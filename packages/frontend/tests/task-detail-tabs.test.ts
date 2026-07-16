@@ -6,7 +6,7 @@
 // hand-rolled inline calculation.
 
 import { describe, expect, test } from 'vitest'
-import type { NodeRun } from '@agent-workflow/shared'
+import type { NodeRun, Task } from '@agent-workflow/shared'
 import {
   DYNAMIC_WORKGROUP_TAB_ORDER,
   TAB_ORDER,
@@ -14,6 +14,8 @@ import {
   availableTabs,
   canOfferFailedJump,
   defaultDynamicTab,
+  deriveTaskDetailCapabilities,
+  deriveTaskDetailNavigation,
   nextTabForFailedJump,
 } from '../src/lib/task-detail-tabs'
 
@@ -46,6 +48,17 @@ function makeRun(over: Partial<NodeRun>): NodeRun {
     opencodeSessionId: null,
     ...over,
   } satisfies NodeRun
+}
+
+function makeCapabilityTask(overrides: Partial<Task> = {}): Task {
+  return {
+    workgroupId: null,
+    repoCount: 1,
+    repos: [],
+    worktreePath: '/worktree/task',
+    baseCommit: 'abc123',
+    ...overrides,
+  } as Task
 }
 
 describe('TAB_ORDER', () => {
@@ -138,6 +151,121 @@ describe('availableTabs', () => {
       'worktree-structure',
       'details',
     ])
+  })
+})
+
+describe('RFC-201 task detail capabilities and page-section groups', () => {
+  const plainRelated = {
+    hasOutputs: true,
+    room: { status: 'ready', mode: 'turn-engine' } as const,
+    canReadQuestions: true,
+    canReadFeedback: false,
+  }
+
+  test('filters unavailable outputs/worktree/feedback instead of exposing dead sections', () => {
+    const capabilities = deriveTaskDetailCapabilities(
+      makeCapabilityTask({ worktreePath: '', baseCommit: null }),
+      { ...plainRelated, hasOutputs: false },
+    )
+    expect(capabilities).toMatchObject({
+      outputs: false,
+      worktreeFiles: false,
+      worktreeDiff: false,
+      worktreeStructure: false,
+      questions: true,
+      feedback: false,
+    })
+    expect(availableTabs({ hasOutputs: false, capabilities })).toEqual([
+      'workflow-status',
+      'task-questions',
+      'node-runs',
+      'details',
+    ])
+  })
+
+  test('multi-repo repos[] keep diff and structure available when top-level baseCommit is null', () => {
+    const capabilities = deriveTaskDetailCapabilities(
+      makeCapabilityTask({
+        repoCount: 2,
+        worktreePath: '/worktree/task-parent',
+        baseCommit: null,
+        repos: [
+          {
+            repoIndex: 0,
+            repoPath: '/repo/a',
+            repoUrl: null,
+            baseBranch: 'main',
+            branch: 'task/a',
+            workingBranch: null,
+            baseCommit: null,
+            worktreePath: '/worktree/task-parent/a',
+            worktreeDirName: 'a',
+            hasSubmodules: null,
+            submoduleInitOk: null,
+            submoduleInitError: null,
+          },
+          {
+            repoIndex: 1,
+            repoPath: '/repo/b',
+            repoUrl: null,
+            baseBranch: 'main',
+            branch: 'task/b',
+            workingBranch: null,
+            baseCommit: 'def456',
+            worktreePath: '/worktree/task-parent/b',
+            worktreeDirName: 'b',
+            hasSubmodules: null,
+            submoduleInitOk: null,
+            submoduleInitError: null,
+          },
+        ],
+      }),
+      plainRelated,
+    )
+    expect(capabilities.worktreeFiles).toBe(true)
+    expect(capabilities.worktreeDiff).toBe(true)
+    expect(capabilities.worktreeStructure).toBe(true)
+  })
+
+  test('room shape exposes exactly orchestration or chatroom after stable classification', () => {
+    const turn = deriveTaskDetailCapabilities(makeCapabilityTask({ workgroupId: 'wg' }), {
+      ...plainRelated,
+      room: { status: 'ready', mode: 'turn-engine' },
+    })
+    const dynamic = deriveTaskDetailCapabilities(makeCapabilityTask({ workgroupId: 'wg' }), {
+      ...plainRelated,
+      room: { status: 'ready', mode: 'dynamic-workflow' },
+    })
+    const pending = deriveTaskDetailCapabilities(makeCapabilityTask({ workgroupId: 'wg' }), {
+      ...plainRelated,
+      room: { status: 'pending' },
+    })
+    expect(turn).toMatchObject({ chatroom: true, orchestration: false })
+    expect(dynamic).toMatchObject({ chatroom: false, orchestration: true })
+    expect(pending).toMatchObject({ chatroom: false, orchestration: false })
+  })
+
+  test('groups every existing wire key without inventing display aliases', () => {
+    const navigation = deriveTaskDetailNavigation([...DYNAMIC_WORKGROUP_TAB_ORDER])
+    expect(navigation.availableTabs).toEqual([...DYNAMIC_WORKGROUP_TAB_ORDER])
+    expect(navigation.groups).toEqual([
+      {
+        key: 'overview',
+        items: ['workflow-status', 'details', 'dw-orchestration'],
+      },
+      { key: 'execution', items: ['node-runs'] },
+      {
+        key: 'artifacts',
+        items: ['outputs', 'worktree-files', 'worktree-diff', 'worktree-structure'],
+      },
+      { key: 'collaboration', items: ['task-questions', 'feedback'] },
+    ])
+    expect(navigation.defaultForGroup).toEqual({
+      overview: 'workflow-status',
+      execution: 'node-runs',
+      artifacts: 'outputs',
+      collaboration: 'task-questions',
+    })
   })
 })
 

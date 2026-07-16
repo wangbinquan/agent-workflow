@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next'
 import type { Memory } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
 
 interface MemoryDetailResponse {
@@ -56,7 +57,18 @@ export function MemoryConflictCompareDialog(props: MemoryConflictCompareDialogPr
           {existing.isLoading ? (
             <LoadingState size="compact" />
           ) : existing.error !== null && existing.error !== undefined ? (
-            <div className="error-box">{String(existing.error)}</div>
+            <ErrorBanner
+              error={existing.error}
+              action={
+                <button
+                  type="button"
+                  className="btn btn--sm"
+                  onClick={() => void existing.refetch()}
+                >
+                  {t('common.retry')}
+                </button>
+              }
+            />
           ) : existing.data !== undefined ? (
             <MemoryPreview memory={existing.data.memory} />
           ) : null}

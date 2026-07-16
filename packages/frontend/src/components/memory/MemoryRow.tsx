@@ -16,8 +16,7 @@ export interface MemoryRowProps {
   /** RFC-045: when provided AND the row's status is candidate / approved /
    *  archived, an Edit button is rendered BEFORE the `actions` slot. */
   onEdit?: () => void
-  /** RFC-045: optional override for editability (parents that already gate
-   *  on isAdmin pass false to hide the button). Defaults to true. */
+  /** Optional server-oracle-derived editability override. */
   editable?: boolean
   /** RFC-101: optional leading multi-select checkbox (used by the fuse picker). */
   select?: { checked: boolean; onChange: () => void }

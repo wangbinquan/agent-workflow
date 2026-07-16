@@ -40,10 +40,11 @@ const I18N_KEYS = [
 ]
 
 describe('RFC-108 T24/T25 — Recovery settings tab', () => {
-  test('settings.tsx has a RecoveryTab wired into the tab nav + render', () => {
+  test('settings.tsx has a RecoveryTab wired into page-section navigation + render', () => {
     expect(/function RecoveryTab\(/.test(settings)).toBe(true)
     expect(settings.includes("tab === 'recovery'")).toBe(true)
-    expect(settings.includes("'recovery', t('settings.tabRecovery')")).toBe(true)
+    expect(settings.includes("key: 'recovery'")).toBe(true)
+    expect(settings.includes("label: t('settings.tabRecovery')")).toBe(true)
   })
 
   test('RecoveryTab reuses the shared Switch + Field primitives (no hand-rolled chrome)', () => {

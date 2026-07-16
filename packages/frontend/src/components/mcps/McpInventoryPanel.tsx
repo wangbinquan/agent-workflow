@@ -14,19 +14,38 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import type { McpProbe, McpToolInfo } from '@agent-workflow/shared'
+import { EmptyState } from '@/components/EmptyState'
+import { ErrorBanner } from '@/components/ErrorBanner'
+import { LoadingState } from '@/components/LoadingState'
 import { McpProbeStatusChip, type McpProbeUiStatus } from '@/components/McpProbeStatusChip'
+import { NoticeBanner } from '@/components/NoticeBanner'
+import type { SplitBusyRelease } from '@/components/split/splitDirty'
 import { useMcpProbe, useProbeMcpMutation } from '@/lib/mcp-probe-query'
+import { probeFreshness } from '@/lib/probe-freshness'
 
 export interface McpInventoryPanelProps {
   mcpName: string
+  operationConfigHash?: string
+  /** Current saved row timestamp; absent is deliberately treated as stale. */
+  mcpUpdatedAt?: number
+  dirty?: boolean
+  saving?: boolean
+  /** Persist the captured draft and return the exact PUT receipt hash. */
+  onSaveForProbe?: () => Promise<string | null>
+  beginBusy?: () => SplitBusyRelease
 }
 
 export function McpInventoryPanel(props: McpInventoryPanelProps) {
   const { t } = useTranslation()
   const probeQ = useMcpProbe(props.mcpName)
   const probeMut = useProbeMcpMutation(props.mcpName)
+  const [preparationError, setPreparationError] = useState<unknown>(null)
 
-  const probe = probeQ.data ?? null
+  const persistedProbe = probeQ.data ?? null
+  const persistedProbeExpired =
+    persistedProbe !== null &&
+    !probeFreshness(persistedProbe, props.mcpUpdatedAt ?? Number.MAX_SAFE_INTEGER)
+  const probe = persistedProbeExpired ? null : persistedProbe
   const isProbing = probeMut.isPending
   const uiStatus: McpProbeUiStatus = isProbing
     ? 'probing'
@@ -36,8 +55,89 @@ export function McpInventoryPanel(props: McpInventoryPanelProps) {
         ? 'ok'
         : 'error'
 
+  async function runSaved(hash: string): Promise<void> {
+    const release = props.beginBusy?.() ?? (() => undefined)
+    try {
+      await probeMut.runAsync(hash)
+    } finally {
+      release()
+    }
+  }
+
+  async function saveAndProbe(): Promise<void> {
+    if (props.onSaveForProbe === undefined) return
+    setPreparationError(null)
+    let hash: string | null
+    try {
+      hash = await props.onSaveForProbe()
+    } catch (error) {
+      setPreparationError(error)
+      return
+    }
+    if (hash === null) return
+    try {
+      await runSaved(hash)
+    } catch {
+      // The mutation exposes its structured transport/domain error below.
+    }
+  }
+
+  const hash = props.operationConfigHash
+  const operationActions =
+    hash === undefined ? undefined : props.dirty === true ? (
+      <div className="mcp-operation-basis__actions">
+        <button
+          type="button"
+          className="btn btn--sm btn--primary"
+          disabled={isProbing || props.saving === true}
+          onClick={() => void saveAndProbe()}
+          data-testid="mcp-save-and-probe"
+        >
+          {props.saving === true ? t('common.saving') : t('mcps.probe.saveAndRun')}
+        </button>
+        <button
+          type="button"
+          className="btn btn--sm"
+          disabled={isProbing || props.saving === true}
+          onClick={() => void runSaved(hash).catch(() => undefined)}
+          data-testid="mcp-probe-saved-version"
+        >
+          {t('mcps.probe.useSaved')}
+        </button>
+      </div>
+    ) : (
+      <button
+        type="button"
+        className="btn btn--sm btn--primary"
+        disabled={isProbing || props.saving === true}
+        onClick={() => void runSaved(hash).catch(() => undefined)}
+        data-testid={`mcp-inventory-reprobe-${props.mcpName}`}
+      >
+        {isProbing ? t('mcps.probe.btnRunning') : t('mcps.probe.btnRun')}
+      </button>
+    )
+
   return (
     <section id="inventory" className="mcp-inventory">
+      <NoticeBanner
+        tone={props.dirty === true || hash === undefined ? 'warning' : 'info'}
+        size="compact"
+        title={
+          props.dirty === true ? t('mcps.probe.basisDirtyTitle') : t('mcps.probe.basisSavedTitle')
+        }
+        action={operationActions}
+        className="mcp-operation-basis"
+      >
+        {hash === undefined ? (
+          t('mcps.probe.basisUnavailable')
+        ) : (
+          <>
+            {props.dirty === true ? t('mcps.probe.basisDirtyBody') : t('mcps.probe.basisSavedBody')}{' '}
+            <code title={hash}>{hash.slice(0, 10)}</code>
+          </>
+        )}
+      </NoticeBanner>
+
       <header className="mcp-inventory__header">
         <h2 className="mcp-inventory__title">
           {t('mcps.probe.section.tools')} · {t('mcps.probe.section.resources')} ·{' '}
@@ -45,32 +145,73 @@ export function McpInventoryPanel(props: McpInventoryPanelProps) {
         </h2>
         <McpProbeStatusChip status={uiStatus} title={probe?.errorMessage ?? undefined} />
         <span className="mcp-inventory__meta">
-          {probe === null
+          {persistedProbe === null
             ? t('mcps.probe.neverProbed')
             : t('mcps.probe.lastProbed', {
-                at: formatTimestamp(probe.updatedAt),
+                at: formatTimestamp(persistedProbe.updatedAt),
               })}
-          {probe !== null && ` · ${formatLatency(probe.latencyMs, t)}`}
+          {persistedProbe !== null && ` · ${formatLatency(persistedProbe.latencyMs, t)}`}
         </span>
-        <button
-          type="button"
-          className="btn btn--sm"
-          onClick={() => probeMut.mutate()}
-          disabled={isProbing}
-          data-testid={`mcp-inventory-reprobe-${props.mcpName}`}
-        >
-          {isProbing ? t('mcps.probe.btnRunning') : t('mcps.probe.btnRun')}
-        </button>
       </header>
 
-      {probe !== null && (probe.status === 'error' || probe.errorCode === 'partial') && (
-        <ErrorBox probe={probe} />
+      {preparationError !== null && <ErrorBanner error={preparationError} />}
+      {probeMut.resultStale && (
+        <NoticeBanner tone="warning" size="compact">
+          {t('mcps.probe.resultStale')}
+        </NoticeBanner>
       )}
-
-      {probe === null ? (
-        <p className="muted">{t('mcps.probe.neverProbed')}</p>
+      {persistedProbeExpired && !probeMut.resultStale && (
+        <NoticeBanner tone="warning" size="compact">
+          {t('mcps.probe.savedResultExpired')}
+        </NoticeBanner>
+      )}
+      {isProbing ? (
+        <LoadingState label={t('mcps.probe.btnRunning')} data-testid="mcp-probe-running" />
+      ) : probeMut.error !== null ? (
+        <ErrorBanner
+          error={probeMut.error}
+          action={
+            hash === undefined ? undefined : (
+              <button
+                type="button"
+                className="btn btn--sm"
+                onClick={() => void runSaved(hash).catch(() => undefined)}
+              >
+                {t('common.retry')}
+              </button>
+            )
+          }
+        />
+      ) : probeQ.isLoading ? (
+        <LoadingState data-testid="mcp-probe-loading" />
+      ) : probeQ.error !== null ? (
+        <ErrorBanner
+          error={probeQ.error}
+          action={
+            <button type="button" className="btn btn--sm" onClick={() => void probeQ.refetch()}>
+              {t('common.retry')}
+            </button>
+          }
+        />
+      ) : persistedProbeExpired ? (
+        <EmptyState
+          title={t('mcps.probe.savedResultExpired')}
+          description={t('mcps.probe.savedResultExpiredHint')}
+          size="compact"
+          data-testid="mcp-probe-expired"
+        />
+      ) : probe === null ? (
+        <EmptyState
+          title={t('mcps.probe.neverProbed')}
+          description={t('mcps.probe.neverProbedHint')}
+          size="compact"
+          data-testid="mcp-probe-never-run"
+        />
       ) : (
         <>
+          {(probe.status === 'error' || probe.errorCode === 'partial') && (
+            <ProbeError probe={probe} />
+          )}
           <ToolsSection tools={probe.tools} />
           <ResourcesSection resources={probe.resources} templates={probe.resourceTemplates} />
           <PromptsSection prompts={probe.prompts} />
@@ -81,21 +222,26 @@ export function McpInventoryPanel(props: McpInventoryPanelProps) {
   )
 }
 
-function ErrorBox(props: { probe: McpProbe }) {
+function ProbeError(props: { probe: McpProbe }) {
   const { t } = useTranslation()
   const [showDetail, setShowDetail] = useState(false)
   const codeKey = errorCodeI18nKey(props.probe.errorCode)
   return (
-    <div className="mcp-inventory__error" data-testid="mcp-inventory-error">
-      <p className="mcp-inventory__error-title">{t('mcps.probe.error.title')}</p>
-      <p className="mcp-inventory__error-message">
-        {codeKey !== null ? t(codeKey) : t('mcps.probe.error.codeInternalError')}
-      </p>
-      {props.probe.errorMessage !== null && props.probe.errorMessage !== '' && (
-        <p className="mcp-inventory__error-message">{props.probe.errorMessage}</p>
-      )}
+    <div data-testid="mcp-inventory-error">
+      <ErrorBanner
+        error={
+          new Error(
+            [
+              codeKey !== null ? t(codeKey) : t('mcps.probe.error.codeInternalError'),
+              props.probe.errorMessage,
+            ]
+              .filter((value): value is string => value !== null && value !== '')
+              .join(' '),
+          )
+        }
+      />
       {props.probe.errorDetail !== null && (
-        <>
+        <div className="mcp-inventory__error-detail">
           <button
             type="button"
             className="btn btn--ghost btn--sm"
@@ -109,7 +255,7 @@ function ErrorBox(props: { probe: McpProbe }) {
               {JSON.stringify(props.probe.errorDetail, null, 2)}
             </pre>
           )}
-        </>
+        </div>
       )}
     </div>
   )

@@ -14,7 +14,7 @@
 // StatusChip, ErrorBanner/LoadingState — no native modal chrome / inputs.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useRef, useState, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   configDirEnvProblem,
@@ -23,12 +23,19 @@ import {
 } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { Field, NumberInput, TextInput } from '@/components/Form'
 import { Select } from '@/components/Select'
 import { ModelSelect } from '@/components/ModelSelect'
 import { StatusChip } from '@/components/StatusChip'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
+import {
+  cacheConfigWriteReceipt,
+  reconcileAmbiguousConfigWrite,
+  writeConfigPatch,
+} from '@/lib/config-resource'
+import { ConfigAmbiguousWriteError } from '@/lib/config-receipts'
 
 export const RUNTIMES_QUERY_KEY = ['runtimes'] as const
 
@@ -83,10 +90,22 @@ function smokeChipKind(probe: SmokeResult | null): 'success' | 'warn' | 'danger'
   return 'danger'
 }
 
-export function RuntimeList() {
+export function RuntimeList({
+  showHeading = true,
+  restoreFocusFallbackRef,
+}: {
+  showHeading?: boolean
+  /** Stable owning-section heading used when an embedded list has no local heading. */
+  restoreFocusFallbackRef?: RefObject<HTMLElement | null>
+} = {}) {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const [editing, setEditing] = useState<RuntimeView | 'new' | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+  const deleteTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const listHeadingRef = useRef<HTMLHeadingElement | null>(null)
+  const addRuntimeRef = useRef<HTMLButtonElement | null>(null)
+  const deleteFallbackRef = useRef<HTMLElement | null>(null)
 
   const list = useQuery<{ runtimes: RuntimeView[] }>({
     queryKey: RUNTIMES_QUERY_KEY,
@@ -102,20 +121,34 @@ export function RuntimeList() {
 
   const del = useMutation({
     mutationFn: (name: string) => api.delete(`/api/runtimes/${encodeURIComponent(name)}`),
-    onSuccess: (_data, name) => {
-      void qc.invalidateQueries({ queryKey: RUNTIMES_QUERY_KEY })
+    onSuccess: async (_data, name) => {
       // RFC-114 Codex P2-2: the deleted runtime's cached model list (?runtime=name)
       // is now stale — drop it so a same-name re-create re-fetches the new binary.
-      void qc.invalidateQueries({ queryKey: ['runtime', 'models', 'rt', name] })
+      // Await the list refetch before ConfirmDialog closes. The deleted row's
+      // trigger is then already gone and Dialog can deterministically focus the
+      // stable list heading instead of briefly focusing a node about to unmount.
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: RUNTIMES_QUERY_KEY }),
+        qc.invalidateQueries({ queryKey: ['runtime', 'models', 'rt', name] }),
+      ])
     },
   })
 
   // RFC-113 D3: the in-table "set as default" marker writes config.defaultRuntime.
   const setDefault = useMutation({
-    mutationFn: (name: string) => api.put('/api/config', { defaultRuntime: name }),
-    onSuccess: () => {
+    mutationFn: (name: string) => writeConfigPatch({ defaultRuntime: name }),
+    onSuccess: (receipt) => {
+      cacheConfigWriteReceipt(qc, receipt)
       void qc.invalidateQueries({ queryKey: RUNTIMES_QUERY_KEY })
-      void qc.invalidateQueries({ queryKey: ['config'] })
+    },
+    onError: async (error) => {
+      if (!(error instanceof ConfigAmbiguousWriteError)) return
+      try {
+        await reconcileAmbiguousConfigWrite(error, qc)
+        await qc.invalidateQueries({ queryKey: RUNTIMES_QUERY_KEY })
+      } catch {
+        // The mutation's original outcome-unknown error remains visible.
+      }
     },
   })
 
@@ -132,9 +165,19 @@ export function RuntimeList() {
 
   return (
     <div className="page__section" style={{ marginBottom: 16 }}>
-      <div className="page__header--row" style={{ marginBottom: 8 }}>
-        <strong>{t('runtimes.title')}</strong>
+      <div
+        className={`page__header--row runtime-list__header${
+          showHeading ? '' : ' runtime-list__header--actions-only'
+        }`}
+        style={{ marginBottom: 8 }}
+      >
+        {showHeading && (
+          <h2 ref={listHeadingRef} className="runtime-list__title" tabIndex={-1}>
+            {t('runtimes.title')}
+          </h2>
+        )}
         <button
+          ref={addRuntimeRef}
           type="button"
           className="btn btn--sm btn--primary"
           onClick={() => setEditing('new')}
@@ -161,7 +204,9 @@ export function RuntimeList() {
               role="listitem"
             >
               <div className="runtime-list__main">
-                <span className="runtime-list__name">{rt.name}</span>
+                <span className="runtime-list__name" tabIndex={-1}>
+                  {rt.name}
+                </span>
                 {/* a11y: a `success` chip (green text on translucent green) misses
                     the WCAG contrast floor (axe-core /settings gate). The default
                     row is already accented by the green left border (.row--default);
@@ -235,7 +280,16 @@ export function RuntimeList() {
                   type="button"
                   className="btn btn--xs btn--danger"
                   disabled={del.isPending}
-                  onClick={() => del.mutate(rt.name)}
+                  onClick={(event) => {
+                    deleteTriggerRef.current = event.currentTarget
+                    const row = event.currentTarget.closest('.runtime-list__row')
+                    deleteFallbackRef.current =
+                      row?.nextElementSibling?.querySelector<HTMLElement>('.runtime-list__name') ??
+                      (showHeading
+                        ? listHeadingRef.current
+                        : (restoreFocusFallbackRef?.current ?? addRuntimeRef.current))
+                    setDeleteTarget(rt.name)
+                  }}
                 >
                   {t('runtimes.delete')}
                 </button>
@@ -244,8 +298,6 @@ export function RuntimeList() {
           ))}
         </ul>
       )}
-      {del.error !== null && del.error !== undefined && <ErrorBanner error={del.error} />}
-
       {editing !== null && (
         <RuntimeFormDialog
           existing={editing === 'new' ? null : editing}
@@ -256,6 +308,21 @@ export function RuntimeList() {
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={t('runtimes.deleteTitle', { name: deleteTarget ?? '' })}
+        description={t('runtimes.deleteDescription')}
+        confirmLabel={t('runtimes.delete')}
+        tone="danger"
+        triggerRef={deleteTriggerRef}
+        restoreFocusFallbackRef={deleteFallbackRef}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={async () => {
+          if (deleteTarget === null) return
+          await del.mutateAsync(deleteTarget)
+        }}
+      />
     </div>
   )
 }

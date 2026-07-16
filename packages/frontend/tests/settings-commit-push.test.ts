@@ -16,14 +16,18 @@ const SETTINGS = readFileSync(
   resolve(import.meta.dirname, '..', 'src', 'routes', 'settings.tsx'),
   'utf-8',
 )
+const SETTINGS_DRAFTS = readFileSync(
+  resolve(import.meta.dirname, '..', 'src', 'lib', 'settings-drafts.ts'),
+  'utf-8',
+)
 const ZH = readFileSync(resolve(import.meta.dirname, '..', 'src', 'i18n', 'zh-CN.ts'), 'utf-8')
 const EN = readFileSync(resolve(import.meta.dirname, '..', 'src', 'i18n', 'en-US.ts'), 'utf-8')
 
 describe('settings.tsx — RFC-117 commit&push runtime config', () => {
   test('persists runtime + repair keys in the System agents tab draft slice', () => {
-    expect(SETTINGS).toContain("'commitPushRuntime'")
-    expect(SETTINGS).toContain("'commitPushMaxRepairRetries'")
-    expect(SETTINGS).toContain("'commitPushDiffMaxBytes'")
+    expect(SETTINGS_DRAFTS).toContain("'commitPushRuntime'")
+    expect(SETTINGS_DRAFTS).toContain("'commitPushMaxRepairRetries'")
+    expect(SETTINGS_DRAFTS).toContain("'commitPushDiffMaxBytes'")
   })
   test('renders the commit runtime picker bound to state (RuntimeSelect, not ModelSelect)', () => {
     expect(SETTINGS).toMatch(/state\.commitPushRuntime/)
@@ -36,7 +40,7 @@ describe('settings.tsx — RFC-117 commit&push runtime config', () => {
 
 describe('settings.tsx — RFC-117 memory-distill runtime config', () => {
   test('persists memoryDistillRuntime in the System agents tab draft slice', () => {
-    expect(SETTINGS).toContain("'memoryDistillRuntime'")
+    expect(SETTINGS_DRAFTS).toContain("'memoryDistillRuntime'")
     expect(SETTINGS).toMatch(/state\.memoryDistillRuntime/)
     expect(SETTINGS).toContain("t('settings.memoryDistillRuntimeLabel')")
     expect(SETTINGS).not.toContain('state.memoryDistillModel')

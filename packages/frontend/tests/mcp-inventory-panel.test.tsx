@@ -88,11 +88,15 @@ function errProbe(): McpProbe {
   } as McpProbe
 }
 
-function renderPanel(name = 'pg') {
+function renderPanel(name = 'pg', mcpUpdatedAt = 0) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={qc}>
-      <McpInventoryPanel mcpName={name} />
+      <McpInventoryPanel
+        mcpName={name}
+        operationConfigHash={'a'.repeat(64)}
+        mcpUpdatedAt={mcpUpdatedAt}
+      />
     </QueryClientProvider>,
   )
 }
@@ -145,5 +149,15 @@ describe('McpInventoryPanel', () => {
     mockProbeGet('pg', okProbe())
     renderPanel()
     await waitFor(() => screen.getByTestId('mcp-inventory-reprobe-pg'))
+  })
+
+  test('a probe older than the current saved row is unknown and hides its inventory', async () => {
+    const probe = okProbe()
+    mockProbeGet('pg', probe)
+    renderPanel('pg', probe.startedAt)
+    await waitFor(() => screen.getByTestId('mcp-probe-expired'))
+    expect(screen.getByTestId('mcp-probe-status-unknown')).toBeTruthy()
+    expect(screen.getAllByText('The saved probe result is out of date.')).toHaveLength(2)
+    expect(screen.queryByTestId('mcp-tool-row-query')).toBeNull()
   })
 })

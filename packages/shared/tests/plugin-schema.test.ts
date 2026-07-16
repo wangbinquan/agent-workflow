@@ -20,6 +20,7 @@ import {
   PluginNameSchema,
   PluginOptionsSchema,
   PluginSchema,
+  PluginOperationResourceSchema,
   PluginSourceKindSchema,
   PluginSpecSchema,
   PluginUpdateCheckSchema,
@@ -135,6 +136,32 @@ describe('PluginSchema (response shape)', () => {
   })
 })
 
+describe('PluginOperationResourceSchema', () => {
+  test('accepts the full Plugin row plus an exact SHA-256 operation hash', () => {
+    const base = {
+      id: '01HPLUGIN',
+      name: 'p1',
+      spec: 'pkg@1',
+      options: {},
+      description: '',
+      enabled: true,
+      sourceKind: 'npm' as const,
+      cachedPath: '/tmp/plugin',
+      resolvedVersion: '1.0.0',
+      installedAt: 1,
+      schemaVersion: 1,
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    expect(
+      PluginOperationResourceSchema.safeParse({
+        ...base,
+        operationConfigHash: 'a'.repeat(64),
+      }).success,
+    ).toBe(true)
+  })
+})
+
 describe('CreatePluginSchema', () => {
   test('options defaults to {}', () => {
     const r = CreatePluginSchema.parse({ name: 'p1', spec: 'x@1' })
@@ -170,11 +197,22 @@ describe('RenamePluginSchema', () => {
 
 describe('PluginUpdateCheckSchema', () => {
   test('available + nullable current/latest', () => {
+    const exact = { identityStatus: 'known' as const, configHashUsed: 'a'.repeat(64) }
     expect(
-      PluginUpdateCheckSchema.parse({ available: false, current: '1.0.0', latest: '1.0.0' }),
+      PluginUpdateCheckSchema.parse({
+        available: false,
+        current: '1.0.0',
+        latest: '1.0.0',
+        ...exact,
+      }),
     ).toBeTruthy()
     expect(
-      PluginUpdateCheckSchema.parse({ available: true, current: null, latest: null }),
+      PluginUpdateCheckSchema.parse({
+        available: true,
+        current: null,
+        latest: null,
+        ...exact,
+      }),
     ).toBeTruthy()
   })
 })

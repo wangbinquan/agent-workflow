@@ -15,7 +15,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import type { Config } from '@agent-workflow/shared'
+import { DEFAULT_CONFIG, type Config } from '@agent-workflow/shared'
 import { SystemAgentsTab } from '../src/routes/settings'
 import i18n from '../src/i18n'
 import { setBaseUrl, setToken, clearToken } from '../src/stores/auth'
@@ -28,21 +28,11 @@ function wrap(qc: QueryClient) {
 
 function mkConfig(overrides: Partial<Config> = {}): Config {
   return {
-    $schema_version: 1,
-    maxConcurrentNodes: 4,
-    multiProcessSubprocessConcurrency: 4,
-    defaultPerTaskMaxDurationMs: 3_600_000,
-    defaultPerTaskMaxTotalTokens: 0,
-    defaultPerNodeTimeoutMs: 1_800_000,
-    worktreeAutoGc: { enabled: false },
-    eventsArchiveThresholds: { perNodeRunRows: 50_000, globalRows: 1_000_000 },
-    largeOutputThresholdBytes: 1_048_576,
-    bindHost: '127.0.0.1',
+    ...DEFAULT_CONFIG,
     language: 'zh-CN',
     theme: 'system',
-    logLevel: 'info',
     ...overrides,
-  } as Config
+  }
 }
 
 function mockPut() {
@@ -69,7 +59,7 @@ function mockPut() {
 }
 
 beforeEach(() => {
-  setBaseUrl('http://daemon.test')
+  setBaseUrl(`http://settings-commit-push-${crypto.randomUUID()}.test`)
   setToken('tok')
   void i18n.changeLanguage('zh-CN')
 })

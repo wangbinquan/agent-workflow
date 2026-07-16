@@ -14,6 +14,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
   McpProbeErrorCode,
+  McpProbeOperationReceiptSchema,
   McpProbeSchema,
   McpPromptInfoSchema,
   McpResourceInfoSchema,
@@ -161,6 +162,21 @@ describe('McpProbeSchema', () => {
   test('rejects unknown keys (strict)', () => {
     const r = McpProbeSchema.safeParse({ ...base, weirdField: 1 })
     expect(r.success).toBe(false)
+  })
+
+  test('operation receipt extends the strict persisted row with the exact config hash', () => {
+    expect(
+      McpProbeOperationReceiptSchema.safeParse({
+        ...base,
+        configHashUsed: 'a'.repeat(64),
+      }).success,
+    ).toBe(true)
+    expect(
+      McpProbeOperationReceiptSchema.safeParse({
+        ...base,
+        configHashUsed: 'not-a-sha256',
+      }).success,
+    ).toBe(false)
   })
 
   test('rejects negative latency / non-integer timestamps', () => {

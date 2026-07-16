@@ -1,12 +1,23 @@
-// RFC-198 — replacing native confirm in SkillFileTree must keep the pending
-// target stable, revalidate it before discarding, and restore keyboard focus
-// even when the clicked tree row disappears while the dialog is open.
+// RFC-201 T3.2 — file selection no longer owns a lossy one-file buffer.  Every
+// path is a route-owned staged scope, so switching files preserves edits and
+// create/delete remain reversible until Save All.
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import type { FileNode } from '@agent-workflow/shared'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { useState } from 'react'
+import type { FileNode, SkillContent } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { SkillFileTree } from '../src/components/SkillFileTree'
+import {
+  createSkillCompositeDraft,
+  editSkillFile,
+  editSkillNewPath,
+  receiveSkillFile,
+  stageSkillFileCreate,
+  stageSkillFileDelete,
+  undoSkillFile,
+  type SkillCompositeDraftState,
+} from '../src/lib/skill-composite-draft'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import '../src/i18n'
 
@@ -20,44 +31,60 @@ function json(payload: unknown): Response {
 const FILES: FileNode[] = [
   { path: 'a.txt', type: 'file' },
   { path: 'b.txt', type: 'file' },
-  { path: 'c.txt', type: 'file' },
 ]
 
+const INITIAL: SkillContent = {
+  name: 'sk1',
+  description: 'd',
+  bodyMd: 'b',
+  frontmatterExtra: {},
+  token: 'TOK1',
+}
+
+function Harness() {
+  const [selected, setSelected] = useState<string | null>(null)
+  const [state, setState] = useState<SkillCompositeDraftState>(() =>
+    createSkillCompositeDraft(INITIAL),
+  )
+  return (
+    <SkillFileTree
+      skillName="sk1"
+      selected={selected}
+      onSelectedChange={setSelected}
+      newPath={state.newPath.draft}
+      onNewPathChange={(path) => setState((current) => editSkillNewPath(current, path))}
+      fileScopes={state.files}
+      onFileLoaded={(path, content, epoch) =>
+        setState((current) => receiveSkillFile(current, path, content, epoch))
+      }
+      onFileChange={(path, content) => setState((current) => editSkillFile(current, path, content))}
+      onStageCreate={(path) => setState((current) => stageSkillFileCreate(current, path))}
+      onStageDelete={(path) => setState((current) => stageSkillFileDelete(current, path))}
+      onUndo={(path) => setState((current) => undoSkillFile(current, path))}
+    />
+  )
+}
+
 function setup() {
-  let rows = FILES
-  const fileReads: string[] = []
-  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL) => {
+  const calls: Array<{ url: string; method: string }> = []
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL, init) => {
     const url = typeof input === 'string' ? input : input.toString()
-    if (url.includes('/files')) return json(rows)
+    const method = (init?.method ?? 'GET').toUpperCase()
+    calls.push({ url, method })
+    if (url.includes('/files')) return json(FILES)
     if (url.includes('/file')) {
       const path = new URL(url).searchParams.get('path')
-      if (path !== null) fileReads.push(path)
-      return json({ content: path === 'b.txt' ? 'beta' : path === 'c.txt' ? 'gamma' : 'alpha' })
+      return json({ content: path === 'b.txt' ? 'beta' : 'alpha' })
     }
     return new Response('not found', { status: 404 })
   })
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  const view = render(
+  render(
     <QueryClientProvider client={client}>
-      <SkillFileTree skillName="sk1" />
+      <Harness />
     </QueryClientProvider>,
   )
-  return {
-    client,
-    fileReads,
-    view,
-    removeTarget() {
-      rows = [FILES[0]!]
-      act(() => client.setQueryData(['skill-files', 'sk1'], rows))
-    },
-  }
-}
-
-async function makeDirty() {
-  fireEvent.click(await screen.findByRole('button', { name: /a\.txt/i }))
-  const editor = (await screen.findByDisplayValue('alpha')) as HTMLTextAreaElement
-  fireEvent.change(editor, { target: { value: 'edited alpha' } })
-  return editor
+  return calls
 }
 
 beforeEach(() => {
@@ -70,51 +97,45 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('RFC-198 SkillFileTree discard confirmation', () => {
-  test('cancel preserves the draft and focus; confirm switches to the snapshotted target', async () => {
-    const { fileReads } = setup()
-    const editor = await makeDirty()
-    const target = screen.getByRole('button', { name: /b\.txt/i })
+describe('RFC-201 controlled SkillFileTree', () => {
+  test('switching paths preserves every staged draft without a discard dialog', async () => {
+    setup()
+    fireEvent.click(await screen.findByRole('button', { name: /a\.txt/i }))
+    fireEvent.change(await screen.findByDisplayValue('alpha'), {
+      target: { value: 'edited alpha' },
+    })
 
-    fireEvent.click(target)
-    expect(await screen.findByRole('dialog', { name: /unsaved changes/i })).toBeTruthy()
-    expect(editor.value).toBe('edited alpha')
-
-    fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    expect(document.activeElement).toBe(target)
-    expect(editor.value).toBe('edited alpha')
-
-    fireEvent.click(target)
-    const dialog = await screen.findByRole('dialog', { name: /unsaved changes/i })
-    // A second tree click while the modal is open must not replace the original
-    // target snapshot, even if a synthetic click reaches the inert background.
-    fireEvent.click(screen.getByRole('button', { name: /c\.txt/i }))
-    const confirm = within(dialog).getByRole('button', { name: /discard changes/i })
-    fireEvent.click(confirm)
-    fireEvent.click(confirm)
-
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    fireEvent.click(screen.getByRole('button', { name: /b\.txt/i }))
     expect(await screen.findByDisplayValue('beta')).toBeTruthy()
-    expect(screen.queryByDisplayValue('gamma')).toBeNull()
-    expect(fileReads.filter((path) => path === 'b.txt')).toHaveLength(1)
-    expect(fileReads).not.toContain('c.txt')
-    expect(target.classList.contains('file-tree__item--active')).toBe(true)
-    expect(document.activeElement).toBe(target)
+    expect(screen.queryByRole('dialog')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: /a\.txt/i }))
+    expect(await screen.findByDisplayValue('edited alpha')).toBeTruthy()
+    expect(screen.getAllByText(/edited · pending/i).length).toBeGreaterThan(0)
   })
 
-  test('a vanished target is rejected and closing falls back to the focusable tree root', async () => {
-    const { removeTarget, view } = setup()
-    await makeDirty()
+  test('create and delete are staged, reversible, and send no write request', async () => {
+    const calls = setup()
+    const pathInput = await screen.findByTestId('skill-new-path')
+    fireEvent.change(pathInput, { target: { value: 'new.md' } })
+    fireEvent.click(screen.getByRole('button', { name: /add to changes/i }))
+    await waitFor(() => {
+      const editor = document.querySelector<HTMLTextAreaElement>('.file-tree__editor textarea')
+      expect(editor).not.toBeNull()
+      fireEvent.change(editor!, { target: { value: 'draft' } })
+    })
+    expect(screen.getAllByText(/new · pending/i).length).toBeGreaterThan(0)
+
+    fireEvent.click(screen.getByRole('button', { name: /undo pending change/i }))
+    expect(screen.queryByRole('button', { name: /new\.md/i })).toBeNull()
+
     fireEvent.click(screen.getByRole('button', { name: /b\.txt/i }))
-    expect(await screen.findByRole('dialog', { name: /unsaved changes/i })).toBeTruthy()
+    await screen.findByDisplayValue('beta')
+    fireEvent.click(screen.getByRole('button', { name: /mark for deletion/i }))
+    expect(await screen.findByText(/marked for deletion/i)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /undo pending change/i }))
+    expect(await screen.findByDisplayValue('beta')).toBeTruthy()
 
-    removeTarget()
-    fireEvent.click(screen.getByRole('button', { name: /discard changes/i }))
-
-    expect((await screen.findByRole('alert')).textContent).toMatch(/no longer available/i)
-    fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    expect(document.activeElement).toBe(view.container.querySelector('.file-tree'))
+    expect(calls.every((call) => call.method === 'GET')).toBe(true)
   })
 })

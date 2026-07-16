@@ -47,6 +47,7 @@ interface Props {
 type Tab = 'edit' | 'preview'
 
 const NODE_INSPECTOR_TAB_PREFIX = 'workflow-node-inspector'
+const NODE_INSPECTOR_HEADING_ID = `${NODE_INSPECTOR_TAB_PREFIX}-heading`
 
 /**
  * Per-kind Edit form registry — same shape as the canvas NODE_TYPES
@@ -105,7 +106,9 @@ export function NodeInspector({ definition, selectedNodeId, agents, onChange, on
     <aside className="inspector">
       <header className="inspector__header">
         <div>
-          <div className="inspector__kind">{node.kind}</div>
+          <div id={NODE_INSPECTOR_HEADING_ID} className="inspector__kind">
+            {node.kind}
+          </div>
           <div className="inspector__id">
             <code>{node.id}</code>
           </div>
@@ -124,6 +127,7 @@ export function NodeInspector({ definition, selectedNodeId, agents, onChange, on
         tabs={inspectorTabs}
         active={activeTab}
         onSelect={setTab}
+        ariaLabelledBy={NODE_INSPECTOR_HEADING_ID}
         idPrefix={NODE_INSPECTOR_TAB_PREFIX}
       />
       <div className="inspector__body">

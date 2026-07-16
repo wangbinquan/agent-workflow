@@ -64,9 +64,10 @@ export function buildQuickCreatePayload(
 }
 
 // ---------------------------------------------------------------------------
-// Config draft (detail-page edit surface). Members are NOT part of the draft
-// — they are managed card-by-card with immediate PUTs; a config save passes
-// the group's current members through unchanged (PUT is full-replace).
+// Config draft (detail-page edit surface). The legacy config-only builder below
+// remains useful to non-studio callers. The detail studio combines this draft
+// with its complete route-owned member draft through buildCompositeUpdatePayload
+// so every full-replace PUT captures one coherent document.
 // ---------------------------------------------------------------------------
 
 export interface WorkgroupConfigDraft {
@@ -150,6 +151,12 @@ export function buildConfigUpdatePayload(
 
 export interface WorkgroupMemberRowState {
   key: string
+  /**
+   * Latest server id for this stable local row. Full-replace PUT regenerates
+   * every id, so UI selection/edit ownership must use `key`, never this id.
+   * New rows have no server id until the composite save receipt is verified.
+   */
+  serverId: string | null
   memberType: WorkgroupMemberType
   /** memberType='agent' — may reference a not-yet-existing agent (dangling
    *  references are legal; launch-time validation owns existence). */
@@ -179,6 +186,7 @@ export function makeAgentMemberRow(input: {
 }): WorkgroupMemberRowState {
   return {
     key: nextMemberRowKey(),
+    serverId: null,
     memberType: 'agent',
     agentName: input.agentName,
     userId: '',
@@ -194,6 +202,7 @@ export function makeHumanMemberRow(input: {
 }): WorkgroupMemberRowState {
   return {
     key: nextMemberRowKey(),
+    serverId: null,
     memberType: 'human',
     agentName: '',
     userId: input.userId,
@@ -208,13 +217,192 @@ export function workgroupToMembersState(w: Workgroup): WorkgroupMembersState {
     .sort((a, b) => a.sortOrder - b.sortOrder)
     .map<WorkgroupMemberRowState>((m) => ({
       key: m.id,
+      serverId: m.id,
       memberType: m.memberType,
       agentName: m.agentName ?? '',
       userId: m.userId ?? '',
       displayName: m.displayName,
       roleDesc: m.roleDesc,
     }))
-  return { members, leaderKey: w.leaderMemberId }
+  return {
+    members,
+    leaderKey:
+      w.leaderMemberId === null
+        ? null
+        : (members.find((member) => member.serverId === w.leaderMemberId)?.key ?? null),
+  }
+}
+
+/**
+ * Build the one legal persistence body for the detail studio. Config and the
+ * complete member draft are validated and captured together; callers must not
+ * send the two projections through separate PUTs because the endpoint is a
+ * full-document replace.
+ */
+export function buildCompositeUpdatePayload(
+  config: WorkgroupConfigDraft,
+  members: WorkgroupMembersState,
+  group: Workgroup,
+): BuiltWorkgroup<UpdateWorkgroup> {
+  const errors: Record<string, string> = {}
+  if (config.maxRounds !== undefined && !isValidMaxRounds(config.maxRounds)) {
+    errors.maxRounds = 'workgroups.errors.maxRoundsInvalid'
+  }
+
+  members.members.forEach((member, index) => {
+    const rowErrors = validateMemberDraft(
+      member,
+      members.members.filter((other) => other.key !== member.key),
+    )
+    for (const [field, key] of Object.entries(rowErrors)) {
+      errors[`member-${index}-${field}`] ??= key
+    }
+  })
+
+  const leader =
+    members.leaderKey === null
+      ? undefined
+      : members.members.find((member) => member.key === members.leaderKey)
+  if (members.leaderKey !== null && (leader === undefined || leader.memberType !== 'agent')) {
+    errors.leader = 'workgroups.errors.leaderMustBeAgent'
+  }
+  if (
+    config.mode === 'dynamic_workflow' &&
+    members.members.some((member) => member.memberType === 'human')
+  ) {
+    errors.mode = 'workgroups.errors.dynamicNoHumanMembers'
+  }
+  if (Object.keys(errors).length > 0) return { ok: false, errors }
+
+  const payload = {
+    description: group.description,
+    instructions: config.instructions,
+    mode: config.mode,
+    ...(config.mode === 'leader_worker' && leader !== undefined
+      ? { leaderDisplayName: leader.displayName.trim() }
+      : {}),
+    switches: { ...config.switches },
+    maxRounds: config.maxRounds ?? WORKGROUP_MAX_ROUNDS_DEFAULT,
+    completionGate: config.completionGate,
+    autonomous: config.autonomous,
+    fanOut: config.fanOut,
+    members: members.members.map(rowToInput),
+  }
+  const parsed = UpdateWorkgroupSchema.safeParse(payload)
+  if (!parsed.success) return { ok: false, errors: schemaIssues(parsed.error.issues) }
+  return { ok: true, payload: parsed.data }
+}
+
+export type WorkgroupSaveReconcileResult =
+  | {
+      ok: true
+      config: WorkgroupConfigDraft
+      members: WorkgroupMembersState
+    }
+  | { ok: false; reason: string }
+
+/**
+ * Verify that a PUT response represents the exact captured full-replace
+ * request, then remap each submitted stable local key to the regenerated
+ * server id by request index. Index alone is never trusted: every semantic
+ * member field and the leader relation must match first.
+ */
+export function reconcileWorkgroupSaveResponse(
+  payload: UpdateWorkgroup,
+  submitted: WorkgroupMembersState,
+  response: Workgroup,
+): WorkgroupSaveReconcileResult {
+  if (
+    response.description !== payload.description ||
+    response.instructions !== payload.instructions ||
+    response.mode !== payload.mode ||
+    response.switches.shareOutputs !== payload.switches.shareOutputs ||
+    response.switches.directMessages !== payload.switches.directMessages ||
+    response.switches.blackboard !== payload.switches.blackboard ||
+    response.maxRounds !== payload.maxRounds ||
+    response.completionGate !== payload.completionGate ||
+    (response.autonomous ?? false) !== (payload.autonomous ?? false) ||
+    (response.fanOut ?? false) !== (payload.fanOut ?? false)
+  ) {
+    return { ok: false, reason: 'config-mismatch' }
+  }
+
+  const fresh = [...response.members].sort((left, right) => left.sortOrder - right.sortOrder)
+  if (
+    fresh.length !== payload.members.length ||
+    submitted.members.length !== payload.members.length
+  ) {
+    return { ok: false, reason: 'member-count-mismatch' }
+  }
+  if (
+    fresh.some((member, index) => member.sortOrder !== index || member.id.length === 0) ||
+    new Set(fresh.map((member) => member.id)).size !== fresh.length
+  ) {
+    return { ok: false, reason: 'member-identity-mismatch' }
+  }
+  if (new Set(submitted.members.map((member) => member.key)).size !== submitted.members.length) {
+    return { ok: false, reason: 'duplicate-local-key' }
+  }
+
+  const remapped: WorkgroupMemberRowState[] = []
+  for (let index = 0; index < payload.members.length; index += 1) {
+    const requested = payload.members[index]!
+    const local = submitted.members[index]!
+    const server = fresh[index]!
+    const localInput = rowToInput(local)
+    const localMatchesRequest =
+      localInput.memberType === requested.memberType &&
+      localInput.agentName === requested.agentName &&
+      localInput.userId === requested.userId &&
+      localInput.displayName === requested.displayName &&
+      localInput.roleDesc === requested.roleDesc
+    const agentMatches =
+      requested.memberType === 'agent'
+        ? server.agentName === requested.agentName && server.userId === null
+        : server.agentName === null && server.userId === requested.userId
+    if (
+      server.memberType !== requested.memberType ||
+      !localMatchesRequest ||
+      !agentMatches ||
+      server.displayName !== requested.displayName ||
+      server.roleDesc !== requested.roleDesc
+    ) {
+      return { ok: false, reason: `member-${index}-mismatch` }
+    }
+    remapped.push({
+      ...local,
+      serverId: server.id,
+      memberType: server.memberType,
+      agentName: server.agentName ?? '',
+      userId: server.userId ?? '',
+      displayName: server.displayName,
+      roleDesc: server.roleDesc,
+    })
+  }
+
+  const expectedLeaderIndex =
+    payload.leaderDisplayName === undefined
+      ? -1
+      : payload.members.findIndex(
+          (member) =>
+            member.memberType === 'agent' && member.displayName === payload.leaderDisplayName,
+        )
+  if (payload.leaderDisplayName !== undefined && expectedLeaderIndex < 0) {
+    return { ok: false, reason: 'leader-request-mismatch' }
+  }
+  const expectedLeaderId = expectedLeaderIndex < 0 ? null : fresh[expectedLeaderIndex]!.id
+  if (response.leaderMemberId !== expectedLeaderId) {
+    return { ok: false, reason: 'leader-mismatch' }
+  }
+
+  return {
+    ok: true,
+    config: workgroupToConfigDraft(response),
+    members: {
+      members: remapped,
+      leaderKey: expectedLeaderIndex < 0 ? null : submitted.members[expectedLeaderIndex]!.key,
+    },
+  }
 }
 
 export function addMember(

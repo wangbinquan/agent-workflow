@@ -13,7 +13,7 @@ interface MobileNavDialogProps {
   triggerRef: RefObject<HTMLButtonElement | null>
   restoreFocusFallbackRef: RefObject<HTMLElement | null>
   footer: ReactNode
-  renderBadge?: (item: SubNavItem) => ReactNode
+  renderAccessory?: (item: SubNavItem) => ReactNode
 }
 
 export function MobileNavDialog({
@@ -23,7 +23,7 @@ export function MobileNavDialog({
   triggerRef,
   restoreFocusFallbackRef,
   footer,
-  renderBadge,
+  renderAccessory,
 }: MobileNavDialogProps) {
   const { t } = useTranslation()
   const initialFocusRef = useRef<HTMLAnchorElement | null>(null)
@@ -45,7 +45,7 @@ export function MobileNavDialog({
         mode="mobile"
         onNavigate={onNavigate}
         focusTargetRef={initialFocusRef}
-        renderBadge={renderBadge}
+        renderAccessory={renderAccessory}
       />
     </Dialog>
   )

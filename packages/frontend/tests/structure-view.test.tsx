@@ -14,7 +14,7 @@ import type {
   DependencyChange,
   HunkAnchor,
 } from '@agent-workflow/shared'
-import '../src/i18n'
+import i18n from '../src/i18n'
 import { StructuralDiffView } from '../src/components/structure/StructuralDiffView'
 import {
   summaryRows,
@@ -438,7 +438,9 @@ describe('<StructuralDiffView /> keyboard file switching', () => {
 
   test('ArrowDown / ArrowUp move between files and swap the body', () => {
     render(<StructuralDiffView data={sampleDiff()} />)
-    const tablist = screen.getByRole('tablist')
+    const tablist = screen.getByRole('tablist', {
+      name: i18n.t('tasks.structFileSelectorLabel'),
+    })
     // first file (mod.py) selected by default
     expect(selectedFileName()).toBe('mod.py')
     expect(screen.getByText('speak')).toBeTruthy()

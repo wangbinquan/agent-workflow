@@ -3,14 +3,14 @@
 // Cards key on plugin id, carry sourceKind + version + enabled + "update
 // available" chips. The update state is a shared query cache (['plugins',
 // 'updates']) written by the detail "Updates" tab's check-update and read here,
-// gated on a spec + resolvedVersion fingerprint so a re-installed plugin can't
-// keep a stale chip. Per-row check-update / upgrade buttons moved into the
-// detail "Updates" tab.
+// keyed by stable id + exact operationConfigHash so a re-installed/ACL-edited
+// plugin cannot keep a stale chip. Per-row actions live in the detail Updates
+// tab.
 
 import { useQuery } from '@tanstack/react-query'
 import { Outlet, createRoute, useMatchRoute, useParams } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
-import type { Plugin } from '@agent-workflow/shared'
+import type { PluginOperationResource } from '@agent-workflow/shared'
 import { useResourceList } from '@/hooks/useResourceList'
 import { EmptyState } from '@/components/EmptyState'
 import { ResourceBadges } from '@/components/ResourceBadges'
@@ -18,6 +18,7 @@ import { ResourceSplitPage, type ResourceCardItem } from '@/components/split/Res
 import { StatusChip } from '@/components/StatusChip'
 import {
   PLUGIN_UPDATES_KEY,
+  pluginUpdateEntry,
   pluginUpdateAvailable,
   type PluginUpdatesCache,
 } from '@/lib/plugin-updates'
@@ -38,7 +39,7 @@ export const IndexRoute = createRoute({
 
 function PluginsSplitLayout() {
   const { t } = useTranslation()
-  const { data, isLoading, error, refetch, owners } = useResourceList<Plugin>({
+  const { data, isLoading, error, refetch, owners } = useResourceList<PluginOperationResource>({
     queryKey: ['plugins'],
     endpoint: '/api/plugins',
     deleteBy: 'id',
@@ -69,13 +70,15 @@ function PluginsSplitLayout() {
             t(`plugins.sourceKind.${p.sourceKind}`),
             p.resolvedVersion ?? '',
             !p.enabled ? t('plugins.disabledChip') : '',
-            pluginUpdateAvailable(updateCache[p.id], p) ? t('plugins.updateAvailableChip') : '',
+            pluginUpdateAvailable(pluginUpdateEntry(updateCache, p), p)
+              ? t('plugins.updateAvailableChip')
+              : '',
             p.visibility === 'private' ? t('acl.privateChip') : '',
             p.ownerUserId != null ? (owners.get(p.ownerUserId)?.displayName ?? '') : '',
           ].join(' '),
           to: '/plugins/$id',
           params: { id: p.id },
-          primaryStatus: pluginUpdateAvailable(updateCache[p.id], p) ? (
+          primaryStatus: pluginUpdateAvailable(pluginUpdateEntry(updateCache, p), p) ? (
             <StatusChip kind="info" size="sm" withDot data-testid={`plugin-update-${p.name}`}>
               {t('plugins.updateAvailableChip')}
             </StatusChip>

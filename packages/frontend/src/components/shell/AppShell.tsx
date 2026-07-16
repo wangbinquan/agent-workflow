@@ -66,7 +66,7 @@ export function AppShell({ pathname, children }: AppShellProps) {
   const pendingNavigationRef = useRef<string | null>(null)
   const previousCompactRef = useRef(compact)
 
-  const renderBadge = useCallback(
+  const renderAccessory = useCallback(
     (item: SubNavItem) => (item.to === '/memory' ? <MemoryPendingBadge /> : null),
     [],
   )
@@ -127,7 +127,7 @@ export function AppShell({ pathname, children }: AppShellProps) {
       ) : (
         <aside className="sidebar desktop-sidebar" data-testid="desktop-sidebar">
           <ShellBrand />
-          <ShellNavigation active={active} mode="desktop" renderBadge={renderBadge} />
+          <ShellNavigation active={active} mode="desktop" renderAccessory={renderAccessory} />
           <InboxFooterButton ref={inboxTriggerRef} open={inboxOpen} onToggle={toggleInboxOpen} />
           <ShellFooter active={active} />
         </aside>
@@ -150,7 +150,7 @@ export function AppShell({ pathname, children }: AppShellProps) {
           onNavigate={prepareMobileNavigation}
           triggerRef={menuTriggerRef}
           restoreFocusFallbackRef={mainRef}
-          renderBadge={renderBadge}
+          renderAccessory={renderAccessory}
           footer={<ShellFooter active={active} onNavigate={prepareMobileNavigation} />}
         />
       )}

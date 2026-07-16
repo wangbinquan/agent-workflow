@@ -1,6 +1,6 @@
 // RFC-169 follow-up — regression lock for the keep-mounted tab-panel hidden bug.
 //
-// The agent Prompt tab and the skill Content tab render a fill-height
+// The agent Prompt tab and the skill Edit tab render a fill-height
 // MarkdownEditor via the `.agent-form__panel--prompt` class. That class needs
 // `display: flex` for the fill layout — but a BARE `.agent-form__panel--prompt
 // { display: flex }` overrides the UA rule `[hidden] { display: none }` (author

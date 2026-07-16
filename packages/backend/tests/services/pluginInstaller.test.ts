@@ -9,8 +9,8 @@
 //   4. install failure (non-zero exit) → PluginInstallFailedError carrying
 //      redacted stderr (Authorization / token shapes scrubbed).
 //   5. install timeout → PluginInstallTimeoutError; child killed.
-//   6. Concurrent installs of the same plugin id share one in-flight install
-//      (npm shim writes a counter file, asserted at 1).
+//   6. Every npm/git preparation receives a distinct immutable generation,
+//      including concurrent installs for the same stable plugin id.
 //   7. Source code anchor: installer source contains `"--prefix"` literal so a
 //      future refactor cannot silently change npm install behaviour to `cwd`.
 
@@ -168,13 +168,7 @@ describe('installPlugin — npm path (with fake npm shim)', () => {
     // Sanity: the decoys really were written (the fixture is doing its job).
     const decoyPkg = JSON.parse(
       await readFile(
-        join(
-          pluginsDir,
-          'p-regression-readdir',
-          'node_modules',
-          'aaa-decoy-transitive',
-          'package.json',
-        ),
+        join(result.generationDir!, 'node_modules', 'aaa-decoy-transitive', 'package.json'),
         'utf-8',
       ),
     )
@@ -234,14 +228,15 @@ describe('installPlugin — npm path (with fake npm shim)', () => {
   }, 10_000)
 })
 
-describe('installPlugin — in-flight Map serialises concurrent installs', () => {
-  test('two concurrent installs of same pluginId resolve to same result', async () => {
+describe('installPlugin — immutable generations', () => {
+  test('two concurrent preparations of the same pluginId never share a directory', async () => {
     process.env.FAKE_NPM_MODE = 'success'
     const [a, b] = await Promise.all([
       installPlugin('p20', 'pkg-a@1', { pluginsDir, npmBin: FAKE_NPM }),
       installPlugin('p20', 'pkg-a@1', { pluginsDir, npmBin: FAKE_NPM }),
     ])
-    expect(a.cachedPath).toBe(b.cachedPath)
+    expect(a.cachedPath).not.toBe(b.cachedPath)
+    expect(a.generationDir).not.toBe(b.generationDir)
     expect(a.resolvedVersion).toBe(b.resolvedVersion)
   })
 

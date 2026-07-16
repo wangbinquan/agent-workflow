@@ -13,7 +13,7 @@ export interface ShellNavigationProps {
   mode: 'desktop' | 'mobile'
   onNavigate?: (destination: string) => void
   focusTargetRef?: RefObject<HTMLAnchorElement | null>
-  renderBadge?: (item: SubNavItem) => ReactNode
+  renderAccessory?: (item: SubNavItem) => ReactNode
 }
 
 export function ShellNavigation({
@@ -21,7 +21,7 @@ export function ShellNavigation({
   mode,
   onNavigate,
   focusTargetRef,
-  renderBadge,
+  renderAccessory,
 }: ShellNavigationProps) {
   const { t } = useTranslation()
   const navRef = useRef<HTMLElement | null>(null)
@@ -34,7 +34,9 @@ export function ShellNavigation({
     const wantedHref = active.activeItemTo ?? '/'
     focusTargetRef.current =
       Array.from(navRef.current?.querySelectorAll<HTMLAnchorElement>('a[href]') ?? []).find(
-        (link) => link.getAttribute('href') === wantedHref,
+        (link) =>
+          link.pathname === wantedHref &&
+          (wantedHref === '/' || link.classList.contains('nav-item__main')),
       ) ?? null
   }, [active.activeItemTo, focusTargetRef, mode])
 
@@ -77,7 +79,7 @@ export function ShellNavigation({
       </Link>
 
       {NAV_GROUPS.map((group) => (
-        <NavGroup key={group.key} group={group} active={active} renderBadge={renderBadge} />
+        <NavGroup key={group.key} group={group} active={active} renderAccessory={renderAccessory} />
       ))}
     </nav>
   )

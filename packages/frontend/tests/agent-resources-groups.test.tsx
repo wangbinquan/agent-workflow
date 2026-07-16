@@ -22,7 +22,7 @@ function mount() {
     </QueryClientProvider>,
   )
   // Reveal the resources panel (it's keep-mounted but hidden by default).
-  fireEvent.click(screen.getByRole('tab', { name: /Resources/ }))
+  fireEvent.click(screen.getByRole('tab', { name: /Capabilities & collaboration/ }))
 }
 
 beforeEach(() => {
@@ -43,19 +43,21 @@ const groupOf = (title: string): HTMLElement =>
 describe('RFC-173 — resources tab two-group layout', () => {
   test('renders the Capabilities and Dependencies group titles', () => {
     mount()
-    expect(screen.getByText('Capabilities')).toBeTruthy()
-    expect(screen.getByText('Dependencies')).toBeTruthy()
+    expect(screen.getByText('Available capabilities')).toBeTruthy()
+    expect(screen.getByText('Collaborating agents')).toBeTruthy()
   })
 
   test('skills / MCP / plugins live in Capabilities; depends + autodetect + tree in Dependencies', () => {
     mount()
-    const cap = groupOf('Capabilities')
+    const cap = groupOf('Available capabilities')
     expect(within(cap).getByRole('combobox', { name: 'Skills' })).toBeTruthy()
     expect(within(cap).getByRole('combobox', { name: 'MCP servers' })).toBeTruthy()
     expect(within(cap).getByRole('combobox', { name: 'Plugins' })).toBeTruthy()
 
-    const dep = groupOf('Dependencies')
-    expect(within(dep).getByRole('combobox', { name: 'Depends on agents' })).toBeTruthy()
+    const dep = groupOf('Collaborating agents')
+    expect(
+      within(dep).getByRole('combobox', { name: 'Agents it can collaborate with' }),
+    ).toBeTruthy()
     expect(within(dep).getByTestId('agent-dep-autodetect-button')).toBeTruthy()
     // The dependency-tree preview (empty hint for a fresh agent) is in this group.
     expect(dep.querySelector('.dep-tree__empty')).toBeTruthy()
@@ -72,6 +74,15 @@ describe('RFC-173 — resources tab two-group layout', () => {
     for (const name of ['cap', 'dep', 'skill', 'mcp', 'plugin', 'agent']) {
       expect(icons.filter((i) => i === name)).toHaveLength(1)
     }
+  })
+
+  test('keeps closure/cache mechanics behind an optional technical disclosure', () => {
+    mount()
+    expect(screen.getByText(/Choose what this agent can use/)).toBeTruthy()
+    const details = screen.getByText('Technical information').closest('details')
+    expect(details?.open).toBe(false)
+    expect(details?.querySelector('.dep-tree__empty')).toBeTruthy()
+    expect(details?.textContent).toContain('file:// cache')
   })
 })
 

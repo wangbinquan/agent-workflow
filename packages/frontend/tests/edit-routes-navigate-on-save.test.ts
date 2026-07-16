@@ -5,12 +5,11 @@
 // non-trivial to JSDOM-render (TanStack Router + React Query + many child
 // components), so we assert at the source level.
 //
-// skills.detail re-anchor (RFC-151 impl gate → RFC-170 T-BSAFE③): navigation was
-// first moved OUT of the two save mutations into a coordinated handler (per-channel
-// navigate masked a sibling failure), and then the double-PUT itself was retired
-// (410 Gone) in favour of a SINGLE combined-save funnel. The lock now asserts the
-// current shape: one combinedSave mutation, staying in place (commitSaved, no
-// navigate). Behavior coverage: skills-detail-save-channels.test.tsx.
+// skills.detail re-anchor (RFC-201): metadata plus every dirty file now form one
+// route-owned composite draft. A save captures one revision plan, owns a single
+// busy lease, and advances the server-issued composite token step-by-step. It
+// stays in place; a later file failure must not hide an earlier successful step.
+// Behavior coverage: skills-detail-save-channels.test.tsx.
 
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -18,6 +17,7 @@ import { describe, expect, test } from 'vitest'
 
 const agentDetailPath = resolve(__dirname, '../src/routes/agents.detail.tsx')
 const skillDetailPath = resolve(__dirname, '../src/routes/skills.detail.tsx')
+const skillCompositePath = resolve(__dirname, '../src/lib/skill-composite-draft.ts')
 
 describe('edit routes navigate to list on save (source layer)', () => {
   // RFC-169 D2 — INTENTIONAL FLIP: the split (master-detail) page saves in
@@ -30,33 +30,52 @@ describe('edit routes navigate to list on save (source layer)', () => {
     expect(block).toContain('commitSaved(')
   })
 
-  // RFC-169 D2 / RFC-170 T-BSAFE③ — skills.detail saves in place through the
-  // single combined-save funnel. The handler reseeds via commitSaved and
-  // best-effort refetches, but must NOT navigate.
-  test('skills.detail combined-save stays in place (commitSaved, no navigate)', () => {
+  test('skills.detail captures one composite plan and saves it sequentially in place', () => {
     const src = readFileSync(skillDetailPath, 'utf-8')
-    const start = src.indexOf('const handleSave = async')
-    expect(start).toBeGreaterThan(-1)
-    const end = src.indexOf('const del = useMutation', start)
-    expect(end).toBeGreaterThan(start)
-    const block = src.slice(start, end)
-    expect(block).toContain('combinedSave.mutateAsync')
-    expect(block).toContain('commitSaved(')
+    const block = extractBetween(src, 'const handleSave = useCallback', 'const handleRecheck')
+
+    expect(block).toContain('const current = compositeRef.current')
+    expect(block).toContain('saveBusyReleaseRef.current !== undefined')
+    expect(block).toContain('const plan = captureSkillSavePlan(current)')
+    expect(block).toContain('const releaseBusy = beginBusy(name)')
+    expect(block).toContain('for (const step of plan)')
+    expect(block).toContain('token = await writeStep(step, token, requestId)')
     expect(block).not.toMatch(/navigate\(/)
   })
 
-  // RFC-170 T-BSAFE③: the per-channel double-PUT (saveMeta/saveContent) is retired
-  // — there is now ONE save mutation (combinedSave), which must not navigate
-  // (navigation belongs to delete, not save). The failure-mask regression that
-  // motivated moving navigate out of the channels can no longer recur.
-  test('skills.detail combinedSave mutation must NOT navigate; the double-PUT channels are gone', () => {
+  test('skill composite plan owns metadata + dirty files and every write is token-fenced', () => {
     const src = readFileSync(skillDetailPath, 'utf-8')
-    const block = extractMutationBlock(src, 'combinedSave')
-    expect(block).not.toMatch(/navigate\(/)
+    const composite = readFileSync(skillCompositePath, 'utf-8')
+    const plan = extractBetween(
+      composite,
+      'export function captureSkillSavePlan',
+      'export function isDefinitiveSkillWriteError',
+    )
+
+    expect(plan).toContain('aggregate.valid || aggregate.busy || aggregate.outcomeUnknown')
+    expect(plan).toContain('state.metadata.dirty')
+    expect(plan).toContain('Object.entries(state.files)')
+    expect(plan).toContain('.filter(([, scope]) => scope.dirty)')
+    expect(plan).toContain(
+      '`${left.path}\\0${left.op}`.localeCompare(`${right.path}\\0${right.op}`)',
+    )
+
+    const writeStep = extractBetween(src, 'const writeStep = useCallback', 'const handleSave')
+    expect(writeStep).toContain('{ ...step.submitted, expectedToken }')
+    expect(writeStep).toContain('{ content: step.submitted.content, expectedToken }')
+    expect(writeStep).toContain('expectedToken=${encodeURIComponent(expectedToken)}')
     expect(src).not.toContain('const saveMeta = useMutation')
     expect(src).not.toContain('const saveContent = useMutation')
   })
 })
+
+function extractBetween(src: string, startNeedle: string, endNeedle: string): string {
+  const start = src.indexOf(startNeedle)
+  if (start === -1) throw new Error(`could not find '${startNeedle}'`)
+  const end = src.indexOf(endNeedle, start)
+  if (end === -1) throw new Error(`could not find '${endNeedle}' after '${startNeedle}'`)
+  return src.slice(start, end)
+}
 
 function extractMutationBlock(src: string, varName: string): string {
   const start = src.indexOf(`const ${varName} = useMutation(`)

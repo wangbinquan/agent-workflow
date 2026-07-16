@@ -18,7 +18,21 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import type { Task } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
+const actorState = vi.hoisted(() => ({
+  permissions: ['memory:read'] as string[],
+  error: null as Error | null,
+  refetch: vi.fn(),
+}))
+
 vi.mock('@/hooks/useTaskSync', () => ({ useTaskSync: vi.fn() }))
+vi.mock('@/hooks/useActor', () => ({
+  useActor: () => ({
+    data: actorState.error === null ? { permissions: actorState.permissions } : undefined,
+    error: actorState.error,
+    isError: actorState.error !== null,
+    refetch: actorState.refetch,
+  }),
+}))
 vi.mock('@/components/tasks/RecoverySection', () => ({ RecoverySection: () => null }))
 vi.mock('@/components/tasks/StuckTaskBanner', () => ({ StuckTaskBanner: () => null }))
 vi.mock('@/components/tasks/WorkflowSyncBanner', () => ({ WorkflowSyncBanner: () => null }))
@@ -181,6 +195,11 @@ function dynamicRoom(
 function primeTask(qc: QueryClient, row: Task, primeNodeRuns = true): void {
   qc.setQueryData(['tasks', row.id], row)
   if (primeNodeRuns) qc.setQueryData(['tasks', row.id, 'node-runs'], { runs: [], outputs: [] })
+  qc.setQueryData(['tasks', row.id, 'diff'], {
+    diff: '',
+    baseCommit: row.baseCommit,
+    truncated: false,
+  })
   qc.setQueryData(['task-questions', row.id], [])
   qc.setQueryData(['task-clarify-directives', row.id], {})
   qc.setQueryData(['agents'], [])
@@ -236,16 +255,48 @@ function renderTaskRoute(
   return { qc, router, view }
 }
 
+class DesktopResizeObserver {
+  constructor(private readonly callback: ResizeObserverCallback) {}
+
+  observe = (target: Element) => {
+    this.callback(
+      [
+        {
+          target,
+          contentRect: { width: 1024 },
+          contentBoxSize: [{ inlineSize: 1024 }],
+        } as unknown as ResizeObserverEntry,
+      ],
+      this as unknown as ResizeObserver,
+    )
+  }
+
+  disconnect = () => {}
+  unobserve = () => {}
+}
+
+function sectionDestination(tab: string): HTMLAnchorElement {
+  const link = Array.from(
+    document.querySelectorAll<HTMLAnchorElement>('.page-section-nav__leaf'),
+  ).find((candidate) => new URL(candidate.href).searchParams.get('tab') === tab)
+  if (link === undefined) throw new Error(`missing Task destination for ${tab}`)
+  return link
+}
+
 function expectActivePanel(tab: string): void {
-  const activeTab = document.getElementById(`task-detail-tab-${tab}`)
-  const activePanel = document.getElementById(`task-detail-panel-${tab}`)
-  expect(activeTab?.getAttribute('aria-selected')).toBe('true')
-  expect(activeTab?.getAttribute('aria-controls')).toBe(activePanel?.id)
+  const activeLink = sectionDestination(tab)
+  const activePanel = document.getElementById(`task-detail-section-${tab}`)
+  expect(activeLink.getAttribute('aria-current')).toBe('page')
   expect(activePanel?.hidden).toBe(false)
-  expect(screen.getByRole('tabpanel').id).toBe(activePanel?.id)
+  expect(activePanel?.getAttribute('data-task-detail-section')).toBe(tab)
+  expect(document.querySelectorAll('.task-detail__pane:not([hidden])')).toHaveLength(1)
 }
 
 beforeEach(() => {
+  vi.stubGlobal('ResizeObserver', DesktopResizeObserver)
+  actorState.permissions = ['memory:read']
+  actorState.error = null
+  actorState.refetch.mockReset()
   setBaseUrl('http://daemon.test')
   setToken('tok')
 })
@@ -253,9 +304,116 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 describe('/tasks/$id rendered URL-backed panels', () => {
+  test('no-worktree task filters artifact leaves and replaces an old diff deep link', async () => {
+    installFetch(() => undefined)
+    const { router } = renderTaskRoute('/tasks/no-worktree?tab=worktree-diff&focus=keep', [
+      task('no-worktree'),
+    ])
+
+    await waitFor(() => {
+      expect(router.state.location.search).toEqual({ tab: 'workflow-status', focus: 'keep' })
+      expectActivePanel('workflow-status')
+    })
+    expect(document.getElementById('task-detail-section-worktree-diff')).toBeNull()
+    expect(document.getElementById('task-detail-section-worktree-structure')).toBeNull()
+    expect(document.getElementById('task-detail-section-worktree-files')).toBeNull()
+  })
+
+  test('multi-repo diff stays deep-linkable when aggregate baseCommit is null', async () => {
+    installFetch(() => undefined)
+    const multi = task('multi', {
+      repoCount: 2,
+      worktreePath: '/worktree/multi',
+      baseCommit: null,
+      repos: [
+        {
+          repoIndex: 0,
+          repoPath: '/repo/a',
+          repoUrl: null,
+          baseBranch: 'main',
+          branch: 'task/a',
+          workingBranch: null,
+          baseCommit: null,
+          worktreePath: '/worktree/multi/a',
+          worktreeDirName: 'a',
+          hasSubmodules: null,
+          submoduleInitOk: null,
+          submoduleInitError: null,
+        },
+        {
+          repoIndex: 1,
+          repoPath: '/repo/b',
+          repoUrl: null,
+          baseBranch: 'main',
+          branch: 'task/b',
+          workingBranch: null,
+          baseCommit: 'repo-b-base',
+          worktreePath: '/worktree/multi/b',
+          worktreeDirName: 'b',
+          hasSubmodules: null,
+          submoduleInitOk: null,
+          submoduleInitError: null,
+        },
+      ],
+    })
+    const { router } = renderTaskRoute('/tasks/multi?tab=worktree-diff&focus=keep', [multi])
+
+    await waitFor(() => {
+      expect(router.state.location.search).toEqual({ tab: 'worktree-diff', focus: 'keep' })
+      expectActivePanel('worktree-diff')
+    })
+    expect(screen.getByTestId('worktree-diff-stub')).toBeTruthy()
+  })
+
+  test('feedback leaf follows memory:read and unavailable deep links canonicalize', async () => {
+    actorState.permissions = []
+    installFetch(() => undefined)
+    const { router } = renderTaskRoute('/tasks/plain?tab=feedback&focus=keep', [task('plain')])
+
+    await waitFor(() => {
+      expect(router.state.location.search).toEqual({ tab: 'workflow-status', focus: 'keep' })
+      expectActivePanel('workflow-status')
+    })
+    expect(document.getElementById('task-detail-section-feedback')).toBeNull()
+  })
+
+  test('permission lookup failure preserves a feedback deep link and exposes retry', async () => {
+    actorState.error = new Error('permission lookup unavailable')
+    installFetch(() => undefined)
+    const { router } = renderTaskRoute('/tasks/plain?tab=feedback&focus=keep', [task('plain')])
+
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('permission lookup unavailable')
+    expect(router.state.location.search).toEqual({ tab: 'feedback', focus: 'keep' })
+    expect(screen.queryByRole('navigation', { name: /任务分区|Task sections/ })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: /重试|Retry/ }))
+    expect(actorState.refetch).toHaveBeenCalledTimes(1)
+  })
+
+  test('pending questions are discoverable on both collaboration group and active leaf', async () => {
+    installFetch(() => undefined)
+    const { qc } = renderTaskRoute('/tasks/plain?tab=task-questions', [task('plain')])
+    act(() => {
+      qc.setQueryData(
+        ['task-questions', 'plain'],
+        [
+          { id: 'q1', phase: 'pending' },
+          { id: 'q2', phase: 'staged' },
+          { id: 'q3', phase: 'done' },
+        ],
+      )
+    })
+
+    await waitFor(() => expectActivePanel('task-questions'))
+    expect(screen.getByTestId('tq-group-badge').textContent).toBe('2')
+    expect(screen.getByTestId('tq-section-badge').textContent).toBe('2')
+  })
+
   test('invalid panel canonicalizes with replace, adjacent search survives, and click push supports Back/Forward', async () => {
     installFetch(() => undefined)
     const { router } = renderTaskRoute('/tasks/plain?tab=overview&focus=node-1&trace=2', [
@@ -270,7 +428,7 @@ describe('/tasks/$id rendered URL-backed panels', () => {
       })
       expectActivePanel('workflow-status')
     })
-    fireEvent.click(document.getElementById('task-detail-tab-details')!)
+    fireEvent.click(sectionDestination('details'))
     await waitFor(() => {
       expect(router.state.location.search).toEqual({
         focus: 'node-1',
@@ -302,7 +460,7 @@ describe('/tasks/$id rendered URL-backed panels', () => {
 
     await screen.findByTestId('loading-state')
     expect(router.state.location.search).toEqual({ tab: 'workflow-status', focus: 'node-2' })
-    expect(screen.queryByRole('tablist')).toBeNull()
+    expect(screen.queryByRole('navigation', { name: /任务分区|Task sections/ })).toBeNull()
 
     await act(async () => {
       room.resolve(json(turnRoom('crew')))
@@ -356,7 +514,7 @@ describe('/tasks/$id rendered URL-backed panels', () => {
 
     await screen.findByRole('alert')
     expect(router.state.location.search).toEqual({ tab: 'chatroom', focus: 'node-3' })
-    expect(screen.queryByRole('tabpanel')).toBeNull()
+    expect(document.querySelector('.task-detail__pane:not([hidden])')).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: /详细信息|Details/ }))
     await waitFor(() => {
@@ -375,7 +533,7 @@ describe('/tasks/$id rendered URL-backed panels', () => {
 
   test('switching task ids re-resolves the panel shape instead of leaving the previous task panel visible', async () => {
     installFetch(() => undefined)
-    const plain = task('plain')
+    const plain = task('plain', { worktreePath: '/worktree/plain', baseCommit: 'abc123' })
     const crew = task('crew', { workgroupId: 'wg_crew', workgroupName: 'Crew' })
     const { router } = renderTaskRoute('/tasks/plain?tab=worktree-diff&focus=keep', [plain, crew], {
       room: turnRoom('crew'),
@@ -393,7 +551,7 @@ describe('/tasks/$id rendered URL-backed panels', () => {
       expect(router.state.location.search).toEqual({ tab: 'chatroom', focus: 'keep' })
       expectActivePanel('chatroom')
     })
-    expect(document.getElementById('task-detail-panel-worktree-diff')?.hidden).toBe(true)
+    expect(document.getElementById('task-detail-section-worktree-diff')).toBeNull()
   })
 
   test('a programmatic canvas jump pushes the questions panel and preserves adjacent search', async () => {

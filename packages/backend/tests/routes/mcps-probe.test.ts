@@ -66,11 +66,18 @@ async function req(app: Hono, path: string, init: RequestInit = {}): Promise<Res
 async function createMcp(
   app: Hono,
   body: Record<string, unknown>,
-): Promise<{ name: string; id: string }> {
+): Promise<{ name: string; id: string; operationConfigHash: string }> {
   const r = await req(app, '/api/mcps', { method: 'POST', body: JSON.stringify(body) })
   if (r.status !== 201) throw new Error(`mcp create failed: ${r.status} ${await r.text()}`)
-  const j = (await r.json()) as { name: string; id: string }
+  const j = (await r.json()) as { name: string; id: string; operationConfigHash: string }
   return j
+}
+
+async function postProbe(app: Hono, name: string, expectedConfigHash: string): Promise<Response> {
+  return req(app, `/api/mcps/${name}/probe`, {
+    method: 'POST',
+    body: JSON.stringify({ expectedConfigHash }),
+  })
 }
 
 afterEach(() => {
@@ -90,13 +97,13 @@ describe('GET /api/mcps/probes (static route precedence)', () => {
   })
 
   test('returns the latest probe per mcp after POST probe', async () => {
-    await createMcp(app, {
+    const mcp = await createMcp(app, {
       name: 'pg-prod',
       type: 'local',
       config: { command: ['uvx', 'pg-mcp'] },
     })
     __setProbeOptionsForTesting({ openClient: fakeOpener(makeFakeClient()) })
-    const probed = await req(app, '/api/mcps/pg-prod/probe', { method: 'POST' })
+    const probed = await postProbe(app, 'pg-prod', mcp.operationConfigHash)
     expect(probed.status).toBe(200)
 
     const list = await req(app, '/api/mcps/probes')
@@ -134,13 +141,13 @@ describe('GET /api/mcps/:name/probe', () => {
   })
 
   test('200 with probe row after POST', async () => {
-    await createMcp(app, {
+    const mcp = await createMcp(app, {
       name: 'pg-prod',
       type: 'local',
       config: { command: ['uvx', 'pg-mcp'] },
     })
     __setProbeOptionsForTesting({ openClient: fakeOpener(makeFakeClient()) })
-    await req(app, '/api/mcps/pg-prod/probe', { method: 'POST' })
+    await postProbe(app, 'pg-prod', mcp.operationConfigHash)
     const r = await req(app, '/api/mcps/pg-prod/probe')
     expect(r.status).toBe(200)
     const j = (await r.json()) as { status: string; tools: unknown[] }
@@ -156,13 +163,13 @@ describe('POST /api/mcps/:name/probe', () => {
   })
 
   test('200 + status=ok on happy path', async () => {
-    await createMcp(app, {
+    const mcp = await createMcp(app, {
       name: 'pg-prod',
       type: 'local',
       config: { command: ['uvx', 'pg-mcp'] },
     })
     __setProbeOptionsForTesting({ openClient: fakeOpener(makeFakeClient()) })
-    const r = await req(app, '/api/mcps/pg-prod/probe', { method: 'POST' })
+    const r = await postProbe(app, 'pg-prod', mcp.operationConfigHash)
     expect(r.status).toBe(200)
     const j = (await r.json()) as { status: string; mcpName: string }
     expect(j.status).toBe('ok')
@@ -170,7 +177,7 @@ describe('POST /api/mcps/:name/probe', () => {
   })
 
   test('200 + status=error when probe fails (NOT 5xx — failure is expected/persisted)', async () => {
-    await createMcp(app, {
+    const mcp = await createMcp(app, {
       name: 'pg-prod',
       type: 'local',
       config: { command: ['uvx', 'pg-mcp'] },
@@ -181,7 +188,7 @@ describe('POST /api/mcps/:name/probe', () => {
       throw e
     }
     __setProbeOptionsForTesting({ openClient: opener })
-    const r = await req(app, '/api/mcps/pg-prod/probe', { method: 'POST' })
+    const r = await postProbe(app, 'pg-prod', mcp.operationConfigHash)
     expect(r.status).toBe(200)
     const j = (await r.json()) as { status: string; errorCode: string }
     expect(j.status).toBe('error')
@@ -189,7 +196,7 @@ describe('POST /api/mcps/:name/probe', () => {
   })
 
   test('200 + status=ok + errorCode=partial when one list fails', async () => {
-    await createMcp(app, {
+    const mcp = await createMcp(app, {
       name: 'pg-prod',
       type: 'local',
       config: { command: ['uvx', 'pg-mcp'] },
@@ -197,7 +204,7 @@ describe('POST /api/mcps/:name/probe', () => {
     __setProbeOptionsForTesting({
       openClient: fakeOpener(makeFakeClient({ failTools: true })),
     })
-    const r = await req(app, '/api/mcps/pg-prod/probe', { method: 'POST' })
+    const r = await postProbe(app, 'pg-prod', mcp.operationConfigHash)
     expect(r.status).toBe(200)
     const j = (await r.json()) as { status: string; errorCode: string; tools: unknown }
     expect(j.status).toBe('ok')
@@ -206,20 +213,20 @@ describe('POST /api/mcps/:name/probe', () => {
   })
 
   test('422 mcp-disabled when enabled=false', async () => {
-    await createMcp(app, {
+    const mcp = await createMcp(app, {
       name: 'pg-prod',
       type: 'local',
       config: { command: ['uvx', 'pg-mcp'] },
       enabled: false,
     })
-    const r = await req(app, '/api/mcps/pg-prod/probe', { method: 'POST' })
+    const r = await postProbe(app, 'pg-prod', mcp.operationConfigHash)
     expect(r.status).toBe(422)
     const j = (await r.json()) as { code: string }
     expect(j.code).toBe('mcp-disabled')
   })
 
   test('404 mcp-not-found before any probe attempt', async () => {
-    const r = await req(app, '/api/mcps/ghost/probe', { method: 'POST' })
+    const r = await postProbe(app, 'ghost', '0'.repeat(64))
     expect(r.status).toBe(404)
     const j = (await r.json()) as { code: string }
     expect(j.code).toBe('mcp-not-found')

@@ -40,9 +40,26 @@ describe('.page--task-detail fits the viewport without a document scrollbar', ()
   })
 
   test('panes wrapper takes the remaining vertical space and can shrink', () => {
+    const workspace = ruleBody('.task-detail__workspace')
+    expect(workspace).toMatch(/flex:\s*1/)
+    expect(workspace).toMatch(/width:\s*100%/)
+    expect(workspace).toMatch(/min-width:\s*0/)
+    expect(workspace).toMatch(/min-height:\s*0/)
     const body = ruleBody('.task-detail__panes')
     expect(body).toMatch(/flex:\s*1/)
     expect(body).toMatch(/min-height:\s*0/)
+  })
+
+  test('top banner stack is bounded and independently scrollable', () => {
+    const body = ruleBody('.task-detail__banner-stack')
+    expect(body).toMatch(/max-height:\s*min\(32dvh,\s*240px\)/)
+    expect(body).toMatch(/min-height:\s*0/)
+    expect(body).toMatch(/overflow-y:\s*auto/)
+    expect(body).toMatch(/overscroll-behavior-y:\s*contain/)
+
+    const item = ruleBody('.task-detail__banner-stack > .task-error-banner')
+    expect(item).toMatch(/padding:\s*var\(--space-2\)\s+var\(--space-3\)/)
+    expect(item).toMatch(/margin-bottom:\s*0/)
   })
 
   test('individual panes own their overflow and toggle via [hidden]', () => {

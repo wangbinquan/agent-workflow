@@ -3,20 +3,21 @@
 // Locks: create → list → get → update → rename → delete happy path; install
 // failure rolls back without leaving a DB row; still-referenced delete guard;
 // name-conflict; rename cascade updates agents.plugins JSON column atomically;
-// delete cleans up the plugin install directory.
+// delete defers immutable-generation cleanup to conservative GC.
 //
 // Install path uses the test-only fake-npm.sh shim (see RFC-031 design §3.2)
 // so tests stay hermetic and offline.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, utimes } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createAgent, getAgent } from '../src/services/agent'
 import {
   createPlugin,
+  collectPluginGenerationGarbage,
   deletePlugin,
   findAgentsReferencingPlugin,
   getPlugin,
@@ -130,13 +131,19 @@ describe('services/plugin.ts delete + cleanup', () => {
     db = createInMemoryDb(MIGRATIONS)
   })
 
-  test('delete removes row + cleans plugin dir from disk', async () => {
+  test('delete removes row but defers generation cleanup until conservative GC', async () => {
     const p = await createPlugin(db, { name: 'gone', spec: 'g@1' }, opts())
-    const installDir = join(pluginsDir, p.id)
-    expect(existsSync(installDir)).toBe(true)
+    expect(existsSync(p.cachedPath)).toBe(true)
+    // Inline deletion would be unsafe even when this generation is old: a
+    // child process may still be importing it after the row disappears.
+    const generationDir = dirname(dirname(p.cachedPath))
+    const old = new Date(Date.now() - 48 * 60 * 60_000)
+    await utimes(generationDir, old, old)
     await deletePlugin(db, p.id, opts())
     expect(await listPlugins(db)).toHaveLength(0)
-    expect(existsSync(installDir)).toBe(false)
+    expect(existsSync(p.cachedPath)).toBe(true)
+    await collectPluginGenerationGarbage(db, opts(), { graceMs: 0, now: Date.now() + 1 })
+    expect(existsSync(p.cachedPath)).toBe(false)
   })
 
   test('delete missing → NotFoundError', async () => {

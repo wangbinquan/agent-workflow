@@ -15,6 +15,7 @@
 
 import { z } from 'zod'
 import { ResourceVisibilitySchema } from './resourceAcl'
+import { OperationConfigHashSchema } from './operationRevision'
 
 /** Permitted characters in plugin name (URL-safe; matches `/api/plugins/:name`). */
 export const PLUGIN_NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
@@ -56,6 +57,8 @@ export const PluginSchema = z.object({
   ownerUserId: z.string().nullable().optional(),
   /** RFC-099 ACL — 'public' = every user; 'private' = owner + grants. Absent ⇒ 'public'. */
   visibility: ResourceVisibilitySchema.optional(),
+  /** Monotonic ACL revision; absent only in legacy fixtures. */
+  aclRevision: z.number().int().nonnegative().optional(),
   enabled: z.boolean(),
   sourceKind: PluginSourceKindSchema,
   /**
@@ -76,6 +79,17 @@ export const PluginSchema = z.object({
   updatedAt: z.number().int(),
 })
 export type Plugin = z.infer<typeof PluginSchema>
+
+/** GET/POST/PUT Plugin wire shape after RFC-201 exact-operation fencing. */
+export const PluginOperationResourceSchema = PluginSchema.and(
+  z.object({ operationConfigHash: OperationConfigHashSchema }),
+)
+export type PluginOperationResource = z.infer<typeof PluginOperationResourceSchema>
+
+export const PluginOperationRequestSchema = z
+  .object({ expectedConfigHash: OperationConfigHashSchema })
+  .strict()
+export type PluginOperationRequest = z.infer<typeof PluginOperationRequestSchema>
 
 /** POST /api/plugins body. Install happens synchronously inside the handler. */
 export const CreatePluginSchema = z.object({
@@ -112,5 +126,15 @@ export const PluginUpdateCheckSchema = z.object({
   available: z.boolean(),
   current: z.string().nullable(),
   latest: z.string().nullable(),
+  /** `unknown` means a legacy install has no immutable generation manifest. */
+  identityStatus: z.enum(['known', 'unknown']),
+  configHashUsed: OperationConfigHashSchema,
 })
 export type PluginUpdateCheck = z.infer<typeof PluginUpdateCheckSchema>
+
+/** Response shape for POST /api/plugins/:id/upgrade. */
+export const PluginUpgradeResultSchema = z.object({
+  configHashUsed: OperationConfigHashSchema,
+  resource: PluginOperationResourceSchema,
+})
+export type PluginUpgradeResult = z.infer<typeof PluginUpgradeResultSchema>

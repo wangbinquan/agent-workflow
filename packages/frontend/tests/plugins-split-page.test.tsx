@@ -35,9 +35,21 @@ interface PluginRow {
   updatedAt: number
   visibility: 'public' | 'private'
   ownerUserId: string | null
+  operationConfigHash: string
 }
 
 let plugins: PluginRow[]
+let requests: Array<{ path: string; method: string; body: unknown }> = []
+let deferCheck = false
+let resolveDeferredCheck: ((response: Response) => void) | null = null
+let deferUpgrade = false
+let resolveDeferredUpgrade: (() => void) | null = null
+let latestQueryClient: QueryClient | null = null
+let failSave = false
+let failCheck = false
+let staleCheckOnce = false
+let checkAvailable = true
+let checkIdentityStatus: 'known' | 'unknown' = 'known'
 
 function makePlugin(): PluginRow {
   return {
@@ -54,6 +66,7 @@ function makePlugin(): PluginRow {
     updatedAt: 0,
     visibility: 'public',
     ownerUserId: null,
+    operationConfigHash: 'a'.repeat(64),
   }
 }
 
@@ -63,6 +76,8 @@ function installFetch() {
       const url = typeof input === 'string' ? input : input.toString()
       const method = (init?.method ?? 'GET').toUpperCase()
       const path = url.replace(/^https?:\/\/[^/]+/, '').split('?')[0]!
+      const body = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined
+      requests.push({ path, method, body })
 
       if (method === 'GET' && path === '/api/plugins') return json(plugins)
       if (method === 'POST' && path === '/api/users/lookup') return json([])
@@ -71,8 +86,67 @@ function installFetch() {
         const p = plugins.find((x) => x.id === decodeURIComponent(detail[1]!))
         return p ? json(p) : json({ error: 'nf' }, 404)
       }
-      if (/\/api\/plugins\/[^/]+\/check-update$/.test(path) && method === 'POST')
-        return json({ available: true, current: '1.2.0', latest: '1.3.0' })
+      if (detail && method === 'PUT') {
+        if (failSave) return json({ code: 'save-failed', message: 'save failed' }, 500)
+        const index = plugins.findIndex((x) => x.id === decodeURIComponent(detail[1]!))
+        if (index < 0) return json({ error: 'nf' }, 404)
+        plugins[index] = {
+          ...plugins[index]!,
+          ...(body as Partial<PluginRow>),
+          operationConfigHash: 'b'.repeat(64),
+          updatedAt: plugins[index]!.updatedAt + 1,
+        }
+        return json(plugins[index])
+      }
+      if (/\/api\/plugins\/[^/]+\/check-update$/.test(path) && method === 'POST') {
+        if (failCheck) return json({ code: 'check-failed', message: 'check failed' }, 503)
+        if (staleCheckOnce) {
+          staleCheckOnce = false
+          plugins[0] = {
+            ...plugins[0]!,
+            description: 'foreign write before Check',
+            operationConfigHash: 'c'.repeat(64),
+            updatedAt: plugins[0]!.updatedAt + 1,
+          }
+          return json(
+            { code: 'resource-operation-stale', message: 'plugin changed; reload and retry' },
+            409,
+          )
+        }
+        const response = json({
+          available: checkAvailable,
+          current: '1.2.0',
+          latest: checkAvailable ? '1.3.0' : '1.2.0',
+          identityStatus: checkIdentityStatus,
+          configHashUsed: (body as { expectedConfigHash: string }).expectedConfigHash,
+        })
+        if (deferCheck) {
+          return new Promise<Response>((resolve) => {
+            resolveDeferredCheck = () => resolve(response)
+          })
+        }
+        return response
+      }
+      if (/\/api\/plugins\/[^/]+\/upgrade$/.test(path) && method === 'POST') {
+        const current = plugins[0]!
+        const resource = {
+          ...current,
+          resolvedVersion: '1.3.0',
+          operationConfigHash: 'd'.repeat(64),
+          updatedAt: current.updatedAt + 1,
+        }
+        plugins[0] = resource
+        const response = json({
+          configHashUsed: (body as { expectedConfigHash: string }).expectedConfigHash,
+          resource,
+        })
+        if (deferUpgrade) {
+          return new Promise<Response>((resolve) => {
+            resolveDeferredUpgrade = () => resolve(response)
+          })
+        }
+        return response
+      }
       return json({ error: 'unhandled' }, 404)
     },
   )
@@ -80,6 +154,7 @@ function installFetch() {
 
 function renderPlugins(initial: string) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  latestQueryClient = qc
   const tree = RootRoute.addChildren([
     pluginsRoute.addChildren([pluginNewRoute, pluginDetailRoute, pluginsIndexRoute]),
   ])
@@ -100,6 +175,17 @@ beforeEach(() => {
   setBaseUrl('http://daemon.test')
   setToken('tok')
   plugins = [makePlugin()]
+  requests = []
+  deferCheck = false
+  resolveDeferredCheck = null
+  deferUpgrade = false
+  resolveDeferredUpgrade = null
+  latestQueryClient = null
+  failSave = false
+  failCheck = false
+  staleCheckOnce = false
+  checkAvailable = true
+  checkIdentityStatus = 'known'
   installFetch()
 })
 afterEach(() => vi.restoreAllMocks())
@@ -161,5 +247,170 @@ describe('/plugins split page', () => {
     fireEvent.click(await waitFor(() => screen.getByTestId('plugin-check-update')))
     // The list card (left rail, always mounted) now shows the update chip.
     await waitFor(() => expect(screen.getByTestId('plugin-update-my-plugin')).toBeTruthy())
+  })
+
+  test('dirty Save and check publishes the exact PUT receipt before operation', async () => {
+    renderPlugins('/plugins/p1')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'my-plugin' }))
+    fireEvent.change(screen.getByLabelText(/^Spec/), { target: { value: 'my-plugin@^2' } })
+    fireEvent.click(screen.getByRole('tab', { name: 'Updates' }))
+    const button = screen.getByTestId('plugin-check-update')
+    expect(button.textContent).toBe('Save and check')
+    fireEvent.click(button)
+    await waitFor(() => expect(screen.getByTestId('plugin-update-my-plugin')).toBeTruthy())
+    const writes = requests.filter(
+      (request) => request.method === 'PUT' || request.path.endsWith('/check-update'),
+    )
+    expect(writes.map((request) => request.method)).toEqual(['PUT', 'POST'])
+    expect(writes[1]?.body).toEqual({ expectedConfigHash: 'b'.repeat(64) })
+  })
+
+  test('invalid draft returns to Config and performs zero save/check request', async () => {
+    renderPlugins('/plugins/p1')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'my-plugin' }))
+    fireEvent.change(screen.getByLabelText(/^Options \(JSON object\)/), {
+      target: { value: '{broken' },
+    })
+    fireEvent.click(screen.getByRole('tab', { name: 'Updates' }))
+    fireEvent.click(screen.getByTestId('plugin-check-update'))
+    await waitFor(() => expect(screen.getByTestId('plugin-panel-config').hidden).toBe(false))
+    const options = screen.getByTestId('plugin-form-options')
+    await waitFor(() => expect(document.activeElement).toBe(options))
+    expect(options.getAttribute('aria-invalid')).toBe('true')
+    expect(options.getAttribute('aria-errormessage')).toBe('plugin-field-options-error')
+    expect(
+      requests.some(
+        (request) => request.method === 'PUT' || request.path.endsWith('/check-update'),
+      ),
+    ).toBe(false)
+  })
+
+  test('Save failure performs zero Check request and keeps the draft dirty', async () => {
+    failSave = true
+    renderPlugins('/plugins/p1')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'my-plugin' }))
+    fireEvent.change(screen.getByLabelText(/^Spec/), { target: { value: 'my-plugin@^2' } })
+    fireEvent.click(screen.getByRole('tab', { name: 'Updates' }))
+    fireEvent.click(screen.getByTestId('plugin-check-update'))
+    await waitFor(() => expect(screen.getByText(/save failed/)).toBeTruthy())
+    expect(requests.filter((request) => request.path.endsWith('/check-update'))).toHaveLength(0)
+    expect(screen.getByText('Draft differs from the saved plugin')).toBeTruthy()
+  })
+
+  test('no-change receipt is explicit and keeps Upgrade disabled', async () => {
+    checkAvailable = false
+    renderPlugins('/plugins/p1')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'my-plugin' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Updates' }))
+    fireEvent.click(screen.getByTestId('plugin-check-update'))
+    await waitFor(() => expect(screen.getByText('This saved plugin is up to date.')).toBeTruthy())
+    expect((screen.getByTestId('plugin-upgrade') as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  test('Check transport error has a working exact-operation retry', async () => {
+    failCheck = true
+    renderPlugins('/plugins/p1')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'my-plugin' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Updates' }))
+    fireEvent.click(screen.getByTestId('plugin-check-update'))
+    await waitFor(() => expect(screen.getByText(/check failed/)).toBeTruthy())
+    failCheck = false
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(screen.getByTestId('plugin-update-my-plugin')).toBeTruthy())
+    expect(requests.filter((request) => request.path.endsWith('/check-update'))).toHaveLength(2)
+  })
+
+  test('stale Check reloads the saved hash so Retry uses the new exact basis', async () => {
+    staleCheckOnce = true
+    renderPlugins('/plugins/p1')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'my-plugin' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Updates' }))
+    fireEvent.click(screen.getByTestId('plugin-check-update'))
+    await waitFor(() => expect(screen.getByText(/older saved revision/)).toBeTruthy())
+    await waitFor(() =>
+      expect(
+        latestQueryClient!.getQueryData<PluginRow>(['plugins', 'p1'])?.operationConfigHash,
+      ).toBe('c'.repeat(64)),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(screen.getByTestId('plugin-update-my-plugin')).toBeTruthy())
+    const checks = requests.filter((request) => request.path.endsWith('/check-update'))
+    expect(checks.map((request) => request.body)).toEqual([
+      { expectedConfigHash: 'a'.repeat(64) },
+      { expectedConfigHash: 'c'.repeat(64) },
+    ])
+  })
+
+  test('Upgrade applies only the exact checked hash and clears the ready chip', async () => {
+    renderPlugins('/plugins/p1')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'my-plugin' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Updates' }))
+    fireEvent.click(screen.getByTestId('plugin-check-update'))
+    await waitFor(() => expect(screen.getByTestId('plugin-update-my-plugin')).toBeTruthy())
+    fireEvent.click(screen.getByTestId('plugin-upgrade'))
+    await waitFor(() =>
+      expect(screen.getByText('Upgrade published a new immutable plugin generation.')).toBeTruthy(),
+    )
+    expect(screen.queryByTestId('plugin-update-my-plugin')).toBeNull()
+    const upgradeRequest = requests.find((request) => request.path.endsWith('/upgrade'))
+    expect(upgradeRequest?.body).toEqual({ expectedConfigHash: 'a'.repeat(64) })
+  })
+
+  test('late Check receipt cannot populate cache after a newer resource hash wins', async () => {
+    deferCheck = true
+    renderPlugins('/plugins/p1')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'my-plugin' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Updates' }))
+    fireEvent.click(screen.getByTestId('plugin-check-update'))
+    await waitFor(() => expect(resolveDeferredCheck).not.toBeNull())
+    latestQueryClient!.setQueryData(['plugins', 'p1'], {
+      ...plugins[0]!,
+      description: 'foreign write',
+      operationConfigHash: 'c'.repeat(64),
+    })
+    resolveDeferredCheck!(json({}))
+    await waitFor(() => expect(screen.getByText(/older saved revision/)).toBeTruthy())
+    expect(screen.queryByTestId('plugin-update-my-plugin')).toBeNull()
+  })
+
+  test('late Upgrade receipt cannot roll the detail query back over a newer PUT hash', async () => {
+    deferUpgrade = true
+    renderPlugins('/plugins/p1')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'my-plugin' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Updates' }))
+    fireEvent.click(screen.getByTestId('plugin-check-update'))
+    await waitFor(() => expect(screen.getByTestId('plugin-update-my-plugin')).toBeTruthy())
+    fireEvent.click(screen.getByTestId('plugin-upgrade'))
+    await waitFor(() => expect(resolveDeferredUpgrade).not.toBeNull())
+
+    const newer = {
+      ...plugins[0]!,
+      description: 'foreign PUT after backend upgrade',
+      operationConfigHash: 'e'.repeat(64),
+      updatedAt: plugins[0]!.updatedAt + 1,
+    }
+    plugins[0] = newer
+    latestQueryClient!.setQueryData(['plugins', 'p1'], newer)
+    resolveDeferredUpgrade!()
+
+    await waitFor(() => expect(screen.getByText(/older saved revision/)).toBeTruthy())
+    await waitFor(() =>
+      expect(
+        latestQueryClient!.getQueryData<PluginRow>(['plugins', 'p1'])?.operationConfigHash,
+      ).toBe('e'.repeat(64)),
+    )
+    expect(latestQueryClient!.getQueryData<PluginRow>(['plugins', 'p1'])?.description).toBe(
+      'foreign PUT after backend upgrade',
+    )
+  })
+
+  test('file source explains external management and exposes no Check/Upgrade actions', async () => {
+    plugins[0] = { ...plugins[0]!, sourceKind: 'file', spec: '/tmp/external-plugin' }
+    renderPlugins('/plugins/p1')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'my-plugin' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Updates' }))
+    expect(screen.getByText('Managed by an external path')).toBeTruthy()
+    expect(screen.queryByTestId('plugin-check-update')).toBeNull()
+    expect(screen.queryByTestId('plugin-upgrade')).toBeNull()
   })
 })

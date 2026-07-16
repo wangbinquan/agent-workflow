@@ -282,7 +282,7 @@ describe('WorktreeDiffPanel — keyboard file switching', () => {
 
   test('ArrowDown / ArrowUp move to the next / previous file', () => {
     render(<WorktreeDiffPanel diff={THREE_FILE_DIFF} />)
-    const tablist = screen.getByRole('tablist')
+    const tablist = screen.getByRole('tablist', { name: i18n.t('tasks.diffFileSelectorLabel') })
     expect(selectedTabLabel()).toBe('a.ts')
 
     fireEvent.keyDown(tablist, { key: 'ArrowDown' })

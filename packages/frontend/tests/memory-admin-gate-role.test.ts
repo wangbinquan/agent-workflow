@@ -1,27 +1,43 @@
-// Locks the RFC-099 audit (2026-07-15) fix: the distill-jobs detail route and
-// the sidebar memory badge must gate their admin-only surfaces on the admin
-// ROLE (useIsAdmin), NOT the memory:approve PERMISSION. RFC-099 D12 moved
-// memory:approve into the user baseline, so usePermission('memory:approve') is
-// true for EVERY logged-in user — keying the gate off it made the "admin only"
-// branch a no-op: non-admins fired the admin requests (403 → WS reconnect
-// loop) and the badge counted the whole candidate pool. If this goes red,
-// someone reintroduced the permission-point gate; use the role instead.
+// Locks the two distinct memory access authorities after RFC-201:
+//   - distill-job administration is still an actor-role gate (useIsAdmin);
+//   - the sidebar candidate badge follows each server-returned canManage bit.
+//
+// `memory:approve` is in the user baseline, so it is not an admin oracle. The
+// badge must not replace the per-row server decision with either a role check
+// or a missing-field truthiness fallback.
 
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'vitest'
+import { countManageableMemoryCandidates } from '../src/components/shell/MemoryPendingBadge'
 
-const FILES = [
-  ['distill-jobs detail route', 'src/routes/memory.distill-jobs.$jobId.tsx'],
-  ['sidebar memory badge', 'src/components/shell/MemoryPendingBadge.tsx'],
-] as const
+const DISTILL_ROUTE = readFileSync(
+  resolve(__dirname, '../src/routes/memory.distill-jobs.$jobId.tsx'),
+  'utf8',
+)
+const PENDING_BADGE = readFileSync(
+  resolve(__dirname, '../src/components/shell/MemoryPendingBadge.tsx'),
+  'utf8',
+)
 
-describe('memory admin gate keys off role, not the memory:approve permission', () => {
-  for (const [label, rel] of FILES) {
-    test(`${label} gates on useIsAdmin, not usePermission('memory:approve')`, () => {
-      const src = readFileSync(resolve(__dirname, '..', rel), 'utf8')
-      expect(src).not.toContain("usePermission('memory:approve')")
-      expect(src).toContain('useIsAdmin')
-    })
-  }
+describe('memory access authorities', () => {
+  test('distill-job detail remains role-gated, never permission-point gated', () => {
+    expect(DISTILL_ROUTE).not.toContain("usePermission('memory:approve')")
+    expect(DISTILL_ROUTE).toContain('useIsAdmin')
+    expect(DISTILL_ROUTE).toMatch(/enabled: isAdmin/)
+  })
+
+  test('pending badge delegates candidate eligibility only to explicit canManage=true', () => {
+    expect(PENDING_BADGE).not.toContain("usePermission('memory:approve')")
+    expect(PENDING_BADGE).not.toContain('useIsAdmin')
+    expect(PENDING_BADGE).toContain('item.canManage === true')
+
+    const candidates = [
+      { canManage: true },
+      { canManage: false },
+      { canManage: undefined },
+      {},
+    ] as unknown as Parameters<typeof countManageableMemoryCandidates>[0]
+    expect(countManageableMemoryCandidates(candidates)).toBe(1)
+  })
 })

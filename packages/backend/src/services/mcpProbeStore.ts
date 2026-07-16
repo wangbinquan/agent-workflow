@@ -44,10 +44,22 @@ export async function getProbe(db: DbClient, mcpName: string): Promise<McpProbe 
   return r === undefined ? null : rowToProbe(r.probe, r.mcpName)
 }
 
+/** Stable-id variant used by the operation coordinator across renames. */
+export async function getProbeByMcpId(db: DbClient, mcpId: string): Promise<McpProbe | null> {
+  const rows = await db
+    .select({ probe: mcpProbes, mcpName: mcps.name })
+    .from(mcpProbes)
+    .innerJoin(mcps, eq(mcpProbes.mcpId, mcps.id))
+    .where(eq(mcpProbes.mcpId, mcpId))
+    .limit(1)
+  const row = rows[0]
+  return row === undefined ? null : rowToProbe(row.probe, row.mcpName)
+}
+
 export async function upsertProbe(
   db: DbClient,
   mcpId: string,
-  mcpName: string,
+  _mcpName: string,
   result: ProbeResult,
 ): Promise<McpProbe> {
   // Pre-check parent mcp exists — defends against caller passing a stale id
@@ -90,7 +102,7 @@ export async function upsertProbe(
   } else {
     await db.update(mcpProbes).set(cols).where(eq(mcpProbes.mcpId, mcpId))
   }
-  const after = await getProbe(db, mcpName)
+  const after = await getProbeByMcpId(db, mcpId)
   if (after === null) throw new Error('probe row disappeared after upsert')
   return after
 }

@@ -8,7 +8,7 @@
 // displayName uniqueness, the alias auto-follows the agent name / picked user
 // until hand-edited, and buildRow() emits a validated row.
 
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { UserPublic } from '@agent-workflow/shared'
 import { AgentCapabilityCard } from '@/components/agent/AgentCapabilityCard'
@@ -44,6 +44,8 @@ export interface AgentMemberDraft {
   setRoleDesc: (v: string) => void
   errors: Record<string, string>
   invalid: boolean
+  dirty: boolean
+  reset: () => void
   buildRow: () => WorkgroupMemberRowState
 }
 
@@ -52,6 +54,12 @@ export function useAgentMemberDraft(others: MemberDraftOthers): AgentMemberDraft
   const [displayName, setDisplayName] = useState('')
   const [aliasTouched, setAliasTouched] = useState(false)
   const [roleDesc, setRoleDesc] = useState('')
+  const reset = useCallback(() => {
+    setAgentName('')
+    setDisplayName('')
+    setAliasTouched(false)
+    setRoleDesc('')
+  }, [])
 
   const errors = validateMemberDraft(
     { memberType: 'agent', agentName, userId: '', displayName },
@@ -73,6 +81,8 @@ export function useAgentMemberDraft(others: MemberDraftOthers): AgentMemberDraft
     setRoleDesc,
     errors,
     invalid: Object.keys(errors).length > 0,
+    dirty: agentName !== '' || displayName !== '' || roleDesc !== '',
+    reset,
     buildRow: () => makeAgentMemberRow({ agentName, displayName, roleDesc }),
   }
 }
@@ -147,6 +157,8 @@ export interface HumanMemberDraft {
   setRoleDesc: (v: string) => void
   errors: Record<string, string>
   invalid: boolean
+  dirty: boolean
+  reset: () => void
   /** null until a user is picked (submit stays disabled via `invalid`). */
   buildRow: () => WorkgroupMemberRowState | null
 }
@@ -156,6 +168,12 @@ export function useHumanMemberDraft(others: MemberDraftOthers): HumanMemberDraft
   const [displayName, setDisplayName] = useState('')
   const [aliasTouched, setAliasTouched] = useState(false)
   const [roleDesc, setRoleDesc] = useState('')
+  const reset = useCallback(() => {
+    setPicked([])
+    setDisplayName('')
+    setAliasTouched(false)
+    setRoleDesc('')
+  }, [])
   const user = picked[0]
 
   const errors = validateMemberDraft(
@@ -180,6 +198,8 @@ export function useHumanMemberDraft(others: MemberDraftOthers): HumanMemberDraft
     setRoleDesc,
     errors,
     invalid: Object.keys(errors).length > 0,
+    dirty: picked.length > 0 || displayName !== '' || roleDesc !== '',
+    reset,
     buildRow: () =>
       user === undefined ? null : makeHumanMemberRow({ userId: user.id, displayName, roleDesc }),
   }

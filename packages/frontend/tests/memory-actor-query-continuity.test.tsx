@@ -92,6 +92,7 @@ function renderMemory(client: QueryClient, initialEntry = '/memory?tab=distill-j
       <RouterProvider router={router as any} />
     </QueryClientProvider>,
   )
+  return router
 }
 
 beforeEach(async () => {
@@ -107,6 +108,40 @@ afterEach(() => {
 })
 
 describe('/memory actor query continuity', () => {
+  test('invalid tab canonicalizes to All and compact navigation preserves adjacent search/hash', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (request: RequestInfo | URL) => {
+      const path = new URL(request.toString()).pathname
+      if (path === '/api/memories') return json({ items: [] })
+      if (path === '/api/fusions/pending-count') return json({ count: 0 })
+      throw new Error(`unexpected memory request: ${path}`)
+    })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    client.setQueryData(['auth', 'me', 'tok'], userActor)
+
+    const router = renderMemory(client, '/memory?tab=bogus&focus=mem_1&source=distill#candidate')
+
+    await waitFor(() => {
+      expect(router.state.location.search).toEqual({
+        tab: 'all',
+        focus: 'mem_1',
+        source: 'distill',
+      })
+      expect(router.state.location.hash).toBe('candidate')
+    })
+
+    const selector = screen.getByRole('combobox', { name: enUS.memory.sectionNavLabel })
+    fireEvent.click(selector)
+    fireEvent.mouseDown(screen.getByRole('option', { name: /Fusion/ }))
+    await waitFor(() => {
+      expect(router.state.location.search).toEqual({
+        tab: 'fusion',
+        focus: 'mem_1',
+        source: 'distill',
+      })
+      expect(router.state.location.hash).toBe('candidate')
+    })
+  })
+
   test('cold start renders LoadingState without flashing admin or forbidden content', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (request: RequestInfo | URL) => {
       const path = new URL(request.toString()).pathname
@@ -119,8 +154,7 @@ describe('/memory actor query continuity', () => {
 
     expect(await screen.findByRole('heading', { level: 1, name: enUS.memory.title })).toBeTruthy()
     expect(screen.getByTestId('loading-state')).toBeTruthy()
-    expect(screen.queryByTestId('memory-tab-bar')).toBeNull()
-    expect(screen.queryByTestId('memory-distill-jobs-admin-only')).toBeNull()
+    expect(screen.queryByRole('navigation', { name: enUS.memory.sectionNavLabel })).toBeNull()
     expect(screen.queryByTestId('memory-distill-jobs')).toBeNull()
   })
 
@@ -135,20 +169,24 @@ describe('/memory actor query continuity', () => {
           ? json({ code: 'actor-unavailable', message: 'Actor lookup failed' }, 503)
           : json(userActor)
       }
+      if (path === '/api/memories') return json({ items: [] })
+      if (path === '/api/fusions/pending-count') return json({ count: 0 })
       throw new Error(`unexpected memory request: ${path}`)
     })
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
 
-    renderMemory(client)
+    const router = renderMemory(client)
 
     expect((await screen.findByRole('alert')).textContent).toContain('Actor lookup failed')
-    expect(screen.queryByTestId('memory-tab-bar')).toBeNull()
-    expect(screen.queryByTestId('memory-distill-jobs-admin-only')).toBeNull()
+    expect(screen.queryByRole('navigation', { name: enUS.memory.sectionNavLabel })).toBeNull()
 
     failActor = false
     fireEvent.click(screen.getByRole('button', { name: enUS.common.retry }))
-    expect(await screen.findByTestId('memory-tab-bar')).toBeTruthy()
-    expect(screen.getByTestId('memory-distill-jobs-admin-only')).toBeTruthy()
+    expect(
+      await screen.findByRole('navigation', { name: enUS.memory.sectionNavLabel }),
+    ).toBeTruthy()
+    await waitFor(() => expect(router.state.location.search.tab).toBe('all'))
+    expect(screen.getByRole('status').textContent).toContain(enUS.memory.sectionUnavailable)
     expect(actorRequests).toBe(2)
   })
 
@@ -161,6 +199,8 @@ describe('/memory actor query continuity', () => {
           ? json({ code: 'actor-refresh-failed', message: 'Actor refresh failed' }, 503)
           : json(adminActor)
       }
+      if (path === '/api/memories') return json({ items: [] })
+      if (path === '/api/fusions/pending-count') return json({ count: 0 })
       throw new Error(`unexpected memory request: ${path}`)
     })
     const client = new QueryClient({

@@ -8,7 +8,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { Config } from '@agent-workflow/shared'
-import { api } from '@/api/client'
+import { queryConfig, useConfigQueryKey } from '@/lib/config-resource'
 import { getToken, subscribeAuth } from '@/stores/auth'
 
 export type Theme = 'system' | 'light' | 'dark'
@@ -74,9 +74,10 @@ export function useResolvedTheme(): ResolvedTheme {
 export function useApplyTheme(): void {
   const token = useAuthToken()
   const system = useSystemTheme()
+  const configQueryKey = useConfigQueryKey()
   const config = useQuery<Config>({
-    queryKey: ['config'],
-    queryFn: ({ signal }) => api.get('/api/config', undefined, signal),
+    queryKey: configQueryKey,
+    queryFn: ({ signal }) => queryConfig(signal),
     enabled: token !== null,
     staleTime: 60_000,
   })

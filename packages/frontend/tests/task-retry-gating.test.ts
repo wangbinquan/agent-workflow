@@ -146,8 +146,11 @@ describe('tasks.detail.tsx — resume button/hint wiring (source locks)', () => 
 
   test('the turn-engine workgroup relaunch hint is wired (showWorkgroupResumeHint → resumeUnavailableWorkgroup)', () => {
     expect(DETAIL_SRC).toMatch(/const showWorkgroupResumeHint =[\s\S]*?!isDynamicWorkgroup/)
-    expect(DETAIL_SRC).toMatch(/\{showWorkgroupResumeHint && \(/)
+    expect(DETAIL_SRC).toMatch(
+      /\{showWorkgroupResumeHint && !dismissedBanners\.has\(workgroupResumeBannerKey\) && \(/,
+    )
     expect(DETAIL_SRC).toMatch(/tasks\.resumeUnavailableWorkgroup/)
+    expect(DETAIL_SRC).toMatch(/dismissBanner\(workgroupResumeBannerKey\)/)
   })
 
   test('resumeUnavailableWorkgroup copy exists in both i18n bundles', () => {

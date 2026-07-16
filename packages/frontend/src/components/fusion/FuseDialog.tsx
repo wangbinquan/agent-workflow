@@ -77,7 +77,7 @@ export function FuseDialog({
     enabled: open && entry.kind === 'from-skill',
   })
   const selectable = useMemo(
-    () => (memories.data?.items ?? []).filter((m) => m.canManage !== false),
+    () => (memories.data?.items ?? []).filter((m) => m.canManage === true),
     [memories.data],
   )
 

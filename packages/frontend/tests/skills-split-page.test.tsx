@@ -1,12 +1,12 @@
 // RFC-169 (T14) — the /skills split page end-to-end (real routes + mocked API):
 //   - /skills empty pane hosts the guidance (RFC-178: managed-only);
-//   - selecting a managed skill opens the four-tab detail;
+//   - selecting a managed skill opens the task-oriented detail tabs;
 //   - editing marks it dirty; Save stays in place (D2) and clears the dot;
 //   - the file tree refuses to add the protected SKILL.md main file (guard).
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { RouterProvider, createMemoryHistory, createRouter } from '@tanstack/react-router'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { Route as RootRoute } from '../src/routes/__root'
@@ -55,7 +55,16 @@ function makeSkill(name: string, description = ''): SkillRow {
   }
 }
 
-function installFetch() {
+function installFetch(
+  opts: {
+    saveGate?: Promise<void>
+    ambiguousSave?: boolean
+    failContentAfterSave?: boolean
+    restoreGate?: Promise<void>
+    withRestorableVersion?: boolean
+  } = {},
+) {
+  let saveAttempted = false
   vi.spyOn(globalThis, 'fetch').mockImplementation(
     async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input.toString()
@@ -82,7 +91,10 @@ function installFetch() {
         // RFC-170 T-BSAFE③: the content read is the single fenced snapshot — it
         // carries the authoritative description + body + composite token, and Save
         // routes through the combined-save funnel below.
-        if (method === 'GET')
+        if (method === 'GET') {
+          if (saveAttempted && opts.failContentAfterSave) {
+            return json({ code: 'snapshot-unavailable', message: 'snapshot unavailable' }, 500)
+          }
           return json({
             name,
             description: skills.find((x) => x.name === name)?.description ?? '',
@@ -90,11 +102,15 @@ function installFetch() {
             contentVersion: 1,
             token: `t-${name}`,
           })
+        }
       }
       // RFC-170 T-BSAFE③: combined-save is the single save funnel (the old
       // metadata/content PUTs are 410 Gone). Apply the description + body patch.
       const saveMatch = path.match(/^\/api\/skills\/([^/]+)\/save$/)
       if (saveMatch && method === 'POST') {
+        await opts.saveGate
+        saveAttempted = true
+        if (opts.ambiguousSave) throw new TypeError('response lost')
         const name = decodeURIComponent(saveMatch[1]!)
         const i = skills.findIndex((x) => x.name === name)
         const patch = (body ?? {}) as { description?: string; bodyMd?: string }
@@ -110,7 +126,30 @@ function installFetch() {
       }
       if (/\/api\/skills\/[^/]+\/files$/.test(path))
         return json([{ path: 'SKILL.md', type: 'file' }])
-      if (/\/api\/skills\/[^/]+\/versions$/.test(path)) return json([])
+      if (/\/api\/skills\/[^/]+\/versions$/.test(path)) {
+        return json(
+          opts.withRestorableVersion
+            ? [
+                {
+                  id: 'sk1-v0',
+                  skillName: 'sk1',
+                  versionIndex: 0,
+                  source: 'editor',
+                  summary: 'Earlier version',
+                  fusionId: null,
+                  restoredFromVersion: null,
+                  authorUserId: null,
+                  contentHash: 'hash-v0',
+                  createdAt: 1,
+                },
+              ]
+            : [],
+        )
+      }
+      if (/\/api\/skills\/[^/]+\/versions\/\d+\/restore$/.test(path) && method === 'POST') {
+        await opts.restoreGate
+        return json({ ok: true })
+      }
       return json({ error: 'unhandled' }, 404)
     },
   )
@@ -165,12 +204,11 @@ describe('/skills split page', () => {
     await waitFor(() => expect(screen.getByTestId('split-detail').textContent).not.toBe(''))
   })
 
-  test('selecting a managed skill opens the four-tab detail', async () => {
+  test('selecting a managed skill opens the three task-oriented tabs', async () => {
     renderSkills('/skills/sk1')
     await waitFor(() => screen.getByRole('heading', { level: 2, name: 'sk1' }))
     for (const [key, name] of [
-      ['overview', 'Overview'],
-      ['content', 'Content'],
+      ['edit', 'Edit'],
       ['files', 'Files'],
       ['history', 'History'],
     ] as const) {
@@ -194,8 +232,86 @@ describe('/skills split page', () => {
     const desc = screen.getByRole('textbox', { name: /Description/ }) as HTMLInputElement
     fireEvent.change(desc, { target: { value: 'edited skill desc' } })
     await waitFor(() => expect(screen.queryByTestId('split-card-dot-sk1')).not.toBeNull())
+    expect(screen.getByRole('tab', { name: /Edit.*unsaved/i })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: /History.*Save or discard/i })).toBeTruthy()
     fireEvent.click(screen.getByTestId('skill-save-button'))
     await waitFor(() => expect(screen.queryByTestId('split-card-dot-sk1')).toBeNull())
+    expect(router.state.location.pathname).toBe('/skills/sk1')
+  })
+
+  test('Save All holds the route busy guard until the write and reconciliation settle', async () => {
+    vi.restoreAllMocks()
+    let releaseSave!: () => void
+    const saveGate = new Promise<void>((resolve) => {
+      releaseSave = resolve
+    })
+    installFetch({ saveGate })
+    const router = renderSkills('/skills/sk1')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'sk1' }))
+    fireEvent.change(screen.getByRole('textbox', { name: /Description/ }), {
+      target: { value: 'pending skill save' },
+    })
+
+    fireEvent.click(screen.getByTestId('skill-save-button'))
+    fireEvent.click(screen.getByTestId('skills-mobile-back'))
+
+    const dialog = await screen.findByTestId('unsaved-guard-dialog')
+    expect(dialog.textContent).toMatch(/save is still in progress/i)
+    expect(screen.queryByTestId('unsaved-discard')).toBeNull()
+    expect(router.state.location.pathname).toBe('/skills/sk1')
+
+    releaseSave()
+    await waitFor(() => expect(screen.queryByTestId('unsaved-guard-dialog')).toBeNull())
+    expect(router.state.location.pathname).toBe('/skills/sk1')
+    fireEvent.click(screen.getByTestId('skills-mobile-back'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/skills'))
+  })
+
+  test('outcome-unknown keeps the busy guard armed and never exposes Discard', async () => {
+    vi.restoreAllMocks()
+    installFetch({ ambiguousSave: true, failContentAfterSave: true })
+    const router = renderSkills('/skills/sk1')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'sk1' }))
+    fireEvent.change(screen.getByRole('textbox', { name: /Description/ }), {
+      target: { value: 'unknown outcome' },
+    })
+    fireEvent.click(screen.getByTestId('skill-save-button'))
+
+    await screen.findByText(/save result unknown/i)
+    fireEvent.click(screen.getByTestId('skills-mobile-back'))
+
+    const dialog = await screen.findByTestId('unsaved-guard-dialog')
+    expect(dialog.textContent).toMatch(/save is still in progress/i)
+    expect(screen.queryByTestId('unsaved-discard')).toBeNull()
+    expect(router.state.location.pathname).toBe('/skills/sk1')
+  })
+
+  test('restore acquires busy synchronously before POST so same-tick Back has no Discard', async () => {
+    vi.restoreAllMocks()
+    let releaseRestore!: () => void
+    const restoreGate = new Promise<void>((resolve) => {
+      releaseRestore = resolve
+    })
+    installFetch({ restoreGate, withRestorableVersion: true })
+    const router = renderSkills('/skills/sk1')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'sk1' }))
+    fireEvent.click(screen.getByRole('tab', { name: /^History$/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /^Restore$/i }))
+    const confirm = screen.getByRole('button', { name: /Restore the skill to v0/i })
+    const back = screen.getByTestId('skills-mobile-back')
+
+    act(() => {
+      confirm.click()
+      back.click()
+    })
+
+    const dialog = await screen.findByTestId('unsaved-guard-dialog')
+    expect(dialog.textContent).toMatch(/save is still in progress/i)
+    expect(screen.queryByTestId('unsaved-discard')).toBeNull()
+    expect(router.state.location.pathname).toBe('/skills/sk1')
+
+    releaseRestore()
+    await waitFor(() => expect(screen.queryByTestId('unsaved-guard-dialog')).toBeNull())
     expect(router.state.location.pathname).toBe('/skills/sk1')
   })
 
@@ -208,14 +324,14 @@ describe('/skills split page', () => {
     fireEvent.click(screen.getByRole('button', { name: /Add/ }))
     // Frontend guard blocks it with an error, no PUT attempted.
     await waitFor(() =>
-      expect(screen.getByText(/SKILL\.md is edited in the Content tab/)).toBeTruthy(),
+      expect(screen.getByText(/SKILL\.md is edited in the Edit tab/)).toBeTruthy(),
     )
   })
 
   test('the new view offers the managed + ZIP creation modes', async () => {
     renderSkills('/skills/new')
     await waitFor(() => screen.getByRole('heading', { level: 2, name: /New skill/ }))
-    const managedTab = screen.getByRole('tab', { name: 'Managed' })
+    const managedTab = screen.getByRole('tab', { name: 'Manual creation' })
     expect(managedTab.id).toBe('skills-new-tab-managed')
     expect(managedTab.getAttribute('aria-controls')).toBe('skills-new-panel-managed')
     expect(
@@ -234,7 +350,7 @@ describe('/skills split page', () => {
     ).toBe('detail')
     fireEvent.click(screen.getByTestId('skills-tab-zip'))
     expect(screen.getByRole('heading', { level: 2, name: 'Import skills' })).toBeTruthy()
-    const zipTab = screen.getByRole('tab', { name: 'ZIP import' })
+    const zipTab = screen.getByRole('tab', { name: 'Import ZIP' })
     expect(zipTab.id).toBe('skills-new-tab-zip')
     expect(zipTab.getAttribute('aria-controls')).toBe('skills-new-panel-zip')
     expect(document.getElementById('skills-new-panel-zip')?.getAttribute('aria-labelledby')).toBe(
@@ -243,8 +359,40 @@ describe('/skills split page', () => {
     expect(screen.getByText(/Structure and name conflicts/)).toBeTruthy()
     expect(screen.queryByTestId('skill-create-button')).toBeNull()
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Managed' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Manual creation' }))
     expect(screen.getByRole('heading', { level: 2, name: 'New skill' })).toBeTruthy()
     expect(screen.getByTestId('skill-create-button')).toBeTruthy()
+  })
+
+  test('a selected ZIP participates in the route guard and Discard clears it', async () => {
+    const router = renderSkills('/skills/new')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: /New skill/ }))
+    fireEvent.click(screen.getByTestId('skills-tab-zip'))
+    fireEvent.change(screen.getByTestId('zip-file-input'), {
+      target: {
+        files: [new File(['zip'], 'staged.zip', { type: 'application/zip' })],
+      },
+    })
+    expect(screen.getByText('staged.zip')).toBeTruthy()
+    expect(screen.getByRole('tab', { name: /Import ZIP.*unsaved/i })).toBeTruthy()
+
+    fireEvent.click(screen.getByTestId('skills-mobile-back'))
+    expect(await screen.findByTestId('unsaved-guard-dialog')).toBeTruthy()
+    expect(router.state.location.pathname).toBe('/skills/new')
+
+    fireEvent.click(screen.getByTestId('unsaved-discard'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/skills'))
+  })
+
+  test('manual progress stays announced after switching creation modes', async () => {
+    renderSkills('/skills/new')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: /New skill/ }))
+
+    const name = screen.getAllByRole('textbox')[0] as HTMLInputElement
+    fireEvent.change(name, { target: { value: 'draft-skill' } })
+    expect(screen.getByRole('tab', { name: /Manual creation.*unsaved/i })).toBeTruthy()
+
+    fireEvent.click(screen.getByTestId('skills-tab-zip'))
+    expect(screen.getByRole('tab', { name: /Manual creation.*unsaved/i })).toBeTruthy()
   })
 })

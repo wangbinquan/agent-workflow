@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next'
 import type { Task } from '@agent-workflow/shared'
 
 import { api } from '@/api/client'
+import { BannerDismissButton } from '@/components/NoticeBanner'
 import { formatRelativeTime } from '@/lib/homepage'
 import { isTerminal } from '@/lib/task-detail-tabs'
 
@@ -78,6 +79,7 @@ export function RecoverySection({
   const { t } = useTranslation()
   const qc = useQueryClient()
   const [expanded, setExpanded] = useState(false)
+  const [dismissedSignature, setDismissedSignature] = useState<string | null>(null)
   const q = useQuery<{ events: RecoveryEventRow[]; suspended: boolean }>({
     queryKey: ['recovery-events', taskId],
     queryFn: ({ signal }) =>
@@ -97,6 +99,11 @@ export function RecoverySection({
   if (data === undefined || (data.events.length === 0 && !data.suspended)) return null
 
   const { events, suspended } = data
+  const recoverySignature = `${taskId}:${suspended}:${events
+    .map((event) => `${event.id}:${event.kind}:${event.createdAt}`)
+    .sort()
+    .join('|')}`
+  if (dismissedSignature === recoverySignature) return null
   const nowMs = Date.now()
 
   return (
@@ -104,6 +111,7 @@ export function RecoverySection({
       className={`task-error-banner ${
         suspended ? 'task-error-banner--warning' : 'task-error-banner--muted'
       } task-recovery`}
+      role={suspended ? 'alert' : 'status'}
       data-testid="task-recovery"
     >
       <div className="task-error-banner__body">
@@ -159,6 +167,14 @@ export function RecoverySection({
             {expanded ? t('tasks.recovery.collapse') : t('tasks.recovery.expand')}
           </button>
         )}
+        <BannerDismissButton
+          label={t('common.close')}
+          onDismiss={() => {
+            setExpanded(false)
+            setDismissedSignature(recoverySignature)
+          }}
+          testId="task-recovery-dismiss"
+        />
       </div>
     </div>
   )

@@ -1,13 +1,12 @@
-// RFC-021: source-level locks on how `tasks.detail.tsx` wires the tab
-// layout. We deliberately don't do a full RTL render of TaskDetailPage —
+// RFC-021/RFC-201: source-level locks on how `tasks.detail.tsx` wires the
+// URL-backed page-section layout. We deliberately don't do a full RTL render of TaskDetailPage —
 // that route reads from tanstack-router's `Route.useParams()`, runs four
 // `useQuery`s, two `useMutation`s, and `useTaskSync` (WS), so a full
 // integration render would need a wall of mocks and would still fail to
 // exercise xyflow inside jsdom.
 //
-// What this file *does* lock: the structural invariants that make the
-// tabs actually tabs — five distinct `hidden={tab !== 'X'}` panes, a
-// tab-bar with all five labels, and the jumpToFailed handler that
+// What this file *does* lock: the structural invariants that keep every
+// URL key mapped to one hidden/active section, grouped page navigation, and the jumpToFailed handler that
 // switches tab synchronously with the node-run selection. Pure-function
 // branches (TAB_ORDER / availableTabs / nextTabForFailedJump) are
 // covered by tests/task-detail-tabs.test.ts.
@@ -18,7 +17,7 @@ import { describe, expect, test } from 'vitest'
 
 const SRC = readFileSync(resolve(import.meta.dirname, '..', 'src/routes/tasks.detail.tsx'), 'utf8')
 
-describe('TaskDetailPage tab structure', () => {
+describe('TaskDetailPage page-section structure', () => {
   test('page root uses .page--task-detail (viewport lock anchor)', () => {
     expect(SRC).toMatch(/className="page page--task-detail"/)
     expect(SRC).not.toMatch(/className="page page--wide"/)
@@ -46,13 +45,12 @@ describe('TaskDetailPage tab structure', () => {
     )
   })
 
-  test('renders the shared <TabBar> carrying .task-detail__tab-bar', () => {
-    // RFC-150 PR-3: the hand-rolled `<nav role="tablist" class="task-detail__tab-bar
-    // tabs">` became the shared <TabBar className="task-detail__tab-bar"> —
-    // role=tablist/tab and the `tabs` class chain now come from the primitive
-    // (locked in tab-bar.test.tsx), so anchor on the TabBar wiring instead.
-    expect(SRC).toMatch(/<TabBar\b/)
-    expect(SRC).toMatch(/className="task-detail__tab-bar"/)
+  test('uses grouped inline PageSectionNav instead of pseudo-tab semantics', () => {
+    expect(SRC).toMatch(/<PageSectionNav<TaskDetailTab>/)
+    expect(SRC).toMatch(/presentation="inline"/)
+    expect(SRC).toMatch(/<PageSectionLink/)
+    expect(SRC).not.toMatch(/<TabBar\b/)
+    expect(SRC).not.toMatch(/role:\s*'tabpanel'/)
   })
 
   test('renders six panes keyed by `hidden={tab !== ...}` (one per TaskDetailTab)', () => {
@@ -70,10 +68,10 @@ describe('TaskDetailPage tab structure', () => {
     }
   })
 
-  test('outputs pane is gated on hasOutputs so an empty tab never shows up', () => {
-    // `availableTabs` filters the tab bar; this guard makes sure the
+  test('outputs pane is gated on the shared capability so an empty section never shows up', () => {
+    // `availableTabs` filters the navigation; this guard makes sure the
     // pane DOM also stays absent when there are no output ports.
-    expect(SRC).toMatch(/\{hasOutputs && \(/)
+    expect(SRC).toMatch(/\{taskCapabilities\.outputs && \(/)
   })
 
   test('jumpToFailed uses nextTabForFailedJump and applies selection + URL push', () => {
@@ -98,7 +96,7 @@ describe('TaskDetailPage tab structure', () => {
     expect(SRC).toMatch(/<WorktreeDiffPanel\b/)
     expect(SRC).not.toMatch(/<DiffViewer\b/)
     expect(SRC).toMatch(
-      /taskTabPanelProps\('worktree-diff'\)[\s\S]*?className="task-detail__pane task-detail__pane--worktree-diff"/,
+      /taskSectionProps\(t, 'worktree-diff'\)[\s\S]*?className="task-detail__pane task-detail__pane--worktree-diff"/,
     )
   })
 
@@ -140,18 +138,29 @@ describe('TaskDetailPage tab structure', () => {
     expect(SRC).not.toMatch(/\bsetTab\(/)
   })
 
-  test('all explicit tab jumps share push navigation and preserve search', () => {
+  test('all explicit section jumps share push navigation and preserve search', () => {
     expect(SRC).toMatch(/search: \(previous\) => withTaskDetailTab\(previous, next\)/)
-    expect(SRC).toMatch(/onSelect=\{\(next\) => navigateTaskTab\(next\)\}/)
+    expect(SRC).toMatch(/onSelectCompact=\{\(next\) => navigateTaskTab\(next\)\}/)
+    expect(SRC).toMatch(/search=\{\(previous\) => withTaskDetailTab\(previous, key\)\}/)
     expect(SRC).toMatch(/navigateTaskTab\('task-questions'\)/)
     expect(SRC).toMatch(/navigateTaskTab\('worktree-diff'\)/)
   })
 
-  test('TabBar and every pane share stable task-detail ids', () => {
+  test('navigation owns aria-current and every panel is an accessible section, not a tabpanel', () => {
     expect(SRC).toMatch(/idPrefix="task-detail"/)
-    expect(SRC).toMatch(/tabDomIds\('task-detail', tab\)/)
-    expect(SRC).toMatch(/role: 'tabpanel'/)
-    expect(SRC).toMatch(/'aria-labelledby': ids\.tabId/)
+    expect(SRC).toMatch(/pageSectionCurrent=\{destination\.ariaCurrent\}/)
+    expect(SRC).toMatch(/id: `task-detail-section-\$\{tab\}`/)
+    expect(SRC).toMatch(/'aria-label': tabLabel\(t, tab\)/)
+    expect(SRC).not.toMatch(/taskTabPanelProps/)
+  })
+
+  test('diff and structure queries/panels share the multi-repo capability oracle', () => {
+    expect(SRC).toMatch(/enabled: tab === 'worktree-diff' && taskCapabilities\.worktreeDiff/)
+    expect(SRC).toMatch(
+      /enabled: tab === 'worktree-structure' && taskCapabilities\.worktreeStructure/,
+    )
+    expect(SRC).not.toMatch(/tab === 'worktree-structure'[\s\S]{0,160}task\.data\.baseCommit/)
+    expect(SRC).not.toMatch(/tk\.baseCommit === null/)
   })
 
   test('late room classification has pending and retryable error states', () => {

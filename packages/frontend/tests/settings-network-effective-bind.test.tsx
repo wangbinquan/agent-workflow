@@ -1,16 +1,12 @@
-// The Network settings tab echoes the daemon's EFFECTIVE binding (GET
-// /api/daemon) into the editable bind fields the persisted config left unset —
-// so the tab shows the address the daemon is really on (notably the concrete
-// port when bindPort was blank / ephemeral) instead of an empty box. Regression
-// guard for "why doesn't the Network tab reflect the current config": the
-// effective port must backfill the *editable* (saveable) port field, must NOT
-// overwrite a value the config already pins, and must leave the field blank when
-// the daemon run-info is unavailable.
+// RFC-201 PR-A: the daemon's EFFECTIVE port is a suggestion, not persisted
+// config. Loading GET /api/daemon must not silently mutate the draft or enable
+// Save; the user explicitly chooses whether to pin that currently ephemeral
+// port into config.json.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
-import type { Config } from '@agent-workflow/shared'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { DEFAULT_CONFIG, type Config } from '@agent-workflow/shared'
 import { NetworkTab } from '../src/routes/settings'
 import i18n from '../src/i18n'
 import { setBaseUrl, setToken, clearToken } from '../src/stores/auth'
@@ -23,21 +19,11 @@ function wrap(qc: QueryClient) {
 
 function mkConfig(overrides: Partial<Config> = {}): Config {
   return {
-    $schema_version: 1,
-    maxConcurrentNodes: 4,
-    multiProcessSubprocessConcurrency: 4,
-    defaultPerTaskMaxDurationMs: 3_600_000,
-    defaultPerTaskMaxTotalTokens: 0,
-    defaultPerNodeTimeoutMs: 1_800_000,
-    worktreeAutoGc: { enabled: false },
-    eventsArchiveThresholds: { perNodeRunRows: 50_000, globalRows: 1_000_000 },
-    largeOutputThresholdBytes: 1_048_576,
-    bindHost: '127.0.0.1',
+    ...DEFAULT_CONFIG,
     language: 'zh-CN',
     theme: 'system',
-    logLevel: 'info',
     ...overrides,
-  } as Config
+  }
 }
 
 // Mock GET /api/daemon; every other request resolves to an empty JSON object.
@@ -70,7 +56,7 @@ const DAEMON = {
 }
 
 beforeEach(() => {
-  setBaseUrl('http://daemon.test')
+  setBaseUrl(`http://settings-network-${crypto.randomUUID()}.test`)
   setToken('tok')
   void i18n.changeLanguage('zh-CN')
 })
@@ -81,16 +67,20 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('NetworkTab echoes the effective binding into the editable fields', () => {
-  test('backfills the effective port into the editable bindPort field when config leaves it unset', async () => {
+describe('NetworkTab treats the effective binding as an explicit suggestion', () => {
+  test('shows the effective port as a suggestion without creating a dirty draft', async () => {
     mockDaemon(DAEMON)
     render(<NetworkTab config={mkConfig()} />, { wrapper: wrap(newQc()) })
     const port = (await screen.findByTestId('settings-bind-port')) as HTMLInputElement
-    await waitFor(() => expect(port.value).toBe('52341'))
-    // It is the real, editable field — not a read-only readout.
+    await waitFor(() => expect(port.placeholder).toBe('52341'))
+    expect(port.value).toBe('')
     expect(port.disabled).toBe(false)
-    // The earlier separate read-only readout no longer exists.
-    expect(screen.queryByTestId('settings-effective-bind')).toBeNull()
+    const save = screen.getByRole('button', { name: /^(保存|Save)$/ }) as HTMLButtonElement
+    expect(save.disabled).toBe(true)
+
+    fireEvent.click(screen.getByTestId('settings-use-effective-port'))
+    expect(port.value).toBe('52341')
+    expect(save.disabled).toBe(false)
   })
 
   test('does NOT overwrite a port the config already pins', async () => {

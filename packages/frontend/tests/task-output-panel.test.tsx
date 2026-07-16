@@ -87,11 +87,55 @@ async function renderPanel(props?: { outputs?: NodeRunOutput[] }) {
 describe('TaskOutputPanel', () => {
   test('lists all declared ports and default-selects the first', async () => {
     await renderPanel()
+    expect(screen.getByRole('tablist').getAttribute('aria-orientation')).toBe('vertical')
     expect(screen.getByTestId('task-output-option-0').getAttribute('aria-selected')).toBe('true')
     expect(screen.getByTestId('task-output-option-1').getAttribute('aria-selected')).toBe('false')
     expect(screen.getByTestId('task-output-option-2')).toBeTruthy()
     // First port (file kind) value shown in the detail.
     expect(screen.getByText('out/report.md')).toBeTruthy()
+  })
+
+  test('vertical tabs use roving focus, manual activation, and stable panel ids', async () => {
+    await renderPanel()
+    const tabs = screen.getAllByRole('tab')
+    const panels = screen.getAllByRole('tabpanel', { hidden: true })
+    expect(tabs.map((tab) => tab.tabIndex)).toEqual([0, -1, -1])
+    expect(panels).toHaveLength(3)
+    for (const [index, tab] of tabs.entries()) {
+      const panel = document.getElementById(tab.getAttribute('aria-controls') ?? '')
+      expect(panel).not.toBeNull()
+      expect(panel?.getAttribute('aria-labelledby')).toBe(tab.id)
+      expect((panel as HTMLElement | null)?.hidden).toBe(index !== 0)
+    }
+
+    tabs[0]!.focus()
+    fireEvent.keyDown(tabs[0]!, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(tabs[1])
+    expect(screen.getByTestId('task-output-option-0').getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByText('out/report.md')).toBeTruthy()
+
+    fireEvent.keyDown(tabs[1]!, { key: 'Enter' })
+    expect(screen.getByTestId('task-output-option-1').getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByText('all good')).toBeTruthy()
+  })
+
+  test('vertical tabs support Home/End/Space and ignore modified arrows', async () => {
+    await renderPanel()
+    const tabs = screen.getAllByRole('tab')
+
+    tabs[0]!.focus()
+    fireEvent.keyDown(tabs[0]!, { key: 'End' })
+    expect(document.activeElement).toBe(tabs[2])
+    expect(tabs.map((tab) => tab.tabIndex)).toEqual([-1, -1, 0])
+
+    fireEvent.keyDown(tabs[2]!, { key: ' ' })
+    expect(screen.getByTestId('task-output-option-2').getAttribute('aria-selected')).toBe('true')
+
+    fireEvent.keyDown(tabs[2]!, { key: 'Home' })
+    expect(document.activeElement).toBe(tabs[0])
+    fireEvent.keyDown(tabs[0]!, { key: 'ArrowDown', metaKey: true })
+    expect(document.activeElement).toBe(tabs[0])
+    expect(screen.getByTestId('task-output-option-2').getAttribute('aria-selected')).toBe('true')
   })
 
   test('file-path kind Download prefers the port-artifact archive (RFC-193)', async () => {

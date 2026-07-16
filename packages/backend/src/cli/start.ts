@@ -24,6 +24,7 @@ import { startLifecycleInvariantsLoop } from '@/services/lifecycleInvariants'
 import { sealOpenHumanGatesForTask } from '@/services/terminalSweep'
 import { startStuckTaskDetectorLoop } from '@/services/stuckTaskDetector'
 import { startBatchImportGc } from '@/services/repoBatchImport'
+import { startPluginGenerationGc } from '@/services/pluginGenerationGc'
 import { detectGitCapabilities, mergeTreeGateError, MIN_GIT_VERSION } from '@/services/gitVersion'
 import {
   setMemoryDistillLangProvider,
@@ -443,6 +444,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     undefined,
     batchImportCfg.repoBatchImportRetentionMs,
   )
+  const pluginGenerationGcTicker = startPluginGenerationGc({ db, pluginsDir: Paths.pluginsDir })
   // RFC-050: register an ambient provider so enqueueDistillJob callers
   // pick up the current `config.memoryDistillLang` without us having to
   // thread configPath through review.ts / clarify.ts / taskFeedback.ts.
@@ -597,6 +599,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     gcTicker.stop()
     archiveTicker.stop()
     batchImportGcTicker.stop()
+    pluginGenerationGcTicker.stop()
     memoryDistillTicker.stop()
     lifecycleInvariantsTicker.stop()
     stuckDetectorTicker.stop()

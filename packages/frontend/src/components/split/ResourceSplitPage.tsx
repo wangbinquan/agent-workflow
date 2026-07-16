@@ -14,7 +14,7 @@
 // task-outputs-panel option language; the dirty dot is drawn from the
 // SplitDirty context.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link, type LinkProps } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
@@ -24,7 +24,11 @@ import { TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
 import { RelativeTime } from '@/components/RelativeTime'
 import { filterResourceCards } from '@/lib/resource-card-filter'
-import { SplitDirtyContext, type SplitDirtyContextValue } from '@/components/split/splitDirty'
+import {
+  SplitDirtyContext,
+  type SplitDirtyContextValue,
+  type SplitDiscardHandler,
+} from '@/components/split/splitDirty'
 import { UnsavedChangesGuard } from '@/components/split/UnsavedChangesGuard'
 import { AGENT_ICON, MCP_ICON, PLUGIN_ICON, SKILL_ICON } from '@/components/icons/resourceIcons'
 
@@ -112,10 +116,14 @@ export function ResourceSplitPage(props: ResourceSplitPageProps) {
   const { t } = useTranslation()
   const [search, setSearch] = useState('')
   const searchInputRef = useRef<HTMLInputElement | null>(null)
+  const listPaneRef = useRef<HTMLElement | null>(null)
+  const detailPaneRef = useRef<HTMLElement | null>(null)
+  const mobileBackRef = useRef<HTMLAnchorElement | null>(null)
   const cardRefs = useRef(new Map<string, HTMLAnchorElement>())
   const newLinkRef = useRef<HTMLAnchorElement | null>(null)
   const restoreListFocusRef = useRef(false)
   const returnCardKeyRef = useRef<string | null>(null)
+  const lastInteractionPaneRef = useRef<'list' | 'detail' | null>(null)
 
   // Dirty key in a ref (guard reads it synchronously) + state (drives the dot).
   const dirtyKeyRef = useRef<string | null>(null)
@@ -132,7 +140,66 @@ export function ResourceSplitPage(props: ResourceSplitPageProps) {
       setDirtyKey(null)
     }
   }, [])
-  const ctxValue = useMemo<SplitDirtyContextValue>(() => ({ dirtyKey, report }), [dirtyKey, report])
+
+  // Mutation tokens are synchronous refs because navigation can be attempted in
+  // the same tick that a route starts network I/O. State is only a render wakeup
+  // for the mounted guard when the first token starts or the final token settles.
+  const busyRef = useRef(false)
+  const busyTokensRef = useRef(new Set<symbol>())
+  const [, setBusy] = useState(false)
+  const beginBusy = useCallback((cardKey: string) => {
+    const token = Symbol(cardKey)
+    busyTokensRef.current.add(token)
+    if (!busyRef.current) {
+      busyRef.current = true
+      setBusy(true)
+    }
+
+    let released = false
+    return () => {
+      if (released) return
+      released = true
+      busyTokensRef.current.delete(token)
+      if (busyRef.current && busyTokensRef.current.size === 0) {
+        busyRef.current = false
+        setBusy(false)
+      }
+    }
+  }, [])
+
+  const discardHandlersRef = useRef(new Map<string, Set<SplitDiscardHandler>>())
+  const registerDiscard = useCallback((cardKey: string, discard: SplitDiscardHandler) => {
+    let handlers = discardHandlersRef.current.get(cardKey)
+    if (handlers === undefined) {
+      handlers = new Set()
+      discardHandlersRef.current.set(cardKey, handlers)
+    }
+    handlers.add(discard)
+
+    let registered = true
+    return () => {
+      if (!registered) return
+      registered = false
+      const current = discardHandlersRef.current.get(cardKey)
+      current?.delete(discard)
+      if (current?.size === 0) discardHandlersRef.current.delete(cardKey)
+    }
+  }, [])
+  const discardCurrent = useCallback((): boolean => {
+    const cardKey = dirtyKeyRef.current
+    if (cardKey === null) return true
+    const handlers = discardHandlersRef.current.get(cardKey)
+    if (handlers === undefined) return true
+    for (const discard of [...handlers]) {
+      if (discard() === false) return false
+    }
+    return true
+  }, [])
+
+  const ctxValue = useMemo<SplitDirtyContextValue>(
+    () => ({ dirtyKey, report, beginBusy, registerDiscard }),
+    [beginBusy, dirtyKey, registerDiscard, report],
+  )
 
   const items = props.items
   const filtered = useMemo(
@@ -144,6 +211,84 @@ export function ResourceSplitPage(props: ResourceSplitPageProps) {
   const visibleCount = filtered?.length ?? 0
   const firstVisibleKey = filtered?.[0]?.key ?? null
   const mobileView = props.selectedKey !== null || props.newActive ? 'detail' : 'list'
+
+  // Chromium can blur an element to <body> as soon as a media-query rule hides
+  // its pane, before the MediaQueryList change callback runs. Remember the last
+  // controlled interaction owner so that resize recovery still knows where the
+  // now-lost focus came from. Pointer ownership also clears a stale list value
+  // when the user clicked a non-focusable detail/background surface.
+  useEffect(() => {
+    const paneForTarget = (target: EventTarget | null): 'list' | 'detail' | null => {
+      if (!(target instanceof Node)) {
+        return null
+      } else if (listPaneRef.current?.contains(target) === true) {
+        return 'list'
+      } else if (detailPaneRef.current?.contains(target) === true) {
+        return 'detail'
+      }
+      return null
+    }
+    const rememberFocusPane = (event: FocusEvent) => {
+      // A hidden focused element is automatically blurred to body/html in
+      // Chromium. That synthetic destination must not erase its source pane;
+      // an intentional click outside is handled by pointerdown below.
+      if (event.target === document.body || event.target === document.documentElement) return
+      lastInteractionPaneRef.current = paneForTarget(event.target)
+    }
+    const rememberPointerPane = (event: PointerEvent) => {
+      lastInteractionPaneRef.current = paneForTarget(event.target)
+    }
+    document.addEventListener('focusin', rememberFocusPane, true)
+    document.addEventListener('pointerdown', rememberPointerPane, true)
+    return () => {
+      document.removeEventListener('focusin', rememberFocusPane, true)
+      document.removeEventListener('pointerdown', rememberPointerPane, true)
+    }
+  }, [])
+
+  // At the compact breakpoint the list and detail are mutually exclusive. A
+  // card click or a 1081→1080 resize can otherwise leave keyboard focus on a
+  // link that CSS just hid. Move only that hidden-list focus to the explicit
+  // Back affordance; focus already inside the detail (or an open dialog) stays
+  // exactly where the user put it.
+  const recoverCompactDetailFocus = useCallback(() => {
+    if (mobileView !== 'detail') return
+    const active = document.activeElement
+    const activeStillInList = active !== null && listPaneRef.current?.contains(active) === true
+    const browserDroppedHiddenListFocus =
+      (active === null || active === document.body || active === document.documentElement) &&
+      lastInteractionPaneRef.current === 'list'
+    if (!activeStillInList && !browserDroppedHiddenListFocus) return
+    mobileBackRef.current?.focus()
+  }, [mobileView])
+
+  useLayoutEffect(() => {
+    if (typeof window.matchMedia !== 'function') return
+    const compact = window.matchMedia('(max-width: 1080px)')
+    let recoveryFrame: number | null = null
+    const recoverIfCompact = () => {
+      if (!compact.matches) return
+      recoverCompactDetailFocus()
+      // Real browsers may dispatch the media/resize signal before the new CSS
+      // display state is focusable. Retry once after layout; the source-pane
+      // memory above survives Chromium's intervening blur-to-body.
+      if (typeof window.requestAnimationFrame === 'function') {
+        if (recoveryFrame !== null) window.cancelAnimationFrame(recoveryFrame)
+        recoveryFrame = window.requestAnimationFrame(() => {
+          recoveryFrame = null
+          recoverCompactDetailFocus()
+        })
+      }
+    }
+    recoverIfCompact()
+    compact.addEventListener?.('change', recoverIfCompact)
+    window.addEventListener('resize', recoverIfCompact)
+    return () => {
+      compact.removeEventListener?.('change', recoverIfCompact)
+      window.removeEventListener('resize', recoverIfCompact)
+      if (recoveryFrame !== null) window.cancelAnimationFrame(recoveryFrame)
+    }
+  }, [recoverCompactDetailFocus])
 
   // The rail and detail stay mounted; CSS chooses which one is reachable at
   // <=1080px from data-mobile-view. After the explicit detail -> list link
@@ -187,9 +332,9 @@ export function ResourceSplitPage(props: ResourceSplitPageProps) {
   return (
     <div className="page page--split" data-mobile-view={mobileView}>
       <SplitDirtyContext.Provider value={ctxValue}>
-        <UnsavedChangesGuard dirtyRef={dirtyKeyRef} />
+        <UnsavedChangesGuard dirtyRef={dirtyKeyRef} busyRef={busyRef} onDiscard={discardCurrent} />
         <div className="split">
-          <aside className="split__list">
+          <aside ref={listPaneRef} className="split__list">
             <div className="split__heading">
               <h1 className="split__title">{props.title}</h1>
               {items !== undefined && (
@@ -318,11 +463,12 @@ export function ResourceSplitPage(props: ResourceSplitPageProps) {
               {props.newLabel}
             </Link>
           </aside>
-          <section className="split__detail" data-testid="split-detail">
+          <section ref={detailPaneRef} className="split__detail" data-testid="split-detail">
             {mobileView === 'detail' &&
               props.listTo !== undefined &&
               props.mobileBackLabel !== undefined && (
                 <Link
+                  ref={mobileBackRef}
                   to={props.listTo}
                   className="split__mobile-back"
                   data-testid={props.mobileBackTestId ?? 'split-mobile-back'}

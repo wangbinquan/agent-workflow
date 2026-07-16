@@ -3,14 +3,14 @@
 // parent's concern.
 //
 // RFC-169 (T7) — the six stacked FormSections (RFC-155) became five right-rail
-// tabs: Basics / Prompt / Ports / Resources & deps / Advanced. The RFC-155
+// tabs: Basics / Prompt / Ports / Capabilities & collaboration / Advanced. The RFC-155
 // "collapse + rising-edge auto-open" affordance is retired; its "there's
 // content here" hint is carried by the Ports/Resources tab count badges
 // (portBadgeCount / resourceRefCount, pure + unit-tested). Panels are
 // keep-mounted (hidden, not unmounted) so a half-typed JsonField in Advanced
 // survives tab switches.
 
-import { useState } from 'react'
+import { useId, useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
@@ -23,7 +23,7 @@ import { DependencyAutodetectButton } from './agents/DependencyAutodetectButton'
 import { DependencyTreePreview } from './agents/DependencyTreePreview'
 import { mergeAgentDeps } from '@/lib/agent-dep-detect'
 import { Field, Switch, TextInput } from './Form'
-import { JsonField } from './JsonField'
+import { JsonField, jsonFieldChangeFromValue, type JsonFieldChange } from './JsonField'
 import { MarkdownEditor } from './MarkdownEditor'
 import { McpsPicker } from './McpsPicker'
 import { PluginsPicker } from './PluginsPicker'
@@ -35,6 +35,8 @@ import { SkillsPicker } from './SkillsPicker'
 import { TabBar, type TabDef } from './TabBar'
 import { TabPanels } from './split/TabPanels'
 import { validateAgentPortState } from '@/lib/agent-ports'
+import { stableStringify } from '@/lib/stable-stringify'
+import { StatusChip } from './StatusChip'
 import {
   AGENT_ICON,
   CAP_ICON,
@@ -56,6 +58,12 @@ export interface AgentFormProps {
   onTabChange?: (tab: AgentTab) => void
   /** The owning route renders the compact port summary as its sole live alert. */
   hasExternalPortAlert?: boolean
+  /** RFC-201: route-owned raw/parsed/error state for the two Advanced JSON fields. */
+  jsonDraft?: AgentJsonDraft
+  onJsonDraftChange?: (next: AgentJsonDraft) => void
+  /** Route-level validation summary asks the form to reveal and focus this field. */
+  focusJsonField?: AgentJsonFieldKey
+  onJsonFocusHandled?: () => void
 }
 
 const DEFAULT: CreateAgent = {
@@ -74,6 +82,65 @@ const DEFAULT: CreateAgent = {
 
 export function emptyAgent(): CreateAgent {
   return structuredClone(DEFAULT)
+}
+
+export type AgentJsonFieldKey = 'permission' | 'frontmatterExtra'
+
+export interface AgentJsonDraft {
+  permission: JsonFieldChange<Record<string, unknown>>
+  frontmatterExtra: JsonFieldChange<Record<string, unknown>>
+}
+
+export function createAgentJsonDraft(value: CreateAgent): AgentJsonDraft {
+  return {
+    permission: jsonFieldChangeFromValue(value.permission ?? {}),
+    frontmatterExtra: jsonFieldChangeFromValue(value.frontmatterExtra ?? {}),
+  }
+}
+
+/**
+ * Adopt a changed parent value only while the corresponding JSON field is
+ * valid. Invalid raw text is a newer route draft and must survive a late save
+ * receipt or background refetch. Explicit import/reset callers replace the
+ * whole AgentJsonDraft instead of using this reconciler.
+ */
+export function reconcileAgentJsonDraft(
+  current: AgentJsonDraft | undefined,
+  value: CreateAgent,
+): AgentJsonDraft {
+  if (current === undefined) return createAgentJsonDraft(value)
+
+  const reconcileField = (
+    field: JsonFieldChange<Record<string, unknown>>,
+    persisted: Record<string, unknown>,
+  ) => {
+    if (field.error !== undefined) return field
+    return stableStringify(field.parsed) === stableStringify(persisted)
+      ? field
+      : jsonFieldChangeFromValue(persisted)
+  }
+
+  const permission = reconcileField(current.permission, value.permission ?? {})
+  const frontmatterExtra = reconcileField(current.frontmatterExtra, value.frontmatterExtra ?? {})
+  if (permission === current.permission && frontmatterExtra === current.frontmatterExtra) {
+    return current
+  }
+  return { permission, frontmatterExtra }
+}
+
+export function agentJsonInvalidFields(draft: AgentJsonDraft): AgentJsonFieldKey[] {
+  const invalid: AgentJsonFieldKey[] = []
+  if (draft.permission.error !== undefined || draft.permission.parsed === undefined) {
+    invalid.push('permission')
+  }
+  if (draft.frontmatterExtra.error !== undefined || draft.frontmatterExtra.parsed === undefined) {
+    invalid.push('frontmatterExtra')
+  }
+  return invalid
+}
+
+export function agentJsonFieldDomId(idPrefix: string, key: AgentJsonFieldKey): string {
+  return `${idPrefix}-json-${key === 'permission' ? 'permission' : 'frontmatter-extra'}`
 }
 
 /** RFC-169 — Ports tab badge: declared input + output ports. Pure. */
@@ -101,20 +168,49 @@ export function AgentForm({
   activeTab,
   onTabChange,
   hasExternalPortAlert,
+  jsonDraft: controlledJsonDraft,
+  onJsonDraftChange,
+  focusJsonField,
+  onJsonFocusHandled,
 }: AgentFormProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [internalTab, setInternalTab] = useState<AgentTab>('basics')
+  const [uncontrolledJsonDraft, setUncontrolledJsonDraft] = useState(() =>
+    createAgentJsonDraft(value),
+  )
+  const permissionJsonRef = useRef<HTMLTextAreaElement | null>(null)
+  const frontmatterExtraJsonRef = useRef<HTMLTextAreaElement | null>(null)
+  const jsonDraft = controlledJsonDraft ?? uncontrolledJsonDraft
   const tab = activeTab ?? internalTab
   const selectTab = (next: AgentTab) => {
     if (activeTab === undefined) setInternalTab(next)
     onTabChange?.(next)
   }
+  useLayoutEffect(() => {
+    if (tab !== 'advanced') return
+    const target =
+      focusJsonField === 'permission'
+        ? permissionJsonRef.current
+        : focusJsonField === 'frontmatterExtra'
+          ? frontmatterExtraJsonRef.current
+          : null
+    if (target === null) return
+    target.focus()
+    onJsonFocusHandled?.()
+  }, [focusJsonField, onJsonFocusHandled, tab])
   // RFC-113: the runtime selector is the only per-agent profile control here —
   // model / variant / temperature / steps now live on the runtime profile, so
   // AgentForm no longer renders ModelSelect.
   function patch<K extends keyof CreateAgent>(key: K, next: CreateAgent[K]) {
     onChange({ ...value, [key]: next })
+  }
+
+  function patchJson(key: AgentJsonFieldKey, next: JsonFieldChange<Record<string, unknown>>) {
+    const nextJsonDraft = { ...jsonDraft, [key]: next }
+    if (controlledJsonDraft === undefined) setUncontrolledJsonDraft(nextJsonDraft)
+    onJsonDraftChange?.(nextJsonDraft)
+    if (next.parsed !== undefined) patch(key, next.parsed)
   }
 
   // RFC-112: registered runtimes (GET /api/runtimes — open to all users) drive
@@ -145,7 +241,11 @@ export function AgentForm({
 
   const portCount = portBadgeCount(value)
   const refCount = resourceRefCount(value)
+  const invalidJsonCount = agentJsonInvalidFields(jsonDraft).length
   const portValidation = validateAgentPortState(value)
+  const blockingPortCount = portValidation.issues.filter(
+    (issue) => issue.severity === 'error',
+  ).length
   const tabs: ReadonlyArray<TabDef<AgentTab>> = [
     { key: 'basics', label: t('agentForm.tabBasics'), testid: 'agent-tab-basics' },
     { key: 'prompt', label: t('agentForm.tabPrompt'), testid: 'agent-tab-prompt' },
@@ -153,7 +253,13 @@ export function AgentForm({
       key: 'ports',
       label: t('agentForm.tabPorts'),
       testid: 'agent-tab-ports',
-      badge: portCount > 0 ? portCount : undefined,
+      badge: blockingPortCount > 0 ? blockingPortCount : portCount > 0 ? portCount : undefined,
+      ...(blockingPortCount > 0
+        ? {
+            badgeTone: 'danger' as const,
+            badgeAriaLabel: t('agentForm.portValidationBadge', { count: blockingPortCount }),
+          }
+        : { badgeTone: 'neutral' as const }),
       badgeTestid: 'agent-tab-ports-badge',
     },
     {
@@ -161,9 +267,19 @@ export function AgentForm({
       label: t('agentForm.tabResources'),
       testid: 'agent-tab-resources',
       badge: refCount > 0 ? refCount : undefined,
+      badgeTone: 'neutral',
       badgeTestid: 'agent-tab-resources-badge',
     },
-    { key: 'advanced', label: t('agentForm.tabAdvanced'), testid: 'agent-tab-advanced' },
+    invalidJsonCount > 0
+      ? {
+          key: 'advanced',
+          label: t('agentForm.tabAdvanced'),
+          testid: 'agent-tab-advanced',
+          badge: invalidJsonCount,
+          badgeTone: 'danger',
+          badgeAriaLabel: t('agentForm.jsonValidationBadge', { count: invalidJsonCount }),
+        }
+      : { key: 'advanced', label: t('agentForm.tabAdvanced'), testid: 'agent-tab-advanced' },
   ]
 
   const basics = (
@@ -256,6 +372,7 @@ export function AgentForm({
 
   const resources = (
     <>
+      <p className="agent-resources__intro">{t('agentForm.resourcesIntro')}</p>
       {/* RFC-173: two labelled groups so the two kinds of relationship read
           clearly — "capabilities" (skills/MCP/plugins injected into the agent's
           process) vs "dependencies" (other agents it can delegate to). Each
@@ -344,14 +461,17 @@ export function AgentForm({
           onApply={(selection) => onChange(mergeAgentDeps(value, selection))}
         />
 
-        {/* RFC-169: the dependency-tree preview joins the resources tab (its own
-            RFC-155 section is retired). Clicking a node navigates to that agent —
-            the split page's unsaved guard intercepts a dirty draft, as intended. */}
-        <DependencyTreePreview
-          name={value.name}
-          dependsOn={value.dependsOn ?? []}
-          onNodeClick={(n) => navigate({ to: '/agents/$name', params: { name: n } })}
-        />
+        <details className="agent-resources__technical">
+          <summary>{t('agentForm.technicalDetailsSummary')}</summary>
+          <p>{t('agentForm.technicalDetailsBody')}</p>
+          {/* The closure preview is useful for debugging, but it is not needed
+              to complete the common capability-selection task. */}
+          <DependencyTreePreview
+            name={value.name}
+            dependsOn={value.dependsOn ?? []}
+            onNodeClick={(n) => navigate({ to: '/agents/$name', params: { name: n } })}
+          />
+        </details>
       </section>
     </>
   )
@@ -385,10 +505,13 @@ export function AgentForm({
 
       <Field label={t('agentForm.fieldPermission')} hint={t('agentForm.fieldPermissionHint')}>
         <JsonField
-          value={value.permission ?? {}}
-          onChange={(v) => patch('permission', v)}
+          state={jsonDraft.permission}
+          onChange={(next) => patchJson('permission', next)}
           placeholder={t('agentForm.permissionPlaceholder')}
           rows={5}
+          id={agentJsonFieldDomId(idPrefix, 'permission')}
+          textareaRef={permissionJsonRef}
+          data-testid="agent-json-permission"
         />
       </Field>
 
@@ -397,10 +520,13 @@ export function AgentForm({
         hint={t('agentForm.fieldFrontmatterExtraHint')}
       >
         <JsonField
-          value={value.frontmatterExtra ?? {}}
-          onChange={(v) => patch('frontmatterExtra', v)}
+          state={jsonDraft.frontmatterExtra}
+          onChange={(next) => patchJson('frontmatterExtra', next)}
           placeholder={t('common.optionalPlaceholder')}
           rows={4}
+          id={agentJsonFieldDomId(idPrefix, 'frontmatterExtra')}
+          textareaRef={frontmatterExtraJsonRef}
+          data-testid="agent-json-frontmatter-extra"
         />
       </Field>
     </>
@@ -433,5 +559,58 @@ export function AgentForm({
         ]}
       />
     </div>
+  )
+}
+
+export interface AgentJsonValidationSummaryProps {
+  draft: AgentJsonDraft
+  onNavigate: (key: AgentJsonFieldKey) => void
+}
+
+/** Route-level live summary; inline field errors stay associated but non-live. */
+export function AgentJsonValidationSummary({ draft, onNavigate }: AgentJsonValidationSummaryProps) {
+  const { t } = useTranslation()
+  const headingId = useId()
+  const invalid = agentJsonInvalidFields(draft)
+  if (invalid.length === 0) return null
+
+  return (
+    <section
+      className="agent-port-validation agent-port-validation--compact"
+      role="alert"
+      aria-labelledby={headingId}
+      data-testid="agent-json-validation"
+    >
+      <h3 id={headingId} className="agent-port-validation__title">
+        {t('agentForm.jsonValidationTitle', { count: invalid.length })}
+      </h3>
+      <ul className="agent-port-validation__list">
+        {invalid.map((key) => {
+          const label = t(
+            key === 'permission' ? 'agentForm.fieldPermission' : 'agentForm.fieldFrontmatterExtra',
+          )
+          const message = draft[key].error ?? t('agentForm.jsonSyntaxError')
+          return (
+            <li
+              key={key}
+              className="agent-port-validation__item agent-port-validation__item--error"
+            >
+              <StatusChip kind="danger" size="sm">
+                {t('agentForm.jsonErrorStatus')}
+              </StatusChip>
+              <span className="agent-port-validation__message">{message}</span>
+              <button
+                type="button"
+                className="btn btn--xs agent-port-validation__navigate"
+                onClick={() => onNavigate(key)}
+                aria-label={t('agentForm.jsonFixField', { field: label })}
+              >
+                {t('agentForm.jsonFixField', { field: label })}
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+    </section>
   )
 }

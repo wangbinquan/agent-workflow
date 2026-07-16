@@ -80,13 +80,23 @@ export interface UseDraftFromQueryResult<D> {
 export function useDraftFromQuery<T, D>(
   data: T | undefined,
   map: (t: T) => D,
-  opts?: { ready?: boolean; followWhenClean?: boolean },
+  opts?: {
+    ready?: boolean
+    followWhenClean?: boolean
+    /**
+     * A sibling route-owned buffer is dirty even when `draft` itself still
+     * equals its seed (for example raw-invalid JSON whose last parsed object
+     * remains unchanged). Freeze clean-follow until that sibling reconciles.
+     */
+    freezeWhen?: boolean
+  },
 ): UseDraftFromQueryResult<D> {
   const [draft, setDraft] = useState<D | undefined>(undefined)
   const [seed, setSeed] = useState<D | undefined>(undefined)
   const [loaded, setLoaded] = useState(false)
   const ready = opts?.ready ?? true
   const followWhenClean = opts?.followWhenClean ?? false
+  const freezeWhen = opts?.freezeWhen ?? false
 
   // Refs mirror the latest committed values so async callbacks (commitSaved)
   // and the follow effect read the current draft/seed without stale closures.
@@ -113,10 +123,10 @@ export function useDraftFromQuery<T, D>(
     const mapped = map(data)
     const mappedSig = stableStringify(mapped)
     const seedSig = stableStringify(seedRef.current)
-    const isDirtyNow = stableStringify(draftRef.current) !== seedSig
+    const isDirtyNow = freezeWhen || stableStringify(draftRef.current) !== seedSig
     if (mappedSig !== seedSig) setSeed(mapped)
     if (!isDirtyNow && stableStringify(draftRef.current) !== mappedSig) setDraft(mapped)
-  }, [followWhenClean, loaded, ready, data, map])
+  }, [followWhenClean, freezeWhen, loaded, ready, data, map])
 
   const commitSaved = useCallback((submitted: D, saved: D) => {
     const cur = draftRef.current

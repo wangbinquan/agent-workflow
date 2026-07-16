@@ -56,6 +56,33 @@ afterEach(() => {
 })
 
 describe('/auth shared forms and tabs', () => {
+  test('distinguishes OIDC loading, discovery error with retry, and configured-empty', async () => {
+    let firstReject: ((reason?: unknown) => void) | undefined
+    const first = new Promise<Response>((_resolve, reject) => {
+      firstReject = reject
+    })
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementationOnce(() => first)
+      .mockResolvedValueOnce(json({ providers: [] }))
+    renderAuth()
+
+    expect(await screen.findByTestId('oidc-discovery-loading')).toBeTruthy()
+    fireEvent.change(screen.getByRole('textbox', { name: enUS.auth.username }), {
+      target: { value: 'preserved-user' },
+    })
+    await act(async () => firstReject!(new Error('discovery offline')))
+
+    const error = await screen.findByRole('alert')
+    expect(error.textContent).toContain(enUS.auth.oidcDiscoveryError)
+    fireEvent.click(screen.getByRole('button', { name: /retry/i }))
+    expect(await screen.findByText(enUS.auth.oidcDiscoveryEmpty)).toBeTruthy()
+    expect(
+      (screen.getByRole('textbox', { name: enUS.auth.username }) as HTMLInputElement).value,
+    ).toBe('preserved-user')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
   test('focuses username once, preserves both drafts, and links every tab to its panel', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(json({ providers: [] }))
     renderAuth()

@@ -14,7 +14,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import type { Memory, MemorySummary } from '@agent-workflow/shared'
+import type { MemorySummary } from '@agent-workflow/shared'
 import type { ApiError } from '@/api/client'
 import { api } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
@@ -31,18 +31,25 @@ interface ListResponse {
   items: MemorySummary[]
 }
 
-type View = 'approved' | 'archived'
+export type MemoryAllView = 'approved' | 'archived'
 
 type PendingConfirm = { kind: 'archive' | 'delete'; id: string } | null
 
 export interface MemoryAllListProps {
-  isAdmin: boolean
+  /** Route-owned so leaving All and returning preserves the chosen view. */
+  view?: MemoryAllView
+  onViewChange?: (view: MemoryAllView) => void
 }
 
-export function MemoryAllList({ isAdmin }: MemoryAllListProps) {
+export function MemoryAllList({ view: controlledView, onViewChange }: MemoryAllListProps = {}) {
   const { t } = useTranslation()
   const qc = useQueryClient()
-  const [view, setView] = useState<View>('approved')
+  const [localView, setLocalView] = useState<MemoryAllView>('approved')
+  const view = controlledView ?? localView
+  const setView = (next: MemoryAllView) => {
+    setLocalView(next)
+    onViewChange?.(next)
+  }
   const [pending, setPending] = useState<PendingConfirm>(null)
   // RFC-101: approved-view multi-select → "Fuse into skill".
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -58,17 +65,6 @@ export function MemoryAllList({ isAdmin }: MemoryAllListProps) {
   // full Memory (the list endpoint returns MemorySummary only) and feed it
   // to <MemoryEditDialog>.
   const [editingId, setEditingId] = useState<string | null>(null)
-  const editingMemory = useQuery<{ memory: Memory }>({
-    queryKey: ['memories', 'detail', editingId],
-    queryFn: ({ signal }) =>
-      api.get<{ memory: Memory }>(
-        `/api/memories/${encodeURIComponent(editingId ?? '')}`,
-        undefined,
-        signal,
-      ),
-    enabled: editingId !== null,
-  })
-
   const list = useQuery<ListResponse>({
     queryKey: ['memories', 'all', view],
     queryFn: ({ signal }) => api.get<ListResponse>('/api/memories', { status: view }, signal),
@@ -103,7 +99,7 @@ export function MemoryAllList({ isAdmin }: MemoryAllListProps) {
 
   return (
     <div className="memory-all" data-testid="memory-all">
-      <Segmented<View>
+      <Segmented<MemoryAllView>
         className="memory-all__filter"
         options={(['approved', 'archived'] as const).map((v) => ({
           value: v,
@@ -131,7 +127,6 @@ export function MemoryAllList({ isAdmin }: MemoryAllListProps) {
       {renderBody({
         list,
         view,
-        isAdmin,
         archivePending: archive.isPending,
         unarchivePending: unarchive.isPending,
         delPending: del.isPending,
@@ -150,12 +145,8 @@ export function MemoryAllList({ isAdmin }: MemoryAllListProps) {
         entry={{ kind: 'from-memories', memoryIds: Array.from(selected) }}
       />
 
-      {editingId !== null && editingMemory.data?.memory !== undefined && (
-        <MemoryEditDialog
-          open
-          onClose={() => setEditingId(null)}
-          memory={editingMemory.data.memory}
-        />
+      {editingId !== null && (
+        <MemoryEditDialog open onClose={() => setEditingId(null)} memoryId={editingId} />
       )}
 
       {pending !== null && (
@@ -201,8 +192,7 @@ export function MemoryAllList({ isAdmin }: MemoryAllListProps) {
 
 interface BodyArgs {
   list: ReturnType<typeof useQuery<ListResponse>>
-  view: View
-  isAdmin: boolean
+  view: MemoryAllView
   archivePending: boolean
   unarchivePending: boolean
   delPending: boolean
@@ -220,7 +210,6 @@ function renderBody(args: BodyArgs) {
   const {
     list,
     view,
-    isAdmin,
     archivePending,
     unarchivePending,
     delPending,
@@ -252,14 +241,22 @@ function renderBody(args: BodyArgs) {
     <>
       {listError && <ErrorBanner error={list.error} action={retryAction} />}
       {rows.length === 0 ? (
-        <EmptyState title={t('memory.empty')} />
+        <EmptyState
+          title={t(
+            view === 'approved' ? 'memory.emptyStates.approved' : 'memory.emptyStates.archived',
+          )}
+          description={t(
+            view === 'approved'
+              ? 'memory.emptyStates.approvedDescription'
+              : 'memory.emptyStates.archivedDescription',
+          )}
+        />
       ) : (
         <ul className="memory-all-list" data-testid="memory-all-list">
           {rows.map((m) => {
-            // RFC-099 (D12): per-row manage rights — scope-resource owners manage
-            // their own rows; `canManage` comes from the backend annotation and
-            // falls back to the admin role for older payloads.
-            const rowManage = m.canManage ?? isAdmin
+            // RFC-201: fail closed when an old payload lacks the annotation.
+            // Actor role/ownership is never reconstructed in the browser.
+            const rowManage = m.canManage === true
             return (
               <MemoryRow
                 key={m.id}

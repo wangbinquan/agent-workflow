@@ -11,9 +11,11 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { DEFAULT_CONFIG } from '@agent-workflow/shared'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { LanguageSwitch } from '../src/components/LanguageSwitch'
 import i18n from '../src/i18n'
+import { getConfigQueryKey } from '../src/lib/config-resource'
 import { setBaseUrl, setToken, clearToken } from '../src/stores/auth'
 
 function wrap(qc: QueryClient) {
@@ -30,12 +32,13 @@ interface MockOptions {
 
 function mockFetch(opts: MockOptions): { calls: Array<{ method: string; body: unknown }> } {
   const calls: Array<{ method: string; body: unknown }> = []
+  let persistedLanguage = opts.getLanguage
   vi.spyOn(globalThis, 'fetch').mockImplementation(
     async (url: RequestInfo | URL, init?: RequestInit) => {
       const s = typeof url === 'string' ? url : url.toString()
       const method = init?.method ?? 'GET'
       if (s.includes('/api/config') && method === 'GET') {
-        return new Response(JSON.stringify({ language: opts.getLanguage }), {
+        return new Response(JSON.stringify({ ...DEFAULT_CONFIG, language: persistedLanguage }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         })
@@ -50,7 +53,8 @@ function mockFetch(opts: MockOptions): { calls: Array<{ method: string; body: un
             headers: { 'content-type': 'application/json' },
           })
         }
-        return new Response(JSON.stringify({ language: body.language }), {
+        persistedLanguage = body.language
+        return new Response(JSON.stringify({ ...DEFAULT_CONFIG, language: body.language }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         })
@@ -62,13 +66,15 @@ function mockFetch(opts: MockOptions): { calls: Array<{ method: string; body: un
 }
 
 beforeEach(() => {
-  setBaseUrl('http://daemon.test')
+  setBaseUrl(`http://language-switch-${crypto.randomUUID()}.test`)
   setToken('tok')
   void i18n.changeLanguage('zh-CN')
 })
 
 afterEach(() => {
-  document.body.innerHTML = ''
+  // Unsubscribe the live Config observer before rotating credentials and
+  // restoring fetch, otherwise its invalidation can escape into real DNS.
+  cleanup()
   clearToken()
   vi.restoreAllMocks()
 })
@@ -109,7 +115,7 @@ describe('LanguageSwitch', () => {
     })
   })
 
-  test('clicking inactive option fires PUT with merged language + flips i18n optimistically', async () => {
+  test('clicking inactive option fires PUT with only language + flips i18n optimistically', async () => {
     const { calls } = mockFetch({ getLanguage: 'zh-CN' })
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(<LanguageSwitch />, { wrapper: wrap(qc) })
@@ -124,7 +130,7 @@ describe('LanguageSwitch', () => {
       expect(calls).toHaveLength(1)
     })
     expect(calls[0]?.method).toBe('PUT')
-    expect((calls[0]?.body as { language?: string }).language).toBe('en-US')
+    expect(calls[0]?.body).toEqual({ language: 'en-US' })
   })
 
   test('PUT success caches returned config — aria-checked moves to the new value', async () => {
@@ -139,7 +145,7 @@ describe('LanguageSwitch', () => {
     await waitFor(() => {
       expect(en.getAttribute('aria-checked')).toBe('true')
     })
-    expect(qc.getQueryData(['config'])).toMatchObject({ language: 'en-US' })
+    expect(qc.getQueryData(getConfigQueryKey())).toMatchObject({ language: 'en-US' })
   })
 
   test('PUT failure rolls back i18n + renders error line', async () => {

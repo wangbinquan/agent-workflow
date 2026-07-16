@@ -118,7 +118,48 @@ interface Recorded {
   calls: Array<{ url: string; method: string; body: unknown }>
 }
 
-function installFetch(state: { workgroups: Workgroup[]; failDetail?: boolean } & Recorded): void {
+let memberIdSeq = 500
+
+/** Mirrors the real full-replace endpoint, including regenerated member ids. */
+function synthesizePutRow(base: Workgroup, body: Record<string, unknown>): Workgroup {
+  const members = (body.members as Array<Record<string, unknown>>).map((member, index) => ({
+    id: `mem_p${memberIdSeq++}`,
+    memberType: member.memberType as 'agent' | 'human',
+    agentName: (member.agentName as string | undefined) ?? null,
+    userId: (member.userId as string | undefined) ?? null,
+    displayName: member.displayName as string,
+    roleDesc: (member.roleDesc as string | undefined) ?? '',
+    sortOrder: index,
+  }))
+  const leaderName = body.leaderDisplayName as string | undefined
+  return {
+    ...base,
+    description: body.description as string,
+    instructions: body.instructions as string,
+    mode: body.mode as Workgroup['mode'],
+    switches: body.switches as Workgroup['switches'],
+    maxRounds: body.maxRounds as number,
+    completionGate: body.completionGate as boolean,
+    autonomous: body.autonomous as boolean,
+    fanOut: body.fanOut as boolean,
+    members,
+    leaderMemberId:
+      leaderName === undefined
+        ? null
+        : (members.find((member) => member.displayName === leaderName)?.id ?? null),
+    updatedAt: base.updatedAt + 1,
+  }
+}
+
+function installFetch(
+  state: {
+    workgroups: Workgroup[]
+    failDetail?: boolean
+    putStatus?: number
+    renameGate?: Promise<void>
+    deleteGate?: Promise<void>
+  } & Recorded,
+): void {
   vi.spyOn(globalThis, 'fetch').mockImplementation(
     async (req: RequestInfo | URL, init?: RequestInit) => {
       const url = req.toString()
@@ -147,6 +188,7 @@ function installFetch(state: { workgroups: Workgroup[]; failDetail?: boolean } &
       }
       const rename = url.match(/\/api\/workgroups\/([^/]+)\/rename$/)
       if (rename !== null && method === 'POST') {
+        await state.renameGate
         const from = decodeURIComponent(rename[1]!)
         const idx = state.workgroups.findIndex((w) => w.name === from)
         // Atomic rename + description edit (2026-07-13): echo the new name and,
@@ -174,10 +216,22 @@ function installFetch(state: { workgroups: Workgroup[]; failDetail?: boolean } &
           return row !== undefined ? json(row) : json({ code: 'workgroup-not-found' }, 404)
         }
         if (method === 'PUT') {
+          if (state.putStatus !== undefined) {
+            return json(
+              { code: 'workgroup-save-unavailable', message: 'workgroup save unavailable' },
+              state.putStatus,
+            )
+          }
           const row = state.workgroups.find((w) => w.name === name)
-          return json(row ?? wg(name))
+          const fresh = synthesizePutRow(row ?? wg(name), body as Record<string, unknown>)
+          const index = state.workgroups.findIndex((workgroup) => workgroup.name === name)
+          if (index >= 0) state.workgroups[index] = fresh
+          return json(fresh)
         }
-        if (method === 'DELETE') return new Response(null, { status: 204 })
+        if (method === 'DELETE') {
+          await state.deleteGate
+          return new Response(null, { status: 204 })
+        }
       }
       if (url.endsWith('/api/workgroups') && method === 'GET') return json(state.workgroups)
       if (url.endsWith('/api/workgroups') && method === 'POST') {
@@ -489,10 +543,14 @@ describe('/workgroups/$name — config editing', () => {
       'local unsaved instructions',
     )
 
-    await router.navigate({
+    const navigation = router.navigate({
       to: '/workgroups/$name',
       params: { name: 'second-squad' },
     })
+    const guard = await screen.findByTestId('unsaved-guard-dialog')
+    expect(guard.textContent).toContain('Unsaved changes')
+    fireEvent.click(screen.getByTestId('unsaved-discard'))
+    await navigation
     await waitFor(() =>
       expect(
         (screen.getByTestId('workgroup-field-instructions') as HTMLTextAreaElement).value,
@@ -528,14 +586,54 @@ describe('/workgroups/$name — config editing', () => {
     })
   })
 
-  test('a leaderless leader_worker group keeps Save ENABLED (lenient save contract)', async () => {
+  test('an authoritative refetch unlocks an ambiguous save even when remote differs', async () => {
+    const state = {
+      workgroups: [wg('review-squad')],
+      calls: [] as Recorded['calls'],
+      putStatus: 503 as number | undefined,
+    }
+    installFetch(state)
+    await renderPage('/workgroups/review-squad')
+
+    fireEvent.change(await screen.findByTestId('workgroup-field-instructions'), {
+      target: { value: 'local draft after uncertain save' },
+    })
+    const save = screen.getByTestId('workgroup-save-button') as HTMLButtonElement
+    fireEvent.click(save)
+
+    await waitFor(() => {
+      expect(
+        state.calls.filter(
+          (call) => call.method === 'GET' && call.url.endsWith('/api/workgroups/review-squad'),
+        ),
+      ).toHaveLength(2)
+      expect(save.disabled).toBe(false)
+    })
+    expect((screen.getByTestId('workgroup-field-instructions') as HTMLTextAreaElement).value).toBe(
+      'local draft after uncertain save',
+    )
+
+    state.putStatus = undefined
+    fireEvent.click(save)
+    await waitFor(() => {
+      expect(state.workgroups[0]?.instructions).toBe('local draft after uncertain save')
+      expect(save.disabled).toBe(true)
+    })
+  })
+
+  test('a clean leaderless group is save-valid but Save All stays disabled until an edit', async () => {
     installFetch({
       workgroups: [wg('review-squad', { leaderMemberId: null })],
       calls: [],
     })
     await renderPage('/workgroups/review-squad')
     await screen.findByTestId('workgroup-field-instructions')
-    expect((screen.getByTestId('workgroup-save-button') as HTMLButtonElement).disabled).toBe(false)
+    const save = screen.getByTestId('workgroup-save-button') as HTMLButtonElement
+    expect(save.disabled).toBe(true)
+    fireEvent.change(screen.getByTestId('workgroup-field-instructions'), {
+      target: { value: 'leaderless remains save-valid' },
+    })
+    expect(save.disabled).toBe(false)
   })
 
   test('rename dialog seeds name + description and POSTs /rename with both', async () => {
@@ -587,6 +685,63 @@ describe('/workgroups/$name — config editing', () => {
       )
       expect(post?.body).toEqual({ newName: 'review-squad', description: 'new blurb' })
     })
+  })
+
+  test('rename is synchronously non-discardable and self-navigation releases the guard', async () => {
+    let releaseRename!: () => void
+    const renameGate = new Promise<void>((resolve) => {
+      releaseRename = resolve
+    })
+    const state = {
+      workgroups: [wg('review-squad')],
+      calls: [] as Recorded['calls'],
+      renameGate,
+    }
+    installFetch(state)
+    const router = await renderPage('/workgroups/review-squad')
+
+    fireEvent.click(await screen.findByTestId('workgroup-rename-button'))
+    fireEvent.change(screen.getByTestId('workgroup-rename-name'), {
+      target: { value: 'audit-squad' },
+    })
+    fireEvent.click(screen.getByTestId('workgroup-rename-confirm'))
+    void router.navigate({ to: '/workgroups' })
+
+    const guard = await screen.findByTestId('unsaved-guard-dialog')
+    expect(guard.textContent).toMatch(/still in progress/i)
+    expect(screen.queryByTestId('unsaved-discard')).toBeNull()
+    expect(router.state.location.pathname).toBe('/workgroups/review-squad')
+
+    releaseRename()
+    await waitFor(() => expect(router.state.location.pathname).toBe('/workgroups/audit-squad'))
+    await waitFor(() => expect(screen.queryByTestId('unsaved-guard-dialog')).toBeNull())
+  })
+
+  test('delete is synchronously non-discardable and successful delete reaches the list', async () => {
+    let releaseDelete!: () => void
+    const deleteGate = new Promise<void>((resolve) => {
+      releaseDelete = resolve
+    })
+    installFetch({
+      workgroups: [wg('review-squad')],
+      calls: [],
+      deleteGate,
+    })
+    const router = await renderPage('/workgroups/review-squad')
+
+    const remove = await screen.findByRole('button', { name: /^Delete$/i })
+    fireEvent.click(remove)
+    fireEvent.click(screen.getByRole('button', { name: /Confirm/i }))
+    void router.navigate({ to: '/workgroups' })
+
+    const guard = await screen.findByTestId('unsaved-guard-dialog')
+    expect(guard.textContent).toMatch(/still in progress/i)
+    expect(screen.queryByTestId('unsaved-discard')).toBeNull()
+    expect(router.state.location.pathname).toBe('/workgroups/review-squad')
+
+    releaseDelete()
+    await waitFor(() => expect(router.state.location.pathname).toBe('/workgroups'))
+    await waitFor(() => expect(screen.queryByTestId('unsaved-guard-dialog')).toBeNull())
   })
 })
 

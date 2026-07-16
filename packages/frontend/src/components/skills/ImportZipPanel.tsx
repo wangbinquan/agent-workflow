@@ -1,7 +1,7 @@
 // RFC-196: a three-stage ZIP import task — select, review, result.
 // The parse/commit wire and RFC-102 permission matrix remain unchanged.
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { Link, useNavigate } from '@tanstack/react-router'
@@ -13,6 +13,7 @@ import {
   type Skill,
 } from '@agent-workflow/shared'
 import { Card } from '@/components/Card'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { FileDropzone, formatShortBytes } from '@/components/FileDropzone'
@@ -61,194 +62,283 @@ type ZipImportPhase =
 
 type Busy = 'parse' | 'commit' | null
 
+type PendingReset = { kind: 'file'; file: File | null } | { kind: 'review' } | null
+
+export interface ImportZipPanelHandle {
+  /** Discard every staged ZIP selection/decision before a guarded navigation. */
+  discard: () => boolean
+}
+
+export interface ImportZipPanelProps {
+  /** select-with-file and review are unsafe to leave; a stable result is clean. */
+  onDirtyChange?: (dirty: boolean) => void
+  /** Commit writes are globally non-discardable until the request settles. */
+  beginCommitBusy?: () => () => void
+}
+
 const ACCEPT_ZIP = '.zip,application/zip,application/x-zip-compressed'
 
 function freshSelect(file: File | null = null): ZipImportPhase {
   return { kind: 'select', file, selectionError: null, parseError: null }
 }
 
-export function ImportZipPanel() {
-  const { t } = useTranslation()
-  const navigate = useNavigate()
-  const qc = useQueryClient()
-  const chooseButtonRef = useRef<HTMLButtonElement | null>(null)
-  const resultHeadingRef = useRef<HTMLHeadingElement | null>(null)
-  const [phase, setPhase] = useState<ZipImportPhase>(() => freshSelect())
-  const [busy, setBusy] = useState<Busy>(null)
+export const ImportZipPanel = forwardRef<ImportZipPanelHandle, ImportZipPanelProps>(
+  function ImportZipPanel({ onDirtyChange, beginCommitBusy }, ref) {
+    const { t } = useTranslation()
+    const navigate = useNavigate()
+    const qc = useQueryClient()
+    const chooseButtonRef = useRef<HTMLButtonElement | null>(null)
+    const resetTriggerRef = useRef<HTMLElement | null>(null)
+    const resultHeadingRef = useRef<HTMLHeadingElement | null>(null)
+    const parseAttemptRef = useRef(0)
+    const parseAbortRef = useRef<AbortController | null>(null)
+    const [phase, setPhase] = useState<ZipImportPhase>(() => freshSelect())
+    const [busy, setBusy] = useState<Busy>(null)
+    const [pendingReset, setPendingReset] = useState<PendingReset>(null)
 
-  const skillsList = useQuery<Skill[]>({
-    queryKey: ['skills'],
-    queryFn: async () => {
-      const res = await authedFetch('/api/skills', { method: 'GET' })
-      if (!res.ok) throw new Error(`failed to list skills: ${res.status}`)
-      return (await res.json()) as Skill[]
-    },
-  })
-  const existingNames = useMemo(
-    () => new Set((skillsList.data ?? []).map((skill) => skill.name)),
-    [skillsList.data],
-  )
+    const skillsList = useQuery<Skill[]>({
+      queryKey: ['skills'],
+      queryFn: async () => {
+        const res = await authedFetch('/api/skills', { method: 'GET' })
+        if (!res.ok) throw new Error(`failed to list skills: ${res.status}`)
+        return (await res.json()) as Skill[]
+      },
+    })
+    const existingNames = useMemo(
+      () => new Set((skillsList.data ?? []).map((skill) => skill.name)),
+      [skillsList.data],
+    )
 
-  useEffect(() => {
-    if (phase.kind === 'result') resultHeadingRef.current?.focus()
-  }, [phase.kind])
+    useEffect(() => {
+      if (phase.kind === 'result') resultHeadingRef.current?.focus()
+    }, [phase.kind])
 
-  function onFileChange(next: File | null) {
-    if (busy !== null) return
-    if (next === null) {
-      setPhase(freshSelect())
-      return
+    const dirty = phase.kind === 'review' || (phase.kind === 'select' && phase.file !== null)
+    useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange])
+
+    useImperativeHandle(
+      ref,
+      () => ({
+        discard: () => {
+          if (busy === 'commit') return false
+          parseAttemptRef.current += 1
+          parseAbortRef.current?.abort()
+          parseAbortRef.current = null
+          setBusy(null)
+          setPendingReset(null)
+          setPhase(freshSelect())
+          onDirtyChange?.(false)
+          return true
+        },
+      }),
+      [busy, onDirtyChange],
+    )
+
+    function applyFileChange(next: File | null) {
+      if (busy !== null) return
+      if (next === null) {
+        setPhase(freshSelect())
+        onDirtyChange?.(false)
+        return
+      }
+      const checked = validateSkillZipFile(next)
+      if (!checked.ok) {
+        setPhase({
+          kind: 'select',
+          file: null,
+          selectionError:
+            checked.reason === 'type'
+              ? t('skills.zipWrongType')
+              : t('skills.zipTooLarge', { limit: formatShortBytes(SKILL_ZIP_LIMITS.totalBytes) }),
+          parseError: null,
+        })
+        onDirtyChange?.(false)
+        return
+      }
+      setPhase(freshSelect(checked.file))
+      onDirtyChange?.(true)
     }
-    const checked = validateSkillZipFile(next)
-    if (!checked.ok) {
-      setPhase({
-        kind: 'select',
-        file: null,
-        selectionError:
-          checked.reason === 'type'
-            ? t('skills.zipWrongType')
-            : t('skills.zipTooLarge', { limit: formatShortBytes(SKILL_ZIP_LIMITS.totalBytes) }),
-        parseError: null,
-      })
-      return
-    }
-    setPhase(freshSelect(checked.file))
-  }
 
-  async function onParse() {
-    if (phase.kind !== 'select' || phase.file === null || busy !== null) return
-    const file = phase.file
-    setBusy('parse')
-    setPhase({ ...phase, selectionError: null, parseError: null })
-    try {
-      const fd = new FormData()
-      fd.append('file', file)
-      const res = await authedFetch('/api/skills/import-zip/parse', {
-        method: 'POST',
-        body: fd,
-      })
-      if (!res.ok) {
+    function onFileChange(next: File | null) {
+      if (busy !== null || phase.kind !== 'select') return
+      if (phase.file !== null) {
+        resetTriggerRef.current = chooseButtonRef.current
+        setPendingReset({ kind: 'file', file: next })
+        return
+      }
+      applyFileChange(next)
+    }
+
+    async function onParse() {
+      if (phase.kind !== 'select' || phase.file === null || busy !== null) return
+      const file = phase.file
+      const attempt = ++parseAttemptRef.current
+      const controller = new AbortController()
+      parseAbortRef.current = controller
+      setBusy('parse')
+      setPhase({ ...phase, selectionError: null, parseError: null })
+      try {
+        const fd = new FormData()
+        fd.append('file', file)
+        const res = await authedFetch('/api/skills/import-zip/parse', {
+          method: 'POST',
+          body: fd,
+          signal: controller.signal,
+        })
+        if (parseAttemptRef.current !== attempt) return
+        if (!res.ok) {
+          setPhase({
+            kind: 'select',
+            file,
+            selectionError: null,
+            parseError: await readResponseError(res, t('skills.zipParseFailedFallback')),
+          })
+          return
+        }
+        const parse = (await res.json()) as ParseSkillZipResponse
+        setPhase({
+          kind: 'review',
+          file,
+          parse,
+          rows: rowsFromParseResponse(parse),
+          commitError: null,
+        })
+      } catch (error) {
+        if (parseAttemptRef.current !== attempt) return
         setPhase({
           kind: 'select',
           file,
           selectionError: null,
-          parseError: await readResponseError(res, t('skills.zipParseFailedFallback')),
+          parseError: errorFromUnknown(error, t('skills.zipParseFailedFallback')),
         })
-        return
+      } finally {
+        if (parseAttemptRef.current === attempt) {
+          parseAbortRef.current = null
+          setBusy(null)
+        }
       }
-      const parse = (await res.json()) as ParseSkillZipResponse
-      setPhase({
-        kind: 'review',
-        file,
-        parse,
-        rows: rowsFromParseResponse(parse),
-        commitError: null,
-      })
-    } catch (error) {
-      setPhase({
-        kind: 'select',
-        file,
-        selectionError: null,
-        parseError: errorFromUnknown(error, t('skills.zipParseFailedFallback')),
-      })
-    } finally {
-      setBusy(null)
     }
-  }
 
-  async function onCommit() {
-    if (phase.kind !== 'review' || busy !== null) return
-    const review = phase
-    setBusy('commit')
-    setPhase({ ...review, commitError: null })
-    try {
-      const fd = new FormData()
-      fd.append('file', review.file)
-      fd.append('decisions', JSON.stringify(buildDecisionMap(review.rows)))
-      const res = await authedFetch('/api/skills/import-zip/commit', {
-        method: 'POST',
-        body: fd,
-      })
-      if (!res.ok) {
+    async function onCommit() {
+      if (phase.kind !== 'review' || busy !== null) return
+      const review = phase
+      const releaseBusy = beginCommitBusy?.() ?? (() => {})
+      setBusy('commit')
+      setPhase({ ...review, commitError: null })
+      try {
+        const fd = new FormData()
+        fd.append('file', review.file)
+        fd.append('decisions', JSON.stringify(buildDecisionMap(review.rows)))
+        const res = await authedFetch('/api/skills/import-zip/commit', {
+          method: 'POST',
+          body: fd,
+        })
+        if (!res.ok) {
+          setPhase({
+            ...review,
+            commitError: await readResponseError(
+              res,
+              t('skills.zipCommitFailedFallback', { status: res.status }),
+            ),
+          })
+          return
+        }
+        const summary = (await res.json()) as CommitSkillZipResponse
+        await qc.invalidateQueries({ queryKey: ['skills'] }).catch(() => undefined)
+        setPhase({ kind: 'result', fileName: review.file.name, summary })
+        onDirtyChange?.(false)
+      } catch (error) {
         setPhase({
           ...review,
-          commitError: await readResponseError(
-            res,
-            t('skills.zipCommitFailedFallback', { status: res.status }),
+          commitError: errorFromUnknown(
+            error,
+            t('skills.zipCommitFailedFallback', { status: '—' }),
           ),
         })
-        return
+      } finally {
+        setBusy(null)
+        releaseBusy()
       }
-      const summary = (await res.json()) as CommitSkillZipResponse
-      await qc.invalidateQueries({ queryKey: ['skills'] }).catch(() => undefined)
-      setPhase({ kind: 'result', fileName: review.file.name, summary })
-    } catch (error) {
-      setPhase({
-        ...review,
-        commitError: errorFromUnknown(error, t('skills.zipCommitFailedFallback', { status: '—' })),
-      })
-    } finally {
-      setBusy(null)
     }
-  }
 
-  function updateRow(idx: number, patch: Partial<RowState['decision']>) {
-    if (phase.kind !== 'review' || busy !== null) return
-    setPhase({
-      ...phase,
-      rows: phase.rows.map((row, i) =>
-        i === idx ? { ...row, decision: { ...row.decision, ...patch } } : row,
-      ),
-      commitError: null,
-    })
-  }
+    function updateRow(idx: number, patch: Partial<RowState['decision']>) {
+      if (phase.kind !== 'review' || busy !== null) return
+      setPhase({
+        ...phase,
+        rows: phase.rows.map((row, i) =>
+          i === idx ? { ...row, decision: { ...row.decision, ...patch } } : row,
+        ),
+        commitError: null,
+      })
+    }
 
-  function returnToSelect() {
-    if (phase.kind !== 'review' || busy !== null) return
-    setPhase(freshSelect(phase.file))
-  }
+    function returnToSelect(trigger: HTMLButtonElement) {
+      if (phase.kind !== 'review' || busy !== null) return
+      resetTriggerRef.current = trigger
+      setPendingReset({ kind: 'review' })
+    }
 
-  function importAnother() {
-    setPhase(freshSelect())
-    window.setTimeout(() => chooseButtonRef.current?.focus(), 0)
-  }
+    function importAnother() {
+      setPhase(freshSelect())
+      window.setTimeout(() => chooseButtonRef.current?.focus(), 0)
+    }
 
-  return (
-    <div className="skill-import" data-testid="skill-import">
-      {phase.kind === 'select' && (
-        <SelectPhase
-          phase={phase}
-          busy={busy === 'parse'}
-          chooseButtonRef={chooseButtonRef}
-          onFileChange={onFileChange}
-          onParse={onParse}
+    return (
+      <div className="skill-import" data-testid="skill-import">
+        {phase.kind === 'select' && (
+          <SelectPhase
+            phase={phase}
+            busy={busy === 'parse'}
+            chooseButtonRef={chooseButtonRef}
+            onFileChange={onFileChange}
+            onParse={onParse}
+          />
+        )}
+        {phase.kind === 'review' && (
+          <ReviewPhase
+            phase={phase}
+            busy={busy === 'commit'}
+            existingNames={existingNames}
+            namesAvailable={skillsList.data !== undefined}
+            namesLoading={skillsList.isPending}
+            namesError={skillsList.isError ? skillsList.error : null}
+            onRetryNames={() => void skillsList.refetch()}
+            onUpdate={updateRow}
+            onBack={returnToSelect}
+            onCommit={onCommit}
+          />
+        )}
+        {phase.kind === 'result' && (
+          <ResultPhase
+            phase={phase}
+            headingRef={resultHeadingRef}
+            onContinue={importAnother}
+            onReturn={() => navigate({ to: '/skills' })}
+          />
+        )}
+        <ConfirmDialog
+          open={pendingReset !== null}
+          title={t('splitPage.unsavedTitle')}
+          description={t('splitPage.unsavedBody')}
+          confirmLabel={t('splitPage.unsavedDiscard')}
+          tone="danger"
+          triggerRef={resetTriggerRef}
+          restoreFocusFallbackRef={chooseButtonRef}
+          onClose={() => setPendingReset(null)}
+          onConfirm={() => {
+            const action = pendingReset
+            if (action === null) return
+            if (action.kind === 'review') {
+              if (phase.kind === 'review') setPhase(freshSelect(phase.file))
+            } else {
+              applyFileChange(action.file)
+            }
+          }}
         />
-      )}
-      {phase.kind === 'review' && (
-        <ReviewPhase
-          phase={phase}
-          busy={busy === 'commit'}
-          existingNames={existingNames}
-          namesAvailable={skillsList.data !== undefined}
-          namesLoading={skillsList.isPending}
-          namesError={skillsList.isError ? skillsList.error : null}
-          onRetryNames={() => void skillsList.refetch()}
-          onUpdate={updateRow}
-          onBack={returnToSelect}
-          onCommit={onCommit}
-        />
-      )}
-      {phase.kind === 'result' && (
-        <ResultPhase
-          phase={phase}
-          headingRef={resultHeadingRef}
-          onContinue={importAnother}
-          onReturn={() => navigate({ to: '/skills' })}
-        />
-      )}
-    </div>
-  )
-}
+      </div>
+    )
+  },
+)
 
 function SelectPhase({
   phase,
@@ -347,7 +437,7 @@ function ReviewPhase({
   namesError: unknown
   onRetryNames: () => void
   onUpdate: (idx: number, patch: Partial<RowState['decision']>) => void
-  onBack: () => void
+  onBack: (trigger: HTMLButtonElement) => void
   onCommit: () => void
 }) {
   const { t } = useTranslation()
@@ -367,7 +457,12 @@ function ReviewPhase({
           <strong title={phase.file.name}>{phase.file.name}</strong>
           <span>{formatShortBytes(phase.file.size)}</span>
         </div>
-        <button type="button" className="btn btn--sm" disabled={busy} onClick={onBack}>
+        <button
+          type="button"
+          className="btn btn--sm"
+          disabled={busy}
+          onClick={(event) => onBack(event.currentTarget)}
+        >
           {t('skills.zipReplace')}
         </button>
       </div>
@@ -394,7 +489,12 @@ function ReviewPhase({
           title={t('skills.zipNoCandidatesTitle')}
           description={t('skills.zipNoCandidates')}
           action={
-            <button type="button" className="btn" disabled={busy} onClick={onBack}>
+            <button
+              type="button"
+              className="btn"
+              disabled={busy}
+              onClick={(event) => onBack(event.currentTarget)}
+            >
               {t('skills.zipReplace')}
             </button>
           }
@@ -461,7 +561,12 @@ function ReviewPhase({
             )}
           </div>
           <div className="skill-import__action-buttons">
-            <button type="button" className="btn" disabled={busy} onClick={onBack}>
+            <button
+              type="button"
+              className="btn"
+              disabled={busy}
+              onClick={(event) => onBack(event.currentTarget)}
+            >
               {t('skills.zipBack')}
             </button>
             <button

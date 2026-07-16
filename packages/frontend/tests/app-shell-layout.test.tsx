@@ -9,6 +9,7 @@ interface MockLinkProps extends AnchorHTMLAttributes<HTMLAnchorElement> {
   children?: ReactNode
   activeOptions?: unknown
   activeProps?: unknown
+  search?: Record<string, string> | ((previous: Record<string, unknown>) => unknown)
 }
 
 const harness = vi.hoisted(() => ({
@@ -30,6 +31,7 @@ vi.mock('@tanstack/react-router', async () => {
       children,
       activeOptions: _activeOptions,
       activeProps: _activeProps,
+      search,
       onClick,
       ...anchorProps
     },
@@ -40,7 +42,10 @@ vi.mock('@tanstack/react-router', async () => {
       {
         ...anchorProps,
         ref,
-        href: to,
+        href:
+          search !== undefined && typeof search !== 'function'
+            ? `${to}?${new URLSearchParams(search).toString()}`
+            : to,
         onClick: (event: React.MouseEvent<HTMLAnchorElement>) => {
           onClick?.(event)
           if (!event.defaultPrevented) {
@@ -150,7 +155,17 @@ vi.mock('@/components/shell/InboxDrawer', async () => {
 vi.mock('@/components/shell/MemoryPendingBadge', async () => {
   const React = await import('react')
   return {
-    MemoryPendingBadge: () => React.createElement('span', { 'data-testid': 'memory-badge' }),
+    MemoryPendingBadge: () =>
+      React.createElement(
+        'a',
+        {
+          href: '/memory?tab=fusion',
+          className: 'nav-item__accessory',
+          'data-testid': 'memory-badge',
+          onClick: (event: React.MouseEvent<HTMLAnchorElement>) => event.preventDefault(),
+        },
+        '2',
+      ),
   }
 })
 
@@ -221,6 +236,21 @@ afterEach(() => {
 })
 
 describe('RFC-198 responsive AppShell', () => {
+  test('Memory main/default and pending accessory are sibling links', () => {
+    vi.stubGlobal('matchMedia', undefined)
+    render(
+      <AppShell pathname="/memory">
+        <h1>Memory</h1>
+      </AppShell>,
+    )
+
+    const main = href('/memory?tab=all')
+    const accessory = screen.getByTestId('memory-badge')
+    expect(main.contains(accessory)).toBe(false)
+    expect(main.parentElement).toBe(accessory.parentElement)
+    expect(accessory.getAttribute('href')).toBe('/memory?tab=fusion')
+  })
+
   test('matchMedia absence falls back to one desktop shell tree', () => {
     vi.stubGlobal('matchMedia', undefined)
     render(
@@ -316,6 +346,28 @@ describe('RFC-198 responsive AppShell', () => {
       </AppShell>,
     )
     await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId('agents-heading')))
+  })
+
+  test('mobile Memory pending accessory shares the close and committed-focus handoff', async () => {
+    installMatchMedia(true)
+    const view = render(
+      <AppShell pathname="/tasks">
+        <h1>Tasks</h1>
+      </AppShell>,
+    )
+    const trigger = screen.getByTestId('mobile-menu-trigger')
+    fireEvent.click(trigger)
+    fireEvent.click(screen.getByTestId('memory-badge'))
+
+    expect(screen.queryByTestId('mobile-nav-dialog')).toBeNull()
+    expect(document.activeElement).toBe(trigger)
+
+    view.rerender(
+      <AppShell pathname="/memory">
+        <h1 data-testid="memory-heading">Memory</h1>
+      </AppShell>,
+    )
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId('memory-heading')))
   })
 
   test('blocked navigation pending state cannot focus an unrelated later route', async () => {

@@ -73,6 +73,7 @@ interface Props {
 type Tab = 'session' | 'events' | 'output' | 'stats'
 
 const NODE_DETAIL_DRAWER_TAB_PREFIX = 'node-detail-drawer'
+const NODE_DETAIL_DRAWER_HEADING_ID = `${NODE_DETAIL_DRAWER_TAB_PREFIX}-heading`
 
 export function NodeDetailDrawer({
   taskId,
@@ -90,6 +91,19 @@ export function NodeDetailDrawer({
   const [tab, setTab] = useState<Tab>('session')
   const [cascade, setCascade] = useState(true)
   const qc = useQueryClient()
+  const run = nodeRunId === null ? undefined : runs.find((candidate) => candidate.id === nodeRunId)
+  const nodeOutputs =
+    nodeRunId === null ? [] : outputs.filter((output) => output.nodeRunId === nodeRunId)
+  const eventsQuery = useQuery<NodeRunEventsResponse>({
+    queryKey: ['tasks', taskId, 'node-runs', nodeRunId, 'events'],
+    queryFn: ({ signal }) =>
+      api.get(
+        `/api/tasks/${encodeURIComponent(taskId)}/node-runs/${encodeURIComponent(nodeRunId ?? '')}/events`,
+        undefined,
+        signal,
+      ),
+    enabled: run !== undefined,
+  })
 
   const retry = useMutation({
     mutationFn: () => {
@@ -107,9 +121,7 @@ export function NodeDetailDrawer({
   })
 
   if (nodeRunId === null) return null
-  const run = runs.find((r) => r.id === nodeRunId)
   if (run === undefined) return null
-  const nodeOutputs = outputs.filter((o) => o.nodeRunId === nodeRunId)
   const retryable = canRetryNodeRun(run.status, taskStatus)
 
   // P-3-10: sibling fan-out children, if this run is a multi-process parent.
@@ -121,15 +133,32 @@ export function NodeDetailDrawer({
 
   const tabs: Array<TabDef<Tab>> = [
     { key: 'session', label: t('nodeDrawer.tabSession') },
-    { key: 'events', label: t('nodeDrawer.tabEvents') },
-    { key: 'output', label: t('nodeDrawer.tabOutput') },
+    {
+      key: 'events',
+      label: t('nodeDrawer.tabEvents'),
+      badge: eventsQuery.data?.events.length,
+      badgeTone: 'neutral',
+      badgeAriaLabel:
+        eventsQuery.data === undefined
+          ? undefined
+          : t('nodeDrawer.eventCount', { count: eventsQuery.data.events.length }),
+    },
+    {
+      key: 'output',
+      label: t('nodeDrawer.tabOutput'),
+      badge: nodeOutputs.length,
+      badgeTone: 'neutral',
+      badgeAriaLabel: t('nodeDrawer.outputCount', { count: nodeOutputs.length }),
+    },
     { key: 'stats', label: t('nodeDrawer.tabStats') },
   ]
   return (
     <aside className="inspector">
       <header className="inspector__header">
         <div>
-          <div className="inspector__kind">{t('nodeDrawer.kindLabel')}</div>
+          <div id={NODE_DETAIL_DRAWER_HEADING_ID} className="inspector__kind">
+            {t('nodeDrawer.kindLabel')}
+          </div>
           <div className="inspector__id">
             <code>{run.nodeId}</code> <span className="muted">/ {run.id.slice(-6)}</span>
           </div>
@@ -148,6 +177,7 @@ export function NodeDetailDrawer({
         tabs={tabs}
         active={tab}
         onSelect={setTab}
+        ariaLabelledBy={NODE_DETAIL_DRAWER_HEADING_ID}
         idPrefix={NODE_DETAIL_DRAWER_TAB_PREFIX}
       />
       {retryable && (
@@ -196,7 +226,7 @@ export function NodeDetailDrawer({
                   workflowNodeKind={workflowNodeKind}
                 />
               )}
-              {active && key === 'events' && <EventsTab taskId={taskId} nodeRunId={nodeRunId} />}
+              {active && key === 'events' && <EventsTab query={eventsQuery} />}
               {active && key === 'output' && <OutputTab outputs={nodeOutputs} />}
               {active && key === 'stats' && (
                 <StatsTab
@@ -446,18 +476,17 @@ function StatsTab({
   )
 }
 
-function EventsTab({ taskId, nodeRunId }: { taskId: string; nodeRunId: string }) {
+function EventsTab({
+  query,
+}: {
+  query: {
+    data: NodeRunEventsResponse | undefined
+    isLoading: boolean
+    error: unknown
+  }
+}) {
   const { t } = useTranslation()
   const [enabledKinds, setEnabledKinds] = useState<Set<string>>(() => new Set(NODE_EVENT_KIND))
-  const query = useQuery<NodeRunEventsResponse>({
-    queryKey: ['tasks', taskId, 'node-runs', nodeRunId, 'events'],
-    queryFn: ({ signal }) =>
-      api.get(
-        `/api/tasks/${encodeURIComponent(taskId)}/node-runs/${encodeURIComponent(nodeRunId)}/events`,
-        undefined,
-        signal,
-      ),
-  })
 
   const visible = useMemo(
     () => (query.data?.events ?? []).filter((e) => enabledKinds.has(e.kind)),

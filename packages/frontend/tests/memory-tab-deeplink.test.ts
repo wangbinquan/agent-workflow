@@ -3,7 +3,7 @@
 // Why this test exists: the homepage memory tile counts the APPROVED pool and
 // deep-links to `/memory?tab=all` (whose default view is that pool). The
 // route's validateSearch is the contract: legal tabs pass through, junk falls
-// back to the classic approval-queue default (empty search), and the
+// back to the stable All default (empty search), and the
 // PRE-EXISTING RFC-041 `focus` param (written by distill-job CandidatesList)
 // keeps flowing — swallowing it would break those deep-links.
 
@@ -25,10 +25,14 @@ describe('RFC-190 /memory tab deep-link', () => {
     expect(validate({ tab: 'fusion' })).toEqual({ tab: 'fusion' })
   })
 
-  test('junk / absent tab falls back to empty search (approval-queue default)', () => {
+  test('junk / absent tab falls back to empty search (All default) without dropping adjacent state', () => {
     expect(validate({})).toEqual({})
     expect(validate({ tab: 'bogus' })).toEqual({})
     expect(validate({ tab: 42 })).toEqual({})
+    expect(validate({ tab: 'bogus', focus: 'mem_1', source: 'distill' })).toEqual({
+      focus: 'mem_1',
+      source: 'distill',
+    })
   })
 
   test('pre-existing focus param is preserved (RFC-041 CandidatesList links)', () => {
@@ -41,7 +45,7 @@ describe('RFC-190 /memory tab deep-link', () => {
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-describe('RFC-198 /memory URL tab authority + panel semantics', () => {
+describe('RFC-201 /memory URL section authority', () => {
   test('functional tab updates preserve focus and adjacent search state', () => {
     expect(withMemoryTab({ focus: 'mem_123', source: 'distill', tab: 'all' }, 'fusion')).toEqual({
       focus: 'mem_123',
@@ -50,17 +54,16 @@ describe('RFC-198 /memory URL tab authority + panel semantics', () => {
     })
   })
 
-  test('route derives active state from search and wires stable tab/panel ids', () => {
+  test('route defaults to All and uses PageSectionNav without tab semantics', () => {
     const src = readFileSync(resolve(__dirname, '../src/routes/memory.tsx'), 'utf-8')
-    expect(src).toContain("const tab = search.tab ?? 'approval-queue'")
+    expect(src).toContain("const requestedTab = isMemoryTab(search.tab) ? search.tab : 'all'")
     expect(src).toContain('const navigate = Route.useNavigate()')
     expect(src).toContain('search: (previous) => withMemoryTab(previous, next)')
     expect(src).toContain('hash })')
-    expect(src).toContain('idPrefix="memory"')
-    expect(src).toContain("tabDomIds('memory', panelTab)")
-    expect(src).toContain('role="tabpanel"')
-    expect(src).toContain('aria-labelledby={ids.tabId}')
-    expect(src).toContain('hidden={!isActive}')
+    expect(src).toContain('<PageSectionNav<MemoryTab>')
+    expect(src).toContain('pageSectionCurrent={destination.ariaCurrent}')
+    expect(src).not.toContain('<TabBar')
+    expect(src).not.toContain('role="tabpanel"')
     expect(src).not.toContain('setTab(')
   })
 })

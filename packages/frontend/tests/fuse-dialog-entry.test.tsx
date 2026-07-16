@@ -94,6 +94,31 @@ describe('FuseDialog entry union — two-state render', () => {
     expect(calls.some((c) => c.url.includes('/api/skills'))).toBe(false)
   })
 
+  test('from-skill: picker includes only explicit canManage=true rows', async () => {
+    installFetch((c) => {
+      if (c.url.includes('/api/memories')) {
+        return json({
+          items: [
+            {
+              id: 'allowed',
+              scopeType: 'global',
+              scopeId: null,
+              title: 'Allowed',
+              canManage: true,
+            },
+            { id: 'denied', scopeType: 'global', scopeId: null, title: 'Denied', canManage: false },
+            { id: 'legacy', scopeType: 'global', scopeId: null, title: 'Legacy missing bit' },
+          ],
+        })
+      }
+      return json([])
+    })
+    mount({ kind: 'from-skill', skillName: 'my-skill' })
+    expect(await screen.findByText('Allowed')).toBeTruthy()
+    expect(screen.queryByText('Denied')).toBeNull()
+    expect(screen.queryByText('Legacy missing bit')).toBeNull()
+  })
+
   test('from-skill: locked skill name is what gets submitted', async () => {
     const calls = installFetch((c) => {
       if (c.url.includes('/api/memories')) {

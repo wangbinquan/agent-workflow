@@ -22,6 +22,7 @@ import type { Workgroup } from '@agent-workflow/shared'
 import { WorkgroupForm } from '../src/components/workgroup/WorkgroupForm'
 import {
   addMember,
+  buildCompositeUpdatePayload,
   buildConfigUpdatePayload,
   buildMembersUpdatePayload,
   buildQuickCreatePayload,
@@ -29,6 +30,7 @@ import {
   makeAgentMemberRow,
   makeHumanMemberRow,
   patchMember,
+  reconcileWorkgroupSaveResponse,
   removeMember,
   sanitizeMemberAlias,
   setLeader,
@@ -412,6 +414,82 @@ describe('buildMembersUpdatePayload', () => {
       expect(built.errors['member-0-displayName']).toBe('workgroups.errors.displayNameDuplicate')
       expect(built.errors['member-1-displayName']).toBe('workgroups.errors.displayNameDuplicate')
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// RFC-201 composite save + id-safe receipt mapping
+// ---------------------------------------------------------------------------
+
+describe('RFC-201 workgroup composite save receipt', () => {
+  test('captures config + complete members once and remaps regenerated ids onto stable local keys', () => {
+    const config = { ...workgroupToConfigDraft(STORED), instructions: 'new charter' }
+    const members = patchMember(workgroupToMembersState(STORED), 'mem_2', {
+      displayName: 'Alicia',
+    })
+    const built = buildCompositeUpdatePayload(config, members, STORED)
+    expect(built.ok).toBe(true)
+    if (!built.ok) return
+    expect(built.payload.instructions).toBe('new charter')
+    expect(built.payload.members.map((member) => member.displayName)).toEqual(['Coder', 'Alicia'])
+
+    const response: Workgroup = {
+      ...STORED,
+      instructions: 'new charter',
+      leaderMemberId: 'fresh-1',
+      members: [
+        { ...STORED.members[1]!, id: 'fresh-1', sortOrder: 0 },
+        {
+          ...STORED.members[0]!,
+          id: 'fresh-2',
+          displayName: 'Alicia',
+          sortOrder: 1,
+        },
+      ],
+    }
+    const reconciled = reconcileWorkgroupSaveResponse(built.payload, members, response)
+    expect(reconciled.ok).toBe(true)
+    if (!reconciled.ok) return
+    expect(reconciled.members.members.map((member) => member.key)).toEqual(['mem_1', 'mem_2'])
+    expect(reconciled.members.members.map((member) => member.serverId)).toEqual([
+      'fresh-1',
+      'fresh-2',
+    ])
+    expect(reconciled.members.leaderKey).toBe('mem_1')
+  })
+
+  test('fails closed when index semantics or leader mapping do not match the captured request', () => {
+    const config = workgroupToConfigDraft(STORED)
+    const members = workgroupToMembersState(STORED)
+    const built = buildCompositeUpdatePayload(config, members, STORED)
+    expect(built.ok).toBe(true)
+    if (!built.ok) return
+
+    const reordered: Workgroup = {
+      ...STORED,
+      leaderMemberId: 'fresh-1',
+      members: [
+        { ...STORED.members[0]!, id: 'fresh-2', sortOrder: 0 },
+        { ...STORED.members[1]!, id: 'fresh-1', sortOrder: 1 },
+      ],
+    }
+    expect(reconcileWorkgroupSaveResponse(built.payload, members, reordered)).toEqual({
+      ok: false,
+      reason: 'member-0-mismatch',
+    })
+
+    const wrongLeader: Workgroup = {
+      ...STORED,
+      leaderMemberId: 'fresh-2',
+      members: [
+        { ...STORED.members[1]!, id: 'fresh-1', sortOrder: 0 },
+        { ...STORED.members[0]!, id: 'fresh-2', sortOrder: 1 },
+      ],
+    }
+    expect(reconcileWorkgroupSaveResponse(built.payload, members, wrongLeader)).toEqual({
+      ok: false,
+      reason: 'leader-mismatch',
+    })
   })
 })
 

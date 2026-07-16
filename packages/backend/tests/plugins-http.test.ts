@@ -6,7 +6,7 @@
 // hermetic; the live `npm` binary is never invoked from these tests.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { chmod, mkdtemp, rm, symlink } from 'node:fs/promises'
+import { access, chmod, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { Hono } from 'hono'
@@ -45,6 +45,19 @@ async function req(app: Hono, path: string, init: RequestInit = {}): Promise<Res
   return app.request(path, { ...init, headers })
 }
 
+async function waitForFile(path: string, timeoutMs = 2_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    try {
+      await access(path)
+      return
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 5))
+    }
+  }
+  throw new Error(`timed out waiting for ${path}`)
+}
+
 beforeEach(async () => {
   pluginsDir = await mkdtemp(join(tmpdir(), 'rfc031-http-'))
   // Install dir under AGENT_WORKFLOW_HOME so the route layer (no installer
@@ -67,6 +80,9 @@ afterEach(async () => {
   if (originalPath !== undefined) process.env.PATH = originalPath
   delete process.env.FAKE_NPM_MODE
   delete process.env.FAKE_NPM_VERSION
+  delete process.env.FAKE_NPM_COUNTER_FILE
+  delete process.env.FAKE_NPM_PAUSE_STARTED
+  delete process.env.FAKE_NPM_PAUSE_RELEASE
   delete process.env.AGENT_WORKFLOW_HOME
 })
 
@@ -237,12 +253,90 @@ describe('/api/plugins install path (PATH-injected fake npm)', () => {
     })
     expect(create.status).toBe(201)
     process.env.FAKE_NPM_VERSION = '2.0.0' // probe will see this
-    const r = await req(app, '/api/plugins/upcheck/check-update', { method: 'POST' })
+    const created = (await create.json()) as { operationConfigHash: string }
+    const r = await req(app, '/api/plugins/upcheck/check-update', {
+      method: 'POST',
+      body: JSON.stringify({ expectedConfigHash: created.operationConfigHash }),
+    })
     expect(r.status).toBe(200)
-    const body = (await r.json()) as { available: boolean; current: string; latest: string }
+    const body = (await r.json()) as {
+      available: boolean
+      current: string
+      latest: string
+      configHashUsed: string
+    }
     expect(body.current).toBe('1.0.0')
     expect(body.latest).toBe('2.0.0')
     expect(body.available).toBe(true)
+    expect(body.configHashUsed).toBe(created.operationConfigHash)
+  })
+
+  test('stale Check/Upgrade hash returns stable 409 and performs zero npm I/O', async () => {
+    const { app } = buildHarness()
+    const create = await req(app, '/api/plugins', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'stale-check', spec: 'pkg@1' }),
+    })
+    expect(create.status).toBe(201)
+    const counter = join(pluginsDir, 'npm-counter.log')
+    process.env.FAKE_NPM_COUNTER_FILE = counter
+    for (const operation of ['check-update', 'upgrade']) {
+      await writeFile(counter, '')
+      const response = await req(app, `/api/plugins/stale-check/${operation}`, {
+        method: 'POST',
+        body: JSON.stringify({ expectedConfigHash: '0'.repeat(64) }),
+      })
+      expect(response.status).toBe(409)
+      expect(((await response.json()) as { code: string }).code).toBe('resource-operation-stale')
+      expect(await readFile(counter, 'utf-8')).toBe('')
+    }
+    delete process.env.FAKE_NPM_COUNTER_FILE
+  })
+
+  test('same id+hash concurrent Check callers join one complete operation', async () => {
+    const { app } = buildHarness()
+    const create = await req(app, '/api/plugins', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'joined-check', spec: 'pkg@1' }),
+    })
+    const created = (await create.json()) as { operationConfigHash: string }
+    const counter = join(pluginsDir, 'npm-counter.log')
+    await writeFile(counter, '')
+    process.env.FAKE_NPM_COUNTER_FILE = counter
+    const init = {
+      method: 'POST',
+      body: JSON.stringify({ expectedConfigHash: created.operationConfigHash }),
+    }
+    const [a, b] = await Promise.all([
+      req(app, '/api/plugins/joined-check/check-update', init),
+      req(app, '/api/plugins/joined-check/check-update', init),
+    ])
+    expect(a.status).toBe(200)
+    expect(b.status).toBe(200)
+    expect((await readFile(counter, 'utf-8')).trim().split('\n')).toHaveLength(1)
+    delete process.env.FAKE_NPM_COUNTER_FILE
+  })
+
+  test('file source fails closed for Check and Upgrade', async () => {
+    const { db, app } = buildHarness()
+    const external = await mkdtemp(join(pluginsDir, 'external-'))
+    const plugin = await createPlugin(
+      db,
+      { name: 'external', spec: external },
+      { pluginsDir, npmBin: FAKE_NPM },
+    )
+    const detail = await req(app, `/api/plugins/${plugin.id}`)
+    const wire = (await detail.json()) as { operationConfigHash: string }
+    for (const suffix of ['check-update', 'upgrade']) {
+      const response = await req(app, `/api/plugins/${plugin.id}/${suffix}`, {
+        method: 'POST',
+        body: JSON.stringify({ expectedConfigHash: wire.operationConfigHash }),
+      })
+      expect(response.status).toBe(422)
+      expect(((await response.json()) as { code: string }).code).toBe(
+        'plugin-operation-unsupported',
+      )
+    }
   })
 
   test('POST /api/plugins/:id/upgrade re-installs + updates installedAt', async () => {
@@ -252,14 +346,158 @@ describe('/api/plugins install path (PATH-injected fake npm)', () => {
       method: 'POST',
       body: JSON.stringify({ name: 'upgr', spec: 'pkg@1.0.0' }),
     })
-    const created = (await create.json()) as { installedAt: number; resolvedVersion: string }
+    const created = (await create.json()) as {
+      installedAt: number
+      resolvedVersion: string
+      operationConfigHash: string
+    }
     process.env.FAKE_NPM_VERSION = '1.5.0'
     // Allow some clock advance so installedAt strictly increases.
     await new Promise((r) => setTimeout(r, 10))
-    const r = await req(app, '/api/plugins/upgr/upgrade', { method: 'POST' })
+    const r = await req(app, '/api/plugins/upgr/upgrade', {
+      method: 'POST',
+      body: JSON.stringify({ expectedConfigHash: created.operationConfigHash }),
+    })
     expect(r.status).toBe(200)
-    const upgraded = (await r.json()) as { installedAt: number; resolvedVersion: string }
-    expect(upgraded.resolvedVersion).toBe('1.5.0')
-    expect(upgraded.installedAt).toBeGreaterThanOrEqual(created.installedAt)
+    const receipt = (await r.json()) as {
+      configHashUsed: string
+      resource: { installedAt: number; resolvedVersion: string; operationConfigHash: string }
+    }
+    expect(receipt.configHashUsed).toBe(created.operationConfigHash)
+    expect(receipt.resource.resolvedVersion).toBe('1.5.0')
+    expect(receipt.resource.installedAt).toBeGreaterThanOrEqual(created.installedAt)
+    expect(receipt.resource.operationConfigHash).not.toBe(created.operationConfigHash)
+  })
+
+  test('PUT waits behind an in-flight Upgrade and publishes from the upgraded row', async () => {
+    const { app } = buildHarness()
+    process.env.FAKE_NPM_VERSION = '1.0.0'
+    const create = await req(app, '/api/plugins', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'serialized-upgrade', spec: 'pkg@1.0.0' }),
+    })
+    expect(create.status).toBe(201)
+    const created = (await create.json()) as { operationConfigHash: string }
+
+    const pauseStarted = join(pluginsDir, 'upgrade-started')
+    const pauseRelease = join(pluginsDir, 'upgrade-release')
+    process.env.FAKE_NPM_MODE = 'pause'
+    process.env.FAKE_NPM_VERSION = '2.0.0'
+    process.env.FAKE_NPM_PAUSE_STARTED = pauseStarted
+    process.env.FAKE_NPM_PAUSE_RELEASE = pauseRelease
+
+    const upgradePromise = req(app, '/api/plugins/serialized-upgrade/upgrade', {
+      method: 'POST',
+      body: JSON.stringify({ expectedConfigHash: created.operationConfigHash }),
+    })
+
+    let updateSettled = false
+    let updatePromise: Promise<Response> | undefined
+    let settledBeforeRelease = false
+    try {
+      await waitForFile(pauseStarted)
+      updatePromise = req(app, '/api/plugins/serialized-upgrade', {
+        method: 'PUT',
+        body: JSON.stringify({ description: 'edited while upgrade was running' }),
+      }).finally(() => {
+        updateSettled = true
+      })
+      await new Promise((resolve) => setTimeout(resolve, 30))
+      settledBeforeRelease = updateSettled
+    } finally {
+      await writeFile(pauseRelease, '')
+    }
+
+    expect(updatePromise).toBeDefined()
+    const [upgrade, update] = await Promise.all([upgradePromise, updatePromise!])
+    expect(settledBeforeRelease).toBe(false)
+    expect(upgrade.status).toBe(200)
+    expect(update.status).toBe(200)
+
+    const upgradeReceipt = (await upgrade.json()) as {
+      resource: { operationConfigHash: string; resolvedVersion: string }
+    }
+    const updated = (await update.json()) as {
+      description: string
+      operationConfigHash: string
+      resolvedVersion: string
+    }
+    expect(upgradeReceipt.resource.resolvedVersion).toBe('2.0.0')
+    expect(updated.resolvedVersion).toBe('2.0.0')
+    expect(updated.description).toBe('edited while upgrade was running')
+    expect(updated.operationConfigHash).not.toBe(upgradeReceipt.resource.operationConfigHash)
+
+    const final = await req(app, '/api/plugins/serialized-upgrade')
+    expect(final.status).toBe(200)
+    expect(await final.json()).toMatchObject(updated)
+  })
+
+  test('ACL mutation waits behind Upgrade and advances the exact resource hash', async () => {
+    const { app } = buildHarness()
+    process.env.FAKE_NPM_VERSION = '1.0.0'
+    const create = await req(app, '/api/plugins', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'serialized-acl', spec: 'pkg@1.0.0' }),
+    })
+    expect(create.status).toBe(201)
+    const created = (await create.json()) as { operationConfigHash: string }
+    const aclBefore = await req(app, '/api/plugins/serialized-acl/acl')
+    expect(aclBefore.status).toBe(200)
+    const aclSnapshot = (await aclBefore.json()) as { resourceId: string; aclRevision: number }
+
+    const pauseStarted = join(pluginsDir, 'acl-upgrade-started')
+    const pauseRelease = join(pluginsDir, 'acl-upgrade-release')
+    process.env.FAKE_NPM_MODE = 'pause'
+    process.env.FAKE_NPM_VERSION = '2.0.0'
+    process.env.FAKE_NPM_PAUSE_STARTED = pauseStarted
+    process.env.FAKE_NPM_PAUSE_RELEASE = pauseRelease
+
+    const upgradePromise = req(app, '/api/plugins/serialized-acl/upgrade', {
+      method: 'POST',
+      body: JSON.stringify({ expectedConfigHash: created.operationConfigHash }),
+    })
+
+    let aclSettled = false
+    let aclPromise: Promise<Response> | undefined
+    let settledBeforeRelease = false
+    try {
+      await waitForFile(pauseStarted)
+      aclPromise = req(app, '/api/plugins/serialized-acl/acl', {
+        method: 'PUT',
+        body: JSON.stringify({
+          visibility: 'private',
+          expectedResourceId: aclSnapshot.resourceId,
+          expectedAclRevision: aclSnapshot.aclRevision,
+        }),
+      }).finally(() => {
+        aclSettled = true
+      })
+      await new Promise((resolve) => setTimeout(resolve, 30))
+      settledBeforeRelease = aclSettled
+    } finally {
+      await writeFile(pauseRelease, '')
+    }
+
+    expect(aclPromise).toBeDefined()
+    const [upgrade, aclUpdate] = await Promise.all([upgradePromise, aclPromise!])
+    expect(settledBeforeRelease).toBe(false)
+    expect(upgrade.status).toBe(200)
+    expect(aclUpdate.status).toBe(200)
+
+    const upgradeReceipt = (await upgrade.json()) as {
+      resource: { operationConfigHash: string }
+    }
+    expect(await aclUpdate.json()).toMatchObject({
+      resourceId: aclSnapshot.resourceId,
+      visibility: 'private',
+      aclRevision: aclSnapshot.aclRevision + 1,
+    })
+    const final = await req(app, '/api/plugins/serialized-acl')
+    const finalResource = (await final.json()) as {
+      visibility: string
+      operationConfigHash: string
+    }
+    expect(finalResource.visibility).toBe('private')
+    expect(finalResource.operationConfigHash).not.toBe(upgradeReceipt.resource.operationConfigHash)
   })
 })

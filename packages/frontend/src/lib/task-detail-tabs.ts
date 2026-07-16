@@ -24,6 +24,141 @@ export type TaskDetailTab =
   // the confirm gate (read-only DAG preview + approve / reject) and save-as.
   | 'dw-orchestration'
 
+export type TaskDetailGroup = 'overview' | 'execution' | 'artifacts' | 'collaboration'
+
+export interface TaskDetailCapabilities {
+  outputs: boolean
+  worktreeFiles: boolean
+  worktreeDiff: boolean
+  worktreeStructure: boolean
+  orchestration: boolean
+  chatroom: boolean
+  questions: boolean
+  feedback: boolean
+}
+
+export interface TaskDetailCapabilityRoom {
+  status: 'pending' | 'error' | 'ready'
+  mode?: 'turn-engine' | 'dynamic-workflow'
+}
+
+export interface TaskDetailRelatedData {
+  hasOutputs: boolean
+  room: TaskDetailCapabilityRoom
+  /** GET /questions inherits task visibility, so every task viewer can read it. */
+  canReadQuestions: boolean
+  /** GET /feedback is additionally guarded by the memory:read permission. */
+  canReadFeedback: boolean
+}
+
+export interface TaskDetailNavigationGroup {
+  key: TaskDetailGroup
+  items: TaskDetailTab[]
+}
+
+export interface TaskDetailNavigation {
+  groups: TaskDetailNavigationGroup[]
+  availableTabs: TaskDetailTab[]
+  defaultForGroup: Record<TaskDetailGroup, TaskDetailTab | undefined>
+}
+
+/**
+ * Page-section information architecture. This changes presentation order only;
+ * every leaf remains the existing TaskDetailTab URL wire key.
+ */
+export const TASK_DETAIL_GROUP_TABS: Readonly<Record<TaskDetailGroup, readonly TaskDetailTab[]>> = {
+  overview: ['workflow-status', 'details', 'dw-orchestration'],
+  execution: ['node-runs'],
+  artifacts: ['outputs', 'worktree-files', 'worktree-diff', 'worktree-structure'],
+  collaboration: ['task-questions', 'feedback', 'chatroom'],
+}
+
+export const TASK_DETAIL_GROUP_ORDER: readonly TaskDetailGroup[] = [
+  'overview',
+  'execution',
+  'artifacts',
+  'collaboration',
+]
+
+function nonEmptyPath(value: string | null | undefined): boolean {
+  return typeof value === 'string' && value.trim() !== ''
+}
+
+function usableDiffProjection(projection: {
+  worktreePath?: string | null
+  baseCommit?: string | null
+}): boolean {
+  return nonEmptyPath(projection.worktreePath) && nonEmptyPath(projection.baseCommit)
+}
+
+/**
+ * Single capability oracle for Task detail navigation and query/panel gates.
+ *
+ * The backend diff/structure consumers use the top-level projection for a
+ * single-repo task and per-repo projections for a multi-repo task. In
+ * particular, a multi-repo task has no meaningful aggregate base commit, so a
+ * null top-level baseCommit must not hide usable repo shards. Worktree files
+ * need only a readable task/repo root; actual filesystem disappearance remains
+ * a stable in-panel 410 rather than being guessed from the DTO.
+ */
+export function deriveTaskDetailCapabilities(
+  task: Pick<Task, 'workgroupId' | 'repoCount' | 'repos' | 'worktreePath' | 'baseCommit'>,
+  relatedData: TaskDetailRelatedData,
+): TaskDetailCapabilities {
+  const isMultiRepo = task.repoCount > 1 || task.repos.length > 1
+  const projections = [
+    { worktreePath: task.worktreePath, baseCommit: task.baseCommit },
+    ...task.repos.map((repo) => ({
+      worktreePath: repo.worktreePath,
+      baseCommit: repo.baseCommit,
+    })),
+  ]
+  const hasWorktreeProjection = projections.some((projection) =>
+    nonEmptyPath(projection.worktreePath),
+  )
+  const hasDiffProjection = isMultiRepo
+    ? task.repos.some(usableDiffProjection)
+    : usableDiffProjection({
+        worktreePath: task.worktreePath,
+        baseCommit: task.baseCommit,
+      })
+  const isWorkgroup = task.workgroupId !== null && task.workgroupId !== undefined
+  const stableRoom = isWorkgroup && relatedData.room.status === 'ready'
+
+  return {
+    outputs: relatedData.hasOutputs,
+    worktreeFiles: hasWorktreeProjection,
+    worktreeDiff: hasDiffProjection,
+    worktreeStructure: hasDiffProjection,
+    orchestration: stableRoom && relatedData.room.mode === 'dynamic-workflow',
+    chatroom: stableRoom && relatedData.room.mode === 'turn-engine',
+    questions: relatedData.canReadQuestions,
+    feedback: relatedData.canReadFeedback,
+  }
+}
+
+export function deriveTaskDetailNavigation(
+  available: readonly TaskDetailTab[],
+): TaskDetailNavigation {
+  const availableSet = new Set(available)
+  const defaultForGroup: Record<TaskDetailGroup, TaskDetailTab | undefined> = {
+    overview: undefined,
+    execution: undefined,
+    artifacts: undefined,
+    collaboration: undefined,
+  }
+  const groups: TaskDetailNavigationGroup[] = []
+
+  for (const key of TASK_DETAIL_GROUP_ORDER) {
+    const items = TASK_DETAIL_GROUP_TABS[key].filter((tab) => availableSet.has(tab))
+    if (items.length === 0) continue
+    defaultForGroup[key] = items[0]
+    groups.push({ key, items })
+  }
+
+  return { groups, availableTabs: [...available], defaultForGroup }
+}
+
 /** Canonical left-to-right tab order shown in the page tab bar.
  *  RFC-128 (用户 2026-06-29): the task-question board moves to SECOND (right after
  *  workflow-status) so pending questions are prominent; the tab also carries a
@@ -83,31 +218,67 @@ export const DYNAMIC_WORKGROUP_TAB_ORDER: readonly TaskDetailTab[] = [
 ] as const
 
 /**
- * Filter `TAB_ORDER` to the tabs that should actually render. The
- * `outputs` tab is hidden when the workflow has no declared output
- * ports — showing an empty tab would just trick the user into clicking
- * it. Every other tab is always present (including `worktree-diff`,
- * which has its own "No base commit" / "No changes" fallbacks in-pane).
+ * Filter the preserved wire-order sets to the page sections that should
+ * actually render. RFC-201 supplies the capability oracle so output,
+ * worktree, room and permission-gated leaves do not lead to dead panels.
+ * The fallback capability object keeps pre-RFC-201 pure callers compatible.
  *
  * RFC-164 PR-4: `isWorkgroup` (default false so pre-existing callers/tests
  * stay untouched) switches to the fixed `WORKGROUP_TAB_ORDER` set — the
- * chat room leads, canvas/outputs are hidden, and `hasOutputs` is ignored.
+ * chat room leads and canvas/outputs are absent unless the supplied
+ * capability model says otherwise.
  *
  * RFC-167 PR-3: `isDynamicWorkgroup` (wins over `isWorkgroup` — the page
  * derives it from the room config's mode, which arrives one query later
- * than workgroupId) switches to DYNAMIC_WORKGROUP_TAB_ORDER with the same
- * `outputs` filter as plain workflow tasks.
+ * than workgroupId) switches to DYNAMIC_WORKGROUP_TAB_ORDER before applying
+ * the same capability filter.
  */
 export function availableTabs(opts: {
   hasOutputs: boolean
   isWorkgroup?: boolean
   isDynamicWorkgroup?: boolean
+  capabilities?: TaskDetailCapabilities
 }): TaskDetailTab[] {
-  if (opts.isDynamicWorkgroup === true) {
-    return DYNAMIC_WORKGROUP_TAB_ORDER.filter((t) => t !== 'outputs' || opts.hasOutputs)
+  const capabilities =
+    opts.capabilities ??
+    ({
+      outputs: opts.hasOutputs,
+      worktreeFiles: true,
+      worktreeDiff: true,
+      worktreeStructure: true,
+      orchestration: opts.isDynamicWorkgroup === true,
+      chatroom: opts.isWorkgroup === true && opts.isDynamicWorkgroup !== true,
+      questions: true,
+      feedback: true,
+    } satisfies TaskDetailCapabilities)
+  const permits = (tab: TaskDetailTab): boolean => {
+    switch (tab) {
+      case 'outputs':
+        return capabilities.outputs
+      case 'worktree-files':
+        return capabilities.worktreeFiles
+      case 'worktree-diff':
+        return capabilities.worktreeDiff
+      case 'worktree-structure':
+        return capabilities.worktreeStructure
+      case 'dw-orchestration':
+        return capabilities.orchestration
+      case 'chatroom':
+        return capabilities.chatroom
+      case 'task-questions':
+        return capabilities.questions
+      case 'feedback':
+        return capabilities.feedback
+      default:
+        return true
+    }
   }
-  if (opts.isWorkgroup === true) return [...WORKGROUP_TAB_ORDER]
-  return TAB_ORDER.filter((t) => t !== 'outputs' || opts.hasOutputs)
+
+  if (opts.isDynamicWorkgroup === true) {
+    return DYNAMIC_WORKGROUP_TAB_ORDER.filter(permits)
+  }
+  if (opts.isWorkgroup === true) return WORKGROUP_TAB_ORDER.filter(permits)
+  return TAB_ORDER.filter(permits)
 }
 
 /**

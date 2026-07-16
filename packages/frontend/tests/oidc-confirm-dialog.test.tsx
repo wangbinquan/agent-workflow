@@ -35,6 +35,7 @@ vi.mock('@/components/RuntimeList', () => ({
 
 import { api } from '../src/api/client'
 import i18n from '../src/i18n'
+import { getConfigQueryKey } from '../src/lib/config-resource'
 import { Route as SettingsRoute, validateSettingsSearch } from '../src/routes/settings'
 
 interface Provider {
@@ -93,7 +94,7 @@ function renderAuthentication(initialRows: Provider[]) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Number.POSITIVE_INFINITY } },
   })
-  client.setQueryData(['config'], DEFAULT_CONFIG)
+  client.setQueryData(getConfigQueryKey(), DEFAULT_CONFIG)
   const root = createRootRoute({ component: () => <Outlet /> })
   const settings = createRoute({
     getParentRoute: () => root,

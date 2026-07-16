@@ -8,7 +8,7 @@
 //   - "Diagnose" button opens the panel (via /diagnose POST mock)
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import { LIFECYCLE_ALERT_RULES } from '@agent-workflow/shared'
@@ -179,6 +179,57 @@ describe('StuckTaskBanner', () => {
     await waitFor(() => {
       expect(document.body.querySelector('[data-testid="task-diagnose-panel"]')).not.toBeNull()
     })
+  })
+
+  test('dismiss hides the current alert signature', async () => {
+    globalThis.fetch = mockFetch({
+      alerts: [{ id: 'a', rule: 'S4', severity: 'warning', detail: {}, detectedAt: 1 }],
+    }) as unknown as typeof fetch
+    const Wrapper = makeWrapper()
+    render(
+      <Wrapper>
+        <StuckTaskBanner taskId="t1" />
+      </Wrapper>,
+    )
+
+    await screen.findByTestId('stuck-task-banner')
+    fireEvent.click(screen.getByTestId('stuck-task-banner-dismiss'))
+    expect(screen.queryByTestId('stuck-task-banner')).toBeNull()
+  })
+
+  test('detail refresh stays dismissed, while severity promotion reappears', async () => {
+    const initial = {
+      id: 'a',
+      rule: 'S4' as const,
+      severity: 'warning' as const,
+      detail: {},
+      detectedAt: 1,
+    }
+    globalThis.fetch = mockFetch({ alerts: [initial] }) as unknown as typeof fetch
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={qc}>
+        <StuckTaskBanner taskId="t1" />
+      </QueryClientProvider>,
+    )
+
+    await screen.findByTestId('stuck-task-banner')
+    fireEvent.click(screen.getByTestId('stuck-task-banner-dismiss'))
+    expect(screen.queryByTestId('stuck-task-banner')).toBeNull()
+
+    act(() => {
+      qc.setQueryData(['tasks', 't1', 'alerts'], {
+        alerts: [{ ...initial, detail: { phase: 'changed' } }],
+      })
+    })
+    expect(screen.queryByTestId('stuck-task-banner')).toBeNull()
+
+    act(() => {
+      qc.setQueryData(['tasks', 't1', 'alerts'], {
+        alerts: [{ ...initial, severity: 'error', detail: { phase: 'changed' } }],
+      })
+    })
+    expect(await screen.findByTestId('stuck-task-banner')).toBeTruthy()
   })
 
   // RFC-098 WP-8 (对抗检视修订 #5): the S5 rule landed with bilingual bundle

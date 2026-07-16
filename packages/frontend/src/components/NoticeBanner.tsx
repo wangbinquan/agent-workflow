@@ -5,7 +5,7 @@
 // screen reader. Icons are decorative inline SVG; meaning always remains in
 // text and is never conveyed by a glyph or colour alone.
 
-import type { ReactElement, ReactNode } from 'react'
+import type { MouseEvent, ReactElement, ReactNode } from 'react'
 
 export type NoticeBannerTone = 'info' | 'success' | 'warning' | 'error'
 export type NoticeBannerSize = 'compact' | 'comfortable'
@@ -15,6 +15,11 @@ export interface NoticeBannerProps {
   title?: string
   children: ReactNode
   action?: ReactNode
+  /** Explicit close control; the owner supplies both behavior and localized label. */
+  dismiss?: {
+    label: string
+    onDismiss: () => void
+  }
   size?: NoticeBannerSize
   /** Compatibility hook for callers migrating an established surface class. */
   className?: string
@@ -94,6 +99,70 @@ export function NoticeBanner(props: NoticeBannerProps): ReactElement {
         <div className="notice-banner__body">{props.children}</div>
       </div>
       {isPresent(props.action) && <div className="notice-banner__action">{props.action}</div>}
+      {props.dismiss !== undefined && (
+        <BannerDismissButton label={props.dismiss.label} onDismiss={props.dismiss.onDismiss} />
+      )}
     </div>
+  )
+}
+
+export function BannerDismissButton({
+  label,
+  onDismiss,
+  testId,
+}: {
+  label: string
+  onDismiss: () => void
+  testId?: string
+}): ReactElement {
+  const handleDismiss = (event: MouseEvent<HTMLButtonElement>) => {
+    const current = event.currentTarget
+    const taskPage = current.closest<HTMLElement>('.page--task-detail')
+    const stack = current.closest<HTMLElement>('.task-detail__banner-stack')
+    const wasFocused = document.activeElement === current
+    const dismissButtons =
+      stack === null
+        ? []
+        : Array.from(stack.querySelectorAll<HTMLButtonElement>('.banner-dismiss-button'))
+    const currentIndex = dismissButtons.indexOf(current)
+    const nextDismiss =
+      currentIndex < 0
+        ? undefined
+        : (dismissButtons[currentIndex + 1] ?? dismissButtons[currentIndex - 1])
+    const sectionNav = taskPage?.querySelector<HTMLElement>(
+      '.task-detail__workspace > .page-section-nav',
+    )
+    const compactDestination = sectionNav?.querySelector<HTMLElement>('[role="combobox"]')
+    const activeDestination = sectionNav
+      ?.querySelector<HTMLElement>('[data-page-section-active-leaf="true"]')
+      ?.querySelector<HTMLElement>(
+        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )
+    const headerDestination = taskPage?.querySelector<HTMLElement>(
+      '.page__header a[href], .page__header button:not([disabled]), .page__header [tabindex]:not([tabindex="-1"])',
+    )
+    const appContent = taskPage?.closest<HTMLElement>('.content[tabindex]')
+    const fallbackFocus =
+      compactDestination ?? activeDestination ?? headerDestination ?? sectionNav ?? appContent
+
+    onDismiss()
+    if (!wasFocused) return
+    queueMicrotask(() => {
+      if (nextDismiss?.isConnected === true) nextDismiss.focus()
+      else if (fallbackFocus?.isConnected === true) fallbackFocus.focus()
+    })
+  }
+
+  return (
+    <button
+      type="button"
+      className="banner-dismiss-button"
+      aria-label={label}
+      title={label}
+      onClick={handleDismiss}
+      data-testid={testId}
+    >
+      <span aria-hidden="true">×</span>
+    </button>
   )
 }

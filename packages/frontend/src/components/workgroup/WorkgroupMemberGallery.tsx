@@ -20,10 +20,12 @@ import { EmptyState } from '@/components/EmptyState'
 import { StatusChip } from '@/components/StatusChip'
 import { useAgentsList } from '@/hooks/useAgentsList'
 import { useUserLookup } from '@/hooks/useUserLookup'
-import { workgroupToMembersState } from '@/lib/workgroup-form'
+import { workgroupToMembersState, type WorkgroupMembersState } from '@/lib/workgroup-form'
 
 export interface WorkgroupMemberGalleryProps {
   group: Workgroup
+  /** Route-owned complete draft. Omitted callers retain the server-row view. */
+  membersState?: WorkgroupMembersState
   /** Selected member row key (server member id) — highlights the card. */
   selectedKey: string | null
   /** Card activation; the page owns toggle semantics (same key ⇒ close). */
@@ -48,7 +50,8 @@ function AgentPortsBadge({ agent }: { agent: Agent | undefined }) {
 
 export function WorkgroupMemberGallery(props: WorkgroupMemberGalleryProps) {
   const { t } = useTranslation()
-  const state = useMemo(() => workgroupToMembersState(props.group), [props.group])
+  const serverState = useMemo(() => workgroupToMembersState(props.group), [props.group])
+  const state = props.membersState ?? serverState
   const showLeaderBadge = props.group.mode === 'leader_worker'
   const users = useUserLookup(
     state.members.map((m) => (m.memberType === 'human' ? m.userId : null)),

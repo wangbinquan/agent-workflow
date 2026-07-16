@@ -251,6 +251,62 @@ describe('/clarify/$nodeRunId detail (RFC-023 T23)', () => {
     expect(screen.getByTestId('clarify-shard-shard-B')).toBeTruthy()
   })
 
+  test('shard peers are current-page links in a named nav and preserve current search', async () => {
+    const session = mkSession({ sourceShardKey: 'shard-A' })
+    const peers: ClarifyRoundSummary[] = [
+      {
+        id: 'sess_a',
+        taskId: 'task_a',
+        taskName: 'fixture-task',
+        kind: 'self',
+        askingNodeId: 'designer',
+        askingShardKey: 'shard-A',
+        intermediaryNodeId: 'c1',
+        intermediaryNodeRunId: 'nr_clarify',
+        targetConsumerNodeId: null,
+        loopIter: 0,
+        iteration: 0,
+        questionCount: 1,
+        status: 'awaiting_human',
+        directive: null,
+        createdAt: 0,
+        answeredAt: null,
+      },
+      {
+        id: 'sess_b',
+        taskId: 'task_a',
+        taskName: 'fixture-task',
+        kind: 'self',
+        askingNodeId: 'designer',
+        askingShardKey: 'shard-B',
+        intermediaryNodeId: 'c1',
+        intermediaryNodeRunId: 'nr_clarify_b',
+        targetConsumerNodeId: null,
+        loopIter: 0,
+        iteration: 0,
+        questionCount: 1,
+        status: 'awaiting_human',
+        directive: null,
+        createdAt: 0,
+        answeredAt: null,
+      },
+    ]
+    mockApi(session, peers)
+    renderRoute('/clarify/nr_clarify?focus=q1')
+    const switcher = await screen.findByTestId('clarify-shard-switcher')
+    const nav = switcher.querySelector('nav')
+    expect(nav?.getAttribute('aria-label')).toBeTruthy()
+    expect(nav?.querySelector('[role="tablist"]')).toBeNull()
+
+    const current = screen.getByTestId('clarify-shard-shard-A') as HTMLAnchorElement
+    const sibling = screen.getByTestId('clarify-shard-shard-B') as HTMLAnchorElement
+    expect(current.getAttribute('aria-current')).toBe('page')
+    expect(sibling.getAttribute('aria-current')).toBeNull()
+    expect(current.className).not.toContain('tabs__tab')
+    expect(sibling.getAttribute('href')).toContain('/clarify/nr_clarify_b')
+    expect(sibling.getAttribute('href')).toContain('focus=q1')
+  })
+
   test('peer lookup failure stays visible and can be retried without hiding the loaded round', async () => {
     const session = mkSession({ sourceShardKey: 'shard-A' })
     let peerAttempts = 0

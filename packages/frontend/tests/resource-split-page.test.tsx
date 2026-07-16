@@ -6,9 +6,9 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import type { ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import {
   Outlet,
   RouterProvider,
@@ -21,7 +21,13 @@ import {
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { Route as RootRoute } from '../src/routes/__root'
 import { ResourceSplitPage, type ResourceCardItem } from '../src/components/split/ResourceSplitPage'
-import { useReportSplitDirty } from '../src/components/split/splitDirty'
+import {
+  useRegisterSplitDiscard,
+  useReportSplitDirty,
+  useSplitDirty,
+  type SplitBusyRelease,
+  type SplitDiscardHandler,
+} from '../src/components/split/splitDirty'
 import '../src/i18n'
 
 const ITEMS: ResourceCardItem[] = [
@@ -55,6 +61,93 @@ function mockFetch() {
 function DirtyDetail({ dirty }: { dirty: boolean }) {
   const { name } = useParams({ from: '/agents/$name' })
   useReportSplitDirty(name, dirty)
+  return (
+    <div data-testid="detail-pane" tabIndex={-1}>
+      detail:{name}
+    </div>
+  )
+}
+
+function stubCompactViewport(initial: boolean) {
+  let matches = initial
+  const listeners = new Set<() => void>()
+  const media = {
+    get matches() {
+      return matches
+    },
+    media: '(max-width: 1080px)',
+    onchange: null,
+    addEventListener: (_type: string, listener: () => void) => {
+      listeners.add(listener)
+    },
+    removeEventListener: (_type: string, listener: () => void) => {
+      listeners.delete(listener)
+    },
+    addListener: (listener: () => void) => {
+      listeners.add(listener)
+    },
+    removeListener: (listener: () => void) => {
+      listeners.delete(listener)
+    },
+    dispatchEvent: () => true,
+  } as unknown as MediaQueryList
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn(() => media),
+  )
+  return {
+    setCompact(next: boolean) {
+      matches = next
+      for (const listener of [...listeners]) listener()
+    },
+  }
+}
+
+function ConcurrentBusyDetail() {
+  const { beginBusy } = useSplitDirty()
+  const firstReleaseRef = useRef<SplitBusyRelease | undefined>(undefined)
+  const secondReleaseRef = useRef<SplitBusyRelease | undefined>(undefined)
+  return (
+    <div data-testid="detail-pane">
+      <button
+        type="button"
+        data-testid="start-two-busy"
+        onClick={() => {
+          firstReleaseRef.current = beginBusy('code-worker')
+          secondReleaseRef.current = beginBusy('code-worker')
+        }}
+      >
+        start two
+      </button>
+      <button
+        type="button"
+        data-testid="release-first-busy"
+        onClick={() => firstReleaseRef.current?.()}
+      >
+        release first
+      </button>
+      <button
+        type="button"
+        data-testid="release-second-busy"
+        onClick={() => secondReleaseRef.current?.()}
+      >
+        release second
+      </button>
+    </div>
+  )
+}
+
+function CompositeDiscardDetail({
+  first,
+  second,
+}: {
+  first: SplitDiscardHandler
+  second: SplitDiscardHandler
+}) {
+  const { name } = useParams({ from: '/agents/$name' })
+  useReportSplitDirty(name, true)
+  useRegisterSplitDiscard(name, first)
+  useRegisterSplitDiscard(name, second)
   return <div data-testid="detail-pane">detail:{name}</div>
 }
 
@@ -67,6 +160,8 @@ function renderSplit(opts: {
   emptyDescription?: string
   emptyIcon?: ReactNode
   onRetry?: () => void
+  concurrentBusy?: boolean
+  discardHandlers?: readonly [SplitDiscardHandler, SplitDiscardHandler]
 }) {
   mockFetch()
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -108,7 +203,14 @@ function renderSplit(opts: {
   const detailRoute = createRoute({
     getParentRoute: () => layoutRoute,
     path: '/$name',
-    component: () => <DirtyDetail dirty={opts.detailDirty ?? false} />,
+    component: () =>
+      opts.concurrentBusy ? (
+        <ConcurrentBusyDetail />
+      ) : opts.discardHandlers === undefined ? (
+        <DirtyDetail dirty={opts.detailDirty ?? false} />
+      ) : (
+        <CompositeDiscardDetail first={opts.discardHandlers[0]} second={opts.discardHandlers[1]} />
+      ),
   })
   const newRoute = createRoute({
     getParentRoute: () => layoutRoute,
@@ -135,6 +237,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 describe('ResourceSplitPage — structure & three states', () => {
@@ -326,6 +429,39 @@ describe('ResourceSplitPage — mobile list/detail DOM contract', () => {
     )
   })
 
+  test('compact route entry and 1081→1080 resize move only soon-hidden list focus', async () => {
+    const viewport = stubCompactViewport(true)
+    const router = renderSplit({ initial: '/agents', items: ITEMS })
+    const card = await screen.findByTestId('split-card-code-worker')
+    card.focus()
+    fireEvent.click(card)
+    await waitFor(() => expect(router.state.location.pathname).toBe('/agents/code-worker'))
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByTestId('agents-mobile-back')),
+    )
+
+    act(() => viewport.setCompact(false))
+    const detail = screen.getByTestId('detail-pane')
+    detail.focus()
+    act(() => viewport.setCompact(true))
+    expect(document.activeElement).toBe(detail)
+
+    act(() => viewport.setCompact(false))
+    screen.getByTestId('split-card-auditor').focus()
+    act(() => viewport.setCompact(true))
+    expect(document.activeElement).toBe(screen.getByTestId('agents-mobile-back'))
+
+    // Real Chromium may drop the hidden link to body before matchMedia's
+    // callback. The remembered pane owner must still restore a useful target.
+    act(() => viewport.setCompact(false))
+    const auditor = screen.getByTestId('split-card-auditor')
+    auditor.focus()
+    auditor.blur()
+    expect(document.activeElement).toBe(document.body)
+    act(() => viewport.setCompact(true))
+    expect(document.activeElement).toBe(screen.getByTestId('agents-mobile-back'))
+  })
+
   test('back navigation uses the existing dirty blocker before restoring list focus', async () => {
     const router = renderSplit({
       initial: '/agents/code-worker',
@@ -391,5 +527,52 @@ describe('ResourceSplitPage — dirty dot via context', () => {
     renderSplit({ initial: '/agents/code-worker', items: ITEMS, detailDirty: false })
     await waitFor(() => screen.getByTestId('detail-pane'))
     expect(screen.queryByTestId('split-card-dot-code-worker')).toBeNull()
+  })
+})
+
+describe('ResourceSplitPage — busy tokens and composite discard', () => {
+  test('concurrent busy tokens are independent and each release is idempotent', async () => {
+    const router = renderSplit({
+      initial: '/agents/code-worker',
+      items: ITEMS,
+      concurrentBusy: true,
+    })
+    await screen.findByTestId('detail-pane')
+    fireEvent.click(screen.getByTestId('start-two-busy'))
+    fireEvent.click(screen.getByTestId('agents-mobile-back'))
+
+    await screen.findByTestId('unsaved-guard-dialog')
+    expect(screen.queryByTestId('unsaved-discard')).toBeNull()
+    expect(router.state.location.pathname).toBe('/agents/code-worker')
+
+    fireEvent.click(screen.getByTestId('release-first-busy'))
+    fireEvent.click(screen.getByTestId('release-first-busy'))
+    expect(screen.getByTestId('unsaved-guard-dialog')).toBeTruthy()
+
+    fireEvent.click(screen.getByTestId('release-second-busy'))
+    await waitFor(() => expect(screen.queryByTestId('unsaved-guard-dialog')).toBeNull())
+    expect(router.state.location.pathname).toBe('/agents/code-worker')
+
+    fireEvent.click(screen.getByTestId('agents-mobile-back'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/agents'))
+  })
+
+  test('discard composes every handler registered for the dirty card', async () => {
+    const first = vi.fn()
+    const second = vi.fn()
+    const router = renderSplit({
+      initial: '/agents/code-worker',
+      items: ITEMS,
+      discardHandlers: [first, second],
+    })
+    await waitFor(() => screen.getByTestId('split-card-dot-code-worker'))
+
+    fireEvent.click(screen.getByTestId('agents-mobile-back'))
+    await screen.findByTestId('unsaved-guard-dialog')
+    fireEvent.click(screen.getByTestId('unsaved-discard'))
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/agents'))
+    expect(first).toHaveBeenCalledTimes(1)
+    expect(second).toHaveBeenCalledTimes(1)
   })
 })

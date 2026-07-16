@@ -1,4 +1,4 @@
-// RFC-128 (用户 2026-06-29) — source-level guard for the 「问题」tab badge.
+// RFC-128 / RFC-201 — source-level guard for the 「问题」section badge.
 //
 // TAB_ORDER position (question board moved to SECOND) is locked in
 // task-detail-tabs.test.ts. tasks.detail.tsx is a large route component not
@@ -13,14 +13,13 @@ import { describe, expect, test } from 'vitest'
 
 const SRC = readFileSync(resolve(__dirname, '..', 'src', 'routes', 'tasks.detail.tsx'), 'utf8')
 
-describe('RFC-128 question tab badge (source-level lock)', () => {
-  test('「问题」tab renders a count badge gated to the task-questions tab + positive count', () => {
-    // RFC-150 PR-3: the badge <span class="tabs__tab-badge"> markup moved into
-    // the shared <TabBar> badge slot; tasks.detail.tsx now wires it through
-    // the TabDef `badge` prop (same gating expression) with the stable
-    // `tq-tab-badge` testid landing on the badge span via `badgeTestid`.
-    expect(SRC).toMatch(/badge:\s+k === 'task-questions' && pendingQuestionCount > 0/)
-    expect(SRC).toContain("badgeTestid: k === 'task-questions' ? 'tq-tab-badge' : undefined")
+describe('RFC-128 question section badge (source-level lock)', () => {
+  test('「问题」pending count is visible on both the collaboration group and leaf', () => {
+    expect(SRC).toContain('data-testid="tq-section-badge"')
+    expect(SRC).toContain('data-testid="tq-group-badge"')
+    expect(SRC).toContain("key === 'task-questions' ? questionBadge : undefined")
+    expect(SRC).toContain("group.key === 'collaboration' && pendingQuestionCount > 0")
+    expect(SRC).toContain("? 'attention' : undefined")
   })
 
   test('badge count = 待指派(pending) + 待下发(staged) only (needs-action), incl. manual', () => {

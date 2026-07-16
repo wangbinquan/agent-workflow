@@ -153,7 +153,13 @@ function synthesizePutRow(base: Workgroup, body: Record<string, unknown>): Workg
   return {
     ...base,
     description: (body.description as string | undefined) ?? base.description,
+    instructions: (body.instructions as string | undefined) ?? base.instructions,
     mode: (body.mode as Workgroup['mode'] | undefined) ?? base.mode,
+    switches: (body.switches as Workgroup['switches'] | undefined) ?? base.switches,
+    maxRounds: (body.maxRounds as number | undefined) ?? base.maxRounds,
+    completionGate: (body.completionGate as boolean | undefined) ?? base.completionGate,
+    autonomous: (body.autonomous as boolean | undefined) ?? base.autonomous,
+    fanOut: (body.fanOut as boolean | undefined) ?? base.fanOut,
     members,
     leaderMemberId:
       leaderName !== undefined
@@ -326,6 +332,93 @@ describe('panel three-state switching (§9.1)', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     // panel still shows the member editor
     expect(within(panelEl()).getByTestId('workgroup-member-displayname-input')).toBeTruthy()
+  })
+
+  test('RFC-201: member edits survive card switch, Close and panel Escape', async () => {
+    installFetch({ workgroups: [wg('squad')], calls: [] })
+    await renderPage('/workgroups/squad')
+    fireEvent.click(await screen.findByTestId('workgroup-card-open-Auditor'))
+    fireEvent.change(await within(panelEl()).findByTestId('workgroup-member-displayname-input'), {
+      target: { value: 'DraftAuditor' },
+    })
+
+    fireEvent.click(screen.getByTestId('workgroup-card-open-Coder'))
+    expect(
+      (within(panelEl()).getByTestId('workgroup-member-displayname-input') as HTMLInputElement)
+        .value,
+    ).toBe('Coder')
+    fireEvent.click(screen.getByTestId('workgroup-card-open-DraftAuditor'))
+    expect(
+      (within(panelEl()).getByTestId('workgroup-member-displayname-input') as HTMLInputElement)
+        .value,
+    ).toBe('DraftAuditor')
+
+    fireEvent.click(screen.getByTestId('workgroup-panel-close'))
+    fireEvent.click(screen.getByTestId('workgroup-card-open-DraftAuditor'))
+    const reopened = within(panelEl()).getByTestId(
+      'workgroup-member-displayname-input',
+    ) as HTMLInputElement
+    expect(reopened.value).toBe('DraftAuditor')
+    fireEvent.keyDown(reopened, { key: 'Escape' })
+    fireEvent.click(screen.getByTestId('workgroup-card-open-DraftAuditor'))
+    expect(
+      (within(panelEl()).getByTestId('workgroup-member-displayname-input') as HTMLInputElement)
+        .value,
+    ).toBe('DraftAuditor')
+  })
+
+  test('RFC-201: unfinished add draft survives Close and participates in route guard', async () => {
+    installFetch({ workgroups: [wg('squad')], calls: [] })
+    const router = await renderPage('/workgroups/squad')
+    fireEvent.click(await screen.findByTestId('workgroup-add-agent-member'))
+    await pickAgent('coder')
+    fireEvent.change(screen.getByTestId('workgroup-member-displayname-input'), {
+      target: { value: 'pendingAgent' },
+    })
+    fireEvent.change(screen.getByTestId('workgroup-member-role-input'), {
+      target: { value: 'pending specialist' },
+    })
+    fireEvent.click(screen.getByTestId('workgroup-panel-close'))
+    fireEvent.click(screen.getByTestId('workgroup-add-agent-member'))
+    expect(
+      (screen.getByTestId('workgroup-member-displayname-input') as HTMLInputElement).value,
+    ).toBe('pendingAgent')
+    expect((screen.getByTestId('workgroup-member-role-input') as HTMLInputElement).value).toBe(
+      'pending specialist',
+    )
+
+    void router.navigate({ to: '/workgroups' })
+    await screen.findByTestId('unsaved-guard-dialog')
+    fireEvent.click(screen.getByTestId('unsaved-stay'))
+    await waitFor(() => expect(screen.queryByTestId('unsaved-guard-dialog')).toBeNull())
+    expect(router.state.location.pathname).toBe('/workgroups/squad')
+    expect(
+      (screen.getByTestId('workgroup-member-displayname-input') as HTMLInputElement).value,
+    ).toBe('pendingAgent')
+  })
+
+  test('RFC-201: route leave offers Stay/Discard for the composite member draft', async () => {
+    installFetch({ workgroups: [wg('squad')], calls: [] })
+    const router = await renderPage('/workgroups/squad')
+    fireEvent.click(await screen.findByTestId('workgroup-card-open-Auditor'))
+    fireEvent.change(await within(panelEl()).findByTestId('workgroup-member-role-input'), {
+      target: { value: 'locally edited role' },
+    })
+
+    void router.navigate({ to: '/workgroups' })
+    await screen.findByTestId('unsaved-guard-dialog')
+    fireEvent.click(screen.getByTestId('unsaved-stay'))
+    await waitFor(() => expect(screen.queryByTestId('unsaved-guard-dialog')).toBeNull())
+    expect(router.state.location.pathname).toBe('/workgroups/squad')
+    expect((screen.getByTestId('workgroup-member-role-input') as HTMLInputElement).value).toBe(
+      'locally edited role',
+    )
+
+    const secondNavigation = router.navigate({ to: '/workgroups' })
+    await screen.findByTestId('unsaved-guard-dialog')
+    fireEvent.click(screen.getByTestId('unsaved-discard'))
+    await secondNavigation
+    expect(router.state.location.pathname).toBe('/workgroups')
   })
 })
 
@@ -707,7 +800,7 @@ describe('config save stays on the page; the saved flash never lies (§9.7/9.8, 
     fireEvent.change(screen.getByTestId('workgroup-field-instructions'), {
       target: { value: 'v3' },
     })
-    expect(screen.getByTestId('workgroup-save-button').textContent).toBe('Save')
+    expect(screen.getByTestId('workgroup-save-button').textContent).toBe('Save all changes')
   })
 
   test('editing while the PUT is in flight suppresses the Saved flash (F2)', async () => {
@@ -739,13 +832,93 @@ describe('config save stays on the page; the saved flash never lies (§9.7/9.8, 
     // The flash must NOT appear — the on-screen draft (v3) was never saved.
     await waitFor(() => {
       const label = screen.getByTestId('workgroup-save-button').textContent
-      expect(label).toBe('Save')
+      expect(label).toBe('Save all changes')
     })
+  })
+
+  test('RFC-201: a newer member edit made in flight remains dirty after the verified receipt', async () => {
+    const state = { workgroups: [wg('squad')], calls: [] as Recorded['calls'] }
+    let releasePut: ((response: Response) => void) | null = null
+    installFetch(state, {
+      putImpl: () =>
+        new Promise<Response>((resolve) => {
+          releasePut = resolve
+        }),
+    })
+    await renderPage('/workgroups/squad')
+    fireEvent.click(await screen.findByTestId('workgroup-card-open-Auditor'))
+    const input = (await within(panelEl()).findByTestId(
+      'workgroup-member-displayname-input',
+    )) as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'SubmittedAlias' } })
+    fireEvent.click(screen.getByTestId('workgroup-save-button'))
+    await waitFor(() => expect(releasePut).not.toBeNull())
+
+    fireEvent.change(input, { target: { value: 'NewerAlias' } })
+    const submitted = state.calls.find((call) => call.method === 'PUT')!.body as Record<
+      string,
+      unknown
+    >
+    const response = synthesizePutRow(wg('squad'), submitted)
+    state.workgroups[0] = response
+    releasePut!(
+      new Response(JSON.stringify(response), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    await waitFor(() => expect(input.value).toBe('NewerAlias'))
+    expect((screen.getByTestId('workgroup-save-button') as HTMLButtonElement).disabled).toBe(false)
+    expect(state.calls.filter((call) => call.method === 'PUT')).toHaveLength(1)
+  })
+
+  test('RFC-201: a semantically mismatched 200 refetches, preserves the draft, and unlocks', async () => {
+    const state = { workgroups: [wg('squad')], calls: [] as Recorded['calls'] }
+    installFetch(state, {
+      putImpl: (_name, body) => {
+        const mismatched = synthesizePutRow(wg('squad'), body)
+        mismatched.members[2] = {
+          ...mismatched.members[2]!,
+          displayName: 'ForeignAlias',
+        }
+        return new Response(JSON.stringify(mismatched), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      },
+    })
+    const router = await renderPage('/workgroups/squad')
+    fireEvent.change(await screen.findByTestId('workgroup-field-instructions'), {
+      target: { value: 'submitted charter' },
+    })
+    fireEvent.click(screen.getByTestId('workgroup-save-button'))
+
+    await waitFor(() => {
+      expect(state.calls.filter((call) => call.method === 'PUT')).toHaveLength(1)
+      expect(state.calls.filter((call) => call.method === 'GET').length).toBeGreaterThan(1)
+      expect((screen.getByTestId('workgroup-save-button') as HTMLButtonElement).disabled).toBe(
+        false,
+      )
+    })
+    expect((screen.getByTestId('workgroup-field-instructions') as HTMLTextAreaElement).value).toBe(
+      'submitted charter',
+    )
+    expect(screen.getByRole('status').textContent).toContain('Server settings changed')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Use server values' }))
+    expect((screen.getByTestId('workgroup-field-instructions') as HTMLTextAreaElement).value).toBe(
+      '',
+    )
+    expect((screen.getByTestId('workgroup-save-button') as HTMLButtonElement).disabled).toBe(true)
+
+    await router.navigate({ to: '/workgroups' })
+    expect(screen.queryByTestId('unsaved-guard-dialog')).toBeNull()
   })
 })
 
-describe('member PUT failure keeps the draft and resets on panel switch (§9.9, F5)', () => {
-  test('409 → panel error + draft kept → retry succeeds; switching members clears the error', async () => {
+describe('composite PUT failure keeps every member draft (§9.9 / RFC-201)', () => {
+  test('409 → global error + draft kept across member switch → retry succeeds', async () => {
     const state = { workgroups: [wg('squad')], calls: [] as Recorded['calls'] }
     let failNext = true
     installFetch(state, {
@@ -775,12 +948,13 @@ describe('member PUT failure keeps the draft and resets on panel switch (§9.9, 
         .value,
     ).toBe('Auditrix')
 
-    // switching to another member resets the error (F5 ownership)
+    // The save owns the complete document, so its error remains visible while
+    // switching members; the route-owned draft is not discarded.
     fireEvent.click(screen.getByTestId('workgroup-card-open-Coder'))
-    await waitFor(() => expect(within(panelEl()).queryByTestId('workgroup-panel-error')).toBeNull())
+    expect(within(panelEl()).getByTestId('workgroup-panel-error')).toBeTruthy()
 
-    // back to the member; retry now succeeds and the selection survives
-    fireEvent.click(screen.getByTestId('workgroup-card-open-Auditor'))
+    // back to the route-owned renamed draft; retry now succeeds.
+    fireEvent.click(screen.getByTestId('workgroup-card-open-Auditrix'))
     const again = (await within(panelEl()).findByTestId(
       'workgroup-member-displayname-input',
     )) as HTMLInputElement
@@ -811,7 +985,7 @@ describe('mode-transition error (§9.12, F3)', () => {
         'Dynamic-workflow groups allow agent members only — remove the human members before saving.',
       ),
     ).toBeNull()
-    expect((screen.getByTestId('workgroup-save-button') as HTMLButtonElement).disabled).toBe(false)
+    expect((screen.getByTestId('workgroup-save-button') as HTMLButtonElement).disabled).toBe(true)
   })
 })
 
@@ -864,7 +1038,7 @@ describe('Codex impl-gate P1/P2 — lost-update and draft-loss guards', () => {
     })
   })
 
-  test('P1: a header config save keeps the open member editor AND its unsaved draft (id churn re-resolved)', async () => {
+  test('RFC-201: config + member dirty Save All emits one full-replace PUT and keeps selection', async () => {
     const state = { workgroups: [wg('squad')], calls: [] as Recorded['calls'] }
     installFetch(state)
     await renderPage('/workgroups/squad')
@@ -879,20 +1053,30 @@ describe('Codex impl-gate P1/P2 — lost-update and draft-loss guards', () => {
     )) as HTMLInputElement
     fireEvent.change(input, { target: { value: 'DraftName' } })
 
-    // header Save fires the config channel; the synthesized PUT response
-    // regenerates every member id
+    // Save All captures both scopes in one immutable full-replace body.
     fireEvent.click(screen.getByTestId('workgroup-save-button'))
     await waitFor(() => {
-      expect(state.calls.some((c) => c.method === 'PUT')).toBe(true)
+      expect(state.calls.filter((call) => call.method === 'PUT')).toHaveLength(1)
     })
-    // The member editor survived (no collapse to config) and the unsaved
-    // draft is intact (content-keyed body never remounted).
+    const body = state.calls.find((call) => call.method === 'PUT')!.body as {
+      instructions: string
+      members: Array<{ displayName: string }>
+    }
+    expect(body.instructions).toBe('v2')
+    expect(body.members.map((member) => member.displayName)).toEqual([
+      'Coder',
+      'Alice',
+      'DraftName',
+    ])
+    // The verified receipt remaps regenerated ids onto the stable local key;
+    // selection survives and both submitted scopes are clean.
     await waitFor(() => {
       expect(
         (within(panelEl()).getByTestId('workgroup-member-displayname-input') as HTMLInputElement)
           .value,
       ).toBe('DraftName')
     })
+    expect((screen.getByTestId('workgroup-save-button') as HTMLButtonElement).disabled).toBe(true)
   })
 
   test('P2: set-leader does not clobber a dirty alias draft (content-keyed body survives id churn)', async () => {
@@ -905,13 +1089,14 @@ describe('Codex impl-gate P1/P2 — lost-update and draft-loss guards', () => {
     )) as HTMLInputElement
     fireEvent.change(input, { target: { value: 'DirtyAlias' } })
 
-    fireEvent.click(within(panelEl()).getByTestId('workgroup-set-leader-Auditor'))
+    fireEvent.click(within(panelEl()).getByTestId('workgroup-set-leader-DirtyAlias'))
     await waitFor(() => {
       const put = state.calls.find((c) => c.method === 'PUT')
-      // The wire carries the SERVER alias (unsaved edits are not submitted)…
-      expect((put?.body as Record<string, unknown>).leaderDisplayName).toBe('Auditor')
+      // The action shares the same composite snapshot, so the edited alias and
+      // leader choice are committed atomically in one PUT.
+      expect((put?.body as Record<string, unknown>).leaderDisplayName).toBe('DirtyAlias')
     })
-    // …and the dirty draft is still on screen for the user to save later.
+    // The controlled editor remains selected after id regeneration.
     await waitFor(() => {
       expect(within(panelEl()).getByTestId('workgroup-leader-badge')).toBeTruthy()
     })

@@ -61,6 +61,7 @@ describe('TabPanels keep-mounted', () => {
           ]}
           active="a"
           onSelect={() => {}}
+          ariaLabel="Example sections"
           idPrefix="resource"
         />
         <TabPanels

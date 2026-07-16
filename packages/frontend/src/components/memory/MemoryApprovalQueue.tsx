@@ -21,11 +21,7 @@ interface ListResponse {
   items: Memory[]
 }
 
-export interface MemoryApprovalQueueProps {
-  isAdmin: boolean
-}
-
-export function MemoryApprovalQueue({ isAdmin }: MemoryApprovalQueueProps) {
+export function MemoryApprovalQueue() {
   const { t } = useTranslation()
   const qc = useQueryClient()
   // `include=body` widens the list rows to full Memory shape so the card can
@@ -56,22 +52,9 @@ export function MemoryApprovalQueue({ isAdmin }: MemoryApprovalQueueProps) {
     candidate: Memory
     existingId: string
   } | null>(null)
-  // RFC-045: row-level edit dialog. Even though the approval queue now
-  // loads full Memory rows (via `include=body`), MemoryEditDialog wants the
-  // canonical detail shape (timestamps + chain), so we still fetch by id on
-  // click and only mount the dialog once that response is in the cache.
+  // RFC-201: clicking Edit mounts its stable loading/error/retry dialog shell
+  // immediately; the dialog owns the canonical detail fetch.
   const [editingId, setEditingId] = useState<string | null>(null)
-  const editingMemory = useQuery<{ memory: Memory }>({
-    queryKey: ['memories', 'detail', editingId],
-    queryFn: ({ signal }) =>
-      api.get<{ memory: Memory }>(
-        `/api/memories/${encodeURIComponent(editingId ?? '')}`,
-        undefined,
-        signal,
-      ),
-    enabled: editingId !== null,
-  })
-
   const candidatesError = candidates.error !== null && candidates.error !== undefined
   const retryAction = (
     <button type="button" className="btn btn--sm" onClick={() => void candidates.refetch()}>
@@ -85,12 +68,18 @@ export function MemoryApprovalQueue({ isAdmin }: MemoryApprovalQueueProps) {
     }
     return <LoadingState />
   }
-  const rows = candidates.data.items
+  // The list and badge share the exact server annotation oracle. Visible but
+  // non-manageable candidates are not approval work for this actor.
+  const rows = candidates.data.items.filter((memory) => memory.canManage === true)
   if (rows.length === 0) {
     return (
       <>
         {candidatesError && <ErrorBanner error={candidates.error} action={retryAction} />}
-        <EmptyState title={t('memory.empty')} data-testid="memory-approval-queue-empty" />
+        <EmptyState
+          title={t('memory.emptyStates.candidates')}
+          description={t('memory.emptyStates.candidatesDescription')}
+          data-testid="memory-approval-queue-empty"
+        />
       </>
     )
   }
@@ -98,25 +87,17 @@ export function MemoryApprovalQueue({ isAdmin }: MemoryApprovalQueueProps) {
   return (
     <div className="memory-approval-queue" data-testid="memory-approval-queue">
       {candidatesError && <ErrorBanner error={candidates.error} action={retryAction} />}
-      {/* RFC-099 (D12): non-admins may still manage rows whose scoped
-          resource they OWN — the banner only shows when nothing here is
-          manageable by them. */}
-      {!isAdmin && rows.every((m) => m.canManage !== true) && rows.length > 0 && (
-        <div className="info-box info-box--muted" data-testid="memory-admin-only-banner">
-          {t('memory.adminOnly')}
-        </div>
-      )}
       <ul className="memory-approval-queue__list">
         {rows.map((mem) => (
           <CandidateCard
             key={mem.id}
             candidate={mem}
-            isAdmin={mem.canManage ?? isAdmin}
+            canManage={mem.canManage === true}
             disabled={promote.isPending}
             onApprove={() => promote.mutate({ id: mem.id, body: { action: 'approve' } })}
             onReject={() => promote.mutate({ id: mem.id, body: { action: 'reject' } })}
             onCompare={(refId) => setCompareWith({ candidate: mem, existingId: refId })}
-            onEdit={(mem.canManage ?? isAdmin) ? () => setEditingId(mem.id) : undefined}
+            onEdit={mem.canManage === true ? () => setEditingId(mem.id) : undefined}
           />
         ))}
       </ul>
@@ -129,7 +110,7 @@ export function MemoryApprovalQueue({ isAdmin }: MemoryApprovalQueueProps) {
           approving={promote.isPending}
           rejecting={promote.isPending}
           onApproveSupersede={
-            isAdmin
+            compareWith.candidate.canManage === true
               ? () => {
                   promote.mutate(
                     {
@@ -145,7 +126,7 @@ export function MemoryApprovalQueue({ isAdmin }: MemoryApprovalQueueProps) {
               : undefined
           }
           onReject={
-            isAdmin
+            compareWith.candidate.canManage === true
               ? () => {
                   promote.mutate(
                     { id: compareWith.candidate.id, body: { action: 'reject' } },
@@ -161,12 +142,8 @@ export function MemoryApprovalQueue({ isAdmin }: MemoryApprovalQueueProps) {
           <ErrorBanner error={promote.error} />
         </div>
       )}
-      {editingId !== null && editingMemory.data?.memory !== undefined && (
-        <MemoryEditDialog
-          open
-          onClose={() => setEditingId(null)}
-          memory={editingMemory.data.memory}
-        />
+      {editingId !== null && (
+        <MemoryEditDialog open onClose={() => setEditingId(null)} memoryId={editingId} />
       )}
     </div>
   )
@@ -174,18 +151,18 @@ export function MemoryApprovalQueue({ isAdmin }: MemoryApprovalQueueProps) {
 
 interface CandidateCardProps {
   candidate: Memory
-  isAdmin: boolean
+  canManage: boolean
   disabled: boolean
   onApprove: () => void
   onReject: () => void
   onCompare: (refId: string) => void
-  /** RFC-045: when defined and the user is admin, render an [Edit] button. */
+  /** RFC-201: present only when the server says this row is manageable. */
   onEdit?: () => void
 }
 
 function CandidateCard({
   candidate,
-  isAdmin,
+  canManage,
   disabled,
   onApprove,
   onReject,
@@ -243,7 +220,7 @@ function CandidateCard({
             type="button"
             className="btn btn--sm"
             onClick={onEdit}
-            disabled={!isAdmin || disabled}
+            disabled={!canManage || disabled}
             data-testid={`memory-candidate-${candidate.id}-edit`}
           >
             {t('memory.action.edit')}
@@ -263,7 +240,7 @@ function CandidateCard({
           type="button"
           className="btn btn--sm"
           onClick={onReject}
-          disabled={!isAdmin || disabled}
+          disabled={!canManage || disabled}
           data-testid={`memory-candidate-${candidate.id}-reject`}
         >
           {t('memory.action.reject')}
@@ -272,7 +249,7 @@ function CandidateCard({
           type="button"
           className="btn btn--sm btn--primary"
           onClick={onApprove}
-          disabled={!isAdmin || disabled}
+          disabled={!canManage || disabled}
           data-testid={`memory-candidate-${candidate.id}-approve`}
         >
           {t('memory.action.approve')}

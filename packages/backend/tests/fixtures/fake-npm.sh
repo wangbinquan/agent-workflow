@@ -20,6 +20,9 @@ if [[ "$1" == "--version" ]]; then
 fi
 
 if [[ "$1" == "install" ]]; then
+  if [[ -n "${FAKE_NPM_COUNTER_FILE:-}" ]]; then
+    printf 'install\n' >> "$FAKE_NPM_COUNTER_FILE"
+  fi
   # find --prefix arg + last positional spec.
   PREFIX=""
   SPEC=""
@@ -43,6 +46,13 @@ if [[ "$1" == "install" ]]; then
     # Sleep longer than any reasonable test timeout.
     sleep 300
     exit 0
+  fi
+
+  if [[ "$MODE" == "pause" ]]; then
+    : "${FAKE_NPM_PAUSE_STARTED:?FAKE_NPM_PAUSE_STARTED is required in pause mode}"
+    : "${FAKE_NPM_PAUSE_RELEASE:?FAKE_NPM_PAUSE_RELEASE is required in pause mode}"
+    touch "$FAKE_NPM_PAUSE_STARTED"
+    while [[ ! -f "$FAKE_NPM_PAUSE_RELEASE" ]]; do sleep 0.01; done
   fi
 
   if [[ "$MODE" == "leak-secret" ]]; then
@@ -115,6 +125,35 @@ EOF
       }
     ' "$HOST_PKG" > "$TMP" && mv "$TMP" "$HOST_PKG"
   fi
+
+  # RFC-201 immutable-generation identity fixture. Real npm writes this lock
+  # entry; the installer requires resolved+integrity for npm and a final
+  # commit SHA for git instead of trusting package.json.version display text.
+  case "$SPEC" in
+    git+*|github:*|gitlab:*|bitbucket:*)
+      COMMIT="${FAKE_NPM_COMMIT:-0123456789abcdef0123456789abcdef01234567}"
+      RESOLVED="git+https://example.test/${PKG_NAME}.git#${COMMIT}"
+      GIT_HEAD_VALUE="\"${COMMIT}\""
+      ;;
+    *)
+      RESOLVED="https://registry.example.test/${PKG_NAME}/-/${PKG_NAME##*/}-${VERSION}.tgz"
+      GIT_HEAD_VALUE="null"
+      ;;
+  esac
+  cat > "${PREFIX}/package-lock.json" <<EOF
+{
+  "name": "aw-plugin-host",
+  "lockfileVersion": 3,
+  "packages": {
+    "node_modules/${PKG_NAME}": {
+      "version": "${VERSION}",
+      "resolved": "${RESOLVED}",
+      "integrity": "sha512-fake-${VERSION}",
+      "gitHead": ${GIT_HEAD_VALUE}
+    }
+  }
+}
+EOF
   exit 0
 fi
 

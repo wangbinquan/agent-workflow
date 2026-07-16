@@ -12,7 +12,12 @@ import { api } from '@/api/client'
 import { McpFields } from '@/components/McpFields'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { PageHeader } from '@/components/PageHeader'
-import { NEW_CARD_KEY, useReportSplitDirty, useSplitDirty } from '@/components/split/splitDirty'
+import {
+  NEW_CARD_KEY,
+  useReportSplitDirty,
+  useSplitDirty,
+  type SplitBusyRelease,
+} from '@/components/split/splitDirty'
 import { useDirtyBaseline } from '@/hooks/useDraftFromQuery'
 import { buildCreatePayload, EMPTY_LOCAL_FORM, type McpFormState } from '@/lib/mcp-form'
 import { Route as mcpsRoute } from './mcps'
@@ -27,19 +32,22 @@ function McpCreatePage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const qc = useQueryClient()
-  const { report } = useSplitDirty()
+  const { beginBusy, report } = useSplitDirty()
   const [form, setForm] = useState<McpFormState>(EMPTY_LOCAL_FORM)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const { dirty } = useDirtyBaseline(form, EMPTY_LOCAL_FORM)
   useReportSplitDirty(NEW_CARD_KEY, dirty)
 
   const create = useMutation({
-    mutationFn: (payload: CreateMcp): Promise<Mcp> => api.post<Mcp>('/api/mcps', payload),
-    onSuccess: (m) => {
+    mutationFn: ({ payload }: { payload: CreateMcp; release: SplitBusyRelease }): Promise<Mcp> =>
+      api.post<Mcp>('/api/mcps', payload),
+    onSuccess: (m, { release }) => {
       report(NEW_CARD_KEY, false)
       void qc.invalidateQueries({ queryKey: ['mcps'] })
+      release()
       navigate({ to: '/mcps/$name', params: { name: m.name } })
     },
+    onSettled: (_mcp, _error, { release }) => release(),
   })
 
   function submit() {
@@ -50,11 +58,12 @@ function McpCreatePage() {
       return
     }
     setErrors({})
-    create.mutate(built.payload)
+    if (create.isPending) return
+    create.mutate({ payload: built.payload, release: beginBusy(NEW_CARD_KEY) })
   }
 
   return (
-    <div className="agent-new">
+    <fieldset className="agent-new detail-freeze" disabled={create.isPending}>
       <PageHeader
         title={t('mcps.newTitle')}
         headingLevel={2}
@@ -74,6 +83,6 @@ function McpCreatePage() {
       <div className="split__detail-body">
         <McpFields value={form} onChange={setForm} errors={errors} />
       </div>
-    </div>
+    </fieldset>
   )
 }

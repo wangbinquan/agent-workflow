@@ -12,6 +12,7 @@ import {
   type Skill,
 } from '@agent-workflow/shared'
 import { ImportZipPanel } from '../src/components/skills/ImportZipPanel'
+import type { ImportZipPanelProps } from '../src/components/skills/ImportZipPanel'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import i18n from '../src/i18n'
 
@@ -80,11 +81,11 @@ function makeWrapper() {
   }
 }
 
-function renderPanel() {
+function renderPanel(props: ImportZipPanelProps = {}) {
   const Wrapper = makeWrapper()
   return render(
     <Wrapper>
-      <ImportZipPanel />
+      <ImportZipPanel {...props} />
     </Wrapper>,
   )
 }
@@ -228,6 +229,45 @@ describe('ImportZipPanel (RFC-196)', () => {
     expect(attempts).toBe(2)
   })
 
+  test('selected/review state is dirty, while an imported result is clean', async () => {
+    const onDirtyChange = vi.fn()
+    installRouter({
+      parse: { body: parseResponse([candidate('fresh')]) },
+      commit: {
+        body: { created: [makeSkill('fresh')], updated: [], skipped: [], failed: [] },
+      },
+    })
+    renderPanel({ onDirtyChange })
+    await waitFor(() => expect(onDirtyChange).toHaveBeenLastCalledWith(false))
+
+    chooseFile()
+    await waitFor(() => expect(onDirtyChange).toHaveBeenLastCalledWith(true))
+    await parseSelectedFile()
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true)
+
+    fireEvent.click(screen.getByTestId('zip-commit-button'))
+    await screen.findByTestId('zip-import-summary')
+    await waitFor(() => expect(onDirtyChange).toHaveBeenLastCalledWith(false))
+  })
+
+  test('replacing a selected archive requires confirmation and cancel preserves the old file', async () => {
+    installRouter({})
+    renderPanel()
+    chooseFile(fakeZipFile('a.zip'))
+    expect(screen.getByText('a.zip')).toBeTruthy()
+
+    chooseFile(fakeZipFile('b.zip'))
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.cancel') }))
+    expect(screen.getByText('a.zip')).toBeTruthy()
+    expect(screen.queryByText('b.zip')).toBeNull()
+
+    chooseFile(fakeZipFile('b.zip'))
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('splitPage.unsavedDiscard') }))
+    expect(screen.getByText('b.zip')).toBeTruthy()
+    expect(screen.queryByText('a.zip')).toBeNull()
+  })
+
   test('review uses candidate cards and keeps archive errors beside valid rows', async () => {
     installRouter({
       parse: {
@@ -264,6 +304,7 @@ describe('ImportZipPanel (RFC-196)', () => {
     expect(screen.getByText(i18n.t('skills.zipNoCandidatesTitle'))).toBeTruthy()
     expect(screen.queryByTestId('zip-commit-button')).toBeNull()
     fireEvent.click(screen.getAllByRole('button', { name: i18n.t('skills.zipReplace') })[0]!)
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('splitPage.unsavedDiscard') }))
     expect(screen.getByTestId('zip-select-phase')).toBeTruthy()
   })
 
@@ -352,6 +393,8 @@ describe('ImportZipPanel (RFC-196)', () => {
       resolveCommit = resolve
     })
     let commitCalls = 0
+    const releaseBusy = vi.fn()
+    const beginCommitBusy = vi.fn(() => releaseBusy)
     const summary: CommitSkillZipResponse = {
       created: [makeSkill('fresh')],
       updated: [],
@@ -365,7 +408,7 @@ describe('ImportZipPanel (RFC-196)', () => {
         return commitPromise
       },
     })
-    renderPanel()
+    renderPanel({ beginCommitBusy })
     chooseFile()
     await parseSelectedFile()
 
@@ -373,10 +416,13 @@ describe('ImportZipPanel (RFC-196)', () => {
     fireEvent.click(commitButton)
     fireEvent.click(commitButton)
     expect(commitCalls).toBe(1)
+    expect(beginCommitBusy).toHaveBeenCalledTimes(1)
+    expect(releaseBusy).not.toHaveBeenCalled()
     expect(commitButton.disabled).toBe(true)
     resolveCommit(jsonResponse(summary))
 
     const result = await screen.findByTestId('zip-import-summary')
+    expect(releaseBusy).toHaveBeenCalledTimes(1)
     expect(result.textContent).toContain(i18n.t('skills.zipResultSuccess'))
     expect(navigateSpy).not.toHaveBeenCalled()
     expect(document.activeElement).toBe(screen.getByRole('heading', { name: /Import complete/ }))
@@ -507,7 +553,11 @@ describe('ImportZipPanel (RFC-196)', () => {
     expect(screen.getByTestId('zip-row-from-a')).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: i18n.t('skills.zipBack') }))
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('splitPage.unsavedDiscard') }))
     expect(screen.queryByTestId('zip-row-from-a')).toBeNull()
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByTestId('zip-file-input-button')),
+    )
     chooseFile(fakeZipFile('b.zip'))
     await parseSelectedFile()
     expect(screen.getByTestId('zip-row-from-b')).toBeTruthy()

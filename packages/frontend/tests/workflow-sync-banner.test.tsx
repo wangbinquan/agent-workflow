@@ -10,7 +10,7 @@
 
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { WorkflowSyncPreview } from '@agent-workflow/shared'
 
 import { setBaseUrl, setToken } from '../src/stores/auth'
@@ -72,11 +72,12 @@ function renderBanner() {
   setBaseUrl('')
   setToken('tok')
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(
+  const view = render(
     <QueryClientProvider client={qc}>
       <WorkflowSyncBanner taskId="t1" />
     </QueryClientProvider>,
   )
+  return { ...view, queryClient: qc }
 }
 
 afterEach(() => {
@@ -91,6 +92,24 @@ describe('RFC-109 WorkflowSyncBanner', () => {
     expect(await screen.findByTestId('workflow-sync-banner')).toBeTruthy()
     // version delta shown
     expect(screen.getByTestId('workflow-sync-banner').textContent).toContain('v1 → v2')
+  })
+
+  test('dismiss hides the current workflow-version signature', async () => {
+    installFetch(preview())
+    const { queryClient } = renderBanner()
+    await screen.findByTestId('workflow-sync-banner')
+
+    fireEvent.click(screen.getByTestId('workflow-sync-dismiss'))
+    expect(screen.queryByTestId('workflow-sync-banner')).toBeNull()
+
+    act(() => {
+      queryClient.setQueryData(
+        ['tasks', 't1', 'workflow-sync-preview'],
+        preview({ latestVersion: 3 }),
+      )
+    })
+    expect(await screen.findByTestId('workflow-sync-banner')).toBeTruthy()
+    expect(screen.getByTestId('workflow-sync-banner').textContent).toContain('v1 → v3')
   })
 
   test('hidden when definitions are identical (differs=false)', async () => {

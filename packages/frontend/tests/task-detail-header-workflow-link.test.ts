@@ -17,7 +17,7 @@
 //
 // Source-level scan because the routed component registers against TanStack
 // Router at runtime and is awkward to mount in happy-dom. We split the source at
-// the tab bar so the assertions prove the link lives in the always-visible
+// the page-section workspace so the assertions prove the link lives in the always-visible
 // header region, not just "somewhere in the file".
 
 import { readFileSync } from 'node:fs'
@@ -29,16 +29,15 @@ const SRC = readFileSync(
   'utf-8',
 )
 
-// Everything before the tab bar (<nav class="task-detail__tab-bar">) is the
-// always-rendered page header; everything after is tab panes, including the
-// "details" tab that hosts the subject meta row.
-const TAB_MARKER = 'task-detail__tab-bar'
-const HEADER = SRC.split(TAB_MARKER)[0] ?? ''
-const AFTER_HEADER = SRC.slice(SRC.indexOf(TAB_MARKER))
+// Everything before the page-section workspace is always-rendered header chrome;
+// everything after includes the section navigation + the Details section.
+const SECTION_MARKER = 'task-detail__workspace'
+const HEADER = SRC.split(SECTION_MARKER)[0] ?? ''
+const AFTER_HEADER = SRC.slice(SRC.indexOf(SECTION_MARKER))
 
 describe('task detail header — subject jump link', () => {
-  test('the tab-bar marker exists so the header/panes split is valid', () => {
-    expect(SRC).toContain(TAB_MARKER)
+  test('the page-section marker exists so the header/sections split is valid', () => {
+    expect(SRC).toContain(SECTION_MARKER)
     expect(HEADER.length).toBeGreaterThan(0)
   })
 

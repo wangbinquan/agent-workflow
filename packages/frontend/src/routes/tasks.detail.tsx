@@ -21,8 +21,9 @@ import type { ApiError } from '@/api/client'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
-import { NoticeBanner } from '@/components/NoticeBanner'
+import { BannerDismissButton, NoticeBanner } from '@/components/NoticeBanner'
 import { PageHeader } from '@/components/PageHeader'
+import { PageSectionLink, PageSectionNav, type PageSectionGroup } from '@/components/PageSectionNav'
 import { TableViewport } from '@/components/TableViewport'
 import { TaskSubjectLink } from '@/components/TaskSubjectLink'
 import { WorkflowCanvas, type WorkflowCanvasHandle } from '@/components/canvas/WorkflowCanvas'
@@ -42,7 +43,6 @@ import { SessionTab } from '@/components/node-session/SessionTab'
 import { collectPorts, TaskOutputPanel } from '@/components/TaskOutputPanel'
 import { Segmented } from '@/components/Segmented'
 import { StatusChip } from '@/components/StatusChip'
-import { TabBar, tabDomIds } from '@/components/TabBar'
 import { TaskStatusChip } from '@/components/TaskStatusChip'
 import { WorktreeDiffPanel } from '@/components/WorktreeDiffPanel'
 import { StructuralDiffView } from '@/components/structure/StructuralDiffView'
@@ -59,16 +59,21 @@ import { deriveClarifyNodeNav, type ClarifyNodeNavKind } from '@/lib/clarify-nod
 import { reviewRunDisplay } from '@/lib/reviewRunDisplay'
 import {
   canOfferFailedJump,
+  deriveTaskDetailCapabilities,
+  deriveTaskDetailNavigation,
   isTerminal,
   nextTabForFailedJump,
+  type TaskDetailGroup,
   type TaskDetailTab,
 } from '@/lib/task-detail-tabs'
 import {
   resolveTaskDetailTabs,
+  type TaskDetailRoomClassification,
   validateTaskDetailSearch,
   withTaskDetailTab,
 } from '@/lib/task-detail-route-tabs'
 import { workgroupRoomKey, type WorkgroupRoomResponse } from '@/lib/workgroup-room'
+import { useActor } from '@/hooks/useActor'
 import { useTaskSync } from '@/hooks/useTaskSync'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Route as RootRoute } from './__root'
@@ -80,14 +85,37 @@ export const Route = createRoute({
   validateSearch: validateTaskDetailSearch,
 })
 
+function bannerErrorSignature(error: unknown): string {
+  if (error instanceof Error) {
+    const transport = error as Error & { status?: unknown; code?: unknown }
+    return `${error.name}:${String(transport.status ?? '')}:${String(transport.code ?? '')}:${error.message}`
+  }
+  if (typeof error === 'string') return error
+  try {
+    return JSON.stringify(error) ?? String(error)
+  } catch {
+    return String(error)
+  }
+}
+
 function TaskDetailPage() {
   const { t } = useTranslation()
   const { id } = Route.useParams()
   const search = Route.useSearch()
   const navigateTaskRoute = Route.useNavigate()
   const qc = useQueryClient()
+  const actor = useActor()
   useTaskSync(id)
   const [selectedNodeRunId, setSelectedNodeRunId] = useState<string | null>(null)
+  const [dismissedBanners, setDismissedBanners] = useState<ReadonlySet<string>>(() => new Set())
+  const dismissBanner = useCallback((key: string) => {
+    setDismissedBanners((previous) => {
+      if (previous.has(key)) return previous
+      const next = new Set(previous)
+      next.add(key)
+      return next
+    })
+  }, [])
   // RFC-198: every tab write uses this one functional-search navigation path.
   // Canonical fallbacks pass replace=true; user/programmatic jumps use push so
   // Back/Forward traverses panels. Unrelated search payload is preserved.
@@ -150,16 +178,6 @@ function TaskDetailPage() {
       isTerminal(task.data?.status) && (q.state.data?.runs.length ?? 0) > 0 ? false : 3000,
   })
 
-  const diff = useQuery<TaskDiff>({
-    queryKey: ['tasks', id, 'diff'],
-    queryFn: ({ signal }) =>
-      api.get(`/api/tasks/${encodeURIComponent(id)}/diff`, undefined, signal),
-    enabled: task.data !== undefined && task.data.baseCommit !== null,
-    refetchInterval: (q) =>
-      isTerminal(task.data?.status) && q.state.data !== undefined ? false : 6000,
-    retry: false,
-  })
-
   // RFC-128: task-question count for the 「问题」tab badge. Same query key as the
   // canvas badges (TaskStatusCanvas) so they share one cache entry + useTaskSync
   // invalidation. Non-member / no-questions → [] → 0 → no badge.
@@ -215,22 +233,54 @@ function TaskDetailPage() {
       api.get(`/api/workgroup-tasks/${encodeURIComponent(id)}/room`, undefined, signal),
     enabled: isWorkgroup,
   })
+  const taskQueryBannerKey = `${id}:task-query:${task.dataUpdatedAt}:${bannerErrorSignature(task.error)}`
+  const roomErrorBannerKey = `${id}:room-query:${room.dataUpdatedAt}:${bannerErrorSignature(room.error)}`
+  const nodeRunsErrorBannerKey = `${id}:node-runs-query:${nodeRuns.dataUpdatedAt}:${bannerErrorSignature(nodeRuns.error)}`
   const isDynamicWorkgroup = isWorkgroup && room.data?.config.mode === 'dynamic_workflow'
   const dwPhase = room.data?.dw?.phase ?? null
+  const roomClassification: TaskDetailRoomClassification =
+    !isWorkgroup || room.data !== undefined
+      ? {
+          status: 'ready',
+          mode: isDynamicWorkgroup ? 'dynamic-workflow' : 'turn-engine',
+          dwPhase,
+        }
+      : room.error !== null
+        ? { status: 'error' }
+        : { status: 'pending' }
+  // Permission lookup is part of the tab-capability authority.  Treating a
+  // failed lookup as an empty permission set would replace a valid `feedback`
+  // deep-link with the default tab and make a transient outage look like a
+  // durable access decision.  Keep resolution pending until we have data; the
+  // rendered error state below preserves the raw URL and offers a retry.
+  const permissionsReady = actor.data !== undefined
+  const taskCapabilities =
+    task.data === undefined
+      ? {
+          outputs: false,
+          worktreeFiles: false,
+          worktreeDiff: false,
+          worktreeStructure: false,
+          orchestration: false,
+          chatroom: false,
+          questions: false,
+          feedback: false,
+        }
+      : deriveTaskDetailCapabilities(task.data, {
+          hasOutputs,
+          room: roomClassification,
+          // The questions GET endpoint inherits the task-view gate and has no
+          // additional global permission. Writes remain member-gated server-side.
+          canReadQuestions: true,
+          canReadFeedback: actor.data?.permissions.includes('memory:read') ?? false,
+        })
   const tabResolution = resolveTaskDetailTabs({
     taskLoaded: task.data !== undefined,
+    capabilitiesReady: permissionsReady,
     hasOutputs,
+    capabilities: taskCapabilities,
     isWorkgroup,
-    room:
-      !isWorkgroup || room.data !== undefined
-        ? {
-            status: 'ready',
-            mode: isDynamicWorkgroup ? 'dynamic-workflow' : 'turn-engine',
-            dwPhase,
-          }
-        : room.error !== null
-          ? { status: 'error' }
-          : { status: 'pending' },
+    room: roomClassification,
     searchTab: search.tab,
   })
   const tabs = tabResolution.status === 'ready' ? tabResolution.tabs : []
@@ -244,6 +294,7 @@ function TaskDetailPage() {
         : undefined
   const displayedTabs: TaskDetailTab[] =
     tabResolution.status === 'ready' ? tabs : tab === 'details' ? ['details'] : []
+  const taskNavigation = deriveTaskDetailNavigation(displayedTabs)
   const canonicalTab =
     tabResolution.status === 'ready' && tabResolution.canonicalize ? tabResolution.tab : null
   useEffect(() => {
@@ -259,15 +310,31 @@ function TaskDetailPage() {
     [task.data?.workflowSnapshot],
   )
 
-  // RFC-083 — structural (semantic) diff for the task scope. Same gating as the
-  // textual diff (needs a base commit); refetches while the task is live.
+  const diff = useQuery<TaskDiff>({
+    queryKey: ['tasks', id, 'diff'],
+    queryFn: ({ signal }) =>
+      api.get(`/api/tasks/${encodeURIComponent(id)}/diff`, undefined, signal),
+    // One oracle owns both navigation and fetching. Multi-repo tasks often
+    // have top-level baseCommit=null while repos[] still contain usable shards.
+    enabled: tab === 'worktree-diff' && taskCapabilities.worktreeDiff,
+    refetchInterval: (q) =>
+      isTerminal(task.data?.status) && q.state.data !== undefined ? false : 6000,
+    retry: false,
+  })
+  // Backend node/wrapper structural scopes are single-repo only. Keep the
+  // whole-task scope selected for multi-repo tasks instead of offering a leaf
+  // that deterministically returns 422.
+  const effectiveStructScope = task.data?.repoCount === 1 ? structScope : 'task'
+
+  // RFC-083 — structural (semantic) diff for the task scope. It shares the
+  // exact multi-repo capability gate with its navigation leaf and panel.
   const structuralDiff = useQuery<StructuralDiff>({
-    queryKey: ['tasks', id, 'structural-diff', structScope, engineMode],
+    queryKey: ['tasks', id, 'structural-diff', effectiveStructScope, engineMode],
     queryFn: ({ signal }) => {
       const params = new URLSearchParams()
-      if (structScope.startsWith('node:')) {
+      if (effectiveStructScope.startsWith('node:')) {
         params.set('scope', 'node')
-        params.set('nodeRunId', structScope.slice('node:'.length))
+        params.set('nodeRunId', effectiveStructScope.slice('node:'.length))
       } else {
         params.set('scope', 'task')
       }
@@ -281,8 +348,7 @@ function TaskDetailPage() {
     // Only when the Structure tab is open: the analysis is expensive (git grep +
     // tree-sitter parse), and the scope <Select> must not mount into the DOM on
     // other tabs (else a page-wide `[role=combobox]` locator grabs it).
-    enabled:
-      tab === 'worktree-structure' && task.data !== undefined && task.data.baseCommit !== null,
+    enabled: tab === 'worktree-structure' && taskCapabilities.worktreeStructure,
     refetchInterval: (q) =>
       isTerminal(task.data?.status) && q.state.data !== undefined ? false : 6000,
     retry: false,
@@ -312,26 +378,66 @@ function TaskDetailPage() {
     )
   }
   if (task.data === undefined) return null
+  if (actor.data === undefined && actor.error !== null && actor.error !== undefined) {
+    return (
+      <div className="page page--task-detail">
+        <PageHeader title={task.data.name} />
+        <ErrorBanner
+          error={actor.error}
+          action={
+            <button type="button" className="btn btn--sm" onClick={() => void actor.refetch()}>
+              {t('common.retry')}
+            </button>
+          }
+        />
+      </div>
+    )
+  }
   if (tabResolution.status === 'pending') {
     return (
       <div className="page page--task-detail">
         <PageHeader title={task.data.name} />
-        {task.error !== null && task.error !== undefined && (
-          <ErrorBanner
-            error={task.error}
-            action={
-              <button type="button" className="btn btn--sm" onClick={() => void task.refetch()}>
-                {t('common.retry')}
-              </button>
-            }
-          />
-        )}
+        {task.error !== null &&
+          task.error !== undefined &&
+          !dismissedBanners.has(taskQueryBannerKey) && (
+            <ErrorBanner
+              error={task.error}
+              action={
+                <button type="button" className="btn btn--sm" onClick={() => void task.refetch()}>
+                  {t('common.retry')}
+                </button>
+              }
+              onDismiss={() => dismissBanner(taskQueryBannerKey)}
+            />
+          )}
         <LoadingState label={t('tasks.loadingTask')} />
       </div>
     )
   }
 
   const tk = task.data
+  const questionBadge =
+    pendingQuestionCount > 0 ? (
+      <span data-testid="tq-section-badge">{pendingQuestionCount}</span>
+    ) : undefined
+  const taskSectionGroups: PageSectionGroup<TaskDetailTab>[] = taskNavigation.groups.map(
+    (group) => ({
+      key: group.key,
+      label: taskDetailGroupLabel(t, group.key),
+      badge:
+        group.key === 'collaboration' && pendingQuestionCount > 0 ? (
+          <span data-testid="tq-group-badge">{pendingQuestionCount}</span>
+        ) : undefined,
+      badgeTone:
+        group.key === 'collaboration' && pendingQuestionCount > 0 ? 'attention' : undefined,
+      items: group.items.map((key) => ({
+        key,
+        label: tabLabel(t, key),
+        badge: key === 'task-questions' ? questionBadge : undefined,
+        badgeTone: key === 'task-questions' && pendingQuestionCount > 0 ? 'attention' : undefined,
+      })),
+    }),
+  )
   const nodeRunsConsumerActive =
     tab === 'workflow-status' || tab === 'node-runs' || tab === 'outputs'
   // RFC-202 T3: awaiting_review / awaiting_human are cancelable too (shared
@@ -361,6 +467,10 @@ function TaskDetailPage() {
   // dynamic group mid-load never flashes the wrong message.
   const showWorkgroupResumeHint =
     resumability === 'ready' && isWorkgroup && room.data !== undefined && !isDynamicWorkgroup
+  const resumeUnavailableBannerKey = `${id}:resume-unavailable:${resumability}`
+  const workgroupResumeBannerKey = `${id}:workgroup-resume:${room.data?.config.mode ?? 'unknown'}`
+  const failedBannerKey = `${id}:failed:${tk.finishedAt ?? 'active'}:${tk.failedNodeId ?? ''}:${tk.errorSummary ?? ''}:${tk.errorMessage ?? ''}`
+  const worktreePreservedBannerKey = `${id}:worktree-preserved:${tk.finishedAt ?? 'active'}:${tk.status}:${tk.worktreePath}`
 
   return (
     <div className="page page--task-detail">
@@ -427,390 +537,468 @@ function TaskDetailPage() {
           </>
         }
       />
-      {task.error !== null && task.error !== undefined && (
-        <ErrorBanner
-          error={task.error}
-          action={
-            <button type="button" className="btn btn--sm" onClick={() => void task.refetch()}>
-              {t('common.retry')}
-            </button>
-          }
-        />
-      )}
-      <StuckTaskBanner taskId={id} />
-      <WorkflowSyncBanner taskId={id} />
-      {cancel.error !== null && cancel.error !== undefined && <ErrorBanner error={cancel.error} />}
-      {resume.error !== null && resume.error !== undefined && <ErrorBanner error={resume.error} />}
-      {resumability === 'worktree-missing' && (
-        <NoticeBanner
-          tone="info"
-          size="compact"
-          className="info-box--muted"
-          action={
-            <Link to="/tasks/new" search={{ relaunchFrom: tk.id }} className="btn btn--sm">
-              {t('tasks.resumeLaunchLink')}
-            </Link>
-          }
-        >
-          {t('tasks.resumeUnavailableNoWorktree')}
-        </NoticeBanner>
-      )}
-      {showWorkgroupResumeHint && (
-        <NoticeBanner
-          tone="info"
-          size="compact"
-          className="info-box--muted"
-          action={
-            <Link to="/tasks/new" search={{ relaunchFrom: tk.id }} className="btn btn--sm">
-              {t('tasks.resumeLaunchLink')}
-            </Link>
-          }
-        >
-          {t('tasks.resumeUnavailableWorkgroup')}
-        </NoticeBanner>
-      )}
-
-      {tk.status === 'failed' && tk.errorSummary !== null && (
-        <div className="task-error-banner">
-          <div className="task-error-banner__body">
-            <div className="task-error-banner__summary" title={tk.errorSummary}>
-              <strong>{t('tasks.failedBanner')}</strong> <span>{tk.errorSummary}</span>
-            </div>
-            {tk.errorMessage !== null && tk.errorMessage !== tk.errorSummary && (
-              <details className="task-error-banner__details">
-                <summary>{t('common.details')}</summary>
-                <pre>{tk.errorMessage}</pre>
-              </details>
-            )}
-          </div>
-          {/* The jump targets the workflow-status canvas; a turn-engine
-              workgroup task has no such tab (WORKGROUP_TAB_ORDER), so the
-              button used to bounce straight back to the chatroom with a
-              dangling selection — hide it there (canOfferFailedJump). */}
-          {tk.failedNodeId !== null && nodeRuns.data !== undefined && canOfferFailedJump(tabs) && (
-            <button
-              type="button"
-              className="btn btn--sm btn--danger"
-              onClick={() => {
-                const { runId, tab: next } = nextTabForFailedJump(
-                  nodeRuns.data!.runs,
-                  tk.failedNodeId,
-                )
-                if (runId !== null) setSelectedNodeRunId(runId)
-                navigateTaskTab(next)
+      <div className="task-detail__banner-stack">
+        {task.error !== null &&
+          task.error !== undefined &&
+          !dismissedBanners.has(taskQueryBannerKey) && (
+            <ErrorBanner
+              error={task.error}
+              action={
+                <button type="button" className="btn btn--sm" onClick={() => void task.refetch()}>
+                  {t('common.retry')}
+                </button>
+              }
+              onDismiss={() => dismissBanner(taskQueryBannerKey)}
+            />
+          )}
+        <StuckTaskBanner key={`stuck:${id}`} taskId={id} />
+        <WorkflowSyncBanner key={`workflow-sync:${id}`} taskId={id} />
+        {cancel.error !== null && cancel.error !== undefined && (
+          <ErrorBanner error={cancel.error} onDismiss={() => cancel.reset()} />
+        )}
+        {resume.error !== null && resume.error !== undefined && (
+          <ErrorBanner error={resume.error} onDismiss={() => resume.reset()} />
+        )}
+        {resumability === 'worktree-missing' &&
+          !dismissedBanners.has(resumeUnavailableBannerKey) && (
+            <NoticeBanner
+              tone="info"
+              size="compact"
+              className="info-box--muted"
+              action={
+                <Link to="/tasks/new" search={{ relaunchFrom: tk.id }} className="btn btn--sm">
+                  {t('tasks.resumeLaunchLink')}
+                </Link>
+              }
+              dismiss={{
+                label: t('common.close'),
+                onDismiss: () => dismissBanner(resumeUnavailableBannerKey),
               }}
             >
-              {t('tasks.jumpToFailed', { nodeId: tk.failedNodeId })}
-            </button>
+              {t('tasks.resumeUnavailableNoWorktree')}
+            </NoticeBanner>
           )}
-        </div>
-      )}
+        {showWorkgroupResumeHint && !dismissedBanners.has(workgroupResumeBannerKey) && (
+          <NoticeBanner
+            tone="info"
+            size="compact"
+            className="info-box--muted"
+            action={
+              <Link to="/tasks/new" search={{ relaunchFrom: tk.id }} className="btn btn--sm">
+                {t('tasks.resumeLaunchLink')}
+              </Link>
+            }
+            dismiss={{
+              label: t('common.close'),
+              onDismiss: () => dismissBanner(workgroupResumeBannerKey),
+            }}
+          >
+            {t('tasks.resumeUnavailableWorkgroup')}
+          </NoticeBanner>
+        )}
 
-      {(tk.status === 'canceled' || tk.status === 'interrupted') && tk.worktreePath !== '' && (
-        <NoticeBanner tone="info" size="compact" className="info-box--muted">
-          {t('tasks.worktreePreserved', { path: tk.worktreePath })}
-        </NoticeBanner>
-      )}
-
-      {/* RFC-108 T21/T23: system-recovery audit + auto-recovery quarantine clear,
-          live-polled while the task is active (same idiom as the task/node-runs queries). */}
-      <RecoverySection taskId={id} status={tk.status} />
-
-      {tabResolution.status === 'error' && (
-        <ErrorBanner
-          error={room.error}
-          action={
-            <div className="page__actions">
-              {tab !== 'details' && (
-                <button
-                  type="button"
-                  className="btn btn--sm"
-                  onClick={() => navigateTaskTab('details')}
-                >
-                  {t('tasks.tabDetails')}
-                </button>
-              )}
-              <button type="button" className="btn btn--sm" onClick={() => void room.refetch()}>
-                {t('common.retry')}
-              </button>
+        {tk.status === 'failed' &&
+          tk.errorSummary !== null &&
+          !dismissedBanners.has(failedBannerKey) && (
+            <div className="task-error-banner" role="alert">
+              <div className="task-error-banner__body">
+                <div className="task-error-banner__summary" title={tk.errorSummary}>
+                  <strong>{t('tasks.failedBanner')}</strong> <span>{tk.errorSummary}</span>
+                </div>
+                {tk.errorMessage !== null && tk.errorMessage !== tk.errorSummary && (
+                  <details className="task-error-banner__details">
+                    <summary>{t('common.details')}</summary>
+                    <pre>{tk.errorMessage}</pre>
+                  </details>
+                )}
+              </div>
+              <div className="task-error-banner__actions">
+                {/* The jump targets the workflow-status canvas; a turn-engine
+                    workgroup task has no such tab, so hide it there. */}
+                {tk.failedNodeId !== null &&
+                  nodeRuns.data !== undefined &&
+                  canOfferFailedJump(tabs) && (
+                    <button
+                      type="button"
+                      className="btn btn--sm btn--danger task-error-banner__jump"
+                      title={t('tasks.jumpToFailed', { nodeId: tk.failedNodeId })}
+                      onClick={() => {
+                        const { runId, tab: next } = nextTabForFailedJump(
+                          nodeRuns.data!.runs,
+                          tk.failedNodeId,
+                        )
+                        if (runId !== null) setSelectedNodeRunId(runId)
+                        navigateTaskTab(next)
+                      }}
+                    >
+                      {t('tasks.jumpToFailed', { nodeId: tk.failedNodeId })}
+                    </button>
+                  )}
+                <BannerDismissButton
+                  label={t('common.close')}
+                  onDismiss={() => dismissBanner(failedBannerKey)}
+                  testId="task-failed-banner-dismiss"
+                />
+              </div>
             </div>
-          }
-        />
-      )}
+          )}
 
-      {displayedTabs.length > 0 && (
-        <TabBar<TaskDetailTab>
-          className="task-detail__tab-bar"
-          tabs={displayedTabs.map((k) => ({
-            key: k,
-            label: tabLabel(t, k),
-            // RFC-128: 「问题」tab carries a non-terminal pending-question count badge.
-            badge:
-              k === 'task-questions' && pendingQuestionCount > 0 ? pendingQuestionCount : undefined,
-            badgeTestid: k === 'task-questions' ? 'tq-tab-badge' : undefined,
-          }))}
-          active={tab ?? 'details'}
-          onSelect={(next) => navigateTaskTab(next)}
-          idPrefix="task-detail"
-          ariaLabel={tk.name}
-        />
-      )}
+        {(tk.status === 'canceled' || tk.status === 'interrupted') &&
+          tk.worktreePath !== '' &&
+          !dismissedBanners.has(worktreePreservedBannerKey) && (
+            <NoticeBanner
+              tone="info"
+              size="compact"
+              className="info-box--muted"
+              dismiss={{
+                label: t('common.close'),
+                onDismiss: () => dismissBanner(worktreePreservedBannerKey),
+              }}
+            >
+              {t('tasks.worktreePreserved', { path: tk.worktreePath })}
+            </NoticeBanner>
+          )}
 
-      {/* The node-runs aggregate powers three panels. Keep its feedback next
+        {/* RFC-108 T21/T23: system-recovery audit + auto-recovery quarantine clear,
+            live-polled while the task is active (same idiom as the task/node-runs queries). */}
+        <RecoverySection key={`recovery:${id}`} taskId={id} status={tk.status} />
+
+        {tabResolution.status === 'error' && !dismissedBanners.has(roomErrorBannerKey) && (
+          <ErrorBanner
+            error={room.error}
+            action={
+              <div className="page__actions">
+                {tab !== 'details' && (
+                  <button
+                    type="button"
+                    className="btn btn--sm"
+                    onClick={() => navigateTaskTab('details')}
+                  >
+                    {t('tasks.tabDetails')}
+                  </button>
+                )}
+                <button type="button" className="btn btn--sm" onClick={() => void room.refetch()}>
+                  {t('common.retry')}
+                </button>
+              </div>
+            }
+            onDismiss={() => dismissBanner(roomErrorBannerKey)}
+          />
+        )}
+      </div>
+
+      <div className="task-detail__workspace">
+        {displayedTabs.length > 0 && tab !== undefined && (
+          <PageSectionNav<TaskDetailTab>
+            groups={taskSectionGroups}
+            active={tab}
+            presentation="inline"
+            inlineLayout="single-row"
+            ariaLabel={t('tasks.sectionNavLabel')}
+            idPrefix="task-detail"
+            renderDestination={(key, destination) => (
+              <PageSectionLink
+                to="/tasks/$id"
+                params={{ id }}
+                search={(previous) => withTaskDetailTab(previous, key)}
+                className={destination.className}
+                pageSectionCurrent={destination.ariaCurrent}
+                data-task-detail-section-link={key}
+              >
+                {destination.children}
+              </PageSectionLink>
+            )}
+            onSelectCompact={(next) => navigateTaskTab(next)}
+          />
+        )}
+
+        {/* The node-runs aggregate powers three panels. Keep its feedback next
           to the active navigation surface so workflow status and outputs do
           not look like an empty success while the aggregate is loading or
           failed. Cached data remains mounted underneath a stale error. */}
-      {nodeRunsConsumerActive && nodeRuns.data === undefined && nodeRuns.isLoading && (
-        <LoadingState size="compact" />
-      )}
-      {nodeRunsConsumerActive && nodeRuns.error !== null && nodeRuns.error !== undefined && (
-        <ErrorBanner
-          error={nodeRuns.error}
-          action={
-            <button type="button" className="btn btn--sm" onClick={() => void nodeRuns.refetch()}>
-              {t('common.retry')}
-            </button>
-          }
-        />
-      )}
-
-      <div className="task-detail__panes">
-        {/* RFC-164 PR-4: workgroup chat room — the group task's primary view.
-            Content mounts only for TURN-ENGINE workgroup tasks (RFC-167:
-            dynamic_workflow groups have no turns/chatroom — they get the
-            orchestration pane below instead). The pane div always exists so
-            the hidden-pane structure stays uniform. */}
-        <div
-          {...taskTabPanelProps('chatroom')}
-          className="task-detail__pane"
-          hidden={tab !== 'chatroom'}
-        >
-          {isWorkgroup && !isDynamicWorkgroup && (
-            <WorkgroupRoom taskId={id} taskStatus={tk.status} />
-          )}
-        </div>
-
-        {/* RFC-167 PR-3: dynamic-workflow orchestration panel — generation
-            progress, the confirm gate (read-only DAG preview) and save-as. */}
-        <div
-          {...taskTabPanelProps('dw-orchestration')}
-          className="task-detail__pane"
-          hidden={tab !== 'dw-orchestration'}
-        >
-          {isDynamicWorkgroup && (
-            <DynamicWorkflowPanel
-              taskId={id}
-              taskStatus={tk.status}
-              errorSummary={tk.errorSummary ?? null}
+        {nodeRunsConsumerActive && nodeRuns.data === undefined && nodeRuns.isLoading && (
+          <LoadingState size="compact" />
+        )}
+        {nodeRunsConsumerActive &&
+          nodeRuns.error !== null &&
+          nodeRuns.error !== undefined &&
+          !dismissedBanners.has(nodeRunsErrorBannerKey) && (
+            <ErrorBanner
+              error={nodeRuns.error}
+              action={
+                <button
+                  type="button"
+                  className="btn btn--sm"
+                  onClick={() => void nodeRuns.refetch()}
+                >
+                  {t('common.retry')}
+                </button>
+              }
+              onDismiss={() => dismissBanner(nodeRunsErrorBannerKey)}
             />
           )}
-        </div>
 
-        {/* workflow-status: always mounted so xyflow viewport survives tab switches.
+        <div className="task-detail__panes">
+          {/* RFC-164 PR-4: workgroup chat room — the group task's primary view.
+            Content mounts only for TURN-ENGINE workgroup tasks (RFC-167:
+            dynamic_workflow groups have no turns/chatroom — they get the
+            orchestration section below instead). Capability-inapplicable
+            sections do not enter the DOM. */}
+          {taskCapabilities.chatroom && (
+            <section
+              {...taskSectionProps(t, 'chatroom')}
+              className="task-detail__pane"
+              hidden={tab !== 'chatroom'}
+            >
+              <WorkgroupRoom taskId={id} taskStatus={tk.status} />
+            </section>
+          )}
+
+          {/* RFC-167 PR-3: dynamic-workflow orchestration panel — generation
+            progress, the confirm gate (read-only DAG preview) and save-as. */}
+          {taskCapabilities.orchestration && (
+            <section
+              {...taskSectionProps(t, 'dw-orchestration')}
+              className="task-detail__pane"
+              hidden={tab !== 'dw-orchestration'}
+            >
+              <DynamicWorkflowPanel
+                taskId={id}
+                taskStatus={tk.status}
+                errorSummary={tk.errorSummary ?? null}
+              />
+            </section>
+          )}
+
+          {/* workflow-status: always mounted while available so xyflow viewport survives section switches.
             RFC-164 PR-4: except for turn-engine workgroup tasks — their tab set
             never reaches this pane and the builtin host graph must not render.
             RFC-167 PR-3: a dynamic task's canvas is REAL once the confirmed DAG
             is swapped in (phase executing); before that the snapshot is still
             the generation host graph — show a waiting hint instead. */}
-        <div
-          {...taskTabPanelProps('workflow-status')}
-          className="task-detail__pane"
-          hidden={tab !== 'workflow-status'}
-        >
-          {isDynamicWorkgroup && dwPhase !== 'executing' && (
-            <EmptyState size="comfortable" title={t('workgroups.dw.canvasPending')} />
-          )}
-          {(!isWorkgroup || (isDynamicWorkgroup && dwPhase === 'executing')) && (
-            <div className={taskCanvasLayoutClass(selectedNodeRunId)}>
-              <TaskStatusCanvas
-                canvasRef={canvasRef}
-                task={tk}
-                runs={nodeRuns.data?.runs ?? []}
-                onSelectNodeRun={setSelectedNodeRunId}
-                onJumpToQuestions={jumpToQuestions}
-              />
-              {selectedNodeRunId !== null && nodeRuns.data !== undefined && (
-                <NodeDetailDrawer
-                  taskId={id}
-                  taskStatus={tk.status}
-                  nodeRunId={selectedNodeRunId}
-                  nodeId={resolveNodeIdFromRuns(nodeRuns.data.runs, selectedNodeRunId)}
-                  workflowNodeKind={resolveNodeKindFromSnapshot(
-                    tk.workflowSnapshot,
-                    resolveNodeIdFromRuns(nodeRuns.data.runs, selectedNodeRunId),
-                  )}
-                  agentName={resolveAgentNameFromSnapshot(
-                    tk.workflowSnapshot,
-                    resolveNodeIdFromRuns(nodeRuns.data.runs, selectedNodeRunId),
-                  )}
-                  runs={nodeRuns.data.runs}
-                  outputs={nodeRuns.data.outputs}
-                  onClose={closeNodeDrawer}
-                  onSelectRun={setSelectedNodeRunId}
-                />
+          {displayedTabs.includes('workflow-status') && (
+            <section
+              {...taskSectionProps(t, 'workflow-status')}
+              className="task-detail__pane"
+              hidden={tab !== 'workflow-status'}
+            >
+              {isDynamicWorkgroup && dwPhase !== 'executing' && (
+                <EmptyState size="comfortable" title={t('workgroups.dw.canvasPending')} />
               )}
-            </div>
+              {(!isWorkgroup || (isDynamicWorkgroup && dwPhase === 'executing')) && (
+                <div className={taskCanvasLayoutClass(selectedNodeRunId)}>
+                  <TaskStatusCanvas
+                    canvasRef={canvasRef}
+                    task={tk}
+                    runs={nodeRuns.data?.runs ?? []}
+                    onSelectNodeRun={setSelectedNodeRunId}
+                    onJumpToQuestions={jumpToQuestions}
+                  />
+                  {selectedNodeRunId !== null && nodeRuns.data !== undefined && (
+                    <NodeDetailDrawer
+                      taskId={id}
+                      taskStatus={tk.status}
+                      nodeRunId={selectedNodeRunId}
+                      nodeId={resolveNodeIdFromRuns(nodeRuns.data.runs, selectedNodeRunId)}
+                      workflowNodeKind={resolveNodeKindFromSnapshot(
+                        tk.workflowSnapshot,
+                        resolveNodeIdFromRuns(nodeRuns.data.runs, selectedNodeRunId),
+                      )}
+                      agentName={resolveAgentNameFromSnapshot(
+                        tk.workflowSnapshot,
+                        resolveNodeIdFromRuns(nodeRuns.data.runs, selectedNodeRunId),
+                      )}
+                      runs={nodeRuns.data.runs}
+                      outputs={nodeRuns.data.outputs}
+                      onClose={closeNodeDrawer}
+                      onSelectRun={setSelectedNodeRunId}
+                    />
+                  )}
+                </div>
+              )}
+            </section>
           )}
-        </div>
 
-        <div
-          {...taskTabPanelProps('node-runs')}
-          className="task-detail__pane"
-          hidden={tab !== 'node-runs'}
-        >
-          {nodeRuns.data !== undefined && (
-            <NodeRunsTable runs={nodeRuns.data.runs} workflowSnapshot={tk.workflowSnapshot} />
+          {displayedTabs.includes('node-runs') && (
+            <section
+              {...taskSectionProps(t, 'node-runs')}
+              className="task-detail__pane"
+              hidden={tab !== 'node-runs'}
+            >
+              {nodeRuns.data !== undefined && (
+                <NodeRunsTable runs={nodeRuns.data.runs} workflowSnapshot={tk.workflowSnapshot} />
+              )}
+            </section>
           )}
-        </div>
 
-        <div
-          {...taskTabPanelProps('details')}
-          className="task-detail__pane"
-          hidden={tab !== 'details'}
-        >
-          {/* RFC-066: multi-repo summary. Single-repo tasks (repoCount === 1)
+          <section
+            {...taskSectionProps(t, 'details')}
+            className="task-detail__pane"
+            hidden={tab !== 'details'}
+          >
+            {/* RFC-066: multi-repo summary. Single-repo tasks (repoCount === 1)
               render nothing here — byte-baseline visual against pre-RFC-066.
               Multi-repo shows a collapsible block listing every repo's
               sub-dir name, baseBranch, and (when present) redacted URL. */}
-          {tk.repoCount > 1 && (
-            <details className="task-detail__multi-repo" data-testid="task-detail-multi-repo">
-              <summary>{t('tasks.multiRepoSummary', { count: tk.repoCount })}</summary>
-              <ul className="task-detail__multi-repo-list">
-                {tk.repos.map((r) => (
-                  <li key={r.repoIndex} data-testid={`task-detail-multi-repo-row-${r.repoIndex}`}>
-                    <code>{r.worktreeDirName || r.repoPath}</code>
-                    {' @ '}
-                    <code>{r.baseBranch || t('common.emDash')}</code>
-                    {r.repoUrl !== null && r.repoUrl !== '' && (
-                      <span className="data-table__muted"> · {redactGitUrl(r.repoUrl)}</span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
-          <dl className="task-meta">
-            {/* The task's execution subject. Subject-aware <dt> label (工作流 /
+            {tk.repoCount > 1 && (
+              <details className="task-detail__multi-repo" data-testid="task-detail-multi-repo">
+                <summary>{t('tasks.multiRepoSummary', { count: tk.repoCount })}</summary>
+                <ul className="task-detail__multi-repo-list">
+                  {tk.repos.map((r) => (
+                    <li key={r.repoIndex} data-testid={`task-detail-multi-repo-row-${r.repoIndex}`}>
+                      <code>{r.worktreeDirName || r.repoPath}</code>
+                      {' @ '}
+                      <code>{r.baseBranch || t('common.emDash')}</code>
+                      {r.repoUrl !== null && r.repoUrl !== '' && (
+                        <span className="data-table__muted"> · {redactGitUrl(r.repoUrl)}</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+            <dl className="task-meta">
+              {/* The task's execution subject. Subject-aware <dt> label (工作流 /
                 工作组 / 代理) + TaskSubjectLink, so a group / single-agent task
                 links to its owning resource instead of the internal
                 `__workgroup_host__` / `__agent_host__` anchor. The parenthesised
                 workflow ULID is kept for plain workflow tasks only. */}
-            <dt>
-              {subjectKind === 'workgroup'
-                ? t('tasks.workgroupBadge')
-                : subjectKind === 'agent'
-                  ? t('tasks.agentBadge')
-                  : t('tasks.metaWorkflow')}
-            </dt>
-            <dd>
-              <TaskSubjectLink task={tk} taskId={tk.id} />
-              {subjectKind === 'workflow' && tk.workflowName !== null && (
+              <dt>
+                {subjectKind === 'workgroup'
+                  ? t('tasks.workgroupBadge')
+                  : subjectKind === 'agent'
+                    ? t('tasks.agentBadge')
+                    : t('tasks.metaWorkflow')}
+              </dt>
+              <dd>
+                <TaskSubjectLink task={tk} taskId={tk.id} />
+                {subjectKind === 'workflow' && tk.workflowName !== null && (
+                  <>
+                    {' '}
+                    <span className="data-table__muted">
+                      (<code>{tk.workflowId}</code>)
+                    </span>
+                  </>
+                )}
+              </dd>
+              {tk.repoUrl !== null && (
                 <>
-                  {' '}
-                  <span className="data-table__muted">
-                    (<code>{tk.workflowId}</code>)
-                  </span>
+                  <dt>{t('tasks.metaRepoUrl')}</dt>
+                  <dd>
+                    <code data-testid="task-detail-repo-url">{redactGitUrl(tk.repoUrl)}</code>
+                  </dd>
                 </>
               )}
-            </dd>
-            {tk.repoUrl !== null && (
-              <>
-                <dt>{t('tasks.metaRepoUrl')}</dt>
-                <dd>
-                  <code data-testid="task-detail-repo-url">{redactGitUrl(tk.repoUrl)}</code>
-                </dd>
-              </>
-            )}
-            <dt>{tk.repoUrl !== null ? t('tasks.metaRepoCachePath') : t('tasks.metaRepo')}</dt>
-            <dd>
-              <code>{tk.repoPath}</code>
-            </dd>
-            <dt>{t('tasks.metaWorktree')}</dt>
-            <dd>
-              <code>{tk.worktreePath || t('common.emDash')}</code>
-            </dd>
-            <dt>{t('tasks.metaBranch')}</dt>
-            <dd>
-              <code>{tk.branch}</code> @{' '}
-              <code>{(tk.baseCommit ?? '').slice(0, 12) || t('common.emDash')}</code>
-            </dd>
-            {/* RFC-075: surface the base branch + (user-specified) working
+              <dt>{tk.repoUrl !== null ? t('tasks.metaRepoCachePath') : t('tasks.metaRepo')}</dt>
+              <dd>
+                <code>{tk.repoPath}</code>
+              </dd>
+              <dt>{t('tasks.metaWorktree')}</dt>
+              <dd>
+                <code>{tk.worktreePath || t('common.emDash')}</code>
+              </dd>
+              <dt>{t('tasks.metaBranch')}</dt>
+              <dd>
+                <code>{tk.branch}</code> @{' '}
+                <code>{(tk.baseCommit ?? '').slice(0, 12) || t('common.emDash')}</code>
+              </dd>
+              {/* RFC-075: surface the base branch + (user-specified) working
                 branch. Working branch null → the framework isolation branch. */}
-            <dt>{t('tasks.metaBaseBranch')}</dt>
-            <dd>
-              <code data-testid="task-detail-base-branch">
-                {tk.baseBranch || t('common.emDash')}
-              </code>
-            </dd>
-            <dt>{t('tasks.metaWorkingBranch')}</dt>
-            <dd>
-              {tk.workingBranch !== null ? (
-                <code data-testid="task-detail-working-branch">{tk.workingBranch}</code>
-              ) : (
-                <span className="data-table__muted" data-testid="task-detail-working-branch">
-                  {t('tasks.metaWorkingBranchNone')}
-                </span>
+              <dt>{t('tasks.metaBaseBranch')}</dt>
+              <dd>
+                <code data-testid="task-detail-base-branch">
+                  {tk.baseBranch || t('common.emDash')}
+                </code>
+              </dd>
+              <dt>{t('tasks.metaWorkingBranch')}</dt>
+              <dd>
+                {tk.workingBranch !== null ? (
+                  <code data-testid="task-detail-working-branch">{tk.workingBranch}</code>
+                ) : (
+                  <span className="data-table__muted" data-testid="task-detail-working-branch">
+                    {t('tasks.metaWorkingBranchNone')}
+                  </span>
+                )}
+                {tk.autoCommitPush && (
+                  <span className="data-table__muted"> · {t('tasks.metaAutoCommitPushOn')}</span>
+                )}
+              </dd>
+              <dt>{t('tasks.metaStarted')}</dt>
+              <dd>{new Date(tk.startedAt).toLocaleString()}</dd>
+              <dt>{t('tasks.metaFinished')}</dt>
+              <dd>
+                {tk.finishedAt === null
+                  ? t('common.emDash')
+                  : new Date(tk.finishedAt).toLocaleString()}
+              </dd>
+              {tk.errorSummary !== null && (
+                <>
+                  <dt>{t('tasks.metaError')}</dt>
+                  <dd className="task-meta__error">{tk.errorSummary}</dd>
+                </>
               )}
-              {tk.autoCommitPush && (
-                <span className="data-table__muted"> · {t('tasks.metaAutoCommitPushOn')}</span>
+            </dl>
+          </section>
+
+          {taskCapabilities.outputs && (
+            <section
+              {...taskSectionProps(t, 'outputs')}
+              className="task-detail__pane"
+              hidden={tab !== 'outputs'}
+            >
+              {nodeRuns.data !== undefined && (
+                <TaskOutputPanel
+                  task={tk}
+                  runs={nodeRuns.data.runs}
+                  outputs={nodeRuns.data.outputs}
+                />
               )}
-            </dd>
-            <dt>{t('tasks.metaStarted')}</dt>
-            <dd>{new Date(tk.startedAt).toLocaleString()}</dd>
-            <dt>{t('tasks.metaFinished')}</dt>
-            <dd>
-              {tk.finishedAt === null
-                ? t('common.emDash')
-                : new Date(tk.finishedAt).toLocaleString()}
-            </dd>
-            {tk.errorSummary !== null && (
-              <>
-                <dt>{t('tasks.metaError')}</dt>
-                <dd className="task-meta__error">{tk.errorSummary}</dd>
-              </>
-            )}
-          </dl>
-        </div>
-
-        {hasOutputs && (
-          <div
-            {...taskTabPanelProps('outputs')}
-            className="task-detail__pane"
-            hidden={tab !== 'outputs'}
-          >
-            {nodeRuns.data !== undefined && (
-              <TaskOutputPanel
-                task={tk}
-                runs={nodeRuns.data.runs}
-                outputs={nodeRuns.data.outputs}
-              />
-            )}
-          </div>
-        )}
-
-        {/* RFC-065 — worktree files browser, between outputs and worktree-diff. */}
-        <div
-          {...taskTabPanelProps('worktree-files')}
-          className="task-detail__pane"
-          hidden={tab !== 'worktree-files'}
-        >
-          {tk.worktreePath === '' ? (
-            <div className="muted">{t('tasks.worktreeFilesNoWorktree')}</div>
-          ) : (
-            <WorktreeFilesPanel taskId={tk.id} />
+            </section>
           )}
-        </div>
 
-        <div
-          {...taskTabPanelProps('worktree-diff')}
-          className="task-detail__pane task-detail__pane--worktree-diff"
-          hidden={tab !== 'worktree-diff'}
-        >
-          {tk.baseCommit === null ? (
-            <div className="muted">{t('tasks.noBaseCommit')}</div>
-          ) : diff.data !== undefined ? (
-            <>
-              {diff.error !== null && diff.error !== undefined && (
+          {/* RFC-065 — worktree files browser, between outputs and worktree-diff. */}
+          {taskCapabilities.worktreeFiles && (
+            <section
+              {...taskSectionProps(t, 'worktree-files')}
+              className="task-detail__pane"
+              hidden={tab !== 'worktree-files'}
+            >
+              <WorktreeFilesPanel taskId={tk.id} />
+            </section>
+          )}
+
+          {taskCapabilities.worktreeDiff && (
+            <section
+              {...taskSectionProps(t, 'worktree-diff')}
+              className="task-detail__pane task-detail__pane--worktree-diff"
+              hidden={tab !== 'worktree-diff'}
+            >
+              {diff.data !== undefined ? (
+                <>
+                  {diff.error !== null && diff.error !== undefined && (
+                    <ErrorBanner
+                      error={diff.error}
+                      action={
+                        <button
+                          type="button"
+                          className="btn btn--sm"
+                          onClick={() => void diff.refetch()}
+                        >
+                          {t('common.retry')}
+                        </button>
+                      }
+                    />
+                  )}
+                  <WorktreeDiffPanel
+                    diff={diff.data.diff}
+                    truncated={diff.data.truncated}
+                    focusFilePath={diffFocusFile}
+                    storageKey={tk.id}
+                  />
+                </>
+              ) : diff.isLoading ? (
+                <LoadingState size="compact" label={t('tasks.loadingDiff')} />
+              ) : diff.error !== null && diff.error !== undefined ? (
                 <ErrorBanner
                   error={diff.error}
                   action={
@@ -823,72 +1011,83 @@ function TaskDetailPage() {
                     </button>
                   }
                 />
-              )}
-              <WorktreeDiffPanel
-                diff={diff.data.diff}
-                truncated={diff.data.truncated}
-                focusFilePath={diffFocusFile}
-                storageKey={tk.id}
-              />
-            </>
-          ) : diff.isLoading ? (
-            <LoadingState size="compact" label={t('tasks.loadingDiff')} />
-          ) : diff.error !== null && diff.error !== undefined ? (
-            <ErrorBanner
-              error={diff.error}
-              action={
-                <button type="button" className="btn btn--sm" onClick={() => void diff.refetch()}>
-                  {t('common.retry')}
-                </button>
-              }
-            />
-          ) : null}
-        </div>
+              ) : null}
+            </section>
+          )}
 
-        {/* RFC-083 — structural (semantic) diff overlay for the textual diff.
+          {/* RFC-083 — structural (semantic) diff overlay for the textual diff.
             Content (incl. the scope <Select>) renders only when this tab is
             active: keeps the expensive analysis lazy and keeps a page-wide
             `[role=combobox]` locator from grabbing the hidden scope picker. */}
-        <div
-          {...taskTabPanelProps('worktree-structure')}
-          className="task-detail__pane"
-          hidden={tab !== 'worktree-structure'}
-        >
-          {tab !== 'worktree-structure' ? null : tk.baseCommit === null ? (
-            <div className="muted">{t('tasks.noBaseCommit')}</div>
-          ) : (
-            <div className="structure-pane">
-              <div className="structure-pane__scope">
-                <span className="structure-pane__scope-label">{t('tasks.structScopeLabel')}</span>
-                <Select
-                  ariaLabel={t('tasks.structScopeLabel')}
-                  value={structScope}
-                  onChange={setStructScope}
-                  options={[
-                    { value: 'task', label: t('tasks.structScopeTask') },
-                    ...(nodeRuns.data?.runs ?? []).map((r) => ({
-                      value: `node:${r.id}`,
-                      label: `${r.nodeId} · ${r.status}`,
-                    })),
-                  ]}
-                />
-                <span className="structure-pane__scope-label">{t('tasks.structEngineLabel')}</span>
-                <Segmented<'baseline' | 'deep'>
-                  value={engineMode}
-                  onChange={setEngineMode}
-                  options={(['baseline', 'deep'] as const).map((m) => ({
-                    value: m,
-                    label:
-                      m === 'baseline'
-                        ? t('tasks.structEngineBaseline')
-                        : t('tasks.structEngineDeep'),
-                  }))}
-                  ariaLabel={t('tasks.structEngineLabel')}
-                />
-              </div>
-              {structuralDiff.data !== undefined ? (
-                <>
-                  {structuralDiff.error !== null && structuralDiff.error !== undefined && (
+          {taskCapabilities.worktreeStructure && (
+            <section
+              {...taskSectionProps(t, 'worktree-structure')}
+              className="task-detail__pane"
+              hidden={tab !== 'worktree-structure'}
+            >
+              {tab !== 'worktree-structure' ? null : (
+                <div className="structure-pane">
+                  <div className="structure-pane__scope">
+                    <span className="structure-pane__scope-label">
+                      {t('tasks.structScopeLabel')}
+                    </span>
+                    <Select
+                      ariaLabel={t('tasks.structScopeLabel')}
+                      value={effectiveStructScope}
+                      onChange={setStructScope}
+                      options={[
+                        { value: 'task', label: t('tasks.structScopeTask') },
+                        ...(tk.repoCount === 1
+                          ? (nodeRuns.data?.runs ?? []).map((r) => ({
+                              value: `node:${r.id}`,
+                              label: `${r.nodeId} · ${r.status}`,
+                            }))
+                          : []),
+                      ]}
+                    />
+                    <span className="structure-pane__scope-label">
+                      {t('tasks.structEngineLabel')}
+                    </span>
+                    <Segmented<'baseline' | 'deep'>
+                      value={engineMode}
+                      onChange={setEngineMode}
+                      options={(['baseline', 'deep'] as const).map((m) => ({
+                        value: m,
+                        label:
+                          m === 'baseline'
+                            ? t('tasks.structEngineBaseline')
+                            : t('tasks.structEngineDeep'),
+                      }))}
+                      ariaLabel={t('tasks.structEngineLabel')}
+                    />
+                  </div>
+                  {structuralDiff.data !== undefined ? (
+                    <>
+                      {structuralDiff.error !== null && structuralDiff.error !== undefined && (
+                        <ErrorBanner
+                          error={structuralDiff.error}
+                          action={
+                            <button
+                              type="button"
+                              className="btn btn--sm"
+                              onClick={() => void structuralDiff.refetch()}
+                            >
+                              {t('common.retry')}
+                            </button>
+                          }
+                        />
+                      )}
+                      <StructuralDiffView
+                        data={structuralDiff.data}
+                        onJumpToHunk={(anchor) => {
+                          setDiffFocusFile(anchor.filePath)
+                          navigateTaskTab('worktree-diff')
+                        }}
+                      />
+                    </>
+                  ) : structuralDiff.isLoading ? (
+                    <LoadingState size="compact" label={t('tasks.loadingDiff')} />
+                  ) : structuralDiff.error !== null && structuralDiff.error !== undefined ? (
                     <ErrorBanner
                       error={structuralDiff.error}
                       action={
@@ -901,70 +1100,64 @@ function TaskDetailPage() {
                         </button>
                       }
                     />
-                  )}
-                  <StructuralDiffView
-                    data={structuralDiff.data}
-                    onJumpToHunk={(anchor) => {
-                      setDiffFocusFile(anchor.filePath)
-                      navigateTaskTab('worktree-diff')
-                    }}
-                  />
-                </>
-              ) : structuralDiff.isLoading ? (
-                <LoadingState size="compact" label={t('tasks.loadingDiff')} />
-              ) : structuralDiff.error !== null && structuralDiff.error !== undefined ? (
-                <ErrorBanner
-                  error={structuralDiff.error}
-                  action={
-                    <button
-                      type="button"
-                      className="btn btn--sm"
-                      onClick={() => void structuralDiff.refetch()}
-                    >
-                      {t('common.retry')}
-                    </button>
-                  }
-                />
-              ) : null}
-            </div>
+                  ) : null}
+                </div>
+              )}
+            </section>
           )}
-        </div>
 
-        {/* RFC-041 PR4: per-task feedback. Originally lived in a fixed
+          {/* RFC-041 PR4: per-task feedback. Originally lived in a fixed
             footer panel below the panes, but a long feedback thread
             squeezed `.task-detail__panes` (flex:1; min-height:0) down to
-            zero and hid the task area. Promoting it to its own tab keeps
+            zero and hid the task area. Promoting it to its own section keeps
             the run-monitoring panes their full height. */}
-        <div
-          {...taskTabPanelProps('feedback')}
-          className="task-detail__pane"
-          hidden={tab !== 'feedback'}
-        >
-          <TaskFeedbackList taskId={id} />
-        </div>
-        {/* RFC-120: task question list / 任务中心 board. */}
-        <div
-          {...taskTabPanelProps('task-questions')}
-          className="task-detail__pane"
-          hidden={tab !== 'task-questions'}
-        >
-          <TaskQuestionList
-            taskId={id}
-            nodeOptions={agentNodeOptions}
-            focusTargetNode={focusTargetNode}
-          />
+          {taskCapabilities.feedback && (
+            <section
+              {...taskSectionProps(t, 'feedback')}
+              className="task-detail__pane"
+              hidden={tab !== 'feedback'}
+            >
+              <TaskFeedbackList taskId={id} />
+            </section>
+          )}
+          {/* RFC-120: task question list / 任务中心 board. */}
+          {taskCapabilities.questions && (
+            <section
+              {...taskSectionProps(t, 'task-questions')}
+              className="task-detail__pane"
+              hidden={tab !== 'task-questions'}
+            >
+              <TaskQuestionList
+                taskId={id}
+                nodeOptions={agentNodeOptions}
+                focusTargetNode={focusTargetNode}
+              />
+            </section>
+          )}
         </div>
       </div>
     </div>
   )
 }
 
-function taskTabPanelProps(tab: TaskDetailTab) {
-  const ids = tabDomIds('task-detail', tab)
+function taskSectionProps(t: (key: string) => string, tab: TaskDetailTab) {
   return {
-    role: 'tabpanel' as const,
-    id: ids.panelId,
-    'aria-labelledby': ids.tabId,
+    id: `task-detail-section-${tab}`,
+    'aria-label': tabLabel(t, tab),
+    'data-task-detail-section': tab,
+  }
+}
+
+function taskDetailGroupLabel(t: (key: string) => string, group: TaskDetailGroup): string {
+  switch (group) {
+    case 'overview':
+      return t('tasks.sectionGroupOverview')
+    case 'execution':
+      return t('tasks.sectionGroupExecution')
+    case 'artifacts':
+      return t('tasks.sectionGroupArtifacts')
+    case 'collaboration':
+      return t('tasks.sectionGroupCollaboration')
   }
 }
 

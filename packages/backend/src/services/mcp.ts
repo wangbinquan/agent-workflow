@@ -10,7 +10,12 @@
 // `mcp: [...]` list. Same pattern as RFC-022 dependsOn cascade.
 
 import type { CreateMcp, Mcp, RenameMcp, UpdateMcp } from '@agent-workflow/shared'
-import { McpLocalConfigSchema, McpRemoteConfigSchema, McpSchema } from '@agent-workflow/shared'
+import {
+  canonicalJson,
+  McpLocalConfigSchema,
+  McpRemoteConfigSchema,
+  McpSchema,
+} from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
@@ -27,6 +32,13 @@ export async function listMcps(db: DbClient): Promise<Mcp[]> {
 
 export async function getMcp(db: DbClient, name: string): Promise<Mcp | null> {
   const rows = await db.select().from(mcps).where(eq(mcps.name, name)).limit(1)
+  const row = rows[0]
+  return row ? rowToMcp(row) : null
+}
+
+/** Stable-id load used after entering the RFC-201 keyed coordinator. */
+export async function getMcpById(db: DbClient, id: string): Promise<Mcp | null> {
+  const rows = await db.select().from(mcps).where(eq(mcps.id, id)).limit(1)
   const row = rows[0]
   return row ? rowToMcp(row) : null
 }
@@ -65,8 +77,13 @@ export async function createMcp(
   return created
 }
 
-export async function updateMcp(db: DbClient, name: string, patch: UpdateMcp): Promise<Mcp> {
-  const existing = await getMcp(db, name)
+export async function updateMcp(
+  db: DbClient,
+  name: string,
+  patch: UpdateMcp,
+  opts: { existing?: Mcp; updatedAt?: number } = {},
+): Promise<Mcp> {
+  const existing = opts.existing ?? (await getMcp(db, name))
   if (existing === null) {
     throw new NotFoundError('mcp-not-found', `mcp '${name}' not found`)
   }
@@ -85,19 +102,35 @@ export async function updateMcp(db: DbClient, name: string, patch: UpdateMcp): P
     validateConfigForType(existing.type, patch.config)
   }
 
-  const set: Partial<typeof mcps.$inferInsert> = { updatedAt: Date.now() }
-  if (patch.description !== undefined) set.description = patch.description
-  if (patch.enabled !== undefined) set.enabled = patch.enabled
-  if (patch.config !== undefined) set.config = JSON.stringify(patch.config)
+  const nextDescription = patch.description ?? existing.description
+  const nextEnabled = patch.enabled ?? existing.enabled
+  const nextConfig = patch.config ?? existing.config
+  const changed =
+    nextDescription !== existing.description ||
+    nextEnabled !== existing.enabled ||
+    canonicalJson(nextConfig) !== canonicalJson(existing.config)
+  if (!changed) return existing
 
-  await db.update(mcps).set(set).where(eq(mcps.name, name))
-  const updated = await getMcp(db, name)
+  const set: Partial<typeof mcps.$inferInsert> = {
+    updatedAt: opts.updatedAt ?? Math.max(Date.now(), existing.updatedAt + 1),
+  }
+  if (nextDescription !== existing.description) set.description = nextDescription
+  if (nextEnabled !== existing.enabled) set.enabled = nextEnabled
+  if (canonicalJson(nextConfig) !== canonicalJson(existing.config))
+    set.config = JSON.stringify(nextConfig)
+
+  await db.update(mcps).set(set).where(eq(mcps.id, existing.id))
+  const updated = await getMcpById(db, existing.id)
   if (updated === null) throw new Error('mcp disappeared after update')
   return updated
 }
 
-export async function deleteMcp(db: DbClient, name: string): Promise<void> {
-  const existing = await getMcp(db, name)
+export async function deleteMcp(
+  db: DbClient,
+  name: string,
+  opts: { existing?: Mcp } = {},
+): Promise<void> {
+  const existing = opts.existing ?? (await getMcp(db, name))
   if (existing === null) {
     throw new NotFoundError('mcp-not-found', `mcp '${name}' not found`)
   }
@@ -110,15 +143,20 @@ export async function deleteMcp(db: DbClient, name: string): Promise<void> {
       { referencedBy: dependents },
     )
   }
-  await db.delete(mcps).where(eq(mcps.name, name))
+  await db.delete(mcps).where(eq(mcps.id, existing.id))
 }
 
-export async function renameMcp(db: DbClient, oldName: string, input: RenameMcp): Promise<Mcp> {
-  const existing = await getMcp(db, oldName)
+export async function renameMcp(
+  db: DbClient,
+  oldName: string,
+  input: RenameMcp,
+  opts: { existing?: Mcp; updatedAt?: number } = {},
+): Promise<Mcp> {
+  const existing = opts.existing ?? (await getMcp(db, oldName))
   if (existing === null) {
     throw new NotFoundError('mcp-not-found', `mcp '${oldName}' not found`)
   }
-  if (input.newName === oldName) return existing
+  if (input.newName === existing.name) return existing
 
   if ((await getMcp(db, input.newName)) !== null) {
     throw new ConflictError(
@@ -130,14 +168,17 @@ export async function renameMcp(db: DbClient, oldName: string, input: RenameMcp)
   // Rename + cascade update of agents.mcp arrays in a single transaction so
   // we never end up with a renamed mcp row plus stale agent references (the
   // missing-reference would surface as a validator error on next save).
-  const dependents = await findAgentsReferencingMcp(db, oldName)
+  const dependents = await findAgentsReferencingMcp(db, existing.name)
   // RFC-093: synchronous transaction (dbTxSync) — the previous async form
   // COMMITted at its first await; a mid-cascade failure left a renamed row
   // with stale agent references (audit S-10).
   dbTxSync(db, (tx) => {
     tx.update(mcps)
-      .set({ name: input.newName, updatedAt: Date.now() })
-      .where(eq(mcps.name, oldName))
+      .set({
+        name: input.newName,
+        updatedAt: opts.updatedAt ?? Math.max(Date.now(), existing.updatedAt + 1),
+      })
+      .where(eq(mcps.id, existing.id))
       .run()
 
     for (const dep of dependents) {
@@ -156,7 +197,7 @@ export async function renameMcp(db: DbClient, oldName: string, input: RenameMcp)
       } catch {
         arr = []
       }
-      const next = arr.map((n) => (n === oldName ? input.newName : n))
+      const next = arr.map((n) => (n === existing.name ? input.newName : n))
       tx.update(agents)
         .set({ mcp: JSON.stringify(next), updatedAt: Date.now() })
         .where(eq(agents.id, dep.id))
@@ -229,6 +270,7 @@ function rowToMcp(row: McpRow): Mcp {
     // RFC-099 ACL projection — routes filter on these.
     ownerUserId: row.ownerUserId,
     visibility: row.visibility,
+    aclRevision: row.aclRevision,
     type: row.type,
     config,
     enabled: row.enabled,

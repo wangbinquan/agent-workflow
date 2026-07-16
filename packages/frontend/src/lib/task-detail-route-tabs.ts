@@ -12,6 +12,7 @@ import {
   WORKGROUP_TAB_ORDER,
   availableTabs,
   defaultDynamicTab,
+  type TaskDetailCapabilities,
   type TaskDetailTab,
 } from './task-detail-tabs'
 
@@ -55,7 +56,10 @@ export type TaskDetailRoomClassification =
 
 export interface ResolveTaskDetailTabsInput {
   taskLoaded: boolean
+  /** Async permission/capability inputs must settle before URL canonicalization. */
+  capabilitiesReady?: boolean
   hasOutputs: boolean
+  capabilities?: TaskDetailCapabilities
   isWorkgroup: boolean
   room: TaskDetailRoomClassification
   searchTab?: TaskDetailTab
@@ -82,7 +86,7 @@ export type TaskDetailTabResolution =
  * changes cannot override it (unless the tab truly leaves `availableTabs`).
  */
 export function resolveTaskDetailTabs(input: ResolveTaskDetailTabsInput): TaskDetailTabResolution {
-  if (!input.taskLoaded) return { status: 'pending' }
+  if (!input.taskLoaded || input.capabilitiesReady === false) return { status: 'pending' }
 
   let shape: 'plain' | 'turn-engine' | 'dynamic-workflow'
   let isDynamicWorkgroup = false
@@ -110,9 +114,13 @@ export function resolveTaskDetailTabs(input: ResolveTaskDetailTabsInput): TaskDe
     hasOutputs: input.hasOutputs,
     isWorkgroup: input.isWorkgroup,
     isDynamicWorkgroup,
+    capabilities: input.capabilities,
   })
+  const stableDefault = tabs.includes(defaultTab) ? defaultTab : (tabs[0] ?? 'details')
   const tab =
-    input.searchTab !== undefined && tabs.includes(input.searchTab) ? input.searchTab : defaultTab
+    input.searchTab !== undefined && tabs.includes(input.searchTab)
+      ? input.searchTab
+      : stableDefault
 
   return {
     status: 'ready',

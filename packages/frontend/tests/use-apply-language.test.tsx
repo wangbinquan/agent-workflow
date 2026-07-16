@@ -10,7 +10,8 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, waitFor } from '@testing-library/react'
+import { cleanup, render, waitFor } from '@testing-library/react'
+import { DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { useApplyLanguage, isSupportedLanguage } from '../src/hooks/useLanguage'
 import i18n, { setLanguage } from '../src/i18n'
 import { clearToken, setBaseUrl, setToken } from '../src/stores/auth'
@@ -28,14 +29,17 @@ function wrap(qc: QueryClient) {
 
 function mockConfigOnce(language: unknown) {
   const calls: string[] = []
-  vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
-    const s = typeof url === 'string' ? url : url.toString()
-    calls.push(s)
-    return new Response(JSON.stringify({ language }), {
-      status: 200,
-      headers: { 'content-type': 'application/json' },
-    })
-  })
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: RequestInfo | URL) => {
+      const s = typeof url === 'string' ? url : url.toString()
+      calls.push(s)
+      return new Response(JSON.stringify({ ...DEFAULT_CONFIG, language }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    }),
+  )
   return calls
 }
 
@@ -46,9 +50,11 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  cleanup()
   document.body.innerHTML = ''
   document.documentElement.removeAttribute('lang')
   clearToken()
+  vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
 

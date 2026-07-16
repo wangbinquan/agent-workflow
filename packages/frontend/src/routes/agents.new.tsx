@@ -11,19 +11,33 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useNavigate } from '@tanstack/react-router'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Agent, Config, CreateAgent } from '@agent-workflow/shared'
 import { api } from '@/api/client'
-import { AgentForm, emptyAgent, type AgentTab } from '@/components/AgentForm'
+import {
+  AgentForm,
+  AgentJsonValidationSummary,
+  agentJsonInvalidFields,
+  createAgentJsonDraft,
+  emptyAgent,
+  type AgentJsonFieldKey,
+  type AgentTab,
+} from '@/components/AgentForm'
 import { AgentImportDialog } from '@/components/AgentImportDialog'
 import { AgentPortValidationSummary } from '@/components/agent-ports/AgentPortValidationSummary'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { PageHeader } from '@/components/PageHeader'
-import { NEW_CARD_KEY, useReportSplitDirty, useSplitDirty } from '@/components/split/splitDirty'
+import {
+  NEW_CARD_KEY,
+  useReportSplitDirty,
+  useSplitDirty,
+  type SplitBusyRelease,
+} from '@/components/split/splitDirty'
 import { useDirtyBaseline } from '@/hooks/useDraftFromQuery'
 import { mergeAgentImport } from '@/lib/agent-import-merge'
 import { validateAgentPortState } from '@/lib/agent-ports'
+import { queryConfig, useConfigQueryKey } from '@/lib/config-resource'
 import { Route as agentsRoute } from './agents'
 
 export const Route = createRoute({
@@ -48,17 +62,23 @@ function AgentCreatePage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const qc = useQueryClient()
-  const { report } = useSplitDirty()
+  const { beginBusy, report } = useSplitDirty()
   const [draft, setDraft] = useState(emptyAgent)
+  const [jsonDraft, setJsonDraft] = useState(() => createAgentJsonDraft(emptyAgent()))
   const [activeTab, setActiveTab] = useState<AgentTab>('basics')
+  const [jsonFocusTarget, setJsonFocusTarget] = useState<AgentJsonFieldKey>()
+  const clearJsonFocusTarget = useCallback(() => setJsonFocusTarget(undefined), [])
   const [importOpen, setImportOpen] = useState(false)
   const importTriggerRef = useRef<HTMLButtonElement | null>(null)
   const { dirty, resetBaseline } = useDirtyBaseline(draft, draft)
-  useReportSplitDirty(NEW_CARD_KEY, dirty)
+  const invalidJsonFields = agentJsonInvalidFields(jsonDraft)
+  const jsonValid = invalidJsonFields.length === 0
+  useReportSplitDirty(NEW_CARD_KEY, dirty || !jsonValid)
 
+  const configQueryKey = useConfigQueryKey()
   const config = useQuery<Config>({
-    queryKey: ['config'],
-    queryFn: ({ signal }) => api.get('/api/config', undefined, signal),
+    queryKey: configQueryKey,
+    queryFn: ({ signal }) => queryConfig(signal),
     staleTime: 30_000,
     retry: false,
   })
@@ -76,8 +96,12 @@ function AgentCreatePage() {
   }, [config.data, resetBaseline])
 
   const create = useMutation({
-    mutationFn: () => api.post<Agent>('/api/agents', draft),
-    onSuccess: async (created) => {
+    // Capture the exact click-time payload.  The request may settle after a
+    // render (or after the defaults query), so reading the closure here would
+    // make the submitted agent depend on unrelated later state.
+    mutationFn: ({ submitted }: { submitted: CreateAgent; release: SplitBusyRelease }) =>
+      api.post<Agent>('/api/agents', submitted),
+    onSuccess: async (created, { release }) => {
       // Sync-clear before navigating so the guard doesn't block THIS navigation.
       report(NEW_CARD_KEY, false)
       await qc.cancelQueries({ queryKey: ['agents'], exact: true })
@@ -86,14 +110,20 @@ function AgentCreatePage() {
       )
       void qc.invalidateQueries({ queryKey: ['agents'], exact: true })
       qc.setQueryData(['agents', created.name], created)
+      release()
       navigate({ to: '/agents/$name', params: { name: created.name } })
     },
+    onSettled: (_created, _error, { release }) => release(),
   })
   const portValidation = validateAgentPortState(draft)
   const blockingPortIssues = portValidation.issues.filter((issue) => issue.severity === 'error')
 
   return (
-    <div className="agent-new">
+    <fieldset
+      className="agent-new detail-freeze"
+      disabled={create.isPending}
+      data-testid="agent-create-scope"
+    >
       <PageHeader
         title={t('agents.newTitle')}
         headingLevel={2}
@@ -111,9 +141,13 @@ function AgentCreatePage() {
             <button
               type="button"
               className="btn btn--primary"
-              disabled={create.isPending || draft.name === '' || !portValidation.valid}
+              disabled={
+                create.isPending || draft.name === '' || !portValidation.valid || !jsonValid
+              }
               onClick={() => {
-                if (portValidation.valid) create.mutate()
+                if (portValidation.valid && jsonValid && !create.isPending) {
+                  create.mutate({ submitted: draft, release: beginBusy(NEW_CARD_KEY) })
+                }
               }}
               data-testid="agent-create-button"
             >
@@ -121,6 +155,13 @@ function AgentCreatePage() {
             </button>
           </>
         }
+      />
+      <AgentJsonValidationSummary
+        draft={jsonDraft}
+        onNavigate={(key) => {
+          setJsonFocusTarget(key)
+          setActiveTab('advanced')
+        }}
       />
       {blockingPortIssues.length > 0 && (
         <AgentPortValidationSummary
@@ -137,6 +178,10 @@ function AgentCreatePage() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         hasExternalPortAlert={blockingPortIssues.length > 0}
+        jsonDraft={jsonDraft}
+        onJsonDraftChange={setJsonDraft}
+        focusJsonField={jsonFocusTarget}
+        onJsonFocusHandled={clearJsonFocusTarget}
       />
       <AgentImportDialog
         open={importOpen}
@@ -144,8 +189,14 @@ function AgentCreatePage() {
         currentValue={draft}
         triggerRef={importTriggerRef}
         onViewForm={setActiveTab}
-        onApply={(res) => setDraft((prev) => mergeAgentImport(prev, res))}
+        onApply={(res) => {
+          const merged = mergeAgentImport(draft, res)
+          setDraft(merged)
+          // Import is an explicit replacement, so it resets raw JSON (including
+          // any invalid text) to the imported semantic values atomically.
+          setJsonDraft(createAgentJsonDraft(merged))
+        }}
       />
-    </div>
+    </fieldset>
   )
 }

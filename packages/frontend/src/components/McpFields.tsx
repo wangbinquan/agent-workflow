@@ -21,21 +21,34 @@ export interface McpFieldsProps {
 
 export function McpFields({ value, onChange, nameLocked, errors }: McpFieldsProps) {
   const { t } = useTranslation()
+  const errorText = (field: string): string | undefined => {
+    const key = errors[field]
+    return key === undefined ? undefined : t(key)
+  }
   const set = <K extends keyof McpFormState>(k: K, v: McpFormState[K]): void => {
     onChange({ ...value, [k]: v })
   }
   return (
     <div className="form-grid">
-      <Field label={t('mcps.fieldName')} required hint={t('mcps.fieldNameHint')}>
+      <Field
+        label={t('mcps.fieldName')}
+        required
+        hint={t('mcps.fieldNameHint')}
+        error={errorText('name')}
+        errorId="mcp-field-name-error"
+      >
         <TextInput
+          id="mcp-field-name"
           value={value.name}
           onChange={(v) => set('name', v)}
           placeholder="postgres-prod"
           disabled={nameLocked === true}
           required
           pattern={MCP_NAME_RE.source}
+          aria-invalid={errors.name !== undefined}
+          aria-describedby={errors.name !== undefined ? 'mcp-field-name-error' : undefined}
+          aria-errormessage={errors.name !== undefined ? 'mcp-field-name-error' : undefined}
         />
-        {errors.name && <span className="form-field__error">{errors.name}</span>}
       </Field>
 
       <Field label={t('mcps.fieldDescription')}>
@@ -68,14 +81,27 @@ export function McpFields({ value, onChange, nameLocked, errors }: McpFieldsProp
 
       {value.type === 'local' && (
         <>
-          <Field label={t('mcps.fieldCommand')} required hint={t('mcps.fieldCommandHint')}>
+          <Field
+            label={t('mcps.fieldCommand')}
+            required
+            hint={t('mcps.fieldCommandHint')}
+            error={errorText('command')}
+            errorId="mcp-field-command-error"
+          >
             <TextInput
+              id="mcp-field-command"
               value={value.command}
               onChange={(v) => set('command', v)}
               placeholder="uvx postgres-mcp"
               required
+              aria-invalid={errors.command !== undefined}
+              aria-describedby={
+                errors.command !== undefined ? 'mcp-field-command-error' : undefined
+              }
+              aria-errormessage={
+                errors.command !== undefined ? 'mcp-field-command-error' : undefined
+              }
             />
-            {errors.command && <span className="form-field__error">{errors.command}</span>}
           </Field>
           <Field label={t('mcps.fieldEnv')} hint={t('mcps.fieldEnvHint')}>
             <TextArea
@@ -92,15 +118,24 @@ export function McpFields({ value, onChange, nameLocked, errors }: McpFieldsProp
 
       {value.type === 'remote' && (
         <>
-          <Field label={t('mcps.fieldUrl')} required hint={t('mcps.fieldUrlHint')}>
+          <Field
+            label={t('mcps.fieldUrl')}
+            required
+            hint={t('mcps.fieldUrlHint')}
+            error={errorText('url')}
+            errorId="mcp-field-url-error"
+          >
             <TextInput
+              id="mcp-field-url"
               value={value.url}
               onChange={(v) => set('url', v)}
               type="url"
               placeholder="https://mcp.example.com/sse"
               required
+              aria-invalid={errors.url !== undefined}
+              aria-describedby={errors.url !== undefined ? 'mcp-field-url-error' : undefined}
+              aria-errormessage={errors.url !== undefined ? 'mcp-field-url-error' : undefined}
             />
-            {errors.url && <span className="form-field__error">{errors.url}</span>}
           </Field>
           <Field label={t('mcps.fieldHeaders')} hint={t('mcps.fieldHeadersHint')}>
             <TextArea
@@ -126,13 +161,20 @@ export function McpFields({ value, onChange, nameLocked, errors }: McpFieldsProp
         </>
       )}
 
-      <Field label={t('mcps.fieldTimeoutMs')}>
+      <Field
+        label={t('mcps.fieldTimeoutMs')}
+        error={errorText('timeoutMs')}
+        errorId="mcp-field-timeout-error"
+      >
         <TextInput
+          id="mcp-field-timeout"
           value={value.timeoutMsText}
           onChange={(v) => set('timeoutMsText', v)}
           placeholder="30000"
+          aria-invalid={errors.timeoutMs !== undefined}
+          aria-describedby={errors.timeoutMs !== undefined ? 'mcp-field-timeout-error' : undefined}
+          aria-errormessage={errors.timeoutMs !== undefined ? 'mcp-field-timeout-error' : undefined}
         />
-        {errors.timeoutMs && <span className="form-field__error">{errors.timeoutMs}</span>}
       </Field>
     </div>
   )

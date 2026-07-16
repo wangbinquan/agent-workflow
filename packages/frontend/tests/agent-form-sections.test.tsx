@@ -34,7 +34,7 @@ function mount(initial: CreateAgent, onChange: (next: CreateAgent) => void = () 
   return { ...utils, ui }
 }
 
-const TAB_NAMES = ['Basics', 'Prompt', 'Ports', 'Resources & deps', 'Advanced']
+const TAB_NAMES = ['Basics', 'Prompt', 'Ports', 'Capabilities & collaboration', 'Advanced']
 
 beforeEach(() => {
   setBaseUrl('http://daemon.test')
@@ -83,7 +83,7 @@ describe('RFC-169 — five-tab layout', () => {
       ['basics', 'Basics'],
       ['prompt', 'Prompt'],
       ['ports', 'Ports'],
-      ['resources', 'Resources & deps'],
+      ['resources', 'Capabilities & collaboration'],
       ['advanced', 'Advanced'],
     ] as const) {
       const tab = screen.getByRole('tab', { name: new RegExp(name) })
@@ -110,7 +110,23 @@ describe('RFC-169 — tab count badges', () => {
     expect(screen.queryByTestId('agent-tab-resources-badge')).toBeNull()
     unmount()
     mount({ ...emptyAgent(), skills: ['s'], mcp: ['m'], dependsOn: ['d'] })
-    expect(screen.getByTestId('agent-tab-resources-badge').textContent).toBe('3')
+    const badge = screen.getByTestId('agent-tab-resources-badge')
+    expect(badge.textContent).toBe('3')
+    expect(badge.getAttribute('data-tone')).toBe('neutral')
+  })
+
+  test('blocking port validation replaces the neutral count with a danger badge', () => {
+    mount({
+      ...emptyAgent(),
+      inputs: [
+        { name: 'duplicate', kind: 'string' },
+        { name: 'duplicate', kind: 'string' },
+      ],
+    })
+    const badge = screen.getByTestId('agent-tab-ports-badge')
+    expect(badge.textContent).toBe('1')
+    expect(badge.getAttribute('data-tone')).toBe('danger')
+    expect(badge.getAttribute('aria-label')).toBe('Port configuration errors: 1')
   })
 })
 

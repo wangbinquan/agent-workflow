@@ -520,6 +520,7 @@ function StructuralTree({
       <aside className="structure__files">
         <nav
           role="tablist"
+          aria-label={t('tasks.structFileSelectorLabel')}
           aria-orientation="vertical"
           className="structure__tablist"
           onKeyDown={onTablistKeyDown}

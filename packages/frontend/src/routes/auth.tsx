@@ -8,11 +8,13 @@
 // still override BASE_URL_KEY via localStorage for now.
 
 import { createRoute, useRouter, useSearch } from '@tanstack/react-router'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, ApiError } from '@/api/client'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { Field, TextInput } from '@/components/Form'
+import { LoadingState } from '@/components/LoadingState'
+import { NoticeBanner } from '@/components/NoticeBanner'
 import { TabBar, type TabDef } from '@/components/TabBar'
 import { TabPanels, type TabPanelDef } from '@/components/split/TabPanels'
 import { describeApiError } from '@/i18n'
@@ -42,6 +44,11 @@ interface OidcProvider {
   iconUrl: string | null
 }
 
+type OidcDiscoveryState =
+  | { status: 'loading' }
+  | { status: 'error'; error: unknown }
+  | { status: 'success'; providers: OidcProvider[] }
+
 type AuthTab = 'password' | 'oidc' | 'token'
 
 export const Route = createRoute({
@@ -59,7 +66,7 @@ function AuthPage() {
   const router = useRouter()
   const { redirect } = useSearch({ from: Route.id }) as AuthSearch
   const { t } = useTranslation()
-  const [providers, setProviders] = useState<OidcProvider[]>([])
+  const [oidcDiscovery, setOidcDiscovery] = useState<OidcDiscoveryState>({ status: 'loading' })
   const [tab, setTab] = useState<AuthTab>('password')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -68,6 +75,7 @@ function AuthPage() {
   const [busy, setBusy] = useState(false)
   const usernameRef = useRef<HTMLInputElement>(null)
   const initialFocusDoneRef = useRef(false)
+  const discoveryRequestRef = useRef(0)
 
   // Focus the first password-method field exactly once for this Auth-page
   // landing. Panels stay mounted below, so keyboard tab activation never
@@ -78,14 +86,29 @@ function AuthPage() {
     usernameRef.current?.focus()
   }, [])
 
-  // Fetch enabled providers once on mount; show the OIDC tab only when the
-  // list is non-empty.
-  useEffect(() => {
-    void api
-      .get<{ providers: OidcProvider[] }>('/api/auth/oidc/providers')
-      .then((r) => setProviders(r.providers ?? []))
-      .catch(() => setProviders([]))
+  const discoverOidcProviders = useCallback(async () => {
+    const request = ++discoveryRequestRef.current
+    setOidcDiscovery({ status: 'loading' })
+    try {
+      const response = await api.get<{ providers: OidcProvider[] }>('/api/auth/oidc/providers')
+      if (discoveryRequestRef.current !== request) return
+      setOidcDiscovery({ status: 'success', providers: response.providers ?? [] })
+    } catch (error) {
+      if (discoveryRequestRef.current !== request) return
+      setOidcDiscovery({ status: 'error', error })
+    }
   }, [])
+
+  // Discovery is a visible async state, not an empty-list fallback: otherwise
+  // a network failure falsely tells users that this installation has no SSO.
+  useEffect(() => {
+    void discoverOidcProviders()
+    return () => {
+      discoveryRequestRef.current += 1
+    }
+  }, [discoverOidcProviders])
+
+  const providers = oidcDiscovery.status === 'success' ? oidcDiscovery.providers : []
 
   // Note: the `#aw_session=` fragment from the OIDC callback is handled
   // globally in __root.tsx (so any postLoginRedirect target picks it up),
@@ -275,6 +298,33 @@ function AuthPage() {
         ariaLabel={t('auth.title')}
         idPrefix="auth-method"
       />
+      {oidcDiscovery.status === 'loading' && (
+        <LoadingState
+          size="compact"
+          label={t('auth.oidcDiscoveryLoading')}
+          data-testid="oidc-discovery-loading"
+        />
+      )}
+      {oidcDiscovery.status === 'error' && (
+        <ErrorBanner
+          error={oidcDiscovery.error}
+          message={t('auth.oidcDiscoveryError')}
+          action={
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={() => void discoverOidcProviders()}
+            >
+              {t('common.retry')}
+            </button>
+          }
+        />
+      )}
+      {oidcDiscovery.status === 'success' && providers.length === 0 && (
+        <NoticeBanner tone="info" size="compact">
+          {t('auth.oidcDiscoveryEmpty')}
+        </NoticeBanner>
+      )}
       <TabPanels<AuthTab> active={tab} panels={panels} idPrefix="auth-method" />
     </div>
   )

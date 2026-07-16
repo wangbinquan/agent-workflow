@@ -54,7 +54,11 @@ export function MemoryFusionList() {
             <ErrorBanner error={fusions.error} action={retryAction} />
           </div>
         )}
-        <EmptyState title={t('memory.fusion.empty')} data-testid="memory-fusion-empty" />
+        <EmptyState
+          title={t('memory.fusion.empty')}
+          description={t('memory.fusion.emptyDescription')}
+          data-testid="memory-fusion-empty"
+        />
       </>
     )
   }

@@ -15,6 +15,13 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import {
+  RouterProvider,
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from '@tanstack/react-router'
 import type { MemorySummary } from '@agent-workflow/shared'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { MemoryPendingBadge } from '../src/components/shell/MemoryPendingBadge'
@@ -32,6 +39,7 @@ function mkSum(overrides: Partial<MemorySummary> = {}): MemorySummary {
     approvedAt: null,
     version: 1,
     distillAction: 'new',
+    canManage: true,
     ...overrides,
   }
 }
@@ -84,9 +92,22 @@ function installFetch(
 
 function renderBadge() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const root = createRootRoute({ component: MemoryPendingBadge })
+  const memory = createRoute({
+    getParentRoute: () => root,
+    path: '/memory',
+    component: () => null,
+    validateSearch: (search: Record<string, unknown>) => search,
+  })
+  const router = createRouter({
+    routeTree: root.addChildren([memory]),
+    history: createMemoryHistory({ initialEntries: ['/'] }),
+  })
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryPendingBadge />
+      {/* Focused test router intentionally differs from the generated app tree. */}
+      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+      <RouterProvider router={router as any} />
     </QueryClientProvider>,
   )
 }
@@ -121,16 +142,16 @@ describe('MemoryPendingBadge', () => {
     })
   })
 
-  test('non-admin sees no badge (and no /api/memories fetch fires)', async () => {
+  test('server canManage=false candidates do not contribute to the badge', async () => {
     const { urls } = installFetch({ permissions: ['memory:read'], role: 'user' }, [
-      mkSum(),
-      mkSum({ id: 'm2' }),
+      mkSum({ canManage: false }),
+      mkSum({ id: 'm2', canManage: false }),
     ])
     renderBadge()
     // Allow react-query a tick to consider firing the candidate query.
     await new Promise((r) => setTimeout(r, 20))
     expect(screen.queryByTestId('nav-memory-badge')).toBeNull()
-    expect(urls.some((u) => u.includes('/api/memories'))).toBe(false)
+    expect(urls.some((u) => u.includes('/api/memories'))).toBe(true)
   })
 
   test('admin with zero pending candidates does not render the badge', async () => {
@@ -157,5 +178,16 @@ describe('MemoryPendingBadge', () => {
     await waitFor(() => {
       expect(screen.getByTestId('nav-memory-badge').textContent).toBe('5')
     })
+    expect(screen.getByTestId('nav-memory-badge').getAttribute('href')).toContain(
+      'tab=approval-queue',
+    )
+  })
+
+  test('fusion is the sibling destination when there are no manageable candidates', async () => {
+    installFetch({ permissions: ['memory:read'], role: 'user' }, [mkSum({ canManage: false })], 2)
+    renderBadge()
+    const accessory = await screen.findByTestId('nav-memory-badge')
+    expect(accessory.getAttribute('href')).toContain('tab=fusion')
+    expect(accessory.closest('.nav-item__main')).toBeNull()
   })
 })

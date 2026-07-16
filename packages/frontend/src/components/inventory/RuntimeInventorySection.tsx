@@ -53,7 +53,7 @@ export function RuntimeInventorySection({ taskId, nodeRunId, workflowNodeKind }:
     >
       <summary className="inventory-section__summary">
         <span>{t('nodeDrawer.inventory.title')}</span>
-        {snap !== undefined && snap.captured && (
+        {snap != null && snap.captured && (
           <span className="inventory-section__chips" data-testid="inventory-chips">
             <span className="inventory-section__chip">
               {t('nodeDrawer.inventory.chip.agents')}·{snap.agents.length}
@@ -94,7 +94,7 @@ function InventoryBody({ query }: { query: QueryShape }) {
     )
   }
   const snap = query.data
-  if (snap === undefined) return null
+  if (snap == null) return null
   if (!snap.captured) {
     const reasonKey = `nodeDrawer.inventory.reason.${snap.reason}` as const
     return (

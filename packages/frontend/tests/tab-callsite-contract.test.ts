@@ -1,7 +1,8 @@
 // RFC-198 PR4 — source ratchet for the semantic split between true tabs and
 // filters/view-mode pickers (design.md §6.1).
 //
-// A new <TabBar> callsite must be deliberately classified below. True tabs
+// A new <TabBar> callsite must be deliberately classified below. Page-section
+// links such as Settings deliberately stay out of this list. True tabs
 // carry a stable, page-unique idPrefix and expose a matching tabpanel through
 // either <TabPanels> or tabDomIds(). Filters stay on <Segmented> radio
 // semantics. The two vertical diff file selectors are separately classified
@@ -164,13 +165,10 @@ const TRUE_TAB_CALLSITES = [
   'components/NodeDetailDrawer.tsx::node-detail-drawer',
   'components/canvas/NodeInspector.tsx::workflow-node-inspector',
   'routes/auth.tsx::auth-method',
-  'routes/memory.tsx::memory',
   'routes/mcps.detail.tsx::mcps-detail',
   'routes/plugins.detail.tsx::plugins-detail',
-  'routes/settings.tsx::settings',
   'routes/skills.detail.tsx::skills-detail',
   'routes/skills.new.tsx::skills-new',
-  'routes/tasks.detail.tsx::task-detail',
 ] as const
 
 const FILTER_SEGMENTED_CALLSITES = [
@@ -181,6 +179,7 @@ const FILTER_SEGMENTED_CALLSITES = [
 ] as const
 
 const VERTICAL_TRUE_TAB_CALLSITES = {
+  'components/TaskOutputPanel.tsx': { tablist: 1, tab: 1 },
   'components/WorktreeDiffPanel.tsx': { tablist: 1, tab: 1 },
   'components/structure/StructuralDiffView.tsx': { tablist: 1, tab: 1 },
 } as const
@@ -202,6 +201,23 @@ describe('RFC-198 true-tab callsite contract', () => {
       })
       .sort()
     expect(actual).toEqual([...TRUE_TAB_CALLSITES].sort())
+  })
+
+  test('every TabBar has exactly one accessible-name mechanism', () => {
+    const tabBars = units.flatMap((unit) => jsxCallsites(unit, 'TabBar'))
+    const missingName = tabBars.filter(
+      (callsite) =>
+        attribute(callsite, 'ariaLabel') === undefined &&
+        attribute(callsite, 'ariaLabelledBy') === undefined,
+    )
+    const duplicateName = tabBars.filter(
+      (callsite) =>
+        attribute(callsite, 'ariaLabel') !== undefined &&
+        attribute(callsite, 'ariaLabelledBy') !== undefined,
+    )
+
+    expect(missingName.map(location), 'TabBar callsites missing an accessible name').toEqual([])
+    expect(duplicateName.map(location), 'TabBar callsites must not supply both names').toEqual([])
   })
 
   test('every TabBar prefix is associated with a matching tabpanel', () => {

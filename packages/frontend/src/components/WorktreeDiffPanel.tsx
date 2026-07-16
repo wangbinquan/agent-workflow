@@ -242,6 +242,7 @@ export function WorktreeDiffPanel({ diff, truncated, focusFilePath, storageKey }
         </div>
         <nav
           role="tablist"
+          aria-label={t('tasks.diffFileSelectorLabel')}
           aria-orientation="vertical"
           className="worktree-diff__tablist"
           onKeyDown={onTablistKeyDown}

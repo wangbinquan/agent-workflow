@@ -1,14 +1,16 @@
 // RFC-031 — installer for opencode plugin records.
 //
-// One installer call materialises a plugin spec into a stable local directory
-// `~/.agent-workflow/plugins/{id}/` and returns the resolved entry path the
-// runner will inject as `file://<cachedPath>` into OPENCODE_CONFIG_CONTENT.
+// Every npm/git installer call materialises into a fresh immutable generation
+// under `~/.agent-workflow/plugins/{id}/generations/{opId}/`. The DB continues
+// pointing at the prior complete generation until the caller atomically
+// publishes the new cachedPath. file: specs remain external paths and are not
+// advertised as atomically checkable/upgradable.
 // The acceptance contract (proposal §5 / design §3.2):
 //   1. Eager install on save — POST/PUT triggers this; failure → 422, no DB row.
 //   2. Spawn time is zero-network — opencode receives a `file://` path, never
 //      the raw npm/git spec.
-//   3. Concurrent saves of the same plugin id share a single in-flight install
-//      (Map<id, Promise>) to prevent npm-install races on the same directory.
+//   3. The stable-id ResourceOperationCoordinator serialises publication; the
+//      installer itself never shares mutable directories or in-flight results.
 //   4. stderr / error messages are routed through `redactSensitiveString`
 //      before they reach API responses, log output, or DB rows.
 //   5. `npm` binary discovery is probed once per process; absence downgrades
@@ -20,9 +22,11 @@
 //   everything else                                       → npm
 
 import { spawn } from 'node:child_process'
-import { mkdir, readFile, realpath, rm, stat } from 'node:fs/promises'
-import { join } from 'node:path'
+import type { Dirent } from 'node:fs'
+import { mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, stat } from 'node:fs/promises'
+import { dirname, isAbsolute, join, relative, resolve as resolvePath } from 'node:path'
 import type { PluginSourceKind } from '@agent-workflow/shared'
+import { ulid } from 'ulid'
 import { redactSensitiveString } from '@/util/redact'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
@@ -39,6 +43,29 @@ export interface InstallResult {
   /** npm: package.json.version; git: short sha (if discoverable); file: mtime hash. Null if unreadable. */
   resolvedVersion: string | null
   sourceKind: PluginSourceKind
+  /** null for external file: sources. */
+  generationDir: string | null
+  /** Stable immutable source identity; null only for external file: sources. */
+  sourceIdentity: string | null
+  manifest: PluginGenerationManifest | null
+}
+
+export const PLUGIN_GENERATION_MANIFEST = '.agent-workflow-plugin-generation.json'
+
+export interface PluginGenerationManifest {
+  version: 1
+  pluginId: string
+  opId: string
+  sourceKind: 'npm' | 'git'
+  requestedSpec: string
+  entryRelativePath: string
+  resolvedVersion: string | null
+  sourceIdentity: string
+  resolved: string
+  integrity: string | null
+  commit: string | null
+  completed: true
+  createdAt: number
 }
 
 export class PluginInstallFailedError extends Error {
@@ -124,15 +151,8 @@ export function resetNpmProbeCacheForTests(): void {
   npmProbeCache = null
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// in-flight Map to serialise concurrent installs on the same plugin id
-// ─────────────────────────────────────────────────────────────────────────────
-
-const inFlight = new Map<string, Promise<InstallResult>>()
-
 /**
- * Install or refresh a plugin spec into `<rootDir>/<pluginId>/`. Concurrent
- * calls for the same pluginId share the underlying promise.
+ * Prepare an immutable install generation. Publication is a separate DB step.
  *
  * @param pluginId  ULID of the plugin row (caller mints before calling).
  * @param spec      Raw user-supplied spec.
@@ -147,28 +167,18 @@ export async function installPlugin(
     timeoutMs?: number
   } = {},
 ): Promise<InstallResult> {
-  const existing = inFlight.get(pluginId)
-  if (existing) return existing
-  const promise = (async () => {
-    try {
-      return await installPluginInner(pluginId, spec, opts)
-    } finally {
-      inFlight.delete(pluginId)
-    }
-  })()
-  inFlight.set(pluginId, promise)
-  return promise
+  const sourceKind = inferSourceKind(spec)
+  if (sourceKind === 'file') return installFilePlugin(spec)
+  return installPluginGeneration(pluginId, ulid(), spec, sourceKind, opts)
 }
 
-async function installPluginInner(
+async function installPluginGeneration(
   pluginId: string,
+  opId: string,
   spec: string,
+  sourceKind: 'npm' | 'git',
   opts: { pluginsDir?: string; npmBin?: string; timeoutMs?: number },
 ): Promise<InstallResult> {
-  const sourceKind = inferSourceKind(spec)
-  if (sourceKind === 'file') {
-    return installFilePlugin(spec)
-  }
   // npm + git both go through `npm install` — npm-package-arg handles git URLs
   // and github shorthand natively (see opencode plugin/shared.ts:resolvePluginTarget).
   const npmBin = opts.npmBin ?? 'npm'
@@ -177,8 +187,10 @@ async function installPluginInner(
     if (!ok) throw new NpmUnavailableError()
   }
   const root = opts.pluginsDir ?? Paths.pluginsDir
-  const pluginDir = join(root, pluginId)
-  await mkdir(pluginDir, { recursive: true, mode: 0o700 })
+  const generationsDir = join(root, pluginId, 'generations')
+  await mkdir(generationsDir, { recursive: true, mode: 0o700 })
+  const pluginDir = join(generationsDir, opId)
+  await mkdir(pluginDir, { recursive: false, mode: 0o700 })
   // Seed a minimal host package so `npm install` writes node_modules/ here
   // rather than walking up to the user's repo.
   const hostPkg = join(pluginDir, 'package.json')
@@ -218,10 +230,38 @@ async function installPluginInner(
 
   // Read node_modules/ to identify the installed package name + version.
   const installed = await readInstalledPackage(pluginDir)
+  if (sourceKind === 'npm' && installed.version === null) {
+    throw new PluginInstallFailedError('installed npm package has no readable version', 0)
+  }
+  const identity = await readInstalledIdentity(pluginDir, installed.packageName, sourceKind)
+  await stat(installed.entryDir)
+  const resolvedVersion = sourceKind === 'git' ? identity.commit!.slice(0, 12) : installed.version
+  const manifest: PluginGenerationManifest = {
+    version: 1,
+    pluginId,
+    opId,
+    sourceKind,
+    requestedSpec: spec,
+    entryRelativePath: relative(pluginDir, installed.entryDir),
+    resolvedVersion,
+    sourceIdentity: identity.sourceIdentity,
+    resolved: identity.resolved,
+    integrity: identity.integrity,
+    commit: identity.commit,
+    completed: true,
+    createdAt: Date.now(),
+  }
+  const manifestPath = join(pluginDir, PLUGIN_GENERATION_MANIFEST)
+  const tmpManifest = `${manifestPath}.${ulid()}.tmp`
+  await Bun.write(tmpManifest, JSON.stringify(manifest, null, 2))
+  await rename(tmpManifest, manifestPath)
   return {
     cachedPath: installed.entryDir,
-    resolvedVersion: installed.version,
+    resolvedVersion,
     sourceKind,
+    generationDir: pluginDir,
+    sourceIdentity: identity.sourceIdentity,
+    manifest,
   }
 }
 
@@ -247,6 +287,9 @@ async function installFilePlugin(spec: string): Promise<InstallResult> {
     cachedPath: resolved,
     resolvedVersion: mtime > 0 ? mtime.toString(16) : null,
     sourceKind: 'file',
+    generationDir: null,
+    sourceIdentity: null,
+    manifest: null,
   }
 }
 
@@ -262,7 +305,7 @@ async function installFilePlugin(spec: string): Promise<InstallResult> {
  */
 async function readInstalledPackage(
   pluginDir: string,
-): Promise<{ entryDir: string; version: string | null }> {
+): Promise<{ entryDir: string; packageName: string; version: string | null }> {
   const nm = join(pluginDir, 'node_modules')
   let requestedName: string | null = null
   try {
@@ -286,7 +329,7 @@ async function readInstalledPackage(
     // mislead the UI/runner, so surface the install as version-less and let
     // opencode fail loudly on import.
     log.warn('plugin install left host package.json without dependencies', { pluginDir })
-    return { entryDir: pluginDir, version: null }
+    throw new PluginInstallFailedError('installed package identity is missing', 0)
   }
 
   // Scoped name (`@scope/pkg`) joins correctly under node_modules/.
@@ -298,7 +341,60 @@ async function readInstalledPackage(
   } catch {
     // unreadable package.json — keep null, the row is still valid.
   }
-  return { entryDir: pkgRoot, version }
+  return { entryDir: pkgRoot, packageName: requestedName, version }
+}
+
+async function readInstalledIdentity(
+  pluginDir: string,
+  packageName: string,
+  sourceKind: 'npm' | 'git',
+): Promise<{
+  sourceIdentity: string
+  resolved: string
+  integrity: string | null
+  commit: string | null
+}> {
+  let lock: unknown
+  try {
+    lock = JSON.parse(await readFile(join(pluginDir, 'package-lock.json'), 'utf-8'))
+  } catch {
+    throw new PluginInstallFailedError('npm install did not produce package-lock identity', 0)
+  }
+  const packages = (lock as { packages?: unknown }).packages
+  const entry =
+    packages !== null && typeof packages === 'object'
+      ? (packages as Record<string, unknown>)[`node_modules/${packageName}`]
+      : undefined
+  if (entry === null || typeof entry !== 'object') {
+    throw new PluginInstallFailedError('installed package is missing from package-lock', 0)
+  }
+  const record = entry as Record<string, unknown>
+  const resolved = typeof record.resolved === 'string' ? record.resolved : ''
+  const integrity = typeof record.integrity === 'string' ? record.integrity : null
+  if (sourceKind === 'npm') {
+    if (resolved === '' || integrity === null) {
+      throw new PluginInstallFailedError('npm package-lock identity is incomplete', 0)
+    }
+    return {
+      sourceIdentity: `npm:${resolved}\n${integrity}`,
+      resolved,
+      integrity,
+      commit: null,
+    }
+  }
+  const gitHead = typeof record.gitHead === 'string' ? record.gitHead : ''
+  const commit =
+    (/^[a-f0-9]{40}$/i.exec(gitHead)?.[0] ?? /[#/]([a-f0-9]{40})(?:$|\?)/i.exec(resolved)?.[1]) ||
+    null
+  if (commit === null) {
+    throw new PluginInstallFailedError('git package-lock identity has no final commit SHA', 0)
+  }
+  return {
+    sourceIdentity: `git:${commit.toLowerCase()}`,
+    resolved,
+    integrity,
+    commit: commit.toLowerCase(),
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -314,34 +410,175 @@ async function readInstalledPackage(
 export async function checkForUpdate(
   pluginId: string,
   spec: string,
-  currentVersion: string | null,
+  currentCachedPath: string,
   opts: { pluginsDir?: string; npmBin?: string; timeoutMs?: number } = {},
-): Promise<{ available: boolean; latest: string | null }> {
+): Promise<{ available: boolean; latest: string | null; identityStatus: 'known' | 'unknown' }> {
+  const sourceKind = inferSourceKind(spec)
+  if (sourceKind === 'file') {
+    throw new PluginInstallFailedError('file source is externally managed and cannot be checked', 0)
+  }
   const root = opts.pluginsDir ?? Paths.pluginsDir
-  const probeDir = join(root, `${pluginId}.check-${Date.now().toString(36)}`)
+  await mkdir(root, { recursive: true, mode: 0o700 })
+  const probeDir = await mkdtemp(join(root, '.check-'))
   try {
-    const result = await installPluginInner(`${pluginId}.check`, spec, {
+    const result = await installPluginGeneration(pluginId, ulid(), spec, sourceKind, {
       ...opts,
-      pluginsDir: probeDir, // installer mkdir's <probeDir>/<pluginId.check>
+      pluginsDir: probeDir,
     })
-    const available =
-      result.resolvedVersion !== null &&
-      currentVersion !== null &&
-      result.resolvedVersion !== currentVersion
-    return { available, latest: result.resolvedVersion }
+    const current = await readGenerationManifestForCachedPath(currentCachedPath)
+    if (
+      current === null ||
+      current.pluginId !== pluginId ||
+      current.sourceKind !== sourceKind ||
+      current.requestedSpec !== spec
+    ) {
+      return { available: false, latest: result.resolvedVersion, identityStatus: 'unknown' }
+    }
+    return {
+      available: current.sourceIdentity !== result.sourceIdentity,
+      latest: result.resolvedVersion,
+      identityStatus: 'known',
+    }
   } finally {
     await rm(probeDir, { recursive: true, force: true }).catch(() => undefined)
   }
 }
 
-/** Delete the framework-managed install directory for a plugin id. No-op when missing. */
-export async function cleanupPluginDir(
-  pluginId: string,
-  opts: { pluginsDir?: string } = {},
-): Promise<void> {
+export async function readGenerationManifestForCachedPath(
+  cachedPath: string,
+): Promise<PluginGenerationManifest | null> {
+  let cursor = cachedPath
+  for (let depth = 0; depth < 8; depth += 1) {
+    try {
+      const parsed = JSON.parse(
+        await readFile(join(cursor, PLUGIN_GENERATION_MANIFEST), 'utf-8'),
+      ) as Partial<PluginGenerationManifest>
+      if (!isCompleteGenerationManifest(parsed, cursor, cachedPath)) return null
+      return parsed
+    } catch {
+      const parent = dirname(cursor)
+      if (parent === cursor) break
+      cursor = parent
+    }
+  }
+  return null
+}
+
+function isCompleteGenerationManifest(
+  parsed: Partial<PluginGenerationManifest>,
+  generationDir: string,
+  cachedPath: string,
+): parsed is PluginGenerationManifest {
+  if (
+    parsed.version !== 1 ||
+    parsed.completed !== true ||
+    typeof parsed.pluginId !== 'string' ||
+    parsed.pluginId.length === 0 ||
+    typeof parsed.opId !== 'string' ||
+    parsed.opId.length === 0 ||
+    (parsed.sourceKind !== 'npm' && parsed.sourceKind !== 'git') ||
+    typeof parsed.requestedSpec !== 'string' ||
+    parsed.requestedSpec.length === 0 ||
+    typeof parsed.entryRelativePath !== 'string' ||
+    parsed.entryRelativePath.length === 0 ||
+    isAbsolute(parsed.entryRelativePath) ||
+    parsed.entryRelativePath === '..' ||
+    parsed.entryRelativePath.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`) ||
+    (parsed.resolvedVersion !== null && typeof parsed.resolvedVersion !== 'string') ||
+    typeof parsed.sourceIdentity !== 'string' ||
+    parsed.sourceIdentity.length === 0 ||
+    typeof parsed.resolved !== 'string' ||
+    parsed.resolved.length === 0 ||
+    (parsed.integrity !== null && typeof parsed.integrity !== 'string') ||
+    (parsed.commit !== null && typeof parsed.commit !== 'string') ||
+    !Number.isInteger(parsed.createdAt)
+  ) {
+    return false
+  }
+  if (
+    resolvePath(generationDir, parsed.entryRelativePath) !== resolvePath(cachedPath) ||
+    (parsed.sourceKind === 'npm' &&
+      (parsed.integrity === null ||
+        parsed.commit !== null ||
+        parsed.sourceIdentity !== `npm:${parsed.resolved}\n${parsed.integrity}`)) ||
+    (parsed.sourceKind === 'git' &&
+      (parsed.commit === null ||
+        !/^[a-f0-9]{40}$/i.test(parsed.commit) ||
+        parsed.sourceIdentity !== `git:${parsed.commit.toLowerCase()}`))
+  ) {
+    return false
+  }
+  return true
+}
+
+export async function cleanupInstallGeneration(result: InstallResult): Promise<void> {
+  if (result.generationDir === null) return
+  await rm(result.generationDir, { recursive: true, force: true }).catch(() => undefined)
+}
+
+/** Conservative orphan/old-generation collection. Unknown/active paths stay. */
+export async function garbageCollectPluginGenerations(opts: {
+  pluginsDir?: string
+  referencedCachedPaths: ReadonlySet<string>
+  activeCachedPaths?: ReadonlySet<string>
+  graceMs?: number
+  now?: number
+}): Promise<string[]> {
   const root = opts.pluginsDir ?? Paths.pluginsDir
-  const pluginDir = join(root, pluginId)
-  await rm(pluginDir, { recursive: true, force: true }).catch(() => undefined)
+  const active = opts.activeCachedPaths ?? new Set<string>()
+  const graceMs = opts.graceMs ?? 24 * 60 * 60_000
+  const now = opts.now ?? Date.now()
+  const removed: string[] = []
+  let pluginDirs: Dirent[]
+  try {
+    pluginDirs = await readdir(root, { withFileTypes: true })
+  } catch {
+    return removed
+  }
+  for (const pluginDirent of pluginDirs) {
+    if (!pluginDirent.isDirectory()) continue
+    if (pluginDirent.name.startsWith('.check-')) {
+      const checkDir = join(root, pluginDirent.name)
+      try {
+        if (now - (await stat(checkDir)).mtimeMs >= graceMs) {
+          await rm(checkDir, { recursive: true, force: true })
+          removed.push(checkDir)
+        }
+      } catch {
+        // Conservative best effort: an unreadable or concurrently-removed dir stays.
+      }
+      continue
+    }
+    const generationsRoot = join(root, pluginDirent.name, 'generations')
+    let generations: Dirent[]
+    try {
+      generations = await readdir(generationsRoot, { withFileTypes: true })
+    } catch {
+      continue
+    }
+    for (const generation of generations) {
+      if (!generation.isDirectory()) continue
+      const generationDir = join(generationsRoot, generation.name)
+      const isReferenced = [...opts.referencedCachedPaths, ...active].some(
+        (path) => path === generationDir || path.startsWith(`${generationDir}/`),
+      )
+      if (isReferenced) continue
+      let age = 0
+      try {
+        age = now - (await stat(generationDir)).mtimeMs
+      } catch {
+        continue
+      }
+      if (age < graceMs) continue
+      try {
+        await rm(generationDir, { recursive: true, force: true })
+        removed.push(generationDir)
+      } catch {
+        // Conservative best effort: failed deletions are not reported as removed.
+      }
+    }
+  }
+  return removed
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

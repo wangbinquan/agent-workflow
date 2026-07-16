@@ -22,10 +22,9 @@
 //   - stderr (stdio) and HTTP body excerpts go through redactSensitiveString
 //     before they land in errorDetail.
 //
-// In-flight dedup: a module-level Map keyed by mcp.name ensures concurrent
-// POST /api/mcps/:name/probe calls share the same in-flight Promise; tests
-// observe this by spying that the injected openClient factory is called only
-// once. Cleared in finally.
+// Deliberately NO in-flight dedup here. RFC-201 lifts dedup to the complete
+// stable-id + exact-hash operation (including persistence/finalization); a raw
+// name-keyed Promise can cross a rename/config revision and publish stale I/O.
 //
 // Dependency injection: `opts.openClient` lets unit tests substitute a fake
 // client without spawning real subprocesses or making HTTP calls. The real
@@ -116,15 +115,6 @@ export interface ProbeOptions {
   startedAt?: number
 }
 
-// Module-level dedup map. Key = mcp.name; value = the in-flight probe Promise.
-// Tests reach into this via `__inflightSize()` for whitebox assertions.
-const inflight = new Map<string, Promise<ProbeResult>>()
-
-/** Test-only: returns how many probes are currently in flight. */
-export function __inflightSize(): number {
-  return inflight.size
-}
-
 /**
  * Probe one MCP server.
  *
@@ -142,15 +132,7 @@ export async function probeMcp(mcp: Mcp, opts: ProbeOptions = {}): Promise<Probe
     )
   }
 
-  const existing = inflight.get(mcp.name)
-  if (existing !== undefined) {
-    return existing
-  }
-  const p = runProbe(mcp, opts).finally(() => {
-    inflight.delete(mcp.name)
-  })
-  inflight.set(mcp.name, p)
-  return p
+  return runProbe(mcp, opts)
 }
 
 async function runProbe(mcp: Mcp, opts: ProbeOptions): Promise<ProbeResult> {
@@ -205,7 +187,7 @@ async function runProbe(mcp: Mcp, opts: ProbeOptions): Promise<ProbeResult> {
     const resourceTemplates = unwrapList(templatesR, 'resources/templates/list', partialFailures)
     const prompts = unwrapList(promptsR, 'prompts/list', partialFailures)
 
-    const finishedAt = now()
+    const finishedAt = Math.max(now(), startedAt)
     const latencyMs = Math.max(0, finishedAt - startedAt)
 
     if (partialFailures.length > 0) {
@@ -246,7 +228,7 @@ async function runProbe(mcp: Mcp, opts: ProbeOptions): Promise<ProbeResult> {
       finishedAt,
     }
   } catch (err) {
-    const finishedAt = now()
+    const finishedAt = Math.max(now(), startedAt)
     const latencyMs = Math.max(0, finishedAt - startedAt)
     const code = classifyProbeError(err, ac.signal.aborted)
     const message = err instanceof Error ? err.message : String(err)

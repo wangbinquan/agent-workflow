@@ -13,6 +13,7 @@ import { useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { api } from '@/api/client'
+import { BannerDismissButton } from '@/components/NoticeBanner'
 import type { LifecycleAlertRule, LifecycleAlertSeverity } from '@/types/lifecycle'
 
 import { TaskDiagnosePanel } from './TaskDiagnosePanel'
@@ -36,6 +37,7 @@ export interface StuckTaskBannerProps {
 export function StuckTaskBanner(props: StuckTaskBannerProps): ReactElement | null {
   const { t } = useTranslation()
   const [diagnoseOpen, setDiagnoseOpen] = useState(false)
+  const [dismissedSignature, setDismissedSignature] = useState<string | null>(null)
   const q = useQuery<AlertsResponse>({
     queryKey: ['tasks', props.taskId, 'alerts'],
     queryFn: ({ signal }) =>
@@ -51,6 +53,14 @@ export function StuckTaskBanner(props: StuckTaskBannerProps): ReactElement | nul
 
   const alerts = q.data?.alerts ?? []
   if (alerts.length === 0) return null
+
+  const alertSignature = alerts
+    .map(
+      (alert) => `${props.taskId}:${alert.id}:${alert.rule}:${alert.severity}:${alert.detectedAt}`,
+    )
+    .sort()
+    .join('|')
+  if (dismissedSignature === alertSignature) return null
 
   const hasError = alerts.some((a) => a.severity === 'error')
   return (
@@ -74,14 +84,24 @@ export function StuckTaskBanner(props: StuckTaskBannerProps): ReactElement | nul
             <pre>{alerts.map((a) => `${a.rule}: ${describeRule(a.rule, t)}`).join('\n')}</pre>
           </details>
         </div>
-        <button
-          type="button"
-          className={`btn btn--sm ${hasError ? 'btn--danger' : 'btn--primary'}`}
-          onClick={() => setDiagnoseOpen(true)}
-          data-testid="stuck-task-banner-diagnose"
-        >
-          {t('tasks.diagnose.bannerButton')}
-        </button>
+        <div className="task-error-banner__actions">
+          <button
+            type="button"
+            className={`btn btn--sm ${hasError ? 'btn--danger' : 'btn--primary'}`}
+            onClick={() => setDiagnoseOpen(true)}
+            data-testid="stuck-task-banner-diagnose"
+          >
+            {t('tasks.diagnose.bannerButton')}
+          </button>
+          <BannerDismissButton
+            label={t('common.close')}
+            onDismiss={() => {
+              setDiagnoseOpen(false)
+              setDismissedSignature(alertSignature)
+            }}
+            testId="stuck-task-banner-dismiss"
+          />
+        </div>
       </div>
       <TaskDiagnosePanel
         taskId={props.taskId}

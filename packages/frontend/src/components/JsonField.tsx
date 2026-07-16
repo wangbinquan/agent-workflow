@@ -1,74 +1,98 @@
-// Raw JSON textarea + parse status. Used for agent.permission and
-// agent.frontmatterExtra — both are pass-through `Record<string, unknown>`
-// fields where the user knows opencode-shape better than we can validate.
+// Controlled raw JSON textarea used by AgentForm's pass-through object fields.
 //
-// Local string state preserves keystrokes that aren't yet valid JSON. The
-// parent only gets called with parsed values once the input parses cleanly.
+// RFC-201 T3.1: raw text is route-owned alongside the last parse result and
+// validation error. An invalid edit must therefore remain visible to the
+// owning route (dirty guard, Save/Create gating, tab badge) instead of being
+// trapped in this component while the parent keeps the previous valid object.
 
-import { useEffect, useState } from 'react'
+import { useId, type Ref } from 'react'
 import { useTranslation } from 'react-i18next'
 import { TextArea } from './Form'
 
-interface JsonFieldProps {
-  value: Record<string, unknown>
-  onChange: (next: Record<string, unknown>) => void
-  rows?: number
-  placeholder?: string
+export interface JsonFieldChange<T = Record<string, unknown>> {
+  raw: string
+  parsed?: T
+  error?: string
 }
 
-export function JsonField({ value, onChange, rows = 6, placeholder }: JsonFieldProps) {
+interface JsonFieldProps {
+  state: JsonFieldChange<Record<string, unknown>>
+  onChange: (next: JsonFieldChange<Record<string, unknown>>) => void
+  rows?: number
+  placeholder?: string
+  id?: string
+  textareaRef?: Ref<HTMLTextAreaElement>
+  'data-testid'?: string
+}
+
+export function jsonFieldChangeFromValue(
+  value: Record<string, unknown>,
+): JsonFieldChange<Record<string, unknown>> {
+  return { raw: stringify(value), parsed: value }
+}
+
+export function JsonField({
+  state,
+  onChange,
+  rows = 6,
+  placeholder,
+  id,
+  textareaRef,
+  'data-testid': testid,
+}: JsonFieldProps) {
   const { t } = useTranslation()
-  const [draft, setDraft] = useState(() => stringify(value))
-  const [error, setError] = useState<string | null>(null)
-  const [externalSync, setExternalSync] = useState(() => stringify(value))
+  const generatedId = useId()
+  const textareaId = id ?? `${generatedId}-input`
+  const errorId = `${textareaId}-error`
 
-  // Reset the textarea when the parent value changes from outside (e.g. on
-  // initial load after fetch). Avoid clobbering an in-progress edit when the
-  // value didn't actually change.
-  useEffect(() => {
-    const next = stringify(value)
-    if (next !== externalSync) {
-      setDraft(next)
-      setExternalSync(next)
-      setError(null)
-    }
-  }, [value, externalSync])
-
-  function handleChange(next: string) {
-    setDraft(next)
-    if (next.trim() === '') {
-      onChange({})
-      setError(null)
+  function handleChange(raw: string) {
+    if (raw.trim() === '') {
+      onChange({ raw, parsed: {} })
       return
     }
     try {
-      const parsed = JSON.parse(next)
+      const parsed: unknown = JSON.parse(raw)
       if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        setError(t('common.jsonMustBeObject'))
+        onChange({
+          raw,
+          error: t('agentForm.jsonObjectError'),
+        })
         return
       }
-      setError(null)
-      onChange(parsed as Record<string, unknown>)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : t('common.invalidJson'))
+      onChange({ raw, parsed: parsed as Record<string, unknown> })
+    } catch {
+      onChange({
+        raw,
+        error: t('agentForm.jsonSyntaxError'),
+      })
     }
   }
 
   return (
     <div className="json-field">
       <TextArea
-        value={draft}
+        id={textareaId}
+        value={state.raw}
         onChange={handleChange}
         rows={rows}
         placeholder={placeholder}
         monospace
+        textareaRef={textareaRef}
+        aria-invalid={state.error === undefined ? undefined : true}
+        aria-describedby={state.error === undefined ? undefined : errorId}
+        aria-errormessage={state.error === undefined ? undefined : errorId}
+        data-testid={testid}
       />
-      {error !== null && <div className="json-field__error">{error}</div>}
+      {state.error !== undefined && (
+        <div id={errorId} className="json-field__error">
+          {state.error}
+        </div>
+      )}
     </div>
   )
 }
 
-function stringify(v: Record<string, unknown>): string {
-  if (Object.keys(v).length === 0) return ''
-  return JSON.stringify(v, null, 2)
+function stringify(value: Record<string, unknown>): string {
+  if (Object.keys(value).length === 0) return ''
+  return JSON.stringify(value, null, 2)
 }

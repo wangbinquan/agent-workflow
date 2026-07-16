@@ -8,7 +8,8 @@
 // dialog (public Dialog chrome, not a raw modal).
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { DEFAULT_CONFIG } from '@agent-workflow/shared'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { RuntimeList } from '../src/components/RuntimeList'
 import { setBaseUrl, setToken } from '../src/stores/auth'
@@ -77,14 +78,25 @@ function wrap(node: React.ReactNode) {
 }
 
 let fetchUrls: string[] = []
+let configPutBodies: unknown[] = []
 
 beforeEach(() => {
-  setBaseUrl('http://daemon.test')
+  setBaseUrl(`http://runtime-list-${crypto.randomUUID()}.test`)
   setToken('tok')
   fetchUrls = []
-  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+  configPutBodies = []
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const url = typeof input === 'string' ? input : (input as URL | Request).toString()
     fetchUrls.push(url)
+    if (url.includes('/api/config')) {
+      const method = init?.method ?? 'GET'
+      if (method === 'PUT') {
+        const body = init?.body ? JSON.parse(String(init.body)) : null
+        configPutBodies.push(body)
+        return jsonResponse({ ...DEFAULT_CONFIG, defaultRuntime: body.defaultRuntime })
+      }
+      return jsonResponse({ ...DEFAULT_CONFIG, defaultRuntime: 'opencode' })
+    }
     // note: '/api/runtime/models' (singular) is checked BEFORE '/api/runtimes'.
     if (url.includes('/api/runtime/models')) {
       return jsonResponse({
@@ -243,6 +255,21 @@ describe('RuntimeList (RFC-112 PR-D)', () => {
     expect(document.querySelector('.runtime-list__row--default')).toBeTruthy()
   })
 
+  test('Set default queues exactly the defaultRuntime patch', async () => {
+    wrap(<RuntimeList />)
+    await waitFor(() => expect(screen.getByText('my-oc')).toBeTruthy())
+    const myOcRow = Array.from(document.querySelectorAll('.runtime-list__row')).find(
+      (row) => row.querySelector('.runtime-list__name')?.textContent === 'my-oc',
+    )
+    fireEvent.click(
+      Array.from(myOcRow?.querySelectorAll('button') ?? []).find(
+        (button) => button.textContent === 'Set default',
+      )!,
+    )
+    await waitFor(() => expect(configPutBodies).toHaveLength(1))
+    expect(configPutBodies[0]).toEqual({ defaultRuntime: 'my-oc' })
+  })
+
   test('"Add runtime" opens the form dialog with the public Dialog chrome', async () => {
     wrap(<RuntimeList />)
     await waitFor(() => expect(screen.getByText('my-oc')).toBeTruthy())
@@ -316,14 +343,104 @@ describe('RuntimeList (RFC-112 PR-D)', () => {
       </QueryClientProvider>,
     )
     await waitFor(() => expect(screen.getByText('my-oc')).toBeTruthy())
-    // RFC-153: all three rows have a Delete button; my-oc is the 3rd (opencode /
-    // claude-code / my-oc) → click its Delete to invalidate its per-name model query.
+    // RFC-201: deletion is transactional. Open the shared confirmation, then
+    // confirm the exact row before the mutation invalidates its model cache.
     fireEvent.click(screen.getAllByRole('button', { name: /^Delete$/ })[2]!)
+    const dialog = screen.getByRole('dialog', { name: /delete runtime "my-oc"/i })
+    expect(dialog).toBeTruthy()
+    fireEvent.click(within(dialog).getByRole('button', { name: /^Delete$/ }))
     await waitFor(() =>
       expect(spy).toHaveBeenCalledWith(
         expect.objectContaining({ queryKey: ['runtime', 'models', 'rt', 'my-oc'] }),
       ),
     )
+  })
+
+  test('runtime deletion requires confirmation and cancel restores focus to its trigger', async () => {
+    wrap(<RuntimeList />)
+    await waitFor(() => expect(screen.getByText('my-oc')).toBeTruthy())
+    const trigger = screen.getAllByRole('button', { name: /^Delete$/ })[2]!
+    trigger.focus()
+    fireEvent.click(trigger)
+
+    const dialog = screen.getByRole('dialog', { name: /delete runtime "my-oc"/i })
+    expect(within(dialog).getByText(/cannot be undone/i)).toBeTruthy()
+    fireEvent.click(within(dialog).getByRole('button', { name: /^Cancel$/ }))
+
+    await waitFor(() => expect(document.activeElement).toBe(trigger))
+    expect(fetchUrls.some((url) => url.includes('/api/runtimes/my-oc'))).toBe(false)
+  })
+
+  test('successful deletion removes the trigger before close and focuses the stable list heading', async () => {
+    let deleted = false
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = new URL(typeof input === 'string' ? input : (input as URL | Request).toString())
+      const method = init?.method ?? 'GET'
+      if (url.pathname === '/api/runtimes/my-oc' && method === 'DELETE') {
+        deleted = true
+        return jsonResponse({})
+      }
+      if (url.pathname === '/api/runtimes') {
+        return jsonResponse({
+          runtimes: deleted
+            ? RUNTIMES_BODY.runtimes.filter((runtime) => runtime.name !== 'my-oc')
+            : RUNTIMES_BODY.runtimes,
+        })
+      }
+      return jsonResponse({})
+    })
+    wrap(<RuntimeList />)
+    await waitFor(() => expect(screen.getByText('my-oc')).toBeTruthy())
+
+    fireEvent.click(screen.getAllByRole('button', { name: /^Delete$/ })[2]!)
+    const dialog = screen.getByRole('dialog', { name: /delete runtime "my-oc"/i })
+    fireEvent.click(within(dialog).getByRole('button', { name: /^Delete$/ }))
+
+    await waitFor(() => expect(screen.queryByText('my-oc')).toBeNull())
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Runtimes' }))
+  })
+
+  test('embedded list deletion falls back to its owning section heading when no next card exists', async () => {
+    let deleted = false
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = new URL(typeof input === 'string' ? input : (input as URL | Request).toString())
+      const method = init?.method ?? 'GET'
+      if (url.pathname === '/api/runtimes/my-oc' && method === 'DELETE') {
+        deleted = true
+        return jsonResponse({})
+      }
+      if (url.pathname === '/api/runtimes') {
+        return jsonResponse({ runtimes: deleted ? [] : [RUNTIMES_BODY.runtimes[2]!] })
+      }
+      return jsonResponse({})
+    })
+    const fallbackRef = { current: null as HTMLElement | null }
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Infinity, gcTime: Infinity } },
+    })
+    render(
+      <QueryClientProvider client={client}>
+        <h2
+          ref={(node) => {
+            fallbackRef.current = node
+          }}
+          tabIndex={-1}
+        >
+          Runtime section
+        </h2>
+        <RuntimeList showHeading={false} restoreFocusFallbackRef={fallbackRef} />
+      </QueryClientProvider>,
+    )
+    await waitFor(() => expect(screen.getByText('my-oc')).toBeTruthy())
+
+    fireEvent.click(screen.getByRole('button', { name: /^Delete$/ }))
+    const dialog = screen.getByRole('dialog', { name: /delete runtime "my-oc"/i })
+    fireEvent.click(within(dialog).getByRole('button', { name: /^Delete$/ }))
+
+    await waitFor(() => expect(screen.queryByText('my-oc')).toBeNull())
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Runtime section' }))
   })
 
   // RFC-154: config-dir injection overrides — two optional fields whose

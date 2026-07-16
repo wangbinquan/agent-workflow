@@ -1,4 +1,4 @@
-// /settings — config editor split into per-concern tabs (Runtime / System agents /
+// /settings — config editor split into URL-backed concern sections (Runtime / System agents /
 // Limits / Recovery / GC / Network / Appearance / Rendering / Authentication).
 //
 // RFC-156: the "System agents" tab collects the internal framework agents'
@@ -19,9 +19,20 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useRouterState } from '@tanstack/react-router'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { Agent, Config, ConfigPatch } from '@agent-workflow/shared'
+import type { Config, ConfigPatch } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
 import { Card } from '@/components/Card'
+import {
+  SettingsDraftProvider,
+  useSettingsConfigDraft,
+  useSettingsDraftRegistry,
+  type SettingsConfigDraftController,
+  type SettingsConfigDraftMutateOptions,
+} from '@/components/settings/SettingsDraftProvider'
+import {
+  useFusionAgentDraft,
+  type FusionAgentDraftController,
+} from '@/components/settings/useFusionAgentDraft'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { Dialog } from '@/components/Dialog'
 import { EmptyState } from '@/components/EmptyState'
@@ -30,14 +41,20 @@ import { Field, NumberInput, Switch, TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { PageHeader } from '@/components/PageHeader'
+import { PageSectionLink, PageSectionNav, type PageSectionGroup } from '@/components/PageSectionNav'
 import { RuntimeSelect } from '@/components/RuntimeSelect'
 import { Select } from '@/components/Select'
 import { StatusChip } from '@/components/StatusChip'
-import { TabBar, tabDomIds } from '@/components/TabBar'
 import { TableViewport } from '@/components/TableViewport'
 import { RuntimeList } from '@/components/RuntimeList'
 import { describeApiError, setLanguage, type SupportedLanguage } from '@/i18n'
 import { isSupportedLanguage } from '@/hooks/useLanguage'
+import { queryConfig, useConfigQueryKey } from '@/lib/config-resource'
+import {
+  SETTINGS_CONFIG_SCOPE_IDS,
+  settingsConfigScopeKeys,
+  type SettingsConfigScopeId,
+} from '@/lib/settings-drafts'
 import { Route as RootRoute } from './__root'
 
 export const Route = createRoute({
@@ -76,6 +93,95 @@ interface SettingsSearch extends Record<string, unknown> {
   tab?: SettingsTab
 }
 
+function configScopeForSettingsTab(tab: SettingsTab): SettingsConfigScopeId | undefined {
+  switch (tab) {
+    case 'systemAgents':
+      return SETTINGS_CONFIG_SCOPE_IDS.systemAgents
+    case 'limits':
+      return SETTINGS_CONFIG_SCOPE_IDS.limits
+    case 'recovery':
+      return SETTINGS_CONFIG_SCOPE_IDS.recovery
+    case 'gc':
+      return SETTINGS_CONFIG_SCOPE_IDS.gc
+    case 'network':
+      return SETTINGS_CONFIG_SCOPE_IDS.network
+    case 'appearance':
+      return SETTINGS_CONFIG_SCOPE_IDS.appearance
+    case 'rendering':
+      return SETTINGS_CONFIG_SCOPE_IDS.rendering
+    case 'runtime':
+    case 'authentication':
+      return undefined
+  }
+}
+
+function SettingsSectionNav({
+  groups,
+  active,
+  fusionDirty,
+  fusionStale,
+  fusionOutcomeUnknown,
+  onSelectCompact,
+}: {
+  groups: readonly PageSectionGroup<SettingsTab>[]
+  active: SettingsTab
+  fusionDirty: boolean
+  fusionStale: boolean
+  fusionOutcomeUnknown: boolean
+  onSelectCompact: (tab: SettingsTab) => void
+}) {
+  const { t } = useTranslation()
+  const registry = useSettingsDraftRegistry()
+  const groupsWithStatus = groups.map((group) => ({
+    ...group,
+    items: group.items.map((item) => {
+      const scope = configScopeForSettingsTab(item.key)
+      const state = scope === undefined ? undefined : registry?.scopes[scope]
+      const isFusionLeaf = item.key === 'systemAgents'
+      const outcomeUnknown =
+        state?.ambiguousSubmit !== undefined || (isFusionLeaf && fusionOutcomeUnknown)
+      const stale = state?.staleRemote !== undefined || (isFusionLeaf && fusionStale)
+      const dirty = state?.dirty === true || (isFusionLeaf && fusionDirty)
+      if (!outcomeUnknown && !stale && !dirty) return item
+      return {
+        ...item,
+        badge: outcomeUnknown || stale ? '!' : '•',
+        badgeTone: outcomeUnknown
+          ? ('danger' as const)
+          : stale
+            ? ('attention' as const)
+            : undefined,
+        badgeAriaLabel: outcomeUnknown
+          ? t('settings.outcomeUnknown')
+          : stale
+            ? t('settings.staleTitle')
+            : t('editor.statusUnsaved'),
+      }
+    }),
+  }))
+
+  return (
+    <PageSectionNav<SettingsTab>
+      groups={groupsWithStatus}
+      active={active}
+      presentation="rail"
+      ariaLabel={t('settings.sectionNavLabel')}
+      idPrefix="settings"
+      renderDestination={(key, destination) => (
+        <PageSectionLink
+          to="/settings"
+          search={(previous) => withSettingsTab(previous, key)}
+          className={destination.className}
+          pageSectionCurrent={destination.ariaCurrent}
+        >
+          {destination.children}
+        </PageSectionLink>
+      )}
+      onSelectCompact={onSelectCompact}
+    />
+  )
+}
+
 function isSettingsTab(tab: unknown): tab is SettingsTab {
   return typeof tab === 'string' && (SETTINGS_TABS as readonly string[]).includes(tab)
 }
@@ -95,6 +201,7 @@ export function withSettingsTab<T extends Record<string, unknown>>(
 function SettingsPage() {
   const [runtimeFlashKey, setRuntimeFlashKey] = useState(0)
   const claimedRuntimeFlashRef = useRef(0)
+  const sectionHeadingRef = useRef<HTMLHeadingElement | null>(null)
   const { t } = useTranslation()
   const search = Route.useSearch()
   const navigate = Route.useNavigate()
@@ -107,9 +214,15 @@ function SettingsPage() {
     claimedRuntimeFlashRef.current = key
     return true
   }, [])
+  const configQueryKey = useConfigQueryKey()
   const config = useQuery<Config>({
-    queryKey: ['config'],
-    queryFn: ({ signal }) => api.get('/api/config', undefined, signal),
+    queryKey: configQueryKey,
+    queryFn: ({ signal }) => queryConfig(signal),
+  })
+  // This independent resource is owned by the route shell, not the active
+  // System-agents leaf, so switching Settings tabs cannot discard its draft.
+  const fusionDraft = useFusionAgentDraft({
+    enabled: config.data !== undefined && tab === 'systemAgents',
   })
 
   // RFC-198: URL search is the single tab authority. Missing/unknown values
@@ -132,6 +245,80 @@ function SettingsPage() {
       {t('common.retry')}
     </button>
   )
+  const sectionGroups: readonly PageSectionGroup<SettingsTab>[] = [
+    {
+      key: 'execution',
+      label: t('settings.sectionGroups.execution'),
+      items: [
+        {
+          key: 'runtime',
+          label: t('settings.tabRuntime'),
+          description: t('settings.sectionDescriptions.runtime'),
+        },
+        {
+          key: 'systemAgents',
+          label: t('settings.tabSystemAgents'),
+          description: t('settings.sectionDescriptions.systemAgents'),
+        },
+        {
+          key: 'limits',
+          label: t('settings.tabLimits'),
+          description: t('settings.sectionDescriptions.limits'),
+        },
+      ],
+    },
+    {
+      key: 'reliability',
+      label: t('settings.sectionGroups.reliability'),
+      items: [
+        {
+          key: 'recovery',
+          label: t('settings.tabRecovery'),
+          description: t('settings.sectionDescriptions.recovery'),
+        },
+        {
+          key: 'gc',
+          label: t('settings.tabGc'),
+          description: t('settings.sectionDescriptions.gc'),
+        },
+      ],
+    },
+    {
+      key: 'access',
+      label: t('settings.sectionGroups.access'),
+      items: [
+        {
+          key: 'network',
+          label: t('settings.tabNetwork'),
+          description: t('settings.sectionDescriptions.network'),
+        },
+        {
+          key: 'authentication',
+          label: t('settings.tabAuthentication'),
+          description: t('settings.sectionDescriptions.authentication'),
+        },
+      ],
+    },
+    {
+      key: 'interface',
+      label: t('settings.sectionGroups.interface'),
+      items: [
+        {
+          key: 'appearance',
+          label: t('settings.tabAppearance'),
+          description: t('settings.sectionDescriptions.appearance'),
+        },
+        {
+          key: 'rendering',
+          label: t('settings.tabRendering'),
+          description: t('settings.sectionDescriptions.rendering'),
+        },
+      ],
+    },
+  ]
+  const activeSection = sectionGroups
+    .flatMap((group) => group.items)
+    .find((section) => section.key === tab)
   let panelContent: React.ReactNode = null
   if (config.data === undefined) {
     if (config.isLoading) panelContent = <LoadingState label={t('settings.loading')} />
@@ -143,9 +330,15 @@ function SettingsPage() {
       <>
         {config.error !== null && <ErrorBanner error={config.error} action={retryAction} />}
         {tab === 'runtime' && (
-          <RuntimeTab flashKey={runtimeFlashKey} claimFlash={claimRuntimeFlash} />
+          <RuntimeTab
+            flashKey={runtimeFlashKey}
+            claimFlash={claimRuntimeFlash}
+            focusFallbackRef={sectionHeadingRef}
+          />
         )}
-        {tab === 'systemAgents' && <SystemAgentsTab config={config.data} />}
+        {tab === 'systemAgents' && (
+          <SystemAgentsTab config={config.data} fusionDraft={fusionDraft} />
+        )}
         {tab === 'limits' && <LimitsTab config={config.data} />}
         {tab === 'recovery' && <RecoveryTab config={config.data} />}
         {tab === 'gc' && <GcTab config={config.data} />}
@@ -157,54 +350,59 @@ function SettingsPage() {
     )
   }
 
-  return (
-    <div className="page">
-      <PageHeader title={t('settings.title')} />
-
-      <TabBar<SettingsTab>
-        tabs={(
-          [
-            ['runtime', t('settings.tabRuntime')],
-            ['systemAgents', t('settings.tabSystemAgents')],
-            ['limits', t('settings.tabLimits')],
-            ['recovery', t('settings.tabRecovery')],
-            ['gc', t('settings.tabGc')],
-            ['network', t('settings.tabNetwork')],
-            ['appearance', t('settings.tabAppearance')],
-            ['rendering', t('settings.tabRendering')],
-            ['authentication', t('settings.tabAuthentication')],
-          ] as Array<[SettingsTab, string]>
-        ).map(([k, label]) => ({ key: k, label }))}
+  const sectionShell = (
+    <div className="page-section-layout settings-section-layout">
+      <SettingsSectionNav
+        groups={sectionGroups}
         active={tab}
-        onSelect={(next) => {
+        fusionDirty={fusionDraft.dirty}
+        fusionStale={fusionDraft.stale}
+        fusionOutcomeUnknown={fusionDraft.outcomeUnknown}
+        onSelectCompact={(next) => {
           if (next === tab) return
           void navigate({ search: (previous) => withSettingsTab(previous, next) })
         }}
-        idPrefix="settings"
-        ariaLabel={t('settings.title')}
       />
 
-      {SETTINGS_TABS.map((panelTab) => {
-        const ids = tabDomIds('settings', panelTab)
-        const isActive = panelTab === tab
-        return (
-          <div
-            key={panelTab}
-            role="tabpanel"
-            id={ids.panelId}
-            aria-labelledby={ids.tabId}
-            hidden={!isActive}
-          >
-            {isActive ? panelContent : null}
-          </div>
-        )
-      })}
+      <section
+        className={`settings-section-panel settings-section-panel--${tab}`}
+        aria-labelledby={`settings-section-title-${tab}`}
+      >
+        <header className="settings-section-panel__header">
+          <h2 ref={sectionHeadingRef} id={`settings-section-title-${tab}`} tabIndex={-1}>
+            {activeSection?.label}
+          </h2>
+          <p>{activeSection?.description}</p>
+        </header>
+        {panelContent}
+      </section>
+    </div>
+  )
+
+  return (
+    <div className="page">
+      <PageHeader title={t('settings.title')} />
+      {config.data === undefined ? (
+        sectionShell
+      ) : (
+        <SettingsDraftProvider
+          config={config.data}
+          externalDirty={fusionDraft.dirty}
+          externalBusy={fusionDraft.busy}
+          externalOutcomeUnknown={fusionDraft.outcomeUnknown}
+          externalDiscard={() => {
+            void fusionDraft.discard()
+          }}
+        >
+          {sectionShell}
+        </SettingsDraftProvider>
+      )}
     </div>
   )
 }
 
 // ---------------------------------------------------------------------------
-// Tabs
+// Sections
 // ---------------------------------------------------------------------------
 
 interface TabProps {
@@ -214,9 +412,11 @@ interface TabProps {
 function RuntimeTab({
   flashKey = 0,
   claimFlash,
+  focusFallbackRef,
 }: {
   flashKey?: number
   claimFlash?: (key: number) => boolean
+  focusFallbackRef?: React.RefObject<HTMLElement | null>
 }) {
   const runtimeRef = useRef<HTMLDivElement | null>(null)
   const [flashing, setFlashing] = useState(false)
@@ -241,33 +441,22 @@ function RuntimeTab({
       className={`runtime-status-anchor${flashing ? ' runtime-status-anchor--flash' : ''}`}
       data-flash={flashing ? '1' : '0'}
     >
-      <RuntimeList />
+      <RuntimeList showHeading={false} restoreFocusFallbackRef={focusFallbackRef} />
     </div>
   )
 }
 
 function LimitsTab({ config }: TabProps) {
   const { t } = useTranslation()
-  const { state, setState, save } = useTabState(config, [
-    'defaultPerTaskMaxDurationMs',
-    'defaultPerTaskMaxTotalTokens',
-    'defaultPerNodeTimeoutMs',
-    'defaultNodeRetries',
-    'largeOutputThresholdBytes',
-    // RFC-113: global execution knobs relocated here from the Runtime tab (which
-    // is now just the runtimes table).
-    'maxConcurrentNodes',
-    'multiProcessSubprocessConcurrency',
-    'logLevel',
-    // RFC-156: the commit-push runtime + repair/diff knobs moved to the
-    // "System agents" tab (SystemAgentsTab), alongside the other internal agents.
-  ])
+  const draft = useTabState(SETTINGS_CONFIG_SCOPE_IDS.limits, config)
+  const { state, setState, save } = draft
   return (
     <SectionForm
       onSave={save.mutate}
       busy={save.isPending}
       error={save.error}
       success={save.isSuccess && save.error === null ? 'saved' : null}
+      editState={draft}
     >
       <Field
         label={t('settingsForm.perTaskDuration')}
@@ -358,21 +547,15 @@ function LimitsTab({ config }: TabProps) {
 // circuit-breaker. Reuses the shared Switch / Field / NumberInput primitives.
 function RecoveryTab({ config }: TabProps) {
   const { t } = useTranslation()
-  const { state, setState, save } = useTabState(config, [
-    'autoResumeOnBoot',
-    'autoRepair',
-    'autoKillStalledChild',
-    'heartbeatStallMs',
-    'maxAutoRecoveriesPerWindow',
-    'autoRecoveryWindowMs',
-    'periodicOrphanReconcileMs',
-  ])
+  const draft = useTabState(SETTINGS_CONFIG_SCOPE_IDS.recovery, config)
+  const { state, setState, save } = draft
   return (
     <SectionForm
       onSave={save.mutate}
       busy={save.isPending}
       error={save.error}
       success={save.isSuccess && save.error === null ? 'saved' : null}
+      editState={draft}
     >
       <Switch
         checked={state.autoResumeOnBoot ?? false}
@@ -432,10 +615,8 @@ function RecoveryTab({ config }: TabProps) {
 
 function GcTab({ config }: TabProps) {
   const { t } = useTranslation()
-  const { state, setState, save } = useTabState(config, [
-    'worktreeAutoGc',
-    'eventsArchiveThresholds',
-  ])
+  const draft = useTabState(SETTINGS_CONFIG_SCOPE_IDS.gc, config)
+  const { state, setState, save } = draft
   const gc = state.worktreeAutoGc
   const thresholds = state.eventsArchiveThresholds
   return (
@@ -444,6 +625,7 @@ function GcTab({ config }: TabProps) {
       busy={save.isPending}
       error={save.error}
       success={save.isSuccess && save.error === null ? 'saved' : null}
+      editState={draft}
     >
       <Switch
         checked={gc?.enabled === true}
@@ -563,42 +745,18 @@ interface DaemonInfo {
 
 export function NetworkTab({ config }: TabProps) {
   const { t } = useTranslation()
-  const { state, setState, save, restartRequired } = useTabState(config, ['bindHost', 'bindPort'])
+  const draft = useTabState(SETTINGS_CONFIG_SCOPE_IDS.network, config)
+  const { state, setState, save, restartRequired } = draft
   // Read the daemon's EFFECTIVE binding (GET /api/daemon, from the run-info
-  // file) and echo it straight into the editable fields the persisted config
-  // left blank — so the tab shows the address the daemon is actually on now
-  // (notably the concrete port when bindPort was left unset / ephemeral) rather
-  // than an empty box. These are the *saveable* fields: saving a backfilled
-  // value persists it (which pins an otherwise auto-picked port — the accepted
-  // trade-off of echoing live values here). We only ever fill a genuinely-unset
-  // field, so a saved config value and any user edit are never clobbered.
-  // bindHost is always set by the config default, so in practice only bindPort
-  // gets backfilled; the host field already shows the config value, which equals
-  // the effective host unless the daemon was launched with --host.
+  // file), but keep it outside the persisted draft. An ephemeral port is useful
+  // context, not user intent: merely opening this tab must not make the section
+  // dirty or silently pin a once-random port. The explicit action below is the
+  // only path that copies the suggestion into the saveable Config projection.
   const daemon = useQuery<DaemonInfo | null>({
     queryKey: ['daemon-info'],
     queryFn: ({ signal }) => api.get('/api/daemon', undefined, signal),
   })
   const effective = daemon.data
-  useEffect(() => {
-    if (effective == null) return
-    setState((prev) => {
-      const next = { ...prev }
-      let changed = false
-      if (prev.bindPort == null) {
-        next.bindPort = effective.port
-        changed = true
-      }
-      if ((prev.bindHost ?? '') === '') {
-        next.bindHost = effective.host
-        changed = true
-      }
-      return changed ? next : prev
-    })
-    // Backfill once, when the effective binding first resolves. Deliberately not
-    // re-run on later config re-seeds so clearing a field stays cleared.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effective])
   return (
     <SectionForm
       onSave={save.mutate}
@@ -606,6 +764,7 @@ export function NetworkTab({ config }: TabProps) {
       error={save.error}
       success={save.isSuccess && save.error === null ? 'saved' : null}
       restartRequired={restartRequired}
+      editState={draft}
     >
       <Field label={t('settingsForm.bindHost')} required hint={t('settingsForm.bindHostHint')}>
         <TextInput
@@ -613,32 +772,52 @@ export function NetworkTab({ config }: TabProps) {
           onChange={(v) => setState({ ...state, bindHost: v })}
         />
       </Field>
-      <Field label={t('settingsForm.bindPort')} hint={t('settingsForm.bindPortHint')}>
-        <NumberInput
-          value={state.bindPort}
-          onChange={(v) => setState({ ...state, bindPort: v })}
-          data-testid="settings-bind-port"
-          min={0}
-          max={65535}
-        />
-      </Field>
+      <div>
+        <Field label={t('settingsForm.bindPort')} hint={t('settingsForm.bindPortHint')}>
+          <NumberInput
+            value={state.bindPort}
+            onChange={(v) => setState({ ...state, bindPort: v ?? 0 })}
+            placeholder={
+              state.bindPort == null && effective != null ? String(effective.port) : undefined
+            }
+            data-testid="settings-bind-port"
+            min={0}
+            max={65535}
+          />
+        </Field>
+        {(state.bindPort == null || state.bindPort === 0) && effective != null && (
+          <div className="form-field__hint stack-top--xs">
+            <span>{t('settingsForm.bindPortCurrent', { port: effective.port })}</span>{' '}
+            <button
+              type="button"
+              className="btn btn--sm"
+              data-testid="settings-use-effective-port"
+              onClick={() => setState({ ...state, bindPort: effective.port })}
+            >
+              {t('settingsForm.bindPortUseCurrent')}
+            </button>
+          </div>
+        )}
+      </div>
     </SectionForm>
   )
 }
 
 export function AppearanceTab({ config }: TabProps) {
   const { t } = useTranslation()
-  const { state, setState, save } = useTabState(config, ['theme', 'language'], {
+  const draft = useTabState(SETTINGS_CONFIG_SCOPE_IDS.appearance, config, {
     onSaved: (next) => {
       if (isSupportedLanguage(next.language)) setLanguage(next.language as SupportedLanguage)
     },
   })
+  const { state, setState, save } = draft
   return (
     <SectionForm
       onSave={save.mutate}
       busy={save.isPending}
       error={save.error}
       success={save.isSuccess && save.error === null ? 'saved' : null}
+      editState={draft}
     >
       <Field label={t('settings.themeLabel')} hint={t('settings.themeHint')}>
         <Select<NonNullable<Config['theme']>>
@@ -668,29 +847,9 @@ export function AppearanceTab({ config }: TabProps) {
   )
 }
 
-// RFC-156 / RFC-101 — the skill-fusion engine is the builtin `aw-skill-merger`
-// agent, whose runtime lives on the agent ROW (not config.json). RFC-117 D7
-// carved a backend exemption (isRuntimeOnlyAgentPatch) letting a RUNTIME-ONLY
-// PATCH through the RFC-104 builtin read-only lock, and this tab is the "settings
-// picker" it anticipated. Module-level so the query key + patch URL share a source.
-const SKILL_MERGER_AGENT_NAME = 'aw-skill-merger'
-
 // RFC-156 — the config.json keys the three config-driven internal agents own. One
 // source for the useTabState slice AND the "did any config field change?" check
 // (so a fusion-only save can skip the config PUT — Codex impl-gate P2c).
-const SYSTEM_AGENT_CONFIG_KEYS = [
-  'commitPushRuntime',
-  'commitPushModel',
-  'commitPushMaxRepairRetries',
-  'commitPushDiffMaxBytes',
-  'commitPushLang',
-  'memoryDistillRuntime',
-  'memoryDistillModel',
-  'memoryDistillLang',
-  'mergeAgentRuntime',
-  'mergeAgentModel',
-] as const satisfies ReadonlyArray<keyof ConfigPatch>
-
 // RFC-156 — each internal agent renders as a bordered <Card> (shared RFC-124
 // primitive) so the blocks read as four DISTINCT panels instead of blending into
 // one scroll. Header = title + one-line role hint; `children` = that agent's
@@ -732,41 +891,46 @@ function AgentCard({
 // would fall THROUGH to a stale legacy model instead of the global default.
 // RFC-117 D2 already made the model come from the profile, so a lingering
 // `*Model` is pure vestige — every interaction sweeps it.
-export function SystemAgentsTab({ config }: TabProps) {
+interface SystemAgentsTabProps extends TabProps {
+  /** Route-owned in production; omitted only by isolated leaf tests/stories. */
+  fusionDraft?: FusionAgentDraftController
+}
+
+export function SystemAgentsTab({ config, fusionDraft: routeFusionDraft }: SystemAgentsTabProps) {
   const { t } = useTranslation()
-  const qc = useQueryClient()
-  const { state, setState, save } = useTabState(config, [...SYSTEM_AGENT_CONFIG_KEYS])
-
-  // Fusion runtime lives on the aw-skill-merger agent row, not config. A local
-  // draft (undefined = untouched → mirror the loaded pin) lets the one Save
-  // button flush it next to the config PUT; the PATCH body stays runtime-only.
-  const fusion = useQuery<Agent>({
-    queryKey: ['agents', SKILL_MERGER_AGENT_NAME],
-    queryFn: ({ signal }) => api.get(`/api/agents/${SKILL_MERGER_AGENT_NAME}`, undefined, signal),
-  })
-  const [fusionDraft, setFusionDraft] = useState<string | null | undefined>(undefined)
-  const fusionCurrent = fusion.data?.runtime ?? null
-  const fusionValue = fusionDraft === undefined ? fusionCurrent : fusionDraft
-  const fusionSave = useMutation({
-    // Runtime-ONLY body — exactly { runtime } (null clears the pin → inherit); any
-    // extra key re-trips the RFC-104 builtin lock (403 builtin-readonly).
-    mutationFn: (runtime: string | null) =>
-      api.put<Agent>(`/api/agents/${SKILL_MERGER_AGENT_NAME}`, { runtime }),
-    onSuccess: (a) => {
-      qc.setQueryData(['agents', SKILL_MERGER_AGENT_NAME], a)
-      setFusionDraft(undefined)
-    },
-  })
-
-  // Fusion is dirty only once its real runtime has loaded (`fusion.isSuccess` — an
-  // unresolved / failed GET leaves fusionCurrent=null / the field disabled, so it
-  // can't be edited or mistaken for "Inherit"; Codex impl-gate P2a) AND the draft
-  // actually diverges from that loaded pin.
-  const fusionDirty = fusion.isSuccess && fusionDraft !== undefined && fusionDraft !== fusionCurrent
+  const draft = useTabState(SETTINGS_CONFIG_SCOPE_IDS.systemAgents, config)
+  const { state, setState, save } = draft
+  // Hooks cannot be conditional. The fallback keeps this exported leaf usable in
+  // focused tests; the actual route passes its persistent, above-tab owner and
+  // disables this dormant instance.
+  const fallbackFusionDraft = useFusionAgentDraft({ enabled: routeFusionDraft === undefined })
+  const fusion = routeFusionDraft ?? fallbackFusionDraft
+  const fusionSave = fusion.save
+  const fusionDirty = fusion.dirty
   // Config is dirty only if the user touched a config field — a fusion-only save
   // must NOT re-PUT the (possibly now-stale) config slice and clobber a concurrent
   // edit to commit/memory/merge (Codex impl-gate P2c).
-  const configDirty = SYSTEM_AGENT_CONFIG_KEYS.some((k) => state[k] !== config[k])
+  const configDirty = draft.dirty
+
+  const combinedEditState: SectionFormProps['editState'] = {
+    dirty: configDirty || fusionDirty,
+    validity: draft.validity,
+    firstInvalidTarget: draft.firstInvalidTarget,
+    stale: draft.stale || fusion.stale,
+    outcomeUnknown: draft.outcomeUnknown || fusion.outcomeUnknown,
+    // Neither resource has a safe in-session unblock after a response-loss
+    // write. A GET is observational only while the original handler may still
+    // finish later.
+    writeBlocked: draft.writeBlocked || fusion.outcomeUnknown,
+    reconcile: () => {
+      if (draft.outcomeUnknown && !draft.writeBlocked) draft.reconcile()
+      if (fusion.outcomeUnknown) void fusion.reconcile()
+    },
+    discard: () => {
+      if (draft.stale && !draft.outcomeUnknown) draft.discard()
+      if (fusion.stale && !fusion.outcomeUnknown) void fusion.discard()
+    },
+  }
 
   // One Save, two endpoints. When config changed, PUT it first and PATCH the fusion
   // row only in its onSuccess — SEQUENCED so a rejected config PUT (e.g. an
@@ -774,14 +938,19 @@ export function SystemAgentsTab({ config }: TabProps) {
   // under a "failed" banner (Codex impl-gate P2b). When only fusion changed, PATCH
   // it directly and skip the config PUT entirely (P2c).
   const onSave = () => {
+    // Reserve the fusion request/revision/runtime before Config starts. Edits
+    // made while Config is pending remain a newer dirty revision and are never
+    // substituted into this already-clicked Save operation.
+    const preparedFusion = fusionDirty ? fusionSave.prepare() : null
     if (configDirty) {
       save.mutate(undefined, {
         onSuccess: () => {
-          if (fusionDirty) fusionSave.mutate(fusionDraft ?? null)
+          preparedFusion?.commit()
         },
+        onError: () => preparedFusion?.cancel(),
       })
-    } else if (fusionDirty) {
-      fusionSave.mutate(fusionDraft ?? null)
+    } else {
+      preparedFusion?.commit()
     }
   }
 
@@ -789,19 +958,39 @@ export function SystemAgentsTab({ config }: TabProps) {
     <div>
       <SectionForm
         onSave={onSave}
-        busy={save.isPending || fusionSave.isPending}
+        busy={save.isPending || fusion.busy}
         error={save.error ?? fusionSave.error}
         // "saved" once whichever mutation ran has settled OK and neither errored —
         // a fusion-only save never runs `save`, so keying only off save.isSuccess
         // would hide the confirmation there.
         success={
           !save.isPending &&
-          !fusionSave.isPending &&
+          !fusion.busy &&
+          !draft.dirty &&
+          !fusion.dirty &&
           (save.isSuccess || fusionSave.isSuccess) &&
           save.error === null &&
           fusionSave.error === null
             ? 'saved'
             : null
+        }
+        editState={combinedEditState}
+        canSave={
+          (configDirty || fusionDirty) &&
+          (!configDirty || (draft.validity === 'valid' && !draft.outcomeUnknown && !draft.stale)) &&
+          !fusion.stale &&
+          !fusion.outcomeUnknown
+        }
+        disabledReason={
+          draft.outcomeUnknown || fusion.outcomeUnknown
+            ? t('settings.outcomeUnknown')
+            : draft.stale || fusion.stale
+              ? t('settings.staleTitle')
+              : configDirty && draft.validity === 'invalid'
+                ? t('settings.invalidChanges')
+                : !configDirty && !fusionDirty
+                  ? t('settings.noChanges')
+                  : undefined
         }
       >
         <AgentCard
@@ -921,15 +1110,15 @@ export function SystemAgentsTab({ config }: TabProps) {
           <Field
             label={t('settings.systemAgents.fusionRuntime')}
             hint={t('settings.systemAgents.fusionRuntimeHint')}
-            error={fusion.isError ? describeError(fusion.error) : undefined}
+            error={fusion.query.isError ? describeError(fusion.query.error) : undefined}
           >
             <RuntimeSelect
-              value={fusionValue}
+              value={fusion.value}
               ariaLabel={t('settings.systemAgents.fusionRuntime')}
               // Disabled until the merger row's real runtime has loaded, so a
               // not-yet-resolved / failed GET can't be edited or read as "Inherit".
-              disabled={!fusion.isSuccess}
-              onChange={(v) => setFusionDraft(v)}
+              disabled={!fusion.loaded}
+              onChange={fusion.setValue}
             />
           </Field>
         </AgentCard>
@@ -940,7 +1129,8 @@ export function SystemAgentsTab({ config }: TabProps) {
 
 function RenderingTab({ config }: TabProps) {
   const { t } = useTranslation()
-  const { state, setState, save } = useTabState(config, ['plantumlEndpoint', 'plantumlAuthHeader'])
+  const draft = useTabState(SETTINGS_CONFIG_SCOPE_IDS.rendering, config)
+  const { state, setState, save } = draft
   const [testState, setTestState] = useState<{
     kind: 'idle' | 'running' | 'success' | 'failure'
     msg?: string
@@ -985,6 +1175,7 @@ function RenderingTab({ config }: TabProps) {
       busy={save.isPending}
       error={save.error}
       success={save.isSuccess && save.error === null ? 'saved' : null}
+      editState={draft}
     >
       <Field
         label={t('settings.renderingPlantumlEndpointLabel')}
@@ -1654,45 +1845,26 @@ interface UseTabStateOptions {
   onSaved?: (next: Config) => void
 }
 
-function useTabState<K extends keyof ConfigPatch>(
-  config: Config,
-  keys: K[],
-  options?: UseTabStateOptions,
-) {
-  const qc = useQueryClient()
-  const initial: ConfigPatch = {}
-  for (const k of keys) {
-    ;(initial as Record<string, unknown>)[k] = (config as Record<string, unknown>)[k]
-  }
-  const [state, setState] = useState<ConfigPatch>(initial)
+function useTabState(scope: SettingsConfigScopeId, config: Config, options?: UseTabStateOptions) {
   const [restartRequired, setRestartRequired] = useState(false)
-
-  // Re-seed when the config re-fetches (e.g. after save).
-  useEffect(() => {
-    const next: ConfigPatch = {}
-    for (const k of keys) {
-      ;(next as Record<string, unknown>)[k] = (config as Record<string, unknown>)[k]
-    }
-    setState(next)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config])
-
-  const save = useMutation({
-    mutationFn: () => api.put<Config>('/api/config', state),
-    onSuccess: (next) => {
-      // Restart banner fires whenever any restart-required key handled by this
-      // tab actually changed value. Comparing to `config` (the pre-save query
-      // snapshot) rather than `state` avoids false positives when the user
-      // saved without editing those fields.
-      setRestartRequired(hasRestartRequiredChange(keys, config, next))
-      qc.setQueryData(['config'], next)
+  const draft = useSettingsConfigDraft(scope, config, {
+    onSaved: (next, _submitted, baseline) => {
+      setRestartRequired(hasRestartRequiredChange(settingsConfigScopeKeys(scope), baseline, next))
       options?.onSaved?.(next)
     },
-    onMutate: () => {
-      setRestartRequired(false)
-    },
   })
-  return { state, setState, save, restartRequired }
+  const mutate = useCallback(
+    (variables?: undefined, mutateOptions?: SettingsConfigDraftMutateOptions) => {
+      setRestartRequired(false)
+      draft.save.mutate(variables, mutateOptions)
+    },
+    [draft.save],
+  )
+  return {
+    ...draft,
+    save: { ...draft.save, mutate },
+    restartRequired,
+  } satisfies SettingsConfigDraftController & { restartRequired: boolean }
 }
 
 interface SectionFormProps {
@@ -1700,6 +1872,20 @@ interface SectionFormProps {
   busy: boolean
   error: unknown
   success: string | null
+  editState: Pick<
+    SettingsConfigDraftController,
+    | 'dirty'
+    | 'validity'
+    | 'firstInvalidTarget'
+    | 'stale'
+    | 'outcomeUnknown'
+    | 'writeBlocked'
+    | 'reconcile'
+    | 'discard'
+  >
+  /** System Agents also owns the independent fusion Agent-row scope. */
+  canSave?: boolean
+  disabledReason?: string
   restartRequired?: boolean
   children: React.ReactNode
 }
@@ -1709,15 +1895,36 @@ function SectionForm({
   busy,
   error,
   success,
+  editState,
+  canSave: canSaveOverride,
+  disabledReason: disabledReasonOverride,
   restartRequired,
   children,
 }: SectionFormProps) {
   const { t } = useTranslation()
+  const canSave =
+    canSaveOverride ??
+    (editState.dirty && editState.validity === 'valid' && !editState.outcomeUnknown)
+  const disabledReason =
+    disabledReasonOverride ??
+    (editState.outcomeUnknown
+      ? t('settings.outcomeUnknown')
+      : editState.validity === 'invalid'
+        ? t('settings.invalidChanges')
+        : !editState.dirty
+          ? t('settings.noChanges')
+          : undefined)
   return (
     <div>
       <div className="form-grid">{children}</div>
       <div className="form-actions">
-        <button type="button" className="btn btn--primary" onClick={() => onSave()} disabled={busy}>
+        <button
+          type="button"
+          className="btn btn--primary"
+          onClick={() => onSave()}
+          disabled={busy || !canSave}
+          title={busy ? undefined : disabledReason}
+        >
           {busy ? t('common.saving') : t('common.save')}
         </button>
         {success !== null && <span className="form-actions__ok">{t('common.saved')}</span>}
@@ -1725,6 +1932,40 @@ function SectionForm({
           <span className="form-actions__error">{describeError(error)}</span>
         )}
       </div>
+      {!busy && !canSave && disabledReason !== undefined && (
+        <p className="muted settings-hint settings-hint--tight">{disabledReason}</p>
+      )}
+      {editState.outcomeUnknown ? (
+        <NoticeBanner
+          tone="warning"
+          size="compact"
+          title={t('settings.outcomeUnknown')}
+          className="stack-top--sm"
+          action={
+            editState.writeBlocked ? undefined : (
+              <button type="button" className="btn btn--sm" onClick={editState.reconcile}>
+                {t('settings.outcomeUnknownReconcile')}
+              </button>
+            )
+          }
+        >
+          {t(editState.writeBlocked ? 'settings.writeBlockedBody' : 'settings.outcomeUnknownBody')}
+        </NoticeBanner>
+      ) : editState.stale ? (
+        <NoticeBanner
+          tone="warning"
+          size="compact"
+          title={t('settings.staleTitle')}
+          className="stack-top--sm"
+          action={
+            <button type="button" className="btn btn--sm" onClick={editState.discard}>
+              {t('settings.staleDiscard')}
+            </button>
+          }
+        >
+          {t('settings.staleBody')}
+        </NoticeBanner>
+      ) : null}
       {restartRequired === true && (
         <NoticeBanner
           tone="warning"

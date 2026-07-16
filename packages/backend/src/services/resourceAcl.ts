@@ -263,6 +263,7 @@ export async function updateResourceAcl(
   type: AclResourceType,
   row: AclRow,
   body: UpdateResourceAclBody,
+  opts: { updatedAt?: number } = {},
 ): Promise<ResourceAcl> {
   await requireResourceOwner(db, actor, type, row)
 
@@ -270,7 +271,7 @@ export async function updateResourceAcl(
   if (body.ownerUserId !== undefined) referenced.add(body.ownerUserId)
 
   const table = ACL_TABLES[type]
-  const now = Date.now()
+  const now = opts.updatedAt ?? Date.now()
 
   // RFC-170 §8 (G3-9/G5-P5): the OCC CAS, referenced-user active check, and the
   // prevOwner/grant assembly all run inside ONE write tx off an in-tx row

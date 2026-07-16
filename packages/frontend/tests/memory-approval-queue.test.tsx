@@ -10,7 +10,7 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { Memory } from '@agent-workflow/shared'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { MemoryApprovalQueue } from '../src/components/memory/MemoryApprovalQueue'
@@ -36,15 +36,16 @@ function mkCandidate(overrides: Partial<Memory> = {}): Memory {
     approvedAt: null,
     createdAt: 1000,
     version: 1,
+    canManage: true,
     ...overrides,
   }
 }
 
-function wrap(isAdmin: boolean) {
+function wrap() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryApprovalQueue isAdmin={isAdmin} />
+      <MemoryApprovalQueue />
     </QueryClientProvider>,
   )
 }
@@ -83,7 +84,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  document.body.innerHTML = ''
+  cleanup()
   vi.restoreAllMocks()
 })
 
@@ -96,7 +97,7 @@ describe('MemoryApprovalQueue', () => {
           headers: { 'content-type': 'application/json' },
         }),
     )
-    wrap(true)
+    wrap()
     await waitFor(() => {
       expect(screen.getByTestId('memory-approval-queue-empty')).toBeTruthy()
     })
@@ -110,7 +111,7 @@ describe('MemoryApprovalQueue', () => {
           headers: { 'content-type': 'application/json' },
         }),
     )
-    wrap(true)
+    wrap()
     const approve = (await screen.findByTestId(
       'memory-candidate-mem_cand_1-approve',
     )) as HTMLButtonElement
@@ -120,20 +121,17 @@ describe('MemoryApprovalQueue', () => {
     expect(screen.queryByTestId('memory-admin-only-banner')).toBeNull()
   })
 
-  test('non-admin sees disabled buttons + admin-only banner', async () => {
+  test('rows without server canManage are excluded from this actor approval queue', async () => {
     installFetch(
       () =>
-        new Response(JSON.stringify({ items: [mkCandidate()] }), {
+        new Response(JSON.stringify({ items: [mkCandidate({ canManage: false })] }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         }),
     )
-    wrap(false)
-    const approve = (await screen.findByTestId(
-      'memory-candidate-mem_cand_1-approve',
-    )) as HTMLButtonElement
-    expect(approve.disabled).toBe(true)
-    expect(screen.getByTestId('memory-admin-only-banner')).toBeTruthy()
+    wrap()
+    expect(await screen.findByTestId('memory-approval-queue-empty')).toBeTruthy()
+    expect(screen.queryByTestId('memory-candidate-mem_cand_1-approve')).toBeNull()
   })
 
   test('approve click posts { action: "approve" } to /promote', async () => {
@@ -149,7 +147,7 @@ describe('MemoryApprovalQueue', () => {
         headers: { 'content-type': 'application/json' },
       })
     })
-    wrap(true)
+    wrap()
     const btn = await screen.findByTestId('memory-candidate-mem_cand_1-approve')
     fireEvent.click(btn)
     await waitFor(() => {
@@ -174,7 +172,7 @@ describe('MemoryApprovalQueue', () => {
           { status: 200, headers: { 'content-type': 'application/json' } },
         ),
     )
-    wrap(true)
+    wrap()
     const body = await screen.findByTestId('memory-candidate-mem_cand_1-body')
     expect(body.textContent).toBe('short body across\ntwo lines only')
     expect(screen.queryByTestId('memory-candidate-mem_cand_1-body-toggle')).toBeNull()
@@ -197,7 +195,7 @@ describe('MemoryApprovalQueue', () => {
           headers: { 'content-type': 'application/json' },
         }),
     )
-    wrap(true)
+    wrap()
     const body = await screen.findByTestId('memory-candidate-mem_cand_1-body')
     expect(body.getAttribute('data-expanded')).toBe('false')
     expect(body.className).toContain('memory-candidate-card__body--clamped')
@@ -226,13 +224,62 @@ describe('MemoryApprovalQueue', () => {
         headers: { 'content-type': 'application/json' },
       })
     })
-    wrap(true)
+    wrap()
     const btn = await screen.findByTestId('memory-candidate-mem_cand_1-reject')
     fireEvent.click(btn)
     await waitFor(() => {
       const post = calls.find((c) => c.method === 'POST')
       expect(post?.url).toContain('/api/memories/mem_cand_1/promote')
       expect((post?.body as { action: string }).action).toBe('reject')
+    })
+  })
+
+  test('owner-manageable conflict keeps Compare approve/reject actions enabled', async () => {
+    const candidate = mkCandidate({
+      canManage: true,
+      distillAction: 'conflict_with',
+      supersedesId: 'mem_existing',
+    })
+    const calls = installFetch(({ method, url }) => {
+      if (method === 'GET' && url.includes('/api/memories/mem_existing')) {
+        return new Response(
+          JSON.stringify({
+            memory: mkCandidate({
+              id: 'mem_existing',
+              status: 'approved',
+              distillAction: null,
+              supersedesId: null,
+            }),
+            ancestors: [],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
+      }
+      if (method === 'GET') {
+        return new Response(JSON.stringify({ items: [candidate] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return new Response(JSON.stringify({ memory: { ...candidate, status: 'approved' } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+    wrap()
+
+    fireEvent.click(await screen.findByTestId('memory-candidate-mem_cand_1-compare'))
+    const approve = await screen.findByTestId('memory-compare-approve-supersede')
+    await waitFor(() => expect((approve as HTMLButtonElement).disabled).toBe(false))
+    expect(screen.getByTestId('memory-compare-reject')).toBeTruthy()
+    fireEvent.click(approve)
+
+    await waitFor(() => {
+      const post = calls.find((call) => call.method === 'POST')
+      expect(post?.body).toEqual({
+        action: 'approve_and_supersede',
+        supersedeIds: ['mem_existing'],
+      })
     })
   })
 })

@@ -43,4 +43,16 @@ describe('routes/tasks.detail.tsx — failed banner single-line summary', () => 
     expect(SRC).toMatch(/<details className="task-error-banner__details">/)
     expect(SRC).toMatch(/<pre>\{tk\.errorMessage\}<\/pre>/)
   })
+
+  test('long failed node ids keep the mobile close control reachable', () => {
+    expect(SRC).toMatch(
+      /className="btn btn--sm btn--danger task-error-banner__jump"\s+title=\{t\('tasks\.jumpToFailed'/,
+    )
+    expect(CSS).toMatch(
+      /\.task-error-banner__jump\s*\{[^}]*min-width:\s*0[^}]*max-width:\s*min\(32rem,\s*100%\)[^}]*overflow:\s*hidden[^}]*text-overflow:\s*ellipsis/,
+    )
+    expect(CSS).toMatch(
+      /@media\s*\(max-width:\s*720px\)[\s\S]*?\.task-error-banner\s*\{[^}]*flex-direction:\s*column[^}]*min-width:\s*0[^}]*\}[\s\S]*?\.task-error-banner__actions\s*\{[^}]*min-width:\s*0[^}]*width:\s*100%[^}]*\}[\s\S]*?\.task-error-banner__jump\s*\{[^}]*flex:\s*1 1 auto[^}]*max-width:\s*100%/,
+    )
+  })
 })

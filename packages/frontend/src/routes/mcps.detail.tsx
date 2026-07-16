@@ -7,12 +7,16 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useNavigate } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { Mcp } from '@agent-workflow/shared'
+import type { Mcp, McpOperationResource } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { useDraftFromQuery } from '@/hooks/useDraftFromQuery'
-import { useReportSplitDirty, useSplitDirty } from '@/components/split/splitDirty'
+import {
+  useReportSplitDirty,
+  useSplitDirty,
+  type SplitBusyRelease,
+} from '@/components/split/splitDirty'
 import { DetailHeaderActions } from '@/components/DetailHeaderActions'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
@@ -20,8 +24,9 @@ import { McpFields } from '@/components/McpFields'
 import { McpInventoryPanel } from '@/components/mcps/McpInventoryPanel'
 import { TabBar, type TabDef } from '@/components/TabBar'
 import { TabPanels } from '@/components/split/TabPanels'
-import { MCP_PROBES_KEY } from '@/lib/mcp-probe-query'
+import { MCP_PROBES_KEY, mcpProbeKey } from '@/lib/mcp-probe-query'
 import { buildCreatePayload, EMPTY_LOCAL_FORM, mcpToForm, type McpFormState } from '@/lib/mcp-form'
+import { stableStringify } from '@/lib/stable-stringify'
 import { Route as mcpsRoute } from './mcps'
 
 export const Route = createRoute({
@@ -38,11 +43,11 @@ function McpDetailPage() {
   const { name } = Route.useParams()
   const navigate = useNavigate()
   const qc = useQueryClient()
-  const { report } = useSplitDirty()
+  const { beginBusy, report } = useSplitDirty()
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [tab, setTab] = useState<McpTab>('config')
 
-  const query = useQuery<Mcp>({
+  const query = useQuery<McpOperationResource>({
     queryKey: ['mcps', name],
     queryFn: ({ signal }) => api.get(`/api/mcps/${encodeURIComponent(name)}`, undefined, signal),
   })
@@ -54,16 +59,23 @@ function McpDetailPage() {
     dirty,
     commitSaved,
   } = useDraftFromQuery(query.data, mcpToForm, { followWhenClean: true })
+  const formRef = useRef(form)
+  formRef.current = form
   useReportSplitDirty(name, dirty)
 
   const save = useMutation({
-    mutationFn: (snapshot: McpFormState): Promise<Mcp> => {
+    mutationFn: ({
+      snapshot,
+    }: {
+      snapshot: McpFormState
+      release: SplitBusyRelease
+    }): Promise<McpOperationResource> => {
       const built = buildCreatePayload(snapshot)
       if (!built.ok) return Promise.reject(new Error('invalid form'))
       const { name: _drop, ...patch } = built.payload
-      return api.put<Mcp>(`/api/mcps/${encodeURIComponent(name)}`, patch)
+      return api.put<McpOperationResource>(`/api/mcps/${encodeURIComponent(name)}`, patch)
     },
-    onSuccess: async (m, snapshot) => {
+    onSuccess: async (m, { snapshot }) => {
       await qc.cancelQueries({ queryKey: ['mcps', name], exact: true })
       qc.setQueryData(['mcps', name], m)
       await qc.cancelQueries({ queryKey: ['mcps'], exact: true })
@@ -73,33 +85,67 @@ function McpDetailPage() {
       void qc.invalidateQueries({ queryKey: ['mcps'], exact: true })
       // A config change makes the persisted probe stale.
       void qc.invalidateQueries({ queryKey: MCP_PROBES_KEY })
+      void qc.invalidateQueries({ queryKey: mcpProbeKey(name), exact: true })
       commitSaved(snapshot, mcpToForm(m))
     },
+    onSettled: (_mcp, _error, { release }) => release(),
   })
+
+  function showValidationErrors(nextErrors: Record<string, string>): void {
+    setErrors(nextErrors)
+    save.reset()
+    setTab('config')
+    const first = ['name', 'command', 'url', 'timeoutMs'].find(
+      (field) => nextErrors[field] !== undefined,
+    )
+    if (first !== undefined) {
+      const id = first === 'timeoutMs' ? 'mcp-field-timeout' : `mcp-field-${first}`
+      setTimeout(() => document.getElementById(id)?.focus(), 0)
+    }
+  }
 
   function submitSave() {
     if (form === undefined) return
     const built = buildCreatePayload(form)
     if (!built.ok) {
-      setErrors(built.errors)
-      save.reset()
+      showValidationErrors(built.errors)
       return
     }
     setErrors({})
-    save.mutate(form)
+    if (save.isPending || del.isPending) return
+    save.mutate({ snapshot: form, release: beginBusy(name) })
+  }
+
+  async function saveForProbe(): Promise<string | null> {
+    const snapshot = formRef.current
+    if (snapshot === undefined || save.isPending || del.isPending) return null
+    const built = buildCreatePayload(snapshot)
+    if (!built.ok) {
+      showValidationErrors(built.errors)
+      return null
+    }
+    setErrors({})
+    const receipt = await save.mutateAsync({ snapshot, release: beginBusy(name) })
+    if (stableStringify(formRef.current) !== stableStringify(snapshot)) {
+      throw new Error(t('mcps.probe.draftChangedDuringSave'))
+    }
+    return receipt.operationConfigHash
   }
 
   const del = useMutation({
-    mutationFn: () => api.delete(`/api/mcps/${encodeURIComponent(name)}`),
-    onSuccess: async () => {
+    mutationFn: (_variables: { release: SplitBusyRelease }) =>
+      api.delete(`/api/mcps/${encodeURIComponent(name)}`),
+    onSuccess: async (_deleted, { release }) => {
       report(name, false)
       await qc.cancelQueries({ queryKey: ['mcps'], exact: true })
       qc.setQueryData<Mcp[]>(['mcps'], (rows) =>
         rows === undefined ? rows : rows.filter((r) => r.name !== name),
       )
       void qc.invalidateQueries({ queryKey: ['mcps'], exact: true })
+      release()
       navigate({ to: '/mcps' })
     },
+    onSettled: (_deleted, _error, { release }) => release(),
   })
 
   const retryDetailAction = (
@@ -132,13 +178,16 @@ function McpDetailPage() {
         save={{
           label: save.isPending ? t('common.saving') : t('common.save'),
           onClick: submitSave,
-          disabled: save.isPending || !loaded,
+          disabled: save.isPending || del.isPending || !loaded,
           testid: 'mcp-save-button',
         }}
         del={{
           label: t('common.delete'),
-          onConfirm: () => del.mutateAsync(),
-          disabled: del.isPending,
+          onConfirm: () => {
+            if (save.isPending || del.isPending) return Promise.resolve()
+            return del.mutateAsync({ release: beginBusy(name) })
+          },
+          disabled: del.isPending || save.isPending,
         }}
         errors={[save.error, del.error]}
       />
@@ -175,7 +224,17 @@ function McpDetailPage() {
             {
               key: 'probe',
               testid: 'mcp-panel-probe',
-              content: <McpInventoryPanel mcpName={name} />,
+              content: (
+                <McpInventoryPanel
+                  mcpName={name}
+                  operationConfigHash={query.data?.operationConfigHash}
+                  mcpUpdatedAt={query.data?.updatedAt}
+                  dirty={dirty}
+                  saving={save.isPending}
+                  onSaveForProbe={saveForProbe}
+                  beginBusy={() => beginBusy(name)}
+                />
+              ),
             },
           ]}
         />

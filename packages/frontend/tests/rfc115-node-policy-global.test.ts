@@ -14,6 +14,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'vitest'
+import { SETTINGS_CONFIG_SCOPE_IDS, settingsConfigScopeKeys } from '../src/lib/settings-drafts'
 
 const read = (p: string): string => readFileSync(resolve(import.meta.dirname, '..', p), 'utf-8')
 const SETTINGS = read('src/routes/settings.tsx')
@@ -28,8 +29,16 @@ const EN = read('src/i18n/en-US.ts')
 const AGENTS = read('src/routes/agents.tsx')
 
 describe('RFC-115 settings — global defaultNodeRetries knob', () => {
-  test('LimitsTab persists defaultNodeRetries in the draft slice', () => {
-    expect(SETTINGS).toContain("'defaultNodeRetries'")
+  test('LimitsTab persists defaultNodeRetries through its route-owned RFC-201 draft scope', () => {
+    expect(settingsConfigScopeKeys(SETTINGS_CONFIG_SCOPE_IDS.limits)).toContain(
+      'defaultNodeRetries',
+    )
+    expect(SETTINGS).toMatch(
+      /function LimitsTab\(\{ config \}: TabProps\)[\s\S]*?useTabState\(SETTINGS_CONFIG_SCOPE_IDS\.limits, config\)/,
+    )
+    // The shared scope allowlist, not a panel-local full Config copy, also
+    // drives restart comparison and the minimal PUT projection.
+    expect(SETTINGS).toContain('settingsConfigScopeKeys(scope)')
   })
   test('renders the field bound to state via the nodeRetries i18n key', () => {
     expect(SETTINGS).toMatch(/state\.defaultNodeRetries/)

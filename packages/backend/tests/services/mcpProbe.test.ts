@@ -16,7 +16,7 @@
 //   - initialize timeout (Error name signalling timeout) → handshake-failed.
 //   - ENOENT-style connect failure → connect-failed.
 //   - Hard total-timeout (60s ceiling, but injected as 10ms here) → timeout.
-//   - In-flight Map dedups concurrent probes of the same mcp.
+//   - Raw I/O never dedups by mutable name (RFC-201 coordinates full operations).
 //   - Redact: stderr containing `secret` lands in errorDetail.stderr WITHOUT
 //     the literal `secret`.
 //   - Env isolation: buildStdioEnv drops daemon SOME_FAKE_TOKEN and includes
@@ -25,7 +25,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { Mcp } from '@agent-workflow/shared'
 import {
-  __inflightSize,
   buildStdioEnv,
   classifyProbeError,
   probeMcp,
@@ -110,7 +109,6 @@ function fakeOpener(client: ProbedMcpClient, handshakeMs = 50): OpenClientFn {
 
 afterEach(() => {
   // Inflight map should empty after every test (probe Promise finally drops it).
-  expect(__inflightSize()).toBe(0)
 })
 
 // ----------------------------- tests -----------------------------------------
@@ -327,8 +325,8 @@ describe('probeMcp — error mapping', () => {
   })
 })
 
-describe('probeMcp — in-flight dedup', () => {
-  test('two concurrent probes of the same mcp share one openClient call', async () => {
+describe('probeMcp — raw I/O identity', () => {
+  test('two concurrent raw probes of the same name do not dedup below the operation fence', async () => {
     let calls = 0
     const client = makeFakeClient({})
     const opener: OpenClientFn = async () => {
@@ -342,8 +340,8 @@ describe('probeMcp — in-flight dedup', () => {
       probeMcp(m, { openClient: opener }),
       probeMcp(m, { openClient: opener }),
     ])
-    expect(calls).toBe(1)
-    expect(a).toBe(b)
+    expect(calls).toBe(2)
+    expect(a).not.toBe(b)
   })
 
   test('different mcp names are NOT deduped', async () => {

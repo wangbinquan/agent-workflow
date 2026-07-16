@@ -94,7 +94,18 @@ const PLUGIN = {
   spec: 'dd-trace',
   options: {},
   description: '',
+  ownerUserId: null,
+  visibility: 'public',
+  aclRevision: 0,
   enabled: true,
+  sourceKind: 'npm',
+  cachedPath: '/tmp/plugins/p1/generations/op1/node_modules/dd-trace',
+  resolvedVersion: '1.0.0',
+  installedAt: 1,
+  schemaVersion: 1,
+  createdAt: 1,
+  updatedAt: 1,
+  operationConfigHash: 'a'.repeat(64),
 }
 
 function renderRoute(route: unknown) {
@@ -191,6 +202,10 @@ describe('invalid submit → inline field error only, no form-actions banner, no
     })
     fireEvent.click(screen.getByTestId('plugin-save-button'))
     await waitFor(() => expect(screen.getByText(/spec is required/i)).toBeTruthy())
+    const spec = screen.getByTestId('plugin-form-spec')
+    await waitFor(() => expect(document.activeElement).toBe(spec))
+    expect(spec.getAttribute('aria-invalid')).toBe('true')
+    expect(spec.getAttribute('aria-describedby')).toBe('plugin-field-spec-error')
     expect(document.querySelector('.form-actions__error')).toBeNull()
     expect(document.body.textContent ?? '').not.toContain('form-invalid')
     expect(writeCount(calls)).toBe(0)
@@ -208,6 +223,9 @@ describe('invalid submit → inline field error only, no form-actions banner, no
     fireEvent.change(specInput, { target: { value: '' } })
     fireEvent.click(screen.getByTestId('plugin-save-button'))
     await waitFor(() => expect(screen.getByText(/spec is required/i)).toBeTruthy())
+    await waitFor(() => expect(document.activeElement).toBe(specInput))
+    expect(specInput.getAttribute('aria-invalid')).toBe('true')
+    expect(specInput.getAttribute('aria-errormessage')).toBe('plugin-field-spec-error')
     expect(document.querySelector('.form-actions__error')).toBeNull()
     expect(document.body.textContent ?? '').not.toContain('form-invalid')
     expect(calls.filter((c) => c.method === 'PUT').length).toBe(0)

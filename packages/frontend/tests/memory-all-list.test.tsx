@@ -26,6 +26,7 @@ function mkMem(overrides: Partial<MemorySummary> = {}): MemorySummary {
     approvedAt: 1700000000000,
     version: 1,
     distillAction: null,
+    canManage: true,
     ...overrides,
   }
 }
@@ -58,11 +59,11 @@ function installFetch(handler: (call: FetchCall) => Response | Promise<Response>
   return calls
 }
 
-function wrap(isAdmin: boolean) {
+function wrap() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryAllList isAdmin={isAdmin} />
+      <MemoryAllList />
     </QueryClientProvider>,
   )
 }
@@ -87,7 +88,7 @@ describe('MemoryAllList — Approved/Archived filter + in-app confirm dialog', (
           headers: { 'content-type': 'application/json' },
         }),
     )
-    wrap(true)
+    wrap()
     await screen.findByTestId('memory-all-mem_1-archive')
 
     expect(screen.getByRole('radiogroup')).toBeTruthy()
@@ -111,7 +112,7 @@ describe('MemoryAllList — Approved/Archived filter + in-app confirm dialog', (
           headers: { 'content-type': 'application/json' },
         }),
     )
-    wrap(true)
+    wrap()
     await waitFor(() => {
       expect(screen.getByTestId('memory-all-mem_1-archive')).toBeTruthy()
     })
@@ -127,7 +128,9 @@ describe('MemoryAllList — Approved/Archived filter + in-app confirm dialog', (
       lastStatusParam = status
       if (status === 'archived') {
         return new Response(
-          JSON.stringify({ items: [mkMem({ id: 'mem_arc', status: 'archived' })] }),
+          JSON.stringify({
+            items: [mkMem({ id: 'mem_arc', status: 'archived' })],
+          }),
           { status: 200, headers: { 'content-type': 'application/json' } },
         )
       }
@@ -136,7 +139,7 @@ describe('MemoryAllList — Approved/Archived filter + in-app confirm dialog', (
         headers: { 'content-type': 'application/json' },
       })
     })
-    wrap(true)
+    wrap()
     await screen.findByTestId('memory-all-mem_1-archive')
     fireEvent.click(screen.getByTestId('memory-all-filter-archived'))
     await screen.findByTestId('memory-all-mem_arc-unarchive')
@@ -157,7 +160,7 @@ describe('MemoryAllList — Approved/Archived filter + in-app confirm dialog', (
     // (the shared Dialog path replaces window.confirm — also grep-locked below).
     const confirmSpy = vi.fn()
     vi.stubGlobal('confirm', confirmSpy)
-    wrap(true)
+    wrap()
     const btn = await screen.findByTestId('memory-all-mem_1-archive')
     fireEvent.click(btn)
     // Dialog rendered; the original window.confirm is NOT used.
@@ -185,7 +188,7 @@ describe('MemoryAllList — Approved/Archived filter + in-app confirm dialog', (
         headers: { 'content-type': 'application/json' },
       })
     })
-    wrap(true)
+    wrap()
     const btn = await screen.findByTestId('memory-all-mem_1-archive')
     fireEvent.click(btn)
     await screen.findByTestId('memory-confirm-dialog')
@@ -218,7 +221,7 @@ describe('MemoryAllList — Approved/Archived filter + in-app confirm dialog', (
     // (the shared Dialog path replaces window.confirm — also grep-locked below).
     const confirmSpy = vi.fn()
     vi.stubGlobal('confirm', confirmSpy)
-    wrap(true)
+    wrap()
     const btn = await screen.findByTestId('memory-all-mem_1-delete')
     fireEvent.click(btn)
     await screen.findByTestId('memory-confirm-dialog')
@@ -251,7 +254,7 @@ describe('MemoryAllList — Approved/Archived filter + in-app confirm dialog', (
         headers: { 'content-type': 'application/json' },
       })
     })
-    wrap(true)
+    wrap()
     fireEvent.click(screen.getByTestId('memory-all-filter-archived'))
     const btn = await screen.findByTestId('memory-all-mem_arc-unarchive')
     fireEvent.click(btn)
@@ -262,21 +265,23 @@ describe('MemoryAllList — Approved/Archived filter + in-app confirm dialog', (
     expect(screen.queryByTestId('memory-confirm-dialog')).toBeNull()
   })
 
-  test('non-admin sees archive + unarchive disabled across views', async () => {
+  test('server canManage=false disables archive + unarchive across views', async () => {
     installFetch(({ url }) => {
       const u = new URL(url)
       if (u.searchParams.get('status') === 'archived') {
         return new Response(
-          JSON.stringify({ items: [mkMem({ id: 'mem_arc', status: 'archived' })] }),
+          JSON.stringify({
+            items: [mkMem({ id: 'mem_arc', status: 'archived', canManage: false })],
+          }),
           { status: 200, headers: { 'content-type': 'application/json' } },
         )
       }
-      return new Response(JSON.stringify({ items: [mkMem()] }), {
+      return new Response(JSON.stringify({ items: [mkMem({ canManage: false })] }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       })
     })
-    wrap(false)
+    wrap()
     const archiveBtn = (await screen.findByTestId('memory-all-mem_1-archive')) as HTMLButtonElement
     expect(archiveBtn.disabled).toBe(true)
     fireEvent.click(screen.getByTestId('memory-all-filter-archived'))

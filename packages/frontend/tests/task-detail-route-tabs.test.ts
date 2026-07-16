@@ -69,6 +69,19 @@ describe('resolveTaskDetailTabs — plain tasks', () => {
     ).toEqual({ status: 'pending' })
   })
 
+  test('waits for async permissions/capabilities instead of rewriting a valid deep link early', () => {
+    expect(
+      resolveTaskDetailTabs({
+        taskLoaded: true,
+        capabilitiesReady: false,
+        hasOutputs: false,
+        isWorkgroup: false,
+        room: pendingRoom,
+        searchTab: 'feedback',
+      }),
+    ).toEqual({ status: 'pending' })
+  })
+
   test('missing search canonicalizes to workflow-status with replace intent', () => {
     const result = resolveTaskDetailTabs({
       taskLoaded: true,
@@ -105,6 +118,39 @@ describe('resolveTaskDetailTabs — plain tasks', () => {
     })
     expect(result).toMatchObject({ tab: 'workflow-status', canonicalize: true })
     if (result.status === 'ready') expect(result.tabs).not.toContain('outputs')
+  })
+
+  test('capability filtering canonicalizes a no-worktree deep link but keeps multi-repo diff usable', () => {
+    const baseCapabilities = {
+      outputs: false,
+      worktreeFiles: false,
+      worktreeDiff: false,
+      worktreeStructure: false,
+      orchestration: false,
+      chatroom: false,
+      questions: true,
+      feedback: false,
+    }
+    expect(
+      resolveTaskDetailTabs({
+        taskLoaded: true,
+        hasOutputs: false,
+        capabilities: baseCapabilities,
+        isWorkgroup: false,
+        room: pendingRoom,
+        searchTab: 'worktree-diff',
+      }),
+    ).toMatchObject({ tab: 'workflow-status', canonicalize: true })
+    expect(
+      resolveTaskDetailTabs({
+        taskLoaded: true,
+        hasOutputs: false,
+        capabilities: { ...baseCapabilities, worktreeDiff: true, worktreeStructure: true },
+        isWorkgroup: false,
+        room: pendingRoom,
+        searchTab: 'worktree-diff',
+      }),
+    ).toMatchObject({ tab: 'worktree-diff', canonicalize: false })
   })
 })
 

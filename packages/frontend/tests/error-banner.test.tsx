@@ -1,7 +1,7 @@
 // RFC-195 T2 — shared <ErrorBanner> message/action/a11y extension contract.
 
-import { render, screen } from '@testing-library/react'
-import { describe, expect, test } from 'vitest'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { describe, expect, test, vi } from 'vitest'
 import { ApiError } from '../src/api/client'
 import { ErrorBanner } from '../src/components/ErrorBanner'
 import { describeApiError } from '../src/i18n'
@@ -50,5 +50,14 @@ describe('<ErrorBanner />', () => {
       'notice-banner__action',
     )
     expect(alert.querySelector('.notice-banner__body')?.textContent).toBe('network unavailable')
+  })
+
+  test('optional dismiss control is accessible and delegates state ownership', () => {
+    const onDismiss = vi.fn()
+    render(<ErrorBanner error={new Error('network unavailable')} onDismiss={onDismiss} />)
+
+    const close = screen.getByRole('button', { name: /close|关闭/i })
+    fireEvent.click(close)
+    expect(onDismiss).toHaveBeenCalledTimes(1)
   })
 })

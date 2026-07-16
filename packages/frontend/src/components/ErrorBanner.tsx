@@ -9,9 +9,10 @@ interface ErrorBannerProps {
   error: unknown
   message?: string
   action?: ReactNode
+  onDismiss?: () => void
 }
 
-export function ErrorBanner({ error, message, action }: ErrorBannerProps) {
+export function ErrorBanner({ error, message, action, onDismiss }: ErrorBannerProps) {
   const { t } = useTranslation()
   const msg =
     message ??
@@ -22,6 +23,9 @@ export function ErrorBanner({ error, message, action }: ErrorBannerProps) {
       tone="error"
       size="compact"
       action={action}
+      dismiss={
+        onDismiss === undefined ? undefined : { label: t('common.close'), onDismiss: onDismiss }
+      }
       className={hasAction ? 'error-box error-banner--with-action' : 'error-box'}
     >
       {msg}

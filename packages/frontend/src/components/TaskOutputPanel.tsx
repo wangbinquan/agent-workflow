@@ -11,9 +11,10 @@
 
 import type { NodeRun, NodeRunOutput, Task } from '@agent-workflow/shared'
 import { Link } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useRef, useState, type KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { tabDomIds } from '@/components/TabBar'
 import { copyText } from '@/lib/clipboard'
 import {
   buildPreviewTarget,
@@ -49,6 +50,8 @@ interface ResolvedPort {
 export function TaskOutputPanel({ task, runs, outputs }: Props) {
   const { t } = useTranslation()
   const [selectedIndex, setSelectedIndex] = useState(0)
+  const [rovingIndex, setRovingIndex] = useState(0)
+  const tabRefs = useRef(new Map<number, HTMLButtonElement>())
 
   const ports = collectPorts(task.workflowSnapshot)
   if (ports.length === 0) {
@@ -85,7 +88,41 @@ export function TaskOutputPanel({ task, runs, outputs }: Props) {
   // Clamp: ports can change between renders (live updates) — never index past
   // the end.
   const idx = Math.min(selectedIndex, resolved.length - 1)
-  const selected = resolved[idx]
+  const focusIdx = Math.min(rovingIndex, resolved.length - 1)
+
+  function moveFocus(next: number) {
+    const clamped = Math.max(0, Math.min(resolved.length - 1, next))
+    setRovingIndex(clamped)
+    tabRefs.current.get(clamped)?.focus()
+  }
+
+  function handleTabKeyDown(index: number, event: KeyboardEvent<HTMLButtonElement>) {
+    if (event.metaKey || event.ctrlKey || event.altKey) return
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault()
+        moveFocus(index + 1)
+        break
+      case 'ArrowUp':
+        event.preventDefault()
+        moveFocus(index - 1)
+        break
+      case 'Home':
+        event.preventDefault()
+        moveFocus(0)
+        break
+      case 'End':
+        event.preventDefault()
+        moveFocus(resolved.length - 1)
+        break
+      case ' ':
+      case 'Enter':
+        event.preventDefault()
+        setRovingIndex(index)
+        setSelectedIndex(index)
+        break
+    }
+  }
 
   return (
     <section className="task-outputs">
@@ -93,37 +130,67 @@ export function TaskOutputPanel({ task, runs, outputs }: Props) {
       <div className="task-outputs-panel" data-testid="task-outputs-panel">
         <div
           className="task-outputs-panel__list"
-          role="listbox"
+          role="tablist"
+          aria-orientation="vertical"
           aria-label={t('taskOutputs.section')}
         >
-          {resolved.map((r, i) => (
-            <button
-              key={`${r.port.name}-${i}`}
-              type="button"
-              role="option"
-              aria-selected={i === idx}
-              className={'task-outputs-panel__option' + (i === idx ? ' is-selected' : '')}
-              onClick={() => setSelectedIndex(i)}
-              data-testid={`task-output-option-${i}`}
-            >
-              <span className="task-outputs-panel__option-name">{r.port.name}</span>
-              <span className="task-outputs-panel__option-bind">
-                {r.port.nodeId}.{r.port.portName}
-              </span>
-            </button>
-          ))}
+          {resolved.map((r, i) => {
+            const ids = tabDomIds('task-output-port', String(i))
+            return (
+              <button
+                key={`${r.port.name}-${i}`}
+                ref={(element) => {
+                  if (element === null) tabRefs.current.delete(i)
+                  else tabRefs.current.set(i, element)
+                }}
+                type="button"
+                role="tab"
+                id={ids.tabId}
+                aria-controls={ids.panelId}
+                aria-selected={i === idx}
+                tabIndex={i === focusIdx ? 0 : -1}
+                className={'task-outputs-panel__option' + (i === idx ? ' is-selected' : '')}
+                onClick={() => {
+                  setRovingIndex(i)
+                  setSelectedIndex(i)
+                }}
+                onFocus={() => setRovingIndex(i)}
+                onKeyDown={(event) => handleTabKeyDown(i, event)}
+                data-testid={`task-output-option-${i}`}
+              >
+                <span className="task-outputs-panel__option-name">{r.port.name}</span>
+                <span className="task-outputs-panel__option-bind">
+                  {r.port.nodeId}.{r.port.portName}
+                </span>
+              </button>
+            )
+          })}
         </div>
         <div className="task-outputs-panel__detail">
-          {selected !== undefined && (
-            <OutputDetail
-              key={`${selected.port.name}-${idx}`}
-              taskId={task.id}
-              port={selected.port}
-              value={selected.value}
-              kind={selected.kind}
-              sourceRunId={selected.runId}
-            />
-          )}
+          {resolved.map((port, i) => {
+            const ids = tabDomIds('task-output-port', String(i))
+            const isActive = i === idx
+            return (
+              <section
+                key={`${port.port.name}-${i}`}
+                className="task-outputs-panel__tabpanel"
+                role="tabpanel"
+                id={ids.panelId}
+                aria-labelledby={ids.tabId}
+                hidden={!isActive}
+              >
+                {isActive ? (
+                  <OutputDetail
+                    taskId={task.id}
+                    port={port.port}
+                    value={port.value}
+                    kind={port.kind}
+                    sourceRunId={port.runId}
+                  />
+                ) : null}
+              </section>
+            )
+          })}
         </div>
       </div>
     </section>

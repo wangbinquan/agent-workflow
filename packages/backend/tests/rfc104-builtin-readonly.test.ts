@@ -480,6 +480,8 @@ describe('RFC-104 — source-level guard anchors (regression: do not delete the 
     const yaml = readFileSync(resolve(SRC, 'services', 'workflow.yaml.ts'), 'utf-8')
     expect(yaml).toContain("assertNotBuiltin('workflow', existing)")
     const acl = readFileSync(resolve(SRC, 'routes', 'resourceAcl.ts'), 'utf-8')
-    expect(acl).toContain('assertNotBuiltin(cfg.type, row)')
+    // RFC-201: the ACL mutation coordinator reloads inside its resource lock;
+    // the builtin guard must inspect that fresh row, not the pre-lock snapshot.
+    expect(acl).toContain('assertNotBuiltin(cfg.type, fresh)')
   })
 })

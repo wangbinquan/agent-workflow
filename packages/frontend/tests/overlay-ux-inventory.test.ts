@@ -78,14 +78,14 @@ const OVERLAY_CALLSITES = {
   'components/split/UnsavedChangesGuard.tsx': { family: 'primitive-and-guard', count: 1 },
 
   'components/AclPanel.tsx': { family: 'access-and-settings', count: 2 },
-  'components/RuntimeList.tsx': { family: 'access-and-settings', count: 1 },
+  // Runtime edit/add dialog plus RFC-201's shared destructive confirmation.
+  'components/RuntimeList.tsx': { family: 'access-and-settings', count: 2 },
   'routes/settings.tsx': { family: 'access-and-settings', count: 2 },
   'routes/users.tsx': { family: 'access-and-settings', count: 1 },
 
   'components/AgentImportDialog.tsx': { family: 'resource-management', count: 1 },
   'components/QuickCreateDialog.tsx': { family: 'resource-management', count: 1 },
   'components/RenameDialog.tsx': { family: 'resource-management', count: 1 },
-  'components/SkillFileTree.tsx': { family: 'resource-management', count: 1 },
   'components/WorkflowImportDialog.tsx': { family: 'resource-management', count: 1 },
   'components/agent-ports/AgentPortDialog.tsx': { family: 'resource-management', count: 1 },
   'components/agents/DependencyAutodetectDialog.tsx': {
@@ -94,6 +94,8 @@ const OVERLAY_CALLSITES = {
   },
   'components/repos/BatchImportDialog.tsx': { family: 'resource-management', count: 1 },
   'components/skill/SkillVersionHistory.tsx': { family: 'resource-management', count: 1 },
+  // RFC-201: replacing ZIP-import review state is an explicit shared Dialog.
+  'components/skills/ImportZipPanel.tsx': { family: 'resource-management', count: 1 },
   'routes/repos.tsx': { family: 'resource-management', count: 1 },
 
   'components/canvas/WorkflowCanvas.tsx': { family: 'workflow-authoring', count: 1 },

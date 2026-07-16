@@ -30,6 +30,16 @@ describe('RFC-072 — Outputs tab source guards', () => {
     expect(CSS).toMatch(/\.task-outputs-panel__pre\s*\{/)
   })
 
+  test('port selector is a complete vertical tab widget, never a half-listbox', () => {
+    expect(PANEL).toContain('role="tablist"')
+    expect(PANEL).toContain('aria-orientation="vertical"')
+    expect(PANEL).toContain('role="tab"')
+    expect(PANEL).toContain('role="tabpanel"')
+    expect(PANEL).toContain('aria-controls={ids.panelId}')
+    expect(PANEL).not.toContain('role="listbox"')
+    expect(PANEL).not.toContain('role="option"')
+  })
+
   test('Copy goes through copyText, never a bare navigator.clipboard', () => {
     expect(PANEL).toContain("from '@/lib/clipboard'")
     expect(PANEL).toContain('copyText(')

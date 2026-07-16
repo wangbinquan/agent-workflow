@@ -100,13 +100,13 @@ interface PanelCase {
 const PANELS: PanelCase[] = [
   {
     name: 'all memories',
-    node: () => <MemoryAllList isAdmin />,
+    node: () => <MemoryAllList />,
     emptyResponse: { items: [] },
     assertEmpty: () => expect(screen.getByTestId('empty-state')).toBeTruthy(),
   },
   {
     name: 'approval queue',
-    node: () => <MemoryApprovalQueue isAdmin />,
+    node: () => <MemoryApprovalQueue />,
     emptyResponse: { items: [] },
     assertEmpty: () => expect(screen.getByTestId('memory-approval-queue-empty')).toBeTruthy(),
   },
@@ -189,6 +189,11 @@ describe('RFC-198 memory panel async-state contract', () => {
 
       await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(2))
       await waitFor(assertEmpty)
+      for (const emptyState of document.querySelectorAll('.empty-state')) {
+        expect(
+          emptyState.querySelector('.empty-state__description')?.textContent?.trim(),
+        ).toBeTruthy()
+      }
       expect(screen.queryByRole('alert')).toBeNull()
     },
   )

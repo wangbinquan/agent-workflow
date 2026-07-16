@@ -8,7 +8,7 @@
 // Accessibility: role=combobox + aria-controls/expanded + role=listbox /
 // option + arrow-key + Home/End + Enter/Space + Esc.
 
-import { Fragment, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { usePopoverPosition } from '@/hooks/usePopoverPosition'
@@ -18,6 +18,10 @@ export interface SelectOption<V extends string> {
   label: string
   description?: string
   disabled?: boolean
+  /** Optional compact status carried by both the closed value and option row. */
+  badge?: ReactNode
+  badgeTone?: 'neutral' | 'attention' | 'danger'
+  badgeAriaLabel?: string
   /**
    * Optional group label. Consecutive options sharing the same non-empty
    * `group` render under a single non-interactive header — the unified
@@ -26,6 +30,44 @@ export interface SelectOption<V extends string> {
    * entries are adjacent; the header shows whenever `group` changes.
    */
   group?: string
+  /** Status for the non-interactive group header rendered before this option. */
+  groupBadge?: ReactNode
+  groupBadgeTone?: 'neutral' | 'attention' | 'danger'
+  groupBadgeAriaLabel?: string
+}
+
+function hasBadge(value: ReactNode): boolean {
+  return value !== undefined && value !== null && value !== false
+}
+
+function OptionBadge({
+  value,
+  tone = 'neutral',
+  ariaLabel,
+}: {
+  value: ReactNode
+  tone?: 'neutral' | 'attention' | 'danger'
+  ariaLabel?: string
+}) {
+  if (!hasBadge(value)) return null
+  return (
+    <span
+      className={`select__badge select__badge--${tone}`}
+      data-tone={tone}
+      aria-label={ariaLabel}
+    >
+      {value}
+    </span>
+  )
+}
+
+function OptionTitle<V extends string>({ option }: { option: SelectOption<V> }) {
+  return (
+    <span className="select__option-title-row">
+      <span>{option.label}</span>
+      <OptionBadge value={option.badge} tone={option.badgeTone} ariaLabel={option.badgeAriaLabel} />
+    </span>
+  )
 }
 
 interface Props<V extends string> {
@@ -209,11 +251,15 @@ export function Select<V extends string>(props: Props<V>) {
         onKeyDown={onTriggerKey}
       >
         <span id={labelId} className="select__value">
-          {current
-            ? props.renderValue
-              ? props.renderValue(current)
-              : current.label
-            : (props.placeholder ?? '')}
+          {current ? (
+            props.renderValue ? (
+              props.renderValue(current)
+            ) : (
+              <OptionTitle option={current} />
+            )
+          ) : (
+            (props.placeholder ?? '')
+          )}
         </span>
         <span className="select__chevron" aria-hidden>
           ▾
@@ -284,8 +330,13 @@ export function Select<V extends string>(props: Props<V>) {
               return (
                 <Fragment key={opt.value}>
                   {showHeader && (
-                    <li className="select__group" role="presentation" aria-hidden>
-                      {opt.group}
+                    <li className="select__group" role="presentation">
+                      <span>{opt.group}</span>
+                      <OptionBadge
+                        value={opt.groupBadge}
+                        tone={opt.groupBadgeTone}
+                        ariaLabel={opt.groupBadgeAriaLabel}
+                      />
                     </li>
                   )}
                   <li
@@ -317,11 +368,13 @@ export function Select<V extends string>(props: Props<V>) {
                         props.renderOption(opt)
                       ) : opt.description !== undefined && opt.description !== '' ? (
                         <span className="select__option-stack">
-                          <span className="select__option-title">{opt.label}</span>
+                          <span className="select__option-title">
+                            <OptionTitle option={opt} />
+                          </span>
                           <span className="select__option-sub">{opt.description}</span>
                         </span>
                       ) : (
-                        opt.label
+                        <OptionTitle option={opt} />
                       )}
                     </span>
                     {selected && (

@@ -6,7 +6,11 @@
 // "Row missing" and "row invisible" deliberately produce the SAME 404 payload
 // so a non-granted user cannot probe existence (D1).
 
-import { UpdateResourceAclBodySchema, type AclResourceType } from '@agent-workflow/shared'
+import {
+  UpdateResourceAclBodySchema,
+  type AclResourceType,
+  type ResourceAcl,
+} from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { actorOf } from '@/auth/actor'
 import type { AppDeps } from '@/server'
@@ -28,6 +32,12 @@ export interface AclEndpointConfig {
   param: 'name' | 'id'
   /** Load the row by the route key; null when absent. */
   load: (db: AppDeps['db'], key: string) => Promise<AclRow | null>
+  /** RFC-201: optional stable-id linearization adapter for operation resources. */
+  coordinator?: {
+    runExclusive: (resourceId: string, task: () => Promise<ResourceAcl>) => Promise<ResourceAcl>
+    loadById: (db: AppDeps['db'], resourceId: string) => Promise<AclRow | null>
+    nextUpdatedAt?: (row: AclRow) => Promise<number>
+  }
 }
 
 export function mountAclEndpoints(app: Hono, deps: AppDeps, cfg: AclEndpointConfig): void {
@@ -50,11 +60,6 @@ export function mountAclEndpoints(app: Hono, deps: AppDeps, cfg: AclEndpointConf
     if (row === null || !(await canViewResource(deps.db, actor, cfg.type, row))) {
       throw new NotFoundError(`${cfg.type}-not-found`, `${cfg.type} '${key}' not found`)
     }
-    // RFC-104: built-in resources are read-only — refuse owner / visibility /
-    // grants changes (the footgun that un-hid + unlocked a built-in). Placed
-    // after can-view (D1 isolation) and before owner enforcement. No-op for
-    // resource types with no built-in rows (skill/mcp/plugin).
-    assertNotBuiltin(cfg.type, row)
     const body: unknown = await c.req.json().catch(() => ({}))
     const parsed = UpdateResourceAclBodySchema.safeParse(body)
     if (!parsed.success) {
@@ -62,7 +67,25 @@ export function mountAclEndpoints(app: Hono, deps: AppDeps, cfg: AclEndpointConf
         issues: parsed.error.issues,
       })
     }
-    const result = await updateResourceAcl(deps.db, actor, cfg.type, row, parsed.data)
+    const updateFresh = async (fresh: AclRow): Promise<ResourceAcl> => {
+      if (!(await canViewResource(deps.db, actor, cfg.type, fresh))) {
+        throw new NotFoundError(`${cfg.type}-not-found`, `${cfg.type} '${key}' not found`)
+      }
+      // RFC-104: built-ins are read-only. This runs on the in-lock fresh row.
+      assertNotBuiltin(cfg.type, fresh)
+      const updatedAt = await cfg.coordinator?.nextUpdatedAt?.(fresh)
+      return updateResourceAcl(deps.db, actor, cfg.type, fresh, parsed.data, { updatedAt })
+    }
+    const result =
+      cfg.coordinator === undefined
+        ? await updateFresh(row)
+        : await cfg.coordinator.runExclusive(row.id, async () => {
+            const fresh = await cfg.coordinator!.loadById(deps.db, row.id)
+            if (fresh === null) {
+              throw new NotFoundError(`${cfg.type}-not-found`, `${cfg.type} '${key}' not found`)
+            }
+            return updateFresh(fresh)
+          })
     if (cfg.type === 'workflow') {
       // Lets connected /ws/workflows clients re-fetch AND lets the WS server
       // invalidate its per-connection visibility cache for this workflow.

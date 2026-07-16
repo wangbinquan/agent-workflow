@@ -1,4 +1,4 @@
-// Locks in that the per-task feedback area lives inside its own tab pane on
+// Locks in that the per-task feedback area lives inside its own page section on
 // the task detail page, not as a fixed footer panel below the panes.
 //
 // Why this exists: the task-detail page is
@@ -25,7 +25,7 @@ const SRC = readFileSync(
   'utf-8',
 )
 
-describe('routes/tasks.detail.tsx — feedback lives in its own tab pane', () => {
+describe('routes/tasks.detail.tsx — feedback lives in its own bounded page section', () => {
   test('TaskFeedbackList is rendered inside a `.task-detail__pane` gated by `tab === feedback`', () => {
     // The pane wraps the feedback list and is hidden unless the feedback
     // tab is selected. Locking the regex here so a future refactor can't
@@ -38,7 +38,7 @@ describe('routes/tasks.detail.tsx — feedback lives in its own tab pane', () =>
     )
   })
 
-  test('there is exactly one <TaskFeedbackList /> render and it sits BEFORE the closing panes div', () => {
+  test('there is exactly one <TaskFeedbackList /> render inside its section after the panes marker', () => {
     // Belt-and-suspenders: a stray copy of the old footer-positioned
     // `<TaskFeedbackList>` would re-introduce the squeeze. We assert both
     // the count and that its index is before the `</div>` that closes
@@ -47,26 +47,13 @@ describe('routes/tasks.detail.tsx — feedback lives in its own tab pane', () =>
     expect(matches.length).toBe(1)
 
     const panesOpen = SRC.indexOf('className="task-detail__panes"')
-    const panesClose = SRC.indexOf(
-      '</div>',
-      // First `</div>` after the LAST top-level pane. Find by walking from
-      // panesOpen and tracking nesting would be overkill — instead, locate
-      // the unique sibling that used to host the footer panel. The new
-      // structure has NO sibling between `</div>` (panes wrapper close) and
-      // the page root close, so we just check that the feedback render
-      // appears before the page root's terminator pattern.
-      panesOpen,
-    )
     const feedback = SRC.indexOf('<TaskFeedbackList')
+    const feedbackSectionOpen = SRC.lastIndexOf('<section', feedback)
+    const feedbackSectionClose = SRC.indexOf('</section>', feedback)
     expect(panesOpen).toBeGreaterThanOrEqual(0)
-    expect(panesClose).toBeGreaterThan(panesOpen)
     expect(feedback).toBeGreaterThan(panesOpen)
-    // The feedback render must be inside the panes block, not after it.
-    // We assert this by counting how many top-level `<div>` opens precede
-    // the feedback render starting from panesOpen.
-    const between = SRC.slice(panesOpen, feedback)
-    const opens = (between.match(/<div\b/g) ?? []).length
-    const closes = (between.match(/<\/div>/g) ?? []).length
-    expect(opens).toBeGreaterThan(closes) // still inside an open <div> block
+    expect(feedbackSectionOpen).toBeGreaterThan(panesOpen)
+    expect(feedback).toBeGreaterThan(feedbackSectionOpen)
+    expect(feedbackSectionClose).toBeGreaterThan(feedback)
   })
 })

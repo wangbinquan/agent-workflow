@@ -10,13 +10,26 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, createRoute, useNavigate } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Agent, CreateAgent } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { useDraftFromQuery } from '@/hooks/useDraftFromQuery'
-import { useReportSplitDirty, useSplitDirty } from '@/components/split/splitDirty'
-import { AgentForm, emptyAgent, type AgentTab } from '@/components/AgentForm'
+import {
+  useReportSplitDirty,
+  useSplitDirty,
+  type SplitBusyRelease,
+} from '@/components/split/splitDirty'
+import {
+  AgentForm,
+  AgentJsonValidationSummary,
+  agentJsonInvalidFields,
+  emptyAgent,
+  reconcileAgentJsonDraft,
+  type AgentJsonDraft,
+  type AgentJsonFieldKey,
+  type AgentTab,
+} from '@/components/AgentForm'
 import { AgentPortValidationSummary } from '@/components/agent-ports/AgentPortValidationSummary'
 import { DetailHeaderActions } from '@/components/DetailHeaderActions'
 import { ErrorBanner } from '@/components/ErrorBanner'
@@ -37,8 +50,14 @@ function AgentDetailPage() {
   const { name } = Route.useParams()
   const navigate = useNavigate()
   const qc = useQueryClient()
-  const { report } = useSplitDirty()
+  const { beginBusy, report } = useSplitDirty()
   const [activeTab, setActiveTab] = useState<AgentTab>('basics')
+  const [jsonFocusTarget, setJsonFocusTarget] = useState<AgentJsonFieldKey>()
+  const clearJsonFocusTarget = useCallback(() => setJsonFocusTarget(undefined), [])
+  const [jsonDraft, setJsonDraft] = useState<AgentJsonDraft>()
+  const invalidJsonFields = jsonDraft === undefined ? [] : agentJsonInvalidFields(jsonDraft)
+  const jsonReady = jsonDraft !== undefined
+  const jsonValid = jsonReady && invalidJsonFields.length === 0
 
   const query = useQuery<Agent>({
     queryKey: ['agents', name],
@@ -51,14 +70,18 @@ function AgentDetailPage() {
   const { draft, setDraft, loaded, dirty, commitSaved } = useDraftFromQuery(
     query.data,
     agentToDraft,
-    { followWhenClean: true },
+    { followWhenClean: true, freezeWhen: jsonReady && !jsonValid },
   )
-  useReportSplitDirty(name, dirty)
+  useEffect(() => {
+    if (draft === undefined) return
+    setJsonDraft((current) => reconcileAgentJsonDraft(current, draft))
+  }, [draft])
+  useReportSplitDirty(name, dirty || (jsonReady && !jsonValid))
 
   const save = useMutation({
-    mutationFn: (submitted: CreateAgent) =>
+    mutationFn: ({ submitted }: { submitted: CreateAgent; release: SplitBusyRelease }) =>
       api.put<Agent>(`/api/agents/${encodeURIComponent(name)}`, agentToPutBody(submitted)),
-    onSuccess: async (saved, submitted) => {
+    onSuccess: async (saved, { submitted }) => {
       // Detail fence (R3-P1-2): cancel any in-flight detail GET before writing
       // saved, else a stale GET could land after and clobber it.
       await qc.cancelQueries({ queryKey: ['agents', name], exact: true })
@@ -74,11 +97,13 @@ function AgentDetailPage() {
       commitSaved(submitted, agentToDraft(saved))
       // stay in place — no navigate (RFC-169 D2).
     },
+    onSettled: (_saved, _error, { release }) => release(),
   })
 
   const del = useMutation({
-    mutationFn: () => api.delete(`/api/agents/${encodeURIComponent(name)}`),
-    onSuccess: async () => {
+    mutationFn: ({ release: _release }: { release: SplitBusyRelease }) =>
+      api.delete(`/api/agents/${encodeURIComponent(name)}`),
+    onSuccess: async (_deleted, { release }) => {
       // Sync-clear the dirty ref so the guard doesn't block THIS navigation
       // (the resource no longer exists — nothing to save).
       report(name, false)
@@ -87,8 +112,10 @@ function AgentDetailPage() {
         rows === undefined ? rows : rows.filter((r) => r.name !== name),
       )
       void qc.invalidateQueries({ queryKey: ['agents'], exact: true })
+      release()
       navigate({ to: '/agents' })
     },
+    onSettled: (_deleted, _error, { release }) => release(),
   })
   const portValidation = validateAgentPortState(draft ?? emptyAgent())
   const blockingPortIssues = portValidation.issues.filter((issue) => issue.severity === 'error')
@@ -118,15 +145,27 @@ function AgentDetailPage() {
         save={{
           label: save.isPending ? t('common.saving') : t('common.save'),
           onClick: () => {
-            if (draft !== undefined) save.mutate(draft)
+            if (
+              draft !== undefined &&
+              jsonValid &&
+              portValidation.valid &&
+              !save.isPending &&
+              !del.isPending
+            ) {
+              save.mutate({ submitted: draft, release: beginBusy(name) })
+            }
           },
-          disabled: save.isPending || !loaded || !portValidation.valid,
+          disabled:
+            save.isPending || del.isPending || !loaded || !portValidation.valid || !jsonValid,
           testid: 'agent-save-button',
         }}
         del={{
           label: t('common.delete'),
-          onConfirm: () => del.mutateAsync(),
-          disabled: del.isPending,
+          onConfirm: () => {
+            if (save.isPending || del.isPending) return Promise.resolve()
+            return del.mutateAsync({ release: beginBusy(name) })
+          },
+          disabled: del.isPending || save.isPending,
         }}
         errors={[save.error, del.error]}
         extra={
@@ -142,6 +181,15 @@ function AgentDetailPage() {
           )
         }
       />
+      {jsonDraft !== undefined && (
+        <AgentJsonValidationSummary
+          draft={jsonDraft}
+          onNavigate={(key) => {
+            setJsonFocusTarget(key)
+            setActiveTab('advanced')
+          }}
+        />
+      )}
       {blockingPortIssues.length > 0 && (
         <AgentPortValidationSummary
           issues={blockingPortIssues}
@@ -160,6 +208,10 @@ function AgentDetailPage() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         hasExternalPortAlert={blockingPortIssues.length > 0}
+        jsonDraft={jsonDraft}
+        onJsonDraftChange={setJsonDraft}
+        focusJsonField={jsonFocusTarget}
+        onJsonFocusHandled={clearJsonFocusTarget}
       />
     </fieldset>
   )

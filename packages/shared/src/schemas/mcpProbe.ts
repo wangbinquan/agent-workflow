@@ -19,6 +19,7 @@
 // are persisted with `status='error'` (or `status='ok'` for `partial`).
 
 import { z } from 'zod'
+import { OperationConfigHashSchema } from './operationRevision'
 
 /** A single tool advertised by the MCP server. */
 export const McpToolInfoSchema = z
@@ -124,3 +125,9 @@ export const McpProbeSchema = z
   })
   .strict()
 export type McpProbe = z.infer<typeof McpProbeSchema>
+
+/** Immediate POST /probe receipt; persisted GET rows intentionally omit the fence. */
+export const McpProbeOperationReceiptSchema = McpProbeSchema.extend({
+  configHashUsed: OperationConfigHashSchema,
+})
+export type McpProbeOperationReceipt = z.infer<typeof McpProbeOperationReceiptSchema>

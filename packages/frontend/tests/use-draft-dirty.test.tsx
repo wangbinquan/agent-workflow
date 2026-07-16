@@ -76,6 +76,22 @@ describe('useDraftFromQuery — followWhenClean / dirty-freeze', () => {
     expect(result.current.dirty).toBe(true) // vs advanced seed 'server-changed'
   })
 
+  test('route-owned invalid buffer freezes an otherwise clean draft', () => {
+    const { result, rerender } = renderHook(
+      ({ data, freezeWhen }) =>
+        useDraftFromQuery<V, V>(data, idMap, { followWhenClean: true, freezeWhen }),
+      { initialProps: { data: { v: 'orig' } as V, freezeWhen: false } },
+    )
+
+    rerender({ data: { v: 'server-changed' }, freezeWhen: true })
+    expect(result.current.draft).toEqual({ v: 'orig' })
+    // The remote value still advances the baseline. Once the sibling buffer
+    // becomes valid, the retained draft is correctly dirty against it.
+    rerender({ data: { v: 'server-changed' }, freezeWhen: false })
+    expect(result.current.draft).toEqual({ v: 'orig' })
+    expect(result.current.dirty).toBe(true)
+  })
+
   test('without followWhenClean, a clean draft does NOT follow refetches (hydrate-once)', () => {
     const { result, rerender } = renderHook(({ data }) => useDraftFromQuery<V, V>(data, idMap), {
       initialProps: { data: { v: 'orig' } as V },

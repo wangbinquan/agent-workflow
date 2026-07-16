@@ -28,6 +28,13 @@ function ruleBody(selector: string, css: string): string {
   return body
 }
 
+function ruleBodies(selector: string, css: string): string[] {
+  const escaped = selector.replace(/[.\\]/g, '\\$&')
+  return [...css.matchAll(new RegExp(`(?:^|\\n|\\})\\s*${escaped}\\s*\\{([^}]*)\\}`, 'g'))].map(
+    (match) => match[1] ?? '',
+  )
+}
+
 describe('pages fill the full content width', () => {
   test('.page does not impose a max-width', () => {
     const css = readFileSync(STYLES_CSS, 'utf8')
@@ -47,5 +54,45 @@ describe('pages fill the full content width', () => {
     const css = readFileSync(STYLES_CSS, 'utf8')
     const body = ruleBody('.onboarding', css)
     expect(body).toMatch(/max-width\s*:\s*\d+px/)
+  })
+
+  test('only semantic reading surfaces are capped; workspace selectors stay full-width', () => {
+    const css = readFileSync(STYLES_CSS, 'utf8')
+    const workspaceSelectors = [
+      '.content',
+      '.page',
+      '.page--wide',
+      '.page--split',
+      '.task-detail__workspace',
+      '.worktree-diff',
+      '.structure__tree',
+      '.data-table',
+    ]
+    for (const selector of workspaceSelectors) {
+      const bodies = ruleBodies(selector, css)
+      expect(bodies.length, `${selector} must remain an explicit contract`).toBeGreaterThan(0)
+      expect(bodies.join('\n'), `${selector} must not become a reading-measure cap`).not.toMatch(
+        /max-(?:inline-)?width\s*:/,
+      )
+    }
+
+    const readingMeasureSelectors = [
+      '.account-page',
+      '.auth-page',
+      '.onboarding',
+      '.task-wizard',
+      '.settings-section-panel',
+    ]
+    for (const selector of readingMeasureSelectors) {
+      expect(
+        ruleBodies(selector, css).join('\n'),
+        `${selector} needs a deliberate line measure`,
+      ).toMatch(/max-(?:inline-)?(?:size|width)\s*:/)
+    }
+  })
+
+  test('broad content/page selectors are never grouped into a blanket width cap', () => {
+    const css = readFileSync(STYLES_CSS, 'utf8')
+    expect(css).not.toMatch(/(?:^|\n)\s*\.(?:content|page)\s*,[^{]*\{[^}]*max-width\s*:/s)
   })
 })

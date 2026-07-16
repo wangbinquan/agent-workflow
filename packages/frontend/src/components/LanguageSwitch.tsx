@@ -2,7 +2,7 @@
 //
 // Two-option segmented control. Clicking an option:
 //   1. Optimistically flips i18next via setLanguage (instant UI response).
-//   2. Fires PUT /api/config { ...config, language } to persist.
+//   2. Queues the minimal PUT /api/config { language } patch to persist.
 //   3. On error, rolls i18next back to the previous value + shows a muted
 //      red error line below the segmented control.
 //
@@ -13,10 +13,18 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Config } from '@agent-workflow/shared'
-import { api } from '@/api/client'
 import { describeApiError, setLanguage, SUPPORTED_LANGUAGES, type SupportedLanguage } from '@/i18n'
 import { isSupportedLanguage } from '@/hooks/useLanguage'
+import {
+  cacheConfigWriteReceipt,
+  configReceiptCoordinator,
+  queryConfig,
+  reconcileAmbiguousConfigWrite,
+  useConfigQueryKey,
+  writeConfigPatch,
+} from '@/lib/config-resource'
 import { getToken, subscribeAuth } from '@/stores/auth'
+import { ConfigAmbiguousWriteError, type ConfigWriteReceipt } from '@/lib/config-receipts'
 
 interface Props {
   className?: string
@@ -30,9 +38,10 @@ export function LanguageSwitch({ className }: Props) {
   const { t, i18n } = useTranslation()
   const qc = useQueryClient()
   const token = useAuthToken()
+  const configQueryKey = useConfigQueryKey()
   const config = useQuery<Config>({
-    queryKey: ['config'],
-    queryFn: ({ signal }) => api.get('/api/config', undefined, signal),
+    queryKey: configQueryKey,
+    queryFn: ({ signal }) => queryConfig(signal),
     enabled: token !== null,
     staleTime: 60_000,
   })
@@ -43,19 +52,37 @@ export function LanguageSwitch({ className }: Props) {
       ? (i18n.language as SupportedLanguage)
       : 'zh-CN'
 
-  const mutation = useMutation<Config, Error, SupportedLanguage, { previous: SupportedLanguage }>({
-    mutationFn: (lang) =>
-      api.put<Config>('/api/config', { ...(config.data ?? {}), language: lang }),
+  const mutation = useMutation<
+    ConfigWriteReceipt,
+    Error,
+    SupportedLanguage,
+    { previous: SupportedLanguage }
+  >({
+    mutationFn: (lang) => writeConfigPatch({ language: lang }),
     onMutate: (lang) => {
       const previous = current
       setLanguage(lang)
       return { previous }
     },
-    onSuccess: (next) => {
-      qc.setQueryData(['config'], next)
+    onSuccess: (receipt) => {
+      cacheConfigWriteReceipt(qc, receipt)
     },
-    onError: (_err, _lang, ctx) => {
-      if (ctx) setLanguage(ctx.previous)
+    onError: async (error, lang, ctx) => {
+      if (error instanceof ConfigAmbiguousWriteError) {
+        try {
+          const receipt = await reconcileAmbiguousConfigWrite(error, qc)
+          if (isSupportedLanguage(receipt.config.language)) {
+            setLanguage(receipt.config.language as SupportedLanguage)
+          }
+        } catch {
+          // Keep the optimistic choice visible alongside the outcome-unknown
+          // error. Rolling back would falsely claim the daemon rejected it.
+        }
+        return
+      }
+      // A late definitive error must not roll a newer accepted language back.
+      const acceptedLanguage = configReceiptCoordinator.getSnapshot()?.config.language
+      if (ctx && i18n.language === lang && acceptedLanguage !== lang) setLanguage(ctx.previous)
     },
   })
 

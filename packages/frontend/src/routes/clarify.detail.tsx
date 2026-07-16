@@ -34,6 +34,7 @@ import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { PageHeader } from '@/components/PageHeader'
+import { PeerNav } from '@/components/PeerNav'
 import { StatusChip } from '@/components/StatusChip'
 import { QuestionForm, type QuestionFormHandle } from '@/components/clarify/QuestionForm'
 import { ClarifyQuestionHandler } from '@/components/clarify/ClarifyQuestionHandler'
@@ -731,21 +732,28 @@ export function ClarifyDetailPage() {
       {!isCross && shardPeers.length > 0 && (
         <section className="clarify-shard-switcher" data-testid="clarify-shard-switcher">
           <span className="muted">{t('clarify.detail.shardSwitcherLabel')}:</span>{' '}
-          {shardPeers.map((p) => (
-            <Link
-              key={p.id}
-              to="/clarify/$nodeRunId"
-              params={{ nodeRunId: p.intermediaryNodeRunId }}
-              className={
-                'tabs__tab' +
-                (p.intermediaryNodeRunId === s.intermediaryNodeRunId ? ' tabs__tab--active' : '')
-              }
-              data-shard-key={p.askingShardKey ?? ''}
-              data-testid={`clarify-shard-${p.askingShardKey ?? 'main'}`}
-            >
-              {p.askingShardKey ?? '—'}
-            </Link>
-          ))}
+          <PeerNav
+            ariaLabel={t('clarify.detail.shardSwitcherLabel')}
+            activeKey={s.intermediaryNodeRunId}
+            items={shardPeers.map((peer) => ({
+              key: peer.intermediaryNodeRunId,
+              label: peer.askingShardKey ?? '—',
+              peer,
+            }))}
+            renderDestination={(item, destination) => (
+              <Link
+                to="/clarify/$nodeRunId"
+                params={{ nodeRunId: item.peer.intermediaryNodeRunId }}
+                search={(previous) => previous}
+                className={destination.className}
+                aria-current={destination.ariaCurrent}
+                data-shard-key={item.peer.askingShardKey ?? ''}
+                data-testid={`clarify-shard-${item.peer.askingShardKey ?? 'main'}`}
+              >
+                {destination.children}
+              </Link>
+            )}
+          />
         </section>
       )}
 

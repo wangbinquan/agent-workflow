@@ -51,7 +51,10 @@ export function MemoryDistillJobsTable() {
     return (
       <>
         {listError && <ErrorBanner error={list.error} action={retryAction} />}
-        <EmptyState title={t('memory.distillJobs.empty')} />
+        <EmptyState
+          title={t('memory.distillJobs.empty')}
+          description={t('memory.distillJobs.emptyDescription')}
+        />
       </>
     )
   }

@@ -1,4 +1,5 @@
-// RFC-198 PR4 — rendered /settings URL-tab and config-query continuity regressions.
+// RFC-198 PR4 / RFC-201 — rendered /settings URL-section and config-query
+// continuity regressions.
 //
 // These tests mount the production SettingsPage under its real route id. They
 // lock browser-history semantics (user tab changes push; canonicalization
@@ -16,7 +17,7 @@ import {
   createRouter,
 } from '@tanstack/react-router'
 import { DEFAULT_CONFIG, type Config } from '@agent-workflow/shared'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 vi.mock('@/components/RuntimeList', () => ({
@@ -24,6 +25,7 @@ vi.mock('@/components/RuntimeList', () => ({
 }))
 
 import '../src/i18n'
+import { getConfigQueryKey } from '../src/lib/config-resource'
 import { Route as SettingsRoute, validateSettingsSearch } from '../src/routes/settings'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 
@@ -70,7 +72,7 @@ function renderSettingsRoute(
       queries: { retry: false, staleTime: options.staleTime ?? Number.POSITIVE_INFINITY },
     },
   })
-  if (options.config !== undefined) qc.setQueryData(['config'], options.config)
+  if (options.config !== undefined) qc.setQueryData(getConfigQueryKey(), options.config)
 
   // SettingsPage calls hooks on its production Route object. A cloned route
   // with the same /settings id supplies that match while avoiding AppShell and
@@ -96,16 +98,48 @@ function renderSettingsRoute(
   return { qc, router, view }
 }
 
+class DesktopResizeObserver {
+  constructor(private readonly callback: ResizeObserverCallback) {}
+
+  observe = (target: Element) => {
+    this.callback(
+      [
+        {
+          target,
+          contentRect: { width: 1024 },
+          contentBoxSize: [{ inlineSize: 1024 }],
+        } as unknown as ResizeObserverEntry,
+      ],
+      this as unknown as ResizeObserver,
+    )
+  }
+
+  disconnect = () => {}
+  unobserve = () => {}
+}
+
+function sectionDestination(tab: string): HTMLAnchorElement {
+  const link = Array.from(
+    document.querySelectorAll<HTMLAnchorElement>('.page-section-nav__leaf'),
+  ).find((candidate) => new URL(candidate.href).searchParams.get('tab') === tab)
+  if (link === undefined) throw new Error(`missing Settings destination for ${tab}`)
+  return link
+}
+
+function activePanel(tab: string): HTMLElement {
+  const panel = document.querySelector<HTMLElement>(`.settings-section-panel--${tab}`)
+  if (panel === null) throw new Error(`missing active Settings panel for ${tab}`)
+  return panel
+}
+
 function expectActivePanel(tab: string): void {
-  const activeTab = document.getElementById(`settings-tab-${tab}`)
-  const activePanel = document.getElementById(`settings-panel-${tab}`)
-  expect(activeTab?.getAttribute('aria-selected')).toBe('true')
-  expect(activeTab?.getAttribute('aria-controls')).toBe(activePanel?.id)
-  expect(activePanel?.hidden).toBe(false)
-  expect(screen.getByRole('tabpanel').id).toBe(activePanel?.id)
+  expect(sectionDestination(tab).getAttribute('aria-current')).toBe('page')
+  expect(activePanel(tab).getAttribute('aria-labelledby')).toBe(`settings-section-title-${tab}`)
+  expect(document.querySelectorAll('.settings-section-panel')).toHaveLength(1)
 }
 
 beforeEach(() => {
+  vi.stubGlobal('ResizeObserver', DesktopResizeObserver)
   setBaseUrl('http://daemon.test')
   setToken('tok')
 })
@@ -113,9 +147,50 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 describe('/settings rendered URL-backed tabs', () => {
+  test('a Config draft survives active-panel unmount and browser tab history', async () => {
+    installFetch(() => undefined)
+    const { router } = renderSettingsRoute(['/settings?tab=limits&focus=keep'], {
+      config: DEFAULT_CONFIG,
+    })
+
+    await waitFor(() => expectActivePanel('limits'))
+    const limitsPanel = activePanel('limits')
+    const duration = within(limitsPanel).getAllByRole('spinbutton')[0] as HTMLInputElement
+    fireEvent.change(duration, { target: { value: '424242' } })
+    expect(duration.value).toBe('424242')
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: /Limits.*(unsaved|未保存)/i })).toBeTruthy()
+    })
+
+    fireEvent.click(sectionDestination('network'))
+    await waitFor(() => {
+      expectActivePanel('network')
+      expect(screen.getByRole('link', { name: /Limits.*(unsaved|未保存)/i })).toBeTruthy()
+    })
+    fireEvent.click(sectionDestination('limits'))
+    await waitFor(() => {
+      expectActivePanel('limits')
+      expect(
+        (within(activePanel('limits')).getAllByRole('spinbutton')[0] as HTMLInputElement).value,
+      ).toBe('424242')
+    })
+
+    router.history.back()
+    await waitFor(() => expectActivePanel('network'))
+    router.history.forward()
+    await waitFor(() => {
+      expectActivePanel('limits')
+      expect(
+        (within(activePanel('limits')).getAllByRole('spinbutton')[0] as HTMLInputElement).value,
+      ).toBe('424242')
+      expect(router.state.location.search).toEqual({ tab: 'limits', focus: 'keep' })
+    })
+  })
+
   test('tab clicks push and Back/Forward preserve adjacent search parameters', async () => {
     installFetch(() => undefined)
     const { router } = renderSettingsRoute(['/settings?tab=limits&focus=runtime-card&trace=2'], {
@@ -123,7 +198,7 @@ describe('/settings rendered URL-backed tabs', () => {
     })
 
     await waitFor(() => expectActivePanel('limits'))
-    fireEvent.click(document.getElementById('settings-tab-appearance')!)
+    fireEvent.click(sectionDestination('appearance'))
     await waitFor(() => {
       expect(router.state.location.search).toEqual({
         focus: 'runtime-card',
@@ -178,7 +253,7 @@ describe('/settings rendered URL-backed tabs', () => {
       expect(document.querySelector('.runtime-status-anchor')?.getAttribute('data-flash')).toBe('1')
     })
 
-    fireEvent.click(document.getElementById('settings-tab-appearance')!)
+    fireEvent.click(sectionDestination('appearance'))
     await waitFor(() => expectActivePanel('appearance'))
     router.history.back()
     await waitFor(() => {
@@ -234,8 +309,8 @@ describe('/settings rendered config-query states', () => {
       expect(fetchSpy).toHaveBeenCalled()
       expect(screen.getByRole('alert').textContent).toContain('refresh failed')
       expectActivePanel('appearance')
-      expect(document.querySelector('#settings-panel-appearance .form-grid')).toBeTruthy()
+      expect(document.querySelector('.settings-section-panel--appearance .form-grid')).toBeTruthy()
     })
-    expect(qc.getQueryData(['config'])).toEqual(DEFAULT_CONFIG)
+    expect(qc.getQueryData(getConfigQueryKey())).toEqual(DEFAULT_CONFIG)
   })
 })

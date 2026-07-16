@@ -62,9 +62,14 @@ describe('sidebar pending-review badge renders as a bubble', () => {
     expect(body).toMatch(/align-items:\s*center/)
   })
 
-  test('active variant inverts the badge so it stays readable on the accent fill', () => {
+  test('both link and row active variants invert the badge on the accent fill', () => {
     const css = readFileSync(STYLES_CSS, 'utf8')
-    expect(css).toMatch(/\.nav-item--active\s+\.sidebar__badge\s*\{/)
+    const match = css.match(
+      /\.nav-item--active\s+\.sidebar__badge\s*,\s*\.nav-item-row--active\s+\.sidebar__badge\s*\{([^}]*)\}/,
+    )
+    expect(match).not.toBeNull()
+    expect(match![1]).toMatch(/background:\s*#fff/)
+    expect(match![1]).toMatch(/color:\s*var\(--accent\)/)
   })
 
   test('InboxFooterButton emits <span class="sidebar__badge"> with the 99+ cap (RFC-032 PR2)', () => {

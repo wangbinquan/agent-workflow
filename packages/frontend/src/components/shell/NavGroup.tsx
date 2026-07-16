@@ -11,11 +11,11 @@ import type { ActiveNav, NavGroupEntry, SubNavItem } from '@/lib/nav'
 interface NavGroupProps {
   group: NavGroupEntry
   active: ActiveNav
-  /** Optional badge factory; PR1 / PR2 do not use it but PR3 may attach per-row counts. */
-  renderBadge?: (item: SubNavItem) => ReactNode
+  /** Optional sibling action factory (for example Memory pending review). */
+  renderAccessory?: (item: SubNavItem) => ReactNode
 }
 
-export function NavGroup({ group, active, renderBadge }: NavGroupProps) {
+export function NavGroup({ group, active, renderAccessory }: NavGroupProps) {
   const { t } = useTranslation()
   return (
     <div className="nav-group" data-group={group.key}>
@@ -28,7 +28,7 @@ export function NavGroup({ group, active, renderBadge }: NavGroupProps) {
             key={item.to}
             item={item}
             isActive={active.activeItemTo === item.to}
-            badge={renderBadge ? renderBadge(item) : null}
+            accessory={renderAccessory ? renderAccessory(item) : null}
           />
         ))}
       </div>
@@ -39,23 +39,26 @@ export function NavGroup({ group, active, renderBadge }: NavGroupProps) {
 interface NavItemProps {
   item: SubNavItem
   isActive: boolean
-  badge: ReactNode
+  accessory: ReactNode
 }
 
-function NavItem({ item, isActive, badge }: NavItemProps) {
+function NavItem({ item, isActive, accessory }: NavItemProps) {
   const { t } = useTranslation()
   const className = ['nav-item', isActive ? 'nav-item--active' : null].filter(Boolean).join(' ')
   return (
-    <Link
-      to={item.to}
-      className={className}
-      activeProps={{ className: `${className} nav-item--active` }}
-    >
-      <span className="nav-item__icon" aria-hidden="true">
-        <ResourceIcon name={item.icon} />
-      </span>
-      <span className="nav-item__label">{t(item.i18nKey)}</span>
-      {badge}
-    </Link>
+    <div className={`nav-item-row${isActive ? ' nav-item-row--active' : ''}`}>
+      <Link
+        to={item.to}
+        search={item.to === '/memory' ? { tab: 'all' } : undefined}
+        className={`${className} nav-item__main`}
+        activeProps={{ className: `${className} nav-item__main nav-item--active` }}
+      >
+        <span className="nav-item__icon" aria-hidden="true">
+          <ResourceIcon name={item.icon} />
+        </span>
+        <span className="nav-item__label">{t(item.i18nKey)}</span>
+      </Link>
+      {accessory}
+    </div>
   )
 }

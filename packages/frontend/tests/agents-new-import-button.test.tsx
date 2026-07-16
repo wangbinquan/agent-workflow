@@ -29,10 +29,11 @@ describe('agents new-route import wiring (source layer)', () => {
     expect(src).toContain("t('agentForm.importButton')")
   })
 
-  test('agents.new.tsx wires AgentImportDialog with mergeAgentImport callback', () => {
+  test('agents.new.tsx merges the import and resets route-owned raw JSON from that result', () => {
     const src = readFileSync(newRoutePath, 'utf-8')
     expect(src).toContain('<AgentImportDialog')
-    expect(src).toContain('mergeAgentImport(prev, res)')
+    expect(src).toContain('const merged = mergeAgentImport(draft, res)')
+    expect(src).toContain('setJsonDraft(createAgentJsonDraft(merged))')
     expect(src).toContain('triggerRef={importTriggerRef}')
     expect(src).toContain('onViewForm={setActiveTab}')
   })

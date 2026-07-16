@@ -20,6 +20,8 @@ import { useTranslation } from 'react-i18next'
 import type { Agent, Workflow } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
+import { ErrorBanner } from '@/components/ErrorBanner'
+import { LoadingState } from '@/components/LoadingState'
 import {
   MemoryFormFields,
   validateMemoryForm,
@@ -48,6 +50,8 @@ export interface MemoryDialogShellProps {
   /** Already-mapped mutation error message, or null when clean. */
   errorText: string | null
   onSubmit: () => void
+  /** Keeps this Dialog mounted while an edit detail request resolves. */
+  contentState?: { status: 'loading' } | { status: 'error'; error: unknown; onRetry: () => void }
 }
 
 export function MemoryDialogShell(props: MemoryDialogShellProps) {
@@ -61,18 +65,18 @@ export function MemoryDialogShell(props: MemoryDialogShellProps) {
   const agents = useQuery<Agent[]>({
     queryKey: ['agents'],
     queryFn: ({ signal }) => api.get<Agent[]>('/api/agents', undefined, signal),
-    enabled: props.open,
+    enabled: props.open && props.contentState === undefined,
   })
   const workflows = useQuery<Workflow[]>({
     queryKey: ['workflows'],
     queryFn: ({ signal }) => api.get<Workflow[]>('/api/workflows', undefined, signal),
-    enabled: props.open,
+    enabled: props.open && props.contentState === undefined,
   })
   const repos = useQuery<{ items: CachedRepoListEntry[] }>({
     queryKey: ['cached-repos'],
     queryFn: ({ signal }) =>
       api.get<{ items: CachedRepoListEntry[] }>('/api/cached-repos', undefined, signal),
-    enabled: props.open,
+    enabled: props.open && props.contentState === undefined,
   })
 
   return (
@@ -96,39 +100,56 @@ export function MemoryDialogShell(props: MemoryDialogShellProps) {
           >
             {t('memory.formCancel')}
           </button>
-          <button
-            type="button"
-            className="btn btn--sm btn--primary"
-            onClick={() => {
-              if (isInvalid || props.pending) return
-              props.onSubmit()
-            }}
-            disabled={isInvalid || props.pending}
-            data-testid={`${props.testid}-save`}
-          >
-            {t('memory.formSave')}
-          </button>
+          {props.contentState === undefined && (
+            <button
+              type="button"
+              className="btn btn--sm btn--primary"
+              onClick={() => {
+                if (isInvalid || props.pending) return
+                props.onSubmit()
+              }}
+              disabled={isInvalid || props.pending}
+              data-testid={`${props.testid}-save`}
+            >
+              {t('memory.formSave')}
+            </button>
+          )}
         </>
       }
     >
-      {props.errorText !== null && (
-        <div className="error-box" data-testid={`${props.testid}-error`}>
-          {props.errorText}
-        </div>
+      {props.contentState?.status === 'loading' ? (
+        <LoadingState label={t('memory.loadingEdit')} />
+      ) : props.contentState?.status === 'error' ? (
+        <ErrorBanner
+          error={props.contentState.error}
+          action={
+            <button type="button" className="btn btn--sm" onClick={props.contentState.onRetry}>
+              {t('common.retry')}
+            </button>
+          }
+        />
+      ) : (
+        <>
+          {props.errorText !== null && (
+            <div className="error-box" data-testid={`${props.testid}-error`}>
+              {props.errorText}
+            </div>
+          )}
+          <MemoryFormFields
+            state={props.form.state}
+            errors={errors}
+            onScopeType={props.form.setScopeType}
+            onScopeId={props.form.setScopeId}
+            onTitle={props.form.setTitle}
+            onBodyMd={props.form.setBodyMd}
+            onTags={props.form.setTags}
+            agents={agentsToOptions(agents.data)}
+            workflows={workflowsToOptions(workflows.data)}
+            repos={reposToOptions(repos.data?.items)}
+            disabled={props.pending}
+          />
+        </>
       )}
-      <MemoryFormFields
-        state={props.form.state}
-        errors={errors}
-        onScopeType={props.form.setScopeType}
-        onScopeId={props.form.setScopeId}
-        onTitle={props.form.setTitle}
-        onBodyMd={props.form.setBodyMd}
-        onTags={props.form.setTags}
-        agents={agentsToOptions(agents.data)}
-        workflows={workflowsToOptions(workflows.data)}
-        repos={reposToOptions(repos.data?.items)}
-        disabled={props.pending}
-      />
     </Dialog>
   )
 }

@@ -76,7 +76,14 @@ function chooseSelectOption(comboboxName: RegExp, optionName: string) {
 }
 
 function installFetch(
-  opts: { failList?: boolean; ownerName?: string; failDetail?: () => boolean } = {},
+  opts: {
+    failList?: boolean
+    ownerName?: string
+    failDetail?: () => boolean
+    createGate?: Promise<void>
+    saveGate?: Promise<void>
+    deleteGate?: Promise<void>
+  } = {},
 ) {
   vi.spyOn(globalThis, 'fetch').mockImplementation(
     async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -95,6 +102,7 @@ function installFetch(
         return a ? json(a) : json({ error: 'not found' }, 404)
       }
       if (method === 'PUT' && path.includes('/api/agents/')) {
+        await opts.saveGate
         const name = decodeURIComponent(path.split('/api/agents/')[1]!.split('?')[0]!)
         const i = agents.findIndex((x) => x.name === name)
         if (i < 0) return json({ error: 'not found' }, 404)
@@ -102,6 +110,7 @@ function installFetch(
         return json(agents[i])
       }
       if (method === 'POST' && path.endsWith('/api/agents')) {
+        await opts.createGate
         const created = makeAgent(
           (body as { name: string }).name,
           (body as AgentRow).description ?? '',
@@ -110,6 +119,7 @@ function installFetch(
         return json(created)
       }
       if (method === 'DELETE' && path.includes('/api/agents/')) {
+        await opts.deleteGate
         const name = decodeURIComponent(path.split('/api/agents/')[1]!.split('?')[0]!)
         agents = agents.filter((x) => x.name !== name)
         return json({ ok: true })
@@ -279,6 +289,188 @@ describe('/agents split page', () => {
     await waitFor(() =>
       expect(screen.getByTestId('split-card-alpha').textContent).toContain('edited-desc'),
     )
+  })
+
+  test('a delayed PUT blocks navigation as busy and never offers fake discard', async () => {
+    vi.restoreAllMocks()
+    let releaseSave!: () => void
+    const saveGate = new Promise<void>((resolve) => {
+      releaseSave = resolve
+    })
+    installFetch({ saveGate })
+    const router = renderAgents('/agents/alpha')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'alpha' }))
+    fireEvent.change(screen.getByRole('textbox', { name: /Description/ }), {
+      target: { value: 'pending save' },
+    })
+
+    fireEvent.click(screen.getByTestId('agent-save-button'))
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: /^Delete$/ }) as HTMLButtonElement).disabled).toBe(
+        true,
+      ),
+    )
+    fireEvent.click(screen.getByTestId('split-card-beta'))
+
+    const dialog = await screen.findByTestId('unsaved-guard-dialog')
+    expect(dialog.textContent).toMatch(/save is still in progress/i)
+    expect(screen.queryByTestId('unsaved-discard')).toBeNull()
+    expect(router.state.location.pathname).toBe('/agents/alpha')
+
+    releaseSave()
+    await waitFor(() => expect(screen.queryByTestId('unsaved-guard-dialog')).toBeNull())
+    expect(router.state.location.pathname).toBe('/agents/alpha')
+    fireEvent.click(screen.getByTestId('split-card-beta'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/agents/beta'))
+  })
+
+  test('a delayed DELETE blocks navigation and releases before its own success navigation', async () => {
+    vi.restoreAllMocks()
+    let releaseDelete!: () => void
+    const deleteGate = new Promise<void>((resolve) => {
+      releaseDelete = resolve
+    })
+    installFetch({ deleteGate })
+    const router = renderAgents('/agents/alpha')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'alpha' }))
+
+    fireEvent.click(screen.getByRole('button', { name: /^Delete$/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Confirm/i }))
+    fireEvent.click(screen.getByTestId('split-card-beta'))
+
+    const dialog = await screen.findByTestId('unsaved-guard-dialog')
+    expect(dialog.textContent).toMatch(/save is still in progress/i)
+    expect(screen.queryByTestId('unsaved-discard')).toBeNull()
+    expect(router.state.location.pathname).toBe('/agents/alpha')
+
+    releaseDelete()
+    await waitFor(() => expect(router.state.location.pathname).toBe('/agents'))
+    expect(screen.queryByTestId('unsaved-guard-dialog')).toBeNull()
+    expect(screen.queryByTestId('split-card-alpha')).toBeNull()
+  })
+
+  test('invalid Advanced JSON is route-dirty, blocks stale Save/navigation, and repairs hidden-field focus', async () => {
+    agents = [
+      { ...makeAgent('alpha', 'first'), permission: { edit: 'allow' } },
+      makeAgent('beta', 'second'),
+    ]
+    const router = renderAgents('/agents/alpha')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'alpha' }))
+
+    fireEvent.click(screen.getByTestId('agent-tab-advanced'))
+    const permission = screen.getByTestId('agent-json-permission') as HTMLTextAreaElement
+    expect(permission.value).toContain('"edit": "allow"')
+    fireEvent.change(permission, { target: { value: '{"edit":' } })
+
+    const save = screen.getByTestId('agent-save-button') as HTMLButtonElement
+    await waitFor(() => expect(save.disabled).toBe(true))
+    expect(screen.getByTestId('split-card-dot-alpha')).toBeTruthy()
+    expect(permission.getAttribute('aria-invalid')).toBe('true')
+    const errorId = permission.getAttribute('aria-describedby')
+    expect(errorId).toBe('agents-detail-json-permission-error')
+    expect(document.getElementById(errorId!)?.textContent).toContain('Check quotes')
+
+    const advancedBadge = screen
+      .getByTestId('agent-tab-advanced')
+      .querySelector('[data-tone="danger"]')
+    expect(advancedBadge?.getAttribute('aria-label')).toBe('Invalid JSON fields: 1')
+
+    // A disabled Save cannot submit the previous parsed {edit:"allow"} object.
+    fireEvent.click(save)
+    expect(agents.find((agent) => agent.name === 'alpha')?.permission).toEqual({ edit: 'allow' })
+
+    // The route summary can recover a validation target even when its panel is
+    // hidden; activation happens first, then focus moves to the stable field id.
+    fireEvent.click(screen.getByTestId('agent-tab-basics'))
+    fireEvent.click(screen.getByRole('button', { name: 'Fix Permission JSON' }))
+    await waitFor(() => expect(document.activeElement).toBe(permission))
+    expect(screen.getByTestId('agent-tab-advanced').getAttribute('aria-selected')).toBe('true')
+
+    fireEvent.click(screen.getByTestId('split-card-beta'))
+    expect(await screen.findByTestId('unsaved-guard-dialog')).toBeTruthy()
+    expect(router.state.location.pathname).toBe('/agents/alpha')
+    fireEvent.click(screen.getByTestId('unsaved-stay'))
+  })
+
+  test('repairing invalid JSON submits the repaired object, never the last valid one', async () => {
+    agents = [{ ...makeAgent('alpha'), permission: { edit: 'allow' } }]
+    renderAgents('/agents/alpha')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'alpha' }))
+    fireEvent.click(screen.getByTestId('agent-tab-advanced'))
+
+    const permission = screen.getByTestId('agent-json-permission') as HTMLTextAreaElement
+    fireEvent.change(permission, { target: { value: '{"edit":' } })
+    const save = screen.getByTestId('agent-save-button') as HTMLButtonElement
+    await waitFor(() => expect(save.disabled).toBe(true))
+
+    fireEvent.change(permission, { target: { value: '{"edit":"deny"}' } })
+    await waitFor(() => expect(save.disabled).toBe(false))
+    expect(screen.queryByTestId('agent-json-validation')).toBeNull()
+    fireEvent.click(save)
+
+    await waitFor(() => expect(screen.queryByTestId('split-card-dot-alpha')).toBeNull())
+    expect(agents[0]?.permission).toEqual({ edit: 'deny' })
+  })
+
+  test('valid JSON whitespace/key-order edits are semantically clean', async () => {
+    agents = [{ ...makeAgent('alpha'), permission: { a: 1, b: 2 } }]
+    renderAgents('/agents/alpha')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'alpha' }))
+    fireEvent.click(screen.getByTestId('agent-tab-advanced'))
+
+    fireEvent.change(screen.getByTestId('agent-json-permission'), {
+      target: { value: '{\n  "b": 2,\n  "a": 1\n}' },
+    })
+    await waitFor(() => expect(screen.queryByTestId('agent-json-validation')).toBeNull())
+    expect(screen.queryByTestId('split-card-dot-alpha')).toBeNull()
+    expect(
+      screen.getByTestId('agent-tab-advanced').querySelector('[data-tone="danger"]'),
+    ).toBeNull()
+  })
+
+  test('raw-invalid JSON freezes clean-follow instead of accepting a foreign refetch', async () => {
+    agents = [{ ...makeAgent('alpha', 'local-baseline'), permission: { edit: 'allow' } }]
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    renderAgents('/agents/alpha', qc)
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'alpha' }))
+    fireEvent.click(screen.getByTestId('agent-tab-advanced'))
+    const permission = screen.getByTestId('agent-json-permission') as HTMLTextAreaElement
+    fireEvent.change(permission, { target: { value: '{"edit":' } })
+    await waitFor(() =>
+      expect((screen.getByTestId('agent-save-button') as HTMLButtonElement).disabled).toBe(true),
+    )
+
+    qc.setQueryData(['agents', 'alpha'], {
+      ...agents[0]!,
+      description: 'foreign-refetch',
+      permission: { edit: 'deny' },
+    })
+
+    await waitFor(() => expect(permission.value).toBe('{"edit":'))
+    expect(
+      (
+        screen.getByRole('textbox', {
+          name: /Description/,
+          hidden: true,
+        }) as HTMLInputElement
+      ).value,
+    ).toBe('local-baseline')
+
+    // Repairing back to the local object remains dirty against the remote
+    // baseline; the foreign payload is never replayed over the route draft.
+    fireEvent.change(permission, { target: { value: '{"edit":"allow"}' } })
+    await waitFor(() =>
+      expect((screen.getByTestId('agent-save-button') as HTMLButtonElement).disabled).toBe(false),
+    )
+    expect(screen.getByTestId('split-card-dot-alpha')).toBeTruthy()
+    expect(
+      (
+        screen.getByRole('textbox', {
+          name: /Description/,
+          hidden: true,
+        }) as HTMLInputElement
+      ).value,
+    ).toBe('local-baseline')
   })
 
   test('detail retry recovers initial failure and stale refetch keeps an unsaved draft mounted', async () => {
@@ -473,6 +665,58 @@ describe('/agents split page', () => {
     await waitFor(() =>
       expect(screen.getByTestId('split-card-gamma').className).toContain('is-selected'),
     )
+  })
+
+  test('Create captures the submitted draft and freezes editing until the request settles', async () => {
+    vi.restoreAllMocks()
+    let releaseCreate!: () => void
+    const createGate = new Promise<void>((resolve) => {
+      releaseCreate = resolve
+    })
+    installFetch({ createGate })
+    const router = renderAgents('/agents/new')
+    const name = (await screen.findByRole('textbox', { name: /Name/ })) as HTMLInputElement
+    fireEvent.change(name, { target: { value: 'frozen-create' } })
+
+    fireEvent.click(screen.getByTestId('agent-create-button'))
+
+    const scope = screen.getByTestId('agent-create-scope') as HTMLFieldSetElement
+    await waitFor(() => expect(scope.disabled).toBe(true))
+    expect(scope.contains(name)).toBe(true)
+    expect(scope.contains(screen.getByTestId('agent-import-open'))).toBe(true)
+
+    fireEvent.click(screen.getByTestId('agents-mobile-back'))
+    const dialog = await screen.findByTestId('unsaved-guard-dialog')
+    expect(dialog.textContent).toMatch(/save is still in progress/i)
+    expect(screen.queryByTestId('unsaved-discard')).toBeNull()
+    expect(router.state.location.pathname).toBe('/agents/new')
+
+    releaseCreate()
+    await waitFor(() => expect(router.state.location.pathname).toBe('/agents/frozen-create'))
+    expect(screen.queryByTestId('unsaved-guard-dialog')).toBeNull()
+  })
+
+  test('new Agent invalid JSON blocks Create and arms the existing route guard', async () => {
+    const router = renderAgents('/agents/new')
+    await waitFor(() => screen.getByTestId('agent-create-button'))
+    fireEvent.change(screen.getByRole('textbox', { name: /Name/ }), {
+      target: { value: 'gamma' },
+    })
+    fireEvent.click(screen.getByTestId('agent-tab-advanced'))
+    fireEvent.change(screen.getByTestId('agent-json-frontmatter-extra'), {
+      target: { value: '["not-an-object"]' },
+    })
+
+    const create = screen.getByTestId('agent-create-button') as HTMLButtonElement
+    await waitFor(() => expect(create.disabled).toBe(true))
+    expect(screen.getByTestId('agent-json-validation').textContent).toContain(
+      'arrays, strings, and numbers are not accepted',
+    )
+    expect(agents.some((agent) => agent.name === 'gamma')).toBe(false)
+
+    fireEvent.click(screen.getByTestId('agents-mobile-back'))
+    expect(await screen.findByTestId('unsaved-guard-dialog')).toBeTruthy()
+    expect(router.state.location.pathname).toBe('/agents/new')
   })
 
   test('imported duplicate inputs and outputs block Create until both are repaired', async () => {

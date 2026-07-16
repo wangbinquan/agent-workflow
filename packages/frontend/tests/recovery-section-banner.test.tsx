@@ -8,7 +8,7 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 
 import type { Task } from '@agent-workflow/shared'
 
@@ -62,11 +62,12 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 function renderSection(status: Task['status'] = 'running') {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(
+  const view = render(
     <QueryClientProvider client={qc}>
       <RecoverySection taskId="task_1" status={status} />
     </QueryClientProvider>,
   )
+  return { ...view, queryClient: qc }
 }
 
 describe('<RecoverySection />', () => {
@@ -141,6 +142,37 @@ describe('<RecoverySection />', () => {
       expect(
         calls.some((c) => c.method === 'POST' && c.url.includes('/clear-recovery-suspension')),
       ).toBe(true),
+    )
+  })
+
+  test('dismiss hides the current recovery-event signature', async () => {
+    installFetch(() =>
+      jsonResponse({
+        events: [{ id: 'r1', kind: 'auto-resume', reason: null, createdAt: 1 }],
+        suspended: false,
+      }),
+    )
+    const { queryClient } = renderSection('done')
+    await waitFor(() =>
+      expect(document.querySelector('[data-testid="task-recovery"]')).not.toBeNull(),
+    )
+
+    fireEvent.click(
+      document.querySelector('[data-testid="task-recovery-dismiss"]') as HTMLButtonElement,
+    )
+    expect(document.querySelector('[data-testid="task-recovery"]')).toBeNull()
+
+    act(() => {
+      queryClient.setQueryData(['recovery-events', 'task_1'], {
+        events: [
+          { id: 'r1', kind: 'auto-resume', reason: null, createdAt: 1 },
+          { id: 'r2', kind: 'periodic-reap', reason: null, createdAt: 2 },
+        ],
+        suspended: false,
+      })
+    })
+    await waitFor(() =>
+      expect(document.querySelector('[data-testid="task-recovery"]')).not.toBeNull(),
     )
   })
 })

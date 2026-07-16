@@ -12,6 +12,7 @@
 // services/runner.ts buildInlineConfig). Do NOT rename here.
 
 import { z } from 'zod'
+import { OperationConfigHashSchema } from './operationRevision'
 import { ResourceVisibilitySchema } from './resourceAcl'
 
 /** Permitted characters in mcp name (URL-safe; matches `/api/mcps/:name`). */
@@ -78,6 +79,8 @@ export const McpSchema = z.discriminatedUnion('type', [
     ownerUserId: z.string().nullable().optional(),
     /** RFC-099 ACL — 'public' = every user; 'private' = owner + grants. Absent ⇒ 'public'. */
     visibility: ResourceVisibilitySchema.optional(),
+    /** Monotonic ACL revision; absent only in legacy fixtures. */
+    aclRevision: z.number().int().nonnegative().optional(),
     type: z.literal('local'),
     config: McpLocalConfigSchema,
     enabled: z.boolean(),
@@ -93,6 +96,8 @@ export const McpSchema = z.discriminatedUnion('type', [
     ownerUserId: z.string().nullable().optional(),
     /** RFC-099 ACL — 'public' = every user; 'private' = owner + grants. Absent ⇒ 'public'. */
     visibility: ResourceVisibilitySchema.optional(),
+    /** Monotonic ACL revision; absent only in legacy fixtures. */
+    aclRevision: z.number().int().nonnegative().optional(),
     type: z.literal('remote'),
     config: McpRemoteConfigSchema,
     enabled: z.boolean(),
@@ -102,6 +107,17 @@ export const McpSchema = z.discriminatedUnion('type', [
   }),
 ])
 export type Mcp = z.infer<typeof McpSchema>
+
+/** GET/POST/PUT MCP wire shape after RFC-201 exact-operation fencing. */
+export const McpOperationResourceSchema = McpSchema.and(
+  z.object({ operationConfigHash: OperationConfigHashSchema }),
+)
+export type McpOperationResource = z.infer<typeof McpOperationResourceSchema>
+
+export const McpOperationRequestSchema = z
+  .object({ expectedConfigHash: OperationConfigHashSchema })
+  .strict()
+export type McpOperationRequest = z.infer<typeof McpOperationRequestSchema>
 
 /** POST /api/mcps body — both kinds. */
 export const CreateMcpSchema = z.discriminatedUnion('type', [

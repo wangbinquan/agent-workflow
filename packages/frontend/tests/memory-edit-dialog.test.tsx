@@ -138,6 +138,78 @@ describe('_diffAgainstForTests — RFC-045', () => {
 })
 
 describe('MemoryEditDialog — UX', () => {
+  test('memoryId mode mounts one stable Dialog through detail loading and success', async () => {
+    let resolveDetail: ((response: Response) => void) | undefined
+    installFetch((call) => {
+      if (call.url.includes('/api/memories/mem_x')) {
+        return new Promise<Response>((resolve) => {
+          resolveDetail = resolve
+        })
+      }
+      return new Response('[]', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryEditDialog open onClose={() => {}} memoryId="mem_x" />
+      </QueryClientProvider>,
+    )
+
+    const shell = await screen.findByTestId('memory-edit-dialog')
+    expect(screen.getByTestId('loading-state')).toBeTruthy()
+    expect(screen.queryByTestId('memory-edit-dialog-save')).toBeNull()
+
+    resolveDetail?.(
+      new Response(JSON.stringify({ memory: mkMemory(), ancestors: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    expect(await screen.findByTestId('memory-form-title')).toBeTruthy()
+    expect(screen.getByTestId('memory-edit-dialog')).toBe(shell)
+    expect(screen.getByTestId('memory-edit-dialog-save')).toBeTruthy()
+  })
+
+  test('memoryId load error stays in the Dialog and Retry resolves the form', async () => {
+    let detailRequests = 0
+    installFetch((call) => {
+      if (call.url.includes('/api/memories/mem_x')) {
+        detailRequests += 1
+        if (detailRequests === 1) {
+          return new Response(JSON.stringify({ code: 'detail-failed', message: 'load failed' }), {
+            status: 503,
+            headers: { 'content-type': 'application/json' },
+          })
+        }
+        return new Response(JSON.stringify({ memory: mkMemory(), ancestors: [] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return new Response('[]', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryEditDialog open onClose={() => {}} memoryId="mem_x" />
+      </QueryClientProvider>,
+    )
+
+    const shell = await screen.findByTestId('memory-edit-dialog')
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('load failed')
+    fireEvent.click(screen.getByRole('button', { name: /Retry|重试/i }))
+    expect(await screen.findByTestId('memory-form-title')).toBeTruthy()
+    expect(screen.getByTestId('memory-edit-dialog')).toBe(shell)
+    expect(detailRequests).toBe(2)
+  })
+
   test('renders with seeded title / body / scope', async () => {
     installFetch(
       () => new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } }),

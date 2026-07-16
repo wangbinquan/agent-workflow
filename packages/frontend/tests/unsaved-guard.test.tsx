@@ -6,8 +6,12 @@
 //   - a clean draft never blocks;
 //   - a SYNCHRONOUS report(key,false) before a programmatic navigate is not
 //     blocked (T-D5 sync-ref — the create/delete onSuccess path).
+// RFC-201 (T1.3) extends that guard without weakening the RFC-169 default:
+//   - a caller may allow only its own same-resource section-key navigation;
+//   - unrelated search/path changes still block;
+//   - an in-flight mutation blocks every navigation and cannot be discarded.
 //
-// beforeenload arming is covered by e2e (jsdom can't meaningfully fire it).
+// beforeunload arming is covered by e2e (jsdom can't meaningfully fire it).
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -22,10 +26,11 @@ import {
   useNavigate,
   useParams,
 } from '@tanstack/react-router'
-import type { ReactElement } from 'react'
+import { useRef, useState, type ReactElement } from 'react'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { Route as RootRoute } from '../src/routes/__root'
 import { ResourceSplitPage, type ResourceCardItem } from '../src/components/split/ResourceSplitPage'
+import { UnsavedChangesGuard } from '../src/components/split/UnsavedChangesGuard'
 import { useReportSplitDirty, useSplitDirty } from '../src/components/split/splitDirty'
 import '../src/i18n'
 
@@ -126,6 +131,101 @@ function renderGuard(opts: { initial: string; Detail: () => ReactElement }) {
   return router
 }
 
+interface GuardSearch extends Record<string, unknown> {
+  tab?: string
+  filter?: string
+}
+
+function GuardAdapterHarness({ busy, onDiscard }: { busy: boolean; onDiscard?: () => void }) {
+  const [settled, setSettled] = useState(false)
+  const dirtyRef = useRef<string | null>('settings:appearance')
+  const busyRef = useRef(busy)
+  dirtyRef.current = settled ? null : 'settings:appearance'
+  busyRef.current = settled ? false : busy
+  return (
+    <div data-testid="guard-adapter-page">
+      <UnsavedChangesGuard
+        dirtyRef={dirtyRef}
+        busyRef={busyRef}
+        shouldBlockNavigation={({ current, next }) => {
+          if (current.pathname !== next.pathname) return true
+          const currentSearch = current.search as GuardSearch
+          const nextSearch = next.search as GuardSearch
+          const keys = new Set([...Object.keys(currentSearch), ...Object.keys(nextSearch)])
+          const changedKeys = [...keys].filter(
+            (key) => JSON.stringify(currentSearch[key]) !== JSON.stringify(nextSearch[key]),
+          )
+          // Test adapter mirrors Settings' narrow contract: only its registered
+          // section key may change; adjacent search state is resource identity.
+          return changedKeys.length !== 1 || changedKeys[0] !== 'tab'
+        }}
+        onDiscard={onDiscard}
+      />
+      <button type="button" data-testid="settle-busy" onClick={() => setSettled(true)}>
+        settle
+      </button>
+      <button
+        type="button"
+        data-testid="start-busy-without-render"
+        onClick={() => {
+          busyRef.current = true
+        }}
+      >
+        start busy silently
+      </button>
+      <Link
+        to="/settings"
+        search={(previous) => ({ ...previous, tab: 'limits' })}
+        data-testid="change-section"
+      >
+        section
+      </Link>
+      <Link
+        to="/settings"
+        search={(previous) => ({ ...previous, filter: 'changed' })}
+        data-testid="change-filter"
+      >
+        filter
+      </Link>
+      <Link to="/agents" data-testid="change-path">
+        agents
+      </Link>
+    </div>
+  )
+}
+
+function renderGuardAdapter(opts: { busy?: boolean; onDiscard?: () => void } = {}) {
+  vi.spyOn(globalThis, 'fetch').mockImplementation(
+    async () => new Response('not found', { status: 404 }),
+  )
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const settingsRoute = createRoute({
+    getParentRoute: () => RootRoute,
+    path: '/settings',
+    validateSearch: (raw): GuardSearch => raw,
+    component: () => <GuardAdapterHarness busy={opts.busy ?? false} onDiscard={opts.onDiscard} />,
+  })
+  const agentsRoute = createRoute({
+    getParentRoute: () => RootRoute,
+    path: '/agents',
+    component: () => <div data-testid="agents-page">agents</div>,
+  })
+  const tree = RootRoute.addChildren([settingsRoute, agentsRoute])
+  const router = createRouter({
+    routeTree: tree,
+    history: createMemoryHistory({
+      initialEntries: ['/settings?tab=appearance&filter=stable'],
+    }),
+  })
+  render(
+    <QueryClientProvider client={qc}>
+      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+      <RouterProvider router={router as any} />
+    </QueryClientProvider>,
+  )
+  return router
+}
+
 beforeEach(() => {
   setBaseUrl('http://daemon.test')
   setToken('tok')
@@ -202,5 +302,78 @@ describe('UnsavedChangesGuard', () => {
     fireEvent.click(screen.getByTestId('save-and-go'))
     await waitFor(() => expect(router.state.location.pathname).toBe('/agents/b'))
     expect(screen.queryByTestId('unsaved-guard-dialog')).toBeNull()
+  })
+
+  test('caller predicate allows only its same-resource section search change', async () => {
+    const router = renderGuardAdapter()
+    await waitFor(() => screen.getByTestId('guard-adapter-page'))
+
+    fireEvent.click(screen.getByTestId('change-section'))
+    await waitFor(() => expect(router.state.location.search.tab).toBe('limits'))
+    expect(router.state.location.search.filter).toBe('stable')
+    expect(screen.queryByTestId('unsaved-guard-dialog')).toBeNull()
+
+    fireEvent.click(screen.getByTestId('change-filter'))
+    await waitFor(() => screen.getByTestId('unsaved-guard-dialog'))
+    expect(router.state.location.search.filter).toBe('stable')
+    fireEvent.click(screen.getByTestId('unsaved-stay'))
+    await waitFor(() => expect(screen.queryByTestId('unsaved-guard-dialog')).toBeNull())
+
+    fireEvent.click(screen.getByTestId('change-path'))
+    await waitFor(() => screen.getByTestId('unsaved-guard-dialog'))
+    expect(router.state.location.pathname).toBe('/settings')
+  })
+
+  test('busy mutation blocks even an allowed section change and offers no discard', async () => {
+    const router = renderGuardAdapter({ busy: true })
+    await waitFor(() => screen.getByTestId('guard-adapter-page'))
+
+    fireEvent.click(screen.getByTestId('change-section'))
+    await waitFor(() => screen.getByTestId('unsaved-guard-dialog'))
+    expect(router.state.location.search.tab).toBe('appearance')
+    expect(screen.getByTestId('unsaved-stay')).toBeTruthy()
+    expect(screen.queryByTestId('unsaved-discard')).toBeNull()
+  })
+
+  test('discard clears the caller-owned registry before a blocked navigation proceeds', async () => {
+    const onDiscard = vi.fn()
+    const router = renderGuardAdapter({ onDiscard })
+    await waitFor(() => screen.getByTestId('guard-adapter-page'))
+
+    fireEvent.click(screen.getByTestId('change-filter'))
+    await waitFor(() => screen.getByTestId('unsaved-guard-dialog'))
+    fireEvent.click(screen.getByTestId('unsaved-discard'))
+
+    await waitFor(() => expect(router.state.location.search.filter).toBe('changed'))
+    expect(onDiscard).toHaveBeenCalledTimes(1)
+  })
+
+  test('a busy-only blocker closes when the exact save settles clean', async () => {
+    const router = renderGuardAdapter({ busy: true })
+    await waitFor(() => screen.getByTestId('guard-adapter-page'))
+
+    fireEvent.click(screen.getByTestId('change-section'))
+    await waitFor(() => screen.getByTestId('unsaved-guard-dialog'))
+    fireEvent.click(screen.getByTestId('settle-busy'))
+
+    await waitFor(() => expect(screen.queryByTestId('unsaved-guard-dialog')).toBeNull())
+    expect(router.state.location.search.tab).toBe('appearance')
+  })
+
+  test('a stale discard button cannot proceed after the mutation becomes busy', async () => {
+    const onDiscard = vi.fn()
+    const router = renderGuardAdapter({ onDiscard })
+    await waitFor(() => screen.getByTestId('guard-adapter-page'))
+
+    fireEvent.click(screen.getByTestId('change-filter'))
+    const staleDiscard = await screen.findByTestId('unsaved-discard')
+    // Mutate only the synchronous ref so the already-rendered button remains
+    // in the DOM, reproducing the exact render-to-click TOCTOU window.
+    fireEvent.click(screen.getByTestId('start-busy-without-render'))
+    fireEvent.click(staleDiscard)
+
+    expect(router.state.location.search.filter).toBe('stable')
+    expect(onDiscard).not.toHaveBeenCalled()
+    expect(screen.getByTestId('unsaved-guard-dialog')).toBeTruthy()
   })
 })

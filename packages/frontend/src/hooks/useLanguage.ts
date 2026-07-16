@@ -10,7 +10,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useEffect, useSyncExternalStore } from 'react'
 import type { Config } from '@agent-workflow/shared'
 import i18n, { setLanguage, SUPPORTED_LANGUAGES, type SupportedLanguage } from '@/i18n'
-import { api } from '@/api/client'
+import { queryConfig, useConfigQueryKey } from '@/lib/config-resource'
 import { getToken, subscribeAuth } from '@/stores/auth'
 
 export function isSupportedLanguage(x: unknown): x is SupportedLanguage {
@@ -24,9 +24,10 @@ function useAuthToken(): string | null {
 /** Side-effect hook: keep i18next + <html lang> in sync with config.language. */
 export function useApplyLanguage(): void {
   const token = useAuthToken()
+  const configQueryKey = useConfigQueryKey()
   const config = useQuery<Config>({
-    queryKey: ['config'],
-    queryFn: ({ signal }) => api.get('/api/config', undefined, signal),
+    queryKey: configQueryKey,
+    queryFn: ({ signal }) => queryConfig(signal),
     enabled: token !== null,
     staleTime: 60_000,
   })

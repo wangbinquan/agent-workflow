@@ -8,6 +8,7 @@ export * from './schemas/cachedRepo'
 export * from './schemas/clarify'
 export * from './schemas/config'
 export * from './schemas/oidcProvider'
+export * from './schemas/operationRevision'
 export * from './schemas/permission'
 export * from './schemas/repo'
 export * from './schemas/resourceAcl'
@@ -48,6 +49,8 @@ export * from './diagnose-repair'
 export * from './node-kind-behavior'
 export * from './workflow-sync-diff' // RFC-109
 export * from './workflow-canonical' // RFC-199
+export * from './mcp-operation' // RFC-201
+export * from './plugin-operation' // RFC-201
 export * from './workflow-yaml' // RFC-199
 export * from './workflow-node-references' // RFC-199 T7.1
 export * from './task-questions' // RFC-120

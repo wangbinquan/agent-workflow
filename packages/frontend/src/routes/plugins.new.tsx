@@ -7,12 +7,17 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { CreatePlugin, Plugin } from '@agent-workflow/shared'
+import type { CreatePlugin, PluginOperationResource } from '@agent-workflow/shared'
 import { api } from '@/api/client'
-import { PluginFields } from '@/components/PluginFields'
+import { PluginFields, focusFirstPluginFieldError } from '@/components/PluginFields'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { PageHeader } from '@/components/PageHeader'
-import { NEW_CARD_KEY, useReportSplitDirty, useSplitDirty } from '@/components/split/splitDirty'
+import {
+  NEW_CARD_KEY,
+  useReportSplitDirty,
+  useSplitDirty,
+  type SplitBusyRelease,
+} from '@/components/split/splitDirty'
 import { useDirtyBaseline } from '@/hooks/useDraftFromQuery'
 import { buildCreatePayload, EMPTY_PLUGIN_FORM, type PluginFormState } from '@/lib/plugin-form'
 import { Route as pluginsRoute } from './plugins'
@@ -27,20 +32,27 @@ function PluginCreatePage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const qc = useQueryClient()
-  const { report } = useSplitDirty()
+  const { beginBusy, report } = useSplitDirty()
   const [form, setForm] = useState<PluginFormState>(EMPTY_PLUGIN_FORM)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const { dirty } = useDirtyBaseline(form, EMPTY_PLUGIN_FORM)
   useReportSplitDirty(NEW_CARD_KEY, dirty)
 
   const create = useMutation({
-    mutationFn: (payload: CreatePlugin): Promise<Plugin> =>
-      api.post<Plugin>('/api/plugins', payload),
-    onSuccess: (p) => {
+    mutationFn: ({
+      payload,
+    }: {
+      payload: CreatePlugin
+      release: SplitBusyRelease
+    }): Promise<PluginOperationResource> =>
+      api.post<PluginOperationResource>('/api/plugins', payload),
+    onSuccess: (p, { release }) => {
       report(NEW_CARD_KEY, false)
       void qc.invalidateQueries({ queryKey: ['plugins'] })
+      release()
       navigate({ to: '/plugins/$id', params: { id: p.id } })
     },
+    onSettled: (_plugin, _error, { release }) => release(),
   })
 
   function submit() {
@@ -48,14 +60,16 @@ function PluginCreatePage() {
     if (!built.ok) {
       setErrors(built.errors)
       create.reset()
+      focusFirstPluginFieldError(built.errors)
       return
     }
     setErrors({})
-    create.mutate(built.payload)
+    if (create.isPending) return
+    create.mutate({ payload: built.payload, release: beginBusy(NEW_CARD_KEY) })
   }
 
   return (
-    <div className="agent-new">
+    <fieldset className="agent-new detail-freeze" disabled={create.isPending}>
       <PageHeader
         title={t('plugins.newTitle')}
         headingLevel={2}
@@ -75,6 +89,6 @@ function PluginCreatePage() {
       <div className="split__detail-body">
         <PluginFields value={form} onChange={setForm} errors={errors} />
       </div>
-    </div>
+    </fieldset>
   )
 }

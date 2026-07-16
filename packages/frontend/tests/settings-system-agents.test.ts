@@ -12,6 +12,14 @@ const SETTINGS = readFileSync(
   resolve(import.meta.dirname, '..', 'src', 'routes', 'settings.tsx'),
   'utf-8',
 )
+const SETTINGS_DRAFTS = readFileSync(
+  resolve(import.meta.dirname, '..', 'src', 'lib', 'settings-drafts.ts'),
+  'utf-8',
+)
+const FUSION_DRAFT = readFileSync(
+  resolve(import.meta.dirname, '..', 'src', 'components', 'settings', 'useFusionAgentDraft.ts'),
+  'utf-8',
+)
 const ZH = readFileSync(resolve(import.meta.dirname, '..', 'src', 'i18n', 'zh-CN.ts'), 'utf-8')
 const EN = readFileSync(resolve(import.meta.dirname, '..', 'src', 'i18n', 'en-US.ts'), 'utf-8')
 
@@ -37,7 +45,7 @@ describe('RFC-198 — Settings URL tab shell', () => {
     })
   })
 
-  test('route uses URL authority, replace canonicalization, and stable tab/panel ids', () => {
+  test('route uses URL authority, replace canonicalization, and stable section ids', () => {
     expect(SETTINGS).toContain('validateSearch: validateSettingsSearch')
     expect(SETTINGS).toContain('const search = Route.useSearch()')
     expect(SETTINGS).toContain('const navigate = Route.useNavigate()')
@@ -46,12 +54,12 @@ describe('RFC-198 — Settings URL tab shell', () => {
     expect(SETTINGS).toContain("withSettingsTab(previous, 'runtime')")
     expect(SETTINGS).toContain("hash: hash === 'runtime' ? '' : hash")
     expect(SETTINGS).toContain('replace: true')
+    expect(SETTINGS).toContain('<PageSectionNav<SettingsTab>')
     expect(SETTINGS).toContain('idPrefix="settings"')
-    expect(SETTINGS).toContain("ariaLabel={t('settings.title')}")
-    expect(SETTINGS).toContain("tabDomIds('settings', panelTab)")
-    expect(SETTINGS).toContain('role="tabpanel"')
-    expect(SETTINGS).toContain('aria-labelledby={ids.tabId}')
-    expect(SETTINGS).toContain('hidden={!isActive}')
+    expect(SETTINGS).toContain("ariaLabel={t('settings.sectionNavLabel')}")
+    expect(SETTINGS).toContain('pageSectionCurrent={destination.ariaCurrent}')
+    expect(SETTINGS).toContain('aria-labelledby={`settings-section-title-${tab}`}')
+    expect(SETTINGS).toContain('id={`settings-section-title-${tab}`}')
   })
 
   test('shared shell and async states replace settings-local chrome', () => {
@@ -61,18 +69,20 @@ describe('RFC-198 — Settings URL tab shell', () => {
   })
 })
 
-describe('RFC-156 — tab placement', () => {
-  test('Tab union + TabBar list gain systemAgents and drop the Memory tab', () => {
+describe('RFC-156 — section placement', () => {
+  test('section union + execution group include systemAgents and drop the Memory section', () => {
     expect(SETTINGS).toContain("'systemAgents'")
-    expect(SETTINGS).toContain("['systemAgents', t('settings.tabSystemAgents')]")
-    // The Memory tab is gone from the bar + dispatch. Its i18n label key stays
+    expect(SETTINGS).toContain("key: 'execution'")
+    expect(SETTINGS).toContain("key: 'systemAgents'")
+    expect(SETTINGS).toContain("label: t('settings.tabSystemAgents')")
+    // The Memory section is gone from navigation + dispatch. Its i18n label key stays
     // (locked by i18n-distill-output-lang-keys.test.ts) but is no longer rendered.
     expect(SETTINGS).not.toContain("t('settings.tabMemory')")
     expect(SETTINGS).not.toContain('<MemoryTab')
     expect(SETTINGS).not.toContain('function MemoryTab')
   })
   test('dispatch renders SystemAgentsTab', () => {
-    expect(SETTINGS).toContain('<SystemAgentsTab config={config.data} />')
+    expect(SETTINGS).toContain('<SystemAgentsTab config={config.data} fusionDraft={fusionDraft} />')
   })
 })
 
@@ -90,7 +100,7 @@ describe('RFC-156 — SystemAgentsTab slice + D6 model clearing', () => {
       'mergeAgentRuntime',
       'mergeAgentModel',
     ]) {
-      expect(SETTINGS).toContain(`'${key}'`)
+      expect(SETTINGS_DRAFTS).toContain(`'${key}'`)
     }
   })
 
@@ -117,11 +127,11 @@ describe('RFC-156 — SystemAgentsTab slice + D6 model clearing', () => {
 
 describe('RFC-156 — fusion card writes a runtime-only patch to the builtin agent', () => {
   test('targets aw-skill-merger via /api/agents with a runtime-only body', () => {
-    expect(SETTINGS).toContain("SKILL_MERGER_AGENT_NAME = 'aw-skill-merger'")
-    expect(SETTINGS).toContain('/api/agents/${SKILL_MERGER_AGENT_NAME}')
+    expect(FUSION_DRAFT).toContain("SKILL_MERGER_AGENT_NAME = 'aw-skill-merger'")
+    expect(FUSION_DRAFT).toContain('/api/agents/${SKILL_MERGER_AGENT_NAME}')
     // Body MUST be exactly `{ runtime }` — any extra key re-trips the RFC-104
     // builtin read-only lock (403 builtin-readonly).
-    expect(SETTINGS).toContain('{ runtime })')
+    expect(FUSION_DRAFT).toContain('{ runtime })')
   })
 })
 

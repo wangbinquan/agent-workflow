@@ -7,16 +7,22 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useNavigate } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Skill } from '@agent-workflow/shared'
 import { SKILL_NAME_RE } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { Field, TextArea, TextInput } from '@/components/Form'
 import { ErrorBanner } from '@/components/ErrorBanner'
-import { ImportZipPanel } from '@/components/skills/ImportZipPanel'
+import { ImportZipPanel, type ImportZipPanelHandle } from '@/components/skills/ImportZipPanel'
 import { PageHeader } from '@/components/PageHeader'
-import { NEW_CARD_KEY, useReportSplitDirty, useSplitDirty } from '@/components/split/splitDirty'
+import {
+  NEW_CARD_KEY,
+  useRegisterSplitDiscard,
+  useReportSplitDirty,
+  useSplitDirty,
+  type SplitBusyRelease,
+} from '@/components/split/splitDirty'
 import { TabPanels } from '@/components/split/TabPanels'
 import { TabBar } from '@/components/TabBar'
 import { useDirtyBaseline } from '@/hooks/useDraftFromQuery'
@@ -36,39 +42,57 @@ const EMPTY_FORM = {
   bodyMd: '',
 }
 
+interface CreateSkillInput {
+  draft: typeof EMPTY_FORM
+  release: SplitBusyRelease
+}
+
 function SkillCreatePage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const qc = useQueryClient()
-  const { report } = useSplitDirty()
+  const { beginBusy, report } = useSplitDirty()
   const [tab, setTab] = useState<Tab>('managed')
   const [form, setForm] = useState({ ...EMPTY_FORM })
+  const [zipDirty, setZipDirty] = useState(false)
+  const zipPanelRef = useRef<ImportZipPanelHandle | null>(null)
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
     setForm((f) => ({ ...f, [k]: v }))
 
-  // Dirty = the form fields differ from empty (the ZIP panel's staged selection
-  // is best-effort local state, not tracked — §3.4 three-times-final).
+  // The route owns one composite create draft. A selected/reviewed archive is
+  // just as unsafe to lose as typed manual fields; a committed result is clean.
   const { dirty } = useDirtyBaseline(form, EMPTY_FORM)
-  useReportSplitDirty(NEW_CARD_KEY, dirty)
+  useReportSplitDirty(NEW_CARD_KEY, dirty || zipDirty)
+
+  const discardAll = useCallback(() => {
+    if (zipPanelRef.current?.discard() === false) return false
+    setForm({ ...EMPTY_FORM })
+    setZipDirty(false)
+    report(NEW_CARD_KEY, false)
+    return true
+  }, [report])
+  useRegisterSplitDiscard(NEW_CARD_KEY, discardAll)
 
   const create = useMutation({
-    mutationFn: (): Promise<Skill> =>
+    mutationFn: ({ draft }: CreateSkillInput): Promise<Skill> =>
       api.post<Skill>('/api/skills', {
-        name: form.name,
-        description: form.description,
-        bodyMd: form.bodyMd,
+        name: draft.name,
+        description: draft.description,
+        bodyMd: draft.bodyMd,
       }),
-    onSuccess: (s) => {
+    onSuccess: (s, { release }) => {
       report(NEW_CARD_KEY, false) // sync-clear before navigating
+      release()
       void qc.invalidateQueries({ queryKey: ['skills'] })
       navigate({ to: '/skills/$name', params: { name: s.name } })
     },
+    onSettled: (_skill, _error, { release }) => release(),
   })
 
   const disabled = form.name === '' || create.isPending || !SKILL_NAME_RE.test(form.name)
 
   return (
-    <div className="agent-new">
+    <fieldset className="agent-new detail-freeze" disabled={create.isPending}>
       <PageHeader
         title={tab === 'zip' ? t('skills.importTitle') : t('skills.newTitle')}
         headingLevel={2}
@@ -77,7 +101,9 @@ function SkillCreatePage() {
             <button
               type="button"
               className="btn btn--primary"
-              onClick={() => create.mutate()}
+              onClick={() =>
+                create.mutate({ draft: { ...form }, release: beginBusy(NEW_CARD_KEY) })
+              }
               disabled={disabled}
               data-testid="skill-create-button"
             >
@@ -91,11 +117,39 @@ function SkillCreatePage() {
 
       <TabBar<Tab>
         tabs={[
-          { key: 'managed', label: t('skills.tabManaged') },
-          { key: 'zip', label: t('skills.tabZip'), testid: 'skills-tab-zip' },
+          {
+            key: 'managed',
+            label: t('skills.tabManaged'),
+            ...(create.error !== null && create.error !== undefined
+              ? {
+                  badge: '!',
+                  badgeTone: 'danger' as const,
+                  badgeAriaLabel: t('editor.draftStatus.phase.error'),
+                }
+              : dirty
+                ? {
+                    badge: '•',
+                    badgeTone: 'neutral' as const,
+                    badgeAriaLabel: t('editor.statusUnsaved'),
+                  }
+                : {}),
+          },
+          {
+            key: 'zip',
+            label: t('skills.tabZip'),
+            testid: 'skills-tab-zip',
+            ...(zipDirty
+              ? {
+                  badge: '•',
+                  badgeTone: 'neutral' as const,
+                  badgeAriaLabel: t('editor.statusUnsaved'),
+                }
+              : {}),
+          },
         ]}
         active={tab}
         onSelect={setTab}
+        ariaLabel={t('skills.title')}
         idPrefix="skills-new"
       />
 
@@ -105,7 +159,16 @@ function SkillCreatePage() {
         idPrefix="skills-new"
         className="split__detail-body"
         panels={[
-          { key: 'zip', content: <ImportZipPanel /> },
+          {
+            key: 'zip',
+            content: (
+              <ImportZipPanel
+                ref={zipPanelRef}
+                onDirtyChange={setZipDirty}
+                beginCommitBusy={() => beginBusy(NEW_CARD_KEY)}
+              />
+            ),
+          },
           {
             key: 'managed',
             content: (
@@ -139,6 +202,6 @@ function SkillCreatePage() {
           },
         ]}
       />
-    </div>
+    </fieldset>
   )
 }

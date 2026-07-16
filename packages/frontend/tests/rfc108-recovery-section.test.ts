@@ -25,7 +25,9 @@ const section = read('../src/components/tasks/RecoverySection.tsx')
 describe('RFC-108 T21 — task-detail RecoverySection', () => {
   test('RecoverySection exists and is rendered in the task detail', () => {
     expect(/export function RecoverySection\(/.test(section)).toBe(true)
-    expect(detail.includes('<RecoverySection taskId={id} status={tk.status} />')).toBe(true)
+    expect(detail).toMatch(
+      /<RecoverySection\s+key=\{`recovery:\$\{id\}`\}\s+taskId=\{id\}\s+status=\{tk\.status\}\s+\/>/,
+    )
   })
 
   test('queries recovery-events and posts clear-recovery-suspension', () => {

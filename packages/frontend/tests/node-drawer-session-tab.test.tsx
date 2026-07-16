@@ -7,7 +7,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { I18nextProvider } from 'react-i18next'
-import type { NodeRun, SessionViewResponse } from '@agent-workflow/shared'
+import type { NodeRun, NodeRunOutput, SessionViewResponse } from '@agent-workflow/shared'
 import i18n from '../src/i18n'
 import { NodeDetailDrawer } from '../src/components/NodeDetailDrawer'
 
@@ -46,6 +46,7 @@ function renderDrawer(props: {
   nodeId: string | null
   workflowNodeKind: string | null
   runs: NodeRun[]
+  outputs?: NodeRunOutput[]
 }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
@@ -59,7 +60,7 @@ function renderDrawer(props: {
           workflowNodeKind={props.workflowNodeKind}
           agentName={null}
           runs={props.runs}
-          outputs={[]}
+          outputs={props.outputs ?? []}
           onClose={vi.fn()}
         />
       </I18nextProvider>
@@ -85,9 +86,15 @@ beforeEach(() => {
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = typeof input === 'string' ? input : input.toString()
     if (url.includes('/session')) {
-      return new Response(JSON.stringify(SAMPLE_SESSION), { status: 200 })
+      return new Response(JSON.stringify(SAMPLE_SESSION), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
     }
-    return new Response(JSON.stringify({ events: [], cursor: null }), { status: 200 })
+    return new Response(JSON.stringify({ events: [], cursor: null }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })
   }) as unknown as typeof globalThis.fetch
 })
 afterEach(() => {
@@ -124,7 +131,7 @@ describe('RFC-027 NodeDetailDrawer Session tab', () => {
     renderDrawer({ nodeRunId: r.id, nodeId: r.nodeId, workflowNodeKind: 'agent-single', runs: [r] })
 
     const sessionTab = screen.getByRole('tab', { name: 'Session' })
-    const eventsTab = screen.getByRole('tab', { name: 'Events' })
+    const eventsTab = screen.getByRole('tab', { name: /^Events/ })
     expect(sessionTab.id).toBe('node-detail-drawer-tab-session')
     expect(sessionTab.getAttribute('aria-controls')).toBe('node-detail-drawer-panel-session')
     expect(eventsTab.id).toBe('node-detail-drawer-tab-events')
@@ -144,6 +151,25 @@ describe('RFC-027 NodeDetailDrawer Session tab', () => {
     expect(panels[0]?.getAttribute('aria-labelledby')).toBe(eventsTab.id)
     expect(document.getElementById('node-detail-drawer-panel-session')?.hidden).toBe(true)
     expect(document.getElementById('node-detail-drawer-panel-events')?.hidden).toBe(false)
+  })
+
+  test('Events and Output expose neutral counts without turning them into alerts', async () => {
+    const r = run({ id: 'r1', promptText: 'hi' })
+    renderDrawer({
+      nodeRunId: r.id,
+      nodeId: r.nodeId,
+      workflowNodeKind: 'wrapper-git',
+      runs: [r],
+      outputs: [
+        { nodeRunId: r.id, port: 'summary', value: 'one' },
+        { nodeRunId: r.id, port: 'report', value: 'two' },
+      ],
+    })
+
+    const outputBadge = screen.getByLabelText('2 outputs')
+    expect(outputBadge.getAttribute('data-tone')).toBe('neutral')
+    const eventBadge = await screen.findByLabelText('0 events')
+    expect(eventBadge.getAttribute('data-tone')).toBe('neutral')
   })
 
   test('non-agent kind (wrapper-git) shows the "not applicable" hint', () => {

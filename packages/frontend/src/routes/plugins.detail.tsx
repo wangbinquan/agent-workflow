@@ -1,27 +1,34 @@
-// Plugin detail / edit page — the right rail of the /plugins split page.
-//
-// RFC-169 (T17): child route under the /plugins layout (path '/$id'), two tabs
-// (Config / Updates). The check-update + upgrade actions moved here from the
-// list row; check-update writes the shared ['plugins','updates'] cache (with a
-// spec + resolvedVersion fingerprint) so the list card can light up its chip.
+// Plugin detail: exact saved-revision Check/Upgrade UX (RFC-169 / RFC-201).
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useNavigate } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { Plugin } from '@agent-workflow/shared'
-import { api } from '@/api/client'
-import { useDraftFromQuery } from '@/hooks/useDraftFromQuery'
-import { useReportSplitDirty, useSplitDirty } from '@/components/split/splitDirty'
+import type {
+  PluginOperationResource,
+  PluginUpdateCheck,
+  PluginUpgradeResult,
+} from '@agent-workflow/shared'
+import { api, ApiError } from '@/api/client'
 import { DetailHeaderActions } from '@/components/DetailHeaderActions'
+import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
-import { PluginFields } from '@/components/PluginFields'
+import { NoticeBanner } from '@/components/NoticeBanner'
+import { PluginFields, focusFirstPluginFieldError } from '@/components/PluginFields'
 import { TabBar, type TabDef } from '@/components/TabBar'
 import { TabPanels } from '@/components/split/TabPanels'
 import {
+  useReportSplitDirty,
+  useSplitDirty,
+  type SplitBusyRelease,
+} from '@/components/split/splitDirty'
+import { useDraftFromQuery } from '@/hooks/useDraftFromQuery'
+import {
   PLUGIN_UPDATES_KEY,
   pluginUpdateAvailable,
+  pluginUpdateCacheKey,
+  pluginUpdateEntry,
   type PluginUpdatesCache,
 } from '@/lib/plugin-updates'
 import {
@@ -30,6 +37,7 @@ import {
   pluginToForm,
   type PluginFormState,
 } from '@/lib/plugin-form'
+import { stableStringify } from '@/lib/stable-stringify'
 import { Route as pluginsRoute } from './plugins'
 
 export const Route = createRoute({
@@ -40,19 +48,46 @@ export const Route = createRoute({
 })
 
 type PluginTab = 'config' | 'updates'
+type OperationKind = 'check' | 'upgrade'
+interface ActiveOperation {
+  requestId: number
+  expectedHash: string
+  kind: OperationKind
+}
+
+const NOOP_RELEASE: SplitBusyRelease = () => {}
+const EXACT_OPERATION_HASH_RE = /^[a-f0-9]{64}$/
+
+function exactOperationHashOf(resource: PluginOperationResource | undefined): string | null {
+  const candidate = (resource as { operationConfigHash?: unknown } | undefined)?.operationConfigHash
+  return typeof candidate === 'string' && EXACT_OPERATION_HASH_RE.test(candidate) ? candidate : null
+}
 
 function PluginDetailPage() {
   const { t } = useTranslation()
   const { id } = Route.useParams()
   const navigate = useNavigate()
   const qc = useQueryClient()
-  const { report } = useSplitDirty()
+  const { beginBusy, report } = useSplitDirty()
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [tab, setTab] = useState<PluginTab>('config')
+  const [operationNotice, setOperationNotice] = useState<
+    | 'update-ready'
+    | 'no-change'
+    | 'identity-unknown'
+    | 'draft-changed'
+    | 'stale'
+    | 'upgraded'
+    | null
+  >(null)
+  const [lastOperationKind, setLastOperationKind] = useState<OperationKind>('check')
+  const operationSequence = useRef(0)
+  const activeOperation = useRef<ActiveOperation | null>(null)
 
-  const query = useQuery<Plugin>({
+  const query = useQuery<PluginOperationResource>({
     queryKey: ['plugins', id],
-    queryFn: ({ signal }) => api.get(`/api/plugins/${encodeURIComponent(id)}`, undefined, signal),
+    queryFn: ({ signal }) =>
+      api.get<PluginOperationResource>(`/api/plugins/${encodeURIComponent(id)}`, undefined, signal),
   })
 
   const {
@@ -62,90 +97,263 @@ function PluginDetailPage() {
     dirty,
     commitSaved,
   } = useDraftFromQuery(query.data, pluginToForm, { followWhenClean: true })
+  const formRef = useRef(form)
+  formRef.current = form
   useReportSplitDirty(id, dirty)
 
-  const dropUpdateEntry = () =>
-    qc.setQueryData<PluginUpdatesCache>(PLUGIN_UPDATES_KEY, (prev) => {
-      if (prev === undefined || prev[id] === undefined) return prev
-      const next = { ...prev }
-      delete next[id]
-      return next
+  const dropUpdateEntries = () =>
+    qc.setQueryData<PluginUpdatesCache>(PLUGIN_UPDATES_KEY, (previous) => {
+      if (previous === undefined) return previous
+      const next = Object.fromEntries(
+        Object.entries(previous).filter(([key]) => !key.startsWith(`${id}:`)),
+      )
+      return Object.keys(next).length === Object.keys(previous).length ? previous : next
     })
 
+  const publishResource = (resource: PluginOperationResource) => {
+    qc.setQueryData<PluginOperationResource>(['plugins', id], resource)
+    qc.setQueryData<PluginOperationResource[]>(['plugins'], (rows) =>
+      rows === undefined ? rows : rows.map((row) => (row.id === id ? resource : row)),
+    )
+  }
+
+  const handleOperationError = (error: unknown) => {
+    if (!(error instanceof ApiError) || error.code !== 'resource-operation-stale') return
+    setOperationNotice('stale')
+    dropUpdateEntries()
+    void qc.invalidateQueries({ queryKey: ['plugins', id], exact: true })
+    void qc.invalidateQueries({ queryKey: ['plugins'], exact: true })
+  }
+
   const save = useMutation({
-    mutationFn: (snapshot: PluginFormState): Promise<Plugin> => {
+    mutationFn: ({ snapshot }: { snapshot: PluginFormState; release: SplitBusyRelease }) => {
       if (query.data === undefined) return Promise.reject(new Error('not loaded'))
       const built = buildUpdatePayload(snapshot, query.data)
       if (!built.ok) return Promise.reject(new Error('invalid form'))
-      return api.put<Plugin>(`/api/plugins/${encodeURIComponent(id)}`, built.payload)
-    },
-    onSuccess: async (p, snapshot) => {
-      await qc.cancelQueries({ queryKey: ['plugins', id], exact: true })
-      qc.setQueryData(['plugins', id], p)
-      await qc.cancelQueries({ queryKey: ['plugins'], exact: true })
-      qc.setQueryData<Plugin[]>(['plugins'], (rows) =>
-        rows === undefined ? rows : rows.map((r) => (r.id === id ? p : r)),
+      return api.put<PluginOperationResource>(
+        `/api/plugins/${encodeURIComponent(id)}`,
+        built.payload,
       )
-      void qc.invalidateQueries({ queryKey: ['plugins'], exact: true })
-      dropUpdateEntry() // spec may have changed → stale check
-      commitSaved(snapshot, pluginToForm(p))
     },
+    onSuccess: async (resource, { snapshot }) => {
+      await qc.cancelQueries({ queryKey: ['plugins', id], exact: true })
+      await qc.cancelQueries({ queryKey: ['plugins'], exact: true })
+      publishResource(resource)
+      void qc.invalidateQueries({ queryKey: ['plugins'], exact: true })
+      dropUpdateEntries()
+      commitSaved(snapshot, pluginToForm(resource))
+    },
+    onSettled: (_resource, _error, { release }) => release(),
   })
 
-  function submitSave() {
-    if (query.data === undefined || form === undefined) return
-    const built = buildUpdatePayload(form, query.data)
-    if (!built.ok) {
-      setErrors(built.errors)
-      save.reset()
-      return
-    }
-    setErrors({})
-    save.mutate(form)
-  }
-
   const del = useMutation({
-    mutationFn: () => api.delete(`/api/plugins/${encodeURIComponent(id)}`),
-    onSuccess: async () => {
+    mutationFn: (_variables: { release: SplitBusyRelease }) =>
+      api.delete(`/api/plugins/${encodeURIComponent(id)}`),
+    onSuccess: async (_deleted, { release }) => {
       report(id, false)
       await qc.cancelQueries({ queryKey: ['plugins'], exact: true })
-      qc.setQueryData<Plugin[]>(['plugins'], (rows) =>
-        rows === undefined ? rows : rows.filter((r) => r.id !== id),
+      qc.setQueryData<PluginOperationResource[]>(['plugins'], (rows) =>
+        rows === undefined ? rows : rows.filter((row) => row.id !== id),
       )
       void qc.invalidateQueries({ queryKey: ['plugins'], exact: true })
-      dropUpdateEntry()
+      dropUpdateEntries()
+      release()
       navigate({ to: '/plugins' })
     },
+    onSettled: (_deleted, _error, { release }) => release(),
   })
 
   const checkUpdate = useMutation({
-    mutationFn: (): Promise<{
-      available: boolean
-      current: string | null
-      latest: string | null
-    }> => api.post(`/api/plugins/${encodeURIComponent(id)}/check-update`),
-    onSuccess: (result) => {
-      if (query.data === undefined) return
-      qc.setQueryData<PluginUpdatesCache>(PLUGIN_UPDATES_KEY, (prev) => ({
-        ...(prev ?? {}),
-        [id]: {
-          spec: query.data!.spec,
-          resolvedVersion: query.data!.resolvedVersion,
-          latest: result.latest,
+    mutationFn: (variables: ActiveOperation & { release: SplitBusyRelease }) =>
+      api.post<PluginUpdateCheck>(`/api/plugins/${encodeURIComponent(id)}/check-update`, {
+        expectedConfigHash: variables.expectedHash,
+      }),
+    onSuccess: (receipt, variables) => {
+      const active = activeOperation.current
+      const current = qc.getQueryData<PluginOperationResource>(['plugins', id])
+      if (
+        active?.requestId !== variables.requestId ||
+        active.kind !== 'check' ||
+        active.expectedHash !== variables.expectedHash ||
+        receipt.configHashUsed !== variables.expectedHash ||
+        current?.operationConfigHash !== receipt.configHashUsed
+      ) {
+        setOperationNotice('stale')
+        void qc.invalidateQueries({ queryKey: ['plugins', id], exact: true })
+        return
+      }
+      qc.setQueryData<PluginUpdatesCache>(PLUGIN_UPDATES_KEY, (previous) => ({
+        ...(previous ?? {}),
+        [pluginUpdateCacheKey(id, receipt.configHashUsed)]: {
+          configHashUsed: receipt.configHashUsed,
+          available: receipt.available,
+          latest: receipt.latest,
+          identityStatus: receipt.identityStatus,
         },
       }))
+      setOperationNotice(
+        receipt.identityStatus === 'unknown'
+          ? 'identity-unknown'
+          : receipt.available
+            ? 'update-ready'
+            : 'no-change',
+      )
+    },
+    onError: handleOperationError,
+    onSettled: (_receipt, _error, variables) => {
+      if (activeOperation.current?.requestId === variables.requestId) activeOperation.current = null
+      variables.release()
     },
   })
 
   const upgrade = useMutation({
-    mutationFn: (): Promise<Plugin> =>
-      api.post<Plugin>(`/api/plugins/${encodeURIComponent(id)}/upgrade`),
-    onSuccess: (p) => {
-      qc.setQueryData(['plugins', id], p)
-      void qc.invalidateQueries({ queryKey: ['plugins'] })
-      dropUpdateEntry()
+    mutationFn: (variables: ActiveOperation & { release: SplitBusyRelease }) =>
+      api.post<PluginUpgradeResult>(`/api/plugins/${encodeURIComponent(id)}/upgrade`, {
+        expectedConfigHash: variables.expectedHash,
+      }),
+    onSuccess: (receipt, variables) => {
+      const active = activeOperation.current
+      let accepted = false
+      qc.setQueryData<PluginOperationResource>(['plugins', id], (current) => {
+        if (
+          active?.requestId !== variables.requestId ||
+          active.kind !== 'upgrade' ||
+          active.expectedHash !== variables.expectedHash ||
+          receipt.configHashUsed !== variables.expectedHash ||
+          current?.operationConfigHash !== receipt.configHashUsed
+        ) {
+          return current
+        }
+        accepted = true
+        return receipt.resource
+      })
+      if (!accepted) {
+        setOperationNotice('stale')
+        void qc.invalidateQueries({ queryKey: ['plugins', id], exact: true })
+        return
+      }
+      qc.setQueryData<PluginOperationResource[]>(['plugins'], (rows) =>
+        rows?.map((row) =>
+          row.id === id && row.operationConfigHash === receipt.configHashUsed
+            ? receipt.resource
+            : row,
+        ),
+      )
+      dropUpdateEntries()
+      setOperationNotice('upgraded')
+      void qc.invalidateQueries({ queryKey: ['plugins'], exact: true })
+    },
+    onError: handleOperationError,
+    onSettled: (_receipt, _error, variables) => {
+      if (activeOperation.current?.requestId === variables.requestId) activeOperation.current = null
+      variables.release()
     },
   })
+
+  const operationBusy = checkUpdate.isPending || upgrade.isPending
+
+  function validateSnapshot(snapshot: PluginFormState): boolean {
+    if (query.data === undefined) return false
+    const built = buildUpdatePayload(snapshot, query.data)
+    if (built.ok) {
+      setErrors({})
+      return true
+    }
+    setErrors(built.errors)
+    setTab('config')
+    save.reset()
+    focusFirstPluginFieldError(built.errors)
+    return false
+  }
+
+  function submitSave() {
+    if (
+      query.data === undefined ||
+      form === undefined ||
+      save.isPending ||
+      del.isPending ||
+      operationBusy
+    )
+      return
+    if (!validateSnapshot(form)) return
+    save.mutate({ snapshot: form, release: beginBusy(id) })
+  }
+
+  async function runCheck(): Promise<void> {
+    if (
+      query.data === undefined ||
+      form === undefined ||
+      save.isPending ||
+      del.isPending ||
+      operationBusy ||
+      query.data.sourceKind === 'file'
+    )
+      return
+    const release = beginBusy(id)
+    let basis = query.data
+    if (dirty) {
+      const snapshot = form
+      if (!validateSnapshot(snapshot)) {
+        release()
+        return
+      }
+      try {
+        basis = await save.mutateAsync({ snapshot, release: NOOP_RELEASE })
+      } catch {
+        release()
+        return
+      }
+      if (stableStringify(formRef.current) !== stableStringify(snapshot)) {
+        setOperationNotice('draft-changed')
+        release()
+        return
+      }
+    }
+    const expectedHash = exactOperationHashOf(basis)
+    if (expectedHash === null) {
+      setOperationNotice('stale')
+      void qc.invalidateQueries({ queryKey: ['plugins', id], exact: true })
+      release()
+      return
+    }
+    const request: ActiveOperation = {
+      requestId: ++operationSequence.current,
+      expectedHash,
+      kind: 'check',
+    }
+    activeOperation.current = request
+    setLastOperationKind('check')
+    setOperationNotice(null)
+    try {
+      await checkUpdate.mutateAsync({ ...request, release })
+    } catch {
+      // ErrorBanner renders the exact mutation error; onSettled releases busy.
+    }
+  }
+
+  function runUpgrade() {
+    const current = query.data
+    const expectedHash = exactOperationHashOf(current)
+    if (
+      current === undefined ||
+      expectedHash === null ||
+      dirty ||
+      save.isPending ||
+      del.isPending ||
+      operationBusy ||
+      current.sourceKind === 'file'
+    )
+      return
+    const request: ActiveOperation = {
+      requestId: ++operationSequence.current,
+      expectedHash,
+      kind: 'upgrade',
+    }
+    activeOperation.current = request
+    setLastOperationKind('upgrade')
+    setOperationNotice(null)
+    upgrade.mutate({ ...request, release: beginBusy(id) })
+  }
 
   const retryDetailAction = (
     <button type="button" className="btn btn--sm" onClick={() => void query.refetch()}>
@@ -160,9 +368,16 @@ function PluginDetailPage() {
     return null
   }
 
-  const displayName = query.data?.name ?? id
+  const resource = query.data
+  const displayName = resource?.name ?? id
+  const exactResourceHash = exactOperationHashOf(resource)
   const updateCache = qc.getQueryData<PluginUpdatesCache>(PLUGIN_UPDATES_KEY) ?? {}
-  const updateReady = query.data !== undefined && pluginUpdateAvailable(updateCache[id], query.data)
+  const currentUpdate =
+    resource === undefined || exactResourceHash === null
+      ? undefined
+      : pluginUpdateEntry(updateCache, resource)
+  const updateReady = resource !== undefined && pluginUpdateAvailable(currentUpdate, resource)
+  const canRebaseline = currentUpdate?.identityStatus === 'unknown'
 
   const tabs: Array<TabDef<PluginTab>> = [
     { key: 'config', label: t('plugins.detailTabConfig'), testid: 'plugin-tab-config' },
@@ -171,37 +386,126 @@ function PluginDetailPage() {
 
   const updatesPanel = (
     <div className="plugin-updates">
+      {resource !== undefined && (
+        <NoticeBanner
+          tone={dirty ? 'warning' : 'info'}
+          title={
+            dirty ? t('plugins.executionBasisDirtyTitle') : t('plugins.executionBasisSavedTitle')
+          }
+          size="compact"
+        >
+          {dirty ? t('plugins.executionBasisDirtyBody') : t('plugins.executionBasisSavedBody')}{' '}
+          <code>{exactResourceHash?.slice(0, 12) ?? t('common.emDash')}</code>
+        </NoticeBanner>
+      )}
       <div className="plugin-updates__row">
         <span className="muted">{t('plugins.colVersion')}</span>
-        <code>{query.data?.resolvedVersion ?? t('common.emDash')}</code>
+        <code>{resource?.resolvedVersion ?? t('common.emDash')}</code>
       </div>
-      <div className="form-actions">
-        <button
-          type="button"
-          className="btn btn--sm"
-          onClick={() => checkUpdate.mutate()}
-          disabled={checkUpdate.isPending}
-          data-testid="plugin-check-update"
-        >
-          {checkUpdate.isPending ? t('plugins.checking') : t('plugins.checkUpdateButton')}
-        </button>
-        <button
-          type="button"
-          className="btn btn--sm btn--primary"
-          onClick={() => upgrade.mutate()}
-          disabled={upgrade.isPending || !updateReady}
-          data-testid="plugin-upgrade"
-        >
-          {upgrade.isPending ? t('plugins.upgrading') : t('plugins.upgradeButton')}
-        </button>
-      </div>
-      {updateReady && (
-        <div className="plugin-updates__available" data-testid="plugin-update-latest">
-          {t('plugins.updateAvailableChip')}: <code>{updateCache[id]?.latest}</code>
+
+      {resource?.sourceKind === 'file' ? (
+        <NoticeBanner tone="info" size="compact" title={t('plugins.externalManagedTitle')}>
+          {t('plugins.externalManagedBody')}
+        </NoticeBanner>
+      ) : (
+        <div className="form-actions">
+          <button
+            type="button"
+            className="btn btn--sm"
+            onClick={() => void runCheck()}
+            disabled={
+              save.isPending ||
+              del.isPending ||
+              operationBusy ||
+              (!dirty && exactResourceHash === null)
+            }
+            data-testid="plugin-check-update"
+          >
+            {checkUpdate.isPending
+              ? t('plugins.checking')
+              : dirty
+                ? t('plugins.saveAndCheckButton')
+                : t('plugins.checkUpdateButton')}
+          </button>
+          <button
+            type="button"
+            className="btn btn--sm btn--primary"
+            onClick={runUpgrade}
+            disabled={
+              dirty ||
+              save.isPending ||
+              del.isPending ||
+              operationBusy ||
+              exactResourceHash === null ||
+              (!updateReady && !canRebaseline)
+            }
+            data-testid="plugin-upgrade"
+          >
+            {upgrade.isPending
+              ? t('plugins.upgrading')
+              : canRebaseline
+                ? t('plugins.reinstallBaselineButton')
+                : t('plugins.upgradeButton')}
+          </button>
         </div>
       )}
+
+      {operationBusy && <LoadingState size="compact" data-testid="plugin-operation-loading" />}
+      {!operationBusy &&
+        operationNotice === null &&
+        checkUpdate.error == null &&
+        upgrade.error == null &&
+        resource?.sourceKind !== 'file' && (
+          <EmptyState
+            size="compact"
+            title={t('plugins.notCheckedTitle')}
+            description={t('plugins.notCheckedBody')}
+            data-testid="plugin-update-empty"
+          />
+        )}
+      {operationNotice === 'update-ready' && (
+        <NoticeBanner tone="success" size="compact" title={t('plugins.updateReadyTitle')}>
+          {t('plugins.updateReadyBody', { version: currentUpdate?.latest ?? t('common.emDash') })}
+        </NoticeBanner>
+      )}
+      {operationNotice === 'no-change' && (
+        <NoticeBanner tone="success" size="compact">
+          {t('plugins.noUpdateAvailable')}
+        </NoticeBanner>
+      )}
+      {operationNotice === 'identity-unknown' && (
+        <NoticeBanner tone="warning" size="compact" title={t('plugins.identityUnknownTitle')}>
+          {t('plugins.identityUnknownBody')}
+        </NoticeBanner>
+      )}
+      {operationNotice === 'draft-changed' && (
+        <NoticeBanner tone="warning" size="compact">
+          {t('plugins.draftChangedDuringSave')}
+        </NoticeBanner>
+      )}
+      {operationNotice === 'stale' && (
+        <NoticeBanner tone="warning" size="compact">
+          {t('plugins.staleOperationResult')}
+        </NoticeBanner>
+      )}
+      {operationNotice === 'upgraded' && (
+        <NoticeBanner tone="success" size="compact">
+          {t('plugins.upgradeSuccess')}
+        </NoticeBanner>
+      )}
       {(checkUpdate.error ?? upgrade.error) != null && (
-        <ErrorBanner error={checkUpdate.error ?? upgrade.error} />
+        <ErrorBanner
+          error={checkUpdate.error ?? upgrade.error}
+          action={
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={() => (lastOperationKind === 'check' ? void runCheck() : runUpgrade())}
+            >
+              {t('common.retry')}
+            </button>
+          }
+        />
       )}
     </div>
   )
@@ -218,13 +522,16 @@ function PluginDetailPage() {
         save={{
           label: save.isPending ? t('plugins.saving') : t('plugins.saveButton'),
           onClick: submitSave,
-          disabled: save.isPending || !loaded,
+          disabled: save.isPending || del.isPending || operationBusy || !loaded,
           testid: 'plugin-save-button',
         }}
         del={{
           label: t('common.delete'),
-          onConfirm: () => del.mutateAsync(),
-          disabled: del.isPending,
+          onConfirm: () => {
+            if (save.isPending || del.isPending || operationBusy) return Promise.resolve()
+            return del.mutateAsync({ release: beginBusy(id) })
+          },
+          disabled: del.isPending || save.isPending || operationBusy,
         }}
         errors={[save.error, del.error]}
       />

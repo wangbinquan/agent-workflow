@@ -32,6 +32,7 @@ export function SkillVersionHistory({
   currentVersion,
   onRestored,
   busy = false,
+  onRestoreStart,
   onPendingChange,
 }: {
   skillName: string
@@ -42,6 +43,8 @@ export function SkillVersionHistory({
   /** RFC-169: another version operation (save / file write) is in flight —
    *  disable restore for simple mutual exclusion. */
   busy?: boolean
+  /** Synchronous pre-mutation hook used by the route-level navigation guard. */
+  onRestoreStart?: () => void
   /** RFC-169: report restore-in-flight so the detail can disable Save too. */
   onPendingChange?: (pending: boolean) => void
 }) {
@@ -168,7 +171,10 @@ export function SkillVersionHistory({
                               confirmLabel={t('skills.versionRestoreConfirm', {
                                 n: v.versionIndex,
                               })}
-                              onConfirm={() => restore.mutate(v.versionIndex)}
+                              onConfirm={() => {
+                                onRestoreStart?.()
+                                restore.mutate(v.versionIndex)
+                              }}
                               disabled={restore.isPending || busy}
                             />
                           </>

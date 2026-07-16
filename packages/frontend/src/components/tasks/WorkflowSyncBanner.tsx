@@ -11,6 +11,7 @@ import { useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { api } from '@/api/client'
+import { BannerDismissButton } from '@/components/NoticeBanner'
 import type { Task, WorkflowSyncPreview } from '@agent-workflow/shared'
 
 import { WorkflowSyncDialog } from './WorkflowSyncDialog'
@@ -23,6 +24,7 @@ export function WorkflowSyncBanner(props: WorkflowSyncBannerProps): ReactElement
   const { t } = useTranslation()
   const qc = useQueryClient()
   const [open, setOpen] = useState(false)
+  const [dismissedSignature, setDismissedSignature] = useState<string | null>(null)
 
   const q = useQuery<WorkflowSyncPreview>({
     queryKey: ['tasks', props.taskId, 'workflow-sync-preview'],
@@ -63,6 +65,9 @@ export function WorkflowSyncBanner(props: WorkflowSyncBannerProps): ReactElement
   const preview = q.data
   if (preview === undefined || !preview.syncable || !preview.differs) return null
 
+  const previewSignature = `${props.taskId}:${preview.currentVersion ?? 'unknown'}:${preview.latestVersion ?? 'unknown'}`
+  if (dismissedSignature === previewSignature) return null
+
   const versionText = `v${preview.currentVersion ?? t('tasks.syncWorkflow.unknownVersion')} → v${preview.latestVersion ?? '?'}`
 
   return (
@@ -80,14 +85,24 @@ export function WorkflowSyncBanner(props: WorkflowSyncBannerProps): ReactElement
             </span>
           </div>
         </div>
-        <button
-          type="button"
-          className="btn btn--sm btn--primary"
-          onClick={() => setOpen(true)}
-          data-testid="workflow-sync-open"
-        >
-          {t('tasks.syncWorkflow.button')}
-        </button>
+        <div className="task-error-banner__actions">
+          <button
+            type="button"
+            className="btn btn--sm btn--primary"
+            onClick={() => setOpen(true)}
+            data-testid="workflow-sync-open"
+          >
+            {t('tasks.syncWorkflow.button')}
+          </button>
+          <BannerDismissButton
+            label={t('common.close')}
+            onDismiss={() => {
+              setOpen(false)
+              setDismissedSignature(previewSignature)
+            }}
+            testId="workflow-sync-dismiss"
+          />
+        </div>
       </div>
       {open && (
         <WorkflowSyncDialog

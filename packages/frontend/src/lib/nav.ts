@@ -60,8 +60,8 @@ export const NAV_GROUPS: NavGroupEntry[] = [
   },
   // RFC-041 PR4 follow-up: mirror the single-item Workflows-group shape so
   // the sidebar reads as four parallel categories. The pending-candidate
-  // badge is rendered by NavGroup's `renderBadge` hook from __root.tsx
-  // (admin only — non-admin sees the row without a badge).
+  // pending work is rendered as a sibling accessory Link by NavGroup. The
+  // main row itself always enters the stable `?tab=all` library default.
   {
     key: 'memory',
     i18nKey: 'nav.group.memory',

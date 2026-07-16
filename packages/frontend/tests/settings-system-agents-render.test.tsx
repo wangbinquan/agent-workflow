@@ -13,7 +13,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import type { Config } from '@agent-workflow/shared'
+import { DEFAULT_CONFIG, type Config } from '@agent-workflow/shared'
 import { SystemAgentsTab } from '../src/routes/settings'
 import i18n from '../src/i18n'
 import { setBaseUrl, setToken, clearToken } from '../src/stores/auth'
@@ -26,21 +26,11 @@ function wrap(qc: QueryClient) {
 
 function mkConfig(overrides: Partial<Config> = {}): Config {
   return {
-    $schema_version: 1,
-    maxConcurrentNodes: 4,
-    multiProcessSubprocessConcurrency: 4,
-    defaultPerTaskMaxDurationMs: 3_600_000,
-    defaultPerTaskMaxTotalTokens: 0,
-    defaultPerNodeTimeoutMs: 1_800_000,
-    worktreeAutoGc: { enabled: false },
-    eventsArchiveThresholds: { perNodeRunRows: 50_000, globalRows: 1_000_000 },
-    largeOutputThresholdBytes: 1_048_576,
-    bindHost: '127.0.0.1',
+    ...DEFAULT_CONFIG,
     language: 'zh-CN',
     theme: 'system',
-    logLevel: 'info',
     ...overrides,
-  } as Config
+  }
 }
 
 function json(obj: unknown) {
@@ -88,7 +78,7 @@ function mockFetch(): Recorded {
 }
 
 beforeEach(() => {
-  setBaseUrl('http://daemon.test')
+  setBaseUrl(`http://settings-system-agents-${crypto.randomUUID()}.test`)
   setToken('tok')
   void i18n.changeLanguage('en-US')
 })
@@ -309,5 +299,83 @@ describe('RFC-156 SystemAgentsTab — fusion save is a runtime-only agent patch'
     await Promise.resolve()
     await Promise.resolve()
     expect(rec.agentPuts).toHaveLength(0)
+  })
+
+  test('the sequenced fusion PUT uses the click-time snapshot while newer editing stays dirty', async () => {
+    let resolveConfig!: (response: Response) => void
+    const pendingConfig = new Promise<Response>((resolve) => {
+      resolveConfig = resolve
+    })
+    const rec: { configPuts: Array<unknown>; agentPuts: Array<Record<string, unknown>> } = {
+      configPuts: [],
+      agentPuts: [],
+    }
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      async (url: RequestInfo | URL, init?: RequestInit) => {
+        const s = typeof url === 'string' ? url : url.toString()
+        const method = init?.method ?? 'GET'
+        if (s.includes('/api/runtimes')) {
+          return json({
+            runtimes: [
+              { name: 'opencode', protocol: 'opencode', enabled: true },
+              { name: 'fast-oc', protocol: 'opencode', enabled: true },
+            ],
+          })
+        }
+        if (s.includes('/api/agents/aw-skill-merger') && method === 'GET') {
+          return json({ name: 'aw-skill-merger', runtime: 'opencode', builtin: true })
+        }
+        if (s.includes('/api/agents/aw-skill-merger') && method === 'PUT') {
+          const body = JSON.parse(String(init?.body)) as Record<string, unknown>
+          rec.agentPuts.push(body)
+          return json({ name: 'aw-skill-merger', runtime: body.runtime, builtin: true })
+        }
+        if (s.includes('/api/config') && method === 'PUT') {
+          rec.configPuts.push(JSON.parse(String(init?.body)))
+          return pendingConfig
+        }
+        if (s.includes('/api/config') && method === 'GET') {
+          return json(mkConfig({ mergeAgentRuntime: 'fast-oc' }))
+        }
+        return json({})
+      },
+    )
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(<SystemAgentsTab config={mkConfig()} />, { wrapper: wrap(qc) })
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('combobox', {
+          name: i18n.t('settings.systemAgents.fusionRuntime'),
+        }).textContent,
+      ).toContain('opencode'),
+    )
+    await pickRuntime(i18n.t('settingsForm.mergeAgentRuntime'), 'fast-oc')
+    await pickRuntime(i18n.t('settings.systemAgents.fusionRuntime'), 'fast-oc')
+    clickSave()
+    await waitFor(() => expect(rec.configPuts).toHaveLength(1))
+
+    // The form remains editable while Config is pending. This newer choice is
+    // revision N+1 and must not replace the runtime reserved by the Save click.
+    await pickRuntime(
+      i18n.t('settings.systemAgents.fusionRuntime'),
+      i18n.t('settings.runtimeInherit'),
+    )
+    await act(async () => {
+      resolveConfig(json(mkConfig({ mergeAgentRuntime: 'fast-oc' })))
+      await pendingConfig
+    })
+
+    await waitFor(() => expect(rec.agentPuts).toHaveLength(1))
+    expect(rec.agentPuts[0]).toEqual({ runtime: 'fast-oc' })
+    expect(
+      screen.getByRole('combobox', {
+        name: i18n.t('settings.systemAgents.fusionRuntime'),
+      }).textContent,
+    ).toContain(i18n.t('settings.runtimeInherit'))
+    const saveButton = screen
+      .getAllByRole('button')
+      .find((button) => /保存|Save/.test(button.textContent ?? '')) as HTMLButtonElement | undefined
+    expect(saveButton?.disabled).toBe(false)
   })
 })

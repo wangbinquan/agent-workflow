@@ -6,9 +6,10 @@
 // pre-RFC-164 lists (the golden lock — a refactor that leaks 'chatroom' into
 // normal tasks or drops a legacy tab goes red here).
 //
-// Source-level assertions on tasks.detail.tsx pin the wiring (chatroom pane +
-// WorkgroupRoom mount + tabs[0] default fallback + canvas gated off for
-// group tasks), the same fallback idiom as task-detail-page-tabs.test.ts.
+// Source-level assertions on tasks.detail.tsx pin the RFC-201 wiring: the
+// capability oracle feeds route resolution, PageSectionNav owns navigation,
+// and inapplicable workgroup panes do not enter the DOM. The canvas remains
+// gated off for turn-engine workgroups.
 
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -74,10 +75,15 @@ describe('availableTabs — non-workgroup tasks stay item-by-item unchanged', ()
 })
 
 describe('tasks.detail.tsx — workgroup wiring (source locks)', () => {
-  test('derives isWorkgroup from task.workgroupId and delegates async shape resolution', () => {
+  test('derives capabilities once and delegates URL resolution to the RFC-201 oracle', () => {
     expect(SRC).toMatch(/const isWorkgroup = task\.data\?\.workgroupId != null/)
+    expect(SRC).toMatch(/deriveTaskDetailCapabilities\(task\.data, \{/)
+    expect(SRC).toMatch(/canReadQuestions: true/)
+    expect(SRC).toMatch(/canReadFeedback: actor\.data\?\.permissions\.includes\('memory:read'\)/)
     expect(SRC).toMatch(/resolveTaskDetailTabs\(\{/)
-    expect(SRC).toMatch(/hasOutputs,\s*isWorkgroup,/)
+    expect(SRC).toMatch(/capabilitiesReady: permissionsReady/)
+    expect(SRC).toMatch(/capabilities: taskCapabilities/)
+    expect(SRC).toMatch(/isWorkgroup,\s*room: roomClassification/)
     expect(SRC).toMatch(/mode: isDynamicWorkgroup \? 'dynamic-workflow' : 'turn-engine'/)
   })
 
@@ -86,9 +92,21 @@ describe('tasks.detail.tsx — workgroup wiring (source locks)', () => {
     expect(SRC).toMatch(/navigateTaskTab\(canonicalTab, true\)/)
   })
 
-  test('renders a chatroom pane mounting WorkgroupRoom for TURN-ENGINE group tasks only (RFC-167: dynamic groups have no chatroom)', () => {
+  test('RFC-201 PageSectionNav preserves URL-owned task section links and compact selection', () => {
+    expect(SRC).toContain('<PageSectionNav<TaskDetailTab>')
+    expect(SRC).toMatch(/groups=\{taskSectionGroups\}/)
+    expect(SRC).toMatch(/active=\{tab\}/)
+    expect(SRC).toMatch(/presentation="inline"/)
+    expect(SRC).toContain('<PageSectionLink')
+    expect(SRC).toMatch(/withTaskDetailTab\(previous, key\)/)
+    expect(SRC).toMatch(/onSelectCompact=\{\(next\) => navigateTaskTab\(next\)\}/)
+  })
+
+  test('renders WorkgroupRoom only when the capability oracle permits chatroom', () => {
+    expect(SRC).toMatch(/\{taskCapabilities\.chatroom && \(/)
+    expect(SRC).toMatch(/taskSectionProps\(t, 'chatroom'\)/)
     expect(SRC).toMatch(/hidden=\{tab !== 'chatroom'\}/)
-    expect(SRC).toMatch(/\{isWorkgroup && !isDynamicWorkgroup && \(\s*<WorkgroupRoom/)
+    expect(SRC).toMatch(/<WorkgroupRoom taskId=\{id\} taskStatus=\{tk\.status\} \/>/)
   })
 
   test('the host-graph canvas never mounts for turn-engine group tasks; a dynamic task unlocks it only in the executing phase', () => {
@@ -101,9 +119,11 @@ describe('tasks.detail.tsx — workgroup wiring (source locks)', () => {
     )
   })
 
-  test('RFC-167: the orchestration pane mounts DynamicWorkflowPanel for dynamic tasks', () => {
+  test('RFC-167/RFC-201: the orchestration pane is capability-gated for dynamic tasks', () => {
+    expect(SRC).toMatch(/\{taskCapabilities\.orchestration && \(/)
+    expect(SRC).toMatch(/taskSectionProps\(t, 'dw-orchestration'\)/)
     expect(SRC).toMatch(/hidden=\{tab !== 'dw-orchestration'\}/)
-    expect(SRC).toMatch(/\{isDynamicWorkgroup && \(\s*<DynamicWorkflowPanel/)
+    expect(SRC).toMatch(/<DynamicWorkflowPanel/)
   })
 
   test('RFC-198: room config must settle before a workgroup tab is resolved', () => {
