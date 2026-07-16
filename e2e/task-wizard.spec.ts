@@ -113,8 +113,33 @@ test.describe('RFC-165 — /tasks/new wizard', () => {
     expect(final.status).toBe('done')
 
     // The diff tab is reachable (scratch delivery surface — empty diff is
-    // fine, the stub writes no files).
-    await page.locator('.task-detail__tab-bar [role="tab"]', { hasText: /Diff/i }).click()
+    // fine, the stub writes no files). PageSectionNav is container-responsive,
+    // so exercise whichever semantic presentation owns the current width.
+    const sectionNav = page.locator('.task-detail__workspace > .page-section-nav')
+    await expect(sectionNav).toBeVisible()
+    if ((await sectionNav.getAttribute('data-mode')) === 'compact') {
+      await page.getByTestId('task-detail-compact-select').click()
+      await page.getByRole('option', { name: 'Worktree diff', exact: true }).click()
+    } else {
+      await expect(sectionNav).toHaveAttribute('data-inline-layout', 'single-row')
+      const groupBox = await sectionNav.locator('.page-section-nav__group-triggers').boundingBox()
+      const leafBox = await sectionNav
+        .locator('.page-section-nav__active-group-leaves')
+        .boundingBox()
+      const navBox = await sectionNav.boundingBox()
+      expect(groupBox).not.toBeNull()
+      expect(leafBox).not.toBeNull()
+      expect(navBox).not.toBeNull()
+      expect(Math.abs(groupBox!.y - leafBox!.y)).toBeLessThanOrEqual(4)
+      expect(navBox!.height).toBeLessThanOrEqual(52)
+      await sectionNav
+        .locator('.page-section-nav__group-trigger')
+        .filter({ hasText: 'Artifacts' })
+        .click()
+      await page.locator('[data-task-detail-section-link="worktree-diff"]').click()
+    }
+    await expect(page).toHaveURL(/(?:\?|&)tab=worktree-diff(?:&|$)/)
+    await expect(page.locator('[data-task-detail-section="worktree-diff"]')).toBeVisible()
   })
 
   test('workgroup + scratch: wizard chain reaches done (real wg envelope)', async ({ page }) => {

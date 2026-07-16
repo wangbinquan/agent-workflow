@@ -253,7 +253,7 @@ test('happy path: agents → workflow → launch → task done → outputs visib
   // the output card is visible. The tab itself only renders when
   // `collectPorts(workflowSnapshot).length > 0`, so its appearance also
   // doubles as a smoke check for hasOutputs detection.
-  await page.locator('.task-detail__tab-bar [role="tab"]', { hasText: /Outputs|输出/ }).click()
+  await page.locator('[data-task-detail-section-link="outputs"]').click()
   // RFC-072: the Outputs tab is now a two-pane browser; the selected port's
   // value renders in .task-outputs-panel__pre (single declared port → selected
   // by default). Replaces the old per-card .task-output-card__body.
@@ -271,9 +271,7 @@ test('happy path: agents → workflow → launch → task done → outputs visib
   // RFC-021: step 7 left us on the Outputs tab (canvas pane is hidden via
   // [hidden] → display:none). Switch back to Workflow status so the canvas
   // is in the live layout tree before geometry assertions run.
-  await page
-    .locator('.task-detail__tab-bar [role="tab"]', { hasText: /Workflow status|工作流状态/ })
-    .click()
+  await page.locator('[data-task-detail-section-link="workflow-status"]').click()
   await expect(page.locator('.canvas-node__port-label').first()).toBeVisible({ timeout: 10_000 })
   const labelFit = await page.evaluate(() => {
     const labels = Array.from(document.querySelectorAll('.canvas-node__port-label'))
@@ -513,7 +511,7 @@ test('RFC-024: launch task from git URL clones into cache and renders redacted U
   expect(final.status).toBe('done')
 
   // Task detail → Details tab → redacted URL row visible.
-  await page.locator('.task-detail__tab-bar [role="tab"]', { hasText: /Details|详细信息/ }).click()
+  await page.locator('[data-task-detail-section-link="details"]').click()
   const urlCell = page.getByTestId('task-detail-repo-url')
   await expect(urlCell).toBeVisible({ timeout: 10_000 })
   // For a `file://` URL there are no creds to redact; the redacted form is
@@ -675,9 +673,10 @@ test('RFC-022: agent form Dependency tree (preview) renders the full closure', a
   )
   await page.goto(`${daemon.baseUrl}/agents/rfc022-a`)
 
-  // RFC-169: the dependency-tree preview lives in the "Resources & deps" tab
-  // (hidden until activated) — open it before asserting the tree.
-  await page.getByRole('tab', { name: /Resources/ }).click()
+  // RFC-201: the dependency-tree preview lives in the renamed capability tab
+  // and is intentionally collapsed under technical details.
+  await page.getByTestId('agent-tab-resources').click()
+  await page.locator('.agent-resources__technical > summary').click()
 
   // 200ms debounce → wait for the closure preview to populate. The tree
   // renders a treeitem per closure member (root + dependents recursively).

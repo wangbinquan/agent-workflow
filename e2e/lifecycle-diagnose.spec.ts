@@ -280,4 +280,9 @@ test('R1 violation surfaces banner + Diagnose panel renders the rule', async ({ 
   await page.locator('[data-testid="task-diagnose-panel"]').press('Escape')
   await expect(panel).toHaveCount(0)
   await expect(banner).toBeVisible()
+
+  // The alert remains server-side, but the operator can reclaim page space
+  // for this exact alert signature during the current page session.
+  await page.locator('[data-testid="stuck-task-banner-dismiss"]').click()
+  await expect(banner).toHaveCount(0)
 })

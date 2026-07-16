@@ -42,6 +42,18 @@ async function setDaemonTheme(theme: AppTheme): Promise<void> {
   expect(response.ok, `failed to set ${theme} theme (${response.status})`).toBe(true)
 }
 
+async function setDaemonLanguage(language: 'en-US' | 'zh-CN'): Promise<void> {
+  const response = await fetch(`${daemon.baseUrl}/api/config`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${daemon.token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ language }),
+  })
+  expect(response.ok, `failed to set ${language} language (${response.status})`).toBe(true)
+}
+
 async function postFixture(path: string, body: unknown): Promise<unknown> {
   const response = await fetch(`${daemon.baseUrl}${path}`, {
     method: 'POST',
@@ -357,9 +369,119 @@ test.describe('RFC-198 global UX browser matrix', () => {
     await expectNoPageOverflow(page)
 
     await page.goto(`${daemon.baseUrl}/settings?tab=limits`)
-    await expect(page.getByRole('tab', { name: 'Limits' })).toHaveAttribute('aria-selected', 'true')
+    await expect(
+      page.locator('.settings-section-layout .page-section-nav__leaf[aria-current="page"]'),
+    ).toContainText('Limits')
     await expect(page.getByRole('button', { name: 'Save' })).toBeVisible()
     await expect(page.locator('.form-input').first()).toBeVisible()
+    await expectNoPageOverflow(page)
+  })
+
+  test('1081 to 1080 split resize hands off only hidden-list focus and preserves detail draft focus', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1081, height: 800 })
+    await setDaemonTheme('light')
+    await primeAuth(page)
+    await page.goto(`${daemon.baseUrl}/agents/${FIXTURE_AGENT}`)
+
+    const list = page.locator('.split__list')
+    const detail = page.getByTestId('split-detail')
+    const card = page.getByTestId(`split-card-${FIXTURE_AGENT}`)
+    const back = page.getByTestId('agents-mobile-back')
+    await expect(list).toBeVisible()
+    await expect(detail).toBeVisible()
+    await expect(back).toBeHidden()
+
+    await card.focus()
+    await expect(card).toBeFocused()
+    await page.setViewportSize({ width: 1080, height: 800 })
+    await expect(list).toBeHidden()
+    await expect(detail).toBeVisible()
+    await expect(back).toBeVisible()
+    await expect(back).toBeFocused()
+
+    await page.setViewportSize({ width: 1081, height: 800 })
+    const description = page.getByRole('textbox', { name: 'Description' })
+    await description.fill('RFC-201 resize keeps this unsaved draft')
+    await expect(description).toBeFocused()
+    await page.setViewportSize({ width: 1080, height: 800 })
+    await expect(description).toBeFocused()
+    await expect(description).toHaveValue('RFC-201 resize keeps this unsaved draft')
+
+    await page.setViewportSize({ width: 1081, height: 800 })
+    await expect(page.getByTestId(`split-card-dot-${FIXTURE_AGENT}`)).toBeVisible()
+    await page.setViewportSize({ width: 1080, height: 800 })
+
+    await back.click()
+    const guard = page.getByTestId('unsaved-guard-dialog')
+    await expect(guard).toBeVisible()
+    await expect(page).toHaveURL(new RegExp(`/agents/${FIXTURE_AGENT}$`))
+    await page.getByTestId('unsaved-stay').click()
+    await expect(guard).toHaveCount(0)
+    await expect(page).toHaveURL(new RegExp(`/agents/${FIXTURE_AGENT}$`))
+    await expect(description).toHaveValue('RFC-201 resize keeps this unsaved draft')
+    await expect(back).toBeFocused()
+
+    await back.click()
+    await expect(guard).toBeVisible()
+    await page.getByTestId('unsaved-discard').click()
+    await expect(page).toHaveURL(new RegExp('/agents$'))
+    await expect(card).toBeFocused()
+    await expect(page.getByTestId(`split-card-dot-${FIXTURE_AGENT}`)).toHaveCount(0)
+
+    await card.press('Enter')
+    await expect(page).toHaveURL(new RegExp(`/agents/${FIXTURE_AGENT}$`))
+    await expect(description).toHaveValue('RFC-198 responsive split fixture')
+    await expectNoPageOverflow(page)
+  })
+
+  test('640x400 keeps ResourceSplit actions fixed while the active detail panel owns scrolling', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 640, height: 400 })
+    await setDaemonTheme('light')
+    await primeAuth(page)
+    await page.goto(`${daemon.baseUrl}/agents/${FIXTURE_AGENT}`)
+
+    const main = page.getByTestId('app-shell-main')
+    const back = page.getByTestId('agents-mobile-back')
+    const save = page.getByTestId('agent-save-button')
+    await page.getByTestId('agent-tab-advanced').click()
+    const panel = page.getByTestId('agent-panel-advanced')
+    const lastField = page.getByTestId('agent-json-frontmatter-extra')
+
+    await expect(back).toBeInViewport()
+    await expect(save).toBeInViewport()
+    await expect(panel).toHaveCSS('overflow-y', 'auto')
+    expect(await panel.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(
+      true,
+    )
+    await lastField.scrollIntoViewIfNeeded()
+    await expect(lastField).toBeInViewport()
+    expect(await panel.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+    expect(await main.evaluate((element) => element.scrollTop)).toBe(0)
+    await expect(back).toBeInViewport()
+    await expect(save).toBeInViewport()
+    await expectNoPageOverflow(page)
+  })
+
+  test('640x400 settings keeps its selector, purpose, field, and final action reachable', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 640, height: 400 })
+    await setDaemonTheme('light')
+    await primeAuth(page)
+    await page.goto(`${daemon.baseUrl}/settings?tab=network`)
+
+    await expect(page.getByTestId('settings-compact-select')).toBeInViewport()
+    await expect(page.getByRole('heading', { name: 'Network', exact: true })).toBeInViewport()
+    await expect(page.getByRole('textbox', { name: 'Bind host' })).toBeInViewport()
+
+    const save = page.getByRole('button', { name: 'Save', exact: true })
+    await save.scrollIntoViewIfNeeded()
+    await expect(save).toBeInViewport()
+    await expect(page.getByText('There are no changes to save')).toBeInViewport()
     await expectNoPageOverflow(page)
   })
 
@@ -509,6 +631,61 @@ test.describe('RFC-198 global UX browser matrix', () => {
     await expectNoPageOverflow(page)
   })
 
+  test('Chinese page-section navigation stays discoverable at 1280 and 390', async ({ page }) => {
+    await setDaemonTheme('light')
+    await setDaemonLanguage('zh-CN')
+    await primeAuth(page)
+
+    try {
+      await page.goto(`${daemon.baseUrl}/settings?tab=limits`)
+      await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN')
+      await expect(page.getByRole('navigation', { name: '设置分区' })).toBeVisible()
+      await expect(page.getByRole('heading', { name: '限额', exact: true })).toBeVisible()
+      await expectNoPageOverflow(page)
+
+      await page.setViewportSize({ width: 390, height: 844 })
+      await expect(page.getByTestId('settings-compact-select')).toBeVisible()
+      await expect(page.getByRole('combobox', { name: '设置分区' })).toBeVisible()
+      await expectNoPageOverflow(page)
+    } finally {
+      await setDaemonLanguage('en-US')
+    }
+  })
+
+  test('reduced motion makes overflowing TabBar controls scroll instantly', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await setDaemonTheme('light')
+    await primeAuth(page)
+    await page.goto(`${daemon.baseUrl}/agents/new`)
+
+    const tablist = page.getByRole('tablist', { name: 'Agent configuration groups' })
+    await expect(tablist).toBeVisible()
+    const scrollEnd = page.getByRole('button', { name: 'Show more sections after' })
+    await expect(scrollEnd).toBeEnabled()
+    await tablist.evaluate((element) => {
+      ;(
+        window as typeof window & { __rfc201ScrollBehavior?: ScrollBehavior }
+      ).__rfc201ScrollBehavior = undefined
+      element.scrollBy = ((options: ScrollToOptions) => {
+        ;(
+          window as typeof window & { __rfc201ScrollBehavior?: ScrollBehavior }
+        ).__rfc201ScrollBehavior = options.behavior
+      }) as typeof element.scrollBy
+    })
+
+    await scrollEnd.click()
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (window as typeof window & { __rfc201ScrollBehavior?: ScrollBehavior })
+              .__rfc201ScrollBehavior,
+        ),
+      )
+      .toBe('auto')
+  })
+
   test('768 compact shell keeps split actions and form fields at usable widths', async ({
     page,
   }) => {
@@ -625,7 +802,7 @@ test.describe('RFC-198 global UX browser matrix', () => {
       '/tasks',
       '/scheduled',
       '/repos',
-      '/memory',
+      '/memory?tab=all',
     ]) {
       await expect(nav.locator(`a[href="${href}"]`)).toHaveCount(1)
     }
@@ -654,10 +831,7 @@ test.describe('RFC-198 global UX browser matrix', () => {
     await expectNoPageOverflow(page)
 
     await page.goto(`${daemon.baseUrl}/settings?tab=network`)
-    await expect(page.getByRole('tab', { name: 'Network' })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    )
+    await expect(page.getByTestId('settings-compact-select')).toContainText('Network')
     await expect(page.getByTestId('settings-bind-port')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Save' })).toBeVisible()
     await expectNoPageOverflow(page)
@@ -816,10 +990,9 @@ test.describe('RFC-198 global UX browser matrix', () => {
     await expectNoPageOverflow(page)
 
     await page.goto(`${daemon.baseUrl}/settings?tab=appearance`)
-    await expect(page.getByRole('tab', { name: 'Appearance' })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    )
+    await expect(
+      page.locator('.settings-section-layout .page-section-nav__leaf[aria-current="page"]'),
+    ).toContainText('Appearance')
     await expect(page.getByRole('button', { name: 'Save' })).toBeVisible()
 
     await routeReviewDiffFixture(page)

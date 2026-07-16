@@ -32,6 +32,88 @@ import { routePopulatedInbox } from './inbox-fixtures'
 
 let daemon: DaemonHandle
 
+async function postJson(path: string, body: unknown): Promise<unknown> {
+  const response = await fetch(`${daemon.baseUrl}${path}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${daemon.token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  })
+  expect(response.ok, `failed to seed ${path} (${response.status})`).toBe(true)
+  return response.json()
+}
+
+async function seedTerminalTask(): Promise<string> {
+  const agentName = 'a11y-task-agent'
+  await postJson('/api/agents', {
+    name: agentName,
+    description: 'RFC-201 task detail accessibility fixture',
+    outputs: ['answer'],
+    readonly: true,
+    bodyMd: '',
+  })
+  const workflow = (await postJson('/api/workflows', {
+    name: 'a11y-task-workflow',
+    description: 'RFC-201 task detail accessibility fixture',
+    definition: {
+      $schema_version: 1,
+      inputs: [{ kind: 'text', key: 'topic', label: 'Topic', required: true }],
+      nodes: [
+        { id: 'in_1', kind: 'input', inputKey: 'topic', position: { x: 0, y: 0 } },
+        {
+          id: 'agent_1',
+          kind: 'agent-single',
+          agentName,
+          promptTemplate: 'Explain {{topic}} briefly.',
+          position: { x: 320, y: 0 },
+        },
+        {
+          id: 'out_1',
+          kind: 'output',
+          ports: [{ name: 'answer', bind: { nodeId: 'agent_1', portName: 'answer' } }],
+          position: { x: 640, y: 0 },
+        },
+      ],
+      edges: [
+        {
+          id: 'e_in_agent',
+          source: { nodeId: 'in_1', portName: 'topic' },
+          target: { nodeId: 'agent_1', portName: 'topic' },
+        },
+        {
+          id: 'e_agent_out',
+          source: { nodeId: 'agent_1', portName: 'answer' },
+          target: { nodeId: 'out_1', portName: 'answer' },
+        },
+      ],
+    },
+  })) as { id: string }
+  const task = (await postJson('/api/tasks', {
+    workflowId: workflow.id,
+    name: 'A11y task detail',
+    scratch: true,
+    inputs: { topic: 'accessible page sections' },
+  })) as { id: string }
+
+  const deadline = Date.now() + 30_000
+  while (Date.now() < deadline) {
+    const response = await fetch(`${daemon.baseUrl}/api/tasks/${task.id}`, {
+      headers: { Authorization: `Bearer ${daemon.token}` },
+    })
+    if (response.ok) {
+      const current = (await response.json()) as { status: string }
+      if (current.status === 'done') return task.id
+      if (['failed', 'canceled', 'interrupted'].includes(current.status)) {
+        throw new Error(`a11y task fixture reached ${current.status}`)
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+  throw new Error('a11y task fixture did not finish in 30s')
+}
+
 test.beforeAll(async () => {
   daemon = await startDaemon()
 })
@@ -171,8 +253,8 @@ test.describe('RFC-054 W2-6 — accessibility (axe-core) on key pages', () => {
   })
 
   test('/agents/new (RFC-169 five-tab form) passes a11y', async ({ page }) => {
-    // RFC-169 — the agent form is a five-tab right rail (Basics / Prompt / Ports
-    // / Resources & deps / Advanced). Scan the default (Basics) panel + the tab
+    // RFC-169/201 — the agent form is a five-tab right rail (Basics / Prompt / Ports
+    // / Capabilities & collaboration / Advanced). Scan the default (Basics) panel + the tab
     // strip, then visit the Advanced tab so its JSON fields are also scanned
     // (keep-mounted panels are hidden until active, so axe skips them otherwise).
     await primeAuth(page, daemon)
@@ -182,12 +264,15 @@ test.describe('RFC-054 W2-6 — accessibility (axe-core) on key pages', () => {
     await page.getByRole('tab', { name: 'Advanced', exact: true }).click()
     await expectNoCriticalOrSeriousAxeViolations(page, '/agents/new (Advanced tab)')
 
-    // RFC-173 — the Resources & deps tab now hosts the <MultiSelect> tag
+    // RFC-173/201 — the Capabilities & collaboration tab hosts the <MultiSelect> tag
     // comboboxes. Scan the two-group panel, then open a picker (with a selected
     // tag) so axe also covers the portaled listbox + chip remove buttons — the
     // nested-button risk lives exactly here.
-    await page.getByRole('tab', { name: /Resources/ }).click()
-    await expectNoCriticalOrSeriousAxeViolations(page, '/agents/new (Resources tab)')
+    await page.getByRole('tab', { name: 'Capabilities & collaboration', exact: true }).click()
+    await expectNoCriticalOrSeriousAxeViolations(
+      page,
+      '/agents/new (Capabilities & collaboration tab)',
+    )
     const skills = page.getByRole('combobox', { name: 'Skills' })
     await skills.click()
     await skills.fill('demo-skill')
@@ -223,6 +308,29 @@ test.describe('RFC-054 W2-6 — accessibility (axe-core) on key pages', () => {
     await page.goto(`${daemon.baseUrl}/settings`)
     await expect(page.getByRole('heading', { name: /settings/i }).first()).toBeVisible()
     await expectNoCriticalOrSeriousAxeViolations(page, '/settings')
+  })
+
+  test('/skills/new local tabs pass a11y', async ({ page }) => {
+    await primeAuth(page, daemon)
+    await page.goto(`${daemon.baseUrl}/skills/new`)
+    await expect(page.getByRole('tab', { name: 'Manual creation', exact: true })).toBeVisible()
+    await expectNoCriticalOrSeriousAxeViolations(page, '/skills/new (manual)')
+    await page.getByRole('tab', { name: 'Import ZIP', exact: true }).click()
+    await expectNoCriticalOrSeriousAxeViolations(page, '/skills/new (ZIP)')
+  })
+
+  test('/mcps detail tabs pass a11y', async ({ page }) => {
+    await postJson('/api/mcps', {
+      name: 'a11y-mcp',
+      description: 'RFC-201 MCP accessibility fixture',
+      type: 'local',
+      config: { command: ['bun', '--version'] },
+      enabled: true,
+    })
+    await primeAuth(page, daemon)
+    await page.goto(`${daemon.baseUrl}/mcps/a11y-mcp`)
+    await expect(page.getByRole('heading', { name: 'a11y-mcp', exact: true })).toBeVisible()
+    await expectNoCriticalOrSeriousAxeViolations(page, '/mcps/a11y-mcp')
   })
 
   test('/settings mobile dark table and OIDC form dialog pass a11y', async ({ page }) => {
@@ -306,5 +414,13 @@ test.describe('RFC-054 W2-6 — accessibility (axe-core) on key pages', () => {
     await expect(page.locator('[data-testid="homepage"]')).toBeVisible()
     await page.waitForLoadState('networkidle')
     await expectNoCriticalOrSeriousAxeViolations(page, '/ (seeded homepage)')
+  })
+
+  test('/tasks/:id grouped page sections pass a11y', async ({ page }) => {
+    const taskId = await seedTerminalTask()
+    await primeAuth(page, daemon)
+    await page.goto(`${daemon.baseUrl}/tasks/${taskId}`)
+    await expect(page.getByRole('heading', { name: /^A11y task detail/ })).toBeVisible()
+    await expectNoCriticalOrSeriousAxeViolations(page, '/tasks/:id')
   })
 })

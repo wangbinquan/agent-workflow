@@ -42,8 +42,8 @@ test('RFC-045: admin manually creates a candidate, edits it, then approves it', 
   await primeAuth(page, daemon)
   await page.goto(`${daemon.baseUrl}/memory`)
 
-  // The Approval Queue tab is the default landing tab.
-  await expect(page.getByTestId('memory-tab-bar')).toBeVisible()
+  // RFC-201: the stable library is the default landing section.
+  await expect(page.getByTestId('memory-section-all')).toHaveAttribute('aria-current', 'page')
 
   // (1) Open the [+ New memory] dialog.
   await page.getByTestId('memory-new-button').click()
@@ -60,6 +60,12 @@ test('RFC-045: admin manually creates a candidate, edits it, then approves it', 
   // card appears.
   await page.getByTestId('memory-new-dialog-save').click()
   await expect(page.getByTestId('memory-new-dialog')).toHaveCount(0)
+
+  // A successful manual candidate creation moves to the actionable queue.
+  await expect(page.getByTestId('memory-section-approval-queue')).toHaveAttribute(
+    'aria-current',
+    'page',
+  )
 
   // The newly-created candidate's id is unknown to the test, but its
   // title is unique. Wait for a candidate card whose body contains it.
@@ -95,8 +101,8 @@ test('RFC-045: admin manually creates a candidate, edits it, then approves it', 
     page.locator('.memory-candidate-card', { hasText: 'e2e-manual-rule' }),
   ).toHaveCount(0)
 
-  // Switch to All Approved tab; new row carries the edited tag.
-  await page.getByTestId('memory-tab-all').click()
+  // Switch to All Approved; the new row carries the edited tag.
+  await page.getByTestId('memory-section-all').click()
   const approvedRow = page.locator('[data-testid^="memory-row-"]', {
     hasText: 'e2e-manual-rule',
   })

@@ -286,7 +286,7 @@ test('SIGKILL daemon mid-task → restart → task=interrupted → click Resume 
   }
 })
 
-test('SIGTERM (graceful) → task ends canceled, NOT resumable via Resume (relaunch path)', async () => {
+test('SIGTERM (graceful) → task ends interrupted and remains resumable', async () => {
   const repo = makeFixtureRepo()
 
   const daemonA = await startDaemon({
@@ -301,18 +301,15 @@ test('SIGTERM (graceful) → task ends canceled, NOT resumable via Resume (relau
     await waitForStatus(daemonA, taskId, (s) => s === 'running', 10_000, 'A-running-sigterm')
 
     // SIGTERM walks the graceful-shutdown path: cli/start.ts aborts
-    // in-flight runners (their AbortControllers SIGTERM the opencode child),
-    // and the scheduler's cancellation handler marks the task `canceled` —
-    // distinct from the SIGKILL `interrupted` shape covered in case 1.
+    // in-flight runners (their AbortControllers SIGTERM the opencode child).
+    // RFC-202 records this as daemon-restart/interrupted, not a user cancel,
+    // so the existing task remains resumable after the daemon returns.
     // 35s SIGKILL fallback gives the 30s graceful budget headroom.
     await daemonA.killChild('SIGTERM', 35_000)
 
-    // LOCKS: graceful shutdown produces canceled tasks (not interrupted).
-    // If a future refactor accidentally maps graceful shutdown → interrupted,
-    // the Resume button would suddenly become clickable for previously-
-    // canceled rows; this assertion catches it. resumeTask explicitly
-    // omits 'canceled' from its allowlist (task.ts:471-475), so the user
-    // path here is "relaunch" not "resume".
+    // LOCKS: a daemon-owned shutdown must not masquerade as a user cancel.
+    // The harness disables boot auto-resume, so exercise the explicit resume
+    // endpoint and prove the original task can still reach done.
     const daemonB = await startDaemon({
       home,
       stubOpencode: SLOW_STUB,
@@ -320,16 +317,15 @@ test('SIGTERM (graceful) → task ends canceled, NOT resumable via Resume (relau
     })
     try {
       const afterRestart = await getTaskStatus(daemonB, taskId)
-      expect(afterRestart).toBe('canceled')
+      expect(afterRestart).toBe('interrupted')
 
-      // /resume returns 409 task-not-resumable for canceled rows.
       const resumeRes = await fetch(`${daemonB.baseUrl}/api/tasks/${taskId}/resume`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${daemonB.token}` },
       })
-      expect(resumeRes.status).toBe(409)
-      const body = (await resumeRes.json()) as { code?: string }
-      expect(body.code).toBe('task-not-resumable')
+      expect(resumeRes.ok).toBe(true)
+      const resumed = await pollUntilTerminal(daemonB, taskId, 30_000)
+      expect(resumed).toBe('done')
 
       // Sanity: we can still launch a NEW task on the same workflow + repo
       // (graceful shutdown didn't poison the daemon's runtime).

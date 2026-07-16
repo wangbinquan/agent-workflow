@@ -278,8 +278,19 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
 
   test('/auth (unauthenticated landing)', async ({ page }) => {
     await prepareScene(page, { theme: 'light', fixture: 'clean' })
+    await page.route('**/api/auth/oidc/providers', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ providers: [] }),
+      }),
+    )
     await page.goto(`${requireDaemon().baseUrl}/auth`)
     await expect(page.getByRole('heading', { name: /sign in|connect/i }).first()).toBeVisible()
+    await expect(page.getByTestId('oidc-discovery-loading')).toBeHidden()
+    await expect(
+      page.getByText('No identity providers are configured. Use password or token sign-in.'),
+    ).toBeVisible()
     await expect(page).toHaveScreenshot('auth.png', SNAPSHOT_OPTS)
   })
 
@@ -447,10 +458,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await primeAuth(page)
     await page.goto(`${requireDaemon().baseUrl}/settings?tab=network`)
     await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible()
-    await expect(page.getByRole('tab', { name: 'Network' })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    )
+    await expect(page.getByTestId('settings-compact-select')).toContainText('Network')
     await expect(page.getByTestId('settings-bind-port')).toBeVisible()
     await expect(page.getByTestId('settings-bind-port')).toHaveValue('43210')
     await expect(page).toHaveScreenshot('mobile-settings-network.png', SNAPSHOT_OPTS)
