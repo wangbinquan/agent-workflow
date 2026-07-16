@@ -10,12 +10,12 @@ const log = createLogger('ws.broadcaster')
 
 export type ChannelKey = string
 
-type Listener<M> = (msg: M) => void
+type Listener<M, C> = (msg: M, context: C | undefined) => void
 
-class TypedBroadcaster<M> {
-  private subs = new Map<ChannelKey, Set<Listener<M>>>()
+class TypedBroadcaster<M, C = never> {
+  private subs = new Map<ChannelKey, Set<Listener<M, C>>>()
 
-  subscribe(channel: ChannelKey, listener: Listener<M>): () => void {
+  subscribe(channel: ChannelKey, listener: Listener<M, C>): () => void {
     let set = this.subs.get(channel)
     if (set === undefined) {
       set = new Set()
@@ -30,12 +30,12 @@ class TypedBroadcaster<M> {
     }
   }
 
-  broadcast(channel: ChannelKey, msg: M): void {
+  broadcast(channel: ChannelKey, msg: M, context?: C): void {
     const set = this.subs.get(channel)
     if (set === undefined) return
     for (const listener of set) {
       try {
-        listener(msg)
+        listener(msg, context)
       } catch (err) {
         log.warn('listener threw', {
           channel,
@@ -81,9 +81,28 @@ import type {
   WorkflowsWsMessage,
 } from '@agent-workflow/shared'
 
+/**
+ * Process-local authorization snapshot for a deleted workflow. This context is
+ * delivered beside the shared WS message and is never serialized to clients.
+ * The delete service captures it in the same transaction as the deleted row so
+ * a cold WebSocket connection can still be gated after that row is gone.
+ */
+export interface WorkflowDeletedAudienceContext {
+  kind: 'workflow.deleted-audience'
+  workflowId: string
+  visibility: 'public' | 'private'
+  ownerUserId: string | null
+  grantedUserIds: ReadonlySet<string>
+}
+
+export type WorkflowsBroadcastContext = WorkflowDeletedAudienceContext
+
 export const taskBroadcaster = new TypedBroadcaster<TaskWsMessage>()
 export const tasksListBroadcaster = new TypedBroadcaster<TasksListWsMessage>()
-export const workflowsBroadcaster = new TypedBroadcaster<WorkflowsWsMessage>()
+export const workflowsBroadcaster = new TypedBroadcaster<
+  WorkflowsWsMessage,
+  WorkflowsBroadcastContext
+>()
 export const repoImportsBroadcaster = new TypedBroadcaster<RepoImportWsMessage>()
 export const memoryBroadcaster = new TypedBroadcaster<MemoryWsMessage>()
 export const memoryDistillJobBroadcaster = new TypedBroadcaster<MemoryDistillJobWsMessage>()

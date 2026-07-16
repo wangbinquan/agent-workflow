@@ -211,20 +211,15 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     await agentNode.click()
     await page.keyboard.press('Backspace')
     await expect(page.locator('.react-flow__node')).toHaveCount(2)
+    await expect(page.getByTestId('workflow-undo')).toBeEnabled()
+    await expect(page.locator('.workflow-canvas')).toBeFocused()
 
-    // Some editors bind Ctrl+Z to React Flow's undo, others bind it
-    // at a higher level. Try the cross-platform combo. If undo isn't
-    // supported on this build, this test will report the gap clearly.
     await page.keyboard.press('Control+z')
-    // Allow a short wait for the rerender.
-    await page.waitForTimeout(200)
-    const countAfter = await page.locator('.react-flow__node').count()
-    // We accept EITHER undo restored to 3 OR the editor doesn't have
-    // undo wired up yet (still 2). The test exists primarily to
-    // *document* the contract — log a structured marker on the
-    // partial path so a future PR's CI noise surfaces it. Don't fail
-    // on the missing-undo case to keep the gate predictable.
-    expect([2, 3]).toContain(countAfter)
+    await expect(page.locator('.react-flow__node')).toHaveCount(3)
+    await expect(page.locator('.react-flow__node').nth(1)).toHaveClass(/selected/)
+
+    await page.keyboard.press('Control+Shift+z')
+    await expect(page.locator('.react-flow__node')).toHaveCount(2)
   })
 
   test('Shift+click extends node selection (xyflow multi-select default)', async ({
@@ -401,5 +396,150 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     // Sanity that the route param plumbs through — if a future
     // router refactor accidentally inlines the id, this fires.
     expect(page.url()).toContain(`/workflows/${workflowId}`)
+  })
+
+  test('RFC-199 B0 records the five legacy editor geometry baselines', async ({
+    page,
+  }, testInfo) => {
+    type Geometry = {
+      viewport: { width: number; height: number }
+      columns: string
+      layoutClientHeight: number
+      layoutScrollHeight: number
+      palette: { x: number; y: number; width: number; height: number; bottom: number }
+      canvas: { x: number; y: number; width: number; height: number; bottom: number }
+      inspector: { x: number; y: number; width: number; height: number; bottom: number }
+    }
+
+    const samples: Geometry[] = []
+    for (const viewport of [
+      { width: 1536, height: 900 },
+      { width: 1280, height: 800 },
+      { width: 1179, height: 800 },
+      { width: 720, height: 800 },
+      { width: 390, height: 844 },
+    ]) {
+      await page.setViewportSize(viewport)
+      await openEditor(page)
+      await page.locator('.react-flow__node[data-id="agent_1"]').click()
+      await expect(page.locator('.editor-layout > .inspector')).toBeVisible()
+
+      samples.push(
+        await page.locator('.editor-layout').evaluate((layout, currentViewport) => {
+          const relativeRect = (element: Element) => {
+            const layoutBox = layout.getBoundingClientRect()
+            const box = element.getBoundingClientRect()
+            const x = box.left - layoutBox.left + layout.scrollLeft
+            const y = box.top - layoutBox.top + layout.scrollTop
+            return {
+              x,
+              y,
+              width: box.width,
+              height: box.height,
+              bottom: y + box.height,
+            }
+          }
+          const palette = layout.querySelector(':scope > .editor-sidebar')
+          const canvas = layout.querySelector(':scope > .canvas-frame')
+          const inspector = layout.querySelector(':scope > .inspector')
+          if (palette === null || canvas === null || inspector === null) {
+            throw new Error('legacy editor columns missing')
+          }
+          return {
+            viewport: currentViewport,
+            columns: getComputedStyle(layout).gridTemplateColumns,
+            layoutClientHeight: layout.clientHeight,
+            layoutScrollHeight: layout.scrollHeight,
+            palette: relativeRect(palette),
+            canvas: relativeRect(canvas),
+            inspector: relativeRect(inspector),
+          }
+        }, viewport),
+      )
+    }
+
+    await testInfo.attach('rfc199-b0-editor-geometry.json', {
+      body: JSON.stringify(samples, null, 2),
+      contentType: 'application/json',
+    })
+
+    const byWidth = new Map(samples.map((sample) => [sample.viewport.width, sample]))
+    const wide = byWidth.get(1536)!
+    const cramped = byWidth.get(1280)!
+    const compactDesktop = byWidth.get(1179)!
+    const boundary = byWidth.get(720)!
+    const phone = byWidth.get(390)!
+
+    // Legacy desktop is always three rails. The 1280 fixture proves the
+    // RFC's motivating defect directly: the actual canvas is far below the
+    // future 520px floor, and 1179 gets squeezed even further.
+    expect(wide.palette.width).toBeCloseTo(240, 0)
+    expect(wide.inspector.width).toBeCloseTo(480, 0)
+    expect(cramped.palette.width).toBeCloseTo(240, 0)
+    expect(cramped.inspector.width).toBeCloseTo(480, 0)
+    expect(cramped.canvas.width).toBeLessThan(520)
+    expect(compactDesktop.canvas.width).toBeLessThan(cramped.canvas.width)
+
+    // <=720 is the RFC-198 vertical-stack baseline being superseded. At
+    // 390px all three surfaces are laid out one after another and overflow
+    // the bounded editor viewport: this is a measured long tower, not a
+    // screenshot-only observation.
+    expect(boundary.palette.bottom).toBeLessThanOrEqual(boundary.canvas.y + 1)
+    expect(boundary.canvas.bottom).toBeLessThanOrEqual(boundary.inspector.y + 1)
+    expect(phone.palette.bottom).toBeLessThanOrEqual(phone.canvas.y + 1)
+    expect(phone.canvas.bottom).toBeLessThanOrEqual(phone.inspector.y + 1)
+    expect(phone.canvas.height).toBeGreaterThanOrEqual(560)
+    expect(phone.inspector.height).toBeGreaterThanOrEqual(384)
+    expect(phone.layoutScrollHeight).toBeGreaterThan(phone.layoutClientHeight + 300)
+  })
+
+  test('RFC-199 B0 screen-to-flow placement survives a zoomed viewport', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await openEditor(page)
+    await page.locator('.react-flow__node[data-id="agent_1"]').click()
+    await expect(page.locator('.editor-layout > .inspector')).toBeVisible()
+
+    const pane = page.locator('.react-flow__pane')
+    const zoomIn = page.locator('.react-flow__controls-zoomin')
+    await zoomIn.click()
+    await zoomIn.click()
+    await page.waitForTimeout(250)
+    const transform = await page
+      .locator('.react-flow__viewport')
+      .evaluate((element) => getComputedStyle(element).transform)
+    expect(transform).not.toBe('none')
+
+    const before = await page
+      .locator('.react-flow__node')
+      .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-id')))
+    const paneBox = await pane.boundingBox()
+    if (paneBox === null) throw new Error('canvas pane missing')
+    const expectedTopLeft = {
+      x: paneBox.x + paneBox.width / 2,
+      y: paneBox.y + paneBox.height / 2,
+    }
+
+    await page.locator('.editor-sidebar__item').first().click()
+    await expect(page.locator('.react-flow__node')).toHaveCount(before.length + 1)
+    const insertedId = await page
+      .locator('.react-flow__node')
+      .evaluateAll(
+        (nodes, oldIds) =>
+          nodes.map((node) => node.getAttribute('data-id')).find((id) => !oldIds.includes(id)) ??
+          null,
+        before,
+      )
+    if (insertedId === null) throw new Error('inserted node id missing')
+    const insertedBox = await page
+      .locator(`.react-flow__node[data-id="${insertedId}"]`)
+      .boundingBox()
+    if (insertedBox === null) throw new Error('inserted node box missing')
+
+    // addPaletteItemAtViewportCenter takes a screen point, converts it with
+    // screenToFlowPosition, and xyflow projects it back through the active
+    // zoom transform. The new node's top-left therefore lands on the visible
+    // pane center even though the flow viewport is no longer identity.
+    expect(Math.abs(insertedBox.x - expectedTopLeft.x)).toBeLessThanOrEqual(3)
+    expect(Math.abs(insertedBox.y - expectedTopLeft.y)).toBeLessThanOrEqual(3)
   })
 })

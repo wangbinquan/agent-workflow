@@ -10,10 +10,16 @@ import { CLARIFY_SOURCE_PORT_NAME, resolveClarifySessionMode } from '@agent-work
 import { useTranslation } from 'react-i18next'
 import { Field, TextArea } from '@/components/Form'
 import { Segmented } from '@/components/Segmented'
+import {
+  atomicNodeInspectorChange,
+  continuousNodeInspectorChange,
+  InspectorHistoryBoundary,
+  type InspectorChangeMeta,
+} from './historyMeta'
 import { NodeTitleField } from './NodeTitleField'
 import type { EditProps } from './types'
 
-export function ClarifyEdit({ node, definition, onPatch }: EditProps) {
+export function ClarifyEdit({ node, definition, onPatch, onHistoryBoundary }: EditProps) {
   const { t } = useTranslation()
   const rec = node as unknown as Record<string, unknown>
   const description = typeof rec.description === 'string' ? rec.description : ''
@@ -35,18 +41,30 @@ export function ClarifyEdit({ node, definition, onPatch }: EditProps) {
   })
   const inLoop = enclosingLoop !== undefined
 
-  function patchClarify(delta: Record<string, unknown>): void {
-    onPatch({ ...(node as Record<string, unknown>), ...delta } as unknown as WorkflowNode)
+  function patchClarify(delta: Record<string, unknown>, meta: InspectorChangeMeta): void {
+    onPatch({ ...(node as Record<string, unknown>), ...delta } as unknown as WorkflowNode, meta)
   }
+
+  const descriptionMeta = continuousNodeInspectorChange(
+    node.id,
+    'description',
+    t('inspector.fieldClarifyDescription'),
+  )
 
   return (
     <div className="form-grid">
-      <NodeTitleField node={node} onPatch={onPatch} />
+      <NodeTitleField node={node} onPatch={onPatch} onHistoryBoundary={onHistoryBoundary} />
       <Field
         label={t('inspector.fieldClarifyDescription')}
         hint={t('inspector.fieldClarifyDescriptionHint')}
       >
-        <TextArea value={description} rows={2} onChange={(v) => patchClarify({ description: v })} />
+        <InspectorHistoryBoundary meta={descriptionMeta} onBoundary={onHistoryBoundary}>
+          <TextArea
+            value={description}
+            rows={2}
+            onChange={(v) => patchClarify({ description: v }, descriptionMeta)}
+          />
+        </InspectorHistoryBoundary>
       </Field>
       <Field label={t('inspector.fieldClarifyLinkedAgent')}>
         {linkedAgentId !== null ? (
@@ -93,7 +111,16 @@ export function ClarifyEdit({ node, definition, onPatch }: EditProps) {
           // Explicit field write keeps roundtripping deterministic: even
           // 'isolated' is stored when the user picks it (from 'inline'), so
           // the workflow.definition surfaces the user's choice.
-          onChange={(mode) => patchClarify({ sessionMode: mode })}
+          onChange={(mode) =>
+            patchClarify(
+              { sessionMode: mode },
+              atomicNodeInspectorChange(
+                node.id,
+                'sessionMode',
+                t('inspector.fieldClarifySessionMode'),
+              ),
+            )
+          }
           allowActiveReselect
           options={(['isolated', 'inline'] as const).map((mode) => ({
             value: mode,

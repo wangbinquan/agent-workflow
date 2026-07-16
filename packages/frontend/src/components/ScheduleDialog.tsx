@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next'
 import { api, type ApiError } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
 import { Field, NumberInput, TextInput } from '@/components/Form'
+import { NoticeBanner } from '@/components/NoticeBanner'
 import { Segmented } from '@/components/Segmented'
 import { Select } from '@/components/Select'
 import { describeApiError } from '@/i18n'
@@ -188,6 +189,18 @@ export function ScheduleDialog({
         </>
       }
     >
+      {edit === undefined && (launchKind ?? 'workflow') === 'workflow' && (
+        <div data-testid="schedule-dialog-workflow-policy">
+          <NoticeBanner
+            tone="info"
+            size="compact"
+            title={t('taskWizard.scheduledWorkflowLatestTitle')}
+          >
+            {t('taskWizard.scheduledWorkflowLatestBody')}
+          </NoticeBanner>
+        </div>
+      )}
+
       <Field label={t('scheduled.fieldName')} required>
         <TextInput value={name} onChange={setName} maxLength={255} data-testid="schedule-name" />
       </Field>

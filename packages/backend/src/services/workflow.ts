@@ -6,18 +6,43 @@
 
 import type {
   CreateWorkflow,
+  DeleteWorkflow,
+  SaveWorkflowReceipt,
   UpdateWorkflow,
   Workflow,
+  WorkflowDetail,
   WorkflowDefinition,
+  WorkflowDraftSnapshot,
+  WorkflowRevision,
+  WorkflowSnapshotHash,
   WorkflowValidationResult,
 } from '@agent-workflow/shared'
-import { WORKFLOW_SCHEMA_VERSION, WorkflowDefinitionSchema } from '@agent-workflow/shared'
-import { eq } from 'drizzle-orm'
+import {
+  DeleteWorkflowSchema,
+  serializeWorkflowDefinitionStorageV1,
+  serializeWorkflowEditableSnapshotV1,
+  UpdateWorkflowSchema,
+  WORKFLOW_SCHEMA_VERSION,
+  WorkflowDefinitionSchema,
+  WorkflowDraftSnapshotSchema,
+  WorkflowNameSchema,
+} from '@agent-workflow/shared'
+import { and, eq } from 'drizzle-orm'
+import { createHash } from 'node:crypto'
 import { ulid } from 'ulid'
+import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { tasks, workflows } from '@/db/schema'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
-import { WORKFLOWS_CHANNEL, workflowsBroadcaster } from '@/ws/broadcaster'
+import { type DbTxSync, dbTxSync } from '@/db/txSync'
+import { resourceGrants, tasks, workflows } from '@/db/schema'
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import {
+  WORKFLOWS_CHANNEL,
+  workflowsBroadcaster,
+  type WorkflowDeletedAudienceContext,
+} from '@/ws/broadcaster'
+import { assertNewRefsUsable, diffNewNames, extractWorkflowAgentNames } from './resourceRefs'
+import { canViewResource, isAdminActor, isResourceOwner } from './resourceAcl'
+import { assertNotBuiltin } from './systemResources'
 import { validateWorkflowById } from './workflow.validator'
 
 type WorkflowRow = typeof workflows.$inferSelect
@@ -27,39 +52,45 @@ export async function listWorkflows(db: DbClient): Promise<Workflow[]> {
   return rows.map(rowToWorkflow)
 }
 
-export async function getWorkflow(db: DbClient, id: string): Promise<Workflow | null> {
+export async function getWorkflow(db: DbClient, id: string): Promise<WorkflowDetail | null> {
   const rows = await db.select().from(workflows).where(eq(workflows.id, id)).limit(1)
   const row = rows[0]
-  return row ? rowToWorkflow(row) : null
+  return row ? rowToWorkflowDetail(row) : null
 }
 
 export async function createWorkflow(
   db: DbClient,
   input: CreateWorkflow,
   opts?: { ownerUserId?: string; builtin?: boolean },
-): Promise<Workflow> {
+): Promise<WorkflowDetail> {
   const id = ulid()
   const now = Date.now()
   // Normalize incoming v1 → v2 (RFC-005) so new rows always land at the
   // latest schema version. Older clients can still post v1 — they get upgraded.
   const normalized = migrateDefinitionToLatest(input.definition)
-  await db.insert(workflows).values({
-    id,
-    name: input.name,
-    description: input.description,
-    definition: JSON.stringify(normalized),
-    version: 1,
-    // RFC-099: creator becomes owner; new resources default to 'public' (D18).
-    ownerUserId: opts?.ownerUserId ?? null,
-    visibility: 'public',
-    // RFC-104: built-in marker — only seedFusionResources passes builtin:true;
-    // never set via any HTTP path (CreateWorkflowSchema omits it).
-    builtin: opts?.builtin ?? false,
-    createdAt: now,
-    updatedAt: now,
-  })
-  const created = await getWorkflow(db, id)
-  if (created === null) throw new Error('workflow disappeared right after insert')
+  const inserted = await db
+    .insert(workflows)
+    .values({
+      id,
+      name: input.name,
+      description: input.description,
+      definition: serializeWorkflowDefinitionStorageV1(normalized),
+      version: 1,
+      // RFC-099: creator becomes owner; new resources default to 'public' (D18).
+      ownerUserId: opts?.ownerUserId ?? null,
+      visibility: 'public',
+      // RFC-104: built-in marker — only seedFusionResources passes builtin:true;
+      // never set via any HTTP path (CreateWorkflowSchema omits it).
+      builtin: opts?.builtin ?? false,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning()
+  const insertedRow = inserted[0]
+  if (insertedRow === undefined) throw new Error('workflow insert returned no row')
+  // RFC-199: the create response is derived from INSERT RETURNING. A post-insert
+  // GET could race a later writer and falsely return somebody else's revision.
+  const created = rowToWorkflowDetail(insertedRow)
   workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
     type: 'workflow.created',
     workflowId: created.id,
@@ -69,59 +100,225 @@ export async function createWorkflow(
   return created
 }
 
+/**
+ * Every content writer must identify whether it is acting for an authenticated
+ * user or as a framework-internal operation. There is intentionally no
+ * `undefined` / implicit-system escape hatch.
+ */
+export type WorkflowWritePrincipal =
+  | { kind: 'actor'; actor: Actor }
+  | { kind: 'system'; reason: string }
+
 export async function updateWorkflow(
   db: DbClient,
   id: string,
-  patch: UpdateWorkflow,
-): Promise<Workflow> {
-  const existing = await getWorkflow(db, id)
-  if (existing === null) {
-    throw new NotFoundError('workflow-not-found', `workflow '${id}' not found`)
+  input: UpdateWorkflow,
+  principal: WorkflowWritePrincipal,
+): Promise<SaveWorkflowReceipt> {
+  const parsed = UpdateWorkflowSchema.safeParse(input)
+  if (!parsed.success) {
+    throw new ValidationError('workflow-invalid', 'invalid workflow save payload', {
+      issues: parsed.error.issues,
+    })
+  }
+  const normalizedSnapshot = normalizeWorkflowSnapshot(parsed.data.snapshot)
+  const submittedBytes = serializeWorkflowEditableSnapshotV1(normalizedSnapshot)
+  const definitionStorage = serializeWorkflowDefinitionStorageV1(normalizedSnapshot.definition)
+
+  // Schema/reference checks remain outside the single-row write transaction.
+  // The current row gates below are repeated in dbTxSync, so an ACL transfer or
+  // built-in flip between preflight and CAS cannot authorize a stale writer.
+  const preflightRow = await loadRawWorkflow(db, id)
+  if (preflightRow !== null) {
+    await assertPrincipalCanWritePreflight(db, principal, preflightRow)
+    const preflightWorkflow = rowToWorkflow(preflightRow)
+    assertChangedWorkflowName(preflightWorkflow.name, normalizedSnapshot.name)
+    if (principal.kind === 'actor') {
+      const newNames = diffNewNames(
+        extractWorkflowAgentNames(preflightWorkflow.definition),
+        extractWorkflowAgentNames(normalizedSnapshot.definition),
+      )
+      await assertNewRefsUsable(db, principal.actor, [{ type: 'agent', names: newNames }])
+    }
   }
 
-  const set: Partial<typeof workflows.$inferInsert> = {
-    version: existing.version + 1,
-    updatedAt: Date.now(),
-  }
-  if (patch.name !== undefined) set.name = patch.name
-  if (patch.description !== undefined) set.description = patch.description
-  if (patch.definition !== undefined)
-    set.definition = JSON.stringify(migrateDefinitionToLatest(patch.definition))
+  const txResult = dbTxSync<{ receipt: SaveWorkflowReceipt; committed: boolean }>(db, (tx) => {
+    const currentRow = tx.select().from(workflows).where(eq(workflows.id, id)).get()
+    if (currentRow === undefined) throwWorkflowNotFound(id)
 
-  await db.update(workflows).set(set).where(eq(workflows.id, id))
-  const updated = await getWorkflow(db, id)
-  if (updated === null) throw new Error('workflow disappeared after update')
-  workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
-    type: 'workflow.updated',
-    workflowId: updated.id,
-    version: updated.version,
-    updatedAt: updated.updatedAt,
+    assertPrincipalCanWriteInTx(tx, principal, currentRow)
+    const current = rowToWorkflow(currentRow)
+    assertChangedWorkflowName(current.name, normalizedSnapshot.name)
+
+    const currentSnapshot = workflowDraftSnapshotOf(current)
+    const currentBytes = serializeWorkflowEditableSnapshotV1(currentSnapshot)
+    const currentRevision = workflowRevisionOf(current)
+    const logicalSame = currentBytes === submittedBytes
+
+    if (currentRow.version !== parsed.data.expectedVersion) {
+      // Response-loss reconciliation: a retry of the exact bytes already at
+      // the server succeeds without minting another revision or WS frame.
+      if (logicalSame) {
+        return {
+          receipt: {
+            clientMutationId: parsed.data.clientMutationId,
+            requestedBaseVersion: parsed.data.expectedVersion,
+            revision: currentRevision,
+            snapshot: normalizedSnapshot,
+            outcome: 'already-current',
+          },
+          committed: false,
+        }
+      }
+      throw new ConflictError(
+        'workflow-version-conflict',
+        `workflow '${id}' is at version ${currentRow.version}, expected ${parsed.data.expectedVersion}`,
+        { current: currentRevision },
+      )
+    }
+
+    const physicalDefinitionCurrent = currentRow.definition === definitionStorage
+    if (logicalSame && physicalDefinitionCurrent) {
+      return {
+        receipt: {
+          clientMutationId: parsed.data.clientMutationId,
+          requestedBaseVersion: parsed.data.expectedVersion,
+          revision: currentRevision,
+          snapshot: normalizedSnapshot,
+          outcome: 'already-current',
+        },
+        committed: false,
+      }
+    }
+
+    const updatedAt = Date.now()
+    const returned = tx
+      .update(workflows)
+      .set({
+        name: normalizedSnapshot.name,
+        description: normalizedSnapshot.description,
+        definition: definitionStorage,
+        version: currentRow.version + 1,
+        updatedAt,
+      })
+      .where(and(eq(workflows.id, id), eq(workflows.version, parsed.data.expectedVersion)))
+      .returning()
+      .get()
+    if (returned === undefined) {
+      // Defensive CAS-loss surface. In the synchronous SQLite transaction this
+      // should be unreachable, but never manufacture a success receipt.
+      throw new ConflictError('workflow-version-conflict', `workflow '${id}' changed; reload`, {
+        current: currentRevision,
+      })
+    }
+    const committed = rowToWorkflow(returned)
+    const revision = workflowRevisionOf(committed)
+    return {
+      receipt: {
+        clientMutationId: parsed.data.clientMutationId,
+        requestedBaseVersion: parsed.data.expectedVersion,
+        revision,
+        snapshot: normalizedSnapshot,
+        outcome: 'committed',
+      },
+      committed: true,
+    }
   })
-  return updated
+
+  if (txResult.committed) {
+    workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
+      type: 'workflow.updated',
+      workflowId: txResult.receipt.revision.workflowId,
+      clientMutationId: txResult.receipt.clientMutationId,
+      version: txResult.receipt.revision.version,
+      snapshotHash: txResult.receipt.revision.snapshotHash,
+      updatedAt: txResult.receipt.revision.updatedAt,
+    })
+  }
+  return txResult.receipt
 }
 
-export async function deleteWorkflow(db: DbClient, id: string): Promise<void> {
-  const existing = await getWorkflow(db, id)
-  if (existing === null) {
-    throw new NotFoundError('workflow-not-found', `workflow '${id}' not found`)
+export async function deleteWorkflow(
+  db: DbClient,
+  id: string,
+  input: DeleteWorkflow,
+  principal: WorkflowWritePrincipal,
+): Promise<void> {
+  const parsed = DeleteWorkflowSchema.safeParse(input)
+  if (!parsed.success) {
+    throw new ValidationError('workflow-invalid', 'invalid workflow delete payload', {
+      issues: parsed.error.issues,
+    })
   }
-  // Refuse on ANY task referencing this workflow — running, done, failed,
-  // canceled, interrupted. Per the user's decision in design Q&A round 18:
-  // "被引用拒绝（没引用才能删）". A future iteration may relax this by making
-  // tasks.workflowId nullable + ON DELETE SET NULL.
-  const refs = await findReferencingTasks(db, id)
-  if (refs.length > 0) {
-    throw new ConflictError(
-      'workflow-in-use',
-      `workflow '${id}' has ${refs.length} task(s) referencing it; delete those tasks first`,
-      { tasks: refs },
-    )
-  }
-  await db.delete(workflows).where(eq(workflows.id, id))
-  workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
-    type: 'workflow.deleted',
-    workflowId: id,
+  const deleted = dbTxSync<{
+    deletedVersion: number
+    audience: WorkflowDeletedAudienceContext
+  }>(db, (tx) => {
+    const currentRow = tx.select().from(workflows).where(eq(workflows.id, id)).get()
+    if (currentRow === undefined) throwWorkflowNotFound(id)
+    assertPrincipalCanWriteInTx(tx, principal, currentRow)
+
+    if (currentRow.version !== parsed.data.expectedVersion) {
+      throw new ConflictError(
+        'workflow-version-conflict',
+        `workflow '${id}' is at version ${currentRow.version}, expected ${parsed.data.expectedVersion}`,
+        { current: workflowRevisionOf(rowToWorkflow(currentRow)) },
+      )
+    }
+
+    // Refuse on ANY task referencing this workflow — running, done, failed,
+    // canceled, interrupted. The check and DELETE share one transaction, so a
+    // task insert that wins first is always observed as workflow-in-use.
+    const referenceCount = countReferencingTasksInTx(tx, id)
+    if (referenceCount > 0) {
+      throw new ConflictError(
+        'workflow-in-use',
+        `workflow '${id}' has ${referenceCount} task(s) referencing it; delete those tasks first`,
+        // Task ids/statuses are task-ACL protected. A public workflow's owner
+        // may not be a member of tasks launched by other users, so disclose
+        // only the aggregate needed to explain why deletion is blocked.
+        { referenceCount },
+      )
+    }
+
+    // The row cannot be re-read after DELETE. Capture its complete non-admin
+    // visibility audience in this same transaction, then carry it beside (not
+    // inside) the WS frame after commit. This closes the cold-cache delivery
+    // gap without exposing ACL data on the shared client wire.
+    const grantRows = tx
+      .select({ userId: resourceGrants.userId })
+      .from(resourceGrants)
+      .where(and(eq(resourceGrants.resourceType, 'workflow'), eq(resourceGrants.resourceId, id)))
+      .all()
+    const audience: WorkflowDeletedAudienceContext = {
+      kind: 'workflow.deleted-audience',
+      workflowId: id,
+      visibility: currentRow.visibility,
+      ownerUserId: currentRow.ownerUserId,
+      grantedUserIds: new Set(grantRows.map((row) => row.userId)),
+    }
+
+    const deletedRow = tx
+      .delete(workflows)
+      .where(and(eq(workflows.id, id), eq(workflows.version, parsed.data.expectedVersion)))
+      .returning({ id: workflows.id, version: workflows.version })
+      .get()
+    if (deletedRow === undefined) {
+      throw new ConflictError('workflow-version-conflict', `workflow '${id}' changed; reload`)
+    }
+    return { deletedVersion: deletedRow.version, audience }
   })
+
+  workflowsBroadcaster.broadcast(
+    WORKFLOWS_CHANNEL,
+    {
+      type: 'workflow.deleted',
+      workflowId: id,
+      clientMutationId: parsed.data.clientMutationId,
+      deletedVersion: deleted.deletedVersion,
+    },
+    deleted.audience,
+  )
 }
 
 /**
@@ -138,15 +335,9 @@ export async function validateWorkflow(
 
 // --- helpers ---
 
-async function findReferencingTasks(
-  db: DbClient,
-  workflowId: string,
-): Promise<Array<{ id: string; status: string }>> {
-  const rows = await db
-    .select({ id: tasks.id, status: tasks.status })
-    .from(tasks)
-    .where(eq(tasks.workflowId, workflowId))
-  return rows
+function countReferencingTasksInTx(tx: DbTxSync, workflowId: string): number {
+  return tx.select({ id: tasks.id }).from(tasks).where(eq(tasks.workflowId, workflowId)).all()
+    .length
 }
 
 function rowToWorkflow(row: WorkflowRow): Workflow {
@@ -188,6 +379,130 @@ function rowToWorkflow(row: WorkflowRow): Workflow {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   }
+}
+
+function rowToWorkflowDetail(row: WorkflowRow): WorkflowDetail {
+  return workflowToDetail(rowToWorkflow(row))
+}
+
+/** Complete editable snapshot, normalized to the latest definition schema. */
+export function workflowDraftSnapshotOf(workflow: Workflow): WorkflowDraftSnapshot {
+  return normalizeWorkflowSnapshot({
+    name: workflow.name,
+    description: workflow.description,
+    definition: workflow.definition,
+  })
+}
+
+/** Lowercase SHA-256 over the shared domain-separated canonical serialization. */
+export function workflowSnapshotHashOf(snapshot: WorkflowDraftSnapshot): WorkflowSnapshotHash {
+  const normalized = normalizeWorkflowSnapshot(snapshot)
+  return createHash('sha256')
+    .update(serializeWorkflowEditableSnapshotV1(normalized), 'utf8')
+    .digest('hex')
+}
+
+/** Pure detail projection reused by GET/create/YAML collision responses. */
+export function workflowToDetail(workflow: Workflow): WorkflowDetail {
+  const snapshot = workflowDraftSnapshotOf(workflow)
+  return {
+    ...workflow,
+    definition: snapshot.definition,
+    snapshotHash: workflowSnapshotHashOf(snapshot),
+  }
+}
+
+/** Pure exact-revision projection reused by save, delete and YAML. */
+export function workflowRevisionOf(workflow: Workflow): WorkflowRevision {
+  const snapshot = workflowDraftSnapshotOf(workflow)
+  return {
+    workflowId: workflow.id,
+    version: workflow.version,
+    snapshotHash: workflowSnapshotHashOf(snapshot),
+    updatedAt: workflow.updatedAt,
+  }
+}
+
+function normalizeWorkflowSnapshot(snapshot: WorkflowDraftSnapshot): WorkflowDraftSnapshot {
+  return WorkflowDraftSnapshotSchema.parse({
+    name: snapshot.name,
+    description: snapshot.description,
+    definition: migrateDefinitionToLatest(snapshot.definition),
+  })
+}
+
+async function loadRawWorkflow(db: DbClient, id: string): Promise<WorkflowRow | null> {
+  const rows = await db.select().from(workflows).where(eq(workflows.id, id)).limit(1)
+  return rows[0] ?? null
+}
+
+async function assertPrincipalCanWritePreflight(
+  db: DbClient,
+  principal: WorkflowWritePrincipal,
+  row: WorkflowRow,
+): Promise<void> {
+  if (principal.kind === 'system') {
+    assertNotBuiltin('workflow', row)
+    return
+  }
+  if (!(await canViewResource(db, principal.actor, 'workflow', row))) {
+    throwWorkflowNotFound(row.id)
+  }
+  assertNotBuiltin('workflow', row)
+  if (!isResourceOwner(principal.actor, row)) {
+    throw new ForbiddenError('forbidden', 'only the workflow owner or an admin can modify it')
+  }
+}
+
+function assertPrincipalCanWriteInTx(
+  tx: DbTxSync,
+  principal: WorkflowWritePrincipal,
+  row: WorkflowRow,
+): void {
+  if (principal.kind === 'system') {
+    assertNotBuiltin('workflow', row)
+    return
+  }
+
+  const actor = principal.actor
+  const isAdmin = isAdminActor(actor)
+  const isOwner = row.ownerUserId !== null && row.ownerUserId === actor.user.id
+  let visible = isAdmin || isOwner || row.visibility === 'public'
+  if (!visible) {
+    const grant = tx
+      .select({ resourceId: resourceGrants.resourceId })
+      .from(resourceGrants)
+      .where(
+        and(
+          eq(resourceGrants.resourceType, 'workflow'),
+          eq(resourceGrants.resourceId, row.id),
+          eq(resourceGrants.userId, actor.user.id),
+        ),
+      )
+      .get()
+    visible = grant !== undefined
+  }
+  if (!visible) throwWorkflowNotFound(row.id)
+  assertNotBuiltin('workflow', row)
+  if (!isAdmin && !isOwner) {
+    throw new ForbiddenError('forbidden', 'only the workflow owner or an admin can modify it')
+  }
+}
+
+function assertChangedWorkflowName(currentName: string, submittedName: string): void {
+  if (currentName === submittedName) return
+  const parsed = WorkflowNameSchema.safeParse(submittedName)
+  if (!parsed.success) {
+    throw new ValidationError(
+      'workflow-name-invalid',
+      'workflow name must start with [a-z0-9] and contain only [a-z0-9_-] (max 128 chars)',
+      { issues: parsed.error.issues },
+    )
+  }
+}
+
+function throwWorkflowNotFound(id: string): never {
+  throw new NotFoundError('workflow-not-found', `workflow '${id}' not found`)
 }
 
 /**

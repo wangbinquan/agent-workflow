@@ -1,7 +1,7 @@
 // API client wrapper: token header, query string, error mapping, 401 → clearToken.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { ApiError, apiRequest } from '../src/api/client'
+import { api, ApiError, apiRequest } from '../src/api/client'
 import { clearToken, setBaseUrl, setToken } from '../src/stores/auth'
 
 const realFetch = globalThis.fetch
@@ -59,6 +59,77 @@ describe('apiRequest', () => {
     expect(init.method).toBe('POST')
     expect(init.body).toBe(JSON.stringify({ foo: 'bar' }))
     expect((init.headers as Record<string, string>)['Content-Type']).toBe('application/json')
+  })
+
+  test('deleteJson sends a fenced DELETE body without changing delete(path, signal)', async () => {
+    const fetchMock = vi.fn(async (_req: RequestInfo | URL, _init?: RequestInit) =>
+      jsonResponse({ ok: true }),
+    )
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    await api.deleteJson('/api/workflows/w1', {
+      expectedVersion: 3,
+      clientMutationId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+    })
+    const controller = new AbortController()
+    await api.delete('/api/agents/a1', controller.signal)
+
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit
+    expect(init.method).toBe('DELETE')
+    expect(init.body).toBe(
+      JSON.stringify({
+        expectedVersion: 3,
+        clientMutationId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      }),
+    )
+    expect((init.headers as Record<string, string>)['Content-Type']).toBe('application/json')
+    const legacyInit = fetchMock.mock.calls[1]?.[1] as RequestInit
+    expect(legacyInit.method).toBe('DELETE')
+    expect(legacyInit.body).toBeUndefined()
+    expect(legacyInit.signal).toBe(controller.signal)
+  })
+
+  test('getBlob sends auth plus exact query and preserves successful bytes', async () => {
+    const fetchMock = vi.fn(
+      async (_req: RequestInfo | URL, _init?: RequestInit) =>
+        new Response('name: workflow', {
+          headers: { 'Content-Type': 'application/yaml' },
+        }),
+    )
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    const blob = await api.getBlob('/api/workflows/w1/export', {
+      expectedVersion: 4,
+      expectedSnapshotHash: 'a'.repeat(64),
+    })
+    expect(await blob.text()).toBe('name: workflow')
+    const [url, init] = fetchMock.mock.calls[0]!
+    expect(String(url)).toBe(
+      `http://daemon.test/api/workflows/w1/export?expectedVersion=4&expectedSnapshotHash=${'a'.repeat(64)}`,
+    )
+    expect((init?.headers as Record<string, string>).Authorization).toBe('Bearer tok')
+    expect(init?.method).toBe('GET')
+  })
+
+  test('getBlob keeps the shared structured error decoder', async () => {
+    globalThis.fetch = (async () =>
+      jsonResponse(
+        {
+          ok: false,
+          code: 'workflow-version-mismatch',
+          message: 'workflow changed',
+          details: { current: { version: 5 } },
+        },
+        { status: 409 },
+      )) as unknown as typeof fetch
+
+    await expect(
+      api.getBlob('/api/workflows/w1/export', { expectedVersion: 4 }),
+    ).rejects.toMatchObject({
+      status: 409,
+      code: 'workflow-version-mismatch',
+      details: { current: { version: 5 } },
+    })
   })
 
   test('throws ApiError preserving code/message/details on backend error (nested shape)', async () => {

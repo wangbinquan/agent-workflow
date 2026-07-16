@@ -4,6 +4,7 @@
 
 import { Hono } from 'hono'
 import type { MiddlewareHandler } from 'hono'
+import type { WorkflowRevision } from '@agent-workflow/shared'
 import { actorOf } from '@/auth/actor'
 import { requirePermission, resourcePermissionGate } from '@/auth/permissions'
 import type { SecretBox } from '@/auth/secretBox'
@@ -77,6 +78,16 @@ export interface AppDeps {
    * a stub so POST /:id/run-now doesn't spawn a real opencode task.
    */
   buildScheduleLaunch?: BuildScheduleLaunch
+  /**
+   * RFC-199 deterministic concurrency seam for exact workflow consumers.
+   * Production leaves this undefined. Tests use it to commit a concurrent
+   * workflow writer after the exact-revision guard and prove validation/YAML
+   * serialization still consume the one captured immutable revision.
+   */
+  workflowExactOperationHook?: (input: {
+    operation: 'validate' | 'export'
+    revision: WorkflowRevision
+  }) => void | Promise<void>
 }
 
 export function createApp(deps: AppDeps): Hono {

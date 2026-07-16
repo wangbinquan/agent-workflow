@@ -204,9 +204,16 @@ export function buildScheduledEnvelope(
   body: Record<string, unknown>,
   ref: { agentName?: string; workgroupName?: string },
 ): Record<string, unknown> {
-  if (kind === 'agent') return { agentName: ref.agentName ?? '', ...body }
-  if (kind === 'workgroup') return { workgroupName: ref.workgroupName ?? '', ...body }
-  return body
+  // RFC-199 T6.6: scheduled workflows deliberately resolve the latest
+  // workflow revision when each occurrence fires. Keep the immediate-launch
+  // OCC fence out of durable schedule config even if a caller accidentally
+  // hands this helper an already-guarded body.
+  const scheduledBody = { ...body }
+  delete scheduledBody.expectedWorkflowVersion
+
+  if (kind === 'agent') return { agentName: ref.agentName ?? '', ...scheduledBody }
+  if (kind === 'workgroup') return { workgroupName: ref.workgroupName ?? '', ...scheduledBody }
+  return scheduledBody
 }
 
 /**

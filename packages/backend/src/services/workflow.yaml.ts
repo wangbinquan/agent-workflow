@@ -3,59 +3,50 @@
 // Export: dump the canonical Workflow object (id + name + description +
 // definition) as YAML using the `yaml` package's pretty printer.
 //
-// Import: parse YAML, validate the embedded definition with
-// `WorkflowDefinitionSchema`, and decide how to handle conflicts:
-//   - if the YAML provides an `id` that already exists, return a 409
-//     `workflow-import-conflict` with details so the frontend can pop the
-//     Skip/Overwrite/Import-as-new dialog
-//   - if no id is provided, always insert as a new workflow
+// Import: parse the structured request's YAML, validate the embedded definition
+// with `WorkflowDefinitionSchema`, and apply one explicit mode:
+//   - fail: a visible id collision returns a revision-bearing 409
+//   - overwrite: requires the confirmed id/version/mutation fence and delegates
+//     to the same full-snapshot save service as editor autosave
+//   - new: discards an incoming id and inserts a fresh workflow
 
-import type { Workflow, WorkflowDefinition } from '@agent-workflow/shared'
-import { WorkflowDefinitionSchema, WorkflowNameSchema } from '@agent-workflow/shared'
-import { eq } from 'drizzle-orm'
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
-import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
-import { workflows } from '@/db/schema'
-import { requireResourceOwner } from '@/services/resourceAcl'
-import { assertNotBuiltin } from '@/services/systemResources'
+import type {
+  ImportWorkflowRequest,
+  ImportWorkflowResult,
+  Workflow,
+  WorkflowDefinition,
+} from '@agent-workflow/shared'
 import {
-  assertNewRefsUsable,
-  diffNewNames,
-  extractWorkflowAgentNames,
-} from '@/services/resourceRefs'
-import { createWorkflow, getWorkflow, updateWorkflow } from '@/services/workflow'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+  stringifyWorkflowYamlDocument,
+  WorkflowDefinitionSchema,
+  WorkflowNameSchema,
+} from '@agent-workflow/shared'
+import { parse as parseYaml } from 'yaml'
+import type { DbClient } from '@/db/client'
+import { canViewResource } from '@/services/resourceAcl'
+import { assertNotBuiltin } from '@/services/systemResources'
+import { assertNewRefsUsable, extractWorkflowAgentNames } from '@/services/resourceRefs'
+import {
+  createWorkflow,
+  getWorkflow,
+  updateWorkflow,
+  workflowRevisionOf,
+  type WorkflowWritePrincipal,
+} from '@/services/workflow'
+import { ConflictError, ValidationError } from '@/util/errors'
 
-export async function exportWorkflowYaml(db: DbClient, id: string): Promise<string> {
-  const wf = await getWorkflow(db, id)
-  if (wf === null) {
-    throw new NotFoundError('workflow-not-found', `workflow '${id}' not found`)
-  }
-  const payload = {
-    id: wf.id,
-    name: wf.name,
-    description: wf.description,
-    definition: wf.definition,
-  }
-  return stringifyYaml(payload, { indent: 2, lineWidth: 120 })
-}
-
-export interface ImportYamlOptions {
-  /**
-   * Conflict policy when the YAML's id collides with an existing workflow:
-   *   - 'fail' (default): throws ConflictError so the frontend can prompt
-   *   - 'overwrite': updates the existing row (bumps version)
-   *   - 'new': inserts as a brand-new workflow (id discarded)
-   */
-  onConflict?: 'fail' | 'overwrite' | 'new'
-  /**
-   * RFC-099 — the importing user. When present: create path stamps them as
-   * owner + checks agent-reference usability; overwrite path additionally
-   * requires them to own the existing workflow. Absent (internal/test
-   * callers) skips ACL entirely (daemon-context back-compat).
-   */
-  actor?: Actor
+/**
+ * Serialize an already-captured workflow row. Callers that also perform an
+ * ACL/revision guard must pass that exact immutable snapshot here instead of
+ * re-reading by id after the guard (RFC-199 B1/B3).
+ */
+export function stringifyWorkflowYaml(
+  wf: Pick<Workflow, 'id' | 'name' | 'description' | 'definition'>,
+): string {
+  return stringifyWorkflowYamlDocument(
+    { name: wf.name, description: wf.description, definition: wf.definition },
+    { id: wf.id },
+  )
 }
 
 export interface YamlImportPreview {
@@ -108,21 +99,53 @@ export function previewWorkflowYaml(yamlText: string): Omit<YamlImportPreview, '
 
 export async function importWorkflowYaml(
   db: DbClient,
-  yamlText: string,
-  opts: ImportYamlOptions = {},
-): Promise<Workflow> {
-  const preview = previewWorkflowYaml(yamlText)
-  const onConflict = opts.onConflict ?? 'fail'
+  request: ImportWorkflowRequest,
+  principal: WorkflowWritePrincipal,
+): Promise<ImportWorkflowResult> {
+  if (request.yamlText.length === 0) {
+    throw new ValidationError('workflow-yaml-empty', 'empty YAML body')
+  }
+  const preview = previewWorkflowYaml(request.yamlText)
 
-  if (preview.id !== null && onConflict !== 'new') {
-    const existing = (
-      await db.select().from(workflows).where(eq(workflows.id, preview.id)).limit(1)
-    )[0]
-    if (existing !== undefined) {
-      // RFC-104: never let a YAML import target a built-in workflow (by id) —
-      // neither overwrite nor the fail-path conflict; built-ins are read-only.
-      assertNotBuiltin('workflow', existing)
-      if (onConflict === 'fail') {
+  if (request.mode === 'overwrite') {
+    if (preview.id === null || preview.id !== request.overwrite.workflowId) {
+      throw new ValidationError(
+        'workflow-import-target-mismatch',
+        'YAML workflow id does not match the confirmed overwrite target',
+        { yamlWorkflowId: preview.id, workflowId: request.overwrite.workflowId },
+      )
+    }
+    const receipt = await updateWorkflow(
+      db,
+      request.overwrite.workflowId,
+      {
+        expectedVersion: request.overwrite.expectedVersion,
+        clientMutationId: request.overwrite.clientMutationId,
+        snapshot: {
+          name: preview.name,
+          description: preview.description,
+          definition: preview.definition,
+        },
+      },
+      principal,
+    )
+    return { outcome: 'overwritten', receipt }
+  }
+
+  if (preview.id !== null && request.mode === 'fail') {
+    const existing = await getWorkflow(db, preview.id)
+    if (existing !== null) {
+      // mode=fail discards a non-colliding incoming id and creates a fresh row.
+      // A private collision must take that exact same path: returning 404 here
+      // while a truly missing id returns 201 would be an existence oracle.
+      if (
+        principal.kind === 'actor' &&
+        !(await canViewResource(db, principal.actor, 'workflow', existing))
+      ) {
+        // Deliberately fall through to the fresh-id create below.
+      } else {
+        // Built-ins are explicitly read-only for callers who can see them.
+        assertNotBuiltin('workflow', existing)
         throw new ConflictError(
           'workflow-import-conflict',
           `workflow '${preview.id}' already exists`,
@@ -130,46 +153,31 @@ export async function importWorkflowYaml(
             workflowId: preview.id,
             existingName: existing.name,
             incomingName: preview.name,
+            current: workflowRevisionOf(existing),
           },
         )
       }
-      // overwrite — RFC-099: only the owner (or admin) may overwrite, and
-      // newly-added agent references must be usable by the importer.
-      if (opts.actor !== undefined) {
-        await requireResourceOwner(db, opts.actor, 'workflow', existing)
-        const prevDef = JSON.parse(existing.definition) as {
-          nodes?: Array<Record<string, unknown>>
-        }
-        const newNames = diffNewNames(
-          extractWorkflowAgentNames(prevDef),
-          extractWorkflowAgentNames(preview.definition),
-        )
-        await assertNewRefsUsable(db, opts.actor, [{ type: 'agent', names: newNames }])
-      }
-      return await updateWorkflow(db, preview.id, {
-        name: preview.name,
-        description: preview.description,
-        definition: preview.definition,
-      })
     }
   }
 
-  // Either no id, or onConflict==='new', or id had no collision — create.
-  // RFC-099: importer becomes owner; on create every reference is new.
-  if (opts.actor !== undefined) {
-    await assertNewRefsUsable(db, opts.actor, [
+  // mode=new always discards the incoming id. mode=fail creates only when the
+  // id is absent/non-colliding. HTTP callers always provide an actor principal;
+  // framework callers must opt into the explicit audited system branch.
+  if (principal.kind === 'actor') {
+    await assertNewRefsUsable(db, principal.actor, [
       { type: 'agent', names: [...extractWorkflowAgentNames(preview.definition)] },
     ])
   }
-  return await createWorkflow(
+  const workflow = await createWorkflow(
     db,
     {
       name: preview.name,
       description: preview.description,
       definition: preview.definition,
     },
-    opts.actor !== undefined ? { ownerUserId: opts.actor.user.id } : undefined,
+    principal.kind === 'actor' ? { ownerUserId: principal.actor.user.id } : undefined,
   )
+  return { outcome: 'created', workflow }
 }
 
 function safeParse(yamlText: string): unknown {

@@ -185,14 +185,25 @@ describe('POST / PUT paths normalize older versions → latest on write', () => 
     })
 
     // PUT with a v1 patch — could happen from an older client.
-    await updateWorkflow(db, created.id, {
-      definition: {
-        $schema_version: 1,
-        inputs: [{ kind: 'text', key: 'k', label: 'k' }],
-        nodes: [],
-        edges: [],
+    await updateWorkflow(
+      db,
+      created.id,
+      {
+        expectedVersion: created.version,
+        clientMutationId: ulid(),
+        snapshot: {
+          name: created.name,
+          description: created.description,
+          definition: {
+            $schema_version: 1,
+            inputs: [{ kind: 'text', key: 'k', label: 'k' }],
+            nodes: [],
+            edges: [],
+          },
+        },
       },
-    })
+      { kind: 'system', reason: 'workflow-schema-migrate-test' },
+    )
 
     const rows = await db.select().from(workflows).where(eq(workflows.id, created.id))
     const raw = JSON.parse(rows[0]!.definition) as {

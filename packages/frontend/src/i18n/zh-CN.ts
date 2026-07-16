@@ -1156,6 +1156,7 @@ export interface Resources {
       import: string
       importing: string
       retry: string
+      refreshConflict: string
       another: string
       chooseAnother: string
       conflictTitle: string
@@ -1802,16 +1803,22 @@ export interface Resources {
     statusUnsaved: string
     statusSaved: string
     launch: string
+    preparingLaunch: string
     validate: string
     validating: string
     exportYaml: string
+    exporting: string
     exportTitle: string
+    actionDraftChanged: string
+    actionRevisionMismatch: string
     remoteUpdated: string
     remoteDeleted: string
     remoteDismiss: string
     validationOk: string
     validationIssues: string
     validationWarnings: string
+    validationStaleDraft: string
+    validationStaleInventory: string
     validationAutoFitWrapper: string
     paletteFilter: string
     paletteNoMatches: string
@@ -1848,6 +1855,70 @@ export interface Resources {
     menuSelectedCount: string
     nodeTitleUnsetAgent: string
     nodeTitleUnsetKey: string
+    history: {
+      undo: string
+      redo: string
+      undoIntent: string
+      redoIntent: string
+      canvasEdit: string
+      delete: string
+      connect: string
+      paste: string
+      duplicate: string
+      wrap: string
+      unwrap: string
+      fitWrapper: string
+      insert: string
+      move: string
+      rename: string
+      editInspector: string
+    }
+    draftStatus: {
+      groupLabel: string
+      phaseAria: string
+      transportAria: string
+      phase: {
+        clean: string
+        dirty: string
+        saving: string
+        reconciling: string
+        error: string
+        conflict: string
+        inaccessible: string
+        deleted: string
+      }
+      transport: {
+        online: string
+        degraded: string
+        offline: string
+      }
+      retryNow: string
+      offlineTitle: string
+      offlineBody: string
+      reconcilingTitle: string
+      reconcilingBody: string
+      errorTitle: string
+      errorBody: string
+      conflictTitle: string
+      conflictBody: string
+      saveCopyRecommended: string
+      saveCopy: string
+      loadRemote: string
+      overwriteRemote: string
+      loadDialogTitle: string
+      loadDialogBody: string
+      loadDialogConfirm: string
+      overwriteDialogTitle: string
+      overwriteDialogBody: string
+      overwriteDialogConfirm: string
+      inaccessibleTitle: string
+      inaccessibleBody: string
+      deletedTitle: string
+      deletedBody: string
+      exportLocal: string
+      retryAccess: string
+      returnToList: string
+    }
   }
   taskWizard: {
     launchEntry: string
@@ -1897,6 +1968,13 @@ export interface Resources {
     kindLocked: string
     degradedBanner: string
     spaceUnresolvedNotice: string
+    workflowVersionMismatchTitle: string
+    workflowVersionMismatchBody: string
+    workflowVersionReturnToEditor: string
+    workflowVersionUseLatest: string
+    workflowLaunchVersionMismatchBody: string
+    scheduledWorkflowLatestTitle: string
+    scheduledWorkflowLatestBody: string
   }
   stepper: {
     progress: string
@@ -2679,6 +2757,11 @@ export interface Resources {
   /** RFC-106 — live drag-connect badge (new input vs reuse existing). */
   canvas: {
     connect: { newInput: string; reuseInput: string }
+    clipboardBlocked: string
+    clipboardReferencesFiltered: string
+    referencesPruned: string
+    referenceChangeBlocked: string
+    placementUnavailable: string
   }
   /** Canvas chip label for review nodes (⚖ icon). */
   reviewNode: {
@@ -4432,6 +4515,7 @@ export const zhCN: Resources = {
       import: '导入',
       importing: '正在导入…',
       retry: '重试导入',
+      refreshConflict: '刷新冲突信息',
       another: '继续导入',
       chooseAnother: '选择其他文件',
       conflictTitle: '已存在相同 id 的工作流',
@@ -5063,16 +5147,22 @@ export const zhCN: Resources = {
     statusUnsaved: '未保存',
     statusSaved: '已保存',
     launch: '启动任务 →',
+    preparingLaunch: '正在保存并校验…',
     validate: '校验',
     validating: '校验中…',
     exportYaml: '导出 YAML',
+    exporting: '导出中…',
     exportTitle: '下载为 YAML',
+    actionDraftChanged: '操作期间草稿发生了变化。请确认当前保存状态后重试。',
+    actionRevisionMismatch: '服务端回执与已保存的工作流版本不一致，未继续执行后续操作。',
     remoteUpdated: '该工作流在其它端被更新（v{{version}}）；当前视图即将刷新。',
     remoteDeleted: '该工作流在其它端被删除。',
     remoteDismiss: '关闭',
     validationOk: '✓ 校验通过',
     validationIssues: '{{n}} 个问题',
     validationWarnings: '{{n}} 个警告（不阻塞启动）',
+    validationStaleDraft: '上次校验（草稿已变化）',
+    validationStaleInventory: '上次校验（校验所依赖的资源可能已变化）',
     validationAutoFitWrapper: '自适应',
     paletteFilter: '过滤面板…',
     paletteNoMatches: '没有匹配项。',
@@ -5108,6 +5198,72 @@ export const zhCN: Resources = {
     menuSelectedCount: '已选 {{n}} 个',
     nodeTitleUnsetAgent: '(未设置代理)',
     nodeTitleUnsetKey: '(未设置 key)',
+    history: {
+      undo: '撤销',
+      redo: '重做',
+      undoIntent: '撤销：{{label}}',
+      redoIntent: '重做：{{label}}',
+      canvasEdit: '编辑画布',
+      delete: '删除所选内容',
+      connect: '连接步骤',
+      paste: '粘贴步骤',
+      duplicate: '复制步骤',
+      wrap: '包装步骤',
+      unwrap: '解散包装器',
+      fitWrapper: '自适应包装器',
+      insert: '添加步骤',
+      move: '移动步骤',
+      rename: '重命名工作流',
+      editInspector: '编辑配置',
+    },
+    draftStatus: {
+      groupLabel: '工作流草稿状态',
+      phaseAria: '保存状态：{{status}}',
+      transportAria: '连接状态：{{status}}',
+      phase: {
+        clean: '已保存',
+        dirty: '有未保存修改',
+        saving: '保存中',
+        reconciling: '正在核对保存结果',
+        error: '保存失败',
+        conflict: '版本冲突',
+        inaccessible: '无法访问',
+        deleted: '已删除',
+      },
+      transport: {
+        online: '在线',
+        degraded: '实时同步降级',
+        offline: '离线',
+      },
+      retryNow: '立即重试',
+      offlineTitle: '当前离线',
+      offlineBody: '本地草稿已保留；恢复连接后会先核对服务端版本。',
+      reconcilingTitle: '正在核对保存结果',
+      reconcilingBody: '上次请求的结果不确定；在核对完成前不会发送后续修改。',
+      errorTitle: '工作流保存失败',
+      errorBody: '本地草稿仍然保留。请重试保存，或先导出本地内容。',
+      conflictTitle: '检测到版本冲突',
+      conflictBody:
+        '本地草稿 r{{localRevision}} 与远端 v{{remoteVersion}} 不一致。请选择如何继续。',
+      saveCopyRecommended: '另存为副本（推荐）',
+      saveCopy: '另存为副本',
+      loadRemote: '加载远端',
+      overwriteRemote: '覆盖远端',
+      loadDialogTitle: '加载远端版本？',
+      loadDialogBody: '加载远端 v{{remoteVersion}} 将丢弃本地草稿 r{{localRevision}} 的修改。',
+      loadDialogConfirm: '加载远端并丢弃本地修改',
+      overwriteDialogTitle: '覆盖远端版本？',
+      overwriteDialogBody:
+        '本地草稿 r{{localRevision}} 基于 v{{baseVersion}}；确认后将尝试覆盖远端 v{{remoteVersion}}。如果远端再次变化，仍会停在冲突状态。',
+      overwriteDialogConfirm: '确认覆盖远端',
+      inaccessibleTitle: '无法继续访问此工作流',
+      inaccessibleBody: '此工作流可能已删除或权限已变化。本地草稿仍然保留。',
+      deletedTitle: '工作流已删除',
+      deletedBody: '服务端已明确删除此工作流；本地草稿仍可导出或另存为副本。',
+      exportLocal: '导出本地 YAML',
+      retryAccess: '重试访问',
+      returnToList: '返回工作流列表',
+    },
   },
   taskWizard: {
     launchEntry: '启动任务',
@@ -5159,6 +5315,16 @@ export const zhCN: Resources = {
     degradedBanner: '该定时任务存储的配置无法解析（旧格式或已损坏）；请重新填写并保存以修复。',
     spaceUnresolvedNotice:
       '无法完整重建源任务的执行空间（内部空间、旧版本地路径，或在准备阶段就失败、仓库列表可能不完整）——已清空，请重新确认并填写完整的仓库列表后再启动。',
+    workflowVersionMismatchTitle: '工作流在启动前已变化',
+    workflowVersionMismatchBody:
+      '本次启动基于 v{{expected}}，但工作流当前已是 v{{current}}。请返回编辑器，对最新版本重新校验后再启动。',
+    workflowVersionReturnToEditor: '返回编辑器重新校验',
+    workflowVersionUseLatest: '加载并检查最新版本',
+    workflowLaunchVersionMismatchBody:
+      '启动期间工作流已更新，本次没有创建任务。请加载并检查最新字段后再试。',
+    scheduledWorkflowLatestTitle: '计划执行时使用最新工作流',
+    scheduledWorkflowLatestBody:
+      '定时任务不会固定当前工作流版本；每次触发时都会加载并校验当时最新的可用版本。',
   },
   stepper: {
     progress: '创建步骤',
@@ -5925,6 +6091,11 @@ export const zhCN: Resources = {
   },
   canvas: {
     connect: { newInput: '新增输入', reuseInput: '复用输入' },
+    clipboardBlocked: '所选步骤存在不完整的引用或输入声明，已阻止本次复制或粘贴。',
+    clipboardReferencesFiltered: '已安全移除 {{n}} 个指向复制范围外的引用，请检查粘贴后的配置。',
+    referencesPruned: '已清理 {{n}} 个指向已删除步骤的失效引用，工作流结构仍保持一致。',
+    referenceChangeBlocked: '存在无法安全更新的未知步骤引用，已阻止本次变更。',
+    placementUnavailable: '该位置附近没有可用空间，请平移画布后重试。',
   },
   reviewNode: {
     label: '评审',

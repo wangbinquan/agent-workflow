@@ -9,6 +9,7 @@ import { DocVersionDecisionSchema, ReviewCommentSchema, ReviewDecisionKindSchema
 import { ClarifySessionSchema, ClarifySessionSummarySchema } from './clarify'
 import { BatchImportRowSchema } from './repoBatchImport'
 import { MemorySummarySchema } from './memory'
+import { WorkflowMutationIdSchema, WorkflowSnapshotHashSchema } from './workflow'
 
 // -----------------------------------------------------------------------------
 // /ws/tasks/{taskId}
@@ -260,10 +261,17 @@ export const WorkflowsWsMessageSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('workflow.updated'),
     workflowId: z.string(),
+    clientMutationId: WorkflowMutationIdSchema,
     version: z.number().int(),
+    snapshotHash: WorkflowSnapshotHashSchema,
     updatedAt: z.number().int(),
   }),
-  z.object({ type: z.literal('workflow.deleted'), workflowId: z.string() }),
+  z.object({
+    type: z.literal('workflow.deleted'),
+    workflowId: z.string(),
+    clientMutationId: WorkflowMutationIdSchema,
+    deletedVersion: z.number().int().positive(),
+  }),
   // RFC-099 — fired on PUT /api/workflows/:id/acl. Carries no ACL payload;
   // clients re-fetch, and the WS server uses it to invalidate its
   // per-connection visibility cache for this workflowId.

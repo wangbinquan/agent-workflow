@@ -83,6 +83,17 @@ describe('deleteWrapperWithChildren', () => {
     expect(ids).toEqual(['outside'])
   })
 
+  test('recursively removes nested wrappers and their descendants', () => {
+    const d = def([
+      wrap('outer', 'wrapper-git', ['inner-wrapper']),
+      wrap('inner-wrapper', 'wrapper-loop', ['nested-child']),
+      agent('nested-child'),
+      agent('outside'),
+    ])
+    const out = deleteWrapperWithChildren(d, 'outer')
+    expect(out.nodes.map((node) => node.id)).toEqual(['outside'])
+  })
+
   test('drops edges whose endpoints were removed alongside the wrapper', () => {
     const edges = [
       {
@@ -131,6 +142,29 @@ describe('wrapper delete confirmation snapshot', () => {
           snapshot,
         ),
     ).toBe(true)
+  })
+
+  test('snapshots recursive descendants so nested scope changes invalidate confirmation', () => {
+    const original = def([
+      wrap('outer', 'wrapper-git', ['inner']),
+      wrap('inner', 'wrapper-loop', ['a1']),
+      agent('a1'),
+      agent('a2'),
+    ])
+    const snapshot = snapshotWrapperDelete(original, 'outer')
+    expect(snapshot).toEqual({ wrapperId: 'outer', childIds: ['a1', 'inner'] })
+    expect(
+      snapshot !== null &&
+        isWrapperDeleteSnapshotCurrent(
+          def([
+            wrap('outer', 'wrapper-git', ['inner']),
+            wrap('inner', 'wrapper-loop', ['a1', 'a2']),
+            agent('a1'),
+            agent('a2'),
+          ]),
+          snapshot,
+        ),
+    ).toBe(false)
   })
 
   test('rejects a removed wrapper or a changed destructive child set', () => {

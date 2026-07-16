@@ -7,7 +7,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type { Agent, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import { NodeInspector } from '../src/components/canvas/NodeInspector'
+import { NodeInspector, type InspectorChangeMeta } from '../src/components/canvas/NodeInspector'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 
 function wrap(node: React.ReactElement) {
@@ -63,7 +63,7 @@ function Host({
 }: {
   initial: WorkflowNode
   agents: Agent[]
-  onChangeSpy: (def: WorkflowDefinition) => void
+  onChangeSpy: (def: WorkflowDefinition, meta: InspectorChangeMeta) => void
   onCloseSpy: () => void
 }) {
   const [def, setDef] = useState<WorkflowDefinition>(makeDef([initial]))
@@ -72,9 +72,9 @@ function Host({
       definition={def}
       selectedNodeId={initial.id}
       agents={agents}
-      onChange={(next) => {
+      onChange={(next, meta) => {
         setDef(next)
-        onChangeSpy(next)
+        onChangeSpy(next, meta)
       }}
       onClose={onCloseSpy}
     />
@@ -329,6 +329,11 @@ describe('NodeInspector', () => {
     pickFromCombobox(trigger, 'coder')
     const after = lastPatchedNode(onChange) as unknown as { agentName: string }
     expect(after.agentName).toBe('coder')
+    expect(onChange.mock.calls[0]?.[1]).toEqual({
+      source: 'inspector',
+      label: 'Agent',
+      transaction: 'single',
+    })
   })
 
   // When no override is set, the model dropdown shows the agent's own
@@ -413,6 +418,32 @@ describe('NodeInspector', () => {
     fireEvent.change(titleEl, { target: { value: 'My coder' } })
     const next = lastPatchedNode(onChange) as unknown as { title?: string }
     expect(next.title).toBe('My coder')
+  })
+
+  test('continuous text emits a stable node+field mergeKey and a no-op blur boundary', () => {
+    const { onChange } = setup({ id: 'a1', kind: 'agent-single', agentName: 'coder' })
+    const titleEl = screen.getByLabelText(/Display name/i) as HTMLInputElement
+
+    fireEvent.change(titleEl, { target: { value: 'My' } })
+    fireEvent.change(titleEl, { target: { value: 'My coder' } })
+    fireEvent.blur(titleEl)
+
+    expect(onChange).toHaveBeenCalledTimes(3)
+    expect(onChange.mock.calls[0]?.[1]).toEqual({
+      source: 'inspector',
+      label: 'Display name',
+      mergeKey: 'node:a1:title',
+      transaction: 'update',
+    })
+    expect(onChange.mock.calls[1]?.[1]).toEqual(onChange.mock.calls[0]?.[1])
+    expect(onChange.mock.calls[2]?.[1]).toEqual({
+      source: 'inspector',
+      label: 'Display name',
+      mergeKey: 'node:a1:title',
+      transaction: 'update',
+      historyBoundary: 'blur',
+    })
+    expect(onChange.mock.calls[2]?.[0]).toEqual(onChange.mock.calls[1]?.[0])
   })
 
   test('display name field: blanking strips node.title entirely', () => {

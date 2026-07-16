@@ -219,6 +219,46 @@ export type Workflow = z.infer<typeof WorkflowSchema>
 
 // --- request payloads ---
 
+/** RFC-199: canonical 128-bit ULID used to correlate one submitted intent. */
+export const WorkflowMutationIdSchema = z
+  .string()
+  .length(26)
+  .regex(/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/)
+export type WorkflowMutationId = z.infer<typeof WorkflowMutationIdSchema>
+
+/** Lowercase SHA-256 of the domain-separated editable snapshot serialization. */
+export const WorkflowSnapshotHashSchema = z.string().regex(/^[0-9a-f]{64}$/)
+export type WorkflowSnapshotHash = z.infer<typeof WorkflowSnapshotHashSchema>
+
+/** The complete user-editable unit. Saves never accept partial patches. */
+export const WorkflowDraftSnapshotSchema = z
+  .object({
+    // Preserve grandfathered names during autosave. A changed/new name is
+    // still gated by WorkflowNameSchema in the service layer.
+    name: z.string().min(1).max(256),
+    description: z.string(),
+    definition: WorkflowDefinitionSchema,
+  })
+  .strict()
+export type WorkflowDraftSnapshot = z.infer<typeof WorkflowDraftSnapshotSchema>
+
+/** Server-owned identity of one exact persisted workflow revision. */
+export const WorkflowRevisionSchema = z
+  .object({
+    workflowId: z.string().min(1),
+    version: z.number().int().positive(),
+    snapshotHash: WorkflowSnapshotHashSchema,
+    updatedAt: z.number().int(),
+  })
+  .strict()
+export type WorkflowRevision = z.infer<typeof WorkflowRevisionSchema>
+
+/** Detail/create response. List rows deliberately remain plain Workflow. */
+export const WorkflowDetailSchema = WorkflowSchema.extend({
+  snapshotHash: WorkflowSnapshotHashSchema,
+})
+export type WorkflowDetail = z.infer<typeof WorkflowDetailSchema>
+
 /**
  * 2026-07-10 naming unification: workflow names follow the SAME rules as
  * workgroup names (slug charset, ≤128) — one regex, aliased so the two can
@@ -245,17 +285,109 @@ export type CreateWorkflow = z.infer<typeof CreateWorkflowSchema>
 
 export const UpdateWorkflowSchema = z
   .object({
-    // Permissive on purpose (grandfather): auto-save PUTs echo the stored
-    // name, which may predate the slug rules. The rename gate lives in the
-    // PUT route (validates only when the name differs from the stored one).
-    name: z.string().min(1).max(256).optional(),
-    description: z.string().optional(),
-    definition: WorkflowDefinitionSchema.optional(),
+    expectedVersion: z.number().int().positive(),
+    clientMutationId: WorkflowMutationIdSchema,
+    snapshot: WorkflowDraftSnapshotSchema,
   })
   .strict()
 export type UpdateWorkflow = z.infer<typeof UpdateWorkflowSchema>
 
+export const SaveWorkflowReceiptSchema = z
+  .object({
+    clientMutationId: WorkflowMutationIdSchema,
+    requestedBaseVersion: z.number().int().positive(),
+    revision: WorkflowRevisionSchema,
+    snapshot: WorkflowDraftSnapshotSchema,
+    outcome: z.enum(['committed', 'already-current']),
+  })
+  .strict()
+export type SaveWorkflowReceipt = z.infer<typeof SaveWorkflowReceiptSchema>
+
+export const DeleteWorkflowSchema = z
+  .object({
+    expectedVersion: z.number().int().positive(),
+    clientMutationId: WorkflowMutationIdSchema,
+  })
+  .strict()
+export type DeleteWorkflow = z.infer<typeof DeleteWorkflowSchema>
+
+const ImportWorkflowOverwriteSchema = z
+  .object({
+    workflowId: z.string().min(1),
+    expectedVersion: z.number().int().positive(),
+    clientMutationId: WorkflowMutationIdSchema,
+  })
+  .strict()
+
+/** RFC-199 structured YAML import request; overwrite is always revision-fenced. */
+export const ImportWorkflowRequestSchema = z.discriminatedUnion('mode', [
+  z.object({ yamlText: z.string(), mode: z.literal('fail') }).strict(),
+  z.object({ yamlText: z.string(), mode: z.literal('new') }).strict(),
+  z
+    .object({
+      yamlText: z.string(),
+      mode: z.literal('overwrite'),
+      overwrite: ImportWorkflowOverwriteSchema,
+    })
+    .strict(),
+])
+export type ImportWorkflowRequest = z.infer<typeof ImportWorkflowRequestSchema>
+
+export const ImportWorkflowResultSchema = z.discriminatedUnion('outcome', [
+  z.object({ outcome: z.literal('created'), workflow: WorkflowDetailSchema }).strict(),
+  z.object({ outcome: z.literal('overwritten'), receipt: SaveWorkflowReceiptSchema }).strict(),
+])
+export type ImportWorkflowResult = z.infer<typeof ImportWorkflowResultSchema>
+
 // --- /validate response (P-2-01 will fill in real checks) ---
+
+/**
+ * Stable semantic rows the frontend inspector can focus. These are not DOM
+ * ids: adding a focusable validator field requires extending this shared list
+ * and the frontend resolver together.
+ */
+export const WORKFLOW_NODE_FIELD_KEYS = [
+  'title',
+  'agent',
+  'prompt',
+  'input-definition',
+  'output-binding',
+  'review-source',
+  'review-rerunnable-on-reject',
+  'review-rerunnable-on-iterate',
+  'loop-max-iterations',
+  'loop-exit-condition',
+  'loop-output-bindings',
+  'fanout-inputs',
+  'clarify-session-mode',
+  'cross-clarify-session-mode',
+] as const
+export const WorkflowNodeFieldKeySchema = z.enum(WORKFLOW_NODE_FIELD_KEYS)
+export type WorkflowNodeFieldKey = z.infer<typeof WorkflowNodeFieldKeySchema>
+
+export const WorkflowValidationTargetSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('node'), nodeId: z.string().min(1) }).strict(),
+  z
+    .object({
+      kind: z.literal('node-field'),
+      nodeId: z.string().min(1),
+      field: WorkflowNodeFieldKeySchema,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('node-port'),
+      nodeId: z.string().min(1),
+      direction: z.enum(['input', 'output']),
+      portName: z.string().min(1),
+    })
+    .strict(),
+  z.object({ kind: z.literal('edge'), edgeId: z.string().min(1) }).strict(),
+  z.object({ kind: z.literal('workflow-input'), inputKey: z.string().min(1) }).strict(),
+  z.object({ kind: z.literal('workflow-output'), outputName: z.string().min(1) }).strict(),
+  z.object({ kind: z.literal('workflow') }).strict(),
+])
+export type WorkflowValidationTarget = z.infer<typeof WorkflowValidationTargetSchema>
 
 export const WorkflowValidationIssueSchema = z.object({
   /** Stable kebab-case identifier; one per static-check rule. */
@@ -263,6 +395,8 @@ export const WorkflowValidationIssueSchema = z.object({
   message: z.string(),
   /** Optional pointer into the definition (e.g. node id, edge id). */
   pointer: z.string().optional(),
+  /** Strict semantic location; pointer remains for backward compatibility. */
+  target: WorkflowValidationTargetSchema.optional(),
   /**
    * Severity. Absence is treated as 'error' for backwards compatibility — only
    * issues that explicitly set 'warning' are non-blocking. `result.ok` is true
@@ -277,6 +411,39 @@ export const WorkflowValidationResultSchema = z.object({
   issues: z.array(WorkflowValidationIssueSchema),
 })
 export type WorkflowValidationResult = z.infer<typeof WorkflowValidationResultSchema>
+
+/**
+ * RFC-199 B3: every operation that consumes persisted workflow bytes carries
+ * both members of the revision fingerprint. Version alone is insufficient for
+ * defensive response-loss reconciliation, while a hash without a version
+ * cannot establish the requested point in the workflow history.
+ */
+export const WorkflowExactRevisionSchema = z
+  .object({
+    expectedVersion: z.number().int().positive(),
+    expectedSnapshotHash: WorkflowSnapshotHashSchema,
+  })
+  .strict()
+export type WorkflowExactRevision = z.infer<typeof WorkflowExactRevisionSchema>
+
+export const WorkflowValidationRequestSchema = WorkflowExactRevisionSchema
+export type WorkflowValidationRequest = z.infer<typeof WorkflowValidationRequestSchema>
+
+/** Lowercase SHA-256 of the domain-separated validation-context projection. */
+export const WorkflowValidationContextHashSchema = z.string().regex(/^[0-9a-f]{64}$/)
+export type WorkflowValidationContextHash = z.infer<typeof WorkflowValidationContextHashSchema>
+
+/** Exact validation receipt bound to one workflow revision and one inventory. */
+export const WorkflowValidationReceiptSchema = z
+  .object({
+    revision: WorkflowRevisionSchema,
+    validationContextHash: WorkflowValidationContextHashSchema,
+    validatedAt: z.number().int().nonnegative(),
+    ok: z.boolean(),
+    issues: z.array(WorkflowValidationIssueSchema),
+  })
+  .strict()
+export type WorkflowValidationReceipt = z.infer<typeof WorkflowValidationReceiptSchema>
 
 // --- RFC-023 Clarify node ----------------------------------------------------
 //

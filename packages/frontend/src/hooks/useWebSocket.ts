@@ -14,10 +14,18 @@
 // later-mounted — keeps riding stale credentials. Messages are routed to the
 // listeners after JSON-parse; non-JSON frames are silently dropped.
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { getBaseUrl, getToken, subscribeAuth } from '@/stores/auth'
 
 type Listener = (msg: unknown) => void
+type ConnectionStateListener = (state: WebSocketConnectionState) => void
+
+export interface WebSocketConnectionState {
+  /** True only while the current physical socket is OPEN. */
+  connected: boolean
+  /** Increments once for every OPEN physical socket in this shared connection lifetime. */
+  connectionEpoch: number
+}
 
 export interface UseWebSocketOptions {
   /** Path on the daemon, e.g. `/ws/workflows` or `/ws/tasks/01XYZ`. */
@@ -38,9 +46,12 @@ const MAX_BACKOFF_MS = 30_000
 interface SharedConn {
   path: string
   listeners: Set<Listener>
+  connectionStateListeners: Set<ConnectionStateListener>
   socket: WebSocket | null
   reconnectTimer: ReturnType<typeof setTimeout> | null
   backoff: number
+  connected: boolean
+  connectionEpoch: number
   /** Flipped when the last subscriber releases — no further reconnects. */
   stopped: boolean
 }
@@ -65,6 +76,7 @@ function forceReconnect(conn: SharedConn): void {
   }
   const old = conn.socket
   conn.socket = null // detach BEFORE closing — old's close handler must not reschedule
+  markDisconnected(conn)
   closeSocket(old)
   conn.backoff = BASE_BACKOFF_MS
   connect(conn)
@@ -75,33 +87,48 @@ function forceReconnect(conn: SharedConn): void {
  * connection when it's the first subscriber. Returns a release fn; the last
  * release tears the socket down (timers cancelled, no reconnect).
  */
-function acquireSharedConn(path: string, listener: Listener): () => void {
+function acquireSharedConn(
+  path: string,
+  listener: Listener,
+  connectionStateListener: ConnectionStateListener,
+): () => void {
   let conn = sharedConns.get(path)
   if (conn === undefined) {
     conn = {
       path,
       listeners: new Set(),
+      connectionStateListeners: new Set(),
       socket: null,
       reconnectTimer: null,
       backoff: BASE_BACKOFF_MS,
+      connected: false,
+      connectionEpoch: 0,
       stopped: false,
     }
     sharedConns.set(path, conn)
     connect(conn)
   }
   conn.listeners.add(listener)
+  conn.connectionStateListeners.add(connectionStateListener)
+  // A hook may join an already-open pooled socket. Give it the current epoch
+  // immediately so it performs the same open-time reconciliation as the
+  // subscribers that witnessed the physical `open` event.
+  connectionStateListener(connectionStateOf(conn))
   const acquired = conn
   let released = false
   return () => {
     if (released) return
     released = true
     acquired.listeners.delete(listener)
+    acquired.connectionStateListeners.delete(connectionStateListener)
     if (acquired.listeners.size > 0) return
     acquired.stopped = true
     sharedConns.delete(path)
     if (acquired.reconnectTimer !== null) clearTimeout(acquired.reconnectTimer)
-    closeSocket(acquired.socket)
+    const old = acquired.socket
     acquired.socket = null
+    markDisconnected(acquired)
+    closeSocket(old)
   }
 }
 
@@ -149,6 +176,12 @@ function connect(conn: SharedConn): void {
   ws.addEventListener('open', () => {
     if (conn.socket !== ws) return // superseded — don't reset the live backoff
     conn.backoff = BASE_BACKOFF_MS
+    // Browsers emit one open per socket. The guard also prevents a malformed
+    // test/polyfill from advancing the epoch twice for the same live socket.
+    if (conn.connected) return
+    conn.connected = true
+    conn.connectionEpoch += 1
+    publishConnectionState(conn)
   })
   ws.addEventListener('close', () => {
     // A socket superseded by forceReconnect (or detached on release) is no
@@ -156,6 +189,7 @@ function connect(conn: SharedConn): void {
     // an auth rotation would end up with TWO live sockets on the path.
     if (conn.socket !== ws) return
     conn.socket = null
+    markDisconnected(conn)
     scheduleReconnect(conn)
   })
   ws.addEventListener('error', () => {
@@ -170,18 +204,55 @@ function scheduleReconnect(conn: SharedConn): void {
   conn.reconnectTimer = setTimeout(() => connect(conn), wait)
 }
 
-export function useWebSocket({ path, onMessage, enabled = true }: UseWebSocketOptions): void {
+const DISCONNECTED_STATE: WebSocketConnectionState = {
+  connected: false,
+  connectionEpoch: 0,
+}
+
+export function useWebSocket({
+  path,
+  onMessage,
+  enabled = true,
+}: UseWebSocketOptions): WebSocketConnectionState {
   // Latest-listener ref so we don't resubscribe every render when the caller
   // passes an inline arrow function.
   const listenerRef = useRef<Listener>(onMessage)
+  const [connectionState, setConnectionState] =
+    useState<WebSocketConnectionState>(DISCONNECTED_STATE)
   useEffect(() => {
     listenerRef.current = onMessage
   }, [onMessage])
 
   useEffect(() => {
     if (!enabled) return
-    return acquireSharedConn(path, (msg) => listenerRef.current(msg))
+    return acquireSharedConn(path, (msg) => listenerRef.current(msg), setConnectionState)
   }, [path, enabled])
+
+  return enabled ? connectionState : DISCONNECTED_STATE
+}
+
+function connectionStateOf(conn: SharedConn): WebSocketConnectionState {
+  return {
+    connected: conn.connected,
+    connectionEpoch: conn.connectionEpoch,
+  }
+}
+
+function publishConnectionState(conn: SharedConn): void {
+  const state = connectionStateOf(conn)
+  for (const listener of [...conn.connectionStateListeners]) {
+    try {
+      listener(state)
+    } catch {
+      /* one React subscriber must not starve its siblings */
+    }
+  }
+}
+
+function markDisconnected(conn: SharedConn): void {
+  if (!conn.connected) return
+  conn.connected = false
+  publishConnectionState(conn)
 }
 
 // `readyState === 0` is CONNECTING per the WebSocket spec; hard-coded to

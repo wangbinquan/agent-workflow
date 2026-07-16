@@ -10,7 +10,16 @@
 // (skill version bump + memory fuse) + OCC).
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { join as pjoin } from 'node:path'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
@@ -114,6 +123,21 @@ function statusOf(db: DbClient, id: string): string {
   )[0]!.status
 }
 
+function fusionWorkRoots(appHome: string): string[] {
+  const root = pjoin(appHome, 'fusions')
+  if (!existsSync(root)) return []
+  const workRoots: string[] = []
+  for (const fusionId of readdirSync(root)) {
+    const fusionRoot = pjoin(root, fusionId)
+    if (!existsSync(fusionRoot)) continue
+    for (const iteration of readdirSync(fusionRoot)) {
+      const work = pjoin(fusionRoot, iteration, 'work')
+      if (existsSync(work)) workRoots.push(work)
+    }
+  }
+  return workRoots
+}
+
 describe('isValidFusionTransition', () => {
   test('legal transitions', () => {
     expect(isValidFusionTransition('running', 'awaiting_approval')).toBe(true)
@@ -149,6 +173,27 @@ describe('createFusion preconditions', () => {
       code = (err as { code?: string }).code
     }
     expect(code).toBe('fusion-memory-not-approved')
+  })
+
+  test('seedWorktree git failure removes the owned root before startTask handoff', async () => {
+    await createManagedSkill(h.db, { appHome: h.appHome } as SkillFsOptions, {
+      name: 'lint',
+      description: 'd',
+      bodyMd: 'v1',
+      frontmatterExtra: {},
+    })
+    const mem = approvedGlobalMemory(h.db, 'm')
+    const deps: FusionDeps = {
+      ...h.deps,
+      seedGit: async () => ({ stdout: '', stderr: 'injected seed failure', exitCode: 73 }),
+    }
+    await expect(
+      createFusion({ skillName: 'lint', memoryIds: [mem], intent: '' }, deps, adminActor),
+    ).rejects.toThrow(/injected seed failure/)
+
+    expect(h.db.select().from(tasks).all()).toHaveLength(0)
+    expect(h.db.select().from(fusions).all()).toHaveLength(0)
+    expect(fusionWorkRoots(h.appHome)).toEqual([])
   })
 })
 
@@ -410,6 +455,32 @@ describe('RFC-170 T6 — fusion precondition token', () => {
     expect(after!.status).toBe('awaiting_approval')
     expect(after!.iteration).toBe(1)
     expect(after!.currentTaskId).toBe(taskBefore)
+  })
+
+  test('rejectFusion pre-startTask failure removes the next-iteration owned root', async () => {
+    const fsOpts: SkillFsOptions = { appHome: h.appHome }
+    await createManagedSkill(h.db, fsOpts, {
+      name: 'lint',
+      description: 'd',
+      bodyMd: 'orig',
+      frontmatterExtra: {},
+    })
+    const mem = approvedGlobalMemory(h.db, 'm')
+    const fusion = await toAwaitingApproval('lint', mem)
+    const taskCountBefore = h.db.select().from(tasks).all().length
+    const deps: FusionDeps = {
+      ...h.deps,
+      beforeStartTaskHandoff: ({ phase }) => {
+        if (phase === 'reject') throw new Error('injected reject pre-handoff failure')
+      },
+    }
+    await expect(rejectFusion(deps, fusion.id, 'retry', adminActor)).rejects.toThrow(
+      /injected reject pre-handoff failure/,
+    )
+
+    expect(h.db.select().from(tasks).all()).toHaveLength(taskCountBefore)
+    expect(existsSync(pjoin(h.appHome, 'fusions', fusion.id, 'iter2', 'work'))).toBe(false)
+    expect((await getFusion(h.deps, fusion.id))!.status).toBe('failed')
   })
 
   test('happy path: an unchanged skill still approves (token matches)', async () => {

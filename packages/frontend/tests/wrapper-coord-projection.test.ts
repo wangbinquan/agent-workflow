@@ -39,6 +39,27 @@ function flowNode(id: string, kind: string, pos: { x: number; y: number }): Node
 }
 
 describe('coordProjection', () => {
+  test('sized legacy wrapper without position keeps the canonical renderer-grid anchor', () => {
+    const d = def([
+      { id: 'legacy-leaf', kind: 'agent-single' } as unknown as WorkflowNode,
+      {
+        id: 'legacy-wrapper',
+        kind: 'wrapper-git',
+        nodeIds: [],
+        size: { width: 400, height: 300 },
+      } as unknown as WorkflowNode,
+    ])
+    const flow = [
+      flowNode('legacy-leaf', 'agent-single', { x: 80, y: 80 }),
+      flowNode('legacy-wrapper', 'wrapper-git', { x: 360, y: 80 }),
+    ]
+
+    expect(resolveWrappers(d).get('legacy-wrapper')?.position).toEqual({ x: 360, y: 80 })
+    expect(
+      projectDefinitionForXyflow(d, flow).find((node) => node.id === 'legacy-wrapper')?.position,
+    ).toEqual({ x: 360, y: 80 })
+  })
+
   test('single wrapper with one child: child becomes relative-to-parent', () => {
     const d = def([
       wrap('w1', 'wrapper-git', ['a1'], {
@@ -104,6 +125,67 @@ describe('coordProjection', () => {
     expect(git1.position).toEqual({ x: 50, y: 50 }) // relative to loop1 at (0,0)
     expect(a1.parentId).toBe('git1')
     expect(a1.position).toEqual({ x: 100, y: 150 }) // 150-50, 200-50
+  })
+
+  // RFC-199 T7.7: the inverse must accumulate every ancestor offset. The old
+  // implementation only added the direct parent's relative xyflow position,
+  // which silently lost a non-zero outer-wrapper offset for nested children.
+  test('nested wrappers with a non-zero outer position round-trip to canonical absolute positions', () => {
+    const d = def([
+      wrap('outer', 'wrapper-loop', ['inner'], {
+        size: { width: 900, height: 700 },
+        position: { x: 100, y: 80 },
+      }),
+      wrap('inner', 'wrapper-git', ['a1'], {
+        size: { width: 500, height: 360 },
+        position: { x: 180, y: 150 },
+      }),
+      child('a1', { x: 260, y: 240 }),
+    ])
+    const flow: Node[] = [
+      flowNode('outer', 'wrapper-loop', { x: 100, y: 80 }),
+      flowNode('inner', 'wrapper-git', { x: 180, y: 150 }),
+      flowNode('a1', 'agent-single', { x: 260, y: 240 }),
+    ]
+
+    const projected = projectDefinitionForXyflow(d, flow)
+    expect(projected.find((n) => n.id === 'inner')?.position).toEqual({ x: 80, y: 70 })
+    expect(projected.find((n) => n.id === 'a1')?.position).toEqual({ x: 80, y: 90 })
+
+    const absolute = projectXyflowPositionsToAbsolute(d, projected)
+    expect(absolute.find((n) => n.id === 'outer')?.position).toEqual({ x: 100, y: 80 })
+    expect(absolute.find((n) => n.id === 'inner')?.position).toEqual({ x: 180, y: 150 })
+    expect(absolute.find((n) => n.id === 'a1')?.position).toEqual({ x: 260, y: 240 })
+  })
+
+  // RFC-199 T7.7: xyflow moves nested descendants visually when an ancestor
+  // wrapper moves. Persisting must therefore resolve against the current
+  // ancestor chain, not the definition's stale absolute positions.
+  test('moving a nested ancestor preserves the descendant relative offsets when converted back', () => {
+    const d = def([
+      wrap('outer', 'wrapper-loop', ['inner'], {
+        size: { width: 900, height: 700 },
+        position: { x: 100, y: 80 },
+      }),
+      wrap('inner', 'wrapper-git', ['a1'], {
+        size: { width: 500, height: 360 },
+        position: { x: 180, y: 150 },
+      }),
+      child('a1', { x: 260, y: 240 }),
+    ])
+    const projected = projectDefinitionForXyflow(d, [
+      flowNode('outer', 'wrapper-loop', { x: 100, y: 80 }),
+      flowNode('inner', 'wrapper-git', { x: 180, y: 150 }),
+      flowNode('a1', 'agent-single', { x: 260, y: 240 }),
+    ])
+    const moved = projected.map((n) =>
+      n.id === 'outer' ? { ...n, position: { x: 140, y: 110 } } : n,
+    )
+
+    const absolute = projectXyflowPositionsToAbsolute(d, moved)
+    expect(absolute.find((n) => n.id === 'outer')?.position).toEqual({ x: 140, y: 110 })
+    expect(absolute.find((n) => n.id === 'inner')?.position).toEqual({ x: 220, y: 180 })
+    expect(absolute.find((n) => n.id === 'a1')?.position).toEqual({ x: 300, y: 270 })
   })
 
   test('top-level nodes (no wrapper) have no parentId and absolute position', () => {

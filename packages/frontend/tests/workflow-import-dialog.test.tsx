@@ -5,6 +5,7 @@
 import { useRef, useState } from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import type { WorkflowRevision } from '@agent-workflow/shared'
 import { ApiError } from '../src/api/client'
 import {
   WorkflowImportDialog,
@@ -12,6 +13,18 @@ import {
 } from '../src/components/WorkflowImportDialog'
 import i18n from '../src/i18n'
 import { enUS } from '../src/i18n/en-US'
+
+function conflictError(workflowId: string): ApiError {
+  return new ApiError(409, 'workflow-import-conflict', 'id collides', {
+    workflowId,
+    current: {
+      workflowId,
+      version: 7,
+      snapshotHash: 'a'.repeat(64),
+      updatedAt: 1_720_000_000_000,
+    },
+  })
+}
 
 function yamlFile(
   raw = 'name: imported\n',
@@ -27,6 +40,9 @@ function setup(
   onImport: WorkflowImportDialogProps['onImport'] = vi
     .fn<WorkflowImportDialogProps['onImport']>()
     .mockResolvedValue(undefined),
+  onRefreshConflict: WorkflowImportDialogProps['onRefreshConflict'] = vi
+    .fn<WorkflowImportDialogProps['onRefreshConflict']>()
+    .mockImplementation(async (workflowId) => revision(workflowId, 8, 'b')),
 ) {
   const onClose = vi.fn()
   function Harness() {
@@ -44,13 +60,23 @@ function setup(
             setOpen(false)
           }}
           onImport={onImport}
+          onRefreshConflict={onRefreshConflict}
           triggerRef={triggerRef}
         />
       </>
     )
   }
   render(<Harness />)
-  return { onImport, onClose }
+  return { onImport, onClose, onRefreshConflict }
+}
+
+function revision(workflowId: string, version: number, hash = 'a'): WorkflowRevision {
+  return {
+    workflowId,
+    version,
+    snapshotHash: hash.repeat(64),
+    updatedAt: 1_720_000_000_000 + version,
+  }
 }
 
 function selectFile(file: File): void {
@@ -110,8 +136,8 @@ describe('WorkflowImportDialog', () => {
 
   test('conflict defaults to new, preserves one YAML snapshot, and retries explicit overwrite', async () => {
     const onImport = vi
-      .fn<(yaml: string, mode: 'fail' | 'new' | 'overwrite') => Promise<void>>()
-      .mockRejectedValueOnce(new ApiError(409, 'workflow-import-conflict', 'id collides'))
+      .fn<WorkflowImportDialogProps['onImport']>()
+      .mockRejectedValueOnce(conflictError('same'))
       .mockRejectedValueOnce(new Error('overwrite failed'))
       .mockResolvedValueOnce(undefined)
     setup(onImport)
@@ -131,19 +157,64 @@ describe('WorkflowImportDialog', () => {
     expect(
       screen.getByTestId('workflow-import-choice-overwrite').getAttribute('aria-checked'),
     ).toBe('true')
-    expect(onImport).toHaveBeenNthCalledWith(2, 'id: same\n', 'overwrite')
+    const firstOverwrite = onImport.mock.calls[1]?.[2]
+    expect(firstOverwrite).toMatchObject({ workflowId: 'same', expectedVersion: 7 })
+    expect(firstOverwrite?.clientMutationId).toMatch(/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/)
 
     fireEvent.click(screen.getByTestId('workflow-import-submit'))
     expect(await screen.findByTestId('workflow-import-result')).toBeTruthy()
-    expect(onImport).toHaveBeenNthCalledWith(3, 'id: same\n', 'overwrite')
+    expect(onImport).toHaveBeenNthCalledWith(3, 'id: same\n', 'overwrite', firstOverwrite)
+    expect(onImport.mock.calls[2]?.[2]?.clientMutationId).toBe(firstOverwrite?.clientMutationId)
     expect(file.text).toHaveBeenCalledTimes(1)
     expect(screen.getByText(enUS.workflows.workflowOverwritten)).toBeTruthy()
+  })
+
+  test('overwrite version drift invalidates the old fence and requires a read-only refresh', async () => {
+    const onImport = vi
+      .fn<WorkflowImportDialogProps['onImport']>()
+      .mockRejectedValueOnce(conflictError('same'))
+      .mockRejectedValueOnce(
+        new ApiError(409, 'workflow-version-conflict', 'workflow changed', {
+          current: revision('same', 8, 'b'),
+        }),
+      )
+      .mockResolvedValueOnce(undefined)
+    const onRefreshConflict = vi
+      .fn<WorkflowImportDialogProps['onRefreshConflict']>()
+      .mockResolvedValue(revision('same', 8, 'b'))
+    setup(onImport, onRefreshConflict)
+    selectFile(yamlFile('id: same\n', 'same.yaml'))
+
+    fireEvent.click(screen.getByTestId('workflow-import-submit'))
+    expect(await screen.findByTestId('workflow-import-conflict')).toBeTruthy()
+    fireEvent.click(screen.getByTestId('workflow-import-choice-overwrite'))
+    fireEvent.click(screen.getByTestId('workflow-import-submit'))
+
+    expect((await screen.findByRole('alert')).textContent).toContain('workflow changed')
+    const staleFence = onImport.mock.calls[1]?.[2]
+    expect(staleFence).toMatchObject({ workflowId: 'same', expectedVersion: 7 })
+    expect(screen.getByTestId('workflow-import-submit').textContent).toBe(
+      enUS.workflows.importDialog.refreshConflict,
+    )
+
+    fireEvent.click(screen.getByTestId('workflow-import-submit'))
+    await waitFor(() => expect(onRefreshConflict).toHaveBeenCalledWith('same'))
+    expect(onImport).toHaveBeenCalledTimes(2)
+    expect(screen.getByTestId('workflow-import-submit').textContent).toBe(
+      enUS.workflows.importDialog.import,
+    )
+
+    fireEvent.click(screen.getByTestId('workflow-import-submit'))
+    expect(await screen.findByTestId('workflow-import-result')).toBeTruthy()
+    const refreshedFence = onImport.mock.calls[2]?.[2]
+    expect(refreshedFence).toMatchObject({ workflowId: 'same', expectedVersion: 8 })
+    expect(refreshedFence?.clientMutationId).not.toBe(staleFence?.clientMutationId)
   })
 
   test('the safe conflict default submits new without requiring a magic string', async () => {
     const onImport = vi
       .fn<WorkflowImportDialogProps['onImport']>()
-      .mockRejectedValueOnce(new ApiError(409, 'workflow-import-conflict', 'id collides'))
+      .mockRejectedValueOnce(conflictError('existing'))
       .mockResolvedValueOnce(undefined)
     setup(onImport)
     selectFile(yamlFile('id: existing\n'))
@@ -160,7 +231,7 @@ describe('WorkflowImportDialog', () => {
   test('canceling a conflict performs no second import and restores trigger focus', async () => {
     const onImport = vi
       .fn<WorkflowImportDialogProps['onImport']>()
-      .mockRejectedValueOnce(new ApiError(409, 'workflow-import-conflict', 'id collides'))
+      .mockRejectedValueOnce(conflictError('existing'))
     const { onClose } = setup(onImport)
     selectFile(yamlFile('id: existing\n'))
     fireEvent.click(screen.getByTestId('workflow-import-submit'))
@@ -171,6 +242,22 @@ describe('WorkflowImportDialog', () => {
     expect(onImport).toHaveBeenCalledTimes(1)
     expect(onClose).toHaveBeenCalledTimes(1)
     expect(document.activeElement?.textContent).toBe('Open import')
+  })
+
+  test('a malformed conflict without the exact current revision fails closed', async () => {
+    const onImport = vi.fn<WorkflowImportDialogProps['onImport']>().mockRejectedValueOnce(
+      new ApiError(409, 'workflow-import-conflict', 'id collides', {
+        workflowId: 'existing',
+        current: { workflowId: 'existing', version: 7 },
+      }),
+    )
+    setup(onImport)
+    selectFile(yamlFile('id: existing\n'))
+
+    fireEvent.click(screen.getByTestId('workflow-import-submit'))
+    expect(await screen.findByRole('alert')).toBeTruthy()
+    expect(screen.queryByTestId('workflow-import-conflict')).toBeNull()
+    expect(onImport).toHaveBeenCalledTimes(1)
   })
 
   test('pending is single-fire and locks file changes and every dismiss path', async () => {

@@ -6,6 +6,12 @@
 
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
+import {
+  WorkflowRevisionSchema,
+  type ImportWorkflowRequest,
+  type WorkflowRevision,
+} from '@agent-workflow/shared'
+import { ulid } from 'ulid'
 import { ApiError } from '@/api/client'
 import { describeApiError } from '@/i18n'
 import { Dialog } from './Dialog'
@@ -16,6 +22,10 @@ import { Segmented } from './Segmented'
 
 export type WorkflowImportConflictChoice = 'new' | 'overwrite'
 export type WorkflowImportMode = 'fail' | WorkflowImportConflictChoice
+export type WorkflowImportOverwrite = Extract<
+  ImportWorkflowRequest,
+  { mode: 'overwrite' }
+>['overwrite']
 
 export type WorkflowImportState =
   | { kind: 'select'; file: File | null; error: string | null }
@@ -24,6 +34,8 @@ export type WorkflowImportState =
       file: File
       yaml: string
       choice: WorkflowImportConflictChoice
+      overwrite: WorkflowImportOverwrite | null
+      workflowId: string
       error: string | null
     }
   | { kind: 'result'; message: string }
@@ -31,7 +43,13 @@ export type WorkflowImportState =
 export interface WorkflowImportDialogProps {
   open: boolean
   onClose: () => void
-  onImport: (yaml: string, mode: WorkflowImportMode) => Promise<void>
+  onImport: (
+    yaml: string,
+    mode: WorkflowImportMode,
+    overwrite?: WorkflowImportOverwrite,
+  ) => Promise<void>
+  /** Pure refetch: refreshing a stale overwrite fence must never create/import. */
+  onRefreshConflict: (workflowId: string) => Promise<WorkflowRevision>
   triggerRef?: RefObject<HTMLButtonElement | null>
 }
 
@@ -79,6 +97,16 @@ export function WorkflowImportDialog(props: WorkflowImportDialogProps) {
     const generation = ++requestGenerationRef.current
     let snapshot: { file: File; yaml: string; mode: WorkflowImportMode } | null = null
     try {
+      if (state.kind === 'conflict' && state.choice === 'overwrite' && state.overwrite === null) {
+        const current = await props.onRefreshConflict(state.workflowId)
+        if (!isCurrentRequest(generation)) return
+        const overwrite = importOverwriteFromRevision(state.workflowId, current)
+        if (overwrite === null)
+          throw new Error('workflow conflict refresh returned another resource')
+        setState({ ...state, overwrite, error: null })
+        return
+      }
+
       let yaml: string
       let file: File
       let mode: WorkflowImportMode
@@ -102,7 +130,12 @@ export function WorkflowImportDialog(props: WorkflowImportDialogProps) {
 
       if (!isCurrentRequest(generation)) return
       snapshot = { file, yaml, mode }
-      await props.onImport(yaml, mode)
+      if (mode === 'overwrite' && state.kind === 'conflict') {
+        if (state.overwrite === null) throw new Error('workflow overwrite revision is stale')
+        await props.onImport(yaml, mode, state.overwrite)
+      } else {
+        await props.onImport(yaml, mode)
+      }
       if (!isCurrentRequest(generation)) return
       setState({
         kind: 'result',
@@ -117,13 +150,33 @@ export function WorkflowImportDialog(props: WorkflowImportDialogProps) {
         error instanceof ApiError &&
         error.code === 'workflow-import-conflict'
       ) {
-        setState({
-          kind: 'conflict',
-          file: snapshot.file,
-          yaml: snapshot.yaml,
-          choice: 'new',
-          error: null,
-        })
+        const overwrite = importOverwriteFromConflict(error)
+        if (overwrite === null) {
+          // RFC-199's collision contract always carries the exact current
+          // revision. Fail closed if an older/malformed daemon omits it: an
+          // unfenced overwrite must never be offered.
+          setState({ ...state, error: describeApiError(error) })
+        } else {
+          setState({
+            kind: 'conflict',
+            file: snapshot.file,
+            yaml: snapshot.yaml,
+            choice: 'new',
+            overwrite,
+            workflowId: overwrite.workflowId,
+            error: null,
+          })
+        }
+      } else if (
+        state.kind === 'conflict' &&
+        state.choice === 'overwrite' &&
+        error instanceof ApiError &&
+        error.code === 'workflow-version-conflict'
+      ) {
+        // A 409 is definitive fence drift, not a transport retry. Invalidate
+        // the old version + mutation id and require a read-only refetch before
+        // the user can confirm overwrite again.
+        setState({ ...state, overwrite: null, error: describeApiError(error) })
       } else if (state.kind === 'select') {
         setState({ ...state, error: describeApiError(error) })
       } else {
@@ -145,11 +198,15 @@ export function WorkflowImportDialog(props: WorkflowImportDialogProps) {
     if (!pendingRef.current) props.onClose()
   }
 
+  const needsConflictRefresh =
+    state.kind === 'conflict' && state.choice === 'overwrite' && state.overwrite === null
   const submitLabel = pending
     ? t('workflows.importDialog.importing')
-    : state.kind !== 'result' && state.error !== null
-      ? t('workflows.importDialog.retry')
-      : t('workflows.importDialog.import')
+    : needsConflictRefresh
+      ? t('workflows.importDialog.refreshConflict')
+      : state.kind !== 'result' && state.error !== null
+        ? t('workflows.importDialog.retry')
+        : t('workflows.importDialog.import')
 
   return (
     <Dialog
@@ -266,4 +323,28 @@ export function WorkflowImportDialog(props: WorkflowImportDialogProps) {
       )}
     </Dialog>
   )
+}
+
+export function importOverwriteFromConflict(error: ApiError): WorkflowImportOverwrite | null {
+  if (typeof error.details !== 'object' || error.details === null) return null
+  const details = error.details as Record<string, unknown>
+  const current = WorkflowRevisionSchema.safeParse(details.current)
+  if (!current.success) return null
+  if (typeof details.workflowId !== 'string') return null
+  const workflowId = details.workflowId
+  if (workflowId !== current.data.workflowId) return null
+  return importOverwriteFromRevision(workflowId, current.data)
+}
+
+export function importOverwriteFromRevision(
+  workflowId: string,
+  revision: WorkflowRevision,
+): WorkflowImportOverwrite | null {
+  const current = WorkflowRevisionSchema.safeParse(revision)
+  if (!current.success || current.data.workflowId !== workflowId) return null
+  return {
+    workflowId,
+    expectedVersion: current.data.version,
+    clientMutationId: ulid(),
+  }
 }

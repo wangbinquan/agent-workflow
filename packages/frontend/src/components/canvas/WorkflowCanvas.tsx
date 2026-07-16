@@ -15,6 +15,7 @@ import {
   MiniMap,
   type Node,
   type NodeChange,
+  type OnDelete,
   type OnConnectEnd,
   Position,
   ReactFlow,
@@ -45,7 +46,13 @@ import type {
   WorkflowEdge,
   WorkflowNode,
 } from '@agent-workflow/shared'
-import { declaredPorts, isClarifyAskingNode, isWrapperKind } from '@agent-workflow/shared'
+import {
+  declaredPorts,
+  collectNodeReferenceClosure,
+  isClarifyAskingNode,
+  isWrapperKind,
+  pruneDeletedNodeReferences,
+} from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 import { AgentNode } from './nodes/AgentNode'
 import { applyPaste, buildSlice, getClipboard, setClipboard } from './canvasClipboard'
@@ -54,7 +61,6 @@ import {
   cascadeRemoveClarifyChannel,
   classifyClarifyConnection,
   clarifyHasAttachedAgent,
-  clearClarifyEdgesForRemovedNodes,
   hasExistingClarifyChannel,
   isValidClarifyTarget,
 } from './clarifyDragHelper'
@@ -63,7 +69,6 @@ import {
   applyCrossClarifyQuestionerReverseDrag,
   cascadeRemoveCrossClarifyChannel,
   classifyCrossClarifyConnection,
-  clearCrossClarifyEdgesForRemovedNodes,
   crossClarifyHasAttachedQuestioner,
   crossClarifyHasDesignerEdge,
   isStrayClarifyChannelDrop,
@@ -80,6 +85,7 @@ import { CrossClarifyNode } from './nodes/CrossClarifyNode'
 import { applyConnectionForReviewOutput, applyDisconnectForReviewOutput } from './connectionSync'
 import { ContextMenu, type ContextMenuItem } from './ContextMenu'
 import { ConfirmDialog } from '../ConfirmDialog'
+import { NoticeBanner } from '../NoticeBanner'
 import { InputNode } from './nodes/InputNode'
 import { deserialize, makeNode, PALETTE_MIME, type PaletteItem } from './nodePalette'
 import { OutputNode } from './nodes/OutputNode'
@@ -88,9 +94,11 @@ import { INBOUND_HANDLE_ID, type CanvasNodeData, type CanvasSelection } from './
 import { syncInputDefs } from './syncInputDefs'
 import { GroupWrapperNode } from './nodes/WrapperNodes'
 import {
+  buildParentMap,
   buildMeasuredSizesFromXyflowNodes,
   projectDefinitionForXyflow,
   projectXyflowPositionsToAbsolute,
+  resolveWrappers,
 } from './coordProjection'
 import {
   applyMembershipPatch,
@@ -98,6 +106,7 @@ import {
   type WrapperHitInput,
 } from './wrapperMembership'
 import { DEFAULT_NODE_SIZE_BY_KIND, fitWrapperToInner } from './wrapperFit'
+import { effectiveWorkflowNodePosition, findOpenPlacement } from '../../lib/workflow-placement'
 import {
   clearWrapperSize,
   deleteWrapperWithChildren,
@@ -125,9 +134,20 @@ const NODE_TYPES = {
 
 export interface WorkflowCanvasProps {
   definition: WorkflowDefinition
+  /**
+   * Stable workflow identity stored in semantic clipboard payloads. The edit
+   * route always supplies this; isolated stories/tests may omit it and use a
+   * local-only identity.
+   */
+  workflowId?: string
   /** Used to look up agent.outputs when rendering agent nodes. Optional. */
   agents?: Agent[]
-  onChange?: (next: WorkflowDefinition) => void
+  onChange?: (next: WorkflowDefinition, meta?: WorkflowCanvasChangeMeta) => void
+  canUndo?: boolean
+  canRedo?: boolean
+  /** Canvas-scoped history shortcuts; text controls keep native browser undo. */
+  onUndo?: () => void
+  onRedo?: () => void
   /**
    * Receives the currently-selected node or edge, or null when nothing
    * (or a multi-selection) is active. Edge selection lets the editor
@@ -199,6 +219,21 @@ export interface WorkflowCanvasProps {
   clarifyNavs?: Record<string, 'awaiting' | 'answered'>
 }
 
+export interface WorkflowCanvasChangeMeta {
+  label: string
+  selectionBefore?: CanvasSelection | null
+  selectionAfter?: CanvasSelection | null
+}
+
+function singleCanvasSelection(
+  nodes: readonly string[],
+  edges: readonly string[],
+): CanvasSelection | null {
+  if (nodes.length === 1 && edges.length === 0) return { kind: 'node', id: nodes[0]! }
+  if (edges.length === 1 && nodes.length === 0) return { kind: 'edge', id: edges[0]! }
+  return null
+}
+
 /**
  * Imperative handle exposed via ref on {@link WorkflowCanvas}. The parent
  * route uses `clearSelection` from inspector close buttons so the edge /
@@ -210,6 +245,7 @@ export interface WorkflowCanvasProps {
 export interface WorkflowCanvasHandle {
   addPaletteItemAtViewportCenter: (item: PaletteItem) => void
   clearSelection: () => void
+  restoreSelection: (selection: CanvasSelection | null) => void
 }
 
 /** Screen-space center used by palette click / keyboard insertion. */
@@ -225,6 +261,16 @@ export function viewportCenter(rect: {
   }
 }
 
+/** Native text editing always wins over canvas copy/paste/history shortcuts. */
+export function isCanvasTextEditingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false
+  return (
+    target.closest(
+      'input, textarea, select, [role="textbox"], [contenteditable]:not([contenteditable="false"])',
+    ) !== null
+  )
+}
+
 export const WorkflowCanvas = forwardRef<WorkflowCanvasHandle, WorkflowCanvasProps>(
   function WorkflowCanvas(props, ref) {
     return (
@@ -237,6 +283,7 @@ export const WorkflowCanvas = forwardRef<WorkflowCanvasHandle, WorkflowCanvasPro
 
 function CanvasInner({
   definition,
+  workflowId,
   agents,
   onChange,
   onSelect,
@@ -249,11 +296,16 @@ function CanvasInner({
   onNodeClarifyDirectiveToggle,
   reviewNavs,
   clarifyNavs,
+  canUndo,
+  canRedo,
+  onUndo,
+  onRedo,
   handleRef,
 }: WorkflowCanvasProps & {
   handleRef?: React.ForwardedRef<WorkflowCanvasHandle>
 }) {
   const { t } = useTranslation()
+  const [canvasNotice, setCanvasNotice] = useState<string | null>(null)
   const agentByName = useMemo(() => {
     const m = new Map<string, Agent>()
     for (const a of agents ?? []) m.set(a.name, a)
@@ -281,11 +333,29 @@ function CanvasInner({
   // covers all three deletion paths (Delete key, EdgeInspector remove,
   // node-removal cascade) without each callsite having to opt in.
   const commitChange = useCallback(
-    (next: WorkflowDefinition) => {
-      if (onChange === undefined) return
-      const nextEdgeIds = new Set(next.edges.map((e) => e.id))
+    (next: WorkflowDefinition, meta?: WorkflowCanvasChangeMeta): boolean => {
+      if (onChange === undefined) return false
+      let staged = next
+      const nextNodeIds = new Set(next.nodes.map((node) => node.id))
+      const removedNodeCount = definition.nodes.reduce(
+        (count, node) => count + (nextNodeIds.has(node.id) ? 0 : 1),
+        0,
+      )
+      if (removedNodeCount > 0) {
+        const pruned = pruneDeletedNodeReferences(next, nextNodeIds)
+        if (!pruned.safe) {
+          setCanvasNotice(t('canvas.referenceChangeBlocked'))
+          return false
+        }
+        staged = pruned.definition
+        if (pruned.warnings.length > 0) {
+          setCanvasNotice(t('canvas.referencesPruned', { n: pruned.warnings.length }))
+        }
+      }
+
+      const nextEdgeIds = new Set(staged.edges.map((edge) => edge.id))
       const deleted = definition.edges.filter((e) => !nextEdgeIds.has(e.id))
-      let staged = deleted.length === 0 ? next : applyDisconnectForReviewOutput(next, deleted)
+      if (deleted.length > 0) staged = applyDisconnectForReviewOutput(staged, deleted)
       // RFC-023 bugfix: a clarify channel is a (ask, ans) pair persisted as
       // two edges. Deleting either half on its own would leave a half-wired
       // channel — the scheduler still sees the ask edge and re-runs the
@@ -303,9 +373,10 @@ function CanvasInner({
       }
       const synced = syncInputDefs(staged.inputs ?? [], staged.nodes)
       if (synced !== (staged.inputs ?? [])) staged = { ...staged, inputs: synced }
-      onChange(staged)
+      onChange(staged, meta ?? { label: t('editor.history.canvasEdit') })
+      return true
     },
-    [definition.edges, onChange],
+    [definition.edges, definition.nodes, onChange, t],
   )
   // RFC-120 D13: stable bridge to the latest onNodeQuestionBadgeClick prop. A
   // ref keeps the handle identity-stable across renders so node-data rebuilds
@@ -412,6 +483,32 @@ function CanvasInner({
   useEffect(() => {
     nodesRef.current = nodes
   }, [nodes])
+  // Event callbacks can arrive back-to-back before React commits the previous
+  // controlled-state update. Mirror edges as well as nodes so each callback
+  // can compute its next state synchronously, then perform setters/commits in
+  // an explicit order — never from inside a replayable state updater.
+  const edgesRef = useRef<Edge[]>(edges)
+  useEffect(() => {
+    edgesRef.current = edges
+  }, [edges])
+
+  /**
+   * Publish one semantic selection to every owner before a definition rebuild.
+   * `selectionRef` is synchronous because the def-sync effect may run before
+   * React flushes the local state update; the signature prevents xyflow's
+   * subsequent onSelectionChange echo from reopening a render loop.
+   */
+  const syncCanvasSelection = useCallback(
+    (nodeIds: readonly string[], edgeIds: readonly string[]): CanvasSelection | null => {
+      const next = buildCanvasSelectionSync(nodeIds, edgeIds)
+      selectionRef.current = next.local
+      setSelection(next.local)
+      lastEmittedSelectionSig.current = next.signature
+      onSelect?.(next.route)
+      return next.route
+    },
+    [onSelect],
+  )
 
   // A canvas mounted inside a hidden tab pane (`.task-detail__pane[hidden]`
   // → display:none) measures 0×0, so xyflow resolves its queued init fitView
@@ -546,88 +643,63 @@ function CanvasInner({
 
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
-      setNodes((prev) => {
-        const next = applyNodeChanges(changes, prev)
-        if (!readOnly && onChange !== undefined) {
-          // Only propagate changes that actually affect the persisted
-          // workflow definition. xyflow's `select` and `dimensions`
-          // changes are local UI state — propagating them would mint a
-          // new definition reference, which the def-sync useEffect would
-          // immediately re-apply by rebuilding `nodes`, retriggering
-          // onNodesChange... a feedback loop that hits React's
-          // "Maximum update depth exceeded" guard.
-          if (affectsDefinition(changes)) {
-            const stillReferenced = new Set(next.map((n) => n.id))
-            const liveEdges = edges.filter(
-              (e) => stillReferenced.has(e.source) && stillReferenced.has(e.target),
-            )
-            if (liveEdges.length !== edges.length) setEdges(liveEdges)
-            const removedIds: string[] = []
-            for (const c of changes) {
-              if (c.type === 'remove') removedIds.push(c.id)
-            }
-            commitChange(toDefinition(definition, next, liveEdges))
-            // Delete key path: xyflow's built-in `deleteKeyCode` removes the
-            // selected node before our `deleteSelected` callback ever fires
-            // (deleteSelected is wired only to the right-click menu). Without
-            // this branch the parent route still has `selection={kind:'node',
-            // id:<deleted>}`, the inspector returns null but the 3rd grid
-            // column stays open → an empty white frame on the right until
-            // the user clicks elsewhere. Mirror onPaneClick's "clear parent
-            // selection" path whenever an emitted-selection node is among
-            // the removed ids. The internal `selection` ref's nodes/edges
-            // are kept in sync separately via the onSelectionChange handler.
-            if (removedIds.length > 0) {
-              const sig = lastEmittedSelectionSig.current
-              const emittedNodeMatch = sig.startsWith('node:') && removedIds.includes(sig.slice(5))
-              if (emittedNodeMatch && onSelect !== undefined) {
-                lastEmittedSelectionSig.current = 'null'
-                onSelect(null)
-              }
-            }
-          }
-        }
-        return next
-      })
+      const reconciled = reconcileFlowNodeChanges(changes, nodesRef.current, edgesRef.current)
+      const next = reconciled.nodes
+      nodesRef.current = next
+      setNodes(next)
+      if (readOnly === true || onChange === undefined || !affectsDefinition(changes)) return
+
+      // Only propagate changes that actually affect the persisted workflow
+      // definition. xyflow's `select` and `dimensions` changes are local UI
+      // state; propagating them would create a definition rebuild loop.
+      const previousEdges = edgesRef.current
+      const liveEdges = reconciled.edges
+      if (liveEdges.length !== previousEdges.length) {
+        edgesRef.current = liveEdges
+        setEdges(liveEdges)
+      }
+      const removedIds: string[] = []
+      for (const change of changes) {
+        if (change.type === 'remove') removedIds.push(change.id)
+      }
+      // xyflow emits incident edge removals and node removals in two callbacks
+      // for one Delete gesture. `onDelete` owns the single semantic
+      // transaction; these callbacks only mirror controlled flow state.
+      if (removedIds.length === 0) {
+        commitChange(toDefinition(definition, next, liveEdges), {
+          label: t('editor.history.canvasEdit'),
+        })
+      }
+      // Parent selection is intentionally untouched here. `onDelete` owns the
+      // final selection, and no setter/commit runs inside a replayable updater.
     },
-    [commitChange, definition, edges, onChange, onSelect, readOnly],
+    [commitChange, definition, onChange, readOnly, t],
   )
 
   const handleEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
       if (readOnly === true) return
-      setEdges((prev) => {
-        // Apply ALL change types (select / remove / replace / etc) via
-        // xyflow's helper. Previous version only handled `remove`, which
-        // silently swallowed `select` changes — edges never got
-        // `selected: true`, the EdgeInspector entry point was unreachable.
-        const next = applyEdgeChanges(changes, prev)
-        // Only the structural mutations need to round-trip into the
-        // persisted WorkflowDefinition; selection-only ticks stay local.
-        if (onChange !== undefined && affectsEdgeDefinition(changes)) {
-          const removedIds: string[] = []
-          for (const c of changes) {
-            if (c.type === 'remove') removedIds.push(c.id)
-          }
-          commitChange(toDefinition(definition, nodes, next))
-          // Same parent-selection clear as handleNodesChange: xyflow's
-          // built-in Delete-key path also removes the selected edge here,
-          // not via deleteSelected. Without this, the parent route's
-          // selection still references the dead edge and the inspector
-          // column stays open.
-          if (removedIds.length > 0) {
-            const sig = lastEmittedSelectionSig.current
-            const emittedEdgeMatch = sig.startsWith('edge:') && removedIds.includes(sig.slice(5))
-            if (emittedEdgeMatch && onSelect !== undefined) {
-              lastEmittedSelectionSig.current = 'null'
-              onSelect(null)
-            }
-          }
-        }
-        return next
-      })
+      // Apply ALL change types (select / remove / replace / etc) via xyflow's
+      // helper. Compute outside the setter so React cannot replay a commit or
+      // a sibling state update as part of a functional updater.
+      const next = applyEdgeChanges(changes, edgesRef.current)
+      edgesRef.current = next
+      setEdges(next)
+      if (onChange === undefined || !affectsEdgeDefinition(changes)) return
+      const removedIds: string[] = []
+      for (const change of changes) {
+        if (change.type === 'remove') removedIds.push(change.id)
+      }
+      // See handleNodesChange: one `onDelete` callback persists the whole
+      // node+incident-edge gesture atomically.
+      if (removedIds.length === 0) {
+        commitChange(toDefinition(definition, nodesRef.current, next), {
+          label: t('editor.history.canvasEdit'),
+        })
+      }
+      // Parent selection is finalized once by `onDelete`.
     },
-    [commitChange, definition, nodes, onChange, onSelect, readOnly],
+    [commitChange, definition, onChange, readOnly, t],
   )
 
   const deleteKeyCodes = useMemo(() => ['Backspace', 'Delete'], [])
@@ -670,7 +742,7 @@ function CanvasInner({
           sourceAgentNodeId: clarifyDrop.sourceAgentNodeId,
           clarifyNodeId: clarifyDrop.clarifyNodeId,
         })
-        if (next !== definition) commitChange(next)
+        if (next !== definition) commitChange(next, { label: t('editor.history.connect') })
         return
       }
       // RFC-056 cross-clarify drops. Two shapes:
@@ -693,7 +765,7 @@ function CanvasInner({
             designerNodeId: crossDrop.designerNodeId,
           })
         }
-        if (next !== definition) commitChange(next)
+        if (next !== definition) commitChange(next, { label: t('editor.history.connect') })
         return
       }
       // RFC-007: distinguish "dropped on catch-all left strip" from "dropped
@@ -770,9 +842,9 @@ function CanvasInner({
       // handle but the inspector's inputs[] list is missing the entry, and
       // the validator would emit a port-mismatch on next save).
       const reconciled = ensureWrapperFanoutInputForEdge(synced, built)
-      commitChange(reconciled)
+      commitChange(reconciled, { label: t('editor.history.connect') })
     },
-    [commitChange, definition, onChange, readOnly, rf],
+    [commitChange, definition, onChange, readOnly, rf, t],
   )
 
   // RFC-106: a fresh drag starts un-handled; onConnect flips the flag when it
@@ -839,9 +911,9 @@ function CanvasInner({
         viaCatchAll: target.kind === 'new',
       })
       const reconciled = ensureWrapperFanoutInputForEdge(synced, built)
-      commitChange(reconciled)
+      commitChange(reconciled, { label: t('editor.history.connect') })
     },
-    [commitChange, definition, onChange, readOnly, rf, trackConnectPointer],
+    [commitChange, definition, onChange, readOnly, rf, t, trackConnectPointer],
   )
 
   // RFC-106: inject (or clear) the live preview input port on the hovered node.
@@ -1027,19 +1099,55 @@ function CanvasInner({
 
   const copySelection = useCallback(() => {
     if (selection.nodes.length === 0) return
-    const slice = buildSlice(definition, selection.nodes)
-    if (slice !== null) setClipboard(slice)
-  }, [definition, selection.nodes])
+    try {
+      const slice = buildSlice(definition, selection.nodes, workflowId ?? 'local-workflow')
+      if (slice === null) return
+      setClipboard(slice)
+      setCanvasNotice(
+        slice.warnings.length > 0
+          ? t('canvas.clipboardReferencesFiltered', { n: slice.warnings.length })
+          : null,
+      )
+    } catch {
+      setCanvasNotice(t('canvas.clipboardBlocked'))
+    }
+  }, [definition, selection.nodes, t, workflowId])
 
   const pasteFromClipboard = useCallback(
     (at: { x: number; y: number }) => {
       const slice = getClipboard()
       if (slice === null || onChange === undefined || readOnly === true) return
-      const { definition: next, newNodeIds } = applyPaste(definition, slice, at)
-      commitChange(next)
-      setSelection({ nodes: newNodeIds, edges: [] })
+      try {
+        const { definition: next, newNodeIds, warnings } = applyPaste(definition, slice, at)
+        const selectionBefore = singleCanvasSelection(selection.nodes, selection.edges)
+        const accepted = commitChange(next, {
+          label: t('editor.history.paste'),
+          selectionBefore,
+          // Multi-select has no single route inspector subject, but redo still
+          // restores a useful focus target inside the newly-pasted slice.
+          selectionAfter: newNodeIds[0] === undefined ? null : { kind: 'node', id: newNodeIds[0] },
+        })
+        if (!accepted) return
+        syncCanvasSelection(newNodeIds, [])
+        setCanvasNotice(
+          warnings.length > 0
+            ? t('canvas.clipboardReferencesFiltered', { n: warnings.length })
+            : null,
+        )
+      } catch {
+        setCanvasNotice(t('canvas.clipboardBlocked'))
+      }
     },
-    [commitChange, definition, onChange, readOnly],
+    [
+      commitChange,
+      definition,
+      onChange,
+      readOnly,
+      selection.edges,
+      selection.nodes,
+      syncCanvasSelection,
+      t,
+    ],
   )
 
   const selectAll = useCallback(() => {
@@ -1056,9 +1164,20 @@ function CanvasInner({
     const el = wrapperRef.current
     if (el === null) return
     function onKey(e: KeyboardEvent) {
+      if (isCanvasTextEditingTarget(e.target)) return
       const mod = e.metaKey || e.ctrlKey
       if (!mod) return
-      if (e.key === 'c' || e.key === 'C') {
+      if (e.key === 'z' || e.key === 'Z') {
+        e.preventDefault()
+        if (e.shiftKey) {
+          if (canRedo === true) onRedo?.()
+        } else if (canUndo === true) {
+          onUndo?.()
+        }
+      } else if ((e.key === 'y' || e.key === 'Y') && e.ctrlKey && !e.metaKey) {
+        e.preventDefault()
+        if (canRedo === true) onRedo?.()
+      } else if (e.key === 'c' || e.key === 'C') {
         copySelection()
       } else if (e.key === 'v' || e.key === 'V') {
         // Paste in the visible viewport center so the user sees the result.
@@ -1075,53 +1194,161 @@ function CanvasInner({
     }
     el.addEventListener('keydown', onKey)
     return () => el.removeEventListener('keydown', onKey)
-  }, [copySelection, pasteFromClipboard, readOnly, rf, selectAll])
+  }, [canRedo, canUndo, copySelection, onRedo, onUndo, pasteFromClipboard, readOnly, rf, selectAll])
 
   const deleteSelected = useCallback(() => {
     if (onChange === undefined || readOnly === true) return
     if (selection.nodes.length === 0 && selection.edges.length === 0) return
-    const removedNodes = new Set(selection.nodes)
-    const removedEdges = new Set(selection.edges)
-    const keptNodes = definition.nodes.filter((n) => !removedNodes.has(n.id))
-    const stillIds = new Set(keptNodes.map((n) => n.id))
-    const keptEdges = definition.edges.filter(
-      (e) =>
-        !removedEdges.has(e.id) && stillIds.has(e.source.nodeId) && stillIds.has(e.target.nodeId),
-    )
-    let nextDef: WorkflowDefinition = { ...definition, nodes: keptNodes, edges: keptEdges }
-    // RFC-023: deleting an agent or clarify node cascade-removes both edges
-    // of its clarify channel so the canvas doesn't render dangling arrows.
-    // (Above filter already drops edges whose endpoint nodes were removed,
-    // but routing through the helper documents the dependency.)
-    nextDef = clearClarifyEdgesForRemovedNodes(nextDef, [...removedNodes])
-    // RFC-056: same cascade for cross-clarify nodes — drops any of the
-    // three edge half-shapes (ask / ans / designer) that referenced a
-    // removed node.
-    nextDef = clearCrossClarifyEdgesForRemovedNodes(nextDef, [...removedNodes])
-    commitChange(nextDef)
-    setSelection({ nodes: [], edges: [] })
-    // Tell the parent route to drop its selection too — otherwise
-    // `editorLayoutClass` keeps the third column slot reserved and the
-    // (now-empty) NodeInspector renders an empty white frame until the
-    // user clicks elsewhere. mirrors onPaneClick's "clear parent
-    // selection" path so the inspector folds away the moment its node
-    // disappears.
-    if (lastEmittedSelectionSig.current !== 'null') {
-      lastEmittedSelectionSig.current = 'null'
-      if (onSelect !== undefined) onSelect(null)
+    const deleted = deleteWorkflowSelection(definition, selection.nodes, selection.edges)
+    if (!deleted.safe) {
+      setCanvasNotice(t('canvas.referenceChangeBlocked'))
+      return
     }
-  }, [commitChange, definition, onChange, onSelect, readOnly, selection.edges, selection.nodes])
+    if (deleted.warnings.length > 0) {
+      setCanvasNotice(t('canvas.referencesPruned', { n: deleted.warnings.length }))
+    }
+    const accepted = commitChange(deleted.definition, {
+      label: t('editor.history.delete'),
+      selectionBefore: singleCanvasSelection(selection.nodes, selection.edges),
+      selectionAfter: null,
+    })
+    if (!accepted) return
+    syncCanvasSelection([], [])
+    wrapperRef.current?.focus()
+  }, [
+    commitChange,
+    definition,
+    onChange,
+    readOnly,
+    selection.edges,
+    selection.nodes,
+    syncCanvasSelection,
+    t,
+  ])
+
+  const restoreRejectedFlowDelete = useCallback(
+    (removedNodes: Node[], removedEdges: Edge[]) => {
+      // xyflow projects keyboard deletion before `onDelete`; rebuild from the
+      // unchanged canonical definition when the reference inventory rejects
+      // the mutation. All setters run in this event callback, never inside a
+      // replayable functional updater.
+      const nodeIds = new Set(selectionRef.current.nodes)
+      const edgeIds = new Set(selectionRef.current.edges)
+      for (const node of removedNodes) if (node.selected === true) nodeIds.add(node.id)
+      for (const edge of removedEdges) if (edge.selected === true) edgeIds.add(edge.id)
+      const restoredSelection = { nodes: [...nodeIds], edges: [...edgeIds] }
+      const measured = buildMeasuredSizesFromXyflowNodes(nodesRef.current)
+      const restoredNodes = applySelection(
+        projectDefinitionForXyflow(
+          definition,
+          toFlowNodes(
+            definition,
+            agentByName,
+            nodeStatuses,
+            questionCounts,
+            handleQuestionBadgeClick,
+            clarifyDirectives,
+            handleClarifyDirectiveToggle,
+            reviewNavs,
+            clarifyNavs,
+          ),
+          measured,
+        ),
+        restoredSelection.nodes,
+      )
+      const restoredEdges = applySelection(
+        toFlowEdges(definition.edges, buildControlFlowEdgeIds(definition, agentByName)),
+        restoredSelection.edges,
+      )
+      nodesRef.current = restoredNodes
+      edgesRef.current = restoredEdges
+      setNodes(restoredNodes)
+      setEdges(restoredEdges)
+      syncCanvasSelection(restoredSelection.nodes, restoredSelection.edges)
+      wrapperRef.current?.focus()
+    },
+    [
+      agentByName,
+      clarifyDirectives,
+      clarifyNavs,
+      definition,
+      handleClarifyDirectiveToggle,
+      handleQuestionBadgeClick,
+      nodeStatuses,
+      questionCounts,
+      reviewNavs,
+      syncCanvasSelection,
+    ],
+  )
+
+  const handleFlowDelete = useCallback<OnDelete>(
+    ({ nodes: removedNodes, edges: removedEdges }) => {
+      if (onChange === undefined || readOnly === true) return
+      const nodeIds = removedNodes.map((node) => node.id)
+      const edgeIds = removedEdges.map((edge) => edge.id)
+      const deleted = deleteWorkflowSelection(definition, nodeIds, edgeIds)
+      if (!deleted.safe) {
+        setCanvasNotice(t('canvas.referenceChangeBlocked'))
+        restoreRejectedFlowDelete(removedNodes, removedEdges)
+        return
+      }
+      if (deleted.warnings.length > 0) {
+        setCanvasNotice(t('canvas.referencesPruned', { n: deleted.warnings.length }))
+      }
+      const accepted = commitChange(deleted.definition, {
+        label: t('editor.history.delete'),
+        selectionBefore:
+          nodeIds.length === 1
+            ? { kind: 'node', id: nodeIds[0]! }
+            : singleCanvasSelection([], edgeIds),
+        selectionAfter: null,
+      })
+      if (!accepted) {
+        restoreRejectedFlowDelete(removedNodes, removedEdges)
+        return
+      }
+      syncCanvasSelection([], [])
+      // The selected DOM node may have been removed, causing focus to fall to
+      // body. Return focus to the canvas so the immediately-following Undo is
+      // reachable without an extra click.
+      wrapperRef.current?.focus()
+    },
+    [
+      commitChange,
+      definition,
+      onChange,
+      readOnly,
+      restoreRejectedFlowDelete,
+      syncCanvasSelection,
+      t,
+    ],
+  )
 
   const duplicateNode = useCallback(
     (nodeId: string) => {
-      const slice = buildSlice(definition, [nodeId])
-      if (slice === null || onChange === undefined || readOnly === true) return
-      const at = { x: slice.anchor.x + 40, y: slice.anchor.y + 40 }
-      const { definition: next, newNodeIds } = applyPaste(definition, slice, at)
-      commitChange(next)
-      setSelection({ nodes: newNodeIds, edges: [] })
+      if (onChange === undefined || readOnly === true) return
+      try {
+        const slice = buildSlice(definition, [nodeId], workflowId ?? 'local-workflow')
+        if (slice === null) return
+        const at = { x: slice.anchor.x + 40, y: slice.anchor.y + 40 }
+        const { definition: next, newNodeIds, warnings } = applyPaste(definition, slice, at)
+        const accepted = commitChange(next, {
+          label: t('editor.history.duplicate'),
+          selectionBefore: { kind: 'node', id: nodeId },
+          selectionAfter: newNodeIds[0] === undefined ? null : { kind: 'node', id: newNodeIds[0] },
+        })
+        if (!accepted) return
+        syncCanvasSelection(newNodeIds, [])
+        setCanvasNotice(
+          warnings.length > 0
+            ? t('canvas.clipboardReferencesFiltered', { n: warnings.length })
+            : null,
+        )
+      } catch {
+        setCanvasNotice(t('canvas.clipboardBlocked'))
+      }
     },
-    [commitChange, definition, onChange, readOnly],
+    [commitChange, definition, onChange, readOnly, syncCanvasSelection, t, workflowId],
   )
 
   // P-3-04: wrap the current selection in a new wrapper-git / wrapper-loop
@@ -1133,11 +1360,11 @@ function CanvasInner({
       const inner = selection.nodes
       if (inner.length === 0) return
       const innerSet = new Set(inner)
-      const innerNodes = definition.nodes.filter((n) => innerSet.has(n.id))
       let minX = Number.POSITIVE_INFINITY
       let minY = Number.POSITIVE_INFINITY
-      for (const n of innerNodes) {
-        const p = n.position ?? { x: 0, y: 0 }
+      for (const [index, n] of definition.nodes.entries()) {
+        if (!innerSet.has(n.id)) continue
+        const p = effectiveWorkflowNodePosition(n, index)
         if (p.x < minX) minX = p.x
         if (p.y < minY) minY = p.y
       }
@@ -1154,13 +1381,32 @@ function CanvasInner({
         kind === 'wrapper-loop'
           ? { ...base, maxIterations: 3, exitCondition: { kind: 'port-empty' } }
           : base
-      commitChange({
-        ...definition,
-        nodes: [...definition.nodes, wrapper as WorkflowNode],
-      })
-      setSelection({ nodes: [wrapperId], edges: [] })
+      const selectionBefore = singleCanvasSelection(selection.nodes, selection.edges)
+      const selectionAfter = { kind: 'node' as const, id: wrapperId }
+      const accepted = commitChange(
+        {
+          ...definition,
+          nodes: [...definition.nodes, wrapper as WorkflowNode],
+        },
+        {
+          label: t('editor.history.wrap'),
+          selectionBefore,
+          selectionAfter,
+        },
+      )
+      if (!accepted) return
+      syncCanvasSelection([wrapperId], [])
     },
-    [commitChange, definition, onChange, readOnly, selection.nodes],
+    [
+      commitChange,
+      definition,
+      onChange,
+      readOnly,
+      selection.edges,
+      selection.nodes,
+      syncCanvasSelection,
+      t,
+    ],
   )
 
   const decomposeWrapper = useCallback(
@@ -1173,13 +1419,20 @@ function CanvasInner({
       const innerIds = Array.isArray(inner)
         ? inner.filter((s): s is string => typeof s === 'string')
         : []
-      commitChange({
-        ...definition,
-        nodes: definition.nodes.filter((n) => n.id !== wrapperId),
-      })
-      setSelection({ nodes: innerIds, edges: [] })
+      const accepted = commitChange(
+        {
+          ...definition,
+          nodes: definition.nodes.filter((n) => n.id !== wrapperId),
+        },
+        {
+          label: t('editor.history.unwrap'),
+          selectionBefore: { kind: 'node', id: wrapperId },
+          selectionAfter: innerIds[0] === undefined ? null : { kind: 'node', id: innerIds[0] },
+        },
+      )
+      if (accepted) syncCanvasSelection(innerIds, [])
     },
-    [commitChange, definition, onChange, readOnly],
+    [commitChange, definition, onChange, readOnly, syncCanvasSelection, t],
   )
 
   // RFC-016 T8: Fit to children — closure around the pure clearWrapperSize
@@ -1189,9 +1442,15 @@ function CanvasInner({
     (wrapperId: string) => {
       if (onChange === undefined || readOnly === true) return
       const next = clearWrapperSize(definition, wrapperId)
-      if (next !== definition) commitChange(next)
+      if (next !== definition) {
+        commitChange(next, {
+          label: t('editor.history.fitWrapper'),
+          selectionBefore: { kind: 'node', id: wrapperId },
+          selectionAfter: { kind: 'node', id: wrapperId },
+        })
+      }
     },
-    [commitChange, definition, onChange, readOnly],
+    [commitChange, definition, onChange, readOnly, t],
   )
 
   // RFC-016 T8: delete a wrapper AND its inner nodes (right-click menu).
@@ -1203,10 +1462,16 @@ function CanvasInner({
       if (onChange === undefined || readOnly === true) return
       const next = deleteWrapperWithChildren(definition, wrapperId)
       if (next === definition) return
-      commitChange(next)
-      setSelection({ nodes: [], edges: [] })
+      const accepted = commitChange(next, {
+        label: t('editor.history.delete'),
+        selectionBefore: { kind: 'node', id: wrapperId },
+        selectionAfter: null,
+      })
+      if (!accepted) throw new Error(t('canvas.referenceChangeBlocked'))
+      syncCanvasSelection([], [])
+      wrapperRef.current?.focus()
     },
-    [commitChange, definition, onChange, readOnly],
+    [commitChange, definition, onChange, readOnly, syncCanvasSelection, t],
   )
 
   // One construction path for both desktop HTML5 drop and the accessible
@@ -1217,19 +1482,58 @@ function CanvasInner({
     (item: PaletteItem, position: { x: number; y: number }, selectAfterInsert: boolean) => {
       if (onChange === undefined || readOnly === true) return
       const existingIds = new Set(definition.nodes.map((n) => n.id))
-      const newNode = makeNode(item, position, { agents, existingIds })
-      if (selectAfterInsert) {
-        const nextSelection = { nodes: [newNode.id], edges: [] as string[] }
-        selectionRef.current = nextSelection
-        setSelection(nextSelection)
-        if (onSelect !== undefined) {
-          lastEmittedSelectionSig.current = `node:${newNode.id}`
-          onSelect({ kind: 'node', id: newNode.id })
-        }
+      const measured = buildMeasuredSizesFromXyflowNodes(nodesRef.current)
+      const wrappers = resolveWrappers(definition, measured)
+      const parentMap = buildParentMap(wrappers)
+      let openPosition: { x: number; y: number }
+      try {
+        openPosition = findOpenPlacement({
+          desiredPoint: position,
+          candidateSize: DEFAULT_NODE_SIZE_BY_KIND[item.kind],
+          scope: { kind: 'top-level' },
+          nodes: definition.nodes.map((node, index) => ({
+            id: node.id,
+            position: effectiveWorkflowNodePosition(node, index),
+            measuredSize: measured.get(node.id),
+            defaultSize: DEFAULT_NODE_SIZE_BY_KIND[node.kind],
+            directWrapperNodeId: parentMap.get(node.id),
+          })),
+          wrapperRects: [...wrappers.values()].map((wrapper) => ({
+            id: wrapper.id,
+            x: wrapper.position.x,
+            y: wrapper.position.y,
+            width: wrapper.width,
+            height: wrapper.height,
+            directWrapperNodeId: parentMap.get(wrapper.id),
+          })),
+        })
+      } catch {
+        setCanvasNotice(t('canvas.placementUnavailable'))
+        return
       }
-      commitChange({ ...definition, nodes: [...definition.nodes, newNode] })
+      const newNode = makeNode(item, openPosition, { agents, existingIds })
+      const accepted = commitChange(
+        { ...definition, nodes: [...definition.nodes, newNode] },
+        {
+          label: t('editor.history.insert'),
+          selectionBefore: singleCanvasSelection(selection.nodes, selection.edges),
+          selectionAfter: { kind: 'node', id: newNode.id },
+        },
+      )
+      if (!accepted) return
+      if (selectAfterInsert) syncCanvasSelection([newNode.id], [])
     },
-    [agents, commitChange, definition, onChange, onSelect, readOnly],
+    [
+      agents,
+      commitChange,
+      definition,
+      onChange,
+      readOnly,
+      selection.edges,
+      selection.nodes,
+      syncCanvasSelection,
+      t,
+    ],
   )
 
   const addPaletteItemAtViewportCenter = useCallback(
@@ -1397,6 +1701,17 @@ function CanvasInner({
         )
         lastEmittedSelectionSig.current = 'null'
       },
+      restoreSelection: (nextSelection) => {
+        storeApi.getState().unselectNodesAndEdges()
+        const selectedNodes = nextSelection?.kind === 'node' ? [nextSelection.id] : []
+        const selectedEdges = nextSelection?.kind === 'edge' ? [nextSelection.id] : []
+        setNodes((current) => applySelection(clearFlowSelection(current), selectedNodes))
+        setEdges((current) => applySelection(clearFlowSelection(current), selectedEdges))
+        setSelection({ nodes: selectedNodes, edges: selectedEdges })
+        lastEmittedSelectionSig.current =
+          nextSelection === null ? 'null' : `${nextSelection.kind}:${nextSelection.id}`
+        wrapperRef.current?.focus()
+      },
     }),
     [storeApi],
   )
@@ -1415,6 +1730,7 @@ function CanvasInner({
         nodeTypes={NODE_TYPES}
         onNodesChange={handleNodesChange}
         onEdgesChange={handleEdgesChange}
+        onDelete={handleFlowDelete}
         onConnect={handleConnect}
         onConnectStart={handleConnectStart}
         onConnectEnd={handleConnectEnd}
@@ -1551,7 +1867,14 @@ function CanvasInner({
           for (const wid of toFit) {
             nextDef = fitWrapperToInner(nextDef, wid, measured)
           }
-          commitChange(nextDef)
+          const primaryDragged = draggedNodes[0]?.id
+          commitChange(nextDef, {
+            label: t('editor.history.move'),
+            selectionBefore:
+              primaryDragged === undefined ? null : { kind: 'node', id: primaryDragged },
+            selectionAfter:
+              primaryDragged === undefined ? null : { kind: 'node', id: primaryDragged },
+          })
         }}
         onNodeContextMenu={handleNodeContextMenu}
         onPaneContextMenu={handlePaneContextMenu}
@@ -1599,12 +1922,36 @@ function CanvasInner({
           />
         )}
       </ReactFlow>
+      {canvasNotice !== null ? (
+        <NoticeBanner
+          tone="warning"
+          size="compact"
+          className="workflow-canvas__clipboard-notice"
+          action={
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              aria-label={t('common.close')}
+              onClick={() => setCanvasNotice(null)}
+            >
+              ×
+            </button>
+          }
+        >
+          {canvasNotice}
+        </NoticeBanner>
+      ) : null}
       <ContextMenu
         open={menu !== null}
         x={menu?.x ?? 0}
         y={menu?.y ?? 0}
         items={menuItems}
-        onClose={() => setMenu(null)}
+        onClose={() => {
+          setMenu(null)
+          // Menu buttons unmount after every action. Return focus to the
+          // canvas so an immediate Undo/Redo shortcut remains reachable.
+          wrapperRef.current?.focus()
+        }}
         header={
           menu?.nodeId !== undefined && menu?.nodeId !== null ? (
             <code>{menu.nodeId}</code>
@@ -1644,9 +1991,6 @@ function CanvasInner({
 // ---------------------------------------------------------------------------
 // definition <-> xyflow shape translation
 // ---------------------------------------------------------------------------
-
-const FALLBACK_X = (idx: number) => 80 + (idx % 4) * 280
-const FALLBACK_Y = (idx: number) => 80 + Math.floor(idx / 4) * 200
 
 /**
  * Decision oracle for the hidden-mount refit (pure — see the ResizeObserver
@@ -1771,7 +2115,6 @@ function toFlowNodes(
     if (Array.isArray(inner)) for (const id of inner) loopBodyIds.add(id)
   }
   return definition.nodes.map((n, idx) => {
-    const pos = n.position
     const ports = computePorts(n, agentByName, definition)
     const data: CanvasNodeData = {
       nodeId: n.id,
@@ -1881,8 +2224,7 @@ function toFlowNodes(
     return {
       id: n.id,
       type: n.kind,
-      position:
-        pos !== undefined ? { x: pos.x, y: pos.y } : { x: FALLBACK_X(idx), y: FALLBACK_Y(idx) },
+      position: effectiveWorkflowNodePosition(n, idx),
       data,
     }
   })
@@ -1929,6 +2271,50 @@ function toFlowEdges(
  */
 function affectsDefinition(changes: NodeChange[]): boolean {
   return changes.some((c) => c.type === 'add' || c.type === 'remove' || c.type === 'replace')
+}
+
+/**
+ * Pure controlled-state projection for one xyflow node-change batch. Keeping
+ * incident-edge filtering here makes React replay harmless: callers can run
+ * the same batch more than once and receive the same projection without any
+ * setter, parent commit or input mutation occurring inside the calculation.
+ */
+export function reconcileFlowNodeChanges(
+  changes: NodeChange[],
+  currentNodes: Node[],
+  currentEdges: Edge[],
+): { nodes: Node[]; edges: Edge[] } {
+  const nodes = applyNodeChanges(changes, currentNodes)
+  const nodeIds = new Set(nodes.map((node) => node.id))
+  const edges = currentEdges.filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target))
+  return { nodes, edges }
+}
+
+/**
+ * One semantic deletion transaction for keyboard, context-menu and future
+ * toolbar entry points. Wrapper roots expand through their complete recursive
+ * child closure before the shared survivor inventory prunes every remaining
+ * node/edge/top-level-output reference.
+ */
+export function deleteWorkflowSelection(
+  definition: WorkflowDefinition,
+  selectedNodeIds: Iterable<string>,
+  selectedEdgeIds: Iterable<string>,
+): ReturnType<typeof pruneDeletedNodeReferences> {
+  const closure = collectNodeReferenceClosure(definition, selectedNodeIds)
+  const removedNodeIds = new Set(closure.nodeIds)
+  const removedEdgeIds = new Set(selectedEdgeIds)
+  const nodes = definition.nodes.filter((node) => !removedNodeIds.has(node.id))
+  const base: WorkflowDefinition = {
+    ...definition,
+    nodes,
+    edges: definition.edges.filter((edge) => !removedEdgeIds.has(edge.id)),
+  }
+  const pruned = pruneDeletedNodeReferences(base, new Set(nodes.map((node) => node.id)))
+  return {
+    ...pruned,
+    warnings: [...closure.warnings, ...pruned.warnings],
+  }
 }
 
 /**
@@ -2031,6 +2417,25 @@ export function deriveSelection(nodeIds: string[], edgeIds: string[]): CanvasSel
     return { kind: 'edge', id: edgeIds[0] }
   }
   return null
+}
+
+/**
+ * One immutable oracle for the local xyflow selection, the single-subject
+ * route inspector, and the callback de-duplication signature. Multi-select
+ * remains highlighted locally while deliberately collapsing the inspector
+ * subject to null.
+ */
+export function buildCanvasSelectionSync(
+  nodeIds: readonly string[],
+  edgeIds: readonly string[],
+): {
+  local: { nodes: string[]; edges: string[] }
+  route: CanvasSelection | null
+  signature: string
+} {
+  const local = { nodes: [...nodeIds], edges: [...edgeIds] }
+  const route = deriveSelection(local.nodes, local.edges)
+  return { local, route, signature: selectionSig(route) }
 }
 
 /**

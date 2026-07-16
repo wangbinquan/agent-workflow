@@ -27,7 +27,10 @@ import { OutputEdit } from './inspector/OutputEdit'
 import { ReviewEdit } from './inspector/ReviewEdit'
 import { WrapperFanoutEdit } from './inspector/WrapperFanoutEdit'
 import { WrapperGitLoopEdit } from './inspector/WrapperGitLoopEdit'
+import type { InspectorChangeMeta } from './inspector/historyMeta'
 import type { EditProps } from './inspector/types'
+
+export type { InspectorChangeMeta } from './inspector/historyMeta'
 
 // Re-exported for unit tests + historical import path compatibility (the
 // helper moved to ./inspector/promptRefs with the agent Edit component).
@@ -37,7 +40,7 @@ interface Props {
   definition: WorkflowDefinition
   selectedNodeId: string | null
   agents: Agent[]
-  onChange: (next: WorkflowDefinition) => void
+  onChange: (next: WorkflowDefinition, meta: InspectorChangeMeta) => void
   onClose: () => void
 }
 
@@ -89,9 +92,13 @@ export function NodeInspector({ definition, selectedNodeId, agents, onChange, on
     ...(hasPreview ? [{ key: 'preview', label: t('inspector.tabPreview') } as TabDef<Tab>] : []),
   ]
 
-  function patch(next: WorkflowNode) {
+  function patch(next: WorkflowNode, meta: InspectorChangeMeta) {
     const nodes = definition.nodes.map((n) => (n.id === next.id ? next : n))
-    onChange({ ...definition, nodes })
+    onChange({ ...definition, nodes }, meta)
+  }
+
+  function closeHistoryMerge(meta: InspectorChangeMeta) {
+    onChange(definition, meta)
   }
 
   return (
@@ -138,6 +145,7 @@ export function NodeInspector({ definition, selectedNodeId, agents, onChange, on
                   definition={definition}
                   onPatch={patch}
                   onCommitDef={onChange}
+                  onHistoryBoundary={closeHistoryMerge}
                 />
               )}
               {active && key === 'preview' && (

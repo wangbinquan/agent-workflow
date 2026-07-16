@@ -209,6 +209,24 @@ describe('fitWrapperToInner', () => {
     expect(w.size.height).toBe(fit.height)
   })
 
+  // RFC-199 T7.7: drag-stop fit must use the same recursively resolved visual
+  // rect as first-render fit when a direct child is an unsized nested wrapper.
+  test('nested wrapper without persisted size contributes its fitted rect on drag-stop', () => {
+    const a = agent('a', { x: 100, y: 120 })
+    const b = agent('b', { x: 700, y: 480 })
+    const inner = wrapper('inner', ['a', 'b'], { x: 999, y: 999 }, undefined)
+    const outer = wrapper('outer', ['inner'], { x: 0, y: 0 }, { width: 2000, height: 1500 })
+    const nodes = [outer, inner, a, b]
+
+    const next = fitWrapperToInner(def(nodes), 'outer')
+    const fittedOuter = sizedWrapperById(next, 'outer')
+    const expected = computeFitBounds(outer, nodes)
+
+    expect(fittedOuter.position).toEqual(expected.offset)
+    expect(fittedOuter.size.width).toBe(expected.width)
+    expect(fittedOuter.size.height).toBe(expected.height)
+  })
+
   test('uses measured size when provided (handles ports growing the inner footprint)', () => {
     // The static DEFAULT for agent-single is 280x180; here we feed a
     // larger measured size (400x300) to simulate a port-heavy agent. The

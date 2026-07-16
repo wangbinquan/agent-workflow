@@ -208,8 +208,8 @@ describe('Onboarding render', () => {
 
   test('Import demo workflow POSTs the bundled YAML and shows a success hint', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ id: 'wf-x' }), {
-        status: 200,
+      new Response(JSON.stringify({ outcome: 'created', workflow: { id: 'wf-x' } }), {
+        status: 201,
         headers: { 'content-type': 'application/json' },
       }),
     )
@@ -220,12 +220,15 @@ describe('Onboarding render', () => {
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1))
     const [url, init] = fetchSpy.mock.calls[0]!
     expect(String(url)).toContain('/api/workflows/import')
-    expect(String(url)).toContain('onConflict=new')
+    expect(String(url)).not.toContain('onConflict')
     expect((init as RequestInit).method).toBe('POST')
     const headers = (init as RequestInit).headers as Record<string, string>
-    expect(headers['content-type']).toBe('text/yaml')
+    expect(headers['Content-Type']).toBe('application/json')
     expect(headers.Authorization).toBe('Bearer tok')
-    expect((init as RequestInit).body).toBe(DEMO_WORKFLOW_YAML)
+    expect(JSON.parse(String((init as RequestInit).body))).toEqual({
+      yamlText: DEMO_WORKFLOW_YAML,
+      mode: 'new',
+    })
 
     await waitFor(() => expect(screen.getByText(/imported|已导入/i)).toBeTruthy())
   })
@@ -245,8 +248,8 @@ describe('Onboarding render', () => {
         ),
       )
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ id: 'wf-retry' }), {
-          status: 200,
+        new Response(JSON.stringify({ outcome: 'created', workflow: { id: 'wf-retry' } }), {
+          status: 201,
           headers: { 'content-type': 'application/json' },
         }),
       )

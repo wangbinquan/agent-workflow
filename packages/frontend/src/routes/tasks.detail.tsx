@@ -796,7 +796,7 @@ function TaskDetailPage() {
 
         <div
           {...taskTabPanelProps('worktree-diff')}
-          className="task-detail__pane"
+          className="task-detail__pane task-detail__pane--worktree-diff"
           hidden={tab !== 'worktree-diff'}
         >
           {tk.baseCommit === null ? (

@@ -4,17 +4,20 @@
 // `KIND_INSPECTORS` registry (NodeInspector.tsx) over one component per kind.
 
 import type { Agent, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import type { InspectorChangeMeta } from './historyMeta'
 
 export interface EditProps {
   node: WorkflowNode
   agents: Agent[]
   definition: WorkflowDefinition
-  onPatch: (next: WorkflowNode) => void
+  onPatch: (next: WorkflowNode, meta: InspectorChangeMeta) => void
   /**
    * Apply a multi-field workflow definition change. Used by branches that
    * need to mutate the node + other parts of the definition atomically
    * (e.g. RFC-004 input-node inputKey rename touches inputs[] + edges, and
    * the inputs[] entry edits live outside the node itself).
    */
-  onCommitDef: (next: WorkflowDefinition) => void
+  onCommitDef: (next: WorkflowDefinition, meta: InspectorChangeMeta) => void
+  /** Close a continuous field's merge group without changing the snapshot. */
+  onHistoryBoundary: (meta: InspectorChangeMeta) => void
 }

@@ -13,9 +13,9 @@
 //     copy-paste between environments, copy-paste from docs). If any
 //     field is lost or renamed in the export path, the round-trip fails.
 //
-// Conflict modes (RFC-054 plan): the import endpoint supports
-// onConflict={fail,overwrite,new} via a query parameter. Each gets its
-// own test below.
+// RFC-199: import is a structured JSON request. Overwrite is bound to the
+// exact revision the user saw; delete is revision-fenced too. Each mode gets
+// its own test below so the removed raw-YAML/query fallback cannot return.
 
 import { test, expect } from '@playwright/test'
 import { readFileSync } from 'node:fs'
@@ -29,6 +29,12 @@ let daemon: DaemonHandle
 const HERE = dirname(fileURLToPath(import.meta.url))
 const FIXTURES_DIR = join(HERE, 'fixtures', 'import-files')
 const SAMPLE_YAML = readFileSync(join(FIXTURES_DIR, 'sample-workflow.yaml'), 'utf-8')
+let mutationSequence = 0
+
+function nextClientMutationId(): string {
+  mutationSequence += 1
+  return String(mutationSequence).padStart(26, '0')
+}
 
 test.setTimeout(120_000)
 
@@ -58,15 +64,18 @@ test.afterAll(async () => {
 
 async function importYaml(
   yaml: string,
-  onConflict: 'fail' | 'overwrite' | 'new' = 'fail',
+  mode: 'fail' | 'overwrite' | 'new' = 'fail',
+  overwrite?: { workflowId: string; expectedVersion: number; clientMutationId: string },
 ): Promise<Response> {
-  return fetch(`${daemon.baseUrl}/api/workflows/import?onConflict=${onConflict}`, {
+  return fetch(`${daemon.baseUrl}/api/workflows/import`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${daemon.token}`,
-      'Content-Type': 'application/yaml',
+      'Content-Type': 'application/json',
     },
-    body: yaml,
+    body: JSON.stringify(
+      mode === 'overwrite' ? { yamlText: yaml, mode, overwrite } : { yamlText: yaml, mode },
+    ),
   })
 }
 
@@ -79,10 +88,20 @@ async function exportYaml(id: string): Promise<string> {
 }
 
 async function deleteWorkflow(id: string): Promise<void> {
-  await fetch(`${daemon.baseUrl}/api/workflows/${id}`, {
-    method: 'DELETE',
+  const detail = await fetch(`${daemon.baseUrl}/api/workflows/${id}`, {
     headers: { Authorization: `Bearer ${daemon.token}` },
   })
+  if (!detail.ok) throw new Error(`delete preflight: ${detail.status}`)
+  const { version } = (await detail.json()) as { version: number }
+  const deleted = await fetch(`${daemon.baseUrl}/api/workflows/${id}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${daemon.token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ expectedVersion: version, clientMutationId: nextClientMutationId() }),
+  })
+  if (deleted.status !== 204) throw new Error(`delete: ${deleted.status}`)
 }
 
 interface WorkflowRow {
@@ -93,11 +112,28 @@ interface WorkflowRow {
   definition: unknown
 }
 
+type ImportResult =
+  | { outcome: 'created'; workflow: WorkflowRow }
+  | {
+      outcome: 'overwritten'
+      receipt: {
+        revision: { workflowId: string; version: number }
+        snapshot: { name: string; description: string; definition: unknown }
+      }
+    }
+
+async function createdWorkflow(res: Response): Promise<WorkflowRow> {
+  const result = (await res.json()) as ImportResult
+  expect(result.outcome).toBe('created')
+  if (result.outcome !== 'created') throw new Error('expected created import result')
+  return result.workflow
+}
+
 test.describe('RFC-054 W2-7 — YAML import / export', () => {
   test('fixture imports cleanly (HTTP 201) and produces a workflow row', async () => {
     const res = await importYaml(SAMPLE_YAML, 'fail')
     expect(res.status).toBe(201)
-    const wf = (await res.json()) as WorkflowRow
+    const wf = await createdWorkflow(res)
     expect(wf.name).toBe('rfc054-w2-7-sample')
     expect(wf.id).toBeTruthy()
     expect(wf.definition).toBeTruthy()
@@ -108,7 +144,7 @@ test.describe('RFC-054 W2-7 — YAML import / export', () => {
     // 1. Import the fixture.
     const r1 = await importYaml(SAMPLE_YAML, 'fail')
     expect(r1.status).toBe(201)
-    const wf1 = (await r1.json()) as WorkflowRow
+    const wf1 = await createdWorkflow(r1)
 
     // 2. Export and snapshot the YAML.
     const yamlExported = await exportYaml(wf1.id)
@@ -125,7 +161,7 @@ test.describe('RFC-054 W2-7 — YAML import / export', () => {
     //    shape) fails here.
     const r2 = await importYaml(yamlExported, 'fail')
     expect(r2.status).toBe(201)
-    const wf2 = (await r2.json()) as WorkflowRow
+    const wf2 = await createdWorkflow(r2)
     expect(wf2.name).toBe('rfc054-w2-7-sample')
 
     // 5. The two definitions must be structurally equivalent. We do a
@@ -140,14 +176,14 @@ test.describe('RFC-054 W2-7 — YAML import / export', () => {
   })
 
   // Conflict-resolution tests use the EXPORTED yaml (which includes the
-  // server-assigned id) so onConflict actually triggers. The base fixture
+  // server-assigned id) so mode=fail actually triggers. The base fixture
   // intentionally omits `id` so it can be imported repeatedly without
   // conflict — these tests grab the assigned id post-import and inject
   // it into the second YAML payload.
-  test('onConflict=fail: re-importing with the same id returns 4xx', async () => {
+  test('mode=fail: re-importing with the same id returns the current revision', async () => {
     const r1 = await importYaml(SAMPLE_YAML, 'fail')
     expect(r1.status).toBe(201)
-    const wf1 = (await r1.json()) as WorkflowRow
+    const wf1 = await createdWorkflow(r1)
 
     // Export yields YAML with the id baked in — that's the artifact a
     // user would actually paste back to migrate between environments.
@@ -155,39 +191,57 @@ test.describe('RFC-054 W2-7 — YAML import / export', () => {
     expect(exported).toContain(`id: ${wf1.id}`)
 
     const r2 = await importYaml(exported, 'fail')
-    expect(r2.status).toBeGreaterThanOrEqual(400)
-    expect(r2.status).toBeLessThan(500)
+    expect(r2.status).toBe(409)
+    const conflict = (await r2.json()) as {
+      code: string
+      details?: { workflowId?: string; current?: { workflowId: string; version: number } }
+    }
+    expect(conflict.code).toBe('workflow-import-conflict')
+    expect(conflict.details?.workflowId).toBe(wf1.id)
+    expect(conflict.details?.current).toMatchObject({
+      workflowId: wf1.id,
+      version: wf1.version,
+    })
 
     await deleteWorkflow(wf1.id)
   })
 
-  test('onConflict=overwrite: existing workflow is updated in place (id preserved)', async () => {
+  test('mode=overwrite: existing workflow is updated at the confirmed revision', async () => {
     const r1 = await importYaml(SAMPLE_YAML, 'fail')
-    const wf1 = (await r1.json()) as WorkflowRow
+    expect(r1.status).toBe(201)
+    const wf1 = await createdWorkflow(r1)
 
     const exported = await exportYaml(wf1.id)
-    const r2 = await importYaml(exported, 'overwrite')
-    expect(r2.status).toBe(201)
-    const wf2 = (await r2.json()) as WorkflowRow
+    const mutationId = nextClientMutationId()
+    const r2 = await importYaml(exported, 'overwrite', {
+      workflowId: wf1.id,
+      expectedVersion: wf1.version,
+      clientMutationId: mutationId,
+    })
+    expect(r2.status).toBe(200)
+    const result = (await r2.json()) as ImportResult
+    expect(result.outcome).toBe('overwritten')
+    if (result.outcome !== 'overwritten') throw new Error('expected overwritten import result')
 
     // Same ID — overwrite preserves identity.
-    expect(wf2.id).toBe(wf1.id)
-    // Overwrite typically bumps version. Allow equal-or-greater so a
-    // future "no-op overwrite stays at same version" optimization
-    // doesn't break the test.
-    expect(wf2.version).toBeGreaterThanOrEqual(wf1.version)
+    expect(result.receipt.revision.workflowId).toBe(wf1.id)
+    // Exact same YAML is a canonical no-op; the receipt still identifies the
+    // confirmed revision without minting a fake successor.
+    expect(result.receipt.revision.version).toBe(wf1.version)
+    expect(result.receipt.snapshot.definition).toEqual(wf1.definition)
 
-    await deleteWorkflow(wf2.id)
+    await deleteWorkflow(wf1.id)
   })
 
-  test('onConflict=new: re-importing with the same id produces a fresh row (id discarded)', async () => {
+  test('mode=new: re-importing with the same id produces a fresh row (id discarded)', async () => {
     const r1 = await importYaml(SAMPLE_YAML, 'fail')
-    const wf1 = (await r1.json()) as WorkflowRow
+    expect(r1.status).toBe(201)
+    const wf1 = await createdWorkflow(r1)
 
     const exported = await exportYaml(wf1.id)
     const r2 = await importYaml(exported, 'new')
     expect(r2.status).toBe(201)
-    const wf2 = (await r2.json()) as WorkflowRow
+    const wf2 = await createdWorkflow(r2)
 
     // Different ID — `new` discarded the imported id and minted a new one.
     expect(wf2.id).not.toBe(wf1.id)

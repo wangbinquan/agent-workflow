@@ -3,7 +3,7 @@
 // setSelection; everything that touches the WorkflowDefinition lives here
 // so tests can exercise it without rendering the canvas.
 
-import { isWrapperKind } from '@agent-workflow/shared'
+import { collectNodeReferenceClosure, isWrapperKind } from '@agent-workflow/shared'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 export interface WrapperDeleteSnapshot {
@@ -20,12 +20,9 @@ export function snapshotWrapperDelete(
 ): WrapperDeleteSnapshot | null {
   const target = definition.nodes.find((node) => node.id === wrapperId)
   if (target === undefined || !isWrapperKind(target.kind)) return null
-  const inner = (target as Record<string, unknown>).nodeIds
-  const childIds = Array.isArray(inner)
-    ? (inner as unknown[])
-        .filter((value): value is string => typeof value === 'string')
-        .sort((a, b) => a.localeCompare(b))
-    : []
+  const childIds = collectNodeReferenceClosure(definition, [wrapperId])
+    .nodeIds.filter((nodeId) => nodeId !== wrapperId)
+    .sort((a, b) => a.localeCompare(b))
   return { wrapperId, childIds }
 }
 
@@ -63,9 +60,9 @@ export function clearWrapperSize(
   return { ...prevDef, nodes }
 }
 
-/** Remove a wrapper AND every node listed in its nodeIds (and any orphaned
- * edges). Returns prevDef by reference for non-wrapper targets so callers
- * can short-circuit. */
+/** Remove a wrapper AND its complete recursive child closure (and any
+ * orphaned edges). Returns prevDef by reference for non-wrapper targets so
+ * callers can short-circuit. */
 export function deleteWrapperWithChildren(
   prevDef: WorkflowDefinition,
   wrapperId: string,
@@ -73,11 +70,7 @@ export function deleteWrapperWithChildren(
   const target = prevDef.nodes.find((n) => n.id === wrapperId)
   if (target === undefined) return prevDef
   if (!isWrapperKind(target.kind)) return prevDef
-  const inner = (target as Record<string, unknown>).nodeIds
-  const innerIds = Array.isArray(inner)
-    ? (inner as unknown[]).filter((s): s is string => typeof s === 'string')
-    : []
-  const toRemove = new Set<string>([wrapperId, ...innerIds])
+  const toRemove = new Set(collectNodeReferenceClosure(prevDef, [wrapperId]).nodeIds)
   const keptNodes = prevDef.nodes.filter((n) => !toRemove.has(n.id))
   const stillIds = new Set(keptNodes.map((n) => n.id))
   const keptEdges = prevDef.edges.filter(

@@ -55,6 +55,7 @@ interface FetchCall {
 const WF_DETAIL = {
   id: 'wf-1',
   name: 'My WF',
+  version: 1,
   definition: {
     inputs: [{ key: 'topic', label: 'Topic', kind: 'text', required: true }],
     nodes: [],
@@ -108,6 +109,22 @@ const SCHEDULE_AGENT = {
   consecutiveFailures: 0,
   createdAt: 1,
   updatedAt: 1,
+}
+
+const SCHEDULE_WORKFLOW = {
+  ...SCHEDULE_AGENT,
+  id: 'sched-wf',
+  name: 'nightly workflow',
+  launchKind: 'workflow',
+  launchPayload: {
+    workflowId: 'wf-1',
+    name: 'nightly workflow run',
+    inputs: { topic: 'scheduled topic' },
+    scratch: true,
+    // Legacy/accidental contamination: editing the schedule must rebuild the
+    // payload without preserving an immediate-launch point-in-time guard.
+    expectedWorkflowVersion: 99,
+  },
 }
 
 // RFC-175 relaunch source: a completed agent/scratch task whose params the
@@ -168,6 +185,9 @@ function installFetch(): FetchCall[] {
       }
       calls.push({ url, method, body })
       const json = jsonResponse
+      if (url.includes('/api/scheduled-tasks/sched-wf') && method === 'PUT')
+        return json({ ...SCHEDULE_WORKFLOW, updatedAt: 2 })
+      if (url.includes('/api/scheduled-tasks/sched-wf')) return json(SCHEDULE_WORKFLOW)
       if (url.includes('/api/scheduled-tasks/sched-a') && method === 'PUT')
         return json({ ...SCHEDULE_AGENT, updatedAt: 2 })
       if (url.includes('/api/scheduled-tasks/sched-a')) return json(SCHEDULE_AGENT)
@@ -199,7 +219,23 @@ function jsonResponse(payload: unknown, status = 200): Response {
   })
 }
 
-async function renderWizard(initialUrl: string, options: { waitForWizard?: boolean } = {}) {
+function deferredResponse() {
+  let resolve!: (value: Response) => void
+  let reject!: (reason: unknown) => void
+  const promise = new Promise<Response>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
+async function renderWizard(
+  initialUrl: string,
+  options: {
+    waitForWizard?: boolean
+    seedQueries?: (queryClient: QueryClient) => void
+  } = {},
+) {
   const mod = await import('../src/routes/tasks.new')
   const rootRoute = createRootRoute({ component: () => <Outlet /> })
   const wizard = createRoute({
@@ -223,11 +259,23 @@ async function renderWizard(initialUrl: string, options: { waitForWizard?: boole
     path: '/scheduled',
     component: () => <div data-testid="scheduled-list-page" />,
   })
+  const workflowEditor = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/workflows/$id',
+    component: () => <div data-testid="workflow-editor-page" />,
+  })
   const router = createRouter({
-    routeTree: rootRoute.addChildren([wizard, taskPage, scheduledDetail, scheduledList]),
+    routeTree: rootRoute.addChildren([
+      wizard,
+      taskPage,
+      scheduledDetail,
+      scheduledList,
+      workflowEditor,
+    ]),
     history: createMemoryHistory({ initialEntries: [initialUrl] }),
   })
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  options.seedQueries?.(qc)
   render(
     <QueryClientProvider client={qc}>
       <RouterProvider router={router} />
@@ -297,6 +345,189 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
       repoUrl: 'https://github.com/o/r.git',
       // RFC-075 pref default: auto commit&push starts ON.
       autoCommitPush: true,
+      expectedWorkflowVersion: 1,
+    })
+  })
+
+  test('RFC-199 cached vN still waits for first fresh detail and rejects server vN+1', async () => {
+    installFetch()
+    const base = vi.mocked(globalThis.fetch).getMockImplementation()!
+    const freshDetail = deferredResponse()
+    vi.mocked(globalThis.fetch).mockImplementation((input, init) => {
+      const url = input.toString()
+      if (url.includes('/api/workflows/wf-1')) {
+        return freshDetail.promise
+      }
+      return base(input, init)
+    })
+
+    await renderWizard('/tasks/new?kind=workflow&workflow=wf-1&workflowVersion=1', {
+      seedQueries: (queryClient) => {
+        queryClient.setQueryData(['workflows', 'wf-1'], WF_DETAIL)
+      },
+    })
+    // The shared cache is display-only until this mount's forced fetch wins.
+    expect(screen.queryByLabelText(/Topic \(topic\)/)).toBeNull()
+    freshDetail.resolve(jsonResponse({ ...WF_DETAIL, version: 2 }))
+    const mismatch = await screen.findByTestId('wizard-workflow-version-mismatch')
+    expect(mismatch.textContent).toMatch(/v1/)
+    expect(mismatch.textContent).toMatch(/v2/)
+
+    // Deep links start on workspace. The stale cached definition never seeds
+    // fields, and the fresh mismatch keeps progression blocked.
+    next()
+    fireEvent.change(await screen.findByTestId('wizard-task-name'), { target: { value: 'T1' } })
+    expect(screen.queryByLabelText(/Topic \(topic\)/)).toBeNull()
+    expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(true)
+
+    fireEvent.click(screen.getByTestId('wizard-workflow-version-recover'))
+    await waitFor(() => expect(screen.queryByTestId('workflow-editor-page')).toBeTruthy())
+  })
+
+  test('RFC-199 background vN+1 keeps the captured vN fields, values, kinds, and File objects visible', async () => {
+    const v1 = {
+      ...WF_DETAIL,
+      definition: {
+        inputs: [
+          { key: 'removed', label: 'Removed text', kind: 'text', required: true },
+          { key: 'changed', label: 'Changed text', kind: 'text' },
+          {
+            key: 'asset',
+            label: 'Asset upload',
+            kind: 'upload',
+            required: true,
+            targetDir: 'assets',
+          },
+        ],
+        nodes: [],
+      },
+    }
+    installFetch()
+    const base = vi.mocked(globalThis.fetch).getMockImplementation()!
+    vi.mocked(globalThis.fetch).mockImplementation((input, init) =>
+      input.toString().includes('/api/workflows/wf-1')
+        ? Promise.resolve(jsonResponse(v1))
+        : base(input, init),
+    )
+    const rendered = await renderWizard('/tasks/new?kind=workflow&workflow=wf-1&workflowVersion=1')
+
+    next()
+    const removed = (await screen.findByLabelText(/Removed text \(removed\)/)) as HTMLInputElement
+    const changed = screen.getByLabelText(/Changed text \(changed\)/) as HTMLInputElement
+    fireEvent.change(screen.getByTestId('wizard-task-name'), { target: { value: 'T1' } })
+    fireEvent.change(removed, { target: { value: 'keep removed value' } })
+    fireEvent.change(changed, { target: { value: 'keep text kind' } })
+    const file = new File(['payload'], 'artifact.txt', { type: 'text/plain' })
+    const fileInput = document.querySelector<HTMLInputElement>('input[type="file"]')
+    expect(fileInput).not.toBeNull()
+    fireEvent.change(fileInput!, { target: { files: [file] } })
+    expect(await screen.findByText('artifact.txt')).toBeTruthy()
+
+    act(() => {
+      rendered.qc.setQueryData(['workflows', 'wf-1'], {
+        ...v1,
+        version: 2,
+        definition: {
+          inputs: [
+            {
+              key: 'changed',
+              label: 'Changed enum',
+              kind: 'enum',
+              choices: ['new-only'],
+            },
+            { key: 'asset', label: 'Asset text', kind: 'text' },
+          ],
+          nodes: [],
+        },
+      })
+    })
+    expect((await screen.findByTestId('wizard-workflow-version-mismatch')).textContent).toMatch(
+      /v1.*v2|v2.*v1/s,
+    )
+
+    // No silent reseed: deleted fields, the old widget kind, typed bytes and
+    // non-serializable File stay visible until the user explicitly recovers.
+    expect((screen.getByLabelText(/Removed text \(removed\)/) as HTMLInputElement).value).toBe(
+      'keep removed value',
+    )
+    const preservedChanged = screen.getByLabelText(/Changed text \(changed\)/) as HTMLInputElement
+    expect(preservedChanged.tagName).toBe('INPUT')
+    expect(preservedChanged.value).toBe('keep text kind')
+    expect(screen.getByText('artifact.txt')).toBeTruthy()
+    expect(screen.queryByLabelText(/Changed enum \(changed\)/)).toBeNull()
+    expect(screen.queryByLabelText(/Asset text \(asset\)/)).toBeNull()
+    expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  test('RFC-199 POST version mismatch is an alert and explicitly adopts a fresh workflow before retry', async () => {
+    const v2 = {
+      ...WF_DETAIL,
+      version: 2,
+      definition: {
+        inputs: [
+          ...WF_DETAIL.definition.inputs,
+          { key: 'review', label: 'Review note', kind: 'text', required: true },
+        ],
+        nodes: [],
+      },
+    }
+    installFetch()
+    const base = vi.mocked(globalThis.fetch).getMockImplementation()!
+    let detailVersion = 1
+    const postedBodies: Record<string, unknown>[] = []
+    vi.mocked(globalThis.fetch).mockImplementation(async (input, init) => {
+      const url = input.toString()
+      const method = init?.method ?? 'GET'
+      if (url.includes('/api/workflows/wf-1')) {
+        return jsonResponse(detailVersion === 1 ? WF_DETAIL : v2)
+      }
+      if (url.endsWith('/api/tasks') && method === 'POST') {
+        const body = JSON.parse(String(init?.body)) as Record<string, unknown>
+        postedBodies.push(body)
+        if (postedBodies.length === 1) {
+          detailVersion = 2
+          return jsonResponse(
+            {
+              code: 'workflow-version-mismatch',
+              message: 'workflow changed',
+              details: { expectedVersion: 1, currentVersion: 2 },
+            },
+            409,
+          )
+        }
+        return jsonResponse({ id: 'task-w' }, 201)
+      }
+      return base(input, init)
+    })
+
+    await renderWizard('/tasks/new?kind=workflow&workflow=wf-1')
+    next()
+    fireEvent.change(await screen.findByTestId('wizard-task-name'), { target: { value: 'T1' } })
+    fireEvent.change(await screen.findByLabelText(/Topic \(topic\)/), {
+      target: { value: 'hello' },
+    })
+    await waitFor(() =>
+      expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(false),
+    )
+    next()
+    fireEvent.click(screen.getByTestId('wizard-launch'))
+
+    const errorSurface = await screen.findByTestId('wizard-workflow-submit-version-error')
+    expect(within(errorSurface).getByRole('alert')).toBeTruthy()
+    expect(errorSurface.textContent).toMatch(/没有创建任务|no task was created/)
+    expect(postedBodies[0]).toMatchObject({ expectedWorkflowVersion: 1 })
+
+    fireEvent.click(screen.getByTestId('wizard-workflow-submit-version-recover'))
+    const review = (await screen.findByLabelText(/Review note \(review\)/)) as HTMLInputElement
+    expect((screen.getByLabelText(/Topic \(topic\)/) as HTMLInputElement).value).toBe('hello')
+    expect(screen.queryByTestId('wizard-workflow-submit-version-error')).toBeNull()
+    fireEvent.change(review, { target: { value: 'checked' } })
+    next()
+    fireEvent.click(screen.getByTestId('wizard-launch'))
+    await waitFor(() => expect(screen.queryByTestId('task-page')).toBeTruthy())
+    expect(postedBodies[1]).toMatchObject({
+      expectedWorkflowVersion: 2,
+      inputs: { topic: 'hello', review: 'checked' },
     })
   })
 
@@ -446,6 +677,50 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
     })
   })
 
+  test('RFC-199 T6.6: scheduled workflow creation explains latest-at-run and persists no version guard', async () => {
+    const calls = installFetch()
+    await renderWizard('/tasks/new?schedule=1&kind=workflow&workflow=wf-1&workflowVersion=1')
+
+    expect((await screen.findByTestId('wizard-scheduled-workflow-policy')).textContent).toMatch(
+      /计划执行时使用最新工作流|Scheduled runs use the latest workflow/,
+    )
+
+    // Editor deep links land on workspace; scratch is already selected.
+    next()
+    fireEvent.change(await screen.findByTestId('wizard-task-name'), {
+      target: { value: 'scheduled workflow run' },
+    })
+    fireEvent.change(await screen.findByLabelText(/Topic \(topic\)/), {
+      target: { value: 'scheduled topic' },
+    })
+    await waitFor(() =>
+      expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(false),
+    )
+    next()
+
+    fireEvent.click(await screen.findByTestId('wizard-save-scheduled'))
+    expect((await screen.findByTestId('schedule-dialog-workflow-policy')).textContent).toMatch(
+      /计划执行时使用最新工作流|Scheduled runs use the latest workflow/,
+    )
+    fireEvent.change(screen.getByTestId('schedule-name'), {
+      target: { value: 'nightly workflow' },
+    })
+    fireEvent.click(screen.getByTestId('schedule-save'))
+
+    await waitFor(() => {
+      const post = calls.find((c) => c.method === 'POST' && c.url.endsWith('/api/scheduled-tasks'))
+      expect(post).toBeTruthy()
+      const launchPayload = (post!.body as { launchPayload: Record<string, unknown> }).launchPayload
+      expect(launchPayload).toEqual({
+        workflowId: 'wf-1',
+        name: 'scheduled workflow run',
+        inputs: { topic: 'scheduled topic' },
+        scratch: true,
+      })
+      expect('expectedWorkflowVersion' in launchPayload).toBe(false)
+    })
+  })
+
   test('W7: ?editScheduled seeds a kind-locked wizard and PUTs the rebuilt payload', async () => {
     const calls = installFetch()
     await renderWizard('/tasks/new?editScheduled=sched-a')
@@ -482,6 +757,34 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
     })
     expect(calls.some((c) => c.method === 'POST' && c.url.endsWith('/api/tasks'))).toBe(false)
     await waitFor(() => expect(screen.queryByTestId('scheduled-detail-page')).toBeTruthy())
+  })
+
+  test('RFC-199 T6.6: workflow schedule editing keeps latest-at-run visible and removes a stale guard', async () => {
+    const calls = installFetch()
+    await renderWizard('/tasks/new?editScheduled=sched-wf')
+
+    expect((await screen.findByTestId('wizard-scheduled-workflow-policy')).textContent).toMatch(
+      /计划执行时使用最新工作流|Scheduled runs use the latest workflow/,
+    )
+    fireEvent.click(await screen.findByTestId('stepper-step-confirm'))
+    const save = await screen.findByTestId('wizard-save-config')
+    await waitFor(() => expect((save as HTMLButtonElement).disabled).toBe(false))
+    fireEvent.click(save)
+
+    await waitFor(() => {
+      const put = calls.find(
+        (c) => c.method === 'PUT' && c.url.endsWith('/api/scheduled-tasks/sched-wf'),
+      )
+      expect(put).toBeTruthy()
+      const launchPayload = (put!.body as { launchPayload: Record<string, unknown> }).launchPayload
+      expect(launchPayload).toEqual({
+        workflowId: 'wf-1',
+        name: 'nightly workflow run',
+        inputs: { topic: 'scheduled topic' },
+        scratch: true,
+      })
+      expect('expectedWorkflowVersion' in launchPayload).toBe(false)
+    })
   })
 
   test('W8: builtin agents are filtered out of the object picker', async () => {

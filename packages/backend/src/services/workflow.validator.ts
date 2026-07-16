@@ -24,8 +24,11 @@ import type {
   ParsedKind,
   Skill,
   WorkflowDefinition,
+  WorkflowNodeFieldKey,
+  WorkflowValidationContextHash,
   WorkflowValidationIssue,
   WorkflowValidationResult,
+  WorkflowValidationTarget,
 } from '@agent-workflow/shared'
 import {
   DEPRECATED_PROMPT_TOKENS,
@@ -34,6 +37,7 @@ import {
   CLARIFY_RESPONSE_TARGET_PORT_NAME,
   CROSS_CLARIFY_EXTERNAL_FEEDBACK_PORT,
   BUILTIN_VARS,
+  canonicalJson,
   CLARIFY_SOURCE_PORT_NAME,
   countFanoutAggregators,
   declaredPorts,
@@ -43,6 +47,7 @@ import {
   isWrapperKind,
   tryParseKind,
 } from '@agent-workflow/shared'
+import { createHash } from 'node:crypto'
 import type { DbClient } from '@/db/client'
 import { listAgents } from '@/services/agent'
 import { listPlugins } from '@/services/plugin'
@@ -66,13 +71,21 @@ import { NotFoundError } from '@/util/errors'
  * workflow referencing a missing/disabled plugin validated at launch and
  * died at spawn. A consistency lock test pins every caller to this helper.
  */
-export async function buildWorkflowValidationContext(db: DbClient): Promise<ValidatorContext> {
+export async function loadWorkflowValidationContext(db: DbClient): Promise<ValidatorContext> {
+  const [agents, skills, plugins] = await Promise.all([
+    listAgents(db),
+    listSkills(db),
+    listPlugins(db),
+  ])
   return {
-    agents: await listAgents(db),
-    skills: await listSkills(db),
-    plugins: await listPlugins(db),
+    agents,
+    skills,
+    plugins,
   }
 }
+
+/** @deprecated Use the canonical loader; retained for existing runtime callers. */
+export const buildWorkflowValidationContext = loadWorkflowValidationContext
 
 export async function validateWorkflowById(
   db: DbClient,
@@ -82,7 +95,19 @@ export async function validateWorkflowById(
   if (wf === null) {
     throw new NotFoundError('workflow-not-found', `workflow '${id}' not found`)
   }
-  return validateWorkflowDef(wf.definition, await buildWorkflowValidationContext(db))
+  return validateWorkflowDefinition(wf.definition, await loadWorkflowValidationContext(db))
+}
+
+export interface ValidatorPluginResource {
+  name: string
+  enabled: boolean
+  id?: string
+  ownerUserId?: string | null
+  visibility?: 'public' | 'private'
+  sourceKind?: string
+  resolvedVersion?: string | null
+  schemaVersion?: number
+  updatedAt?: number
 }
 
 export interface ValidatorContext {
@@ -95,7 +120,172 @@ export interface ValidatorContext {
    * silently skips the plugin check when this field is absent so existing
    * tests + workflow-yaml import sites don't break.
    */
-  plugins?: Array<{ name: string; enabled: boolean }>
+  plugins?: ValidatorPluginResource[]
+}
+
+export const WORKFLOW_VALIDATION_CONTEXT_DOMAIN_V1 = 'workflow-validation-context/v1\n'
+
+/**
+ * Stable, non-secret projection of every inventory field that can affect
+ * workflow validation or port semantics. Resource arrays are identity-sorted;
+ * canonicalJson recursively sorts map keys. Agent body/prompt, permissions,
+ * plugin spec/options/cache paths, and skill filesystem paths are deliberately
+ * absent.
+ */
+export function projectWorkflowValidationContext(ctx: ValidatorContext) {
+  return {
+    agents: [...ctx.agents].sort(compareResourceIdentity).map((agent) => ({
+      id: agent.id,
+      name: agent.name,
+      ownerUserId: agent.ownerUserId ?? null,
+      visibility: agent.visibility ?? 'public',
+      builtin: agent.builtin ?? false,
+      schemaVersion: agent.schemaVersion,
+      updatedAt: agent.updatedAt,
+      role: agent.role ?? 'normal',
+      inputs: (agent.inputs ?? []).map((input) => ({
+        name: input.name,
+        kind: input.kind,
+        required: input.required ?? false,
+      })),
+      outputs: [...(agent.outputs ?? [])],
+      outputKinds: { ...(agent.outputKinds ?? {}) },
+      outputWrapperPortNames: { ...(agent.outputWrapperPortNames ?? {}) },
+      dependsOn: [...(agent.dependsOn ?? [])],
+      skills: [...(agent.skills ?? [])],
+      mcp: [...(agent.mcp ?? [])],
+      plugins: [...(agent.plugins ?? [])],
+      runtime: agent.runtime ?? null,
+      syncOutputsOnIterate: agent.syncOutputsOnIterate,
+    })),
+    skills: [...ctx.skills].sort(compareResourceIdentity).map((skill) => ({
+      id: skill.id,
+      name: skill.name,
+      ownerUserId: skill.ownerUserId ?? null,
+      visibility: skill.visibility ?? 'public',
+      enabled: true,
+      sourceKind: skill.sourceKind,
+      schemaVersion: skill.schemaVersion,
+      contentVersion: skill.contentVersion,
+      updatedAt: skill.updatedAt,
+    })),
+    plugins: [...(ctx.plugins ?? [])].sort(compareResourceIdentity).map((plugin) => ({
+      id: plugin.id ?? null,
+      name: plugin.name,
+      ownerUserId: plugin.ownerUserId ?? null,
+      visibility: plugin.visibility ?? 'public',
+      enabled: plugin.enabled,
+      sourceKind: plugin.sourceKind ?? null,
+      resolvedVersion: plugin.resolvedVersion ?? null,
+      schemaVersion: plugin.schemaVersion ?? null,
+      updatedAt: plugin.updatedAt ?? null,
+    })),
+  }
+}
+
+export function workflowValidationContextHashOf(
+  ctx: ValidatorContext,
+): WorkflowValidationContextHash {
+  return createHash('sha256')
+    .update(
+      `${WORKFLOW_VALIDATION_CONTEXT_DOMAIN_V1}${canonicalJson(
+        projectWorkflowValidationContext(ctx),
+      )}`,
+      'utf8',
+    )
+    .digest('hex') as WorkflowValidationContextHash
+}
+
+function compareResourceIdentity(
+  left: { id?: string; name: string },
+  right: { id?: string; name: string },
+): number {
+  return left.name.localeCompare(right.name) || (left.id ?? '').localeCompare(right.id ?? '')
+}
+
+interface WorkflowValidationTargets {
+  node(nodeId: string): WorkflowValidationTarget
+  nodeField(nodeId: string, field: WorkflowNodeFieldKey): WorkflowValidationTarget
+  nodePort(
+    nodeId: string,
+    direction: 'input' | 'output',
+    portName: string,
+  ): WorkflowValidationTarget
+  outputBinding(nodeId: string, outputName: string): WorkflowValidationTarget
+  edge(edgeId: string): WorkflowValidationTarget
+  workflowInput(inputKey: string): WorkflowValidationTarget
+  workflow(): WorkflowValidationTarget
+}
+
+/**
+ * RFC-199 T5.5: build strict issue targets without ever guessing among
+ * duplicate semantic identities. The definition is the sole input, so this
+ * remains a pure projection shared by every validator rule below.
+ */
+function createWorkflowValidationTargets(def: WorkflowDefinition): WorkflowValidationTargets {
+  const count = (values: string[]): Map<string, number> => {
+    const counts = new Map<string, number>()
+    for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1)
+    return counts
+  }
+  const nodeIdCounts = count((def.nodes ?? []).map((node) => node.id))
+  const edgeIdCounts = count((def.edges ?? []).map((edge) => edge.id))
+  const inputKeyCounts = count((def.inputs ?? []).map((input) => input.key))
+  const outputNameCounts = count(
+    (def.nodes ?? [])
+      .filter((node) => node.kind === 'output')
+      .flatMap((node) => readBindings(node, 'ports').map((binding) => binding.name)),
+  )
+  const nodePortCounts = count(
+    (def.nodes ?? []).flatMap((node) => {
+      if (node.kind === 'output') {
+        return readBindings(node, 'ports').map(
+          (binding) => `${node.id}\u0000input\u0000${binding.name}`,
+        )
+      }
+      if (node.kind === 'wrapper-fanout') {
+        return readWrapperFanoutInputs(node).map(
+          (input) => `${node.id}\u0000input\u0000${input.name}`,
+        )
+      }
+      return []
+    }),
+  )
+  const workflow = (): WorkflowValidationTarget => ({ kind: 'workflow' })
+  const uniqueNode = (nodeId: string, target: WorkflowValidationTarget) =>
+    nodeIdCounts.get(nodeId) === 1 ? target : workflow()
+
+  return {
+    node: (nodeId) => uniqueNode(nodeId, { kind: 'node', nodeId }),
+    nodeField: (nodeId, field) => uniqueNode(nodeId, { kind: 'node-field', nodeId, field }),
+    nodePort: (nodeId, direction, portName) => {
+      const compoundIdentity = `${nodeId}\u0000${direction}\u0000${portName}`
+      return (nodePortCounts.get(compoundIdentity) ?? 0) > 1
+        ? workflow()
+        : uniqueNode(nodeId, { kind: 'node-port', nodeId, direction, portName })
+    },
+    outputBinding: (nodeId, outputName) =>
+      outputNameCounts.get(outputName) === 1
+        ? uniqueNode(nodeId, {
+            kind: 'node-port',
+            nodeId,
+            direction: 'input',
+            portName: outputName,
+          })
+        : workflow(),
+    edge: (edgeId) => (edgeIdCounts.get(edgeId) === 1 ? { kind: 'edge', edgeId } : workflow()),
+    workflowInput: (inputKey) =>
+      inputKeyCounts.get(inputKey) === 1 ? { kind: 'workflow-input', inputKey } : workflow(),
+    workflow,
+  }
+}
+
+/** RFC-199 name for the pure validator; legacy callers keep validateWorkflowDef. */
+export function validateWorkflowDefinition(
+  def: WorkflowDefinition,
+  ctx: ValidatorContext,
+): WorkflowValidationResult {
+  return validateWorkflowDef(def, ctx)
 }
 
 export function validateWorkflowDef(
@@ -103,6 +293,7 @@ export function validateWorkflowDef(
   ctx: ValidatorContext,
 ): WorkflowValidationResult {
   const issues: WorkflowValidationIssue[] = []
+  const target = createWorkflowValidationTargets(def)
 
   const nodes = def.nodes ?? []
   const edges = def.edges ?? []
@@ -132,6 +323,7 @@ export function validateWorkflowDef(
           code: 'wrapper-empty',
           message: `wrapper-git '${node.id}' has no inner nodes`,
           pointer: node.id,
+          target: target.node(node.id),
         })
       }
     }
@@ -142,6 +334,7 @@ export function validateWorkflowDef(
           code: 'wrapper-empty',
           message: `wrapper-loop '${node.id}' has no inner nodes`,
           pointer: node.id,
+          target: target.node(node.id),
         })
       }
       const maxIter = readNumber(node, 'maxIterations')
@@ -150,6 +343,7 @@ export function validateWorkflowDef(
           code: 'wrapper-loop-max-iterations',
           message: `wrapper-loop '${node.id}' missing maxIterations (integer ≥ 1)`,
           pointer: node.id,
+          target: target.nodeField(node.id, 'loop-max-iterations'),
         })
       }
       const exitCond = (node as Record<string, unknown>).exitCondition
@@ -158,6 +352,7 @@ export function validateWorkflowDef(
           code: 'wrapper-loop-exit-condition',
           message: `wrapper-loop '${node.id}' missing exitCondition`,
           pointer: node.id,
+          target: target.nodeField(node.id, 'loop-exit-condition'),
         })
       }
     }
@@ -179,6 +374,7 @@ export function validateWorkflowDef(
             code: 'wrapper-fanout-nested',
             message: `wrapper-fanout '${node.id}' is nested inside wrapper-fanout '${candidate.id}' — total shard count grows multiplicatively at runtime; consider declaring 'expectedShardCount' or restructuring`,
             pointer: node.id,
+            target: target.node(node.id),
             severity: 'warning',
           })
           break
@@ -206,12 +402,14 @@ export function validateWorkflowDef(
           code: 'wrapper-fanout-shard-source-missing',
           message: `wrapper-fanout '${node.id}' has no input port marked isShardSource: true (exactly one required)`,
           pointer: node.id,
+          target: target.nodeField(node.id, 'fanout-inputs'),
         })
       } else if (shardSources.length > 1) {
         issues.push({
           code: 'wrapper-fanout-shard-source-duplicate',
           message: `wrapper-fanout '${node.id}' has ${shardSources.length} input ports marked isShardSource: true (exactly one allowed)`,
           pointer: node.id,
+          target: target.nodeField(node.id, 'fanout-inputs'),
         })
       } else {
         const shardPort = shardSources[0]!
@@ -221,6 +419,7 @@ export function validateWorkflowDef(
             code: 'wrapper-fanout-shard-source-must-be-list',
             message: `wrapper-fanout '${node.id}' shardSource input '${shardPort.name}' must declare kind: list<T> (got '${shardPort.kind}')`,
             pointer: node.id,
+            target: target.nodePort(node.id, 'input', shardPort.name),
           })
         }
       }
@@ -268,6 +467,7 @@ export function validateWorkflowDef(
             code: 'wrapper-loop-nested',
             message: `wrapper-loop '${node.id}' is nested inside wrapper-loop '${cur}' — inner iterations silently no-op from the outer loop's 2nd round (audit S-6); restructure to a single loop until nested-loop support lands`,
             pointer: node.id,
+            target: target.node(node.id),
           })
           break
         }
@@ -322,6 +522,7 @@ export function validateWorkflowDef(
         code: 'edge-source-node-missing',
         message: `edge '${edge.id}' source node '${edge.source.nodeId}' not found`,
         pointer: edge.id,
+        target: target.edge(edge.id),
       })
       continue
     }
@@ -330,6 +531,7 @@ export function validateWorkflowDef(
         code: 'edge-target-node-missing',
         message: `edge '${edge.id}' target node '${edge.target.nodeId}' not found`,
         pointer: edge.id,
+        target: target.edge(edge.id),
       })
       continue
     }
@@ -346,6 +548,7 @@ export function validateWorkflowDef(
           code: 'edge-source-port-missing',
           message: `edge '${edge.id}': node '${src.id}' has no output port '${edge.source.portName}'`,
           pointer: edge.id,
+          target: target.nodePort(src.id, 'output', edge.source.portName),
         })
       }
     }
@@ -359,6 +562,7 @@ export function validateWorkflowDef(
           code: 'edge-target-port-missing',
           message: `edge '${edge.id}': output node '${tgt.id}' has no input port '${edge.target.portName}'`,
           pointer: edge.id,
+          target: target.nodePort(tgt.id, 'input', edge.target.portName),
         })
       }
     } else if (tgt.kind === 'wrapper-git' || tgt.kind === 'wrapper-loop') {
@@ -366,6 +570,7 @@ export function validateWorkflowDef(
         code: 'edge-target-port-missing',
         message: `edge '${edge.id}': wrapper '${tgt.id}' does not accept inbound edges in v1`,
         pointer: edge.id,
+        target: target.nodePort(tgt.id, 'input', edge.target.portName),
       })
     } else if (tgt.kind === 'wrapper-fanout' && edge.boundary === undefined) {
       // RFC-146 impl-gate fix (Codex high): a PLAIN inbound edge into a
@@ -385,6 +590,7 @@ export function validateWorkflowDef(
           code: 'edge-target-port-missing',
           message: `edge '${edge.id}': wrapper-fanout '${tgt.id}' has no declared input port '${edge.target.portName}'`,
           pointer: edge.id,
+          target: target.nodePort(tgt.id, 'input', edge.target.portName),
         })
       }
     }
@@ -418,6 +624,7 @@ export function validateWorkflowDef(
             code: 'fanout-inner-chain-unsupported',
             message: `edge '${edge.id}' chains inner node '${src.id}' into non-aggregator inner node '${tgt.id}' inside wrapper-fanout '${srcWrapper}' — per-shard chains are not dispatched yet (the target reads an EMPTY port at runtime, audit S-5); route the result through the aggregator or split into sequential fanouts`,
             pointer: edge.id,
+            target: target.edge(edge.id),
           })
         }
       }
@@ -466,6 +673,7 @@ export function validateWorkflowDef(
     issues.push({
       code: 'topology-cycle',
       message: 'workflow contains a cycle outside any loop wrapper',
+      target: target.workflow(),
     })
   }
 
@@ -504,6 +712,7 @@ export function validateWorkflowDef(
         code: 'wrapper-loop-inner-data-cycle',
         message: `wrapper-loop '${node.id}' has a data cycle between its inner nodes; with no cross-iteration ports in v1 this deadlocks at runtime (the scheduler fails the loop scope with a cycle error). Break the cycle or route the feedback through a clarify channel / worktree file.`,
         pointer: node.id,
+        target: target.node(node.id),
         severity: 'warning',
       })
     }
@@ -519,6 +728,7 @@ export function validateWorkflowDef(
           code: 'agent-not-found',
           message: `node '${node.id}': agent '${name}' not found`,
           pointer: node.id,
+          target: target.nodeField(node.id, 'agent'),
         })
         continue
       }
@@ -543,6 +753,7 @@ export function validateWorkflowDef(
                 : '; currently at top level'
             }).`,
             pointer: node.id,
+            target: target.nodeField(node.id, 'agent'),
           })
         }
       }
@@ -552,6 +763,7 @@ export function validateWorkflowDef(
             code: 'skill-not-found',
             message: `agent '${agent.name}' (used by node '${node.id}') references unknown skill '${s}'`,
             pointer: node.id,
+            target: target.nodeField(node.id, 'agent'),
           })
         }
       }
@@ -563,12 +775,14 @@ export function validateWorkflowDef(
               code: 'plugin-not-found',
               message: `agent '${agent.name}' (used by node '${node.id}') references unknown plugin '${p}'`,
               pointer: node.id,
+              target: target.nodeField(node.id, 'agent'),
             })
           } else if (!pluginsEnabled.has(p)) {
             issues.push({
               code: 'plugin-disabled',
               message: `agent '${agent.name}' (used by node '${node.id}') references disabled plugin '${p}'`,
               pointer: node.id,
+              target: target.nodeField(node.id, 'agent'),
             })
           }
         }
@@ -592,6 +806,7 @@ export function validateWorkflowDef(
             code: 'agent-dependency-not-found',
             message: `agent '${agent.name}' (used by node '${node.id}') depends on unknown agent '${depName}'`,
             pointer: node.id,
+            target: target.nodeField(node.id, 'agent'),
           })
           continue
         }
@@ -601,6 +816,7 @@ export function validateWorkflowDef(
               code: 'skill-not-found',
               message: `dependent agent '${dep.name}' (closure of '${agent.name}', used by node '${node.id}') references unknown skill '${s}'`,
               pointer: node.id,
+              target: target.nodeField(node.id, 'agent'),
             })
           }
         }
@@ -612,12 +828,14 @@ export function validateWorkflowDef(
                 code: 'plugin-not-found',
                 message: `dependent agent '${dep.name}' (closure of '${agent.name}', used by node '${node.id}') references unknown plugin '${p}'`,
                 pointer: node.id,
+                target: target.nodeField(node.id, 'agent'),
               })
             } else if (!pluginsEnabled.has(p)) {
               issues.push({
                 code: 'plugin-disabled',
                 message: `dependent agent '${dep.name}' (closure of '${agent.name}', used by node '${node.id}') references disabled plugin '${p}'`,
                 pointer: node.id,
+                target: target.nodeField(node.id, 'agent'),
               })
             }
           }
@@ -636,6 +854,7 @@ export function validateWorkflowDef(
             code: 'binding-node-missing',
             message: `output node '${node.id}' port '${b.name}' binds to unknown node '${b.bind.nodeId}'`,
             pointer: node.id,
+            target: target.outputBinding(node.id, b.name),
           })
         } else {
           const outs = outputPorts.get(b.bind.nodeId) ?? new Set()
@@ -644,6 +863,7 @@ export function validateWorkflowDef(
               code: 'binding-port-missing',
               message: `output node '${node.id}' port '${b.name}' binds to unknown port '${b.bind.portName}' on '${b.bind.nodeId}'`,
               pointer: node.id,
+              target: target.outputBinding(node.id, b.name),
             })
           }
         }
@@ -657,6 +877,7 @@ export function validateWorkflowDef(
             code: 'binding-node-missing',
             message: `wrapper-loop '${node.id}' outputBinding '${b.name}' references unknown node '${b.bind.nodeId}'`,
             pointer: node.id,
+            target: target.nodeField(node.id, 'loop-output-bindings'),
           })
         } else {
           const outs = outputPorts.get(b.bind.nodeId) ?? new Set()
@@ -665,6 +886,7 @@ export function validateWorkflowDef(
               code: 'binding-port-missing',
               message: `wrapper-loop '${node.id}' outputBinding '${b.name}' references unknown port '${b.bind.portName}' on '${b.bind.nodeId}'`,
               pointer: node.id,
+              target: target.nodeField(node.id, 'loop-output-bindings'),
             })
           }
         }
@@ -688,6 +910,7 @@ export function validateWorkflowDef(
             code: 'wrapper-loop-exit-node-missing',
             message: `wrapper-loop '${node.id}' exitCondition references unknown node '${exitNodeId}'`,
             pointer: node.id,
+            target: target.nodeField(node.id, 'loop-exit-condition'),
           })
         } else if (exitNodeId !== undefined && exitPortName !== undefined) {
           const exitNode = nodeById.get(exitNodeId)
@@ -700,6 +923,7 @@ export function validateWorkflowDef(
               code: 'wrapper-loop-exit-port-missing',
               message: `wrapper-loop '${node.id}' exitCondition references unknown port '${exitPortName}' on node '${exitNodeId}'`,
               pointer: node.id,
+              target: target.nodeField(node.id, 'loop-exit-condition'),
             })
           }
         }
@@ -715,6 +939,7 @@ export function validateWorkflowDef(
         code: 'input-key-duplicate',
         message: `duplicate input key '${inp.key}'`,
         pointer: inp.key,
+        target: target.workflow(),
       })
     }
     seenKeys.add(inp.key)
@@ -732,6 +957,7 @@ export function validateWorkflowDef(
         code: 'upload-input-target-dir-missing',
         message: `upload input '${inp.key}' missing targetDir`,
         pointer: inp.key,
+        target: target.workflowInput(inp.key),
       })
       continue
     }
@@ -740,6 +966,7 @@ export function validateWorkflowDef(
         code: 'upload-input-target-dir-invalid',
         message: `upload input '${inp.key}' targetDir '${td}' must be a repo-relative path without '..' or absolute prefixes`,
         pointer: inp.key,
+        target: target.workflowInput(inp.key),
       })
     }
   }
@@ -761,6 +988,7 @@ export function validateWorkflowDef(
         code: 'input-key-not-declared',
         message: `input node '${node.id}' inputKey '${key}' not declared in workflow.inputs[]`,
         pointer: node.id,
+        target: target.nodeField(node.id, 'input-definition'),
       })
     }
   }
@@ -770,6 +998,7 @@ export function validateWorkflowDef(
         code: 'input-orphan-declared',
         message: `workflow.inputs[] declares key '${inp.key}' but no input node references it`,
         pointer: inp.key,
+        target: target.workflowInput(inp.key),
         severity: 'warning',
       })
     }
@@ -802,6 +1031,7 @@ export function validateWorkflowDef(
           code: 'wrapper-children-outside-bounds',
           message: `wrapper '${node.id}' contains inner node '${innerId}' positioned outside its visual bounds — fit to children to fix`,
           pointer: node.id,
+          target: target.node(node.id),
           severity: 'warning',
         })
         // One warning per wrapper is enough — auto-fit fixes them all.
@@ -847,6 +1077,7 @@ export function validateWorkflowDef(
           code: 'review-input-source-missing',
           message: `review node '${node.id}' missing or malformed inputSource`,
           pointer: node.id,
+          target: target.nodeField(node.id, 'review-source'),
         })
         continue
       }
@@ -858,6 +1089,7 @@ export function validateWorkflowDef(
           code: 'review-input-source-missing',
           message: `review node '${node.id}' inputSource references unknown node '${srcNodeId}'`,
           pointer: node.id,
+          target: target.nodeField(node.id, 'review-source'),
         })
         continue
       }
@@ -867,6 +1099,7 @@ export function validateWorkflowDef(
           code: 'review-input-source-missing',
           message: `review node '${node.id}' inputSource references unknown port '${srcPort}' on '${srcNodeId}'`,
           pointer: node.id,
+          target: target.nodeField(node.id, 'review-source'),
         })
         continue
       }
@@ -896,6 +1129,7 @@ export function validateWorkflowDef(
               code: 'review-input-list-item-not-markdown',
               message: `review node '${node.id}' inputSource '${srcNodeId}.${srcPort}' has list kind '${kind}' whose item is not a markdown document; multi-document review requires list<path<md>> | list<markdown>.`,
               pointer: node.id,
+              target: target.nodeField(node.id, 'review-source'),
             })
           }
         } else if (!isMarkdownish) {
@@ -903,6 +1137,7 @@ export function validateWorkflowDef(
             code: 'review-input-source-not-markdown',
             message: `review node '${node.id}' inputSource '${srcNodeId}.${srcPort}' must be declared kind: markdown | path<md> | markdown_file on agent '${agentName}'`,
             pointer: node.id,
+            target: target.nodeField(node.id, 'review-source'),
           })
         }
       } else {
@@ -911,6 +1146,7 @@ export function validateWorkflowDef(
           code: 'review-input-source-not-markdown',
           message: `review node '${node.id}' inputSource must come from an agent node (got kind '${src.kind}')`,
           pointer: node.id,
+          target: target.nodeField(node.id, 'review-source'),
         })
       }
       // rerunnable subsets must be reachable upstream of inputSource.
@@ -925,6 +1161,7 @@ export function validateWorkflowDef(
             code: 'review-rerunnable-out-of-scope',
             message: `review node '${node.id}' rerunnableOnReject id '${id}' is not in the reachable upstream of inputSource '${srcNodeId}'`,
             pointer: node.id,
+            target: target.nodeField(node.id, 'review-rerunnable-on-reject'),
           })
         }
       }
@@ -934,6 +1171,7 @@ export function validateWorkflowDef(
             code: 'review-rerunnable-out-of-scope',
             message: `review node '${node.id}' rerunnableOnIterate id '${id}' is not in the reachable upstream of inputSource '${srcNodeId}'`,
             pointer: node.id,
+            target: target.nodeField(node.id, 'review-rerunnable-on-iterate'),
           })
         }
       }
@@ -976,6 +1214,7 @@ export function validateWorkflowDef(
           code: 'clarify-questions-port-missing',
           message: `clarify node '${node.id}' has no inbound edge on 'questions' port; drag from the clarify input handle onto an agent to wire it`,
           pointer: node.id,
+          target: target.nodePort(node.id, 'input', 'questions'),
         })
       }
 
@@ -988,6 +1227,7 @@ export function validateWorkflowDef(
             code: 'clarify-input-source-missing',
             message: `clarify node '${node.id}' inbound edge references unknown node '${e.source.nodeId}'`,
             pointer: node.id,
+            target: target.edge(e.id),
           })
           continue
         }
@@ -996,6 +1236,7 @@ export function validateWorkflowDef(
             code: 'clarify-target-not-agent',
             message: `clarify node '${node.id}' must connect to an agent-single node (got kind '${src.kind}' on '${src.id}')`,
             pointer: node.id,
+            target: target.edge(e.id),
           })
           continue
         }
@@ -1020,6 +1261,7 @@ export function validateWorkflowDef(
             code: 'clarify-self-loop',
             message: `clarify node '${node.id}' has an answers edge pointing back to itself`,
             pointer: node.id,
+            target: target.edge(e.id),
           })
         }
       }
@@ -1030,6 +1272,7 @@ export function validateWorkflowDef(
           code: 'clarify-no-iteration-cap',
           message: `clarify node '${node.id}' is not inside a wrapper-loop — agent may ask back indefinitely; consider wrapping in a wrapper-loop with max_iterations`,
           pointer: node.id,
+          target: target.node(node.id),
           severity: 'warning',
         })
       }
@@ -1040,6 +1283,7 @@ export function validateWorkflowDef(
           code: 'clarify-answers-port-disconnected',
           message: `clarify node '${node.id}' has no outbound edge on 'answers' port; answer injection still flows via the session, but the canvas hides the data flow`,
           pointer: node.id,
+          target: target.nodePort(node.id, 'output', 'answers'),
           severity: 'warning',
         })
       }
@@ -1093,6 +1337,7 @@ export function validateWorkflowDef(
           code: 'cross-clarify-input-source-missing',
           message: `clarify-cross-agent node '${node.id}' has no inbound edge on 'questions' port; reverse-drag from the input handle onto an agent-single questioner to wire it`,
           pointer: node.id,
+          target: target.nodePort(node.id, 'input', 'questions'),
         })
       } else {
         for (const e of inboundOnQuestions) {
@@ -1102,6 +1347,7 @@ export function validateWorkflowDef(
               code: 'cross-clarify-input-source-missing',
               message: `clarify-cross-agent node '${node.id}' inbound edge references unknown node '${e.source.nodeId}'`,
               pointer: node.id,
+              target: target.edge(e.id),
             })
             continue
           }
@@ -1110,6 +1356,7 @@ export function validateWorkflowDef(
               code: 'cross-clarify-target-not-agent-single',
               message: `clarify-cross-agent node '${node.id}' must connect to an agent-single questioner (got kind '${src.kind}' on '${src.id}')`,
               pointer: node.id,
+              target: target.edge(e.id),
             })
             continue
           }
@@ -1138,6 +1385,7 @@ export function validateWorkflowDef(
             code: 'cross-clarify-has-downstream',
             message: `clarify-cross-agent node '${node.id}' has an outgoing edge from non-system port '${e.source.portName}'; only 'to_designer' and 'to_questioner' are allowed`,
             pointer: node.id,
+            target: target.nodePort(node.id, 'output', e.source.portName),
           })
         }
       }
@@ -1151,6 +1399,7 @@ export function validateWorkflowDef(
           code: 'cross-clarify-manual-edge-missing',
           message: `clarify-cross-agent node '${node.id}' has no outbound edge on 'to_designer' port; submit will have no designer to trigger a rerun on`,
           pointer: node.id,
+          target: target.nodePort(node.id, 'output', CROSS_CLARIFY_OUT_TO_DESIGNER_PORT),
           severity: 'warning',
         })
       }
@@ -1174,6 +1423,7 @@ export function validateWorkflowDef(
             code: 'cross-clarify-multiple-designers',
             message: `clarify-cross-agent node '${node.id}' has 'to_designer' edges to multiple agents (${sorted.join(', ')}); only one designer agent allowed per cross-clarify node`,
             pointer: node.id,
+            target: target.node(node.id),
           })
         }
       }
@@ -1188,6 +1438,7 @@ export function validateWorkflowDef(
           code: 'cross-clarify-no-iteration-cap',
           message: `clarify-cross-agent node '${node.id}' is not inside a wrapper-loop — questioner may keep asking indefinitely; consider wrapping in a wrapper-loop with max_iterations`,
           pointer: node.id,
+          target: target.node(node.id),
           severity: 'warning',
         })
       }
@@ -1202,6 +1453,7 @@ export function validateWorkflowDef(
               code: 'cross-clarify-target-not-ancestor',
               message: `clarify-cross-agent node '${node.id}' to_designer target '${e.target.nodeId}' is not a topological upstream ancestor of questioner '${questionerId}'; the designer rerun feedback loop may not close`,
               pointer: node.id,
+              target: target.edge(e.id),
               severity: 'warning',
             })
           }
@@ -1226,6 +1478,7 @@ export function validateWorkflowDef(
           code: 'cross-clarify-auto-edge-deleted',
           message: `clarify-cross-agent node '${node.id}' has no 'to_questioner' → '${questionerId}.__clarify_response__' edge; answer injection still flows via the session, but the canvas hides the feedback loop`,
           pointer: node.id,
+          target: target.nodePort(node.id, 'output', CROSS_CLARIFY_OUT_TO_QUESTIONER_PORT),
           severity: 'warning',
         })
       }
@@ -1242,6 +1495,7 @@ export function validateWorkflowDef(
               code: 'cross-clarify-self-review-warning',
               message: `clarify-cross-agent node '${node.id}' wires the same agent '${designerAgentName}' as both designer and questioner; consider RFC-023 self-clarify instead`,
               pointer: node.id,
+              target: target.edge(e.id),
               severity: 'warning',
             })
           }
@@ -1300,6 +1554,7 @@ export function validateWorkflowDef(
         code: 'system-port-illegal-target',
         message: `edge '${edge.id}': '${tp}' is an agent answer-injection port, but target '${edge.target.nodeId}' is kind '${tgt.kind}' (must be agent-single); the scheduler strips this edge and the runtime would resolve the wrong node`,
         pointer: edge.target.nodeId,
+        target: target.edge(edge.id),
       })
     }
     // accept only the channel source AND (for `__clarify_response__`) inject the
@@ -1313,6 +1568,7 @@ export function validateWorkflowDef(
           code: 'system-port-illegal-source',
           message: `edge '${edge.id}': port '__clarify_response__' on '${edge.target.nodeId}' may only be fed by a clarify node's 'answers' port or a clarify-cross-agent node's 'to_questioner' port (got '${edge.source.nodeId}.${sp}', kind '${src.kind}'); a plain data edge here is silently dropped by the scheduler and makes '${edge.target.nodeId}' a false dispatch root`,
           pointer: edge.target.nodeId,
+          target: target.edge(edge.id),
         })
       } else {
         // Source is canonical — verify the answer returns to the SAME agent that
@@ -1326,6 +1582,7 @@ export function validateWorkflowDef(
             code: 'system-port-mispaired-target',
             message: `edge '${edge.id}': '${edge.source.nodeId}' answers must be injected into the agent that asked it (${owners}), not '${edge.target.nodeId}'; buildScopeUpstreams strips this edge, so the wrong target launches as a false dispatch root`,
             pointer: edge.target.nodeId,
+            target: target.edge(edge.id),
           })
         }
       }
@@ -1337,6 +1594,7 @@ export function validateWorkflowDef(
           code: 'system-port-illegal-source',
           message: `edge '${edge.id}': port '__external_feedback__' on '${edge.target.nodeId}' may only be fed by a clarify-cross-agent node's 'to_designer' port (got '${edge.source.nodeId}.${sp}', kind '${src.kind}'); a plain data edge here is silently dropped by the scheduler and makes '${edge.target.nodeId}' a false dispatch root`,
           pointer: edge.target.nodeId,
+          target: target.edge(edge.id),
         })
       }
     }
@@ -1356,6 +1614,7 @@ export function validateWorkflowDef(
         code: 'system-port-illegal-source',
         message: `edge '${edge.id}': the 'questions' port on ${tgt.kind} '${edge.target.nodeId}' may only be fed by an agent's '__clarify__' port (got '${edge.source.nodeId}.${sp}'); runtime channel discovery keys on '__clarify__', so any other source leaves the clarify channel broken`,
         pointer: edge.target.nodeId,
+        target: target.edge(edge.id),
       })
     }
     // (d) the agent `__clarify__` ask port may ONLY feed a clarify / cross
@@ -1370,6 +1629,7 @@ export function validateWorkflowDef(
         code: 'system-port-illegal-target',
         message: `edge '${edge.id}': the '__clarify__' ask port on '${edge.source.nodeId}' may only feed a clarify / clarify-cross-agent node's 'questions' port (got target '${edge.target.nodeId}.${tp}')`,
         pointer: edge.source.nodeId,
+        target: target.edge(edge.id),
       })
     }
     // (e) a clarify node's `answers` output may ONLY feed an agent's
@@ -1381,6 +1641,7 @@ export function validateWorkflowDef(
         code: 'system-port-illegal-target',
         message: `edge '${edge.id}': clarify node '${edge.source.nodeId}' 'answers' port may only feed an agent's '__clarify_response__' port (got target '${edge.target.nodeId}.${tp}')`,
         pointer: edge.source.nodeId,
+        target: target.edge(edge.id),
       })
     }
     // (b) reserved cross output SOURCE ports may ONLY appear as the canonical
@@ -1399,6 +1660,7 @@ export function validateWorkflowDef(
         code: 'system-port-illegal-target',
         message: `edge '${edge.id}': reserved port 'to_questioner' on '${edge.source.nodeId}' (kind '${src.kind}') may only appear as a clarify-cross-agent node feeding a questioner's '__clarify_response__' port (got target '${edge.target.nodeId}.${tp}'); a plain data edge here is silently dropped by the scheduler and makes '${edge.target.nodeId}' a false dispatch root`,
         pointer: edge.source.nodeId,
+        target: target.edge(edge.id),
       })
     }
     if (
@@ -1409,6 +1671,7 @@ export function validateWorkflowDef(
         code: 'system-port-illegal-target',
         message: `edge '${edge.id}': reserved port 'to_designer' on '${edge.source.nodeId}' (kind '${src.kind}') may only appear as a clarify-cross-agent node feeding a designer's '__external_feedback__' port (got target '${edge.target.nodeId}.${tp}'); a plain data edge here is silently dropped by the scheduler and makes '${edge.target.nodeId}' a false dispatch root`,
         pointer: edge.source.nodeId,
+        target: target.edge(edge.id),
       })
     }
   }
@@ -1430,6 +1693,7 @@ export function validateWorkflowDef(
         code: 'multiple-aggregators-in-fanout',
         message: `wrapper-fanout '${node.id}' contains ${aggCount} aggregator agents; v1 supports at most 1 (RFC-060 design §4.3)`,
         pointer: node.id,
+        target: target.node(node.id),
       })
     }
   }
@@ -1444,6 +1708,7 @@ export function validateWorkflowDef(
           code: 'boundary-input-source-not-wrapper',
           message: `edge '${edge.id}' boundary='wrapper-input' source.nodeId '${edge.source.nodeId}' is not a wrapper-fanout node`,
           pointer: edge.id,
+          target: target.edge(edge.id),
         })
         continue
       }
@@ -1453,6 +1718,7 @@ export function validateWorkflowDef(
           code: 'boundary-input-port-not-declared',
           message: `edge '${edge.id}' boundary='wrapper-input' source.portName '${edge.source.portName}' is not declared in wrapper-fanout '${wrapper.id}' inputs[]`,
           pointer: edge.id,
+          target: target.nodePort(wrapper.id, 'input', edge.source.portName),
         })
       }
       const wrapperInner = new Set(readStringArray(wrapper, 'nodeIds'))
@@ -1461,6 +1727,7 @@ export function validateWorkflowDef(
           code: 'boundary-input-target-not-inner',
           message: `edge '${edge.id}' boundary='wrapper-input' target.nodeId '${edge.target.nodeId}' is not in wrapper-fanout '${wrapper.id}' nodeIds[]`,
           pointer: edge.id,
+          target: target.edge(edge.id),
         })
       }
     } else if (edge.boundary === 'wrapper-output') {
@@ -1470,6 +1737,7 @@ export function validateWorkflowDef(
           code: 'boundary-output-target-not-wrapper',
           message: `edge '${edge.id}' boundary='wrapper-output' target.nodeId '${edge.target.nodeId}' is not a wrapper-fanout node`,
           pointer: edge.id,
+          target: target.edge(edge.id),
         })
         continue
       }
@@ -1479,6 +1747,7 @@ export function validateWorkflowDef(
           code: 'boundary-output-source-not-inner',
           message: `edge '${edge.id}' boundary='wrapper-output' source.nodeId '${edge.source.nodeId}' is not in wrapper-fanout '${wrapper.id}' nodeIds[]`,
           pointer: edge.id,
+          target: target.edge(edge.id),
         })
         continue
       }
@@ -1493,6 +1762,7 @@ export function validateWorkflowDef(
           code: 'boundary-output-source-must-be-aggregator',
           message: `edge '${edge.id}' boundary='wrapper-output' source '${edge.source.nodeId}' must be an aggregator agent-single node (RFC-060 §5.3.1)`,
           pointer: edge.id,
+          target: target.edge(edge.id),
         })
       }
     }
@@ -1520,6 +1790,7 @@ export function validateWorkflowDef(
           code: 'prompt-template-deprecated-token',
           message: `node '${node.id}' prompt references retired token {{${ref}}} — it renders an empty string (RFC-148 removed its injection path); remove it from the template`,
           pointer: node.id,
+          target: target.nodeField(node.id, 'prompt'),
           severity: 'warning',
         })
         continue
@@ -1529,6 +1800,7 @@ export function validateWorkflowDef(
           code: 'prompt-template-unresolved',
           message: `node '${node.id}' prompt references {{${ref}}} but has no matching inbound port`,
           pointer: node.id,
+          target: target.nodeField(node.id, 'prompt'),
         })
       }
     }
@@ -1719,6 +1991,12 @@ export function validateAgentClarifyMultiplicity(args: {
   edges: WorkflowDefinition['edges']
 }): WorkflowValidationIssue[] {
   const issues: WorkflowValidationIssue[] = []
+  const target = createWorkflowValidationTargets({
+    $schema_version: 4,
+    inputs: [],
+    nodes: args.nodes,
+    edges: args.edges,
+  })
   const nodesById = new Map(args.nodes.map((n) => [n.id, n]))
 
   // Rule 1: agent has ≥ 2 outbound `__clarify__` edges to distinct targets.
@@ -1748,6 +2026,9 @@ export function validateAgentClarifyMultiplicity(args: {
       code: 'clarify-multiple-clarify-on-same-agent',
       message: `agent '${agentId}' already has a clarify channel; remove the other clarify node before adding '${sortedTargets[0]}'`,
       pointer: sortedTargets[0],
+      // Multiple clarify nodes are implicated; selecting the dictionary-min
+      // legacy pointer would pretend the issue has a unique repair target.
+      target: target.workflow(),
     })
   }
 
@@ -1777,12 +2058,14 @@ export function validateAgentClarifyMultiplicity(args: {
         code: 'clarify-multiple-source-agents',
         message: `clarify node '${node.id}' has inbound 'questions' edges from multiple agents (${sorted.join(', ')}); only one agent may be attached to a clarify node`,
         pointer: node.id,
+        target: target.nodePort(node.id, 'input', 'questions'),
       })
     } else {
       issues.push({
         code: 'cross-clarify-multiple-questioners',
         message: `clarify-cross-agent node '${node.id}' has inbound 'questions' edges from multiple agents (${sorted.join(', ')}); only one questioner agent allowed per cross-clarify node`,
         pointer: node.id,
+        target: target.nodePort(node.id, 'input', 'questions'),
       })
     }
   }

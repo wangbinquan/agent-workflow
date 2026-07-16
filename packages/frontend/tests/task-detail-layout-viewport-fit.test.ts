@@ -62,17 +62,28 @@ describe('.page--task-detail fits the viewport without a document scrollbar', ()
 })
 
 describe('worktree diff vertical file tabs', () => {
+  test('the real task-detail diff pane exposes its inline width as a named container', () => {
+    const body = ruleBody('.task-detail__pane--worktree-diff')
+    expect(body).toMatch(/container:\s*worktree-diff-pane\s*\/\s*inline-size/)
+  })
+
   test('two-column layout fills the pane vertically', () => {
     const body = ruleBody('.worktree-diff')
     expect(body).toMatch(/display:\s*flex/)
     expect(body).toMatch(/flex-direction:\s*row/)
     expect(body).toMatch(/height:\s*100%/)
+    expect(body).toMatch(/width:\s*100%/)
+    expect(body).toMatch(/min-width:\s*0/)
     expect(body).toMatch(/min-height:\s*0/)
   })
 
-  test('left file list is a fixed-width independently scrollable column', () => {
+  // Regression: a fixed 280px rail made the actual diff frame unnecessarily
+  // narrow at laptop / split-window widths. Keep the tree readable, but let it
+  // yield a predictable share of the row to the primary diff surface.
+  test('left file list is a bounded responsive independently scrollable column', () => {
     const body = ruleBody('.worktree-diff__files')
-    expect(body).toMatch(/flex:\s*0 0 280px/)
+    expect(body).toMatch(/flex:\s*0 1 clamp\(220px,\s*24%,\s*280px\)/)
+    expect(body).not.toMatch(/flex:\s*0 0 280px/)
     expect(body).toMatch(/overflow-y:\s*auto/)
     expect(body).toMatch(/min-height:\s*0/)
   })
@@ -89,6 +100,12 @@ describe('worktree diff vertical file tabs', () => {
     expect(body).not.toMatch(/border-right:\s*1px solid var\(--border\)/)
   })
 
+  test('narrow task panes stack the file rail above a full-width diff body', () => {
+    expect(STYLES).toMatch(
+      /@container\s+worktree-diff-pane\s*\(max-width:\s*880px\)\s*\{[\s\S]*?\.worktree-diff\s*\{[^}]*flex-direction:\s*column[^}]*\}[\s\S]*?\.worktree-diff__files\s*\{[^}]*flex:\s*0 0 auto[^}]*width:\s*100%[^}]*max-height:\s*12rem/,
+    )
+  })
+
   test('right body grows + lays inner card out as a flex column', () => {
     // Outer body itself doesn't scroll — it just sizes the inner
     // .diff__file card, which then handles vertical overflow internally
@@ -101,6 +118,11 @@ describe('worktree diff vertical file tabs', () => {
     expect(body).toMatch(/overflow:\s*hidden/)
   })
 
+  test('inactive file tabpanels do not participate in the flex row', () => {
+    const body = ruleBody('.worktree-diff__body[hidden]')
+    expect(body).toMatch(/display:\s*none/)
+  })
+
   test('inner .diff__file fills the full right column height (RFC-021 contract)', () => {
     // Without these rules the .diff__file was intrinsic-content-sized
     // and its <pre> hit a 480px max-height cap, leaving ~190px of empty
@@ -109,6 +131,10 @@ describe('worktree diff vertical file tabs', () => {
     expect(file).toMatch(/flex:\s*1/)
     expect(file).toMatch(/display:\s*flex/)
     expect(file).toMatch(/flex-direction:\s*column/)
+    // A <pre> has a very large min-content width. Without min-width:0 on its
+    // flex parent, the card grows past the body and the body's overflow:hidden
+    // clips the frame instead of leaving scrolling to .diff__body.
+    expect(file).toMatch(/min-width:\s*0/)
     expect(file).toMatch(/min-height:\s*0/)
     const pre = ruleBody('.worktree-diff__body > .diff__file > .diff__body')
     expect(pre).toMatch(/flex:\s*1/)

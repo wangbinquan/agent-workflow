@@ -76,7 +76,12 @@ export function ConfirmButton({
     setArmed(false)
     armedKey.current = undefined
     const r = onConfirm()
-    if (r instanceof Promise) void r
+    if (r instanceof Promise) {
+      // Mutations surface their error through component state. Consume the
+      // rejected promise here so a two-click action cannot also create an
+      // unhandled rejection in the browser.
+      void r.catch(() => {})
+    }
   }
 
   return (

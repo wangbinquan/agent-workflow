@@ -19,14 +19,26 @@
 //   S6 scratch + preCreatedWorktree (multipart) is rejected until the unified
 //      materializeSpace protocol lands (T2c) — explicit 422, not half-working.
 import { afterEach, describe, expect, test } from 'bun:test'
-import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { materializeSpace, startTask } from '../src/services/task'
-import { materializingSpaces } from '../src/services/gc'
+import {
+  materializingSpaces,
+  runScratchOrphanGc,
+  SCRATCH_ORPHAN_MIN_AGE_MS,
+} from '../src/services/gc'
 import { taskRepos, tasks, workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 
@@ -144,6 +156,69 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
     // R3-2-r4: no revivable workspace ⇒ tombstoned atomically with the row.
     expect(row.workspacePrunedAt).not.toBe(null)
     expect(materializingSpaces.size).toBe(0)
+  })
+
+  test('S4b init failure + rm failure hard-errors with an unleased, GC-recoverable anchor', async () => {
+    h = buildHarness()
+    // Install a per-test git template whose pre-commit hook makes the scratch
+    // root commit fail after `git init` has created a real residual repo.
+    const template = join(h.appHome, 'git-template')
+    const hooks = join(template, 'hooks')
+    mkdirSync(hooks, { recursive: true })
+    const preCommit = join(hooks, 'pre-commit')
+    writeFileSync(preCommit, '#!/bin/sh\nexit 1\n')
+    chmodSync(preCommit, 0o755)
+    const previousTemplate = process.env.GIT_TEMPLATE_DIR
+    process.env.GIT_TEMPLATE_DIR = template
+
+    let thrown: unknown
+    try {
+      await materializeSpace(
+        { ...BODY },
+        {
+          db: h.db,
+          workspaceCleanupHook: (event) => {
+            if (event.stage === 'owned-root-remove') {
+              throw new Error('injected scratch rm failure')
+            }
+          },
+        },
+        h.appHome,
+      )
+    } catch (error) {
+      thrown = error
+    } finally {
+      if (previousTemplate === undefined) delete process.env.GIT_TEMPLATE_DIR
+      else process.env.GIT_TEMPLATE_DIR = previousTemplate
+    }
+
+    expect(thrown).toMatchObject({
+      code: 'scratch-materialize-cleanup-incomplete',
+      status: 500,
+      details: {
+        materializeError: expect.stringContaining('scratch-root-commit-failed'),
+        workspaceCleanup: {
+          complete: false,
+          failures: [{ stage: 'owned-root-remove', message: 'injected scratch rm failure' }],
+        },
+      },
+    })
+    const details = (thrown as { details: { taskId: string; path: string } }).details
+    expect(details.path).toBe(join(h.appHome, 'scratch', details.taskId))
+    expect(existsSync(details.path)).toBe(true)
+    expect((await runGit(details.path, ['rev-parse', '--git-dir'])).exitCode).toBe(0)
+    expect(materializingSpaces.has(details.taskId)).toBe(false)
+    expect(await h.db.select().from(tasks)).toHaveLength(0)
+
+    // No row is committed on this 500 path. Recovery therefore uses the
+    // existing unanchored-scratch GC after its safety age floor.
+    const gc = await runScratchOrphanGc(
+      h.db,
+      h.appHome,
+      Date.now() + SCRATCH_ORPHAN_MIN_AGE_MS + 1_000,
+    )
+    expect(gc.removed).toContain(details.taskId)
+    expect(existsSync(details.path)).toBe(false)
   })
 
   test('S5 lease released on success', async () => {
@@ -267,6 +342,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
             worktreePath: '/tmp/x',
             branch: 'b',
             baseCommit: null,
+            cleanup: { kind: 'borrowed' },
           },
         },
       ),

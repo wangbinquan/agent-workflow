@@ -43,6 +43,7 @@ import { ReposRoute as reposRoute } from '@/routes/repos'
 import { Route as memoryRoute } from '@/routes/memory'
 import { Route as memoryDistillJobDetailRoute } from '@/routes/memory.distill-jobs.$jobId'
 import { Route as fusionDetailRoute } from '@/routes/fusions.detail'
+import { workflowLaunchWizardSearch } from '@/lib/workflow-launch-handoff'
 
 // RFC-165 (T14): both legacy launcher pages are retired — their URLs redirect
 // into the /tasks/new wizard with the object pre-picked (deep links land on
@@ -51,11 +52,10 @@ const workflowLaunchRedirect = createRoute({
   getParentRoute: () => rootRoute,
   path: '/workflows/$id/launch',
   beforeLoad: ({ params, search }) => {
-    const editScheduled = (search as { editScheduled?: string }).editScheduled
+    const launchSearch = search as { editScheduled?: string; version?: unknown }
     throw redirect({
       to: '/tasks/new',
-      search:
-        editScheduled !== undefined ? { editScheduled } : { kind: 'workflow', workflow: params.id },
+      search: workflowLaunchWizardSearch(params.id, launchSearch),
     })
   },
 })

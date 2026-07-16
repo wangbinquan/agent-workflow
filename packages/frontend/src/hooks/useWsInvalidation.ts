@@ -24,7 +24,7 @@
 import type { QueryKey } from '@tanstack/react-query'
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef } from 'react'
-import { useWebSocket } from './useWebSocket'
+import { useWebSocket, type WebSocketConnectionState } from './useWebSocket'
 
 export type WsInvalidationRules<M extends { type: string }, Ctx = void> = {
   [K in M['type']]?: (msg: Extract<M, { type: K }>, ctx: Ctx) => readonly QueryKey[] | void
@@ -36,7 +36,7 @@ export function useWsInvalidation<M extends { type: string }, Ctx = void>(
   path: string | null,
   rules: WsInvalidationRules<M, Ctx>,
   ctx?: Ctx,
-): void {
+): WebSocketConnectionState {
   const qc = useQueryClient()
   const rulesRef = useRef(rules)
   const ctxRef = useRef(ctx)
@@ -44,7 +44,7 @@ export function useWsInvalidation<M extends { type: string }, Ctx = void>(
     rulesRef.current = rules
     ctxRef.current = ctx
   })
-  useWebSocket({
+  return useWebSocket({
     path: path ?? '',
     enabled: path !== null && path !== '',
     onMessage: (raw) => {

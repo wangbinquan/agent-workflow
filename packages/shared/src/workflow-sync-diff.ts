@@ -22,6 +22,7 @@
 
 import { isWrapperKind } from './schemas/workflow'
 import { touchesSystemChannelPort } from './systemChannelPorts'
+import { canonicalJson } from './workflow-canonical'
 import type { WorkflowDefinition, WorkflowNode, WorkflowEdge } from './schemas/workflow'
 
 // RFC-147: the private 5-port set moved to the shared system-channel-port
@@ -136,16 +137,6 @@ function semanticNode(n: WorkflowNode): Record<string, unknown> {
   return rest
 }
 
-/** Deterministic JSON: object keys sorted recursively, array order preserved. */
-function stableStringify(v: unknown): string {
-  if (v === null || typeof v !== 'object') return JSON.stringify(v) ?? 'null'
-  if (Array.isArray(v)) return `[${v.map(stableStringify).join(',')}]`
-  const keys = Object.keys(v as Record<string, unknown>).sort()
-  return `{${keys
-    .map((k) => `${JSON.stringify(k)}:${stableStringify((v as Record<string, unknown>)[k])}`)
-    .join(',')}}`
-}
-
 function nodesById(def: WorkflowDefinition): Map<string, WorkflowNode> {
   const m = new Map<string, WorkflowNode>()
   for (const n of def.nodes) m.set(n.id, n)
@@ -159,7 +150,10 @@ function changedKeys(a: WorkflowNode, b: WorkflowNode): string[] {
   const keys = new Set([...Object.keys(sa), ...Object.keys(sb)])
   const out: string[] = []
   for (const k of keys) {
-    if (stableStringify(sa[k]) !== stableStringify(sb[k])) out.push(k)
+    // Array wrapping preserves the previous comparison's JSON semantics for a
+    // missing/undefined field (`[undefined]` → `[null]`) while canonicalJson
+    // correctly rejects a non-JSON top-level undefined.
+    if (canonicalJson([sa[k]]) !== canonicalJson([sb[k]])) out.push(k)
   }
   return out.sort()
 }
@@ -201,13 +195,13 @@ function wrapperFingerprint(
     .filter((e) => memberIds.has(e.source.nodeId) && memberIds.has(e.target.nodeId))
     .map(edgeKey)
     .sort()
-  return stableStringify({ node: structural, incident, internal })
+  return canonicalJson({ node: structural, incident, internal })
 }
 
 /** Definition canonicalized for the `differs` check: node positions stripped so
  *  a canvas-only move does not register as a meaningful change. */
 function canonicalDef(def: WorkflowDefinition): string {
-  return stableStringify({
+  return canonicalJson({
     nodes: def.nodes.map(semanticNode),
     edges: def.edges,
     outputs: (def as { outputs?: unknown }).outputs ?? null,

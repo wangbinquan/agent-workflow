@@ -168,7 +168,9 @@ describe('RFC-152 — workflows frameGate keeps the deleted-uses-OLD-cache order
     workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
       type: 'workflow.updated',
       workflowId: privateWfId,
+      clientMutationId: ulid(),
       version: 2,
+      snapshotHash: '0'.repeat(64),
       updatedAt: 123,
     })
   }
@@ -176,6 +178,8 @@ describe('RFC-152 — workflows frameGate keeps the deleted-uses-OLD-cache order
     workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
       type: 'workflow.deleted',
       workflowId: privateWfId,
+      clientMutationId: ulid(),
+      deletedVersion: 2,
     })
   }
 

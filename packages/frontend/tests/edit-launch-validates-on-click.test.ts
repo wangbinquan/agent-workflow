@@ -29,24 +29,27 @@ describe('workflows.edit launch button validates first (source layer)', () => {
     expect(src).not.toMatch(/<Link\s+to="\/workflows\/\$id\/launch"/)
   })
 
-  test('Launch button calls validate.mutateAsync and navigates on success', () => {
-    // Pull out the button labelled with editor.launch and assert it
-    // wires the validate mutation into its onClick. We accept any
-    // promise-chaining form (await/.then) as long as both calls show
-    // up in the same button onClick block.
+  test('Launch button delegates to the exact save/validate handoff', () => {
     const block = extractLaunchButtonBlock(src)
-    expect(block).toMatch(/validate\s*\.\s*mutateAsync\s*\(\s*\)/)
-    expect(block).toMatch(/navigate\s*\(\s*\{\s*to:\s*'\/tasks\/new'/)
+    expect(block).toContain('handleLaunch()')
     expect(block).toMatch(/t\('editor\.launch'\)/)
+
+    const handler = extractLaunchHandler(src)
+    expect(handler).toContain('exactActionRef.current !== null')
+    expect(handler).toContain('controller.ensureSaved({ signal: abort.signal })')
+    expect(handler).toContain('runExactValidation(saved, abort.signal)')
+    expect(handler).toContain('exactActionAbortRef.current?.abort()')
+    expect(handler).toContain("to: '/workflows/$id/launch'")
+    expect(handler).toContain('search: { version: saved.server.version }')
   })
 
   test('blocking-issue gate uses error-severity semantics (default error)', () => {
     // The launch click handler must treat issues with severity 'error'
     // (or undefined, since the schema defaults missing severity to
     // 'error' — see partitionIssues) as blocking. Warnings pass.
-    const block = extractLaunchButtonBlock(src)
-    expect(block).toMatch(/severity\s*\?\?\s*'error'/)
-    expect(block).toMatch(/===\s*'error'/)
+    const handler = extractLaunchHandler(src)
+    expect(handler).toMatch(/severity\s*\?\?\s*'error'/)
+    expect(handler).toMatch(/===\s*'error'/)
   })
 })
 
@@ -64,4 +67,12 @@ function extractLaunchButtonBlock(src: string): string {
   const end = src.indexOf('</button>', labelIdx)
   if (end === -1) throw new Error('could not find </button> after editor.launch label')
   return src.slice(start, end + '</button>'.length)
+}
+
+function extractLaunchHandler(src: string): string {
+  const start = src.indexOf('const handleLaunch = async')
+  if (start === -1) throw new Error('could not find handleLaunch')
+  const end = src.indexOf('\n  // Conflict/terminal save-copy', start)
+  if (end === -1) throw new Error('could not find end of handleLaunch')
+  return src.slice(start, end)
 }

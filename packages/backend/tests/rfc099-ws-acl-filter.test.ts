@@ -7,6 +7,7 @@
 
 import type { Server } from 'bun'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { eq } from 'drizzle-orm'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createSession } from '../src/auth/sessionStore'
@@ -36,6 +37,7 @@ interface Harness {
   aliceId: string
   carolToken: string
   carolId: string
+  daveToken: string
   cleanup: () => Promise<void>
 }
 
@@ -60,8 +62,15 @@ async function buildHarness(): Promise<Harness> {
     role: 'user',
     password: 'longEnoughPassword',
   })
+  const dave = await createUser(db, {
+    username: 'dave',
+    displayName: 'Dave',
+    role: 'user',
+    password: 'longEnoughPassword',
+  })
   const aliceToken = (await createSession({ db, userId: alice.id })).token
   const carolToken = (await createSession({ db, userId: carol.id })).token
+  const daveToken = (await createSession({ db, userId: dave.id })).token
   const ws = buildWebSocketAdapter({ daemonToken: DAEMON_TOKEN, db })
   const server = Bun.serve({
     port: 0,
@@ -82,6 +91,7 @@ async function buildHarness(): Promise<Harness> {
     aliceId: alice.id,
     carolToken,
     carolId: carol.id,
+    daveToken,
     cleanup: async () => {
       server.stop(true)
       resetBroadcastersForTests()
@@ -118,6 +128,53 @@ async function framesSeen(
   })
 }
 
+interface LiveFrames {
+  socket: WebSocket
+  frames: Array<Record<string, unknown>>
+}
+
+/** Open a cold workflows connection and keep collecting after its hello. */
+async function connectLiveFrames(url: string): Promise<LiveFrames> {
+  const frames: Array<Record<string, unknown>> = []
+  const socket = new WebSocket(url)
+  await new Promise<void>((resolvePromise, reject) => {
+    socket.addEventListener('error', () => reject(new Error('ws error')))
+    socket.addEventListener('message', (event) => {
+      const message = JSON.parse(String(event.data)) as Record<string, unknown>
+      if (message.type === 'hello') {
+        resolvePromise()
+        return
+      }
+      frames.push(message)
+    })
+  })
+  return { socket, frames }
+}
+
+async function waitUntil(predicate: () => boolean, capMs = 1000): Promise<void> {
+  const start = Date.now()
+  while (!predicate()) {
+    if (Date.now() - start > capMs) return
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 5))
+  }
+}
+
+async function deleteViaHttp(
+  h: Harness,
+  workflowId: string,
+  expectedVersion: number,
+  clientMutationId: string,
+): Promise<Response> {
+  return fetch(`${h.url.replace(/^ws:/, 'http:')}/api/workflows/${workflowId}`, {
+    method: 'DELETE',
+    headers: {
+      authorization: `Bearer ${h.aliceToken}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ expectedVersion, clientMutationId }),
+  })
+}
+
 describe('RFC-099 — /ws/workflows per-frame ACL filter', () => {
   let h: Harness
   let privateWfId = ''
@@ -140,7 +197,9 @@ describe('RFC-099 — /ws/workflows per-frame ACL filter', () => {
     workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
       type: 'workflow.updated',
       workflowId: privateWfId,
+      clientMutationId: ulid(),
       version: 2,
+      snapshotHash: '0'.repeat(64),
       updatedAt: 123,
     })
   }
@@ -184,6 +243,81 @@ describe('RFC-099 — /ws/workflows per-frame ACL filter', () => {
     )
     expect(carolFrames.some((f) => f.type === 'workflow.acl.updated')).toBe(true)
     expect(carolFrames.some((f) => f.type === 'workflow.updated')).toBe(true)
+  })
+
+  test('cold owner and grantee receive an exact private delete frame while a stranger learns nothing', async () => {
+    await h.db.insert(resourceGrants).values({
+      resourceType: 'workflow',
+      resourceId: privateWfId,
+      userId: h.carolId,
+      addedBy: h.aliceId,
+      addedAt: Date.now(),
+    })
+    const [owner, grantee, stranger] = await Promise.all([
+      connectLiveFrames(`${h.url}/ws/workflows?token=${h.aliceToken}`),
+      connectLiveFrames(`${h.url}/ws/workflows?token=${h.carolToken}`),
+      connectLiveFrames(`${h.url}/ws/workflows?token=${h.daveToken}`),
+    ])
+    const clientMutationId = ulid()
+    const exactFrame = {
+      type: 'workflow.deleted',
+      workflowId: privateWfId,
+      clientMutationId,
+      deletedVersion: 1,
+    }
+    try {
+      const response = await deleteViaHttp(h, privateWfId, 1, clientMutationId)
+      expect(response.status).toBe(204)
+      await waitUntil(
+        () =>
+          owner.frames.some((frame) => frame.type === 'workflow.deleted') &&
+          grantee.frames.some((frame) => frame.type === 'workflow.deleted'),
+      )
+
+      expect(owner.frames).toContainEqual(exactFrame)
+      expect(grantee.frames).toContainEqual(exactFrame)
+      // Let every async frame-gate promise settle before asserting non-delivery.
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 50))
+      expect(stranger.frames.some((frame) => frame.type === 'workflow.deleted')).toBe(false)
+      const ownerFrame = owner.frames.find((frame) => frame.type === 'workflow.deleted')
+      expect(Object.keys(ownerFrame ?? {}).sort()).toEqual(Object.keys(exactFrame).sort())
+    } finally {
+      owner.socket.close()
+      grantee.socket.close()
+      stranger.socket.close()
+    }
+  })
+
+  test('cold public viewers receive workflow.deleted without serializing its audience context', async () => {
+    await h.db.update(workflows).set({ visibility: 'public' }).where(eq(workflows.id, privateWfId))
+    const [owner, publicViewer] = await Promise.all([
+      connectLiveFrames(`${h.url}/ws/workflows?token=${h.aliceToken}`),
+      connectLiveFrames(`${h.url}/ws/workflows?token=${h.daveToken}`),
+    ])
+    const clientMutationId = ulid()
+    const exactFrame = {
+      type: 'workflow.deleted',
+      workflowId: privateWfId,
+      clientMutationId,
+      deletedVersion: 1,
+    }
+    try {
+      const response = await deleteViaHttp(h, privateWfId, 1, clientMutationId)
+      expect(response.status).toBe(204)
+      await waitUntil(
+        () =>
+          owner.frames.some((frame) => frame.type === 'workflow.deleted') &&
+          publicViewer.frames.some((frame) => frame.type === 'workflow.deleted'),
+      )
+
+      expect(owner.frames).toContainEqual(exactFrame)
+      expect(publicViewer.frames).toContainEqual(exactFrame)
+      const publicFrame = publicViewer.frames.find((frame) => frame.type === 'workflow.deleted')
+      expect(Object.keys(publicFrame ?? {}).sort()).toEqual(Object.keys(exactFrame).sort())
+    } finally {
+      owner.socket.close()
+      publicViewer.socket.close()
+    }
   })
 })
 

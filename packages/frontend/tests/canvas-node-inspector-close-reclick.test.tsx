@@ -64,9 +64,7 @@ describe('clearSelection drives xyflow unselectNodesAndEdges', () => {
 
   test('still resets the dedupe sig and the local selection mirror', async () => {
     const src = await fs.readFile(SRC, 'utf8')
-    const block = src.match(
-      /useImperativeHandle\([\s\S]*?clearSelection: \(\) => \{[\s\S]*?\},\s*\}\),\s*\[storeApi\],\s*\)/,
-    )
+    const block = src.match(/clearSelection: \(\) => \{[\s\S]*?\n\s*\},\n\s*restoreSelection:/)
     expect(block?.[0] ?? '').toMatch(/lastEmittedSelectionSig\.current = 'null'/)
     expect(block?.[0] ?? '').toMatch(/setSelection\(\(prev\) =>/)
   })
@@ -80,9 +78,7 @@ describe('clearSelection drives xyflow unselectNodesAndEdges', () => {
 describe('clearSelection does not delegate to clearFlowSelection', () => {
   test('clearFlowSelection is not referenced inside the imperative handle', async () => {
     const src = await fs.readFile(SRC, 'utf8')
-    const block = src.match(
-      /useImperativeHandle\([\s\S]*?clearSelection: \(\) => \{[\s\S]*?\},\s*\}\),\s*\[storeApi\],\s*\)/,
-    )
+    const block = src.match(/clearSelection: \(\) => \{[\s\S]*?\n\s*\},\n\s*restoreSelection:/)
     expect(block?.[0] ?? '').not.toMatch(/clearFlowSelection/)
   })
 })

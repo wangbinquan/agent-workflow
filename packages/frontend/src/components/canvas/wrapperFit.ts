@@ -10,6 +10,7 @@
 
 import { isWrapperKind } from '@agent-workflow/shared'
 import type { NodeKind, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import { effectiveWorkflowNodePosition } from '../../lib/workflow-placement'
 
 /** Default fallback dimensions per node kind. Used when the inner node has no
  * recorded `size` AND xyflow has not yet measured it. Values err on the
@@ -53,6 +54,16 @@ interface FitBounds {
   offset: XY
 }
 
+interface NodeRect extends XY {
+  width: number
+  height: number
+}
+
+function effectivePositionInDefinition(node: WorkflowNode, allNodes: readonly WorkflowNode[]): XY {
+  const index = allNodes.findIndex((candidate) => candidate.id === node.id)
+  return effectiveWorkflowNodePosition(node, index < 0 ? 0 : index)
+}
+
 function nodeSize(
   node: WorkflowNode,
   measuredSizes?: Map<string, { width: number; height: number }>,
@@ -80,11 +91,58 @@ function nodeSize(
   return DEFAULT_NODE_SIZE_BY_KIND[node.kind] ?? { width: 200, height: 100 }
 }
 
-export function computeFitBounds(
+function hasPersistedSize(node: WorkflowNode): boolean {
+  const size = (node as Record<string, unknown>).size as
+    | { width?: unknown; height?: unknown }
+    | undefined
+  return (
+    size !== undefined &&
+    typeof size.width === 'number' &&
+    typeof size.height === 'number' &&
+    size.width > 0 &&
+    size.height > 0
+  )
+}
+
+/** Resolve the rectangle a node actually occupies in canonical absolute
+ * coordinates. Unsized wrappers do not render at their stale persisted
+ * `position`; projection renders them at computeFitBounds' offset instead.
+ * Recursing here keeps an outer wrapper's bbox aligned with that visual rect. */
+function resolveNodeRect(
+  node: WorkflowNode,
+  allNodes: WorkflowNode[],
+  padding: number,
+  measuredSizes: Map<string, { width: number; height: number }> | undefined,
+  resolvingWrappers: Set<string>,
+): NodeRect {
+  if (isWrapperKind(node.kind) && !hasPersistedSize(node)) {
+    if (!resolvingWrappers.has(node.id)) {
+      resolvingWrappers.add(node.id)
+      const fit = computeFitBoundsInternal(
+        node,
+        allNodes,
+        padding,
+        measuredSizes,
+        resolvingWrappers,
+      )
+      resolvingWrappers.delete(node.id)
+      return { x: fit.offset.x, y: fit.offset.y, width: fit.width, height: fit.height }
+    }
+    // Invalid cyclic membership: use the conservative kind fallback rather
+    // than recursing forever. Validated definitions never take this branch.
+  }
+
+  const position = effectivePositionInDefinition(node, allNodes)
+  const size = nodeSize(node, measuredSizes)
+  return { x: position.x, y: position.y, width: size.width, height: size.height }
+}
+
+function computeFitBoundsInternal(
   wrapper: WorkflowNode,
   allNodes: WorkflowNode[],
-  padding: number = WRAPPER_DEFAULT_PADDING,
-  measuredSizes?: Map<string, { width: number; height: number }>,
+  padding: number,
+  measuredSizes: Map<string, { width: number; height: number }> | undefined,
+  resolvingWrappers: Set<string>,
 ): FitBounds {
   const innerIds = (wrapper as Record<string, unknown>).nodeIds
   const ids = Array.isArray(innerIds)
@@ -94,7 +152,7 @@ export function computeFitBounds(
   const inner = allNodes.filter((n) => idSet.has(n.id))
 
   if (inner.length === 0) {
-    const pos = wrapper.position ?? { x: 0, y: 0 }
+    const pos = effectivePositionInDefinition(wrapper, allNodes)
     return {
       width: WRAPPER_EMPTY_MIN_WIDTH,
       height: WRAPPER_EMPTY_MIN_HEIGHT,
@@ -106,13 +164,12 @@ export function computeFitBounds(
   let minY = Number.POSITIVE_INFINITY
   let maxX = Number.NEGATIVE_INFINITY
   let maxY = Number.NEGATIVE_INFINITY
-  for (const n of inner) {
-    const p = n.position ?? { x: 0, y: 0 }
-    const size = nodeSize(n, measuredSizes)
-    if (p.x < minX) minX = p.x
-    if (p.y < minY) minY = p.y
-    if (p.x + size.width > maxX) maxX = p.x + size.width
-    if (p.y + size.height > maxY) maxY = p.y + size.height
+  for (const node of inner) {
+    const rect = resolveNodeRect(node, allNodes, padding, measuredSizes, resolvingWrappers)
+    if (rect.x < minX) minX = rect.x
+    if (rect.y < minY) minY = rect.y
+    if (rect.x + rect.width > maxX) maxX = rect.x + rect.width
+    if (rect.y + rect.height > maxY) maxY = rect.y + rect.height
   }
 
   // Extra slack so handles (rendered at -14px outside the node edge per
@@ -131,6 +188,15 @@ export function computeFitBounds(
     y: Math.round(minY - padding - WRAPPER_HEADER_HEIGHT),
   }
   return { width, height, offset }
+}
+
+export function computeFitBounds(
+  wrapper: WorkflowNode,
+  allNodes: WorkflowNode[],
+  padding: number = WRAPPER_DEFAULT_PADDING,
+  measuredSizes?: Map<string, { width: number; height: number }>,
+): FitBounds {
+  return computeFitBoundsInternal(wrapper, allNodes, padding, measuredSizes, new Set([wrapper.id]))
 }
 
 /** Target clearance from each inner-node edge to the wrapper's visible
@@ -208,13 +274,19 @@ export function fitWrapperToInner(
   let minY = Number.POSITIVE_INFINITY
   let maxX = Number.NEGATIVE_INFINITY
   let maxY = Number.NEGATIVE_INFINITY
+  const resolvingWrappers = new Set([target.id])
   for (const n of inner) {
-    const p = n.position ?? { x: 0, y: 0 }
-    const size = nodeSize(n, measuredSizes)
-    if (p.x < minX) minX = p.x
-    if (p.y < minY) minY = p.y
-    if (p.x + size.width > maxX) maxX = p.x + size.width
-    if (p.y + size.height > maxY) maxY = p.y + size.height
+    const rect = resolveNodeRect(
+      n,
+      prevDef.nodes,
+      WRAPPER_DEFAULT_PADDING,
+      measuredSizes,
+      resolvingWrappers,
+    )
+    if (rect.x < minX) minX = rect.x
+    if (rect.y < minY) minY = rect.y
+    if (rect.x + rect.width > maxX) maxX = rect.x + rect.width
+    if (rect.y + rect.height > maxY) maxY = rect.y + rect.height
   }
 
   // Snap each side to exactly inner_extreme ± clearance — bidirectional.
@@ -223,7 +295,7 @@ export function fitWrapperToInner(
   const needRight = maxX + AUTO_FIT_RIGHT_CLEARANCE
   const needBottom = maxY + AUTO_FIT_BOTTOM_CLEARANCE
 
-  const pos = target.position ?? { x: 0, y: 0 }
+  const pos = effectivePositionInDefinition(target, prevDef.nodes)
   const curLeft = pos.x
   const curTop = pos.y
   const curRight = pos.x + sizeRec.width

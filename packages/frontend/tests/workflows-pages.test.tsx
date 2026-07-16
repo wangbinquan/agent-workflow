@@ -31,7 +31,7 @@ import {
   createRouter,
   Outlet,
 } from '@tanstack/react-router'
-import type { Workflow } from '@agent-workflow/shared'
+import type { SaveWorkflowReceipt, Workflow, WorkflowDetail } from '@agent-workflow/shared'
 import { WORKFLOW_NAME_RE, WORKGROUP_NAME_RE } from '@agent-workflow/shared'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import {
@@ -40,6 +40,11 @@ import {
   workflowNameError,
   workflowRenameError,
 } from '../src/lib/workflow-form'
+import {
+  applyWorkflowSaveReceipt,
+  makeWorkflowDeleteRequest,
+  makeWorkflowSaveRequest,
+} from '../src/lib/workflow-save-wire'
 import { zhCN } from '../src/i18n/zh-CN'
 import { enUS } from '../src/i18n/en-US'
 import { HomepageGreeting } from '../src/components/home/HomepageGreeting'
@@ -81,6 +86,10 @@ function wf(name: string, overrides: Partial<Workflow> = {}): Workflow {
     visibility: 'public',
     ...overrides,
   }
+}
+
+function wfDetail(name: string, overrides: Partial<WorkflowDetail> = {}): WorkflowDetail {
+  return { ...wf(name), snapshotHash: 'a'.repeat(64), ...overrides }
 }
 
 interface Recorded {
@@ -137,7 +146,10 @@ function installFetch(
       }
       if (url.includes('/api/users/lookup')) return json([])
       if (url.includes('/api/workflows/import') && method === 'POST') {
-        const ir = opts.importResponse ?? { status: 201, body: wf('imported') }
+        const ir = opts.importResponse ?? {
+          status: 201,
+          body: { outcome: 'created', workflow: wfDetail('imported') },
+        }
         return json(ir.body, ir.status)
       }
       if (url.endsWith('/api/workflows') && method === 'GET') return json(state.workflows)
@@ -147,7 +159,7 @@ function installFetch(
         }
         const b = body as { name: string; description: string; definition: unknown }
         const created = json(
-          wf('created', {
+          wfDetail('created', {
             id: 'wf_created',
             name: b.name,
             description: b.description,
@@ -264,6 +276,68 @@ describe('workflow name rules (pure) — unified with workgroup naming (用户 2
     expect(built.ok).toBe(true)
     if (!built.ok) return
     expect(built.payload.description).toBe('')
+  })
+})
+
+describe('RFC-199 B1 workflow revision wire adapter', () => {
+  test('each save/delete intent gets a canonical fresh ULID and carries the full fence', () => {
+    const snapshot = {
+      name: 'audit-flow',
+      description: 'demo',
+      definition: EMPTY_WORKFLOW_DEFINITION,
+    }
+    const first = makeWorkflowSaveRequest(7, snapshot)
+    const second = makeWorkflowSaveRequest(7, snapshot)
+    const deletion = makeWorkflowDeleteRequest(7)
+
+    expect(first).toMatchObject({ expectedVersion: 7, snapshot })
+    expect(first.clientMutationId).toMatch(/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/)
+    expect(second.clientMutationId).toMatch(/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/)
+    expect(deletion.clientMutationId).toMatch(/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/)
+    expect(
+      new Set([first.clientMutationId, second.clientMutationId, deletion.clientMutationId]).size,
+    ).toBe(3)
+  })
+
+  test('a save receipt updates only editable snapshot and server revision fields', () => {
+    const current = wfDetail('before', {
+      id: 'wf-1',
+      version: 4,
+      ownerUserId: 'owner-1',
+      visibility: 'private',
+    })
+    const receipt: SaveWorkflowReceipt = {
+      clientMutationId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      requestedBaseVersion: 4,
+      revision: {
+        workflowId: 'wf-1',
+        version: 5,
+        snapshotHash: 'b'.repeat(64),
+        updatedAt: 1_730_000_000_000,
+      },
+      snapshot: {
+        name: 'after',
+        description: 'normalized',
+        definition: { ...EMPTY_WORKFLOW_DEFINITION, $schema_version: 4 },
+      },
+      outcome: 'committed',
+    }
+
+    expect(applyWorkflowSaveReceipt(current, receipt)).toMatchObject({
+      id: 'wf-1',
+      name: 'after',
+      description: 'normalized',
+      version: 5,
+      snapshotHash: 'b'.repeat(64),
+      ownerUserId: 'owner-1',
+      visibility: 'private',
+    })
+    expect(() =>
+      applyWorkflowSaveReceipt(current, {
+        ...receipt,
+        revision: { ...receipt.revision, workflowId: 'wf-other' },
+      }),
+    ).toThrow(/different workflow/)
   })
 })
 
@@ -494,8 +568,8 @@ describe('/workflows quick-create dialog', () => {
 
     expect(await screen.findByTestId('workflow-import-result')).toBeTruthy()
     const importCall = state.calls.find((call) => call.url.includes('/api/workflows/import'))
-    expect(importCall?.url).toContain('onConflict=fail')
-    expect(importCall?.body).toBe('name: imported\n')
+    expect(importCall?.url).not.toContain('onConflict')
+    expect(importCall?.body).toEqual({ yamlText: 'name: imported\n', mode: 'fail' })
     await waitFor(() => {
       const gets = state.calls.filter(
         (call) => call.method === 'GET' && call.url.endsWith('/api/workflows'),
@@ -530,11 +604,7 @@ describe('/workflows search validation', () => {
   })
 })
 
-describe('postYaml decodes FLAT daemon error payloads (Codex P2)', () => {
-  // The daemon's errorHandler emits FLAT {ok:false, code, message}. postYaml
-  // used to parse only a nested {error:{...}} shape, degrading EVERY import
-  // failure — including the 409 that drives the overwrite/new prompt — to a
-  // generic `http-<status>`. It now reuses the api client's extractErrorBody.
+describe('postYaml uses the structured RFC-199 import wire', () => {
   test('flat 422 → ApiError carries workflow-name-invalid (was http-422)', async () => {
     installFetch(
       { workflows: [], calls: [] },
@@ -567,10 +637,42 @@ describe('postYaml decodes FLAT daemon error payloads (Codex P2)', () => {
     })
   })
 
+  test('overwrite posts the exact conflict fence and refuses a missing fence', async () => {
+    const state = { workflows: [], calls: [] as Recorded['calls'] }
+    installFetch(state, {
+      importResponse: {
+        status: 200,
+        body: {
+          outcome: 'overwritten',
+          receipt: { outcome: 'committed' },
+        },
+      },
+    })
+    const { postYaml } = await import('../src/routes/workflows')
+    const overwrite = {
+      workflowId: 'wf-existing',
+      expectedVersion: 9,
+      clientMutationId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+    }
+
+    await postYaml('id: wf-existing\n', 'overwrite', overwrite)
+    expect(state.calls.find((call) => call.url.includes('/api/workflows/import'))?.body).toEqual({
+      yamlText: 'id: wf-existing\n',
+      mode: 'overwrite',
+      overwrite,
+    })
+    await expect(postYaml('id: wf-existing\n', 'overwrite')).rejects.toThrow(
+      /requires the conflict revision fence/,
+    )
+  })
+
   test('the import UI routes coded errors through the shared decoders (source lock)', () => {
     const list = readSrc('routes/workflows.tsx')
-    expect(list).toContain('extractErrorBody(')
+    expect(list).toContain("api.post<ImportWorkflowResult>('/api/workflows/import', body)")
     expect(list).toContain('<WorkflowImportDialog')
+    expect(list).not.toContain('extractErrorBody(')
+    expect(list).not.toContain('onConflict')
+    expect(list).not.toContain("'content-type': 'text/yaml'")
     expect(list).not.toContain('window.prompt')
   })
 })
@@ -597,22 +699,19 @@ describe('/workflows/new removal wiring', () => {
 
   test('editor separates initial failure from stale refetch failure (stuck-loading fix)', () => {
     const edit = readSrc('routes/workflows.edit.tsx')
-    const initialGuardIdx = edit.indexOf(
-      'if (draft === null || loadedWorkflowIdRef.current !== id)',
-    )
+    const initialGuardIdx = edit.indexOf('if (query.data === undefined)')
     const initialErrorIdx = edit.indexOf(
       'if (query.error !== null && query.error !== undefined)',
       initialGuardIdx,
     )
-    const editorReturnIdx = edit.indexOf('<div className="page page--editor">')
-    const staleErrorIdx = edit.indexOf(
-      'query.error !== null && query.error !== undefined &&',
-      editorReturnIdx,
-    )
+    const loadedAdapterIdx = edit.indexOf('<WorkflowEditorLoaded')
+    const editorReturnIdx = edit.indexOf('<div className="page page--editor">', loadedAdapterIdx)
+    const staleErrorIdx = edit.indexOf('const backgroundQueryError =', loadedAdapterIdx)
     expect(initialGuardIdx).toBeGreaterThan(0)
     expect(initialErrorIdx).toBeGreaterThan(initialGuardIdx)
-    expect(editorReturnIdx).toBeGreaterThan(initialErrorIdx)
-    expect(staleErrorIdx).toBeGreaterThan(editorReturnIdx)
+    expect(loadedAdapterIdx).toBeGreaterThan(initialErrorIdx)
+    expect(editorReturnIdx).toBeGreaterThan(loadedAdapterIdx)
+    expect(staleErrorIdx).toBeGreaterThan(loadedAdapterIdx)
     expect(edit).toContain('<PageHeader title={id} />')
     expect(edit).toContain("<LoadingState label={t('editor.loadingWorkflow')} />")
     expect(edit).toContain('error={query.error}')
@@ -622,12 +721,33 @@ describe('/workflows/new removal wiring', () => {
 
   test('editor composes shared page header and feedback without changing canvas ownership', () => {
     const edit = readSrc('routes/workflows.edit.tsx')
-    expect(edit).toContain('title={name || id}')
+    expect(edit).toContain('title={controller.state.local.name || workflowId}')
     expect(edit).toContain('actions={headerActions}')
-    expect(edit).toContain('<ErrorBanner error={save.error} />')
+    expect(edit).toContain('<WorkflowDraftStatus')
     expect(edit).toContain('<ErrorBanner error={validate.error} />')
-    expect(edit).toContain('<NoticeBanner')
     expect(edit).toContain('<WorkflowCanvas')
+  })
+
+  test('editor delegates the composite draft/WS/query lifecycle and fences DELETE', () => {
+    const edit = readSrc('routes/workflows.edit.tsx')
+    expect(edit).toContain('useQuery<WorkflowDetail>')
+    expect(edit).toContain('useWorkflowEditorDraft({')
+    expect(edit).toContain('initial,')
+    expect(edit).toContain('observeRemoteDetail(observedDetail)')
+    expect(edit).toContain('onFrame: controller.remoteFrame')
+    expect(edit).toContain('inFlightMutationId: controller.inFlightMutationId')
+    expect(edit).toContain('controller.commit({ ...controller.state.local, definition })')
+    expect(edit).toContain('<UnsavedChangesGuard dirtyRef={unsafeNavigationRef} />')
+    expect(edit).toContain('makeWorkflowDeleteRequest(expectedVersion)')
+    expect(edit).toContain('confirmationKey={deleteConfirmationKey}')
+    expect(edit).toContain('del.mutateAsync({ expectedVersion: deleteExpectedVersion })')
+    expect(edit).toContain('<ErrorBanner error={del.error} />')
+    expect(edit).toContain('api.deleteJson<void>')
+    expect(edit).not.toContain('makeWorkflowSaveRequest')
+    expect(edit).not.toContain('applyWorkflowSaveReceipt')
+    expect(edit).not.toContain('setDraft(')
+    expect(edit).not.toContain('renameSave')
+    expect(edit).not.toContain('api.delete(`/api/workflows/${encodeURIComponent(id)}`)')
   })
 
   test('the editor route file only serves /workflows/$id', () => {
@@ -641,6 +761,15 @@ describe('/workflows/new removal wiring', () => {
     const ob = readSrc('components/Onboarding.tsx')
     expect(ob).not.toContain('/workflows/new')
     expect(ob).toContain('to="/workflows"')
+  })
+
+  test('Onboarding demo import shares the structured JSON writer without a raw fallback', () => {
+    const ob = readSrc('components/Onboarding.tsx')
+    expect(ob).toContain("api.post<ImportWorkflowResult>('/api/workflows/import'")
+    expect(ob).toContain("mode: 'new'")
+    expect(ob).not.toContain('getBaseUrl')
+    expect(ob).not.toContain('onConflict')
+    expect(ob).not.toContain("'content-type': 'text/yaml'")
   })
 
   test('BOTH list pages compose the shared QuickCreateDialog (用户 2026-07-10 拍板抽公共组件)', () => {
@@ -687,7 +816,7 @@ describe('/workflows/new removal wiring', () => {
     const edit = readSrc('routes/workflows.edit.tsx')
     const hits = edit.match(/workflowRenameError\(/g) ?? []
     expect(hits.length).toBeGreaterThanOrEqual(1)
-    expect(edit).toContain("import { workflowRenameError } from '@/lib/workflow-form'")
+    expect(edit).toContain('workflowRenameError } from')
   })
 
   test('editor edits name/description via a RenameDialog, not inline fields (用户 2026-07-13)', () => {

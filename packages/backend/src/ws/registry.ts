@@ -68,6 +68,7 @@ import {
   taskBroadcaster,
   tasksListBroadcaster,
   workflowsBroadcaster,
+  type WorkflowsBroadcastContext,
 } from './broadcaster'
 
 const log = createLogger('ws.registry')
@@ -96,6 +97,17 @@ export interface ChannelMessageByKind {
   memories: MemoryWsMessage
   'memory-distill-jobs': MemoryDistillJobWsMessage
   'scheduled-tasks': ScheduledTaskWsMessage
+}
+
+/** Process-local metadata delivered beside frames; never part of JSON wire. */
+export interface ChannelBroadcastContextByKind {
+  task: never
+  'tasks-list': never
+  workflows: WorkflowsBroadcastContext
+  'repo-import': never
+  memories: never
+  'memory-distill-jobs': never
+  'scheduled-tasks': never
 }
 
 export type WsChannelKind = keyof ChannelParamsByKind
@@ -137,8 +149,8 @@ export interface FrameGateCtx {
 }
 
 /** Structural view of a TypedBroadcaster — gatedSubscribe only subscribes. */
-export interface WsBroadcasterLike<M> {
-  subscribe(channel: string, listener: (msg: M) => void): () => void
+export interface WsBroadcasterLike<M, C = never> {
+  subscribe(channel: string, listener: (msg: M, context: C | undefined) => void): () => void
 }
 
 export interface ChannelSpec<K extends WsChannelKind, M> {
@@ -147,7 +159,7 @@ export interface ChannelSpec<K extends WsChannelKind, M> {
   helloName: (p: ChannelParamsByKind[K]) => string
   pathRe: RegExp
   parse: (m: RegExpMatchArray, url: URL) => ChannelParamsByKind[K] | null
-  broadcaster: WsBroadcasterLike<M>
+  broadcaster: WsBroadcasterLike<M, ChannelBroadcastContextByKind[K]>
   /** Broadcaster channel key — always delegates to the broadcaster.ts constants so producers can never drift. */
   channelKeyOf: (p: ChannelParamsByKind[K]) => string
   /** (a) whole-connection gate at upgrade time (task / memory-distill-jobs). */
@@ -157,7 +169,11 @@ export interface ChannelSpec<K extends WsChannelKind, M> {
     p: ChannelParamsByKind[K],
   ) => Promise<true | WsUpgradeRefusal>
   /** (b) per-frame filter (tasks-list / workflows / memories). */
-  frameGate?: (ctx: FrameGateCtx, msg: M) => Promise<boolean>
+  frameGate?: (
+    ctx: FrameGateCtx,
+    msg: M,
+    context?: ChannelBroadcastContextByKind[K],
+  ) => Promise<boolean>
   /**
    * Send synchronously to admins without consulting frameGate. Matches the
    * pre-registry code exactly: true for workflows/memories (their handlers
@@ -220,6 +236,28 @@ async function cachedWorkflowVisible(ctx: FrameGateCtx, workflowId: string): Pro
     rows.length === 0 ? false : await canViewResource(ctx.db, ctx.actor, 'workflow', rows[0]!)
   ctx.cache.set(key, visible)
   return visible
+}
+
+/**
+ * Resolve a deleted workflow against the audience captured before DELETE.
+ * `null` means no matching out-of-band context was supplied, so legacy direct
+ * broadcaster callers may fall back to the connection's old visibility cache.
+ */
+function deletedWorkflowAudienceVisible(
+  actor: Actor,
+  workflowId: string,
+  context: WorkflowsBroadcastContext | undefined,
+): boolean | null {
+  if (
+    context === undefined ||
+    context.kind !== 'workflow.deleted-audience' ||
+    context.workflowId !== workflowId
+  ) {
+    return null
+  }
+  if (context.visibility === 'public') return true
+  if (context.ownerUserId === actor.user.id) return true
+  return context.grantedUserIds.has(actor.user.id)
 }
 
 /**
@@ -351,10 +389,11 @@ export const WS_CHANNELS: WsChannelRegistry = {
     //   - 'workflow.acl.updated': bust FIRST, then gate — the ACL just
     //     changed, so a connection granted access mid-stream receives this
     //     very frame (and subsequent updates) with fresh visibility.
-    //   - 'workflow.deleted': the row is already gone; read the OLD cached
-    //     visibility (the client only renders workflows it could see), then
-    //     bust. No cache entry ⇒ drop (admins were short-circuited above).
-    frameGate: async (ctx, msg) => {
+    //   - 'workflow.deleted': the row is already gone. Prefer the transaction-
+    //     captured process-local audience so cold owner/grantee/public sockets
+    //     receive it; direct legacy/test broadcasts without context retain the
+    //     OLD-cache fallback. Either path busts the cache afterward.
+    frameGate: async (ctx, msg, deliveryContext) => {
       if (msg.type === 'workflow.acl.updated') {
         ctx.cache.delete(`wf:${msg.workflowId}`)
         return cachedWorkflowVisible(ctx, msg.workflowId)
@@ -362,6 +401,12 @@ export const WS_CHANNELS: WsChannelRegistry = {
       if (msg.type === 'workflow.deleted') {
         const cached = ctx.cache.get(`wf:${msg.workflowId}`)
         ctx.cache.delete(`wf:${msg.workflowId}`)
+        const visibleFromAudience = deletedWorkflowAudienceVisible(
+          ctx.actor,
+          msg.workflowId,
+          deliveryContext,
+        )
+        if (visibleFromAudience !== null) return visibleFromAudience
         return cached === true
       }
       return cachedWorkflowVisible(ctx, msg.workflowId)
@@ -470,13 +515,17 @@ interface ErasedChannelSpec {
   pathRe: RegExp
   parse: (m: RegExpMatchArray, url: URL) => AnyChannelParams | null
   channelKeyOf: (p: AnyChannelParams) => string
-  broadcaster: WsBroadcasterLike<AnyChannelMessage>
+  broadcaster: WsBroadcasterLike<AnyChannelMessage, AnyBroadcastContext>
   upgradeGate?: (
     db: DbClient,
     actor: Actor,
     p: AnyChannelParams,
   ) => Promise<true | WsUpgradeRefusal>
-  frameGate?: (ctx: FrameGateCtx, msg: AnyChannelMessage) => Promise<boolean>
+  frameGate?: (
+    ctx: FrameGateCtx,
+    msg: AnyChannelMessage,
+    context?: AnyBroadcastContext,
+  ) => Promise<boolean>
   adminShortCircuit?: boolean
   onOpenExtra?: (
     ws: ServerWebSocket<WsConnectionData>,
@@ -484,6 +533,8 @@ interface ErasedChannelSpec {
     db: DbClient,
   ) => Promise<void>
 }
+
+type AnyBroadcastContext = ChannelBroadcastContextByKind[WsChannelKind]
 
 function erasedSpecOf(kind: WsChannelKind): ErasedChannelSpec {
   return WS_CHANNELS[kind] as unknown as ErasedChannelSpec
@@ -532,7 +583,7 @@ export function gatedSubscribe(
 ): void {
   const erased = spec as unknown as ErasedChannelSpec
   const channelKey = erased.channelKeyOf(params)
-  ws.data.unsubscribe = erased.broadcaster.subscribe(channelKey, (msg) => {
+  ws.data.unsubscribe = erased.broadcaster.subscribe(channelKey, (msg, context) => {
     if (erased.adminShortCircuit === true && ws.data.actor.user.role === 'admin') {
       sendJson(ws, msg)
       return
@@ -544,7 +595,7 @@ export function gatedSubscribe(
     // Fire-and-forget the async gate; a throwing gate (DB blip) falls back
     // to NOT sending — same safer-default as the unknown-shape drops.
     erased
-      .frameGate({ db, actor: ws.data.actor, cache: ws.data.visibilityCache }, msg)
+      .frameGate({ db, actor: ws.data.actor, cache: ws.data.visibilityCache }, msg, context)
       .then((visible) => {
         if (visible) sendJson(ws, msg)
       })

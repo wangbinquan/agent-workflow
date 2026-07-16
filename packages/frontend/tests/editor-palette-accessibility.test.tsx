@@ -12,6 +12,7 @@ import {
   viewportCenter,
 } from '../src/components/canvas/WorkflowCanvas'
 import i18n from '../src/i18n'
+import { PALETTE_MIME, deserialize } from '../src/components/canvas/nodePalette'
 
 const EMPTY_DEFINITION: WorkflowDefinition = {
   $schema_version: 3,
@@ -26,6 +27,36 @@ afterEach(() => {
 })
 
 describe('accessible workflow palette activation', () => {
+  test('canvas history shortcuts work while native text-field undo remains untouched', () => {
+    const onUndo = vi.fn()
+    const onRedo = vi.fn()
+    const { container } = render(
+      <I18nextProvider i18n={i18n}>
+        <WorkflowCanvas
+          definition={EMPTY_DEFINITION}
+          canUndo
+          canRedo
+          onUndo={onUndo}
+          onRedo={onRedo}
+        />
+      </I18nextProvider>,
+    )
+    const canvas = container.querySelector<HTMLElement>('.workflow-canvas')!
+    const textInput = document.createElement('input')
+    canvas.append(textInput)
+
+    fireEvent.keyDown(textInput, { key: 'z', ctrlKey: true })
+    expect(onUndo).not.toHaveBeenCalled()
+    expect(onRedo).not.toHaveBeenCalled()
+
+    fireEvent.keyDown(canvas, { key: 'z', ctrlKey: true })
+    expect(onUndo).toHaveBeenCalledTimes(1)
+    fireEvent.keyDown(canvas, { key: 'z', metaKey: true, shiftKey: true })
+    expect(onRedo).toHaveBeenCalledTimes(1)
+    fireEvent.keyDown(canvas, { key: 'y', ctrlKey: true })
+    expect(onRedo).toHaveBeenCalledTimes(2)
+  })
+
   test('a real button preserves HTML5 drag and click inserts exactly once', () => {
     const onAdd = vi.fn()
     const { container } = render(
@@ -39,9 +70,24 @@ describe('accessible workflow palette activation', () => {
     expect(item?.getAttribute('draggable')).toBe('true')
 
     const setData = vi.fn()
-    const dataTransfer = { setData, effectAllowed: 'none' }
-    fireEvent.dragStart(item!, { dataTransfer })
+    const setEffectAllowed = vi.fn()
+    const dataTransfer = {
+      setData,
+      get effectAllowed() {
+        return 'none'
+      },
+      set effectAllowed(value: string) {
+        setEffectAllowed(value)
+      },
+    }
+    const dragStart = new DragEvent('dragstart', { bubbles: true, cancelable: true })
+    Object.defineProperty(dragStart, 'dataTransfer', { value: dataTransfer })
+    fireEvent(item!, dragStart)
     expect(setData).toHaveBeenCalledTimes(2)
+    const calls = setData.mock.calls as Array<[string, string]>
+    expect(calls.map(([mime]) => mime)).toEqual([PALETTE_MIME, 'text/plain'])
+    expect(deserialize(calls[0]![1])).toEqual(deserialize(calls[1]![1]))
+    expect(setEffectAllowed).toHaveBeenCalledWith('copy')
     expect(onAdd).not.toHaveBeenCalled()
 
     fireEvent.click(item!)

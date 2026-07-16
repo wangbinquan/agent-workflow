@@ -15,10 +15,16 @@ import {
 import { useTranslation } from 'react-i18next'
 import { Field, TextArea } from '@/components/Form'
 import { Segmented } from '@/components/Segmented'
+import {
+  atomicNodeInspectorChange,
+  continuousNodeInspectorChange,
+  InspectorHistoryBoundary,
+  type InspectorChangeMeta,
+} from './historyMeta'
 import { NodeTitleField } from './NodeTitleField'
 import type { EditProps } from './types'
 
-export function CrossClarifyEdit({ node, definition, onPatch }: EditProps) {
+export function CrossClarifyEdit({ node, definition, onPatch, onHistoryBoundary }: EditProps) {
   const { t } = useTranslation()
   const rec = node as unknown as Record<string, unknown>
   const description = typeof rec.description === 'string' ? rec.description : ''
@@ -43,22 +49,30 @@ export function CrossClarifyEdit({ node, definition, onPatch }: EditProps) {
   })
   const inLoop = enclosingLoop !== undefined
 
-  function patchCrossClarify(delta: Record<string, unknown>): void {
-    onPatch({ ...(node as Record<string, unknown>), ...delta } as unknown as WorkflowNode)
+  function patchCrossClarify(delta: Record<string, unknown>, meta: InspectorChangeMeta): void {
+    onPatch({ ...(node as Record<string, unknown>), ...delta } as unknown as WorkflowNode, meta)
   }
+
+  const descriptionMeta = continuousNodeInspectorChange(
+    node.id,
+    'description',
+    t('inspector.fieldClarifyDescription'),
+  )
 
   return (
     <div className="form-grid" data-testid="cross-clarify-inspector">
-      <NodeTitleField node={node} onPatch={onPatch} />
+      <NodeTitleField node={node} onPatch={onPatch} onHistoryBoundary={onHistoryBoundary} />
       <Field
         label={t('inspector.fieldClarifyDescription')}
         hint={t('inspector.fieldClarifyDescriptionHint')}
       >
-        <TextArea
-          value={description}
-          rows={2}
-          onChange={(v) => patchCrossClarify({ description: v })}
-        />
+        <InspectorHistoryBoundary meta={descriptionMeta} onBoundary={onHistoryBoundary}>
+          <TextArea
+            value={description}
+            rows={2}
+            onChange={(v) => patchCrossClarify({ description: v }, descriptionMeta)}
+          />
+        </InspectorHistoryBoundary>
       </Field>
       <Field label={t('crossClarify.inspector.fieldLinkedQuestioner')}>
         {linkedQuestionerId !== null ? (
@@ -115,7 +129,16 @@ export function CrossClarifyEdit({ node, definition, onPatch }: EditProps) {
       >
         <Segmented<'isolated' | 'inline'>
           value={sessionModeForQuestioner}
-          onChange={(mode) => patchCrossClarify({ sessionModeForQuestioner: mode })}
+          onChange={(mode) =>
+            patchCrossClarify(
+              { sessionModeForQuestioner: mode },
+              atomicNodeInspectorChange(
+                node.id,
+                'sessionModeForQuestioner',
+                t('crossClarify.inspector.sessionModeForQuestioner'),
+              ),
+            )
+          }
           allowActiveReselect
           options={(['isolated', 'inline'] as const).map((mode) => ({
             value: mode,

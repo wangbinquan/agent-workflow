@@ -3,35 +3,39 @@
 // POST   /api/workflows                create
 // PUT    /api/workflows/:id            update (version+1)
 // DELETE /api/workflows/:id            delete (refuses when running task references)
-// POST   /api/workflows/:id/validate   M1 stub returning { ok:true, issues:[] }
-//
-// YAML import/export endpoints land in P-4-08.
+// POST   /api/workflows/:id/validate   exact-revision static validation receipt
+// GET    /api/workflows/:id/export     exact-revision YAML export
 
 import {
   CreateWorkflowSchema,
+  DeleteWorkflowSchema,
+  ImportWorkflowRequestSchema,
   UpdateWorkflowSchema,
-  WorkflowNameSchema,
+  WorkflowExactRevisionSchema,
+  WorkflowValidationRequestSchema,
 } from '@agent-workflow/shared'
+import type { WorkflowDetail, WorkflowExactRevision } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
-import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
-import { assertNotBuiltin, excludeBuiltinWorkflows } from '@/services/systemResources'
-import {
-  assertNewRefsUsable,
-  diffNewNames,
-  extractWorkflowAgentNames,
-} from '@/services/resourceRefs'
+import { canViewResource, filterVisibleRows } from '@/services/resourceAcl'
+import { excludeBuiltinWorkflows } from '@/services/systemResources'
+import { assertNewRefsUsable, extractWorkflowAgentNames } from '@/services/resourceRefs'
 import {
   createWorkflow,
   deleteWorkflow,
   getWorkflow,
   listWorkflows,
   updateWorkflow,
-  validateWorkflow,
+  workflowRevisionOf,
 } from '@/services/workflow'
-import { exportWorkflowYaml, importWorkflowYaml } from '@/services/workflow.yaml'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import {
+  loadWorkflowValidationContext,
+  validateWorkflowDefinition,
+  workflowValidationContextHashOf,
+} from '@/services/workflow.validator'
+import { importWorkflowYaml, stringifyWorkflowYaml } from '@/services/workflow.yaml'
+import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { mountAclEndpoints } from './resourceAcl'
 
 export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
@@ -83,56 +87,76 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
     const id = c.req.param('id')
     const parsed = UpdateWorkflowSchema.safeParse(await safeJson(c.req.raw))
     if (!parsed.success) {
-      throw new ValidationError('workflow-invalid', 'invalid workflow patch', {
+      throw new ValidationError('workflow-invalid', 'invalid workflow save payload', {
         issues: parsed.error.issues,
       })
     }
     const actor = actorOf(c)
-    const existing = await loadVisibleWorkflow(actor, id)
-    assertNotBuiltin('workflow', existing) // RFC-104: built-ins are read-only
-    await requireResourceOwner(deps.db, actor, 'workflow', existing)
-    // 2026-07-10 naming unification: renames follow the workgroup slug rules,
-    // but ONLY on change — auto-save PUTs echoing a stored legacy free-form
-    // name keep working (grandfather; see WorkflowNameSchema doc).
-    if (parsed.data.name !== undefined && parsed.data.name !== existing.name) {
-      const nameOk = WorkflowNameSchema.safeParse(parsed.data.name)
-      if (!nameOk.success) {
-        throw new ValidationError(
-          'workflow-name-invalid',
-          'workflow name must start with [a-z0-9] and contain only [a-z0-9_-] (max 128 chars)',
-          { issues: nameOk.error.issues },
-        )
-      }
-    }
-    // RFC-099 (D15): only NEWLY-added agent references are checked.
-    if (parsed.data.definition !== undefined) {
-      const newNames = diffNewNames(
-        extractWorkflowAgentNames(existing.definition),
-        extractWorkflowAgentNames(parsed.data.definition),
-      )
-      await assertNewRefsUsable(deps.db, actor, [{ type: 'agent', names: newNames }])
-    }
-    return c.json(await updateWorkflow(deps.db, id, parsed.data))
+    return c.json(await updateWorkflow(deps.db, id, parsed.data, { kind: 'actor', actor }))
   })
 
   app.delete('/api/workflows/:id', async (c) => {
+    const parsed = DeleteWorkflowSchema.safeParse(await safeJson(c.req.raw))
+    if (!parsed.success) {
+      throw new ValidationError('workflow-invalid', 'invalid workflow delete payload', {
+        issues: parsed.error.issues,
+      })
+    }
     const actor = actorOf(c)
-    const existing = await loadVisibleWorkflow(actor, c.req.param('id'))
-    assertNotBuiltin('workflow', existing) // RFC-104: built-ins are read-only
-    await requireResourceOwner(deps.db, actor, 'workflow', existing)
-    await deleteWorkflow(deps.db, c.req.param('id'))
+    await deleteWorkflow(deps.db, c.req.param('id'), parsed.data, { kind: 'actor', actor })
     return c.body(null, 204)
   })
 
   app.post('/api/workflows/:id/validate', async (c) => {
-    await loadVisibleWorkflow(actorOf(c), c.req.param('id'))
-    return c.json(await validateWorkflow(deps.db, c.req.param('id')))
+    // ACL, revision guard and validation all consume this one immutable detail.
+    // In particular, do not replace this with validateWorkflowById after the
+    // guard: that would re-read latest and admit a check-vN/validate-vN+1 race.
+    const workflow = await loadVisibleWorkflow(actorOf(c), c.req.param('id'))
+    const parsed = WorkflowValidationRequestSchema.safeParse(await safeJson(c.req.raw))
+    if (!parsed.success) {
+      throw new ValidationError(
+        'workflow-validation-invalid',
+        'invalid exact workflow validation payload',
+        { issues: parsed.error.issues },
+      )
+    }
+    const revision = assertExactWorkflowRevision(workflow, parsed.data, 'workflow-validation-stale')
+    await deps.workflowExactOperationHook?.({ operation: 'validate', revision })
+    const context = await loadWorkflowValidationContext(deps.db)
+    const result = validateWorkflowDefinition(workflow.definition, context)
+    return c.json({
+      revision,
+      validationContextHash: workflowValidationContextHashOf(context),
+      validatedAt: Date.now(),
+      ...result,
+    })
   })
 
   // P-4-08: YAML export / import.
   app.get('/api/workflows/:id/export', async (c) => {
-    await loadVisibleWorkflow(actorOf(c), c.req.param('id'))
-    const yaml = await exportWorkflowYaml(deps.db, c.req.param('id'))
+    // Capture once: ACL, exact-revision guard and YAML bytes are all derived
+    // from this same immutable detail. Never re-read latest after the guard.
+    const workflow = await loadVisibleWorkflow(actorOf(c), c.req.param('id'))
+    const query = Object.fromEntries(
+      Object.entries(c.req.queries()).map(([key, values]) => [
+        key,
+        values.length === 1 ? values[0] : values,
+      ]),
+    )
+    const parsed = WorkflowExactRevisionSchema.safeParse({
+      ...query,
+      expectedVersion: parseExactPositiveInteger(
+        typeof query.expectedVersion === 'string' ? query.expectedVersion : undefined,
+      ),
+    })
+    if (!parsed.success) {
+      throw new ValidationError('workflow-export-invalid', 'invalid exact workflow export query', {
+        issues: parsed.error.issues,
+      })
+    }
+    const revision = assertExactWorkflowRevision(workflow, parsed.data, 'workflow-version-mismatch')
+    await deps.workflowExactOperationHook?.({ operation: 'export', revision })
+    const yaml = stringifyWorkflowYaml(workflow)
     return c.body(yaml, 200, {
       'content-type': 'application/yaml; charset=utf-8',
       'content-disposition': `attachment; filename="${c.req.param('id')}.yaml"`,
@@ -140,17 +164,15 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
   })
 
   app.post('/api/workflows/import', async (c) => {
-    const body = await c.req.text()
-    if (body.length === 0) {
-      throw new ValidationError('workflow-yaml-empty', 'empty YAML body')
+    const parsed = ImportWorkflowRequestSchema.safeParse(await safeJson(c.req.raw))
+    if (!parsed.success) {
+      throw new ValidationError('workflow-import-invalid', 'invalid workflow import payload', {
+        issues: parsed.error.issues,
+      })
     }
-    const onConflictRaw = c.req.query('onConflict')
-    const onConflict =
-      onConflictRaw === 'overwrite' || onConflictRaw === 'new' || onConflictRaw === 'fail'
-        ? onConflictRaw
-        : 'fail'
-    const wf = await importWorkflowYaml(deps.db, body, { onConflict, actor: actorOf(c) })
-    return c.json(wf, 201)
+    const actor = actorOf(c)
+    const result = await importWorkflowYaml(deps.db, parsed.data, { kind: 'actor', actor })
+    return c.json(result, result.outcome === 'created' ? 201 : 200)
   })
 
   // RFC-099 — GET/PUT /api/workflows/:id/acl
@@ -168,4 +190,32 @@ async function safeJson(req: Request): Promise<unknown> {
   } catch {
     return {}
   }
+}
+
+function parseExactPositiveInteger(raw: string | undefined): number | undefined {
+  if (raw === undefined || !/^[1-9][0-9]*$/.test(raw)) return undefined
+  const value = Number(raw)
+  return Number.isSafeInteger(value) ? value : undefined
+}
+
+function assertExactWorkflowRevision(
+  workflow: WorkflowDetail,
+  expected: WorkflowExactRevision,
+  code: 'workflow-validation-stale' | 'workflow-version-mismatch',
+) {
+  const current = workflowRevisionOf(workflow)
+  if (
+    current.version !== expected.expectedVersion ||
+    current.snapshotHash !== expected.expectedSnapshotHash
+  ) {
+    throw new ConflictError(
+      code,
+      `workflow '${workflow.id}' does not match the requested revision`,
+      {
+        expected,
+        current,
+      },
+    )
+  }
+  return current
 }

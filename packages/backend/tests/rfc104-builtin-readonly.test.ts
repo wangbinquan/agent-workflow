@@ -15,6 +15,7 @@
 // DB-level "≤1 built-in per name" guarantee that de-ambiguates fusionWorkflowId.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import type { WorkflowDetail } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -84,6 +85,12 @@ async function builtinWorkflowId(db: DbClient): Promise<string> {
 async function expect403Builtin(res: Response): Promise<void> {
   expect(res.status).toBe(403)
   expect(JSON.stringify(await res.json())).toContain('builtin-readonly')
+}
+
+async function workflowDetail(app: Hono, id: string): Promise<WorkflowDetail> {
+  const res = await api(app, `/api/workflows/${id}`)
+  expect(res.status).toBe(200)
+  return (await res.json()) as WorkflowDetail
 }
 
 /** Insert a task row whose workflow is the built-in (mirrors task-collab-launch). */
@@ -180,14 +187,28 @@ describe('RFC-104 — route guards refuse mutating a built-in (even as admin)', 
     const { db, app } = buildApp()
     await seedFusionResources(db)
     const id = await builtinWorkflowId(db)
+    const workflow = await workflowDetail(app, id)
 
     await expect403Builtin(
       await api(app, `/api/workflows/${id}`, {
         method: 'PUT',
-        body: JSON.stringify({ description: 'hijack' }),
+        body: JSON.stringify({
+          expectedVersion: workflow.version,
+          clientMutationId: ulid(),
+          snapshot: {
+            name: workflow.name,
+            description: 'hijack',
+            definition: workflow.definition,
+          },
+        }),
       }),
     )
-    await expect403Builtin(await api(app, `/api/workflows/${id}`, { method: 'DELETE' }))
+    await expect403Builtin(
+      await api(app, `/api/workflows/${id}`, {
+        method: 'DELETE',
+        body: JSON.stringify({ expectedVersion: workflow.version, clientMutationId: ulid() }),
+      }),
+    )
     expect(db.select().from(workflows).where(eq(workflows.id, id)).all()[0]?.builtin).toBe(true)
   })
 
@@ -236,12 +257,25 @@ describe('RFC-104 — route guards refuse mutating a built-in (even as admin)', 
     await seedFusionResources(db)
     const id = await builtinWorkflowId(db)
 
-    const yaml = await (await api(app, `/api/workflows/${id}/export`)).text()
+    const workflow = await workflowDetail(app, id)
+    const query = new URLSearchParams({
+      expectedVersion: String(workflow.version),
+      expectedSnapshotHash: workflow.snapshotHash,
+    })
+    const yaml = await (await api(app, `/api/workflows/${id}/export?${query}`)).text()
     expect(yaml.length).toBeGreaterThan(0)
-    const res = await api(app, '/api/workflows/import?onConflict=overwrite', {
+    const res = await api(app, '/api/workflows/import', {
       method: 'POST',
-      headers: { 'content-type': 'application/yaml' },
-      body: yaml,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        yamlText: yaml,
+        mode: 'overwrite',
+        overwrite: {
+          workflowId: id,
+          expectedVersion: workflow.version,
+          clientMutationId: ulid(),
+        },
+      }),
     })
     await expect403Builtin(res)
   })

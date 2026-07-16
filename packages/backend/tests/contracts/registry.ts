@@ -21,7 +21,13 @@
 // existing entry is non-breaking.
 
 import { z } from 'zod'
-import { ErrorResponseSchema, OverviewResponseSchema } from '@agent-workflow/shared'
+import {
+  ErrorResponseSchema,
+  ImportWorkflowResultSchema,
+  OverviewResponseSchema,
+  WorkflowDetailSchema,
+  WorkflowValidationReceiptSchema,
+} from '@agent-workflow/shared'
 import type { ContractHarness } from './harness'
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
@@ -213,15 +219,50 @@ export const ENDPOINTS: EndpointSpec[] = [
     path: '/api/workflows/:id',
     happy: {
       pathParams: (h) => ({ id: h.fixtures.workflowId }),
-      schema: z.object({ workflow: z.any() }).passthrough(),
+      schema: WorkflowDetailSchema,
     },
   },
-  { method: 'POST', path: '/api/workflows' },
+  {
+    method: 'POST',
+    path: '/api/workflows',
+    happy: {
+      body: {
+        name: 'contract-created-workflow',
+        description: '',
+        definition: { $schema_version: 4, inputs: [], nodes: [], edges: [] },
+      },
+      status: 201,
+      schema: WorkflowDetailSchema,
+    },
+  },
   { method: 'PUT', path: '/api/workflows/:id' },
   { method: 'DELETE', path: '/api/workflows/:id' },
-  { method: 'POST', path: '/api/workflows/:id/validate' },
+  {
+    method: 'POST',
+    path: '/api/workflows/:id/validate',
+    happy: {
+      pathParams: (h) => ({ id: h.fixtures.workflowId }),
+      body: (h: ContractHarness) => ({
+        expectedVersion: h.fixtures.workflowVersion,
+        expectedSnapshotHash: h.fixtures.workflowSnapshotHash,
+      }),
+      schema: WorkflowValidationReceiptSchema,
+    },
+  },
   { method: 'GET', path: '/api/workflows/:id/export' },
-  { method: 'POST', path: '/api/workflows/import' },
+  {
+    method: 'POST',
+    path: '/api/workflows/import',
+    happy: {
+      body: {
+        mode: 'new',
+        yamlText:
+          "name: contract-imported-workflow\ndescription: ''\ndefinition:\n  $schema_version: 4\n  inputs: []\n  nodes: []\n  edges: []\n",
+      },
+      status: 201,
+      schema: ImportWorkflowResultSchema,
+    },
+  },
 
   // ---- workgroups (RFC-164) ----
   {

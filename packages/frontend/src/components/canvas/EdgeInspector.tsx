@@ -11,11 +11,19 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Field } from '@/components/Form'
 import { applyDisconnectForReviewOutput } from './connectionSync'
+import {
+  atomicEdgeInspectorChange,
+  blurInspectorChange,
+  continuousEdgeInspectorChange,
+  type InspectorChangeMeta,
+} from './inspector/historyMeta'
+
+export type { InspectorChangeMeta } from './inspector/historyMeta'
 
 interface Props {
   edge: WorkflowEdge
   definition: WorkflowDefinition
-  onChange: (next: WorkflowDefinition) => void
+  onChange: (next: WorkflowDefinition, meta: InspectorChangeMeta) => void
   onClose: () => void
 }
 
@@ -31,22 +39,31 @@ export function EdgeInspector({ edge, definition, onChange, onClose }: Props) {
   }, [edge.id, edge.target.portName])
 
   function commit() {
+    const meta = continuousEdgeInspectorChange(
+      edge.id,
+      'target.portName',
+      t('inspector.edgePortNameLabel'),
+    )
     const trimmed = draftPort.trim()
     if (trimmed === '' || trimmed === edge.target.portName) {
       setConflict(null)
+      onChange(definition, blurInspectorChange(meta))
       return
     }
     if (hasConflict(definition, edge, trimmed)) {
       setConflict(t('inspector.edgeConflictMsg'))
+      onChange(definition, blurInspectorChange(meta))
       return
     }
     setConflict(null)
-    onChange({
+    const next = {
       ...definition,
       edges: definition.edges.map((e) =>
         e.id === edge.id ? { ...e, target: { ...e.target, portName: trimmed } } : e,
       ),
-    })
+    }
+    onChange(next, meta)
+    onChange(next, blurInspectorChange(meta))
   }
 
   function remove() {
@@ -61,7 +78,7 @@ export function EdgeInspector({ edge, definition, onChange, onClose }: Props) {
       { ...definition, edges: definition.edges.filter((e) => e.id !== edge.id) },
       [edge],
     )
-    onChange(next)
+    onChange(next, atomicEdgeInspectorChange(edge.id, 'delete', t('inspector.edgeDeleteBtn')))
     onClose()
   }
 
@@ -102,7 +119,6 @@ export function EdgeInspector({ edge, definition, onChange, onClose }: Props) {
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault()
-                  commit()
                   ;(e.target as HTMLInputElement).blur()
                 }
               }}

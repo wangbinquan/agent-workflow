@@ -9,14 +9,24 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { CreateWorkflow, Workflow } from '@agent-workflow/shared'
-import { api, ApiError, extractErrorBody } from '@/api/client'
+import type {
+  CreateWorkflow,
+  ImportWorkflowRequest,
+  ImportWorkflowResult,
+  Workflow,
+  WorkflowDetail,
+  WorkflowRevision,
+} from '@agent-workflow/shared'
+import { api } from '@/api/client'
 import { useResourceList } from '@/hooks/useResourceList'
 import { describeApiError } from '@/i18n'
-import { getBaseUrl, getToken } from '@/stores/auth'
 import { QuickCreateDialog } from '@/components/QuickCreateDialog'
 import { ResourceBadges } from '@/components/ResourceBadges'
-import { WorkflowImportDialog, type WorkflowImportMode } from '@/components/WorkflowImportDialog'
+import {
+  WorkflowImportDialog,
+  type WorkflowImportMode,
+  type WorkflowImportOverwrite,
+} from '@/components/WorkflowImportDialog'
 import { ResourceGalleryPage, type GalleryCardItem } from '@/components/gallery/ResourceGalleryPage'
 import { WORKFLOW_ICON } from '@/components/icons/resourceIcons'
 import { buildQuickCreateWorkflowPayload } from '@/lib/workflow-form'
@@ -87,7 +97,7 @@ function WorkflowsPage() {
     setCreateOpen(open)
   }, [])
   const create = useMutation({
-    mutationFn: (body: CreateWorkflow): Promise<Workflow> => api.post('/api/workflows', body),
+    mutationFn: (body: CreateWorkflow): Promise<WorkflowDetail> => api.post('/api/workflows', body),
     onSuccess: (created) => {
       void qc.invalidateQueries({ queryKey: ['workflows'] })
       qc.setQueryData(['workflows', created.id], created)
@@ -129,9 +139,25 @@ function WorkflowsPage() {
 
   const [importOpen, setImportOpen] = useState(false)
   const importTriggerRef = useRef<HTMLButtonElement | null>(null)
-  async function importWorkflow(yaml: string, mode: WorkflowImportMode): Promise<void> {
-    await postYaml(yaml, mode)
+  async function importWorkflow(
+    yaml: string,
+    mode: WorkflowImportMode,
+    overwrite?: WorkflowImportOverwrite,
+  ): Promise<void> {
+    await postYaml(yaml, mode, overwrite)
     await qc.invalidateQueries({ queryKey: ['workflows'] })
+  }
+
+  async function refreshImportConflict(workflowId: string): Promise<WorkflowRevision> {
+    const current = await api.get<WorkflowDetail>(
+      `/api/workflows/${encodeURIComponent(workflowId)}`,
+    )
+    return {
+      workflowId: current.id,
+      version: current.version,
+      snapshotHash: current.snapshotHash,
+      updatedAt: current.updatedAt,
+    }
   }
 
   // Gallery items — updatedAt desc (freshest first). Node count derives from
@@ -263,27 +289,28 @@ function WorkflowsPage() {
         open={importOpen}
         onClose={() => setImportOpen(false)}
         onImport={importWorkflow}
+        onRefreshConflict={refreshImportConflict}
         triggerRef={importTriggerRef}
       />
     </ResourceGalleryPage>
   )
 }
 
-/** Exported for tests — hand-rolled fetch (text/yaml body + query param), so
- *  it must share the api client's FLAT/nested error decoding. */
-export async function postYaml(yaml: string, onConflict: WorkflowImportMode): Promise<void> {
-  const base = getBaseUrl()
-  const token = getToken()
-  const url = new URL('/api/workflows/import', base)
-  url.searchParams.set('onConflict', onConflict)
-  const headers: Record<string, string> = { 'content-type': 'text/yaml' }
-  if (token !== null) headers.Authorization = `Bearer ${token}`
-  const res = await fetch(url.toString(), { method: 'POST', headers, body: yaml })
-  if (!res.ok) {
-    // Shared decoder: the daemon emits FLAT {ok:false, code, message} — the
-    // old nested-only parse here degraded every import failure (including
-    // the 409 conflict that drives the overwrite/new prompt) to `http-<n>`.
-    const err = extractErrorBody(await res.json().catch(() => null), res)
-    throw new ApiError(res.status, err.code, err.message, err.details)
+/** RFC-199 structured import: no raw YAML/query fallback and overwrite is
+ * bound to the exact revision shown by the conflict dialog. */
+export async function postYaml(
+  yamlText: string,
+  mode: WorkflowImportMode,
+  overwrite?: WorkflowImportOverwrite,
+): Promise<ImportWorkflowResult> {
+  let body: ImportWorkflowRequest
+  if (mode === 'overwrite') {
+    if (overwrite === undefined) {
+      throw new Error('workflow overwrite requires the conflict revision fence')
+    }
+    body = { yamlText, mode, overwrite }
+  } else {
+    body = { yamlText, mode }
   }
+  return api.post<ImportWorkflowResult>('/api/workflows/import', body)
 }

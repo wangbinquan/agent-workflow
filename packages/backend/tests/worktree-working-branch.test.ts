@@ -13,10 +13,10 @@
 //   - invalid branch name → working-branch-invalid
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createWorktree, runGit } from '../src/util/git'
+import { cleanupCreatedWorktree, createWorktree, runGit } from '../src/util/git'
 
 interface Fixture {
   source: string
@@ -62,6 +62,21 @@ async function currentBranchOf(worktree: string): Promise<string> {
   return (await runGit(worktree, ['rev-parse', '--abbrev-ref', 'HEAD'])).stdout.trim()
 }
 
+async function advanceRef(
+  repoPath: string,
+  branchRef: string,
+  before: string,
+  message: string,
+): Promise<string> {
+  const tree = (await runGit(repoPath, ['rev-parse', `${before}^{tree}`])).stdout.trim()
+  const commit = await runGit(repoPath, ['commit-tree', tree, '-p', before, '-m', message])
+  expect(commit.exitCode).toBe(0)
+  const next = commit.stdout.trim()
+  const update = await runGit(repoPath, ['update-ref', branchRef, next, before])
+  expect(update.exitCode).toBe(0)
+  return next
+}
+
 describe('createWorktree RFC-075 working branch', () => {
   let f: Fixture
   beforeEach(async () => {
@@ -93,6 +108,39 @@ describe('createWorktree RFC-075 working branch', () => {
     expect(r.branch).toBe('feature/brand-new')
     expect(await currentBranchOf(r.worktreePath)).toBe('feature/brand-new')
     expect(readFileSync(join(r.worktreePath, 'a.txt'), 'utf-8')).toBe('original\n')
+  })
+
+  test('branch ref read failure is reported as incomplete cleanup, never as missing', async () => {
+    const r = await createWorktree({
+      repoPath: f.source,
+      taskId: 'task-ref-read-failure',
+      baseBranch: 'main',
+      appHome: newHome(f),
+      submoduleMode: 'never',
+    })
+    const gitDir = join(f.source, '.git')
+    const hiddenGitDir = join(f.source, '.git-ref-read-failure')
+    let renamed = false
+    let cleanup: Awaited<ReturnType<typeof cleanupCreatedWorktree>> | undefined
+    try {
+      cleanup = await cleanupCreatedWorktree(r.cleanup, {
+        beforeStage: (stage) => {
+          if (stage !== 'branch-restore') return
+          renameSync(gitDir, hiddenGitDir)
+          renamed = true
+        },
+      })
+    } finally {
+      if (renamed) renameSync(hiddenGitDir, gitDir)
+    }
+
+    expect(cleanup).toMatchObject({
+      worktreeRemoved: true,
+      branchRestored: false,
+      failures: [{ stage: 'branch-restore' }],
+    })
+    expect(cleanup?.failures[0]?.message).toContain('not a git repository')
+    expect((await runGit(f.source, ['rev-parse', r.cleanup.branchRef])).exitCode).toBe(0)
   })
 
   test('reuse local branch + fast-forward base merge brings base-only files in', async () => {
@@ -139,6 +187,94 @@ describe('createWorktree RFC-075 working branch', () => {
     // Both files present after the merge commit.
     expect(existsSync(join(r.worktreePath, 'branch-only.txt'))).toBe(true)
     expect(existsSync(join(r.worktreePath, 'base-only.txt'))).toBe(true)
+  })
+
+  test('external writer after branch capture wins; launch CAS never overwrites it', async () => {
+    const branch = 'feature/capture-race'
+    const branchRef = `refs/heads/${branch}`
+    await runGit(f.source, ['branch', branch, 'main'])
+    const before = (await runGit(f.source, ['rev-parse', branchRef])).stdout.trim()
+    const home = newHome(f)
+    let externalCommit = ''
+    let attemptedPath = ''
+
+    await expect(
+      createWorktree({
+        repoPath: f.source,
+        taskId: 'task-capture-race',
+        baseBranch: 'main',
+        appHome: home,
+        submoduleMode: 'never',
+        workingBranch: branch,
+        lifecycleHook: async (event) => {
+          if (event.stage !== 'working-branch-after-capture') return
+          attemptedPath = event.worktreePath
+          expect(event.branchBefore).toBe(before)
+          externalCommit = await advanceRef(
+            f.source,
+            branchRef,
+            before,
+            'external writer in capture window',
+          )
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: 'working-branch-concurrent-update',
+      status: 409,
+      details: { expected: before },
+    })
+
+    expect((await runGit(f.source, ['rev-parse', branchRef])).stdout.trim()).toBe(externalCommit)
+    expect(existsSync(attemptedPath)).toBe(false)
+    const list = await runGit(f.source, ['worktree', 'list', '--porcelain'])
+    expect(list.stdout).not.toContain(attemptedPath)
+  })
+
+  test('external writer after detached merge wins; prepared result is never attributed to it', async () => {
+    const branch = 'feature/prepared-race'
+    const branchRef = `refs/heads/${branch}`
+    await runGit(f.source, ['branch', branch, 'main'])
+    writeFileSync(join(f.source, 'base-race.txt'), 'base moved\n')
+    await runGit(f.source, ['add', '.'])
+    await runGit(f.source, ['commit', '-q', '-m', 'advance base for prepared race'])
+    const before = (await runGit(f.source, ['rev-parse', branchRef])).stdout.trim()
+    const home = newHome(f)
+    let externalCommit = ''
+    let preparedCommit = ''
+    let attemptedPath = ''
+
+    await expect(
+      createWorktree({
+        repoPath: f.source,
+        taskId: 'task-prepared-race',
+        baseBranch: 'main',
+        appHome: home,
+        submoduleMode: 'never',
+        workingBranch: branch,
+        lifecycleHook: async (event) => {
+          if (event.stage !== 'working-branch-prepared-before-cas') return
+          attemptedPath = event.worktreePath
+          preparedCommit = event.preparedCommit ?? ''
+          externalCommit = await advanceRef(
+            f.source,
+            branchRef,
+            before,
+            'external writer after detached merge',
+          )
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: 'working-branch-concurrent-update',
+      status: 409,
+      details: { expected: before },
+    })
+
+    expect(preparedCommit).not.toBe('')
+    expect(preparedCommit).not.toBe(externalCommit)
+    expect((await runGit(f.source, ['rev-parse', branchRef])).stdout.trim()).toBe(externalCommit)
+    expect(existsSync(attemptedPath)).toBe(false)
+    const list = await runGit(f.source, ['worktree', 'list', '--porcelain'])
+    expect(list.stdout).not.toContain(attemptedPath)
   })
 
   test('reuse + base merge conflict → throws and tears down the worktree', async () => {

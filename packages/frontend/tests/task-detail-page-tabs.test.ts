@@ -97,6 +97,9 @@ describe('TaskDetailPage tab structure', () => {
   test('uses WorktreeDiffPanel (not the legacy DiffViewer) on the diff pane', () => {
     expect(SRC).toMatch(/<WorktreeDiffPanel\b/)
     expect(SRC).not.toMatch(/<DiffViewer\b/)
+    expect(SRC).toMatch(
+      /taskTabPanelProps\('worktree-diff'\)[\s\S]*?className="task-detail__pane task-detail__pane--worktree-diff"/,
+    )
   })
 
   test('emits all seven tab i18n labels via the tabLabel switch (RFC-065 added worktree-files)', () => {
@@ -123,7 +126,7 @@ describe('TaskDetailPage tab structure', () => {
     // isWorkgroup — see rfc164-workgroup-tabs.test.ts for its wiring locks).
     // RFC-167 PR-3 added the dw-orchestration pane (dynamic-workflow confirm
     // gate; content gated on isDynamicWorkgroup).
-    const paneCount = (SRC.match(/className="task-detail__pane"/g) ?? []).length
+    const paneCount = (SRC.match(/className="task-detail__pane(?:\s[^"]*)?"/g) ?? []).length
     expect(paneCount).toBe(11)
     expect(SRC.match(/className="task-detail__panes"/g)?.length).toBe(1)
   })

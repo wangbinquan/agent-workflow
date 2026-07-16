@@ -2441,6 +2441,21 @@ code {
   justify-content: flex-end;
 }
 
+/* Undo/Redo expose the next semantic action in visible text (touch users do
+ * not get hover titles). Keep long inspector labels from monopolising the
+ * header; the title attribute retains the untruncated wording. */
+.workflow-history-action {
+  min-width: 0;
+  max-width: min(22rem, 42vw);
+  gap: var(--space-1);
+}
+
+.workflow-history-action__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .page__section {
   margin-top: 32px;
 }
@@ -5117,6 +5132,16 @@ details.form-section[open] > summary {
   user-select: none;
   opacity: 0.75;
   z-index: 4;
+}
+
+.workflow-canvas__clipboard-notice {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  width: min(520px, calc(100% - 32px));
+  transform: translateX(-50%);
+  z-index: 8;
+  box-shadow: var(--shadow-md);
 }
 
 .workflow-canvas .react-flow {
@@ -8341,18 +8366,32 @@ mark.comment-anchor[data-active='true'] {
   display: none;
 }
 
+/* The shell keeps a 220px navigation rail on desktop, so viewport media
+ * queries do not describe how much room the diff pane actually has. Name the
+ * pane as an inline-size container and let the diff react to its REAL width.
+ * This avoids the sharp 900px shell-breakpoint cliff where the code column
+ * used to collapse to roughly 390px even though the page was still desktop. */
+.task-detail__pane--worktree-diff {
+  container: worktree-diff-pane / inline-size;
+}
+
 /* ---- RFC-021: worktree diff vertical file tabs ---- */
 
 .worktree-diff {
   display: flex;
   flex-direction: row;
+  width: 100%;
   height: 100%;
+  min-width: 0;
   min-height: 0;
   gap: 8px;
 }
 
 .worktree-diff__files {
-  flex: 0 0 280px;
+  /* Keep the tree readable without permanently taking 280px from the primary
+   * diff surface. At laptop / split-window widths the rail yields down to
+   * 220px; on roomy desktops it tops out at the established 280px. */
+  flex: 0 1 clamp(220px, 24%, 280px);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -8494,6 +8533,14 @@ mark.comment-anchor[data-active='true'] {
   overflow: hidden;
 }
 
+/* Every file keeps a tabpanel in the DOM so aria-controls always resolves.
+ * Author CSS overrides the browser's built-in [hidden] rule, so the flex
+ * declaration above would otherwise lay out every inactive panel and squeeze
+ * the selected diff into a sliver. Only the active panel may consume space. */
+.worktree-diff__body[hidden] {
+  display: none;
+}
+
 /* Inside the worktree-diff body, the legacy .diff__file card is forced
  * to grow to the full available height (instead of intrinsic sizing)
  * and its <pre> body drops its 480px max-height cap so a long diff fills
@@ -8502,6 +8549,10 @@ mark.comment-anchor[data-active='true'] {
   flex: 1;
   display: flex;
   flex-direction: column;
+  /* <pre> contributes a wide min-content size. Let the card fit its assigned
+   * column so .diff__body owns horizontal scrolling instead of the outer
+   * body's overflow:hidden clipping the frame. */
+  min-width: 0;
   min-height: 0;
 }
 
@@ -8510,6 +8561,22 @@ mark.comment-anchor[data-active='true'] {
   min-height: 0;
   max-height: none;
   overflow: auto;
+}
+
+/* Keep at least a readable code column. Once the pane itself cannot provide
+ * ~640px for hunks beside the file rail, move the rail above the diff. The
+ * active file then receives the pane's full width; the rail stays compact and
+ * independently scrollable instead of pushing the code frame into a sliver. */
+@container worktree-diff-pane (max-width: 880px) {
+  .worktree-diff {
+    flex-direction: column;
+  }
+
+  .worktree-diff__files {
+    flex: 0 0 auto;
+    width: 100%;
+    max-height: 12rem;
+  }
 }
 
 /* RFC-022: dependency-closure tree (AgentForm preview + node Stats tab). */

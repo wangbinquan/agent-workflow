@@ -7,7 +7,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
-import type { Agent, Workflow } from '@agent-workflow/shared'
+import type { Agent, ImportWorkflowResult, Workflow } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { CapabilityGrid } from '@/components/home/CapabilityGrid'
@@ -15,7 +15,6 @@ import { PipelineHero } from '@/components/home/PipelineHero'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { PageHeader } from '@/components/PageHeader'
 import { DEMO_WORKFLOW_YAML } from '@/fixtures/demo-workflow'
-import { getBaseUrl, getToken } from '@/stores/auth'
 
 export interface OnboardingProbe {
   isFirstRun: boolean
@@ -191,22 +190,10 @@ export function Onboarding(props: OnboardingProps = {}) {
 }
 
 async function postDemoYaml(yamlText: string): Promise<void> {
-  const url = new URL('/api/workflows/import', getBaseUrl())
-  url.searchParams.set('onConflict', 'new')
-  const headers: Record<string, string> = { 'content-type': 'text/yaml' }
-  const token = getToken()
-  if (token !== null) headers.Authorization = `Bearer ${token}`
-  const res = await fetch(url.toString(), { method: 'POST', headers, body: yamlText })
-  if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as {
-      error?: { code: string; message: string }
-    } | null
-    const err = body?.error ?? {
-      code: `http-${res.status}`,
-      message: res.statusText || 'request failed',
-    }
-    throw new ApiError(res.status, err.code, err.message)
-  }
+  await api.post<ImportWorkflowResult>('/api/workflows/import', {
+    yamlText,
+    mode: 'new',
+  })
 }
 
 function describeError(e: unknown): string {

@@ -69,10 +69,13 @@ import { mintNodeRun } from '@/services/nodeRunMint'
 import { pickFreshestRun } from '@/services/freshness'
 import { listAvailableRefs, resolveCachedRepo } from '@/services/gitRepoCache'
 import {
+  cleanupCreatedWorktree,
   createWorktree,
   gitDiffSnapshot,
   initScratchRepo,
   isGitWorkTree,
+  type WorktreeCleanupProvenance,
+  type WorktreeLifecycleHookEvent,
   worktreeDiff,
 } from '@/util/git'
 import { redactGitUrl } from '@agent-workflow/shared'
@@ -260,6 +263,28 @@ export interface StartTaskDeps {
    * can verify the subject on re-launch.
    */
   agentLaunch?: { agentName: string; agentId: string; snapshotJson: string }
+  /**
+   * RFC-199 T6.5 deterministic race seam. Production callers never set this;
+   * backend regressions use it to linearize workflow delete/version writers
+   * immediately before or after the task-row transaction without sleeps.
+   */
+  workflowLaunchCommitHook?: (event: WorkflowLaunchCommitHookEvent) => void | Promise<void>
+  /** RFC-199 test seam for deterministic remove/ref/root cleanup failures. */
+  workspaceCleanupHook?: (event: WorkspaceCleanupHookEvent) => void | Promise<void>
+}
+
+export interface WorkflowLaunchCommitHookEvent {
+  stage: 'materialized-before-task-commit' | 'task-committed'
+  workflowId: string
+  capturedWorkflowVersion: number
+  taskId: string
+  spaceKind: MaterializedSpace['kind']
+  worktreePath: string
+  repoWorktrees: ReadonlyArray<{
+    repoPath: string
+    worktreePath: string
+    branch: string
+  }>
 }
 
 /**
@@ -272,6 +297,15 @@ export interface PreCreatedWorktree {
   worktreePath: string
   branch: string
   baseCommit: string | null
+  /**
+   * Explicit ownership handoff. `borrowed` is never recursively removed;
+   * fusion hands off its ephemeral repo as `owned-root`; callers using
+   * materializeWorktree hand off the exact linked-worktree provenance.
+   */
+  cleanup:
+    | { kind: 'borrowed' }
+    | { kind: 'owned-root'; path: string }
+    | { kind: 'linked-worktree'; provenance: WorktreeCleanupProvenance }
 }
 
 /**
@@ -306,11 +340,14 @@ export async function materializeWorktree(opts: {
   /** RFC-075/067: identity for the framework's merge commit on branch reuse. */
   gitUserName?: string | null
   gitUserEmail?: string | null
+  /** RFC-199 deterministic create/post-add race seam; tests only. */
+  lifecycleHook?: (event: WorktreeLifecycleHookEvent) => void | Promise<void>
 }): Promise<{
   worktreePath: string
   branch: string
   baseCommit: string | null
   earlyError: string | null
+  cleanup: WorktreeCleanupProvenance | null
   // RFC-034: surface submodule init outcome so caller can emit warning event.
   submoduleInitOk: boolean
   submoduleInitError: string | null
@@ -328,12 +365,14 @@ export async function materializeWorktree(opts: {
       ...(opts.workingBranch !== undefined ? { workingBranch: opts.workingBranch } : {}),
       ...(opts.gitUserName != null ? { gitUserName: opts.gitUserName } : {}),
       ...(opts.gitUserEmail != null ? { gitUserEmail: opts.gitUserEmail } : {}),
+      ...(opts.lifecycleHook !== undefined ? { lifecycleHook: opts.lifecycleHook } : {}),
     })
     return {
       worktreePath: wt.worktreePath,
       branch: wt.branch,
       baseCommit: wt.baseCommit,
       earlyError: null,
+      cleanup: wt.cleanup,
       submoduleInitOk: wt.submoduleInitOk,
       submoduleInitError: wt.submoduleInitError,
       hasSubmodules: wt.hasSubmodules,
@@ -343,7 +382,11 @@ export async function materializeWorktree(opts: {
     // name, in use, base fetch failed, merge conflict) is a hard launch
     // failure surfaced as 422 — let the typed error propagate instead of
     // degrading into a `failed` task row.
-    if (err instanceof ValidationError && err.code.startsWith('working-branch-')) {
+    if (
+      err instanceof DomainError &&
+      (err.code.startsWith('working-branch-') ||
+        err.code === 'worktree-post-add-cleanup-incomplete')
+    ) {
       throw err
     }
     return {
@@ -351,6 +394,7 @@ export async function materializeWorktree(opts: {
       branch: '',
       baseCommit: null,
       earlyError: err instanceof Error ? err.message : String(err),
+      cleanup: null,
       submoduleInitOk: true,
       submoduleInitError: null,
       hasSubmodules: false,
@@ -639,6 +683,194 @@ export interface MaterializedSpace {
   earlyError: string | null
   resolvedSources: ResolvedRepoSource[]
   repos: MaterializedRepo[]
+  /** Explicit ownership lease consumed by startTask or the multipart route. */
+  cleanup: MaterializedSpaceCleanup
+}
+
+export interface WorkspaceCleanupHookEvent {
+  stage: 'worktree-remove' | 'branch-restore' | 'owned-root-remove'
+  taskId: string
+  path: string
+  repoPath?: string
+  branch?: string
+}
+
+export interface WorkspaceCleanupFailure extends WorkspaceCleanupHookEvent {
+  message: string
+}
+
+export interface WorkspaceCleanupReport {
+  taskId: string
+  complete: boolean
+  failures: WorkspaceCleanupFailure[]
+}
+
+export interface MaterializedSpaceCleanup {
+  taskId: string
+  /** Scratch/multi/fusion ephemeral root only; never a URL cache or user source. */
+  ownedRoot: string | null
+  /** Exact provenance emitted by createWorktree; never inferred after the fact. */
+  worktrees: WorktreeCleanupProvenance[]
+  state: 'owned' | 'committed' | 'cleaned'
+  report: WorkspaceCleanupReport | null
+}
+
+function createMaterializedSpaceCleanup(
+  taskId: string,
+  ownedRoot: string | null,
+  worktrees: WorktreeCleanupProvenance[] = [],
+): MaterializedSpaceCleanup {
+  return {
+    taskId,
+    ownedRoot,
+    worktrees,
+    state: 'owned',
+    report: null,
+  }
+}
+
+/**
+ * Consume a materialization ownership lease after a launch failed before its
+ * task row committed. Every Git ref mutation is CAS-safe in util/git.ts. The
+ * report is cached on the lease so route + service double-catch is idempotent,
+ * and an incomplete cleanup is surfaced rather than being logged as zero
+ * residue. Shared repo/cache paths never appear as `ownedRoot`.
+ */
+async function cleanupMaterializedSpaceLease(
+  ledger: MaterializedSpaceCleanup,
+  hook?: (event: WorkspaceCleanupHookEvent) => void | Promise<void>,
+): Promise<WorkspaceCleanupReport> {
+  if (ledger.report !== null) return ledger.report
+  if (ledger.state === 'committed') {
+    return { taskId: ledger.taskId, complete: true, failures: [] }
+  }
+
+  const failures: WorkspaceCleanupFailure[] = []
+  let worktreeCleanupFailed = false
+  for (const entry of [...ledger.worktrees].reverse()) {
+    const result = await cleanupCreatedWorktree(entry, {
+      beforeStage: async (stage) => {
+        await hook?.({
+          stage,
+          taskId: ledger.taskId,
+          path: entry.worktreePath,
+          repoPath: entry.repoPath,
+          branch: entry.branch,
+        })
+      },
+    })
+    if (!result.worktreeRemoved) worktreeCleanupFailed = true
+    for (const failure of result.failures) {
+      failures.push({
+        stage: failure.stage,
+        taskId: ledger.taskId,
+        path: entry.worktreePath,
+        repoPath: entry.repoPath,
+        branch: entry.branch,
+        message: failure.message,
+      })
+    }
+  }
+
+  // A multi container contains only launch-owned sibling worktrees. Never
+  // recursively erase it when unregistering one of those worktrees failed.
+  if (ledger.ownedRoot !== null && !worktreeCleanupFailed) {
+    try {
+      await hook?.({
+        stage: 'owned-root-remove',
+        taskId: ledger.taskId,
+        path: ledger.ownedRoot,
+      })
+      await rm(ledger.ownedRoot, { recursive: true, force: true })
+    } catch (error) {
+      // mkdir can fail because an ancestor is a file. In that case rm also
+      // reports ENOTDIR even though the launch-owned root never existed; this
+      // is genuinely zero residue, not an incomplete cleanup. Any surviving
+      // root remains a hard, structured failure.
+      if (existsSync(ledger.ownedRoot)) {
+        failures.push({
+          stage: 'owned-root-remove',
+          taskId: ledger.taskId,
+          path: ledger.ownedRoot,
+          message: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
+  }
+
+  const report: WorkspaceCleanupReport = {
+    taskId: ledger.taskId,
+    complete: failures.length === 0,
+    failures,
+  }
+  ledger.state = 'cleaned'
+  ledger.report = report
+  if (!report.complete) {
+    log.error('rfc199/start-task-cleanup-incomplete', { ...report })
+  }
+  return report
+}
+
+/** Multipart route cleanup before startTask accepts the ownership handoff. */
+export async function cleanupMaterializedSpace(
+  space: MaterializedSpace,
+  hook?: (event: WorkspaceCleanupHookEvent) => void | Promise<void>,
+): Promise<WorkspaceCleanupReport> {
+  try {
+    return await cleanupMaterializedSpaceLease(space.cleanup, hook)
+  } finally {
+    materializingSpaces.delete(space.taskId)
+  }
+}
+
+function withWorkspaceCleanupReport(error: unknown, report: WorkspaceCleanupReport): Error {
+  if (report.complete) return error instanceof Error ? error : new Error(String(error))
+  if (error instanceof DomainError) {
+    const details =
+      typeof error.details === 'object' && error.details !== null && !Array.isArray(error.details)
+        ? { ...error.details, workspaceCleanup: report }
+        : { causeDetails: error.details, workspaceCleanup: report }
+    return new DomainError(error.code, error.message, error.status, details)
+  }
+  return new DomainError(
+    'task-launch-cleanup-incomplete',
+    error instanceof Error ? error.message : String(error),
+    500,
+    { workspaceCleanup: report },
+  )
+}
+
+function workflowLaunchVersionMismatch(
+  workflowId: string,
+  expectedVersion: number,
+  currentVersion: number | null,
+): ConflictError {
+  const current = currentVersion === null ? 'deleted' : `v${currentVersion}`
+  return new ConflictError(
+    'workflow-version-mismatch',
+    `workflow '${workflowId}' changed during launch (expected v${expectedVersion}, now ${current})`,
+    { expectedVersion, currentVersion },
+  )
+}
+
+function workflowLaunchHookEvent(
+  stage: WorkflowLaunchCommitHookEvent['stage'],
+  workflow: Workflow,
+  space: MaterializedSpace,
+): WorkflowLaunchCommitHookEvent {
+  return {
+    stage,
+    workflowId: workflow.id,
+    capturedWorkflowVersion: workflow.version,
+    taskId: space.taskId,
+    spaceKind: space.kind,
+    worktreePath: space.worktreePath,
+    repoWorktrees: space.repos.map((repo) => ({
+      repoPath: repo.repoPath,
+      worktreePath: repo.worktreePath,
+      branch: repo.branch,
+    })),
+  }
 }
 
 export async function materializeSpace(
@@ -667,6 +899,7 @@ export async function materializeSpace(
   // ---- scratch: the workspace IS a brand-new git repo (RFC-165 §3). ----
   if (input.scratch === true) {
     const scratchDir = join(appHome, 'scratch', taskId)
+    const cleanup = createMaterializedSpaceCleanup(taskId, scratchDir)
     materializingSpaces.set(taskId, { dir: scratchDir, startedAt: Date.now() })
     const init = await initScratchRepo({
       dir: scratchDir,
@@ -683,6 +916,7 @@ export async function materializeSpace(
         baseCommit: init.rootCommit,
         earlyError: null,
         resolvedSources: [],
+        cleanup,
         repos: [
           {
             repoIndex: 0,
@@ -700,10 +934,25 @@ export async function materializeSpace(
         ],
       }
     }
-    // Cleanup ownership = the materializing layer (design F9): remove the
-    // half-created dir best-effort; the caller mints exactly ONE failed row
-    // (workspace_pruned_at stamped there — no revivable workspace exists).
-    await rm(scratchDir, { recursive: true, force: true }).catch(() => {})
+    // Cleanup ownership = the materializing layer (design F9). A failed rm is
+    // not equivalent to a pruned workspace: surface the structured residue
+    // and release the process-local lease so the orphan scanner can recover
+    // the predictable scratch/{taskId} path on a later pass.
+    const report = await cleanupMaterializedSpaceLease(cleanup, deps.workspaceCleanupHook)
+    materializingSpaces.delete(taskId)
+    if (!report.complete) {
+      throw new DomainError(
+        'scratch-materialize-cleanup-incomplete',
+        `scratch workspace initialization failed and cleanup was incomplete: ${init.error}`,
+        500,
+        {
+          taskId,
+          path: scratchDir,
+          materializeError: init.error,
+          workspaceCleanup: report,
+        },
+      )
+    }
     return {
       kind: 'scratch',
       spaceKind: 'scratch',
@@ -714,6 +963,7 @@ export async function materializeSpace(
       earlyError: init.error,
       resolvedSources: [],
       repos: [],
+      cleanup,
     }
   }
 
@@ -785,6 +1035,11 @@ export async function materializeSpace(
         { url: redactGitUrl(source.repoUrl), ref: input.ref ?? null, availableRefs: available },
       )
     }
+    const cleanup = createMaterializedSpaceCleanup(
+      taskId,
+      null,
+      wt.cleanup === null ? [] : [wt.cleanup],
+    )
     return {
       kind: 'single',
       spaceKind:
@@ -799,6 +1054,7 @@ export async function materializeSpace(
       baseCommit: wt.baseCommit,
       earlyError: wt.earlyError,
       resolvedSources,
+      cleanup,
       repos: [
         {
           repoIndex: 0,
@@ -822,85 +1078,95 @@ export async function materializeSpace(
   // legacy `tasks.*` repo/worktree/branch columns mirror repos[0] for
   // back-compat with API consumers that haven't adopted `repos[]` yet.
   const parentWorktree = join(appHome, 'worktrees', 'multi', taskId)
-  mkdirSync(parentWorktree, { recursive: true })
-  let earlyError: string | null = null
-  const repos: MaterializedRepo[] = []
-  const usedDirNames = new Set<string>()
-  for (let i = 0; i < resolvedSources.length; i++) {
-    const source = resolvedSources[i]!
-    const rawName = basename(source.repoPath)
-    const dirName = resolveMultiRepoDirName(rawName, usedDirNames)
-    usedDirNames.add(dirName)
-    const wt = await materializeWorktree({
-      repoPath: source.repoPath,
-      baseBranch: source.baseBranch,
-      taskId,
-      appHome,
-      overrideWorktreePath: join(parentWorktree, dirName),
-      // RFC-075: same working branch name applied to every repo in the task.
-      ...(input.workingBranch !== undefined ? { workingBranch: input.workingBranch } : {}),
-      gitUserName: input.gitUserName ?? null,
-      gitUserEmail: input.gitUserEmail ?? null,
-    })
-    if (wt.earlyError !== null) {
-      earlyError = `repo[${i}] (${dirName}) failed: ${wt.earlyError}`
-      // URL mode: rewrap missing-ref into the legacy `repo-ref-not-found`
-      // error shape so the launcher's existing helpful-list UI continues
-      // to work for the first failing repo.
-      if (
-        source.repoUrl !== null &&
-        /worktree-base-invalid|cannot resolve base ref/i.test(wt.earlyError)
-      ) {
-        const available = await listAvailableRefs(source.repoPath, 10)
-        const spec = repoSpecs[i]!
-        const specRef = 'ref' in spec ? spec.ref : undefined
-        throw new ValidationError(
-          'repo-ref-not-found',
-          `ref '${specRef ?? source.baseBranch ?? '(default)'}' not found in ${redactGitUrl(source.repoUrl)}`,
-          {
-            url: redactGitUrl(source.repoUrl),
-            ref: specRef ?? null,
-            availableRefs: available,
-            repoIndex: i,
-          },
-        )
-      }
-      break
-    }
-    if (!wt.submoduleInitOk) {
-      log.warn('[rfc034/submodule-init-failed] worktree submodule init failed', {
+  const cleanup = createMaterializedSpaceCleanup(taskId, parentWorktree)
+  try {
+    mkdirSync(parentWorktree, { recursive: true })
+    let earlyError: string | null = null
+    const repos: MaterializedRepo[] = []
+    const usedDirNames = new Set<string>()
+    for (let i = 0; i < resolvedSources.length; i++) {
+      const source = resolvedSources[i]!
+      const rawName = basename(source.repoPath)
+      const dirName = resolveMultiRepoDirName(rawName, usedDirNames)
+      usedDirNames.add(dirName)
+      const wt = await materializeWorktree({
+        repoPath: source.repoPath,
+        baseBranch: source.baseBranch,
         taskId,
-        worktreePath: wt.worktreePath,
+        appHome,
+        overrideWorktreePath: join(parentWorktree, dirName),
+        // RFC-075: same working branch name applied to every repo in the task.
+        ...(input.workingBranch !== undefined ? { workingBranch: input.workingBranch } : {}),
+        gitUserName: input.gitUserName ?? null,
+        gitUserEmail: input.gitUserEmail ?? null,
+      })
+      // Ownership is registered immediately after createWorktree hands it off,
+      // before any later per-repo validation/logging can throw.
+      if (wt.cleanup !== null) cleanup.worktrees.push(wt.cleanup)
+      if (wt.earlyError !== null) {
+        earlyError = `repo[${i}] (${dirName}) failed: ${wt.earlyError}`
+        // URL mode: rewrap missing-ref into the legacy `repo-ref-not-found`
+        // error shape so the launcher's existing helpful-list UI continues
+        // to work for the first failing repo.
+        if (
+          source.repoUrl !== null &&
+          /worktree-base-invalid|cannot resolve base ref/i.test(wt.earlyError)
+        ) {
+          const available = await listAvailableRefs(source.repoPath, 10)
+          const spec = repoSpecs[i]!
+          const specRef = 'ref' in spec ? spec.ref : undefined
+          throw new ValidationError(
+            'repo-ref-not-found',
+            `ref '${specRef ?? source.baseBranch ?? '(default)'}' not found in ${redactGitUrl(source.repoUrl)}`,
+            {
+              url: redactGitUrl(source.repoUrl),
+              ref: specRef ?? null,
+              availableRefs: available,
+              repoIndex: i,
+            },
+          )
+        }
+        break
+      }
+      if (!wt.submoduleInitOk) {
+        log.warn('[rfc034/submodule-init-failed] worktree submodule init failed', {
+          taskId,
+          worktreePath: wt.worktreePath,
+          repoIndex: i,
+          stderr: wt.submoduleInitError ?? '',
+        })
+      }
+      repos.push({
         repoIndex: i,
-        stderr: wt.submoduleInitError ?? '',
+        repoPath: source.repoPath,
+        repoUrl: source.repoUrl,
+        baseBranch: source.baseBranch ?? '',
+        branch: wt.branch,
+        baseCommit: wt.baseCommit,
+        worktreePath: wt.worktreePath,
+        worktreeDirName: dirName,
+        submoduleInitOk: wt.submoduleInitOk,
+        submoduleInitError: wt.submoduleInitError,
+        hasSubmodules: wt.hasSubmodules,
       })
     }
-    repos.push({
-      repoIndex: i,
-      repoPath: source.repoPath,
-      repoUrl: source.repoUrl,
-      baseBranch: source.baseBranch ?? '',
-      branch: wt.branch,
-      baseCommit: wt.baseCommit,
-      worktreePath: wt.worktreePath,
-      worktreeDirName: dirName,
-      submoduleInitOk: wt.submoduleInitOk,
-      submoduleInitError: wt.submoduleInitError,
-      hasSubmodules: wt.hasSubmodules,
-    })
-  }
-  // Mirror repos[0] into the legacy `tasks.*` columns for API back-compat.
-  const head0 = repos[0]
-  return {
-    kind: 'multi',
-    spaceKind: resolvedSources.some((s) => s.repoUrl === null) ? 'local' : 'remote',
-    taskId,
-    worktreePath: parentWorktree,
-    branch: head0?.branch ?? '',
-    baseCommit: head0?.baseCommit ?? null,
-    earlyError,
-    resolvedSources,
-    repos,
+    // Mirror repos[0] into the legacy `tasks.*` columns for API back-compat.
+    const head0 = repos[0]
+    return {
+      kind: 'multi',
+      spaceKind: resolvedSources.some((s) => s.repoUrl === null) ? 'local' : 'remote',
+      taskId,
+      worktreePath: parentWorktree,
+      branch: head0?.branch ?? '',
+      baseCommit: head0?.baseCommit ?? null,
+      earlyError,
+      resolvedSources,
+      repos,
+      cleanup,
+    }
+  } catch (error) {
+    const report = await cleanupMaterializedSpaceLease(cleanup)
+    throw withWorkspaceCleanupReport(error, report)
   }
 }
 
@@ -923,7 +1189,57 @@ export async function startTaskWithLocalRepo(
   })
 }
 
+interface StartTaskOwnership {
+  cleanup: MaterializedSpaceCleanup | null
+  taskRowCommitted: boolean
+}
+
+function cleanupFromPreCreated(pre: PreCreatedWorktree): MaterializedSpaceCleanup {
+  switch (pre.cleanup.kind) {
+    case 'borrowed':
+      return createMaterializedSpaceCleanup(pre.taskId, null)
+    case 'owned-root':
+      return createMaterializedSpaceCleanup(pre.taskId, pre.cleanup.path)
+    case 'linked-worktree':
+      return createMaterializedSpaceCleanup(pre.taskId, null, [pre.cleanup.provenance])
+  }
+}
+
+/**
+ * Own the cleanup handoff before any workflow/version/validation read. This is
+ * essential for multipart and fusion callers: those callers materialize first,
+ * so even an initial exact-version mismatch must release their workspace.
+ */
 export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<Task> {
+  const ownership: StartTaskOwnership = {
+    cleanup:
+      deps.materializedSpace?.cleanup ??
+      (deps.preCreatedWorktree === undefined
+        ? null
+        : cleanupFromPreCreated(deps.preCreatedWorktree)),
+    taskRowCommitted: false,
+  }
+  try {
+    return await startTaskImpl(input, deps, ownership)
+  } catch (error) {
+    if (!ownership.taskRowCommitted && ownership.cleanup !== null) {
+      const report = await cleanupMaterializedSpaceLease(
+        ownership.cleanup,
+        deps.workspaceCleanupHook,
+      )
+      throw withWorkspaceCleanupReport(error, report)
+    }
+    throw error
+  } finally {
+    if (ownership.cleanup !== null) materializingSpaces.delete(ownership.cleanup.taskId)
+  }
+}
+
+async function startTaskImpl(
+  input: StartTask,
+  deps: StartTaskDeps,
+  ownership: StartTaskOwnership,
+): Promise<Task> {
   // Resolve workflow.
   const workflow = await getWorkflow(deps.db, input.workflowId)
   if (workflow === null) {
@@ -941,10 +1257,10 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
     input.expectedWorkflowVersion !== undefined &&
     workflow.version !== input.expectedWorkflowVersion
   ) {
-    throw new ConflictError(
-      'workflow-version-mismatch',
-      `workflow '${input.workflowId}' changed since the form was prepared ` +
-        `(expected v${input.expectedWorkflowVersion}, now v${workflow.version})`,
+    throw workflowLaunchVersionMismatch(
+      input.workflowId,
+      input.expectedWorkflowVersion,
+      workflow.version,
     )
   }
 
@@ -1071,6 +1387,7 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
       baseCommit: pre.baseCommit,
       earlyError: null,
       resolvedSources: [source],
+      cleanup: ownership.cleanup ?? cleanupFromPreCreated(pre),
       repos: [
         {
           repoIndex: 0,
@@ -1097,6 +1414,7 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
   const earlyError = space.earlyError
   const materializedRepos = space.repos
   const resolvedSources = space.resolvedSources
+  ownership.cleanup = space.cleanup
 
   // RFC-067: trim and pair-validate the optional Git commit identity.
   // StartTaskSchema's superRefine already rejected the half-set case, but we
@@ -1124,12 +1442,46 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
 
   const now = Date.now()
   try {
+    await deps.workflowLaunchCommitHook?.(
+      workflowLaunchHookEvent('materialized-before-task-commit', workflow, space),
+    )
+
     // RFC-165 (F17-r3): the task row + its per-repo rows + the launch
     // collaborator rows + the single-agent existence RE-check land in ONE
     // dbTxSync transaction — atomicity replaces the old best-effort manual
     // rollback (which, per Codex P1, could even delete a PRE-EXISTING task
     // when a handed-off taskId collided). Synchronous surface only inside.
     dbTxSync(deps.db, (tx) => {
+      // RFC-199 T6.5: the workflow row captured before materialization is not
+      // sufficient to authorize the final task insert. Re-read inside the
+      // SAME transaction that writes the FK. Delete-first linearizes here as
+      // a structured mismatch (rather than a raw SQLite FK 500); when the
+      // editor supplied an exact version, a materialization-time writer is
+      // fenced here as well. If this transaction wins first, deleteWorkflow's
+      // in-transaction reference check necessarily observes the task row.
+      const liveWorkflow = tx
+        .select({ version: workflows.version })
+        .from(workflows)
+        .where(eq(workflows.id, workflow.id))
+        .get()
+      if (liveWorkflow === undefined) {
+        throw workflowLaunchVersionMismatch(
+          workflow.id,
+          input.expectedWorkflowVersion ?? workflow.version,
+          null,
+        )
+      }
+      if (
+        input.expectedWorkflowVersion !== undefined &&
+        liveWorkflow.version !== input.expectedWorkflowVersion
+      ) {
+        throw workflowLaunchVersionMismatch(
+          workflow.id,
+          input.expectedWorkflowVersion,
+          liveWorkflow.version,
+        )
+      }
+
       // F17: a concurrent agent delete between the service-level 404 gate and
       // this insert must fail the launch — never mint a task for a ghost.
       if (deps.agentLaunch !== undefined) {
@@ -1286,18 +1638,31 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
         }
       }
     })
-  } catch (err) {
-    // The transaction rolled back — no task/task_repos/collaborator rows
-    // survive. RFC-165 (F9): a scratch dir whose row failed to commit is
-    // unreachable from any task row — the launch flow owns its cleanup,
-    // best-effort, before rethrowing.
-    if (isScratch && worktreePath !== '') {
-      await rm(worktreePath, { recursive: true, force: true }).catch(() => {})
+    ownership.taskRowCommitted = true
+    space.cleanup.state = 'committed'
+
+    // Observer-only half of the deterministic race seam. A test callback must
+    // not be able to strand a committed pending row before scheduler kickoff;
+    // surface its own assertion through captured state and keep launch moving.
+    try {
+      await deps.workflowLaunchCommitHook?.(
+        workflowLaunchHookEvent('task-committed', workflow, space),
+      )
+    } catch (error) {
+      log.warn('rfc199/start-task-post-commit-hook-failed', {
+        taskId,
+        error: error instanceof Error ? error.message : String(error),
+      })
     }
+  } catch (err) {
+    // The outer ownership wrapper cleans every pre-commit failure, including
+    // errors thrown before this transaction for handed-off multipart/fusion
+    // spaces. Keeping one owner avoids route/service cleanup drift.
+    log.debug('rfc199/start-task-precommit-failure-deferred-to-owner', {
+      taskId,
+      error: err instanceof Error ? err.message : String(err),
+    })
     throw err
-  } finally {
-    // Row committed (or failure cleaned up) — release the materialize lease.
-    materializingSpaces.delete(taskId)
   }
 
   const task = (await getTask(deps.db, taskId)) as Task

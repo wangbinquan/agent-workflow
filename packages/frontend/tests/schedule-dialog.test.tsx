@@ -57,6 +57,20 @@ const LAUNCH = {
 }
 
 describe('ScheduleDialog', () => {
+  test('workflow create mode explains that each run uses the latest workflow', () => {
+    const r = wrap(
+      <ScheduleDialog
+        open
+        onClose={() => {}}
+        buildLaunchPayload={() => LAUNCH}
+        launchKind="workflow"
+      />,
+    )
+    expect(r.getByTestId('schedule-dialog-workflow-policy').textContent).toMatch(
+      /计划执行时使用最新工作流|Scheduled runs use the latest workflow/,
+    )
+  })
+
   test('renders the four repeat modes; save disabled until a name is entered', () => {
     const r = wrap(<ScheduleDialog open onClose={() => {}} buildLaunchPayload={() => LAUNCH} />)
     // 4 mode options present (Segmented testidPrefix="schedule-kind").

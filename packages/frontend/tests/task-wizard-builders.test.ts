@@ -245,6 +245,16 @@ describe('buildScheduledEnvelope (RFC-165 §9b)', () => {
       name: 'T',
     })
   })
+
+  test('RFC-199 T6.6: workflow schedules strip the point-in-time version guard', () => {
+    expect(
+      buildScheduledEnvelope(
+        'workflow',
+        { workflowId: 'wf1', name: 'T', expectedWorkflowVersion: 7 },
+        {},
+      ),
+    ).toEqual({ workflowId: 'wf1', name: 'T' })
+  })
 })
 
 describe('payloadToWizardSeed (editScheduled backfill)', () => {

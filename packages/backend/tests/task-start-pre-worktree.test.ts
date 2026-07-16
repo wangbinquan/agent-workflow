@@ -134,6 +134,7 @@ describe('startTask with preCreatedWorktree (RFC-020)', () => {
           worktreePath: wt.worktreePath,
           branch: wt.branch,
           baseCommit: wt.baseCommit,
+          cleanup: { kind: 'linked-worktree', provenance: wt.cleanup! },
         },
       },
     )

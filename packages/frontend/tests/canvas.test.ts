@@ -243,10 +243,18 @@ describe('toFlowNodes', () => {
     expect(agent.inputPorts).toEqual(['req'])
   })
 
-  test('falls back to a tile grid when position is absent', () => {
-    const flow = toFlowNodes([{ id: 'x', kind: 'input', inputKey: 'k' }], [])
-    expect(flow[0]?.position.x).toBeGreaterThan(0)
-    expect(flow[0]?.position.y).toBeGreaterThan(0)
+  test('falls back to the canonical non-overlapping tile grid when positions are absent', () => {
+    const flow = toFlowNodes(
+      [
+        { id: 'x', kind: 'input', inputKey: 'x' },
+        { id: 'y', kind: 'input', inputKey: 'y' },
+      ],
+      [],
+    )
+    expect(flow.map((node) => node.position)).toEqual([
+      { x: 80, y: 80 },
+      { x: 360, y: 80 },
+    ])
   })
 
   test('wrapper-git carries innerCount', () => {

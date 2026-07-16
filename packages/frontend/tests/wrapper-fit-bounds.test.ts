@@ -59,6 +59,17 @@ describe('computeFitBounds', () => {
     expect(out.height).toBe(200 + sz.height + WRAPPER_DEFAULT_PADDING * 2 + WRAPPER_HEADER_HEIGHT)
   })
 
+  test('multiple legacy inner nodes without positions use distinct canonical renderer tiles', () => {
+    const w = wrapper('w1', ['a1', 'a2'])
+    const a = { id: 'a1', kind: 'agent-single' } as unknown as WorkflowNode
+    const b = { id: 'a2', kind: 'agent-single' } as unknown as WorkflowNode
+    const out = computeFitBounds(w, [w, a, b])
+    const sz = DEFAULT_NODE_SIZE_BY_KIND['agent-single']
+
+    // Definition indices 1 and 2 render at x=360 and x=640 respectively.
+    expect(out.width).toBe(280 + sz.width + WRAPPER_DEFAULT_PADDING * 2 + HANDLE_SLACK * 2)
+  })
+
   test('inner wrapper contributes its persisted size to the bbox', () => {
     const innerWrap = {
       id: 'inner',
@@ -71,6 +82,29 @@ describe('computeFitBounds', () => {
     const out = computeFitBounds(outer, [outer, innerWrap])
     expect(out.width).toBe(500 + WRAPPER_DEFAULT_PADDING * 2 + HANDLE_SLACK * 2)
     expect(out.height).toBe(300 + WRAPPER_DEFAULT_PADDING * 2 + WRAPPER_HEADER_HEIGHT)
+  })
+
+  // RFC-199 T7.7: an unsized nested wrapper renders at its own computed fit
+  // rect. The outer wrapper must consume that resolved rect, rather than the
+  // nested wrapper's stale position plus the small 240x160 kind fallback.
+  test('inner wrapper without persisted size contributes its recursively fitted rect', () => {
+    const a = agentSingle('a1', { x: 100, y: 120 })
+    const b = agentSingle('a2', { x: 700, y: 480 })
+    const inner = wrapper('inner', ['a1', 'a2'], { x: 999, y: 999 })
+    const outer = wrapper('outer', ['inner'])
+    const nodes = [outer, inner, a, b]
+
+    const innerFit = computeFitBounds(inner, nodes)
+    const outerFit = computeFitBounds(outer, nodes)
+
+    expect(outerFit.offset).toEqual({
+      x: innerFit.offset.x - WRAPPER_DEFAULT_PADDING - HANDLE_SLACK,
+      y: innerFit.offset.y - WRAPPER_DEFAULT_PADDING - WRAPPER_HEADER_HEIGHT,
+    })
+    expect(outerFit.width).toBe(innerFit.width + WRAPPER_DEFAULT_PADDING * 2 + HANDLE_SLACK * 2)
+    expect(outerFit.height).toBe(
+      innerFit.height + WRAPPER_DEFAULT_PADDING * 2 + WRAPPER_HEADER_HEIGHT,
+    )
   })
 
   test('measured sizes override DEFAULT_NODE_SIZE_BY_KIND when provided', () => {

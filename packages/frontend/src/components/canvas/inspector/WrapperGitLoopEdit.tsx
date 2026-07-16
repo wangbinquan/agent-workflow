@@ -9,10 +9,22 @@ import { useTranslation } from 'react-i18next'
 import { Field, NumberInput, TextInput } from '@/components/Form'
 import { Select } from '@/components/Select'
 import { loopMemberCandidates } from '../wrapperCandidates'
+import {
+  atomicNodeInspectorChange,
+  continuousNodeInspectorChange,
+  InspectorHistoryBoundary,
+  type InspectorChangeMeta,
+} from './historyMeta'
 import { NodeTitleField } from './NodeTitleField'
 import type { EditProps } from './types'
 
-export function WrapperGitLoopEdit({ node, agents, definition, onPatch }: EditProps) {
+export function WrapperGitLoopEdit({
+  node,
+  agents,
+  definition,
+  onPatch,
+  onHistoryBoundary,
+}: EditProps) {
   const { t } = useTranslation()
   const rec = node as unknown as Record<string, unknown>
   const inner = Array.isArray(rec.nodeIds) ? (rec.nodeIds as string[]) : []
@@ -20,7 +32,7 @@ export function WrapperGitLoopEdit({ node, agents, definition, onPatch }: EditPr
   if (!isLoop) {
     return (
       <div className="form-grid">
-        <NodeTitleField node={node} onPatch={onPatch} />
+        <NodeTitleField node={node} onPatch={onPatch} onHistoryBoundary={onHistoryBoundary} />
         <Field label={t('inspector.innerNodeIds')} hint={t('inspector.innerNodeIdsHint')}>
           <div className="muted">
             {inner.length === 0 ? t('inspector.none') : inner.map((i) => <code key={i}>{i} </code>)}
@@ -42,31 +54,55 @@ export function WrapperGitLoopEdit({ node, agents, definition, onPatch }: EditPr
         bind: { nodeId: string; portName: string }
       }>)
     : []
-  function update(patch: Record<string, unknown>) {
-    onPatch({
-      ...(node as Record<string, unknown>),
-      ...patch,
-    } as unknown as WorkflowNode)
+  function update(patch: Record<string, unknown>, meta: InspectorChangeMeta) {
+    onPatch(
+      {
+        ...(node as Record<string, unknown>),
+        ...patch,
+      } as unknown as WorkflowNode,
+      meta,
+    )
   }
-  function updateExit(patch: Record<string, unknown>) {
-    update({
-      exitCondition: { ...exitCondRaw, ...patch },
-    })
+  function updateExit(patch: Record<string, unknown>, meta: InspectorChangeMeta) {
+    update(
+      {
+        exitCondition: { ...exitCondRaw, ...patch },
+      },
+      meta,
+    )
   }
-  function setBindings(next: typeof bindings) {
-    update({ outputBindings: next })
+  function setBindings(next: typeof bindings, meta: InspectorChangeMeta) {
+    update({ outputBindings: next }, meta)
   }
   return (
     <div className="form-grid">
-      <NodeTitleField node={node} onPatch={onPatch} />
+      <NodeTitleField node={node} onPatch={onPatch} onHistoryBoundary={onHistoryBoundary} />
       <div className="info-box info-box--muted">{t('inspector.loopBanner')}</div>
       <Field label={t('inspector.fieldMaxIterations')} required>
-        <NumberInput
-          value={typeof rec.maxIterations === 'number' ? rec.maxIterations : undefined}
-          onChange={(v) => update({ maxIterations: v ?? 1 })}
-          min={1}
-          step={1}
-        />
+        <InspectorHistoryBoundary
+          meta={continuousNodeInspectorChange(
+            node.id,
+            'maxIterations',
+            t('inspector.fieldMaxIterations'),
+          )}
+          onBoundary={onHistoryBoundary}
+        >
+          <NumberInput
+            value={typeof rec.maxIterations === 'number' ? rec.maxIterations : undefined}
+            onChange={(v) =>
+              update(
+                { maxIterations: v ?? 1 },
+                continuousNodeInspectorChange(
+                  node.id,
+                  'maxIterations',
+                  t('inspector.fieldMaxIterations'),
+                ),
+              )
+            }
+            min={1}
+            step={1}
+          />
+        </InspectorHistoryBoundary>
       </Field>
       <Field
         label={t('inspector.fieldExitConditionKind')}
@@ -75,7 +111,16 @@ export function WrapperGitLoopEdit({ node, agents, definition, onPatch }: EditPr
         <Select<string>
           value={exitKind}
           ariaLabel={t('inspector.fieldExitConditionKind')}
-          onChange={(v) => updateExit({ kind: v })}
+          onChange={(v) =>
+            updateExit(
+              { kind: v },
+              atomicNodeInspectorChange(
+                node.id,
+                'exitCondition.kind',
+                t('inspector.fieldExitConditionKind'),
+              ),
+            )
+          }
           options={[
             { value: 'port-empty', label: 'port-empty' },
             { value: 'port-not-empty', label: 'port-not-empty' },
@@ -105,7 +150,16 @@ export function WrapperGitLoopEdit({ node, agents, definition, onPatch }: EditPr
                   className={nodeIdInvalid ? 'form-input--invalid' : undefined}
                   value={exitNodeId}
                   ariaLabel={t('inspector.loopExitNodeIdSelect')}
-                  onChange={(v) => updateExit({ nodeId: v })}
+                  onChange={(v) =>
+                    updateExit(
+                      { nodeId: v },
+                      atomicNodeInspectorChange(
+                        node.id,
+                        'exitCondition.nodeId',
+                        t('inspector.fieldExitConditionTarget'),
+                      ),
+                    )
+                  }
                   data-testid="loop-exit-node-select"
                   options={[
                     { value: '', label: t('inspector.loopExitNodeIdSelect') },
@@ -134,7 +188,16 @@ export function WrapperGitLoopEdit({ node, agents, definition, onPatch }: EditPr
                   className={portInvalid ? 'form-input--invalid' : undefined}
                   value={exitPortName}
                   ariaLabel={t('inspector.loopExitPortNameSelect')}
-                  onChange={(v) => updateExit({ portName: v })}
+                  onChange={(v) =>
+                    updateExit(
+                      { portName: v },
+                      atomicNodeInspectorChange(
+                        node.id,
+                        'exitCondition.portName',
+                        t('inspector.fieldExitConditionTarget'),
+                      ),
+                    )
+                  }
                   disabled={exitNodeId.length === 0}
                   data-testid="loop-exit-port-select"
                   options={[
@@ -162,25 +225,82 @@ export function WrapperGitLoopEdit({ node, agents, definition, onPatch }: EditPr
       </Field>
       {exitKind === 'port-equals' && (
         <Field label={t('inspector.fieldExitConditionValue')}>
-          <TextInput value={exitValue} onChange={(v) => updateExit({ value: v })} />
+          <InspectorHistoryBoundary
+            meta={continuousNodeInspectorChange(
+              node.id,
+              'exitCondition.value',
+              t('inspector.fieldExitConditionValue'),
+            )}
+            onBoundary={onHistoryBoundary}
+          >
+            <TextInput
+              value={exitValue}
+              onChange={(v) =>
+                updateExit(
+                  { value: v },
+                  continuousNodeInspectorChange(
+                    node.id,
+                    'exitCondition.value',
+                    t('inspector.fieldExitConditionValue'),
+                  ),
+                )
+              }
+            />
+          </InspectorHistoryBoundary>
         </Field>
       )}
       {exitKind === 'port-count-lt' && (
         <>
           <Field label={t('inspector.fieldExitConditionN')}>
-            <NumberInput
-              value={exitN}
-              onChange={(v) => updateExit({ n: v ?? 1 })}
-              min={1}
-              step={1}
-            />
+            <InspectorHistoryBoundary
+              meta={continuousNodeInspectorChange(
+                node.id,
+                'exitCondition.n',
+                t('inspector.fieldExitConditionN'),
+              )}
+              onBoundary={onHistoryBoundary}
+            >
+              <NumberInput
+                value={exitN}
+                onChange={(v) =>
+                  updateExit(
+                    { n: v ?? 1 },
+                    continuousNodeInspectorChange(
+                      node.id,
+                      'exitCondition.n',
+                      t('inspector.fieldExitConditionN'),
+                    ),
+                  )
+                }
+                min={1}
+                step={1}
+              />
+            </InspectorHistoryBoundary>
           </Field>
           <Field label={t('inspector.fieldExitConditionSeparator')}>
-            <TextInput
-              value={exitSeparator}
-              onChange={(v) => updateExit({ separator: v })}
-              placeholder="\\n"
-            />
+            <InspectorHistoryBoundary
+              meta={continuousNodeInspectorChange(
+                node.id,
+                'exitCondition.separator',
+                t('inspector.fieldExitConditionSeparator'),
+              )}
+              onBoundary={onHistoryBoundary}
+            >
+              <TextInput
+                value={exitSeparator}
+                onChange={(v) =>
+                  updateExit(
+                    { separator: v },
+                    continuousNodeInspectorChange(
+                      node.id,
+                      'exitCondition.separator',
+                      t('inspector.fieldExitConditionSeparator'),
+                    ),
+                  )
+                }
+                placeholder="\\n"
+              />
+            </InspectorHistoryBoundary>
           </Field>
         </>
       )}
@@ -201,16 +321,32 @@ export function WrapperGitLoopEdit({ node, agents, definition, onPatch }: EditPr
               b.bind.portName.length > 0 && !bindPortCandidates.includes(b.bind.portName)
             return (
               <li key={i} className="inspector__output-port-row">
-                <input
-                  className="form-input"
-                  value={b.name}
-                  onChange={(e) => {
-                    const copy = [...bindings]
-                    copy[i] = { ...b, name: e.target.value }
-                    setBindings(copy)
-                  }}
-                  placeholder={t('inspector.outputNamePlaceholder')}
-                />
+                <InspectorHistoryBoundary
+                  meta={continuousNodeInspectorChange(
+                    node.id,
+                    `outputBindings.${i}.name`,
+                    t('inspector.fieldOutputBindings'),
+                  )}
+                  onBoundary={onHistoryBoundary}
+                >
+                  <input
+                    className="form-input"
+                    value={b.name}
+                    onChange={(e) => {
+                      const copy = [...bindings]
+                      copy[i] = { ...b, name: e.target.value }
+                      setBindings(
+                        copy,
+                        continuousNodeInspectorChange(
+                          node.id,
+                          `outputBindings.${i}.name`,
+                          t('inspector.fieldOutputBindings'),
+                        ),
+                      )
+                    }}
+                    placeholder={t('inspector.outputNamePlaceholder')}
+                  />
+                </InspectorHistoryBoundary>
                 <Select<string>
                   className={`form-input--mono${bindNodeInvalid ? ' form-input--invalid' : ''}`}
                   value={b.bind.nodeId}
@@ -218,7 +354,14 @@ export function WrapperGitLoopEdit({ node, agents, definition, onPatch }: EditPr
                   onChange={(v) => {
                     const copy = [...bindings]
                     copy[i] = { ...b, bind: { ...b.bind, nodeId: v } }
-                    setBindings(copy)
+                    setBindings(
+                      copy,
+                      atomicNodeInspectorChange(
+                        node.id,
+                        `outputBindings.${i}.bind.nodeId`,
+                        t('inspector.fieldOutputBindings'),
+                      ),
+                    )
                   }}
                   options={[
                     { value: '', label: t('inspector.loopExitNodeIdSelect') },
@@ -243,7 +386,14 @@ export function WrapperGitLoopEdit({ node, agents, definition, onPatch }: EditPr
                   onChange={(v) => {
                     const copy = [...bindings]
                     copy[i] = { ...b, bind: { ...b.bind, portName: v } }
-                    setBindings(copy)
+                    setBindings(
+                      copy,
+                      atomicNodeInspectorChange(
+                        node.id,
+                        `outputBindings.${i}.bind.portName`,
+                        t('inspector.fieldOutputBindings'),
+                      ),
+                    )
                   }}
                   disabled={b.bind.nodeId.length === 0}
                   options={[
@@ -262,7 +412,16 @@ export function WrapperGitLoopEdit({ node, agents, definition, onPatch }: EditPr
                 <button
                   type="button"
                   className="btn btn--sm"
-                  onClick={() => setBindings(bindings.filter((_, j) => j !== i))}
+                  onClick={() =>
+                    setBindings(
+                      bindings.filter((_, j) => j !== i),
+                      atomicNodeInspectorChange(
+                        node.id,
+                        `outputBindings.${i}.remove`,
+                        t('inspector.remove'),
+                      ),
+                    )
+                  }
                 >
                   {t('inspector.remove')}
                 </button>
@@ -274,13 +433,16 @@ export function WrapperGitLoopEdit({ node, agents, definition, onPatch }: EditPr
           type="button"
           className="btn btn--sm"
           onClick={() =>
-            setBindings([
-              ...bindings,
-              {
-                name: `out_${bindings.length + 1}`,
-                bind: { nodeId: '', portName: '' },
-              },
-            ])
+            setBindings(
+              [
+                ...bindings,
+                {
+                  name: `out_${bindings.length + 1}`,
+                  bind: { nodeId: '', portName: '' },
+                },
+              ],
+              atomicNodeInspectorChange(node.id, 'outputBindings.add', t('inspector.addBinding')),
+            )
           }
         >
           {t('inspector.addBinding')}

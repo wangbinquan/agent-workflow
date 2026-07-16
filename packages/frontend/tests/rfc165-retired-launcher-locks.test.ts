@@ -37,5 +37,9 @@ describe('RFC-165 §11.26 — retired launcher locks', () => {
     expect(router).toContain("path: '/workflows/$id/launch'")
     expect(router).toContain("path: '/workgroups/launch'")
     expect(router).toMatch(/redirect\(\{\s*\n?\s*to: '\/tasks\/new'/)
+    // RFC-199: the retired workflow URL is also the exact editor handoff;
+    // its validated `version=N` becomes the wizard's workflowVersion fence.
+    expect(router).toContain('version?: unknown')
+    expect(router).toContain('workflowLaunchWizardSearch(params.id, launchSearch)')
   })
 })

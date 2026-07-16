@@ -10,10 +10,22 @@ import { useTranslation } from 'react-i18next'
 import { Field, Switch, TextArea, TextInput } from '@/components/Form'
 import { Select } from '@/components/Select'
 import { REVIEW_INPUT_HANDLE_ID, syncEdgeFromFormField } from '../connectionSync'
+import {
+  atomicNodeInspectorChange,
+  continuousNodeInspectorChange,
+  InspectorHistoryBoundary,
+  type InspectorChangeMeta,
+} from './historyMeta'
 import { NodeTitleField } from './NodeTitleField'
 import type { EditProps } from './types'
 
-export function ReviewEdit({ node, definition, onPatch, onCommitDef }: EditProps) {
+export function ReviewEdit({
+  node,
+  definition,
+  onPatch,
+  onCommitDef,
+  onHistoryBoundary,
+}: EditProps) {
   const { t } = useTranslation()
   const rec = node as unknown as Record<string, unknown>
   const inputSource = (rec.inputSource ?? {}) as Record<string, unknown> as {
@@ -41,18 +53,24 @@ export function ReviewEdit({ node, definition, onPatch, onCommitDef }: EditProps
     .filter((n) => n.id !== node.id && n.kind !== 'output')
     .map((n) => n.id)
 
-  const patchReview = (delta: Record<string, unknown>): void =>
-    onPatch({
-      ...(node as Record<string, unknown>),
-      ...delta,
-    } as unknown as WorkflowNode)
+  const patchReview = (delta: Record<string, unknown>, meta: InspectorChangeMeta): void =>
+    onPatch(
+      {
+        ...(node as Record<string, unknown>),
+        ...delta,
+      } as unknown as WorkflowNode,
+      meta,
+    )
 
   /**
    * RFC-007: changing inputSource via the form must keep the canvas
    * edge in lock-step. We rebuild the node + recompute edges in one
    * commit so the auto-save sees a consistent definition.
    */
-  const patchReviewInputSource = (nextSource: { nodeId: string; portName: string }): void => {
+  const patchReviewInputSource = (
+    nextSource: { nodeId: string; portName: string },
+    meta: InspectorChangeMeta,
+  ): void => {
     const prevSource = {
       nodeId: inputSource.nodeId ?? '',
       portName: inputSource.portName ?? '',
@@ -71,17 +89,49 @@ export function ReviewEdit({ node, definition, onPatch, onCommitDef }: EditProps
       prevSource,
       nextSource,
     )
-    onCommitDef(nextDef)
+    onCommitDef(nextDef, meta)
   }
+
+  const descriptionMeta = continuousNodeInspectorChange(
+    node.id,
+    'description',
+    t('inspector.fieldReviewDescription'),
+  )
+  const inputPortMeta = continuousNodeInspectorChange(
+    node.id,
+    'inputSource.portName',
+    t('inspector.fieldReviewInputSourcePort'),
+  )
+  const rerunRejectMeta = continuousNodeInspectorChange(
+    node.id,
+    'rerunnableOnReject',
+    t('inspector.fieldReviewRerunReject'),
+  )
+  const rerunIterateMeta = continuousNodeInspectorChange(
+    node.id,
+    'rerunnableOnIterate',
+    t('inspector.fieldReviewRerunIterate'),
+  )
+  const commentTemplateMeta = continuousNodeInspectorChange(
+    node.id,
+    'commentInjectTemplate',
+    t('inspector.fieldReviewCommentTemplate'),
+  )
 
   return (
     <div className="form-grid">
-      <NodeTitleField node={node} onPatch={onPatch} />
+      <NodeTitleField node={node} onPatch={onPatch} onHistoryBoundary={onHistoryBoundary} />
       <Field
         label={t('inspector.fieldReviewDescription')}
         hint={t('inspector.fieldReviewDescriptionHint')}
       >
-        <TextArea value={description} rows={2} onChange={(v) => patchReview({ description: v })} />
+        <InspectorHistoryBoundary meta={descriptionMeta} onBoundary={onHistoryBoundary}>
+          <TextArea
+            value={description}
+            rows={2}
+            onChange={(v) => patchReview({ description: v }, descriptionMeta)}
+          />
+        </InspectorHistoryBoundary>
       </Field>
       <Field
         label={t('inspector.fieldReviewInputSourceNode')}
@@ -92,10 +142,17 @@ export function ReviewEdit({ node, definition, onPatch, onCommitDef }: EditProps
           value={inputSource.nodeId ?? ''}
           ariaLabel={t('inspector.fieldReviewInputSourceNode')}
           onChange={(v) =>
-            patchReviewInputSource({
-              nodeId: v,
-              portName: inputSource.portName ?? '',
-            })
+            patchReviewInputSource(
+              {
+                nodeId: v,
+                portName: inputSource.portName ?? '',
+              },
+              atomicNodeInspectorChange(
+                node.id,
+                'inputSource.nodeId',
+                t('inspector.fieldReviewInputSourceNode'),
+              ),
+            )
           }
           options={[
             { value: '', label: '—' },
@@ -108,59 +165,92 @@ export function ReviewEdit({ node, definition, onPatch, onCommitDef }: EditProps
         hint={t('inspector.fieldReviewInputSourcePortHint')}
         required
       >
-        <TextInput
-          value={inputSource.portName ?? ''}
-          onChange={(v) =>
-            patchReviewInputSource({ nodeId: inputSource.nodeId ?? '', portName: v })
-          }
-          placeholder="design"
-        />
+        <InspectorHistoryBoundary meta={inputPortMeta} onBoundary={onHistoryBoundary}>
+          <TextInput
+            value={inputSource.portName ?? ''}
+            onChange={(v) =>
+              patchReviewInputSource(
+                { nodeId: inputSource.nodeId ?? '', portName: v },
+                inputPortMeta,
+              )
+            }
+            placeholder="design"
+          />
+        </InspectorHistoryBoundary>
       </Field>
       <Field
         label={t('inspector.fieldReviewRerunReject')}
         hint={t('inspector.fieldReviewRerunRejectHint')}
       >
-        <TextInput
-          value={rerunnableOnReject.join(', ')}
-          onChange={(v) =>
-            patchReview({
-              rerunnableOnReject: v
-                .split(',')
-                .map((s) => s.trim())
-                .filter((s) => s.length > 0),
-            })
-          }
-          placeholder={inputSource.nodeId ?? ''}
-        />
+        <InspectorHistoryBoundary meta={rerunRejectMeta} onBoundary={onHistoryBoundary}>
+          <TextInput
+            value={rerunnableOnReject.join(', ')}
+            onChange={(v) =>
+              patchReview(
+                {
+                  rerunnableOnReject: v
+                    .split(',')
+                    .map((s) => s.trim())
+                    .filter((s) => s.length > 0),
+                },
+                rerunRejectMeta,
+              )
+            }
+            placeholder={inputSource.nodeId ?? ''}
+          />
+        </InspectorHistoryBoundary>
       </Field>
       <Field
         label={t('inspector.fieldReviewRerunIterate')}
         hint={t('inspector.fieldReviewRerunIterateHint')}
       >
-        <TextInput
-          value={rerunnableOnIterate.join(', ')}
-          onChange={(v) =>
-            patchReview({
-              rerunnableOnIterate: v
-                .split(',')
-                .map((s) => s.trim())
-                .filter((s) => s.length > 0),
-            })
-          }
-          placeholder={inputSource.nodeId ?? ''}
-        />
+        <InspectorHistoryBoundary meta={rerunIterateMeta} onBoundary={onHistoryBoundary}>
+          <TextInput
+            value={rerunnableOnIterate.join(', ')}
+            onChange={(v) =>
+              patchReview(
+                {
+                  rerunnableOnIterate: v
+                    .split(',')
+                    .map((s) => s.trim())
+                    .filter((s) => s.length > 0),
+                },
+                rerunIterateMeta,
+              )
+            }
+            placeholder={inputSource.nodeId ?? ''}
+          />
+        </InspectorHistoryBoundary>
       </Field>
       <Field label={t('inspector.fieldReviewRollbackReject')}>
         <Switch
           checked={rollbackFilesOnReject}
-          onChange={(c) => patchReview({ rollbackFilesOnReject: c })}
+          onChange={(c) =>
+            patchReview(
+              { rollbackFilesOnReject: c },
+              atomicNodeInspectorChange(
+                node.id,
+                'rollbackFilesOnReject',
+                t('inspector.fieldReviewRollbackReject'),
+              ),
+            )
+          }
           label={t('inspector.fieldReviewRollbackRejectLabel')}
         />
       </Field>
       <Field label={t('inspector.fieldReviewRollbackIterate')}>
         <Switch
           checked={rollbackFilesOnIterate}
-          onChange={(c) => patchReview({ rollbackFilesOnIterate: c })}
+          onChange={(c) =>
+            patchReview(
+              { rollbackFilesOnIterate: c },
+              atomicNodeInspectorChange(
+                node.id,
+                'rollbackFilesOnIterate',
+                t('inspector.fieldReviewRollbackIterate'),
+              ),
+            )
+          }
           label={t('inspector.fieldReviewRollbackIterateLabel')}
         />
       </Field>
@@ -168,12 +258,14 @@ export function ReviewEdit({ node, definition, onPatch, onCommitDef }: EditProps
         label={t('inspector.fieldReviewCommentTemplate')}
         hint={t('inspector.fieldReviewCommentTemplateHint')}
       >
-        <TextArea
-          value={commentInjectTemplate}
-          rows={3}
-          onChange={(v) => patchReview({ commentInjectTemplate: v })}
-          placeholder=""
-        />
+        <InspectorHistoryBoundary meta={commentTemplateMeta} onBoundary={onHistoryBoundary}>
+          <TextArea
+            value={commentInjectTemplate}
+            rows={3}
+            onChange={(v) => patchReview({ commentInjectTemplate: v }, commentTemplateMeta)}
+            placeholder=""
+          />
+        </InspectorHistoryBoundary>
       </Field>
     </div>
   )

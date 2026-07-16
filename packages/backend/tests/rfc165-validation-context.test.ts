@@ -31,25 +31,27 @@ describe('RFC-165 T7 — buildWorkflowValidationContext', () => {
     expect(Array.isArray(ctx.plugins)).toBe(true)
   })
 
-  test('consistency lock: every production validateWorkflowDef caller uses the helper', () => {
-    // Files that gate launches / syncs on validateWorkflowDef. Each must
-    // build its ctx via buildWorkflowValidationContext — a hand-rolled
+  test('consistency lock: every production workflow validator caller uses the helper', () => {
+    // Files that gate launches / syncs on either validator entry point. Each
+    // must load its ctx via the canonical loader (or its legacy alias) — a hand-rolled
     // `{ agents: …, skills: … }` literal next to validateWorkflowDef( is
     // exactly the regression this pins down.
     const productionCallers = [
       'src/services/task.ts',
       'src/routes/tasks.ts',
+      'src/routes/workflows.ts',
       'src/services/workflow.validator.ts',
     ]
     for (const rel of productionCallers) {
       const src = read(rel)
-      if (!src.includes('validateWorkflowDef(')) continue
-      expect(src.includes('buildWorkflowValidationContext('), `${rel} must use the helper`).toBe(
-        true,
-      )
+      if (!/\bvalidateWorkflow(?:Def|Definition)\(/.test(src)) continue
+      expect(
+        /\b(?:load|build)WorkflowValidationContext\(/.test(src),
+        `${rel} must use the helper`,
+      ).toBe(true)
       // No partial hand-rolled context objects at the call sites.
       expect(
-        /validateWorkflowDef\([^)]*\{\s*\n?\s*agents:/m.test(src),
+        /validateWorkflow(?:Def|Definition)\([^)]*\{\s*\n?\s*agents:/m.test(src),
         `${rel} hand-rolls a partial validation ctx`,
       ).toBe(false)
     }

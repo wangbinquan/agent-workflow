@@ -10,7 +10,7 @@ import { existsSync } from 'node:fs'
 import { mkdir, rm, stat, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
-import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import type { Logger } from '@/util/log'
 
 export interface GitRunResult {
@@ -404,6 +404,27 @@ export interface CreateWorktreeOptions {
    */
   gitUserName?: string | null
   gitUserEmail?: string | null
+  /**
+   * RFC-199 deterministic lifecycle seam. Production callers omit this;
+   * regression tests use it to place an external ref writer in the two
+   * working-branch CAS windows and to inject post-add cleanup failures.
+   */
+  lifecycleHook?: (event: WorktreeLifecycleHookEvent) => void | Promise<void>
+}
+
+export interface WorktreeLifecycleHookEvent {
+  stage:
+    | 'working-branch-after-capture'
+    | 'working-branch-prepared-before-cas'
+    | 'post-add-before-submodules'
+    | 'post-add-cleanup-worktree-remove'
+    | 'post-add-cleanup-branch-restore'
+  repoPath: string
+  worktreePath: string
+  branch: string
+  branchRef: string
+  branchBefore: string | null
+  preparedCommit?: string
 }
 
 export interface CreatedWorktree {
@@ -411,6 +432,12 @@ export interface CreatedWorktree {
   branch: string
   /** Source-repo commit the worktree starts from (for snapshotting later). */
   baseCommit: string
+  /**
+   * Exact launch-time ownership record. Cleanup must use this record instead
+   * of guessing from a branch name or path shape: a user working branch may
+   * have existed before launch and may have been advanced by the base merge.
+   */
+  cleanup: WorktreeCleanupProvenance
   /**
    * RFC-034: outcome of the `submodule update --init --recursive` pass on the
    * fresh worktree. `true` when no submodules / mode='never' / sync succeeded.
@@ -423,6 +450,161 @@ export interface CreatedWorktree {
   submoduleInitError: string | null
   /** True iff the parent repo carries a `.gitmodules` file. */
   hasSubmodules: boolean
+}
+
+/**
+ * Git ownership captured around one successful `git worktree add`.
+ *
+ * `branchBefore` is the local branch ref before this launch (`null` when the
+ * launch created it). `branchAfter` is the exact ref value after materialize.
+ * Rollback uses those values as compare-and-swap operands, so a concurrent ref
+ * writer is never overwritten or force-deleted.
+ */
+export interface WorktreeCleanupProvenance {
+  repoPath: string
+  worktreePath: string
+  branch: string
+  branchRef: string
+  branchBefore: string | null
+  branchAfter: string
+}
+
+export interface WorktreeCleanupResult {
+  worktreeRemoved: boolean
+  branchRestored: boolean
+  failures: Array<{
+    stage: 'worktree-remove' | 'branch-restore'
+    message: string
+  }>
+}
+
+type LocalBranchRefRead =
+  | { kind: 'present'; value: string }
+  | { kind: 'missing' }
+  | { kind: 'error'; message: string }
+
+async function inspectLocalBranchRef(
+  repoPath: string,
+  branchRef: string,
+): Promise<LocalBranchRefRead> {
+  const result = await runGit(repoPath, ['rev-parse', '--verify', '--quiet', branchRef])
+  if (result.exitCode === 0) return { kind: 'present', value: result.stdout.trim() }
+  // `rev-parse --verify --quiet` uses 1 for an absent ref. Any other status
+  // is a repository/read failure and must never be collapsed into "missing".
+  if (result.exitCode === 1) return { kind: 'missing' }
+  return {
+    kind: 'error',
+    message:
+      result.stderr.trim() ||
+      `git rev-parse exited ${result.exitCode} while reading '${branchRef}'`,
+  }
+}
+
+async function readLocalBranchRef(repoPath: string, branchRef: string): Promise<string | null> {
+  const result = await inspectLocalBranchRef(repoPath, branchRef)
+  if (result.kind === 'present') return result.value
+  if (result.kind === 'missing') return null
+  throw new DomainError(
+    'worktree-branch-ref-read-failed',
+    `cannot read local branch ref '${branchRef}'`,
+    500,
+    { repoPath, message: result.message },
+  )
+}
+
+async function restoreBranchRefCas(
+  provenance: WorktreeCleanupProvenance,
+  beforeStage?: () => void | Promise<void>,
+): Promise<Pick<WorktreeCleanupResult, 'branchRestored' | 'failures'>> {
+  const failures: WorktreeCleanupResult['failures'] = []
+  try {
+    await beforeStage?.()
+  } catch (error) {
+    failures.push({
+      stage: 'branch-restore',
+      message: error instanceof Error ? error.message : String(error),
+    })
+    return { branchRestored: false, failures }
+  }
+
+  const read = await inspectLocalBranchRef(provenance.repoPath, provenance.branchRef)
+  if (read.kind === 'error') {
+    failures.push({ stage: 'branch-restore', message: read.message })
+    return { branchRestored: false, failures }
+  }
+  const current = read.kind === 'present' ? read.value : null
+  if (current === provenance.branchBefore) return { branchRestored: true, failures }
+
+  const restore =
+    provenance.branchBefore === null
+      ? await runGit(provenance.repoPath, [
+          'update-ref',
+          '-d',
+          provenance.branchRef,
+          provenance.branchAfter,
+        ])
+      : await runGit(provenance.repoPath, [
+          'update-ref',
+          provenance.branchRef,
+          provenance.branchBefore,
+          provenance.branchAfter,
+        ])
+  if (restore.exitCode !== 0) {
+    failures.push({
+      stage: 'branch-restore',
+      message:
+        restore.stderr.trim() ||
+        `branch ref changed concurrently (expected ${provenance.branchAfter}, found ${current ?? 'missing'})`,
+    })
+  }
+  return { branchRestored: restore.exitCode === 0, failures }
+}
+
+/**
+ * Remove a launch-owned linked worktree and CAS-restore its branch ref.
+ *
+ * The ref operation deliberately uses `git update-ref <ref> <new> <old>` (or
+ * `-d <ref> <old>` for a branch minted by this launch). A ref that moved after
+ * materialization is retained and reported as incomplete cleanup; it is never
+ * force-reset to the stale launch-time value.
+ */
+export async function cleanupCreatedWorktree(
+  provenance: WorktreeCleanupProvenance,
+  opts?: {
+    beforeStage?: (stage: 'worktree-remove' | 'branch-restore') => void | Promise<void>
+  },
+): Promise<WorktreeCleanupResult> {
+  const failures: WorktreeCleanupResult['failures'] = []
+  try {
+    await opts?.beforeStage?.('worktree-remove')
+  } catch (error) {
+    failures.push({
+      stage: 'worktree-remove',
+      message: error instanceof Error ? error.message : String(error),
+    })
+    return { worktreeRemoved: false, branchRestored: false, failures }
+  }
+  const remove = await runGit(provenance.repoPath, [
+    'worktree',
+    'remove',
+    '--force',
+    provenance.worktreePath,
+  ])
+  if (remove.exitCode !== 0) {
+    failures.push({
+      stage: 'worktree-remove',
+      message: remove.stderr.trim() || `git worktree remove exited ${remove.exitCode}`,
+    })
+    return { worktreeRemoved: false, branchRestored: false, failures }
+  }
+
+  const branch = await restoreBranchRefCas(provenance, () => opts?.beforeStage?.('branch-restore'))
+  failures.push(...branch.failures)
+  return {
+    worktreeRemoved: true,
+    branchRestored: branch.branchRestored,
+    failures,
+  }
 }
 
 export async function createWorktree(opts: CreateWorktreeOptions): Promise<CreatedWorktree> {
@@ -462,16 +644,20 @@ export async function createWorktree(opts: CreateWorktreeOptions): Promise<Creat
   // branch as the worktree's checked-out branch. Omitted → byte-for-byte
   // legacy behavior (grep guard locks the `agent-workflow/{taskId}` literal).
   const branch = opts.workingBranch ?? `agent-workflow/${opts.taskId}`
+  let cleanup: WorktreeCleanupProvenance
   if (opts.workingBranch) {
-    await checkoutWorkingBranch({
+    cleanup = await checkoutWorkingBranch({
       repoPath: opts.repoPath,
       worktreePath,
       branch: opts.workingBranch,
       baseCommit,
       gitUserName: opts.gitUserName ?? null,
       gitUserEmail: opts.gitUserEmail ?? null,
+      ...(opts.lifecycleHook !== undefined ? { lifecycleHook: opts.lifecycleHook } : {}),
     })
   } else {
+    const branchRef = `refs/heads/${branch}`
+    const branchBefore = await readLocalBranchRef(opts.repoPath, branchRef)
     const add = await runGit(opts.repoPath, [
       'worktree',
       'add',
@@ -487,22 +673,76 @@ export async function createWorktree(opts: CreateWorktreeOptions): Promise<Creat
         500,
       )
     }
+    cleanup = {
+      repoPath: opts.repoPath,
+      worktreePath,
+      branch,
+      branchRef,
+      branchBefore,
+      // `worktree add -b <branch> <path> <baseCommit>` creates the ref at this
+      // exact commit; retaining the operand here also avoids an unowned gap if
+      // a post-add ref read itself fails.
+      branchAfter: baseCommit,
+    }
   }
 
-  // RFC-034: dynamic import to avoid a circular dep between util/git.ts and
-  // services/gitSubmodule.ts (which itself imports runGit from this file).
-  const { syncSubmodules } = await import('@/services/gitSubmodule')
-  const { resolveSubmoduleParams } = await import('@/services/gitRepoCache')
-  const effective = resolveSubmoduleParams(opts.submoduleMode, opts.submoduleJobs)
-  const sub = await syncSubmodules(worktreePath, {
-    mode: effective.mode,
-    jobs: effective.jobs,
-  })
+  const sub = await (async () => {
+    try {
+      await opts.lifecycleHook?.({
+        stage: 'post-add-before-submodules',
+        repoPath: cleanup.repoPath,
+        worktreePath: cleanup.worktreePath,
+        branch: cleanup.branch,
+        branchRef: cleanup.branchRef,
+        branchBefore: cleanup.branchBefore,
+        preparedCommit: cleanup.branchAfter,
+      })
+      // RFC-034: dynamic import to avoid a circular dep between util/git.ts and
+      // services/gitSubmodule.ts (which itself imports runGit from this file).
+      const { syncSubmodules } = await import('@/services/gitSubmodule')
+      const { resolveSubmoduleParams } = await import('@/services/gitRepoCache')
+      const effective = resolveSubmoduleParams(opts.submoduleMode, opts.submoduleJobs)
+      return await syncSubmodules(worktreePath, {
+        mode: effective.mode,
+        jobs: effective.jobs,
+      })
+    } catch (error) {
+      // Once `worktree add` succeeds this helper owns both the registration and
+      // the exact branch mutation. An unexpected post-add failure is cleaned
+      // here because no caller has received the provenance handoff yet.
+      const cleanupResult = await cleanupCreatedWorktree(cleanup, {
+        beforeStage: async (stage) => {
+          await opts.lifecycleHook?.({
+            stage:
+              stage === 'worktree-remove'
+                ? 'post-add-cleanup-worktree-remove'
+                : 'post-add-cleanup-branch-restore',
+            repoPath: cleanup.repoPath,
+            worktreePath: cleanup.worktreePath,
+            branch: cleanup.branch,
+            branchRef: cleanup.branchRef,
+            branchBefore: cleanup.branchBefore,
+            preparedCommit: cleanup.branchAfter,
+          })
+        },
+      })
+      if (cleanupResult.failures.length > 0) {
+        throw new DomainError(
+          'worktree-post-add-cleanup-incomplete',
+          error instanceof Error ? error.message : String(error),
+          500,
+          { cleanup: cleanupResult },
+        )
+      }
+      throw error
+    }
+  })()
 
   return {
     worktreePath,
     branch,
     baseCommit,
+    cleanup,
     submoduleInitOk: sub.ok,
     submoduleInitError: sub.error,
     hasSubmodules: sub.hasGitmodules,
@@ -530,13 +770,114 @@ function mapWorktreeAddError(stderr: string, branch: string): Error {
   return new DomainError('worktree-add-failed', `git worktree add failed: ${stderr.trim()}`, 500)
 }
 
+interface RegisteredWorktree {
+  path: string
+  branchRef: string | null
+}
+
+async function listRegisteredWorktrees(repoPath: string): Promise<RegisteredWorktree[]> {
+  const list = await runGit(repoPath, ['worktree', 'list', '--porcelain'])
+  if (list.exitCode !== 0) {
+    throw new DomainError(
+      'working-branch-state-read-failed',
+      `cannot inspect worktrees for '${repoPath}'`,
+      500,
+      { stderr: list.stderr.trim() },
+    )
+  }
+  const registrations: RegisteredWorktree[] = []
+  let current: RegisteredWorktree | null = null
+  for (const line of list.stdout.split('\n')) {
+    if (line.startsWith('worktree ')) {
+      if (current !== null) registrations.push(current)
+      current = { path: line.slice('worktree '.length), branchRef: null }
+    } else if (line.startsWith('branch ') && current !== null) {
+      current.branchRef = line.slice('branch '.length)
+    }
+  }
+  if (current !== null) registrations.push(current)
+  return registrations
+}
+
+async function assertWorkingBranchNotInUse(
+  repoPath: string,
+  branch: string,
+  branchRef: string,
+): Promise<void> {
+  const owner = (await listRegisteredWorktrees(repoPath)).find(
+    (registration) => registration.branchRef === branchRef,
+  )
+  if (owner !== undefined) {
+    throw new ValidationError(
+      'working-branch-in-use',
+      `working branch '${branch}' is already checked out by another worktree`,
+      { worktreePath: owner.path },
+    )
+  }
+}
+
+async function cleanupFailedWorkingBranchAttach(
+  provenance: WorktreeCleanupProvenance,
+): Promise<WorktreeCleanupResult> {
+  let registrations: RegisteredWorktree[]
+  try {
+    registrations = await listRegisteredWorktrees(provenance.repoPath)
+  } catch (error) {
+    return {
+      worktreeRemoved: false,
+      branchRestored: false,
+      failures: [
+        {
+          stage: 'worktree-remove',
+          message: error instanceof Error ? error.message : String(error),
+        },
+      ],
+    }
+  }
+
+  if (registrations.some((registration) => registration.path === provenance.worktreePath)) {
+    return cleanupCreatedWorktree(provenance)
+  }
+
+  const externalOwner = registrations.find(
+    (registration) => registration.branchRef === provenance.branchRef,
+  )
+  if (externalOwner !== undefined) {
+    return {
+      worktreeRemoved: true,
+      branchRestored: false,
+      failures: [
+        {
+          stage: 'branch-restore',
+          message: `working branch is now checked out at '${externalOwner.path}'`,
+        },
+      ],
+    }
+  }
+
+  const branch = await restoreBranchRefCas(provenance)
+  return { worktreeRemoved: true, branchRestored: branch.branchRestored, failures: branch.failures }
+}
+
+function cleanupFailureDetails(error: Error, cleanup: WorktreeCleanupResult): unknown {
+  return {
+    cause:
+      error instanceof DomainError
+        ? { code: error.code, status: error.status, details: error.details }
+        : { message: error.message },
+    cleanup,
+  }
+}
+
 /**
  * RFC-075: materialize a user-specified working branch into a fresh worktree.
  *
  *  - Validates the branch name via `git check-ref-format --branch`.
- *  - New branch (absent local + remote) → `worktree add -b` off `baseCommit`.
- *  - Existing branch (local or remote) → reuse: check it out into the worktree
- *    and `git merge` `baseCommit` (the RFC-068 remote-synced base) into it.
+ *  - New branch (absent local + remote) → prepare `baseCommit`.
+ *  - Existing branch (local or remote) → merge `baseCommit` in a detached
+ *    preparation worktree, never in the user branch's attached worktree.
+ *  - Publish with one expected-old `update-ref` CAS, then attach the branch.
+ *    Ownership is never inferred from a ref read after merge.
  *
  * On any failure the partially-created worktree is torn down so a failed
  * launch leaves nothing behind, and a typed ValidationError with a stable
@@ -551,8 +892,10 @@ async function checkoutWorkingBranch(opts: {
   baseCommit: string
   gitUserName: string | null
   gitUserEmail: string | null
-}): Promise<void> {
+  lifecycleHook?: (event: WorktreeLifecycleHookEvent) => void | Promise<void>
+}): Promise<WorktreeCleanupProvenance> {
   const { repoPath, worktreePath, branch, baseCommit } = opts
+  const branchRef = `refs/heads/${branch}`
 
   // 1. Authoritative name validation (mirrors shared isLooseValidBranchName).
   const fmt = await runGit(repoPath, ['check-ref-format', '--branch', branch])
@@ -562,68 +905,208 @@ async function checkoutWorkingBranch(opts: {
     })
   }
 
-  // 2. Existence probes: local head + remote head.
-  const localExists =
-    (await runGit(repoPath, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`]))
-      .exitCode === 0
-  const remoteLs = await runGit(repoPath, ['ls-remote', '--heads', 'origin', branch])
-  const remoteExists = remoteLs.exitCode === 0 && remoteLs.stdout.trim().length > 0
+  // 2. Capture the expected-old operand before any preparation. A writer in
+  // either hook window makes the final CAS fail instead of becoming part of
+  // this launch's cleanup provenance.
+  const branchBefore = await readLocalBranchRef(repoPath, branchRef)
+  await opts.lifecycleHook?.({
+    stage: 'working-branch-after-capture',
+    repoPath,
+    worktreePath,
+    branch,
+    branchRef,
+    branchBefore,
+  })
+  await assertWorkingBranchNotInUse(repoPath, branch, branchRef)
 
-  // 3a. New branch off the remote-synced base — no merge needed.
-  if (!localExists && !remoteExists) {
-    const add = await runGit(repoPath, ['worktree', 'add', '-b', branch, worktreePath, baseCommit])
-    if (add.exitCode !== 0) throw mapWorktreeAddError(add.stderr, branch)
-    return
-  }
-
-  // 3b. Reuse. When the branch lives only on the remote, fetch it and create a
-  // local branch off the remote tip; otherwise check out the existing local.
-  if (!localExists && remoteExists) {
-    const fetch = await runGit(repoPath, [
-      'fetch',
-      'origin',
-      `${branch}:refs/remotes/origin/${branch}`,
-    ])
-    if (fetch.exitCode !== 0) {
-      throw new ValidationError(
-        'working-branch-base-fetch-failed',
-        `failed to fetch existing remote working branch '${branch}'`,
-        { stderr: fetch.stderr.trim() },
-      )
+  // 3. Resolve the preparation start without creating or moving the local
+  // head. Remote-only reuse fetches a tracking ref; the local branch remains
+  // absent until the CAS below.
+  let preparationStart = branchBefore
+  if (preparationStart === null) {
+    const remoteLs = await runGit(repoPath, ['ls-remote', '--heads', 'origin', branch])
+    const remoteExists = remoteLs.exitCode === 0 && remoteLs.stdout.trim().length > 0
+    if (remoteExists) {
+      const fetch = await runGit(repoPath, [
+        'fetch',
+        'origin',
+        `${branch}:refs/remotes/origin/${branch}`,
+      ])
+      if (fetch.exitCode !== 0) {
+        throw new ValidationError(
+          'working-branch-base-fetch-failed',
+          `failed to fetch existing remote working branch '${branch}'`,
+          { stderr: fetch.stderr.trim() },
+        )
+      }
+      const remoteHead = await runGit(repoPath, [
+        'rev-parse',
+        '--verify',
+        `refs/remotes/origin/${branch}^{commit}`,
+      ])
+      if (remoteHead.exitCode !== 0) {
+        throw new ValidationError(
+          'working-branch-base-fetch-failed',
+          `cannot resolve fetched remote working branch '${branch}'`,
+          { stderr: remoteHead.stderr.trim() },
+        )
+      }
+      preparationStart = remoteHead.stdout.trim()
     }
-    const add = await runGit(repoPath, [
+  }
+  preparationStart ??= baseCommit
+
+  // 4. Compute the merge result in detached state. The merge may write an
+  // object, but cannot move the user's branch ref.
+  let preparedCommit = baseCommit
+  if (branchBefore !== null || preparationStart !== baseCommit) {
+    const prepare = await runGit(repoPath, [
       'worktree',
       'add',
-      '-b',
-      branch,
+      '--detach',
       worktreePath,
-      `refs/remotes/origin/${branch}`,
+      preparationStart,
     ])
-    if (add.exitCode !== 0) throw mapWorktreeAddError(add.stderr, branch)
-  } else {
-    const add = await runGit(repoPath, ['worktree', 'add', worktreePath, branch])
-    if (add.exitCode !== 0) throw mapWorktreeAddError(add.stderr, branch)
+    if (prepare.exitCode !== 0) throw mapWorktreeAddError(prepare.stderr, branch)
+
+    const merge = await runGit(worktreePath, [
+      ...gitIdentityArgs(opts.gitUserName, opts.gitUserEmail),
+      'merge',
+      '--no-edit',
+      baseCommit,
+    ])
+    if (merge.exitCode !== 0) {
+      await runGit(worktreePath, ['merge', '--abort'])
+      const remove = await runGit(repoPath, ['worktree', 'remove', '--force', worktreePath])
+      if (remove.exitCode !== 0) {
+        throw new DomainError(
+          'working-branch-prepare-cleanup-incomplete',
+          `merging base into working branch '${branch}' failed and the detached preparation worktree could not be removed`,
+          500,
+          {
+            stderr: merge.stderr.trim(),
+            cleanup: {
+              worktreePath,
+              worktreeRemoved: false,
+              message: remove.stderr.trim(),
+            },
+          },
+        )
+      }
+      throw new ValidationError(
+        'working-branch-base-merge-conflict',
+        `merging base into working branch '${branch}' produced a conflict`,
+        { stderr: merge.stderr.trim() },
+      )
+    }
+
+    const prepared = await runGit(worktreePath, ['rev-parse', '--verify', 'HEAD'])
+    if (prepared.exitCode !== 0) {
+      const remove = await runGit(repoPath, ['worktree', 'remove', '--force', worktreePath])
+      throw new DomainError(
+        'working-branch-prepare-read-failed',
+        `cannot resolve detached merge result for working branch '${branch}'`,
+        500,
+        {
+          stderr: prepared.stderr.trim(),
+          cleanup: {
+            worktreePath,
+            worktreeRemoved: remove.exitCode === 0,
+            message: remove.stderr.trim(),
+          },
+        },
+      )
+    }
+    preparedCommit = prepared.stdout.trim()
+    const remove = await runGit(repoPath, ['worktree', 'remove', '--force', worktreePath])
+    if (remove.exitCode !== 0) {
+      throw new DomainError(
+        'working-branch-prepare-cleanup-incomplete',
+        `detached preparation worktree for '${branch}' could not be removed`,
+        500,
+        { worktreePath, stderr: remove.stderr.trim() },
+      )
+    }
   }
 
-  // 4. Merge the remote-synced base into the checked-out working branch. A
-  // fast-forward needs no identity; a true merge commit uses the task identity
-  // (RFC-067) when present, else the daemon's git config.
-  const merge = await runGit(worktreePath, [
-    ...gitIdentityArgs(opts.gitUserName, opts.gitUserEmail),
-    'merge',
-    '--no-edit',
-    baseCommit,
+  await opts.lifecycleHook?.({
+    stage: 'working-branch-prepared-before-cas',
+    repoPath,
+    worktreePath,
+    branch,
+    branchRef,
+    branchBefore,
+    preparedCommit,
+  })
+  await assertWorkingBranchNotInUse(repoPath, branch, branchRef)
+
+  // 5. The only local branch mutation. `000…` is Git's expected-missing
+  // operand; omitting old-value would be an unconditional overwrite.
+  const zeroOid = '0000000000000000000000000000000000000000'
+  const publish = await runGit(repoPath, [
+    'update-ref',
+    branchRef,
+    preparedCommit,
+    branchBefore ?? zeroOid,
   ])
-  if (merge.exitCode !== 0) {
-    // Abort the conflicted merge and tear the worktree back down.
-    await runGit(worktreePath, ['merge', '--abort'])
-    await runGit(repoPath, ['worktree', 'remove', '--force', worktreePath])
-    throw new ValidationError(
-      'working-branch-base-merge-conflict',
-      `merging base into working branch '${branch}' produced a conflict`,
-      { stderr: merge.stderr.trim() },
+  if (publish.exitCode !== 0) {
+    const current = await readLocalBranchRef(repoPath, branchRef)
+    throw new ConflictError(
+      'working-branch-concurrent-update',
+      `working branch '${branch}' changed while its launch workspace was being prepared`,
+      {
+        branchRef,
+        expected: branchBefore,
+        current,
+        preparedCommit,
+        stderr: publish.stderr.trim(),
+      },
     )
   }
+
+  const provenance: WorktreeCleanupProvenance = {
+    repoPath,
+    worktreePath,
+    branch,
+    branchRef,
+    branchBefore,
+    branchAfter: preparedCommit,
+  }
+
+  // 6. Attach only after CAS. Failed attach rolls back exactly that CAS. A
+  // raw ref writer or newly attached external worktree is preserved and
+  // surfaced as incomplete cleanup.
+  const add = await runGit(repoPath, ['worktree', 'add', worktreePath, branch])
+  if (add.exitCode !== 0) {
+    const error = mapWorktreeAddError(add.stderr, branch)
+    const cleanup = await cleanupFailedWorkingBranchAttach(provenance)
+    if (cleanup.failures.length > 0) {
+      throw new DomainError(
+        'working-branch-attach-cleanup-incomplete',
+        error.message,
+        500,
+        cleanupFailureDetails(error, cleanup),
+      )
+    }
+    throw error
+  }
+
+  const attachedHead = await runGit(worktreePath, ['rev-parse', '--verify', 'HEAD'])
+  if (attachedHead.exitCode !== 0 || attachedHead.stdout.trim() !== preparedCommit) {
+    const cleanup = await cleanupCreatedWorktree(provenance)
+    throw new ConflictError(
+      'working-branch-concurrent-update',
+      `working branch '${branch}' changed before its launch workspace was attached`,
+      {
+        branchRef,
+        expected: preparedCommit,
+        current: attachedHead.exitCode === 0 ? attachedHead.stdout.trim() : null,
+        stderr: attachedHead.stderr.trim(),
+        cleanup,
+      },
+    )
+  }
+  return provenance
 }
 
 /**

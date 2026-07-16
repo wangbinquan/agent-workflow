@@ -9,10 +9,22 @@ import { deriveWrapperFanoutOutputs, tryParseKind } from '@agent-workflow/shared
 import { useTranslation } from 'react-i18next'
 import { Field, Switch, TextInput } from '@/components/Form'
 import { KindSelect } from '@/components/KindSelect'
+import {
+  atomicNodeInspectorChange,
+  continuousNodeInspectorChange,
+  InspectorHistoryBoundary,
+  type InspectorChangeMeta,
+} from './historyMeta'
 import { NodeTitleField } from './NodeTitleField'
 import type { EditProps } from './types'
 
-export function WrapperFanoutEdit({ node, agents, definition, onPatch }: EditProps) {
+export function WrapperFanoutEdit({
+  node,
+  agents,
+  definition,
+  onPatch,
+  onHistoryBoundary,
+}: EditProps) {
   const { t } = useTranslation()
   const rec = node as unknown as Record<string, unknown>
   const inner = Array.isArray(rec.nodeIds) ? (rec.nodeIds as string[]) : []
@@ -31,22 +43,28 @@ export function WrapperFanoutEdit({ node, agents, definition, onPatch }: EditPro
     node.id,
     new Map(agents.map((a) => [a.name, a])),
   )
-  function update(patch: Record<string, unknown>) {
-    onPatch({
-      ...(node as Record<string, unknown>),
-      ...patch,
-    } as unknown as WorkflowNode)
+  function update(patch: Record<string, unknown>, meta: InspectorChangeMeta) {
+    onPatch(
+      {
+        ...(node as Record<string, unknown>),
+        ...patch,
+      } as unknown as WorkflowNode,
+      meta,
+    )
   }
-  function setInputs(next: FanoutInput[]) {
-    update({ inputs: next })
+  function setInputs(next: FanoutInput[], meta: InspectorChangeMeta) {
+    update({ inputs: next }, meta)
   }
-  function patchInput(idx: number, patch: Partial<FanoutInput>) {
+  function patchInput(idx: number, patch: Partial<FanoutInput>, meta: InspectorChangeMeta) {
     const next = inputsList.map((p, i) => (i === idx ? { ...p, ...patch } : p))
-    setInputs(next)
+    setInputs(next, meta)
   }
   function removeInput(idx: number) {
     const next = inputsList.filter((_, i) => i !== idx)
-    setInputs(next)
+    setInputs(
+      next,
+      atomicNodeInspectorChange(node.id, `inputs.${idx}.remove`, t('inspector.fanoutInputRemove')),
+    )
   }
   function addInput() {
     const next = [...inputsList, { name: `input_${inputsList.length + 1}`, kind: 'list<string>' }]
@@ -56,11 +74,11 @@ export function WrapperFanoutEdit({ node, agents, definition, onPatch }: EditPro
     if (!inputsList.some((p) => p.isShardSource === true)) {
       next[next.length - 1] = { ...next[next.length - 1]!, isShardSource: true }
     }
-    setInputs(next)
+    setInputs(next, atomicNodeInspectorChange(node.id, 'inputs.add', t('inspector.fanoutInputAdd')))
   }
   return (
     <div className="form-grid">
-      <NodeTitleField node={node} onPatch={onPatch} />
+      <NodeTitleField node={node} onPatch={onPatch} onHistoryBoundary={onHistoryBoundary} />
       <Field label={t('inspector.innerNodeIds')} hint={t('inspector.innerNodeIdsHint')}>
         <div className="muted">
           {inner.length === 0 ? t('inspector.none') : inner.map((i) => <code key={i}>{i} </code>)}
@@ -81,14 +99,43 @@ export function WrapperFanoutEdit({ node, agents, definition, onPatch }: EditPro
             return (
               <div key={idx} className="fanout-input-row-wrap">
                 <div className="fanout-input-row">
-                  <TextInput
-                    value={p.name}
-                    onChange={(v) => patchInput(idx, { name: v })}
-                    placeholder={t('inspector.fanoutInputNamePlaceholder')}
-                  />
+                  <InspectorHistoryBoundary
+                    meta={continuousNodeInspectorChange(
+                      node.id,
+                      `inputs.${idx}.name`,
+                      t('inspector.fanoutInputs'),
+                    )}
+                    onBoundary={onHistoryBoundary}
+                  >
+                    <TextInput
+                      value={p.name}
+                      onChange={(v) =>
+                        patchInput(
+                          idx,
+                          { name: v },
+                          continuousNodeInspectorChange(
+                            node.id,
+                            `inputs.${idx}.name`,
+                            t('inspector.fanoutInputs'),
+                          ),
+                        )
+                      }
+                      placeholder={t('inspector.fanoutInputNamePlaceholder')}
+                    />
+                  </InspectorHistoryBoundary>
                   <KindSelect
                     value={p.kind}
-                    onChange={(v) => patchInput(idx, { kind: v })}
+                    onChange={(v) =>
+                      patchInput(
+                        idx,
+                        { kind: v },
+                        atomicNodeInspectorChange(
+                          node.id,
+                          `inputs.${idx}.kind`,
+                          t('inspector.fanoutInputs'),
+                        ),
+                      )
+                    }
                     testidPrefix={`fanout-input-kind-${idx}`}
                   />
                   <Switch
@@ -99,7 +146,14 @@ export function WrapperFanoutEdit({ node, agents, definition, onPatch }: EditPro
                         ...q,
                         isShardSource: i === idx ? v : false,
                       }))
-                      setInputs(next)
+                      setInputs(
+                        next,
+                        atomicNodeInspectorChange(
+                          node.id,
+                          `inputs.${idx}.isShardSource`,
+                          t('inspector.fanoutInputShardSource'),
+                        ),
+                      )
                     }}
                     label={t('inspector.fanoutInputShardSource')}
                   />

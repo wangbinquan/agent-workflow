@@ -81,8 +81,8 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
  * so any future endpoint that wraps in `{ error: ... }` still parses.
  *
  * Exported for the few hand-rolled fetches that can't go through `api.*`
- * (e.g. the YAML import POST in routes/workflows.tsx) — they had re-grown
- * the exact nested-only bug this function fixed.
+ * (currently multipart/download surfaces). Structured JSON writers should
+ * stay on the helpers below so they cannot re-grow a second error decoder.
  */
 export function extractErrorBody(
   payload: unknown,
@@ -150,16 +150,46 @@ export async function apiPostMultipart<T>(
   return payload as T
 }
 
+/**
+ * Authenticated binary/text download. Unlike apiRequest this preserves the
+ * successful response body as a Blob, while errors still use the one shared
+ * structured decoder.
+ */
+export async function apiGetBlob(
+  path: string,
+  query?: RequestOptions['query'],
+  signal?: AbortSignal,
+): Promise<Blob> {
+  const token = getToken()
+  const headers: Record<string, string> = { Accept: '*/*' }
+  if (token !== null) headers.Authorization = `Bearer ${token}`
+  const res = await fetch(buildUrl(path, query), { method: 'GET', headers, signal })
+  if (res.status === 401) clearToken()
+  if (!res.ok) {
+    const isJson = res.headers.get('content-type')?.includes('application/json') ?? false
+    const payload: unknown = isJson ? await res.json().catch(() => null) : null
+    const err = extractErrorBody(payload, res)
+    throw new ApiError(res.status, err.code, err.message, err.details)
+  }
+  return res.blob()
+}
+
 export const api = {
   get: <T>(path: string, query?: RequestOptions['query'], signal?: AbortSignal) =>
     apiRequest<T>(path, { query, signal }),
   post: <T>(path: string, body?: unknown, signal?: AbortSignal) =>
     apiRequest<T>(path, { method: 'POST', body, signal }),
   postMultipart: apiPostMultipart,
+  getBlob: apiGetBlob,
   put: <T>(path: string, body?: unknown, signal?: AbortSignal) =>
     apiRequest<T>(path, { method: 'PUT', body, signal }),
   patch: <T>(path: string, body?: unknown, signal?: AbortSignal) =>
     apiRequest<T>(path, { method: 'PATCH', body, signal }),
   delete: <T>(path: string, signal?: AbortSignal) =>
     apiRequest<T>(path, { method: 'DELETE', signal }),
+  /** JSON-fenced destructive writes (for example RFC-199 workflow delete).
+   * Kept separate so existing `delete(path, signal?)` callers retain their
+   * second-argument meaning. */
+  deleteJson: <T>(path: string, body: unknown, signal?: AbortSignal) =>
+    apiRequest<T>(path, { method: 'DELETE', body, signal }),
 }

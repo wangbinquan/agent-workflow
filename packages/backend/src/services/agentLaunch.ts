@@ -14,6 +14,7 @@
 import {
   applySpaceFields,
   buildClarifyEdges,
+  serializeWorkflowDefinitionStorageV1,
   StartTaskSchema,
   WorkflowDefinitionSchema,
   type LaunchSpaceFields,
@@ -54,7 +55,12 @@ export async function ensureAgentHostWorkflow(db: DbClient): Promise<void> {
       id: AGENT_HOST_WORKFLOW_ID,
       name: AGENT_HOST_WORKFLOW_NAME,
       description: 'RFC-165 single-agent host anchor — do not launch directly',
-      definition: '{"$schema_version":1,"inputs":[],"nodes":[],"edges":[]}',
+      definition: serializeWorkflowDefinitionStorageV1({
+        $schema_version: 4,
+        inputs: [],
+        nodes: [],
+        edges: [],
+      }),
       builtin: true,
     })
     .onConflictDoNothing({ target: workflows.id })

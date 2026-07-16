@@ -27,6 +27,7 @@ import type { Node } from '@xyflow/react'
 import { isWrapperKind } from '@agent-workflow/shared'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { computeFitBounds } from './wrapperFit'
+import { effectiveWorkflowNodePosition } from '../../lib/workflow-placement'
 
 // flag-audit W0: the private wrapper-kind predicate that once lived here (and
 // missed wrapper-fanout during the RFC-060 rollout — wrapper-sizing bug) is
@@ -79,7 +80,7 @@ export function resolveWrappers(
   measuredSizes?: Map<string, { width: number; height: number }>,
 ): Map<string, WrapperResolved> {
   const out = new Map<string, WrapperResolved>()
-  for (const n of definition.nodes) {
+  for (const [index, n] of definition.nodes.entries()) {
     if (!isWrapperKind(n.kind)) continue
     const rec = n as unknown as Record<string, unknown>
     const ids = Array.isArray(rec.nodeIds)
@@ -93,7 +94,7 @@ export function resolveWrappers(
       typeof sizeRec.width === 'number' &&
       typeof sizeRec.height === 'number'
     ) {
-      const pos = n.position ?? { x: 0, y: 0 }
+      const pos = effectiveWorkflowNodePosition(n, index)
       out.set(n.id, {
         id: n.id,
         position: { x: pos.x, y: pos.y },
@@ -214,30 +215,53 @@ export function projectDefinitionForXyflow(
 
 /** Inverse: when xyflow hands us flowNodes (children carry relative position),
  * compute absolute coordinates so the caller can serialize back to
- * definition.nodes. Wrapper nodes themselves come back with the absolute
- * render anchor xyflow holds; no transform needed for them. */
+ * definition.nodes. Nested wrappers are children too, so their current
+ * absolute render anchor must be resolved through the complete parent chain. */
 export function projectXyflowPositionsToAbsolute(
   definition: WorkflowDefinition,
   flowNodes: Node[],
   measuredSizes?: Map<string, { width: number; height: number }>,
 ): Node[] {
-  // Build absolute wrapper positions from the *current* flowNodes (so live
-  // drags of the wrapper move children along correctly).
-  const wrappers = new Map<string, { x: number; y: number }>()
-  for (const fn of flowNodes) {
-    if (isWrapperKind(fn.type ?? '')) {
-      wrappers.set(fn.id, { x: fn.position.x, y: fn.position.y })
-    }
-  }
   const wrapperMembership = buildParentMap(resolveWrappers(definition, measuredSizes))
+  const flowById = new Map(flowNodes.map((node) => [node.id, node] as const))
+  const absoluteById = new Map<string, { x: number; y: number }>()
+  const resolving = new Set<string>()
+
+  // Resolve from the *current* xyflow positions so moving any ancestor moves
+  // all of its nested descendants when the canonical absolute coordinates are
+  // persisted. The validator rejects cycles, but the guard keeps this pure
+  // boundary total for malformed in-memory definitions.
+  const resolveAbsolutePosition = (id: string): { x: number; y: number } | undefined => {
+    const cached = absoluteById.get(id)
+    if (cached !== undefined) return cached
+    const node = flowById.get(id)
+    if (node === undefined) return undefined
+    if (resolving.has(id)) return undefined
+
+    resolving.add(id)
+    const parentId = wrapperMembership.get(id)
+    const parentPosition = parentId === undefined ? undefined : resolveAbsolutePosition(parentId)
+    resolving.delete(id)
+
+    const absolute =
+      parentId !== undefined && parentPosition !== undefined
+        ? {
+            x: node.position.x + parentPosition.x,
+            y: node.position.y + parentPosition.y,
+          }
+        : { x: node.position.x, y: node.position.y }
+    absoluteById.set(id, absolute)
+    return absolute
+  }
+
   return flowNodes.map((fn) => {
     const parentId = wrapperMembership.get(fn.id)
     if (parentId === undefined) return fn
-    const wp = wrappers.get(parentId)
-    if (wp === undefined) return fn
+    const absolute = resolveAbsolutePosition(fn.id)
+    if (absolute === undefined) return fn
     return {
       ...fn,
-      position: { x: fn.position.x + wp.x, y: fn.position.y + wp.y },
+      position: absolute,
     }
   })
 }

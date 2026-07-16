@@ -21,6 +21,7 @@
 import {
   applySpaceFields,
   initialDwState,
+  serializeWorkflowDefinitionStorageV1,
   StartTaskSchema,
   workgroupLaunchReadiness,
   WorkgroupRuntimeConfigSchema,
@@ -120,7 +121,12 @@ export async function ensureWorkgroupHostWorkflow(db: DbClient): Promise<void> {
       id: WORKGROUP_HOST_WORKFLOW_ID,
       name: WORKGROUP_HOST_WORKFLOW_NAME,
       description: 'RFC-164 workgroup host anchor — do not launch directly',
-      definition: '{"$schema_version":1,"inputs":[],"nodes":[],"edges":[]}',
+      definition: serializeWorkflowDefinitionStorageV1({
+        $schema_version: 4,
+        inputs: [],
+        nodes: [],
+        edges: [],
+      }),
       builtin: true,
     })
     .onConflictDoNothing({ target: workflows.id })

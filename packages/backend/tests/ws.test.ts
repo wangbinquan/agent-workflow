@@ -182,8 +182,26 @@ describe('WebSocket channels', () => {
     ws.addEventListener('message', (e) => received.push(JSON.parse(String(e.data))))
     await waitUntil(() => hasType(received, 'hello'))
 
-    await updateWorkflow(h.db, wf.id, { name: 'wf renamed' })
-    await deleteWorkflow(h.db, wf.id)
+    const receipt = await updateWorkflow(
+      h.db,
+      wf.id,
+      {
+        expectedVersion: wf.version,
+        clientMutationId: ulid(),
+        snapshot: {
+          name: 'wf-renamed',
+          description: wf.description,
+          definition: wf.definition,
+        },
+      },
+      { kind: 'system', reason: 'ws-test' },
+    )
+    await deleteWorkflow(
+      h.db,
+      wf.id,
+      { expectedVersion: receipt.revision.version, clientMutationId: ulid() },
+      { kind: 'system', reason: 'ws-test' },
+    )
     await waitUntil(
       () => hasType(received, 'workflow.updated') && hasType(received, 'workflow.deleted'),
     )

@@ -13,29 +13,52 @@ import { Field, TextArea } from '@/components/Form'
 import { Select } from '@/components/Select'
 import { computePorts } from '../WorkflowCanvas'
 import { MissingRefList, PortRefList } from './promptRefs'
+import {
+  atomicNodeInspectorChange,
+  continuousNodeInspectorChange,
+  InspectorHistoryBoundary,
+  type InspectorChangeMeta,
+} from './historyMeta'
 import { NodeTitleField } from './NodeTitleField'
 import type { EditProps } from './types'
 
-export function AgentSingleEdit({ node, agents, definition, onPatch }: EditProps) {
+export function AgentSingleEdit({
+  node,
+  agents,
+  definition,
+  onPatch,
+  onHistoryBoundary,
+}: EditProps) {
   const { t } = useTranslation()
   const rec = node as unknown as Record<string, unknown>
   const agentName = typeof rec.agentName === 'string' ? rec.agentName : ''
   const promptTemplate = typeof rec.promptTemplate === 'string' ? rec.promptTemplate : ''
   const ports = computePorts(node, new Map(agents.map((a) => [a.name, a])), definition)
 
-  function update(p: Record<string, unknown>) {
-    onPatch({ ...(node as Record<string, unknown>), ...p } as unknown as WorkflowNode)
+  function update(p: Record<string, unknown>, meta: InspectorChangeMeta) {
+    onPatch({ ...(node as Record<string, unknown>), ...p } as unknown as WorkflowNode, meta)
   }
+
+  const promptMeta = continuousNodeInspectorChange(
+    node.id,
+    'promptTemplate',
+    t('inspector.fieldPromptTemplate'),
+  )
 
   return (
     <div className="form-grid">
-      <NodeTitleField node={node} onPatch={onPatch} />
+      <NodeTitleField node={node} onPatch={onPatch} onHistoryBoundary={onHistoryBoundary} />
       <Field label={t('inspector.fieldAgent')} required>
         <Select<string>
           value={agentName}
           placeholder={t('inspector.pickAgent')}
           ariaLabel={t('inspector.fieldAgent')}
-          onChange={(v) => update({ agentName: v })}
+          onChange={(v) =>
+            update(
+              { agentName: v },
+              atomicNodeInspectorChange(node.id, 'agentName', t('inspector.fieldAgent')),
+            )
+          }
           options={[
             { value: '', label: t('inspector.pickAgent') },
             ...agents.map((a) => ({ value: a.name, label: a.name })),
@@ -47,12 +70,14 @@ export function AgentSingleEdit({ node, agents, definition, onPatch }: EditProps
         label={t('inspector.fieldPromptTemplate')}
         hint={t('inspector.fieldPromptTemplateHint')}
       >
-        <TextArea
-          value={promptTemplate}
-          onChange={(v) => update({ promptTemplate: v })}
-          rows={8}
-          monospace
-        />
+        <InspectorHistoryBoundary meta={promptMeta} onBoundary={onHistoryBoundary}>
+          <TextArea
+            value={promptTemplate}
+            onChange={(v) => update({ promptTemplate: v }, promptMeta)}
+            rows={8}
+            monospace
+          />
+        </InspectorHistoryBoundary>
         <PortRefList ports={ports.inputs} />
         <MissingRefList template={promptTemplate} inputPorts={ports.inputs} />
       </Field>

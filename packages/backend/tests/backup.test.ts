@@ -2,7 +2,15 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -146,6 +154,15 @@ describe('createBackup', () => {
     const entries = readdirSync(join(h.appHome, 'backups'))
     const stale = entries.filter((e) => e.startsWith('.staging-'))
     expect(stale.length).toBe(0)
+  })
+
+  test('workflow YAML uses each list-captured row without an N+1 by-id reread', () => {
+    const source = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'backup.ts'),
+      'utf8',
+    )
+    expect(source).toContain('stringifyWorkflowYaml(wf)')
+    expect(source).not.toContain('exportWorkflowYaml(opts.db, wf.id)')
   })
 })
 

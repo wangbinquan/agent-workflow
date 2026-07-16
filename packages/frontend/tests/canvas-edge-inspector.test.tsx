@@ -4,7 +4,11 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { useState } from 'react'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
-import { EdgeInspector, hasConflict } from '../src/components/canvas/EdgeInspector'
+import {
+  EdgeInspector,
+  hasConflict,
+  type InspectorChangeMeta,
+} from '../src/components/canvas/EdgeInspector'
 
 function makeDef(): WorkflowDefinition {
   return {
@@ -30,7 +34,7 @@ function Host({
   onChangeSpy,
   initialDef,
 }: {
-  onChangeSpy: (def: WorkflowDefinition) => void
+  onChangeSpy: (def: WorkflowDefinition, meta: InspectorChangeMeta) => void
   initialDef: WorkflowDefinition
 }) {
   const [def, setDef] = useState(initialDef)
@@ -41,9 +45,9 @@ function Host({
     <EdgeInspector
       edge={edge}
       definition={def}
-      onChange={(next) => {
+      onChange={(next, meta) => {
         setDef(next)
-        onChangeSpy(next)
+        onChangeSpy(next, meta)
       }}
       onClose={() => {}}
     />
@@ -63,9 +67,23 @@ describe('EdgeInspector', () => {
       .find((i) => (i as HTMLInputElement).value === 'out')!
     fireEvent.change(input, { target: { value: 'requirement' } })
     fireEvent.blur(input)
-    expect(onChange).toHaveBeenCalledTimes(1)
+    expect(onChange).toHaveBeenCalledTimes(2)
     const next = onChange.mock.calls[0]![0] as WorkflowDefinition
     expect(next.edges.find((e) => e.id === 'e1')!.target.portName).toBe('requirement')
+    expect(onChange.mock.calls[0]?.[1]).toEqual({
+      source: 'inspector',
+      label: 'Target port name',
+      mergeKey: 'edge:e1:target.portName',
+      transaction: 'update',
+    })
+    expect(onChange.mock.calls[1]?.[0]).toEqual(next)
+    expect(onChange.mock.calls[1]?.[1]).toEqual({
+      source: 'inspector',
+      label: 'Target port name',
+      mergeKey: 'edge:e1:target.portName',
+      transaction: 'update',
+      historyBoundary: 'blur',
+    })
   })
 
   test('renaming to an already-occupied port (same source+target) → blocked + conflict text', () => {
@@ -83,7 +101,12 @@ describe('EdgeInspector', () => {
       .find((i) => (i as HTMLInputElement).value === 'out')!
     fireEvent.change(input, { target: { value: 'requirement' } })
     fireEvent.blur(input)
-    expect(onChange).not.toHaveBeenCalled()
+    expect(onChange).toHaveBeenCalledTimes(1)
+    expect(onChange.mock.calls[0]?.[0]).toBe(def)
+    expect(onChange.mock.calls[0]?.[1]).toMatchObject({
+      mergeKey: 'edge:e1:target.portName',
+      historyBoundary: 'blur',
+    })
     // Asserted via class instead of text so the i18n race in test setup
     // doesn't matter (the conflict box renders <div class="error-box">).
     expect(container.querySelector('.error-box')).not.toBeNull()
@@ -97,7 +120,11 @@ describe('EdgeInspector', () => {
       .find((i) => (i as HTMLInputElement).value === 'out')!
     fireEvent.change(input, { target: { value: '   ' } })
     fireEvent.blur(input)
-    expect(onChange).not.toHaveBeenCalled()
+    expect(onChange).toHaveBeenCalledTimes(1)
+    expect(onChange.mock.calls[0]?.[1]).toMatchObject({
+      mergeKey: 'edge:e1:target.portName',
+      historyBoundary: 'blur',
+    })
     expect(container.querySelector('.error-box')).toBeNull()
   })
 
@@ -112,6 +139,11 @@ describe('EdgeInspector', () => {
     const next = onChange.mock.calls[0]![0] as WorkflowDefinition
     expect(next.edges.find((e) => e.id === 'e1')).toBeUndefined()
     expect(next.edges).toHaveLength(1)
+    expect(onChange.mock.calls[0]?.[1]).toEqual({
+      source: 'inspector',
+      label: 'Delete edge',
+      transaction: 'single',
+    })
   })
 })
 

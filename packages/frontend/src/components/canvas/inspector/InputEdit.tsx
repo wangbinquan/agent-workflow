@@ -6,10 +6,22 @@ import { useTranslation } from 'react-i18next'
 import { Field, Switch, TextArea, TextInput } from '@/components/Form'
 import { Select } from '@/components/Select'
 import { patchInputDef, renameInputKey } from '../syncInputDefs'
+import {
+  atomicNodeInspectorChange,
+  continuousNodeInspectorChange,
+  InspectorHistoryBoundary,
+  type InspectorChangeMeta,
+} from './historyMeta'
 import { NodeTitleField } from './NodeTitleField'
 import type { EditProps } from './types'
 
-export function InputEdit({ node, definition, onPatch, onCommitDef }: EditProps) {
+export function InputEdit({
+  node,
+  definition,
+  onPatch,
+  onCommitDef,
+  onHistoryBoundary,
+}: EditProps) {
   const { t } = useTranslation()
   const rec = node as unknown as Record<string, unknown>
   const key = typeof rec.inputKey === 'string' ? rec.inputKey : ''
@@ -21,23 +33,45 @@ export function InputEdit({ node, definition, onPatch, onCommitDef }: EditProps)
   const inputLabel = inputDef?.label ?? key
   const inputRequired = inputDef?.required ?? true
   const inputDescription = inputDef?.description ?? ''
+  const inputKeyMeta = continuousNodeInspectorChange(
+    node.id,
+    'inputKey',
+    t('inspector.fieldInputKey'),
+  )
+  const inputLabelMeta = continuousNodeInspectorChange(
+    node.id,
+    'input.label',
+    t('inspector.fieldInputLabel'),
+  )
+  const inputDescriptionMeta = continuousNodeInspectorChange(
+    node.id,
+    'input.description',
+    t('inspector.fieldInputDescription'),
+  )
   return (
     <div className="form-grid">
-      <NodeTitleField node={node} onPatch={onPatch} />
+      <NodeTitleField node={node} onPatch={onPatch} onHistoryBoundary={onHistoryBoundary} />
       <Field label={t('inspector.fieldInputKey')} required hint={t('inspector.fieldInputKeyHint')}>
-        <TextInput
-          value={key}
-          onChange={(v) => {
-            if (v.length === 0 || v === key) return
-            onCommitDef(renameInputKey(definition, node.id, v))
-          }}
-        />
+        <InspectorHistoryBoundary meta={inputKeyMeta} onBoundary={onHistoryBoundary}>
+          <TextInput
+            value={key}
+            onChange={(v) => {
+              if (v.length === 0 || v === key) return
+              onCommitDef(renameInputKey(definition, node.id, v), inputKeyMeta)
+            }}
+          />
+        </InspectorHistoryBoundary>
       </Field>
       <Field label={t('inspector.fieldInputKind')} hint={t('inspector.fieldInputKindHint')}>
         <Select<WorkflowInput['kind']>
           value={inputKind}
           ariaLabel={t('inspector.fieldInputKind')}
-          onChange={(v) => onCommitDef(patchInputDef(definition, key, { kind: v }))}
+          onChange={(v) =>
+            onCommitDef(
+              patchInputDef(definition, key, { kind: v }),
+              atomicNodeInspectorChange(node.id, 'input.kind', t('inspector.fieldInputKind')),
+            )
+          }
           options={[
             { value: 'text', label: 'text' },
             { value: 'files', label: 'files' },
@@ -49,20 +83,35 @@ export function InputEdit({ node, definition, onPatch, onCommitDef }: EditProps)
       </Field>
       {inputKind === 'upload' && (
         <UploadInputFields
+          nodeId={node.id}
           def={inputDef ?? { kind: 'upload', key, label: inputLabel }}
-          onPatch={(patch) => onCommitDef(patchInputDef(definition, key, patch))}
+          onPatch={(patch, meta) => onCommitDef(patchInputDef(definition, key, patch), meta)}
+          onHistoryBoundary={onHistoryBoundary}
         />
       )}
       <Field label={t('inspector.fieldInputLabel')} hint={t('inspector.fieldInputLabelHint')}>
-        <TextInput
-          value={inputLabel}
-          onChange={(v) => onCommitDef(patchInputDef(definition, key, { label: v }))}
-        />
+        <InspectorHistoryBoundary meta={inputLabelMeta} onBoundary={onHistoryBoundary}>
+          <TextInput
+            value={inputLabel}
+            onChange={(v) =>
+              onCommitDef(patchInputDef(definition, key, { label: v }), inputLabelMeta)
+            }
+          />
+        </InspectorHistoryBoundary>
       </Field>
       <Field label={t('inspector.fieldInputRequired')}>
         <Switch
           checked={inputRequired}
-          onChange={(c) => onCommitDef(patchInputDef(definition, key, { required: c }))}
+          onChange={(c) =>
+            onCommitDef(
+              patchInputDef(definition, key, { required: c }),
+              atomicNodeInspectorChange(
+                node.id,
+                'input.required',
+                t('inspector.fieldInputRequired'),
+              ),
+            )
+          }
           label={t('inspector.fieldInputRequired')}
         />
       </Field>
@@ -70,11 +119,15 @@ export function InputEdit({ node, definition, onPatch, onCommitDef }: EditProps)
         label={t('inspector.fieldInputDescription')}
         hint={t('inspector.fieldInputDescriptionHint')}
       >
-        <TextArea
-          value={inputDescription}
-          rows={3}
-          onChange={(v) => onCommitDef(patchInputDef(definition, key, { description: v }))}
-        />
+        <InspectorHistoryBoundary meta={inputDescriptionMeta} onBoundary={onHistoryBoundary}>
+          <TextArea
+            value={inputDescription}
+            rows={3}
+            onChange={(v) =>
+              onCommitDef(patchInputDef(definition, key, { description: v }), inputDescriptionMeta)
+            }
+          />
+        </InspectorHistoryBoundary>
       </Field>
     </div>
   )
@@ -86,11 +139,15 @@ export function InputEdit({ node, definition, onPatch, onCommitDef }: EditProps)
  * round-trips through the strict-on-write validator.
  */
 function UploadInputFields({
+  nodeId,
   def,
   onPatch,
+  onHistoryBoundary,
 }: {
+  nodeId: string
   def: WorkflowInput
-  onPatch: (patch: Partial<WorkflowInput>) => void
+  onPatch: (patch: Partial<WorkflowInput>, meta: InspectorChangeMeta) => void
+  onHistoryBoundary: (meta: InspectorChangeMeta) => void
 }) {
   const { t } = useTranslation()
   const rec = def as Record<string, unknown>
@@ -105,6 +162,31 @@ function UploadInputFields({
     targetDir.includes('..') ||
     targetDir.startsWith('/') ||
     /^[A-Za-z]:[\\/]/.test(targetDir)
+  const targetDirMeta = continuousNodeInspectorChange(
+    nodeId,
+    'input.targetDir',
+    t('inspector.upload.targetDir'),
+  )
+  const acceptMeta = continuousNodeInspectorChange(
+    nodeId,
+    'input.accept',
+    t('inspector.upload.accept'),
+  )
+  const maxFileSizeMeta = continuousNodeInspectorChange(
+    nodeId,
+    'input.maxFileSize',
+    t('inspector.upload.maxFileSize'),
+  )
+  const minCountMeta = continuousNodeInspectorChange(
+    nodeId,
+    'input.minCount',
+    t('inspector.upload.minCount'),
+  )
+  const maxCountMeta = continuousNodeInspectorChange(
+    nodeId,
+    'input.maxCount',
+    t('inspector.upload.maxCount'),
+  )
   return (
     <>
       <Field
@@ -116,67 +198,82 @@ function UploadInputFields({
         }
         required
       >
-        <TextInput
-          value={targetDir}
-          onChange={(v) => onPatch({ ...(def as object), targetDir: v } as Partial<WorkflowInput>)}
-          placeholder="inputs/refs"
-        />
+        <InspectorHistoryBoundary meta={targetDirMeta} onBoundary={onHistoryBoundary}>
+          <TextInput
+            value={targetDir}
+            onChange={(v) =>
+              onPatch({ ...(def as object), targetDir: v } as Partial<WorkflowInput>, targetDirMeta)
+            }
+            placeholder="inputs/refs"
+          />
+        </InspectorHistoryBoundary>
       </Field>
       <Field label={t('inspector.upload.accept')} hint={t('inspector.upload.acceptHint')}>
-        <TextInput
-          value={acceptText}
-          onChange={(v) => {
-            const next = v
-              .split(',')
-              .map((s) => s.trim())
-              .filter((s) => s !== '')
-            onPatch({ ...(def as object), accept: next } as Partial<WorkflowInput>)
-          }}
-          placeholder=".pdf, image/*"
-        />
+        <InspectorHistoryBoundary meta={acceptMeta} onBoundary={onHistoryBoundary}>
+          <TextInput
+            value={acceptText}
+            onChange={(v) => {
+              const next = v
+                .split(',')
+                .map((s) => s.trim())
+                .filter((s) => s !== '')
+              onPatch({ ...(def as object), accept: next } as Partial<WorkflowInput>, acceptMeta)
+            }}
+            placeholder=".pdf, image/*"
+          />
+        </InspectorHistoryBoundary>
       </Field>
       <Field label={t('inspector.upload.maxFileSize')} hint={t('inspector.upload.maxFileSizeHint')}>
-        <input
-          className="form-input"
-          type="number"
-          min={1}
-          value={maxFileSize ?? ''}
-          onChange={(e) => {
-            const raw = e.target.value
-            const n = raw === '' ? undefined : Number(raw)
-            onPatch({
-              ...(def as object),
-              maxFileSize: n,
-            } as Partial<WorkflowInput>)
-          }}
-          placeholder="52428800"
-        />
+        <InspectorHistoryBoundary meta={maxFileSizeMeta} onBoundary={onHistoryBoundary}>
+          <input
+            className="form-input"
+            type="number"
+            min={1}
+            value={maxFileSize ?? ''}
+            onChange={(e) => {
+              const raw = e.target.value
+              const n = raw === '' ? undefined : Number(raw)
+              onPatch(
+                {
+                  ...(def as object),
+                  maxFileSize: n,
+                } as Partial<WorkflowInput>,
+                maxFileSizeMeta,
+              )
+            }}
+            placeholder="52428800"
+          />
+        </InspectorHistoryBoundary>
       </Field>
       <Field label={t('inspector.upload.minCount')}>
-        <input
-          className="form-input"
-          type="number"
-          min={0}
-          value={minCount ?? ''}
-          onChange={(e) => {
-            const raw = e.target.value
-            const n = raw === '' ? undefined : Number(raw)
-            onPatch({ ...(def as object), minCount: n } as Partial<WorkflowInput>)
-          }}
-        />
+        <InspectorHistoryBoundary meta={minCountMeta} onBoundary={onHistoryBoundary}>
+          <input
+            className="form-input"
+            type="number"
+            min={0}
+            value={minCount ?? ''}
+            onChange={(e) => {
+              const raw = e.target.value
+              const n = raw === '' ? undefined : Number(raw)
+              onPatch({ ...(def as object), minCount: n } as Partial<WorkflowInput>, minCountMeta)
+            }}
+          />
+        </InspectorHistoryBoundary>
       </Field>
       <Field label={t('inspector.upload.maxCount')}>
-        <input
-          className="form-input"
-          type="number"
-          min={1}
-          value={maxCount ?? ''}
-          onChange={(e) => {
-            const raw = e.target.value
-            const n = raw === '' ? undefined : Number(raw)
-            onPatch({ ...(def as object), maxCount: n } as Partial<WorkflowInput>)
-          }}
-        />
+        <InspectorHistoryBoundary meta={maxCountMeta} onBoundary={onHistoryBoundary}>
+          <input
+            className="form-input"
+            type="number"
+            min={1}
+            value={maxCount ?? ''}
+            onChange={(e) => {
+              const raw = e.target.value
+              const n = raw === '' ? undefined : Number(raw)
+              onPatch({ ...(def as object), maxCount: n } as Partial<WorkflowInput>, maxCountMeta)
+            }}
+          />
+        </InspectorHistoryBoundary>
       </Field>
     </>
   )

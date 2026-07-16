@@ -55,7 +55,14 @@ describe('demo workflow YAML fixture', () => {
   test('importWorkflowYaml stores it as a brand-new workflow', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const yaml = readDemoYaml()
-    const wf = await importWorkflowYaml(db, yaml, { onConflict: 'new' })
+    const result = await importWorkflowYaml(
+      db,
+      { yamlText: yaml, mode: 'new' },
+      { kind: 'system', reason: 'onboarding-demo-test' },
+    )
+    expect(result.outcome).toBe('created')
+    if (result.outcome !== 'created') throw new Error('expected a created import result')
+    const wf = result.workflow
     expect(wf.id).toBeTruthy()
     expect(wf.name.toLowerCase()).toContain('demo')
     expect(wf.definition.nodes).toHaveLength(3)

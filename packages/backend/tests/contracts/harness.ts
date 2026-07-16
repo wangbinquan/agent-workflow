@@ -20,6 +20,7 @@ import { ulid } from 'ulid'
 import { createSecretBoxFromKey } from '../../src/auth/secretBox'
 import { createInMemoryDb, type DbClient } from '../../src/db/client'
 import { createApp } from '../../src/server'
+import { getWorkflow } from '../../src/services/workflow'
 import { createUser } from '../../src/services/users'
 import {
   agents,
@@ -54,6 +55,8 @@ export interface SeededFixtures {
   pluginName: string
   pluginId: string
   workflowId: string
+  workflowVersion: number
+  workflowSnapshotHash: string
   taskId: string
   nodeRunId: string
   memoryId: string
@@ -192,6 +195,8 @@ export async function buildContractHarness(): Promise<ContractHarness> {
     sourceKind: 'manual',
     createdAt: now,
   })
+  const workflow = await getWorkflow(db, workflowId)
+  if (workflow === null) throw new Error('contract harness: failed to seed workflow')
 
   return {
     app,
@@ -206,6 +211,8 @@ export async function buildContractHarness(): Promise<ContractHarness> {
       pluginName,
       pluginId,
       workflowId,
+      workflowVersion: workflow.version,
+      workflowSnapshotHash: workflow.snapshotHash,
       taskId,
       nodeRunId,
       memoryId,

@@ -129,8 +129,11 @@ describe('RFC-155 — de-hinted routes do not re-reference their old keys', () =
 
 describe('RFC-155 — keep-list anchors (over-deletion guard)', () => {
   test('dynamic header lines survive', () => {
-    // workflows.edit header status line (id · version · save state).
-    expect(read('routes/workflows.edit.tsx')).toMatch(/statusSaving/)
+    // workflows.edit keeps id + exact server version in the header and projects
+    // the save/transport axes through the persistent RFC-199 status component.
+    const workflowEditor = read('routes/workflows.edit.tsx')
+    expect(workflowEditor).toMatch(/controller\.state\.serverRevision\.version/)
+    expect(workflowEditor).toMatch(/<WorkflowDraftStatus/)
     // reviews detail iteration/decision hint — also locked by
     // reviews-detail-title-description.test.ts.
     expect(read('routes/reviews.detail.tsx')).toMatch(/t\('reviews\.detailHint'/)

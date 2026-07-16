@@ -26,6 +26,7 @@ import type {
   TaskMembers,
   UserPublic,
   Workflow,
+  WorkflowDefinition,
   Workgroup,
 } from '@agent-workflow/shared'
 import {
@@ -33,7 +34,7 @@ import {
   taskExecutionKind,
   workgroupLaunchReadiness,
 } from '@agent-workflow/shared'
-import { api } from '@/api/client'
+import { api, ApiError } from '@/api/client'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { Field, NumberInput, Switch, TextArea, TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
@@ -75,6 +76,8 @@ interface TaskWizardSearch {
   kind?: WizardKind
   /** Deep-link object refs — one per kind (workflow id / agent name / group name). */
   workflow?: string
+  /** RFC-199: exact editor revision handed to the launch wizard. */
+  workflowVersion?: number
   agent?: string
   workgroup?: string
   /** `?schedule=1` — scheduled mode: save-as-scheduled becomes the primary action. */
@@ -96,6 +99,20 @@ export const TaskWizardRoute = createRoute({
     for (const k of ['workflow', 'agent', 'workgroup', 'editScheduled', 'relaunchFrom'] as const) {
       const v = raw[k]
       if (typeof v === 'string' && v.length > 0) out[k] = v
+    }
+    const rawWorkflowVersion = raw.workflowVersion
+    const numericWorkflowVersion =
+      typeof rawWorkflowVersion === 'number'
+        ? rawWorkflowVersion
+        : typeof rawWorkflowVersion === 'string' && rawWorkflowVersion.trim() !== ''
+          ? Number(rawWorkflowVersion)
+          : undefined
+    if (
+      numericWorkflowVersion !== undefined &&
+      Number.isInteger(numericWorkflowVersion) &&
+      numericWorkflowVersion > 0
+    ) {
+      out.workflowVersion = numericWorkflowVersion
     }
     if (raw.schedule === true || raw.schedule === 1 || raw.schedule === '1') out.schedule = true
     return out
@@ -141,13 +158,28 @@ function TaskWizardPage() {
   // historical task with no stored id → best-effort by name).
   const [selectedWorkgroupId, setSelectedWorkgroupId] = useState<string | undefined>(undefined)
   const [selectedAgentId, setSelectedAgentId] = useState<string | undefined>(undefined)
-  // RFC-175 (§2c/§4.8): for a relaunched WORKFLOW task, the `workflows.version`
-  // the inputs were normalized against — sent as `expectedWorkflowVersion` so a
-  // concurrent PUT to a newer version is rejected rather than silently storing
-  // stale inputs. Captured once when the workflow detail first loads.
-  const [normalizedWorkflowVersion, setNormalizedWorkflowVersion] = useState<number | undefined>(
-    undefined,
-  )
+  // RFC-175 + RFC-199: every immediate WORKFLOW launch captures the exact
+  // `workflows.version` its inputs were normalized against. Editor deep links
+  // additionally require their validated version to match the first detail
+  // read; later background advances never silently reseed user-entered inputs.
+  const [normalizedWorkflowRevision, setNormalizedWorkflowRevision] = useState<{
+    workflowId: string
+    version: number
+    definition: WorkflowDefinition
+  } | null>(null)
+  const normalizedWorkflowVersion =
+    kind === 'workflow' && normalizedWorkflowRevision?.workflowId === workflowId
+      ? normalizedWorkflowRevision.version
+      : undefined
+  const normalizedWorkflowDefinition =
+    kind === 'workflow' && normalizedWorkflowRevision?.workflowId === workflowId
+      ? normalizedWorkflowRevision.definition
+      : undefined
+  const [workflowVersionMismatch, setWorkflowVersionMismatch] = useState<{
+    workflowId: string
+    expected: number
+    current: number
+  } | null>(null)
 
   // --- Step 2 state: execution space (D9: default remote, remember last) ---
   const [space, setSpace] = useState(() =>
@@ -226,7 +258,37 @@ function TaskWizardPage() {
     queryFn: ({ signal }) =>
       api.get(`/api/workflows/${encodeURIComponent(workflowId)}`, undefined, signal),
     enabled: kind === 'workflow' && workflowId !== '',
+    // The editor handoff is an exact revision fence. A shared 5s cache hit is
+    // only a placeholder until this wizard mount has observed fresh server
+    // truth; otherwise a writer between validate and navigation stays hidden.
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
+    refetchInterval: 15_000,
   })
+
+  const expectedWorkflowVersionForCurrentSelection =
+    kind === 'workflow' && normalizedWorkflowRevision?.workflowId === workflowId
+      ? normalizedWorkflowRevision.version
+      : search.kind === 'workflow' && search.workflow === workflowId
+        ? search.workflowVersion
+        : undefined
+  // Derive the live mismatch in render as well as persisting it in state. A
+  // query update renders before its effect runs; gating only on effect-owned
+  // state would leave one paint where a stale vN form could still submit vN+1.
+  const observedWorkflowVersionMismatch =
+    kind === 'workflow' &&
+    workflowQ.data !== undefined &&
+    workflowQ.isFetchedAfterMount &&
+    workflowQ.isSuccess &&
+    expectedWorkflowVersionForCurrentSelection !== undefined &&
+    workflowQ.data.version !== expectedWorkflowVersionForCurrentSelection
+      ? {
+          workflowId,
+          expected: expectedWorkflowVersionForCurrentSelection,
+          current: workflowQ.data.version,
+        }
+      : null
+  const activeWorkflowVersionMismatch = observedWorkflowVersionMismatch ?? workflowVersionMismatch
 
   // RFC-110: matched cached clone for the files/git input pickers.
   const cachedRepos = useQuery<{ items: CachedRepo[] }>({
@@ -440,7 +502,37 @@ function TaskWizardPage() {
   // uploads map is filtered in lockstep — leaving files picked for a PREVIOUS
   // workflow would force a multipart submit with unknown keys (Codex P2).
   useEffect(() => {
-    if (kind !== 'workflow' || workflowQ.data === undefined) return
+    if (
+      kind !== 'workflow' ||
+      workflowQ.data === undefined ||
+      !workflowQ.isFetchedAfterMount ||
+      !workflowQ.isSuccess
+    )
+      return
+    const capturedVersion =
+      normalizedWorkflowRevision?.workflowId === workflowId
+        ? normalizedWorkflowRevision.version
+        : undefined
+    const expectedVersion = expectedWorkflowVersionForCurrentSelection
+    if (expectedVersion !== undefined && workflowQ.data.version !== expectedVersion) {
+      setWorkflowVersionMismatch({
+        workflowId,
+        expected: expectedVersion,
+        current: workflowQ.data.version,
+      })
+      return
+    }
+    setWorkflowVersionMismatch((current) => (current?.workflowId === workflowId ? null : current))
+    if (capturedVersion === undefined) {
+      setNormalizedWorkflowRevision({
+        workflowId,
+        version: workflowQ.data.version,
+        // React Query replaces cache values, but keep a private immutable-ish
+        // snapshot so a later vN+1 refresh cannot redraw vN fields under the
+        // user's already-entered values.
+        definition: structuredClone(workflowQ.data.definition),
+      })
+    }
     const defs = workflowQ.data.definition.inputs ?? []
     setInputs((prev) => {
       const seeded: Record<string, string> = {}
@@ -460,10 +552,15 @@ function TaskWizardPage() {
       const kept = Object.entries(prev).filter(([k]) => uploadKeys.has(k))
       return kept.length === Object.keys(prev).length ? prev : Object.fromEntries(kept)
     })
-    // RFC-175 (§2c): capture the version the inputs were normalized against, sent
-    // as expectedWorkflowVersion on the immediate relaunch submit.
-    if (isRelaunch) setNormalizedWorkflowVersion(workflowQ.data.version)
-  }, [kind, workflowQ.data, isRelaunch])
+  }, [
+    kind,
+    expectedWorkflowVersionForCurrentSelection,
+    normalizedWorkflowRevision,
+    workflowId,
+    workflowQ.data,
+    workflowQ.isFetchedAfterMount,
+    workflowQ.isSuccess,
+  ])
 
   // --- Step 1 filtering (launchability projection) ---------------------------
   const workflowOptions = (workflowsQ.data ?? [])
@@ -509,7 +606,11 @@ function TaskWizardPage() {
     kind === 'workflow' ? (
       <Select
         value={workflowId}
-        onChange={setWorkflowId}
+        onChange={(nextWorkflowId) => {
+          setWorkflowId(nextWorkflowId)
+          setNormalizedWorkflowRevision(null)
+          setWorkflowVersionMismatch(null)
+        }}
         options={workflowOptions}
         searchable
         ariaLabel={objectFieldLabel}
@@ -557,7 +658,7 @@ function TaskWizardPage() {
       : selectedObject
 
   // --- Gating ---------------------------------------------------------------
-  const inputDefs = kind === 'workflow' ? (workflowQ.data?.definition.inputs ?? []) : []
+  const inputDefs = kind === 'workflow' ? (normalizedWorkflowDefinition?.inputs ?? []) : []
   const missingRequired = inputDefs.some((def) => {
     if (def.kind === 'upload') {
       const list = uploads[def.key] ?? []
@@ -586,7 +687,7 @@ function TaskWizardPage() {
   const hasUploadInput = inputDefs.some((d) => d.kind === 'upload')
   const hasWrapperGitNode =
     kind === 'workflow' &&
-    (workflowQ.data?.definition.nodes ?? []).some((n) => n.kind === 'wrapper-git')
+    (normalizedWorkflowDefinition?.nodes ?? []).some((n) => n.kind === 'wrapper-git')
   const multiRepoBlockedReason: MultiRepoBlockedReason | null =
     kind === 'workflow' && space.kind === 'remote' && space.repos.length > 1
       ? hasWrapperGitNode
@@ -610,7 +711,11 @@ function TaskWizardPage() {
   // path for upload inputs). Require a SUCCESSFUL detail load.
   const contentReady =
     kind === 'workflow'
-      ? workflowQ.isSuccess && !missingRequired
+      ? workflowQ.isSuccess &&
+        workflowQ.isFetchedAfterMount &&
+        normalizedWorkflowVersion !== undefined &&
+        activeWorkflowVersionMismatch === null &&
+        !missingRequired
       : kind === 'agent'
         ? description.trim().length > 0
         : goal.trim().length > 0
@@ -760,6 +865,48 @@ function TaskWizardPage() {
     onSuccess: (created) => navigate({ to: '/tasks/$id', params: { id: created.id } }),
   })
 
+  const startWorkflowVersionMismatch =
+    kind === 'workflow' && isWorkflowVersionMismatchError(start.error)
+
+  const adoptLatestWorkflow = (latest: Workflow): void => {
+    const defs = latest.definition.inputs ?? []
+    setNormalizedWorkflowRevision({
+      workflowId,
+      version: latest.version,
+      definition: structuredClone(latest.definition),
+    })
+    setInputs((previous) =>
+      Object.fromEntries(
+        defs.map((definition) => [
+          definition.key,
+          normalizeSeededInput(definition, previous[definition.key] ?? ''),
+        ]),
+      ),
+    )
+    const uploadKeys = new Set(
+      defs.filter((definition) => definition.kind === 'upload').map((definition) => definition.key),
+    )
+    setUploads((previous) =>
+      Object.fromEntries(Object.entries(previous).filter(([key]) => uploadKeys.has(key))),
+    )
+    setWorkflowVersionMismatch(null)
+    start.reset()
+    // Explicit adoption may change/remove fields. Bring the user back to the
+    // content step so the new version is reviewed before another submit.
+    setStep(STEP_CONTENT)
+    setMaxVisited((previous) => Math.max(previous, STEP_CONTENT))
+  }
+
+  const recoverWorkflowVersion = async (): Promise<void> => {
+    if (search.workflowVersion !== undefined) {
+      await navigate({ to: '/workflows/$id', params: { id: workflowId } })
+      return
+    }
+    const refreshed = await workflowQ.refetch()
+    if (!refreshed.isSuccess || refreshed.data === undefined) return
+    adoptLatestWorkflow(refreshed.data)
+  }
+
   const scheduledEnvelope = () =>
     buildScheduledEnvelope(kind, buildImmediateBody(), { agentName, workgroupName })
 
@@ -880,6 +1027,69 @@ function TaskWizardPage() {
         </div>
       )}
 
+      {kind === 'workflow' && activeWorkflowVersionMismatch !== null && (
+        <div data-testid="wizard-workflow-version-mismatch">
+          <NoticeBanner
+            tone="warning"
+            title={t('taskWizard.workflowVersionMismatchTitle')}
+            action={
+              <button
+                type="button"
+                className="btn btn--sm"
+                onClick={() => void recoverWorkflowVersion()}
+                data-testid="wizard-workflow-version-recover"
+              >
+                {t(
+                  search.workflowVersion !== undefined
+                    ? 'taskWizard.workflowVersionReturnToEditor'
+                    : 'taskWizard.workflowVersionUseLatest',
+                )}
+              </button>
+            }
+          >
+            {t('taskWizard.workflowVersionMismatchBody', {
+              expected: activeWorkflowVersionMismatch.expected,
+              current: activeWorkflowVersionMismatch.current,
+            })}
+          </NoticeBanner>
+        </div>
+      )}
+
+      {startWorkflowVersionMismatch && (
+        <div data-testid="wizard-workflow-submit-version-error">
+          <ErrorBanner
+            error={start.error}
+            message={t('taskWizard.workflowLaunchVersionMismatchBody')}
+            action={
+              <button
+                type="button"
+                className="btn btn--sm"
+                onClick={() => void recoverWorkflowVersion()}
+                data-testid="wizard-workflow-submit-version-recover"
+              >
+                {t(
+                  search.workflowVersion !== undefined
+                    ? 'taskWizard.workflowVersionReturnToEditor'
+                    : 'taskWizard.workflowVersionUseLatest',
+                )}
+              </button>
+            }
+          />
+        </div>
+      )}
+
+      {kind === 'workflow' && (search.schedule === true || isEdit) && (
+        <div data-testid="wizard-scheduled-workflow-policy">
+          <NoticeBanner
+            tone="info"
+            size="compact"
+            title={t('taskWizard.scheduledWorkflowLatestTitle')}
+          >
+            {t('taskWizard.scheduledWorkflowLatestBody')}
+          </NoticeBanner>
+        </div>
+      )}
+
       <Stepper
         steps={steps}
         current={step}
@@ -954,14 +1164,16 @@ function TaskWizardPage() {
                 {t('scheduled.collabLoadError')}
               </span>
             )}
-            {(start.error !== null && start.error !== undefined) ||
-            (saveConfig.error !== null && saveConfig.error !== undefined) ? (
+            {((start.error !== null &&
+              start.error !== undefined &&
+              !startWorkflowVersionMismatch) ||
+              (saveConfig.error !== null && saveConfig.error !== undefined)) && (
               <span className="form-actions__error" data-testid="wizard-submit-error">
                 {kind === 'workgroup'
                   ? workgroupLaunchErrorMessage(start.error ?? saveConfig.error, t)
                   : describeApiError(start.error ?? saveConfig.error)}
               </span>
-            ) : null}
+            )}
           </>
         }
       >
@@ -987,7 +1199,8 @@ function TaskWizardPage() {
                   setCollaborators([])
                   setSelectedWorkgroupId(undefined)
                   setSelectedAgentId(undefined)
-                  setNormalizedWorkflowVersion(undefined)
+                  setNormalizedWorkflowRevision(null)
+                  setWorkflowVersionMismatch(null)
                 }}
                 disabled={isEdit}
                 ariaLabel={t('taskWizard.kindLabel')}
@@ -1517,4 +1730,10 @@ function RemoteIcon() {
 function truncate(s: string): string {
   const v = s.trim()
   return v.length > 120 ? `${v.slice(0, 120)}…` : v || '—'
+}
+
+function isWorkflowVersionMismatchError(error: unknown): error is ApiError {
+  return (
+    error instanceof ApiError && error.status === 409 && error.code === 'workflow-version-mismatch'
+  )
 }

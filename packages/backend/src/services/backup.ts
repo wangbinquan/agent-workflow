@@ -27,7 +27,7 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import type { DbClient } from '@/db/client'
-import { exportWorkflowYaml } from '@/services/workflow.yaml'
+import { stringifyWorkflowYaml } from '@/services/workflow.yaml'
 import { listWorkflows } from '@/services/workflow'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
@@ -108,7 +108,10 @@ export async function createBackup(opts: BackupOptions): Promise<BackupResult> {
     mkdirSync(workflowsDest, { recursive: true })
     const all = await listWorkflows(opts.db)
     for (const wf of all) {
-      const yaml = await exportWorkflowYaml(opts.db, wf.id)
+      // RFC-199: listWorkflows already captured the immutable row used for
+      // this export. Never re-read by id and accidentally serialize a later
+      // revision under the earlier enumeration.
+      const yaml = stringifyWorkflowYaml(wf)
       writeFileSync(join(workflowsDest, `${wf.id}.yaml`), yaml, 'utf-8')
       contents.workflows += 1
     }

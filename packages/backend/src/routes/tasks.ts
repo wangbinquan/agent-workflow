@@ -41,6 +41,7 @@ import {
 } from '@agent-workflow/shared'
 import {
   cancelTask,
+  cleanupMaterializedSpace,
   computeWorkflowSyncPreview,
   getNodeRunEvents,
   getNodeRunStdout,
@@ -53,9 +54,8 @@ import {
   retryNode,
   startTask,
   syncTaskWorkflow,
+  type WorkspaceCleanupReport,
 } from '@/services/task'
-import { materializingSpaces } from '@/services/gc'
-import { rmSync } from 'node:fs'
 import { getTaskStructuralDiff } from '@/services/structuralDiff/service'
 import { getCallTargets } from '@/services/structuralDiff/callGraph/expandService'
 import type { ResolvedDeepConfig } from '@/services/structuralDiff/deep/service'
@@ -83,7 +83,7 @@ import { getWorkflow } from '@/services/workflow'
 import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
 import { tasksListBroadcaster, TASKS_LIST_CHANNEL } from '@/ws/broadcaster'
 import { Paths } from '@/util/paths'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 
 /** RFC-083: resolve deep-mode indexer path overrides + timeout from settings.
  *  Unreadable config → PATH lookup + default timeout. */
@@ -763,6 +763,32 @@ function collectUploadInputDefs(inputs: readonly WorkflowInput[]): Map<string, U
   return out
 }
 
+/**
+ * Keep the upload failure as the primary API error even when reclaiming its
+ * not-yet-owned workspace also fails. The cleanup report is recovery metadata,
+ * not a reason to erase the actionable upload code/status/details.
+ */
+export function attachWorkspaceCleanupToMultipartError(
+  error: unknown,
+  report: WorkspaceCleanupReport,
+): DomainError {
+  const primary =
+    error instanceof DomainError
+      ? error
+      : new ValidationError(
+          'task-upload-failed',
+          `failed to land uploads into worktree: ${error instanceof Error ? error.message : String(error)}`,
+        )
+  if (report.complete) return primary
+  const details =
+    typeof primary.details === 'object' &&
+    primary.details !== null &&
+    !Array.isArray(primary.details)
+      ? { ...primary.details, workspaceCleanup: report }
+      : { causeDetails: primary.details, workspaceCleanup: report }
+  return new DomainError(primary.code, primary.message, primary.status, details)
+}
+
 /** Match `files[<key>][]` field names; allowed keys mirror WorkflowInput.key. */
 const UPLOAD_FIELD_RE = /^files\[([A-Za-z0-9_-]+)\]\[\]$/
 
@@ -838,6 +864,23 @@ async function handleMultipartTaskStart(
   // 2. Resolve workflow → extract upload input declarations. RFC-099 (D3):
   // the launcher must be able to use the workflow; invisible == missing.
   const workflow = await assertWorkflowLaunchable(deps.db, actor, startInput.workflowId)
+  // RFC-199 G1: reject a stale launch guard against the SAME visible row we
+  // just captured, before URL resolution can mint a cache row/worktree/branch.
+  // startTask intentionally retains its own pre-materialize and final-tx
+  // fences for races that occur after this route-level fast refusal.
+  if (
+    startInput.expectedWorkflowVersion !== undefined &&
+    workflow.version !== startInput.expectedWorkflowVersion
+  ) {
+    throw new ConflictError(
+      'workflow-version-mismatch',
+      `workflow '${startInput.workflowId}' changed during launch (expected v${startInput.expectedWorkflowVersion}, now v${workflow.version})`,
+      {
+        expectedVersion: startInput.expectedWorkflowVersion,
+        currentVersion: workflow.version,
+      },
+    )
+  }
   const uploadDefs = collectUploadInputDefs(workflow.definition.inputs)
 
   // 3. Walk multipart fields, bind each file blob to its inputKey.
@@ -953,6 +996,7 @@ async function handleMultipartTaskStart(
   }
 
   // 5. Write uploads + pack paths back into inputs[] (limits resolved at step 4).
+  let inputsOut: Record<string, string>
   try {
     const result = await applyUploadsToWorktree({
       worktreePath: space.worktreePath,
@@ -960,37 +1004,31 @@ async function handleMultipartTaskStart(
       files: uploadFiles,
       limits,
     })
-    const inputsOut: Record<string, string> = { ...startInput.inputs }
+    inputsOut = { ...startInput.inputs }
     for (const [key, paths] of result.packedByKey.entries()) {
       inputsOut[key] = paths.join('\n')
     }
-    // 6. Hand off to startTask with the materialized space (consumed verbatim).
-    return await startTask(
-      { ...startInput, inputs: inputsOut },
-      {
-        db: deps.db,
-        actorUserId: actor.user.id,
-        ...(opencodeCmd ? { opencodeCmd } : {}),
-        ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
-        // RFC-103 T2: multipart (upload) start must thread runtime config too.
-        ...resolveLaunchRuntimeConfig(deps.configPath),
-        materializedSpace: space,
-      },
-    )
   } catch (err) {
-    // Upload write failed (limits, accept, or fs error). Throw a structured
-    // error; no task row is created. RFC-165 (F9): a scratch workspace has no
-    // anchor without a row — the launch flow owns its cleanup and releases
-    // the materialize lease. A repo worktree stays on disk (pre-existing
-    // "createWorktree failed" semantics; the orphan belongs to worktree GC).
-    if (space.kind === 'scratch' && space.worktreePath !== '') {
-      rmSync(space.worktreePath, { recursive: true, force: true })
-    }
-    materializingSpaces.delete(space.taskId)
-    if (err instanceof ValidationError) throw err
-    throw new ValidationError(
-      'task-upload-failed',
-      `failed to land uploads into worktree: ${(err as Error).message}`,
-    )
+    // No task row owns this materialization. Consume the same explicit cleanup
+    // lease startTask uses (normal linked worktree, scratch, or future shapes),
+    // rather than guessing ownership from `space.kind`.
+    const cleanup = await cleanupMaterializedSpace(space)
+    throw attachWorkspaceCleanupToMultipartError(err, cleanup)
   }
+
+  // 6. Hand off ownership to startTask. Its outer wrapper now covers every
+  // pre-commit error (including the initial exact-version guard), so this call
+  // intentionally sits outside the upload-write catch above.
+  return await startTask(
+    { ...startInput, inputs: inputsOut },
+    {
+      db: deps.db,
+      actorUserId: actor.user.id,
+      ...(opencodeCmd ? { opencodeCmd } : {}),
+      ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
+      // RFC-103 T2: multipart (upload) start must thread runtime config too.
+      ...resolveLaunchRuntimeConfig(deps.configPath),
+      materializedSpace: space,
+    },
+  )
 }

@@ -5,8 +5,10 @@
 // usability gate on agent/workflow saves.
 
 import { beforeEach, describe, expect, test } from 'bun:test'
+import type { WorkflowDefinition, WorkflowDetail } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { resolve } from 'node:path'
+import { ulid } from 'ulid'
 import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createApp } from '../src/server'
@@ -63,6 +65,33 @@ async function req(
   headers.set('Authorization', `Bearer ${token}`)
   if (init.body && !headers.has('content-type')) headers.set('content-type', 'application/json')
   return app.request(path, { ...init, headers })
+}
+
+async function loadWorkflow(app: Hono, token: string, id: string): Promise<WorkflowDetail> {
+  const res = await req(app, token, `/api/workflows/${id}`)
+  expect(res.status).toBe(200)
+  return (await res.json()) as WorkflowDetail
+}
+
+async function saveWorkflowDefinition(
+  app: Hono,
+  token: string,
+  id: string,
+  definition: WorkflowDefinition,
+): Promise<Response> {
+  const current = await loadWorkflow(app, token, id)
+  return req(app, token, `/api/workflows/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      expectedVersion: current.version,
+      clientMutationId: ulid(),
+      snapshot: {
+        name: current.name,
+        description: current.description,
+        definition,
+      },
+    }),
+  })
 }
 
 const AGENT_BODY = {
@@ -315,16 +344,13 @@ describe('RFC-099 — D15 new-reference usability gate', () => {
       method: 'POST',
       body: JSON.stringify(wfBody('secret-agent')),
     })
-    const wf = (await created.json()) as { id: string; definition: Record<string, unknown> }
+    const wf = (await created.json()) as WorkflowDetail
     await req(h.app, h.alice.token, `/api/workflows/${wf.id}/acl`, {
       method: 'PUT',
       body: JSON.stringify({ ownerUserId: h.bob.id }),
     })
     // bob saves with the existing reference untouched → allowed (D15).
-    const keep = await req(h.app, h.bob.token, `/api/workflows/${wf.id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ definition: wf.definition }),
-    })
+    const keep = await saveWorkflowDefinition(h.app, h.bob.token, wf.id, wf.definition)
     expect(keep.status).toBe(200)
     // bob adds a SECOND node pointing at the same invisible agent under a new
     // node id — the agent NAME set is unchanged, so still allowed…
@@ -336,12 +362,7 @@ describe('RFC-099 — D15 new-reference usability gate', () => {
       ],
     }
     expect(
-      (
-        await req(h.app, h.bob.token, `/api/workflows/${wf.id}`, {
-          method: 'PUT',
-          body: JSON.stringify({ definition: def2 }),
-        })
-      ).status,
+      (await saveWorkflowDefinition(h.app, h.bob.token, wf.id, def2 as WorkflowDefinition)).status,
     ).toBe(200)
     // …but referencing a DIFFERENT private agent he cannot see is rejected.
     await req(h.app, h.alice.token, '/api/agents', {
@@ -359,10 +380,12 @@ describe('RFC-099 — D15 new-reference usability gate', () => {
         { id: 'n3', kind: 'agent-single', agentName: 'second-secret' },
       ],
     }
-    const rejected = await req(h.app, h.bob.token, `/api/workflows/${wf.id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ definition: def3 }),
-    })
+    const rejected = await saveWorkflowDefinition(
+      h.app,
+      h.bob.token,
+      wf.id,
+      def3 as WorkflowDefinition,
+    )
     expect(rejected.status).toBe(422)
     expect(((await rejected.json()) as { code: string }).code).toBe('acl-missing-refs')
   })
@@ -383,7 +406,7 @@ describe('RFC-099 — workflows list filter + private workflow lifecycle', () =>
     h = await buildHarness()
   })
 
-  test('private workflow hidden from stranger lists and 404 on detail/export', async () => {
+  test('private workflow hidden from stranger lists and 404 on detail/validate/export', async () => {
     const created = await req(h.app, h.alice.token, '/api/workflows', {
       method: 'POST',
       body: JSON.stringify({
@@ -392,7 +415,7 @@ describe('RFC-099 — workflows list filter + private workflow lifecycle', () =>
         definition: { $schema_version: 4, inputs: [], nodes: [], edges: [] },
       }),
     })
-    const wf = (await created.json()) as { id: string }
+    const wf = (await created.json()) as WorkflowDetail
     await req(h.app, h.alice.token, `/api/workflows/${wf.id}/acl`, {
       method: 'PUT',
       body: JSON.stringify({ visibility: 'private' }),
@@ -402,9 +425,60 @@ describe('RFC-099 — workflows list filter + private workflow lifecycle', () =>
     }>
     expect(list.some((w) => w.id === wf.id)).toBe(false)
     expect((await req(h.app, h.carol.token, `/api/workflows/${wf.id}`)).status).toBe(404)
-    expect((await req(h.app, h.carol.token, `/api/workflows/${wf.id}/export`)).status).toBe(404)
     expect(
-      (await req(h.app, h.carol.token, `/api/workflows/${wf.id}`, { method: 'DELETE' })).status,
+      (
+        await req(h.app, h.carol.token, `/api/workflows/${wf.id}/validate`, {
+          method: 'POST',
+          body: JSON.stringify({
+            expectedVersion: wf.version,
+            expectedSnapshotHash: wf.snapshotHash,
+          }),
+        })
+      ).status,
+    ).toBe(404)
+    expect((await req(h.app, h.carol.token, `/api/workflows/${wf.id}/export`)).status).toBe(404)
+    const yamlText = JSON.stringify({
+      id: wf.id,
+      name: wf.name,
+      description: wf.description,
+      definition: wf.definition,
+    })
+    const hiddenConflict = await req(h.app, h.carol.token, '/api/workflows/import', {
+      method: 'POST',
+      body: JSON.stringify({ yamlText, mode: 'fail' }),
+    })
+    // A hidden collision is indistinguishable from an absent incoming id. Since
+    // mode=fail discards a non-colliding YAML id, it creates a fresh Carol-owned
+    // row instead of leaking that Alice's private id exists via 404 vs 201.
+    expect(hiddenConflict.status).toBe(201)
+    const hiddenResult = (await hiddenConflict.json()) as {
+      outcome: string
+      workflow: WorkflowDetail
+    }
+    expect(hiddenResult.outcome).toBe('created')
+    expect(hiddenResult.workflow.id).not.toBe(wf.id)
+    expect(hiddenResult.workflow.ownerUserId).toBe(h.carol.id)
+    const hiddenOverwrite = await req(h.app, h.carol.token, '/api/workflows/import', {
+      method: 'POST',
+      body: JSON.stringify({
+        yamlText,
+        mode: 'overwrite',
+        overwrite: {
+          workflowId: wf.id,
+          expectedVersion: wf.version,
+          clientMutationId: ulid(),
+        },
+      }),
+    })
+    expect(hiddenOverwrite.status).toBe(404)
+    expect(((await hiddenOverwrite.json()) as { code: string }).code).toBe('workflow-not-found')
+    expect(
+      (
+        await req(h.app, h.carol.token, `/api/workflows/${wf.id}`, {
+          method: 'DELETE',
+          body: JSON.stringify({ expectedVersion: wf.version, clientMutationId: ulid() }),
+        })
+      ).status,
     ).toBe(404)
     // owner still fully operational
     expect((await req(h.app, h.alice.token, `/api/workflows/${wf.id}`)).status).toBe(200)

@@ -34,15 +34,25 @@ import {
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { cachedRepos, tasks as tasksTable } from '../src/db/schema'
+import { attachWorkspaceCleanupToMultipartError } from '../src/routes/tasks'
 import { createApp } from '../src/server'
 import { createAgent } from '../src/services/agent'
-import { createWorkflow } from '../src/services/workflow'
+import {
+  createWorkflow,
+  getWorkflow,
+  updateWorkflow,
+  workflowDraftSnapshotOf,
+  type WorkflowWritePrincipal,
+} from '../src/services/workflow'
 import { materializeWorktree, startTask } from '../src/services/task'
+import { ValidationError } from '../src/util/errors'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const SYSTEM: WorkflowWritePrincipal = { kind: 'system', reason: 'rfc199-multipart-cleanup-test' }
 
 function makeStubOpencode(dir: string): string {
   const path = join(dir, 'stub-opencode.sh')
@@ -302,6 +312,81 @@ describe('RFC-107 — URL launch + multipart upload', () => {
     // No half-created task.
     expect(h.db.select().from(tasksTable).all().length).toBe(0)
     rmSync(h.tmp, { recursive: true, force: true })
+  })
+
+  test('RFC-199: stale exact version is rejected before cache/worktree/branch materialization', async () => {
+    const h = await buildHarness()
+    const before = await getWorkflow(h.db, h.validWorkflowId)
+    expect(before).not.toBeNull()
+    await updateWorkflow(
+      h.db,
+      h.validWorkflowId,
+      {
+        expectedVersion: before!.version,
+        clientMutationId: ulid(),
+        snapshot: { ...workflowDraftSnapshotOf(before!), description: 'v2 before multipart POST' },
+      },
+      SYSTEM,
+    )
+
+    const fd = buildFormData(
+      {
+        workflowId: h.validWorkflowId,
+        expectedWorkflowVersion: before!.version,
+        name: 'stale-after-materialize',
+        repoUrl: h.bareUrl,
+        inputs: { topic: 'x', refs: '' },
+      },
+      [['refs', 'a.txt', 'alpha']],
+    )
+    const res = await postMultipart(h.app, fd)
+    expect(res.status).toBe(409)
+    expect(await res.json()).toMatchObject({
+      code: 'workflow-version-mismatch',
+      details: { expectedVersion: before!.version, currentVersion: before!.version + 1 },
+    })
+    expect(h.db.select().from(tasksTable).all()).toHaveLength(0)
+    expect(h.db.select().from(cachedRepos).all()).toHaveLength(0)
+
+    // The captured visible workflow row rejects the stale guard before URL
+    // resolution. No cache repository exists in which a task branch could be
+    // minted, and no launch worktree root exists either.
+    const home = process.env.AGENT_WORKFLOW_HOME!
+    expect(existsSync(join(home, 'repos'))).toBe(false)
+    expect(existsSync(join(home, 'worktrees'))).toBe(false)
+    rmSync(h.tmp, { recursive: true, force: true })
+  })
+
+  test('RFC-199: cleanup failure decorates but does not replace the upload DomainError', () => {
+    const original = new ValidationError(
+      'upload-target-symlink',
+      'upload target resolves outside the worktree',
+      { inputKey: 'refs', targetDir: 'inputs/refs' },
+    )
+    const cleanup = {
+      taskId: '01RFC199UPLOADCLEANUP000000',
+      complete: false,
+      failures: [
+        {
+          stage: 'worktree-remove' as const,
+          taskId: '01RFC199UPLOADCLEANUP000000',
+          path: '/tmp/worktree',
+          repoPath: '/tmp/repo',
+          branch: 'agent-workflow/test',
+          message: 'injected cleanup failure',
+        },
+      ],
+    }
+
+    const decorated = attachWorkspaceCleanupToMultipartError(original, cleanup)
+    expect(decorated.code).toBe(original.code)
+    expect(decorated.status).toBe(original.status)
+    expect(decorated.message).toBe(original.message)
+    expect(decorated.details).toEqual({
+      inputKey: 'refs',
+      targetDir: 'inputs/refs',
+      workspaceCleanup: cleanup,
+    })
   })
 
   test('Codex impl-gate: url + INVALID upload (maxCount) rejected BEFORE clone — no cache row, no task', async () => {
@@ -645,6 +730,7 @@ describe('RFC-107 — startTask preResolvedSource (resolve-once + redaction)', (
           worktreePath: wt.worktreePath,
           branch: wt.branch,
           baseCommit: wt.baseCommit,
+          cleanup: { kind: 'linked-worktree', provenance: wt.cleanup! },
         },
       },
     )

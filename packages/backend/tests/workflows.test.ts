@@ -2,13 +2,20 @@
 // In-memory SQLite; CRUD round-trips and references checks only — full
 // topology/port validation lands in P-2-01.
 
-import type { WorkflowDefinition } from '@agent-workflow/shared'
+import type {
+  DeleteWorkflow,
+  UpdateWorkflow,
+  WorkflowDefinition,
+  WorkflowDetail,
+  WorkflowDraftSnapshot,
+} from '@agent-workflow/shared'
 import { beforeEach, describe, expect, test } from 'bun:test'
+import { eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { tasks } from '../src/db/schema'
+import { tasks, workflows } from '../src/db/schema'
 import { createApp } from '../src/server'
 import {
   createWorkflow,
@@ -22,6 +29,7 @@ import { ConflictError, NotFoundError } from '../src/util/errors'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const SYSTEM_PRINCIPAL = { kind: 'system', reason: 'workflow-service-test' } as const
 
 function buildHarness(): { db: DbClient; app: Hono } {
   const db = createInMemoryDb(MIGRATIONS)
@@ -60,6 +68,25 @@ function sampleDefinition(): WorkflowDefinition {
   }
 }
 
+function saveInput(
+  workflow: Pick<WorkflowDetail, 'version' | 'name' | 'description' | 'definition'>,
+  patch: Partial<WorkflowDraftSnapshot> = {},
+): UpdateWorkflow {
+  return {
+    expectedVersion: workflow.version,
+    clientMutationId: ulid(),
+    snapshot: {
+      name: patch.name ?? workflow.name,
+      description: patch.description ?? workflow.description,
+      definition: patch.definition ?? workflow.definition,
+    },
+  }
+}
+
+function deleteInput(workflow: Pick<WorkflowDetail, 'version'>): DeleteWorkflow {
+  return { expectedVersion: workflow.version, clientMutationId: ulid() }
+}
+
 describe('workflow service', () => {
   let db: DbClient
 
@@ -90,18 +117,32 @@ describe('workflow service', () => {
       description: '',
       definition: sampleDefinition(),
     })
-    const after = await updateWorkflow(db, wf.id, {
-      name: 'renamed',
-      definition: { ...sampleDefinition(), nodes: [] },
-    })
-    expect(after.version).toBe(2)
-    expect(after.name).toBe('renamed')
-    expect(after.definition.nodes.length).toBe(0)
+    const after = await updateWorkflow(
+      db,
+      wf.id,
+      saveInput(wf, {
+        name: 'renamed',
+        definition: { ...sampleDefinition(), nodes: [] },
+      }),
+      SYSTEM_PRINCIPAL,
+    )
+    expect(after.revision.version).toBe(2)
+    expect(after.snapshot.name).toBe('renamed')
+    expect(after.snapshot.definition.nodes.length).toBe(0)
   })
 
   test('update unknown id -> NotFoundError', async () => {
     await expect(
-      updateWorkflow(db, '01HXXXXXXXXXXXXXXXXXXX', { name: 'x' }),
+      updateWorkflow(
+        db,
+        '01HXXXXXXXXXXXXXXXXXXX',
+        {
+          expectedVersion: 1,
+          clientMutationId: ulid(),
+          snapshot: { name: 'x', description: '', definition: sampleDefinition() },
+        },
+        SYSTEM_PRINCIPAL,
+      ),
     ).rejects.toBeInstanceOf(NotFoundError)
   })
 
@@ -111,9 +152,12 @@ describe('workflow service', () => {
       description: '',
       definition: sampleDefinition(),
     })
-    await deleteWorkflow(db, wf.id)
+    const input = deleteInput(wf)
+    await deleteWorkflow(db, wf.id, input, SYSTEM_PRINCIPAL)
     expect(await getWorkflow(db, wf.id)).toBeNull()
-    await expect(deleteWorkflow(db, wf.id)).rejects.toBeInstanceOf(NotFoundError)
+    await expect(deleteWorkflow(db, wf.id, input, SYSTEM_PRINCIPAL)).rejects.toBeInstanceOf(
+      NotFoundError,
+    )
   })
 
   test('delete refuses when ANY task references the workflow (running)', async () => {
@@ -136,7 +180,9 @@ describe('workflow service', () => {
       inputs: '{}',
       startedAt: Date.now(),
     })
-    await expect(deleteWorkflow(db, wf.id)).rejects.toBeInstanceOf(ConflictError)
+    await expect(
+      deleteWorkflow(db, wf.id, deleteInput(wf), SYSTEM_PRINCIPAL),
+    ).rejects.toBeInstanceOf(ConflictError)
   })
 
   test('delete refuses when ANY task references the workflow (done)', async () => {
@@ -161,7 +207,9 @@ describe('workflow service', () => {
       inputs: '{}',
       startedAt: Date.now(),
     })
-    await expect(deleteWorkflow(db, wf.id)).rejects.toBeInstanceOf(ConflictError)
+    await expect(
+      deleteWorkflow(db, wf.id, deleteInput(wf), SYSTEM_PRINCIPAL),
+    ).rejects.toBeInstanceOf(ConflictError)
   })
 
   test('validate on empty workflow definition returns ok', async () => {
@@ -247,16 +295,19 @@ describe('workflow HTTP routes', () => {
           definition: sampleDefinition(),
         }),
       })
-    ).json()) as { id: string }
+    ).json()) as WorkflowDetail
 
     const put = await req(app, `/api/workflows/${created.id}`, {
       method: 'PUT',
-      body: JSON.stringify({ name: 'renamed' }),
+      body: JSON.stringify(saveInput(created, { name: 'renamed' })),
     })
     expect(put.status).toBe(200)
-    const after = (await put.json()) as { name: string; version: number }
-    expect(after.name).toBe('renamed')
-    expect(after.version).toBe(2)
+    const after = (await put.json()) as {
+      snapshot: { name: string }
+      revision: { version: number }
+    }
+    expect(after.snapshot.name).toBe('renamed')
+    expect(after.revision.version).toBe(2)
   })
 
   // 2026-07-10 naming unification: workflow names follow the workgroup slug
@@ -288,30 +339,42 @@ describe('workflow HTTP routes', () => {
         definition: sampleDefinition(),
       }),
     })
-    const created = (await post.json()) as { id: string }
-    await updateWorkflow(hdb, created.id, { name: 'Legacy Name With Spaces' })
+    const created = (await post.json()) as WorkflowDetail
+    // Simulate a row written before the slug rule existed. The current save
+    // service correctly refuses to mint a new invalid name, so this fixture
+    // must bypass it just like a historical migration state would.
+    await hdb
+      .update(workflows)
+      .set({ name: 'Legacy Name With Spaces' })
+      .where(eq(workflows.id, created.id))
+    const legacy = await getWorkflow(hdb, created.id)
+    if (legacy === null) throw new Error('legacy workflow disappeared')
 
     // Auto-save shape: echoes the stored legacy name → must keep working.
     const same = await req(happ, `/api/workflows/${created.id}`, {
       method: 'PUT',
-      body: JSON.stringify({ name: 'Legacy Name With Spaces', description: 'touched' }),
+      body: JSON.stringify(saveInput(legacy, { description: 'touched' })),
     })
     expect(same.status).toBe(200)
+    const current = await getWorkflow(hdb, created.id)
+    if (current === null) throw new Error('workflow disappeared after save')
 
     // An actual rename must satisfy the unified rules.
     const bad = await req(happ, `/api/workflows/${created.id}`, {
       method: 'PUT',
-      body: JSON.stringify({ name: 'Still Bad Name' }),
+      body: JSON.stringify(saveInput(current, { name: 'Still Bad Name' })),
     })
     expect(bad.status).toBe(422)
     expect(((await bad.json()) as { code: string }).code).toBe('workflow-name-invalid')
 
     const good = await req(happ, `/api/workflows/${created.id}`, {
       method: 'PUT',
-      body: JSON.stringify({ name: 'legacy-renamed' }),
+      body: JSON.stringify(saveInput(current, { name: 'legacy-renamed' })),
     })
     expect(good.status).toBe(200)
-    expect(((await good.json()) as { name: string }).name).toBe('legacy-renamed')
+    expect(((await good.json()) as { snapshot: { name: string } }).snapshot.name).toBe(
+      'legacy-renamed',
+    )
   })
 
   test('GET unknown id returns 404 with workflow-not-found', async () => {
@@ -330,11 +393,35 @@ describe('workflow HTTP routes', () => {
           definition: sampleDefinition(),
         }),
       })
-    ).json()) as { id: string }
-    const del = await req(app, `/api/workflows/${created.id}`, { method: 'DELETE' })
+    ).json()) as WorkflowDetail
+    const body = JSON.stringify(deleteInput(created))
+    const del = await req(app, `/api/workflows/${created.id}`, { method: 'DELETE', body })
     expect(del.status).toBe(204)
-    const again = await req(app, `/api/workflows/${created.id}`, { method: 'DELETE' })
+    const again = await req(app, `/api/workflows/${created.id}`, { method: 'DELETE', body })
     expect(again.status).toBe(404)
+  })
+
+  test('PUT and DELETE reject missing revision fences', async () => {
+    const created = (await (
+      await req(app, '/api/workflows', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'fenced-workflow',
+          description: '',
+          definition: sampleDefinition(),
+        }),
+      })
+    ).json()) as WorkflowDetail
+
+    expect(
+      (
+        await req(app, `/api/workflows/${created.id}`, {
+          method: 'PUT',
+          body: JSON.stringify({ name: 'partial-patch' }),
+        })
+      ).status,
+    ).toBe(422)
+    expect((await req(app, `/api/workflows/${created.id}`, { method: 'DELETE' })).status).toBe(422)
   })
 
   test('POST /:id/validate returns ok for an empty workflow', async () => {
@@ -347,10 +434,24 @@ describe('workflow HTTP routes', () => {
           definition: { $schema_version: 1, inputs: [], nodes: [], edges: [] },
         }),
       })
-    ).json()) as { id: string }
-    const res = await req(app, `/api/workflows/${created.id}/validate`, { method: 'POST' })
+    ).json()) as WorkflowDetail
+    const res = await req(app, `/api/workflows/${created.id}/validate`, {
+      method: 'POST',
+      body: JSON.stringify({
+        expectedVersion: created.version,
+        expectedSnapshotHash: created.snapshotHash,
+      }),
+    })
     expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ ok: true, issues: [] })
+    expect(await res.json()).toMatchObject({
+      revision: {
+        workflowId: created.id,
+        version: created.version,
+        snapshotHash: created.snapshotHash,
+      },
+      ok: true,
+      issues: [],
+    })
   })
 
   test('all /api/workflows/* require token', async () => {

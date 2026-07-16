@@ -1241,6 +1241,7 @@ export const enUS: Resources = {
       import: 'Import',
       importing: 'Importing…',
       retry: 'Retry import',
+      refreshConflict: 'Refresh conflict details',
       another: 'Import another',
       chooseAnother: 'Choose another file',
       conflictTitle: 'A workflow with this id already exists',
@@ -1898,16 +1899,24 @@ export const enUS: Resources = {
     statusUnsaved: 'unsaved',
     statusSaved: 'saved',
     launch: 'Launch task →',
+    preparingLaunch: 'Saving and validating…',
     validate: 'Validate',
     validating: 'Validating…',
     exportYaml: 'Export YAML',
+    exporting: 'Exporting…',
     exportTitle: 'Download workflow as YAML',
+    actionDraftChanged:
+      'The draft changed while this action was running. Review the saved state and try again.',
+    actionRevisionMismatch:
+      'The server response did not match the saved workflow revision. Nothing else was done.',
     remoteUpdated: 'Workflow was updated elsewhere (v{{version}}); your view will refresh.',
     remoteDeleted: 'This workflow was deleted from another tab.',
     remoteDismiss: 'dismiss',
     validationOk: '✓ valid',
     validationIssues: '{{n}} issue(s)',
     validationWarnings: '{{n}} warning(s) — does not block launch',
+    validationStaleDraft: 'Last validation (the draft has changed)',
+    validationStaleInventory: 'Last validation (validation resources may have changed)',
     validationAutoFitWrapper: 'Auto-fit',
     paletteFilter: 'Filter palette…',
     paletteNoMatches: 'No matches.',
@@ -1946,6 +1955,77 @@ export const enUS: Resources = {
     menuSelectedCount: '{{n}} selected',
     nodeTitleUnsetAgent: '(unset agent)',
     nodeTitleUnsetKey: '(unset key)',
+    history: {
+      undo: 'Undo',
+      redo: 'Redo',
+      undoIntent: 'Undo: {{label}}',
+      redoIntent: 'Redo: {{label}}',
+      canvasEdit: 'Edit canvas',
+      delete: 'Delete selection',
+      connect: 'Connect steps',
+      paste: 'Paste steps',
+      duplicate: 'Duplicate step',
+      wrap: 'Wrap steps',
+      unwrap: 'Unwrap steps',
+      fitWrapper: 'Fit wrapper',
+      insert: 'Add step',
+      move: 'Move step',
+      rename: 'Rename workflow',
+      editInspector: 'Edit configuration',
+    },
+    draftStatus: {
+      groupLabel: 'Workflow draft status',
+      phaseAria: 'Save status: {{status}}',
+      transportAria: 'Connection status: {{status}}',
+      phase: {
+        clean: 'Saved',
+        dirty: 'Unsaved changes',
+        saving: 'Saving',
+        reconciling: 'Checking save result',
+        error: 'Save failed',
+        conflict: 'Version conflict',
+        inaccessible: 'Inaccessible',
+        deleted: 'Deleted',
+      },
+      transport: {
+        online: 'Online',
+        degraded: 'Live sync degraded',
+        offline: 'Offline',
+      },
+      retryNow: 'Retry now',
+      offlineTitle: 'You are offline',
+      offlineBody:
+        'Your local draft is preserved. The server revision will be checked before saving resumes.',
+      reconcilingTitle: 'Checking the save result',
+      reconcilingBody:
+        'The last request has an uncertain result. Later edits will not be sent until this check finishes.',
+      errorTitle: 'Workflow save failed',
+      errorBody: 'Your local draft is preserved. Retry saving or export the local content first.',
+      conflictTitle: 'A version conflict was detected',
+      conflictBody:
+        'Local draft r{{localRevision}} differs from remote v{{remoteVersion}}. Choose how to continue.',
+      saveCopyRecommended: 'Save as copy (recommended)',
+      saveCopy: 'Save as copy',
+      loadRemote: 'Load remote',
+      overwriteRemote: 'Overwrite remote',
+      loadDialogTitle: 'Load the remote version?',
+      loadDialogBody:
+        'Loading remote v{{remoteVersion}} will discard the changes in local draft r{{localRevision}}.',
+      loadDialogConfirm: 'Load remote and discard local changes',
+      overwriteDialogTitle: 'Overwrite the remote version?',
+      overwriteDialogBody:
+        'Local draft r{{localRevision}} is based on v{{baseVersion}}. This will attempt to overwrite remote v{{remoteVersion}}. If it changes again, the draft remains in conflict.',
+      overwriteDialogConfirm: 'Overwrite remote',
+      inaccessibleTitle: 'This workflow is no longer accessible',
+      inaccessibleBody:
+        'This workflow may have been deleted or your permissions may have changed. Your local draft is still preserved.',
+      deletedTitle: 'Workflow deleted',
+      deletedBody:
+        'The server explicitly deleted this workflow. You can still export the local draft or save it as a copy.',
+      exportLocal: 'Export local YAML',
+      retryAccess: 'Retry access',
+      returnToList: 'Return to workflows',
+    },
   },
   taskWizard: {
     launchEntry: 'Start task',
@@ -2001,6 +2081,16 @@ export const enUS: Resources = {
       'This schedule\u2019s stored config cannot be parsed (legacy or corrupted); re-fill the form and save to repair it.',
     spaceUnresolvedNotice:
       'The source task\u2019s workspace could not be fully rebuilt (internal space, legacy local path, or a setup-stage failure that may have kept only part of the repo list) \u2014 it was cleared; re-confirm and complete the repository list before launching.',
+    workflowVersionMismatchTitle: 'Workflow changed before launch',
+    workflowVersionMismatchBody:
+      'This launch was prepared for v{{expected}}, but the workflow is now v{{current}}. Return to the editor and validate the latest revision before launching.',
+    workflowVersionReturnToEditor: 'Return to editor and validate',
+    workflowVersionUseLatest: 'Load and review latest version',
+    workflowLaunchVersionMismatchBody:
+      'The workflow changed while the task was starting, so no task was created. Load and review the latest fields before trying again.',
+    scheduledWorkflowLatestTitle: 'Scheduled runs use the latest workflow',
+    scheduledWorkflowLatestBody:
+      'The current workflow version is not pinned. Each scheduled occurrence loads and validates the latest available version when it starts.',
   },
   stepper: {
     progress: 'Steps',
@@ -2811,6 +2901,15 @@ export const enUS: Resources = {
   },
   canvas: {
     connect: { newInput: 'New input', reuseInput: 'Reuse input' },
+    clipboardBlocked:
+      'Copy or paste was blocked because the selected steps contain incomplete references or input declarations.',
+    clipboardReferencesFiltered:
+      '{{n}} reference(s) outside the copied steps were safely removed. Review the pasted configuration.',
+    referencesPruned:
+      '{{n}} stale reference(s) to deleted steps were removed so the workflow remains consistent.',
+    referenceChangeBlocked:
+      'This change was blocked because an unsupported step reference could not be updated safely.',
+    placementUnavailable: 'No open space was found near that point. Pan the canvas and try again.',
   },
   reviewNode: {
     label: 'review',
