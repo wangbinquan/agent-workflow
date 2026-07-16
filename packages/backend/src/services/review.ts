@@ -2136,27 +2136,44 @@ export async function submitReviewDecision(
     throw new NotFoundError('review-not-found', `review run ${args.nodeRunId} not found`)
   }
   const run = runRows[0]!
-  // RFC-202 T2 write-path guard: refuse decisions on a task that is already
-  // done/canceled — the terminal sweep normally closes these runs, but a
-  // hook failure (or a race with it) can leave the run awaiting; the write
-  // path must fail closed on its own. failed/interrupted stay decidable
-  // (revivable, design §1).
-  const owningTask = (
-    await args.db
+  // RFC-202 T2 write-path guard (Codex impl-gate P1 hardening): refuse
+  // decisions on a task that is already done/canceled. The check runs INSIDE
+  // one synchronous transaction together with a re-read of the run row, so a
+  // concurrent cancel+terminal-sweep (now reachable — T3 made awaiting_review
+  // cancelable) cannot slip between "task looked alive" and "run looked
+  // awaiting": both facts are observed atomically. Residual window: the
+  // decision mutations below are NOT yet inside this transaction — a sweep
+  // landing mid-mutation still loses the run-flip CAS at the end (design
+  // §2.9-5 documents the follow-up to transactionalize the whole path).
+  // failed/interrupted stay decidable (revivable, design §1).
+  dbTxSync(args.db, (tx) => {
+    const owningTask = tx
       .select({ status: tasks.status })
       .from(tasks)
       .where(eq(tasks.id, run.taskId))
-      .limit(1)
-  )[0]
-  if (
-    owningTask !== undefined &&
-    (owningTask.status === 'done' || owningTask.status === 'canceled')
-  ) {
-    throw new ConflictError(
-      'task-terminal',
-      `task ${run.taskId} is '${owningTask.status}'; this review round is closed and no longer accepts decisions`,
-    )
-  }
+      .all()[0]
+    if (
+      owningTask !== undefined &&
+      (owningTask.status === 'done' || owningTask.status === 'canceled')
+    ) {
+      throw new ConflictError(
+        'task-terminal',
+        `task ${run.taskId} is '${owningTask.status}'; this review round is closed and no longer accepts decisions`,
+      )
+    }
+    const liveRun = tx
+      .select({ status: nodeRuns.status })
+      .from(nodeRuns)
+      .where(eq(nodeRuns.id, args.nodeRunId))
+      .all()[0]
+    if (liveRun !== undefined && liveRun.status !== 'awaiting_review') {
+      // The sweep (or another decider) already closed this run.
+      throw new ConflictError(
+        'review-not-awaiting',
+        `review ${args.nodeRunId} not awaiting_review (status=${liveRun.status})`,
+      )
+    }
+  })
   if (run.status !== 'awaiting_review') {
     throw new ConflictError(
       'review-not-awaiting',

@@ -95,6 +95,7 @@
 2. **未新增 `transitionNodeRunStatusInTx` 原语**：封存器沿用仓内既定模式——`dbTxSync` 内带 `rfc053-allow-direct-status-write` 标记的守卫直写（与 workgroup 封存器同款；guard 测试认可该标记），转移合法性由 awaiting-only WHERE 守卫编码（对应共享表 `mark-canceled` 边，该边已存在无需扩表）。
 3. **review 详情页顶部状态说明条未实现**（T6-6 的窄化）：终态任务的评审轮已从列表/徽标消失，直接决策被写路径护栏 409（`task-terminal`，中文词条已补）；详情页沿用既有 decided 只读态。如需页面级说明条另行小 PR。
 4. `sealRoundQuestions` 的写路径护栏在事务内同时覆盖 done/canceled（clarify 轮封存后再提交会先撞 `clarify-round-terminal`，两道闸互为兜底）。
+5. **实现门 P1 的处置与残留**（2026-07-16 实现门折入）：`submitReviewDecision` 的终态检查已事务化（同一 `dbTxSync` 内原子观察 task.status + run.status，取消无法插进两次读之间）；但决策主体（评论归档/decided 标记/端口写入/rerun 铸造）尚未整体进事务——sweep 在"门通过后、末尾 run 翻转 CAS 前"落地仍可造成已取消任务上的部分变更（末尾 CAS 会输给 sweep 并抛错，无静默假成功）。完整事务化列为后续工单（需把 ~150 行含文件 IO 的路径改造为 sync-tx 形态）。同批折入的其余实现门 findings：修复弹窗关闭时重置失败态；`workflows.edit.tsx` 就地渲染 `visibleScheduled`/`hiddenCount`；反问封存原因改为暴露 `sealedCause`（park-carrier node_run 的 errorMessage，转移时点事实）而非用任务当前状态推断。
 
 ## 3. 接口契约变化汇总
 

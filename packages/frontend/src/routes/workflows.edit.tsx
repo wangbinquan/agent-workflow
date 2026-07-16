@@ -868,7 +868,30 @@ export function WorkflowEditorLoaded({
           }
         />
       )}
-      {del.error !== null && del.error !== undefined && <ErrorBanner error={del.error} />}
+      {del.error !== null && del.error !== undefined && (
+        <ErrorBanner
+          error={del.error}
+          action={(() => {
+            // RFC-202 T5 (Codex impl-gate P2): the backend attaches the
+            // principal-visible referencing schedules + a hidden-count
+            // aggregate — render them so the user knows WHAT to repoint.
+            const err = del.error as { code?: string; details?: unknown }
+            if (err.code !== 'workflow-scheduled-referenced') return undefined
+            const d = err.details as
+              | { visibleScheduled?: Array<{ id: string; name: string }>; hiddenCount?: number }
+              | undefined
+            if (d === undefined) return undefined
+            const names = (d.visibleScheduled ?? []).map((v) => v.name)
+            const hidden = d.hiddenCount ?? 0
+            return (
+              <span className="workflow-delete-refs">
+                {names.length > 0 && t('editor.deleteScheduledRefs', { names: names.join('、') })}
+                {hidden > 0 && ' ' + t('editor.deleteScheduledRefsHidden', { count: hidden })}
+              </span>
+            )
+          })()}
+        />
+      )}
       {actionError !== null && actionError !== undefined && (
         <div ref={actionErrorFocusRef} tabIndex={-1} data-testid="workflow-action-error-focus">
           <ErrorBanner error={actionError} />

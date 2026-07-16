@@ -20,7 +20,7 @@
 // happened in Chinese, and only forwards genuine successes.
 
 import { useMutation } from '@tanstack/react-query'
-import { useState, type ReactElement } from 'react'
+import { useEffect, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { RepairOption, RepairRequest, RepairResponse } from '@agent-workflow/shared'
@@ -61,6 +61,18 @@ export function RepairConfirmModal(props: RepairConfirmModalProps): ReactElement
       onApplied(result)
     },
   })
+
+  // Codex impl-gate P2: the parent keeps this component mounted across
+  // open/close and option switches — without a reset, a stale failure banner
+  // (and its Close-only footer) survives into the next confirmation and
+  // blocks any further Apply.
+  useEffect(() => {
+    if (!open) {
+      setFailedResult(null)
+      apply.reset()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, option.id])
 
   const confirmDisabled = !option.available || apply.isPending
   const confirmClass = option.destructive ? 'btn btn--sm btn--danger' : 'btn btn--sm btn--primary'

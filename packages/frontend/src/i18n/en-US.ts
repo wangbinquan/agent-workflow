@@ -2028,6 +2028,8 @@ export const enUS: Resources = {
     },
   },
   editor: {
+    deleteScheduledRefs: 'Referencing scheduled tasks: {{names}}.',
+    deleteScheduledRefsHidden: '{{count}} more scheduled task(s) you cannot see also reference it.',
     newTitle: 'New workflow',
     fieldName: 'Name',
     fieldDescription: 'Description',

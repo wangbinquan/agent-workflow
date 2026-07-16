@@ -211,4 +211,58 @@ describe('<RepairConfirmModal />', () => {
     expect(document.body.textContent).toContain('resuming the task failed')
     expect(document.body.textContent).toContain('worktree missing')
   })
+
+  // Codex impl-gate P2 (RFC-202): closing after an ok:false failure must
+  // reset the failure state — the parent keeps this component mounted, so a
+  // stale banner would otherwise block any further Apply on reopen.
+  test('reopening after an ok:false close restores the Apply footer', async () => {
+    installFetch(() =>
+      jsonResponse({
+        ok: false,
+        auditId: 'audit-3',
+        outcome: 'apply-failed',
+        outcomeMessage: 'boom',
+        resolvedAlertIds: [],
+        newAlerts: [],
+      }),
+    )
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const view = render(
+      <QueryClientProvider client={qc}>
+        <RepairConfirmModal
+          taskId="task_1"
+          alertId="al_1"
+          option={mkOpt()}
+          open={true}
+          onCancel={() => {}}
+          onApplied={() => {}}
+        />
+      </QueryClientProvider>,
+    )
+    fireEvent.click(
+      document.querySelector('[data-testid="repair-confirm-apply"]') as HTMLButtonElement,
+    )
+    await waitFor(() => {
+      expect(document.querySelector('[data-testid="repair-confirm-close-failed"]')).not.toBeNull()
+    })
+    const reopen = (open: boolean) =>
+      view.rerender(
+        <QueryClientProvider client={qc}>
+          <RepairConfirmModal
+            taskId="task_1"
+            alertId="al_1"
+            option={mkOpt()}
+            open={open}
+            onCancel={() => {}}
+            onApplied={() => {}}
+          />
+        </QueryClientProvider>,
+      )
+    reopen(false)
+    reopen(true)
+    await waitFor(() => {
+      expect(document.querySelector('[data-testid="repair-confirm-apply"]')).not.toBeNull()
+    })
+    expect(document.querySelector('[data-testid="repair-confirm-close-failed"]')).toBeNull()
+  })
 })

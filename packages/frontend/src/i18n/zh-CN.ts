@@ -1911,6 +1911,8 @@ export interface Resources {
     }
   }
   editor: {
+    deleteScheduledRefs: string
+    deleteScheduledRefsHidden: string
     newTitle: string
     fieldName: string
     fieldDescription: string
@@ -5422,6 +5424,8 @@ export const zhCN: Resources = {
     },
   },
   editor: {
+    deleteScheduledRefs: '引用它的定时任务：{{names}}。',
+    deleteScheduledRefsHidden: '另有 {{count}} 个你不可见的定时任务也在引用。',
     newTitle: '新建工作流',
     fieldName: '名称',
     fieldDescription: '描述',

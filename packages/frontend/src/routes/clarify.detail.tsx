@@ -28,7 +28,6 @@ import type {
   SubmitClarifyAnswersResponse,
   WorkflowDefinition,
 } from '@agent-workflow/shared'
-import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 import { api, type ApiError } from '@/api/client'
 import { AttributionChip } from '@/components/AttributionChip'
 import { ErrorBanner } from '@/components/ErrorBanner'
@@ -801,15 +800,20 @@ export function ClarifyDetailPage() {
           was safely saved. Copy branches on the owning task's status. */}
       {(s.status === 'canceled' || s.status === 'abandoned') &&
         (() => {
-          const taskStatus = taskQuery.data?.status
-          const taskTerminal =
-            taskStatus !== undefined &&
-            (TERMINAL_TASK_STATUSES as readonly string[]).includes(taskStatus)
+          // Codex impl-gate P2: branch on the TRANSITION-TIME cause the
+          // backend recorded (sealedCause), never the task's mutable current
+          // status — a canceled-then-retried task would otherwise relabel its
+          // historical round as an autonomous dismissal (and vice versa).
+          const cause = s.sealedCause
+          const copy =
+            cause !== undefined && cause.startsWith('task-')
+              ? t('clarify.roundSealedByTaskTerminal')
+              : cause === 'wg-autonomous-dismissed'
+                ? t('clarify.roundDismissedByAutonomous')
+                : t('clarify.detail.roundSealedFooter')
           return (
             <NoticeBanner tone="info" size="compact" className="clarify-round-sealed">
-              {taskTerminal
-                ? t('clarify.roundSealedByTaskTerminal')
-                : t('clarify.roundDismissedByAutonomous')}
+              {copy}
             </NoticeBanner>
           )
         })()}

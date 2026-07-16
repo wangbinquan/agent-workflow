@@ -18,7 +18,7 @@ import { desc, eq, inArray } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
-import { clarifyRounds, tasks } from '@/db/schema'
+import { clarifyRounds, nodeRuns, tasks } from '@/db/schema'
 import {
   TERMINAL_TASK_STATUSES,
   type ClarifyAnswer,
@@ -231,7 +231,27 @@ export async function getClarifyRoundDetail(
     )
   }
   const titlesByTaskAndNode = await loadNodeTitlesByTask(db, [row.taskId])
-  return rowToDetail(row, titlesByTaskAndNode)
+  const detail = rowToDetail(row, titlesByTaskAndNode)
+  // RFC-202 T6 (Codex impl-gate P2): the UI must explain WHY a round was
+  // sealed — inferring it from the task's MUTABLE current status misattributes
+  // history (e.g. a canceled-then-retried task's abandoned round would read as
+  // an autonomous dismissal). The park-carrier node_run's errorMessage records
+  // the transition-time cause ('task-canceled' / 'task-done' from the terminal
+  // sweep, 'wg-autonomous-dismissed' from the workgroup flip); expose it
+  // verbatim as an optional field.
+  if (row.status === 'canceled' || row.status === 'abandoned') {
+    const run = (
+      await db
+        .select({ errorMessage: nodeRuns.errorMessage })
+        .from(nodeRuns)
+        .where(eq(nodeRuns.id, intermediaryNodeRunId))
+        .limit(1)
+    )[0]
+    if (run?.errorMessage != null && run.errorMessage !== '') {
+      detail.sealedCause = run.errorMessage
+    }
+  }
+  return detail
 }
 
 function rowToSummary(
