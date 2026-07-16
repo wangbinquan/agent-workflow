@@ -47,7 +47,7 @@ describe('app-shell viewport locking (RFC-168 clipping regression)', () => {
     expect(content).toContain('min-width: 0')
   })
 
-  test('900px swaps to one topbar + main grid while 720px stays the content breakpoint', () => {
+  test('900px swaps to one topbar + main grid while 1080px owns compact resource splits', () => {
     expect(CSS).toMatch(
       /@media \(max-width: 900px\)[\s\S]*?grid-template-columns: minmax\(0, 1fr\)[\s\S]*?grid-template-rows: auto minmax\(0, 1fr\)/,
     )
@@ -55,7 +55,7 @@ describe('app-shell viewport locking (RFC-168 clipping regression)', () => {
     expect(CSS).toMatch(
       /@media \(max-width: 900px\)[\s\S]*?\.content[\s\S]*?padding: var\(--space-3\)/,
     )
-    expect(CSS).toMatch(/@media \(max-width: 720px\)[\s\S]*?data-mobile-view='list'/)
+    expect(CSS).toMatch(/@media \(max-width: 1080px\)[\s\S]*?data-mobile-view='list'/)
   })
 
   test('mobile nav and tablet Inbox are viewport/safe-area bounded', () => {

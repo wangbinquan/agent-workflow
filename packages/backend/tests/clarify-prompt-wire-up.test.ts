@@ -68,7 +68,10 @@ describe('scheduler ↔ runner clarify prompt wire-up (RFC-023 T12)', () => {
 
   test('shared/src/prompt.ts mounts buildClarifyProtocolBlock inside renderUserPrompt', () => {
     const src = readFileSync(join(SHARED_SRC, 'prompt.ts'), 'utf8')
-    expect(src).toContain('buildClarifyProtocolBlock()')
+    // RFC-200 threads the per-run envelope nonce through the mandatory clarify
+    // protocol instead of rendering the historical bare-tag block.
+    expect(src).toContain('const nonce = input.envelopeNonce')
+    expect(src).toContain('buildClarifyProtocolBlock(nonce)')
     // RFC-100: the clarify-active path mounts the mandatory ask-back preamble +
     // clarify format, gated on the clarifyChannel ADT's mandatory projection
     // (RFC-148 — was `hasClarifyChannel === true`). The bi-modal

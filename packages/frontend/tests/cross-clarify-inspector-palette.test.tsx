@@ -217,12 +217,23 @@ describe('RFC-056 source-text grep guards (T9)', () => {
     expect(src).toContain('crossClarify.canvas.paletteLabel')
   })
 
-  test('WorkflowCanvas.tsx wires CrossClarifyNode + classifyCrossClarifyConnection', () => {
+  test('WorkflowCanvas.tsx wires CrossClarifyNode + canonical cross-clarify mutation paths', () => {
     const src = readFileSync(CANVAS_TSX, 'utf-8')
     expect(src).toContain('CrossClarifyNode')
     expect(src).toContain('classifyCrossClarifyConnection')
     expect(src).toContain('applyCrossClarifyQuestionerReverseDrag')
     expect(src).toContain('applyCrossClarifyDesignerDrag')
-    expect(src).toContain('clearCrossClarifyEdgesForRemovedNodes')
+    expect(src).toContain('deleteWorkflowSelection')
+
+    // RFC-199 routes node/edge deletion through the shared reference-pruning
+    // transaction. Cross-clarify's paired-edge cleanup therefore belongs in
+    // commitChange, rather than the old node-removal-only helper.
+    const commitIdx = src.indexOf('const commitChange = useCallback')
+    expect(commitIdx).toBeGreaterThan(-1)
+    const nextDeclarationIdx = src.indexOf('const questionBadgeClickRef', commitIdx)
+    expect(nextDeclarationIdx).toBeGreaterThan(commitIdx)
+    const commitBlock = src.slice(commitIdx, nextDeclarationIdx)
+    expect(commitBlock).toContain('pruneDeletedNodeReferences')
+    expect(commitBlock).toContain('cascadeRemoveCrossClarifyChannel')
   })
 })

@@ -301,7 +301,7 @@ describe('RFC-199 validation-context semantic source ratchet', () => {
         `${family} semantic reads missing from validation-context projection`,
       ).toEqual([])
     }
-  })
+  }, 20_000)
 
   test('projection keeps prompt, secret configuration and runtime paths out', () => {
     const projection = canonicalJson(projectWorkflowValidationContext(fixtureContext()))

@@ -724,7 +724,8 @@ describe('/workflows/new removal wiring', () => {
     expect(edit).toContain('title={controller.state.local.name || workflowId}')
     expect(edit).toContain('actions={headerActions}')
     expect(edit).toContain('<WorkflowDraftStatus')
-    expect(edit).toContain('<ErrorBanner error={validate.error} />')
+    expect(edit).toContain('data-testid="workflow-action-error-focus"')
+    expect(edit).toContain('<ErrorBanner error={actionError} />')
     expect(edit).toContain('<WorkflowCanvas')
   })
 
@@ -736,7 +737,10 @@ describe('/workflows/new removal wiring', () => {
     expect(edit).toContain('observeRemoteDetail(observedDetail)')
     expect(edit).toContain('onFrame: controller.remoteFrame')
     expect(edit).toContain('inFlightMutationId: controller.inFlightMutationId')
-    expect(edit).toContain('controller.commit({ ...controller.state.local, definition })')
+    expect(edit).toMatch(
+      /controller\.commit\(\s*\{ \.\.\.controller\.state\.local, definition \},\s*\{/,
+    )
+    expect(edit).toContain('onChange={commitDefinition}')
     expect(edit).toContain('<UnsavedChangesGuard dirtyRef={unsafeNavigationRef} />')
     expect(edit).toContain('makeWorkflowDeleteRequest(expectedVersion)')
     expect(edit).toContain('confirmationKey={deleteConfirmationKey}')

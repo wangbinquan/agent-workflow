@@ -297,12 +297,12 @@ describe('ResourceSplitPage — structure & three states', () => {
 })
 
 describe('ResourceSplitPage — mobile list/detail DOM contract', () => {
-  test('CSS switches exactly one split pane at the 720px content breakpoint', () => {
+  test('CSS switches exactly one split pane at the 1080px compact breakpoint', () => {
     const css = readFileSync(
       path.resolve(path.dirname(new URL(import.meta.url).pathname), '../src/styles.css'),
       'utf8',
     )
-    expect(css).toMatch(/@media \(max-width: 720px\)[\s\S]*?data-mobile-view='list'/)
+    expect(css).toMatch(/@media \(max-width: 1080px\)[\s\S]*?data-mobile-view='list'/)
     expect(css).toMatch(/data-mobile-view='detail'[\s\S]*?\.split__list[\s\S]*?display: none/)
     expect(css).toMatch(/\.split__mobile-back[\s\S]*?display: inline-flex/)
   })

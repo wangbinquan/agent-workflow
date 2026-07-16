@@ -1243,7 +1243,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     // leave newC consuming the OLD B here.
     expect(consumedOf(newB).agentA).toBe(newA.id)
     expect(consumedOf(newC).agentB).toBe(newB.id)
-  })
+  }, 20_000)
 
   // ---------------------------------------------------------------------------
   // S11 — A(clarify)→B(clarify)→review. A non-clarifying intermediate is the

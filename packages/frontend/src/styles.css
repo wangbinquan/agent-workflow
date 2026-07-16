@@ -14374,14 +14374,19 @@ button.status-chip {
   min-width: 0;
 }
 
-/* Narrow-viewport degrade:桌面优先 but must not break-layout. Stack the two
-   columns; the card rail is capped and scrolls internally, the detail fills the
-   rest. Both sides stay horizontal-overflow free (P2-8's 901px break gone). */
+/* Compact viewport: the persistent side-by-side split no longer fits beside the
+   220px app navigation. Show the route-owned list OR detail pane instead of
+   stacking both vertically. The old auto + 1fr rows let the list consume most
+   of a short laptop viewport, which collapsed fill-height editors (notably the
+   Agent Prompt textarea) to a one-line sliver. */
 @media (max-width: 1080px) {
+  /* Pages without route-owned list/detail state (for example Workgroup detail)
+     keep both panes reachable by stacking the rail above the detail. */
   .split {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
   }
+
   .split__list {
     border-right: 0;
     border-bottom: 1px solid var(--border);
@@ -14389,39 +14394,35 @@ button.status-chip {
     padding-bottom: var(--space-3);
     min-height: 0;
   }
+
   .split__cards {
-    /* 15rem (=240px) rather than a literal 240px so the RFC-072 source guard,
-       which globally asserts the old task-output card rule string is gone,
-       stays meaningful. */
     max-height: 15rem;
   }
-}
 
-@media (max-width: 720px) {
   .page--split[data-mobile-view='list'] .split__detail,
   .page--split[data-mobile-view='detail'] .split__list {
     display: none;
   }
 
-  .split {
+  .page--split[data-mobile-view] .split {
     grid-template-rows: minmax(0, 1fr);
   }
 
-  .split__list {
+  .page--split[data-mobile-view] .split__list {
     height: 100%;
-    padding-bottom: 0;
     border-bottom: 0;
+    padding-bottom: 0;
   }
 
-  .split__cards {
+  .page--split[data-mobile-view] .split__cards {
     max-height: none;
   }
 
-  .split__detail {
+  .page--split[data-mobile-view] .split__detail {
     height: 100%;
   }
 
-  .split__mobile-back {
+  .page--split[data-mobile-view] .split__mobile-back {
     display: inline-flex;
     align-self: flex-start;
     align-items: center;
@@ -14432,7 +14433,7 @@ button.status-chip {
     font-weight: 600;
   }
 
-  .split__mobile-back:focus-visible {
+  .page--split[data-mobile-view] .split__mobile-back:focus-visible {
     outline: var(--focus-ring-width) solid var(--focus-ring-color);
     outline-offset: var(--focus-ring-offset);
   }

@@ -177,15 +177,16 @@ describe('WorkflowCanvas does not enable selectionOnDrag', () => {
     expect(src).toMatch(/setEdges\(\s*\[?\s*\.{0,3}\s*applySelection\(\s*toFlowEdges\(/)
   })
 
-  test('Delete-key paths clear parent selection so the inspector column folds away', async () => {
+  test('all delete entry points share one semantic transaction and selection publisher', async () => {
     // Regression: pressing Delete on a selected node removed the node
     // from definition but the parent route's `selection` state still
     // held `{kind:'node', id:'foo'}` → `editorLayoutClass` kept the
     // 3rd grid column open AND `canvas-frame` stayed at its narrower
-    // width because the grid column track was still reserved. xyflow's
-    // built-in `deleteKeyCode` fires `onNodesChange` / `onEdgesChange`
-    // — NOT our `deleteSelected` callback (which is wired only to the
-    // right-click menu). So all THREE paths must clear onSelect.
+    // width because the grid column track was still reserved. RFC-199
+    // consolidated this into one semantic delete oracle plus one selection
+    // publisher: context-menu deletion calls it directly, while xyflow's
+    // Delete-key path reaches it through `onDelete`. `onNodesChange` and
+    // `onEdgesChange` now only mirror controlled flow state for that gesture.
     //
     // Source-level lock because triggering xyflow's Delete-key path in
     // JSDOM is brittle; the regex survives prettier reformatting.
@@ -197,36 +198,56 @@ describe('WorkflowCanvas does not enable selectionOnDrag', () => {
       'utf8',
     )
 
-    function bodyOf(opener: string, closer: string): string {
+    function bodyBetween(opener: string, closer: string): string {
       const start = src.indexOf(opener)
       expect(start).toBeGreaterThan(-1)
       const end = src.indexOf(closer, start)
+      expect(end).toBeGreaterThan(start)
       return src.slice(start, end)
     }
 
-    // Path 1: right-click menu / explicit deleteSelected callback.
-    const deleteSelectedBody = bodyOf('const deleteSelected = useCallback(', '[commitChange')
-    expect(deleteSelectedBody).toMatch(/lastEmittedSelectionSig\.current\s*=\s*['"]null['"]/)
-    expect(deleteSelectedBody).toMatch(/onSelect\s*\(\s*null\s*\)/)
+    const deleteOracle = bodyBetween(
+      'export function deleteWorkflowSelection(',
+      '/**\n * Edge equivalent of {@link affectsDefinition}',
+    )
+    expect(deleteOracle).toContain('collectNodeReferenceClosure')
+    expect(deleteOracle).toContain('pruneDeletedNodeReferences')
 
-    // Path 2: Delete key on a selected node — handleNodesChange must
-    // detect that the emitted-selection node id is in removedIds and
-    // clear the parent selection.
-    const handleNodesChangeBody = bodyOf(
+    const deleteSelectedBody = bodyBetween(
+      'const deleteSelected = useCallback(',
+      'const restoreRejectedFlowDelete = useCallback(',
+    )
+    const handleFlowDeleteBody = bodyBetween(
+      'const handleFlowDelete = useCallback<OnDelete>(',
+      'const duplicateNode = useCallback(',
+    )
+    for (const body of [deleteSelectedBody, handleFlowDeleteBody]) {
+      expect(body).toContain('deleteWorkflowSelection(')
+      expect(body).toMatch(/selectionAfter:\s*null/)
+      expect(body).toMatch(/const accepted = commitChange\(/)
+      expect(body).toMatch(/syncCanvasSelection\(\[\], \[\]\)/)
+      expect(body.indexOf('syncCanvasSelection([], [])')).toBeGreaterThan(
+        body.indexOf('const accepted = commitChange('),
+      )
+    }
+
+    expect(src).toContain('onDelete={handleFlowDelete}')
+
+    // xyflow emits incident-edge and node removals through these controlled
+    // callbacks before `onDelete`; neither may persist or publish selection
+    // for the removal batch independently.
+    const handleNodesChangeBody = bodyBetween(
       'const handleNodesChange = useCallback(',
-      '[commitChange, definition, edges',
-    )
-    expect(handleNodesChangeBody).toMatch(/lastEmittedSelectionSig\.current/)
-    expect(handleNodesChangeBody).toMatch(/onSelect\s*\(\s*null\s*\)/)
-
-    // Path 3: Delete key on a selected edge — same shape via
-    // handleEdgesChange.
-    const handleEdgesChangeBody = bodyOf(
       'const handleEdgesChange = useCallback(',
-      '[commitChange, definition, nodes',
     )
-    expect(handleEdgesChangeBody).toMatch(/lastEmittedSelectionSig\.current/)
-    expect(handleEdgesChangeBody).toMatch(/onSelect\s*\(\s*null\s*\)/)
+    const handleEdgesChangeBody = bodyBetween(
+      'const handleEdgesChange = useCallback(',
+      'const deleteKeyCodes = useMemo(',
+    )
+    for (const body of [handleNodesChangeBody, handleEdgesChangeBody]) {
+      expect(body).toMatch(/if \(removedIds\.length === 0\) \{\s*commitChange\(/)
+      expect(body).not.toContain('syncCanvasSelection(')
+    }
   })
 })
 

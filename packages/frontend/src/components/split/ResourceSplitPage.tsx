@@ -146,7 +146,7 @@ export function ResourceSplitPage(props: ResourceSplitPageProps) {
   const mobileView = props.selectedKey !== null || props.newActive ? 'detail' : 'list'
 
   // The rail and detail stay mounted; CSS chooses which one is reachable at
-  // <=720px from data-mobile-view. After the explicit detail -> list link
+  // <=1080px from data-mobile-view. After the explicit detail -> list link
   // completes (including an UnsavedChangesGuard proceed), restore focus to the
   // card the user came from, then the first visible card, then New.
   useEffect(() => {

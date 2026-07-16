@@ -54,7 +54,10 @@ describe('RFC-023 bugfix source-level wiring guard', () => {
     // cascade) funnels through it.
     const commitIdx = src.indexOf('const commitChange = useCallback')
     expect(commitIdx).toBeGreaterThan(-1)
-    const commitBlock = src.slice(commitIdx, commitIdx + 1500)
+    const nextDeclarationIdx = src.indexOf('const questionBadgeClickRef', commitIdx)
+    expect(nextDeclarationIdx).toBeGreaterThan(commitIdx)
+    const commitBlock = src.slice(commitIdx, nextDeclarationIdx)
+    expect(commitBlock).toContain('pruneDeletedNodeReferences')
     expect(commitBlock).toContain('cascadeRemoveClarifyChannel')
   })
 

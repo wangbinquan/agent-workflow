@@ -367,8 +367,10 @@ describe('WorkflowEditorLoaded RFC-199 draft integration', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1_000)
     })
-    await flushEffects()
-    expect(request).not.toBeNull()
+    // hashWorkflowDraftSnapshot crosses the native WebCrypto queue. A fixed
+    // number of Promise.resolve() turns can still finish before digest() on a
+    // loaded CI worker, so wait for the observable save seam instead.
+    await vi.waitFor(() => expect(request).not.toBeNull())
     const captured = request as unknown as UpdateWorkflow
     expect(captured.expectedVersion).toBe(1)
     expect(captured.snapshot).toEqual({
@@ -537,16 +539,17 @@ describe('WorkflowEditorLoaded RFC-199 draft integration', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1)
     })
-    await flushEffects()
-    expect(put).toHaveBeenCalledTimes(1)
-    expect(post).toHaveBeenCalledWith(
-      '/api/workflows/wf-1/validate',
-      {
-        expectedVersion: 2,
-        expectedSnapshotHash: hash('b'),
-      },
-      expect.any(AbortSignal),
-    )
+    await vi.waitFor(() => {
+      expect(put).toHaveBeenCalledTimes(1)
+      expect(post).toHaveBeenCalledWith(
+        '/api/workflows/wf-1/validate',
+        {
+          expectedVersion: 2,
+          expectedSnapshotHash: hash('b'),
+        },
+        expect.any(AbortSignal),
+      )
+    })
     expect(put.mock.invocationCallOrder[0]).toBeLessThan(post.mock.invocationCallOrder[0]!)
   })
 
@@ -656,13 +659,14 @@ describe('WorkflowEditorLoaded RFC-199 draft integration', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(300)
     })
-    await flushEffects()
-
-    expect(screen.getByTestId('workflow-draft-transport').textContent).toMatch(/离线|Offline/)
-    expect(
-      (screen.getByRole('button', { name: /启动任务|Launch task/ }) as HTMLButtonElement).disabled,
-    ).toBe(false)
-    expect(document.activeElement).toBe(screen.getByTestId('workflow-draft-status-focus'))
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('workflow-draft-transport').textContent).toMatch(/离线|Offline/)
+      expect(
+        (screen.getByRole('button', { name: /启动任务|Launch task/ }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(false)
+      expect(document.activeElement).toBe(screen.getByTestId('workflow-draft-status-focus'))
+    })
     expect(screen.queryByTestId('workflow-action-error-focus')).toBeNull()
   })
 

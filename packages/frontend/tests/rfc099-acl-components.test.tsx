@@ -251,7 +251,7 @@ describe('workflows editor header — one full-size primary plus compact seconda
     const src = await fs.readFile(path.join(here, '../src/routes/workflows.edit.tsx'), 'utf8')
     const start = src.indexOf('const headerActions')
     expect(start).toBeGreaterThan(-1)
-    const end = src.indexOf('</>\n    ),', start)
+    const end = src.indexOf('const backgroundQueryError =', start)
     expect(end).toBeGreaterThan(start)
     const block = src.slice(start, end)
     let primaryCount = 0

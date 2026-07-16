@@ -32,10 +32,21 @@ describe('tasks.new.tsx — RFC-037 task name wiring', () => {
     expect(SRC).toMatch(/stepContentReady\s*=[\s\S]*nameReady/)
   })
 
-  test('workflow content gate requires a SUCCESSFUL detail load (Codex P1)', () => {
+  test('workflow content gate requires a fresh successful detail bound to one exact revision', () => {
     // While the detail query is pending/failed, inputDefs is empty and
     // missingRequired reads false — the gate must not treat that as ready.
-    expect(SRC).toMatch(/workflowQ\.isSuccess && !missingRequired/)
+    // RFC-199 additionally requires this mount to observe fresh server truth,
+    // bind inputs to one normalized revision, and reject a version mismatch.
+    const start = SRC.indexOf('const contentReady =')
+    const end = SRC.indexOf('const gitNameTrim =', start)
+    expect(start).toBeGreaterThan(-1)
+    expect(end).toBeGreaterThan(start)
+    const gate = SRC.slice(start, end)
+    expect(gate).toContain('workflowQ.isSuccess')
+    expect(gate).toContain('workflowQ.isFetchedAfterMount')
+    expect(gate).toContain('normalizedWorkflowVersion !== undefined')
+    expect(gate).toContain('activeWorkflowVersionMismatch === null')
+    expect(gate).toContain('!missingRequired')
   })
 
   test('every submit arm stamps the trimmed name into the body', () => {
