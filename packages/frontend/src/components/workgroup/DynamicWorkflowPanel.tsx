@@ -31,6 +31,7 @@ import { TaskStatusChip } from '@/components/TaskStatusChip'
 import { WorkflowCanvas } from '@/components/canvas/WorkflowCanvas'
 import { describeApiError } from '@/i18n'
 import { workgroupRoomKey, type WorkgroupRoomResponse } from '@/lib/workgroup-room'
+import { ErrorBanner } from '@/components/ErrorBanner'
 
 export interface DynamicWorkflowPanelProps {
   taskId: string
@@ -122,7 +123,7 @@ export function DynamicWorkflowPanel({
 
   if (room.isLoading) return <LoadingState size="comfortable" />
   if (room.error !== null && room.error !== undefined) {
-    return <div className="error-box">{describeApiError(room.error)}</div>
+    return <ErrorBanner error={room.error} />
   }
   if (dw === null) {
     return <EmptyState size="comfortable" title={t('workgroups.dw.previewEmpty')} />
@@ -179,18 +180,22 @@ export function DynamicWorkflowPanel({
           header={<h3 className="workgroup-room__side-title">{t('workgroups.dw.title')}</h3>}
           data-testid="dw-generating-card"
         >
+          {/* RFC-203 T4: dw-generate-exhausted (and friends) localize via
+              the shared failure oracle; unknown summaries fall back to the
+              existing exhausted copy instead of raw machine tokens. */}
           {taskStatus === 'failed' ? (
-            <div className="error-box" data-testid="dw-generate-failed">
-              {/* RFC-203 T4: dw-generate-exhausted (and friends) localize via
-                  the shared failure oracle; unknown summaries fall back to the
-                  existing exhausted copy instead of raw machine tokens. */}
-              {errorSummary !== null && errorSummary !== ''
-                ? (() => {
-                    const f = describeTaskFailure({ errorSummary })
-                    return f.matched === 'generic' ? t('workgroups.dw.exhausted') : f.title
-                  })()
-                : t('workgroups.dw.exhausted')}
-            </div>
+            <ErrorBanner
+              error={null}
+              message={
+                errorSummary !== null && errorSummary !== ''
+                  ? (() => {
+                      const f = describeTaskFailure({ errorSummary })
+                      return f.matched === 'generic' ? t('workgroups.dw.exhausted') : f.title
+                    })()
+                  : t('workgroups.dw.exhausted')
+              }
+              testid="dw-generate-failed"
+            />
           ) : (
             <>
               <LoadingState size="compact" />
@@ -252,9 +257,7 @@ export function DynamicWorkflowPanel({
               </p>
             )}
             {confirm.error !== null && confirm.error !== undefined && !rejectOpen && (
-              <div className="error-box" data-testid="dw-gate-error">
-                {describeApiError(confirm.error)}
-              </div>
+              <ErrorBanner error={confirm.error} testid="dw-gate-error" />
             )}
           </Card>
           {generated !== null ? (

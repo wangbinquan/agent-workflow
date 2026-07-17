@@ -131,9 +131,7 @@ export function MemoryDialogShell(props: MemoryDialogShellProps) {
       ) : (
         <>
           {props.errorText !== null && (
-            <div className="error-box" data-testid={`${props.testid}-error`}>
-              {props.errorText}
-            </div>
+            <ErrorBanner error={props.errorText} testid={`${props.testid}-error`} />
           )}
           <MemoryFormFields
             state={props.form.state}

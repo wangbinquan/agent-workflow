@@ -13,8 +13,8 @@ import { Field, NumberInput, TextInput } from '@/components/Form'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { Segmented } from '@/components/Segmented'
 import { Select } from '@/components/Select'
-import { describeApiError } from '@/i18n'
 import { nextRuns } from '@/lib/schedule-view'
+import { ErrorBanner } from '@/components/ErrorBanner'
 
 type Kind = ScheduleSpec['kind']
 type Unit = 'minutes' | 'hours' | 'days'
@@ -301,7 +301,7 @@ export function ScheduleDialog({
         )}
       </div>
 
-      {save.error != null && <div className="error-box">{describeApiError(save.error)}</div>}
+      {save.error != null && <ErrorBanner error={save.error} />}
     </Dialog>
   )
 }

@@ -21,7 +21,6 @@ import { SessionTab } from './node-session/SessionTab'
 import { StatusChip } from './StatusChip'
 import { TabBar, tabDomIds, type TabDef } from './TabBar'
 import { api } from '@/api/client'
-import { describeApiError } from '@/i18n'
 import {
   clarifyRoundForRun,
   displayRetryForRun,
@@ -37,6 +36,7 @@ import {
 import { reviewRunDisplay } from '@/lib/reviewRunDisplay'
 import { parseRfc026Event } from '@/lib/rfc026-events'
 import { parseRfc031Event } from '@/lib/rfc031-events'
+import { ErrorBanner } from '@/components/ErrorBanner'
 
 interface Props {
   taskId: string
@@ -203,9 +203,7 @@ export function NodeDetailDrawer({
           </label>
         </div>
       )}
-      {retry.error !== null && retry.error !== undefined && (
-        <div className="error-box">{describeApiError(retry.error)}</div>
-      )}
+      {retry.error !== null && retry.error !== undefined && <ErrorBanner error={retry.error} />}
       {children.length > 0 && <SubProcessList shards={children} onPick={onSelectRun} />}
       <div className="inspector__body">
         {tabs.map(({ key }) => {
@@ -533,9 +531,7 @@ function EventsTab({
         ))}
       </div>
       {query.isLoading && <LoadingState size="compact" />}
-      {query.error !== null && query.error !== undefined && (
-        <div className="error-box">{describeApiError(query.error)}</div>
-      )}
+      {query.error !== null && query.error !== undefined && <ErrorBanner error={query.error} />}
       {visible.length === 0 && !query.isLoading && (
         <div className="muted">{t('nodeDrawer.noEventsMatch')}</div>
       )}

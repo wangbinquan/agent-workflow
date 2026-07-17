@@ -19,9 +19,18 @@ interface ErrorBannerProps {
   action?: ReactNode
   onDismiss?: () => void
   overrides?: Record<string, string>
+  /** Root data-testid passthrough (RFC-203 T5b migrations keep anchors). */
+  testid?: string
 }
 
-export function ErrorBanner({ error, message, action, onDismiss, overrides }: ErrorBannerProps) {
+export function ErrorBanner({
+  error,
+  message,
+  action,
+  onDismiss,
+  overrides,
+  testid,
+}: ErrorBannerProps) {
   const { t } = useTranslation()
   const resolved =
     error === null || error === undefined
@@ -38,6 +47,7 @@ export function ErrorBanner({ error, message, action, onDismiss, overrides }: Er
         onDismiss === undefined ? undefined : { label: t('common.close'), onDismiss: onDismiss }
       }
       className={hasAction ? 'error-box error-banner--with-action' : 'error-box'}
+      testid={testid}
     >
       {msg}
       {resolved !== null && (

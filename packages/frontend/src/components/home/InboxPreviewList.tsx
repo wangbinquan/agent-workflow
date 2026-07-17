@@ -15,6 +15,7 @@ import type { ClarifyRoundSummary, ReviewSummary } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { EmptyState } from '@/components/EmptyState'
 import { LoadingState } from '@/components/LoadingState'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import {
   INBOX_PREVIEW_LIMIT,
   formatRelativeTime,
@@ -60,20 +61,22 @@ export function InboxPreviewList({ onCount }: InboxPreviewListProps) {
   }
   if (bothErrored) {
     return (
-      <div className="error-box" role="alert">
-        <span>{t('home.section.error.generic')}</span>
-        <button
-          type="button"
-          className="btn btn--xs"
-          onClick={() => {
-            void reviews.refetch()
-            void clarify.refetch()
-          }}
-          style={{ marginLeft: 8 }}
-        >
-          {t('home.section.error.retry')}
-        </button>
-      </div>
+      <ErrorBanner
+        error={reviews.error ?? clarify.error}
+        message={t('home.section.error.generic')}
+        action={
+          <button
+            type="button"
+            className="btn btn--xs"
+            onClick={() => {
+              void reviews.refetch()
+              void clarify.refetch()
+            }}
+          >
+            {t('home.section.error.retry')}
+          </button>
+        }
+      />
     )
   }
   if (items.length === 0) {

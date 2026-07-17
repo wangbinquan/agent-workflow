@@ -18,6 +18,7 @@ import { RuntimeInventorySection } from '@/components/inventory/RuntimeInventory
 import { Select, type SelectOption } from '@/components/Select'
 import { clarifyRoundForRun, displayRetryForRun, formatIterationLabel } from '@/lib/node-history'
 import { nodeRunStatusToKind } from '@/lib/noderun-status'
+import { ErrorBanner } from '@/components/ErrorBanner'
 
 interface Props {
   taskId: string
@@ -277,7 +278,7 @@ function SessionBody({ taskId, nodeRunId }: { taskId: string; nodeRunId: string 
   })
   if (query.isLoading) return <LoadingState size="compact" />
   if (query.error !== null && query.error !== undefined) {
-    return <div className="error-box">{t('session.loadError')}</div>
+    return <ErrorBanner error={query.error} message={t('session.loadError')} />
   }
   if (query.data === undefined) return null
   return <ConversationFlow tree={query.data.tree} />

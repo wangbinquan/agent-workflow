@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Field } from '@/components/Form'
 import { applyDisconnectForReviewOutput } from './connectionSync'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import {
   atomicEdgeInspectorChange,
   blurInspectorChange,
@@ -123,7 +124,7 @@ export function EdgeInspector({ edge, definition, onChange, onClose }: Props) {
                 }
               }}
             />
-            {conflict !== null && <div className="error-box">{conflict}</div>}
+            {conflict !== null && <ErrorBanner error={conflict} />}
           </Field>
           <button type="button" className="btn btn--sm btn--danger" onClick={remove}>
             {t('inspector.edgeDeleteBtn')}

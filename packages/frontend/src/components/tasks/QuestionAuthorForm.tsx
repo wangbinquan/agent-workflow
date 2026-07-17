@@ -15,7 +15,7 @@ import type { ApiError } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
 import { Field, TextArea, TextInput } from '@/components/Form'
 import { Select } from '@/components/Select'
-import { describeApiError } from '@/i18n'
+import { ErrorBanner } from '@/components/ErrorBanner'
 
 export interface QuestionAuthorFormProps {
   open: boolean
@@ -113,9 +113,7 @@ export function QuestionAuthorForm({
       }
     >
       {create.error !== null && create.error !== undefined && (
-        <div className="error-box" data-testid="question-author-error">
-          {describeApiError(create.error)}
-        </div>
+        <ErrorBanner error={create.error} testid="question-author-error" />
       )}
       <Field label={t('taskQuestions.author.titleLabel')} required>
         <TextInput

@@ -10,6 +10,7 @@ import { ConversationFlow } from '@/components/node-session/ConversationFlow'
 import { EmptyState } from '@/components/EmptyState'
 import { LoadingState } from '@/components/LoadingState'
 import { selectAttempts } from '@/lib/distill-job-detail'
+import { ErrorBanner } from '@/components/ErrorBanner'
 
 interface Props {
   sessionData: MemoryDistillSessionView | undefined
@@ -40,9 +41,11 @@ function ConversationSectionInner({ attempts }: { attempts: MemoryDistillSession
         <AttemptPickerLite attempts={attempts} picked={picked} onPick={setPicked} />
       )}
       {current.captureFailed && (
-        <div className="error-box" data-testid="distill-conversation-capture-failed">
-          {t('memory.distillJobDetail.captureFailed')}
-        </div>
+        <ErrorBanner
+          error={null}
+          message={t('memory.distillJobDetail.captureFailed')}
+          testid="distill-conversation-capture-failed"
+        />
       )}
       {current.tree === null ? (
         <EmptyState size="compact" title={t('memory.distillJobDetail.noConversation')} />

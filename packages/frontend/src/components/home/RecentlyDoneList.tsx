@@ -15,6 +15,7 @@ import { api } from '@/api/client'
 import { LoadingState } from '@/components/LoadingState'
 import { TASKS_HOMEPAGE_QUERY_KEY } from './RunningTaskList'
 import { TaskRow } from './task-row'
+import { ErrorBanner } from '@/components/ErrorBanner'
 
 // flag-audit W0: single source — shared/lifecycle.ts TERMINAL_TASK_STATUSES
 // (was a hand-copied 4-value list that could drift from the state machine).
@@ -52,17 +53,15 @@ export function RecentlyDoneList({ onCount }: RecentlyDoneListProps) {
   }
   if (tasks.error !== null && tasks.error !== undefined) {
     return (
-      <div className="error-box" role="alert">
-        <span>{t('home.section.error.generic')}</span>
-        <button
-          type="button"
-          className="btn btn--xs"
-          onClick={() => void tasks.refetch()}
-          style={{ marginLeft: 8 }}
-        >
-          {t('home.section.error.retry')}
-        </button>
-      </div>
+      <ErrorBanner
+        error={tasks.error}
+        message={t('home.section.error.generic')}
+        action={
+          <button type="button" className="btn btn--xs" onClick={() => void tasks.refetch()}>
+            {t('home.section.error.retry')}
+          </button>
+        }
+      />
     )
   }
   if (recent.length === 0) {

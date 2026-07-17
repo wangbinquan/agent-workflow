@@ -16,9 +16,9 @@ import { api } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
 import { StatusChip } from '@/components/StatusChip'
 import { TableViewport } from '@/components/TableViewport'
-import { describeApiError } from '@/i18n'
 import { RepairChoiceDialog } from '@/components/tasks/RepairChoiceDialog'
 import type { LifecycleAlertRule, LifecycleAlertSeverity } from '@/types/lifecycle'
+import { ErrorBanner } from '@/components/ErrorBanner'
 
 interface DiagnoseAlertRow {
   id: string
@@ -100,9 +100,7 @@ export function TaskDiagnosePanel(props: TaskDiagnosePanelProps): ReactElement {
         }
       >
         {m.isPending && <div className="muted">{t('tasks.diagnose.loading')}</div>}
-        {m.error !== null && m.error !== undefined && (
-          <div className="error-box">{describeApiError(m.error)}</div>
-        )}
+        {m.error !== null && m.error !== undefined && <ErrorBanner error={m.error} />}
         {m.data !== undefined && (
           <DiagnoseTable
             response={m.data}

@@ -16,8 +16,8 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { RepoFilesResponse, WorkflowInput } from '@agent-workflow/shared'
 import { api } from '@/api/client'
-import { describeApiError } from '@/i18n'
 import { TextArea, TextInput } from '@/components/Form'
+import { ErrorBanner } from '@/components/ErrorBanner'
 
 interface Props {
   def: WorkflowInput
@@ -141,7 +141,7 @@ export function FilesPicker({ def, repoPath, value, onChange, sourceKind = 'path
   }
   if (all.error !== null && all.error !== undefined) {
     if (urlMode) return fallback
-    return <div className="error-box">{describeApiError(all.error)}</div>
+    return <ErrorBanner error={all.error} />
   }
 
   return (

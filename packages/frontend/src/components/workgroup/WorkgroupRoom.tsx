@@ -37,6 +37,7 @@ import { WorkgroupTaskConfigDialog } from '@/components/workgroup/WorkgroupTaskC
 import { useUserLookup } from '@/hooks/useUserLookup'
 import { describeApiError } from '@/i18n'
 import { displayNoderunStatusKey, nodeRunStatusToKind } from '@/lib/noderun-status'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import {
   applyMention,
   assignmentDurationMs,
@@ -303,7 +304,7 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
 
   if (room.isLoading) return <LoadingState data-testid="workgroup-room-loading" />
   if (room.error !== null && room.error !== undefined) {
-    return <div className="error-box">{describeApiError(room.error)}</div>
+    return <ErrorBanner error={room.error} />
   }
   if (room.data === undefined) return null
 
@@ -401,12 +402,10 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
         )}
 
         {cancelCard.error !== null && cancelCard.error !== undefined && (
-          <div className="error-box">{describeApiError(cancelCard.error)}</div>
+          <ErrorBanner error={cancelCard.error} />
         )}
         {deliver.error !== null && deliver.error !== undefined && (
-          <div className="error-box" data-testid="workgroup-room-deliver-error">
-            {describeApiError(deliver.error)}
-          </div>
+          <ErrorBanner error={deliver.error} testid="workgroup-room-deliver-error" />
         )}
 
         <div className="workgroup-room__composer">
@@ -533,9 +532,7 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
             </div>
           )}
           {send.error !== null && send.error !== undefined && (
-            <div className="error-box" data-testid="workgroup-room-send-error">
-              {describeApiError(send.error)}
-            </div>
+            <ErrorBanner error={send.error} testid="workgroup-room-send-error" />
           )}
         </div>
       </section>
@@ -714,9 +711,7 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
               <div className="workgroup-room__body">{data.gate.summary}</div>
             )}
             {confirmGate.error !== null && confirmGate.error !== undefined && (
-              <div className="error-box" data-testid="workgroup-room-gate-error">
-                {describeApiError(confirmGate.error)}
-              </div>
+              <ErrorBanner error={confirmGate.error} testid="workgroup-room-gate-error" />
             )}
           </Card>
         )}

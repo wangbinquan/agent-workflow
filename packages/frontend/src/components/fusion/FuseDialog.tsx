@@ -140,7 +140,7 @@ export function FuseDialog({
       }
     >
       {launch.error ? <ErrorBanner error={launch.error} /> : null}
-      {localError !== null ? <div className="error-box">⚠ {localError}</div> : null}
+      {localError !== null ? <ErrorBanner error={localError} /> : null}
 
       {entry.kind === 'from-memories' && (
         <Field label={t('fusion.fieldSkill')} hint={t('fusion.fieldSkillHint')} required>

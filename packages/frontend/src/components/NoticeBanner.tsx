@@ -23,6 +23,9 @@ export interface NoticeBannerProps {
   size?: NoticeBannerSize
   /** Compatibility hook for callers migrating an established surface class. */
   className?: string
+  /** Optional root data-testid — RFC-203 T5b: migrated error surfaces keep
+   *  their established test anchors on the banner itself (no wrapper divs). */
+  testid?: string
 }
 
 function NoticeIcon({ tone }: { tone: NoticeBannerTone }): ReactElement {
@@ -90,6 +93,7 @@ export function NoticeBanner(props: NoticeBannerProps): ReactElement {
       className={classes.join(' ')}
       role={isError ? 'alert' : 'status'}
       aria-live={isError ? undefined : 'polite'}
+      data-testid={props.testid}
     >
       <span className="notice-banner__icon" aria-hidden="true">
         <NoticeIcon tone={props.tone} />
