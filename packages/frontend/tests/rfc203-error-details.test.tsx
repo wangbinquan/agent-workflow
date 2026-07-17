@@ -33,6 +33,23 @@ describe('<ErrorDetails />', () => {
     expect(container.textContent).toContain('2')
   })
 
+  // RFC-203 PR-2 实现门 P2：校验 issue 行 = 本地化标题 + 原文（节点/边定位）
+  // 可及折叠块 —— 不是 hover-only 的 title 属性（触屏/键盘/读屏都够不到）。
+  test('workflow-validation issues localize with the raw locator in a collapsible block', () => {
+    const issues = [
+      { code: 'wrapper-loop-max-iterations', message: "wrapper-loop 'nd-1' missing maxIterations" },
+      { path: ['inputs', 0], message: 'zod-style stays as-is' },
+    ]
+    const { container } = render(<ErrorDetails details={{ issues }} />)
+    expect(container.textContent).toContain('循环包装器缺少最大迭代次数。')
+    // locator survives as expandable CONTENT, not a title attribute
+    const fold = container.querySelector('.error-details__issues li details pre')
+    expect(fold?.textContent).toContain("wrapper-loop 'nd-1' missing maxIterations")
+    expect(container.querySelector('li[title]')).toBeNull()
+    // non-validation issue keeps the legacy path+message row
+    expect(container.textContent).toContain('inputs.0: zod-style stays as-is')
+  })
+
   test('principal-aware reference shape renders names + hidden count', () => {
     const { container } = render(
       <ErrorDetails

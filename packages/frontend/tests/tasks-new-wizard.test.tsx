@@ -914,6 +914,57 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
     expect(errorEl.textContent?.length ?? 0).toBeGreaterThan(0)
   })
 
+  // RFC-203 PR-2 实现门 P1：workflow 启动被 422 workflow-invalid 驳回时，
+  // details.issues（节点/边定位）必须经富横幅渲染出来——此前 footer 的
+  // describeApiError 字符串壳把 issues 整个丢掉，词条精确化后只剩一句
+  // 「工作流内容不合法」，用户无从定位要修哪个节点。
+  test('workflow launch 422 workflow-invalid renders localized validation issues (rich banner)', async () => {
+    installFetch()
+    const base = vi.mocked(globalThis.fetch).getMockImplementation()!
+    vi.mocked(globalThis.fetch).mockImplementation(async (input, init) => {
+      const url = input.toString()
+      if (url.includes('/api/tasks') && (init?.method ?? 'GET') === 'POST') {
+        return jsonResponse(
+          {
+            ok: false,
+            code: 'workflow-invalid',
+            message:
+              "workflow 'wf-1' failed static validation (1 error); fix issues before starting a task",
+            details: {
+              issues: [
+                {
+                  code: 'wrapper-loop-max-iterations',
+                  message: "wrapper-loop 'nd-loop' missing maxIterations (integer >= 1)",
+                },
+              ],
+            },
+          },
+          422,
+        )
+      }
+      return base(input, init)
+    })
+    await renderWizard('/tasks/new?kind=workflow&workflow=wf-1')
+    next()
+    fireEvent.change(await screen.findByTestId('wizard-task-name'), { target: { value: 'T1' } })
+    fireEvent.change(await screen.findByLabelText(/Topic \(topic\)/), {
+      target: { value: 'hello' },
+    })
+    await waitFor(() =>
+      expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(false),
+    )
+    next()
+    fireEvent.click(screen.getByTestId('wizard-launch'))
+
+    const errorEl = await screen.findByTestId('wizard-submit-error')
+    expect(within(errorEl).getByRole('alert')).toBeTruthy()
+    // 精确 L1 标题（zh/en 任一 locale 下都必须是本地化句子，不是裸 code）
+    expect(errorEl.textContent).toMatch(/工作流内容不合法|Invalid workflow payload/)
+    // 校验 issue 本地化行 + 定位原文进可展开折叠块（不是 hover title）
+    expect(errorEl.textContent).toMatch(/循环包装器缺少最大迭代次数|missing maxIterations/)
+    expect(within(errorEl).getByText(/wrapper-loop 'nd-loop' missing maxIterations/)).toBeTruthy()
+  })
+
   test('RFC-198: editScheduled initial loading/error retries into a seeded wizard', async () => {
     installFetch()
     const base = vi.mocked(globalThis.fetch).getMockImplementation()!

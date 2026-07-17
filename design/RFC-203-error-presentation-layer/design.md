@@ -112,6 +112,12 @@ P2：**网络错误标签移到 fetch 边界**——resolver 按 `instanceof Typ
 - **契约性断言更新**（PR 说明）：`repo-clone-failed`/`internal-error`/`workflow-version-conflict` 获得精确词条后，resolver 域兜底测试样例改用 `merge-tree-failed`（内部 plumbing，设计上留域兜底）与合成码；`workflow-import-dialog` 的 409 断言从「拼原文」改为精确词条句子。
 - **status-0 回归修复**（随批，CI run 29555048439 rerun 的 e2e 抓到）：fetch 边界打标后，`useWorkflowEditorDraft.failureFromError` 把 `ApiError(status 0)` 误判为 `kind:'http'` 确定性失败，破坏 RFC-199 弱网「结局未知 → offline + reconcile」语义；修为 status 0 归 transport。单测新增真实打标形状注入；`rfc199-save-reliability.spec.ts` 本地 Chromium 5/5 复绿。教训已固化进用例注释：transport-loss 类单测必须用打标形状（ApiError status 0），不能只用裸 TypeError。
 
+## 1.12 PR-2 实现门折入记录（2026-07-17，Codex 1P1+1P2 全折入）
+
+- **P1 wizard 启动失败面升富横幅**：launch 的 `workflow-invalid` 带 `details.issues`（节点/边定位），tasks.new 的 footer `describeApiError` 字符串壳把它们全部丢掉——词条精确化后只剩「工作流内容不合法」一句。改为正文区 `<ErrorBanner>`（与版本冲突横幅同区，同类失败既有先例），issues 经 ErrorDetails→describeValidationIssue 渲染本地化行 + 定位原文；workgroup 分支保留 footer 专用友好文案（`workgroupLaunchErrorMessage`），`wizard-submit-error` testid 两分支互斥复用（既有锚点契约不变）。其余字符串壳面仍按计划归 PR-3 T5。
+- **P2 ErrorDetails 校验行定位可及化**：原文（唯一 locator）从 hover-only `title` 属性改为 `error-details__raw` 折叠块（与 ValidationPanel 同构）——title 属性触屏/键盘/读屏都够不到。
+- 测试：wizard 422 workflow-invalid 富渲染用例（role=alert + 本地化 issue 行 + 折叠原文可见）；ErrorDetails 校验行折叠块 + `li[title]` 零残留断言。
+
 ## 2. 失败模式
 
 - 词条缺失/漂移：L2 域兜底保证任何新码不裸奔英文；完整性测试锁 zh/en 同构。

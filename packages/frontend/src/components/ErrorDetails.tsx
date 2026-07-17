@@ -68,16 +68,23 @@ export function ErrorDetails({ details, raw, hint }: ErrorDetailsProps): ReactEl
             const path = Array.isArray(iss.path) ? iss.path.join('.') : ''
             const msg = typeof iss.message === 'string' ? iss.message : String(iss.code ?? '')
             // RFC-203 T3c: workflow-validation issues ({code, message}) get
-            // the shared localizer; the raw message (node/edge locator) moves
-            // to the hover title. Zod issues and unknown shapes fall through
-            // to the localizer's fallback ONLY on a real validation code, so
-            // gate on an exact/family match instead of shape sniffing.
+            // the shared localizer. Zod issues and unknown shapes keep the
+            // path+message render — the localizer only applies on a real
+            // exact/family validation-code match, never via shape sniffing.
+            // Impl-gate P2: the raw message is the ONLY locator (node/edge
+            // ids) — render it as a collapsible block like ValidationPanel
+            // does; a hover-only title attribute is unreachable on touch and
+            // for keyboard/screen-reader users.
             if (typeof iss.code === 'string' && msg !== '') {
               const v = describeValidationIssue({ code: iss.code, message: msg })
               if (v.matched !== 'fallback') {
                 return (
-                  <li key={i} title={v.raw}>
+                  <li key={i}>
                     {v.title}
+                    <details className="error-details__raw">
+                      <summary>{t('errorDetails.rawSummary')}</summary>
+                      <pre>{v.raw.slice(0, RAW_MAX)}</pre>
+                    </details>
                   </li>
                 )
               }

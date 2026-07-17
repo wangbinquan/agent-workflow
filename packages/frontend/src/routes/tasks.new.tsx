@@ -50,7 +50,6 @@ import { RepoSourceList, type MultiRepoBlockedReason } from '@/components/launch
 import { UploadPicker } from '@/components/launch/UploadPicker'
 import { useActor } from '@/hooks/useActor'
 import { useUserLookup } from '@/hooks/useUserLookup'
-import { describeApiError } from '@/i18n'
 import { resolveUrlRepoPath, validateRepoUrl } from '@/lib/launch-repo-source'
 import {
   buildAgentStartBody,
@@ -1090,6 +1089,19 @@ function TaskWizardPage() {
         </div>
       )}
 
+      {/* RFC-203 PR-2 实现门 P1：workflow/agent 启动失败改走富横幅——launch 的
+          workflow-invalid 带 details.issues（节点/边定位），字符串壳会把它们
+          全部丢掉，只剩一句「工作流内容不合法」。放在版本冲突横幅的同一正文
+          区（同类失败的既有先例）；workgroup 分支保留 footer 的专用友好文案
+          （workgroupLaunchErrorMessage）。 */}
+      {kind !== 'workgroup' &&
+        ((start.error !== null && start.error !== undefined && !startWorkflowVersionMismatch) ||
+          (saveConfig.error !== null && saveConfig.error !== undefined)) && (
+          <div data-testid="wizard-submit-error">
+            <ErrorBanner error={start.error ?? saveConfig.error} />
+          </div>
+        )}
+
       <Stepper
         steps={steps}
         current={step}
@@ -1164,16 +1176,13 @@ function TaskWizardPage() {
                 {t('scheduled.collabLoadError')}
               </span>
             )}
-            {((start.error !== null &&
-              start.error !== undefined &&
-              !startWorkflowVersionMismatch) ||
-              (saveConfig.error !== null && saveConfig.error !== undefined)) && (
-              <span className="form-actions__error" data-testid="wizard-submit-error">
-                {kind === 'workgroup'
-                  ? workgroupLaunchErrorMessage(start.error ?? saveConfig.error, t)
-                  : describeApiError(start.error ?? saveConfig.error)}
-              </span>
-            )}
+            {kind === 'workgroup' &&
+              ((start.error !== null && start.error !== undefined) ||
+                (saveConfig.error !== null && saveConfig.error !== undefined)) && (
+                <span className="form-actions__error" data-testid="wizard-submit-error">
+                  {workgroupLaunchErrorMessage(start.error ?? saveConfig.error, t)}
+                </span>
+              )}
           </>
         }
       >
