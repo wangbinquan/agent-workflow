@@ -2610,7 +2610,10 @@ code {
 }
 .error-details__raw > summary {
   cursor: pointer;
-  opacity: 0.85;
+  /* No opacity reduction: it would drop the summary text under the WCAG AA
+     contrast threshold against the banner background (a11y regression caught
+     on /agents inbox dialog). Weight-based de-emphasis stays contrast-safe. */
+  font-weight: 500;
 }
 .error-details__raw pre {
   margin: var(--space-1) 0 0;

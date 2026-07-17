@@ -9,6 +9,8 @@
 // raw message lands in a collapsible block.
 
 import { describe, expect, test } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { cleanup, render } from '@testing-library/react'
 import { afterEach } from 'vitest'
 import { ErrorDetails } from '../src/components/ErrorDetails'
@@ -92,5 +94,20 @@ describe('<ErrorDetails />', () => {
   test('hint renders above everything', () => {
     const { container } = render(<ErrorDetails hint="下一步：重试" />)
     expect(container.querySelector('.error-details__hint')?.textContent).toContain('下一步')
+  })
+})
+
+describe('RFC-203 ErrorDetails a11y guard (CSS source lock)', () => {
+  test('the raw-toggle summary does NOT reduce opacity (WCAG AA contrast)', () => {
+    // The /agents inbox dialog renders an ErrorBanner → <ErrorDetails> whose
+    // <details><summary> toggle is axe-scanned. A prior `opacity: 0.85` on
+    // it failed the color-contrast rule (CI e2e a11y, run 29551050507). Lock
+    // that the .error-details__raw > summary rule carries no opacity.
+    const css = readFileSync(resolve(import.meta.dirname, '..', 'src', 'styles.css'), 'utf8')
+    const block = css.slice(
+      css.indexOf('.error-details__raw > summary'),
+      css.indexOf('.error-details__raw pre'),
+    )
+    expect(block).not.toMatch(/opacity\s*:/)
   })
 })
