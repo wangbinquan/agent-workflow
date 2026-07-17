@@ -12,9 +12,10 @@
 //     no longer dominates the page;
 //   - a banner tone instead of an h2 heading (muted when it's just history,
 //     warning + 「解除隔离」 when the task is quarantined);
-//   - human-readable Chinese labels for every kind via describeRecoveryKind,
+//   - human-readable Chinese labels for every kind via the shared
+//     labelForCode (RFC-203 T5c: key-shadows-code promoted to i18n/errors),
 //     with a raw-code fallback when the backend ships a kind newer than this
-//     bundle (same contract as describeRule).
+//     bundle.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, type ReactElement } from 'react'
@@ -23,6 +24,7 @@ import { useTranslation } from 'react-i18next'
 import type { Task } from '@agent-workflow/shared'
 
 import { api } from '@/api/client'
+import { labelForCode } from '@/i18n/errors'
 import { BannerDismissButton } from '@/components/NoticeBanner'
 import { formatRelativeTime } from '@/lib/homepage'
 import { isTerminal } from '@/lib/task-detail-tabs'
@@ -37,7 +39,7 @@ export interface RecoveryEventRow {
 // Authoritative mirror of backend `services/recovery.ts` `RecoveryEventKind`
 // (10 values). When the backend adds a kind, the bundle-completeness test
 // (recovery-section-kind-i18n.test.ts) flags the missing translation; until one
-// lands, describeRecoveryKind() falls back to the raw code (never blank, never a
+// lands, labelForCode() falls back to the raw code (never blank, never a
 // leaked i18n key).
 export const RECOVERY_EVENT_KINDS = [
   'boot-reap',
@@ -51,18 +53,6 @@ export const RECOVERY_EVENT_KINDS = [
   'heartbeat-kill',
   'quarantine',
 ] as const
-
-/**
- * Map a `recovery_event` kind code to a user-facing label. Mirrors
- * <StuckTaskBanner>'s describeRule: the i18n key shadows the code, and a missing
- * key (backend ahead of this bundle) falls back to the bare code rather than
- * leaking `tasks.recovery.kind.X`. Exported for unit tests.
- */
-export function describeRecoveryKind(kind: string, t: (k: string) => string): string {
-  const key = `tasks.recovery.kind.${kind}`
-  const label = t(key)
-  return label === key ? kind : label
-}
 
 /**
  * Per-task system-recovery audit. Invisible for the common healthy task (no
@@ -134,7 +124,9 @@ export function RecoverySection({
                 // hang it on `title` so an operator can still hover for the
                 // original signal without it cluttering the row.
                 <li key={e.id} className="task-recovery__item" title={e.reason ?? undefined}>
-                  <span className="task-recovery__kind">{describeRecoveryKind(e.kind, t)}</span>
+                  <span className="task-recovery__kind">
+                    {labelForCode('tasks.recovery.kind', e.kind)}
+                  </span>
                   <span className="task-recovery__time muted">
                     {t(`home.taskRow.${rel.key}`, rel.opts)}
                   </span>

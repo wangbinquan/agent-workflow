@@ -17,6 +17,7 @@ import { BannerDismissButton } from '@/components/NoticeBanner'
 import type { LifecycleAlertRule, LifecycleAlertSeverity } from '@/types/lifecycle'
 
 import { TaskDiagnosePanel } from './TaskDiagnosePanel'
+import { labelForCode } from '@/i18n/errors'
 
 export interface StuckTaskBannerAlert {
   id: string
@@ -81,7 +82,11 @@ export function StuckTaskBanner(props: StuckTaskBannerProps): ReactElement | nul
           </div>
           <details className="task-error-banner__details">
             <summary>{t('tasks.diagnose.bannerRulesSummary')}</summary>
-            <pre>{alerts.map((a) => `${a.rule}: ${describeRule(a.rule, t)}`).join('\n')}</pre>
+            <pre>
+              {alerts
+                .map((a) => `${a.rule}: ${labelForCode('tasks.diagnose.rule', a.rule)}`)
+                .join('\n')}
+            </pre>
           </details>
         </div>
         <div className="task-error-banner__actions">
@@ -110,15 +115,4 @@ export function StuckTaskBanner(props: StuckTaskBannerProps): ReactElement | nul
       />
     </>
   )
-}
-
-function describeRule(rule: LifecycleAlertRule, t: (k: string) => string): string {
-  // i18n keys mirror the rule code so future additions only need a new
-  // entry under tasks.diagnose.rule.<code>.
-  const key = `tasks.diagnose.rule.${rule}`
-  const label = t(key)
-  // RFC-098: a backend ahead of this bundle can emit a rule we have no entry
-  // for — i18next then returns the raw key. Fall back to the bare rule code
-  // instead of leaking 'tasks.diagnose.rule.X' into the banner.
-  return label === key ? rule : label
 }

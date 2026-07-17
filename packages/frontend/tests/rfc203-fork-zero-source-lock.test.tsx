@@ -47,6 +47,24 @@ describe('RFC-203 分叉清零源级锁', () => {
   })
 })
 
+describe('L3 fallback 不拼原文（T5c 第三锁）', () => {
+  test('未知码的 fallback 标题恒为纯词条，原文只进 raw', async () => {
+    const { default: i18n } = await import('i18next')
+    const { setLanguage } = await import('../src/i18n')
+    const { resolveApiError } = await import('../src/i18n/errors')
+    const { ApiError } = await import('../src/api/client')
+    await new Promise<void>((resolvePromise) => {
+      if (i18n.isInitialized) resolvePromise()
+      else i18n.on('initialized', () => resolvePromise())
+    })
+    setLanguage('zh-CN')
+    const r = resolveApiError(new ApiError(500, 'zz-no-family-no-entry', 'raw diagnostic text'))
+    expect(r.title).toBe('请求失败')
+    expect(r.title.includes('raw diagnostic text')).toBe(false)
+    expect(r.raw).toBe('raw diagnostic text')
+  })
+})
+
 describe('ErrorBanner testid 契约（T5b 迁移锚点通道）', () => {
   test('testid 落在 banner 根（role=alert 元素），不是 wrapper', () => {
     const { container } = render(<ErrorBanner error={new Error('x')} testid="my-anchor" />)

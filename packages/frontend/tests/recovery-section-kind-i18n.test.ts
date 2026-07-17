@@ -1,11 +1,13 @@
 // LOCKS: RFC-108 recovery banner — the user-reported "文案太技术看不懂" fix.
 //
-// describeRecoveryKind() must humanise every recovery_event kind (no raw enum
-// like `boot-reap` ever reaches the user) and the zh/en bundles must stay
-// symmetric + complete against the backend kind set. Mirrors <StuckTaskBanner>'s
-// describeRule contract. If the backend (services/recovery.ts RecoveryEventKind)
-// gains a kind, RECOVERY_EVENT_KINDS + these assertions flag the missing
-// translation; until one lands, describeRecoveryKind falls back to the raw code.
+// The shared labelForCode('tasks.recovery.kind', kind) must humanise every
+// recovery_event kind (no raw enum like `boot-reap` ever reaches the user) and
+// the zh/en bundles must stay symmetric + complete against the backend kind
+// set (RFC-203 T5c promoted the local describeRecoveryKind/describeRule pair
+// to this one primitive). If the backend (services/recovery.ts
+// RecoveryEventKind) gains a kind, RECOVERY_EVENT_KINDS + these assertions
+// flag the missing translation; until one lands, labelForCode falls back to
+// the raw code.
 //
 // Also a source-level guard: locks the old <h2>恢复</h2> page__section +
 // <code>{kind}</code> dump from creeping back, and that tasks.detail.tsx now
@@ -16,21 +18,26 @@ import { join } from 'node:path'
 
 import { describe, expect, test } from 'vitest'
 
-import { describeRecoveryKind, RECOVERY_EVENT_KINDS } from '../src/components/tasks/RecoverySection'
+import { RECOVERY_EVENT_KINDS } from '../src/components/tasks/RecoverySection'
+import i18n, { setLanguage } from '../src/i18n'
+import { labelForCode } from '../src/i18n/errors'
 import { zhCN } from '../src/i18n/zh-CN'
 import { enUS } from '../src/i18n/en-US'
 
-describe('describeRecoveryKind', () => {
-  test('unknown kind falls back to the raw code (never a leaked i18n key)', () => {
-    // i18next returns the key itself for a missing entry — describeRecoveryKind
-    // must detect that and show the bare code instead of `tasks.recovery.kind.X`.
-    const t = (k: string) => k
-    expect(describeRecoveryKind('some-future-kind', t)).toBe('some-future-kind')
+describe('labelForCode over recovery kinds (ex-describeRecoveryKind)', () => {
+  test('unknown kind falls back to the raw code (never a leaked i18n key)', async () => {
+    await new Promise<void>((resolve) => {
+      if (i18n.isInitialized) resolve()
+      else i18n.on('initialized', () => resolve())
+    })
+    setLanguage('zh-CN')
+    expect(labelForCode('tasks.recovery.kind', 'some-future-kind')).toBe('some-future-kind')
   })
 
   test('known kind resolves to its human label', () => {
-    const t = (k: string) => (k === 'tasks.recovery.kind.auto-resume' ? '自动从断点继续运行' : k)
-    expect(describeRecoveryKind('auto-resume', t)).toBe('自动从断点继续运行')
+    expect(labelForCode('tasks.recovery.kind', 'auto-resume')).toBe(
+      (zhCN.tasks.recovery.kind as Record<string, string>)['auto-resume'],
+    )
   })
 })
 
@@ -64,7 +71,7 @@ const DETAIL_SRC = readFileSync(
 
 describe('recovery banner source guards', () => {
   test('RecoverySection humanises kinds and is not the old h2 page__section', () => {
-    expect(SECTION_SRC).toContain('describeRecoveryKind')
+    expect(SECTION_SRC).toContain("labelForCode('tasks.recovery.kind'")
     // The old implementation leaked the raw enum in a <code> tag and rendered a
     // <h2> page__section that read like a second page heading.
     expect(SECTION_SRC).not.toContain('<code>{e.kind}')

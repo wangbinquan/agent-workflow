@@ -212,8 +212,12 @@ export function TaskQuestionList({
           setDispatchError(new Error(t('taskQuestions.dispatchInFlightNode', { node: label })))
           return
         }
-        const mapped = DISPATCH_ERROR_KEYS[err.code]
-        setDispatchError(mapped ? new Error(t(mapped)) : err)
+        // RFC-203 T5c: keep the raw ApiError — the banner resolves it through
+        // resolveApiError with DISPATCH_ERROR_KEYS as caller-local overrides
+        // (override tier beats the exact errors.<code> entries, preserving
+        // this board's established per-surface copy), and the raw server
+        // message survives in the collapsible detail instead of being lost.
+        setDispatchError(err)
         return
       }
       setDispatchError(err)
@@ -385,7 +389,9 @@ export function TaskQuestionList({
           {addBtn}
         </div>
       </div>
-      {dispatchError !== null && <ErrorBanner error={dispatchError} />}
+      {dispatchError !== null && (
+        <ErrorBanner error={dispatchError} overrides={DISPATCH_ERROR_KEYS} />
+      )}
       <div className="task-questions" data-testid="task-questions-board">
         {PHASE_ORDER.map((phase) => {
           const col = shown.filter((c) => c.phase === phase)
