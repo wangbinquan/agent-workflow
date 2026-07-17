@@ -122,8 +122,12 @@ describe('RFC-203 T6 — uniform error bodies (source locks)', () => {
 
   test('plantuml guards use DomainError, no bare {error:string} bodies', () => {
     const src = read('src/routes/plantuml.ts')
-    expect(src).toContain("DomainError('plantuml-source-too-large'")
-    expect(src).toContain("DomainError('plantuml-source-required'")
+    // Format-agnostic: prettier may wrap the DomainError(...) call across
+    // lines, so match the code + DomainError presence separately rather than
+    // a single-line literal.
+    expect(src).toContain('DomainError')
+    expect(src).toContain("'plantuml-source-too-large'")
+    expect(src).toContain("'plantuml-source-required'")
     expect(src).not.toContain("c.json({ error: 'plantuml")
   })
 
