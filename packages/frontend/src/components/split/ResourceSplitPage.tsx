@@ -315,6 +315,14 @@ export function ResourceSplitPage(props: ResourceSplitPageProps) {
   const markListFocusRestore = useCallback(() => {
     returnCardKeyRef.current = props.selectedKey
     restoreListFocusRef.current = true
+    // Focus the Back trigger synchronously, before TanStack Link's own router
+    // click runs. WebKit does not focus an <a> on mouse click — activeElement
+    // drops to <body> — so an UnsavedChangesGuard opening from this navigation
+    // would capture <body> at open time and its Stay/ESC focus restore would be
+    // a no-op, stranding keyboard users at the top of the document. Same
+    // rationale (and ordering requirement) as AppShell's prepareMobileNavigation.
+    // Locked by e2e/ux-consistency.spec.ts (webkit) + tests/split-page-focus.test.tsx.
+    mobileBackRef.current?.focus({ preventScroll: true })
   }, [props.selectedKey])
 
   const retryAction =

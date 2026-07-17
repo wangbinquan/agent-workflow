@@ -484,6 +484,31 @@ describe('ResourceSplitPage — mobile list/detail DOM contract', () => {
     )
   })
 
+  // Regression: staying on the guard used to strand focus on <body> in Safari.
+  // WebKit does not focus an <a> on mouse click, so Dialog's open-time capture
+  // of document.activeElement saw <body> and its close-time restore was a no-op
+  // (body.focus() cannot move focus). The fix focuses the Back trigger inside
+  // markListFocusRestore, before TanStack Link's router click. jsdom shares
+  // WebKit's no-click-focus semantic, so this locks the fix on every PR — the
+  // e2e that caught it (e2e/ux-consistency.spec.ts:380) is webkit-nightly only.
+  test('staying on the dirty guard restores focus to the Back trigger, not <body>', async () => {
+    const router = renderSplit({
+      initial: '/agents/code-worker',
+      items: ITEMS,
+      detailDirty: true,
+    })
+    await waitFor(() => screen.getByTestId('split-card-dot-code-worker'))
+
+    const back = screen.getByTestId('agents-mobile-back')
+    fireEvent.click(back)
+    await waitFor(() => screen.getByTestId('unsaved-guard-dialog'))
+
+    fireEvent.click(screen.getByTestId('unsaved-stay'))
+    await waitFor(() => expect(screen.queryByTestId('unsaved-guard-dialog')).toBeNull())
+    expect(router.state.location.pathname).toBe('/agents/code-worker')
+    await waitFor(() => expect(document.activeElement).toBe(back))
+  })
+
   test('list focus falls back to the first visible card, then the create action', async () => {
     const firstRouter = renderSplit({ initial: '/agents/missing', items: ITEMS })
     await waitFor(() => screen.getByTestId('detail-pane'))
