@@ -13,9 +13,9 @@
 import i18n from 'i18next'
 import LanguageDetector from 'i18next-browser-languagedetector'
 import { initReactI18next } from 'react-i18next'
-import { ApiError } from '@/api/client'
 import { enUS } from './en-US'
 import { zhCN } from './zh-CN'
+import { resolveApiError } from './errors'
 
 export const SUPPORTED_LANGUAGES = ['zh-CN', 'en-US'] as const
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number]
@@ -52,14 +52,15 @@ export function setLanguage(lang: SupportedLanguage): void {
  * debugging while still showing something readable in the UI.
  */
 export function describeApiError(err: unknown): string {
-  if (!(err instanceof ApiError)) {
-    return err instanceof Error ? err.message : String(err)
-  }
-  const t = i18n.t.bind(i18n)
-  const exists = i18n.exists(`errors.${err.code}`)
-  if (exists) return t(`errors.${err.code}`)
-  // Fall back to: "<localized 'Request failed'>: <backend message>"
-  return `${t('errors.fallback')}: ${err.message}`
+  // RFC-203 T1: thin string-only shell over the three-tier resolver. Exact /
+  // override matches are self-sufficient localized sentences; the domain and
+  // fallback tiers keep `: <raw backend message>` appended so surfaces that
+  // render a single string (form rows, dialogs not yet on ErrorBanner) never
+  // lose the only diagnostic — the rich ErrorBanner path folds `raw` into a
+  // collapsible block instead.
+  const r = resolveApiError(err)
+  if (r.matched === 'exact' || r.matched === 'override') return r.title
+  return r.raw !== undefined && r.raw !== '' && r.raw !== r.title ? `${r.title}: ${r.raw}` : r.title
 }
 
 export default i18n

@@ -4,7 +4,6 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, test, vi } from 'vitest'
 import { ApiError } from '../src/api/client'
 import { ErrorBanner } from '../src/components/ErrorBanner'
-import { describeApiError } from '../src/i18n'
 
 describe('<ErrorBanner />', () => {
   test('keeps Error message parsing and exposes an alert', () => {
@@ -17,15 +16,17 @@ describe('<ErrorBanner />', () => {
     expect(alert.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true')
   })
 
-  test('keeps ApiError code and message parsing', () => {
+  test('ApiError renders the resolved title + the raw message in a collapsible block (RFC-203)', () => {
     render(<ErrorBanner error={new ApiError(503, 'upstream-down', 'try again later')} />)
 
-    expect(screen.getByRole('alert').textContent).toBe(
-      describeApiError(new ApiError(503, 'upstream-down', 'try again later')),
-    )
+    const alert = screen.getByRole('alert')
+    // Unmapped code → misc domain template title; raw folded, not inline.
+    expect(alert.textContent).toContain('Request failed')
+    const fold = alert.querySelector('.error-details__raw pre')
+    expect(fold?.textContent).toBe('try again later')
   })
 
-  test('message overrides the default error parsing', () => {
+  test('message overrides the title; raw diagnostics stay in the fold', () => {
     render(
       <ErrorBanner
         error={new ApiError(503, 'upstream-down', 'try again later')}
@@ -33,7 +34,9 @@ describe('<ErrorBanner />', () => {
       />,
     )
 
-    expect(screen.getByRole('alert').textContent).toBe('Reviews could not be loaded')
+    const alert = screen.getByRole('alert')
+    expect(alert.textContent).toContain('Reviews could not be loaded')
+    expect(alert.querySelector('.error-details__raw pre')?.textContent).toBe('try again later')
   })
 
   test('action adds the layout modifier and renders beside the message', () => {

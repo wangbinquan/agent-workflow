@@ -142,7 +142,9 @@ describe('/tasks — run-monitor table (RFC-192)', () => {
     expect(rec.urls.some((u) => u.includes('/api/tasks') && u.includes('limit=500'))).toBe(true)
 
     const err = screen.getByTestId('task-error-t_boom')
-    expect(err.textContent).toBe('node exec failed: exited 1')
+    // RFC-203 T4: the cell shows LOCALIZED failure copy; the raw machine
+    // summary survives in the hover title only.
+    expect(err.textContent).toBe('Task execution failed.')
     expect(err.getAttribute('title')).toBe('node exec failed: exited 1')
     // Canceled row: summary present in the payload but NO red error line.
     expect(screen.queryByTestId('task-error-t_halted')).toBeNull()

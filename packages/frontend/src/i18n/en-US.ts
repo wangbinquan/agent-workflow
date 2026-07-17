@@ -1785,6 +1785,49 @@ export const enUS: Resources = {
     resumeUnavailableWorkgroup:
       "Workgroup tasks can't resume in place after failing — the group's orchestration is engine-driven, so recovery is a relaunch, not an in-place continue. Relaunch the workgroup instead.",
     resumeLaunchLink: 'Launch a new task →',
+    failure: {
+      generic: 'Task execution failed.',
+      'envelope-missing':
+        'The agent did not produce output in the agreed format (missing output envelope).',
+      'envelope-missing__hint':
+        'Usually the model ignored the output protocol — use Resume to retry the node.',
+      'clarify-and-output-both':
+        'The agent submitted both a clarify request and a result; the formats conflict.',
+      'clarify-questions-malformed': "The agent's clarify questions could not be parsed.",
+      'clarify-required':
+        'This node must clarify before producing output, but the agent answered directly.',
+      'clarify-forbidden': 'Clarifying was stopped, but the agent kept asking.',
+      'envelope-port-malformed': 'An output port tag was incomplete (possibly truncated).',
+      'port-validation-failed': "The agent's port output failed validation.",
+      'port-validation-failed__hint':
+        'Check the port validation info in the node drawer, then Resume to retry.',
+      summary: {
+        snapshotLost: "The task's workspace snapshot is gone; it cannot continue in place.",
+        snapshotInvalid: "The task's workspace snapshot is no longer valid.",
+        snapshotMissing: "The task's workspace snapshot cannot be found.",
+        liveChildSurvived: 'The previous agent process is still alive; rerunning is unsafe.',
+        liveChildSurvived__hint:
+          'Wait a moment and retry; if it persists, use Diagnose to clean up.',
+        daemonRestart: 'A daemon restart interrupted this task.',
+        daemonRestart__hint: 'Use Resume to continue (auto-resume handles this when enabled).',
+        orphanReconcile: 'The task lost contact during operation and was marked interrupted.',
+        canceledByUser: 'The task was canceled manually.',
+        schedulerError: 'An internal scheduler error failed the task.',
+        schedulerStalled: 'Scheduling stalled: a node could not make progress.',
+        schedulerStalled__hint:
+          'Use Diagnose to inspect the blocker, or restart the daemon and resume.',
+        dwGenerateExhausted: 'Dynamic workflow generation kept failing; retries stopped.',
+        dwGenerateExhausted__hint: 'Adjust the request or workgroup config and launch again.',
+        nodeTimeout: 'The node timed out.',
+        nodeTimeout__hint: 'Raise the node timeout in its config, then Resume to retry.',
+        childUnkillable: 'The agent process could not be terminated; the run was abandoned.',
+        worktreeCreationFailed: 'Creating the task workspace failed.',
+        workgroupMaxRounds: 'The workgroup hit its round limit before finishing.',
+        workgroupMaxRounds__hint: 'Raise the round limit or narrow the goal, then relaunch.',
+        exitedWithCode: 'The agent process exited abnormally.',
+        exitedWithCode__hint: 'Check the node session log for the cause, then Resume to retry.',
+      },
+    },
     failedBanner: 'Task failed.',
     jumpToFailed: 'Jump to failed node ({{nodeId}})',
     diagnose: {
@@ -2028,8 +2071,6 @@ export const enUS: Resources = {
     },
   },
   editor: {
-    deleteScheduledRefs: 'Referencing scheduled tasks: {{names}}.',
-    deleteScheduledRefsHidden: '{{count}} more scheduled task(s) you cannot see also reference it.',
     newTitle: 'New workflow',
     fieldName: 'Name',
     fieldDescription: 'Description',
@@ -3080,7 +3121,46 @@ export const enUS: Resources = {
   crossClarifyNode: {
     label: 'cross-clarify',
   },
+  errorDomains: {
+    taskQuestion: 'Question board action failed',
+    task: 'Task action failed',
+    clarify: 'Clarify action failed',
+    review: 'Review action failed',
+    workflow: 'Workflow action failed',
+    workgroup: 'Workgroup action failed',
+    skill: 'Skill action failed',
+    agent: 'Agent action failed',
+    mcp: 'MCP action failed',
+    plugin: 'Plugin action failed',
+    memory: 'Memory action failed',
+    schedule: 'Scheduled task action failed',
+    fusion: 'Fusion action failed',
+    runtime: 'Runtime action failed',
+    upload: 'File upload failed',
+    repo: 'Repository action failed',
+    lifecycle: 'Task lifecycle action failed',
+    auth: 'Authentication or permission check failed',
+    misc: 'Request failed',
+  },
+  errorDetails: {
+    hintPrefix: 'Next step',
+    moreIssues: '…{{count}} more issue(s) not shown',
+    referencedByNames: 'Referenced by: {{names}}.',
+    referencedByHidden: '{{count}} more reference(s) you cannot see.',
+    referencedByCount: '{{count}} reference(s) exist; remove them first.',
+    availableRefs: 'Available branches/refs: {{refs}}',
+    versionConflict:
+      'Version conflict: yours is v{{expected}}, server is at v{{current}} — refresh and retry.',
+    stderrSummary: 'git output',
+    rawSummary: 'Raw error message',
+  },
   errors: {
+    'network-unreachable': 'Cannot reach the service.',
+    'network-unreachable__hint':
+      'Make sure the daemon is running and the network is reachable, then retry.',
+    'call-target-method-required': 'Missing method reference parameter (methodRef).',
+    'plantuml-source-required': 'Diagram source is empty; nothing to render.',
+    'plantuml-source-too-large': 'Diagram source is too large to render.',
     'http-401': 'Unauthorized — please sign in again.',
     'http-404': 'Not found.',
     'http-409': 'Conflict — refresh and retry.',

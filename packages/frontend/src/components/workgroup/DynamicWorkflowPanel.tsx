@@ -16,6 +16,7 @@
 // one cache entry, invalidated by task.status WS frames via useTaskSync).
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { describeTaskFailure } from '@/lib/task-failure'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Agent, TaskStatus } from '@agent-workflow/shared'
@@ -180,8 +181,14 @@ export function DynamicWorkflowPanel({
         >
           {taskStatus === 'failed' ? (
             <div className="error-box" data-testid="dw-generate-failed">
+              {/* RFC-203 T4: dw-generate-exhausted (and friends) localize via
+                  the shared failure oracle; unknown summaries fall back to the
+                  existing exhausted copy instead of raw machine tokens. */}
               {errorSummary !== null && errorSummary !== ''
-                ? errorSummary
+                ? (() => {
+                    const f = describeTaskFailure({ errorSummary })
+                    return f.matched === 'generic' ? t('workgroups.dw.exhausted') : f.title
+                  })()
                 : t('workgroups.dw.exhausted')}
             </div>
           ) : (

@@ -64,7 +64,14 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
   const payload: unknown = isJson ? await res.json().catch(() => null) : null
 
   if (!res.ok) {
+    // RFC-203 T1: a non-JSON error response (proxy 502 page, plain-text
+    // gateway error) used to collapse to `statusText` — read a capped slice
+    // of the body so the only diagnostic survives into ApiError.message.
     const err = extractErrorBody(payload, res)
+    if (!isJson && err.code === `http-${res.status}`) {
+      const text = await res.text().catch(() => '')
+      if (text.trim() !== '') err.message = text.slice(0, 2048)
+    }
     throw new ApiError(res.status, err.code, err.message, err.details)
   }
   return payload as T
@@ -144,7 +151,14 @@ export async function apiPostMultipart<T>(
   const payload: unknown = isJson ? await res.json().catch(() => null) : null
 
   if (!res.ok) {
+    // RFC-203 T1: a non-JSON error response (proxy 502 page, plain-text
+    // gateway error) used to collapse to `statusText` — read a capped slice
+    // of the body so the only diagnostic survives into ApiError.message.
     const err = extractErrorBody(payload, res)
+    if (!isJson && err.code === `http-${res.status}`) {
+      const text = await res.text().catch(() => '')
+      if (text.trim() !== '') err.message = text.slice(0, 2048)
+    }
     throw new ApiError(res.status, err.code, err.message, err.details)
   }
   return payload as T

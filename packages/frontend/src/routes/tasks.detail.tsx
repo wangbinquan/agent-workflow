@@ -57,6 +57,7 @@ import { agentNodeOptionsFromSnapshot, resolveNodeNameFromSnapshot } from '@/lib
 import { deriveReviewNodeNav, type ReviewNodeNavKind } from '@/lib/review-node-nav'
 import { deriveClarifyNodeNav, type ClarifyNodeNavKind } from '@/lib/clarify-node-nav'
 import { reviewRunDisplay } from '@/lib/reviewRunDisplay'
+import { describeTaskFailure } from '@/lib/task-failure'
 import {
   canOfferFailedJump,
   deriveTaskDetailCapabilities,
@@ -599,49 +600,67 @@ function TaskDetailPage() {
 
         {tk.status === 'failed' &&
           tk.errorSummary !== null &&
-          !dismissedBanners.has(failedBannerKey) && (
-            <div className="task-error-banner" role="alert">
-              <div className="task-error-banner__body">
-                <div className="task-error-banner__summary" title={tk.errorSummary}>
-                  <strong>{t('tasks.failedBanner')}</strong> <span>{tk.errorSummary}</span>
-                </div>
-                {tk.errorMessage !== null && tk.errorMessage !== tk.errorSummary && (
+          !dismissedBanners.has(failedBannerKey) &&
+          (() => {
+            // RFC-203 T4: the banner leads with LOCALIZED failure copy
+            // (failureCode → summary-token → generic); the raw machine
+            // summary/message move into the collapsible details block
+            // (audit P1 F-2 — users used to face 'snapshot-lost' verbatim).
+            const failure = describeTaskFailure({
+              failureCode: tk.failureCode ?? null,
+              errorSummary: tk.errorSummary,
+              errorMessage: tk.errorMessage,
+            })
+            return (
+              <div className="task-error-banner" role="alert">
+                <div className="task-error-banner__body">
+                  <div className="task-error-banner__summary" title={tk.errorSummary ?? ''}>
+                    <strong>{t('tasks.failedBanner')}</strong> <span>{failure.title}</span>
+                  </div>
+                  {failure.hint !== undefined && (
+                    <div className="task-error-banner__summary muted">{failure.hint}</div>
+                  )}
                   <details className="task-error-banner__details">
                     <summary>{t('common.details')}</summary>
-                    <pre>{tk.errorMessage}</pre>
+                    <pre>
+                      {[tk.errorSummary, tk.errorMessage]
+                        .filter((x): x is string => x !== null && x !== '')
+                        .filter((x, i, arr) => arr.indexOf(x) === i)
+                        .join('\n')}
+                    </pre>
                   </details>
-                )}
-              </div>
-              <div className="task-error-banner__actions">
-                {/* The jump targets the workflow-status canvas; a turn-engine
+                </div>
+                <div className="task-error-banner__actions">
+                  {/* The jump targets the workflow-status canvas; a turn-engine
                     workgroup task has no such tab, so hide it there. */}
-                {tk.failedNodeId !== null &&
-                  nodeRuns.data !== undefined &&
-                  canOfferFailedJump(tabs) && (
-                    <button
-                      type="button"
-                      className="btn btn--sm btn--danger task-error-banner__jump"
-                      title={t('tasks.jumpToFailed', { nodeId: tk.failedNodeId })}
-                      onClick={() => {
-                        const { runId, tab: next } = nextTabForFailedJump(
-                          nodeRuns.data!.runs,
-                          tk.failedNodeId,
-                        )
-                        if (runId !== null) setSelectedNodeRunId(runId)
-                        navigateTaskTab(next)
-                      }}
-                    >
-                      {t('tasks.jumpToFailed', { nodeId: tk.failedNodeId })}
-                    </button>
-                  )}
-                <BannerDismissButton
-                  label={t('common.close')}
-                  onDismiss={() => dismissBanner(failedBannerKey)}
-                  testId="task-failed-banner-dismiss"
-                />
+                  {tk.failedNodeId !== null &&
+                    nodeRuns.data !== undefined &&
+                    canOfferFailedJump(tabs) && (
+                      <button
+                        type="button"
+                        className="btn btn--sm btn--danger task-error-banner__jump"
+                        title={t('tasks.jumpToFailed', { nodeId: tk.failedNodeId })}
+                        onClick={() => {
+                          const { runId, tab: next } = nextTabForFailedJump(
+                            nodeRuns.data!.runs,
+                            tk.failedNodeId,
+                          )
+                          if (runId !== null) setSelectedNodeRunId(runId)
+                          navigateTaskTab(next)
+                        }}
+                      >
+                        {t('tasks.jumpToFailed', { nodeId: tk.failedNodeId })}
+                      </button>
+                    )}
+                  <BannerDismissButton
+                    label={t('common.close')}
+                    onDismiss={() => dismissBanner(failedBannerKey)}
+                    testId="task-failed-banner-dismiss"
+                  />
+                </div>
               </div>
-            </div>
-          )}
+            )
+          })()}
 
         {(tk.status === 'canceled' || tk.status === 'interrupted') &&
           tk.worktreePath !== '' &&
@@ -934,7 +953,16 @@ function TaskDetailPage() {
               {tk.errorSummary !== null && (
                 <>
                   <dt>{t('tasks.metaError')}</dt>
-                  <dd className="task-meta__error">{tk.errorSummary}</dd>
+                  {/* RFC-203 T4: localized; raw token preserved in title. */}
+                  <dd className="task-meta__error" title={tk.errorSummary}>
+                    {
+                      describeTaskFailure({
+                        failureCode: tk.failureCode ?? null,
+                        errorSummary: tk.errorSummary,
+                        errorMessage: tk.errorMessage,
+                      }).title
+                    }
+                  </dd>
                 </>
               )}
             </dl>

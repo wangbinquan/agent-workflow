@@ -305,7 +305,12 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
   app.get('/api/tasks/:id/call-targets', async (c) => {
     const methodRef = c.req.query('methodRef')
     if (methodRef === undefined || methodRef === '') {
-      return c.json({ error: 'methodRef query param required' }, 422)
+      // RFC-203 T6: uniform error body (was a bare `{error: string}` the
+      // shared decoder could not parse) + a call-target-specific code.
+      throw new ValidationError(
+        'call-target-method-required',
+        'methodRef query param required for /call-targets',
+      )
     }
     const targets = await getCallTargets(deps.db, c.req.param('id'), methodRef)
     return c.json({ targets })

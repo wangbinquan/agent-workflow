@@ -20,7 +20,13 @@ const CSS = readFileSync(resolve(import.meta.dirname, '..', 'src', 'styles.css')
 
 describe('routes/tasks.detail.tsx — failed banner single-line summary', () => {
   test('summary line is wrapped in `.task-error-banner__summary` with hover title', () => {
-    expect(SRC).toMatch(/<div className="task-error-banner__summary" title=\{tk\.errorSummary\}>/)
+    // RFC-203 T4: the summary line now renders LOCALIZED failure copy
+    // (describeTaskFailure) while the raw machine token stays in the hover
+    // title — the single-line clipping contract is unchanged.
+    expect(SRC).toMatch(
+      /<div className="task-error-banner__summary" title=\{tk\.errorSummary \?\? ''\}>/,
+    )
+    expect(SRC).toContain('describeTaskFailure({')
   })
 
   test('banner uses a `__body` wrapper that can shrink (min-width:0) inside the flex row', () => {
@@ -41,7 +47,10 @@ describe('routes/tasks.detail.tsx — failed banner single-line summary', () => 
     // stack trace below. Locking this so a future "simplify" pass doesn't
     // accidentally rip out the details panel along with the wrapper.
     expect(SRC).toMatch(/<details className="task-error-banner__details">/)
-    expect(SRC).toMatch(/<pre>\{tk\.errorMessage\}<\/pre>/)
+    // RFC-203 T4: the fold now carries BOTH the raw errorSummary token and
+    // errorMessage (deduped) — the machine strings moved out of the summary
+    // line into here.
+    expect(SRC).toMatch(/\[tk\.errorSummary, tk\.errorMessage\]/)
   })
 
   test('long failed node ids keep the mobile close control reachable', () => {

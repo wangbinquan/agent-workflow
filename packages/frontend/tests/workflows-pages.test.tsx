@@ -746,7 +746,10 @@ describe('/workflows/new removal wiring', () => {
     expect(edit).toContain('confirmationKey={deleteConfirmationKey}')
     expect(edit).toContain('del.mutateAsync({ expectedVersion: deleteExpectedVersion })')
     expect(edit).toContain('error={del.error}')
-    expect(edit).toContain('className="workflow-delete-refs"')
+    // RFC-203 T2: the workflow-scheduled-referenced list (visibleScheduled +
+    // hiddenCount) now renders via the shared <ErrorDetails> inside
+    // ErrorBanner — the RFC-202 call-site-local `.workflow-delete-refs`
+    // renderer was removed, so ErrorBanner receives del.error directly.
     expect(edit).toContain('api.deleteJson<void>')
     expect(edit).not.toContain('makeWorkflowSaveRequest')
     expect(edit).not.toContain('applyWorkflowSaveReceipt')

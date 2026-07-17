@@ -165,7 +165,10 @@ describe('DynamicWorkflowPanel — generating', () => {
     installFetch(makeRoom({ phase: 'generating', generateAttempts: 3, rejectRounds: 0 }, 'failed'))
     renderPanel('failed', 'dw-generate-exhausted')
     const box = await screen.findByTestId('dw-generate-failed')
-    expect(box.textContent).toContain('dw-generate-exhausted')
+    // RFC-203 T4: the machine token localizes via describeTaskFailure —
+    // the raw 'dw-generate-exhausted' string must NOT reach the user.
+    expect(box.textContent).not.toContain('dw-generate-exhausted')
+    expect(box.textContent).toMatch(/generation kept failing|多次生成/)
   })
 })
 

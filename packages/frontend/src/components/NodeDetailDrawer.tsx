@@ -9,6 +9,7 @@
 //   - Stats   — start/finish/duration, exit code, token usage.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { describeTaskFailure } from '@/lib/task-failure'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { NodeRun, NodeRunEventsResponse, NodeRunOutput, Task } from '@agent-workflow/shared'
@@ -428,7 +429,15 @@ function StatsTab({
       {cancellationKind === 'manual' && run.errorMessage !== null && (
         <>
           <dt>{t('nodeDrawer.statError')}</dt>
-          <dd className="task-meta__error">{run.errorMessage}</dd>
+          {/* RFC-203 T4: localized failure copy; raw message in title. */}
+          <dd className="task-meta__error" title={run.errorMessage}>
+            {
+              describeTaskFailure({
+                failureCode: run.failureCode ?? null,
+                errorSummary: run.errorMessage,
+              }).title
+            }
+          </dd>
         </>
       )}
       {agentName !== null && <StatsDependencyTreeRow agentName={agentName} />}

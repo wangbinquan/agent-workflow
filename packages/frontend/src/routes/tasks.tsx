@@ -14,6 +14,7 @@
 // without the param local filtering would silently miss older rows).
 
 import { useQuery } from '@tanstack/react-query'
+import { describeTaskFailure } from '@/lib/task-failure'
 import { Link, createRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -323,7 +324,13 @@ function TasksPage() {
                             title={row.errorSummary}
                             data-testid={`task-error-${row.id}`}
                           >
-                            {row.errorSummary}
+                            {/* RFC-203 T4: localized failure copy; raw token stays in title. */}
+                            {
+                              describeTaskFailure({
+                                failureCode: row.failureCode ?? null,
+                                errorSummary: row.errorSummary,
+                              }).title
+                            }
                           </span>
                         )}
                       </div>

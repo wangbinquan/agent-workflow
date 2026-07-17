@@ -2586,6 +2586,44 @@ code {
   font-size: 14px;
 }
 
+/* RFC-203: structured error details rendered by <ErrorDetails> under the
+   banner title — hint line, reference/issue rows and a collapsible raw block. */
+.error-details {
+  margin-top: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: 13px;
+}
+.error-details__hint {
+  font-weight: 500;
+}
+.error-details__issues {
+  margin: 0;
+  padding-left: 1.2em;
+}
+.error-details__refs {
+  margin: 0;
+}
+.error-details__raw {
+  margin: 0;
+}
+.error-details__raw > summary {
+  cursor: pointer;
+  opacity: 0.85;
+}
+.error-details__raw pre {
+  margin: var(--space-1) 0 0;
+  padding: var(--space-2);
+  max-height: 220px;
+  overflow: auto;
+  background: var(--panel);
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .notice-banner {
   --notice-fg: var(--info-fg);
   --notice-bg: var(--info-bg);

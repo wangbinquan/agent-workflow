@@ -2,6 +2,7 @@
 // Cancel/resume/retry land in P-1-15 + M3 (P-3-08, P-3-09).
 
 import type {
+  FailureCode,
   NodeKind,
   NodeRun,
   NodeRunEvent,
@@ -2845,7 +2846,13 @@ export async function getTask(db: DbClient, id: string): Promise<Task | null> {
     .orderBy(asc(taskRepos.repoIndex))
   const repos: TaskRepo[] =
     repoRows.length > 0 ? repoRows.map(mapTaskRepoRow) : [synthesizeRepoFromTaskRow(row.task)]
-  return rowToTask(row.task, row.workflowName, repos)
+  const task = rowToTask(row.task, row.workflowName, repos)
+  // RFC-203 T4: task-level failure-code projection (failed-run oracle).
+  const codes = await loadTaskFailureCodes(db, [
+    { id: row.task.id, status: row.task.status, failedNodeId: row.task.failedNodeId },
+  ])
+  const failureCode = codes.get(row.task.id)
+  return failureCode !== undefined ? { ...task, failureCode } : task
 }
 
 export interface ListTasksFilters {
@@ -2933,9 +2940,19 @@ export async function listTasks(
           .where(and(inArray(lifecycleAlerts.taskId, taskIds), isNull(lifecycleAlerts.resolvedAt)))
           .groupBy(lifecycleAlerts.taskId)
   const openByTask = new Map(alertCounts.map((a) => [a.taskId, Number(a.n)]))
+  // RFC-203 T4: one batched failure-code projection for the whole page.
+  const failureCodes = await loadTaskFailureCodes(
+    db,
+    rows.map((r) => ({
+      id: r.task.id,
+      status: r.task.status,
+      failedNodeId: r.task.failedNodeId,
+    })),
+  )
   return rows.map((r) => ({
     ...rowToSummary(r.task, r.workflowName),
     openAlertCount: openByTask.get(r.task.id) ?? 0,
+    ...(failureCodes.has(r.task.id) ? { failureCode: failureCodes.get(r.task.id) ?? null } : {}),
   }))
 }
 
@@ -2953,6 +2970,45 @@ function parseCommitPushJson(raw: string | null): CommitPushMeta | null {
   } catch {
     return null
   }
+}
+
+/**
+ * RFC-203 T4 — deterministic failed-run oracle: for failed tasks, project the
+ * RFC-145 failure code of the FAILED NODE's freshest top-level run into the
+ * task-level DTO (Task / TaskSummary.failureCode) so the list page and the
+ * failure banner can localize copy without fetching node runs. One batched
+ * query for any number of tasks; tasks without failedNodeId (scheduler-level
+ * failures) resolve to null.
+ */
+async function loadTaskFailureCodes(
+  db: DbClient,
+  rows: ReadonlyArray<{ id: string; status: string; failedNodeId: string | null }>,
+): Promise<Map<string, FailureCode | null>> {
+  const out = new Map<string, FailureCode | null>()
+  const wanted = rows.filter((r) => r.status === 'failed' && r.failedNodeId !== null)
+  if (wanted.length === 0) return out
+  const runRows = await db
+    .select({
+      taskId: nodeRuns.taskId,
+      nodeId: nodeRuns.nodeId,
+      id: nodeRuns.id,
+      parentNodeRunId: nodeRuns.parentNodeRunId,
+      status: nodeRuns.status,
+      failureCode: nodeRuns.failureCode,
+    })
+    .from(nodeRuns)
+    .where(
+      inArray(
+        nodeRuns.taskId,
+        wanted.map((r) => r.id),
+      ),
+    )
+  for (const t of wanted) {
+    const candidates = runRows.filter((r) => r.taskId === t.id && r.nodeId === t.failedNodeId)
+    const fresh = pickFreshestRun(candidates, { topLevelOnly: true })
+    out.set(t.id, (fresh?.failureCode ?? null) as FailureCode | null)
+  }
+  return out
 }
 
 /**
@@ -3084,6 +3140,9 @@ export async function getTaskNodeRuns(db: DbClient, taskId: string): Promise<Tas
       pid: r.pid,
       exitCode: r.exitCode,
       errorMessage: r.errorMessage,
+      // RFC-203 T4: RFC-145 machine-readable failure code, now surfaced so
+      // the UI can localize failure copy instead of parsing errorMessage.
+      failureCode: (r.failureCode ?? null) as FailureCode | null,
       supersededByReview: (r.supersededByReview ?? null) as 'iterated' | 'rejected' | null,
       rolledBack: r.rolledBack ?? null,
       promptText: r.promptText,

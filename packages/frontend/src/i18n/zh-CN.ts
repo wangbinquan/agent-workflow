@@ -1583,6 +1583,7 @@ export interface Resources {
     collabLoadError: string
   }
   tasks: {
+    failure: Record<string, string | Record<string, string>>
     title: string
     newButton: string
     filterAll: string
@@ -1911,8 +1912,6 @@ export interface Resources {
     }
   }
   editor: {
-    deleteScheduledRefs: string
-    deleteScheduledRefsHidden: string
     newTitle: string
     fieldName: string
     fieldDescription: string
@@ -2917,6 +2916,18 @@ export interface Resources {
     label: string
   }
   errors: Record<string, string>
+  errorDomains: Record<string, string>
+  errorDetails: {
+    hintPrefix: string
+    moreIssues: string
+    referencedByNames: string
+    referencedByHidden: string
+    referencedByCount: string
+    availableRefs: string
+    versionConflict: string
+    stderrSummary: string
+    rawSummary: string
+  }
   // RFC-023 clarify feature (PR-C).
   clarify: {
     roundSealedByTaskTerminal: string
@@ -5187,6 +5198,42 @@ export const zhCN: Resources = {
     resumeUnavailableWorkgroup:
       '组任务失败后不支持原地继续（组的编排由引擎驱动，恢复靠重启而非续跑）。请重新启动该工作组。',
     resumeLaunchLink: '启动新任务 →',
+    failure: {
+      generic: '任务执行失败。',
+      'envelope-missing': '代理没有按约定格式输出结果（缺少输出信封）。',
+      'envelope-missing__hint': '通常是模型没有遵循输出协议——可点「继续任务」重试该节点。',
+      'clarify-and-output-both': '代理同时提交了反问与结果，格式冲突。',
+      'clarify-questions-malformed': '代理提出的反问格式无法解析。',
+      'clarify-required': '该节点要求先反问再输出，但代理直接给出了结果。',
+      'clarify-forbidden': '已停止反问，但代理仍在提出反问。',
+      'envelope-port-malformed': '代理输出的端口标签不完整（可能被截断）。',
+      'port-validation-failed': '代理输出的端口内容未通过校验。',
+      'port-validation-failed__hint': '查看节点详情里的端口校验信息，点「继续任务」重试。',
+      summary: {
+        snapshotLost: '任务的工作区快照丢失，无法从原位置继续。',
+        snapshotInvalid: '任务的工作区快照已失效。',
+        snapshotMissing: '找不到任务的工作区快照。',
+        liveChildSurvived: '上一次运行的代理进程仍未退出，无法安全重跑。',
+        liveChildSurvived__hint: '稍候片刻再试；若持续出现，用「诊断」检查并清理残留进程。',
+        daemonRestart: '服务重启中断了任务。',
+        daemonRestart__hint: '点「继续执行」从中断处恢复（开启自动恢复后会自动续跑）。',
+        orphanReconcile: '服务运行期间检测到任务失联，已标记为中断。',
+        canceledByUser: '任务已被手动取消。',
+        schedulerError: '调度器内部错误导致任务失败。',
+        schedulerStalled: '调度停滞：有节点长时间无法推进。',
+        schedulerStalled__hint: '用「诊断」查看阻塞原因，或重启 daemon 后恢复任务。',
+        dwGenerateExhausted: '动态工作流多次生成仍不可用，已停止重试。',
+        dwGenerateExhausted__hint: '调整需求描述或工作组配置后重新发起。',
+        nodeTimeout: '节点执行超时。',
+        nodeTimeout__hint: '可在节点配置中调大超时时间后点「继续任务」重试。',
+        childUnkillable: '代理进程无法终止，已放弃该次运行。',
+        worktreeCreationFailed: '创建任务工作区失败。',
+        workgroupMaxRounds: '工作组达到轮次上限仍未完成目标。',
+        workgroupMaxRounds__hint: '可提高轮次上限或拆小目标后重新启动工作组任务。',
+        exitedWithCode: '代理进程异常退出。',
+        exitedWithCode__hint: '查看节点会话日志定位原因，点「继续任务」重试。',
+      },
+    },
     failedBanner: '任务失败。',
     jumpToFailed: '跳到失败节点 ({{nodeId}})',
     diagnose: {
@@ -5424,8 +5471,6 @@ export const zhCN: Resources = {
     },
   },
   editor: {
-    deleteScheduledRefs: '引用它的定时任务：{{names}}。',
-    deleteScheduledRefsHidden: '另有 {{count}} 个你不可见的定时任务也在引用。',
     newTitle: '新建工作流',
     fieldName: '名称',
     fieldDescription: '描述',
@@ -6413,8 +6458,48 @@ export const zhCN: Resources = {
   crossClarifyNode: {
     label: '跨代理反问',
   },
+  // RFC-203: per-domain fallback templates — any unmapped code resolves to
+  // its domain's template instead of a bare English message.
+  errorDomains: {
+    taskQuestion: '问题看板操作失败',
+    task: '任务操作失败',
+    clarify: '反问操作失败',
+    review: '评审操作失败',
+    workflow: '工作流操作失败',
+    workgroup: '工作组操作失败',
+    skill: '技能操作失败',
+    agent: '代理操作失败',
+    mcp: 'MCP 操作失败',
+    plugin: '插件操作失败',
+    memory: '记忆操作失败',
+    schedule: '定时任务操作失败',
+    fusion: '融合操作失败',
+    runtime: '运行时操作失败',
+    upload: '文件上传失败',
+    repo: '仓库操作失败',
+    lifecycle: '任务生命周期操作失败',
+    auth: '账号或权限校验失败',
+    misc: '请求失败',
+  },
+  // RFC-203: structured details renderer strings.
+  errorDetails: {
+    hintPrefix: '下一步',
+    moreIssues: '…另有 {{count}} 条问题未列出',
+    referencedByNames: '引用方：{{names}}。',
+    referencedByHidden: '另有 {{count}} 个你不可见的引用方。',
+    referencedByCount: '存在 {{count}} 个引用方，需先解除引用。',
+    availableRefs: '可用分支/引用：{{refs}}',
+    versionConflict: '版本冲突：你基于 v{{expected}}，服务器已是 v{{current}}——请刷新后重试。',
+    stderrSummary: 'git 输出',
+    rawSummary: '原始错误信息',
+  },
   // Error codes thrown by the backend (DomainError family + transport).
   errors: {
+    'network-unreachable': '无法连接到服务。',
+    'network-unreachable__hint': '请确认 daemon 正在运行、网络可达后重试。',
+    'call-target-method-required': '缺少方法引用参数（methodRef）。',
+    'plantuml-source-required': '图表源码为空，无法渲染。',
+    'plantuml-source-too-large': '图表源码过大，超出渲染上限。',
     'http-401': '未授权 — 请重新登录并粘贴 token。',
     'http-404': '资源不存在。',
     'http-409': '存在冲突，请刷新后重试。',

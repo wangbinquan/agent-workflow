@@ -88,19 +88,21 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
   ): Promise<true | false | Response> {
     const url = new URL(req.url)
     if (!url.pathname.startsWith('/ws/')) return false
+    // RFC-203 T6: WS upgrade rejections use the SAME flat uniform error body
+    // as every HTTP route ({ok:false, code, message}) — the old nested
+    // {error:{...}} shape needed a defensive branch in the frontend decoder.
+    const wsError = (code: string, message: string, status: number): Response =>
+      new Response(JSON.stringify({ ok: false, code, message }), {
+        status,
+        headers: { 'Content-Type': 'application/json' },
+      })
     const channel = parseWsChannel(url)
     if (channel === null) {
-      return new Response(
-        JSON.stringify({ error: { code: 'ws-unknown-channel', message: 'unknown ws channel' } }),
-        { status: 404, headers: { 'Content-Type': 'application/json' } },
-      )
+      return wsError('ws-unknown-channel', 'unknown ws channel', 404)
     }
     const queryToken = url.searchParams.get('token')
     if (queryToken === null || queryToken === '') {
-      return new Response(
-        JSON.stringify({ error: { code: 'auth-required', message: 'invalid or missing token' } }),
-        { status: 401, headers: { 'Content-Type': 'application/json' } },
-      )
+      return wsError('auth-required', 'invalid or missing token', 401)
     }
     // RFC-036 — accept session tokens (aws_s_…), PATs (aws_pat_…) and the
     // legacy daemon token, the same set the HTTP `multiAuth` middleware
@@ -118,10 +120,7 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
       })
     }
     if (actor === null) {
-      return new Response(
-        JSON.stringify({ error: { code: 'auth-required', message: 'invalid or missing token' } }),
-        { status: 401, headers: { 'Content-Type': 'application/json' } },
-      )
+      return wsError('auth-required', 'invalid or missing token', 401)
     }
     // RFC-152 — upgrade-time whole-connection gates come from the registry:
     //   task               → canViewTask (RFC-054 W2-4; the tasks-list channel
@@ -131,10 +130,7 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
     //   everything else     → gate-less, passes through.
     const verdict = await checkUpgradeGate(deps.db, actor, channel)
     if (verdict !== true) {
-      return new Response(JSON.stringify({ error: verdict }), {
-        status: 403,
-        headers: { 'Content-Type': 'application/json' },
-      })
+      return wsError(verdict.code, verdict.message, 403)
     }
     const data: ConnectionData = {
       channel,
@@ -146,7 +142,7 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
     }
     const ok = server.upgrade(req, { data })
     if (!ok) {
-      return new Response('upgrade-failed', { status: 426 })
+      return wsError('upgrade-failed', 'websocket upgrade failed', 426)
     }
     return true
   }

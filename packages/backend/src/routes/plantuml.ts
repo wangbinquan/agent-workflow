@@ -20,6 +20,7 @@ import type { Hono } from 'hono'
 import { loadConfig } from '@/config'
 import type { AppDeps } from '@/server'
 import { PLANTUML_SOURCE_MAX, hostOf, renderPlantuml } from '@/services/plantuml'
+import { DomainError } from '@/util/errors'
 
 export function mountPlantumlRoutes(app: Hono, deps: AppDeps): void {
   app.post('/api/plantuml/render', async (c) => {
@@ -28,15 +29,24 @@ export function mountPlantumlRoutes(app: Hono, deps: AppDeps): void {
     // authoritative source-length guard when the header is absent / lying).
     const declaredLen = Number(c.req.header('content-length') ?? '0')
     if (Number.isFinite(declaredLen) && declaredLen > PLANTUML_SOURCE_MAX + 1024) {
-      return c.json({ error: 'plantuml-source-too-large' }, 413)
+      // RFC-203 T6: uniform DomainError body (was `{error:string}`).
+      throw new DomainError(
+        'plantuml-source-too-large',
+        'plantuml source exceeds render limit',
+        413,
+      )
     }
     const body = (await c.req.json().catch(() => ({}))) as { source?: unknown }
     const source = typeof body.source === 'string' ? body.source : ''
     if (source.length === 0) {
-      return c.json({ error: 'plantuml-source-required' }, 400)
+      throw new DomainError('plantuml-source-required', 'plantuml source is empty', 400)
     }
     if (source.length > PLANTUML_SOURCE_MAX) {
-      return c.json({ error: 'plantuml-source-too-large' }, 413)
+      throw new DomainError(
+        'plantuml-source-too-large',
+        'plantuml source exceeds render limit',
+        413,
+      )
     }
     const cfg = loadConfig(deps.configPath)
     const endpoint = (cfg.plantumlEndpoint ?? '').trim()
