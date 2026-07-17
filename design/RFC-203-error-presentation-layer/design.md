@@ -103,6 +103,15 @@ P1：引用清单 ACL 脱敏（未脱敏形状只渲染计数，后端抛点 T6 
 
 P2：**网络错误标签移到 fetch 边界**——resolver 按 `instanceof TypeError` 猜测会把应用层 TypeError 伪装成 daemon 离线，改为 api/client.ts `fetchOrNetworkError` 在请求边界抛 `ApiError(0,'network-unreachable')`（AbortError 原样放行），resolver 删除猜测分支；**非 JSON 错误体 capped 流式读取**——`cappedErrorText` 只读 ≤2KiB 即 cancel 流，超大代理错误页不再整体缓冲；**NodeDetailDrawer 只对 failed/exhausted 行本地化**——classifyCanceled 的 'manual' 臂也覆盖 canceled/interrupted，其 errorMessage 非失败令牌，走 describeTaskFailure 会误标「任务执行失败」，改按 status 分流；**dw-reject-exhausted 令牌接通**（workgroupTasks.ts 发射、影射表+zh/en 词条补齐）。随批收尾（fold 完成于仓库搬迁后的接续 session）：tasks.preview port-artifact 预览 queryFn 的裸 fetch 改走导出的 `fetchOrNetworkError`（其失败进 ErrorBanner→resolveApiError，唯一受 TypeError 分支删除影响的消费面；其余裸 fetch 站点为布尔标志/私有错误路径，PlantUmlBlock 留待 T5a 迁移时一并换）；resolver/测试头部过期注释同步；新增 client 边界测试 ×3 + 网络打标源级锁 ×3。
 
+## 1.11 PR-2 落地记录（2026-07-17）
+
+- **L1 全量超额**：302 基础键（12 全量域 + repo×29 / auth×25 子集 + Tier-2 wire 码全数 + http-4xx/5xx 家族）+ 27 个 `__hint`；skill 域含 `skill-quarantined`（SkillQuarantinedError 默认码，盘点漏项）。孤儿 `skill-source-*` ×5 已删。完整性测试锁 zh/en 键集同构 / ≥150 / hint 配对 / 19 域 / 风格铁律 / Tier-2 在位（`rfc203-l1-completeness.test.ts`）。
+- **校验词条按 65 码全量精确**（现值；盘点期 84 → RFC 收敛后 65），高于 plan 的 ~40 —— 依「面向代码最合理优先于改动最小」偏好；族兜底 13 条 + 全局兜底防新码。测试直接读 `workflow.validator.ts` 源码提取全部 code 断言零漏（新码上线未配词条会红一条明确指引的测试）。
+- **键布局备选**：`validation.issue.<code>` / `validation.family.<prefix>` / `validation.fallback`（design 原文 `validation.<issueCode>` 平铺会让 family 子对象与 `Record<string,string>` 类型冲突；嵌套三段是类型干净的等价变体）。
+- **ErrorDetails issues 分支**按 exact/family 命中门控（zod issue 无 validation 词条命中，保持原 path+message 渲染，不误吞）。ValidationPanel 行 = code 徽标 + 本地化标题 + 原文 `<details>` 折叠（复用 `error-details__raw`）。
+- **契约性断言更新**（PR 说明）：`repo-clone-failed`/`internal-error`/`workflow-version-conflict` 获得精确词条后，resolver 域兜底测试样例改用 `merge-tree-failed`（内部 plumbing，设计上留域兜底）与合成码；`workflow-import-dialog` 的 409 断言从「拼原文」改为精确词条句子。
+- **status-0 回归修复**（随批，CI run 29555048439 rerun 的 e2e 抓到）：fetch 边界打标后，`useWorkflowEditorDraft.failureFromError` 把 `ApiError(status 0)` 误判为 `kind:'http'` 确定性失败，破坏 RFC-199 弱网「结局未知 → offline + reconcile」语义；修为 status 0 归 transport。单测新增真实打标形状注入；`rfc199-save-reliability.spec.ts` 本地 Chromium 5/5 复绿。教训已固化进用例注释：transport-loss 类单测必须用打标形状（ApiError status 0），不能只用裸 TypeError。
+
 ## 2. 失败模式
 
 - 词条缺失/漂移：L2 域兜底保证任何新码不裸奔英文；完整性测试锁 zh/en 同构。

@@ -272,3 +272,59 @@ export function labelForCode(keyPrefix: string, code: string): string {
   if (!i18n.exists(key)) return code
   return i18n.t(key)
 }
+
+/** Ordered longest-prefix-first family table for workflow-validation issue
+ *  codes (`validation.family.<prefix>`); more-specific prefixes MUST precede
+ *  their shorter cousins (wrapper-loop before wrapper, upload-input before
+ *  input, cross-clarify before clarify). */
+const VALIDATION_FAMILY_PREFIXES: readonly string[] = [
+  'wrapper-loop-',
+  'wrapper-fanout-',
+  'wrapper-',
+  'cross-clarify-',
+  'clarify-',
+  'boundary-',
+  'edge-',
+  'binding-',
+  'upload-input-',
+  'input-',
+  'review-',
+  'prompt-template-',
+  'system-port-',
+]
+
+export interface DescribedValidationIssue {
+  /** Localized one-line title (never the raw English validator message). */
+  title: string
+  /** The original validator message — node/edge ids live here; render it as
+   *  a collapsible detail so the location info is never lost (design-gate P2:
+   *  issues carry no structured params in v1, the message IS the locator). */
+  raw: string
+  matched: 'exact' | 'family' | 'fallback'
+}
+
+/**
+ * RFC-203 T3c — the ONE localizer for workflow-validation issues, shared by
+ * the editor ValidationPanel and the <ErrorDetails> issues branch. Three
+ * tiers: exact `validation.issue.<code>` → longest-prefix family
+ * `validation.family.<prefix>` → `validation.fallback`.
+ */
+export function describeValidationIssue(issue: {
+  code: string
+  message: string
+}): DescribedValidationIssue {
+  const exactKey = `validation.issue.${issue.code}`
+  if (i18n.exists(exactKey)) {
+    return { title: i18n.t(exactKey), raw: issue.message, matched: 'exact' }
+  }
+  for (const p of VALIDATION_FAMILY_PREFIXES) {
+    if (!issue.code.startsWith(p)) continue
+    const famKey = `validation.family.${p.slice(0, -1)}`
+    // No early break on a missing family key: a code matching wrapper-loop-*
+    // may still land on the broader wrapper family if the narrow one is gone.
+    if (i18n.exists(famKey)) {
+      return { title: i18n.t(famKey), raw: issue.message, matched: 'family' }
+    }
+  }
+  return { title: i18n.t('validation.fallback'), raw: issue.message, matched: 'fallback' }
+}

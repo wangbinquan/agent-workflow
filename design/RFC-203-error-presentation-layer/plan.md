@@ -31,13 +31,13 @@
 
 ## 验收清单（对应 proposal §5）
 
-- [ ] A1 resolveApiError 三级 + 归一 + 兼容壳（PR-1）
-- [ ] A2 ErrorDetails 六形状（PR-1）
-- [ ] A3 词条 L1≥150 / L2×19 / 校验≥40 / 孤儿清零（PR-2）
-- [ ] A4 failureCode 端到端 + 影射表 ≥12（PR-1）
+- [x] A1 resolveApiError 三级 + 归一 + 兼容壳（PR-1，36749ddf；归一改边界打标见 design §1.10）
+- [x] A2 ErrorDetails 六形状（PR-1，36749ddf）
+- [x] A3 词条 L1≥150（实 302+27hint）/ L2×19 / 校验≥40（实 65 全量）/ 孤儿清零（PR-2，见 design §1.11）
+- [x] A4 failureCode 端到端 + 影射表 ≥12（PR-1；PR-1 实现门补 dw-reject-exhausted）
 - [ ] A5 分叉清零 + 源码锁（PR-3）
-- [ ] A6 非统一体收敛（PR-1）
-- [ ] A7 全量门槛（每 PR）
+- [x] A6 非统一体收敛（PR-1，36749ddf）
+- [x] A7 全量门槛（PR-1 / PR-2 均四门全绿 + 定向 e2e）
 
 ## 协调注意
 

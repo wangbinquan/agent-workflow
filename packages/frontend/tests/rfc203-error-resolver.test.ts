@@ -78,15 +78,19 @@ describe('resolveApiError', () => {
     expect(r.hint).toContain('daemon')
   })
 
+  // PR-2 note: exemplars must stay PERMANENTLY unmapped — repo-clone-failed /
+  // internal-error got L1 entries in T3a, so the domain-tier locks moved to
+  // merge-tree-failed (internal git plumbing, domain-fallback by design) and a
+  // synthetic never-registered code for the misc family.
   test('unmapped code falls to its domain template', () => {
-    const r = resolveApiError(new ApiError(422, 'repo-clone-failed', 'git clone failed: fatal x'))
+    const r = resolveApiError(new ApiError(422, 'merge-tree-failed', 'git merge-tree: fatal x'))
     expect(r.matched).toBe('domain')
     expect(r.title).toBe('仓库操作失败')
-    expect(r.raw).toBe('git clone failed: fatal x')
+    expect(r.raw).toBe('git merge-tree: fatal x')
   })
 
-  test('unknown family falls to global fallback', () => {
-    const r = resolveApiError(new ApiError(500, 'internal-error', 'boom'))
+  test('unknown family falls to the misc domain template', () => {
+    const r = resolveApiError(new ApiError(500, 'zz-never-registered', 'boom'))
     expect(r.matched).toBe('domain') // misc domain template exists
     expect(r.title).toBe('请求失败')
   })
@@ -139,7 +143,7 @@ describe('describeApiError shell', () => {
     )
   })
   test('domain tier → keeps ": raw" so string-only surfaces stay diagnostic', () => {
-    expect(describeApiError(new ApiError(422, 'repo-clone-failed', 'fatal: nope'))).toBe(
+    expect(describeApiError(new ApiError(422, 'merge-tree-failed', 'fatal: nope'))).toBe(
       '仓库操作失败: fatal: nope',
     )
   })

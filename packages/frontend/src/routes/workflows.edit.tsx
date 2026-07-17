@@ -5,6 +5,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
   Agent,
@@ -18,6 +19,7 @@ import type {
   WorkflowValidationReceipt,
 } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
+import { describeValidationIssue } from '@/i18n/errors'
 import { EditorSidebar } from '@/components/canvas/EditorSidebar'
 import { EdgeInspector } from '@/components/canvas/EdgeInspector'
 import { NodeInspector } from '@/components/canvas/NodeInspector'
@@ -1070,9 +1072,7 @@ function ValidationPanel({
           </div>
           <ul>
             {errors.map((i, idx) => (
-              <li key={`e-${idx}`}>
-                <code>{i.code}</code> — {i.message}
-              </li>
+              <ValidationIssueRow issue={i} key={`e-${idx}`} />
             ))}
           </ul>
         </div>
@@ -1084,8 +1084,7 @@ function ValidationPanel({
           </div>
           <ul>
             {warnings.map((i, idx) => (
-              <li key={`w-${idx}`}>
-                <code>{i.code}</code> — {i.message}
+              <ValidationIssueRow issue={i} key={`w-${idx}`}>
                 {i.code === 'wrapper-children-outside-bounds' &&
                 i.pointer !== undefined &&
                 onAutoFitWrapper !== undefined ? (
@@ -1100,12 +1099,35 @@ function ValidationPanel({
                     </button>
                   </>
                 ) : null}
-              </li>
+              </ValidationIssueRow>
             ))}
           </ul>
         </div>
       )}
     </div>
+  )
+}
+
+// RFC-203 T3c — localized title line; the raw validator message (which carries
+// the node/edge ids) folds into the same row so location info is never lost.
+function ValidationIssueRow({
+  issue,
+  children,
+}: {
+  issue: WorkflowValidationIssue
+  children?: ReactNode
+}) {
+  const { t } = useTranslation()
+  const described = describeValidationIssue(issue)
+  return (
+    <li>
+      <code>{issue.code}</code> — {described.title}
+      {children}
+      <details className="error-details__raw">
+        <summary>{t('errorDetails.rawSummary')}</summary>
+        <pre>{described.raw}</pre>
+      </details>
+    </li>
   )
 }
 

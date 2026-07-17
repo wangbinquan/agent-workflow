@@ -17,6 +17,7 @@
 
 import type { ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
+import { describeValidationIssue } from '@/i18n/errors'
 
 const RAW_MAX = 4096
 
@@ -66,6 +67,21 @@ export function ErrorDetails({ details, raw, hint }: ErrorDetailsProps): ReactEl
           {shown.map((iss, i) => {
             const path = Array.isArray(iss.path) ? iss.path.join('.') : ''
             const msg = typeof iss.message === 'string' ? iss.message : String(iss.code ?? '')
+            // RFC-203 T3c: workflow-validation issues ({code, message}) get
+            // the shared localizer; the raw message (node/edge locator) moves
+            // to the hover title. Zod issues and unknown shapes fall through
+            // to the localizer's fallback ONLY on a real validation code, so
+            // gate on an exact/family match instead of shape sniffing.
+            if (typeof iss.code === 'string' && msg !== '') {
+              const v = describeValidationIssue({ code: iss.code, message: msg })
+              if (v.matched !== 'fallback') {
+                return (
+                  <li key={i} title={v.raw}>
+                    {v.title}
+                  </li>
+                )
+              }
+            }
             return <li key={i}>{path !== '' ? `${path}: ${msg}` : msg}</li>
           })}
           {issues.length > ZOD_ISSUE_LIMIT && (

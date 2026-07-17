@@ -190,7 +190,12 @@ describe('WorkflowImportDialog', () => {
     fireEvent.click(screen.getByTestId('workflow-import-choice-overwrite'))
     fireEvent.click(screen.getByTestId('workflow-import-submit'))
 
-    expect((await screen.findByRole('alert')).textContent).toContain('workflow changed')
+    // RFC-203 PR-2: workflow-version-conflict now has an EXACT L1 entry, so
+    // the string-only shell shows the clean localized sentence (no ": raw"
+    // suffix — that only survives on domain/fallback tiers).
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      enUS.errors['workflow-version-conflict'],
+    )
     const staleFence = onImport.mock.calls[1]?.[2]
     expect(staleFence).toMatchObject({ workflowId: 'same', expectedVersion: 7 })
     expect(screen.getByTestId('workflow-import-submit').textContent).toBe(

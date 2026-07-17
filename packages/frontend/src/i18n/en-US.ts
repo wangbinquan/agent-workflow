@@ -3146,6 +3146,115 @@ export const enUS: Resources = {
     auth: 'Authentication or permission check failed',
     misc: 'Request failed',
   },
+  validation: {
+    issue: {
+      'agent-not-found': 'The node references an unknown agent.',
+      'agent-dependency-not-found': 'An agent used by a node depends on an unknown agent.',
+      'aggregator-agent-outside-fanout': 'Aggregator agents must sit inside a fan-out wrapper.',
+      'skill-not-found': 'An agent used by a node references an unknown skill.',
+      'plugin-not-found': 'An agent used by a node references an unknown plugin.',
+      'plugin-disabled': 'An agent used by a node references a disabled plugin.',
+      'binding-node-missing': 'An output port binds to an unknown node.',
+      'binding-port-missing': 'An output port binds to an unknown port.',
+      'boundary-input-port-not-declared':
+        'A wrapper-input edge references an undeclared input port.',
+      'boundary-input-source-not-wrapper':
+        'The wrapper-input edge source is not a fan-out wrapper.',
+      'boundary-input-target-not-inner': 'The wrapper-input edge target is not inside the wrapper.',
+      'boundary-output-source-must-be-aggregator':
+        'The wrapper-output edge must originate from the aggregator agent.',
+      'boundary-output-source-not-inner':
+        'The wrapper-output edge source is not inside the wrapper.',
+      'boundary-output-target-not-wrapper':
+        'The wrapper-output edge target is not a fan-out wrapper.',
+      'clarify-questions-port-missing': 'The clarify node questions port has no inbound edge.',
+      'clarify-answers-port-disconnected':
+        'The clarify node answers port has no outbound edge (answers still flow via the internal channel).',
+      'clarify-input-source-missing': 'A clarify inbound edge references an unknown node.',
+      'clarify-multiple-clarify-on-same-agent': 'An agent can only have one clarify channel.',
+      'clarify-multiple-source-agents':
+        'The clarify node receives questions edges from multiple agents.',
+      'clarify-no-iteration-cap':
+        'The clarify node is not inside a loop wrapper; the agent may ask indefinitely.',
+      'clarify-self-loop': 'The clarify answers edge points back at itself.',
+      'clarify-target-not-agent': 'The clarify node must connect to a single-process agent node.',
+      'cross-clarify-auto-edge-deleted':
+        'The cross-clarify node lost its auto edge back to the questioner.',
+      'cross-clarify-has-downstream':
+        'The cross-clarify node must not have other downstream edges.',
+      'cross-clarify-input-source-missing': 'The cross-clarify questions port has no inbound edge.',
+      'cross-clarify-manual-edge-missing':
+        'The cross-clarify to_designer edge is missing; submits would have nowhere to go.',
+      'cross-clarify-multiple-designers':
+        'The cross-clarify to_designer edges point at multiple agents.',
+      'cross-clarify-multiple-questioners':
+        'The cross-clarify questions edges come from multiple agents.',
+      'cross-clarify-no-iteration-cap':
+        'The cross-clarify node is not inside a loop wrapper; the questioner may ask indefinitely.',
+      'cross-clarify-self-review-warning':
+        'The cross-clarify designer and questioner are the same agent.',
+      'cross-clarify-target-not-agent-single':
+        'The cross-clarify questioner must be a single-process agent node.',
+      'cross-clarify-target-not-ancestor':
+        'The cross-clarify designer must be a topological ancestor of the questioner.',
+      'edge-source-node-missing': 'The edge source node does not exist.',
+      'edge-source-port-missing': 'The edge source port does not exist.',
+      'edge-target-node-missing': 'The edge target node does not exist.',
+      'edge-target-port-missing': 'The edge target port does not exist.',
+      'fanout-inner-chain-unsupported':
+        'Chaining inner nodes into a non-aggregator is unsupported inside a fan-out wrapper.',
+      'input-key-duplicate': 'Duplicate input key.',
+      'input-key-not-declared': 'The input node references a key the workflow does not declare.',
+      'input-orphan-declared': 'A declared workflow input is referenced by no input node.',
+      'multiple-aggregators-in-fanout': 'A fan-out wrapper supports at most one aggregator agent.',
+      'prompt-template-deprecated-token':
+        'The prompt references a retired template token (it renders empty).',
+      'prompt-template-unresolved': 'The prompt references a token with no matching inbound port.',
+      'review-input-list-item-not-markdown': 'The review list input item kind must be markdown.',
+      'review-input-source-missing': 'The review node is missing its input source.',
+      'review-input-source-not-markdown':
+        'The review input source must be declared markdown or path kind.',
+      'review-rerunnable-out-of-scope':
+        'A rerunnable-on-reject node must be in the reachable upstream of the input source.',
+      'system-port-illegal-source': 'The answer-injection port may only be fed by a clarify node.',
+      'system-port-illegal-target':
+        'That is an answer-injection port; its target must be an agent node.',
+      'system-port-mispaired-target': 'Answers must be injected into the agent that asked.',
+      'topology-cycle': 'The workflow contains a cycle outside any loop wrapper.',
+      'upload-input-target-dir-missing': 'The upload input is missing its target dir.',
+      'upload-input-target-dir-invalid':
+        'The upload input target dir must be a repo-relative path.',
+      'wrapper-children-outside-bounds': 'An inner node sits outside the wrapper visual bounds.',
+      'wrapper-empty': 'The wrapper has no inner nodes.',
+      'wrapper-fanout-nested': 'Fan-out wrappers cannot nest inside each other.',
+      'wrapper-fanout-shard-source-duplicate':
+        'A fan-out wrapper must have exactly one shard-source port (found several).',
+      'wrapper-fanout-shard-source-missing': 'The fan-out wrapper has no shard-source port.',
+      'wrapper-fanout-shard-source-must-be-list': 'The shard-source port must declare a list kind.',
+      'wrapper-loop-exit-condition': 'The loop wrapper is missing its exit condition.',
+      'wrapper-loop-exit-node-missing': 'The loop exit condition references an unknown node.',
+      'wrapper-loop-exit-port-missing': 'The loop exit condition references an unknown port.',
+      'wrapper-loop-inner-data-cycle': 'The loop wrapper has a data cycle between its inner nodes.',
+      'wrapper-loop-max-iterations': 'The loop wrapper is missing maxIterations.',
+      'wrapper-loop-nested': 'Loop wrappers cannot nest inside each other.',
+    },
+    family: {
+      'wrapper-loop': 'Loop wrapper misconfigured.',
+      'wrapper-fanout': 'Fan-out wrapper misconfigured.',
+      wrapper: 'Wrapper misconfigured.',
+      'cross-clarify': 'Cross-clarify wiring issue.',
+      clarify: 'Clarify wiring issue.',
+      boundary: 'Wrapper boundary wiring issue.',
+      edge: 'Edge issue.',
+      binding: 'Output binding issue.',
+      'upload-input': 'Upload input issue.',
+      input: 'Workflow input issue.',
+      review: 'Review node issue.',
+      'prompt-template': 'Prompt template issue.',
+      'system-port': 'System port wiring issue.',
+    },
+    fallback: 'Workflow validation failed.',
+  },
   errorDetails: {
     hintPrefix: 'Next step',
     moreIssues: '…{{count}} more issue(s) not shown',
@@ -3159,42 +3268,319 @@ export const enUS: Resources = {
     rawSummary: 'Raw error message',
   },
   errors: {
+    // --- wire / transport（Tier-2） ---
     'network-unreachable': 'Cannot reach the service.',
     'network-unreachable__hint':
       'Make sure the daemon is running and the network is reachable, then retry.',
-    'call-target-method-required': 'Missing method reference parameter (methodRef).',
-    'plantuml-source-required': 'Diagram source is empty; nothing to render.',
-    'plantuml-source-too-large': 'Diagram source is too large to render.',
+    'route-not-found': 'Route not found.',
+    'ws-unknown-channel': 'Unknown live channel.',
+    'internal-error': 'Internal server error.',
+    'internal-error__hint': 'Retry later; if it persists, check the daemon logs.',
+    'invalid-json': 'The request body is not valid JSON.',
+    'invalid-body': 'Invalid request body.',
+    'confirm-required': 'Hard delete requires explicit confirmation.',
+    'builtin-readonly': 'Built-in framework resources are read-only.',
+    'not-found': 'Not found.',
+    'resume-failed': 'Task resume failed.',
+    'resume-failed__hint': 'Check the task page error details; use Diagnose if needed.',
+    'http-400': 'Bad request.',
     'http-401': 'Unauthorized — please sign in again.',
+    'http-403': 'Forbidden.',
     'http-404': 'Not found.',
     'http-409': 'Conflict — refresh and retry.',
-    'route-not-found': 'Route not found.',
+    'http-500': 'Internal server error.',
+    'http-502': 'Bad gateway.',
+    'http-503': 'Service temporarily unavailable.',
+    // --- task ---
+    'task-not-found': 'Task not found.',
+    'task-not-visible': 'This task is not visible to you (it may not exist or you lack access).',
+    'task-invalid': 'Invalid task payload.',
+    'task-filter-invalid': 'Invalid task filter.',
     'task-not-cancelable': 'Task is already in a terminal state and cannot be canceled.',
     'task-terminal':
       'The owning task has ended; this item is sealed and the submission was not saved.',
-    'clarify-round-terminal':
-      'This clarify round is sealed (its task ended or the round was withdrawn); the answer was not saved.',
-    'workflow-scheduled-referenced':
-      'This workflow is still referenced by scheduled task(s); delete or repoint them first.',
     'task-not-resumable': 'Task is still running or has not failed; cannot resume.',
     'task-still-running': 'Task is still running; cancel it first.',
-    'workflow-import-conflict': 'Import conflict: a workflow with the same id already exists.',
+    'task-not-syncable': 'Task is actively running; cannot sync its workflow definition.',
+    'task-not-syncable__hint': 'Wait for the task to finish or cancel it, then sync.',
+    'task-host-sync-unsupported': 'Agent / workgroup tasks have no workflow to sync from.',
+    'task-no-base-commit': 'This task has no recorded base commit; cannot compute its diff.',
+    'task-worktree-missing':
+      'The task workspace no longer exists (it may have been garbage-collected).',
+    'task-upload-failed': 'Failed to place uploaded files into the task workspace.',
+    'task-launch-cleanup-incomplete':
+      'Task launch failed and its workspace could not be fully cleaned up.',
+    'task-launch-cleanup-incomplete__hint':
+      'Inspect the task worktree directory on disk and clean it up if needed.',
+    'task-multipart-invalid': 'Could not parse the upload form.',
+    'task-multipart-payload-missing': 'The upload form is missing the task payload field.',
+    'task-multipart-payload-invalid': 'The task payload in the upload form is not valid JSON.',
+    'task-multipart-string-not-file': 'An upload field carried text where a file was expected.',
+    'task-multipart-unknown-field': 'The upload form contains an unexpected field.',
+    'task-multipart-unknown-input':
+      'Uploaded files target an upload input the workflow does not declare.',
+    // --- task question board ---
+    'task-question-not-found': 'Question not found.',
+    'task-question-terminal': 'This question has ended and cannot be reassigned.',
+    'task-question-already-dispatched':
+      'This question was already dispatched and cannot be reassigned.',
+    'task-question-already-dispatched__hint': 'Reopen it first, then assign a new handler.',
+    'task-question-not-awaiting-confirm': 'This question is not awaiting confirmation.',
+    'task-question-not-sealed': 'Some questions are not sealed yet; cannot dispatch.',
+    'task-question-not-sealed__hint': 'Seal an answer for every question first.',
+    'task-question-reassign-invalid': 'This question cannot be reassigned to the selected node.',
+    'task-question-round-missing':
+      'The clarify round behind this question is gone; cannot reassign.',
+    'task-question-round-multi-target':
+      'Questions of one clarify round point at multiple handler nodes; cannot dispatch together.',
+    'task-question-target-changed':
+      'This question was reassigned while dispatch was being planned; refresh and retry.',
+    'task-question-snapshot-unparseable':
+      'The task workflow snapshot is corrupt; cannot compute a dispatch target.',
+    'task-question-designer-not-ready':
+      'The target node still has clarifications in flight; dispatch is blocked.',
+    'task-question-node-dispatch-in-flight':
+      'The target node has an unfinished rerun in flight; dispatch is blocked.',
+    'task-question-borrow-ledger-conflict':
+      'This node has conflicting open reassignment records; dispatch is blocked.',
+    'task-question-home-multi-borrow':
+      'Questions on this node were reassigned to conflicting handlers.',
+    'task-question-unsafe-dispatch-target':
+      'The target node has no prior run to inherit; dispatch would be unsafe.',
+    'manual-question-title-required': 'Question title is required.',
+    'manual-question-title-too-long': 'Question title exceeds the length limit.',
+    'manual-question-body-required': 'Question body is required.',
+    'manual-question-body-too-long': 'Question body exceeds the length limit.',
+    'manual-question-target-required': 'A manual question must be assigned to an agent node.',
+    'manual-question-target-invalid': 'The assignee is not an agent node in this task workflow.',
+    'manual-question-target-never-run':
+      'That node has never run; a manual question cannot be assigned to it.',
+    'manual-question-target-never-run__hint':
+      'Pick a node that has already run, or wait until it runs once.',
+    'manual-question-workgroup-member-target':
+      'Cannot target the shared workgroup member host node.',
+    'entry-ids-required': 'Select at least one question.',
+    'target-node-required': 'A target node is required.',
+    // --- clarify ---
+    'clarify-session-not-found': 'Clarify session not found.',
+    'cross-clarify-session-not-found': 'Cross-clarify session not found.',
+    'clarify-round-not-found': 'Clarify round not found.',
+    'clarify-round-terminal':
+      'This clarify round is sealed (its task ended or the round was withdrawn); the answer was not saved.',
+    'clarify-round-not-awaiting':
+      'This clarify round is not awaiting human answers; the draft was not saved.',
+    'clarify-already-answered':
+      'This clarify round was already finalized; it no longer accepts answers.',
+    'clarify-question-not-found': 'That question is not part of this clarify round.',
+    'clarify-question-already-sealed': 'This question is already sealed.',
+    'clarify-seal-empty': 'Nothing in the selection can be sealed.',
+    'clarify-iteration-mismatch':
+      'This clarify round changed while you were editing; refresh and retry.',
+    'clarify-answers-invalid': 'Invalid clarify answers payload.',
+    'clarify-answers-not-array': 'Answers must be submitted as a list.',
+    'clarify-answer-malformed': 'One of the answers is malformed.',
+    'clarify-draft-invalid': 'Invalid clarify draft.',
+    'clarify-directive-invalid': 'Invalid clarify directive.',
+    'clarify-list-query-invalid': 'Invalid clarify list query.',
+    'clarify-question-ids-requires-defer':
+      'Per-question submission is only available in deferred mode.',
+    'clarify-resubmit-requires-defer':
+      'Re-answering is only available from the centralized answer pane (deferred mode).',
+    'clarify-quick-finalize-incomplete':
+      'Quick submit did not cover every question; auto-dispatch was refused.',
+    'clarify-quick-finalize-incomplete__hint': 'Answer the remaining questions, then submit again.',
+    'not-asking-node': 'That node is not a clarify asking node in this task.',
+    // --- review ---
+    'review-not-found': 'Review not found.',
+    'review-versions-empty': 'This review has no document versions yet.',
+    'review-not-awaiting': 'This review has no pending document version.',
+    'review-doc-version-missing': 'There is no pending document version to review.',
+    'review-doc-decided': 'This document is already decided.',
+    'review-not-multi-doc': 'This document is not a multi-document item.',
+    'review-selection-incomplete': 'Some documents are still undecided; cannot approve.',
+    'review-selection-incomplete__hint': 'Decide every document, then submit.',
+    'review-selection-invalid': 'Invalid selection.',
+    'review-iteration-mismatch': 'The review advanced while you were acting; refresh and retry.',
+    'review-decision-invalid': 'Invalid review decision.',
+    'review-comment-invalid': 'Invalid review comment.',
+    'review-comment-not-found': 'Review comment not found.',
+    'review-list-query-invalid': 'Invalid review list query.',
+    'review-node-missing-from-snapshot':
+      'The review node is missing from the task workflow snapshot.',
+    'doc-version-not-found': 'Document version not found.',
+    'review-version-not-found': 'Document version not found.',
+    'doc-version-body-missing': 'The body file for this document version is missing.',
+    'anchor-empty-selection': 'The quoted selection must not be empty.',
+    'anchor-selection-not-found':
+      'The quoted text is not present in the document (it may have changed).',
+    // --- workflow ---
+    'workflow-not-found': 'Workflow not found.',
+    'workflow-not-visible':
+      'This workflow is not visible to you (it may not exist or you lack access).',
+    'workflow-deleted': 'That workflow no longer exists.',
+    'workflow-invalid': 'Invalid workflow payload.',
     'workflow-name-invalid':
       'Workflow name must start with a lowercase letter / digit, only [a-z0-9_-], at most 128 chars.',
-    'config-invalid': 'Invalid config.',
-    'task-invalid': 'Invalid task payload.',
-    'skill-source-path-missing': 'Path does not exist.',
-    'skill-source-path-not-dir': 'Path is not a directory.',
-    'skill-source-path-in-use': 'This parent directory is already registered.',
-    'skill-source-children-referenced':
-      'Child skills under this folder are still referenced by agents; unbind first.',
-    'skill-source-readonly':
-      'This skill is managed by a folder; edit files in the source directory.',
-    // RFC-164 PR-4: workgroup room endpoints.
+    'workflow-version-conflict': 'The workflow was updated by someone else; refresh and retry.',
+    'workflow-version-mismatch': 'The workflow changed during launch; refresh and launch again.',
+    'workflow-in-use': 'Tasks still reference this workflow; it cannot be deleted.',
+    'workflow-in-use__hint': 'Delete the referencing tasks first.',
+    'workflow-scheduled-referenced':
+      'This workflow is still referenced by scheduled task(s); delete or repoint them first.',
+    'workflow-definition-corrupt': 'The stored workflow definition is corrupt.',
+    'workflow-snapshot-corrupt': 'The task workflow snapshot is corrupt.',
+    'workflow-sync-noop': 'The task is already on the latest workflow definition.',
+    'workflow-sync-preview-stale':
+      'The workflow advanced since this preview; refresh and re-confirm.',
+    'workflow-export-invalid': 'Invalid export query.',
+    'workflow-validation-invalid': 'Invalid validation payload.',
+    'workflow-import-invalid': 'Invalid workflow import payload.',
+    'workflow-import-conflict': 'Import conflict: a workflow with the same id already exists.',
+    'workflow-import-target-mismatch':
+      'The YAML workflow id does not match the confirmed overwrite target.',
+    'workflow-yaml-empty': 'The YAML body is empty.',
+    'workflow-yaml-invalid': 'The YAML did not parse to a workflow object.',
+    'dw-no-generated-workflow': 'This task has no generated workflow to save.',
+    'dw-generated-def-invalid':
+      'The stored generated workflow is unreadable; reject with feedback to regenerate.',
+    'dw-generated-def-stale':
+      'The generated workflow no longer validates against the current agent pool; reject with feedback to regenerate.',
+    // --- upload ---
+    'upload-unknown-input': 'No upload input is declared for this key.',
+    'upload-input-invalid': 'The workflow upload input definition is malformed.',
+    'upload-file-too-large': 'A file exceeds the size cap for its input.',
+    'upload-too-large': 'The total upload size exceeds the limit.',
+    'upload-too-many-files': 'Too many files in this upload.',
+    'upload-max-count': 'Too many files for this input.',
+    'upload-min-count': 'Not enough files for this input.',
+    'upload-mime-rejected': 'A file type is not in the accept list for this input.',
+    'upload-name-clash': 'Could not pick a non-clashing file name.',
+    'upload-path-escape': 'The resolved upload path escapes the target directory.',
+    'upload-target-absolute': 'The target directory must be repo-relative.',
+    'upload-target-escape': 'The target directory escapes the task workspace.',
+    // --- schedule ---
+    'scheduled-task-not-found': 'Scheduled task not found.',
+    'scheduled-task-invalid': 'Invalid scheduled task payload.',
+    'scheduled-task-forbidden': 'You are not permitted to modify this scheduled task.',
+    'scheduled-kind-immutable': 'The launch kind of a scheduled task cannot change.',
+    'scheduled-kind-immutable__hint': 'Delete it and recreate with the new kind.',
+    'scheduled-task-needs-repair':
+      'This scheduled task has an unreadable launch payload; supply a full payload to repair it.',
+    'scheduled-task-row-corrupt': 'The scheduled task record is corrupt.',
+    'scheduled-task-upload-required':
+      'The workflow requires a file upload, which a scheduled task cannot supply.',
+    // --- runtime ---
+    'runtime-not-found': 'Runtime not found.',
+    'runtime-exists': 'A runtime with this name already exists.',
+    'runtime-name-invalid': 'Runtime name must be lowercase URL-safe.',
+    'runtime-protocol-invalid': 'Unsupported protocol.',
+    'runtime-binary-invalid': 'The binary path must be a single path.',
+    'runtime-temperature-invalid': 'temperature must be between 0 and 2.',
+    'runtime-config-dir-env-invalid': 'The config-dir environment variable name is invalid.',
+    'runtime-config-dir-env-reserved':
+      'The config-dir environment variable collides with a platform-reserved one.',
+    'runtime-config-dir-name-invalid': 'The config-dir name must be a single directory name.',
+    'runtime-default-cannot-disable':
+      'This runtime is the effective default; change the default before disabling it.',
+    'runtime-disabled': 'A disabled runtime cannot become the default; enable it first.',
+    'runtime-in-use': 'Agents still use this runtime; it cannot be deleted.',
+    'runtime-in-use__hint': 'Re-point those agents to another runtime first.',
+    'runtime-last': 'This is the only remaining runtime; it cannot be deleted.',
+    'opencode-models-failed': 'Failed to fetch the model list.',
+    'opencode-models-failed__hint':
+      'Check that the runtime works and the network / proxy is reachable, then retry.',
+    // --- mcp ---
+    'mcp-not-found': 'MCP not found.',
+    'mcp-invalid': 'Invalid MCP payload.',
+    'mcp-config-invalid': 'Invalid MCP config.',
+    'mcp-name-in-use': 'An MCP with this name already exists.',
+    'mcp-type-immutable': 'The MCP type cannot change.',
+    'mcp-disabled': 'This MCP is disabled; enable it before probing.',
+    'mcp-probe-invalid': 'The probe request is missing its config check; refresh and retry.',
+    'mcp-rename-invalid': 'Invalid rename payload.',
+    'mcp-row-corrupt': 'This MCP record is corrupt.',
+    'mcp-still-referenced': 'Agents still reference this MCP; it cannot be deleted.',
+    'mcp-still-referenced__hint': 'Unbind it from the referencing agents first.',
+    'probe-not-found': 'This MCP has not been probed yet; probe it first.',
+    'resource-operation-stale': 'The resource changed; reload before probing.',
+    'resource-operation-superseded': 'A newer probe completed; this result was discarded.',
+    // --- plugin ---
+    'plugin-not-found': 'Plugin not found.',
+    'plugin-invalid': 'Invalid plugin payload.',
+    'plugin-name-in-use': 'A plugin with this name already exists.',
+    'plugin-disabled': 'The agent references disabled plugin(s).',
+    'plugin-disabled__hint': 'Enable the plugin or remove the reference from the agent.',
+    'plugin-file-not-found': 'Plugin file not found.',
+    'plugin-install-failed': 'Plugin install failed.',
+    'plugin-install-timeout': 'Plugin install timed out.',
+    'plugin-operation-invalid': 'The operation is missing its config check; refresh and retry.',
+    'plugin-operation-unsupported':
+      'Externally managed file plugins do not support check or upgrade.',
+    'plugin-rename-invalid': 'Invalid rename payload.',
+    'plugin-row-corrupt': 'This plugin record is corrupt.',
+    'plugin-still-referenced': 'Agents still reference this plugin; it cannot be deleted.',
+    'plugin-still-referenced__hint': 'Unbind it from the referencing agents first.',
+    'npm-unavailable': 'npm is unavailable; the plugin cannot be installed.',
+    'npm-unavailable__hint':
+      'Make sure npm is installed on the server and the network is reachable, then retry.',
+    // --- agent ---
+    'agent-not-found': 'Agent not found.',
+    'agent-invalid': 'Invalid agent payload.',
+    'agent-name-in-use': 'An agent with this name already exists.',
+    'agent-rename-invalid': 'Invalid rename payload.',
+    'agent-launch-invalid': 'Invalid launch payload.',
+    'agent-launching': 'A task launch is in progress for this agent; retry shortly.',
+    'agent-id-mismatch': 'The target agent was replaced; refresh and retry.',
+    'agent-in-use': 'Workflows still reference this agent; it cannot be deleted.',
+    'agent-in-use__hint': 'Swap it out of the referencing workflows first.',
+    'agent-scheduled-referenced':
+      'Scheduled tasks still target this agent; delete or repoint them first.',
+    'agent-tasks-active':
+      'This agent still has non-terminal tasks; cancel or wait before deleting.',
+    'agent-dependency-self': 'An agent cannot depend on itself.',
+    'agent-dependency-cycle': 'Agent dependencies form a cycle.',
+    'agent-dependency-not-found': 'A depended-on agent does not exist.',
+    'agent-dependency-still-referenced':
+      'Other agents still depend on this agent; it cannot be deleted.',
+    'agent-dependency-still-referenced__hint': 'Remove it from the depending agents first.',
+    // --- skill ---
+    'skill-not-found': 'Skill not found.',
+    'skill-invalid': 'Invalid skill payload.',
+    'skill-name-in-use': 'A skill with this name already exists.',
+    'skill-in-use': 'Agents still reference this skill; it cannot be deleted.',
+    'skill-in-use__hint': 'Unbind it from the referencing agents first.',
+    'skill-changed': 'The skill changed; reload and retry.',
+    'skill-version-conflict': 'The skill changed since this operation started; reload and retry.',
+    'skill-token-invalid': 'The page state is stale; reload and retry.',
+    'skill-content-invalid': 'Invalid combined save.',
+    'skill-file-invalid': 'Invalid file write payload.',
+    'skill-file-not-found': 'File not found in this skill.',
+    'skill-file-is-dir': 'That path is a directory.',
+    'skill-md-missing': 'SKILL.md not found.',
+    'skill-md-protected':
+      'SKILL.md cannot be written or deleted directly; use the skill save flow.',
+    'skill-not-managed': 'This skill is not managed; it has no versioning.',
+    'skill-version-invalid': 'The version must be a positive integer.',
+    'skill-version-not-found': 'That skill version does not exist.',
+    'skill-restore-invalid': 'Invalid restore payload.',
+    'skill-operation-busy': 'The skill is busy under another operation; retry shortly.',
+    'skill-operation-inactive': 'That operation is gone or already inactive.',
+    'skill-endpoint-gone':
+      'This save endpoint is retired; refresh the page to use the new save flow.',
+    'skill-quarantined': 'This skill failed verification this boot and is unavailable.',
+    'skill-quarantined__hint':
+      'Check its status on the skills page, fix it, then restart the daemon.',
+    'zip-file-missing': 'The zip file is missing.',
+    'zip-limit-exceeded': 'The zip exceeds the size limit.',
+    'zip-decode-failed': 'Failed to decode the zip.',
+    'zip-traversal': 'The zip contains an illegal path.',
+    'zip-multipart-invalid': 'Could not parse the upload form.',
+    'zip-decisions-missing': 'Import decisions are missing.',
+    'zip-decisions-invalid': 'The import decisions are not valid JSON.',
+    // --- workgroup（RFC-164 room / delivery / confirm-gate / config） ---
     'workgroup-task-terminal': 'Task finished — no more messages can be sent.',
     'workgroup-assignment-not-cancelable':
       'This assignment already started or finished; it cannot be canceled.',
-    // RFC-164 PR-5: delivery / completion gate / mid-run config.
     'workgroup-delivery-invalid': 'Invalid delivery: a body or a summary is required.',
     'workgroup-delivery-not-human': 'Only human-member assignments accept deliveries.',
     'workgroup-delivery-conflict':
@@ -3206,6 +3592,83 @@ export const enUS: Resources = {
     'workgroup-config-no-agents': 'Removing these members would leave no agent member.',
     'workgroup-config-duplicate-member': 'A member with this display name already exists.',
     'workgroup-config-empty': 'There are no changes to save.',
+    // --- repo / git / worktree（用户可触发子集，其余走域兜底） ---
+    'repo-url-invalid': 'Unsupported or malformed Git URL.',
+    'repo-clone-failed': 'git clone failed.',
+    'repo-clone-failed__hint': 'Check the URL, credentials and network, then retry.',
+    'repo-ref-not-found': 'The requested ref was not found in the repository.',
+    'repo-file-source-unreachable': 'The local file:// source is missing or unreadable.',
+    'repo-not-git': 'That path is not a git repository.',
+    'repo-path-missing': 'The path does not exist.',
+    'repo-path-unknown': 'That path is not a known cached repository.',
+    'repo-cache-corrupt': 'The repository cache directory is corrupt.',
+    'repo-cache-corrupt__hint': 'Delete the cached repo, then launch again to re-clone.',
+    'repo-cache-locked': 'The repository cache is locked by another operation; the wait timed out.',
+    'batch-empty': 'No repository URLs to import.',
+    'batch-too-large': 'Too many URLs in one import batch.',
+    'batch-not-found': 'The import batch is gone or expired.',
+    'row-not-found': 'Import row not found.',
+    'row-not-retryable': 'This import row cannot be retried in its current state.',
+    'cached-repo-not-found': 'Cached repository not found.',
+    'path-empty': 'A path is required.',
+    'path-absolute': 'The path must be relative.',
+    'path-backslash': 'The path must not contain backslashes.',
+    'path-traversal': 'The path escapes the allowed root.',
+    'worktree-missing': 'The task workspace no longer exists (it may have been garbage-collected).',
+    'worktree-base-invalid': 'The base ref cannot be resolved.',
+    'worktree-file-not-found': 'File not found in the workspace.',
+    'worktree-dir-not-found': 'Directory not found in the workspace.',
+    'snapshot-lost': 'The node pre-snapshot is missing; cannot resume or retry.',
+    'snapshot-missing': 'The snapshot was pruned; nothing was changed.',
+    'working-branch-invalid': 'Invalid working branch name.',
+    'working-branch-in-use': 'The working branch is already checked out elsewhere.',
+    'working-branch-concurrent-update':
+      'The working branch changed while the launch was being prepared; retry.',
+    'working-branch-base-merge-conflict':
+      'Merging the base into the working branch hit a conflict.',
+    'working-branch-base-merge-conflict__hint':
+      'Resolve the conflict manually or pick another working branch.',
+    // --- auth / 账号（登录 / 权限 / 改密子集 + OIDC wire 码） ---
+    'auth-required': 'Sign-in is required.',
+    'auth-required__hint': 'Sign in again, then retry.',
+    unauthorized: 'Your session is invalid or expired.',
+    unauthorized__hint: 'Sign in again, then retry.',
+    forbidden: 'You do not have permission for this action.',
+    'admin-required': 'This action requires an admin.',
+    'not-task-member': 'Only task members or an admin can do this.',
+    'acl-invalid': 'Invalid sharing payload.',
+    'acl-missing-refs': 'You lack access to some referenced resources.',
+    'acl-revision-conflict': 'The sharing settings changed; reload and retry.',
+    'acl-resource-mismatch': 'The resource changed; reload.',
+    'invalid-collaborator': 'A selected collaborator is not an active user.',
+    'login-invalid': 'Invalid login payload.',
+    'session-not-found': 'Session not found.',
+    'user-not-found': 'User not found.',
+    'username-taken': 'That username is taken.',
+    'old-password-required': 'The old password is required.',
+    'old-password-mismatch': 'The old password is incorrect.',
+    'change-password-invalid': 'Invalid change-password payload.',
+    'self-disable-forbidden': 'You cannot disable your own account.',
+    'self-role-change-forbidden': 'You cannot change your own role.',
+    'last-admin-protection': 'The last active admin cannot be disabled.',
+    'oidc-not-configured': 'OIDC sign-in is not configured.',
+    'oidc-provider-not-found': 'OIDC provider not found.',
+    'oidc-provider-invalid': 'Invalid OIDC provider payload.',
+    'oidc-slug-taken': 'That provider slug already exists.',
+    'oidc-discovery-incomplete': 'OIDC discovery is incomplete; sign-in cannot proceed.',
+    // --- launch / ports / 杂项 ---
+    'start-task-source-required': 'A repository source is required to launch.',
+    'start-task-path-retired':
+      'Launching by local path is retired; use a repo URL (file:// for local repos).',
+    'assignments-removed':
+      'Per-node assignments were removed; task members answer reviews and clarifications now.',
+    'port-not-found': 'That run has no such output port.',
+    'port-artifact-missing':
+      'The port artifact is unreadable (archive absent and workspace fallback failed).',
+    'call-target-method-required': 'Missing method reference parameter (methodRef).',
+    'plantuml-source-required': 'Diagram source is empty; nothing to render.',
+    'plantuml-source-too-large': 'Diagram source is too large to render.',
+    'config-invalid': 'Invalid config.',
     fallback: 'Request failed',
   },
   clarify: {
