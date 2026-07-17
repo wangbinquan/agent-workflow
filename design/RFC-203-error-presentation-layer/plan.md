@@ -5,13 +5,13 @@
 ## PR-1 基建层（T1/T2/T4/T6）
 
 - **RFC-203-T1 resolveApiError 解析器**
-  新建 `frontend/src/i18n/errors.ts`：三级降级 + 归一（TypeError→network-unreachable）+ overrides + 插值白名单 + `labelForCode` helper；`describeApiError` 改薄壳；client.ts 收编 WS 嵌套体。测试：≥12 用例 + domainOf 全表。
+  新建 `frontend/src/i18n/errors.ts`：三级降级 + 归一（TypeError→network-unreachable、非 JSON 错误响应 capped res.text() 作 raw）+ overrides + 插值白名单 + `labelForCode` helper；`describeApiError` 改薄壳；client.ts 收编 WS 嵌套体。**L2 域模板 19 条 + fallback 去拼接随本 PR 落**（设计门 P1：契约切换与兜底词条必须同批，否则 PR-1 期间未映射错误只剩「请求失败」丢诊断）。测试：≥12 用例 + domainOf 全表 + 中间态兜底断言。
 - **RFC-203-T2 ErrorBanner/ErrorDetails 富渲染**
   `ErrorDetails` 六形状 + 未知跳过 + raw 折叠；ErrorBanner 接 `overrides`；RFC-202 的 workflows.edit details 局部渲染迁入并删除。测试：六形状各一 + 未知安全。
 - **RFC-203-T4 failureCode 端到端 + errorSummary 影射**
-  shared NodeRunSchema 加可选 `failureCode`；getTaskNodeRuns 映射；`lib/task-failure.ts` 三级 describeTaskFailure；五个消费面改造（tasks.detail 横幅/meta、tasks 列表、NodeDetailDrawer、DynamicWorkflowPanel）。测试：透出 + 优先级 + 前缀令牌。
-- **RFC-203-T6 后端非统一体收敛**
-  tasks.ts:308 / plantuml×3 / ws/server×5 改统一体。测试：路由形状锁。
+  shared NodeRunSchema + **Task/TaskSummary** 加可选 `failureCode`（failed-run oracle 投影，复用 pickFreshestRun）；getTaskNodeRuns/getTask/listTasks 映射；`lib/task-failure.ts` 三级 describeTaskFailure（影射表含 dw-generate-exhausted，接通 workgroups.dw.exhausted 死词条）；五个消费面改造（tasks.detail 横幅/meta、tasks 列表、NodeDetailDrawer、DynamicWorkflowPanel）。测试：透出 + 任务级投影 + 优先级 + 前缀令牌 + dw 面板专项。
+- **RFC-203-T6 后端非统一体收敛 + 引用清单 ACL 化**
+  tasks.ts:308（新码 call-target-method-required）/ plantuml×3 / ws/server×5 改统一体；deleteMcp/deletePlugin/deleteAgent/deleteWorkgroup/deleteSkill 的引用 details 改 principal-aware 形状（visible[]+hiddenCount，deleteWorkflow 先例）——未改造形状 ErrorDetails 只渲染计数（ACL 铁律）。测试：路由形状锁 + 他人私有引用不泄名。
 - 门槛：全量四门 + binary smoke（shared 变更）。
 
 ## PR-2 词条批量（T3）
@@ -24,7 +24,7 @@
 
 ## PR-3 分叉清零迁移（T5）
 
-- **RFC-203-T5a** 6 处私有 describeError 替换 + 各消费点断言更新。
+- **RFC-203-T5a** 6 处私有 describeError 替换 + 各消费点断言更新；DetailHeaderActions 改走 ErrorBanner+ErrorDetails（agents/skills 删除引用清单的实际屏幕入口）；PlantUmlBlock.proxyRender 接 resolveApiError。
 - **RFC-203-T5b** 22 处裸 `.error-box` 迁 ErrorBanner（workgroup 8 + home 3 优先）；视觉零回归自查（错误态不在基线路径，home 三处确认基线为正常态）。
 - **RFC-203-T5c** DISPATCH_ERROR_KEYS→overrides、describeRecoveryKind→labelForCode；源码锁三条（私有 describeError 零命中 / error-box 白名单 / fallback 不拼原文）。
 - 收尾：Codex 实现门（每 PR 各一次）；design/plan.md 状态翻转；STATE.md 记录；push 后按 sha 查 CI。

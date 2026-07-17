@@ -42,7 +42,7 @@
 ### T1 解析器 `resolveApiError`（新文件 `src/i18n/errors.ts`）
 
 - 返回 `ResolvedApiError { title: string; hint?: string; raw?: string; code?: string; details?: unknown }`。
-- **归一**：`TypeError`（fetch 网络错）→ 合成 code `network-unreachable`；非 Error/未知 → `String(err)` 作 raw + L3。`extractErrorBody`（client.ts）同步收编 WS 嵌套 `{error:{code,message}}`（现有防御分支保留）。
+- **归一**：`TypeError`（fetch 网络错）→ 合成 code `network-unreachable`；非 Error/未知 → `String(err)` 作 raw + L3。`extractErrorBody`（client.ts）同步收编 WS 嵌套 `{error:{code,message}}`（现有防御分支保留）；【设计门 P2】非 JSON 错误响应（代理 502 纯文本等）读 capped `res.text()`（≤2KB）作 raw 携带——现状 payload=null 把唯一诊断信息丢光。
 - **查表顺序**：`opts.overrides?.[code]`（调用方局部覆盖，吸收 DISPATCH_ERROR_KEYS 语义）→ `errors.<code>`→ `errors.domain.<domainOf(code)>` → `errors.fallback`。`domainOf` 是纯函数：code 前缀 → 19 域之一（`repo|git|worktree|iso|path|snapshot|working-branch|batch|...`→`repo` 等；映射表与测试同源）。
 - **插值**：词条统一走 i18next 插值；`resolveApiError` 把 `details` 里的**白名单标量**（count/name/ref/nodeId…）注入插值上下文（防注入：只取 string/number，长度截断）。
 - **hint 词条对**：约定 `errors.<code>` 为标题、`errors.<code>__hint` 为下一步指引（可缺省）——避免为 hint 另开 interface 结构。
@@ -55,7 +55,7 @@
 - 新子组件 `ErrorDetails`（`components/ErrorDetails.tsx`）：按形状渲染——
   - `{issues: ZodIssue[]}` → 前 N 条 `path: message` 列表（N=5，超出计数）；
   - `{issues: WorkflowValidationIssue[]}` → issue.code 走 T4 的校验词条层；
-  - `{referencedBy}` / `{scheduledTaskIds|visibleScheduled+hiddenCount}` / `{taskIds}` → 名单/计数行（RFC-202 workflows.edit 的实现迁入此处并删除局部版）；
+  - 引用清单族【设计门 P1×2 修正】：真实 payload 形状为 `{referencedBy}`（mcp/plugin 删除，值是 agent 名数组）、`{workflows:[{id,name}]}`（agent 被工作流引用）、`{agents:[...]}`（skill 被 agent 引用）、`{scheduledTaskIds}`（agent/workgroup 被定时引用）、`{visibleScheduled+hiddenCount}`（workflow，RFC-202 先例）、`{taskIds}`。**ACL 铁律**：只有 principal-aware 形状（visible[]+hiddenCount）可渲染名单；未脱敏的裸数组形状（referencedBy/scheduledTaskIds/workflows/agents 现状）只渲染**聚合计数**，绝不列名——T6 同批把这些后端抛点改造为 deleteWorkflow 同款可见性过滤形状后才升级为名单渲染（RFC-202 workflows.edit 局部实现迁入此处并删除）；
   - `{availableRefs}` → 「可用分支：a、b、c」；
   - `{expectedVersion,currentVersion}` → 「本地 vX / 服务器 vY，请刷新」；
   - `{stderr}` / raw → `<details>` 折叠 `<pre>`（等宽、截断 4KB）。
@@ -68,15 +68,16 @@
 - **L2 域级 19 条**：`errors.domain.repo` =「仓库操作失败」等；`resolveApiError` 兜底时 title=域模板，raw=英文原文进折叠。
 - **L3**：`fallback` 改「请求失败」（原文不再拼进标题）。
 - **Tier-2 wire 码**（route-not-found/oidc-\*/opencode-models-failed/resume-failed/ws 四码）全部 L1。
-- **Tier-3 校验 issue 码**：新表 `validation.<issueCode>`（同为 Record）：常见 ~40 精确（wrapper-_/edge-_/input-_/prompt-template-_/clarify-no-iteration-cap…），其余走前缀族兜底 `validation.family.<prefix>`；校验面板（workflows.edit ValidationPanel）与 ErrorDetails 的 issues 分支共用一个 `describeValidationIssue(t, issue)` helper。
+- **Tier-3 校验 issue 码**：新表 `validation.<issueCode>`（同为 Record）：常见 ~40 精确（wrapper-_/edge-_/input-_/prompt-template-_/clarify-no-iteration-cap…），其余走前缀族兜底 `validation.family.<prefix>`；校验面板（workflows.edit ValidationPanel）与 ErrorDetails 的 issues 分支共用一个 `describeValidationIssue(t, issue)` helper。【设计门 P2 修正】`WorkflowValidationIssue` 无结构化插值参数、部分码一码多文案变体（具体端口/kind 值只在英文 message 里）——v1 契约定为**词条=标题行、原始英文 message=同行折叠详情**（不丢定位信息）；给 issue DTO 加 params 属后端 84 抛点改造，列为后续增强不入本 RFC。
 - 清理 5 个孤儿键；**词条完整性测试**：zh/en 键集 diff 为空 + L2 19 域齐全。
 
 ### T4 failureCode 端到端 + errorSummary 影射
 
 - shared：`NodeRunSchema` 增 `failureCode: FailureCodeSchema.nullable().optional()`；backend `getTaskNodeRuns` 映射该列（一行）。
+- **任务级投影（设计门 P1 修正）**：任务列表只有 `TaskSummary`、DynamicWorkflowPanel 只收 errorSummary——单加 NodeRun 字段喂不到这两个点。增确定性 failed-run oracle：`failedNodeFailureCode(runs)` = 按 `failedNodeId`（tasks 表已有）定位失败节点的 freshest top-level run（复用 `pickFreshestRun`）取其 failureCode；`Task`/`TaskSummary` schema 增可选 `failureCode`，`getTask`/`listTasks` 投影；DynamicWorkflowPanel props 增 `failureCode`。
 - 前端：`lib/task-failure.ts` 新纯函数 `describeTaskFailure({failureCode, errorSummary, errorMessage}, t)` →
   1. failureCode 命中 → `tasks.failure.<code>`（7 值全映射，含下一步：恢复/重试指引）；
-  2. errorSummary 命中影射表 `tasks.failure.summary.<token>`（≥12 已知令牌：snapshot-lost / snapshot-invalid / live-child-survived / child-unkillable / node-timeout 前缀 / scheduler error / scheduler stalled 前缀 / daemon-restart / orphan-reconcile / canceled by user / exited with code 前缀 / worktree creation failed 前缀——前缀类用 startsWith 匹配）；
+  2. errorSummary 命中影射表 `tasks.failure.summary.<token>`（≥12 已知令牌：snapshot-lost / snapshot-invalid / live-child-survived / child-unkillable / node-timeout 前缀 / scheduler error / scheduler stalled 前缀 / daemon-restart / orphan-reconcile / canceled by user / exited with code 前缀 / worktree creation failed 前缀 / **dw-generate-exhausted**（设计门 P2：接通既有 `workgroups.dw.exhausted` 死词条 + 面板专项测试）——前缀类用 startsWith 匹配）；
   3. 兜底：域模板「任务执行失败」+ 原文折叠。
 - 消费面改造：`tasks.detail.tsx:601-611` 横幅（title=映射文案，summary/message 原文全部进折叠）、`tasks.tsx:320-326` 列表红字（title 短形）、`NodeDetailDrawer.tsx:428-431`、`DynamicWorkflowPanel.tsx:183-184`、meta 表 `:934-937`。
 - **不改**后端 errorSummary 写入（机器协议保持；`task-wizard.ts:338` 有对英文前缀的逻辑依赖，动写入面风险大——影射只在展示层）。
@@ -84,14 +85,19 @@
 ### T5 分叉清零
 
 - 6 处私有 `describeError` → `resolveApiError`（注意语义差：私有版输出 `code: message`——迁移后 title 本地化 + raw 折叠，消费点如 BatchImportDialog 的行内 message 列改 `resolveApiError(e).title`）。
+- 【设计门 P1/P2 补充消费点】`DetailHeaderActions`（agents/skills 删除错误的实际渲染面，现为 string-only describeApiError）改走 ErrorBanner+ErrorDetails，否则引用清单形状永远到不了屏幕；`PlantUmlBlock.proxyRender` 的 catch 分支改经 resolveApiError 再入 buildErrorWithSource。
 - `DISPATCH_ERROR_KEYS` 改传 `overrides` 给统一层（词条不动，删除局部查表分支）；describeRecoveryKind → `labelForCode`。
 - 源码锁：`grep 'function describeError'` 前端 0 命中；`.error-box` 直拼白名单锁。
 
 ### T6 非统一错误体收敛（backend）
 
-- `tasks.ts:308` → `ValidationError('task-filter-invalid', ...)`（就近复用现有码）；
+- `tasks.ts:308` → `ValidationError('call-target-method-required', ...)`【设计门 P2：该端点缺的是 call-targets 的 methodRef 参数，复用 task-filter-invalid 会给出无关指引】+ L1 词条；
 - `plantuml.ts:31/36/39` → DomainError 家族（`plantuml-source-too-large`/`plantuml-source-required` 进 L1 词条）；`:58` 的 200 判别式联合**不动**（源码注释声明故意）；
 - `ws/server.ts` 四处 → 统一体 `{ok:false, code, message}`（消费方只有浏览器 devtools 与前端 WS 错误路径，前端 `extractErrorBody` 的嵌套防御分支保留一版本期兼容）；`:149` 纯文本 426 → 统一体。
+
+## 1.9 设计门折入记录（2026-07-17，Codex 4P1+5P2 全折入）
+
+P1：引用清单 ACL 脱敏（未脱敏形状只渲染计数，后端抛点 T6 同批改造）；真实 payload 形状补全（{workflows}/{agents}）+ DetailHeaderActions 接入结构化渲染；failureCode 任务级投影（Task/TaskSummary + failed-run oracle）；PR-1 随行 L2 域模板防中间态诊断回归（见 plan.md）。P2：dw-generate-exhausted 令牌接通死词条；非 JSON body capped 保留；校验词条=标题+原文折叠（issue params 列后续增强）；PlantUmlBlock 接入；call-target-method-required 专用码。
 
 ## 2. 失败模式
 
