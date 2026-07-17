@@ -4,6 +4,7 @@
 // immutability; still-referenced delete guard; name-conflict; rename cascade
 // updates agents.mcp JSON column atomically.
 
+import { buildActor } from '../src/auth/actor'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -18,6 +19,13 @@ import {
   updateMcp,
 } from '../src/services/mcp'
 import { ConflictError, NotFoundError, ValidationError } from '../src/util/errors'
+
+// RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps
+// these service-level tests' original full-visibility expectations.
+const T6_ACTOR = buildActor({
+  user: { id: 'u-t6-test', username: 'u-t6', displayName: 'T6', role: 'admin', status: 'active' },
+  source: 'session',
+})
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -169,12 +177,12 @@ describe('services/mcp.ts CRUD', () => {
       config: { command: ['x'] },
       enabled: true,
     })
-    await deleteMcp(db, 'lonely')
+    await deleteMcp(db, 'lonely', T6_ACTOR)
     expect(await getMcp(db, 'lonely')).toBeNull()
   })
 
   test('delete on missing mcp → NotFoundError', async () => {
-    await expect(deleteMcp(db, 'nope')).rejects.toBeInstanceOf(NotFoundError)
+    await expect(deleteMcp(db, 'nope', T6_ACTOR)).rejects.toBeInstanceOf(NotFoundError)
   })
 })
 
@@ -227,10 +235,12 @@ describe('services/mcp.ts reference cascade', () => {
     })
 
     const refs = await findAgentsReferencingMcp(db, 'sentry')
-    expect(refs).toEqual([{ id: expect.any(String), name: 'a-prod' }])
+    expect(refs).toEqual([
+      { id: expect.any(String), name: 'a-prod', ownerUserId: null, visibility: 'public' },
+    ])
   })
 
-  test('delete with references → ConflictError + referencedBy', async () => {
+  test('delete with references → ConflictError + principal-aware visible list', async () => {
     await createMcp(db, {
       name: 'm',
       description: '',
@@ -253,14 +263,14 @@ describe('services/mcp.ts reference cascade', () => {
     })
     let err: unknown
     try {
-      await deleteMcp(db, 'm')
+      await deleteMcp(db, 'm', T6_ACTOR)
     } catch (e) {
       err = e
     }
     expect(err).toBeInstanceOf(ConflictError)
     if (err instanceof ConflictError) {
       expect(err.code).toBe('mcp-still-referenced')
-      const refs = (err.details as { referencedBy: { name: string }[] }).referencedBy
+      const refs = (err.details as { visible: { name: string }[] }).visible
       expect(refs.map((r) => r.name)).toEqual(['consumer'])
     }
   })

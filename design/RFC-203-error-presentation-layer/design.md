@@ -118,6 +118,14 @@ P2：**网络错误标签移到 fetch 边界**——resolver 按 `instanceof Typ
 - **P2 ErrorDetails 校验行定位可及化**：原文（唯一 locator）从 hover-only `title` 属性改为 `error-details__raw` 折叠块（与 ValidationPanel 同构）——title 属性触屏/键盘/读屏都够不到。
 - 测试：wizard 422 workflow-invalid 富渲染用例（role=alert + 本地化 issue 行 + 折叠原文可见）；ErrorDetails 校验行折叠块 + `li[title]` 零残留断言。
 
+## 1.13 PR-3 落地记录（2026-07-17）
+
+- **T5a**：6 处字节级相同私有 describeError 全部替换为公共 describeApiError；DetailHeaderActions 错误行升逐通道 ErrorBanner（删除引用清单 details 的屏幕入口，结构不变量「错误恒为 header 兄弟」保持，两处结构锁随迁）；PlantUmlBlock 直连回退链 3 fetch 打标 + 双展示点接 describeApiError；Onboarding 冗余 message prop 收敛。
+- **T5b**：22 处裸 error-box 全数迁 ErrorBanner；NoticeBanner/ErrorBanner 最小扩展可选 testid prop（挂 banner 根），7 个既有测试锚点原样保留；home 三处 retry 按钮入 action 槽。全量 4783/4783 零涟漪。
+- **T5c**：DISPATCH_ERROR_KEYS 收编为 ErrorBanner overrides（覆盖层胜精确词条保分面文案，raw 进折叠；RFC-133 nodeId→label 富化分支保留——label 查表非 overrides 能表达）；describeRecoveryKind/describeRule 两个 key-shadows-code 副本统一 labelForCode。三源码锁齐位：describeError 零命中 / error-box 白名单=ErrorBanner / fallback 不拼原文（`rfc203-fork-zero-source-lock`）。
+- **T6 补課（PR-1 漏项勘误）**：PR-1 只落了「非统一体收敛」半截；本批把 8 个引用拒绝发射点（deleteAgent×3 + renameAgent×3 中的 workflows/dependsOn/schedule、deleteMcp、deletePlugin、deleteSkill、deleteWorkgroup+renameWorkgroup 的 schedule）全部改为 deleteWorkflow 先例的 principal-aware `{visible[]+hiddenCount}`。新公共原语 `resourceAcl.discloseRefsSync/discloseRefs/discloseScheduleRefs`（sync 版供 dbTxSync 守卫块用，grant 集在事务外预取——披露是展示控制而非拒绝判定，陈旧集无害）；service delete/rename 签名线程化 `actor`；finder 拓宽携带 acl 列。测试：`rfc203-refs-acl.test.ts` 三面（agent-in-use 私有工作流不泄名 / mcp-still-referenced 私有代理不泄名 / workgroup-scheduled-referenced 成员私有规则 + admin 全见）+ 存量形状断言 6 处按新契约更新。legacy 裸数组键从这些发射点绝迹（锁在测试里）。
+- 门槛：typecheck/lint/format 绿；backend 全量 5797/0 fail；前端全量 4787/4787；binary smoke 过。
+
 ## 2. 失败模式
 
 - 词条缺失/漂移：L2 域兜底保证任何新码不裸奔英文；完整性测试锁 zh/en 同构。

@@ -143,7 +143,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
     await mcpOperationCoordinator.runExclusive(resolved.id, async () => {
       const fresh = await loadVisibleMcpById(actor, resolved.id)
       await requireResourceOwner(deps.db, actor, 'mcp', fresh)
-      await deleteMcp(deps.db, fresh.name, { existing: fresh })
+      await deleteMcp(deps.db, fresh.name, actor, { existing: fresh })
     })
     return c.body(null, 204)
   })

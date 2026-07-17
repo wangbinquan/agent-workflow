@@ -42,6 +42,13 @@ import { createUser } from '../src/services/users'
 import { createWorkflow } from '../src/services/workflow'
 import { createWorkgroup } from '../src/services/workgroups'
 
+// RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps
+// these service-level tests' original full-visibility expectations.
+const T6_ACTOR = buildActor({
+  user: { id: 'u-t6-test', username: 'u-t6', displayName: 'T6', role: 'admin', status: 'active' },
+  source: 'session',
+})
+
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const SPEC = { kind: 'daily', at: '09:00', timezone: 'UTC' } as const
@@ -251,10 +258,10 @@ describe('RFC-165 §9b — create/update by kind (K1/K2/K3/K7)', () => {
       { actor: actorFor(ownerId) },
     )
     const { deleteAgent, renameAgent } = await import('../src/services/agent')
-    await expect(renameAgent(db, 'solo', { newName: 'solo2' })).rejects.toMatchObject({
+    await expect(renameAgent(db, 'solo', { newName: 'solo2' }, T6_ACTOR)).rejects.toMatchObject({
       code: 'agent-scheduled-referenced',
     })
-    await expect(deleteAgent(db, 'solo')).rejects.toMatchObject({
+    await expect(deleteAgent(db, 'solo', T6_ACTOR)).rejects.toMatchObject({
       code: 'agent-scheduled-referenced',
     })
   })
@@ -283,10 +290,10 @@ describe('RFC-165 §9b — create/update by kind (K1/K2/K3/K7)', () => {
       { actor: actorFor(ownerId) },
     )
     const { deleteWorkgroup, renameWorkgroup } = await import('../src/services/workgroups')
-    await expect(renameWorkgroup(db, 'squad', 'squad2')).rejects.toMatchObject({
+    await expect(renameWorkgroup(db, 'squad', 'squad2', T6_ACTOR)).rejects.toMatchObject({
       code: 'workgroup-scheduled-referenced',
     })
-    await expect(deleteWorkgroup(db, 'squad')).rejects.toMatchObject({
+    await expect(deleteWorkgroup(db, 'squad', T6_ACTOR)).rejects.toMatchObject({
       code: 'workgroup-scheduled-referenced',
     })
   })

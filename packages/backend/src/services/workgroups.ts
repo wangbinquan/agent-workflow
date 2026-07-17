@@ -30,6 +30,8 @@ import type {
   WorkgroupMode,
 } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
+import { discloseScheduleRefs } from './resourceAcl'
+import type { Actor } from '@/auth/actor'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
@@ -196,20 +198,26 @@ export async function updateWorkgroup(
  * （tasks 走 id + 快照，定时行不是）。rename/delete 遇引用行 → 409，防
  * 「先静默失败、名字复用后打错组」。
  */
-async function scheduledRowsReferencingWorkgroup(db: DbClient, name: string): Promise<string[]> {
+async function scheduledRowsReferencingWorkgroup(
+  db: DbClient,
+  name: string,
+): Promise<Array<{ id: string; name: string; ownerUserId: string }>> {
   const rows = await db
     .select({
       id: scheduledTasks.id,
+      name: scheduledTasks.name,
       launchKind: scheduledTasks.launchKind,
       launchPayload: scheduledTasks.launchPayload,
+      ownerUserId: scheduledTasks.ownerUserId,
     })
     .from(scheduledTasks)
-  const out: string[] = []
+  const out: Array<{ id: string; name: string; ownerUserId: string }> = []
   for (const row of rows) {
     if (row.launchKind !== 'workgroup') continue
     try {
       const p = JSON.parse(row.launchPayload) as { workgroupName?: unknown }
-      if (p.workgroupName === name) out.push(row.id)
+      if (p.workgroupName === name)
+        out.push({ id: row.id, name: row.name, ownerUserId: row.ownerUserId })
     } catch {
       /* degraded rows are repaired/deleted via their own flow */
     }
@@ -217,7 +225,7 @@ async function scheduledRowsReferencingWorkgroup(db: DbClient, name: string): Pr
   return out
 }
 
-export async function deleteWorkgroup(db: DbClient, name: string): Promise<void> {
+export async function deleteWorkgroup(db: DbClient, name: string, actor: Actor): Promise<void> {
   const existing = await getWorkgroup(db, name)
   if (existing === null) {
     throw new NotFoundError('workgroup-not-found', `workgroup '${name}' not found`)
@@ -228,10 +236,13 @@ export async function deleteWorkgroup(db: DbClient, name: string): Promise<void>
   // Scheduled rows are the exception — they reference the mutable NAME.
   const schedRefs = await scheduledRowsReferencingWorkgroup(db, name)
   if (schedRefs.length > 0) {
+    // RFC-203 T6: principal-aware disclosure (deleteWorkflow precedent) —
+    // schedules are member-private, so names show only for the actor's own
+    // schedules (or tasks:read:all admins); the rest is a count.
     throw new ConflictError(
       'workgroup-scheduled-referenced',
       `workgroup '${name}' is the target of ${schedRefs.length} scheduled task(s); delete or repoint them first`,
-      { scheduledTaskIds: schedRefs },
+      discloseScheduleRefs(actor, schedRefs),
     )
   }
   await db.delete(workgroups).where(eq(workgroups.name, name))
@@ -252,6 +263,7 @@ export async function renameWorkgroup(
   db: DbClient,
   oldName: string,
   newName: string,
+  actor: Actor,
   description?: string,
 ): Promise<Workgroup> {
   const existing = await getWorkgroup(db, oldName)
@@ -276,7 +288,7 @@ export async function renameWorkgroup(
       throw new ConflictError(
         'workgroup-scheduled-referenced',
         `workgroup '${oldName}' is the target of ${schedRefs.length} scheduled task(s); repoint them before renaming`,
-        { scheduledTaskIds: schedRefs },
+        discloseScheduleRefs(actor, schedRefs),
       )
     }
   }

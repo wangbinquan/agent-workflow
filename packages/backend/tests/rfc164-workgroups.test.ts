@@ -12,6 +12,7 @@
 //     + identical 404 (D1), owner-only writes, D15 new-agent-ref usability
 //     gate on create AND update (grandfathered existing refs pass).
 
+import { buildActor } from '../src/auth/actor'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { resolve } from 'node:path'
@@ -35,6 +36,13 @@ import {
   updateWorkgroup,
 } from '../src/services/workgroups'
 import { ConflictError, NotFoundError, ValidationError } from '../src/util/errors'
+
+// RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps
+// these service-level tests' original full-visibility expectations.
+const T6_ACTOR = buildActor({
+  user: { id: 'u-t6-test', username: 'u-t6', displayName: 'T6', role: 'admin', status: 'active' },
+  source: 'session',
+})
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DAEMON_TOKEN = 'a'.repeat(64)
@@ -307,39 +315,41 @@ describe('RFC-164 — services/workgroups.ts CRUD', () => {
 
   test('rename happy path + conflict + delete + not-found', async () => {
     await createWorkgroup(db, groupInput())
-    const renamed = await renameWorkgroup(db, 'payment-squad', 'pay-squad')
+    const renamed = await renameWorkgroup(db, 'payment-squad', 'pay-squad', T6_ACTOR)
     expect(renamed.name).toBe('pay-squad')
     expect(await getWorkgroup(db, 'payment-squad')).toBeNull()
 
     await createWorkgroup(db, groupInput())
-    expect(renameWorkgroup(db, 'pay-squad', 'payment-squad')).rejects.toThrow(ConflictError)
+    expect(renameWorkgroup(db, 'pay-squad', 'payment-squad', T6_ACTOR)).rejects.toThrow(
+      ConflictError,
+    )
 
-    await deleteWorkgroup(db, 'pay-squad')
+    await deleteWorkgroup(db, 'pay-squad', T6_ACTOR)
     expect(await getWorkgroup(db, 'pay-squad')).toBeNull()
-    expect(deleteWorkgroup(db, 'pay-squad')).rejects.toThrow(NotFoundError)
+    expect(deleteWorkgroup(db, 'pay-squad', T6_ACTOR)).rejects.toThrow(NotFoundError)
     expect(updateWorkgroup(db, 'pay-squad', groupInput())).rejects.toThrow(NotFoundError)
   })
 
   test('rename + description edit atomically (2026-07-13 后端原子端点)', async () => {
     await createWorkgroup(db, groupInput())
     // name + description together
-    const both = await renameWorkgroup(db, 'payment-squad', 'pay-squad', 'new blurb')
+    const both = await renameWorkgroup(db, 'payment-squad', 'pay-squad', T6_ACTOR, 'new blurb')
     expect(both.name).toBe('pay-squad')
     expect(both.description).toBe('new blurb')
 
     // description-only: name unchanged, the conflict/scheduled guards don't run,
     // the description is updated in place.
-    const descOnly = await renameWorkgroup(db, 'pay-squad', 'pay-squad', 'blurb v2')
+    const descOnly = await renameWorkgroup(db, 'pay-squad', 'pay-squad', T6_ACTOR, 'blurb v2')
     expect(descOnly.name).toBe('pay-squad')
     expect(descOnly.description).toBe('blurb v2')
 
     // pure rename (description omitted) leaves the stored description untouched.
-    const pure = await renameWorkgroup(db, 'pay-squad', 'pay-team')
+    const pure = await renameWorkgroup(db, 'pay-squad', 'pay-team', T6_ACTOR)
     expect(pure.name).toBe('pay-team')
     expect(pure.description).toBe('blurb v2')
 
     // no-op (same name, description omitted) returns the row unchanged.
-    const noop = await renameWorkgroup(db, 'pay-team', 'pay-team')
+    const noop = await renameWorkgroup(db, 'pay-team', 'pay-team', T6_ACTOR)
     expect(noop.name).toBe('pay-team')
     expect(noop.description).toBe('blurb v2')
   })

@@ -35,8 +35,8 @@
 - [x] A2 ErrorDetails 六形状（PR-1，36749ddf）
 - [x] A3 词条 L1≥150（实 302+27hint）/ L2×19 / 校验≥40（实 65 全量）/ 孤儿清零（PR-2，见 design §1.11）
 - [x] A4 failureCode 端到端 + 影射表 ≥12（PR-1；PR-1 实现门补 dw-reject-exhausted）
-- [ ] A5 分叉清零 + 源码锁（PR-3）
-- [x] A6 非统一体收敛（PR-1，36749ddf）
+- [x] A5 分叉清零 + 源码锁（PR-3，见 design §1.13：T5a/T5b/T5c 三批 + 三源码锁）
+- [x] A6 非统一体收敛（PR-1，36749ddf）+ 引用清单 ACL 化（**勘误**：此半截 PR-1 漏项，补課于 PR-3，见 design §1.13-T6）
 - [x] A7 全量门槛（PR-1 / PR-2 均四门全绿 + 定向 e2e）
 
 ## 协调注意

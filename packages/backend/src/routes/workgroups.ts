@@ -112,7 +112,7 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
     const actor = actorOf(c)
     const existing = await loadVisibleWorkgroup(actor, name)
     await requireResourceOwner(deps.db, actor, 'workgroup', existing)
-    await deleteWorkgroup(deps.db, name)
+    await deleteWorkgroup(deps.db, name, actor)
     return c.body(null, 204)
   })
 
@@ -132,6 +132,7 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
       deps.db,
       name,
       parsed.data.newName,
+      actor,
       parsed.data.description,
     )
     return c.json(renamed)

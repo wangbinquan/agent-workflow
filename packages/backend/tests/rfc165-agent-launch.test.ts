@@ -70,6 +70,13 @@ import {
 } from '../src/services/workflow.validator'
 import { runGit } from '../src/util/git'
 
+// RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps
+// these service-level tests' original full-visibility expectations.
+const T6_ACTOR = buildActor({
+  user: { id: 'u-t6-test', username: 'u-t6', displayName: 'T6', role: 'admin', status: 'active' },
+  source: 'session',
+})
+
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const AGENT_FIELDS = {
@@ -306,8 +313,10 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
       startedAt: Date.now(),
       sourceAgentName: 'solo',
     })
-    await expect(deleteAgent(db, 'solo')).rejects.toMatchObject({ code: 'agent-tasks-active' })
-    await expect(renameAgent(db, 'solo', { newName: 'solo2' })).rejects.toMatchObject({
+    await expect(deleteAgent(db, 'solo', T6_ACTOR)).rejects.toMatchObject({
+      code: 'agent-tasks-active',
+    })
+    await expect(renameAgent(db, 'solo', { newName: 'solo2' }, T6_ACTOR)).rejects.toMatchObject({
       code: 'agent-tasks-active',
     })
 
@@ -317,9 +326,9 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
       .where(eq(tasks.id, liveId))
     // Terminal-only history no longer blocks (accepted limitation: later
     // retry/resume of that task fails agent-not-found — soft reference).
-    const renamed = await renameAgent(db, 'solo', { newName: 'solo2' })
+    const renamed = await renameAgent(db, 'solo', { newName: 'solo2' }, T6_ACTOR)
     expect(renamed.name).toBe('solo2')
-    await deleteAgent(db, 'solo2')
+    await deleteAgent(db, 'solo2', T6_ACTOR)
     expect((await db.select().from(agents)).length).toBe(0)
   })
 })
@@ -709,8 +718,10 @@ describe('RFC-175 §2e — agent relaunch identity guard + launch reservation', 
     expect(isAgentLaunching(agentId)).toBe(true)
 
     // deleteAgent + renameAgent refuse while a launch is in flight.
-    await expect(deleteAgent(db, 'solo')).rejects.toMatchObject({ code: 'agent-launching' })
-    await expect(renameAgent(db, 'solo', { newName: 'solo2' })).rejects.toMatchObject({
+    await expect(deleteAgent(db, 'solo', T6_ACTOR)).rejects.toMatchObject({
+      code: 'agent-launching',
+    })
+    await expect(renameAgent(db, 'solo', { newName: 'solo2' }, T6_ACTOR)).rejects.toMatchObject({
       code: 'agent-launching',
     })
 
@@ -718,12 +729,14 @@ describe('RFC-175 §2e — agent relaunch identity guard + launch reservation', 
     // OTHER launch is still materializing — delete stays blocked.
     releaseAgentLaunch(agentId)
     expect(isAgentLaunching(agentId)).toBe(true)
-    await expect(deleteAgent(db, 'solo')).rejects.toMatchObject({ code: 'agent-launching' })
+    await expect(deleteAgent(db, 'solo', T6_ACTOR)).rejects.toMatchObject({
+      code: 'agent-launching',
+    })
 
     // Only after the LAST holder releases does delete proceed.
     releaseAgentLaunch(agentId)
     expect(isAgentLaunching(agentId)).toBe(false)
-    await deleteAgent(db, 'solo')
+    await deleteAgent(db, 'solo', T6_ACTOR)
     expect(await getAgent(db, 'solo')).toBeNull()
   })
 })

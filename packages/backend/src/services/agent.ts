@@ -19,6 +19,13 @@ import { dbTxSync } from '@/db/txSync'
 import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { agentsDependingOnIn, validateDependsOn } from './agentDeps'
+import {
+  discloseRefsSync,
+  discloseScheduleRefs,
+  isAdminActor,
+  listGrantedResourceIds,
+} from './resourceAcl'
+import type { Actor } from '@/auth/actor'
 import { getRuntime } from './runtimeRegistry'
 import { isAgentLaunching } from './agentLaunchReservation'
 
@@ -244,11 +251,20 @@ export async function updateAgent(db: DbClient, name: string, patch: UpdateAgent
   return updated
 }
 
-export async function deleteAgent(db: DbClient, name: string): Promise<void> {
+export async function deleteAgent(db: DbClient, name: string, actor: Actor): Promise<void> {
   const existing = await getAgent(db, name)
   if (existing === null) {
     throw new NotFoundError('agent-not-found', `agent '${name}' not found`)
   }
+  // RFC-203 T6: reference-disclosure grant sets, pre-fetched OUTSIDE the
+  // guard transaction (dbTxSync is sync) — used only to decide which
+  // referencing resource NAMES the refusal details may show.
+  const wfGranted = isAdminActor(actor)
+    ? new Set<string>()
+    : await listGrantedResourceIds(db, actor, 'workflow')
+  const agGranted = isAdminActor(actor)
+    ? new Set<string>()
+    : await listGrantedResourceIds(db, actor, 'agent')
   // RFC-165 (F17-r3): guards + the delete run in ONE dbTxSync — the old
   // check-then-await-then-write shape let a reference land between the check
   // and the delete. All reads below use the synchronous tx surface.
@@ -266,30 +282,54 @@ export async function deleteAgent(db: DbClient, name: string): Promise<void> {
       )
     }
     const wfRows = tx
-      .select({ id: workflows.id, name: workflows.name, definition: workflows.definition })
+      .select({
+        id: workflows.id,
+        name: workflows.name,
+        definition: workflows.definition,
+        ownerUserId: workflows.ownerUserId,
+        visibility: workflows.visibility,
+      })
       .from(workflows)
       .all()
     const refs = workflowsUsingAgentIn(wfRows, name)
     if (refs.length > 0) {
-      throw new ConflictError('agent-in-use', `agent '${name}' is referenced by workflows`, {
-        workflows: refs,
-      })
+      const refIds = new Set(refs.map((r) => r.id))
+      throw new ConflictError(
+        'agent-in-use',
+        `agent '${name}' is referenced by ${refs.length} workflow(s)`,
+        discloseRefsSync(
+          actor,
+          wfRows.filter((r) => refIds.has(r.id)),
+          wfGranted,
+        ),
+      )
     }
     // RFC-022 reverse-dep guard: refuse to delete an agent any other agent's
     // dependsOn closure mentions. Forces the caller to deref upstream first so
     // runtime never spawns with a dangling reference (which would surface as
     // a node failure with `agent-dependency-not-found`).
     const depRows = tx
-      .select({ name: agents.name, dependsOn: agents.dependsOn })
+      .select({
+        id: agents.id,
+        name: agents.name,
+        dependsOn: agents.dependsOn,
+        ownerUserId: agents.ownerUserId,
+        visibility: agents.visibility,
+      })
       .from(agents)
       .where(like(agents.dependsOn, `%"${name}"%`))
       .all()
     const dependents = agentsDependingOnIn(depRows, name)
     if (dependents.length > 0) {
+      const depNames = new Set(dependents)
       throw new ConflictError(
         'agent-dependency-still-referenced',
-        `agent '${name}' is referenced by other agents' dependsOn`,
-        { referencedBy: dependents },
+        `agent '${name}' is referenced by ${dependents.length} other agent(s)' dependsOn`,
+        discloseRefsSync(
+          actor,
+          depRows.filter((r) => depNames.has(r.name)),
+          agGranted,
+        ),
       )
     }
     // RFC-165 §4: a NON-terminal single-agent task still runs (or will run)
@@ -314,17 +354,23 @@ export async function deleteAgent(db: DbClient, name: string): Promise<void> {
     const schedRows = tx
       .select({
         id: scheduledTasks.id,
+        name: scheduledTasks.name,
         launchKind: scheduledTasks.launchKind,
         launchPayload: scheduledTasks.launchPayload,
+        ownerUserId: scheduledTasks.ownerUserId,
       })
       .from(scheduledTasks)
       .all()
     const schedRefs = scheduledRowsReferencingAgent(schedRows, name)
     if (schedRefs.length > 0) {
+      const schedIds = new Set(schedRefs)
       throw new ConflictError(
         'agent-scheduled-referenced',
         `agent '${name}' is the target of ${schedRefs.length} scheduled task(s); delete or repoint them first`,
-        { scheduledTaskIds: schedRefs },
+        discloseScheduleRefs(
+          actor,
+          schedRows.filter((r) => schedIds.has(r.id)),
+        ),
       )
     }
     tx.delete(agents).where(eq(agents.name, name)).run()
@@ -335,6 +381,7 @@ export async function renameAgent(
   db: DbClient,
   oldName: string,
   input: RenameAgent,
+  actor: Actor,
 ): Promise<Agent> {
   const existing = await getAgent(db, oldName)
   if (existing === null) {
@@ -344,6 +391,14 @@ export async function renameAgent(
 
   // RFC-165 (F17-r3): guards + the rename run in ONE dbTxSync (mirror of
   // deleteAgent; the old await gaps let references land mid-flight).
+  // RFC-203 T6: disclosure grant sets (see deleteAgent) — pre-fetched
+  // outside the sync guard transaction.
+  const wfGranted = isAdminActor(actor)
+    ? new Set<string>()
+    : await listGrantedResourceIds(db, actor, 'workflow')
+  const agGranted = isAdminActor(actor)
+    ? new Set<string>()
+    : await listGrantedResourceIds(db, actor, 'agent')
   dbTxSync(db, (tx) => {
     // RFC-175 (§2e): refuse while a single-agent launch holds this agent's id.
     // A rename changes the name the launch's frozen snapshot resolves by, so the
@@ -357,31 +412,53 @@ export async function renameAgent(
       )
     }
     const wfRows = tx
-      .select({ id: workflows.id, name: workflows.name, definition: workflows.definition })
+      .select({
+        id: workflows.id,
+        name: workflows.name,
+        definition: workflows.definition,
+        ownerUserId: workflows.ownerUserId,
+        visibility: workflows.visibility,
+      })
       .from(workflows)
       .all()
     const refs = workflowsUsingAgentIn(wfRows, oldName)
     if (refs.length > 0) {
+      const refIds = new Set(refs.map((r) => r.id))
       throw new ConflictError(
         'agent-in-use',
-        `agent '${oldName}' is referenced by workflows; cannot rename`,
-        { workflows: refs },
+        `agent '${oldName}' is referenced by ${refs.length} workflow(s); cannot rename`,
+        discloseRefsSync(
+          actor,
+          wfRows.filter((r) => refIds.has(r.id)),
+          wfGranted,
+        ),
       )
     }
 
     // RFC-022 reverse-dep guard (mirror of deleteAgent). Don't silently rename
     // out from under other agents' dependsOn — the caller must deref first.
     const depRows = tx
-      .select({ name: agents.name, dependsOn: agents.dependsOn })
+      .select({
+        id: agents.id,
+        name: agents.name,
+        dependsOn: agents.dependsOn,
+        ownerUserId: agents.ownerUserId,
+        visibility: agents.visibility,
+      })
       .from(agents)
       .where(like(agents.dependsOn, `%"${oldName}"%`))
       .all()
     const dependents = agentsDependingOnIn(depRows, oldName)
     if (dependents.length > 0) {
+      const depNames = new Set(dependents)
       throw new ConflictError(
         'agent-dependency-still-referenced',
-        `agent '${oldName}' is referenced by other agents' dependsOn; cannot rename`,
-        { referencedBy: dependents },
+        `agent '${oldName}' is referenced by ${dependents.length} other agent(s)' dependsOn; cannot rename`,
+        discloseRefsSync(
+          actor,
+          depRows.filter((r) => depNames.has(r.name)),
+          agGranted,
+        ),
       )
     }
 
@@ -408,17 +485,23 @@ export async function renameAgent(
     const schedRows = tx
       .select({
         id: scheduledTasks.id,
+        name: scheduledTasks.name,
         launchKind: scheduledTasks.launchKind,
         launchPayload: scheduledTasks.launchPayload,
+        ownerUserId: scheduledTasks.ownerUserId,
       })
       .from(scheduledTasks)
       .all()
     const schedRefs = scheduledRowsReferencingAgent(schedRows, oldName)
     if (schedRefs.length > 0) {
+      const schedIds = new Set(schedRefs)
       throw new ConflictError(
         'agent-scheduled-referenced',
         `agent '${oldName}' is the target of ${schedRefs.length} scheduled task(s); repoint them before renaming`,
-        { scheduledTaskIds: schedRefs },
+        discloseScheduleRefs(
+          actor,
+          schedRows.filter((r) => schedIds.has(r.id)),
+        ),
       )
     }
 

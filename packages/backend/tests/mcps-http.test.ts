@@ -174,7 +174,7 @@ describe('DELETE /api/mcps/:name', () => {
     expect(res.status).toBe(204)
   })
 
-  test('with references → 409 + referencedBy', async () => {
+  test('with references → 409 + principal-aware visible list', async () => {
     await req(app, '/api/mcps', { method: 'POST', body: JSON.stringify(localPayload('m')) })
     await createAgent(db, {
       name: 'consumer',
@@ -193,8 +193,10 @@ describe('DELETE /api/mcps/:name', () => {
     expect(res.status).toBe(409)
     const body = (await res.json()) as Record<string, unknown>
     expect(body.code).toBe('mcp-still-referenced')
-    const referencedBy = (body.details as { referencedBy: { name: string }[] }).referencedBy
-    expect(referencedBy.map((r) => r.name)).toEqual(['consumer'])
+    // RFC-203 T6: principal-aware shape (visible[] + hiddenCount).
+    const details = body.details as { visible: { name: string }[]; hiddenCount: number }
+    expect(details.visible.map((r) => r.name)).toEqual(['consumer'])
+    expect(details.hiddenCount).toBe(0)
   })
 
   test('DELETE unknown → 404', async () => {

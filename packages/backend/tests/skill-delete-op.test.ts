@@ -3,6 +3,7 @@
 // a crash pre-db-committed restores the root from trash (delete never committed);
 // post-db-committed drops the trash (row already gone).
 
+import { buildActor } from '../src/auth/actor'
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -16,6 +17,13 @@ import { deleteManagedSkillOp } from '../src/services/skillDeleteOp'
 import { advancePhase, beginOperation, getActiveOp } from '../src/services/skillOperations'
 import { recoverSkillOperations } from '../src/services/skillOpRecoveryDriver'
 import { SKILL_OP_RECOVERY_REGISTRY } from '../src/services/skillOpRegistry'
+
+// RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps
+// these service-level tests' original full-visibility expectations.
+const T6_ACTOR = buildActor({
+  user: { id: 'u-t6-test', username: 'u-t6', displayName: 'T6', role: 'admin', status: 'active' },
+  source: 'session',
+})
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -55,7 +63,7 @@ describe('RFC-170 delete op', () => {
   })
 
   test('deleteSkill (managed) routes through the op and removes the skill', async () => {
-    await deleteSkill(db, fsOpts, 'foo')
+    await deleteSkill(db, fsOpts, 'foo', T6_ACTOR)
     expect(await getSkill(db, 'foo')).toBeNull()
     expect(existsSync(root())).toBe(false)
   })

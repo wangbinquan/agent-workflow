@@ -118,7 +118,7 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
     const initial = await loadVisiblePlugin(actor, c.req.param('id'))
     await pluginOperationCoordinator.runExclusive(initial.id, async () => {
       await loadFreshOwned(actor, initial.id)
-      await deletePlugin(deps.db, initial.id)
+      await deletePlugin(deps.db, initial.id, actor)
     })
     return c.body(null, 204)
   })

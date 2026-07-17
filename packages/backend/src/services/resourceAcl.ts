@@ -95,6 +95,59 @@ export function isVisibleRow(actor: Actor, row: AclRow, grantedIds: ReadonlySet<
   return grantedIds.has(row.id)
 }
 
+/** RFC-203 T6 — delete/rename refusal details, principal-aware (the
+ *  deleteWorkflow precedent): names only for referencing resources the actor
+ *  may see, everything else an aggregate count. The frontend <ErrorDetails>
+ *  renders exactly this shape ({visible[], hiddenCount}); the legacy bare
+ *  arrays it renders count-only (ACL iron rule). */
+export interface DisclosedRefs {
+  visible: Array<{ id: string; name: string }>
+  hiddenCount: number
+}
+
+/** Sync core — dbTxSync guard blocks use this with a grant set pre-fetched
+ *  OUTSIDE the transaction (grants are disclosure control, not the refusal
+ *  decision itself, so a stale set is harmless). */
+export function discloseRefsSync(
+  actor: Actor,
+  rows: ReadonlyArray<AclRow & { name: string }>,
+  grantedIds: ReadonlySet<string>,
+): DisclosedRefs {
+  const visible = rows.filter((r) => isVisibleRow(actor, r, grantedIds))
+  return {
+    visible: visible.map((r) => ({ id: r.id, name: r.name })),
+    hiddenCount: rows.length - visible.length,
+  }
+}
+
+/** Async convenience for non-transactional refusal sites. */
+export async function discloseRefs(
+  db: DbClient,
+  actor: Actor,
+  type: AclResourceType,
+  rows: ReadonlyArray<AclRow & { name: string }>,
+): Promise<DisclosedRefs> {
+  const granted = isAdminActor(actor)
+    ? new Set<string>()
+    : await listGrantedResourceIds(db, actor, type)
+  return discloseRefsSync(actor, rows, granted)
+}
+
+/** Schedules are member-private (owner + tasks:read:all admins), not an
+ *  ACL_TABLES resource — mirror the deleteWorkflow precedent for
+ *  *-scheduled-referenced refusals. */
+export function discloseScheduleRefs(
+  actor: Actor,
+  rows: ReadonlyArray<{ id: string; name: string; ownerUserId: string }>,
+): DisclosedRefs {
+  const canSeeAll = actor.permissions.has('tasks:read:all' as never)
+  const visible = rows.filter((r) => canSeeAll || r.ownerUserId === actor.user.id)
+  return {
+    visible: visible.map((r) => ({ id: r.id, name: r.name })),
+    hiddenCount: rows.length - visible.length,
+  }
+}
+
 /**
  * Post-filter a full list query down to what the actor may see. One grants
  * query per call; admins short-circuit without touching resource_grants.

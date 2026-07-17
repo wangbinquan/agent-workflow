@@ -147,7 +147,7 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
     const actor = actorOf(c)
     const existing = await loadVisibleSkill(actor, c.req.param('name'))
     await requireResourceOwner(deps.db, actor, 'skill', existing)
-    await deleteSkill(deps.db, fsOpts, c.req.param('name'))
+    await deleteSkill(deps.db, fsOpts, c.req.param('name'), actor)
     return c.body(null, 204)
   })
 

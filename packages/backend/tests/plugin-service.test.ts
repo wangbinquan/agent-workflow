@@ -8,6 +8,7 @@
 // Install path uses the test-only fake-npm.sh shim (see RFC-031 design §3.2)
 // so tests stay hermetic and offline.
 
+import { buildActor } from '../src/auth/actor'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { mkdtemp, rm, utimes } from 'node:fs/promises'
@@ -27,6 +28,13 @@ import {
 } from '../src/services/plugin'
 import { resetNpmProbeCacheForTests } from '../src/services/pluginInstaller'
 import { ConflictError, NotFoundError } from '../src/util/errors'
+
+// RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps
+// these service-level tests' original full-visibility expectations.
+const T6_ACTOR = buildActor({
+  user: { id: 'u-t6-test', username: 'u-t6', displayName: 'T6', role: 'admin', status: 'active' },
+  source: 'session',
+})
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.sh')
@@ -139,7 +147,7 @@ describe('services/plugin.ts delete + cleanup', () => {
     const generationDir = dirname(dirname(p.cachedPath))
     const old = new Date(Date.now() - 48 * 60 * 60_000)
     await utimes(generationDir, old, old)
-    await deletePlugin(db, p.id, opts())
+    await deletePlugin(db, p.id, T6_ACTOR, opts())
     expect(await listPlugins(db)).toHaveLength(0)
     expect(existsSync(p.cachedPath)).toBe(true)
     await collectPluginGenerationGarbage(db, opts(), { graceMs: 0, now: Date.now() + 1 })
@@ -147,10 +155,12 @@ describe('services/plugin.ts delete + cleanup', () => {
   })
 
   test('delete missing → NotFoundError', async () => {
-    await expect(deletePlugin(db, 'no-such-id', opts())).rejects.toBeInstanceOf(NotFoundError)
+    await expect(deletePlugin(db, 'no-such-id', T6_ACTOR, opts())).rejects.toBeInstanceOf(
+      NotFoundError,
+    )
   })
 
-  test('delete still-referenced → ConflictError with referencedBy list', async () => {
+  test('delete still-referenced → ConflictError with principal-aware visible list', async () => {
     const p = await createPlugin(db, { name: 'live', spec: 'live@1' }, opts())
     // createAgent validates that referenced plugins exist (T6 layer), so we
     // first persist the plugin, then mint the agent referencing it.
@@ -168,14 +178,17 @@ describe('services/plugin.ts delete + cleanup', () => {
       bodyMd: '',
     })
     try {
-      await deletePlugin(db, p.id, opts())
+      await deletePlugin(db, p.id, T6_ACTOR, opts())
       throw new Error('expected ConflictError')
     } catch (err) {
       expect(err).toBeInstanceOf(ConflictError)
       const e = err as ConflictError
       expect(e.code).toBe('plugin-still-referenced')
       expect(e.details).toEqual(
-        expect.objectContaining({ referencedBy: [{ id: expect.any(String), name: 'consumer' }] }),
+        expect.objectContaining({
+          visible: [{ id: expect.any(String), name: 'consumer' }],
+          hiddenCount: 0,
+        }),
       )
     }
   })

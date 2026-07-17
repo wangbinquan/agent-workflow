@@ -1,6 +1,7 @@
 // Service + HTTP coverage for Skills CRUD (P-1-09).
 // Uses real temp filesystem (skill content lives on disk) + in-memory SQLite.
 
+import { buildActor } from '../src/auth/actor'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
@@ -25,6 +26,13 @@ import {
   type SkillFsOptions,
 } from '../src/services/skill'
 import { ConflictError, NotFoundError, ValidationError } from '../src/util/errors'
+
+// RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps
+// these service-level tests' original full-visibility expectations.
+const T6_ACTOR = buildActor({
+  user: { id: 'u-t6-test', username: 'u-t6', displayName: 'T6', role: 'admin', status: 'active' },
+  source: 'session',
+})
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -219,18 +227,18 @@ describe('skill service', () => {
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })
-    await expect(deleteSkill(h.db, fsOpts, 'foo')).rejects.toBeInstanceOf(ConflictError)
+    await expect(deleteSkill(h.db, fsOpts, 'foo', T6_ACTOR)).rejects.toBeInstanceOf(ConflictError)
     expect(existsSync(skillDir)).toBe(true)
 
     // After removing reference, delete succeeds.
     await h.db.delete(agents).where(eq(agents.name, 'a1'))
-    await deleteSkill(h.db, fsOpts, 'foo')
+    await deleteSkill(h.db, fsOpts, 'foo', T6_ACTOR)
     expect(existsSync(skillDir)).toBe(false)
     expect(await getSkill(h.db, 'foo')).toBeNull()
   })
 
   test('delete unknown skill -> NotFoundError', async () => {
-    await expect(deleteSkill(h.db, fsOpts, 'nope')).rejects.toBeInstanceOf(NotFoundError)
+    await expect(deleteSkill(h.db, fsOpts, 'nope', T6_ACTOR)).rejects.toBeInstanceOf(NotFoundError)
   })
 })
 

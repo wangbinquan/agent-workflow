@@ -175,7 +175,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
     const existing = await loadVisibleAgent(actor, name)
     assertNotBuiltin('agent', existing) // RFC-104: built-ins are read-only
     await requireResourceOwner(deps.db, actor, 'agent', existing)
-    await deleteAgent(deps.db, name)
+    await deleteAgent(deps.db, name, actor)
     return c.body(null, 204)
   })
 
@@ -233,7 +233,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
     const existing = await loadVisibleAgent(actor, name)
     assertNotBuiltin('agent', existing) // RFC-104: built-ins are read-only
     await requireResourceOwner(deps.db, actor, 'agent', existing)
-    const renamed = await renameAgent(deps.db, name, parsed.data)
+    const renamed = await renameAgent(deps.db, name, parsed.data, actor)
     return c.json(renamed)
   })
 

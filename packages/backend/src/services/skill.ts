@@ -47,6 +47,8 @@ import {
 import { parseFrontmatter, stringifyFrontmatter } from '@/util/frontmatter'
 import { realpathInside, safeJoin } from '@/util/safePath'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { discloseRefs } from './resourceAcl'
+import type { Actor } from '@/auth/actor'
 
 type SkillRow = typeof skills.$inferSelect
 
@@ -246,15 +248,23 @@ export async function createManagedSkillWithFiles(
 
 // --- delete ---
 
-export async function deleteSkill(db: DbClient, opts: SkillFsOptions, name: string): Promise<void> {
+export async function deleteSkill(
+  db: DbClient,
+  opts: SkillFsOptions,
+  name: string,
+  actor: Actor,
+): Promise<void> {
   const existing = await getSkill(db, name)
   if (existing === null) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
 
   const refs = await findAgentsUsingSkill(db, name)
   if (refs.length > 0) {
-    throw new ConflictError('skill-in-use', `skill '${name}' is referenced by agents`, {
-      agents: refs,
-    })
+    // RFC-203 T6: principal-aware disclosure (deleteWorkflow precedent).
+    throw new ConflictError(
+      'skill-in-use',
+      `skill '${name}' is referenced by ${refs.length} agent(s)`,
+      await discloseRefs(db, actor, 'agent', refs),
+    )
   }
 
   // RFC-170 §6a: crash-safe op-based delete — rename the whole root to trash,
@@ -267,15 +277,34 @@ export async function deleteSkill(db: DbClient, opts: SkillFsOptions, name: stri
 async function findAgentsUsingSkill(
   db: DbClient,
   skillName: string,
-): Promise<Array<{ id: string; name: string }>> {
+): Promise<
+  Array<{ id: string; name: string; ownerUserId: string | null; visibility: 'public' | 'private' }>
+> {
   const rows = await db
-    .select({ id: agents.id, name: agents.name, skills: agents.skills })
+    .select({
+      id: agents.id,
+      name: agents.name,
+      skills: agents.skills,
+      ownerUserId: agents.ownerUserId,
+      visibility: agents.visibility,
+    })
     .from(agents)
-  const out: Array<{ id: string; name: string }> = []
+  const out: Array<{
+    id: string
+    name: string
+    ownerUserId: string | null
+    visibility: 'public' | 'private'
+  }> = []
   for (const row of rows) {
     try {
       const skillsArr = JSON.parse(row.skills) as string[]
-      if (skillsArr.includes(skillName)) out.push({ id: row.id, name: row.name })
+      if (skillsArr.includes(skillName))
+        out.push({
+          id: row.id,
+          name: row.name,
+          ownerUserId: row.ownerUserId,
+          visibility: row.visibility,
+        })
     } catch {
       // skip malformed
     }

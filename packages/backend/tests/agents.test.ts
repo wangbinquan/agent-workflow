@@ -1,6 +1,7 @@
 // Service + HTTP coverage for Agents CRUD (P-1-08).
 // In-memory SQLite via createInMemoryDb — no daemon spawn needed.
 
+import { buildActor } from '../src/auth/actor'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { resolve } from 'node:path'
@@ -18,6 +19,13 @@ import {
 } from '../src/services/agent'
 import { ConflictError, NotFoundError } from '../src/util/errors'
 import { createRuntime } from '../src/services/runtimeRegistry'
+
+// RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps
+// these service-level tests' original full-visibility expectations.
+const T6_ACTOR = buildActor({
+  user: { id: 'u-t6-test', username: 'u-t6', displayName: 'T6', role: 'admin', status: 'active' },
+  source: 'session',
+})
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -199,9 +207,9 @@ describe('agent service', () => {
       frontmatterExtra: {},
       bodyMd: '',
     })
-    await deleteAgent(db, 'a')
+    await deleteAgent(db, 'a', T6_ACTOR)
     expect(await getAgent(db, 'a')).toBeNull()
-    await expect(deleteAgent(db, 'a')).rejects.toBeInstanceOf(NotFoundError)
+    await expect(deleteAgent(db, 'a', T6_ACTOR)).rejects.toBeInstanceOf(NotFoundError)
   })
 
   test('delete refuses when a workflow references the agent', async () => {
@@ -229,7 +237,7 @@ describe('agent service', () => {
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })
-    await expect(deleteAgent(db, 'a')).rejects.toBeInstanceOf(ConflictError)
+    await expect(deleteAgent(db, 'a', T6_ACTOR)).rejects.toBeInstanceOf(ConflictError)
   })
 
   test('rename succeeds; renaming to existing name rejected', async () => {
@@ -259,11 +267,13 @@ describe('agent service', () => {
       frontmatterExtra: {},
       bodyMd: '',
     })
-    const renamed = await renameAgent(db, 'a', { newName: 'c' })
+    const renamed = await renameAgent(db, 'a', { newName: 'c' }, T6_ACTOR)
     expect(renamed.name).toBe('c')
     expect(await getAgent(db, 'a')).toBeNull()
     expect(await getAgent(db, 'c')).not.toBeNull()
-    await expect(renameAgent(db, 'c', { newName: 'b' })).rejects.toBeInstanceOf(ConflictError)
+    await expect(renameAgent(db, 'c', { newName: 'b' }, T6_ACTOR)).rejects.toBeInstanceOf(
+      ConflictError,
+    )
   })
 
   test('rename refuses when referenced by workflow', async () => {
@@ -287,7 +297,9 @@ describe('agent service', () => {
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })
-    await expect(renameAgent(db, 'a', { newName: 'b' })).rejects.toBeInstanceOf(ConflictError)
+    await expect(renameAgent(db, 'a', { newName: 'b' }, T6_ACTOR)).rejects.toBeInstanceOf(
+      ConflictError,
+    )
   })
 
   // RFC-022 T1: `dependsOn` is a JSON string[] column with default `[]`; CRUD

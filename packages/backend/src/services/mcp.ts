@@ -17,6 +17,8 @@ import {
   McpSchema,
 } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
+import { discloseRefs } from './resourceAcl'
+import type { Actor } from '@/auth/actor'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
@@ -128,6 +130,7 @@ export async function updateMcp(
 export async function deleteMcp(
   db: DbClient,
   name: string,
+  actor: Actor,
   opts: { existing?: Mcp } = {},
 ): Promise<void> {
   const existing = opts.existing ?? (await getMcp(db, name))
@@ -136,11 +139,12 @@ export async function deleteMcp(
   }
   const dependents = await findAgentsReferencingMcp(db, name)
   if (dependents.length > 0) {
-    // Same shape as RFC-022 agent-dependency-still-referenced for consistency.
+    // RFC-203 T6: principal-aware disclosure (deleteWorkflow precedent) —
+    // names only for agents the actor may see, the rest an aggregate count.
     throw new ConflictError(
       'mcp-still-referenced',
       `mcp '${name}' is referenced by ${dependents.length} agent(s)`,
-      { referencedBy: dependents },
+      await discloseRefs(db, actor, 'agent', dependents),
     )
   }
   await db.delete(mcps).where(eq(mcps.id, existing.id))
@@ -217,22 +221,40 @@ export async function renameMcp(
  * re-parse and exact-match with Array.includes. Without the exact match, name
  * 'sentry' would falsely flag a row whose mcp is `["sentry-staging"]`.
  */
+export interface ReferencingAgentRow {
+  id: string
+  name: string
+  ownerUserId: string | null
+  visibility: 'public' | 'private'
+}
+
 export async function findAgentsReferencingMcp(
   db: DbClient,
   name: string,
-): Promise<Array<{ id: string; name: string }>> {
+): Promise<ReferencingAgentRow[]> {
   const { like } = await import('drizzle-orm')
   const rows = await db
-    .select({ id: agents.id, name: agents.name, mcp: agents.mcp })
+    .select({
+      id: agents.id,
+      name: agents.name,
+      mcp: agents.mcp,
+      ownerUserId: agents.ownerUserId,
+      visibility: agents.visibility,
+    })
     .from(agents)
     .where(like(agents.mcp, `%"${name}"%`))
 
-  const out: Array<{ id: string; name: string }> = []
+  const out: ReferencingAgentRow[] = []
   for (const row of rows) {
     try {
       const parsed = JSON.parse(row.mcp) as unknown
       if (Array.isArray(parsed) && parsed.includes(name)) {
-        out.push({ id: row.id, name: row.name })
+        out.push({
+          id: row.id,
+          name: row.name,
+          ownerUserId: row.ownerUserId,
+          visibility: row.visibility,
+        })
       }
     } catch {
       // malformed column — agent.ts parser treats it as [] anyway

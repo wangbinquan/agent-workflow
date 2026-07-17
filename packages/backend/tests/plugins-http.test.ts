@@ -175,7 +175,7 @@ describe('/api/plugins CRUD (service-seeded)', () => {
     expect(body.code).toBe('plugin-name-in-use')
   })
 
-  test('DELETE 409 with referencedBy list when an agent depends on it', async () => {
+  test('DELETE 409 with principal-aware visible list when an agent depends on it', async () => {
     await createAgent(db, {
       name: 'consumer',
       description: '',
@@ -191,12 +191,14 @@ describe('/api/plugins CRUD (service-seeded)', () => {
     })
     const r = await req(app, '/api/plugins/seeded', { method: 'DELETE' })
     expect(r.status).toBe(409)
+    // RFC-203 T6: principal-aware shape (visible[] + hiddenCount).
     const body = (await r.json()) as {
       code: string
-      details: { referencedBy: Array<{ name: string }> }
+      details: { visible: Array<{ name: string }>; hiddenCount: number }
     }
     expect(body.code).toBe('plugin-still-referenced')
-    expect(body.details.referencedBy.map((r) => r.name)).toContain('consumer')
+    expect(body.details.visible.map((r) => r.name)).toContain('consumer')
+    expect(body.details.hiddenCount).toBe(0)
   })
 
   test('DELETE 204 when not referenced', async () => {

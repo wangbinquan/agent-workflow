@@ -4,6 +4,7 @@
 // a malformed token → 400. This is the OCC that stops a paused editor from
 // silently overwriting a concurrent change / a delete-recreate ABA.
 
+import { buildActor } from '../src/auth/actor'
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -18,6 +19,13 @@ import {
   writeSkillContent,
 } from '../src/services/skill'
 import { ConflictError, ValidationError } from '../src/util/errors'
+
+// RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps
+// these service-level tests' original full-visibility expectations.
+const T6_ACTOR = buildActor({
+  user: { id: 'u-t6-test', username: 'u-t6', displayName: 'T6', role: 'admin', status: 'active' },
+  source: 'session',
+})
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -98,7 +106,7 @@ describe('RFC-170 T4 — combined save with token OCC', () => {
 
   test('managed: writeSkillContent with a stale skillId (delete→recreate ABA) → 409', async () => {
     const staleId = (await getSkill(db, 'foo'))!.id
-    await deleteSkill(db, fsOpts, 'foo')
+    await deleteSkill(db, fsOpts, 'foo', T6_ACTOR)
     await createManagedSkill(db, fsOpts, {
       name: 'foo',
       description: 'd0',
@@ -124,7 +132,7 @@ describe('RFC-170 T4 — combined save with token OCC', () => {
   // changed content (skips the no-op); this one writes IDENTICAL content.
   test('managed: an IDENTICAL-content write with a stale skillId → 409 (no-op path is fenced too)', async () => {
     const staleId = (await getSkill(db, 'foo'))!.id
-    await deleteSkill(db, fsOpts, 'foo')
+    await deleteSkill(db, fsOpts, 'foo', T6_ACTOR)
     await createManagedSkill(db, fsOpts, {
       name: 'foo',
       description: 'd0',

@@ -22,6 +22,8 @@ import {
   type InstallResult,
 } from './pluginInstaller'
 import { pluginOperationCoordinator } from './resourceOperationCoordinator'
+import { discloseRefs } from './resourceAcl'
+import type { Actor } from '@/auth/actor'
 
 type PluginRow = typeof plugins.$inferSelect
 type CreatePluginInput = z.input<typeof CreatePluginSchema>
@@ -176,16 +178,18 @@ export async function reinstallPlugin(
 export async function deletePlugin(
   db: DbClient,
   id: string,
+  actor: Actor,
   _deps: PluginServiceDeps = {},
 ): Promise<void> {
   const captured = await requirePluginRow(db, id)
   const existing = rowToPlugin(captured)
   const dependents = await findAgentsReferencingPlugin(db, existing.name)
   if (dependents.length > 0) {
+    // RFC-203 T6: principal-aware disclosure (deleteWorkflow precedent).
     throw new ConflictError(
       'plugin-still-referenced',
       `plugin '${existing.name}' is referenced by ${dependents.length} agent(s)`,
-      { referencedBy: dependents },
+      await discloseRefs(db, actor, 'agent', dependents),
     )
   }
   dbTxSync(db, (tx) => {
@@ -248,19 +252,38 @@ export async function renamePlugin(db: DbClient, id: string, input: RenamePlugin
   return renamed
 }
 
+export interface ReferencingAgentRow {
+  id: string
+  name: string
+  ownerUserId: string | null
+  visibility: 'public' | 'private'
+}
+
 export async function findAgentsReferencingPlugin(
   db: DbClient,
   name: string,
-): Promise<Array<{ id: string; name: string }>> {
+): Promise<ReferencingAgentRow[]> {
   const rows = await db
-    .select({ id: agents.id, name: agents.name, plugins: agents.plugins })
+    .select({
+      id: agents.id,
+      name: agents.name,
+      plugins: agents.plugins,
+      ownerUserId: agents.ownerUserId,
+      visibility: agents.visibility,
+    })
     .from(agents)
     .where(like(agents.plugins, `%"${name}"%`))
-  const out: Array<{ id: string; name: string }> = []
+  const out: ReferencingAgentRow[] = []
   for (const row of rows) {
     try {
       const parsed = JSON.parse(row.plugins) as unknown
-      if (Array.isArray(parsed) && parsed.includes(name)) out.push({ id: row.id, name: row.name })
+      if (Array.isArray(parsed) && parsed.includes(name))
+        out.push({
+          id: row.id,
+          name: row.name,
+          ownerUserId: row.ownerUserId,
+          visibility: row.visibility,
+        })
     } catch {
       // Corrupt legacy row: same [] fallback as Agent mapper.
     }
