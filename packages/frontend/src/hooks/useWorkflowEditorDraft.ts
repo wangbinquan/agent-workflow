@@ -989,7 +989,13 @@ function defaultMutationId(): WorkflowMutationId {
 }
 
 function failureFromError(error: unknown): WorkflowDraftFailure {
-  if (error instanceof ApiError) {
+  // RFC-203 impl-gate P2 follow-up: the fetch boundary tags genuine network
+  // failures as ApiError(status 0, 'network-unreachable'). Status 0 means the
+  // request never produced an HTTP verdict — the save may or may not have
+  // landed — so it MUST classify as a transport loss (offline + reconcile,
+  // RFC-199 G1), never as a definitive http failure. The e2e weak-network
+  // suite (rfc199-save-reliability.spec.ts) locks this end-to-end.
+  if (error instanceof ApiError && error.status !== 0) {
     return { kind: 'http', status: error.status, message: error.message }
   }
   return {

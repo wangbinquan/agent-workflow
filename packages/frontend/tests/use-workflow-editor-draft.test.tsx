@@ -355,6 +355,38 @@ describe('useWorkflowEditorDraft', () => {
     })
   })
 
+  // RFC-203 回归锁（CI run 29555048439 rerun 抓到）：fetch 边界把真实网络失败
+  // 打标为 ApiError(status 0, 'network-unreachable') 后，failureFromError 一度
+  // 把它当 kind:'http' 的确定性失败 —— RFC-199 弱网语义要求 status 0（无 HTTP
+  // 结论，保存可能已落地）必须与裸 TypeError 一样走 transport 丢失 → offline +
+  // reconcile。单测此前只注入 TypeError，真实打标形状零覆盖，e2e 才红。
+  test('tagged network loss (ApiError status 0) classifies as transport loss, not http failure', async () => {
+    const io = makeTransport()
+    io.save.mockRejectedValueOnce(new ApiError(0, 'network-unreachable', 'Failed to fetch'))
+    io.fetch.mockRejectedValueOnce(new ApiError(0, 'network-unreachable', 'Failed to fetch'))
+    const { result } = renderHook(() =>
+      useWorkflowEditorDraft({
+        initial: detail(),
+        transport: io.transport,
+        mutationIdFactory: mutationFactory(),
+        hashSnapshot: async (value) => hashFor(value),
+      }),
+    )
+
+    act(() => result.current.commit(snapshot('first')))
+    const barrier = result.current.ensureSaved().catch((error: unknown) => error)
+    act(() => vi.advanceTimersByTime(300))
+    await flush()
+
+    await expect(barrier).resolves.toMatchObject({ reason: 'unavailable', transport: 'offline' })
+    expect(result.current.state).toMatchObject({
+      phase: 'reconciling',
+      transport: 'offline',
+      local: snapshot('first'),
+      inFlight: { clientMutationId: MUTATION_A, snapshot: snapshot('first') },
+    })
+  })
+
   test('isSavedDraftCurrent rejects any later local revision or remote adoption', async () => {
     const current = renderHook(() => useWorkflowEditorDraft({ initial: detail() }))
     const saved = await current.result.current.ensureSaved()
