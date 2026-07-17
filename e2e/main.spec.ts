@@ -673,10 +673,11 @@ test('RFC-022: agent form Dependency tree (preview) renders the full closure', a
   )
   await page.goto(`${daemon.baseUrl}/agents/rfc022-a`)
 
-  // RFC-201: the dependency-tree preview lives in the renamed capability tab
-  // and is intentionally collapsed under technical details.
+  // The dependency-tree preview lives in the renamed capability tab. Existing
+  // agent details default the technical disclosure open so the closure is
+  // visible without an extra discovery click.
   await page.getByTestId('agent-tab-resources').click()
-  await page.locator('.agent-resources__technical > summary').click()
+  await expect(page.locator('.agent-resources__technical')).toHaveAttribute('open', '')
 
   // 200ms debounce → wait for the closure preview to populate. The tree
   // renders a treeitem per closure member (root + dependents recursively).

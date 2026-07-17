@@ -240,6 +240,15 @@ describe('/agents split page', () => {
     expect((screen.getByRole('textbox', { name: /Name/ }) as HTMLInputElement).value).toBe('alpha')
   })
 
+  test('existing-agent detail opens dependency technical information by default', async () => {
+    renderAgents('/agents/alpha')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'alpha' }))
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Capabilities & collaboration' }))
+    const details = screen.getByText('Technical information').closest('details')
+    expect(details?.open).toBe(true)
+  })
+
   test('dense agent metadata stays in one quiet wrapping footer with long values titled', async () => {
     const runtimeName = `runtime-${'x'.repeat(80)}`
     const ownerName = `Owner ${'y'.repeat(122)}`

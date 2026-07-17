@@ -205,6 +205,7 @@ function AgentDetailPage() {
         onChange={setDraft}
         idPrefix="agents-detail"
         nameLocked
+        defaultTechnicalDetailsOpen
         activeTab={activeTab}
         onTabChange={setActiveTab}
         hasExternalPortAlert={blockingPortIssues.length > 0}

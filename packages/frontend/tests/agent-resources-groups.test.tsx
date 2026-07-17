@@ -12,13 +12,17 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { AgentForm, emptyAgent } from '../src/components/AgentForm'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 
-function mount() {
+function mount({ defaultTechnicalDetailsOpen = false } = {}) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity, gcTime: Infinity } },
   })
   render(
     <QueryClientProvider client={qc}>
-      <AgentForm value={emptyAgent()} onChange={() => {}} />
+      <AgentForm
+        value={emptyAgent()}
+        onChange={() => {}}
+        defaultTechnicalDetailsOpen={defaultTechnicalDetailsOpen}
+      />
     </QueryClientProvider>,
   )
   // Reveal the resources panel (it's keep-mounted but hidden by default).
@@ -83,6 +87,15 @@ describe('RFC-173 — resources tab two-group layout', () => {
     expect(details?.open).toBe(false)
     expect(details?.querySelector('.dep-tree__empty')).toBeTruthy()
     expect(details?.textContent).toContain('file:// cache')
+  })
+
+  test('can default the technical disclosure open on an existing-agent detail and still collapse it', () => {
+    mount({ defaultTechnicalDetailsOpen: true })
+    const details = screen.getByText('Technical information').closest('details')
+    expect(details?.open).toBe(true)
+
+    fireEvent.click(screen.getByText('Technical information'))
+    expect(details?.open).toBe(false)
   })
 })
 

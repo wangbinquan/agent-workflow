@@ -58,6 +58,8 @@ export interface AgentFormProps {
   onTabChange?: (tab: AgentTab) => void
   /** The owning route renders the compact port summary as its sole live alert. */
   hasExternalPortAlert?: boolean
+  /** Existing-agent details reveal dependency mechanics without a discovery click. */
+  defaultTechnicalDetailsOpen?: boolean
   /** RFC-201: route-owned raw/parsed/error state for the two Advanced JSON fields. */
   jsonDraft?: AgentJsonDraft
   onJsonDraftChange?: (next: AgentJsonDraft) => void
@@ -168,6 +170,7 @@ export function AgentForm({
   activeTab,
   onTabChange,
   hasExternalPortAlert,
+  defaultTechnicalDetailsOpen = false,
   jsonDraft: controlledJsonDraft,
   onJsonDraftChange,
   focusJsonField,
@@ -176,6 +179,7 @@ export function AgentForm({
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [internalTab, setInternalTab] = useState<AgentTab>('basics')
+  const [technicalDetailsOpen, setTechnicalDetailsOpen] = useState(defaultTechnicalDetailsOpen)
   const [uncontrolledJsonDraft, setUncontrolledJsonDraft] = useState(() =>
     createAgentJsonDraft(value),
   )
@@ -461,7 +465,11 @@ export function AgentForm({
           onApply={(selection) => onChange(mergeAgentDeps(value, selection))}
         />
 
-        <details className="agent-resources__technical">
+        <details
+          className="agent-resources__technical"
+          open={technicalDetailsOpen}
+          onToggle={(event) => setTechnicalDetailsOpen(event.currentTarget.open)}
+        >
           <summary>{t('agentForm.technicalDetailsSummary')}</summary>
           <p>{t('agentForm.technicalDetailsBody')}</p>
           {/* The closure preview is useful for debugging, but it is not needed
