@@ -209,4 +209,50 @@ describe('apiRequest', () => {
     const headers = (fetchMock.mock.calls[0]?.[1] as RequestInit).headers as Record<string, string>
     expect(headers.Authorization).toBeUndefined()
   })
+
+  // RFC-203 (Codex impl-gate P2) — transport failures are tagged AT the fetch
+  // boundary. Locks: (1) a fetch reject (TypeError) becomes
+  // ApiError('network-unreachable') so every resolver surface localizes it;
+  // (2) caller-driven aborts pass through untouched (they are not outages);
+  // (3) a huge non-JSON error body is capped, never buffered whole.
+  test('fetch rejection becomes ApiError network-unreachable (status 0)', async () => {
+    globalThis.fetch = (async () => {
+      throw new TypeError('Failed to fetch')
+    }) as unknown as typeof fetch
+
+    await expect(apiRequest('/api/agents')).rejects.toMatchObject({
+      name: 'ApiError',
+      status: 0,
+      code: 'network-unreachable',
+      message: 'Failed to fetch',
+    })
+  })
+
+  test('AbortError from fetch propagates unchanged (not wrapped as ApiError)', async () => {
+    const abort = new DOMException('The operation was aborted.', 'AbortError')
+    globalThis.fetch = (async () => {
+      throw abort
+    }) as unknown as typeof fetch
+
+    await expect(apiRequest('/api/agents')).rejects.toBe(abort)
+  })
+
+  test('non-JSON error body is capped at 2 KiB without buffering the whole body', async () => {
+    const big = 'x'.repeat(1 << 20) // 1 MiB proxy error page
+    globalThis.fetch = (async () =>
+      new Response(big, {
+        status: 502,
+        statusText: 'Bad Gateway',
+        headers: { 'Content-Type': 'text/html' },
+      })) as unknown as typeof fetch
+
+    const err = await apiRequest('/api/agents').then(
+      () => null,
+      (e: unknown) => e as ApiError,
+    )
+    expect(err).toBeInstanceOf(ApiError)
+    expect(err?.code).toBe('http-502')
+    expect(err?.message.length).toBeLessThanOrEqual(2048)
+    expect(err?.message.startsWith('xxx')).toBe(true)
+  })
 })

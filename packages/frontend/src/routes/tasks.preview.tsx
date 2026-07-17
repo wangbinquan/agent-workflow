@@ -13,7 +13,7 @@ import { createRoute, Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import type { NodeRunOutput, TaskNodeRuns, WorktreeFileResponse } from '@agent-workflow/shared'
 import { WORKTREE_FILE_MAX_BYTES } from '@agent-workflow/shared'
-import { api, ApiError } from '@/api/client'
+import { api, ApiError, fetchOrNetworkError } from '@/api/client'
 import { fetchWorktreeFile } from '@/api/worktreeFiles'
 import { portArtifactItemUrl } from '@/lib/worktree-download'
 import { getBaseUrl, getToken } from '@/stores/auth'
@@ -131,10 +131,16 @@ function ArtifactPreviewBody({
       const token = getToken()
       const headers: Record<string, string> = {}
       if (token !== null) headers.Authorization = `Bearer ${token}`
-      const res = await fetch(portArtifactItemUrl(getBaseUrl(), taskId, runId, port), {
-        headers,
-        ...(signal !== undefined ? { signal } : {}),
-      })
+      // RFC-203: tagged fetch — this queryFn's rejection feeds <ErrorBanner>/
+      // resolveApiError, so offline must classify as network-unreachable
+      // instead of leaking a verbatim TypeError("Failed to fetch").
+      const res = await fetchOrNetworkError(
+        portArtifactItemUrl(getBaseUrl(), taskId, runId, port),
+        {
+          headers,
+          ...(signal !== undefined ? { signal } : {}),
+        },
+      )
       if (res.status === 404) return { fallback: true as const }
       if (!res.ok) throw new ApiError(res.status, `http-${res.status}`, res.statusText)
       return {

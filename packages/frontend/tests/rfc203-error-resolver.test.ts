@@ -1,10 +1,12 @@
 // RFC-203 T1 — the three-tier error resolver contract.
 //
 // LOCKS: exact `errors.<code>` → domain template `errorDomains.<domain>` →
-// `errors.fallback`; caller overrides win over exact; fetch TypeErrors
-// normalize to 'network-unreachable'; details scalars interpolate with
-// truncation; describeApiError (string shell) keeps `: <raw>` appended for
-// the domain/fallback tiers ONLY (design-gate P1 — string-only surfaces must
+// `errors.fallback`; caller overrides win over exact; network failures arrive
+// pre-tagged as ApiError('network-unreachable') from the fetch boundary
+// (impl-gate P2 — the resolver must NOT reclassify raw TypeErrors, that
+// masked app bugs as outages); details scalars interpolate with truncation;
+// describeApiError (string shell) keeps `: <raw>` appended for the
+// domain/fallback tiers ONLY (design-gate P1 — string-only surfaces must
 // not lose the diagnostic while exact matches stay clean sentences).
 
 import { beforeAll, describe, expect, test } from 'vitest'
@@ -97,12 +99,19 @@ describe('resolveApiError', () => {
     expect(r.title).toBe('请求失败')
   })
 
-  test('fetch TypeError normalizes to network-unreachable', () => {
-    const r = resolveApiError(new TypeError('Failed to fetch'))
+  test('ApiError network-unreachable (tagged at fetch boundary) → exact localized title', () => {
+    const r = resolveApiError(new ApiError(0, 'network-unreachable', 'Failed to fetch'))
     expect(r.code).toBe('network-unreachable')
     expect(r.matched).toBe('exact')
     expect(r.title).toBe('无法连接到服务。')
-    expect(r.raw).toBe('Failed to fetch')
+  })
+
+  test('a RAW TypeError (not from fetch) is NOT masked as offline — its message shows', () => {
+    // Codex impl-gate P2: only genuine transport failures are tagged network-
+    // unreachable at the fetch boundary; an app-level TypeError falls through.
+    const r = resolveApiError(new TypeError('x.map is not a function'))
+    expect(r.code).toBe('')
+    expect(r.title).toBe('x.map is not a function')
   })
 
   test('plain Error / unknown values keep their message AS the title (display-ready convention)', () => {

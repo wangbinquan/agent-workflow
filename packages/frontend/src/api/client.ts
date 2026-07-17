@@ -38,6 +38,57 @@ function buildUrl(path: string, query?: RequestOptions['query']): string {
   return url.toString()
 }
 
+// RFC-203 (Codex impl-gate P2): tag transport failures at the fetch boundary
+// so ONLY genuine network errors become 'network-unreachable'. A bare fetch
+// reject is a TypeError ("Failed to fetch"); classifying every TypeError that
+// way (in the resolver) masked app-level TypeErrors as daemon outages, so the
+// tagging lives here where we know it was the request that failed. AbortErrors
+// propagate unchanged (caller-driven cancellation, not a network fault).
+// Exported for the few raw-fetch boundaries outside this module (blob/preview
+// readers that need response headers) — anything whose failure feeds
+// resolveApiError must use this instead of bare fetch, or offline shows as
+// verbatim "Failed to fetch".
+export async function fetchOrNetworkError(url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init)
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') throw err
+    throw new ApiError(0, 'network-unreachable', err instanceof Error ? err.message : String(err))
+  }
+}
+
+// RFC-203 (Codex impl-gate P2): read at most `cap` bytes of an error response
+// body and cancel the stream, so a large plain-text/HTML proxy error cannot
+// buffer the whole body (memory / tab freeze) just to slice 2 KiB off it.
+async function cappedErrorText(res: Response, cap = 2048): Promise<string> {
+  const body = res.body
+  if (body === null) return await res.text().catch(() => '')
+  const reader = body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  try {
+    while (total < cap) {
+      const { done, value } = await reader.read()
+      if (done || value === undefined) break
+      chunks.push(value)
+      total += value.length
+    }
+  } catch {
+    /* partial body is fine */
+  } finally {
+    await reader.cancel().catch(() => {})
+  }
+  const out = new Uint8Array(Math.min(total, cap))
+  let off = 0
+  for (const c of chunks) {
+    if (off >= out.length) break
+    const take = Math.min(c.length, out.length - off)
+    out.set(c.subarray(0, take), off)
+    off += take
+  }
+  return new TextDecoder().decode(out)
+}
+
 export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   const token = getToken()
   const headers: Record<string, string> = { Accept: 'application/json' }
@@ -48,7 +99,7 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
     body = JSON.stringify(opts.body)
   }
 
-  const res = await fetch(buildUrl(path, opts.query), {
+  const res = await fetchOrNetworkError(buildUrl(path, opts.query), {
     method: opts.method ?? 'GET',
     headers,
     body,
@@ -69,8 +120,8 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
     // of the body so the only diagnostic survives into ApiError.message.
     const err = extractErrorBody(payload, res)
     if (!isJson && err.code === `http-${res.status}`) {
-      const text = await res.text().catch(() => '')
-      if (text.trim() !== '') err.message = text.slice(0, 2048)
+      const text = await cappedErrorText(res)
+      if (text.trim() !== '') err.message = text
     }
     throw new ApiError(res.status, err.code, err.message, err.details)
   }
@@ -138,7 +189,7 @@ export async function apiPostMultipart<T>(
   const headers: Record<string, string> = { Accept: 'application/json' }
   if (token !== null) headers.Authorization = `Bearer ${token}`
 
-  const res = await fetch(buildUrl(path), {
+  const res = await fetchOrNetworkError(buildUrl(path), {
     method: 'POST',
     headers,
     body,
@@ -156,8 +207,8 @@ export async function apiPostMultipart<T>(
     // of the body so the only diagnostic survives into ApiError.message.
     const err = extractErrorBody(payload, res)
     if (!isJson && err.code === `http-${res.status}`) {
-      const text = await res.text().catch(() => '')
-      if (text.trim() !== '') err.message = text.slice(0, 2048)
+      const text = await cappedErrorText(res)
+      if (text.trim() !== '') err.message = text
     }
     throw new ApiError(res.status, err.code, err.message, err.details)
   }
@@ -177,7 +228,7 @@ export async function apiGetBlob(
   const token = getToken()
   const headers: Record<string, string> = { Accept: '*/*' }
   if (token !== null) headers.Authorization = `Bearer ${token}`
-  const res = await fetch(buildUrl(path, query), { method: 'GET', headers, signal })
+  const res = await fetchOrNetworkError(buildUrl(path, query), { method: 'GET', headers, signal })
   if (res.status === 401) clearToken()
   if (!res.ok) {
     const isJson = res.headers.get('content-type')?.includes('application/json') ?? false

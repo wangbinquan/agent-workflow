@@ -429,14 +429,20 @@ function StatsTab({
       {cancellationKind === 'manual' && run.errorMessage !== null && (
         <>
           <dt>{t('nodeDrawer.statError')}</dt>
-          {/* RFC-203 T4: localized failure copy; raw message in title. */}
+          {/* RFC-203 T4 (Codex impl-gate P2): localize ONLY genuine failure
+              rows. classifyCanceled returns 'manual' for canceled / interrupted
+              rows too, whose errorMessage ('aborted by signal',
+              'daemon-shutdown …') is not a task-failure token — running it
+              through describeTaskFailure would mislabel them "Task execution
+              failed". Those keep their raw message; failed / exhausted rows
+              get the localized copy. */}
           <dd className="task-meta__error" title={run.errorMessage}>
-            {
-              describeTaskFailure({
-                failureCode: run.failureCode ?? null,
-                errorSummary: run.errorMessage,
-              }).title
-            }
+            {run.status === 'failed' || run.status === 'exhausted'
+              ? describeTaskFailure({
+                  failureCode: run.failureCode ?? null,
+                  errorSummary: run.errorMessage,
+                }).title
+              : run.errorMessage}
           </dd>
         </>
       )}

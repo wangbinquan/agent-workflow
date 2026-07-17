@@ -9,8 +9,10 @@
 //   overrides (caller-local)  →  exact `errors.<code>`  →  domain template
 //   `errorDomains.<domain>`   →  global `errors.fallback`
 //
-// plus normalization (network TypeError → 'network-unreachable') and a
-// whitelisted interpolation context taken from `ApiError.details`.
+// plus a whitelisted interpolation context taken from `ApiError.details`.
+// Network failures arrive already normalized: api/client.ts tags them
+// ApiError('network-unreachable') at the fetch boundary (impl-gate P2), so
+// this resolver never guesses from TypeError shapes.
 //
 // `describeApiError` (i18n/index.ts) stays the string-only shell on top of
 // this: exact/override matches return the localized title alone; domain /
@@ -201,12 +203,11 @@ export function resolveApiError(err: unknown, opts?: ResolveApiErrorOptions): Re
     code = err.code
     raw = err.message
     details = err.details
-  } else if (err instanceof TypeError) {
-    // fetch() network failures ("Failed to fetch" / "Load failed") — the
-    // one non-ApiError shape every page can hit when the daemon is down.
-    code = 'network-unreachable'
-    raw = err.message
   } else if (err instanceof Error) {
+    // RFC-203 (Codex impl-gate P2): network failures are tagged as
+    // ApiError('network-unreachable') at the fetch boundary (api/client.ts),
+    // so a raw TypeError reaching HERE is an application bug, not a daemon
+    // outage — surface its own message instead of masking it as offline.
     // A plain Error with no code is display-ready text by convention (the
     // widespread `new Error(t('...'))` caller-local pattern) — keep the
     // message AS the title instead of demoting it under a generic banner.

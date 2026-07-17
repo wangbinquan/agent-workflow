@@ -1818,6 +1818,10 @@ export const enUS: Resources = {
           'Use Diagnose to inspect the blocker, or restart the daemon and resume.',
         dwGenerateExhausted: 'Dynamic workflow generation kept failing; retries stopped.',
         dwGenerateExhausted__hint: 'Adjust the request or workgroup config and launch again.',
+        dwRejectExhausted:
+          'The dynamic workflow was rejected too many times without passing; retries stopped.',
+        dwRejectExhausted__hint:
+          'Relax the acceptance criteria or adjust the workgroup goal, then relaunch.',
         nodeTimeout: 'The node timed out.',
         nodeTimeout__hint: 'Raise the node timeout in its config, then Resume to retry.',
         childUnkillable: 'The agent process could not be terminated; the run was abandoned.',

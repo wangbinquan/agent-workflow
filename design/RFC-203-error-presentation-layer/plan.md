@@ -24,7 +24,7 @@
 
 ## PR-3 分叉清零迁移（T5）
 
-- **RFC-203-T5a** 6 处私有 describeError 替换 + 各消费点断言更新；DetailHeaderActions 改走 ErrorBanner+ErrorDetails（agents/skills 删除引用清单的实际屏幕入口）；PlantUmlBlock.proxyRender 接 resolveApiError。
+- **RFC-203-T5a** 6 处私有 describeError 替换 + 各消费点断言更新；DetailHeaderActions 改走 ErrorBanner+ErrorDetails（agents/skills 删除引用清单的实际屏幕入口）；PlantUmlBlock.proxyRender 接 resolveApiError。**注意（PR-1 实现门 P2 后续约束）**：PlantUmlBlock 的 3 处裸 fetch 接 resolveApiError 时必须同时换成 `fetchOrNetworkError`（api/client.ts 导出），否则离线时显示原文 "Failed to fetch"；换完把它加进 `rfc203-network-tagging-source-lock.test.ts`。
 - **RFC-203-T5b** 22 处裸 `.error-box` 迁 ErrorBanner（workgroup 8 + home 3 优先）；视觉零回归自查（错误态不在基线路径，home 三处确认基线为正常态）。
 - **RFC-203-T5c** DISPATCH_ERROR_KEYS→overrides、describeRecoveryKind→labelForCode；源码锁三条（私有 describeError 零命中 / error-box 白名单 / fallback 不拼原文）。
 - 收尾：Codex 实现门（每 PR 各一次）；design/plan.md 状态翻转；STATE.md 记录；push 后按 sha 查 CI。

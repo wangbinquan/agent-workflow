@@ -99,6 +99,10 @@
 
 P1：引用清单 ACL 脱敏（未脱敏形状只渲染计数，后端抛点 T6 同批改造）；真实 payload 形状补全（{workflows}/{agents}）+ DetailHeaderActions 接入结构化渲染；failureCode 任务级投影（Task/TaskSummary + failed-run oracle）；PR-1 随行 L2 域模板防中间态诊断回归（见 plan.md）。P2：dw-generate-exhausted 令牌接通死词条；非 JSON body capped 保留；校验词条=标题+原文折叠（issue params 列后续增强）；PlantUmlBlock 接入；call-target-method-required 专用码。
 
+## 1.10 PR-1 实现门折入记录（2026-07-17，Codex P2×4 + 随批收尾）
+
+P2：**网络错误标签移到 fetch 边界**——resolver 按 `instanceof TypeError` 猜测会把应用层 TypeError 伪装成 daemon 离线，改为 api/client.ts `fetchOrNetworkError` 在请求边界抛 `ApiError(0,'network-unreachable')`（AbortError 原样放行），resolver 删除猜测分支；**非 JSON 错误体 capped 流式读取**——`cappedErrorText` 只读 ≤2KiB 即 cancel 流，超大代理错误页不再整体缓冲；**NodeDetailDrawer 只对 failed/exhausted 行本地化**——classifyCanceled 的 'manual' 臂也覆盖 canceled/interrupted，其 errorMessage 非失败令牌，走 describeTaskFailure 会误标「任务执行失败」，改按 status 分流；**dw-reject-exhausted 令牌接通**（workgroupTasks.ts 发射、影射表+zh/en 词条补齐）。随批收尾（fold 完成于仓库搬迁后的接续 session）：tasks.preview port-artifact 预览 queryFn 的裸 fetch 改走导出的 `fetchOrNetworkError`（其失败进 ErrorBanner→resolveApiError，唯一受 TypeError 分支删除影响的消费面；其余裸 fetch 站点为布尔标志/私有错误路径，PlantUmlBlock 留待 T5a 迁移时一并换）；resolver/测试头部过期注释同步；新增 client 边界测试 ×3 + 网络打标源级锁 ×3。
+
 ## 2. 失败模式
 
 - 词条缺失/漂移：L2 域兜底保证任何新码不裸奔英文；完整性测试锁 zh/en 同构。

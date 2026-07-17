@@ -42,6 +42,7 @@ const EXACT_TOKENS: Record<string, string> = {
   'canceled by user': 'canceledByUser',
   'scheduler error': 'schedulerError',
   'dw-generate-exhausted': 'dwGenerateExhausted',
+  'dw-reject-exhausted': 'dwRejectExhausted',
 }
 
 /** Prefix-match summary tokens (writers append detail after the prefix). */

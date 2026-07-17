@@ -5224,6 +5224,8 @@ export const zhCN: Resources = {
         schedulerStalled__hint: '用「诊断」查看阻塞原因，或重启 daemon 后恢复任务。',
         dwGenerateExhausted: '动态工作流多次生成仍不可用，已停止重试。',
         dwGenerateExhausted__hint: '调整需求描述或工作组配置后重新发起。',
+        dwRejectExhausted: '动态工作流多次被驳回仍未达标，已停止重试。',
+        dwRejectExhausted__hint: '放宽验收标准或调整工作组目标后重新发起。',
         nodeTimeout: '节点执行超时。',
         nodeTimeout__hint: '可在节点配置中调大超时时间后点「继续任务」重试。',
         childUnkillable: '代理进程无法终止，已放弃该次运行。',
