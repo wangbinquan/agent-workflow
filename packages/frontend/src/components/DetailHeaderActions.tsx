@@ -4,8 +4,9 @@
 // `page__actions` cluster keeps page-specific extras → AclDialogButton → Save →
 // delete ConfirmButton, followed — OUTSIDE the flex header, so long errors
 // never get squeezed into the top-right corner (plugins-page-wiring lock) —
-// by a `.form-actions` row rendering one `form-actions__error` span per
-// failed mutation channel.
+// by one <ErrorBanner> block per failed mutation channel (RFC-203 T5a: the
+// delete-refused errors carry principal-aware reference lists that only the
+// rich ErrorDetails path can render; the old string-shell span dropped them).
 //
 // Contract notes (RFC-151 design gate revision):
 //   - `save` is fully caller-owned: label (incl. pending switching), onClick
@@ -22,8 +23,8 @@ import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AclDialogButton } from '@/components/AclPanel'
 import { ConfirmButton } from '@/components/ConfirmButton'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import { PageHeader } from '@/components/PageHeader'
-import { describeApiError } from '@/i18n'
 
 export interface DetailHeaderActionsProps {
   /** Resource name rendered by the shared PageHeader heading. */
@@ -57,7 +58,7 @@ export interface DetailHeaderActionsProps {
   /** Page-specific leading actions (e.g. skills' Fuse button). */
   extra?: ReactNode
   /** Mutation error channels; each non-nullish entry renders its own
-   *  form-actions__error span through describeApiError. */
+   *  <ErrorBanner> block (localized title + structured details + raw fold). */
   errors: ReadonlyArray<unknown>
 }
 
@@ -96,15 +97,9 @@ export function DetailHeaderActions(props: DetailHeaderActionsProps) {
           </>
         }
       />
-      {present.length > 0 && (
-        <div className="form-actions">
-          {present.map((e, i) => (
-            <span className="form-actions__error" key={i}>
-              {describeApiError(e)}
-            </span>
-          ))}
-        </div>
-      )}
+      {present.map((e, i) => (
+        <ErrorBanner error={e} key={i} />
+      ))}
     </>
   )
 }

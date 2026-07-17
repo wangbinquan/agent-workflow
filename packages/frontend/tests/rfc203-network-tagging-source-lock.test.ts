@@ -7,9 +7,9 @@
 //      只允许出现在该 helper 自身实现里，恰好 1 处）；
 //   2. resolver 不得回潮 TypeError 猜测分支；
 //   3. tasks.preview 的 port-artifact 预览 queryFn 的失败会进 ErrorBanner→
-//      resolveApiError，必须用打标 fetch，否则离线显示原文 "Failed to fetch"。
-// PlantUmlBlock 的 3 处裸 fetch 走私有错误路径，PR-3（T5a）迁 resolveApiError
-// 时一并换成 fetchOrNetworkError——届时把它加进本锁。
+//      resolveApiError，必须用打标 fetch，否则离线显示原文 "Failed to fetch"；
+//   4. PlantUmlBlock（PR-3 T5a 已迁）：直连回退链 3 处 fetch 全部打标、最终
+//      展示走 describeApiError——回潮成裸 fetch 会让离线显示原文。
 import { describe, expect, test } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -34,5 +34,12 @@ describe('RFC-203 网络打标源级锁', () => {
     const preview = read('src/routes/tasks.preview.tsx')
     expect(preview).toContain('fetchOrNetworkError(')
     expect(preview.match(/await fetch\(/g)).toBeNull()
+  })
+
+  test('PlantUmlBlock：回退链全部打标 + 展示走 describeApiError', () => {
+    const block = read('src/components/review/PlantUmlBlock.tsx')
+    expect(block.match(/await fetch\(/g)).toBeNull()
+    expect(block.match(/fetchOrNetworkError\(/g)?.length).toBeGreaterThanOrEqual(3)
+    expect(block).toContain('describeApiError(')
   })
 })

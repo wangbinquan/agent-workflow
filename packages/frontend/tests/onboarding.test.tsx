@@ -256,7 +256,13 @@ describe('Onboarding render', () => {
     wrap(<Onboarding />)
     fireEvent.click(screen.getByText(/Import demo workflow/i))
     await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy())
-    expect(screen.getByRole('alert').textContent).toContain('workflow-yaml-invalid')
+    // RFC-203 T5a: the private describeError fork leaked `code: message`; the
+    // shared resolver shows the localized L1 sentence and keeps the backend
+    // diagnostic in the raw fold — the machine code never leaks as copy.
+    const alertText = screen.getByRole('alert').textContent ?? ''
+    expect(alertText).toMatch(/did not parse to a workflow object|无法解析为工作流对象/)
+    expect(alertText).toContain('definition failed schema validation')
+    expect(alertText).not.toContain('workflow-yaml-invalid')
     const retry = screen.getByRole('button', { name: /Retry|重试/ })
     expect(retry.getAttribute('aria-busy')).toBe('false')
     fireEvent.click(retry)

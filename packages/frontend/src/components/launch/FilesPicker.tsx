@@ -15,7 +15,8 @@ import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { RepoFilesResponse, WorkflowInput } from '@agent-workflow/shared'
-import { api, ApiError } from '@/api/client'
+import { api } from '@/api/client'
+import { describeApiError } from '@/i18n'
 import { TextArea, TextInput } from '@/components/Form'
 
 interface Props {
@@ -140,7 +141,7 @@ export function FilesPicker({ def, repoPath, value, onChange, sourceKind = 'path
   }
   if (all.error !== null && all.error !== undefined) {
     if (urlMode) return fallback
-    return <div className="error-box">{describeError(all.error)}</div>
+    return <div className="error-box">{describeApiError(all.error)}</div>
   }
 
   return (
@@ -186,10 +187,4 @@ export function FilesPicker({ def, repoPath, value, onChange, sourceKind = 'path
       )}
     </div>
   )
-}
-
-function describeError(e: unknown): string {
-  if (e instanceof ApiError) return `${e.code}: ${e.message}`
-  if (e instanceof Error) return e.message
-  return String(e)
 }

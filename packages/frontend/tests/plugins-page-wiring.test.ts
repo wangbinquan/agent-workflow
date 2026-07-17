@@ -81,19 +81,20 @@ describe('RFC-031 /plugins wiring', () => {
     expect(read('components/DetailHeaderActions.tsx')).toContain('ConfirmButton')
   })
 
-  test('detail page renders save/del errors in dedicated .form-actions row, NOT inside header .page__actions', () => {
-    // Regression: previously the detail page rendered `<span class="form-actions__error">`
-    // for save.error / del.error as a child of `<div className="page__actions">` in
-    // the page header. That header row is `display:flex; justify-content:space-between`,
-    // so a long error like "plugin-install-failed: plugin install failed (exit 1)" got
-    // squeezed into the top-right corner of the page, visually disconnected from the
-    // form it pertains to. RFC-151 PR-4 single-sourced the placement in
-    // <DetailHeaderActions>: the `.form-actions` error row renders as a SIBLING
-    // after the flex header, never inside the `.page__actions` cluster. Lock the
-    // structural property on the shared shell + the page's wiring through it.
+  test('detail page renders save/del errors AFTER the header, NOT inside .page__actions', () => {
+    // Regression: previously the detail page rendered the mutation error as a
+    // child of `<div className="page__actions">` in the page header. That
+    // header row is `display:flex; justify-content:space-between`, so a long
+    // error got squeezed into the top-right corner, visually disconnected
+    // from the form it pertains to. RFC-151 PR-4 single-sourced the placement
+    // in <DetailHeaderActions>; RFC-203 T5a upgraded the mechanism from a
+    // form-actions__error span (string shell) to one <ErrorBanner> per
+    // channel — the rich path renders the principal-aware delete-reference
+    // lists. The structural property stays: banners are SIBLINGS after the
+    // flex header, never inside the `.page__actions` cluster.
     const shell = read('components/DetailHeaderActions.tsx')
-    expect(shell).toContain('className="form-actions"')
-    expect(shell).toContain('form-actions__error')
+    expect(shell).toContain('<ErrorBanner error={e}')
+    expect(shell).not.toContain('form-actions__error')
     expect(shell).toContain("import { PageHeader } from '@/components/PageHeader'")
     expect(shell).toContain('<PageHeader')
     expect(shell).toContain('actions={')
@@ -101,6 +102,7 @@ describe('RFC-031 /plugins wiring', () => {
     const pageHeader = read('components/PageHeader.tsx')
     expect(pageHeader).toContain('className="page__actions"')
     expect(pageHeader).not.toContain('form-actions__error')
+    expect(pageHeader).not.toContain('ErrorBanner')
     // plugins.detail routes both mutation channels through the shell's slot.
     const src = read('routes/plugins.detail.tsx')
     expect(src).toMatch(/errors=\{\[save\.error, del\.error\]\}/)

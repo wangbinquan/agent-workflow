@@ -244,14 +244,19 @@ describe('render — both paths fail', () => {
     expect(mount.querySelector('.review-diagram__source')?.textContent).toContain('@startuml')
   })
 
-  test('network error also falls back to error + source', async () => {
+  test('network error also falls back to error + source (localized, RFC-203 T5a)', async () => {
     const mount = makeMount()
     vi.stubGlobal('fetch', async () => {
       throw new Error('connection refused')
     })
     PlantUmlBlock.render(mount, 'src', 'https://example.test', undefined)
     await settle(50)
-    expect(mount.querySelector('.review-diagram__error')?.textContent).toMatch(/connection refused/)
+    // The direct-endpoint chain tags transport failures at the fetch boundary
+    // (fetchOrNetworkError) and resolves them through describeApiError — the
+    // user sees the localized offline copy, not a raw transport message.
+    expect(mount.querySelector('.review-diagram__error')?.textContent).toMatch(
+      /Cannot reach the service|无法连接到服务/,
+    )
   })
 
   test('non-SVG response falls back to error path', async () => {

@@ -1110,7 +1110,7 @@ export function SystemAgentsTab({ config, fusionDraft: routeFusionDraft }: Syste
           <Field
             label={t('settings.systemAgents.fusionRuntime')}
             hint={t('settings.systemAgents.fusionRuntimeHint')}
-            error={fusion.query.isError ? describeError(fusion.query.error) : undefined}
+            error={fusion.query.isError ? describeApiError(fusion.query.error) : undefined}
           >
             <RuntimeSelect
               value={fusion.value}
@@ -1929,7 +1929,7 @@ function SectionForm({
         </button>
         {success !== null && <span className="form-actions__ok">{t('common.saved')}</span>}
         {error !== null && error !== undefined && (
-          <span className="form-actions__error">{describeError(error)}</span>
+          <span className="form-actions__error">{describeApiError(error)}</span>
         )}
       </div>
       {!busy && !canSave && disabledReason !== undefined && (
@@ -1978,10 +1978,4 @@ function SectionForm({
       )}
     </div>
   )
-}
-
-function describeError(e: unknown): string {
-  if (e instanceof ApiError) return `${e.code}: ${e.message}`
-  if (e instanceof Error) return e.message
-  return String(e)
 }

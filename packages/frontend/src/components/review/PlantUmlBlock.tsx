@@ -29,8 +29,8 @@
 import DOMPurify from 'dompurify'
 import pako from 'pako'
 
-import { api } from '@/api/client'
-import i18n from '@/i18n'
+import { api, fetchOrNetworkError } from '@/api/client'
+import i18n, { describeApiError } from '@/i18n'
 
 export const PlantUmlBlock = {
   /**
@@ -124,7 +124,7 @@ async function fetchAndSwap(
   let plantumlSyntaxError: string | null = null
   try {
     const encoded = PlantUmlBlock.encodeForPlantuml(source)
-    const r = await fetch(`${base}/plantuml/svg/${encoded}`, { headers })
+    const r = await fetchOrNetworkError(`${base}/plantuml/svg/${encoded}`, { headers })
     const text = await r.text()
     if (r.ok) {
       svg = text
@@ -145,7 +145,7 @@ async function fetchAndSwap(
   if (svg === null && plantumlSyntaxError === null) {
     try {
       const encoded = PlantUmlBlock.encodeForGet(source)
-      const r = await fetch(`${base}/plantuml/svg/${encoded}`, { headers })
+      const r = await fetchOrNetworkError(`${base}/plantuml/svg/${encoded}`, { headers })
       if (r.ok) {
         svg = await r.text()
       } else {
@@ -159,7 +159,7 @@ async function fetchAndSwap(
   //    syntax error with a different server's response.
   if (svg === null && plantumlSyntaxError === null) {
     try {
-      const r = await fetch(`${base}/plantuml/svg`, {
+      const r = await fetchOrNetworkError(`${base}/plantuml/svg`, {
         method: 'POST',
         headers: { ...headers, 'content-type': 'text/plain' },
         body: source,
@@ -180,10 +180,15 @@ async function fetchAndSwap(
     mount.appendChild(swapSvg(svg))
     return
   }
+  // RFC-203 T5a: resolve through the shared error layer — a tagged network
+  // failure localizes (network-unreachable) instead of leaking the raw
+  // "Failed to fetch"; plantuml syntax errors keep their extracted line info.
   const msg =
     plantumlSyntaxError !== null
       ? plantumlSyntaxError
-      : (lastErr?.message ?? i18n.t('reviews.plantumlUnknownError'))
+      : lastErr !== null
+        ? describeApiError(lastErr)
+        : i18n.t('reviews.plantumlUnknownError')
   mount.appendChild(buildErrorWithSource(source, msg))
 }
 
@@ -203,8 +208,9 @@ async function proxyRender(mount: HTMLElement, source: string): Promise<void> {
     resp = await api.post('/api/plantuml/render', { source })
   } catch (err) {
     mount.innerHTML = ''
-    const msg = err instanceof Error ? err.message : i18n.t('reviews.plantumlUnknownError')
-    mount.appendChild(buildErrorWithSource(source, msg))
+    // RFC-203 T5a: api.post failures arrive as tagged ApiError (incl. the
+    // plantuml-* codes and network-unreachable) — resolve to localized copy.
+    mount.appendChild(buildErrorWithSource(source, describeApiError(err)))
     return
   }
   mount.innerHTML = ''

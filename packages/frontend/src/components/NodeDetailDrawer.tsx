@@ -20,7 +20,8 @@ import { LoadingState } from './LoadingState'
 import { SessionTab } from './node-session/SessionTab'
 import { StatusChip } from './StatusChip'
 import { TabBar, tabDomIds, type TabDef } from './TabBar'
-import { api, ApiError } from '@/api/client'
+import { api } from '@/api/client'
+import { describeApiError } from '@/i18n'
 import {
   clarifyRoundForRun,
   displayRetryForRun,
@@ -203,7 +204,7 @@ export function NodeDetailDrawer({
         </div>
       )}
       {retry.error !== null && retry.error !== undefined && (
-        <div className="error-box">{describeError(retry.error)}</div>
+        <div className="error-box">{describeApiError(retry.error)}</div>
       )}
       {children.length > 0 && <SubProcessList shards={children} onPick={onSelectRun} />}
       <div className="inspector__body">
@@ -533,7 +534,7 @@ function EventsTab({
       </div>
       {query.isLoading && <LoadingState size="compact" />}
       {query.error !== null && query.error !== undefined && (
-        <div className="error-box">{describeError(query.error)}</div>
+        <div className="error-box">{describeApiError(query.error)}</div>
       )}
       {visible.length === 0 && !query.isLoading && (
         <div className="muted">{t('nodeDrawer.noEventsMatch')}</div>
@@ -625,12 +626,6 @@ function CopyButton({ text }: { text: string }) {
       {copied ? t('common.copied') : t('common.copy')}
     </button>
   )
-}
-
-function describeError(e: unknown): string {
-  if (e instanceof ApiError) return `${e.code}: ${e.message}`
-  if (e instanceof Error) return e.message
-  return String(e)
 }
 
 /**

@@ -8,7 +8,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import type { Agent, ImportWorkflowResult, Workflow } from '@agent-workflow/shared'
-import { api, ApiError } from '@/api/client'
+import { api } from '@/api/client'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { CapabilityGrid } from '@/components/home/CapabilityGrid'
 import { PipelineHero } from '@/components/home/PipelineHero'
@@ -168,7 +168,7 @@ export function Onboarding(props: OnboardingProps = {}) {
               </NoticeBanner>
             )}
             {importDemo.error !== null && importDemo.error !== undefined && (
-              <ErrorBanner error={importDemo.error} message={describeError(importDemo.error)} />
+              <ErrorBanner error={importDemo.error} />
             )}
           </div>
         </li>
@@ -194,10 +194,4 @@ async function postDemoYaml(yamlText: string): Promise<void> {
     yamlText,
     mode: 'new',
   })
-}
-
-function describeError(e: unknown): string {
-  if (e instanceof ApiError) return `${e.code}: ${e.message}`
-  if (e instanceof Error) return e.message
-  return String(e)
 }

@@ -19,6 +19,7 @@ import type {
   WorkflowValidationReceipt,
 } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
+import { describeApiError } from '@/i18n'
 import { describeValidationIssue } from '@/i18n/errors'
 import { EditorSidebar } from '@/components/canvas/EditorSidebar'
 import { EdgeInspector } from '@/components/canvas/EdgeInspector'
@@ -1005,7 +1006,7 @@ export function WorkflowEditorLoaded({
         pending={copyCreate.isPending}
         submitError={
           copyCreate.error !== null && copyCreate.error !== undefined
-            ? describeError(copyCreate.error)
+            ? describeApiError(copyCreate.error)
             : undefined
         }
         onCreate={() => {
@@ -1129,10 +1130,4 @@ function ValidationIssueRow({
       </details>
     </li>
   )
-}
-
-function describeError(e: unknown): string {
-  if (e instanceof ApiError) return `${e.code}: ${e.message}`
-  if (e instanceof Error) return e.message
-  return String(e)
 }

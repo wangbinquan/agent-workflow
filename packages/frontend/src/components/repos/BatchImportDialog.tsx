@@ -15,6 +15,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, ApiError } from '@/api/client'
+import { describeApiError } from '@/i18n'
 import { Dialog } from '@/components/Dialog'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { Field, TextArea, TextInput } from '@/components/Form'
@@ -80,7 +81,7 @@ export function BatchImportDialog({
           setSnapshot(null)
           return
         }
-        setErrorMsg(describeError(err))
+        setErrorMsg(describeApiError(err))
       })
   }, [open, activeBatchId, onActiveBatchIdChange])
 
@@ -157,7 +158,7 @@ export function BatchImportDialog({
       // cached-repos query.
       qc.invalidateQueries({ queryKey: ['cached-repos'] })
     } catch (err) {
-      setErrorMsg(describeError(err))
+      setErrorMsg(describeApiError(err))
     } finally {
       setSubmitting(false)
     }
@@ -215,7 +216,7 @@ export function BatchImportDialog({
       restoreRowFocus(rowId, 'retry')
     } catch (err) {
       if (fromEditor) setRetryError(err)
-      else setErrorMsg(describeError(err))
+      else setErrorMsg(describeApiError(err))
     } finally {
       retryInFlightRef.current = false
       setRetryPending(false)
@@ -468,10 +469,4 @@ export function parseTextarea(text: string): string[] {
     out.push(trimmed)
   }
   return out
-}
-
-function describeError(e: unknown): string {
-  if (e instanceof ApiError) return `${e.code}: ${e.message}`
-  if (e instanceof Error) return e.message
-  return String(e)
 }
