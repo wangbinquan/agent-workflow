@@ -269,6 +269,19 @@ export async function deleteAgent(db: DbClient, name: string, actor: Actor): Pro
   // check-then-await-then-write shape let a reference land between the check
   // and the delete. All reads below use the synchronous tx surface.
   dbTxSync(db, (tx) => {
+    // RFC-203 T6 实现门 P1 —— identity fence：上面的 grant 预取是 async，
+    // `existing` 捕获与本事务之间存在 yield 窗口；并发「删除后同名重建 /
+    // 改名腾挪」可把这个 NAME 换绑到另一行，事务按 name 操作就会动到替身、
+    // 绕过它的 launch/ownership 守卫。进事务先重读并断言 id 未变（既有
+    // agent-id-mismatch 语义，RFC-175 先例），把窗口关死。
+    const fenceRow = tx.select({ id: agents.id }).from(agents).where(eq(agents.name, name)).get()
+    if (fenceRow === undefined || fenceRow.id !== existing.id) {
+      throw new ConflictError(
+        'agent-id-mismatch',
+        `agent '${name}' was concurrently replaced; reload and retry`,
+      )
+    }
+
     // RFC-175 (§2e): refuse while a single-agent launch holds this agent's id.
     // The launch resolves the agent by NAME from a frozen snapshot, so deleting
     // (then recreating same-name) mid-launch would run a DIFFERENT agent than
@@ -400,6 +413,19 @@ export async function renameAgent(
     ? new Set<string>()
     : await listGrantedResourceIds(db, actor, 'agent')
   dbTxSync(db, (tx) => {
+    // RFC-203 T6 实现门 P1 —— identity fence：上面的 grant 预取是 async，
+    // `existing` 捕获与本事务之间存在 yield 窗口；并发「删除后同名重建 /
+    // 改名腾挪」可把这个 NAME 换绑到另一行，事务按 name 操作就会动到替身、
+    // 绕过它的 launch/ownership 守卫。进事务先重读并断言 id 未变（既有
+    // agent-id-mismatch 语义，RFC-175 先例），把窗口关死。
+    const fenceRow = tx.select({ id: agents.id }).from(agents).where(eq(agents.name, oldName)).get()
+    if (fenceRow === undefined || fenceRow.id !== existing.id) {
+      throw new ConflictError(
+        'agent-id-mismatch',
+        `agent '${oldName}' was concurrently replaced; reload and retry`,
+      )
+    }
+
     // RFC-175 (§2e): refuse while a single-agent launch holds this agent's id.
     // A rename changes the name the launch's frozen snapshot resolves by, so the
     // runtime could resolve a different agent than the task recorded. Same

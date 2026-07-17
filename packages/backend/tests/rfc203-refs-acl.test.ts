@@ -9,6 +9,7 @@
 //   3. 可见即列名：public / 本人 / admin 视角下引用名单完整；
 //   4. 计划（schedule）走成员私有规则（owner / tasks:read:all），非 ACL 表。
 import { beforeEach, describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
@@ -52,6 +53,25 @@ const AGENT_BASE = {
   frontmatterExtra: {},
   bodyMd: '',
 }
+
+// PR-3 实现门 P1 —— identity fence 源级锁。grant 预取（async）把 `existing`
+// 捕获与 dbTxSync 守卫事务之间拉开了 yield 窗口；并发同名替换可让事务按
+// name 动到替身、绕过 isAgentLaunching(existing.id) 的 ABA 防护。修复 =
+// 事务首步重读该 name 的行并断言 id === existing.id（agent-id-mismatch）。
+// bun:sqlite 驱动同步完成一切 await，进程内交错无法在单测里确定性构造——
+// 按仓规以源级断言锁住 fence 不被 refactor 拆掉；happy path 无误伤由本文件
+// 与 agents/rfc165 系列的全部删除/改名行为测试保证。
+describe('RFC-203 T6 实现门 P1：agent identity fence（源级锁）', () => {
+  test('deleteAgent 与 renameAgent 的事务体都以 id fence 开场', () => {
+    const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'agent.ts'), 'utf8')
+    const fences = src.match(/fenceRow\.id !== existing\.id/g) ?? []
+    expect(fences.length).toBe(2)
+    const mismatches = src.match(/'agent-id-mismatch'/g) ?? []
+    expect(mismatches.length).toBeGreaterThanOrEqual(2)
+    // fence 必须在 grant 预取之后的事务内（关的是预取拉开的窗口）
+    expect(src.indexOf('fenceRow')).toBeGreaterThan(src.indexOf('listGrantedResourceIds'))
+  })
+})
 
 describe('RFC-203 T6 引用披露 ACL', () => {
   let db: DbClient
