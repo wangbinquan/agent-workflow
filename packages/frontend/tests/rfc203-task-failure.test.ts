@@ -44,6 +44,7 @@ describe('describeTaskFailure', () => {
       'canceled by user',
       'scheduler error',
       'dw-generate-exhausted',
+      'dw-reject-exhausted',
     ]) {
       const r = describeTaskFailure({ errorSummary: summary })
       expect(r.matched).toBe('summary-token')
@@ -78,5 +79,24 @@ describe('describeTaskFailure', () => {
     const r = describeTaskFailure({ errorMessage: 'boom' })
     expect(r.matched).toBe('generic')
     expect(r.raw).toBe('boom')
+  })
+})
+
+// PR-1 实现门 P2 —— NodeDetailDrawer statError 行的接线源级锁。为什么存在：
+// classifyCanceled 的 'manual' 臂同时覆盖 failed/exhausted 与
+// canceled/interrupted；后两者的 errorMessage（'aborted by signal' /
+// 'daemon-shutdown …'）不是失败令牌，误走 describeTaskFailure 会错标
+// 「任务执行失败」。drawer 是巨型运行时组件（渲染需 query/ws 全套上下文），
+// 按仓规以源级断言兜底：本地化必须按 status 分流，原文分支不得丢失。
+describe('NodeDetailDrawer statError 分流（源级锁）', () => {
+  test('describeTaskFailure 只对 failed/exhausted 行生效，其余保留原文', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { resolve } = await import('node:path')
+    const drawer = readFileSync(
+      resolve(__dirname, '../src/components/NodeDetailDrawer.tsx'),
+      'utf8',
+    )
+    expect(drawer).toContain("run.status === 'failed' || run.status === 'exhausted'")
+    expect(drawer).toContain(': run.errorMessage}')
   })
 })
