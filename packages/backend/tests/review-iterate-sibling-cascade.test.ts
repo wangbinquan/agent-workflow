@@ -23,12 +23,13 @@
 //   - check the cascadeSiblingReviews call in submitReviewDecision iterate branch
 //   - check buildSiblingOutputsBlock for the `__sibling_outputs__` payload
 
-import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync, chmodSync } from 'node:fs'
+import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { execFileSync } from 'node:child_process'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { execSync } from 'node:child_process'
 import { and, eq, desc } from 'drizzle-orm'
+import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { docVersions, nodeRuns } from '../src/db/schema'
@@ -39,9 +40,37 @@ import {
   buildSiblingOutputsBlock,
   submitReviewDecision,
 } from '../src/services/review'
-import { startTaskWithLocalRepo } from '../src/services/task'
+import {
+  abortAllActiveTasks,
+  startTaskWithLocalRepo as startTaskWithLocalRepoBase,
+} from '../src/services/task'
+import { nonInteractiveGitEnv } from '../src/util/git'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const GIT_TIMEOUT_MS = 10_000
+const NODE_TIMEOUT_MS = 10_000
+const FLOW_TIMEOUT_MS = 20_000
+
+setDefaultTimeout(FLOW_TIMEOUT_MS + 10_000)
+
+function git(...args: string[]): void {
+  execFileSync('git', args, {
+    stdio: 'ignore',
+    timeout: GIT_TIMEOUT_MS,
+    env: nonInteractiveGitEnv(),
+  })
+}
+
+function startTaskWithLocalRepo(
+  input: Parameters<typeof startTaskWithLocalRepoBase>[0],
+  deps: Parameters<typeof startTaskWithLocalRepoBase>[1],
+) {
+  return startTaskWithLocalRepoBase(input, {
+    ...deps,
+    defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
+    defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
+  })
+}
 
 const PROPOSAL_DOC = '# Proposal v1\n\nWe build B2B platform for orders.\n'
 const DESIGN_DOC = '# Design v1\n\nAPI exposes /orders/cancel.\n'
@@ -99,13 +128,15 @@ async function buildHarness(opts: HarnessOpts): Promise<Harness> {
   const appHome = join(tmp, 'appHome')
   const repoPath = join(tmp, 'repo')
   const db = createInMemoryDb(MIGRATIONS)
+  const previousAppHome = process.env.AGENT_WORKFLOW_HOME
 
-  execSync(`mkdir -p "${repoPath}"`, { stdio: 'ignore' })
-  execSync(`git init -b main "${repoPath}"`, { stdio: 'ignore' })
-  execSync(`git -C "${repoPath}" config user.email t@t.test`, { stdio: 'ignore' })
-  execSync(`git -C "${repoPath}" config user.name t`, { stdio: 'ignore' })
+  mkdirSync(repoPath, { recursive: true })
+  git('-C', repoPath, 'init', '-b', 'main')
+  git('-C', repoPath, 'config', 'user.email', 't@t.test')
+  git('-C', repoPath, 'config', 'user.name', 't')
   writeFileSync(join(repoPath, 'README.md'), '# repo\n')
-  execSync(`git -C "${repoPath}" add . && git -C "${repoPath}" commit -m init`, { stdio: 'ignore' })
+  git('-C', repoPath, 'add', '.')
+  git('-C', repoPath, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
 
   const stubOpencode = makeStubOpencode(tmp)
 
@@ -205,19 +236,29 @@ async function buildHarness(opts: HarnessOpts): Promise<Harness> {
     },
     cleanup: async () => {
       rmSync(tmp, { recursive: true, force: true })
-      delete process.env.AGENT_WORKFLOW_HOME
+      if (previousAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+      else process.env.AGENT_WORKFLOW_HOME = previousAppHome
     },
   }
 }
 
 describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => {
   let h: Harness
+  let cleanupHarness: (() => Promise<void>) | undefined
+  let watchdog: ReturnType<typeof setTimeout> | undefined
+  beforeEach(() => {
+    cleanupHarness = undefined
+    watchdog = setTimeout(() => abortAllActiveTasks('test-timeout'), FLOW_TIMEOUT_MS)
+  })
   afterEach(async () => {
-    await h.cleanup()
+    if (watchdog !== undefined) clearTimeout(watchdog)
+    abortAllActiveTasks('test-cleanup')
+    await cleanupHarness?.()
   })
 
   test('iterate on `design` resets sibling review nodes (`proposal` + `plan`) to awaiting_review with bumped reviewIteration', async () => {
     h = await buildHarness({ agentSyncOutputsOnIterate: true })
+    cleanupHarness = h.cleanup
 
     // All three review node_runs land in awaiting_review after the upstream
     // agent runs (handled by the scheduler harness).
@@ -269,6 +310,7 @@ describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => 
 
   test('approved sibling is pulled back to pending after iterate (RFC-014 #3: even done(approved) cascade)', async () => {
     h = await buildHarness({ agentSyncOutputsOnIterate: true })
+    cleanupHarness = h.cleanup
 
     // First approve proposal so it goes to status=done.
     await submitReviewDecision({
@@ -307,6 +349,7 @@ describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => 
 
   test('agent opt-out (syncOutputsOnIterate=false) — siblings stay put on iterate (C5)', async () => {
     h = await buildHarness({ agentSyncOutputsOnIterate: false })
+    cleanupHarness = h.cleanup
 
     await submitReviewDecision({
       db: h.db,
@@ -337,6 +380,7 @@ describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => 
 
   test('buildSiblingOutputsBlock returns the English instruction + worktree-relative file paths (not bodies)', async () => {
     h = await buildHarness({ agentSyncOutputsOnIterate: true })
+    cleanupHarness = h.cleanup
 
     // RFC-014 updated: the block lists `- {portName}: {sourceFilePath}` lines
     // pulled from doc_versions.source_file_path. The harness emits inline
@@ -375,6 +419,7 @@ describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => 
 
   test('buildSiblingOutputsBlock returns undefined when every sibling is inline (no sourceFilePath)', async () => {
     h = await buildHarness({ agentSyncOutputsOnIterate: true })
+    cleanupHarness = h.cleanup
 
     // Stub emits inline markdown for all three ports → sourceFilePath is
     // null on every doc_version. With RFC-014 §3.2 (updated) "skip inline"
@@ -392,6 +437,7 @@ describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => 
 
   test('buildSiblingOutputsBlock returns undefined when agent opt-out (no sibling cascade fires either)', async () => {
     h = await buildHarness({ agentSyncOutputsOnIterate: false })
+    cleanupHarness = h.cleanup
 
     const block = await buildSiblingOutputsBlock({
       db: h.db,
@@ -405,6 +451,7 @@ describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => 
 
   test('buildReviewPromptContext on iterate path populates `siblingOutputs` with paths for opt-in agent (when sibling ports have sourceFilePath)', async () => {
     h = await buildHarness({ agentSyncOutputsOnIterate: true })
+    cleanupHarness = h.cleanup
 
     // Seed sourceFilePath on the sibling doc_versions before the decision —
     // simulates the upstream agent having used `kind: markdown_file` outputs
@@ -437,6 +484,7 @@ describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => 
 
   test('buildReviewPromptContext on iterate path with opt-out agent leaves `siblingOutputs` undefined', async () => {
     h = await buildHarness({ agentSyncOutputsOnIterate: false })
+    cleanupHarness = h.cleanup
 
     await submitReviewDecision({
       db: h.db,
@@ -456,6 +504,7 @@ describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => 
   // doc_versions.reviewIteration is what `buildSiblingOutputsBlock` relies on.
   test('buildSiblingOutputsBlock reads the latest doc_version per sibling port', async () => {
     h = await buildHarness({ agentSyncOutputsOnIterate: true })
+    cleanupHarness = h.cleanup
 
     // The harness emitted v0 for all three ports. Confirm the desc query
     // would in fact prefer a higher reviewIteration if it existed.

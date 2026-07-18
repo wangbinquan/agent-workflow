@@ -35,23 +35,60 @@
 //     (!effectiveHasClarifyChannel / !suppressPriorOutput must stay gone), and
 //     the hasClarifyChannel threading is locked by clarify-prompt-wire-up.test.ts.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync, chmodSync } from 'node:fs'
+import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { execFileSync } from 'node:child_process'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { execSync } from 'node:child_process'
 import { and, eq } from 'drizzle-orm'
+import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { nodeRuns } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
 import { addReviewComment, submitReviewDecision } from '../src/services/review'
-import { runTask } from '../src/services/scheduler'
-import { startTaskWithLocalRepo } from '../src/services/task'
+import { runTask as runTaskBase } from '../src/services/scheduler'
+import {
+  abortAllActiveTasks,
+  startTaskWithLocalRepo as startTaskWithLocalRepoBase,
+} from '../src/services/task'
+import { nonInteractiveGitEnv } from '../src/util/git'
 import { reenterScheduler } from './reenter-scheduler'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const GIT_TIMEOUT_MS = 10_000
+const NODE_TIMEOUT_MS = 10_000
+const FLOW_TIMEOUT_MS = 20_000
+
+setDefaultTimeout(FLOW_TIMEOUT_MS + 10_000)
+
+function git(...args: string[]): void {
+  execFileSync('git', args, {
+    stdio: 'ignore',
+    timeout: GIT_TIMEOUT_MS,
+    env: nonInteractiveGitEnv(),
+  })
+}
+
+function runTask(options: Parameters<typeof runTaskBase>[0]) {
+  return runTaskBase({
+    ...options,
+    defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
+    defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
+  })
+}
+
+function startTaskWithLocalRepo(
+  input: Parameters<typeof startTaskWithLocalRepoBase>[0],
+  deps: Parameters<typeof startTaskWithLocalRepoBase>[1],
+) {
+  return startTaskWithLocalRepoBase(input, {
+    ...deps,
+    defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
+    defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
+  })
+}
 
 const V1_MARKER = 'PRIOR-AUDIT-MARKER-V1'
 const REPORT_V1 = `# Audit Report v1\n\nFINDING: ${V1_MARKER} — the login handler lacks rate limiting.\n`
@@ -102,13 +139,15 @@ async function buildHarness(): Promise<Harness> {
   const appHome = join(tmp, 'appHome')
   const repoPath = join(tmp, 'repo')
   const db = createInMemoryDb(MIGRATIONS)
+  const previousAppHome = process.env.AGENT_WORKFLOW_HOME
 
-  execSync(`mkdir -p "${repoPath}"`, { stdio: 'ignore' })
-  execSync(`git init -b main "${repoPath}"`, { stdio: 'ignore' })
-  execSync(`git -C "${repoPath}" config user.email t@t.test`, { stdio: 'ignore' })
-  execSync(`git -C "${repoPath}" config user.name t`, { stdio: 'ignore' })
+  mkdirSync(repoPath, { recursive: true })
+  git('-C', repoPath, 'init', '-b', 'main')
+  git('-C', repoPath, 'config', 'user.email', 't@t.test')
+  git('-C', repoPath, 'config', 'user.name', 't')
   writeFileSync(join(repoPath, 'README.md'), '# repo\n')
-  execSync(`git -C "${repoPath}" add . && git -C "${repoPath}" commit -m init`, { stdio: 'ignore' })
+  git('-C', repoPath, 'add', '.')
+  git('-C', repoPath, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
 
   const stubOpencode = makeStubOpencode(tmp)
 
@@ -195,18 +234,26 @@ async function buildHarness(): Promise<Harness> {
     reviewNodeRunId: reviewRows[0]!.id,
     cleanup: () => {
       rmSync(tmp, { recursive: true, force: true })
-      delete process.env.AGENT_WORKFLOW_HOME
+      if (previousAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+      else process.env.AGENT_WORKFLOW_HOME = previousAppHome
     },
   }
 }
 
 describe('RFC-119 e2e — review-iterate rerun gets the prior output in its prompt', () => {
   let h: Harness
+  let cleanupHarness: (() => void) | undefined
+  let watchdog: ReturnType<typeof setTimeout> | undefined
   beforeEach(async () => {
+    cleanupHarness = undefined
+    watchdog = setTimeout(() => abortAllActiveTasks('test-timeout'), FLOW_TIMEOUT_MS)
     h = await buildHarness()
+    cleanupHarness = h.cleanup
   })
   afterEach(() => {
-    h.cleanup()
+    if (watchdog !== undefined) clearTimeout(watchdog)
+    abortAllActiveTasks('test-cleanup')
+    cleanupHarness?.()
   })
 
   test('the fresh auditor prompt carries `## Prior Output` + the V1 body + the update directive', async () => {

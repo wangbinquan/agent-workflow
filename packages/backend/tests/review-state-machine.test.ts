@@ -8,12 +8,21 @@
 // the e2e tests) + a tiny workflow: input → designer (agent producing
 // kind=markdown 'design' port) → reviewDesign (review node) → output.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync, chmodSync, existsSync, readFileSync } from 'node:fs'
+import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { execFileSync } from 'node:child_process'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { execSync } from 'node:child_process'
 import { and, eq } from 'drizzle-orm'
+import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { docVersions, nodeRunOutputs, nodeRuns, reviewComments, tasks } from '../src/db/schema'
@@ -27,11 +36,47 @@ import {
   listReviewSummaries,
   submitReviewDecision,
 } from '../src/services/review'
-import { runTask } from '../src/services/scheduler'
-import { startTaskWithLocalRepo } from '../src/services/task'
+import { runTask as runTaskBase } from '../src/services/scheduler'
+import {
+  abortAllActiveTasks,
+  startTaskWithLocalRepo as startTaskWithLocalRepoBase,
+} from '../src/services/task'
+import { nonInteractiveGitEnv } from '../src/util/git'
 import { reenterScheduler } from './reenter-scheduler'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const GIT_TIMEOUT_MS = 10_000
+const NODE_TIMEOUT_MS = 10_000
+const FLOW_TIMEOUT_MS = 20_000
+
+setDefaultTimeout(FLOW_TIMEOUT_MS + 10_000)
+
+function git(...args: string[]): void {
+  execFileSync('git', args, {
+    stdio: 'ignore',
+    timeout: GIT_TIMEOUT_MS,
+    env: nonInteractiveGitEnv(),
+  })
+}
+
+function runTask(options: Parameters<typeof runTaskBase>[0]) {
+  return runTaskBase({
+    ...options,
+    defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
+    defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
+  })
+}
+
+function startTaskWithLocalRepo(
+  input: Parameters<typeof startTaskWithLocalRepoBase>[0],
+  deps: Parameters<typeof startTaskWithLocalRepoBase>[1],
+) {
+  return startTaskWithLocalRepoBase(input, {
+    ...deps,
+    defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
+    defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
+  })
+}
 
 interface Harness {
   db: DbClient
@@ -92,17 +137,17 @@ async function buildHarness(): Promise<Harness> {
   const appHome = join(tmp, 'appHome')
   const repoPath = join(tmp, 'repo')
   const db = createInMemoryDb(MIGRATIONS)
+  const previousAppHome = process.env.AGENT_WORKFLOW_HOME
 
   // Set up a real git repo so worktree creation actually works.
-  execSync('git init -b main', { cwd: tmp, stdio: 'ignore' })
-  execSync(`mkdir -p "${repoPath}"`, { stdio: 'ignore' })
-  execSync(`git init -b main "${repoPath}"`, { stdio: 'ignore' })
-  execSync(`git -C "${repoPath}" config user.email t@t.test`, { stdio: 'ignore' })
-  execSync(`git -C "${repoPath}" config user.name t`, { stdio: 'ignore' })
+  git('-C', tmp, 'init', '-b', 'main')
+  mkdirSync(repoPath, { recursive: true })
+  git('-C', repoPath, 'init', '-b', 'main')
+  git('-C', repoPath, 'config', 'user.email', 't@t.test')
+  git('-C', repoPath, 'config', 'user.name', 't')
   writeFileSync(join(repoPath, 'README.md'), '# repo\n')
-  execSync(`git -C "${repoPath}" add . && git -C "${repoPath}" commit -m init`, {
-    stdio: 'ignore',
-  })
+  git('-C', repoPath, 'add', '.')
+  git('-C', repoPath, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
 
   const stubOpencode = makeStubOpencode(tmp)
 
@@ -188,18 +233,26 @@ async function buildHarness(): Promise<Harness> {
     reviewNodeRunId: reviewRuns[0]!.id,
     cleanup: async () => {
       rmSync(tmp, { recursive: true, force: true })
-      delete process.env.AGENT_WORKFLOW_HOME
+      if (previousAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+      else process.env.AGENT_WORKFLOW_HOME = previousAppHome
     },
   }
 }
 
 describe('RFC-005 review state machine — dispatch + decisions', () => {
   let h: Harness
+  let cleanupHarness: (() => Promise<void>) | undefined
+  let watchdog: ReturnType<typeof setTimeout> | undefined
   beforeEach(async () => {
+    cleanupHarness = undefined
+    watchdog = setTimeout(() => abortAllActiveTasks('test-timeout'), FLOW_TIMEOUT_MS)
     h = await buildHarness()
+    cleanupHarness = h.cleanup
   })
   afterEach(async () => {
-    await h.cleanup()
+    if (watchdog !== undefined) clearTimeout(watchdog)
+    abortAllActiveTasks('test-cleanup')
+    await cleanupHarness?.()
   })
 
   test('scheduler parks review at awaiting_review + creates doc_version v1', async () => {
@@ -542,11 +595,18 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
 
 describe('RFC-005 review REST endpoints', () => {
   let h: Harness
+  let cleanupHarness: (() => Promise<void>) | undefined
+  let watchdog: ReturnType<typeof setTimeout> | undefined
   beforeEach(async () => {
+    cleanupHarness = undefined
+    watchdog = setTimeout(() => abortAllActiveTasks('test-timeout'), FLOW_TIMEOUT_MS)
     h = await buildHarness()
+    cleanupHarness = h.cleanup
   })
   afterEach(async () => {
-    await h.cleanup()
+    if (watchdog !== undefined) clearTimeout(watchdog)
+    abortAllActiveTasks('test-cleanup')
+    await cleanupHarness?.()
   })
 
   const HEADERS = { Authorization: 'Bearer tok' }

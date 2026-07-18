@@ -50,6 +50,12 @@ const reviewIterateRegressions = [
   'review-iterate-file-path-in-prompt.test.ts',
   'review-iterate-drops-prior-clarify-history.test.ts',
 ].map((file) => readFileSync(resolve(root, 'packages', 'backend', 'tests', file), 'utf8'))
+const reviewStateRegressions = [
+  'rerun-prior-output-e2e.test.ts',
+  'review-iterate-sibling-cascade.test.ts',
+  'review-state-machine.test.ts',
+  'reviews-iterate-mints-new-run.test.ts',
+].map((file) => readFileSync(resolve(root, 'packages', 'backend', 'tests', file), 'utf8'))
 const hardenedBunCommand = 'bun test --isolate --randomize'
 const hardenedFrontendCommand = 'vitest run --sequence.shuffle'
 
@@ -169,7 +175,7 @@ describe('repository test entrypoint', () => {
   })
 
   test('historical review-iterate regressions bound subprocesses and restore ambient home', () => {
-    for (const source of reviewIterateRegressions) {
+    for (const source of [...reviewIterateRegressions, ...reviewStateRegressions]) {
       expect(source).not.toContain('execSync(')
       expect(source).toContain("execFileSync('git'")
       expect(source).toContain('timeout: GIT_TIMEOUT_MS')

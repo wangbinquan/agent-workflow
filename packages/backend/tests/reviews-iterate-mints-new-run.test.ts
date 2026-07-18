@@ -8,21 +8,51 @@
 // If this goes red, services/review.ts:submitReviewDecision iterate/reject
 // branch is out of lock-step with RFC-011 design §3.1.
 
-import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync, chmodSync } from 'node:fs'
+import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { execFileSync } from 'node:child_process'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { execSync } from 'node:child_process'
 import { and, eq } from 'drizzle-orm'
+import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { nodeRuns } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
 import { submitReviewDecision } from '../src/services/review'
-import { startTaskWithLocalRepo } from '../src/services/task'
+import {
+  abortAllActiveTasks,
+  startTaskWithLocalRepo as startTaskWithLocalRepoBase,
+} from '../src/services/task'
+import { nonInteractiveGitEnv } from '../src/util/git'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const GIT_TIMEOUT_MS = 10_000
+const NODE_TIMEOUT_MS = 10_000
+const FLOW_TIMEOUT_MS = 20_000
+
+setDefaultTimeout(FLOW_TIMEOUT_MS + 10_000)
+
+function git(...args: string[]): string {
+  return execFileSync('git', args, {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+    timeout: GIT_TIMEOUT_MS,
+    env: nonInteractiveGitEnv(),
+  })
+}
+
+function startTaskWithLocalRepo(
+  input: Parameters<typeof startTaskWithLocalRepoBase>[0],
+  deps: Parameters<typeof startTaskWithLocalRepoBase>[1],
+) {
+  return startTaskWithLocalRepoBase(input, {
+    ...deps,
+    defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
+    defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
+  })
+}
 
 interface Harness {
   db: DbClient
@@ -79,14 +109,16 @@ async function buildHarness(opts?: HarnessOpts): Promise<Harness> {
   const appHome = join(tmp, 'appHome')
   const repoPath = join(tmp, 'repo')
   const db = createInMemoryDb(MIGRATIONS)
+  const previousAppHome = process.env.AGENT_WORKFLOW_HOME
 
-  execSync('git init -b main', { cwd: tmp, stdio: 'ignore' })
-  execSync(`mkdir -p "${repoPath}"`, { stdio: 'ignore' })
-  execSync(`git init -b main "${repoPath}"`, { stdio: 'ignore' })
-  execSync(`git -C "${repoPath}" config user.email t@t.test`, { stdio: 'ignore' })
-  execSync(`git -C "${repoPath}" config user.name t`, { stdio: 'ignore' })
+  git('-C', tmp, 'init', '-b', 'main')
+  mkdirSync(repoPath, { recursive: true })
+  git('-C', repoPath, 'init', '-b', 'main')
+  git('-C', repoPath, 'config', 'user.email', 't@t.test')
+  git('-C', repoPath, 'config', 'user.name', 't')
   writeFileSync(join(repoPath, 'README.md'), '# repo\n')
-  execSync(`git -C "${repoPath}" add . && git -C "${repoPath}" commit -m init`, { stdio: 'ignore' })
+  git('-C', repoPath, 'add', '.')
+  git('-C', repoPath, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
 
   const stubOpencode = makeStubOpencode(tmp)
 
@@ -188,7 +220,8 @@ async function buildHarness(opts?: HarnessOpts): Promise<Harness> {
     reviewNodeRunId: reviewRuns[0]!.id,
     cleanup: async () => {
       rmSync(tmp, { recursive: true, force: true })
-      delete process.env.AGENT_WORKFLOW_HOME
+      if (previousAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+      else process.env.AGENT_WORKFLOW_HOME = previousAppHome
     },
   }
 }
@@ -210,8 +243,8 @@ async function seedDesignerPreSnapshot(h: Harness): Promise<string> {
   // `git stash create` skips untracked files, so add the file first to put
   // it in the index — then the stash sha is non-empty and rollbackToSnapshot
   // can apply it back.
-  execSync('git add dirty.txt', { cwd: h.worktreePath })
-  const sha = execSync('git stash create', { cwd: h.worktreePath }).toString().trim()
+  git('-C', h.worktreePath, 'add', 'dirty.txt')
+  const sha = git('-C', h.worktreePath, 'stash', 'create').trim()
   if (sha === '') throw new Error('git stash create returned empty sha')
   // Update the latest non-shard designer row.
   const rows = await fetchDesignerTopRuns(h)
@@ -231,12 +264,21 @@ async function fetchDesignerTopRuns(h: Harness) {
 
 describe('RFC-011 review reject/iterate mints a fresh node_run', () => {
   let h: Harness
+  let cleanupHarness: (() => Promise<void>) | undefined
+  let watchdog: ReturnType<typeof setTimeout> | undefined
+  beforeEach(() => {
+    cleanupHarness = undefined
+    watchdog = setTimeout(() => abortAllActiveTasks('test-timeout'), FLOW_TIMEOUT_MS)
+  })
   afterEach(async () => {
-    await h.cleanup()
+    if (watchdog !== undefined) clearTimeout(watchdog)
+    abortAllActiveTasks('test-cleanup')
+    await cleanupHarness?.()
   })
 
   test('iterate keeps the old upstream run as canceled and preserves its promptText', async () => {
     h = await buildHarness()
+    cleanupHarness = h.cleanup
     const beforeRuns = await fetchDesignerTopRuns(h)
     expect(beforeRuns.length).toBe(1)
     const originalPrompt = beforeRuns[0]!.promptText
@@ -267,6 +309,7 @@ describe('RFC-011 review reject/iterate mints a fresh node_run', () => {
 
   test('iterate mints a new pending row at retry_index+1 inheriting preSnapshot', async () => {
     h = await buildHarness()
+    cleanupHarness = h.cleanup
     const before = (await fetchDesignerTopRuns(h))[0]!
     const beforeSnapshot = before.preSnapshot
 
@@ -292,6 +335,7 @@ describe('RFC-011 review reject/iterate mints a fresh node_run', () => {
 
   test('reject does the same and sibling review nodes still cascade back to awaiting_review', async () => {
     h = await buildHarness({ secondReviewNode: true })
+    cleanupHarness = h.cleanup
     const before = await fetchDesignerTopRuns(h)
     expect(before.length).toBe(1)
 
@@ -339,6 +383,7 @@ describe('RFC-011 review reject/iterate mints a fresh node_run', () => {
 
   test('iterate with rollbackFilesOnIterate=true tags the canceled row with -rollback', async () => {
     h = await buildHarness({ rollbackFilesOnIterate: true })
+    cleanupHarness = h.cleanup
     await seedDesignerPreSnapshot(h)
 
     await submitReviewDecision({
@@ -357,6 +402,7 @@ describe('RFC-011 review reject/iterate mints a fresh node_run', () => {
 
   test('iterate without rollback flag leaves no -rollback marker even with seeded preSnapshot', async () => {
     h = await buildHarness() // default rollbackFilesOnIterate=false
+    cleanupHarness = h.cleanup
     await seedDesignerPreSnapshot(h)
 
     await submitReviewDecision({
@@ -375,6 +421,7 @@ describe('RFC-011 review reject/iterate mints a fresh node_run', () => {
 
   test('reject with default rollbackFilesOnReject=true tags the canceled row with -rollback', async () => {
     h = await buildHarness()
+    cleanupHarness = h.cleanup
     await seedDesignerPreSnapshot(h)
 
     await submitReviewDecision({
@@ -393,6 +440,7 @@ describe('RFC-011 review reject/iterate mints a fresh node_run', () => {
 
   test('reject with rollbackFilesOnReject=false omits the -rollback marker', async () => {
     h = await buildHarness({ rollbackFilesOnReject: false })
+    cleanupHarness = h.cleanup
     await seedDesignerPreSnapshot(h)
 
     await submitReviewDecision({
