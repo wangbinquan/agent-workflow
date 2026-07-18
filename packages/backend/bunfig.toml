@@ -1,0 +1,4 @@
+[test]
+# Workspace-filtered scripts run with packages/backend as cwd, so the root
+# bunfig is not loaded. Keep process-global env/cwd isolation active there too.
+preload = ["./tests/setup.ts"]

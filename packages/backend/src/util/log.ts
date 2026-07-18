@@ -1,5 +1,5 @@
 // Structured logger for the daemon.
-// Light wrapper over process.stdout + appendFileSync; design.md §12 selects
+// Light wrapper over the stdout fd + appendFileSync; design.md §12 selects
 // "Bun built-in console + 轻量结构化包装" over pino.
 //
 // API:
@@ -10,7 +10,7 @@
 // Configuration is global (one daemon process == one log destination):
 //   configureLogger({ level: 'debug', logFile: '/path/to/log', jsonMode: false })
 
-import { appendFileSync, mkdirSync, renameSync, statSync } from 'node:fs'
+import { appendFileSync, mkdirSync, renameSync, statSync, writeSync } from 'node:fs'
 import { dirname } from 'node:path'
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
@@ -43,8 +43,13 @@ const state: LoggerState = {
 
 type StdoutWriter = (line: string) => void
 
+const STDOUT_FD = 1
+
 const defaultStdoutWriter: StdoutWriter = (line) => {
-  process.stdout.write(line)
+  // Bun isolates can lazily materialize competing WriteStreams for process.stdout,
+  // which intermittently fails with epoll_ctl EEXIST on Linux. Writing to the
+  // inherited stdout descriptor avoids that process-global stream construction.
+  writeSync(STDOUT_FD, line)
 }
 
 let stdoutWriter = defaultStdoutWriter
@@ -93,7 +98,7 @@ export function createLogger(service: string): Logger {
     try {
       stdoutWriter(line)
     } catch {
-      // stdout may be closed, or Bun may fail to materialize its WriteStream.
+      // stdout may be closed.
       // Logging is best-effort and must never fail daemon work.
     }
     if (state.logFile !== null) {

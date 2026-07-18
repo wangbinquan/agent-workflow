@@ -34,6 +34,7 @@ const sharedPkg = JSON.parse(
 const frontendPkg = JSON.parse(
   readFileSync(resolve(root, 'packages', 'frontend', 'package.json'), 'utf8'),
 ) as RootPackageJson
+const backendBunfig = readFileSync(resolve(root, 'packages', 'backend', 'bunfig.toml'), 'utf8')
 const ciWorkflow = readFileSync(resolve(root, '.github', 'workflows', 'ci.yml'), 'utf8')
 const visualWorkflow = readFileSync(
   resolve(root, '.github', 'workflows', 'visual-regression-nightly.yml'),
@@ -163,6 +164,7 @@ describe('repository test entrypoint', () => {
 
   test('every backend gate isolates files and randomizes execution order', () => {
     expect(backendPkg.scripts?.test).toBe(hardenedBunCommand)
+    expect(backendBunfig).toContain('preload = ["./tests/setup.ts"]')
     // CI shards the backend suite across runners: each shard is an isolated VM,
     // which is why sharding is safe where `bun test --parallel` deadlocks on the
     // single-instance daemon flock. Both legs keep --isolate --randomize; the
