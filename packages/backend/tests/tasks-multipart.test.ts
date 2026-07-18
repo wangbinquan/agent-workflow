@@ -4,20 +4,74 @@
 // before any task row is created, (c) workflow-not-found preempts uploads,
 // (d) limit / accept rejections propagate as ValidationError.
 
-import { describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { execFileSync } from 'node:child_process'
 import type { Hono } from 'hono'
-import { execSync } from 'node:child_process'
-import { mkdtempSync, writeFileSync, chmodSync, existsSync, readFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createApp } from '../src/server'
 import { createAgent } from '../src/services/agent'
+import { abortAllActiveTasks, isTaskActive } from '../src/services/task'
 import { createWorkflow } from '../src/services/workflow'
+import { nonInteractiveGitEnv } from '../src/util/git'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const GIT_TIMEOUT_MS = 10_000
+const NODE_TIMEOUT_MS = 10_000
+const FLOW_TIMEOUT_MS = 20_000
+const ACTIVE_TASK_SETTLE_TIMEOUT_MS = 5_000
+
+let cleanupDirs: string[] = []
+let previousAppHome: string | undefined
+let watchdog: ReturnType<typeof setTimeout> | undefined
+
+setDefaultTimeout(FLOW_TIMEOUT_MS + ACTIVE_TASK_SETTLE_TIMEOUT_MS + 5_000)
+
+beforeEach(() => {
+  cleanupDirs = []
+  previousAppHome = process.env.AGENT_WORKFLOW_HOME
+  watchdog = setTimeout(() => abortAllActiveTasks('test-timeout'), FLOW_TIMEOUT_MS)
+})
+
+afterEach(async () => {
+  if (watchdog !== undefined) clearTimeout(watchdog)
+  try {
+    await abortActiveTasksAndWait('test-cleanup')
+  } finally {
+    for (const dir of cleanupDirs.reverse()) rmSync(dir, { recursive: true, force: true })
+    if (previousAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+    else process.env.AGENT_WORKFLOW_HOME = previousAppHome
+  }
+})
+
+function makeTempDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix))
+  cleanupDirs.push(dir)
+  return dir
+}
+
+async function abortActiveTasksAndWait(reason: string): Promise<void> {
+  const taskIds = abortAllActiveTasks(reason)
+  const deadline = Date.now() + ACTIVE_TASK_SETTLE_TIMEOUT_MS
+  while (taskIds.some((taskId) => isTaskActive(taskId)) && Date.now() < deadline) {
+    await Bun.sleep(20)
+  }
+  const stuck = taskIds.filter((taskId) => isTaskActive(taskId))
+  if (stuck.length > 0) throw new Error(`active test tasks failed to settle: ${stuck.join(', ')}`)
+}
+
+function git(...args: string[]): void {
+  execFileSync('git', args, {
+    stdio: 'ignore',
+    timeout: GIT_TIMEOUT_MS,
+    env: nonInteractiveGitEnv(),
+  })
+}
 
 function makeStubOpencode(dir: string): string {
   const path = join(dir, 'stub-opencode.sh')
@@ -40,24 +94,21 @@ exit 1
 interface Harness {
   db: DbClient
   app: Hono
-  tmp: string
   repoPath: string
   workflowId: string
-  stubOpencode: string
 }
 
 async function buildHarness(): Promise<Harness> {
-  const tmp = mkdtempSync(join(tmpdir(), 'aw-multipart-'))
+  const tmp = makeTempDir('aw-multipart-')
   // Pin app home so worktrees / config land under tmp, not the real user dir.
   process.env.AGENT_WORKFLOW_HOME = join(tmp, 'home')
   const repoPath = join(tmp, 'repo')
-  execSync(`git init -b main "${repoPath}"`, { stdio: 'ignore' })
-  execSync(`git -C "${repoPath}" config user.email t@t.test`, { stdio: 'ignore' })
-  execSync(`git -C "${repoPath}" config user.name t`, { stdio: 'ignore' })
+  git('init', '-b', 'main', repoPath)
+  git('-C', repoPath, 'config', 'user.email', 't@t.test')
+  git('-C', repoPath, 'config', 'user.name', 't')
   writeFileSync(join(repoPath, 'README.md'), '# repo\n')
-  execSync(`git -C "${repoPath}" add . && git -C "${repoPath}" commit -m init`, {
-    stdio: 'ignore',
-  })
+  git('-C', repoPath, 'add', '.')
+  git('-C', repoPath, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
 
   const stubOpencode = makeStubOpencode(tmp)
 
@@ -129,9 +180,14 @@ async function buildHarness(): Promise<Harness> {
   // Pin opencode binary for the route handler.
   writeFileSync(
     join(tmp, 'config.json'),
-    JSON.stringify({ $schema_version: 1, opencodePath: stubOpencode }),
+    JSON.stringify({
+      $schema_version: 1,
+      opencodePath: stubOpencode,
+      defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
+      defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
+    }),
   )
-  return { db, app, tmp, repoPath, workflowId: wf.id, stubOpencode }
+  return { db, app, repoPath, workflowId: wf.id }
 }
 
 function buildFormData(payload: object, files: Array<[string, string, string]>): FormData {

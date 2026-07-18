@@ -18,9 +18,9 @@
 // All git is offline via a `file://` bare repo (mirrors start-task-url.test.ts);
 // no `RUN_GIT_NETWORK` dependency.
 
-import { describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { execSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import {
   chmodSync,
   existsSync,
@@ -34,6 +34,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { cachedRepos, tasks as tasksTable } from '../src/db/schema'
@@ -47,12 +48,81 @@ import {
   workflowDraftSnapshotOf,
   type WorkflowWritePrincipal,
 } from '../src/services/workflow'
-import { materializeWorktree, startTask } from '../src/services/task'
+import {
+  abortAllActiveTasks,
+  isTaskActive,
+  materializeWorktree,
+  startTask as startTaskBase,
+} from '../src/services/task'
 import { ValidationError } from '../src/util/errors'
+import { nonInteractiveGitEnv } from '../src/util/git'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SYSTEM: WorkflowWritePrincipal = { kind: 'system', reason: 'rfc199-multipart-cleanup-test' }
+const GIT_TIMEOUT_MS = 10_000
+const NODE_TIMEOUT_MS = 10_000
+const FLOW_TIMEOUT_MS = 20_000
+const ACTIVE_TASK_SETTLE_TIMEOUT_MS = 5_000
+
+let cleanupDirs: string[] = []
+let previousAppHome: string | undefined
+let watchdog: ReturnType<typeof setTimeout> | undefined
+
+setDefaultTimeout(FLOW_TIMEOUT_MS + ACTIVE_TASK_SETTLE_TIMEOUT_MS + 5_000)
+
+beforeEach(() => {
+  cleanupDirs = []
+  previousAppHome = process.env.AGENT_WORKFLOW_HOME
+  watchdog = setTimeout(() => abortAllActiveTasks('test-timeout'), FLOW_TIMEOUT_MS)
+})
+
+afterEach(async () => {
+  if (watchdog !== undefined) clearTimeout(watchdog)
+  try {
+    await abortActiveTasksAndWait('test-cleanup')
+  } finally {
+    for (const dir of cleanupDirs.reverse()) rmSync(dir, { recursive: true, force: true })
+    if (previousAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+    else process.env.AGENT_WORKFLOW_HOME = previousAppHome
+  }
+})
+
+function makeTempDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix))
+  cleanupDirs.push(dir)
+  return dir
+}
+
+async function abortActiveTasksAndWait(reason: string): Promise<void> {
+  const taskIds = abortAllActiveTasks(reason)
+  const deadline = Date.now() + ACTIVE_TASK_SETTLE_TIMEOUT_MS
+  while (taskIds.some((taskId) => isTaskActive(taskId)) && Date.now() < deadline) {
+    await Bun.sleep(20)
+  }
+  const stuck = taskIds.filter((taskId) => isTaskActive(taskId))
+  if (stuck.length > 0) throw new Error(`active test tasks failed to settle: ${stuck.join(', ')}`)
+}
+
+function git(...args: string[]): string {
+  return execFileSync('git', args, {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+    timeout: GIT_TIMEOUT_MS,
+    env: nonInteractiveGitEnv(),
+  })
+}
+
+function startTask(
+  input: Parameters<typeof startTaskBase>[0],
+  deps: Parameters<typeof startTaskBase>[1],
+) {
+  return startTaskBase(input, {
+    ...deps,
+    defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
+    defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
+  })
+}
 
 function makeStubOpencode(dir: string): string {
   const path = join(dir, 'stub-opencode.sh')
@@ -76,13 +146,14 @@ exit 1
 function makeBareRepo(tmp: string): string {
   const working = join(tmp, 'src')
   mkdirSync(working, { recursive: true })
-  execSync(`git init -b main "${working}"`, { stdio: 'ignore' })
-  execSync(`git -C "${working}" config user.email t@t.test`, { stdio: 'ignore' })
-  execSync(`git -C "${working}" config user.name t`, { stdio: 'ignore' })
+  git('init', '-b', 'main', working)
+  git('-C', working, 'config', 'user.email', 't@t.test')
+  git('-C', working, 'config', 'user.name', 't')
   writeFileSync(join(working, 'README.md'), '# repo\n')
-  execSync(`git -C "${working}" add . && git -C "${working}" commit -m init`, { stdio: 'ignore' })
+  git('-C', working, 'add', '.')
+  git('-C', working, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
   const bare = join(tmp, 'remote.git')
-  execSync(`git clone --bare "${working}" "${bare}"`, { stdio: 'ignore' })
+  git('clone', '--bare', working, bare)
   return bare
 }
 
@@ -101,23 +172,21 @@ const UPLOAD_WF_INPUTS = [
 interface Harness {
   db: DbClient
   app: Hono
-  tmp: string
   bareUrl: string
   localRepo: string
   validWorkflowId: string
   invalidWorkflowId: string
-  stubOpencode: string
 }
 
 async function buildHarness(): Promise<Harness> {
-  const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc107-'))
+  const tmp = makeTempDir('aw-rfc107-')
   process.env.AGENT_WORKFLOW_HOME = join(tmp, 'home')
   const bare = makeBareRepo(tmp)
   const bareUrl = `file://${bare}`
 
   // A local clone usable as a path-mode repo for the path+workingBranch regression.
   const localRepo = join(tmp, 'local')
-  execSync(`git clone "${bare}" "${localRepo}"`, { stdio: 'ignore' })
+  git('clone', bare, localRepo)
 
   const stubOpencode = makeStubOpencode(tmp)
   const db = createInMemoryDb(MIGRATIONS)
@@ -206,17 +275,20 @@ async function buildHarness(): Promise<Harness> {
   })
   writeFileSync(
     join(tmp, 'config.json'),
-    JSON.stringify({ $schema_version: 1, opencodePath: stubOpencode }),
+    JSON.stringify({
+      $schema_version: 1,
+      opencodePath: stubOpencode,
+      defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
+      defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
+    }),
   )
   return {
     db,
     app,
-    tmp,
     bareUrl,
     localRepo,
     validWorkflowId: valid.id,
     invalidWorkflowId: invalid.id,
-    stubOpencode,
   }
 }
 
@@ -269,7 +341,6 @@ describe('RFC-107 — URL launch + multipart upload', () => {
     expect(body.repoUrl).toBe(h.bareUrl)
     // Exactly one cache row was minted (resolved once).
     expect(h.db.select().from(cachedRepos).all().length).toBe(1)
-    rmSync(h.tmp, { recursive: true, force: true })
   })
 
   test('F1: invalid workflow + url upload → workflow-invalid BEFORE any clone (no cache row, no task)', async () => {
@@ -291,7 +362,6 @@ describe('RFC-107 — URL launch + multipart upload', () => {
     // cache was never touched and no task row exists.
     expect(h.db.select().from(cachedRepos).all().length).toBe(0)
     expect(h.db.select().from(tasksTable).all().length).toBe(0)
-    rmSync(h.tmp, { recursive: true, force: true })
   })
 
   test('F3 (parity): a bad ref on a url upload → structured error, no task row', async () => {
@@ -311,7 +381,6 @@ describe('RFC-107 — URL launch + multipart upload', () => {
     expect(res.status).toBeLessThan(500)
     // No half-created task.
     expect(h.db.select().from(tasksTable).all().length).toBe(0)
-    rmSync(h.tmp, { recursive: true, force: true })
   })
 
   test('RFC-199: stale exact version is rejected before cache/worktree/branch materialization', async () => {
@@ -354,7 +423,6 @@ describe('RFC-107 — URL launch + multipart upload', () => {
     const home = process.env.AGENT_WORKFLOW_HOME!
     expect(existsSync(join(home, 'repos'))).toBe(false)
     expect(existsSync(join(home, 'worktrees'))).toBe(false)
-    rmSync(h.tmp, { recursive: true, force: true })
   })
 
   test('RFC-199: cleanup failure decorates but does not replace the upload DomainError', () => {
@@ -417,7 +485,6 @@ describe('RFC-107 — URL launch + multipart upload', () => {
     // Decisive: the upload was rejected before the repo was resolved/cloned.
     expect(h.db.select().from(cachedRepos).all().length).toBe(0)
     expect(h.db.select().from(tasksTable).all().length).toBe(0)
-    rmSync(h.tmp, { recursive: true, force: true })
   })
 
   test('F2: url + upload + workingBranch → worktree is actually on that branch', async () => {
@@ -435,11 +502,8 @@ describe('RFC-107 — URL launch + multipart upload', () => {
     const res = await postMultipart(h.app, fd)
     expect(res.status).toBe(201)
     const body = (await res.json()) as { worktreePath: string }
-    const branch = execSync(`git -C "${body.worktreePath}" rev-parse --abbrev-ref HEAD`)
-      .toString()
-      .trim()
+    const branch = git('-C', body.worktreePath, 'rev-parse', '--abbrev-ref', 'HEAD').trim()
     expect(branch).toBe('feature/rfc107')
-    rmSync(h.tmp, { recursive: true, force: true })
   })
 
   test('F2 (file:// variant): file URL + upload + workingBranch also checks out the branch', async () => {
@@ -460,11 +524,8 @@ describe('RFC-107 — URL launch + multipart upload', () => {
     const res = await postMultipart(h.app, fd)
     expect(res.status).toBe(201)
     const body = (await res.json()) as { worktreePath: string }
-    const branch = execSync(`git -C "${body.worktreePath}" rev-parse --abbrev-ref HEAD`)
-      .toString()
-      .trim()
+    const branch = git('-C', body.worktreePath, 'rev-parse', '--abbrev-ref', 'HEAD').trim()
     expect(branch).toBe('feature/path-wb')
-    rmSync(h.tmp, { recursive: true, force: true })
   })
 
   test('REGRESSION: multi-repo + upload still rejected (multi-repo-upload-unsupported)', async () => {
@@ -482,7 +543,6 @@ describe('RFC-107 — URL launch + multipart upload', () => {
     expect(res.status).toBe(422)
     const body = (await res.json()) as { code: string }
     expect(body.code).toBe('multi-repo-upload-unsupported')
-    rmSync(h.tmp, { recursive: true, force: true })
   })
 })
 
@@ -553,26 +613,30 @@ describe('RFC-107 — security: a cloned repo cannot make uploads escape the wor
     })
     writeFileSync(
       join(tmp, 'config.json'),
-      JSON.stringify({ $schema_version: 1, opencodePath: stubOpencode }),
+      JSON.stringify({
+        $schema_version: 1,
+        opencodePath: stubOpencode,
+        defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
+        defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
+      }),
     )
     return { db, app, wfId: wf.id }
   }
 
   function commitBareRepo(working: string, bare: string): void {
-    execSync(`git -C "${working}" init -b main`, { stdio: 'ignore' })
-    execSync(`git -C "${working}" config user.email t@t.test`, { stdio: 'ignore' })
-    execSync(`git -C "${working}" config user.name t`, { stdio: 'ignore' })
+    git('-C', working, 'init', '-b', 'main')
+    git('-C', working, 'config', 'user.email', 't@t.test')
+    git('-C', working, 'config', 'user.name', 't')
     writeFileSync(join(working, 'README.md'), '# r\n')
-    execSync(`git -C "${working}" add -A && git -C "${working}" commit -m init`, {
-      stdio: 'ignore',
-    })
-    execSync(`git clone --bare "${working}" "${bare}"`, { stdio: 'ignore' })
+    git('-C', working, 'add', '-A')
+    git('-C', working, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
+    git('clone', '--bare', working, bare)
   }
 
   // Codex impl-gate (pass 2): an ANCESTOR of targetDir is a symlink escaping the
   // worktree. The realpath dir-guard must reject before any write.
   test('committed `inputs/` ancestor symlink → rejected (path-traversal), nothing written outside', async () => {
-    const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc107-sym-'))
+    const tmp = makeTempDir('aw-rfc107-sym-')
     process.env.AGENT_WORKFLOW_HOME = join(tmp, 'home')
     const evil = join(tmp, 'evil')
     mkdirSync(evil, { recursive: true })
@@ -598,14 +662,13 @@ describe('RFC-107 — security: a cloned repo cannot make uploads escape the wor
     expect(((await res.json()) as { code: string }).code).toBe('path-traversal')
     // Decisive: nothing was written into the attacker directory.
     expect(existsSync(join(evil, 'refs'))).toBe(false)
-    rmSync(tmp, { recursive: true, force: true })
   })
 
   // Codex impl-gate (pass 3): the LEAF is a dangling symlink named like the
   // uploaded file, inside a REAL targetDir. The dir-guard passes; the writer must
   // not follow the leaf symlink (lstat-collision rename + O_EXCL).
   test('committed leaf symlink `inputs/refs/<name>` (dangling) → write does not follow it outside', async () => {
-    const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc107-leaf-'))
+    const tmp = makeTempDir('aw-rfc107-leaf-')
     process.env.AGENT_WORKFLOW_HOME = join(tmp, 'home')
     const outsideTarget = join(tmp, 'pwned-leaf') // does NOT exist (dangling link)
     const working = join(tmp, 'src')
@@ -629,7 +692,6 @@ describe('RFC-107 — security: a cloned repo cannot make uploads escape the wor
     expect(res.status).toBeLessThan(500)
     // Decisive: the dangling symlink's outside target was NOT created through it.
     expect(existsSync(outsideTarget)).toBe(false)
-    rmSync(tmp, { recursive: true, force: true })
   })
 })
 
@@ -642,7 +704,7 @@ describe('RFC-107 — security: a cloned repo cannot make uploads escape the wor
 // ---------------------------------------------------------------------------
 describe('RFC-107 — startTask preResolvedSource (resolve-once + redaction)', () => {
   async function unitSetup() {
-    const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc107-unit-'))
+    const tmp = makeTempDir('aw-rfc107-unit-')
     const appHome = join(tmp, 'home')
     mkdirSync(appHome, { recursive: true })
     process.env.AGENT_WORKFLOW_HOME = appHome
@@ -650,13 +712,12 @@ describe('RFC-107 — startTask preResolvedSource (resolve-once + redaction)', (
 
     const realRepo = join(tmp, 'real')
     mkdirSync(realRepo, { recursive: true })
-    execSync(`git init -b main "${realRepo}"`, { stdio: 'ignore' })
-    execSync(`git -C "${realRepo}" config user.email t@t.test`, { stdio: 'ignore' })
-    execSync(`git -C "${realRepo}" config user.name t`, { stdio: 'ignore' })
+    git('init', '-b', 'main', realRepo)
+    git('-C', realRepo, 'config', 'user.email', 't@t.test')
+    git('-C', realRepo, 'config', 'user.name', 't')
     writeFileSync(join(realRepo, 'README.md'), '# r\n')
-    execSync(`git -C "${realRepo}" add . && git -C "${realRepo}" commit -m init`, {
-      stdio: 'ignore',
-    })
+    git('-C', realRepo, 'add', '.')
+    git('-C', realRepo, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
 
     const stubOpencode = makeStubOpencode(tmp)
     await createAgent(db, {
@@ -692,11 +753,11 @@ describe('RFC-107 — startTask preResolvedSource (resolve-once + redaction)', (
         ],
       } as never,
     })
-    return { tmp, appHome, db, realRepo, stubOpencode, wf }
+    return { appHome, db, realRepo, stubOpencode, wf }
   }
 
   test('credentialed URL never cloned (resolve-once) and persisted redacted (F3 + F4)', async () => {
-    const { tmp, appHome, db, realRepo, stubOpencode, wf } = await unitSetup()
+    const { appHome, db, realRepo, stubOpencode, wf } = await unitSetup()
     const taskId = 'task-rfc107-unit'
     // A real worktree built from the real repo so the scheduler can run.
     const wt = await materializeWorktree({
@@ -738,7 +799,6 @@ describe('RFC-107 — startTask preResolvedSource (resolve-once + redaction)', (
     expect(task.status).not.toBe('failed')
     // F4: persisted repoUrl is redacted — no cleartext credential in the DB.
     expect(task.repoUrl ?? '').not.toContain('s3cr3t')
-    rmSync(tmp, { recursive: true, force: true })
   })
 })
 

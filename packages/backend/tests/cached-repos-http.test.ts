@@ -2,10 +2,10 @@
 // POST /api/tasks. Exercises the full HTTP surface so the launcher and
 // /repos management page can rely on the contract.
 
-import { beforeEach, describe, expect, test } from 'bun:test'
-import { execSync } from 'node:child_process'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { execFileSync } from 'node:child_process'
 import type { Hono } from 'hono'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
@@ -13,48 +13,79 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { cachedRepos, tasks, workflows } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { resolveCachedRepo } from '../src/services/gitRepoCache'
+import { nonInteractiveGitEnv } from '../src/util/git'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const GIT_TIMEOUT_MS = 10_000
+
+let cleanupHarness: (() => void) | undefined
+
+beforeEach(() => {
+  cleanupHarness = undefined
+})
+
+afterEach(() => {
+  cleanupHarness?.()
+})
+
+function git(...args: string[]): void {
+  execFileSync('git', args, {
+    stdio: 'ignore',
+    timeout: GIT_TIMEOUT_MS,
+    env: nonInteractiveGitEnv(),
+  })
+}
 
 interface Harness {
   db: DbClient
   app: Hono
   appHome: string
-  tmp: string
   remoteUrl: string
 }
 
 function buildBareRemote(tmp: string): string {
   const working = join(tmp, 'src-' + ulid())
   mkdirSync(working, { recursive: true })
-  execSync(`git init -b main "${working}"`, { stdio: 'ignore' })
-  execSync(`git -C "${working}" config user.email t@t.test`, { stdio: 'ignore' })
-  execSync(`git -C "${working}" config user.name t`, { stdio: 'ignore' })
+  git('init', '-b', 'main', working)
+  git('-C', working, 'config', 'user.email', 't@t.test')
+  git('-C', working, 'config', 'user.name', 't')
   writeFileSync(join(working, 'README.md'), '# fixture\n')
-  execSync(`git -C "${working}" add . && git -C "${working}" commit -m init`, {
-    stdio: 'ignore',
-  })
+  git('-C', working, 'add', '.')
+  git('-C', working, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
   const bare = join(tmp, 'remote-' + ulid() + '.git')
-  execSync(`git clone --bare "${working}" "${bare}"`, { stdio: 'ignore' })
+  git('clone', '--bare', working, bare)
   return `file://${bare}`
 }
 
 function buildHarness(): Harness {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-cached-repos-http-'))
+  const previousAppHome = process.env.AGENT_WORKFLOW_HOME
+  const cleanup = () => {
+    rmSync(tmp, { recursive: true, force: true })
+    if (previousAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+    else process.env.AGENT_WORKFLOW_HOME = previousAppHome
+  }
+  cleanupHarness = cleanup
   const appHome = join(tmp, 'home')
-  mkdirSync(appHome, { recursive: true })
-  process.env.AGENT_WORKFLOW_HOME = appHome
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: TOKEN,
-    configPath: join(tmp, 'config.json'),
-    opencodeVersion: '1.14.25',
-    dbVersion: 8,
-    db,
-  })
-  const remoteUrl = buildBareRemote(tmp)
-  return { db, app, appHome, tmp, remoteUrl }
+  try {
+    mkdirSync(appHome, { recursive: true })
+    process.env.AGENT_WORKFLOW_HOME = appHome
+    const db = createInMemoryDb(MIGRATIONS)
+    const app = createApp({
+      token: TOKEN,
+      configPath: join(tmp, 'config.json'),
+      opencodeVersion: '1.14.25',
+      dbVersion: 8,
+      db,
+    })
+    const remoteUrl = buildBareRemote(tmp)
+    return { db, app, appHome, remoteUrl }
+  } catch (error) {
+    cleanup()
+    cleanupHarness = undefined
+    throw error
+  }
 }
 
 async function req(app: Hono, path: string, init?: RequestInit): Promise<Response> {
@@ -75,7 +106,6 @@ describe('cached-repos HTTP routes (RFC-024 T5)', () => {
     expect(res.status).toBe(200)
     const body = (await res.json()) as { items: unknown[] }
     expect(body.items).toEqual([])
-    rmSync(h.tmp, { recursive: true, force: true })
   })
 
   test('GET /api/cached-repos lists cached entries with redacted URL', async () => {
@@ -91,7 +121,6 @@ describe('cached-repos HTTP routes (RFC-024 T5)', () => {
     expect(body.items.length).toBe(1)
     expect(typeof body.items[0]?.urlRedacted).toBe('string')
     expect(body.items[0]?.defaultBranch).toBe('main')
-    rmSync(h.tmp, { recursive: true, force: true })
   })
 
   test('POST /api/cached-repos/:id/refresh updates lastFetchedAt', async () => {
@@ -106,7 +135,6 @@ describe('cached-repos HTTP routes (RFC-024 T5)', () => {
     const body = (await res.json()) as { fetchOk: boolean; item: { lastFetchedAt: string } }
     expect(body.fetchOk).toBe(true)
     expect(Date.parse(body.item.lastFetchedAt)).toBeGreaterThanOrEqual(Date.parse(initial))
-    rmSync(h.tmp, { recursive: true, force: true })
   })
 
   test('DELETE /api/cached-repos/:id with no references succeeds', async () => {
@@ -117,7 +145,6 @@ describe('cached-repos HTTP routes (RFC-024 T5)', () => {
     const res = await req(h.app, `/api/cached-repos/${r.cached.id}`, { method: 'DELETE' })
     expect(res.status).toBe(200)
     expect(h.db.select().from(cachedRepos).all().length).toBe(0)
-    rmSync(h.tmp, { recursive: true, force: true })
   })
 
   test('DELETE blocked by reference count without ?force=1', async () => {
@@ -168,13 +195,11 @@ describe('cached-repos HTTP routes (RFC-024 T5)', () => {
     })
     expect(forced.status).toBe(200)
     expect(h.db.select().from(cachedRepos).all().length).toBe(0)
-    rmSync(h.tmp, { recursive: true, force: true })
   })
 
   test('DELETE 404 when id unknown', async () => {
     const res = await req(h.app, `/api/cached-repos/nonexistent`, { method: 'DELETE' })
     expect(res.status).toBe(404)
-    rmSync(h.tmp, { recursive: true, force: true })
   })
 })
 
@@ -197,7 +222,6 @@ describe('POST /api/tasks URL validation (RFC-024 T5)', () => {
       }),
     })
     expect(res.status).toBe(422)
-    rmSync(h.tmp, { recursive: true, force: true })
   })
 
   test('rejects neither repoPath nor repoUrl', async () => {
@@ -207,7 +231,6 @@ describe('POST /api/tasks URL validation (RFC-024 T5)', () => {
       body: JSON.stringify({ workflowId: 'wf-1', inputs: {} }),
     })
     expect(res.status).toBe(422)
-    rmSync(h.tmp, { recursive: true, force: true })
   })
 
   test('rejects malformed repoUrl with redacted message', async () => {
@@ -225,6 +248,5 @@ describe('POST /api/tasks URL validation (RFC-024 T5)', () => {
     // and never echoes a secret. The redact-leak test exercises the 4xx body
     // directly via the schema.
     expect(res.status).toBeGreaterThanOrEqual(400)
-    rmSync(h.tmp, { recursive: true, force: true })
   })
 })

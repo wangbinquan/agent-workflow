@@ -56,6 +56,18 @@ const reviewStateRegressions = [
   'review-state-machine.test.ts',
   'reviews-iterate-mints-new-run.test.ts',
 ].map((file) => readFileSync(resolve(root, 'packages', 'backend', 'tests', file), 'utf8'))
+const cachedReposRegression = readFileSync(
+  resolve(root, 'packages', 'backend', 'tests', 'cached-repos-http.test.ts'),
+  'utf8',
+)
+const startTaskUrlRegression = readFileSync(
+  resolve(root, 'packages', 'backend', 'tests', 'start-task-url.test.ts'),
+  'utf8',
+)
+const multipartLaunchRegressions = [
+  'rfc107-url-upload-multipart.test.ts',
+  'tasks-multipart.test.ts',
+].map((file) => readFileSync(resolve(root, 'packages', 'backend', 'tests', file), 'utf8'))
 const hardenedBunCommand = 'bun test --isolate --randomize'
 const hardenedFrontendCommand = 'vitest run --sequence.shuffle'
 
@@ -184,6 +196,27 @@ describe('repository test entrypoint', () => {
       expect(source).toContain('defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET')
       expect(source).toContain("abortAllActiveTasks('test-timeout')")
       expect(source).toContain('const previousAppHome = process.env.AGENT_WORKFLOW_HOME')
+      expect(source).toContain('process.env.AGENT_WORKFLOW_HOME = previousAppHome')
+    }
+  })
+
+  test('URL and multipart launch regressions bound Git and cannot leak background tasks or temp state', () => {
+    const activeLaunchRegressions = [startTaskUrlRegression, ...multipartLaunchRegressions]
+    for (const source of [cachedReposRegression, ...activeLaunchRegressions]) {
+      expect(source).not.toContain('execSync(')
+      expect(source).toContain("execFileSync('git'")
+      expect(source).toContain('timeout: GIT_TIMEOUT_MS')
+      expect(source).toContain('env: nonInteractiveGitEnv()')
+      expect(source).toContain('afterEach(')
+    }
+    for (const source of activeLaunchRegressions) {
+      expect(source).toContain('defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS')
+      expect(source).toContain('defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET')
+      expect(source).toContain("abortAllActiveTasks('test-timeout')")
+      expect(source).toContain('isTaskActive(taskId)')
+    }
+    for (const source of [cachedReposRegression, ...multipartLaunchRegressions]) {
+      expect(source).toContain('previousAppHome')
       expect(source).toContain('process.env.AGENT_WORKFLOW_HOME = previousAppHome')
     }
   })
