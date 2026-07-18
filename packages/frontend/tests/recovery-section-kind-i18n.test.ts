@@ -16,21 +16,24 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { describe, expect, test } from 'vitest'
+import { beforeEach, describe, expect, test } from 'vitest'
 
 import { RECOVERY_EVENT_KINDS } from '../src/components/tasks/RecoverySection'
-import i18n, { setLanguage } from '../src/i18n'
+import i18n from '../src/i18n'
 import { labelForCode } from '../src/i18n/errors'
 import { zhCN } from '../src/i18n/zh-CN'
 import { enUS } from '../src/i18n/en-US'
 
+beforeEach(async () => {
+  await new Promise<void>((resolve) => {
+    if (i18n.isInitialized) resolve()
+    else i18n.on('initialized', () => resolve())
+  })
+  await i18n.changeLanguage('zh-CN')
+})
+
 describe('labelForCode over recovery kinds (ex-describeRecoveryKind)', () => {
-  test('unknown kind falls back to the raw code (never a leaked i18n key)', async () => {
-    await new Promise<void>((resolve) => {
-      if (i18n.isInitialized) resolve()
-      else i18n.on('initialized', () => resolve())
-    })
-    setLanguage('zh-CN')
+  test('unknown kind falls back to the raw code (never a leaked i18n key)', () => {
     expect(labelForCode('tasks.recovery.kind', 'some-future-kind')).toBe('some-future-kind')
   })
 

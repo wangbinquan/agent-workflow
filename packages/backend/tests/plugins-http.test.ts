@@ -6,11 +6,13 @@
 // hermetic; the live `npm` binary is never invoked from these tests.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { access, chmod, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { access, chmod, copyFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { Hono } from 'hono'
+import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { plugins } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { resetNpmProbeCacheForTests } from '../src/services/pluginInstaller'
 import { createPlugin } from '../src/services/plugin'
@@ -45,6 +47,30 @@ async function req(app: Hono, path: string, init: RequestInit = {}): Promise<Res
   return app.request(path, { ...init, headers })
 }
 
+function seedPluginRow(db: DbClient, name: string, spec: string): void {
+  // CRUD route tests do not exercise installation. Seed the published row
+  // directly so their beforeEach cannot inherit fake-npm process latency; the
+  // dedicated install-path block below owns all subprocess coverage.
+  const id = ulid()
+  const now = Date.now()
+  db.insert(plugins)
+    .values({
+      id,
+      name,
+      spec,
+      optionsJson: '{}',
+      description: '',
+      enabled: true,
+      sourceKind: 'npm',
+      cachedPath: join(pluginsDir, id, 'node_modules', name),
+      resolvedVersion: '1.0.0',
+      installedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .run()
+}
+
 async function waitForFile(path: string, timeoutMs = 2_000): Promise<void> {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
@@ -63,11 +89,14 @@ beforeEach(async () => {
   // Install dir under AGENT_WORKFLOW_HOME so the route layer (no installer
   // override available) resolves to it.
   process.env.AGENT_WORKFLOW_HOME = pluginsDir
-  // Prepend a PATH-shadow dir that aliases `npm` → fake-npm.sh so the
-  // installer's PATH lookup picks up the shim instead of the host npm.
+  // Prepend a PATH-shadow dir containing a private fake npm copy so the
+  // installer's PATH lookup picks up the shim instead of the host npm. Avoid
+  // a symlink here: Bun's test runner can intermittently hang while spawning
+  // an executable script through a temporary symlink on macOS.
   fakeNpmPathDir = await mkdtemp(join(tmpdir(), 'rfc031-path-'))
-  await symlink(FAKE_NPM, join(fakeNpmPathDir, 'npm'))
-  await chmod(FAKE_NPM, 0o755).catch(() => undefined)
+  const fakeNpmPath = join(fakeNpmPathDir, 'npm')
+  await copyFile(FAKE_NPM, fakeNpmPath)
+  await chmod(fakeNpmPath, 0o755)
   originalPath = process.env.PATH
   process.env.PATH = `${fakeNpmPathDir}:${process.env.PATH ?? ''}`
   resetNpmProbeCacheForTests()
@@ -99,17 +128,16 @@ describe('/api/plugins auth', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CRUD path (uses service layer directly so we don't depend on PATH lookups)
+// CRUD path (DB-seeded so it does not depend on PATH lookups)
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('/api/plugins CRUD (service-seeded)', () => {
+describe('/api/plugins CRUD (DB-seeded)', () => {
   let db: DbClient
   let app: Hono
 
-  beforeEach(async () => {
+  beforeEach(() => {
     ;({ db, app } = buildHarness())
-    // Seed via service layer so we don't need the http POST install path here.
-    await createPlugin(db, { name: 'seeded', spec: 'pkg@1' }, { pluginsDir, npmBin: FAKE_NPM })
+    seedPluginRow(db, 'seeded', 'pkg@1')
   })
 
   test('GET /api/plugins lists seeded rows', async () => {
@@ -157,7 +185,7 @@ describe('/api/plugins CRUD (service-seeded)', () => {
 
   test('POST /api/plugins/:name/rename succeeds + 409 on name conflict', async () => {
     // Seed a second plugin so we can attempt to collide.
-    await createPlugin(db, { name: 'other', spec: 'o@1' }, { pluginsDir, npmBin: FAKE_NPM })
+    seedPluginRow(db, 'other', 'o@1')
     const r1 = await req(app, '/api/plugins/seeded/rename', {
       method: 'POST',
       body: JSON.stringify({ newName: 'fresh' }),

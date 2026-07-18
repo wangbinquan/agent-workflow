@@ -13,9 +13,9 @@
 //   Test 1 (non-blocking): with a SLOW commit session, the downstream ready
 //   node is spawned WHILE the commit session is still running —
 //   trace order: node2.start < first-commit.end. Pre-B1 node2.start was
-//   strictly >= commit.end (the synchronous await). Margin is structural
-//   (commit sleeps 600ms; node2's dispatch needs only constant pipeline
-//   overhead after node1 completes).
+//   strictly >= commit.end (the synchronous await). A file-backed barrier
+//   keeps the first commit session open until node2 actually starts, avoiding
+//   a fixed millisecond window that collapses under full-suite load.
 //
 //   Test 2 (cancel drains synthetics — revision #2): a cancel landing while
 //   the commit session is in flight must DRAIN the synthetic before runScope
@@ -73,8 +73,19 @@ const trace = (phase) =>
     JSON.stringify({ agent, callIndex: n, phase, t: Date.now() }) + '\\n',
   )
 trace('start')
+writeFileSync(join(stateDir, 'started-' + agent), String(Date.now()))
 let text
 if (agent === 'commit') {
+  const waitForAgent = process.env.CP_COMMIT_WAIT_FOR_AGENT ?? ''
+  if (n === 0 && waitForAgent !== '') {
+    const timeoutMs = Number(process.env.CP_COMMIT_WAIT_TIMEOUT_MS ?? '10000')
+    const deadline = Date.now() + (Number.isFinite(timeoutMs) ? timeoutMs : 10000)
+    const marker = join(stateDir, 'started-' + waitForAgent)
+    while (!existsSync(marker) && Date.now() < deadline) await Bun.sleep(10)
+    if (!existsSync(marker)) {
+      writeFileSync(join(stateDir, 'wait-timeout-commit-0'), waitForAgent)
+    }
+  }
   const delays = JSON.parse(process.env.CP_COMMIT_DELAYS ?? '[]')
   const d = Number(delays[n] ?? 0)
   if (Number.isFinite(d) && d > 0) await Bun.sleep(d)
@@ -237,18 +248,22 @@ describe('RFC-098 B1 — auto commit&push runs as a synthetic in-flight entry, n
   test('ready downstream node is dispatched WHILE the slow commit session runs (n2.start < first commit end)', async () => {
     const taskId = await seedTask(h)
 
-    // n1 completes instantly leaving a dirty worktree → its commit session
-    // (callIndex 0) sleeps 600ms. n2 then becomes ready; under the synthetic
-    // in-flight design the loop dispatches it immediately. n2's own
-    // completion triggers a SECOND commit session (callIndex 1) — give it a
-    // LONGER sleep so the first session deterministically commits+pushes
-    // first and the second finds nothing left to commit (its outcome is not
-    // asserted; commit failures never break task execution).
+    // n1 completes instantly leaving a dirty worktree. The first commit
+    // session waits on n2's process-start marker, so the ordering oracle is a
+    // handshake rather than a scheduler-speed assumption. With the old
+    // synchronous await, n2 can never create that marker before the commit's
+    // 10s deadline and this test deterministically fails. n2's completion
+    // triggers a SECOND commit session (callIndex 1) — keep that one delayed
+    // so the first session commits+pushes first and the second finds nothing
+    // left to commit (its outcome is not asserted; commit failures never
+    // break task execution).
     await withEnv(
       {
         CP_STATE_DIR: h.stateDir,
         CP_WRITE_FILE_FOR_n1: 'change.txt',
-        CP_COMMIT_DELAYS: JSON.stringify([600, 1500]),
+        CP_COMMIT_WAIT_FOR_AGENT: 'n2',
+        CP_COMMIT_WAIT_TIMEOUT_MS: '10000',
+        CP_COMMIT_DELAYS: JSON.stringify([0, 1500]),
       },
       () =>
         runTask({
@@ -280,9 +295,10 @@ describe('RFC-098 B1 — auto commit&push runs as a synthetic in-flight entry, n
     expect(commit0Start!.t).toBeGreaterThanOrEqual(n1End!.t)
 
     // HEADLINE (flipped semantics vs the pre-B1 synchronous await): n2 was
-    // SPAWNED while the first commit session was still sleeping — the
-    // dispatch loop did not freeze. Pre-B1, n2.start >= commit0.end held
-    // structurally. ~600ms structural margin, no millisecond racing.
+    // SPAWNED before the first commit session could finish — the dispatch
+    // loop did not freeze. Pre-B1, n2.start >= commit0.end held structurally;
+    // the file-backed wait would time out before allowing that old ordering.
+    expect(existsSync(join(h.stateDir, 'wait-timeout-commit-0'))).toBe(false)
     expect(n2Start!.t).toBeLessThan(commit0End!.t)
 
     // The commit landed for real: n1's commit container row is done & pushed,
@@ -299,7 +315,7 @@ describe('RFC-098 B1 — auto commit&push runs as a synthetic in-flight entry, n
     // Drain determinism on the OK path: nothing is left un-settled after
     // runTask returns (the synthetics resolved inside the race set).
     expect(rows.filter((r) => r.status === 'running' || r.status === 'pending').length).toBe(0)
-  }, 20_000)
+  }, 30_000)
 
   test('cancel mid-commit: synthetics are drained — task lands canceled with every row settled, no orphaned commit session', async () => {
     const taskId = await seedTask(h)

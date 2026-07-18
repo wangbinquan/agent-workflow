@@ -693,7 +693,11 @@ describe('CentralizedAnswerDialog — cross-round keyboard navigation', () => {
     q1.focus()
     // Digit '1' picks option 0 of the single-choice question AND advances (QuestionForm contract).
     fireEvent.keyDown(q1, { key: '1' })
-    expect((within(q1).getAllByRole('radio')[0] as HTMLInputElement).checked).toBe(true)
+    // The key handler is a native listener; the controlled radio's React
+    // commit may land on the next turn under a loaded CI runner.
+    await waitFor(() =>
+      expect((within(q1).getAllByRole('radio')[0] as HTMLInputElement).checked).toBe(true),
+    )
     expect(document.activeElement).toBe(q2)
   })
 
@@ -721,7 +725,9 @@ describe('CentralizedAnswerDialog — cross-round keyboard navigation', () => {
     // Digit-pick the LAST question → it gets checked, but focus stays on q2 (NO-OP), not submit.
     q2.focus()
     fireEvent.keyDown(q2, { key: '1' })
-    expect((within(q2).getAllByRole('radio')[0] as HTMLInputElement).checked).toBe(true)
+    await waitFor(() =>
+      expect((within(q2).getAllByRole('radio')[0] as HTMLInputElement).checked).toBe(true),
+    )
     expect(document.activeElement).toBe(q2)
     expect(document.activeElement).not.toBe(submit)
   })
@@ -743,7 +749,9 @@ describe('CentralizedAnswerDialog — cross-round keyboard navigation', () => {
 
     q1.focus()
     fireEvent.keyDown(q1, { key: '1' }) // picks (first filled answer) + advances past the last question
-    expect((within(q1).getAllByRole('radio')[0] as HTMLInputElement).checked).toBe(true)
+    await waitFor(() =>
+      expect((within(q1).getAllByRole('radio')[0] as HTMLInputElement).checked).toBe(true),
+    )
     // The submit button enables (filledTotal 0→1) but NO deferred flush focuses it — focus stays put.
     await waitFor(() => expect(submit.disabled).toBe(false))
     expect(document.activeElement).toBe(q1)

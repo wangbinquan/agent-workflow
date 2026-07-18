@@ -89,6 +89,10 @@ jobs:
           # stays deterministic. CI has the environment to run them — enable here so
           # coverage is unchanged (these files run unconditionally before this gate).
           RUN_GIT_NETWORK: '1'
+          # Chaos scenarios mutate only isolated temporary directories and inject
+          # deterministic filesystem faults. Keep them opt-in locally, but execute
+          # them in the ubuntu gate so they cannot remain permanently skipped.
+          RUN_CHAOS: '1'
 
       - name: Test (backend only, bun:test, macOS — no coverage)
         if: matrix.os != 'ubuntu-latest'

@@ -10,7 +10,7 @@
     "lint": "eslint src tests --max-warnings=0",
     "lint:fix": "eslint src tests --fix",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run --sequence.shuffle"
   },
   "dependencies": {
     "@agent-workflow/shared": "workspace:*",

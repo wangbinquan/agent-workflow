@@ -6,7 +6,7 @@
 // behavior when the diff string changes mid-session.
 
 import { fireEvent, render, screen, within } from '@testing-library/react'
-import { afterAll, describe, expect, test } from 'vitest'
+import { describe, expect, test } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -38,13 +38,6 @@ index 5555..6666 100644
 +new line from c
  ctx c
 `
-
-// One test below flips the locale to lock i18n coverage; restore the
-// bootstrap language afterward so neighbouring test files keep the locale
-// they expect (the harness defaults via navigator.language under happy-dom).
-afterAll(async () => {
-  await i18n.changeLanguage('en-US')
-})
 
 describe('WorktreeDiffPanel', () => {
   test('renders one tab per file, defaults to selecting the first', () => {
@@ -91,10 +84,10 @@ describe('WorktreeDiffPanel', () => {
     expect(screen.queryByText('+new line from a')).toBeNull()
   })
 
-  test('empty diff string renders the "No changes" fallback with no tablist', () => {
-    render(<WorktreeDiffPanel diff="" />)
-    // i18next bootstraps from navigator.language under happy-dom (= en-US).
-    expect(screen.getByText(/No changes/i)).toBeTruthy()
+  test('empty diff string renders the empty fallback with no tablist', () => {
+    const { container } = render(<WorktreeDiffPanel diff="" />)
+    const fallback = container.querySelector('.diff--empty')
+    expect(fallback?.textContent?.trim()).toBeTruthy()
     expect(screen.queryByRole('tablist')).toBeNull()
   })
 

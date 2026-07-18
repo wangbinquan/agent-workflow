@@ -52,7 +52,13 @@ import {
 // restore target capture the guard, not Node's real network implementation.
 installUnexpectedNetworkGuard()
 
+let languageAtTestStart: string | undefined
+
 beforeEach(() => {
+  // i18next is a process-global singleton. Preserve each test's inherited
+  // baseline (including a suite-level beforeAll locale) so a case that changes
+  // language cannot leak that mutation to its shuffled neighbour.
+  languageAtTestStart = i18n.resolvedLanguage ?? i18n.language
   resetUnexpectedNetworkRequests()
   installUnexpectedNetworkGuard()
 })
@@ -61,6 +67,11 @@ afterEach(async () => {
   cleanup()
   await new Promise((resolve) => setTimeout(resolve, 0))
   const unexpected = takeUnexpectedNetworkRequests()
+  const restoreLanguage = languageAtTestStart
+  languageAtTestStart = undefined
+  if (restoreLanguage !== undefined && i18n.resolvedLanguage !== restoreLanguage) {
+    await i18n.changeLanguage(restoreLanguage)
+  }
   if (unexpected.length > 0) {
     throw new Error(
       `Unexpected network request(s) escaped test mocks:\n${unexpected.map((r) => `- ${r}`).join('\n')}`,
@@ -78,6 +89,6 @@ afterEach(async () => {
 // the rendered DOM still carried raw keys (`enumPicker.add`,
 // `enumPicker.otherPlaceholder`). vitest setup is an ES module, so
 // top-level await is supported here.
-await import('../src/i18n')
+const { default: i18n } = await import('../src/i18n')
 
 export {}

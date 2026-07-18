@@ -56,6 +56,70 @@ interface TestModifierUse {
   modifier: string
 }
 
+interface OptInGateUse {
+  file: string
+  line: number
+  gate: string
+}
+
+interface GateActivationCheck {
+  file: string
+  marker: string
+}
+
+// Every RUN_* switch referenced by a test must have a concrete automated
+// activation path. This prevents a locally green, permanently skipped suite:
+// adding a new switch makes the exact-name assertion fail until CI owns it.
+const REQUIRED_GATE_ACTIVATIONS: Record<string, GateActivationCheck[]> = {
+  RUN_CHAOS: [{ file: '.github/workflows/ci.yml', marker: "RUN_CHAOS: '1'" }],
+  RUN_GIT_NETWORK: [{ file: '.github/workflows/ci.yml', marker: "RUN_GIT_NETWORK: '1'" }],
+  RUN_GIT_PROTOCOLS: [
+    { file: '.github/workflows/git-protocols-e2e.yml', marker: "RUN_GIT_PROTOCOLS: '1'" },
+  ],
+  RUN_OPENCODE_INTEGRATION: [
+    {
+      file: '.github/workflows/integration-opencode.yml',
+      marker: "RUN_OPENCODE_INTEGRATION: '1'",
+    },
+  ],
+  RUN_VISUAL_REGRESSION: [
+    {
+      file: 'package.json',
+      marker:
+        '"test:visual": "RUN_VISUAL_REGRESSION=1 playwright test e2e/visual-regression.spec.ts --project=chromium",',
+    },
+    {
+      file: '.github/workflows/visual-regression-nightly.yml',
+      marker: 'run: bun run test:visual -- --retries=0',
+    },
+  ],
+}
+
+function optInGateName(node: ts.Node): string | null {
+  let gate: string | null = null
+  let receiver: ts.Expression | null = null
+
+  if (ts.isPropertyAccessExpression(node)) {
+    gate = node.name.text
+    receiver = node.expression
+  } else if (ts.isElementAccessExpression(node) && ts.isStringLiteral(node.argumentExpression)) {
+    gate = node.argumentExpression.text
+    receiver = node.expression
+  }
+
+  if (
+    !gate?.startsWith('RUN_') ||
+    !receiver ||
+    !ts.isPropertyAccessExpression(receiver) ||
+    !ts.isIdentifier(receiver.expression) ||
+    receiver.expression.text !== 'process' ||
+    receiver.name.text !== 'env'
+  ) {
+    return null
+  }
+  return gate
+}
+
 function listTestFiles(dir: string): string[] {
   const files: string[] = []
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -78,9 +142,10 @@ function rootTestApi(expr: ts.Expression): string | null {
 function parseTestModifiers(
   file: string,
   sourceText: string,
-): { modifiers: TestModifierUse[]; aliases: TestModifierUse[] } {
+): { modifiers: TestModifierUse[]; aliases: TestModifierUse[]; gates: OptInGateUse[] } {
   const modifiers: TestModifierUse[] = []
   const aliases: TestModifierUse[] = []
+  const gates: OptInGateUse[] = []
   const source = ts.createSourceFile(
     file,
     sourceText,
@@ -90,6 +155,12 @@ function parseTestModifiers(
   )
 
   const visit = (node: ts.Node): void => {
+    const gate = optInGateName(node)
+    if (gate) {
+      const line = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1
+      gates.push({ file, line, gate })
+    }
+
     if (ts.isPropertyAccessExpression(node)) {
       const modifier = node.name.text
       const line = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1
@@ -116,21 +187,27 @@ function parseTestModifiers(
   }
   visit(source)
 
-  return { modifiers, aliases }
+  return { modifiers, aliases, gates }
 }
 
-function collectTestModifiers(): { modifiers: TestModifierUse[]; aliases: TestModifierUse[] } {
+function collectTestModifiers(): {
+  modifiers: TestModifierUse[]
+  aliases: TestModifierUse[]
+  gates: OptInGateUse[]
+} {
   const modifiers: TestModifierUse[] = []
   const aliases: TestModifierUse[] = []
+  const gates: OptInGateUse[] = []
 
   for (const absolute of TEST_ROOTS.flatMap(listTestFiles)) {
     const file = relative(REPO_ROOT, absolute)
     const parsed = parseTestModifiers(file, readFileSync(absolute, 'utf8'))
     modifiers.push(...parsed.modifiers)
     aliases.push(...parsed.aliases)
+    gates.push(...parsed.gates)
   }
 
-  return { modifiers, aliases }
+  return { modifiers, aliases, gates }
 }
 
 describe('repository test-suite policy', () => {
@@ -151,6 +228,8 @@ describe('repository test-suite policy', () => {
         describe['todo']('unfinished')
         test.fail('expected failure', () => {})
         fit('focused alias', () => {})
+        const directGate = process.env.RUN_DIRECT_PROBE
+        const bracketGate = process.env['RUN_BRACKET_PROBE']
       `,
     )
 
@@ -158,6 +237,7 @@ describe('repository test-suite policy', () => {
       ['only', 'skip', 'runIf', 'fixme', 'todo', 'fail'].sort(),
     )
     expect(probe.aliases.map(({ modifier }) => modifier)).toEqual(['fit'])
+    expect(probe.gates.map(({ gate }) => gate)).toEqual(['RUN_DIRECT_PROBE', 'RUN_BRACKET_PROBE'])
   })
 
   test('focused and unresolved test declarations are forbidden', () => {
@@ -176,5 +256,20 @@ describe('repository test-suite policy', () => {
       actual[key] = (actual[key] ?? 0) + 1
     }
     expect(actual).toEqual(ALLOWED_SKIP_COUNTS)
+  })
+
+  test('every opt-in RUN_* test gate is activated by automation', () => {
+    const discovered = [...new Set(inventory.gates.map(({ gate }) => gate))].sort()
+    expect(discovered).toEqual(Object.keys(REQUIRED_GATE_ACTIVATIONS).sort())
+
+    const checks: Record<string, boolean> = {}
+    for (const [gate, activations] of Object.entries(REQUIRED_GATE_ACTIVATIONS)) {
+      for (const activation of activations) {
+        const key = `${gate}#${activation.file}`
+        const source = readFileSync(resolve(REPO_ROOT, activation.file), 'utf8')
+        checks[key] = source.split(/\r?\n/).some((line) => line.trim() === activation.marker)
+      }
+    }
+    expect(checks).toEqual(Object.fromEntries(Object.keys(checks).map((key) => [key, true])))
   })
 })
