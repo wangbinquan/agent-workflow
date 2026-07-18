@@ -62,7 +62,17 @@ export function mountWorktreeFilesRoutes(app: Hono, deps: AppDeps): void {
     // c.req.path: "/api/worktree-files/{taskId}/{rel}"
     const prefix = `/api/worktree-files/${taskId}/`
     const path = c.req.path
-    const rel = path.startsWith(prefix) ? decodeURIComponent(path.slice(prefix.length)) : ''
+    let rel = ''
+    if (path.startsWith(prefix)) {
+      try {
+        rel = decodeURIComponent(path.slice(prefix.length))
+      } catch {
+        throw new ValidationError(
+          'worktree-file-invalid-encoding',
+          'relative file path has invalid URL encoding',
+        )
+      }
+    }
     if (rel.length === 0) {
       throw new ValidationError(
         'worktree-file-missing-path',

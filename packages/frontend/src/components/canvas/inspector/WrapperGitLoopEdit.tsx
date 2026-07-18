@@ -46,7 +46,10 @@ export function WrapperGitLoopEdit({
   const exitNodeId = typeof exitCondRaw.nodeId === 'string' ? exitCondRaw.nodeId : ''
   const exitPortName = typeof exitCondRaw.portName === 'string' ? exitCondRaw.portName : ''
   const exitValue = typeof exitCondRaw.value === 'string' ? exitCondRaw.value : ''
-  const exitN = typeof exitCondRaw.n === 'number' ? exitCondRaw.n : 1
+  const exitN =
+    typeof exitCondRaw.n === 'number' && Number.isInteger(exitCondRaw.n) && exitCondRaw.n >= 1
+      ? exitCondRaw.n
+      : 1
   const exitSeparator = typeof exitCondRaw.separator === 'string' ? exitCondRaw.separator : ''
   const bindings = Array.isArray(rec.outputBindings)
     ? (rec.outputBindings as Array<{
@@ -91,7 +94,7 @@ export function WrapperGitLoopEdit({
             value={typeof rec.maxIterations === 'number' ? rec.maxIterations : undefined}
             onChange={(v) =>
               update(
-                { maxIterations: v ?? 1 },
+                { maxIterations: v === undefined ? 1 : Math.max(1, Math.trunc(v)) },
                 continuousNodeInspectorChange(
                   node.id,
                   'maxIterations',
@@ -113,7 +116,7 @@ export function WrapperGitLoopEdit({
           ariaLabel={t('inspector.fieldExitConditionKind')}
           onChange={(v) =>
             updateExit(
-              { kind: v },
+              { kind: v, ...(v === 'port-count-lt' ? { n: exitN } : {}) },
               atomicNodeInspectorChange(
                 node.id,
                 'exitCondition.kind',
@@ -264,7 +267,7 @@ export function WrapperGitLoopEdit({
                 value={exitN}
                 onChange={(v) =>
                   updateExit(
-                    { n: v ?? 1 },
+                    { n: v === undefined ? 1 : Math.max(1, Math.trunc(v)) },
                     continuousNodeInspectorChange(
                       node.id,
                       'exitCondition.n',

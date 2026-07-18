@@ -89,7 +89,7 @@ describe('evaluateExitCondition — port-count-lt custom separator + empty-token
 })
 
 describe('parseExitCondition — port-count-lt boundary coercions', () => {
-  test('non-finite n (NaN) coerces to 0 and empty separator coerces to default "\\n"', () => {
+  test('non-finite, missing, and non-positive n are rejected', () => {
     const cond = parseExitCondition({
       kind: 'port-count-lt',
       nodeId: 'a',
@@ -97,13 +97,11 @@ describe('parseExitCondition — port-count-lt boundary coercions', () => {
       n: NaN,
       separator: '',
     })
-    expect(cond).toEqual({
-      kind: 'port-count-lt',
-      nodeId: 'a',
-      portName: 'p',
-      n: 0,
-      separator: '\n',
-    })
+    expect(cond).toBeNull()
+    expect(parseExitCondition({ kind: 'port-count-lt', nodeId: 'a', portName: 'p' })).toBeNull()
+    expect(
+      parseExitCondition({ kind: 'port-count-lt', nodeId: 'a', portName: 'p', n: 0 }),
+    ).toBeNull()
   })
 
   test('a valid custom separator is preserved verbatim', () => {

@@ -118,6 +118,7 @@ import {
 } from '@/services/nodeRunMint'
 import { resolveInternalAgentRuntime } from '@/services/runtimeRegistry'
 import { getTaskWriteSem, gcTaskWriteSem } from '@/services/taskWriteLocks'
+import { getProcessNodeSemaphore } from '@/services/processNodeConcurrency'
 import { buildReviewPromptContext, dispatchReviewNode } from '@/services/review'
 import {
   areTransitiveUpstreamsCompleted,
@@ -231,7 +232,7 @@ export interface RunTaskOptions {
    * Replaces the per-node `retries` override; `?? 3` fallback for mock/unwired.
    */
   defaultNodeRetries?: number
-  /** Global concurrency limit for agent nodes within this task. Default 4. */
+  /** Daemon-wide concurrency limit shared by agent nodes across tasks. Default 4. */
   maxConcurrentNodes?: number
   /** Concurrency cap for fan-out child subprocesses (P-3-02). Default 4. */
   multiProcessSubprocessConcurrency?: number
@@ -445,6 +446,27 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
     }
   }
 
+  // Defense in depth for legacy/imported snapshots that predate the validator
+  // rule. Scheduler maps key by node id; allowing duplicates would silently
+  // fold one node away and the later topological check would lie to the user
+  // with an unrelated cycle error.
+  const nodeIdCounts = new Map<string, number>()
+  for (const node of definition.nodes) {
+    nodeIdCounts.set(node.id, (nodeIdCounts.get(node.id) ?? 0) + 1)
+  }
+  const duplicateNode = [...nodeIdCounts].find(([, count]) => count > 1)
+  if (duplicateNode !== undefined) {
+    const [nodeId, count] = duplicateNode
+    await failTask(
+      db,
+      taskId,
+      'workflow-node-id-duplicate',
+      `node id '${nodeId}' appears ${count} times; node ids must be unique`,
+      nodeId,
+    )
+    return
+  }
+
   // RFC-066 PR-B T9: scheduler-side defense-in-depth gate. T6 already
   // rejects multi-repo + wrapper-git at launch time, but a hypothetical
   // direct insert into `tasks` (skipping the route layer) or a future
@@ -500,7 +522,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
     opts,
     log,
     inputsMap,
-    globalSem: new Semaphore(opts.maxConcurrentNodes ?? 4),
+    globalSem: getProcessNodeSemaphore(db, opts.maxConcurrentNodes ?? 4),
     // RFC-098 B1 (audit S-9): the writer lock comes from the per-task
     // registry so HTTP rollback paths (clarify/review/cross-clarify) hold THE
     // SAME instance. gc happens in this function's finally only (see

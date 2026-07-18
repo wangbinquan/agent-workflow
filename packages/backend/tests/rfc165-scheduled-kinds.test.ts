@@ -365,6 +365,7 @@ describe('RFC-165 §9b — fire dispatch by kind (K4/K5)', () => {
   })
 
   test('K5 workgroup row fires through startWorkgroupTask (workgroupId stamped)', async () => {
+    await createAgent(db, { ...AGENT_FIELDS, name: 'a1' })
     await createWorkgroup(db, {
       name: 'squad',
       description: '',

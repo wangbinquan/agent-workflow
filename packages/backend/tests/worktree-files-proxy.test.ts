@@ -152,6 +152,18 @@ describe('GET /api/worktree-files/:taskId/* — RFC-005 T13', () => {
     expect(body).not.toContain('TOP SECRET')
   })
 
+  test('malformed percent encoding is a client error, never an uncaught 500', async () => {
+    const res = await h.app.fetch(
+      new Request(`http://localhost/api/worktree-files/${h.taskId}/%E0%A4%A`, {
+        headers: HEADERS,
+      }),
+    )
+    expect(res.status).toBe(422)
+    expect((await res.json()) as { code: string }).toMatchObject({
+      code: 'worktree-file-invalid-encoding',
+    })
+  })
+
   test('missing file → 404', async () => {
     const res = await h.app.fetch(
       new Request(`http://localhost/api/worktree-files/${h.taskId}/no/such/path.png`, {

@@ -29,6 +29,7 @@ import type {
   Language,
   NodeRunStatus,
   NodeRunSyncSummary,
+  TaskStatus,
   TaskTransitionEvent,
   Workflow,
   WorkflowDefinition,
@@ -54,7 +55,7 @@ import {
   users,
   workflows,
 } from '@/db/schema'
-import { dbTxSync } from '@/db/txSync'
+import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { buildLaunchCollabRows } from '@/services/taskCollab'
 import { getWorkflow } from '@/services/workflow'
 import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
@@ -488,6 +489,17 @@ export async function resolveRepoSourceSingle(
     { db: deps.db, appHome, syncBranches: syncCandidates },
     { url: spec.repoUrl },
   )
+  if (!resolved.fetchOk) {
+    throw new DomainError(
+      'repo-fetch-failed',
+      `repository fetch failed for ${resolved.cached.urlRedacted}; refusing to launch from a stale cache`,
+      502,
+      {
+        url: resolved.cached.urlRedacted,
+        stderr: resolved.fetchError,
+      },
+    )
+  }
   const baseBranch = spec.ref ?? resolved.cached.defaultBranch ?? undefined
   let ffWarnings: Array<{ branch: string; warning: string }> = resolved.ffOutcomes
     .filter((o) => o.warning !== null)
@@ -1978,6 +1990,29 @@ export async function resumeTask(db: DbClient, id: string, deps: StartTaskDeps):
 }
 
 /**
+ * Resume while committing synchronous companion rows inside the same task
+ * ownership CAS transaction. Gate decisions use this instead of "write gate,
+ * then fire-and-forget resume": if preflight/CAS/companion writes fail, every
+ * row remains unchanged and the user can retry the decision.
+ */
+export async function resumeTaskWithAtomicSideEffects(
+  db: DbClient,
+  id: string,
+  deps: StartTaskDeps,
+  onClaimTx: (tx: DbTxSync, transition: { from: TaskStatus; to: TaskStatus }) => void,
+): Promise<Task> {
+  return resumeKick(db, id, deps, {
+    event: { kind: 'resume' },
+    selectRollback: (runs) => selectResumeRollbackTargets(runs),
+    reason: 'resumeTask',
+    conflictCode: 'task-not-resumable',
+    verb: 'resume',
+    worktreePreflight: true,
+    onClaimTx,
+  })
+}
+
+/**
  * RFC-167 — the dynamic-workflow confirm gate's resume core: write the
  * decision's durable state ATOMICALLY within the resume ownership CAS, then
  * re-kick the scheduler. approve passes BOTH columns (swap the confirmed DAG
@@ -2037,6 +2072,13 @@ async function resumeKick(
      * real worktree). The T7 cross-row snapshot pre-pass below is unconditional.
      */
     worktreePreflight?: boolean
+    onClaimTx?: (
+      tx: DbTxSync,
+      transition: {
+        from: TaskStatus
+        to: TaskStatus
+      },
+    ) => void
   },
 ): Promise<Task> {
   const task = await getTask(db, id)
@@ -2083,6 +2125,7 @@ async function resumeKick(
         failedNodeId: null,
         ...opts.extra,
       },
+      ...(opts.onClaimTx !== undefined ? { onTransitionTx: opts.onClaimTx } : {}),
       reason: opts.reason,
     })
   } catch (err) {

@@ -69,6 +69,8 @@ import type {
 import { createLogger } from '../src/util/log'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
+const OPENCODE_CMD = ['bun', 'run', MOCK_OPENCODE]
 const log = createLogger('rfc167-dw-engine-test')
 
 // ---------------------------------------------------------------------------
@@ -540,10 +542,21 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
 
   test('dynamic launch synthesizes the generation snapshot + dw slot and enters the GENERATE engine', async () => {
     const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc167-launch-'))
+    const previousOutputs = process.env.MOCK_OPENCODE_OUTPUTS
     try {
-      // ghost pool: the generate engine fails at pool resolution BEFORE any
-      // host-node run — the launch chain is exercised end to end with no
-      // subprocess risk, and the failure shape proves the dispatch target.
+      await createAgent(db, {
+        name: 'launch-agent',
+        description: '',
+        outputs: ['result'],
+        syncOutputsOnIterate: true,
+        permission: {},
+        skills: [],
+        dependsOn: [],
+        mcp: [],
+        plugins: [],
+        frontmatterExtra: {},
+        bodyMd: 'execute the generated step',
+      })
       await createWorkgroup(db, {
         name: 'dyn',
         description: '',
@@ -553,19 +566,37 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
         maxRounds: 5,
         completionGate: false,
         members: [
-          { memberType: 'agent', agentName: 'ghost-agent', displayName: 'ghost', roleDesc: '' },
+          {
+            memberType: 'agent',
+            agentName: 'launch-agent',
+            displayName: 'launcher',
+            roleDesc: '',
+          },
         ],
       })
       const actor = buildActor({
         user: { id: 'u-own', username: 'own', displayName: 'own', role: 'admin', status: 'active' },
         source: 'daemon',
       })
+      process.env.MOCK_OPENCODE_OUTPUTS = JSON.stringify({
+        workflow: JSON.stringify({
+          nodes: [
+            {
+              id: 'generated-step',
+              agentName: 'launch-agent',
+              promptTemplate: 'execute',
+              inputs: [],
+            },
+          ],
+          edges: [],
+        }),
+      })
       const task = await startWorkgroupTask(
         db,
         actor,
         'dyn',
         { name: 't', goal: '目标', scratch: true },
-        { db, appHome, awaitScheduler: true },
+        { db, appHome, opencodeCmd: OPENCODE_CMD, awaitScheduler: true },
       )
 
       const row = (await db.select().from(tasks).where(eq(tasks.id, task.id)))[0]
@@ -574,12 +605,13 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
       expect(snapshot.nodes).toHaveLength(1)
       expect(snapshot.nodes[0]?.id).toBe(DW_ORCHESTRATOR_NODE_ID)
       const raw = JSON.parse(row?.workgroupConfigJson ?? '{}') as Record<string, unknown>
-      // dw stamped at launch; the failed generate pass left phase='generating'
-      expect(parseDwState(raw.dw)).toEqual(initialDwState())
-      // the generate-engine failure shape — NOT the turn engine, NOT runScope
-      expect(row?.status).toBe('failed')
-      expect(row?.errorSummary).toContain('agent pool is empty')
+      // The mock orchestrator's proposal proves runTask dispatched to the
+      // GENERATE engine (not the turn engine or runScope).
+      expect(parseDwState(raw.dw)?.phase).toBe('awaiting_confirm')
+      expect(row?.status).toBe('awaiting_review')
     } finally {
+      if (previousOutputs === undefined) delete process.env.MOCK_OPENCODE_OUTPUTS
+      else process.env.MOCK_OPENCODE_OUTPUTS = previousOutputs
       rmSync(appHome, { recursive: true, force: true })
     }
   })

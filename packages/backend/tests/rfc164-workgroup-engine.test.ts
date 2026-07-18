@@ -288,6 +288,38 @@ describe('RFC-164 engine — launch path', () => {
     expect(body.details?.reasons).toEqual(['leader-missing'])
   })
 
+  test('上线前加固：deleted roster agent blocks launch before task/host materialization', async () => {
+    await createWorkgroup(db, {
+      name: 'dangling-agent',
+      description: '',
+      instructions: '',
+      mode: 'leader_worker',
+      leaderDisplayName: 'ghost',
+      switches: { shareOutputs: true, directMessages: false, blackboard: false },
+      maxRounds: 5,
+      completionGate: false,
+      members: [
+        { memberType: 'agent', agentName: 'deleted-agent', displayName: 'ghost', roleDesc: '' },
+      ],
+    })
+    const res = await req('/api/workgroups/dangling-agent/tasks', {
+      method: 'POST',
+      body: JSON.stringify({ name: 't', goal: 'g', scratch: true }),
+    })
+    expect(res.status).toBe(422)
+    const body = (await res.json()) as {
+      code: string
+      details?: { reasons?: string[]; missingAgentNames?: string[] }
+    }
+    expect(body.code).toBe('workgroup-not-ready')
+    expect(body.details?.reasons).toEqual(['agent-missing'])
+    expect(body.details?.missingAgentNames).toEqual(['deleted-agent'])
+    expect(await db.select().from(tasks)).toHaveLength(0)
+    expect(
+      (await db.select().from(workflows)).some((w) => w.id === WORKGROUP_HOST_WORKFLOW_ID),
+    ).toBe(false)
+  })
+
   // RFC-167 PR-2③: the PR-1 staged guard is GONE — dynamic_workflow groups
   // launch into the generate→confirm→execute engine. Full launch coverage
   // (snapshot/dw stamp/engine entry) lives in rfc167-dynamic-workflow-engine

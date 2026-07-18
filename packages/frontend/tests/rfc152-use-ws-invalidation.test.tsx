@@ -47,17 +47,36 @@ const RealWebSocket = globalThis.WebSocket
 
 type ProbeMsg = { type: 'ping'; n: number } | { type: 'side'; payload: string } | { type: 'zap' }
 
-function Probe({ path, rules }: { path: string | null; rules: WsInvalidationRules<ProbeMsg> }) {
-  useWsInvalidation<ProbeMsg>(path, rules)
+function Probe({
+  path,
+  rules,
+  reconcileKeys,
+}: {
+  path: string | null
+  rules: WsInvalidationRules<ProbeMsg>
+  reconcileKeys?: readonly (readonly unknown[])[]
+}) {
+  useWsInvalidation<ProbeMsg>(
+    path,
+    rules,
+    undefined,
+    reconcileKeys === undefined
+      ? undefined
+      : { reconcileOnOpen: () => reconcileKeys as readonly (readonly string[])[] },
+  )
   return null
 }
 
-function mountProbe(path: string | null, rules: WsInvalidationRules<ProbeMsg>) {
+function mountProbe(
+  path: string | null,
+  rules: WsInvalidationRules<ProbeMsg>,
+  reconcileKeys?: readonly (readonly unknown[])[],
+) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } })
   const invalidateSpy = vi.spyOn(qc, 'invalidateQueries')
   const utils = render(
     <QueryClientProvider client={qc}>
-      <Probe path={path} rules={rules} />
+      <Probe path={path} rules={rules} reconcileKeys={reconcileKeys} />
     </QueryClientProvider>,
   )
   return { qc, invalidateSpy, ...utils }
@@ -78,6 +97,18 @@ afterEach(() => {
 })
 
 describe('useWsInvalidation — rules table dispatch', () => {
+  test('every physical open reconciles configured queries even when no frame arrives', () => {
+    const { invalidateSpy } = mountProbe('/ws/probe', {}, [['surface'], ['surface', 'detail']])
+    const sock = MockSocket.instances[MockSocket.instances.length - 1]!
+
+    act(() => {
+      for (const fn of sock.listeners.open ?? []) fn(null)
+    })
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['surface'] })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['surface', 'detail'] })
+  })
+
   test('rule returning keys invalidates each; unmatched types are ignored', () => {
     const { invalidateSpy } = mountProbe('/ws/probe', {
       ping: (msg) => [['a'], ['b', msg.n]],
@@ -169,5 +200,30 @@ describe('useWsInvalidation — same-path socket sharing (D5 refcount)', () => {
       sock.fireMessage({ type: 'ping', n: 3 })
     })
     expect(b.invalidateSpy).toHaveBeenCalledWith({ queryKey: ['b'] })
+  })
+
+  test('changing to an already-open path reconciles even when both sockets have the same epoch', () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } })
+    const invalidateSpy = vi.spyOn(qc, 'invalidateQueries')
+    const view = (movingPath: string) => (
+      <QueryClientProvider client={qc}>
+        <Probe path={movingPath} rules={{}} reconcileKeys={[['rotated']]} />
+        <Probe path="/ws/b" rules={{}} />
+      </QueryClientProvider>
+    )
+    const utils = render(view('/ws/a'))
+    expect(MockSocket.instances).toHaveLength(2)
+    act(() => {
+      for (const sock of MockSocket.instances) {
+        for (const fn of sock.listeners.open ?? []) fn(null)
+      }
+    })
+    invalidateSpy.mockClear()
+
+    // The moving hook carries epoch=1 from /ws/a; the resident /ws/b socket is
+    // also epoch=1. Reconciliation must follow the path identity, not only the
+    // numeric epoch.
+    utils.rerender(view('/ws/b'))
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['rotated'] })
   })
 })

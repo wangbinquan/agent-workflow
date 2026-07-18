@@ -28,17 +28,19 @@ import { z } from 'zod'
 import { actorOf, SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
 import {
+  agents,
   clarifySessions,
   nodeRuns,
   taskCollaborators,
   tasks,
   users,
   workgroupAssignments,
+  workgroupMemberCursors,
   workgroupMessages,
 } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
 import { DW_GATE_CAUSE, DW_MAX_REJECT_ROUNDS } from '@/services/dynamicWorkflowRunner'
-import { setNodeRunStatus, setTaskStatus } from '@/services/lifecycle'
+import { setNodeRunStatus, setNodeRunStatusTx, setTaskStatus } from '@/services/lifecycle'
 import { validateDynamicWorkflowDef } from '@/services/orchestratorAgent'
 import { assertNewRefsUsable, extractWorkflowAgentNames } from '@/services/resourceRefs'
 import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
@@ -47,12 +49,13 @@ import {
   getTask,
   resumeDynamicWorkflowExecution,
   resumeTask,
+  resumeTaskWithAtomicSideEffects,
 } from '@/services/task'
 import { canViewTask } from '@/services/taskCollab'
 import { createWorkflow } from '@/services/workflow'
 import {
-  advanceMemberCursor,
   casAssignmentStatus,
+  casAssignmentStatusTx,
   dismissOpenClarifyParksForAutonomous,
 } from '@/services/workgroupLifecycle'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
@@ -510,28 +513,39 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
       parsed.data.body ??
       `${parsed.data.summary ?? ''}${parsed.data.detail ? `\n\n${parsed.data.detail}` : ''}`
     const deliveryId = ulid()
-    await deps.db.insert(workgroupMessages).values({
-      id: deliveryId,
-      taskId,
-      round: row.round,
-      authorKind: 'human',
-      authorMemberId: member.id,
-      authorUserId: actor.user.id,
-      kind: 'delivery',
-      bodyMd,
-      mentionsJson: '[]',
-      assignmentId,
-      createdAt: Date.now(),
+    const delivered = dbTxSync(deps.db, (tx) => {
+      const flipped = casAssignmentStatusTx(tx, assignmentId, 'dispatched', 'delivered', {
+        resultMessageId: deliveryId,
+      })
+      if (!flipped) return false
+      tx.insert(workgroupMessages)
+        .values({
+          id: deliveryId,
+          taskId,
+          round: row.round,
+          authorKind: 'human',
+          authorMemberId: member.id,
+          authorUserId: actor.user.id,
+          kind: 'delivery',
+          bodyMd,
+          mentionsJson: '[]',
+          assignmentId,
+          createdAt: Date.now(),
+        })
+        .run()
+      return true
     })
-    const flipped = await casAssignmentStatus(deps.db, assignmentId, 'dispatched', 'delivered', {
-      resultMessageId: deliveryId,
-    })
-    if (!flipped) {
+    if (!delivered) {
       throw new ConflictError(
         'workgroup-delivery-conflict',
         `assignment is '${row.status}' — only dispatched human cards accept delivery`,
       )
     }
+    broadcastWg(taskId, {
+      type: 'wg.assignment.updated',
+      assignmentId,
+      status: 'delivered',
+    })
     broadcastWg(taskId, { type: 'wg.message.created', messageId: deliveryId, kind: 'delivery' })
     kickResumeIfResumable(taskId, task.status)
     return c.json({ messageId: deliveryId }, 201)
@@ -558,53 +572,94 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
       )
     }
     const approve = parsed.data.decision === 'approve'
-    const nextGate = approve
-      ? { ...gateRaw, awaitingConfirmation: false, approved: true, rejected: false }
-      : {
-          ...gateRaw,
-          awaitingConfirmation: false,
-          approved: false,
-          declaredDone: false,
-          rejected: true,
-          rejectedComment: parsed.data.comment ?? '',
-        }
-    await deps.db
-      .update(tasks)
-      .set({ workgroupConfigJson: JSON.stringify({ ...raw, gate: nextGate }) })
-      .where(eq(tasks.id, taskId))
-    // close the gate holder run (invariant row) — awaiting_review → done
-    const holder = (
-      await deps.db
-        .select()
+    const messageId = ulid()
+    const closedHolderIds: string[] = []
+    await resumeTaskWithAtomicSideEffects(deps.db, taskId, buildResumeDeps(), (tx, transition) => {
+      if (transition.from !== 'awaiting_review') {
+        throw new ConflictError(
+          'workgroup-gate-not-open',
+          'the completion gate is not awaiting confirmation',
+        )
+      }
+      const fresh = tx
+        .select({ workgroupConfigJson: tasks.workgroupConfigJson })
+        .from(tasks)
+        .where(eq(tasks.id, taskId))
+        .limit(1)
+        .get()
+      const freshRaw = JsonObjectSchema.parse(JSON.parse(fresh?.workgroupConfigJson ?? '{}'))
+      const freshGate = JsonObjectSchema.parse(freshRaw.gate ?? {})
+      if (freshGate.awaitingConfirmation !== true) {
+        throw new ConflictError(
+          'workgroup-gate-not-open',
+          'the completion gate is not awaiting confirmation',
+        )
+      }
+      const nextGate = approve
+        ? { ...freshGate, awaitingConfirmation: false, approved: true, rejected: false }
+        : {
+            ...freshGate,
+            awaitingConfirmation: false,
+            approved: false,
+            declaredDone: false,
+            rejected: true,
+            rejectedComment: parsed.data.comment ?? '',
+          }
+      tx.update(tasks)
+        .set({ workgroupConfigJson: JSON.stringify({ ...freshRaw, gate: nextGate }) })
+        .where(eq(tasks.id, taskId))
+        .run()
+
+      const holders = tx
+        .select({ id: nodeRuns.id })
         .from(nodeRuns)
-        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.rerunCause, 'wg-gate')))
-    ).filter((r) => r.status === 'awaiting_review')
-    for (const h of holder) {
-      await setNodeRunStatus({
-        db: deps.db,
-        nodeRunId: h.id,
-        to: 'done',
-        allowedFrom: ['awaiting_review'],
-        reason: approve ? 'wg-gate-approved' : 'wg-gate-rejected',
+        .where(
+          and(
+            eq(nodeRuns.taskId, taskId),
+            eq(nodeRuns.rerunCause, 'wg-gate'),
+            eq(nodeRuns.status, 'awaiting_review'),
+          ),
+        )
+        .all()
+      for (const holder of holders) {
+        setNodeRunStatusTx({
+          tx,
+          nodeRunId: holder.id,
+          to: 'done',
+          allowedFrom: ['awaiting_review'],
+          reason: approve ? 'wg-gate-approved' : 'wg-gate-rejected',
+        })
+        closedHolderIds.push(holder.id)
+      }
+      tx.insert(workgroupMessages)
+        .values({
+          id: messageId,
+          taskId,
+          round: 0,
+          authorKind: 'human',
+          authorUserId: actor.user.id,
+          kind: 'system',
+          bodyMd: approve
+            ? 'completion gate APPROVED'
+            : `completion gate REJECTED: ${parsed.data.comment ?? ''}`,
+          mentionsJson: '[]',
+          createdAt: Date.now(),
+        })
+        .run()
+    })
+    // Every frame follows the transaction that made it true. Scheduler work may
+    // already be re-entering, but it can only observe the fully committed gate.
+    for (const holderId of closedHolderIds) {
+      taskBroadcaster.broadcast(TASK_CHANNEL(taskId), {
+        id: -1,
+        type: 'node.status',
+        nodeRunId: holderId,
+        nodeId: WG_LEADER_NODE_ID,
+        status: 'done',
       })
     }
-    await deps.db.insert(workgroupMessages).values({
-      id: ulid(),
-      taskId,
-      round: 0,
-      authorKind: 'human',
-      authorUserId: actor.user.id,
-      kind: 'system',
-      bodyMd: approve
-        ? 'completion gate APPROVED'
-        : `completion gate REJECTED: ${parsed.data.comment ?? ''}`,
-      mentionsJson: '[]',
-      createdAt: Date.now(),
-    })
+    broadcastWg(taskId, { type: 'wg.message.created', messageId, kind: 'system' })
     broadcastWg(taskId, { type: 'wg.gate.updated', awaitingConfirmation: false })
-    // re-enter the engine from awaiting_review (approve → finishes; reject →
-    // leader wakes with gate-rejected).
-    kickResume(taskId)
     return c.json({ decision: parsed.data.decision })
   })
 
@@ -849,6 +904,35 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
       })
     }
     const patch = parsed.data
+    const addedAgentNames = [
+      ...new Set(
+        (patch.addMembers ?? []).flatMap((member) =>
+          member.memberType === 'agent' && member.agentName ? [member.agentName] : [],
+        ),
+      ),
+    ]
+    if (addedAgentNames.length > 0) {
+      // Mid-run membership is a new reference just like editing a workgroup
+      // resource: reject private agents before the existence check so the
+      // response cannot be used to distinguish a hidden row from a typo.
+      await assertNewRefsUsable(deps.db, actor, [{ type: 'agent', names: addedAgentNames }])
+      const existing = new Set(
+        (
+          await deps.db
+            .select({ name: agents.name })
+            .from(agents)
+            .where(inArray(agents.name, addedAgentNames))
+        ).map((row) => row.name),
+      )
+      const missing = addedAgentNames.filter((name) => !existing.has(name))
+      if (missing.length > 0) {
+        throw new ValidationError(
+          'workgroup-config-agent-missing',
+          `agent member(s) do not exist: ${missing.join(', ')}`,
+          { missingAgentNames: missing },
+        )
+      }
+    }
     const changes: string[] = []
     let members = [...config.members]
     // RFC-099 audit (2026-07-15): human members added mid-run must also become
@@ -856,9 +940,13 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
     // without this a joiner is "added but can't get in" (launch does this via
     // the T24 union in workgroupLaunch.ts; the mid-run path had missed it).
     const newHumanUserIds: string[] = []
+    let removingMemberIds: Set<string> | null = null
+    const joinCursors: Array<{ memberId: string; messageId: string }> = []
+    const assignmentUpdates: Array<{ assignmentId: string; status: string }> = []
 
     if (patch.removeMemberIds !== undefined && patch.removeMemberIds.length > 0) {
       const removing = new Set(patch.removeMemberIds)
+      removingMemberIds = removing
       if (config.leaderMemberId !== null && removing.has(config.leaderMemberId)) {
         throw new ValidationError('workgroup-config-leader-immutable', 'cannot remove the leader')
       }
@@ -871,29 +959,6 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
         )
       }
       for (const m of removed) changes.push(`removed @${m.displayName}`)
-      // non-terminal cards of removed members: lw cancel; fc back to open.
-      const rows = await deps.db
-        .select()
-        .from(workgroupAssignments)
-        .where(eq(workgroupAssignments.taskId, taskId))
-      for (const a of rows) {
-        if (a.assigneeMemberId === null || !removing.has(a.assigneeMemberId)) continue
-        if (a.status === 'open' || a.status === 'dispatched' || a.status === 'awaiting_human') {
-          if (config.mode === 'free_collab' && a.status !== 'open') {
-            const reopened =
-              a.status === 'dispatched' &&
-              (await casAssignmentStatus(deps.db, a.id, 'dispatched', 'failed').catch(() => false))
-            if (reopened) {
-              await casAssignmentStatus(deps.db, a.id, 'failed', 'open', {
-                assigneeMemberId: null,
-                nodeRunId: null,
-              }).catch(() => false)
-            }
-          } else {
-            await casAssignmentStatus(deps.db, a.id, a.status, 'canceled').catch(() => false)
-          }
-        }
-      }
     }
 
     if (patch.addMembers !== undefined && patch.addMembers.length > 0) {
@@ -944,7 +1009,7 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
         changes.push(`added @${m.displayName} (${m.memberType})`)
         // join-no-history: cursor starts AT the current room tail (msghub 语义).
         if (maxMsg !== undefined) {
-          await advanceMemberCursor(deps.db, taskId, id, maxMsg)
+          joinCursors.push({ memberId: id, messageId: maxMsg })
         }
       }
       // RFC-099 audit: new human members must be active users before they ride
@@ -994,6 +1059,22 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
           // unreadable fresh JSON — fall back to the handler's earlier read
         }
       }
+      const freshConfig = WorkgroupRuntimeConfigSchema.safeParse(base)
+      if (!freshConfig.success) {
+        throw new ConflictError(
+          'workgroup-config-conflict',
+          'the workgroup config changed into an unreadable state while editing',
+        )
+      }
+      // Membership operations were validated against the entry snapshot. If
+      // another editor changed the roster during the async ACL/user checks,
+      // refuse this write instead of replacing their fresh members wholesale.
+      if (JSON.stringify(freshConfig.data.members) !== JSON.stringify(config.members)) {
+        throw new ConflictError(
+          'workgroup-config-conflict',
+          'the workgroup roster changed while editing; reload and retry',
+        )
+      }
       const nextConfig = {
         ...base,
         members,
@@ -1024,7 +1105,103 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
           .onConflictDoNothing()
           .run()
       }
+
+      // Every roster side effect lands in the SAME transaction as the fresh
+      // config row. A later validation error / crash can no longer return 422
+      // after canceling cards or advancing a joiner's cursor.
+      if (removingMemberIds !== null && removingMemberIds.size > 0) {
+        const rows = tx
+          .select()
+          .from(workgroupAssignments)
+          .where(eq(workgroupAssignments.taskId, taskId))
+          .all()
+        for (const assignment of rows) {
+          if (
+            assignment.assigneeMemberId === null ||
+            !removingMemberIds.has(assignment.assigneeMemberId)
+          ) {
+            continue
+          }
+          if (
+            assignment.status !== 'open' &&
+            assignment.status !== 'dispatched' &&
+            assignment.status !== 'awaiting_human' &&
+            assignment.status !== 'running'
+          ) {
+            continue
+          }
+          if (assignment.status === 'running') {
+            throw new ConflictError(
+              'workgroup-member-running',
+              `member '${assignment.assigneeMemberId}' still owns a running assignment`,
+            )
+          }
+          if (config.mode === 'free_collab') {
+            if (assignment.status === 'dispatched') {
+              if (!casAssignmentStatusTx(tx, assignment.id, 'dispatched', 'failed')) {
+                throw new ConflictError(
+                  'workgroup-config-conflict',
+                  `assignment '${assignment.id}' changed while editing the roster`,
+                )
+              }
+              if (
+                !casAssignmentStatusTx(tx, assignment.id, 'failed', 'open', {
+                  assigneeMemberId: null,
+                  nodeRunId: null,
+                })
+              ) {
+                throw new ConflictError(
+                  'workgroup-config-conflict',
+                  `assignment '${assignment.id}' changed while editing the roster`,
+                )
+              }
+              assignmentUpdates.push({ assignmentId: assignment.id, status: 'open' })
+            } else if (assignment.status === 'awaiting_human') {
+              if (
+                !casAssignmentStatusTx(tx, assignment.id, 'awaiting_human', 'open', {
+                  assigneeMemberId: null,
+                  nodeRunId: null,
+                })
+              ) {
+                throw new ConflictError(
+                  'workgroup-config-conflict',
+                  `assignment '${assignment.id}' changed while editing the roster`,
+                )
+              }
+              assignmentUpdates.push({ assignmentId: assignment.id, status: 'open' })
+            }
+          } else if (assignment.status !== 'open') {
+            if (!casAssignmentStatusTx(tx, assignment.id, assignment.status, 'canceled')) {
+              throw new ConflictError(
+                'workgroup-config-conflict',
+                `assignment '${assignment.id}' changed while editing the roster`,
+              )
+            }
+            assignmentUpdates.push({ assignmentId: assignment.id, status: 'canceled' })
+          } else if (casAssignmentStatusTx(tx, assignment.id, 'open', 'canceled')) {
+            assignmentUpdates.push({ assignmentId: assignment.id, status: 'canceled' })
+          }
+        }
+      }
+      for (const cursor of joinCursors) {
+        tx.insert(workgroupMemberCursors)
+          .values({
+            taskId,
+            memberId: cursor.memberId,
+            lastConsumedMessageId: cursor.messageId,
+            updatedAt: Date.now(),
+          })
+          .onConflictDoNothing()
+          .run()
+      }
     })
+    for (const update of assignmentUpdates) {
+      broadcastWg(taskId, {
+        type: 'wg.assignment.updated',
+        assignmentId: update.assignmentId,
+        status: update.status,
+      })
+    }
     // RFC-181 A2 (design-gate P0) — false→true dismisses in-flight clarify
     // parks so the toggle works on a task that is ALREADY parked on questions
     // (session+round+park-run canceled, worker cards requeued, stale answers

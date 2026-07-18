@@ -26,5 +26,10 @@ const RULES: WsInvalidationRules<ScheduledTaskWsMessage> = {
 
 export function useScheduledTaskWs(opts: { enabled?: boolean } = {}): void {
   const enabled = opts.enabled ?? true
-  useWsInvalidation<ScheduledTaskWsMessage>(enabled ? WS_PATHS.scheduledTasks : null, RULES)
+  useWsInvalidation<ScheduledTaskWsMessage>(
+    enabled ? WS_PATHS.scheduledTasks : null,
+    RULES,
+    undefined,
+    { reconcileOnOpen: () => [['scheduled-tasks']] },
+  )
 }

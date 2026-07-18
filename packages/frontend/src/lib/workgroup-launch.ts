@@ -8,7 +8,7 @@
 import { ApiError } from '@/api/client'
 import { describeApiError } from '@/i18n'
 
-export type WorkgroupLaunchReadinessReason = 'no-agent-member' | 'leader-missing'
+export type WorkgroupLaunchReadinessReason = 'no-agent-member' | 'leader-missing' | 'agent-missing'
 
 /**
  * Structured classification of a launch failure (pure — no i18n). The three
@@ -34,7 +34,8 @@ export function classifyWorkgroupLaunchError(
         ? (err.details as { reasons?: unknown }).reasons
         : undefined
     const reasons = (Array.isArray(raw) ? raw : []).filter(
-      (r): r is WorkgroupLaunchReadinessReason => r === 'no-agent-member' || r === 'leader-missing',
+      (r): r is WorkgroupLaunchReadinessReason =>
+        r === 'no-agent-member' || r === 'leader-missing' || r === 'agent-missing',
     )
     return { kind: 'not-ready', reasons }
   }
@@ -50,11 +51,11 @@ export function workgroupLaunchErrorMessage(err: unknown, t: (key: string) => st
   const classified = classifyWorkgroupLaunchError(err)
   switch (classified.kind) {
     case 'not-ready': {
-      const parts = classified.reasons.map((r) =>
-        r === 'no-agent-member'
-          ? t('workgroups.readiness.noAgentMember')
-          : t('workgroups.readiness.leaderMissing'),
-      )
+      const parts = classified.reasons.map((r) => {
+        if (r === 'no-agent-member') return t('workgroups.readiness.noAgentMember')
+        if (r === 'agent-missing') return t('workgroups.readiness.agentMissing')
+        return t('workgroups.readiness.leaderMissing')
+      })
       return [t('workgroups.launch.notReady'), ...parts].join(' ')
     }
     case 'human-members-unsupported':

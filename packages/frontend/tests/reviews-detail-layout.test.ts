@@ -96,6 +96,19 @@ describe('review detail layout — sidebar position + top-right action cluster +
     expect(tsx).toMatch(/else if \(k === 'r'\) void onReject\(\)/)
     expect(tsx).toMatch(/else if \(k === 'i'\) void onIterate\(\)/)
   })
+
+  test('A/I/R decisions ignore every modified key chord', () => {
+    const tsx = readFileSync(REVIEWS_DETAIL_TSX, 'utf8')
+    const handler = tsx.slice(
+      tsx.indexOf('const onKey = (e: KeyboardEvent)'),
+      tsx.indexOf('const k = e.key.toLowerCase()'),
+    )
+    expect(handler).toMatch(/e\.metaKey/)
+    expect(handler).toMatch(/e\.ctrlKey/)
+    expect(handler).toMatch(/e\.altKey/)
+    expect(handler).toMatch(/e\.shiftKey/)
+    expect(handler).toMatch(/return/)
+  })
 })
 
 describe('review detail decision dialog — replaces window.confirm / prompt / alert', () => {
@@ -193,5 +206,21 @@ describe('review detail sidebar — ▲/▼ jump buttons mirror the J/K shortcut
     expect(tsx).toMatch(/const suppressScrollSpyUntilRef\s*=\s*useRef/)
     expect(tsx).toMatch(/suppressScrollSpyUntilRef\.current\s*=\s*Date\.now\(\)\s*\+/)
     expect(tsx).toMatch(/if\s*\(Date\.now\(\)\s*<\s*suppressScrollSpyUntilRef\.current\)\s*return/)
+  })
+})
+
+describe('review comment mutations — failures stay visible and recoverable', () => {
+  test('ReviewDocPane renders action-local errors for create, update, and delete mutations', () => {
+    const tsx = readFileSync(PANE_TSX, 'utf8')
+    expect(tsx).toContain("import { ErrorBanner } from '@/components/ErrorBanner'")
+    expect(tsx).toMatch(/<ErrorBanner\s+error=\{submitComment\.error\}/)
+    expect(tsx).toMatch(/<ErrorBanner\s+error=\{updateComment\.error\}/)
+    expect(tsx).toMatch(/<ErrorBanner\s+error=\{deleteComment\.error\}/)
+  })
+
+  test('failed async create/update calls are caught so drafts remain editable without unhandled rejections', () => {
+    const tsx = readFileSync(PANE_TSX, 'utf8')
+    expect(tsx).toMatch(/try\s*\{\s*await updateComment\.mutateAsync/s)
+    expect(tsx).toMatch(/try\s*\{\s*await submitComment\.mutateAsync/s)
   })
 })

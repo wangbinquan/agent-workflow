@@ -109,6 +109,8 @@ interface TextInputProps {
   'aria-labelledby'?: AriaAttributes['aria-labelledby']
   'aria-errormessage'?: AriaAttributes['aria-errormessage']
   'data-testid'?: string
+  onBlur?: FocusEventHandler<HTMLInputElement>
+  onKeyDown?: KeyboardEventHandler<HTMLInputElement>
 }
 
 export function TextInput({
@@ -133,6 +135,8 @@ export function TextInput({
   'aria-labelledby': ariaLabelledBy,
   'aria-errormessage': ariaErrorMessage,
   'data-testid': testid,
+  onBlur,
+  onKeyDown,
 }: TextInputProps) {
   return (
     <input
@@ -157,6 +161,8 @@ export function TextInput({
       aria-labelledby={ariaLabelledBy}
       aria-errormessage={ariaErrorMessage}
       data-testid={testid}
+      onBlur={onBlur}
+      onKeyDown={onKeyDown}
     />
   )
 }

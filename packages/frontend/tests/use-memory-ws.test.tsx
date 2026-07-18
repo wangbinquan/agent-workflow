@@ -132,6 +132,10 @@ describe('useMemoryWs', () => {
     const sock = MockSocket.instances[MockSocket.instances.length - 1]!
     act(() => {
       sock.fireOpen()
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['memories', 'pending-count'] })
+    invalidateSpy.mockClear()
+    act(() => {
       sock.fireMessage({ type: 'task.something-else', payload: 1 })
     })
     expect(invalidateSpy).not.toHaveBeenCalled()

@@ -12,6 +12,7 @@ import type {
 } from '@agent-workflow/shared'
 import {
   ScheduleSpecSchema,
+  ScheduledLaunchKindSchema,
   ScheduledTaskSchema,
   computeNextRunAt,
   rejectRetiredStartTaskKeys,
@@ -444,9 +445,53 @@ export async function fireSchedule(
   buildLaunch: BuildScheduleLaunch,
   now: number,
 ): Promise<{ taskId: string }> {
-  const kind = (row.launchKind ?? 'workflow') as ScheduledLaunchKind
-  const body = scheduledPayloadSchemaFor(kind).parse(JSON.parse(row.launchPayload))
-  const spec = ScheduleSpecSchema.parse(JSON.parse(row.scheduleSpec))
+  const parsedKind = ScheduledLaunchKindSchema.safeParse(row.launchKind ?? 'workflow')
+  if (!parsedKind.success) {
+    throw new ValidationError(
+      'schedule-kind-invalid',
+      `scheduled task '${row.id}' has an invalid launch kind`,
+      { launchKind: row.launchKind },
+    )
+  }
+  const kind = parsedKind.data
+  let launchPayload: unknown
+  try {
+    launchPayload = JSON.parse(row.launchPayload)
+  } catch {
+    throw new ValidationError(
+      'schedule-payload-invalid',
+      `scheduled task '${row.id}' has invalid launch-payload JSON`,
+      { reason: 'invalid-json' },
+    )
+  }
+  const parsedBody = scheduledPayloadSchemaFor(kind).safeParse(launchPayload)
+  if (!parsedBody.success) {
+    throw new ValidationError(
+      'schedule-payload-invalid',
+      `scheduled task '${row.id}' has an invalid launch payload`,
+      { issues: parsedBody.error.issues },
+    )
+  }
+  let scheduleSpec: unknown
+  try {
+    scheduleSpec = JSON.parse(row.scheduleSpec)
+  } catch {
+    throw new ValidationError(
+      'schedule-spec-invalid',
+      `scheduled task '${row.id}' has invalid schedule-spec JSON`,
+      { reason: 'invalid-json' },
+    )
+  }
+  const parsedSpec = ScheduleSpecSchema.safeParse(scheduleSpec)
+  if (!parsedSpec.success) {
+    throw new ValidationError(
+      'schedule-spec-invalid',
+      `scheduled task '${row.id}' has an invalid schedule spec`,
+      { issues: parsedSpec.error.issues },
+    )
+  }
+  const body = parsedBody.data
+  const spec = parsedSpec.data
   const bodyWithName = {
     ...(body as Record<string, unknown>),
     name: decorateTaskName((body as { name: string }).name, spec, now),

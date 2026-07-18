@@ -51,6 +51,7 @@ import {
 } from '@agent-workflow/shared'
 import { and, asc, eq, inArray, isNull } from 'drizzle-orm'
 import { monotonicFactory, ulid } from 'ulid'
+import { KeyedSerialQueue } from '@/util/keyedSerialQueue'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
 import {
@@ -2002,15 +2003,9 @@ async function driveMessageTurn(
 // finishing in the same tick would otherwise interleave their dedup read
 // and insert (TOCTOU). One engine instance per task is guaranteed by the
 // runTask CAS claim, so an in-process chain fully closes the race.
-const tasksAddChains = new Map<string, Promise<unknown>>()
+const tasksAddQueue = new KeyedSerialQueue<string>()
 function serializeTasksAdd<T>(taskId: string, fn: () => Promise<T>): Promise<T> {
-  const prev = tasksAddChains.get(taskId) ?? Promise.resolve()
-  const next = prev.then(fn, fn)
-  tasksAddChains.set(
-    taskId,
-    next.catch(() => undefined),
-  )
-  return next
+  return tasksAddQueue.run(taskId, fn)
 }
 
 /**

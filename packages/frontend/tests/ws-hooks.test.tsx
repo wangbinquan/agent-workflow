@@ -127,6 +127,25 @@ describe('useTasksSync', () => {
     }
     expect(spy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ['tasks'] }))
   })
+
+  test('reconciles the task list as soon as the lossy notification socket opens', async () => {
+    const client = new QueryClient()
+    const spy = vi.spyOn(client, 'invalidateQueries')
+    function Host() {
+      useTasksSync()
+      return null
+    }
+    render(
+      <QueryClientProvider client={client}>
+        <Host />
+      </QueryClientProvider>,
+    )
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['tasks'] })
+  })
 })
 
 describe('useWorkflowSync', () => {

@@ -44,5 +44,16 @@ const RULES: WsInvalidationRules<MemoryDistillJobWsMessage> = {
 }
 
 export function useMemoryDistillJobWs({ enabled = true }: UseMemoryDistillJobWsOpts = {}): void {
-  useWsInvalidation<MemoryDistillJobWsMessage>(enabled ? WS_PATHS.memoryDistillJobs : null, RULES)
+  useWsInvalidation<MemoryDistillJobWsMessage>(
+    enabled ? WS_PATHS.memoryDistillJobs : null,
+    RULES,
+    undefined,
+    {
+      reconcileOnOpen: () => [
+        ['memory-distill-jobs'],
+        MEMORY_QUERY_KEYS.pendingCount,
+        MEMORY_QUERY_KEYS.candidates,
+      ],
+    },
+  )
 }

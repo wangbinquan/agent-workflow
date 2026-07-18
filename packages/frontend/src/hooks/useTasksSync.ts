@@ -21,5 +21,7 @@ const RULES: WsInvalidationRules<TasksListWsMessage> = {
 }
 
 export function useTasksSync(enabled: boolean = true): void {
-  useWsInvalidation<TasksListWsMessage>(enabled ? WS_PATHS.tasksList : null, RULES)
+  useWsInvalidation<TasksListWsMessage>(enabled ? WS_PATHS.tasksList : null, RULES, undefined, {
+    reconcileOnOpen: () => [['tasks']],
+  })
 }

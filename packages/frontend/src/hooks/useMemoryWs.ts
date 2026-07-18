@@ -66,5 +66,7 @@ const RULES: WsInvalidationRules<MemoryWsMessage> = {
 }
 
 export function useMemoryWs({ enabled = true }: UseMemoryWsOpts = {}): void {
-  useWsInvalidation<MemoryWsMessage>(enabled ? WS_PATHS.memories : null, RULES)
+  useWsInvalidation<MemoryWsMessage>(enabled ? WS_PATHS.memories : null, RULES, undefined, {
+    reconcileOnOpen: broadSurface,
+  })
 }

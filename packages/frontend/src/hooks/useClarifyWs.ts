@@ -71,5 +71,6 @@ export function useClarifyWs(opts: UseClarifyWsOpts): void {
     opts.taskId === null ? null : WS_PATHS.task(opts.taskId),
     RULES,
     opts,
+    { reconcileOnOpen: (ctx) => (ctx === undefined ? [] : clarifySurface(ctx)) },
   )
 }

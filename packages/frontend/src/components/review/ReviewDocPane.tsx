@@ -31,6 +31,7 @@ import { useTranslation } from 'react-i18next'
 import type { ReviewComment, ReviewCommentAnchor } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { AttributionChip } from '@/components/AttributionChip'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import { TextArea } from '@/components/Form'
 import { useUserLookup } from '@/hooks/useUserLookup'
 import { Prose } from '@/components/prose/Prose'
@@ -390,7 +391,12 @@ export function ReviewDocPane(props: ReviewDocPaneProps) {
     async (commentId: string) => {
       const text = editDraft.trim()
       if (text.length === 0) return
-      await updateComment.mutateAsync({ commentId, commentText: text })
+      try {
+        await updateComment.mutateAsync({ commentId, commentText: text })
+      } catch {
+        // Keep the editor and draft open. The action-local ErrorBanner below
+        // owns the structured error and lets the user retry safely.
+      }
     },
     [editDraft, updateComment],
   )
@@ -505,7 +511,13 @@ export function ReviewDocPane(props: ReviewDocPaneProps) {
     if (popover === null) return
     const text = popover.draft.trim()
     if (text.length === 0) return
-    await submitComment.mutateAsync({ anchor: popover.anchor, commentText: text })
+    try {
+      await submitComment.mutateAsync({ anchor: popover.anchor, commentText: text })
+    } catch {
+      // Preserve the popover + persisted draft and avoid an unhandled rejected
+      // promise. ErrorBanner exposes the API failure in place.
+      return
+    }
     await deleteDraft({ taskId, nodeRunId, docVersionId, anchorHash: anchorKey(popover.anchor) })
     setPopover(null)
   }, [popover, submitComment, taskId, nodeRunId, docVersionId])
@@ -601,6 +613,9 @@ export function ReviewDocPane(props: ReviewDocPaneProps) {
                 ›
               </button>
             </header>
+            {deleteComment.error !== null && (
+              <ErrorBanner error={deleteComment.error} onDismiss={() => deleteComment.reset()} />
+            )}
             {sortedComments.length === 0 ? (
               <div className="review-detail__bubbles-empty muted">
                 {mode === 'historical'
@@ -674,7 +689,7 @@ export function ReviewDocPane(props: ReviewDocPaneProps) {
                             e.stopPropagation()
                             deleteComment.mutate(c.id)
                           }}
-                          disabled={mode !== 'awaiting'}
+                          disabled={mode !== 'awaiting' || deleteComment.isPending}
                         >
                           ×
                         </button>
@@ -710,6 +725,12 @@ export function ReviewDocPane(props: ReviewDocPaneProps) {
                             }
                           }}
                         />
+                        {updateComment.error !== null && (
+                          <ErrorBanner
+                            error={updateComment.error}
+                            onDismiss={() => updateComment.reset()}
+                          />
+                        )}
                         <div className="comment-bubble__edit-form-actions">
                           <button
                             type="button"
@@ -789,6 +810,9 @@ export function ReviewDocPane(props: ReviewDocPaneProps) {
               }
             }}
           />
+          {submitComment.error !== null && (
+            <ErrorBanner error={submitComment.error} onDismiss={() => submitComment.reset()} />
+          )}
           <div className="comment-popover__actions">
             <button
               type="button"

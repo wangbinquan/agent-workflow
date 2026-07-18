@@ -196,10 +196,33 @@ export async function runCommitPush(
   let stat: string
   let diffRaw: string
   try {
-    await g(['add', '-A'])
-    numstat = (await g(['diff', '--cached', '--numstat'])).stdout
-    stat = (await g(['diff', '--cached', '--stat'])).stdout
-    diffRaw = (await g(['diff', '--cached'])).stdout
+    const staged = await g(['add', '-A'])
+    if (staged.exitCode !== 0) {
+      return await finalize('commit-local-failed', {
+        pushError: `git add failed: ${redactPushError(staged.stderr)}`,
+      })
+    }
+    const numstatResult = await g(['diff', '--cached', '--numstat'])
+    if (numstatResult.exitCode !== 0) {
+      return await finalize('commit-local-failed', {
+        pushError: `git diff --numstat failed: ${redactPushError(numstatResult.stderr)}`,
+      })
+    }
+    numstat = numstatResult.stdout
+    const statResult = await g(['diff', '--cached', '--stat'])
+    if (statResult.exitCode !== 0) {
+      return await finalize('commit-local-failed', {
+        pushError: `git diff --stat failed: ${redactPushError(statResult.stderr)}`,
+      })
+    }
+    stat = statResult.stdout
+    const diffResult = await g(['diff', '--cached'])
+    if (diffResult.exitCode !== 0) {
+      return await finalize('commit-local-failed', {
+        pushError: `git diff failed: ${redactPushError(diffResult.stderr)}`,
+      })
+    }
+    diffRaw = diffResult.stdout
   } finally {
     releaseWrite?.()
   }

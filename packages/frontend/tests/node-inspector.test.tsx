@@ -230,6 +230,7 @@ describe('NodeInspector', () => {
     // both have the same displayed value).
     const inputKeyEl = screen.getAllByDisplayValue('req')[0] as HTMLInputElement
     fireEvent.change(inputKeyEl, { target: { value: 'spec' } })
+    fireEvent.blur(inputKeyEl)
     const next = lastPatchedNode(onChange) as unknown as { inputKey: string }
     expect(next.inputKey).toBe('spec')
   })

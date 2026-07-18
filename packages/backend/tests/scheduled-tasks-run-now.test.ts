@@ -13,7 +13,7 @@ import { resolve } from 'node:path'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { workflows } from '../src/db/schema'
+import { scheduledTasks, workflows } from '../src/db/schema'
 import { createApp } from '../src/server'
 import {
   createScheduledTask,
@@ -146,6 +146,28 @@ describe('RFC-159 T7 — run-now service (pure-launch semantics)', () => {
     const { build } = stubLaunch()
     await expect(runScheduleNow(db, 'nope', build)).rejects.toBeInstanceOf(NotFoundError)
   })
+
+  test('corrupt launch kind is rejected before a payload is dispatched through the wrong launcher', async () => {
+    const id = await makeSchedule(true)
+    await db
+      .update(scheduledTasks)
+      .set({
+        launchKind: 'corrupt-kind' as never,
+        // Before the guard, every unknown kind selected the workgroup schema,
+        // then buildScheduleLaunch fell through to the workflow launcher.
+        launchPayload: JSON.stringify({
+          workgroupName: 'squad',
+          name: 'nightly',
+          goal: 'g',
+          scratch: true,
+        }),
+      })
+      .where(eq(scheduledTasks.id, id))
+    const { build } = stubLaunch()
+    await expect(runScheduleNow(db, id, build)).rejects.toMatchObject({
+      code: 'schedule-kind-invalid',
+    })
+  })
 })
 
 describe('RFC-159 T7 — run-now route gate', () => {
@@ -222,6 +244,18 @@ describe('RFC-159 T7 — run-now route gate', () => {
     const res = await runNow(bobToken)
     expect(res.status).toBe(201)
     expect(((await res.json()) as { taskId: string }).taskId).toBe(STUB_TASK_ID)
+  })
+
+  test('legacy/corrupt launch payload is a structured 422, not a raw Zod 500', async () => {
+    await db
+      .update(scheduledTasks)
+      .set({ launchPayload: '{}' })
+      .where(eq(scheduledTasks.id, schedId))
+    const res = await runNow(bobToken)
+    expect(res.status).toBe(422)
+    expect((await res.json()) as { code: string }).toMatchObject({
+      code: 'schedule-payload-invalid',
+    })
   })
 
   test('admin → 201', async () => {

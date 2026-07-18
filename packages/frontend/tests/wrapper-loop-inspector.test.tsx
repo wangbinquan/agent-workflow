@@ -202,6 +202,31 @@ describe('loop NodeInspector candidate-driven selects', () => {
     expect(loopNode.exitCondition.kind).toBe('port-not-empty')
   })
 
+  test('switching to port-count-lt persists the displayed default n', () => {
+    const def = makeDef([loop('w1', ['a1']), agentNode('a1', 'fixer')])
+    function ChangeHost() {
+      const [d, setD] = useState(def)
+      return (
+        <>
+          <NodeInspector
+            definition={d}
+            selectedNodeId="w1"
+            agents={fakeAgents({ name: 'fixer', outputs: ['design'] })}
+            onChange={setD}
+            onClose={() => {}}
+          />
+          <pre data-testid="snapshot">{JSON.stringify(d)}</pre>
+        </>
+      )
+    }
+    render(<ChangeHost />)
+    const kindList = openTrigger(comboboxShowing(/port-empty/))
+    fireEvent.mouseDown(within(kindList).getByText('port-count-lt'))
+    const snap = JSON.parse(screen.getByTestId('snapshot').textContent ?? '{}')
+    const loopNode = snap.nodes.find((n: { id: string }) => n.id === 'w1')
+    expect(loopNode.exitCondition).toMatchObject({ kind: 'port-count-lt', n: 1 })
+  })
+
   test('changing exitCondition.nodeId triggers a definition update', () => {
     const def = makeDef([
       loop('w1', ['a1', 'a2']),

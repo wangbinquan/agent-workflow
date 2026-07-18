@@ -17,7 +17,7 @@
 import type { WorkgroupAssignmentStatus } from '@agent-workflow/shared'
 import { and, eq, sql } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
-import { dbTxSync } from '@/db/txSync'
+import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import {
   clarifyRounds,
   clarifySessions,
@@ -108,6 +108,29 @@ export async function casAssignmentStatus(
     })
   }
   return landed
+}
+
+/**
+ * Transactional companion of casAssignmentStatus. The caller owns the outer
+ * dbTxSync transaction and broadcasts only after commit. This is required for
+ * operations such as human delivery and roster edits where the assignment
+ * transition and its companion message/config rows form one business fact.
+ */
+export function casAssignmentStatusTx(
+  tx: DbTxSync,
+  assignmentId: string,
+  from: WorkgroupAssignmentStatus,
+  to: WorkgroupAssignmentStatus,
+  set: Partial<typeof workgroupAssignments.$inferInsert> = {},
+): boolean {
+  assertAssignmentTransition(from, to)
+  const updated = tx
+    .update(workgroupAssignments)
+    .set({ ...set, status: to, updatedAt: Date.now() })
+    .where(and(eq(workgroupAssignments.id, assignmentId), eq(workgroupAssignments.status, from)))
+    .returning({ id: workgroupAssignments.id })
+    .all()
+  return updated.length > 0
 }
 
 /**

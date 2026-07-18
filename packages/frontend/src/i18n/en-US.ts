@@ -1428,6 +1428,7 @@ export const enUS: Resources = {
       'A built-in agent orchestrates the members into a workflow from your goal; you confirm it, then it runs. No chatroom — members are the orchestratable pool.',
     readiness: {
       noAgentMember: 'No agent members yet — the group cannot launch.',
+      agentMissing: 'Some roster agents were deleted. Edit the members before launching.',
       leaderMissing: 'Leader-Worker mode needs one agent member designated as leader.',
       noNonLeaderWorker:
         'The roster only contains the leader — nobody to dispatch to; the leader can only idle (launch still allowed).',
@@ -2401,6 +2402,8 @@ export const enUS: Resources = {
     fieldInputKey: 'Input key',
     fieldInputKeyHint:
       "Must be unique. Also names the input node's output port and the launcher field key.",
+    fieldInputKeyRequired: 'Input key is required.',
+    fieldInputKeyDuplicate: 'Input key {{key}} is already used by another workflow input.',
     fieldInputKind: 'Field kind',
     fieldInputKindHint:
       'Picks the launcher widget — text = single/multi-line, files = file picker, enum = enum, git = branch/commit/PR.',
@@ -2434,9 +2437,11 @@ export const enUS: Resources = {
       'Port name on the source node; its declared kind must be markdown-family (markdown / markdown_file / path<md>). A list<path<md>> / list<markdown> port enters multi-document review.',
     fieldReviewRerunReject: 'Reject re-runs',
     fieldReviewRerunRejectHint:
-      'Comma-separated node ids. Default = source node + all its reachable upstreams.',
+      'Press Enter or comma to add node ids. Default = source node + all its reachable upstreams.',
     fieldReviewRerunIterate: 'Iterate re-runs',
-    fieldReviewRerunIterateHint: 'Comma-separated node ids. Default = direct source node only.',
+    fieldReviewRerunIterateHint:
+      'Press Enter or comma to add node ids. Default = direct source node only.',
+    fieldReviewRerunInvalid: 'Node {{id}} is not an available upstream node.',
     fieldReviewRollbackReject: 'Rollback files on reject',
     fieldReviewRollbackRejectLabel: 'Restore worktree to pre-snapshot when rejecting',
     fieldReviewRollbackIterate: 'Rollback files on iterate',
@@ -3207,6 +3212,7 @@ export const enUS: Resources = {
       'input-key-not-declared': 'The input node references a key the workflow does not declare.',
       'input-orphan-declared': 'A declared workflow input is referenced by no input node.',
       'multiple-aggregators-in-fanout': 'A fan-out wrapper supports at most one aggregator agent.',
+      'node-id-duplicate': 'Node ids must be unique within a workflow.',
       'prompt-template-deprecated-token':
         'The prompt references a retired template token (it renders empty).',
       'prompt-template-unresolved': 'The prompt references a token with no matching inbound port.',
@@ -3466,6 +3472,13 @@ export const enUS: Resources = {
     'scheduled-kind-immutable__hint': 'Delete it and recreate with the new kind.',
     'scheduled-task-needs-repair':
       'This scheduled task has an unreadable launch payload; supply a full payload to repair it.',
+    'schedule-payload-invalid':
+      'The saved launch payload is corrupt, so this schedule cannot run now.',
+    'schedule-payload-invalid__hint': 'Edit and save the complete launch settings, then try again.',
+    'schedule-kind-invalid': 'The saved launch type is corrupt, so this schedule cannot run.',
+    'schedule-kind-invalid__hint': 'Delete this schedule and recreate it with the intended type.',
+    'schedule-spec-invalid': 'The saved schedule timing rule is invalid.',
+    'schedule-spec-invalid__hint': 'Edit the cadence and timezone, then save again.',
     'scheduled-task-row-corrupt': 'The scheduled task record is corrupt.',
     'scheduled-task-upload-required':
       'The workflow requires a file upload, which a scheduled task cannot supply.',
@@ -3591,11 +3604,22 @@ export const enUS: Resources = {
     'workgroup-config-leader-immutable': 'The leader member cannot be removed.',
     'workgroup-config-no-agents': 'Removing these members would leave no agent member.',
     'workgroup-config-duplicate-member': 'A member with this display name already exists.',
+    'workgroup-config-agent-missing': 'The agent being added no longer exists.',
+    'workgroup-config-conflict':
+      'The roster changed in another operation; this save was not applied.',
+    'workgroup-config-conflict__hint': 'Refresh the room, then retry the roster edit.',
+    'workgroup-member-running':
+      'This member still owns a running assignment and cannot be removed.',
     'workgroup-config-empty': 'There are no changes to save.',
     // --- repo / git / worktree（用户可触发子集，其余走域兜底） ---
     'repo-url-invalid': 'Unsupported or malformed Git URL.',
     'repo-clone-failed': 'git clone failed.',
     'repo-clone-failed__hint': 'Check the URL, credentials and network, then retry.',
+    'repo-fetch-failed': 'Repository sync failed; the task was not launched from stale code.',
+    'repo-fetch-failed__hint': 'Check repository credentials and network access, then retry.',
+    'repo-refresh-failed':
+      'Repository refresh failed; the last successful fetch time was preserved.',
+    'repo-refresh-failed__hint': 'Check repository credentials and network access, then retry.',
     'repo-ref-not-found': 'The requested ref was not found in the repository.',
     'repo-file-source-unreachable': 'The local file:// source is missing or unreadable.',
     'repo-not-git': 'That path is not a git repository.',
@@ -3617,6 +3641,7 @@ export const enUS: Resources = {
     'worktree-missing': 'The task workspace no longer exists (it may have been garbage-collected).',
     'worktree-base-invalid': 'The base ref cannot be resolved.',
     'worktree-file-not-found': 'File not found in the workspace.',
+    'worktree-file-invalid-encoding': 'The file path has invalid URL encoding.',
     'worktree-dir-not-found': 'Directory not found in the workspace.',
     'snapshot-lost': 'The node pre-snapshot is missing; cannot resume or retry.',
     'snapshot-missing': 'The snapshot was pruned; nothing was changed.',

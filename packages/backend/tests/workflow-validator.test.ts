@@ -253,6 +253,25 @@ describe('rule 3: wrapper required fields', () => {
     expect(codes).not.toContain('wrapper-empty')
   })
 
+  test('invalid: port-count-lt requires a positive integer n', () => {
+    const def = makeDef({
+      inputs: [{ kind: 'text', key: 'r', label: 'r' }],
+      nodes: [
+        { id: 'n1', kind: 'input', inputKey: 'r' },
+        {
+          id: 'wl',
+          kind: 'wrapper-loop',
+          nodeIds: ['n1'],
+          maxIterations: 5,
+          exitCondition: { kind: 'port-count-lt', nodeId: 'n1', portName: 'r' },
+        },
+      ],
+    })
+    expect(validateWorkflowDef(def, EMPTY_CTX).issues.map((i) => i.code)).toContain(
+      'wrapper-loop-exit-condition',
+    )
+  })
+
   test('invalid: wrapper-loop missing maxIterations + exitCondition + inner', () => {
     const def = makeDef({
       nodes: [{ id: 'wl', kind: 'wrapper-loop', nodeIds: [] }],
@@ -274,6 +293,24 @@ describe('rule 3: wrapper required fields', () => {
 // ---------------------------------------------------------------------------
 
 describe('rule 4: reference resolution', () => {
+  test('上线前加固：duplicate node ids are rejected before scheduler Map folding', () => {
+    const def = makeDef({
+      nodes: [
+        { id: 'dup', kind: 'input', inputKey: 'requirement' },
+        { id: 'dup', kind: 'agent-single', agentName: 'coder' },
+      ],
+    })
+    const result = validateWorkflowDef(def, {
+      agents: [agent('coder', ['result'])],
+      skills: [],
+    })
+    expect(result.ok).toBe(false)
+    expect(result.issues.filter((issue) => issue.code === 'node-id-duplicate')).toHaveLength(1)
+    expect(result.issues.find((issue) => issue.code === 'node-id-duplicate')?.target).toEqual({
+      kind: 'workflow',
+    })
+  })
+
   test('valid: known agent, known skill, valid binding', () => {
     const a = agent('coder', ['result'], ['py-utils'])
     const def = makeDef({

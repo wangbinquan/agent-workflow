@@ -139,6 +139,18 @@ describe('launch 422 mapping', () => {
     expect(msg).toContain('workgroups.readiness.leaderMissing')
   })
 
+  test('上线前加固：deleted roster agents get actionable launch copy', () => {
+    const err = new ApiError(422, 'workgroup-not-ready', 'not ready', {
+      reasons: ['agent-missing'],
+      missingAgentNames: ['deleted-agent'],
+    })
+    expect(classifyWorkgroupLaunchError(err)).toEqual({
+      kind: 'not-ready',
+      reasons: ['agent-missing'],
+    })
+    expect(workgroupLaunchErrorMessage(err, echoT)).toContain('workgroups.readiness.agentMissing')
+  })
+
   test('malformed details degrade to an empty reason list (never crash)', () => {
     const err = new ApiError(422, 'workgroup-not-ready', 'not ready', { reasons: 'bogus' })
     expect(classifyWorkgroupLaunchError(err)).toEqual({ kind: 'not-ready', reasons: [] })
@@ -168,6 +180,7 @@ describe('launch 422 mapping', () => {
       expect(bundle.workgroups.launch.notReady.length).toBeGreaterThan(0)
       expect(bundle.workgroups.launch.invalidPayload.length).toBeGreaterThan(0)
       expect(bundle.workgroups.launch.humanMembersUnsupported.length).toBeGreaterThan(0)
+      expect(bundle.workgroups.readiness.agentMissing.length).toBeGreaterThan(0)
     }
     expect(zhCN.workgroups.launch.humanMembersUnsupported).toContain('后续版本')
     expect(enUS.workgroups.launch.humanMembersUnsupported).toContain('later version')

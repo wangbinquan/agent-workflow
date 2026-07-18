@@ -262,6 +262,32 @@ describe('runTask: linear DAG (M1)', () => {
     expect(t?.errorSummary).toContain('cycle')
   })
 
+  test('上线前加固：legacy snapshot with duplicate node ids fails explicitly, not as a cycle', async () => {
+    await seedAgent(h.db, 'a', ['out'])
+    const def: WorkflowDefinition = {
+      $schema_version: 1,
+      inputs: [],
+      nodes: [
+        { id: 'dup', kind: 'agent-single', agentName: 'a' },
+        { id: 'dup', kind: 'agent-single', agentName: 'a' },
+      ],
+      edges: [],
+    }
+    const { taskId } = await seedWorkflowAndTask(h, def)
+    await runTask({
+      taskId,
+      db: h.db,
+      appHome: h.appHome,
+      opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+    })
+    const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    expect(task?.status).toBe('failed')
+    expect(task?.errorSummary).toBe('workflow-node-id-duplicate')
+    expect(task?.errorMessage).toContain("node id 'dup' appears 2 times")
+    expect(task?.errorMessage).not.toContain('cycle')
+    expect(await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).toHaveLength(0)
+  })
+
   test('node runner failure halts task at that node', async () => {
     await seedAgent(h.db, 'broken', ['summary'])
     const def: WorkflowDefinition = {

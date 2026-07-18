@@ -4,8 +4,11 @@
 
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
 import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { gitUrlCacheKeyWith, parseGitUrl, type StartTask } from '@agent-workflow/shared'
+import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { cachedRepos } from '../src/db/schema'
 import {
@@ -14,6 +17,7 @@ import {
   refreshCachedRepo,
   resolveCachedRepo,
 } from '../src/services/gitRepoCache'
+import { resolveRepoSourceSingle } from '../src/services/task'
 import { runGit } from '../src/util/git'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -187,6 +191,57 @@ describe('gitRepoCache (RFC-024 T3)', () => {
     const r = await refreshCachedRepo({ db, appHome, now: () => t++ }, a.cached.id)
     expect(r.fetchOk).toBe(true)
     expect(Date.parse(r.item.lastFetchedAt)).toBeGreaterThan(Date.parse(a.cached.lastFetchedAt))
+  })
+
+  test('failed manual refresh is an error and preserves the last successful fetch time', async () => {
+    const a = await resolveCachedRepo({ db, appHome, fetchOnReuse: false }, { url: remoteUrl })
+    rmSync(remoteDir, { recursive: true, force: true })
+    let err: unknown
+    try {
+      await refreshCachedRepo(
+        { db, appHome, now: () => Date.parse(a.cached.lastFetchedAt) + 60_000 },
+        a.cached.id,
+      )
+    } catch (error) {
+      err = error
+    }
+    expect(err).toMatchObject({ code: 'repo-refresh-failed' })
+    const row = db.select().from(cachedRepos).where(eq(cachedRepos.id, a.cached.id)).get()
+    expect(row?.lastFetchedAt).toBe(Date.parse(a.cached.lastFetchedAt))
+  })
+
+  test('URL task launch refuses a warm cache when fetch failed instead of running stale code', async () => {
+    const a = await resolveCachedRepo({ db, appHome, fetchOnReuse: false }, { url: remoteUrl })
+    const unreachableUrl = 'https://127.0.0.1:1/unreachable.git'
+    const parsed = parseGitUrl(unreachableUrl)
+    expect(parsed).not.toBeNull()
+    const hash = gitUrlCacheKeyWith(parsed!, (value) =>
+      createHash('sha1').update(value).digest('hex'),
+    ).hash
+    await runGit(a.cached.localPath, ['remote', 'set-url', 'origin', unreachableUrl])
+    await db
+      .update(cachedRepos)
+      .set({ url: unreachableUrl, urlHash: hash })
+      .where(eq(cachedRepos.id, a.cached.id))
+
+    let err: unknown
+    try {
+      await resolveRepoSourceSingle(
+        { repoUrl: unreachableUrl },
+        {
+          workflowId: 'wf',
+          name: 'stale-source-must-fail',
+          repoUrl: unreachableUrl,
+          inputs: {},
+        } as StartTask,
+        { db, appHome },
+      )
+    } catch (error) {
+      err = error
+    }
+    expect(err).toMatchObject({ code: 'repo-fetch-failed' })
+    const row = db.select().from(cachedRepos).where(eq(cachedRepos.id, a.cached.id)).get()
+    expect(row?.lastFetchedAt).toBe(Date.parse(a.cached.lastFetchedAt))
   })
 
   test('refreshCachedRepo on missing dir throws repo-cache-corrupt', async () => {

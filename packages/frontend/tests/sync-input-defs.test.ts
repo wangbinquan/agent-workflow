@@ -102,6 +102,25 @@ describe('renameInputKey', () => {
     })
     expect(renameInputKey(prev, 'a1', 'newkey')).toBe(prev)
   })
+
+  test('refuses a rename that would collide with another input node key', () => {
+    const prev = defWith({
+      nodes: [inputNode('i1', 'requirement'), inputNode('i2', 'spec')],
+      inputs: [
+        { kind: 'text', key: 'requirement', label: 'Requirement' },
+        { kind: 'files', key: 'spec', label: 'Specification' },
+      ],
+      edges: [
+        {
+          id: 'e1',
+          source: { nodeId: 'i1', portName: 'requirement' },
+          target: { nodeId: 'a1', portName: 'prompt' },
+        },
+      ],
+    })
+
+    expect(renameInputKey(prev, 'i1', 'spec')).toBe(prev)
+  })
 })
 
 describe('patchInputDef', () => {

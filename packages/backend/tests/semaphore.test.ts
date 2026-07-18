@@ -85,4 +85,42 @@ describe('Semaphore', () => {
     await Promise.all(tasks)
     expect(peak).toBe(2)
   })
+
+  test('上线前加固：resize grows immediately and shrinks without preempting holders', async () => {
+    const sem = new Semaphore(2)
+    const release1 = await sem.acquire()
+    const release2 = await sem.acquire()
+
+    sem.resize(1)
+    expect(sem.capacity).toBe(1)
+    expect(sem.available).toBe(0)
+    let thirdEntered = false
+    const third = sem.acquire().then((release) => {
+      thirdEntered = true
+      return release
+    })
+    await Promise.resolve()
+    expect(thirdEntered).toBe(false)
+    release1()
+    await Promise.resolve()
+    expect(thirdEntered).toBe(false)
+    release2()
+    const release3 = await third
+    expect(thirdEntered).toBe(true)
+
+    const fourth = sem.acquire()
+    sem.resize(2)
+    const release4 = await fourth
+    expect(sem.capacity).toBe(2)
+    release3()
+    release4()
+  })
+
+  test('release functions are idempotent so a cleanup bug cannot inflate capacity', async () => {
+    const sem = new Semaphore(1)
+    const release = await sem.acquire()
+    release()
+    release()
+    expect(sem.available).toBe(1)
+  })
 })

@@ -10,7 +10,7 @@
 // workflows-group highlight via `resolveActiveNav`'s fallback.
 
 import { Outlet, createRootRoute, redirect, useRouterState } from '@tanstack/react-router'
-import { useSyncExternalStore, type ReactNode } from 'react'
+import { useEffect, useSyncExternalStore, type ReactNode } from 'react'
 import { AppShell } from '@/components/shell/AppShell'
 import { RouteTransitionState } from '@/components/shell/RouteTransitionState'
 import { useApplyLanguage } from '@/hooks/useLanguage'
@@ -37,17 +37,34 @@ function useAuthToken(): string | null {
 
 export function RootComponent() {
   const token = useAuthToken()
-  const pathname = useRouterState({ select: (s) => s.location.pathname })
+  const location = useRouterState({
+    select: (s) => ({ pathname: s.location.pathname, href: s.location.href }),
+  })
   useApplyTheme()
   useApplyLanguage()
   // RFC-036 — the `#aw_session=` fragment from the OIDC callback is
   // consumed at module-init time inside @/stores/auth.ts (so the token
   // is set BEFORE TanStack Router's beforeLoad gate inspects it).
   // Nothing else to do here on cold boot.
+  if (location.pathname !== '/auth' && token === null) {
+    return <AuthLossRedirect redirect={location.href} />
+  }
   return (
-    <RootShell pathname={pathname} token={token}>
+    <RootShell pathname={location.pathname} token={token}>
       <Outlet />
     </RootShell>
+  )
+}
+
+function AuthLossRedirect({ redirect }: { redirect: string }) {
+  const navigate = Route.useNavigate()
+  useEffect(() => {
+    void navigate({ to: '/auth', search: { redirect }, replace: true })
+  }, [navigate, redirect])
+  return (
+    <BareShell>
+      <RouteTransitionState />
+    </BareShell>
   )
 }
 

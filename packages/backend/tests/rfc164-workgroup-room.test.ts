@@ -30,6 +30,7 @@ import {
   workgroupMessages,
 } from '../src/db/schema'
 import { createApp } from '../src/server'
+import { createAgent } from '../src/services/agent'
 import { createUser } from '../src/services/users'
 import { resolveMentions } from '../src/routes/workgroupTasks'
 import { createLogger } from '../src/util/log'
@@ -67,6 +68,22 @@ function cfg(): WorkgroupRuntimeConfig {
       },
     ],
   }
+}
+
+async function seedAgent(db: DbClient, name: string): Promise<void> {
+  await createAgent(db, {
+    name,
+    description: '',
+    outputs: ['result'],
+    syncOutputsOnIterate: true,
+    permission: {},
+    skills: [],
+    dependsOn: [],
+    mcp: [],
+    plugins: [],
+    frontmatterExtra: {},
+    bodyMd: 'test agent',
+  })
 }
 
 describe('RFC-164 room — resolveMentions', () => {
@@ -502,6 +519,15 @@ describe('RFC-164 room — PR-5 surfaces', () => {
       body: JSON.stringify({ body: 'again' }),
     })
     expect(dup.status).toBe(409)
+    // 上线前加固（2026-07-18）：409 必须是零副作用。旧实现先 INSERT
+    // delivery message 再 CAS 卡片，重复提交虽然返回 409，房间里却会留下
+    // 一条幽灵答案。
+    const afterDuplicate = await db
+      .select()
+      .from(workgroupMessages)
+      .where(eq(workgroupMessages.taskId, taskId))
+    expect(afterDuplicate.filter((m) => m.kind === 'delivery')).toHaveLength(2)
+    expect(afterDuplicate.some((m) => m.bodyMd === 'again')).toBe(false)
   })
 
   test('deliver 拒绝非 human 卡', async () => {
@@ -549,6 +575,13 @@ describe('RFC-164 room — PR-5 surfaces', () => {
 
   test('confirm approve：gate 关+approved、门 run done、系统消息', async () => {
     await openGate()
+    // Atomic confirm now performs the same worktree preflight as every resume.
+    // Use an existing directory for this positive path; the missing-worktree
+    // rollback contract is locked separately below.
+    await db
+      .update(tasks)
+      .set({ worktreePath: import.meta.dir })
+      .where(eq(tasks.id, taskId))
     const res = await req(owner.token, `/api/workgroup-tasks/${taskId}/confirm`, {
       method: 'POST',
       body: JSON.stringify({ decision: 'approve' }),
@@ -567,6 +600,10 @@ describe('RFC-164 room — PR-5 surfaces', () => {
 
   test('confirm reject：必带 comment；declaredDone 复位 + rejected 置位', async () => {
     await openGate()
+    await db
+      .update(tasks)
+      .set({ worktreePath: import.meta.dir })
+      .where(eq(tasks.id, taskId))
     const noComment = await req(owner.token, `/api/workgroup-tasks/${taskId}/confirm`, {
       method: 'POST',
       body: JSON.stringify({ decision: 'reject' }),
@@ -585,6 +622,41 @@ describe('RFC-164 room — PR-5 surfaces', () => {
     expect(raw.gate.rejectedComment).toBe('测试没覆盖并发场景')
   })
 
+  test('上线前加固：confirm 恢复失败时 gate、holder 与消息全部保持可重试', async () => {
+    await openGate()
+    const beforeMessages = await db
+      .select()
+      .from(workgroupMessages)
+      .where(eq(workgroupMessages.taskId, taskId))
+
+    // beforeEach deliberately points at /tmp/x-wt, which does not exist. The
+    // old fire-and-forget path returned 200, closed the gate + holder, then only
+    // logged the failed resume — permanently stranding the task.
+    const res = await req(owner.token, `/api/workgroup-tasks/${taskId}/confirm`, {
+      method: 'POST',
+      body: JSON.stringify({ decision: 'approve' }),
+    })
+    expect(res.status).toBe(410)
+
+    const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const raw = JSON.parse(task?.workgroupConfigJson ?? '{}') as {
+      gate: { approved: boolean; awaitingConfirmation: boolean }
+    }
+    expect(task?.status).toBe('awaiting_review')
+    expect(raw.gate.approved).toBe(false)
+    expect(raw.gate.awaitingConfirmation).toBe(true)
+    const holders = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
+      (r) => r.rerunCause === 'wg-gate',
+    )
+    expect(holders).toHaveLength(1)
+    expect(holders[0]?.status).toBe('awaiting_review')
+    const afterMessages = await db
+      .select()
+      .from(workgroupMessages)
+      .where(eq(workgroupMessages.taskId, taskId))
+    expect(afterMessages).toHaveLength(beforeMessages.length)
+  })
+
   test('gate 未开时 confirm → 409', async () => {
     const res = await req(owner.token, `/api/workgroup-tasks/${taskId}/confirm`, {
       method: 'POST',
@@ -594,6 +666,7 @@ describe('RFC-164 room — PR-5 surfaces', () => {
   })
 
   test('config patch：加成员游标=当前尾（不补历史）、减成员卡转置、leader 不可删、重名拒', async () => {
+    await seedAgent(db, 'late-joiner')
     // 先落一条消息作为「历史」
     await db.insert(workgroupMessages).values({
       id: ulid(),
@@ -719,6 +792,123 @@ describe('RFC-164 room — PR-5 surfaces', () => {
       }),
     })
     expect(add.status).toBe(422)
+  })
+
+  test('上线前加固：已删除的 agent 不能在运行中加入 roster', async () => {
+    const add = await req(owner.token, `/api/workgroup-tasks/${taskId}/config`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        addMembers: [
+          {
+            memberType: 'agent',
+            agentName: 'deleted-agent',
+            displayName: 'deleted',
+            roleDesc: '',
+          },
+        ],
+      }),
+    })
+    expect(add.status).toBe(422)
+    const raw = JSON.parse(
+      (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.workgroupConfigJson ?? '{}',
+    ) as { members: Array<{ displayName: string }> }
+    expect(raw.members.some((m) => m.displayName === 'deleted')).toBe(false)
+  })
+
+  test('上线前加固：运行中的成员不可从 roster 移除', async () => {
+    const cardId = ulid()
+    await db.insert(workgroupAssignments).values({
+      id: cardId,
+      taskId,
+      round: 1,
+      source: 'leader',
+      assigneeMemberId: 'm-coder',
+      title: 'still running',
+      briefMd: 'the runtime still owns this member',
+      status: 'running',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    })
+    const remove = await req(owner.token, `/api/workgroup-tasks/${taskId}/config`, {
+      method: 'PUT',
+      body: JSON.stringify({ removeMemberIds: ['m-coder'] }),
+    })
+    expect(remove.status).toBe(409)
+    const raw = JSON.parse(
+      (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.workgroupConfigJson ?? '{}',
+    ) as { members: Array<{ id: string }> }
+    expect(raw.members.some((m) => m.id === 'm-coder')).toBe(true)
+    expect(
+      (await db.select().from(workgroupAssignments).where(eq(workgroupAssignments.id, cardId)))[0]
+        ?.status,
+    ).toBe('running')
+  })
+
+  test('上线前加固：无效 config patch 返回 422 时不取消卡片、不写游标、不改 roster', async () => {
+    const cardId = ulid()
+    await db.insert(workgroupAssignments).values({
+      id: cardId,
+      taskId,
+      round: 1,
+      source: 'leader',
+      assigneeMemberId: 'm-coder',
+      title: 'must survive rejected patch',
+      briefMd: 'validation must precede durable side effects',
+      status: 'dispatched',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    })
+    await db.insert(workgroupMessages).values({
+      id: ulid(),
+      taskId,
+      round: 0,
+      authorKind: 'system',
+      kind: 'system',
+      bodyMd: 'cursor tail',
+      mentionsJson: '[]',
+      createdAt: Date.now(),
+    })
+    const { workgroupMemberCursors } = await import('../src/db/schema')
+    const beforeCursorCount = (
+      await db
+        .select()
+        .from(workgroupMemberCursors)
+        .where(eq(workgroupMemberCursors.taskId, taskId))
+    ).length
+
+    // Removal used to cancel m-coder's card before the later human validation
+    // discovered that ghost-user did not exist.
+    const rejected = await req(owner.token, `/api/workgroup-tasks/${taskId}/config`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        removeMemberIds: ['m-coder'],
+        addMembers: [
+          {
+            memberType: 'human',
+            userId: 'ghost-user',
+            displayName: 'ghost',
+            roleDesc: '',
+          },
+        ],
+      }),
+    })
+    expect(rejected.status).toBe(422)
+    expect(
+      (await db.select().from(workgroupAssignments).where(eq(workgroupAssignments.id, cardId)))[0]
+        ?.status,
+    ).toBe('dispatched')
+    const raw = JSON.parse(
+      (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.workgroupConfigJson ?? '{}',
+    ) as { members: Array<{ id: string; displayName: string }> }
+    expect(raw.members.some((m) => m.id === 'm-coder')).toBe(true)
+    expect(raw.members.some((m) => m.displayName === 'ghost')).toBe(false)
+    const afterCursorCount = (
+      await db
+        .select()
+        .from(workgroupMemberCursors)
+        .where(eq(workgroupMemberCursors.taskId, taskId))
+    ).length
+    expect(afterCursorCount).toBe(beforeCursorCount)
   })
 
   // RFC-181 A/A2 — autonomous 进 per-task PATCH（对称 on/off + system 消息），

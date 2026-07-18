@@ -32,10 +32,11 @@ import {
   type WorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
 import { buildClarifyEdges } from '@agent-workflow/shared'
+import { inArray } from 'drizzle-orm'
 import { buildDynamicWorkflowGenerateSnapshot } from '@/services/orchestratorAgent'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { workflows } from '@/db/schema'
+import { agents, workflows } from '@/db/schema'
 import { canViewResource } from '@/services/resourceAcl'
 import { getWorkgroup } from '@/services/workgroups'
 import { startTask, type StartTaskDeps } from '@/services/task'
@@ -194,7 +195,6 @@ export async function startWorkgroupTask(
     group.members,
   )
 
-  await ensureWorkgroupHostWorkflow(db)
   const config = buildWorkgroupRuntimeConfig(group, input.goal)
   // RFC-167: a dynamic_workflow group launches into the GENERATE phase — the
   // snapshot is a single built-in orchestrator node (swapped for the generated
@@ -235,6 +235,38 @@ export async function startWorkgroupTask(
       issues: parsed.error.issues,
     })
   }
+
+  // Save-time leniency lets a roster survive an agent deletion, but launch must
+  // fail before task/worktree materialization. Without this gate leader_worker
+  // fails only after spending setup work, while free_collab can repeatedly wake
+  // an unresolvable member without a run, cursor advance, or visible error.
+  const rosterAgentNames = [
+    ...new Set(
+      group.members.flatMap((member) =>
+        member.memberType === 'agent' && member.agentName !== null ? [member.agentName] : [],
+      ),
+    ),
+  ]
+  const existingAgentNames =
+    rosterAgentNames.length === 0
+      ? new Set<string>()
+      : new Set(
+          (
+            await db
+              .select({ name: agents.name })
+              .from(agents)
+              .where(inArray(agents.name, rosterAgentNames))
+          ).map((row) => row.name),
+        )
+  const missingAgentNames = rosterAgentNames.filter((name) => !existingAgentNames.has(name))
+  if (missingAgentNames.length > 0) {
+    throw new ValidationError('workgroup-not-ready', 'workgroup is not launch-ready', {
+      reasons: ['agent-missing'],
+      missingAgentNames,
+    })
+  }
+
+  await ensureWorkgroupHostWorkflow(db)
 
   return startTask(parsed.data, {
     ...deps,

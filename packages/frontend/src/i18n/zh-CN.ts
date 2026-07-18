@@ -1322,6 +1322,7 @@ export interface Resources {
     // Launch-readiness banner (shared workgroupLaunchReadiness reasons).
     readiness: {
       noAgentMember: string
+      agentMissing: string
       leaderMissing: string
       noNonLeaderWorker: string
     }
@@ -2218,6 +2219,8 @@ export interface Resources {
     resolvedInbound: string
     fieldInputKey: string
     fieldInputKeyHint: string
+    fieldInputKeyRequired: string
+    fieldInputKeyDuplicate: string
     fieldInputKind: string
     fieldInputKindHint: string
     fieldInputLabel: string
@@ -2248,6 +2251,7 @@ export interface Resources {
     fieldReviewRerunRejectHint: string
     fieldReviewRerunIterate: string
     fieldReviewRerunIterateHint: string
+    fieldReviewRerunInvalid: string
     fieldReviewRollbackReject: string
     fieldReviewRollbackRejectLabel: string
     fieldReviewRollbackIterate: string
@@ -4865,6 +4869,7 @@ export const zhCN: Resources = {
       '内置 agent 根据你的目标把成员编排成一条 workflow，你确认后顺序执行。无聊天室——成员即可编排的 agent 池。',
     readiness: {
       noAgentMember: '还没有 agent 成员，无法启动。',
+      agentMissing: '花名册中的部分 agent 已被删除，请先编辑成员后再启动。',
       leaderMissing: 'Leader-Worker 模式需要指定一名 agent 成员为 leader。',
       noNonLeaderWorker:
         '花名册里只有 leader 自己——没有可派活的成员，启动后 leader 只能空转（仍可启动）。',
@@ -5784,6 +5789,8 @@ export const zhCN: Resources = {
     resolvedInbound: '入边端口：',
     fieldInputKey: 'Input key',
     fieldInputKeyHint: '工作流内必须唯一；也是该 input 节点产出端口名 + launcher 字段 key。',
+    fieldInputKeyRequired: 'Input key 不能为空。',
+    fieldInputKeyDuplicate: 'Input key {{key}} 已被另一个工作流输入使用。',
     fieldInputKind: '字段类型',
     fieldInputKindHint:
       '决定 launcher 上的输入控件：text=单行/多行文本，files=多选文件，enum=枚举，git=分支/commit/PR。',
@@ -5813,9 +5820,10 @@ export const zhCN: Resources = {
     fieldReviewInputSourcePortHint:
       '上游端口名；该端口在 agent 上声明的 kind 需属 markdown 家族（markdown / markdown_file / path<md>）。声明为 list<path<md>> / list<markdown> 时进入多文档评审。',
     fieldReviewRerunReject: 'reject 时重跑节点',
-    fieldReviewRerunRejectHint: '逗号分隔的节点 id；默认 = 上游节点 + 其所有可达上游。',
+    fieldReviewRerunRejectHint: '按 Enter 或逗号添加节点 id；默认 = 上游节点 + 其所有可达上游。',
     fieldReviewRerunIterate: 'iterate 时重跑节点',
-    fieldReviewRerunIterateHint: '逗号分隔的节点 id；默认 = 仅上游节点。',
+    fieldReviewRerunIterateHint: '按 Enter 或逗号添加节点 id；默认 = 仅上游节点。',
+    fieldReviewRerunInvalid: '节点 {{id}} 不是可选的上游节点。',
     fieldReviewRollbackReject: '退回时回滚文件',
     fieldReviewRollbackRejectLabel: '回滚上游节点对 worktree 的修改',
     fieldReviewRollbackIterate: '迭代时回滚文件',
@@ -6534,6 +6542,7 @@ export const zhCN: Resources = {
       'input-key-not-declared': '输入节点引用的 key 未在工作流 inputs 里声明。',
       'input-orphan-declared': '工作流声明的输入没有任何输入节点引用。',
       'multiple-aggregators-in-fanout': '一个扇出包装器最多只能有一个聚合代理。',
+      'node-id-duplicate': '工作流内的节点 id 必须唯一。',
       'prompt-template-deprecated-token': '提示词引用了已废弃的模板变量（会渲染为空）。',
       'prompt-template-unresolved': '提示词引用的模板变量没有对应的入边端口。',
       'review-input-list-item-not-markdown': '评审节点的列表输入元素类型必须是 markdown。',
@@ -6752,6 +6761,12 @@ export const zhCN: Resources = {
     'scheduled-kind-immutable': '定时任务的发起类型创建后不可修改。',
     'scheduled-kind-immutable__hint': '删除后按新类型重建。',
     'scheduled-task-needs-repair': '该定时任务的启动参数已不可读取，需要提交完整参数修复。',
+    'schedule-payload-invalid': '该定时任务保存的启动参数已损坏，无法立即运行。',
+    'schedule-payload-invalid__hint': '编辑并重新保存完整启动参数后再试。',
+    'schedule-kind-invalid': '该定时任务保存的发起类型已损坏，无法运行。',
+    'schedule-kind-invalid__hint': '删除该定时任务，并按正确的发起类型重新创建。',
+    'schedule-spec-invalid': '该定时任务保存的执行时间规则无效。',
+    'schedule-spec-invalid__hint': '编辑执行频率与时区并重新保存。',
     'scheduled-task-row-corrupt': '定时任务数据已损坏。',
     'scheduled-task-upload-required': '该工作流要求上传文件，定时任务无法提供，无法定时发起。',
     // --- runtime ---
@@ -6863,11 +6878,19 @@ export const zhCN: Resources = {
     'workgroup-config-leader-immutable': 'Leader 成员不可移除。',
     'workgroup-config-no-agents': '移除后将没有任何 agent 成员，无法保存。',
     'workgroup-config-duplicate-member': '成员显示名与现有成员重复。',
+    'workgroup-config-agent-missing': '要加入的 agent 已不存在。',
+    'workgroup-config-conflict': '成员列表刚刚被其他操作修改，本次保存未生效。',
+    'workgroup-config-conflict__hint': '刷新房间后重新调整成员。',
+    'workgroup-member-running': '该成员仍在执行派单，暂时不能移除。',
     'workgroup-config-empty': '没有任何改动可保存。',
     // --- repo / git / worktree（用户可触发子集，其余走域兜底） ---
     'repo-url-invalid': '仓库地址不受支持或格式错误。',
     'repo-clone-failed': 'git clone 失败。',
     'repo-clone-failed__hint': '检查仓库地址、凭据与网络后重试。',
+    'repo-fetch-failed': '仓库同步失败；为避免使用陈旧代码，本次任务未启动。',
+    'repo-fetch-failed__hint': '检查仓库凭据与网络，确认可以 fetch 后重试。',
+    'repo-refresh-failed': '仓库刷新失败，上次成功同步时间保持不变。',
+    'repo-refresh-failed__hint': '检查仓库凭据与网络后重试。',
     'repo-ref-not-found': '在仓库里找不到指定的分支 / 引用。',
     'repo-file-source-unreachable': '本地 file:// 仓库源不存在或不可读。',
     'repo-not-git': '该路径不是 git 仓库。',
@@ -6889,6 +6912,7 @@ export const zhCN: Resources = {
     'worktree-missing': '任务工作区已不存在（可能已被回收）。',
     'worktree-base-invalid': '基准分支 / 引用无法解析。',
     'worktree-file-not-found': '工作区里没有该文件。',
+    'worktree-file-invalid-encoding': '文件路径的 URL 编码无效。',
     'worktree-dir-not-found': '工作区里没有该目录。',
     'snapshot-lost': '节点的改动快照已丢失，无法恢复 / 重试。',
     'snapshot-missing': '改动快照已被回收，操作未执行。',

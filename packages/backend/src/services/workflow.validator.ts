@@ -53,6 +53,7 @@ import { listAgents } from '@/services/agent'
 import { listPlugins } from '@/services/plugin'
 import { listSkills } from '@/services/skill'
 import { getWorkflow } from '@/services/workflow'
+import { parseExitCondition } from '@/services/exitCondition'
 import { NotFoundError } from '@/util/errors'
 
 // RFC-103 T5 (04-WFM-06/07): the built-in prompt-var set is now the single
@@ -313,6 +314,23 @@ export function validateWorkflowDef(
       ? undefined
       : new Set(ctx.plugins.filter((p) => p.enabled).map((p) => p.name))
 
+  // Stable node identity is a scheduler invariant, not a canvas nicety. A
+  // duplicate id used to survive validation, then `new Map(nodes.map(...))`
+  // folded one node away and the topological pass misreported the workflow as
+  // an unrelated cycle. Emit once per duplicated identity; the workflow target
+  // is intentional because no individual duplicate is uniquely focusable.
+  const nodeIdCounts = new Map<string, number>()
+  for (const node of nodes) nodeIdCounts.set(node.id, (nodeIdCounts.get(node.id) ?? 0) + 1)
+  for (const [nodeId, count] of nodeIdCounts) {
+    if (count < 2) continue
+    issues.push({
+      code: 'node-id-duplicate',
+      message: `node id '${nodeId}' appears ${count} times; node ids must be unique`,
+      pointer: nodeId,
+      target: target.workflow(),
+    })
+  }
+
   // 1. wrapper-required-fields ------------------------------------------------
   // (run early so later rules don't dereference invalid wrappers)
   for (const node of nodes) {
@@ -351,6 +369,13 @@ export function validateWorkflowDef(
         issues.push({
           code: 'wrapper-loop-exit-condition',
           message: `wrapper-loop '${node.id}' missing exitCondition`,
+          pointer: node.id,
+          target: target.nodeField(node.id, 'loop-exit-condition'),
+        })
+      } else if (parseExitCondition(exitCond) === null) {
+        issues.push({
+          code: 'wrapper-loop-exit-condition',
+          message: `wrapper-loop '${node.id}' has an invalid exitCondition`,
           pointer: node.id,
           target: target.nodeField(node.id, 'loop-exit-condition'),
         })

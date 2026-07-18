@@ -32,19 +32,31 @@ export type WsInvalidationRules<M extends { type: string }, Ctx = void> = {
 
 type ErasedRule = (msg: unknown, ctx: unknown) => readonly QueryKey[] | void
 
+export interface WsInvalidationOptions<Ctx> {
+  /**
+   * WS frames are notifications, not a replay log. Return the query surfaces
+   * that must be reconciled after every physical open (initial, reconnect, or
+   * auth rotation) so events missed while disconnected cannot leave stale UI.
+   */
+  reconcileOnOpen?: (ctx: Ctx | undefined) => readonly QueryKey[]
+}
+
 export function useWsInvalidation<M extends { type: string }, Ctx = void>(
   path: string | null,
   rules: WsInvalidationRules<M, Ctx>,
   ctx?: Ctx,
+  options?: WsInvalidationOptions<Ctx>,
 ): WebSocketConnectionState {
   const qc = useQueryClient()
   const rulesRef = useRef(rules)
   const ctxRef = useRef(ctx)
+  const reconcileOnOpenRef = useRef(options?.reconcileOnOpen)
   useEffect(() => {
     rulesRef.current = rules
     ctxRef.current = ctx
+    reconcileOnOpenRef.current = options?.reconcileOnOpen
   })
-  return useWebSocket({
+  const connectionState = useWebSocket({
     path: path ?? '',
     enabled: path !== null && path !== '',
     onMessage: (raw) => {
@@ -60,4 +72,13 @@ export function useWsInvalidation<M extends { type: string }, Ctx = void>(
       }
     },
   })
+  useEffect(() => {
+    if (connectionState.connectionEpoch === 0) return
+    const keys = reconcileOnOpenRef.current?.(ctxRef.current)
+    if (keys === undefined) return
+    for (const key of keys) {
+      void qc.invalidateQueries({ queryKey: key })
+    }
+  }, [connectionState.connectionEpoch, path, qc])
+  return connectionState
 }

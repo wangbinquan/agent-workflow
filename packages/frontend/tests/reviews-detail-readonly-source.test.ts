@@ -114,7 +114,8 @@ describe('RFC-013/RFC-149 reviews.detail.tsx — readonly historical view', () =
     // RFC-149 'decided' contract: edit (✎) + delete (×) stay visible but
     // disabled on a current-but-decided round.
     const disabledWrites = p.match(/disabled=\{mode !== 'awaiting'\}/g)
-    expect(disabledWrites?.length).toBe(2)
+    expect(disabledWrites?.length).toBe(1)
+    expect(p).toMatch(/disabled=\{mode !== 'awaiting' \|\| deleteComment\.isPending\}/)
     // The pane takes the single three-state prop, not the retired boolean pair.
     expect(p).toMatch(/mode:\s*ReviewPaneMode/)
     expect(p).not.toMatch(/readonly:\s*boolean/)

@@ -37,6 +37,7 @@ import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 import { getCachedGitCapabilities } from '@/services/gitVersion'
 import { detectSubmodules, syncSubmodules, type SubmoduleMode } from '@/services/gitSubmodule'
+import { KeyedSerialQueue } from '@/util/keyedSerialQueue'
 
 const log = createLogger('git-repo-cache')
 
@@ -45,28 +46,10 @@ const DEFAULT_CLONE_TIMEOUT_MS = 30 * 60 * 1000
 const sha1Hex = (s: string) => createHash('sha1').update(s).digest('hex')
 
 /** Per-URL serialization. Same urlHash → second caller awaits the first. */
-const urlMutex = new Map<string, Promise<unknown>>()
+const urlQueue = new KeyedSerialQueue<string>()
 
-async function withUrlLock<T>(urlHash: string, fn: () => Promise<T>): Promise<T> {
-  const prev = urlMutex.get(urlHash) ?? Promise.resolve()
-  let release!: () => void
-  const slot = new Promise<void>((resolve) => {
-    release = resolve
-  })
-  urlMutex.set(
-    urlHash,
-    prev.then(() => slot),
-  )
-  try {
-    await prev
-    return await fn()
-  } finally {
-    release()
-    // Best-effort cleanup: if no one queued behind us, drop the map entry.
-    if (urlMutex.get(urlHash) === prev.then(() => slot)) {
-      urlMutex.delete(urlHash)
-    }
-  }
+function withUrlLock<T>(urlHash: string, fn: () => Promise<T>): Promise<T> {
+  return urlQueue.run(urlHash, fn)
 }
 
 async function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
@@ -457,7 +440,10 @@ export async function resolveCachedRepo(
           stderr: sub.error ?? '',
         })
       }
-      const ts = now()
+      // `lastFetchedAt` means the last SUCCESSFUL fetch. A failed warm reuse
+      // may still refresh submodule diagnostics, but must not make stale code
+      // look freshly synchronized in the repository UI.
+      const ts = fetchOk ? now() : row.lastFetchedAt
       deps.db
         .update(cachedRepos)
         .set({
@@ -716,6 +702,12 @@ export async function refreshCachedRepo(
       fetchOk = false
       fetchError = redactGitUrl(r.stderr.trim())
       log.warn('manual refresh fetch failed', { url: redacted, stderr: fetchError })
+      throw new DomainError(
+        'repo-refresh-failed',
+        `repository refresh failed for ${redacted}: ${fetchError || 'git fetch failed'}`,
+        502,
+        { url: redacted, stderr: fetchError },
+      )
     }
     const sub = await syncSubmodules(row.localPath, {
       mode: submodule.mode,

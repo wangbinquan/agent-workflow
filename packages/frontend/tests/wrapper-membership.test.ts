@@ -11,8 +11,11 @@ import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import {
   applyMembershipPatch,
   resolveMembershipOnDragStop,
+  wrapperDescendantIds,
   type WrapperHitInput,
 } from '../src/components/canvas/wrapperMembership'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 function gitWrap(
   id: string,
@@ -80,6 +83,26 @@ describe('resolveMembershipOnDragStop', () => {
       draggedCenter: { x: 100, y: 100 },
       wrappers: [gitWrap('w1', [], { x: 0, y: 0, width: 1000, height: 1000 })],
     })
+    expect(r.joinWrapperId).toBeNull()
+  })
+
+  test('a dragged wrapper cannot join one of its descendants and create a membership cycle', () => {
+    const definition = def([
+      wrapperNode('outer', 'wrapper-loop', ['inner']),
+      wrapperNode('inner', 'wrapper-git', ['leaf']),
+      { id: 'leaf', kind: 'agent-single' } as unknown as WorkflowNode,
+    ])
+    const blocked = wrapperDescendantIds(definition, 'outer')
+    const r = resolveMembershipOnDragStop({
+      draggedNodeId: 'outer',
+      draggedCenter: { x: 100, y: 100 },
+      wrappers: [
+        gitWrap('outer', ['inner'], { x: 0, y: 0, width: 600, height: 500 }),
+        gitWrap('inner', ['leaf'], { x: 50, y: 50, width: 200, height: 200 }),
+      ],
+      blockedWrapperIds: blocked,
+    })
+    expect([...blocked]).toEqual(['inner'])
     expect(r.joinWrapperId).toBeNull()
   })
 })
@@ -195,5 +218,39 @@ describe('applyMembershipPatch', () => {
     })
     // a1 is removed from w1; non-existent join target is silently dropped.
     expect((out.nodes[0] as unknown as { nodeIds: string[] }).nodeIds).toEqual([])
+  })
+
+  test('defense in depth refuses a direct cyclic wrapper patch', () => {
+    const d = def([
+      wrapperNode('outer', 'wrapper-loop', ['inner']),
+      wrapperNode('inner', 'wrapper-git', []),
+    ])
+    const out = applyMembershipPatch(d, {
+      draggedNodeId: 'outer',
+      joinWrapperId: 'inner',
+      leaveWrapperId: null,
+    })
+    expect(out).toBe(d)
+  })
+
+  test('defense in depth refuses a direct self-membership patch', () => {
+    const d = def([wrapperNode('w1', 'wrapper-loop', [])])
+    const out = applyMembershipPatch(d, {
+      draggedNodeId: 'w1',
+      joinWrapperId: 'w1',
+      leaveWrapperId: null,
+    })
+    expect(out).toBe(d)
+  })
+})
+
+describe('WorkflowCanvas wrapper drag wiring', () => {
+  test('wrapper drags use the same membership path as ordinary nodes', () => {
+    const src = readFileSync(
+      resolve(import.meta.dirname, '..', 'src', 'components', 'canvas', 'WorkflowCanvas.tsx'),
+      'utf8',
+    )
+    expect(src).not.toMatch(/if \(isWrapperKind\(dn\.type\)\) continue/)
+    expect(src).toMatch(/wrapperDescendantIds\(nextDef, dn\.id\)/)
   })
 })

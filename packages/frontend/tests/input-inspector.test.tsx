@@ -94,7 +94,12 @@ describe('input NodeInspector (RFC-004)', () => {
     })
     const spy = vi.fn()
     render(<Host initial={def} onChangeSpy={spy} />)
-    fireEvent.change(screen.getByDisplayValue('req'), { target: { value: 'spec' } })
+    const keyInput = screen.getByDisplayValue('req')
+    fireEvent.change(keyInput, { target: { value: 'spec' } })
+    // A key rename is structural. Keep a local draft while the user types so
+    // transient intermediate values cannot rewrite nodes/inputs/edges.
+    expect(spy).not.toHaveBeenCalled()
+    fireEvent.blur(keyInput)
     const next = last(spy)
     expect((next.nodes[0] as Record<string, unknown>).inputKey).toBe('spec')
     expect(next.inputs[0]?.key).toBe('spec')
@@ -102,6 +107,74 @@ describe('input NodeInspector (RFC-004)', () => {
     expect(next.edges[0]?.source.portName).toBe('spec')
     // The agent-side target port name is preserved.
     expect(next.edges[0]?.target.portName).toBe('req')
+  })
+
+  test('duplicate inputKey stays as an invalid draft and never corrupts either input definition', () => {
+    const def = makeDef({
+      inputs: [
+        { kind: 'text', key: 'req', label: 'Need it' },
+        { kind: 'files', key: 'spec', label: 'Specification' },
+      ],
+      nodes: [
+        { id: 'i1', kind: 'input', inputKey: 'req' } as WorkflowNode,
+        { id: 'i2', kind: 'input', inputKey: 'spec' } as WorkflowNode,
+      ],
+    })
+    const spy = vi.fn()
+    render(<Host initial={def} onChangeSpy={spy} />)
+
+    const keyInput = screen.getByDisplayValue('req')
+    fireEvent.change(keyInput, { target: { value: 'spec' } })
+    fireEvent.blur(keyInput)
+
+    expect(spy).not.toHaveBeenCalled()
+    expect((keyInput as HTMLInputElement).value).toBe('spec')
+    expect(keyInput.getAttribute('aria-invalid')).toBe('true')
+    expect(screen.getByRole('alert').textContent).toMatch(/spec/)
+  })
+
+  test('inputKey also reports a collision with an orphan inputs[] definition', () => {
+    const def = makeDef({
+      inputs: [
+        { kind: 'text', key: 'req', label: 'Need it' },
+        { kind: 'files', key: 'orphan', label: 'Imported orphan' },
+      ],
+      nodes: [{ id: 'i1', kind: 'input', inputKey: 'req' } as WorkflowNode],
+    })
+    const spy = vi.fn()
+    render(<Host initial={def} onChangeSpy={spy} />)
+
+    const keyInput = screen.getByDisplayValue('req')
+    fireEvent.change(keyInput, { target: { value: 'orphan' } })
+    fireEvent.blur(keyInput)
+
+    expect(spy).not.toHaveBeenCalled()
+    expect(keyInput.getAttribute('aria-invalid')).toBe('true')
+    expect(screen.getByRole('alert').textContent).toMatch(/orphan/)
+  })
+
+  test('upload accept list commits comma-delimited chips without eating the delimiter mid-edit', () => {
+    const def = makeDef({
+      inputs: [
+        {
+          kind: 'upload',
+          key: 'attachments',
+          label: 'Attachments',
+          targetDir: 'inputs/attachments',
+          accept: ['.pdf'],
+        },
+      ],
+      nodes: [{ id: 'i1', kind: 'input', inputKey: 'attachments' } as WorkflowNode],
+    })
+    const spy = vi.fn()
+    render(<Host initial={def} onChangeSpy={spy} />)
+
+    const acceptInput = screen.getByTestId('upload-accept-input')
+    fireEvent.change(acceptInput, { target: { value: 'image/*' } })
+    fireEvent.keyDown(acceptInput, { key: ',' })
+
+    expect((last(spy).inputs[0] as Record<string, unknown>).accept).toEqual(['.pdf', 'image/*'])
+    expect((acceptInput as HTMLInputElement).value).toBe('')
   })
 
   test('editing label only touches the matching inputs[] entry, leaves the node alone', () => {

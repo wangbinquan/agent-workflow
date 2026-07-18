@@ -61,6 +61,20 @@ export function renameInputKey(
   const prevKey = (node as Record<string, unknown>).inputKey
   if (typeof prevKey !== 'string' || prevKey === nextKey) return prevDef
 
+  // Never merge two launcher fields by accident. Before this guard, renaming
+  // one input node to another node's key produced duplicate nodes + duplicate
+  // inputs[] entries, and a later edit could patch both definitions at once.
+  const collidesWithNode = prevDef.nodes.some(
+    (candidate) =>
+      candidate.id !== nodeId &&
+      candidate.kind === 'input' &&
+      (candidate as unknown as Record<string, unknown>).inputKey === nextKey,
+  )
+  const collidesWithDefinition = (prevDef.inputs ?? []).some(
+    (input) => input.key === nextKey && input.key !== prevKey,
+  )
+  if (collidesWithNode || collidesWithDefinition) return prevDef
+
   const nodes = prevDef.nodes.map((n) =>
     n.id === nodeId
       ? ({ ...(n as Record<string, unknown>), inputKey: nextKey } as unknown as WorkflowNode)

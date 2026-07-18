@@ -7,6 +7,7 @@
 
 import type { WorkflowNode } from '@agent-workflow/shared'
 import { useTranslation } from 'react-i18next'
+import { ChipsInput } from '@/components/ChipsInput'
 import { Field, Switch, TextArea, TextInput } from '@/components/Form'
 import { Select } from '@/components/Select'
 import { REVIEW_INPUT_HANDLE_ID, syncEdgeFromFormField } from '../connectionSync'
@@ -183,20 +184,16 @@ export function ReviewEdit({
         hint={t('inspector.fieldReviewRerunRejectHint')}
       >
         <InspectorHistoryBoundary meta={rerunRejectMeta} onBoundary={onHistoryBoundary}>
-          <TextInput
-            value={rerunnableOnReject.join(', ')}
-            onChange={(v) =>
-              patchReview(
-                {
-                  rerunnableOnReject: v
-                    .split(',')
-                    .map((s) => s.trim())
-                    .filter((s) => s.length > 0),
-                },
-                rerunRejectMeta,
-              )
+          <ChipsInput
+            value={rerunnableOnReject}
+            onChange={(next) => patchReview({ rerunnableOnReject: next }, rerunRejectMeta)}
+            validate={(token) =>
+              upstreamCandidates.includes(token)
+                ? null
+                : t('inspector.fieldReviewRerunInvalid', { id: token })
             }
             placeholder={inputSource.nodeId ?? ''}
+            testidPrefix="review-rerun-reject"
           />
         </InspectorHistoryBoundary>
       </Field>
@@ -205,20 +202,16 @@ export function ReviewEdit({
         hint={t('inspector.fieldReviewRerunIterateHint')}
       >
         <InspectorHistoryBoundary meta={rerunIterateMeta} onBoundary={onHistoryBoundary}>
-          <TextInput
-            value={rerunnableOnIterate.join(', ')}
-            onChange={(v) =>
-              patchReview(
-                {
-                  rerunnableOnIterate: v
-                    .split(',')
-                    .map((s) => s.trim())
-                    .filter((s) => s.length > 0),
-                },
-                rerunIterateMeta,
-              )
+          <ChipsInput
+            value={rerunnableOnIterate}
+            onChange={(next) => patchReview({ rerunnableOnIterate: next }, rerunIterateMeta)}
+            validate={(token) =>
+              upstreamCandidates.includes(token)
+                ? null
+                : t('inspector.fieldReviewRerunInvalid', { id: token })
             }
             placeholder={inputSource.nodeId ?? ''}
+            testidPrefix="review-rerun-iterate"
           />
         </InspectorHistoryBoundary>
       </Field>

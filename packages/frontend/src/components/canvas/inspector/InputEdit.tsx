@@ -2,7 +2,9 @@
 // the NodeInspector EditForm switch by RFC-146 T3.
 
 import type { WorkflowInput } from '@agent-workflow/shared'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { ChipsInput } from '@/components/ChipsInput'
 import { Field, Switch, TextArea, TextInput } from '@/components/Form'
 import { Select } from '@/components/Select'
 import { patchInputDef, renameInputKey } from '../syncInputDefs'
@@ -25,6 +27,8 @@ export function InputEdit({
   const { t } = useTranslation()
   const rec = node as unknown as Record<string, unknown>
   const key = typeof rec.inputKey === 'string' ? rec.inputKey : ''
+  const [keyDraft, setKeyDraft] = useState(key)
+  useEffect(() => setKeyDraft(key), [key, node.id])
   // RFC-004: inputKey is the single source of truth for the launcher form
   // entry. Edits to the launcher field's kind / label / required /
   // description land on definition.inputs[].
@@ -33,11 +37,24 @@ export function InputEdit({
   const inputLabel = inputDef?.label ?? key
   const inputRequired = inputDef?.required ?? true
   const inputDescription = inputDef?.description ?? ''
-  const inputKeyMeta = continuousNodeInspectorChange(
-    node.id,
-    'inputKey',
-    t('inspector.fieldInputKey'),
-  )
+  const normalizedKeyDraft = keyDraft.trim()
+  const duplicateKey =
+    definition.nodes.some(
+      (candidate) =>
+        candidate.id !== node.id &&
+        candidate.kind === 'input' &&
+        (candidate as unknown as Record<string, unknown>).inputKey === normalizedKeyDraft,
+    ) ||
+    (definition.inputs ?? []).some(
+      (candidate) => candidate.key === normalizedKeyDraft && candidate.key !== key,
+    )
+  const inputKeyError =
+    normalizedKeyDraft === ''
+      ? t('inspector.fieldInputKeyRequired')
+      : duplicateKey
+        ? t('inspector.fieldInputKeyDuplicate', { key: normalizedKeyDraft })
+        : undefined
+  const inputKeyMeta = atomicNodeInspectorChange(node.id, 'inputKey', t('inspector.fieldInputKey'))
   const inputLabelMeta = continuousNodeInspectorChange(
     node.id,
     'input.label',
@@ -51,16 +68,37 @@ export function InputEdit({
   return (
     <div className="form-grid">
       <NodeTitleField node={node} onPatch={onPatch} onHistoryBoundary={onHistoryBoundary} />
-      <Field label={t('inspector.fieldInputKey')} required hint={t('inspector.fieldInputKeyHint')}>
-        <InspectorHistoryBoundary meta={inputKeyMeta} onBoundary={onHistoryBoundary}>
-          <TextInput
-            value={key}
-            onChange={(v) => {
-              if (v.length === 0 || v === key) return
-              onCommitDef(renameInputKey(definition, node.id, v), inputKeyMeta)
-            }}
-          />
-        </InspectorHistoryBoundary>
+      <Field
+        label={t('inspector.fieldInputKey')}
+        required
+        hint={t('inspector.fieldInputKeyHint')}
+        error={inputKeyError}
+        errorId={`input-key-error-${node.id}`}
+      >
+        <TextInput
+          value={keyDraft}
+          onChange={setKeyDraft}
+          onBlur={() => {
+            if (inputKeyError !== undefined) return
+            if (normalizedKeyDraft === key) {
+              setKeyDraft(key)
+              return
+            }
+            onCommitDef(renameInputKey(definition, node.id, normalizedKeyDraft), inputKeyMeta)
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              event.currentTarget.blur()
+            } else if (event.key === 'Escape') {
+              event.preventDefault()
+              setKeyDraft(key)
+              event.currentTarget.blur()
+            }
+          }}
+          aria-invalid={inputKeyError === undefined ? undefined : true}
+          aria-errormessage={inputKeyError === undefined ? undefined : `input-key-error-${node.id}`}
+        />
       </Field>
       <Field label={t('inspector.fieldInputKind')} hint={t('inspector.fieldInputKindHint')}>
         <Select<WorkflowInput['kind']>
@@ -153,7 +191,6 @@ function UploadInputFields({
   const rec = def as Record<string, unknown>
   const targetDir = typeof rec.targetDir === 'string' ? rec.targetDir : ''
   const acceptArr = Array.isArray(rec.accept) ? (rec.accept as string[]) : []
-  const acceptText = acceptArr.join(', ')
   const maxFileSize = typeof rec.maxFileSize === 'number' ? rec.maxFileSize : undefined
   const minCount = typeof rec.minCount === 'number' ? rec.minCount : undefined
   const maxCount = typeof rec.maxCount === 'number' ? rec.maxCount : undefined
@@ -210,16 +247,13 @@ function UploadInputFields({
       </Field>
       <Field label={t('inspector.upload.accept')} hint={t('inspector.upload.acceptHint')}>
         <InspectorHistoryBoundary meta={acceptMeta} onBoundary={onHistoryBoundary}>
-          <TextInput
-            value={acceptText}
-            onChange={(v) => {
-              const next = v
-                .split(',')
-                .map((s) => s.trim())
-                .filter((s) => s !== '')
+          <ChipsInput
+            value={acceptArr}
+            onChange={(next) =>
               onPatch({ ...(def as object), accept: next } as Partial<WorkflowInput>, acceptMeta)
-            }}
+            }
             placeholder=".pdf, image/*"
+            testidPrefix="upload-accept"
           />
         </InspectorHistoryBoundary>
       </Field>

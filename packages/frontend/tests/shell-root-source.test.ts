@@ -36,6 +36,13 @@ describe('RFC-198 root shell source contract', () => {
     expect(rootSource).toMatch(/throw redirect\(/)
     expect(rootSource).not.toMatch(/NAV_GROUPS|InboxFooterButton|SettingsGearButton|<aside/)
   })
+
+  test('an in-session token loss actively navigates to auth with the current href', () => {
+    expect(rootSource).toMatch(/function AuthLossRedirect/)
+    expect(rootSource).toMatch(/navigate\(\{\s*to: '\/auth'/)
+    expect(rootSource).toMatch(/search: \{ redirect \}/)
+    expect(rootSource).toMatch(/replace: true/)
+  })
 })
 
 describe('RFC-198 AppShell source contract', () => {

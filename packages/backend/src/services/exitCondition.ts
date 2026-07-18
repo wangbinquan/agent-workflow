@@ -34,7 +34,9 @@ export function parseExitCondition(raw: unknown): ExitCondition | null {
   if (
     typeof r.kind !== 'string' ||
     typeof r.nodeId !== 'string' ||
-    typeof r.portName !== 'string'
+    r.nodeId.length === 0 ||
+    typeof r.portName !== 'string' ||
+    r.portName.length === 0
   ) {
     return null
   }
@@ -53,9 +55,11 @@ export function parseExitCondition(raw: unknown): ExitCondition | null {
     }
   }
   if (r.kind === 'port-count-lt') {
-    const n = typeof r.n === 'number' && Number.isFinite(r.n) ? r.n : 0
+    if (typeof r.n !== 'number' || !Number.isFinite(r.n) || !Number.isInteger(r.n) || r.n < 1) {
+      return null
+    }
     const sep = typeof r.separator === 'string' && r.separator.length > 0 ? r.separator : '\n'
-    return { kind: 'port-count-lt', nodeId: r.nodeId, portName: r.portName, n, separator: sep }
+    return { kind: 'port-count-lt', nodeId: r.nodeId, portName: r.portName, n: r.n, separator: sep }
   }
   return null
 }

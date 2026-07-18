@@ -151,5 +151,18 @@ export function useTaskSync(taskId: string | null): void {
   useWsInvalidation<TaskWsMessage>(
     taskId === null ? null : WS_PATHS.task(taskId),
     buildTaskSyncRules(taskId),
+    undefined,
+    {
+      // Prefix invalidation reconciles task detail + node runs + diff + alerts.
+      // The remaining keys cover side surfaces that share this task stream.
+      reconcileOnOpen: () => [
+        ['tasks', taskId],
+        ['reviews'],
+        ['clarify'],
+        ['task-questions', taskId],
+        ['task-clarify-directives', taskId],
+        workgroupRoomKey(taskId),
+      ],
+    },
   )
 }

@@ -8,19 +8,24 @@
 // Not designed for cross-process use; one daemon = one event loop.
 
 export class Semaphore {
-  private remaining: number
-  private waiters: Array<() => void> = []
+  private inUse = 0
+  private readonly waiters: Array<(release: () => void) => void> = []
+  private currentCapacity: number
 
-  constructor(public readonly capacity: number) {
+  constructor(capacity: number) {
     if (!Number.isInteger(capacity) || capacity < 1) {
       throw new Error(`Semaphore capacity must be a positive integer, got ${capacity}`)
     }
-    this.remaining = capacity
+    this.currentCapacity = capacity
+  }
+
+  get capacity(): number {
+    return this.currentCapacity
   }
 
   /** Currently-free slots (capacity - inFlight). */
   get available(): number {
-    return this.remaining
+    return Math.max(0, this.currentCapacity - this.inUse)
   }
 
   /** Number of callers blocked waiting for a slot. */
@@ -35,25 +40,46 @@ export class Semaphore {
    */
   acquire(): Promise<() => void> {
     return new Promise<() => void>((resolve) => {
-      const grant = () => resolve(() => this.release())
-      if (this.remaining > 0) {
-        this.remaining -= 1
-        grant()
+      if (this.inUse < this.currentCapacity) {
+        this.inUse += 1
+        resolve(this.releaseOnce())
         return
       }
-      this.waiters.push(() => {
-        this.remaining -= 1
-        grant()
-      })
+      this.waiters.push(resolve)
     })
   }
 
-  private release(): void {
-    this.remaining += 1
-    // Hand the freed slot to the next waiter — if there is one — in FIFO
-    // order. The waiter's continuation re-decrements `remaining`.
-    const next = this.waiters.shift()
-    if (next !== undefined) next()
+  /**
+   * Change the live capacity. Shrinking never preempts current holders; queued
+   * callers remain blocked until inUse drops below the new cap. Growing drains
+   * the FIFO immediately. One daemon can therefore apply a new global setting
+   * without replacing the shared limiter and splitting the budget.
+   */
+  resize(capacity: number): void {
+    if (!Number.isInteger(capacity) || capacity < 1) {
+      throw new Error(`Semaphore capacity must be a positive integer, got ${capacity}`)
+    }
+    this.currentCapacity = capacity
+    this.drain()
+  }
+
+  private releaseOnce(): () => void {
+    let released = false
+    return () => {
+      if (released) return
+      released = true
+      this.inUse -= 1
+      this.drain()
+    }
+  }
+
+  private drain(): void {
+    while (this.inUse < this.currentCapacity) {
+      const next = this.waiters.shift()
+      if (next === undefined) return
+      this.inUse += 1
+      next(this.releaseOnce())
+    }
   }
 
   /**

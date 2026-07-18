@@ -103,6 +103,7 @@ import {
 import {
   applyMembershipPatch,
   resolveMembershipOnDragStop,
+  wrapperDescendantIds,
   type WrapperHitInput,
 } from './wrapperMembership'
 import { DEFAULT_NODE_SIZE_BY_KIND, fitWrapperToInner } from './wrapperFit'
@@ -1084,6 +1085,11 @@ function CanvasInner({
       if (isStrayClarifyChannelDrop(guardConn)) {
         return false
       }
+      // Backend validation forbids ordinary inbound edges on git/loop
+      // wrappers. Their legacy full-height catch-all handle must therefore
+      // reject the drop here; accepting it creates an edge with no rendered
+      // target handle, so the user cannot see, select, or delete it.
+      if (isUnsupportedWrapperInbound(definition, conn)) return false
       // RFC-007 task-detail iterate lock.
       if (taskContext === undefined) return true
       if (conn.target === null || conn.target === undefined) return true
@@ -1823,8 +1829,8 @@ function CanvasInner({
           }
           for (const dn of draggedNodes) {
             // Wrapper-on-wrapper or non-wrapper-into-wrapper both go through
-            // the same path. Wrapper-on-itself is excluded inside resolve().
-            if (isWrapperKind(dn.type)) continue
+            // the same path. Wrapper-on-itself and cyclic drops onto a nested
+            // descendant are excluded inside resolve().
             const absNode = absoluteNodes.find((n) => n.id === dn.id)
             if (absNode === undefined) continue
             const m = measured.get(dn.id)
@@ -1838,6 +1844,9 @@ function CanvasInner({
               draggedNodeId: dn.id,
               draggedCenter: center,
               wrappers,
+              blockedWrapperIds: isWrapperKind(dn.type)
+                ? wrapperDescendantIds(nextDef, dn.id)
+                : undefined,
             })
             nextDef = applyMembershipPatch(nextDef, patch)
           }
@@ -2329,6 +2338,16 @@ export function deleteWorkflowSelection(
  */
 export function affectsEdgeDefinition(changes: EdgeChange[]): boolean {
   return changes.some((c) => c.type === 'remove' || c.type === 'add' || c.type === 'replace')
+}
+
+/** True when a connection targets a wrapper kind that has no inbound ports. */
+export function isUnsupportedWrapperInbound(
+  definition: WorkflowDefinition,
+  connection: { target?: string | null },
+): boolean {
+  if (connection.target === null || connection.target === undefined) return false
+  const target = definition.nodes.find((node) => node.id === connection.target)
+  return target?.kind === 'wrapper-git' || target?.kind === 'wrapper-loop'
 }
 
 /**

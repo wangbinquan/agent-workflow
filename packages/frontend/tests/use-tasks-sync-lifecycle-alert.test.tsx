@@ -24,6 +24,7 @@ let captured: ((msg: unknown) => void) | null = null
 vi.mock('../src/hooks/useWebSocket', () => ({
   useWebSocket: ({ onMessage }: { path: string; onMessage: (msg: unknown) => void }) => {
     captured = onMessage
+    return { connected: false, connectionEpoch: 0 }
   },
 }))
 

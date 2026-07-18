@@ -196,6 +196,23 @@ describe('runCommitPush', () => {
     expect(await remoteHasBranch(f.remote, 'feature/x')).toBe(false)
   })
 
+  test('git add failure is never misreported as skipped-empty', async () => {
+    f = await build()
+    writeFileSync(join(f.repo, 'b.txt'), 'must remain visible\n')
+    const fakeRunGit = (async (cwd: string, args: string[], opts?: Parameters<typeof runGit>[2]) =>
+      args[0] === 'add'
+        ? { stdout: '', stderr: 'fatal: index is locked', exitCode: 128 }
+        : runGit(cwd, args, opts)) as typeof runGit
+    const { nodeRunId, meta } = await runCommitPush(baseParams(f), {
+      db: f.db,
+      runGit: fakeRunGit,
+    })
+    expect(meta.pushOutcome).toBe('commit-local-failed')
+    expect(meta.pushError).toContain('index is locked')
+    expect((await readMeta(f, nodeRunId)).status).toBe('failed')
+    expect((await runGit(f.repo, ['status', '--short'])).stdout).toContain('b.txt')
+  })
+
   test('null LLM message → deterministic fallback, still pushes', async () => {
     f = await build()
     writeFileSync(join(f.repo, 'b.txt'), 'x\n')

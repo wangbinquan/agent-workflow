@@ -36,6 +36,7 @@ import {
 } from '@agent-workflow/shared'
 import { nodeRuns } from '@/db/schema'
 import type { DbClient } from '@/db/client'
+import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { ConflictError, DomainError, NotFoundError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 
@@ -196,6 +197,60 @@ export async function setNodeRunStatus(args: {
   return { from, to: args.to }
 }
 
+/**
+ * Synchronous transaction companion for business operations that must move a
+ * node_run together with other durable rows. It intentionally does not
+ * broadcast: the caller emits frames only after the enclosing transaction
+ * commits, preserving the lifecycle broadcast ordering rule above.
+ */
+export function setNodeRunStatusTx(args: {
+  tx: DbTxSync
+  nodeRunId: string
+  to: NodeRunStatus
+  allowedFrom: readonly NodeRunStatus[]
+  extra?: NodeRunStatusUpdateExtra
+  allowTerminal?: boolean
+  reason?: string
+}): { from: NodeRunStatus; to: NodeRunStatus } {
+  const row = args.tx
+    .select({ status: nodeRuns.status })
+    .from(nodeRuns)
+    .where(eq(nodeRuns.id, args.nodeRunId))
+    .limit(1)
+    .get()
+  if (row === undefined) {
+    throw new NotFoundError('node-run-not-found', `node_run ${args.nodeRunId} not found`)
+  }
+  const from = row.status as NodeRunStatus
+  if (isTerminalNodeRunStatus(from) && args.allowTerminal !== true) {
+    throw new ConflictError(
+      'illegal-node-run-transition',
+      `node_run ${args.nodeRunId} is terminal ('${from}'); refuse to overwrite${args.reason ? ` (${args.reason})` : ''}`,
+    )
+  }
+  if (!args.allowedFrom.includes(from)) {
+    throw new ConflictError(
+      'illegal-node-run-transition',
+      `node_run ${args.nodeRunId} status='${from}' not in allowedFrom=[${args.allowedFrom.join(',')}]${args.reason ? ` (${args.reason})` : ''}`,
+    )
+  }
+  // rfc053-allow-direct-status-write -- transactional companion of setNodeRunStatus
+  const updated = args.tx
+    .update(nodeRuns)
+    .set({ status: args.to, ...(args.extra ?? {}) })
+    .where(and(eq(nodeRuns.id, args.nodeRunId), eq(nodeRuns.status, from)))
+    .returning({ id: nodeRuns.id })
+    .all()
+  if (updated.length === 0) {
+    throw new ConcurrentNodeRunTransition(
+      args.nodeRunId,
+      from,
+      args.reason ?? `setNodeRunStatusTx to=${args.to}`,
+    )
+  }
+  return { from, to: args.to }
+}
+
 // -----------------------------------------------------------------------------
 // RFC-097 — tasks.status CAS (audit S-8 / S-14 / WP-4): the RFC-053 triple
 // (transition table + CAS helper + direct-write ratchet) replicated to the
@@ -271,6 +326,12 @@ export async function setTaskStatus(args: {
   allowedFrom: readonly TaskStatus[]
   allowTerminal?: boolean
   extra?: TaskStatusUpdateExtra
+  /**
+   * Optional synchronous companion writes that must commit or roll back with
+   * the task ownership CAS. Used for decisions whose gate/config/message rows
+   * would otherwise tear if resume loses or preflight fails.
+   */
+  onTransitionTx?: (tx: DbTxSync, transition: { from: TaskStatus; to: TaskStatus }) => void
   reason: string
 }): Promise<{ from: TaskStatus; to: TaskStatus }> {
   const rows = await args.db
@@ -344,20 +405,33 @@ export async function setTaskStatus(args: {
       )
     }
   }
-  // rfc097-allow-direct-task-status-write -- single allowlisted writer
-  const updated = await args.db
-    .update(tasks)
-    .set({ status: args.to, ...(args.extra ?? {}) })
-    .where(
-      and(
-        eq(tasks.id, args.taskId),
-        eq(tasks.status, from),
-        ...(isRevival ? [isNull(tasks.workspacePruningAt), isNull(tasks.workspacePrunedAt)] : []),
-      ),
-    )
-    .returning({ id: tasks.id })
-  if (updated.length === 0) {
-    throw new ConcurrentTaskTransition(args.taskId, args.allowedFrom, args.reason)
+  const transition = { from, to: args.to }
+  const writeStatus = (writer: Pick<DbClient, 'update'>) =>
+    // rfc097-allow-direct-task-status-write -- single allowlisted writer
+    writer
+      .update(tasks)
+      .set({ status: args.to, ...(args.extra ?? {}) })
+      .where(
+        and(
+          eq(tasks.id, args.taskId),
+          eq(tasks.status, from),
+          ...(isRevival ? [isNull(tasks.workspacePruningAt), isNull(tasks.workspacePrunedAt)] : []),
+        ),
+      )
+      .returning({ id: tasks.id })
+  if (args.onTransitionTx !== undefined) {
+    dbTxSync(args.db, (tx) => {
+      const updated = writeStatus(tx).all()
+      if (updated.length === 0) {
+        throw new ConcurrentTaskTransition(args.taskId, args.allowedFrom, args.reason)
+      }
+      args.onTransitionTx?.(tx, transition)
+    })
+  } else {
+    const updated = await writeStatus(args.db)
+    if (updated.length === 0) {
+      throw new ConcurrentTaskTransition(args.taskId, args.allowedFrom, args.reason)
+    }
   }
   // RFC-202 T2: unrevivable terminal statuses sweep the task's open human
   // gates (clarify rounds / review parks) so they leave the inbox for good.
@@ -376,7 +450,7 @@ export async function setTaskStatus(args: {
       )
     }
   }
-  return { from, to: args.to }
+  return transition
 }
 
 /**
@@ -436,6 +510,7 @@ export async function transitionTaskStatusByEvent(args: {
   event: TaskTransitionEvent
   allowTerminal?: boolean
   extra?: TaskStatusUpdateExtra
+  onTransitionTx?: (tx: DbTxSync, transition: { from: TaskStatus; to: TaskStatus }) => void
   reason: string
 }): Promise<{ from: TaskStatus; to: TaskStatus }> {
   return setTaskStatus({
@@ -445,6 +520,7 @@ export async function transitionTaskStatusByEvent(args: {
     allowedFrom: allowedFromForTaskEvent(args.event),
     ...(args.allowTerminal !== undefined ? { allowTerminal: args.allowTerminal } : {}),
     ...(args.extra !== undefined ? { extra: args.extra } : {}),
+    ...(args.onTransitionTx !== undefined ? { onTransitionTx: args.onTransitionTx } : {}),
     reason: args.reason,
   })
 }
@@ -468,8 +544,6 @@ import {
   allowedFromForMergeEvent,
   nextMergeState,
 } from '@agent-workflow/shared'
-import type { DbTxSync } from '@/db/txSync'
-
 /** Companion columns that may ride along a merge_state transition — the iso
  *  snapshot quintet (begin-isolation pins the base, mark-pending-merge pins
  *  the result tree) plus wrapperProgressJson (reenter-isolation clears the

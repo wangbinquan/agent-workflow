@@ -30,6 +30,36 @@ export interface MembershipPatch {
   leaveWrapperId: string | null
 }
 
+/** Return every wrapper nested below `wrapperId`, directly or transitively.
+ * Corrupt cyclic snapshots terminate safely and never include the root. */
+export function wrapperDescendantIds(
+  definition: WorkflowDefinition,
+  wrapperId: string,
+): Set<string> {
+  const byId = new Map(definition.nodes.map((node) => [node.id, node]))
+  const root = byId.get(wrapperId)
+  const descendants = new Set<string>()
+  const visited = new Set<string>([wrapperId])
+  const rootInner = (root as unknown as { nodeIds?: unknown } | undefined)?.nodeIds
+  const pending =
+    isWrapperKind(root?.kind) && Array.isArray(rootInner)
+      ? rootInner.filter((id): id is string => typeof id === 'string')
+      : []
+  while (pending.length > 0) {
+    const id = pending.pop()
+    if (id === undefined || visited.has(id)) continue
+    visited.add(id)
+    const node = byId.get(id)
+    if (node === undefined || !isWrapperKind(node.kind)) continue
+    descendants.add(id)
+    const inner = (node as unknown as { nodeIds?: unknown }).nodeIds
+    if (Array.isArray(inner)) {
+      for (const childId of inner) if (typeof childId === 'string') pending.push(childId)
+    }
+  }
+  return descendants
+}
+
 function pointInRect(p: { x: number; y: number }, r: Rect): boolean {
   return p.x >= r.x && p.x <= r.x + r.width && p.y >= r.y && p.y <= r.y + r.height
 }
@@ -45,10 +75,14 @@ export function resolveMembershipOnDragStop(args: {
   draggedNodeId: string
   draggedCenter: { x: number; y: number }
   wrappers: WrapperHitInput[]
+  /** Wrappers that cannot accept this node (for wrapper drags: descendants). */
+  blockedWrapperIds?: ReadonlySet<string>
 }): MembershipPatch {
-  const { draggedNodeId, draggedCenter, wrappers } = args
+  const { draggedNodeId, draggedCenter, wrappers, blockedWrapperIds } = args
   // Exclude wrapper from hit-testing itself (nested case).
-  const others = wrappers.filter((w) => w.id !== draggedNodeId)
+  const others = wrappers.filter(
+    (w) => w.id !== draggedNodeId && blockedWrapperIds?.has(w.id) !== true,
+  )
   const hits = others.filter((w) => pointInRect(draggedCenter, w.rect))
   // Innermost = smallest-area hit; deterministic tie-break by id.
   hits.sort((a, b) => {
@@ -81,6 +115,15 @@ export function applyMembershipPatch(
   patch: MembershipPatch,
 ): WorkflowDefinition {
   if (patch.joinWrapperId === null && patch.leaveWrapperId === null) return prevDef
+  const draggedNode = prevDef.nodes.find((node) => node.id === patch.draggedNodeId)
+  if (
+    patch.joinWrapperId !== null &&
+    isWrapperKind(draggedNode?.kind) &&
+    (patch.joinWrapperId === patch.draggedNodeId ||
+      wrapperDescendantIds(prevDef, patch.draggedNodeId).has(patch.joinWrapperId))
+  ) {
+    return prevDef
+  }
   let touched = false
   const nodes = prevDef.nodes.map((n) => {
     if (!isWrapperKind(n.kind)) return n

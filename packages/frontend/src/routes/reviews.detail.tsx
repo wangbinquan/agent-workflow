@@ -390,6 +390,10 @@ function ReviewDetailPage() {
           return
         }
       }
+      // Plain A/R/I are intentionally single-key actions. Never let browser
+      // or OS chords such as Cmd+A (select all) submit an irreversible review
+      // decision as a side effect.
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return
       const k = e.key.toLowerCase()
       if (k === 'a') void onApprove()
       else if (k === 'r') void onReject()

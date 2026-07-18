@@ -187,7 +187,9 @@ describe('RFC-199 strict workflow validation targets', () => {
       'utf8',
     )
     const emissions = [...source.matchAll(/^\s+code: '[^']+',/gm)]
-    expect(emissions).toHaveLength(84)
+    // Release hardening adds duplicate-node-id plus malformed loop-condition
+    // emissions; every new site must still carry a strict navigation target.
+    expect(emissions).toHaveLength(86)
     for (const emission of emissions) {
       const start = emission.index ?? 0
       const nextPush = source.indexOf('issues.push({', start)
