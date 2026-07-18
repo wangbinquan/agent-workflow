@@ -27,6 +27,7 @@ jobs:
     # signal. No opencode needed: none of these spawn the daemon.
     name: Lint + Typecheck + Format + Shared tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
 
@@ -162,6 +163,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
         shard: [1, 2, 3]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
 
@@ -189,6 +191,7 @@ jobs:
     # the four actions share one checkout / bun install.
     name: Static scans (audit + actionlint + shellcheck + gitleaks)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
         with:
@@ -295,6 +298,7 @@ jobs:
     # manually via packages/backend/scripts/perf-sweep.ts on release.
     name: Perf microbenchmark gate
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
 
@@ -336,6 +340,7 @@ jobs:
     # integrations on purpose).
     name: Markdown link check (design/)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
 
@@ -371,6 +376,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
 
@@ -457,6 +463,9 @@ jobs:
         os: [ubuntu-latest, macos-latest]
         shard: [1, 2, 3, 4]
     runs-on: ${{ matrix.os }}
+    # Cold browser/system-dependency installation needs more headroom than the
+    # unit jobs, but must not inherit Actions' six-hour default.
+    timeout-minutes: 20
     env:
       # Pin Playwright's browser dir to a workspace path so the cache key/path
       # is identical across Linux/macOS (defaults differ: ~/.cache/ms-playwright

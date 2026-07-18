@@ -25,6 +25,10 @@ const frontendPkg = JSON.parse(
   readFileSync(resolve(root, 'packages', 'frontend', 'package.json'), 'utf8'),
 ) as RootPackageJson
 const ciWorkflow = readFileSync(resolve(root, '.github', 'workflows', 'ci.yml'), 'utf8')
+const visualWorkflow = readFileSync(
+  resolve(root, '.github', 'workflows', 'visual-regression-nightly.yml'),
+  'utf8',
+)
 const strandedClarifyRegression = readFileSync(
   resolve(root, 'packages', 'backend', 'tests', 'review-clarify-question-phase-stranded.test.ts'),
   'utf8',
@@ -32,8 +36,8 @@ const strandedClarifyRegression = readFileSync(
 const hardenedBunCommand = 'bun test --isolate --randomize'
 const hardenedFrontendCommand = 'vitest run --sequence.shuffle'
 
-function workflowJob(name: string): string {
-  const lines = ciWorkflow.split(/\r?\n/)
+function workflowJob(source: string, name: string): string {
+  const lines = source.split(/\r?\n/)
   const start = lines.findIndex((line) => line === `  ${name}:`)
   if (start < 0) throw new Error(`Missing CI job: ${name}`)
   const nextJob = lines.findIndex(
@@ -44,6 +48,13 @@ function workflowJob(name: string): string {
       /^[\w-]+:$/.test(line.slice(2)),
   )
   return lines.slice(start, nextJob < 0 ? undefined : nextJob).join('\n')
+}
+
+function workflowJobNames(source: string): string[] {
+  const lines = source.split(/\r?\n/)
+  const jobsStart = lines.findIndex((line) => line === 'jobs:')
+  if (jobsStart < 0) throw new Error('Missing jobs block')
+  return lines.slice(jobsStart + 1).flatMap((line) => line.match(/^ {2}([\w-]+):$/)?.[1] ?? [])
 }
 
 function occurrenceCount(source: string, marker: string): number {
@@ -81,10 +92,10 @@ describe('repository test entrypoint', () => {
   })
 
   test('CI matrices cover every declared test shard and supported OS', () => {
-    const backendJob = workflowJob('test-backend')
-    const frontendJob = workflowJob('test-frontend')
-    const buildBinaryJob = workflowJob('build-binary')
-    const e2eJob = workflowJob('e2e')
+    const backendJob = workflowJob(ciWorkflow, 'test-backend')
+    const frontendJob = workflowJob(ciWorkflow, 'test-frontend')
+    const buildBinaryJob = workflowJob(ciWorkflow, 'build-binary')
+    const e2eJob = workflowJob(ciWorkflow, 'e2e')
 
     // A denominator in the command is not enough: accidentally shortening the
     // matrix (for example, [1, 2, 3] with /4) makes CI green while one quarter
@@ -109,10 +120,7 @@ describe('repository test entrypoint', () => {
     expect(occurrenceCount(e2eJob, `--shard=\${{ matrix.shard }}/4`)).toBe(1)
   })
 
-  test('backend shards and the known sync-child regression have hard deadlines', () => {
-    const backendJob = workflowJob('test-backend')
-    expect(backendJob).toContain('timeout-minutes: 15')
-
+  test('the known sync-child regression has hard deadlines', () => {
     // A macOS shard previously went silent immediately after entering this
     // file. Keep both possible blocking layers bounded: synchronous fixture Git
     // commands and scheduler-owned scenario subprocesses.
@@ -123,6 +131,38 @@ describe('repository test entrypoint', () => {
     expect(strandedClarifyRegression).toContain('defaultNodeRetries: 0')
     expect(strandedClarifyRegression).toContain("abortAllActiveTasks('test-timeout')")
     expect(strandedClarifyRegression).toContain("controller.abort('test-timeout')")
+  })
+
+  test('every Actions job has an explicit bounded deadline', () => {
+    const expectedCiDeadlines = new Map<string, number>([
+      ['lint', 15],
+      ['test-backend', 15],
+      ['test-frontend', 15],
+      ['scans', 15],
+      ['perf', 15],
+      ['docs', 15],
+      ['build-binary', 15],
+      ['e2e', 20],
+    ])
+    expect(workflowJobNames(ciWorkflow)).toEqual([...expectedCiDeadlines.keys()])
+    for (const [name, minutes] of expectedCiDeadlines) {
+      const job = workflowJob(ciWorkflow, name)
+      expect(occurrenceCount(job, 'timeout-minutes:')).toBe(1)
+      expect(job).toContain(`timeout-minutes: ${minutes}`)
+    }
+
+    const visualJob = workflowJob(visualWorkflow, 'visual-regression')
+    expect(workflowJobNames(visualWorkflow)).toEqual(['visual-regression'])
+    expect(occurrenceCount(visualJob, 'timeout-minutes:')).toBe(1)
+    expect(visualJob).toContain('timeout-minutes: 20')
+  })
+
+  test('visual regression pins the same opencode version as main CI', () => {
+    const ciVersion = ciWorkflow.match(/OPENCODE_VERSION:\s*'([^']+)'/)?.[1]
+    const visualVersion = visualWorkflow.match(/OPENCODE_VERSION:\s*'([^']+)'/)?.[1]
+    expect(ciVersion).toBeDefined()
+    expect(visualVersion).toBe(ciVersion)
+    expect(visualWorkflow).toContain('opencode-ai@${{ env.OPENCODE_VERSION }}')
   })
 
   test('low-level Bun discovery and shared process-state setup remain backend-only', () => {

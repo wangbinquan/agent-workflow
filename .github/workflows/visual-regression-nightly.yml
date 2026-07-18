@@ -63,12 +63,20 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # Match the main CI runtime probe instead of letting an unrelated `latest`
+  # release change screenshot startup behavior between otherwise identical runs.
+  OPENCODE_VERSION: '1.15.5'
+
 jobs:
   visual-regression:
     name: Playwright visual regression (ubuntu)
     # Keep the pixel environment aligned with the documented Playwright Noble
     # container instead of letting ubuntu-latest change underneath baselines.
     runs-on: ubuntu-24.04
+    # Includes a cold browser + system dependency install, so retain generous
+    # headroom while avoiding Actions' six-hour default on a stuck daemon/browser.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
 
@@ -79,7 +87,7 @@ jobs:
 
       - name: Install opencode (daemon dependency)
         run: |
-          bun install -g opencode-ai
+          bun install -g opencode-ai@${{ env.OPENCODE_VERSION }}
           export PATH="$HOME/.bun/bin:$PATH"
           opencode --version
 
