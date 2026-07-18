@@ -36,7 +36,6 @@
 //     the hasClarifyChannel threading is locked by clarify-prompt-wire-up.test.ts.
 
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { execFileSync } from 'node:child_process'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -53,7 +52,7 @@ import {
   abortAllActiveTasks,
   startTaskWithLocalRepo as startTaskWithLocalRepoBase,
 } from '../src/services/task'
-import { nonInteractiveGitEnv } from '../src/util/git'
+import { runTestGit } from './helpers/testCommand'
 import { reenterScheduler } from './reenter-scheduler'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -63,12 +62,8 @@ const FLOW_TIMEOUT_MS = 20_000
 
 setDefaultTimeout(FLOW_TIMEOUT_MS + 10_000)
 
-function git(...args: string[]): void {
-  execFileSync('git', args, {
-    stdio: 'ignore',
-    timeout: GIT_TIMEOUT_MS,
-    env: nonInteractiveGitEnv(),
-  })
+async function git(...args: string[]): Promise<void> {
+  await runTestGit(args, GIT_TIMEOUT_MS)
 }
 
 function runTask(options: Parameters<typeof runTaskBase>[0]) {
@@ -101,7 +96,7 @@ interface Harness {
   taskId: string
   auditorDoneRunId: string
   reviewNodeRunId: string
-  cleanup: () => void
+  cleanup: () => Promise<void>
 }
 
 let runIdx = 0
@@ -142,12 +137,12 @@ async function buildHarness(): Promise<Harness> {
   const previousAppHome = process.env.AGENT_WORKFLOW_HOME
 
   mkdirSync(repoPath, { recursive: true })
-  git('-C', repoPath, 'init', '-b', 'main')
-  git('-C', repoPath, 'config', 'user.email', 't@t.test')
-  git('-C', repoPath, 'config', 'user.name', 't')
+  await git('-C', repoPath, 'init', '-b', 'main')
+  await git('-C', repoPath, 'config', 'user.email', 't@t.test')
+  await git('-C', repoPath, 'config', 'user.name', 't')
   writeFileSync(join(repoPath, 'README.md'), '# repo\n')
-  git('-C', repoPath, 'add', '.')
-  git('-C', repoPath, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
+  await git('-C', repoPath, 'add', '.')
+  await git('-C', repoPath, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
 
   const stubOpencode = makeStubOpencode(tmp)
 
@@ -232,10 +227,14 @@ async function buildHarness(): Promise<Harness> {
     taskId: task.id,
     auditorDoneRunId: auditorDone.id,
     reviewNodeRunId: reviewRows[0]!.id,
-    cleanup: () => {
-      rmSync(tmp, { recursive: true, force: true })
-      if (previousAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
-      else process.env.AGENT_WORKFLOW_HOME = previousAppHome
+    cleanup: async () => {
+      try {
+        db.$client.close()
+      } finally {
+        rmSync(tmp, { recursive: true, force: true })
+        if (previousAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+        else process.env.AGENT_WORKFLOW_HOME = previousAppHome
+      }
     },
   }
 }

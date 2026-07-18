@@ -113,13 +113,28 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # Keep random order coverage while making a wedged run reproducible. Bun
+      # normally prints its generated seed only in the final summary, which is
+      # unavailable when the job-level timeout kills a frozen test process.
+      # A rerun of the same Actions run keeps the same run number and therefore
+      # the same per-shard seed.
+      - name: Derive reproducible backend test seed
+        shell: bash
+        run: |
+          seed=$(( (GITHUB_RUN_NUMBER * 10 + MATRIX_SHARD) % 2147483647 ))
+          if (( seed == 0 )); then seed=1; fi
+          echo "BUN_TEST_SEED=$seed" >> "$GITHUB_ENV"
+          echo "Backend test seed: $seed"
+        env:
+          MATRIX_SHARD: ${{ matrix.shard }}
+
       # --isolate prevents coverage-mode module singletons from leaking across
       # files; --randomize exposes any remaining within-file order dependency and
       # prints a seed that reproduces the failure; --shard=N/4 selects this
       # runner's quarter of the files. Coverage is instrumented only on ubuntu.
       - name: Test backend (ubuntu shard — with coverage)
         if: matrix.os == 'ubuntu-latest'
-        run: bun test --isolate --randomize --shard=${{ matrix.shard }}/4 --coverage --coverage-reporter=text --coverage-reporter=lcov
+        run: bun test --isolate --randomize --seed="$BUN_TEST_SEED" --shard=${{ matrix.shard }}/4 --coverage --coverage-reporter=text --coverage-reporter=lcov
         env:
           # Real-git-clone (file:// + recursive submodules) and external MCP-spawn
           # integration suites are gated behind RUN_GIT_NETWORK so local `bun test`
@@ -132,7 +147,7 @@ jobs:
 
       - name: Test backend (macOS shard — no coverage)
         if: matrix.os != 'ubuntu-latest'
-        run: bun test --isolate --randomize --shard=${{ matrix.shard }}/4
+        run: bun test --isolate --randomize --seed="$BUN_TEST_SEED" --shard=${{ matrix.shard }}/4
         env:
           RUN_GIT_NETWORK: '1'
 

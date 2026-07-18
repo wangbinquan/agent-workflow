@@ -96,6 +96,10 @@ const sourceGrepRegression = readFileSync(
   resolve(root, 'packages', 'backend', 'tests', 'rfc064-source-grep-guards.test.ts'),
   'utf8',
 )
+const asyncTestCommandHelper = readFileSync(
+  resolve(root, 'packages', 'backend', 'tests', 'helpers', 'testCommand.ts'),
+  'utf8',
+)
 const e2eCommandHelper = readFileSync(resolve(root, 'e2e', 'command.ts'), 'utf8')
 const e2eSpecSources = readE2eSpecSources(resolve(root, 'e2e'))
 const hardenedBunCommand = 'bun test --isolate --randomize'
@@ -161,9 +165,14 @@ describe('repository test entrypoint', () => {
     // ubuntu shards additionally instrument coverage. The local gate
     // (backendPkg.scripts.test, asserted above) stays unsharded.
     expect(ciWorkflow).toContain(
-      `run: ${hardenedBunCommand} --shard=\${{ matrix.shard }}/4 --coverage --coverage-reporter=text --coverage-reporter=lcov`,
+      `run: ${hardenedBunCommand} --seed="$BUN_TEST_SEED" --shard=\${{ matrix.shard }}/4 --coverage --coverage-reporter=text --coverage-reporter=lcov`,
     )
-    expect(ciWorkflow).toContain(`run: ${hardenedBunCommand} --shard=\${{ matrix.shard }}/4\n`)
+    expect(ciWorkflow).toContain(
+      `run: ${hardenedBunCommand} --seed="$BUN_TEST_SEED" --shard=\${{ matrix.shard }}/4\n`,
+    )
+    expect(ciWorkflow).toContain('name: Derive reproducible backend test seed')
+    expect(ciWorkflow).toContain('echo "BUN_TEST_SEED=$seed" >> "$GITHUB_ENV"')
+    expect(ciWorkflow).toContain('echo "Backend test seed: $seed"')
   })
 
   test('shared and frontend gates randomize execution order', () => {
@@ -236,15 +245,27 @@ describe('repository test entrypoint', () => {
   test('historical review-iterate regressions bound subprocesses and restore ambient home', () => {
     for (const source of [...reviewIterateRegressions, ...reviewStateRegressions]) {
       expect(source).not.toContain('execSync(')
-      expect(source).toContain("execFileSync('git'")
-      expect(source).toContain('timeout: GIT_TIMEOUT_MS')
-      expect(source).toContain('env: nonInteractiveGitEnv()')
+      expect(source).not.toContain('execFileSync(')
+      expect(source).not.toContain('node:child_process')
+      expect(source).toContain('runTestGit(args, GIT_TIMEOUT_MS)')
+      expect(source).toContain('await git(')
       expect(source).toContain('defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS')
       expect(source).toContain('defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET')
       expect(source).toContain("abortAllActiveTasks('test-timeout')")
+      expect(source).toContain('db.$client.close()')
       expect(source).toContain('const previousAppHome = process.env.AGENT_WORKFLOW_HOME')
       expect(source).toContain('process.env.AGENT_WORKFLOW_HOME = previousAppHome')
     }
+
+    // The Ubuntu coverage hang after 36a72b92 showed why a timeout option on a
+    // synchronous child is not a process boundary: if Bun wedges in that call,
+    // neither bun:test nor the watchdog can run. Lock the async kill-and-reap
+    // implementation as well as its use by the affected regression family.
+    expect(asyncTestCommandHelper).toContain('Bun.spawn({')
+    expect(asyncTestCommandHelper).toContain('Promise.race([completed, deadline])')
+    expect(asyncTestCommandHelper).toContain("proc.kill('SIGKILL')")
+    expect(asyncTestCommandHelper).toContain('await proc.exited')
+    expect(asyncTestCommandHelper).toContain('env: nonInteractiveGitEnv()')
   })
 
   test('URL and multipart launch regressions bound Git and cannot leak background tasks or temp state', () => {

@@ -33,7 +33,6 @@
 // in runner.ts.
 
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { execFileSync } from 'node:child_process'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -50,7 +49,7 @@ import {
   abortAllActiveTasks,
   startTaskWithLocalRepo as startTaskWithLocalRepoBase,
 } from '../src/services/task'
-import { nonInteractiveGitEnv } from '../src/util/git'
+import { runTestGit } from './helpers/testCommand'
 import { reenterScheduler } from './reenter-scheduler'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET, type ClarifyAnswer } from '@agent-workflow/shared'
 
@@ -61,12 +60,8 @@ const FLOW_TIMEOUT_MS = 20_000
 
 setDefaultTimeout(FLOW_TIMEOUT_MS + 10_000)
 
-function git(...args: string[]): void {
-  execFileSync('git', args, {
-    stdio: 'ignore',
-    timeout: GIT_TIMEOUT_MS,
-    env: nonInteractiveGitEnv(),
-  })
+async function git(...args: string[]): Promise<void> {
+  await runTestGit(args, GIT_TIMEOUT_MS)
 }
 
 function runTask(options: Parameters<typeof runTaskBase>[0]) {
@@ -157,14 +152,14 @@ async function buildHarness(): Promise<Harness> {
   const db = createInMemoryDb(MIGRATIONS)
   const previousAppHome = process.env.AGENT_WORKFLOW_HOME
 
-  git('-C', tmp, 'init', '-b', 'main')
+  await git('-C', tmp, 'init', '-b', 'main')
   mkdirSync(repoPath, { recursive: true })
-  git('-C', repoPath, 'init', '-b', 'main')
-  git('-C', repoPath, 'config', 'user.email', 't@t.test')
-  git('-C', repoPath, 'config', 'user.name', 't')
+  await git('-C', repoPath, 'init', '-b', 'main')
+  await git('-C', repoPath, 'config', 'user.email', 't@t.test')
+  await git('-C', repoPath, 'config', 'user.name', 't')
   writeFileSync(join(repoPath, 'README.md'), '# repo\n')
-  git('-C', repoPath, 'add', '.')
-  git('-C', repoPath, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
+  await git('-C', repoPath, 'add', '.')
+  await git('-C', repoPath, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
 
   const stubOpencode = makeStubOpencode(tmp)
 
@@ -288,9 +283,13 @@ async function buildHarness(): Promise<Harness> {
     designerDoneRunId: designerDone.id,
     reviewNodeRunId: reviewRows[0]!.id,
     cleanup: async () => {
-      rmSync(tmp, { recursive: true, force: true })
-      if (previousAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
-      else process.env.AGENT_WORKFLOW_HOME = previousAppHome
+      try {
+        db.$client.close()
+      } finally {
+        rmSync(tmp, { recursive: true, force: true })
+        if (previousAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+        else process.env.AGENT_WORKFLOW_HOME = previousAppHome
+      }
     },
   }
 }
