@@ -7,3 +7,4 @@ exact = false
 # `bun run test`, which runs backend with file isolation + randomized order,
 # then explicitly runs the shared and frontend suites.
 root = "packages/backend/tests"
+preload = ["./packages/backend/tests/setup.ts"]

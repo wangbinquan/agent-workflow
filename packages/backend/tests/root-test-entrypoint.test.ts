@@ -105,8 +105,11 @@ describe('repository test entrypoint', () => {
     expect(occurrenceCount(e2eJob, `--shard=\${{ matrix.shard }}/4`)).toBe(1)
   })
 
-  test('low-level Bun discovery remains backend-only', () => {
+  test('low-level Bun discovery and shared process-state setup remain backend-only', () => {
     const bunfig = readFileSync(resolve(root, 'bunfig.toml'), 'utf8')
     expect(bunfig).toMatch(/\[test\][\s\S]*root\s*=\s*"packages\/backend\/tests"/)
+    expect(bunfig).toMatch(
+      /\[test\][\s\S]*preload\s*=\s*\["\.\/packages\/backend\/tests\/setup\.ts"\]/,
+    )
   })
 })
