@@ -17,7 +17,6 @@
 // (autoDispatchClarifyRound) — same harness as clarify-review-combination-scenarios.
 
 import { afterEach, beforeEach, expect, setDefaultTimeout, test } from 'bun:test'
-import { execFileSync } from 'node:child_process'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -31,8 +30,8 @@ import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { runTask } from '../src/services/scheduler'
 import { abortAllActiveTasks, startTaskWithLocalRepo } from '../src/services/task'
 import { listTaskQuestions } from '../src/services/taskQuestions'
-import { nonInteractiveGitEnv } from '../src/util/git'
 import { reenterScheduler } from './reenter-scheduler'
+import { runTestGit } from './helpers/testCommand'
 import type {
   ClarifyAnswer,
   ClarifyQuestion,
@@ -49,12 +48,8 @@ const FLOW_TIMEOUT_MS = 15_000
 
 setDefaultTimeout(FLOW_TIMEOUT_MS * 2)
 
-function git(...args: string[]): void {
-  execFileSync('git', args, {
-    stdio: 'ignore',
-    timeout: GIT_TIMEOUT_MS,
-    env: nonInteractiveGitEnv(),
-  })
+function git(...args: string[]): Promise<string> {
+  return runTestGit(args, GIT_TIMEOUT_MS)
 }
 
 function clarifyBody(qid: string) {
@@ -86,19 +81,25 @@ let tmp: string
 let db: DbClient
 let appHome: string
 let repoPath: string
+let previousScenarioPlanFile: string | undefined
+let previousScenarioStateDir: string | undefined
+let previousAppHome: string | undefined
 
-beforeEach(() => {
+beforeEach(async () => {
+  previousScenarioPlanFile = process.env.SCENARIO_PLAN_FILE
+  previousScenarioStateDir = process.env.SCENARIO_STATE_DIR
+  previousAppHome = process.env.AGENT_WORKFLOW_HOME
   tmp = mkdtempSync(join(tmpdir(), 'aw-strand-q-'))
   appHome = join(tmp, 'home')
   repoPath = join(tmp, 'repo')
   mkdirSync(appHome, { recursive: true })
   mkdirSync(join(tmp, 'state'), { recursive: true })
-  git('init', '-b', 'main', repoPath)
-  git('-C', repoPath, 'config', 'user.email', 't@t.test')
-  git('-C', repoPath, 'config', 'user.name', 't')
+  await git('init', '-b', 'main', repoPath)
+  await git('-C', repoPath, 'config', 'user.email', 't@t.test')
+  await git('-C', repoPath, 'config', 'user.name', 't')
   writeFileSync(join(repoPath, 'README.md'), '# r\n')
-  git('-C', repoPath, 'add', '.')
-  git('-C', repoPath, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
+  await git('-C', repoPath, 'add', '.')
+  await git('-C', repoPath, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
   db = createInMemoryDb(MIGRATIONS)
   process.env.SCENARIO_PLAN_FILE = join(tmp, 'plan.json')
   process.env.SCENARIO_STATE_DIR = join(tmp, 'state')
@@ -106,10 +107,14 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  db.$client.close()
   rmSync(tmp, { recursive: true, force: true })
-  delete process.env.SCENARIO_PLAN_FILE
-  delete process.env.SCENARIO_STATE_DIR
-  delete process.env.AGENT_WORKFLOW_HOME
+  if (previousScenarioPlanFile === undefined) delete process.env.SCENARIO_PLAN_FILE
+  else process.env.SCENARIO_PLAN_FILE = previousScenarioPlanFile
+  if (previousScenarioStateDir === undefined) delete process.env.SCENARIO_STATE_DIR
+  else process.env.SCENARIO_STATE_DIR = previousScenarioStateDir
+  if (previousAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+  else process.env.AGENT_WORKFLOW_HOME = previousAppHome
 })
 
 function opencodeCmd(): string[] {

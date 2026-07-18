@@ -10,7 +10,6 @@
 
 import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { __resetRecoveryCountersForTest } from '../src/services/recovery'
-import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -23,7 +22,6 @@ import { buildActor } from '../src/auth/actor'
 import { createAgent } from '../src/services/agent'
 import { autoResumeInterruptedTasks } from '../src/services/autoResume'
 import { abortAllActiveTasks, resumeTask } from '../src/services/task'
-import { nonInteractiveGitEnv } from '../src/util/git'
 import { createWorkgroup } from '../src/services/workgroups'
 import {
   buildWorkgroupHostSnapshot,
@@ -31,6 +29,7 @@ import {
   startWorkgroupTask,
   WORKGROUP_HOST_WORKFLOW_ID,
 } from '../src/services/workgroupLaunch'
+import { runTestCommand, runTestGit } from './helpers/testCommand'
 
 // RFC-187: this suite drives REAL auto-resume, which bumps the process-global
 // recovery counters. bun shares the module registry across test files under CI's
@@ -53,12 +52,8 @@ const FLOW_TIMEOUT_MS = 20_000
 
 setDefaultTimeout(FLOW_TIMEOUT_MS + 10_000)
 
-function git(...args: string[]): void {
-  execFileSync('git', args, {
-    stdio: 'ignore',
-    timeout: GIT_TIMEOUT_MS,
-    env: nonInteractiveGitEnv(),
-  })
+function git(...args: string[]): Promise<string> {
+  return runTestGit(args, GIT_TIMEOUT_MS)
 }
 
 async function withActiveTaskDeadline<T>(operation: () => Promise<T>): Promise<T> {
@@ -89,6 +84,8 @@ function harness(): Harness {
   const appHome = join(tmp, 'home')
   const stateDir = join(tmp, 'state')
   const planFile = join(tmp, 'plan.json')
+  const previousScenarioPlanFile = process.env.SCENARIO_PLAN_FILE
+  const previousScenarioStateDir = process.env.SCENARIO_STATE_DIR
   mkdirSync(appHome, { recursive: true })
   mkdirSync(stateDir, { recursive: true })
   const db = createInMemoryDb(MIGRATIONS)
@@ -98,9 +95,12 @@ function harness(): Harness {
     stateDir,
     planFile,
     cleanup: () => {
+      db.$client.close()
       rmSync(tmp, { recursive: true, force: true })
-      delete process.env.SCENARIO_PLAN_FILE
-      delete process.env.SCENARIO_STATE_DIR
+      if (previousScenarioPlanFile === undefined) delete process.env.SCENARIO_PLAN_FILE
+      else process.env.SCENARIO_PLAN_FILE = previousScenarioPlanFile
+      if (previousScenarioStateDir === undefined) delete process.env.SCENARIO_STATE_DIR
+      else process.env.SCENARIO_STATE_DIR = previousScenarioStateDir
     },
   }
 }
@@ -259,8 +259,8 @@ describe('RFC-186 PR-2 — interrupted leader_worker task auto-resumes to done',
     const h = harness()
     const repo = mkdtempSync(join(tmpdir(), 'aw-wg-e2e-repo-'))
     try {
-      git('-C', repo, 'init', '-b', 'main', '-q')
-      git(
+      await git('-C', repo, 'init', '-b', 'main', '-q')
+      await git(
         '-C',
         repo,
         '-c',
@@ -367,10 +367,10 @@ describe('RFC-186 PR-2 — interrupted leader_worker task auto-resumes to done',
 // A always-on smoke that the scenario stub itself is runnable (so a genuine
 // skip in CI can't hide a broken fixture path).
 describe('RFC-186 — scenario-opencode fixture is present', () => {
-  test('scenario stub reports a version', () => {
-    const out = execFileSync('bun', ['run', SCENARIO_STUB, '--version'], {
-      encoding: 'utf8',
-      timeout: FIXTURE_TIMEOUT_MS,
+  test('scenario stub reports a version', async () => {
+    const out = await runTestCommand(['bun', 'run', SCENARIO_STUB, '--version'], {
+      timeoutMs: FIXTURE_TIMEOUT_MS,
+      label: 'scenario-opencode fixture',
     })
     expect(out).toContain('scenario-opencode')
   })

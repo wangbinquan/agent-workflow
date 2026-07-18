@@ -11,7 +11,6 @@
 // 01KSHVXCH6RQ5F5P64MZ4FZVN6 on current code.
 
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { execFileSync } from 'node:child_process'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -45,11 +44,11 @@ import {
   abortAllActiveTasks,
   startTaskWithLocalRepo as startTaskWithLocalRepoBase,
 } from '../src/services/task'
-import { nonInteractiveGitEnv } from '../src/util/git'
 // RFC-097: runTask's entry CAS only claims pending tasks. Every scheduler
 // re-entry below (the post-decision / post-answer `await runTask(...)` calls)
 // is preceded by reenterScheduler — the test stand-in for resumeTask.
 import { reenterScheduler } from './reenter-scheduler'
+import { runTestGit } from './helpers/testCommand'
 import {
   DEFAULT_PROTOCOL_RETRY_BUDGET,
   type ClarifyAnswer,
@@ -69,12 +68,8 @@ setDefaultTimeout(FLOW_TIMEOUT_MS + 10_000)
 
 let scenarioController = new AbortController()
 
-function git(...args: string[]): void {
-  execFileSync('git', args, {
-    stdio: 'ignore',
-    timeout: GIT_TIMEOUT_MS,
-    env: nonInteractiveGitEnv(),
-  })
+function git(...args: string[]): Promise<string> {
+  return runTestGit(args, GIT_TIMEOUT_MS)
 }
 
 function runTask(options: Parameters<typeof runTaskBase>[0]) {
@@ -134,21 +129,24 @@ interface Ctx {
 }
 
 let idx = 0
-function freshCtx(): Ctx {
+async function freshCtx(): Promise<Ctx> {
   idx++
   const tmp = mkdtempSync(join(tmpdir(), `aw-combo-${idx}-`))
   const appHome = join(tmp, 'home')
   const repoPath = join(tmp, 'repo')
   const stateDir = join(tmp, 'state')
   const planFile = join(tmp, 'plan.json')
+  const previousScenarioPlanFile = process.env.SCENARIO_PLAN_FILE
+  const previousScenarioStateDir = process.env.SCENARIO_STATE_DIR
+  const previousAppHome = process.env.AGENT_WORKFLOW_HOME
   mkdirSync(appHome, { recursive: true })
   mkdirSync(stateDir, { recursive: true })
-  git('init', '-b', 'main', repoPath)
-  git('-C', repoPath, 'config', 'user.email', 't@t.test')
-  git('-C', repoPath, 'config', 'user.name', 't')
+  await git('init', '-b', 'main', repoPath)
+  await git('-C', repoPath, 'config', 'user.email', 't@t.test')
+  await git('-C', repoPath, 'config', 'user.name', 't')
   writeFileSync(join(repoPath, 'README.md'), '# r\n')
-  git('-C', repoPath, 'add', '.')
-  git('-C', repoPath, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
+  await git('-C', repoPath, 'add', '.')
+  await git('-C', repoPath, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
   const db = createInMemoryDb(MIGRATIONS)
   return {
     db,
@@ -157,10 +155,14 @@ function freshCtx(): Ctx {
     stateDir,
     planFile,
     cleanup: () => {
+      db.$client.close()
       rmSync(tmp, { recursive: true, force: true })
-      delete process.env.SCENARIO_PLAN_FILE
-      delete process.env.SCENARIO_STATE_DIR
-      delete process.env.AGENT_WORKFLOW_HOME
+      if (previousScenarioPlanFile === undefined) delete process.env.SCENARIO_PLAN_FILE
+      else process.env.SCENARIO_PLAN_FILE = previousScenarioPlanFile
+      if (previousScenarioStateDir === undefined) delete process.env.SCENARIO_STATE_DIR
+      else process.env.SCENARIO_STATE_DIR = previousScenarioStateDir
+      if (previousAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+      else process.env.AGENT_WORKFLOW_HOME = previousAppHome
     },
   }
 }
@@ -224,13 +226,13 @@ async function makeDesigner(c: Ctx, name = 'designer', outs = ['design']): Promi
 describe('combination scenarios: agent × review × clarify (current code)', () => {
   let c: Ctx
   let watchdog: ReturnType<typeof setTimeout>
-  beforeEach(() => {
+  beforeEach(async () => {
     scenarioController = new AbortController()
     watchdog = setTimeout(() => {
       scenarioController.abort('test-timeout')
       abortAllActiveTasks('test-timeout')
     }, FLOW_TIMEOUT_MS)
-    c = freshCtx()
+    c = await freshCtx()
   })
   afterEach(() => {
     clearTimeout(watchdog)

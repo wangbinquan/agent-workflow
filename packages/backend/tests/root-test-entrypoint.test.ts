@@ -213,15 +213,19 @@ describe('repository test entrypoint', () => {
 
   test('the known sync-child regression has hard deadlines', () => {
     // A macOS shard previously went silent immediately after entering this
-    // file. Keep both possible blocking layers bounded: synchronous fixture Git
-    // commands and scheduler-owned scenario subprocesses.
+    // file. Keep both possible blocking layers bounded: fixture Git commands
+    // use the async kill-and-reap boundary, while the scheduler owns scenario
+    // subprocess deadlines.
     expect(strandedClarifyRegression).not.toContain('execSync(')
-    expect(strandedClarifyRegression).toContain("execFileSync('git'")
-    expect(strandedClarifyRegression).toContain('timeout: GIT_TIMEOUT_MS')
+    expect(strandedClarifyRegression).not.toContain('execFileSync(')
+    expect(strandedClarifyRegression).not.toContain('node:child_process')
+    expect(strandedClarifyRegression).toContain('runTestGit(args, GIT_TIMEOUT_MS)')
+    expect(strandedClarifyRegression).toContain('await git(')
     expect(strandedClarifyRegression).toContain('defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS')
     expect(strandedClarifyRegression).toContain('defaultNodeRetries: 0')
     expect(strandedClarifyRegression).toContain("abortAllActiveTasks('test-timeout')")
     expect(strandedClarifyRegression).toContain("controller.abort('test-timeout')")
+    expect(strandedClarifyRegression).toContain('db.$client.close()')
   })
 
   test('real-subprocess scenario suites bound local Git, nodes, and whole flows', () => {
@@ -231,15 +235,18 @@ describe('repository test entrypoint', () => {
       workgroupRegression,
     ]) {
       expect(source).not.toContain('execSync(')
-      expect(source).toContain("execFileSync('git'")
-      expect(source).toContain('timeout: GIT_TIMEOUT_MS')
+      expect(source).not.toContain('execFileSync(')
+      expect(source).not.toContain('node:child_process')
+      expect(source).toContain('runTestGit(args, GIT_TIMEOUT_MS)')
+      expect(source).toContain('await git(')
       expect(source).toContain('defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS')
       expect(source).toContain('defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET')
       expect(source).toContain("abortAllActiveTasks('test-timeout')")
+      expect(source).toContain('db.$client.close()')
     }
     expect(clarifyCombinationRegression).toContain("scenarioController.abort('test-timeout')")
-    expect(workgroupRegression).toContain("execFileSync('bun'")
-    expect(workgroupRegression).toContain('timeout: FIXTURE_TIMEOUT_MS')
+    expect(workgroupRegression).toContain('runTestCommand(')
+    expect(workgroupRegression).toContain('timeoutMs: FIXTURE_TIMEOUT_MS')
   })
 
   test('historical review-iterate regressions bound subprocesses and restore ambient home', () => {

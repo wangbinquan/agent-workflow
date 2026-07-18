@@ -14,7 +14,6 @@
 //      impl-gate P1-3 unlocked, exercised end to end.
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -41,9 +40,9 @@ import {
   resumeDynamicWorkflowExecution,
   resumeTask,
 } from '../src/services/task'
-import { nonInteractiveGitEnv } from '../src/util/git'
 import { createWorkgroup } from '../src/services/workgroups'
 import { startWorkgroupTask } from '../src/services/workgroupLaunch'
+import { runTestGit } from './helpers/testCommand'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
@@ -54,12 +53,8 @@ const FLOW_TIMEOUT_MS = 20_000
 
 afterEach(() => abortAllActiveTasks('test-cleanup'))
 
-function git(...args: string[]): void {
-  execFileSync('git', args, {
-    stdio: 'ignore',
-    timeout: GIT_TIMEOUT_MS,
-    env: nonInteractiveGitEnv(),
-  })
+function git(...args: string[]): Promise<string> {
+  return runTestGit(args, GIT_TIMEOUT_MS)
 }
 
 async function withActiveTaskDeadline<T>(operation: () => Promise<T>): Promise<T> {
@@ -225,6 +220,7 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
       ).length
       expect(orchRunsAfter).toBe(orchRuns.length)
     } finally {
+      db.$client.close()
       rmSync(appHome, { recursive: true, force: true })
     }
   }, 30000)
@@ -235,8 +231,8 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
     const db = createInMemoryDb(MIGRATIONS)
     try {
       await seedPlannerAgent(db)
-      git('-C', repo, 'init', '-b', 'main', '-q')
-      git(
+      await git('-C', repo, 'init', '-b', 'main', '-q')
+      await git(
         '-C',
         repo,
         '-c',
@@ -331,6 +327,7 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
         .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'plan-step')))
       expect(planRuns.some((r) => r.status === 'done')).toBe(true)
     } finally {
+      db.$client.close()
       rmSync(appHome, { recursive: true, force: true })
       rmSync(repo, { recursive: true, force: true })
     }
