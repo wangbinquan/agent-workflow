@@ -16,7 +16,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import {
   RouterProvider,
   createMemoryHistory,
@@ -36,7 +36,10 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  document.body.innerHTML = ''
+  // Unmount queries before restoring fetch. Clearing body.innerHTML alone
+  // leaves the React tree subscribed, so a late query can escape through the
+  // real network after vi.restoreAllMocks().
+  cleanup()
   vi.restoreAllMocks()
 })
 

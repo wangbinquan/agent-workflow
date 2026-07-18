@@ -12,8 +12,21 @@ export type ChannelKey = string
 
 type Listener<M, C> = (msg: M, context: C | undefined) => void
 
+interface ResettableBroadcaster {
+  reset(): void
+}
+
+// Keep reset coverage coupled to construction rather than to a hand-maintained
+// list. A new logical channel is therefore test-isolated automatically as soon
+// as its broadcaster is created.
+const allBroadcasters = new Set<ResettableBroadcaster>()
+
 class TypedBroadcaster<M, C = never> {
   private subs = new Map<ChannelKey, Set<Listener<M, C>>>()
+
+  constructor() {
+    allBroadcasters.add(this)
+  }
 
   subscribe(channel: ChannelKey, listener: Listener<M, C>): () => void {
     let set = this.subs.get(channel)
@@ -110,10 +123,5 @@ export const scheduledTaskBroadcaster = new TypedBroadcaster<ScheduledTaskWsMess
 
 /** Reset all broadcasters — only used in tests between cases. */
 export function resetBroadcastersForTests(): void {
-  taskBroadcaster.reset()
-  tasksListBroadcaster.reset()
-  workflowsBroadcaster.reset()
-  repoImportsBroadcaster.reset()
-  memoryBroadcaster.reset()
-  memoryDistillJobBroadcaster.reset()
+  for (const broadcaster of allBroadcasters) broadcaster.reset()
 }

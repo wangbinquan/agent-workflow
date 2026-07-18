@@ -9,7 +9,7 @@
 // migrations 0000..0044, seeds users + resources, then stage B applies 0045
 // against the same file and asserts the backfill.
 
-import { describe, expect, test, beforeAll, afterAll } from 'bun:test'
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -93,20 +93,12 @@ describe('RFC-099 migration 0045 — DB with human admins', () => {
     prevDir = makeMigrationsFolder(PREV_MAX_IDX)
     fullDir = makeMigrationsFolder(FULL_MAX_IDX)
   })
-  afterAll(() => {
-    rmSync(tmp, { recursive: true, force: true })
-    rmSync(prevDir, { recursive: true, force: true })
-    rmSync(fullDir, { recursive: true, force: true })
-  })
-
-  test('stage A: 0000..0044 — no ACL columns yet; seed 2 admins + 1 user + resources', () => {
+  beforeEach(() => {
+    rmSync(dbPath, { force: true })
     const { sqlite } = openWithMigrations(dbPath, prevDir)
     try {
-      const cols = sqlite.prepare("PRAGMA table_info('agents')").all() as { name: string }[]
-      expect(cols.map((c) => c.name)).not.toContain('owner_user_id')
-
-      // adminLate is created FIRST in insertion order but with a LATER
-      // created_at — the backfill must pick by created_at, not rowid.
+      // adminLate is inserted first but has a later created_at; the migration
+      // must choose by created_at rather than rowid.
       insertUser(sqlite, {
         id: ids.adminLate,
         username: 'late-admin',
@@ -122,6 +114,21 @@ describe('RFC-099 migration 0045 — DB with human admins', () => {
       insertUser(sqlite, { id: ids.user, username: 'bob', role: 'user', createdAt: 500 })
       insertAgent(sqlite, ids.agent, 'auditor')
       insertWorkflow(sqlite, ids.wf, 'code-review')
+    } finally {
+      sqlite.close()
+    }
+  })
+  afterAll(() => {
+    rmSync(tmp, { recursive: true, force: true })
+    rmSync(prevDir, { recursive: true, force: true })
+    rmSync(fullDir, { recursive: true, force: true })
+  })
+
+  test('stage A: 0000..0044 — no ACL columns yet; seed 2 admins + 1 user + resources', () => {
+    const { sqlite } = openWithMigrations(dbPath, prevDir)
+    try {
+      const cols = sqlite.prepare("PRAGMA table_info('agents')").all() as { name: string }[]
+      expect(cols.map((c) => c.name)).not.toContain('owner_user_id')
     } finally {
       sqlite.close()
     }

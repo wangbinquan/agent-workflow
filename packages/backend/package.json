@@ -14,7 +14,7 @@
     "lint": "eslint src tests --max-warnings=0",
     "lint:fix": "eslint src tests --fix",
     "typecheck": "tsc --noEmit",
-    "test": "bun test",
+    "test": "bun test --isolate --randomize",
     "db:generate": "drizzle-kit generate",
     "db:check": "drizzle-kit check",
     "perf:sweep": "bun run scripts/perf-sweep.ts"

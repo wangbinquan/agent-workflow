@@ -159,6 +159,11 @@ describe('TaskQuestionList board', () => {
 
   test('stage button posts to /stage with staged:true', async () => {
     const post = vi.spyOn(api, 'post').mockResolvedValue(undefined as never)
+    const get = vi
+      .spyOn(api, 'get')
+      .mockResolvedValue([
+        entry({ id: 'e1', phase: 'staged', staged: true, sealed: true }),
+      ] as never)
     // sealed:true — 「加入待下发」only shows once the answer is sealed (待下发 gate, below);
     // an unsealed pending card hides the button (the server would reject the stage anyway).
     await wrap([entry({ id: 'e1', phase: 'pending', staged: false, sealed: true })])
@@ -167,6 +172,7 @@ describe('TaskQuestionList board', () => {
     await waitFor(() =>
       expect(post).toHaveBeenCalledWith('/api/tasks/task-1/questions/e1/stage', { staged: true }),
     )
+    await waitFor(() => expect(get).toHaveBeenCalledWith('/api/tasks/task-1/questions'))
   })
 
   // RFC-162: retired — collapse (and its `tq-collapse-notice` knowledge text) plus the
@@ -897,6 +903,17 @@ describe('TaskQuestionList RFC-163 分组卡（下发前一问一卡）', () => 
 
   test('组级 stage：分组卡「加入待下发」→ 对每个 handler 各 POST 一次 /stage', async () => {
     const post = vi.spyOn(api, 'post').mockResolvedValue(undefined as never)
+    const get = vi.spyOn(api, 'get').mockResolvedValue([
+      entry({ id: 's', roleKind: 'self', phase: 'staged', staged: true, sealed: true }),
+      entry({
+        id: 'd',
+        roleKind: 'designer',
+        effectiveTargetNodeId: 'fixer',
+        phase: 'staged',
+        staged: true,
+        sealed: true,
+      }),
+    ] as never)
     await wrap([
       entry({ id: 's', roleKind: 'self', phase: 'pending', sealed: true }),
       entry({
@@ -912,6 +929,7 @@ describe('TaskQuestionList RFC-163 分组卡（下发前一问一卡）', () => 
       expect(post).toHaveBeenCalledWith('/api/tasks/task-1/questions/s/stage', { staged: true })
       expect(post).toHaveBeenCalledWith('/api/tasks/task-1/questions/d/stage', { staged: true })
     })
+    await waitFor(() => expect(get).toHaveBeenCalledWith('/api/tasks/task-1/questions'))
   })
 
   test('批量下发展开整组：staged 组的 entryIds 含 asker+designer（filter 到 asker 节点也不裁掉 off-filter designer——P1 保全组）', async () => {

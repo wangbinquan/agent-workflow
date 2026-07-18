@@ -77,9 +77,12 @@ jobs:
       # the following cross-platform step.
       - name: Test (backend only, bun:test, ubuntu — with coverage)
         if: matrix.os == 'ubuntu-latest'
+        # --isolate prevents coverage-mode module singletons from leaking across
+        # files; --randomize exposes any remaining within-file order dependency
+        # and prints a seed that reproduces the failure.
         # --coverage-reporter accepts multiple values: keep the human-readable
         # text summary in the log and also emit lcov for codecov upload.
-        run: bun test --coverage --coverage-reporter=text --coverage-reporter=lcov
+        run: bun test --isolate --randomize --coverage --coverage-reporter=text --coverage-reporter=lcov
         env:
           # Real-git-clone (file:// + recursive submodules) and external MCP-spawn
           # integration suites are gated behind RUN_GIT_NETWORK so local `bun test`
@@ -89,7 +92,7 @@ jobs:
 
       - name: Test (backend only, bun:test, macOS — no coverage)
         if: matrix.os != 'ubuntu-latest'
-        run: bun test
+        run: bun test --isolate --randomize
         env:
           RUN_GIT_NETWORK: '1'
 

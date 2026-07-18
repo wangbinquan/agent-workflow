@@ -7,7 +7,7 @@
 // applies 0021 against the same file — the backfill UPDATE runs once and
 // the seeded rows pick up their backfilled name.
 
-import { describe, expect, test, beforeAll, afterAll } from 'bun:test'
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -49,21 +49,69 @@ function openWithMigrations(filePath: string, migrationsFolder: string) {
   return { db, sqlite }
 }
 
+interface SeededPre0021 {
+  workflowKept: string
+  workflowDropped: string
+  taskKept: string
+  taskOrphan: string
+}
+
+function seedPre0021(filePath: string, migrationsFolder: string): SeededPre0021 {
+  const { sqlite } = openWithMigrations(filePath, migrationsFolder)
+  try {
+    const workflowKept = ulid()
+    const workflowDropped = ulid()
+    const now = Date.now()
+    sqlite
+      .prepare(
+        `INSERT INTO workflows (id, name, description, definition, version, schema_version, created_at, updated_at)
+         VALUES (?, 'code-review', '', '{}', 1, 1, ?, ?), (?, 'doomed-flow', '', '{}', 1, 1, ?, ?)`,
+      )
+      .run(workflowKept, now, now, workflowDropped, now, now)
+
+    const taskKept = ulid()
+    const taskOrphan = ulid()
+    const insertTask = sqlite.prepare(
+      `INSERT INTO tasks
+         (id, workflow_id, workflow_snapshot, repo_path, worktree_path,
+          base_branch, branch, base_commit, status, inputs, max_duration_ms,
+          max_total_tokens, started_at, finished_at, error_summary, error_message,
+          failed_node_id, expires_at, deleted_at, schema_version)
+       VALUES (?, ?, '{}', '/r', '/wt', 'main', ?, NULL, 'done', '{}', NULL, NULL,
+               1000, 2000, NULL, NULL, NULL, NULL, NULL, 1)`,
+    )
+    insertTask.run(taskKept, workflowKept, `agent-workflow/${taskKept}`)
+    insertTask.run(taskOrphan, workflowDropped, `agent-workflow/${taskOrphan}`)
+
+    // Simulate a historical task whose workflow row vanished while its
+    // snapshot survived, so 0021 must exercise the fallback name.
+    sqlite.exec('PRAGMA foreign_keys = OFF;')
+    sqlite.prepare(`DELETE FROM workflows WHERE id = ?`).run(workflowDropped)
+    sqlite.exec('PRAGMA foreign_keys = ON;')
+
+    return { workflowKept, workflowDropped, taskKept, taskOrphan }
+  } finally {
+    sqlite.close()
+  }
+}
+
 describe('RFC-037 migration 0021 — tasks.name + backfill', () => {
   const tmpDb = mkdtempSync(join(tmpdir(), 'aw-mig-rfc037-test-'))
   const dbPath = join(tmpDb, 'db.sqlite')
   let prevMigrationsDir: string
   let fullMigrationsDir: string
-  const seeded: {
-    workflowKept: string
-    workflowDropped: string
-    taskKept: string
-    taskOrphan: string
-  } = { workflowKept: '', workflowDropped: '', taskKept: '', taskOrphan: '' }
+  let seeded: SeededPre0021
 
   beforeAll(() => {
     prevMigrationsDir = makeMigrationsFolder(19) // up to 0020
     fullMigrationsDir = makeMigrationsFolder(20) // up to 0021
+  })
+
+  // Every case builds the pre-0021 boundary itself. The old A → B → C test
+  // chain only passed in declaration order and failed under --randomize.
+  beforeEach(() => {
+    rmSync(dbPath, { force: true })
+    seeded = seedPre0021(dbPath, prevMigrationsDir)
   })
 
   afterAll(() => {
@@ -77,45 +125,6 @@ describe('RFC-037 migration 0021 — tasks.name + backfill', () => {
     try {
       const cols = sqlite.prepare("PRAGMA table_info('tasks')").all() as { name: string }[]
       expect(cols.map((c) => c.name)).not.toContain('name')
-
-      // Seed two workflows and three tasks. One workflow gets deleted before
-      // 0021 runs so its task triggers the COALESCE fallback path.
-      seeded.workflowKept = ulid()
-      seeded.workflowDropped = ulid()
-      const now = Date.now()
-      sqlite
-        .prepare(
-          `INSERT INTO workflows (id, name, description, definition, version, schema_version, created_at, updated_at)
-           VALUES (?, 'code-review', '', '{}', 1, 1, ?, ?), (?, 'doomed-flow', '', '{}', 1, 1, ?, ?)`,
-        )
-        .run(seeded.workflowKept, now, now, seeded.workflowDropped, now, now)
-
-      seeded.taskKept = ulid()
-      seeded.taskOrphan = ulid()
-      const insertTask = sqlite.prepare(
-        `INSERT INTO tasks
-           (id, workflow_id, workflow_snapshot, repo_path, worktree_path,
-            base_branch, branch, base_commit, status, inputs, max_duration_ms,
-            max_total_tokens, started_at, finished_at, error_summary, error_message,
-            failed_node_id, expires_at, deleted_at, schema_version)
-         VALUES (?, ?, '{}', '/r', '/wt', 'main', ?, NULL, 'done', '{}', NULL, NULL,
-                 1000, 2000, NULL, NULL, NULL, NULL, NULL, 1)`,
-      )
-      insertTask.run(seeded.taskKept, seeded.workflowKept, `agent-workflow/${seeded.taskKept}`)
-      insertTask.run(
-        seeded.taskOrphan,
-        seeded.workflowDropped,
-        `agent-workflow/${seeded.taskOrphan}`,
-      )
-
-      // Drop the doomed workflow so the task is orphaned by the time 0021 runs.
-      // tasks.workflow_id is FK NO ACTION; temporarily disable FK enforcement
-      // so the DELETE can simulate the "workflow row vanished, task survived
-      // via snapshot" state that legitimately exists in production after a
-      // CASCADE-less manual cleanup.
-      sqlite.exec('PRAGMA foreign_keys = OFF;')
-      sqlite.prepare(`DELETE FROM workflows WHERE id = ?`).run(seeded.workflowDropped)
-      sqlite.exec('PRAGMA foreign_keys = ON;')
       const remaining = sqlite
         .prepare(`SELECT id FROM workflows WHERE id = ?`)
         .all(seeded.workflowDropped) as { id: string }[]
@@ -152,6 +161,9 @@ describe('RFC-037 migration 0021 — tasks.name + backfill', () => {
   })
 
   test('stage C: re-opening idempotently re-applies nothing; backfill survives', () => {
+    // Apply 0021 in this case before exercising the idempotent re-open. Do not
+    // rely on stage B having happened first.
+    openWithMigrations(dbPath, fullMigrationsDir).sqlite.close()
     const { sqlite } = openWithMigrations(dbPath, fullMigrationsDir)
     try {
       const rows = sqlite.prepare(`SELECT id, name FROM tasks ORDER BY id`).all() as {

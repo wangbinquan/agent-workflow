@@ -2066,13 +2066,12 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
   // aggregator children (parentNodeRunId set) don't break the downstream review,
   // and approve completes cleanly.
   // ---------------------------------------------------------------------------
-  // DEFERRED (not a product bug): the fanout wrapper's shardSource/outlet ports
-  // need validator-compliant declarations that the runtime-only fanout e2e test
-  // bypasses via direct seed. The "wrapper inner/child rows (parentNodeRunId set)
-  // don't break a downstream review" property is already locked structurally by
-  // S13 (loop wrapper → builder → review). Revisit with a direct-seed harness if
-  // fanout-specific provenance needs its own lock.
-  test.skip('S19 fanout → builder → review approves cleanly (shard children excluded)', async () => {
+  // This used to be skipped while wrapper-fanout's validator/runtime contract
+  // was incomplete. Keep it executable now: unlike the direct-seed fanout
+  // tests, this path must survive createWorkflow validation, run real shard +
+  // aggregator children, and prove their parentNodeRunId rows cannot shadow the
+  // top-level builder consumed by review.
+  test('S19 fanout → builder → review approves cleanly (shard children excluded)', async () => {
     await createAgent(c.db, {
       name: 'worker',
       description: '',

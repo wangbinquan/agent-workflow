@@ -15,7 +15,7 @@
 //      __drizzle_migrations hashes for 0000+0001 and applies only 0002.
 //   4. Verify seed rows preserved + new schema reachable.
 
-import { describe, expect, test, beforeAll, afterAll } from 'bun:test'
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -64,32 +64,18 @@ function openWithMigrations(filePath: string, migrationsFolder: string) {
   return { db, sqlite }
 }
 
-describe('RFC-005 0002 migration — data integrity + new schema', () => {
-  const tmpDb = mkdtempSync(join(tmpdir(), 'aw-mig-test-'))
-  const dbPath = join(tmpDb, 'db.sqlite')
-  let v1MigrationsDir: string
-  let v2MigrationsDir: string
+interface SeededV1Ids {
+  workflowId: string
+  taskId: string
+  nodeRunId: string
+}
 
-  beforeAll(() => {
-    v1MigrationsDir = makeMigrationsFolder([0, 1])
-    v2MigrationsDir = makeMigrationsFolder([0, 1, 2])
-  })
-
-  afterAll(() => {
-    rmSync(tmpDb, { recursive: true, force: true })
-    rmSync(v1MigrationsDir, { recursive: true, force: true })
-    rmSync(v2MigrationsDir, { recursive: true, force: true })
-  })
-
-  test('stage A: applies 0000 + 0001 only; v1 schema is reachable', () => {
-    const { sqlite } = openWithMigrations(dbPath, v1MigrationsDir)
-
-    // Seed a workflow + task + node_run, the way the daemon would after v1.
+function seedV1(filePath: string, migrationsFolder: string): SeededV1Ids {
+  const { sqlite } = openWithMigrations(filePath, migrationsFolder)
+  try {
     const workflowId = ulid()
-    // RFC-099 update: switched from drizzle's typed insert to raw SQL for the
-    // same reason tasks/node_runs below already did (RFC-024 comment) — adding
-    // `visibility` (RFC-099, default 'public') to schema.ts makes drizzle emit
-    // `INSERT (..., visibility)` against a v1 DB that doesn't have the column.
+    // Raw SQL pins this fixture to the historical columns instead of making
+    // current schema.ts emit columns that did not exist at v1.
     sqlite
       .prepare(
         `INSERT INTO workflows (id, name, description, definition, version, schema_version, created_at, updated_at)
@@ -103,11 +89,6 @@ describe('RFC-005 0002 migration — data integrity + new schema', () => {
       )
 
     const taskId = ulid()
-    // RFC-024 update: switched from drizzle's typed insert to raw SQL for the
-    // same reason node_runs already does (see comment below). Adding `repoUrl`
-    // (RFC-024) to schema.ts would make drizzle emit `INSERT (..., repo_url)`
-    // against a v1 DB that doesn't yet have the column. Raw SQL pins the test
-    // to the columns 0000+0001 actually created.
     sqlite
       .prepare(
         `INSERT INTO tasks
@@ -127,11 +108,6 @@ describe('RFC-005 0002 migration — data integrity + new schema', () => {
       )
 
     const nodeRunId = ulid()
-    // NB: review_iteration column does not exist yet in stage A — drizzle
-    // INSERT still works because the schema.ts defines a default(0), and the
-    // SQL column also doesn't exist; drizzle just emits column names that DO
-    // exist. We sidestep this by using raw SQL so the seed survives the
-    // schema-vs-DB version mismatch.
     sqlite
       .prepare(
         `INSERT INTO node_runs
@@ -143,6 +119,40 @@ describe('RFC-005 0002 migration — data integrity + new schema', () => {
                  NULL, NULL, 10, 20, 0, 0, 30, NULL)`,
       )
       .run(nodeRunId, taskId, 'designer')
+
+    return { workflowId, taskId, nodeRunId }
+  } finally {
+    sqlite.close()
+  }
+}
+
+describe('RFC-005 0002 migration — data integrity + new schema', () => {
+  const tmpDb = mkdtempSync(join(tmpdir(), 'aw-mig-test-'))
+  const dbPath = join(tmpDb, 'db.sqlite')
+  let v1MigrationsDir: string
+  let v2MigrationsDir: string
+  let seededIds: SeededV1Ids
+
+  beforeAll(() => {
+    v1MigrationsDir = makeMigrationsFolder([0, 1])
+    v2MigrationsDir = makeMigrationsFolder([0, 1, 2])
+  })
+
+  // Rebuild the v1 boundary for every case so random test order cannot turn
+  // these migration assertions into an implicit A → B → C state machine.
+  beforeEach(() => {
+    rmSync(dbPath, { force: true })
+    seededIds = seedV1(dbPath, v1MigrationsDir)
+  })
+
+  afterAll(() => {
+    rmSync(tmpDb, { recursive: true, force: true })
+    rmSync(v1MigrationsDir, { recursive: true, force: true })
+    rmSync(v2MigrationsDir, { recursive: true, force: true })
+  })
+
+  test('stage A: applies 0000 + 0001 only; v1 schema is reachable', () => {
+    const { sqlite } = openWithMigrations(dbPath, v1MigrationsDir)
 
     // Verify stage A is genuinely pre-0002: doc_versions table does not exist.
     const tablesBefore = sqlite
@@ -156,10 +166,6 @@ describe('RFC-005 0002 migration — data integrity + new schema', () => {
     expect(cols.map((c) => c.name)).not.toContain('review_iteration')
 
     sqlite.close()
-    // Hand the ULIDs off to stage B through module scope.
-    seededIds.workflowId = workflowId
-    seededIds.taskId = taskId
-    seededIds.nodeRunId = nodeRunId
   })
 
   test('stage B: applies 0002; v1 rows untouched, new schema present', () => {
@@ -268,6 +274,7 @@ describe('RFC-005 0002 migration — data integrity + new schema', () => {
   })
 
   test('stage C: re-opening the file is idempotent — no migrations re-run', () => {
+    openWithMigrations(dbPath, v2MigrationsDir).sqlite.close()
     // openWithMigrations should run cleanly without throwing on a fully-migrated file.
     const { db, sqlite } = openWithMigrations(dbPath, v2MigrationsDir)
     // The seed rows survive across re-opens.
@@ -276,6 +283,3 @@ describe('RFC-005 0002 migration — data integrity + new schema', () => {
     sqlite.close()
   })
 })
-
-// Module-scoped seed identifiers passed between stages.
-const seededIds = { workflowId: '', taskId: '', nodeRunId: '' }

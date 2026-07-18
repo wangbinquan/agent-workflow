@@ -157,11 +157,15 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
 }
 
 describe('RFC-098 B1 — S-24: wrapper-git finalize diff failure is fail-closed', () => {
-  let h: Harness
-  afterEach(() => h.cleanup())
+  let cleanup: (() => void) | undefined
+  afterEach(() => {
+    cleanup?.()
+    cleanup = undefined
+  })
 
   test('worktree destroyed before finalize → wrapper FAILED with git-diff-failed, task FAILED — not green with an empty diff', async () => {
-    h = await buildHarness('fail')
+    const h = await buildHarness('fail')
+    cleanup = h.cleanup
     const taskId = await seedTask(h)
 
     await withEnv({ S24_DELETE_GIT: '1', S24_WRITE_FILE: 'newfile.txt' }, () =>
@@ -218,7 +222,8 @@ describe('RFC-098 B1 — S-24: wrapper-git finalize diff failure is fail-closed'
   }, 20_000)
 
   test('control: intact worktree → wrapper done, git_diff lists exactly the file the inner agent wrote (normal path unchanged)', async () => {
-    h = await buildHarness('ok')
+    const h = await buildHarness('ok')
+    cleanup = h.cleanup
     const taskId = await seedTask(h)
 
     await withEnv({ S24_DELETE_GIT: '0', S24_WRITE_FILE: 'newfile.txt' }, () =>

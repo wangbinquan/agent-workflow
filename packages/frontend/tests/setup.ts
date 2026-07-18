@@ -40,11 +40,32 @@ if (typeof globalThis.window !== 'undefined') {
 // then fires after happy-dom has torn `window` down — producing "ReferenceError:
 // window is not defined" inside react-dom's scheduler. Draining one
 // macrotask + microtask cycle after each test gives React a chance to finish.
-import { afterEach } from 'vitest'
+import { afterEach, beforeEach } from 'vitest'
 import { cleanup } from '@testing-library/react'
+import {
+  installUnexpectedNetworkGuard,
+  resetUnexpectedNetworkRequests,
+  takeUnexpectedNetworkRequests,
+} from './unexpectedNetwork'
+
+// Install immediately so test modules that capture the current fetch as their
+// restore target capture the guard, not Node's real network implementation.
+installUnexpectedNetworkGuard()
+
+beforeEach(() => {
+  resetUnexpectedNetworkRequests()
+  installUnexpectedNetworkGuard()
+})
+
 afterEach(async () => {
   cleanup()
   await new Promise((resolve) => setTimeout(resolve, 0))
+  const unexpected = takeUnexpectedNetworkRequests()
+  if (unexpected.length > 0) {
+    throw new Error(
+      `Unexpected network request(s) escaped test mocks:\n${unexpected.map((r) => `- ${r}`).join('\n')}`,
+    )
+  }
 })
 
 // Boot i18next so components that call useTranslation() get real strings.

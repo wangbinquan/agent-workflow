@@ -3,6 +3,7 @@
 exact = false
 
 [test]
-# Root `bun test` discovers backend tests only. Shared tests must run through
-# `bun run --filter @agent-workflow/shared test`; frontend tests use Vitest.
+# Low-level `bun test` discovery is backend-only. The repository gate is
+# `bun run test`, which runs backend with file isolation + randomized order,
+# then explicitly runs the shared and frontend suites.
 root = "packages/backend/tests"

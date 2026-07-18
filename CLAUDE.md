@@ -16,7 +16,7 @@ This repo is **mid-implementation** (M1 in progress; ~9/18 of M1 done as of last
 
 When a batch of issues completes, commit + push and update `STATE.md` so the next session can pick up seamlessly.
 
-`bun install` then `bun test` to verify dev environment works.
+`bun install` then `bun run test` to verify the backend, shared, and frontend test suites.
 
 ## RFC workflow（新增 / 修改前的强制流程）
 

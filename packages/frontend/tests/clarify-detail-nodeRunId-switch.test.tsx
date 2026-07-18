@@ -37,6 +37,7 @@ import {
 import type { ClarifyRound } from '@agent-workflow/shared'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { ClarifyDetailPage } from '../src/routes/clarify.detail'
+import { unexpectedNetworkFetch } from './unexpectedNetwork'
 import '../src/i18n'
 
 const ROUTE_TSX = resolve(__dirname, '..', 'src', 'routes', 'clarify.detail.tsx')
@@ -90,27 +91,40 @@ function mkSession(over: Partial<ClarifyRound>): ClarifyRound {
 }
 
 function mockApi(byNodeRunId: Record<string, ClarifyRound>) {
-  vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
-    const s = typeof url === 'string' ? url : url.toString()
-    for (const [nodeRunId, sess] of Object.entries(byNodeRunId)) {
-      if (s.includes(`/api/clarify/${nodeRunId}`) && !s.endsWith('/answers')) {
-        return new Response(JSON.stringify(sess), {
+  vi.spyOn(globalThis, 'fetch').mockImplementation(
+    async (url: RequestInfo | URL, init?: RequestInit) => {
+      const s = typeof url === 'string' ? url : url.toString()
+      const json = (value: unknown) =>
+        new Response(JSON.stringify(value), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         })
+      for (const [nodeRunId, sess] of Object.entries(byNodeRunId)) {
+        if (s.includes(`/api/clarify/${nodeRunId}`) && !s.endsWith('/answers')) {
+          return json(sess)
+        }
       }
-    }
-    if (s.includes('/api/clarify?')) {
-      return new Response('[]', {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      })
-    }
-    return new Response('{}', {
-      status: 200,
-      headers: { 'content-type': 'application/json' },
-    })
-  })
+      if (s.endsWith('/api/auth/me')) {
+        return json({
+          user: {
+            id: 'u_me',
+            username: 'me',
+            displayName: 'Me',
+            role: 'admin',
+            status: 'active',
+          },
+          source: 'session',
+          permissions: [],
+          linkedIdentities: [],
+          pats: [],
+        })
+      }
+      if (s.endsWith('/api/tasks/task_x/questions')) return json([])
+      if (s.endsWith('/api/tasks/task_x')) return json({ name: 'Task X' })
+      if (s.includes('/api/clarify?')) return json([])
+      return unexpectedNetworkFetch(url, init)
+    },
+  )
 }
 
 function renderRoute(initialPath: string) {
@@ -193,7 +207,7 @@ describe('/clarify/$nodeRunId — RFC-051 reset on nodeRunId switch', () => {
       ],
     })
     mockApi({ nr_A: sessA, nr_B: sessB })
-    const { router } = renderRoute('/clarify/nr_A')
+    const { qc, router } = renderRoute('/clarify/nr_A')
     // Wait until A's question lands.
     await waitFor(() => {
       expect(screen.queryByText('Question for A')).not.toBeNull()
@@ -207,6 +221,10 @@ describe('/clarify/$nodeRunId — RFC-051 reset on nodeRunId switch', () => {
       expect(screen.queryByText('Question 1 for B')).not.toBeNull()
       expect(screen.queryByText('Question 2 for B')).not.toBeNull()
     })
+    // Let the task breadcrumb + coordination queries finish while the strict
+    // fetch mock is still installed. Previously they raced test teardown and
+    // escaped to the process-level network guard.
+    await waitFor(() => expect(qc.isFetching()).toBe(0))
     // A's question must no longer be in the DOM (we navigated away).
     expect(screen.queryByText('Question for A')).toBeNull()
   })
