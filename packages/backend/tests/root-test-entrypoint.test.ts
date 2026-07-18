@@ -10,6 +10,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 interface RootPackageJson {
+  packageManager?: string
   scripts?: Record<string, string>
 }
 
@@ -38,6 +39,14 @@ const visualWorkflow = readFileSync(
   resolve(root, '.github', 'workflows', 'visual-regression-nightly.yml'),
   'utf8',
 )
+const workflowSources = readdirSync(resolve(root, '.github', 'workflows'), {
+  withFileTypes: true,
+})
+  .filter((entry) => entry.isFile() && /\.ya?ml$/.test(entry.name))
+  .map((entry) => ({
+    name: entry.name,
+    source: readFileSync(resolve(root, '.github', 'workflows', entry.name), 'utf8'),
+  }))
 const strandedClarifyRegression = readFileSync(
   resolve(root, 'packages', 'backend', 'tests', 'review-clarify-question-phase-stranded.test.ts'),
   'utf8',
@@ -118,6 +127,23 @@ function occurrenceCount(source: string, marker: string): number {
 }
 
 describe('repository test entrypoint', () => {
+  test('every Actions workflow pins the exact Bun release declared by packageManager', () => {
+    const expectedVersion = pkg.packageManager?.match(/^bun@(\d+\.\d+\.\d+)$/)?.[1]
+    expect(expectedVersion).toBeDefined()
+
+    for (const { name, source } of workflowSources) {
+      const setupCount = occurrenceCount(source, 'uses: oven-sh/setup-bun@')
+      const configuredVersions = [
+        ...source.matchAll(/^\s*bun-version:\s*['"]?([^'"\s]+)['"]?\s*$/gm),
+      ].map((match) => match[1]!)
+
+      expect(`${name}: ${configuredVersions.length}`).toBe(`${name}: ${setupCount}`)
+      for (const version of configuredVersions) {
+        expect(`${name}: bun@${version}`).toBe(`${name}: bun@${expectedVersion}`)
+      }
+    }
+  })
+
   test('bun run test dispatches backend, shared, and frontend in order', () => {
     expect(pkg.scripts?.test).toBe(
       'bun run test:backend && bun run test:shared && bun run test:frontend',
@@ -284,6 +310,7 @@ describe('repository test entrypoint', () => {
 
     expect(pkg.scripts?.['lint:repo-ui']).toContain('"e2e/**/*.ts"')
     expect(pkg.scripts?.['format:check:repo-ui']).toContain('"e2e/**/*.{ts,md}"')
+    expect(pkg.scripts?.['format:check:repo-ui']).toContain('".github/workflows/*.{yml,yaml}"')
   })
 
   test('every Actions job has an explicit bounded deadline', () => {

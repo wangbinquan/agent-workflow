@@ -34,9 +34,9 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          # Lockfile format was changed in 1.2+; keep CI on the same major as
-          # what developers run locally. Bump as the project upgrades.
-          bun-version: '1.3.x'
+          # Keep CI byte-for-byte aligned with packageManager. Patch releases
+          # can change test-runner isolation/coverage semantics; bump together.
+          bun-version: '1.3.13'
 
       - name: Cache bun package downloads
         # setup-bun caches only the bun binary, not the dependency tree, so
@@ -92,7 +92,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: '1.3.x'
+          bun-version: '1.3.13'
 
       - name: Cache bun package downloads
         uses: actions/cache@v6
@@ -170,7 +170,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: '1.3.x'
+          bun-version: '1.3.13'
 
       - name: Cache bun package downloads
         uses: actions/cache@v6
@@ -202,7 +202,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: '1.3.x'
+          bun-version: '1.3.13'
 
       - name: Cache bun package downloads
         uses: actions/cache@v6
@@ -220,8 +220,8 @@ jobs:
         # esbuild < 0.25, which only affects `vite dev` and doesn't ship in
         # the single binary). `--prod` was tried first but isn't a documented
         # flag in bun 1.3.x audit (the help only lists --json / --audit-level
-        # / --ignore), and on CI's bun 1.3.14 it appeared to be silently
-        # ignored — moderate dev advisories still failed the gate. Filtering
+        # / --ignore). When CI floated to Bun 1.3.14, `--prod` appeared to be
+        # silently ignored: moderate dev advisories still failed the gate. Filtering
         # by severity is portable across bun versions and matches what local
         # `bun audit --audit-level=high` reports.
         #
@@ -305,7 +305,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: '1.3.x'
+          bun-version: '1.3.13'
 
       - name: Cache bun package downloads
         uses: actions/cache@v6
@@ -383,7 +383,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: '1.3.x'
+          bun-version: '1.3.13'
 
       - name: Cache bun package downloads
         uses: actions/cache@v6
@@ -477,7 +477,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: '1.3.x'
+          bun-version: '1.3.13'
 
       - name: Cache bun package downloads
         uses: actions/cache@v6

@@ -15,7 +15,7 @@
     "lint:fix": "bun run --filter '*' lint:fix",
     "format": "prettier --write \"packages/**/*.{ts,tsx,json,md}\"",
     "format:check": "prettier --check \"packages/**/*.{ts,tsx,json,md}\" && bun run format:check:repo-ui",
-    "format:check:repo-ui": "prettier --check package.json playwright.config.ts \"e2e/**/*.{ts,md}\" .github/workflows/ci.yml .github/workflows/visual-regression-nightly.yml",
+    "format:check:repo-ui": "prettier --check package.json playwright.config.ts \"e2e/**/*.{ts,md}\" \".github/workflows/*.{yml,yaml}\"",
     "typecheck": "bun run --filter '*' typecheck",
     "test": "bun run test:backend && bun run test:shared && bun run test:frontend",
     "test:backend": "bun test --isolate --randomize",
