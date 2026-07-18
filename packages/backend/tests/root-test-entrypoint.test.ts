@@ -100,6 +100,10 @@ const asyncTestCommandHelper = readFileSync(
   resolve(root, 'packages', 'backend', 'tests', 'helpers', 'testCommand.ts'),
   'utf8',
 )
+const loggerRegression = readFileSync(
+  resolve(root, 'packages', 'backend', 'tests', 'log.test.ts'),
+  'utf8',
+)
 const e2eCommandHelper = readFileSync(resolve(root, 'e2e', 'command.ts'), 'utf8')
 const e2eSpecSources = readE2eSpecSources(resolve(root, 'e2e'))
 const hardenedBunCommand = 'bun test --isolate --randomize'
@@ -173,6 +177,12 @@ describe('repository test entrypoint', () => {
     expect(ciWorkflow).toContain('name: Derive reproducible backend test seed')
     expect(ciWorkflow).toContain('echo "BUN_TEST_SEED=$seed" >> "$GITHUB_ENV"')
     expect(ciWorkflow).toContain('echo "Backend test seed: $seed"')
+  })
+
+  test('logger tests capture through a local sink without mutating process stdout', () => {
+    expect(loggerRegression).not.toContain('process.stdout.write =')
+    expect(loggerRegression).toContain('setLoggerStdoutWriterForTest(')
+    expect(loggerRegression).toContain('stdout failure is best-effort')
   })
 
   test('shared and frontend gates randomize execution order', () => {

@@ -2,12 +2,16 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { configureLogger, createLogger, resetLoggerForTest } from '../src/util/log'
+import {
+  configureLogger,
+  createLogger,
+  resetLoggerForTest,
+  setLoggerStdoutWriterForTest,
+} from '../src/util/log'
 
 describe('logger', () => {
   let tmp: string
   let logFile: string
-  let originalWrite: typeof process.stdout.write
   let captured: string
 
   beforeEach(() => {
@@ -15,16 +19,12 @@ describe('logger', () => {
     tmp = mkdtempSync(join(tmpdir(), 'aw-log-'))
     logFile = join(tmp, 'daemon.log')
     captured = ''
-    originalWrite = process.stdout.write.bind(process.stdout)
-    // Intercept stdout to assert on output without polluting test runner.
-    process.stdout.write = ((chunk: string | Uint8Array) => {
-      captured += typeof chunk === 'string' ? chunk : new TextDecoder().decode(chunk)
-      return true
-    }) as typeof process.stdout.write
+    setLoggerStdoutWriterForTest((line) => {
+      captured += line
+    })
   })
 
   afterEach(() => {
-    process.stdout.write = originalWrite
     rmSync(tmp, { recursive: true, force: true })
     resetLoggerForTest()
   })
@@ -83,6 +83,17 @@ describe('logger', () => {
     expect(existsSync(logFile)).toBe(true)
     const onDisk = readFileSync(logFile, 'utf-8')
     expect(onDisk).toContain('to disk')
+  })
+
+  test('stdout failure is best-effort and does not suppress file logging', () => {
+    configureLogger({ level: 'info', logFile })
+    setLoggerStdoutWriterForTest(() => {
+      throw new Error('stdout unavailable')
+    })
+    const log = createLogger('demo')
+
+    expect(() => log.info('still running')).not.toThrow()
+    expect(readFileSync(logFile, 'utf-8')).toContain('still running')
   })
 
   test('field formatting: quotes values containing spaces or quotes', () => {

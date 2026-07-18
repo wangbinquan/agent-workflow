@@ -41,6 +41,14 @@ const state: LoggerState = {
   writesSinceCheck: 0,
 }
 
+type StdoutWriter = (line: string) => void
+
+const defaultStdoutWriter: StdoutWriter = (line) => {
+  process.stdout.write(line)
+}
+
+let stdoutWriter = defaultStdoutWriter
+
 export function configureLogger(opts: {
   level?: LogLevel
   logFile?: string | null
@@ -58,6 +66,12 @@ export function resetLoggerForTest(): void {
   state.logFile = null
   state.jsonMode = false
   state.writesSinceCheck = 0
+  stdoutWriter = defaultStdoutWriter
+}
+
+/** Test helper: capture logger output without mutating the process-global stdout stream. */
+export function setLoggerStdoutWriterForTest(writer: StdoutWriter): void {
+  stdoutWriter = writer
 }
 
 export interface Logger {
@@ -76,7 +90,12 @@ export function createLogger(service: string): Logger {
     const line = state.jsonMode
       ? JSON.stringify({ ts, level, service, message: msg, ...(fields ?? {}) }) + '\n'
       : formatHuman(ts, level, service, msg, fields)
-    process.stdout.write(line)
+    try {
+      stdoutWriter(line)
+    } catch {
+      // stdout may be closed, or Bun may fail to materialize its WriteStream.
+      // Logging is best-effort and must never fail daemon work.
+    }
     if (state.logFile !== null) {
       try {
         rotateIfNeeded(state.logFile)
