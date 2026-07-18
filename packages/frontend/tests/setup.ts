@@ -35,6 +35,15 @@ if (typeof globalThis.window !== 'undefined') {
 }
 
 type StorageSnapshot = Array<[string, string]>
+type AttributeSnapshot = Array<[string, string]>
+
+interface BrowserShellSnapshot {
+  href: string
+  historyState: unknown
+  title: string
+  htmlAttributes: AttributeSnapshot
+  bodyAttributes: AttributeSnapshot
+}
 
 function snapshotStorage(storage: Storage): StorageSnapshot {
   const snapshot: StorageSnapshot = []
@@ -50,6 +59,32 @@ function snapshotStorage(storage: Storage): StorageSnapshot {
 function restoreStorage(storage: Storage, snapshot: StorageSnapshot): void {
   storage.clear()
   for (const [key, value] of snapshot) storage.setItem(key, value)
+}
+
+function snapshotAttributes(element: Element): AttributeSnapshot {
+  return element.getAttributeNames().map((name) => [name, element.getAttribute(name) ?? ''])
+}
+
+function restoreAttributes(element: Element, snapshot: AttributeSnapshot): void {
+  for (const name of element.getAttributeNames()) element.removeAttribute(name)
+  for (const [name, value] of snapshot) element.setAttribute(name, value)
+}
+
+function snapshotBrowserShell(): BrowserShellSnapshot {
+  return {
+    href: window.location.href,
+    historyState: window.history.state,
+    title: document.title,
+    htmlAttributes: snapshotAttributes(document.documentElement),
+    bodyAttributes: snapshotAttributes(document.body),
+  }
+}
+
+function restoreBrowserShell(snapshot: BrowserShellSnapshot): void {
+  window.history.replaceState(snapshot.historyState, '', snapshot.href)
+  document.title = snapshot.title
+  restoreAttributes(document.documentElement, snapshot.htmlAttributes)
+  restoreAttributes(document.body, snapshot.bodyAttributes)
 }
 
 // React 19's concurrent scheduler defers some render work to `setImmediate`.
@@ -73,6 +108,7 @@ installUnexpectedNetworkGuard()
 let languageAtTestStart: string | undefined
 let localStorageAtTestStart: StorageSnapshot = []
 let sessionStorageAtTestStart: StorageSnapshot = []
+let browserShellAtTestStart: BrowserShellSnapshot | undefined
 
 beforeEach(() => {
   // i18next is a process-global singleton. Preserve each test's inherited
@@ -84,6 +120,7 @@ beforeEach(() => {
   // leaking auth, draft, theme, or viewed-state keys into a shuffled neighbor.
   localStorageAtTestStart = snapshotStorage(localStorage)
   sessionStorageAtTestStart = snapshotStorage(sessionStorage)
+  browserShellAtTestStart = snapshotBrowserShell()
   resetUnexpectedNetworkRequests()
   installUnexpectedNetworkGuard()
 })
@@ -104,6 +141,9 @@ afterEach(async () => {
   restoreStorage(sessionStorage, sessionStorageAtTestStart)
   localStorageAtTestStart = []
   sessionStorageAtTestStart = []
+  const restoreShell = browserShellAtTestStart
+  browserShellAtTestStart = undefined
+  if (restoreShell !== undefined) restoreBrowserShell(restoreShell)
   if (unexpected.length > 0) {
     throw new Error(
       `Unexpected network request(s) escaped test mocks:\n${unexpected.map((r) => `- ${r}`).join('\n')}`,

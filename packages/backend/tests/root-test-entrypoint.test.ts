@@ -76,9 +76,11 @@ describe('repository test entrypoint', () => {
     expect(ciWorkflow).toContain('run: bun run --filter @agent-workflow/frontend test')
   })
 
-  test('CI shard matrices cover every declared backend and frontend shard', () => {
+  test('CI matrices cover every declared test shard and supported OS', () => {
     const backendJob = workflowJob('test-backend')
     const frontendJob = workflowJob('test-frontend')
+    const buildBinaryJob = workflowJob('build-binary')
+    const e2eJob = workflowJob('e2e')
 
     // A denominator in the command is not enough: accidentally shortening the
     // matrix (for example, [1, 2, 3] with /4) makes CI green while one quarter
@@ -92,6 +94,15 @@ describe('repository test entrypoint', () => {
     expect(frontendJob).toContain('os: [ubuntu-latest, macos-latest]')
     expect(frontendJob).toContain('shard: [1, 2, 3]')
     expect(occurrenceCount(frontendJob, `--shard=\${{ matrix.shard }}/3`)).toBe(1)
+
+    expect(buildBinaryJob).toContain('fail-fast: false')
+    expect(buildBinaryJob).toContain('os: [ubuntu-latest, macos-latest]')
+
+    expect(e2eJob).toContain('needs: build-binary')
+    expect(e2eJob).toContain('fail-fast: false')
+    expect(e2eJob).toContain('os: [ubuntu-latest, macos-latest]')
+    expect(e2eJob).toContain('shard: [1, 2, 3, 4]')
+    expect(occurrenceCount(e2eJob, `--shard=\${{ matrix.shard }}/4`)).toBe(1)
   })
 
   test('low-level Bun discovery remains backend-only', () => {
