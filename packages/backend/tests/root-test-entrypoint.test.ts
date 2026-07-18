@@ -28,6 +28,24 @@ const ciWorkflow = readFileSync(resolve(root, '.github', 'workflows', 'ci.yml'),
 const hardenedBunCommand = 'bun test --isolate --randomize'
 const hardenedFrontendCommand = 'vitest run --sequence.shuffle'
 
+function workflowJob(name: string): string {
+  const lines = ciWorkflow.split(/\r?\n/)
+  const start = lines.findIndex((line) => line === `  ${name}:`)
+  if (start < 0) throw new Error(`Missing CI job: ${name}`)
+  const nextJob = lines.findIndex(
+    (line, index) =>
+      index > start &&
+      line.startsWith('  ') &&
+      !line.startsWith('    ') &&
+      /^[\w-]+:$/.test(line.slice(2)),
+  )
+  return lines.slice(start, nextJob < 0 ? undefined : nextJob).join('\n')
+}
+
+function occurrenceCount(source: string, marker: string): number {
+  return source.split(marker).length - 1
+}
+
 describe('repository test entrypoint', () => {
   test('bun run test dispatches backend, shared, and frontend in order', () => {
     expect(pkg.scripts?.test).toBe(
@@ -56,6 +74,24 @@ describe('repository test entrypoint', () => {
     expect(frontendPkg.scripts?.test).toBe(hardenedFrontendCommand)
     expect(ciWorkflow).toContain('run: bun run --filter @agent-workflow/shared test')
     expect(ciWorkflow).toContain('run: bun run --filter @agent-workflow/frontend test')
+  })
+
+  test('CI shard matrices cover every declared backend and frontend shard', () => {
+    const backendJob = workflowJob('test-backend')
+    const frontendJob = workflowJob('test-frontend')
+
+    // A denominator in the command is not enough: accidentally shortening the
+    // matrix (for example, [1, 2, 3] with /4) makes CI green while one quarter
+    // of the suite is never selected.
+    expect(backendJob).toContain('fail-fast: false')
+    expect(backendJob).toContain('os: [ubuntu-latest, macos-latest]')
+    expect(backendJob).toContain('shard: [1, 2, 3, 4]')
+    expect(occurrenceCount(backendJob, `--shard=\${{ matrix.shard }}/4`)).toBe(2)
+
+    expect(frontendJob).toContain('fail-fast: false')
+    expect(frontendJob).toContain('os: [ubuntu-latest, macos-latest]')
+    expect(frontendJob).toContain('shard: [1, 2, 3]')
+    expect(occurrenceCount(frontendJob, `--shard=\${{ matrix.shard }}/3`)).toBe(1)
   })
 
   test('low-level Bun discovery remains backend-only', () => {

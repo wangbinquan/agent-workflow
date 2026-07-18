@@ -34,13 +34,31 @@ if (typeof globalThis.window !== 'undefined') {
   Object.defineProperty(globalThis.window, 'localStorage', { value: shim, configurable: true })
 }
 
+type StorageSnapshot = Array<[string, string]>
+
+function snapshotStorage(storage: Storage): StorageSnapshot {
+  const snapshot: StorageSnapshot = []
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index)
+    if (key === null) continue
+    const value = storage.getItem(key)
+    if (value !== null) snapshot.push([key, value])
+  }
+  return snapshot
+}
+
+function restoreStorage(storage: Storage, snapshot: StorageSnapshot): void {
+  storage.clear()
+  for (const [key, value] of snapshot) storage.setItem(key, value)
+}
+
 // React 19's concurrent scheduler defers some render work to `setImmediate`.
 // When a test renders async-side-effect components (e.g. `<Prose>` lazy-loading
 // shiki / mermaid / plantuml), the work can be queued just as the test ends,
 // then fires after happy-dom has torn `window` down — producing "ReferenceError:
 // window is not defined" inside react-dom's scheduler. Draining one
 // macrotask + microtask cycle after each test gives React a chance to finish.
-import { afterEach, beforeEach } from 'vitest'
+import { afterEach, beforeEach, vi } from 'vitest'
 import { cleanup } from '@testing-library/react'
 import {
   installUnexpectedNetworkGuard,
@@ -53,17 +71,27 @@ import {
 installUnexpectedNetworkGuard()
 
 let languageAtTestStart: string | undefined
+let localStorageAtTestStart: StorageSnapshot = []
+let sessionStorageAtTestStart: StorageSnapshot = []
 
 beforeEach(() => {
   // i18next is a process-global singleton. Preserve each test's inherited
   // baseline (including a suite-level beforeAll locale) so a case that changes
   // language cannot leak that mutation to its shuffled neighbour.
   languageAtTestStart = i18n.resolvedLanguage ?? i18n.language
+  // Browser storage is process-global inside a Vitest worker. Preserve a
+  // suite-level beforeAll baseline while preventing an individual test from
+  // leaking auth, draft, theme, or viewed-state keys into a shuffled neighbor.
+  localStorageAtTestStart = snapshotStorage(localStorage)
+  sessionStorageAtTestStart = snapshotStorage(sessionStorage)
   resetUnexpectedNetworkRequests()
   installUnexpectedNetworkGuard()
 })
 
 afterEach(async () => {
+  // A forgotten fake clock would also fake the macrotask drain below, hanging
+  // the shared hook and poisoning every shuffled neighbor in this worker.
+  if (vi.isFakeTimers()) vi.useRealTimers()
   cleanup()
   await new Promise((resolve) => setTimeout(resolve, 0))
   const unexpected = takeUnexpectedNetworkRequests()
@@ -72,6 +100,10 @@ afterEach(async () => {
   if (restoreLanguage !== undefined && i18n.resolvedLanguage !== restoreLanguage) {
     await i18n.changeLanguage(restoreLanguage)
   }
+  restoreStorage(localStorage, localStorageAtTestStart)
+  restoreStorage(sessionStorage, sessionStorageAtTestStart)
+  localStorageAtTestStart = []
+  sessionStorageAtTestStart = []
   if (unexpected.length > 0) {
     throw new Error(
       `Unexpected network request(s) escaped test mocks:\n${unexpected.map((r) => `- ${r}`).join('\n')}`,
