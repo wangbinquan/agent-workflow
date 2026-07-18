@@ -5,7 +5,7 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { RouterProvider, createMemoryHistory, createRouter } from '@tanstack/react-router'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { Route as RootRoute } from '../src/routes/__root'
@@ -188,7 +188,12 @@ beforeEach(() => {
   checkIdentityStatus = 'known'
   installFetch()
 })
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => {
+  // Keep teardown-triggered route queries behind this file's fetch mock until the
+  // component tree has unmounted; the global hook can then drain safely.
+  cleanup()
+  vi.restoreAllMocks()
+})
 
 describe('/plugins split page', () => {
   test('empty pane; card click opens the two-tab detail', async () => {
