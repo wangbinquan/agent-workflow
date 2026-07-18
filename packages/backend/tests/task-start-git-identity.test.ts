@@ -10,31 +10,95 @@
 //   - Default behaviour (both omitted) is byte-identical to pre-RFC-067:
 //     no env injected, no `[user]` block written.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { execSync } from 'node:child_process'
+import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { execFileSync } from 'node:child_process'
 import {
   chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import { createInMemoryDb } from '../src/db/client'
 import type { DbClient } from '../src/db/client'
 import { tasks } from '../src/db/schema'
 import { eq } from 'drizzle-orm'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
-import { startTaskWithLocalRepo } from '../src/services/task'
+import {
+  abortAllActiveTasks,
+  isTaskActive,
+  startTaskWithLocalRepo as startTaskWithLocalRepoBase,
+} from '../src/services/task'
+import { nonInteractiveGitEnv } from '../src/util/git'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const GIT_TIMEOUT_MS = 10_000
+const NODE_TIMEOUT_MS = 10_000
+const FLOW_TIMEOUT_MS = 20_000
+const ACTIVE_TASK_SETTLE_TIMEOUT_MS = 5_000
+
+let cleanupDirs: string[] = []
+let watchdog: ReturnType<typeof setTimeout> | undefined
+
+setDefaultTimeout(FLOW_TIMEOUT_MS + ACTIVE_TASK_SETTLE_TIMEOUT_MS + 5_000)
+
+beforeEach(() => {
+  cleanupDirs = []
+  watchdog = setTimeout(() => abortAllActiveTasks('test-timeout'), FLOW_TIMEOUT_MS)
+})
+
+afterEach(async () => {
+  if (watchdog !== undefined) clearTimeout(watchdog)
+  try {
+    await abortActiveTasksAndWait('test-cleanup')
+  } finally {
+    for (const dir of cleanupDirs.reverse()) rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+function makeTempDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix))
+  cleanupDirs.push(dir)
+  return dir
+}
+
+async function abortActiveTasksAndWait(reason: string): Promise<void> {
+  const taskIds = abortAllActiveTasks(reason)
+  const deadline = Date.now() + ACTIVE_TASK_SETTLE_TIMEOUT_MS
+  while (taskIds.some((taskId) => isTaskActive(taskId)) && Date.now() < deadline) {
+    await Bun.sleep(20)
+  }
+  const stuck = taskIds.filter((taskId) => isTaskActive(taskId))
+  if (stuck.length > 0) throw new Error(`active test tasks failed to settle: ${stuck.join(', ')}`)
+}
+
+function git(...args: string[]): void {
+  execFileSync('git', args, {
+    stdio: 'ignore',
+    timeout: GIT_TIMEOUT_MS,
+    env: nonInteractiveGitEnv(),
+  })
+}
+
+function startTaskWithLocalRepo(
+  input: Parameters<typeof startTaskWithLocalRepoBase>[0],
+  deps: Parameters<typeof startTaskWithLocalRepoBase>[1],
+) {
+  return startTaskWithLocalRepoBase(input, {
+    ...deps,
+    defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
+    defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
+  })
+}
 
 interface Harness {
-  tmp: string
   appHome: string
   repoPath: string
   db: DbClient
@@ -85,20 +149,19 @@ exit 1
 }
 
 async function setup(): Promise<Harness> {
-  const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc067-'))
+  const tmp = makeTempDir('aw-rfc067-')
   const appHome = join(tmp, 'appHome')
   const repoPath = join(tmp, 'repo')
   const envCaptureDir = join(tmp, 'env-capture')
   mkdirSync(envCaptureDir, { recursive: true })
   const db = createInMemoryDb(MIGRATIONS)
 
-  execSync(`git init -b main "${repoPath}"`, { stdio: 'ignore' })
-  execSync(`git -C "${repoPath}" config user.email t@t.test`, { stdio: 'ignore' })
-  execSync(`git -C "${repoPath}" config user.name t`, { stdio: 'ignore' })
+  git('init', '-b', 'main', repoPath)
+  git('-C', repoPath, 'config', 'user.email', 't@t.test')
+  git('-C', repoPath, 'config', 'user.name', 't')
   writeFileSync(join(repoPath, 'README.md'), '# repo\n')
-  execSync(`git -C "${repoPath}" add . && git -C "${repoPath}" commit -m init`, {
-    stdio: 'ignore',
-  })
+  git('-C', repoPath, 'add', '.')
+  git('-C', repoPath, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
 
   const stubOpencode = makeEnvCapturingStub(tmp, envCaptureDir)
 
@@ -137,7 +200,7 @@ async function setup(): Promise<Harness> {
     },
   })
 
-  return { tmp, appHome, repoPath, db, stubOpencode, envCaptureDir, wfId: wf.id }
+  return { appHome, repoPath, db, stubOpencode, envCaptureDir, wfId: wf.id }
 }
 
 interface CapturedEnv {
@@ -149,10 +212,7 @@ interface CapturedEnv {
 
 function readCapturedEnvs(captureDir: string): CapturedEnv[] {
   if (!existsSync(captureDir)) return []
-  const files = execSync(`ls "${captureDir}"`, { encoding: 'utf8' })
-    .trim()
-    .split('\n')
-    .filter((f) => f.endsWith('.json'))
+  const files = readdirSync(captureDir).filter((file) => file.endsWith('.json'))
   return files.map((f) => JSON.parse(readFileSync(join(captureDir, f), 'utf8')))
 }
 
@@ -202,7 +262,6 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
       expect(e.GIT_COMMITTER_NAME).toBe('__unset__')
       expect(e.GIT_COMMITTER_EMAIL).toBe('__unset__')
     }
-    rmSync(h.tmp, { recursive: true, force: true })
   })
 
   test('AC-2: both set → DB columns persist, env has 4-tuple on every spawn', async () => {
@@ -232,7 +291,6 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
       expect(e.GIT_COMMITTER_NAME).toBe('AI Bot')
       expect(e.GIT_COMMITTER_EMAIL).toBe('bot@workflow.local')
     }
-    rmSync(h.tmp, { recursive: true, force: true })
   })
 
   test('AC-3: leading/trailing whitespace trimmed before persistence + env', async () => {
@@ -257,7 +315,6 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
       expect(e.GIT_AUTHOR_NAME).toBe('Padded Bot')
       expect(e.GIT_AUTHOR_EMAIL).toBe('padded@bot.local')
     }
-    rmSync(h.tmp, { recursive: true, force: true })
   })
 
   test('AC-4: daemon GIT_AUTHOR_NAME set, task identity wins inside spawn', async () => {
@@ -286,7 +343,6 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
       expect(e.GIT_COMMITTER_NAME).toBe('Task Bot')
       expect(e.GIT_COMMITTER_EMAIL).toBe('task@bot.test')
     }
-    rmSync(h.tmp, { recursive: true, force: true })
   })
 
   test('AC-5: daemon GIT_AUTHOR_NAME set, no task identity → daemon value falls through (legacy)', async () => {
@@ -313,7 +369,6 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
       expect(e.GIT_COMMITTER_NAME).toBe('__unset__')
       expect(e.GIT_COMMITTER_EMAIL).toBe('__unset__')
     }
-    rmSync(h.tmp, { recursive: true, force: true })
   })
 
   test('AC-6: two concurrent tasks with different identities do not leak env into each other', async () => {
@@ -321,39 +376,73 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
     // Reuse the same DB / capture dir / repo for the second task: simulates a
     // single daemon driving multiple tasks concurrently. Different capture
     // dirs per task would cheat the isolation check.
-    const taskA = await startTaskWithLocalRepo(
-      {
-        workflowId: hA.wfId,
-        name: 'task-A',
-        repoPath: hA.repoPath,
-        baseBranch: 'main',
-        inputs: { topic: 'tA' },
-        gitUserName: 'Bot A',
-        gitUserEmail: 'a@bot.test',
-      },
-      { db: hA.db, appHome: hA.appHome, opencodeCmd: [hA.stubOpencode], awaitScheduler: true },
-    )
-    const taskB = await startTaskWithLocalRepo(
-      {
-        workflowId: hA.wfId,
-        name: 'task-B',
-        repoPath: hA.repoPath,
-        baseBranch: 'main',
-        inputs: { topic: 'tB' },
-        gitUserName: 'Bot B',
-        gitUserEmail: 'b@bot.test',
-      },
-      { db: hA.db, appHome: hA.appHome, opencodeCmd: [hA.stubOpencode], awaitScheduler: true },
-    )
+    const [taskA, taskB] = await Promise.all([
+      startTaskWithLocalRepo(
+        {
+          workflowId: hA.wfId,
+          name: 'task-A',
+          repoPath: hA.repoPath,
+          baseBranch: 'main',
+          inputs: { topic: 'tA' },
+          gitUserName: 'Bot A',
+          gitUserEmail: 'a@bot.test',
+        },
+        {
+          db: hA.db,
+          appHome: hA.appHome,
+          opencodeCmd: [hA.stubOpencode],
+          awaitScheduler: true,
+        },
+      ),
+      startTaskWithLocalRepo(
+        {
+          workflowId: hA.wfId,
+          name: 'task-B',
+          repoPath: hA.repoPath,
+          baseBranch: 'main',
+          inputs: { topic: 'tB' },
+          gitUserName: 'Bot B',
+          gitUserEmail: 'b@bot.test',
+        },
+        {
+          db: hA.db,
+          appHome: hA.appHome,
+          opencodeCmd: [hA.stubOpencode],
+          awaitScheduler: true,
+        },
+      ),
+    ])
     expect(taskA.gitUserName).toBe('Bot A')
     expect(taskB.gitUserName).toBe('Bot B')
+
+    const captured = readCapturedEnvs(hA.envCaptureDir)
+      .map((env) => ({
+        authorName: env.GIT_AUTHOR_NAME,
+        authorEmail: env.GIT_AUTHOR_EMAIL,
+        committerName: env.GIT_COMMITTER_NAME,
+        committerEmail: env.GIT_COMMITTER_EMAIL,
+      }))
+      .sort((a, b) => a.authorName.localeCompare(b.authorName))
+    expect(captured).toEqual([
+      {
+        authorName: 'Bot A',
+        authorEmail: 'a@bot.test',
+        committerName: 'Bot A',
+        committerEmail: 'a@bot.test',
+      },
+      {
+        authorName: 'Bot B',
+        authorEmail: 'b@bot.test',
+        committerName: 'Bot B',
+        committerEmail: 'b@bot.test',
+      },
+    ])
 
     // process.env survives the spawn — runner mutates only the spawn-local
     // dict, never the parent process. Confirms no env leakage at the daemon
     // level either.
     expect(process.env.GIT_AUTHOR_NAME).toBeUndefined()
     expect(process.env.GIT_AUTHOR_EMAIL).toBeUndefined()
-    rmSync(hA.tmp, { recursive: true, force: true })
   })
 
   test('AC-7: half-identity (only name, schema bypass) → service defensively nullifies BOTH', async () => {
@@ -387,7 +476,6 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
       expect(e.GIT_COMMITTER_NAME).toBe('__unset__')
       expect(e.GIT_COMMITTER_EMAIL).toBe('__unset__')
     }
-    rmSync(h.tmp, { recursive: true, force: true })
   })
 
   test('AC-8: half-identity (only email, schema bypass) → service defensively nullifies BOTH', async () => {
@@ -411,6 +499,5 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
       expect(e.GIT_AUTHOR_NAME).toBe('__unset__')
       expect(e.GIT_AUTHOR_EMAIL).toBe('__unset__')
     }
-    rmSync(h.tmp, { recursive: true, force: true })
   })
 })

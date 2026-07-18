@@ -8,31 +8,85 @@
 //   - reusing an existing branch that conflicts with base on merge →
 //     ValidationError(working-branch-base-merge-conflict).
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { execSync } from 'node:child_process'
+import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { execFileSync } from 'node:child_process'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { taskRepos, tasks } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
-import { getTask, startTaskWithLocalRepo } from '../src/services/task'
+import {
+  abortAllActiveTasks,
+  getTask,
+  isTaskActive,
+  startTaskWithLocalRepo as startTaskWithLocalRepoBase,
+} from '../src/services/task'
+import { nonInteractiveGitEnv } from '../src/util/git'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const GIT_TIMEOUT_MS = 10_000
+const NODE_TIMEOUT_MS = 10_000
+const FLOW_TIMEOUT_MS = 20_000
+const ACTIVE_TASK_SETTLE_TIMEOUT_MS = 5_000
+
+let cleanupDir: string | undefined
+let watchdog: ReturnType<typeof setTimeout> | undefined
+
+setDefaultTimeout(FLOW_TIMEOUT_MS + ACTIVE_TASK_SETTLE_TIMEOUT_MS + 5_000)
+
+beforeEach(() => {
+  cleanupDir = undefined
+  watchdog = setTimeout(() => abortAllActiveTasks('test-timeout'), FLOW_TIMEOUT_MS)
+})
+
+afterEach(async () => {
+  if (watchdog !== undefined) clearTimeout(watchdog)
+  try {
+    await abortActiveTasksAndWait('test-cleanup')
+  } finally {
+    if (cleanupDir !== undefined) rmSync(cleanupDir, { recursive: true, force: true })
+  }
+})
+
+async function abortActiveTasksAndWait(reason: string): Promise<void> {
+  const taskIds = abortAllActiveTasks(reason)
+  const deadline = Date.now() + ACTIVE_TASK_SETTLE_TIMEOUT_MS
+  while (taskIds.some((taskId) => isTaskActive(taskId)) && Date.now() < deadline) {
+    await Bun.sleep(20)
+  }
+  const stuck = taskIds.filter((taskId) => isTaskActive(taskId))
+  if (stuck.length > 0) throw new Error(`active test tasks failed to settle: ${stuck.join(', ')}`)
+}
+
+function git(...args: string[]): void {
+  execFileSync('git', args, {
+    stdio: 'ignore',
+    timeout: GIT_TIMEOUT_MS,
+    env: nonInteractiveGitEnv(),
+  })
+}
+
+function startTaskWithLocalRepo(
+  input: Parameters<typeof startTaskWithLocalRepoBase>[0],
+  deps: Parameters<typeof startTaskWithLocalRepoBase>[1],
+) {
+  return startTaskWithLocalRepoBase(input, {
+    ...deps,
+    defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
+    defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
+  })
+}
 
 interface Harness {
-  tmp: string
   appHome: string
   repoPath: string
   db: DbClient
   stubOpencode: string
   wfId: string
-}
-
-function git(repo: string, args: string): void {
-  execSync(`git -C "${repo}" ${args}`, { stdio: 'ignore' })
 }
 
 function makeStub(dir: string): string {
@@ -54,17 +108,18 @@ exit 1
 
 async function setup(): Promise<Harness> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc075-'))
+  cleanupDir = tmp
   const appHome = join(tmp, 'appHome')
   const repoPath = join(tmp, 'repo')
   mkdirSync(appHome, { recursive: true })
   const db = createInMemoryDb(MIGRATIONS)
 
-  execSync(`git init -b main "${repoPath}"`, { stdio: 'ignore' })
-  git(repoPath, 'config user.email t@t.test')
-  git(repoPath, 'config user.name t')
+  git('init', '-b', 'main', repoPath)
+  git('-C', repoPath, 'config', 'user.email', 't@t.test')
+  git('-C', repoPath, 'config', 'user.name', 't')
   writeFileSync(join(repoPath, 'a.txt'), 'original\n')
-  git(repoPath, 'add .')
-  git(repoPath, 'commit -q -m init')
+  git('-C', repoPath, 'add', '.')
+  git('-C', repoPath, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-q', '-m', 'init')
 
   const stubOpencode = makeStub(tmp)
 
@@ -103,7 +158,7 @@ async function setup(): Promise<Harness> {
     },
   })
 
-  return { tmp, appHome, repoPath, db, stubOpencode, wfId: wf.id }
+  return { appHome, repoPath, db, stubOpencode, wfId: wf.id }
 }
 
 describe('RFC-075 — startTask working branch', () => {
@@ -111,7 +166,6 @@ describe('RFC-075 — startTask working branch', () => {
   beforeEach(async () => {
     h = await setup()
   })
-  afterEach(() => rmSync(h.tmp, { recursive: true, force: true }))
 
   function launch(extra: Record<string, unknown>) {
     return startTaskWithLocalRepo(
@@ -172,14 +226,34 @@ describe('RFC-075 — startTask working branch', () => {
 
   test('reuse existing branch that conflicts with base on merge → working-branch-base-merge-conflict', async () => {
     // feature/cf and main both edit a.txt differently.
-    git(h.repoPath, 'checkout -q -b feature/cf main')
+    git('-C', h.repoPath, 'checkout', '-q', '-b', 'feature/cf', 'main')
     writeFileSync(join(h.repoPath, 'a.txt'), 'from branch\n')
-    git(h.repoPath, 'add .')
-    git(h.repoPath, 'commit -q -m branch-edit')
-    git(h.repoPath, 'checkout -q main')
+    git('-C', h.repoPath, 'add', '.')
+    git(
+      '-C',
+      h.repoPath,
+      '-c',
+      'commit.gpgsign=false',
+      'commit',
+      '--no-verify',
+      '-q',
+      '-m',
+      'branch-edit',
+    )
+    git('-C', h.repoPath, 'checkout', '-q', 'main')
     writeFileSync(join(h.repoPath, 'a.txt'), 'from base\n')
-    git(h.repoPath, 'add .')
-    git(h.repoPath, 'commit -q -m base-edit')
+    git('-C', h.repoPath, 'add', '.')
+    git(
+      '-C',
+      h.repoPath,
+      '-c',
+      'commit.gpgsign=false',
+      'commit',
+      '--no-verify',
+      '-q',
+      '-m',
+      'base-edit',
+    )
 
     let thrown: unknown
     try {

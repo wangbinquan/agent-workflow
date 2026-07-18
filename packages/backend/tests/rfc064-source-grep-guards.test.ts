@@ -21,22 +21,28 @@
 //       so both branches stay in sync.
 
 import { describe, expect, test } from 'bun:test'
+import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { execSync } from 'node:child_process'
+import { nonInteractiveGitEnv } from '../src/util/git'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
+const GIT_TIMEOUT_MS = 10_000
 
 function gitGrep(pattern: string, paths: string[]): string[] {
   try {
-    const out = execSync(
-      `git grep --line-number ${JSON.stringify(pattern)} -- ${paths.map((p) => JSON.stringify(p)).join(' ')}`,
-      { cwd: REPO_ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
-    )
+    const out = execFileSync('git', ['grep', '--line-number', '-e', pattern, '--', ...paths], {
+      cwd: REPO_ROOT,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: GIT_TIMEOUT_MS,
+      env: nonInteractiveGitEnv(),
+    })
     return out.split('\n').filter((l) => l.length > 0)
-  } catch {
+  } catch (error) {
     // git grep exits non-zero when there are no matches; that's the green case.
-    return []
+    if ((error as { status?: number }).status === 1) return []
+    throw error
   }
 }
 

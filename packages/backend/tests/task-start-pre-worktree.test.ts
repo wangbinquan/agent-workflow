@@ -6,19 +6,83 @@
 // task row is created. When passed, startTask must NOT shell out to git;
 // when omitted, behavior is identical to the pre-RFC-020 path.
 
-import { describe, expect, test } from 'bun:test'
-import type { StartTask } from '@agent-workflow/shared'
-import { execSync } from 'node:child_process'
-import { mkdtempSync, writeFileSync, rmSync, chmodSync, existsSync, readFileSync } from 'node:fs'
+import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { DEFAULT_PROTOCOL_RETRY_BUDGET, type StartTask } from '@agent-workflow/shared'
+import { execFileSync } from 'node:child_process'
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb } from '../src/db/client'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
-import { materializeWorktree, startTask } from '../src/services/task'
+import {
+  abortAllActiveTasks,
+  isTaskActive,
+  materializeWorktree,
+  startTask as startTaskBase,
+} from '../src/services/task'
+import { nonInteractiveGitEnv } from '../src/util/git'
 import { ulid } from 'ulid'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const GIT_TIMEOUT_MS = 10_000
+const NODE_TIMEOUT_MS = 10_000
+const FLOW_TIMEOUT_MS = 20_000
+const ACTIVE_TASK_SETTLE_TIMEOUT_MS = 5_000
+
+let cleanupDirs: string[] = []
+let watchdog: ReturnType<typeof setTimeout> | undefined
+
+setDefaultTimeout(FLOW_TIMEOUT_MS + ACTIVE_TASK_SETTLE_TIMEOUT_MS + 5_000)
+
+beforeEach(() => {
+  cleanupDirs = []
+  watchdog = setTimeout(() => abortAllActiveTasks('test-timeout'), FLOW_TIMEOUT_MS)
+})
+
+afterEach(async () => {
+  if (watchdog !== undefined) clearTimeout(watchdog)
+  try {
+    await abortActiveTasksAndWait('test-cleanup')
+  } finally {
+    for (const dir of cleanupDirs.reverse()) rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+function makeTempDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix))
+  cleanupDirs.push(dir)
+  return dir
+}
+
+async function abortActiveTasksAndWait(reason: string): Promise<void> {
+  const taskIds = abortAllActiveTasks(reason)
+  const deadline = Date.now() + ACTIVE_TASK_SETTLE_TIMEOUT_MS
+  while (taskIds.some((taskId) => isTaskActive(taskId)) && Date.now() < deadline) {
+    await Bun.sleep(20)
+  }
+  const stuck = taskIds.filter((taskId) => isTaskActive(taskId))
+  if (stuck.length > 0) throw new Error(`active test tasks failed to settle: ${stuck.join(', ')}`)
+}
+
+function git(...args: string[]): void {
+  execFileSync('git', args, {
+    stdio: 'ignore',
+    timeout: GIT_TIMEOUT_MS,
+    env: nonInteractiveGitEnv(),
+  })
+}
+
+function startTask(
+  input: Parameters<typeof startTaskBase>[0],
+  deps: Parameters<typeof startTaskBase>[1],
+) {
+  return startTaskBase(input, {
+    ...deps,
+    defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
+    defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
+  })
+}
 
 function makeStubOpencode(dir: string): string {
   const path = join(dir, 'stub-opencode.sh')
@@ -39,18 +103,17 @@ exit 1
 }
 
 async function setup() {
-  const tmp = mkdtempSync(join(tmpdir(), 'aw-start-pre-'))
+  const tmp = makeTempDir('aw-start-pre-')
   const appHome = join(tmp, 'appHome')
   const repoPath = join(tmp, 'repo')
   const db = createInMemoryDb(MIGRATIONS)
 
-  execSync('git init -b main "${repoPath}"'.replace('${repoPath}', repoPath), { stdio: 'ignore' })
-  execSync(`git -C "${repoPath}" config user.email t@t.test`, { stdio: 'ignore' })
-  execSync(`git -C "${repoPath}" config user.name t`, { stdio: 'ignore' })
+  git('init', '-b', 'main', repoPath)
+  git('-C', repoPath, 'config', 'user.email', 't@t.test')
+  git('-C', repoPath, 'config', 'user.name', 't')
   writeFileSync(join(repoPath, 'README.md'), '# repo\n')
-  execSync(`git -C "${repoPath}" add . && git -C "${repoPath}" commit -m init`, {
-    stdio: 'ignore',
-  })
+  git('-C', repoPath, 'add', '.')
+  git('-C', repoPath, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
 
   const stubOpencode = makeStubOpencode(tmp)
 
@@ -94,12 +157,12 @@ async function setup() {
     },
   })
 
-  return { tmp, appHome, repoPath, db, stubOpencode, wf }
+  return { appHome, repoPath, db, stubOpencode, wf }
 }
 
 describe('startTask with preCreatedWorktree (RFC-020)', () => {
   test('honors caller-supplied taskId / worktreePath / branch / baseCommit', async () => {
-    const { tmp, appHome, repoPath, db, stubOpencode, wf } = await setup()
+    const { appHome, repoPath, db, stubOpencode, wf } = await setup()
     // Caller pre-creates the worktree (simulating the multipart route).
     const taskId = ulid()
     const wt = await materializeWorktree({
@@ -144,12 +207,10 @@ describe('startTask with preCreatedWorktree (RFC-020)', () => {
     expect(task.branch).toBe(wt.branch)
     // Marker file is still where the caller put it.
     expect(readFileSync(join(wt.worktreePath, 'uploaded.txt'), 'utf8')).toBe('hi')
-
-    rmSync(tmp, { recursive: true, force: true })
   })
 
   test('without preCreatedWorktree, falls back to the original git path', async () => {
-    const { tmp, appHome, repoPath, db, stubOpencode, wf } = await setup()
+    const { appHome, repoPath, db, stubOpencode, wf } = await setup()
     const task = await startTask(
       {
         workflowId: wf.id,
@@ -162,11 +223,10 @@ describe('startTask with preCreatedWorktree (RFC-020)', () => {
     )
     expect(task.worktreePath).not.toBe('')
     expect(existsSync(task.worktreePath)).toBe(true)
-    rmSync(tmp, { recursive: true, force: true })
   })
 
   test('materializeWorktree returns earlyError on bad repo', async () => {
-    const tmp = mkdtempSync(join(tmpdir(), 'aw-materialize-'))
+    const tmp = makeTempDir('aw-materialize-')
     const wt = await materializeWorktree({
       repoPath: join(tmp, 'no-such-repo'),
       baseBranch: 'main',
@@ -175,6 +235,5 @@ describe('startTask with preCreatedWorktree (RFC-020)', () => {
     })
     expect(wt.earlyError).not.toBeNull()
     expect(wt.worktreePath).toBe('')
-    rmSync(tmp, { recursive: true, force: true })
   })
 })

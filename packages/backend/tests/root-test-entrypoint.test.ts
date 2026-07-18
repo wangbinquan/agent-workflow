@@ -68,6 +68,16 @@ const multipartLaunchRegressions = [
   'rfc107-url-upload-multipart.test.ts',
   'tasks-multipart.test.ts',
 ].map((file) => readFileSync(resolve(root, 'packages', 'backend', 'tests', file), 'utf8'))
+const remainingLaunchRegressions = [
+  'rfc122-clarify-directive-dispatch.test.ts',
+  'task-start-git-identity.test.ts',
+  'task-start-pre-worktree.test.ts',
+  'task-start-working-branch.test.ts',
+].map((file) => readFileSync(resolve(root, 'packages', 'backend', 'tests', file), 'utf8'))
+const sourceGrepRegression = readFileSync(
+  resolve(root, 'packages', 'backend', 'tests', 'rfc064-source-grep-guards.test.ts'),
+  'utf8',
+)
 const hardenedBunCommand = 'bun test --isolate --randomize'
 const hardenedFrontendCommand = 'vitest run --sequence.shuffle'
 
@@ -219,6 +229,32 @@ describe('repository test entrypoint', () => {
       expect(source).toContain('previousAppHome')
       expect(source).toContain('process.env.AGENT_WORKFLOW_HOME = previousAppHome')
     }
+  })
+
+  test('remaining launch regressions have hard deadlines and the source grep guard fails closed', () => {
+    for (const source of remainingLaunchRegressions) {
+      expect(source).not.toContain('execSync(')
+      expect(source).toContain("execFileSync('git'")
+      expect(source).toContain('timeout: GIT_TIMEOUT_MS')
+      expect(source).toContain('env: nonInteractiveGitEnv()')
+      expect(source).toContain('defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS')
+      expect(source).toContain('defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET')
+      expect(source).toContain("abortAllActiveTasks('test-timeout')")
+      expect(source).toContain('isTaskActive(taskId)')
+      expect(source).toContain('afterEach(')
+    }
+    expect(remainingLaunchRegressions[0]).toContain(
+      'process.env.AGENT_WORKFLOW_HOME = previousAppHome',
+    )
+    expect(remainingLaunchRegressions[1]).toContain('const [taskA, taskB] = await Promise.all([')
+    expect(remainingLaunchRegressions[1]).toContain('expect(captured).toEqual([')
+
+    expect(sourceGrepRegression).not.toContain('execSync(')
+    expect(sourceGrepRegression).toContain("execFileSync('git'")
+    expect(sourceGrepRegression).toContain('timeout: GIT_TIMEOUT_MS')
+    expect(sourceGrepRegression).toContain('env: nonInteractiveGitEnv()')
+    expect(sourceGrepRegression).toContain('.status === 1) return []')
+    expect(sourceGrepRegression).toContain('throw error')
   })
 
   test('every Actions job has an explicit bounded deadline', () => {

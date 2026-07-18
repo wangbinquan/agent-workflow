@@ -13,8 +13,8 @@
 // Plus a store round-trip and a source-level lock on the scheduler wiring (the
 // dispatch read + the three threads) so a refactor that drops any of them goes red.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { execSync } from 'node:child_process'
+import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -24,18 +24,88 @@ import { clarifySessions, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
-import { runTask } from '../src/services/scheduler'
-import { startTaskWithLocalRepo } from '../src/services/task'
+import { runTask as runTaskBase } from '../src/services/scheduler'
+import {
+  abortAllActiveTasks,
+  isTaskActive,
+  startTaskWithLocalRepo as startTaskWithLocalRepoBase,
+} from '../src/services/task'
 import {
   getNodeClarifyDirective,
   listNodeClarifyDirectives,
   setNodeClarifyDirective,
 } from '../src/services/taskClarifyDirective'
 import { reenterScheduler } from './reenter-scheduler'
-import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
+import {
+  DEFAULT_PROTOCOL_RETRY_BUDGET,
+  type ClarifyAnswer,
+  type ClarifyQuestion,
+  type WorkflowDefinition,
+} from '@agent-workflow/shared'
+import { nonInteractiveGitEnv } from '../src/util/git'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SCENARIO_STUB = resolve(import.meta.dir, 'fixtures', 'scenario-opencode.ts')
+const GIT_TIMEOUT_MS = 10_000
+const NODE_TIMEOUT_MS = 10_000
+const FLOW_TIMEOUT_MS = 20_000
+const ACTIVE_TASK_SETTLE_TIMEOUT_MS = 5_000
+
+let cleanupCtx: (() => void) | undefined
+let watchdog: ReturnType<typeof setTimeout> | undefined
+
+setDefaultTimeout(FLOW_TIMEOUT_MS + ACTIVE_TASK_SETTLE_TIMEOUT_MS + 5_000)
+
+beforeEach(() => {
+  cleanupCtx = undefined
+  watchdog = setTimeout(() => abortAllActiveTasks('test-timeout'), FLOW_TIMEOUT_MS)
+})
+
+afterEach(async () => {
+  if (watchdog !== undefined) clearTimeout(watchdog)
+  try {
+    await abortActiveTasksAndWait('test-cleanup')
+  } finally {
+    cleanupCtx?.()
+  }
+})
+
+async function abortActiveTasksAndWait(reason: string): Promise<void> {
+  const taskIds = abortAllActiveTasks(reason)
+  const deadline = Date.now() + ACTIVE_TASK_SETTLE_TIMEOUT_MS
+  while (taskIds.some((taskId) => isTaskActive(taskId)) && Date.now() < deadline) {
+    await Bun.sleep(20)
+  }
+  const stuck = taskIds.filter((taskId) => isTaskActive(taskId))
+  if (stuck.length > 0) throw new Error(`active test tasks failed to settle: ${stuck.join(', ')}`)
+}
+
+function git(...args: string[]): void {
+  execFileSync('git', args, {
+    stdio: 'ignore',
+    timeout: GIT_TIMEOUT_MS,
+    env: nonInteractiveGitEnv(),
+  })
+}
+
+function runTask(options: Parameters<typeof runTaskBase>[0]) {
+  return runTaskBase({
+    ...options,
+    defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
+    defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
+  })
+}
+
+function startTaskWithLocalRepo(
+  input: Parameters<typeof startTaskWithLocalRepoBase>[0],
+  deps: Parameters<typeof startTaskWithLocalRepoBase>[1],
+) {
+  return startTaskWithLocalRepoBase(input, {
+    ...deps,
+    defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
+    defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
+  })
+}
 
 const MANDATORY = 'MANDATORY ASK-BACK (clarify) mode'
 const STOP_TRAILER = '### User directive: STOP CLARIFYING'
@@ -63,22 +133,37 @@ interface Ctx {
   appHome: string
   repoPath: string
   stateDir: string
-  cleanup: () => void
 }
 let idx = 0
 function freshCtx(): Ctx {
   idx++
   const tmp = mkdtempSync(join(tmpdir(), `aw-rfc122-${idx}-`))
+  const previousPlanFile = process.env.SCENARIO_PLAN_FILE
+  const previousStateDir = process.env.SCENARIO_STATE_DIR
+  const previousAppHome = process.env.AGENT_WORKFLOW_HOME
+  let cleaned = false
+  cleanupCtx = () => {
+    if (cleaned) return
+    cleaned = true
+    rmSync(tmp, { recursive: true, force: true })
+    if (previousPlanFile === undefined) delete process.env.SCENARIO_PLAN_FILE
+    else process.env.SCENARIO_PLAN_FILE = previousPlanFile
+    if (previousStateDir === undefined) delete process.env.SCENARIO_STATE_DIR
+    else process.env.SCENARIO_STATE_DIR = previousStateDir
+    if (previousAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+    else process.env.AGENT_WORKFLOW_HOME = previousAppHome
+  }
   const appHome = join(tmp, 'home')
   const repoPath = join(tmp, 'repo')
   const stateDir = join(tmp, 'state')
   mkdirSync(appHome, { recursive: true })
   mkdirSync(stateDir, { recursive: true })
-  execSync(`git init -b main "${repoPath}"`, { stdio: 'ignore' })
-  execSync(`git -C "${repoPath}" config user.email t@t.test`, { stdio: 'ignore' })
-  execSync(`git -C "${repoPath}" config user.name t`, { stdio: 'ignore' })
+  git('init', '-b', 'main', repoPath)
+  git('-C', repoPath, 'config', 'user.email', 't@t.test')
+  git('-C', repoPath, 'config', 'user.name', 't')
   writeFileSync(join(repoPath, 'README.md'), '# r\n')
-  execSync(`git -C "${repoPath}" add . && git -C "${repoPath}" commit -m init`, { stdio: 'ignore' })
+  git('-C', repoPath, 'add', '.')
+  git('-C', repoPath, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
   process.env.SCENARIO_STATE_DIR = stateDir
   process.env.AGENT_WORKFLOW_HOME = appHome
   return {
@@ -86,12 +171,6 @@ function freshCtx(): Ctx {
     appHome,
     repoPath,
     stateDir,
-    cleanup: () => {
-      rmSync(tmp, { recursive: true, force: true })
-      delete process.env.SCENARIO_PLAN_FILE
-      delete process.env.SCENARIO_STATE_DIR
-      delete process.env.AGENT_WORKFLOW_HOME
-    },
   }
 }
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -197,9 +276,6 @@ describe('RFC-122 dispatch — stop override suppresses the ask-back protocol', 
   beforeEach(() => {
     c = freshCtx()
   })
-  afterEach(() => {
-    c.cleanup()
-  })
 
   test('golden-lock: no override ⇒ first dispatch carries MANDATORY ASK-BACK', async () => {
     writePlan(c.appHome, { designer: [{ clarify: { questions: [Q] } }] })
@@ -272,9 +348,6 @@ describe('RFC-122 H1 — process retry reads the LATEST directive per attempt', 
   beforeEach(() => {
     c = freshCtx()
   })
-  afterEach(() => {
-    c.cleanup()
-  })
 
   test('a flip between a failed attempt and its process-retry is honored by the retry prompt', async () => {
     // attempt 0: no directive row → default 'continue' → mandatory ask-back; the
@@ -337,9 +410,6 @@ describe('RFC-122 — STOP flip on a same-session FOLLOW-UP renders the full out
   let c: Ctx
   beforeEach(() => {
     c = freshCtx()
-  })
-  afterEach(() => {
-    c.cleanup()
   })
 
   test('clarify-required follow-up + mid-loop stop flip → attempt 1 has STOP CLARIFYING + output protocol', async () => {
