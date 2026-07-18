@@ -45,6 +45,11 @@ const workgroupRegression = readFileSync(
   resolve(root, 'packages', 'backend', 'tests', 'rfc186-workgroup-e2e.test.ts'),
   'utf8',
 )
+const reviewIterateRegressions = [
+  'review-iterate-comments-in-prompt.test.ts',
+  'review-iterate-file-path-in-prompt.test.ts',
+  'review-iterate-drops-prior-clarify-history.test.ts',
+].map((file) => readFileSync(resolve(root, 'packages', 'backend', 'tests', file), 'utf8'))
 const hardenedBunCommand = 'bun test --isolate --randomize'
 const hardenedFrontendCommand = 'vitest run --sequence.shuffle'
 
@@ -161,6 +166,20 @@ describe('repository test entrypoint', () => {
     expect(clarifyCombinationRegression).toContain("scenarioController.abort('test-timeout')")
     expect(workgroupRegression).toContain("execFileSync('bun'")
     expect(workgroupRegression).toContain('timeout: FIXTURE_TIMEOUT_MS')
+  })
+
+  test('historical review-iterate regressions bound subprocesses and restore ambient home', () => {
+    for (const source of reviewIterateRegressions) {
+      expect(source).not.toContain('execSync(')
+      expect(source).toContain("execFileSync('git'")
+      expect(source).toContain('timeout: GIT_TIMEOUT_MS')
+      expect(source).toContain('env: nonInteractiveGitEnv()')
+      expect(source).toContain('defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS')
+      expect(source).toContain('defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET')
+      expect(source).toContain("abortAllActiveTasks('test-timeout')")
+      expect(source).toContain('const previousAppHome = process.env.AGENT_WORKFLOW_HOME')
+      expect(source).toContain('process.env.AGENT_WORKFLOW_HOME = previousAppHome')
+    }
   })
 
   test('every Actions job has an explicit bounded deadline', () => {
