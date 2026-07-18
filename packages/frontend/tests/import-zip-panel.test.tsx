@@ -425,7 +425,9 @@ describe('ImportZipPanel (RFC-196)', () => {
     expect(releaseBusy).toHaveBeenCalledTimes(1)
     expect(result.textContent).toContain(i18n.t('skills.zipResultSuccess'))
     expect(navigateSpy).not.toHaveBeenCalled()
-    expect(document.activeElement).toBe(screen.getByRole('heading', { name: /Import complete/ }))
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole('heading', { name: /Import complete/ })),
+    )
     expect(screen.getByRole('link', { name: /fresh/ }).getAttribute('href')).toBe('/skills/fresh')
 
     const commitCall = fetchMock.mock.calls.find((call) =>
