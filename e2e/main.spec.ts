@@ -7,13 +7,13 @@
 // the task detail page.
 
 import { test, expect, type Page } from '@playwright/test'
-import { execSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import { startDaemon, type DaemonHandle } from './harness'
+import { cloneBareGitRepo, initGitRepo } from './command'
 
 interface CreatedFixtures {
   workflowId: string
@@ -34,11 +34,7 @@ test.beforeAll(async () => {
   // git plumbing in scheduler.ts asserts the worktree exists with a HEAD.
   repoDir = mkdtempSync(join(tmpdir(), 'aw-e2e-repo-'))
   writeFileSync(join(repoDir, 'README.md'), '# e2e fixture repo\n', 'utf-8')
-  execSync('git init -b main -q', { cwd: repoDir })
-  execSync('git config user.email e2e@example.com', { cwd: repoDir })
-  execSync('git config user.name e2e', { cwd: repoDir })
-  execSync('git add .', { cwd: repoDir })
-  execSync('git commit -qm initial', { cwd: repoDir })
+  initGitRepo(repoDir)
 
   fixtures = await setupViaApi(daemon, repoDir)
 })
@@ -415,15 +411,10 @@ test('RFC-024: launch task from git URL clones into cache and renders redacted U
 }) => {
   // Seed a bare repo + agent + workflow for this run via REST.
   const remoteRoot = mkdtempSync(join(tmpdir(), 'aw-e2e-rfc024-'))
-  const working = join(remoteRoot, 'src')
-  execSync('git init -b main -q', { cwd: remoteRoot })
-  execSync(`mkdir -p "${working}"`, { stdio: 'ignore' })
   writeFileSync(join(remoteRoot, 'README.md'), '# rfc-024 fixture\n')
-  execSync('git config user.email e2e@example.com', { cwd: remoteRoot })
-  execSync('git config user.name e2e', { cwd: remoteRoot })
-  execSync('git add . && git commit -qm init', { cwd: remoteRoot })
+  initGitRepo(remoteRoot, { message: 'init' })
   const bare = join(remoteRoot, 'remote.git')
-  execSync(`git clone --bare "${remoteRoot}" "${bare}"`, { stdio: 'ignore' })
+  cloneBareGitRepo(remoteRoot, bare)
   const remoteUrl = `file://${bare}`
 
   const headers = {
@@ -563,14 +554,11 @@ test('RFC-033: batch import remote repos on /repos page', async ({ page }) => {
   const urls: string[] = []
   for (let i = 0; i < 2; i++) {
     const working = join(root, `src-${i}`)
-    execSync(`mkdir -p "${working}"`, { stdio: 'ignore' })
-    execSync('git init -b main -q', { cwd: working })
+    mkdirSync(working, { recursive: true })
     writeFileSync(join(working, 'README.md'), `# rfc-033 fixture ${i}\n`)
-    execSync('git config user.email e2e@example.com', { cwd: working })
-    execSync('git config user.name e2e', { cwd: working })
-    execSync('git add . && git commit -qm init', { cwd: working })
+    initGitRepo(working, { message: 'init' })
     const bare = join(root, `remote-${i}.git`)
-    execSync(`git clone --bare "${working}" "${bare}"`, { stdio: 'ignore' })
+    cloneBareGitRepo(working, bare)
     urls.push(`file://${bare}`)
   }
 

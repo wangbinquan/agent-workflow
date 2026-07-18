@@ -24,13 +24,13 @@
 //   → parent aggregates → task done.
 
 import { test, expect } from '@playwright/test'
-import { execSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { startDaemon, type DaemonHandle } from './harness'
+import { initGitRepo } from './command'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const stubClarify = resolve(here, 'fixtures', 'stub-opencode-clarify.sh')
@@ -157,11 +157,7 @@ test.describe('RFC-023 clarify e2e — agent-single happy path', () => {
 
     repoDir = mkdtempSync(join(tmpdir(), 'aw-e2e-clarify-repo-'))
     writeFileSync(join(repoDir, 'README.md'), '# clarify e2e fixture\n', 'utf-8')
-    execSync('git init -b main -q', { cwd: repoDir })
-    execSync('git config user.email e2e@example.com', { cwd: repoDir })
-    execSync('git config user.name e2e', { cwd: repoDir })
-    execSync('git add .', { cwd: repoDir })
-    execSync('git commit -qm initial', { cwd: repoDir })
+    initGitRepo(repoDir)
 
     const headers = {
       Authorization: `Bearer ${daemon.token}`,
@@ -475,11 +471,7 @@ test.describe
 
     repoDir = mkdtempSync(join(tmpdir(), 'aw-e2e-clarify-multi-repo-'))
     writeFileSync(join(repoDir, 'README.md'), '# clarify multi e2e\n', 'utf-8')
-    execSync('git init -b main -q', { cwd: repoDir })
-    execSync('git config user.email e2e@example.com', { cwd: repoDir })
-    execSync('git config user.name e2e', { cwd: repoDir })
-    execSync('git add .', { cwd: repoDir })
-    execSync('git commit -qm initial', { cwd: repoDir })
+    initGitRepo(repoDir)
 
     const headers = {
       Authorization: `Bearer ${daemon.token}`,
@@ -701,11 +693,7 @@ test.describe('RFC-026 clarify e2e — inline session resume', () => {
     })
     repoDir = mkdtempSync(join(tmpdir(), 'aw-e2e-rfc026-repo-'))
     writeFileSync(join(repoDir, 'README.md'), '# rfc026 e2e fixture\n', 'utf-8')
-    execSync('git init -b main -q', { cwd: repoDir })
-    execSync('git config user.email e2e@example.com', { cwd: repoDir })
-    execSync('git config user.name e2e', { cwd: repoDir })
-    execSync('git add .', { cwd: repoDir })
-    execSync('git commit -qm initial', { cwd: repoDir })
+    initGitRepo(repoDir)
 
     const headers = {
       Authorization: `Bearer ${daemon.token}`,

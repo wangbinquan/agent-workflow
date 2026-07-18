@@ -97,9 +97,9 @@ test('RFC-045: admin manually creates a candidate, edits it, then approves it', 
   // (6) Approve → row moves out of Approval Queue and into All Approved.
   await editedCard.getByRole('button', { name: 'Approve' }).click()
   // Approval queue should now be empty (or at least not show our card).
-  await expect(
-    page.locator('.memory-candidate-card', { hasText: 'e2e-manual-rule' }),
-  ).toHaveCount(0)
+  await expect(page.locator('.memory-candidate-card', { hasText: 'e2e-manual-rule' })).toHaveCount(
+    0,
+  )
 
   // Switch to All Approved; the new row carries the edited tag.
   await page.getByTestId('memory-section-all').click()

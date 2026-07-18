@@ -22,13 +22,13 @@
 // Direct DB injection (sqlite3 CLI) — matches lifecycle-diagnose.spec.ts.
 
 import { test, expect, type Page } from '@playwright/test'
-import { execFileSync, execSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import { startDaemon, type DaemonHandle } from './harness'
+import { initGitRepo, runSqlite } from './command'
 
 interface Fixtures {
   workflowId: string
@@ -47,11 +47,7 @@ test.beforeAll(async () => {
 
   repoDir = mkdtempSync(join(tmpdir(), 'aw-e2e-repair-repo-'))
   writeFileSync(join(repoDir, 'README.md'), '# e2e repair fixture\n', 'utf-8')
-  execSync('git init -b main -q', { cwd: repoDir })
-  execSync('git config user.email e2e@example.com', { cwd: repoDir })
-  execSync('git config user.name e2e', { cwd: repoDir })
-  execSync('git add .', { cwd: repoDir })
-  execSync('git commit -qm initial', { cwd: repoDir })
+  initGitRepo(repoDir)
 
   fixtures = await setupViaApi(daemon, repoDir)
   taskId = await launchTaskAndWaitForDone(daemon, fixtures)
@@ -177,7 +173,7 @@ function dbPath(): string {
 }
 
 function runSql(sql: string): void {
-  execFileSync('sqlite3', [dbPath(), sql])
+  runSqlite(dbPath(), sql)
 }
 
 /** Plant a real S3 violation: task running but a node_run that was once

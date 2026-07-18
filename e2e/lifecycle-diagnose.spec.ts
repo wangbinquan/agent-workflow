@@ -21,13 +21,13 @@
 // default on ubuntu, ships in macOS).
 
 import { test, expect, type Page } from '@playwright/test'
-import { execFileSync, execSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import { startDaemon, type DaemonHandle } from './harness'
+import { initGitRepo, runSqlite } from './command'
 
 interface Fixtures {
   workflowId: string
@@ -46,11 +46,7 @@ test.beforeAll(async () => {
 
   repoDir = mkdtempSync(join(tmpdir(), 'aw-e2e-lifecycle-repo-'))
   writeFileSync(join(repoDir, 'README.md'), '# e2e lifecycle fixture\n', 'utf-8')
-  execSync('git init -b main -q', { cwd: repoDir })
-  execSync('git config user.email e2e@example.com', { cwd: repoDir })
-  execSync('git config user.name e2e', { cwd: repoDir })
-  execSync('git add .', { cwd: repoDir })
-  execSync('git commit -qm initial', { cwd: repoDir })
+  initGitRepo(repoDir)
 
   fixtures = await setupViaApi(daemon, repoDir)
   // Launch a task so the detail page has something to render.
@@ -205,7 +201,7 @@ function plantR1Violation(taskId: string): {
       'agent_1', 'answer', 1, 0, 'dv/v1.md', '[]', 'approved', NULL, NULL,
       NULL, ${now}, ${now}, 'e2e-fixture');
   `
-  execFileSync('sqlite3', [dbPath(), sql])
+  runSqlite(dbPath(), sql)
   return { nodeRunId, docVersionId }
 }
 

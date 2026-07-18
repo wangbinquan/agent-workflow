@@ -27,13 +27,13 @@
 // set it 0 so the task completes promptly.
 
 import { test, expect, type Page } from '@playwright/test'
-import { execSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { startDaemon, type DaemonHandle } from './harness'
+import { initGitRepo } from './command'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const SLOW_STUB = resolve(here, 'fixtures', 'stub-opencode-slow.sh')
@@ -52,11 +52,7 @@ interface RepoFixture {
 function makeFixtureRepo(): RepoFixture {
   const repoDir = mkdtempSync(join(tmpdir(), 'aw-e2e-crash-'))
   writeFileSync(join(repoDir, 'README.md'), '# crash-recovery fixture repo\n', 'utf-8')
-  execSync('git init -b main -q', { cwd: repoDir })
-  execSync('git config user.email e2e@example.com', { cwd: repoDir })
-  execSync('git config user.name e2e', { cwd: repoDir })
-  execSync('git add .', { cwd: repoDir })
-  execSync('git commit -qm initial', { cwd: repoDir })
+  initGitRepo(repoDir)
   return {
     repoDir,
     cleanup: () => {

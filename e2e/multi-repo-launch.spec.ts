@@ -15,13 +15,13 @@
 // This spec only exercises the click path → API contract.
 
 import { test, expect, type Page } from '@playwright/test'
-import { execSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { startDaemon, type DaemonHandle } from './harness'
+import { initGitRepo } from './command'
 
 const here = dirname(fileURLToPath(import.meta.url))
 void here // (silence unused-when-fixture-paths-not-used lint)
@@ -56,11 +56,7 @@ interface RepoFixture {
 function makeFixtureRepo(label: string): RepoFixture {
   const repoDir = mkdtempSync(join(tmpdir(), `aw-e2e-rfc066-${label}-`))
   writeFileSync(join(repoDir, 'README.md'), `# ${label}\n`, 'utf-8')
-  execSync('git init -b main -q', { cwd: repoDir })
-  execSync('git config user.email e2e@example.com', { cwd: repoDir })
-  execSync('git config user.name e2e', { cwd: repoDir })
-  execSync('git add .', { cwd: repoDir })
-  execSync('git commit -qm initial', { cwd: repoDir })
+  initGitRepo(repoDir)
   return {
     repoDir,
     cleanup: () => {

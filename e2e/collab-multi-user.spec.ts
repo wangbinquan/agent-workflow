@@ -18,13 +18,13 @@
 // new attack surface.
 
 import { test, expect, type BrowserContext } from '@playwright/test'
-import { execSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import { startDaemon, type DaemonHandle } from './harness'
+import { initGitRepo } from './command'
 
 let daemon: DaemonHandle
 let repoDir: string
@@ -179,11 +179,7 @@ test.beforeAll(async () => {
   daemon = await startDaemon()
   repoDir = mkdtempSync(join(tmpdir(), 'aw-e2e-collab-'))
   writeFileSync(join(repoDir, 'README.md'), '# collab fixture\n', 'utf-8')
-  execSync('git init -b main -q', { cwd: repoDir })
-  execSync('git config user.email e2e@example.com', { cwd: repoDir })
-  execSync('git config user.name e2e', { cwd: repoDir })
-  execSync('git add .', { cwd: repoDir })
-  execSync('git commit -qm initial', { cwd: repoDir })
+  initGitRepo(repoDir)
 })
 
 test.afterAll(async () => {

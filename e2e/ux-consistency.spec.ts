@@ -936,9 +936,13 @@ test.describe('RFC-198 global UX browser matrix', () => {
     await page.keyboard.press('Enter')
     const confirmDialog = page.locator('.confirm-dialog')
     await expectWithinViewport(confirmDialog)
-    expect(await confirmDialog.evaluate((dialog) => dialog.contains(document.activeElement))).toBe(
-      true,
-    )
+    // <Dialog> intentionally assigns initial focus from a 0ms timer so its
+    // portaled panel has mounted. Visibility can win that race; wait on the
+    // actual focus invariant instead of sampling it once and depending on a
+    // Playwright retry to hide the timing window.
+    await expect
+      .poll(() => confirmDialog.evaluate((dialog) => dialog.contains(document.activeElement)))
+      .toBe(true)
     for (const button of await confirmDialog.getByRole('button').all()) {
       const box = await button.boundingBox()
       expect(box).not.toBeNull()

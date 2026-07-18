@@ -20,13 +20,13 @@
 //     (deferred to PR-B T14 / T15 follow-ups)
 
 import { test, expect } from '@playwright/test'
-import { execSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import { startDaemon, type DaemonHandle } from './harness'
+import { initGitRepo } from './command'
 
 interface CreatedFixtures {
   workflowId: string
@@ -44,11 +44,7 @@ test.beforeAll(async () => {
 
   repoDir = mkdtempSync(join(tmpdir(), 'aw-e2e-review-repo-'))
   writeFileSync(join(repoDir, 'README.md'), '# review e2e fixture\n', 'utf-8')
-  execSync('git init -b main -q', { cwd: repoDir })
-  execSync('git config user.email e2e@example.com', { cwd: repoDir })
-  execSync('git config user.name e2e', { cwd: repoDir })
-  execSync('git add .', { cwd: repoDir })
-  execSync('git commit -qm initial', { cwd: repoDir })
+  initGitRepo(repoDir)
 
   fixtures = await setupViaApi(daemon, repoDir)
 })

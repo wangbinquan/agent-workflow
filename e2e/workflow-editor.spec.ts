@@ -33,12 +33,12 @@
 // drive HTML5 drag in Playwright today.
 
 import { test, expect, type Page } from '@playwright/test'
-import { execSync } from 'node:child_process'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { startDaemon, type DaemonHandle } from './harness'
+import { initGitRepo } from './command'
 
 let daemon: DaemonHandle
 let repoDir: string
@@ -137,11 +137,7 @@ test.beforeAll(async () => {
   daemon = await startDaemon()
   repoDir = mkdtempSync(join(tmpdir(), 'aw-e2e-editor-'))
   writeFileSync(join(repoDir, 'README.md'), '# w2-3 fixture\n', 'utf-8')
-  execSync('git init -b main -q', { cwd: repoDir })
-  execSync('git config user.email e2e@example.com', { cwd: repoDir })
-  execSync('git config user.name e2e', { cwd: repoDir })
-  execSync('git add .', { cwd: repoDir })
-  execSync('git commit -qm initial', { cwd: repoDir })
+  initGitRepo(repoDir)
   await seedAgent('w2-3-agent-a')
   await seedAgent('w2-3-agent-b')
 })

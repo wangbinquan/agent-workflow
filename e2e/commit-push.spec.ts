@@ -10,13 +10,13 @@
 // real opencode-stub spawn + the scheduler trigger, wired together.
 
 import { test, expect } from '@playwright/test'
-import { execSync } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import { startDaemon, type DaemonHandle } from './harness'
+import { initBareGitRepo, initGitRepo, runGit } from './command'
 
 const STUB = resolve(import.meta.dirname, 'fixtures', 'stub-opencode-commit.sh')
 
@@ -24,25 +24,17 @@ let daemon: DaemonHandle
 let repo: string
 let remote: string
 
-function sh(cmd: string): void {
-  execSync(cmd, { stdio: 'ignore' })
-}
-
 test.beforeAll(async () => {
   // A writable bare remote seeded from a working repo. RFC-165: the launch
   // clones the bare remote via its file:// URL, so the framework's `git push`
   // from the task worktree lands straight on the bare remote.
   remote = mkdtempSync(join(tmpdir(), 'aw-e2e-cp-remote-'))
-  sh(`git init -q --bare -b main "${remote}"`)
+  initBareGitRepo(remote)
   repo = mkdtempSync(join(tmpdir(), 'aw-e2e-cp-repo-'))
-  sh(`git init -q -b main "${repo}"`)
-  sh(`git -C "${repo}" config user.email e2e@test.local`)
-  sh(`git -C "${repo}" config user.name e2e`)
-  sh(`printf 'seed\\n' > "${repo}/README.md"`)
-  sh(`git -C "${repo}" add .`)
-  sh(`git -C "${repo}" commit -q -m init`)
-  sh(`git -C "${repo}" remote add origin "${remote}"`)
-  sh(`git -C "${repo}" push -q -u origin main`)
+  writeFileSync(join(repo, 'README.md'), 'seed\n')
+  initGitRepo(repo, { email: 'e2e@test.local', message: 'init' })
+  runGit(['remote', 'add', 'origin', remote], repo)
+  runGit(['push', '-q', '-u', 'origin', 'main'], repo)
 
   daemon = await startDaemon({ stubOpencode: STUB })
 })
@@ -167,9 +159,7 @@ test.describe('RFC-075 — auto commit&push (real daemon + bare remote)', () => 
 
     // The bare remote received the task's isolation branch.
     const branch = commitRow!.commitPush!.repoBranch
-    const ls = execSync(`git -C "${remote}" rev-parse --verify "refs/heads/${branch}"`, {
-      encoding: 'utf8',
-    }).trim()
+    const ls = runGit(['rev-parse', '--verify', `refs/heads/${branch}`], remote).trim()
     expect(ls).toMatch(/^[a-f0-9]{40}$/)
   })
 })

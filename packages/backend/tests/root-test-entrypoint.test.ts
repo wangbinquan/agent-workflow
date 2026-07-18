@@ -6,11 +6,20 @@
 // green while two workspaces were never executed.
 
 import { describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 interface RootPackageJson {
   scripts?: Record<string, string>
+}
+
+function readE2eSpecSources(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = resolve(dir, entry.name)
+    if (entry.isDirectory()) return readE2eSpecSources(path)
+    if (!entry.isFile() || !entry.name.endsWith('.spec.ts')) return []
+    return [readFileSync(path, 'utf8')]
+  })
 }
 
 const root = resolve(import.meta.dir, '..', '..', '..')
@@ -78,6 +87,8 @@ const sourceGrepRegression = readFileSync(
   resolve(root, 'packages', 'backend', 'tests', 'rfc064-source-grep-guards.test.ts'),
   'utf8',
 )
+const e2eCommandHelper = readFileSync(resolve(root, 'e2e', 'command.ts'), 'utf8')
+const e2eSpecSources = readE2eSpecSources(resolve(root, 'e2e'))
 const hardenedBunCommand = 'bun test --isolate --randomize'
 const hardenedFrontendCommand = 'vitest run --sequence.shuffle'
 
@@ -255,6 +266,24 @@ describe('repository test entrypoint', () => {
     expect(sourceGrepRegression).toContain('env: nonInteractiveGitEnv()')
     expect(sourceGrepRegression).toContain('.status === 1) return []')
     expect(sourceGrepRegression).toContain('throw error')
+  })
+
+  test('every Playwright fixture command uses the shared shell-free bounded boundary', () => {
+    expect(e2eCommandHelper).toContain("execFileSync('git'")
+    expect(e2eCommandHelper).toContain("execFileSync('sqlite3'")
+    expect(e2eCommandHelper).toContain('timeout: COMMAND_TIMEOUT_MS')
+    expect(e2eCommandHelper).toContain("GIT_TERMINAL_PROMPT: '0'")
+    expect(e2eCommandHelper).toContain("GCM_INTERACTIVE: 'never'")
+    expect(e2eCommandHelper).toContain("'commit.gpgsign=false'")
+    expect(e2eCommandHelper).toContain("'--no-verify'")
+
+    for (const source of e2eSpecSources) {
+      expect(source).not.toContain('child_process')
+      expect(source).not.toMatch(/\bexec(?:File)?Sync\s*\(/)
+    }
+
+    expect(pkg.scripts?.['lint:repo-ui']).toContain('"e2e/**/*.ts"')
+    expect(pkg.scripts?.['format:check:repo-ui']).toContain('"e2e/**/*.{ts,md}"')
   })
 
   test('every Actions job has an explicit bounded deadline', () => {

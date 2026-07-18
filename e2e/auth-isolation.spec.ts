@@ -27,13 +27,13 @@
 //   7. revoked PAT no longer authenticates                    → 401 unauthorized
 
 import { test, expect } from '@playwright/test'
-import { execSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { startDaemon, type DaemonHandle } from './harness'
+import { initGitRepo } from './command'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const FAST_STUB = resolve(here, 'fixtures', 'stub-opencode.sh')
@@ -106,11 +106,7 @@ interface RepoFixture {
 function makeFixtureRepo(): RepoFixture {
   const repoDir = mkdtempSync(join(tmpdir(), 'aw-e2e-auth-'))
   writeFileSync(join(repoDir, 'README.md'), '# auth isolation fixture\n', 'utf-8')
-  execSync('git init -b main -q', { cwd: repoDir })
-  execSync('git config user.email e2e@example.com', { cwd: repoDir })
-  execSync('git config user.name e2e', { cwd: repoDir })
-  execSync('git add .', { cwd: repoDir })
-  execSync('git commit -qm initial', { cwd: repoDir })
+  initGitRepo(repoDir)
   return {
     repoDir,
     cleanup: () => {
