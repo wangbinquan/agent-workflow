@@ -40,10 +40,15 @@ describe('repository test entrypoint', () => {
 
   test('every backend gate isolates files and randomizes execution order', () => {
     expect(backendPkg.scripts?.test).toBe(hardenedBunCommand)
+    // CI shards the backend suite across runners: each shard is an isolated VM,
+    // which is why sharding is safe where `bun test --parallel` deadlocks on the
+    // single-instance daemon flock. Both legs keep --isolate --randomize; the
+    // ubuntu shards additionally instrument coverage. The local gate
+    // (backendPkg.scripts.test, asserted above) stays unsharded.
     expect(ciWorkflow).toContain(
-      `run: ${hardenedBunCommand} --coverage --coverage-reporter=text --coverage-reporter=lcov`,
+      `run: ${hardenedBunCommand} --shard=\${{ matrix.shard }}/4 --coverage --coverage-reporter=text --coverage-reporter=lcov`,
     )
-    expect(ciWorkflow).toContain(`run: ${hardenedBunCommand}\n`)
+    expect(ciWorkflow).toContain(`run: ${hardenedBunCommand} --shard=\${{ matrix.shard }}/4\n`)
   })
 
   test('shared and frontend gates randomize execution order', () => {
