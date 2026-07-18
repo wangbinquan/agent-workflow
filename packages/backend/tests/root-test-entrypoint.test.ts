@@ -33,6 +33,18 @@ const strandedClarifyRegression = readFileSync(
   resolve(root, 'packages', 'backend', 'tests', 'review-clarify-question-phase-stranded.test.ts'),
   'utf8',
 )
+const clarifyCombinationRegression = readFileSync(
+  resolve(root, 'packages', 'backend', 'tests', 'clarify-review-combination-scenarios.test.ts'),
+  'utf8',
+)
+const dynamicWorkflowRegression = readFileSync(
+  resolve(root, 'packages', 'backend', 'tests', 'rfc167-dw-e2e.test.ts'),
+  'utf8',
+)
+const workgroupRegression = readFileSync(
+  resolve(root, 'packages', 'backend', 'tests', 'rfc186-workgroup-e2e.test.ts'),
+  'utf8',
+)
 const hardenedBunCommand = 'bun test --isolate --randomize'
 const hardenedFrontendCommand = 'vitest run --sequence.shuffle'
 
@@ -131,6 +143,24 @@ describe('repository test entrypoint', () => {
     expect(strandedClarifyRegression).toContain('defaultNodeRetries: 0')
     expect(strandedClarifyRegression).toContain("abortAllActiveTasks('test-timeout')")
     expect(strandedClarifyRegression).toContain("controller.abort('test-timeout')")
+  })
+
+  test('real-subprocess scenario suites bound local Git, nodes, and whole flows', () => {
+    for (const source of [
+      clarifyCombinationRegression,
+      dynamicWorkflowRegression,
+      workgroupRegression,
+    ]) {
+      expect(source).not.toContain('execSync(')
+      expect(source).toContain("execFileSync('git'")
+      expect(source).toContain('timeout: GIT_TIMEOUT_MS')
+      expect(source).toContain('defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS')
+      expect(source).toContain('defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET')
+      expect(source).toContain("abortAllActiveTasks('test-timeout')")
+    }
+    expect(clarifyCombinationRegression).toContain("scenarioController.abort('test-timeout')")
+    expect(workgroupRegression).toContain("execFileSync('bun'")
+    expect(workgroupRegression).toContain('timeout: FIXTURE_TIMEOUT_MS')
   })
 
   test('every Actions job has an explicit bounded deadline', () => {

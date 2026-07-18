@@ -10,8 +10,8 @@
 // `[KNOWN-INCIDENT]` are expected to expose the live bug from task
 // 01KSHVXCH6RQ5F5P64MZ4FZVN6 on current code.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { execSync } from 'node:child_process'
+import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { execFileSync } from 'node:child_process'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -40,22 +40,62 @@ import { createWorkflow } from '../src/services/workflow'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { setNodeClarifyDirective } from '../src/services/taskClarifyDirective'
 import { addReviewComment, submitReviewDecision } from '../src/services/review'
-import { runTask } from '../src/services/scheduler'
-import { startTaskWithLocalRepo } from '../src/services/task'
+import { runTask as runTaskBase } from '../src/services/scheduler'
+import {
+  abortAllActiveTasks,
+  startTaskWithLocalRepo as startTaskWithLocalRepoBase,
+} from '../src/services/task'
+import { nonInteractiveGitEnv } from '../src/util/git'
 // RFC-097: runTask's entry CAS only claims pending tasks. Every scheduler
 // re-entry below (the post-decision / post-answer `await runTask(...)` calls)
 // is preceded by reenterScheduler — the test stand-in for resumeTask.
 import { reenterScheduler } from './reenter-scheduler'
-import type {
-  ClarifyAnswer,
-  ClarifyQuestion,
-  WorkflowDefinition,
-  WorkflowNode,
+import {
+  DEFAULT_PROTOCOL_RETRY_BUDGET,
+  type ClarifyAnswer,
+  type ClarifyQuestion,
+  type WorkflowDefinition,
+  type WorkflowNode,
 } from '@agent-workflow/shared'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SCENARIO_STUB = resolve(import.meta.dir, 'fixtures', 'scenario-opencode.ts')
 const actor = { userId: 'u1', role: 'owner' as const }
+const GIT_TIMEOUT_MS = 10_000
+const NODE_TIMEOUT_MS = 10_000
+const FLOW_TIMEOUT_MS = 20_000
+
+setDefaultTimeout(FLOW_TIMEOUT_MS + 10_000)
+
+let scenarioController = new AbortController()
+
+function git(...args: string[]): void {
+  execFileSync('git', args, {
+    stdio: 'ignore',
+    timeout: GIT_TIMEOUT_MS,
+    env: nonInteractiveGitEnv(),
+  })
+}
+
+function runTask(options: Parameters<typeof runTaskBase>[0]) {
+  return runTaskBase({
+    ...options,
+    defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
+    defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
+    signal: scenarioController.signal,
+  })
+}
+
+function startTaskWithLocalRepo(
+  input: Parameters<typeof startTaskWithLocalRepoBase>[0],
+  deps: Parameters<typeof startTaskWithLocalRepoBase>[1],
+) {
+  return startTaskWithLocalRepoBase(input, {
+    ...deps,
+    defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
+    defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
+  })
+}
 
 type Step =
   | { output: Record<string, string> }
@@ -103,11 +143,12 @@ function freshCtx(): Ctx {
   const planFile = join(tmp, 'plan.json')
   mkdirSync(appHome, { recursive: true })
   mkdirSync(stateDir, { recursive: true })
-  execSync(`git init -b main "${repoPath}"`, { stdio: 'ignore' })
-  execSync(`git -C "${repoPath}" config user.email t@t.test`, { stdio: 'ignore' })
-  execSync(`git -C "${repoPath}" config user.name t`, { stdio: 'ignore' })
+  git('init', '-b', 'main', repoPath)
+  git('-C', repoPath, 'config', 'user.email', 't@t.test')
+  git('-C', repoPath, 'config', 'user.name', 't')
   writeFileSync(join(repoPath, 'README.md'), '# r\n')
-  execSync(`git -C "${repoPath}" add . && git -C "${repoPath}" commit -m init`, { stdio: 'ignore' })
+  git('-C', repoPath, 'add', '.')
+  git('-C', repoPath, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
   const db = createInMemoryDb(MIGRATIONS)
   return {
     db,
@@ -182,10 +223,19 @@ async function makeDesigner(c: Ctx, name = 'designer', outs = ['design']): Promi
 
 describe('combination scenarios: agent × review × clarify (current code)', () => {
   let c: Ctx
+  let watchdog: ReturnType<typeof setTimeout>
   beforeEach(() => {
+    scenarioController = new AbortController()
+    watchdog = setTimeout(() => {
+      scenarioController.abort('test-timeout')
+      abortAllActiveTasks('test-timeout')
+    }, FLOW_TIMEOUT_MS)
     c = freshCtx()
   })
   afterEach(() => {
+    clearTimeout(watchdog)
+    scenarioController.abort('test-cleanup')
+    abortAllActiveTasks('test-cleanup')
     c.cleanup()
   })
 

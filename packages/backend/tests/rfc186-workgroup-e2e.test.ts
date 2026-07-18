@@ -10,19 +10,20 @@
 
 import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { __resetRecoveryCountersForTest } from '../src/services/recovery'
-import { execSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { DAEMON_RESTART_ERROR_SUMMARY } from '@agent-workflow/shared'
+import { DAEMON_RESTART_ERROR_SUMMARY, DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workgroupAssignments } from '../src/db/schema'
 import { buildActor } from '../src/auth/actor'
 import { createAgent } from '../src/services/agent'
 import { autoResumeInterruptedTasks } from '../src/services/autoResume'
-import { resumeTask } from '../src/services/task'
+import { abortAllActiveTasks, resumeTask } from '../src/services/task'
+import { nonInteractiveGitEnv } from '../src/util/git'
 import { createWorkgroup } from '../src/services/workgroups'
 import {
   buildWorkgroupHostSnapshot,
@@ -35,15 +36,39 @@ import {
 // recovery counters. bun shares the module registry across test files under CI's
 // coverage run, so leaving them bumped made another suite's exact-count assertion
 // (rfc108-recovery-events) fail depending on file order. Leave no residue.
-afterEach(() => __resetRecoveryCountersForTest())
+afterEach(() => {
+  abortAllActiveTasks('test-cleanup')
+  __resetRecoveryCountersForTest()
+})
 
 // These cases intentionally launch 3–4 real Bun subprocesses. On the macOS
 // full-suite runner each spawn can take about a second; the default 5s timeout
 // can abort a healthy run and leave its async engine overlapping the next case.
-setDefaultTimeout(20_000)
-
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SCENARIO_STUB = resolve(import.meta.dir, 'fixtures', 'scenario-opencode.ts')
+const GIT_TIMEOUT_MS = 10_000
+const FIXTURE_TIMEOUT_MS = 10_000
+const NODE_TIMEOUT_MS = 10_000
+const FLOW_TIMEOUT_MS = 20_000
+
+setDefaultTimeout(FLOW_TIMEOUT_MS + 10_000)
+
+function git(...args: string[]): void {
+  execFileSync('git', args, {
+    stdio: 'ignore',
+    timeout: GIT_TIMEOUT_MS,
+    env: nonInteractiveGitEnv(),
+  })
+}
+
+async function withActiveTaskDeadline<T>(operation: () => Promise<T>): Promise<T> {
+  const watchdog = setTimeout(() => abortAllActiveTasks('test-timeout'), FLOW_TIMEOUT_MS)
+  try {
+    return await operation()
+  } finally {
+    clearTimeout(watchdog)
+  }
+}
 
 interface Step {
   output?: Record<string, string>
@@ -147,12 +172,21 @@ const WORKER_RESULT: Step = {
 }
 
 async function launch(h: Harness, group: string) {
-  const task = await startWorkgroupTask(
-    h.db,
-    actor,
-    group,
-    { name: 'e2e', goal: '产出 alpha', scratch: true },
-    { db: h.db, appHome: h.appHome, opencodeCmd: opencodeCmd(), awaitScheduler: true },
+  const task = await withActiveTaskDeadline(() =>
+    startWorkgroupTask(
+      h.db,
+      actor,
+      group,
+      { name: 'e2e', goal: '产出 alpha', scratch: true },
+      {
+        db: h.db,
+        appHome: h.appHome,
+        opencodeCmd: opencodeCmd(),
+        awaitScheduler: true,
+        defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
+        defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
+      },
+    ),
   )
   return task
 }
@@ -225,9 +259,22 @@ describe('RFC-186 PR-2 — interrupted leader_worker task auto-resumes to done',
     const h = harness()
     const repo = mkdtempSync(join(tmpdir(), 'aw-wg-e2e-repo-'))
     try {
-      execSync(
-        'git init -b main -q && git -c user.email=t@t -c user.name=t commit -q --allow-empty -m init',
-        { cwd: repo },
+      git('-C', repo, 'init', '-b', 'main', '-q')
+      git(
+        '-C',
+        repo,
+        '-c',
+        'user.email=t@t',
+        '-c',
+        'user.name=t',
+        '-c',
+        'commit.gpgsign=false',
+        'commit',
+        '--no-verify',
+        '-q',
+        '--allow-empty',
+        '-m',
+        'init',
       )
       await seedAgent(h.db, 'wg-lead')
       await seedAgent(h.db, 'wg-writer')
@@ -285,17 +332,21 @@ describe('RFC-186 PR-2 — interrupted leader_worker task auto-resumes to done',
       })
 
       writePlan(h, { 'wg-lead': [DISPATCH, DONE], 'wg-writer': [WORKER_RESULT] })
-      const res = await autoResumeInterruptedTasks({
-        db: h.db,
-        breaker: { maxPerWindow: 3, windowMs: 3_600_000 },
-        resume: (id) =>
-          resumeTask(h.db, id, {
-            db: h.db,
-            appHome: h.appHome,
-            opencodeCmd: opencodeCmd(),
-            awaitScheduler: true,
-          }).then(() => undefined),
-      })
+      const res = await withActiveTaskDeadline(() =>
+        autoResumeInterruptedTasks({
+          db: h.db,
+          breaker: { maxPerWindow: 3, windowMs: 3_600_000 },
+          resume: (id) =>
+            resumeTask(h.db, id, {
+              db: h.db,
+              appHome: h.appHome,
+              opencodeCmd: opencodeCmd(),
+              awaitScheduler: true,
+              defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
+              defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
+            }).then(() => undefined),
+        }),
+      )
 
       // Before RFC-186 PR-2 this was `[]` (turn-engine workgroups filtered out) and
       // the task stayed `interrupted` forever.
@@ -317,7 +368,10 @@ describe('RFC-186 PR-2 — interrupted leader_worker task auto-resumes to done',
 // skip in CI can't hide a broken fixture path).
 describe('RFC-186 — scenario-opencode fixture is present', () => {
   test('scenario stub reports a version', () => {
-    const out = execSync(`bun run "${SCENARIO_STUB}" --version`, { encoding: 'utf8' })
+    const out = execFileSync('bun', ['run', SCENARIO_STUB, '--version'], {
+      encoding: 'utf8',
+      timeout: FIXTURE_TIMEOUT_MS,
+    })
     expect(out).toContain('scenario-opencode')
   })
 })

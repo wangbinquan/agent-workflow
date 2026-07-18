@@ -13,8 +13,8 @@
 //      runScope re-runs the swapped DAG to done — the recovery path Codex
 //      impl-gate P1-3 unlocked, exercised end to end.
 
-import { describe, expect, test } from 'bun:test'
-import { execSync } from 'node:child_process'
+import { afterEach, describe, expect, test } from 'bun:test'
+import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -22,6 +22,7 @@ import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import {
   DAEMON_RESTART_ERROR_SUMMARY,
+  DEFAULT_PROTOCOL_RETRY_BUDGET,
   initialDwState,
   parseDwState,
   WorkflowDefinitionSchema,
@@ -35,13 +36,40 @@ import { autoResumeInterruptedTasks } from '../src/services/autoResume'
 import { DW_GATE_CAUSE, DW_GENERATE_CAUSE } from '../src/services/dynamicWorkflowRunner'
 import { setNodeRunStatus } from '../src/services/lifecycle'
 import { DW_ORCHESTRATOR_NODE_ID } from '../src/services/orchestratorAgent'
-import { resumeDynamicWorkflowExecution, resumeTask } from '../src/services/task'
+import {
+  abortAllActiveTasks,
+  resumeDynamicWorkflowExecution,
+  resumeTask,
+} from '../src/services/task'
+import { nonInteractiveGitEnv } from '../src/util/git'
 import { createWorkgroup } from '../src/services/workgroups'
 import { startWorkgroupTask } from '../src/services/workgroupLaunch'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const OPENCODE_CMD = ['bun', 'run', MOCK_OPENCODE]
+const GIT_TIMEOUT_MS = 10_000
+const NODE_TIMEOUT_MS = 10_000
+const FLOW_TIMEOUT_MS = 20_000
+
+afterEach(() => abortAllActiveTasks('test-cleanup'))
+
+function git(...args: string[]): void {
+  execFileSync('git', args, {
+    stdio: 'ignore',
+    timeout: GIT_TIMEOUT_MS,
+    env: nonInteractiveGitEnv(),
+  })
+}
+
+async function withActiveTaskDeadline<T>(operation: () => Promise<T>): Promise<T> {
+  const watchdog = setTimeout(() => abortAllActiveTasks('test-timeout'), FLOW_TIMEOUT_MS)
+  try {
+    return await operation()
+  } finally {
+    clearTimeout(watchdog)
+  }
+}
 
 function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promise<T> {
   const prev: Record<string, string | undefined> = {}
@@ -103,18 +131,27 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
       })
 
       // ── phase 1: GENERATE — the orchestrator (mock) emits the workflow JSON.
-      const task = await withEnv(
-        {
-          MOCK_OPENCODE_OUTPUTS: JSON.stringify({ workflow: JSON.stringify(GENERATED) }),
-        },
-        () =>
-          startWorkgroupTask(
-            db,
-            actor,
-            'dyn-e2e',
-            { name: 'e2e', goal: '把回调竞态修掉', scratch: true },
-            { db, appHome, opencodeCmd: OPENCODE_CMD, awaitScheduler: true },
-          ),
+      const task = await withActiveTaskDeadline(() =>
+        withEnv(
+          {
+            MOCK_OPENCODE_OUTPUTS: JSON.stringify({ workflow: JSON.stringify(GENERATED) }),
+          },
+          () =>
+            startWorkgroupTask(
+              db,
+              actor,
+              'dyn-e2e',
+              { name: 'e2e', goal: '把回调竞态修掉', scratch: true },
+              {
+                db,
+                appHome,
+                opencodeCmd: OPENCODE_CMD,
+                awaitScheduler: true,
+                defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
+                defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
+              },
+            ),
+        ),
       )
 
       const afterGen = (await db.select().from(tasks).where(eq(tasks.id, task.id)))[0]
@@ -145,15 +182,24 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
       const nextDw: DwState = { ...dwRest, phase: 'executing' }
 
       // ── phase 3: EXECUTE — runScope runs the confirmed DAG with the mock.
-      await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ plan: '拆解完毕：三步走' }) }, () =>
-        resumeDynamicWorkflowExecution(
-          db,
-          task.id,
-          { db, appHome, opencodeCmd: OPENCODE_CMD, awaitScheduler: true },
-          {
-            workflowSnapshot: JSON.stringify(generatedDef),
-            workgroupConfigJson: JSON.stringify({ ...rawGen, dw: nextDw }),
-          },
+      await withActiveTaskDeadline(() =>
+        withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ plan: '拆解完毕：三步走' }) }, () =>
+          resumeDynamicWorkflowExecution(
+            db,
+            task.id,
+            {
+              db,
+              appHome,
+              opencodeCmd: OPENCODE_CMD,
+              awaitScheduler: true,
+              defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
+              defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
+            },
+            {
+              workflowSnapshot: JSON.stringify(generatedDef),
+              workgroupConfigJson: JSON.stringify({ ...rawGen, dw: nextDw }),
+            },
+          ),
         ),
       )
 
@@ -189,9 +235,22 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
     const db = createInMemoryDb(MIGRATIONS)
     try {
       await seedPlannerAgent(db)
-      execSync(
-        'git init -b main -q && git -c user.email=t@t -c user.name=t commit -q --allow-empty -m init',
-        { cwd: repo },
+      git('-C', repo, 'init', '-b', 'main', '-q')
+      git(
+        '-C',
+        repo,
+        '-c',
+        'user.email=t@t',
+        '-c',
+        'user.name=t',
+        '-c',
+        'commit.gpgsign=false',
+        'commit',
+        '--no-verify',
+        '-q',
+        '--allow-empty',
+        '-m',
+        'init',
       )
       const def = {
         $schema_version: 4,
@@ -246,9 +305,8 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
         }),
       })
 
-      const res = await withEnv(
-        { MOCK_OPENCODE_OUTPUTS: JSON.stringify({ plan: '恢复后完成' }) },
-        () =>
+      const res = await withActiveTaskDeadline(() =>
+        withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ plan: '恢复后完成' }) }, () =>
           autoResumeInterruptedTasks({
             db,
             breaker: { maxPerWindow: 3, windowMs: 3600_000 },
@@ -258,8 +316,11 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
                 appHome,
                 opencodeCmd: OPENCODE_CMD,
                 awaitScheduler: true,
+                defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
+                defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
               }).then(() => undefined),
           }),
+        ),
       )
       expect(res.resumed).toEqual([taskId])
       const final = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
