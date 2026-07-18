@@ -81,6 +81,10 @@ jobs:
         os: [ubuntu-latest, macos-latest]
         shard: [1, 2, 3, 4]
     runs-on: ${{ matrix.os }}
+    # A sync child-process stall once left macOS shard 4 silent for 17+ minutes.
+    # Healthy shards finish in a few minutes; fail closed well before Actions'
+    # six-hour default while retaining ample slow-runner headroom.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
 

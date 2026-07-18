@@ -16,8 +16,8 @@
 // Driven end-to-end through the REAL scheduler + REAL clarify-answer driver
 // (autoDispatchClarifyRound) — same harness as clarify-review-combination-scenarios.
 
-import { afterEach, beforeEach, expect, test } from 'bun:test'
-import { execSync } from 'node:child_process'
+import { afterEach, beforeEach, expect, setDefaultTimeout, test } from 'bun:test'
+import { execFileSync } from 'node:child_process'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -29,8 +29,9 @@ import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { runTask } from '../src/services/scheduler'
-import { startTaskWithLocalRepo } from '../src/services/task'
+import { abortAllActiveTasks, startTaskWithLocalRepo } from '../src/services/task'
 import { listTaskQuestions } from '../src/services/taskQuestions'
+import { nonInteractiveGitEnv } from '../src/util/git'
 import { reenterScheduler } from './reenter-scheduler'
 import type {
   ClarifyAnswer,
@@ -42,6 +43,19 @@ import type {
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SCENARIO_STUB = resolve(import.meta.dir, 'fixtures', 'scenario-opencode.ts')
 const actor = { userId: 'u1', role: 'owner' as const }
+const GIT_TIMEOUT_MS = 10_000
+const NODE_TIMEOUT_MS = 10_000
+const FLOW_TIMEOUT_MS = 15_000
+
+setDefaultTimeout(FLOW_TIMEOUT_MS * 2)
+
+function git(...args: string[]): void {
+  execFileSync('git', args, {
+    stdio: 'ignore',
+    timeout: GIT_TIMEOUT_MS,
+    env: nonInteractiveGitEnv(),
+  })
+}
 
 function clarifyBody(qid: string) {
   return {
@@ -79,11 +93,12 @@ beforeEach(() => {
   repoPath = join(tmp, 'repo')
   mkdirSync(appHome, { recursive: true })
   mkdirSync(join(tmp, 'state'), { recursive: true })
-  execSync(`git init -b main "${repoPath}"`, { stdio: 'ignore' })
-  execSync(`git -C "${repoPath}" config user.email t@t.test`, { stdio: 'ignore' })
-  execSync(`git -C "${repoPath}" config user.name t`, { stdio: 'ignore' })
+  git('init', '-b', 'main', repoPath)
+  git('-C', repoPath, 'config', 'user.email', 't@t.test')
+  git('-C', repoPath, 'config', 'user.name', 't')
   writeFileSync(join(repoPath, 'README.md'), '# r\n')
-  execSync(`git -C "${repoPath}" add . && git -C "${repoPath}" commit -m init`, { stdio: 'ignore' })
+  git('-C', repoPath, 'add', '.')
+  git('-C', repoPath, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
   db = createInMemoryDb(MIGRATIONS)
   process.env.SCENARIO_PLAN_FILE = join(tmp, 'plan.json')
   process.env.SCENARIO_STATE_DIR = join(tmp, 'state')
@@ -102,6 +117,33 @@ function opencodeCmd(): string[] {
 }
 function writePlan(plan: unknown): void {
   writeFileSync(join(tmp, 'plan.json'), JSON.stringify(plan))
+}
+
+async function withActiveTaskDeadline<T>(operation: () => Promise<T>): Promise<T> {
+  const watchdog = setTimeout(() => abortAllActiveTasks('test-timeout'), FLOW_TIMEOUT_MS)
+  try {
+    return await operation()
+  } finally {
+    clearTimeout(watchdog)
+  }
+}
+
+async function runTaskWithDeadline(taskId: string): Promise<void> {
+  const controller = new AbortController()
+  const watchdog = setTimeout(() => controller.abort('test-timeout'), FLOW_TIMEOUT_MS)
+  try {
+    await runTask({
+      taskId,
+      db,
+      appHome,
+      opencodeCmd: opencodeCmd(),
+      defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
+      defaultNodeRetries: 0,
+      signal: controller.signal,
+    })
+  } finally {
+    clearTimeout(watchdog)
+  }
 }
 async function topLevel(nodeId: string, taskId: string) {
   const rows = await db
@@ -202,15 +244,24 @@ test('multi-round clarify: the round-0 question un-strands to 已处理待确认
     ],
   })
   const wf = await setupClarifyReviewWorkflow('strand')
-  const task = await startTaskWithLocalRepo(
-    {
-      workflowId: wf.id,
-      name: 'strand',
-      repoPath,
-      baseBranch: 'main',
-      inputs: { topic: 'x' },
-    },
-    { db, appHome, opencodeCmd: opencodeCmd(), awaitScheduler: true },
+  const task = await withActiveTaskDeadline(() =>
+    startTaskWithLocalRepo(
+      {
+        workflowId: wf.id,
+        name: 'strand',
+        repoPath,
+        baseBranch: 'main',
+        inputs: { topic: 'x' },
+      },
+      {
+        db,
+        appHome,
+        opencodeCmd: opencodeCmd(),
+        awaitScheduler: true,
+        defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
+        defaultNodeRetries: 0,
+      },
+    ),
   )
 
   // Round 0: agent asked qa.
@@ -226,7 +277,7 @@ test('multi-round clarify: the round-0 question un-strands to 已处理待确认
     actor,
   })
   await reenterScheduler(db, task.id)
-  await runTask({ taskId: task.id, db, appHome, opencodeCmd: opencodeCmd() })
+  await runTaskWithDeadline(task.id)
 
   // Round 1 is now open (agent asked qb) — confirm the qa handler is done-no-output.
   expect(await taskStatus(task.id)).toBe('awaiting_human')
@@ -250,7 +301,7 @@ test('multi-round clarify: the round-0 question un-strands to 已处理待确认
     actor,
   })
   await reenterScheduler(db, task.id)
-  await runTask({ taskId: task.id, db, appHome, opencodeCmd: opencodeCmd() })
+  await runTaskWithDeadline(task.id)
 
   const rev = await awaitingReviewRun(task.id, 'rev')
   expect(rev).toBeDefined()

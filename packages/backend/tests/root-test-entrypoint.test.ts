@@ -25,6 +25,10 @@ const frontendPkg = JSON.parse(
   readFileSync(resolve(root, 'packages', 'frontend', 'package.json'), 'utf8'),
 ) as RootPackageJson
 const ciWorkflow = readFileSync(resolve(root, '.github', 'workflows', 'ci.yml'), 'utf8')
+const strandedClarifyRegression = readFileSync(
+  resolve(root, 'packages', 'backend', 'tests', 'review-clarify-question-phase-stranded.test.ts'),
+  'utf8',
+)
 const hardenedBunCommand = 'bun test --isolate --randomize'
 const hardenedFrontendCommand = 'vitest run --sequence.shuffle'
 
@@ -103,6 +107,22 @@ describe('repository test entrypoint', () => {
     expect(e2eJob).toContain('os: [ubuntu-latest, macos-latest]')
     expect(e2eJob).toContain('shard: [1, 2, 3, 4]')
     expect(occurrenceCount(e2eJob, `--shard=\${{ matrix.shard }}/4`)).toBe(1)
+  })
+
+  test('backend shards and the known sync-child regression have hard deadlines', () => {
+    const backendJob = workflowJob('test-backend')
+    expect(backendJob).toContain('timeout-minutes: 15')
+
+    // A macOS shard previously went silent immediately after entering this
+    // file. Keep both possible blocking layers bounded: synchronous fixture Git
+    // commands and scheduler-owned scenario subprocesses.
+    expect(strandedClarifyRegression).not.toContain('execSync(')
+    expect(strandedClarifyRegression).toContain("execFileSync('git'")
+    expect(strandedClarifyRegression).toContain('timeout: GIT_TIMEOUT_MS')
+    expect(strandedClarifyRegression).toContain('defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS')
+    expect(strandedClarifyRegression).toContain('defaultNodeRetries: 0')
+    expect(strandedClarifyRegression).toContain("abortAllActiveTasks('test-timeout')")
+    expect(strandedClarifyRegression).toContain("controller.abort('test-timeout')")
   })
 
   test('low-level Bun discovery and shared process-state setup remain backend-only', () => {
