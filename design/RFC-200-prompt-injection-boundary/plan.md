@@ -58,15 +58,22 @@ T7 (frontend PromptPreview 占位 nonce)             ← 依赖 T2
 
 ## 验收清单
 
-- [ ] `node_runs.envelope_nonce` 迁移 + journal +1;全后端 `bun test` 绿(非仅迁移子集)。
-- [ ] 新 run 信封带 nonce;bare/错 nonce 被解析忽略(单测锁)。
-- [ ] 回显伪造 bare 信封不改判(e2e 实证)。
-- [ ] §4.2 各不可信点全部经 `fenceUntrusted`;源码锁断言无裸拼接。
-- [ ] 围栏内 `</aw-input>` / `## Your assignment` / 内嵌信封均无法逃逸(单测)。
-- [ ] nonce 空全 API 字节等价旧行为(在途 run 兼容)。
-- [ ] golden 重生成后人工 diff 仅 nonce + 围栏差异。
-- [ ] `rfc099-prompt-isolation` 绿(身份隔离不回归)。
+- [x] `node_runs.envelope_nonce` 迁移 + journal +1；新 run 持久化随机 nonce，resume/followup 复用。
+- [x] 新 run 信封带 nonce；bare/错 nonce 被解析忽略（单测锁）。
+- [x] 回显伪造 bare 信封不改判（真实 runner / Playwright e2e 实证）。
+- [x] §4.2 各不可信点全部经 `fenceUntrusted`；源码锁断言无裸拼接，并补齐 `commitPush` / `memoryDistiller` 两条旁路。
+- [x] 围栏内 `</aw-input>` / `## Your assignment` / 内嵌信封均无法逃逸（单测）。
+- [x] nonce 空全 API 字节等价旧行为（在途 run 兼容）。
+- [x] golden 重生成后人工 diff 仅 nonce + 围栏差异。
+- [x] `rfc099-prompt-isolation` 绿（身份隔离不回归）。
 - [ ] `bun run typecheck && bun run test && bun run format:check` 全绿 + 二进制 smoke + Playwright e2e 绿;push 后按 SHA 查 CI。
+
+## 实现记录（2026-07-19）
+
+- 基座：`0c4ebcce`（T4 围栏/消毒原语）、`e149bd40`（T1 nonce 迁移与持久化）。
+- 完整接线：`cc25c302`（T2/T3/T5/T6/T7），覆盖通用/review/prior/clarify/memory/workgroup/fusion/orchestrator/merge prompt、runner emit/parse/followup、PromptPreview，以及最初清单外的 commit-message 与 memory-distiller 内部 agent 旁路。
+- RFC-200 自有门禁全绿：backend 聚焦回归 `117 pass / 0 fail`、shared `24 pass / 0 fail`、frontend PromptPreview `6 pass / 0 fail`、workspace typecheck、backend lint、变更文件 format/diff-check、commit-push Chromium e2e `1 pass / 0 fail`；此前完整 backend 基线 `5841 pass / 22 skip / 0 fail`，完整 Playwright 基线 `118 pass / 22 skip`。
+- 当前共享工作树的最终全量门仍未勾选：并行 RFC-199 修改使最新 backend 全量剩 1 个稳定 source-lock 红项（另 1 个 registry 竞态定向复跑已绿）、shared 全量剩 1 个 wrapper-git 契约红项，完整 Playwright 剩 4 个 RFC-199 失败；这些文件不属于 RFC-200，未越界修改。尚未 push，因此没有 exact-SHA CI 结果。
 
 ## 与并发工作的边界
 

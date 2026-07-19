@@ -1,6 +1,6 @@
 # RFC-200 — Prompt 注入边界（输入围栏 + 框架锚点消毒 + 信封 per-run nonce）
 
-状态：In Progress（完整档；用户 2026-07-16 批准实现，按 PR-A→D 落地。PR-A/T4 围栏原语已实现）
+状态：Done（2026-07-19 本地实现完成；基座提交 `0c4ebcce` / `e149bd40`，runner 与旁路接线提交 `cc25c302`；尚未 push / 未做 exact-SHA CI）
 作者：本 session（源于 2026-07-16 全仓「给 agent 注入提示词」注入/语义审计）
 
 ## 背景
