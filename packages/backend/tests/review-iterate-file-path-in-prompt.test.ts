@@ -100,6 +100,8 @@ if [[ "$1" == "--version" ]]; then
   exit 0
 fi
 if [[ "$1" == "run" ]]; then
+  NONCE=$(printf '%s' "$2" | sed -n 's/.*nonce="\\([^"]*\\)".*/\\1/p' | head -n 1)
+  OPEN='<workflow-output>'; if [[ -n "$NONCE" ]]; then OPEN='<workflow-output nonce="'"$NONCE"'">'; fi
   COUNTER_FILE='${counterFile}'
   N=$(cat "$COUNTER_FILE")
   N=$((N + 1))
@@ -111,7 +113,7 @@ if [[ "$1" == "run" ]]; then
   fi
   mkdir -p "$(dirname "${SOURCE_PATH}")"
   printf '%b' "$BODY" > '${SOURCE_PATH}'
-  ENV='<workflow-output><port name="design">${SOURCE_PATH}</port></workflow-output>'
+  ENV="$OPEN"'<port name="design">${SOURCE_PATH}</port></workflow-output>'
   TS=$(date +%s%3N)
   printf '{"type":"text","ts":%s,"text":"%s"}\\n' "$TS" "$ENV"
   exit 0

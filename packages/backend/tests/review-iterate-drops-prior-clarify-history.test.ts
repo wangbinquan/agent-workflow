@@ -111,19 +111,25 @@ if [[ "$1" == "--version" ]]; then
   exit 0
 fi
 if [[ "$1" == "run" ]]; then
+  NONCE=$(printf '%s' "$2" | sed -n 's/.*nonce="\\([^"]*\\)".*/\\1/p' | head -n 1)
+  OUTPUT_OPEN='<workflow-output>'; CLARIFY_OPEN='<workflow-clarify>'
+  if [[ -n "$NONCE" ]]; then
+    OUTPUT_OPEN='<workflow-output nonce="'"$NONCE"'">'
+    CLARIFY_OPEN='<workflow-clarify nonce="'"$NONCE"'">'
+  fi
   COUNTER_FILE='${counterFile}'
   N=$(cat "$COUNTER_FILE")
   N=$((N + 1))
   echo $N > "$COUNTER_FILE"
   if [[ $N -eq 1 ]]; then
     # RFC-100: clarify channel ⇒ mandatory ask-back on the designer's first reply.
-    ENV='<workflow-clarify>{"questions":[{"id":"q-db","title":"Which database?","kind":"single","options":["Postgres","MySQL"]}]}</workflow-clarify>'
+    ENV="$CLARIFY_OPEN"'{"questions":[{"id":"q-db","title":"Which database?","kind":"single","options":["Postgres","MySQL"]}]}</workflow-clarify>'
   elif [[ $N -eq 2 ]]; then
     BODY='${v1}'
-    ENV='<workflow-output><port name="design">'"$BODY"'</port></workflow-output>'
+    ENV="$OUTPUT_OPEN"'<port name="design">'"$BODY"'</port></workflow-output>'
   else
     BODY='${v2}'
-    ENV='<workflow-output><port name="design">'"$BODY"'</port></workflow-output>'
+    ENV="$OUTPUT_OPEN"'<port name="design">'"$BODY"'</port></workflow-output>'
   fi
   TS=$(date +%s%3N)
   printf '{"type":"text","ts":%s,"text":"%s"}\\n' "$TS" "$ENV"

@@ -29,6 +29,10 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const EMPTY_EVENTS = { clarify: [], review: [], feedback: [] }
 
+function emptyDistillerStdout(input: DistillerSpawnInput): string {
+  return `<workflow-output nonce="${input.envelopeNonce}"><port name="candidates">{"candidates":[]}</port></workflow-output>`
+}
+
 describe('RFC-050 buildDistillerUserPrompt — output language directive', () => {
   test('D1: outputLang en-US (default) appends English directive at the end', () => {
     const promptDefault = buildDistillerUserPrompt({
@@ -76,8 +80,7 @@ describe('RFC-050 buildDistillerUserPrompt — output language directive', () =>
       captured.push(input)
       return {
         exitCode: 0,
-        stdout:
-          '<workflow-output><port name="candidates">{"candidates":[]}</port></workflow-output>',
+        stdout: emptyDistillerStdout(input),
         stderr: '',
       }
     }

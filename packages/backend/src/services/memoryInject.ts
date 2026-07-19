@@ -22,6 +22,7 @@
 
 import { and, desc, eq, inArray, isNull } from 'drizzle-orm'
 import type { Agent, InjectedMemorySnapshot } from '@agent-workflow/shared'
+import { fenceUntrusted, sanitizeInlineField } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { cachedRepos, memories, nodeRuns, tasks } from '@/db/schema'
 
@@ -219,8 +220,9 @@ function parseTagsField(raw: string | null | undefined): string[] {
 export function formatMemoryBlock(
   set: InjectableMemorySet,
   budget: ScopeBudget = DEFAULT_BUDGET,
+  envelopeNonce = '',
 ): string | null {
-  return formatMemoryBlockWithSnapshot(set, budget).block
+  return formatMemoryBlockWithSnapshot(set, budget, envelopeNonce).block
 }
 
 /**
@@ -234,6 +236,7 @@ export function formatMemoryBlock(
 export function formatMemoryBlockWithSnapshot(
   set: InjectableMemorySet,
   budget: ScopeBudget = DEFAULT_BUDGET,
+  envelopeNonce = '',
 ): { block: string | null; snapshot: InjectedMemorySnapshot[] | null } {
   const agent = clipByBudget(set.byScope.agent, budget.agent)
   const workflow = clipByBudget(set.byScope.workflow, budget.workflow)
@@ -249,7 +252,12 @@ export function formatMemoryBlockWithSnapshot(
     '--- BEGIN INJECTED MEMORY ---',
   ]
   for (const m of all) {
-    lines.push(`- [${m.scopeType}] ${m.title} — ${m.bodyMd}`)
+    if (envelopeNonce.length === 0) {
+      lines.push(`- [${m.scopeType}] ${m.title} — ${m.bodyMd}`)
+      continue
+    }
+    lines.push(`- [${m.scopeType}] ${sanitizeInlineField(m.title)}`)
+    lines.push(fenceUntrusted(`memory:${m.id}`, m.bodyMd, envelopeNonce))
   }
   lines.push('--- END INJECTED MEMORY ---')
   return { block: lines.join('\n'), snapshot: all.map(toSnapshot) }
@@ -337,6 +345,8 @@ export async function injectMemoryForRun(deps: {
   primaryAgent: Agent
   dependents: readonly Agent[]
   budget?: ScopeBudget
+  /** RFC-200 per-run nonce; absent preserves pre-upgrade rendering. */
+  envelopeNonce?: string
 }): Promise<InjectMemoryResult> {
   const taskRow = (await deps.db.select().from(tasks).where(eq(tasks.id, deps.taskId)).limit(1))[0]
   // If the task vanished mid-run there is genuinely no scope context to
@@ -366,7 +376,7 @@ export async function injectMemoryForRun(deps: {
     workflowId,
     repoId,
   })
-  return formatMemoryBlockWithSnapshot(set, deps.budget ?? DEFAULT_BUDGET)
+  return formatMemoryBlockWithSnapshot(set, deps.budget ?? DEFAULT_BUDGET, deps.envelopeNonce ?? '')
 }
 
 /**

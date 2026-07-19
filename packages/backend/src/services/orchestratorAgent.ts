@@ -22,6 +22,8 @@ import type {
 } from '@agent-workflow/shared'
 import {
   DW_VALIDATION_CODES,
+  envelopeOpenTag,
+  fenceUntrusted,
   perCardInputDescriptionBudget,
   renderRosterCapabilityCards,
 } from '@agent-workflow/shared'
@@ -104,7 +106,9 @@ export function buildOrchestratorAgent(): Agent {
       '  port. Source nodes (no upstream) bake the relevant goal detail into their',
       '  promptTemplate directly.',
       '',
-      'Reply with EXACTLY one <workflow-output> envelope containing a single',
+      'Reply with EXACTLY one workflow-output envelope, using the exact opening',
+      'tag (including its required nonce) supplied by the user prompt protocol,',
+      'and containing a single',
       `<port name="${ORCHESTRATOR_WORKFLOW_PORT}"> whose text is the workflow JSON:`,
       '{ "nodes": [ { "id", "agentName", "promptTemplate", "inputs": [ { "port",',
       '"from": { "nodeId", "portName" } } ] } ], "edges": [ { "source": { "nodeId",',
@@ -131,22 +135,34 @@ export function buildOrchestratorPrompt(opts: {
   pool: readonly CapabilitySource[]
   /** On a rejected regeneration round, the human's feedback (high priority). */
   rejectionComment?: string | undefined
+  /** Per-run envelope nonce; empty keeps legacy prompt bytes. */
+  envelopeNonce?: string | undefined
 }): string {
+  const nonce = opts.envelopeNonce ?? ''
   const lines: string[] = ['## Goal', '']
   if (opts.charter.trim().length > 0) {
-    lines.push('Group charter (fixed background):', opts.charter.trim(), '')
+    lines.push(
+      'Group charter (fixed background):',
+      fenceUntrusted('dynamic-workflow-charter', opts.charter.trim(), nonce),
+      '',
+    )
   }
-  lines.push('This run’s objective:', opts.goal.trim(), '')
+  lines.push(
+    'This run’s objective:',
+    fenceUntrusted('dynamic-workflow-goal', opts.goal.trim(), nonce),
+    '',
+  )
+  const poolCards = renderRosterCapabilityCards(opts.pool, {
+    inputDescriptionBudget: perCardInputDescriptionBudget(
+      ORCHESTRATOR_INPUT_DESCRIPTION_TOTAL_BUDGET,
+      opts.pool.length,
+      ORCHESTRATOR_CARD_INPUT_DESCRIPTION_MAX,
+    ),
+  })
   lines.push(
     '## Agent pool',
     '',
-    renderRosterCapabilityCards(opts.pool, {
-      inputDescriptionBudget: perCardInputDescriptionBudget(
-        ORCHESTRATOR_INPUT_DESCRIPTION_TOTAL_BUDGET,
-        opts.pool.length,
-        ORCHESTRATOR_CARD_INPUT_DESCRIPTION_MAX,
-      ),
-    }),
+    fenceUntrusted('dynamic-workflow-agent-pool', poolCards, nonce),
     '',
   )
   if (opts.rejectionComment !== undefined && opts.rejectionComment.trim().length > 0) {
@@ -154,12 +170,12 @@ export function buildOrchestratorPrompt(opts: {
       '## Previous attempt was REJECTED',
       '',
       'A human rejected your previous workflow with this feedback — address it:',
-      opts.rejectionComment.trim(),
+      fenceUntrusted('dynamic-workflow-rejection', opts.rejectionComment.trim(), nonce),
       '',
     )
   }
   lines.push(
-    'Design the workflow now. Reply with exactly one <workflow-output> envelope',
+    `Design the workflow now. Reply with exactly one ${envelopeOpenTag(nonce)} envelope`,
     `containing a single <port name="${ORCHESTRATOR_WORKFLOW_PORT}"> with the workflow JSON.`,
   )
   return lines.join('\n')

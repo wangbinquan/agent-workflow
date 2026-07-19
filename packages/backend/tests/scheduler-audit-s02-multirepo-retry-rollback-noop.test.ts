@@ -57,6 +57,10 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MINI_MOCK_SOURCE = `
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 const env = process.env
+const prompt = process.argv.slice(2)[1] ?? ''
+const nonce = /\\bnonce="([^"]+)"/.exec(prompt)?.[1]
+const outputOpen =
+  nonce === undefined ? '<workflow-output>' : '<workflow-output nonce="' + nonce + '">'
 const counterFile = env.S2_COUNTER_FILE
 if (!counterFile) {
   process.stderr.write('S2_COUNTER_FILE unset\\n')
@@ -77,7 +81,7 @@ if (env.S2_MANIFEST_FILE) {
     JSON.stringify(strayPaths.map((p) => ({ path: p, existsAtRetryStart: existsSync(p) }))),
   )
 }
-const envelope = '<workflow-output>\\n  <port name="summary">ok</port>\\n</workflow-output>'
+const envelope = outputOpen + '\\n  <port name="summary">ok</port>\\n</workflow-output>'
 process.stdout.write(
   JSON.stringify({ type: 'text', timestamp: Date.now(), part: { type: 'text', text: envelope } }) +
     '\\n',

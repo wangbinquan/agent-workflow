@@ -17,10 +17,13 @@ import type {
   WorkgroupRuntimeMember,
 } from '@agent-workflow/shared'
 import {
-  CLARIFY_FORMAT_EXAMPLE,
   CLARIFY_STRUCTURAL_RULES,
+  clarifyFormatExample,
+  envelopeOpenTag,
+  fenceUntrusted,
   resolveClarifyEnabled,
   resolveWorkgroupSwitches,
+  sanitizeInlineField,
   WG_MAX_ASSIGNMENTS_PER_TURN,
   WG_PORT_ASSIGNMENTS,
   WG_PORT_DECISION,
@@ -185,10 +188,16 @@ export function selectMemberSlices(
 // Charter block — group identity + standing charter (instructions). Injected to
 // EVERY member every turn. RFC-176: the objective (goal) is NO LONGER here — it
 // is a mode-routed directive (renderGoalBlock), not shared context.
-export function renderCharterBlock(config: WorkgroupRuntimeConfig): string {
-  const lines = ['## Workgroup', '', `Group: ${config.workgroupName}`]
+export function renderCharterBlock(config: WorkgroupRuntimeConfig, envelopeNonce = ''): string {
+  const groupName =
+    envelopeNonce.length > 0 ? sanitizeInlineField(config.workgroupName) : config.workgroupName
+  const lines = ['## Workgroup', '', `Group: ${groupName}`]
   if (config.instructions.trim().length > 0) {
-    lines.push('', 'Group charter:', config.instructions.trim())
+    lines.push(
+      '',
+      'Group charter:',
+      fenceUntrusted('workgroup-charter', config.instructions.trim(), envelopeNonce),
+    )
   }
   return lines.join('\n')
 }
@@ -197,19 +206,29 @@ export function renderCharterBlock(config: WorkgroupRuntimeConfig): string {
 // own the decomposition: the leader (leader_worker) or every member
 // (free_collab). A leader_worker worker never sees it — it acts on the leader's
 // assignment brief ('## Your assignment', composeMemberPrompt).
-export function renderGoalBlock(config: WorkgroupRuntimeConfig): string {
-  return ['## Group goal', '', config.goal.trim() || '(not stated)'].join('\n')
+export function renderGoalBlock(config: WorkgroupRuntimeConfig, envelopeNonce = ''): string {
+  const goal = config.goal.trim() || '(not stated)'
+  return ['## Group goal', '', fenceUntrusted('workgroup-goal', goal, envelopeNonce)].join('\n')
 }
 
 export function renderRosterBlock(
   config: WorkgroupRuntimeConfig,
   opts: { excludeMemberId?: string; agentCards?: ReadonlyMap<string, string> } = {},
+  envelopeNonce = '',
 ): string {
   const rows = config.members
     .filter((m) => m.id !== opts.excludeMemberId)
     .map((m) => {
       const role = m.roleDesc.trim().length > 0 ? ` — ${m.roleDesc.trim()}` : ''
       const head = `- @${m.displayName} (${m.memberType})${role}`
+      const displayName =
+        envelopeNonce.length > 0 ? sanitizeInlineField(m.displayName) : m.displayName
+      const safeRole =
+        envelopeNonce.length > 0 ? sanitizeInlineField(m.roleDesc.trim()) : m.roleDesc.trim()
+      const renderedHead =
+        envelopeNonce.length > 0
+          ? `- @${displayName} (${m.memberType})${safeRole.length > 0 ? ` — ${safeRole}` : ''}`
+          : head
       // RFC-166: agent members carry a capability card (real declared
       // inputs/outputs/role/prompt summary) so the leader coordinates against
       // actual capability, not just the group roleDesc. human members NEVER
@@ -217,12 +236,12 @@ export function renderRosterBlock(
       // prompt-isolation invariant); the card is keyed by memberId and only
       // populated for agent members by buildRosterAgentCards.
       const card = m.memberType === 'agent' ? opts.agentCards?.get(m.id) : undefined
-      if (card === undefined || card.trim().length === 0) return head
-      const indented = card
+      if (card === undefined || card.trim().length === 0) return renderedHead
+      const indented = fenceUntrusted(`capability-${displayName}`, card, envelopeNonce)
         .split('\n')
         .map((line) => (line.length > 0 ? `  ${line}` : line))
         .join('\n')
-      return `${head}\n${indented}`
+      return `${renderedHead}\n${indented}`
     })
   return ['## Workgroup roster', '', ...rows].join('\n')
 }
@@ -236,15 +255,25 @@ export interface LedgerEntry {
 export function renderLeaderLedger(
   config: WorkgroupRuntimeConfig,
   entries: readonly LedgerEntry[],
+  envelopeNonce = '',
 ): string {
   if (entries.length === 0) {
     return ['## Assignment ledger', '', '(no assignments yet)'].join('\n')
   }
   const rows = entries.map((e) => {
     const a = e.assignment
-    const who = memberDisplayName(config, a.assigneeMemberId)
-    const base = `- [${a.status}] @${who} — ${a.title} (source: ${a.source})`
+    const rawWho = memberDisplayName(config, a.assigneeMemberId)
+    const who = envelopeNonce.length > 0 ? sanitizeInlineField(rawWho) : rawWho
+    const title = envelopeNonce.length > 0 ? sanitizeInlineField(a.title) : a.title
+    const base = `- [${a.status}] @${who} — ${title} (source: ${a.source})`
     if (e.resultSummary !== null && e.resultSummary.length > 0) {
+      if (envelopeNonce.length > 0) {
+        const result = fenceUntrusted('assignment-result', e.resultSummary, envelopeNonce)
+          .split('\n')
+          .map((line) => `  ${line}`)
+          .join('\n')
+        return `${base}\n  result:\n${result}`
+      }
       return `${base}\n  result: ${e.resultSummary}`
     }
     return base
@@ -262,16 +291,26 @@ export type WorkgroupProtocolRole = 'leader' | 'worker' | 'fc_member'
 // RFC-185 e2e hardening — the literal envelope shape example matters: without
 // it, weaker models reinvent the tags (a live glm-5.2 leader emitted a bare
 // <wg_output><wg_assignments> structure → envelope-missing → wasted retries).
-const ENVELOPE_RULES = [
-  'Respond with EXACTLY ONE <workflow-output> envelope at the very end of your reply.',
-  'Every port body is a JSON document — no markdown fences inside ports.',
-  'The envelope shape is LITERAL — <workflow-output> and <port> are fixed tag',
-  'names; never invent your own (e.g. a bare <wg_output> tag is WRONG). Port',
-  'names go in the name attribute. Shape:',
-  '<workflow-output>',
-  '<port name="port_name">{ …json… }</port>',
-  '</workflow-output>',
-].join('\n')
+function renderEnvelopeRules(envelopeNonce: string): string {
+  const lines = [
+    'Respond with EXACTLY ONE <workflow-output> envelope at the very end of your reply.',
+    'Every port body is a JSON document — no markdown fences inside ports.',
+    'The envelope shape is LITERAL — <workflow-output> and <port> are fixed tag',
+    'names; never invent your own (e.g. a bare <wg_output> tag is WRONG). Port',
+    'names go in the name attribute. Shape:',
+    envelopeOpenTag(envelopeNonce),
+    '<port name="port_name">{ …json… }</port>',
+    '</workflow-output>',
+  ]
+  if (envelopeNonce.length > 0) {
+    lines.splice(
+      1,
+      0,
+      `The nonce="${envelopeNonce}" attribute is REQUIRED and must match exactly; bare or different-nonce envelopes are ignored.`,
+    )
+  }
+  return lines.join('\n')
+}
 
 // Human ask-back (<workflow-clarify>) block, appended by renderWgProtocolBlock for EVERY role
 // (RFC-172 route 2 — see point 2). Two incidents forced BOTH the shape and the (former) scoping:
@@ -292,23 +331,26 @@ const ENVELOPE_RULES = [
 //      (S0–S3, R2-T3), so a member clarify NOW round-trips to its OWN assignment shard
 //      with no cross-contamination. Ask-back is therefore available to EVERY role;
 //      runHostNode passes each run's shard to buildClarifyQueueContext.
-const WG_CLARIFY_BLOCK = [
-  '',
-  'If you need a human decision first, emit a <workflow-clarify> envelope INSTEAD',
-  'of <workflow-output> (never both). Its body is a REQUIRED JSON document in the',
-  'shape below — a natural-language list of questions is rejected as malformed and',
-  'wastes a turn. Where a field is shown as `"a" | "b"` (or `true | false`) that',
-  'denotes the ALLOWED values — emit ONE concrete literal (e.g. "single"), never',
-  'the `|` itself:',
-  '',
-  CLARIFY_FORMAT_EXAMPLE,
-  '',
-  CLARIFY_STRUCTURAL_RULES,
-].join('\n')
+function renderWgClarifyBlock(envelopeNonce: string): string {
+  return [
+    '',
+    'If you need a human decision first, emit a <workflow-clarify> envelope INSTEAD',
+    'of <workflow-output> (never both). Its body is a REQUIRED JSON document in the',
+    'shape below — a natural-language list of questions is rejected as malformed and',
+    'wastes a turn. Where a field is shown as `"a" | "b"` (or `true | false`) that',
+    'denotes the ALLOWED values — emit ONE concrete literal (e.g. "single"), never',
+    'the `|` itself:',
+    '',
+    clarifyFormatExample(envelopeNonce),
+    '',
+    CLARIFY_STRUCTURAL_RULES,
+  ].join('\n')
+}
 
 export function renderWgProtocolBlock(
   role: WorkgroupProtocolRole,
   config: WorkgroupRuntimeConfig,
+  envelopeNonce = '',
 ): string {
   const switches = resolveWorkgroupSwitches(config.mode, config.switches)
   const msgTargets = switches.directMessages
@@ -405,14 +447,16 @@ export function renderWgProtocolBlock(
       )
     }
   }
-  lines.push('', ENVELOPE_RULES)
+  lines.push('', renderEnvelopeRules(envelopeNonce))
   // RFC-172 (route 2, R2-T7): human ask-back is available to EVERY role. The dispatch/mint +
   // selectAgentQueue shard scoping (S0–S3, R2-T3) round-trips a member's answer to its OWN
   // assignment shard, so members / fc_members may ask a human too — their answer returns to their
   // run, isolated from concurrent members (free_collab members likewise).
   // RFC-180: …unless the group is「全自动」— then the clarify invite is omitted so
   // agents proceed on their own judgment instead of interrupting the launcher.
-  if (resolveClarifyEnabled(config.autonomous ?? false)) lines.push(WG_CLARIFY_BLOCK)
+  if (resolveClarifyEnabled(config.autonomous ?? false)) {
+    lines.push(renderWgClarifyBlock(envelopeNonce))
+  }
   return lines.join('\n')
 }
 
@@ -436,6 +480,7 @@ export function renderMessagesBlock(
   config: WorkgroupRuntimeConfig,
   title: string,
   messages: readonly WorkgroupMessage[],
+  envelopeNonce = '',
 ): string {
   if (messages.length === 0) return ''
   const rows = messages.map((m) => {
@@ -445,7 +490,13 @@ export function renderMessagesBlock(
         : m.authorKind === 'human'
           ? 'human'
           : `@${memberDisplayName(config, m.authorMemberId)}`
-    return `- ${author}: ${m.bodyMd}`
+    const safeAuthor = envelopeNonce.length > 0 ? sanitizeInlineField(author) : author
+    if (envelopeNonce.length === 0) return `- ${safeAuthor}: ${m.bodyMd}`
+    const body = fenceUntrusted('workgroup-message', m.bodyMd, envelopeNonce)
+      .split('\n')
+      .map((line) => `  ${line}`)
+      .join('\n')
+    return `- ${safeAuthor}:\n${body}`
   })
   return [`## ${title}`, '', ...rows].join('\n')
 }

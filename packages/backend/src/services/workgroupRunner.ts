@@ -23,6 +23,7 @@
 import {
   DEFAULT_PROTOCOL_RETRY_BUDGET,
   FOLLOWUP_POLICY,
+  fenceUntrusted,
   normalizeWgTaskTitle,
   parseWgAssignmentsPort,
   parseWgDecisionPort,
@@ -34,6 +35,7 @@ import {
   resolveClarifyEnabled,
   resolveCompletionGate,
   resolveWorkgroupSwitches,
+  sanitizeInlineField,
   WG_PORT_ASSIGNMENTS,
   WG_PORT_DECISION,
   WG_PORT_MESSAGES,
@@ -63,7 +65,7 @@ import {
   workgroupMessages,
 } from '@/db/schema'
 import { getAgent } from '@/services/agent'
-import { isClarifyRerunCause, mintNodeRun } from '@/services/nodeRunMint'
+import { isClarifyRerunCause, loadRunEnvelopeNonce, mintNodeRun } from '@/services/nodeRunMint'
 import { setNodeRunStatus } from '@/services/lifecycle'
 import {
   advanceMemberCursor,
@@ -790,7 +792,7 @@ function currentRound(state: EngineDbState): number {
 // prompt composition
 // ---------------------------------------------------------------------------
 
-function composeLeaderPrompt(state: EngineDbState): string {
+function composeLeaderPrompt(state: EngineDbState, envelopeNonce = ''): string {
   const { config } = state
   const ledger = state.assignments.map((a) => {
     const resultMsg =
@@ -800,22 +802,33 @@ function composeLeaderPrompt(state: EngineDbState): string {
   const cursor = state.cursors.get(config.leaderMemberId ?? '') ?? ''
   const fresh = state.messages.filter((m) => m.id > cursor)
   const blocks = [
-    renderCharterBlock(config),
+    renderCharterBlock(config, envelopeNonce),
     // RFC-176: the leader owns goal decomposition — carry it every turn.
-    renderGoalBlock(config),
-    renderRosterBlock(config, {
-      excludeMemberId: config.leaderMemberId ?? undefined,
-      agentCards: state.agentCards,
-    }),
-    renderLeaderLedger(config, ledger),
-    renderMessagesBlock(config, 'New activity since your last turn', fresh),
+    renderGoalBlock(config, envelopeNonce),
+    renderRosterBlock(
+      config,
+      {
+        excludeMemberId: config.leaderMemberId ?? undefined,
+        agentCards: state.agentCards,
+      },
+      envelopeNonce,
+    ),
+    renderLeaderLedger(config, ledger, envelopeNonce),
+    renderMessagesBlock(config, 'New activity since your last turn', fresh, envelopeNonce),
   ]
   if (state.gate.rejected) {
+    const rejection = state.gate.rejectedComment
+      ? `A human rejected your completion declaration:\n${fenceUntrusted(
+          'completion-gate-feedback',
+          state.gate.rejectedComment,
+          envelopeNonce,
+        )}`
+      : 'A human rejected your completion declaration.'
     blocks.push(
       [
         '## Completion gate REJECTED',
         '',
-        `A human rejected your completion declaration${state.gate.rejectedComment ? `: ${state.gate.rejectedComment}` : '.'}`,
+        rejection,
         'Address the feedback and continue coordinating.',
       ].join('\n'),
     )
@@ -827,6 +840,7 @@ function composeMemberPrompt(
   state: EngineDbState,
   memberId: string,
   assignment: WorkgroupAssignment | null,
+  envelopeNonce = '',
 ): string {
   const { config } = state
   const slices = selectMemberSlices(config, memberId, {
@@ -834,17 +848,29 @@ function composeMemberPrompt(
     messages: state.messages,
     cursorMessageId: state.cursors.get(memberId) ?? '',
   })
-  const blocks = [renderCharterBlock(config)]
+  const blocks = [renderCharterBlock(config, envelopeNonce)]
   // RFC-176: free_collab has no leader to decompose the goal — every member
   // owns it, so all members see it. A leader_worker worker never does: it acts
   // on the leader's assignment brief ('## Your assignment') below.
-  if (config.mode === 'free_collab') blocks.push(renderGoalBlock(config))
+  if (config.mode === 'free_collab') blocks.push(renderGoalBlock(config, envelopeNonce))
   blocks.push(
-    renderRosterBlock(config, { excludeMemberId: memberId, agentCards: state.agentCards }),
+    renderRosterBlock(
+      config,
+      { excludeMemberId: memberId, agentCards: state.agentCards },
+      envelopeNonce,
+    ),
   )
   if (assignment !== null) {
+    const title =
+      envelopeNonce.length > 0 ? sanitizeInlineField(assignment.title) : assignment.title
     blocks.push(
-      ['## Your assignment', '', `Title: ${assignment.title}`, '', assignment.briefMd].join('\n'),
+      [
+        '## Your assignment',
+        '',
+        `Title: ${title}`,
+        '',
+        fenceUntrusted('assignment-brief', assignment.briefMd, envelopeNonce),
+      ].join('\n'),
     )
   } else {
     blocks.push(
@@ -857,13 +883,17 @@ function composeMemberPrompt(
     )
   }
   if (slices.peerResults.length > 0) {
-    blocks.push(renderMessagesBlock(config, 'Teammate results', slices.peerResults))
+    blocks.push(renderMessagesBlock(config, 'Teammate results', slices.peerResults, envelopeNonce))
   }
   if (slices.mentions.length > 0) {
-    blocks.push(renderMessagesBlock(config, 'Messages addressed to you', slices.mentions))
+    blocks.push(
+      renderMessagesBlock(config, 'Messages addressed to you', slices.mentions, envelopeNonce),
+    )
   }
   if (slices.blackboard.length > 0) {
-    blocks.push(renderMessagesBlock(config, 'Group blackboard (recent)', slices.blackboard))
+    blocks.push(
+      renderMessagesBlock(config, 'Group blackboard (recent)', slices.blackboard, envelopeNonce),
+    )
   }
   return blocks.filter((b) => b.length > 0).join('\n\n')
 }
@@ -1464,15 +1494,20 @@ async function driveLeaderTurn(
       broadcastPendingMint(taskId, runId, WG_LEADER_NODE_ID)
     }
     adoptedRunId = undefined
+    const envelopeNonce = await loadRunEnvelopeNonce(db, runId)
 
     const prompt =
-      composeLeaderPrompt(state) +
+      composeLeaderPrompt(state, envelopeNonce) +
       (wrapUp
         ? '\n\n## FINAL round — the round cap has been reached\n\nThis is your LAST turn. Do NOT dispatch new work (there are no rounds left to run it). ' +
           'Aggregate the completed results and emit `wg_decision` with action `done`. Any `wg_assignments` you emit now will be ignored.'
         : '') +
       (errorNotice !== null
-        ? `\n\n## Protocol errors in your previous reply\n\n${errorNotice}\n\nRe-emit a CORRECT envelope.`
+        ? `\n\n## Protocol errors in your previous reply\n\n${fenceUntrusted(
+            'protocol-error',
+            errorNotice,
+            envelopeNonce,
+          )}\n\nRe-emit a CORRECT envelope.`
         : '')
 
     const result = await hooks.runHostNode({
@@ -1480,7 +1515,7 @@ async function driveLeaderTurn(
       nodeId: WG_LEADER_NODE_ID,
       agent: leaderAgent,
       promptTemplate: prompt,
-      workgroupProtocolBlock: renderWgProtocolBlock('leader', config),
+      workgroupProtocolBlock: renderWgProtocolBlock('leader', config, envelopeNonce),
       hostOutputPorts: wgHostRolePorts('leader'),
       clarifyEnabled: resolveClarifyEnabled(config.autonomous ?? false),
     })
@@ -1742,6 +1777,7 @@ async function driveAssignmentTurn(
       broadcastPendingMint(taskId, runId, WG_MEMBER_NODE_ID)
     }
     adoptedRunId = undefined
+    const envelopeNonce = await loadRunEnvelopeNonce(db, runId)
 
     if (assignment.status === 'dispatched') {
       await casAssignmentStatus(db, assignment.id, 'dispatched', 'running', { nodeRunId: runId })
@@ -1754,9 +1790,13 @@ async function driveAssignmentTurn(
     }
 
     const prompt =
-      composeMemberPrompt(state, memberId, assignment) +
+      composeMemberPrompt(state, memberId, assignment, envelopeNonce) +
       (errorNotice !== null
-        ? `\n\n## Protocol errors in your previous reply\n\n${errorNotice}\n\nRe-emit a CORRECT envelope.`
+        ? `\n\n## Protocol errors in your previous reply\n\n${fenceUntrusted(
+            'protocol-error',
+            errorNotice,
+            envelopeNonce,
+          )}\n\nRe-emit a CORRECT envelope.`
         : '')
 
     const result = await hooks.runHostNode({
@@ -1767,6 +1807,7 @@ async function driveAssignmentTurn(
       workgroupProtocolBlock: renderWgProtocolBlock(
         config.mode === 'free_collab' ? 'fc_member' : 'worker',
         config,
+        envelopeNonce,
       ),
       hostOutputPorts: wgHostRolePorts(config.mode === 'free_collab' ? 'fc_member' : 'worker'),
       clarifyEnabled: resolveClarifyEnabled(config.autonomous ?? false),
@@ -1921,6 +1962,7 @@ async function driveMessageTurn(
     // via the IS NULL guard.
     await stampWgRound(db, runId, currentRound(state))
   }
+  const envelopeNonce = await loadRunEnvelopeNonce(db, runId)
 
   const fcAddendum = isFcInitial
     ? [
@@ -1933,7 +1975,8 @@ async function driveMessageTurn(
       ].join('\n')
     : null
   const prompt =
-    composeMemberPrompt(state, memberId, null) + (fcAddendum !== null ? `\n\n${fcAddendum}` : '')
+    composeMemberPrompt(state, memberId, null, envelopeNonce) +
+    (fcAddendum !== null ? `\n\n${fcAddendum}` : '')
 
   const role = config.mode === 'free_collab' ? ('fc_member' as const) : ('worker' as const)
   const result = await hooks.runHostNode({
@@ -1941,7 +1984,7 @@ async function driveMessageTurn(
     nodeId: WG_MEMBER_NODE_ID,
     agent,
     promptTemplate: prompt,
-    workgroupProtocolBlock: renderWgProtocolBlock(role, config),
+    workgroupProtocolBlock: renderWgProtocolBlock(role, config, envelopeNonce),
     hostOutputPorts: wgHostRolePorts(role),
     clarifyEnabled: resolveClarifyEnabled(config.autonomous ?? false),
   })

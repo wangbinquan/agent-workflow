@@ -161,8 +161,12 @@ function emit(text: string): void {
     JSON.stringify({ type: 'text', timestamp: Date.now(), part: { type: 'text', text } }) + '\\n',
   )
 }
+const prompt = process.argv.slice(2)[1] ?? ''
+const nonce = /\\bnonce="([^"]+)"/.exec(prompt)?.[1]
+const outputOpen =
+  nonce === undefined ? '<workflow-output>' : '<workflow-output nonce="' + nonce + '">'
 const envelope =
-  '<workflow-output>\\n  <port name="summary">fresh ok</port>\\n</workflow-output>'
+  outputOpen + '\\n  <port name="summary">fresh ok</port>\\n</workflow-output>'
 ${body}
 process.exit(0)
 `,

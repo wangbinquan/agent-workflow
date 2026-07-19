@@ -55,6 +55,9 @@ export function PromptPreview({ template, inputPorts, outputs, outputKinds }: Pr
           taskId: '<task.id>',
         },
         agentOutputs: outputs,
+        // RFC-200: previews show the production nonce/fence protocol with a
+        // deterministic marker instead of pretending new runs use legacy tags.
+        envelopeNonce: 'PREVIEW',
         ...(outputKinds !== undefined ? { agentOutputKinds: outputKinds } : {}),
       }),
     [template, inputs, outputs, outputKinds],

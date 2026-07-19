@@ -32,6 +32,7 @@ import {
   buildMergeResolvePrompt,
   evaluateResolution,
   type MergeConflictEntry,
+  type MergeConflictManifest,
   parseConflictManifest,
   type ResolvedPathState,
 } from '@/services/mergeAgent'
@@ -542,7 +543,7 @@ export async function resolveConflictWithAgent(
   conflict: MergeBackConflict,
   opts: {
     containerPath: string
-    runAgent: (prompt: string, cwd: string) => Promise<void>
+    runAgent: (prompt: string, cwd: string, manifest: MergeConflictManifest) => Promise<void>
     log?: Logger
   },
 ): Promise<ResolveConflictOutcome> {
@@ -591,7 +592,7 @@ export async function resolveConflictWithAgent(
   let unresolved: MergeConflictEntry[] = [...manifest, ...unhandled]
   try {
     // §6.2②: run the merge agent in the resolve-iso (scheduler bypasses globalSem).
-    await runAgent(buildMergeResolvePrompt({ manifest }), resolveIso)
+    await runAgent(buildMergeResolvePrompt({ manifest }), resolveIso, manifest)
     // §6.2③: framework self-check from observed worktree state.
     const states = gatherResolvedStates(resolveIso, manifest)
     const verdict = evaluateResolution(manifest, states)

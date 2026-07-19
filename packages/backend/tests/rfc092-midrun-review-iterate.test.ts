@@ -53,6 +53,10 @@ const GATES: Record<string, string> = ${JSON.stringify(paths.gates)}
 const argv = process.argv.slice(2)
 if (argv.includes('--version')) { process.stdout.write('midrun-gate-mock 1.14.99\\n'); process.exit(0) }
 if (argv[0] !== 'run') { process.stderr.write('midrun-gate-mock: expected run\\n'); process.exit(2) }
+const prompt = argv[1] ?? ''
+const nonce = /\\bnonce="([^"]+)"/.exec(prompt)?.[1]
+const outputOpen = nonce === undefined ? '<workflow-output>' : '<workflow-output nonce="' + nonce + '">'
+const clarifyOpen = nonce === undefined ? '<workflow-clarify>' : '<workflow-clarify nonce="' + nonce + '">'
 const ai = argv.indexOf('--agent')
 const agent = ai >= 0 ? (argv[ai + 1] ?? '') : ''
 if (agent === '') { process.stderr.write('midrun-gate-mock: missing --agent\\n'); process.exit(2) }
@@ -78,11 +82,11 @@ function emit(text: string): void {
   process.stdout.write(JSON.stringify({ type: 'text', timestamp: Date.now(), part: { type: 'text', text } }) + '\\n')
 }
 if (step.clarify !== undefined) {
-  emit('<workflow-clarify>' + JSON.stringify(step.clarify) + '</workflow-clarify>')
+  emit(clarifyOpen + JSON.stringify(step.clarify) + '</workflow-clarify>')
   process.exit(0)
 }
 const outputs = (step.output ?? {}) as Record<string, string>
-let envelope = '<workflow-output>\\n'
+let envelope = outputOpen + '\\n'
 for (const [p, c] of Object.entries(outputs)) envelope += '  <port name="' + p + '">' + c + '</port>\\n'
 envelope += '</workflow-output>'
 emit(envelope)

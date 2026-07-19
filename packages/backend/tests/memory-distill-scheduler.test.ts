@@ -38,10 +38,14 @@ import type { DistillerSpawnFn } from '../src/services/memoryDistiller'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
-const EMPTY_ENVELOPE_SPAWN: DistillerSpawnFn = async () => ({
+function emptyDistillerStdout(input: Parameters<DistillerSpawnFn>[0]): string {
+  return `<workflow-output nonce="${input.envelopeNonce}"><port name="candidates">{"candidates":[]}</port></workflow-output>`
+}
+
+const EMPTY_ENVELOPE_SPAWN: DistillerSpawnFn = async (input) => ({
   exitCode: 0,
   stderr: '',
-  stdout: '<workflow-output><port name="candidates">{"candidates":[]}</port></workflow-output>',
+  stdout: emptyDistillerStdout(input),
 })
 
 function seedTask(
@@ -244,13 +248,12 @@ describe('distillTick', () => {
       })
     }
     let spawnCalls = 0
-    const spawnFn: DistillerSpawnFn = async () => {
+    const spawnFn: DistillerSpawnFn = async (input) => {
       spawnCalls += 1
       return {
         exitCode: 0,
         stderr: '',
-        stdout:
-          '<workflow-output><port name="candidates">{"candidates":[]}</port></workflow-output>',
+        stdout: emptyDistillerStdout(input),
       }
     }
     const r = await distillTick({ db, spawnFn })
@@ -312,13 +315,12 @@ describe('distillTick', () => {
     let calls = 0
     const r = await distillTick({
       db,
-      spawnFn: async () => {
+      spawnFn: async (input) => {
         calls += 1
         return {
           exitCode: 0,
           stderr: '',
-          stdout:
-            '<workflow-output><port name="candidates">{"candidates":[]}</port></workflow-output>',
+          stdout: emptyDistillerStdout(input),
         }
       },
     })
@@ -419,8 +421,7 @@ describe('distillTick', () => {
       return {
         exitCode: 0,
         stderr: '',
-        stdout:
-          '<workflow-output><port name="candidates">{"candidates":[]}</port></workflow-output>',
+        stdout: emptyDistillerStdout(input),
       }
     }
     await distillTick({

@@ -59,8 +59,12 @@ function writeShim(appHome: string): string {
 import { writeFileSync } from 'node:fs'
 import { join, basename } from 'node:path'
 const cwd = process.cwd()
+const prompt = process.argv.slice(2)[1] ?? ''
+const nonce = /\\bnonce="([^"]+)"/.exec(prompt)?.[1]
+const outputOpen =
+  nonce === undefined ? '<workflow-output>' : '<workflow-output nonce="' + nonce + '">'
 writeFileSync(join(cwd, basename(cwd) + '.txt'), 'x\\n')
-const envl = '<workflow-output>\\n  <port name="summary">ok</port>\\n</workflow-output>'
+const envl = outputOpen + '\\n  <port name="summary">ok</port>\\n</workflow-output>'
 process.stdout.write(
   JSON.stringify({ type: 'text', timestamp: Date.now(), part: { type: 'text', text: envl } }) + '\\n',
 )

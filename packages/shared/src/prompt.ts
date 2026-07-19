@@ -15,6 +15,12 @@ import {
   renderClarifyDirectiveTrailer,
 } from './clarify'
 import { groupPortsByParsedKind, parsePortKind, getHandlerForParsedKind } from './outputKinds'
+import {
+  awInputProtocolNote,
+  fenceUntrusted,
+  hasAwInputFence,
+  sanitizeInlineField,
+} from './promptFencing'
 
 /**
  * Review-driven re-run context (RFC-005 + RFC-014).
@@ -342,6 +348,13 @@ export interface RenderPromptInput {
    * threads no nonce) → byte-identical to the pre-RFC-200 render.
    */
   envelopeNonce?: string
+  /**
+   * RFC-200: another model-visible channel (currently injected system memory)
+   * contains aw-input fences. This keeps the fence protocol declaration owned
+   * by renderUserPrompt and emitted exactly once even when this prompt has no
+   * fenced user-input value of its own.
+   */
+  hasExternalUntrustedInput?: boolean
 }
 
 // Whitespace-tolerant so `{{ port }}` (a very common authoring habit) resolves
@@ -456,6 +469,11 @@ export function renderUserPrompt(input: RenderPromptInput): string {
   const stopNotice =
     channel !== undefined && channel.kind !== 'none' && channel.injectStopNotice === true
   const tpl = input.promptTemplate ?? ''
+  const nonce = input.envelopeNonce ?? ''
+  const fence = (name: string, value: string | undefined): string =>
+    fenceUntrusted(name, value ?? '', nonce)
+  const inline = (value: string | undefined): string =>
+    nonce.length > 0 ? sanitizeInlineField(value ?? '') : (value ?? '')
   const referenced = new Set<string>()
   const rc = input.reviewContext
   const cc = input.clarifyContext
@@ -493,23 +511,29 @@ export function renderUserPrompt(input: RenderPromptInput): string {
         case '__iteration__':
           return input.meta.iteration !== undefined ? String(input.meta.iteration) : ''
         case '__shard_key__':
-          return input.meta.shardKey ?? ''
+          return fence('shard-key', input.meta.shardKey)
         case '__review_rejection__':
-          return rc?.rejection ?? ''
+          return fence('review-rejection', rc?.rejection)
         case '__review_comments__':
-          return rc?.comments ?? ''
+          return fence('review-comments', rc?.comments)
         case '__iterate_target_port__':
-          return rc?.iterateTargetPort ?? ''
+          return inline(rc?.iterateTargetPort)
         case '__sibling_outputs__':
-          return rc?.siblingOutputs ?? ''
+          return fence('review-sibling-outputs', rc?.siblingOutputs)
         case '__clarify_iteration__':
           return cc?.iteration ?? ''
         case '__clarify_remaining__':
           return cc?.remaining ?? ''
         case '__repos__':
-          return (input.meta.repos ?? []).map((r) => r.worktreePath).join('\n')
+          return fence(
+            'repository-paths',
+            (input.meta.repos ?? []).map((r) => r.worktreePath).join('\n'),
+          )
         case '__repo_names__':
-          return (input.meta.repos ?? []).map((r) => r.worktreeDirName).join('\n')
+          return fence(
+            'repository-names',
+            (input.meta.repos ?? []).map((r) => r.worktreeDirName).join('\n'),
+          )
         case '__repo_count__':
           return String((input.meta.repos ?? []).length)
       }
@@ -525,7 +549,7 @@ export function renderUserPrompt(input: RenderPromptInput): string {
     // above the inlineMode declaration).
     if (inlineMode) return ''
     const v = input.inputs[name]
-    return v ?? ''
+    return fence(name, v)
   })
 
   let sections = ''
@@ -541,7 +565,7 @@ export function renderUserPrompt(input: RenderPromptInput): string {
     // cross-clarify or self-clarify content is missing when it's actually
     // present further down. Skip the auto-append entry for them.
     if (PROMPT_INJECTED_PORT_NAMES.has(name)) continue
-    sections += `\n\n## ${name}\n${content}`
+    sections += `\n\n## ${inline(name)}\n${fence(name, content)}`
   }
 
   // RFC-005: auto-append review context sections when the template didn't
@@ -553,21 +577,21 @@ export function renderUserPrompt(input: RenderPromptInput): string {
       rc.rejection.trim().length > 0 &&
       !referenced.has('__review_rejection__')
     ) {
-      sections += `\n\n## Review Rejection\n${rc.rejection}`
+      sections += `\n\n## Review Rejection\n${fence('review-rejection', rc.rejection)}`
     }
     if (
       rc.comments !== undefined &&
       rc.comments.trim().length > 0 &&
       !referenced.has('__review_comments__')
     ) {
-      sections += `\n\n## Review Comments\n${rc.comments}`
+      sections += `\n\n## Review Comments\n${fence('review-comments', rc.comments)}`
     }
     if (
       rc.iterateTargetPort !== undefined &&
       rc.iterateTargetPort.length > 0 &&
       !referenced.has('__iterate_target_port__')
     ) {
-      sections += `\n\n## Iterate Target Port\n${rc.iterateTargetPort}`
+      sections += `\n\n## Iterate Target Port\n${inline(rc.iterateTargetPort)}`
     }
     // RFC-014: auto-append sibling outputs when the iterate path populated them.
     if (
@@ -575,7 +599,7 @@ export function renderUserPrompt(input: RenderPromptInput): string {
       rc.siblingOutputs.trim().length > 0 &&
       !referenced.has('__sibling_outputs__')
     ) {
-      sections += `\n\n## Sibling Outputs\n${rc.siblingOutputs}`
+      sections += `\n\n## Sibling Outputs\n${fence('review-sibling-outputs', rc.siblingOutputs)}`
     }
   }
 
@@ -589,6 +613,10 @@ export function renderUserPrompt(input: RenderPromptInput): string {
     // inline mode needs no separate "current round" title. RFC-148: the
     // legacy round-grouped else-branch that used to follow is deleted — the
     // scheduler has produced flatBlock-only contexts since RFC-132 PR-C.
+    // The flat block is framework structure produced by renderFlatClarifyQueue:
+    // its one-line fields are sanitized there and free-text manual bodies are
+    // individually fenced. Wrapping the WHOLE block would turn `## Clarify Q&A`
+    // and `- Q:` into data, destroying the structure §4.3 intentionally keeps.
     sections += `\n\n${cc.flatBlock}`
   }
 
@@ -604,11 +632,14 @@ export function renderUserPrompt(input: RenderPromptInput): string {
   // protocol below, so wording and protocol can never disagree.
   const pou = input.priorOutputUpdate
   if (pou?.block !== undefined && pou.block.trim().length > 0 && !inlineMode) {
+    const priorBlock = hasAwInputFence(pou.block, nonce)
+      ? pou.block
+      : fence('prior-output', pou.block)
     if (mandatoryAskBack) {
-      sections += `\n\n${ASKBACK_PRIOR_OUTPUT_BLOCK_TITLE}\n${pou.block}`
+      sections += `\n\n${ASKBACK_PRIOR_OUTPUT_BLOCK_TITLE}\n${priorBlock}`
       sections += `\n\n${ASKBACK_PRIOR_OUTPUT_DIRECTIVE_BLOCK_TITLE}\n${ASKBACK_PRIOR_OUTPUT_DIRECTIVE_TEXT}`
     } else {
-      sections += `\n\n${PRIOR_OUTPUT_BLOCK_TITLE}\n${pou.block}`
+      sections += `\n\n${PRIOR_OUTPUT_BLOCK_TITLE}\n${priorBlock}`
       sections += `\n\n${UPDATE_DIRECTIVE_BLOCK_TITLE}\n${UPDATE_DIRECTIVE_TEXT}`
     }
   }
@@ -646,11 +677,10 @@ export function renderUserPrompt(input: RenderPromptInput): string {
   // RFC-200 (T2): the per-run nonce scopes every emitted envelope open tag.
   // Absent (legacy / pre-RFC-200 run) → the emit helpers render bare tags, so
   // this whole block stays byte-identical to before.
-  const nonce = input.envelopeNonce
   let trailing: string
   if (mandatoryAskBack) {
     trailing = inlineMode
-      ? buildClarifyInlineReminder()
+      ? buildClarifyInlineReminder(nonce)
       : buildMandatoryClarifyPreamble() + buildClarifyProtocolBlock(nonce)
   } else if (optionalAskBack) {
     // RFC-165 (F12): optional ask-back — the agent sees BOTH envelope
@@ -658,7 +688,7 @@ export function renderUserPrompt(input: RenderPromptInput): string {
     // a short dual-choice reminder; the full formats already live in the
     // session transcript from the first round.
     trailing = inlineMode
-      ? buildOptionalClarifyInlineReminder()
+      ? buildOptionalClarifyInlineReminder(nonce)
       : buildOptionalClarifyPreamble() +
         buildOptionalDualProtocolBlock(input.agentOutputs, input.agentOutputKinds, nonce)
   } else if (input.workgroupProtocolBlock !== undefined) {
@@ -667,7 +697,14 @@ export function renderUserPrompt(input: RenderPromptInput): string {
   } else {
     trailing = buildProtocolBlock(input.agentOutputs, input.agentOutputKinds, nonce)
   }
-  return body + sections + trailing
+  const rendered = body + sections + trailing
+  if (
+    nonce.length === 0 ||
+    (!hasAwInputFence(rendered, nonce) && input.hasExternalUntrustedInput !== true)
+  ) {
+    return rendered
+  }
+  return `---\n**Untrusted input boundary.** ${awInputProtocolNote(nonce)}\n\n${rendered}`
 }
 
 /**
@@ -878,13 +915,18 @@ export function buildClarifyProtocolBlock(nonce?: string): string {
  * Returns a leading `\n\n---\n` separator so callers can concatenate after the
  * body / sections without re-injecting their own divider.
  */
-export function buildClarifyInlineReminder(): string {
+export function buildClarifyInlineReminder(nonce?: string): string {
+  const nonceReminder =
+    nonce !== undefined && nonce.length > 0
+      ? ` Copy the exact \`nonce="${nonce}"\` attribute onto that opening tag; a bare or different nonce is ignored.`
+      : ''
   return (
     '\n\n---\n' +
     'The user has answered your previous `<workflow-clarify>` round (see "Clarify Q&A — User Answers (Current Round)" above). ' +
     'This node stays in MANDATORY ask-back mode until the user clicks "Stop clarifying" — your next reply MUST be another `<workflow-clarify>` envelope. ' +
     'Do not emit `<workflow-output>`; it will be rejected. ' +
-    'The full clarify format and asking-back rules from earlier in this session still apply and have not been re-emitted.'
+    'The full clarify format and asking-back rules from earlier in this session still apply and have not been re-emitted.' +
+    nonceReminder
   )
 }
 
@@ -949,12 +991,17 @@ export function buildOptionalDualProtocolBlock(
  * answered the previous round; the agent may ask again OR finalize now. The
  * full formats from the first round still stand in the session transcript.
  */
-export function buildOptionalClarifyInlineReminder(): string {
+export function buildOptionalClarifyInlineReminder(nonce?: string): string {
+  const nonceReminder =
+    nonce !== undefined && nonce.length > 0
+      ? ` Whichever envelope you choose, copy the exact \`nonce="${nonce}"\` attribute onto its opening tag; a bare or different nonce is ignored.`
+      : ''
   return (
     '\n\n---\n' +
     'The user has answered your previous `<workflow-clarify>` round (see "Clarify Q&A — User Answers (Current Round)" above). ' +
     'This node remains in OPTIONAL ask-back mode: if something material is still unclear, reply with another `<workflow-clarify>` envelope; otherwise produce the final `<workflow-output>` now. ' +
-    'Reply with exactly one of the two envelopes — the formats from earlier in this session still apply and have not been re-emitted.'
+    'Reply with exactly one of the two envelopes — the formats from earlier in this session still apply and have not been re-emitted.' +
+    nonceReminder
   )
 }
 
@@ -1032,6 +1079,8 @@ export const FOLLOWUP_POLICY: Record<FailureCode, { reason: EnvelopeFollowupReas
 export const DEFAULT_PROTOCOL_RETRY_BUDGET = 3
 
 export interface EnvelopeFollowupInput {
+  /** RFC-200: nonce of the session-owning run; absent preserves legacy bytes. */
+  envelopeNonce?: string
   /**
    * Whether the agent node has a clarify channel wired (RFC-023). Drives the
    * choice between the single-envelope follow-up wording and the bi-modal
@@ -1213,5 +1262,10 @@ export function renderEnvelopeFollowupPrompt(input: EnvelopeFollowupInput): stri
     ? 'Port content validation — follow-up.'
     : 'Envelope missing — follow-up.'
 
-  return `\n\n---\n**${label}** ${opening}\n\n${bullets}${repairBlocks}${trailer}`
+  const nonceReminder =
+    input.envelopeNonce !== undefined && input.envelopeNonce.length > 0
+      ? `\n\n**Nonce requirement.** Whichever envelope is valid for this round, its opening tag MUST carry \`nonce="${input.envelopeNonce}"\` exactly. A bare envelope or a different nonce is ignored.`
+      : ''
+
+  return `\n\n---\n**${label}** ${opening}\n\n${bullets}${repairBlocks}${trailer}${nonceReminder}`
 }

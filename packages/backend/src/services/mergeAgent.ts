@@ -12,7 +12,7 @@
 // merge-tree output format the classifier parses was verified empirically against
 // real `git merge-tree --write-tree` (git ≥ 2.38) — NOT recalled from memory.
 
-import type { Agent } from '@agent-workflow/shared'
+import { envelopeOpenTag, sanitizeInlineField, type Agent } from '@agent-workflow/shared'
 import { residualConflictMarkers } from '@/util/git'
 
 /** Name of the framework-internal merge-resolver agent (never a user row). */
@@ -55,7 +55,8 @@ export function buildMergeAgent(): Agent {
       '(deleted-vs-modified, binary, submodule) leave NO text markers — the prompt ' +
       'lists them explicitly; make a definite keep-or-delete / choose-a-side decision ' +
       'for each. Do not leave any conflict unresolved. Reply with exactly one ' +
-      `<workflow-output> envelope containing a single <port name="${MERGE_RESOLUTION_PORT}"> element.`,
+      'workflow-output envelope using the exact opening tag and required nonce ' +
+      `supplied by the user prompt protocol, containing one ${MERGE_RESOLUTION_PORT} port.`,
     schemaVersion: 1,
     createdAt: now,
     updatedAt: now,
@@ -195,8 +196,10 @@ export function buildMergeResolvePrompt(opts: {
   manifest: MergeConflictManifest
   /** repo worktree dir name → human label (e.g. "repo" for single-repo). */
   repoLabels?: Record<string, string>
+  /** RFC-200 per-run nonce; absent preserves legacy prompt rendering. */
+  envelopeNonce?: string
 }): string {
-  const { manifest, repoLabels = {} } = opts
+  const { manifest, repoLabels = {}, envelopeNonce = '' } = opts
   const lines: string[] = [
     'Resolve the following git merge conflicts in the current working directory.',
     '',
@@ -209,10 +212,12 @@ export function buildMergeResolvePrompt(opts: {
     byRepo.set(e.worktreeDirName, arr)
   }
   for (const [dir, entries] of byRepo) {
-    const label = repoLabels[dir] ?? dir
+    const rawLabel = repoLabels[dir] ?? dir
+    const label = envelopeNonce.length > 0 ? sanitizeInlineField(rawLabel) : rawLabel
     if (byRepo.size > 1) lines.push(`## Repo: ${label}`)
     for (const e of entries) {
-      lines.push(`- ${e.path} — ${conflictInstruction(e.type)}`)
+      const path = envelopeNonce.length > 0 ? sanitizeInlineField(e.path) : e.path
+      lines.push(`- ${path} — ${conflictInstruction(e.type)}`)
     }
     lines.push('')
   }
@@ -222,7 +227,7 @@ export function buildMergeResolvePrompt(opts: {
     'keep the file (with the modification applied) OR delete it. For binary/submodule:',
     'choose exactly one side. Leave NO conflict unresolved.',
     '',
-    `Reply with one <workflow-output><port name="${MERGE_RESOLUTION_PORT}">done</port></workflow-output>.`,
+    `Reply with one ${envelopeOpenTag(envelopeNonce)} envelope, with <port name="${MERGE_RESOLUTION_PORT}">done</port>, then close it with </workflow-output>.`,
   )
   return lines.join('\n')
 }

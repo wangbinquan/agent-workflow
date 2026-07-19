@@ -38,6 +38,10 @@ if (argv[0] === '--version' || argv.includes('--version')) {
   process.exit(0)
 }
 if (argv[0] !== 'run') fail(`expected 'run', got '${argv[0]}'`)
+const prompt = argv[1] ?? ''
+const envelopeNonce = [...prompt.matchAll(/\bnonce="([^"]+)"/g)].at(-1)?.[1]
+const openEnvelope = (kind: 'output' | 'clarify'): string =>
+  envelopeNonce === undefined ? `<workflow-${kind}>` : `<workflow-${kind} nonce="${envelopeNonce}">`
 
 const env = process.env
 if (!env.OPENCODE_CONFIG_DIR) fail('OPENCODE_CONFIG_DIR not set')
@@ -171,11 +175,11 @@ if ('skipEnvelope' in step && step.skipEnvelope) {
   process.exit(0)
 }
 if ('clarify' in step) {
-  emitText(`<workflow-clarify>${JSON.stringify(step.clarify)}</workflow-clarify>`)
+  emitText(`${openEnvelope('clarify')}${JSON.stringify(step.clarify)}</workflow-clarify>`)
   process.exit(0)
 }
 if ('output' in step) {
-  let env2 = '<workflow-output>\n'
+  let env2 = `${openEnvelope('output')}\n`
   for (const [port, content] of Object.entries(step.output)) {
     env2 += `  <port name="${port}">${content}</port>\n`
   }

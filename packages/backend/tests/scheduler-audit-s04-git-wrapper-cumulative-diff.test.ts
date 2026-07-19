@@ -63,6 +63,9 @@ if (argv[0] !== 'run') {
   process.stderr.write('shim-opencode: expected run, got ' + String(argv[0]) + '\\n')
   process.exit(2)
 }
+const nonce = /\\bnonce="([^"]+)"/.exec(argv[1] ?? '')?.[1]
+const outputOpen =
+  nonce === undefined ? '<workflow-output>' : '<workflow-output nonce="' + nonce + '">'
 const ai = argv.indexOf('--agent')
 const agent = ai >= 0 ? (argv[ai + 1] ?? '') : ''
 if (agent === '') {
@@ -91,7 +94,7 @@ if (typeof tmpl === 'string') {
 
 const outputsMap = JSON.parse(process.env.SHIM_OUTPUTS ?? '{}')
 const outs = outputsMap[agent] ?? { summary: 'ok' }
-let envl = '<workflow-output>\\n'
+let envl = outputOpen + '\\n'
 for (const [p, c] of Object.entries(outs)) {
   envl += '  <port name="' + p + '">' + String(c).replaceAll('{n}', String(n)) + '</port>\\n'
 }

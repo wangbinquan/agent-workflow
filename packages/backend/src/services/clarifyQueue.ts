@@ -316,6 +316,8 @@ export interface BuildClarifyQueueContextArgs {
   /** Wrapper loopIter (design §2 — workflow loop, NOT a clarify round). Reserved; the flat queue is
    *  round-agnostic. */
   iteration: number
+  /** RFC-200: fence rendered user/agent-authored Q&A for this run. */
+  envelopeNonce?: string
 }
 
 /**
@@ -345,7 +347,10 @@ export async function buildClarifyQueueContext(
     seenQuestion.add(key)
     return true
   })
-  const block = renderFlatClarifyQueue(renderEntries.map((e) => e.render))
+  const block = renderFlatClarifyQueue(
+    renderEntries.map((e) => e.render),
+    args.envelopeNonce ?? '',
+  )
   if (block === undefined) return undefined // defensive: every entry rendered empty
   // 承接标记 — bind AFTER a renderable block is confirmed (mirrors the legacy injectors, which bind
   // only when they produce a context).

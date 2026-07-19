@@ -745,10 +745,11 @@ test('RFC-027: NodeDetailDrawer Session tab renders the agent conversation', asy
   await expect(attemptsTrigger).toBeVisible({ timeout: 5_000 })
   await expect(attemptsTrigger).toContainText(/initial/i)
 
-  // The user prompt becomes the first message in the conversation flow —
-  // its body should contain the rendered template ("Explain rfc-027 …").
+  // The user prompt becomes the first message in the conversation flow.
+  // RFC-200 fences the rendered input value, so assert across the delimiter
+  // instead of requiring the legacy contiguous "Explain rfc-027" text.
   await expect(page.locator('.session-block--user .session-block__body')).toContainText(
-    /Explain rfc-027/i,
+    /Explain\s+<aw-input name="topic" id="[a-f0-9]+">\s*rfc-027\s*<\/aw-input>/i,
     { timeout: 10_000 },
   )
 

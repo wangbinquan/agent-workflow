@@ -48,6 +48,10 @@ try {
 } catch {}
 n += 1
 writeFileSync(CTRL + '/count', String(n))
+const prompt = process.argv.slice(2)[1] ?? ''
+const nonce = /\\bnonce="([^"]+)"/.exec(prompt)?.[1]
+const outputOpen =
+  nonce === undefined ? '<workflow-output>' : '<workflow-output nonce="' + nonce + '">'
 
 function emit(text: string): void {
   process.stdout.write(
@@ -55,7 +59,7 @@ function emit(text: string): void {
   )
 }
 const envelope = (v: string): string =>
-  '<workflow-output>\\n  <port name="out">' + v + '</port>\\n</workflow-output>'
+  outputOpen + '\\n  <port name="out">' + v + '</port>\\n</workflow-output>'
 
 if (n === 1) {
   // loop 迭代 0：不满足退出条件，继续循环。

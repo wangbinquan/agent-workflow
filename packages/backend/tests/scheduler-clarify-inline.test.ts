@@ -312,7 +312,7 @@ describe('RFC-026 scheduler clarify inline-mode', () => {
     expect(rerun?.promptText ?? '').not.toContain('User Answers (Current Round)')
     expect(rerun?.promptText ?? '').toContain('User directive: STOP CLARIFYING')
     expect(rerun?.promptText ?? '').toContain(
-      'You MUST end your reply with a `<workflow-output>` block',
+      'You MUST end your reply with a `<workflow-output nonce="',
     )
 
     // Info event recorded.

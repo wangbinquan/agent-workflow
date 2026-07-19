@@ -354,7 +354,11 @@ export function extractClarifyEnvelopeBody(stdout: string, nonce?: string): stri
  * Trims whitespace around each port's content (agents often pad with leading
  * newlines from XML pretty-printing).
  */
-export function parseEnvelope(envelopeXml: string, declaredOutputs: string[]): EnvelopeParseResult {
+export function parseEnvelope(
+  envelopeXml: string,
+  declaredOutputs: string[],
+  nonce?: string,
+): EnvelopeParseResult {
   const collected = new Map<string, string>()
   const undeclared: Array<{ name: string; content: string }> = []
   const malformed = new Set<string>()
@@ -368,10 +372,17 @@ export function parseEnvelope(envelopeXml: string, declaredOutputs: string[]): E
   // `</port>` truncated content containing a literal `</port>`). Residual
   // limit: content containing the exact sequence `</port>` + `<port name=`
   // (a fake port boundary) still mis-frames — the protocol forbids it.
-  const inner = envelopeXml
-    // RFC-200: strip the OPEN tag whether bare (`<workflow-output>`) or
-    // nonce-scoped (`<workflow-output nonce="…">`) — `[^>]*` swallows any
-    // attributes so parseEnvelope needs no nonce of its own.
+  // RFC-200: direct callers get the same nonce boundary as the extractor.
+  // The runner already hands us an extracted matching block, but accepting the
+  // nonce here prevents a future caller from bypassing scoping by invoking only
+  // parseEnvelope on a bare/wrong-nonce block. Legacy callers omit it.
+  const scopedEnvelope =
+    nonce !== undefined && nonce.length > 0
+      ? (extractLastEnvelope(envelopeXml, nonce) ?? '')
+      : envelopeXml
+  const inner = scopedEnvelope
+    // The nonce match above has already scoped the block; this strip only
+    // reduces the verified envelope to its port body.
     .replace(/^[\s\S]*?<workflow-output[^>]*>/, '')
     .replace(/<\/workflow-output>[\s\S]*$/, '')
   const CLOSE = '</port>'

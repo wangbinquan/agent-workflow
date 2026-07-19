@@ -87,7 +87,8 @@ if [[ "$1" == "--version" ]]; then
   exit 0
 fi
 if [[ "$1" == "run" ]]; then
-  ENV='<workflow-output>'
+  NONCE=$(printf '%s' "$2" | sed -n 's/.*nonce="\\([^"]*\\)".*/\\1/p' | head -n 1)
+  ENV='<workflow-output>'; if [[ -n "$NONCE" ]]; then ENV='<workflow-output nonce="'"$NONCE"'">'; fi
   ENV="$ENV"'<port name="proposal">${escape(PROPOSAL_DOC)}</port>'
   ENV="$ENV"'<port name="design">${escape(DESIGN_DOC)}</port>'
   ENV="$ENV"'<port name="plan">${escape(PLAN_DOC)}</port>'

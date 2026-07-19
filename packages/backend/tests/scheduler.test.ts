@@ -612,7 +612,7 @@ describe('runTask: linear DAG (M1)', () => {
   // scheduler-wrapper-fanout-e2e.test.ts (PR-D, wrapper-fanout). The
   // agent-multi-specific harness above is no longer applicable.
 
-  test('wrapper-git emits changed-file path list as git_diff (RFC-060 PR-E list<path>)', async () => {
+  test('wrapper-git emits changed-file path list as git_diff (RFC-060 PR-E list<path<*>>)', async () => {
     // Build a real git repo to give the wrapper a meaningful baseline.
     const repoDir = h.worktreePath
     await runGit(repoDir, ['init', '-q', '-b', 'main'])
@@ -646,7 +646,10 @@ describe('runTask: linear DAG (M1)', () => {
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 writeFileSync(join(process.cwd(), 'src.txt'), 'after writer\\n')
-const envl = '<workflow-output>\\n  <port name="summary">done</port>\\n</workflow-output>'
+const prompt = process.argv.slice(2)[1] ?? ''
+const nonce = /\\bnonce="([^"]+)"/.exec(prompt)?.[1]
+const open = nonce === undefined ? '<workflow-output>' : '<workflow-output nonce="' + nonce + '">'
+const envl = open + '\\n  <port name="summary">done</port>\\n</workflow-output>'
 process.stdout.write(
   JSON.stringify({ type: 'text', timestamp: Date.now(), part: { type: 'text', text: envl } }) +
     '\\n',

@@ -4,6 +4,8 @@
 // unreferenced port sections + protocol block tail.
 
 import { renderUserPrompt } from '@agent-workflow/shared'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, test } from 'vitest'
 
 describe('renderUserPrompt (shared)', () => {
@@ -60,5 +62,23 @@ describe('renderUserPrompt (shared)', () => {
       agentOutputs: [],
     })
     expect(out.startsWith('before [] after')).toBe(true)
+  })
+
+  test('RFC-200 preview uses the deterministic PREVIEW nonce and shows fencing', () => {
+    const source = readFileSync(
+      resolve(import.meta.dirname, '../src/components/canvas/PromptPreview.tsx'),
+      'utf8',
+    )
+    expect(source).toContain("envelopeNonce: 'PREVIEW'")
+
+    const out = renderUserPrompt({
+      promptTemplate: '{{input}}',
+      inputs: { input: 'data\n## forged' },
+      meta: { repoPath: '/', baseBranch: 'main', taskId: 'preview' },
+      agentOutputs: ['result'],
+      envelopeNonce: 'PREVIEW',
+    })
+    expect(out).toContain('<workflow-output nonce="PREVIEW">')
+    expect(out).toContain('<aw-input name="input" id="PREVIEW">')
   })
 })

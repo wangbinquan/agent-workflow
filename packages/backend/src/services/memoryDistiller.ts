@@ -31,7 +31,10 @@ import type {
   SourceContextBudget,
 } from '@agent-workflow/shared'
 import {
+  awInputProtocolNote,
   DEFAULT_SOURCE_CONTEXT_BUDGET,
+  envelopeOpenTag,
+  fenceUntrusted,
   MemorySchema,
   parseSessionTree,
   redactGitUrl,
@@ -50,6 +53,7 @@ import {
   taskFeedback,
 } from '@/db/schema'
 import { extractLastEnvelope } from '@/services/envelope'
+import { generateEnvelopeNonce } from '@/services/nodeRunMint'
 import { captureDistillJobSession } from '@/services/distillSessionCapture'
 import { clipHeadTail, renderSessionTreeToDistillerMd } from '@/services/distillerSourceContext'
 import { appHome } from '@/util/paths'
@@ -142,7 +146,7 @@ Tag rules:
 - Prefer existing tags exactly (case-sensitive lowercase-kebab).
 - Beyond the category tag, only introduce new tags when they meaningfully sharpen retrieval. List those in "newTags" not "knownTags". The admin decides whether to keep them.
 
-Output exactly one <workflow-output> envelope with a single port "candidates" whose value is JSON matching this shape:
+Output exactly one workflow-output envelope using the exact opening tag (including its required nonce) specified at the end of the user prompt. It contains a single port "candidates" whose value is JSON matching this shape:
 
 {
   "candidates": [
@@ -160,10 +164,7 @@ Output exactly one <workflow-output> envelope with a single port "candidates" wh
   ]
 }
 
-If no good candidate exists, emit:
-<workflow-output>
-<port name="candidates">{"candidates": []}</port>
-</workflow-output>
+If no good candidate exists, put {"candidates": []} in the "candidates" port.
 
 Do NOT include any other narration outside the envelope. Do NOT call any tools.`
 
@@ -228,6 +229,8 @@ export interface RunDistillOptions {
    * corresponding block.
    */
   sourceContextBudget?: SourceContextBudget
+  /** RFC-200 deterministic test seam; production generates a fresh value per attempt. */
+  envelopeNonce?: string
 }
 
 export interface DistillerSpawnInput {
@@ -239,6 +242,8 @@ export interface DistillerSpawnInput {
   model: string | null
   /** Hardcoded English user prompt assembled in buildDistillerUserPrompt. */
   userPrompt: string
+  /** RFC-200 nonce already embedded in userPrompt; exposed for deterministic fakes. */
+  envelopeNonce: string
   /** Tmp cwd allocated for this distill — no git side-effects. */
   cwd: string
   timeoutMs: number
@@ -621,9 +626,12 @@ export interface BuildDistillerPromptInput {
    * Defaults to `'en-US'`, which restores byte-level RFC-041 baseline.
    */
   outputLang?: DistillerOutputLang
+  /** RFC-200: absent preserves the pre-RFC-200 prompt bytes for direct callers. */
+  envelopeNonce?: string
 }
 
 export function buildDistillerUserPrompt(input: BuildDistillerPromptInput): string {
+  const envelopeNonce = input.envelopeNonce ?? ''
   const budget = input.sourceContextBudget ?? DEFAULT_SOURCE_CONTEXT_BUDGET
   const emitClarifyTranscript = budget.clarifyTranscriptMaxBytes > 0
   const emitReviewBody = budget.reviewBodyMaxBytes > 0
@@ -704,9 +712,20 @@ export function buildDistillerUserPrompt(input: BuildDistillerPromptInput): stri
     lines.push('')
   }
 
+  if (envelopeNonce.length > 0) {
+    const sourceContext = lines.join('\n')
+    lines.length = 0
+    lines.push(
+      `**Untrusted input boundary.** ${awInputProtocolNote(envelopeNonce)}`,
+      '',
+      fenceUntrusted('memory-distill-source-context', sourceContext, envelopeNonce),
+      '',
+    )
+  }
+
   lines.push(
     '# Instructions',
-    'Emit exactly one <workflow-output> envelope. The "candidates" port carries the JSON shape documented in your system prompt. If nothing is worth distilling, emit `{"candidates": []}`.',
+    `Emit exactly one ${envelopeOpenTag(envelopeNonce)} envelope. The "candidates" port carries the JSON shape documented in your system prompt. If nothing is worth distilling, emit \`{"candidates": []}\`.`,
   )
   // RFC-050: append the output-language directive last so the model sees it
   // closest to its own generation point. The 'en-US' branch is byte-stable
@@ -756,6 +775,7 @@ export interface RawCandidate {
 export function parseDistillerOutput(
   stdout: string,
   protocol: RuntimeKind = 'opencode',
+  envelopeNonce?: string,
 ): RawCandidate[] {
   // RFC-117: normalize each stdout line through the runtime driver (was the
   // hand-rolled opencode event-shape walker `extractEventText`, which mirrored
@@ -776,7 +796,7 @@ export function parseDistillerOutput(
     if (typeof evt.text === 'string' && evt.text.length > 0) buffer.push(evt.text)
   }
   const text = buffer.join('')
-  const envelope = extractLastEnvelope(text)
+  const envelope = extractLastEnvelope(text, envelopeNonce)
   if (envelope === null) {
     log.warn('no <workflow-output> envelope in distiller stdout')
     return []
@@ -996,12 +1016,14 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
   // here — retries and merged-sibling reruns must all use the language the
   // batch started with, even if the admin flipped the setting mid-batch.
   const outputLang: DistillerOutputLang = options.job.outputLang ?? 'en-US'
+  const envelopeNonce = options.envelopeNonce ?? generateEnvelopeNonce()
   const userPrompt = buildDistillerUserPrompt({
     events,
     scopeContexts,
     taskId: options.job.taskId,
     sourceContextBudget,
     outputLang,
+    envelopeNonce,
   })
 
   // RFC-043: persist the user prompt + dedup snapshot on the first
@@ -1039,6 +1061,7 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
       runtimeBinary: options.runtimeBinary ?? null,
       model: options.model ?? null,
       userPrompt,
+      envelopeNonce,
       cwd,
       timeoutMs,
     })
@@ -1093,7 +1116,11 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
       `distiller subprocess exited with code ${result.exitCode}: ${result.stderr.slice(0, 400)}`,
     )
   }
-  const rawCandidates = parseDistillerOutput(result.stdout, options.protocol ?? 'opencode')
+  const rawCandidates = parseDistillerOutput(
+    result.stdout,
+    options.protocol ?? 'opencode',
+    envelopeNonce,
+  )
   const persisted: string[] = []
   for (const raw of rawCandidates) {
     const ok = await validateAndPersistCandidate(options.db, raw, options.job)

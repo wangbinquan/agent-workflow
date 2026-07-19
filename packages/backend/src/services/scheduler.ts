@@ -112,6 +112,7 @@ import {
   continuesClarifyLineage,
   frozenRuntimeOfSession,
   isClarifyRerunCause,
+  loadRunEnvelopeNonce,
   mintNodeRun,
   resolveFrozenRuntime,
   schedulerMintCause,
@@ -197,7 +198,12 @@ import {
   persistIsoBase,
   persistIsoNodeTree,
 } from '@/services/isolatedAgentRun'
-import { buildMergeAgent, mergeResolveNodeId } from '@/services/mergeAgent'
+import {
+  buildMergeAgent,
+  buildMergeResolvePrompt,
+  mergeResolveNodeId,
+  type MergeConflictManifest,
+} from '@/services/mergeAgent'
 import {
   runWorkgroupEngine,
   type WorkgroupEngineHooks,
@@ -777,14 +783,14 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
       // A leader run is shardKey=null → pass `undefined` (node-scoped = exact pre-route-2 leader
       // behavior); a member run passes its assignment shard so concurrent members never inject each
       // other's Q&A. Fresh (non-answer) turns get an empty queue → no injection.
-      const runShardKey =
-        (
-          await db
-            .select({ shardKey: nodeRuns.shardKey })
-            .from(nodeRuns)
-            .where(eq(nodeRuns.id, req.nodeRunId))
-            .limit(1)
-        )[0]?.shardKey ?? null
+      const runRow = (
+        await db
+          .select({ shardKey: nodeRuns.shardKey, envelopeNonce: nodeRuns.envelopeNonce })
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, req.nodeRunId))
+          .limit(1)
+      )[0]
+      const runShardKey = runRow?.shardKey ?? null
       const clarifyQueue = await buildClarifyQueueContext({
         db,
         definition,
@@ -793,6 +799,7 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
         dispatchedRunId: req.nodeRunId,
         shardKey: runShardKey === null ? undefined : runShardKey,
         iteration: 0,
+        envelopeNonce: runRow?.envelopeNonce ?? '',
       })
       // RFC-184: workgroup host runs project the member agent's outputs to the
       // role's wg_* protocol ports and clear outputKinds, so runNode parses/
@@ -1585,7 +1592,7 @@ async function maybeRunCommitPush(
     // Drive a commit-agent opencode session under the commit node_run id so the
     // detail-page "view session" button shows the message/repair conversation.
     const genViaOpencode = async (
-      prompt: string,
+      buildPrompt: (envelopeNonce: string) => string,
       ctx: { nodeRunId: string },
     ): Promise<{ message: string | null; sessionId: string | null }> => {
       // Each opencode session (message gen, each repair) runs on its OWN child
@@ -1618,6 +1625,7 @@ async function maybeRunCommitPush(
           },
           configDir: rt.configDir, // RFC-154: frozen with the rest of the snapshot
         })
+        const envelopeNonce = await loadRunEnvelopeNonce(db, sessionRunId)
         const result = await runNode({
           taskId: task.id,
           nodeRunId: sessionRunId,
@@ -1629,7 +1637,7 @@ async function maybeRunCommitPush(
           runtimeConfigDir: frozen.configDir, // RFC-154: frozen config-dir profile
           inputs: {},
           worktreePath: repo.worktreePath,
-          promptTemplate: prompt,
+          promptTemplate: buildPrompt(envelopeNonce),
           templateMeta: {
             repoPath: repo.repoPath,
             baseBranch: baseRef,
@@ -1686,27 +1694,35 @@ async function maybeRunCommitPush(
         acquireWrite: () => state.writeSem.acquire(),
         generateMessage: (mctx) =>
           genViaOpencode(
-            buildCommitMessagePrompt({
-              repoName,
-              branch,
-              baseRef,
-              stat: mctx.stat,
-              diffTruncated: mctx.diffTruncated,
-              // RFC-157: undefined ≡ en-US. Initial + repair share one language.
-              lang: state.opts.commitPushLang ?? 'en-US',
-            }),
+            (envelopeNonce) =>
+              buildCommitMessagePrompt(
+                {
+                  repoName,
+                  branch,
+                  baseRef,
+                  stat: mctx.stat,
+                  diffTruncated: mctx.diffTruncated,
+                  // RFC-157: undefined ≡ en-US. Initial + repair share one language.
+                  lang: state.opts.commitPushLang ?? 'en-US',
+                },
+                envelopeNonce,
+              ),
             mctx,
           ),
         generateRepair: (rctx) =>
           genViaOpencode(
-            buildRepairPrompt({
-              branch,
-              pushStderr: rctx.pushStderr,
-              currentMessage: rctx.currentMessage,
-              stat: rctx.stat,
-              priorAttempts: rctx.priorAttempts,
-              lang: state.opts.commitPushLang ?? 'en-US',
-            }),
+            (envelopeNonce) =>
+              buildRepairPrompt(
+                {
+                  branch,
+                  pushStderr: rctx.pushStderr,
+                  currentMessage: rctx.currentMessage,
+                  stat: rctx.stat,
+                  priorAttempts: rctx.priorAttempts,
+                  lang: state.opts.commitPushLang ?? 'en-US',
+                },
+                envelopeNonce,
+              ),
             rctx,
           ),
       },
@@ -2344,7 +2360,11 @@ async function resolveMergeConflicts(
     defaultRuntime: state.opts.defaultRuntime,
   })
   const mergeNodeId = mergeResolveNodeId(opts.nodeId, opts.iteration)
-  const runAgent = async (prompt: string, cwd: string): Promise<void> => {
+  const runAgent = async (
+    _legacyPrompt: string,
+    cwd: string,
+    manifest: MergeConflictManifest,
+  ): Promise<void> => {
     const sessionRunId = await mintNodeRun(db, {
       taskId: task.id,
       nodeId: mergeNodeId,
@@ -2365,6 +2385,7 @@ async function resolveMergeConflicts(
       },
       configDir: rt.configDir, // RFC-154: frozen with the rest of the snapshot
     })
+    const envelopeNonce = await loadRunEnvelopeNonce(db, sessionRunId)
     // DIRECT runNode — bypasses globalSem on purpose (§7 deadlock avoidance).
     await runNode({
       taskId: task.id,
@@ -2377,7 +2398,7 @@ async function resolveMergeConflicts(
       runtimeConfigDir: frozen.configDir, // RFC-154: frozen config-dir profile
       inputs: {},
       worktreePath: cwd,
-      promptTemplate: prompt,
+      promptTemplate: buildMergeResolvePrompt({ manifest, envelopeNonce }),
       templateMeta: {
         repoPath: cwd,
         baseBranch: task.baseBranch,
@@ -2810,6 +2831,7 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
     })
   }
   broadcastNodeStatus(taskId, nodeRunId, node.id, 'pending')
+  let envelopeNonce = await loadRunEnvelopeNonce(db, nodeRunId)
 
   // Lock order: writeSem ≺ globalSem ≺ subprocessSem (no cycles — RFC-098 survey
   // §wp5-4). RFC-130 §7 SUPERSEDED the RFC-098 B1 "writer acquires writeSem before
@@ -2969,8 +2991,10 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
             shardKey: inheritedShardKey,
             parentNodeRunId: inheritedParentNodeRunId,
             consumedUpstreamRunsJson: consumedUpstreamJson,
+            ...(followupDecision.followup && envelopeNonce.length > 0 ? { envelopeNonce } : {}),
           },
         })
+        envelopeNonce = await loadRunEnvelopeNonce(db, nodeRunId)
         broadcastNodeStatus(taskId, nodeRunId, node.id, 'pending')
         // RFC-130: carry the iso columns onto the freshly-minted retry row so a
         // crash mid-retry can still find the iso worktree (the physical iso is
@@ -3183,6 +3207,7 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
           consumerNodeId: node.id,
           dispatchedRunId: nodeRunId,
           iteration,
+          envelopeNonce,
         })
         // RFC-141: the RFC-120 §18 pure-override handoff suppression (`suppressPriorOutput`) is
         // GONE by user ruling — the reassigned Q&A rides the flat block below, and the prior-output
@@ -3335,6 +3360,7 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
               priorRun.id,
               agent.outputs ?? [],
               onlyPorts,
+              envelopeNonce,
             )
             if (block.length > 0) priorOutputUpdate = { block }
           }
@@ -5281,7 +5307,13 @@ async function dispatchFanoutAggregator(
   })
   let aggPriorOutputUpdate: { block: string } | undefined
   if (aggPriorRun !== undefined) {
-    const block = await composePriorOutputBlock(db, aggPriorRun.id, aggAgent.outputs ?? [])
+    const block = await composePriorOutputBlock(
+      db,
+      aggPriorRun.id,
+      aggAgent.outputs ?? [],
+      undefined,
+      await loadRunEnvelopeNonce(db, aggRunId),
+    )
     if (block.length > 0) aggPriorOutputUpdate = { block }
   }
 
@@ -5981,7 +6013,7 @@ async function runGitWrapperNode(state: SchedulerState, args: OneNodeArgs): Prom
   }
 
   // subRes.kind === 'ok' — emit changed-file list against persisted baseline.
-  // RFC-060 PR-E: git_diff outlet is now `list<path>` (newline-joined file
+  // RFC-060 PR-E: git_diff outlet is now `list<path<*>>` (newline-joined file
   // paths) instead of a full unified diff. Downstream wrapper-fanout can
   // consume it directly as a shardSource. Authors who still want the raw
   // diff can run `git diff` themselves in a downstream agent — or wait for
@@ -6563,6 +6595,7 @@ export async function composePriorOutputBlock(
   priorRunId: string,
   agentOutputs: readonly string[],
   onlyPorts?: ReadonlySet<string>,
+  envelopeNonce = '',
 ): Promise<string> {
   const captured = await db
     .select()
@@ -6573,7 +6606,7 @@ export async function composePriorOutputBlock(
     .filter((p) => onlyPorts === undefined || onlyPorts.has(p))
     .map((p) => ({ portName: p, content: byPort.get(p) ?? '' }))
     .filter((o) => o.content.length > 0)
-  return buildPriorOutputBlock(ordered)
+  return buildPriorOutputBlock(ordered, envelopeNonce)
 }
 
 /**

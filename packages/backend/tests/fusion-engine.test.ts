@@ -63,13 +63,16 @@ const adminActor: Actor = {
 function makeClarifyStub(dir: string): string {
   const path = pjoin(dir, 'stub-opencode.sh')
   const env =
-    '<workflow-clarify>{\\"questions\\":[{\\"id\\":\\"q1\\",\\"title\\":\\"Proceed?\\",\\"kind\\":\\"single\\",\\"options\\":[{\\"label\\":\\"yes\\"},{\\"label\\":\\"no\\"}]}]}</workflow-clarify>'
+    '{\\"questions\\":[{\\"id\\":\\"q1\\",\\"title\\":\\"Proceed?\\",\\"kind\\":\\"single\\",\\"options\\":[{\\"label\\":\\"yes\\"},{\\"label\\":\\"no\\"}]}]}</workflow-clarify>'
   const script = `#!/usr/bin/env bash
 set -e
 if [[ "$1" == "--version" ]]; then echo 'stub-opencode 1.14.99'; exit 0; fi
 if [[ "$1" == "run" ]]; then
-  TS=$(date +%s%3N)
-  printf '{"type":"text","ts":%s,"text":"%s"}\\n' "$TS" "${env}"
+  NONCE=$(printf '%s\\n' "$@" | sed -n 's/.*nonce="\\([^"]*\\)".*/\\1/p' | head -n 1)
+  OPEN='<workflow-clarify>'; if [[ -n "$NONCE" ]]; then OPEN='<workflow-clarify nonce=\\"'"$NONCE"'\\">'; fi
+  ENV="$OPEN"'${env}'
+  TS=$(date +%s)
+  printf '{"type":"text","ts":%s,"text":"%s"}\\n' "$TS" "$ENV"
   exit 0
 fi
 exit 1

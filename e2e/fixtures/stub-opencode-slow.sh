@@ -37,6 +37,14 @@ case "${1-}" in
     ;;
 esac
 
+RAW_PROMPT="${2-}"
+envelope_nonce=$(printf '%s\n' "$RAW_PROMPT" | sed -n 's/.*nonce="\([^"]*\)".*/\1/p' | tail -n 1)
+if [ -z "$envelope_nonce" ]; then
+  echo "stub-opencode-slow: prompt is missing the RFC-200 envelope nonce" >&2
+  exit 3
+fi
+output_open='<workflow-output nonce=\"'"$envelope_nonce"'\">'
+
 sleep_ms="${STUB_OPENCODE_SLEEP_MS:-0}"
 # Whole-second floor; macOS /bin/sh sleep doesn't accept decimals.
 sleep_s=$((sleep_ms / 1000))
@@ -64,7 +72,7 @@ INVENTORY_JSON
 fi
 
 if [ -z "${STUB_OPENCODE_SKIP_ENVELOPE:-}" ]; then
-  printf '%s\n' '{"type":"text","timestamp":0,"part":{"type":"text","text":"<workflow-output>\n  <port name=\"answer\">stub e2e output</port>\n</workflow-output>"}}'
+  printf '%s\n' "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"$output_open\\n  <port name=\\\"answer\\\">stub e2e output</port>\\n</workflow-output>\"}}"
 fi
 
 exit "${STUB_OPENCODE_EXIT_CODE:-0}"

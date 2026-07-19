@@ -19,6 +19,7 @@ import type {
   WorkflowDefinition,
   WorkflowEdge,
 } from './schemas/workflow'
+import { fenceUntrusted, sanitizeInlineField } from './promptFencing'
 import {
   CLARIFY_INPUT_PORT_NAME,
   CLARIFY_OUTPUT_PORT_NAME,
@@ -431,7 +432,11 @@ function isManualFlatEntry(
 }
 
 /** Render one Q&A entry as a flat peer bullet (self/questioner/designer alike). */
-function renderFlatQaItem(question: ClarifyQuestion, answer: ClarifyAnswer | undefined): string {
+function renderFlatQaItem(
+  question: ClarifyQuestion,
+  answer: ClarifyAnswer | undefined,
+  nonce: string,
+): string {
   const kindLabel = question.kind === 'single' ? 'single-choice' : 'multi-choice'
   const optionLabels = question.options
     .map((o) => (o.recommended ? `${o.label} [recommended]` : o.label))
@@ -440,19 +445,25 @@ function renderFlatQaItem(question: ClarifyQuestion, answer: ClarifyAnswer | und
     answer === undefined
       ? 'User did not answer this question.'
       : summariseClarifyAnswer(question, answer)
+  const safe = (value: string): string => (nonce.length > 0 ? sanitizeInlineField(value) : value)
   return [
-    `- Q: ${question.title}`,
-    `  Type: ${kindLabel} / Options: ${optionLabels}`,
-    `  Answer: ${answerText}`,
+    `- Q: ${safe(question.title)}`,
+    `  Type: ${kindLabel} / Options: ${safe(optionLabels)}`,
+    `  Answer: ${safe(answerText)}`,
   ].join('\n')
 }
 
 /** Render one manual instruction (§15) as a flat peer bullet. Title (if any) is
  *  the bullet line; the body indents under it. Returns '' when both are empty. */
-function renderFlatManualItem(title: string | null, body: string | null): string {
+function renderFlatManualItem(title: string | null, body: string | null, nonce: string): string {
   const t = (title ?? '').trim()
   const b = (body ?? '').trim()
   if (t.length === 0 && b.length === 0) return ''
+  if (nonce.length > 0) {
+    const safeTitle = t.length > 0 ? sanitizeInlineField(t) : 'Manual instruction'
+    const safeBody = fenceUntrusted('manual-instruction', b, nonce)
+    return safeBody.length > 0 ? `- ${safeTitle}\n${safeBody}` : `- ${safeTitle}`
+  }
   if (t.length === 0) {
     return b
       .split('\n')
@@ -474,12 +485,15 @@ function renderFlatManualItem(title: string | null, body: string | null): string
  * `undefined` (no block to inject). See the section header for the invariants
  * this locks (no rounds / scope / directive trailer / attribution).
  */
-export function renderFlatClarifyQueue(entries: FlatClarifyEntry[]): string | undefined {
+export function renderFlatClarifyQueue(
+  entries: FlatClarifyEntry[],
+  nonce = '',
+): string | undefined {
   const items: string[] = []
   for (const e of entries) {
     const item = isManualFlatEntry(e)
-      ? renderFlatManualItem(e.manualTitle, e.manualBody)
-      : renderFlatQaItem(e.question, e.answer)
+      ? renderFlatManualItem(e.manualTitle, e.manualBody, nonce)
+      : renderFlatQaItem(e.question, e.answer, nonce)
     if (item.length > 0) items.push(item)
   }
   if (items.length === 0) return undefined
@@ -541,14 +555,16 @@ export function buildPriorOutputBlock(
     portName: string
     content: string
   }>,
+  nonce = '',
 ): string {
   if (outputs.length === 0) return ''
   const lines: string[] = []
   for (const o of outputs) {
     if (o.content.trim().length === 0) continue
-    lines.push(`### ${o.portName}`)
+    const portName = nonce.length > 0 ? sanitizeInlineField(o.portName) : o.portName
+    lines.push(`### ${portName}`)
     lines.push('')
-    lines.push(o.content)
+    lines.push(fenceUntrusted(`prior-output:${portName}`, o.content, nonce))
     lines.push('')
   }
   return lines.join('\n').trimEnd()

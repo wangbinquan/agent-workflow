@@ -36,6 +36,9 @@ function fail(msg: string): never {
 // Drain stdin (the prompt). Without reading it the parent's stdin.write could
 // block on a full pipe for large prompts.
 const prompt = await Bun.stdin.text()
+const envelopeNonce = [...prompt.matchAll(/\bnonce="([^"]+)"/g)].at(-1)?.[1]
+const openEnvelope = (kind: 'output' | 'clarify'): string =>
+  envelopeNonce === undefined ? `<workflow-${kind}>` : `<workflow-${kind} nonce="${envelopeNonce}">`
 
 if (env.MOCK_CLAUDE_CAPTURE_ARGV_TO) {
   writeFileSync(env.MOCK_CLAUDE_CAPTURE_ARGV_TO, JSON.stringify(argv) + '\n', { flag: 'a' })
@@ -94,7 +97,7 @@ if (env.MOCK_CLAUDE_ECHO_PROMPT === '1') {
     } catch (e) {
       fail(`MOCK_CLAUDE_OUTPUTS is not valid JSON: ${(e as Error).message}`)
     }
-    let envelope = '<workflow-output>\n'
+    let envelope = `${openEnvelope('output')}\n`
     for (const [name, content] of Object.entries(outputs)) {
       envelope += `  <port name="${name}">${content}</port>\n`
     }
@@ -102,7 +105,7 @@ if (env.MOCK_CLAUDE_ECHO_PROMPT === '1') {
     blocks.push(envelope)
   }
   if (env.MOCK_CLAUDE_CLARIFY_BODY !== undefined) {
-    blocks.push(`<workflow-clarify>${env.MOCK_CLAUDE_CLARIFY_BODY}</workflow-clarify>`)
+    blocks.push(`${openEnvelope('clarify')}${env.MOCK_CLAUDE_CLARIFY_BODY}</workflow-clarify>`)
   }
   text = blocks.join('\n')
 }

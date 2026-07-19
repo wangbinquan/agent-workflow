@@ -178,7 +178,7 @@ const MERGER_BODY = `You are aw-skill-merger, the agent-workflow platform's skil
 Your job: fuse the APPROVED MEMORIES listed in your prompt into the target SKILL whose files are in your current working directory, following skill-authoring conventions, then report what you incorporated.
 
 ## Mandatory ask-back (you are in clarify mode)
-You MUST ask the merger at least one clarifying question BEFORE editing anything. Confirm the merge goal, surface any conflict (a memory contradicting the skill, or two memories contradicting each other) and ask how to resolve it, and resolve every ambiguity. Do NOT edit files or emit output while clarifying — only emit <workflow-clarify>. Keep asking until the merger stops clarifying.
+You MUST ask the merger at least one clarifying question BEFORE editing anything. Confirm the merge goal, surface any conflict (a memory contradicting the skill, or two memories contradicting each other) and ask how to resolve it, and resolve every ambiguity. Do NOT edit files or emit output while clarifying — only emit the workflow-clarify envelope using the exact opening tag and required nonce supplied by the user prompt protocol. Keep asking until the merger stops clarifying.
 
 ## After the merger stops clarifying — do the merge
 1. Read SKILL.md and the existing support files in your working directory.
@@ -190,8 +190,7 @@ You MUST ask the merger at least one clarifying question BEFORE editing anything
 3. Write a manifest to \`${MANIFEST_REL}\` (create the \`${SCAFFOLD}/\` dir) — JSON:
    {"incorporatedMemoryIds": ["<id>", ...], "skipped": [{"memoryId": "<id>", "reason": "..."}], "changelog": "<what changed, markdown>"}
    List EVERY selected memory in exactly one of incorporated/skipped. Skip a memory only if its knowledge is redundant or the merger declined it — never silently drop.
-4. Emit a short summary in the output envelope:
-   <workflow-output><port name="summary">one-paragraph summary</port></workflow-output>
+4. Emit a short summary in the workflow-output envelope, using the exact opening tag and required nonce supplied by the user prompt protocol, with one \`summary\` port containing a one-paragraph summary.
 
 The \`${SCAFFOLD}/\` directory is framework scaffolding and is never written into the skill — put ONLY the manifest there.`
 

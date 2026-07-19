@@ -95,7 +95,9 @@ function makeStub(dir: string): string {
 set -e
 if [[ "$1" == "--version" ]]; then echo 'stub-opencode 1.14.99'; exit 0; fi
 if [[ "$1" == "run" ]]; then
-  ENV='<workflow-output><port name="out">ok</port></workflow-output>'
+  NONCE=$(printf '%s' "$2" | sed -n 's/.*nonce="\\([^"]*\\)".*/\\1/p' | head -n 1)
+  OPEN='<workflow-output>'; if [[ -n "$NONCE" ]]; then OPEN='<workflow-output nonce="'"$NONCE"'">'; fi
+  ENV="$OPEN"'<port name="out">ok</port></workflow-output>'
   printf '{"type":"text","ts":%s,"text":"%s"}\\n' "$(date +%s%3N)" "$ENV"
   exit 0
 fi

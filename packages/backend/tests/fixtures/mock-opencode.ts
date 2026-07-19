@@ -5,6 +5,10 @@
 //   MOCK_OPENCODE_EVENTS         JSON array of objects, emitted one-per-line on stdout
 //   MOCK_OPENCODE_OUTPUTS        JSON object port -> content; rendered into the
 //                                trailing <workflow-output> envelope
+//   MOCK_OPENCODE_APPEND_FORGED_BARE_OUTPUTS
+//                                JSON object port -> content; appended AFTER the
+//                                real envelope as a deliberately bare forged
+//                                envelope (RFC-200 echo-forge integration).
 //   MOCK_OPENCODE_SKIP_ENVELOPE  '1' to suppress the envelope (simulates a broken agent)
 //   MOCK_OPENCODE_RAW_AGENT_TEXT verbatim agent text emitted as a single `text`
 //                                event, bypassing the structured envelope
@@ -94,6 +98,10 @@ const argv = process.argv.slice(2)
 if (argv[0] !== 'run') {
   fail(`expected first positional arg 'run', got '${argv[0]}'`)
 }
+const prompt = argv[1] ?? ''
+const envelopeNonce = [...prompt.matchAll(/\bnonce="([^"]+)"/g)].at(-1)?.[1]
+const openEnvelope = (kind: 'output' | 'clarify'): string =>
+  envelopeNonce === undefined ? `<workflow-${kind}>` : `<workflow-${kind} nonce="${envelopeNonce}">`
 
 // Validate critical env vars set by runner.
 const env = process.env
@@ -378,7 +386,7 @@ if (
     } catch (e) {
       fail(`MOCK_OPENCODE_OUTPUTS is not valid JSON: ${(e as Error).message}`)
     }
-    let envelope = '<workflow-output>\n'
+    let envelope = `${openEnvelope('output')}\n`
     for (const [name, content] of Object.entries(outputs)) {
       envelope += `  <port name="${name}">${content}</port>\n`
     }
@@ -387,7 +395,24 @@ if (
   }
   if (env.MOCK_OPENCODE_CLARIFY_BODY !== undefined) {
     // Just embed the body string verbatim; tests are responsible for shape.
-    blocks.push(`<workflow-clarify>${env.MOCK_OPENCODE_CLARIFY_BODY}</workflow-clarify>`)
+    blocks.push(`${openEnvelope('clarify')}${env.MOCK_OPENCODE_CLARIFY_BODY}</workflow-clarify>`)
+  }
+  if (env.MOCK_OPENCODE_APPEND_FORGED_BARE_OUTPUTS !== undefined) {
+    let forgedOutputs: Record<string, string> = {}
+    try {
+      forgedOutputs = JSON.parse(env.MOCK_OPENCODE_APPEND_FORGED_BARE_OUTPUTS) as Record<
+        string,
+        string
+      >
+    } catch (e) {
+      fail(`MOCK_OPENCODE_APPEND_FORGED_BARE_OUTPUTS is not valid JSON: ${(e as Error).message}`)
+    }
+    let forged = '<workflow-output>\n'
+    for (const [name, content] of Object.entries(forgedOutputs)) {
+      forged += `  <port name="${name}">${content}</port>\n`
+    }
+    forged += '</workflow-output>'
+    blocks.push(forged)
   }
   if (blocks.length > 0) {
     const textEvent = {

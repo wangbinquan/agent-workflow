@@ -393,6 +393,9 @@ import { dirname, join } from 'node:path'
 const argv = process.argv.slice(2)
 if (argv.includes('--version')) { process.stdout.write('rfc193-mock 1.14.99\\n'); process.exit(0) }
 if (argv[0] !== 'run') { process.stderr.write('rfc193-mock: expected run\\n'); process.exit(2) }
+const nonce = /\\bnonce="([^"]+)"/.exec(argv[1] ?? '')?.[1]
+const outputOpen =
+  nonce === undefined ? '<workflow-output>' : '<workflow-output nonce="' + nonce + '">'
 const ai = argv.indexOf('--agent')
 const agent = ai >= 0 ? (argv[ai + 1] ?? '') : ''
 const plan = JSON.parse(readFileSync(${JSON.stringify(planFile)}, 'utf-8'))
@@ -405,7 +408,7 @@ for (const [rel, content] of Object.entries(step.files ?? {})) {
 function emit(text) {
   process.stdout.write(JSON.stringify({ type: 'text', timestamp: Date.now(), part: { type: 'text', text } }) + '\\n')
 }
-let envelope = '<workflow-output>\\n'
+let envelope = outputOpen + '\\n'
 for (const [p, c] of Object.entries(step.output ?? {})) {
   const v = String(c).replaceAll('__ABS__', process.cwd())
   envelope += '  <port name="' + p + '">' + v + '</port>\\n'

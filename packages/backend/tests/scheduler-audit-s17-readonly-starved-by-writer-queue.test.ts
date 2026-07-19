@@ -67,12 +67,16 @@ if (argv.includes('--version')) {
 }
 const i = argv.indexOf('--agent')
 const agent = i >= 0 ? (argv[i + 1] ?? '') : ''
+const prompt = argv[1] ?? ''
+const nonce = /\\bnonce="([^"]+)"/.exec(prompt)?.[1]
+const outputOpen =
+  nonce === undefined ? '<workflow-output>' : '<workflow-output nonce="' + nonce + '">'
 const trace = process.env.S17_TRACE_FILE ?? ''
 appendFileSync(trace, JSON.stringify({ agent, phase: 'start', t: Date.now() }) + '\\n')
 const delay = Number(process.env['S17_DELAY_MS_FOR_' + agent] ?? '0')
 if (Number.isFinite(delay) && delay > 0) await Bun.sleep(delay)
 const text =
-  '<workflow-output>\\n  <port name="summary">done-' + agent + '</port>\\n</workflow-output>'
+  outputOpen + '\\n  <port name="summary">done-' + agent + '</port>\\n</workflow-output>'
 process.stdout.write(
   JSON.stringify({ type: 'text', timestamp: Date.now(), part: { type: 'text', text } }) + '\\n',
 )

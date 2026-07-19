@@ -24,6 +24,7 @@
 
 import { renderEnvelopeFollowupPrompt, renderUserPrompt } from '@agent-workflow/shared'
 import { describe, expect, test } from 'bun:test'
+import { createHash } from 'node:crypto'
 
 const BASE = {
   promptTemplate:
@@ -180,4 +181,65 @@ describe('RFC-148 golden — renderEnvelopeFollowupPrompt reason 矩阵', () => 
       ).toBe(EXPECTED_FOLLOWUP[name]!)
     })
   }
+})
+
+// RFC-200: keep the legacy byte-for-byte matrix above unchanged for NULL-nonce
+// in-flight runs, and independently lock every live row with a deterministic
+// nonce. Hashes keep this second exact-byte golden reviewable without copying a
+// second multi-kilobyte prompt matrix into the fixture.
+const RFC200_GOLDEN_NONCE = 'RFC200GOLDEN'
+const sha256 = (value: string): string => createHash('sha256').update(value).digest('hex')
+
+const EXPECTED_NONCED_RENDER_SHA256: Record<string, string> = {
+  bare: 'caee1c5e12efa432b6c92325e92d282e7321232b6f4e7464498c67223a45232f',
+  'clarify-channel': '546ad04c7e5e08a5fdb6a7334c767ddfb49108018cf593214587812fa6703df3',
+  'flat-isolated': '4f101c157c5ff001661f4edb34fc61fb63cf8caa3b35d6d2f6a4a8160224d1b4',
+  'flat-inline': '67fc113578138a849e7d516b82c9d3aa8d52e8ab611581a530fff1110f11f563',
+  'inline-no-channel': '0c816d1baf77113c1bc5b02ee6116637c1dbfaab6a2526c44ef5ca6bb3e74d38',
+  'stop-notice': 'adec70e7cfe890bc2720745f61cb76e22d4f412acf46b6e39a64e645c2feb7c9',
+  'prior-output-askback': 'aaa6e46b4f2c60080b13f601c6329de555aad263d27b932f0ec13a0b969ede09',
+  'prior-output-update': 'af78252b01af511e33aad40dbb4e50dc2c669aa2eef3c0ca93e6370477b8db32',
+  'prior-output-inline-suppressed':
+    '67fc113578138a849e7d516b82c9d3aa8d52e8ab611581a530fff1110f11f563',
+  'review-reject': '9866bb39a5c23d88b04d3414d5cdadac42c7738f2050d17ab1d05a6e1dae941f',
+  'review-iterate-siblings': '05606309959108ba08203ad3ee535e1d72dfb9d135fcf495354bc4090f6e65bc',
+}
+const EXPECTED_NONCED_FOLLOWUP_SHA256: Record<string, string> = {
+  'envelope-missing-nochan': 'cb8ed18283dd7224d8cb842bc2444f11375e911466f42fb403bed903e029473b',
+  'envelope-missing-chan': '9e7565b43766caf988fe02193663a3bad6f2d4194a00e8c5f7d9aa83588ac785',
+  'both-present': '7b27eff6597b33c4c3f9bbf629e7276c14c63863385524e53f42fb292f6e1dec',
+  'clarify-malformed': '28a86583bfbda6daa9523329250e9dfc91551d5d0195eb30959ec4fe56c915a0',
+  'clarify-required': 'b2302834ba2a616b31b28e4b23a97de576048bc3da05b3b37f43ebdce0fce176',
+  'envelope-port-malformed': 'eab2eb7aa29e017efe03112dc3d64a6d5f930b3f04854a27b6abe61faa4d9842',
+  'port-validation': '280c660dbea89b1e56fcfd867dcedb67d4bce5436b1c01bd9dda2e29b6a03763',
+  'clarify-malformed-continue': '17ccd293730e684098174bb2ee1ea668e75afd2f27ad8bbc36dff2d74d769210',
+}
+
+describe('RFC-200 golden — deterministic nonced prompt matrix', () => {
+  test('renderUserPrompt live rows', () => {
+    const actual = Object.fromEntries(
+      Object.entries(RENDER_ROWS).map(([name, input]) => [
+        name,
+        sha256(renderUserPrompt({ ...input, envelopeNonce: RFC200_GOLDEN_NONCE } as never)),
+      ]),
+    )
+    expect(actual).toEqual(EXPECTED_NONCED_RENDER_SHA256)
+  })
+
+  test('renderEnvelopeFollowupPrompt reason rows', () => {
+    const actual = Object.fromEntries(
+      Object.entries(FU_ROWS).map(([name, input]) => [
+        name,
+        sha256(
+          renderEnvelopeFollowupPrompt({
+            agentOutputs: ['out'],
+            agentOutputKinds: { out: 'markdown' },
+            envelopeNonce: RFC200_GOLDEN_NONCE,
+            ...input,
+          } as never),
+        ),
+      ]),
+    )
+    expect(actual).toEqual(EXPECTED_NONCED_FOLLOWUP_SHA256)
+  })
 })

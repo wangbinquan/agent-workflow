@@ -48,6 +48,13 @@ mkdir -p "$state_dir"
 # Capture prompt (first positional after 'run') before flag-parsing eats it.
 shift
 RAW_PROMPT="${1-}"
+envelope_nonce=$(printf '%s\n' "$RAW_PROMPT" | sed -n 's/.*nonce="\([^"]*\)".*/\1/p' | tail -n 1)
+if [ -z "$envelope_nonce" ]; then
+  echo "stub-opencode-cross-clarify: prompt is missing the RFC-200 envelope nonce" >&2
+  exit 3
+fi
+output_open='<workflow-output nonce=\"'"$envelope_nonce"'\">'
+clarify_open='<workflow-clarify nonce=\"'"$envelope_nonce"'\">'
 agent="default"
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -85,8 +92,8 @@ fi
 # does its third invocation (count 3) emit <workflow-output>.
 if [ "$agent" = "questioner" ] && [ "$count" -le 2 ]; then
   # questioner.first (count 1) + questioner.cascade (count 2): emit a cross-clarify question.
-  body='{"questions":[{"id":"q-redis","title":"Should we use Redis for caching?","kind":"single","recommended":true,"options":["Yes","No","Maybe"]}]}'
-  printf '%s\n' "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-clarify>$body</workflow-clarify>\"}}"
+  body='{\"questions\":[{\"id\":\"q-redis\",\"title\":\"Should we use Redis for caching?\",\"kind\":\"single\",\"recommended\":true,\"options\":[\"Yes\",\"No\",\"Maybe\"]}]}'
+  printf '%s\n' "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"$clarify_open$body</workflow-clarify>\"}}"
   exit 0
 fi
 
@@ -106,5 +113,5 @@ case "$agent" in
     text="other v$count"
     ;;
 esac
-printf '%s\n' "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output>\\n  <port name=\\\"$port\\\">$text</port>\\n</workflow-output>\"}}"
+printf '%s\n' "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"$output_open\\n  <port name=\\\"$port\\\">$text</port>\\n</workflow-output>\"}}"
 exit 0

@@ -66,6 +66,10 @@ function writeShim(appHome: string): string {
 import { writeFileSync } from 'node:fs'
 import { join, basename } from 'node:path'
 const cwd = process.cwd()
+const prompt = process.argv.slice(2)[1] ?? ''
+const nonce = /\\bnonce="([^"]+)"/.exec(prompt)?.[1]
+const outputOpen =
+  nonce === undefined ? '<workflow-output>' : '<workflow-output nonce="' + nonce + '">'
 const f = join(cwd, 'f.txt')
 const isMerge = cwd.includes('/resolve-')
 let port
@@ -83,7 +87,7 @@ if (isMerge) {
   writeFileSync(f, 'worker-' + basename(cwd) + '\\n')
   port = 'summary'
 }
-const envl = '<workflow-output>\\n  <port name="' + port + '">done</port>\\n</workflow-output>'
+const envl = outputOpen + '\\n  <port name="' + port + '">done</port>\\n</workflow-output>'
 process.stdout.write(
   JSON.stringify({ type: 'text', timestamp: Date.now(), part: { type: 'text', text: envl } }) + '\\n',
 )

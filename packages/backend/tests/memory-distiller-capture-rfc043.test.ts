@@ -25,6 +25,10 @@ import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
+function emptyDistillerStdout(input: Parameters<DistillerSpawnFn>[0]): string {
+  return `<workflow-output nonce="${input.envelopeNonce}"><port name="candidates">{"candidates":[]}</port></workflow-output>`
+}
+
 function seedJobRow(db: DbClient, attempts = 0) {
   const id = ulid()
   db.insert(memoryDistillJobs)
@@ -82,12 +86,9 @@ describe('runDistill RFC-043 capture extensions', () => {
     const memId = seedGlobalApproved(db, 'always run typecheck before push')
     const row = seedJobRow(db, 0)
     const job = rowToDistillJob(row)
-    const spawnFn: DistillerSpawnFn = async () => ({
+    const spawnFn: DistillerSpawnFn = async (input) => ({
       exitCode: 0,
-      stdout: `{"sessionID":"sess-xyz","type":"step-start"}
-<workflow-output>
-<port name="candidates">{"candidates":[]}</port>
-</workflow-output>`,
+      stdout: `{"sessionID":"sess-xyz","type":"step-start"}\n${emptyDistillerStdout(input)}`,
       stderr: 'some warning',
     })
     await runDistill({ db, job, siblings: [job], spawnFn })

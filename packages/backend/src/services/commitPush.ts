@@ -10,7 +10,12 @@
 import type { DetectedEnvelopeKind } from '@/services/envelope'
 import { extractLastEnvelope, parseEnvelope } from '@/services/envelope'
 import type { Agent, Language, NodeRunStatus } from '@agent-workflow/shared'
-import { COMMIT_PUSH_NODE_PREFIX } from '@agent-workflow/shared'
+import {
+  COMMIT_PUSH_NODE_PREFIX,
+  envelopeOpenTag,
+  fenceUntrusted,
+  sanitizeInlineField,
+} from '@agent-workflow/shared'
 
 /** Synthetic node_id prefix marking a framework commit&push node_run.
  *  flag-audit W0: canonical home moved to shared/lifecycle.ts（前端过滤同用）；
@@ -46,7 +51,8 @@ export function buildCommitAgent(): Agent {
     frontmatterExtra: {},
     bodyMd:
       'You write git commit messages and repair rejected pushes. Always reply with exactly one ' +
-      `<workflow-output> envelope containing a single <port name="${COMMIT_MESSAGE_PORT}"> element.`,
+      'workflow-output envelope using the exact opening tag and required nonce supplied by the ' +
+      `user prompt protocol, containing a single ${COMMIT_MESSAGE_PORT} port.`,
     schemaVersion: 1,
     createdAt: now,
     updatedAt: now,
@@ -198,16 +204,31 @@ export const COMMIT_PUSH_OUTPUT_LANG_DIRECTIVE: Readonly<Record<Language, string
 /** Prompt for the built-in commit agent: summarize the staged diff into a
  *  Conventional-Commits-style message. `lang` steers only the summary/body
  *  language (default en-US ≡ unset; the ASCII prefix is preserved either way). */
-export function buildCommitMessagePrompt(opts: {
-  repoName: string
-  branch: string
-  baseRef: string
-  stat: string
-  diffTruncated: string
-  lang?: Language
-}): string {
+export function buildCommitMessagePrompt(
+  opts: {
+    repoName: string
+    branch: string
+    baseRef: string
+    stat: string
+    diffTruncated: string
+    lang?: Language
+  },
+  envelopeNonce = '',
+): string {
+  const inline = (value: string): string =>
+    envelopeNonce.length > 0 ? sanitizeInlineField(value) : value
+  const data = (name: string, value: string): string => fenceUntrusted(name, value, envelopeNonce)
+  const stat = opts.stat.trim() || '(no stat available)'
+  const statBlock =
+    envelopeNonce.length > 0 ? [data('commit-diff-stat', stat)] : ['```', stat, '```']
+  const diffBlock =
+    opts.diffTruncated.trim() === ''
+      ? []
+      : envelopeNonce.length > 0
+        ? ['', 'Diff (possibly truncated):', data('commit-diff', opts.diffTruncated)]
+        : ['', 'Diff (possibly truncated):', '```diff', opts.diffTruncated, '```']
   return [
-    `You are generating a git commit message for changes an AI agent just made in repository "${opts.repoName}" (branch ${opts.branch}, based on ${opts.baseRef}).`,
+    `You are generating a git commit message for changes an AI agent just made in repository "${inline(opts.repoName)}" (branch ${inline(opts.branch)}, based on ${inline(opts.baseRef)}).`,
     '',
     'Write ONE Conventional-Commits style message:',
     '- First line: `<type>(<optional scope>): <concise summary>` (≤ 72 chars).',
@@ -215,15 +236,11 @@ export function buildCommitMessagePrompt(opts: {
     '- Do not invent changes that are not in the diff. Describe what changed.',
     '',
     'Changed files (git diff --stat):',
-    '```',
-    opts.stat.trim() || '(no stat available)',
-    '```',
-    ...(opts.diffTruncated.trim() !== ''
-      ? ['', 'Diff (possibly truncated):', '```diff', opts.diffTruncated, '```']
-      : []),
+    ...statBlock,
+    ...diffBlock,
     '',
     `Return ONLY the message inside the output envelope, e.g.:`,
-    `<workflow-output><port name="${COMMIT_MESSAGE_PORT}">feat(auth): extract token middleware</port></workflow-output>`,
+    `${envelopeOpenTag(envelopeNonce)}<port name="${COMMIT_MESSAGE_PORT}">feat(auth): extract token middleware</port></workflow-output>`,
     // RFC-157: language directive last so the model reads it most recently.
     '',
     COMMIT_PUSH_OUTPUT_LANG_DIRECTIVE[opts.lang ?? 'en-US'],
@@ -232,35 +249,37 @@ export function buildCommitMessagePrompt(opts: {
 
 /** Prompt for the repair session: a push was rejected; produce a corrected
  *  commit message (most server-side rejections are message-format policy). */
-export function buildRepairPrompt(opts: {
-  branch: string
-  pushStderr: string
-  currentMessage: string
-  stat: string
-  priorAttempts: number
-  lang?: Language
-}): string {
+export function buildRepairPrompt(
+  opts: {
+    branch: string
+    pushStderr: string
+    currentMessage: string
+    stat: string
+    priorAttempts: number
+    lang?: Language
+  },
+  envelopeNonce = '',
+): string {
+  const inline = (value: string): string =>
+    envelopeNonce.length > 0 ? sanitizeInlineField(value) : value
+  const data = (name: string, value: string): string => fenceUntrusted(name, value, envelopeNonce)
+  const block = (name: string, value: string): string[] =>
+    envelopeNonce.length > 0 ? [data(name, value)] : ['```', value, '```']
   return [
-    `A "git push" of branch ${opts.branch} was REJECTED by the remote. This is repair attempt ${opts.priorAttempts + 1}.`,
+    `A "git push" of branch ${inline(opts.branch)} was REJECTED by the remote. This is repair attempt ${opts.priorAttempts + 1}.`,
     'Most such rejections are commit-message policy hooks (e.g. Conventional Commits, a required Change-Id / ticket key, max subject length).',
     '',
     'The remote said:',
-    '```',
-    opts.pushStderr.trim() || '(no remote output)',
-    '```',
+    ...block('push-rejection', opts.pushStderr.trim() || '(no remote output)'),
     '',
     'The current commit message is:',
-    '```',
-    opts.currentMessage.trim(),
-    '```',
+    ...block('current-commit-message', opts.currentMessage.trim()),
     '',
     'Changed files (git diff --stat):',
-    '```',
-    opts.stat.trim() || '(no stat available)',
-    '```',
+    ...block('commit-diff-stat', opts.stat.trim() || '(no stat available)'),
     '',
     `Produce a corrected commit message that satisfies the remote's policy. Return ONLY:`,
-    `<workflow-output><port name="${COMMIT_MESSAGE_PORT}">...corrected message...</port></workflow-output>`,
+    `${envelopeOpenTag(envelopeNonce)}<port name="${COMMIT_MESSAGE_PORT}">...corrected message...</port></workflow-output>`,
     // RFC-157: repair message uses the same configured language as the initial
     // one (initial + repair are one agent, one commit-message surface). The
     // remote's structural policy (Change-Id / ticket key) stays ASCII, so the
@@ -272,10 +291,13 @@ export function buildRepairPrompt(opts: {
 
 /** Extract the `commit_message` port from the last `<workflow-output>` block in
  *  the agent's stdout. Returns null when absent/empty. */
-export function parseCommitMessageFromEnvelope(stdout: string): string | null {
-  const env = extractLastEnvelope(stdout)
+export function parseCommitMessageFromEnvelope(
+  stdout: string,
+  envelopeNonce?: string,
+): string | null {
+  const env = extractLastEnvelope(stdout, envelopeNonce)
   if (env === null) return null
-  const { ports } = parseEnvelope(env, [COMMIT_MESSAGE_PORT])
+  const { ports } = parseEnvelope(env, [COMMIT_MESSAGE_PORT], envelopeNonce)
   const msg = (ports.get(COMMIT_MESSAGE_PORT) ?? '').trim()
   return msg.length > 0 ? msg : null
 }

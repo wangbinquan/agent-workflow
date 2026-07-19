@@ -43,6 +43,13 @@ agent="default"
 session_resume=""
 shift  # drop leading 'run'
 RAW_PROMPT="${1-}"
+envelope_nonce=$(printf '%s\n' "$RAW_PROMPT" | sed -n 's/.*nonce="\([^"]*\)".*/\1/p' | tail -n 1)
+if [ -z "$envelope_nonce" ]; then
+  echo "stub-opencode-clarify-inline: prompt is missing the RFC-200 envelope nonce" >&2
+  exit 3
+fi
+output_open='<workflow-output nonce=\"'"$envelope_nonce"'\">'
+clarify_open='<workflow-clarify nonce=\"'"$envelope_nonce"'\">'
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --agent)
@@ -73,13 +80,13 @@ fi
 printf 'x' >> "$key"
 
 if [ "$already_called" -eq 0 ]; then
-  body='{"questions":[{"id":"q-db","title":"Which database should we use?","kind":"single","recommended":true,"options":["Postgres","SQLite"]}]}'
-  printf '%s\n' "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-clarify>$body</workflow-clarify>\"}}"
+  body='{\"questions\":[{\"id\":\"q-db\",\"title\":\"Which database should we use?\",\"kind\":\"single\",\"recommended\":true,\"options\":[\"Postgres\",\"SQLite\"]}]}'
+  printf '%s\n' "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"$clarify_open$body</workflow-clarify>\"}}"
   exit 0
 fi
 
 # Round 1: emit final <workflow-output>. The e2e separately greps
 # CLARIFY_INLINE_ARGV_LOG to confirm `--session $session_id` was passed.
 text="design after inline-clarify $agent (session=$session_resume)"
-printf '%s\n' "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"<workflow-output>\\n  <port name=\\\"design\\\">$text</port>\\n</workflow-output>\"}}"
+printf '%s\n' "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"$output_open\\n  <port name=\\\"design\\\">$text</port>\\n</workflow-output>\"}}"
 exit 0

@@ -23,14 +23,22 @@ case "${1-}" in
     ;;
 esac
 
+RAW_PROMPT="${2-}"
+envelope_nonce=$(printf '%s\n' "$RAW_PROMPT" | sed -n 's/.*nonce="\([^"]*\)".*/\1/p' | tail -n 1)
+if [ -z "$envelope_nonce" ]; then
+  echo "stub-opencode-commit: prompt is missing the RFC-200 envelope nonce" >&2
+  exit 3
+fi
+output_open='<workflow-output nonce=\"'"$envelope_nonce"'\">'
+
 case "$*" in
   *commit_message*)
-    printf '%s\n' '{"type":"text","timestamp":0,"part":{"type":"text","text":"<workflow-output><port name=\"commit_message\">feat: e2e stub commit</port></workflow-output>"}}'
+    printf '%s\n' "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"$output_open<port name=\\\"commit_message\\\">feat: e2e stub commit</port></workflow-output>\"}}"
     ;;
   *)
     # Dirty the worktree (cwd is the task worktree) so a commit is warranted.
     printf 'e2e change %s\n' "$$" > e2e-change.txt
-    printf '%s\n' '{"type":"text","timestamp":0,"part":{"type":"text","text":"<workflow-output><port name=\"answer\">stub e2e output</port></workflow-output>"}}'
+    printf '%s\n' "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"$output_open<port name=\\\"answer\\\">stub e2e output</port></workflow-output>\"}}"
     ;;
 esac
 exit 0

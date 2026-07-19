@@ -53,12 +53,15 @@ import { existsSync } from 'node:fs'
 const argv = process.argv.slice(2)
 if (argv.includes('--version')) { process.stdout.write('rfc097-gate-mock 1.14.99\\n'); process.exit(0) }
 if (argv[0] !== 'run') { process.stderr.write('rfc097-gate-mock: expected run\\n'); process.exit(2) }
+const nonce = /\\bnonce="([^"]+)"/.exec(argv[1] ?? '')?.[1]
+const outputOpen =
+  nonce === undefined ? '<workflow-output>' : '<workflow-output nonce="' + nonce + '">'
 const deadline = Date.now() + 20000
 while (!existsSync(${JSON.stringify(gateFile)})) {
   if (Date.now() > deadline) { process.stderr.write('rfc097-gate-mock: gate timeout\\n'); process.exit(1) }
   await Bun.sleep(25)
 }
-const envelope = '<workflow-output>\\n  <port name="out">ok</port>\\n</workflow-output>'
+const envelope = outputOpen + '\\n  <port name="out">ok</port>\\n</workflow-output>'
 process.stdout.write(JSON.stringify({ type: 'text', timestamp: Date.now(), part: { type: 'text', text: envelope } }) + '\\n')
 process.exit(0)
 `

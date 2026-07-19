@@ -162,6 +162,22 @@ export function generateEnvelopeNonce(): string {
   return randomBytes(8).toString('hex')
 }
 
+/**
+ * RFC-200 read seam shared by every prompt producer and the runner parser.
+ * NULL means the row was dispatched before migration 0097 (or is a legacy
+ * direct-construction test), so callers deliberately fall back to bare tags.
+ */
+export async function loadRunEnvelopeNonce(db: DbClient, nodeRunId: string): Promise<string> {
+  const row = (
+    await db
+      .select({ envelopeNonce: nodeRuns.envelopeNonce })
+      .from(nodeRuns)
+      .where(eq(nodeRuns.id, nodeRunId))
+      .limit(1)
+  )[0]
+  return row?.envelopeNonce ?? ''
+}
+
 export function buildMintNodeRunValues(
   args: MintNodeRunArgs & { id?: string },
 ): typeof nodeRuns.$inferInsert {

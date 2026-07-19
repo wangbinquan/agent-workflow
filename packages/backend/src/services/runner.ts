@@ -86,6 +86,7 @@ import {
 } from './memoryInject'
 import type { FailureCode, InjectedMemorySnapshot } from '@agent-workflow/shared'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
+import { loadRunEnvelopeNonce } from '@/services/nodeRunMint'
 
 // RFC-143 PR-4: SkillSource / ResolvedSkill moved to runtime/types.ts (drivers
 // type their skill inputs there); re-exported so scheduler/tests keep resolving.
@@ -425,6 +426,10 @@ export { pickRuntimeHead } from './runtime/head'
 export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   const log = opts.log ?? createLogger('runner')
   const runRoot = join(opts.appHome, 'runs', opts.taskId, opts.nodeRunId)
+  // RFC-200: this persisted value is the single source for BOTH prompt emit
+  // and stdout parse. Empty means a pre-upgrade in-flight row and preserves
+  // the historical bare-envelope protocol byte-for-byte.
+  const envelopeNonce = await loadRunEnvelopeNonce(opts.db, opts.nodeRunId)
 
   // RFC-111 D15: the runtime is frozen by the dispatcher into node_runs.runtime
   // and threaded here. opencode is the default and its spawn/pump path is
@@ -518,6 +523,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         primaryAgent: opts.agent,
         dependents: opts.dependents ?? [],
         budget: opts.memoryInjectionBudget,
+        envelopeNonce,
       })
       injectedSnapshot = snapshot
       injectedMemoryBlock = memoryBlock
@@ -677,6 +683,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   const prompt =
     followupMode !== undefined
       ? renderEnvelopeFollowupPrompt({
+          envelopeNonce,
           hasClarifyChannel: clarifyMandatory || clarifyOptional,
           // RFC-165 (F12): keep the correction round dual-choice for optional
           // nodes — the mandatory-only bullets would forbid a valid
@@ -698,6 +705,9 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           inputs: opts.inputs,
           meta: opts.templateMeta,
           agentOutputs: opts.agent.outputs,
+          envelopeNonce,
+          hasExternalUntrustedInput:
+            envelopeNonce.length > 0 && injectedMemoryBlock?.includes('<aw-input ') === true,
           ...(opts.workgroupProtocolBlock !== undefined
             ? { workgroupProtocolBlock: opts.workgroupProtocolBlock }
             : {}),
@@ -1198,7 +1208,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     | undefined
   if (status === 'done') {
     const accumulatedText = agentText.join('\n')
-    const kind = detectEnvelopeKind(accumulatedText)
+    const kind = detectEnvelopeKind(accumulatedText, envelopeNonce)
     // RFC-100: while mandatory ask-back is ACTIVE (channel wired AND the user
     // has not clicked "Stop clarifying" — RFC-148: directive === 'mandatory'
     // on the clarify-channel ADT), the ONLY valid reply is a
@@ -1272,7 +1282,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       errorMessage =
         'clarify-and-output-both-present: agent reply contained BOTH <workflow-output> and <workflow-clarify>; the framework requires exactly one'
     } else if (kind === 'clarify') {
-      const body = extractClarifyEnvelopeBody(accumulatedText)
+      const body = extractClarifyEnvelopeBody(accumulatedText, envelopeNonce)
       // RFC-056: cross-clarify path disables the RFC-023 5-question cap.
       // RFC-148: the cap follows the WIRING family alone. RFC-183 narrows the
       // rounds that reach this parse to the invited dispositions (mandatory /
@@ -1315,7 +1325,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       errorMessage = 'no <workflow-output> envelope found in stdout'
     } else {
       // kind === 'output' — legacy happy path.
-      const envelope = extractLastEnvelope(accumulatedText)
+      const envelope = extractLastEnvelope(accumulatedText, envelopeNonce)
       // envelope is non-null here because detectEnvelopeKind matched, but
       // guard defensively for type narrowing.
       if (envelope === null) {
@@ -1323,7 +1333,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         failureCode = 'envelope-missing'
         errorMessage = 'no <workflow-output> envelope found in stdout'
       } else {
-        const parsed = parseEnvelope(envelope, opts.agent.outputs)
+        const parsed = parseEnvelope(envelope, opts.agent.outputs, envelopeNonce)
         outputs = Object.fromEntries(parsed.ports)
         if (parsed.missingDeclared.length > 0) {
           log.warn('agent omitted declared ports', {
@@ -1400,7 +1410,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
                 port: name,
               })
               if (isPathishKindString(kind)) {
-                // 单值 path：detailed 给 sourcePath；list<path>：items 给逐项。
+                // 单值 path：detailed 给 sourcePath；list<path<*>>：items 给逐项。
                 const its =
                   resolved.items !== undefined
                     ? resolved.items

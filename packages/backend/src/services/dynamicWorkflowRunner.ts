@@ -25,6 +25,7 @@ import {
   DEFAULT_PROTOCOL_RETRY_BUDGET,
   DwGeneratedWorkflowSchema,
   dwGeneratedToWorkflowDef,
+  fenceUntrusted,
   parseDwState,
   WorkgroupRuntimeConfigSchema,
   type Agent,
@@ -37,7 +38,7 @@ import type { DbClient } from '@/db/client'
 import { nodeRuns, tasks } from '@/db/schema'
 import { getAgent } from '@/services/agent'
 import { setNodeRunStatus } from '@/services/lifecycle'
-import { mintNodeRun } from '@/services/nodeRunMint'
+import { loadRunEnvelopeNonce, mintNodeRun } from '@/services/nodeRunMint'
 import {
   buildOrchestratorAgent,
   buildOrchestratorPrompt,
@@ -289,6 +290,7 @@ export async function runDynamicWorkflowGenerate(
       retryIndex: priorRuns.length,
       overrides: { agentOverrideName: orchestrator.name },
     })
+    const envelopeNonce = await loadRunEnvelopeNonce(db, runId)
 
     const prompt =
       buildOrchestratorPrompt({
@@ -296,9 +298,14 @@ export async function runDynamicWorkflowGenerate(
         goal: config.goal,
         pool,
         ...(dw.rejectionComment !== undefined ? { rejectionComment: dw.rejectionComment } : {}),
+        envelopeNonce,
       }) +
       (errorNotice !== null
-        ? `\n\n## Validation errors in your previous workflow\n\n${errorNotice}\n\nRe-emit a CORRECTED <workflow-output> envelope with the FULL workflow JSON.`
+        ? `\n\n## Validation errors in your previous workflow\n\n${fenceUntrusted(
+            'dynamic-workflow-validation-errors',
+            errorNotice,
+            envelopeNonce,
+          )}\n\nRe-emit a CORRECTED workflow-output envelope with the FULL workflow JSON and the exact required nonce.`
         : '')
 
     const result = await hooks.runHostNode({

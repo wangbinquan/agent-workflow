@@ -39,6 +39,7 @@ export * from './inventory'
 export * from './clarify'
 export * from './git-url'
 export * from './prompt'
+export * from './promptFencing' // RFC-200
 export * from './agent-md'
 export * from './skill-md'
 export * from './skill-zip'

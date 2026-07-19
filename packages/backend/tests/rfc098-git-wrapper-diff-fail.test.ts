@@ -52,12 +52,15 @@ if (argv.includes('--version')) {
   process.stdout.write('s24-shim 1.0.0\\n')
   process.exit(0)
 }
+const nonce = /\\bnonce="([^"]+)"/.exec(argv[1] ?? '')?.[1]
+const outputOpen =
+  nonce === undefined ? '<workflow-output>' : '<workflow-output nonce="' + nonce + '">'
 const wf = process.env.S24_WRITE_FILE ?? ''
 if (wf !== '') writeFileSync(join(process.cwd(), wf), 'written by probe\\n')
 if (process.env.S24_DELETE_GIT === '1') {
   rmSync(join(process.cwd(), '.git'), { recursive: true, force: true })
 }
-const text = '<workflow-output>\\n  <port name="summary">probed</port>\\n</workflow-output>'
+const text = outputOpen + '\\n  <port name="summary">probed</port>\\n</workflow-output>'
 process.stdout.write(
   JSON.stringify({ type: 'text', timestamp: Date.now(), part: { type: 'text', text } }) + '\\n',
 )

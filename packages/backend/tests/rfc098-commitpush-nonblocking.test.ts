@@ -59,6 +59,9 @@ if (argv.includes('--version')) {
   process.stdout.write('cp-shim 1.0.0\\n')
   process.exit(0)
 }
+const nonce = /\\bnonce="([^"]+)"/.exec(argv[1] ?? '')?.[1]
+const outputOpen =
+  nonce === undefined ? '<workflow-output>' : '<workflow-output nonce="' + nonce + '">'
 const ai = argv.indexOf('--agent')
 const agent = ai >= 0 ? (argv[ai + 1] ?? '') : ''
 const stateDir = process.env.CP_STATE_DIR ?? ''
@@ -89,13 +92,13 @@ if (agent === 'commit') {
   const delays = JSON.parse(process.env.CP_COMMIT_DELAYS ?? '[]')
   const d = Number(delays[n] ?? 0)
   if (Number.isFinite(d) && d > 0) await Bun.sleep(d)
-  text = '<workflow-output><port name="commit_message">test: cp shim commit</port></workflow-output>'
+  text = outputOpen + '<port name="commit_message">test: cp shim commit</port></workflow-output>'
 } else {
   const d = Number(process.env['CP_DELAY_MS_FOR_' + agent] ?? '0')
   if (Number.isFinite(d) && d > 0) await Bun.sleep(d)
   const wf = process.env['CP_WRITE_FILE_FOR_' + agent] ?? ''
   if (wf !== '') writeFileSync(join(process.cwd(), wf), 'written by ' + agent + '\\n')
-  text = '<workflow-output><port name="out">done-' + agent + '</port></workflow-output>'
+  text = outputOpen + '<port name="out">done-' + agent + '</port></workflow-output>'
 }
 process.stdout.write(
   JSON.stringify({ type: 'text', timestamp: Date.now(), part: { type: 'text', text } }) + '\\n',

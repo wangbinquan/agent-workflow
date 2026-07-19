@@ -465,9 +465,10 @@ describe('S-5 layer 3 — runtime: per-shard chain B runs green on empty input',
     expect(fixSpawns.length).toBe(2)
 
     // 对照组：boundary 注入是通的 —— audit 每个 shard 的 prompt 携带分片值。
-    const auditPrompts = auditSpawns.map((s) => s.prompt).sort()
-    expect(auditPrompts[0]).toContain('Audit a.md')
-    expect(auditPrompts[1]).toContain('Audit b.md')
+    const auditDocs = auditSpawns
+      .map((s) => s.prompt.match(/<aw-input name="doc" id="[^"]+">\n([\s\S]*?)\n<\/aw-input>/)?.[1])
+      .sort()
+    expect(auditDocs).toEqual(['a.md', 'b.md'])
 
     for (const s of fixSpawns) {
       // [FLIP] 长期修复（同 shardKey 上游 child 行解析）后：fix prompt 应

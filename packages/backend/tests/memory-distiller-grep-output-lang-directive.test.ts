@@ -34,7 +34,7 @@ async function readSrc(): Promise<string> {
  * editing DISTILLER_SYSTEM_PROMPT. Treat the diff line in this file as
  * the audit trail for prompt edits.
  */
-const BASELINE_SHA256 = 'c150524fb524b31420a06c6c5bdb67c1540181de28786cfb714ca87cf4ab3664'
+const BASELINE_SHA256 = 'd3e640d98cdbd1b2d09c7b813547879242f9bea944a7761a855dcf68eb054474'
 
 describe('RFC-050 grep guards — output-language directive', () => {
   test('G1: both directive strings appear verbatim in memoryDistiller.ts', async () => {

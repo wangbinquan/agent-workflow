@@ -57,6 +57,10 @@ const MINI_MOCK_SOURCE = `
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 const env = process.env
+const prompt = process.argv.slice(2)[1] ?? ''
+const nonce = /\\bnonce="([^"]+)"/.exec(prompt)?.[1]
+const outputOpen =
+  nonce === undefined ? '<workflow-output>' : '<workflow-output nonce="' + nonce + '">'
 const counterFile = env.S2B_COUNTER_FILE
 if (!counterFile) {
   process.stderr.write('S2B_COUNTER_FILE unset\\n')
@@ -109,7 +113,7 @@ if (n === 2) {
 }
 // fresh attempt 2: record the retry-start state, emit a valid envelope, succeed.
 if (env.S2B_MANIFEST_FRESH) recordManifest(env.S2B_MANIFEST_FRESH)
-const envelope = '<workflow-output>\\n  <port name="summary">ok</port>\\n</workflow-output>'
+const envelope = outputOpen + '\\n  <port name="summary">ok</port>\\n</workflow-output>'
 process.stdout.write(
   JSON.stringify({ type: 'text', timestamp: Date.now(), part: { type: 'text', text: envelope } }) +
     '\\n',

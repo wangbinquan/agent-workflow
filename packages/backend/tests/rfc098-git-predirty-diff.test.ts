@@ -49,6 +49,10 @@ import { join } from 'node:path'
 const argv = process.argv.slice(2)
 const ai = argv.indexOf('--agent')
 const agent = ai >= 0 ? (argv[ai + 1] ?? '') : ''
+const prompt = argv[1] ?? ''
+const nonce = /\\bnonce="([^"]+)"/.exec(prompt)?.[1]
+const outputOpen =
+  nonce === undefined ? '<workflow-output>' : '<workflow-output nonce="' + nonce + '">'
 const writes = JSON.parse(process.env.SHIM_WRITES ?? '{}')[agent] ?? {}
 for (const [fname, content] of Object.entries(writes)) {
   if (content === '__DELETE__') {
@@ -58,7 +62,7 @@ for (const [fname, content] of Object.entries(writes)) {
   }
 }
 const outs = JSON.parse(process.env.SHIM_OUTPUTS ?? '{}')[agent] ?? { summary: 'ok' }
-let envl = '<workflow-output>\\n'
+let envl = outputOpen + '\\n'
 for (const [p, c] of Object.entries(outs)) {
   envl += '  <port name="' + p + '">' + String(c) + '</port>\\n'
 }

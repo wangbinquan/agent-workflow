@@ -150,8 +150,13 @@ function valueFileShim(appHome: string): string {
     `
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-const promptArg = process.argv.find((a) => a.startsWith('Process ')) ?? 'Process unknown'
-const value = (promptArg.split('\\n')[0] ?? '').slice('Process '.length).trim()
+const prompt = process.argv.slice(2)[1] ?? ''
+const nonce = /\\bnonce="([^"]+)"/.exec(prompt)?.[1]
+const outputOpen =
+  nonce === undefined ? '<workflow-output>' : '<workflow-output nonce="' + nonce + '">'
+const fencedValue = /<aw-input name="doc" id="[^"]+">\\n([\\s\\S]*?)\\n<\\/aw-input>/.exec(prompt)?.[1]
+const legacyLine = prompt.split('\\n').find((line) => line.startsWith('Process ')) ?? 'Process unknown'
+const value = fencedValue?.trim() ?? legacyLine.slice('Process '.length).trim()
 const safe = value.replace(/[^a-zA-Z0-9]/g, '_')
 if (value.includes('FAIL')) {
   process.stderr.write('simulated shard failure\\n')
@@ -159,7 +164,7 @@ if (value.includes('FAIL')) {
 }
 writeFileSync(join(process.cwd(), 'header.txt'), 'HEADER\\n') // constant across reruns
 writeFileSync(join(process.cwd(), 'f_' + safe + '.txt'), value + '\\n')
-const envl = '<workflow-output>\\n  <port name="result">' + value + '</port>\\n</workflow-output>'
+const envl = outputOpen + '\\n  <port name="result">' + value + '</port>\\n</workflow-output>'
 process.stdout.write(
   JSON.stringify({ type: 'text', timestamp: Date.now(), part: { type: 'text', text: envl } }) + '\\n',
 )
