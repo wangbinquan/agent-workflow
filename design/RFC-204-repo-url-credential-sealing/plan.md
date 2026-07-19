@@ -1,93 +1,76 @@
-# RFC-204 — 任务分解
+# RFC-204 — 任务分解（v2）
 
-关联 `proposal.md` / `design.md`。默认单 RFC 单 PR；commit 前缀 `feat(security): RFC-204 仓库 URL 凭据静态封存与出线脱敏`。全程遵守 CLAUDE.md 多人并发保留原则（精确路径 `git add`、只描述本人改动）与“改动必带测试”。
+关联 `proposal.md` / `design.md`。commit 前缀 `feat(security): RFC-204 仓库 Git 凭据全链路封存/隔离/脱敏`。遵守 CLAUDE.md 多人并发保留原则与「改动必带测试」。范围经 2026-07-19 设计门 + 用户拍板扩为：cached_repos 封存 + wire 脱敏 + **origin 清洗/凭据注入** + **scheduled 封存** + 记忆 join 迁移 + 全启动面 cachedRepoId + 备份 gate + WAL 抹除。
 
 ---
 
 ## 依赖图
-
 ```
-T1 (shared schema) ──┬─> T3 (gitRepoCache 封存/脱敏)
-                     ├─> T4 (启动 reuse-by-id + 封存 + refCount)
-                     └─> T5 (task 序列化脱敏)
-T2 (migration 0098) ─┴─> T3, T4, T6
-T3, T4 ──> T5
-T6 (backfill + SecretBox threading) 依赖 T2、T3、T4
-T1..T6 ──> T7 (frontend) ──> T8 (测试补齐 + 文档 + STATE)
+T1 shared schema ─┬─> T4 gitRepoCache 封存/脱敏/refCount
+T2 migration 0098 ┤   T5 凭据注入+origin清洗 (util/gitCredentials)
+                  ├─> T6 启动/relaunch/agent/workgroup/scheduled cachedRepoId 贯通
+                  ├─> T7 记忆 scope join 迁移
+                  └─> T8 backfill gate + WAL 抹除 + 备份前置 + SecretBox threading
+T4,T5 ─> T6 ; T2 ─> T4/T7/T8 ; T5 ─> T8(scrub 既有镜像)
+T1..T8 ─> T9 frontend ─> T10 回归+文档+STATE
 ```
-
-建议实现顺序：T1 → T2 → T3 → T4 → T5 → T6 → T7 → T8（每步带其单测；T8 收口跨主体回归与文档）。
-
----
+建议顺序：T1→T2→T5→T4→T6→T7→T8→T9→T10（T5 凭据注入先落，T4 clone 即用它 scrub）。
 
 ## 子任务
 
-### RFC-204-T1 · shared schema 契约
-- `shared/schemas/cachedRepo.ts`：删 `url`，保留 `urlRedacted`。
-- `shared/schemas/task.ts`：三处响应形（:104/:193/:310）`repoUrl`→`repoUrlRedacted`(nullable) + `cachedRepoId`(nullable)；`StartTaskRequest`/多仓 `repos[]`（:398 一带）新增可选 `cachedRepoId`，`superRefine` 保证仓源互斥（`repoUrl`⊕`cachedRepoId`⊕scratch⊕internalSource）。
-- 测试：`cached-repo-schema-*`/`task` schema 正反例、互斥 superRefine。
-- 产出：编译错误清单（后续 T3-T7 逐个消费点复核的锚）。
+### RFC-204-T1 · shared schema
+- `cachedRepo.ts` 删 `url`。`task.ts` 三响应形加 `cachedRepoId`（`repoUrl` 保留＝已脱敏，更新注释）。`StartTaskRequest`/`repos[]`/`StartAgentTaskSchema`/`StartWorkgroupTaskSchema`/`LaunchSpaceFields` 加可选 `cachedRepoId` + 仓源互斥 `superRefine`。
+- 测试：schema 正反例、四启动 schema 互斥。
 
 ### RFC-204-T2 · migration 0098（加列）
-- `db/migrations/0098_rfc204_repo_url_sealing.sql`：`ALTER TABLE cached_repos ADD COLUMN url_enc text` / `... url_redacted text`；`tasks` 与 `task_repos` 各 `ADD COLUMN repo_url_enc text` / `repo_url_redacted text` / `cached_repo_id text`。逐句 `--> statement-breakpoint`。
-- 同步 `db/migrations/meta/_journal.json` + `db/schema.ts` 列定义。
-- 测试：新增 `migration-0098-*.test.ts`（列存在、nullable、幂等 apply）；**跑全量 backend 套件**（记忆 `feedback_full_suite_after_migration`）。
+- `0098_rfc204_repo_cred.sql`：cached_repos `ADD url_enc/url_redacted`；task_repos `ADD cached_repo_id` + `CREATE INDEX idx_task_repos_cached_repo_id`；tasks `ADD cached_repo_id`。逐句 `--> statement-breakpoint`。同步 `_journal.json` + `schema.ts`。
+- 测试：`migration-0098-*`（列/索引/幂等）；**全量** backend 套件。
 
-### RFC-204-T3 · gitRepoCache 封存 / 解封 / 出线脱敏
-- `ResolveCachedRepoDeps` 加 `secretBox: SecretBox`（必需）。
-- 写路径（clone 新行 :551 / 复用回写）：`url_enc=seal(input.url)`、`url_redacted=redactGitUrl(input.url)`、`url=''`。
-- `rowToCached`(:165)：删 `url: row.url`；`urlRedacted: row.urlRedacted`（读存储列）。
-- 解封：仅 clone / 按 id 兜底 re-clone 用 `unseal`；错误/日志继续用 redacted。
-- `refTaskCount`：签名与查询改按 `cached_repo_id`；调用点 :465/:601/:656/:740 随改。
-- 测试：`git-repo-cache*.test.ts` 扩——封存后 row 无明文、rowToCached 无 `url`、refTaskCount 按 id。
+### RFC-204-T5 · 凭据注入 + origin 清洗
+- 新 `util/gitCredentials.ts`：`scrubOrigin(dir, redactedRemote)`、`runGitAuthed(cwd,args,{plaintextUrl})`（GIT_ASKPASS + chmod-600 临时脚本 + 仅子进程 env + finally 删；无 userinfo 直通 `runGit`）。
+- 接入 clone(`gitRepoCache:499`)、fetch reuse(`:362`)、refresh(`:703`)、submodule、commit-push(`commitPushRunner:285/330`)；clone/backfill 后 `scrubOrigin`。
+- 测试：`rfc204-agent-origin-scrub`（origin 无 userinfo、注入认证成功、mock askpass 断言不落 config）。
 
-### RFC-204-T4 · 启动 reuse-by-id + 封存 repo_url + stamp
-- `services/task.ts`：`normalizeSources`/解析支持 `cachedRepoId` 分支（load row → `unseal(url_enc)` → `resolveCachedRepo` → stamp `cached_repo_id`/`repo_url_enc`/`repo_url_redacted`）；`repoUrl` 分支封存落 task_repos + tasks 顶层镜像。
-- 未知 `cachedRepoId` → 404 同形；互斥违背 → 校验拒。
-- 解封 `realUrl` 仅内存，不入日志/prompt。
-- 测试：`rfc204-reuse-by-id.test.ts`、`rfc204-at-rest-sealing.test.ts`、prompt 不含凭据锁。
+### RFC-204-T4 · gitRepoCache 封存/脱敏/refCount
+- 写路径 `url_enc/url_redacted/url=''`；`rowToCached` 删 `url`；file:// re-key(`:338`)、refresh/delete 诊断(`:685`/`:782`) 改读 `url_redacted`；`refTaskCount` 改按 `cached_repo_id`（调用点 :465/:601/:656/:740）；`ResolveCachedRepoDeps` 加 `secretBox`。
+- 测试：封存后 row 无明文、rowToCached 无 url、refTaskCount 按 id、file:// re-key 仍工作。
 
-### RFC-204-T5 · task 序列化脱敏
-- task list/detail 组装处（`routes/tasks.ts` / 对应 service）：输出 `repoUrlRedacted`/`cachedRepoId`，删明文 `repoUrl`；多仓 `repos[i]` 同构。
-- 测试：`rfc204-task-wire-cred-leak.test.ts`（成员读无 token）。
+### RFC-204-T6 · 五启动面 cachedRepoId 贯通
+- `task.ts` normalizeSources cachedRepoId 分支（unseal→resolve→stamp）；agentLaunch/workgroupLaunch/applySpaceFields 透传；`task-wizard.ts` relaunch 重建 `{cachedRepoId}`（单/多仓）；scheduled 保存载荷改写 + 启动解封；FF 警告 `task.ts:1010` redact。
+- 测试：`rfc204-reuse-by-id`（五入口）、`rfc204-scheduled-payload-cred`、`rfc204-ff-warning-redacted`、prompt 无凭据锁。
 
-### RFC-204-T6 · startup backfill + SecretBox threading
-- 幂等 backfill pass（migrate 后、secretBox 就绪后）：封存历史 `cached_repos`/`tasks`/`task_repos` 明文、填 `*_redacted`、按 `url_hash` 回填 `cached_repo_id`、清明文列。哨兵 `*_redacted IS NULL`。
-- 将 `AppDeps.secretBox` 在 git/启动路径由可选提升为必需并 thread（`cli/start.ts` 已创建）；测试注入 `createSecretBoxFromKey(fixedKey)`。
-- 测试：`rfc204-backfill.test.ts`（封存/脱敏/回填/清空/幂等/不可解析 warn）。
+### RFC-204-T7 · 记忆 scope join 迁移
+- `memoryInject.ts:360-365` / `memoryDistillScheduler.ts:179-184` 改按 `cached_repo_id`。
+- 测试：`rfc204-memory-scope-cached-id`（私有仓命中 + 不误选）。
 
-### RFC-204-T7 · frontend 消费点
-- `components/launch/RepoSourceRow.tsx`：下拉 `value=it.id`/`label=it.urlRedacted`；选中 → `{cachedRepoId}` 源。
-- `lib/launch-repo-source.ts`：复用匹配按 id；`toLaunchBody` reuse 发 `{cachedRepoId}`、新 URL 发 `{repoUrl}`。
-- `routes/repos.tsx:216`：用 `urlRedacted`。
-- `components/memory/MemoryDialogShell.tsx:167`：label 用 `urlRedacted`（顺带修 ux-audit §10-③）。
-- 任务详情/列表 repoUrl 展示点 → `repoUrlRedacted`。
-- 测试：RepoSourceRow / MemoryDialogShell / repos 删除确认 / 任务视图断言 + 源码锁（option value 非明文 url）。
+### RFC-204-T8 · backfill gate + WAL 抹除 + 备份前置
+- `ensureCredentialsSealed(db, secretBox)` 幂等：封存 cached_repos + scrubOrigin 既有镜像 + 回填 task/tasks `cached_repo_id`（按 url_hash）+ scheduled 载荷改写 + `secure_delete`/`wal_checkpoint(TRUNCATE)`/`VACUUM`。
+- daemon 启动（`cli/start.ts`）与 backup CLI（`cli/backup.ts` VACUUM 前）都调用；`AppDeps.secretBox` 于 git/启动/备份路径提升为必需并 thread。
+- 测试：`rfc204-backfill`（幂等/scrub/回填/scheduled/裸文件无明文）、`rfc204-backup-gate`、`rfc204-at-rest-sealing`。
 
-### RFC-204-T8 · 收口：跨主体回归 + 文档 + STATE
-- 补齐 `rfc204-cross-user-cred-leak.test.ts`（P0 红锚）与全部 §8 未覆盖 case。
-- 更新 `design/design.md`（若其对 cached_repos/task 存储有断言）与本 RFC 状态。
-- `STATE.md`：进行中 RFC 行改 Done + 已完成表加一行；`plan.md` RFC 索引状态更新。
-- 记 deferred：`0099` drop 空 `url`/`repo_url` 列（§6.3）；R1 镜像 `.git/config` 清洗；R2 共享镜像凭据隔离。
+### RFC-204-T9 · frontend
+- `RepoSourceRow`（value=id/label=redacted/产 `{cachedRepoId}`）、`launch-repo-source`+`toLaunchBody`（复用按 id）、`task-wizard` relaunch、`repos.tsx:216`、`MemoryDialogShell.tsx:167`。
+- 测试：各点断言 + 源码锁（option value 非明文 url）。
+
+### RFC-204-T10 · 收口
+- 补 `rfc204-cross-user-cred-leak`（P0-a 红锚）+ task 侧脱敏回归锁 + §8 余项。
+- STATE.md 进行中→Done + 已完成表加行；plan.md RFC 索引状态更新。
+- 记 deferred：`0099` drop 空 `url`（R3）；R1 注入 env 侧信道（askpass 改 fd）；R2 共享镜像凭据隔离。
 
 ---
 
 ## PR 拆分建议
-
-默认**单 PR**（T1–T8 一起），因为 schema 重命名（T1）会让 T3–T7 编译红，拆开会留中间不可编译态。若体量过大，可按“后端封存闭环（T1–T6）”+“前端消费（T7）+回归（T8）”两 PR，但 T1 的 schema 变更须与后端消费同 PR 落，前端 PR 紧随（其间 wire 已安全，前端只是改展示/复用键）。
-
----
+默认**单 PR**（schema 重命名会牵连全链编译）。若过大，可拆两 PR：**P1 后端凭据闭环（T1–T8）**必须整体落（wire+存储+注入+启动+备份自洽），**P2 前端消费+回归（T9–T10）**紧随（其间 wire 已安全）。scheduled/agent/workgroup 启动面（T6）不得漏——否则复用在这些模式静默失败。
 
 ## 验收清单（对齐 proposal §4）
-
-- [ ] `GET /api/cached-repos` 对含凭据行无 token 子串；`CachedRepoSchema` 无 `url`。
-- [ ] task list/detail wire 无 token；有 `repoUrlRedacted`+`cachedRepoId`。
-- [ ] sqlite 行凭据列无明文；`*_enc` unseal 回原 URL。
-- [ ] 前端历史仓下拉 value=`cachedRepoId`；复用请求体无明文 `repoUrl`；git 认证成功。
-- [ ] `MemoryDialogShell` / `repos.tsx` 展示用 `urlRedacted`。
-- [ ] backfill 封存历史 + 清明文 + 回填 id + 幂等。
-- [ ] `refTaskCount`/删除守卫按 `cached_repo_id` 计数正确。
-- [ ] `typecheck && lint && test && format:check` 全绿；**全量** backend 套件；单二进制 build smoke；`_journal.json` 一致。
-- [ ] 源码防回归锁（schema 无 url / rowToCached 不 emit 明文 / RepoSourceRow option value 非明文）就位。
-- [ ] 推送后按 `feedback_post_commit_ci_check` 查 GitHub Actions 绿。
-- [ ] 设计门与实现门各跑一次 Codex review（记忆 `feedback_codex_review_after_changes`），findings 折入。
+- [ ] `GET /api/cached-repos` 无 token；`CachedRepoSchema` 无 `url`。
+- [ ] 镜像/worktree `git remote get-url origin` 无凭据；clone/fetch/push/submodule 注入认证成功。
+- [ ] `GET /api/scheduled-tasks` 无 token；重放认证成功。
+- [ ] `cached_repos.url` 空、`url_enc` unseal 回原；WAL checkpoint 后裸文件无 token。
+- [ ] 五启动入口选历史私有仓复用成功、请求体/payload 无明文 repoUrl。
+- [ ] refTaskCount / 记忆 scope 按 `cached_repo_id` 正确（私有仓记忆修复）。
+- [ ] 升级后首次 `POST /api/backup` 与 `agent-workflow backup` 均已封存。
+- [ ] task 侧脱敏回归锁存在。
+- [ ] `typecheck && lint && test && format:check` 全绿；全量 backend；单二进制 smoke；`_journal.json` 一致；CI 绿。
+- [ ] 源码锁齐（schema 无 url / rowToCached 不 emit / origin 无 userinfo / RepoSourceRow value 非明文）。
+- [ ] 设计门 + 实现门 Codex review findings 折入。
