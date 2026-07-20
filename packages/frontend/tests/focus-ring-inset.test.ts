@@ -151,6 +151,12 @@ describe('focus ring — inset for full-bleed form controls', () => {
 // may reintroduce an outset ring, not that these specific rules are right. A new
 // rule in this family with `outline-offset: 0` or a bare spread box-shadow reds
 // this immediately.
+// KNOWN LIMITATION (covered by the geometry layer, not here): this table
+// matches CLASS NAMES inside the selector text, so a rule written as
+// `.form-field input:focus` or `.inspector textarea:focus` — no listed class in
+// the selector — is not policed here. Element/descendant selectors are rare in
+// this sheet, and e2e/focus-ring-clip.spec.ts measures the real geometry
+// regardless of how the selector was written.
 describe('focus ring — no scroll-flush control may reintroduce an outset ring', () => {
   // Controls that sit on a clip edge BY CONSTRUCTION, so an outset ring is
   // always cut no matter which container they land in:
@@ -171,6 +177,7 @@ describe('focus ring — no scroll-flush control may reintroduce an outset ring'
     '.task-outputs-panel__option',
     '.workgroup-room__runlog-row',
     '.react-flow__controls-button',
+    '.clarify-question',
   ]
 
   /**
@@ -241,7 +248,18 @@ describe('focus ring — no scroll-flush control may reintroduce an outset ring'
 
   it.each(focusRules)('%s paints no ring outside the border box', (_sel, body) => {
     const offset = lastDecl(body, 'outline-offset')
-    const outline = lastDecl(body, 'outline')
+    // Longhands count too. Checking only the `outline:` shorthand let a rule
+    // written as `outline-style: solid; outline-width: 2px` slip straight
+    // through the guard while painting an outset ring. (Adversarial review, P2.)
+    const shorthand = lastDecl(body, 'outline')
+    const styleLong = lastDecl(body, 'outline-style')
+    const widthLong = lastDecl(body, 'outline-width')
+    const outline =
+      shorthand !== undefined && !/^none\b/.test(shorthand)
+        ? shorthand
+        : styleLong !== undefined && !/^none\b/.test(styleLong)
+          ? `${widthLong ?? '2px'} ${styleLong}`
+          : undefined
     // A visible outline must be pulled inside; `outline: none` needs nothing.
     if (outline !== undefined && !/^none\b/.test(outline)) {
       expect(offset, `${_sel}: draws an outline but has no inset outline-offset`).toBeDefined()

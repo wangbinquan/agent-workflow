@@ -10179,9 +10179,14 @@ mark.comment-anchor[data-active='true'] {
   outline: none;
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 6%, var(--panel));
+  /* RFC-206 — both layers inset. The second used to be a 3px OUTSET halo on a
+     tabIndex={0} card; it survived only because today's ancestor happens to
+     have 24px of padding. Neither guard covered it (no listed class name for
+     the static table, and /clarify/{id} was outside the audited routes), so it
+     was a live "nobody owns this" gap. Inset removes the gap structurally. */
   box-shadow:
     inset 4px 0 0 0 var(--accent),
-    0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent);
+    inset 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 .clarify-question--recommended {
   border-color: color-mix(in srgb, var(--accent) 45%, var(--border));

@@ -244,6 +244,26 @@ test.beforeAll(async () => {
   })
   expect(wgTask.ok, `failed to launch workgroup task (${wgTask.status})`).toBe(true)
   seededWorkgroupTaskId = ((await wgTask.json()) as { id: string }).id
+
+  // Settle it before auditing. The chatroom pane is WS-driven, so a still-running
+  // workgroup task keeps re-rendering under the audit — tagged nodes disappear
+  // mid-measurement and coverage silently drops. Terminal (or parked) is enough.
+  const wgDeadline = Date.now() + 90_000
+  while (Date.now() < wgDeadline) {
+    const r = await fetch(`${daemon.baseUrl}/api/tasks/${seededWorkgroupTaskId}`, {
+      headers: { Authorization: `Bearer ${daemon.token}` },
+    })
+    if (r.ok) {
+      const { status } = (await r.json()) as { status: string }
+      if (
+        ['done', 'failed', 'canceled', 'interrupted', 'awaiting_review', 'awaiting_human'].includes(
+          status,
+        )
+      )
+        break
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250))
+  }
 })
 
 test.afterAll(async () => {
@@ -368,7 +388,12 @@ const AUDIT_ENGINE = `
         // gate, which was a silent false negative: .tabs__tab pokes 1px below
         // .tabs, so the gate discarded the clipper entirely and hid the REAL
         // top/left clips (ink 4 vs room 0). Locked by the overhang self-check.
-        if (room[s] < 0) continue;
+        // Tolerance mirrors the violation threshold below. Using a hard < 0
+        // meant a control pushed to -0.001 by flex/grid fractional widths lost
+        // that entire side — and a width:100% element with negative inline
+        // margins lost BOTH inline sides, i.e. the worst-clipped cases went
+        // silent. Sub-pixel overhang is rounding, not an intentional overhang.
+        if (room[s] < -0.5) continue;
         if (ink[s] > 0 && room[s] < ink[s] - 0.5) {
           out.push({
             kind, control: label(el), clipper: label(p), side: s,
@@ -394,6 +419,24 @@ const AUDIT_ENGINE = `
     const found = [];
     const ink = inkOf(cs);
     if (SIDES.some((s) => ink[s] > 0)) found.push(...measureRect(el, rect, ink, 'self'));
+
+    // :focus-within rings live on ANCESTORS that are usually not focusable
+    // themselves, so they never appear in the candidate set and would never be
+    // measured. This repo has exactly that shape — .user-picker
+    // .chips-input__row:focus-within paints a ring on a plain <div> wrapper —
+    // meaning a rule RFC-206 itself edited was geometrically unverifiable.
+    // With :focus forced on the candidate, ancestors already match
+    // :focus-within, so their computed style is live here: walk up and measure
+    // any ancestor that is now painting a ring of its own.
+    for (let a = el.parentElement; a && a !== document.documentElement; a = a.parentElement) {
+      const as2 = getComputedStyle(a);
+      const aInk = inkOf(as2);
+      if (!SIDES.some((s) => aInk[s] > 0)) continue;
+      const ar = a.getBoundingClientRect();
+      if (!ar.width || !ar.height) continue;
+      if (as2.position === 'fixed') continue;
+      found.push(...measureRect(a, ar, aInk, 'focus-within'));
+    }
 
     // Stretch-overlay pseudo rings (.workgroup-card__open::after,
     // .gallery-card__stretch::after): an absolutely positioned ::after with
@@ -463,7 +506,21 @@ const AUDIT_ENGINE = `
     // ring is being cut. Dedup, if any, happens after measurement.
     measure(i) {
       const el = document.querySelector('[data-fr-audit="' + i + '"]');
-      return el ? auditOne(el) : [];
+      // Report whether the node still existed. tag() runs once, then each node
+      // takes 3 cross-process round trips (querySelector -> forcePseudoState ->
+      // evaluate); a React re-render inside that window makes the tagged node —
+      // and its data-fr-audit — disappear. Returning a bare [] there is
+      // indistinguishable from "measured it, found nothing", and the coverage
+      // number (taken from tag()) would still count it as covered. That is the
+      // exact假绿 this audit exists to prevent, so the count must come from
+      // here, not from tag().
+      if (el === null) return { alive: false, inMain: false, violations: [] };
+      // Coverage must count only controls in the MAIN region. The shell nav
+      // (.sidebar / mobile topbar) renders on every route, so a whole-document
+      // count is >= 10 even when the surface itself rendered empty — the gate
+      // would then only ever catch "the page did not load at all".
+      const inMain = el.closest('.content') !== null && el.closest('.sidebar') === null;
+      return { alive: true, inMain, violations: auditOne(el) };
     },
     untag() {
       for (const el of document.querySelectorAll('[data-fr-audit]')) el.removeAttribute('data-fr-audit');
@@ -508,7 +565,7 @@ declare global {
   interface Window {
     __frAudit: {
       tag(): number
-      measure(i: number): Violation[]
+      measure(i: number): { alive: boolean; inMain: boolean; violations: Violation[] }
       untag(): void
     }
   }
@@ -539,6 +596,8 @@ async function auditPage(
   // nodeIds are invalidated by navigation — always re-root per page.
   const { root } = await cdp.send('DOM.getDocument', { depth: -1 })
   const found: Violation[] = []
+  let measured = 0 // main-region only — see measure()'s inMain
+  let alive = 0
 
   for (let i = 0; i < count; i++) {
     const { nodeId } = await cdp.send('DOM.querySelector', {
@@ -550,7 +609,16 @@ async function auditPage(
       nodeId,
       forcedPseudoClasses: ['focus', 'focus-visible'],
     })
-    found.push(...((await page.evaluate((n) => window.__frAudit.measure(n), i)) as Violation[]))
+    const r = (await page.evaluate((n) => window.__frAudit.measure(n), i)) as {
+      alive: boolean
+      inMain: boolean
+      violations: Violation[]
+    }
+    if (r.alive) {
+      alive += 1
+      if (r.inMain) measured += 1
+    }
+    found.push(...r.violations)
     // Clearing is mandatory: forced state is per-node and persistent, so
     // leaving it on pollutes later measurements (e.g. an ancestor that would
     // then match :focus-within).
@@ -558,7 +626,12 @@ async function auditPage(
   }
 
   await page.evaluate(() => window.__frAudit.untag())
-  return { found, measured: count }
+  // `count` is what tag() SAW; `measured` is what actually got measured. They
+  // differ whenever the DOM churned mid-audit — surface that rather than hide it.
+  if (alive < count) {
+    console.log(`[focus-ring] ${count - alive}/${count} tagged nodes vanished mid-audit`)
+  }
+  return { found, measured }
 }
 
 /** Assign a per-instance occurrence index so one waiver cannot cover a NEW
@@ -759,6 +832,31 @@ test.describe('RFC-206 — audit engine self-checks', () => {
     expect(found.every((v) => v.ink >= 2)).toBe(true)
   })
 
+  test('detects a :focus-within ring painted on a NON-focusable ancestor', async ({ page }) => {
+    // The wrapper is a plain <div> with no tabindex, so it is never a candidate;
+    // only walking up from the focused child finds its ring. This repo really
+    // has this shape (.user-picker .chips-input__row:focus-within on a div),
+    // and RFC-206 edited that very rule — without this path the edit would be
+    // geometrically unverifiable.
+    await page.setContent(`<!doctype html><meta charset=utf-8>
+      <style>
+        .clip{overflow:auto;width:220px;height:60px;padding:0;background:#eee}
+        .row{display:flex;width:100%;box-sizing:border-box;border:1px solid #999}
+        .row:focus-within{outline:2px solid #1f5fda;outline-offset:2px}
+        .row input{flex:1;border:0;min-width:0}
+      </style>
+      <div class="clip"><div class="row"><input id="i"></div></div>`)
+    const cdp = await page.context().newCDPSession(page)
+    await cdp.send('DOM.enable')
+    await cdp.send('CSS.enable')
+    const { found } = await auditPage(page, cdp)
+    await cdp.detach()
+    expect(
+      found.filter((v) => v.kind === 'focus-within' && v.control === '.row').length,
+      `the wrapper's :focus-within ring must be measured; got:\n${found.map(describe).join('\n')}`,
+    ).toBeGreaterThan(0)
+  })
+
   test('does not report elements scrolled out of the scrollport', async ({ page }) => {
     await page.setContent(`<!doctype html><meta charset=utf-8>
       <style>
@@ -936,6 +1034,12 @@ test('focus rings are not clipped anywhere', async ({ page }) => {
     await page.waitForTimeout(350)
     record(`/tasks/{id}?tab=${tab}`, await sweep())
   }
+
+  // Workgroup detail (the room's own page, distinct from the task chatroom pane).
+  await page.goto(`${daemon.baseUrl}/workgroups/focus-ring-audit-wg`)
+  await expect(page.locator('.app-shell, .page, main').first()).toBeVisible()
+  await page.waitForTimeout(500)
+  record('/workgroups/{name}', await sweep())
 
   // Review detail: .review-detail__layout carries `padding-right: 14px` only
   // (added for a different clip report), so left/top/bottom had zero room.
