@@ -247,6 +247,40 @@ describe('RFC-211 guided tour page', () => {
     expect(link.getAttribute('href')).toBe('/agents/new')
   })
 
+  test('the run step warns when no runtime is ready, and stays quiet when one is', async () => {
+    // POST /api/tasks does not verify the runtime binary exists, so on an
+    // unconfigured machine the tour's finale would otherwise die with an opaque
+    // node-level spawn error — at the exact step where a newcomer can least
+    // afford to debug. Equally important: no warning on a healthy install,
+    // because a banner that cries wolf trains people to ignore it.
+    stubFetch([
+      {
+        match: /\/api\/onboarding\/runs$/,
+        body: [{ ...RUN, completedSteps: ['agent.create', 'agent.ports'] }],
+      },
+      { match: /\/api\/runtimes\/status/, body: { runtimes: [{ name: 'opencode', ok: false }] } },
+    ])
+    const unready = await renderGuide()
+    fireEvent.click(await screen.findByTestId('guide-track-agent'))
+    fireEvent.click(await screen.findByTestId('stepper-step-agent.run'))
+    await waitFor(() => expect(screen.getByTestId('guide-runtime-unready')).toBeTruthy())
+    unready.unmount()
+
+    vi.restoreAllMocks()
+    stubFetch([
+      {
+        match: /\/api\/onboarding\/runs$/,
+        body: [{ ...RUN, completedSteps: ['agent.create', 'agent.ports'] }],
+      },
+      { match: /\/api\/runtimes\/status/, body: { runtimes: [{ name: 'opencode', ok: true }] } },
+    ])
+    await renderGuide()
+    fireEvent.click(await screen.findByTestId('guide-track-agent'))
+    fireEvent.click(await screen.findByTestId('stepper-step-agent.run'))
+    await waitFor(() => expect(screen.getByTestId('guide-provision')).toBeTruthy())
+    expect(screen.queryByTestId('guide-runtime-unready')).toBeNull()
+  })
+
   test('cleanup requires confirmation and shows what will be deleted first', async () => {
     const spy = stubFetch([
       { match: /\/api\/onboarding\/runs$/, body: [RUN] },

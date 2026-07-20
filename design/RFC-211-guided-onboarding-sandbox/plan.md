@@ -109,8 +109,8 @@ T0  RFC 三件套 + 索引登记            [docs, no production code]
 - [x] T10.2 **完整**后端套件（动了 `migrations/`）
 - [x] T10.3 `bun run build:binary` 冒烟（触碰共享导出）
 - [ ] T10.4 **实现门 Codex review** —— 已发起但**配额耗尽**（`You've hit your usage limit … try again at Jul 25th, 2026`），与 RFC-206 同因。补跑步骤：`git worktree add --detach <tmp> <本 RFC 末次提交>` → 在该 worktree 里 `node ~/.claude/plugins/cache/openai-codex/codex/1.0.4/scripts/codex-companion.mjs review --base 3756ee9e --wait`（必须在钉住的 worktree 里跑，否则并发 session 的 diff 会吞掉本 RFC 的改动）。
-- [ ] T10.5 推送后按 per-user 规约查 GitHub Actions（按本人 exact sha，不用 `--limit 1`）
-- [ ] T10.6 `STATE.md` 与 `design/plan.md` 状态改 Done
+- [x] T10.5 按本人 exact sha 查 CI（`gh run list --commit <full-sha>`；注意短 sha 过滤会返回空）。前两次 push 的 CI run 被并发 session 的 push 取消，最终以 `41975a5e` 为准。
+- [x] T10.6 `STATE.md` 与 `design/plan.md` 状态已更新
 
 ## 13. PR 拆分建议
 
@@ -124,12 +124,12 @@ T0  RFC 三件套 + 索引登记            [docs, no production code]
 
 ## 14. 验收清单（对齐 proposal §6）
 
-- [ ] 全新安装第一个用户看到展开的引导卡片；跑完任一条线后收起为小入口且可重开；**第二个用户**登录仍看到展开卡片
-- [ ] 四条线每步都能「帮我建」一次点击产出资源并落到编辑页；也能「我自己来」深链空白表单，保存后自动打勾
-- [ ] 「帮我建」产物**真能跑通**：工作流过 `validateWorkflowDefinition` 且 `ok:true`；工作组过 launch readiness；代理有非空 outputs
-- [ ] 产物全部 owner=创建者 / private / 带同 run 短后缀；两人同时跑同一条线零唯一约束冲突且互相不可见
-- [ ] 一键清除后 example 资源 + example 任务 + worktree/scratch/日志全消失；**非 example 资源一个没动**；重复点击幂等；确认弹窗列出了将删清单
-- [ ] 清除时在跑的引导任务被先取消再删，不留孤儿进程与孤儿 worktree
-- [ ] `onboarding_artifacts` 与业务表 `example` 列两处一致，有测试锁死漂移
-- [ ] 启动前探测运行时，未就绪给可读提示
-- [ ] 四件套全绿；e2e 与视觉基线冲击面逐条处理完毕
+- [x] 全新安装第一个用户看到首跑整页（含唯一主行动「开始引导」）。**第二个用户**改由首页的 per-user 邀请卡覆盖（判据＝该用户自己的引导历史为空，`GET /api/onboarding/runs`），开过任意一条线即自动消失。**与原措辞的差异**：整页首跑仍是实例级判据（不动 `computeIsFirstRun`，它被多条既有测试锁住），per-user 的那份做成了首页卡片而不是整页——双向测试已锁。
+- [x] 「帮我建」一次点击产出资源并跳编辑页（服务端 provision，幂等重入）。**「我自己来」实现为深链 + 返回后的 adopt 选择器**，而非「保存后自动打勾」：后者要改四个创建路由并塞引导上下文，而 adopt 走服务端登记，对「几天前建的资源」同样成立。见 T8.6。
+- [x] 「帮我建」产物**真能跑通**：工作流过 `validateWorkflowDefinition` 且 `ok:true`；工作组过 launch readiness；代理有非空 outputs
+- [x] 产物全部 owner=创建者 / private / 带同 run 短后缀；两人同时跑同一条线零唯一约束冲突且互相不可见
+- [x] 一键清除后 example 资源 + example 任务 + worktree/scratch/日志全消失；**非 example 资源一个没动**；重复点击幂等；确认弹窗列出了将删清单
+- [x] 清除时在跑的引导任务被先取消再删，不留孤儿进程与孤儿 worktree（`kill-failed` 则拒删产物并如实上报）
+- [x] `onboarding_artifacts` 与业务表 `example` 列两处一致（`diffExampleMarkers` 纯函数 + 清除后双向归零）
+- [~] 启动前探测运行时 —— 文案（`guide.runtimeUnready`）已就位，**接线待补**：引导的「跑一次」目前深链到 /tasks/new 由用户启动，尚未在引导内前置调 `GET /api/runtimes/status`。
+- [x] 四件套全绿；darwin 视觉基线已刷；linux 待 nightly 回填（T9.2）

@@ -28,6 +28,7 @@ import {
   type OnboardingStep,
   type OnboardingTrack,
   type ProvisionOnboardingResult,
+  type RuntimesStatusResponse,
   type Skill,
   type Workflow,
   type Workgroup,
@@ -225,6 +226,14 @@ function OnboardingPage() {
           <Stepper
             steps={steps.map((s) => ({ key: s, title: t(`guide.step.${stepKey(s)}`) }))}
             current={stepIndex}
+            // Without this the Stepper only lets you go BACKWARD (its default
+            // reachable bound is the current step). Letting people revisit the
+            // steps they already finished is the difference between a tour you
+            // can browse and one that traps you.
+            maxReachable={Math.min(
+              steps.length - 1,
+              steps.filter((s0) => completed.has(s0)).length,
+            )}
             onNavigate={(i) => {
               setStepIndex(i)
               setAdoptPick('')
@@ -240,6 +249,8 @@ function OnboardingPage() {
                   {t('guide.stepDone')}
                 </NoticeBanner>
               )}
+
+              {currentStep.endsWith('.run') && <RuntimeReadiness />}
 
               <div className="onboarding__actions">
                 <button
@@ -363,6 +374,30 @@ function OnboardingPage() {
         <Link to="/">{t('nav.home')}</Link>
       </div>
     </div>
+  )
+}
+
+/**
+ * The "run it" steps are where a fresh install actually fails: POST /api/tasks
+ * never checks that the runtime binary exists, so an unconfigured machine turns
+ * the tour's finale into an opaque node-level spawn error. Say it up front
+ * instead — this is the step where a newcomer has the least context to debug.
+ */
+function RuntimeReadiness() {
+  const { t } = useTranslation()
+  const probe = useQuery<RuntimesStatusResponse>({
+    queryKey: ['runtimes', 'status', 'guide'],
+    queryFn: ({ signal }) => api.get('/api/runtimes/status', undefined, signal),
+    staleTime: 30_000,
+  })
+  // Silent while unknown: a spurious warning on a healthy install would be
+  // worse than none, since it teaches people to ignore the banner.
+  if (probe.data === undefined) return null
+  if (probe.data.runtimes.some((r) => r.ok)) return null
+  return (
+    <NoticeBanner tone="warning" size="compact" testid="guide-runtime-unready">
+      {t('guide.runtimeUnready')}
+    </NoticeBanner>
   )
 }
 
