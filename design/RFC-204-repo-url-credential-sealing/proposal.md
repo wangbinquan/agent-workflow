@@ -1,18 +1,19 @@
 # RFC-204 — 仓库 Git 凭据的封存、出线脱敏与复用改造
 
-状态：Draft（v3，2026-07-20；两轮设计门 Codex 审查后定稿范围）
+状态：Draft（v4，2026-07-20；**三轮**设计门 Codex 审查后定稿，待实现批准）
 作者：Claude（受权限系统审计 2026-07-15 P0-3 委派）
 关联：审计 backlog（记忆 `project_permission_system_audit_2026_07_15`）P0-3；RFC-024（cached_repos）、RFC-054 W3-4（task 侧已脱敏落库）、RFC-066（task_repos 多仓）、RFC-036（secretBox）、RFC-159（scheduled_tasks）、RFC-165（file:// 走缓存）、**RFC-205（运行时沙箱——承接本 RFC 移出的 agent 凭据隔离，见 §2 非目标）**。
 
-> **范围演进（两轮设计门审查修正）**
+> **范围演进（三轮设计门审查修正；每轮 finding 均已折入或经用户拍板改范围）**
 > - **v1→v2**：审查更正「task-wire 泄漏」不存在（`tasks.repo_url`/`task_repos.repo_url` 早由 RFC-054 W3-4 脱敏落库），并揭示 scheduled 载荷与镜像 origin 两个真实面。
-> - **v2→v3（本版）**：第二轮审查证实 **P0-b「把凭据从 task agent 手里隔离」用加密+origin 清洗做不到**——agent 与 daemon 同 UID，可直接读 `~/.agent-workflow/secret.key`+`db.sqlite` 解出全部 `url_enc`，无需碰 origin；且 origin 注入子系统本身吞下 6 条正确性 finding。用户 2026-07-20 拍板：**P0-b 移出，另立 RFC-205 运行时沙箱**（FS/UID 隔离才是真边界，且能统一保护 key/DB/origin）。本 RFC 回到可达且有价值的核心。
+> - **v2→v3**：第二轮审查证实 **P0-b「把凭据从 task agent 手里隔离」用加密+origin 清洗做不到**——agent 与 daemon 同 UID，可直接读 `~/.agent-workflow/secret.key`+`db.sqlite` 解出全部 `url_enc`，无需碰 origin；且 origin 注入子系统本身吞下 6 条正确性 finding。用户拍板：**P0-b 移出，另立 RFC-205 运行时沙箱**（FS/UID 隔离才是真边界，且能统一保护 key/DB/origin）。本 RFC 回到可达且有价值的核心。
+> - **v3→v4（本版）**：第三轮审查发现 query 形凭据是深坑（`parseGitUrl` 把 query 留在 `parsed.path` → 泄进 cache slug/`local_path`（**在 wire 上**）/`url_hash`；历史 `redactGitUrl` 不脱 query 已污染 task 两列与三个 error 列），且 scheduled 契约有三处硬伤（单一校验器同时管请求/存储/响应→外部可投递密文；`cachedRepoId` 输入未处理；编辑往返丢凭据）；另纠正 v3 对 FF 日志"已脱敏"的错误假设（`task.ts:531` 返回原文）。用户拍板 query 走**轻量清理**（入口拒绝 + 展示脱敏 + 历史列 re-redact，**不改 hash/不改名目录/不 re-key**）。
 
 ---
 
-## 1. 背景与真实泄漏面（v3 范围内）
+## 1. 背景与真实泄漏面（v4 范围内）
 
-平台接入私有仓的既定方式是把 Git 凭据塞进 URL（`https://x-access-token:TOKEN@host/o/p.git`，或 query 形 `?access_token=TOKEN`）。经两轮源码核对，本 RFC 处理**可由封存/脱敏关闭**的面：
+平台接入私有仓的既定方式是把 Git 凭据塞进 URL（`https://x-access-token:TOKEN@host/o/p.git`，或 query 形 `?access_token=TOKEN`）。经三轮源码核对，本 RFC 处理**可由封存/脱敏关闭**的面：
 
 ### P0-a · cached_repos 明文 URL 跨用户泄漏（审计首要动因）
 `cached_repos` 全局共享、无 owner（`db/schema.ts:666`）；`gitRepoCache.ts:169` `rowToCached` 把明文 `url` 与 `urlRedacted` 一起上 wire；`GET /api/cached-repos` 门 `repos:read ∈ USER_BASELINE`（`permission.ts:67`）→ **任何登录用户/最窄 PAT 拉全表明文凭据**。
@@ -23,8 +24,8 @@
 ### 静态明文（DB / WAL / 备份）
 `cached_repos.url` 与上述 payload 明文落库；`POST /api/backup` 与 `agent-workflow backup` CLI 均 `VACUUM INTO` 打包 `db.sqlite`（`backup.ts:6`、`cli/backup.ts`），且 **backup 不含 `secret.key`**（经核对：仅 db.sqlite/config.json/skills/workflows）→ **封存对备份与「仅 db.sqlite 被拷走」真实有效**。SQLite 为 WAL 且未启 `secure_delete`（`db/client.ts:32`），逻辑清空不抹物理页。
 
-### redactGitUrl 的 query 盲区（既有隐患，一并修）
-`redactGitUrl` 只脱 userinfo、**不脱 query**（`git-url.ts`）→ `?access_token=TOKEN` 原样留存，连今天已脱敏的 task 列都可能含 query token。须在 redact/封存前把敏感 query 一并处理。
+### query 形凭据 URL 的深层泄漏（既有隐患，本 RFC 处理）
+两个叠加缺陷：`redactGitUrl` 只脱 userinfo、**不脱 query**；且 `parseGitUrl` 把 `?access_token=TOKEN` 留在 `parsed.path`（`git-url.ts` https 分支 `path = body.slice(slashIdx+1)`）→ 泄进 cache slug → `cached_repos.local_path`（**在 wire 上**，`cachedRepo.ts:12`）+ worktree 路径 + `url_hash`；历史上还已把 token 写进 `tasks.repo_url`/`task_repos.repo_url` 与 error 列（`last_submodule_sync_error`/`submodule_init_error`/`scheduled_tasks.last_error`）。**处理（用户 2026-07-20 拍板「轻量清理」）**：going-forward 在 launch/schedule 入口**拒绝** query 凭据 URL（userinfo 形仍支持、封存已覆盖）；`redactGitUrl` 补 query 脱敏用于展示/日志；backfill re-redact 历史列 + wire 层脱敏 `local_path`；**不改 `canonicalForHash`、不改名缓存目录、不 re-key `url_hash`**（入口拒绝后无新 query slug/hash 产生，既有行经 `cachedRepoId` 复用仍命中原 hash）。
 
 ### 不是泄漏（v1 更正，保留）
 `tasks.repo_url`/`task_repos.repo_url` 已脱敏落库（RFC-054 W3-4，`task.ts:1547/1609`）→ 任务读接口本就返回脱敏形；这两列无明文凭据静态残留。只加回归锁 + 修 query 盲区。
@@ -40,7 +41,7 @@
 1. **消除 P0-a**：cached_repos 一切 wire 不再含明文 `url`；`repos:read` 保持 baseline（复用选择器需要），只让载荷安全。
 2. **静态封存 cached_repos 凭据**：以 `secretBox`(AES-256-GCM) 封存 `cached_repos.url`（`url_enc`）；配合 `secure_delete`+WAL checkpoint/truncate+VACUUM，使 DB 文件与备份 tar 无明文凭据、无物理页残留。
 3. **消除 P1-a**：`scheduled_tasks.launch_payload` 内凭据**自封存**（payload 内 `repoUrl` 明文→`repoUrlEnc` 密文 + `repoUrlRedacted` 展示），出线/备份不含明文；**自持凭据、不依赖 cache row**（避免升级需联网 clone / 删缓存断定时）。
-4. **修 redactGitUrl query 盲区**：脱敏与封存前把敏感 query（`access_token`/`token`/…）一并处理；task 列既有脱敏顺带补全。
+4. **关闭 query 形凭据泄漏（轻量路线）**：① 入口**拒绝** query 凭据 URL（launch + schedule 保存）；② `redactGitUrl` 补敏感 query 脱敏（展示/日志/落库脱敏统一受益，含 task 列既有盲区）；③ wire 层脱敏 `cached_repos.local_path`；④ backfill re-redact 历史 `tasks.repo_url`/`task_repos.repo_url` 与 `last_submodule_sync_error`/`submodule_init_error`/`scheduled_tasks.last_error`。**不动 `canonicalForHash`/目录名/`url_hash`**。
 5. **保留并修好复用/重启 UX**：交互启动 / relaunch / agent 启动 / workgroup 启动**四面**改按 `cachedRepoId` 引用镜像，服务端解封驱动 git，凭据永不再出后端；顺带修好 relaunch 私有仓（今天因 task 侧脱敏而 auth 失败）。
 6. **迁移明文消费者**：`refTaskCount`、记忆 scope 解析（`memoryInject.ts:365`/`memoryDistillScheduler.ts:184` 现以 `cachedRepos.url==tasks.repoUrl` join）改走 `cached_repo_id`，顺带修私有仓记忆 scope（今天 redacted≠plaintext 已 latent 失效）。
 7. **备份前置封存**：backfill 挪进 daemon 启动**与** backup CLI 都经过的共享、**网络无关**的 gate，杜绝「升级后首次备份仍含明文」，且不因联网/凭据阻塞升级。
@@ -66,8 +67,10 @@
 ---
 
 ## 4. 验收标准
-1. `GET /api/cached-repos` 对含凭据行（userinfo 形与 query 形）无 token 子串；`CachedRepoSchema` 无 `url`。
-2. `GET /api/scheduled-tasks`（及 detail）对含凭据 payload 无 token；重放该定时任务仍认证成功；删除其引用的缓存后重放仍成功（自持凭据）。
+1. `GET /api/cached-repos` 对含凭据行（userinfo 形与历史 query 形）**整个响应体**无 token 子串——含 `urlRedacted` **与 `localPath`**；`CachedRepoSchema` 无 `url`。
+1b. 新提交的 query 凭据 URL（launch 与 schedule 保存）被入口校验拒绝并给出可读错误；userinfo 形正常通过。
+2. `GET /api/scheduled-tasks`（及 detail）对含凭据 payload 无 token；重放该定时任务仍认证成功；删除其引用的缓存后重放仍成功（自持凭据）；**以 `cachedRepoId` 创建的 schedule 同样自持**（保存时解析并重新封存）。
+2b. 对含凭据 schedule 做**空编辑往返**（GET→PUT 原样回写）后，下次触发仍认证成功（凭据不被 `***` 覆盖）。
 3. 启动后直查 sqlite：`cached_repos.url` 空、`url_enc` unseal 回原 URL（含 query token）；`wal_checkpoint(TRUNCATE)` 后**裸文件** `db.sqlite`+`-wal` grep 无 token。
 4. 交互启动 / relaunch / agent / workgroup **四入口**选历史私有仓复用成功，请求体无明文 `repoUrl`。
 5. `refTaskCount`、记忆 scope 解析改按 `cached_repo_id` 且计数/选仓正确（私有仓记忆 scope 修复）。
