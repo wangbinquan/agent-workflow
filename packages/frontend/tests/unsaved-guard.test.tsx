@@ -30,7 +30,10 @@ import { useRef, useState, type ReactElement } from 'react'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { Route as RootRoute } from '../src/routes/__root'
 import { ResourceSplitPage, type ResourceCardItem } from '../src/components/split/ResourceSplitPage'
-import { UnsavedChangesGuard } from '../src/components/split/UnsavedChangesGuard'
+import {
+  BUSY_ESCAPE_AFTER_MS,
+  UnsavedChangesGuard,
+} from '../src/components/split/UnsavedChangesGuard'
 import { useReportSplitDirty, useSplitDirty } from '../src/components/split/splitDirty'
 import '../src/i18n'
 
@@ -136,17 +139,31 @@ interface GuardSearch extends Record<string, unknown> {
   filter?: string
 }
 
-function GuardAdapterHarness({ busy, onDiscard }: { busy: boolean; onDiscard?: () => void }) {
+function GuardAdapterHarness({
+  busy,
+  onDiscard,
+  busySince,
+  onForceLeave,
+}: {
+  busy: boolean
+  onDiscard?: () => void
+  busySince?: number | null
+  onForceLeave?: () => void
+}) {
   const [settled, setSettled] = useState(false)
   const dirtyRef = useRef<string | null>('settings:appearance')
   const busyRef = useRef(busy)
+  const busySinceRef = useRef<number | null>(busySince ?? null)
   dirtyRef.current = settled ? null : 'settings:appearance'
   busyRef.current = settled ? false : busy
+  busySinceRef.current = settled ? null : (busySince ?? null)
   return (
     <div data-testid="guard-adapter-page">
       <UnsavedChangesGuard
         dirtyRef={dirtyRef}
         busyRef={busyRef}
+        busySinceRef={busySinceRef}
+        {...(onForceLeave ? { onForceLeave } : {})}
         shouldBlockNavigation={({ current, next }) => {
           if (current.pathname !== next.pathname) return true
           const currentSearch = current.search as GuardSearch
@@ -194,7 +211,14 @@ function GuardAdapterHarness({ busy, onDiscard }: { busy: boolean; onDiscard?: (
   )
 }
 
-function renderGuardAdapter(opts: { busy?: boolean; onDiscard?: () => void } = {}) {
+function renderGuardAdapter(
+  opts: {
+    busy?: boolean
+    onDiscard?: () => void
+    busySince?: number | null
+    onForceLeave?: () => void
+  } = {},
+) {
   vi.spyOn(globalThis, 'fetch').mockImplementation(
     async () => new Response('not found', { status: 404 }),
   )
@@ -203,7 +227,14 @@ function renderGuardAdapter(opts: { busy?: boolean; onDiscard?: () => void } = {
     getParentRoute: () => RootRoute,
     path: '/settings',
     validateSearch: (raw): GuardSearch => raw,
-    component: () => <GuardAdapterHarness busy={opts.busy ?? false} onDiscard={opts.onDiscard} />,
+    component: () => (
+      <GuardAdapterHarness
+        busy={opts.busy ?? false}
+        onDiscard={opts.onDiscard}
+        busySince={opts.busySince ?? null}
+        onForceLeave={opts.onForceLeave}
+      />
+    ),
   })
   const agentsRoute = createRoute({
     getParentRoute: () => RootRoute,
@@ -333,6 +364,45 @@ describe('UnsavedChangesGuard', () => {
     expect(router.state.location.search.tab).toBe('appearance')
     expect(screen.getByTestId('unsaved-stay')).toBeTruthy()
     expect(screen.queryByTestId('unsaved-discard')).toBeNull()
+  })
+
+  // RFC-208 — the busy block may no longer be indefinite AND unescapable at the
+  // same time. Before this, a request that hung (no timeout existed anywhere in
+  // api/client.ts) left the router-GLOBAL blocker armed with a Stay-only dialog:
+  // every route in the app was unreachable from every page until a reload.
+  //
+  // The block itself is unchanged — a client-side abort still cannot prove the
+  // server did not commit — so the escape is offered only after the operation
+  // has visibly stalled, and it says so.
+  test('a stalled busy mutation offers an informed "leave anyway" that aborts it', async () => {
+    const onForceLeave = vi.fn()
+    const router = renderGuardAdapter({
+      busy: true,
+      busySince: Date.now() - (BUSY_ESCAPE_AFTER_MS + 1_000),
+      onForceLeave,
+    })
+    await waitFor(() => screen.getByTestId('guard-adapter-page'))
+
+    fireEvent.click(screen.getByTestId('change-section'))
+    await waitFor(() => screen.getByTestId('unsaved-guard-dialog'))
+    // Discard stays hidden: this is NOT "pretend it never happened".
+    expect(screen.queryByTestId('unsaved-discard')).toBeNull()
+
+    fireEvent.click(screen.getByTestId('unsaved-force-leave'))
+    // The in-flight request is cancelled, not merely abandoned — otherwise a
+    // late onSuccess would yank the user back from wherever they navigated to.
+    expect(onForceLeave).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(router.state.location.search.tab).toBe('appearance'))
+  })
+
+  test('a freshly-started busy mutation offers no escape yet (only Stay)', async () => {
+    renderGuardAdapter({ busy: true, busySince: Date.now() })
+    await waitFor(() => screen.getByTestId('guard-adapter-page'))
+
+    fireEvent.click(screen.getByTestId('change-section'))
+    await waitFor(() => screen.getByTestId('unsaved-guard-dialog'))
+    expect(screen.getByTestId('unsaved-stay')).toBeTruthy()
+    expect(screen.queryByTestId('unsaved-force-leave')).toBeNull()
   })
 
   test('discard clears the caller-owned registry before a blocked navigation proceeds', async () => {

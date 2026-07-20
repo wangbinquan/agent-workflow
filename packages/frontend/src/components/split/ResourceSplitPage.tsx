@@ -145,13 +145,23 @@ export function ResourceSplitPage(props: ResourceSplitPageProps) {
   // the same tick that a route starts network I/O. State is only a render wakeup
   // for the mounted guard when the first token starts or the final token settles.
   const busyRef = useRef(false)
-  const busyTokensRef = useRef(new Set<symbol>())
+  // RFC-208: tokens now carry metadata, not just identity. `startedAt` lets the
+  // unsaved guard offer an informed escape once a mutation has clearly stopped
+  // making progress, and `abort` lets that escape actually cancel the request —
+  // a timestamp alone could do neither, which is why the first sketch of this
+  // (a bare `startedAt` on the release closure) could not work.
+  const busyTokensRef = useRef(new Map<symbol, { startedAt: number; abort?: () => void }>())
+  const busySinceRef = useRef<number | null>(null)
   const [, setBusy] = useState(false)
-  const beginBusy = useCallback((cardKey: string) => {
+  const beginBusy = useCallback((cardKey: string, opts?: { abort?: () => void }) => {
     const token = Symbol(cardKey)
-    busyTokensRef.current.add(token)
+    busyTokensRef.current.set(token, {
+      startedAt: Date.now(),
+      ...(opts?.abort ? { abort: opts.abort } : {}),
+    })
     if (!busyRef.current) {
       busyRef.current = true
+      busySinceRef.current = Date.now()
       setBusy(true)
     }
 
@@ -162,9 +172,15 @@ export function ResourceSplitPage(props: ResourceSplitPageProps) {
       busyTokensRef.current.delete(token)
       if (busyRef.current && busyTokensRef.current.size === 0) {
         busyRef.current = false
+        busySinceRef.current = null
         setBusy(false)
       }
     }
+  }, [])
+
+  /** Cancel every in-flight operation holding a token (the escape hatch). */
+  const abortBusy = useCallback(() => {
+    for (const entry of busyTokensRef.current.values()) entry.abort?.()
   }, [])
 
   const discardHandlersRef = useRef(new Map<string, Set<SplitDiscardHandler>>())
@@ -340,7 +356,13 @@ export function ResourceSplitPage(props: ResourceSplitPageProps) {
   return (
     <div className="page page--split" data-mobile-view={mobileView}>
       <SplitDirtyContext.Provider value={ctxValue}>
-        <UnsavedChangesGuard dirtyRef={dirtyKeyRef} busyRef={busyRef} onDiscard={discardCurrent} />
+        <UnsavedChangesGuard
+          dirtyRef={dirtyKeyRef}
+          busyRef={busyRef}
+          busySinceRef={busySinceRef}
+          onForceLeave={abortBusy}
+          onDiscard={discardCurrent}
+        />
         <div className="split">
           <aside ref={listPaneRef} className="split__list">
             <div className="split__heading">

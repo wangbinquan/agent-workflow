@@ -99,9 +99,22 @@ function AgentCreatePage() {
     // Capture the exact click-time payload.  The request may settle after a
     // render (or after the defaults query), so reading the closure here would
     // make the submitted agent depend on unrelated later state.
-    mutationFn: ({ submitted }: { submitted: CreateAgent; release: SplitBusyRelease }) =>
-      api.post<Agent>('/api/agents', submitted),
-    onSuccess: async (created, { release }) => {
+    mutationFn: ({
+      submitted,
+      signal,
+    }: {
+      submitted: CreateAgent
+      release: SplitBusyRelease
+      signal: AbortSignal
+    }) => api.post<Agent>('/api/agents', submitted, signal),
+    onSuccess: async (created, { release, signal }) => {
+      // RFC-208: the unsaved guard's "leave anyway" aborts this request. If it
+      // did, the user has already chosen a destination — a late success must not
+      // navigate them somewhere else.
+      if (signal.aborted) {
+        release()
+        return
+      }
       // Sync-clear before navigating so the guard doesn't block THIS navigation.
       report(NEW_CARD_KEY, false)
       await qc.cancelQueries({ queryKey: ['agents'], exact: true })
@@ -146,7 +159,12 @@ function AgentCreatePage() {
               }
               onClick={() => {
                 if (portValidation.valid && jsonValid && !create.isPending) {
-                  create.mutate({ submitted: draft, release: beginBusy(NEW_CARD_KEY) })
+                  const ctl = new AbortController()
+                  create.mutate({
+                    submitted: draft,
+                    signal: ctl.signal,
+                    release: beginBusy(NEW_CARD_KEY, { abort: () => ctl.abort() }),
+                  })
                 }
               }}
               data-testid="agent-create-button"

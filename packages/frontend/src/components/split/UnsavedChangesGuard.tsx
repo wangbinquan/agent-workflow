@@ -21,6 +21,19 @@ export interface UnsavedChangesGuardProps {
   /** In-flight mutation state. Busy navigation cannot truthfully be discarded. */
   busyRef?: RefObject<boolean>
   /**
+   * RFC-208 — when the current busy stretch began. Once it exceeds
+   * BUSY_ESCAPE_AFTER_MS the dialog offers an informed "leave anyway".
+   *
+   * The block itself is NOT relaxed: a completed client-side abort still cannot
+   * prove the server did not commit. What changed is that the block is no longer
+   * allowed to be indefinite AND unescapable at the same time — a request that
+   * hangs used to lock navigation for the whole app with a Stay-only dialog, and
+   * only a reload could clear it.
+   */
+  busySinceRef?: RefObject<number | null>
+  /** Cancel the in-flight operation(s) before leaving. */
+  onForceLeave?: () => void
+  /**
    * Optional dirty-navigation policy. Return false only for a caller-owned,
    * same-resource navigation that is safe because its draft remains mounted.
    * Busy mutations always block regardless of this predicate.
@@ -33,9 +46,14 @@ export interface UnsavedChangesGuardProps {
   onDiscard?: () => boolean | void
 }
 
+/** RFC-208 — how long a busy stretch may run before the dialog offers an out. */
+export const BUSY_ESCAPE_AFTER_MS = 10_000
+
 export function UnsavedChangesGuard({
   dirtyRef,
   busyRef,
+  busySinceRef,
+  onForceLeave,
   shouldBlockNavigation,
   onDiscard,
 }: UnsavedChangesGuardProps) {
@@ -72,6 +90,11 @@ export function UnsavedChangesGuard({
   if (resolver.status !== 'blocked') return null
 
   const busy = busyRef?.current === true
+  // Only offer the escape once the operation has visibly stopped progressing.
+  // Before that the honest answer really is "wait" — a normal save settles in
+  // well under this, so the button never appears during healthy use.
+  const since = busySinceRef?.current ?? null
+  const stalled = busy && since !== null && Date.now() - since >= BUSY_ESCAPE_AFTER_MS
 
   return (
     <Dialog
@@ -104,10 +127,24 @@ export function UnsavedChangesGuard({
               {t('splitPage.unsavedDiscard')}
             </button>
           )}
+          {busy && stalled && (
+            <button
+              type="button"
+              className="btn btn--danger"
+              onClick={() => {
+                onForceLeave?.()
+                resolver.proceed()
+              }}
+              data-testid="unsaved-force-leave"
+            >
+              {t('splitPage.unsavedForceLeave')}
+            </button>
+          )}
         </>
       }
     >
       <p>{t(busy ? 'splitPage.unsavedBusyBody' : 'splitPage.unsavedBody')}</p>
+      {busy && stalled && <p>{t('splitPage.unsavedForceLeaveWarning')}</p>}
     </Dialog>
   )
 }

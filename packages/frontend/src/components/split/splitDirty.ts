@@ -31,7 +31,7 @@ export interface SplitDirtyContextValue {
    * cleanup can safely share it. Optional only for legacy isolated test
    * providers; ResourceSplitPage always supplies the production implementation.
    */
-  beginBusy?: (cardKey: string) => SplitBusyRelease
+  beginBusy?: (cardKey: string, opts?: { abort?: () => void }) => SplitBusyRelease
   /**
    * Register one route-owned synchronous discard operation. Registrations are
    * composed per card key by ResourceSplitPage before guarded navigation.
