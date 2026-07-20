@@ -855,6 +855,7 @@ export interface Resources {
     artifactsTitle: string
     artifactsEmpty: string
     artifactMissing: string
+    releaseArtifact: string
     cleanupCta: string
     cleanupTitle: string
     cleanupConfirm: string
@@ -4429,6 +4430,7 @@ export const zhCN: Resources = {
     artifactsTitle: '这条线产生的东西',
     artifactsEmpty: '还没有产生任何资源。',
     artifactMissing: '已被删除',
+    releaseArtifact: '移出引导集合',
     cleanupCta: '清除我的引导产物',
     cleanupTitle: '清除引导产物',
     cleanupConfirm: '确认清除',

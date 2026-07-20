@@ -152,6 +152,16 @@ function OnboardingPage() {
     },
   })
 
+  const release = useMutation<OnboardingRun, Error, string>({
+    mutationFn: (artifactId) =>
+      api.delete(
+        `/api/onboarding/runs/${encodeURIComponent(run?.id ?? '')}/artifacts/${encodeURIComponent(artifactId)}`,
+      ),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['onboarding'] })
+    },
+  })
+
   const inventory = useQuery<ExampleInventory>({
     queryKey: ['onboarding', 'examples', cleanupScope],
     queryFn: ({ signal }) => api.get('/api/onboarding/examples', { scope: cleanupScope }, signal),
@@ -298,8 +308,19 @@ function OnboardingPage() {
                 {run.artifacts.map((a) => (
                   <li key={a.id}>
                     <span className="mono">{a.resourceName}</span>{' '}
-                    <span className="muted">({a.resourceType})</span>
-                    {!a.alive && <span className="muted"> — {t('guide.artifactMissing')}</span>}
+                    <span className="muted">({a.resourceType})</span>{' '}
+                    {/* Escape hatch for the adopt picker: without it, one
+                        mis-click would enrol a real resource in a destructive
+                        sweep with no way back. */}
+                    <button
+                      type="button"
+                      className="btn btn--xs"
+                      data-testid={`guide-artifact-release-${a.resourceType}`}
+                      disabled={release.isPending}
+                      onClick={() => release.mutate(a.id)}
+                    >
+                      {t('guide.releaseArtifact')}
+                    </button>
                   </li>
                 ))}
               </ul>

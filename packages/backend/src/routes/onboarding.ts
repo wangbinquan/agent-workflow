@@ -35,7 +35,14 @@ import { Paths } from '@/util/paths'
 import { ForbiddenError, ValidationError } from '@/util/errors'
 import type { SkillFsOptions } from '@/services/skill'
 import { cleanupExamples, collectExamples } from '@/services/exampleCleanup'
-import { adoptResource, listRuns, patchRun, provisionStep, startRun } from '@/services/onboarding'
+import {
+  adoptResource,
+  listRuns,
+  patchRun,
+  provisionStep,
+  releaseArtifact,
+  startRun,
+} from '@/services/onboarding'
 
 export function mountOnboardingRoutes(app: Hono, deps: AppDeps): void {
   const skillFs: SkillFsOptions = { appHome: Paths.root }
@@ -90,6 +97,15 @@ export function mountOnboardingRoutes(app: Hono, deps: AppDeps): void {
       })
     }
     return c.json(await adoptResource(deps.db, actorOf(c), c.req.param('id'), parsed.data))
+  })
+
+  // Un-adopt. Without it a mis-click in the adopt picker would permanently
+  // enrol a real resource into a destructive sweep — there is no other write
+  // path anywhere that clears `example`.
+  app.delete('/api/onboarding/runs/:id/artifacts/:artifactId', async (c) => {
+    return c.json(
+      await releaseArtifact(deps.db, actorOf(c), c.req.param('id'), c.req.param('artifactId')),
+    )
   })
 
   app.get('/api/onboarding/examples', async (c) => {

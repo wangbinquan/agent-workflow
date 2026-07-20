@@ -512,6 +512,7 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'PATCH', path: '/api/onboarding/runs/:id' },
   { method: 'POST', path: '/api/onboarding/runs/:id/provision' },
   { method: 'POST', path: '/api/onboarding/runs/:id/adopt' },
+  { method: 'DELETE', path: '/api/onboarding/runs/:id/artifacts/:artifactId' },
   {
     method: 'GET',
     path: '/api/onboarding/examples',

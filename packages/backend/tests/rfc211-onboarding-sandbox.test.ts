@@ -27,16 +27,21 @@ import { CreateAgentSchema, workgroupLaunchReadiness } from '@agent-workflow/sha
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, skills, tasks, users, workflows, workgroups } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
+import type { Hono } from 'hono'
+import { createApp } from '../src/server'
+import { createUser } from '../src/services/users'
+import { createSession } from '../src/auth/sessionStore'
 import {
   adoptResource,
   diffExampleMarkers,
   listRuns,
   provisionStep,
+  releaseArtifact,
   startRun,
   suffixFromRunId,
 } from '../src/services/onboarding'
 import { cleanupExamples, collectExamples } from '../src/services/exampleCleanup'
-import { createAgent, getAgent, listAgents } from '../src/services/agent'
+import { createAgent, deleteAgent, getAgent, listAgents } from '../src/services/agent'
 import { createWorkflow, getWorkflow } from '../src/services/workflow'
 import { getWorkgroup } from '../src/services/workgroups'
 
@@ -209,7 +214,7 @@ describe('RFC-211 — adoption ("我自己来")', () => {
     db = createInMemoryDb(MIGRATIONS)
   })
 
-  test('adopting flips the row to private + example and bumps the ACL revision', async () => {
+  test('adopting marks the row without touching the ACL the user chose', async () => {
     const actor = await seedUser(db, 'u1')
     const run = await startRun(db, actor, 'agent')
     const created = await createAgent(
@@ -230,10 +235,11 @@ describe('RFC-211 — adoption ("我自己来")', () => {
 
     const after = await db.select().from(agents).where(eq(agents.id, created.id)).get()
     expect(after?.example).toBe(true)
-    expect(after?.visibility).toBe('private')
-    // The ACL panel commits with an expectedAclRevision — a silent visibility
-    // flip would let a concurrent edit land on a snapshot that is no longer true.
-    expect(after?.aclRevision).toBe((before?.aclRevision ?? 0) + 1)
+    // Adoption marks; it does not re-classify. Flipping this to private would
+    // remove the resource from every other user's list and break their saves
+    // with acl-missing-refs — silently, on both sides.
+    expect(after?.visibility).toBe(before?.visibility)
+    expect(after?.aclRevision).toBe(before?.aclRevision ?? 0)
   })
 
   test("adopting somebody else's resource is refused", async () => {
@@ -453,5 +459,268 @@ describe('RFC-211 — diffExampleMarkers (pure oracle)', () => {
     expect(diffExampleMarkers([], [{ resourceType: 'agent', id: 'real', example: false }])).toEqual(
       { markedWithoutArtifact: [], artifactWithoutMark: [] },
     )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// HTTP surface. The 4xx half is the point here: the route-error-code ratchet
+// (route-error-code-coverage.test.ts) exists because rejection branches get
+// written and then never exercised, so a guard can be deleted with every test
+// still green. Each case below names the exact code, not a status range.
+// ---------------------------------------------------------------------------
+
+describe('RFC-211 — onboarding HTTP routes', () => {
+  let db: DbClient
+  let app: Hono
+  let userToken: string
+  let adminToken: string
+
+  beforeEach(async () => {
+    db = createInMemoryDb(MIGRATIONS)
+    app = createApp({
+      token: 'daemon-token-never-used',
+      configPath: '/tmp/aw-rfc211-config-never-used.json',
+      opencodeVersion: '1.14.25',
+      dbVersion: 1,
+      db,
+    })
+    const u = await createUser(db, {
+      username: 'learner',
+      displayName: 'learner',
+      role: 'user',
+      password: 'longEnoughPassword',
+    })
+    userToken = (await createSession({ db, userId: u.id })).token
+    const a = await createUser(db, {
+      username: 'root',
+      displayName: 'root',
+      role: 'admin',
+      password: 'longEnoughPassword',
+    })
+    adminToken = (await createSession({ db, userId: a.id })).token
+  })
+
+  async function call(token: string, path: string, init: RequestInit = {}): Promise<Response> {
+    const headers = new Headers(init.headers)
+    headers.set('Authorization', `Bearer ${token}`)
+    if (init.body !== undefined && !headers.has('content-type')) {
+      headers.set('content-type', 'application/json')
+    }
+    return app.request(path, { ...init, headers })
+  }
+
+  test('POST /api/onboarding/runs rejects an unknown track with onboarding-run-invalid', async () => {
+    const res = await call(userToken, '/api/onboarding/runs', {
+      method: 'POST',
+      body: JSON.stringify({ track: 'not-a-track' }),
+    })
+    expect(res.status).toBe(422)
+    expect(((await res.json()) as { code: string }).code).toBe('onboarding-run-invalid')
+  })
+
+  test('PATCH /api/onboarding/runs/:id rejects an unknown status with onboarding-run-invalid', async () => {
+    const created = await call(userToken, '/api/onboarding/runs', {
+      method: 'POST',
+      body: JSON.stringify({ track: 'agent' }),
+    })
+    const run = (await created.json()) as { id: string }
+    const res = await call(userToken, `/api/onboarding/runs/${run.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'nonsense' }),
+    })
+    expect(res.status).toBe(422)
+    expect(((await res.json()) as { code: string }).code).toBe('onboarding-run-invalid')
+  })
+
+  test('provision rejects an unknown step with onboarding-step-invalid', async () => {
+    const created = await call(userToken, '/api/onboarding/runs', {
+      method: 'POST',
+      body: JSON.stringify({ track: 'agent' }),
+    })
+    const run = (await created.json()) as { id: string }
+    const res = await call(userToken, `/api/onboarding/runs/${run.id}/provision`, {
+      method: 'POST',
+      body: JSON.stringify({ step: 'agent.not-a-step' }),
+    })
+    expect(res.status).toBe(422)
+    expect(((await res.json()) as { code: string }).code).toBe('onboarding-step-invalid')
+  })
+
+  test('adopt rejects a malformed body with onboarding-adopt-invalid', async () => {
+    const created = await call(userToken, '/api/onboarding/runs', {
+      method: 'POST',
+      body: JSON.stringify({ track: 'agent' }),
+    })
+    const run = (await created.json()) as { id: string }
+    const res = await call(userToken, `/api/onboarding/runs/${run.id}/adopt`, {
+      method: 'POST',
+      // resourceKey missing — the guide must not silently adopt "something".
+      body: JSON.stringify({ step: 'agent.create', resourceType: 'agent' }),
+    })
+    expect(res.status).toBe(422)
+    expect(((await res.json()) as { code: string }).code).toBe('onboarding-adopt-invalid')
+  })
+
+  test('a run belonging to somebody else is 404, byte-identical to a missing one', async () => {
+    const mine = await call(userToken, '/api/onboarding/runs', {
+      method: 'POST',
+      body: JSON.stringify({ track: 'agent' }),
+    })
+    const run = (await mine.json()) as { id: string }
+
+    const stranger = await createUser(db, {
+      username: 'stranger',
+      displayName: 'stranger',
+      role: 'user',
+      password: 'longEnoughPassword',
+    })
+    const strangerToken = (await createSession({ db, userId: stranger.id })).token
+
+    const foreign = await call(strangerToken, `/api/onboarding/runs/${run.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'abandoned' }),
+    })
+    const missing = await call(strangerToken, '/api/onboarding/runs/01KZZZZZZZZZZZZZZZZZZZZZZZ', {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'abandoned' }),
+    })
+    expect(foreign.status).toBe(404)
+    expect(missing.status).toBe(404)
+    // RFC-099 D1: an error shape must never reveal that someone else's thing exists.
+    const a = (await foreign.json()) as { code: string }
+    const b = (await missing.json()) as { code: string }
+    expect(a.code).toBe(b.code)
+  })
+
+  test('scope=all is admin-only on both the preview and the sweep', async () => {
+    for (const [method, path] of [
+      ['GET', '/api/onboarding/examples?scope=all'],
+      ['DELETE', '/api/onboarding/examples?scope=all'],
+    ] as const) {
+      const denied = await call(userToken, path, { method })
+      expect({ method, status: denied.status }).toEqual({ method, status: 403 })
+      const allowed = await call(adminToken, path, { method })
+      expect({ method, status: allowed.status }).toEqual({ method, status: 200 })
+    }
+  })
+
+  test('a regular user can preview and sweep their own scope', async () => {
+    const res = await call(userToken, '/api/onboarding/examples', { method: 'GET' })
+    expect(res.status).toBe(200)
+    expect(((await res.json()) as { scope: string }).scope).toBe('mine')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Regressions found by the RFC-211 implementation-gate adversarial review.
+// Each of these was a real wedge or a real irreversible side effect.
+// ---------------------------------------------------------------------------
+
+describe('RFC-211 — review regressions', () => {
+  let db: DbClient
+
+  beforeEach(() => {
+    db = createInMemoryDb(MIGRATIONS)
+  })
+
+  test('deleting a guide resource by hand does not wedge the run', async () => {
+    // The ordinary DELETE endpoints do not touch onboarding_artifacts (there is
+    // no FK by design), so a stale row is the NORMAL state after any manual
+    // cleanup. If provisioning trusted it, every later attempt would re-create
+    // under the same name — a permanent 409 for agents (globally unique names).
+    const actor = await seedUser(db, 'u1')
+    const fs = skillFs()
+    const run = await startRun(db, actor, 'agent')
+    const first = await provisionStep(db, actor, run.id, 'agent.create', { skillFs: fs })
+    await deleteAgent(db, first.resourceName, actor)
+
+    const second = await provisionStep(db, actor, run.id, 'agent.create', { skillFs: fs })
+    expect(second.reused).toBe(false)
+    expect((await db.select().from(agents)).length).toBe(1)
+    // And the dead bookkeeping row is gone rather than piling up.
+    const rows = await listRuns(db, actor)
+    expect(rows[0]?.artifacts.filter((a) => a.resourceType === 'agent').length).toBe(1)
+  })
+
+  test('a hand-deleted example workflow does not spawn duplicates on retry', async () => {
+    // workflows.name is NOT unique, so the same bug shows up as silent
+    // duplication instead of a 409.
+    const actor = await seedUser(db, 'u1')
+    const fs = skillFs()
+    const run = await startRun(db, actor, 'workflow')
+    const first = await provisionStep(db, actor, run.id, 'workflow.create', { skillFs: fs })
+    await db.delete(workflows).where(eq(workflows.id, first.resourceId))
+
+    await provisionStep(db, actor, run.id, 'workflow.create', { skillFs: fs })
+    await provisionStep(db, actor, run.id, 'workflow.create', { skillFs: fs })
+    expect((await db.select().from(workflows)).length).toBe(1)
+  })
+
+  test('adoption marks but never re-classifies, and is reversible', async () => {
+    // Flipping an adopted resource to private would make it vanish from every
+    // other user's list and break their saves with acl-missing-refs — with no
+    // notice on either side, and (before releaseArtifact) no way back.
+    const actor = await seedUser(db, 'u1')
+    const run = await startRun(db, actor, 'agent')
+    const created = await createAgent(
+      db,
+      CreateAgentSchema.parse({ name: 'my-real-agent', outputs: ['result'] }),
+      { ownerUserId: 'u1' },
+    )
+
+    await adoptResource(db, actor, run.id, {
+      step: 'agent.create',
+      resourceType: 'agent',
+      resourceKey: 'my-real-agent',
+    })
+    const adopted = await db.select().from(agents).where(eq(agents.id, created.id)).get()
+    expect(adopted?.example).toBe(true)
+    expect(adopted?.visibility).toBe('public') // untouched
+
+    const runs = await listRuns(db, actor)
+    const artifact = runs[0]!.artifacts.find((a) => a.resourceId === created.id)!
+    await releaseArtifact(db, actor, run.id, artifact.id)
+
+    const released = await db.select().from(agents).where(eq(agents.id, created.id)).get()
+    expect(released?.example).toBe(false)
+    // …and it is out of the sweep entirely.
+    expect((await collectExamples(db, actor, 'mine')).entries).toEqual([])
+  })
+
+  test('provisioning steps aside instead of colliding with a hand-made same-name agent', async () => {
+    // The run suffix is visible to its owner, so they can build an agent with
+    // exactly the name the workflow track wants. Adopting it would enrol a
+    // resource the tour never made; colliding would 409 and wedge the step.
+    const actor = await seedUser(db, 'u1')
+    const run = await startRun(db, actor, 'workflow')
+    const suffix = suffixFromRunId(run.id)
+    await createAgent(
+      db,
+      CreateAgentSchema.parse({ name: `guide-auditor-${suffix}`, outputs: ['mine'] }),
+      { ownerUserId: 'u1' },
+    )
+
+    const res = await provisionStep(db, actor, run.id, 'workflow.create', { skillFs: skillFs() })
+    expect(res.resourceType).toBe('workflow')
+    const squatter = await db
+      .select()
+      .from(agents)
+      .where(eq(agents.name, `guide-auditor-${suffix}`))
+      .get()
+    // The user's own agent is untouched — not marked, not re-owned.
+    expect(squatter?.example).toBe(false)
+  })
+
+  test('cleanup collects bookkeeping rows whose resource is already gone', async () => {
+    const actor = await seedUser(db, 'u1')
+    const fs = skillFs()
+    const run = await startRun(db, actor, 'agent')
+    const made = await provisionStep(db, actor, run.id, 'agent.create', { skillFs: fs })
+    await deleteAgent(db, made.resourceName, actor)
+
+    const result = await cleanupExamples(db, actor, 'mine', { skillFs: fs })
+    expect(result.complete).toBe(true)
+    const rows = await listRuns(db, actor)
+    expect(rows[0]?.artifacts).toEqual([])
   })
 })

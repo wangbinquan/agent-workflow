@@ -43,7 +43,7 @@ import {
   workgroups,
 } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
-import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { createAgent, getAgent, updateAgent } from '@/services/agent'
 import { createManagedSkill, type SkillFsOptions } from '@/services/skill'
 import { createWorkflow } from '@/services/workflow'
@@ -101,13 +101,19 @@ async function hydrateArtifacts(db: DbClient, runId: string): Promise<Onboarding
     // practice resources, and every checkbox in the guide is keyed off whether
     // the resource is still there RIGHT NOW, never off a cached snapshot.
     const live = await liveResourceName(db, row.resourceType, row.resourceId)
+    if (live === null && row.resourceType !== 'task') {
+      // The user deleted it through the ordinary UI. Drop the bookkeeping row
+      // instead of showing a permanent "deleted" tombstone nothing can clear.
+      await db.delete(onboardingArtifacts).where(eq(onboardingArtifacts.id, row.id))
+      continue
+    }
     out.push({
       id: row.id,
       runId: row.runId,
       resourceType: row.resourceType,
       resourceId: row.resourceId,
       resourceName: live ?? row.resourceName,
-      alive: live !== null,
+      alive: true,
       createdAt: row.createdAt,
     })
   }
@@ -288,6 +294,21 @@ function recordArtifact(
   })
 }
 
+/**
+ * The first artifact of this type whose resource STILL EXISTS.
+ *
+ * Liveness is not optional here. Nothing removes an artifact row when the user
+ * deletes the resource through the ordinary list page (the table deliberately
+ * has no FK to the business tables, because the five delete paths differ), so a
+ * stale row is the normal state after any manual cleanup. Returning it would
+ * make every later "build it for me" re-attempt creation under the SAME name —
+ * a permanent 409 for agents/skills/workgroups (globally unique names) and, for
+ * workflows (names are not unique), an unbounded pile of identical rows.
+ *
+ * Dead rows are dropped on sight rather than merely skipped: leaving them would
+ * keep them in the run's artifact list forever, with no path that can ever
+ * collect them (cleanup only deletes rows for resources it actually removed).
+ */
 async function findArtifact(
   db: DbClient,
   runId: string,
@@ -297,9 +318,12 @@ async function findArtifact(
     .select()
     .from(onboardingArtifacts)
     .where(and(eq(onboardingArtifacts.runId, runId), eq(onboardingArtifacts.resourceType, type)))
-  // A workflow track provisions two agents; the first one registered is the
-  // primary (the one the guide sends the user to edit).
-  return rows[0]
+  for (const row of rows) {
+    if (row.resourceType === 'task') return row
+    if ((await liveResourceName(db, row.resourceType, row.resourceId)) !== null) return row
+    await db.delete(onboardingArtifacts).where(eq(onboardingArtifacts.id, row.id))
+  }
+  return undefined
 }
 
 // --- example content ---------------------------------------------------------
@@ -474,10 +498,32 @@ async function ensureSecondaryAgent(
     bodyMd: string
   },
 ): Promise<{ id: string; name: string }> {
+  // Only reclaim a name that is genuinely one of OUR practice agents. The run
+  // suffix is visible to its owner, so they can hand-build an agent with the
+  // same name; adopting it would register a resource the tour never made (and
+  // never marked), leaving a bookkeeping row that no cleanup path can collect
+  // and, worse, one that a later findArtifact could hand back as the coder.
   const existing = await getAgent(db, input.name)
   if (existing !== null) {
-    recordArtifact(db, run.id, 'agent', existing.id, existing.name)
-    return { id: existing.id, name: existing.name }
+    if (existing.ownerUserId === actor.user.id && existing.example === true) {
+      recordArtifact(db, run.id, 'agent', existing.id, existing.name)
+      return { id: existing.id, name: existing.name }
+    }
+    // Name is taken by something that is not ours — step aside rather than
+    // colliding (createAgent would 409 and wedge the whole step).
+    for (let n = 2; n <= 20; n++) {
+      const alt = `${input.name}-${n}`
+      if ((await getAgent(db, alt)) === null) {
+        const made = await createAgent(db, CreateAgentSchema.parse({ ...input, name: alt }), {
+          ownerUserId: actor.user.id,
+          visibility: 'private',
+          example: true,
+        })
+        recordArtifact(db, run.id, 'agent', made.id, made.name)
+        return { id: made.id, name: made.name }
+      }
+    }
+    throw new ConflictError('agent-name-in-use', `agent '${input.name}' already exists`)
   }
   const created = await createAgent(db, CreateAgentSchema.parse(input), {
     ownerUserId: actor.user.id,
@@ -731,25 +777,72 @@ export async function adoptResource(
     throw new NotFoundError(`${resourceType}-not-found`, `${resourceType} not found`)
   }
 
-  const currentAcl = await db
-    .select({ aclRevision: table.aclRevision })
-    .from(table)
-    .where(eq(table.id, row.id))
-    .get()
+  // Adoption marks, it does not re-classify. Provisioned artifacts are born
+  // private; an adopted one is something the user already made a visibility
+  // decision about, and silently flipping it to private would make the resource
+  // vanish from everyone else's list — breaking their saves with
+  // acl-missing-refs, with no notice on either side. `excludeForeignExamples`
+  // already keeps practice material out of other people's lists, and this way
+  // adoption stays fully reversible (see releaseArtifact).
   await db
     .update(table)
-    .set({
-      example: true,
-      visibility: 'private',
-      // A visibility change MUST bump the ACL revision: the ACL panel commits
-      // with an expectedAclRevision, so flipping silently would let a
-      // concurrent edit land on top of a snapshot that is no longer true.
-      aclRevision: (currentAcl?.aclRevision ?? 0) + 1,
-      updatedAt: Date.now(),
-    } as never)
+    .set({ example: true, updatedAt: Date.now() } as never)
     .where(eq(table.id, row.id))
   recordArtifact(db, run.id, resourceType, row.id, row.name)
   return markStepDone(db, actor, run, input.step)
+}
+
+/**
+ * Take a resource back OUT of the tour: drop its bookkeeping row and clear the
+ * example flag, so the one-click cleanup will never touch it again.
+ *
+ * This is what makes adoption safe to try. Without it, one mis-click in the
+ * adopt picker would permanently enrol a real resource into a destructive sweep
+ * with no way back — there is no other write path in the codebase that clears
+ * `example`.
+ */
+export async function releaseArtifact(
+  db: DbClient,
+  actor: Actor,
+  runId: string,
+  artifactId: string,
+): Promise<OnboardingRun> {
+  const run = await requireOwnRun(db, actor, runId)
+  const row = await db
+    .select()
+    .from(onboardingArtifacts)
+    .where(and(eq(onboardingArtifacts.id, artifactId), eq(onboardingArtifacts.runId, run.id)))
+    .get()
+  if (row === undefined) {
+    throw new NotFoundError('onboarding-artifact-not-found', 'onboarding artifact not found')
+  }
+  if (row.resourceType !== 'task') {
+    const table =
+      row.resourceType === 'agent'
+        ? agents
+        : row.resourceType === 'skill'
+          ? skills
+          : row.resourceType === 'workflow'
+            ? workflows
+            : workgroups
+    // Ownership is re-checked here rather than trusted from the artifact row:
+    // the resource may have changed hands since it was registered.
+    const live = await db
+      .select({ id: table.id, ownerUserId: table.ownerUserId })
+      .from(table)
+      .where(eq(table.id, row.resourceId))
+      .get()
+    if (live !== undefined && live.ownerUserId === actor.user.id) {
+      await db
+        .update(table)
+        .set({ example: false, updatedAt: Date.now() } as never)
+        .where(eq(table.id, row.resourceId))
+    }
+  }
+  await db.delete(onboardingArtifacts).where(eq(onboardingArtifacts.id, row.id))
+  const fresh = await db.select().from(onboardingRuns).where(eq(onboardingRuns.id, run.id)).get()
+  if (fresh === undefined) throw new Error('onboarding run vanished during release')
+  return toRun(db, fresh)
 }
 
 async function markStepDone(

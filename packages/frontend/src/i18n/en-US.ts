@@ -725,6 +725,7 @@ export const enUS: Resources = {
     artifactsTitle: 'What this track created',
     artifactsEmpty: 'Nothing created yet.',
     artifactMissing: 'deleted',
+    releaseArtifact: 'Remove from tour',
     cleanupCta: 'Clean up my tour material',
     cleanupTitle: 'Clean up tour material',
     cleanupConfirm: 'Delete them',

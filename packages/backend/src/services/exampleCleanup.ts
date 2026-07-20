@@ -48,6 +48,7 @@ import {
   agents,
   nodeRuns,
   onboardingArtifacts,
+  onboardingRuns,
   skills,
   taskRepos,
   tasks,
@@ -372,7 +373,8 @@ export async function deleteExampleTask(db: DbClient, taskId: string): Promise<E
     .from(tasks)
     .where(eq(tasks.id, taskId))
     .get()
-  if (alreadyPruned?.prunedAt === null && !(await claimWorkspacePrune(db, taskId, Date.now()))) {
+  const claimedAt = Date.now()
+  if (alreadyPruned?.prunedAt === null && !(await claimWorkspacePrune(db, taskId, claimedAt))) {
     return {
       ...base,
       outcome: 'skipped',
@@ -384,6 +386,14 @@ export async function deleteExampleTask(db: DbClient, taskId: string): Promise<E
   try {
     await removeTaskArtifacts(db, row)
   } catch (err) {
+    // Release the prune claim we just took. Holding it would make the retry the
+    // contract promises impossible: the next attempt would lose the claim to
+    // OURSELVES for the whole 30-minute lease and report the task as "being
+    // pruned by the background collector" — which nothing would ever finish.
+    await db
+      .update(tasks)
+      .set({ workspacePruningAt: null })
+      .where(and(eq(tasks.id, taskId), eq(tasks.workspacePruningAt, claimedAt)))
     return {
       ...base,
       outcome: 'failed',
@@ -396,13 +406,53 @@ export async function deleteExampleTask(db: DbClient, taskId: string): Promise<E
   return { ...base, outcome: 'deleted' }
 }
 
+/**
+ * Drop bookkeeping rows for resources that no longer exist. Scoped to the
+ * acting user's runs so one person's cleanup never edits another's ledger.
+ */
+async function purgeOrphanArtifacts(db: DbClient, actor: Actor): Promise<void> {
+  const rows = await db
+    .select({
+      id: onboardingArtifacts.id,
+      resourceType: onboardingArtifacts.resourceType,
+      resourceId: onboardingArtifacts.resourceId,
+    })
+    .from(onboardingArtifacts)
+    .innerJoin(onboardingRuns, eq(onboardingArtifacts.runId, onboardingRuns.id))
+    .where(eq(onboardingRuns.userId, actor.user.id))
+  for (const row of rows) {
+    const table =
+      row.resourceType === 'agent'
+        ? agents
+        : row.resourceType === 'skill'
+          ? skills
+          : row.resourceType === 'workflow'
+            ? workflows
+            : row.resourceType === 'workgroup'
+              ? workgroups
+              : tasks
+    const live = await db
+      .select({ id: table.id })
+      .from(table)
+      .where(eq(table.id, row.resourceId))
+      .get()
+    if (live === undefined) {
+      await db.delete(onboardingArtifacts).where(eq(onboardingArtifacts.id, row.id))
+    }
+  }
+}
+
 function itemFromError(
   base: Pick<ExampleCleanupItem, 'resourceType' | 'resourceId' | 'resourceName'>,
   err: unknown,
 ): ExampleCleanupItem {
   if (err instanceof DomainError) {
-    // 409s here are legitimate outcomes, not bugs: somebody else's agent may
-    // list this example skill, or a schedule may still reference the workflow.
+    // 404 means somebody got there first — a second tab, or the user deleting
+    // it by hand mid-sweep. Reporting that as a failure would show a scary
+    // partial-cleanup warning for a resource that is, in fact, gone.
+    if (err.status === 404) return { ...base, outcome: 'deleted', code: 'already-gone' }
+    // 409s are legitimate outcomes, not bugs: somebody else's agent may list
+    // this example skill, or a schedule may still reference the workflow.
     // Report them faithfully so the user can act, and never fail the batch.
     return {
       ...base,
@@ -554,6 +604,11 @@ export async function cleanupExamples(
   if (deletedIds.length > 0) {
     await db.delete(onboardingArtifacts).where(inArray(onboardingArtifacts.resourceId, deletedIds))
   }
+  // Also collect rows whose resource is already gone — the user deleted it
+  // through the ordinary list page, which does not touch this table (there is
+  // no FK, deliberately). They are invisible to `collectExamples` (it reads the
+  // business tables), so nothing else would ever remove them.
+  await purgeOrphanArtifacts(db, actor)
 
   return { complete: items.every((i) => i.outcome === 'deleted'), items }
 }

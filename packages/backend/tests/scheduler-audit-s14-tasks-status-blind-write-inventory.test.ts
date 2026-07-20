@@ -67,6 +67,13 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   // RFC-165 (R3-2-r4): the revive gate stamps workspace_pruned_at when the
   // dir vanished pre-tombstone (heal-forward) — companion-column write only.
   'services/lifecycle.ts': 1,
+  // RFC-211: the example sweep releases the prune claim it just took when the
+  // on-disk removal throws (CAS-scoped to its own claim stamp, same shape as
+  // gc.ts's release). Companion column only — the sweep never flips `status`;
+  // it drives tasks terminal through cancelTask before it deletes anything.
+  // Without the release, the retry the cleanup contract promises would lose the
+  // claim to ITSELF for the whole 30-minute lease.
+  'services/exampleCleanup.ts': 1,
   // RFC-164 PR-3: gate approve/reject + mid-run config edit both rewrite
   // workgroup_config_json (the task-owned runtime copy) — never `status`
   // (the gate's status flip rides transitionTaskStatusByEvent separately).
