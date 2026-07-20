@@ -72,6 +72,7 @@ export type SettingsTab =
   | 'limits'
   | 'recovery'
   | 'gc'
+  | 'git'
   | 'network'
   | 'appearance'
   | 'rendering'
@@ -83,6 +84,7 @@ export const SETTINGS_TABS = [
   'limits',
   'recovery',
   'gc',
+  'git',
   'network',
   'appearance',
   'rendering',
@@ -103,6 +105,8 @@ function configScopeForSettingsTab(tab: SettingsTab): SettingsConfigScopeId | un
       return SETTINGS_CONFIG_SCOPE_IDS.recovery
     case 'gc':
       return SETTINGS_CONFIG_SCOPE_IDS.gc
+    case 'git':
+      return SETTINGS_CONFIG_SCOPE_IDS.git
     case 'network':
       return SETTINGS_CONFIG_SCOPE_IDS.network
     case 'appearance':
@@ -277,6 +281,11 @@ function SettingsPage() {
           description: t('settings.sectionDescriptions.recovery'),
         },
         {
+          key: 'git',
+          label: t('settings.tabGit'),
+          description: t('settings.sectionDescriptions.git'),
+        },
+        {
           key: 'gc',
           label: t('settings.tabGc'),
           description: t('settings.sectionDescriptions.gc'),
@@ -341,6 +350,7 @@ function SettingsPage() {
         )}
         {tab === 'limits' && <LimitsTab config={config.data} />}
         {tab === 'recovery' && <RecoveryTab config={config.data} />}
+        {tab === 'git' && <GitTab config={config.data} />}
         {tab === 'gc' && <GcTab config={config.data} />}
         {tab === 'network' && <NetworkTab config={config.data} />}
         {tab === 'appearance' && <AppearanceTab config={config.data} />}
@@ -609,6 +619,105 @@ function RecoveryTab({ config }: TabProps) {
           step={60_000}
         />
       </Field>
+    </SectionForm>
+  )
+}
+
+/**
+ * RFC-210 — submodule handling: recursion mode, parallelism, upstream tracking,
+ * and the background refresh cadence.
+ *
+ * Lives next to GC under "reliability" because both are about what the platform
+ * does to a repo outside a task run.
+ */
+function GitTab({ config }: TabProps) {
+  const { t } = useTranslation()
+  const draft = useTabState(SETTINGS_CONFIG_SCOPE_IDS.git, config)
+  const { state, setState, save } = draft
+  const refresh = state.submoduleAutoRefresh
+  return (
+    <SectionForm
+      onSave={save.mutate}
+      busy={save.isPending}
+      error={save.error}
+      success={save.isSuccess && save.error === null ? 'saved' : null}
+      editState={draft}
+    >
+      <Field
+        label={t('settingsForm.gitRecurseSubmodules')}
+        hint={t('settingsForm.gitRecurseSubmodulesHint')}
+      >
+        <Select
+          value={state.gitRecurseSubmodules ?? 'auto'}
+          onChange={(v) => setState({ ...state, gitRecurseSubmodules: v })}
+          options={[
+            { value: 'auto' as const, label: t('settingsForm.gitRecurseAuto') },
+            { value: 'always' as const, label: t('settingsForm.gitRecurseAlways') },
+            { value: 'never' as const, label: t('settingsForm.gitRecurseNever') },
+          ]}
+          ariaLabel={t('settingsForm.gitRecurseSubmodules')}
+        />
+      </Field>
+      <div className="form-grid form-grid--cols-2">
+        <Field
+          label={t('settingsForm.gitSubmoduleJobs')}
+          hint={t('settingsForm.gitSubmoduleJobsHint')}
+        >
+          <NumberInput
+            value={state.gitSubmoduleJobs ?? 4}
+            onChange={(v) => setState({ ...state, gitSubmoduleJobs: v ?? 4 })}
+            min={1}
+            max={32}
+          />
+        </Field>
+      </div>
+      <Switch
+        checked={state.gitSubmoduleRemote === true}
+        onChange={(v) => setState({ ...state, gitSubmoduleRemote: v })}
+        label={t('settingsForm.gitSubmoduleRemote')}
+        hint={t('settingsForm.gitSubmoduleRemoteHint')}
+      />
+      <Switch
+        checked={refresh?.enabled !== false}
+        onChange={(v) =>
+          setState({ ...state, submoduleAutoRefresh: { ...(refresh ?? {}), enabled: v } })
+        }
+        label={t('settingsForm.submoduleAutoRefresh')}
+        hint={t('settingsForm.submoduleAutoRefreshHint')}
+      />
+      <div className="form-grid form-grid--cols-2">
+        <Field label={t('settingsForm.submoduleRefreshIntervalMs')}>
+          <NumberInput
+            value={refresh?.intervalMs ?? 6 * 60 * 60 * 1000}
+            onChange={(v) =>
+              setState({
+                ...state,
+                submoduleAutoRefresh: {
+                  ...(refresh ?? { enabled: true }),
+                  ...(v !== undefined ? { intervalMs: v } : {}),
+                },
+              })
+            }
+            min={60_000}
+            step={60 * 60 * 1000}
+          />
+        </Field>
+        <Field label={t('settingsForm.submoduleOnlyRecentDays')}>
+          <NumberInput
+            value={refresh?.onlyRecentDays ?? 30}
+            onChange={(v) =>
+              setState({
+                ...state,
+                submoduleAutoRefresh: {
+                  ...(refresh ?? { enabled: true }),
+                  ...(v !== undefined ? { onlyRecentDays: v } : {}),
+                },
+              })
+            }
+            min={1}
+          />
+        </Field>
+      </div>
     </SectionForm>
   )
 }

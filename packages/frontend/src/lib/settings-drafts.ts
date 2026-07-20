@@ -28,6 +28,7 @@ export const SETTINGS_CONFIG_SCOPE_IDS = {
   limits: 'settings.limits',
   recovery: 'settings.recovery',
   gc: 'settings.gc',
+  git: 'settings.git',
   network: 'settings.network',
   appearance: 'settings.appearance',
   rendering: 'settings.rendering',
@@ -67,6 +68,11 @@ export const SETTINGS_CONFIG_SCOPE_KEYS = {
     'periodicOrphanReconcileMs',
   ],
   gc: ['worktreeAutoGc', 'eventsArchiveThresholds'],
+  // RFC-210. Registering here is not optional bookkeeping: this list IS the
+  // minimal-write allowlist, so a key missing from it gets silently dropped on
+  // save. It is also `satisfies Record<keyof SETTINGS_CONFIG_SCOPE_IDS, …>`,
+  // which is why the scope id above has to exist first.
+  git: ['gitRecurseSubmodules', 'gitSubmoduleJobs', 'gitSubmoduleRemote', 'submoduleAutoRefresh'],
   network: ['bindHost', 'bindPort'],
   appearance: ['theme', 'language'],
   rendering: ['plantumlEndpoint', 'plantumlAuthHeader'],
@@ -152,6 +158,7 @@ const SECTION_BY_SCOPE: Record<SettingsConfigScopeId, SettingsConfigSection> = {
   [SETTINGS_CONFIG_SCOPE_IDS.limits]: 'limits',
   [SETTINGS_CONFIG_SCOPE_IDS.recovery]: 'recovery',
   [SETTINGS_CONFIG_SCOPE_IDS.gc]: 'gc',
+  [SETTINGS_CONFIG_SCOPE_IDS.git]: 'git',
   [SETTINGS_CONFIG_SCOPE_IDS.network]: 'network',
   [SETTINGS_CONFIG_SCOPE_IDS.appearance]: 'appearance',
   [SETTINGS_CONFIG_SCOPE_IDS.rendering]: 'rendering',
@@ -196,6 +203,7 @@ export function createSettingsDraftRegistry(
       [SETTINGS_CONFIG_SCOPE_IDS.limits]: create(SETTINGS_CONFIG_SCOPE_IDS.limits),
       [SETTINGS_CONFIG_SCOPE_IDS.recovery]: create(SETTINGS_CONFIG_SCOPE_IDS.recovery),
       [SETTINGS_CONFIG_SCOPE_IDS.gc]: create(SETTINGS_CONFIG_SCOPE_IDS.gc),
+      [SETTINGS_CONFIG_SCOPE_IDS.git]: create(SETTINGS_CONFIG_SCOPE_IDS.git),
       [SETTINGS_CONFIG_SCOPE_IDS.network]: create(SETTINGS_CONFIG_SCOPE_IDS.network),
       [SETTINGS_CONFIG_SCOPE_IDS.appearance]: create(SETTINGS_CONFIG_SCOPE_IDS.appearance),
       [SETTINGS_CONFIG_SCOPE_IDS.rendering]: create(SETTINGS_CONFIG_SCOPE_IDS.rendering),

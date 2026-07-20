@@ -23,6 +23,12 @@ export const CachedRepoSchema = z.object({
   defaultBranch: z.string().nullable(),
   /** ISO timestamp of last successful `git fetch` (or clone for fresh rows). */
   lastFetchedAt: z.string(),
+  /**
+   * RFC-210 G7 — last time the background refresh loop touched this mirror.
+   * `.default(null)` so pre-RFC-210 rows and fixtures keep parsing (same idiom
+   * as the other additive fields here).
+   */
+  lastAutoRefreshAt: z.string().nullable().default(null),
   /** ISO timestamp of original clone. */
   createdAt: z.string(),
   /** Count of `tasks` rows whose `repoUrl` matches `url`. Joined at query time. */

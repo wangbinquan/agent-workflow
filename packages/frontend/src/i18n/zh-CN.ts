@@ -626,6 +626,7 @@ export interface Resources {
     colUrl: string
     colLocalPath: string
     colLastFetched: string
+    colLastAutoRefresh: string
     colRefs: string
     colActions: string
     refresh: string
@@ -663,6 +664,8 @@ export interface Resources {
       labelOk: string
       labelError: string
       titleOk: string
+      labelPending: string
+      titlePending: string
       errorFallback: string
     }
   }
@@ -681,6 +684,7 @@ export interface Resources {
       limits: string
       recovery: string
       gc: string
+      git: string
       network: string
       appearance: string
       rendering: string
@@ -691,6 +695,7 @@ export interface Resources {
     tabLimits: string
     tabRecovery: string
     tabGc: string
+    tabGit: string
     tabNetwork: string
     tabAppearance: string
     tabMemory: string
@@ -870,6 +875,7 @@ export interface Resources {
     no: string
     details: string
     emDash: string
+    shaRangeLabel: string
     updated: string
     /** RFC-191: <RelativeTime> tokens（列表层相对时间口径，双向）。 */
     relTime: {
@@ -1640,6 +1646,8 @@ export interface Resources {
     commitOutcomeLocalAuth: string
     commitOutcomeLocalFailed: string
     commitOutcomeSubrepoFailed: string
+    subrepoPushed: string
+    subrepoNotPushed: string
     commitOutcomeSkippedEmpty: string
     commitFiles: string
     metaStarted: string
@@ -2967,6 +2975,19 @@ export interface Resources {
     largeOutputThreshold: string
     zeroUnlimited: string
     autoGcLabel: string
+    gitRecurseSubmodules: string
+    gitRecurseSubmodulesHint: string
+    gitRecurseAuto: string
+    gitRecurseAlways: string
+    gitRecurseNever: string
+    gitSubmoduleJobs: string
+    gitSubmoduleJobsHint: string
+    gitSubmoduleRemote: string
+    gitSubmoduleRemoteHint: string
+    submoduleAutoRefresh: string
+    submoduleAutoRefreshHint: string
+    submoduleRefreshIntervalMs: string
+    submoduleOnlyRecentDays: string
     autoGcHint: string
     olderThanDays: string
     onlyMerged: string
@@ -4112,6 +4133,7 @@ export const zhCN: Resources = {
     colUrl: '远端 URL',
     colLocalPath: '本地缓存路径',
     colLastFetched: '上次 fetch 时间',
+    colLastAutoRefresh: '上次自动刷新',
     colRefs: '关联任务',
     colActions: '操作',
     refresh: '刷新',
@@ -4150,6 +4172,8 @@ export const zhCN: Resources = {
       labelOk: '含 submodule',
       labelError: '⚠ submodule',
       titleOk: '上次 submodule 同步成功',
+      labelPending: '含 submodule',
+      titlePending: '尚未同步过 submodule',
       errorFallback: 'submodule 同步失败（无 stderr）',
     },
   },
@@ -4168,6 +4192,7 @@ export const zhCN: Resources = {
       limits: '设置任务、token、超时与并发边界。',
       recovery: '创建备份并配置恢复行为。',
       gc: '控制数据保留与自动清理。',
+      git: '控制 submodule 的递归、并行度与后台刷新。',
       network: '设置 daemon 监听地址与端口。',
       appearance: '选择主题与界面语言。',
       rendering: '配置外部图表渲染服务。',
@@ -4178,6 +4203,7 @@ export const zhCN: Resources = {
     tabLimits: '限额',
     tabRecovery: '恢复',
     tabGc: 'GC',
+    tabGit: 'Git',
     tabNetwork: '网络',
     tabAppearance: '外观',
     tabMemory: '记忆',
@@ -4373,6 +4399,7 @@ export const zhCN: Resources = {
     no: '否',
     details: '详情',
     emDash: '—',
+    shaRangeLabel: '从 {{from}} 到 {{to}}',
     updated: '最近更新',
     relTime: {
       justNow: '刚刚',
@@ -5325,6 +5352,8 @@ export const zhCN: Resources = {
     commitOutcomeLocalAuth: '仅本地提交（推送受限）',
     commitOutcomeLocalFailed: '仅本地提交（推送失败）',
     commitOutcomeSubrepoFailed: '子模块推送失败，父仓未推送',
+    subrepoPushed: '已推送',
+    subrepoNotPushed: '未推送',
     commitOutcomeSkippedEmpty: '无改动',
     commitFiles: '{{files}} 个文件，+{{ins}}/-{{del}}',
     metaStarted: '开始',
@@ -6686,6 +6715,22 @@ export const zhCN: Resources = {
     largeOutputThreshold: '大输出阈值 (bytes)',
     zeroUnlimited: '0 = 无限制。',
     autoGcLabel: '自动 GC 已合并的 worktree',
+    gitRecurseSubmodules: 'submodule 递归模式',
+    gitRecurseSubmodulesHint:
+      'auto：检测到 .gitmodules 才递归（默认）；always：始终递归；never：完全关闭。',
+    gitRecurseAuto: 'auto（检测到才递归）',
+    gitRecurseAlways: 'always（始终递归）',
+    gitRecurseNever: 'never（关闭）',
+    gitSubmoduleJobs: 'submodule 并行度',
+    gitSubmoduleJobsHint: 'clone / update 的 --jobs N。默认 4；git 低于 2.13 时自动降为 1。',
+    gitSubmoduleRemote: '子模块跟随上游最新',
+    gitSubmoduleRemoteHint:
+      '任务 worktree 创建时把每个 submodule 拉到其上游分支最新，而非父仓记录的 commit；之后整个任务期间不再变动。默认关闭——用可重现性换新鲜度。',
+    submoduleAutoRefresh: '后台定时刷新缓存仓',
+    submoduleAutoRefreshHint:
+      '定期对最近用过的缓存仓跑 fetch + submodule 同步，不必等到起任务或手动刷新。',
+    submoduleRefreshIntervalMs: '刷新间隔（毫秒）',
+    submoduleOnlyRecentDays: '只刷最近多少天用过的仓',
     autoGcHint: '后台周期性任务；v1 默认关闭也无碍。',
     olderThanDays: 'GC 时间窗（天）',
     onlyMerged: '仅 GC 已合并分支',

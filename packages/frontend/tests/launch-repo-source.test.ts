@@ -162,6 +162,7 @@ function cachedRepo(url: string, localPath: string): CachedRepo {
     hasSubmodules: null,
     lastSubmoduleSyncOk: null,
     lastSubmoduleSyncError: null,
+    lastAutoRefreshAt: null,
   }
 }
 

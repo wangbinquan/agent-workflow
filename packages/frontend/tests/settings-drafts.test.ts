@@ -30,6 +30,7 @@ describe('RFC-201 Settings draft registry', () => {
       'limits',
       'recovery',
       'gc',
+      'git',
       'network',
       'appearance',
       'rendering',

@@ -10684,25 +10684,6 @@ mark.comment-anchor[data-active='true'] {
 }
 
 /* RFC-034 — submodule recursion badge on /repos rows. */
-.submodule-badge {
-  display: inline-block;
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 500;
-  vertical-align: middle;
-  margin-left: 4px;
-  white-space: nowrap;
-}
-.submodule-badge--ok {
-  background: var(--accent-soft, #e0f2fe);
-  color: var(--accent-strong, #075985);
-}
-.submodule-badge--error {
-  background: var(--warn-soft, #fef3c7);
-  color: var(--warn-strong, #92400e);
-  cursor: help;
-}
 
 /* RFC-033 — Batch import dialog on /repos. */
 .batch-import-dialog {
@@ -17533,4 +17514,22 @@ button.status-chip {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* RFC-210 — "old sha → new sha" pair and the per-submodule result list. Both
+   lean on existing tokens; no new colors or spacing scale. */
+.sha-range {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+}
+.task-detail__subrepos {
+  list-style: none;
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--font-sm);
 }

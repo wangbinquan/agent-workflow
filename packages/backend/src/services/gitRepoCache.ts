@@ -214,6 +214,10 @@ function rowToCached(row: typeof cachedRepos.$inferSelect, referencingTaskCount 
     localPath: redactSensitiveString(row.localPath),
     defaultBranch: row.defaultBranch ?? null,
     lastFetchedAt: new Date(row.lastFetchedAt).toISOString(),
+    lastAutoRefreshAt:
+      row.lastAutoRefreshAt === null || row.lastAutoRefreshAt === undefined
+        ? null
+        : new Date(row.lastAutoRefreshAt).toISOString(),
     createdAt: new Date(row.createdAt).toISOString(),
     referencingTaskCount,
     hasSubmodules: row.hasSubmodules ?? null,

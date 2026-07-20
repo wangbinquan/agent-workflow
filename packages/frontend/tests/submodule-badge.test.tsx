@@ -41,7 +41,8 @@ describe('<SubmoduleBadge />', () => {
       />,
     )
     const chip = screen.getByTestId('submodule-badge-ok')
-    expect(chip.className).toContain('submodule-badge--ok')
+    // RFC-210: folded into <StatusChip>; the private `.submodule-badge` CSS is gone.
+    expect(chip.className).toContain('status-chip--success')
     expect(chip.textContent).toContain('submodule')
   })
 
@@ -54,7 +55,7 @@ describe('<SubmoduleBadge />', () => {
       />,
     )
     const chip = screen.getByTestId('submodule-badge-error')
-    expect(chip.className).toContain('submodule-badge--error')
+    expect(chip.className).toContain('status-chip--danger')
     expect(chip.getAttribute('title')).toContain('***')
     expect(chip.getAttribute('title')).not.toContain('user:tok')
   })

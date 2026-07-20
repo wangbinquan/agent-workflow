@@ -43,6 +43,7 @@ import { SessionTab } from '@/components/node-session/SessionTab'
 import { collectPorts, TaskOutputPanel } from '@/components/TaskOutputPanel'
 import { Segmented } from '@/components/Segmented'
 import { StatusChip } from '@/components/StatusChip'
+import { ShaRange } from '@/components/ShaRange'
 import { TaskStatusChip } from '@/components/TaskStatusChip'
 import { WorktreeDiffPanel } from '@/components/WorktreeDiffPanel'
 import { StructuralDiffView } from '@/components/structure/StructuralDiffView'
@@ -1635,6 +1636,22 @@ function CommitRunRow({ run, allRuns }: { run: NodeRun; allRuns: NodeRun[] }) {
         <StatusChip kind={nodeRunStatusToKind(run.status)} data-testid="commit-push-outcome">
           {t(commitOutcomeKey(cp.pushOutcome))}
         </StatusChip>{' '}
+        {/* RFC-210: per-submodule results. Without this the only visible signal
+            for a withheld parent is the outcome chip, which says nothing about
+            WHICH submodule blocked it. */}
+        {cp.subrepos !== undefined && cp.subrepos.length > 0 && (
+          <ul className="task-detail__subrepos" data-testid="commit-push-subrepos">
+            {cp.subrepos.map((sr) => (
+              <li key={sr.path} data-testid={`commit-push-subrepo-${sr.path}`}>
+                <code>{sr.path}</code> <ShaRange from={sr.fromSha} to={sr.toSha} />{' '}
+                <StatusChip kind={sr.pushed ? 'success' : 'danger'} size="sm">
+                  {t(sr.pushed ? 'tasks.subrepoPushed' : 'tasks.subrepoNotPushed')}
+                </StatusChip>
+                {sr.error !== null && <span className="data-table__muted"> · {sr.error}</span>}
+              </li>
+            ))}
+          </ul>
+        )}
         {sessionRuns.length > 0 && latestChild !== undefined && (
           <button
             type="button"

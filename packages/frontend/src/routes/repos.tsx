@@ -125,6 +125,7 @@ function ReposPage() {
                 <th>{t('repos.colUrl')}</th>
                 <th>{t('repos.colLocalPath')}</th>
                 <th>{t('repos.colLastFetched')}</th>
+                <th>{t('repos.colLastAutoRefresh')}</th>
                 <th>{t('repos.colRefs')}</th>
                 <th>{t('repos.colActions')}</th>
               </tr>
@@ -145,6 +146,15 @@ function ReposPage() {
                     {/* RFC-192 (D4/D5): list-layer relative time; the ISO string
                       rides <RelativeTime>'s string contract (Date.parse). */}
                     <RelativeTime ts={item.lastFetchedAt} />
+                  </td>
+                  <td>
+                    {/* RFC-210: distinct from lastFetched — that one also moves
+                        on every task launch, this is the background loop alone. */}
+                    {item.lastAutoRefreshAt === null ? (
+                      <span className="data-table__muted">{t('common.emDash')}</span>
+                    ) : (
+                      <RelativeTime ts={item.lastAutoRefreshAt} />
+                    )}
                   </td>
                   <td>{item.referencingTaskCount}</td>
                   <td>
