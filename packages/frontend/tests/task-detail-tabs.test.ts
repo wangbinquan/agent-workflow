@@ -148,6 +148,8 @@ describe('availableTabs', () => {
     expect(availableTabs({ hasOutputs: true, isWorkgroup: true })).toEqual([
       'chatroom',
       'task-questions',
+      'worktree-files',
+      'worktree-diff',
       'worktree-structure',
       'details',
     ])
@@ -245,6 +247,38 @@ describe('RFC-201 task detail capabilities and page-section groups', () => {
     expect(turn).toMatchObject({ chatroom: true, orchestration: false })
     expect(dynamic).toMatchObject({ chatroom: false, orchestration: true })
     expect(pending).toMatchObject({ chatroom: false, orchestration: false })
+  })
+
+  // 2026-07-20 — the workgroup 产物 leaves must compose with the capability
+  // oracle exactly like a workflow task's do: present when the group task has a
+  // canonical worktree (where every member's merge-back lands), absent when it
+  // has none. Before this, WORKGROUP_TAB_ORDER dropped both leaves outright, so
+  // a group whose members wrote files had no browse/download surface at all.
+  test('a turn-engine group with a canonical worktree exposes browse + diff; a worktree-less one exposes neither', () => {
+    const withWorktree = deriveTaskDetailCapabilities(
+      makeCapabilityTask({ workgroupId: 'wg' }),
+      plainRelated,
+    )
+    expect(withWorktree).toMatchObject({ worktreeFiles: true, worktreeDiff: true })
+    expect(
+      availableTabs({ hasOutputs: true, isWorkgroup: true, capabilities: withWorktree }),
+    ).toEqual([
+      'chatroom',
+      'task-questions',
+      'worktree-files',
+      'worktree-diff',
+      'worktree-structure',
+      'details',
+    ])
+
+    const withoutWorktree = deriveTaskDetailCapabilities(
+      makeCapabilityTask({ workgroupId: 'wg', worktreePath: '', baseCommit: null }),
+      plainRelated,
+    )
+    expect(withoutWorktree).toMatchObject({ worktreeFiles: false, worktreeDiff: false })
+    expect(
+      availableTabs({ hasOutputs: true, isWorkgroup: true, capabilities: withoutWorktree }),
+    ).toEqual(['chatroom', 'task-questions', 'details'])
   })
 
   test('groups every existing wire key without inventing display aliases', () => {

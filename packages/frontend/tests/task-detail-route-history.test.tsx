@@ -476,6 +476,41 @@ describe('/tasks/$id rendered URL-backed panels', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(1)
   })
 
+  // 2026-07-20 — user report: 「工作组的执行界面的产物里也要增加工作目录和工作目录 diff 的能力，
+  // 因为 agent 会写文件，现在没地方下载文件」. WORKGROUP_TAB_ORDER shipped (91cab517) without the
+  // two browse/diff leaves, so a turn-engine group's 产物 group held only the structural overlay
+  // and the files its members merged back into the canonical worktree had no download surface.
+  // This renders the REAL route to prove both panes mount and are reachable from the nav — the
+  // pure-function locks in task-detail-tabs.test.ts alone would not catch a missing pane.
+  test('a turn-engine group reaches the worktree browse and diff panes it used to lack', async () => {
+    installFetch(() => undefined)
+    const crew = task('crew', {
+      workgroupId: 'wg_crew',
+      workgroupName: 'Crew',
+      worktreePath: '/worktree/crew',
+      baseCommit: 'abc123',
+    })
+    const { router } = renderTaskRoute('/tasks/crew?tab=worktree-files', [crew], {
+      room: turnRoom('crew'),
+    })
+
+    await waitFor(() => {
+      expect(router.state.location.search).toEqual({ tab: 'worktree-files' })
+      expectActivePanel('worktree-files')
+    })
+    expect(screen.getByTestId('worktree-files-stub')).toBeTruthy()
+
+    fireEvent.click(sectionDestination('worktree-diff'))
+    await waitFor(() => {
+      expect(router.state.location.search).toEqual({ tab: 'worktree-diff' })
+      expectActivePanel('worktree-diff')
+    })
+    expect(screen.getByTestId('worktree-diff-stub')).toBeTruthy()
+    // The chat room stays the group's default view — this widens the artifacts
+    // group, it does not demote the room.
+    expect(document.getElementById('task-detail-section-chatroom')).not.toBeNull()
+  })
+
   test('dynamic-workflow canonical default remains stable when its room phase advances', async () => {
     installFetch(() => undefined)
     const dynamic = task('dynamic', {

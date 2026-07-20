@@ -188,10 +188,24 @@ export const TAB_ORDER: readonly TaskDetailTab[] = [
  * applies (the host snapshot declares no output ports). Kept as its own
  * constant — NOT a filter over TAB_ORDER — so the group set can't silently
  * grow when a future RFC appends a workflow-task tab.
+ *
+ * 2026-07-20 — `worktree-files` + `worktree-diff` were missing here from the
+ * day this constant was born (91cab517), leaving the 产物 group with `structure`
+ * as its only leaf: a user could see that symbols moved but could neither
+ * browse nor DOWNLOAD the files the members wrote. That gap is worse for a
+ * group than for a workflow task, because RFC-184 makes host runs persist no
+ * declared outputs at all (scheduler.ts `persistDeclaredOutputs: false`), so
+ * port artifacts are permanently empty and the canonical worktree is the group's
+ * ONLY file deliverable — members run in throwaway iso worktrees whose refs are
+ * deleted right after each turn, and their writes survive only by merge-back
+ * into `tasks.worktree_path`. Both leaves stay capability-filtered below, so a
+ * repo-less group still shows neither.
  */
 export const WORKGROUP_TAB_ORDER: readonly TaskDetailTab[] = [
   'chatroom',
   'task-questions',
+  'worktree-files',
+  'worktree-diff',
   'worktree-structure',
   'details',
 ] as const

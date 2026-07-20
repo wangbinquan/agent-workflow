@@ -21,18 +21,35 @@ import { zhCN } from '../src/i18n/zh-CN'
 const SRC = readFileSync(resolve(import.meta.dirname, '..', 'src/routes/tasks.detail.tsx'), 'utf8')
 
 describe('availableTabs — workgroup tasks', () => {
-  test('group tab set = chatroom(first) + task-questions + worktree-structure + details', () => {
+  test('group tab set = chatroom(first) + task-questions + the three worktree leaves + details', () => {
     expect(availableTabs({ hasOutputs: false, isWorkgroup: true })).toEqual([
       'chatroom',
       'task-questions',
+      'worktree-files',
+      'worktree-diff',
       'worktree-structure',
       'details',
     ])
   })
 
+  // 2026-07-20 regression lock (user report: 「工作组的执行界面的产物里也要增加工作目录和
+  // 工作目录 diff 的能力，因为 agent 会写文件，现在没地方下载文件」). RFC-164 PR-4 shipped this
+  // set with `worktree-structure` as the 产物 group's ONLY leaf, so a group's members could
+  // write files nobody could browse or download. Re-dropping either leaf reds this test.
+  test('the 产物 group exposes browse + textual diff, not just the structural overlay', () => {
+    const tabs = availableTabs({ hasOutputs: false, isWorkgroup: true })
+    expect(tabs).toContain('worktree-files')
+    expect(tabs).toContain('worktree-diff')
+    // Wire-order within the group mirrors TAB_ORDER: browse → text diff → structure.
+    expect(tabs.indexOf('worktree-files')).toBeLessThan(tabs.indexOf('worktree-diff'))
+    expect(tabs.indexOf('worktree-diff')).toBeLessThan(tabs.indexOf('worktree-structure'))
+  })
+
   test('outputs stays hidden for group tasks even if the snapshot declared ports', () => {
     // The builtin host snapshot declares none, but the gate must not depend
     // on that accident — hasOutputs is ignored entirely for group tasks.
+    // (RFC-184 also makes host runs persist no declared outputs, so port
+    // artifacts are permanently empty — worktree files are the real deliverable.)
     expect(availableTabs({ hasOutputs: true, isWorkgroup: true })).toEqual([...WORKGROUP_TAB_ORDER])
     expect(availableTabs({ hasOutputs: true, isWorkgroup: true })).not.toContain('workflow-status')
     expect(availableTabs({ hasOutputs: true, isWorkgroup: true })).not.toContain('outputs')
