@@ -39,6 +39,13 @@ const FORBIDDEN_ALIASES = new Set(['fit', 'fdescribe', 'ftest', 'xit', 'xdescrib
 // inventory and therefore requires an intentional review of this policy.
 const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   'e2e/clarify.spec.ts#skip': 1,
+  // RFC-206: the focus-ring geometry audit measures a forced :focus-visible
+  // state, which only Chrome DevTools Protocol (CSS.forcePseudoState) can
+  // produce — programmatic focus does not reliably match :focus-visible. The
+  // spec therefore skips on non-chromium projects (webkit is the opt-in
+  // nightly run; chromium is the PR-gating default, so no gating coverage is
+  // lost).
+  'e2e/focus-ring-clip.spec.ts#skip': 1,
   'e2e/git-protocols.spec.ts#skip': 2,
   'e2e/visual-regression.spec.ts#skip': 1,
   'e2e/workflow-editor.spec.ts#skip': 1,
