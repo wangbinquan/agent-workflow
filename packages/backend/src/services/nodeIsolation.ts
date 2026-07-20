@@ -48,6 +48,7 @@ import {
   poolRefName,
   pushObjectsToPool,
   resolveSubmodulePool,
+  subSlug,
   rewriteGitlinkInCommit,
   submoduleGitDir,
   usableSubmodules,
@@ -450,6 +451,10 @@ async function mergeSubmodulesIntoTheirs(
   r: IsoRepo,
   theirsCommit: string,
   log?: Logger,
+  agent?: {
+    containerPath: string
+    resolveSubConflict?: (conflict: MergeBackConflict) => Promise<{ resolved: boolean }>
+  },
 ): Promise<{ theirs: string; conflicts: string[] }> {
   const paths = Object.keys(r.subBases)
   if (paths.length === 0 || r.poolDir === null) return { theirs: theirsCommit, conflicts: [] }
@@ -468,12 +473,32 @@ async function mergeSubmodulesIntoTheirs(
     const ours = oursHead.stdout.trim()
     const sub = theirsHead.stdout.trim()
 
-    const res = await mergeSubmoduleTrees(r.poolDir, { base, ours, theirs: sub })
+    let res = await mergeSubmoduleTrees(r.poolDir, { base, ours, theirs: sub })
     if (res.merged === null) {
-      log?.warn('submodule three-way merge conflicted', { subPath, error: res.error ?? '' })
-      conflicts.push(subPath)
-      continue
+      // RFC-210 T25: give the merge agent a shot inside the submodule before
+      // withholding the whole repo. A submodule IS an ordinary git work tree, so
+      // the existing resolve-iso machinery applies verbatim — the only thing that
+      // differs is which directory it points at.
+      const settled = await tryAgentResolveSubmodule(r, subPath, {
+        base,
+        ours,
+        theirs: sub,
+        raw: res.error ?? '',
+        ...(agent ?? { containerPath: '' }),
+        ...(log !== undefined ? { log } : {}),
+      })
+      if (settled === null) {
+        log?.warn('submodule three-way merge conflicted', { subPath, error: res.error ?? '' })
+        conflicts.push(subPath)
+        continue
+      }
+      res = { merged: settled, trivial: false, error: null }
     }
+    // Every branch above either produced a commit or `continue`d, but TS cannot
+    // see that through the reassignment — assert it once instead of sprinkling
+    // non-null assertions over the four uses below.
+    const mergedSha = res.merged
+    if (mergedSha === null) continue
     // Anchor whatever canonical is about to point at, ALWAYS — not just for a
     // real merge commit. The node-scoped anchor dies with `discardNodeIso`, so
     // after that this worktree-scoped ref is the only thing keeping canonical's
@@ -482,16 +507,16 @@ async function mergeSubmodulesIntoTheirs(
     const anchored = await runGit(r.poolDir, [
       'update-ref',
       worktreeRefName(handleTaskIdOf(r), subPath),
-      res.merged,
+      mergedSha,
     ])
     if (anchored.exitCode !== 0) {
-      log?.warn('submodule anchor failed', { subPath, sha: res.merged })
+      log?.warn('submodule anchor failed', { subPath, sha: mergedSha })
     }
-    if (res.merged === sub) continue // theirs already carries it — nothing to rewrite
+    if (mergedSha === sub) continue // theirs already carries it — nothing to rewrite
     const rewritten = await rewriteGitlinkInCommit(r.canonWorktreePath, {
       commit: theirs,
       subPath,
-      sha: res.merged,
+      sha: mergedSha,
     })
     if (rewritten === null) {
       log?.warn('gitlink rewrite failed — treating as conflict', { subPath })
@@ -501,6 +526,91 @@ async function mergeSubmodulesIntoTheirs(
     theirs = rewritten
   }
   return { theirs, conflicts }
+}
+
+/**
+ * RFC-210 T25 — run the merge agent inside a conflicted submodule.
+ *
+ * Builds the same `MergeBackConflict` shape the parent level uses, but pointed at
+ * the submodule's own work tree, and lets `resolveConflictWithAgent` do the rest
+ * (resolve-iso, prompt, per-path verdict, materialize). Returns the resolved
+ * commit, or null to fall back to withholding the repo.
+ *
+ * The resolve-iso lives under `resolve-sub/<slug>` — hashed, because a submodule
+ * path contains '/' and may contain spaces, neither of which survives being used
+ * as a directory name segment here.
+ */
+async function tryAgentResolveSubmodule(
+  r: IsoRepo,
+  subPath: string,
+  ctx: {
+    base: string
+    ours: string
+    theirs: string
+    raw: string
+    containerPath?: string
+    resolveSubConflict?: (conflict: MergeBackConflict) => Promise<{ resolved: boolean }>
+    log?: Logger
+  },
+): Promise<string | null> {
+  if (ctx.resolveSubConflict === undefined || ctx.containerPath === undefined) return null
+  if (r.poolDir === null) return null
+  const subAbs = join(r.canonWorktreePath, subPath)
+  // The conflicted tree the agent has to fix — recomputed here because
+  // mergeSubmoduleTrees only reports that it failed, not the tree it produced.
+  const mt = await runGit(r.poolDir, [
+    'merge-tree',
+    '--write-tree',
+    `--merge-base=${ctx.base}`,
+    ctx.ours,
+    ctx.theirs,
+  ])
+  const mergedTree = mt.stdout.split('\n')[0]?.trim()
+  if (mergedTree === undefined || mergedTree === '') return null
+
+  const conflict: MergeBackConflict = {
+    // Names the resolve-iso directory; slugged because subPath has slashes.
+    worktreeDirName: `sub/${subSlug(subPath)}`,
+    paths: [subPath],
+    mergedTree,
+    rawConflictOutput: ctx.raw,
+    base: ctx.base,
+    canonWorktreePath: subAbs,
+    taskBaseHead: ctx.ours,
+    salvagedPaths: [],
+    forcedRepoRelPaths: [],
+  }
+  let outcome: { resolved: boolean }
+  try {
+    outcome = await ctx.resolveSubConflict(conflict)
+  } catch (err) {
+    ctx.log?.warn('submodule merge agent threw — withholding repo', {
+      subPath,
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return null
+  }
+  if (!outcome.resolved) return null
+
+  // The agent materialized its resolution into the submodule work tree; turn it
+  // into a real commit so the parent has a gitlink to point at, and publish it.
+  const staged = await runGit(subAbs, ['add', '-A'])
+  if (staged.exitCode !== 0) return null
+  const committed = await runGit(
+    subAbs,
+    ['commit', '-q', '-m', `aw: submodule merge resolution (${subPath})`],
+    { env: AW_INTERNAL_GIT_IDENTITY },
+  )
+  if (committed.exitCode !== 0) return null
+  const head = await runGit(subAbs, ['rev-parse', 'HEAD'])
+  if (head.exitCode !== 0) return null
+  const sha = head.stdout.trim()
+  const gitDir = await submoduleGitDir(r.canonWorktreePath, subPath)
+  if (gitDir !== null) {
+    await pushObjectsToPool(r.poolDir, gitDir, sha, worktreeRefName(handleTaskIdOf(r), subPath))
+  }
+  ctx.log?.info('submodule conflict resolved by merge agent', { subPath, sha })
+  return sha
 }
 
 /**
@@ -633,6 +743,17 @@ export async function mergeBackNodeIso(
   handle: IsoHandle,
   nodeTrees: Record<string, string>,
   log?: Logger,
+  /**
+   * RFC-210 T25 — optional merge-agent hook for a conflicted SUBMODULE.
+   *
+   * Called synchronously, inside merge-back, before the superproject merge runs.
+   * That timing is what makes it safe: a resolution is folded straight into the
+   * parent's `theirs` tree and the merge continues, so there is no "resolved but
+   * the parent never re-merged" window and no cross-resume convergence path to
+   * get wrong. Absent (or unresolved) ⟹ today's behaviour: withhold the whole
+   * repo and park for a human.
+   */
+  resolveSubConflict?: (conflict: MergeBackConflict) => Promise<{ resolved: boolean }>,
 ): Promise<MergeBackResult> {
   if (handle.passthrough) return { clean: true, conflicts: [] }
   const conflicts: MergeBackResult['conflicts'] = []
@@ -644,7 +765,10 @@ export async function mergeBackNodeIso(
     // ("Recursive merging with submodules currently only supports trivial
     // cases"), so by the time the superproject merge below runs, every gitlink
     // must already look like a one-sided change.
-    const subMerge = await mergeSubmodulesIntoTheirs(r, theirs, log)
+    const subMerge = await mergeSubmodulesIntoTheirs(r, theirs, log, {
+      containerPath: handle.containerPath,
+      ...(resolveSubConflict !== undefined ? { resolveSubConflict } : {}),
+    })
     // Record on the handle either way: a resolved round must CLEAR a stale set
     // left by a previous attempt, otherwise resume stays failed forever.
     r.pendingSubResolves = subMerge.conflicts

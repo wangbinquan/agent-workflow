@@ -230,7 +230,19 @@ export async function mergeBackAndSettle(args: {
   }
   const trees = nodeTrees
   const merge = await writeSem.run(async () => {
-    const mergeRes = await mergeBackNodeIso(handle, trees, log)
+    const mergeRes = await mergeBackNodeIso(
+      handle,
+      trees,
+      log,
+      // RFC-210 T25: reuse the SAME injected resolver for a conflicted submodule.
+      // It runs synchronously inside merge-back, so a resolution folds straight
+      // into the parent's tree and the merge continues — no separate convergence
+      // path, and nothing new for the caller to wire.
+      async (subConflict) => {
+        const res = await args.conflictResolver([subConflict], handle.containerPath)
+        return { resolved: res.allResolved }
+      },
+    )
     if (mergeRes.clean) return { kind: 'merged' as const }
     const res = await args.conflictResolver(mergeRes.conflicts, handle.containerPath)
     return res.allResolved
