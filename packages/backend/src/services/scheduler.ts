@@ -213,6 +213,10 @@ import {
 import { runDynamicWorkflowGenerate } from '@/services/dynamicWorkflowRunner'
 import { DW_ORCHESTRATOR_NODE_ID } from '@/services/orchestratorAgent'
 import { deriveWorkgroupDispatchFromConfig, type WorkgroupDispatch } from '@agent-workflow/shared'
+// RFC-210 replay: submodule topology read-back + the fail-closed gate around it.
+import { IsoSubmodulesSchema } from '@agent-workflow/shared'
+import { existsSync } from 'node:fs'
+import { join as pathJoin } from 'node:path'
 import { Semaphore } from '@/util/semaphore'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 
@@ -2202,6 +2206,61 @@ function parseIsoJsonMap(s: string | null): Record<string, string> {
 }
 
 /**
+ * RFC-210 — read a node_run's persisted submodule topology back for replay.
+ *
+ * Defensive parse: a row that fails the schema is treated as ABSENT rather than
+ * half-trusted. Absence matters — `replaySubmodulesMissing` below turns it into a
+ * refusal instead of letting merge-back run parent-only, which for a gitlink both
+ * sides moved silently resolves as "take theirs" and discards the sibling node's
+ * submodule commits.
+ */
+function parseIsoSubmodules(
+  row: { isoSubmodulesJson: string | null; isoSubmodulesReposJson: string | null },
+  repoCount: number,
+): Record<string, { subBases: Record<string, string>; poolDir: string | null }> {
+  const raw = repoCount === 1 ? row.isoSubmodulesJson : row.isoSubmodulesReposJson
+  if (raw === null || raw === '') return {}
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (repoCount === 1) {
+      const one = IsoSubmodulesSchema.safeParse(parsed)
+      return one.success ? { '': { subBases: one.data.subBases, poolDir: one.data.poolDir } } : {}
+    }
+    if (parsed === null || typeof parsed !== 'object') return {}
+    const out: Record<string, { subBases: Record<string, string>; poolDir: string | null }> = {}
+    for (const [dir, v] of Object.entries(parsed as Record<string, unknown>)) {
+      const one = IsoSubmodulesSchema.safeParse(v)
+      if (one.success) out[dir] = { subBases: one.data.subBases, poolDir: one.data.poolDir }
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
+/**
+ * RFC-210 fail-closed gate for replay: does any repo carry submodules while the
+ * persisted topology for it is missing?
+ *
+ * Mirrors the existing `node_tree missing` refusal a few lines below — replaying
+ * without the per-submodule merge bases is not a degraded merge, it is a merge
+ * that silently drops work.
+ */
+function replaySubmodulesMissing(
+  repos: ReadonlyArray<{ worktreePath: string; worktreeDirName: string }>,
+  persisted: Record<string, { subBases: Record<string, string>; poolDir: string | null }>,
+): string | null {
+  for (const repo of repos) {
+    if (!existsSync(pathJoin(repo.worktreePath, '.gitmodules'))) continue
+    const entry = persisted[repo.worktreeDirName]
+    if (entry === undefined || Object.keys(entry.subBases).length === 0) {
+      return repo.worktreeDirName || 'repo'
+    }
+  }
+  return null
+}
+
+/**
  * RFC-130 D15/T3c2: on resume, replay merge-back for any 'pending-merge' row. A
  * daemon crash between agent-success (runner wrote status='done') and merge-back
  * leaves a done row whose delta never reached the canonical worktree — deriveFrontier
@@ -2242,6 +2301,13 @@ async function replayPendingMerges(state: SchedulerState, log: Logger): Promise<
     if (Object.keys(nodeTrees).length === 0) {
       throw new Error(`pending-merge replay: node_tree missing for run ${r.id}`)
     }
+    const submodules = parseIsoSubmodules(r, task.repoCount)
+    const missingSub = replaySubmodulesMissing(state.repos, submodules)
+    if (missingSub !== null) {
+      throw new Error(
+        `pending-merge replay: submodule topology missing for repo '${missingSub}' of run ${r.id}`,
+      )
+    }
     const handle = rebuildIsoHandle({
       appHome: state.opts.appHome,
       taskId,
@@ -2249,6 +2315,7 @@ async function replayPendingMerges(state: SchedulerState, log: Logger): Promise<
       canonRepos: state.repos,
       baseSnapshots,
       taskBaseHeads,
+      submodules,
       // RFC-193 K1: the replay's merge-back re-snapshots canonical (ours) —
       // it must keep force-including the task's gitignored port files.
       forcedContainerPaths: await forcedPortPathsForTask(db, taskId),
@@ -2330,6 +2397,9 @@ async function replayConflictHumanResolutions(state: SchedulerState, log: Logger
       baseSnapshots,
       taskBaseHeads,
       forcedContainerPaths: await forcedPortPathsForTask(db, taskId),
+      // RFC-210: the human-resolve completion re-merges, so it needs the same
+      // per-submodule bases the original merge-back had.
+      submodules: parseIsoSubmodules(r, task.repoCount),
     })
     const outcome = await state.writeSem.run(() =>
       completeHumanResolvedConflict(handle, nodeTrees, log),
@@ -5627,6 +5697,10 @@ export async function createOrRebuildWrapperIso(
   existing: {
     isoBaseSnapshot: string | null
     isoBaseSnapshotReposJson: string | null
+    // RFC-210: the rebuilt wrapper iso merges back like any other node's, so the
+    // caller must hand its persisted submodule topology through too.
+    isoSubmodulesJson?: string | null
+    isoSubmodulesReposJson?: string | null
   } | null,
 ): Promise<IsoHandle> {
   const { db, task, taskId } = state
@@ -5709,6 +5783,16 @@ export async function createOrRebuildWrapperIso(
         baseSnapshots,
         taskBaseHeads,
         forcedContainerPaths: await forcedPortPathsForTask(state.db, taskId),
+        // RFC-210: a rebuilt wrapper iso merges back like any other, so it
+        // carries the same submodule topology. (The discard-only rebuild below
+        // deliberately does not — it needs paths and refs, nothing else.)
+        submodules: parseIsoSubmodules(
+          {
+            isoSubmodulesJson: effectiveExisting.isoSubmodulesJson ?? null,
+            isoSubmodulesReposJson: effectiveExisting.isoSubmodulesReposJson ?? null,
+          },
+          task.repoCount,
+        ),
       })
     }
     // No persisted iso base (legacy / passthrough row) — fall through to create.
