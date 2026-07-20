@@ -30,7 +30,7 @@ import { rename } from 'node:fs/promises'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
-import { cachedRepos, tasks } from '@/db/schema'
+import { cachedRepos, scheduledTasks, taskRepos } from '@/db/schema'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { classifyBaseRef, nonInteractiveGitEnv, runGit } from '@/util/git'
 import { createLogger } from '@/util/log'
@@ -469,7 +469,7 @@ export async function resolveCachedRepo(
         lastSubmoduleSyncError: sub.error,
       }
       return {
-        cached: rowToCached(updated, await refTaskCount(deps.db, row.url)),
+        cached: rowToCached(updated, await refTaskCount(deps.db, row.id)),
         cold: false,
         fetchOk,
         fetchError,
@@ -622,7 +622,7 @@ export async function resolveCachedRepo(
           lastSubmoduleSyncOk: true,
           lastSubmoduleSyncError: null,
         },
-        await refTaskCount(deps.db, input.url),
+        await refTaskCount(deps.db, id),
       ),
       cold: true,
       fetchOk: true,
@@ -637,13 +637,30 @@ export async function resolveCachedRepo(
   return await withTimeout(work, timeoutMs, `resolveCachedRepo(${redacted})`)
 }
 
-async function refTaskCount(db: DbClient, url: string): Promise<number> {
+/**
+ * RFC-204: count references BY MIRROR ID, not by URL.
+ *
+ * The old `tasks.repo_url == url` join cannot survive sealing — the plaintext
+ * column is blanked, so it would silently count everything against ''. It was
+ * already wrong for private repos anyway, since repo_url is stored redacted
+ * (RFC-054 W3-4) and never equalled the plaintext cache URL.
+ *
+ * Scheduled tasks are included: their launch payload references the mirror by
+ * `cachedRepoId`, so deleting the row out from under an enabled schedule would
+ * make its next fire die with `cached-repo-not-found`.
+ */
+async function refTaskCount(db: DbClient, cachedRepoId: string): Promise<number> {
   const r = db
     .select({ count: sql<number>`count(*)`.as('count') })
-    .from(tasks)
-    .where(eq(tasks.repoUrl, url))
+    .from(taskRepos)
+    .where(eq(taskRepos.cachedRepoId, cachedRepoId))
     .all()
-  return r[0]?.count ?? 0
+  let count = r[0]?.count ?? 0
+  const needle = JSON.stringify(cachedRepoId)
+  for (const row of db.select().from(scheduledTasks).all()) {
+    if (row.launchPayload.includes(`"cachedRepoId":${needle}`)) count++
+  }
+  return count
 }
 
 /**
@@ -664,7 +681,7 @@ export async function listCachedRepos(db: DbClient): Promise<CachedRepo[]> {
   const rows = db.select().from(cachedRepos).all()
   const out: CachedRepo[] = []
   for (const row of rows) {
-    out.push(rowToCached(row, await refTaskCount(db, row.url)))
+    out.push(rowToCached(row, await refTaskCount(db, row.id)))
   }
   // Most recently fetched first.
   out.sort((a, b) =>
@@ -748,7 +765,7 @@ export async function refreshCachedRepo(
       lastSubmoduleSyncError: sub.error,
     }
     return {
-      item: rowToCached(updated, await refTaskCount(deps.db, row.url)),
+      item: rowToCached(updated, await refTaskCount(deps.db, row.id)),
       fetchOk,
       fetchError,
       submoduleSyncOk: sub.ok,
@@ -788,7 +805,7 @@ export async function deleteCachedRepo(
   if (!row) {
     throw new NotFoundError('cached-repo-not-found', `cached repo ${id} not found`)
   }
-  const count = await refTaskCount(deps.db, row.url)
+  const count = await refTaskCount(deps.db, row.id)
   if (count > 0 && !options.force) {
     throw new CachedRepoHasReferencesError(count, redactGitUrl(row.url))
   }

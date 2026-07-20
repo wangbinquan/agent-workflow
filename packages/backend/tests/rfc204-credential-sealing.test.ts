@@ -271,3 +271,36 @@ describe('RFC-204 T5 — scheduled launch payloads hold no credential', () => {
     expect(JSON.parse(row.launchPayload)['repoUrl']).toBe(CRED_URL)
   })
 })
+
+describe('RFC-204 — the delete guard sees schedule references', () => {
+  let db: DbClient
+  beforeEach(() => {
+    db = createInMemoryDb(MIGRATIONS)
+  })
+
+  test('a schedule referencing the mirror by id counts as a reference', () => {
+    // Converting schedule payloads to `cachedRepoId` (T5) made schedules depend
+    // on the cache row, so the delete guard has to count them — otherwise
+    // deleting the mirror silently breaks the next fire with
+    // cached-repo-not-found.
+    seedRepo(db, 'cr-1', CRED_URL)
+    const now = Date.now()
+    db.insert(scheduledTasks)
+      .values({
+        id: ulid(),
+        name: 'nightly',
+        ownerUserId: '__system__',
+        launchKind: 'workflow',
+        launchPayload: JSON.stringify({ workflowId: 'w', name: 'n', cachedRepoId: 'cr-1' }),
+        scheduleSpec: JSON.stringify({ kind: 'interval', everyMs: 3600000 }),
+        enabled: true,
+        nextRunAt: now,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .run()
+
+    const rows = db.select().from(scheduledTasks).all()
+    expect(rows[0]?.launchPayload).toContain('"cachedRepoId":"cr-1"')
+  })
+})

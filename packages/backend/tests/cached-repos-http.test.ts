@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { cachedRepos, tasks, workflows } from '../src/db/schema'
+import { cachedRepos, tasks, workflows, taskRepos } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { resolveCachedRepo } from '../src/services/gitRepoCache'
 import { nonInteractiveGitEnv } from '../src/util/git'
@@ -152,8 +152,11 @@ describe('cached-repos HTTP routes (RFC-024 T5)', () => {
       { db: h.db, appHome: h.appHome, fetchOnReuse: false },
       { url: h.remoteUrl },
     )
-    // Fake a workflow + task referencing this URL.
+    // RFC-204: references are counted by MIRROR ID (task_repos.cached_repo_id),
+    // not by URL — the URL join could not survive sealing and was already broken
+    // for private repos, whose tasks.repo_url is stored redacted.
     const wfId = ulid()
+    const taskId = ulid()
     h.db
       .insert(workflows)
       .values({
@@ -170,7 +173,7 @@ describe('cached-repos HTTP routes (RFC-024 T5)', () => {
       .values({
         name: 'fixture-task',
 
-        id: ulid(),
+        id: taskId,
         workflowId: wfId,
         workflowSnapshot: '{}',
         repoPath: r.cached.localPath,
@@ -182,6 +185,20 @@ describe('cached-repos HTTP routes (RFC-024 T5)', () => {
         status: 'done',
         inputs: '{}',
         startedAt: Date.now(),
+        cachedRepoId: r.cached.id,
+      })
+      .run()
+    h.db
+      .insert(taskRepos)
+      .values({
+        taskId,
+        repoIndex: 0,
+        repoPath: r.cached.localPath,
+        repoUrl: r.cached.urlRedacted,
+        cachedRepoId: r.cached.id,
+        branch: 'agent-workflow/x',
+        worktreePath: r.cached.localPath,
+        worktreeDirName: '',
       })
       .run()
 
