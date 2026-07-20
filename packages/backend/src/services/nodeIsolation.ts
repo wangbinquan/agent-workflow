@@ -44,11 +44,14 @@ import {
   detectSubmodules,
   ensureSubmoduleAlternates,
   listSubmodules,
+  mergeSubmoduleTrees,
   poolRefName,
   pushObjectsToPool,
   resolveSubmodulePool,
+  rewriteGitlinkInCommit,
   submoduleGitDir,
   usableSubmodules,
+  worktreeRefName,
 } from '@/services/gitSubmodule'
 import type { Logger } from '@/util/log'
 
@@ -408,6 +411,93 @@ export async function snapshotNodeIsoFinal(
 }
 
 /**
+ * RFC-210 §2.3 — resolve every submodule of one repo and fold the results into
+ * the node's `theirs` commit.
+ *
+ * For each submodule the three sides are:
+ *   base   — its HEAD when this iso was created (recorded on the handle)
+ *   ours   — canonical's current HEAD for it
+ *   theirs — the iso's current HEAD for it
+ *
+ * `mergeSubmoduleTrees` short-circuits the three trivial shapes (nobody moved /
+ * only one side moved) and only builds a merge commit when both sides diverged.
+ * Whatever comes out is written into `theirs` as a plain gitlink update, so the
+ * superproject-level merge that follows sees the trivial "one side moved" shape
+ * it can actually handle.
+ *
+ * Bottom-up: a nested submodule's result changes ITS parent's gitlink, and that
+ * parent must be rewritten before it is itself folded into the level above.
+ */
+async function mergeSubmodulesIntoTheirs(
+  r: IsoRepo,
+  theirsCommit: string,
+  log?: Logger,
+): Promise<{ theirs: string; conflicts: string[] }> {
+  const paths = Object.keys(r.subBases)
+  if (paths.length === 0 || r.poolDir === null) return { theirs: theirsCommit, conflicts: [] }
+
+  const conflicts: string[] = []
+  let theirs = theirsCommit
+  const ordered = [...paths].sort(
+    (a, b) => b.split('/').length - a.split('/').length || b.localeCompare(a),
+  )
+  for (const subPath of ordered) {
+    const base = r.subBases[subPath]
+    if (base === undefined) continue
+    const oursHead = await runGit(join(r.canonWorktreePath, subPath), ['rev-parse', 'HEAD'])
+    const theirsHead = await runGit(join(r.isoWorktreePath, subPath), ['rev-parse', 'HEAD'])
+    if (oursHead.exitCode !== 0 || theirsHead.exitCode !== 0) continue // uninitialized side
+    const ours = oursHead.stdout.trim()
+    const sub = theirsHead.stdout.trim()
+
+    const res = await mergeSubmoduleTrees(r.poolDir, { base, ours, theirs: sub })
+    if (res.merged === null) {
+      log?.warn('submodule three-way merge conflicted', { subPath, error: res.error ?? '' })
+      conflicts.push(subPath)
+      continue
+    }
+    if (res.merged === sub) continue // theirs already carries it — nothing to rewrite
+    // The merge result is a NEW commit that only exists in the pool; canonical
+    // reads it through alternates, but it still needs an anchor of its own or
+    // the next gc takes it.
+    if (!res.trivial) {
+      const anchored = await runGit(r.poolDir, [
+        'update-ref',
+        worktreeRefName(handleTaskIdOf(r), subPath),
+        res.merged,
+      ])
+      if (anchored.exitCode !== 0) {
+        log?.warn('submodule merge anchor failed', { subPath, sha: res.merged })
+      }
+    }
+    const rewritten = await rewriteGitlinkInCommit(r.canonWorktreePath, {
+      commit: theirs,
+      subPath,
+      sha: res.merged,
+    })
+    if (rewritten === null) {
+      log?.warn('gitlink rewrite failed — treating as conflict', { subPath })
+      conflicts.push(subPath)
+      continue
+    }
+    theirs = rewritten
+  }
+  return { theirs, conflicts }
+}
+
+/**
+ * The worktree-scoped anchor is keyed on the task, but IsoRepo does not carry the
+ * task id. Deriving it from the container path keeps the anchor stable without
+ * widening the struct for one caller.
+ */
+function handleTaskIdOf(r: IsoRepo): string {
+  // `{appHome}/iso/{taskId}/{nodeRunId}[/{dir}]` — walk up from the iso worktree.
+  const parts = r.isoWorktreePath.split('/')
+  const isoAt = parts.lastIndexOf('iso')
+  return isoAt >= 0 && parts[isoAt + 1] !== undefined ? (parts[isoAt + 1] as string) : 'unknown'
+}
+
+/**
  * RFC-210 — make this repo's submodule commits reachable outside the iso.
  *
  * Each submodule's head is fetched into the shared pool AND anchored with a
@@ -529,8 +619,34 @@ export async function mergeBackNodeIso(
   if (handle.passthrough) return { clean: true, conflicts: [] }
   const conflicts: MergeBackResult['conflicts'] = []
   for (const r of handle.repos) {
-    const theirs = nodeTrees[r.worktreeDirName]
+    let theirs = nodeTrees[r.worktreeDirName]
     if (theirs === undefined) continue
+    // RFC-210 §2.3: resolve每个 submodule FIRST, folding the result back into
+    // `theirs`. git's own merge-tree refuses a gitlink both sides moved
+    // ("Recursive merging with submodules currently only supports trivial
+    // cases"), so by the time the superproject merge below runs, every gitlink
+    // must already look like a one-sided change.
+    const subMerge = await mergeSubmodulesIntoTheirs(r, theirs, log)
+    if (subMerge.conflicts.length > 0) {
+      // A conflicted submodule cannot be represented as a parent-level path
+      // conflict (the gitlink is one entry, the disagreement is inside it), so
+      // the whole repo is withheld and handed to the human/agent resolve path.
+      conflicts.push({
+        worktreeDirName: r.worktreeDirName,
+        paths: subMerge.conflicts.map((p) => `${p} (submodule)`),
+        mergedTree: '',
+        rawConflictOutput: subMerge.conflicts
+          .map((p) => `CONFLICT (submodule): Merge conflict in ${p}`)
+          .join('\n'),
+        base: r.baseSnapshot,
+        canonWorktreePath: r.canonWorktreePath,
+        taskBaseHead: r.taskBaseHead,
+        salvagedPaths: [],
+        forcedRepoRelPaths: r.forcedRepoRelPaths,
+      })
+      continue
+    }
+    theirs = subMerge.theirs
     const ours = await snapshotFullState(r.canonWorktreePath, {
       log,
       forceIncludePaths: r.forcedRepoRelPaths,

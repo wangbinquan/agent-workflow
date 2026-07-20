@@ -9,8 +9,10 @@
 import { redactGitUrl } from '@agent-workflow/shared'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { runGit, snapshotFullState } from '@/util/git'
+import { AW_INTERNAL_GIT_IDENTITY, runGit, snapshotFullState } from '@/util/git'
 
 export type SubmoduleMode = 'auto' | 'always' | 'never'
 
@@ -466,3 +468,116 @@ export async function rollbackSubmodulesRecursive(
     await runGit(join(worktreePath, p), ['checkout', '--detach', snap.head])
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RFC-210 §2.3 — per-submodule three-way merge.
+//
+// git does NOT do this for us. A superproject-level `merge-tree` that sees a
+// gitlink moved on BOTH sides gives up with exit 1 and
+//   "Recursive merging with submodules currently only supports trivial cases."
+// Running the same command INSIDE the submodule merges cleanly (measured: two
+// nodes editing different lines of one file merge to a union), so the recursion
+// has to be driven from here.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface SubMergeResult {
+  /** Commit the submodule should end up at, or null when the merge conflicted. */
+  merged: string | null
+  /** True when nothing had to be done (all three sides agree, or one side is idle). */
+  trivial: boolean
+  /** Raw stderr for a conflicted / failed merge. */
+  error: string | null
+}
+
+/**
+ * Merge one submodule's `ours` and `theirs` over `base`, inside `poolDir`.
+ *
+ * Result parentage matters: the merged commit MUST have `ours` as an ancestor,
+ * otherwise the superproject's own merge still refuses the gitlink. Measured on
+ * git 2.50.1 — `-p theirs` alone ⟹ superproject exit 1; `-p ours` alone,
+ * `-p ours -p theirs`, and `-p theirs -p ours` all ⟹ exit 0. So the real
+ * invariant is ancestry, not parent count or order; two parents are used anyway
+ * so `theirs` stays reachable and the submodule's history keeps both lineages.
+ */
+export async function mergeSubmoduleTrees(
+  poolDir: string,
+  args: { base: string; ours: string; theirs: string; message?: string },
+): Promise<SubMergeResult> {
+  const { base, ours, theirs } = args
+  if (ours === theirs) return { merged: ours, trivial: true, error: null }
+  // One side never moved ⟹ take the other verbatim; no merge commit needed.
+  if (ours === base) return { merged: theirs, trivial: true, error: null }
+  if (theirs === base) return { merged: ours, trivial: true, error: null }
+
+  const mt = await runGit(poolDir, [
+    'merge-tree',
+    '--write-tree',
+    `--merge-base=${base}`,
+    ours,
+    theirs,
+  ])
+  if (mt.exitCode !== 0) {
+    // exit 1 = real conflict; anything higher (e.g. an unreadable base) is a
+    // hard error the caller must NOT mistake for "needs a merge agent".
+    return { merged: null, trivial: false, error: mt.stdout.trim() || mt.stderr.trim() }
+  }
+  const tree = mt.stdout.split('\n')[0]?.trim()
+  if (tree === undefined || tree === '') {
+    return { merged: null, trivial: false, error: 'merge-tree produced no tree' }
+  }
+  const commit = await runGit(
+    poolDir,
+    ['commit-tree', tree, '-p', ours, '-p', theirs, '-m', args.message ?? 'aw: submodule merge'],
+    { env: AW_INTERNAL_GIT_IDENTITY },
+  )
+  if (commit.exitCode !== 0) {
+    return { merged: null, trivial: false, error: commit.stderr.trim() }
+  }
+  return { merged: commit.stdout.trim(), trivial: false, error: null }
+}
+
+/**
+ * Rewrite one gitlink inside `treeish`'s tree and return a NEW commit carrying it.
+ *
+ * Used to fold a per-submodule merge result back into the node's `theirs` tree so
+ * the superproject-level merge only ever sees the trivial "one side moved" shape.
+ * Uses a scratch index so the caller's real index/HEAD/worktree are untouched.
+ */
+export async function rewriteGitlinkInCommit(
+  repoPath: string,
+  args: { commit: string; subPath: string; sha: string; message?: string },
+): Promise<string | null> {
+  const idx = join(tmpdir(), `aw-gitlink-idx-${process.pid}-${gitlinkIdxCounter++}`)
+  const env = { GIT_INDEX_FILE: idx }
+  try {
+    const read = await runGit(repoPath, ['read-tree', `${args.commit}^{tree}`], { env })
+    if (read.exitCode !== 0) return null
+    const upd = await runGit(
+      repoPath,
+      ['update-index', '--cacheinfo', `160000,${args.sha},${args.subPath}`],
+      { env },
+    )
+    if (upd.exitCode !== 0) return null
+    const wt = await runGit(repoPath, ['write-tree'], { env })
+    if (wt.exitCode !== 0) return null
+    const commit = await runGit(
+      repoPath,
+      [
+        'commit-tree',
+        wt.stdout.trim(),
+        '-p',
+        args.commit,
+        '-m',
+        args.message ?? 'aw: submodule gitlink',
+      ],
+      { env: AW_INTERNAL_GIT_IDENTITY },
+    )
+    return commit.exitCode === 0 ? commit.stdout.trim() : null
+  } finally {
+    await rm(idx, { force: true }).catch(() => {
+      /* best-effort */
+    })
+  }
+}
+
+let gitlinkIdxCounter = 0
