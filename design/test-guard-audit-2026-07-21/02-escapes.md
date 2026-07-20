@@ -255,10 +255,10 @@
 - **当时补的防护**：改为按 tasks.cached_repo_id 直取。两处契约测试更新为新口径并写明原因；新增「私有仓（脱敏 repo_url）仍能解析 repo scope」回归——这条在改动前是红的；另加「无缓存镜像 → 无 repo scope」。
 - **是否上升为通用机制**：只修了 memory 这两处。「凡是与 tasks.repo_url 做等值比较的地方都是错的」这条没有落成扫描守卫；同一天的 6fb34d10 就是同款漏（relaunch 也用 repo_url）——**同一根因在同一天被发现两次**，正说明当时补的是单点。RFC-204 T7 还要清空 url 列，届时公有仓也会退化成用 '' 匹配任意行，是同一根因的第三次。
 
-### `6fb34d10` — 「重新启动此任务」对私有仓一直是坏的：task.repos[].repoUrl 自 RFC-054 W3-4 起是脱敏值，relaunch 把 https://***@host/... 当来源发出去，认证必然失败。commit messag
+### `6fb34d10` — 「重新启动此任务」对私有仓一直是坏的：task.repos[].repoUrl 自 RFC-054 W3-4 起是脱敏值，relaunch 把 https&#58;//***@host/... 当来源发出去，认证必然失败。commit messag
 
 - **发现者**：self-audit　**根因类别**：`wire-field-drop`
-- **现象**：「重新启动此任务」对私有仓一直是坏的：task.repos[].repoUrl 自 RFC-054 W3-4 起是脱敏值，relaunch 把 https://***@host/... 当来源发出去，认证必然失败。commit message 原话：「它从来就不是一个可用的 relaunch 来源」。
+- **现象**：「重新启动此任务」对私有仓一直是坏的：task.repos[].repoUrl 自 RFC-054 W3-4 起是脱敏值，relaunch 把 https&#58;//***@host/... 当来源发出去，认证必然失败。commit message 原话：「它从来就不是一个可用的 relaunch 来源」。
 - **测试网为什么没拦住**：与 33fe7061 同根因（脱敏列被当明文用），同样被公有仓夹具遮蔽。我实际 grep 验证过：packages/frontend/tests/task-wizard-builders.test.ts:355 的 repo 夹具构造器签名是 `(repoUrl: string | null, baseBranch = 'main')`，**根本没有 cachedRepoId 字段**，全文件对 relaunch 来源的断言只覆盖 repoUrl 分支。
 - **当时补的防护**：**这次修复没有加任何测试**——commit 只改了 packages/frontend/src/lib/task-wizard.ts（+16/-5），零测试文件。新逻辑（task-wizard.ts:358-362 优先用 cachedRepoId、无 id 回退 repoUrl）目前处于完全无防护状态。
 - **是否上升为通用机制**：既没有单点防护也没有通用机制。我 grep 过 packages/frontend/tests 全量：cachedRepoId 只出现在 task-detail-tabs / batch-import-dialog / rfc152 等**别的**测试的夹具里当占位 null，没有一条断言 relaunch 会用它。这条修复只要被后续重构碰一下就会静默回退，且回退后仍然只有私有仓用户能发现。

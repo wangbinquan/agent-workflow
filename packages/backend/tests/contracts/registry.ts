@@ -296,24 +296,6 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'POST', path: '/api/workgroups' },
   { method: 'PUT', path: '/api/workgroups/:name' },
   { method: 'DELETE', path: '/api/workgroups/:name' },
-
-  // ---- onboarding (RFC-211 guided sandbox) ----
-  {
-    method: 'GET',
-    path: '/api/onboarding/runs',
-    happy: { schema: z.array(z.any()) },
-  },
-  { method: 'POST', path: '/api/onboarding/runs' },
-  { method: 'PATCH', path: '/api/onboarding/runs/:id' },
-  { method: 'POST', path: '/api/onboarding/runs/:id/provision' },
-  { method: 'POST', path: '/api/onboarding/runs/:id/adopt' },
-  {
-    method: 'GET',
-    path: '/api/onboarding/examples',
-    happy: { schema: z.object({ scope: z.string(), entries: z.array(z.any()) }) },
-  },
-  // Destructive sweep — no happy fixture (it would delete real rows).
-  { method: 'DELETE', path: '/api/onboarding/examples' },
   { method: 'POST', path: '/api/workgroups/:name/rename' },
   { method: 'POST', path: '/api/workgroups/:name/tasks' },
   { method: 'GET', path: '/api/workgroup-tasks/pending-count' },
