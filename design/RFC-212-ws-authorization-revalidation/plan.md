@@ -1,36 +1,48 @@
-# RFC-212 — 任务分解
+# RFC-212 — 任务分解（v2，按设计门裁决重写）
 
-单 PR 交付（改动集中在 `ws/` + 七个撤销写入点各一行），但按下列顺序推进，每步自带测试。
+> v1 的 T1–T8 建立在被推翻的选型（全局 epoch + 惰性复核）上，整体作废。
+> 裁决见 [`design-gate-review.md`](design-gate-review.md)，修订后的设计见 [`design.md`](design.md)。
 
 | 编号 | 任务 | 依赖 | 验收 |
 | --- | --- | --- | --- |
-| **T1** | 新建 `src/auth/authEpoch.ts`：`bumpAuthEpoch(reason)` / `currentAuthEpoch()` / `AuthEpochReason` 联合类型 | — | 单测：初值、单调递增、reason 进日志不进逻辑 |
-| **T2** | 七个撤销写入点各加一次 `bumpAuthEpoch(...)`（design §4 表） | T1 | 每个写入点一条「调用后 epoch 递增」的断言；**外加源码棘轮**断言七个函数体都含该调用 |
-| **T3** | `ChannelSpec` 增加必填 `revalidation` 字段，七个通道逐一表态 | — | **编译期**：删掉任一通道的声明必须 tsc 失败（变异实证）；表驱动测试遍历矩阵 |
-| **T4** | `ConnectionData` 加 `token` / `epoch`；upgrade 时填充 | T1 | 类型 + 一条断言 upgrade 后 `epoch === currentAuthEpoch()` |
-| **T5** | 帧投递前的惰性复核（design §2 五步），含 4401/4403 关闭码 | T1–T4 | AC-1~AC-4 的行为用例 + AC-6 零额外查询计数 |
-| **T6** | 确认前端对 4401/4403 的重连退避不会退化成快速重试风暴 | T5 | 读 `hooks/useWebSocket.ts`；若无退避则补，并加一条源码/行为锁 |
-| **T7** | 变异实证（AC-7）：三处定向劣化各自必红；纳入审计报告 G6 的变异清单 | T5 | 三条变异逐一记录在 PR 说明里 |
-| **T8** | 文档收口：`design/plan.md` RFC 索引状态改 Done；`STATE.md` 追加一行；审计报告 Top-6 标注已闭环 | T7 | 索引与实现一致（受 `docs-implementation-parity.test.ts` 同类反向锁保护） |
+| **T1** | `src/ws/connections.ts`：进程级连接集合 + `trackConnection` / `untrackConnection`，接进 `server.ts:150-157` handleOpen 与 `:159-167` handleClose | — | 建连/断连后集合大小正确；`handleClose` 里既有的 `unsubscribe()` 不受影响 |
+| **T2** | `WsConnectionData` 换成凭据**指纹**（`{kind, hash, expiresAt}` / `{kind:'daemon'}`）+ `closing` 标志；`patStore.ts:31` 的 `hashToken` 导出 | T1 | 源码锁：`WsConnectionData` 上不得出现任何原始凭据字段 |
+| **T3** | 只读复核入口 `lookupActiveSessionByHash` / `lookupActivePatByHash`（查询体不变，跳过 `lastUsedAt` 写） | T2 | AC-8：复核路径零写入（计数断言） |
+| **T4** | `ChannelSpec` 增加必填 `revalidation`（`refreshActor` / `cache` 判别联合 / `rerunUpgradeGate`），七通道按 design §3.4 表逐一表态 | — | AC-5：`@ts-expect-error` 反向锁 + 表驱动遍历 |
+| **T5** | `revalidateAllConnections`：只读复核 → 失效 close(4401) → **写回 `ws.data.actor`** → 按声明清缓存 → 按声明重跑 `checkUpgradeGate` → 不过 close(4403)；关闭前同步置 `closing` 并同步 `unsubscribe()` | T1–T4 | AC-1 / AC-2 / AC-3 / AC-4a / AC-4b；**静默连接**也必须被关闭 |
+| **T6** | `commitAndRevalidate(db, reason, fn)` 包装器；design §4 的八个写入点全部改用它（**提交之后**触发） | T5 | 「在 await 让出点人为 yield 时投递帧」的用例；写入面级源码棘轮 |
+| **T7** | 凭据自然过期：投递前纯内存 `now > expiresAt → close(4401)`（零查询） | T2 | 过期用例；AC-6 不受影响 |
+| **T8** | 前端：`useWebSocket.ts:186` 读 `e.code`；`4401 → clearToken() + 重新登录提示` | T5 | AC-9；配前端行为锁（不是源码文本锁） |
+| **T9** | 回归锚点：`rfc152-ws-channel-registry.test.ts:277` / `:290`（同步投递）必须保持绿——方案 D 下帧路径不变，它们是「没有退回方案 C」的证据 | T5 | 两条用例原样通过 |
+| **T10** | 文档收口：`design/plan.md` 状态改 Done；`STATE.md` 更新；审计报告 Top-6 标注闭环；**新增一条** `docs-implementation-parity` 反向锁（v1 误称「已受保护」，实际那是逐条手写的锁集合） | T9 | 索引与实现一致且有锁 |
 
 ## PR 拆分建议
 
-默认单 PR。若 T5 的复核逻辑评审中出现分歧，可把 T1–T4（纯基建 + 矩阵，行为不变）先合，T5–T7 作为第二个 PR。**不可反向拆**：先合 T5 而不合 T3 的矩阵，等于把 28 格重新交回给人记。
+- **PR-1（基建，行为不变）**：T1–T4 + T9 的锚点确认。可独立合并。
+- **PR-2（行为）**：T5–T7。
+- **PR-3**：T8 前端 + T10 收口。
+
+**不可反向拆**：先合 T5 而不合 T4 的矩阵，等于把七个通道的复核策略重新交回给人记。
 
 ## 验收清单（合并前逐条打勾）
 
-- [ ] AC-1 任务成员移除 → `task` 连接被关闭且不再收帧；**移除前收得到**（正向对照）
-- [ ] AC-2 角色降级 → `tasks-list` / `workflows` / `memories` 失去 admin 短路
-- [ ] AC-3 会话 / PAT 吊销、账号停用 → 连接被 4401 关闭
-- [ ] AC-4 资源 ACL 收回 → 对应通道缓存失效
-- [ ] AC-5 矩阵 `satisfies Record<WsChannelKind, …>`；删一格即编译失败
-- [ ] AC-6 无撤销时零额外 DB 查询（计数断言）
-- [ ] AC-7 三条变异各自必红
-- [ ] 全量后端套件 + typecheck + lint + format:check 全绿
-- [ ] 推送后按 [feedback_post_commit_ci_check] 查 CI（用本次提交的确切 sha）
+- [ ] AC-1 成员移除 → `task` 连接关闭且一帧不漏；**移除前收得到**（正向对照）
+- [ ] AC-2 降级 → 短路类与 permissions 类**分列**断言 + `ws.data.actor` 已替换的白盒断言
+- [ ] AC-3 会话 / 批量吊销 / PAT / 停用 / 过期 → 4401；**静默连接同样被关闭**
+- [ ] AC-4a 有缓存通道缓存失效；AC-4b 无缓存通道按新 actor 判定
+- [ ] AC-5 必填字段 + `@ts-expect-error` 反向锁 + 表驱动遍历
+- [ ] AC-6 无撤销时零额外查询（`countingDb` 拦 select/insert/update/delete，**不能只拦 select**）
+- [ ] AC-8 复核路径零写入
+- [ ] AC-9 前端读到关闭码并清 token
+- [ ] T9 两条同步投递锚点原样绿
+- [ ] 写入面级棘轮就位（新增撤销写入点默认变红）
+- [ ] 全量后端套件 + 前端 + typecheck + lint + format:check 全绿
+- [ ] 推送后按 [feedback_post_commit_ci_check] 用本次提交的确切 sha 查 CI
+
+> AC-7（变异实证）**不进合并门**：变异基建（审计 G6）尚未建成。本 RFC 的四条变异作为 G6 的首批输入。
 
 ## 风险
 
-1. **`token` 驻留连接对象**：见 design §3.2 的安全评估。评审时若认为不可接受，退化方案是保存凭据 id + 类型，复核时按 id 查两张表——多一次查询，且拿不到「用户被停用」的统一答案，需额外查 users。
-2. **粗粒度 epoch 导致的复核风暴**：任一撤销让所有连接各复核一次。按本平台的连接数量级（个位数到几十）可忽略；若未来成为问题，可把 epoch 按 userId 分桶，接口不变。
-3. **与 RFC-054 W2-4 的取舍冲突**：本设计不改「无撤销时不查 DB」这一前提，冲突只存在于表述层面，已在 proposal §6 说明。
+1. **粗粒度重扫**：任一撤销让所有连接各做一次只读查询。按本平台连接数量级可忽略；若成为问题，可叠加「按 userId 分桶」。
+2. **`closing` 与在途帧**：`broadcaster.broadcast` 是同步 for-of，必须在 `ws.close()` 前**同步**退订，否则 AC-1 会变成 flaky 来源。
+3. **`repo-import` 通道无门**：本 RFC 不补（RFC-152 D4 遗留），矩阵里显式填 `na` 并在非目标点名，避免「28 格已覆盖」的表述掩盖它。
