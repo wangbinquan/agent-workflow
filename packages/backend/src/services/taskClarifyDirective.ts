@@ -11,7 +11,7 @@
 // `setBy` is the task-member user id, recorded for the UI/audit trail only; like
 // every other attribution column it MUST NOT enter an agent prompt.
 
-import { and, eq } from 'drizzle-orm'
+import { and, eq, ne } from 'drizzle-orm'
 import { isClarifyAskingNode, type ClarifyDirective } from '@agent-workflow/shared'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
@@ -41,18 +41,9 @@ export async function getNodeClarifyDirective(
   db: DbClient,
   taskId: string,
   nodeId: string,
+  shardKey?: string | null,
 ): Promise<ClarifyDirective | undefined> {
-  const rows = await db
-    .select({ directive: taskNodeClarifyDirectives.directive })
-    .from(taskNodeClarifyDirectives)
-    .where(
-      and(
-        eq(taskNodeClarifyDirectives.taskId, taskId),
-        eq(taskNodeClarifyDirectives.nodeId, nodeId),
-      ),
-    )
-    .limit(1)
-  return (rows[0]?.directive as ClarifyDirective | undefined) ?? undefined
+  return (await getNodeClarifyDirectiveRow(db, taskId, nodeId, shardKey))?.directive
 }
 
 /**
@@ -67,9 +58,16 @@ export async function getNodeClarifyDirectiveRow(
   db: DbClient,
   taskId: string,
   nodeId: string,
+  /**
+   * RFC-207 — resolve for ONE asker. The asker's own row wins; absent, the
+   * node-level ('') row applies. Omitting this reads the node-level row only,
+   * which is what every non-sharded caller (the canvas toggle) wants.
+   */
+  shardKey?: string | null,
 ): Promise<{ directive: ClarifyDirective; updatedAt: number } | undefined> {
   const rows = await db
     .select({
+      shardKey: taskNodeClarifyDirectives.shardKey,
       directive: taskNodeClarifyDirectives.directive,
       updatedAt: taskNodeClarifyDirectives.updatedAt,
     })
@@ -80,8 +78,8 @@ export async function getNodeClarifyDirectiveRow(
         eq(taskNodeClarifyDirectives.nodeId, nodeId),
       ),
     )
-    .limit(1)
-  const row = rows[0]
+  const key = shardKey ?? ''
+  const row = rows.find((r) => r.shardKey === key) ?? rows.find((r) => r.shardKey === '')
   if (row === undefined) return undefined
   return { directive: row.directive as ClarifyDirective, updatedAt: row.updatedAt }
 }
@@ -98,15 +96,36 @@ export async function setNodeClarifyDirective(
   nodeId: string,
   directive: ClarifyDirective,
   setBy: string | null,
+  shardKey?: string | null,
 ): Promise<void> {
   const now = Date.now()
+  const key = shardKey ?? ''
   await db
     .insert(taskNodeClarifyDirectives)
-    .values({ taskId, nodeId, directive, setBy, updatedAt: now })
+    .values({ taskId, nodeId, shardKey: key, directive, setBy, updatedAt: now })
     .onConflictDoUpdate({
-      target: [taskNodeClarifyDirectives.taskId, taskNodeClarifyDirectives.nodeId],
+      target: [
+        taskNodeClarifyDirectives.taskId,
+        taskNodeClarifyDirectives.nodeId,
+        taskNodeClarifyDirectives.shardKey,
+      ],
       set: { directive, setBy, updatedAt: now },
     })
+  // RFC-207 — a NODE-level 'continue' is the "un-stop everything here" gesture.
+  // Without this the per-asker rows would keep winning the resolution above, and
+  // the canvas toggle would read as continue while an asker stayed silenced —
+  // a stop with no way back.
+  if (key === '' && directive === 'continue') {
+    await db
+      .delete(taskNodeClarifyDirectives)
+      .where(
+        and(
+          eq(taskNodeClarifyDirectives.taskId, taskId),
+          eq(taskNodeClarifyDirectives.nodeId, nodeId),
+          ne(taskNodeClarifyDirectives.shardKey, ''),
+        ),
+      )
+  }
 }
 
 /**
@@ -120,11 +139,14 @@ export async function listNodeClarifyDirectives(
   const rows = await db
     .select({
       nodeId: taskNodeClarifyDirectives.nodeId,
+      shardKey: taskNodeClarifyDirectives.shardKey,
       directive: taskNodeClarifyDirectives.directive,
     })
     .from(taskNodeClarifyDirectives)
     .where(eq(taskNodeClarifyDirectives.taskId, taskId))
   const out: Record<string, ClarifyDirective> = {}
-  for (const r of rows) out[r.nodeId] = r.directive as ClarifyDirective
+  // Node-level view only — the canvas has one toggle per node and no shard axis.
+  // Per-asker rows surface in the workgroup room instead (RFC-207 §3.7.5).
+  for (const r of rows) if (r.shardKey === '') out[r.nodeId] = r.directive as ClarifyDirective
   return out
 }

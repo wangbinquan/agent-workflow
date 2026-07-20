@@ -404,7 +404,9 @@ describe('RFC-123 D: 源码 wiring 守卫', () => {
     const norm = (s: string) => s.replace(/\s+/g, ' ')
     expect(sealSrc).toContain('setNodeClarifyDirective')
     expect(norm(sealSrc)).toContain(
-      "await setNodeClarifyDirective( args.db, txResult.taskId, txResult.askingNodeId, 'stop', args.sealedBy ?? 'local', )",
+      // RFC-207 — the call gained a 6th arg: WHICH asker to stop. Without it a
+      // workgroup stop would silence every member sharing the host node.
+      "await setNodeClarifyDirective( args.db, txResult.taskId, txResult.askingNodeId, 'stop', args.sealedBy ?? 'local', wgClarifyAskerKeyForRound(txResult.askingNodeId, txResult.askingShardKey ?? null), )",
     )
   })
 })

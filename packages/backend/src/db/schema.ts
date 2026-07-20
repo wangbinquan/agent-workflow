@@ -1674,6 +1674,14 @@ export const taskNodeClarifyDirectives = sqliteTable(
     // Workflow node id of the asking-agent node (validated at the API as
     // isClarifyAskingNode against the task's workflow snapshot).
     nodeId: text('node_id').notNull(),
+    // RFC-207 — which ASKER inside that node the directive applies to. A workgroup
+    // runs every member assignment on one shared host node id, so a node-level row
+    // would silence every worker at once instead of the one that asked. '' means
+    // node-level (the canvas toggle, and every non-sharded asker); a real key
+    // targets one asker. NOT NULL with an '' sentinel rather than nullable,
+    // because SQLite does not imply NOT NULL on PRIMARY KEY columns in an ordinary
+    // rowid table — NULLs there would let duplicate rows through.
+    shardKey: text('shard_key').notNull().default(''),
     directive: text('directive', { enum: ['continue', 'stop'] }).notNull(),
     // Task-member user id who last set it (UI/audit only).
     setBy: text('set_by'),
@@ -1682,7 +1690,7 @@ export const taskNodeClarifyDirectives = sqliteTable(
       .default(sql`(unixepoch() * 1000)`),
   },
   (t) => ({
-    pk: primaryKey({ columns: [t.taskId, t.nodeId] }),
+    pk: primaryKey({ columns: [t.taskId, t.nodeId, t.shardKey] }),
     taskIdx: index('idx_task_node_clarify_directives_task').on(t.taskId),
   }),
 )

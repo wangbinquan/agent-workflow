@@ -32,6 +32,7 @@ import {
   workgroupMemberCursors,
 } from '@/db/schema'
 import { taskBroadcaster, TASK_CHANNEL } from '@/ws/broadcaster'
+import { getNodeClarifyDirective } from './taskClarifyDirective'
 import { WG_LEADER_NODE_ID } from './workgroupLaunch'
 
 export const WORKGROUP_ASSIGNMENT_TRANSITIONS: Record<
@@ -207,11 +208,9 @@ export async function isTaskClarifySuppressed(
     if (nodeId === undefined) return false
     const budget = resolveClarifyBudget({ clarifyBudget: parsed.clarifyBudget })
     if (budget <= 0) return true
-    const asked = await countWgClarifyAsks(
-      db,
-      taskId,
-      wgClarifyAskerKey(nodeId, shardKey ?? null, WG_LEADER_NODE_ID),
-    )
+    const askerKey = wgClarifyAskerKey(nodeId, shardKey ?? null, WG_LEADER_NODE_ID)
+    if ((await getNodeClarifyDirective(db, taskId, nodeId, askerKey)) === 'stop') return true
+    const asked = await countWgClarifyAsks(db, taskId, askerKey)
     return asked >= budget
   } catch {
     return false
@@ -407,10 +406,9 @@ export async function resolveWgClarifyAllowed(
   if (!workgroupHasHumanMember(members)) return false
   const budget = resolveClarifyBudget({ clarifyBudget })
   if (budget <= 0) return false
-  const asked = await countWgClarifyAsks(
-    db,
-    taskId,
-    wgClarifyAskerKey(nodeId, shardKey, WG_LEADER_NODE_ID),
-  )
+  const askerKey = wgClarifyAskerKey(nodeId, shardKey, WG_LEADER_NODE_ID)
+  // A human explicitly told THIS asker to stop — that outranks any leftover budget.
+  if ((await getNodeClarifyDirective(db, taskId, nodeId, askerKey)) === 'stop') return false
+  const asked = await countWgClarifyAsks(db, taskId, askerKey)
   return asked < budget
 }

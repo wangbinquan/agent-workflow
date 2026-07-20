@@ -26,7 +26,15 @@ import {
 } from '@/services/taskClarifyDirective'
 import { NotFoundError, ValidationError } from '@/util/errors'
 
-const SetDirectiveBodySchema = z.object({ directive: ClarifyDirectiveSchema })
+const SetDirectiveBodySchema = z.object({
+  directive: ClarifyDirectiveSchema,
+  /**
+   * RFC-207 — target ONE asker inside the node (a workgroup assignment or member)
+   * instead of the whole node. Omitted ⇒ the node-level row, which is what the
+   * canvas toggle sets and what a node-level 'continue' clears back to.
+   */
+  shardKey: z.string().min(1).optional(),
+})
 
 async function loadVisibleTask(deps: AppDeps, taskId: string, actor: Actor) {
   const [t] = await deps.db.select().from(tasksTable).where(eq(tasksTable.id, taskId)).limit(1)
@@ -72,7 +80,19 @@ export function mountTaskClarifyDirectiveRoutes(app: Hono, deps: AppDeps): void 
       )
     }
 
-    await setNodeClarifyDirective(deps.db, taskId, nodeId, parsed.data.directive, actor.user.id)
-    return c.json({ ok: true, nodeId, directive: parsed.data.directive })
+    await setNodeClarifyDirective(
+      deps.db,
+      taskId,
+      nodeId,
+      parsed.data.directive,
+      actor.user.id,
+      parsed.data.shardKey,
+    )
+    return c.json({
+      ok: true,
+      nodeId,
+      directive: parsed.data.directive,
+      ...(parsed.data.shardKey !== undefined ? { shardKey: parsed.data.shardKey } : {}),
+    })
   })
 }

@@ -913,31 +913,19 @@ describe('RFC-164 room — PR-5 surfaces', () => {
 
   // RFC-181 A/A2 — autonomous 进 per-task PATCH（对称 on/off + system 消息），
   // false→true 单事务遣散在途 clarify park 并 requeue 卡（design §2.1/§2.1a）。
-  test('RFC-181：PATCH autonomous 往返 + false→true 遣散在途 clarify park', async () => {
+  test('RFC-207：移除最后一个人工成员 → 遣散在途 clarify park', async () => {
     const { clarifySessions } = await import('../src/db/schema')
     const { mintNodeRun } = await import('../src/services/nodeRunMint')
 
-    // A：接受 autonomous、写 config、changes 文案。
-    const on = await req(owner.token, `/api/workgroup-tasks/${taskId}/config`, {
-      method: 'PUT',
-      body: JSON.stringify({ autonomous: true }),
-    })
-    expect(on.status).toBe(200)
-    const changes = ((await on.json()) as { changes: string[] }).changes
-    expect(changes.some((c) => c.includes('autonomous → true'))).toBe(true)
-    const readCfg = async (): Promise<{ autonomous?: boolean }> =>
-      JSON.parse(
-        (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.workgroupConfigJson ?? '{}',
-      ) as { autonomous?: boolean }
-    expect((await readCfg()).autonomous).toBe(true)
-
-    // 对称 off（true→false 不触发遣散路径）。
-    const off = await req(owner.token, `/api/workgroup-tasks/${taskId}/config`, {
-      method: 'PUT',
-      body: JSON.stringify({ autonomous: false }),
-    })
-    expect(off.status).toBe(200)
-    expect((await readCfg()).autonomous).toBe(false)
+    // RFC-207 — the autonomous switch this test used to drive is gone. Losing the
+    // LAST human is the equivalent transition: nobody is left to answer, so an
+    // in-flight ask-back must be dismissed instead of leaving the task parked
+    // forever on a question addressed to nobody.
+    const cfgNow = JSON.parse(
+      (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.workgroupConfigJson ?? '{}',
+    ) as { members: Array<{ id: string; memberType: string }> }
+    const humanMemberIds = cfgNow.members.filter((m) => m.memberType === 'human').map((m) => m.id)
+    expect(humanMemberIds.length).toBeGreaterThan(0)
 
     // A2：seed 一个 worker clarify park（awaiting_human 卡 + 中介 park run +
     // open session），翻 on → 遣散 + requeue + changes 附遣散计数。
@@ -977,7 +965,7 @@ describe('RFC-164 room — PR-5 surfaces', () => {
     })
     const on2 = await req(owner.token, `/api/workgroup-tasks/${taskId}/config`, {
       method: 'PUT',
-      body: JSON.stringify({ autonomous: true }),
+      body: JSON.stringify({ removeMemberIds: humanMemberIds }),
     })
     expect(on2.status).toBe(200)
     const changes2 = ((await on2.json()) as { changes: string[] }).changes
@@ -993,7 +981,7 @@ describe('RFC-164 room — PR-5 surfaces', () => {
     // true→true：no-op（无遣散计数，仍是合法 patch——附带 completionGate 改动）。
     const on3 = await req(owner.token, `/api/workgroup-tasks/${taskId}/config`, {
       method: 'PUT',
-      body: JSON.stringify({ autonomous: true, completionGate: false }),
+      body: JSON.stringify({ completionGate: false }),
     })
     expect(on3.status).toBe(200)
     const changes3 = ((await on3.json()) as { changes: string[] }).changes

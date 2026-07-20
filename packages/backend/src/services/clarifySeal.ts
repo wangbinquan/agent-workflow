@@ -49,6 +49,7 @@ import {
 import { parseAnswersArray, sealAnswersServerSide } from '@/services/clarify'
 import { getTaskQuestionWriteSem } from '@/services/taskWriteLocks'
 import { reconcileRoundEntriesTx } from '@/services/taskQuestions'
+import { wgClarifyAskerKeyForRound } from './wgAskerKey'
 import { setNodeClarifyDirective } from '@/services/taskClarifyDirective'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import {
@@ -449,6 +450,7 @@ export async function sealRoundQuestions(
         stopFinalized: flipNow && effectiveDirective === 'stop',
         taskId: round.taskId,
         askingNodeId: round.askingNodeId,
+        askingShardKey: round.askingShardKey,
       }
     })
   // Run the seal tx UNDER the per-task question-write lock B (finding 2). If the round is missing the
@@ -465,12 +467,16 @@ export async function sealRoundQuestions(
   // is already persisted in-tx. askingNodeId is the source agent (self) or questioner (cross)
   // — the same node the quick paths target. Still NO rerun / NO resume (defer semantics).
   if (txResult.stopFinalized && txResult.askingNodeId) {
+    // RFC-207 — the 6th arg stops the ASKER that asked, not every asker on the
+    // node. The round records which shard asked; the key function collapses a
+    // workgroup message turn to its member so a stop survives the next message.
     await setNodeClarifyDirective(
       args.db,
       txResult.taskId,
       txResult.askingNodeId,
       'stop',
       args.sealedBy ?? 'local',
+      wgClarifyAskerKeyForRound(txResult.askingNodeId, txResult.askingShardKey ?? null),
     )
   }
   return {
