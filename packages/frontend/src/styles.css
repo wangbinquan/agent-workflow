@@ -8015,6 +8015,39 @@ details.form-section[open] > summary {
   padding-top: 16px;
 }
 
+/* The Stepper primitive reserves 12rem of body height so the /tasks/new wizard
+   does not jump between steps. The tour's steps are two lines and two buttons,
+   so that reservation reads as a ~200px hole above the Next row. */
+.onboarding .stepper__body {
+  min-height: 0;
+}
+
+.onboarding__step-done {
+  color: var(--success-fg);
+  font-size: 13px;
+}
+
+.onboarding__artifact {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.onboarding__artifact-name {
+  font-size: 13px;
+}
+
+.onboarding__artifact-kind {
+  font-size: 12px;
+}
+
+/* Push the row action to the trailing edge so a list of artifacts reads as a
+   column of names with one action rail, not ragged inline text. */
+.onboarding__artifact > .btn {
+  margin-inline-start: auto;
+}
+
 /* ---- Reviews list group heading ---- */
 
 .reviews-group {

@@ -14,6 +14,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type * as RouterModule from '@tanstack/react-router'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 
 vi.mock('@tanstack/react-router', async () => {
@@ -173,6 +175,31 @@ describe('RFC-211 homepage invitation', () => {
     wrap(<HomepageGreeting />)
     await waitFor(() => expect(screen.getByTestId('homepage-start-task')).toBeTruthy())
     expect(screen.queryByTestId('homepage-guide-prompt')).toBeNull()
+  })
+})
+
+describe('RFC-211 guide navigation targets', () => {
+  test('every post-provision destination is a route that actually exists', () => {
+    // Caught by walking the tour in a real browser: the workflow track sent
+    // people to '/workflows/$id/edit', which renders "Not Found" — the editor
+    // route is '/workflows/$id'. Unit tests could not see it (the router is
+    // mocked) and typecheck could not either (TanStack's `to` is widened with
+    // `as never` here). So compare the strings against the registered paths.
+    const readSrc = (rel: string): string =>
+      readFileSync(resolve(__dirname, '..', 'src', rel), 'utf8')
+
+    const guide = readSrc('routes/onboarding.tsx')
+    const targets = [...guide.matchAll(/to: '(\/[^']*\$[^']*)'/g)].map((m) => m[1]!)
+    expect(targets.length).toBeGreaterThan(0)
+
+    // Registered leaf paths, reassembled from each route file's own definition.
+    const registered = new Set([
+      '/agents' + /path: '(\/\$name)'/.exec(readSrc('routes/agents.detail.tsx'))![1]!,
+      '/skills' + /path: '(\/\$name)'/.exec(readSrc('routes/skills.detail.tsx'))![1]!,
+      /path: '(\/workflows\/\$id)'/.exec(readSrc('routes/workflows.edit.tsx'))![1]!,
+      /path: '(\/workgroups\/\$name)'/.exec(readSrc('routes/workgroups.detail.tsx'))![1]!,
+    ])
+    expect(targets.filter((t) => !registered.has(t))).toEqual([])
   })
 })
 

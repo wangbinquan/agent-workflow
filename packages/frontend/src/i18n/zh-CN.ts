@@ -848,6 +848,8 @@ export interface Resources {
     start: string
     provision: string
     provisionRunning: string
+    provisionAgain: string
+    finish: string
     selfServe: string
     stepDone: string
     openResource: string
@@ -4417,17 +4419,19 @@ export const zhCN: Resources = {
     title: '上手引导',
     intro: '选一条线开始。每一步都可以让引导替你生成一份能跑的样板，也可以自己动手建。',
     sandboxNotice:
-      '引导里创建的东西都是你自己的练习资源：只有你看得见，随时可以在下面一键清除（连同它们产生的任务与产物）。',
+      '引导里创建的都是你自己的练习资源：只有你看得见，随时可以在下面一键清除（连同它们产生的任务与产物）。',
     pickTrack: '你想先学哪一块？',
     resume: '继续',
     start: '开始',
     provision: '帮我建一个',
     provisionRunning: '正在生成…',
+    provisionAgain: '再生成一份',
+    finish: '完成这条线',
     selfServe: '我自己来',
     stepDone: '已完成',
     openResource: '打开它 →',
     runtimeUnready: '运行时还没就绪，任务可能跑不起来。先到设置里检查运行时与凭据。',
-    artifactsTitle: '这条线产生的东西',
+    artifactsTitle: '本次引导产生的资源',
     artifactsEmpty: '还没有产生任何资源。',
     artifactMissing: '已被删除',
     releaseArtifact: '移出引导集合',

@@ -105,6 +105,24 @@ function OnboardingPage() {
   const currentStep = steps[stepIndex] ?? null
   const completed = new Set(run?.completedSteps ?? [])
 
+  /**
+   * The tour writes real resources through the server, so every mutation has to
+   * invalidate the ordinary list caches too. Without this, "build it for me"
+   * lands you on the agent's edit page while the list rail next to it still
+   * shows the empty state it cached a moment earlier — the first thing the tour
+   * does looks like it silently failed.
+   */
+  const invalidateResourceLists = async (): Promise<void> => {
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ['onboarding'] }),
+      qc.invalidateQueries({ queryKey: ['agents'] }),
+      qc.invalidateQueries({ queryKey: ['skills'] }),
+      qc.invalidateQueries({ queryKey: ['workflows'] }),
+      qc.invalidateQueries({ queryKey: ['workgroups'] }),
+      qc.invalidateQueries({ queryKey: ['overview'] }),
+    ])
+  }
+
   const startRun = useMutation<OnboardingRun, Error, OnboardingTrack>({
     mutationFn: (t0) => api.post('/api/onboarding/runs', { track: t0 }),
     onSuccess: async (created) => {
@@ -118,7 +136,7 @@ function OnboardingPage() {
     mutationFn: (step) =>
       api.post(`/api/onboarding/runs/${encodeURIComponent(run?.id ?? '')}/provision`, { step }),
     onSuccess: async (res) => {
-      await qc.invalidateQueries({ queryKey: ['onboarding', 'runs'] })
+      await invalidateResourceLists()
       // Land on the EDIT surface, not a read-only detail: seeing the real form
       // pre-filled is the part that teaches.
       if (res.resourceType === 'agent') {
@@ -126,8 +144,9 @@ function OnboardingPage() {
       } else if (res.resourceType === 'skill') {
         void navigate({ to: '/skills/$name', params: { name: res.resourceName } as never } as never)
       } else if (res.resourceType === 'workflow') {
+        // The editor route is '/workflows/$id' — there is no '/edit' segment.
         void navigate({
-          to: '/workflows/$id/edit',
+          to: '/workflows/$id',
           params: { id: res.resourceId } as never,
         } as never)
       } else if (res.resourceType === 'workgroup') {
@@ -148,7 +167,7 @@ function OnboardingPage() {
       }),
     onSuccess: async () => {
       setAdoptPick('')
-      await qc.invalidateQueries({ queryKey: ['onboarding', 'runs'] })
+      await invalidateResourceLists()
     },
   })
 
@@ -158,7 +177,19 @@ function OnboardingPage() {
         `/api/onboarding/runs/${encodeURIComponent(run?.id ?? '')}/artifacts/${encodeURIComponent(artifactId)}`,
       ),
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['onboarding'] })
+      await invalidateResourceLists()
+    },
+  })
+
+  const finish = useMutation<OnboardingRun, Error, void>({
+    mutationFn: () =>
+      api.patch(`/api/onboarding/runs/${encodeURIComponent(run?.id ?? '')}`, {
+        status: 'completed',
+      }),
+    onSuccess: async () => {
+      await invalidateResourceLists()
+      setTrack(null)
+      setStepIndex(0)
     },
   })
 
@@ -173,11 +204,7 @@ function OnboardingPage() {
     onSuccess: async (res) => {
       setCleanupResult(res)
       setCleanupOpen(false)
-      await qc.invalidateQueries({ queryKey: ['onboarding'] })
-      await qc.invalidateQueries({ queryKey: ['agents'] })
-      await qc.invalidateQueries({ queryKey: ['skills'] })
-      await qc.invalidateQueries({ queryKey: ['workflows'] })
-      await qc.invalidateQueries({ queryKey: ['workgroups'] })
+      await invalidateResourceLists()
       await qc.invalidateQueries({ queryKey: ['tasks'] })
     },
   })
@@ -249,16 +276,24 @@ function OnboardingPage() {
               setAdoptPick('')
             }}
             nextEnabled={completed.has(currentStep)}
+            // The Stepper swaps Next for this on the last step. Without it the
+            // tour just… stops, with a dead disabled button as its final state.
+            finalActions={
+              <button
+                type="button"
+                className="btn btn--primary"
+                data-testid="guide-finish"
+                disabled={!completed.has(currentStep) || finish.isPending}
+                aria-busy={finish.isPending}
+                onClick={() => finish.mutate()}
+              >
+                {t('guide.finish')}
+              </button>
+            }
             rootTestid="guide-stepper"
           >
             <div className="stack--sm">
               <p>{t(`guide.step.${stepKey(currentStep)}Body`)}</p>
-
-              {completed.has(currentStep) && (
-                <NoticeBanner tone="success" size="compact" testid="guide-step-done">
-                  {t('guide.stepDone')}
-                </NoticeBanner>
-              )}
 
               {currentStep.endsWith('.run') && <RuntimeReadiness />}
 
@@ -271,8 +306,17 @@ function OnboardingPage() {
                   aria-busy={provision.isPending}
                   onClick={() => provision.mutate(currentStep)}
                 >
-                  {provision.isPending ? t('guide.provisionRunning') : t('guide.provision')}
+                  {provision.isPending
+                    ? t('guide.provisionRunning')
+                    : completed.has(currentStep)
+                      ? t('guide.provisionAgain')
+                      : t('guide.provision')}
                 </button>
+                {completed.has(currentStep) && (
+                  <span className="onboarding__step-done" data-testid="guide-step-done">
+                    ✓ {t('guide.stepDone')}
+                  </span>
+                )}
                 <Link
                   to={selfServePath(currentStep).to as never}
                   search={selfServePath(currentStep).search as never}
@@ -300,15 +344,16 @@ function OnboardingPage() {
 
       {run !== null && (
         <section className="page__section">
-          <Card header={<h2>{t('guide.artifactsTitle')}</h2>} data-testid="guide-artifacts">
+          <h2>{t('guide.artifactsTitle')}</h2>
+          <Card data-testid="guide-artifacts">
             {run.artifacts.length === 0 ? (
               <EmptyState title={t('guide.artifactsEmpty')} size="compact" />
             ) : (
               <ul className="onboarding__artifacts">
                 {run.artifacts.map((a) => (
-                  <li key={a.id}>
-                    <span className="mono">{a.resourceName}</span>{' '}
-                    <span className="muted">({a.resourceType})</span>{' '}
+                  <li key={a.id} className="onboarding__artifact">
+                    <span className="onboarding__artifact-name mono">{a.resourceName}</span>
+                    <span className="onboarding__artifact-kind muted">{a.resourceType}</span>
                     {/* Escape hatch for the adopt picker: without it, one
                         mis-click would enrol a real resource in a destructive
                         sweep with no way back. */}
@@ -346,7 +391,7 @@ function OnboardingPage() {
           {isAdmin && (
             <button
               type="button"
-              className="btn btn--danger"
+              className="btn btn--sm"
               data-testid="guide-cleanup-all"
               onClick={() => {
                 setCleanupScope('all')
@@ -390,10 +435,6 @@ function OnboardingPage() {
           </div>
         }
       />
-
-      <div className="onboarding__skip">
-        <Link to="/">{t('nav.home')}</Link>
-      </div>
     </div>
   )
 }
