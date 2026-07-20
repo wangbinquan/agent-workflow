@@ -851,7 +851,10 @@ describe('WorkflowEditorLoaded RFC-199 draft integration', () => {
         expectedVersion: 1,
         expectedSnapshotHash: hash('a'),
       },
-      expect.any(AbortSignal),
+      // RFC-208: getBlob's third parameter became an options bag so a caller can
+      // also set `deadlineMs`. The contract this test guards — export stays
+      // cancellable — is unchanged, so assert the signal inside the bag.
+      { signal: expect.any(AbortSignal) },
     )
     expect(createObjectURL).toHaveBeenCalledWith(blob)
     expect(click.mock.contexts[0]).toMatchObject({ download: 'workflow.yaml' })

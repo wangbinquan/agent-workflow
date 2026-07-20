@@ -56,6 +56,16 @@ describe('RFC-187 T8 — source lock (the wg hook abandons instead of stranding)
   test('the wg hook still discards its iso unconditionally (why the abandon is required)', () => {
     // if this ever becomes keepIso-style preservation, the abandon above must be
     // revisited — the two decisions are one contract.
-    expect(SCHED).toMatch(/finally \{[\s\S]{0,200}discardNodeIso\(iso, log\)/)
+    //
+    // RFC-208 changed the SHAPE of this finally without changing that contract:
+    // `releaseGlobal()` now runs BEFORE the cleanup await (a wedged
+    // `git worktree remove` used to strand the daemon-wide semaphore permit
+    // forever), and the reordering carries an explanatory comment. The original
+    // assertion was a 200-character proximity window, so it broke on the added
+    // prose while the behaviour it guards was untouched. Assert the contract
+    // itself instead: this finally discards, and it discards UNCONDITIONALLY.
+    const wgFinally = /finally \{([\s\S]{0,900}?)discardNodeIso\(iso, log\)/.exec(SCHED)
+    expect(wgFinally).not.toBeNull()
+    expect(wgFinally?.[1] ?? '').not.toMatch(/keepIso/)
   })
 })

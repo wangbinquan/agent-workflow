@@ -86,7 +86,14 @@ describe('apiRequest', () => {
     const legacyInit = fetchMock.mock.calls[1]?.[1] as RequestInit
     expect(legacyInit.method).toBe('DELETE')
     expect(legacyInit.body).toBeUndefined()
-    expect(legacyInit.signal).toBe(controller.signal)
+    // RFC-208: the signal reaching fetch is now a composite of the caller's
+    // signal and this request's deadline, so it is deliberately NOT the same
+    // object. What the caller is promised is unchanged and is what we assert:
+    // aborting their controller still aborts the request.
+    expect(legacyInit.signal).toBeInstanceOf(AbortSignal)
+    expect(legacyInit.signal?.aborted).toBe(false)
+    controller.abort()
+    expect(legacyInit.signal?.aborted).toBe(true)
   })
 
   test('getBlob sends auth plus exact query and preserves successful bytes', async () => {

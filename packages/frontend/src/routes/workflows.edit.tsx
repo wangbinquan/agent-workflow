@@ -717,7 +717,7 @@ export function WorkflowEditorLoaded({
           expectedVersion: saved.server.version,
           expectedSnapshotHash: saved.server.snapshotHash,
         },
-        abort.signal,
+        { signal: abort.signal },
       )
       assertActionRevision(saved)
       downloadWorkflowServerExport(blob, saved.snapshot.name)

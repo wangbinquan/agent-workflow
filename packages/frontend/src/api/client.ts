@@ -20,11 +20,110 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * RFC-208 — no request may wait forever.
+ *
+ * The browser imposes no response timeout, so a half-open socket (daemon event
+ * loop blocked on sync git/exec, laptop sleep/wake, black-holing proxy) used to
+ * leave `fetch` pending with no error and no escape. That is not a cosmetic
+ * stall: the pending mutation holds the split page's busy token, which feeds a
+ * ROUTER-GLOBAL `useBlocker`, and while busy the unsaved-changes guard hides its
+ * Discard button — so one wedged request locks navigation app-wide until reload.
+ *
+ * Two budgets, because "how long is legitimate" has two different shapes:
+ *
+ *  - `CLIENT_HARD_DEADLINE_MS` — requests whose duration does NOT scale with
+ *    payload size. Comfortably above the daemon's own `idleTimeout` (255s, see
+ *    backend `cli/start.ts`), so anything the daemon would still answer comes
+ *    back — or the daemon closes the socket and we get a real error.
+ *
+ *  - `payloadDeadlineMs(bytes)` — uploads/downloads, where a slow-but-healthy
+ *    link legitimately takes longer the bigger the body.
+ *
+ * NOTE, deliberately: clearing `idleTimeout` is NOT a proof that this can never
+ * misfire. `idleTimeout` bounds INACTIVITY; `AbortSignal.timeout` bounds TOTAL
+ * ELAPSED time. An upload that keeps the socket busy is never idle, which is
+ * exactly why the payload budget exists (and why an earlier revision of this
+ * design, which claimed the fixed budget was "constructively safe", was wrong).
+ */
+export const CLIENT_HARD_DEADLINE_MS = 300_000
+/** Transfer allowance floor, on top of which payload time is added. */
+export const PAYLOAD_DEADLINE_BASE_MS = 60_000
+/** ≈64 KiB/s — tolerates a genuinely bad 512 Kbit/s link. */
+export const PAYLOAD_MIN_BYTES_PER_MS = 64
+
+/**
+ * Deadline for a body-size-bound request. The `max` floor is load-bearing: a
+ * zero-byte multipart is still a real request (an upload-kind workflow input
+ * submits multipart even with no files picked, so the backend's min/max gate
+ * runs) and the server may spend its normal budget on repo resolution and
+ * worktree creation. Transfer time is ADDED to the fixed budget, never
+ * substituted for it.
+ */
+export function payloadDeadlineMs(bytes: number): number {
+  const transfer =
+    Number.isFinite(bytes) && bytes > 0 ? Math.ceil(bytes / PAYLOAD_MIN_BYTES_PER_MS) : 0
+  return Math.max(CLIENT_HARD_DEADLINE_MS, PAYLOAD_DEADLINE_BASE_MS + transfer)
+}
+
 export interface RequestOptions {
   method?: string
   body?: unknown
   query?: Record<string, string | number | undefined>
   signal?: AbortSignal
+  /** Override the deadline. Omit for the budget appropriate to the entry point. */
+  deadlineMs?: number
+}
+
+/**
+ * Combine the caller's signal with this request's deadline.
+ *
+ * Returns the deadline signal separately so callers can tell the two apart
+ * afterwards: a caller-driven abort must stay an AbortError (the user cancelled;
+ * that is not a fault), while the deadline firing is a reportable timeout.
+ */
+function withDeadline(
+  signal: AbortSignal | undefined,
+  deadlineMs: number,
+): { signal: AbortSignal; deadline: AbortSignal } {
+  const deadline = AbortSignal.timeout(deadlineMs)
+  return {
+    signal: signal === undefined ? deadline : AbortSignal.any([signal, deadline]),
+    deadline,
+  }
+}
+
+/**
+ * Bound a body read (`res.json()` / `res.text()` / `res.blob()`).
+ *
+ * Bounding `fetch` alone is not enough: a proxy can deliver headers and then
+ * stall, leaving the body stream awaiting an EOF that never arrives. `fetch`
+ * has already resolved by then, so its signal no longer helps — we race the
+ * read against the deadline and cancel the stream so the socket is released.
+ */
+async function readWithDeadline<T>(
+  res: Response,
+  deadline: AbortSignal,
+  read: () => Promise<T>,
+): Promise<T> {
+  if (deadline.aborted) throw new ApiError(0, 'request-timeout', 'request timed out')
+  return await new Promise<T>((resolve, reject) => {
+    const onAbort = () => {
+      void res.body?.cancel().catch(() => {})
+      reject(new ApiError(0, 'request-timeout', 'request timed out'))
+    }
+    deadline.addEventListener('abort', onAbort, { once: true })
+    read().then(
+      (value) => {
+        deadline.removeEventListener('abort', onAbort)
+        resolve(value)
+      },
+      (err: unknown) => {
+        deadline.removeEventListener('abort', onAbort)
+        reject(err instanceof Error ? err : new Error(String(err)))
+      },
+    )
+  })
 }
 
 function buildUrl(path: string, query?: RequestOptions['query']): string {
@@ -53,6 +152,12 @@ export async function fetchOrNetworkError(url: string, init: RequestInit): Promi
     return await fetch(url, init)
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') throw err
+    // RFC-208: a deadline firing must be reported as a timeout, never as
+    // "daemon unreachable" — the daemon may well be up and merely wedged, and
+    // the two need different remedies.
+    if (err instanceof DOMException && err.name === 'TimeoutError') {
+      throw new ApiError(0, 'request-timeout', err.message)
+    }
     throw new ApiError(0, 'network-unreachable', err instanceof Error ? err.message : String(err))
   }
 }
@@ -99,11 +204,13 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
     body = JSON.stringify(opts.body)
   }
 
+  const { signal, deadline } = withDeadline(opts.signal, opts.deadlineMs ?? CLIENT_HARD_DEADLINE_MS)
+
   const res = await fetchOrNetworkError(buildUrl(path, opts.query), {
     method: opts.method ?? 'GET',
     headers,
     body,
-    signal: opts.signal,
+    signal,
   })
 
   if (res.status === 401) {
@@ -112,7 +219,14 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
   }
 
   const isJson = res.headers.get('content-type')?.includes('application/json') ?? false
-  const payload: unknown = isJson ? await res.json().catch(() => null) : null
+  const payload: unknown = isJson
+    ? await readWithDeadline(res, deadline, () => res.json()).catch((err: unknown) => {
+        // A malformed body is still a null payload (historical behavior); a
+        // deadline is a real failure and must not be swallowed into it.
+        if (err instanceof ApiError) throw err
+        return null
+      })
+    : null
 
   if (!res.ok) {
     // RFC-203 T1: a non-JSON error response (proxy 502 page, plain-text
@@ -183,11 +297,17 @@ export function extractErrorBody(
 export async function apiPostMultipart<T>(
   path: string,
   body: FormData,
-  signal?: AbortSignal,
+  opts?: { signal?: AbortSignal; deadlineMs?: number },
 ): Promise<T> {
   const token = getToken()
   const headers: Record<string, string> = { Accept: 'application/json' }
   if (token !== null) headers.Authorization = `Bearer ${token}`
+
+  // Body-size-bound: budget from the bytes actually being uploaded.
+  const { signal, deadline } = withDeadline(
+    opts?.signal,
+    opts?.deadlineMs ?? payloadDeadlineMs(formDataByteLength(body)),
+  )
 
   const res = await fetchOrNetworkError(buildUrl(path), {
     method: 'POST',
@@ -199,7 +319,12 @@ export async function apiPostMultipart<T>(
   if (res.status === 401) clearToken()
 
   const isJson = res.headers.get('content-type')?.includes('application/json') ?? false
-  const payload: unknown = isJson ? await res.json().catch(() => null) : null
+  const payload: unknown = isJson
+    ? await readWithDeadline(res, deadline, () => res.json()).catch((err: unknown) => {
+        if (err instanceof ApiError) throw err
+        return null
+      })
+    : null
 
   if (!res.ok) {
     // RFC-203 T1: a non-JSON error response (proxy 502 page, plain-text
@@ -223,20 +348,39 @@ export async function apiPostMultipart<T>(
 export async function apiGetBlob(
   path: string,
   query?: RequestOptions['query'],
-  signal?: AbortSignal,
+  opts?: { signal?: AbortSignal; deadlineMs?: number },
 ): Promise<Blob> {
   const token = getToken()
   const headers: Record<string, string> = { Accept: '*/*' }
   if (token !== null) headers.Authorization = `Bearer ${token}`
+  // Fixed budget by default: the caller cannot know the byte count before the
+  // response arrives, and the server does not guarantee Content-Length — so a
+  // payload-derived budget would be guesswork. A genuinely large download must
+  // pass `deadlineMs` explicitly rather than rely on an invented default.
+  const { signal, deadline } = withDeadline(
+    opts?.signal,
+    opts?.deadlineMs ?? CLIENT_HARD_DEADLINE_MS,
+  )
   const res = await fetchOrNetworkError(buildUrl(path, query), { method: 'GET', headers, signal })
   if (res.status === 401) clearToken()
   if (!res.ok) {
     const isJson = res.headers.get('content-type')?.includes('application/json') ?? false
-    const payload: unknown = isJson ? await res.json().catch(() => null) : null
+    const payload: unknown = isJson
+      ? await readWithDeadline(res, deadline, () => res.json()).catch(() => null)
+      : null
     const err = extractErrorBody(payload, res)
     throw new ApiError(res.status, err.code, err.message, err.details)
   }
-  return res.blob()
+  return await readWithDeadline(res, deadline, () => res.blob())
+}
+
+/** Best-effort byte count of a multipart body (used only to size its deadline). */
+function formDataByteLength(body: FormData): number {
+  let total = 0
+  for (const [, value] of body.entries()) {
+    total += value instanceof Blob ? value.size : new TextEncoder().encode(String(value)).length
+  }
+  return total
 }
 
 export const api = {
