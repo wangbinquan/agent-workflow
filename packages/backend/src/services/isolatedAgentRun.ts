@@ -22,6 +22,10 @@
 // and calls runNode directly) is injected by the scheduler as a callback.
 
 import type { DbClient } from '@/db/client'
+// RFC-210: the pending-submodule-conflict write is a plain column update, not a
+// merge_state transition, so it goes direct rather than through lifecycle.
+import { nodeRuns } from '@/db/schema'
+import { eq } from 'drizzle-orm'
 import { transitionMergeState, tryTransitionMergeState } from '@/services/lifecycle'
 import {
   createNodeIso,
@@ -237,8 +241,84 @@ export async function mergeBackAndSettle(args: {
     await transitionMergeState({ db, nodeRunId, event: { kind: 'mark-merged', via } })
     return { kind: 'merged' }
   }
+  // RFC-210: persist which submodules are still unresolved BEFORE parking.
+  // The fail-closed gate in completeHumanResolvedConflict reads this back on
+  // resume; without it a crash between park and resume would lose the fact that
+  // a submodule conflict is open, and the parent-level re-probe would find the
+  // parent clean and declare the repo resolved.
+  await persistPendingSubResolves(db, nodeRunId, args.repoCount, handle)
   await transitionMergeState({ db, nodeRunId, event: { kind: 'park-conflict-human', via } })
   return { kind: 'conflict-human', detail: merge.detail }
+}
+
+/**
+ * RFC-210 — merge the current `pendingSubResolves` into the already-persisted
+ * submodule topology, leaving `subBases` / `poolDir` untouched.
+ *
+ * Read-modify-write rather than a fresh object: the bases were written at iso
+ * creation and are what the eventual re-merge needs; only the unresolved set is
+ * new information.
+ */
+async function persistPendingSubResolves(
+  db: DbClient,
+  nodeRunId: string,
+  repoCount: number,
+  handle: IsoHandle,
+): Promise<void> {
+  if (handle.passthrough) return
+  if (!handle.repos.some((r) => r.pendingSubResolves.length > 0)) return
+  const row = (
+    await db
+      .select({
+        single: nodeRuns.isoSubmodulesJson,
+        multi: nodeRuns.isoSubmodulesReposJson,
+      })
+      .from(nodeRuns)
+      .where(eq(nodeRuns.id, nodeRunId))
+      .limit(1)
+  )[0]
+  if (row === undefined) return
+
+  const withPending = (raw: string | null, repo: IsoRepo | undefined): string | null => {
+    if (repo === undefined) return raw
+    let base: Record<string, unknown> = { poolDir: repo.poolDir, subBases: repo.subBases }
+    if (raw !== null && raw !== '') {
+      try {
+        const parsed: unknown = JSON.parse(raw)
+        if (parsed !== null && typeof parsed === 'object') base = parsed as Record<string, unknown>
+      } catch {
+        /* keep the reconstructed shape */
+      }
+    }
+    return JSON.stringify({ ...base, pendingSubResolves: repo.pendingSubResolves })
+  }
+
+  if (repoCount === 1) {
+    await db
+      .update(nodeRuns)
+      .set({ isoSubmodulesJson: withPending(row.single, handle.repos[0]) })
+      .where(eq(nodeRuns.id, nodeRunId))
+    return
+  }
+  let multi: Record<string, unknown> = {}
+  if (row.multi !== null && row.multi !== '') {
+    try {
+      const parsed: unknown = JSON.parse(row.multi)
+      if (parsed !== null && typeof parsed === 'object') multi = parsed as Record<string, unknown>
+    } catch {
+      /* rebuild below */
+    }
+  }
+  for (const r of handle.repos) {
+    const prev = multi[r.worktreeDirName]
+    const raw = prev === undefined ? null : JSON.stringify(prev)
+    const next = withPending(raw, r)
+    if (next !== null) multi[r.worktreeDirName] = JSON.parse(next) as unknown
+  }
+  await db
+    .update(nodeRuns)
+    .set({ isoSubmodulesReposJson: JSON.stringify(multi) })
+    .where(eq(nodeRuns.id, nodeRunId))
 }
 
 /**

@@ -66,6 +66,7 @@ function repoEntry(dir: string, worktreeDirName: string, base: string, baseHead:
     // RFC-210: no submodules in this fixture — empty topology, no pool.
     subBases: {},
     poolDir: null,
+    pendingSubResolves: [],
   }
 }
 

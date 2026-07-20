@@ -40,23 +40,18 @@ const created: string[] = []
 // between files and everything looks green) while CI runs with --isolate, where
 // each file starts clean and these tests fail with exit 128.
 let prevGitGlobal: string | undefined
-let prevGitSystem: string | undefined
 const gitCfgDir = mkdtempSync(join(tmpdir(), 'aw-rfc210-gitcfg-'))
 
 beforeAll(() => {
   const cfg = join(gitCfgDir, 'gitconfig')
   writeFileSync(cfg, '[protocol "file"]\n\tallow = always\n[user]\n\tname = t\n\temail = t@e.com\n')
   prevGitGlobal = process.env.GIT_CONFIG_GLOBAL
-  prevGitSystem = process.env.GIT_CONFIG_SYSTEM
   process.env.GIT_CONFIG_GLOBAL = cfg
-  process.env.GIT_CONFIG_SYSTEM = '/dev/null'
 })
 
 afterAll(() => {
   if (prevGitGlobal === undefined) delete process.env.GIT_CONFIG_GLOBAL
   else process.env.GIT_CONFIG_GLOBAL = prevGitGlobal
-  if (prevGitSystem === undefined) delete process.env.GIT_CONFIG_SYSTEM
-  else process.env.GIT_CONFIG_SYSTEM = prevGitSystem
   rmSync(gitCfgDir, { recursive: true, force: true })
 })
 

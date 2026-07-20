@@ -198,6 +198,7 @@ describe('RFC-130 §6.2 — resolveConflictWithAgent (mock agent)', () => {
           // RFC-210: no submodules in this fixture — empty topology, no pool.
           subBases: {},
           poolDir: null,
+          pendingSubResolves: [],
         },
       ],
     }

@@ -44,7 +44,6 @@ let root = ''
 let pool = ''
 let wt = ''
 let prevGlobal: string | undefined
-let prevSystem: string | undefined
 
 beforeAll(async () => {
   root = mkdtempSync(join(tmpdir(), 'aw-rfc210-alt-'))
@@ -56,9 +55,7 @@ beforeAll(async () => {
   const cfg = join(root, 'gitconfig')
   writeFileSync(cfg, '[protocol "file"]\n\tallow = always\n[user]\n\tname = t\n\temail = t@t\n')
   prevGlobal = process.env.GIT_CONFIG_GLOBAL
-  prevSystem = process.env.GIT_CONFIG_SYSTEM
   process.env.GIT_CONFIG_GLOBAL = cfg
-  process.env.GIT_CONFIG_SYSTEM = '/dev/null'
 
   const sub = join(root, 'sub')
   mkdirSync(sub)
@@ -88,8 +85,6 @@ beforeAll(async () => {
 afterAll(() => {
   if (prevGlobal === undefined) delete process.env.GIT_CONFIG_GLOBAL
   else process.env.GIT_CONFIG_GLOBAL = prevGlobal
-  if (prevSystem === undefined) delete process.env.GIT_CONFIG_SYSTEM
-  else process.env.GIT_CONFIG_SYSTEM = prevSystem
   if (root !== '') rmSync(root, { recursive: true, force: true })
 })
 

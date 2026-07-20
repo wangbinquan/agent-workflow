@@ -46,7 +46,6 @@ function git(cwd: string, args: string[]): Promise<{ code: number; out: string }
 
 let root = ''
 let prevGlobal: string | undefined
-let prevSystem: string | undefined
 
 async function initRepo(dir: string, file: string, content: string): Promise<void> {
   mkdirSync(dir, { recursive: true })
@@ -61,16 +60,12 @@ beforeAll(() => {
   const cfg = join(root, 'gitconfig')
   writeFileSync(cfg, '[protocol "file"]\n\tallow = always\n[user]\n\tname = t\n\temail = t@t\n')
   prevGlobal = process.env.GIT_CONFIG_GLOBAL
-  prevSystem = process.env.GIT_CONFIG_SYSTEM
   process.env.GIT_CONFIG_GLOBAL = cfg
-  process.env.GIT_CONFIG_SYSTEM = '/dev/null'
 })
 
 afterAll(() => {
   if (prevGlobal === undefined) delete process.env.GIT_CONFIG_GLOBAL
   else process.env.GIT_CONFIG_GLOBAL = prevGlobal
-  if (prevSystem === undefined) delete process.env.GIT_CONFIG_SYSTEM
-  else process.env.GIT_CONFIG_SYSTEM = prevSystem
   if (root !== '') rmSync(root, { recursive: true, force: true })
 })
 

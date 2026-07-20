@@ -96,6 +96,18 @@ export interface IsoRepo {
    * that can never be cleaned up), and mock harnesses have no git host at all.
    */
   poolDir: string | null
+  /**
+   * RFC-210: submodule paths whose three-way merge conflicted and are still
+   * unresolved. Written at merge-back (the conflict set is not knowable at iso
+   * creation) and read back on resume.
+   *
+   * Non-empty MUST fail the human-resolve completion closed. A conflicted
+   * submodule produces no parent-level resolve-iso — the gitlink is one tree
+   * entry and the disagreement lives inside it — so the "no resolve-iso ⇒
+   * re-probe the parent" path below would find the parent clean and declare the
+   * whole repo resolved while the submodule conflict is still open.
+   */
+  pendingSubResolves: string[]
 }
 
 export interface IsoHandle {
@@ -189,6 +201,7 @@ export async function createNodeIso(opts: {
         forcedRepoRelPaths: [],
         subBases: {},
         poolDir: null,
+        pendingSubResolves: [],
       })),
     }
   }
@@ -237,6 +250,7 @@ export async function createNodeIso(opts: {
       forcedRepoRelPaths,
       subBases,
       poolDir,
+      pendingSubResolves: [],
     })
   }
   return {
@@ -327,7 +341,10 @@ export function rebuildIsoHandle(opts: {
    * theirs" — silently discarding the other node's submodule commits, which is
    * precisely the class of loss RFC-210 exists to fix.
    */
-  submodules?: Record<string, { subBases: Record<string, string>; poolDir: string | null }>
+  submodules?: Record<
+    string,
+    { subBases: Record<string, string>; poolDir: string | null; pendingSubResolves?: string[] }
+  >
 }): IsoHandle {
   const repos: IsoRepo[] = opts.canonRepos.map((r) => ({
     repoPath: r.repoPath,
@@ -345,6 +362,7 @@ export function rebuildIsoHandle(opts: {
     forcedRepoRelPaths: repoRelForcedPaths(opts.forcedContainerPaths, r.worktreeDirName),
     subBases: opts.submodules?.[r.worktreeDirName]?.subBases ?? {},
     poolDir: opts.submodules?.[r.worktreeDirName]?.poolDir ?? null,
+    pendingSubResolves: opts.submodules?.[r.worktreeDirName]?.pendingSubResolves ?? [],
   }))
   return {
     taskId: opts.taskId,
@@ -627,6 +645,9 @@ export async function mergeBackNodeIso(
     // cases"), so by the time the superproject merge below runs, every gitlink
     // must already look like a one-sided change.
     const subMerge = await mergeSubmodulesIntoTheirs(r, theirs, log)
+    // Record on the handle either way: a resolved round must CLEAR a stale set
+    // left by a previous attempt, otherwise resume stays failed forever.
+    r.pendingSubResolves = subMerge.conflicts
     if (subMerge.conflicts.length > 0) {
       // A conflicted submodule cannot be represented as a parent-level path
       // conflict (the gitlink is one entry, the disagreement is inside it), so
@@ -1046,6 +1067,18 @@ export async function completeHumanResolvedConflict(
   if (handle.passthrough) return { allResolved: true, unresolvedRepos: [] }
   const unresolved: string[] = []
   for (const r of handle.repos) {
+    // RFC-210 fail-closed: an unresolved SUBMODULE conflict never produces a
+    // parent-level resolve-iso, so without this gate the re-probe below sees a
+    // clean parent tree and declares the repo resolved — landing a gitlink whose
+    // conflict nobody ever settled.
+    if (r.pendingSubResolves.length > 0) {
+      log?.warn('conflict-human resume: submodule conflicts still unresolved', {
+        worktreeDirName: r.worktreeDirName,
+        subPaths: r.pendingSubResolves,
+      })
+      unresolved.push(r.worktreeDirName)
+      continue
+    }
     const nodeTree = nodeTrees[r.worktreeDirName]
     const suffix = r.worktreeDirName === '' ? 'repo' : r.worktreeDirName
     const resolveIso = join(handle.containerPath, `resolve-${suffix}`)
