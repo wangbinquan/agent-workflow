@@ -34,7 +34,7 @@
 
 | v1 断言 | 真相 | 证据 |
 |---|---|---|
-| 「`submodule update --init --reference <pool>` 建立 alternates」**无条件成立** | **只对首次 init 成立**。对**已初始化**的 module dir 是**静默 no-op**（无报错、exit 0）。v1 只测了全新 iso 就写成了通则 | X1 复现：第二、三次带 `--reference` 重跑 `alternates=[无]` |
+| 「`submodule update --init --reference <pool>` 建立 alternates」**无条件成立** | **不可依赖，且跨 git 版本不一致**。对**已初始化**的 module dir：git 2.50.1 (Apple Git-155) 是**静默 no-op**（alternates 不出现，exit 0）；CI runner 的 git 则**会**挂上。两种情况都 exit 0，调用方无从分辨。v1 只测了全新 iso 就写成通则 | X1 本机复现 no-op；CI run `29738347309` 两个 OS 上 `existsSync(alternates)` 均为 true（我按本机行为写死断言，被 CI 打红） |
 | 「合并结果写进父仓 theirs tree ⟹ 父仓层变 trivial」 | **错**。真正的不变量是 merged sub-commit **必须以 `ours` 为祖先**（与 parent 个数/顺序无关，见 §2.3 的 v3 更正）；现有 `commitTree()`（`util/git.ts:1978`）只接受一个 parent，默认写法（`-p theirs`）100% 退回 `exit=1` | X3 + 二轮审计四组对照 |
 | 「`pushObjectsToPool` 回写后对象安全」 | **错**。`git fetch <dir> <sha>` **只写 FETCH_HEAD、不建 ref**，对象在池里**恒不可达**；**默认 `gc`**（两周宽限期，长期 worktree 必然跨过）就会删。删后 canonical 子仓 `bad object HEAD` ⟹ **父仓 `git status` 整体失败** ⟹ `snapshotFullState` 的 `add -A` 崩 ⟹ 全线崩 | 审计 A2/E3/H3 |
 

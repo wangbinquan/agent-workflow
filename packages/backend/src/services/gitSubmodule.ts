@@ -21,12 +21,15 @@ export interface SubmoduleSyncOptions {
    * RFC-210 G1: pass `--reference <poolDir>` so a FIRST-TIME init clones with a
    * shared object pool instead of a full copy.
    *
-   * NOT a correctness mechanism — `--reference` is a silent no-op on an ALREADY
-   * initialized module dir (measured: alternates stays absent, exit 0), and git
-   * applies a single `--reference` to EVERY submodule in the tree (measured:
-   * an unrelated submodule gets bound to this pool). Correctness comes from
-   * `ensureSubmoduleAlternates`, which writes `objects/info/alternates` per
-   * submodule. This flag is a first-clone speedup only.
+   * NOT a correctness mechanism, for two independent reasons:
+   *  - On an ALREADY initialized module dir its effect is VERSION-DEPENDENT:
+   *    git 2.50.1 leaves alternates absent (silent no-op), CI runners' git
+   *    attaches it. Both exit 0, so a caller cannot tell which happened.
+   *  - git applies a single `--reference` to EVERY submodule in the tree
+   *    (measured: an unrelated submodule gets bound to this pool).
+   * Correctness comes from `ensureSubmoduleAlternates`, which writes
+   * `objects/info/alternates` per submodule. This flag is a first-clone
+   * speedup only.
    */
   referencePool?: string
   /** RFC-210 G8: `--remote` (track the submodule's upstream branch tip). */

@@ -94,18 +94,29 @@ afterAll(() => {
 })
 
 describe('RFC-210 shared object pool', () => {
-  test('--reference is a silent no-op on an already-initialized module dir', async () => {
+  test('--reference on an already-initialized module dir is not something to rely on', async () => {
+    // `submodule update --reference` is VERSION-DEPENDENT on an already-initialized
+    // module dir: git 2.50.1 (Apple Git-155) leaves `objects/info/alternates` absent
+    // and exits 0 — a silent no-op — while the CI runners' git does attach it.
+    // Either way it always exits 0, so a caller cannot tell which happened.
+    //
+    // That inconsistency is exactly why the production path never depends on this
+    // flag for correctness (it is a first-clone speedup only) and always writes the
+    // alternates file explicitly. Asserting either branch as an invariant would
+    // pin one git version's behaviour; all that matters is that it never errors.
     const md = await submoduleGitDir(wt, 'vendor')
     expect(md).not.toBeNull()
-    const alt = join(md as string, 'objects', 'info', 'alternates')
-    expect(existsSync(alt)).toBe(false)
-
     const r = await git(wt, ['submodule', 'update', '--init', '-q', '--reference', pool])
-    expect(r.code).toBe(0) // succeeds...
-    expect(existsSync(alt)).toBe(false) // ...but changes nothing. This is the trap.
+    expect(r.code).toBe(0)
   })
 
   test('ensureSubmoduleAlternates attaches the pool to an initialized module dir', async () => {
+    const md0 = (await submoduleGitDir(wt, 'vendor')) as string
+    const alt0 = join(md0, 'objects', 'info', 'alternates')
+    // Start from a known-clean state so this asserts OUR write, not git's, on
+    // every git version (see the version note above).
+    if (existsSync(alt0)) rmSync(alt0)
+
     const res = await ensureSubmoduleAlternates(wt, 'vendor', pool)
     expect(res).toEqual({ ok: true, error: null })
 
