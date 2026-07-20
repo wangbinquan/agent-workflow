@@ -132,7 +132,7 @@ export async function initScratchRepo(opts: {
 export async function runGit(
   cwd: string,
   args: string[],
-  opts?: { env?: Record<string, string | undefined>; stdin?: string },
+  opts?: { env?: Record<string, string | undefined>; stdin?: string; timeoutMs?: number },
 ): Promise<GitRunResult> {
   const proc = Bun.spawn({
     cmd: ['git', '-C', cwd, ...args],
@@ -148,14 +148,59 @@ export async function runGit(
     // ONLY plumbing shape git offers for surgical index edits. Callers that
     // don't pass `stdin` keep the historical ignore (no behavior change).
     stdin: opts?.stdin === undefined ? 'ignore' : new TextEncoder().encode(opts.stdin),
+    // RFC-208: with a timeout the child runs in its OWN process group so the
+    // timer can SIGKILL the whole tree. git delegates freely (credential
+    // helpers, ssh, `!`-aliases through a shell), and killing only the direct
+    // child leaves those grandchildren alive holding the pipes — the exact
+    // failure util/opencode.ts already learned. Without a timeout the historical
+    // flat spawn is kept byte-for-byte.
+    ...(opts?.timeoutMs !== undefined ? { detached: true } : {}),
   })
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ])
-  return { stdout, stderr, exitCode }
+
+  if (opts?.timeoutMs === undefined) {
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ])
+    return { stdout, stderr, exitCode }
+  }
+
+  let timedOut = false
+  const timer = setTimeout(() => {
+    timedOut = true
+    try {
+      process.kill(-proc.pid, 'SIGKILL')
+    } catch {
+      proc.kill('SIGKILL')
+    }
+  }, opts.timeoutMs)
+  try {
+    // Await the exit FIRST, then bound the pipe reads: a surviving grandchild
+    // can inherit the write end and keep `.text()` from ever seeing EOF even
+    // after the direct child is reaped (util/opencode.ts §probe).
+    const outPromise = new Response(proc.stdout).text().catch(() => '')
+    const errPromise = new Response(proc.stderr).text().catch(() => '')
+    const exitCode = await proc.exited
+    const drained = <T>(p: Promise<T>, fallback: T): Promise<T> =>
+      Promise.race([p, new Promise<T>((r) => setTimeout(() => r(fallback), 250))])
+    const stdout = await drained(outPromise, '')
+    const stderr = await drained(errPromise, '')
+    if (!timedOut) return { stdout, stderr, exitCode }
+    return {
+      stdout,
+      // Timeouts must be diagnosable, and must never be mistaken for success:
+      // a SIGKILLed process can surface exitCode 0/null depending on platform.
+      stderr: `${stderr}\ngit timed out after ${opts.timeoutMs}ms (killed)`.trim(),
+      exitCode: exitCode === 0 ? GIT_TIMEOUT_EXIT_CODE : exitCode,
+    }
+  } finally {
+    clearTimeout(timer)
+  }
 }
+
+/** Conventional "timed out" exit status (matches coreutils `timeout`). */
+export const GIT_TIMEOUT_EXIT_CODE = 124
 
 /** Throw a typed error if `repoPath` is not a usable git repo. */
 export async function requireGitRepo(repoPath: string): Promise<void> {
@@ -1579,12 +1624,14 @@ export interface RemoveWorktreeOptions {
   worktreePath: string
   /** Pass through `--force` (default false). */
   force?: boolean
+  /** RFC-208: bound the underlying git so a wedged remove cannot hang a caller. */
+  timeoutMs?: number
 }
 
 export async function removeWorktree(opts: RemoveWorktreeOptions): Promise<void> {
   const args = ['worktree', 'remove', opts.worktreePath]
   if (opts.force) args.push('--force')
-  const r = await runGit(opts.repoPath, args)
+  const r = await runGit(opts.repoPath, args, { timeoutMs: opts.timeoutMs })
   if (r.exitCode !== 0) {
     throw new DomainError(
       'worktree-remove-failed',
@@ -2026,8 +2073,11 @@ export async function deleteIsoRefs(
   repoPath: string,
   taskId: string,
   nodeRunId: string,
+  opts?: { timeoutMs?: number },
 ): Promise<void> {
   for (const kind of ['base', 'node'] as const) {
-    await runGit(repoPath, ['update-ref', '-d', isoRefName(taskId, nodeRunId, kind)])
+    await runGit(repoPath, ['update-ref', '-d', isoRefName(taskId, nodeRunId, kind)], {
+      timeoutMs: opts?.timeoutMs,
+    })
   }
 }

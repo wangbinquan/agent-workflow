@@ -1081,12 +1081,19 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
       log.error('workgroup host-node run threw', { nodeRunId: req.nodeRunId, message })
       return { status: 'failed', outputs: {}, errorMessage: message }
     } finally {
+      // RFC-208: release the daemon-wide permit BEFORE awaiting cleanup. The
+      // three sibling call sites already do it in this order; this one drifted
+      // and turned a wedged `git worktree remove` into a permanent permit leak
+      // (globalSem is shared daemon-wide, so exhausting it stalls every task in
+      // the process and nothing self-heals — restart only). discardNodeIso is
+      // itself bounded now (ISO_DISCARD_GIT_TIMEOUT_MS), which is what keeps
+      // runHostNode able to resolve at all.
+      releaseGlobal()
       try {
         await discardNodeIso(iso, log)
       } catch {
         /* best-effort */
       }
-      releaseGlobal()
     }
   }
   return {
@@ -2872,7 +2879,6 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
       message: 'iso-setup-failed',
     }
   }
-  await persistIsoBase(db, nodeRunId, task.repoCount, isoHandle)
   // RFC-130: keep the iso worktree past the finally when the node parks (clarify
   // awaiting_human / merge conflict) so resume (D19) + the merge agent (PR-B) can
   // reuse its exact state. Discarded on any terminal exit.
@@ -2893,6 +2899,13 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
   let priorAttemptClarifyActive = false
 
   try {
+    // RFC-208: persisting the iso base must happen INSIDE the region whose
+    // finally releases the permit. It used to sit between the acquire and this
+    // try, and `transitionMergeState` throwing there (a documented, test-locked
+    // behavior — NotFoundError / IllegalMergeStateTransition /
+    // ConcurrentMergeStateTransition, plus any SQLite error) leaked one
+    // daemon-wide permit per occurrence with no way back short of a restart.
+    await persistIsoBase(db, nodeRunId, task.repoCount, isoHandle)
     for (let attempt = retryIndex; attempt <= retryIndex + maxRetries; attempt++) {
       // RFC-042: when the previous attempt failed for a recognized envelope
       // reason AND opencode exited cleanly AND we captured a session id AND

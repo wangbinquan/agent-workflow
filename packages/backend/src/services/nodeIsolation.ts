@@ -488,6 +488,20 @@ export async function undoPriorShardDeltaInIso(
   return true
 }
 
+/**
+ * RFC-208: every git call in the discard path is bounded.
+ *
+ * This is pure best-effort cleanup — a worktree we fail to remove is picked up
+ * by GC — but it used to be UNBOUNDED, and that turned a stuck
+ * `git worktree remove` (residual `index.lock`, stalled network volume) into a
+ * daemon-wide outage: the scheduler awaited it while holding the shared
+ * `globalSem` permit, so the permit never came back and, once capacity was
+ * exhausted, every task in the daemon stopped. Bounding it here is what lets
+ * `runHostNode` — and therefore `runTask` — resolve at all, which the release
+ * reordering alone does not achieve (Codex design gate, RFC-208 §6-3).
+ */
+export const ISO_DISCARD_GIT_TIMEOUT_MS = 60_000
+
 /** Remove all iso worktrees + delete the base/node pin refs for a run (best-effort). */
 export async function discardNodeIso(handle: IsoHandle, log?: Logger): Promise<void> {
   if (handle.passthrough) return // in-place run — the canonical worktree is NOT ours to remove
@@ -497,6 +511,7 @@ export async function discardNodeIso(handle: IsoHandle, log?: Logger): Promise<v
         repoPath: r.canonWorktreePath,
         worktreePath: r.isoWorktreePath,
         force: true,
+        timeoutMs: ISO_DISCARD_GIT_TIMEOUT_MS,
       })
     } catch (err) {
       log?.warn('iso worktree remove failed (leaving for GC)', {
@@ -504,7 +519,9 @@ export async function discardNodeIso(handle: IsoHandle, log?: Logger): Promise<v
         error: err instanceof Error ? err.message : String(err),
       })
     }
-    await deleteIsoRefs(r.canonWorktreePath, handle.taskId, handle.nodeRunId)
+    await deleteIsoRefs(r.canonWorktreePath, handle.taskId, handle.nodeRunId, {
+      timeoutMs: ISO_DISCARD_GIT_TIMEOUT_MS,
+    })
   }
 }
 
