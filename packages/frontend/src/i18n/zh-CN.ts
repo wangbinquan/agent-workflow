@@ -911,6 +911,9 @@ export interface Resources {
     emptyResource: string
     startedAt: string
     finishedAt: string
+    // Shared <ClampedText> fold toggle.
+    expandText: string
+    collapseText: string
   }
   // RFC-173: shared <MultiSelect> tag combobox (resource pickers).
   multiSelect: {
@@ -4398,6 +4401,8 @@ export const zhCN: Resources = {
     emptyResource: '暂无{{title}}。',
     startedAt: '开始时间',
     finishedAt: '完成时间',
+    expandText: '展开全文',
+    collapseText: '收起',
   },
   // RFC-173：共享 <MultiSelect> 标签多选框（资源选择器）。
   multiSelect: {

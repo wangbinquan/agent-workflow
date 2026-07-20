@@ -14273,6 +14273,45 @@ mark.comment-anchor[data-active='true'] {
   align-items: center;
 }
 
+/* ---- Shared <ClampedText> — long user text, folded with a visible way out.
+   The line budget rides in on `--clamped-text-lines` (set inline by the
+   component) so one rule serves every caller, and the bottom edge fades so a
+   fold is never mistaken for the end of the text. `.clamped-text` (the wrapper
+   + toggle) only exists when the text actually overflows its budget. ---- */
+.clamped-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.clamped-text__body {
+  /* The clamp height is `lines × line-height`, so line-height MUST be a known
+     number rather than the `normal` (~1.2) the element would otherwise inherit
+     — guessing it leaves a sliver of the next line peeking out from under the
+     fold, which reads as a rendering glitch. Both halves read the same custom
+     property so they can never drift apart. */
+  --clamped-text-line-height: 1.5;
+  line-height: var(--clamped-text-line-height);
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.clamped-text__body--clamped {
+  max-height: calc(var(--clamped-text-lines, 4) * var(--clamped-text-line-height) * 1em);
+  overflow: hidden;
+  /* 70% matches the .memory-candidate-card__body--clamped precedent — fading
+     sooner costs a whole readable line. */
+  -webkit-mask-image: linear-gradient(to bottom, #000 70%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 70%, transparent 100%);
+}
+
+.clamped-text__toggle {
+  align-self: flex-start;
+}
+
 /* RFC-120/124 — task question board (精修横向看板：阶段=泳道列). */
 .task-questions {
   display: flex;
@@ -15097,10 +15136,27 @@ button.status-chip {
   flex-direction: column;
   gap: 4px;
 }
+/* A row carries four things (member / turn kind / status / duration) but the
+   rail track is only minmax(220px, 280px). As a single nowrap flex line that
+   never fit, and the overflow landed in the worst possible places: `.chip` has
+   no white-space rule, so its CJK label ("领导轮") broke BETWEEN GLYPHS and
+   stacked vertically, while `.status-chip` (white-space: nowrap, hence an
+   unshrinkable min-content floor) spilled straight past the card's edge and
+   pushed the duration out of view entirely — reported as "轮次标签因为宽度不够
+   会被换行导致很丑".
+
+   Fix: stop asking one line to hold four things. Two grid rows, identical
+   shape on every entry — line 1 is identity (name, duration right-aligned),
+   line 2 is state (turn-kind chip + status chip). Chips keep their intrinsic
+   width and never wrap; the member name is the only elastic cell and degrades
+   to an ellipsis (full value stays in `title`). A future third chip (e.g. the
+   TurnCard's clarify-suppressed note) joins line 2 without a layout rethink.
+   Locked by workgroup-room-side-rail.test.tsx. */
 .workgroup-room__runlog-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 6px;
+  gap: 2px 6px;
   width: 100%;
   padding: 4px 6px;
   background: none;
@@ -15108,8 +15164,31 @@ button.status-chip {
   border-radius: 6px;
   cursor: pointer;
   font: inherit;
+  /* Without this the row inherits the 16px document default (button carries
+     `font: inherit`), which read a size larger than the 13px roster right
+     above it in the same rail and drove most of the overflow. */
+  font-size: 13px;
   color: inherit;
   text-align: left;
+}
+.workgroup-room__runlog-row > .workgroup-room__member-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workgroup-room__runlog-meta {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+/* The whole point of the fix: a chip is an atom, never a vertical glyph stack. */
+.workgroup-room__runlog-meta > .chip,
+.workgroup-room__runlog-meta > .status-chip {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 .workgroup-room__runlog-row:hover {
   background: color-mix(in srgb, var(--text) 8%, var(--panel));
@@ -15154,10 +15233,13 @@ button.status-chip {
   overflow-wrap: anywhere;
 }
 
-/* Long goals stay scannable — clip after a few lines, full text via title. */
+/* Long goals stay scannable via <ClampedText> (fold + 展开/收起), NOT via the
+   bare `max-height: 6.5em; overflow: hidden` this used to be: that clipped
+   mid-sentence with no way to read on, and its own comment claimed "full text
+   via title" while the JSX never set a title — the tail of a long goal was
+   simply unreachable. Locked by workgroup-room-side-rail.test.tsx. */
 .workgroup-room__goal {
-  max-height: 6.5em;
-  overflow: hidden;
+  min-width: 0;
 }
 
 /* ---- RFC-164 PR-5/6 — room additions (same .workgroup-room namespace) ---- */

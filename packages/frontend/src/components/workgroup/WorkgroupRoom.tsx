@@ -26,6 +26,7 @@ import type {
 import { resolveWorkgroupSwitches } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { Card } from '@/components/Card'
+import { ClampedText } from '@/components/ClampedText'
 import { ConfirmButton } from '@/components/ConfirmButton'
 import { Dialog } from '@/components/Dialog'
 import { EmptyState } from '@/components/EmptyState'
@@ -643,29 +644,41 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
                 const live = nodeRuns.data?.runs.find((r) => r.id === e.nodeRunId)
                 const status = live?.status ?? e.status
                 const dur = turnDurationMs(e, roomNow)
+                const name =
+                  e.displayName !== null ? `@${e.displayName}` : t('workgroups.room.removedMember')
                 return (
                   <li key={e.nodeRunId}>
+                    {/* Two grid lines — identity then state. The rail is far
+                        too narrow (220–280px) for one line to hold all four
+                        fields; see the .workgroup-room__runlog-row comment in
+                        styles.css for what the single-line version did to the
+                        chips. */}
                     <button
                       type="button"
                       className="workgroup-room__runlog-row"
                       onClick={() => setDrawerRunId(e.nodeRunId)}
                       data-testid={`wg-runlog-${e.nodeRunId}`}
                     >
-                      <span className="workgroup-room__member-name">
-                        {e.displayName !== null
-                          ? `@${e.displayName}`
-                          : t('workgroups.room.removedMember')}
-                      </span>
-                      <span className="chip chip--tight">{turnKindLabel(t, e.kind)}</span>
-                      <StatusChip
-                        kind={live !== undefined ? nodeRunStatusToKind(live.status) : 'neutral'}
-                        size="sm"
-                        withDot={status === 'running'}
+                      <span
+                        className="workgroup-room__member-name"
+                        // The name is the only cell allowed to truncate, so it
+                        // is also the only one that needs the full value back.
+                        title={name}
                       >
-                        {live !== undefined ? t(displayNoderunStatusKey(live)) : status}
-                      </StatusChip>
+                        {name}
+                      </span>
                       <span className="workgroup-room__time">
                         {dur === null ? '—' : formatTurnDuration(dur)}
+                      </span>
+                      <span className="workgroup-room__runlog-meta">
+                        <span className="chip chip--tight">{turnKindLabel(t, e.kind)}</span>
+                        <StatusChip
+                          kind={live !== undefined ? nodeRunStatusToKind(live.status) : 'neutral'}
+                          size="sm"
+                          withDot={status === 'running'}
+                        >
+                          {live !== undefined ? t(displayNoderunStatusKey(live)) : status}
+                        </StatusChip>
                       </span>
                     </button>
                   </li>
@@ -746,7 +759,16 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
         >
           <dl className="workgroup-room__info">
             <dt>{t('workgroups.room.infoGoal')}</dt>
-            <dd className="workgroup-room__goal">{data.config.goal}</dd>
+            <dd className="workgroup-room__goal">
+              {/* Goals are free-form and routinely long; folding them keeps
+                  模式 / 最大轮数 / 协作开关 above the fold while leaving the
+                  whole text one click (and Ctrl-F) away. */}
+              <ClampedText
+                text={data.config.goal}
+                data-testid="workgroup-room-goal"
+                toggleTestId="workgroup-room-goal-toggle"
+              />
+            </dd>
             <dt>{t('workgroups.room.infoMode')}</dt>
             <dd>
               {data.config.mode === 'leader_worker'

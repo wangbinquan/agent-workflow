@@ -780,6 +780,8 @@ export const enUS: Resources = {
     emptyResource: 'No {{title}} yet.',
     startedAt: 'Started',
     finishedAt: 'Finished',
+    expandText: 'Show all',
+    collapseText: 'Show less',
   },
   // RFC-173: shared <MultiSelect> tag combobox (resource pickers).
   multiSelect: {
