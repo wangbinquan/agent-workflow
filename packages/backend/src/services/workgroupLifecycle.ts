@@ -15,6 +15,7 @@
 //   any non-terminal ──▶ canceled
 
 import type { WorkgroupAssignmentStatus } from '@agent-workflow/shared'
+import { workgroupHasHumanMember } from '@agent-workflow/shared'
 import { and, eq, sql } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
@@ -163,7 +164,17 @@ export async function advanceMemberCursor(
  * a run dispatched with ask-back allowed cannot park the task after the
  * launcher toggled autonomous ON (design-gate P1-①).
  */
-export async function isTaskAutonomous(db: DbClient, taskId: string): Promise<boolean> {
+/**
+ * RFC-207 — is ask-back suppressed for this task, i.e. does its FROZEN roster
+ * hold no human member? Read live from `tasks.workgroup_config_json` (the copy
+ * the engine and the mid-run config PATCH share), so removing the last human
+ * takes effect on the very next check rather than the next launch.
+ *
+ * Missing / unparseable config ⇒ NOT suppressed. An unreadable snapshot is an
+ * anomaly, and letting a question through so a human can look is the safe
+ * failure — the same direction the RFC-180 predecessor took.
+ */
+export async function isTaskClarifySuppressed(db: DbClient, taskId: string): Promise<boolean> {
   const row = (
     await db
       .select({ cfg: tasks.workgroupConfigJson })
@@ -173,8 +184,14 @@ export async function isTaskAutonomous(db: DbClient, taskId: string): Promise<bo
   )[0]
   if (row === undefined || row.cfg === null) return false
   try {
-    const parsed = JSON.parse(row.cfg) as { autonomous?: unknown }
-    return parsed.autonomous === true
+    const parsed = JSON.parse(row.cfg) as { members?: unknown }
+    if (!Array.isArray(parsed.members)) return false
+    return !workgroupHasHumanMember(
+      parsed.members.filter(
+        (m): m is { memberType: 'agent' | 'human' } =>
+          typeof m === 'object' && m !== null && 'memberType' in m,
+      ),
+    )
   } catch {
     return false
   }
@@ -259,7 +276,7 @@ export async function dismissOpenClarifyParksForAutonomous(
         .set({
           status: 'canceled',
           finishedAt: Date.now(),
-          errorMessage: 'wg-autonomous-dismissed',
+          errorMessage: 'wg-clarify-disabled',
         })
         .where(and(eq(nodeRuns.id, s.clarifyNodeRunId), eq(nodeRuns.status, 'awaiting_human')))
         .returning({ id: nodeRuns.id })

@@ -816,8 +816,8 @@ export function ClarifyDetailPage() {
           const copy =
             cause !== undefined && cause.startsWith('task-')
               ? t('clarify.roundSealedByTaskTerminal')
-              : cause === 'wg-autonomous-dismissed'
-                ? t('clarify.roundDismissedByAutonomous')
+              : cause === 'wg-clarify-disabled'
+                ? t('clarify.roundDismissedNoHuman')
                 : t('clarify.detail.roundSealedFooter')
           return (
             <NoticeBanner tone="info" size="compact" className="clarify-round-sealed">

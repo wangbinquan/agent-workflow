@@ -20,6 +20,7 @@ import {
   WorkflowDefinitionSchema,
   WorkflowNameSchema,
   WorkgroupRuntimeConfigSchema,
+  workgroupHasHumanMember,
 } from '@agent-workflow/shared'
 import { and, asc, eq, inArray, isNotNull } from 'drizzle-orm'
 import type { Hono } from 'hono'
@@ -114,9 +115,9 @@ const ConfigPatchSchema = z.object({
     .optional(),
   maxRounds: z.number().int().positive().max(WORKGROUP_MAX_ROUNDS_LIMIT).optional(),
   completionGate: z.boolean().optional(),
-  // RFC-181 A — mid-run autonomous toggle, symmetric on/off (the engine reads
-  // the task config every pass, so the next loadDbState picks it up live).
-  autonomous: z.boolean().optional(),
+  // RFC-207 — mid-run ask-back budget, same live-pickup channel as maxRounds
+  // (the engine reloads the task config every pass).
+  clarifyBudget: z.number().int().min(0).max(50).optional(),
   // RFC-185 D4 — mid-run fan-out toggle, same live-pickup channel. No flip
   // compensation needed: turning OFF lets in-flight instances finish; the
   // leader simply stops being invited to fan out from its next turn.
@@ -935,6 +936,9 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
     }
     const changes: string[] = []
     let members = [...config.members]
+    // RFC-207 §3.4 — snapshot BEFORE any add/remove: the dismissal below fires
+    // only on the >0 → 0 transition, never on a roster that never had humans.
+    const hadHumanMember = workgroupHasHumanMember(config.members)
     // RFC-099 audit (2026-07-15): human members added mid-run must also become
     // task_collaborators — canViewTask / room access key off that table, so
     // without this a joiner is "added but can't get in" (launch does this via
@@ -1035,7 +1039,7 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
     if (patch.switches !== undefined) changes.push('switches updated')
     if (patch.maxRounds !== undefined) changes.push(`maxRounds → ${patch.maxRounds}`)
     if (patch.completionGate !== undefined) changes.push(`completionGate → ${patch.completionGate}`)
-    if (patch.autonomous !== undefined) changes.push(`autonomous → ${patch.autonomous}`)
+    if (patch.clarifyBudget !== undefined) changes.push(`clarifyBudget → ${patch.clarifyBudget}`)
     if (patch.fanOut !== undefined) changes.push(`fanOut → ${patch.fanOut}`)
     if (changes.length === 0) {
       throw new ValidationError('workgroup-config-empty', 'nothing to change')
@@ -1081,7 +1085,7 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
         ...(patch.switches !== undefined ? { switches: patch.switches } : {}),
         ...(patch.maxRounds !== undefined ? { maxRounds: patch.maxRounds } : {}),
         ...(patch.completionGate !== undefined ? { completionGate: patch.completionGate } : {}),
-        ...(patch.autonomous !== undefined ? { autonomous: patch.autonomous } : {}),
+        ...(patch.clarifyBudget !== undefined ? { clarifyBudget: patch.clarifyBudget } : {}),
         ...(patch.fanOut !== undefined ? { fanOut: patch.fanOut } : {}),
       }
       tx.update(tasks)
@@ -1202,22 +1206,19 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
         status: update.status,
       })
     }
-    // RFC-181 A2 (design-gate P0) — false→true dismisses in-flight clarify
-    // parks so the toggle works on a task that is ALREADY parked on questions
-    // (session+round+park-run canceled, worker cards requeued, stale answers
-    // rejected via the canceled round). true→true / no-park are natural
-    // no-ops inside. dynamic_workflow is excluded (impl-gate P2): it has no
-    // turn engine, autonomous is mode-inert there (RFC-180), and A2 must not
-    // sweep a generated node's ordinary clarify park.
-    if (
-      patch.autonomous === true &&
-      config.autonomous !== true &&
-      config.mode !== 'dynamic_workflow'
-    ) {
+    // RFC-207 §3.4 (inherits RFC-181 A2, design-gate P0) — losing the LAST human
+    // member dismisses in-flight clarify parks, so removing the humans works on a
+    // task that is ALREADY parked on questions (session+round+park-run canceled,
+    // worker cards requeued, stale answers rejected via the canceled round).
+    // Rosters that still hold a human are natural no-ops. dynamic_workflow is
+    // excluded (impl-gate P2): it has no turn engine, the roster predicate is
+    // mode-inert there, and this must not sweep a generated node's ordinary
+    // clarify park.
+    if (hadHumanMember && !workgroupHasHumanMember(members) && config.mode !== 'dynamic_workflow') {
       const dismissed = await dismissOpenClarifyParksForAutonomous(deps.db, taskId, config.mode)
       if (dismissed.dismissedSessions > 0) {
         changes.push(
-          `dismissed ${dismissed.dismissedSessions} open clarify session(s) (autonomous)`,
+          `dismissed ${dismissed.dismissedSessions} open clarify session(s) (no human member left)`,
         )
         // Impl-gate P2 — the `task.status === 'awaiting_human'` gate further
         // down reads the row loaded BEFORE this dismissal, and the engine may

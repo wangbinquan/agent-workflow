@@ -8,7 +8,7 @@
 //     同源，schema 默认会让省略字段的老 PUT 静默翻转已有组）。
 //   - 转移表 A2 requeue 新边：awaiting_human→dispatched / awaiting_human→open
 //     合法；其余边不变。
-//   - isTaskAutonomous：C 的 envelope 时刻压制判据——重读任务当前
+//   - isTaskClarifySuppressed：C 的 envelope 时刻压制判据——重读任务当前
 //     workgroupConfigJson（中途 PATCH 可翻转，快照布尔会漏掉在途竞态）。
 //   - A2 遣散原语 dismissOpenClarifyParksForAutonomous：open session →
 //     canceled + 中介 park run canceled + assignment 经新边 requeue
@@ -16,7 +16,7 @@
 //     不碰卡；已终态 session no-op；幂等；广播 node.status{canceled} +
 //     wg.assignment.updated。
 //   - C 源级锁（与 RFC-182 的 note 派生互为契约）：scheduler 在
-//     createClarifySession 前 `await isTaskAutonomous(db, taskId)` 重读 +
+//     createClarifySession 前 `await isTaskClarifySuppressed(db, taskId)` 重读 +
 //     autonomous 下 clarifyChannel 走 'stopped'（复用 RFC-123 runNode
 //     clarify-forbidden 持久拒绝）；workgroupRunner 的 leader / worker 失败
 //     分支带 CLARIFY_FORBIDDEN_PREFIX 重试。改任一侧即红。
@@ -27,7 +27,11 @@ import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
 import type { TaskWsMessage } from '@agent-workflow/shared'
-import { CreateWorkgroupSchema, UpdateWorkgroupSchema } from '@agent-workflow/shared'
+import {
+  CreateWorkgroupSchema,
+  UpdateWorkgroupSchema,
+  WG_CLARIFY_BUDGET_DEFAULT,
+} from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   clarifyRounds,
@@ -42,7 +46,7 @@ import { createWorkgroup, getWorkgroup, updateWorkgroup } from '../src/services/
 import {
   canTransitionAssignment,
   dismissOpenClarifyParksForAutonomous,
-  isTaskAutonomous,
+  isTaskClarifySuppressed,
 } from '../src/services/workgroupLifecycle'
 import { TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 
@@ -75,7 +79,7 @@ describe('RFC-181 D — create 缺省全自动，update 省略保留现值', () 
   })
 
   test('schema 层：Create/Update 共享字段均无默认（默认只住在 handler，设计门 P1）', () => {
-    expect(groupInput().autonomous).toBeUndefined()
+    expect(groupInput().clarifyBudget).toBeUndefined()
     const upd = UpdateWorkgroupSchema.parse({
       description: '',
       instructions: '',
@@ -85,22 +89,25 @@ describe('RFC-181 D — create 缺省全自动，update 省略保留现值', () 
       completionGate: true,
       members: [],
     })
-    expect(upd.autonomous).toBeUndefined()
+    expect(upd.clarifyBudget).toBeUndefined()
   })
 
-  test('create 省略 → autonomous=true；显式 false 尊重', async () => {
+  // RFC-207 — `autonomous` is gone; `clarifyBudget` inherits its optional-not-default
+  // contract verbatim (the hazard is identical: a full-replace PUT that omits the
+  // field must not silently rewrite the stored group).
+  test('create 省略 → 默认预算；显式值尊重', async () => {
     const created = await createWorkgroup(db, groupInput())
-    expect(created.autonomous).toBe(true)
+    expect(created.clarifyBudget).toBe(WG_CLARIFY_BUDGET_DEFAULT)
     const explicit = await createWorkgroup(
       db,
-      groupInput({ name: 'manual-squad', autonomous: false }),
+      groupInput({ name: 'manual-squad', clarifyBudget: 0 }),
     )
-    expect(explicit.autonomous).toBe(false)
+    expect(explicit.clarifyBudget).toBe(0)
   })
 
-  test('update 省略 autonomous → 保留现值（false 不被翻 on / true 不被翻 off）', async () => {
-    await createWorkgroup(db, groupInput({ name: 'g-false', autonomous: false }))
-    await createWorkgroup(db, groupInput({ name: 'g-true', autonomous: true }))
+  test('update 省略 clarifyBudget → 保留现值（不被默认值覆写）', async () => {
+    await createWorkgroup(db, groupInput({ name: 'g-false', clarifyBudget: 0 }))
+    await createWorkgroup(db, groupInput({ name: 'g-true', clarifyBudget: 9 }))
     const updBody = () =>
       UpdateWorkgroupSchema.parse({
         description: 'edited',
@@ -116,11 +123,11 @@ describe('RFC-181 D — create 缺省全自动，update 省略保留现值', () 
       })
     await updateWorkgroup(db, 'g-false', updBody())
     await updateWorkgroup(db, 'g-true', updBody())
-    expect((await getWorkgroup(db, 'g-false'))?.autonomous).toBe(false)
-    expect((await getWorkgroup(db, 'g-true'))?.autonomous).toBe(true)
-    // 显式值仍然生效（对称 on/off）。
-    await updateWorkgroup(db, 'g-false', { ...updBody(), autonomous: true })
-    expect((await getWorkgroup(db, 'g-false'))?.autonomous).toBe(true)
+    expect((await getWorkgroup(db, 'g-false'))?.clarifyBudget).toBe(0)
+    expect((await getWorkgroup(db, 'g-true'))?.clarifyBudget).toBe(9)
+    // 显式值仍然生效。
+    await updateWorkgroup(db, 'g-false', { ...updBody(), clarifyBudget: 5 })
+    expect((await getWorkgroup(db, 'g-false'))?.clarifyBudget).toBe(5)
   })
 })
 
@@ -139,10 +146,10 @@ describe('RFC-181 A2 — 转移表 requeue 新边', () => {
 })
 
 // ---------------------------------------------------------------------------
-// A2 遣散原语 + isTaskAutonomous（真 DB）
+// A2 遣散原语 + isTaskClarifySuppressed（真 DB）
 // ---------------------------------------------------------------------------
 
-describe('RFC-181 A2/C — isTaskAutonomous + dismissOpenClarifyParksForAutonomous', () => {
+describe('RFC-181 A2/C — isTaskClarifySuppressed + dismissOpenClarifyParksForAutonomous', () => {
   let db: DbClient
   let taskId: string
 
@@ -240,20 +247,25 @@ describe('RFC-181 A2/C — isTaskAutonomous + dismissOpenClarifyParksForAutonomo
 
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
-    taskId = await seedTask(JSON.stringify({ autonomous: true }))
+    taskId = await seedTask(JSON.stringify({ members: [{ memberType: 'agent' }] }))
   })
 
-  test('isTaskAutonomous：true / false / 缺字段 / 坏 JSON / 无 config', async () => {
-    expect(await isTaskAutonomous(db, taskId)).toBe(true)
-    const off = await seedTask(JSON.stringify({ autonomous: false }))
-    expect(await isTaskAutonomous(db, off)).toBe(false)
+  // RFC-207 — the oracle now reads the frozen ROSTER instead of a switch. Every
+  // unreadable case still resolves to "not suppressed": an anomaly should let a
+  // question reach a human, not silently swallow it.
+  test('isTaskClarifySuppressed：无人工 / 有人工 / 缺字段 / 坏 JSON / 无 config', async () => {
+    expect(await isTaskClarifySuppressed(db, taskId)).toBe(true)
+    const withHuman = await seedTask(
+      JSON.stringify({ members: [{ memberType: 'agent' }, { memberType: 'human' }] }),
+    )
+    expect(await isTaskClarifySuppressed(db, withHuman)).toBe(false)
     const missing = await seedTask(JSON.stringify({}))
-    expect(await isTaskAutonomous(db, missing)).toBe(false)
+    expect(await isTaskClarifySuppressed(db, missing)).toBe(false)
     const broken = await seedTask('{not-json')
-    expect(await isTaskAutonomous(db, broken)).toBe(false)
+    expect(await isTaskClarifySuppressed(db, broken)).toBe(false)
     const none = await seedTask(null)
-    expect(await isTaskAutonomous(db, none)).toBe(false)
-    expect(await isTaskAutonomous(db, 'no-such-task')).toBe(false)
+    expect(await isTaskClarifySuppressed(db, none)).toBe(false)
+    expect(await isTaskClarifySuppressed(db, 'no-such-task')).toBe(false)
   })
 
   test('lw：session 双状态 canceled + 中介 run canceled + 卡 awaiting_human→dispatched（保 assignee、清 nodeRunId）+ 双帧广播', async () => {
@@ -272,7 +284,7 @@ describe('RFC-181 A2/C — isTaskAutonomous + dismissOpenClarifyParksForAutonomo
     expect(session?.status).toBe('canceled')
     const run = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, park.clarifyRunId)))[0]
     expect(run?.status).toBe('canceled')
-    expect(run?.errorMessage).toBe('wg-autonomous-dismissed')
+    expect(run?.errorMessage).toBe('wg-clarify-disabled')
     // 实现门 P1-②：权威轮行同事务 canceled（seal/答案路径读的是 rounds）。
     const round = (
       await db
@@ -357,8 +369,12 @@ describe('RFC-181 C — 源级契约锁', () => {
 
   test('scheduler：判定器注入 + 建 session 前后双重重读 + 事后补偿遣散（实现门 P1-③）', () => {
     const scheduler = SRC('services/scheduler.ts')
-    expect(scheduler).toContain('clarifySuppressed: () => isTaskAutonomous(db, taskId)')
-    const preCheck = scheduler.indexOf('await isTaskAutonomous(db, taskId)')
+    // RFC-207 §3.4a — the callback must keep the dispatch-time floor in front of the
+    // live read: a turn that carried no invite may not ask just because the roster
+    // gained a human while it ran.
+    expect(scheduler).toContain('req.clarifyEnabled === false')
+    expect(scheduler).toContain('isTaskClarifySuppressed(db, taskId)')
+    const preCheck = scheduler.indexOf('await isTaskClarifySuppressed(db, taskId)')
     const create = scheduler.indexOf('await createClarifySession(')
     const compensate = scheduler.indexOf('await dismissOpenClarifyParksForAutonomous(db, taskId)')
     expect(preCheck).toBeGreaterThan(-1)
@@ -381,10 +397,11 @@ describe('RFC-181 C — 源级契约锁', () => {
     const hits = runner.split("result.failureCode === 'clarify-forbidden'").length - 1
     expect(hits).toBeGreaterThanOrEqual(2) // leader 分支 + worker 分支
     expect(runner).not.toContain('startsWith(CLARIFY_FORBIDDEN_PREFIX)')
-    expect(runner).toContain('Ask-back is OFF in this autonomous group')
-    expect(
-      runner.split('clarifyEnabled: resolveClarifyEnabled(config.autonomous ?? false)').length - 1,
-    ).toBe(3) // leader / assignment / message-turn 三处调用点
+    expect(runner).toContain('Ask-back is OFF')
+    // RFC-207 §3.7.2 — each of the three turns resolves the permission ONCE and
+    // feeds it to BOTH the protocol renderer and `clarifyEnabled`. Counting the
+    // `clarifyEnabled:` sites keeps that wiring from silently losing one.
+    expect(runner.split('clarifyEnabled: ').length - 1).toBe(3)
   })
 
   test('route：A2 对 dynamic_workflow 免疫 + 遣散后新鲜状态复读 kick（实现门 P2）', () => {

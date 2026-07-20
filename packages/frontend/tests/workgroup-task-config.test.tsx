@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { WorkgroupRuntimeConfig } from '@agent-workflow/shared'
+import { WG_CLARIFY_BUDGET_DEFAULT } from '@agent-workflow/shared'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { WorkgroupTaskConfigDialog } from '../src/components/workgroup/WorkgroupTaskConfigDialog'
 import {
@@ -83,23 +84,25 @@ describe('buildWorkgroupConfigPatch — only-changed-fields matrix', () => {
     expect(buildWorkgroupConfigPatch(config, same)).toBeNull()
   })
 
-  // RFC-181 A — autonomous rides the same only-changed diffing; the `?? false`
-  // coalesce means an absent stored value and a false draft are "unchanged".
-  test('autonomous: only-when-changed（含存储缺省≡false 的等价）', () => {
+  // RFC-207 — clarifyBudget rides the same only-changed diffing; the shared default
+  // coalesce means an absent stored value and a default-valued draft are "unchanged"
+  // — that equivalence is what keeps a pre-RFC-207 task snapshot from emitting a
+  // spurious patch the moment the dialog opens.
+  test('clarifyBudget: only-when-changed（含存储缺省≡默认值的等价）', () => {
     const on = workgroupTaskConfigDraftFrom(config)
-    on.autonomous = true
-    expect(buildWorkgroupConfigPatch(config, on)).toEqual({ autonomous: true })
+    on.clarifyBudget = 7
+    expect(buildWorkgroupConfigPatch(config, on)).toEqual({ clarifyBudget: 7 })
 
-    const offOnStoredTrue = workgroupTaskConfigDraftFrom(makeConfig({ autonomous: true }))
-    expect(offOnStoredTrue.autonomous).toBe(true)
-    offOnStoredTrue.autonomous = false
-    expect(buildWorkgroupConfigPatch(makeConfig({ autonomous: true }), offOnStoredTrue)).toEqual({
-      autonomous: false,
+    const stored = workgroupTaskConfigDraftFrom(makeConfig({ clarifyBudget: 9 }))
+    expect(stored.clarifyBudget).toBe(9)
+    stored.clarifyBudget = 0
+    expect(buildWorkgroupConfigPatch(makeConfig({ clarifyBudget: 9 }), stored)).toEqual({
+      clarifyBudget: 0,
     })
 
-    // 存储无字段（老任务 config）+ draft false → 无变化。
+    // 存储无字段（老任务 config）+ draft 取默认值 → 无变化。
     const untouched = workgroupTaskConfigDraftFrom(config)
-    expect(untouched.autonomous).toBe(false)
+    expect(untouched.clarifyBudget).toBe(WG_CLARIFY_BUDGET_DEFAULT)
     expect(buildWorkgroupConfigPatch(config, untouched)).toBeNull()
   })
 
@@ -208,9 +211,29 @@ afterEach(() => {
 })
 
 describe('WorkgroupTaskConfigDialog', () => {
+  const withHuman = () => {
+    const base = makeConfig()
+    return {
+      ...base,
+      members: [
+        ...base.members,
+        {
+          id: 'mem_human',
+          memberType: 'human' as const,
+          agentName: null,
+          userId: 'u-1',
+          displayName: 'owner',
+          roleDesc: '',
+        },
+      ],
+    }
+  }
+
+  // RFC-207 — the gate control only exists when someone can confirm it, so this
+  // flip test needs a roster with a human.
   test('submit disabled while nothing changed; a gate flip PUTs ONLY {completionGate}', async () => {
     const calls = installFetch()
-    renderDialog(makeConfig())
+    renderDialog(withHuman())
     const submit = (await screen.findByTestId('wg-config-submit')) as HTMLButtonElement
     expect(submit.disabled).toBe(true)
     expect(screen.getByTestId('wg-config-empty-hint')).toBeTruthy()
@@ -257,21 +280,21 @@ describe('WorkgroupTaskConfigDialog', () => {
     })
   })
 
-  // RFC-181 A —「全自动」进 mid-run 配置弹窗：拨动即 PUT {autonomous}，开启时
-  // completionGate 开关置灰（与 WorkgroupForm 同款联动）。
-  test('autonomous switch PUTs {autonomous:true} and grays the completion gate', async () => {
+  // RFC-207 —「反问次数上限」进 mid-run 配置弹窗：改动即 PUT {clarifyBudget}。
+  // 同时锁住设计门 P2 的要求：控件的启用与否看 STAGED 花名册——用户暂存了「移除
+  // 最后一个人工成员」时，界面必须当场反映「保存后就没人可问了」，而不是等保存完
+  // 才变。否则用户看到的与他即将提交的语义相反。
+  test('clarifyBudget PUTs the new value when the roster has a human', async () => {
     const calls = installFetch()
-    renderDialog(makeConfig())
+    renderDialog(withHuman())
     await screen.findByTestId('wg-config-submit')
 
-    const gateSwitch = screen.getByLabelText(/Completion gate/) as HTMLInputElement
-    expect(gateSwitch.disabled).toBe(false)
-
-    fireEvent.click(screen.getByLabelText(/Autonomous \(don't interrupt me\)/))
+    const budget = screen.getByTestId('wg-config-clarify-budget') as HTMLInputElement
+    expect(budget.disabled).toBe(false)
+    fireEvent.change(budget, { target: { value: '1' } })
     await waitFor(() => {
       expect((screen.getByTestId('wg-config-submit') as HTMLButtonElement).disabled).toBe(false)
     })
-    expect((screen.getByLabelText(/Completion gate/) as HTMLInputElement).disabled).toBe(true)
 
     fireEvent.click(screen.getByTestId('wg-config-submit'))
     await waitFor(() => {
@@ -279,8 +302,16 @@ describe('WorkgroupTaskConfigDialog', () => {
         (c) => c.method === 'PUT' && c.url.endsWith('/api/workgroup-tasks/t1/config'),
       )
       expect(put).toBeTruthy()
-      expect(put?.body).toEqual({ autonomous: true })
+      expect(put?.body).toEqual({ clarifyBudget: 1 })
     })
+  })
+
+  test('an agent-only roster grays the completion gate and the ask-back budget', async () => {
+    installFetch()
+    renderDialog(makeConfig())
+    await screen.findByTestId('wg-config-submit')
+    expect((screen.getByLabelText(/Completion gate/) as HTMLInputElement).disabled).toBe(true)
+    expect((screen.getByTestId('wg-config-clarify-budget') as HTMLInputElement).disabled).toBe(true)
   })
 
   test('leader row has no remove control; staging a worker removal PUTs removeMemberIds', async () => {

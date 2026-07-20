@@ -21,6 +21,7 @@ import type {
   WorkgroupRuntimeMember,
   WorkgroupSwitches,
 } from '@agent-workflow/shared'
+import { resolveClarifyBudget } from '@agent-workflow/shared'
 import { WORKGROUP_MAX_ROUNDS_LIMIT } from '@agent-workflow/shared'
 import type { StatusChipKind } from '@/components/StatusChip'
 
@@ -614,9 +615,8 @@ export interface WorkgroupTaskConfigDraft {
   /** undefined = field cleared → treated as "unchanged". */
   maxRounds: number | undefined
   completionGate: boolean
-  /** RFC-181 A — mid-run autonomous toggle (symmetric on/off; false→true also
-   *  dismisses in-flight clarify parks server-side, A2). */
-  autonomous: boolean
+  /** RFC-207 — mid-run ask-back budget per asker (leader / assignment / member). */
+  clarifyBudget: number
   /** RFC-185 D4 — mid-run opt-in leader fan-out toggle (same live channel). */
   fanOut: boolean
   addMembers: WorkgroupConfigMemberAdd[]
@@ -627,14 +627,14 @@ export interface WorkgroupTaskConfigDraft {
 export function workgroupTaskConfigDraftFrom(
   config: Pick<
     WorkgroupRuntimeConfig,
-    'switches' | 'maxRounds' | 'completionGate' | 'autonomous' | 'fanOut'
+    'switches' | 'maxRounds' | 'completionGate' | 'clarifyBudget' | 'fanOut'
   >,
 ): WorkgroupTaskConfigDraft {
   return {
     switches: { ...config.switches },
     maxRounds: config.maxRounds,
     completionGate: config.completionGate,
-    autonomous: config.autonomous ?? false,
+    clarifyBudget: resolveClarifyBudget(config),
     fanOut: config.fanOut ?? false,
     addMembers: [],
     removeMemberIds: [],
@@ -651,7 +651,7 @@ export function workgroupTaskConfigDraftFrom(
 export function buildWorkgroupConfigPatch(
   config: Pick<
     WorkgroupRuntimeConfig,
-    'switches' | 'maxRounds' | 'completionGate' | 'autonomous' | 'fanOut'
+    'switches' | 'maxRounds' | 'completionGate' | 'clarifyBudget' | 'fanOut'
   >,
   draft: WorkgroupTaskConfigDraft,
 ): Record<string, unknown> | null {
@@ -668,7 +668,7 @@ export function buildWorkgroupConfigPatch(
     out.maxRounds = draft.maxRounds
   }
   if (draft.completionGate !== config.completionGate) out.completionGate = draft.completionGate
-  if (draft.autonomous !== (config.autonomous ?? false)) out.autonomous = draft.autonomous
+  if (draft.clarifyBudget !== resolveClarifyBudget(config)) out.clarifyBudget = draft.clarifyBudget
   if (draft.fanOut !== (config.fanOut ?? false)) out.fanOut = draft.fanOut
   if (draft.addMembers.length > 0) {
     out.addMembers = draft.addMembers.map((m) =>

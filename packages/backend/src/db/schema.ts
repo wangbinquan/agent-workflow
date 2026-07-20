@@ -493,7 +493,8 @@ export const workgroups = sqliteTable('workgroups', {
   /** Completion gate: leader-done parks the task awaiting human confirmation. */
   completionGate: integer('completion_gate', { mode: 'boolean' }).notNull().default(false),
   /** RFC-180「全自动」: no clarify invite + gate treated off + leader-idle auto-nudge. */
-  autonomous: integer('autonomous', { mode: 'boolean' }).notNull().default(false),
+  // RFC-207 — per-asker ask-back cap; see resolveClarifyBudget (shared).
+  clarifyBudget: integer('clarify_budget').notNull().default(3),
   /** RFC-185 D4: opt-in leader fan-out (same-member concurrent instances).
    *  OFF (default) keeps the original one-entity-per-agent protocol untouched. */
   fanOut: integer('fan_out', { mode: 'boolean' }).notNull().default(false),

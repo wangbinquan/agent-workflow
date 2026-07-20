@@ -237,7 +237,7 @@ export async function getClarifyRoundDetail(
   // history (e.g. a canceled-then-retried task's abandoned round would read as
   // an autonomous dismissal). The park-carrier node_run's errorMessage records
   // the transition-time cause ('task-canceled' / 'task-done' from the terminal
-  // sweep, 'wg-autonomous-dismissed' from the workgroup flip); expose it
+  // sweep, 'wg-clarify-disabled' from the workgroup flip); expose it
   // verbatim as an optional field.
   if (row.status === 'canceled' || row.status === 'abandoned') {
     const run = (

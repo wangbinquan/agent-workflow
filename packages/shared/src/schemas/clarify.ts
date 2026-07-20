@@ -456,7 +456,7 @@ export const ClarifyRoundSchema = z.object({
     .optional(),
   /** RFC-202 T6 — transition-time seal cause for terminal rounds, taken from
    *  the park-carrier node_run's errorMessage ('task-canceled' / 'task-done'
-   *  from the terminal sweep, 'wg-autonomous-dismissed' from the workgroup
+   *  from the terminal sweep, 'wg-clarify-disabled' from the workgroup
    *  autonomous flip). Absent on open/answered rounds and legacy rows; the UI
    *  falls back to a generic sealed notice. NEVER inferred from the task's
    *  mutable current status (misattributes history after retry/resume). */

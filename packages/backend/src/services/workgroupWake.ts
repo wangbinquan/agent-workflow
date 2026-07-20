@@ -12,7 +12,7 @@ import type {
 import {
   resolveCompletionGate,
   resolveWorkgroupSwitches,
-  WG_AUTONOMOUS_NUDGE_LIMIT,
+  WG_LEADER_IDLE_NUDGE_LIMIT,
 } from '@agent-workflow/shared'
 import { sliceMessagesAfter } from './workgroupContext'
 
@@ -84,7 +84,7 @@ export type WorkgroupOutcome =
       // never aggregated; park (deliverable visible via diff) instead of hard-failing.
       reason: 'clarify-or-delivery' | 'leader-idle' | 'leader-clarify' | 'max-rounds-wrapup'
     }
-  | { kind: 'leader-nudge'; nudgeCount: number } // RFC-180 autonomous: auto-remind an idle leader
+  | { kind: 'leader-nudge'; nudgeCount: number } // RFC-207: auto-remind an idle leader before parking
   | { kind: 'failed'; reason: 'max-rounds' | 'fc-deadlock' }
 
 /**
@@ -305,20 +305,19 @@ export function decideWorkgroupOutcome(input: WakeInput, wake: WakeSet): Workgro
 
   if (input.config.mode === 'leader_worker') {
     if (input.gate.declaredDone) {
-      // RFC-180: autonomous treats the gate as off (leader-done finishes directly).
-      return resolveCompletionGate(input.config.autonomous ?? false, input.config.completionGate)
+      // RFC-207: no human on the roster ⇒ nobody to confirm ⇒ leader-done finishes directly.
+      return resolveCompletionGate(input.config.members, input.config.completionGate)
         ? { kind: 'awaiting_gate' }
         : { kind: 'done' }
     }
     if (humanPending) return { kind: 'awaiting_human', reason: 'clarify-or-delivery' }
     // Leader consumed everything, dispatched nothing, declared nothing.
-    // RFC-180: an autonomous group auto-nudges the leader (up to N consecutive
-    // no-progress rounds) before parking; a non-autonomous group parks for a
-    // human nudge right away (a room message re-wakes the leader) — design §4.2.
-    if (input.config.autonomous ?? false) {
-      const nudges = countTrailingNudges(input.messages)
-      if (nudges < WG_AUTONOMOUS_NUDGE_LIMIT) return { kind: 'leader-nudge', nudgeCount: nudges }
-    }
+    // RFC-207 §3.3: EVERY group auto-nudges the leader first (up to N consecutive
+    // no-progress rounds) and only then parks. Nudging is strictly better than
+    // parking on a leader that merely fumbled a turn, and it costs a human
+    // nothing — so the old autonomous/supervised split is gone.
+    const nudges = countTrailingNudges(input.messages)
+    if (nudges < WG_LEADER_IDLE_NUDGE_LIMIT) return { kind: 'leader-nudge', nudgeCount: nudges }
     return { kind: 'awaiting_human', reason: 'leader-idle' }
   }
 

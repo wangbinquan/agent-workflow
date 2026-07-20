@@ -967,7 +967,24 @@ describe('RFC-164 engine — free_collab orchestration', () => {
   })
 
   test('fc gate: converge with completionGate on → awaiting_review + holder run', async () => {
-    const { taskId } = await seedEngineTask(db, { ...fcCfg(), completionGate: true })
+    // RFC-207 — the gate only exists when someone can confirm it, i.e. when the
+    // roster holds a human. An agent-only fc group finishes directly.
+    const base = fcCfg()
+    const { taskId } = await seedEngineTask(db, {
+      ...base,
+      completionGate: true,
+      members: [
+        ...base.members,
+        {
+          id: 'm-human',
+          memberType: 'human' as const,
+          agentName: null,
+          userId: 'u-1',
+          displayName: 'owner',
+          roleDesc: '',
+        },
+      ],
+    })
     const { hooks } = scriptedHooks({
       leader: [],
       member: [
@@ -1188,10 +1205,17 @@ describe('RFC-181 C — clarify 压制收场（fake hooks）', () => {
   }
 
   test('leader：压制重提示 → 耗尽 drop-and-continue（不 throw、不 park）→ nudge 后收敛 done', async () => {
-    const config = cfg({ autonomous: true, completionGate: false })
+    // RFC-207 — suppression is now driven by the roster: strip the human so
+    // ask-back is off (the RFC-181 `autonomous: true` this replaced meant the
+    // same thing). With a human present the leader would legitimately be invited.
+    const base = cfg({ completionGate: false })
+    const config = {
+      ...base,
+      members: base.members.filter((m) => m.memberType === 'agent'),
+    }
     const { taskId } = await seedEngineTask(db, config)
     const { hooks, requests } = scriptedHooks({
-      // WG_PROTOCOL_RETRIES=1 → 2 次压制尝试后 drop；autonomous 空转 nudge
+      // WG_PROTOCOL_RETRIES=1 → 2 次压制尝试后 drop；leader 空转 nudge
       // 重新唤醒 leader，第三个脚本收敛 done。
       leader: [
         cfSuppressed,
@@ -1211,7 +1235,7 @@ describe('RFC-181 C — clarify 压制收场（fake hooks）', () => {
   })
 
   test('worker：压制重提示 → 耗尽 assignment failed 浮出（不 park），任务照常收敛', async () => {
-    const config = cfg({ autonomous: true, completionGate: false })
+    const config = cfg({ completionGate: false })
     const { taskId } = await seedEngineTask(db, config)
     const { hooks, requests } = scriptedHooks({
       leader: [

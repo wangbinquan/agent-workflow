@@ -32,7 +32,7 @@ import {
   parseWgTasksAddPort,
   perCardInputDescriptionBudget,
   renderAgentCapabilityCard,
-  resolveClarifyEnabled,
+  workgroupHasHumanMember,
   resolveCompletionGate,
   resolveWorkgroupSwitches,
   sanitizeInlineField,
@@ -975,7 +975,7 @@ export async function runWorkgroupEngine(
       // autonomous mode promises never to ask for. Re-assert the invariant at entry instead
       // of assuming it impossible. No-op in the overwhelming common case (no open session).
       if (
-        (rec.config.autonomous ?? false) &&
+        !workgroupHasHumanMember(rec.config.members) &&
         rec.config.mode !== 'dynamic_workflow' &&
         rec.clarifySessions.some((s) => s.status === 'awaiting_human')
       ) {
@@ -1118,7 +1118,7 @@ export async function runWorkgroupEngine(
             log.warn('workgroup engine: lw done without declaration', { taskId })
           }
           if (
-            resolveCompletionGate(state.config.autonomous ?? false, state.config.completionGate) &&
+            resolveCompletionGate(state.config.members, state.config.completionGate) &&
             !state.gate.approved &&
             !state.gate.awaitingConfirmation
           ) {
@@ -1510,14 +1510,24 @@ async function driveLeaderTurn(
           )}\n\nRe-emit a CORRECT envelope.`
         : '')
 
+    // RFC-207 §3.7.2 — resolve ONCE and feed BOTH the protocol block (whether to
+    // invite an ask-back) and `clarifyEnabled` (whether to accept one). Deriving
+    // it separately in each place is how a prompt ends up inviting a question the
+    // envelope gate then rejects.
+    const leaderClarifyAllowed = workgroupHasHumanMember(config.members)
     const result = await hooks.runHostNode({
       nodeRunId: runId,
       nodeId: WG_LEADER_NODE_ID,
       agent: leaderAgent,
       promptTemplate: prompt,
-      workgroupProtocolBlock: renderWgProtocolBlock('leader', config, envelopeNonce),
+      workgroupProtocolBlock: renderWgProtocolBlock(
+        'leader',
+        config,
+        envelopeNonce,
+        leaderClarifyAllowed,
+      ),
       hostOutputPorts: wgHostRolePorts('leader'),
-      clarifyEnabled: resolveClarifyEnabled(config.autonomous ?? false),
+      clarifyEnabled: leaderClarifyAllowed,
     })
     if (result.status === 'canceled') return
     if (result.status === 'awaiting') return // leader asked the human — task parks via outcome pass
@@ -1799,6 +1809,11 @@ async function driveAssignmentTurn(
           )}\n\nRe-emit a CORRECT envelope.`
         : '')
 
+    // RFC-207 §3.7.2 — resolve ONCE and feed BOTH the protocol block (whether to
+    // invite an ask-back) and `clarifyEnabled` (whether to accept one). Deriving
+    // it separately in each place is how a prompt ends up inviting a question the
+    // envelope gate then rejects.
+    const assignmentClarifyAllowed = workgroupHasHumanMember(config.members)
     const result = await hooks.runHostNode({
       nodeRunId: runId,
       nodeId: WG_MEMBER_NODE_ID,
@@ -1808,9 +1823,10 @@ async function driveAssignmentTurn(
         config.mode === 'free_collab' ? 'fc_member' : 'worker',
         config,
         envelopeNonce,
+        assignmentClarifyAllowed,
       ),
       hostOutputPorts: wgHostRolePorts(config.mode === 'free_collab' ? 'fc_member' : 'worker'),
-      clarifyEnabled: resolveClarifyEnabled(config.autonomous ?? false),
+      clarifyEnabled: assignmentClarifyAllowed,
     })
     if (result.status === 'canceled') {
       await casAssignmentStatus(db, assignment.id, 'running', 'canceled').catch(() => false)
@@ -1979,14 +1995,19 @@ async function driveMessageTurn(
     (fcAddendum !== null ? `\n\n${fcAddendum}` : '')
 
   const role = config.mode === 'free_collab' ? ('fc_member' as const) : ('worker' as const)
+  // RFC-207 §3.7.2 — resolve ONCE and feed BOTH the protocol block (whether to
+  // invite an ask-back) and `clarifyEnabled` (whether to accept one). Deriving
+  // it separately in each place is how a prompt ends up inviting a question the
+  // envelope gate then rejects.
+  const msgClarifyAllowed = workgroupHasHumanMember(config.members)
   const result = await hooks.runHostNode({
     nodeRunId: runId,
     nodeId: WG_MEMBER_NODE_ID,
     agent,
     promptTemplate: prompt,
-    workgroupProtocolBlock: renderWgProtocolBlock(role, config, envelopeNonce),
+    workgroupProtocolBlock: renderWgProtocolBlock(role, config, envelopeNonce, msgClarifyAllowed),
     hostOutputPorts: wgHostRolePorts(role),
-    clarifyEnabled: resolveClarifyEnabled(config.autonomous ?? false),
+    clarifyEnabled: msgClarifyAllowed,
   })
   // RFC-186 T5 (audit §5 F6): advance the member cursor AFTER the hook RETURNS
   // (done OR failed — both consume the @-mention so it can't re-loop), but never

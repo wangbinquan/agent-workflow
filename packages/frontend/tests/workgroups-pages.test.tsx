@@ -140,7 +140,7 @@ function synthesizePutRow(base: Workgroup, body: Record<string, unknown>): Workg
     switches: body.switches as Workgroup['switches'],
     maxRounds: body.maxRounds as number,
     completionGate: body.completionGate as boolean,
-    autonomous: body.autonomous as boolean,
+    clarifyBudget: body.clarifyBudget as number,
     fanOut: body.fanOut as boolean,
     members,
     leaderMemberId:
@@ -961,7 +961,7 @@ describe('RFC-164 /workgroups wiring', () => {
       'cardMembers_one',
       'cardMembers_other',
       'cardLeader',
-      'autonomousChip',
+      'humanMemberChip',
       'cardAddAgent',
       'cardSelectLeader',
       'cardNoWorkers',

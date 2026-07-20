@@ -27,6 +27,7 @@ import {
   WORKGROUP_MAX_ROUNDS_DEFAULT,
   WORKGROUP_MAX_ROUNDS_LIMIT,
   WORKGROUP_NAME_RE,
+  WG_CLARIFY_BUDGET_DEFAULT,
 } from '@agent-workflow/shared'
 
 /** Characters a member displayName must not contain (mirrors the shared
@@ -87,7 +88,7 @@ export interface WorkgroupConfigDraft {
   maxRounds: number | undefined
   completionGate: boolean
   /** RFC-180「全自动」— no clarify invite + gate treated off + leader-idle auto-nudge. */
-  autonomous: boolean
+  clarifyBudget: number
   /** RFC-185 D4 — opt-in leader fan-out; OFF keeps the fixed one-per-agent mode. */
   fanOut: boolean
 }
@@ -99,7 +100,7 @@ export function workgroupToConfigDraft(w: Workgroup): WorkgroupConfigDraft {
     switches: { ...w.switches },
     maxRounds: w.maxRounds,
     completionGate: w.completionGate,
-    autonomous: w.autonomous ?? false,
+    clarifyBudget: w.clarifyBudget ?? WG_CLARIFY_BUDGET_DEFAULT,
     fanOut: w.fanOut ?? false,
   }
 }
@@ -133,7 +134,7 @@ export function buildConfigUpdatePayload(
     switches: { ...draft.switches },
     maxRounds: draft.maxRounds ?? WORKGROUP_MAX_ROUNDS_DEFAULT,
     completionGate: draft.completionGate,
-    autonomous: draft.autonomous,
+    clarifyBudget: draft.clarifyBudget,
     fanOut: draft.fanOut,
     members: membersToInputs(group.members),
   }
@@ -284,7 +285,7 @@ export function buildCompositeUpdatePayload(
     switches: { ...config.switches },
     maxRounds: config.maxRounds ?? WORKGROUP_MAX_ROUNDS_DEFAULT,
     completionGate: config.completionGate,
-    autonomous: config.autonomous,
+    clarifyBudget: config.clarifyBudget,
     fanOut: config.fanOut,
     members: members.members.map(rowToInput),
   }
@@ -321,7 +322,8 @@ export function reconcileWorkgroupSaveResponse(
     response.switches.blackboard !== payload.switches.blackboard ||
     response.maxRounds !== payload.maxRounds ||
     response.completionGate !== payload.completionGate ||
-    (response.autonomous ?? false) !== (payload.autonomous ?? false) ||
+    (response.clarifyBudget ?? WG_CLARIFY_BUDGET_DEFAULT) !==
+      (payload.clarifyBudget ?? WG_CLARIFY_BUDGET_DEFAULT) ||
     (response.fanOut ?? false) !== (payload.fanOut ?? false)
   ) {
     return { ok: false, reason: 'config-mismatch' }
@@ -505,7 +507,7 @@ export function buildMembersUpdatePayload(
     switches: { ...group.switches },
     maxRounds: group.maxRounds,
     completionGate: group.completionGate,
-    autonomous: group.autonomous ?? false,
+    clarifyBudget: group.clarifyBudget ?? WG_CLARIFY_BUDGET_DEFAULT,
     fanOut: group.fanOut ?? false,
     members: state.members.map(rowToInput),
   }

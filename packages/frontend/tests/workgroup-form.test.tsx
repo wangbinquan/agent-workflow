@@ -19,6 +19,7 @@ import { afterEach, describe, expect, test } from 'vitest'
 import { useState } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { Workgroup } from '@agent-workflow/shared'
+import { WG_CLARIFY_BUDGET_DEFAULT } from '@agent-workflow/shared'
 import { WorkgroupForm } from '../src/components/workgroup/WorkgroupForm'
 import {
   addMember,
@@ -125,14 +126,14 @@ describe('buildConfigUpdatePayload', () => {
     ])
   })
 
-  test('RFC-180: autonomous round-trips draft ↔ payload (default off; on when set)', () => {
-    // STORED has no autonomous → draft defaults false → payload false.
+  test('RFC-207: clarifyBudget round-trips draft ↔ payload (default when absent)', () => {
+    // STORED has no clarifyBudget → draft reads the shared default → payload carries it.
     const asDraft = workgroupToConfigDraft(STORED)
-    expect(asDraft.autonomous).toBe(false)
-    const on = buildConfigUpdatePayload({ ...asDraft, autonomous: true }, STORED)
-    expect(on.ok && on.payload.autonomous).toBe(true)
-    const off = buildConfigUpdatePayload({ ...asDraft, autonomous: false }, STORED)
-    expect(off.ok && off.payload.autonomous).toBe(false)
+    expect(asDraft.clarifyBudget).toBe(WG_CLARIFY_BUDGET_DEFAULT)
+    const raised = buildConfigUpdatePayload({ ...asDraft, clarifyBudget: 7 }, STORED)
+    expect(raised.ok && raised.payload.clarifyBudget).toBe(7)
+    const zero = buildConfigUpdatePayload({ ...asDraft, clarifyBudget: 0 }, STORED)
+    expect(zero.ok && zero.payload.clarifyBudget).toBe(0)
   })
 
   test('RFC-185 D4: fanOut round-trips draft ↔ payload (opt-in — default off)', () => {
@@ -526,15 +527,15 @@ function baseDraft(): WorkgroupConfigDraft {
     switches: { shareOutputs: true, directMessages: false, blackboard: false },
     maxRounds: 20,
     completionGate: false,
-    autonomous: false,
+    clarifyBudget: WG_CLARIFY_BUDGET_DEFAULT,
     fanOut: false,
   }
 }
 
 /** Stateful harness mirroring the detail page's controlled-form wiring. */
-function Harness({ initial }: { initial?: WorkgroupConfigDraft }) {
+function Harness({ initial, human = true }: { initial?: WorkgroupConfigDraft; human?: boolean }) {
   const [draft, setDraft] = useState<WorkgroupConfigDraft>(initial ?? baseDraft())
-  return <WorkgroupForm value={draft} onChange={setDraft} errors={{}} />
+  return <WorkgroupForm value={draft} onChange={setDraft} errors={{}} hasHumanMember={human} />
 }
 
 function switchInput(label: RegExp): HTMLInputElement {
@@ -594,15 +595,17 @@ describe('WorkgroupForm — free_collab switch gating', () => {
     expect(switchInput(/Completion gate/).checked).toBe(true)
   })
 
-  test('RFC-180: turning on Autonomous grays out the completion gate switch', () => {
-    render(<Harness />)
+  // RFC-207 — the gate is no longer grayed by a switch but by the ROSTER: with no
+  // human member there is nobody to confirm, so the control is inert. Same for the
+  // ask-back budget (nobody to ask).
+  test('a roster without a human grays out the completion gate and the ask-back budget', () => {
+    const { unmount } = render(<Harness human />)
     expect(switchInput(/Completion gate/).disabled).toBe(false)
-    // `/Autonomous \(/` matches the label only — the gate's autonomous hint
-    // ("Autonomous mode: …") must NOT be mistaken for a second Autonomous switch.
-    const auto = switchInput(/Autonomous \(/)
-    expect(auto.checked).toBe(false)
-    fireEvent.click(auto)
-    expect(switchInput(/Autonomous \(/).checked).toBe(true)
+    expect((screen.getByLabelText(/Ask-back limit/) as HTMLInputElement).disabled).toBe(false)
+    unmount()
+
+    render(<Harness human={false} />)
     expect(switchInput(/Completion gate/).disabled).toBe(true)
+    expect((screen.getByLabelText(/Ask-back limit/) as HTMLInputElement).disabled).toBe(true)
   })
 })

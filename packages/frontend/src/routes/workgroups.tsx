@@ -12,7 +12,7 @@ import { createRoute, useNavigate } from '@tanstack/react-router'
 import { useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Workgroup } from '@agent-workflow/shared'
-import { workgroupLaunchReadiness } from '@agent-workflow/shared'
+import { workgroupHasHumanMember, workgroupLaunchReadiness } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { useResourceList } from '@/hooks/useResourceList'
 import { describeApiError } from '@/i18n'
@@ -111,7 +111,7 @@ function WorkgroupsPage() {
                   modeLabel,
                   t('workgroups.cardMembers', { count: w.members.length }),
                   leader === null ? '' : t('workgroups.cardLeader', { name: leader }),
-                  w.autonomous === true ? t('workgroups.autonomousChip') : '',
+                  workgroupHasHumanMember(w.members) ? t('workgroups.humanMemberChip') : '',
                   w.visibility === 'private' ? t('acl.privateChip') : '',
                   w.ownerUserId != null ? (owners.get(w.ownerUserId)?.displayName ?? '') : '',
                 ].join(' '),
@@ -138,8 +138,8 @@ function WorkgroupsPage() {
                         {t('workgroups.cardLeader', { name: leader })}
                       </span>
                     )}
-                    {w.autonomous === true && (
-                      <span className="chip chip--tight">{t('workgroups.autonomousChip')}</span>
+                    {workgroupHasHumanMember(w.members) && (
+                      <span className="chip chip--tight">{t('workgroups.humanMemberChip')}</span>
                     )}
                   </>
                 ),

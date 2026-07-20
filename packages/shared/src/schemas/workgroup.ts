@@ -121,15 +121,13 @@ export const WorkgroupSchema = z.object({
   /** Completion gate: leader-done parks the task for human confirmation. */
   completionGate: z.boolean(),
   /**
-   * RFC-180「全自动」— when true the group tries NOT to interrupt the launcher:
-   * the clarify ask-back invite is not injected, the completion gate is treated
-   * as off (leader-done finishes directly), and a leader-idle round auto-nudges
-   * instead of parking (until WG_AUTONOMOUS_NUDGE_LIMIT consecutive no-progress
-   * rounds). Effective view via resolveCompletionGate / resolveClarifyEnabled.
-   * Optional (DB row always supplies a real boolean; absent ⇒ OFF) so callers /
-   * fixtures may omit it — consumers coalesce `?? false`.
+   * RFC-207「反问预算」— how many times ONE asker (the leader, one assignment,
+   * or one member's message turns) may ask the humans before the ask-back is
+   * suppressed and it is told to decide for itself. Guards against endless
+   * ask-back ping-pong once the roster does contain a human. Absent ⇒ 3
+   * (resolveClarifyBudget is the ONLY fallback site — never bare `?? 3`).
    */
-  autonomous: z.boolean().optional(),
+  clarifyBudget: z.number().int().min(0).max(50).optional(),
   /**
    * RFC-185 D4 — opt-in leader fan-out: when true the leader protocol invites
    * same-member MULTIPLE wg_assignments entries (each = a concurrent instance).
@@ -169,16 +167,13 @@ const workgroupConfigFields = {
   // Default ON (2026-07-13 用户拍板): a new group's tasks park for human
   // confirmation when the leader declares done, instead of auto-finishing.
   completionGate: z.boolean().default(true),
-  // RFC-180「全自动」/ RFC-181 D — when ON: no clarify invite + gate treated
-  // off + leader-idle auto-nudge + hard clarify suppression (RFC-181 C); see
-  // resolveCompletionGate / resolveClarifyEnabled.
-  // Optional (not .default) BY DESIGN (RFC-181 design-gate P1): this field
-  // object is shared by Create AND full-replace Update schemas, so a schema
-  // default would let an omitting PUT silently flip an existing group. The
-  // defaults live in the handlers instead: create coalesces `?? true`
-  // (RFC-181 D: new groups are autonomous), update coalesces `?? existing`
-  // (omitted ⇒ preserve).
-  autonomous: z.boolean().optional(),
+  // RFC-207「反问预算」— per-asker ask-back cap; see WorkgroupSchema above.
+  // Optional (not .default) BY DESIGN (same rationale RFC-181 design-gate P1
+  // established for the deleted `autonomous`): this field object is shared by
+  // Create AND full-replace Update, so a schema default would let an omitting
+  // PUT silently rewrite an existing group. Handler defaults instead: create
+  // coalesces `?? WG_CLARIFY_BUDGET_DEFAULT`, update `?? existing`.
+  clarifyBudget: z.number().int().min(0).max(50).optional(),
   // RFC-185 D4 — opt-in leader fan-out. Same optional-not-default rationale as
   // autonomous above; handler defaults: create `?? false` (fan-out must never
   // change the original fixed mode unless explicitly enabled), update
@@ -319,25 +314,76 @@ export function resolveWorkgroupSwitches(
 }
 
 /**
- * RFC-180 §2.1 — effective completion-gate view. `autonomous` overrides the
- * stored gate to OFF (leader-done finishes directly); otherwise the stored value
- * stands (so turning autonomous back off restores the group's original gate).
- * Single source — the engine reads this, never `config.completionGate` raw.
+ * RFC-207 §1.1 — THE single predicate for "does this group involve humans?".
+ *
+ * Whether a group wants a human in the loop is expressed exactly once, by the
+ * roster: putting a `memberType: 'human'` member in it. The RFC-180/181
+ * `autonomous` switch was a second source for the same intent and is deleted —
+ * two sources could disagree, and both disagreeing combinations were bugs
+ * (no human yet still asking = the original complaint; human present yet hard
+ * suppressed = the roster edit being overruled by a switch).
+ *
+ * Only roster members count: a task's `collaboratorUserIds` is a permission
+ * list, invisible to agents and unaddressable in prompts (RFC-207 D5).
  */
-export function resolveCompletionGate(autonomous: boolean, storedGate: boolean): boolean {
-  return autonomous ? false : storedGate
+export function workgroupHasHumanMember(
+  members: ReadonlyArray<{ memberType: WorkgroupMemberType }>,
+): boolean {
+  return members.some((m) => m.memberType === 'human')
 }
 
 /**
- * RFC-180 §2.1 — whether the clarify ask-back invite is injected. Autonomous
- * groups omit it so agents don't interrupt the launcher with questions.
+ * RFC-207 §1.2 — effective completion-gate view. No human member ⇒ nobody to
+ * confirm ⇒ the gate is off and a leader-declared done finishes directly;
+ * otherwise the group's stored value stands.
+ * Single source — the engine reads this, never `config.completionGate` raw.
+ *
+ * The first parameter is deliberately the MEMBER LIST rather than a boolean:
+ * the predicate it replaced (`autonomous`) sat in the same position with the
+ * exact OPPOSITE truth value, so a boolean signature would let a missed call
+ * site typecheck while inverting behaviour (RFC-207 R1).
  */
-export function resolveClarifyEnabled(autonomous: boolean): boolean {
-  return !autonomous
+export function resolveCompletionGate(
+  members: ReadonlyArray<{ memberType: WorkgroupMemberType }>,
+  storedGate: boolean,
+): boolean {
+  return workgroupHasHumanMember(members) ? storedGate : false
 }
 
-/** RFC-180 §2.4 — consecutive no-progress leader-idle nudges before parking. */
-export const WG_AUTONOMOUS_NUDGE_LIMIT = 3
+/**
+ * RFC-207 §3.6.5 — the ONLY fallback site for a missing `clarifyBudget`.
+ * Frozen task snapshots taken before RFC-207 carry no such field, and the two
+ * gates that consume it (dispatch-time invite, envelope-time accept) MUST agree
+ * — a bare `?? 3` at each read site is how they drift apart.
+ */
+export const WG_CLARIFY_BUDGET_DEFAULT = 3
+export function resolveClarifyBudget(config: { clarifyBudget?: number | undefined }): number {
+  return config.clarifyBudget ?? WG_CLARIFY_BUDGET_DEFAULT
+}
+
+/**
+ * RFC-207 §3.6.3 — the stable identity of an ask-back "asker". Both the budget
+ * counter and the per-asker stop directive key on this.
+ *
+ * A raw shard key cannot serve: a member's MESSAGE turn is sharded by
+ * `msg:<memberId>:<messageId>`, so every fresh message would mint a new asker,
+ * resetting the budget and orphaning any stop — a bypass through which ask-back
+ * could run forever (RFC-207 R12). Message turns therefore collapse to the
+ * member.
+ */
+export function wgClarifyAskerKey(
+  nodeId: string,
+  shardKey: string | null,
+  leaderNodeId: string,
+): string {
+  if (nodeId === leaderNodeId) return 'leader'
+  if (shardKey === null) return 'leader'
+  if (shardKey.startsWith('msg:')) return `mem:${shardKey.split(':')[1] ?? ''}`
+  return `asg:${shardKey}`
+}
+
+/** RFC-207 §3.3 — consecutive no-progress leader-idle nudges before parking. */
+export const WG_LEADER_IDLE_NUDGE_LIMIT = 3
 
 // ---------------------------------------------------------------------------
 // Launch body (POST /api/workgroups/:name/tasks, design §3)

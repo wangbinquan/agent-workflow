@@ -32,7 +32,6 @@ function cfg(overrides: Partial<WorkgroupRuntimeConfig> = {}): WorkgroupRuntimeC
     completionGate: false,
     instructions: 'go',
     goal: 'make hello.txt',
-    autonomous: true,
     members: [
       {
         id: 'm-lead',

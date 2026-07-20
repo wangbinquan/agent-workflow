@@ -382,7 +382,10 @@ describe('RFC-164 core — rendered blocks', () => {
   // The invite and its JSON schema must ship together, reusing the SHARED
   // CLARIFY_FORMAT_EXAMPLE (no drift).
   test('LEADER protocol block ships the <workflow-clarify> JSON schema it invites', () => {
-    const block = renderWgProtocolBlock('leader', cfg())
+    // RFC-207 — ask-back permission now arrives as an argument (the caller resolves
+    // roster + budget + stop ONCE and shares it with the envelope gate), so these
+    // "the invite ships with its schema" checks pass it explicitly.
+    const block = renderWgProtocolBlock('leader', cfg(), '', true)
     expect(block).toContain('<workflow-clarify>')
     // carries the exact shared format example + structural rules, so an agent
     // that asks emits parseable JSON instead of prose.
@@ -401,7 +404,7 @@ describe('RFC-164 core — rendered blocks', () => {
   // the invite + JSON schema too — reversing the interim leader-only window (Codex reviews 2-3).
   for (const role of ['worker', 'fc_member'] as const) {
     test(`${role} protocol block DOES invite human clarify (route 2)`, () => {
-      const block = renderWgProtocolBlock(role, cfg())
+      const block = renderWgProtocolBlock(role, cfg(), '', true)
       expect(block).toContain('<workflow-clarify>')
       expect(block).toContain(CLARIFY_FORMAT_EXAMPLE)
     })
@@ -620,11 +623,14 @@ describe('RFC-164 core — decideWorkgroupOutcome', () => {
     })
   })
 
-  test('leader idle stall parks awaiting_human (human nudge re-wakes)', () => {
+  // RFC-207 §3.3 — an idle leader is now auto-nudged first (every group, not just
+  // the old autonomous ones); parking is what happens once the nudge budget is
+  // spent. rfc207-human-derived-clarify.test.ts owns the full nudge→park ladder.
+  test('leader idle stall nudges before parking', () => {
     const input = wakeInput({ roundsUsed: 2 })
     expect(decideWorkgroupOutcome(input, { items: [], capExceeded: false })).toEqual({
-      kind: 'awaiting_human',
-      reason: 'leader-idle',
+      kind: 'leader-nudge',
+      nudgeCount: 0,
     })
   })
 
@@ -809,7 +815,7 @@ describe('RFC-164 core — renderWgProtocolBlock (三版文案锚点)', () => {
     // — the shard-scoped clarify queue (S0–S3, R2-T3) round-trips each member's answer to its own
     // assignment. (Was leader-only during the interim shard-blind window.)
     for (const role of ['leader', 'worker', 'fc_member'] as const) {
-      expect(renderWgProtocolBlock(role, cfg())).toContain('<workflow-clarify>')
+      expect(renderWgProtocolBlock(role, cfg(), '', true)).toContain('<workflow-clarify>')
     }
   })
 
@@ -826,7 +832,7 @@ describe('RFC-164 core — renderWgProtocolBlock (三版文案锚点)', () => {
       nonce,
     )
     const messages = renderMessagesBlock(config, 'Activity', [msg({ bodyMd: hostile })], nonce)
-    const protocol = renderWgProtocolBlock('leader', config, nonce)
+    const protocol = renderWgProtocolBlock('leader', config, nonce, true)
 
     for (const block of [charter, goal, roster, ledger, messages]) {
       expect(block).toContain(`<aw-input `)

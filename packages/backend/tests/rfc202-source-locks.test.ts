@@ -52,7 +52,7 @@ describe('RFC-202 source locks', () => {
   test('clarify detail wires the sealed-round copy (both causes) and the sealed footer', () => {
     const src = read('packages/frontend/src/routes/clarify.detail.tsx')
     expect(src).toContain('clarify.roundSealedByTaskTerminal')
-    expect(src).toContain('clarify.roundDismissedByAutonomous')
+    expect(src).toContain('clarify.roundDismissedNoHuman')
     expect(src).toContain('clarify.detail.roundSealedFooter')
     for (const bundle of [
       'packages/frontend/src/i18n/zh-CN.ts',
@@ -60,7 +60,7 @@ describe('RFC-202 source locks', () => {
     ]) {
       const b = read(bundle)
       expect(b).toContain('roundSealedByTaskTerminal')
-      expect(b).toContain('roundDismissedByAutonomous')
+      expect(b).toContain('roundDismissedNoHuman')
       expect(b).toContain('roundSealedFooter')
       expect(b).toContain("'task-terminal'")
       expect(b).toContain("'clarify-round-terminal'")

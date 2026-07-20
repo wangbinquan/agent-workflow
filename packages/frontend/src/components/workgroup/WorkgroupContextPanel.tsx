@@ -180,6 +180,10 @@ export function WorkgroupContextPanel(props: WorkgroupContextPanelProps) {
             value={props.configDraft}
             onChange={props.onConfigChange}
             errors={props.configErrors}
+            /* RFC-207 — from the DRAFT roster, not the server receipt: while a
+               human add/removal is in flight (or failed), the two disagree and
+               the gate/budget controls must match what the next save submits. */
+            hasHumanMember={state.members.some((m) => m.memberType === 'human')}
           />
         )}
 

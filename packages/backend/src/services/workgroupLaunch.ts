@@ -95,7 +95,7 @@ export function buildWorkgroupRuntimeConfig(
     switches: group.switches,
     maxRounds: group.maxRounds,
     completionGate: group.completionGate,
-    autonomous: group.autonomous,
+    clarifyBudget: group.clarifyBudget,
     fanOut: group.fanOut,
     instructions: group.instructions,
     goal,

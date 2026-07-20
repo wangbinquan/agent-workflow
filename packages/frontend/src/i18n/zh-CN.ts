@@ -1299,7 +1299,7 @@ export interface Resources {
     cardMembers_one: string
     cardMembers_other: string
     cardLeader: string
-    autonomousChip: string
+    humanMemberChip: string
     cardAddAgent: string
     cardSelectLeader: string
     cardNoWorkers: string
@@ -1373,9 +1373,10 @@ export interface Resources {
     fieldMaxRoundsHint: string
     fieldCompletionGate: string
     fieldCompletionGateHint: string
-    fieldCompletionGateAutonomousHint: string
-    fieldAutonomous: string
-    fieldAutonomousHint: string
+    fieldCompletionGateNoHumanHint: string
+    fieldClarifyBudget: string
+    fieldClarifyBudgetHint: string
+    fieldClarifyBudgetNoHumanHint: string
     fieldFanOut: string
     fieldFanOutHint: string
     // RFC-164 PR-4 — detail-page launch entry + /workgroups/launch page.
@@ -3079,7 +3080,7 @@ export interface Resources {
   // RFC-023 clarify feature (PR-C).
   clarify: {
     roundSealedByTaskTerminal: string
-    roundDismissedByAutonomous: string
+    roundDismissedNoHuman: string
     taskNameLabel: string
     nav: { label: string; badgeTitle: string }
     list: {
@@ -4982,7 +4983,7 @@ export const zhCN: Resources = {
     cardMembers_one: '{{count}} 名成员',
     cardMembers_other: '{{count}} 名成员',
     cardLeader: 'Leader · {{name}}',
-    autonomousChip: '全自动',
+    humanMemberChip: '含人工',
     cardAddAgent: '添加 agent 后可启动',
     cardSelectLeader: '指定 Leader 后可启动',
     cardNoWorkers: 'Leader 暂无可派成员',
@@ -5056,10 +5057,11 @@ export const zhCN: Resources = {
     fieldMaxRoundsHint: '1–1000，默认 1000。',
     fieldCompletionGate: '完成门（人工确认）',
     fieldCompletionGateHint: 'Leader 宣布完成后任务停在待人工确认，而不是直接结束。',
-    fieldCompletionGateAutonomousHint: '全自动模式下不适用——leader 宣布完成即直接结束。',
-    fieldAutonomous: '全自动（别打扰我）',
-    fieldAutonomousHint:
-      '不向你反问、完成门视为关闭、leader 空转时自动催办若干轮再泊人。适合纯 agent 工作组。',
+    fieldCompletionGateNoHumanHint: '本组没有人工成员，没人可确认——leader 宣布完成即直接结束。',
+    fieldClarifyBudget: '反问次数上限',
+    fieldClarifyBudgetHint:
+      '同一提问方（leader、每张派单、每个成员）最多向人反问几次；用满后它会被要求自行决断。0 表示完全不反问。',
+    fieldClarifyBudgetNoHumanHint: '本组没有人工成员，没人可问——agent 一律自行决断。',
     fieldFanOut: '动态多实例派单（fan-out）',
     fieldFanOutHint:
       '允许 leader 对同一 agent 成员在一轮内并发派发多个任务实例（各自独立执行后统一验收）。关闭时保持「每个成员一次一单」的固定模式。',
@@ -6878,6 +6880,8 @@ export const zhCN: Resources = {
     // --- wire / transport（Tier-2） ---
     'network-unreachable': '无法连接到服务。',
     'network-unreachable__hint': '请确认 daemon 正在运行、网络可达后重试。',
+    'request-timeout': '请求超时，已停止等待。',
+    'request-timeout__hint': '服务端可能仍在处理这次请求。刷新页面确认结果后再决定是否重试。',
     'route-not-found': '路由不存在。',
     'ws-unknown-channel': '实时通道不存在。',
     'internal-error': '服务内部错误。',
@@ -7239,7 +7243,7 @@ export const zhCN: Resources = {
   },
   clarify: {
     roundSealedByTaskTerminal: '所属任务已结束，本轮反问已封存，无需回答。',
-    roundDismissedByAutonomous: '工作组已切换为全自动模式，本轮反问已撤销，无需回答。',
+    roundDismissedNoHuman: '工作组里已没有人工成员，本轮反问已撤销，无需回答。',
     taskNameLabel: '所属任务',
     nav: {
       label: '反问澄清',

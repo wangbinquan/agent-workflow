@@ -30,8 +30,19 @@ function cfg(overrides: Partial<WorkgroupRuntimeConfig> = {}): WorkgroupRuntimeC
     completionGate: false,
     instructions: 'be kind',
     goal: 'fix payments',
-    autonomous: false,
+    // RFC-207 — ask-back requires a human on the roster (the RFC-180 `autonomous:
+    // false` this replaced meant the same thing: "questions to humans are on").
+    // Without one the leader's <workflow-clarify> is suppressed and this park
+    // can never happen, so the fixture would pass vacuously.
     members: [
+      {
+        id: 'm-human',
+        memberType: 'human',
+        agentName: null,
+        userId: 'u-1',
+        displayName: 'owner',
+        roleDesc: '拍板',
+      },
       {
         id: 'm-lead',
         memberType: 'agent',

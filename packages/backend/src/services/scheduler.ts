@@ -145,7 +145,7 @@ import { forcedPortPathsForTask, toContainerRelative } from '@/services/portArti
 import { CLARIFY_FORBIDDEN_PREFIX, parsePortValidationFailuresJson } from '@/services/envelope'
 import {
   dismissOpenClarifyParksForAutonomous,
-  isTaskAutonomous,
+  isTaskClarifySuppressed,
 } from '@/services/workgroupLifecycle'
 import { runCommitPush } from '@/services/commitPushRunner'
 import {
@@ -861,7 +861,17 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
         // failed:clarify-forbidden BEFORE terminal persistence.
         clarifyChannel: { kind: 'self', directive: 'delegated', injectStopNotice: false },
         ...(req.clarifyEnabled !== undefined
-          ? { clarifySuppressed: () => isTaskAutonomous(db, taskId) }
+          ? {
+              clarifySuppressed: () =>
+                // RFC-207 §3.4a — dispatch-time floor. This turn's prompt carried no
+                // ask-back invite, so it must not be allowed to ask merely because the
+                // roster gained a human while it was running; the new human takes
+                // effect from the NEXT turn. The live read handles the other
+                // direction (a human leaving mid-flight must silence it at once).
+                req.clarifyEnabled === false
+                  ? Promise.resolve(true)
+                  : isTaskClarifySuppressed(db, taskId),
+            }
           : {}),
         ...(clarifyQueue !== undefined
           ? { clarifyContext: { flatBlock: clarifyQueue.block } }
@@ -933,7 +943,7 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
             failureCode: 'clarify-forbidden',
           }
         }
-        if (req.clarifyEnabled !== undefined && (await isTaskAutonomous(db, taskId))) {
+        if (req.clarifyEnabled !== undefined && (await isTaskClarifySuppressed(db, taskId))) {
           return await lateSuppress()
         }
         // RFC-172 (route 2, R2-T7): human ask-back is now enabled for EVERY workgroup host node
@@ -987,7 +997,7 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
         // set). Re-check AFTER the insert and compensate through the same A2
         // primitive — idempotent against a concurrent PATCH-side dismissal
         // (both CAS on awaiting_human, the loser no-ops).
-        if (req.clarifyEnabled !== undefined && (await isTaskAutonomous(db, taskId))) {
+        if (req.clarifyEnabled !== undefined && (await isTaskClarifySuppressed(db, taskId))) {
           const dismissed = await dismissOpenClarifyParksForAutonomous(db, taskId)
           // 182 impl-gate P1 — only rewrite the asking run when the dismissal
           // actually took the session down. Zero dismissals means an answer

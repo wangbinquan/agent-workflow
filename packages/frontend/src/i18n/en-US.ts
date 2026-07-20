@@ -1402,7 +1402,7 @@ export const enUS: Resources = {
     cardMembers_one: '{{count}} member',
     cardMembers_other: '{{count}} members',
     cardLeader: 'Leader · {{name}}',
-    autonomousChip: 'Autonomous',
+    humanMemberChip: 'Has humans',
     cardAddAgent: 'Add an agent to launch',
     cardSelectLeader: 'Choose a leader to launch',
     cardNoWorkers: 'Leader has no workers',
@@ -1481,11 +1481,13 @@ export const enUS: Resources = {
     fieldCompletionGate: 'Completion gate (human confirm)',
     fieldCompletionGateHint:
       'When the leader declares done, the task parks for human confirmation instead of finishing.',
-    fieldCompletionGateAutonomousHint:
-      'Autonomous mode: not applicable — the leader declaring done finishes the task directly.',
-    fieldAutonomous: "Autonomous (don't interrupt me)",
-    fieldAutonomousHint:
-      'No clarify questions to you, the completion gate is treated as off, and an idle leader is auto-nudged (a few rounds) before parking. Best for fully-agent groups.',
+    fieldCompletionGateNoHumanHint:
+      'No human member in this group — nobody to confirm, so the leader declaring done finishes the task directly.',
+    fieldClarifyBudget: 'Ask-back limit',
+    fieldClarifyBudgetHint:
+      'How many times one asker (the leader, each assignment, each member) may ask a human before it is told to decide for itself. 0 disables ask-back entirely.',
+    fieldClarifyBudgetNoHumanHint:
+      'No human member in this group — nobody to ask, so agents always decide for themselves.',
     fieldFanOut: 'Dynamic fan-out (multi-instance dispatch)',
     fieldFanOutHint:
       'Let the leader dispatch multiple concurrent instances of the same agent member in one turn (each runs independently, verified together). Off keeps the fixed one-at-a-time mode.',
@@ -3421,6 +3423,9 @@ export const enUS: Resources = {
     'network-unreachable': 'Cannot reach the service.',
     'network-unreachable__hint':
       'Make sure the daemon is running and the network is reachable, then retry.',
+    'request-timeout': 'The request timed out and we stopped waiting.',
+    'request-timeout__hint':
+      'The server may still be processing it. Reload to check the outcome before retrying.',
     'route-not-found': 'Route not found.',
     'ws-unknown-channel': 'Unknown live channel.',
     'internal-error': 'Internal server error.',
@@ -3842,8 +3847,8 @@ export const enUS: Resources = {
   clarify: {
     roundSealedByTaskTerminal:
       'The owning task has ended; this clarify round is sealed and needs no answer.',
-    roundDismissedByAutonomous:
-      'The workgroup switched to fully-autonomous mode; this clarify round was withdrawn and needs no answer.',
+    roundDismissedNoHuman:
+      'The workgroup no longer has a human member; this clarify round was withdrawn and needs no answer.',
     taskNameLabel: 'Task',
     nav: {
       label: 'Clarify',

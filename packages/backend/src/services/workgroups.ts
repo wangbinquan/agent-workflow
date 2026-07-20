@@ -29,6 +29,7 @@ import type {
   WorkgroupMember,
   WorkgroupMode,
 } from '@agent-workflow/shared'
+import { WG_CLARIFY_BUDGET_DEFAULT } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
 import { discloseScheduleRefs } from './resourceAcl'
 import type { Actor } from '@/auth/actor'
@@ -118,9 +119,9 @@ export async function createWorkgroup(
         blackboard: input.switches.blackboard,
         maxRounds: input.maxRounds,
         completionGate: input.completionGate,
-        // RFC-181 D: new groups default to autonomous (don't-interrupt-me) —
+        // RFC-207: new groups get the default ask-back budget —
         // create-scoped only; update below preserves the stored value instead.
-        autonomous: input.autonomous ?? true,
+        clarifyBudget: input.clarifyBudget ?? WG_CLARIFY_BUDGET_DEFAULT,
         // RFC-185 D4: fan-out is opt-in — default OFF so the original fixed
         // one-entity-per-agent mode is never changed implicitly.
         fanOut: input.fanOut ?? false,
@@ -171,12 +172,12 @@ export async function updateWorkgroup(
         blackboard: input.switches.blackboard,
         maxRounds: input.maxRounds,
         completionGate: input.completionGate,
-        // RFC-181 D (design-gate P1): a PUT that omits `autonomous` must NOT
+        // RFC-207 (inherits RFC-181 design-gate P1): a PUT that omits it must NOT
         // silently flip the stored value in either direction — the field is
         // shared between Create/Update schemas, so the create default must not
         // leak into full-replace updates. Omitted ⇒ keep the existing row.
-        autonomous: input.autonomous ?? existing.autonomous,
-        // RFC-185 D4: same omitted-⇒-preserve contract as autonomous above.
+        clarifyBudget: input.clarifyBudget ?? existing.clarifyBudget,
+        // RFC-185 D4: same omitted-⇒-preserve contract as clarifyBudget above.
         fanOut: input.fanOut ?? existing.fanOut,
         updatedAt: now,
       })
@@ -419,7 +420,7 @@ function rowToWorkgroup(row: WorkgroupRow, memberRows: MemberRow[]): Workgroup {
     },
     maxRounds: row.maxRounds,
     completionGate: row.completionGate,
-    autonomous: row.autonomous,
+    clarifyBudget: row.clarifyBudget,
     fanOut: row.fanOut,
     members,
     ownerUserId: row.ownerUserId,

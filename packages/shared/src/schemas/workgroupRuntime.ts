@@ -46,10 +46,11 @@ export const WorkgroupRuntimeConfigSchema = z.object({
   switches: WorkgroupSwitchesSchema,
   maxRounds: z.number().int().positive(),
   completionGate: z.boolean(),
-  // RFC-180「全自动」— optional so pre-RFC-180 task snapshots (no field) parse as
-  // non-autonomous (engine read sites coalesce `?? false`; zero regression). See
-  // resolveCompletionGate / resolveClarifyEnabled in schemas/workgroup.ts.
-  autonomous: z.boolean().optional(),
+  // RFC-207「反问预算」— optional so pre-RFC-207 task snapshots (no field) still
+  // parse; the ONE fallback lives in resolveClarifyBudget (schemas/workgroup.ts),
+  // never a bare `?? 3` at a read site — the dispatch-time invite gate and the
+  // envelope-time accept gate must never disagree.
+  clarifyBudget: z.number().int().min(0).max(50).optional(),
   // RFC-185 D4 — opt-in leader fan-out; optional so pre-RFC-185 task snapshots
   // parse as fan-out-off (protocol render site coalesces `=== true`).
   fanOut: z.boolean().optional(),

@@ -158,7 +158,7 @@ function synthesizePutRow(base: Workgroup, body: Record<string, unknown>): Workg
     switches: (body.switches as Workgroup['switches'] | undefined) ?? base.switches,
     maxRounds: (body.maxRounds as number | undefined) ?? base.maxRounds,
     completionGate: (body.completionGate as boolean | undefined) ?? base.completionGate,
-    autonomous: (body.autonomous as boolean | undefined) ?? base.autonomous,
+    clarifyBudget: (body.clarifyBudget as number | undefined) ?? base.clarifyBudget,
     fanOut: (body.fanOut as boolean | undefined) ?? base.fanOut,
     members,
     leaderMemberId:

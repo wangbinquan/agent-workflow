@@ -14,6 +14,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { WorkgroupRuntimeConfig } from '@agent-workflow/shared'
+import { WG_CLARIFY_BUDGET_DEFAULT } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
 import { Field, NumberInput, Switch } from '@/components/Form'
@@ -49,6 +50,12 @@ export function WorkgroupTaskConfigDialog({
   const [addHumanOpen, setAddHumanOpen] = useState(false)
 
   const fc = config.mode === 'free_collab'
+  // RFC-207 — the roster AS STAGED: removals and additions in this dialog take
+  // effect on save, so the gate/budget controls must reflect what the user is
+  // about to submit, not the roster the task currently holds.
+  const stagedHasHuman =
+    config.members.some((m) => m.memberType === 'human' && !draft.removeMemberIds.includes(m.id)) ||
+    draft.addMembers.some((m) => m.memberType === 'human')
 
   const save = useMutation({
     mutationFn: (patch: Record<string, unknown>) =>
@@ -183,24 +190,36 @@ export function WorkgroupTaskConfigDialog({
         onChange={(v) => setDraft((d) => ({ ...d, completionGate: v }))}
         label={t('workgroups.fieldCompletionGate')}
         hint={
-          draft.autonomous
-            ? t('workgroups.fieldCompletionGateAutonomousHint')
-            : t('workgroups.fieldCompletionGateHint')
+          stagedHasHuman
+            ? t('workgroups.fieldCompletionGateHint')
+            : t('workgroups.fieldCompletionGateNoHumanHint')
         }
-        disabled={draft.autonomous}
+        disabled={!stagedHasHuman}
       />
 
-      {/* RFC-181 A — mid-run autonomous toggle (same per-task patch channel as
-          completionGate). Flipping it ON also dismisses in-flight clarify
-          parks server-side (A2), so an already-ping-ponging task goes quiet
-          without a cancel+relaunch. */}
-      <Switch
-        checked={draft.autonomous}
-        onChange={(v) => setDraft((d) => ({ ...d, autonomous: v }))}
-        label={t('workgroups.fieldAutonomous')}
-        hint={t('workgroups.fieldAutonomousHint')}
-        data-testid="wg-config-autonomous"
-      />
+      {/* RFC-207 — mid-run ask-back budget (same per-task patch channel as
+          completionGate). Removing the last human instead dismisses in-flight
+          clarify parks server-side, so a ping-ponging task goes quiet without a
+          cancel+relaunch. */}
+      <Field
+        label={t('workgroups.fieldClarifyBudget')}
+        hint={
+          stagedHasHuman
+            ? t('workgroups.fieldClarifyBudgetHint')
+            : t('workgroups.fieldClarifyBudgetNoHumanHint')
+        }
+      >
+        <NumberInput
+          value={draft.clarifyBudget}
+          onChange={(v) =>
+            setDraft((d) => ({ ...d, clarifyBudget: v ?? WG_CLARIFY_BUDGET_DEFAULT }))
+          }
+          min={0}
+          max={50}
+          disabled={!stagedHasHuman}
+          data-testid="wg-config-clarify-budget"
+        />
+      </Field>
 
       {/* RFC-185 D4 — mid-run opt-in fan-out toggle (leader_worker only; same
           per-task patch channel). No flip compensation: turning OFF lets

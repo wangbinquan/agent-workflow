@@ -11,20 +11,28 @@
 
 import { useTranslation } from 'react-i18next'
 import type { WorkgroupMode } from '@agent-workflow/shared'
-import { WORKGROUP_MAX_ROUNDS_LIMIT } from '@agent-workflow/shared'
+import { WG_CLARIFY_BUDGET_DEFAULT, WORKGROUP_MAX_ROUNDS_LIMIT } from '@agent-workflow/shared'
 import { Field, NumberInput, Switch, TextArea } from '@/components/Form'
 import { FormSection } from '@/components/FormSection'
 import { Segmented } from '@/components/Segmented'
 import type { WorkgroupConfigDraft } from '@/lib/workgroup-form'
 
 export interface WorkgroupFormProps {
+  /**
+   * RFC-207 — does the roster being edited contain a human member? Drives the
+   * completion gate and the ask-back budget, both of which are meaningless
+   * without someone to ask or confirm. Comes from the DRAFT roster, not the
+   * last server receipt: mid-edit the two disagree, and the switch must match
+   * what the next save will submit.
+   */
+  hasHumanMember: boolean
   value: WorkgroupConfigDraft
   onChange: (next: WorkgroupConfigDraft) => void
   /** Raw i18n error keys from the payload builder. */
   errors: Record<string, string>
 }
 
-export function WorkgroupForm({ value, onChange, errors }: WorkgroupFormProps) {
+export function WorkgroupForm({ value, onChange, errors, hasHumanMember }: WorkgroupFormProps) {
   const { t } = useTranslation()
   const set = <K extends keyof WorkgroupConfigDraft>(k: K, v: WorkgroupConfigDraft[K]): void => {
     onChange({ ...value, [k]: v })
@@ -140,21 +148,31 @@ export function WorkgroupForm({ value, onChange, errors }: WorkgroupFormProps) {
             onChange={(v) => set('completionGate', v)}
             label={t('workgroups.fieldCompletionGate')}
             hint={
-              value.autonomous
-                ? t('workgroups.fieldCompletionGateAutonomousHint')
-                : t('workgroups.fieldCompletionGateHint')
+              hasHumanMember
+                ? t('workgroups.fieldCompletionGateHint')
+                : t('workgroups.fieldCompletionGateNoHumanHint')
             }
-            disabled={value.autonomous}
+            disabled={!hasHumanMember}
           />
 
-          {/* RFC-180「全自动」— master switch: no clarify invite + gate treated off
-              + leader-idle auto-nudge. Grays out the gate above when on. */}
-          <Switch
-            checked={value.autonomous}
-            onChange={(v) => set('autonomous', v)}
-            label={t('workgroups.fieldAutonomous')}
-            hint={t('workgroups.fieldAutonomousHint')}
-          />
+          {/* RFC-207 — ask-back budget per asker. Meaningless without a human on
+              the roster (nobody to ask), so it grays out alongside the gate. */}
+          <Field
+            label={t('workgroups.fieldClarifyBudget')}
+            hint={
+              hasHumanMember
+                ? t('workgroups.fieldClarifyBudgetHint')
+                : t('workgroups.fieldClarifyBudgetNoHumanHint')
+            }
+          >
+            <NumberInput
+              value={value.clarifyBudget}
+              onChange={(v) => set('clarifyBudget', v ?? WG_CLARIFY_BUDGET_DEFAULT)}
+              min={0}
+              max={50}
+              disabled={!hasHumanMember}
+            />
+          </Field>
 
           {/* RFC-185 D4 — opt-in leader fan-out (leader_worker only: it is a
               leader dispatch capability). OFF keeps the original protocol. */}

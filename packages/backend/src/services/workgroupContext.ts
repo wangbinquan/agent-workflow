@@ -21,7 +21,6 @@ import {
   clarifyFormatExample,
   envelopeOpenTag,
   fenceUntrusted,
-  resolveClarifyEnabled,
   resolveWorkgroupSwitches,
   sanitizeInlineField,
   WG_MAX_ASSIGNMENTS_PER_TURN,
@@ -351,6 +350,16 @@ export function renderWgProtocolBlock(
   role: WorkgroupProtocolRole,
   config: WorkgroupRuntimeConfig,
   envelopeNonce = '',
+  /**
+   * RFC-207 §3.7.2 — may THIS asker ask a human on THIS turn? Passed in rather
+   * than derived here, because the answer depends on per-asker state this
+   * function cannot see (ask-back budget spent, per-asker stop directive), and
+   * because the caller must feed the SAME value to `clarifyEnabled` on the run
+   * request. Deriving it in two places is how a prompt ends up inviting an
+   * ask-back that the envelope gate then rejects — burning the protocol retry
+   * budget and failing the assignment for nothing.
+   */
+  clarifyAllowed = false,
 ): string {
   const switches = resolveWorkgroupSwitches(config.mode, config.switches)
   const msgTargets = switches.directMessages
@@ -452,9 +461,12 @@ export function renderWgProtocolBlock(
   // selectAgentQueue shard scoping (S0–S3, R2-T3) round-trips a member's answer to its OWN
   // assignment shard, so members / fc_members may ask a human too — their answer returns to their
   // run, isolated from concurrent members (free_collab members likewise).
-  // RFC-180: …unless the group is「全自动」— then the clarify invite is omitted so
-  // agents proceed on their own judgment instead of interrupting the launcher.
-  if (resolveClarifyEnabled(config.autonomous ?? false)) {
+  // RFC-207: …unless this asker may not ask right now — no human on the roster,
+  // its ask-back budget is spent, or a human told it to stop. Then the invite is
+  // omitted and it proceeds on its own judgment. `clarifyAllowed` is resolved
+  // ONCE by the caller and shared with the envelope gate (§3.7.2), so the prompt
+  // never invites something the runner would reject.
+  if (clarifyAllowed) {
     lines.push(renderWgClarifyBlock(envelopeNonce))
   }
   return lines.join('\n')
