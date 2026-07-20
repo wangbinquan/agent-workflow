@@ -822,3 +822,47 @@ v1 已列 8 个，**补**：`rfc130-crash-replay.test.ts` / `rfc130-shard-rerun-
 | **D11** | **path 模式仓不建池、降级为 worktree 私有 module dir** | 用户拍板"给子仓也做 snapshot/rollback"的意图是**不留清不掉的副作用**；path 模式的池就是用户真实仓，平台对象/ref/commit 会永久落进去。用性能换干净 |
 | **D12** | **子仓回滚不复活 `pre_snapshot`** | 该机制在 iso 模型下已是死代码（§0.3）；扩展它等于扩展死代码，且会与 iso 重试语义冲突 |
 | **D13** | **`materializeTree` 增 `gitlinkFailureMode`** | 保住 `undoPriorShardDeltaInIso` 的 fail-open 契约 |
+
+---
+
+## 16. 落地后对抗审计发现的 8 条 P0（已修）
+
+八个 PR 全部合入、CI 全绿之后又跑了一轮对抗审计（4 路并行，全部用真 git fixture
+实测，不接受纯推理结论）。结果是 **8 条 P0**，其中数条直接否定了本 RFC 的核心承诺。
+记在这里而不是悄悄修掉，因为每一条都指向一类**本地测试结构性看不见**的盲区。
+
+| # | 症状 | 根因 | 修复 |
+|---|---|---|---|
+| A1 | 所有既有安装升级后 0102 被静默跳过，daemon 起得来但每条 `cached_repos` / `node_runs` 查询死于 `no such column` | `_journal.json` 的 `when` 用了真实 `Date.now()`，而本仓 journal 跑在合成的「上一条 +86400000」轴上、早已排到 2026-08；drizzle 只在 `lastDbMigration.created_at < folderMillis` 时应用 | `when` 改为 0101+1day；新增 journal 单调性断言 |
+| A2 | 非根层 submodule（`libs/vendor`）的合并结果被静默丢弃，merge-back 仍报 clean | 第⑥步 `ls-tree` 没带 `-r`，根层只看到 `040000 tree libs`，被 `!== 'commit'` 跳过 | `ls-tree -r` |
+| A3 | 未初始化 / 拉不通的 gitlink 让**每次** merge-back 抛 `materialize-failed`，且抛在 canonical 已被改写之后 | 未初始化的子仓是**空目录**，`existsSync(subPath)` 恒真；`git -C <空目录> checkout` 向上跑到超级项目 | 判据改 `existsSync(<sub>/.git)` |
+| A4 | 仓里有 ≥2 个子仓或任何嵌套时，第一个节点 merge-back 就硬崩（**AC-4 = 100% 不可用**） | `poolDir ??= pool` 只记第一个子仓的池，而池是**每子仓一个** | `poolDirs: Record<subPath, string>`，4 处使用点按路径取 |
+| A5 | canonical 子仓里用户**未提交**的修改被 `checkout -f` 静默销毁 | D22 退役的直接代价：旧的 `submodule update` 不带 `--force`，脏子仓只会让 update 失败 | 强推前按 G10 pin 全状态快照到 `refs/agent-workflow/subsnap/`；快照失败则拒绝强推 |
+| A6 | 子仓冲突不 park 成 `awaiting_human` 而是 merge-failed，人拿不到恢复路径 | 仓级冲突项 `mergedTree: ''` → `git commit-tree ""` exit 128 → `commitTree` throw，异常穿过 writeSem | 显式识别空树并直接 park，不建 resolve-iso |
+| A7 | 被 pin 的子仓被 fast-forward 到 upstream tip 并推出去，pin 销毁 | 子仓 push 非 FF 时照抄父仓的 `fetch` + `merge FETCH_HEAD` 修复 | 子仓不做非 FF 调和，报错交给人 |
+| A8 | 未改动、不可推的子仓（只读 vendored 三方库）扣住**整个父仓**的 commit-push，父仓连本地提交都不落 | §5.1② 的「有本地新提交或脏内容」谓词在实现里漏了 | 补谓词：脏 或 HEAD 领先于记录的 gitlink，否则取锁前跳过 |
+
+### 为什么本地测试一条都红不了
+
+四类盲区，值得单独记住：
+
+1. **全部 rfc210-\* 测试只用一个根层 `vendor`**，且永远初始化好。A2 / A3 / A4 三条
+   合起来意味着「一个根层子仓」是唯一被覆盖的形状，而它恰好是唯一不出问题的形状。
+2. **所有 DB 测试从零建库**。那时 `lastDbMigration` 是 undefined、所有 journal 条目
+   无条件应用，A1 结构性不可见；`upgrade-rolling` 的 freeze target 又都停在
+   idx 1/13/19，远早于出事那条。
+3. **`rfc210-recursive-submodule-merge` 直接调 `mergeBackNodeIso` 且不带 resolver**，
+   整条 settle 路径（A6 所在）被绕过。
+4. **G10 的 `snapshotSubmodule` / `rollbackSubmodule` 是死代码**——只有测试引用它们，
+   测试因此绿得很好看，而生产路径上没有任何 caller。A5 就长在这个缝里。
+
+### 仍未处理
+
+以下为同批审计的 P1/P2，尚未修，按严重度排：G10 的 `rollbackSubmodule` 在
+commit-push 失败路径上仍未接线（§6.3 表格声称「可回退」）；`tryAgentResolveSubmodule`
+的 `paths` 传的是父仓相对路径而 manifest 是子仓相对，导致 T25 结构性永远
+unresolved；嵌套 `rewriteGitlinkInCommit` 往超级项目 tree 写 `vendor/inner` 在 git
+层面恒失败；`pendingSubResolves` 没有清空路径，一旦写下非空值 `conflict-human` 行
+解不开；`onlyRecentDays` 被 refresh 自身的 `lastFetchedAt` 写入抵消；`ShaRange`
+抽出来了但三处老代码一处没迁；`SubmoduleBadge` 第三/四态可见文案完全相同、只靠
+颜色区分（WCAG 1.4.1）。
