@@ -82,7 +82,7 @@ export async function isTaskClarifySuppressed(db: Db, taskId: string): Promise<b
 | 2 | `workgroupRunner.ts:1520` leader turn | `clarifyEnabled: resolveClarifyEnabled(config.autonomous ?? false)` | `clarifyEnabled: workgroupHasHumanMember(config.members)` |
 | 3 | `workgroupRunner.ts:1813` assignment turn | 同上 | 同上 |
 | 4 | `workgroupRunner.ts:1989` message turn | 同上 | 同上 |
-| 5 | `scheduler.ts:863-865` | `clarifySuppressed: () => isTaskAutonomous(db, taskId)` | `clarifySuppressed: () => isTaskClarifySuppressed(db, taskId)`（`req.clarifyEnabled !== undefined` 的 wiring 条件不变——它只是「这是 wg host run」的标记） |
+| 5 | `scheduler.ts:863-865` | `clarifySuppressed: () => isTaskAutonomous(db, taskId)` | `clarifySuppressed: () => req.clarifyEnabled === false ? true : isTaskClarifySuppressed(db, taskId)`——**派发期 false 是压制地板**，见 §3.4a（`req.clarifyEnabled !== undefined` 的 wiring 条件不变，它只是「这是 wg host run」的标记） |
 | 6 | `scheduler.ts:936-937` late-suppress | `await isTaskAutonomous(...)` | `await isTaskClarifySuppressed(...)` |
 | 7 | `scheduler.ts:990-999` TOCTOU 补偿 | 同上 + `dismissOpenClarifyParksForAutonomous` | 同上 + `dismissOpenClarifyParks` |
 | 8 | `workgroupWake.ts:308-311` 完工门 | `resolveCompletionGate(input.config.autonomous ?? false, input.config.completionGate)` | `resolveCompletionGate(input.config.members, input.config.completionGate)` |
@@ -127,28 +127,212 @@ willHave  = workgroupHasHumanMember(<写入的 nextConfig.members>)
 
 替换掉现有的 `patch.autonomous === true && stored !== true` 触发条件（`workgroupTasks.ts:1212-1222`）。
 
-### 3.5 `persistGate` 的 reload-merge 必须覆盖 members（风险点）
+### 3.4a 派发期地板：加人不得让「本轮没被邀请」的 turn 反问（**Codex 设计门 P1**）
 
-`workgroupRunner.ts:583-600` 的 reload-and-merge 事务，当初是为了「引擎写整份 JSON 时不要覆盖掉并发的 `autonomous` PATCH」。`autonomous` 删了，但**判据载体变成了 `members`**——同一类竞态照样存在（引擎写 gate 的同时用户在删人）。实现时**必须核实该 merge 的字段清单包含 `members`**（以及 `switches`/`maxRounds`/`completionGate`/`fanOut`），否则一次 gate 持久化就能把用户刚做的成员变更抹掉，且表现为「删了人却还在问」。这是本 RFC 最容易静默回归的一处，列为设计门重点。
+活判据（`isTaskClarifySuppressed`）单独用会破坏 invite/accept 对称性：一个在**无人工**时起跑的 turn，其 prompt 里根本没有邀请块；若此时有人往任务里加了第一个人工成员，活判据立刻返回「不压制」，而 `scheduler.ts` 只按 `req.clarifyEnabled !== undefined` 决定要不要接线——于是**这个从未被邀请的 turn 硬发的 `<workflow-clarify>` 会被接受并建 session、把任务泊住**。这既违反 §3.4 声明的「下一轮起生效」，也正是 RFC-183 要守的「邀请⟺接受」对称契约。
+
+因此两个方向必须分别由不同的时点判定：
+
+| 方向 | 判定时点 | 理由 |
+|---|---|---|
+| **不压制 →压制**（人被移走） | envelope 到达时的**活 DB 读** | 起跑时有人、落地时没人 ⇒ 必须当场压住（RFC-181 C 的 TOCTOU 论证原样成立） |
+| **压制 → 不压制**（人被加入） | **派发期快照**（`req.clarifyEnabled`）为地板 | 该轮 prompt 没有邀请块，它就不该问；新加的人从**下一轮**起才让 agent 被邀请 |
+
+即：`suppressed = (dispatchClarifyEnabled === false) || liveSuppressed`。派发期地板与活读合围，才把两个方向都关严。测试须显式覆盖「无人工起跑 → 中途加人 → 该 turn 硬发 clarify 仍被驳回、任务不 park；下一轮才拿到邀请块」。
+
+### 3.5 `persistGate` 的并发覆盖面（**已核实，无需改动**）
+
+`workgroupRunner.ts:583-607` 的 reload-and-merge 事务当初是为了「引擎写整份 JSON 时别覆盖掉并发的 `autonomous` PATCH」。`autonomous` 删了之后，判据载体变成 `members`，同一类竞态（引擎写 gate 的同时用户在删人）看似照样存在——**但已核实不成立**：该事务重读整行 JSON 作 `base`，只覆盖 `gate` 一个键（`:605` `JSON.stringify({ ...base, gate })`），**没有字段白名单**，故 `members` 天然被保留。
+
+全仓 `workgroup_config_json` 的写入口只有四处：`task.ts:1666`（启动插入）、`workgroupRunner.ts:605`（本节，reload-merge）、`routes/workgroupTasks.ts:1088`（配置 PATCH，同样 reload-merge）、`task.ts:2118`（dynamic_workflow 的 phase swap，本 RFC 不涉及）。**无需改代码**，但要补一条并发回归测试锁住「整份 merge」这个性质——防止未来有人把它优化成字段白名单而静默丢掉成员变更（表现为「删了人却还在问」）。
+
+### 3.6 反问预算（G8 / D14 / D16）
+
+#### 3.6.1 取证：今天为什么真的会无限
+
+| 路径 | 现有天花板 | 出处 |
+|---|---|---|
+| lw · **worker** 反问 ping-pong | **零**。asking run 与 clarify-answer 续跑都是 `__wg_member__` 行，lw 的 `countRoundsUsed` 只数 `__wg_leader__`；且 parked worker 进 `busyMemberIds` ⇒ leader 不被唤醒 ⇒ 全任务轮数冻结 | `workgroupRunner.ts:673`、`workgroupWake.ts:150-152/201-205` |
+| lw · **leader** 反问 | 有界：一次问答吃 2 轮（asking + 续跑），但 `maxRounds` 默认/上限均 1000 | `workgroupRunner.ts:676-677/1463-1468`、`schemas/workgroup.ts:106-107` |
+| fc · 成员反问 | 有界（续跑计入 COUNT） | `workgroupRunner.ts:684-689` |
+| 代际上限 | **全仓不存在**（`MAX_CLARIFY*` / `CLARIFY_*_LIMIT` 零命中；`createClarifySession`、`priorDoneGenerationsForRun` 均为纯计数） | `clarify.ts:120-230`、`scheduler.ts:6713-6739` |
+| `maxDurationMs` | **反向有害**：park 期不可见（只扫 `running`），`startedAt` 不重置 ⇒ 人答完首个 tick 秒杀 | `limits.ts:34/76-83`、`task.ts:1010-1018`、`tests/scheduler-audit-gap1-limits-resume-startedat.test.ts:183-217` |
+| 「停止反问」 | 工作组内 **no-op**：directive 行写得进去，host 路径写死 `delegated` 且从不读表 | `clarifySeal.ts:467-474` vs `scheduler.ts:862`（唯一读取点 `scheduler.ts:3190` 只服务普通节点） |
+
+#### 3.6.2 计数载体：复用现成的代际计数，零新表零新列
+
+工作组 host 的反问路径**已经**在算「这个提问方问过几次」——`scheduler.ts:960-970` 的
+`askingGeneration = priorDoneGenerationsForRun(taskId, nodeId, iteration, shardKey).length`，
+且**天然按 shardKey 分片**（`scheduler.ts:6713-6739`）。它正是预算所需的计数器：
+
+| 提问方 | shardKey | 计数范围 |
+|---|---|---|
+| leader | `null` | 整个任务里 leader 累计问过几次 |
+| 某张派单 | assignment id | 这张派单问过几次；**新派单 = 新 shardKey = 从 0 重新计**（天然重置，无需「实质进展」判定） |
+
+预算检查即一行：`askingGeneration >= clarifyBudget` ⇒ 走压制。放在 `createClarifySession` **之前**（与 §3.4a 的地板、活判据同一处短路点），保证「不建 session、不 park」。
+
+> **语义说明（用户确认的简化）**：派单侧靠「换派单即换 shardKey」天然重置；leader 侧是**任务级累计**、不重置——问满就不能再问了。这比「连续 N 次无进展则截断」可预测得多，也不需要定义什么算「进展」。leader 侧觉得紧就把组定义的数字调大（D16）。
+
+#### 3.6.3 到限行为
+
+复用 RFC-181 C 的软驳回通道，**不新增失败模式**：驳回 → 重提示（文案改述为「反问次数已用尽，请自行决断并 emit `<workflow-output>`」）→ `WG_PROTOCOL_RETRIES` 耗尽后 leader `drop-and-continue`、worker 该轮 `failed`。**绝不 park、绝不因反问杀任务。**
+
+#### 3.6.4 组定义字段
+
+`workgroupConfigFields` 新增 `clarifyBudget: z.number().int().min(0).max(50).default(3)`，随 `WorkgroupSchema` / `WorkgroupRuntimeConfig` 一同落库与冻结快照。
+
+- `0` = 即使有人工成员也完全不许反问（与「无人工成员」同效，但语义是显式选择）。
+- 与「有无人工成员」判据是**串联**关系：先看有没有人（无人 ⇒ 恒关），再看预算（有人但问满 ⇒ 关）。
+- 与 `autonomous` 不同，它**不是**「要不要人参与」的第二事实源，而是「人参与时能被打扰多少次」的量——不违反本 RFC 删开关的初衷。
+- 默认值走 `.default(3)` 还是 handler 侧 coalesce，须遵循 `autonomous` 踩过的坑（RFC-181 设计门 P1）：该字段对象被 Create **和** full-replace Update 共用，schema 默认会让「省略该字段的 PUT」静默改写既有组。**因此照抄 `fanOut` / 旧 `autonomous` 的做法：schema 里 optional 不给 default，create 侧 `?? 3`、update 侧 `?? existing`。**
+- 中途可调：进 per-task `ConfigPatchSchema`（与 `maxRounds` 同类），下一轮引擎 `loadDbState` 生效。
+
+### 3.7 打通「停止反问」（G9 / D15）+ 派单级粒度（用户 2026-07-20 拍板）
+
+#### 3.7.1 现状：线already铺到门口，就差一个读取点
+
+- 表 `task_node_clarify_directives`（`db/schema.ts:1660-1680`，migration `0064`）：PK `(task_id, node_id)`，取值 `'continue' | 'stop'`。
+- 写入方：答题时勾「提交并停止反问」⇒ `clarifySeal.ts:467-474` `setNodeClarifyDirective(..., askingNodeId, 'stop', ...)`；画布节点开关 ⇒ `routes/taskClarifyDirective.ts:46-77`。
+- **路由守卫已经放行工作组节点**：`isAskingNodeInSnapshot` → `agentHasClarifyChannel` 只问「这个节点有没有 clarify 出边」，而 `buildWorkgroupHostSnapshot` 给 `__wg_leader__` **和** `__wg_member__` 都接了（`workgroupLaunch.ts:78-79`）。所以**今天从公开 API 就能给工作组写进一行 stop**——只是 host 路径从不读它（唯一读取点 `scheduler.ts:3189-3191` 只服务普通节点），写了等于没写。
+- host 路径读它几乎零成本：`runShardKey` 已在 `scheduler.ts:797-804` 查出并用于 clarify 队列。
+
+#### 3.7.2 接法：走 `clarifySuppressed`，不碰 `clarifyChannel`
+
+**不要**把工作组的 `directive:'delegated'` 改成 `'stopped'`。`clarifyDispositionFor` 把 `'stopped'` 映射为 `'reject'`（`prompt.ts:210-226`），会让共享 runner 接管「拒绝」的措辞与判定，撞上 RFC-183 的对称性锁，也违背 `'delegated'` 的本意（邀请与判定归工作组协议块所有，`scheduler.ts:848-861`）。
+
+正确接法是把「停止」并入**已有的三元压制条件**，两侧对称：
+
+```
+clarifyAllowed(asker) = hasHumanMember           // §1 判据
+                     && askingGeneration < clarifyBudget   // §3.6 预算
+                     && directiveOf(asker) !== 'stop'      // §3.7 人工喊停
+```
+
+- **派发期**（控「邀不邀请」）：`workgroupRunner.ts:1520/1813/1989` 的 `clarifyEnabled` 由该式求值。
+- **envelope 期**（控「接不接受」）：`scheduler.ts:863-865` 的 `clarifySuppressed` 取该式取反，并保留 §3.4a 的派发期地板。
+
+两侧同源 ⇒ invite⟺accept 对称不破；到限/被停后的收场完全复用 RFC-181 软驳回通道（文案分三种：无人可问 / 次数用尽 / 已被喊停）。
+
+#### 3.7.3 shard 维度（表重建）
+
+工作组所有成员派单共用一个 `__wg_member__` 节点 id，仅靠 `node_runs.shard_key` 区分。要做到「只停发问的那张派单」，`task_node_clarify_directives` 必须加 shard 维度。SQLite 改不了主键 ⇒ **重建式 migration**：
+
+```sql
+CREATE TABLE task_node_clarify_directives_new (
+  task_id    TEXT    NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  node_id    TEXT    NOT NULL,
+  shard_key  TEXT    NOT NULL DEFAULT '',        -- '' = 节点级（非分片提问方）
+  directive  TEXT    NOT NULL,
+  set_by     TEXT,
+  updated_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+  PRIMARY KEY (task_id, node_id, shard_key)
+);
+--> statement-breakpoint
+INSERT INTO task_node_clarify_directives_new (task_id, node_id, shard_key, directive, set_by, updated_at)
+  SELECT task_id, node_id, '', directive, set_by, updated_at FROM task_node_clarify_directives;
+--> statement-breakpoint
+DROP TABLE task_node_clarify_directives;
+--> statement-breakpoint
+ALTER TABLE task_node_clarify_directives_new RENAME TO task_node_clarify_directives;
+--> statement-breakpoint
+CREATE INDEX idx_task_node_clarify_directives_task ON task_node_clarify_directives(task_id);
+```
+
+- **用 `''` 哨兵而非 NULL**：SQLite 的 PRIMARY KEY 列在普通（有 rowid）表里**不隐含 NOT NULL**，用 NULL 会允许多行重复，主键形同虚设。列保持 `NOT NULL DEFAULT ''`，在 service 边界做 `shardKey ?? ''`（写）/ `'' → null`（读）转换，对外仍是全仓通行的 `string | null` 约定。
+- **读取解析顺序**：先查该 shard 行，无则回落节点级（`''`）行。这让「停某一张派单」与「停这个节点全部」可以共存。
+- 受影响的 service：`taskClarifyDirective.ts` 的 `getNodeClarifyDirectiveRow` / `getNodeClarifyDirective` / `setNodeClarifyDirective`（`onConflictDoUpdate.target` 加 `shardKey`）/ `listNodeClarifyDirectives`。三个生产读取点：`scheduler.ts:3189-3191`、`crossClarify.ts:500`、`clarifyMigration.ts:179`。
+- **两条源码文本锁必然变红**、必须同步改：`rfc122-clarify-directive-dispatch.test.ts:547/569`（断言 `'getNodeClarifyDirectiveRow(db, taskId, node.id)'` 字面量）、`rfc123-clarify-directive-single-source.test.ts:394/405-407`（断言 `setNodeClarifyDirective(...)` 的确切调用形状）。
+
+#### 3.7.4 写入侧规则与对普通任务的**已披露**影响
+
+统一规则：**`clarifySeal` 按轮的 `askingShardKey` 写行**（`clarify_rounds.askingShardKey`，`schema.ts:1580`，今天被 `clarifySeal.ts:467-474` 丢弃），`null → ''`。逐场景：
+
+| 提问方 | `askingShardKey` | 落哪一行 | 与今天相比 |
+|---|---|---|---|
+| 普通非分片节点 | `null` | 节点级 `''` | **不变** |
+| 工作组 leader | `null` | 节点级 `''`（leader 本就是单例，节点级即 leader 级） | 新能力 |
+| 工作组成员派单 | assignment id | 该 shard 行 | 新能力，满足「只停发问的那张」 |
+| **普通任务的 fan-out 分片节点** | shard key | 该 shard 行 | **有变化**：今天点 stop 会停掉该节点**全部**分片，改后只停这一片 |
+
+最后一行是对 §2 目标 G7（非工作组零变化）的**一处有意让步**：它本质是个 bug 修复（停 shard 3 的问题不该顺带静音 shard 7），但确实是行为变化，**显式披露并配测试**，不藏在实现里。
+
+画布节点开关维持节点级语义（读写 `''` 行），`listNodeClarifyDirectives` 仍返回 `Record<nodeId, directive>` 的节点级视图——避免动到普通任务画布的既有契约。
+
+#### 3.7.5 恢复入口（用户拍板）
+
+停止是**可撤销状态**，不是单向门。房间信息区显示「反问已停止」并给恢复按钮：
+
+- 后端：房间响应（`routes/workgroupTasks.ts:363`）增补 `clarifyStops`（leader 一项 + 每张在途派单一项）；`SetDirectiveBodySchema`（`routes/taskClarifyDirective.ts:28`）加可选 `shardKey`，复用同一路由写 `'continue'`。
+- 前端：`WorkgroupRoom` 的信息区 / 对应派单卡片上显示状态 chip + 复用既有 `.btn--xs` 恢复按钮。**不新增配置开关**——它呈现的是当前状态，不是组的固有属性。
+
+### 3.8 park 期间不计入 `maxDurationMs`（G10 / D17）
+
+#### 3.8.1 现状取证
+
+`tasks.startedAt` 全仓**只有一处写入**——建任务时 `task.ts:1654`；`resumeTask` / 调度器置 running / park 全都不碰它（`startedAt` 甚至不在 `TaskStatusUpdateExtra` 白名单里，`lifecycle.ts:290-300`，所以按 RFC-097 的守卫根本写不进去）。而 `limits.ts:77` 直接 `now - t.startedAt`。同时 `enforceLimits` 只扫 `status='running'`（`limits.ts:34`）。合起来：**park 期间不检查，但 park 时长被追溯计费**，人一答完的下一个 tick 就可能 `task-time-limit-exceeded`。
+
+另外确认：**没有任何可查询的状态转移时间戳**——无 `task_events` 表；`recoveryEvents`（`schema.ts:2106`）只记系统动作，用户 resume / park 不写；`lifecycleAlerts` / `lifecycleRepairAudit` 都不是转移日志。所以 park 区间**无法从现有数据反推**，修复必须落列。
+
+#### 3.8.2 取「累计运行时长」而非「平移 startedAt」
+
+`tasks` 新增两列：
+
+```
+running_ms     INTEGER NOT NULL DEFAULT 0   -- 已累计的真实运行时长
+running_since  INTEGER                       -- 本段 running 的起点；非 running 时为 NULL
+```
+
+写入**集中落在 `lifecycle.ts` 的 `writeStatus`**（`:411-423`，全仓唯一被允许直写任务状态的地方）——进入 `running` 时 `running_since = now`；离开 `running` 时 `running_ms += now - running_since`、`running_since = null`。放在这里而不是各调用点，是因为 `setTaskStatus`/`trySetTaskStatus` 有约 25 个调用点（`scheduler.ts:422/636/652…`、`task.ts:1925/1968/2045/2708`、9 个 `lifecycleRepair/options-*.ts`、`fusion.ts:1352`、`orphanReconcile.ts:108`、`shutdown.ts:46`、`routes/workgroupTasks.ts:808`），逐点改必漏。`running_ms | running_since` 需加进 `TaskStatusUpdateExtra` 白名单。
+
+读取只改一处：`limits.ts:77` ⇒ `elapsed = running_ms + (running_since === null ? 0 : now - running_since)`。
+
+**为什么不用「resume 时把 startedAt 往后平移」**：① `awaiting_human` 的 park **不写 `finishedAt`**，最常见的那种 park 根本没有可减的区间；② `startedAt` 还被 8 处按「任务何时开始」语义消费（任务列表排序 `task.ts:3060`、DTO `task.ts:1786/3612/3706`、GC 最小年龄 `gc.ts:139`、stuck 检测 `stuckTaskDetector.ts:272/309`、不变式扫描窗口 `lifecycleInvariants.ts:169`、两个复合索引 `schema.ts:833-834`），平移会静默污染全部。
+
+#### 3.8.3 迁移与测试影响
+
+- migration 追加两列（additive），并把**当前处于 `running` 的行**回填 `running_since = started_at`，否则它们平白获得一次赦免。
+- `tests/scheduler-audit-gap1-limits-resume-startedat.test.ts:170-217`「恢复后的任务被立刻杀掉」**必须翻红并改写**——它锁的正是本次要修掉的 bug（该文件头部注释已预告了各修法会翻哪些断言）。`:143-168`（`startedAt` 保持不变）在本修法下**保持绿**，正是选它的理由之一。
+- **最容易漏的一条**：`tests/limits.test.ts:74-81` 只 seed 了 `{ maxDurationMs, startedAt }`，改后 `running_ms=0` ⇒ 该用例不再触发取消。必须同步更新 seed 助手（`rfc097-cancel-wins.test.ts` 亦驱动 `enforceLimits`，同查）。
 
 ## 4. 数据与迁移
 
 | 项 | 处理 |
 |---|---|
 | `workgroups.autonomous` 列（`db/schema.ts:496`，migration `0093`） | **DROP COLUMN**（先例：`0072_rfc130_drop_agent_readonly.sql` 等 10 个）。Drizzle schema 同步删字段 |
-| `tasks.workgroup_config_json` 里存量快照带的 `autonomous` 键 | **不迁移**。`WorkgroupRuntimeConfigSchema` 删字段后，zod 非 strict 对象会**剥离**未知键 ⇒ 旧快照照常 parse。**实现时须确认该 schema 未加 `.strict()`**（`workgroupRuntime.ts`） |
+| `tasks.workgroup_config_json` 里存量快照带的 `autonomous` 键 | **不迁移**。**已核实** `WorkgroupRuntimeConfigSchema` 为裸 `z.object`（`workgroupRuntime.ts:40`，无 `.strict()`）⇒ 删字段后旧快照照常 parse、多余键被剥离。仍补一条「旧快照可 parse」测试 |
 | `node_runs.error_message = 'wg-autonomous-dismissed'`（`workgroupLifecycle.ts:262`；经 `clarifyRounds.ts:251` 派生成前端 `sealedCause`） | 改写为 `'wg-clarify-disabled'` + migration 回填历史行，保持单一取值（D11） |
 | `_journal.json` | 98 → 99 条；`upgrade-rolling.test.ts` 的 journal-count 断言 +1（标题 + 断言 + 注释三处） |
 
 迁移 SQL（编号实现时复核——另有一个计划中的 `0099` drop `cached_repos.url`，若已被占用则顺延）：
 
+单个 migration 文件，五段（**每段之间必须有 `--> statement-breakpoint`**，否则只有第一条被执行且静默）：
+
 ```sql
--- RFC-207: autonomous 开关删除，反问/完工门改由花名册是否含人工成员派生
+-- RFC-207 §1: autonomous 开关删除（判据改由花名册派生）
 ALTER TABLE workgroups DROP COLUMN autonomous;
 --> statement-breakpoint
+-- RFC-207 §3.6: 反问预算
+ALTER TABLE workgroups ADD COLUMN clarify_budget integer DEFAULT 3 NOT NULL;
+--> statement-breakpoint
+-- RFC-207 §3.8: 累计运行时长（park 期不计入 maxDurationMs）
+ALTER TABLE tasks ADD COLUMN running_ms integer DEFAULT 0 NOT NULL;
+--> statement-breakpoint
+ALTER TABLE tasks ADD COLUMN running_since integer;
+--> statement-breakpoint
+UPDATE tasks SET running_since = started_at WHERE status = 'running';
+--> statement-breakpoint
+-- RFC-207 §D11: 遣散留痕字面量改名
 UPDATE node_runs SET error_message = 'wg-clarify-disabled'
   WHERE error_message = 'wg-autonomous-dismissed';
+--> statement-breakpoint
+-- RFC-207 §3.7.3: directive 表加 shard 维度（SQLite 改不了主键 ⇒ 重建）
+--   …CREATE _new / INSERT SELECT / DROP / RENAME / CREATE INDEX 五段，见 §3.7.3
 ```
+
+**⚠️ 新增 `tasks` 列的连带影响（本仓踩过）**：drizzle 的 INSERT 会带上 HEAD 的**全部**列，因此任何「把 DB 冻结在旧 migration 上」的测试都会报 `no column named running_ms`。这类 fixture 必须改成显式列名的裸 SQL。`workgroups` 的两处列变更同理需排查。
+
+**新增列的连带影响**：`tasks` 表加列会让「冻结在旧 migration 的 DB」测试红（drizzle INSERT 会带上 HEAD 的全部列）；本次加的是 `workgroups` 列，须确认没有测试在旧迁移点插 `workgroups` 行，若有则改成显式列名的裸 SQL fixture。
 
 `--> statement-breakpoint` 必须有，否则只有第一条语句会被执行（静默）。
 
@@ -162,6 +346,14 @@ UPDATE node_runs SET error_message = 'wg-clarify-disabled'
 - `PUT /api/workgroup-tasks/:taskId/config`：`ConfigPatchSchema` 删 `autonomous`（`workgroupTasks.ts:119`）、changes 文案（`:1038`）、nextConfig 合并（`:1084`）。
 - `GET /api/workgroup-tasks/:taskId/room`：返回的 `config` 不再含 `autonomous`（`workgroupTasks.ts:363`）。
 - 无 WS 载荷变化（`autonomous` 从未进 WS 消息；配置变更仍以 `wg.message.created` 的 system 行体现）。
+
+**升级窗口：已加载的旧前端会误报保存失败（Codex 设计门 P2）。** `reconcileWorkgroupSaveResponse`（`lib/workgroup-form.ts:310-327`）逐字段比对「提交的 payload」与「响应」，其中有一行 `(response.autonomous ?? false) !== (payload.autonomous ?? false)`。daemon 升级后、浏览器仍持旧 bundle 时：旧客户端照旧提交 `autonomous:true`（RFC-181 起新建组默认值），新服务端静默丢弃且响应不含该字段 ⇒ `false !== true` ⇒ 返回 `config-mismatch`。**保存其实成功了**，但界面报错、草稿不落定，刷新即恢复。这不是本 RFC 特有的问题，而是**任何 wire 字段删除的通用窗口**（本仓此前无版本偏移强制刷新机制）。
+
+两个可选处置，**默认取 A**：
+- **A（默认）**：不做过渡兼容。新 bundle 删掉该比较行；把这一次性窗口记录在案，并在实现时确认 `config-mismatch` 在 UI 上有可操作文案（提示「服务端已升级，请刷新页面」而非干瘪的失败）。理由：自托管单二进制、用户自己升级 daemon，刷新是自然动作；留一个死字段在 wire 上一个 release 更可能被永久遗忘。
+- **B**：过渡期服务端**原样回显**客户端提交的 `autonomous`（不落库、不参与任何判定），下个 release 再删。零窗口，代价是 wire 上多留一个死字段 + 一个必须被记住的清理任务。
+
+（真正的通用解是 build-version 偏移强制刷新，属独立 RFC，不在本范围。）
 - **e2e 提醒**：`e2e/` 在 workspace typecheck 之外（见 per-user memory）。`e2e/task-wizard.spec.ts:145-200` 创建工作组时本就不传 `autonomous`，但它建的是**纯 agent 组**——改造后行为与今天（新建默认全自动）一致，理论零影响；仍须实跑确认。
 
 ## 6. 前端
@@ -169,11 +361,12 @@ UPDATE node_runs SET error_message = 'wg-clarify-disabled'
 | 位置 | 改动 |
 |---|---|
 | `components/workgroup/WorkgroupForm.tsx:150-157` | 删「全自动」`Switch` |
-| `components/workgroup/WorkgroupForm.tsx:138-148` | 完工确认门 `disabled` 由 `value.autonomous` 改为 `!hasHumanMember`；hint 换 `workgroups.fieldCompletionGateNoHumanHint`。组件新增 prop `hasHumanMember: boolean`，由 `routes/workgroups.detail.tsx:956-963` 从 group.members 计算传入 |
+| `components/workgroup/WorkgroupForm.tsx:138-148` | 完工确认门 `disabled` 由 `value.autonomous` 改为 `!hasHumanMember`；hint 换 `workgroups.fieldCompletionGateNoHumanHint`。组件新增 prop `hasHumanMember: boolean`。**判据取 draft 花名册、不取 `group.members`（Codex 设计门 P2）**：该表单经 `WorkgroupContextPanel` 渲染，那里已有 `members.state.draft`，而 `group.members` 只是上一次服务端回执——加人/删人在途或保存失败时，用回执会让开关与「下一次保存要提交的花名册」相反。由 panel 把 draft 花名册透传下来 |
 | `components/workgroup/WorkgroupTaskConfigDialog.tsx:181-203` | 同上；该弹窗**自带成员增删暂存**，`hasHumanMember` 必须随暂存的增删**实时**重算（勾了「移除最后一个人」时确认门当场置灰），否则用户看到的与提交后的语义不一致 |
-| `lib/workgroup-form.ts:89/102/136/287/324/508` | 删 draft 字段与 payload 分支 |
+| `components/workgroup/WorkgroupForm.tsx`（`maxRounds` 邻位） | **新增**「反问次数上限」`NumberInput`（复用既有 `<Field>`/`<NumberInput>`，与 `maxRounds` 同一分区同一风格），无人工成员时同样置灰 + 提示「本组没有人工成员，不会产生反问」 |
+| `lib/workgroup-form.ts:89/102/136/287/324/508` | 删 `autonomous` draft 字段与 payload 分支；**加** `clarifyBudget`（同时补进 `reconcileWorkgroupSaveResponse` 的逐字段比对，否则新字段的保存回执校验有洞） |
 | `lib/workgroup-room.ts:617/630/637/654/671` | 删 task config draft 字段与 patch diff |
-| `routes/workgroups.tsx:114/141-143` | 「全自动」chip ⇒ **「含人工」chip**（仅当组含 human 成员时显示），i18n key `workgroups.humanMemberChip`；搜索文本同步。**设计取舍**：信号不能消失——用户需要在列表一眼看出「哪些组会来找我」，只是语义翻转。实现时须确认列表 API 的 `rowToWorkgroup` 带 `members`（若不带则改用现成的成员计数字段或补齐） |
+| `routes/workgroups.tsx:114/141-143` | 「全自动」chip ⇒ **「含人工」chip**（仅当组含 human 成员时显示），i18n key `workgroups.humanMemberChip`；搜索文本同步。**设计取舍**：信号不能消失——用户需要在列表一眼看出「哪些组会来找我」，只是语义翻转。数据源**已核实**：`rowToWorkgroup`（`workgroups.ts:410-430`）返回 `members`，列表页直接可判 |
 | `routes/clarify.detail.tsx:819-820` | `sealedCause === 'wg-autonomous-dismissed'` ⇒ `'wg-clarify-disabled'`；文案 key 改名 |
 | `components/workgroup/WorkgroupRoom.tsx:1050-1054` | 「反问已压制」回合卡标注保留；仅 i18n 文案改述为「本组无人工成员」 |
 | i18n（`i18n/zh-CN.ts` + `en-US.ts` + 类型声明三处） | **删**：`workgroups.autonomousChip` / `fieldAutonomous` / `fieldAutonomousHint` / `fieldCompletionGateAutonomousHint`。**加**：`workgroups.humanMemberChip` / `workgroups.fieldCompletionGateNoHumanHint`。**改名**：`clarify.roundDismissedByAutonomous` → `clarify.roundDismissedNoHuman`。`i18n-keys-symmetry.test.ts:28-32` 会抓单边遗漏 |
@@ -211,6 +404,13 @@ UPDATE node_runs SET error_message = 'wg-clarify-disabled'
 - 催办统一：**有人工成员**的 leader_worker 组空转 ⇒ 也走 `{kind:'leader-nudge'}`（这是 G4 的新行为，`rfc187-continue-no-dispatch.test.ts:91/96` 现锁的是「非自治立刻 park」，必须改）；到 `WG_LEADER_IDLE_NUDGE_LIMIT` ⇒ `awaiting_human` reason=`leader-idle`。
 - 兜底：触顶 `max_rounds` 且有产出 ⇒ `max-rounds-wrapup` park（D3，`rfc187-maxrounds-wrapup.test.ts` 保持绿，fixture 换判据）。
 
+**反问预算（G8，backend）**
+- 纯预言：`askingGeneration >= budget` 的边界（budget=3 ⇒ gen 0/1/2 放行、gen 3 驳回）；budget=0 ⇒ 首问即驳回。
+- leader 与派单**各自独立计数**：leader 问满后，一张新派单仍可从 0 开始问（反之亦然）。
+- **新派单重置**：同一 worker 的第二张派单（新 shardKey）预算从 0 起算。
+- 到限行为：驳回 → 重提示 → `WG_PROTOCOL_RETRIES` 耗尽 ⇒ leader drop-and-continue / worker 该轮 failed；**全程任务不进 `awaiting_human`**。
+- 组定义字段：省略该字段的 full-replace PUT **不得**改写既有组的值（照抄 `fanOut` 的 optional-not-default 契约测试）；per-task PATCH 可中途调整且下一轮生效。
+
 **中途转移（backend，路由级）**
 - 加入第一个人工成员 ⇒ 下一轮 `clarifyEnabled=true`（可用 fake hook 断请求参数）。
 - 移除最后一个人工成员且任务卡在 clarify park ⇒ 单事务遣散（session/round canceled、中介 run canceled + `error_message='wg-clarify-disabled'`、assignment 重排队、resume）；仍有其他人工成员时 ⇒ no-op；gate park 不被误遣散；`dynamic_workflow` 免疫。
@@ -231,7 +431,7 @@ UPDATE node_runs SET error_message = 'wg-clarify-disabled'
 **源码锁（brittle，必须同步改，一处不改就红）**
 `rfc181-autonomous-hardening.test.ts:345-395`（4 组）、`rfc187-clarify-continuation-revival.test.ts:176-181`、`rfc187-continue-no-dispatch.test.ts:106-111`、`rfc183-clarify-invite-accept-symmetry.test.ts:229/332-355`、`rfc186-envelope-followup-parity.test.ts:105-137`、`rfc164-workgroup-engine.test.ts:758-849`、`rfc200-source-lock.test.ts:67`、`rfc202-source-locks.test.ts:52-70`（含 i18n key 名）、`rfc187-zero-delta-done.test.ts:30-58`。
 
-**回归防护命名**：新测试文件 `rfc206-human-derived-clarify.test.ts`（backend）/ `workgroup-human-derived-clarify.test.tsx`（frontend），文件顶端注释写明「锁 RFC-207：反问 / 完工门唯一判据 = 花名册是否含人工成员；`autonomous` 已删，任何把它加回来或让判据反转的改动应当在此红」。
+**回归防护命名**：新测试文件 `rfc207-human-derived-clarify.test.ts`（backend）/ `workgroup-human-derived-clarify.test.tsx`（frontend），文件顶端注释写明「锁 RFC-207：反问 / 完工门唯一判据 = 花名册是否含人工成员；`autonomous` 已删，任何把它加回来或让判据反转的改动应当在此红」。
 
 ## 9. 影响面清单（实现时对照勾选）
 
@@ -248,9 +448,9 @@ UPDATE node_runs SET error_message = 'wg-clarify-disabled'
 | 风险 | 级别 | 缓解 |
 |---|---|---|
 | R1 判据漏改静默反转 | **高** | §1.2 破坏性签名变更（typecheck 强制） |
-| R2 `persistGate` merge 漏 members ⇒ 成员变更被引擎覆盖 | **高** | §3.5，设计门重点核实 + 并发测试 |
+| R2 `persistGate` merge 丢 members ⇒ 成员变更被引擎覆盖 | ~~高~~ **已核实不成立** | §3.5——整份 reload-merge、无字段白名单，`members` 天然保留；仅补一条性质回归测试 |
 | R3 源码锁一次性大面积改动（9 个文件）漏改 | 中 | 逐条对照 §8 清单；`bun run test` 全量跑 |
 | R4 migration + journal 计数级联红 | 中 | 全量 backend `bun test`，不只跑子集 |
-| R5 旧快照 `autonomous` 键导致 parse 失败 | 中 | 确认 `WorkgroupRuntimeConfigSchema` 非 strict；补一条「旧快照可 parse」测试 |
+| R5 旧快照 `autonomous` 键导致 parse 失败 | ~~中~~ **已核实不成立** | `WorkgroupRuntimeConfigSchema` 为裸 `z.object`（非 strict），未知键被剥离；仍补一条回归测试 |
 | R6 催办文案改动使在途任务计数重置 | 低 | §3.3 已界定，受 `max_rounds` 约束 |
-| R7 列表 API 不返回 members ⇒ chip 无数据 | 低 | §6 实现时核实，必要时补字段 |
+| R7 列表 API 不返回 members ⇒ chip 无数据 | ~~低~~ **已核实不成立** | `rowToWorkgroup` 返回 `members` |
