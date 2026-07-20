@@ -2024,6 +2024,7 @@ export async function materializeTree(
     taskBaseHead: string
     submoduleMode?: 'auto' | 'always' | 'never'
     submoduleJobs?: number
+    log?: Logger
   },
 ): Promise<void> {
   // ① removals (deleted + type-changed) — checkout-index never deletes.
@@ -2058,7 +2059,94 @@ export async function materializeTree(
   const { syncSubmodules } = await import('@/services/gitSubmodule')
   const { resolveSubmoduleParams } = await import('@/services/gitRepoCache')
   const effective = resolveSubmoduleParams(opts.submoduleMode, opts.submoduleJobs)
-  await syncSubmodules(worktreePath, { mode: effective.mode, jobs: effective.jobs })
+  const synced = await syncSubmodules(worktreePath, { mode: effective.mode, jobs: effective.jobs })
+  if (!synced.ok) {
+    // RFC-210: this return value used to be discarded, which is part of why the
+    // gitlink loss below stayed invisible for so long.
+    opts.log?.warn('submodule sync during materialize failed', {
+      worktreePath,
+      error: synced.error ?? '',
+    })
+  }
+  // ⑥ RFC-210: re-point each submodule at the gitlink the MERGED tree records.
+  //
+  // Must come AFTER ⑤, not before: `submodule update` checks out whatever the
+  // INDEX says, and ④ just reset the index back to the task base — so any
+  // gitlink placed here beforehand is immediately undone. (Written the other way
+  // round first; only a real-git run surfaced it.)
+  //
+  // Without this step the whole merge result for a submodule is silently thrown
+  // away: `checkout-index` in ③ never writes gitlinks, so ⑤ leaves the submodule
+  // sitting at the base commit and the superproject looks untouched.
+  await checkoutMergedGitlinks(worktreePath, opts.mergedTree, effective, opts.log)
+}
+
+/**
+ * RFC-210 — walk the merged tree's gitlinks and check each submodule out to the
+ * commit the merge decided on.
+ *
+ * Recurses by hand because `git ls-tree -r` cannot see through a gitlink (it is
+ * a commit object belonging to another repository), so nested submodules are
+ * invisible to a single listing. Each level is read from its own parent.
+ *
+ * Failure modes are deliberately split:
+ *  - the object is missing ⟹ THROW. It means the publish step never ran for this
+ *    commit, and continuing would leave canonical pointing at an unreachable
+ *    object — the superproject's `git status` would then fail outright.
+ *  - the submodule working tree is dirty ⟹ force the checkout after snapshotting
+ *    is the caller's job; here we retry with `-f` and only warn if that also
+ *    fails. Turning "user left edits in a submodule" into a hard merge-back
+ *    failure would just move RFC-130 D22's block to a later, more expensive point.
+ */
+async function checkoutMergedGitlinks(
+  worktreePath: string,
+  tree: string,
+  effective: { mode: 'auto' | 'always' | 'never'; jobs: number },
+  log?: Logger,
+  prefix = '',
+): Promise<void> {
+  if (effective.mode === 'never') return
+  const listed = await runGit(worktreePath, ['ls-tree', tree])
+  if (listed.exitCode !== 0) return
+  for (const line of listed.stdout.split('\n')) {
+    // `<mode> <type> <sha>\t<name>`; gitlinks are type `commit`.
+    const [meta, name] = line.split('\t')
+    if (meta === undefined || name === undefined) continue
+    const parts = meta.trim().split(/\s+/)
+    if (parts[1] !== 'commit') continue
+    const sha = parts[2]
+    if (sha === undefined) continue
+    const relPath = prefix === '' ? name : `${prefix}/${name}`
+    const subPath = join(worktreePath, name)
+    if (!existsSync(subPath)) continue // uninitialized — nothing to move
+    const co = await runGit(subPath, ['checkout', '--detach', sha])
+    if (co.exitCode !== 0) {
+      const stderr = co.stderr.trim()
+      if (/would be overwritten|local changes/i.test(stderr)) {
+        const forced = await runGit(subPath, ['checkout', '--detach', '-f', sha])
+        if (forced.exitCode !== 0) {
+          log?.warn('submodule gitlink checkout failed on dirty worktree', {
+            subPath: relPath,
+            sha,
+            error: forced.stderr.trim(),
+          })
+          continue
+        }
+      } else {
+        throw new DomainError(
+          'materialize-failed',
+          `submodule '${relPath}' cannot be moved to ${sha}: ${stderr}`,
+          500,
+        )
+      }
+    }
+    // Recurse: this submodule may itself contain submodules, and their gitlinks
+    // live in ITS tree, not the one we just listed.
+    const subTree = await runGit(subPath, ['rev-parse', `${sha}^{tree}`])
+    if (subTree.exitCode === 0) {
+      await checkoutMergedGitlinks(subPath, subTree.stdout.trim(), effective, log, relPath)
+    }
+  }
 }
 
 /** `git diff --name-only --diff-filter=<filter> <from> <to>` (RFC-130 materialize helper). */

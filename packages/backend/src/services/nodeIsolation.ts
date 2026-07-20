@@ -14,12 +14,12 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
+  AW_INTERNAL_GIT_IDENTITY,
   buildSalvageTree,
   commitTree,
   createIsolatedWorktree,
   deleteIsoRefs,
   gitCommitExists,
-  hasDirtySubmoduleContent,
   isGitWorkTree,
   isoRefName,
   materializeTree,
@@ -40,6 +40,7 @@ import { repoRelForcedPaths } from '@/services/portArtifacts'
 // RFC-210. Static import is safe: gitSubmodule imports util/git, util/git reaches
 // gitSubmodule only through a dynamic import, so the edge stays one-way.
 import {
+  bottomUp,
   detectSubmodules,
   ensureSubmoduleAlternates,
   listSubmodules,
@@ -217,7 +218,11 @@ export async function createNodeIso(opts: {
       ...(opts.submoduleMode !== undefined ? { submoduleMode: opts.submoduleMode } : {}),
       ...(opts.submoduleJobs !== undefined ? { submoduleJobs: opts.submoduleJobs } : {}),
     })
-    const { subBases, poolDir } = await captureSubmoduleTopology(isoWorktreePath, opts.log)
+    const { subBases, poolDir } = await captureSubmoduleTopology(
+      isoWorktreePath,
+      r.worktreePath,
+      opts.log,
+    )
     repos.push({
       repoPath: r.repoPath,
       canonWorktreePath: r.worktreePath,
@@ -260,6 +265,7 @@ export async function createNodeIso(opts: {
  */
 async function captureSubmoduleTopology(
   isoWorktreePath: string,
+  canonWorktreePath: string,
   log?: Logger,
 ): Promise<{ subBases: Record<string, string>; poolDir: string | null }> {
   if (!detectSubmodules(isoWorktreePath)) return { subBases: {}, poolDir: null }
@@ -278,12 +284,22 @@ async function captureSubmoduleTopology(
     // First pool wins as the handle-level record; each submodule still gets its
     // OWN pool attached below (a single --reference would cross-wire them).
     poolDir ??= pool
-    const linked = await ensureSubmoduleAlternates(isoWorktreePath, s.path, pool)
-    if (!linked.ok) {
-      log?.warn('submodule alternates attach failed — running degraded', {
-        subPath: s.path,
-        error: linked.error ?? '',
-      })
+    // BOTH sides must borrow from the pool. The iso side is where the node's
+    // commits are produced; the CANONICAL side is where merge-back later has to
+    // check them out — and every worktree owns a private module dir, so without
+    // this canonical simply cannot see them (`fatal: unable to read tree`).
+    for (const [label, wt] of [
+      ['iso', isoWorktreePath],
+      ['canonical', canonWorktreePath],
+    ] as const) {
+      const linked = await ensureSubmoduleAlternates(wt, s.path, pool)
+      if (!linked.ok) {
+        log?.warn('submodule alternates attach failed — running degraded', {
+          side: label,
+          subPath: s.path,
+          error: linked.error ?? '',
+        })
+      }
     }
   }
   return { subBases, poolDir }
@@ -356,18 +372,18 @@ export async function snapshotNodeIsoFinal(
   if (handle.passthrough) return {}
   const out: Record<string, string> = {}
   for (const r of handle.repos) {
-    // RFC-130 D22: fail LOUD if the node left uncommitted content INSIDE a submodule
-    // — the tree snapshot captures only the gitlink commit, so those edits would be
-    // silently dropped on merge-back. The node fails (merge-failed) with a clear
-    // message instead of losing work.
-    if (await hasDirtySubmoduleContent(r.isoWorktreePath)) {
-      throw new Error(
-        `submodule-dirty-content: node ${handle.nodeRunId} left uncommitted content inside a ` +
-          `submodule of '${r.worktreeDirName || 'repo'}'; the tree snapshot captures only the ` +
-          `gitlink commit, so those edits cannot merge back. Commit the submodule changes inside ` +
-          `the agent (or avoid editing submodule working trees).`,
-      )
-    }
+    // RFC-130 D22 RETIRED by RFC-210.
+    //
+    // D22 threw here when the node left uncommitted content inside a submodule,
+    // because `snapshotFullState` captures only the gitlink and those edits would
+    // have been dropped on merge-back — failing loudly beat losing work silently.
+    //
+    // That trade-off is gone: publishSubmoduleHeads below commits the leftovers
+    // under the platform identity and publishes them to the shared pool, and
+    // materializeTree checks the merged gitlink out on the canonical side. The
+    // edits now survive, so there is nothing left to reject. (`hasDirtySubmoduleContent`
+    // itself stays — it is a cheap probe other code can still use.)
+    //
     // RFC-210 T15: publish every submodule's CURRENT head into the shared pool
     // before this iso can be discarded.
     //
@@ -406,22 +422,53 @@ export async function snapshotNodeIsoFinal(
  * actually becomes fatal, and it reports the problem with far better context.
  */
 async function publishSubmoduleHeads(handle: IsoHandle, r: IsoRepo, log?: Logger): Promise<void> {
-  if (r.poolDir === null || Object.keys(r.subBases).length === 0) return
-  for (const s of usableSubmodules(await listSubmodules(r.isoWorktreePath))) {
+  if (Object.keys(r.subBases).length === 0) return
+  // Bottom-up: committing a nested submodule moves ITS gitlink, and that change
+  // is only visible to the level above if the child is committed first.
+  for (const s of bottomUp(usableSubmodules(await listSubmodules(r.isoWorktreePath)))) {
+    const subAbs = join(r.isoWorktreePath, s.path)
+
+    // RFC-210 (this is what retires RFC-130 D22): commit whatever the node left
+    // uncommitted inside the submodule, under the platform identity.
+    //
+    // `snapshotFullState` records only the gitlink, so uncommitted submodule
+    // content cannot ride the snapshot — which is precisely why D22 used to fail
+    // the node loudly. Now that such commits can actually REACH canonical
+    // (shared pool + gitlink checkout at materialize), turning the edits into a
+    // real commit carries the work through instead of rejecting it.
+    const status = await runGit(subAbs, ['status', '--porcelain', '--untracked-files=all'])
+    if (status.exitCode === 0 && status.stdout.trim() !== '') {
+      const staged = await runGit(subAbs, ['add', '-A'])
+      if (staged.exitCode === 0) {
+        const committed = await runGit(
+          subAbs,
+          ['commit', '-q', '-m', `aw: submodule changes from node ${handle.nodeRunId}`],
+          { env: AW_INTERNAL_GIT_IDENTITY },
+        )
+        if (committed.exitCode !== 0) {
+          log?.warn('submodule auto-commit failed', {
+            subPath: s.path,
+            error: committed.stderr.trim(),
+          })
+        }
+      }
+    }
+
+    if (r.poolDir === null) continue // degraded (path mode / no host) — nowhere to publish
+    // Re-read HEAD: the auto-commit above may have moved it.
+    const head = await runGit(subAbs, ['rev-parse', 'HEAD'])
+    if (head.exitCode !== 0) continue
+    const sha = head.stdout.trim()
     const gitDir = await submoduleGitDir(r.isoWorktreePath, s.path)
     if (gitDir === null) continue
     const res = await pushObjectsToPool(
       r.poolDir,
       gitDir,
-      s.headSha,
+      sha,
       poolRefName(handle.taskId, handle.nodeRunId, s.path),
     )
     if (!res.ok) {
-      log?.warn('submodule object publish failed', {
-        subPath: s.path,
-        sha: s.headSha,
-        error: res.error ?? '',
-      })
+      log?.warn('submodule object publish failed', { subPath: s.path, sha, error: res.error ?? '' })
     }
   }
 }
@@ -619,13 +666,54 @@ export async function undoPriorShardDeltaInIso(
     })
     return false
   }
+  // RFC-210 pre-flight: this function's contract is FAIL-OPEN and never
+  // destructive — it either undoes the prior delta completely or leaves the iso
+  // alone and lets the next shard superimpose. materializeTree now also moves
+  // submodule gitlinks, and that step THROWS when a gitlink's commit is not
+  // reachable. Letting it throw here would be the one outcome the contract
+  // forbids: steps ①-④ have already rewritten the parent files by then, so the
+  // iso would sit half-undone (parent reverted, submodules still on the previous
+  // shard's commits) and the next shard's output would merge on top of that mix.
+  // Checking reachability BEFORE touching anything keeps the bail-out clean.
+  if (!(await gitlinksReachable(isoWorktreePath, rev.mergedTree))) {
+    log?.warn('T14 iso-undo: submodule gitlink unreachable — superimposition fallback', {
+      mergedTree: rev.mergedTree,
+    })
+    return false
+  }
   const canonCurrentTree = await treeOf(isoWorktreePath, isoCurrent)
   const taskBaseHead = await headOf(isoWorktreePath)
   await materializeTree(isoWorktreePath, {
     mergedTree: rev.mergedTree,
     canonCurrentTree,
     taskBaseHead,
+    ...(log !== undefined ? { log } : {}),
   })
+  return true
+}
+
+/**
+ * RFC-210 — can every gitlink in `tree` actually be checked out here?
+ *
+ * Only walks one level: a nested submodule's gitlinks live inside ITS commit,
+ * which we cannot inspect until the outer one is reachable anyway — so an outer
+ * miss is enough to bail, and an outer hit makes the inner check materializeTree's
+ * problem (where throwing is the correct response).
+ */
+async function gitlinksReachable(worktreePath: string, tree: string): Promise<boolean> {
+  const listed = await runGit(worktreePath, ['ls-tree', tree])
+  if (listed.exitCode !== 0) return true // cannot tell — don't block on a guess
+  for (const line of listed.stdout.split('\n')) {
+    const [meta, name] = line.split('\t')
+    if (meta === undefined || name === undefined) continue
+    const parts = meta.trim().split(/\s+/)
+    if (parts[1] !== 'commit') continue
+    const sha = parts[2]
+    if (sha === undefined) continue
+    const subPath = join(worktreePath, name)
+    if (!existsSync(subPath)) continue
+    if (!(await gitCommitExists(subPath, sha))) return false
+  }
   return true
 }
 

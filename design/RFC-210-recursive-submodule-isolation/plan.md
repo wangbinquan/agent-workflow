@@ -68,6 +68,19 @@
 
 ### PR-3 merge-back gitlink 修复（红→绿）
 
+> **进度（2026-07-20）：T16/T16b/T18-T22 已实现**。红→绿走通：红测试先复现
+> "节点在子仓的提交被 merge-back 吞掉"，修复后 4/4 绿，RFC-130 全套 122/122 未破。
+>
+> **实现修正两处**：① **canonical 侧也要挂 alternates**——PR-2 只挂了 iso，
+> merge-back 时 `fatal: unable to read tree`（每个 worktree 私有 module dir，池不自动可见）；
+> ② **merge-back 的 index 语义与回滚相反**——前者 index 停 base、工作区在 merged（差值即未暂存），
+> 后者要求两者一致；我把回滚的断言套到 merge-back 上，红了才发现。
+>
+> **T21 用 pre-flight 而非 `gitlinkFailureMode`**：审计建议的 warn 模式会留下"父撤子不撤"的
+> 混合半态（③④ 已改父仓文件，⑤ 静默失败让子仓停在上一分片）。改为在 `undoPriorShardDeltaInIso`
+> 动手**之前**检查 gitlink 可达性，不可达就 `return false` 走既有叠加路径，
+> fail-open 契约（never destructive）得以原样保住。
+
 | ID | 任务 | 落点 | 依赖 |
 |---|---|---|---|
 | **T16**（v3 从 PR-2 移入） | 删除 D22 fail-loud（`nodeIsolation.ts:264-275`）；`hasDirtySubmoduleContent` 降级为探针。**必须与 T19 同 PR**——单独上线会拆掉唯一止损网而修复未到，用户从"显式报错"退化为"静默丢"，覆盖面还从"agent 自己提交"扩大到"所有脏子仓" | `nodeIsolation.ts`、`util/git.ts:1690` | T15 |

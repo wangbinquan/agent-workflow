@@ -15,7 +15,7 @@
 //  3. **无 submodule 的仓必须零额外 git 进程**（AC-12）。所有 submodule 逻辑的
 //     第一道门是 `detectSubmodules`（纯 existsSync）；拓扑记录为空时后续全部短路。
 
-import { describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -29,6 +29,36 @@ import { runGit } from '@/util/git'
 
 const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc210-iso-home-'))
 const created: string[] = []
+
+// git >= 2.38 refuses the `file` transport for submodules however the URL is
+// spelled. Production argv deliberately omits the allowance, so tests that drive
+// the REAL code path (createNodeIso → syncSubmodules → submodule update) must
+// inject it through a throwaway global config.
+//
+// Setting it per-command is not enough and relying on a sibling test file having
+// set it is a trap: `bun test` shares one process locally (so the variable leaks
+// between files and everything looks green) while CI runs with --isolate, where
+// each file starts clean and these tests fail with exit 128.
+let prevGitGlobal: string | undefined
+let prevGitSystem: string | undefined
+const gitCfgDir = mkdtempSync(join(tmpdir(), 'aw-rfc210-gitcfg-'))
+
+beforeAll(() => {
+  const cfg = join(gitCfgDir, 'gitconfig')
+  writeFileSync(cfg, '[protocol "file"]\n\tallow = always\n[user]\n\tname = t\n\temail = t@e.com\n')
+  prevGitGlobal = process.env.GIT_CONFIG_GLOBAL
+  prevGitSystem = process.env.GIT_CONFIG_SYSTEM
+  process.env.GIT_CONFIG_GLOBAL = cfg
+  process.env.GIT_CONFIG_SYSTEM = '/dev/null'
+})
+
+afterAll(() => {
+  if (prevGitGlobal === undefined) delete process.env.GIT_CONFIG_GLOBAL
+  else process.env.GIT_CONFIG_GLOBAL = prevGitGlobal
+  if (prevGitSystem === undefined) delete process.env.GIT_CONFIG_SYSTEM
+  else process.env.GIT_CONFIG_SYSTEM = prevGitSystem
+  rmSync(gitCfgDir, { recursive: true, force: true })
+})
 
 function tmp(prefix: string): string {
   const d = mkdtempSync(join(tmpdir(), prefix))

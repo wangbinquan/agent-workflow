@@ -355,6 +355,20 @@ commit 对象），所以不存在"一次拿到所有层 gitlink"的捷径。
 
 ⑤ 必须在 ④ 之后（F8）。gitlink 清单**逐层递归**取（`ls-tree` 穿不透 gitlink，见 §2.3）。
 
+> **★ 实现时坐实的两条（PR-3）**：
+>
+> **一、canonical 侧也必须挂 alternates，否则步骤⑤ 直接 `fatal: unable to read tree`。**
+> PR-2 只给 iso worktree 挂了池，merge-back 时 canonical 读不到节点的子仓 commit——
+> 每个 worktree 拥有**私有** module dir，池对它并不自动可见。这实证了 §0.2 第三条
+> "对象共享是 gitlink 修复的前提，不是优化"：顺序改对了但对象不在，照样失败。
+> 现在 `captureSubmoduleTopology` 对 iso 与 canonical **两侧**都挂。
+>
+> **二、merge-back 与回滚的 index 语义相反，不能套用同一条断言。**
+> merge-back 后 index 停在 **base**、工作区在 **merged**，两者的差值**就是**那笔未暂存改动
+> （RFC-130 D23/D28）。而 §6.2 的回滚要求 index 与工作区**一致**。
+> 我一开始把回滚的断言（`ls-files -s` == 子仓 HEAD）写进了 merge-back 测试，红了才反应过来——
+> 那条断言实际是在要求"改动被 stage 了"，与设计正好相反。
+
 ### 3.2 失败语义（修正 v1 的过度 fail-loud）
 
 | 失败 | 处理 |
