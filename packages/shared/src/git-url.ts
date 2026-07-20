@@ -171,7 +171,53 @@ export function redactGitUrl(input: string): string {
   // doesn't contain a colon — pattern below requires `:` between user
   // and password, so it can't re-match pass-1 output.
   out = out.replace(/([a-z][a-z0-9+.-]*:\/\/)[^/@\s:]+:[^/@\s]+@/gi, '$1***:***@')
+  // Pass 3 (RFC-204 T0): query-string credentials — `?access_token=X`,
+  // `&private_token=Y`. Passes 1/2 only cover URI *userinfo*, so before this
+  // the token survived verbatim into `url_redacted`, task columns and daemon
+  // logs. Value class excludes `&`/`#`/whitespace so only the one param dies.
+  out = out.replace(QUERY_CREDENTIAL_RE, '$1***')
   return out
+}
+
+/**
+ * RFC-204 — query-string parameter names that carry a Git credential.
+ * Longest-first so alternation cannot match a suffix of a longer key
+ * (e.g. `token` inside `access_token`) at the same anchor position.
+ */
+export const SENSITIVE_QUERY_KEYS: readonly string[] = [
+  'personal_access_token',
+  'private_token',
+  'access_token',
+  'oauth_token',
+  'api_key',
+  'apikey',
+  'password',
+  'passwd',
+  'secret',
+  'token',
+  'auth',
+  'pwd',
+]
+
+const QUERY_CREDENTIAL_SRC = String.raw`([?&](?:${SENSITIVE_QUERY_KEYS.join('|')})=)[^&#\s]*`
+
+/** Global matcher used by `redactGitUrl`; recreated per call site to avoid lastIndex state. */
+const QUERY_CREDENTIAL_RE = new RegExp(QUERY_CREDENTIAL_SRC, 'gi')
+
+/**
+ * RFC-204 — true when the URL carries a credential in its query string.
+ *
+ * Backs the launch / schedule input gate: such URLs are REJECTED rather than
+ * sealed, because `parseGitUrl` keeps the query inside `parsed.path`, so the
+ * token would flow into the cache slug → `cached_repos.local_path` (which is
+ * on the wire) → worktree paths, and into `url_hash`. Rejecting at the door
+ * means no new query-form slug/hash is ever minted, which is what lets this
+ * RFC leave `canonicalForHash` (and therefore existing cache keys) untouched.
+ * The userinfo form stays supported — sealing covers it.
+ */
+export function hasQueryCredential(input: string): boolean {
+  if (typeof input !== 'string') return false
+  return new RegExp(QUERY_CREDENTIAL_SRC, 'i').test(input)
 }
 
 /**

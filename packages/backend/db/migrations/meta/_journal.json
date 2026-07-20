@@ -680,6 +680,13 @@
       "when": 1785772800000,
       "tag": "0097_rfc200_envelope_nonce",
       "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "6",
+      "when": 1785859200000,
+      "tag": "0098_rfc204_repo_cred",
+      "breakpoints": true
     }
   ]
 }

@@ -603,6 +603,9 @@ export async function resolveCachedRepo(
           id,
           urlHash: hash,
           url: input.url,
+          // RFC-204 T2: columns exist as of 0098; the sealing gate fills them.
+          urlEnc: null,
+          urlRedacted: null,
           localPath: cacheDir,
           defaultBranch: defaultBr,
           lastFetchedAt: ts,

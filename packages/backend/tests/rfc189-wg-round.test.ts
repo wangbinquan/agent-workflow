@@ -90,21 +90,24 @@ describe('RFC-189 迁移 0095 — 回填互 oracle', () => {
       const wfId = ulid()
       const taskId = ulid()
       await db.insert(workflows).values({ id: wfId, name: `wf-${taskId}`, definition: '{}' })
-      await db.insert(tasks).values({
-        id: taskId,
-        name: 't',
-        workflowId: wfId,
-        workflowSnapshot: '{}',
-        repoPath: '/tmp/x',
-        worktreePath: '/tmp/x',
-        baseBranch: 'main',
-        branch: `agent-workflow/${taskId}`,
-        status: 'done',
-        inputs: '{}',
-        startedAt: Date.now(),
-        workgroupId: 'wg1',
-        workgroupConfigJson: JSON.stringify({ mode }),
-      })
+      // NOTE (RFC-204 T2): this row is inserted into a table frozen at 0094,
+      // but drizzle emits EVERY column of the HEAD schema in its INSERT — so
+      // any later migration that merely ADDs a `tasks` column made this line
+      // fail with "table tasks has no column named …". Spelling the columns out
+      // keeps the fixture pinned to the 0094-era shape the test actually needs,
+      // so future additive migrations don't re-red it (same intent as the
+      // tag-based journal truncation above).
+      db.run(sql`
+        INSERT INTO tasks (
+          id, name, workflow_id, workflow_snapshot, repo_path, worktree_path,
+          base_branch, branch, status, inputs, started_at,
+          workgroup_id, workgroup_config_json
+        ) VALUES (
+          ${taskId}, 't', ${wfId}, '{}', '/tmp/x', '/tmp/x',
+          'main', ${`agent-workflow/${taskId}`}, 'done', '{}', ${Date.now()},
+          'wg1', ${JSON.stringify({ mode })}
+        )
+      `)
       return taskId
     }
 

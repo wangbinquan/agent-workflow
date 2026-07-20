@@ -668,7 +668,14 @@ export const cachedRepos = sqliteTable(
   {
     id: text('id').primaryKey(), // ULID
     urlHash: text('url_hash').notNull().unique(), // 8-hex sha1 of canonical URL
-    url: text('url').notNull(), // original URL as supplied (may contain creds — redact in UI)
+    // RFC-204: legacy plaintext column. The sealing gate blanks it to '' once
+    // url_enc/url_redacted are populated; nothing reads it after that. Dropping
+    // the column is deferred to 0099 (SQLite drop = table rebuild).
+    url: text('url').notNull(),
+    /** RFC-204: `secretBox.seal(原始URL)` — the ONLY place the credential lives. */
+    urlEnc: text('url_enc'),
+    /** RFC-204: `redactGitUrl(原始URL)` — the only form allowed out on the wire. */
+    urlRedacted: text('url_redacted'),
     localPath: text('local_path').notNull(), // absolute path under ~/.agent-workflow/repos/
     defaultBranch: text('default_branch'), // nullable; null when HEAD was detached / unborn
     lastFetchedAt: integer('last_fetched_at').notNull(),
@@ -705,8 +712,12 @@ export const tasks = sqliteTable(
     workflowVersion: integer('workflow_version'),
     repoPath: text('repo_path').notNull(),
     // RFC-024: original Git URL when launched from a remote URL. NULL for path-mode
-    // tasks. May contain credentials; render via redactGitUrl before display.
+    // tasks. RFC-204 verified this is ALREADY stored redacted (RFC-054 W3-4 writes
+    // redactGitUrl(...) at insert), so it carries no credential — it just can't be
+    // fed back into a launch. Relaunch/reuse goes through cached_repo_id below.
     repoUrl: text('repo_url'),
+    /** RFC-204: cached mirror this task was materialized from (deterministic ref key). */
+    cachedRepoId: text('cached_repo_id'),
     worktreePath: text('worktree_path').notNull(),
     baseBranch: text('base_branch').notNull(),
     branch: text('branch').notNull(), // 'agent-workflow/{task-id}'
@@ -885,6 +896,13 @@ export const taskRepos = sqliteTable(
     repoPath: text('repo_path').notNull(),
     /** RFC-024 redacted URL; NULL for path-mode entries. */
     repoUrl: text('repo_url'),
+    /**
+     * RFC-204: cached mirror backing this repo entry. Replaces the old
+     * `cached_repos.url == task_repos.repo_url` plaintext join (impossible once
+     * the URL is sealed under a random IV) for refTaskCount, the cache-delete
+     * guard and repo-scoped memory resolution.
+     */
+    cachedRepoId: text('cached_repo_id'),
     baseBranch: text('base_branch').notNull().default(''),
     /** 'agent-workflow/{taskId}' — each per-source-repo worktree gets the
      * same branch name (the branches live in different source repos, so
@@ -912,6 +930,9 @@ export const taskRepos = sqliteTable(
     pk: primaryKey({ columns: [t.taskId, t.repoIndex] }),
     repoPathIdx: index('idx_task_repos_repo_path').on(t.repoPath),
     repoUrlIdx: index('idx_task_repos_repo_url').on(t.repoUrl),
+    // RFC-204: refTaskCount / the cache-delete guard evaluate this once per
+    // listed cache row — unindexed it degenerates into repeated full scans.
+    cachedRepoIdIdx: index('idx_task_repos_cached_repo_id').on(t.cachedRepoId),
   }),
 )
 
