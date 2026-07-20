@@ -233,7 +233,19 @@ export async function createManagedSkillWithFiles(
     // Roll back (in-process): discard the reserving row + files + retire the op.
     // (A crash — not an in-process throw — is recovered at boot by the reserve
     // recovery handler, which does the same.)
-    rmSync(skillDir, { recursive: true, force: true })
+    // RFC-208: the filesystem cleanup must never be able to skip the DB
+    // rollback. `force: true` only swallows ENOENT — EPERM / EBUSY / ENOTEMPTY
+    // still throw, and when they did, `abandonOperation` never ran: the row
+    // stayed `reserving` and the operation lock stayed ACTIVE, so every endpoint
+    // for that skill answered 409 skill-operation-busy forever. The orphan sweep
+    // could not clear it either, since it only reclaims locks whose op is no
+    // longer active — and this one is. Leftover files are recoverable (GC, and
+    // the boot reserve-recovery handler); a stuck lock is not.
+    try {
+      rmSync(skillDir, { recursive: true, force: true })
+    } catch {
+      /* best-effort: a leftover dir is reclaimable, a stranded lock is not */
+    }
     dbTxSync(db, (tx) => {
       tx.delete(skills).where(eq(skills.id, id)).run()
       abandonOperation(tx, opId)
