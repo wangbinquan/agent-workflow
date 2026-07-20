@@ -132,15 +132,18 @@ export async function persistIsoBase(
  */
 function submodulesJsonFor(repo: IsoRepo | undefined): string | null {
   if (repo === undefined || Object.keys(repo.subBases).length === 0) return null
-  return JSON.stringify({ poolDir: repo.poolDir, subBases: repo.subBases })
+  return JSON.stringify({ poolDirs: repo.poolDirs, subBases: repo.subBases })
 }
 
 /** Multi-repo counterpart, keyed by `worktreeDirName`; null when no repo has submodules. */
 function submodulesReposJsonFor(handle: IsoHandle): string | null {
-  const map: Record<string, { poolDir: string | null; subBases: Record<string, string> }> = {}
+  const map: Record<
+    string,
+    { poolDirs: Record<string, string>; subBases: Record<string, string> }
+  > = {}
   for (const r of handle.repos) {
     if (Object.keys(r.subBases).length === 0) continue
-    map[r.worktreeDirName] = { poolDir: r.poolDir, subBases: r.subBases }
+    map[r.worktreeDirName] = { poolDirs: r.poolDirs, subBases: r.subBases }
   }
   return Object.keys(map).length === 0 ? null : JSON.stringify(map)
 }
@@ -293,7 +296,7 @@ async function persistPendingSubResolves(
 
   const withPending = (raw: string | null, repo: IsoRepo | undefined): string | null => {
     if (repo === undefined) return raw
-    let base: Record<string, unknown> = { poolDir: repo.poolDir, subBases: repo.subBases }
+    let base: Record<string, unknown> = { poolDirs: repo.poolDirs, subBases: repo.subBases }
     if (raw !== null && raw !== '') {
       try {
         const parsed: unknown = JSON.parse(raw)

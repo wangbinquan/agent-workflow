@@ -91,12 +91,22 @@ export interface IsoRepo {
    */
   subBases: Record<string, string>
   /**
-   * RFC-210: shared object pool backing this repo's submodules, or null when
-   * running degraded — path-mode repos deliberately get none (D11: the host is
-   * the USER'S repo, and a pool there accumulates platform objects/refs/commits
-   * that can never be cleaned up), and mock harnesses have no git host at all.
+   * RFC-210: shared object pool backing each submodule, keyed by submodule path.
+   *
+   * Per SUBMODULE, not per repo. Every submodule owns a separate module dir and
+   * therefore a separate pool; a repo-level `poolDir` (what this used to be,
+   * recording whichever submodule happened to be first) sent every subsequent
+   * submodule's objects into a foreign pool, and merge-back then died on
+   * `fatal: unable to read tree` for anything past the first one — i.e. any repo
+   * with two submodules, and every nested case, which is the headline scenario.
+   *
+   * A path missing from this map is running degraded and must be skipped, not
+   * silently pointed at some other submodule's pool: path-mode repos
+   * deliberately get none (D11 — the host is the USER'S repo, and a pool there
+   * accumulates platform objects/refs/commits that can never be cleaned up), and
+   * mock harnesses have no git host at all.
    */
-  poolDir: string | null
+  poolDirs: Record<string, string>
   /**
    * RFC-210: submodule paths whose three-way merge conflicted and are still
    * unresolved. Written at merge-back (the conflict set is not knowable at iso
@@ -201,7 +211,7 @@ export async function createNodeIso(opts: {
         taskBaseHead: '',
         forcedRepoRelPaths: [],
         subBases: {},
-        poolDir: null,
+        poolDirs: {},
         pendingSubResolves: [],
       })),
     }
@@ -235,7 +245,7 @@ export async function createNodeIso(opts: {
       ...(opts.submoduleMode !== undefined ? { submoduleMode: opts.submoduleMode } : {}),
       ...(opts.submoduleJobs !== undefined ? { submoduleJobs: opts.submoduleJobs } : {}),
     })
-    const { subBases, poolDir } = await captureSubmoduleTopology(
+    const { subBases, poolDirs } = await captureSubmoduleTopology(
       isoWorktreePath,
       r.worktreePath,
       opts.log,
@@ -250,7 +260,7 @@ export async function createNodeIso(opts: {
       taskBaseHead,
       forcedRepoRelPaths,
       subBases,
-      poolDir,
+      poolDirs,
       pendingSubResolves: [],
     })
   }
@@ -285,13 +295,13 @@ async function captureSubmoduleTopology(
   isoWorktreePath: string,
   canonWorktreePath: string,
   log?: Logger,
-): Promise<{ subBases: Record<string, string>; poolDir: string | null }> {
-  if (!detectSubmodules(isoWorktreePath)) return { subBases: {}, poolDir: null }
+): Promise<{ subBases: Record<string, string>; poolDirs: Record<string, string> }> {
+  if (!detectSubmodules(isoWorktreePath)) return { subBases: {}, poolDirs: {} }
   const subs = usableSubmodules(await listSubmodules(isoWorktreePath))
-  if (subs.length === 0) return { subBases: {}, poolDir: null }
+  if (subs.length === 0) return { subBases: {}, poolDirs: {} }
 
   const subBases: Record<string, string> = {}
-  let poolDir: string | null = null
+  const poolDirs: Record<string, string> = {}
   for (const s of subs) {
     subBases[s.path] = s.headSha
     const pool = await resolveSubmodulePool(isoWorktreePath, s.path)
@@ -299,9 +309,9 @@ async function captureSubmoduleTopology(
       log?.info('submodule pool unavailable — running degraded', { subPath: s.path })
       continue
     }
-    // First pool wins as the handle-level record; each submodule still gets its
-    // OWN pool attached below (a single --reference would cross-wire them).
-    poolDir ??= pool
+    // Keyed by path. This used to keep only the first pool for the whole repo,
+    // which cross-wired every other submodule onto it.
+    poolDirs[s.path] = pool
     // BOTH sides must borrow from the pool. The iso side is where the node's
     // commits are produced; the CANONICAL side is where merge-back later has to
     // check them out — and every worktree owns a private module dir, so without
@@ -320,7 +330,7 @@ async function captureSubmoduleTopology(
       }
     }
   }
-  return { subBases, poolDir }
+  return { subBases, poolDirs }
 }
 
 /** Reconstruct an IsoHandle from persisted columns (resume / GC replay — D15). */
@@ -344,7 +354,11 @@ export function rebuildIsoHandle(opts: {
    */
   submodules?: Record<
     string,
-    { subBases: Record<string, string>; poolDir: string | null; pendingSubResolves?: string[] }
+    {
+      subBases: Record<string, string>
+      poolDirs?: Record<string, string>
+      pendingSubResolves?: string[]
+    }
   >
 }): IsoHandle {
   const repos: IsoRepo[] = opts.canonRepos.map((r) => ({
@@ -362,7 +376,7 @@ export function rebuildIsoHandle(opts: {
     taskBaseHead: opts.taskBaseHeads[r.worktreeDirName] ?? '',
     forcedRepoRelPaths: repoRelForcedPaths(opts.forcedContainerPaths, r.worktreeDirName),
     subBases: opts.submodules?.[r.worktreeDirName]?.subBases ?? {},
-    poolDir: opts.submodules?.[r.worktreeDirName]?.poolDir ?? null,
+    poolDirs: opts.submodules?.[r.worktreeDirName]?.poolDirs ?? {},
     pendingSubResolves: opts.submodules?.[r.worktreeDirName]?.pendingSubResolves ?? [],
   }))
   return {
@@ -457,7 +471,7 @@ async function mergeSubmodulesIntoTheirs(
   },
 ): Promise<{ theirs: string; conflicts: string[] }> {
   const paths = Object.keys(r.subBases)
-  if (paths.length === 0 || r.poolDir === null) return { theirs: theirsCommit, conflicts: [] }
+  if (paths.length === 0) return { theirs: theirsCommit, conflicts: [] }
 
   const conflicts: string[] = []
   let theirs = theirsCommit
@@ -467,13 +481,19 @@ async function mergeSubmodulesIntoTheirs(
   for (const subPath of ordered) {
     const base = r.subBases[subPath]
     if (base === undefined) continue
+    // Each submodule's own pool. Missing ⟹ this one is degraded; skip it rather
+    // than reaching for a sibling's pool, which is what the old repo-level
+    // `poolDir` did and is why anything past the first submodule died on
+    // `unable to read tree`.
+    const pool = r.poolDirs[subPath]
+    if (pool === undefined) continue
     const oursHead = await runGit(join(r.canonWorktreePath, subPath), ['rev-parse', 'HEAD'])
     const theirsHead = await runGit(join(r.isoWorktreePath, subPath), ['rev-parse', 'HEAD'])
     if (oursHead.exitCode !== 0 || theirsHead.exitCode !== 0) continue // uninitialized side
     const ours = oursHead.stdout.trim()
     const sub = theirsHead.stdout.trim()
 
-    let res = await mergeSubmoduleTrees(r.poolDir, { base, ours, theirs: sub })
+    let res = await mergeSubmoduleTrees(pool, { base, ours, theirs: sub })
     if (res.merged === null) {
       // RFC-210 T25: give the merge agent a shot inside the submodule before
       // withholding the whole repo. A submodule IS an ordinary git work tree, so
@@ -504,7 +524,7 @@ async function mergeSubmodulesIntoTheirs(
     // after that this worktree-scoped ref is the only thing keeping canonical's
     // gitlink target reachable; a plain "take theirs" result needs it just as
     // much as a merge does.
-    const anchored = await runGit(r.poolDir, [
+    const anchored = await runGit(pool, [
       'update-ref',
       worktreeRefName(handleTaskIdOf(r), subPath),
       mergedSha,
@@ -554,11 +574,12 @@ async function tryAgentResolveSubmodule(
   },
 ): Promise<string | null> {
   if (ctx.resolveSubConflict === undefined || ctx.containerPath === undefined) return null
-  if (r.poolDir === null) return null
+  const pool = r.poolDirs[subPath]
+  if (pool === undefined) return null
   const subAbs = join(r.canonWorktreePath, subPath)
   // The conflicted tree the agent has to fix — recomputed here because
   // mergeSubmoduleTrees only reports that it failed, not the tree it produced.
-  const mt = await runGit(r.poolDir, [
+  const mt = await runGit(pool, [
     'merge-tree',
     '--write-tree',
     `--merge-base=${ctx.base}`,
@@ -607,7 +628,7 @@ async function tryAgentResolveSubmodule(
   const sha = head.stdout.trim()
   const gitDir = await submoduleGitDir(r.canonWorktreePath, subPath)
   if (gitDir !== null) {
-    await pushObjectsToPool(r.poolDir, gitDir, sha, worktreeRefName(handleTaskIdOf(r), subPath))
+    await pushObjectsToPool(pool, gitDir, sha, worktreeRefName(handleTaskIdOf(r), subPath))
   }
   ctx.log?.info('submodule conflict resolved by merge agent', { subPath, sha })
   return sha
@@ -672,7 +693,10 @@ async function publishSubmoduleHeads(handle: IsoHandle, r: IsoRepo, log?: Logger
       }
     }
 
-    if (r.poolDir === null) continue // degraded (path mode / no host) — nowhere to publish
+    // This submodule's own pool. Publishing into a sibling's pool (what the
+    // repo-level poolDir did) put the objects somewhere merge-back never looks.
+    const pool = r.poolDirs[s.path]
+    if (pool === undefined) continue // degraded (path mode / no host) — nowhere to publish
     // Re-read HEAD: the auto-commit above may have moved it.
     const head = await runGit(subAbs, ['rev-parse', 'HEAD'])
     if (head.exitCode !== 0) continue
@@ -680,7 +704,7 @@ async function publishSubmoduleHeads(handle: IsoHandle, r: IsoRepo, log?: Logger
     const gitDir = await submoduleGitDir(r.isoWorktreePath, s.path)
     if (gitDir === null) continue
     const res = await pushObjectsToPool(
-      r.poolDir,
+      pool,
       gitDir,
       sha,
       poolRefName(handle.taskId, handle.nodeRunId, s.path),
@@ -1061,10 +1085,14 @@ async function dropNodePoolRefs(
   nodeRunId: string,
   log?: Logger,
 ): Promise<void> {
-  if (r.poolDir === null) return
   for (const subPath of Object.keys(r.subBases)) {
+    // Delete each ref from the pool it was CREATED in. With the old repo-level
+    // poolDir every ref was deleted from the first submodule's pool, so all the
+    // others silently failed and leaked.
+    const pool = r.poolDirs[subPath]
+    if (pool === undefined) continue
     const ref = poolRefName(taskId, nodeRunId, subPath)
-    const res = await runGit(r.poolDir, ['update-ref', '-d', ref], {
+    const res = await runGit(pool, ['update-ref', '-d', ref], {
       timeoutMs: ISO_DISCARD_GIT_TIMEOUT_MS,
     })
     if (res.exitCode !== 0) {

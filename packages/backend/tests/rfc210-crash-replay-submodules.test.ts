@@ -25,7 +25,7 @@ const canonRepos: CanonRepo[] = [
 ]
 
 describe('RFC-210 crash replay carries submodule topology', () => {
-  test('rebuildIsoHandle restores subBases and poolDir per repo', () => {
+  test('rebuildIsoHandle restores subBases and poolDirs per repo', () => {
     const handle = rebuildIsoHandle({
       appHome: '/home',
       taskId: 't1',
@@ -34,16 +34,16 @@ describe('RFC-210 crash replay carries submodule topology', () => {
       baseSnapshots: { a: 'basea', b: 'baseb' },
       taskBaseHeads: { a: 'heada', b: 'headb' },
       submodules: {
-        a: { subBases: { vendor: 'sha-a-vendor' }, poolDir: '/pool/a/vendor' },
-        b: { subBases: { vendor: 'sha-b-vendor' }, poolDir: '/pool/b/vendor' },
+        a: { subBases: { vendor: 'sha-a-vendor' }, poolDirs: { vendor: '/pool/a/vendor' } },
+        b: { subBases: { vendor: 'sha-b-vendor' }, poolDirs: { vendor: '/pool/b/vendor' } },
       },
     })
     // Same submodule NAME in two repos must keep two distinct bases — a flat map
     // keyed only by submodule path would have collapsed these.
     expect(handle.repos[0]?.subBases).toEqual({ vendor: 'sha-a-vendor' })
     expect(handle.repos[1]?.subBases).toEqual({ vendor: 'sha-b-vendor' })
-    expect(handle.repos[0]?.poolDir).toBe('/pool/a/vendor')
-    expect(handle.repos[1]?.poolDir).toBe('/pool/b/vendor')
+    expect(handle.repos[0]?.poolDirs['vendor']).toBe('/pool/a/vendor')
+    expect(handle.repos[1]?.poolDirs['vendor']).toBe('/pool/b/vendor')
   })
 
   test('a repo with no recorded topology rebuilds empty rather than undefined', () => {
@@ -54,13 +54,13 @@ describe('RFC-210 crash replay carries submodule topology', () => {
       canonRepos,
       baseSnapshots: {},
       taskBaseHeads: {},
-      submodules: { a: { subBases: { vendor: 's' }, poolDir: null } },
+      submodules: { a: { subBases: { vendor: 's' }, poolDirs: {} } },
     })
     expect(handle.repos[0]?.subBases).toEqual({ vendor: 's' })
     // Repo 'b' was never recorded — downstream code checks Object.keys().length,
     // so it must be an empty object, not undefined.
     expect(handle.repos[1]?.subBases).toEqual({})
-    expect(handle.repos[1]?.poolDir).toBeNull()
+    expect(handle.repos[1]?.poolDirs).toEqual({})
   })
 
   test('omitting submodules entirely keeps the pre-RFC-210 shape', () => {
@@ -74,7 +74,7 @@ describe('RFC-210 crash replay carries submodule topology', () => {
     })
     for (const r of handle.repos) {
       expect(r.subBases).toEqual({})
-      expect(r.poolDir).toBeNull()
+      expect(r.poolDirs).toEqual({})
     }
   })
 })
@@ -82,19 +82,19 @@ describe('RFC-210 crash replay carries submodule topology', () => {
 describe('RFC-210 IsoSubmodules persistence schema', () => {
   test('accepts the shape persistIsoBase writes', () => {
     const parsed = IsoSubmodulesSchema.safeParse({
-      poolDir: '/pool/vendor',
+      poolDirs: { vendor: '/pool/vendor' },
       subBases: { vendor: 'abc123', 'vendor/inner': 'def456' },
     })
     expect(parsed.success).toBe(true)
   })
 
-  test('poolDir may be null (degraded / path-mode repos)', () => {
-    expect(IsoSubmodulesSchema.safeParse({ poolDir: null, subBases: {} }).success).toBe(true)
+  test('poolDirs may be empty (degraded / path-mode repos)', () => {
+    expect(IsoSubmodulesSchema.safeParse({ poolDirs: {}, subBases: {} }).success).toBe(true)
   })
 
   test('carries the optional merge-back fields', () => {
     const parsed = IsoSubmodulesSchema.safeParse({
-      poolDir: null,
+      poolDirs: {},
       subBases: { vendor: 'abc' },
       subSnapshots: { vendor: { head: 'h', snapshot: 's', pinRef: 'refs/x' } },
       pendingSubResolves: ['vendor'],
@@ -106,7 +106,7 @@ describe('RFC-210 IsoSubmodules persistence schema', () => {
     // Absent is what arms the fail-closed replay gate; silently accepting a
     // half-parsed object would let a parent-only merge through.
     expect(IsoSubmodulesSchema.safeParse({ subBases: { vendor: 'abc' } }).success).toBe(false)
-    expect(IsoSubmodulesSchema.safeParse({ poolDir: null, subBases: 'nope' }).success).toBe(false)
+    expect(IsoSubmodulesSchema.safeParse({ poolDirs: {}, subBases: 'nope' }).success).toBe(false)
     expect(IsoSubmodulesSchema.safeParse(null).success).toBe(false)
   })
 })

@@ -360,6 +360,11 @@ export const TaskSchema = z.object({
    * workgroup tasks.
    */
   sourceAgentName: z.string().nullable().optional(),
+  /**
+   * RFC-211: launched against a guided-onboarding sandbox resource. Derived at
+   * INSERT time from the source resource, never accepted on the wire.
+   */
+  example: z.boolean().optional(),
 })
 export type Task = z.infer<typeof TaskSchema>
 
@@ -853,11 +858,21 @@ export type CommitPushOutcome = z.infer<typeof CommitPushOutcomeSchema>
  */
 export const IsoSubmodulesSchema = z.object({
   /**
-   * Shared object pool for this repo's submodules, or null when running
-   * degraded (path-mode repos deliberately get no pool — see RFC-210 D11 —
-   * and mock harnesses have no git host at all).
+   * submodule path → the shared object pool backing THAT submodule.
+   *
+   * Keyed per submodule because each one owns a separate module dir and hence a
+   * separate pool. This was a single repo-level `poolDir` holding whichever
+   * submodule resolved first, which sent every other submodule's objects into a
+   * foreign pool and made merge-back fail with `unable to read tree` for any
+   * repo with two submodules or any nesting at all.
+   *
+   * A path absent from the map is running degraded and gets skipped — path-mode
+   * repos deliberately get no pool (RFC-210 D11) and mock harnesses have no git
+   * host. Rows written before this change carry the old `poolDir` key, fail
+   * `safeParse`, and degrade to "no topology recorded", which is the same
+   * fallback as a missing column.
    */
-  poolDir: z.string().nullable(),
+  poolDirs: z.record(z.string(), z.string()),
   /** submodule path → its HEAD when the iso worktree was created. */
   subBases: z.record(z.string(), z.string()),
   /** submodule path → snapshot taken before the platform mutated it (G10). */

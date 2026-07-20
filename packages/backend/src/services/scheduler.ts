@@ -2217,20 +2217,51 @@ function parseIsoJsonMap(s: string | null): Record<string, string> {
 function parseIsoSubmodules(
   row: { isoSubmodulesJson: string | null; isoSubmodulesReposJson: string | null },
   repoCount: number,
-): Record<string, { subBases: Record<string, string>; poolDir: string | null }> {
+): Record<
+  string,
+  {
+    subBases: Record<string, string>
+    poolDirs: Record<string, string>
+    pendingSubResolves: string[]
+  }
+> {
   const raw = repoCount === 1 ? row.isoSubmodulesJson : row.isoSubmodulesReposJson
   if (raw === null || raw === '') return {}
   try {
     const parsed: unknown = JSON.parse(raw)
     if (repoCount === 1) {
       const one = IsoSubmodulesSchema.safeParse(parsed)
-      return one.success ? { '': { subBases: one.data.subBases, poolDir: one.data.poolDir } } : {}
+      // `pendingSubResolves` MUST be carried through. Dropping it here (it used
+      // to be filtered out by this very projection) left the fail-closed gate in
+      // completeHumanResolvedConflict reading a permanently empty list on the
+      // only production path that reaches it — replayConflictHumanResolutions.
+      return one.success
+        ? {
+            '': {
+              subBases: one.data.subBases,
+              poolDirs: one.data.poolDirs,
+              pendingSubResolves: one.data.pendingSubResolves ?? [],
+            },
+          }
+        : {}
     }
     if (parsed === null || typeof parsed !== 'object') return {}
-    const out: Record<string, { subBases: Record<string, string>; poolDir: string | null }> = {}
+    const out: Record<
+      string,
+      {
+        subBases: Record<string, string>
+        poolDirs: Record<string, string>
+        pendingSubResolves: string[]
+      }
+    > = {}
     for (const [dir, v] of Object.entries(parsed as Record<string, unknown>)) {
       const one = IsoSubmodulesSchema.safeParse(v)
-      if (one.success) out[dir] = { subBases: one.data.subBases, poolDir: one.data.poolDir }
+      if (one.success)
+        out[dir] = {
+          subBases: one.data.subBases,
+          poolDirs: one.data.poolDirs,
+          pendingSubResolves: one.data.pendingSubResolves ?? [],
+        }
     }
     return out
   } catch {
@@ -2248,7 +2279,7 @@ function parseIsoSubmodules(
  */
 function replaySubmodulesMissing(
   repos: ReadonlyArray<{ worktreePath: string; worktreeDirName: string }>,
-  persisted: Record<string, { subBases: Record<string, string>; poolDir: string | null }>,
+  persisted: Record<string, { subBases: Record<string, string> }>,
 ): string | null {
   for (const repo of repos) {
     if (!existsSync(pathJoin(repo.worktreePath, '.gitmodules'))) continue

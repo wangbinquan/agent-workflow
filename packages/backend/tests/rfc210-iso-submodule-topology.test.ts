@@ -105,7 +105,7 @@ describe('RFC-210 iso submodule topology', () => {
       canonRepos: [canonRepo(canon)],
     })
     expect(handle.repos[0]?.subBases).toEqual({})
-    expect(handle.repos[0]?.poolDir).toBeNull()
+    expect(handle.repos[0]?.poolDirs).toEqual({})
     await discardNodeIso(handle)
   }, 60_000)
 
@@ -123,7 +123,7 @@ describe('RFC-210 iso submodule topology', () => {
     expect(repo?.subBases).toEqual({ vendor: subHead })
     // realpath both sides: git reports the resolved path, and on macOS the temp
     // dir arrives as /var/... while git hands back /private/var/....
-    expect(realpathSync(repo?.poolDir as string)).toBe(realpathSync(pool))
+    expect(realpathSync(repo?.poolDirs['vendor'] as string)).toBe(realpathSync(pool))
     await discardNodeIso(handle)
   }, 90_000)
 
