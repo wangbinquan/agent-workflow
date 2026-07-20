@@ -1575,6 +1575,8 @@ export const enUS: Resources = {
       turnKindAssignment: 'Assignment turn',
       removedMember: 'Removed member',
       clarifySuppressedNote: 'Ask-back suppressed',
+      clarifyStopped: 'Ask-back stopped: {{asker}}',
+      clarifyResume: 'Resume ask-back',
       runLogTitle: 'Run log · {{count}}',
       runLogEmpty: 'No runs yet',
       backToLatest: 'Back to latest',

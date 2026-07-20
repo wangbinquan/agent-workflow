@@ -37,6 +37,7 @@ import {
   users,
   workgroupAssignments,
   workgroupMemberCursors,
+  taskNodeClarifyDirectives,
   workgroupMessages,
 } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
@@ -373,10 +374,27 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
     // dynamic_workflow 没有回合账本 ⇒ 0（UI 只在 free_collab 渲染）。
     const roundedMode = roundedModeOf(config.mode)
     const roundsUsed = roundedMode === null ? 0 : deriveRoundsUsed(roundedMode, hostRuns)
+    // RFC-207 §3.7.5 — which askers a human has silenced. Stopping is a REVERSIBLE
+    // state, not a one-way door: without surfacing it the room offers no way back
+    // (the canvas toggle that ordinary tasks use does not exist for workgroups).
+    // Keyed by asker (leader / asg:<id> / mem:<id>) so each can be resumed alone.
+    const stopRows = await deps.db
+      .select({
+        nodeId: taskNodeClarifyDirectives.nodeId,
+        shardKey: taskNodeClarifyDirectives.shardKey,
+        directive: taskNodeClarifyDirectives.directive,
+      })
+      .from(taskNodeClarifyDirectives)
+      .where(eq(taskNodeClarifyDirectives.taskId, taskId))
+    const clarifyStops = stopRows
+      .filter((r) => r.directive === 'stop' && r.shardKey !== '')
+      .map((r) => ({ nodeId: r.nodeId, askerKey: r.shardKey }))
+
     return c.json({
       taskId,
       taskStatus: task.status,
       config,
+      clarifyStops,
       roundsUsed,
       gate: {
         declaredDone: gateRaw.declaredDone === true,

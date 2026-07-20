@@ -1457,6 +1457,8 @@ export interface Resources {
       turnKindAssignment: string
       removedMember: string
       clarifySuppressedNote: string
+      clarifyStopped: string
+      clarifyResume: string
       runLogTitle: string
       runLogEmpty: string
       backToLatest: string
@@ -5147,6 +5149,8 @@ export const zhCN: Resources = {
       turnKindAssignment: '派发轮',
       removedMember: '已移除成员',
       clarifySuppressedNote: '反问已压制',
+      clarifyStopped: '已停止向你反问：{{asker}}',
+      clarifyResume: '恢复反问',
       runLogTitle: '执行记录 · {{count}}',
       runLogEmpty: '还没有任何执行',
       backToLatest: '回到最新',

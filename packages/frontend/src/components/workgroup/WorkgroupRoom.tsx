@@ -148,6 +148,18 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
     onSuccess: () => void qc.invalidateQueries({ queryKey: workgroupRoomKey(taskId) }),
   })
 
+  // RFC-207 — un-silence one asker. Reuses the ordinary per-node directive route
+  // with the asker key as its shard, so there is exactly one write path for
+  // stop/continue rather than a workgroup-only twin.
+  const resumeClarify = useMutation({
+    mutationFn: ({ nodeId, askerKey }: { nodeId: string; askerKey: string }) =>
+      api.post(
+        `/api/tasks/${encodeURIComponent(taskId)}/nodes/${encodeURIComponent(nodeId)}/clarify-directive`,
+        { directive: 'continue', shardKey: askerKey },
+      ),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: workgroupRoomKey(taskId) }),
+  })
+
   // PR-5 (拍板 #16) — human-member delivery, both shapes normalized by
   // buildDeliverBody. The room refresh flips the card to 'delivered'.
   const deliver = useMutation({
@@ -762,6 +774,30 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
             ) : undefined
           }
         >
+          {/* RFC-207 — askers a human silenced. Stopping ask-back is reversible;
+              ordinary tasks un-stop from the canvas toggle, which a workgroup has
+              no equivalent of, so without this row a stop would be permanent. */}
+          {(data.clarifyStops ?? []).length > 0 && (
+            <div
+              className="workgroup-room__clarify-stops"
+              data-testid="workgroup-room-clarify-stops"
+            >
+              {(data.clarifyStops ?? []).map((stop) => (
+                <span key={`${stop.nodeId}:${stop.askerKey}`} className="chip chip--tight">
+                  {t('workgroups.room.clarifyStopped', { asker: stop.askerKey })}
+                  <button
+                    type="button"
+                    className="btn btn--xs"
+                    data-testid={`workgroup-room-clarify-resume-${stop.askerKey}`}
+                    onClick={() => resumeClarify.mutate(stop)}
+                    disabled={resumeClarify.isPending}
+                  >
+                    {t('workgroups.room.clarifyResume')}
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
           <dl className="workgroup-room__info">
             <dt>{t('workgroups.room.infoGoal')}</dt>
             <dd className="workgroup-room__goal">

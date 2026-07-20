@@ -41,6 +41,7 @@ import {
 } from '../src/services/crossClarify'
 import {
   getNodeClarifyDirective,
+  listNodeClarifyDirectives,
   setNodeClarifyDirective,
 } from '../src/services/taskClarifyDirective'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
@@ -414,3 +415,45 @@ describe('RFC-123 D: 源码 wiring 守卫', () => {
 // ---------------------------------------------------------------------------
 // E. recency 闸 — stale 'continue' toggle 不得重启用更晚的 stop（Codex impl-gate P2）
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// RFC-207 — per-asker stop. A workgroup runs every member assignment on ONE host
+// node id, so a node-level directive would silence every worker at once; and a
+// node-level "continue" has to be able to undo a per-asker stop, or stopping
+// becomes a one-way door with no UI to reverse it.
+// ---------------------------------------------------------------------------
+
+describe('RFC-207 — 逐提问方的停止反问', () => {
+  let db2: DbClient
+  let T: string
+
+  beforeEach(async () => {
+    db2 = createInMemoryDb(resolve(import.meta.dir, '..', 'db', 'migrations'))
+    T = await insertTask(db2, { $schema_version: 4, inputs: [], nodes: [], edges: [] })
+  })
+
+  test('停一个提问方不影响另一个；节点级行作为回落', async () => {
+    await setNodeClarifyDirective(db2, T, '__wg_member__', 'stop', 'u1', 'asg:A')
+    expect(await getNodeClarifyDirective(db2, T, '__wg_member__', 'asg:A')).toBe('stop')
+    expect(await getNodeClarifyDirective(db2, T, '__wg_member__', 'asg:B')).toBeUndefined()
+
+    // A node-level row applies to askers with no row of their own.
+    await setNodeClarifyDirective(db2, T, '__wg_member__', 'stop', 'u1', null)
+    expect(await getNodeClarifyDirective(db2, T, '__wg_member__', 'asg:B')).toBe('stop')
+  })
+
+  test('节点级 continue 清掉该节点全部分片行（否则停了就恢复不了）', async () => {
+    await setNodeClarifyDirective(db2, T, '__wg_member__', 'stop', 'u1', 'asg:A')
+    await setNodeClarifyDirective(db2, T, '__wg_member__', 'stop', 'u1', 'mem:m1')
+    await setNodeClarifyDirective(db2, T, '__wg_member__', 'continue', 'u1', null)
+    expect(await getNodeClarifyDirective(db2, T, '__wg_member__', 'asg:A')).toBe('continue')
+    expect(await getNodeClarifyDirective(db2, T, '__wg_member__', 'mem:m1')).toBe('continue')
+  })
+
+  test('画布视图只看节点级行——分片停止不该染色整个节点', async () => {
+    await setNodeClarifyDirective(db2, T, 'n1', 'stop', 'u1', 'shard-9')
+    expect(await listNodeClarifyDirectives(db2, T)).toEqual({})
+    await setNodeClarifyDirective(db2, T, 'n1', 'stop', 'u1', null)
+    expect(await listNodeClarifyDirectives(db2, T)).toEqual({ n1: 'stop' })
+  })
+})

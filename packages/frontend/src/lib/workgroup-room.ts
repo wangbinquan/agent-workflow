@@ -45,7 +45,15 @@ export interface WorkgroupRoomGate {
   summary: string | null
 }
 
+/** RFC-207 — one asker a human has silenced (leader / asg:<id> / mem:<id>). */
+export interface WorkgroupClarifyStop {
+  nodeId: string
+  askerKey: string
+}
+
 export interface WorkgroupRoomResponse {
+  /** Absent on a daemon older than RFC-207 — treat as none. */
+  clarifyStops?: WorkgroupClarifyStop[]
   taskId: string
   taskStatus: TaskStatus
   config: WorkgroupRuntimeConfig

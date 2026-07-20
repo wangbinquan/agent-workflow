@@ -8281,6 +8281,11 @@ details.form-section[open] > summary {
    `.page--task-detail` / `.page--editor` chrome trim. The page header keeps
    the approve / iterate / reject buttons pinned at the top-right; the
    scroll region below fills whatever is left. */
+/* RFC-206 T5' — `overflow: hidden` (viewport-filling layout) with no padding
+   clipped the header's decision buttons (Approve / Reject / …) and the task
+   backlink against the page edge. Measured, not guessed: the sibling
+   `.review-detail__layout` (which carries `padding-right: 14px`) turned out to
+   be FINE — this shell was the actual clipper. */
 .page--review-detail {
   max-width: none;
   display: flex;
@@ -8289,6 +8294,7 @@ details.form-section[open] > summary {
   height: 100%;
   min-height: 0;
   overflow: hidden;
+  padding: var(--focus-ring-gutter);
 }
 
 .content:has(.page--review-detail) {
@@ -15274,9 +15280,14 @@ button.status-chip {
 .workgroup-room__runlog-row:hover {
   background: color-mix(in srgb, var(--text) 8%, var(--panel));
 }
+/* RFC-206 T5' — the rows are full-width children of `.workgroup-room__runlog`,
+   an `overflow-y: auto` list with `padding: 0`, so they are flush on ALL FOUR
+   sides by construction and the outset ring was cut on every one of them.
+   Same class of control as the other scroll-flush list rows ⇒ inset the ring
+   rather than padding the list (which would misalign the log's gutters). */
 .workgroup-room__runlog-row:focus-visible {
   outline: 2px solid var(--accent, #3b82f6);
-  outline-offset: 1px;
+  outline-offset: var(--focus-ring-offset-inset);
 }
 
 /* RFC-182 P1-1 — back-to-latest float over the log (shown only when the user
@@ -15295,6 +15306,20 @@ button.status-chip {
 .workgroup-room__gate-state {
   margin: 0;
   font-size: 13px;
+}
+
+/* RFC-207 — silenced-asker chips + their resume buttons. */
+.workgroup-room__clarify-stops {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.workgroup-room__clarify-stops .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .workgroup-room__info {
