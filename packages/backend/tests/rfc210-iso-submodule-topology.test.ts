@@ -22,6 +22,7 @@ import { join } from 'node:path'
 import {
   createNodeIso,
   discardNodeIso,
+  mergeBackNodeIso,
   snapshotNodeIsoFinal,
   type CanonRepo,
 } from '@/services/nodeIsolation'
@@ -186,11 +187,25 @@ describe('RFC-210 iso submodule topology', () => {
     const nodeSha = (await runGit(isoSub, ['rev-parse', 'HEAD'])).stdout.trim()
 
     await snapshotNodeIsoFinal(handle)
+
+    // While the node is alive its NODE-scoped anchor is what protects the object.
+    await runGit(pool, ['reflog', 'expire', '--expire=now', '--all'])
+    await runGit(pool, ['gc', '--prune=now', '--quiet'])
+    expect((await runGit(pool, ['cat-file', '-t', nodeSha])).stdout.trim()).toBe('commit')
+
+    // After merge-back the WORKTREE-scoped anchor takes over: discardNodeIso
+    // drops the node anchor (the pool is shared across tasks and would otherwise
+    // grow without bound), so anything canonical's gitlink points at has to be
+    // held by the longer-lived ref instead.
+    await mergeBackNodeIso(handle, await snapshotNodeIsoFinal(handle))
+    const landed = (await runGit(join(canon, 'vendor'), ['rev-parse', 'HEAD'])).stdout.trim()
     await discardNodeIso(handle)
 
     await runGit(pool, ['reflog', 'expire', '--expire=now', '--all'])
     await runGit(pool, ['gc', '--prune=now', '--quiet'])
-    expect((await runGit(pool, ['cat-file', '-t', nodeSha])).stdout.trim()).toBe('commit')
+    expect((await runGit(pool, ['cat-file', '-t', landed])).stdout.trim()).toBe('commit')
+    // And canonical is still readable — the whole point of keeping the anchor.
+    expect((await runGit(join(canon, 'vendor'), ['status', '--porcelain'])).exitCode).toBe(0)
   }, 120_000)
 })
 

@@ -474,20 +474,20 @@ async function mergeSubmodulesIntoTheirs(
       conflicts.push(subPath)
       continue
     }
-    if (res.merged === sub) continue // theirs already carries it — nothing to rewrite
-    // The merge result is a NEW commit that only exists in the pool; canonical
-    // reads it through alternates, but it still needs an anchor of its own or
-    // the next gc takes it.
-    if (!res.trivial) {
-      const anchored = await runGit(r.poolDir, [
-        'update-ref',
-        worktreeRefName(handleTaskIdOf(r), subPath),
-        res.merged,
-      ])
-      if (anchored.exitCode !== 0) {
-        log?.warn('submodule merge anchor failed', { subPath, sha: res.merged })
-      }
+    // Anchor whatever canonical is about to point at, ALWAYS — not just for a
+    // real merge commit. The node-scoped anchor dies with `discardNodeIso`, so
+    // after that this worktree-scoped ref is the only thing keeping canonical's
+    // gitlink target reachable; a plain "take theirs" result needs it just as
+    // much as a merge does.
+    const anchored = await runGit(r.poolDir, [
+      'update-ref',
+      worktreeRefName(handleTaskIdOf(r), subPath),
+      res.merged,
+    ])
+    if (anchored.exitCode !== 0) {
+      log?.warn('submodule anchor failed', { subPath, sha: res.merged })
     }
+    if (res.merged === sub) continue // theirs already carries it — nothing to rewrite
     const rewritten = await rewriteGitlinkInCommit(r.canonWorktreePath, {
       commit: theirs,
       subPath,
@@ -692,6 +692,34 @@ export async function mergeBackNodeIso(
       // materialize below): it mutates canonical with no rollback, so a
       // swallowed mid-mutation error would leave canonical partially changed
       // while claiming the delta was withheld.
+      // RFC-210 §2.4 — never salvage a conflict that touches a gitlink.
+      //
+      // buildSalvageTree reverts each conflicted path to `ours`, and it only
+      // fail-closes on DIRECTORY entries — a gitlink is neither a tree nor a
+      // blob, so it slips through. When `ours` has no entry for it (one node
+      // removed the submodule while another changed it) the revert becomes a
+      // deletion, and materializeTree step ① then `rm -rf`s the submodule
+      // directory out of the canonical worktree. Withhold the whole repo and let
+      // a human decide instead.
+      const gitlinkConflict = merge.conflicts.find((p) => r.subBases[p] !== undefined)
+      if (gitlinkConflict !== undefined) {
+        log?.warn('gitlink conflict — withholding repo instead of salvaging', {
+          worktreeDirName: r.worktreeDirName,
+          subPath: gitlinkConflict,
+        })
+        conflicts.push({
+          worktreeDirName: r.worktreeDirName,
+          paths: merge.conflicts,
+          mergedTree: merge.mergedTree,
+          rawConflictOutput: merge.rawConflictOutput,
+          base: r.baseSnapshot,
+          canonWorktreePath: r.canonWorktreePath,
+          taskBaseHead: r.taskBaseHead,
+          salvagedPaths: [],
+          forcedRepoRelPaths: r.forcedRepoRelPaths,
+        })
+        continue
+      }
       let salvage: { tree: string; landedPaths: string[] } | null = null
       try {
         salvage = await buildSalvageTree(r.canonWorktreePath, {
@@ -888,6 +916,36 @@ export async function discardNodeIso(handle: IsoHandle, log?: Logger): Promise<v
     await deleteIsoRefs(r.canonWorktreePath, handle.taskId, handle.nodeRunId, {
       timeoutMs: ISO_DISCARD_GIT_TIMEOUT_MS,
     })
+    await dropNodePoolRefs(r, handle.taskId, handle.nodeRunId, log)
+  }
+}
+
+/**
+ * RFC-210 — drop this node's anchors from the shared object pool.
+ *
+ * The pool is shared ACROSS tasks, so anchors that are never released grow
+ * without bound. Only the NODE-scoped ones go here (`pool/<task>/<run>/<slug>`);
+ * the worktree-scoped `wt/<task>/<slug>` anchors deliberately outlive the node —
+ * they are what keep the commit canonical's gitlink points at reachable, and
+ * canonical worktrees are long-lived (`worktreeAutoGc` defaults to false).
+ *
+ * Best-effort: this is cleanup, and a leaked ref costs disk, not correctness.
+ */
+async function dropNodePoolRefs(
+  r: IsoRepo,
+  taskId: string,
+  nodeRunId: string,
+  log?: Logger,
+): Promise<void> {
+  if (r.poolDir === null) return
+  for (const subPath of Object.keys(r.subBases)) {
+    const ref = poolRefName(taskId, nodeRunId, subPath)
+    const res = await runGit(r.poolDir, ['update-ref', '-d', ref], {
+      timeoutMs: ISO_DISCARD_GIT_TIMEOUT_MS,
+    })
+    if (res.exitCode !== 0) {
+      log?.warn('pool ref delete failed (leaving for GC)', { ref, error: res.stderr.trim() })
+    }
   }
 }
 
