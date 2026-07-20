@@ -350,12 +350,23 @@ export function taskToLaunchPayload(task: Task): {
     // (Locked to the backend marker by a source test.)
     spaceResolvable = false
   } else {
+    // RFC-204: prefer the mirror id. `task.repos[].repoUrl` is stored REDACTED
+    // (RFC-054 W3-4), so relaunching a private repo by URL sent `https://***@…`
+    // and failed authentication — it was never a usable relaunch source. The id
+    // is; the daemon resolves the real URL server-side.
     const repos = task.repos
-      .filter((r) => (r.repoUrl ?? '') !== '')
-      .map((r) => ({
-        repoUrl: r.repoUrl ?? '',
-        ...(r.baseBranch ? { ref: r.baseBranch } : {}),
-      }))
+      .filter((r) => (r.cachedRepoId ?? '') !== '' || (r.repoUrl ?? '') !== '')
+      .map((r) =>
+        (r.cachedRepoId ?? '') !== ''
+          ? {
+              cachedRepoId: r.cachedRepoId as string,
+              ...(r.baseBranch ? { ref: r.baseBranch } : {}),
+            }
+          : {
+              repoUrl: r.repoUrl ?? '',
+              ...(r.baseBranch ? { ref: r.baseBranch } : {}),
+            },
+      )
     if (repos.length > 0) payload.repos = repos
     else spaceResolvable = false
   }
