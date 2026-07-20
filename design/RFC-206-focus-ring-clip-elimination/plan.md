@@ -4,18 +4,22 @@
 
 ## PR 拆分
 
-| PR   | 任务               | 主题                                               |
-| ---- | ------------------ | -------------------------------------------------- |
-| PR-1 | T0（已落）、T1、T2 | 守卫上线 + 基线白名单（**止血**）                  |
-| PR-2 | T3、T4             | 高影响面存量修复（全站 TabBar / 面板 / a11y 硬伤） |
-| PR-3 | T5、T6             | 长尾容器清零                                       |
-| PR-4 | T7、T8             | 白名单清空 → 转硬失败 + 收口                       |
+> **实际交付情况**（与下表原计划有出入，出入原因写在各任务的「状态」段里）：
 
-各 PR 之间**严格串行**：白名单是 PR-2/3 的输入，必须先由 PR-1 产出。
+| PR | 任务 | commit | 主题 |
+| --- | --- | --- | --- |
+| PR-1 | T0、T1、T2 | `72dd7572` (+`9306a143` skip 白名单登记) | 守卫上线 + 37 条基线（**止血**） |
+| PR-2 | T3、T4、**T7** | `588591b0` | 存量清零 → 白名单归空、**提前转硬失败** |
+| PR-3 | T5'（第一批） | `077b99fe` | 覆盖工作流编辑器 + 任务详情，**+274 条**清零 |
+| PR-4 | T5'（第二批）、T6、T8 | `1b99caea` | 覆盖评审详情 / 聊天室 / 弹窗，**+11 条**；T6 由实测收敛为无动作；收口 |
+
+原计划的 **T5「长尾容器批量清零」被作废**（几何审计对那份静态清单一条也没报），
+**T7 提前到 PR-2** 达成（T3+T4 一次清空了整份基线）。各 PR 严格串行：白名单是
+后续批次的输入。
 
 ---
 
-## T0 · `.form-input` 族 inset 化（**已完成，未提交**）
+## T0 · `.form-input` 族 inset 化（**已交付**）
 
 用户报告的两处直接修复，作为本 RFC 的既成前提。
 
@@ -26,7 +30,7 @@
 - 新增 `packages/frontend/tests/focus-ring-inset.test.ts`（含表级 banned-pattern 守卫 + 变异测试已验证）。
 - 更新 `workgroup-room-composer-outline-clip.test.ts` 中断言旧前置条件的那条 case。
 
-**状态**：代码已写、四门全绿（typecheck / lint / 4937 前端用例 / format）、明暗双主题像素验证通过。**尚未 commit**，等本 RFC 批准后随 PR-1 一起提交。
+**状态：已交付**（随 PR-1 `72dd7572` 提交）。四门全绿、明暗双主题像素验证通过。注：其中 `.agent-form__panel` 的内边距在 T3 被收敛掉了——gutter 上移到共享的 `.split__detail-body`，因为前者只覆盖 agent 表单，裸用 `.split__detail-body` 的 `/skills/new`、`/mcps/new`、`/plugins/new` 正是因此才漏掉。
 
 **依赖**：无。
 
@@ -187,8 +191,22 @@
 **直接失败**（`/agents`、`/skills` 头部根本没有 import 按钮，原写法一直在空跑，
 正是被这道门抓出来的）。
 
+### 窄视口（≤720px）补齐
+
+design.md §6 的失败模式表早就写了「只测了默认视口 ⇒ 移动端 `@media` 下的容器漏测」，
+T1 也把「desktop / ≤720px 两个视口」写进了任务，但**第一版实现漏了**——直到收口自查
+才发现 spec 里连一次 `setViewportSize` 都没有。`styles.css` 有一整套
+`@media (max-width: 720px)` 规制会换掉容器（`.md-editor--fill` 变成无 padding 的
+`overflow-y:auto`、`.workgroup-room__side` 反转成 `overflow: visible`、tasks 工具栏的
+`.segmented` 自己变成滚动盒、`.page--split` 长出移动端返回键），等于有半套响应式 CSS
+从没被审计过。
+
+现已补上：6 条代表性路由 + 任务详情在 720×900 下重扫一遍，**0 违规**（覆盖门确认
+确实测到了控件，不是空跑）。踩到一个实现细节：这段必须放在 `cdp.detach()` **之前**，
+否则 CDP 会话已关闭、`sweep()` 直接抛 `Target page, context or browser has been closed`。
+
 覆盖面现状：21 条列表/新建路由 + agent 详情 5 页签 + 工作流编辑器（含 inspector）
-+ 任务详情 9 个 `?tab=` + 评审详情 + 工作组聊天室 + 3 个弹窗。
++ 任务详情 9 个 `?tab=` + 评审详情 + 工作组聊天室 + 3 个弹窗 + **≤720px 窄视口重扫**。
 
 ---
 
@@ -232,7 +250,11 @@
 
 **已做**：STATE.md 与 `design/plan.md` RFC 索引状态翻新（Draft → In Progress，列明已交付/剩余）。
 
-**未做（阻塞）**：**实现门 Codex review 没跑成**。两次尝试：第一次 `Turn failed / Reviewer failed to output a response`；第二次明确报 `You've hit your usage limit … try again at Jul 25th, 2026 12:03 PM`。**配额恢复后必须补跑**——按 `feedback_codex_review_after_changes`，设计门与实现门是两道独立的门，设计门过了不代表实现门可以省。补跑方法（共享树必须隔离，否则会被并发 session 的 diff 淹没）：
+**替代已做**：Codex 不可用期间改用**独立对抗审查**（另起一个上下文、只给我这份
+累计 diff + 设计意图，专问「两道守卫能不能在真有裁剪时静默通过」）。这不能顶替
+Codex 门，但比什么都不做强，发现项与处置记在下方。
+
+**未做（外部阻塞）**：**实现门 Codex review 没跑成**。两次尝试：第一次 `Turn failed / Reviewer failed to output a response`；第二次明确报 `You've hit your usage limit … try again at Jul 25th, 2026 12:03 PM`。**配额恢复后必须补跑**——按 `feedback_codex_review_after_changes`，设计门与实现门是两道独立的门，设计门过了不代表实现门可以省。补跑方法（共享树必须隔离，否则会被并发 session 的 diff 淹没）：
 
 ```
 git worktree add --detach <wt> b1ac247a
@@ -240,7 +262,14 @@ cd <wt> && git cherry-pick 72dd7572 588591b0 9306a143
 node <codex-companion> review --wait --base b1ac247a --scope branch
 ```
 
-**未做**：单二进制 smoke 与 Playwright e2e 在 CI 上尚未跑过我的守卫（被 backend 红项 gate 掉，红项归属并发 session 的 `7ee8df92`）。下一次 CI 转绿时需确认 `focus-ring-clip.spec.ts` 真的在 CI 里跑过、而不是又被 skip。
+**CI 上仍未跑过（不是本 RFC 能控制的）**：连续三轮 CI（`f8ea36c2` / `3033f4ec` / `66937ae4`）的 `Playwright e2e` 与 `Build single-binary (smoke)` 都被 **skip**——它们 gate 在 backend 分片之后，而 backend 一直红在并发 session 的提交上（依次为 `7ee8df92` RFC-207 漏改三个测试文件、`b9fdecd6` RFC-210 的 `rfc210-alternates`）。逐条 bisect 确认与本 RFC 无关。
+
+**替代验证（已做，可复现）**：在 `origin/main` 的**干净 detached worktree** 里
+`bun install --frozen-lockfile` + `bun run build` + `bun run build:binary`（走
+CI 同一条产物链，smoke 通过），再跑 `focus-ring-clip.spec.ts` —— **5/5 绿**
+（4 条引擎自检 + 全量 sweep，空白名单 + 覆盖门）。这与 CI 会做的事等价，唯一
+差别是 runner 环境。等 backend 转绿后仍应确认该 spec 在 CI 里**真的执行过**
+而不是又被 skip。
 
 ---
 

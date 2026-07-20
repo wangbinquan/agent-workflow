@@ -764,6 +764,10 @@ async function primeAuth(page: Page, d: DaemonHandle): Promise<void> {
   )
 }
 
+/** Routes re-swept at <=720px, where styles.css swaps in a different container
+ *  regime. Kept to a representative subset so the extra pass stays cheap. */
+const NARROW_ROUTES = ['/agents', '/tasks', '/workflows', '/settings', '/memory', '/clarify']
+
 const ROUTES = [
   '/',
   '/agents',
@@ -945,6 +949,27 @@ test('focus rings are not clipped anywhere', async ({ page }) => {
   await expect(page.locator('.dialog__panel')).toBeVisible()
   record('/repos(batch-import-dialog)', await sweep())
 
+  // ── Narrow viewport (<=720px) ─────────────────────────────────────────
+  // styles.css has a whole `@media (max-width: 720px)` regime that swaps
+  // containers around — `.md-editor--fill` gains `overflow-y: auto` with no
+  // padding, `.workgroup-room__side` flips to `overflow: visible`, the tasks
+  // toolbar's `.segmented` becomes the scroll box itself (2px padding vs a 4px
+  // ring), and `.page--split` grows a mobile back button. None of that is
+  // exercised at the desktop viewport, so half the responsive CSS was
+  // unaudited. Required by design.md §6 ("只测了默认视口" failure mode).
+  await page.setViewportSize({ width: 720, height: 900 })
+  for (const route of NARROW_ROUTES) {
+    await page.goto(`${daemon.baseUrl}${route}`)
+    await expect(page.locator('.app-shell, .page, main').first()).toBeVisible()
+    await page.waitForTimeout(350)
+    record(`${route}@720`, await sweep())
+  }
+  await page.goto(`${daemon.baseUrl}/tasks/${seededTaskId}`)
+  await expect(page.locator('.page--task-detail').first()).toBeVisible()
+  await page.waitForTimeout(500)
+  record('/tasks/{id}@720', await sweep())
+  await page.setViewportSize({ width: 1280, height: 800 })
+
   await cdp.detach()
 
   if (process.env.RFC206_DUMP_BASELINE) {
@@ -970,6 +995,8 @@ test('focus rings are not clipped anywhere', async ({ page }) => {
     '/repos(batch-import-dialog)',
     '/workflows(import-dialog)',
     '/memory(new-dialog)',
+    '/agents@720',
+    '/tasks/{id}@720',
   ]
   const uncovered = REQUIRED_SURFACES.filter((s) => (coverage.get(s) ?? 0) === 0)
   expect(
