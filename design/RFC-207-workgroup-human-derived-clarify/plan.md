@@ -34,7 +34,8 @@
 ### 阶段 C —— backend 路由与持久化
 
 - **T11** `routes/workgroupTasks.ts`：`ConfigPatchSchema` 删 `autonomous`（:119）、changes 文案（:1038）、nextConfig 合并（:1084）。
-- **T12** `routes/workgroupTasks.ts:1212-1222` 遣散触发条件改为「人工成员数 `>0 → 0`」（design §3.4），保留 `dynamic_workflow` 守卫、单事务编排、双 kick。
+- **T12** `routes/workgroupTasks.ts:1212-1222` 遣散触发条件改为「人工成员数 `>0 → 0`」（design §3.4），保留 `dynamic_workflow` 守卫与双 kick。
+- **T12a（二轮设计门 P1）** 把「配置写入 + 遣散」整体纳入 `getTaskQuestionWriteSem(taskId)`（`services/taskWriteLocks.ts:61`，答案提交侧经 `clarifySeal.ts:458` 持有同一把）。现状是配置事务在 `:1197` 就提交、遣散在 `:1217` 另开事务，RFC-181 A2 声称的「陈旧答案 409 / 不 mint 重跑」在这条缝里**并不成立**，只换触发条件会原样继承。注意该锁**非重入**（遣散原语内部不得再取）且锁序为 A(`getTaskWriteSem`) ≻ B(本锁)，此处只取 B。备选是把遣散改造成 tx-aware，但要动 RFC-181 既有原语签名，**优先加锁方案**。
 - **T13** `services/workgroups.ts:123/178/422`（create 默认 / update 保留 / 序列化）、`services/workgroupLaunch.ts:98`（快照）删字段。
 - **T13a** `services/workgroups.ts` create/update/序列化 + `workgroupLaunch.ts` 快照**新增** `clarifyBudget`；照抄 `fanOut` 的 optional-not-default 契约（create `?? 3`、update `?? existing`），**不能**用 schema `.default()`（否则省略该字段的 PUT 会静默改写既有组）。
 - **T14** `db/schema.ts:496` 删列 + `clarify_budget` 新列 + `tasks.running_ms/running_since` 新列 + `task_node_clarify_directives` 重建 + `node_runs.error_message` 回填，**单 migration 多段、每段之间 `--> statement-breakpoint`**（design §4）+ `_journal.json` +1。排查「冻结在旧 migration 的 DB」fixture（drizzle INSERT 会带 HEAD 全部列 ⇒ `no column named running_ms`）。
@@ -43,9 +44,13 @@
 
 ### 阶段 C2 —— 反问不能永不停（G8 / G9 / G10）
 
-- **T28（G8 预算）** `schemas/workgroup.ts` 加 `clarifyBudget`（optional-not-default）+ 进 `WorkgroupRuntimeConfig` + 进 per-task `ConfigPatchSchema`；`scheduler.ts:960-970` 在 `createClarifySession` **之前**加 `askingGeneration >= budget ⇒ 压制`（与 §3.4a 地板、活判据同一短路点）；重提示文案区分「无人可问 / 次数用尽 / 已被喊停」三种。
+- **T28a（G8 键与回退）** shared 新增 `wgClarifyAskerKey(nodeId, shardKey)`（leader / `asg:*` / `mem:*` 归一化，design §3.6.3）与 `resolveClarifyBudget(config)` + `WG_CLARIFY_BUDGET_DEFAULT=3`（design §3.6.5）。**所有读取点只准走它们**，禁止裸 `?? 3`（配源码锁）。
+- **T28b（G8 计数）** 按 `clarify_sessions` 的真实提问记录计数（`sourceAgentNodeId` + 归一化 asker key），**不得**复用 `priorDoneGenerationsForRun`——它统计的是同一 `(nodeId, iteration, shardKey)` 下所有 done 顶层 run，leader 每个正常回合都算一行，会让「跑满 N 个不反问的回合后首次反问」被误判耗尽（二轮设计门 P1）。检查点在 `createClarifySession` **之前**，与 §3.4a 地板、活判据同一短路。
+- **T28c（G8 字段）** `schemas/workgroup.ts` 加 `clarifyBudget`（optional-not-default）+ 进 `WorkgroupRuntimeConfig`（**optional**，旧快照必须仍可解析）+ 进 per-task `ConfigPatchSchema`；重提示文案区分「无人可问 / 次数用尽 / 已被喊停」三种。
+- **T28d（G8 邀请同源，二轮设计门 P1）** `renderWgProtocolBlock` 增参 `clarifyAllowed`，`workgroupContext.ts:457` 改用传入值不再自推；三个 turn 各算一次 `clarifyAllowed` 同时喂 renderer 与 `clarifyEnabled`。**否则预算耗尽/被停时 prompt 仍在邀请、envelope 又拒绝，白烧 `WG_PROTOCOL_RETRIES` 并把派单打成 failed。** 连带改 `rfc200-source-lock.test.ts:67`。
 - **T29（G9 存储）** `task_node_clarify_directives` 加 `shard_key TEXT NOT NULL DEFAULT ''`、PK 改三元（重建式 migration，`''` 作节点级哨兵，service 边界做 `null ↔ ''` 转换）；改 `taskClarifyDirective.ts` 四个函数 + 三个生产读取点（`scheduler.ts:3189-3191`、`crossClarify.ts:500`、`clarifyMigration.ts:179`），读取按「shard 行优先、节点级回落」。
-- **T30（G9 写入）** `clarifySeal.ts:467-474` 改为按轮的 `askingShardKey` 落行（`null → ''`）；`routes/taskClarifyDirective.ts` 的 body schema 加可选 `shardKey`。**必配测试**：普通非分片零变化 + 普通 fan-out 分片 stop 收窄为单片（design §3.7.4 已披露的行为变化）。
+- **T29b（G9 恢复语义，二轮设计门 P2）** 写入节点级 `continue` 时同事务 `DELETE` 该 `(task_id, node_id)` 下所有 shard 行——否则 shard 级 stop 优先于节点级 continue，形成「看着是继续、实际仍被停」的不可恢复死角。
+- **T30（G9 写入）** `clarifySeal.ts:467-474` 改为按轮的 `askingShardKey` 经 `wgClarifyAskerKey` 归一化后落行（`null → ''`；工作组消息轮 `msg:*` → `mem:*`，不归一化则每条消息换一个键、停了等于没停）；`routes/taskClarifyDirective.ts` 的 body schema 加可选 `shardKey`。**必配测试**：普通非分片零变化 + 普通 fan-out 分片 stop 收窄为单片（design §3.7.4 已披露的行为变化）。
 - **T31（G9 接线）** 工作组 host 路径读 directive：派发期并入 `clarifyEnabled`（`workgroupRunner.ts:1520/1813/1989`）、envelope 期并入 `clarifySuppressed`（`scheduler.ts:863-865`）。**不改** `clarifyChannel.directive`（保持 `'delegated'`，别撞 RFC-183 对称性锁 / `clarifyDispositionFor` 的 `'stopped'→'reject'` 语义）。
 - **T32（G9 恢复入口）** 房间响应增补 `clarifyStops`；`WorkgroupRoom` 信息区 / 派单卡片显示「反问已停止」chip + 复用 `.btn--xs` 恢复按钮（调既有 directive 路由写 `'continue'`）。**不新增配置开关**。
 - **T33（G10）** `tasks` 加 `running_ms`/`running_since`；写入集中在 `lifecycle.ts:411-423` 的 `writeStatus`（进/出 `running` 各一条规则），`TaskStatusUpdateExtra`（`:290-300`）白名单加这两列；`limits.ts:77` 改读累计值；migration 回填当前 `running` 行的 `running_since = started_at`。

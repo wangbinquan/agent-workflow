@@ -78,10 +78,10 @@ export async function isTaskClarifySuppressed(db: Db, taskId: string): Promise<b
 
 | # | 位置 | 现状 | 改为 |
 |---|---|---|---|
-| 1 | `workgroupContext.ts:457` | `if (resolveClarifyEnabled(config.autonomous ?? false))` push 邀请块 | `if (workgroupHasHumanMember(config.members))` |
-| 2 | `workgroupRunner.ts:1520` leader turn | `clarifyEnabled: resolveClarifyEnabled(config.autonomous ?? false)` | `clarifyEnabled: workgroupHasHumanMember(config.members)` |
-| 3 | `workgroupRunner.ts:1813` assignment turn | 同上 | 同上 |
-| 4 | `workgroupRunner.ts:1989` message turn | 同上 | 同上 |
+| 1 | `workgroupContext.ts:457` | `if (resolveClarifyEnabled(config.autonomous ?? false))` push 邀请块 | **改为使用调用方传入的 `clarifyAllowed`**（`renderWgProtocolBlock` 新增该参数），不再自行从 config 推导——§3.7.2 二轮设计门 P1 |
+| 2 | `workgroupRunner.ts:1518-1520` leader turn | `renderWgProtocolBlock('leader', config, nonce)` + `clarifyEnabled: resolveClarifyEnabled(...)` | 先算一次 `clarifyAllowed`（花名册 ∧ 预算 ∧ 未被停），**同时**喂给 renderer 与 `clarifyEnabled` |
+| 3 | `workgroupRunner.ts:1807-1813` assignment turn | 同上 | 同上（asker key = `asg:<assignmentId>`） |
+| 4 | `workgroupRunner.ts:1987-1989` message turn | 同上 | 同上（asker key = `mem:<memberId>`，§3.6.3） |
 | 5 | `scheduler.ts:863-865` | `clarifySuppressed: () => isTaskAutonomous(db, taskId)` | `clarifySuppressed: () => req.clarifyEnabled === false ? true : isTaskClarifySuppressed(db, taskId)`——**派发期 false 是压制地板**，见 §3.4a（`req.clarifyEnabled !== undefined` 的 wiring 条件不变，它只是「这是 wg host run」的标记） |
 | 6 | `scheduler.ts:936-937` late-suppress | `await isTaskAutonomous(...)` | `await isTaskClarifySuppressed(...)` |
 | 7 | `scheduler.ts:990-999` TOCTOU 补偿 | 同上 + `dismissOpenClarifyParksForAutonomous` | 同上 + `dismissOpenClarifyParks` |
@@ -122,7 +122,11 @@ willHave  = workgroupHasHumanMember(<写入的 nextConfig.members>)
 ```
 
 - `!hadHuman && willHave`（加入第一个人）：无补偿动作。下一轮引擎 `loadDbState` 即注入邀请块。**已因压制而 failed 的 assignment 不会自动重跑**——沿用 RFC-181 的 drop-and-continue 语义，本 RFC 不扩范围。
-- `hadHuman && !willHave`（移除最后一人，D7）：与配置写入**同一把锁 / 同一事务**内 `dismissOpenClarifyParks(db, taskId, mode)`，随后 `kickIfParked` 解卡 + resume。完全复用 RFC-181 A2 的编排（含：与答案提交串行化 ⇒ 陈旧答案 409 / 幂等拒绝；`dynamic_workflow` 免疫；遣散后新鲜状态复读 kick + 2.5s 延迟二次 kick 防搁浅）。`changes[]` 追加人类可读行。
+- `hadHuman && !willHave`（移除最后一人，D7）：`dismissOpenClarifyParks(db, taskId, mode)` + `kickIfParked` 解卡 + resume，复用 RFC-181 A2 的编排（`dynamic_workflow` 免疫；遣散后新鲜状态复读 kick + 2.5s 延迟二次 kick 防搁浅）。`changes[]` 追加人类可读行。
+
+  **⚠️ 二轮设计门 P1——「同一事务」在现状里是假的。** 已核实：配置 `dbTxSync` 在 `workgroupTasks.ts:1197` 就提交了，遣散在 `:1217` 才调用，而 `dismissOpenClarifyParksForAutonomous` **自己另开** `dbTxSync`。RFC-181 A2 声称的「与答案提交串行化 ⇒ 陈旧答案 409 / 不 mint 重跑」在这个缝里并不成立：若答案恰好在两者之间提交，它会把 round 置 `answered` 并 mint continuation，随后遣散已看不到 `awaiting_human` 行。只换触发条件会把这个缺陷一并继承，**AC5 的保证是空头支票**。
+
+  处置：让「配置写入 + 遣散」整体持有**答案提交侧同一把锁**——`getTaskQuestionWriteSem(taskId)`（`services/taskWriteLocks.ts:61`；答案路径经 `clarifySeal.ts:458` 持有它）。注意两点：① 它是**非重入** `Semaphore(1)`，遣散原语内部不得再次获取（`clarifyAutoDispatch.ts:17` 已记录 `sealRoundQuestions` 是「获取后即释放」的模式）；② 模块文档规定的锁序是 A(`getTaskWriteSem`) ≻ B(本锁)，本处只取 B、不持 A，不构成环。备选方案是把遣散改造成 tx-aware（接受外部 tx），但那要改 RFC-181 的既有原语签名，**优先取加锁方案**。
 - 其余组合 no-op。**完工确认门的 park 不被遣散**（gate park 与 clarify park 分开，同 RFC-181）。
 
 替换掉现有的 `patch.autonomous === true && stored !== true` 触发条件（`workgroupTasks.ts:1212-1222`）。
@@ -159,20 +163,48 @@ willHave  = workgroupHasHumanMember(<写入的 nextConfig.members>)
 | `maxDurationMs` | **反向有害**：park 期不可见（只扫 `running`），`startedAt` 不重置 ⇒ 人答完首个 tick 秒杀 | `limits.ts:34/76-83`、`task.ts:1010-1018`、`tests/scheduler-audit-gap1-limits-resume-startedat.test.ts:183-217` |
 | 「停止反问」 | 工作组内 **no-op**：directive 行写得进去，host 路径写死 `delegated` 且从不读表 | `clarifySeal.ts:467-474` vs `scheduler.ts:862`（唯一读取点 `scheduler.ts:3190` 只服务普通节点） |
 
-#### 3.6.2 计数载体：复用现成的代际计数，零新表零新列
+#### 3.6.2 计数载体（**二轮设计门 P1 返工**：不能复用 `askingGeneration`）
 
-工作组 host 的反问路径**已经**在算「这个提问方问过几次」——`scheduler.ts:960-970` 的
-`askingGeneration = priorDoneGenerationsForRun(taskId, nodeId, iteration, shardKey).length`，
-且**天然按 shardKey 分片**（`scheduler.ts:6713-6739`）。它正是预算所需的计数器：
+初稿想直接复用 `scheduler.ts:960-970` 已经算好的
+`askingGeneration = priorDoneGenerationsForRun(...).length`。**这是错的**——已核实
+`priorDoneGenerationsForRun`（`scheduler.ts:6713-6735`）统计的是同一
+`(taskId, nodeId, iteration, shardKey)` 下**所有** `done` 顶层 run，不是「问过几次」：
 
-| 提问方 | shardKey | 计数范围 |
+- **assignment 侧**大致等价（一张派单内每个 done run 基本对应一次提问），巧合而已；
+- **leader 侧完全错位**——leader 每个正常回合都是一行 `__wg_leader__` / shardKey `null` 的 done run。预算取 3 时，leader 只要先跑完 3 个**根本没反问**的正常回合，它的**第一次**反问就会被判为「预算已耗尽」。
+
+因此预算必须按**真实提问记录**计数：`clarify_sessions`（每次 `createClarifySession` 一行，带
+`sourceAgentNodeId` + `sourceShardKey`）。计数发生在建 session 之前，天然不含本次。
+
+#### 3.6.3 提问方键（asker key）——预算与「停止」共用的稳定身份
+
+shardKey 直接当身份会漏一条路：**message turn 也能反问**，而它的 shardKey 是
+`msg:${memberId}:${maxMessageId}`（`workgroupRunner.ts:1951`）——**每被新消息唤醒一次就是一个新 shardKey**，预算永远从 0 开始；而在 `leader_worker` 下这些 member run 又不计入 `maxRounds`，等于留了一条可持续反问的旁路（二轮设计门 P2）。
+
+故定义一个纯函数做归一化，**预算计数与 stop directive 共用同一个键**：
+
+```ts
+/** RFC-207 —— 反问的「提问方」稳定身份；预算与停止指令共用。 */
+export function wgClarifyAskerKey(nodeId: string, shardKey: string | null): string {
+  if (nodeId === WG_LEADER_NODE_ID) return 'leader'          // 单例，跨整个任务
+  if (shardKey === null) return 'leader'                      // 防御：host 侧不该出现
+  if (shardKey.startsWith('msg:')) return `mem:${shardKey.split(':')[1]}` // 成员级，堵旁路
+  return `asg:${shardKey}`                                    // 派单级，换派单即重置
+}
+```
+
+（`msg:` 前缀与 `split(':')[1]` 取 memberId 的约定源码里已在用：`workgroupRunner.ts:1036/1042/1404-1406`。）
+
+| 提问方 | 键 | 计数范围 / 重置 |
 |---|---|---|
-| leader | `null` | 整个任务里 leader 累计问过几次 |
-| 某张派单 | assignment id | 这张派单问过几次；**新派单 = 新 shardKey = 从 0 重新计**（天然重置，无需「实质进展」判定） |
+| leader | `leader` | 整个任务累计，不重置 |
+| 某张派单 | `asg:<assignmentId>` | 该派单内累计；**换一张派单自动从 0** |
+| 成员的消息轮 | `mem:<memberId>` | 该成员累计，**不随消息 id 重置**（这是修掉的旁路） |
 
-预算检查即一行：`askingGeneration >= clarifyBudget` ⇒ 走压制。放在 `createClarifySession` **之前**（与 §3.4a 的地板、活判据同一处短路点），保证「不建 session、不 park」。
+预算检查：`countClarifySessions(taskId, askerKey) >= clarifyBudget` ⇒ 走压制。位置在
+`createClarifySession` **之前**，与 §3.4a 的派发期地板、活判据同一处短路点，保证「不建 session、不 park」。
 
-> **语义说明（用户确认的简化）**：派单侧靠「换派单即换 shardKey」天然重置；leader 侧是**任务级累计**、不重置——问满就不能再问了。这比「连续 N 次无进展则截断」可预测得多，也不需要定义什么算「进展」。leader 侧觉得紧就把组定义的数字调大（D16）。
+> **语义说明**：派单侧靠换派单天然重置；leader / 成员消息轮是累计不重置——问满就不能再问了。这比「连续 N 次无进展则截断」可预测得多，也无需定义什么算「进展」。觉得紧就把组定义的数字调大（D16）。
 
 #### 3.6.3 到限行为
 
@@ -187,6 +219,24 @@ willHave  = workgroupHasHumanMember(<写入的 nextConfig.members>)
 - 与 `autonomous` 不同，它**不是**「要不要人参与」的第二事实源，而是「人参与时能被打扰多少次」的量——不违反本 RFC 删开关的初衷。
 - 默认值走 `.default(3)` 还是 handler 侧 coalesce，须遵循 `autonomous` 踩过的坑（RFC-181 设计门 P1）：该字段对象被 Create **和** full-replace Update 共用，schema 默认会让「省略该字段的 PUT」静默改写既有组。**因此照抄 `fanOut` / 旧 `autonomous` 的做法：schema 里 optional 不给 default，create 侧 `?? 3`、update 侧 `?? existing`。**
 - 中途可调：进 per-task `ConfigPatchSchema`（与 `maxRounds` 同类），下一轮引擎 `loadDbState` 生效。
+
+#### 3.6.5 旧任务快照的回退（**二轮设计门 P1**）
+
+存量 `tasks.workgroup_config_json` 里**没有** `clarifyBudget`（migration 只给 `workgroups` 表加列，不改快照）。两个陷阱：
+
+- 若 `WorkgroupRuntimeConfigSchema` 把它设成 **required**，升级后所有在途任务的 `loadDbState` 解析当场失败——比 autonomous 那次严重得多。
+- 若只设 optional 而各读取点各自 `?? 3`，则**派发期与 envelope 期可能取到不同值**（有人漏写），重演本 RFC 一直在防的不对称。
+
+处置：runtime schema 里 optional，并**只提供一个回退出口**——
+
+```ts
+export const WG_CLARIFY_BUDGET_DEFAULT = 3
+export function resolveClarifyBudget(config: { clarifyBudget?: number }): number {
+  return config.clarifyBudget ?? WG_CLARIFY_BUDGET_DEFAULT
+}
+```
+
+所有读取点（派发期、envelope 期、房间展示）一律走它，禁止裸 `?? 3`。必配测试：**缺该字段的旧快照**能正常解析、且行为等同 budget=3。
 
 ### 3.7 打通「停止反问」（G9 / D15）+ 派单级粒度（用户 2026-07-20 拍板）
 
@@ -211,6 +261,16 @@ clarifyAllowed(asker) = hasHumanMember           // §1 判据
 
 - **派发期**（控「邀不邀请」）：`workgroupRunner.ts:1520/1813/1989` 的 `clarifyEnabled` 由该式求值。
 - **envelope 期**（控「接不接受」）：`scheduler.ts:863-865` 的 `clarifySuppressed` 取该式取反，并保留 §3.4a 的派发期地板。
+
+**⚠️ 二轮设计门 P1：光改 `clarifyEnabled` 不够。** 协议块由
+`renderWgProtocolBlock(role, config, envelopeNonce)` 构造（`workgroupRunner.ts:1518`），而它内部
+（`workgroupContext.ts:457`）只看 `config`——`clarifyEnabled` **根本不参与渲染**。若不一并改，
+`budget=0` / 预算耗尽 / 该 shard 已被喊停时，**prompt 仍在明确邀请 agent 反问，随后 envelope 又把它驳回**，白白烧掉 `WG_PROTOCOL_RETRIES` 次重试，member 侧还会把该派单打成 failed。
+
+因此把判据**显式传进 renderer**：`renderWgProtocolBlock(role, config, envelopeNonce, clarifyAllowed)`，
+`workgroupContext.ts:457` 改成直接用传入值、不再自己从 config 推导。这样邀请与接受**同一个来源、同一次求值**，
+对称性由构造保证而非靠两处各自算对。（连带：`rfc200-source-lock.test.ts:67` 锁的是
+`renderWgProtocolBlock('leader', config, envelopeNonce)` 字面量，必须同步改。）
 
 两侧同源 ⇒ invite⟺accept 对称不破；到限/被停后的收场完全复用 RFC-181 软驳回通道（文案分三种：无人可问 / 次数用尽 / 已被喊停）。
 
@@ -241,18 +301,20 @@ CREATE INDEX idx_task_node_clarify_directives_task ON task_node_clarify_directiv
 
 - **用 `''` 哨兵而非 NULL**：SQLite 的 PRIMARY KEY 列在普通（有 rowid）表里**不隐含 NOT NULL**，用 NULL 会允许多行重复，主键形同虚设。列保持 `NOT NULL DEFAULT ''`，在 service 边界做 `shardKey ?? ''`（写）/ `'' → null`（读）转换，对外仍是全仓通行的 `string | null` 约定。
 - **读取解析顺序**：先查该 shard 行，无则回落节点级（`''`）行。这让「停某一张派单」与「停这个节点全部」可以共存。
+- **节点级 `continue` 必须清除该节点的 shard 行（二轮设计门 P2）**：否则出现无法恢复的死角——普通 fan-out 的某个 shard 在答题时被写入 stop 后，用户在画布上点「继续反问」只会写节点级 `continue`，而读取规则让 shard 行优先，于是**看着是继续、实际仍被停**。规则定为：写入节点级 `continue` 时，同事务 `DELETE` 掉该 `(task_id, node_id)` 下所有 shard 行（语义：节点级操作是「一键归位」）。写入节点级 `stop` 不必删（shard 行本就更严或同向）。工作组侧另有 §3.7.5 的 per-shard 恢复入口。
 - 受影响的 service：`taskClarifyDirective.ts` 的 `getNodeClarifyDirectiveRow` / `getNodeClarifyDirective` / `setNodeClarifyDirective`（`onConflictDoUpdate.target` 加 `shardKey`）/ `listNodeClarifyDirectives`。三个生产读取点：`scheduler.ts:3189-3191`、`crossClarify.ts:500`、`clarifyMigration.ts:179`。
 - **两条源码文本锁必然变红**、必须同步改：`rfc122-clarify-directive-dispatch.test.ts:547/569`（断言 `'getNodeClarifyDirectiveRow(db, taskId, node.id)'` 字面量）、`rfc123-clarify-directive-single-source.test.ts:394/405-407`（断言 `setNodeClarifyDirective(...)` 的确切调用形状）。
 
 #### 3.7.4 写入侧规则与对普通任务的**已披露**影响
 
-统一规则：**`clarifySeal` 按轮的 `askingShardKey` 写行**（`clarify_rounds.askingShardKey`，`schema.ts:1580`，今天被 `clarifySeal.ts:467-474` 丢弃），`null → ''`。逐场景：
+统一规则：**`clarifySeal` 按轮的 `askingShardKey` 写行**（`clarify_rounds.askingShardKey`，`schema.ts:1580`，今天被 `clarifySeal.ts:467-474` 丢弃），并经**同一个键函数**归一化后落库——预算与停止共用 §3.6.3 的 `wgClarifyAskerKey`，对非工作组节点是恒等（`shardKey ?? ''`）。逐场景：
 
 | 提问方 | `askingShardKey` | 落哪一行 | 与今天相比 |
 |---|---|---|---|
 | 普通非分片节点 | `null` | 节点级 `''` | **不变** |
-| 工作组 leader | `null` | 节点级 `''`（leader 本就是单例，节点级即 leader 级） | 新能力 |
-| 工作组成员派单 | assignment id | 该 shard 行 | 新能力，满足「只停发问的那张」 |
+| 工作组 leader | `null` | `leader` | 新能力 |
+| 工作组成员派单 | assignment id | `asg:<id>` | 新能力，满足「只停发问的那张」 |
+| 工作组成员消息轮 | `msg:<mem>:<msgId>` | `mem:<mem>`（归一化） | 新能力；**不归一化就会每条消息换一个键**，停了等于没停（同 §3.6.3 的预算旁路） |
 | **普通任务的 fan-out 分片节点** | shard key | 该 shard 行 | **有变化**：今天点 stop 会停掉该节点**全部**分片，改后只停这一片 |
 
 最后一行是对 §2 目标 G7（非工作组零变化）的**一处有意让步**：它本质是个 bug 修复（停 shard 3 的问题不该顺带静音 shard 7），但确实是行为变化，**显式披露并配测试**，不藏在实现里。
@@ -263,7 +325,7 @@ CREATE INDEX idx_task_node_clarify_directives_task ON task_node_clarify_directiv
 
 停止是**可撤销状态**，不是单向门。房间信息区显示「反问已停止」并给恢复按钮：
 
-- 后端：房间响应（`routes/workgroupTasks.ts:363`）增补 `clarifyStops`（leader 一项 + 每张在途派单一项）；`SetDirectiveBodySchema`（`routes/taskClarifyDirective.ts:28`）加可选 `shardKey`，复用同一路由写 `'continue'`。
+- 后端：房间响应（`routes/workgroupTasks.ts:363`）增补 `clarifyStops` —— **按 asker key 全量返回**（`leader` + 每张在途派单 `asg:*` + **每个成员 `mem:*`**）。只列 leader 与在途派单会漏掉消息轮的 `mem:*` 停止态，用户看不到也就撤不回（二轮设计门 P2）。`SetDirectiveBodySchema`（`routes/taskClarifyDirective.ts:28`）加可选 `shardKey`，复用同一路由写 `'continue'`。
 - 前端：`WorkgroupRoom` 的信息区 / 对应派单卡片上显示状态 chip + 复用既有 `.btn--xs` 恢复按钮。**不新增配置开关**——它呈现的是当前状态，不是组的固有属性。
 
 ### 3.8 park 期间不计入 `maxDurationMs`（G10 / D17）
@@ -405,11 +467,26 @@ UPDATE node_runs SET error_message = 'wg-clarify-disabled'
 - 兜底：触顶 `max_rounds` 且有产出 ⇒ `max-rounds-wrapup` park（D3，`rfc187-maxrounds-wrapup.test.ts` 保持绿，fixture 换判据）。
 
 **反问预算（G8，backend）**
-- 纯预言：`askingGeneration >= budget` 的边界（budget=3 ⇒ gen 0/1/2 放行、gen 3 驳回）；budget=0 ⇒ 首问即驳回。
-- leader 与派单**各自独立计数**：leader 问满后，一张新派单仍可从 0 开始问（反之亦然）。
-- **新派单重置**：同一 worker 的第二张派单（新 shardKey）预算从 0 起算。
+- `wgClarifyAskerKey` 真值表：leader / `asg:*` / `mem:*`（`msg:` 归一化）/ 防御分支。
+- 计数边界：budget=3 ⇒ 前 3 次放行、第 4 次驳回；budget=0 ⇒ 首问即驳回。
+- **二轮设计门 P1 的回归锁（必写）**：leader 先跑 **N 个不反问的正常回合**（N > budget），随后**第一次**反问**必须放行**——这条正是初稿「复用 `priorDoneGenerationsForRun`」会挂掉的用例。
+- **二轮设计门 P2 的回归锁（必写）**：同一成员被**多条不同消息**依次唤醒，反问计数**不随消息 id 重置**（`mem:` 键生效）。
+- **邀请⟺接受同源（二轮设计门 P1）**：budget=0 / 预算耗尽 / 已被喊停时，协议块里**不得**出现 `<workflow-clarify>`（否则就是「邀请了又拒绝」白烧重试、还会把派单打成 failed）。
+- **旧快照回退**：缺 `clarifyBudget` 的 `workgroup_config_json` 能正常解析、行为等同 budget=3；全仓无裸 `?? 3`（源码锁）。
+- leader / 派单 / 成员消息轮**各自独立计数**：leader 问满后，一张新派单仍可从 0 开始问。
+- **新派单重置**：同一 worker 的第二张派单（新 assignment id）预算从 0 起算。
 - 到限行为：驳回 → 重提示 → `WG_PROTOCOL_RETRIES` 耗尽 ⇒ leader drop-and-continue / worker 该轮 failed；**全程任务不进 `awaiting_human`**。
 - 组定义字段：省略该字段的 full-replace PUT **不得**改写既有组的值（照抄 `fanOut` 的 optional-not-default 契约测试）；per-task PATCH 可中途调整且下一轮生效。
+
+**停止反问（G9，backend + frontend）**
+- 派单级：停 `asg:A` 后 `asg:B` 仍可反问；停 leader 不影响派单。
+- 归一化：在成员消息轮上点停 ⇒ 写 `mem:<id>`，该成员后续**任何**消息轮都被停。
+- **节点级 continue 清 shard 行（二轮设计门 P2）**：先在某 shard 上 stop、再走节点级 `continue`，断言该 shard **确实恢复**——不写这条就会留下「看着是继续、实际仍被停」的不可恢复死角。
+- 普通任务：非分片节点 stop/continue 行为**逐字节不变**；fan-out 分片节点 stop 收窄为单片（§3.7.4 已披露的变化，配专测）。
+- 恢复入口：房间 `clarifyStops` 覆盖 leader / `asg:*` / `mem:*` 三类；点恢复后下一轮可正常反问。
+
+**移除最后一人 × 答案提交的竞态（G5，二轮设计门 P1）**
+- 并发用例：遣散与答案提交同时发起 ⇒ 要么答案先落、要么被 409 拒绝；**绝不出现「答案已 mint continuation 而遣散扫不到 `awaiting_human` 行」**的中间态——这正是现状两段事务留下的缝，AC5 的保证靠这条测试兑现。
 
 **中途转移（backend，路由级）**
 - 加入第一个人工成员 ⇒ 下一轮 `clarifyEnabled=true`（可用 fake hook 断请求参数）。
@@ -454,3 +531,10 @@ UPDATE node_runs SET error_message = 'wg-clarify-disabled'
 | R5 旧快照 `autonomous` 键导致 parse 失败 | ~~中~~ **已核实不成立** | `WorkgroupRuntimeConfigSchema` 为裸 `z.object`（非 strict），未知键被剥离；仍补一条回归测试 |
 | R6 催办文案改动使在途任务计数重置 | 低 | §3.3 已界定，受 `max_rounds` 约束 |
 | R7 列表 API 不返回 members ⇒ chip 无数据 | ~~低~~ **已核实不成立** | `rowToWorkgroup` 返回 `members` |
+| R8 预算计数器选错 ⇒ leader 首次反问即被误拒 | **高（二轮设计门 P1，已改设计）** | §3.6.2 改按 `clarify_sessions` 真实提问记录计数；配「N 个正常回合后首问必须放行」回归锁 |
+| R9 邀请与接受不同源 ⇒ 邀请了又拒绝、白烧重试并打挂派单 | **高（二轮设计门 P1，已改设计）** | §3.7.2 把 `clarifyAllowed` 显式传进 `renderWgProtocolBlock`，构造上同源 |
+| R10 遣散与答案提交跨两个事务 ⇒ AC5 的 409/不 mint 是空头支票 | **高（二轮设计门 P1，已改设计）** | §3.4 整体纳入 `getTaskQuestionWriteSem`；配并发测试 |
+| R11 旧快照缺 `clarifyBudget` ⇒ 在途任务解析失败或两侧取值不一致 | **中（二轮设计门 P1，已改设计）** | §3.6.5 runtime schema optional + 唯一回退出口 `resolveClarifyBudget`，禁裸 `?? 3` |
+| R12 消息轮 shardKey 每次都变 ⇒ 预算与停止双双失效的旁路 | **中（二轮设计门 P2，已改设计）** | §3.6.3 `wgClarifyAskerKey` 归一化到 `mem:<memberId>` |
+| R13 shard 级 stop 无法被节点级 continue 清除 ⇒ 不可恢复死角 | **中（二轮设计门 P2，已改设计）** | §3.7.3 节点级 continue 同事务删该节点全部 shard 行 |
+| R14 directive 表重建式 migration 出错 ⇒ 丢历史指令 | 中 | 五段各带 `--> statement-breakpoint`；INSERT SELECT 全量搬；配 replay 测试 |
