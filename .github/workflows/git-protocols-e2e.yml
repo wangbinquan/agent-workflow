@@ -23,6 +23,19 @@ on:
   schedule:
     - cron: '0 8 * * *'
   workflow_dispatch:
+  # Main-only development means the `pull_request` filter below never fires;
+  # without this mirror the suite only ever ran on the daily cron, decoupled
+  # from the commits that touch git protocol handling.
+  # See design/test-guard-audit-2026-07-21 §2 逃逸机制⑥ / gap M2-harness-2.
+  push:
+    branches: [main]
+    paths:
+      - 'packages/backend/src/services/gitRepoCache.ts'
+      - 'packages/backend/src/services/repoBatchImport.ts'
+      - 'packages/shared/src/git-url.ts'
+      - 'scripts/git-protocols/**'
+      - 'e2e/git-protocols.spec.ts'
+      - '.github/workflows/git-protocols-e2e.yml'
   pull_request:
     paths:
       - 'packages/backend/src/services/gitRepoCache.ts'

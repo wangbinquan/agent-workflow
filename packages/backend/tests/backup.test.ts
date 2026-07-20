@@ -118,6 +118,51 @@ describe('createBackup', () => {
     )
   })
 
+  // RFC-204's whole at-rest encryption argument rests on one sentence in a
+  // comment (services/repoCredentials.ts:8): the backup carries the sealed DB
+  // but NOT `secret.key`, so a leaked tarball cannot be unsealed. Nothing
+  // asserted it. The tarball is safe today only because createBackup happens to
+  // be whitelist-shaped — an implementation detail, not a locked contract. One
+  // "let's also include the rest of appHome" change would put the key and the
+  // ciphertext in the same archive, and every existing test would stay green.
+  // See design/test-guard-audit-2026-07-21 gap B6-data-5 / 逃逸机制⑧.
+  test('never ships the at-rest encryption key, and carries no plaintext credential', async () => {
+    const secret = 'SECRET-KEY-MUST-NOT-BE-BACKED-UP'
+    const plaintextToken = 'ghp-PLAINTEXT-CREDENTIAL-MUST-NOT-APPEAR'
+    writeFileSync(join(h.appHome, 'secret.key'), secret, 'utf-8')
+    // A sibling that a future "back up everything under appHome" change would
+    // sweep in alongside the key.
+    mkdirSync(join(h.appHome, 'credentials'), { recursive: true })
+    writeFileSync(join(h.appHome, 'credentials', 'repo.json'), plaintextToken, 'utf-8')
+
+    const r = await createBackup({ db: h.db, appHome: h.appHome })
+
+    const members = await listTarMembers(r.path)
+    expect(members.some((m) => m.endsWith('secret.key'))).toBe(false)
+    expect(members.some((m) => m.includes('credentials'))).toBe(false)
+
+    // Content half: prove the member-name assertions above are not vacuous by
+    // scanning what the archive actually carries — a key renamed to something
+    // innocuous, or inlined into config.json, would still fail here. Scan the
+    // DECOMPRESSED bytes: a gzip stream essentially never contains the literal
+    // plaintext, so grepping the .tar.gz itself would be a guard with no teeth.
+    const unpacked = join(h.appHome, 'unpacked-secret-scan')
+    await extractTar(r.path, unpacked)
+    const scan = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+        const path = join(dir, entry.name)
+        if (entry.isDirectory()) return scan(path)
+        const bytes = readFileSync(path)
+        const hits: string[] = []
+        if (bytes.includes(Buffer.from(secret, 'utf-8'))) hits.push(`${path}: secret.key material`)
+        if (bytes.includes(Buffer.from(plaintextToken, 'utf-8'))) {
+          hits.push(`${path}: plaintext credential`)
+        }
+        return hits
+      })
+    expect(scan(unpacked)).toEqual([])
+  })
+
   test('db dump is a valid sqlite file with the schema applied', async () => {
     await createWorkflow(h.db, {
       name: 'rt',

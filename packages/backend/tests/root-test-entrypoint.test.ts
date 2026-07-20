@@ -385,6 +385,82 @@ describe('repository test entrypoint', () => {
     expect(visualWorkflow).toContain('opencode-ai@${{ env.OPENCODE_VERSION }}')
   })
 
+  // ---------------------------------------------------------------------------
+  // design/test-guard-audit-2026-07-21 §2 逃逸机制⑥ "门与分支在测试/CI 环境恒不激活".
+  //
+  // The three tests below lock the CI *topology*, which the audit found to be
+  // the precondition for every other guard's credibility: a guard that silently
+  // did not run is reported with the same green as a guard that ran clean.
+  // ---------------------------------------------------------------------------
+
+  test('path-filtered drift sentinels also fire on push, not only on pull_request', () => {
+    // CLAUDE.md mandates main-only development (no PR branches), so a workflow
+    // whose only code-coupled trigger is `pull_request` is decoupled from the
+    // commits it guards and degenerates into a daily cron. Both opencode
+    // integration and the git-protocol e2e sweep were in exactly that state.
+    for (const { name, source } of workflowSources) {
+      if (!/^ {2}pull_request:/m.test(source)) continue
+      expect(`${name}: push trigger = ${/^ {2}push:/m.test(source)}`).toBe(
+        `${name}: push trigger = true`,
+      )
+      // The push filter must be at least as wide as the pull_request one,
+      // otherwise the mirror only pretends to cover the same surface.
+      const pushBlock = source.match(/^ {2}push:\n(?: {4}.*\n| *\n)*/m)?.[0] ?? ''
+      const prBlock = source.match(/^ {2}pull_request:\n(?: {4}.*\n| *\n)*/m)?.[0] ?? ''
+      for (const path of [...prBlock.matchAll(/^ {6}- '([^']+)'$/gm)].map((m) => m[1]!)) {
+        expect(`${name}: push covers '${path}' = ${pushBlock.includes(`'${path}'`)}`).toBe(
+          `${name}: push covers '${path}' = true`,
+        )
+      }
+    }
+  })
+
+  test('binary smoke and e2e are not skipped by an unrelated red shard', () => {
+    // `needs:` alone makes GitHub SKIP the job when any dependency fails. With
+    // several sessions pushing to main concurrently, someone else's red backend
+    // shard used to take the shipped-binary smoke, the Playwright suite, the
+    // axe a11y sweep and the focus-ring geometry audit down with it — while the
+    // run still looked like "those guards had nothing to say".
+    for (const job of ['build-binary', 'e2e']) {
+      const source = workflowJob(ciWorkflow, job)
+      expect(`${job}: ${source.includes('if: ${{ !cancelled() }}')}`).toBe(`${job}: true`)
+    }
+  })
+
+  test('the opencode version CI installs satisfies the daemon MIN_OPENCODE_VERSION', () => {
+    // ci.yml:13-18 states this constraint in a comment ("Must stay >=
+    // MIN_OPENCODE_VERSION ... Bump together") — a cross-file contract whose
+    // only load-bearing carrier was prose. If it ever drifts low, CI installs a
+    // runtime the daemon itself refuses to start against, and the integration
+    // legs verify a version no user can run.
+    const opencodeUtil = readFileSync(
+      resolve(root, 'packages', 'backend', 'src', 'util', 'opencode.ts'),
+      'utf8',
+    )
+    const min = opencodeUtil.match(/MIN_OPENCODE_VERSION\s*=\s*'([^']+)'/)?.[1]
+    expect(min).toBeDefined()
+
+    const parse = (v: string): number[] => v.split('.').map((p) => Number.parseInt(p, 10))
+    const gte = (a: string, b: string): boolean => {
+      const [x, y] = [parse(a), parse(b)]
+      for (let i = 0; i < Math.max(x.length, y.length); i += 1) {
+        const diff = (x[i] ?? 0) - (y[i] ?? 0)
+        if (diff !== 0) return diff > 0
+      }
+      return true
+    }
+
+    for (const { name, source } of workflowSources) {
+      for (const pinned of [...source.matchAll(/OPENCODE_VERSION:\s*'([^']+)'/g)].map(
+        (m) => m[1]!,
+      )) {
+        expect(`${name}: opencode ${pinned} >= ${min}`).toBe(
+          `${name}: opencode ${pinned} >= ${gte(pinned, min as string) ? min : `TOO OLD (min ${min})`}`,
+        )
+      }
+    }
+  })
+
   test('low-level Bun discovery and shared process-state setup remain backend-only', () => {
     const bunfig = readFileSync(resolve(root, 'bunfig.toml'), 'utf8')
     expect(bunfig).toMatch(/\[test\][\s\S]*root\s*=\s*"packages\/backend\/tests"/)

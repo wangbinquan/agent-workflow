@@ -381,11 +381,21 @@ jobs:
 
   build-binary:
     name: Build single-binary (smoke)
-    # Gate the binary build + e2e on the fast, cheap checks and the full test
-    # matrix (all backend + frontend shards) so we don't spend build/e2e minutes
-    # on a run whose unit tests are already red. Each is a separate job now that
-    # the old monolithic `check` was split for sharding.
+    # Order the binary build + e2e AFTER the fast, cheap checks and the full test
+    # matrix so their logs read top-down and a green run costs the same as before.
+    # Each is a separate job now that the old monolithic `check` was split for
+    # sharding.
     needs: [lint, test-backend, test-frontend]
+    # …but `needs` alone SKIPS this job when any dependency is red, and a skipped
+    # guard is indistinguishable from a guard that ran clean. This repository is
+    # developed main-only with several sessions pushing concurrently, so an
+    # unrelated backend shard going red is routine — and it used to silently take
+    # the binary smoke, the e2e suite, the a11y sweep and the focus-ring geometry
+    # audit down with it (RFC-206 was signed off on a run where its own new guard
+    # never executed). `!cancelled()` keeps the ordering while letting these run
+    # anyway; a superseding push still cancels the whole run as before.
+    # See design/test-guard-audit-2026-07-21 §2 逃逸机制⑥.
+    if: ${{ !cancelled() }}
     strategy:
       fail-fast: false
       matrix:
@@ -472,6 +482,12 @@ jobs:
     # `test.beforeAll` semantics hold).
     name: Playwright e2e (shard ${{ matrix.shard }}/4)
     needs: build-binary
+    # Same reasoning as build-binary's `if`: a red unit shard must not silently
+    # skip the only layer that exercises real layout, real browser a11y and the
+    # shipped binary. If build-binary itself failed there is no artifact to
+    # download and this job fails loudly on the download step — which is the
+    # honest signal, unlike a skip.
+    if: ${{ !cancelled() }}
     strategy:
       fail-fast: false
       matrix:

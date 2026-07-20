@@ -34,6 +34,22 @@ on:
   schedule:
     - cron: '30 7 * * *'
   workflow_dispatch:
+  # This repository is developed main-only (no PR branches), so a
+  # `pull_request`-only path filter never fires on the commit that actually
+  # changes the opencode interface — the drift sentinel was decoupled from the
+  # code it guards and left running on a daily cron alone. Mirror the same
+  # filter on `push` so the sweep runs at the moment the interface moves, the
+  # way visual-regression-nightly already does.
+  # See design/test-guard-audit-2026-07-21 §2 逃逸机制⑥ / gap M2-harness-2.
+  push:
+    branches: [main]
+    paths:
+      - 'packages/backend/src/services/runner.ts'
+      - 'packages/backend/src/services/envelope.ts'
+      - 'packages/backend/src/services/protocol.ts'
+      - 'packages/backend/src/opencode-plugin/**'
+      - 'packages/backend/tests/integration-opencode/**'
+      - '.github/workflows/integration-opencode.yml'
   pull_request:
     paths:
       - 'packages/backend/src/services/runner.ts'
