@@ -227,7 +227,7 @@
 - [x] T16.1 将 `e2e/workflow-editor.spec.ts` 加入 root lint/format 精确清单；不靠未被 gate 覆盖的文件宣称完成。
 - [x] T16.2 E2E：zero-drag + empty-wrapper Add、真实 drag NEW/REUSE、edge insert target/mirror/Undo + forbidden-edge fail-closed、delayed save、offline before PUT/response-loss+offline/recovery/foreign-commit conflict、two-tab conflict、editor→wizard mismatch、mobile non-drag、validation focus、strict undo/redo oracle。
 - [x] T16.3 visual scenes：1536 三栏、1280 inspector light/dark、1179 palette/inspector side modal、390 empty+picker、390 full-screen inspector；保留既有 task-detail baseline，并**新增** deterministic dynamic-workflow preview component/page baseline。固定 fixture、mask 随机 id/version、禁动画/caret并同步新增 scene count。
-- [ ] T16.4 同步 visual scene count、README、nightly 注释与 Darwin/Linux baseline；不扩大 threshold 吞差异。
+- [x] T16.4 同步 visual scene count、README、nightly 注释与 Darwin/Linux baseline；不扩大 threshold 吞差异。
 - [x] T16.5 focused tests 后跑仓库正式门：
   - `bun run typecheck`
   - `bun run test`
@@ -238,7 +238,7 @@
 - [x] T16.6 检查 source/AST ratchets：content writer 无 unfenced update；所有 production workflow INSERT definition（显列 agentLaunch/workgroupLaunch）必经 canonical helper；metadata-only update 仅 allowlist且不触碰 editable columns/version；DB delete 仅 fenced service，禁 `deleteWorkflow(db,id)`/route direct delete；无裸 setDraft、第二 connection builder、editor vertical stack 或新增 native alert/prompt/confirm。
 - [ ] T16.7 更新 RFC 状态、`STATE.md`、`design/plan.md`；精确路径提交，保留并行改动。若获 push 授权，按仓库要求验证 commit attribution、push 后检查该 SHA CI。
 
-**B10 本地验证（2026-07-19）**：workspace typecheck/lint/format、depcheck、`git diff --check`、完整 backend/shared/frontend 单测、单二进制构建/version/doctor smoke、完整 Chromium E2E、RFC-199 axe/source ratchet 与 Darwin visual `25/25` 全绿；1280 light/dark Darwin 各重复 5 次零 diff。T16.4 保持未勾：本地 MCR `ubuntu-24.04` 容器与 GitHub 托管 runner 的字体/栅格库存不同，所产 9 张 Linux 图仅作诊断且尚未由 hosted runner 验证，不扩大 threshold。T16.7 保持未勾：尚未获 commit/push 授权，也没有 exact-SHA CI。
+**B10 验证（2026-07-20）**：workspace typecheck/lint/format、depcheck、`git diff --check`、完整 backend/shared/frontend 单测、单二进制构建/version/doctor smoke、完整 Chromium E2E、RFC-199 axe/source ratchet 与 Darwin visual `25/25` 全绿；1280 light/dark Darwin 各重复 5 次零 diff。GitHub 托管 `ubuntu-24.04` run `29710251462` 由提交 `21c2ab8acad1` 生成 artifact `8448850393`，其中 9 张 Linux 基准已逐文件替换本地 MCR 诊断图且不扩大 threshold；待下一提交的 hosted visual 零 diff 复跑。T16.7 保持未勾：精确提交/push 已开始，最终 exact-SHA CI 尚待复跑确认。
 
 ## 13. 回滚与停线条件
 
