@@ -380,6 +380,22 @@ test.describe('RFC-054 W2-6 — accessibility (axe-core) on key pages', () => {
     await expectNoCriticalOrSeriousAxeViolations(page, '/ (onboarding)')
   })
 
+  // RFC-211: the guided tour is a brand-new page whose whole point is that it
+  // is built from the shared primitives rather than bespoke chrome — the
+  // radiogroup track picker, the stepper and the destructive-confirm dialog all
+  // carry roles/labels only because those primitives provide them. Axe is what
+  // proves that stayed true.
+  test('/onboarding (guided tour) passes a11y', async ({ page }) => {
+    await primeAuth(page, daemon)
+    await page.goto(`${daemon.baseUrl}/onboarding`)
+    await page.waitForLoadState('networkidle')
+    await expect(page.getByTestId('guide-page')).toBeVisible()
+    // Exercise the track picker so the stepper (and its step list) is on screen
+    // for the scan, not just the empty landing state.
+    await page.getByTestId('guide-track-agent').click()
+    await expectNoCriticalOrSeriousAxeViolations(page, '/onboarding (guided tour)')
+  })
+
   // RFC-190: the capability-portal homepage (pipeline hero SVG + tiles +
   // task feed) only renders non-first-run — seed one agent + workflow so
   // the axe gate actually covers it. Runs AFTER the onboarding case

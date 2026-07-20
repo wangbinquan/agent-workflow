@@ -4416,7 +4416,7 @@ export const zhCN: Resources = {
     title: '上手引导',
     intro: '选一条线开始。每一步都可以让引导替你生成一份能跑的样板，也可以自己动手建。',
     sandboxNotice:
-      '引导里创建的东西都是**你自己的练习资源**：只有你看得见，随时可以在下面一键清除（连同它们产生的任务与产物）。',
+      '引导里创建的东西都是你自己的练习资源：只有你看得见，随时可以在下面一键清除（连同它们产生的任务与产物）。',
     pickTrack: '你想先学哪一块？',
     resume: '继续',
     start: '开始',
@@ -4436,7 +4436,7 @@ export const zhCN: Resources = {
       '下列资源与任务会被删除，它们的工作区、运行日志和产物也会一并清掉。此操作不可撤销。',
     cleanupAdminCta: '清除全实例的引导产物（管理员）',
     cleanupAdminWarning:
-      '这会删掉**所有用户**的引导产物，包括别人正在进行的引导。请确认没有人正在使用。',
+      '这会删掉所有用户的引导产物，包括别人正在进行的引导。请确认没有人正在使用。',
     cleanupEmpty: '当前没有引导产物。',
     cleanupDone: '已全部清除。',
     cleanupPartial: '部分项目未能清除，下面列出了原因。',
@@ -6260,7 +6260,7 @@ export const zhCN: Resources = {
     innerNodeIdsHint: '通过画布右键菜单组装。',
     fanoutInputs: '输入端口',
     fanoutInputsHint:
-      '声明的输入端口列表。**恰好一个**必须标记为 shard source 且 kind 必须是 list<T>；其余作为 broadcast 端口、传给每个 shard。',
+      '声明的输入端口列表。有且只有一个必须标记为 shard source 且 kind 必须是 list<T>；其余作为 broadcast 端口、传给每个 shard。',
     fanoutInputNamePlaceholder: '端口名',
     fanoutInputShardSource: '分片源',
     fanoutInputShardSourceMustBeList: '分片源的 kind 必须是 list<T>',

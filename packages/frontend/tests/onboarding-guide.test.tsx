@@ -106,6 +106,32 @@ afterEach(() => {
   window.localStorage.clear()
 })
 
+describe('RFC-211 guide copy', () => {
+  test('no bundle leaks literal markdown into plain-text components', async () => {
+    // Caught in a real browser: the sandbox banner shipped `**your own practice
+    // material**` and NoticeBanner renders plain text, so the asterisks showed
+    // up verbatim on the first screen a new user sees. Nothing else in the app
+    // markdown-renders i18n copy either, so this is a bundle-wide rule.
+    const [{ zhCN }, { enUS }] = await Promise.all([
+      import('../src/i18n/zh-CN'),
+      import('../src/i18n/en-US'),
+    ])
+    const offenders: string[] = []
+    const walk = (node: unknown, path: string): void => {
+      if (typeof node === 'string') {
+        if (node.includes('**')) offenders.push(`${path}: ${node.slice(0, 60)}`)
+        return
+      }
+      if (node !== null && typeof node === 'object') {
+        for (const [k, v] of Object.entries(node)) walk(v, path === '' ? k : `${path}.${k}`)
+      }
+    }
+    walk(zhCN, '')
+    walk(enUS, '')
+    expect(offenders).toEqual([])
+  })
+})
+
 describe('RFC-211 guided tour page', () => {
   test('renders through the shared page header and offers all four tracks', async () => {
     stubFetch([{ match: /\/api\/onboarding\/runs/, body: [] }])

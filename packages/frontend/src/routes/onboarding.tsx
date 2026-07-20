@@ -360,7 +360,7 @@ function OnboardingPage() {
       />
 
       <div className="onboarding__skip">
-        <Link to="/">{t('guide.backToGuide') === '' ? '' : t('nav.home')}</Link>
+        <Link to="/">{t('nav.home')}</Link>
       </div>
     </div>
   )

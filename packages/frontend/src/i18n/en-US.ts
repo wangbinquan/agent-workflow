@@ -711,7 +711,7 @@ export const enUS: Resources = {
     intro:
       'Pick a track. Every step can either build a working example for you, or send you to the real form to do it yourself.',
     sandboxNotice:
-      'Everything the tour creates is **your own practice material**: only you can see it, and you can wipe all of it below in one click (together with the tasks and artifacts it produced).',
+      'Everything the tour creates is your own practice material: only you can see it, and you can wipe all of it below in one click (together with the tasks and artifacts it produced).',
     pickTrack: 'What would you like to learn first?',
     resume: 'Resume',
     start: 'Start',
@@ -732,7 +732,7 @@ export const enUS: Resources = {
       'These resources and tasks will be deleted, along with their workspaces, run logs and artifacts. This cannot be undone.',
     cleanupAdminCta: 'Clean up the whole instance (admin)',
     cleanupAdminWarning:
-      "This deletes **every user's** tour material, including tours other people are in the middle of. Make sure nobody is using it.",
+      "This deletes EVERY user's tour material, including tours other people are in the middle of. Make sure nobody is using it.",
     cleanupEmpty: 'There is no tour material right now.',
     cleanupDone: 'All cleaned up.',
     cleanupPartial: 'Some items could not be removed — the reasons are listed below.',
