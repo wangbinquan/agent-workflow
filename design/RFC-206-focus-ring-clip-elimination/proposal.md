@@ -8,12 +8,12 @@
 
 这不是新 bug，是**第五次**复发。仓库里已经有四处针对同一现象的补丁：
 
-| 补丁位置 | 覆盖的轴 | 留下的锁 |
-| --- | --- | --- |
-| `.dialog__body`（负 margin 借位） | 仅左右 | `dialog-body-focus-outline-clip.test.ts` |
-| `.fuse-dialog .dialog__body`（RFC-101） | 仅左右（与上条重复） | — |
-| `.task-detail__pane > .workgroup-room` | 四边 | `workgroup-room-composer-outline-clip.test.ts` |
-| `.page--editor > .form-grid` | 仅左右，且只有 2px | `editor-layout-viewport-fit.test.ts` |
+| 补丁位置                                | 覆盖的轴             | 留下的锁                                       |
+| --------------------------------------- | -------------------- | ---------------------------------------------- |
+| `.dialog__body`（负 margin 借位）       | 仅左右               | `dialog-body-focus-outline-clip.test.ts`       |
+| `.fuse-dialog .dialog__body`（RFC-101） | 仅左右（与上条重复） | —                                              |
+| `.task-detail__pane > .workgroup-room`  | 四边                 | `workgroup-room-composer-outline-clip.test.ts` |
+| `.page--editor > .form-grid`            | 仅左右，且只有 2px   | `editor-layout-viewport-fit.test.ts`           |
 
 每一次都只补了「这次被报出来的那一条轴」，所以每次都会从**没补到的轴**再冒出来。用户这次报的两处，正是四次补丁都没覆盖到的轴。
 

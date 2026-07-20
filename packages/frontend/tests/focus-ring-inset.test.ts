@@ -81,29 +81,56 @@ describe('focus ring — inset for full-bleed form controls', () => {
     expect(body).toMatch(/box-shadow:\s*inset\s+0\s+0\s+0\s+2px/)
   })
 
-  it('.agent-form__panel — the scroll box itself — carries room for OUTSET rings', () => {
-    // It also carries .split__detail-body (overflow: auto), so its own padding
-    // is the only room its children get. The <Switch> checkbox is flush at x=0
-    // with a 4px ring; without this it is visibly cut on /agents → 高级.
-    const body = ruleBody('.agent-form__panel {')
-    expect(body).toMatch(/padding:\s*var\(--space-3\)\s+4px\s+4px/)
+  it('.split__detail-body — the scroll box itself — carries a gutter for OUTSET rings', () => {
+    // This element IS the scroll box, so its padding is the only room its
+    // children get. The .form-switch checkbox is flush at x=0 with a 4px outset
+    // ring. The gutter lives here rather than on .agent-form__panel so the bare
+    // consumers (/skills/new, /mcps/new, /plugins/new) get it too — they were
+    // clipping precisely because the earlier fix was scoped to the agent form.
+    const body = ruleBody('.split__detail-body {')
+    expect(body).toMatch(/padding-inline:\s*var\(--focus-ring-gutter\)/)
+    expect(body).toMatch(/padding-block-end:\s*var\(--focus-ring-gutter\)/)
+  })
+
+  it('declares --focus-ring-gutter >= the widest outset ring', () => {
+    expect(ruleBody(':root {')).toMatch(/--focus-ring-gutter:\s*4px/)
+  })
+
+  it('tab strips and segmented bars use the inset ring (scroll-flush by construction)', () => {
+    // .tabs and .page-filter are deliberately overflow-x:auto so long strips
+    // can scroll, which puts their children exactly on the clip edge.
+    const body = ruleBody(':where(.tabs__tab, .segmented__option):focus-visible {')
+    expect(body).toMatch(/outline-offset:\s*var\(--focus-ring-offset-inset\)/)
+  })
+
+  it('the workgroup member card stretch-overlay ring is inset', () => {
+    // position:absolute; inset:0 inside an overflow:hidden .split-card — an
+    // outset offset put the whole ring outside the clip box, i.e. NO visible
+    // focus indicator at all for keyboard users.
+    const body = ruleBody('.workgroup-card__open:focus-visible::after {')
+    expect(body).toMatch(/outline-offset:\s*var\(--focus-ring-offset-inset\)/)
   })
 })
 
-// Table-level guard (not file-level): the point is that NO form-control rule
-// may reintroduce an outset ring, not that these four specific rules are right.
-// A new `.form-input`-family :focus rule with `outline-offset: 0` or a bare
-// spread box-shadow reds this immediately.
-describe('focus ring — no full-bleed control may reintroduce an outset ring', () => {
-  // Controls that are width:100% inside a .form-field, i.e. flush against
-  // whatever scroll box contains them.
-  const FULL_BLEED = [
+// Table-level guard (not file-level): the point is that NO scroll-flush control
+// may reintroduce an outset ring, not that these specific rules are right. A new
+// rule in this family with `outline-offset: 0` or a bare spread box-shadow reds
+// this immediately.
+describe('focus ring — no scroll-flush control may reintroduce an outset ring', () => {
+  // Controls that sit on a clip edge BY CONSTRUCTION, so an outset ring is
+  // always cut no matter which container they land in:
+  //   * width:100% form controls inside a .form-field;
+  //   * tab strips / segmented bars, whose rails (.tabs, .page-filter) are
+  //     deliberately overflow-x:auto so long strips can scroll (RFC-206 T3).
+  const SCROLL_FLUSH = [
     '.form-input',
     '.chips-input__row',
     '.multi-select__field',
     '.select__trigger',
     '.clarify-custom-input',
     '.select__search-input',
+    '.tabs__tab',
+    '.segmented__option',
   ]
 
   /**
@@ -125,7 +152,7 @@ describe('focus ring — no full-bleed control may reintroduce an outset ring', 
   }
 
   const focusRules = [...rulesBySelector()].filter(
-    ([sel]) => /:focus(-visible|-within)?\b/.test(sel) && FULL_BLEED.some((c) => sel.includes(c)),
+    ([sel]) => /:focus(-visible|-within)?\b/.test(sel) && SCROLL_FLUSH.some((c) => sel.includes(c)),
   )
 
   it('finds the form-control focus rules it is meant to police', () => {

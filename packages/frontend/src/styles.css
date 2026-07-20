@@ -95,6 +95,10 @@
      forever — no per-container patch required. Locked by
      tests/focus-ring-inset.test.ts. */
   --focus-ring-offset-inset: calc(-1 * var(--focus-ring-width));
+  /* Room a clipping container must reserve for a child's OUTSET ring. Must be
+     >= the widest outset ring (--focus-ring-width + --focus-ring-offset = 4px).
+     Use this instead of a bare `4px` so retuning the ring retunes the gutters. */
+  --focus-ring-gutter: 4px;
 }
 
 /* P-5-04 dark theme — applied when the resolved theme is dark, which the
@@ -14815,9 +14819,15 @@ mark.comment-anchor[data-active='true'] {
   outline: none;
 }
 
+/* RFC-206 T4 — a11y fix, not merely a cosmetic clip. This ::after is
+   `position: absolute; inset: 0`, so its containing block is the nearest
+   POSITIONED ancestor — `.split-card`, which is `overflow: hidden`. An
+   `outline-offset: 2px` therefore started 2px OUTSIDE the card's own clip box:
+   the member card had NO visible focus ring at all for keyboard users.
+   Inset, mirroring `.split-card:focus-visible` which was already fixed this way. */
 .workgroup-card__open:focus-visible::after {
   outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline-offset: var(--focus-ring-offset-inset);
 }
 
 .workgroup-card__ref {
@@ -16022,6 +16032,14 @@ button.status-chip {
   overflow: auto;
   min-height: 0;
   min-width: 0;
+  /* RFC-206 T3 — this IS the scroll box, so its padding is the only room its
+     children's focus rings get. Full-bleed form controls no longer need it
+     (inset ring), but OUTSET-ring controls that are flush by construction do:
+     the .form-switch checkbox is grid column 1 at x=0 with a 4px ring, and the
+     last field sits flush at the bottom. Previously only the agent form got
+     this, so the bare consumers (/skills/new, /mcps/new, /plugins/new) clipped. */
+  padding-inline: var(--focus-ring-gutter);
+  padding-block-end: var(--focus-ring-gutter);
 }
 
 /* Compact viewport: the persistent side-by-side split no longer fits beside the
@@ -16103,16 +16121,11 @@ button.status-chip {
 .agent-form > .tabs-viewport {
   flex-shrink: 0;
 }
-/* This element IS the scroll box (it also carries .split__detail-body, which is
-   `overflow: auto`), so its padding is the only room a child's focus ring has.
-   Full-bleed form controls no longer need it — their ring is inset (see
-   --focus-ring-offset-inset) — but the panel also holds OUTSET-ring controls
-   that are flush by construction: the <Switch> checkbox is grid column 1 at
-   x=0 with a 4px ring, and .btn rows sit flush at the bottom. 4px covers the
-   widest outset ring (2px width + 2px offset). Locked by
-   tests/focus-ring-inset.test.ts. */
+/* Only the top spacing lives here — the focus-ring gutter moved onto the
+   shared .split__detail-body (RFC-206 T3) so every consumer gets it, not just
+   the agent form. */
 .agent-form__panel {
-  padding: var(--space-3) 4px 4px;
+  padding-top: var(--space-3);
 }
 /* Scoped to :not([hidden]) — a bare `display: flex` would override the keep-
    mounted panel's `hidden` attribute (UA `[hidden] { display: none }` is lower
@@ -16817,16 +16830,27 @@ button.status-chip {
   min-height: 28px;
 }
 
-:where(
-  .btn,
-  .nav-item,
-  .sidebar__link,
-  .tabs__tab,
-  .segmented__option,
-  .dialog__close
-):focus-visible {
+:where(.btn, .nav-item, .sidebar__link, .dialog__close):focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: var(--focus-ring-offset);
+}
+
+/* RFC-206 T3 — tab strips and segmented filter bars are SCROLL-FLUSH BY
+   CONSTRUCTION: `.tabs` and `.page-filter` are deliberately `overflow-x: auto`
+   so long strips can scroll, which means their children sit exactly on the
+   clip edge and an outset ring is always cut. Measured before the fix:
+   `.tabs__tab` lost top+left (ink 4 vs room 0, 15 instances) and
+   `.segmented__option` lost top+bottom+left (ink 4 vs room 2 — `.segmented`'s
+   own 2px padding was all the room there was, 20 instances).
+
+   Same reasoning as the full-bleed form controls above: when a control is
+   flush by design, fix the RING (O(1)) rather than every container that will
+   ever hold it (O(containers), the habit that made this bug recur five times).
+   Intrinsically-sized chrome that is NOT flush by construction (.btn,
+   .nav-item, .sidebar__link, .dialog__close) keeps the outset ring above. */
+:where(.tabs__tab, .segmented__option):focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset-inset);
 }
 
 .form-input:focus {

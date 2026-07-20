@@ -4,12 +4,12 @@
 
 ## PR 拆分
 
-| PR | 任务 | 主题 |
-| --- | --- | --- |
-| PR-1 | T0（已落）、T1、T2 | 守卫上线 + 基线白名单（**止血**） |
-| PR-2 | T3、T4 | 高影响面存量修复（全站 TabBar / 面板 / a11y 硬伤） |
-| PR-3 | T5、T6 | 长尾容器清零 |
-| PR-4 | T7、T8 | 白名单清空 → 转硬失败 + 收口 |
+| PR   | 任务               | 主题                                               |
+| ---- | ------------------ | -------------------------------------------------- |
+| PR-1 | T0（已落）、T1、T2 | 守卫上线 + 基线白名单（**止血**）                  |
+| PR-2 | T3、T4             | 高影响面存量修复（全站 TabBar / 面板 / a11y 硬伤） |
+| PR-3 | T5、T6             | 长尾容器清零                                       |
+| PR-4 | T7、T8             | 白名单清空 → 转硬失败 + 收口                       |
 
 各 PR 之间**严格串行**：白名单是 PR-2/3 的输入，必须先由 PR-1 产出。
 
@@ -68,12 +68,12 @@
 
 **状态：已完成**。基线 **37 条**，全部来自 **4 个根因**（下表即 T3 的工单）。`RFC206_DUMP_BASELINE=1` 可机械重生成，无需手抄。双向变异验证：删一条豁免 ⇒ 该裁剪立刻被报；加一条假豁免 ⇒ 被判 stale。
 
-| 数量 | 控件 | 裁剪容器 | 根因 |
-| --- | --- | --- | --- |
-| 18 | `.segmented__option` | `.page-filter` | `overflow-x:auto` 无 padding；`.segmented` 只给 2px，环要 4px |
-| 15 | `.tabs__tab` | `.tabs` | **TabBar，全站在用**；`overflow-x:auto` + `padding:0` vs 4px 环 |
-| 2 | `input`（`.form-switch` 复选框） | `.split__detail-body` | 裸 `.split__detail-body` 无 gutter，控件贴 x=0 |
-| 2 | `.segmented__option` | `.split__detail-body` | 同上 |
+| 数量 | 控件                             | 裁剪容器              | 根因                                                            |
+| ---- | -------------------------------- | --------------------- | --------------------------------------------------------------- |
+| 18   | `.segmented__option`             | `.page-filter`        | `overflow-x:auto` 无 padding；`.segmented` 只给 2px，环要 4px   |
+| 15   | `.tabs__tab`                     | `.tabs`               | **TabBar，全站在用**；`overflow-x:auto` + `padding:0` vs 4px 环 |
+| 2    | `input`（`.form-switch` 复选框） | `.split__detail-body` | 裸 `.split__detail-body` 无 gutter，控件贴 x=0                  |
+| 2    | `.segmented__option`             | `.split__detail-body` | 同上                                                            |
 
 值得注意：`/repos` 批量导入弹窗与 `/agents` 高级页签（用户最初报的两处）**已通过**——T0 的 inset 化在真实浏览器里得到端到端验证。
 
@@ -93,6 +93,17 @@
 
 **依赖**：T2。
 
+**状态：已完成**，但**修法与本任务初稿不同**——实施时改用了更彻底的一招。
+
+`.tabs`（`overflow-x:auto`）与 `.page-filter`（同）是**故意做成可横向滚动**的，因此其子元素**天生贴着裁剪边**，与满宽表单控件是同一类处境。给这类容器补 padding 只是又一次 O(容器数)；正确做法是把**环**内移：
+
+- `.tabs__tab` / `.segmented__option` 从共享 `:where(.btn, …)` 外扩规则中**移出**，改用 `--focus-ring-offset-inset`。一次覆盖 35/37 条违规，**零布局改动、零溢出风险**（补 padding 反而要动 `.tabs` 的 `border-bottom` 与 `.tabs__tab` 的 `margin-bottom:-1px` 对齐关系）。
+- 剩余 2 条（`.form-switch` 复选框，外扩环、贴 x=0）走容器 gutter：新 token `--focus-ring-gutter: 4px` 加到 **`.split__detail-body`**，而不是 T0 时的 `.agent-form__panel`——后者只覆盖 agent 表单，裸 `.split__detail-body` 的 `/skills/new`、`/mcps/new`、`/plugins/new` 正是因此才漏掉。T0 的 `.agent-form__panel` 特例随之收敛为只留 `padding-top`。
+
+由此得出本 RFC 的**判据**（已写入 `focus-ring-inset.test.ts` 的 `SCROLL_FLUSH` 表）：**「贴边是否由构造决定」**——满宽表单控件、页签条、分段筛选条都是，改环；`.btn` / `.nav-item` / `.sidebar__link` / `.dialog__close` 不是，保持外扩环 + 容器 gutter。
+
+明暗双主题截图复验：环四边完整。
+
 ---
 
 ## T4 · a11y 硬伤：焦点环 100% 不可见
@@ -104,6 +115,10 @@
 
 **依赖**：T2。（与 T3 无耦合，可并行）
 
+**状态：已完成**。`.workgroup-card__open:focus-visible::after` 改 `--focus-ring-offset-inset`。`.gallery-card__stretch::after` 复查确认本就是 inset，无回归。
+
+⚠️ 注意：这条**几何审计并未报出**——因为白名单基线是在有数据的路由上采的，而工作组成员卡需要 fixture 才渲染（见 T5）。它是静态审计发现、人工复核确认的。这正说明**两层守卫互补**：几何层判得准但只看得见它走到的页面。
+
 ---
 
 ## T5 · 零 padding 列表滚动容器批量清零
@@ -114,6 +129,20 @@
 
 **依赖**：T2。
 
+**状态：作废（无事可做），改立 T5'。** T3 的环内移一次清掉 35/37 条，剩 2 条由 `.split__detail-body` gutter 解决；几何审计对上表**一条也没报**。这验证了 design.md §2 的判断——静态审计的容器清单里，大部分要么根本不含外扩环的可聚焦子元素，要么已有足够 padding。**按清单逐个补 padding 会是纯粹的无用改动。**
+
+### T5' · 扩大审计覆盖面（真正的剩余工作）
+
+当前审计走的是列表页 / new 页 + agent 详情五个页签 + 批量导入弹窗。**需要 fixture 才渲染的重面尚未覆盖**，因此「0 违规」的结论只在已覆盖面上成立：
+
+- 任务详情（含 worktree diff / 输出面板 / 反问面板）
+- 工作组房间（`.workgroup-room__runlog`、成员卡——T4 那条硬伤就藏在这里，是静态审计而非几何审计发现的）
+- 评审详情（`.review-detail__layout` 只有 `padding-right`）
+- 工作流编辑器（`.inspector`、`.editor-sidebar`、节点选择器）
+- 记忆蒸馏 / 融合等次级弹窗
+
+做法：照 `a11y.spec.ts` 的 seed 套路补 fixture，把这些面加进 `ROUTES` / 弹窗用例。**每加一面都可能带出新违规，属预期**。
+
 ---
 
 ## T6 · 已有补丁的补齐与归位
@@ -123,7 +152,7 @@
 - `.task-detail__pane` —— 仅 `> .workgroup-room` 受保护，其它 pane 子项裸奔。
 - 复查四处历史补丁：失效的删（连同源码锁），仍有用的补注释说明「为谁保留」（design.md §5、验收标准 AC6）。
 
-**依赖**：T2。
+**依赖**：T2，以及 **T5'**——前三条都在尚未覆盖的面上，必须先让几何审计能走到那里，否则是在凭静态推测改代码（正是本 RFC 要根除的做法）。四处历史补丁的注释归位已在 T0/T3 完成。
 
 ---
 
@@ -132,6 +161,8 @@
 - 确认 `KNOWN_CLIPS` 为空。
 - 移除豁免机制本身（或保留空 Map + 一条「新增条目需 RFC 说明」的注释锁）。
 - 静态层同步转硬失败。
+
+**状态：已完成（提前到 PR-2）。** T3+T4 一次清空 37 条基线，故白名单**现在就是空的**，审计已处于**硬失败**模式：任何新增裁剪立即红。保留空 `Map` + 注释说明「新增条目＝声称某个被裁的焦点环可接受，需 RFC-206 修订并写明为谁豁免」，并指向两条正解（贴边由构造决定 → 环内移；容器缺空间 → `--focus-ring-gutter`）。
 
 **验收**：AC5、AC4。
 

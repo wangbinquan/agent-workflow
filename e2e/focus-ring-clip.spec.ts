@@ -375,160 +375,19 @@ function describe(v: Violation): string {
 
 // ───────────────────────── baseline allowlist ─────────────────────────
 //
-// RFC-206 T2. key -> reason (mandatory). Every entry is a pre-existing clip
-// that predates this audit; new ones must be FIXED, not appended. Entries come
-// off as the T3–T6 batches land — the allowlist shrinking IS the progress
-// signal, and T7 flips this to a hard failure once it is empty.
-const KNOWN_CLIPS = new Map<string, string>([
-  [
-    '/agents/new::.tabs__tab::.tabs::left::0',
-    'T3 — .tabs (TabBar, used by every tabbed page) is overflow-x:auto with padding:0 vs a 4px outset ring',
-  ],
-  [
-    '/agents/new::.tabs__tab::.tabs::top::0',
-    'T3 — .tabs (TabBar, used by every tabbed page) is overflow-x:auto with padding:0 vs a 4px outset ring',
-  ],
-  [
-    '/agents/new::.tabs__tab::.tabs::top::1',
-    'T3 — .tabs (TabBar, used by every tabbed page) is overflow-x:auto with padding:0 vs a 4px outset ring',
-  ],
-  [
-    '/agents/new::.tabs__tab::.tabs::top::2',
-    'T3 — .tabs (TabBar, used by every tabbed page) is overflow-x:auto with padding:0 vs a 4px outset ring',
-  ],
-  [
-    '/agents/new::.tabs__tab::.tabs::top::3',
-    'T3 — .tabs (TabBar, used by every tabbed page) is overflow-x:auto with padding:0 vs a 4px outset ring',
-  ],
-  [
-    '/agents/new::.tabs__tab::.tabs::top::4',
-    'T3 — .tabs (TabBar, used by every tabbed page) is overflow-x:auto with padding:0 vs a 4px outset ring',
-  ],
-  [
-    '/agents/{name}(tabs)::.tabs__tab::.tabs::left::0',
-    'T3 — .tabs (TabBar, used by every tabbed page) is overflow-x:auto with padding:0 vs a 4px outset ring',
-  ],
-  [
-    '/agents/{name}(tabs)::.tabs__tab::.tabs::top::0',
-    'T3 — .tabs (TabBar, used by every tabbed page) is overflow-x:auto with padding:0 vs a 4px outset ring',
-  ],
-  [
-    '/agents/{name}(tabs)::.tabs__tab::.tabs::top::1',
-    'T3 — .tabs (TabBar, used by every tabbed page) is overflow-x:auto with padding:0 vs a 4px outset ring',
-  ],
-  [
-    '/agents/{name}(tabs)::.tabs__tab::.tabs::top::2',
-    'T3 — .tabs (TabBar, used by every tabbed page) is overflow-x:auto with padding:0 vs a 4px outset ring',
-  ],
-  [
-    '/agents/{name}(tabs)::.tabs__tab::.tabs::top::3',
-    'T3 — .tabs (TabBar, used by every tabbed page) is overflow-x:auto with padding:0 vs a 4px outset ring',
-  ],
-  [
-    '/agents/{name}(tabs)::.tabs__tab::.tabs::top::4',
-    'T3 — .tabs (TabBar, used by every tabbed page) is overflow-x:auto with padding:0 vs a 4px outset ring',
-  ],
-  [
-    '/clarify::.segmented__option::.page-filter::bottom::0',
-    'T3 — .page-filter is overflow-x:auto with no padding; .segmented supplies only 2px for a 4px outset ring',
-  ],
-  [
-    '/clarify::.segmented__option::.page-filter::bottom::1',
-    'T3 — .page-filter is overflow-x:auto with no padding; .segmented supplies only 2px for a 4px outset ring',
-  ],
-  [
-    '/clarify::.segmented__option::.page-filter::bottom::2',
-    'T3 — .page-filter is overflow-x:auto with no padding; .segmented supplies only 2px for a 4px outset ring',
-  ],
-  [
-    '/clarify::.segmented__option::.page-filter::left::0',
-    'T3 — .page-filter is overflow-x:auto with no padding; .segmented supplies only 2px for a 4px outset ring',
-  ],
-  [
-    '/clarify::.segmented__option::.page-filter::top::0',
-    'T3 — .page-filter is overflow-x:auto with no padding; .segmented supplies only 2px for a 4px outset ring',
-  ],
-  [
-    '/clarify::.segmented__option::.page-filter::top::1',
-    'T3 — .page-filter is overflow-x:auto with no padding; .segmented supplies only 2px for a 4px outset ring',
-  ],
-  [
-    '/clarify::.segmented__option::.page-filter::top::2',
-    'T3 — .page-filter is overflow-x:auto with no padding; .segmented supplies only 2px for a 4px outset ring',
-  ],
-  [
-    '/mcps/new::.segmented__option::.split__detail-body::left::0',
-    'T3 — bare .split__detail-body has no gutter for the 4px outset ring',
-  ],
-  [
-    '/mcps/new::.segmented__option::.split__detail-body::right::0',
-    'T3 — bare .split__detail-body has no gutter for the 4px outset ring',
-  ],
-  [
-    '/mcps/new::input::.split__detail-body::left::0',
-    'T3 — bare .split__detail-body has no gutter; the .form-switch checkbox is flush at x=0 with a 4px outset ring',
-  ],
-  [
-    '/plugins/new::input::.split__detail-body::left::0',
-    'T3 — bare .split__detail-body has no gutter; the .form-switch checkbox is flush at x=0 with a 4px outset ring',
-  ],
-  [
-    '/reviews::.segmented__option::.page-filter::bottom::0',
-    'T3 — .page-filter is overflow-x:auto with no padding; .segmented supplies only 2px for a 4px outset ring',
-  ],
-  [
-    '/reviews::.segmented__option::.page-filter::bottom::1',
-    'T3 — .page-filter is overflow-x:auto with no padding; .segmented supplies only 2px for a 4px outset ring',
-  ],
-  [
-    '/reviews::.segmented__option::.page-filter::bottom::2',
-    'T3 — .page-filter is overflow-x:auto with no padding; .segmented supplies only 2px for a 4px outset ring',
-  ],
-  [
-    '/reviews::.segmented__option::.page-filter::bottom::3',
-    'T3 — .page-filter is overflow-x:auto with no padding; .segmented supplies only 2px for a 4px outset ring',
-  ],
-  [
-    '/reviews::.segmented__option::.page-filter::bottom::4',
-    'T3 — .page-filter is overflow-x:auto with no padding; .segmented supplies only 2px for a 4px outset ring',
-  ],
-  [
-    '/reviews::.segmented__option::.page-filter::left::0',
-    'T3 — .page-filter is overflow-x:auto with no padding; .segmented supplies only 2px for a 4px outset ring',
-  ],
-  [
-    '/reviews::.segmented__option::.page-filter::top::0',
-    'T3 — .page-filter is overflow-x:auto with no padding; .segmented supplies only 2px for a 4px outset ring',
-  ],
-  [
-    '/reviews::.segmented__option::.page-filter::top::1',
-    'T3 — .page-filter is overflow-x:auto with no padding; .segmented supplies only 2px for a 4px outset ring',
-  ],
-  [
-    '/reviews::.segmented__option::.page-filter::top::2',
-    'T3 — .page-filter is overflow-x:auto with no padding; .segmented supplies only 2px for a 4px outset ring',
-  ],
-  [
-    '/reviews::.segmented__option::.page-filter::top::3',
-    'T3 — .page-filter is overflow-x:auto with no padding; .segmented supplies only 2px for a 4px outset ring',
-  ],
-  [
-    '/reviews::.segmented__option::.page-filter::top::4',
-    'T3 — .page-filter is overflow-x:auto with no padding; .segmented supplies only 2px for a 4px outset ring',
-  ],
-  [
-    '/skills/new::.tabs__tab::.tabs::left::0',
-    'T3 — .tabs (TabBar, used by every tabbed page) is overflow-x:auto with padding:0 vs a 4px outset ring',
-  ],
-  [
-    '/skills/new::.tabs__tab::.tabs::top::0',
-    'T3 — .tabs (TabBar, used by every tabbed page) is overflow-x:auto with padding:0 vs a 4px outset ring',
-  ],
-  [
-    '/skills/new::.tabs__tab::.tabs::top::1',
-    'T3 — .tabs (TabBar, used by every tabbed page) is overflow-x:auto with padding:0 vs a 4px outset ring',
-  ],
-])
+// key -> reason (mandatory).
+//
+// EMPTY, and it must stay that way — this audit is in hard-failure mode.
+//
+// It opened at 37 entries (T2 baseline) from four root causes; T3/T4 cleared
+// all of them, so there is no such thing as a "pre-existing" clip any more.
+// Adding an entry here is claiming a clipped focus ring is acceptable, which
+// needs an RFC-206 amendment and a reason string saying who it is waived for.
+// Prefer the two real fixes:
+//   * the control is flush by construction  -> give it the INSET ring
+//                                              (var(--focus-ring-offset-inset))
+//   * the container merely lacks room       -> give it var(--focus-ring-gutter)
+const KNOWN_CLIPS = new Map<string, string>()
 
 // ───────────────────────── engine self-checks ─────────────────────────
 //
