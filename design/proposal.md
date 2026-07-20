@@ -199,9 +199,15 @@ Runtime 概念是为了未来扩展到 claude-code 等其他 CLI 而预留的抽
     - `per-directory`：同一 top-level 目录的变更走 1 个子进程
 - **非分片输入端口**：节点的其他输入端口对每个子进程**完整复制**（如 `requirement`、`audit_checklist` 在每个 shard 里都看到完整内容）
 - **fan-in 时机**：等所有子进程结束（含部分失败容忍）
-- **聚合**：每个子进程按命名端口产出 XML 信封；同名端口跨子进程**按 `shard_key` 字典序拼接**为下游单一输入
 - 父节点自动追加 **`errors` port**（agent.outputs 不需声明）：聚合失败 shard 列表 + 各自错误信息。下游可选连这个端口
 - 单进程节点没有自动 `errors` port
+
+> ⚠️ **实现状态：deferred，v1 未实现**（`design/design.md` §6.3 WP-6b 产品决策）。
+> 实际语义是 **fail-all-after-join**：任意一个 shard 失败即整个 wrapper `failed`，**不做部分聚合、不产出 `errors` port**，
+> 成功 shard 的输出对下游不可见。由 `packages/backend/tests/scheduler-audit-s18-s19-fanout-failure-semantics.test.ts` 锁定。
+> 本文后续所有关于「部分容忍」「自动 errors port」的描述（含 §失败与重试表、§v1 范围清单）在落地前**均属产品意图而非现状**。
+
+- **聚合**：每个子进程按命名端口产出 XML 信封；同名端口跨子进程**按 `shard_key` 字典序拼接**为下游单一输入
 
 #### 分片边界细节
 
@@ -372,7 +378,7 @@ opencode 的 skill 发现是基于绝对路径的集合：每个被发现的 `SK
 | opencode stdout 没有合法 `<workflow-output>` 收尾 | 视同失败 |
 | 节点 timeout | 杀子进程，节点 `failed` |
 | 节点上配置 `retries=N` | 失败后**立即重试**，prompt 与上一次完全一致；每次重试创建独立 node_run（以 `retry_index` 区分；UI 在 Stats tab 列出所有 retry history） |
-| 多进程节点的部分子进程失败 | 节点不算 failed，成功部分按字典序聚合到对应 port；失败信息聚合到自动追加的 `errors` port |
+| 多进程节点的部分子进程失败 | **【deferred，v1 未实现】**意图：节点不算 failed，成功部分按字典序聚合到对应 port；失败信息聚合到自动追加的 `errors` port。**现状**：fail-all-after-join，wrapper 直接 `failed`，无聚合、无 errors port |
 | opencode stderr | 也持久化到 `node_run_events`（`kind=stderr`），节点详情 Events tab 与 Raw stdout tab 都可看 |
 | opencode 询问权限 | 默认带 `--dangerously-skip-permissions`，自动放行 |
 | 节点级开关 `dangerouslySkipPermissions=false` | 该节点取消 flag，permission 询问由 opencode 默认行为 reject |
@@ -679,7 +685,7 @@ When you finish, emit a `<workflow-output>` block with the ports declared above.
 - 静态校验全集（5 项）
 - 启动表单（4 种控件 + 仓 + base 分支 + 复用历史输入 + 同仓在跑 task 提示）
 - 单进程节点 + 多进程节点（per-file / per-N-files / per-directory 三种分片，含重命名/二进制/空 diff 边界）
-- 多进程节点自动 errors port + 子进程独立并发上限
+- 多进程节点自动 errors port（**deferred，v1 未实现** —— 见上文 fan-in 段的实现状态说明）+ 子进程独立并发上限
 - Git wrapper、Loop wrapper（三种内置退出条件，loop body 每轮独立无跨轮反馈）+ 任意嵌套
 - 进程隔离（`OPENCODE_CONFIG_CONTENT` 注入 agent + `OPENCODE_CONFIG_DIR` 隔离 managed skill；不设 DISABLE flags）
 - Worktree per task（base 分支可选）+ task 完成后保留

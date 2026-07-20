@@ -111,12 +111,17 @@ not what they consume.
 The bottlenecks below are not blockers for v1. They are listed here so
 we don't lose them; create issues in the v2 milestone when ready.
 
-1. **No index on `node_run_events.node_run_id`.** Queries scan by
-   composite predicate `(nodeRunId, id > since)`. At 1k events per node
-   we don't notice, but a long-running task that accumulates 100k+
-   events before the archiver hits its threshold would do a table scan
-   per page fetch. Action: add `index('idx_nre_node_id').on(nodeRunId, id)`
-   in a migration before users observe slow detail pages.
+1. ~~**No index on `node_run_events.node_run_id`.**~~ **RESOLVED — this
+   entry was stale.** The index exists and covers exactly the composite
+   predicate this entry worried about: `idx_events_node` on
+   `(node_run_id, id)` (`packages/backend/src/db/schema.ts`, the
+   `nodeRunEvents` table), plus `idx_events_session` on
+   `(node_run_id, session_id, id)` for the RFC-027 session tree. Corrected
+   2026-07-21 — the entry had survived long enough that a fresh audit
+   re-reported it as a live performance gap, which is the exact cost of a
+   stale doc (see `design/test-guard-audit-2026-07-21` §2 逃逸机制⑧).
+   `packages/backend/tests/docs-implementation-parity.test.ts` now keeps
+   this entry honest.
 2. **`listTasks` returns full `workflowSnapshot`.** Add a "light"
    projection that omits JSON snapshot + inputs; ~50× payload reduction
    on a 100-row page. Frontend hydrates the snapshot on demand via the
