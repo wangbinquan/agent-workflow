@@ -355,11 +355,19 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     await page.getByTestId('workflow-undo').click()
     await expect(nodes).toHaveCount(before)
     await page.getByTestId('workflow-add-step').click()
-    const keyboardItem = page
-      .getByTestId('workflow-editor-palette-surface')
-      .locator('.editor-sidebar__item')
-      .first()
+    // The palette is a Dialog, so it owns a focus trap. Two waits, both of which
+    // the pointer branch above already had and this branch was missing: the
+    // surface must be open before we reach into it, and focus must have actually
+    // settled on the row before Space. Without the second one, our focus() can
+    // land before the trap's initial focus, the trap takes it back, and Space
+    // fires into the void — the node count stays at `before` and line 364 fails.
+    // (CI run 29757172909, shard 4/4; this file already needed 255e6473 for the
+    // same class of race on the same locator.)
+    const keyboardPalette = page.getByTestId('workflow-editor-palette-surface')
+    await expect(keyboardPalette).toBeVisible()
+    const keyboardItem = keyboardPalette.locator('.editor-sidebar__item').first()
     await keyboardItem.focus()
+    await expect(keyboardItem).toBeFocused()
     await page.keyboard.press('Space')
     await expect(nodes).toHaveCount(before + 1)
     await expect(page.locator('.react-flow__node.selected')).toHaveCount(1)

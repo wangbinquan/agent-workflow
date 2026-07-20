@@ -227,7 +227,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
   })
   afterEach(() => h?.cleanup())
 
-  test('HEAD journal has 102 entries (sanity — locks the freeze target indices)', () => {
+  test('HEAD journal has 103 entries (sanity — locks the freeze target indices)', () => {
     // If a future migration is added, raise FREEZE_TARGETS' upper index
     // accordingly or this assertion will block the cascade. RFC-058 PR-B T11
     // bumped to 31 with migration 0031_rfc058_clarify_rounds_unify; RFC-059 T2
@@ -299,7 +299,37 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // RFC-200 T1 bumped to 97 with 0097_rfc200_envelope_nonce.
     // RFC-204 T2 bumped to 98 with 0101_rfc207_directive_shard.
     // RFC-210 T10 bumped to 102 with 0102_rfc210_submodule_isolation.
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(102)
+    // RFC-211 T1 bumped to 103 with 0103_rfc211_onboarding.
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(103)
+  })
+
+  test('journal `when` timestamps are strictly increasing', () => {
+    // RFC-210 shipped 0102 with a real `Date.now()` (2026-07-20) while this
+    // journal runs on a synthetic +1day/entry axis that is already months into
+    // the future — so 0102 sorted BEFORE 0101. Drizzle's SQLite migrator reads
+    // the newest applied `created_at` once and then applies a migration only
+    // when `lastDbMigration.created_at < migration.folderMillis`
+    // (drizzle-orm/sqlite-core/dialect.cjs). A non-monotonic entry is therefore
+    // skipped forever on every upgrade — silently: `migrate()` does not throw,
+    // the daemon boots, and only later does every query against the new columns
+    // die with `no such column`.
+    //
+    // Nothing else here can see it. Every other DB test (and the freeze targets
+    // below, which stop far earlier) builds from scratch, where
+    // `lastDbMigration` is undefined and all entries apply unconditionally. New
+    // migrations must continue the synthetic axis: previous `when` + 86400000.
+    const entries = JSON.parse(
+      readFileSync(join(MIGRATIONS, 'meta', '_journal.json'), 'utf-8'),
+    ).entries as Array<{ idx: number; when: number; tag: string }>
+    for (let i = 1; i < entries.length; i++) {
+      const prev = entries[i - 1]!
+      const cur = entries[i]!
+      expect({ tag: cur.tag, after: prev.tag, increasing: cur.when > prev.when }).toEqual({
+        tag: cur.tag,
+        after: prev.tag,
+        increasing: true,
+      })
+    }
   })
 
   for (const target of FREEZE_TARGETS) {
