@@ -578,6 +578,9 @@ export type MergeStateUpdateExtra = Partial<
     | 'isoBaseSnapshotReposJson'
     | 'isoNodeTree'
     | 'isoNodeTreeReposJson'
+    // RFC-210: per-node submodule topology, written alongside the base snapshot.
+    | 'isoSubmodulesJson'
+    | 'isoSubmodulesReposJson'
     | 'wrapperProgressJson'
   >
 >

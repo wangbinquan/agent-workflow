@@ -37,6 +37,18 @@ import {
   type ResolvedPathState,
 } from '@/services/mergeAgent'
 import { repoRelForcedPaths } from '@/services/portArtifacts'
+// RFC-210. Static import is safe: gitSubmodule imports util/git, util/git reaches
+// gitSubmodule only through a dynamic import, so the edge stays one-way.
+import {
+  detectSubmodules,
+  ensureSubmoduleAlternates,
+  listSubmodules,
+  poolRefName,
+  pushObjectsToPool,
+  resolveSubmodulePool,
+  submoduleGitDir,
+  usableSubmodules,
+} from '@/services/gitSubmodule'
 import type { Logger } from '@/util/log'
 
 /** One canonical repo + its isolated mirror for a single node run. */
@@ -63,6 +75,23 @@ export interface IsoRepo {
    * drops them at each hop (design §4.5).
    */
   forcedRepoRelPaths: string[]
+  /**
+   * RFC-210: submodule path → its HEAD when this iso was created. The merge base
+   * for the per-submodule three-way merge at merge-back.
+   *
+   * Carried ON THE HANDLE rather than looked up on demand because this module is
+   * git-only and never touches the DB — and merge-back, which is where the value
+   * is needed, runs long after the iso worktree that could have been probed for
+   * it. Empty for repos without submodules (the common case) and for passthrough.
+   */
+  subBases: Record<string, string>
+  /**
+   * RFC-210: shared object pool backing this repo's submodules, or null when
+   * running degraded — path-mode repos deliberately get none (D11: the host is
+   * the USER'S repo, and a pool there accumulates platform objects/refs/commits
+   * that can never be cleaned up), and mock harnesses have no git host at all.
+   */
+  poolDir: string | null
 }
 
 export interface IsoHandle {
@@ -154,6 +183,8 @@ export async function createNodeIso(opts: {
         baseSnapshot: '',
         taskBaseHead: '',
         forcedRepoRelPaths: [],
+        subBases: {},
+        poolDir: null,
       })),
     }
   }
@@ -186,6 +217,7 @@ export async function createNodeIso(opts: {
       ...(opts.submoduleMode !== undefined ? { submoduleMode: opts.submoduleMode } : {}),
       ...(opts.submoduleJobs !== undefined ? { submoduleJobs: opts.submoduleJobs } : {}),
     })
+    const { subBases, poolDir } = await captureSubmoduleTopology(isoWorktreePath, opts.log)
     repos.push({
       repoPath: r.repoPath,
       canonWorktreePath: r.worktreePath,
@@ -195,6 +227,8 @@ export async function createNodeIso(opts: {
       baseSnapshot,
       taskBaseHead,
       forcedRepoRelPaths,
+      subBases,
+      poolDir,
     })
   }
   return {
@@ -204,6 +238,55 @@ export async function createNodeIso(opts: {
     passthrough: false,
     repos,
   }
+}
+
+/**
+ * RFC-210 — record a fresh iso worktree's submodule topology and hook each
+ * submodule up to the shared object pool.
+ *
+ * Gated on `detectSubmodules` (a plain `existsSync('.gitmodules')`) so a repo
+ * without submodules — the overwhelming majority — spawns ZERO extra git
+ * processes and stays byte-identical to the pre-RFC-210 path.
+ *
+ * Attaching alternates is what makes a node's submodule commits reachable from
+ * canonical later; `submodule update --reference` cannot be relied on for it
+ * (no-op on an already-initialized module dir on some git versions, and git
+ * applies a single `--reference` to every submodule in the tree), so the
+ * alternates file is written explicitly, per submodule.
+ *
+ * Fail-soft throughout: a repo whose pool cannot be resolved simply runs
+ * degraded (private module dir, objects fetched into the target worktree at
+ * merge-back instead) rather than failing the node.
+ */
+async function captureSubmoduleTopology(
+  isoWorktreePath: string,
+  log?: Logger,
+): Promise<{ subBases: Record<string, string>; poolDir: string | null }> {
+  if (!detectSubmodules(isoWorktreePath)) return { subBases: {}, poolDir: null }
+  const subs = usableSubmodules(await listSubmodules(isoWorktreePath))
+  if (subs.length === 0) return { subBases: {}, poolDir: null }
+
+  const subBases: Record<string, string> = {}
+  let poolDir: string | null = null
+  for (const s of subs) {
+    subBases[s.path] = s.headSha
+    const pool = await resolveSubmodulePool(isoWorktreePath, s.path)
+    if (pool === null) {
+      log?.info('submodule pool unavailable — running degraded', { subPath: s.path })
+      continue
+    }
+    // First pool wins as the handle-level record; each submodule still gets its
+    // OWN pool attached below (a single --reference would cross-wire them).
+    poolDir ??= pool
+    const linked = await ensureSubmoduleAlternates(isoWorktreePath, s.path, pool)
+    if (!linked.ok) {
+      log?.warn('submodule alternates attach failed — running degraded', {
+        subPath: s.path,
+        error: linked.error ?? '',
+      })
+    }
+  }
+  return { subBases, poolDir }
 }
 
 /** Reconstruct an IsoHandle from persisted columns (resume / GC replay — D15). */
@@ -216,6 +299,16 @@ export function rebuildIsoHandle(opts: {
   taskBaseHeads: Record<string, string>
   /** RFC-193 K1（同 createNodeIso）：resume 路径的快照同样要带清单。 */
   forcedContainerPaths?: string[]
+  /**
+   * RFC-210: per-repo submodule topology read back from `iso_submodules_json` /
+   * `iso_submodules_repos_json`, keyed by `worktreeDirName`.
+   *
+   * Replay MUST carry this. Without it a resumed merge-back falls back to a
+   * parent-only merge, where a gitlink both sides moved resolves as "take
+   * theirs" — silently discarding the other node's submodule commits, which is
+   * precisely the class of loss RFC-210 exists to fix.
+   */
+  submodules?: Record<string, { subBases: Record<string, string>; poolDir: string | null }>
 }): IsoHandle {
   const repos: IsoRepo[] = opts.canonRepos.map((r) => ({
     repoPath: r.repoPath,
@@ -231,6 +324,8 @@ export function rebuildIsoHandle(opts: {
     baseSnapshot: opts.baseSnapshots[r.worktreeDirName] ?? '',
     taskBaseHead: opts.taskBaseHeads[r.worktreeDirName] ?? '',
     forcedRepoRelPaths: repoRelForcedPaths(opts.forcedContainerPaths, r.worktreeDirName),
+    subBases: opts.submodules?.[r.worktreeDirName]?.subBases ?? {},
+    poolDir: opts.submodules?.[r.worktreeDirName]?.poolDir ?? null,
   }))
   return {
     taskId: opts.taskId,
@@ -273,6 +368,17 @@ export async function snapshotNodeIsoFinal(
           `the agent (or avoid editing submodule working trees).`,
       )
     }
+    // RFC-210 T15: publish every submodule's CURRENT head into the shared pool
+    // before this iso can be discarded.
+    //
+    // UNCONDITIONAL, not "only when dirty": an agent may well have committed
+    // inside the submodule itself (today's D22 error message literally tells it
+    // to), leaving the submodule clean while its HEAD sits on a commit that
+    // exists ONLY in this iso's module dir. `git worktree remove --force` then
+    // takes that module dir with it, and the commit is gone for good — canonical
+    // would later resolve the gitlink to an unreachable object.
+    await publishSubmoduleHeads(handle, r, log)
+
     out[r.worktreeDirName] = await snapshotFullState(r.isoWorktreePath, {
       pinRef: isoRefName(handle.taskId, handle.nodeRunId, 'node'),
       log,
@@ -283,6 +389,41 @@ export async function snapshotNodeIsoFinal(
     })
   }
   return out
+}
+
+/**
+ * RFC-210 — make this repo's submodule commits reachable outside the iso.
+ *
+ * Each submodule's head is fetched into the shared pool AND anchored with a
+ * node-scoped ref. The anchor is not optional: `git fetch <dir> <sha>` writes
+ * only FETCH_HEAD, so the objects land unreachable and an ordinary `git gc`
+ * past `gc.pruneExpire` collects them — long after the node succeeded, turning
+ * canonical's submodule into `bad object HEAD` and taking the superproject's
+ * `git status` (hence `snapshotFullState`) down with it.
+ *
+ * Fail-soft: a repo running degraded (no pool) keeps today's behaviour rather
+ * than failing the node here. Merge-back is where an unreachable gitlink
+ * actually becomes fatal, and it reports the problem with far better context.
+ */
+async function publishSubmoduleHeads(handle: IsoHandle, r: IsoRepo, log?: Logger): Promise<void> {
+  if (r.poolDir === null || Object.keys(r.subBases).length === 0) return
+  for (const s of usableSubmodules(await listSubmodules(r.isoWorktreePath))) {
+    const gitDir = await submoduleGitDir(r.isoWorktreePath, s.path)
+    if (gitDir === null) continue
+    const res = await pushObjectsToPool(
+      r.poolDir,
+      gitDir,
+      s.headSha,
+      poolRefName(handle.taskId, handle.nodeRunId, s.path),
+    )
+    if (!res.ok) {
+      log?.warn('submodule object publish failed', {
+        subPath: s.path,
+        sha: s.headSha,
+        error: res.error ?? '',
+      })
+    }
+  }
 }
 
 /**

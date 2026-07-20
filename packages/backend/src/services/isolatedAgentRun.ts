@@ -29,6 +29,7 @@ import {
   snapshotNodeIsoFinal,
   type CanonRepo,
   type IsoHandle,
+  type IsoRepo,
   type MergeBackConflict,
 } from '@/services/nodeIsolation'
 import { forcedPortPathsForTask, repoRelForcedPaths } from '@/services/portArtifacts'
@@ -96,6 +97,8 @@ export async function persistIsoBase(
         isoWorktreePath: handle.containerPath,
         isoBaseSnapshot: handle.repos[0]?.baseSnapshot ?? null,
         isoBaseSnapshotReposJson: null,
+        isoSubmodulesJson: submodulesJsonFor(handle.repos[0]),
+        isoSubmodulesReposJson: null,
       },
     })
     return
@@ -110,8 +113,32 @@ export async function persistIsoBase(
       isoWorktreePath: handle.containerPath,
       isoBaseSnapshot: null,
       isoBaseSnapshotReposJson: JSON.stringify(map),
+      isoSubmodulesJson: null,
+      isoSubmodulesReposJson: submodulesReposJsonFor(handle),
     },
   })
+}
+
+/**
+ * RFC-210 — serialize one repo's submodule topology, or null when it has none.
+ *
+ * NULL rather than `{}` for the submodule-free case (the overwhelming majority)
+ * keeps those rows byte-identical to pre-RFC-210 and lets replay distinguish
+ * "this repo has no submodules" from "the topology was never recorded".
+ */
+function submodulesJsonFor(repo: IsoRepo | undefined): string | null {
+  if (repo === undefined || Object.keys(repo.subBases).length === 0) return null
+  return JSON.stringify({ poolDir: repo.poolDir, subBases: repo.subBases })
+}
+
+/** Multi-repo counterpart, keyed by `worktreeDirName`; null when no repo has submodules. */
+function submodulesReposJsonFor(handle: IsoHandle): string | null {
+  const map: Record<string, { poolDir: string | null; subBases: Record<string, string> }> = {}
+  for (const r of handle.repos) {
+    if (Object.keys(r.subBases).length === 0) continue
+    map[r.worktreeDirName] = { poolDir: r.poolDir, subBases: r.subBases }
+  }
+  return Object.keys(map).length === 0 ? null : JSON.stringify(map)
 }
 
 /** RFC-130: persist the iso node_tree columns + merge_state on agent success (D15).
