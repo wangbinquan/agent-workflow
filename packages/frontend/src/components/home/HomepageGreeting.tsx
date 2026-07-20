@@ -18,16 +18,53 @@ import { Link } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
+  OnboardingRun,
   OverviewTasks,
   RuntimeStatusEntry,
   RuntimesStatusResponse,
 } from '@agent-workflow/shared'
 import { api } from '@/api/client'
+import { NoticeBanner } from '@/components/NoticeBanner'
 import { pickGreetingKey } from '@/lib/homepage'
 import { PipelineHero } from './PipelineHero'
 import { useOverview } from './useOverview'
 
 export const RUNTIMES_STATUS_HOME_QUERY_KEY = ['runtimes', 'status', 'home'] as const
+
+/**
+ * RFC-211: an invitation to the guided tour for anyone who has never taken it.
+ *
+ * The first-run screen it complements is INSTANCE-level (it only renders while
+ * the whole instance has no agents and no workflows), so the second person to
+ * join a team would never have seen it. This one is keyed off the current
+ * user's own tour history instead, and disappears by itself once they start a
+ * track — no dismissal state to store, nothing to get stale.
+ */
+function FirstVisitGuidePrompt() {
+  const { t } = useTranslation()
+  const runs = useQuery<OnboardingRun[]>({
+    queryKey: ['onboarding', 'runs'],
+    queryFn: ({ signal }) => api.get('/api/onboarding/runs', undefined, signal),
+    staleTime: 60_000,
+  })
+  if (runs.data === undefined || runs.data.length > 0) return null
+  return (
+    <div className="stack-top--sm">
+      <NoticeBanner
+        tone="info"
+        size="compact"
+        testid="homepage-guide-prompt"
+        action={
+          <Link to="/onboarding" className="btn btn--sm" data-testid="homepage-guide-prompt-cta">
+            {t('onboarding.startCta')}
+          </Link>
+        }
+      >
+        {t('onboarding.tracksIntro')}
+      </NoticeBanner>
+    </div>
+  )
+}
 
 /** RFC-135 D7: dot color semantics, decoupled from the failure reason. */
 type Severity = 'ok' | 'fault' | 'soft' | 'checking'
@@ -128,6 +165,7 @@ export function HomepageGreeting() {
             {t('onboarding.startCta')}
           </Link>
         </div>
+        <FirstVisitGuidePrompt />
       </div>
       <PipelineHero />
     </header>

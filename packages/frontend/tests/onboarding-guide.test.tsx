@@ -132,6 +132,50 @@ describe('RFC-211 guide copy', () => {
   })
 })
 
+describe('RFC-211 homepage invitation', () => {
+  test('a user who has never taken the tour is invited; one who has is not', async () => {
+    // The first-run screen is INSTANCE-level (empty agents AND workflows), so
+    // the second person to join a populated team would never be offered the
+    // tour at all. This prompt is keyed off the current user's own history.
+    const { HomepageGreeting } = await import('../src/components/home/HomepageGreeting')
+    // The hero also reads the overview aggregate and the runtime registry; both
+    // must be shaped or the component throws before the prompt can render.
+    const HERO = [
+      {
+        match: /\/api\/overview/,
+        body: {
+          resources: {
+            agents: 0,
+            skills: 0,
+            mcps: 0,
+            plugins: 0,
+            workflows: 0,
+            workgroups: 0,
+            repos: 0,
+            scheduled: 0,
+            memories: 0,
+          },
+          tasks: { running: 0, awaiting: 0, done7d: 0, failed7d: 0 },
+          generatedAt: '2026-07-20T00:00:00.000Z',
+        },
+      },
+      { match: /\/api\/runtimes\/status/, body: { runtimes: [] } },
+    ]
+
+    stubFetch([...HERO, { match: /\/api\/onboarding\/runs/, body: [] }])
+    const first = wrap(<HomepageGreeting />)
+    await waitFor(() => expect(screen.getByTestId('homepage-guide-prompt')).toBeTruthy())
+    expect(screen.getByTestId('homepage-guide-prompt-cta').getAttribute('href')).toBe('/onboarding')
+    first.unmount()
+
+    vi.restoreAllMocks()
+    stubFetch([...HERO, { match: /\/api\/onboarding\/runs/, body: [RUN] }])
+    wrap(<HomepageGreeting />)
+    await waitFor(() => expect(screen.getByTestId('homepage-start-task')).toBeTruthy())
+    expect(screen.queryByTestId('homepage-guide-prompt')).toBeNull()
+  })
+})
+
 describe('RFC-211 guided tour page', () => {
   test('renders through the shared page header and offers all four tracks', async () => {
     stubFetch([{ match: /\/api\/onboarding\/runs/, body: [] }])

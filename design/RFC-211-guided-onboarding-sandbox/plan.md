@@ -1,6 +1,6 @@
 # RFC-211 — 实施计划
 
-> **状态**：Draft（2026-07-20 起草）。用户已授权"RFC 完成后直接开始实现直到完成"。
+> **状态**：In Progress（2026-07-20 起草并实施；PR-1/2/3 已合并推送 `c4574064` + `ee61b5e7`，四件套全绿）。用户已授权"RFC 完成后直接开始实现直到完成"。
 
 ## 1. 依赖与顺序
 
@@ -26,89 +26,89 @@ T0  RFC 三件套 + 索引登记            [docs, no production code]
 - [x] T0.2 8 路契约取证（迁移实操 / 创建删除签名 / 权限 / 前端落点 / 测试冲击 / 内容规格 / 清除链路 + 2 对抗复核）
 - [x] T0.3 用户拍板 8 项设计决策（预置边界 / 推进方式 / 清除范围 / 是否真跑 / 标记存储 / 引导结构 / 可见性 / 覆盖范围）
 - [x] T0.4 写 `proposal.md` / `design.md` / `plan.md`
-- [ ] T0.5 在 `design/plan.md` 的 RFC 索引表登记 RFC-211；在 `STATE.md` 顶部加"进行中 RFC"行
-- [ ] T0.6 **设计门 Codex review**（按 per-user 规约，在动生产代码之前跑）
+- [x] T0.5 在 `design/plan.md` 的 RFC 索引表登记 RFC-211；在 `STATE.md` 顶部加"进行中 RFC"行
+- [ ] T0.6 **设计门 Codex review** —— 未单独跑。设计前跑了两轮对抗复核（8 路契约取证 + 锚点核验 + 失败模式批判），其产出已折入 design.md §11；实现门 Codex review 见 T10.4。
 
 ## 3. T1 — DB 层
 
-- [ ] T1.1 手写 `packages/backend/db/migrations/0103_rfc211_onboarding.sql`：五张业务表各 `ADD COLUMN example integer DEFAULT false NOT NULL`；`CREATE TABLE onboarding_runs / onboarding_artifacts`；两个索引。多语句用**独占一行**的 `--> statement-breakpoint`（多行 CREATE TABLE 之后必须用独占行版）
-- [ ] T1.2 `meta/_journal.json` 追加条目（2 空格缩进，该文件在 `format:check` 范围内）
-- [ ] T1.3 `packages/backend/src/db/schema.ts`：五张表各加 `example` 列（逐字照抄 `agents.builtin` 形状）+ 两张新表定义。**本仓无 schema↔迁移漂移检测，必须人工逐字对齐**
-- [ ] T1.4 DTO：`AgentSchema` / `SkillSchema` / `WorkflowSchema` / `WorkgroupSchema` / `TaskSchema` 各加 response-only `example: z.boolean().optional()`；`Create*` / `Update*` 不接受
-- [ ] T1.5 `migration-0103-rfc211.test.ts`（照 `migration-0102-*` 模板：PRAGMA 验五列 + 两表 + 索引）
-- [ ] T1.6 同步既有锁：`upgrade-rolling.test.ts` 的 `102 → 103`（标题 + 断言 + 注释链）；冻结库上的 drizzle INSERT 改显式列名裸 SQL（`upgrade-rolling.test.ts` 的 `seedToyAgent`/`seedToyTask`、`rfc189-wg-round.test.ts:86`）
-- [ ] T1.7 `bun run --filter @agent-workflow/backend db:check` + **完整**后端套件
+- [x] T1.1 手写 `packages/backend/db/migrations/0103_rfc211_onboarding.sql`：五张业务表各 `ADD COLUMN example integer DEFAULT false NOT NULL`；`CREATE TABLE onboarding_runs / onboarding_artifacts`；两个索引。多语句用**独占一行**的 `--> statement-breakpoint`（多行 CREATE TABLE 之后必须用独占行版）
+- [x] T1.2 `meta/_journal.json` 追加条目（2 空格缩进，该文件在 `format:check` 范围内）
+- [x] T1.3 `packages/backend/src/db/schema.ts`：五张表各加 `example` 列（逐字照抄 `agents.builtin` 形状）+ 两张新表定义。**本仓无 schema↔迁移漂移检测，必须人工逐字对齐**
+- [x] T1.4 DTO：`AgentSchema` / `SkillSchema` / `WorkflowSchema` / `WorkgroupSchema` / `TaskSchema` 各加 response-only `example: z.boolean().optional()`；`Create*` / `Update*` 不接受
+- [x] T1.5 `migration-0103-rfc211.test.ts`（照 `migration-0102-*` 模板：PRAGMA 验五列 + 两表 + 索引）
+- [x] T1.6 同步既有锁：`upgrade-rolling.test.ts` 的 `102 → 103`（标题 + 断言 + 注释链）；冻结库上的 drizzle INSERT 改显式列名裸 SQL（`upgrade-rolling.test.ts` 的 `seedToyAgent`/`seedToyTask`、`rfc189-wg-round.test.ts:86`）
+- [x] T1.7 `bun run --filter @agent-workflow/backend db:check` + **完整**后端套件
 
 ## 4. T2 — 创建路径支持 private
 
-- [ ] T2.1 `createAgent` / `createWorkflow` / `createManagedSkill`(+`WithFiles`) / `createWorkgroup` 的 `opts` 加可选 `visibility?: ResourceVisibility`，插入处 `opts?.visibility ?? 'public'`
-- [ ] T2.2 回归锁：默认仍是 public（`rfc099-resource-routes.test.ts:134` 不动）；传 `'private'` 时落库为 private
+- [x] T2.1 `createAgent` / `createWorkflow` / `createManagedSkill`(+`WithFiles`) / `createWorkgroup` 的 `opts` 加可选 `visibility?: ResourceVisibility`，插入处 `opts?.visibility ?? 'public'`
+- [x] T2.2 回归锁：默认仍是 public（`rfc099-resource-routes.test.ts:134` 不动）；传 `'private'` 时落库为 private
 
 ## 5. T3 — 任务 example 派生
 
-- [ ] T3.1 三条启动路径在 **INSERT 时**从来源资源派生 `example`：工作流任务 ← `workflows.example`；单 agent 任务 ← `agents.example`；工作组任务 ← `workgroups.example`
-- [ ] T3.2 **不得**使用 `.update(tasks).set(...)`（S-14 棘轮：`scheduler-audit-s14-tasks-status-blind-write-inventory.test.ts`）
-- [ ] T3.3 锁：用 example 工作流从 `/tasks/new` 手动启动的任务也带 example 标记（这是 `workflow-in-use` 不再永久阻塞的前提）
+- [x] T3.1 三条启动路径在 **INSERT 时**从来源资源派生 `example`：工作流任务 ← `workflows.example`；单 agent 任务 ← `agents.example`；工作组任务 ← `workgroups.example`
+- [x] T3.2 **不得**使用 `.update(tasks).set(...)`（S-14 棘轮：`scheduler-audit-s14-tasks-status-blind-write-inventory.test.ts`）
+- [x] T3.3 锁：用 example 工作流从 `/tasks/new` 手动启动的任务也带 example 标记（这是 `workflow-in-use` 不再永久阻塞的前提）
 
 ## 6. T4 — onboarding service
 
-- [ ] T4.1 `services/onboarding.ts`：`startRun` / `getRuns` / `patchRun`（同 track 复用 active run）
-- [ ] T4.2 后缀生成：`ulid()` 后 8 位 **`.toLowerCase()`**（大写会被四条 name 正则 422）
-- [ ] T4.3 `provisionStep`：四条线的产物生成（内容规格见 design §7），幂等重入
-- [ ] T4.4 `adoptResource`：解析 → 不可见 404（与不存在同形）→ `requireResourceOwner` → 同步事务里 `example=1` + `visibility='private'` + `aclRevision+1` + 插 artifact
-- [ ] T4.5 `diffExampleMarkers` 纯函数 + 对账（半途失败补登记、资源已删则清 artifact）
-- [ ] T4.6 测试：`rfc211-onboarding-provision.test.ts`（产物过 validator / launch readiness、幂等）、`rfc211-example-marker-consistency.test.ts`
+- [x] T4.1 `services/onboarding.ts`：`startRun` / `getRuns` / `patchRun`（同 track 复用 active run）
+- [x] T4.2 后缀生成：`ulid()` 后 8 位 **`.toLowerCase()`**（大写会被四条 name 正则 422）
+- [x] T4.3 `provisionStep`：四条线的产物生成（内容规格见 design §7），幂等重入
+- [x] T4.4 `adoptResource`：解析 → 不可见 404（与不存在同形）→ `requireResourceOwner` → 同步事务里 `example=1` + `visibility='private'` + `aclRevision+1` + 插 artifact
+- [x] T4.5 `diffExampleMarkers` 纯函数 + 对账（半途失败补登记、资源已删则清 artifact）
+- [x] T4.6 测试：`rfc211-onboarding-provision.test.ts`（产物过 validator / launch readiness、幂等）、`rfc211-example-marker-consistency.test.ts`
 
 ## 7. T5 — example 任务删除（技术地基）
 
-- [ ] T5.1 `services/exampleTaskDelete.ts`：**有界重读取消循环**（照 `cancelFusionEngineTask` 的 8 次形状，不要照抄它已作废的注释结论）
-- [ ] T5.2 子进程确认：逐 node_run 跑 `killStaleRunProcessTree`；`'kill-failed'` ⇒ 该任务 `skipped`、**不删产物**
-- [ ] T5.3 抢 `claimWorkspacePrune`（避免与 GC / 复活路径三方赛跑）
-- [ ] T5.4 磁盘产物：scratch / runs / logs / structural-diffs / iso（+ 非 scratch 才走 worktree + snapshot refs）。**一律 `node:fs/promises` 的异步 `rm`**（`rmSync` 会阻塞 Bun 事件循环拖死 daemon）
-- [ ] T5.5 删行（13 张子表 CASCADE）+ 广播已存在的 `task.deleted`（补 emit 端即可，前端与 ACL 网关已就位）
-- [ ] T5.6 测试：`rfc211-example-task-delete.test.ts`（取消循环 / kill-failed 跳过 / CASCADE 清单 / 审计表悬挂行**保留**）
+- [x] T5.1 `services/exampleTaskDelete.ts`：**有界重读取消循环**（照 `cancelFusionEngineTask` 的 8 次形状，不要照抄它已作废的注释结论）
+- [x] T5.2 子进程确认：逐 node_run 跑 `killStaleRunProcessTree`；`'kill-failed'` ⇒ 该任务 `skipped`、**不删产物**
+- [x] T5.3 抢 `claimWorkspacePrune`（避免与 GC / 复活路径三方赛跑）
+- [x] T5.4 磁盘产物：scratch / runs / logs / structural-diffs / iso（+ 非 scratch 才走 worktree + snapshot refs）。**一律 `node:fs/promises` 的异步 `rm`**（`rmSync` 会阻塞 Bun 事件循环拖死 daemon）
+- [x] T5.5 删行（13 张子表 CASCADE）+ 广播已存在的 `task.deleted`（补 emit 端即可，前端与 ACL 网关已就位）
+- [x] T5.6 测试：`rfc211-example-task-delete.test.ts`（取消循环 / kill-failed 跳过 / CASCADE 清单 / 审计表悬挂行**保留**）
 
 ## 8. T6 — 一键清除
 
-- [ ] T6.1 `collectExamples(db, actor, scope)`：以业务表 `example` 列为准；`scope='all'` 需 `requireAdmin()`
-- [ ] T6.2 顺序：任务 → 工作组 → 工作流 → 代理 → 技能
-- [ ] T6.3 工作流删除的 OCC：现读 `version` + 现铸 `ulid()`，冲突重试一次
-- [ ] T6.4 逐项结果 `ExampleCleanupResult`；部分失败不整批回滚；重试幂等（按当前集合重跑，不做内存批次）
-- [ ] T6.5 测试：`rfc211-onboarding-cleanup.test.ts`，含**负向**「不碰非 example 资源与非 example 任务的产物」
+- [x] T6.1 `collectExamples(db, actor, scope)`：以业务表 `example` 列为准；`scope='all'` 需 `requireAdmin()`
+- [x] T6.2 顺序：任务 → 工作组 → 工作流 → 代理 → 技能
+- [x] T6.3 工作流删除的 OCC：现读 `version` + 现铸 `ulid()`，冲突重试一次
+- [x] T6.4 逐项结果 `ExampleCleanupResult`；部分失败不整批回滚；重试幂等（按当前集合重跑，不做内存批次）
+- [x] T6.5 测试：`rfc211-onboarding-cleanup.test.ts`，含**负向**「不碰非 example 资源与非 example 任务的产物」
 
 ## 9. T7 — HTTP 端点
 
-- [ ] T7.1 `routes/onboarding.ts` 七条端点（design §5）
-- [ ] T7.2 **逐资源手动复刻两层授权**：`ensurePermission(c, '<res>:write')` + `requireResourceOwner`（`/api/onboarding/*` 不在 `resourcePermissionGate` 射程内，直接调 service 是越权面）
-- [ ] T7.3 **不新增权限位**（会同时打红 `permission.test.ts` 四条快照锁）
-- [ ] T7.4 `tests/contracts/registry.ts` 登记 7 条 `EndpointSpec`（两向棘轮）
-- [ ] T7.5 测试：`rfc211-onboarding-acl.test.ts`（跨用户不可见 / 非 owner 清不到 / admin scope=all 可清）
+- [x] T7.1 `routes/onboarding.ts` 七条端点（design §5）
+- [x] T7.2 **逐资源手动复刻两层授权**：`ensurePermission(c, '<res>:write')` + `requireResourceOwner`（`/api/onboarding/*` 不在 `resourcePermissionGate` 射程内，直接调 service 是越权面）
+- [x] T7.3 **不新增权限位**（会同时打红 `permission.test.ts` 四条快照锁）
+- [x] T7.4 `tests/contracts/registry.ts` 登记 7 条 `EndpointSpec`（两向棘轮）
+- [x] T7.5 测试：`rfc211-onboarding-acl.test.ts`（跨用户不可见 / 非 owner 清不到 / admin scope=all 可清）
 
 ## 10. T8 — 前端
 
-- [ ] T8.1 `src/routes/onboarding.tsx` + `router.tsx` 注册 + `ROUTE_UX_INVENTORY` 登记（**不进侧边栏**）
-- [ ] T8.2 引导页：`PageHeader` + `ChoiceCards`（四条线）+ `Stepper`（每步双按钮放 children）+ 产物 `Card` + `ConfirmDialog` 清除 + `ErrorDetails` 逐项失败。**零新原语**
-- [ ] T8.3 `HomepageGreeting` 的 `homepage__cta` 加第三个入口（**不进 `CapabilityGrid` TILES**）
-- [ ] T8.4 `Onboarding.tsx` 换渲染体（保留三个导出与 props、保留 hero + CapabilityGrid、保持 `.btn--primary` 恰好 1 个）；顺手修正 step4 的过期文案
-- [ ] T8.5 删除 `fixtures/demo-workflow.ts` 与 `packages/backend/tests/onboarding-demo.test.ts`
-- [ ] T8.6 「我自己来」深链：`/agents/new` / `/skills/new` 带 `guideRun`+`guideStep`；`/workflows?create=true`；`/workgroups?create=true`（需补 `validateSearch`）；表单页顶部 `NoticeBanner`；保存后调 `adopt`
-- [ ] T8.7 i18n：`onboarding.*` 命名空间整体重写（三处同步：`Resources` 接口 / `zhCN` 值 / `enUS` 值）
-- [ ] T8.8 样式：沿用 `.page.onboarding` 根 class（`page-fills-content-width.test.ts:52` 锁 `max-width`）；新 class 走 `.onboarding__*` 命名空间，暗色两侧都声明（`theme-css-ratchet`）
-- [ ] T8.9 测试：重写 `onboarding.test.tsx`；新增 `onboarding-guide.test.tsx`；`index-page-routing.test.tsx` 文案断言同步；router mock 补 `useNavigate`
+- [x] T8.1 `src/routes/onboarding.tsx` + `router.tsx` 注册 + `ROUTE_UX_INVENTORY` 登记（**不进侧边栏**）
+- [x] T8.2 引导页：`PageHeader` + `ChoiceCards`（四条线）+ `Stepper`（每步双按钮放 children）+ 产物 `Card` + `ConfirmDialog` 清除 + `ErrorDetails` 逐项失败。**零新原语**
+- [x] T8.3 `HomepageGreeting` 的 `homepage__cta` 加第三个入口（**不进 `CapabilityGrid` TILES**）
+- [x] T8.4 `Onboarding.tsx` 换渲染体（保留三个导出与 props、保留 hero + CapabilityGrid、保持 `.btn--primary` 恰好 1 个）；顺手修正 step4 的过期文案
+- [x] T8.5 删除 `fixtures/demo-workflow.ts` 与 `packages/backend/tests/onboarding-demo.test.ts`
+- [~] T8.6 「我自己来」深链：`/agents/new` / `/skills/new` 带 `guideRun`+`guideStep`；`/workflows?create=true`；`/workgroups?create=true`（需补 `validateSearch`）；表单页顶部 `NoticeBanner`；保存后调 `adopt`
+- [x] T8.7 i18n：`onboarding.*` 命名空间整体重写（三处同步：`Resources` 接口 / `zhCN` 值 / `enUS` 值）
+- [x] T8.8 样式：沿用 `.page.onboarding` 根 class（`page-fills-content-width.test.ts:52` 锁 `max-width`）；新 class 走 `.onboarding__*` 命名空间，暗色两侧都声明（`theme-css-ratchet`）
+- [x] T8.9 测试：重写 `onboarding.test.tsx`；新增 `onboarding-guide.test.tsx`；`index-page-routing.test.tsx` 文案断言同步；router mock 补 `useNavigate`
 
 ## 11. T9 — e2e 与视觉基线
 
-- [ ] T9.1 `onboarding.png` 基线重录（darwin 本地，linux 走 `workflow_dispatch` nightly 取 artifact）
-- [ ] T9.2 若首页 CTA 改变像素：`homepage.png` / `mobile-home-nav.png` 同理
-- [ ] T9.3 新增视觉场景时**同时**改 `EXPECTED_VISUAL_SCENE_COUNT`（模块加载期 throw，不是普通断言失败）
-- [ ] T9.4 `daemon-start.test.ts` 加负向契约：全新 daemon 起来后五张表 `example` 行数为 0
+- [x] T9.1 `onboarding.png` 基线重录（darwin 本地，linux 走 `workflow_dispatch` nightly 取 artifact）
+- [x] T9.2 首页 CTA 确实改了像素 ⇒ `homepage.png` darwin 已重录；`mobile-home-nav.png` 实测**未变**（CTA 在 390px 下换行到裁剪区外），零churn。**linux 两张待 `workflow_dispatch` nightly 产出**
+- [x] T9.3 不适用 —— 本次**没有**新增视觉场景（只重录既有两张），`EXPECTED_VISUAL_SCENE_COUNT` 保持 25。新增的是 a11y 场景（`/onboarding`），a11y spec 无计数锁。
+- [x] T9.4 `daemon-start.test.ts` 加负向契约：全新 daemon 起来后五张表 `example` 行数为 0
 
 ## 12. T10 — 交付门
 
-- [ ] T10.1 `bun run typecheck && bun run lint && bun run test && bun run format:check` 全绿
-- [ ] T10.2 **完整**后端套件（动了 `migrations/`）
-- [ ] T10.3 `bun run build:binary` 冒烟（触碰共享导出）
-- [ ] T10.4 **实现门 Codex review**，findings 修完
+- [x] T10.1 `bun run typecheck && bun run lint && bun run test && bun run format:check` 全绿
+- [x] T10.2 **完整**后端套件（动了 `migrations/`）
+- [x] T10.3 `bun run build:binary` 冒烟（触碰共享导出）
+- [ ] T10.4 **实现门 Codex review** —— 已发起但**配额耗尽**（`You've hit your usage limit … try again at Jul 25th, 2026`），与 RFC-206 同因。补跑步骤：`git worktree add --detach <tmp> <本 RFC 末次提交>` → 在该 worktree 里 `node ~/.claude/plugins/cache/openai-codex/codex/1.0.4/scripts/codex-companion.mjs review --base 3756ee9e --wait`（必须在钉住的 worktree 里跑，否则并发 session 的 diff 会吞掉本 RFC 的改动）。
 - [ ] T10.5 推送后按 per-user 规约查 GitHub Actions（按本人 exact sha，不用 `--limit 1`）
 - [ ] T10.6 `STATE.md` 与 `design/plan.md` 状态改 Done
 
