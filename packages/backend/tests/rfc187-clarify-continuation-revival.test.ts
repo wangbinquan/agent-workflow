@@ -170,12 +170,16 @@ describe('RFC-187 T13 — source locks (engine-entry revive)', () => {
   })
 
   // Codex P1-7② — RFC-181 A2's dismissal runs OUTSIDE the config-PATCH transaction, so a
-  // crash between "autonomous=true committed" and "dismiss" leaves an autonomous group
+  // RFC-207 — the invariant is unchanged, only its input: a crash between "last
+  // human removed" and "dismiss" leaves a group with no one to answer holding an
+  // open clarify. Re-assert at engine entry.
   // sitting on an open clarify — which (with F3) parks the task awaiting_human for an
   // answer autonomous mode promises never to ask for. Re-assert at engine entry.
-  test('an autonomous group re-entering with an open clarify dismisses it (invariant re-asserted)', () => {
+  test('a human-less group re-entering with an open clarify dismisses it (invariant re-asserted)', () => {
     expect(RUNNER).toContain('dismissOpenClarifyParksForAutonomous(db, taskId, rec.config.mode)')
-    expect(RUNNER).toMatch(/rec\.config\.autonomous \?\? false[\s\S]{0,200}awaiting_human/)
+    expect(RUNNER).toMatch(
+      /!workgroupHasHumanMember\(rec\.config\.members\)[\s\S]{0,200}awaiting_human/,
+    )
     // dynamic_workflow has no clarify channel — excluded, like the PATCH path.
     expect(RUNNER).toMatch(/rec\.config\.mode !== 'dynamic_workflow'/)
   })

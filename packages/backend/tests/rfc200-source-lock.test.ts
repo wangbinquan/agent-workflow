@@ -64,7 +64,11 @@ describe('RFC-200 source wiring locks', () => {
     const workgroup = read('packages/backend/src/services/workgroupRunner.ts')
     expect(workgroup.match(/loadRunEnvelopeNonce\(db, runId\)/g)?.length).toBeGreaterThanOrEqual(3)
     expect(workgroup).toContain('composeMemberPrompt(state, memberId, assignment, envelopeNonce)')
-    expect(workgroup).toContain("renderWgProtocolBlock('leader', config, envelopeNonce)")
+    // RFC-207 — the renderer gained a 4th arg (resolved ask-back permission); the
+    // nonce must still be threaded, which is what this lock is actually about.
+    expect(workgroup).toContain(
+      "renderWgProtocolBlock(\n        'leader',\n        config,\n        envelopeNonce,",
+    )
 
     const dynamic = read('packages/backend/src/services/dynamicWorkflowRunner.ts')
     expect(dynamic).toContain('const envelopeNonce = await loadRunEnvelopeNonce(db, runId)')

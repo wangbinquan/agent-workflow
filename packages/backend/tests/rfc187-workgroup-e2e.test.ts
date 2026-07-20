@@ -84,7 +84,9 @@ async function seedAgent(db: DbClient, name: string): Promise<void> {
 async function seedGroup(
   db: DbClient,
   name: string,
-  opts: { autonomous: boolean; maxRounds?: number },
+  // RFC-207 — ask-back is on iff the roster holds a human; `withHuman` replaces
+  // the old `autonomous` flag (which meant the same thing, inverted).
+  opts: { withHuman: boolean; maxRounds?: number },
 ): Promise<void> {
   await seedAgent(db, 'wg-lead')
   await seedAgent(db, 'wg-writer')
@@ -94,13 +96,15 @@ async function seedGroup(
     instructions: '章程：小步快跑',
     mode: 'leader_worker',
     leaderDisplayName: 'lead',
-    autonomous: opts.autonomous,
     switches: { shareOutputs: true, directMessages: false, blackboard: false },
     maxRounds: opts.maxRounds ?? 8,
     completionGate: false,
     members: [
       { memberType: 'agent', agentName: 'wg-lead', displayName: 'lead', roleDesc: '协调' },
       { memberType: 'agent', agentName: 'wg-writer', displayName: 'writer', roleDesc: '产出' },
+      ...(opts.withHuman
+        ? [{ memberType: 'human', userId: 'u-e2e', displayName: 'owner', roleDesc: '拍板' }]
+        : []),
     ],
   } as Parameters<typeof createWorkgroup>[1])
 }
@@ -151,7 +155,7 @@ describe('RFC-187 F3 — non-autonomous leader clarify parks (does not spin to m
   test('leader clarify → awaiting_human (leader-clarify) with exactly ONE leader run → answer → done', async () => {
     const h = harness()
     try {
-      await seedGroup(h.db, 'wg187-f3', { autonomous: false })
+      await seedGroup(h.db, 'wg187-f3', { withHuman: true })
       // leader: ask a clarify FIRST, then (after the answer) dispatch, then declare done.
       writePlan(h, {
         'wg-lead': [CLARIFY, DISPATCH, DONE],
@@ -212,7 +216,7 @@ describe('RFC-187 §3-7 — maxRounds with completed work wraps up (does not har
   test('maxRounds:1 + dispatch + worker done → grace wrap-up round → task done (not failed)', async () => {
     const h = harness()
     try {
-      await seedGroup(h.db, 'wg187-mr', { autonomous: true, maxRounds: 1 })
+      await seedGroup(h.db, 'wg187-mr', { withHuman: false, maxRounds: 1 })
       // round 1 (the only budgeted round) dispatches; the grace wrap-up round declares done.
       writePlan(h, { 'wg-lead': [DISPATCH, DONE], 'wg-writer': [WORKER_RESULT] })
       const task = await launch(h, 'wg187-mr')
@@ -234,7 +238,7 @@ describe('RFC-187 §4 — zero canonical delta on done posts a warn', () => {
   test('done with completed work but no canonical changes → advisory warn message', async () => {
     const h = harness()
     try {
-      await seedGroup(h.db, 'wg187-zd', { autonomous: true })
+      await seedGroup(h.db, 'wg187-zd', { withHuman: false })
       // scenario-opencode never writes files, so this done has zero canonical delta.
       writePlan(h, { 'wg-lead': [DISPATCH, DONE], 'wg-writer': [WORKER_RESULT] })
       const task = await launch(h, 'wg187-zd')
