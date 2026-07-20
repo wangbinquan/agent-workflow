@@ -371,7 +371,9 @@ describe('injectMemoryForRun', () => {
     resetBroadcastersForTests()
   })
 
-  function seedTask(opts: { repoUrl?: string | null; agentName?: string } = {}): {
+  function seedTask(
+    opts: { repoUrl?: string | null; cachedRepoId?: string | null; agentName?: string } = {},
+  ): {
     taskId: string
     workflowId: string
   } {
@@ -395,6 +397,7 @@ describe('injectMemoryForRun', () => {
         workflowSnapshot: '{}',
         repoPath: '/tmp/wt',
         repoUrl: opts.repoUrl ?? null,
+        cachedRepoId: opts.cachedRepoId ?? null,
         worktreePath: '/tmp/wt',
         baseBranch: 'main',
         branch: 'agent-workflow/' + taskId,
@@ -461,7 +464,11 @@ describe('injectMemoryForRun', () => {
     expect(block).toContain('- [workflow] WF')
   })
 
-  test('resolves repoId via cached_repos.url lookup', async () => {
+  // RFC-204: repo scope resolves via tasks.cached_repo_id, NOT by joining URLs.
+  // The old join compared a redacted tasks.repo_url (RFC-054 W3-4 redacts at
+  // insert) against the plaintext cached_repos.url, so it silently missed every
+  // credentialed/private repo — the credentialed case below is that regression.
+  test('resolves repoId via tasks.cached_repo_id', async () => {
     const url = 'https://github.com/acme/web.git'
     db.insert(cachedRepos)
       .values({
@@ -473,7 +480,7 @@ describe('injectMemoryForRun', () => {
         createdAt: Date.now(),
       })
       .run()
-    const { taskId } = seedTask({ repoUrl: url })
+    const { taskId } = seedTask({ repoUrl: url, cachedRepoId: 'cr-1' })
     seedApprovedMemory(db, { scopeType: 'repo', scopeId: 'cr-1', title: 'REPO' })
     const { block } = await injectMemoryForRun({
       db,
@@ -482,6 +489,34 @@ describe('injectMemoryForRun', () => {
       dependents: [],
     })
     expect(block).toContain('- [repo] REPO')
+  })
+
+  test('private repo (redacted repo_url) still resolves its repo scope', async () => {
+    // Pre-RFC-204 this returned null: repo_url was stored as
+    // `https://***@github.com/acme/priv.git` and never equalled the plaintext
+    // cached_repos.url, so private-repo memories were silently dropped.
+    db.insert(cachedRepos)
+      .values({
+        id: 'cr-priv',
+        urlHash: 'ddccbbaa',
+        url: 'https://x-access-token:TOKEN@github.com/acme/priv.git',
+        localPath: '/tmp/priv',
+        lastFetchedAt: Date.now(),
+        createdAt: Date.now(),
+      })
+      .run()
+    const { taskId } = seedTask({
+      repoUrl: 'https://***@github.com/acme/priv.git',
+      cachedRepoId: 'cr-priv',
+    })
+    seedApprovedMemory(db, { scopeType: 'repo', scopeId: 'cr-priv', title: 'PRIV' })
+    const { block } = await injectMemoryForRun({
+      db,
+      taskId,
+      primaryAgent: mkAgent('agent-1'),
+      dependents: [],
+    })
+    expect(block).toContain('- [repo] PRIV')
   })
 
   test('agent closure: dependents propagate their memories', async () => {

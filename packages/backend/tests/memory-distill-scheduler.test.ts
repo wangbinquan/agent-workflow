@@ -50,7 +50,7 @@ const EMPTY_ENVELOPE_SPAWN: DistillerSpawnFn = async (input) => ({
 
 function seedTask(
   db: DbClient,
-  opts: { repoUrl?: string | null; snapshotAgents?: string[] } = {},
+  opts: { repoUrl?: string | null; cachedRepoId?: string | null; snapshotAgents?: string[] } = {},
 ): { taskId: string; workflowId: string } {
   const wfId = ulid()
   db.insert(workflows)
@@ -79,6 +79,7 @@ function seedTask(
       workflowSnapshot: JSON.stringify(snapshot),
       repoPath: '/tmp/wt',
       repoUrl: opts.repoUrl ?? null,
+      cachedRepoId: opts.cachedRepoId ?? null,
       worktreePath: '/tmp/wt',
       baseBranch: 'main',
       branch: 'agent-workflow/' + taskId,
@@ -158,7 +159,11 @@ describe('computeEligibleScopes', () => {
     expect(r.agentIds).toEqual(['agent-codegen']) // unknown agent silently dropped
     expect(r.includeGlobal).toBe(true)
   })
-  test('resolves repoId via tasks.repoUrl → cached_repos.url join', async () => {
+  // RFC-204: resolves through tasks.cached_repo_id. The previous URL join
+  // compared a redacted tasks.repo_url against the plaintext cached_repos.url,
+  // so private repos never matched (and once the credential column is blanked it
+  // would have matched arbitrary rows on '').
+  test('resolves repoId via tasks.cached_repo_id', async () => {
     db.insert(cachedRepos)
       .values({
         id: 'cr-1',
@@ -169,9 +174,18 @@ describe('computeEligibleScopes', () => {
         createdAt: Date.now(),
       })
       .run()
-    const { taskId } = seedTask(db, { repoUrl: 'https://github.com/acme/web.git' })
+    const { taskId } = seedTask(db, {
+      repoUrl: 'https://github.com/acme/web.git',
+      cachedRepoId: 'cr-1',
+    })
     const r = await computeEligibleScopes(db, taskId)
     expect(r.repoId).toBe('cr-1')
+  })
+
+  test('a task with no cached mirror resolves to no repo scope', async () => {
+    const { taskId } = seedTask(db, { repoUrl: 'https://github.com/acme/web.git' })
+    const r = await computeEligibleScopes(db, taskId)
+    expect(r.repoId).toBeNull()
   })
 })
 

@@ -356,13 +356,18 @@ export async function injectMemoryForRun(deps: {
     typeof taskRow.workflowId === 'string' && taskRow.workflowId.length > 0
       ? taskRow.workflowId
       : null
+  // RFC-204: resolve the repo scope from the stored mirror id, not by joining
+  // URLs. `tasks.repo_url` has been REDACTED at write since RFC-054 W3-4, so
+  // `repo_url == cached_repos.url` never matched for a credentialed URL — repo
+  // scoped memory was silently skipped for private repos. The id join fixes
+  // that and survives the credential being sealed.
   let repoId: string | null = null
-  if (typeof taskRow.repoUrl === 'string' && taskRow.repoUrl.length > 0) {
+  if (typeof taskRow.cachedRepoId === 'string' && taskRow.cachedRepoId.length > 0) {
     const repoRow = (
       await deps.db
         .select({ id: cachedRepos.id })
         .from(cachedRepos)
-        .where(eq(cachedRepos.url, taskRow.repoUrl))
+        .where(eq(cachedRepos.id, taskRow.cachedRepoId))
         .limit(1)
     )[0]
     repoId = repoRow?.id ?? null

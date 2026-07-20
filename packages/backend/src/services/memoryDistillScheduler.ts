@@ -175,13 +175,17 @@ export async function computeEligibleScopes(
       : (
           await db.select({ id: agents.id }).from(agents).where(inArray(agents.name, agentNames))
         ).map((r) => r.id)
+  // RFC-204: see memoryInject — join on the stored mirror id. The old URL join
+  // compared a REDACTED tasks.repo_url against the plaintext cached_repos.url,
+  // so it missed private repos entirely and, once the credential column is
+  // blanked, would have matched arbitrary rows on ''.
   let repoId: string | null = null
-  if (taskRow.repoUrl !== null) {
+  if (taskRow.cachedRepoId !== null) {
     const repoRow = (
       await db
         .select({ id: cachedRepos.id })
         .from(cachedRepos)
-        .where(eq(cachedRepos.url, taskRow.repoUrl))
+        .where(eq(cachedRepos.id, taskRow.cachedRepoId))
         .limit(1)
     )[0]
     repoId = repoRow?.id ?? null
