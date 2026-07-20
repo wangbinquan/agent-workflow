@@ -109,16 +109,22 @@ return error instanceof ApiError && error.status >= 400 && error.status < 500
 
 - **AC-1** 存在一条自动化回归：mock 一个**永不 settle** 的 `fetch`，创建代理后在硬截止到达时
   mutation 以 `ApiError` 收场，表单解冻、可再次提交。（修复前该用例会挂到测试超时。）
-- **AC-2** 硬截止值 **严格大于** daemon 的 `idleTimeout: 255s`，并有一条测试把这个不等式与
-  `cli/start.ts` 的常量绑定，防止任何一侧单方面漂移导致误杀。
+- **AC-2** 截止时间分两档且都可测：档 A（体积有界的 JSON 接口）为固定常数并严格大于 daemon 的
+  `idleTimeout: 255s`；档 B（上传 / blob 下载）由 `payloadDeadlineMs(bytes)` 纯函数推导，
+  200 MiB（`services/upload.ts:42` 的默认 `perRequest`）对应的截止必须远大于档 A。
+  **设计门修正**：初稿误把 `idleTimeout`（空闲上限）当作请求总时长上限，据此断言"构造上
+  不可能误杀"——该断言已撤销，见 design §6-1。
 - **AC-3** 软阈值到达后，被冻结的表单/弹窗渲染出可用的取消控件；点击后请求真被 abort
   （`AbortSignal` 生效），UI 立即恢复可编辑，草稿不丢。
 - **AC-4** busy 状态下的未保存守卫在软阈值后渲染出「仍要离开」，并带明确风险文案；
   点击后导航成功。软阈值之前维持现状（只有「留下」）。
 - **AC-5** `ConfirmDialog` 的 pending 在 `finally` 中清除；请求 reject / abort 后 ESC、overlay、
   ×、取消四个出口全部恢复可用。
-- **AC-6** `isDefinitiveSkillWriteError` 的分类修正后：4xx = 确定性失败；传输失败
-  （`status 0`）= 可安全重试、**不**置 outcomeUnknown；5xx = 结果未知但**不**永久持有导航令牌。
+- **AC-6** 失败分类按**幂等性**而非 HTTP 状态切分：4xx = 确定性失败；传输失败发生在幂等调用上
+  = 可重试；**非幂等写**遇传输失败 / 超时 / abort = 结果未知（服务端可能已提交）。
+  「保存技能时 daemon 重启不再永久锁死」由 **unknown 不再等于永久**（有界 + 逃生口 + 重新检查）
+  达成，**不得**靠把它重分类为"安全"来达成。**设计门修正**：初稿把整个 `status 0` 判为安全
+  重试，会跳过对账、可能重复启动任务，已撤销，见 design §6-2。
 - **AC-7** `hooks/useActor.ts` 等全局 queryFn 补上 `signal`，使 react-query 的取代/卸载
   abort 路径真正可用；有测试锁定 `signal` 被消费。
 - **AC-8** 门禁全绿：`bun run typecheck && bun run lint && bun run test && bun run format:check`，
