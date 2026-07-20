@@ -741,6 +741,13 @@ export const tasks = sqliteTable(
     maxTotalTokens: integer('max_total_tokens'),
     // timing
     startedAt: integer('started_at').notNull(),
+    // RFC-207 §3.8 — ACCUMULATED time actually spent running. `startedAt` is wall
+    // clock since creation and is never reset, so a task parked for days on a
+    // question would be charged for the wait the instant a human answered. These
+    // two are the real clock: `runningSince` is the current running stretch's
+    // start (NULL when not running), `runningMs` the sum of the closed ones.
+    runningMs: integer('running_ms').notNull().default(0),
+    runningSince: integer('running_since'),
     finishedAt: integer('finished_at'),
     // failure diagnostics
     errorSummary: text('error_summary'),

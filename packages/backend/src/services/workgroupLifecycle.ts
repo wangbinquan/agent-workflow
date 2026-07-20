@@ -15,7 +15,11 @@
 //   any non-terminal ──▶ canceled
 
 import type { WorkgroupAssignmentStatus } from '@agent-workflow/shared'
-import { workgroupHasHumanMember } from '@agent-workflow/shared'
+import {
+  resolveClarifyBudget,
+  wgClarifyAskerKey,
+  workgroupHasHumanMember,
+} from '@agent-workflow/shared'
 import { and, eq, sql } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
@@ -28,6 +32,7 @@ import {
   workgroupMemberCursors,
 } from '@/db/schema'
 import { taskBroadcaster, TASK_CHANNEL } from '@/ws/broadcaster'
+import { WG_LEADER_NODE_ID } from './workgroupLaunch'
 
 export const WORKGROUP_ASSIGNMENT_TRANSITIONS: Record<
   WorkgroupAssignmentStatus,
@@ -342,4 +347,54 @@ export async function dismissOpenClarifyParksForAutonomous(
     })
   }
   return result
+}
+
+/**
+ * RFC-207 §3.6 — how many times this ONE asker has already asked the humans.
+ *
+ * Counted from `clarify_sessions` (the real record of questions asked), NOT from
+ * the run generations `priorDoneGenerationsForRun` returns: that counts every
+ * completed top-level run at the node, and the workgroup LEADER runs once per
+ * ordinary round — so after a few plain rounds it would report a budget already
+ * spent and reject the leader's very first question.
+ *
+ * Askers are identified by {@link wgClarifyAskerKey}, so a member woken by many
+ * different messages stays ONE asker instead of minting a fresh budget each time.
+ */
+export async function countWgClarifyAsks(
+  db: DbClient,
+  taskId: string,
+  askerKey: string,
+): Promise<number> {
+  const rows = await db
+    .select({ nodeId: clarifySessions.sourceAgentNodeId, shard: clarifySessions.sourceShardKey })
+    .from(clarifySessions)
+    .where(eq(clarifySessions.taskId, taskId))
+  return rows.filter((r) => wgClarifyAskerKey(r.nodeId, r.shard, WG_LEADER_NODE_ID) === askerKey)
+    .length
+}
+
+/**
+ * RFC-207 §1.3 / §3.7.2 — may this asker ask a human right now? THE single
+ * resolution point: the dispatch side feeds it to the prompt renderer AND to
+ * `clarifyEnabled`, and the envelope side negates it. Resolving it twice is how
+ * a prompt ends up inviting a question the runner then rejects.
+ */
+export async function resolveWgClarifyAllowed(
+  db: DbClient,
+  taskId: string,
+  members: ReadonlyArray<{ memberType: 'agent' | 'human' }>,
+  clarifyBudget: number | undefined,
+  nodeId: string,
+  shardKey: string | null,
+): Promise<boolean> {
+  if (!workgroupHasHumanMember(members)) return false
+  const budget = resolveClarifyBudget({ clarifyBudget })
+  if (budget <= 0) return false
+  const asked = await countWgClarifyAsks(
+    db,
+    taskId,
+    wgClarifyAskerKey(nodeId, shardKey, WG_LEADER_NODE_ID),
+  )
+  return asked < budget
 }

@@ -183,18 +183,29 @@ describe('gap1 — pause time counts toward maxDurationMs wall clock (current-be
 
     const r = await enforceLimits(h.db)
 
-    // DEFECT LOCK: the 1Hz ticker cancels the freshly-resumed task on its
-    // first tick — "task ran <elapsed>ms" actually measures pause + run.
-    // After an accumulated-running-time fix this turns red — assert
-    // canceled === [] and status still 'running' instead.
-    expect(r.canceled).toEqual([taskId])
+    // RFC-207 §3.8 — FIXED. This assertion is the inverse of the defect lock it
+    // replaces (which the file header pre-declared would flip): a task that sat
+    // parked for 7 days has accumulated no running time, so the first tick after
+    // it resumes must NOT kill it. `startedAt` deliberately still reads stale —
+    // eight other consumers treat it as "when was this task created".
+    expect(r.canceled).toEqual([])
     const t = await readTask(h.db, taskId)
-    expect(t?.status).toBe('canceled')
-    expect(t?.errorSummary).toBe('task-time-limit-exceeded')
-    // The reported elapsed time is dominated by the 7-day pause, not real
-    // execution: parse "task ran NNNms" and pin it above 6 days.
-    const m = /task ran (\d+)ms/.exec(t?.errorMessage ?? '')
-    expect(m).not.toBeNull()
-    expect(Number(m![1])).toBeGreaterThan(6 * DAY_MS)
+    expect(t?.status).toBe('running')
+    expect(t?.startedAt).toBe(STALE)
+  })
+
+  test('accumulated running time still trips the cap — the limit is not defanged', async () => {
+    // The mirror of the case above: real running time (an OPEN stretch, i.e. the
+    // task genuinely running) is charged normally. Without this, "park time is
+    // free" could be implemented by never charging anything at all.
+    const taskId = await seedTask(h.db, {
+      status: 'running',
+      startedAt: Date.now() - 2 * ONE_HOUR_MS,
+      runningSince: Date.now() - 2 * ONE_HOUR_MS,
+      maxDurationMs: ONE_HOUR_MS,
+    })
+    const r = await enforceLimits(h.db)
+    expect(r.canceled).toEqual([taskId])
+    expect((await readTask(h.db, taskId))?.errorSummary).toBe('task-time-limit-exceeded')
   })
 })

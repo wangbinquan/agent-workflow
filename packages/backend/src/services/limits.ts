@@ -74,7 +74,11 @@ async function checkOne(
   now: number,
 ): Promise<{ summary: string; message: string } | null> {
   if (typeof t.maxDurationMs === 'number' && t.maxDurationMs > 0) {
-    const elapsed = now - t.startedAt
+    // RFC-207 §3.8 — the accumulated running time, NOT wall clock since creation:
+    // a task that sat parked on a question for a week has not been "running" for a
+    // week, and killing it the moment a human finally answers is the opposite of
+    // what a duration limit is for.
+    const elapsed = t.runningMs + (t.runningSince === null ? 0 : now - t.runningSince)
     if (elapsed > t.maxDurationMs) {
       return {
         summary: 'task-time-limit-exceeded',

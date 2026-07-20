@@ -26,7 +26,7 @@
 // snaps back on refresh. Callers of these helpers place their
 // broadcastNodeStatus AFTER the helper returns; never the other way around.
 
-import { and, eq } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { existsSync } from 'node:fs'
 import {
   type NodeRunTransitionEvent,
@@ -297,6 +297,9 @@ export type TaskStatusUpdateExtra = Partial<
     | 'workflowSnapshot'
     | 'workflowVersion'
     | 'workgroupConfigJson'
+    // RFC-207 §3.8 — written ONLY by writeStatus below, never by callers.
+    | 'runningMs'
+    | 'runningSince'
   >
 >
 
@@ -410,7 +413,23 @@ export async function setTaskStatus(args: {
     // rfc097-allow-direct-task-status-write -- single allowlisted writer
     writer
       .update(tasks)
-      .set({ status: args.to, ...(args.extra ?? {}) })
+      .set({
+        status: args.to,
+        // RFC-207 §3.8 — run-time accounting rides the single allowlisted status
+        // writer so every one of the ~25 transition call sites is covered by
+        // construction. Entering `running` opens a stretch; leaving it closes the
+        // stretch into the accumulated total. Time spent parked, awaiting review or
+        // awaiting a human answer therefore costs nothing against maxDurationMs.
+        ...(args.to === 'running'
+          ? { runningSince: Date.now() }
+          : from === 'running'
+            ? {
+                runningMs: sql`${tasks.runningMs} + (${Date.now()} - COALESCE(${tasks.runningSince}, ${Date.now()}))`,
+                runningSince: null,
+              }
+            : {}),
+        ...(args.extra ?? {}),
+      })
       .where(
         and(
           eq(tasks.id, args.taskId),

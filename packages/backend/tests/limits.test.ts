@@ -72,8 +72,15 @@ describe('enforceLimits', () => {
   })
 
   test('cancels task whose duration exceeds maxDurationMs', async () => {
+    // RFC-207 §3.8 — the cap is measured against ACCUMULATED running time, so the
+    // seed must open a running stretch (`runningSince`) rather than only backdate
+    // `startedAt`; wall clock since creation no longer decides this.
     const startedAt = Date.now() - 10_000
-    const taskId = await seedTask(h.db, { maxDurationMs: 5_000, startedAt })
+    const taskId = await seedTask(h.db, {
+      maxDurationMs: 5_000,
+      startedAt,
+      runningSince: startedAt,
+    })
     const r = await enforceLimits(h.db, Date.now())
     expect(r.canceled).toEqual([taskId])
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]

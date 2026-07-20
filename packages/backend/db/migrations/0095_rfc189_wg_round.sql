@@ -5,6 +5,9 @@
 --     exact countRoundsUsed derivation frozen at this migration: qualifying =
 --     status != canceled AND cause NOT IN (wg-gate, wg-protocol-retry);
 --     non-qualifying rows inherit the round they belong to).
+--     RFC-209: that derivation now lives in services/workgroupRounds.ts
+--     (deriveRoundsUsed) — same口径, plus an exclusion for killed clarify
+--     continuations that a revive has already superseded.
 --   - lw member host rows: the dispatching assignment's round (authoritative
 --     join); message-turn rows (shard 'msg:%') keep the window number.
 --   - free_collab rows: NULL — fc round budget is a row COUNT by design
