@@ -283,23 +283,38 @@ describe('account self-service is scoped to the calling user', () => {
     expect((await (await as(h.app, alice, '/api/auth/identities')).json()) as unknown[]).toEqual([])
   })
 
-  // NOTE (documented, not asserted as desirable): the three handlers disagree on
-  // what they reveal about ids they refuse. Sessions answer 404 for an id that
-  // does not exist but 403 for one that belongs to somebody else — an existence
-  // oracle. PATs and identities answer 403 for both, matching RFC-099's
-  // "indistinguishable from not-found" rule. Locking the current shapes here so
-  // the divergence is visible; unifying it is a product decision, not a
-  // refactor, and is filed in design/test-guard-audit-2026-07-21.
-  test('refusal shapes are locked so the sessions existence-oracle cannot spread', async () => {
+  // All three destructive self-service endpoints must be indistinguishable
+  // between "this id does not exist" and "this id is not yours". Sessions used
+  // to answer 404 for the former, which let any logged-in user probe whether a
+  // given session id was live. Unified to 403 (user decision, 2026-07-21) to
+  // match PATs/identities and RFC-099's "indistinguishable from not-found" rule.
+  test("an unknown id and someone else's id are refused identically (no existence oracle)", async () => {
     const unknownId = ulid()
-    expect(
-      (await as(h.app, h.bob, `/api/auth/sessions/${unknownId}/revoke`, { method: 'POST' })).status,
-    ).toBe(404)
-    expect(
-      (await as(h.app, h.bob, `/api/auth/pats/${unknownId}`, { method: 'DELETE' })).status,
-    ).toBe(403)
-    expect(
-      (await as(h.app, h.bob, `/api/auth/identities/${unknownId}`, { method: 'DELETE' })).status,
-    ).toBe(403)
+    const victimSession = (await (await as(h.app, h.alice, '/api/auth/sessions')).json()) as Array<{
+      id: string
+    }>
+    const someoneElsesId = victimSession[0]?.id
+    expect(someoneElsesId).toBeDefined()
+
+    for (const [label, path] of [
+      ['sessions', `/api/auth/sessions/{id}/revoke`],
+      ['pats', `/api/auth/pats/{id}`],
+      ['identities', `/api/auth/identities/{id}`],
+    ] as const) {
+      const method = label === 'sessions' ? 'POST' : 'DELETE'
+      const unknown = await as(h.app, h.bob, path.replace('{id}', unknownId), { method })
+      const foreign = await as(
+        h.app,
+        h.bob,
+        path.replace('{id}', label === 'sessions' ? (someoneElsesId as string) : unknownId),
+        { method },
+      )
+      expect(`${label}: unknown=${unknown.status} foreign=${foreign.status}`).toBe(
+        `${label}: unknown=403 foreign=403`,
+      )
+      // Byte-identical bodies too — a differing code or message re-opens the
+      // oracle even when both answers are 403.
+      expect(`${label}: ${await unknown.text()}`).toBe(`${label}: ${await foreign.text()}`)
+    }
   })
 })

@@ -142,9 +142,16 @@ export function mountAuthRoutes(app: Hono, deps: AppDeps): void {
       .where(eq(userSessions.id, c.req.param('id')))
       .limit(1)
     const row = rows[0]
-    if (!row) throw new NotFoundError('session-not-found', 'session not found')
-    if (row.userId !== actor.user.id)
-      throw new ForbiddenError('forbidden', "cannot revoke another user's session")
+    // Unknown id and someone-else's id答 the SAME 403 — answering 404 for the
+    // former turned this endpoint into an existence oracle: a logged-in user
+    // could probe which session ids are live simply by watching the status
+    // change. The two sibling endpoints below (PATs, identities) already
+    // collapse both cases, and RFC-099's rule for resources is likewise
+    // "indistinguishable from not-found". Locked by
+    // tests/auth-self-service-idor.test.ts.
+    // See design/test-guard-audit-2026-07-21 §1 (B1-routes-1).
+    if (!row || row.userId !== actor.user.id)
+      throw new ForbiddenError('forbidden', 'session does not belong to current user')
     await revokeSession(deps.db, row.id)
     return c.body(null, 204)
   })
