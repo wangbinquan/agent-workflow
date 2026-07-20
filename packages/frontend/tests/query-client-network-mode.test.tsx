@@ -133,6 +133,17 @@ describe('production query client · networkMode', () => {
     expect(defaults.mutations?.networkMode).toBe('always')
   })
 
+  // Codex impl-gate finding: query-core derives refetchOnReconnect from
+  // networkMode (`networkMode !== 'always'`, queryClient.js:272), so opting into
+  // 'always' turns reconnect refetching off unless it is spelled out. Paired
+  // with refetchOnWindowFocus:false that would strand a query which errored
+  // during an outage. Assert the RESOLVED option, so the coupling is caught even
+  // if someone drops the explicit flag.
+  test('keeps refetch-on-reconnect despite networkMode always', () => {
+    const resolved = createQueryClient().defaultQueryOptions({ queryKey: ['probe'] })
+    expect(resolved.refetchOnReconnect).toBe(true)
+  })
+
   test('creating an agent still fires while the browser reports offline', async () => {
     const router = renderAgentsNew()
     await waitFor(() => screen.getByTestId('agent-create-button'))

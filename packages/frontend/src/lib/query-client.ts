@@ -36,6 +36,13 @@ export function createQueryClient(): QueryClient {
         retry: 1,
         refetchOnWindowFocus: false,
         networkMode: NETWORK_MODE,
+        // Must stay EXPLICIT: query-core derives this from networkMode
+        // (`refetchOnReconnect = networkMode !== 'always'`, queryClient.js:272),
+        // so adopting 'always' above would otherwise silently turn reconnect
+        // refetching OFF. With refetchOnWindowFocus also false, a query that
+        // burned its one retry while the link was down (e.g. ['runtimes'],
+        // which AgentForm needs) would stay errored until a remount.
+        refetchOnReconnect: true,
       },
       mutations: {
         networkMode: NETWORK_MODE,
