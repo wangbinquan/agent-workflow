@@ -33,6 +33,7 @@ import {
   WG_CLARIFY_BUDGET_DEFAULT,
 } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { clarifySessions } from '../src/db/schema'
 import {
   clarifyRounds,
   clarifySessions,
@@ -253,6 +254,68 @@ describe('RFC-181 A2/C — isTaskClarifySuppressed + dismissOpenClarifyParksForA
   // RFC-207 — the oracle now reads the frozen ROSTER instead of a switch. Every
   // unreadable case still resolves to "not suppressed": an anomaly should let a
   // question reach a human, not silently swallow it.
+  // RFC-207 §3.6 — the ask-back BUDGET, i.e. the answer to "you added a human, so
+  // what stops it asking forever?". Counted per asker from clarify_sessions.
+  describe('反问预算', () => {
+    const HUMAN = JSON.stringify({
+      members: [{ memberType: 'agent' }, { memberType: 'human' }],
+      clarifyBudget: 2,
+    })
+    async function ask(taskId: string, nodeId: string, shard: string | null): Promise<void> {
+      await db.insert(clarifySessions).values({
+        id: ulid(),
+        taskId,
+        sourceAgentNodeId: nodeId,
+        sourceAgentNodeRunId: ulid(),
+        sourceShardKey: shard,
+        clarifyNodeId: '__wg_clarify__',
+        clarifyNodeRunId: ulid(),
+        iterationIndex: 0,
+        questionsJson: '[]',
+        status: 'awaiting_human',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      })
+    }
+
+    test('用满即压制；leader 与每张派单各自独立计数', async () => {
+      const t = await seedTask(HUMAN)
+      const leader = { nodeId: '__wg_leader__', shard: null }
+      expect(await isTaskClarifySuppressed(db, t, leader.nodeId, leader.shard)).toBe(false)
+      await ask(t, leader.nodeId, leader.shard)
+      await ask(t, leader.nodeId, leader.shard)
+      expect(await isTaskClarifySuppressed(db, t, leader.nodeId, leader.shard)).toBe(true)
+      // A separate assignment has its own budget — finishing one card and starting
+      // the next must not inherit the previous card's spend.
+      expect(await isTaskClarifySuppressed(db, t, '__wg_member__', 'asg-1')).toBe(false)
+    })
+
+    test('消息轮按成员归一化：换一条消息不重置预算', async () => {
+      const t = await seedTask(HUMAN)
+      await ask(t, '__wg_member__', 'msg:m-coder:01AAA')
+      await ask(t, '__wg_member__', 'msg:m-coder:01BBB')
+      // Keying on the raw shard would mint a fresh asker per message and let a
+      // member ask forever; `mem:<memberId>` is what closes that bypass.
+      expect(await isTaskClarifySuppressed(db, t, '__wg_member__', 'msg:m-coder:01CCC')).toBe(true)
+      expect(await isTaskClarifySuppressed(db, t, '__wg_member__', 'msg:m-other:01AAA')).toBe(false)
+    })
+
+    test('预算 0 = 首问即压制；无人工成员时预算无关', async () => {
+      const zero = await seedTask(
+        JSON.stringify({ members: [{ memberType: 'human' }], clarifyBudget: 0 }),
+      )
+      expect(await isTaskClarifySuppressed(db, zero, '__wg_leader__', null)).toBe(true)
+      const noHuman = await seedTask(JSON.stringify({ members: [{ memberType: 'agent' }] }))
+      expect(await isTaskClarifySuppressed(db, noHuman, '__wg_leader__', null)).toBe(true)
+    })
+
+    test('旧快照缺 clarifyBudget → 回退默认值而非解析失败', async () => {
+      const legacy = await seedTask(JSON.stringify({ members: [{ memberType: 'human' }] }))
+      for (let i = 0; i < WG_CLARIFY_BUDGET_DEFAULT; i++) await ask(legacy, '__wg_leader__', null)
+      expect(await isTaskClarifySuppressed(db, legacy, '__wg_leader__', null)).toBe(true)
+    })
+  })
+
   test('isTaskClarifySuppressed：无人工 / 有人工 / 缺字段 / 坏 JSON / 无 config', async () => {
     expect(await isTaskClarifySuppressed(db, taskId)).toBe(true)
     const withHuman = await seedTask(
@@ -373,8 +436,10 @@ describe('RFC-181 C — 源级契约锁', () => {
     // live read: a turn that carried no invite may not ask just because the roster
     // gained a human while it ran.
     expect(scheduler).toContain('req.clarifyEnabled === false')
-    expect(scheduler).toContain('isTaskClarifySuppressed(db, taskId)')
-    const preCheck = scheduler.indexOf('await isTaskClarifySuppressed(db, taskId)')
+    expect(scheduler).toContain('isTaskClarifySuppressed(db, taskId, req.nodeId, runShardKey)')
+    const preCheck = scheduler.indexOf(
+      'await isTaskClarifySuppressed(db, taskId, req.nodeId, runShardKey)',
+    )
     const create = scheduler.indexOf('await createClarifySession(')
     const compensate = scheduler.indexOf('await dismissOpenClarifyParksForAutonomous(db, taskId)')
     expect(preCheck).toBeGreaterThan(-1)

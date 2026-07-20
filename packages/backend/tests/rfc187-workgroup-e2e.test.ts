@@ -18,7 +18,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { clarifySessions, nodeRuns, tasks, workgroupMessages } from '../src/db/schema'
+import { clarifySessions, nodeRuns, tasks, workgroupMessages, users } from '../src/db/schema'
 import { buildActor } from '../src/auth/actor'
 import { createAgent } from '../src/services/agent'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
@@ -90,6 +90,22 @@ async function seedGroup(
 ): Promise<void> {
   await seedAgent(db, 'wg-lead')
   await seedAgent(db, 'wg-writer')
+  if (opts.withHuman) {
+    // The human member must resolve to an ACTIVE user — createWorkgroup rejects a
+    // roster pointing at a missing/inactive one (workgroups.ts assertHumanMembersActive).
+    await db
+      .insert(users)
+      .values({
+        id: 'u-e2e',
+        username: 'e2e',
+        displayName: 'e2e',
+        role: 'admin',
+        status: 'active',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      })
+      .onConflictDoNothing()
+  }
   await createWorkgroup(db, {
     name,
     description: '',

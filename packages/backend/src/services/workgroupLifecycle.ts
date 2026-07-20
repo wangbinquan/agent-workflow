@@ -179,7 +179,13 @@ export async function advanceMemberCursor(
  * anomaly, and letting a question through so a human can look is the safe
  * failure — the same direction the RFC-180 predecessor took.
  */
-export async function isTaskClarifySuppressed(db: DbClient, taskId: string): Promise<boolean> {
+export async function isTaskClarifySuppressed(
+  db: DbClient,
+  taskId: string,
+  /** RFC-207 — when given, the per-asker ask-back budget is enforced too. */
+  nodeId?: string,
+  shardKey?: string | null,
+): Promise<boolean> {
   const row = (
     await db
       .select({ cfg: tasks.workgroupConfigJson })
@@ -189,14 +195,24 @@ export async function isTaskClarifySuppressed(db: DbClient, taskId: string): Pro
   )[0]
   if (row === undefined || row.cfg === null) return false
   try {
-    const parsed = JSON.parse(row.cfg) as { members?: unknown }
+    const parsed = JSON.parse(row.cfg) as { members?: unknown; clarifyBudget?: number }
     if (!Array.isArray(parsed.members)) return false
-    return !workgroupHasHumanMember(
-      parsed.members.filter(
-        (m): m is { memberType: 'agent' | 'human' } =>
-          typeof m === 'object' && m !== null && 'memberType' in m,
-      ),
+    const members = parsed.members.filter(
+      (m): m is { memberType: 'agent' | 'human' } =>
+        typeof m === 'object' && m !== null && 'memberType' in m,
     )
+    if (!workgroupHasHumanMember(members)) return true
+    // A stubborn agent must not out-ask its budget by emitting anyway, so the
+    // envelope gate enforces the same ceiling the invite gate used.
+    if (nodeId === undefined) return false
+    const budget = resolveClarifyBudget({ clarifyBudget: parsed.clarifyBudget })
+    if (budget <= 0) return true
+    const asked = await countWgClarifyAsks(
+      db,
+      taskId,
+      wgClarifyAskerKey(nodeId, shardKey ?? null, WG_LEADER_NODE_ID),
+    )
+    return asked >= budget
   } catch {
     return false
   }

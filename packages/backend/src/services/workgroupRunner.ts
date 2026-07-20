@@ -78,6 +78,7 @@ import {
   advanceMemberCursor,
   casAssignmentStatus,
   dismissOpenClarifyParksForAutonomous,
+  resolveWgClarifyAllowed,
 } from '@/services/workgroupLifecycle'
 import {
   maxMessageId,
@@ -1538,7 +1539,14 @@ async function driveLeaderTurn(
     // invite an ask-back) and `clarifyEnabled` (whether to accept one). Deriving
     // it separately in each place is how a prompt ends up inviting a question the
     // envelope gate then rejects.
-    const leaderClarifyAllowed = workgroupHasHumanMember(config.members)
+    const leaderClarifyAllowed = await resolveWgClarifyAllowed(
+      db,
+      taskId,
+      config.members,
+      config.clarifyBudget,
+      WG_LEADER_NODE_ID,
+      null,
+    )
     const result = await hooks.runHostNode({
       nodeRunId: runId,
       nodeId: WG_LEADER_NODE_ID,
@@ -1835,7 +1843,14 @@ async function driveAssignmentTurn(
     // invite an ask-back) and `clarifyEnabled` (whether to accept one). Deriving
     // it separately in each place is how a prompt ends up inviting a question the
     // envelope gate then rejects.
-    const assignmentClarifyAllowed = workgroupHasHumanMember(config.members)
+    const assignmentClarifyAllowed = await resolveWgClarifyAllowed(
+      db,
+      taskId,
+      config.members,
+      config.clarifyBudget,
+      WG_MEMBER_NODE_ID,
+      assignment.id,
+    )
     const result = await hooks.runHostNode({
       nodeRunId: runId,
       nodeId: WG_MEMBER_NODE_ID,
@@ -2015,7 +2030,16 @@ async function driveMessageTurn(
   // invite an ask-back) and `clarifyEnabled` (whether to accept one). Deriving
   // it separately in each place is how a prompt ends up inviting a question the
   // envelope gate then rejects.
-  const msgClarifyAllowed = workgroupHasHumanMember(config.members)
+  // The shard key of a message turn embeds the member; only that part is used to
+  // identify the asker, so the message id is irrelevant here (RFC-207 §3.6.3).
+  const msgClarifyAllowed = await resolveWgClarifyAllowed(
+    db,
+    taskId,
+    config.members,
+    config.clarifyBudget,
+    WG_MEMBER_NODE_ID,
+    `msg:${memberId}:0`,
+  )
   const result = await hooks.runHostNode({
     nodeRunId: runId,
     nodeId: WG_MEMBER_NODE_ID,
