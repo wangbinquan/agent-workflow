@@ -42,6 +42,10 @@ export interface HostRunLite {
   /** Immutable per-attempt agent identity (stamped at mint) — the fc
    *  attribution fallback when the card's mutable assignee is gone. */
   agentOverrideName?: string | null
+  /** RFC-209 T9 — 权威轮序数（RFC-189 的 `node_runs.wg_round`）。可选：RFC-179 期的
+   *  fixture 与 0095 回填之前 / 引擎外铸出未打戳的历史行没有它，缺失时回退到旧的
+   *  「按消息 round 反推」推导。 */
+  wgRound?: number | null
 }
 export interface AssignmentLite {
   id: string
@@ -198,13 +202,19 @@ export function deriveWorkgroupRunHistory(
   }
   classified.sort((a, b) => (a.run.id < b.run.id ? -1 : a.run.id > b.run.id ? 1 : 0))
 
-  // Impl-gate P2 — leader round = MESSAGE-anchored (1 + the max round of any
-  // message that landed before this run was minted), NOT a run-count ordinal:
-  // a protocol retry mints extra leader runs inside ONE logical round, and a
-  // count-based ordinal drifts ahead of the divider its card must sit under
-  // (retries share the round; the next real round starts only after the
-  // previous round's messages exist).
-  const leaderRoundOf = (runId: string): number => {
+  // RFC-209 T9 —— leader 回合卡的轮序数**读 `node_runs.wg_round`**（RFC-189 起它才是权威）。
+  //
+  // 此前是从消息 round 反推（`1 + max(m.round | m.id < runId)`，见下面的 legacy 兜底）。
+  // 那是 RFC-182 时代的必要 hack——当时还没有 stamped ordinal。RFC-209 让人类消息也带上真实
+  // 回合号之后，反推必然漂移：`driveLeaderTurn` 在 `runHostNode` **之前**就把本轮的行连
+  // `wgRound` 落库了，所以账本读数是**正在进行的那一轮**；房间里的人在 leader 轮 2 跑动中
+  // 发一句话就写 round 2，而晚于它铸出的协议重试行会被反推成 3（正确答案是 2，重试与本轮
+  // 共享轮号）——卡被塞进一个不存在的 round 3 桶，经尾部兜底渲染到房间最底部，看起来像最新
+  // 事件。这正是本函数注释与 rfc179-member-current-run 那条「重试共享轮号」测试锁住的回归。
+  //
+  // legacy 兜底只服务两类历史行：migration 0095 回填之前的行，以及引擎**外**铸出、尚未被
+  // 领养打戳的行（clarify-answer 续跑 / 崩溃残留）。
+  const leaderRoundOfLegacy = (runId: string): number => {
     let maxRound = 0
     for (const m of messages) {
       if (m.id < runId && (m.round ?? 0) > maxRound) maxRound = m.round ?? 0
@@ -213,7 +223,8 @@ export function deriveWorkgroupRunHistory(
   }
   const open = opts.openClarifySourceRunIds
   return classified.map((cr) => {
-    const round = cr.kind === 'leader-round' ? leaderRoundOf(cr.run.id) : null
+    const round =
+      cr.kind === 'leader-round' ? (cr.run.wgRound ?? leaderRoundOfLegacy(cr.run.id)) : null
     return {
       nodeRunId: cr.run.id,
       memberId: cr.memberId,

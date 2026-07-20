@@ -413,6 +413,9 @@ async function routeDynamicWorkflowPreview(page: Page, taskId: string): Promise<
         assignments: [],
         memberRuns: {},
         runHistory: [],
+        // RFC-209 —— 房间聚合的新字段。e2e 在 workspace typecheck 之外，桩体不同步就会
+        // 悄悄与契约脱节（本仓有过先例）。
+        roundsUsed: 0,
       }),
     })
   })

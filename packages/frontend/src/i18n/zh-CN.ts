@@ -935,6 +935,8 @@ export interface Resources {
     unsavedTitle: string
     unsavedBody: string
     unsavedBusyBody: string
+    unsavedForceLeave: string
+    unsavedForceLeaveWarning: string
     unsavedStay: string
     unsavedDiscard: string
     emptyPaneTitle: string
@@ -1495,6 +1497,9 @@ export interface Resources {
       infoGoal: string
       infoMode: string
       infoMaxRounds: string
+      infoMemberTurnBudget: string
+      memberTurnBudgetValue: string
+      memberTurnBudgetHint: string
       infoSwitches: string
       assignmentStatus: {
         open: string
@@ -4426,6 +4431,9 @@ export const zhCN: Resources = {
     unsavedTitle: '有未保存的修改',
     unsavedBody: '当前有未保存的修改，离开本页将丢弃它们。',
     unsavedBusyBody: '保存操作仍在进行中，请等待完成后再离开本页。',
+    unsavedForceLeave: '仍要离开',
+    unsavedForceLeaveWarning:
+      '这次写入已经明显卡住。离开会取消等待，但无法确定服务端是否已经写入成功——离开后请刷新确认实际结果，再决定是否重试。',
     unsavedStay: '留在本页',
     unsavedDiscard: '放弃修改',
     emptyPaneTitle: '未选择任何项',
@@ -5175,6 +5183,9 @@ export const zhCN: Resources = {
       infoGoal: '目标',
       infoMode: '模式',
       infoMaxRounds: '最大轮数',
+      infoMemberTurnBudget: '成员发言预算',
+      memberTurnBudgetValue: '{{used}} / {{max}}',
+      memberTurnBudgetHint: '一批唤醒要整批放得下才会启动，所以可能提前触顶。',
       infoSwitches: '协作开关',
       assignmentStatus: {
         open: '待认领',

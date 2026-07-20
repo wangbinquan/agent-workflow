@@ -38,6 +38,7 @@ import { WorkgroupTaskConfigDialog } from '@/components/workgroup/WorkgroupTaskC
 import { useUserLookup } from '@/hooks/useUserLookup'
 import { describeApiError } from '@/i18n'
 import { displayNoderunStatusKey, nodeRunStatusToKind } from '@/lib/noderun-status'
+import { roomShowsRoundDividers } from '@/lib/workgroup-mode'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import {
   applyMention,
@@ -184,8 +185,12 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
   // degraded message-turns) between the messages; @-mention message-turns
   // attach under their trigger message inside RoomMessage instead.
   const runHistory = useMemo(() => room.data?.runHistory ?? [], [room.data])
+  // RFC-209 —— 自由协作不画回合分隔线（无全局回合），预算改在右栏如实显示。
   const timeline = useMemo(
-    () => buildRoomTimeline(room.data?.messages ?? [], standaloneTurnEntries(runHistory)),
+    () =>
+      buildRoomTimeline(room.data?.messages ?? [], standaloneTurnEntries(runHistory), {
+        dividers: room.data === undefined ? true : roomShowsRoundDividers(room.data.config.mode),
+      }),
     [room.data, runHistory],
   )
   // RFC-179 §2.3 — per-message「执行中」pill on the @-mention that woke a
@@ -775,8 +780,30 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
                 ? t('workgroups.modeLeaderWorker')
                 : t('workgroups.modeFreeCollab')}
             </dd>
-            <dt>{t('workgroups.room.infoMaxRounds')}</dt>
-            <dd>{data.config.maxRounds}</dd>
+            {/* RFC-209 —— 自由协作的 max_rounds 计的是**成员 run 总数**（design/RFC-164
+                §4.4「硬顶 成员 run 总数 > max_rounds」），不是回合数；它既然不再以
+                「第 X 回合」的形式出现在消息流里，就得在这里如实显示成预算进度，
+                否则用户完全看不到任务什么时候会触顶。 */}
+            {data.config.mode === 'free_collab' ? (
+              <>
+                <dt>{t('workgroups.room.infoMemberTurnBudget')}</dt>
+                <dd data-testid="workgroup-room-turn-budget">
+                  {t('workgroups.room.memberTurnBudgetValue', {
+                    used: data.roundsUsed,
+                    max: data.config.maxRounds,
+                  })}
+                  {/* 复用 Field 的 hint 原语（font-size 12 + --muted），零新 CSS。 */}
+                  <div className="form-field__hint">
+                    {t('workgroups.room.memberTurnBudgetHint')}
+                  </div>
+                </dd>
+              </>
+            ) : (
+              <>
+                <dt>{t('workgroups.room.infoMaxRounds')}</dt>
+                <dd>{data.config.maxRounds}</dd>
+              </>
+            )}
             <dt>{t('workgroups.room.infoSwitches')}</dt>
             <dd>{switchesSummary(data.config.mode, data.config.switches, t)}</dd>
           </dl>

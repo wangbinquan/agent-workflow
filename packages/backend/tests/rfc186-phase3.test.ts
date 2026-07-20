@@ -26,7 +26,20 @@ describe('RFC-186 Phase 3 — engine hardening locks', () => {
   // lexical ordering; plain ulid() reorders same-ms posts).
   test('§3-4: postMessage uses a monotonic ULID factory, not plain ulid()', () => {
     expect(SRC).toContain('const nextMessageId = monotonicFactory()')
-    expect(SRC).toMatch(/async function postMessage[\s\S]{0,120}const id = nextMessageId\(\)/)
+    // RFC-209 —— 距离上限从 120 放宽到 900：postMessage 现在会在铸 id **之前**解析回合号
+    // （`m.round ?? await resolveMessageRound(...)`），中间还夹着解释这个顺序的注释块。
+    // 放宽是**有意**的，但顺序不变式不能松：解析 round → 铸 id → 插入。反过来（在铸 id 与
+    // insert 之间新增 await）会加宽「同毫秒两条消息按 ULID 乱序」的窗口，而 monotonicFactory
+    // 正是 §3-4 为消除它才引入的。下面一条断言把这个顺序本身锁住。
+    expect(SRC).toMatch(/async function postMessage[\s\S]{0,900}const id = nextMessageId\(\)/)
+  })
+
+  // RFC-209 —— 铸 id 与 insert 之间**不得**再插入 await（见上一条注释）。
+  test('§3-4: postMessage inserts immediately after minting the id (no await between)', () => {
+    const body =
+      /const id = nextMessageId\(\)([\s\S]{0,200}?)await db\.insert\(workgroupMessages\)/.exec(SRC)
+    expect(body).not.toBeNull()
+    expect(body?.[1] ?? '').not.toContain('await')
   })
 
   // §3-5 / F5: an adopted assignment run must pass its TRUE status so a still-

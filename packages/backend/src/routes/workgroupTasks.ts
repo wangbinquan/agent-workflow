@@ -61,7 +61,13 @@ import {
 } from '@/services/workgroupLifecycle'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '@/services/workgroupLaunch'
+import { buildRoomMessageRow } from '@/services/workgroupMessages'
 import { deriveMemberCurrentRuns, deriveWorkgroupRunHistory } from '@/services/workgroupRoom'
+import {
+  deriveRoundsUsed,
+  resolveRoomMessageRound,
+  roundedModeOf,
+} from '@/services/workgroupRounds'
 import { Paths } from '@/util/paths'
 import { resolveOpencodeCmd } from '@/util/opencode'
 import { taskBroadcaster, TASK_CHANNEL } from '@/ws/broadcaster'
@@ -311,6 +317,9 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
           finishedAt: nodeRuns.finishedAt,
           failureCode: nodeRuns.failureCode,
           agentOverrideName: nodeRuns.agentOverrideName,
+          // RFC-209 —— 两个用途共用这一列：① 回合账本读数（右栏预算表 roundsUsed）；
+          // ② leader 回合卡的轮序数（RFC-189 之后它才是权威，取代从消息 round 反推）。
+          wgRound: nodeRuns.wgRound,
         })
         .from(nodeRuns)
         .where(
@@ -358,10 +367,17 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
       { openClarifySourceRunIds },
     )
     const gateRaw = JsonObjectSchema.parse(raw.gate ?? {})
+    // RFC-209 —— 已用回合数：与 max_rounds 触顶判据**同源**（同一个 deriveRoundsUsed，
+    // 且这里的 host-run 过滤条件与引擎 loadDbState 逐字相同），所以右栏预算表显示的
+    // 数字就是真正决定任务生死的那个。零新查询——复用上面已经加载的 hostRuns。
+    // dynamic_workflow 没有回合账本 ⇒ 0（UI 只在 free_collab 渲染）。
+    const roundedMode = roundedModeOf(config.mode)
+    const roundsUsed = roundedMode === null ? 0 : deriveRoundsUsed(roundedMode, hostRuns)
     return c.json({
       taskId,
       taskStatus: task.status,
       config,
+      roundsUsed,
       gate: {
         declaredDone: gateRaw.declaredDone === true,
         awaitingConfirmation: gateRaw.awaitingConfirmation === true,
@@ -421,6 +437,10 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
     const body = parsed.data.body
     const mentioned = resolveMentions(body, config)
     const now = Date.now()
+    // RFC-209 —— 人在房间里说的话属于**正在进行的那一轮**，不再硬编码 round 0（那会在
+    // 消息流中间插一条「第 0 回合」分隔线，把讨论劈成三段）。lw 取写入时刻账本读数、
+    // fc 恒 0（该模式无回合）。派单卡与消息共用同一个值。
+    const round = await resolveRoomMessageRound(deps.db, taskId, config.mode)
 
     // 1. dispatch one assignment per mentioned member (决策 #14 — human @ is
     //    a DIRECT dispatch, same rank as a leader dispatch).
@@ -430,7 +450,7 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
       await deps.db.insert(workgroupAssignments).values({
         id,
         taskId,
-        round: 0,
+        round,
         source: 'human',
         createdByUserId: actor.user.id,
         assigneeMemberId: member.id,
@@ -451,18 +471,20 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
     // 2. the message row itself (audit column carries the user id; prompts
     //    only ever see displayName slices — design §11).
     const messageId = ulid()
-    await deps.db.insert(workgroupMessages).values({
-      id: messageId,
-      taskId,
-      round: 0,
-      authorKind: 'human',
-      authorUserId: actor.user.id,
-      kind: mentioned.length > 0 ? 'dispatch' : 'chat',
-      bodyMd: body,
-      mentionsJson: JSON.stringify(mentioned.map((m) => m.id)),
-      assignmentId: assignmentIds[0] ?? null,
-      createdAt: now,
-    })
+    await deps.db.insert(workgroupMessages).values(
+      buildRoomMessageRow({
+        id: messageId,
+        taskId,
+        round,
+        authorKind: 'human',
+        authorUserId: actor.user.id,
+        kind: mentioned.length > 0 ? 'dispatch' : 'chat',
+        bodyMd: body,
+        mentionMemberIds: mentioned.map((m) => m.id),
+        assignmentId: assignmentIds[0] ?? null,
+        createdAt: now,
+      }),
+    )
     broadcastWg(taskId, {
       type: 'wg.message.created',
       messageId,
@@ -520,19 +542,21 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
       })
       if (!flipped) return false
       tx.insert(workgroupMessages)
-        .values({
-          id: deliveryId,
-          taskId,
-          round: row.round,
-          authorKind: 'human',
-          authorMemberId: member.id,
-          authorUserId: actor.user.id,
-          kind: 'delivery',
-          bodyMd,
-          mentionsJson: '[]',
-          assignmentId,
-          createdAt: Date.now(),
-        })
+        .values(
+          buildRoomMessageRow({
+            id: deliveryId,
+            taskId,
+            // 派单卡族：交付回答的是**哪一轮的派单**，恒取 assignment.round（RFC-209 D13）。
+            round: row.round,
+            authorKind: 'human',
+            authorMemberId: member.id,
+            authorUserId: actor.user.id,
+            kind: 'delivery',
+            bodyMd,
+            assignmentId,
+            createdAt: Date.now(),
+          }),
+        )
         .run()
       return true
     })
@@ -558,7 +582,7 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
   app.post('/api/workgroup-tasks/:taskId/confirm', async (c) => {
     const taskId = c.req.param('taskId')
     const actor = actorOf(c)
-    const { task, raw } = await loadVisibleWorkgroupTask(actor, taskId)
+    const { task, raw, config } = await loadVisibleWorkgroupTask(actor, taskId)
     const parsed = ConfirmSchema.safeParse(await safeJson(c.req.raw))
     if (!parsed.success) {
       throw new ValidationError('workgroup-confirm-invalid', 'invalid confirm payload', {
@@ -575,6 +599,10 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
     const approve = parsed.data.decision === 'approve'
     const messageId = ulid()
     const closedHolderIds: string[] = []
+    // RFC-209 —— 事务回调是**同步**的（不能 await），所以回合号在事务外先解析好、
+    // 捕获进闭包。解析与 insert 之间账本可能前进一格，标签落在前一轮——由前端的单调
+    // 守卫吸收，记为可接受残余（design §6）。
+    const gateRound = await resolveRoomMessageRound(deps.db, taskId, config.mode)
     await resumeTaskWithAtomicSideEffects(deps.db, taskId, buildResumeDeps(), (tx, transition) => {
       if (transition.from !== 'awaiting_review') {
         throw new ConflictError(
@@ -633,19 +661,20 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
         closedHolderIds.push(holder.id)
       }
       tx.insert(workgroupMessages)
-        .values({
-          id: messageId,
-          taskId,
-          round: 0,
-          authorKind: 'human',
-          authorUserId: actor.user.id,
-          kind: 'system',
-          bodyMd: approve
-            ? 'completion gate APPROVED'
-            : `completion gate REJECTED: ${parsed.data.comment ?? ''}`,
-          mentionsJson: '[]',
-          createdAt: Date.now(),
-        })
+        .values(
+          buildRoomMessageRow({
+            id: messageId,
+            taskId,
+            round: gateRound,
+            authorKind: 'human',
+            authorUserId: actor.user.id,
+            kind: 'system',
+            bodyMd: approve
+              ? 'completion gate APPROVED'
+              : `completion gate REJECTED: ${parsed.data.comment ?? ''}`,
+            createdAt: Date.now(),
+          }),
+        )
         .run()
     })
     // Every frame follows the transaction that made it true. Scheduler work may
@@ -1242,17 +1271,18 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
       }
     }
     const msgId = ulid()
-    await deps.db.insert(workgroupMessages).values({
-      id: msgId,
-      taskId,
-      round: 0,
-      authorKind: 'human',
-      authorUserId: actor.user.id,
-      kind: 'system',
-      bodyMd: `config updated: ${changes.join('; ')}`,
-      mentionsJson: '[]',
-      createdAt: Date.now(),
-    })
+    await deps.db.insert(workgroupMessages).values(
+      buildRoomMessageRow({
+        id: msgId,
+        taskId,
+        round: await resolveRoomMessageRound(deps.db, taskId, config.mode),
+        authorKind: 'human',
+        authorUserId: actor.user.id,
+        kind: 'system',
+        bodyMd: `config updated: ${changes.join('; ')}`,
+        createdAt: Date.now(),
+      }),
+    )
     broadcastWg(taskId, { type: 'wg.message.created', messageId: msgId, kind: 'system' })
     kickResumeIfResumable(taskId, task.status)
     return c.json({ changes })
@@ -1287,17 +1317,19 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
       )
     }
     const cancelMsgId = ulid()
-    await deps.db.insert(workgroupMessages).values({
-      id: cancelMsgId,
-      taskId,
-      round: row.round,
-      authorKind: 'system',
-      kind: 'system',
-      bodyMd: `assignment '${row.title}' canceled by a task member`,
-      mentionsJson: '[]',
-      assignmentId,
-      createdAt: Date.now(),
-    })
+    await deps.db.insert(workgroupMessages).values(
+      buildRoomMessageRow({
+        id: cancelMsgId,
+        taskId,
+        // 派单卡族：取消说的是**哪一轮的派单**被取消，恒取 assignment.round（RFC-209 D13）。
+        round: row.round,
+        authorKind: 'system',
+        kind: 'system',
+        bodyMd: `assignment '${row.title}' canceled by a task member`,
+        assignmentId,
+        createdAt: Date.now(),
+      }),
+    )
     // Keep concurrent viewers' rooms live: the acting client refreshes via its
     // own mutation onSuccess, but another task member watching only learns of
     // the cancellation (card → 'canceled' + the system note) through these

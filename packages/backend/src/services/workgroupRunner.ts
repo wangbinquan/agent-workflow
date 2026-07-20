@@ -67,6 +67,13 @@ import {
 import { getAgent } from '@/services/agent'
 import { isClarifyRerunCause, loadRunEnvelopeNonce, mintNodeRun } from '@/services/nodeRunMint'
 import { setNodeRunStatus } from '@/services/lifecycle'
+import { buildRoomMessageRow } from '@/services/workgroupMessages'
+import {
+  deriveRoundsUsed,
+  resolveMessageRound,
+  roundedModeOf,
+  type RoundedWorkgroupMode,
+} from '@/services/workgroupRounds'
 import {
   advanceMemberCursor,
   casAssignmentStatus,
@@ -609,7 +616,13 @@ async function persistGate(
 }
 
 interface PostMessageArgs {
-  round: number
+  /**
+   * RFC-209 §2.3 —— **省略 = 写入时刻实时解析**（lw 取账本读数、fc 恒 0）。极性是有意的：
+   * 默认就是正确行为，漏改点得到的是对的值而不是 round 0 那种硬错。
+   * 只有两族显式传值：leader 轮自身产出（用该轮 `wgRound`——这一轮由它定义，账本此刻
+   * 还没计入它）与派单卡族（走 {@link postAssignmentMessage}，用 `assignment.round`）。
+   */
+  round?: number
   authorKind: 'member' | 'human' | 'system'
   authorMemberId?: string | null
   kind: WorkgroupMessage['kind']
@@ -626,21 +639,37 @@ interface PostMessageArgs {
 // within this engine instance (one instance per task, runTask CAS).
 const nextMessageId = monotonicFactory()
 
-async function postMessage(db: DbClient, taskId: string, m: PostMessageArgs): Promise<string> {
+/** 引擎侧的账本模式。dynamic_workflow 到不了回合引擎（见 countRoundsUsed 注释）。 */
+function roundMode(config: WorkgroupRuntimeConfig): RoundedWorkgroupMode {
+  return roundedModeOf(config.mode) ?? 'free_collab'
+}
+
+async function postMessage(
+  db: DbClient,
+  taskId: string,
+  mode: RoundedWorkgroupMode,
+  m: PostMessageArgs,
+): Promise<string> {
+  // RFC-209 §2.3-2 —— round 必须在 nextMessageId() **之前**解析。在铸 id 与 insert 之间
+  // 新增一个 await 会加宽「同毫秒两条消息按 ULID 乱序」的窗口，而上面的 monotonicFactory
+  // 正是 RFC-186 §3-4 为消除它才引入的。顺序恒为：解析 round → 铸 id → 插入。
+  const round = m.round ?? (await resolveMessageRound(db, taskId, mode))
   const id = nextMessageId()
-  await db.insert(workgroupMessages).values({
-    id,
-    taskId,
-    round: m.round,
-    authorKind: m.authorKind,
-    authorMemberId: m.authorMemberId ?? null,
-    authorUserId: null,
-    kind: m.kind,
-    bodyMd: m.bodyMd,
-    mentionsJson: JSON.stringify(m.mentionMemberIds ?? []),
-    assignmentId: m.assignmentId ?? null,
-    createdAt: Date.now(),
-  })
+  await db.insert(workgroupMessages).values(
+    buildRoomMessageRow({
+      id,
+      taskId,
+      round,
+      authorKind: m.authorKind,
+      authorMemberId: m.authorMemberId ?? null,
+      authorUserId: null,
+      kind: m.kind,
+      bodyMd: m.bodyMd,
+      mentionMemberIds: m.mentionMemberIds,
+      assignmentId: m.assignmentId ?? null,
+      createdAt: Date.now(),
+    }),
+  )
   taskBroadcaster.broadcast(TASK_CHANNEL(taskId), {
     id: -1,
     type: 'wg.message.created',
@@ -650,43 +679,39 @@ async function postMessage(db: DbClient, taskId: string, m: PostMessageArgs): Pr
   return id
 }
 
+/**
+ * 派单卡族（结果 / 失败 / 交付 / 取消）专用入口：`round` 恒取 `assignment.round`，
+ * **不接受省略**。这一族的账本读数在定义上就是错答案——轮 2 派出、轮 7 才收工的长跑
+ * worker，其结果消息若标成 round 7 就与它的派单卡脱钩，还会抢在 leader 轮 7 自己的产出
+ * 之前插一条「第 7 回合」。所以它不适用 {@link PostMessageArgs.round} 的「省略即兜底」极性
+ * （RFC-209 D13）。
+ */
+async function postAssignmentMessage(
+  db: DbClient,
+  taskId: string,
+  mode: RoundedWorkgroupMode,
+  assignment: Pick<WorkgroupAssignment, 'id' | 'round'>,
+  m: Omit<PostMessageArgs, 'round' | 'assignmentId'>,
+): Promise<string> {
+  return postMessage(db, taskId, mode, {
+    ...m,
+    round: assignment.round,
+    assignmentId: assignment.id,
+  })
+}
+
 // ---------------------------------------------------------------------------
 // round counting (durable — derived from node_runs each pass)
 // ---------------------------------------------------------------------------
 
+// RFC-209 — 推导本体搬到 services/workgroupRounds.ts（回合账本单一事实源），
+// 引擎 / 写入侧 / 房间聚合三方读同一个数。口径未变：lw = max(wg_round) + NULL 尾巴、
+// fc = 成员 run 行计数；唯一新增是「已被取代的被杀反问续跑行」排除（RFC-209 T7，
+// 修的是同一逻辑回合被数两次）。
 function countRoundsUsed(state: EngineDbState): number {
-  // RFC-187 §3-3 — protocol-retry rows (attempt>0 of ONE logical round) are excluded
-  // so a fumbled turn doesn't burn multiple max_rounds (RFC-186 raised retries 1→3).
-  if (state.config.mode === 'leader_worker') {
-    // RFC-189 — the lw round ledger reads the STAMPED ordinal: max(wg_round)
-    // over non-canceled leader rows. New row categories can never silently
-    // inflate the count again (the pre-189 derivation accreted three exclusion
-    // patches: wg-gate / clarify-row partition / wg-protocol-retry — gate and
-    // retry stamps are ≤ their round's base by construction, so the max is
-    // exclusion-free). The NULL-stamp tail keeps the ledger exact for rows
-    // minted OUTSIDE the engine (clarify-answer reruns, crash leftovers)
-    // between their mint and the drive-time stamp — each such qualifying row
-    // is one started round, exactly what the pre-189 row count said.
-    let max = 0
-    let nullQualifying = 0
-    for (const r of state.hostRuns) {
-      if (r.nodeId !== WG_LEADER_NODE_ID || r.status === 'canceled') continue
-      if (r.wgRound !== null) {
-        if (r.wgRound > max) max = r.wgRound
-      } else if (r.rerunCause !== 'wg-gate' && r.rerunCause !== 'wg-protocol-retry') {
-        nullQualifying++
-      }
-    }
-    return max + nullQualifying
-  }
-  // free_collab stays COUNT-based by design (RFC-189 §1 修订): every member
-  // run consumes one budget row; there is no ordinal to read.
-  return state.hostRuns.filter(
-    (r) =>
-      r.nodeId === WG_MEMBER_NODE_ID &&
-      r.status !== 'canceled' &&
-      r.rerunCause !== 'wg-protocol-retry',
-  ).length
+  // 回合引擎只对 lw / fc 分流（deriveWorkgroupDispatch），dynamic_workflow 到不了这里；
+  // 万一到了就按 fc 计——与 RFC-209 之前的两分支写法逐值一致，不引入新的静默分支。
+  return deriveRoundsUsed(roundedModeOf(state.config.mode) ?? 'free_collab', state.hostRuns)
 }
 
 /**
@@ -769,8 +794,7 @@ async function warnIfZeroDeltaDone(args: WorkgroupEngineArgs, state: EngineDbSta
     return
   }
   if (!detectZeroDeltaDone(filesChanged, doneAssignmentCount)) return
-  await postMessage(args.db, args.taskId, {
-    round: currentRound(state),
+  await postMessage(args.db, args.taskId, roundMode(state.config), {
     authorKind: 'system',
     kind: 'decision',
     bodyMd:
@@ -946,7 +970,8 @@ export async function runWorkgroupEngine(
     ) {
       const leaderId = seed.config.leaderMemberId
       const directed = seed.config.mode === 'leader_worker' && leaderId !== null
-      await postMessage(db, taskId, {
+      await postMessage(db, taskId, roundMode(seed.config), {
+        // RFC-209 — 前奏：开场目标先于任何回合，显式 0（countRoundsUsed(seed)===0 已由上面的守卫保证同值）。
         round: 0,
         authorKind: 'system',
         kind: 'chat',
@@ -1102,8 +1127,7 @@ export async function runWorkgroupEngine(
                   : null
               return `- ${a.title}${result ? `: ${result}` : ''}`
             })
-            await postMessage(db, taskId, {
-              round: currentRound(state),
+            await postMessage(db, taskId, roundMode(state.config), {
               authorKind: 'system',
               kind: 'decision',
               bodyMd:
@@ -1153,8 +1177,7 @@ export async function runWorkgroupEngine(
           // consecutive no-progress nudges (WG_AUTONOMOUS_NUDGE_LIMIT), and the
           // leader must actually run between nudges, so this can't hot-loop.
           const leaderId = state.config.leaderMemberId
-          await postMessage(db, taskId, {
-            round: currentRound(state),
+          await postMessage(db, taskId, roundMode(state.config), {
             authorKind: 'system',
             kind: 'chat',
             bodyMd: WG_NUDGE_BODY,
@@ -1184,8 +1207,7 @@ export async function runWorkgroupEngine(
             outcome.reason === 'max-rounds'
               ? `workgroup hit max_rounds (${state.config.maxRounds})`
               : 'free_collab deadlock: open tasks but no claimable agent member'
-          await postMessage(db, taskId, {
-            round: currentRound(state),
+          await postMessage(db, taskId, roundMode(state.config), {
             authorKind: 'system',
             kind: 'system',
             bodyMd: summary,
@@ -1256,6 +1278,10 @@ async function cancelLeftovers(db: DbClient, taskId: string, state: EngineDbStat
 
 async function openCompletionGate(args: WorkgroupEngineArgs, state: EngineDbState): Promise<void> {
   const { db, taskId } = args
+  // RFC-209 §2.4 — 读一次账本，holder 的 wgRound 与下面那条门消息的 round 共用。
+  // 此前两者相隔 9 行、中间夹着两个 await 却各读各的，注释又断言它们同轮——正是本 RFC
+  // 要消灭的那类漂移（对抗门 P2）。
+  const gateRound = currentRound(state)
   // The gate holder run satisfies the lifecycle invariant "task
   // awaiting_review ⟹ ∃ awaiting_review node_run" (design §8.2, 设计门
   // Finding-2). Minted directly in awaiting_review — a non-frontier host row.
@@ -1266,7 +1292,7 @@ async function openCompletionGate(args: WorkgroupEngineArgs, state: EngineDbStat
     cause: 'wg-gate',
     // RFC-189 — the gate holder belongs to the CURRENT round (display only;
     // wg-gate rows never advance the round budget, ≤ max by construction).
-    overrides: { wgRound: currentRound(state) },
+    overrides: { wgRound: gateRound },
   })
   await setNodeRunStatus({
     db,
@@ -1275,8 +1301,8 @@ async function openCompletionGate(args: WorkgroupEngineArgs, state: EngineDbStat
     allowedFrom: ['pending'],
     reason: 'wg-gate-open',
   })
-  await postMessage(db, taskId, {
-    round: currentRound(state),
+  await postMessage(db, taskId, roundMode(state.config), {
+    round: gateRound,
     authorKind: 'system',
     kind: 'system',
     bodyMd: `completion gate: waiting for human confirmation${state.gate.summary ? ` — ${state.gate.summary}` : ''}`,
@@ -1356,8 +1382,7 @@ async function driveWakeItem(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     log.error('workgroup turn threw', { taskId, item: wakeKey(item), error: message })
-    await postMessage(db, taskId, {
-      round: currentRound(state),
+    await postMessage(db, taskId, roundMode(state.config), {
       authorKind: 'system',
       kind: 'system',
       bodyMd: `internal error driving ${wakeKey(item)}: ${message}`,
@@ -1444,8 +1469,7 @@ async function driveLeaderTurn(
   if (leaderId === null) return
   const leaderAgent = await resolveMemberAgent(args, state, leaderId)
   if (leaderAgent === null) {
-    await postMessage(db, taskId, {
-      round: currentRound(state),
+    await postMessage(db, taskId, roundMode(state.config), {
       authorKind: 'system',
       kind: 'system',
       bodyMd: `leader agent unresolvable (${memberDisplayName(config, leaderId)}) — failing task`,
@@ -1662,7 +1686,7 @@ async function driveLeaderTurn(
           createdAt: Date.now(),
           updatedAt: Date.now(),
         })
-        await postMessage(db, taskId, {
+        await postMessage(db, taskId, roundMode(config), {
           round,
           authorKind: 'member',
           authorMemberId: leaderId,
@@ -1675,7 +1699,7 @@ async function driveLeaderTurn(
     }
     // RFC-187 §3-7 — surface the dropped wrap-up dispatch (see the drop above).
     if (wrapUpDroppedDispatch) {
-      await postMessage(db, taskId, {
+      await postMessage(db, taskId, roundMode(config), {
         round,
         authorKind: 'system',
         kind: 'system',
@@ -1694,7 +1718,7 @@ async function driveLeaderTurn(
     // 4. decision.
     if (decision !== null && decision.ok) {
       if (decision.value.action === 'done') {
-        await postMessage(db, taskId, {
+        await postMessage(db, taskId, roundMode(config), {
           round,
           authorKind: 'member',
           authorMemberId: leaderId,
@@ -1737,12 +1761,10 @@ async function driveAssignmentTurn(
   const agent = await resolveMemberAgent(args, state, memberId)
   if (agent === null) {
     await casAssignmentStatus(db, assignment.id, assignment.status, 'failed').catch(() => false)
-    await postMessage(db, taskId, {
-      round: assignment.round,
+    await postAssignmentMessage(db, taskId, roundMode(config), assignment, {
       authorKind: 'system',
       kind: 'system',
       bodyMd: `assignment '${assignment.title}' failed: agent for @${memberDisplayName(config, memberId)} unresolvable`,
-      assignmentId: assignment.id,
     })
     return
   }
@@ -1857,12 +1879,10 @@ async function driveAssignmentTurn(
         continue
       }
       await casAssignmentStatus(db, assignment.id, 'running', 'failed')
-      await postMessage(db, taskId, {
-        round: assignment.round,
+      await postAssignmentMessage(db, taskId, roundMode(config), assignment, {
         authorKind: 'system',
         kind: 'system',
         bodyMd: `assignment '${assignment.title}' failed: ${result.errorMessage ?? 'run failed'}`,
-        assignmentId: assignment.id,
       })
       if (config.mode === 'free_collab') {
         // bounded re-open (retry budget) — count LIVE, not the turn-start
@@ -1903,12 +1923,10 @@ async function driveAssignmentTurn(
       errorNotice = errors.map((e) => `- ${e}`).join('\n')
       if (attempt === WG_PROTOCOL_RETRIES) {
         await casAssignmentStatus(db, assignment.id, 'running', 'failed')
-        await postMessage(db, taskId, {
-          round: assignment.round,
+        await postAssignmentMessage(db, taskId, roundMode(config), assignment, {
           authorKind: 'system',
           kind: 'system',
           bodyMd: `assignment '${assignment.title}' failed: protocol violation (${errors.join('; ')})`,
-          assignmentId: assignment.id,
         })
         return
       }
@@ -1923,13 +1941,11 @@ async function driveAssignmentTurn(
       })
     }
     await consumeTasksAdd(db, taskId, state, memberId, result.outputs[WG_PORT_TASKS_ADD])
-    const resultMessageId = await postMessage(db, taskId, {
-      round: assignment.round,
+    const resultMessageId = await postAssignmentMessage(db, taskId, roundMode(config), assignment, {
       authorKind: 'member',
       authorMemberId: memberId,
       kind: 'result',
       bodyMd: parsedResult !== null && parsedResult.ok ? parsedResult.value.summary : '',
-      assignmentId: assignment.id,
     })
     await casAssignmentStatus(db, assignment.id, 'running', 'done', { resultMessageId })
     // RFC-186 T5 (audit §5 F6): advance the worker cursor AFTER the assignment's
@@ -2024,8 +2040,7 @@ async function driveMessageTurn(
   // dispatch-to-done critical line; the visibility fix addresses the real harm.)
   if (result.status !== 'done') {
     if (result.status === 'failed') {
-      await postMessage(db, taskId, {
-        round: currentRound(state),
+      await postMessage(db, taskId, roundMode(config), {
         authorKind: 'system',
         kind: 'system',
         bodyMd: `message turn for ${memberDisplayName(config, memberId)} failed: ${result.errorMessage ?? 'run failed'}`,
@@ -2041,8 +2056,11 @@ async function driveMessageTurn(
     messagesRaw !== undefined
       ? parseWgMessagesPort(messagesRaw, roster)
       : { ok: true as const, value: [] }
+  // RFC-209 —— 解析一次，本轮产出的所有消息共用（此前读的是**过期快照**：这个 turn 可能是
+  // 好几个引擎 pass 之前启动的，它的 `state` 早就不是当前值了，fc 首轮因此永远写 round 0）。
+  const turnRound = await resolveMessageRound(db, taskId, roundMode(config))
   if (outMessages.ok && outMessages.value.length > 0) {
-    await persistWgMessages(db, taskId, config, currentRound(state), memberId, outMessages.value, {
+    await persistWgMessages(db, taskId, config, turnRound, memberId, outMessages.value, {
       allowDirect: switches.directMessages,
       allowBlackboard: switches.blackboard,
     })
@@ -2051,8 +2069,8 @@ async function driveMessageTurn(
   if (resultRaw !== undefined) {
     const parsed = parseWgResultPort(resultRaw)
     if (parsed.ok) {
-      await postMessage(db, taskId, {
-        round: currentRound(state),
+      await postMessage(db, taskId, roundMode(config), {
+        round: turnRound,
         authorKind: 'member',
         authorMemberId: memberId,
         kind: 'chat',
@@ -2100,14 +2118,15 @@ async function consumeTasksAddInner(
 ): Promise<number> {
   const parsed = parseWgTasksAddPort(raw)
   if (!parsed.ok) {
-    await postMessage(db, taskId, {
-      round: currentRound(state),
+    await postMessage(db, taskId, roundMode(state.config), {
       authorKind: 'system',
       kind: 'system',
       bodyMd: `wg_tasks_add from @${memberDisplayName(state.config, authorMemberId)} rejected: ${parsed.errors.join('; ')}`,
     })
     return 0
   }
+  // RFC-209 — 解析一次，本次消费产出的所有卡与消息共用（同一批产出必须同回合号）。
+  const cardRound = await resolveMessageRound(db, taskId, roundMode(state.config))
   // LIVE read (not the turn-start snapshot): concurrent initial turns must
   // see each other's just-landed cards or the dedup guard is a no-op
   // (fc-debug 2026-07-10: dup card claimed 4×). A same-instant insert race
@@ -2134,7 +2153,9 @@ async function consumeTasksAddInner(
     await db.insert(workgroupAssignments).values({
       id,
       taskId,
-      round: currentRound(state),
+      // RFC-209 — 卡的回合号取写入时刻的解析值（`consumeTasksAdd` 只在 fc 下进来，
+      // 故恒 0：自由协作没有回合语义，此前这里写的是**过期快照**里的成员 run 累计数）。
+      round: cardRound,
       source: 'self_claim',
       assigneeMemberId: null,
       title: item.title,
@@ -2144,8 +2165,7 @@ async function consumeTasksAddInner(
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })
-    await postMessage(db, taskId, {
-      round: currentRound(state),
+    await postMessage(db, taskId, roundMode(state.config), {
       authorKind: 'member',
       authorMemberId,
       kind: 'dispatch',
@@ -2155,8 +2175,7 @@ async function consumeTasksAddInner(
     added++
   }
   if (dropped > 0) {
-    await postMessage(db, taskId, {
-      round: currentRound(state),
+    await postMessage(db, taskId, roundMode(state.config), {
       authorKind: 'system',
       kind: 'system',
       bodyMd: `${dropped} duplicate task(s) from @${memberDisplayName(state.config, authorMemberId)} dropped (title dedup)`,
@@ -2165,6 +2184,11 @@ async function consumeTasksAddInner(
   return added
 }
 
+/**
+ * RFC-209 §2.3-1 —— `round` 在这里**必填**（它是中间位参，`round?: number` 后跟必填参数
+ * 是 TS1016）。同一轮产出的 N 条消息必须共享同一个回合号，所以由调用方解析一次传进来，
+ * 而不是逐条走 `postMessage` 的省略路径（那会变成每条一次 SELECT，且可能拿到不同的值）。
+ */
 async function persistWgMessages(
   db: DbClient,
   taskId: string,
@@ -2174,6 +2198,7 @@ async function persistWgMessages(
   items: readonly WgMessageItem[],
   allow: { allowDirect: boolean; allowBlackboard: boolean },
 ): Promise<void> {
+  const mode = roundMode(config)
   let dropped = 0
   for (const item of items) {
     if (item.to === null) {
@@ -2181,7 +2206,7 @@ async function persistWgMessages(
         dropped++
         continue
       }
-      await postMessage(db, taskId, {
+      await postMessage(db, taskId, mode, {
         round,
         authorKind: 'member',
         authorMemberId,
@@ -2199,7 +2224,7 @@ async function persistWgMessages(
       dropped++
       continue
     }
-    await postMessage(db, taskId, {
+    await postMessage(db, taskId, mode, {
       round,
       authorKind: 'member',
       authorMemberId,
@@ -2209,7 +2234,7 @@ async function persistWgMessages(
     })
   }
   if (dropped > 0) {
-    await postMessage(db, taskId, {
+    await postMessage(db, taskId, mode, {
       round,
       authorKind: 'system',
       kind: 'system',

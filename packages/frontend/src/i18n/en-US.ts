@@ -804,6 +804,9 @@ export const enUS: Resources = {
     unsavedTitle: 'Unsaved changes',
     unsavedBody: 'You have unsaved changes. Leaving this page will discard them.',
     unsavedBusyBody: 'A save is still in progress. Wait for it to finish before leaving this page.',
+    unsavedForceLeave: 'Leave anyway',
+    unsavedForceLeaveWarning:
+      'This write has clearly stalled. Leaving cancels the wait, but cannot tell you whether the server already applied it — reload to check the real outcome before retrying.',
     unsavedStay: 'Stay on page',
     unsavedDiscard: 'Discard changes',
     emptyPaneTitle: 'Nothing selected',
@@ -1608,6 +1611,10 @@ export const enUS: Resources = {
       infoGoal: 'Goal',
       infoMode: 'Mode',
       infoMaxRounds: 'Max rounds',
+      infoMemberTurnBudget: 'Member turn budget',
+      memberTurnBudgetValue: '{{used}} / {{max}}',
+      memberTurnBudgetHint:
+        'A wake batch only starts if it fits entirely, so the cap can hit early.',
       infoSwitches: 'Switches',
       assignmentStatus: {
         open: 'Open',

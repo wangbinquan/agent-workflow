@@ -62,6 +62,10 @@ export interface WorkgroupRoomResponse {
    *  mint order); `memberRuns` is its projection. Feeds the turn cards, the
    *  执行记录 rail and the drawer's member-scoped run list. */
   runHistory: WorkgroupRunEntry[]
+  /** RFC-209 — 已用回合数，与 max_rounds 触顶判据**同源**（后端同一个
+   *  `deriveRoundsUsed`）。上限走 `config.maxRounds`。自由协作的右栏据此显示
+   *  「成员发言预算 已用 / 上限」——那才是真正决定任务生死的数。 */
+  roundsUsed: number
 }
 
 /**
@@ -82,50 +86,77 @@ export type RoomTimelineEntry =
   | { type: 'message'; message: WorkgroupRoomMessage }
   | { type: 'turn'; entry: WorkgroupRunEntry }
 
+/** 内部锚点：round **边界**（供回合卡冲刷），`visible` 决定它是否渲染成分隔线。 */
+type RoundBoundary = { type: 'round'; round: number; visible: boolean }
+type InternalEntry = Exclude<RoomTimelineEntry, { type: 'round' }> | RoundBoundary
+
 /**
- * Interleave round separators into the ascending message stream: a separator
- * lands wherever `round` changes between consecutive messages. Round-0 rows
- * (pre-engine prelude — e.g. a human speaking before the first leader turn)
- * get no leading separator; the first round-N (N>0) message earns one.
+ * Interleave round separators into the ascending message stream.
  * Message ids are ULIDs, so ascending id == ascending time (the endpoint
  * already orders by id; sort defensively anyway).
+ *
+ * RFC-209 —— 分隔线判据是**单调水位线**：只有 `round > 迄今最大值` 才画一条。
+ * 旧判据是「round 发生变化就画」，把**回退**也算成一次转场，于是流里出现
+ * 「第 5 回合 / 第 0 回合 / 第 5 回合」这种来回跳（用户 2026-07-20 实报），并且
+ * `key={round-N}` 还会重复。水位线从 0 起步，顺带吸收了旧的「round 0 是前奏、不画线」
+ * 特例——前奏天然不满足 `> 0`。回退与重复一律并入上文。
+ *
+ * `opts.dividers === false` —— **自由协作**不画回合分隔线（RFC-209 D2：fc 成员各自异步
+ * 认领任务，本就没有全局回合，编号是类别错误；预算改在右栏如实显示）。此时**所有**
+ * standalone turn 一律按 ULID 交织。这不是防御性写法而是真承重：`workgroupLaunchReadiness`
+ * 只在 lw 下校验 `leaderMemberId`、并不强制 fc 置 null，所以由 lw 改过来的组可能留着陈旧的
+ * leader 身份，进而冒出 `leader-round` 条目。
  *
  * RFC-182 — `standaloneTurns` (leader rounds + degraded message-turns, see
  * `standaloneTurnEntries`) are woven in as `{type:'turn'}` rows:
  *   - leader entries are ROUND-AWARE (design-gate P2): a leader run is minted
  *     BEFORE its own round-N output lands, so pure ULID interleaving would put
  *     the round-1 card above the round-1 divider / under the previous round.
- *     They land right AFTER their round's divider (or at the tail when the
- *     divider hasn't materialized yet — the "leader thinking right now" case).
+ *     They land right AFTER their round's boundary (or at the tail when the
+ *     boundary hasn't materialized yet — the "leader thinking right now" case).
+ *     RFC-209：**锚定按边界走、渲染按 visible 走**——分隔线被水位线抑制时卡片照样锚在
+ *     原处，不会掉到房间底部。
  *   - round-null entries interleave by ULID (nodeRunId vs message id).
  */
 export function buildRoomTimeline(
   messages: readonly WorkgroupRoomMessage[],
   standaloneTurns: readonly WorkgroupRunEntry[] = [],
+  opts: { dividers?: boolean } = {},
 ): RoomTimelineEntry[] {
+  const dividers = opts.dividers ?? true
   const sorted = [...messages].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-  const base: RoomTimelineEntry[] = []
+  const base: InternalEntry[] = []
   let prevRound: number | null = null
+  let maxRound = 0
   for (const m of sorted) {
-    const isTransition = prevRound === null ? m.round > 0 : m.round !== prevRound
-    if (isTransition) base.push({ type: 'round', round: m.round })
+    if (prevRound === null || m.round !== prevRound) {
+      base.push({ type: 'round', round: m.round, visible: dividers && m.round > maxRound })
+    }
+    if (m.round > maxRound) maxRound = m.round
     base.push({ type: 'message', message: m })
     prevRound = m.round
   }
-  if (standaloneTurns.length === 0) return base
+  const strip = (entries: readonly InternalEntry[]): RoomTimelineEntry[] =>
+    entries
+      .filter((e) => e.type !== 'round' || e.visible)
+      .map((e) => (e.type === 'round' ? { type: 'round' as const, round: e.round } : e))
+  if (standaloneTurns.length === 0) return strip(base)
 
   const turns = [...standaloneTurns].sort((a, b) =>
     a.nodeRunId < b.nodeRunId ? -1 : a.nodeRunId > b.nodeRunId ? 1 : 0,
   )
-  const out: RoomTimelineEntry[] = []
+  const out: InternalEntry[] = []
   const tail: WorkgroupRunEntry[] = []
-  const byUlid = turns.filter((t) => t.round === null)
+  // fc（dividers=false）没有分隔线可锚，全部按 ULID 交织。
+  const byUlid = dividers ? turns.filter((t) => t.round === null) : turns
   const byRound = new Map<number, WorkgroupRunEntry[]>()
-  for (const t of turns) {
-    if (t.round === null) continue
-    const arr = byRound.get(t.round) ?? []
-    arr.push(t)
-    byRound.set(t.round, arr)
+  if (dividers) {
+    for (const t of turns) {
+      if (t.round === null) continue
+      const arr = byRound.get(t.round) ?? []
+      arr.push(t)
+      byRound.set(t.round, arr)
+    }
   }
   let ulidIdx = 0
   for (const e of base) {
@@ -147,13 +178,13 @@ export function buildRoomTimeline(
     if (t !== undefined) out.push({ type: 'turn', entry: t })
     ulidIdx++
   }
-  // Rounds whose divider hasn't materialized yet (live leader thinking) — tail,
+  // Rounds whose boundary hasn't materialized yet (live leader thinking) — tail,
   // ascending by round then mint order.
   for (const round of [...byRound.keys()].sort((a, b) => a - b)) {
     for (const t of byRound.get(round) ?? []) tail.push(t)
   }
   for (const t of tail) out.push({ type: 'turn', entry: t })
-  return out
+  return strip(out)
 }
 
 // ---------------------------------------------------------------------------
