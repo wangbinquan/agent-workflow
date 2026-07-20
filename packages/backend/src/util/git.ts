@@ -1688,6 +1688,16 @@ export function isoRefGlob(taskId: string): string {
  * Fast path: a repo with no submodules returns false without the per-submodule scan.
  */
 export async function hasDirtySubmoduleContent(worktreePath: string): Promise<boolean> {
+  // RFC-210 AC-11/AC-12: gate on the filesystem probe FIRST. Every other
+  // submodule-aware path in the platform starts with `detectSubmodules`
+  // (`existsSync('.gitmodules')`, zero processes); this one used to spawn
+  // `submodule status --recursive` unconditionally, so a repo with no
+  // submodules — the overwhelming majority — paid one git process per call
+  // and `gitRecurseSubmodules='never'` could not reach "zero submodule argv".
+  // Duplicated inline rather than imported: services/gitSubmodule.ts imports
+  // this module, so the edge only goes one way (util/git.ts reaches it via
+  // dynamic import).
+  if (!existsSync(join(worktreePath, '.gitmodules'))) return false
   const status = await runGit(worktreePath, ['submodule', 'status', '--recursive'])
   if (status.exitCode !== 0 || status.stdout.trim() === '') return false // no submodules
   // Ask each submodule (recursively) for its own dirty/untracked porcelain. --quiet
