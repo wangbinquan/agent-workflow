@@ -2229,6 +2229,34 @@ async function checkoutMergedGitlinks(
     if (co.exitCode !== 0) {
       const stderr = co.stderr.trim()
       if (/would be overwritten|local changes/i.test(stderr)) {
+        // `-f` is about to DELETE whatever the user had uncommitted in this
+        // submodule. Before RFC-210 that could not happen — `submodule update`
+        // runs without `--force`, so a dirty submodule simply made the update
+        // fail and the edits survived. Retiring D22 turned that into a silent
+        // destruction, so pin a full-state snapshot (tracked + untracked) first
+        // and tell the user the ref. This is what G10's `snapshotSubmodule` was
+        // written for; it had no caller until now, which is exactly why the
+        // comment below it claimed "snapshotting is the caller's job".
+        const { snapshotSubmodule, subSlug } = await import('@/services/gitSubmodule')
+        const preHead = (await runGit(subPath, ['rev-parse', 'HEAD'])).stdout.trim()
+        const pinRef = `refs/agent-workflow/subsnap/${subSlug(relPath)}/${preHead}`
+        try {
+          const snap = await snapshotSubmodule(subPath, pinRef)
+          log?.warn('submodule had uncommitted changes — pinned before force checkout', {
+            subPath: relPath,
+            pinRef: snap.pinRef,
+            snapshot: snap.snapshot,
+            head: snap.head,
+          })
+        } catch (e) {
+          // Refuse to force. Losing the user's work is worse than failing the
+          // merge-back, and the caller can retry once the submodule is clean.
+          throw new DomainError(
+            'materialize-failed',
+            `submodule '${relPath}' has uncommitted changes that could not be snapshotted, refusing to discard them: ${String(e)}`,
+            500,
+          )
+        }
         const forced = await runGit(subPath, ['checkout', '--detach', '-f', sha])
         if (forced.exitCode !== 0) {
           log?.warn('submodule gitlink checkout failed on dirty worktree', {

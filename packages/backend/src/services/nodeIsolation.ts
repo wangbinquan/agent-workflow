@@ -1141,6 +1141,31 @@ export async function resolveConflictWithAgent(
   },
 ): Promise<ResolveConflictOutcome> {
   const { containerPath, runAgent, log } = opts
+  // RFC-210: a submodule-only conflict carries NO parent-level merged tree — the
+  // gitlink is a single tree entry and the disagreement lives inside it, so there
+  // is nothing a parent-level resolve-iso could show the agent. Passing '' to
+  // commit-tree below is `fatal: not a valid object name`, and commitTree turns
+  // a non-zero exit into a throw: the exception escaped this function, went past
+  // writeSem and mergeBackAndSettle, and the node ended up merge-failed with raw
+  // git noise instead of parked as awaiting_human — i.e. the human never got a
+  // recovery path for exactly the case that needs one. The in-submodule agent
+  // attempt already happened upstream in mergeSubmodulesIntoTheirs (T25), so
+  // reaching here means it did not resolve; park directly.
+  if (conflict.mergedTree === '') {
+    log?.info('submodule conflict has no parent-level merged tree — parking without resolve-iso', {
+      worktreeDirName: conflict.worktreeDirName,
+      paths: conflict.paths.join(', '),
+    })
+    return {
+      resolved: false,
+      unresolved: conflict.paths.map((p) => ({
+        worktreeDirName: conflict.worktreeDirName,
+        path: p,
+        type: 'submodule' as const,
+      })),
+      resolveIsoPath: null,
+    }
+  }
   const repoGit = conflict.canonWorktreePath // shared-ODB git dir for worktree/commit ops
   // §6.2①: commit-tree the conflicted merged tree (worktree add needs a commit-ish),
   // then check it out detached — the working tree now carries the conflict markers.
