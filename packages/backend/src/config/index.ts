@@ -100,21 +100,38 @@ export function saveConfigRaw(path: string, cfg: Config): void {
   }
 }
 
+/**
+ * Config keys whose default is a nested object, DERIVED from `DEFAULT_CONFIG`
+ * rather than hard-coded.
+ *
+ * These are the keys that must be deep-merged, and getting that wrong is not a
+ * cosmetic issue: an older `config.json` that predates a newly added inner field
+ * would be passed through verbatim, fail `ConfigSchema.safeParse` on the missing
+ * field, and make `loadConfig` throw — i.e. the daemon stops booting. The list
+ * used to be a hand-maintained pair of `if` branches, so every future nested
+ * field silently opted out of that protection until someone remembered to add it.
+ */
+const NESTED_CONFIG_KEYS: ReadonlySet<string> = new Set(
+  Object.entries(DEFAULT_CONFIG)
+    .filter(([, v]) => typeof v === 'object' && v !== null && !Array.isArray(v))
+    .map(([k]) => k),
+)
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
+}
+
 /** Merge defaults under unknown raw input (shallow + nested for known objects). */
 function mergeDefaults(raw: unknown): Record<string, unknown> {
   const out: Record<string, unknown> = { ...DEFAULT_CONFIG }
   if (typeof raw !== 'object' || raw === null) return out
   const obj = raw as Record<string, unknown>
+  const defaults = DEFAULT_CONFIG as unknown as Record<string, unknown>
   for (const [k, v] of Object.entries(obj)) {
     if (v === undefined) continue
-    // Deep-merge for the two nested objects in the schema.
-    if (k === 'worktreeAutoGc' && typeof v === 'object' && v !== null) {
-      out[k] = { ...DEFAULT_CONFIG.worktreeAutoGc, ...(v as Record<string, unknown>) }
-    } else if (k === 'eventsArchiveThresholds' && typeof v === 'object' && v !== null) {
-      out[k] = {
-        ...DEFAULT_CONFIG.eventsArchiveThresholds,
-        ...(v as Record<string, unknown>),
-      }
+    if (NESTED_CONFIG_KEYS.has(k) && isPlainObject(v)) {
+      const base = defaults[k]
+      out[k] = isPlainObject(base) ? { ...base, ...v } : v
     } else {
       out[k] = v
     }
@@ -133,16 +150,13 @@ function mergePatch(current: Config, patch: ConfigPatch): Config {
       delete (next as Record<string, unknown>)[k]
       continue
     }
-    if (k === 'worktreeAutoGc' && typeof v === 'object' && v !== null) {
-      next.worktreeAutoGc = {
-        ...current.worktreeAutoGc,
-        ...(v as Record<string, unknown>),
-      } as Config['worktreeAutoGc']
-    } else if (k === 'eventsArchiveThresholds' && typeof v === 'object' && v !== null) {
-      next.eventsArchiveThresholds = {
-        ...current.eventsArchiveThresholds,
-        ...(v as Record<string, unknown>),
-      } as Config['eventsArchiveThresholds']
+    // Same derived-key rule as mergeDefaults: a nested object in a PATCH is a
+    // partial update of that object, not a replacement. Hard-coding the key list
+    // here meant `PATCH {newNested: {onlyOneField: x}}` silently dropped the
+    // sibling fields for every nested key someone forgot to add.
+    if (NESTED_CONFIG_KEYS.has(k) && isPlainObject(v)) {
+      const base = (current as unknown as Record<string, unknown>)[k]
+      ;(next as Record<string, unknown>)[k] = isPlainObject(base) ? { ...base, ...v } : v
     } else {
       ;(next as Record<string, unknown>)[k] = v
     }

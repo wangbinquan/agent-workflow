@@ -22,6 +22,27 @@ export const EventsArchiveThresholdsSchema = z.object({
   globalRows: z.number().int().positive(),
 })
 
+/**
+ * RFC-210 G7: periodic background refresh of cached repos and their submodules.
+ *
+ * Shaped like `WorktreeGcSchema` on purpose — `enabled` required, the rest
+ * optional with defaults resolved at the call site. That combination is what
+ * makes the deep-merge in `config/index.ts` apply, which in turn is what keeps
+ * adding a field here from breaking older `config.json` files.
+ */
+export const SubmoduleAutoRefreshSchema = z.object({
+  enabled: z.boolean(),
+  /** Default 6h. Clamped to [1min, 7d]. */
+  intervalMs: z
+    .number()
+    .int()
+    .min(60_000)
+    .max(7 * 24 * 3600_000)
+    .optional(),
+  /** Only refresh repos referenced by a task within this many days. Default 30. */
+  onlyRecentDays: z.number().int().min(1).max(3650).optional(),
+})
+
 /** RFC-020: caps applied to multipart launcher uploads. */
 export const UploadLimitsSchema = z.object({
   perFile: z.number().int().positive(),
@@ -231,6 +252,21 @@ export const ConfigSchema = z.object({
    */
   gitSubmoduleJobs: z.number().int().min(1).max(32).optional(),
 
+  // --- RFC-210 recursive submodule isolation ---
+  /**
+   * Periodic background refresh of cached repos + their submodules. Without it
+   * a mirror only advances when a task launches (warm fetch) or the user hits
+   * Refresh by hand.
+   *
+   * OPTIONAL on purpose: every config.json already on disk predates this field,
+   * and `ConfigSchema` must keep parsing those verbatim or the daemon refuses to
+   * boot after an upgrade (locked by compat-config-versions.test.ts — making an
+   * optional field required is the exact regression it exists to catch).
+   * It still carries a value in DEFAULT_CONFIG, which is what puts it in the
+   * deep-merge set and gives fresh installs the enabled default.
+   */
+  submoduleAutoRefresh: SubmoduleAutoRefreshSchema.optional(),
+
   // --- RFC-075 auto commit & push ---
   /**
    * @deprecated RFC-117 — superseded by `commitPushRuntime` (select a full runtime
@@ -371,6 +407,7 @@ export const DEFAULT_CONFIG: Config = {
     perNodeRunRows: 50_000,
     globalRows: 1_000_000,
   },
+  submoduleAutoRefresh: { enabled: true },
   largeOutputThresholdBytes: 1_048_576, // 1 MB
   bindHost: '127.0.0.1',
   language: 'zh-CN',

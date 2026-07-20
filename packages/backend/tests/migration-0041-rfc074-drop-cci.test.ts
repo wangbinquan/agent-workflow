@@ -157,7 +157,11 @@ describe('RFC-074 migration 0041 — DROP clarify_iteration preserves row data',
       expect(cols).toContain('wg_round')
       // RFC-200 (0097): envelope_nonce — per-run envelope nonce.
       expect(cols).toContain('envelope_nonce')
-      expect(cols.length).toBe(cols0040.length - 1 + 7 + 6 + 3 + 1 + 1)
+      // RFC-210 (0102): iso_submodules_json + iso_submodules_repos_json — the
+      // per-node submodule topology, single/multi split like the iso_* pairs above.
+      expect(cols).toContain('iso_submodules_json')
+      expect(cols).toContain('iso_submodules_repos_json')
+      expect(cols.length).toBe(cols0040.length - 1 + 7 + 6 + 3 + 1 + 1 + 2)
 
       // 4b. row count unchanged.
       const n = (up.query('SELECT count(*) AS n FROM node_runs').get() as { n: number }).n

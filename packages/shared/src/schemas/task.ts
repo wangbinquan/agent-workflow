@@ -834,6 +834,40 @@ export const COMMIT_PUSH_OUTCOME = [
 export const CommitPushOutcomeSchema = z.enum(COMMIT_PUSH_OUTCOME)
 export type CommitPushOutcome = z.infer<typeof CommitPushOutcomeSchema>
 
+/**
+ * RFC-210 — per-node submodule topology, persisted on `node_runs`.
+ *
+ * Stored as JSON in `iso_submodules_json` (single-repo) or
+ * `iso_submodules_repos_json` (multi-repo, keyed by `worktreeDirName`). Parsed
+ * defensively: a row that fails this schema is treated as ABSENT, and an absent
+ * row for a repo that has `.gitmodules` makes crash-replay refuse rather than
+ * fall back to a parent-only merge (which would silently discard a sibling
+ * node's submodule commits).
+ */
+export const IsoSubmodulesSchema = z.object({
+  /**
+   * Shared object pool for this repo's submodules, or null when running
+   * degraded (path-mode repos deliberately get no pool — see RFC-210 D11 —
+   * and mock harnesses have no git host at all).
+   */
+  poolDir: z.string().nullable(),
+  /** submodule path → its HEAD when the iso worktree was created. */
+  subBases: z.record(z.string(), z.string()),
+  /** submodule path → snapshot taken before the platform mutated it (G10). */
+  subSnapshots: z
+    .record(z.string(), z.object({ head: z.string(), snapshot: z.string(), pinRef: z.string() }))
+    .optional(),
+  /**
+   * Submodule paths whose merge conflict is still unresolved. Written at
+   * merge-back (not at creation — the conflict set isn't knowable before then).
+   * Non-empty ⟹ human-resume must fail closed instead of re-probing the parent,
+   * which would otherwise see a clean parent tree and declare the whole thing
+   * resolved while the submodule conflict is still open.
+   */
+  pendingSubResolves: z.array(z.string()).optional(),
+})
+export type IsoSubmodules = z.infer<typeof IsoSubmodulesSchema>
+
 export const CommitPushMetaSchema = z.object({
   /** Absolute path to the repo worktree this commit row targets. */
   repoPath: z.string(),

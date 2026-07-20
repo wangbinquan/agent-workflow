@@ -686,6 +686,14 @@ export const cachedRepos = sqliteTable(
     hasSubmodules: integer('has_submodules', { mode: 'boolean' }),
     lastSubmoduleSyncOk: integer('last_submodule_sync_ok', { mode: 'boolean' }),
     lastSubmoduleSyncError: text('last_submodule_sync_error'),
+    /**
+     * RFC-210 G7: last time the background refresh loop touched this mirror.
+     * NULL = never, which makes pre-existing rows immediately due. Kept separate
+     * from `lastFetchedAt` (which means "last successful fetch", including the
+     * warm fetch a task launch performs) so the loop's cadence can be reasoned
+     * about independently of task traffic.
+     */
+    lastAutoRefreshAt: integer('last_auto_refresh_at'),
   },
   (t) => ({
     lastFetchedIdx: index('idx_cached_repos_last_fetched').on(t.lastFetchedAt),
@@ -1172,6 +1180,21 @@ export const nodeRuns = sqliteTable(
     isoBaseSnapshotReposJson: text('iso_base_snapshot_repos_json'),
     isoNodeTree: text('iso_node_tree'),
     isoNodeTreeReposJson: text('iso_node_tree_repos_json'),
+    /**
+     * RFC-210: submodule topology captured when this node's iso worktree was
+     * created — base commit per submodule path, the shared object pool dir, and
+     * (later, at merge-back) any sub-paths whose conflict is still unresolved.
+     * Shape: `IsoSubmodulesSchema` in @agent-workflow/shared.
+     *
+     * Single/multi split for the same reason as the pair above: a multi-repo
+     * task has one topology PER REPO, and a flat map would let two repos that
+     * both contain e.g. `vendor` clobber each other. Crash replay reads these
+     * back (a node whose repo has `.gitmodules` but no row here is refused
+     * rather than replayed as a parent-only merge, which would silently
+     * overwrite a sibling node's submodule commits).
+     */
+    isoSubmodulesJson: text('iso_submodules_json'),
+    isoSubmodulesReposJson: text('iso_submodules_repos_json'),
     mergeState: text('merge_state'),
     /**
      * RFC-074: provenance map `{ upstreamNodeId: nodeRunId }` — exactly which

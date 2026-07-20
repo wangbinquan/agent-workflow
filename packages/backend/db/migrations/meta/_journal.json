@@ -708,6 +708,13 @@
       "when": 1786118400000,
       "tag": "0101_rfc207_directive_shard",
       "breakpoints": true
+    },
+    {
+      "idx": 101,
+      "version": "6",
+      "when": 1784547409780,
+      "tag": "0102_rfc210_submodule_isolation",
+      "breakpoints": true
     }
   ]
 }

@@ -8,6 +8,23 @@
 
 ### PR-1 地基：池原语 + 配置管道 + migration（无用户可见行为变更）
 
+> **进度（2026-07-20）：PR-1 全部 13 项已实现**。T1-T7 已上 main 且 CI 绿（`b9fdecd6` + `e447fb58`）；
+> T8/T9/T10/T11/T11b/T12/T13 待提交。
+>
+> **T9 的实现比本计划写的简单得多**：原计划要打通 4 层签名，实测调用图后改为
+> **让 `resolveSubmoduleParams` 自己读配置**——一处改动，5 个生产调用点全部自动受益，零签名变更。
+> 详见 design.md §10.2。（顺带查明 RFC-034 断链的物理成因：`scheduler.ts` 与 `nodeIsolation.ts`
+> **都不 import config**，没有任何人处在能传配置的位置上。）
+>
+> **实现中回写设计的三处修正**：① `--reference` 的行为**跨 git 版本不一致**（本机 no-op、CI 会挂上），
+> 断言必须版本无关；② `submoduleAutoRefresh` 写成必填会让存量 config 解析失败、daemon 拒绝启动，
+> 必须 `.optional()` **且** `DEFAULT_CONFIG` 有值（后者才让它进深合并集）；
+> ③ `--remote`（G8）的作用点从读侧改到 `createWorktree`，否则对任务是 no-op。
+>
+> **实测踩中的既有测试锁**（审计精确预测过）：`migration-0041-rfc074-drop-cci.test.ts` 的
+> **列数算术锁**——加两列 ⟹ `Expected: 47 / Received: 49`，症状是列数不等而**不是** `no column named`
+> （后者早被前人用显式列名裸 SQL 填平了）。全量 backend 5985 条里只有它一条红。
+
 | ID | 任务 | 落点 | 依赖 |
 |---|---|---|---|
 | **T1** | `listSubmodules`：`submodule status --recursive` 解析。契约写清——返回**工作区 HEAD**（非 index gitlink）、`flag` 四态、未初始化子仓不被展开、路径可含空格、`pathDepth` 仅用于排序**不可**当"层级"判据 | `services/gitSubmodule.ts` | — |
@@ -26,6 +43,19 @@
 | **T13** | 更新 `git-submodule.test.ts` argv 矩阵、`git-repo-cache-submodule.test.ts:136-195`（deps 形状）、`worktree-working-branch.test.ts`（**12 处** `submoduleMode:'never'`）、`compat-config-versions.test.ts` + `config.test.ts`（DEFAULT_CONFIG） | 既有 | T7,T8 |
 
 ### PR-2 iso 子仓回写 + 快照（gitlink 修复的前提）
+
+> **实现锚点（2026-07-20 读码确认，行号随并发提交会漂，按符号找）**：
+> - `IsoRepo`（`nodeIsolation.ts:43-66`）需加 `subBases: Record<string,string>` + `poolDir: string | null`。
+>   **必须挂在 handle 上**而不是现用现查——`nodeIsolation` 的模块契约是 git-only 不查 DB（`:127`），
+>   而 `mergeBackNodeIso` 正是在那里需要 subBases。
+> - `rebuildIsoHandle`（`:210-241`）按同样两个字段扩参，四个调用点全改（T26）。
+> - D22 fail-loud 在 `snapshotNodeIsoFinal` 里（`:263-277`），T16 删的就是这段。
+> - `mergeBackNodeIso` 的每仓循环（`:343-414`）结构是
+>   `ours = snapshotFullState(canon)` → `mergeTreeInMemory(base, ours, theirs)` → 冲突则 salvage、否则 materialize。
+>   T23 的子仓层合并插在 `mergeTreeInMemory` **之前**，并把结果 gitlink 写进 `theirs` tree。
+> - `persistIsoBase`（`isolatedAgentRun.ts:83-115`）是 single/multi 分叉的样板，
+>   `iso_submodules_json` / `_repos_json` 照抄它的 `repoCount === 1` 分支形状。
+>   注意它在 `passthrough` 时**整行不写**（`:89`），AC-17 的 fail-closed 判据要先查 passthrough。
 
 | ID | 任务 | 落点 | 依赖 |
 |---|---|---|---|
