@@ -14,6 +14,9 @@
 //      visible way out.
 import { afterEach, describe, expect, test } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import path from 'node:path'
 import { ClampedText } from '../src/components/ClampedText'
 import '../src/i18n'
 
@@ -71,6 +74,20 @@ describe('ClampedText', () => {
     const body = screen.getByTestId('ct')
     expect(body.className).toContain(CLAMPED)
     expect(body.textContent).toContain('line 12')
+  })
+
+  // Codex review gate finding: the fold decision counts '\n', so those
+  // newlines MUST actually render. Under the default `white-space: normal`
+  // they collapse into one visual line, and a 9-short-line goal would be
+  // marked folded while rendering as a single line — max-height clips
+  // nothing, the mask fades the only line, and the toggle reveals nothing.
+  test('styles.css: the body preserves authored newlines, so counting them means something', () => {
+    const here2 = path.dirname(fileURLToPath(import.meta.url))
+    const css = readFileSync(path.resolve(here2, '../src/styles.css'), 'utf8')
+    const idx = css.indexOf('.clamped-text__body {')
+    expect(idx).toBeGreaterThanOrEqual(0)
+    const rule = css.slice(css.indexOf('{', idx) + 1, css.indexOf('}', idx))
+    expect(rule).toMatch(/white-space:\s*pre-wrap/)
   })
 
   test('the line budget rides in on a custom property so one rule serves every caller', () => {

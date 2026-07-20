@@ -220,6 +220,16 @@ describe('执行记录 rail — the turn-kind chip must never wrap or clip', () 
     expect(ruleBody('.workgroup-room__runlog-meta {')).toMatch(/grid-column:\s*1 \/ -1/)
   })
 
+  // Codex review gate finding: two unshrinkable chips still overflow a 220px
+  // rail once the labels get long. English is the worst case — "Assignment
+  // turn" + "Awaiting answer" — and without a wrap allowance the fixed-width
+  // children spill past the card exactly like the status chip used to.
+  test('styles.css: the meta line may wrap BETWEEN chips (so long labels never spill)', () => {
+    expect(ruleBody('.workgroup-room__runlog-meta {')).toMatch(/flex-wrap:\s*wrap/)
+    // …while each chip itself stays an atom. Both halves are the fix.
+    expect(ruleBody('.workgroup-room__runlog-meta > .chip,')).toMatch(/white-space:\s*nowrap/)
+  })
+
   test('styles.css: the name degrades to an ellipsis rather than wrapping the row open', () => {
     const body = ruleBody('.workgroup-room__runlog-row > .workgroup-room__member-name {')
     expect(body).toMatch(/text-overflow:\s*ellipsis/)

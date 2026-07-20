@@ -14296,6 +14296,14 @@ mark.comment-anchor[data-active='true'] {
   line-height: var(--clamped-text-line-height);
   margin: 0;
   min-width: 0;
+  /* Authored newlines must SURVIVE, for two reasons. Visually, this is
+     user-written prose and the room already renders it that way
+     (.workgroup-room__body). Structurally, the component decides whether to
+     fold partly by counting '\n' — with the default `normal` those newlines
+     collapse into one visual line, so a 9-short-line goal would render as a
+     single line yet still be marked folded: max-height clips nothing, the mask
+     fades the only line, and the toggle appears with nothing to reveal. */
+  white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
@@ -15183,6 +15191,11 @@ button.status-chip {
   align-items: center;
   gap: 6px;
   min-width: 0;
+  /* Wrap BETWEEN whole chips, never inside one. Two chips still overflow a
+     220px rail once the labels are long — English is the worst case
+     ("Assignment turn" + "Awaiting answer") — and without this the fixed-width
+     children would spill past the card exactly like the status chip used to. */
+  flex-wrap: wrap;
 }
 /* The whole point of the fix: a chip is an atom, never a vertical glyph stack. */
 .workgroup-room__runlog-meta > .chip,
