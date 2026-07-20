@@ -33,7 +33,6 @@ import {
   editSkillMetadata,
   editSkillNewPath,
   getSkillCompositeScope,
-  isDefinitiveSkillWriteError,
   readStableSkillSnapshot,
   receiveSkillFile,
   receiveSkillMetadata,
@@ -48,6 +47,7 @@ import {
   type SkillSaveStep,
   type StableSkillSnapshot,
 } from '@/lib/skill-composite-draft'
+import { classifyWriteOutcome } from '@/lib/write-outcome'
 import { Route as skillsRoute } from './skills'
 
 export const Route = createRoute({
@@ -607,7 +607,15 @@ function SkillDetailPage() {
           token = await writeStep(step, token, requestId)
           saved += 1
         } catch (error) {
-          const outcome = isDefinitiveSkillWriteError(error) ? 'definitive' : 'ambiguous'
+          // RFC-208: skill writes are token-fenced but NOT idempotent — an OCC
+          // fence makes a stale replay detectable (409), it does not make the
+          // write replayable. So a transport failure/timeout here is genuinely
+          // unknown and must go through reconciliation, never be optimistically
+          // treated as "never applied".
+          const outcome =
+            classifyWriteOutcome(error, { idempotent: false }) === 'definitive'
+              ? 'definitive'
+              : 'ambiguous'
           settleStepError(step, requestId, error, outcome)
           setSaveError(error)
 

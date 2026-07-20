@@ -345,11 +345,6 @@ export function captureSkillSavePlan(state: SkillCompositeDraftState): readonly 
   return steps
 }
 
-/** 4xx proves rejection. Network loss, malformed success, and 5xx stay ambiguous. */
-export function isDefinitiveSkillWriteError(error: unknown): boolean {
-  return error instanceof ApiError && error.status >= 400 && error.status < 500
-}
-
 export interface StableSkillSnapshotReader {
   readContent: () => Promise<SkillContent>
   readTree: () => Promise<readonly FileNode[]>

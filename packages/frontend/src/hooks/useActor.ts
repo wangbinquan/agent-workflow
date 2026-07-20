@@ -42,9 +42,17 @@ export function useActor() {
     // (not network-bound), so leaking it through the React Query devtools
     // is no different from leaking it through localStorage.
     queryKey: [...ACTOR_QUERY_KEY, token ?? 'no-token'],
-    queryFn: async () => {
+    // RFC-208: consume the query's `signal`. Without it query-core never marks
+    // the signal used (query.js `#abortSignalConsumed`), so unmounting does not
+    // abort — and a first-load fetch that hangs can never be superseded either
+    // (invalidate/refetch hand back the same never-settling promise). That made
+    // a stalled /api/auth/me permanently strand every permission check in the
+    // app: nav entries vanish and the account page spins forever, with a reload
+    // the only way out. This query is mounted app-wide, so it is the single
+    // highest-value place to get this right.
+    queryFn: async ({ signal }) => {
       if (!token) return null
-      return api.get<MeResponse>('/api/auth/me')
+      return api.get<MeResponse>('/api/auth/me', undefined, signal)
     },
     staleTime: 30_000,
     refetchOnWindowFocus: false,

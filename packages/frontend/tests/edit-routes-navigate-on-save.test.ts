@@ -49,7 +49,11 @@ describe('edit routes navigate to list on save (source layer)', () => {
     const plan = extractBetween(
       composite,
       'export function captureSkillSavePlan',
-      'export function isDefinitiveSkillWriteError',
+      // RFC-208 replaced `isDefinitiveSkillWriteError` (a 4xx/not-4xx boolean)
+      // with `classifyWriteOutcome` in lib/write-outcome.ts, which splits by
+      // IDEMPOTENCY instead — so this delimiter moved to the next export. The
+      // region being asserted below is unchanged.
+      'export interface StableSkillSnapshotReader',
     )
 
     expect(plan).toContain('aggregate.valid || aggregate.busy || aggregate.outcomeUnknown')
