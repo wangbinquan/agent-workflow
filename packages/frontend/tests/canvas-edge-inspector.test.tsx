@@ -14,7 +14,11 @@ function makeDef(): WorkflowDefinition {
   return {
     $schema_version: 1,
     inputs: [],
-    nodes: [],
+    nodes: [
+      { id: 'in1', kind: 'input', inputKey: 'out' },
+      { id: 'wrap_git_1', kind: 'wrapper-git', nodeIds: [] },
+      { id: 'agent1', kind: 'agent-single', agentName: 'worker' },
+    ],
     edges: [
       {
         id: 'e1',
@@ -59,30 +63,26 @@ afterEach(() => {
 })
 
 describe('EdgeInspector', () => {
-  test('renames target.portName on blur → onChange fires with updated edge', () => {
+  function chooseTargetPort(name: string): void {
+    fireEvent.click(screen.getByRole('combobox', { name: 'Target port name' }))
+    const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+      (candidate) => candidate.querySelector('.select__option-title-row')?.textContent === name,
+    )
+    expect(option).toBeDefined()
+    fireEvent.mouseDown(option!)
+  }
+
+  test('renames target.portName from the derived selector in one atomic change', () => {
     const onChange = vi.fn()
     render(<Host initialDef={makeDef()} onChangeSpy={onChange} />)
-    const input = screen
-      .getAllByRole('textbox')
-      .find((i) => (i as HTMLInputElement).value === 'out')!
-    fireEvent.change(input, { target: { value: 'requirement' } })
-    fireEvent.blur(input)
-    expect(onChange).toHaveBeenCalledTimes(2)
+    chooseTargetPort('git_diff')
+    expect(onChange).toHaveBeenCalledTimes(1)
     const next = onChange.mock.calls[0]![0] as WorkflowDefinition
-    expect(next.edges.find((e) => e.id === 'e1')!.target.portName).toBe('requirement')
+    expect(next.edges.find((e) => e.id === 'e1')!.target.portName).toBe('git_diff')
     expect(onChange.mock.calls[0]?.[1]).toEqual({
       source: 'inspector',
       label: 'Target port name',
-      mergeKey: 'edge:e1:target.portName',
-      transaction: 'update',
-    })
-    expect(onChange.mock.calls[1]?.[0]).toEqual(next)
-    expect(onChange.mock.calls[1]?.[1]).toEqual({
-      source: 'inspector',
-      label: 'Target port name',
-      mergeKey: 'edge:e1:target.portName',
-      transaction: 'update',
-      historyBoundary: 'blur',
+      transaction: 'single',
     })
   })
 
@@ -96,35 +96,18 @@ describe('EdgeInspector', () => {
     })
     const onChange = vi.fn()
     const { container } = render(<Host initialDef={def} onChangeSpy={onChange} />)
-    const input = screen
-      .getAllByRole('textbox')
-      .find((i) => (i as HTMLInputElement).value === 'out')!
-    fireEvent.change(input, { target: { value: 'requirement' } })
-    fireEvent.blur(input)
-    expect(onChange).toHaveBeenCalledTimes(1)
-    expect(onChange.mock.calls[0]?.[0]).toBe(def)
-    expect(onChange.mock.calls[0]?.[1]).toMatchObject({
-      mergeKey: 'edge:e1:target.portName',
-      historyBoundary: 'blur',
-    })
+    chooseTargetPort('requirement')
+    expect(onChange).not.toHaveBeenCalled()
     // Asserted via class instead of text so the i18n race in test setup
     // doesn't matter (the conflict box renders <div class="error-box">).
     expect(container.querySelector('.error-box')).not.toBeNull()
   })
 
-  test('renaming to empty / unchanged → no-op (no onChange, no error)', () => {
+  test('choosing the unchanged target port is a no-op', () => {
     const onChange = vi.fn()
     const { container } = render(<Host initialDef={makeDef()} onChangeSpy={onChange} />)
-    const input = screen
-      .getAllByRole('textbox')
-      .find((i) => (i as HTMLInputElement).value === 'out')!
-    fireEvent.change(input, { target: { value: '   ' } })
-    fireEvent.blur(input)
-    expect(onChange).toHaveBeenCalledTimes(1)
-    expect(onChange.mock.calls[0]?.[1]).toMatchObject({
-      mergeKey: 'edge:e1:target.portName',
-      historyBoundary: 'blur',
-    })
+    chooseTargetPort('out')
+    expect(onChange).not.toHaveBeenCalled()
     expect(container.querySelector('.error-box')).toBeNull()
   })
 
@@ -144,6 +127,24 @@ describe('EdgeInspector', () => {
       label: 'Delete edge',
       transaction: 'single',
     })
+  })
+
+  test('fixed review target port is visibly disabled', () => {
+    const def = makeDef()
+    def.nodes.push({
+      id: 'review',
+      kind: 'review',
+      inputSource: { nodeId: 'in1', portName: 'out' },
+    })
+    def.edges[0] = {
+      id: 'e1',
+      source: { nodeId: 'in1', portName: 'out' },
+      target: { nodeId: 'review', portName: '__review_input__' },
+    }
+    render(<Host initialDef={def} onChangeSpy={vi.fn()} />)
+    const port = screen.getByRole('combobox', { name: 'Target port name' })
+    expect(port).toHaveProperty('disabled', true)
+    expect(port.textContent).toContain('__review_input__')
   })
 })
 

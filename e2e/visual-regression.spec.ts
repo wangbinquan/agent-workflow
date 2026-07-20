@@ -1,5 +1,6 @@
-// RFC-054 W2-5 + RFC-198 T8 — visual regression baselines for the 12
-// canonical desktop scenes and five representative 390px mobile scenes.
+// RFC-054 W2-5 + RFC-198 T8 + RFC-199 T16 — visual regression baselines
+// for the canonical shell pages, workflow-editor workspace modes, and a
+// deterministic dynamic-workflow preview.
 //
 // LOCKS: a chunk of pixels for each canonical page. Catches UI changes
 // that:
@@ -33,7 +34,7 @@ import { startDaemon, type DaemonHandle } from './harness'
 import { routePopulatedInbox } from './inbox-fixtures'
 
 const RUN_VISUAL_REGRESSION = process.env.RUN_VISUAL_REGRESSION === '1'
-const EXPECTED_VISUAL_SCENE_COUNT = 17
+const EXPECTED_VISUAL_SCENE_COUNT = 25
 
 let daemon: DaemonHandle | undefined
 
@@ -180,6 +181,66 @@ async function seedResources(): Promise<SeededResources> {
   return { workflowId: workflow.id }
 }
 
+async function seedEditorWorkflow(): Promise<string> {
+  const agentName = 'visual-editor-agent'
+  await postJson('/api/agents', {
+    name: agentName,
+    description: 'Deterministic workflow-editor visual fixture',
+    outputs: ['answer'],
+    outputKinds: { answer: 'markdown' },
+    readonly: true,
+    bodyMd: '',
+  })
+  const workflow = (await postJson('/api/workflows', {
+    name: 'visual-editor-workflow',
+    description: 'A stable three-step authoring canvas',
+    definition: {
+      $schema_version: 4,
+      inputs: [{ kind: 'text', key: 'topic', label: 'Topic', required: true }],
+      nodes: [
+        { id: 'visual_input', kind: 'input', inputKey: 'topic', position: { x: 0, y: 0 } },
+        {
+          id: 'visual_agent',
+          kind: 'agent-single',
+          agentName,
+          promptTemplate: 'Explain {{topic}} clearly.',
+          position: { x: 320, y: 0 },
+        },
+        {
+          id: 'visual_output',
+          kind: 'output',
+          ports: [{ name: 'answer', bind: { nodeId: 'visual_agent', portName: 'answer' } }],
+          position: { x: 640, y: 0 },
+        },
+      ],
+      edges: [
+        {
+          id: 'visual_input_agent',
+          source: { nodeId: 'visual_input', portName: 'topic' },
+          target: { nodeId: 'visual_agent', portName: 'topic' },
+        },
+        {
+          id: 'visual_agent_output',
+          source: { nodeId: 'visual_agent', portName: 'answer' },
+          target: { nodeId: 'visual_output', portName: 'answer' },
+        },
+      ],
+    },
+  })) as { id: string }
+  return workflow.id
+}
+
+async function openEditorScene(
+  page: Page,
+  workflowId: string,
+  expectedNodes: number,
+): Promise<void> {
+  await primeAuth(page)
+  await page.goto(`${requireDaemon().baseUrl}/workflows/${workflowId}`)
+  await expect(page.locator('.workflow-canvas')).toBeVisible()
+  await expect(page.locator('.react-flow__node')).toHaveCount(expectedNodes)
+}
+
 async function seedTerminalTask(): Promise<string> {
   const d = requireDaemon()
   const agentName = 'visual-task-agent'
@@ -187,6 +248,7 @@ async function seedTerminalTask(): Promise<string> {
     name: agentName,
     description: 'Deterministic mobile task-detail visual fixture',
     outputs: ['answer'],
+    outputKinds: { answer: 'markdown' },
     readonly: true,
     bodyMd: '',
   })
@@ -248,6 +310,112 @@ async function seedTerminalTask(): Promise<string> {
     await new Promise((resolve) => setTimeout(resolve, 100))
   }
   throw new Error('visual-regression: task fixture did not finish in 30s')
+}
+
+async function routeDynamicWorkflowPreview(page: Page, taskId: string): Promise<void> {
+  await page.route(`**/api/tasks/${taskId}`, async (route) => {
+    if (route.request().method() !== 'GET') return route.continue()
+    const response = await route.fetch()
+    const task = (await response.json()) as Record<string, unknown>
+    await route.fulfill({
+      response,
+      json: {
+        ...task,
+        status: 'awaiting_review',
+        workgroupId: 'visual-dynamic-workgroup',
+        workgroupName: 'Visual dynamic workgroup',
+      },
+    })
+  })
+  await page.route(`**/api/workgroup-tasks/${taskId}/room`, async (route) => {
+    if (route.request().method() !== 'GET') return route.continue()
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        taskId,
+        taskStatus: 'awaiting_review',
+        config: {
+          workgroupId: 'visual-dynamic-workgroup',
+          workgroupName: 'Visual dynamic workgroup',
+          mode: 'dynamic_workflow',
+          leaderMemberId: null,
+          switches: { shareOutputs: true, directMessages: false, blackboard: false },
+          maxRounds: 10,
+          completionGate: false,
+          instructions: '',
+          goal: 'Turn a product brief into a clear implementation plan.',
+          members: [
+            {
+              id: 'visual-planner-member',
+              memberType: 'agent',
+              agentName: 'visual-task-agent',
+              userId: null,
+              displayName: 'Planner',
+              roleDesc: 'Breaks the brief into an executable plan.',
+            },
+          ],
+        },
+        gate: {
+          declaredDone: false,
+          awaitingConfirmation: false,
+          rejected: false,
+          summary: null,
+        },
+        dw: {
+          phase: 'awaiting_confirm',
+          generateAttempts: 1,
+          rejectRounds: 0,
+          generatedDef: {
+            $schema_version: 4,
+            inputs: [{ kind: 'text', key: 'brief', label: 'Brief', required: true }],
+            nodes: [
+              {
+                id: 'visual_dw_input',
+                kind: 'input',
+                inputKey: 'brief',
+                position: { x: 0, y: 0 },
+              },
+              {
+                id: 'visual_dw_plan',
+                kind: 'agent-single',
+                agentName: 'visual-task-agent',
+                promptTemplate: 'Create a plan for {{brief}}.',
+                position: { x: 320, y: 0 },
+              },
+              {
+                id: 'visual_dw_output',
+                kind: 'output',
+                ports: [
+                  {
+                    name: 'answer',
+                    bind: { nodeId: 'visual_dw_plan', portName: 'answer' },
+                  },
+                ],
+                position: { x: 640, y: 0 },
+              },
+            ],
+            edges: [
+              {
+                id: 'visual_dw_input_plan',
+                source: { nodeId: 'visual_dw_input', portName: 'brief' },
+                target: { nodeId: 'visual_dw_plan', portName: 'brief' },
+              },
+              {
+                id: 'visual_dw_plan_output',
+                source: { nodeId: 'visual_dw_plan', portName: 'answer' },
+                target: { nodeId: 'visual_dw_output', portName: 'answer' },
+              },
+            ],
+          },
+        },
+        messages: [],
+        assignments: [],
+        memberRuns: {},
+        runHistory: [],
+      }),
+    })
+  })
 }
 
 /**
@@ -474,6 +642,126 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await expect(page.locator('.status-chip', { hasText: /^done$/i }).first()).toBeVisible()
     await expect(page.locator('.canvas-node--agent').first()).toBeVisible()
     await expect(page).toHaveScreenshot('mobile-task-detail.png', {
+      ...SNAPSHOT_OPTS,
+      mask: [page.locator('.task-detail__id code')],
+    })
+  })
+
+  // RFC-199 T16.3 — deterministic editor workspace modes. Random resource
+  // ids are masked; the graph, viewport, theme, and selected node are fixed.
+  test('RFC-199 editor 1536 three-rail workspace (light)', async ({ page }) => {
+    await page.setViewportSize({ width: 1536, height: 900 })
+    await prepareScene(page, { theme: 'light', fixture: 'clean' })
+    const workflowId = await seedEditorWorkflow()
+    await openEditorScene(page, workflowId, 3)
+    await page.locator('.react-flow__node[data-id="visual_agent"]').click()
+    await expect(page.locator('.editor-layout')).toHaveAttribute('data-workspace-mode', 'wide')
+    await expect(page.locator('.editor-layout > .editor-sidebar')).toBeVisible()
+    await expect(page.locator('.editor-layout > .inspector')).toBeVisible()
+    await expect(page).toHaveScreenshot('workflow-editor-1536-three-rail-light.png', {
+      ...SNAPSHOT_OPTS,
+      mask: [page.locator('.page--editor .page__meta code')],
+    })
+  })
+
+  test('RFC-199 editor 1280 inspector rail (light)', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await prepareScene(page, { theme: 'light', fixture: 'clean' })
+    const workflowId = await seedEditorWorkflow()
+    await openEditorScene(page, workflowId, 3)
+    await page.locator('.react-flow__node[data-id="visual_agent"]').click()
+    await expect(page.locator('.editor-layout')).toHaveAttribute('data-workspace-mode', 'medium')
+    await expect(page.locator('.editor-layout > .inspector')).toBeVisible()
+    await expect(page).toHaveScreenshot('workflow-editor-1280-inspector-light.png', {
+      ...SNAPSHOT_OPTS,
+      mask: [page.locator('.page--editor .page__meta code')],
+    })
+  })
+
+  test('RFC-199 editor 1280 inspector rail (dark)', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await prepareScene(page, { theme: 'dark', fixture: 'clean' })
+    const workflowId = await seedEditorWorkflow()
+    await openEditorScene(page, workflowId, 3)
+    await page.locator('.react-flow__node[data-id="visual_agent"]').click()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    await expect(page.locator('.editor-layout')).toHaveAttribute('data-workspace-mode', 'medium')
+    await expect(page.locator('.editor-layout > .inspector')).toBeVisible()
+    await expect(page).toHaveScreenshot('workflow-editor-1280-inspector-dark.png', {
+      ...SNAPSHOT_OPTS,
+      mask: [page.locator('.page--editor .page__meta code')],
+    })
+  })
+
+  test('RFC-199 editor 1179 palette side modal (light)', async ({ page }) => {
+    await page.setViewportSize({ width: 1179, height: 800 })
+    await prepareScene(page, { theme: 'light', fixture: 'clean' })
+    const workflowId = await seedEditorWorkflow()
+    await openEditorScene(page, workflowId, 3)
+    await page.getByTestId('workflow-add-step').click()
+    await expect(page.locator('.editor-layout')).toHaveAttribute('data-workspace-mode', 'compact')
+    await expect(page.getByTestId('workflow-editor-palette-surface')).toBeVisible()
+    await expect(page).toHaveScreenshot('workflow-editor-1179-palette-light.png', {
+      ...SNAPSHOT_OPTS,
+      mask: [page.locator('.page--editor .page__meta code')],
+    })
+  })
+
+  test('RFC-199 editor 1179 inspector side modal (light)', async ({ page }) => {
+    await page.setViewportSize({ width: 1179, height: 800 })
+    await prepareScene(page, { theme: 'light', fixture: 'clean' })
+    const workflowId = await seedEditorWorkflow()
+    await openEditorScene(page, workflowId, 3)
+    await page.locator('.react-flow__node[data-id="visual_agent"]').click()
+    await expect(page.locator('.editor-layout')).toHaveAttribute('data-workspace-mode', 'compact')
+    await expect(page.getByTestId('workflow-editor-inspector-surface')).toBeVisible()
+    await expect(page).toHaveScreenshot('workflow-editor-1179-inspector-light.png', {
+      ...SNAPSHOT_OPTS,
+      mask: [page.locator('.page--editor .page__meta code')],
+    })
+  })
+
+  test('RFC-199 editor 390 empty canvas with picker (light)', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    const seeded = await prepareScene(page, { theme: 'light', fixture: 'seeded-resources' })
+    if (seeded === null) throw new Error('visual-regression: missing seeded workflow')
+    await openEditorScene(page, seeded.workflowId, 0)
+    await page.getByTestId('workflow-empty-add-first').click()
+    await expect(page.locator('.editor-layout')).toHaveAttribute('data-workspace-mode', 'phone')
+    await expect(page.getByTestId('workflow-node-picker-dialog')).toBeVisible()
+    // The opaque phone surface covers the random editor metadata. Do not add
+    // a Playwright mask here: masks paint above overlays and would obscure the
+    // picker itself even though the id is already hidden underneath it.
+    await expect(page).toHaveScreenshot('workflow-editor-390-empty-picker-light.png', SNAPSHOT_OPTS)
+  })
+
+  test('RFC-199 editor 390 full-screen inspector (light)', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await prepareScene(page, { theme: 'light', fixture: 'clean' })
+    const workflowId = await seedEditorWorkflow()
+    await openEditorScene(page, workflowId, 3)
+    await page.locator('.react-flow__node[data-id="visual_agent"]').click()
+    await expect(page.locator('.editor-layout')).toHaveAttribute('data-workspace-mode', 'phone')
+    await expect(page.getByTestId('workflow-editor-inspector-surface')).toBeVisible()
+    await expect(page).toHaveScreenshot('workflow-editor-390-inspector-light.png', SNAPSHOT_OPTS)
+  })
+
+  test('RFC-199 deterministic dynamic-workflow preview (light)', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await prepareScene(page, { theme: 'light', fixture: 'clean' })
+    const taskId = await seedTerminalTask()
+    await routeDynamicWorkflowPreview(page, taskId)
+    await primeAuth(page)
+    await page.goto(`${requireDaemon().baseUrl}/tasks/${taskId}?tab=dw-orchestration`)
+    await expect(page.getByTestId('dw-confirm-card')).toBeVisible()
+    const preview = page.getByTestId('dw-preview-canvas')
+    await expect(preview).toBeVisible()
+    await expect(preview.locator('.react-flow__node')).toHaveCount(3)
+    await expect(preview).toHaveScreenshot(
+      'dynamic-workflow-preview-canvas.png',
+      COMPONENT_SNAPSHOT_OPTS,
+    )
+    await expect(page).toHaveScreenshot('dynamic-workflow-preview.png', {
       ...SNAPSHOT_OPTS,
       mask: [page.locator('.task-detail__id code')],
     })

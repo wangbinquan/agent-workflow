@@ -99,10 +99,27 @@ const OVERLAY_CALLSITES = {
   'routes/repos.tsx': { family: 'resource-management', count: 1 },
 
   'components/canvas/WorkflowCanvas.tsx': { family: 'workflow-authoring', count: 1 },
+  'components/workflow-editor/ConnectionDialog.tsx': {
+    family: 'workflow-authoring',
+    count: 1,
+  },
+  'components/workflow-editor/ValidationPanel.tsx': {
+    family: 'workflow-authoring',
+    count: 1,
+  },
   'components/workflow-editor/WorkflowDraftStatus.tsx': {
     family: 'workflow-authoring',
     count: 2,
   },
+  'components/workflow-editor/WorkflowNodePicker.tsx': {
+    family: 'workflow-authoring',
+    count: 1,
+  },
+  'components/workflow-editor/WorkflowStarterDialog.tsx': {
+    family: 'workflow-authoring',
+    count: 1,
+  },
+  'routes/workflows.edit.tsx': { family: 'workflow-authoring', count: 5 },
 
   'components/ScheduleDialog.tsx': { family: 'task-execution', count: 1 },
   'components/tasks/QuestionAuthorForm.tsx': { family: 'task-execution', count: 1 },

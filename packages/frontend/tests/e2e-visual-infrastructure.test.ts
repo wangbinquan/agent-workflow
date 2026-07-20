@@ -14,19 +14,20 @@ function repoFile(path: string): string {
 }
 
 describe('RFC-198 visual infrastructure source gates', () => {
-  test('visual spec declares exactly 17 counted scenes', () => {
+  test('visual spec declares exactly 25 counted scenes', () => {
     const source = repoFile('e2e/visual-regression.spec.ts')
-    expect(source).toContain('const EXPECTED_VISUAL_SCENE_COUNT = 17')
-    expect(source.match(/^\s{2}test\(/gm)).toHaveLength(17)
+    expect(source).toContain('const EXPECTED_VISUAL_SCENE_COUNT = 25')
+    expect(source.match(/^\s{2}test\(/gm)).toHaveLength(25)
     expect(source).toContain('declaredVisualSceneCount !== EXPECTED_VISUAL_SCENE_COUNT')
-    // One declaration plus five locator screenshot callsites.
-    expect(source.match(/COMPONENT_SNAPSHOT_OPTS/g)).toHaveLength(6)
+    // One declaration plus six locator screenshot callsites.
+    expect(source.match(/COMPONENT_SNAPSHOT_OPTS/g)).toHaveLength(7)
     for (const snapshot of [
       'mobile-nav-open.png',
       'page-header-actions.png',
       'table-edge.png',
       'empty-state.png',
       'dialog-footer.png',
+      'dynamic-workflow-preview-canvas.png',
     ]) {
       expect(source).toContain(`'${snapshot}'`)
     }

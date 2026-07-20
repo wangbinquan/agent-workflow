@@ -39,7 +39,7 @@ function definition(childIds = ['a1']): WorkflowDefinition {
 function renderCanvas(initial: WorkflowDefinition, onChange = vi.fn()) {
   const view = render(
     <I18nextProvider i18n={i18n}>
-      <WorkflowCanvas definition={initial} onChange={onChange} />
+      <WorkflowCanvas surface="editor" definition={initial} onChange={onChange} />
     </I18nextProvider>,
   )
   return { onChange, ...view }
@@ -101,7 +101,11 @@ describe('WorkflowCanvas wrapper delete confirmation', () => {
 
     rerender(
       <I18nextProvider i18n={i18n}>
-        <WorkflowCanvas definition={definition(['a1', 'a2'])} onChange={onChange} />
+        <WorkflowCanvas
+          surface="editor"
+          definition={definition(['a1', 'a2'])}
+          onChange={onChange}
+        />
       </I18nextProvider>,
     )
     fireEvent.click(within(dialog).getByRole('button', { name: /^Delete$|^删除$/i }))

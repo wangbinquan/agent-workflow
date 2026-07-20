@@ -56,7 +56,7 @@ describe('RFC-056 cross-clarify canvas wiring', () => {
     expect(matches.length).toBeGreaterThanOrEqual(3)
   })
 
-  test('isValidConnection runs classifyCrossClarifyConnection BEFORE the stray-channel-drop defensive guard (cross-clarify reuses targetHandle="questions")', () => {
+  test('isValidConnection classifies cross-clarify before delegating generic guard policy', () => {
     const src = readFileSync(WORKFLOW_CANVAS_TSX, 'utf8')
     const isValidIdx = src.indexOf('const isValidConnection = useCallback')
     expect(isValidIdx).toBeGreaterThan(-1)
@@ -65,14 +65,12 @@ describe('RFC-056 cross-clarify canvas wiring', () => {
     // useCallback's deps array.
     const body = src.slice(isValidIdx, isValidIdx + 6000)
     const crossClassifyIdx = body.indexOf('classifyCrossClarifyConnection(definition')
-    // The defensive guard was extracted into the pure isStrayClarifyChannelDrop
-    // (2026-06 false-root fix); the ordering invariant is unchanged.
-    const defensiveGuardIdx = body.indexOf('isStrayClarifyChannelDrop(guardConn)')
+    const plannerIdx = body.indexOf('planWorkflowConnection(definition, request, semanticContext)')
     expect(crossClassifyIdx).toBeGreaterThan(-1)
-    expect(defensiveGuardIdx).toBeGreaterThan(-1)
+    expect(plannerIdx).toBeGreaterThan(-1)
     // The cross-clarify classifier must come FIRST so it can claim drops
     // that share the literal port name 'questions' with RFC-023 clarify.
-    expect(crossClassifyIdx).toBeLessThan(defensiveGuardIdx)
+    expect(crossClassifyIdx).toBeLessThan(plannerIdx)
   })
 
   test('isStrayClarifyChannelDrop covers ALL clarify + cross-clarify system port handles', () => {

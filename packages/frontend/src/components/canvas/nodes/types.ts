@@ -14,7 +14,11 @@ export const INBOUND_HANDLE_ID = '__inbound__'
 /** Discriminated selection emitted by WorkflowCanvas.onSelect. RFC-003. */
 export type CanvasSelection = { kind: 'node'; id: string } | { kind: 'edge'; id: string }
 
+export type WorkflowCanvasSurface = 'editor' | 'task' | 'workgroup-preview'
+
 export interface CanvasNodeData extends Record<string, unknown> {
+  /** Explicit scope prevents editor-only authoring chrome leaking into runtime canvases. */
+  surface: WorkflowCanvasSurface
   /** Workflow node id (mirrors xyflow node.id). */
   nodeId: string
   /** Original workflow node kind. */
@@ -27,6 +31,8 @@ export interface CanvasNodeData extends Record<string, unknown> {
   outputPorts: string[]
   /** Input ports declared by this node (rendered on the left). */
   inputPorts: string[]
+  /** Current-revision validation counts. Omitted for stale/task/preview canvases. */
+  validation?: { errors: number; warnings: number }
   /**
    * RFC-106: while a connection is being dragged over this node, the name of
    * the NEW input port the drop will create. Rendered as a live preview port
@@ -127,4 +133,6 @@ export interface CanvasNodeData extends Record<string, unknown> {
    * clickable (golden-lock — editor canvas byte-for-byte unchanged).
    */
   clarifyNav?: 'awaiting' | 'answered'
+  /** Editable workflow only: opens the shared picker with explicit wrapper scope. */
+  onAddInsideWrapper?: (wrapperNodeId: string, trigger?: HTMLElement | null) => void
 }

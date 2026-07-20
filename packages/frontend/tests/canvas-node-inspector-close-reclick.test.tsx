@@ -43,9 +43,10 @@ describe('clearSelection drives xyflow unselectNodesAndEdges', () => {
   test('clearSelection body calls storeApi.getState().unselectNodesAndEdges()', async () => {
     const src = await fs.readFile(SRC, 'utf8')
     // Anchor on the imperative-handle block to avoid matching unrelated
-    // mentions in comments.
+    // mentions in comments. RFC-199 adds more imperative methods and therefore
+    // more dependencies; the guard must not require storeApi to be the only one.
     const block = src.match(
-      /useImperativeHandle\([\s\S]*?clearSelection: \(\) => \{[\s\S]*?\},\s*\}\),\s*\[storeApi\],\s*\)/,
+      /useImperativeHandle\([\s\S]*?clearSelection: \(\) => \{[\s\S]*?\},\s*\}\),\s*\[[^\]]*\],\s*\)/,
     )
     expect(block).not.toBeNull()
     expect(block?.[0] ?? '').toMatch(/storeApi\.getState\(\)\.unselectNodesAndEdges\(\)/)
@@ -56,10 +57,13 @@ describe('clearSelection drives xyflow unselectNodesAndEdges', () => {
 
   test('storeApi is a dep of useImperativeHandle so React refreshes the handle if the provider remounts', async () => {
     const src = await fs.readFile(SRC, 'utf8')
-    // [] would freeze a closure over the first storeApi, which is benign
-    // today (storeApi is stable per ReactFlowProvider) but is a footgun if
-    // we ever mount the canvas outside its own ReactFlowProvider.
-    expect(src).toMatch(/useImperativeHandle\([\s\S]*?\),\s*\[storeApi\],\s*\)/)
+    // Omitting storeApi would freeze a closure over the first store. Other
+    // imperative callbacks legitimately add their own dependencies.
+    const block = src.match(
+      /useImperativeHandle\([\s\S]*?clearSelection: \(\) => \{[\s\S]*?\},\s*\}\),\s*\[([^\]]*)\],\s*\)/,
+    )
+    expect(block).not.toBeNull()
+    expect(block?.[1] ?? '').toMatch(/\bstoreApi\b/)
   })
 
   test('still resets the dedupe sig and the local selection mirror', async () => {

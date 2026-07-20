@@ -262,7 +262,12 @@ export function DynamicWorkflowPanel({
           </Card>
           {generated !== null ? (
             <div className="canvas-frame canvas-frame--task" data-testid="dw-preview-canvas">
-              <WorkflowCanvas definition={generated} agents={agents.data ?? []} readOnly />
+              <WorkflowCanvas
+                surface="workgroup-preview"
+                definition={generated}
+                agents={agents.data ?? []}
+                readOnly
+              />
             </div>
           ) : (
             <EmptyState size="compact" title={t('workgroups.dw.previewEmpty')} />

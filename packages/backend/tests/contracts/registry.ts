@@ -26,8 +26,11 @@ import {
   ImportWorkflowResultSchema,
   OverviewResponseSchema,
   WorkflowDetailSchema,
+  WorkflowDraftValidationReceiptSchema,
   WorkflowValidationReceiptSchema,
+  serializeWorkflowDefinitionCandidateV1,
 } from '@agent-workflow/shared'
+import { createHash } from 'node:crypto'
 import type { ContractHarness } from './harness'
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
@@ -247,6 +250,23 @@ export const ENDPOINTS: EndpointSpec[] = [
         expectedSnapshotHash: h.fixtures.workflowSnapshotHash,
       }),
       schema: WorkflowValidationReceiptSchema,
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/workflows/:id/validate-draft',
+    happy: {
+      pathParams: (h) => ({ id: h.fixtures.workflowId }),
+      body: () => {
+        const definition = { $schema_version: 4 as const, inputs: [], nodes: [], edges: [] }
+        return {
+          definition,
+          claimedCandidateHash: createHash('sha256')
+            .update(serializeWorkflowDefinitionCandidateV1(definition), 'utf8')
+            .digest('hex'),
+        }
+      },
+      schema: WorkflowDraftValidationReceiptSchema,
     },
   },
   { method: 'GET', path: '/api/workflows/:id/export' },

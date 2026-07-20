@@ -1398,6 +1398,7 @@ function TaskStatusCanvas({
     <div className="canvas-frame canvas-frame--task">
       <WorkflowCanvas
         ref={canvasRef}
+        surface="task"
         definition={definition}
         agents={agents.data ?? []}
         nodeStatuses={statuses}

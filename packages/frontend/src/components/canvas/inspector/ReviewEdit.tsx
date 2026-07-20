@@ -7,10 +7,11 @@
 
 import type { WorkflowNode } from '@agent-workflow/shared'
 import { useTranslation } from 'react-i18next'
-import { ChipsInput } from '@/components/ChipsInput'
-import { Field, Switch, TextArea, TextInput } from '@/components/Form'
+import { Field, Switch, TextArea } from '@/components/Form'
+import { MultiSelect } from '@/components/MultiSelect'
 import { Select } from '@/components/Select'
-import { REVIEW_INPUT_HANDLE_ID, syncEdgeFromFormField } from '../connectionSync'
+import { computePorts } from '../WorkflowCanvas'
+import { nodeTitle } from '../nodeTitle'
 import {
   atomicNodeInspectorChange,
   continuousNodeInspectorChange,
@@ -18,13 +19,16 @@ import {
   type InspectorChangeMeta,
 } from './historyMeta'
 import { NodeTitleField } from './NodeTitleField'
+import { InspectorFieldAnchor } from './InspectorFieldAnchor'
+import { InspectorSection } from './InspectorSection'
 import type { EditProps } from './types'
 
 export function ReviewEdit({
   node,
+  agents,
   definition,
   onPatch,
-  onCommitDef,
+  onTransition,
   onHistoryBoundary,
 }: EditProps) {
   const { t } = useTranslation()
@@ -50,9 +54,25 @@ export function ReviewEdit({
   // Candidate upstream node ids = every node in the workflow except this
   // one and any output sink. Validator enforces "subset of reachable
   // upstreams" — this dropdown is the friendly version.
+  const agentByName = new Map(agents.map((agent) => [agent.name, agent]))
   const upstreamCandidates = definition.nodes
     .filter((n) => n.id !== node.id && n.kind !== 'output')
-    .map((n) => n.id)
+    .map((candidate) => ({
+      id: candidate.id,
+      title: nodeTitle(candidate),
+      ports: computePorts(candidate, agentByName, definition).outputs,
+    }))
+  const selectedSource = upstreamCandidates.find(
+    (candidate) => candidate.id === (inputSource.nodeId ?? ''),
+  )
+  const sourceNodeMissing = (inputSource.nodeId ?? '').length > 0 && selectedSource === undefined
+  const sourcePortMissing =
+    (inputSource.portName ?? '').length > 0 &&
+    (selectedSource === undefined || !selectedSource.ports.includes(inputSource.portName ?? ''))
+  const rerunnableOptions = upstreamCandidates.map((candidate) => ({
+    value: candidate.id,
+    label: candidate.title === candidate.id ? candidate.id : `${candidate.title} (${candidate.id})`,
+  }))
 
   const patchReview = (delta: Record<string, unknown>, meta: InspectorChangeMeta): void =>
     onPatch(
@@ -72,46 +92,16 @@ export function ReviewEdit({
     nextSource: { nodeId: string; portName: string },
     meta: InspectorChangeMeta,
   ): void => {
-    const prevSource = {
-      nodeId: inputSource.nodeId ?? '',
-      portName: inputSource.portName ?? '',
-    }
-    const nodes = definition.nodes.map((n) =>
-      n.id === node.id
-        ? ({
-            ...(n as Record<string, unknown>),
-            inputSource: nextSource,
-          } as unknown as WorkflowNode)
-        : n,
+    onTransition(
+      { kind: 'set-review-input-source', reviewNodeId: node.id, inputSource: nextSource },
+      meta,
     )
-    const nextDef = syncEdgeFromFormField(
-      { ...definition, nodes },
-      { nodeId: node.id, portName: REVIEW_INPUT_HANDLE_ID },
-      prevSource,
-      nextSource,
-    )
-    onCommitDef(nextDef, meta)
   }
 
   const descriptionMeta = continuousNodeInspectorChange(
     node.id,
     'description',
     t('inspector.fieldReviewDescription'),
-  )
-  const inputPortMeta = continuousNodeInspectorChange(
-    node.id,
-    'inputSource.portName',
-    t('inspector.fieldReviewInputSourcePort'),
-  )
-  const rerunRejectMeta = continuousNodeInspectorChange(
-    node.id,
-    'rerunnableOnReject',
-    t('inspector.fieldReviewRerunReject'),
-  )
-  const rerunIterateMeta = continuousNodeInspectorChange(
-    node.id,
-    'rerunnableOnIterate',
-    t('inspector.fieldReviewRerunIterate'),
   )
   const commentTemplateMeta = continuousNodeInspectorChange(
     node.id,
@@ -120,146 +110,206 @@ export function ReviewEdit({
   )
 
   return (
-    <div className="form-grid">
-      <NodeTitleField node={node} onPatch={onPatch} onHistoryBoundary={onHistoryBoundary} />
-      <Field
-        label={t('inspector.fieldReviewDescription')}
-        hint={t('inspector.fieldReviewDescriptionHint')}
-      >
-        <InspectorHistoryBoundary meta={descriptionMeta} onBoundary={onHistoryBoundary}>
-          <TextArea
-            value={description}
-            rows={2}
-            onChange={(v) => patchReview({ description: v }, descriptionMeta)}
-          />
-        </InspectorHistoryBoundary>
-      </Field>
-      <Field
-        label={t('inspector.fieldReviewInputSourceNode')}
-        hint={t('inspector.fieldReviewInputSourceNodeHint')}
-        required
-      >
-        <Select<string>
-          value={inputSource.nodeId ?? ''}
-          ariaLabel={t('inspector.fieldReviewInputSourceNode')}
-          onChange={(v) =>
-            patchReviewInputSource(
-              {
-                nodeId: v,
-                portName: inputSource.portName ?? '',
-              },
-              atomicNodeInspectorChange(
-                node.id,
-                'inputSource.nodeId',
-                t('inspector.fieldReviewInputSourceNode'),
-              ),
-            )
-          }
-          options={[
-            { value: '', label: '—' },
-            ...upstreamCandidates.map((id) => ({ value: id, label: id })),
-          ]}
-        />
-      </Field>
-      <Field
-        label={t('inspector.fieldReviewInputSourcePort')}
-        hint={t('inspector.fieldReviewInputSourcePortHint')}
-        required
-      >
-        <InspectorHistoryBoundary meta={inputPortMeta} onBoundary={onHistoryBoundary}>
-          <TextInput
-            value={inputSource.portName ?? ''}
-            onChange={(v) =>
-              patchReviewInputSource(
-                { nodeId: inputSource.nodeId ?? '', portName: v },
-                inputPortMeta,
+    <div className="inspector-sections">
+      <InspectorSection title={t('inspector.sectionBasics')}>
+        <NodeTitleField node={node} onPatch={onPatch} onHistoryBoundary={onHistoryBoundary} />
+        <Field
+          label={t('inspector.fieldReviewDescription')}
+          hint={t('inspector.fieldReviewDescriptionHint')}
+        >
+          <InspectorHistoryBoundary meta={descriptionMeta} onBoundary={onHistoryBoundary}>
+            <TextArea
+              value={description}
+              rows={2}
+              onChange={(v) => patchReview({ description: v }, descriptionMeta)}
+            />
+          </InspectorHistoryBoundary>
+        </Field>
+      </InspectorSection>
+      <InspectorSection title={t('inspector.sectionFlow')}>
+        <InspectorFieldAnchor nodeId={node.id} field="review-source">
+          <div className="form-grid form-grid--two">
+            <Field
+              label={t('inspector.fieldReviewInputSourceNode')}
+              hint={t('inspector.fieldReviewInputSourceNodeHint')}
+              required
+            >
+              <Select<string>
+                searchable
+                className={sourceNodeMissing ? 'form-input--invalid' : undefined}
+                value={inputSource.nodeId ?? ''}
+                ariaLabel={t('inspector.fieldReviewInputSourceNode')}
+                onChange={(nextNodeId) => {
+                  const nextCandidate = upstreamCandidates.find(
+                    (candidate) => candidate.id === nextNodeId,
+                  )
+                  patchReviewInputSource(
+                    {
+                      nodeId: nextNodeId,
+                      portName:
+                        nextCandidate?.ports.includes(inputSource.portName ?? '') === true
+                          ? (inputSource.portName ?? '')
+                          : '',
+                    },
+                    atomicNodeInspectorChange(
+                      node.id,
+                      'inputSource.nodeId',
+                      t('inspector.fieldReviewInputSourceNode'),
+                    ),
+                  )
+                }}
+                options={[
+                  { value: '', label: '—' },
+                  ...rerunnableOptions,
+                  ...(sourceNodeMissing
+                    ? [
+                        {
+                          value: inputSource.nodeId ?? '',
+                          label: t('inspector.missingOption', { value: inputSource.nodeId ?? '' }),
+                        },
+                      ]
+                    : []),
+                ]}
+              />
+            </Field>
+            <Field
+              label={t('inspector.fieldReviewInputSourcePort')}
+              hint={t('inspector.fieldReviewInputSourcePortHint')}
+              required
+            >
+              <Select<string>
+                searchable
+                className={sourcePortMissing ? 'form-input--invalid' : undefined}
+                value={inputSource.portName ?? ''}
+                ariaLabel={t('inspector.fieldReviewInputSourcePort')}
+                disabled={(inputSource.nodeId ?? '').length === 0}
+                onChange={(nextPortName) =>
+                  patchReviewInputSource(
+                    { nodeId: inputSource.nodeId ?? '', portName: nextPortName },
+                    atomicNodeInspectorChange(
+                      node.id,
+                      'inputSource.portName',
+                      t('inspector.fieldReviewInputSourcePort'),
+                    ),
+                  )
+                }
+                options={[
+                  { value: '', label: '—' },
+                  ...(selectedSource?.ports ?? []).map((portName) => ({
+                    value: portName,
+                    label: portName,
+                  })),
+                  ...(sourcePortMissing
+                    ? [
+                        {
+                          value: inputSource.portName ?? '',
+                          label: t('inspector.missingOption', {
+                            value: inputSource.portName ?? '',
+                          }),
+                        },
+                      ]
+                    : []),
+                ]}
+              />
+            </Field>
+          </div>
+        </InspectorFieldAnchor>
+        <InspectorFieldAnchor nodeId={node.id} field="review-rerunnable-on-reject">
+          <Field
+            label={t('inspector.fieldReviewRerunReject')}
+            hint={t('inspector.fieldReviewRerunRejectHint')}
+          >
+            <MultiSelect
+              value={rerunnableOnReject}
+              onChange={(next) =>
+                patchReview(
+                  { rerunnableOnReject: next },
+                  atomicNodeInspectorChange(
+                    node.id,
+                    'rerunnableOnReject',
+                    t('inspector.fieldReviewRerunReject'),
+                  ),
+                )
+              }
+              options={rerunnableOptions}
+              ariaLabel={t('inspector.fieldReviewRerunReject')}
+              placeholder={inputSource.nodeId ?? ''}
+              data-testid="review-rerun-reject"
+            />
+          </Field>
+        </InspectorFieldAnchor>
+        <InspectorFieldAnchor nodeId={node.id} field="review-rerunnable-on-iterate">
+          <Field
+            label={t('inspector.fieldReviewRerunIterate')}
+            hint={t('inspector.fieldReviewRerunIterateHint')}
+          >
+            <MultiSelect
+              value={rerunnableOnIterate}
+              onChange={(next) =>
+                patchReview(
+                  { rerunnableOnIterate: next },
+                  atomicNodeInspectorChange(
+                    node.id,
+                    'rerunnableOnIterate',
+                    t('inspector.fieldReviewRerunIterate'),
+                  ),
+                )
+              }
+              options={rerunnableOptions}
+              ariaLabel={t('inspector.fieldReviewRerunIterate')}
+              placeholder={inputSource.nodeId ?? ''}
+              data-testid="review-rerun-iterate"
+            />
+          </Field>
+        </InspectorFieldAnchor>
+      </InspectorSection>
+      <InspectorSection title={t('inspector.sectionAdvanced')} collapsed>
+        <Field label={t('inspector.fieldReviewRollbackReject')}>
+          <Switch
+            checked={rollbackFilesOnReject}
+            onChange={(c) =>
+              patchReview(
+                { rollbackFilesOnReject: c },
+                atomicNodeInspectorChange(
+                  node.id,
+                  'rollbackFilesOnReject',
+                  t('inspector.fieldReviewRollbackReject'),
+                ),
               )
             }
-            placeholder="design"
+            label={t('inspector.fieldReviewRollbackRejectLabel')}
           />
-        </InspectorHistoryBoundary>
-      </Field>
-      <Field
-        label={t('inspector.fieldReviewRerunReject')}
-        hint={t('inspector.fieldReviewRerunRejectHint')}
-      >
-        <InspectorHistoryBoundary meta={rerunRejectMeta} onBoundary={onHistoryBoundary}>
-          <ChipsInput
-            value={rerunnableOnReject}
-            onChange={(next) => patchReview({ rerunnableOnReject: next }, rerunRejectMeta)}
-            validate={(token) =>
-              upstreamCandidates.includes(token)
-                ? null
-                : t('inspector.fieldReviewRerunInvalid', { id: token })
+        </Field>
+        <Field label={t('inspector.fieldReviewRollbackIterate')}>
+          <Switch
+            checked={rollbackFilesOnIterate}
+            onChange={(c) =>
+              patchReview(
+                { rollbackFilesOnIterate: c },
+                atomicNodeInspectorChange(
+                  node.id,
+                  'rollbackFilesOnIterate',
+                  t('inspector.fieldReviewRollbackIterate'),
+                ),
+              )
             }
-            placeholder={inputSource.nodeId ?? ''}
-            testidPrefix="review-rerun-reject"
+            label={t('inspector.fieldReviewRollbackIterateLabel')}
           />
-        </InspectorHistoryBoundary>
-      </Field>
-      <Field
-        label={t('inspector.fieldReviewRerunIterate')}
-        hint={t('inspector.fieldReviewRerunIterateHint')}
-      >
-        <InspectorHistoryBoundary meta={rerunIterateMeta} onBoundary={onHistoryBoundary}>
-          <ChipsInput
-            value={rerunnableOnIterate}
-            onChange={(next) => patchReview({ rerunnableOnIterate: next }, rerunIterateMeta)}
-            validate={(token) =>
-              upstreamCandidates.includes(token)
-                ? null
-                : t('inspector.fieldReviewRerunInvalid', { id: token })
-            }
-            placeholder={inputSource.nodeId ?? ''}
-            testidPrefix="review-rerun-iterate"
-          />
-        </InspectorHistoryBoundary>
-      </Field>
-      <Field label={t('inspector.fieldReviewRollbackReject')}>
-        <Switch
-          checked={rollbackFilesOnReject}
-          onChange={(c) =>
-            patchReview(
-              { rollbackFilesOnReject: c },
-              atomicNodeInspectorChange(
-                node.id,
-                'rollbackFilesOnReject',
-                t('inspector.fieldReviewRollbackReject'),
-              ),
-            )
-          }
-          label={t('inspector.fieldReviewRollbackRejectLabel')}
-        />
-      </Field>
-      <Field label={t('inspector.fieldReviewRollbackIterate')}>
-        <Switch
-          checked={rollbackFilesOnIterate}
-          onChange={(c) =>
-            patchReview(
-              { rollbackFilesOnIterate: c },
-              atomicNodeInspectorChange(
-                node.id,
-                'rollbackFilesOnIterate',
-                t('inspector.fieldReviewRollbackIterate'),
-              ),
-            )
-          }
-          label={t('inspector.fieldReviewRollbackIterateLabel')}
-        />
-      </Field>
-      <Field
-        label={t('inspector.fieldReviewCommentTemplate')}
-        hint={t('inspector.fieldReviewCommentTemplateHint')}
-      >
-        <InspectorHistoryBoundary meta={commentTemplateMeta} onBoundary={onHistoryBoundary}>
-          <TextArea
-            value={commentInjectTemplate}
-            rows={3}
-            onChange={(v) => patchReview({ commentInjectTemplate: v }, commentTemplateMeta)}
-            placeholder=""
-          />
-        </InspectorHistoryBoundary>
-      </Field>
+        </Field>
+        <Field
+          label={t('inspector.fieldReviewCommentTemplate')}
+          hint={t('inspector.fieldReviewCommentTemplateHint')}
+        >
+          <InspectorHistoryBoundary meta={commentTemplateMeta} onBoundary={onHistoryBoundary}>
+            <TextArea
+              value={commentInjectTemplate}
+              rows={3}
+              onChange={(v) => patchReview({ commentInjectTemplate: v }, commentTemplateMeta)}
+              placeholder=""
+            />
+          </InspectorHistoryBoundary>
+        </Field>
+      </InspectorSection>
     </div>
   )
 }

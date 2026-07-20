@@ -1929,6 +1929,12 @@ export interface Resources {
     exportYaml: string
     exporting: string
     exportTitle: string
+    actionsTitle: string
+    renameActionHint: string
+    aclActionHint: string
+    deleteActionHint: string
+    deleteTitle: string
+    deleteDescription: string
     actionDraftChanged: string
     actionRevisionMismatch: string
     remoteUpdated: string
@@ -1940,8 +1946,116 @@ export interface Resources {
     validationStaleDraft: string
     validationStaleInventory: string
     validationAutoFitWrapper: string
+    validationSummaryOk: string
+    validationBadgeErrors: string
+    validationBadgeWarnings: string
+    validationSummaryErrors: string
+    validationSummaryWarnings: string
+    validationSummaryStale: string
+    validationDetailsTitle: string
+    validationRevalidate: string
+    validationTargetChanged: string
+    validationTargetUnavailable: string
+    validationGoToIssue: string
     paletteFilter: string
     paletteNoMatches: string
+    emptyCanvas: {
+      title: string
+      description: string
+      addFirst: string
+      startTemplate: string
+    }
+    nodePicker: {
+      title: string
+      addButton: string
+      searchLabel: string
+      searchPlaceholder: string
+      recommended: string
+      recent: string
+      all: string
+      noMatches: string
+      resultsCount: string
+      dragHint: string
+    }
+    starter: {
+      title: string
+      standardTitle: string
+      standardDescription: string
+      auditTitle: string
+      auditDescription: string
+      blankTitle: string
+      blankDescription: string
+      apply: string
+      applying: string
+      confirmReplace: string
+      replaceWarning: string
+      chooseAgent: string
+      preview: string
+      validating: string
+      valid: string
+      invalid: string
+      role: {
+        coder: string
+        auditor: string
+        aggregator: string
+        fixer: string
+      }
+      issue: {
+        'role-unmapped': string
+        'agent-missing': string
+        'aggregator-role-required': string
+        'data-output-required': string
+      }
+      copy: {
+        requestLabel: string
+        artifactLabel: string
+        inputTitle: string
+        coderTitle: string
+        gitTitle: string
+        fanoutTitle: string
+        auditorTitle: string
+        aggregatorTitle: string
+        fixerTitle: string
+        outputTitle: string
+      }
+    }
+    nodeActions: {
+      addNext: string
+      connectNext: string
+      copy: string
+      more: string
+      addInside: string
+      insertOnEdge: string
+    }
+    connectionDialog: {
+      title: string
+      sourcePort: string
+      targetNode: string
+      inputMode: string
+      newInput: string
+      reuseInput: string
+      targetPort: string
+      domainChannel: string
+      fanoutInput: string
+      fanoutOutput: string
+      fanoutEndpoint: string
+      fanoutKind: string
+      fanoutRole: string
+      fanoutShard: string
+      fanoutBroadcast: string
+      fanoutDemotes: string
+      preview: string
+      apply: string
+      applied: string
+      inserted: string
+      replaces: string
+      incomplete: string
+      compatibility: {
+        compatible: string
+        incompatible: string
+        unknown: string
+      }
+    }
     paletteAgents: string
     paletteFanOut: string
     paletteFanOutDesc: string
@@ -1972,6 +2086,9 @@ export interface Resources {
     menuWrapLoop: string
     menuDecompose: string
     boxSelectHint: string
+    layoutToolbar: string
+    layoutAll: string
+    layoutSelection: string
     menuSelectedCount: string
     nodeTitleUnsetAgent: string
     nodeTitleUnsetKey: string
@@ -1989,6 +2106,8 @@ export interface Resources {
       unwrap: string
       fitWrapper: string
       insert: string
+      applyStarter: string
+      autoLayout: string
       move: string
       rename: string
       editInspector: string
@@ -2305,8 +2424,17 @@ export interface Resources {
     edgeSourceLabel: string
     edgeTargetLabel: string
     edgePortNameLabel: string
+    edgePortFixedHint: string
     edgeConflictMsg: string
+    edgeReconnectBtn: string
     edgeDeleteBtn: string
+    nodePortSummary: string
+    technicalKind: string
+    technicalId: string
+    sectionBasics: string
+    sectionFlow: string
+    sectionAdvanced: string
+    sectionTechnical: string
     missingRefsLabel: string
     missingRefsHint: string
     // RFC-023 clarify node inspector
@@ -2898,7 +3026,13 @@ export interface Resources {
     clipboardReferencesFiltered: string
     referencesPruned: string
     referenceChangeBlocked: string
+    accessibleName: string
+    accessibleDescription: string
+    nodeConfigurationSummary: string
     placementUnavailable: string
+    layoutCrossScope: string
+    layoutCycles: string
+    layoutLockedOverflow: string
   }
   /** Canvas chip label for review nodes (⚖ icon). */
   reviewNode: {
@@ -5501,6 +5635,12 @@ export const zhCN: Resources = {
     exportYaml: '导出 YAML',
     exporting: '导出中…',
     exportTitle: '下载为 YAML',
+    actionsTitle: '工作流操作',
+    renameActionHint: '修改工作流名称与描述。',
+    aclActionHint: '查看可见性、成员与所有者。',
+    deleteActionHint: '永久删除这个工作流。',
+    deleteTitle: '删除工作流',
+    deleteDescription: '删除版本 {{version}} 的 {{name}}？此操作无法撤销。',
     actionDraftChanged: '操作期间草稿发生了变化。请确认当前保存状态后重试。',
     actionRevisionMismatch: '服务端回执与已保存的工作流版本不一致，未继续执行后续操作。',
     remoteUpdated: '该工作流在其它端被更新（v{{version}}）；当前视图即将刷新。',
@@ -5512,8 +5652,116 @@ export const zhCN: Resources = {
     validationStaleDraft: '上次校验（草稿已变化）',
     validationStaleInventory: '上次校验（校验所依赖的资源可能已变化）',
     validationAutoFitWrapper: '自适应',
+    validationSummaryOk: '校验通过',
+    validationBadgeErrors: '{{n}} 个校验错误',
+    validationBadgeWarnings: '{{n}} 个校验警告',
+    validationSummaryErrors: '{{n}} 个校验问题',
+    validationSummaryWarnings: '{{n}} 个校验警告',
+    validationSummaryStale: '需要重新校验',
+    validationDetailsTitle: '工作流校验',
+    validationRevalidate: '重新校验',
+    validationTargetChanged: '校验后对象已发生变化，请重新校验当前草稿。',
+    validationTargetUnavailable: '对象已变化',
+    validationGoToIssue: '前往修复',
     paletteFilter: '过滤面板…',
     paletteNoMatches: '没有匹配项。',
+    emptyCanvas: {
+      title: '搭建你的工作流',
+      description: '选择一个执行角色开始，之后可继续添加和连接步骤。',
+      addFirst: '添加第一步',
+      startTemplate: '从模板开始',
+    },
+    nodePicker: {
+      title: '添加工作流步骤',
+      addButton: '添加步骤',
+      searchLabel: '搜索工作流步骤',
+      searchPlaceholder: '按名称、类型或能力搜索…',
+      recommended: '推荐',
+      recent: '最近使用',
+      all: '全部步骤',
+      noMatches: '没有匹配的步骤。',
+      resultsCount: '有 {{n}} 个工作流步骤可用。',
+      dragHint: '拖到画布上',
+    },
+    starter: {
+      title: '选择工作流起点',
+      standardTitle: '标准开发闭环',
+      standardDescription: '实现代码 → 按变更文件并行审计 → 汇总问题 → 修复。',
+      auditTitle: '只做审计',
+      auditDescription: '输入待审对象，由一个审计代理产出结构化报告。',
+      blankTitle: '空白工作流',
+      blankDescription: '回到步骤选择器，从第一个节点开始搭建。',
+      apply: '应用 Starter',
+      applying: '重新校验并应用…',
+      confirmReplace: '替换当前工作流',
+      replaceWarning: '当前画布已有内容。再次点击将用这个 Starter 整体替换，并可通过一次撤销恢复。',
+      chooseAgent: '选择代理',
+      preview: '将创建 {{nodes}} 个节点和 {{edges}} 条连接。',
+      validating: '正在用服务端真实资源校验草稿…',
+      valid: 'Starter 已通过当前资源校验。应用时还会重新校验一次。',
+      invalid: '这个映射暂时无法应用：',
+      role: {
+        coder: '实现代理',
+        auditor: '审计代理',
+        aggregator: '汇总代理',
+        fixer: '修复代理',
+      },
+      issue: {
+        'role-unmapped': '请选择一个代理。',
+        'agent-missing': '所选代理已不在当前资源列表中。',
+        'aggregator-role-required': '该角色需要配置为 aggregator 的代理。',
+        'data-output-required': '该角色需要至少一个承载数据的输出端口。',
+      },
+      copy: {
+        requestLabel: '任务需求',
+        artifactLabel: '待审对象',
+        inputTitle: '输入',
+        coderTitle: '实现',
+        gitTitle: '代码变更',
+        fanoutTitle: '逐文件审计',
+        auditorTitle: '审计文件',
+        aggregatorTitle: '汇总问题',
+        fixerTitle: '修复问题',
+        outputTitle: '结果',
+      },
+    },
+    nodeActions: {
+      addNext: '在此步骤后添加',
+      connectNext: '连接下一步',
+      copy: '复制',
+      more: '更多操作',
+      addInside: '添加内部步骤',
+      insertOnEdge: '在这条连线上插入步骤',
+    },
+    connectionDialog: {
+      title: '连接工作流步骤',
+      sourcePort: '来源输出',
+      targetNode: '目标步骤',
+      inputMode: '目标输入',
+      newInput: '新增输入',
+      reuseInput: '复用输入',
+      targetPort: '输入名称',
+      domainChannel: '受管反问通道',
+      fanoutInput: '创建 Fan-out 输入边界',
+      fanoutOutput: '创建 Fan-out 输出边界',
+      fanoutEndpoint: '外侧：{{outer}} · wrapper：{{wrapper}} · 内侧：{{inner}}',
+      fanoutKind: '边界值类型',
+      fanoutRole: 'Fan-out 输入角色',
+      fanoutShard: '分片来源',
+      fanoutBroadcast: '广播',
+      fanoutDemotes: '原分片来源将改为广播：{{ports}}',
+      preview: '连线预览',
+      apply: '应用连线',
+      applied: '已连接 {{source}} 与 {{target}}。',
+      inserted: '已在连线 {{edge}} 上插入 {{node}}。',
+      replaces: '将替换边：{{edges}}',
+      incomplete: '选择两端后即可预览兼容性。',
+      compatibility: {
+        compatible: '兼容',
+        incompatible: '不兼容',
+        unknown: '兼容性未知',
+      },
+    },
     paletteAgents: '代理',
     paletteFanOut: 'Fan-out',
     paletteFanOutDesc: '多进程（按 sourcePort 分片）',
@@ -5543,6 +5791,9 @@ export const zhCN: Resources = {
     menuWrapLoop: '用 loop wrapper 包装',
     menuDecompose: '解组 wrapper',
     boxSelectHint: '按住 Shift 框选',
+    layoutToolbar: '画布布局',
+    layoutAll: '整理全图',
+    layoutSelection: '整理所选',
     menuSelectedCount: '已选 {{n}} 个',
     nodeTitleUnsetAgent: '(未设置代理)',
     nodeTitleUnsetKey: '(未设置 key)',
@@ -5560,6 +5811,8 @@ export const zhCN: Resources = {
       unwrap: '解散包装器',
       fitWrapper: '自适应包装器',
       insert: '添加步骤',
+      applyStarter: '应用工作流 Starter',
+      autoLayout: '自动整理工作流',
       move: '移动步骤',
       rename: '重命名工作流',
       editInspector: '编辑配置',
@@ -5878,8 +6131,17 @@ export const zhCN: Resources = {
     edgeSourceLabel: '源',
     edgeTargetLabel: '目标节点',
     edgePortNameLabel: '目标端口名',
+    edgePortFixedHint: '固定端口、系统端口和边界端口不能在此重命名。',
     edgeConflictMsg: '已存在同源同目标端口的边，请先删除冲突边。',
+    edgeReconnectBtn: '重新连接端点',
     edgeDeleteBtn: '删除该边',
+    nodePortSummary: '{{inputs}} 个输入 · {{outputs}} 个输出',
+    technicalKind: '节点类型',
+    technicalId: '技术 ID',
+    sectionBasics: '基础',
+    sectionFlow: '流程',
+    sectionAdvanced: '高级',
+    sectionTechnical: '技术信息',
     missingRefsLabel: '模板引用但未连入：',
     missingRefsHint: '这些端口名出现在 prompt 模板里但还没有上游边；启动 task 时会被静态校验拦下。',
     fieldClarifyDescription: '说明',
@@ -6458,9 +6720,16 @@ export const zhCN: Resources = {
     connect: { newInput: '新增输入', reuseInput: '复用输入' },
     clipboardBlocked: '所选步骤存在不完整的引用或输入声明，已阻止本次复制或粘贴。',
     clipboardReferencesFiltered: '已安全移除 {{n}} 个指向复制范围外的引用，请检查粘贴后的配置。',
-    referencesPruned: '已清理 {{n}} 个指向已删除步骤的失效引用，工作流结构仍保持一致。',
+    referencesPruned: '已清理 {{n}} 个失效图引用，工作流结构仍保持一致。',
     referenceChangeBlocked: '存在无法安全更新的未知步骤引用，已阻止本次变更。',
+    accessibleName: '工作流画布',
+    accessibleDescription:
+      '使用“添加”或节点工具栏创建并连接步骤；方向键移动焦点，Delete 删除当前选择。',
+    nodeConfigurationSummary: '{{inputs}} 个输入 · {{outputs}} 个输出',
     placementUnavailable: '该位置附近没有可用空间，请平移画布后重试。',
+    layoutCrossScope: '所选步骤分属不同包装器范围。请分别整理每个范围，或使用“整理全图”。',
+    layoutCycles: '布局时保留了 {{n}} 条循环依赖边，但未用它们约束层级。',
+    layoutLockedOverflow: '有 {{n}} 个锁定尺寸的包装器放不下整理后的步骤；其锁定矩形已保留。',
   },
   reviewNode: {
     label: '评审',
@@ -6546,6 +6815,8 @@ export const zhCN: Resources = {
       'prompt-template-deprecated-token': '提示词引用了已废弃的模板变量（会渲染为空）。',
       'prompt-template-unresolved': '提示词引用的模板变量没有对应的入边端口。',
       'review-input-list-item-not-markdown': '评审节点的列表输入元素类型必须是 markdown。',
+      'review-input-edge-conflict': '评审节点只能接收一条输入边。',
+      'review-input-edge-mismatch': '评审节点的输入边与已选择的输入来源不一致。',
       'review-input-source-missing': '评审节点缺少或错误配置了输入来源。',
       'review-input-source-not-markdown': '评审节点的输入来源必须声明为 markdown / path 类型。',
       'review-rerunnable-out-of-scope': '评审驳回后可重跑的节点必须在输入来源的上游范围内。',

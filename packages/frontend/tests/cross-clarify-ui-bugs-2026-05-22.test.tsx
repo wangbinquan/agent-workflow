@@ -40,14 +40,7 @@ import {
 import { CrossClarifyNode } from '../src/components/canvas/nodes/CrossClarifyNode'
 import '../src/i18n'
 
-const WORKFLOW_CANVAS_TSX = resolve(
-  __dirname,
-  '..',
-  'src',
-  'components',
-  'canvas',
-  'WorkflowCanvas.tsx',
-)
+const WORKFLOW_TRANSITION_TS = resolve(__dirname, '..', 'src', 'lib', 'workflow-transition.ts')
 
 function baseDef(): WorkflowDefinition {
   return {
@@ -127,8 +120,8 @@ describe('Bug 1: cascadeRemoveCrossClarifyChannel drops the sibling on single-ed
     expect(next).toBe(def)
   })
 
-  test('WorkflowCanvas.commitChange invokes cascadeRemoveCrossClarifyChannel after cascadeRemoveClarifyChannel', () => {
-    const src = readFileSync(WORKFLOW_CANVAS_TSX, 'utf8')
+  test('the canonical workflow transition invokes cross-clarify cascade after clarify cascade', () => {
+    const src = readFileSync(WORKFLOW_TRANSITION_TS, 'utf8')
     expect(src).toContain('cascadeRemoveCrossClarifyChannel')
     // Ordering: RFC-023 cascade must come before RFC-056 cascade so
     // staged-by-reference short-circuits chain naturally. (Both helpers
@@ -190,6 +183,7 @@ describe('Bug 3: CrossClarifyNode renders disambiguating labels next to the two 
         <CrossClarifyNode
           id="cross1"
           data={{
+            surface: 'task',
             nodeId: 'cross1',
             kind: 'clarify-cross-agent',
             title: 'cross1',

@@ -12,7 +12,7 @@ const SPECIALIZED_MARKER =
   '/* RFC-198: specialized workspaces must degrade at the same 720px boundary as'
 
 describe('RFC-198 specialized mobile layouts', () => {
-  test('all fixed desktop rails and drawers join the canonical 720px stack', () => {
+  test('non-editor fixed desktop rails and drawers join the canonical 720px stack', () => {
     const start = CSS.indexOf(SPECIALIZED_MARKER)
     expect(start).toBeGreaterThanOrEqual(0)
     const block = CSS.slice(
@@ -21,8 +21,6 @@ describe('RFC-198 specialized mobile layouts', () => {
     )
 
     for (const selector of [
-      '.editor-layout',
-      '.editor-layout--with-inspector',
       '.file-tree',
       '.task-canvas-layout--with-drawer',
       '.task-outputs-panel',
@@ -35,6 +33,7 @@ describe('RFC-198 specialized mobile layouts', () => {
     }
     expect(block).toContain('@media (max-width: 720px)')
     expect(block).toContain('grid-template-columns: minmax(0, 1fr)')
+    expect(block).not.toContain('.editor-layout')
   })
 
   test('flex-based diff trees stack and mobile panes retain bounded reading regions', () => {

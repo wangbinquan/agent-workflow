@@ -35,13 +35,13 @@ function Host({ onChangeSpy }: { onChangeSpy: (def: WorkflowDefinition) => void 
 }
 
 describe('review inspector list editors', () => {
-  test('rerunnable node ids commit as chips instead of losing commas in a controlled text field', () => {
+  test('rerunnable node ids commit from the searchable workflow-node selector', () => {
     const spy = vi.fn()
     render(<Host onChangeSpy={spy} />)
 
-    const input = screen.getByTestId('review-rerun-iterate-input')
-    fireEvent.change(input, { target: { value: 'source' } })
-    fireEvent.keyDown(input, { key: ',' })
+    const input = screen.getByTestId('review-rerun-iterate')
+    fireEvent.focus(input)
+    fireEvent.mouseDown(screen.getByRole('option', { name: 'writer (source)' }))
 
     const next = spy.mock.calls.at(-1)?.[0] as WorkflowDefinition
     const review = next.nodes.find((node) => node.id === 'review') as unknown as Record<
@@ -49,6 +49,6 @@ describe('review inspector list editors', () => {
       unknown
     >
     expect(review.rerunnableOnIterate).toEqual(['source'])
-    expect((input as HTMLInputElement).value).toBe('')
+    expect(screen.getAllByText('writer (source)').length).toBeGreaterThan(0)
   })
 })

@@ -1,4 +1,4 @@
-# visual-regression — 17 full-page + 5 component pixel baselines (RFC-054 / RFC-198)
+# visual-regression — 25 full-page + 6 component pixel baselines (RFC-054 / RFC-198 / RFC-199)
 
 Spec: `e2e/visual-regression.spec.ts`. Baselines: `e2e/visual-regression.spec.ts-snapshots/`.
 
@@ -18,15 +18,18 @@ Threshold: `maxDiffPixelRatio: 0.002` (0.2%) per RFC-054 plan §risk 9.
 
 ## Scenes covered
 
-| Viewport         | Scenes                                                                                                              |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------- |
-| 1280×800 desktop | auth, agents, workflows, repos, memory, settings, onboarding, seeded homepage, tasks, and three inbox dialog states |
-| 390×844 mobile   | seeded home + navigation, workflow gallery, agent split detail, settings network form, terminal task detail         |
+| Viewport         | Scenes                                                                                                                                       |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1536×900 desktop | workflow editor with palette and inspector rails                                                                                             |
+| 1280×800 desktop | auth, agents, workflows, repos, memory, settings, onboarding, seeded homepage, tasks, three inbox states, editor light/dark, dynamic preview |
+| 1179×800 compact | workflow editor palette and inspector side modals                                                                                            |
+| 390×844 mobile   | seeded home + navigation, workflow gallery, agent split detail, settings network form, terminal task detail, editor picker/inspector         |
 
-The 17 scenes each own a full-page baseline. Five focused locator baselines lock
+The 25 scenes each own a full-page baseline. Six focused locator baselines lock
 mobile navigation open, PageHeader actions, a real overflowing TableViewport
-edge, an empty state, and a Dialog footer so the full-page 0.2% threshold cannot
-hide a small but important local regression.
+edge, an empty state, a Dialog footer, and the deterministic dynamic-workflow
+preview canvas so the full-page 0.2% threshold cannot hide a small but important
+local regression.
 
 Every scene owns an isolated daemon plus an explicit light/dark and clean/seeded
 fixture. This keeps a single `--grep` run equivalent to the full suite and
@@ -60,11 +63,28 @@ is zero (or commit refreshed baselines in the same PR).
 The CI runs on pinned **Ubuntu 24.04 (Noble)** and compares against the committed
 `*-chromium-linux.png` baselines.
 
-## Generating ubuntu baselines (first-time / refresh)
+## Generating GitHub-hosted Ubuntu baselines (first-time / refresh)
 
 Two options:
 
-### Option A — local Linux box (preferred)
+### Option A — let the pinned GitHub runner produce artifacts (preferred)
+
+1. Open a PR branch.
+2. Trigger the nightly workflow with `workflow_dispatch` against the branch.
+3. The first run fails when new `-chromium-linux.png` files are missing.
+4. Download the workflow's failure artifact, which contains the _actual_
+   screenshots written by the failed run.
+5. Copy those PNGs into `e2e/visual-regression.spec.ts-snapshots/` on
+   the branch, commit, push.
+6. Re-run the workflow and require a zero-diff pass.
+
+This is the documented escape hatch in RFC-054 plan §risk 9: snapshot
+update must be human-triggered, NEVER automatic on CI failure. The workflow's
+`ubuntu-24.04` hosted image is the baseline authority; its complete package
+inventory is maintained by
+[actions/runner-images](https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2404-Readme.md).
+
+### Option B — local Linux container (diagnostics only)
 
 If you have docker / VM access to a Linux environment:
 
@@ -80,31 +100,16 @@ docker run --rm -v "$PWD:/work" -w /work \
   '
 ```
 
-The container tag matches the Playwright `1.60.0` revision in `bun.lock`, and
-its Noble userspace matches the pinned CI runner. Update all three together when
-upgrading Playwright so browser binaries, fonts, and expected pixels stay aligned.
-
-Then commit the resulting `*-chromium-linux.png` files in a dedicated PR
-titled e.g. `chore(visual): refresh ubuntu baselines after <topic>`.
-
-### Option B — let CI do it via workflow_dispatch
-
-1. Open a PR branch.
-2. Trigger the nightly workflow with `workflow_dispatch` against the branch.
-3. The first run fails (no `-chromium-linux.png` files yet).
-4. Download the workflow's failure artifact, which contains the _actual_
-   screenshots written by the failed run.
-5. Copy those PNGs into `e2e/visual-regression.spec.ts-snapshots/` on
-   the branch, commit, push.
-6. Next workflow run is green.
-
-This is the documented escape hatch in RFC-054 plan §risk 9: snapshot
-update must be human-triggered, NEVER automatic on CI failure.
+The container tag matches the Playwright `1.60.0` browser revision in
+`bun.lock`, but the Microsoft Playwright container is not the GitHub-hosted
+runner image and does not guarantee the same installed fonts or rasterization.
+Use it to catch gross layout changes and to inspect candidate screenshots; do
+not commit container-generated Linux PNGs as authoritative baselines. Refresh
+and verify the final files through Option A without raising the threshold.
 
 ## What this gate does NOT cover
 
-- Data-dependent authoring states whose geometry is intentionally user-driven
-  (for example, an arbitrarily arranged workflow editor canvas).
+- Arbitrary user-arranged workflow graphs beyond the fixed RFC-199 editor fixtures.
 - Hover / focus states (only the at-rest state is snapshotted).
 - Every dialog family; semantic/focus/mobile contracts live in
   `overlay-ux-inventory.test.ts`, `ux-consistency.spec.ts`, and

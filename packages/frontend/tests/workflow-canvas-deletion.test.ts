@@ -4,10 +4,10 @@
 import { describe, expect, test } from 'vitest'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import type { Edge, Node, NodeChange } from '@xyflow/react'
-import {
-  deleteWorkflowSelection,
-  reconcileFlowNodeChanges,
-} from '../src/components/canvas/WorkflowCanvas'
+import { reconcileFlowNodeChanges } from '../src/components/canvas/WorkflowCanvas'
+import { applyWorkflowTransition } from '../src/lib/workflow-transition'
+
+const semanticContext = { agentsByName: {}, inventoryRevision: 'test-inventory' }
 
 describe('reconcileFlowNodeChanges', () => {
   test('a deferred/replayed remove is deterministic and never mutates its canonical inputs', () => {
@@ -32,7 +32,7 @@ describe('reconcileFlowNodeChanges', () => {
   })
 })
 
-describe('deleteWorkflowSelection', () => {
+describe('applyWorkflowTransition delete-selection', () => {
   test('recursively deletes nested wrapper descendants and prunes every surviving reference', () => {
     const definition: WorkflowDefinition = {
       $schema_version: 4,
@@ -70,17 +70,20 @@ describe('deleteWorkflowSelection', () => {
       outputs: [{ name: 'top', bind: { nodeId: 'child', portName: 'out' } }],
     }
 
-    const result = deleteWorkflowSelection(definition, ['outer'], [])
-    expect(result.safe).toBe(true)
-    expect(result.definition.nodes.map((node) => node.id)).toEqual(['review', 'output'])
-    expect(result.definition.edges).toEqual([])
-    expect(result.definition.outputs).toEqual([])
-    expect(result.definition.nodes[0]).toMatchObject({
+    const result = applyWorkflowTransition(
+      definition,
+      { kind: 'delete-selection', nodeIds: ['outer'], edgeIds: [] },
+      semanticContext,
+    )
+    expect(result.next.nodes.map((node) => node.id)).toEqual(['review', 'output'])
+    expect(result.next.edges).toEqual([])
+    expect(result.next.outputs).toEqual([])
+    expect(result.next.nodes[0]).toMatchObject({
       inputSource: { nodeId: '', portName: '' },
       rerunnableOnReject: [],
       rerunnableOnIterate: [],
     })
-    expect(result.definition.nodes[1]).toMatchObject({
+    expect(result.next.nodes[1]).toMatchObject({
       ports: [{ name: 'final', bind: { nodeId: '', portName: '' } }],
     })
     expect(result.warnings.length).toBeGreaterThan(0)
@@ -109,8 +112,12 @@ describe('deleteWorkflowSelection', () => {
         },
       ],
     }
-    const result = deleteWorkflowSelection(definition, [], ['edge'])
-    expect(result.definition.nodes).toEqual(definition.nodes)
-    expect(result.definition.edges).toEqual([])
+    const result = applyWorkflowTransition(
+      definition,
+      { kind: 'delete-selection', nodeIds: [], edgeIds: ['edge'] },
+      semanticContext,
+    )
+    expect(result.next.nodes).toEqual(definition.nodes)
+    expect(result.next.edges).toEqual([])
   })
 })

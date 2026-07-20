@@ -5,7 +5,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
   Agent,
@@ -15,15 +14,14 @@ import type {
   WorkflowDefinition,
   WorkflowDetail,
   WorkflowDraftSnapshot,
-  WorkflowValidationIssue,
   WorkflowValidationReceipt,
 } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
 import { describeApiError } from '@/i18n'
-import { describeValidationIssue } from '@/i18n/errors'
-import { EditorSidebar } from '@/components/canvas/EditorSidebar'
+import { EditorPaletteContent, EditorSidebar } from '@/components/canvas/EditorSidebar'
 import { EdgeInspector } from '@/components/canvas/EdgeInspector'
 import { NodeInspector } from '@/components/canvas/NodeInspector'
+import { nodeTitle } from '@/components/canvas/nodeTitle'
 import type { InspectorChangeMeta } from '@/components/canvas/inspector/historyMeta'
 import { healFieldEdgeConsistency } from '@/components/canvas/connectionSync'
 import { syncInputDefs } from '@/components/canvas/syncInputDefs'
@@ -41,21 +39,34 @@ import {
   downloadWorkflowServerExport,
 } from '@/lib/workflow-draft-export'
 import { isWorkflowDraftUnsafeToLeave } from '@/lib/workflow-editor-draft'
-import { AclDialogButton } from '@/components/AclPanel'
-import { ConfirmButton } from '@/components/ConfirmButton'
+import { AclPanel } from '@/components/AclPanel'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { Dialog } from '@/components/Dialog'
 import { LoadingState } from '@/components/LoadingState'
+import { ManagedLiveRegionProvider } from '@/components/ManagedLiveRegion'
 import { PageHeader } from '@/components/PageHeader'
 import { QuickCreateDialog } from '@/components/QuickCreateDialog'
 import { RenameDialog } from '@/components/RenameDialog'
 import { UnsavedChangesGuard } from '@/components/split/UnsavedChangesGuard'
 import { WorkflowDraftStatus } from '@/components/workflow-editor/WorkflowDraftStatus'
+import { WorkflowStarterDialog } from '@/components/workflow-editor/WorkflowStarterDialog'
+import { ValidationPanel } from '@/components/workflow-editor/ValidationPanel'
+export { partitionValidationIssues as partitionIssues } from '@/components/workflow-editor/ValidationPanel'
 import {
   useWorkflowEditorDraft,
   WorkflowEnsureSavedError,
   type WorkflowSavedDraft,
 } from '@/hooks/useWorkflowEditorDraft'
 import { useWorkflowSync } from '@/hooks/useWorkflowSync'
+import { useActor } from '@/hooks/useActor'
+import { planWorkflowIssueNavigation } from '@/lib/workflow-inspector-target'
+import {
+  useWorkflowEditorWorkspaceMode,
+  workspaceHasInspectorRail,
+  workspaceHasPaletteRail,
+  type WorkflowEditorWorkspaceMode,
+} from '@/lib/workflow-editor-workspace'
 import { Route as RootRoute } from './__root'
 
 /**
@@ -66,9 +77,33 @@ import { Route as RootRoute } from './__root'
  *
  * Exported for unit testing — see tests/canvas-editor-layout.test.ts.
  */
-export function editorLayoutClass(selectedNodeId: string | null): string {
-  return selectedNodeId !== null ? 'editor-layout editor-layout--with-inspector' : 'editor-layout'
+export function editorLayoutClass(
+  selectedNodeId: string | null,
+  mode: WorkflowEditorWorkspaceMode = 'wide',
+): string {
+  return [
+    'editor-layout',
+    `editor-layout--${mode}`,
+    selectedNodeId !== null && workspaceHasInspectorRail(mode)
+      ? 'editor-layout--with-inspector'
+      : null,
+  ]
+    .filter(Boolean)
+    .join(' ')
 }
+
+type EditorModalSurface =
+  | 'none'
+  | 'palette'
+  | 'inspector'
+  | 'starter'
+  | 'actions'
+  | 'rename'
+  | 'acl'
+  | 'delete'
+  | 'validation'
+  | 'save-copy'
+  | 'canvas-owned'
 
 export function workflowDeleteConfirmationKey(
   workflowId: string,
@@ -254,6 +289,11 @@ export function WorkflowEditorLoaded({
   const { t } = useTranslation()
   const qc = useQueryClient()
   const navigate = useNavigate()
+  const actor = useActor()
+  const workspaceMode = useWorkflowEditorWorkspaceMode()
+  const hasPaletteRail = workspaceHasPaletteRail(workspaceMode)
+  const hasInspectorRail = workspaceHasInspectorRail(workspaceMode)
+  const [modalSurface, setModalSurface] = useState<EditorModalSurface>('none')
   const [connection, setConnection] = useState({ connected: false, connectionEpoch: 0 })
   const controller = useWorkflowEditorDraft({
     initial,
@@ -395,15 +435,42 @@ export function WorkflowEditorLoaded({
   const [selection, setSelection] = useState<CanvasSelection | null>(null)
   const draft = controller.state.local.definition
   const selectedNodeId = selection?.kind === 'node' ? selection.id : null
+  const selectedNode =
+    selectedNodeId === null
+      ? null
+      : (draft.nodes.find((node) => node.id === selectedNodeId) ?? null)
   const selectedEdge =
     selection?.kind === 'edge'
       ? (draft.edges.find((edge) => edge.id === selection.id) ?? null)
       : null
   const canvasRef = useRef<WorkflowCanvasHandle | null>(null)
+  const [inspectorFocusRequest, setInspectorFocusRequest] = useState<{
+    requestId: number
+    focusId: string
+  } | null>(null)
+  const starterTriggerRef = useRef<HTMLElement | null>(null)
+  const paletteTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const moreTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const paletteSearchRef = useRef<HTMLInputElement | null>(null)
+  const canvasFrameRef = useRef<HTMLDivElement | null>(null)
+  const openStarter = (trigger: HTMLElement): void => {
+    starterTriggerRef.current = trigger
+    setModalSurface('starter')
+  }
   const closeInspector = () => {
     canvasRef.current?.clearSelection()
     setSelection(null)
+    setModalSurface((current) => (current === 'inspector' ? 'none' : current))
   }
+
+  useEffect(() => {
+    setModalSurface((current) => {
+      if (current === 'palette' && hasPaletteRail) return 'none'
+      if (current === 'inspector' && (selection === null || hasInspectorRail)) return 'none'
+      if (current === 'none' && selection !== null && !hasInspectorRail) return 'inspector'
+      return current
+    })
+  }, [hasInspectorRail, hasPaletteRail, selection])
   const commitDefinition = (
     definition: WorkflowDefinition,
     meta?: WorkflowCanvasChangeMeta | InspectorChangeMeta,
@@ -472,10 +539,8 @@ export function WorkflowEditorLoaded({
 
   // Name and description are one composite local transaction. The controller,
   // not this dialog, decides when/how that snapshot is persisted.
-  const [renameOpen, setRenameOpen] = useState(false)
   const [renameName, setRenameName] = useState('')
   const [renameDescription, setRenameDescription] = useState('')
-  const renameTriggerRef = useRef<HTMLButtonElement | null>(null)
   const renameFieldError = workflowRenameError(renameName, controller.state.local.name)
   const renameCanSave =
     renameFieldError === null &&
@@ -707,7 +772,6 @@ export function WorkflowEditorLoaded({
 
   // Conflict/terminal save-copy is a real CreateWorkflow using the captured
   // full local snapshot. Suggested name and description stay editable.
-  const [copyOpen, setCopyOpen] = useState(false)
   const copyOpenRef = useRef(false)
   const [copySnapshot, setCopySnapshot] = useState<WorkflowDraftSnapshot | null>(null)
   const [copyName, setCopyName] = useState('')
@@ -719,7 +783,7 @@ export function WorkflowEditorLoaded({
       qc.setQueryData(['workflows', created.id], created)
       if (!copyOpenRef.current) return
       copyOpenRef.current = false
-      setCopyOpen(false)
+      setModalSurface('none')
       unsafeNavigationRef.current = null
       void navigate({ to: '/workflows/$id', params: { id: created.id } })
     },
@@ -733,8 +797,9 @@ export function WorkflowEditorLoaded({
     setCopyName(copyIntent.suggestedName)
     setCopyDescription(copyIntent.snapshot.description)
     resetCopyCreate()
+    canvasRef.current?.closeModalSurface?.()
     copyOpenRef.current = true
-    setCopyOpen(true)
+    setModalSurface('save-copy')
     clearCopyIntent()
   }, [clearCopyIntent, copyIntent, resetCopyCreate])
   const copyNameError = workflowNameError(copyName)
@@ -756,6 +821,29 @@ export function WorkflowEditorLoaded({
 
   const headerActions = (
     <>
+      <button
+        type="button"
+        className="btn btn--sm"
+        data-testid="workflow-add-step"
+        ref={paletteTriggerRef}
+        onClick={() => {
+          if (hasPaletteRail) paletteSearchRef.current?.focus()
+          else setModalSurface('palette')
+        }}
+      >
+        + {t('editor.nodePicker.addButton')}
+      </button>
+      <button
+        type="button"
+        className="btn btn--sm"
+        ref={(node) => {
+          if (modalSurface !== 'starter') starterTriggerRef.current = node
+        }}
+        onClick={(event) => openStarter(event.currentTarget)}
+        data-testid="workflow-start-template"
+      >
+        {t('editor.emptyCanvas.startTemplate')}
+      </button>
       <button
         type="button"
         className="btn btn--sm workflow-history-action"
@@ -805,329 +893,423 @@ export function WorkflowEditorLoaded({
         {validatePending ? t('editor.validating') : t('editor.validate')}
       </button>
       <button
+        ref={moreTriggerRef}
         type="button"
         className="btn btn--sm"
-        title={t('editor.exportTitle')}
-        onClick={() => void handleExport()}
-        disabled={exactActionRef.current !== null}
+        onClick={() => setModalSurface('actions')}
+        data-testid="workflow-more-actions"
       >
-        {exportPending ? t('editor.exporting') : t('editor.exportYaml')}
+        {t('editor.nodeActions.more')}
       </button>
-      <button
-        type="button"
-        className="btn btn--sm"
-        ref={renameTriggerRef}
-        onClick={() => {
-          setRenameName(controller.state.local.name)
-          setRenameDescription(controller.state.local.description)
-          setRenameOpen(true)
-        }}
-        data-testid="workflow-rename-button"
-      >
-        {t('editor.renameButton')}
-      </button>
-      <AclDialogButton
-        resourceBaseUrl={`/api/workflows/${encodeURIComponent(workflowId)}`}
-        invalidateKey={['workflows']}
-        size="sm"
-      />
-      <ConfirmButton
-        label={t('common.delete')}
-        confirmationKey={deleteConfirmationKey}
-        onConfirm={() => del.mutateAsync({ expectedVersion: deleteExpectedVersion })}
-        variant="danger"
-        disabled={
-          del.isPending ||
-          controller.state.phase === 'inaccessible' ||
-          controller.state.phase === 'deleted'
-        }
-        size="sm"
-      />
     </>
   )
 
   const backgroundQueryError =
     queryError !== null && queryError !== undefined && !isWorkflowAccessLoss(queryError)
-
-  return (
-    <div className="page page--editor">
-      <PageHeader
-        title={controller.state.local.name || workflowId}
-        meta={
-          <>
-            <code>{workflowId}</code> · v{controller.state.serverRevision.version}
-          </>
-        }
-        actions={headerActions}
-      />
-
-      {backgroundQueryError && (
-        <ErrorBanner
-          error={queryError}
-          action={
-            <button type="button" className="btn btn--sm" onClick={onRefetch}>
-              {t('common.retry')}
-            </button>
-          }
-        />
-      )}
-      {/* RFC-203 T2: the scheduled-reference list (visibleScheduled +
-          hiddenCount) now renders via ErrorBanner's shared <ErrorDetails>
-          — the RFC-202 call-site-local renderer moved there. */}
-      {del.error !== null && del.error !== undefined && <ErrorBanner error={del.error} />}
-      {actionError !== null && actionError !== undefined && (
-        <div ref={actionErrorFocusRef} tabIndex={-1} data-testid="workflow-action-error-focus">
-          <ErrorBanner error={actionError} />
-        </div>
-      )}
-      {agents.error !== null && agents.error !== undefined && <ErrorBanner error={agents.error} />}
-
-      <div ref={draftStatusFocusRef} tabIndex={-1} data-testid="workflow-draft-status-focus">
-        <WorkflowDraftStatus
-          state={controller.state}
-          onRetryNow={controller.retry}
-          onSaveCopy={controller.requestCopy}
-          onLoadRemote={controller.confirmLoadRemote}
-          onOverwriteRemote={controller.confirmOverwrite}
-          onExportLocal={() => downloadWorkflowLocalDraft(controller.state.local)}
-          onRetryAccess={controller.retryAccess}
-          onReturnToList={() => {
-            // The terminal Notice action is itself the user's explicit decision
-            // to leave the retained local draft; do not make it confirm twice.
-            unsafeNavigationRef.current = null
-            void navigate({ to: '/workflows' })
-          }}
-          canSaveCopy
-        />
-      </div>
-
-      {validationBinding !== null && (
-        <ValidationPanel
-          result={validationBinding.receipt}
-          stale={validationStale}
-          onAutoFitWrapper={(wrapperId) => {
-            const next = clearWrapperSize(draft, wrapperId)
-            if (next !== draft) commitDefinition(next)
-          }}
-        />
-      )}
-
-      <div className={editorLayoutClass(selection?.id ?? null)}>
-        <EditorSidebar
-          agents={agents.data ?? []}
-          onAdd={(item) => canvasRef.current?.addPaletteItemAtViewportCenter(item)}
-        />
-        <div className="canvas-frame">
-          <WorkflowCanvas
-            ref={canvasRef}
-            workflowId={workflowId}
-            definition={draft}
-            agents={agents.data ?? []}
-            onSelect={setSelection}
-            onChange={commitDefinition}
-            canUndo={controller.canUndo}
-            canRedo={controller.canRedo}
-            onUndo={controller.undo}
-            onRedo={controller.redo}
-          />
-        </div>
-        {selectedEdge !== null ? (
-          <EdgeInspector
-            edge={selectedEdge}
-            definition={draft}
-            onChange={commitDefinition}
-            onClose={closeInspector}
-          />
-        ) : (
-          <NodeInspector
-            definition={draft}
-            selectedNodeId={selectedNodeId}
-            agents={agents.data ?? []}
-            onChange={commitDefinition}
-            onClose={closeInspector}
-          />
-        )}
-      </div>
-
-      <RenameDialog
-        open={renameOpen}
-        onClose={() => setRenameOpen(false)}
-        title={t('editor.renameTitle')}
-        testidPrefix="workflow"
-        nameLabel={t('editor.fieldName')}
-        nameHint={t('workflows.fieldNameHint')}
-        name={renameName}
-        onNameChange={setRenameName}
-        nameError={renameFieldError !== null ? t(renameFieldError) : undefined}
-        descriptionLabel={t('editor.fieldDescription')}
-        description={renameDescription}
-        onDescriptionChange={setRenameDescription}
-        canSave={renameCanSave}
-        pending={false}
-        onSave={() => {
-          if (!renameCanSave) return
-          controller.commit(
-            {
-              ...controller.state.local,
-              name: renameName,
-              description: renameDescription,
-            },
-            {
-              source: 'metadata',
-              label: t('editor.history.rename'),
-              transaction: 'single',
-              selectionBefore: selection,
-              selectionAfter: { kind: 'workflow', field: 'name' },
-            },
-          )
-          setRenameOpen(false)
+  const inspectorDialogTitle =
+    selectedEdge !== null
+      ? t('inspector.edgeTitle')
+      : selectedNode !== null
+        ? nodeTitle(selectedNode)
+        : t('inspector.tabEdit')
+  const renderInspector = (chrome: 'rail' | 'content') =>
+    selectedEdge !== null ? (
+      <EdgeInspector
+        chrome={chrome}
+        edge={selectedEdge}
+        definition={draft}
+        agents={agents.data ?? []}
+        focusRequest={inspectorFocusRequest}
+        onReconnect={(edgeId, trigger) => {
+          setModalSurface('canvas-owned')
+          canvasRef.current?.openEdgeReconnect(edgeId, trigger)
         }}
-        triggerRef={renameTriggerRef}
+        onChange={commitDefinition}
+        onClose={closeInspector}
       />
-
-      <QuickCreateDialog
-        open={copyOpen}
-        onClose={() => {
-          copyOpenRef.current = false
-          setCopyOpen(false)
-          copyCreate.reset()
-        }}
-        title={t('editor.draftStatus.saveCopy')}
-        createLabel={t('editor.draftStatus.saveCopy')}
-        nameLabel={t('editor.fieldName')}
-        nameHint={t('workflows.fieldNameHint')}
-        descriptionLabel={t('editor.fieldDescription')}
-        name={copyName}
-        onNameChange={setCopyName}
-        description={copyDescription}
-        onDescriptionChange={setCopyDescription}
-        nameError={copyName.length > 0 && copyNameError !== null ? t(copyNameError) : undefined}
-        canCreate={copyCanCreate}
-        pending={copyCreate.isPending}
-        submitError={
-          copyCreate.error !== null && copyCreate.error !== undefined
-            ? describeApiError(copyCreate.error)
+    ) : selectedNode !== null ? (
+      <NodeInspector
+        chrome={chrome}
+        definition={draft}
+        selectedNodeId={selectedNode.id}
+        agents={agents.data ?? []}
+        focusRequest={inspectorFocusRequest}
+        onChange={commitDefinition}
+        onClose={closeInspector}
+        onConnect={
+          chrome === 'content'
+            ? (nodeId, trigger) => {
+                setModalSurface('canvas-owned')
+                canvasRef.current?.openConnection(nodeId, trigger)
+              }
             : undefined
         }
-        onCreate={() => {
-          if (copySnapshot === null || !copyCanCreate) return
-          copyCreate.mutate({
-            name: copyName,
-            description: copyDescription,
-            definition: copySnapshot.definition,
-          })
-        }}
-        testidPrefix="workflow-copy"
       />
+    ) : null
 
-      <UnsavedChangesGuard dirtyRef={unsafeNavigationRef} />
-    </div>
+  return (
+    <ManagedLiveRegionProvider>
+      <div className="page page--editor">
+        <PageHeader
+          title={controller.state.local.name || workflowId}
+          meta={
+            <>
+              <code>{workflowId}</code> · v{controller.state.serverRevision.version}
+            </>
+          }
+          actions={headerActions}
+        />
+
+        {backgroundQueryError && (
+          <ErrorBanner
+            error={queryError}
+            action={
+              <button type="button" className="btn btn--sm" onClick={onRefetch}>
+                {t('common.retry')}
+              </button>
+            }
+          />
+        )}
+        {/* RFC-203 T2: the scheduled-reference list (visibleScheduled +
+          hiddenCount) now renders via ErrorBanner's shared <ErrorDetails>
+          — the RFC-202 call-site-local renderer moved there. */}
+        {actionError !== null && actionError !== undefined && (
+          <div ref={actionErrorFocusRef} tabIndex={-1} data-testid="workflow-action-error-focus">
+            <ErrorBanner error={actionError} />
+          </div>
+        )}
+        {agents.error !== null && agents.error !== undefined && (
+          <ErrorBanner error={agents.error} />
+        )}
+
+        <div ref={draftStatusFocusRef} tabIndex={-1} data-testid="workflow-draft-status-focus">
+          <WorkflowDraftStatus
+            state={controller.state}
+            onRetryNow={controller.retry}
+            onSaveCopy={controller.requestCopy}
+            onLoadRemote={controller.confirmLoadRemote}
+            onOverwriteRemote={controller.confirmOverwrite}
+            onExportLocal={() => downloadWorkflowLocalDraft(controller.state.local)}
+            onRetryAccess={controller.retryAccess}
+            onReturnToList={() => {
+              // The terminal Notice action is itself the user's explicit decision
+              // to leave the retained local draft; do not make it confirm twice.
+              unsafeNavigationRef.current = null
+              void navigate({ to: '/workflows' })
+            }}
+            canSaveCopy
+          />
+        </div>
+
+        <div
+          className={editorLayoutClass(selection?.id ?? null, workspaceMode)}
+          data-workspace-mode={workspaceMode}
+        >
+          {hasPaletteRail ? (
+            <EditorSidebar
+              agents={agents.data ?? []}
+              initialFocusRef={paletteSearchRef}
+              onAdd={(item) => canvasRef.current?.addPaletteItemAtViewportCenter(item)}
+            />
+          ) : null}
+          <div ref={canvasFrameRef} className="canvas-frame" tabIndex={-1}>
+            <WorkflowCanvas
+              ref={canvasRef}
+              surface="editor"
+              workflowId={workflowId}
+              definition={draft}
+              agents={agents.data ?? []}
+              onSelect={(nextSelection) => {
+                setSelection(nextSelection)
+                if (!hasInspectorRail) {
+                  setModalSurface(nextSelection === null ? 'none' : 'inspector')
+                }
+              }}
+              onChange={commitDefinition}
+              canUndo={controller.canUndo}
+              canRedo={controller.canRedo}
+              onUndo={controller.undo}
+              onRedo={controller.redo}
+              onStartFromTemplate={openStarter}
+              onModalSurfaceChange={(surface) => {
+                setModalSurface(
+                  surface === null
+                    ? selection !== null && !hasInspectorRail
+                      ? 'inspector'
+                      : 'none'
+                    : 'canvas-owned',
+                )
+              }}
+              validationIssues={
+                validationBinding !== null && validationStale === null
+                  ? validationBinding.receipt.issues
+                  : undefined
+              }
+            />
+            {validationBinding !== null && (
+              <ValidationPanel
+                result={validationBinding.receipt}
+                stale={validationStale}
+                definition={draft}
+                open={modalSurface === 'validation'}
+                onOpenChange={(open) => setModalSurface(open ? 'validation' : 'none')}
+                validating={validatePending}
+                onRevalidate={() => void handleValidate()}
+                onNavigate={(target) => {
+                  const plan = planWorkflowIssueNavigation(target, draft)
+                  if (plan.selection === null || plan.focusId === null) return
+                  setSelection(plan.selection)
+                  canvasRef.current?.focusSelection(plan.selection)
+                  if (!hasInspectorRail) setModalSurface('inspector')
+                  setInspectorFocusRequest((current) => ({
+                    requestId: (current?.requestId ?? 0) + 1,
+                    focusId: plan.focusId as string,
+                  }))
+                }}
+                onAutoFitWrapper={(wrapperId) => {
+                  const next = clearWrapperSize(draft, wrapperId)
+                  if (next !== draft) commitDefinition(next)
+                }}
+              />
+            )}
+          </div>
+          {hasInspectorRail ? renderInspector('rail') : null}
+        </div>
+
+        <Dialog
+          open={modalSurface === 'palette'}
+          onClose={() => setModalSurface('none')}
+          title={t('editor.nodePicker.title')}
+          initialFocusRef={paletteSearchRef}
+          triggerRef={paletteTriggerRef}
+          restoreFocusFallbackRef={canvasFrameRef}
+          panelClassName={`workflow-editor-surface-dialog workflow-editor-surface-dialog--${workspaceMode}`}
+          data-testid="workflow-editor-palette-surface"
+        >
+          <EditorPaletteContent
+            agents={agents.data ?? []}
+            initialFocusRef={paletteSearchRef}
+            showDragGrip={false}
+            onAdd={(item) => {
+              canvasRef.current?.addPaletteItemAtViewportCenter(item)
+              setModalSurface('none')
+            }}
+          />
+        </Dialog>
+
+        <Dialog
+          open={modalSurface === 'inspector' && selection !== null}
+          onClose={closeInspector}
+          title={inspectorDialogTitle}
+          restoreFocusFallbackRef={canvasFrameRef}
+          panelClassName={`workflow-editor-surface-dialog workflow-editor-surface-dialog--${workspaceMode}`}
+          data-testid="workflow-editor-inspector-surface"
+        >
+          {renderInspector('content')}
+        </Dialog>
+
+        <Dialog
+          open={modalSurface === 'actions'}
+          onClose={() => setModalSurface('none')}
+          title={t('editor.actionsTitle')}
+          triggerRef={moreTriggerRef}
+          data-testid="workflow-actions-dialog"
+        >
+          <div className="workflow-editor-action-list">
+            <button
+              type="button"
+              className="workflow-editor-action-list__item"
+              disabled={exactActionRef.current !== null}
+              onClick={() => {
+                setModalSurface('none')
+                void handleExport()
+              }}
+            >
+              <strong>{exportPending ? t('editor.exporting') : t('editor.exportYaml')}</strong>
+              <span>{t('editor.exportTitle')}</span>
+            </button>
+            <button
+              type="button"
+              className="workflow-editor-action-list__item"
+              onClick={() => {
+                setRenameName(controller.state.local.name)
+                setRenameDescription(controller.state.local.description)
+                setModalSurface('rename')
+              }}
+              data-testid="workflow-rename-button"
+            >
+              <strong>{t('editor.renameButton')}</strong>
+              <span>{t('editor.renameActionHint')}</span>
+            </button>
+            {actor.data !== null && actor.data !== undefined && actor.data.source !== 'daemon' ? (
+              <button
+                type="button"
+                className="workflow-editor-action-list__item"
+                onClick={() => setModalSurface('acl')}
+                data-testid="workflow-acl-button"
+              >
+                <strong>{t('acl.title')}</strong>
+                <span>{t('editor.aclActionHint')}</span>
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="workflow-editor-action-list__item workflow-editor-action-list__item--danger"
+              disabled={
+                controller.state.phase === 'inaccessible' || controller.state.phase === 'deleted'
+              }
+              onClick={() => setModalSurface('delete')}
+              data-testid="workflow-delete-button"
+            >
+              <strong>{t('common.delete')}</strong>
+              <span>{t('editor.deleteActionHint')}</span>
+            </button>
+          </div>
+        </Dialog>
+
+        <Dialog
+          open={modalSurface === 'acl'}
+          onClose={() => setModalSurface('none')}
+          title={t('acl.title')}
+          triggerRef={moreTriggerRef}
+          data-testid="workflow-acl-dialog"
+        >
+          <AclPanel
+            resourceBaseUrl={`/api/workflows/${encodeURIComponent(workflowId)}`}
+            invalidateKey={['workflows']}
+            onSaved={() => setModalSurface('none')}
+            onCancel={() => setModalSurface('none')}
+          />
+        </Dialog>
+
+        <ConfirmDialog
+          key={deleteConfirmationKey}
+          open={modalSurface === 'delete'}
+          title={t('editor.deleteTitle')}
+          description={t('editor.deleteDescription', {
+            name: controller.state.local.name || workflowId,
+            version: deleteExpectedVersion,
+          })}
+          confirmLabel={t('common.delete')}
+          tone="danger"
+          triggerRef={moreTriggerRef}
+          onClose={() => setModalSurface('none')}
+          onConfirm={async () => {
+            await del.mutateAsync({ expectedVersion: deleteExpectedVersion })
+          }}
+        />
+
+        <RenameDialog
+          open={modalSurface === 'rename'}
+          onClose={() => setModalSurface('none')}
+          title={t('editor.renameTitle')}
+          testidPrefix="workflow"
+          nameLabel={t('editor.fieldName')}
+          nameHint={t('workflows.fieldNameHint')}
+          name={renameName}
+          onNameChange={setRenameName}
+          nameError={renameFieldError !== null ? t(renameFieldError) : undefined}
+          descriptionLabel={t('editor.fieldDescription')}
+          description={renameDescription}
+          onDescriptionChange={setRenameDescription}
+          canSave={renameCanSave}
+          pending={false}
+          onSave={() => {
+            if (!renameCanSave) return
+            controller.commit(
+              {
+                ...controller.state.local,
+                name: renameName,
+                description: renameDescription,
+              },
+              {
+                source: 'metadata',
+                label: t('editor.history.rename'),
+                transaction: 'single',
+                selectionBefore: selection,
+                selectionAfter: { kind: 'workflow', field: 'name' },
+              },
+            )
+            setModalSurface('none')
+          }}
+          triggerRef={moreTriggerRef}
+        />
+
+        <QuickCreateDialog
+          open={modalSurface === 'save-copy'}
+          onClose={() => {
+            copyOpenRef.current = false
+            setModalSurface('none')
+            copyCreate.reset()
+          }}
+          title={t('editor.draftStatus.saveCopy')}
+          createLabel={t('editor.draftStatus.saveCopy')}
+          nameLabel={t('editor.fieldName')}
+          nameHint={t('workflows.fieldNameHint')}
+          descriptionLabel={t('editor.fieldDescription')}
+          name={copyName}
+          onNameChange={setCopyName}
+          description={copyDescription}
+          onDescriptionChange={setCopyDescription}
+          nameError={copyName.length > 0 && copyNameError !== null ? t(copyNameError) : undefined}
+          canCreate={copyCanCreate}
+          pending={copyCreate.isPending}
+          submitError={
+            copyCreate.error !== null && copyCreate.error !== undefined
+              ? describeApiError(copyCreate.error)
+              : undefined
+          }
+          onCreate={() => {
+            if (copySnapshot === null || !copyCanCreate) return
+            copyCreate.mutate({
+              name: copyName,
+              description: copyDescription,
+              definition: copySnapshot.definition,
+            })
+          }}
+          testidPrefix="workflow-copy"
+        />
+
+        <WorkflowStarterDialog
+          open={modalSurface === 'starter'}
+          workflowId={workflowId}
+          definition={draft}
+          agents={agents.data ?? []}
+          inventorySignature={inventorySignature}
+          triggerRef={starterTriggerRef}
+          onClose={() => setModalSurface('none')}
+          onUseBlank={() => {
+            setModalSurface('none')
+            window.setTimeout(() => {
+              if (hasPaletteRail) paletteSearchRef.current?.focus()
+              else setModalSurface('palette')
+            }, 0)
+          }}
+          onApply={(definition) => {
+            const nextSelection: CanvasSelection | null = definition.nodes.some(
+              (node) => node.id === 'starter_input',
+            )
+              ? { kind: 'node', id: 'starter_input' }
+              : null
+            commitDefinition(definition, {
+              label: t('editor.history.applyStarter'),
+              selectionBefore: selection,
+              selectionAfter: nextSelection,
+            })
+            setSelection(nextSelection)
+            window.requestAnimationFrame(() => {
+              canvasRef.current?.restoreSelection(nextSelection)
+              if (nextSelection !== null && !hasInspectorRail) setModalSurface('inspector')
+            })
+          }}
+        />
+
+        <UnsavedChangesGuard dirtyRef={unsafeNavigationRef} />
+      </div>
+    </ManagedLiveRegionProvider>
   )
 }
 
 function isWorkflowAccessLoss(error: unknown): error is ApiError {
   return error instanceof ApiError && (error.status === 403 || error.status === 404)
-}
-
-/**
- * RFC-004 added a `severity` field to ValidationIssue. The default ('error')
- * stays blocking; only entries explicitly tagged 'warning' fall into the
- * non-blocking bucket. Exported pure for testing.
- */
-export function partitionIssues(issues: WorkflowValidationIssue[]): {
-  errors: WorkflowValidationIssue[]
-  warnings: WorkflowValidationIssue[]
-} {
-  const errors: WorkflowValidationIssue[] = []
-  const warnings: WorkflowValidationIssue[] = []
-  for (const i of issues) {
-    if (i.severity === 'warning') warnings.push(i)
-    else errors.push(i)
-  }
-  return { errors, warnings }
-}
-
-function ValidationPanel({
-  result,
-  stale,
-  onAutoFitWrapper,
-}: {
-  result: { ok: boolean; issues: WorkflowValidationIssue[] }
-  stale: WorkflowValidationStaleReason
-  onAutoFitWrapper?: (wrapperId: string) => void
-}) {
-  const { t } = useTranslation()
-  const { errors, warnings } = partitionIssues(result.issues)
-  return (
-    <div>
-      {stale !== null ? (
-        <div className="validation-panel validation-panel--warn" data-testid="validation-stale">
-          {t(stale === 'draft' ? 'editor.validationStaleDraft' : 'editor.validationStaleInventory')}
-        </div>
-      ) : errors.length === 0 ? (
-        <div className="validation-panel validation-panel--ok">{t('editor.validationOk')}</div>
-      ) : (
-        <div className="validation-panel validation-panel--bad">
-          <div className="validation-panel__title">
-            {t('editor.validationIssues', { n: errors.length })}
-          </div>
-          <ul>
-            {errors.map((i, idx) => (
-              <ValidationIssueRow issue={i} key={`e-${idx}`} />
-            ))}
-          </ul>
-        </div>
-      )}
-      {warnings.length > 0 && (
-        <div className="validation-panel validation-panel--warn">
-          <div className="validation-panel__title">
-            {t('editor.validationWarnings', { n: warnings.length })}
-          </div>
-          <ul>
-            {warnings.map((i, idx) => (
-              <ValidationIssueRow issue={i} key={`w-${idx}`}>
-                {i.code === 'wrapper-children-outside-bounds' &&
-                i.pointer !== undefined &&
-                onAutoFitWrapper !== undefined ? (
-                  <>
-                    {' '}
-                    <button
-                      type="button"
-                      className="validation-panel__action"
-                      onClick={() => onAutoFitWrapper(i.pointer as string)}
-                    >
-                      {t('editor.validationAutoFitWrapper')}
-                    </button>
-                  </>
-                ) : null}
-              </ValidationIssueRow>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// RFC-203 T3c — localized title line; the raw validator message (which carries
-// the node/edge ids) folds into the same row so location info is never lost.
-function ValidationIssueRow({
-  issue,
-  children,
-}: {
-  issue: WorkflowValidationIssue
-  children?: ReactNode
-}) {
-  const { t } = useTranslation()
-  const described = describeValidationIssue(issue)
-  return (
-    <li>
-      <code>{issue.code}</code> — {described.title}
-      {children}
-      <details className="error-details__raw">
-        <summary>{t('errorDetails.rawSummary')}</summary>
-        <pre>{described.raw}</pre>
-      </details>
-    </li>
-  )
 }

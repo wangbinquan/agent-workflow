@@ -16,6 +16,7 @@ import {
   type InspectorChangeMeta,
 } from './historyMeta'
 import { NodeTitleField } from './NodeTitleField'
+import { InspectorFieldAnchor } from './InspectorFieldAnchor'
 import type { EditProps } from './types'
 
 export function WrapperFanoutEdit({
@@ -84,114 +85,116 @@ export function WrapperFanoutEdit({
           {inner.length === 0 ? t('inspector.none') : inner.map((i) => <code key={i}>{i} </code>)}
         </div>
       </Field>
-      <Field label={t('inspector.fanoutInputs')} hint={t('inspector.fanoutInputsHint')}>
-        <div className="fanout-inputs-list">
-          {inputsList.map((p, idx) => {
-            const parsed = tryParseKind(p.kind)
-            const isShardKindOk = parsed?.kind === 'list'
-            // Find inbound edges wired to this port. The user asked us
-            // NOT to split "inbound edges" into its own panel — surface
-            // each edge inline on the corresponding input row so the
-            // inputs[] list is the single source of truth.
-            const wiredFrom = definition.edges.filter(
-              (e) => e.target.nodeId === node.id && e.target.portName === p.name,
-            )
-            return (
-              <div key={idx} className="fanout-input-row-wrap">
-                <div className="fanout-input-row">
-                  <InspectorHistoryBoundary
-                    meta={continuousNodeInspectorChange(
-                      node.id,
-                      `inputs.${idx}.name`,
-                      t('inspector.fanoutInputs'),
-                    )}
-                    onBoundary={onHistoryBoundary}
-                  >
-                    <TextInput
-                      value={p.name}
+      <InspectorFieldAnchor nodeId={node.id} field="fanout-inputs">
+        <Field label={t('inspector.fanoutInputs')} hint={t('inspector.fanoutInputsHint')}>
+          <div className="fanout-inputs-list">
+            {inputsList.map((p, idx) => {
+              const parsed = tryParseKind(p.kind)
+              const isShardKindOk = parsed?.kind === 'list'
+              // Find inbound edges wired to this port. The user asked us
+              // NOT to split "inbound edges" into its own panel — surface
+              // each edge inline on the corresponding input row so the
+              // inputs[] list is the single source of truth.
+              const wiredFrom = definition.edges.filter(
+                (e) => e.target.nodeId === node.id && e.target.portName === p.name,
+              )
+              return (
+                <div key={idx} className="fanout-input-row-wrap">
+                  <div className="fanout-input-row">
+                    <InspectorHistoryBoundary
+                      meta={continuousNodeInspectorChange(
+                        node.id,
+                        `inputs.${idx}.name`,
+                        t('inspector.fanoutInputs'),
+                      )}
+                      onBoundary={onHistoryBoundary}
+                    >
+                      <TextInput
+                        value={p.name}
+                        onChange={(v) =>
+                          patchInput(
+                            idx,
+                            { name: v },
+                            continuousNodeInspectorChange(
+                              node.id,
+                              `inputs.${idx}.name`,
+                              t('inspector.fanoutInputs'),
+                            ),
+                          )
+                        }
+                        placeholder={t('inspector.fanoutInputNamePlaceholder')}
+                      />
+                    </InspectorHistoryBoundary>
+                    <KindSelect
+                      value={p.kind}
                       onChange={(v) =>
                         patchInput(
                           idx,
-                          { name: v },
-                          continuousNodeInspectorChange(
+                          { kind: v },
+                          atomicNodeInspectorChange(
                             node.id,
-                            `inputs.${idx}.name`,
+                            `inputs.${idx}.kind`,
                             t('inspector.fanoutInputs'),
                           ),
                         )
                       }
-                      placeholder={t('inspector.fanoutInputNamePlaceholder')}
+                      testidPrefix={`fanout-input-kind-${idx}`}
                     />
-                  </InspectorHistoryBoundary>
-                  <KindSelect
-                    value={p.kind}
-                    onChange={(v) =>
-                      patchInput(
-                        idx,
-                        { kind: v },
-                        atomicNodeInspectorChange(
-                          node.id,
-                          `inputs.${idx}.kind`,
-                          t('inspector.fanoutInputs'),
-                        ),
-                      )
-                    }
-                    testidPrefix={`fanout-input-kind-${idx}`}
-                  />
-                  <Switch
-                    checked={p.isShardSource === true}
-                    onChange={(v) => {
-                      // Mark this one as shardSource and clear others (singleton invariant).
-                      const next = inputsList.map((q, i) => ({
-                        ...q,
-                        isShardSource: i === idx ? v : false,
-                      }))
-                      setInputs(
-                        next,
-                        atomicNodeInspectorChange(
-                          node.id,
-                          `inputs.${idx}.isShardSource`,
-                          t('inspector.fanoutInputShardSource'),
-                        ),
-                      )
-                    }}
-                    label={t('inspector.fanoutInputShardSource')}
-                  />
-                  <button
-                    type="button"
-                    className="btn btn--xs"
-                    onClick={() => removeInput(idx)}
-                    aria-label={t('inspector.fanoutInputRemove')}
-                  >
-                    ×
-                  </button>
-                </div>
-                {p.isShardSource === true && !isShardKindOk ? (
-                  <div className="muted muted--warn">
-                    {t('inspector.fanoutInputShardSourceMustBeList')}
+                    <Switch
+                      checked={p.isShardSource === true}
+                      onChange={(v) => {
+                        // Mark this one as shardSource and clear others (singleton invariant).
+                        const next = inputsList.map((q, i) => ({
+                          ...q,
+                          isShardSource: i === idx ? v : false,
+                        }))
+                        setInputs(
+                          next,
+                          atomicNodeInspectorChange(
+                            node.id,
+                            `inputs.${idx}.isShardSource`,
+                            t('inspector.fanoutInputShardSource'),
+                          ),
+                        )
+                      }}
+                      label={t('inspector.fanoutInputShardSource')}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn--xs"
+                      onClick={() => removeInput(idx)}
+                      aria-label={t('inspector.fanoutInputRemove')}
+                    >
+                      ×
+                    </button>
                   </div>
-                ) : null}
-                <div className="fanout-input-wired">
-                  {wiredFrom.length === 0 ? (
-                    <span className="muted">{t('inspector.fanoutInputUnwired')}</span>
-                  ) : (
-                    wiredFrom.map((e) => (
-                      <span key={e.id} className="fanout-input-wired__src">
-                        ← <code>{e.source.nodeId}</code>
-                        <span>.</span>
-                        <code>{e.source.portName}</code>
-                      </span>
-                    ))
-                  )}
+                  {p.isShardSource === true && !isShardKindOk ? (
+                    <div className="muted muted--warn">
+                      {t('inspector.fanoutInputShardSourceMustBeList')}
+                    </div>
+                  ) : null}
+                  <div className="fanout-input-wired">
+                    {wiredFrom.length === 0 ? (
+                      <span className="muted">{t('inspector.fanoutInputUnwired')}</span>
+                    ) : (
+                      wiredFrom.map((e) => (
+                        <span key={e.id} className="fanout-input-wired__src">
+                          ← <code>{e.source.nodeId}</code>
+                          <span>.</span>
+                          <code>{e.source.portName}</code>
+                        </span>
+                      ))
+                    )}
+                  </div>
                 </div>
-              </div>
-            )
-          })}
-          <button type="button" className="btn btn--sm" onClick={addInput}>
-            {t('inspector.fanoutInputAdd')}
-          </button>
-        </div>
-      </Field>
+              )
+            })}
+            <button type="button" className="btn btn--sm" onClick={addInput}>
+              {t('inspector.fanoutInputAdd')}
+            </button>
+          </div>
+        </Field>
+      </InspectorFieldAnchor>
       <Field
         label={t('inspector.fanoutDerivedOutputs')}
         hint={t('inspector.fanoutDerivedOutputsHint')}

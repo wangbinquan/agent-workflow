@@ -145,6 +145,7 @@ describe('deriveClarifyNodeNav (pure freshest-run)', () => {
 
 function clarifyData(over: Partial<CanvasNodeData> = {}): CanvasNodeData {
   return {
+    surface: over.surface ?? 'task',
     nodeId: 'clr',
     kind: 'clarify',
     title: 'Clarify',

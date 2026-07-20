@@ -10,6 +10,7 @@ import {
   WorkflowNodeSchema,
   collectNodeReferenceClosure,
   pruneDeletedNodeReferences,
+  pruneWorkflowPortReferences,
   rewriteCopiedNodeReferences,
   rewriteCopiedWorkflowSlice,
   rewriteWorkflowPortReferences,
@@ -561,6 +562,81 @@ describe('rewriteWorkflowPortReferences', () => {
     expect(result.definition.outputs).toEqual([
       { name: 'result', bind: { nodeId: 'input', portName: 'new_key' } },
     ])
+    expect(source).toEqual(snapshot)
+  })
+})
+
+describe('pruneWorkflowPortReferences', () => {
+  test('drops edges/top-level outputs and clears every inventoried PortRef for a disappeared port', () => {
+    const source = definition(
+      [
+        node('producer', 'agent-single'),
+        node('review', 'review', {
+          inputSource: { nodeId: 'producer', portName: 'gone' },
+        }),
+        node('output', 'output', {
+          ports: [{ name: 'result', bind: { nodeId: 'producer', portName: 'gone' } }],
+        }),
+        node('loop', 'wrapper-loop', {
+          nodeIds: ['producer'],
+          exitCondition: { kind: 'port-empty', nodeId: 'producer', portName: 'gone' },
+          outputBindings: [{ name: 'result', bind: { nodeId: 'producer', portName: 'gone' } }],
+        }),
+      ],
+      [
+        {
+          id: 'ordinary',
+          source: { nodeId: 'producer', portName: 'gone' },
+          target: { nodeId: 'output', portName: 'result' },
+        },
+        {
+          id: 'boundary',
+          source: { nodeId: 'producer', portName: 'gone' },
+          target: { nodeId: 'loop', portName: 'result' },
+          boundary: 'wrapper-output',
+        },
+      ],
+      [{ name: 'result', bind: { nodeId: 'producer', portName: 'gone' } }],
+    )
+    const snapshot = JSON.parse(JSON.stringify(source))
+
+    const result = pruneWorkflowPortReferences(source, [{ nodeId: 'producer', portName: 'gone' }])
+
+    expect(result.safe).toBe(true)
+    expect(result.definition.edges).toEqual([])
+    expect(result.definition.outputs).toEqual([])
+    expect((result.definition.nodes[1] as Record<string, unknown>).inputSource).toEqual({
+      nodeId: '',
+      portName: '',
+    })
+    expect((result.definition.nodes[2] as Record<string, unknown>).ports).toEqual([
+      { name: 'result', bind: { nodeId: '', portName: '' } },
+    ])
+    expect((result.definition.nodes[3] as Record<string, unknown>).exitCondition).toEqual({
+      kind: 'port-empty',
+      nodeId: '',
+      portName: '',
+    })
+    expect((result.definition.nodes[3] as Record<string, unknown>).outputBindings).toEqual([
+      { name: 'result', bind: { nodeId: '', portName: '' } },
+    ])
+    expect(result.warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'disappeared-port-reference-pruned',
+          edgeId: 'ordinary',
+          referencedNodeId: 'producer',
+          referencedPortName: 'gone',
+          action: 'drop',
+        }),
+        expect.objectContaining({
+          code: 'disappeared-port-reference-pruned',
+          nodeId: 'review',
+          field: 'inputSource',
+          action: 'clear',
+        }),
+      ]),
+    )
     expect(source).toEqual(snapshot)
   })
 })

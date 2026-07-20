@@ -9,6 +9,8 @@ import { NODE_GLYPHS } from '../nodePalette'
 import { useTranslation } from 'react-i18next'
 import { PortHandles } from './PortHandles'
 import { INBOUND_HANDLE_ID, type CanvasNodeData } from './types'
+import { NodeValidationBadge } from './NodeValidationBadge'
+import { NodeConfigurationSummary } from './NodeConfigurationSummary'
 
 interface Props extends NodeProps {
   data: CanvasNodeData
@@ -19,14 +21,20 @@ export function OutputNode({ data, selected }: Props) {
   return (
     <div
       className={`canvas-node canvas-node--io canvas-node--output ${selected ? 'canvas-node--selected' : ''}`}
+      data-surface={data.surface}
     >
+      <NodeValidationBadge data={data} />
       <div className="canvas-node__header">
         <span className="canvas-node__kind">
           {NODE_GLYPHS.output} {t('ioNode.labelOutput')}
         </span>
         <span className="canvas-node__title">{data.title}</span>
       </div>
-      <div className="canvas-node__id">{data.nodeId}</div>
+      {data.surface === 'editor' ? (
+        <NodeConfigurationSummary data={data} />
+      ) : (
+        <div className="canvas-node__id">{data.nodeId}</div>
+      )}
       <PortHandles
         side="left"
         ports={data.inputPorts}

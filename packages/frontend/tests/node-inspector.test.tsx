@@ -496,4 +496,63 @@ describe('NodeInspector', () => {
     )
     expect(screen.queryByLabelText(/Display name/i)).not.toBeNull()
   })
+
+  test('shows transition warnings when an agent change prunes a disappeared fan-out outlet', () => {
+    const aggregator: Agent = {
+      ...CODER,
+      id: 'agent-aggregator',
+      name: 'aggregator',
+      role: 'aggregator',
+      outputs: ['summary'],
+      outputKinds: { summary: 'markdown' },
+      outputWrapperPortNames: { summary: 'promoted' },
+    }
+    const normal: Agent = {
+      ...CODER,
+      id: 'agent-normal',
+      name: 'normal',
+      outputs: [],
+    }
+    const definition: WorkflowDefinition = {
+      $schema_version: 4,
+      inputs: [],
+      nodes: [
+        { id: 'inner', kind: 'agent-single', agentName: 'aggregator' },
+        { id: 'fanout', kind: 'wrapper-fanout', nodeIds: ['inner'], inputs: [] },
+        {
+          id: 'output',
+          kind: 'output',
+          ports: [{ name: 'report', bind: { nodeId: 'fanout', portName: 'promoted' } }],
+        },
+      ],
+      edges: [
+        {
+          id: 'promoted-edge',
+          source: { nodeId: 'fanout', portName: 'promoted' },
+          target: { nodeId: 'output', portName: 'report' },
+        },
+      ],
+    }
+    const onChange = vi.fn()
+    wrap(
+      <NodeInspector
+        definition={definition}
+        selectedNodeId="inner"
+        agents={[aggregator, normal]}
+        onChange={onChange}
+        onClose={() => {}}
+      />,
+    )
+
+    const agentSelect = comboboxShowing(/aggregator/i)
+    if (agentSelect === undefined) throw new Error('agent selector missing')
+    pickFromCombobox(agentSelect, 'normal')
+
+    expect(screen.getByText(/stale graph reference/i)).toBeTruthy()
+    const next = onChange.mock.calls[0]?.[0] as WorkflowDefinition
+    expect(next.edges).toEqual([])
+    expect(
+      (next.nodes.find((node) => node.id === 'output') as Record<string, unknown>).ports,
+    ).toEqual([{ name: 'report', bind: { nodeId: '', portName: '' } }])
+  })
 })

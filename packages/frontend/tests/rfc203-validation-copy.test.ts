@@ -114,10 +114,15 @@ describe('validation 词条完整性', () => {
 describe('接线源级锁', () => {
   test('ValidationPanel 与 ErrorDetails issues 分支都走 describeValidationIssue', () => {
     const editor = readFileSync(resolve(__dirname, '../src/routes/workflows.edit.tsx'), 'utf8')
-    expect(editor).toContain('describeValidationIssue(')
+    expect(editor).toContain('<ValidationPanel')
+    const validationPanel = readFileSync(
+      resolve(__dirname, '../src/components/workflow-editor/ValidationPanel.tsx'),
+      'utf8',
+    )
+    expect(validationPanel).toContain('describeValidationIssue(')
     // 标题行本地化 + 原文同行折叠（error-details__raw 复用）
-    expect(editor).toContain('{described.title}')
-    expect(editor.includes('<pre>{described.raw}</pre>')).toBe(true)
+    expect(validationPanel).toContain('{described.title}')
+    expect(validationPanel.includes('<pre>{described.raw}</pre>')).toBe(true)
     const details = readFileSync(resolve(__dirname, '../src/components/ErrorDetails.tsx'), 'utf8')
     expect(details).toContain('describeValidationIssue(')
   })

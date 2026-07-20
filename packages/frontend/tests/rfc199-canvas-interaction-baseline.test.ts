@@ -23,6 +23,12 @@ import {
   REVIEW_INPUT_HANDLE_ID,
 } from '../src/components/canvas/connectionSync'
 import { resolveDropTarget } from '../src/components/canvas/connectResolve'
+import {
+  createWorkflowSemanticContext,
+  planWorkflowConnection,
+  type ConnectionRequest,
+} from '../src/lib/workflow-connection-plan'
+import { applyWorkflowTransition } from '../src/lib/workflow-transition'
 
 function node(value: Record<string, unknown>): WorkflowNode {
   return value as unknown as WorkflowNode
@@ -277,5 +283,201 @@ describe('RFC-199 T0.5 legacy drag-connect golden', () => {
 
     expect(input.boundary).toBe('wrapper-input')
     expect(output.boundary).toBe('wrapper-output')
+  })
+})
+
+describe('RFC-199 B5 planner adapter equivalence', () => {
+  const semantic = createWorkflowSemanticContext([
+    {
+      name: 'source',
+      outputs: ['result', 'document', 'report'],
+      outputKinds: { result: 'string', document: 'markdown', report: 'markdown' },
+    },
+  ])
+
+  function applyRequest(def: WorkflowDefinition, request: ConnectionRequest): WorkflowDefinition {
+    const plan = planWorkflowConnection(def, request, semantic)
+    if (!plan.ok) throw new Error(plan.reason.code)
+    return applyWorkflowTransition(def, { kind: 'connection', plan }, semantic).next
+  }
+
+  test('NEW and REUSE preserve the legacy target-port outcomes', () => {
+    const existing: WorkflowEdge = {
+      id: 'existing',
+      source: { nodeId: 'prior', portName: 'result' },
+      target: { nodeId: 'target', portName: 'result' },
+    }
+    const def = definition([agent('source'), agent('prior'), agent('target')], [existing])
+
+    const added = applyRequest(def, {
+      kind: 'generic',
+      edgeId: 'new-edge',
+      source: { nodeId: 'source', portName: 'result' },
+      targetNodeId: 'target',
+      target: { mode: 'new', portName: 'result_2' },
+    })
+    const legacyAdded: WorkflowDefinition = {
+      ...def,
+      edges: [
+        ...def.edges,
+        {
+          id: 'new-edge',
+          source: { nodeId: 'source', portName: 'result' },
+          target: { nodeId: 'target', portName: 'result_2' },
+        },
+      ],
+    }
+    expect(JSON.stringify(added)).toBe(JSON.stringify(legacyAdded))
+    expect(added.edges.map(edgeShape)).toEqual([
+      edgeShape(existing),
+      {
+        source: { nodeId: 'source', portName: 'result' },
+        target: { nodeId: 'target', portName: 'result_2' },
+      },
+    ])
+
+    const reused = applyRequest(def, {
+      kind: 'generic',
+      edgeId: 'reuse-edge',
+      source: { nodeId: 'source', portName: 'result' },
+      targetNodeId: 'target',
+      target: { mode: 'reuse', portName: 'result' },
+    })
+    const legacyReused: WorkflowDefinition = {
+      ...def,
+      edges: [
+        {
+          id: 'reuse-edge',
+          source: { nodeId: 'source', portName: 'result' },
+          target: { nodeId: 'target', portName: 'result' },
+        },
+      ],
+    }
+    expect(JSON.stringify(reused)).toBe(JSON.stringify(legacyReused))
+    expect(reused.edges.map(edgeShape)).toEqual([
+      {
+        source: { nodeId: 'source', portName: 'result' },
+        target: { nodeId: 'target', portName: 'result' },
+      },
+    ])
+  })
+
+  test('review/output mirrors and clarify pair remain one atomic result', () => {
+    const reviewDef = definition([
+      agent('source'),
+      node({
+        id: 'review',
+        kind: 'review',
+        inputSource: { nodeId: '', portName: '' },
+      }),
+    ])
+    const review = applyRequest(reviewDef, {
+      kind: 'generic',
+      edgeId: 'review-edge',
+      source: { nodeId: 'source', portName: 'document' },
+      targetNodeId: 'review',
+      target: { mode: 'reuse', portName: REVIEW_INPUT_HANDLE_ID },
+    })
+    const reviewEdge: WorkflowEdge = {
+      id: 'review-edge',
+      source: { nodeId: 'source', portName: 'document' },
+      target: { nodeId: 'review', portName: REVIEW_INPUT_HANDLE_ID },
+    }
+    const legacyReview = applyConnectionForReviewOutput(
+      { ...reviewDef, edges: [reviewEdge] },
+      reviewEdge,
+    )
+    expect(JSON.stringify(review)).toBe(JSON.stringify(legacyReview))
+    expect(review.nodes.find((candidate) => candidate.id === 'review')).toMatchObject({
+      inputSource: { nodeId: 'source', portName: 'document' },
+    })
+
+    const outputDef = definition([
+      agent('source'),
+      node({ id: 'output', kind: 'output', ports: [] }),
+    ])
+    const output = applyRequest(outputDef, {
+      kind: 'generic',
+      edgeId: 'output-edge',
+      source: { nodeId: 'source', portName: 'report' },
+      targetNodeId: 'output',
+      target: { mode: 'new', portName: 'report' },
+    })
+    const outputEdge: WorkflowEdge = {
+      id: 'output-edge',
+      source: { nodeId: 'source', portName: 'report' },
+      target: { nodeId: 'output', portName: 'report' },
+    }
+    const legacyOutput = applyConnectionForReviewOutput(
+      { ...outputDef, edges: [outputEdge] },
+      outputEdge,
+      { viaCatchAll: true },
+    )
+    expect(JSON.stringify(output)).toBe(JSON.stringify(legacyOutput))
+    expect(output.nodes.find((candidate) => candidate.id === 'output')).toMatchObject({
+      ports: [{ name: 'report', bind: { nodeId: 'source', portName: 'report' } }],
+    })
+
+    const clarifyDef = definition([agent('source'), node({ id: 'clarify', kind: 'clarify' })])
+    const clarify = applyRequest(clarifyDef, {
+      kind: 'clarify-questioner',
+      questionerNodeId: 'source',
+      clarifyNodeId: 'clarify',
+      edgeIds: { ask: 'ask', answer: 'answer' },
+    })
+    expect(clarify.edges.map(edgeShape)).toEqual([
+      {
+        source: { nodeId: 'source', portName: '__clarify__' },
+        target: { nodeId: 'clarify', portName: 'questions' },
+      },
+      {
+        source: { nodeId: 'clarify', portName: 'answers' },
+        target: { nodeId: 'source', portName: '__clarify_response__' },
+      },
+    ])
+  })
+
+  test('generic inner crossings keep the same fan-out boundary tags', () => {
+    const def = definition([
+      node({
+        id: 'fanout',
+        kind: 'wrapper-fanout',
+        nodeIds: ['inner'],
+        inputs: [{ name: 'docs', kind: 'list<path<md>>', isShardSource: true }],
+      }),
+      agent('inner'),
+    ])
+    const withInput = applyRequest(def, {
+      kind: 'generic',
+      edgeId: 'input',
+      source: { nodeId: 'fanout', portName: 'docs' },
+      targetNodeId: 'inner',
+      target: { mode: 'reuse', portName: 'docs' },
+    })
+    const legacyInput = markBoundaryWrapperInput(def, {
+      id: 'input',
+      source: { nodeId: 'fanout', portName: 'docs' },
+      target: { nodeId: 'inner', portName: 'docs' },
+    })
+    expect(JSON.stringify(withInput)).toBe(JSON.stringify({ ...def, edges: [legacyInput] }))
+    const withOutput = applyRequest(withInput, {
+      kind: 'generic',
+      edgeId: 'output',
+      source: { nodeId: 'inner', portName: 'summary' },
+      targetNodeId: 'fanout',
+      target: { mode: 'reuse', portName: 'summary' },
+    })
+    const legacyOutput = markBoundaryWrapperOutput(withInput, {
+      id: 'output',
+      source: { nodeId: 'inner', portName: 'summary' },
+      target: { nodeId: 'fanout', portName: 'summary' },
+    })
+    expect(JSON.stringify(withOutput)).toBe(
+      JSON.stringify({ ...withInput, edges: [...withInput.edges, legacyOutput] }),
+    )
+    expect(withOutput.edges.map((edge) => edge.boundary)).toEqual([
+      'wrapper-input',
+      'wrapper-output',
+    ])
   })
 })

@@ -74,6 +74,12 @@ export function isInlineMarkdownListReviewInput(kind: string): boolean {
 export const REVIEW_APPROVED_PORT_SINGLE = 'approved_doc' as const
 export const REVIEW_APPROVED_PORT_MULTI = 'accepted' as const
 /**
+ * RFC-199: semantic identity of the review node's one fixed inbound handle.
+ * Canvas, connection planning, field/edge reconciliation, and validators must
+ * reference this shared constant instead of re-spelling the sentinel.
+ */
+export const REVIEW_INPUT_PORT_NAME = '__review_input__' as const
+/**
  * RFC-149: the metadata port every review node publishes alongside its
  * approved-document port (nodePorts.ts declaration + review.ts publish sites).
  */

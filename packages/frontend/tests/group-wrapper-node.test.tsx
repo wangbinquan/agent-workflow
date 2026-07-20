@@ -28,6 +28,7 @@ function renderNode(data: WrapperNodeData, selected = false) {
 
 function gitData(overrides: Partial<WrapperNodeData> = {}): WrapperNodeData {
   return {
+    surface: 'task',
     nodeId: 'w1',
     kind: 'wrapper-git',
     title: 'w1',
@@ -39,6 +40,7 @@ function gitData(overrides: Partial<WrapperNodeData> = {}): WrapperNodeData {
 }
 function loopData(overrides: Partial<WrapperNodeData> = {}): WrapperNodeData {
   return {
+    surface: 'task',
     nodeId: 'loop1',
     kind: 'wrapper-loop',
     title: 'loop1',
@@ -52,6 +54,7 @@ function loopData(overrides: Partial<WrapperNodeData> = {}): WrapperNodeData {
 }
 function fanoutData(overrides: Partial<WrapperNodeData> = {}): WrapperNodeData {
   return {
+    surface: 'task',
     nodeId: 'fan1',
     kind: 'wrapper-fanout',
     title: 'fan1',

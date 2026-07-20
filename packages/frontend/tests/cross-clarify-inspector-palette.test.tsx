@@ -32,6 +32,7 @@ const NODE_INSPECTOR_TSX = resolve(
 )
 const PALETTE_TS = resolve(__dirname, '..', 'src', 'components', 'canvas', 'nodePalette.ts')
 const CANVAS_TSX = resolve(__dirname, '..', 'src', 'components', 'canvas', 'WorkflowCanvas.tsx')
+const TRANSITION_TS = resolve(__dirname, '..', 'src', 'lib', 'workflow-transition.ts')
 
 beforeEach(() => {
   setBaseUrl('http://daemon.test')
@@ -217,23 +218,21 @@ describe('RFC-056 source-text grep guards (T9)', () => {
     expect(src).toContain('crossClarify.canvas.paletteLabel')
   })
 
-  test('WorkflowCanvas.tsx wires CrossClarifyNode + canonical cross-clarify mutation paths', () => {
+  test('WorkflowCanvas.tsx wires CrossClarifyNode through the canonical planner + transition', () => {
     const src = readFileSync(CANVAS_TSX, 'utf-8')
     expect(src).toContain('CrossClarifyNode')
     expect(src).toContain('classifyCrossClarifyConnection')
-    expect(src).toContain('applyCrossClarifyQuestionerReverseDrag')
-    expect(src).toContain('applyCrossClarifyDesignerDrag')
-    expect(src).toContain('deleteWorkflowSelection')
+    expect(src).toContain("kind: 'cross-questioner'")
+    expect(src).toContain("kind: 'cross-designer'")
+    expect(src).toContain('planWorkflowConnection')
+    expect(src).toContain('applyWorkflowTransition')
+    expect(src).toContain("kind: 'delete-selection'")
 
     // RFC-199 routes node/edge deletion through the shared reference-pruning
-    // transaction. Cross-clarify's paired-edge cleanup therefore belongs in
-    // commitChange, rather than the old node-removal-only helper.
-    const commitIdx = src.indexOf('const commitChange = useCallback')
-    expect(commitIdx).toBeGreaterThan(-1)
-    const nextDeclarationIdx = src.indexOf('const questionBadgeClickRef', commitIdx)
-    expect(nextDeclarationIdx).toBeGreaterThan(commitIdx)
-    const commitBlock = src.slice(commitIdx, nextDeclarationIdx)
-    expect(commitBlock).toContain('pruneDeletedNodeReferences')
-    expect(commitBlock).toContain('cascadeRemoveCrossClarifyChannel')
+    // transaction. Cross-clarify's paired-edge cleanup therefore lives in the
+    // one semantic transition, rather than in an interaction-specific helper.
+    const transition = readFileSync(TRANSITION_TS, 'utf-8')
+    expect(transition).toContain('pruneDeletedNodeReferences')
+    expect(transition).toContain('cascadeRemoveCrossClarifyChannel')
   })
 })

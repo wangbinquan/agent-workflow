@@ -134,7 +134,10 @@ async function openEditor(page: Page, workflowId: string, expectedName: string):
 }
 
 async function renameDraft(page: Page, name: string): Promise<void> {
-  await page.getByTestId('workflow-rename-button').click()
+  await page.getByTestId('workflow-more-actions').click()
+  const actionsDialog = page.getByTestId('workflow-actions-dialog')
+  await expect(actionsDialog).toBeVisible()
+  await actionsDialog.getByTestId('workflow-rename-button').click()
   await expect(page.getByTestId('workflow-rename-dialog')).toBeVisible()
   await page.getByTestId('workflow-rename-name').fill(name)
   await page.getByTestId('workflow-rename-confirm').click()

@@ -129,8 +129,12 @@ describe('workflows.edit source guard (RFC-016 T9 wiring)', () => {
     const path = await import('node:path')
     const here = path.dirname(new URL(import.meta.url).pathname)
     const src = await fs.readFile(path.join(here, '../src/routes/workflows.edit.tsx'), 'utf8')
+    const panelSrc = await fs.readFile(
+      path.join(here, '../src/components/workflow-editor/ValidationPanel.tsx'),
+      'utf8',
+    )
     expect(src).toMatch(/onAutoFitWrapper=/)
     expect(src).toMatch(/clearWrapperSize\(/)
-    expect(src).toMatch(/wrapper-children-outside-bounds/)
+    expect(panelSrc).toMatch(/wrapper-children-outside-bounds/)
   })
 })

@@ -110,6 +110,7 @@ describe('deriveReviewNodeNav', () => {
 
 function reviewData(over: Partial<CanvasNodeData> = {}): CanvasNodeData {
   return {
+    surface: over.surface ?? 'task',
     nodeId: 'rev',
     kind: 'review',
     title: 'Review',

@@ -49,6 +49,9 @@ const syncHarness = vi.hoisted(
 const canvasHistoryHarness = vi.hoisted(() => ({
   clearSelection: vi.fn(),
   restoreSelection: vi.fn(),
+  openNodePicker: vi.fn(),
+  openConnection: vi.fn(),
+  closeModalSurface: vi.fn(),
 }))
 
 vi.mock('@/hooks/useWorkflowSync', () => ({
@@ -58,40 +61,93 @@ vi.mock('@/hooks/useWorkflowSync', () => ({
   },
 }))
 
-vi.mock('@/components/AclPanel', () => ({ AclDialogButton: () => null }))
+vi.mock('@/components/AclPanel', () => ({ AclPanel: () => null }))
 vi.mock('@/components/ConfirmButton', () => ({
   ConfirmButton: ({ label }: { label: string }) => <button type="button">{label}</button>,
 }))
-vi.mock('@/components/canvas/EditorSidebar', () => ({ EditorSidebar: () => null }))
+vi.mock('@/components/canvas/EditorSidebar', () => ({
+  EditorSidebar: () => null,
+  EditorPaletteContent: () => null,
+}))
 vi.mock('@/components/canvas/EdgeInspector', () => ({ EdgeInspector: () => null }))
+vi.mock('@/components/workflow-editor/WorkflowStarterDialog', () => ({
+  WorkflowStarterDialog: ({
+    open,
+    onApply,
+    onUseBlank,
+  }: {
+    open: boolean
+    onApply: (definition: WorkflowDefinition) => void
+    onUseBlank: () => void
+  }) =>
+    open ? (
+      <>
+        <button
+          type="button"
+          data-testid="mock-starter-apply"
+          onClick={() =>
+            onApply({
+              $schema_version: 4,
+              inputs: [{ kind: 'text', key: 'starter', label: 'Starter' }],
+              nodes: [{ id: 'starter_input', kind: 'input', inputKey: 'starter' }],
+              edges: [],
+            })
+          }
+        >
+          apply starter
+        </button>
+        <button type="button" data-testid="mock-starter-blank" onClick={onUseBlank}>
+          use blank
+        </button>
+      </>
+    ) : null,
+}))
 vi.mock('@/components/canvas/NodeInspector', () => ({
   NodeInspector: ({
     definition,
+    selectedNodeId,
     onChange,
+    onConnect,
   }: {
     definition: WorkflowDefinition
+    selectedNodeId: string | null
     onChange: (definition: WorkflowDefinition, meta: Record<string, unknown>) => void
+    onConnect?: (nodeId: string, trigger: HTMLElement) => void
   }) => (
-    <button
-      type="button"
-      data-testid="inspector-change"
-      onClick={() =>
-        onChange(
-          {
-            ...definition,
-            inputs: [...definition.inputs, { kind: 'text', key: 'inspector', label: 'Inspector' }],
-          },
-          {
-            source: 'inspector',
-            label: 'Edit inspector',
-            mergeKey: 'node:a:title',
-            transaction: 'update',
-          },
-        )
-      }
-    >
-      change inspector
-    </button>
+    <>
+      <button
+        type="button"
+        data-testid="inspector-change"
+        onClick={() =>
+          onChange(
+            {
+              ...definition,
+              inputs: [
+                ...definition.inputs,
+                { kind: 'text', key: 'inspector', label: 'Inspector' },
+              ],
+            },
+            {
+              source: 'inspector',
+              label: 'Edit inspector',
+              mergeKey: 'node:a:title',
+              transaction: 'update',
+            },
+          )
+        }
+      >
+        change inspector
+      </button>
+      {onConnect !== undefined && selectedNodeId !== null ? (
+        <button
+          type="button"
+          data-testid="inspector-connect-next"
+          onClick={(event) => onConnect(selectedNodeId, event.currentTarget)}
+        >
+          connect next
+        </button>
+      ) : null}
+    </>
   ),
 }))
 vi.mock('@/components/canvas/WorkflowCanvas', async () => {
@@ -107,6 +163,9 @@ vi.mock('@/components/canvas/WorkflowCanvas', async () => {
     >(function MockWorkflowCanvas({ definition, onChange, onSelect }, ref) {
       React.useImperativeHandle(ref, () => ({
         addPaletteItemAtViewportCenter: () => undefined,
+        openNodePicker: canvasHistoryHarness.openNodePicker,
+        openConnection: canvasHistoryHarness.openConnection,
+        closeModalSurface: canvasHistoryHarness.closeModalSurface,
         clearSelection: canvasHistoryHarness.clearSelection,
         restoreSelection: canvasHistoryHarness.restoreSelection,
       }))
@@ -263,6 +322,7 @@ async function flushEffects(): Promise<void> {
 }
 
 function renameLocal(name: string, description: string): void {
+  fireEvent.click(screen.getByTestId('workflow-more-actions'))
   fireEvent.click(screen.getByTestId('workflow-rename-button'))
   fireEvent.change(screen.getByTestId('workflow-rename-name'), { target: { value: name } })
   fireEvent.change(screen.getByTestId('workflow-rename-description'), {
@@ -274,6 +334,7 @@ function renameLocal(name: string, description: string): void {
 beforeEach(() => {
   vi.useFakeTimers()
   vi.setSystemTime(10_000)
+  Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1536 })
   setBaseUrl('http://daemon.test')
   setToken('token')
   syncHarness.options = null
@@ -287,6 +348,19 @@ afterEach(() => {
 })
 
 describe('WorkflowEditorLoaded RFC-199 draft integration', () => {
+  test('starter replacement is one composite history transaction and one Undo restores the prior graph', async () => {
+    renderEditor(detail())
+    await flushEffects()
+
+    fireEvent.click(screen.getByTestId('workflow-start-template'))
+    fireEvent.click(screen.getByTestId('mock-starter-apply'))
+    expect(screen.getByTestId('canvas-input-count').textContent).toBe('1')
+    expect(screen.getByTestId('workflow-undo').textContent).toContain('Apply workflow starter')
+
+    fireEvent.click(screen.getByTestId('workflow-undo'))
+    expect(screen.getByTestId('canvas-input-count').textContent).toBe('0')
+  })
+
   test('visible Undo/Redo restores the composite draft and a new edit clears redo', async () => {
     renderEditor(detail())
     await flushEffects()
@@ -317,8 +391,14 @@ describe('WorkflowEditorLoaded RFC-199 draft integration', () => {
   })
 
   test('ordinary inspector input does not publish a selection restore; Undo does', async () => {
-    renderEditor(detail())
+    const initial = detail()
+    initial.definition = {
+      ...initial.definition,
+      nodes: [{ id: 'node-a', kind: 'agent-single', agentName: 'coder' }],
+    }
+    renderEditor(initial)
     await flushEffects()
+    fireEvent.click(screen.getByTestId('canvas-select-node'))
     const initialRestoreCalls = canvasHistoryHarness.restoreSelection.mock.calls.length
 
     fireEvent.click(screen.getByTestId('inspector-change'))
@@ -326,6 +406,73 @@ describe('WorkflowEditorLoaded RFC-199 draft integration', () => {
 
     fireEvent.click(screen.getByTestId('workflow-undo'))
     expect(canvasHistoryHarness.restoreSelection).toHaveBeenCalledTimes(initialRestoreCalls + 1)
+  })
+
+  test('compact selection uses one inspector dialog and resize hands the same selection to a rail', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1179 })
+    const initial = detail()
+    initial.definition = {
+      ...initial.definition,
+      nodes: [{ id: 'node-a', kind: 'agent-single', agentName: 'coder' }],
+    }
+    const { container } = renderEditor(initial)
+    await flushEffects()
+
+    expect(container.querySelector('[data-workspace-mode="compact"]')).not.toBeNull()
+    fireEvent.click(screen.getByTestId('canvas-select-node'))
+    expect(container.querySelector('.editor-layout--with-inspector')).toBeNull()
+    expect(screen.getByTestId('workflow-editor-inspector-surface')).toBeTruthy()
+    expect(screen.getAllByRole('dialog')).toHaveLength(1)
+    expect(screen.getByTestId('inspector-change')).toBeTruthy()
+    fireEvent.click(screen.getByTestId('inspector-connect-next'))
+    expect(canvasHistoryHarness.openConnection).toHaveBeenCalledWith(
+      'node-a',
+      expect.any(HTMLElement),
+    )
+    expect(screen.queryByTestId('workflow-editor-inspector-surface')).toBeNull()
+
+    fireEvent.click(screen.getByTestId('canvas-select-node'))
+    expect(screen.getByTestId('workflow-editor-inspector-surface')).toBeTruthy()
+
+    act(() => {
+      window.innerWidth = 1180
+      window.dispatchEvent(new Event('resize'))
+    })
+    await flushEffects()
+
+    expect(container.querySelector('[data-workspace-mode="medium"]')).not.toBeNull()
+    expect(screen.queryByTestId('workflow-editor-inspector-surface')).toBeNull()
+    expect(container.querySelector('.editor-layout--with-inspector')).not.toBeNull()
+    expect(screen.getByTestId('inspector-change')).toBeTruthy()
+
+    act(() => {
+      window.innerWidth = 1179
+      window.dispatchEvent(new Event('resize'))
+    })
+    await flushEffects()
+    expect(screen.getByTestId('workflow-editor-inspector-surface')).toBeTruthy()
+    expect(screen.getAllByRole('dialog')).toHaveLength(1)
+  })
+
+  test('header keeps Launch as its only primary action and More hands off to one Rename dialog', async () => {
+    const { container } = renderEditor(detail())
+    await flushEffects()
+    const header = container.querySelector('.page__header')
+
+    expect(header?.querySelectorAll('.btn--primary')).toHaveLength(1)
+    expect(header?.querySelector('.btn--primary')?.textContent).toMatch(/启动任务|Launch task/)
+    expect(screen.queryByRole('button', { name: /导出 YAML|Export YAML/ })).toBeNull()
+    expect(screen.queryByTestId('workflow-rename-button')).toBeNull()
+
+    fireEvent.click(screen.getByTestId('workflow-more-actions'))
+    expect(screen.getByTestId('workflow-actions-dialog')).toBeTruthy()
+    expect(screen.getAllByRole('dialog')).toHaveLength(1)
+    expect(screen.getByRole('button', { name: /导出 YAML|Export YAML/ })).toBeTruthy()
+
+    fireEvent.click(screen.getByTestId('workflow-rename-button'))
+    expect(screen.queryByTestId('workflow-actions-dialog')).toBeNull()
+    expect(screen.getByTestId('workflow-rename-dialog')).toBeTruthy()
+    expect(screen.getAllByRole('dialog')).toHaveLength(1)
   })
 
   test('clean remote follow prunes a deleted inspector selection without history focus restore', async () => {
@@ -445,6 +592,8 @@ describe('WorkflowEditorLoaded RFC-199 draft integration', () => {
       screen.getByRole('button', { name: /另存为副本（推荐）|Save as copy \(recommended\)/ }),
     )
     await flushEffects()
+    expect(canvasHistoryHarness.closeModalSurface).toHaveBeenCalled()
+    expect(screen.getAllByRole('dialog')).toHaveLength(1)
     expect((screen.getByTestId('workflow-copy-create-name') as HTMLInputElement).value).toBe(
       'workflow-local-copy',
     )
@@ -492,7 +641,9 @@ describe('WorkflowEditorLoaded RFC-199 draft integration', () => {
       },
       expect.any(AbortSignal),
     )
-    expect(screen.getByText(/校验通过|valid/)).toBeTruthy()
+    expect(screen.getByTestId('workflow-validation-summary').textContent).toMatch(
+      /校验通过|validated/i,
+    )
 
     const launch = screen.getByRole('button', { name: /启动任务|Launch task/ })
     fireEvent.click(launch)
@@ -569,8 +720,12 @@ describe('WorkflowEditorLoaded RFC-199 draft integration', () => {
     })
 
     expect(rendered.router.state.location.pathname).toBe('/editor')
-    expect(screen.getByTestId('validation-stale').textContent).toMatch(
-      /草稿已变化|draft has changed/,
+    expect(screen.getByTestId('workflow-validation-summary').textContent).toMatch(
+      /需要重新校验|revalidation required/i,
+    )
+    fireEvent.click(screen.getByTestId('workflow-validation-summary'))
+    expect(screen.getByTestId('workflow-validation-overlay').textContent).toMatch(
+      /草稿已变化|draft has changed/i,
     )
     expect(document.activeElement).toBe(screen.getByTestId('workflow-action-error-focus'))
   })
@@ -598,8 +753,12 @@ describe('WorkflowEditorLoaded RFC-199 draft integration', () => {
     pending.resolve(validationReceipt())
     await flushEffects()
 
-    expect(screen.getByTestId('validation-stale').textContent).toMatch(
-      /校验所依赖的资源可能已变化|validation resources may have changed/,
+    expect(screen.getByTestId('workflow-validation-summary').textContent).toMatch(
+      /需要重新校验|revalidation required/i,
+    )
+    fireEvent.click(screen.getByTestId('workflow-validation-summary'))
+    expect(screen.getByTestId('workflow-validation-overlay').textContent).toMatch(
+      /校验所依赖的资源可能已变化|validation resources may have changed/i,
     )
     expect(document.querySelector('.validation-panel--ok')).toBeNull()
   })
@@ -682,6 +841,7 @@ describe('WorkflowEditorLoaded RFC-199 draft integration', () => {
     renderEditor(detail())
     await flushEffects()
 
+    fireEvent.click(screen.getByTestId('workflow-more-actions'))
     fireEvent.click(screen.getByRole('button', { name: /导出 YAML|Export YAML/ }))
     await flushEffects()
 

@@ -1192,7 +1192,7 @@ export async function gitDiffSnapshot(worktreePath: string, fromCommit: string):
  * RFC-060 PR-E — wrapper-git output kind upgrade. Returns the
  * newline-separated list of paths that differ between `fromCommit` and the
  * current worktree (committed-but-uncommitted + untracked files). The
- * wrapper-git node's `git_diff` outlet now carries this `list<path>` value
+ * wrapper-git node's `git_diff` outlet now carries this `list<path<*>>` value
  * instead of a full unified diff, so it can feed a downstream wrapper-fanout
  * as a shardSource directly.
  *

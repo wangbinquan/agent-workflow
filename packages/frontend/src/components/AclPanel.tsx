@@ -264,6 +264,7 @@ export function AclPanel({
         onClose={() => setTransferOpen(false)}
         title={t('acl.transferTitle')}
         size="sm"
+        data-testid="acl-transfer-dialog"
         footer={
           <>
             <button type="button" className="btn" onClick={() => setTransferOpen(false)}>

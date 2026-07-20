@@ -42,6 +42,7 @@ function nodeProps(data: Record<string, unknown>): any {
 
 function agentData(over: Partial<CanvasNodeData> = {}): CanvasNodeData {
   return {
+    surface: 'task',
     nodeId: 'a1',
     kind: 'agent-single',
     title: 'coder',

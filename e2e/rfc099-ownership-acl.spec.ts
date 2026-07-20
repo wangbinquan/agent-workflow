@@ -14,6 +14,7 @@
 // list filtering after ACL changes.
 
 import { test, expect, type BrowserContext, type Page } from '@playwright/test'
+import AxeBuilder from '@axe-core/playwright'
 import { startDaemon, type DaemonHandle } from './harness'
 
 let daemon: DaemonHandle
@@ -67,6 +68,23 @@ async function primeAuth(context: BrowserContext, token: string): Promise<void> 
     },
     { baseUrl: daemon.baseUrl, tok: token },
   )
+}
+
+async function expectAxeClean(page: Page, label: string, include?: string): Promise<void> {
+  let builder = new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa'])
+  if (include !== undefined) builder = builder.include(include)
+  const result = await builder.analyze()
+  const blocking = result.violations.filter(
+    (violation) => violation.impact === 'critical' || violation.impact === 'serious',
+  )
+  expect(
+    blocking.map((violation) => ({
+      id: violation.id,
+      impact: violation.impact,
+      targets: violation.nodes.map((node) => node.target.join(' ')),
+    })),
+    `${label} axe violations`,
+  ).toEqual([])
 }
 
 const AGENT_NAME = 'rfc099-secret-agent'
@@ -195,9 +213,36 @@ test('RFC-099: private agent disappears for strangers; granting via AclPanel res
   })
   const wf = (await wfRes.json()) as { id: string }
   await alicePage.goto(`${daemon.baseUrl}/workflows/${wf.id}`)
-  await alicePage.getByTestId('acl-dialog-button').click()
-  await expect(alicePage.getByTestId('acl-panel')).toBeVisible()
-  await expect(alicePage.getByTestId('acl-panel')).toContainText('alice99')
+  await alicePage.getByTestId('workflow-more-actions').click()
+  await expect(alicePage.getByTestId('workflow-actions-dialog')).toBeVisible()
+  await alicePage.getByTestId('workflow-acl-button').click()
+  const workflowAcl = alicePage.getByTestId('workflow-acl-dialog')
+  await expect(workflowAcl).toBeVisible()
+  await expect(alicePage.getByRole('dialog')).toHaveCount(1)
+  await expect(workflowAcl.getByTestId('acl-panel')).toContainText('alice99')
+  await expectAxeClean(alicePage, 'workflow ACL dialog')
+
+  // RFC-199 T14.4/G4: owner transfer is the sole sanctioned nested dialog.
+  // The topmost layer owns focus and Escape while the parent remains open.
+  await workflowAcl.getByTestId('acl-transfer-owner').click()
+  const transferDialog = alicePage.getByTestId('acl-transfer-dialog')
+  await expect(transferDialog).toBeVisible()
+  await expect(alicePage.getByRole('dialog')).toHaveCount(2)
+  await expect(transferDialog.getByRole('heading', { name: 'Transfer ownership' })).toBeVisible()
+  await expect
+    .poll(() =>
+      transferDialog.evaluate((element) => element.contains(element.ownerDocument.activeElement)),
+    )
+    .toBe(true)
+  await expectAxeClean(
+    alicePage,
+    'workflow owner-transfer dialog',
+    '[data-testid="acl-transfer-dialog"]',
+  )
+  await alicePage.keyboard.press('Escape')
+  await expect(transferDialog).toHaveCount(0)
+  await expect(workflowAcl).toBeVisible()
+  await expect(workflowAcl.getByTestId('acl-transfer-owner')).toBeFocused()
 
   await aliceCtx.close()
   await carolCtx.close()

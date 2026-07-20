@@ -1,14 +1,14 @@
 # RFC-054 W2-5 — visual regression nightly + path-filtered PR gate.
 #
-# Compares ubuntu-rendered snapshots of 17 full pages (12 desktop + 5 mobile)
-# plus 5 focused components against the committed `*-chromium-linux.png` baselines under
+# Compares ubuntu-rendered snapshots of 25 full pages
+# plus 6 focused components against the committed `*-chromium-linux.png` baselines under
 # `e2e/visual-regression.spec.ts-snapshots/`. Threshold is 0.2%
 # per RFC-054 plan §risk 9.
 #
 # Trigger:
 #   * `schedule` — 09:00 UTC daily (15 min after git-protocols nightly).
 #   * `workflow_dispatch` — manual button for refreshing ubuntu
-#     baselines (see e2e/visual-regression.README.md option B).
+#     baselines (see e2e/visual-regression.README.md option A).
 #   * `pull_request` — only when the diff touches the frontend or
 #     the visual gate and its direct dependencies.
 #   * `push` — the same path-filtered gate after changes land on main.
@@ -71,8 +71,8 @@ env:
 jobs:
   visual-regression:
     name: Playwright visual regression (ubuntu)
-    # Keep the pixel environment aligned with the documented Playwright Noble
-    # container instead of letting ubuntu-latest change underneath baselines.
+    # Pin the authoritative hosted-runner pixel environment instead of letting
+    # ubuntu-latest change underneath baselines.
     runs-on: ubuntu-24.04
     # Includes a cold browser + system dependency install, so retain generous
     # headroom while avoiding Actions' six-hour default on a stuck daemon/browser.
@@ -107,7 +107,7 @@ jobs:
 
       - name: Upload diff artifacts on failure
         # Contains the actual rendered PNGs that diverged — used to
-        # populate fresh ubuntu baselines via the option-B procedure
+        # populate fresh ubuntu baselines via the option-A procedure
         # in e2e/visual-regression.README.md.
         if: failure()
         uses: actions/upload-artifact@v6

@@ -6,132 +6,216 @@
 // pane lets users rename it later — covering the YAML example
 // `in_1.out → worker_1.requirement` without falling back to YAML import.
 
-import type { WorkflowDefinition, WorkflowEdge } from '@agent-workflow/shared'
-import { useEffect, useState } from 'react'
+import type { Agent, WorkflowDefinition, WorkflowEdge } from '@agent-workflow/shared'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Field } from '@/components/Form'
-import { applyDisconnectForReviewOutput } from './connectionSync'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { Select } from '@/components/Select'
+import { atomicEdgeInspectorChange, type InspectorChangeMeta } from './inspector/historyMeta'
+import { createWorkflowSemanticContext } from '@/lib/workflow-connection-plan'
+import { applyWorkflowTransition, isEdgeTargetPortRenameable } from '@/lib/workflow-transition'
 import {
-  atomicEdgeInspectorChange,
-  blurInspectorChange,
-  continuousEdgeInspectorChange,
-  type InspectorChangeMeta,
-} from './inspector/historyMeta'
+  focusWorkflowInspectorAnchor,
+  WORKFLOW_EDGE_INSPECTOR_HEADING_ID,
+} from '@/lib/workflow-inspector-target'
+import { computePorts } from './WorkflowCanvas'
+import { nodeTitle } from './nodeTitle'
 
 export type { InspectorChangeMeta } from './inspector/historyMeta'
 
-interface Props {
+export interface EdgeInspectorProps {
   edge: WorkflowEdge
   definition: WorkflowDefinition
+  agents?: Agent[]
+  focusRequest?: { requestId: number; focusId: string } | null
+  onReconnect?: (edgeId: string, trigger: HTMLElement) => void
   onChange: (next: WorkflowDefinition, meta: InspectorChangeMeta) => void
   onClose: () => void
+  chrome?: 'rail' | 'content'
 }
 
-export function EdgeInspector({ edge, definition, onChange, onClose }: Props) {
+export function EdgeInspector({
+  edge,
+  definition,
+  agents,
+  focusRequest,
+  onReconnect,
+  onChange,
+  onClose,
+  chrome = 'rail',
+}: EdgeInspectorProps) {
   const { t } = useTranslation()
-  const [draftPort, setDraftPort] = useState(edge.target.portName)
+  const semanticContext = useMemo(() => createWorkflowSemanticContext(agents ?? []), [agents])
+  const targetPortRenameable = isEdgeTargetPortRenameable(definition, edge, semanticContext)
   const [conflict, setConflict] = useState<string | null>(null)
+  const sourceNode = definition.nodes.find((node) => node.id === edge.source.nodeId)
+  const targetNode = definition.nodes.find((node) => node.id === edge.target.nodeId)
+  const targetPortOptions =
+    targetNode === undefined
+      ? [edge.target.portName]
+      : Array.from(
+          new Set([
+            ...computePorts(
+              targetNode,
+              new Map((agents ?? []).map((agent) => [agent.name, agent])),
+              definition,
+            ).inputs,
+            // Keep a legacy or temporarily-invalid persisted value visible.
+            // The selector must not guess a replacement before the user makes
+            // an explicit choice.
+            edge.target.portName,
+          ]),
+        )
 
   // Reset draft when xyflow swaps the selection to a different edge.
   useEffect(() => {
-    setDraftPort(edge.target.portName)
     setConflict(null)
   }, [edge.id, edge.target.portName])
 
-  function commit() {
-    const meta = continuousEdgeInspectorChange(
-      edge.id,
-      'target.portName',
-      t('inspector.edgePortNameLabel'),
-    )
-    const trimmed = draftPort.trim()
-    if (trimmed === '' || trimmed === edge.target.portName) {
-      setConflict(null)
-      onChange(definition, blurInspectorChange(meta))
-      return
-    }
-    if (hasConflict(definition, edge, trimmed)) {
+  useEffect(() => {
+    if (focusRequest === null || focusRequest === undefined) return
+    const frame = window.requestAnimationFrame(() => {
+      focusWorkflowInspectorAnchor(focusRequest.focusId)
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [focusRequest])
+
+  function commit(nextPortName: string) {
+    if (nextPortName === '' || nextPortName === edge.target.portName) return
+    if (hasConflict(definition, edge, nextPortName)) {
       setConflict(t('inspector.edgeConflictMsg'))
-      onChange(definition, blurInspectorChange(meta))
       return
     }
     setConflict(null)
-    const next = {
-      ...definition,
-      edges: definition.edges.map((e) =>
-        e.id === edge.id ? { ...e, target: { ...e.target, portName: trimmed } } : e,
-      ),
+    const result = applyWorkflowTransition(
+      definition,
+      { kind: 'rename-edge-target-port', edgeId: edge.id, portName: nextPortName },
+      semanticContext,
+    )
+    if (result.next === definition && result.warnings.length > 0) {
+      setConflict(t('inspector.edgeConflictMsg'))
+      return
     }
-    onChange(next, meta)
-    onChange(next, blurInspectorChange(meta))
+    onChange(
+      result.next,
+      atomicEdgeInspectorChange(edge.id, 'target.portName', t('inspector.edgePortNameLabel')),
+    )
   }
 
   function remove() {
-    // RFC-007: dropping the edge alone leaves a stale `review.inputSource`
-    // or `output.ports[].bind` behind. The next `healLoadedDefinition` pass
-    // (triggered by qc.invalidateQueries after auto-save) would see "field
-    // has value but no matching edge" and re-materialize the edge — the
-    // edge would visibly disappear and then ~2s later reappear. Run the
-    // same disconnect sync the canvas-driven removal paths already use so
-    // the field and the edge clear atomically.
-    const next = applyDisconnectForReviewOutput(
-      { ...definition, edges: definition.edges.filter((e) => e.id !== edge.id) },
-      [edge],
+    const result = applyWorkflowTransition(
+      definition,
+      { kind: 'delete-selection', nodeIds: [], edgeIds: [edge.id] },
+      semanticContext,
     )
-    onChange(next, atomicEdgeInspectorChange(edge.id, 'delete', t('inspector.edgeDeleteBtn')))
+    onChange(
+      result.next,
+      atomicEdgeInspectorChange(edge.id, 'delete', t('inspector.edgeDeleteBtn')),
+    )
     onClose()
   }
 
   return (
-    <aside className="inspector">
-      <header className="inspector__header">
-        <div>
-          <div className="inspector__kind">{t('inspector.edgeTitle')}</div>
-          <div className="inspector__id">
-            <code>{edge.id}</code>
+    <div
+      className={chrome === 'rail' ? 'inspector' : 'inspector-content'}
+      data-inspector-content="edge"
+    >
+      {chrome === 'rail' ? (
+        <header className="inspector__header">
+          <div>
+            <div id={WORKFLOW_EDGE_INSPECTOR_HEADING_ID} className="inspector__kind" tabIndex={-1}>
+              {t('inspector.edgeTitle')}
+            </div>
           </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inspector__close"
+            aria-label={t('inspector.closeAria')}
+          >
+            ×
+          </button>
+        </header>
+      ) : (
+        <div id={WORKFLOW_EDGE_INSPECTOR_HEADING_ID} className="sr-only" tabIndex={-1}>
+          {t('inspector.edgeTitle')}
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="inspector__close"
-          aria-label={t('inspector.closeAria')}
-        >
-          ×
-        </button>
-      </header>
+      )}
       <div className="inspector__body">
         <div className="form-grid">
           <Field label={t('inspector.edgeSourceLabel')}>
-            <code className="form-input form-input--mono">
-              {edge.source.nodeId}.{edge.source.portName}
-            </code>
+            <div className="inspector__readonly">
+              <strong>
+                {sourceNode === undefined ? edge.source.nodeId : nodeTitle(sourceNode)}
+              </strong>
+              <span> · {edge.source.portName}</span>
+            </div>
           </Field>
           <Field label={t('inspector.edgeTargetLabel')}>
-            <code className="form-input form-input--mono">{edge.target.nodeId}</code>
+            <div className="inspector__readonly">
+              <strong>
+                {targetNode === undefined ? edge.target.nodeId : nodeTitle(targetNode)}
+              </strong>
+            </div>
           </Field>
           <Field label={t('inspector.edgePortNameLabel')}>
-            <input
-              className="form-input form-input--mono"
-              value={draftPort}
-              onChange={(e) => setDraftPort(e.target.value)}
-              onBlur={commit}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  ;(e.target as HTMLInputElement).blur()
-                }
-              }}
+            <Select<string>
+              searchable
+              value={edge.target.portName}
+              ariaLabel={t('inspector.edgePortNameLabel')}
+              disabled={!targetPortRenameable}
+              onChange={commit}
+              options={targetPortOptions.map((portName) => ({ value: portName, label: portName }))}
             />
+            {!targetPortRenameable && (
+              <div className="form-hint">{t('inspector.edgePortFixedHint')}</div>
+            )}
             {conflict !== null && <ErrorBanner error={conflict} />}
           </Field>
+          {onReconnect !== undefined ? (
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={(event) => onReconnect(edge.id, event.currentTarget)}
+            >
+              {t('inspector.edgeReconnectBtn')}
+            </button>
+          ) : null}
+          <details className="inspector__technical">
+            <summary>{t('agentForm.technicalDetailsSummary')}</summary>
+            <dl>
+              <dt>{t('inspector.technicalId')}</dt>
+              <dd className="inspector__technical-id">
+                <code>{edge.id}</code>
+                <button
+                  type="button"
+                  className="btn btn--xs btn--ghost"
+                  onClick={() => void navigator.clipboard?.writeText(edge.id)}
+                >
+                  {t('editor.nodeActions.copy')}
+                </button>
+              </dd>
+              <dt>{t('inspector.edgeSourceLabel')}</dt>
+              <dd>
+                <code>
+                  {edge.source.nodeId}.{edge.source.portName}
+                </code>
+              </dd>
+              <dt>{t('inspector.edgeTargetLabel')}</dt>
+              <dd>
+                <code>
+                  {edge.target.nodeId}.{edge.target.portName}
+                </code>
+              </dd>
+            </dl>
+          </details>
           <button type="button" className="btn btn--sm btn--danger" onClick={remove}>
             {t('inspector.edgeDeleteBtn')}
           </button>
         </div>
       </div>
-    </aside>
+    </div>
   )
 }
 

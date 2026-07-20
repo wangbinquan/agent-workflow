@@ -64,7 +64,8 @@ export interface DeclaredPort {
   /** Output-port kind (e.g. 'signal', 'list<path<md>>') where the source
    *  declares one — agent outputs via `agent.outputKinds`, fanout outlets
    *  via `deriveWrapperFanoutOutputs`, fanout inputs via their declared
-   *  `kind` field. Undefined elsewhere (review/git/loop/input), matching
+   *  `kind` field, and wrapper-git's `git_diff` path list. Undefined
+   *  elsewhere (review/loop/input), matching
    *  what `sourcePortKind` historically derived — do NOT add kinds to
    *  those without auditing control-flow-edge classification. */
   kind?: string
@@ -173,7 +174,7 @@ const PORT_DERIVERS = {
   },
   'wrapper-git': (): DeclaredPorts => ({
     ...NO_PORTS,
-    dataOutputs: [{ name: 'git_diff' }],
+    dataOutputs: [{ name: 'git_diff', kind: 'list<path<*>>' }],
   }),
   'wrapper-loop': ({ node }: DeriverCtx): DeclaredPorts => ({
     ...NO_PORTS,

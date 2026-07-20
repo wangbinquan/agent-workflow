@@ -433,6 +433,34 @@ export type WorkflowValidationRequest = z.infer<typeof WorkflowValidationRequest
 export const WorkflowValidationContextHashSchema = z.string().regex(/^[0-9a-f]{64}$/)
 export type WorkflowValidationContextHash = z.infer<typeof WorkflowValidationContextHashSchema>
 
+/** Lowercase SHA-256 of one domain-separated canonical draft definition. */
+export const WorkflowCandidateHashSchema = z.string().regex(/^[0-9a-f]{64}$/)
+export type WorkflowCandidateHash = z.infer<typeof WorkflowCandidateHashSchema>
+
+/**
+ * RFC-199 T11: validate an in-memory starter candidate without creating or
+ * updating a workflow row. The server always recomputes the hash; the claim is
+ * only a fence against validating bytes different from the client preview.
+ */
+export const WorkflowDraftValidationRequestSchema = z
+  .object({
+    definition: WorkflowDefinitionSchema,
+    claimedCandidateHash: WorkflowCandidateHashSchema,
+  })
+  .strict()
+export type WorkflowDraftValidationRequest = z.infer<typeof WorkflowDraftValidationRequestSchema>
+
+export const WorkflowDraftValidationReceiptSchema = z
+  .object({
+    candidateHash: WorkflowCandidateHashSchema,
+    validationContextHash: WorkflowValidationContextHashSchema,
+    validatedAt: z.number().int().nonnegative(),
+    ok: z.boolean(),
+    issues: z.array(WorkflowValidationIssueSchema),
+  })
+  .strict()
+export type WorkflowDraftValidationReceipt = z.infer<typeof WorkflowDraftValidationReceiptSchema>
+
 /** Exact validation receipt bound to one workflow revision and one inventory. */
 export const WorkflowValidationReceiptSchema = z
   .object({

@@ -18,6 +18,8 @@ import { useTranslation } from 'react-i18next'
 import { PortHandles } from './PortHandles'
 import { REVIEW_INPUT_HANDLE_ID } from '../connectionSync'
 import type { CanvasNodeData } from './types'
+import { NodeValidationBadge } from './NodeValidationBadge'
+import { NodeConfigurationSummary } from './NodeConfigurationSummary'
 
 interface Props extends NodeProps {
   data: CanvasNodeData
@@ -36,7 +38,9 @@ export function ReviewNode({ data, selected }: Props) {
       className={'canvas-node canvas-node--review' + (selected ? ' canvas-node--selected' : '')}
       data-status={data.status ?? 'default'}
       data-review-nav={reviewNav}
+      data-surface={data.surface}
     >
+      <NodeValidationBadge data={data} />
       <Handle
         type="target"
         position={Position.Left}
@@ -50,11 +54,19 @@ export function ReviewNode({ data, selected }: Props) {
         </span>
         <span className="canvas-node__title">{data.title || data.nodeId}</span>
       </div>
-      <div className="canvas-node__id">{data.nodeId}</div>
+      {data.surface === 'editor' ? (
+        <NodeConfigurationSummary data={data} />
+      ) : (
+        <div className="canvas-node__id">{data.nodeId}</div>
+      )}
       {inputSource !== null &&
         (inputSource.nodeId.length > 0 || inputSource.portName.length > 0) && (
           <div className="canvas-node__input-source muted">
-            <code>{inputSource.nodeId || '?'}</code>
+            <code>
+              {data.surface === 'editor'
+                ? ((data as CanvasNodeData & { inputSourceTitle?: string }).inputSourceTitle ?? '?')
+                : inputSource.nodeId || '?'}
+            </code>
             <span>.</span>
             <code>{inputSource.portName || '?'}</code>
           </div>

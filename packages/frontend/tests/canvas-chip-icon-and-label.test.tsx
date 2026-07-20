@@ -63,6 +63,7 @@ function mountCrossClarify(data: CanvasNodeData) {
 
 function agentData(): CanvasNodeData {
   return {
+    surface: 'task',
     nodeId: 'a1',
     kind: 'agent-single',
     title: 'coder',
@@ -72,6 +73,7 @@ function agentData(): CanvasNodeData {
 }
 function reviewData(): CanvasNodeData {
   return {
+    surface: 'task',
     nodeId: 'r1',
     kind: 'review',
     title: 'human-gate',
@@ -81,6 +83,7 @@ function reviewData(): CanvasNodeData {
 }
 function clarifyData(): CanvasNodeData {
   return {
+    surface: 'task',
     nodeId: 'c1',
     kind: 'clarify',
     title: 'ask-back',
@@ -90,6 +93,7 @@ function clarifyData(): CanvasNodeData {
 }
 function crossClarifyData(): CanvasNodeData {
   return {
+    surface: 'task',
     nodeId: 'cc1',
     kind: 'clarify-cross-agent',
     title: 'cross-ask',

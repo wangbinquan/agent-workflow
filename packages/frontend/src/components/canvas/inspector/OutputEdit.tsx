@@ -1,10 +1,11 @@
 // output-node inspector branch (RFC-007 form↔edge sync) — extracted verbatim
 // from the NodeInspector EditForm switch by RFC-146 T3.
 
-import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { useTranslation } from 'react-i18next'
 import { Field } from '@/components/Form'
-import { syncEdgeFromFormField } from '../connectionSync'
+import { Select } from '@/components/Select'
+import { computePorts } from '../WorkflowCanvas'
+import { nodeTitle } from '../nodeTitle'
 import {
   atomicNodeInspectorChange,
   continuousNodeInspectorChange,
@@ -12,13 +13,15 @@ import {
   type InspectorChangeMeta,
 } from './historyMeta'
 import { NodeTitleField } from './NodeTitleField'
+import { InspectorFieldAnchor, InspectorPortAnchor } from './InspectorFieldAnchor'
 import type { EditProps } from './types'
 
 export function OutputEdit({
   node,
+  agents,
   definition,
   onPatch,
-  onCommitDef,
+  onTransition,
   onHistoryBoundary,
 }: EditProps) {
   const { t } = useTranslation()
@@ -26,151 +29,186 @@ export function OutputEdit({
   const ports = Array.isArray(rec.ports)
     ? (rec.ports as Array<{ name: string; bind: { nodeId: string; portName: string } }>)
     : []
-  // RFC-007: setPorts now mirrors the bind / rename / add / remove
-  // operations into definition.edges via syncEdgeFromFormField, so
-  // typing into the bind fields produces the same canvas edge that a
-  // drag-to-connect would have.
+  const agentByName = new Map(agents.map((agent) => [agent.name, agent]))
+  const upstreamCandidates = definition.nodes
+    .filter((candidate) => candidate.id !== node.id && candidate.kind !== 'output')
+    .map((candidate) => ({
+      id: candidate.id,
+      title: nodeTitle(candidate),
+      ports: computePorts(candidate, agentByName, definition).outputs,
+    }))
+  // RFC-199: node declarations and matching edges are one typed transition;
+  // this form no longer owns a second connection-sync implementation.
   function setPorts(next: typeof ports, meta: InspectorChangeMeta) {
-    const nodes = definition.nodes.map((n) =>
-      n.id === node.id
-        ? ({
-            ...(n as Record<string, unknown>),
-            ports: next,
-          } as unknown as WorkflowNode)
-        : n,
-    )
-    let def: WorkflowDefinition = { ...definition, nodes }
-    const prevByName = new Map(ports.map((p) => [p.name, p]))
-    const nextByName = new Map(next.map((p) => [p.name, p]))
-    // Removed / renamed-away ports → drop their edge.
-    for (const [name, p] of prevByName) {
-      if (!nextByName.has(name)) {
-        def = syncEdgeFromFormField(def, { nodeId: node.id, portName: name }, p.bind, null)
-      }
-    }
-    // Reconcile bind on every surviving / new port.
-    for (const [name, p] of nextByName) {
-      const prev = prevByName.get(name)
-      const prevBind = prev?.bind ?? null
-      const nextBindEmpty = p.bind.nodeId === '' && p.bind.portName === ''
-      const nextBind = nextBindEmpty ? null : p.bind
-      def = syncEdgeFromFormField(def, { nodeId: node.id, portName: name }, prevBind, nextBind)
-    }
-    onCommitDef(def, meta)
+    onTransition({ kind: 'set-output-ports', outputNodeId: node.id, ports: next }, meta)
   }
   return (
     <div className="form-grid">
       <NodeTitleField node={node} onPatch={onPatch} onHistoryBoundary={onHistoryBoundary} />
-      <Field label={t('inspector.fieldOutputPorts')} hint={t('inspector.fieldOutputPortsHint')}>
-        <ul className="inspector__output-ports">
-          {ports.map((p, i) => (
-            <li key={i} className="inspector__output-port-row">
-              <InspectorHistoryBoundary
-                meta={continuousNodeInspectorChange(
-                  node.id,
-                  `ports.${i}.name`,
-                  t('inspector.fieldOutputPorts'),
-                )}
-                onBoundary={onHistoryBoundary}
-              >
-                <input
-                  className="form-input"
-                  value={p.name}
-                  onChange={(e) => {
-                    const copy = [...ports]
-                    copy[i] = { ...p, name: e.target.value }
-                    setPorts(
-                      copy,
-                      continuousNodeInspectorChange(
-                        node.id,
-                        `ports.${i}.name`,
-                        t('inspector.fieldOutputPorts'),
-                      ),
-                    )
-                  }}
-                  placeholder={t('inspector.portNamePlaceholder')}
-                />
-              </InspectorHistoryBoundary>
-              <InspectorHistoryBoundary
-                meta={continuousNodeInspectorChange(
-                  node.id,
-                  `ports.${i}.bind.nodeId`,
-                  t('inspector.fieldOutputPorts'),
-                )}
-                onBoundary={onHistoryBoundary}
-              >
-                <input
-                  className="form-input form-input--mono"
-                  value={p.bind.nodeId}
-                  onChange={(e) => {
-                    const copy = [...ports]
-                    copy[i] = { ...p, bind: { ...p.bind, nodeId: e.target.value } }
-                    setPorts(
-                      copy,
-                      continuousNodeInspectorChange(
-                        node.id,
-                        `ports.${i}.bind.nodeId`,
-                        t('inspector.fieldOutputPorts'),
-                      ),
-                    )
-                  }}
-                  placeholder={t('inspector.upstreamPlaceholder')}
-                />
-              </InspectorHistoryBoundary>
-              <InspectorHistoryBoundary
-                meta={continuousNodeInspectorChange(
-                  node.id,
-                  `ports.${i}.bind.portName`,
-                  t('inspector.fieldOutputPorts'),
-                )}
-                onBoundary={onHistoryBoundary}
-              >
-                <input
-                  className="form-input form-input--mono"
-                  value={p.bind.portName}
-                  onChange={(e) => {
-                    const copy = [...ports]
-                    copy[i] = { ...p, bind: { ...p.bind, portName: e.target.value } }
-                    setPorts(
-                      copy,
-                      continuousNodeInspectorChange(
-                        node.id,
-                        `ports.${i}.bind.portName`,
-                        t('inspector.fieldOutputPorts'),
-                      ),
-                    )
-                  }}
-                  placeholder={t('inspector.portPlaceholder')}
-                />
-              </InspectorHistoryBoundary>
-              <button
-                type="button"
-                className="btn btn--sm"
-                onClick={() =>
-                  setPorts(
-                    ports.filter((_, j) => j !== i),
-                    atomicNodeInspectorChange(node.id, `ports.${i}.remove`, t('inspector.remove')),
-                  )
-                }
-              >
-                {t('inspector.remove')}
-              </button>
-            </li>
-          ))}
-        </ul>
-        <button
-          type="button"
-          className="btn btn--sm"
-          onClick={() =>
-            setPorts(
-              [...ports, { name: `port_${ports.length + 1}`, bind: { nodeId: '', portName: '' } }],
-              atomicNodeInspectorChange(node.id, 'ports.add', t('inspector.addPort')),
-            )
-          }
-        >
-          {t('inspector.addPort')}
-        </button>
-      </Field>
+      <InspectorFieldAnchor nodeId={node.id} field="output-binding">
+        <Field label={t('inspector.fieldOutputPorts')} hint={t('inspector.fieldOutputPortsHint')}>
+          <ul className="inspector__output-ports">
+            {ports.map((p, i) => {
+              const selectedNode = upstreamCandidates.find(
+                (candidate) => candidate.id === p.bind.nodeId,
+              )
+              const missingNode = p.bind.nodeId.length > 0 && selectedNode === undefined
+              const missingPort =
+                p.bind.portName.length > 0 &&
+                selectedNode !== undefined &&
+                !selectedNode.ports.includes(p.bind.portName)
+              return (
+                <li key={i} className="inspector__output-port-row">
+                  <InspectorHistoryBoundary
+                    meta={continuousNodeInspectorChange(
+                      node.id,
+                      `ports.${i}.name`,
+                      t('inspector.fieldOutputPorts'),
+                    )}
+                    onBoundary={onHistoryBoundary}
+                  >
+                    <input
+                      className="form-input"
+                      value={p.name}
+                      onChange={(e) => {
+                        const copy = [...ports]
+                        copy[i] = { ...p, name: e.target.value }
+                        setPorts(
+                          copy,
+                          continuousNodeInspectorChange(
+                            node.id,
+                            `ports.${i}.name`,
+                            t('inspector.fieldOutputPorts'),
+                          ),
+                        )
+                      }}
+                      placeholder={t('inspector.portNamePlaceholder')}
+                    />
+                  </InspectorHistoryBoundary>
+                  <InspectorPortAnchor
+                    nodeId={node.id}
+                    direction="input"
+                    portName={p.name}
+                    className="inspector__output-port-binding"
+                  >
+                    <Select<string>
+                      searchable
+                      className={missingNode ? 'form-input--invalid' : undefined}
+                      value={p.bind.nodeId}
+                      ariaLabel={t('inspector.upstreamPlaceholder')}
+                      onChange={(nextNodeId) => {
+                        const nextCandidate = upstreamCandidates.find(
+                          (candidate) => candidate.id === nextNodeId,
+                        )
+                        const nextPort =
+                          nextCandidate?.ports.includes(p.bind.portName) === true
+                            ? p.bind.portName
+                            : ''
+                        const copy = [...ports]
+                        copy[i] = {
+                          ...p,
+                          bind: { nodeId: nextNodeId, portName: nextPort },
+                        }
+                        setPorts(
+                          copy,
+                          atomicNodeInspectorChange(
+                            node.id,
+                            `ports.${i}.bind.nodeId`,
+                            t('inspector.fieldOutputPorts'),
+                          ),
+                        )
+                      }}
+                      options={[
+                        { value: '', label: t('inspector.upstreamPlaceholder') },
+                        ...upstreamCandidates.map((candidate) => ({
+                          value: candidate.id,
+                          label:
+                            candidate.title === candidate.id
+                              ? candidate.id
+                              : `${candidate.title} (${candidate.id})`,
+                        })),
+                        ...(missingNode
+                          ? [
+                              {
+                                value: p.bind.nodeId,
+                                label: t('inspector.missingOption', { value: p.bind.nodeId }),
+                              },
+                            ]
+                          : []),
+                      ]}
+                    />
+                    <Select<string>
+                      searchable
+                      className={missingPort ? 'form-input--invalid' : undefined}
+                      value={p.bind.portName}
+                      ariaLabel={t('inspector.portPlaceholder')}
+                      disabled={p.bind.nodeId.length === 0}
+                      onChange={(nextPortName) => {
+                        const copy = [...ports]
+                        copy[i] = { ...p, bind: { ...p.bind, portName: nextPortName } }
+                        setPorts(
+                          copy,
+                          atomicNodeInspectorChange(
+                            node.id,
+                            `ports.${i}.bind.portName`,
+                            t('inspector.fieldOutputPorts'),
+                          ),
+                        )
+                      }}
+                      options={[
+                        { value: '', label: t('inspector.portPlaceholder') },
+                        ...(selectedNode?.ports ?? []).map((portName) => ({
+                          value: portName,
+                          label: portName,
+                        })),
+                        ...(missingPort
+                          ? [
+                              {
+                                value: p.bind.portName,
+                                label: t('inspector.missingOption', { value: p.bind.portName }),
+                              },
+                            ]
+                          : []),
+                      ]}
+                    />
+                  </InspectorPortAnchor>
+                  <button
+                    type="button"
+                    className="btn btn--sm"
+                    onClick={() =>
+                      setPorts(
+                        ports.filter((_, j) => j !== i),
+                        atomicNodeInspectorChange(
+                          node.id,
+                          `ports.${i}.remove`,
+                          t('inspector.remove'),
+                        ),
+                      )
+                    }
+                  >
+                    {t('inspector.remove')}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+          <button
+            type="button"
+            className="btn btn--sm"
+            onClick={() =>
+              setPorts(
+                [
+                  ...ports,
+                  { name: `port_${ports.length + 1}`, bind: { nodeId: '', portName: '' } },
+                ],
+                atomicNodeInspectorChange(node.id, 'ports.add', t('inspector.addPort')),
+              )
+            }
+          >
+            {t('inspector.addPort')}
+          </button>
+        </Field>
+      </InspectorFieldAnchor>
     </div>
   )
 }

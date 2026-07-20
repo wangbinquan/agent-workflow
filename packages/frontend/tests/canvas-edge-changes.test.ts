@@ -206,12 +206,13 @@ describe('WorkflowCanvas does not enable selectionOnDrag', () => {
       return src.slice(start, end)
     }
 
-    const deleteOracle = bodyBetween(
-      'export function deleteWorkflowSelection(',
-      '/**\n * Edge equivalent of {@link affectsDefinition}',
+    const transitionSrc = await fs.readFile(
+      path.join(here, '../src/lib/workflow-transition.ts'),
+      'utf8',
     )
-    expect(deleteOracle).toContain('collectNodeReferenceClosure')
-    expect(deleteOracle).toContain('pruneDeletedNodeReferences')
+    expect(transitionSrc).toContain('collectNodeReferenceClosure')
+    expect(transitionSrc).toContain('pruneDeletedNodeReferences')
+    expect(src).not.toContain('export function deleteWorkflowSelection(')
 
     const deleteSelectedBody = bodyBetween(
       'const deleteSelected = useCallback(',
@@ -222,12 +223,12 @@ describe('WorkflowCanvas does not enable selectionOnDrag', () => {
       'const duplicateNode = useCallback(',
     )
     for (const body of [deleteSelectedBody, handleFlowDeleteBody]) {
-      expect(body).toContain('deleteWorkflowSelection(')
+      expect(body).toContain("kind: 'delete-selection'")
       expect(body).toMatch(/selectionAfter:\s*null/)
-      expect(body).toMatch(/const accepted = commitChange\(/)
+      expect(body).toMatch(/const accepted = commitTransition\(/)
       expect(body).toMatch(/syncCanvasSelection\(\[\], \[\]\)/)
       expect(body.indexOf('syncCanvasSelection([], [])')).toBeGreaterThan(
-        body.indexOf('const accepted = commitChange('),
+        body.indexOf('const accepted = commitTransition('),
       )
     }
 

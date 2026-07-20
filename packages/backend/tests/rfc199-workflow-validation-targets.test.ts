@@ -188,8 +188,10 @@ describe('RFC-199 strict workflow validation targets', () => {
     )
     const emissions = [...source.matchAll(/^\s+code: '[^']+',/gm)]
     // Release hardening adds duplicate-node-id plus malformed loop-condition
-    // emissions; every new site must still carry a strict navigation target.
-    expect(emissions).toHaveLength(86)
+    // emissions; RFC-199 B5 adds the fixed review-input port, conflict and
+    // mirror-mismatch emissions. Every new site must still carry a strict
+    // navigation target.
+    expect(emissions).toHaveLength(89)
     for (const emission of emissions) {
       const start = emission.index ?? 0
       const nextPush = source.indexOf('issues.push({', start)

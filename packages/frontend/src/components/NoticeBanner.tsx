@@ -5,7 +5,8 @@
 // screen reader. Icons are decorative inline SVG; meaning always remains in
 // text and is never conveyed by a glyph or colour alone.
 
-import type { MouseEvent, ReactElement, ReactNode } from 'react'
+import { useEffect, type MouseEvent, type ReactElement, type ReactNode } from 'react'
+import { readableAnnouncementText, useManagedLiveRegion } from './ManagedLiveRegion'
 
 export type NoticeBannerTone = 'info' | 'success' | 'warning' | 'error'
 export type NoticeBannerSize = 'compact' | 'comfortable'
@@ -83,16 +84,24 @@ function isPresent(node: ReactNode): boolean {
 }
 
 export function NoticeBanner(props: NoticeBannerProps): ReactElement {
+  const managedLiveRegion = useManagedLiveRegion()
   const size = props.size ?? 'comfortable'
   const isError = props.tone === 'error'
   const classes = ['notice-banner', `notice-banner--${props.tone}`, `notice-banner--${size}`]
   if (props.className !== undefined && props.className !== '') classes.push(props.className)
+  const announcement = readableAnnouncementText(props.title, props.children)
+
+  useEffect(() => {
+    if (managedLiveRegion !== null && announcement !== '') {
+      managedLiveRegion.announce(announcement)
+    }
+  }, [announcement, managedLiveRegion])
 
   return (
     <div
       className={classes.join(' ')}
-      role={isError ? 'alert' : 'status'}
-      aria-live={isError ? undefined : 'polite'}
+      role={managedLiveRegion === null ? (isError ? 'alert' : 'status') : undefined}
+      aria-live={managedLiveRegion === null && !isError ? 'polite' : undefined}
       data-testid={props.testid}
     >
       <span className="notice-banner__icon" aria-hidden="true">

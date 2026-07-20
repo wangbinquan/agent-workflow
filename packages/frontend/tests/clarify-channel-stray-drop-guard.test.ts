@@ -92,11 +92,16 @@ describe('isStrayClarifyChannelDrop — clarify-channel stray-drop guard', () =>
     ).toBe(true)
   })
 
-  test('WorkflowCanvas.isValidConnection wires the guard in', () => {
-    const src = readFileSync(
+  test('the shared planner wires the guard used by isValidConnection', () => {
+    const planner = readFileSync(
+      path.resolve(here, '../src/lib/workflow-connection-plan.ts'),
+      'utf-8',
+    )
+    expect(planner).toContain('isStrayClarifyChannelDrop({')
+    const canvas = readFileSync(
       path.resolve(here, '../src/components/canvas/WorkflowCanvas.tsx'),
       'utf-8',
     )
-    expect(src).toContain('isStrayClarifyChannelDrop(guardConn)')
+    expect(canvas).toContain('planWorkflowConnection(definition, request, semanticContext)')
   })
 })

@@ -1,8 +1,8 @@
 // RFC-060 PR-E E.T3 — wrapper-git output kind upgrade.
 //
 // `wrapper-git.git_diff` outlet was a full unified-diff string; now it is a
-// newline-separated list of changed file paths (`list<path>` per RFC-060
-// kind grammar). Locks:
+// newline-separated list of changed file paths (`list<path<*>>` per the kind
+// grammar). Locks:
 //
 //   1. gitChangedFiles returns tracked + untracked paths, deduped, no
 //      empty entries.

@@ -238,13 +238,12 @@ describe('AclPanel', () => {
 })
 
 // --- Header-button sizing. RFC-198 promotes the editor's sole primary action
-// (Launch) to the default page-primary target size; the secondary/ACL/delete
-// actions remain uniformly compact. Rendering the whole editor route needs
-// router + xyflow scaffolding, so this source-level assertion locks that one
-// intentional exception without reopening the old ACL/delete mismatch. ---
+// (Launch) to the default page-primary target size. RFC-199 moves
+// Export/Rename/ACL/Delete behind one compact More action, so this source-level
+// assertion locks both the one-primary rule and that information hierarchy. ---
 
 describe('workflows editor header — one full-size primary plus compact secondary actions', () => {
-  test('Launch is full-size; every other header action opts into sm', async () => {
+  test('Launch is full-size; every other header action is compact and management lives in More', async () => {
     const fs = await import('node:fs/promises')
     const path = await import('node:path')
     const here = path.dirname(new URL(import.meta.url).pathname)
@@ -266,8 +265,10 @@ describe('workflows editor header — one full-size primary plus compact seconda
       }
     }
     expect(primaryCount).toBe(1)
-    // Component-based buttons (AclDialogButton / ConfirmButton) opt in via
-    // the size prop — one each.
-    expect(block.match(/size="sm"/g)?.length).toBe(2)
+    expect(block).toContain('data-testid="workflow-more-actions"')
+    expect(src).toContain('data-testid="workflow-actions-dialog"')
+    expect(src).toContain('data-testid="workflow-acl-button"')
+    expect(src).toContain('data-testid="workflow-delete-button"')
+    expect(src).not.toContain('<AclDialogButton')
   })
 })

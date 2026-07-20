@@ -1,6 +1,7 @@
-// Right-side 480px inspector drawer. Opens when the canvas reports a
-// selected node; closes when the selection clears. Two tabs: Edit (form)
-// and Preview (live prompt assembly).
+// Shared inspector content. Wide/medium workspaces place it in a rail;
+// compact/phone workspaces place the same content in a Dialog. It opens when
+// the canvas reports a selected node and closes when the selection clears.
+// Two tabs: Edit (form) and Preview (live prompt assembly).
 //
 // RFC-146 T3: the 1100-line per-kind `EditForm` switch became the
 // `KIND_INSPECTORS` registry — one Edit component per kind under
@@ -13,11 +14,13 @@
 // owns the dirty/save bookkeeping.
 
 import type { Agent, NodeKind, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FC } from 'react'
 import { useTranslation } from 'react-i18next'
 import { TabBar, tabDomIds, type TabDef } from '@/components/TabBar'
+import { NoticeBanner } from '@/components/NoticeBanner'
 import { computePorts } from './WorkflowCanvas'
+import { nodeTitle } from './nodeTitle'
 import { PromptPreview } from './PromptPreview'
 import { AgentSingleEdit } from './inspector/AgentSingleEdit'
 import { ClarifyEdit } from './inspector/ClarifyEdit'
@@ -29,6 +32,16 @@ import { WrapperFanoutEdit } from './inspector/WrapperFanoutEdit'
 import { WrapperGitLoopEdit } from './inspector/WrapperGitLoopEdit'
 import type { InspectorChangeMeta } from './inspector/historyMeta'
 import type { EditProps } from './inspector/types'
+import { createWorkflowSemanticContext } from '@/lib/workflow-connection-plan'
+import {
+  focusWorkflowInspectorAnchor,
+  workflowInspectorHeadingId,
+} from '@/lib/workflow-inspector-target'
+import {
+  applyWorkflowTransition,
+  type WorkflowTransition,
+  type WorkflowTransitionResult,
+} from '@/lib/workflow-transition'
 
 export type { InspectorChangeMeta } from './inspector/historyMeta'
 
@@ -36,18 +49,21 @@ export type { InspectorChangeMeta } from './inspector/historyMeta'
 // helper moved to ./inspector/promptRefs with the agent Edit component).
 export { extractMissingRefs } from './inspector/promptRefs'
 
-interface Props {
+export interface NodeInspectorProps {
   definition: WorkflowDefinition
   selectedNodeId: string | null
   agents: Agent[]
+  focusRequest?: { requestId: number; focusId: string } | null
   onChange: (next: WorkflowDefinition, meta: InspectorChangeMeta) => void
   onClose: () => void
+  /** Compact/phone equivalent of the selected-node canvas toolbar action. */
+  onConnect?: (nodeId: string, trigger: HTMLElement) => void
+  chrome?: 'rail' | 'content'
 }
 
 type Tab = 'edit' | 'preview'
 
 const NODE_INSPECTOR_TAB_PREFIX = 'workflow-node-inspector'
-const NODE_INSPECTOR_HEADING_ID = `${NODE_INSPECTOR_TAB_PREFIX}-heading`
 
 /**
  * Per-kind Edit form registry — same shape as the canvas NODE_TYPES
@@ -66,18 +82,48 @@ const KIND_INSPECTORS = {
   'clarify-cross-agent': CrossClarifyEdit,
 } as const satisfies Record<NodeKind, FC<EditProps>>
 
-export function NodeInspector({ definition, selectedNodeId, agents, onChange, onClose }: Props) {
+export function NodeInspector({
+  definition,
+  selectedNodeId,
+  agents,
+  focusRequest,
+  onChange,
+  onClose,
+  onConnect,
+  chrome = 'rail',
+}: NodeInspectorProps) {
   const { t } = useTranslation()
   const [tab, setTab] = useState<Tab>('edit')
+  const [transitionNotice, setTransitionNotice] = useState<string | null>(null)
+  const semanticContext = useMemo(() => createWorkflowSemanticContext(agents), [agents])
 
   // Reset to edit tab whenever the selection changes.
   useEffect(() => {
     setTab('edit')
+    setTransitionNotice(null)
   }, [selectedNodeId])
+
+  useEffect(() => {
+    if (focusRequest === null || focusRequest === undefined || selectedNodeId === null) return
+    setTab('edit')
+    let secondFrame = 0
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        focusWorkflowInspectorAnchor(focusRequest.focusId)
+      })
+    })
+    return () => {
+      window.cancelAnimationFrame(firstFrame)
+      window.cancelAnimationFrame(secondFrame)
+    }
+  }, [focusRequest, selectedNodeId])
 
   if (selectedNodeId === null) return null
   const node = definition.nodes.find((n) => n.id === selectedNodeId)
   if (node === undefined) return null
+  const headingId = workflowInspectorHeadingId(node.id)
+  const ports = computePorts(node, new Map(agents.map((agent) => [agent.name, agent])), definition)
+  const displayTitle = nodeTitle(node)
 
   // PreviewPane only renders prompt-template assembly for agent kinds; other
   // kinds previously got a disabled tab + "preview only available for agents"
@@ -95,7 +141,40 @@ export function NodeInspector({ definition, selectedNodeId, agents, onChange, on
 
   function patch(next: WorkflowNode, meta: InspectorChangeMeta) {
     const nodes = definition.nodes.map((n) => (n.id === next.id ? next : n))
-    onChange({ ...definition, nodes }, meta)
+    commitDefinition({ ...definition, nodes }, meta)
+  }
+
+  function commitDefinition(next: WorkflowDefinition, meta: InspectorChangeMeta) {
+    const result = applyWorkflowTransition(
+      definition,
+      { kind: 'replace-definition', next },
+      semanticContext,
+    )
+    publishTransition(result, meta)
+  }
+
+  function commitTransition(transition: WorkflowTransition, meta: InspectorChangeMeta) {
+    const result = applyWorkflowTransition(definition, transition, semanticContext)
+    publishTransition(result, meta)
+  }
+
+  function publishTransition(result: WorkflowTransitionResult, meta: InspectorChangeMeta) {
+    const blocked =
+      result.next === definition &&
+      result.warnings.some(
+        (warning) =>
+          ('action' in warning && warning.action === 'abort') ||
+          warning.code === 'connection-plan-context-stale' ||
+          warning.code === 'connection-plan-graph-stale',
+      )
+    setTransitionNotice(
+      blocked
+        ? t('canvas.referenceChangeBlocked')
+        : result.warnings.length > 0
+          ? t('canvas.referencesPruned', { n: result.warnings.length })
+          : null,
+    )
+    if (!blocked) onChange(result.next, meta)
   }
 
   function closeHistoryMerge(meta: InspectorChangeMeta) {
@@ -103,31 +182,80 @@ export function NodeInspector({ definition, selectedNodeId, agents, onChange, on
   }
 
   return (
-    <aside className="inspector">
-      <header className="inspector__header">
-        <div>
-          <div id={NODE_INSPECTOR_HEADING_ID} className="inspector__kind">
-            {node.kind}
+    <div
+      className={chrome === 'rail' ? 'inspector' : 'inspector-content'}
+      data-inspector-content="node"
+    >
+      {chrome === 'rail' ? (
+        <header className="inspector__header">
+          <div>
+            <div id={headingId} className="inspector__title" tabIndex={-1}>
+              {displayTitle}
+            </div>
+            <div className="inspector__summary">
+              {t('inspector.nodePortSummary', {
+                inputs: ports.inputs.length,
+                outputs: ports.outputs.length,
+              })}
+            </div>
           </div>
-          <div className="inspector__id">
-            <code>{node.id}</code>
-          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inspector__close"
+            aria-label={t('inspector.closeAria')}
+          >
+            ×
+          </button>
+        </header>
+      ) : (
+        <div id={headingId} className="sr-only" tabIndex={-1}>
+          {displayTitle}
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="inspector__close"
-          aria-label={t('inspector.closeAria')}
-        >
-          ×
-        </button>
-      </header>
+      )}
+      {chrome === 'content' && onConnect !== undefined && ports.outputs.length > 0 ? (
+        <div className="inspector__primary-actions">
+          <button
+            type="button"
+            className="btn btn--primary"
+            data-testid="inspector-connect-next"
+            onClick={(event) => onConnect(node.id, event.currentTarget)}
+          >
+            {t('editor.nodeActions.connectNext')}
+          </button>
+        </div>
+      ) : null}
+      <details className="inspector__technical inspector__technical--node">
+        <summary>{t('agentForm.technicalDetailsSummary')}</summary>
+        <dl>
+          <dt>{t('inspector.technicalKind')}</dt>
+          <dd>
+            <code>{node.kind}</code>
+          </dd>
+          <dt>{t('inspector.technicalId')}</dt>
+          <dd className="inspector__technical-id">
+            <code>{node.id}</code>
+            <button
+              type="button"
+              className="btn btn--xs btn--ghost"
+              onClick={() => void navigator.clipboard?.writeText(node.id)}
+            >
+              {t('editor.nodeActions.copy')}
+            </button>
+          </dd>
+        </dl>
+      </details>
+      {transitionNotice !== null && (
+        <NoticeBanner tone="warning" size="compact">
+          {transitionNotice}
+        </NoticeBanner>
+      )}
       <TabBar<Tab>
         variant="inspector"
         tabs={inspectorTabs}
         active={activeTab}
         onSelect={setTab}
-        ariaLabelledBy={NODE_INSPECTOR_HEADING_ID}
+        ariaLabelledBy={headingId}
         idPrefix={NODE_INSPECTOR_TAB_PREFIX}
       />
       <div className="inspector__body">
@@ -148,7 +276,8 @@ export function NodeInspector({ definition, selectedNodeId, agents, onChange, on
                   agents={agents}
                   definition={definition}
                   onPatch={patch}
-                  onCommitDef={onChange}
+                  onCommitDef={commitDefinition}
+                  onTransition={commitTransition}
                   onHistoryBoundary={closeHistoryMerge}
                 />
               )}
@@ -159,7 +288,7 @@ export function NodeInspector({ definition, selectedNodeId, agents, onChange, on
           )
         })}
       </div>
-    </aside>
+    </div>
   )
 }
 

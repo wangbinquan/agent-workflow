@@ -15,8 +15,10 @@ import {
   MiniMap,
   type Node,
   type NodeChange,
+  NodeToolbar,
   type OnDelete,
   type OnConnectEnd,
+  Panel,
   Position,
   ReactFlow,
   ReactFlowProvider,
@@ -31,6 +33,7 @@ import {
   forwardRef,
   useCallback,
   useEffect,
+  useId,
   useImperativeHandle,
   useMemo,
   useRef,
@@ -45,53 +48,42 @@ import type {
   WorkflowDefinition,
   WorkflowEdge,
   WorkflowNode,
+  WorkflowValidationIssue,
 } from '@agent-workflow/shared'
-import {
-  declaredPorts,
-  collectNodeReferenceClosure,
-  isClarifyAskingNode,
-  isWrapperKind,
-  pruneDeletedNodeReferences,
-} from '@agent-workflow/shared'
+import { declaredPorts, isClarifyAskingNode, isWrapperKind } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 import { AgentNode } from './nodes/AgentNode'
 import { applyPaste, buildSlice, getClipboard, setClipboard } from './canvasClipboard'
-import {
-  applyClarifyReverseDrag,
-  cascadeRemoveClarifyChannel,
-  classifyClarifyConnection,
-  clarifyHasAttachedAgent,
-  hasExistingClarifyChannel,
-  isValidClarifyTarget,
-} from './clarifyDragHelper'
-import {
-  applyCrossClarifyDesignerDrag,
-  applyCrossClarifyQuestionerReverseDrag,
-  cascadeRemoveCrossClarifyChannel,
-  classifyCrossClarifyConnection,
-  crossClarifyHasAttachedQuestioner,
-  crossClarifyHasDesignerEdge,
-  isStrayClarifyChannelDrop,
-  isValidCrossClarifyQuestioner,
-  questionerHasExistingClarifyChannel,
-} from './crossClarifyDragHelper'
+import { classifyClarifyConnection } from './clarifyDragHelper'
+import { classifyCrossClarifyConnection } from './crossClarifyDragHelper'
 import { existingInputPorts, nextFreeInputPort } from './dropTarget'
 import { getNodeBoxes, resolveDropTarget } from './connectResolve'
 import { buildControlFlowEdgeIds, CONTROL_FLOW_EDGE_CLASS } from './controlFlowEdge'
 import { nodeTitle } from './nodeTitle'
 import { ConnectDropHint, type ConnectPreviewTarget } from './ConnectDropHint'
+import { WorkflowCanvasEdge, type WorkflowCanvasEdgeData } from './WorkflowCanvasEdge'
 import { ClarifyNode } from './nodes/ClarifyNode'
 import { CrossClarifyNode } from './nodes/CrossClarifyNode'
-import { applyConnectionForReviewOutput, applyDisconnectForReviewOutput } from './connectionSync'
 import { ContextMenu, type ContextMenuItem } from './ContextMenu'
 import { ConfirmDialog } from '../ConfirmDialog'
+import { EmptyState } from '../EmptyState'
 import { NoticeBanner } from '../NoticeBanner'
+import { useManagedLiveRegion } from '../ManagedLiveRegion'
+import {
+  WorkflowNodePicker,
+  type WorkflowNodePickerIntent,
+} from '../workflow-editor/WorkflowNodePicker'
+import { ConnectionDialog } from '../workflow-editor/ConnectionDialog'
 import { InputNode } from './nodes/InputNode'
 import { deserialize, makeNode, PALETTE_MIME, type PaletteItem } from './nodePalette'
 import { OutputNode } from './nodes/OutputNode'
 import { ReviewNode } from './nodes/ReviewNode'
-import { INBOUND_HANDLE_ID, type CanvasNodeData, type CanvasSelection } from './nodes/types'
-import { syncInputDefs } from './syncInputDefs'
+import {
+  INBOUND_HANDLE_ID,
+  type CanvasNodeData,
+  type CanvasSelection,
+  type WorkflowCanvasSurface,
+} from './nodes/types'
 import { GroupWrapperNode } from './nodes/WrapperNodes'
 import {
   buildParentMap,
@@ -109,8 +101,20 @@ import {
 import { DEFAULT_NODE_SIZE_BY_KIND, fitWrapperToInner } from './wrapperFit'
 import { effectiveWorkflowNodePosition, findOpenPlacement } from '../../lib/workflow-placement'
 import {
+  createWorkflowSemanticContext,
+  isWorkflowEdgeInsertable,
+  planWorkflowConnection,
+  planWorkflowEdgeInsertion,
+  type ConnectionRequest,
+} from '../../lib/workflow-connection-plan'
+import { applyWorkflowTransition, type WorkflowTransition } from '../../lib/workflow-transition'
+import { planWorkflowLayout, type WorkflowLayoutSelection } from '../../lib/workflow-layout'
+import {
+  projectWorkflowValidationIssues,
+  type WorkflowValidationCounts,
+} from '../../lib/workflow-validation-projection'
+import {
   clearWrapperSize,
-  deleteWrapperWithChildren,
   isWrapperDeleteSnapshotCurrent,
   snapshotWrapperDelete,
   type WrapperDeleteSnapshot,
@@ -133,7 +137,11 @@ const NODE_TYPES = {
   'clarify-cross-agent': CrossClarifyNode,
 } satisfies Record<NodeKind, ComponentType<never>>
 
+const EDGE_TYPES = { 'workflow-insertable': WorkflowCanvasEdge }
+
 export interface WorkflowCanvasProps {
+  /** Required scope keeps editor-only authoring visuals out of runtime canvases. */
+  surface: WorkflowCanvasSurface
   definition: WorkflowDefinition
   /**
    * Stable workflow identity stored in semantic clipboard payloads. The edit
@@ -144,6 +152,10 @@ export interface WorkflowCanvasProps {
   /** Used to look up agent.outputs when rendering agent nodes. Optional. */
   agents?: Agent[]
   onChange?: (next: WorkflowDefinition, meta?: WorkflowCanvasChangeMeta) => void
+  /** Opens the RFC-199 starter surface from the editable empty canvas. */
+  onStartFromTemplate?: (trigger: HTMLElement) => void
+  /** Coordinates canvas-owned picker/connection dialogs with the editor's one modal controller. */
+  onModalSurfaceChange?: (surface: 'palette' | 'connection' | 'confirm' | null) => void
   canUndo?: boolean
   canRedo?: boolean
   /** Canvas-scoped history shortcuts; text controls keep native browser undo. */
@@ -156,6 +168,8 @@ export interface WorkflowCanvasProps {
    */
   onSelect?: (sel: CanvasSelection | null) => void
   readOnly?: boolean
+  /** Current-revision editor validation only; stale receipts must be omitted. */
+  validationIssues?: readonly WorkflowValidationIssue[]
   /**
    * Map of nodeId → status. Wired into the per-kind renderers'
    * `data-status` attribute so the existing CSS overlay picks the color.
@@ -245,8 +259,16 @@ function singleCanvasSelection(
  */
 export interface WorkflowCanvasHandle {
   addPaletteItemAtViewportCenter: (item: PaletteItem) => void
+  openNodePicker: (intent?: WorkflowNodePickerIntent, trigger?: HTMLElement | null) => void
   clearSelection: () => void
   restoreSelection: (selection: CanvasSelection | null) => void
+  /** Select and reveal one semantic object without depending on drag/mouse input. */
+  focusSelection: (selection: CanvasSelection) => void
+  /** Opens the same planner-backed connection Dialog used by the node toolbar. */
+  openConnection: (nodeId: string, trigger?: HTMLElement | null) => void
+  openEdgeReconnect: (edgeId: string, trigger?: HTMLElement | null) => void
+  /** Closes every canvas-owned top-level modal before an external route surface takes ownership. */
+  closeModalSurface: () => void
 }
 
 /** Screen-space center used by palette click / keyboard insertion. */
@@ -283,12 +305,16 @@ export const WorkflowCanvas = forwardRef<WorkflowCanvasHandle, WorkflowCanvasPro
 )
 
 function CanvasInner({
+  surface,
   definition,
   workflowId,
   agents,
   onChange,
+  onStartFromTemplate,
+  onModalSurfaceChange,
   onSelect,
   readOnly,
+  validationIssues,
   nodeStatuses,
   taskContext,
   questionCounts,
@@ -306,12 +332,20 @@ function CanvasInner({
   handleRef?: React.ForwardedRef<WorkflowCanvasHandle>
 }) {
   const { t } = useTranslation()
+  const managedLiveRegion = useManagedLiveRegion()
+  const canvasDescriptionId = useId()
   const [canvasNotice, setCanvasNotice] = useState<string | null>(null)
+  const [connectionReplaceEdgeId, setConnectionReplaceEdgeId] = useState<string | null>(null)
   const agentByName = useMemo(() => {
     const m = new Map<string, Agent>()
     for (const a of agents ?? []) m.set(a.name, a)
     return m
   }, [agents])
+  const semanticContext = useMemo(() => createWorkflowSemanticContext(agents ?? []), [agents])
+  const validationProjection = useMemo(
+    () => projectWorkflowValidationIssues(definition, validationIssues),
+    [definition, validationIssues],
+  )
   const rf = useReactFlow()
   // Direct handle on xyflow's internal store. Used by `clearSelection`
   // below so we go through `unselectNodesAndEdges`, which synchronously
@@ -323,61 +357,38 @@ function CanvasInner({
   // (selected && !multiSelectActive → neither branch fires) and the
   // inspector never reopened.
   const storeApi = useStoreApi()
-  // RFC-004: every definition commit funnels through `commitChange`, which
-  // reconciles `definition.inputs[]` with input-node inputKeys. Adding /
-  // patching / deleting input nodes therefore keeps the launcher form
-  // declaration in lock-step automatically.
-  //
-  // RFC-007: the same chokepoint detects edges that were present in the
-  // prior `definition` but are missing from `next`, and clears the matching
-  // `inputSource` / `port.bind` field on review / output nodes. This
-  // covers all three deletion paths (Delete key, EdgeInspector remove,
-  // node-removal cascade) without each callsite having to opt in.
-  const commitChange = useCallback(
-    (next: WorkflowDefinition, meta?: WorkflowCanvasChangeMeta): boolean => {
+  // RFC-199: every persisted canvas edit funnels through the one semantic
+  // transition. Input declarations, disconnect cascades, review/output
+  // mirrors, wrapper membership sizing and derived-port cleanup therefore
+  // run once regardless of the interaction entry point.
+  const commitTransition = useCallback(
+    (transition: WorkflowTransition, meta?: WorkflowCanvasChangeMeta): boolean => {
       if (onChange === undefined) return false
-      let staged = next
-      const nextNodeIds = new Set(next.nodes.map((node) => node.id))
-      const removedNodeCount = definition.nodes.reduce(
-        (count, node) => count + (nextNodeIds.has(node.id) ? 0 : 1),
-        0,
-      )
-      if (removedNodeCount > 0) {
-        const pruned = pruneDeletedNodeReferences(next, nextNodeIds)
-        if (!pruned.safe) {
-          setCanvasNotice(t('canvas.referenceChangeBlocked'))
-          return false
-        }
-        staged = pruned.definition
-        if (pruned.warnings.length > 0) {
-          setCanvasNotice(t('canvas.referencesPruned', { n: pruned.warnings.length }))
-        }
+      const result = applyWorkflowTransition(definition, transition, semanticContext)
+      const blocked =
+        result.next === definition &&
+        result.warnings.some(
+          (warning) =>
+            ('action' in warning && warning.action === 'abort') ||
+            warning.code === 'connection-plan-context-stale' ||
+            warning.code === 'connection-plan-graph-stale',
+        )
+      if (blocked) {
+        setCanvasNotice(t('canvas.referenceChangeBlocked'))
+        return false
       }
-
-      const nextEdgeIds = new Set(staged.edges.map((edge) => edge.id))
-      const deleted = definition.edges.filter((e) => !nextEdgeIds.has(e.id))
-      if (deleted.length > 0) staged = applyDisconnectForReviewOutput(staged, deleted)
-      // RFC-023 bugfix: a clarify channel is a (ask, ans) pair persisted as
-      // two edges. Deleting either half on its own would leave a half-wired
-      // channel — the scheduler still sees the ask edge and re-runs the
-      // clarify cycle, but the canvas no longer shows the answer arrow.
-      // Cascade-remove the sibling so a single-edge delete cleanly tears
-      // down the whole channel.
-      if (deleted.length > 0) {
-        staged = cascadeRemoveClarifyChannel(staged, deleted)
-        // RFC-056 mirror of the RFC-023 cascade: deleting one half of the
-        // cross-clarify ask/ans pair on its own would leave a half-wired
-        // questioner channel. Sweep the sibling so single-edge delete
-        // cleanly tears down the channel. The `designer` half is a single
-        // edge with no sibling and is intentionally not cascaded here.
-        staged = cascadeRemoveCrossClarifyChannel(staged, deleted)
+      if (result.warnings.length > 0) {
+        setCanvasNotice(t('canvas.referencesPruned', { n: result.warnings.length }))
       }
-      const synced = syncInputDefs(staged.inputs ?? [], staged.nodes)
-      if (synced !== (staged.inputs ?? [])) staged = { ...staged, inputs: synced }
-      onChange(staged, meta ?? { label: t('editor.history.canvasEdit') })
+      onChange(result.next, meta ?? { label: t('editor.history.canvasEdit') })
       return true
     },
-    [definition.edges, definition.nodes, onChange, t],
+    [definition, onChange, semanticContext, t],
+  )
+  const commitChange = useCallback(
+    (next: WorkflowDefinition, meta?: WorkflowCanvasChangeMeta): boolean =>
+      commitTransition({ kind: 'replace-definition', next }, meta),
+    [commitTransition],
   )
   // RFC-120 D13: stable bridge to the latest onNodeQuestionBadgeClick prop. A
   // ref keeps the handle identity-stable across renders so node-data rebuilds
@@ -410,10 +421,35 @@ function CanvasInner({
     y: number
     nodeId: string | null
   } | null>(null)
+  const [nodePickerIntent, setNodePickerIntent] = useState<WorkflowNodePickerIntent | null>(null)
+  const [connectionSourceNodeId, setConnectionSourceNodeId] = useState<string | null>(null)
+  const [connectionAnnouncement, setConnectionAnnouncement] = useState('')
+  const announceCanvasChange = useCallback(
+    (message: string) => {
+      if (managedLiveRegion === null) setConnectionAnnouncement(message)
+      else managedLiveRegion.announce(message)
+    },
+    [managedLiveRegion],
+  )
   const [wrapperDeleteSnapshot, setWrapperDeleteSnapshot] = useState<WrapperDeleteSnapshot | null>(
     null,
   )
   const wrapperRef = useRef<HTMLDivElement | null>(null)
+  const nodePickerTriggerRef = useRef<HTMLElement | null>(null)
+  const connectionTriggerRef = useRef<HTMLElement | null>(null)
+  const menuTriggerRef = useRef<HTMLElement | null>(null)
+  const openNodePickerRef = useRef<
+    (intent?: WorkflowNodePickerIntent, trigger?: HTMLElement | null) => void
+  >(() => undefined)
+  const handleAddInsideWrapper = useCallback(
+    (wrapperNodeId: string, trigger?: HTMLElement | null) => {
+      openNodePickerRef.current({ kind: 'inside-wrapper', wrapperNodeId }, trigger)
+    },
+    [],
+  )
+  const handleInsertNodeOnEdge = useCallback((edgeId: string, trigger: HTMLElement) => {
+    openNodePickerRef.current({ kind: 'insert-edge', edgeId }, trigger)
+  }, [])
   // Cached signature of the last selection emitted to the parent. Without
   // this guard we'd hand the parent a fresh `{kind, id}` object on every
   // xyflow tick, the parent re-renders, xyflow's StoreUpdater notices new
@@ -435,13 +471,23 @@ function CanvasInner({
         handleClarifyDirectiveToggle,
         reviewNavs,
         clarifyNavs,
+        readOnly !== true && onChange !== undefined ? handleAddInsideWrapper : undefined,
+        validationProjection.nodes,
+        surface,
       ),
     ),
   )
   const [edges, setEdges] = useState<Edge[]>(() =>
-    toFlowEdges(definition.edges, buildControlFlowEdgeIds(definition, agentByName)),
+    toFlowEdges(
+      definition.edges,
+      buildControlFlowEdgeIds(definition, agentByName),
+      workflowInsertableEdgeIds(definition, semanticContext),
+      handleInsertNodeOnEdge,
+      validationProjection.edges,
+    ),
   )
   const externalDefRef = useRef(definition)
+  const externalSurfaceRef = useRef(surface)
   const externalStatusesRef = useRef(nodeStatuses)
   // RFC-120 D13: mirror of `nodeStatuses`' externalStatusesRef guard — lets the
   // def-sync useEffect rebuild node data when only `questionCounts` changes
@@ -456,6 +502,7 @@ function CanvasInner({
   // RFC-161: mirror of the same ref-guard so a clarifyNavs-only change (node-runs
   // query resolves / a clarify advances, definition unchanged) repaints hints.
   const externalClarifyNavsRef = useRef(clarifyNavs)
+  const externalValidationIssuesRef = useRef(validationIssues)
   // Track the last agentByName ref we rebuilt against. The canvas is often
   // mounted on the task-detail page before the `useQuery(['agents'])` call
   // resolves; on first render `agents` is `[]`, so agent-node `outputPorts`
@@ -492,6 +539,66 @@ function CanvasInner({
   useEffect(() => {
     edgesRef.current = edges
   }, [edges])
+
+  const handleAutoLayout = useCallback(
+    (layoutSelection: WorkflowLayoutSelection) => {
+      if (readOnly === true || onChange === undefined) return
+      // Freeze the current xyflow measurements at the adapter boundary. Dagre
+      // and wrapper fitting only see this detached snapshot; the pure planner
+      // never reads live DOM geometry or mutates xyflow state directly.
+      const measuredSizes = new Map(
+        [...buildMeasuredSizesFromXyflowNodes(nodesRef.current)].map(([id, size]) => [
+          id,
+          { width: size.width, height: size.height },
+        ]),
+      )
+      const plan = planWorkflowLayout(definition, {
+        semanticContext,
+        measuredSizes,
+        selection: layoutSelection,
+      })
+      const warningMessages: string[] = []
+      const crossScope = plan.warnings.find((warning) => warning.code === 'cross-scope-selection')
+      if (crossScope !== undefined) warningMessages.push(t('canvas.layoutCrossScope'))
+      const cycleCount = plan.warnings.filter(
+        (warning) => warning.code === 'cycle-back-edge',
+      ).length
+      if (cycleCount > 0) warningMessages.push(t('canvas.layoutCycles', { n: cycleCount }))
+      const overflowCount = plan.warnings.filter(
+        (warning) => warning.code === 'size-locked-overflow',
+      ).length
+      if (overflowCount > 0) {
+        warningMessages.push(t('canvas.layoutLockedOverflow', { n: overflowCount }))
+      }
+
+      if (plan.next === definition) {
+        if (warningMessages.length > 0) setCanvasNotice(warningMessages.join(' '))
+        return
+      }
+      const semanticSelection = singleCanvasSelection(selection.nodes, selection.edges)
+      const accepted = commitChange(plan.next, {
+        label: t('editor.history.autoLayout'),
+        selectionBefore: semanticSelection,
+        selectionAfter: semanticSelection,
+      })
+      if (!accepted) return
+      if (warningMessages.length > 0) setCanvasNotice(warningMessages.join(' '))
+      window.requestAnimationFrame(() => {
+        void rf.fitView()
+      })
+    },
+    [
+      commitChange,
+      definition,
+      onChange,
+      readOnly,
+      rf,
+      selection.edges,
+      selection.nodes,
+      semanticContext,
+      t,
+    ],
+  )
 
   /**
    * Publish one semantic selection to every owner before a definition rebuild.
@@ -563,6 +670,7 @@ function CanvasInner({
 
   useEffect(() => {
     const defChanged = definition !== externalDefRef.current
+    const surfaceChanged = surface !== externalSurfaceRef.current
     const statusChanged = nodeStatuses !== externalStatusesRef.current
     const agentsChanged = agentByName !== externalAgentsRef.current
     // RFC-120 D13: question-badge counts also drive a node-data rebuild — same
@@ -574,22 +682,27 @@ function CanvasInner({
     const reviewNavsChanged = reviewNavs !== externalReviewNavsRef.current
     // RFC-161: clarifyNavs map change repaints clarify-node hints (same shape).
     const clarifyNavsChanged = clarifyNavs !== externalClarifyNavsRef.current
+    const validationChanged = validationIssues !== externalValidationIssuesRef.current
     if (
       defChanged ||
+      surfaceChanged ||
       statusChanged ||
       agentsChanged ||
       questionsChanged ||
       directivesChanged ||
       reviewNavsChanged ||
-      clarifyNavsChanged
+      clarifyNavsChanged ||
+      validationChanged
     ) {
       externalDefRef.current = definition
+      externalSurfaceRef.current = surface
       externalStatusesRef.current = nodeStatuses
       externalAgentsRef.current = agentByName
       externalQuestionCountsRef.current = questionCounts
       externalClarifyDirectivesRef.current = clarifyDirectives
       externalReviewNavsRef.current = reviewNavs
       externalClarifyNavsRef.current = clarifyNavs
+      externalValidationIssuesRef.current = validationIssues
       // Preserve `selected: true` across the rebuild. Without this, an
       // inspector edit (which mints a new `definition` reference) wipes
       // the selected flag, xyflow sees a phantom deselect and fires
@@ -611,6 +724,9 @@ function CanvasInner({
               handleClarifyDirectiveToggle,
               reviewNavs,
               clarifyNavs,
+              readOnly !== true && onChange !== undefined ? handleAddInsideWrapper : undefined,
+              validationProjection.nodes,
+              surface,
             ),
             measured,
           ),
@@ -622,10 +738,16 @@ function CanvasInner({
       // asynchronously once the agents query resolves (see externalAgentsRef
       // above) — without the agentsChanged arm a signal edge stays drawn as a
       // data edge until the next definition edit.
-      if (defChanged || agentsChanged)
+      if (defChanged || agentsChanged || validationChanged)
         setEdges(
           applySelection(
-            toFlowEdges(definition.edges, buildControlFlowEdgeIds(definition, agentByName)),
+            toFlowEdges(
+              definition.edges,
+              buildControlFlowEdgeIds(definition, agentByName),
+              workflowInsertableEdgeIds(definition, semanticContext),
+              handleInsertNodeOnEdge,
+              validationProjection.edges,
+            ),
             sel.edges,
           ),
         )
@@ -638,8 +760,16 @@ function CanvasInner({
     handleQuestionBadgeClick,
     clarifyDirectives,
     handleClarifyDirectiveToggle,
+    handleAddInsideWrapper,
     reviewNavs,
     clarifyNavs,
+    handleInsertNodeOnEdge,
+    onChange,
+    readOnly,
+    semanticContext,
+    surface,
+    validationIssues,
+    validationProjection,
   ])
 
   const handleNodesChange = useCallback(
@@ -724,128 +854,101 @@ function CanvasInner({
       // RFC-106: xyflow fired onConnect ⇒ it snapped to a real handle; the
       // body-drop fallback in onConnectEnd must NOT also fire.
       connectHandledRef.current = true
-      // RFC-023 clarify-channel drops (both directions). The pure classifier
-      // recognises:
-      //   - reverse drag: drag FROM clarify.questions input handle TO an
-      //     agent output port (xyflow normalises to source=agent,
-      //     target=clarify, targetHandle='questions').
-      //   - forward drag: drag FROM clarify.answers output handle TO any
-      //     agent input handle (source=clarify, sourceHandle='answers').
-      // Both produce the same two-edge clarify channel via
-      // applyClarifyReverseDrag — the user gets the same outcome
-      // regardless of drag direction. Without this branch the forward
-      // drag would create a stray `clarify.answers → agent.<input>` edge
-      // that the runtime ignores (channel detection keys off the agent's
-      // `__clarify__` outbound edge).
+      let request: ConnectionRequest
       const clarifyDrop = classifyClarifyConnection(definition, conn)
       if (clarifyDrop !== null) {
-        const next = applyClarifyReverseDrag(definition, {
-          sourceAgentNodeId: clarifyDrop.sourceAgentNodeId,
+        const tail = ulid().slice(-6).toLowerCase()
+        request = {
+          kind: 'clarify-questioner',
+          questionerNodeId: clarifyDrop.sourceAgentNodeId,
           clarifyNodeId: clarifyDrop.clarifyNodeId,
-        })
-        if (next !== definition) commitChange(next, { label: t('editor.history.connect') })
-        return
-      }
-      // RFC-056 cross-clarify drops. Two shapes:
-      //   - questioner-reverse: reverse-drag onto cross.questions → 2 edges
-      //     (questioner.__clarify__ → cross.questions /
-      //      cross.to_questioner → questioner.__clarify_response__).
-      //   - designer-forward: forward-drag cross.to_designer → designer →
-      //     1 edge with target on the synthetic __external_feedback__ port.
-      const crossDrop = classifyCrossClarifyConnection(definition, conn)
-      if (crossDrop !== null) {
-        let next = definition
-        if (crossDrop.kind === 'questioner-reverse') {
-          next = applyCrossClarifyQuestionerReverseDrag(definition, {
+          edgeIds: { ask: `clarify_${tail}_ask`, answer: `clarify_${tail}_ans` },
+        }
+      } else {
+        const crossDrop = classifyCrossClarifyConnection(definition, conn)
+        if (crossDrop?.kind === 'questioner-reverse') {
+          const tail = ulid().slice(-6).toLowerCase()
+          request = {
+            kind: 'cross-questioner',
             questionerNodeId: crossDrop.questionerNodeId,
             crossClarifyNodeId: crossDrop.crossClarifyNodeId,
-          })
-        } else {
-          next = applyCrossClarifyDesignerDrag(definition, {
+            edgeIds: {
+              ask: `cross_clarify_${tail}_ask`,
+              answer: `cross_clarify_${tail}_ans`,
+            },
+          }
+        } else if (crossDrop?.kind === 'designer-forward') {
+          const tail = ulid().slice(-6).toLowerCase()
+          request = {
+            kind: 'cross-designer',
             crossClarifyNodeId: crossDrop.crossClarifyNodeId,
             designerNodeId: crossDrop.designerNodeId,
-          })
-        }
-        if (next !== definition) commitChange(next, { label: t('editor.history.connect') })
-        return
-      }
-      // RFC-007: distinguish "dropped on catch-all left strip" from "dropped
-      // on a specific named handle" BEFORE translateInboundConnection rewrites
-      // targetHandle.
-      let viaCatchAll = conn.targetHandle === INBOUND_HANDLE_ID
-      let translated = translateInboundConnection(conn)
-      let reusePort: string | null = null
-      // RFC-106: a catch-all drop on an agent-single / output target ALWAYS
-      // allocates a NEW input whose name is deconflicted against this node's
-      // existing inputs (`nextFreeInputPort`), so two upstreams both exposing
-      // `result` land on `result` / `result_2` instead of colliding on one
-      // `result`. We key off the KNOWN target node (`conn.target`), not the
-      // cursor hit-test — the catch-all strip overhangs the node edge, so a drop
-      // on its outside sliver leaves the pointer outside node bounds yet is still
-      // a valid new input here (Codex P2). The pointer only decides the precise
-      // REUSE override (drop landed on an existing port of THIS node). Channels /
-      // review / wrappers fall through to the legacy path untouched.
-      const targetNode =
-        conn.targetHandle === INBOUND_HANDLE_ID
-          ? definition.nodes.find((n) => n.id === conn.target)
-          : undefined
-      if (
-        targetNode !== undefined &&
-        (targetNode.kind === 'agent-single' || targetNode.kind === 'output') &&
-        conn.source != null &&
-        conn.sourceHandle != null
-      ) {
-        let portName = nextFreeInputPort(
-          existingInputPorts(definition, targetNode),
-          conn.sourceHandle,
-        )
-        if (connectPointer.current !== null) {
-          const screenPt = connectPointer.current
-          const resolved = resolveDropTarget(
-            definition,
-            getNodeBoxes(rf),
-            rf.screenToFlowPosition(screenPt),
-            screenPt,
-            conn.source,
-            conn.sourceHandle,
-          )
-          if (resolved !== null && resolved.nodeId === conn.target && resolved.kind === 'reuse') {
-            portName = resolved.portName
-            reusePort = portName
+            edgeId: `cross_clarify_${tail}_designer`,
+          }
+        } else {
+          // RFC-007/RFC-106: preserve exact NEW/REUSE geometric resolution;
+          // only the graph application moves into the shared planner.
+          let translated = translateInboundConnection(conn)
+          let mode: 'new' | 'reuse' = conn.targetHandle === INBOUND_HANDLE_ID ? 'new' : 'reuse'
+          const targetNode =
+            conn.targetHandle === INBOUND_HANDLE_ID
+              ? definition.nodes.find((node) => node.id === conn.target)
+              : undefined
+          if (
+            targetNode !== undefined &&
+            (targetNode.kind === 'agent-single' || targetNode.kind === 'output') &&
+            conn.source != null &&
+            conn.sourceHandle != null
+          ) {
+            let portName = nextFreeInputPort(
+              existingInputPorts(definition, targetNode),
+              conn.sourceHandle,
+            )
+            if (connectPointer.current !== null) {
+              const screenPoint = connectPointer.current
+              const resolved = resolveDropTarget(
+                definition,
+                getNodeBoxes(rf),
+                rf.screenToFlowPosition(screenPoint),
+                screenPoint,
+                conn.source,
+                conn.sourceHandle,
+              )
+              if (
+                resolved !== null &&
+                resolved.nodeId === conn.target &&
+                resolved.kind === 'reuse'
+              ) {
+                portName = resolved.portName
+                mode = 'reuse'
+              }
+            }
+            translated = { ...conn, targetHandle: portName }
+          }
+          const translatedTarget = definition.nodes.find((node) => node.id === translated.target)
+          request = {
+            kind: 'generic',
+            edgeId: `edge_${ulid().slice(-6).toLowerCase()}`,
+            source: {
+              nodeId: translated.source ?? '',
+              portName: translated.sourceHandle ?? '',
+            },
+            targetNodeId: translated.target ?? '',
+            target: {
+              mode,
+              portName: translated.targetHandle ?? '',
+            },
+            ...(translatedTarget?.kind === 'wrapper-fanout' && mode === 'new'
+              ? { legacyFanoutInputInference: true }
+              : {}),
           }
         }
-        translated = { ...conn, targetHandle: portName }
-        viaCatchAll = reusePort === null
       }
-      const builtRaw = buildEdgeFromConnection(definition, translated)
-      if (builtRaw === null) return
-      // A reuse drop overwrites that input's source — drop any prior edge into it.
-      const baseDef =
-        reusePort !== null
-          ? {
-              ...definition,
-              edges: definition.edges.filter(
-                (e) =>
-                  !(e.target.nodeId === builtRaw.target.nodeId && e.target.portName === reusePort),
-              ),
-            }
-          : definition
-      // RFC-060 §3 — tag wrapper-fanout boundary edges so the scheduler /
-      // aggregator paths pick them up. The two helpers are mutually exclusive,
-      // so chaining them is safe.
-      const built = markBoundaryWrapperOutput(baseDef, markBoundaryWrapperInput(baseDef, builtRaw))
-      const withEdge = { ...baseDef, edges: [...baseDef.edges, built] }
-      const synced = applyConnectionForReviewOutput(withEdge, built, { viaCatchAll })
-      // RFC-060 — wrapper-fanout inputs[] is the single source of truth for
-      // declared ports. If the user dragged an edge that lands on a port
-      // name not in inputs[], auto-append it so the inspector and the
-      // canvas stay in sync (without this, the canvas shows the wired
-      // handle but the inspector's inputs[] list is missing the entry, and
-      // the validator would emit a port-mismatch on next save).
-      const reconciled = ensureWrapperFanoutInputForEdge(synced, built)
-      commitChange(reconciled, { label: t('editor.history.connect') })
+      const plan = planWorkflowConnection(definition, request, semanticContext)
+      if (!plan.ok) return
+      commitTransition({ kind: 'connection', plan }, { label: t('editor.history.connect') })
     },
-    [commitChange, definition, onChange, readOnly, rf, t],
+    [commitTransition, definition, onChange, readOnly, rf, semanticContext, t],
   )
 
   // RFC-106: a fresh drag starts un-handled; onConnect flips the flag when it
@@ -891,30 +994,25 @@ function CanvasInner({
       const flowPt = rf.screenToFlowPosition(screenPt)
       const target = resolveDropTarget(definition, getNodeBoxes(rf), flowPt, screenPt, src, srcH)
       if (target === null) return
-      const built0: WorkflowEdge = {
-        id: `edge_${ulid().slice(-6).toLowerCase()}`,
-        source: { nodeId: src, portName: srcH },
-        target: { nodeId: target.nodeId, portName: target.portName },
-      }
-      // A reuse drop overwrites that port's source — drop any prior edge into it.
-      const baseEdges =
-        target.kind === 'reuse'
-          ? definition.edges.filter(
-              (e) => !(e.target.nodeId === target.nodeId && e.target.portName === target.portName),
-            )
-          : definition.edges
-      const built = markBoundaryWrapperOutput(
-        { ...definition, edges: baseEdges },
-        markBoundaryWrapperInput({ ...definition, edges: baseEdges }, built0),
+      const targetNode = definition.nodes.find((node) => node.id === target.nodeId)
+      const plan = planWorkflowConnection(
+        definition,
+        {
+          kind: 'generic',
+          edgeId: `edge_${ulid().slice(-6).toLowerCase()}`,
+          source: { nodeId: src, portName: srcH },
+          targetNodeId: target.nodeId,
+          target: { mode: target.kind, portName: target.portName },
+          ...(targetNode?.kind === 'wrapper-fanout' && target.kind === 'new'
+            ? { legacyFanoutInputInference: true }
+            : {}),
+        },
+        semanticContext,
       )
-      const withEdge = { ...definition, edges: [...baseEdges, built] }
-      const synced = applyConnectionForReviewOutput(withEdge, built, {
-        viaCatchAll: target.kind === 'new',
-      })
-      const reconciled = ensureWrapperFanoutInputForEdge(synced, built)
-      commitChange(reconciled, { label: t('editor.history.connect') })
+      if (!plan.ok) return
+      commitTransition({ kind: 'connection', plan }, { label: t('editor.history.connect') })
     },
-    [commitChange, definition, onChange, readOnly, rf, t, trackConnectPointer],
+    [commitTransition, definition, onChange, readOnly, rf, semanticContext, t, trackConnectPointer],
   )
 
   // RFC-106: inject (or clear) the live preview input port on the hovered node.
@@ -1017,79 +1115,63 @@ function CanvasInner({
    */
   const isValidConnection = useCallback(
     (conn: Connection | Edge) => {
-      // xyflow types `Edge.targetHandle` as `string | undefined`, so
-      // normalise to `string | null` before passing to the classifiers.
       const guardConn = {
         source: conn.source ?? null,
         target: conn.target ?? null,
         sourceHandle: conn.sourceHandle ?? null,
         targetHandle: conn.targetHandle ?? null,
       }
-      // RFC-023: clarify-channel pre-flight for both reverse + forward
-      // drags. Fail fast on self-loops, non-agent counterparts, or an
-      // agent that already has another clarify wired. xyflow respects the
-      // false return by showing a red dashed line + refusing to fire
-      // onConnect. When `null`, this connection is not a clarify drop and
-      // falls through to the regular validity checks below.
+      let request: ConnectionRequest
       const clarifyDrop = classifyClarifyConnection(definition, guardConn)
       if (clarifyDrop !== null) {
-        if (clarifyDrop.sourceAgentNodeId === clarifyDrop.clarifyNodeId) return false
-        const agent = definition.nodes.find((n) => n.id === clarifyDrop.sourceAgentNodeId)
-        if (!isValidClarifyTarget(agent)) return false
-        if (hasExistingClarifyChannel(definition, clarifyDrop.sourceAgentNodeId)) return false
-        // RFC-063: a single clarify node may attach to at most one agent.
-        // Block the second-agent reverse-drag with the same red-dashed UX
-        // that already covers the inverse direction.
-        if (clarifyHasAttachedAgent(definition, clarifyDrop.clarifyNodeId)) return false
-        return true
-      }
-      // RFC-056 cross-clarify pre-flight. Must run BEFORE the merged
-      // defensive guard below — cross-clarify reuses the literal port name
-      // `'questions'` (===CLARIFY_INPUT_PORT_NAME), so a defensive
-      // RFC-023 guard placed ahead of this classifier would silently
-      // reject every cross-clarify questioner-reverse drop (see issue #2
-      // 2026-05-22 UI bug report). Mirrors the RFC-023 path: fail-fast on
-      // self-loops, non-agent-single counterparts, and already-wired
-      // channels. xyflow draws the red dashed reject UI on `return false`.
-      const crossDrop = classifyCrossClarifyConnection(definition, guardConn)
-      if (crossDrop !== null) {
-        if (crossDrop.kind === 'questioner-reverse') {
-          if (crossDrop.questionerNodeId === crossDrop.crossClarifyNodeId) return false
-          const q = definition.nodes.find((n) => n.id === crossDrop.questionerNodeId)
-          if (!isValidCrossClarifyQuestioner(q)) return false
-          if (questionerHasExistingClarifyChannel(definition, crossDrop.questionerNodeId))
-            return false
-          // RFC-063: one cross-clarify node may attach to at most one
-          // questioner. Block a second-questioner reverse-drag with the
-          // same red-dashed UX that already covers the inverse direction.
-          if (crossClarifyHasAttachedQuestioner(definition, crossDrop.crossClarifyNodeId))
-            return false
-          return true
+        request = {
+          kind: 'clarify-questioner',
+          questionerNodeId: clarifyDrop.sourceAgentNodeId,
+          clarifyNodeId: clarifyDrop.clarifyNodeId,
         }
-        // designer-forward
-        if (crossDrop.crossClarifyNodeId === crossDrop.designerNodeId) return false
-        const d = definition.nodes.find((n) => n.id === crossDrop.designerNodeId)
-        if (d === undefined || d.kind !== 'agent-single') return false
-        if (crossClarifyHasDesignerEdge(definition, crossDrop.crossClarifyNodeId)) return false
-        return true
+      } else {
+        const crossDrop = classifyCrossClarifyConnection(definition, guardConn)
+        if (crossDrop?.kind === 'questioner-reverse') {
+          request = {
+            kind: 'cross-questioner',
+            questionerNodeId: crossDrop.questionerNodeId,
+            crossClarifyNodeId: crossDrop.crossClarifyNodeId,
+          }
+        } else if (crossDrop?.kind === 'designer-forward') {
+          request = {
+            kind: 'cross-designer',
+            crossClarifyNodeId: crossDrop.crossClarifyNodeId,
+            designerNodeId: crossDrop.designerNodeId,
+          }
+        } else {
+          const translated = translateInboundConnection(guardConn)
+          const mode = guardConn.targetHandle === INBOUND_HANDLE_ID ? 'new' : 'reuse'
+          const targetNode = definition.nodes.find((node) => node.id === translated.target)
+          const targetPortName =
+            mode === 'new' &&
+            targetNode !== undefined &&
+            (targetNode.kind === 'agent-single' || targetNode.kind === 'output') &&
+            translated.sourceHandle != null
+              ? nextFreeInputPort(
+                  existingInputPorts(definition, targetNode),
+                  translated.sourceHandle,
+                )
+              : (translated.targetHandle ?? '')
+          request = {
+            kind: 'generic',
+            source: {
+              nodeId: translated.source ?? '',
+              portName: translated.sourceHandle ?? '',
+            },
+            targetNodeId: translated.target ?? '',
+            target: { mode, portName: targetPortName },
+            ...(targetNode?.kind === 'wrapper-fanout' && mode === 'new'
+              ? { legacyFanoutInputInference: true }
+              : {}),
+          }
+        }
       }
-      // Merged defensive guard for BOTH RFC-023 + RFC-056 clarify-channel
-      // system port handles. Runs only AFTER both classifiers had a chance
-      // to match; if a drop is still carrying any channel handle name, it's a
-      // stray drop the generic catch-all path would turn into a junk edge that
-      // buildScopeUpstreams silently strips (→ false dispatch root) — reject
-      // up-front so xyflow shows the red dashed feedback. The handle name list
-      // (incl. `__clarify_response__` + `__clarify__`, the false-root incident
-      // ports) lives in the pure `isStrayClarifyChannelDrop` so it is
-      // unit-testable and stays symmetric.
-      if (isStrayClarifyChannelDrop(guardConn)) {
-        return false
-      }
-      // Backend validation forbids ordinary inbound edges on git/loop
-      // wrappers. Their legacy full-height catch-all handle must therefore
-      // reject the drop here; accepting it creates an edge with no rendered
-      // target handle, so the user cannot see, select, or delete it.
-      if (isUnsupportedWrapperInbound(definition, conn)) return false
+      if (!planWorkflowConnection(definition, request, semanticContext).ok) return false
       // RFC-007 task-detail iterate lock.
       if (taskContext === undefined) return true
       if (conn.target === null || conn.target === undefined) return true
@@ -1098,7 +1180,7 @@ function CanvasInner({
       const iter = taskContext.reviewIteration[conn.target] ?? 0
       return iter === 0
     },
-    [definition, taskContext],
+    [definition, semanticContext, taskContext],
   )
 
   // ---- Clipboard / shortcuts (P-2-07) ----
@@ -1205,25 +1287,23 @@ function CanvasInner({
   const deleteSelected = useCallback(() => {
     if (onChange === undefined || readOnly === true) return
     if (selection.nodes.length === 0 && selection.edges.length === 0) return
-    const deleted = deleteWorkflowSelection(definition, selection.nodes, selection.edges)
-    if (!deleted.safe) {
-      setCanvasNotice(t('canvas.referenceChangeBlocked'))
-      return
-    }
-    if (deleted.warnings.length > 0) {
-      setCanvasNotice(t('canvas.referencesPruned', { n: deleted.warnings.length }))
-    }
-    const accepted = commitChange(deleted.definition, {
-      label: t('editor.history.delete'),
-      selectionBefore: singleCanvasSelection(selection.nodes, selection.edges),
-      selectionAfter: null,
-    })
+    const accepted = commitTransition(
+      {
+        kind: 'delete-selection',
+        nodeIds: selection.nodes,
+        edgeIds: selection.edges,
+      },
+      {
+        label: t('editor.history.delete'),
+        selectionBefore: singleCanvasSelection(selection.nodes, selection.edges),
+        selectionAfter: null,
+      },
+    )
     if (!accepted) return
     syncCanvasSelection([], [])
     wrapperRef.current?.focus()
   }, [
-    commitChange,
-    definition,
+    commitTransition,
     onChange,
     readOnly,
     selection.edges,
@@ -1257,13 +1337,21 @@ function CanvasInner({
             handleClarifyDirectiveToggle,
             reviewNavs,
             clarifyNavs,
+            readOnly !== true && onChange !== undefined ? handleAddInsideWrapper : undefined,
+            undefined,
+            surface,
           ),
           measured,
         ),
         restoredSelection.nodes,
       )
       const restoredEdges = applySelection(
-        toFlowEdges(definition.edges, buildControlFlowEdgeIds(definition, agentByName)),
+        toFlowEdges(
+          definition.edges,
+          buildControlFlowEdgeIds(definition, agentByName),
+          workflowInsertableEdgeIds(definition, semanticContext),
+          handleInsertNodeOnEdge,
+        ),
         restoredSelection.edges,
       )
       nodesRef.current = restoredNodes
@@ -1279,10 +1367,16 @@ function CanvasInner({
       clarifyNavs,
       definition,
       handleClarifyDirectiveToggle,
+      handleAddInsideWrapper,
       handleQuestionBadgeClick,
       nodeStatuses,
+      onChange,
       questionCounts,
+      readOnly,
       reviewNavs,
+      handleInsertNodeOnEdge,
+      semanticContext,
+      surface,
       syncCanvasSelection,
     ],
   )
@@ -1292,23 +1386,17 @@ function CanvasInner({
       if (onChange === undefined || readOnly === true) return
       const nodeIds = removedNodes.map((node) => node.id)
       const edgeIds = removedEdges.map((edge) => edge.id)
-      const deleted = deleteWorkflowSelection(definition, nodeIds, edgeIds)
-      if (!deleted.safe) {
-        setCanvasNotice(t('canvas.referenceChangeBlocked'))
-        restoreRejectedFlowDelete(removedNodes, removedEdges)
-        return
-      }
-      if (deleted.warnings.length > 0) {
-        setCanvasNotice(t('canvas.referencesPruned', { n: deleted.warnings.length }))
-      }
-      const accepted = commitChange(deleted.definition, {
-        label: t('editor.history.delete'),
-        selectionBefore:
-          nodeIds.length === 1
-            ? { kind: 'node', id: nodeIds[0]! }
-            : singleCanvasSelection([], edgeIds),
-        selectionAfter: null,
-      })
+      const accepted = commitTransition(
+        { kind: 'delete-selection', nodeIds, edgeIds },
+        {
+          label: t('editor.history.delete'),
+          selectionBefore:
+            nodeIds.length === 1
+              ? { kind: 'node', id: nodeIds[0]! }
+              : singleCanvasSelection([], edgeIds),
+          selectionAfter: null,
+        },
+      )
       if (!accepted) {
         restoreRejectedFlowDelete(removedNodes, removedEdges)
         return
@@ -1319,15 +1407,7 @@ function CanvasInner({
       // reachable without an extra click.
       wrapperRef.current?.focus()
     },
-    [
-      commitChange,
-      definition,
-      onChange,
-      readOnly,
-      restoreRejectedFlowDelete,
-      syncCanvasSelection,
-      t,
-    ],
+    [commitTransition, onChange, readOnly, restoreRejectedFlowDelete, syncCanvasSelection, t],
   )
 
   const duplicateNode = useCallback(
@@ -1466,18 +1546,19 @@ function CanvasInner({
   const deleteWrapperWithInner = useCallback(
     (wrapperId: string) => {
       if (onChange === undefined || readOnly === true) return
-      const next = deleteWrapperWithChildren(definition, wrapperId)
-      if (next === definition) return
-      const accepted = commitChange(next, {
-        label: t('editor.history.delete'),
-        selectionBefore: { kind: 'node', id: wrapperId },
-        selectionAfter: null,
-      })
+      const accepted = commitTransition(
+        { kind: 'delete-selection', nodeIds: [wrapperId], edgeIds: [] },
+        {
+          label: t('editor.history.delete'),
+          selectionBefore: { kind: 'node', id: wrapperId },
+          selectionAfter: null,
+        },
+      )
       if (!accepted) throw new Error(t('canvas.referenceChangeBlocked'))
       syncCanvasSelection([], [])
       wrapperRef.current?.focus()
     },
-    [commitChange, definition, onChange, readOnly, syncCanvasSelection, t],
+    [commitTransition, onChange, readOnly, syncCanvasSelection, t],
   )
 
   // One construction path for both desktop HTML5 drop and the accessible
@@ -1485,7 +1566,14 @@ function CanvasInner({
   // the fresh node and opens its inspector; drag-and-drop keeps its existing
   // desktop behavior.
   const insertPaletteItem = useCallback(
-    (item: PaletteItem, position: { x: number; y: number }, selectAfterInsert: boolean) => {
+    (
+      item: PaletteItem,
+      position: { x: number; y: number },
+      selectAfterInsert: boolean,
+      scope: { kind: 'top-level' } | { kind: 'wrapper'; wrapperNodeId: string } = {
+        kind: 'top-level',
+      },
+    ) => {
       if (onChange === undefined || readOnly === true) return
       const existingIds = new Set(definition.nodes.map((n) => n.id))
       const measured = buildMeasuredSizesFromXyflowNodes(nodesRef.current)
@@ -1496,7 +1584,7 @@ function CanvasInner({
         openPosition = findOpenPlacement({
           desiredPoint: position,
           candidateSize: DEFAULT_NODE_SIZE_BY_KIND[item.kind],
-          scope: { kind: 'top-level' },
+          scope,
           nodes: definition.nodes.map((node, index) => ({
             id: node.id,
             position: effectiveWorkflowNodePosition(node, index),
@@ -1518,8 +1606,19 @@ function CanvasInner({
         return
       }
       const newNode = makeNode(item, openPosition, { agents, existingIds })
+      const nodesWithMembership = [...definition.nodes, newNode].map((node) => {
+        if (scope.kind !== 'wrapper' || node.id !== scope.wrapperNodeId) return node
+        const current = node as Record<string, unknown>
+        const nodeIds = Array.isArray(current.nodeIds)
+          ? current.nodeIds.filter((value): value is string => typeof value === 'string')
+          : []
+        return {
+          ...current,
+          nodeIds: nodeIds.includes(newNode.id) ? nodeIds : [...nodeIds, newNode.id],
+        } as unknown as WorkflowNode
+      })
       const accepted = commitChange(
-        { ...definition, nodes: [...definition.nodes, newNode] },
+        { ...definition, nodes: nodesWithMembership },
         {
           label: t('editor.history.insert'),
           selectionBefore: singleCanvasSelection(selection.nodes, selection.edges),
@@ -1554,6 +1653,232 @@ function CanvasInner({
   // contract while always dispatching to the latest definition / callbacks.
   const addPaletteItemAtViewportCenterRef = useRef(addPaletteItemAtViewportCenter)
   addPaletteItemAtViewportCenterRef.current = addPaletteItemAtViewportCenter
+  const openNodePicker = useCallback(
+    (intent?: WorkflowNodePickerIntent, trigger?: HTMLElement | null) => {
+      if (readOnly === true || onChange === undefined) return
+      nodePickerTriggerRef.current = trigger ?? wrapperRef.current
+      onModalSurfaceChange?.('palette')
+      if (intent !== undefined) {
+        setNodePickerIntent(intent)
+        return
+      }
+      const box = wrapperRef.current?.getBoundingClientRect()
+      if (box === undefined) return
+      setNodePickerIntent({
+        kind: 'free',
+        viewportPoint: rf.screenToFlowPosition(viewportCenter(box)),
+        scope: { kind: 'top-level' },
+      })
+    },
+    [onChange, onModalSurfaceChange, readOnly, rf],
+  )
+  openNodePickerRef.current = openNodePicker
+
+  const makeEdgeInsertionCandidate = useCallback(
+    (item: PaletteItem, edgeId: string, avoidCollisions: boolean): WorkflowNode | null => {
+      const edge = definition.edges.find((candidate) => candidate.id === edgeId)
+      if (edge === undefined) return null
+      const sourceIndex = definition.nodes.findIndex((node) => node.id === edge.source.nodeId)
+      const targetIndex = definition.nodes.findIndex((node) => node.id === edge.target.nodeId)
+      if (sourceIndex < 0 || targetIndex < 0) return null
+      const sourcePosition = effectiveWorkflowNodePosition(
+        definition.nodes[sourceIndex]!,
+        sourceIndex,
+      )
+      const targetPosition = effectiveWorkflowNodePosition(
+        definition.nodes[targetIndex]!,
+        targetIndex,
+      )
+      const desiredPoint = {
+        x: Math.round((sourcePosition.x + targetPosition.x) / 2),
+        y: Math.round((sourcePosition.y + targetPosition.y) / 2),
+      }
+      let position = desiredPoint
+      if (avoidCollisions) {
+        const measured = buildMeasuredSizesFromXyflowNodes(nodesRef.current)
+        const wrappers = resolveWrappers(definition, measured)
+        const parentMap = buildParentMap(wrappers)
+        try {
+          position = findOpenPlacement({
+            desiredPoint,
+            candidateSize: DEFAULT_NODE_SIZE_BY_KIND[item.kind],
+            scope: { kind: 'top-level' },
+            nodes: definition.nodes.map((node, index) => ({
+              id: node.id,
+              position: effectiveWorkflowNodePosition(node, index),
+              measuredSize: measured.get(node.id),
+              defaultSize: DEFAULT_NODE_SIZE_BY_KIND[node.kind],
+              directWrapperNodeId: parentMap.get(node.id),
+            })),
+            wrapperRects: [...wrappers.values()].map((wrapper) => ({
+              id: wrapper.id,
+              x: wrapper.position.x,
+              y: wrapper.position.y,
+              width: wrapper.width,
+              height: wrapper.height,
+              directWrapperNodeId: parentMap.get(wrapper.id),
+            })),
+          })
+        } catch {
+          return null
+        }
+      }
+      return makeNode(item, position, {
+        agents,
+        existingIds: new Set(definition.nodes.map((node) => node.id)),
+      })
+    },
+    [agents, definition],
+  )
+
+  const nodePickerDisabledReason = useCallback(
+    (item: PaletteItem): string | null => {
+      if (nodePickerIntent?.kind !== 'insert-edge') return null
+      const candidate = makeEdgeInsertionCandidate(item, nodePickerIntent.edgeId, false)
+      if (candidate === null) return t('canvas.placementUnavailable')
+      const plan = planWorkflowEdgeInsertion(
+        definition,
+        nodePickerIntent.edgeId,
+        candidate,
+        semanticContext,
+      )
+      return plan.ok ? null : plan.reason.message
+    },
+    [definition, makeEdgeInsertionCandidate, nodePickerIntent, semanticContext, t],
+  )
+
+  const pickNode = useCallback(
+    (item: PaletteItem) => {
+      const intent = nodePickerIntent
+      if (intent === null) return
+      if (intent.kind === 'free') {
+        insertPaletteItem(item, intent.viewportPoint, true, intent.scope)
+      } else if (intent.kind === 'after-node') {
+        const sourceIndex = definition.nodes.findIndex((node) => node.id === intent.nodeId)
+        if (sourceIndex >= 0) {
+          const source = definition.nodes[sourceIndex]!
+          const position = effectiveWorkflowNodePosition(source, sourceIndex)
+          insertPaletteItem(
+            item,
+            {
+              x: position.x + DEFAULT_NODE_SIZE_BY_KIND[source.kind].width + 80,
+              y: position.y,
+            },
+            true,
+            intent.scope,
+          )
+        }
+      } else if (intent.kind === 'inside-wrapper') {
+        const measured = buildMeasuredSizesFromXyflowNodes(nodesRef.current)
+        const wrapper = resolveWrappers(definition, measured).get(intent.wrapperNodeId)
+        if (wrapper !== undefined) {
+          insertPaletteItem(
+            item,
+            { x: wrapper.position.x + 40, y: wrapper.position.y + 64 },
+            true,
+            { kind: 'wrapper', wrapperNodeId: intent.wrapperNodeId },
+          )
+        }
+      } else if (intent.kind === 'insert-edge') {
+        const candidate = makeEdgeInsertionCandidate(item, intent.edgeId, true)
+        if (candidate === null) {
+          setCanvasNotice(t('canvas.placementUnavailable'))
+          return
+        }
+        const plan = planWorkflowEdgeInsertion(
+          definition,
+          intent.edgeId,
+          candidate,
+          semanticContext,
+        )
+        if (!plan.ok) {
+          setCanvasNotice(plan.reason.message)
+          return
+        }
+        const accepted = commitTransition(
+          { kind: 'connection', plan },
+          {
+            label: t('editor.history.insert'),
+            selectionBefore: { kind: 'edge', id: intent.edgeId },
+            selectionAfter: { kind: 'node', id: candidate.id },
+          },
+        )
+        if (!accepted) return
+        syncCanvasSelection([candidate.id], [])
+        announceCanvasChange(
+          t('editor.connectionDialog.inserted', { node: candidate.id, edge: intent.edgeId }),
+        )
+      }
+      setNodePickerIntent(null)
+      onModalSurfaceChange?.(null)
+    },
+    [
+      commitTransition,
+      definition,
+      insertPaletteItem,
+      makeEdgeInsertionCandidate,
+      nodePickerIntent,
+      onModalSurfaceChange,
+      semanticContext,
+      syncCanvasSelection,
+      t,
+      announceCanvasChange,
+    ],
+  )
+
+  const selectedNodeId = selection.nodes.length === 1 ? selection.nodes[0]! : null
+  const selectedNode =
+    selectedNodeId === null
+      ? undefined
+      : definition.nodes.find((node) => node.id === selectedNodeId)
+  const selectedNodeCanConnect =
+    selectedNode !== undefined &&
+    computePorts(selectedNode, agentByName, definition).outputs.length > 0
+
+  const openConnectionDialog = useCallback(
+    (nodeId: string, trigger: HTMLElement | null) => {
+      const node = definition.nodes.find((candidate) => candidate.id === nodeId)
+      if (node === undefined || computePorts(node, agentByName, definition).outputs.length === 0) {
+        return
+      }
+      connectionTriggerRef.current = trigger
+      setConnectionReplaceEdgeId(null)
+      setConnectionSourceNodeId(nodeId)
+      setMenu(null)
+      onModalSurfaceChange?.('connection')
+    },
+    [agentByName, definition, onModalSurfaceChange],
+  )
+
+  const openAfterNodePicker = useCallback(
+    (nodeId: string, trigger: HTMLElement) => {
+      const measured = buildMeasuredSizesFromXyflowNodes(nodesRef.current)
+      const parent = buildParentMap(resolveWrappers(definition, measured)).get(nodeId)
+      openNodePicker(
+        {
+          kind: 'after-node',
+          nodeId,
+          scope:
+            parent === undefined
+              ? { kind: 'top-level' }
+              : { kind: 'wrapper', wrapperNodeId: parent },
+        },
+        trigger,
+      )
+    },
+    [definition, openNodePicker],
+  )
+
+  const openNodeMenu = useCallback((nodeId: string, trigger: HTMLElement) => {
+    const canvasRect = wrapperRef.current?.getBoundingClientRect()
+    const triggerRect = trigger.getBoundingClientRect()
+    menuTriggerRef.current = trigger
+    setMenu({
+      x: canvasRect === undefined ? triggerRect.left : triggerRect.left - canvasRect.left,
+      y: canvasRect === undefined ? triggerRect.bottom : triggerRect.bottom - canvasRect.top + 4,
+      nodeId,
+    })
+  }, [])
 
   function handleDragOver(e: React.DragEvent<HTMLDivElement>) {
     if (readOnly === true) return
@@ -1584,6 +1909,7 @@ function CanvasInner({
     const box = wrapperRef.current?.getBoundingClientRect()
     const x = box === undefined ? e.clientX : e.clientX - box.left
     const y = box === undefined ? e.clientY : e.clientY - box.top
+    menuTriggerRef.current = e.currentTarget as HTMLElement
     setMenu({ x, y, nodeId: node.id })
     // Make sure the right-clicked node is part of the selection.
     if (!selection.nodes.includes(node.id)) {
@@ -1597,6 +1923,7 @@ function CanvasInner({
     const box = wrapperRef.current?.getBoundingClientRect()
     const x = box === undefined ? e.clientX : e.clientX - box.left
     const y = box === undefined ? e.clientY : e.clientY - box.top
+    menuTriggerRef.current = wrapperRef.current
     setMenu({ x, y, nodeId: null })
   }
 
@@ -1619,7 +1946,15 @@ function CanvasInner({
         { label: t('editor.menuSelectAll'), onSelect: selectAll },
       ]
     }
+    const menuNode = definition.nodes.find((candidate) => candidate.id === menu.nodeId)
+    const menuNodeCanConnect =
+      menuNode !== undefined && computePorts(menuNode, agentByName, definition).outputs.length > 0
     return [
+      {
+        label: t('editor.nodeActions.connectNext'),
+        disabled: !menuNodeCanConnect,
+        onSelect: () => openConnectionDialog(menu.nodeId!, menuTriggerRef.current),
+      },
       {
         label: t('editor.menuDuplicate'),
         onSelect: () => menu.nodeId !== null && duplicateNode(menu.nodeId),
@@ -1664,12 +1999,16 @@ function CanvasInner({
         onSelect: () => {
           if (menu.nodeId === null) return
           const snapshot = snapshotWrapperDelete(definition, menu.nodeId)
-          if (snapshot !== null) setWrapperDeleteSnapshot(snapshot)
+          if (snapshot !== null) {
+            setWrapperDeleteSnapshot(snapshot)
+            onModalSurfaceChange?.('confirm')
+          }
         },
       },
       { label: t('common.delete'), danger: true, onSelect: deleteSelected },
     ]
   }, [
+    agentByName,
     copySelection,
     decomposeWrapper,
     definition,
@@ -1677,6 +2016,8 @@ function CanvasInner({
     duplicateNode,
     fitWrapperToChildren,
     menu,
+    onModalSurfaceChange,
+    openConnectionDialog,
     pasteFromClipboard,
     rf,
     selectAll,
@@ -1684,6 +2025,27 @@ function CanvasInner({
     t,
     wrapSelection,
   ])
+
+  useEffect(() => {
+    if (readOnly === true) return
+    const element = wrapperRef.current
+    if (element === null) return
+    const openKeyboardMenu = (event: KeyboardEvent) => {
+      if (isCanvasTextEditingTarget(event.target)) return
+      if (!(event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey))) return
+      const nodeId =
+        selectionRef.current.nodes.length === 1 ? selectionRef.current.nodes[0] : undefined
+      if (nodeId === undefined) return
+      const nodeElement = [...element.querySelectorAll<HTMLElement>('.react-flow__node')].find(
+        (candidate) => candidate.dataset.id === nodeId,
+      )
+      if (nodeElement === undefined) return
+      event.preventDefault()
+      openNodeMenu(nodeId, nodeElement)
+    }
+    element.addEventListener('keydown', openKeyboardMenu)
+    return () => element.removeEventListener('keydown', openKeyboardMenu)
+  }, [openNodeMenu, readOnly])
 
   // Lets the parent route deselect the canvas from outside — required by
   // the EdgeInspector / NodeInspector ✕ buttons. Just nulling the parent's
@@ -1699,6 +2061,27 @@ function CanvasInner({
     () => ({
       addPaletteItemAtViewportCenter: (item) => {
         addPaletteItemAtViewportCenterRef.current(item)
+      },
+      openNodePicker: (intent, trigger) => {
+        openNodePickerRef.current(intent, trigger)
+      },
+      openConnection: (nodeId, trigger) => {
+        openConnectionDialog(nodeId, trigger ?? null)
+      },
+      openEdgeReconnect: (edgeId, trigger) => {
+        const edge = definition.edges.find((candidate) => candidate.id === edgeId)
+        if (edge === undefined) return
+        connectionTriggerRef.current = trigger ?? null
+        setConnectionReplaceEdgeId(edgeId)
+        setConnectionSourceNodeId(edge.source.nodeId)
+        onModalSurfaceChange?.('connection')
+      },
+      closeModalSurface: () => {
+        setNodePickerIntent(null)
+        setConnectionSourceNodeId(null)
+        setConnectionReplaceEdgeId(null)
+        setWrapperDeleteSnapshot(null)
+        onModalSurfaceChange?.(null)
       },
       clearSelection: () => {
         storeApi.getState().unselectNodesAndEdges()
@@ -1718,22 +2101,53 @@ function CanvasInner({
           nextSelection === null ? 'null' : `${nextSelection.kind}:${nextSelection.id}`
         wrapperRef.current?.focus()
       },
+      focusSelection: (nextSelection) => {
+        storeApi.getState().unselectNodesAndEdges()
+        const selectedNodes = nextSelection.kind === 'node' ? [nextSelection.id] : []
+        const selectedEdges = nextSelection.kind === 'edge' ? [nextSelection.id] : []
+        setNodes((current) => applySelection(clearFlowSelection(current), selectedNodes))
+        setEdges((current) => applySelection(clearFlowSelection(current), selectedEdges))
+        setSelection({ nodes: selectedNodes, edges: selectedEdges })
+        lastEmittedSelectionSig.current = `${nextSelection.kind}:${nextSelection.id}`
+        window.requestAnimationFrame(() => {
+          const nodeIds =
+            nextSelection.kind === 'node'
+              ? [nextSelection.id]
+              : definition.edges
+                  .filter((edge) => edge.id === nextSelection.id)
+                  .flatMap((edge) => [edge.source.nodeId, edge.target.nodeId])
+          const visibleNodes = nodeIds
+            .map((id) => rf.getNode(id))
+            .filter((node): node is NonNullable<typeof node> => node !== undefined)
+          if (visibleNodes.length > 0) {
+            void rf.fitView({ nodes: visibleNodes, padding: 0.5, maxZoom: 1.25, duration: 180 })
+          }
+        })
+      },
     }),
-    [storeApi],
+    [definition.edges, onModalSurfaceChange, openConnectionDialog, rf, storeApi],
   )
 
   return (
     <div
       ref={wrapperRef}
       className="workflow-canvas"
+      data-surface={surface}
+      role="region"
+      aria-label={t('canvas.accessibleName')}
+      aria-describedby={canvasDescriptionId}
       tabIndex={0}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
+      <p id={canvasDescriptionId} className="sr-only">
+        {t('canvas.accessibleDescription')}
+      </p>
       <ReactFlow
         nodes={nodes}
         edges={edges}
         nodeTypes={NODE_TYPES}
+        edgeTypes={EDGE_TYPES}
         onNodesChange={handleNodesChange}
         onEdgesChange={handleEdgesChange}
         onDelete={handleFlowDelete}
@@ -1919,6 +2333,68 @@ function CanvasInner({
         <Background />
         <MiniMap pannable zoomable />
         <Controls showInteractive={false} />
+        {readOnly !== true && onChange !== undefined ? (
+          <Panel position="top-right" className="workflow-canvas__layout-panel">
+            <div role="toolbar" aria-label={t('editor.layoutToolbar')}>
+              <button
+                type="button"
+                className="btn btn--xs"
+                data-testid="workflow-layout-all"
+                disabled={definition.nodes.length < 2}
+                onClick={() => handleAutoLayout({ mode: 'all' })}
+              >
+                {t('editor.layoutAll')}
+              </button>
+              <button
+                type="button"
+                className="btn btn--xs"
+                data-testid="workflow-layout-selection"
+                disabled={selection.nodes.length < 2}
+                onClick={() =>
+                  handleAutoLayout({ mode: 'selection', nodeIds: [...selection.nodes] })
+                }
+              >
+                {t('editor.layoutSelection')}
+              </button>
+            </div>
+          </Panel>
+        ) : null}
+        {readOnly !== true && onChange !== undefined && selectedNodeId !== null ? (
+          <NodeToolbar
+            nodeId={selectedNodeId}
+            isVisible
+            position={Position.Top}
+            className="workflow-canvas__node-actions nodrag nowheel"
+          >
+            <button
+              type="button"
+              className="btn btn--xs"
+              aria-label={t('editor.nodeActions.addNext')}
+              onClick={(event) => openAfterNodePicker(selectedNodeId, event.currentTarget)}
+            >
+              +
+            </button>
+            <button
+              type="button"
+              className="btn btn--xs btn--primary"
+              disabled={!selectedNodeCanConnect}
+              onClick={(event) => openConnectionDialog(selectedNodeId, event.currentTarget)}
+            >
+              {t('editor.nodeActions.connectNext')}
+            </button>
+            <button type="button" className="btn btn--xs" onClick={copySelection}>
+              {t('editor.nodeActions.copy')}
+            </button>
+            <button
+              type="button"
+              className="btn btn--xs"
+              aria-label={t('editor.nodeActions.more')}
+              onClick={(event) => openNodeMenu(selectedNodeId, event.currentTarget)}
+            >
+              ⋯
+            </button>
+          </NodeToolbar>
+        ) : null}
         {readOnly !== true && (
           <ConnectDropHint
             definition={definition}
@@ -1931,6 +2407,39 @@ function CanvasInner({
           />
         )}
       </ReactFlow>
+      {definition.nodes.length === 0 ? (
+        <div className="workflow-canvas__empty" data-testid="workflow-canvas-empty">
+          <EmptyState
+            title={t('editor.emptyCanvas.title')}
+            description={t('editor.emptyCanvas.description')}
+            action={
+              readOnly !== true && onChange !== undefined ? (
+                <div className="workflow-canvas__empty-actions">
+                  <button
+                    type="button"
+                    className="btn btn--primary"
+                    data-testid="workflow-empty-add-first"
+                    onClick={(event) => openNodePicker(undefined, event.currentTarget)}
+                  >
+                    {t('editor.emptyCanvas.addFirst')}
+                  </button>
+                  {onStartFromTemplate !== undefined ? (
+                    <button
+                      type="button"
+                      className="btn"
+                      data-testid="workflow-empty-start-template"
+                      onClick={(event) => onStartFromTemplate(event.currentTarget)}
+                    >
+                      {t('editor.emptyCanvas.startTemplate')}
+                    </button>
+                  ) : null}
+                </div>
+              ) : undefined
+            }
+            data-testid="workflow-canvas-empty-state"
+          />
+        </div>
+      ) : null}
       {canvasNotice !== null ? (
         <NoticeBanner
           tone="warning"
@@ -1955,12 +2464,7 @@ function CanvasInner({
         x={menu?.x ?? 0}
         y={menu?.y ?? 0}
         items={menuItems}
-        onClose={() => {
-          setMenu(null)
-          // Menu buttons unmount after every action. Return focus to the
-          // canvas so an immediate Undo/Redo shortcut remains reachable.
-          wrapperRef.current?.focus()
-        }}
+        onClose={() => setMenu(null)}
         header={
           menu?.nodeId !== undefined && menu?.nodeId !== null ? (
             <code>{menu.nodeId}</code>
@@ -1968,6 +2472,86 @@ function CanvasInner({
             <span>{t('editor.menuSelectedCount', { n: selection.nodes.length })}</span>
           )
         }
+        triggerRef={menuTriggerRef}
+      />
+      <ConnectionDialog
+        open={connectionSourceNodeId !== null}
+        definition={definition}
+        agents={agents ?? []}
+        sourceNodeId={connectionSourceNodeId ?? ''}
+        sourcePortName={
+          connectionReplaceEdgeId === null
+            ? undefined
+            : definition.edges.find((edge) => edge.id === connectionReplaceEdgeId)?.source.portName
+        }
+        replaceEdgeId={connectionReplaceEdgeId ?? undefined}
+        initialTargetNodeId={
+          connectionReplaceEdgeId === null
+            ? undefined
+            : definition.edges.find((edge) => edge.id === connectionReplaceEdgeId)?.target.nodeId
+        }
+        initialTargetPortName={
+          connectionReplaceEdgeId === null
+            ? undefined
+            : definition.edges.find((edge) => edge.id === connectionReplaceEdgeId)?.target.portName
+        }
+        triggerRef={connectionTriggerRef}
+        restoreFocusFallbackRef={wrapperRef}
+        onClose={() => {
+          setConnectionSourceNodeId(null)
+          setConnectionReplaceEdgeId(null)
+          onModalSurfaceChange?.(null)
+        }}
+        onApply={(plan, targetNodeId) => {
+          const sourceNodeId = connectionSourceNodeId
+          if (sourceNodeId === null) return false
+          const replacedEdgeId = connectionReplaceEdgeId
+          const accepted = commitTransition(
+            { kind: 'connection', plan },
+            {
+              label: t('editor.history.connect'),
+              selectionBefore:
+                replacedEdgeId === null
+                  ? { kind: 'node', id: sourceNodeId }
+                  : { kind: 'edge', id: replacedEdgeId },
+              selectionAfter:
+                replacedEdgeId === null
+                  ? { kind: 'node', id: targetNodeId }
+                  : { kind: 'edge', id: replacedEdgeId },
+            },
+          )
+          if (!accepted) return false
+          if (replacedEdgeId === null) syncCanvasSelection([targetNodeId], [])
+          else syncCanvasSelection([], [replacedEdgeId])
+          announceCanvasChange(
+            t('editor.connectionDialog.applied', { source: sourceNodeId, target: targetNodeId }),
+          )
+          return true
+        }}
+      />
+      {managedLiveRegion === null ? (
+        <div className="workflow-canvas__live" aria-live="polite" aria-atomic="true">
+          {connectionAnnouncement}
+        </div>
+      ) : null}
+      <WorkflowNodePicker
+        open={nodePickerIntent !== null}
+        agents={agents ?? []}
+        intent={
+          nodePickerIntent ?? {
+            kind: 'free',
+            viewportPoint: { x: 0, y: 0 },
+            scope: { kind: 'top-level' },
+          }
+        }
+        onClose={() => {
+          setNodePickerIntent(null)
+          onModalSurfaceChange?.(null)
+        }}
+        onPick={pickNode}
+        disabledReason={nodePickerDisabledReason}
+        triggerRef={nodePickerTriggerRef}
+        restoreFocusFallbackRef={wrapperRef}
       />
       <ConfirmDialog
         open={wrapperDeleteSnapshot !== null}
@@ -1978,7 +2562,10 @@ function CanvasInner({
         confirmLabel={t('common.delete')}
         tone="danger"
         restoreFocusFallbackRef={wrapperRef}
-        onClose={() => setWrapperDeleteSnapshot(null)}
+        onClose={() => {
+          setWrapperDeleteSnapshot(null)
+          onModalSurfaceChange?.(null)
+        }}
         onConfirm={() => {
           const snapshot = wrapperDeleteSnapshot
           if (snapshot === null) return
@@ -2116,6 +2703,9 @@ function toFlowNodes(
   // RFC-161: per clarify/cross-clarify-node click target. When `clarifyNavs` is
   // undefined (editor canvas) no clarify node gets a `clarifyNav` (golden-lock).
   clarifyNavs?: Record<string, 'awaiting' | 'answered'>,
+  onAddInsideWrapper?: (wrapperNodeId: string, trigger?: HTMLElement | null) => void,
+  validationCounts?: Readonly<Record<string, WorkflowValidationCounts | undefined>>,
+  surface: WorkflowCanvasSurface = 'task',
 ): Node[] {
   const loopBodyIds = new Set<string>()
   for (const n of definition.nodes) {
@@ -2126,6 +2716,7 @@ function toFlowNodes(
   return definition.nodes.map((n, idx) => {
     const ports = computePorts(n, agentByName, definition)
     const data: CanvasNodeData = {
+      surface,
       nodeId: n.id,
       kind: n.kind,
       title: nodeTitle(n),
@@ -2136,6 +2727,8 @@ function toFlowNodes(
       const s = statuses[n.id]
       if (s !== undefined) data.status = s
     }
+    const validation = validationCounts?.[n.id]
+    if (validation !== undefined) data.validation = validation
     // RFC-120 D13: paint a question badge only when this node has pending
     // questions. The click handle rides along on the same data so the badge can
     // jump to the board; both stay absent when `questionCounts` isn't supplied.
@@ -2177,6 +2770,7 @@ function toFlowNodes(
     if (isWrapperKind(n.kind)) {
       const inner = (n as unknown as { nodeIds?: string[] }).nodeIds
       ;(data as CanvasNodeData & { innerCount?: number }).innerCount = inner?.length ?? 0
+      if (onAddInsideWrapper !== undefined) data.onAddInsideWrapper = onAddInsideWrapper
     }
     if (n.kind === 'wrapper-loop') {
       // RFC-016: surface maxIterations + exitCondition.kind onto node data so
@@ -2206,9 +2800,13 @@ function toFlowNodes(
       if (raw !== undefined) {
         const nodeId = typeof raw.nodeId === 'string' ? raw.nodeId : ''
         const portName = typeof raw.portName === 'string' ? raw.portName : ''
-        ;(
-          data as CanvasNodeData & { inputSource?: { nodeId: string; portName: string } }
-        ).inputSource = { nodeId, portName }
+        const reviewData = data as CanvasNodeData & {
+          inputSource?: { nodeId: string; portName: string }
+          inputSourceTitle?: string
+        }
+        reviewData.inputSource = { nodeId, portName }
+        const sourceNode = definition.nodes.find((candidate) => candidate.id === nodeId)
+        if (sourceNode !== undefined) reviewData.inputSourceTitle = nodeTitle(sourceNode)
       }
     }
     // RFC-060 PR-E: agent-multi sourcePort mirroring removed.
@@ -2244,21 +2842,60 @@ function toFlowNodes(
 // re-exported here to keep the historical import surface.
 export { nodeTitle }
 
+function workflowInsertableEdgeIds(
+  definition: WorkflowDefinition,
+  context: ReturnType<typeof createWorkflowSemanticContext>,
+): Set<string> {
+  const ids = new Set<string>()
+  for (const edge of definition.edges) {
+    if (isWorkflowEdgeInsertable(definition, edge.id, context)) ids.add(edge.id)
+  }
+  return ids
+}
+
 function toFlowEdges(
   defEdges: WorkflowDefinition['edges'],
   controlFlowEdgeIds?: ReadonlySet<string>,
+  insertableEdgeIds?: ReadonlySet<string>,
+  onInsertNode?: WorkflowCanvasEdgeData['onInsertNode'],
+  validationCounts?: Readonly<Record<string, WorkflowValidationCounts | undefined>>,
 ): Edge[] {
-  return defEdges.map((e) => ({
-    id: e.id,
-    source: e.source.nodeId,
-    target: e.target.nodeId,
-    sourceHandle: e.source.portName,
-    targetHandle: e.target.portName,
-    // RFC-060 signal ports carry no data — render their edge as a grey dashed
-    // control-flow line (styles.css `.canvas-edge--control`). Absent set ⇒ no
-    // tagging, so the existing unit-test call sites round-trip unchanged.
-    ...(controlFlowEdgeIds?.has(e.id) ? { className: CONTROL_FLOW_EDGE_CLASS } : {}),
-  }))
+  return defEdges.map((e) => {
+    const insertable = insertableEdgeIds?.has(e.id) === true && onInsertNode !== undefined
+    const validation = validationCounts?.[e.id]
+    const validationClass =
+      validation === undefined
+        ? undefined
+        : validation.errors > 0
+          ? 'canvas-edge--validation-error'
+          : 'canvas-edge--validation-warning'
+    const className = [
+      controlFlowEdgeIds?.has(e.id) ? CONTROL_FLOW_EDGE_CLASS : undefined,
+      validationClass,
+    ]
+      .filter((value): value is string => value !== undefined)
+      .join(' ')
+    return {
+      id: e.id,
+      source: e.source.nodeId,
+      target: e.target.nodeId,
+      sourceHandle: e.source.portName,
+      targetHandle: e.target.portName,
+      // RFC-060 signal ports carry no data — render their edge as a grey dashed
+      // control-flow line (styles.css `.canvas-edge--control`). Absent set ⇒ no
+      // tagging, so the existing unit-test call sites round-trip unchanged.
+      ...(className === '' ? {} : { className }),
+      ...(insertable || validation !== undefined
+        ? {
+            type: 'workflow-insertable',
+            data: {
+              ...(insertable ? { onInsertNode } : {}),
+              ...(validation !== undefined ? { validation } : {}),
+            } satisfies WorkflowCanvasEdgeData,
+          }
+        : {}),
+    }
+  })
 }
 
 /**
@@ -2297,33 +2934,6 @@ export function reconcileFlowNodeChanges(
   const nodeIds = new Set(nodes.map((node) => node.id))
   const edges = currentEdges.filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target))
   return { nodes, edges }
-}
-
-/**
- * One semantic deletion transaction for keyboard, context-menu and future
- * toolbar entry points. Wrapper roots expand through their complete recursive
- * child closure before the shared survivor inventory prunes every remaining
- * node/edge/top-level-output reference.
- */
-export function deleteWorkflowSelection(
-  definition: WorkflowDefinition,
-  selectedNodeIds: Iterable<string>,
-  selectedEdgeIds: Iterable<string>,
-): ReturnType<typeof pruneDeletedNodeReferences> {
-  const closure = collectNodeReferenceClosure(definition, selectedNodeIds)
-  const removedNodeIds = new Set(closure.nodeIds)
-  const removedEdgeIds = new Set(selectedEdgeIds)
-  const nodes = definition.nodes.filter((node) => !removedNodeIds.has(node.id))
-  const base: WorkflowDefinition = {
-    ...definition,
-    nodes,
-    edges: definition.edges.filter((edge) => !removedEdgeIds.has(edge.id)),
-  }
-  const pruned = pruneDeletedNodeReferences(base, new Set(nodes.map((node) => node.id)))
-  return {
-    ...pruned,
-    warnings: [...closure.warnings, ...pruned.warnings],
-  }
 }
 
 /**
@@ -2562,101 +3172,14 @@ export function buildEdgeFromConnection(
   }
 }
 
-/**
- * RFC-060 — when an edge is dropped on a wrapper-fanout target whose port
- * name is not (yet) in the wrapper's `inputs[]`, auto-append the port. The
- * inspector's Inputs list is the single source of truth for wrapper-fanout
- * declared ports — without this reconciliation, drag-creating an inbound
- * edge would create a "phantom" port that's visible on the canvas but
- * missing from the declared list (and would trip the validator on next
- * save).
- *
- * Default kind for the auto-added port:
- *   - If the wrapper currently has no shardSource, mark the new port as
- *     shardSource with kind `list<string>` (it's the most common drop —
- *     authors first wire up the iteration source, then add broadcast
- *     ports later via the inspector).
- *   - Otherwise, add a non-shard port with kind `string`.
- *
- * Returns `prev` by reference when no change is needed so React effects
- * short-circuit on `===`.
- */
-/**
- * RFC-060 §3 — tag an edge whose source is a wrapper-fanout node and whose
- * target lives inside that wrapper's `nodeIds[]` as a
- * `boundary: 'wrapper-input'` edge. The scheduler's fanout dispatcher
- * (services/fanout.ts) keys off this flag to inject shards / broadcast
- * values into inner-node prompts; an untagged edge would render on the
- * canvas but be ignored at runtime.
- *
- * Returns `edge` by reference when no tagging is needed.
- */
-export function markBoundaryWrapperInput(
-  def: WorkflowDefinition,
-  edge: WorkflowEdge,
-): WorkflowEdge {
-  if (edge.boundary !== undefined) return edge
-  const source = def.nodes.find((n) => n.id === edge.source.nodeId)
-  if (source === undefined || source.kind !== 'wrapper-fanout') return edge
-  const innerIds = (source as Record<string, unknown>).nodeIds
-  const memberIds = Array.isArray(innerIds)
-    ? innerIds.filter((s): s is string => typeof s === 'string')
-    : []
-  if (!memberIds.includes(edge.target.nodeId)) return edge
-  return { ...edge, boundary: 'wrapper-input' }
-}
-
-/**
- * RFC-060 §3 — symmetric mirror of {@link markBoundaryWrapperInput}.
- * Tags an edge whose target is a wrapper-fanout node and whose source
- * lives inside that wrapper's `nodeIds[]` as a
- * `boundary: 'wrapper-output'` edge. The runtime aggregator path
- * (services/fanout.ts) treats inner-to-wrapper-output edges as
- * promotions of the aggregator's per-shard outputs to the wrapper's
- * outlet; without this tag the edge would render but the runtime
- * would treat it as a non-boundary edge and refuse to project.
- *
- * Returns `edge` by reference when no tagging is needed.
- */
-export function markBoundaryWrapperOutput(
-  def: WorkflowDefinition,
-  edge: WorkflowEdge,
-): WorkflowEdge {
-  if (edge.boundary !== undefined) return edge
-  const target = def.nodes.find((n) => n.id === edge.target.nodeId)
-  if (target === undefined || target.kind !== 'wrapper-fanout') return edge
-  const innerIds = (target as Record<string, unknown>).nodeIds
-  const memberIds = Array.isArray(innerIds)
-    ? innerIds.filter((s): s is string => typeof s === 'string')
-    : []
-  if (!memberIds.includes(edge.source.nodeId)) return edge
-  return { ...edge, boundary: 'wrapper-output' }
-}
-
-export function ensureWrapperFanoutInputForEdge(
-  prev: WorkflowDefinition,
-  edge: WorkflowEdge,
-): WorkflowDefinition {
-  const target = prev.nodes.find((n) => n.id === edge.target.nodeId)
-  if (target === undefined || target.kind !== 'wrapper-fanout') return prev
-  const rec = target as unknown as Record<string, unknown>
-  const inputs = Array.isArray(rec.inputs)
-    ? (rec.inputs as Array<{ name?: unknown; kind?: unknown; isShardSource?: unknown }>)
-    : []
-  if (inputs.some((p) => p.name === edge.target.portName)) return prev
-  const hasShardSource = inputs.some((p) => p.isShardSource === true)
-  const newPort = hasShardSource
-    ? { name: edge.target.portName, kind: 'string' }
-    : { name: edge.target.portName, kind: 'list<string>', isShardSource: true }
-  const nextNodes = prev.nodes.map((n) => {
-    if (n.id !== edge.target.nodeId) return n
-    return {
-      ...(n as Record<string, unknown>),
-      inputs: [...inputs, newPort],
-    } as unknown as WorkflowNode
-  })
-  return { ...prev, nodes: nextNodes }
-}
+// Compatibility re-exports for the pre-RFC-199 golden fixtures. Production
+// connection paths consume these only through workflow-connection-plan /
+// workflow-transition.
+export {
+  ensureWrapperFanoutInputForEdge,
+  markBoundaryWrapperInput,
+  markBoundaryWrapperOutput,
+} from '../../lib/workflow-connection-boundary'
 
 function isWrapperNode(def: WorkflowDefinition, nodeId: string | null): boolean {
   if (nodeId === null) return false
@@ -2681,6 +3204,8 @@ export const __testToFlowNodes = (
   reviewNavs?: Record<string, 'awaiting' | 'decided'>,
   // RFC-161: clarify-node click targets, so clarifyNav-threading is testable too.
   clarifyNavs?: Record<string, 'awaiting' | 'answered'>,
+  onAddInsideWrapper?: (wrapperNodeId: string, trigger?: HTMLElement | null) => void,
+  surface: WorkflowCanvasSurface = 'task',
 ): Node[] => {
   const def: WorkflowDefinition = {
     $schema_version: 1,
@@ -2700,6 +3225,9 @@ export const __testToFlowNodes = (
     onClarifyDirectiveToggle,
     reviewNavs,
     clarifyNavs,
+    onAddInsideWrapper,
+    undefined,
+    surface,
   )
 }
 export const __testToFlowEdges = toFlowEdges

@@ -6,21 +6,26 @@
 // The canvas, however, only used to write edges on connect — so a dragged
 // edge into a review or output node left the corresponding field empty,
 // and a typed-in field had no matching edge on the canvas. Both surfaces
-// must mirror each other; this module is the single chokepoint.
+// must mirror each other. RFC-199 makes applyWorkflowTransition the only
+// edit-time chokepoint; this module now provides its low-level mirror
+// primitives plus the one-shot load healer.
 //
 // All exports are pure functions. They return the input definition by
 // reference when nothing changes, so upstream React effects can rely on
 // `===` to short-circuit; the same trick keeps RFC-004 `healLoadedDefinition`
 // from looping with the auto-save useEffect.
 //
-// Three entry points feed in:
-//   1. WorkflowCanvas.handleConnect       → applyConnectionForReviewOutput
-//   2. commitChange edge-drop detection   → applyDisconnectForReviewOutput
-//   3. NodeInspector field onChange       → syncEdgeFromFormField
-// plus a one-shot reconciliation pass on load:
-//   4. workflows.edit.healLoadedDefinition → healFieldEdgeConsistency
+// Production edit surfaces must not call these primitives directly:
+//   1. applyWorkflowTransition → applyConnection/applyDisconnect
+//   2. workflows.edit.healLoadedDefinition → healFieldEdgeConsistency
+// syncEdgeFromFormField remains only as a legacy golden-oracle helper.
 
-import type { WorkflowDefinition, WorkflowEdge, WorkflowNode } from '@agent-workflow/shared'
+import {
+  REVIEW_INPUT_PORT_NAME,
+  type WorkflowDefinition,
+  type WorkflowEdge,
+  type WorkflowNode,
+} from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 
 // Shared schema exports the zod `PortRefSchema` but not the inferred type;
@@ -33,7 +38,7 @@ type PortRef = { nodeId: string; portName: string }
  * (see RFC-007 design §3.1). Distinct from RFC-003's `__inbound__` catch-all
  * so the two paths never collide in `translateInboundConnection`.
  */
-export const REVIEW_INPUT_HANDLE_ID = '__review_input__'
+export const REVIEW_INPUT_HANDLE_ID = REVIEW_INPUT_PORT_NAME
 
 const EMPTY_PORT_REF: PortRef = { nodeId: '', portName: '' }
 

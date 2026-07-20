@@ -1,79 +1,42 @@
-// 240px palette sidebar for the workflow editor. Each item is HTML5
-// draggable; the drop side lives on the canvas.
+// 240px palette sidebar for the workflow editor. The row/search/catalog is
+// shared with the modal WorkflowNodePicker; only the desktop drag grip is a
+// sidebar enhancement.
 
-import { useMemo, useState, type DragEvent } from 'react'
-import { useTranslation } from 'react-i18next'
 import type { Agent } from '@agent-workflow/shared'
-import { PALETTE_MIME, buildPalette, serialize, type PaletteItem } from './nodePalette'
+import type { RefObject } from 'react'
+import { WorkflowNodePickerCatalog } from '../workflow-editor/WorkflowNodePicker'
+import type { PaletteItem } from './nodePalette'
 
-interface Props {
+export interface EditorPaletteContentProps {
   agents: Agent[]
   onAdd: (item: PaletteItem) => void
+  initialFocusRef?: RefObject<HTMLInputElement | null>
+  showDragGrip?: boolean
+  className?: string
 }
 
-export function EditorSidebar({ agents, onAdd }: Props) {
-  const { t } = useTranslation()
-  const [filter, setFilter] = useState('')
-  const sections = useMemo(() => buildPalette(agents, t), [agents, t])
+export function EditorPaletteContent({
+  agents,
+  onAdd,
+  initialFocusRef,
+  showDragGrip = true,
+  className,
+}: EditorPaletteContentProps) {
+  return (
+    <WorkflowNodePickerCatalog
+      agents={agents}
+      onPick={onAdd}
+      showDragGrip={showDragGrip}
+      className={className}
+      initialFocusRef={initialFocusRef}
+    />
+  )
+}
 
-  const visible = useMemo(() => {
-    if (filter.trim() === '') return sections
-    const lower = filter.toLowerCase()
-    return sections
-      .map((s) => ({
-        ...s,
-        items: s.items.filter(
-          (i) =>
-            i.label.toLowerCase().includes(lower) || i.description.toLowerCase().includes(lower),
-        ),
-      }))
-      .filter((s) => s.items.length > 0)
-  }, [sections, filter])
-
-  function onDragStart(e: DragEvent<HTMLButtonElement>, item: PaletteItem) {
-    e.dataTransfer.setData(PALETTE_MIME, serialize(item))
-    e.dataTransfer.setData('text/plain', serialize(item))
-    e.dataTransfer.effectAllowed = 'copy'
-  }
-
+export function EditorSidebar(props: EditorPaletteContentProps) {
   return (
     <aside className="editor-sidebar">
-      <div className="editor-sidebar__filter">
-        <input
-          type="search"
-          placeholder={t('editor.paletteFilter')}
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          className="form-input form-input--sm"
-        />
-      </div>
-      <div className="editor-sidebar__sections">
-        {visible.map((section) => (
-          <section key={section.label} className="editor-sidebar__section">
-            <div className="editor-sidebar__title">{section.label}</div>
-            <ul className="editor-sidebar__list">
-              {section.items.map((entry, i) => (
-                <li key={`${section.label}-${i}`}>
-                  <button
-                    type="button"
-                    draggable
-                    onDragStart={(e) => onDragStart(e, entry.item)}
-                    onClick={() => onAdd(entry.item)}
-                    className="editor-sidebar__item"
-                    title={entry.description}
-                  >
-                    <span className="editor-sidebar__item-label">{entry.label}</span>
-                    <span className="editor-sidebar__item-hint">{entry.description}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))}
-        {visible.length === 0 && (
-          <div className="muted editor-sidebar__empty">{t('editor.paletteNoMatches')}</div>
-        )}
-      </div>
+      <EditorPaletteContent {...props} showDragGrip className="workflow-node-picker--sidebar" />
     </aside>
   )
 }

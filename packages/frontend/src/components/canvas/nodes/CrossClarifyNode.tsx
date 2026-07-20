@@ -27,6 +27,8 @@ import {
 } from '@agent-workflow/shared'
 import { QuestionBadge } from './QuestionBadge'
 import type { CanvasNodeData } from './types'
+import { NodeValidationBadge } from './NodeValidationBadge'
+import { NodeConfigurationSummary } from './NodeConfigurationSummary'
 
 export type CrossClarifyStatus = 'pending' | 'awaiting_human' | 'answered' | 'abandoned' | 'failed'
 
@@ -56,9 +58,11 @@ export function CrossClarifyNode({ data, selected }: Props) {
       }
       data-status={status}
       data-clarify-nav={data.clarifyNav}
+      data-surface={data.surface}
       data-testid={`canvas-node-cross-clarify-${data.nodeId}`}
     >
       <QuestionBadge data={data} />
+      <NodeValidationBadge data={data} />
       <Handle
         type="target"
         position={Position.Left}
@@ -70,7 +74,11 @@ export function CrossClarifyNode({ data, selected }: Props) {
         <span className="canvas-node__kind">{labelText}</span>
         <span className="canvas-node__title">{data.title || data.nodeId}</span>
       </div>
-      <div className="canvas-node__id">{data.nodeId}</div>
+      {data.surface === 'editor' ? (
+        <NodeConfigurationSummary data={data} />
+      ) : (
+        <div className="canvas-node__id">{data.nodeId}</div>
+      )}
       {data.description !== undefined && data.description.length > 0 && (
         <div className="canvas-node__description muted">{data.description}</div>
       )}

@@ -21,6 +21,7 @@ afterEach(() => {
 
 function renderNode(data: Partial<ClarifyNodeData> = {}) {
   const merged: ClarifyNodeData = {
+    surface: 'task',
     nodeId: 'c1',
     kind: 'clarify',
     title: 'Pick the database',

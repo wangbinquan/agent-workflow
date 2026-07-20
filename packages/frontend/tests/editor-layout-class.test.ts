@@ -14,12 +14,14 @@ import { editorLayoutClass } from '../src/routes/workflows.edit'
 
 describe('editorLayoutClass', () => {
   test('no selection: base class only, no inspector column reserved', () => {
-    expect(editorLayoutClass(null)).toBe('editor-layout')
+    expect(editorLayoutClass(null)).toBe('editor-layout editor-layout--wide')
     expect(editorLayoutClass(null)).not.toContain('--with-inspector')
   })
 
   test('selection: inspector column reserved', () => {
-    expect(editorLayoutClass('agent_1')).toBe('editor-layout editor-layout--with-inspector')
+    expect(editorLayoutClass('agent_1')).toBe(
+      'editor-layout editor-layout--wide editor-layout--with-inspector',
+    )
   })
 
   test('toggle is purely a function of selection state', () => {
@@ -32,5 +34,10 @@ describe('editorLayoutClass', () => {
     expect(cls).toContain('--with-inspector')
     cls = editorLayoutClass(null)
     expect(cls).not.toContain('--with-inspector')
+  })
+
+  test('compact and phone modes never reserve a hidden inspector track', () => {
+    expect(editorLayoutClass('agent_1', 'compact')).toBe('editor-layout editor-layout--compact')
+    expect(editorLayoutClass('agent_1', 'phone')).toBe('editor-layout editor-layout--phone')
   })
 })

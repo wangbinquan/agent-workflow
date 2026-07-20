@@ -125,7 +125,7 @@ async function setupViaApi(d: DaemonHandle, repoPath: string): Promise<CreatedFi
           {
             id: 'e_agent_review',
             source: { nodeId: 'agent_1', portName: 'answer' },
-            target: { nodeId: 'review_1', portName: 'doc' },
+            target: { nodeId: 'review_1', portName: '__review_input__' },
           },
           {
             id: 'e_review_out',

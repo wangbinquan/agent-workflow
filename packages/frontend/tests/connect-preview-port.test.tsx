@@ -19,6 +19,7 @@ afterEach(() => {
 
 function renderAgent(data: Partial<CanvasNodeData> = {}) {
   const merged: CanvasNodeData = {
+    surface: 'task',
     nodeId: 'a1',
     kind: 'agent-single',
     title: 'coder',

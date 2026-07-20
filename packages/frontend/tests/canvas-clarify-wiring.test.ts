@@ -27,6 +27,7 @@ import { resolve } from 'node:path'
 const FRONTEND_SRC = resolve(__dirname, '..', 'src')
 const WORKFLOW_CANVAS_TSX = resolve(FRONTEND_SRC, 'components', 'canvas', 'WorkflowCanvas.tsx')
 const CLARIFY_HELPER_TS = resolve(FRONTEND_SRC, 'components', 'canvas', 'clarifyDragHelper.ts')
+const WORKFLOW_TRANSITION_TS = resolve(FRONTEND_SRC, 'lib', 'workflow-transition.ts')
 
 describe('RFC-023 bugfix source-level wiring guard', () => {
   test('clarifyDragHelper.ts exports the new classifier + cascade helpers', () => {
@@ -46,19 +47,11 @@ describe('RFC-023 bugfix source-level wiring guard', () => {
     expect(matches.length).toBeGreaterThanOrEqual(3) // import + 2 callers
   })
 
-  test('WorkflowCanvas.tsx invokes cascadeRemoveClarifyChannel from commitChange', () => {
-    const src = readFileSync(WORKFLOW_CANVAS_TSX, 'utf8')
-    expect(src).toContain('cascadeRemoveClarifyChannel')
-    // The cascade call must live INSIDE commitChange so EVERY edge-delete
-    // path (key, right-click menu, EdgeInspector remove, node-removal
-    // cascade) funnels through it.
-    const commitIdx = src.indexOf('const commitChange = useCallback')
-    expect(commitIdx).toBeGreaterThan(-1)
-    const nextDeclarationIdx = src.indexOf('const questionBadgeClickRef', commitIdx)
-    expect(nextDeclarationIdx).toBeGreaterThan(commitIdx)
-    const commitBlock = src.slice(commitIdx, nextDeclarationIdx)
-    expect(commitBlock).toContain('pruneDeletedNodeReferences')
-    expect(commitBlock).toContain('cascadeRemoveClarifyChannel')
+  test('the transition reconciler cascades clarify deletion for every caller', () => {
+    const transition = readFileSync(WORKFLOW_TRANSITION_TS, 'utf8')
+    expect(transition).toContain('pruneDeletedNodeReferences')
+    expect(transition).toContain('cascadeRemoveClarifyChannel')
+    expect(readFileSync(WORKFLOW_CANVAS_TSX, 'utf8')).toContain('applyWorkflowTransition')
   })
 
   test('computePorts backfills outputs from outbound edges so orphan/system ports stay visible', () => {

@@ -5040,6 +5040,37 @@ details.form-section[open] > summary {
   margin-bottom: 0;
 }
 
+/* The editor header is workspace chrome, so changing an action label (for
+ * example Undo -> Undo: Add step) must not wrap the row and move the canvas
+ * while a screen-space insertion is being projected into flow space. Keep a
+ * stable, compact heading column and let the real button row scroll inline. */
+.page--editor > .page__header > .page__heading {
+  flex: 0 0 clamp(160px, 18vw, 240px);
+  overflow: hidden;
+}
+
+.page--editor > .page__header .page__title,
+.page--editor > .page__header .page__meta {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.page--editor > .page__header > .page__actions {
+  flex: 1 1 0;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  padding: 2px 2px 4px;
+  scrollbar-width: thin;
+}
+
+.page--editor > .page__header > .page__actions > .btn {
+  flex: 0 0 auto;
+}
+
 .page--editor h1 {
   font-size: 18px;
   line-height: 1.3;
@@ -5080,7 +5111,6 @@ details.form-section[open] > summary {
 
 .editor-layout {
   display: grid;
-  grid-template-columns: 240px 1fr;
   gap: 12px;
   flex: 1;
   /* Must be 0 (not 520px) so the grid row can shrink to fit the viewport.
@@ -5089,8 +5119,25 @@ details.form-section[open] > summary {
   min-height: 0;
 }
 
-.editor-layout--with-inspector {
-  grid-template-columns: 240px 1fr 480px;
+.editor-layout--wide {
+  grid-template-columns: 240px minmax(520px, 1fr);
+}
+
+.editor-layout--wide.editor-layout--with-inspector {
+  grid-template-columns: 240px minmax(520px, 1fr) clamp(360px, 27vw, 420px);
+}
+
+.editor-layout--medium {
+  grid-template-columns: minmax(520px, 1fr);
+}
+
+.editor-layout--medium.editor-layout--with-inspector {
+  grid-template-columns: minmax(520px, 1fr) clamp(360px, 30vw, 420px);
+}
+
+.editor-layout--compact,
+.editor-layout--phone {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 /* ---- Node inspector ---- */
@@ -5163,6 +5210,83 @@ details.form-section[open] > summary {
   padding: 12px 14px;
 }
 
+.inspector-content {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.inspector-content .inspector__body {
+  overflow: visible;
+  padding-inline: 0;
+}
+
+.inspector__primary-actions {
+  display: flex;
+  padding: 0 0 var(--space-3);
+}
+
+.inspector__primary-actions > .btn {
+  width: 100%;
+}
+
+.dialog__overlay:has(> .workflow-editor-surface-dialog) {
+  align-items: stretch;
+  justify-content: flex-end;
+  padding: 0;
+}
+
+.dialog__panel.workflow-editor-surface-dialog {
+  width: min(88vw, 420px);
+  height: 100dvh;
+  max-height: 100dvh;
+  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+  padding-top: max(var(--space-4), env(safe-area-inset-top));
+  padding-bottom: max(var(--space-4), env(safe-area-inset-bottom));
+}
+
+.dialog__panel.workflow-editor-surface-dialog--phone {
+  width: 100vw;
+  max-width: none;
+  border: 0;
+  border-radius: 0;
+  padding-right: max(var(--space-4), env(safe-area-inset-right));
+  padding-left: max(var(--space-4), env(safe-area-inset-left));
+}
+
+.workflow-editor-action-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.workflow-editor-action-list__item {
+  display: flex;
+  min-height: 56px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 12px;
+  color: var(--text);
+  text-align: left;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.workflow-editor-action-list__item:hover:not(:disabled),
+.workflow-editor-action-list__item:focus-visible {
+  border-color: var(--accent);
+}
+
+.workflow-editor-action-list__item > span {
+  color: var(--muted);
+  font-size: var(--font-sm);
+}
+
+.workflow-editor-action-list__item--danger > strong {
+  color: var(--danger);
+}
+
 .inspector__output-ports {
   list-style: none;
   margin: 0;
@@ -5227,6 +5351,7 @@ details.form-section[open] > summary {
 }
 
 .canvas-frame {
+  position: relative;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--panel);
@@ -5639,7 +5764,10 @@ details.form-section[open] > summary {
 }
 
 .editor-sidebar__item {
-  display: block;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
   width: 100%;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -5647,17 +5775,13 @@ details.form-section[open] > summary {
   color: inherit;
   font: inherit;
   text-align: left;
-  cursor: grab;
+  cursor: pointer;
   background: var(--bg);
   transition: border-color 0.1s;
 }
 
 .editor-sidebar__item:hover {
   border-color: var(--accent);
-}
-
-.editor-sidebar__item:active {
-  cursor: grabbing;
 }
 
 .editor-sidebar__item-label {
@@ -5687,11 +5811,388 @@ details.form-section[open] > summary {
   text-align: center;
 }
 
+/* RFC-199 B6: one searchable node catalog powers both the persistent desktop
+ * palette and the modal/compact Node Picker. Rows remain ordinary buttons;
+ * the small grip is the optional mouse-only drag enhancement. */
+.workflow-node-picker {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.workflow-node-picker > .form-input {
+  flex: 0 0 auto;
+}
+
+.workflow-node-picker--sidebar {
+  height: 100%;
+  padding: 8px;
+}
+
+.workflow-node-picker__groups {
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.workflow-node-picker-dialog .workflow-node-picker__groups {
+  max-height: min(58vh, 520px);
+}
+
+.workflow-node-picker__group-title {
+  margin: 0 0 5px;
+  padding: 0 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.workflow-node-picker__list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.workflow-node-picker__item-copy {
+  min-width: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.workflow-node-picker__item[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.workflow-node-picker__disabled-reason {
+  margin-top: 4px;
+  color: var(--danger);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.workflow-node-picker__drag-grip {
+  flex: 0 0 auto;
+  min-width: 24px;
+  min-height: 24px;
+  display: inline-grid;
+  place-items: center;
+  color: var(--muted);
+  cursor: grab;
+  user-select: none;
+}
+
+.workflow-node-picker__drag-grip:active {
+  cursor: grabbing;
+}
+
+.workflow-node-picker__empty {
+  padding: 18px 10px;
+  text-align: center;
+}
+
+/* RFC-199 B7: Starter is a compact choose → map → validate surface. The
+ * catalog remains usable at phone width and role selectors keep their own
+ * labels instead of relying on card prose as instructions. */
+.workflow-starter-dialog .dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.workflow-starter__catalog {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.workflow-starter__card {
+  min-width: 0;
+  padding: 14px;
+  text-align: left;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.workflow-starter__card strong,
+.workflow-starter__card span {
+  display: block;
+}
+
+.workflow-starter__card span {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.workflow-starter__card--selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.workflow-starter__roles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.workflow-starter__preview,
+.workflow-starter__valid,
+.workflow-starter__invalid,
+.workflow-starter__replace-warning {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  line-height: 1.45;
+}
+
+.workflow-starter__preview {
+  color: var(--muted);
+  background: color-mix(in srgb, var(--muted) 6%, var(--panel));
+}
+
+.workflow-starter__valid {
+  color: var(--success-fg);
+  background: var(--success-bg);
+  border-color: var(--success-border);
+}
+
+.workflow-starter__invalid,
+.workflow-starter__replace-warning {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, var(--panel));
+  border-color: color-mix(in srgb, var(--danger) 32%, var(--border));
+}
+
+.workflow-starter__invalid ul {
+  margin: 6px 0 0;
+  padding-left: 20px;
+}
+
+@media (max-width: 720px) {
+  .workflow-starter__catalog,
+  .workflow-starter__roles {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .workflow-canvas {
   position: relative;
   width: 100%;
   height: 100%;
   outline: none;
+}
+
+.workflow-canvas__empty {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  pointer-events: none;
+}
+
+.workflow-canvas__empty .empty-state {
+  width: min(460px, 100%);
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-md);
+  pointer-events: auto;
+}
+
+.workflow-canvas__empty-actions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workflow-canvas__node-actions {
+  z-index: 12;
+  display: flex;
+  gap: 4px;
+  padding: 5px;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+}
+
+.workflow-canvas__layout-panel > [role='toolbar'] {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-sm);
+}
+
+@media (max-width: 520px) {
+  .workflow-canvas__layout-panel > [role='toolbar'] {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+.workflow-edge-insert {
+  position: absolute;
+  z-index: 6;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  pointer-events: all;
+  color: var(--accent);
+  font-size: 18px;
+  line-height: 1;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  box-shadow: var(--shadow-sm);
+  opacity: 0.62;
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+}
+
+.workflow-edge-insert:hover,
+.workflow-edge-insert:focus-visible,
+.workflow-edge-insert[data-selected='true'] {
+  opacity: 1;
+}
+
+.workflow-canvas__live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.connection-dialog__form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.connection-dialog__form .select__trigger,
+.connection-dialog__form .form-input {
+  width: 100%;
+}
+
+.connection-dialog__mode {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 3px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.connection-dialog__mode button {
+  min-height: 34px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+}
+
+.connection-dialog__mode button.is-active {
+  color: var(--text);
+  background: var(--panel);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-sm);
+}
+
+.connection-dialog__preview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.connection-dialog__boundary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  color: var(--info-fg);
+  background: var(--info-bg);
+  border: 1px solid var(--info-border);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.connection-dialog__boundary > span {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.connection-dialog__preview > span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.connection-dialog__preview code {
+  overflow-wrap: anywhere;
+}
+
+.connection-dialog__compatibility,
+.connection-dialog__replacement {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.connection-dialog__compatibility[data-tone='success'] {
+  color: var(--success);
+  background: var(--success-bg);
+  border-color: var(--success-border);
+}
+
+.connection-dialog__compatibility[data-tone='attention'],
+.connection-dialog__replacement {
+  color: var(--warn-fg);
+  background: var(--warn-bg);
+  border-color: var(--warn-border);
+}
+
+.connection-dialog__compatibility[data-tone='danger'] {
+  color: var(--danger);
+  background: var(--danger-bg);
+  border-color: var(--danger-border);
+}
+
+.connection-dialog__warnings {
+  margin: 0;
+  padding-inline-start: 20px;
+  color: var(--warn-fg);
+  font-size: 13px;
 }
 
 /* Bottom-center affordance for the box-select gesture. Shift+drag is the
@@ -5706,14 +6207,14 @@ details.form-section[open] > summary {
   transform: translateX(-50%);
   padding: 2px 8px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--panel) 80%, transparent);
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
   border: 1px solid var(--border);
   color: var(--muted, var(--text));
   font-size: 11px;
   line-height: 1.4;
   pointer-events: none;
   user-select: none;
-  opacity: 0.75;
+  opacity: 1;
   z-index: 4;
 }
 
@@ -5896,6 +6397,292 @@ details.form-section[open] > summary {
   padding-left: 18px;
 }
 
+.workflow-validation__summary {
+  position: absolute;
+  z-index: 7;
+  top: 12px;
+  left: 48px;
+  gap: 5px;
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
+  box-shadow: var(--shadow-sm);
+}
+
+.workflow-validation[data-state='stale'] .workflow-validation__summary {
+  color: var(--warn-fg);
+  border-color: var(--warn-border);
+}
+
+.workflow-validation__overlay {
+  position: absolute;
+  z-index: 9;
+  top: 50px;
+  left: 12px;
+  display: flex;
+  width: min(520px, calc(100% - 24px));
+  max-height: min(70%, 560px);
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg);
+}
+
+.workflow-validation__header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.workflow-validation__details {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+  padding: 12px;
+  overscroll-behavior: contain;
+}
+
+.workflow-validation__group > h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
+.workflow-validation__group > ul {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  flex-direction: column;
+  gap: 6px;
+  list-style: none;
+}
+
+.workflow-validation__group > ul > li {
+  position: relative;
+  min-width: 0;
+  padding: 2px;
+}
+
+.workflow-validation__issue {
+  display: grid;
+  width: 100%;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+  padding: 8px 10px;
+  color: var(--text);
+  text-align: left;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+
+.workflow-validation__issue:hover {
+  border-color: var(--accent);
+}
+
+.workflow-validation__issue > span:nth-child(2) {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.workflow-validation__issue code,
+.workflow-validation__issue span {
+  overflow-wrap: anywhere;
+}
+
+.workflow-validation__issue-icon {
+  color: var(--danger);
+  font-weight: 800;
+}
+
+.workflow-validation__issue-action {
+  color: var(--accent);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.workflow-validation__autofit {
+  margin: 4px 0 0 28px;
+}
+
+.workflow-validation__empty {
+  padding: 20px;
+  color: var(--success);
+  text-align: center;
+}
+
+.workflow-validation-dialog {
+  max-height: min(88dvh, 680px);
+}
+
+.workflow-validation-dialog .dialog__body {
+  min-height: 0;
+  overflow: auto;
+}
+
+/* The short-height validation surface is edge-to-edge. The shared dialog
+ * overlay normally contributes a 24px inline gutter, which would otherwise
+ * constrain a 100vw panel to viewport - 48px. */
+.dialog__overlay:has(> .workflow-validation-dialog) {
+  padding: 0;
+}
+
+.inspector__field-anchor:focus-visible,
+[data-inspector-port]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.inspector__output-port-binding {
+  display: contents;
+}
+
+.inspector__title {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.inspector__summary {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.inspector__technical {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.inspector__technical--node {
+  padding: 0 16px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.inspector__technical > summary {
+  cursor: pointer;
+}
+
+.inspector__technical dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 10px;
+  margin: 8px 0 0;
+}
+
+.inspector__technical dt,
+.inspector__technical dd {
+  min-width: 0;
+  margin: 0;
+}
+
+.inspector__technical-id {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.inspector-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.inspector-section {
+  min-width: 0;
+}
+
+.inspector-section > h3,
+.inspector-section > summary {
+  margin: 0 0 10px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.inspector-section > summary {
+  cursor: pointer;
+}
+
+.inspector-section--collapsible[open] > summary {
+  margin-bottom: 10px;
+}
+
+.canvas-node__validation {
+  position: absolute;
+  z-index: 8;
+  top: -11px;
+  right: 8px;
+  display: inline-flex;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.canvas-node__validation-error,
+.canvas-node__validation-warning,
+.workflow-edge-validation {
+  padding: 2px 6px;
+  color: var(--danger);
+  background: var(--panel);
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  box-shadow: var(--shadow-sm);
+  white-space: nowrap;
+}
+
+.canvas-node__validation-warning {
+  color: var(--warn-fg);
+}
+
+.workflow-edge-validation {
+  position: absolute;
+  z-index: 5;
+  color: var(--danger);
+  font-size: 11px;
+  font-weight: 750;
+  pointer-events: none;
+}
+
+.react-flow__edge.canvas-edge--validation-error .react-flow__edge-path {
+  stroke-width: 3;
+  stroke-dasharray: 7 4;
+}
+
+.react-flow__edge.canvas-edge--validation-warning .react-flow__edge-path {
+  stroke-width: 2.5;
+  stroke-dasharray: 5 4;
+}
+
+@media (max-width: 720px), (max-height: 520px) {
+  .dialog__panel.workflow-validation-dialog {
+    inset: 0;
+    width: 100vw;
+    height: 100dvh;
+    max-width: none;
+    max-height: 100dvh;
+    transform: none;
+    border: 0;
+    border-radius: 0;
+    padding-bottom: max(var(--space-4), env(safe-area-inset-bottom));
+  }
+}
+
 /* ---- Custom canvas nodes ---- */
 
 .canvas-node {
@@ -5908,6 +6695,19 @@ details.form-section[open] > summary {
   font-size: 13px;
   color: var(--text);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+/* RFC-199 editor cards use one predictable reading width. Runtime task and
+ * workgroup-preview cards deliberately retain their existing dimensions. */
+.canvas-node[data-surface='editor']:not(.canvas-node--wrapper-group) {
+  box-sizing: border-box;
+  width: 240px;
+  min-width: 240px;
+}
+
+.canvas-node--review[data-surface='editor'] {
+  width: 260px;
+  min-width: 260px;
 }
 
 .canvas-node--selected {
@@ -5938,6 +6738,24 @@ details.form-section[open] > summary {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
   color: var(--muted);
+}
+
+.canvas-node__configuration {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.canvas-node--wrapper-group[data-surface='editor'] > .canvas-node__configuration {
+  position: absolute;
+  top: 28px;
+  left: 10px;
+}
+
+.canvas-node--wrapper-group[data-surface='editor'] .canvas-node__heading-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
 }
 
 /* RFC-120 D13 — on-canvas per-node pending-question count badge. A small red
@@ -6578,6 +7396,16 @@ details.form-section[open] > summary {
   height: 8px !important;
   border: 2px solid var(--panel) !important;
   z-index: 1;
+}
+
+/* Keep the visual dot compact while giving editor pointer/touch users a
+ * 24x24 hit target. The transparent pseudo-element bubbles to the Handle;
+ * non-editor runtime canvases keep their historical geometry. */
+.canvas-node[data-surface='editor']
+  .canvas-node__handle:not(.canvas-node__handle--catchall)::after {
+  position: absolute;
+  inset: -8px;
+  content: '';
 }
 
 /* xyflow ships `.react-flow__edge { pointer-events: visibleStroke }` and
@@ -15895,6 +16723,38 @@ button.status-chip {
     flex: 1 1 auto;
   }
 
+  /* The editor is a bounded workspace, not a document form. Keep its title
+   * and action rail on one compact row so a 390px phone and 640x400 landscape
+   * viewport still leave the canvas as the dominant surface. The rail scrolls
+   * horizontally with real buttons; no action is hidden or moved out of DOM
+   * order, and ordinary pages retain the shared stacked mobile header. */
+  .page--editor .page__header--row {
+    align-items: flex-start;
+    flex-direction: row;
+  }
+
+  .content:has(.page--editor) {
+    padding-block: 8px;
+  }
+
+  .page--editor {
+    gap: 6px;
+  }
+
+  .page--editor > .page__header > .page__heading {
+    flex-basis: 132px;
+  }
+
+  .page--editor > .page__header > .page__actions {
+    width: auto;
+    flex: 1 1 auto;
+    justify-content: flex-start;
+  }
+
+  .page--editor > .page__header > .page__actions > .btn {
+    flex: 0 0 auto;
+  }
+
   /* Keep the subject selector and search reachable as two full-width rows.
      A single inline row exceeds the content width under WebKitGTK's font
      metrics and leaves the search input clipped beyond the mobile viewport. */
@@ -16014,8 +16874,6 @@ button.status-chip {
    order so every control remains reachable without page-level horizontal
    scrolling. */
 @media (max-width: 720px) {
-  .editor-layout,
-  .editor-layout--with-inspector,
   .file-tree,
   .task-canvas-layout--with-drawer,
   .task-outputs-panel,
@@ -16024,11 +16882,6 @@ button.status-chip {
   .workgroup-room,
   .workgroup-room--with-drawer {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .editor-layout {
-    align-content: start;
-    overflow-y: auto;
   }
 
   .editor-sidebar,
@@ -16041,20 +16894,11 @@ button.status-chip {
     max-height: 14rem;
   }
 
-  /* A flex/overflow palette has no reliable intrinsic block contribution in
-     the one-column editor grid. Give its mobile row a definite height so it
-     cannot collapse underneath the following canvas and lose pointer hits. */
-  .editor-layout > .editor-sidebar {
-    height: min(14rem, 35dvh);
-  }
-
-  .editor-layout > .canvas-frame,
   .task-canvas-layout--with-drawer > .canvas-frame--task {
     height: min(70dvh, 38rem);
     min-height: 28rem;
   }
 
-  .editor-layout > .inspector,
   .task-canvas-layout--with-drawer > .inspector,
   .workgroup-room > .inspector {
     min-height: 24rem;
@@ -16439,4 +17283,17 @@ button.status-chip {
   .table-viewport__hint::after {
     transition: none;
   }
+}
+/* Shared screen-reader-only content. Keep it in the accessibility tree without
+   allowing status text or canvas descriptions to affect page geometry. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

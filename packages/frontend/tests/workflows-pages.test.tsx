@@ -743,9 +743,10 @@ describe('/workflows/new removal wiring', () => {
     expect(edit).toContain('onChange={commitDefinition}')
     expect(edit).toContain('<UnsavedChangesGuard dirtyRef={unsafeNavigationRef} />')
     expect(edit).toContain('makeWorkflowDeleteRequest(expectedVersion)')
-    expect(edit).toContain('confirmationKey={deleteConfirmationKey}')
+    expect(edit).toContain('<ConfirmDialog')
+    expect(edit).toContain('key={deleteConfirmationKey}')
+    expect(edit).toContain("open={modalSurface === 'delete'}")
     expect(edit).toContain('del.mutateAsync({ expectedVersion: deleteExpectedVersion })')
-    expect(edit).toContain('error={del.error}')
     // RFC-203 T2: the workflow-scheduled-referenced list (visibleScheduled +
     // hiddenCount) now renders via the shared <ErrorDetails> inside
     // ErrorBanner — the RFC-202 call-site-local `.workflow-delete-refs`

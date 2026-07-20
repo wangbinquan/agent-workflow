@@ -22,6 +22,9 @@ const FRONTEND_SRC = resolve(__dirname, '..', 'src')
 const REVIEW_NODE_TSX = resolve(FRONTEND_SRC, 'components', 'canvas', 'nodes', 'ReviewNode.tsx')
 const CONNECTION_SYNC_TS = resolve(FRONTEND_SRC, 'components', 'canvas', 'connectionSync.ts')
 const WORKFLOW_CANVAS_TSX = resolve(FRONTEND_SRC, 'components', 'canvas', 'WorkflowCanvas.tsx')
+const WORKFLOW_TRANSITION_TS = resolve(FRONTEND_SRC, 'lib', 'workflow-transition.ts')
+const WORKFLOW_PLAN_TS = resolve(FRONTEND_SRC, 'lib', 'workflow-connection-plan.ts')
+const SHARED_REVIEW_TS = resolve(__dirname, '..', '..', 'shared', 'src', 'reviewMultiDoc.ts')
 const WORKFLOWS_EDIT_TSX = resolve(FRONTEND_SRC, 'routes', 'workflows.edit.tsx')
 const STYLES_CSS = resolve(FRONTEND_SRC, 'styles.css')
 
@@ -29,7 +32,10 @@ describe('RFC-007 source-level guard', () => {
   test('connectionSync.ts exists and exports the four sync helpers + sentinel', () => {
     expect(existsSync(CONNECTION_SYNC_TS)).toBe(true)
     const src = readFileSync(CONNECTION_SYNC_TS, 'utf8')
-    expect(src).toMatch(/export const REVIEW_INPUT_HANDLE_ID\s*=\s*['"]__review_input__['"]/)
+    expect(src).toContain('export const REVIEW_INPUT_HANDLE_ID = REVIEW_INPUT_PORT_NAME')
+    expect(readFileSync(SHARED_REVIEW_TS, 'utf8')).toMatch(
+      /export const REVIEW_INPUT_PORT_NAME\s*=\s*['"]__review_input__['"]/,
+    )
     expect(src).toMatch(/export function applyConnectionForReviewOutput\b/)
     expect(src).toMatch(/export function applyDisconnectForReviewOutput\b/)
     expect(src).toMatch(/export function syncEdgeFromFormField\b/)
@@ -45,17 +51,20 @@ describe('RFC-007 source-level guard', () => {
     expect(tsx).not.toContain('Catch-all inbound strip is intentionally off')
   })
 
-  test('WorkflowCanvas.tsx imports and wires the sync helpers', () => {
+  test('WorkflowCanvas delegates connect semantics to the planner/reconciler chokepoint', () => {
     const tsx = readFileSync(WORKFLOW_CANVAS_TSX, 'utf8')
-    expect(tsx).toMatch(/from\s+['"]\.\/connectionSync['"]/)
-    expect(tsx).toContain('applyConnectionForReviewOutput')
-    expect(tsx).toContain('applyDisconnectForReviewOutput')
+    expect(tsx).toContain('planWorkflowConnection')
+    expect(tsx).toContain('applyWorkflowTransition')
+    const transition = readFileSync(WORKFLOW_TRANSITION_TS, 'utf8')
+    expect(transition).toContain('applyConnectionForReviewOutput')
+    expect(transition).toContain('applyDisconnectForReviewOutput')
+    expect(readFileSync(WORKFLOW_PLAN_TS, 'utf8')).toContain('REVIEW_INPUT_PORT_NAME')
     // isValidConnection must be reachable so the iterate-lock surface
     // remains wired even if the prop is removed by accident.
     expect(tsx).toContain('isValidConnection')
   })
 
-  test('ReviewEdit imports REVIEW_INPUT_HANDLE_ID + uses syncEdgeFromFormField', () => {
+  test('ReviewEdit and OutputEdit dispatch typed transitions instead of duplicating sync', () => {
     // RFC-146 T3: the review branch moved from the NodeInspector switch to
     // inspector/ReviewEdit.tsx (OutputEdit.tsx carries the other
     // syncEdgeFromFormField call for output-port binds).
@@ -63,14 +72,14 @@ describe('RFC-007 source-level guard', () => {
       resolve(FRONTEND_SRC, 'components', 'canvas', 'inspector', 'ReviewEdit.tsx'),
       'utf8',
     )
-    expect(reviewTsx).toMatch(/from\s+['"]\.\.\/connectionSync['"]/)
-    expect(reviewTsx).toContain('REVIEW_INPUT_HANDLE_ID')
-    expect(reviewTsx).toContain('syncEdgeFromFormField')
+    expect(reviewTsx).toContain("kind: 'set-review-input-source'")
+    expect(reviewTsx).not.toContain('syncEdgeFromFormField')
     const outputTsx = readFileSync(
       resolve(FRONTEND_SRC, 'components', 'canvas', 'inspector', 'OutputEdit.tsx'),
       'utf8',
     )
-    expect(outputTsx).toContain('syncEdgeFromFormField')
+    expect(outputTsx).toContain("kind: 'set-output-ports'")
+    expect(outputTsx).not.toContain('syncEdgeFromFormField')
   })
 
   test('workflows.edit.tsx threads healFieldEdgeConsistency into healLoadedDefinition', () => {

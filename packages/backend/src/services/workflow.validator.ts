@@ -23,6 +23,7 @@ import type {
   Agent,
   ParsedKind,
   Skill,
+  WorkflowCandidateHash,
   WorkflowDefinition,
   WorkflowNodeFieldKey,
   WorkflowValidationContextHash,
@@ -45,6 +46,8 @@ import {
   isMultiDocReviewInput,
   isReviewableBodyKind,
   isWrapperKind,
+  REVIEW_INPUT_PORT_NAME,
+  serializeWorkflowDefinitionCandidateV1,
   tryParseKind,
 } from '@agent-workflow/shared'
 import { createHash } from 'node:crypto'
@@ -195,6 +198,15 @@ export function workflowValidationContextHashOf(
       'utf8',
     )
     .digest('hex') as WorkflowValidationContextHash
+}
+
+/** Server-authoritative hash for an in-memory starter/draft candidate. */
+export function workflowDefinitionCandidateHashOf(
+  definition: WorkflowDefinition,
+): WorkflowCandidateHash {
+  return createHash('sha256')
+    .update(serializeWorkflowDefinitionCandidateV1(definition), 'utf8')
+    .digest('hex') as WorkflowCandidateHash
 }
 
 function compareResourceIdentity(
@@ -594,6 +606,13 @@ export function validateWorkflowDef(
       issues.push({
         code: 'edge-target-port-missing',
         message: `edge '${edge.id}': wrapper '${tgt.id}' does not accept inbound edges in v1`,
+        pointer: edge.id,
+        target: target.nodePort(tgt.id, 'input', edge.target.portName),
+      })
+    } else if (tgt.kind === 'review' && edge.target.portName !== REVIEW_INPUT_PORT_NAME) {
+      issues.push({
+        code: 'edge-target-port-missing',
+        message: `edge '${edge.id}': review node '${tgt.id}' only accepts input port '${REVIEW_INPUT_PORT_NAME}'`,
         pointer: edge.id,
         target: target.nodePort(tgt.id, 'input', edge.target.portName),
       })
@@ -1127,6 +1146,25 @@ export function validateWorkflowDef(
           target: target.nodeField(node.id, 'review-source'),
         })
         continue
+      }
+      const reviewInputEdges = edges.filter((edge) => edge.target.nodeId === node.id)
+      if (reviewInputEdges.length > 1) {
+        issues.push({
+          code: 'review-input-edge-conflict',
+          message: `review node '${node.id}' has ${reviewInputEdges.length} inbound edges; review accepts exactly one wired source`,
+          pointer: node.id,
+          target: target.nodeField(node.id, 'review-source'),
+        })
+      }
+      for (const edge of reviewInputEdges) {
+        if (edge.target.portName !== REVIEW_INPUT_PORT_NAME) continue
+        if (edge.source.nodeId === srcNodeId && edge.source.portName === srcPort) continue
+        issues.push({
+          code: 'review-input-edge-mismatch',
+          message: `review node '${node.id}' input edge '${edge.id}' does not match inputSource '${srcNodeId}.${srcPort}'`,
+          pointer: edge.id,
+          target: target.nodeField(node.id, 'review-source'),
+        })
       }
       // markdown kind enforcement — only agent nodes carry outputKinds.
       //

@@ -15,6 +15,7 @@ import {
   type InspectorChangeMeta,
 } from './historyMeta'
 import { NodeTitleField } from './NodeTitleField'
+import { InspectorFieldAnchor } from './InspectorFieldAnchor'
 import type { EditProps } from './types'
 
 export function InputEdit({
@@ -68,38 +69,42 @@ export function InputEdit({
   return (
     <div className="form-grid">
       <NodeTitleField node={node} onPatch={onPatch} onHistoryBoundary={onHistoryBoundary} />
-      <Field
-        label={t('inspector.fieldInputKey')}
-        required
-        hint={t('inspector.fieldInputKeyHint')}
-        error={inputKeyError}
-        errorId={`input-key-error-${node.id}`}
-      >
-        <TextInput
-          value={keyDraft}
-          onChange={setKeyDraft}
-          onBlur={() => {
-            if (inputKeyError !== undefined) return
-            if (normalizedKeyDraft === key) {
-              setKeyDraft(key)
-              return
+      <InspectorFieldAnchor nodeId={node.id} field="input-definition">
+        <Field
+          label={t('inspector.fieldInputKey')}
+          required
+          hint={t('inspector.fieldInputKeyHint')}
+          error={inputKeyError}
+          errorId={`input-key-error-${node.id}`}
+        >
+          <TextInput
+            value={keyDraft}
+            onChange={setKeyDraft}
+            onBlur={() => {
+              if (inputKeyError !== undefined) return
+              if (normalizedKeyDraft === key) {
+                setKeyDraft(key)
+                return
+              }
+              onCommitDef(renameInputKey(definition, node.id, normalizedKeyDraft), inputKeyMeta)
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                event.currentTarget.blur()
+              } else if (event.key === 'Escape') {
+                event.preventDefault()
+                setKeyDraft(key)
+                event.currentTarget.blur()
+              }
+            }}
+            aria-invalid={inputKeyError === undefined ? undefined : true}
+            aria-errormessage={
+              inputKeyError === undefined ? undefined : `input-key-error-${node.id}`
             }
-            onCommitDef(renameInputKey(definition, node.id, normalizedKeyDraft), inputKeyMeta)
-          }}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault()
-              event.currentTarget.blur()
-            } else if (event.key === 'Escape') {
-              event.preventDefault()
-              setKeyDraft(key)
-              event.currentTarget.blur()
-            }
-          }}
-          aria-invalid={inputKeyError === undefined ? undefined : true}
-          aria-errormessage={inputKeyError === undefined ? undefined : `input-key-error-${node.id}`}
-        />
-      </Field>
+          />
+        </Field>
+      </InspectorFieldAnchor>
       <Field label={t('inspector.fieldInputKind')} hint={t('inspector.fieldInputKindHint')}>
         <Select<WorkflowInput['kind']>
           value={inputKind}

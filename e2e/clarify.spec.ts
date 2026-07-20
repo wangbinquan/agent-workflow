@@ -243,7 +243,7 @@ test.describe('RFC-023 clarify e2e — agent-single happy path', () => {
             {
               id: 'e_designer_review',
               source: { nodeId: 'designer', portName: 'design' },
-              target: { nodeId: 'review_design', portName: 'doc' },
+              target: { nodeId: 'review_design', portName: '__review_input__' },
             },
             {
               id: 'e_review_out',

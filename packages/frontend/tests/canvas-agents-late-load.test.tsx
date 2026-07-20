@@ -63,7 +63,7 @@ describe('WorkflowCanvas rebuilds when agents query resolves after mount', () =>
     const def = makeDef()
     const { container, rerender } = render(
       <I18nextProvider i18n={i18n}>
-        <WorkflowCanvas definition={def} agents={[]} readOnly />
+        <WorkflowCanvas surface="task" definition={def} agents={[]} readOnly />
       </I18nextProvider>,
     )
     // Initially the agents query hasn't resolved — no output handles
@@ -77,7 +77,7 @@ describe('WorkflowCanvas rebuilds when agents query resolves after mount', () =>
     // Simulate useQuery resolving with the agent list.
     rerender(
       <I18nextProvider i18n={i18n}>
-        <WorkflowCanvas definition={def} agents={[CODER]} readOnly />
+        <WorkflowCanvas surface="task" definition={def} agents={[CODER]} readOnly />
       </I18nextProvider>,
     )
 

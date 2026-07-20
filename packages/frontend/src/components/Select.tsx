@@ -8,7 +8,16 @@
 // Accessibility: role=combobox + aria-controls/expanded + role=listbox /
 // option + arrow-key + Home/End + Enter/Space + Esc.
 
-import { Fragment, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import {
+  Fragment,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type Ref,
+} from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { usePopoverPosition } from '@/hooks/usePopoverPosition'
@@ -79,6 +88,8 @@ interface Props<V extends string> {
   ariaLabel?: string
   /** Extra class names appended to the trigger button. */
   className?: string
+  /** Optional focus/restore handle for Dialog contracts. */
+  triggerRef?: Ref<HTMLButtonElement>
   /** name attribute on the hidden input so the value lands in `form` submits. */
   name?: string
   /** Forwarded to the trigger button so callers migrated from a native
@@ -238,7 +249,13 @@ export function Select<V extends string>(props: Props<V>) {
       <button
         type="button"
         role="combobox"
-        ref={triggerRef}
+        ref={(node) => {
+          triggerRef.current = node
+          if (typeof props.triggerRef === 'function') props.triggerRef(node)
+          else if (props.triggerRef !== null && props.triggerRef !== undefined) {
+            props.triggerRef.current = node
+          }
+        }}
         className={`select__trigger ${props.className ?? ''}`.trim()}
         aria-haspopup="listbox"
         aria-expanded={open}

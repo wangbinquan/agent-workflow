@@ -352,7 +352,7 @@ describe('RFC-199 route source lock', () => {
     const source = readFileSync(ROUTE_SOURCE, 'utf8')
     const validateBlock = source.slice(
       source.indexOf("app.post('/api/workflows/:id/validate'"),
-      source.indexOf('// P-4-08: YAML export / import.'),
+      source.indexOf("app.post('/api/workflows/:id/validate-draft'"),
     )
     const exportBlock = source.slice(
       source.indexOf("app.get('/api/workflows/:id/export'"),

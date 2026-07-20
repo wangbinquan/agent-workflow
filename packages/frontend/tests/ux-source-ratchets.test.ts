@@ -84,6 +84,10 @@ const NATIVE_GLOBALS = new Set(['window', 'globalThis', 'self'])
 const ROLE_DIALOG_ALLOWLIST = new Map([
   ['components/Dialog.tsx', 'shared modal primitive'],
   ['components/review/ReviewDocPane.tsx', 'non-modal selection popover'],
+  [
+    'components/workflow-editor/ValidationPanel.tsx',
+    'non-modal anchored validation detail on wide editor surfaces',
+  ],
 ])
 
 const INPUT_IMPLEMENTATION_ALLOWLIST = new Map([
@@ -145,7 +149,7 @@ describe('RFC-198 global UX source ratchets', () => {
     expect(violations).toEqual([])
   })
 
-  test('modal dialog semantics are owned by Dialog, with one documented non-modal exception', () => {
+  test('modal dialog semantics are owned by Dialog, with documented non-modal exceptions', () => {
     const violations: string[] = []
     for (const source of SOURCES) {
       walk(source.ast, (node) => {

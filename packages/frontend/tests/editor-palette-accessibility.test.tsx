@@ -33,6 +33,7 @@ describe('accessible workflow palette activation', () => {
     const { container } = render(
       <I18nextProvider i18n={i18n}>
         <WorkflowCanvas
+          surface="editor"
           definition={EMPTY_DEFINITION}
           canUndo
           canRedo
@@ -57,7 +58,7 @@ describe('accessible workflow palette activation', () => {
     expect(onRedo).toHaveBeenCalledTimes(2)
   })
 
-  test('a real button preserves HTML5 drag and click inserts exactly once', () => {
+  test('the row is the primary click target and a separate desktop grip preserves HTML5 drag', () => {
     const onAdd = vi.fn()
     const { container } = render(
       <I18nextProvider i18n={i18n}>
@@ -65,9 +66,11 @@ describe('accessible workflow palette activation', () => {
       </I18nextProvider>,
     )
     const item = container.querySelector<HTMLButtonElement>('.editor-sidebar__item')
+    const grip = item?.querySelector<HTMLElement>('.workflow-node-picker__drag-grip') ?? null
     expect(item).not.toBeNull()
     expect(item?.tagName).toBe('BUTTON')
-    expect(item?.getAttribute('draggable')).toBe('true')
+    expect(item?.getAttribute('draggable')).toBeNull()
+    expect(grip?.getAttribute('draggable')).toBe('true')
 
     const setData = vi.fn()
     const setEffectAllowed = vi.fn()
@@ -82,7 +85,7 @@ describe('accessible workflow palette activation', () => {
     }
     const dragStart = new DragEvent('dragstart', { bubbles: true, cancelable: true })
     Object.defineProperty(dragStart, 'dataTransfer', { value: dataTransfer })
-    fireEvent(item!, dragStart)
+    fireEvent(grip!, dragStart)
     expect(setData).toHaveBeenCalledTimes(2)
     const calls = setData.mock.calls as Array<[string, string]>
     expect(calls.map(([mime]) => mime)).toEqual([PALETTE_MIME, 'text/plain'])
@@ -94,19 +97,22 @@ describe('accessible workflow palette activation', () => {
     expect(onAdd).toHaveBeenCalledTimes(1)
   })
 
-  test('native button semantics cover Enter and Space without a duplicate key handler', () => {
-    const src = readFileSync(
+  test('sidebar delegates search, row activation, and keyboard navigation to the shared picker', () => {
+    const sidebar = readFileSync(
       resolve(__dirname, '../src/components/canvas/EditorSidebar.tsx'),
       'utf8',
     )
-    const item = src.match(
-      /<button[\s\S]*?draggable[\s\S]*?onDragStart=\{[\s\S]*?onClick=\{\(\) => onAdd\(entry\.item\)\}[\s\S]*?<\/button>/,
+    const picker = readFileSync(
+      resolve(__dirname, '../src/components/workflow-editor/WorkflowNodePicker.tsx'),
+      'utf8',
     )
-    expect(item).not.toBeNull()
-    expect(item?.[0]).toContain('type="button"')
-    // Native buttons synthesize one click for Enter / Space. A parallel
-    // onKeyDown activation path would double-add a node in real browsers.
-    expect(item?.[0]).not.toContain('onKeyDown')
+    expect(sidebar).toContain('<WorkflowNodePickerCatalog')
+    expect(sidebar).toContain('showDragGrip')
+    expect(sidebar).not.toContain('<input')
+    expect(picker).toContain('<TextInput')
+    expect(picker).toContain('type="search"')
+    expect(picker).toContain("event.key === 'ArrowDown'")
+    expect(picker).toContain("event.key === 'Enter' || event.key === ' '")
   })
 
   test('imperative center insertion appends and selects the same fresh node', async () => {
@@ -120,6 +126,7 @@ describe('accessible workflow palette activation', () => {
         <I18nextProvider i18n={i18n}>
           <WorkflowCanvas
             ref={handle}
+            surface="editor"
             definition={definition}
             onChange={(next) => {
               onChange(next)

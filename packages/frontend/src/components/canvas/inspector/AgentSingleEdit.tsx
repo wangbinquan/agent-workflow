@@ -20,6 +20,7 @@ import {
   type InspectorChangeMeta,
 } from './historyMeta'
 import { NodeTitleField } from './NodeTitleField'
+import { InspectorFieldAnchor } from './InspectorFieldAnchor'
 import type { EditProps } from './types'
 
 export function AgentSingleEdit({
@@ -48,39 +49,44 @@ export function AgentSingleEdit({
   return (
     <div className="form-grid">
       <NodeTitleField node={node} onPatch={onPatch} onHistoryBoundary={onHistoryBoundary} />
-      <Field label={t('inspector.fieldAgent')} required>
-        <Select<string>
-          value={agentName}
-          placeholder={t('inspector.pickAgent')}
-          ariaLabel={t('inspector.fieldAgent')}
-          onChange={(v) =>
-            update(
-              { agentName: v },
-              atomicNodeInspectorChange(node.id, 'agentName', t('inspector.fieldAgent')),
-            )
-          }
-          options={[
-            { value: '', label: t('inspector.pickAgent') },
-            ...agents.map((a) => ({ value: a.name, label: a.name })),
-          ]}
-        />
-      </Field>
-
-      <Field
-        label={t('inspector.fieldPromptTemplate')}
-        hint={t('inspector.fieldPromptTemplateHint')}
-      >
-        <InspectorHistoryBoundary meta={promptMeta} onBoundary={onHistoryBoundary}>
-          <TextArea
-            value={promptTemplate}
-            onChange={(v) => update({ promptTemplate: v }, promptMeta)}
-            rows={8}
-            monospace
+      <InspectorFieldAnchor nodeId={node.id} field="agent">
+        <Field label={t('inspector.fieldAgent')} required>
+          <Select<string>
+            value={agentName}
+            placeholder={t('inspector.pickAgent')}
+            ariaLabel={t('inspector.fieldAgent')}
+            searchable
+            onChange={(v) =>
+              update(
+                { agentName: v },
+                atomicNodeInspectorChange(node.id, 'agentName', t('inspector.fieldAgent')),
+              )
+            }
+            options={[
+              { value: '', label: t('inspector.pickAgent') },
+              ...agents.map((a) => ({ value: a.name, label: a.name })),
+            ]}
           />
-        </InspectorHistoryBoundary>
-        <PortRefList ports={ports.inputs} />
-        <MissingRefList template={promptTemplate} inputPorts={ports.inputs} />
-      </Field>
+        </Field>
+      </InspectorFieldAnchor>
+
+      <InspectorFieldAnchor nodeId={node.id} field="prompt">
+        <Field
+          label={t('inspector.fieldPromptTemplate')}
+          hint={t('inspector.fieldPromptTemplateHint')}
+        >
+          <InspectorHistoryBoundary meta={promptMeta} onBoundary={onHistoryBoundary}>
+            <TextArea
+              value={promptTemplate}
+              onChange={(v) => update({ promptTemplate: v }, promptMeta)}
+              rows={8}
+              monospace
+            />
+          </InspectorHistoryBoundary>
+          <PortRefList ports={ports.inputs} />
+          <MissingRefList template={promptTemplate} inputPorts={ports.inputs} />
+        </Field>
+      </InspectorFieldAnchor>
       {/* RFC-115: per-node retries + timeout overrides removed — both are
           now global execution policy (config.defaultNodeRetries /
           defaultPerNodeTimeoutMs), set in Settings → Limits. */}

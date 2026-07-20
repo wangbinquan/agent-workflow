@@ -5,6 +5,7 @@
 
 import type { Agent, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import type { InspectorChangeMeta } from './historyMeta'
+import type { WorkflowTransition } from '@/lib/workflow-transition'
 
 export interface EditProps {
   node: WorkflowNode
@@ -18,6 +19,8 @@ export interface EditProps {
    * the inputs[] entry edits live outside the node itself).
    */
   onCommitDef: (next: WorkflowDefinition, meta: InspectorChangeMeta) => void
+  /** Dispatch a semantic graph transition without pre-applying its mirrors. */
+  onTransition: (transition: WorkflowTransition, meta: InspectorChangeMeta) => void
   /** Close a continuous field's merge group without changing the snapshot. */
   onHistoryBoundary: (meta: InspectorChangeMeta) => void
 }

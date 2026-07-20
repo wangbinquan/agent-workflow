@@ -57,8 +57,9 @@ export function isControlFlowKind(kind: string | undefined): boolean {
  * The table carries kinds exactly where this function historically derived
  * them — agent outputs (`agent.outputKinds`), wrapper-fanout outlets
  * (aggregator mirror or the `__done__` = signal outlet) — and no kind
- * elsewhere (input/output/review/clarify/wrapper-git/wrapper-loop ⇒ undefined
- * ⇒ default data edge).
+ * elsewhere (input/output/review/clarify/wrapper-loop ⇒ undefined ⇒ default
+ * data edge). wrapper-git declares `list<path<*>>`, whose handler also carries
+ * data.
  *
  * A missing source node (stale snapshot vs edited definition) also ⇒ undefined.
  */

@@ -116,115 +116,129 @@
 
 ## 6. B4 — History、clipboard 与安全放置
 
-- [ ] T7.1 建 shared node-reference descriptor inventory：copy/duplicate wrapper 递归扩 child closure 与 closure 内 edges；重写 wrapper/review/output/loop refs，slice 外引用清空/过滤+warning，edge boundary 保留；同 inventory 驱动 delete prune。clipboard 另携 sourceWorkflowId + input declarations，按 distinct source key 映射一个 collision-safe target key，所有共享-key nodes/edges/declaration 同改并保留 upload 字段；missing declaration fail closed。跨/同 workflow + shared-key fixtures 与 ratchet 防漏映射。
-- [ ] T7.2 route composite history 保存完整 editable snapshot reference + intent/selection hint；save receipt 不清 history。
-- [ ] T7.3 drag start/stop、Dialog submit、delete/insert/layout 为原子 transaction；同字段连续输入按 mergeKey/blur/750ms 合并。
-- [ ] T7.4 Undo/Redo 生成新 revision；新 edit 清 redo；clean remote/load remote/switch workflow 清 history；上限 50，immutable/deep-freeze test。
-- [ ] T7.5 文本控件保留原生 undo；画布聚焦时接管 Cmd/Ctrl+Z、Shift+Cmd/Ctrl+Z、Ctrl+Y；toolbar 是可见主入口。
-- [ ] T7.6 undo 后清理已不存在 selection，并根据 hint 恢复合理 focus；不把 viewport 写进 definition history。
-- [ ] T7.7 新增 `findOpenPlacement`：连续 click 不重叠、中心占用避让、无显式 intent 不落入 wrapper 假包含。
+- [x] T7.1 建 shared node-reference descriptor inventory：copy/duplicate wrapper 递归扩 child closure 与 closure 内 edges；重写 wrapper/review/output/loop refs，slice 外引用清空/过滤+warning，edge boundary 保留；同 inventory 驱动 delete prune。clipboard 另携 sourceWorkflowId + input declarations，按 distinct source key 映射一个 collision-safe target key，所有共享-key nodes/edges/declaration 同改并保留 upload 字段；missing declaration fail closed。跨/同 workflow + shared-key fixtures 与 ratchet 防漏映射。
+- [x] T7.2 route composite history 保存完整 editable snapshot reference + intent/selection hint；save receipt 不清 history。
+- [x] T7.3 drag start/stop、Dialog submit、delete 走原子 transaction；同字段连续输入按 mergeKey/blur/750ms 合并。后续新增的 insert/layout 入口继续分别由 T10.4/T12.4 锁定为单 transaction。
+- [x] T7.4 Undo/Redo 生成新 revision；新 edit 清 redo；clean remote/load remote/switch workflow 清 history；上限 50，immutable/deep-freeze test。
+- [x] T7.5 文本控件保留原生 undo；画布聚焦时接管 Cmd/Ctrl+Z、Shift+Cmd/Ctrl+Z、Ctrl+Y；toolbar 是可见主入口。
+- [x] T7.6 undo 后清理已不存在 selection，并根据 hint 恢复合理 focus；不把 viewport 写进 definition history。
+- [x] T7.7 新增 `findOpenPlacement`：连续 click 不重叠、中心占用避让、无显式 intent 不落入 wrapper 假包含。
+
+**B4 验证（2026-07-19 live source 复核）**：shared reference inventory/closure/rewrite/prune/ratchet `10/10`；history、clipboard、delete、placement、route integration 第一组 `54/54`；hook、Inspector history meta、edge/delete/wrapper missed-issues 组 `131/131`，合计 `195 pass / 0 fail`。未发现需补 production code 的 B4 缺口。
 
 ## 7. B5 — 单一连接语义
 
-- [ ] T8.1 抽 `WorkflowSemanticContext{agentsByName,inventoryRevision}` + `ConnectionIntent/ConnectionPlanResult`；planner 只产出 remove/add edge delta、typed node declaration patches、semantic meta 与 preview，不提前执行 disconnect/connect mirror sync；context 更新必须重算/作废旧 preview。
-- [ ] T8.2 target authority 区分 dynamic agent-single/output inputs 与 fixed review/clarify/wrapper。review 提升 shared `__review_input__` policy：单入/REUSE、agent-only、复用 shared markdownish/list predicate；generic/clarify/fanout intent 返回 compatibility 三态。fanout shard kind 必为 list，选择新 shard 原子 demote 旧 shard并 preview；无 shard 时 broadcast-only 不算完成，锁 0/1/2 shard oracle。
-- [ ] T8.3 唯一 `applyWorkflowTransition(prev,transition,context)`：disconnect cascade → graph/node delta → connect sync → prev/final declared-port diff，返回 next+warnings。review single↔multi 原子迁 `approved_doc↔accepted` 下游 refs；disappeared fanout derived ports 删除 stale edges/清 PortRef并警告。node delete 递归/prune；membership 变更 unlocked refit、locked 保持。所有入口全迁且只 sync 一次。
-- [ ] T8.4 golden fixture 证明 drag `NEW / REUSE` preview 与合法图语义不回退；definition 字节差异只允许明列 dangling-ref/derived-port/fanout 修复并逐 fixture 解释。删除重复拼边/同步分支并用 ratchet 阻止复活。
+- [x] T8.1 抽 `WorkflowSemanticContext{agentsByName,inventoryRevision}` + `ConnectionIntent/ConnectionPlanResult`；planner 只产出 remove/add edge delta、typed node declaration patches、semantic meta 与 preview，不提前执行 disconnect/connect mirror sync；context 更新必须重算/作废旧 preview。
+- [x] T8.2 target authority 区分 dynamic agent-single/output inputs 与 fixed review/clarify/wrapper。review 提升 shared `__review_input__` policy：单入/REUSE、agent-only、复用 shared markdownish/list predicate；generic/clarify/fanout intent 返回 compatibility 三态。fanout shard kind 必为 list，选择新 shard 原子 demote 旧 shard并 preview；无 shard 时 broadcast-only 不算完成，锁 0/1/2 shard oracle。
+- [x] T8.3 唯一 `applyWorkflowTransition(prev,transition,context)`：disconnect cascade → graph/node delta → connect sync → prev/final declared-port diff，返回 next+warnings。review single↔multi 原子迁 `approved_doc↔accepted` 下游 refs；disappeared fanout derived ports 删除 stale edges/清 PortRef并警告。node delete 递归/prune；membership 变更 unlocked refit、locked 保持。所有入口全迁且只 sync 一次。
+- [x] T8.4 golden fixture 证明 drag `NEW / REUSE` preview 与合法图语义不回退；definition 字节差异只允许明列 dangling-ref/derived-port/fanout 修复并逐 fixture 解释。删除重复拼边/同步分支并用 ratchet 阻止复活。
+
+**B5 验证（2026-07-19）**：frontend 全量 `595 files / 4848 pass / 0 fail`，shared 全量 `123 files / 1332 pass / 0 fail`，backend validator/RFC-199 精确套件 `14 files / 143 pass / 0 fail`；workspace typecheck、lint 与本批 code format/diff-check 全绿。并行 dirty tree 上 backend 首轮全量为 `5793 pass / 22 skip / 46 fail`，失败横跨 RFC-200 prompt 文本、daemon/WS/PID/既有跨域时序面；其中本批命中的 validator 发射点计数 ratchet 已由 86 更新至 89 并在上述 143 条精确套件复绿。整树 backend 全绿仍留给并行变更合流后及 T16.5 正式门，不把 G2 通过误写为仓库总门通过。
 
 ### G2 — 语义门
 
-- [ ] 现有真实 drag NEW/REUSE、wrapper boundary、review/output、clarify 回归全绿。
-- [ ] review shared `__review_input__` policy 锁 agent-only + markdownish/list compatibility、occupied replace 与 inputSource/edge 单次 sync；non-agent/known-bad kind fail closed。
-- [ ] review single→multi→single 锁 `approved_doc↔accepted` edges/output/loop refs；删除/更换 fanout aggregator 锁 disappeared promoted port 无 ghost edge/PortRef、warning 可见。
-- [ ] planner 对 self/duplicate 返回稳定 structural reason、零 partial mutation；compatibility 单列三态，guided UI 阻止 known-incompatible，legacy drag 保持 advisory；generic cycle 只 advisory，合法 loop/clarify cycle 保持可建并交最终 validator。
-- [ ] G2 后 UI 才可消费 planner，不能在 Dialog 复制第二套规则。
+- [x] 现有真实 drag NEW/REUSE、wrapper boundary、review/output、clarify 回归全绿。
+- [x] review shared `__review_input__` policy 锁 agent-only + markdownish/list compatibility、occupied replace 与 inputSource/edge 单次 sync；non-agent/known-bad kind fail closed。
+- [x] review single→multi→single 锁 `approved_doc↔accepted` edges/output/loop refs；删除/更换 fanout aggregator 锁 disappeared promoted port 无 ghost edge/PortRef、warning 可见。
+- [x] planner 对 self/duplicate 返回稳定 structural reason、零 partial mutation；compatibility 单列三态，guided UI 阻止 known-incompatible，legacy drag 保持 advisory；generic cycle 只 advisory，合法 loop/clarify cycle 保持可建并交最终 validator。
+- [x] G2 后 UI 才可消费 planner，不能在 Dialog 复制第二套规则。
 
 ## 8. B6 — 零指导建图 UI
 
 ### T9 — Empty / Picker / actions
 
-- [ ] T9.1 editable 空画布用公共 EmptyState 显示“添加第一步”“从模板开始”；readOnly canvas 无创作 CTA。
-- [ ] T9.2 `WorkflowNodePicker` 复用 `buildPalette/makeNode`，支持搜索、推荐/最近/全部、disabled reason、上下键/Enter/Escape/focus restore。
-- [ ] T9.3 palette 搜索迁共享 `TextInput type=search` + accessible label；整行以 click/pointer 为主，拖拽 grip 为桌面增强。
-- [ ] T9.4 toolbar Add、空态、palette、节点/边 contextual `+` 与每个 editable wrapper（含空 wrapper）的“添加内部步骤”共用 picker；intent 显式携 top-level/wrapper scope。placement 可 local 计算，但 definition 始终经 coordProjection 存 absolute、renderer 才 relative；创建+nodeIds membership 一个 transaction，取消零 mutation，锁 nested/Undo 投影。
-- [ ] T9.5 选中节点显示可见“连接下一步 / 复制 / 更多”；Shift+F10/ContextMenu key 与菜单 Arrow/Home/End/Escape/focus restore 完整。
+- [x] T9.1 editable 空画布用公共 EmptyState 显示“添加第一步”“从模板开始”；readOnly canvas 无创作 CTA。
+- [x] T9.2 `WorkflowNodePicker` 复用 `buildPalette/makeNode`，支持搜索、推荐/最近/全部、disabled reason、上下键/Enter/Escape/focus restore。
+- [x] T9.3 palette 搜索迁共享 `TextInput type=search` + accessible label；整行以 click/pointer 为主，拖拽 grip 为桌面增强。
+- [x] T9.4 toolbar Add、空态、palette、节点/边 contextual `+` 与每个 editable wrapper（含空 wrapper）的“添加内部步骤”共用 picker；intent 显式携 top-level/wrapper scope。placement 可 local 计算，但 definition 始终经 coordProjection 存 absolute、renderer 才 relative；创建+nodeIds membership 一个 transaction，取消零 mutation，锁 nested/Undo 投影。
+- [x] T9.5 选中节点显示可见“连接下一步 / 复制 / 更多”；Shift+F10/ContextMenu key 与菜单 Arrow/Home/End/Escape/focus restore 完整。
 
 ### T10 — Non-drag connection / edge insert
 
-- [ ] T10.1 `ConnectionDialog` 显式选择 source output、target node、NEW/REUSE input，显示 kind 与 `A.output → B.input` preview；占用 REUSE 明示替换对象；fanout boundary 显示内/外侧、kind 与 shard/broadcast role，新 shard 明示旧 shard 将转 broadcast。
-- [ ] T10.2 clarify/cross-clarify/fanout boundary 用领域动作文案，不伪装普通 port；agent query 更新时候选同步刷新并作废旧 submit plan。
-- [ ] T10.3 custom ordinary-data edge 提供可聚焦中点 `+`；hover 只是增强，stopPropagation 不抢 EdgeInspector/pane selection。
-- [ ] T10.4 `insertNodeOnEdge` 原子保留原 target port；v1 仅 top-level 且两端都不属于 wrapper 的普通 data edge，boundary/clarify/control/任意 inner/cross-wrapper（含 fanout inner-chain）fail closed。pure+rendered golden 锁 `A→B(existing target port)` 变 `A→N→B`、原 edge 删除、B port/mirrors 单次同步、一个 history/Undo；禁止类型无入口或 fail closed，Cancel 零 mutation。
-- [ ] T10.5 成功后 selection/inspector/focus 可预测并通过 polite live region 宣布；Cancel/Escape 零 mutation。
+- [x] T10.1 `ConnectionDialog` 显式选择 source output、target node、NEW/REUSE input，显示 kind 与 `A.output → B.input` preview；占用 REUSE 明示替换对象；fanout boundary 显示内/外侧、kind 与 shard/broadcast role，新 shard 明示旧 shard 将转 broadcast。
+- [x] T10.2 clarify/cross-clarify/fanout boundary 用领域动作文案，不伪装普通 port；agent query 更新时候选同步刷新并作废旧 submit plan。
+- [x] T10.3 custom ordinary-data edge 提供可聚焦中点 `+`；hover 只是增强，stopPropagation 不抢 EdgeInspector/pane selection。
+- [x] T10.4 `insertNodeOnEdge` 原子保留原 target port；v1 仅 top-level 且两端都不属于 wrapper 的普通 data edge，boundary/clarify/control/任意 inner/cross-wrapper（含 fanout inner-chain）fail closed。pure+rendered golden 锁 `A→B(existing target port)` 变 `A→N→B`、原 edge 删除、B port/mirrors 单次同步、一个 history/Undo；禁止类型无入口或 fail closed，Cancel 零 mutation。
+- [x] T10.5 成功后 selection/inspector/focus 可预测并通过 polite live region 宣布；Cancel/Escape 零 mutation。
+
+**B6 验证（2026-07-19）**：Picker/键盘菜单/空态/wrapper 内添加/节点工具条、ConnectionDialog、普通 data edge 插入与单一 planner/transition 的 7 个聚焦文件 `23 pass / 0 fail`；frontend typecheck/lint 全绿。
 
 ## 9. B7 — Starter 与布局
 
 ### T11 — Starter
 
-- [ ] T11.1 建 client-only catalog：标准开发闭环、只做审计；空白关闭回 picker。
-- [ ] T11.2 role mapping 本地 preflight 后调用 authenticated `validate-draft`，复用 B3 已抽的 backend core/context loader，不建临时 row、不复制到 frontend/shared；candidate/context 变化取消旧结果，Apply 时 fresh 回执匹配 candidate 才允许。
-- [ ] T11.3 将 git diff path-list 以 grammar 合法 `wrapper-git.git_diff = list<path<*>>` 提升到 shared declaredPorts；更新 `list<path>` stale 注释，枚举 sourcePortKind/shardingRegistry/control-flow/validator/canvas/scheduler 并锁 path shardKey 不退化 index、零 runtime 漂移。
-- [ ] T11.4 `validate-draft` 服务端重算 domain-separated candidate hash、claimed mismatch 422，并按 captured stored→candidate 调同源 `assertNewRefsUsable`；返回 hash/context/时间/issues 且零持久化，Apply 后 PUT 再 gate。catalog golden 跑同一 validator；标准闭环遵守 git wrapper/fan-out/aggregator/output promotion。
-- [ ] T11.5 空 workflow 一步 Apply；非空替换二次确认；整个 apply 一个可 Undo transaction。
+- [x] T11.1 建 client-only catalog：标准开发闭环、只做审计；空白关闭回 picker。
+- [x] T11.2 role mapping 本地 preflight 后调用 authenticated `validate-draft`，复用 B3 已抽的 backend core/context loader，不建临时 row、不复制到 frontend/shared；candidate/context 变化取消旧结果，Apply 时 fresh 回执匹配 candidate 才允许。
+- [x] T11.3 将 git diff path-list 以 grammar 合法 `wrapper-git.git_diff = list<path<*>>` 提升到 shared declaredPorts；更新 `list<path>` stale 注释，枚举 sourcePortKind/shardingRegistry/control-flow/validator/canvas/scheduler 并锁 path shardKey 不退化 index、零 runtime 漂移。
+- [x] T11.4 `validate-draft` 服务端重算 domain-separated candidate hash、claimed mismatch 422，并按 captured stored→candidate 调同源 `assertNewRefsUsable`；返回 hash/context/时间/issues 且零持久化，Apply 后 PUT 再 gate。catalog golden 跑同一 validator；标准闭环遵守 git wrapper/fan-out/aggregator/output promotion。
+- [x] T11.5 空 workflow 一步 Apply；非空替换二次确认；整个 apply 一个可 Undo transaction。
 
 ### T12 — Auto-layout
 
-- [ ] T12.1 新增纯 `planWorkflowLayout(definition,{semanticContext,measuredSizes,selection})`；adapter 捕获 immutable measured sizes，优先实测再用默认；返回 `{next,warnings}`，只改 position/必要 wrapper size。
-- [ ] T12.2 data + control/signal execution dependency 都参与 rank；每条边在 endpoint coordinate-space LCA 投影到 direct-child representatives，补 external→wrapper-inner 等跨层约束；actual boundary/mirror 不重复，clarify/system feedback/channel 排除，cycle back edge 稳定选择。
-- [ ] T12.3 最深 wrapper 向外递归，使用 coord projection/wrapper fit；父层移动 wrapper 时把完整 descendant closure 的 canonical absolute positions 同 delta 平移，并锁 nested fixture 的 child-relative geometry 不变；control classification 读 semantic context；sizeLocked 保持尺寸，内容放不下给可见 warning。
-- [ ] T12.4 整图与同 scope selection 模式；selection 保持原 bbox 锚点并避让未选节点；跨 wrapper 返回 advisory，不静默回退整图；layout 一个可 Undo transaction并 fit view。
+- [x] T12.1 新增纯 `planWorkflowLayout(definition,{semanticContext,measuredSizes,selection})`；adapter 捕获 immutable measured sizes，优先实测再用默认；返回 `{next,warnings}`，只改 position/必要 wrapper size。
+- [x] T12.2 data + control/signal execution dependency 都参与 rank；每条边在 endpoint coordinate-space LCA 投影到 direct-child representatives，补 external→wrapper-inner 等跨层约束；actual boundary/mirror 不重复，clarify/system feedback/channel 排除，cycle back edge 稳定选择。
+- [x] T12.3 最深 wrapper 向外递归，使用 coord projection/wrapper fit；父层移动 wrapper 时把完整 descendant closure 的 canonical absolute positions 同 delta 平移，并锁 nested fixture 的 child-relative geometry 不变；control classification 读 semantic context；sizeLocked 保持尺寸，内容放不下给可见 warning。
+- [x] T12.4 整图与同 scope selection 模式；selection 保持原 bbox 锚点并避让未选节点；跨 wrapper 返回 advisory，不静默回退整图；layout 一个可 Undo transaction并 fit view。
+
+**B7 验证（2026-07-19）**：starter/catalog/preview fresh-validation/apply history + layout planner/adapter/route 的 frontend 聚焦门 `34 pass / 0 fail`，shared candidate/hash 与 git-diff grammar `3/0`，backend validate-draft/catalog golden/runtime path stability `13/0`；frontend typecheck/lint 与本批 format 全绿。布局另锁 measured-size snapshot、data+signal LCA、稳定 cycle back-edge、nested descendant delta、selection 避让、cross-scope advisory、sizeLocked warning、单 transaction 与 fit view。
 
 ## 10. B8 — 校验定位与检查器
 
-- [ ] T13.1 strict typed target 覆盖所有能唯一定位的现有 blocking issue；node field 用 shared semantic enum、node port 用复合身份；frontend resolver 优先 target、兼容 pointer/code、unknown/重复对象不猜。
-- [ ] T13.2 抽真实 ValidationPanel；summary 固定 toolbar；normal-height 详情为不参与 grid 的 anchored overlay，`<=720px`/block-size<=520 为互斥 validation sheet；每条 issue 是 button，可 handoff selection + fit + inspector section + stable field focus；1→N own-scroll 且 canvas bounding box 不变。
-- [ ] T13.3 stale target 提示重新校验；节点/边 issue 显示图标+文字+计数，颜色不是唯一信息。
-- [ ] T13.4 node 主卡显示业务名/agent 名与配置摘要；raw kind/id 移到“技术详情”，保留 copy id。
-- [ ] T13.5 `OutputEdit`/`ReviewEdit` editable upstream/rerun node/port 迁可搜索选择；Edge endpoint node 只读业务名+技术 ID，target-port selector 必须走 B5 唯一 transition，端点重连走 ConnectionDialog；wire 不变、零直写旁路。
-- [ ] T13.6 canvas 加 accessible name/description；全页只保留一个受控 live announcement。
-- [ ] T13.7 Inspector 顶层保持“编辑 / 提示词预览”；Review/Loop 等复杂表单在 Edit 内按 Basics / Flow / Advanced / Technical 渐进披露，不继续堆同级 Tab。
+- [x] T13.1 strict typed target 覆盖所有能唯一定位的现有 blocking issue；node field 用 shared semantic enum、node port 用复合身份；frontend resolver 优先 target、兼容 pointer/code、unknown/重复对象不猜。
+- [x] T13.2 抽真实 ValidationPanel；summary 固定 toolbar；normal-height 详情为不参与 grid 的 anchored overlay，`<=720px`/block-size<=520 为互斥 validation sheet；每条 issue 是 button，可 handoff selection + fit + inspector section + stable field focus；1→N own-scroll 且 canvas bounding box 不变。
+- [x] T13.3 stale target 提示重新校验；节点/边 issue 显示图标+文字+计数，颜色不是唯一信息。
+- [x] T13.4 node 主卡显示业务名/agent 名与配置摘要；raw kind/id 移到“技术详情”，保留 copy id。
+- [x] T13.5 `OutputEdit`/`ReviewEdit` editable upstream/rerun node/port 迁可搜索选择；Edge endpoint node 只读业务名+技术 ID，target-port selector 必须走 B5 唯一 transition，端点重连走 ConnectionDialog；wire 不变、零直写旁路。
+- [x] T13.6 canvas 加 accessible name/description；全页只保留一个受控 live announcement。
+- [x] T13.7 Inspector 顶层保持“编辑 / 提示词预览”；Review/Loop 等复杂表单在 Edit 内按 Basics / Flow / Advanced / Technical 渐进披露，不继续堆同级 Tab。
+
+**B8 验证（2026-07-19）**：typed target/resolver、ValidationPanel 定位与 stale handoff、业务标题/技术详情、搜索式 selector、单一 transition/reconnect、canvas a11y/live region 与 Inspector 渐进披露均有 shared/backend/frontend 行为测试及 source ratchet；完整仓库单测与后续浏览器门零失败。
 
 ## 11. B9 — 四档 workspace 与视觉
 
 ### T14 — Responsive surfaces
 
-- [ ] T14.1 抽无 chrome 的 Palette/NodeInspector/EdgeInspector content；rail/Dialog 复用，避免双标题/双 close。
-- [ ] T14.2 editor mode：`>=1536` palette rail + canvas + selection inspector rail；`1180–1535` canvas + selection inspector rail / palette modal；`721–1179` canvas-only + side modal；`<=720` full-screen modal。grid track 分别锁 `240 + minmax(520,1fr) + clamp(360,27vw,420)` 与 `minmax(520,1fr) + clamp(360,30vw,420)`。
-- [ ] T14.3 persistent rail 由 mode+selection 派生；单一 top-level `modalSurface = none|palette|inspector|connection|starter|validation|actions|rename|acl|save-copy|confirm`。compact validation issue→inspector、palette→inspector、More→Rename/ACL/Delete、conflict→save-copy 直接 handoff，无双 top-level Dialog/抢焦点。
-- [ ] T14.4 共享 Dialog + feature `panelClassName`，side `min(88vw,420px)`、phone `100vw×100dvh` + safe area；只为现有 ACL owner-transfer 允许一层 nested Dialog，parent inert，Esc/Cancel/成功逐层恢复焦点。锁其他 surface 不叠层、200% zoom 与 resize fallback。
-- [ ] T14.5 supersede editor vertical-stack selector/test；task/review/workgroup 等 RFC-198 specialized workspace 不变。
+- [x] T14.1 抽无 chrome 的 Palette/NodeInspector/EdgeInspector content；rail/Dialog 复用，避免双标题/双 close。
+- [x] T14.2 editor mode：`>=1536` palette rail + canvas + selection inspector rail；`1180–1535` canvas + selection inspector rail / palette modal；`721–1179` canvas-only + side modal；`<=720` full-screen modal。grid track 分别锁 `240 + minmax(520,1fr) + clamp(360,27vw,420)` 与 `minmax(520,1fr) + clamp(360,30vw,420)`。
+- [x] T14.3 persistent rail 由 mode+selection 派生；单一 top-level `modalSurface = none|palette|inspector|connection|starter|validation|actions|rename|acl|save-copy|confirm`。compact validation issue→inspector、palette→inspector、More→Rename/ACL/Delete、conflict→save-copy 直接 handoff，无双 top-level Dialog/抢焦点。
+- [x] T14.4 共享 Dialog + feature `panelClassName`，side `min(88vw,420px)`、phone `100vw×100dvh` + safe area；只为现有 ACL owner-transfer 允许一层 nested Dialog，parent inert，Esc/Cancel/成功逐层恢复焦点。锁其他 surface 不叠层、200% zoom 与 resize fallback。
+- [x] T14.5 supersede editor vertical-stack selector/test；task/review/workgroup 等 RFC-198 specialized workspace 不变。
 
 ### T15 — Visual hierarchy
 
-- [ ] T15.1 PageHeader：名称/版本/保存；Validate secondary；Launch 唯一 primary；Export/Rename/ACL/Delete 明确进共享 Dialog action list，Delete 转 confirm surface，不新造 Menu。
-- [ ] T15.2 `WorkflowCanvas.surface` 在 editor/task/workgroup-preview 三个 call site 必填并输出 data scope；普通 node 220–240px，列入 fixture 的复杂 wrapper/review 可到 260px；raw id 隐藏、kind/config/validation 新视觉仅 editor 生效，task runtime 与 dynamic preview 零变化。
-- [ ] T15.3 save/transport/validation/config health 分轴；warning 补真实 visual rule，offline/inaccessible/deleted 有独立文案/action oracle，StatusChip/NoticeBanner role 与 live timing 正确。
-- [ ] T15.4 validation 走独立文字/图标/计数 badge，不抢 focus/selected border；锁 focused+selected+error、selected+incomplete、task runtime+kind 组合。port visual 可小但 hit area 尽量 24×24；ConnectionDialog 是完整键盘/触摸等价路径。
+- [x] T15.1 PageHeader：名称/版本/保存；Validate secondary；Launch 唯一 primary；Export/Rename/ACL/Delete 明确进共享 Dialog action list，Delete 转 confirm surface，不新造 Menu。
+- [x] T15.2 `WorkflowCanvas.surface` 在 editor/task/workgroup-preview 三个 call site 必填并输出 data scope；普通 node 220–240px，列入 fixture 的复杂 wrapper/review 可到 260px；raw id 隐藏、kind/config/validation 新视觉仅 editor 生效，task runtime 与 dynamic preview 零变化。
+- [x] T15.3 save/transport/validation/config health 分轴；warning 补真实 visual rule，offline/inaccessible/deleted 有独立文案/action oracle，StatusChip/NoticeBanner role 与 live timing 正确。
+- [x] T15.4 validation 走独立文字/图标/计数 badge，不抢 focus/selected border；锁 focused+selected+error、selected+incomplete、task runtime+kind 组合。port visual 可小但 hit area 尽量 24×24；ConnectionDialog 是完整键盘/触摸等价路径。
 
 ### G3/G4 — UX 门
 
-- [ ] 纯键盘/触摸、不用 drag/right-click/help：空白 → 添加两节点 → 连接 → 修校验 → Launch；另锁空 git/loop/fanout wrapper 内部 Add 与 Undo。
-- [ ] edge insert E2E 锁合法普通 edge 的 target/mirror/Undo 守恒；boundary/clarify/control/inner/cross-wrapper/fanout inner-chain 不显示入口或 fail closed，Cancel 零 mutation。
-- [ ] 1536/1535、1280、1180/1179、1280×521/520、901/900、721/720、390×844、640×400 几何门直接量 bounding box：wide/mid inspector open canvas >=520px、390 block >=560px、landscape summary-only canvas >=240px、side <=420px；无 body overflow、最后字段可达；Validation 1/N own-scroll 且 canvas 尺寸不变，1280×521/520 独立锁 short-height overlay→modal，compact/short modal 打开时改量 full-screen surface/最后 issue/focus handoff。
-- [ ] top-level modal 单实例、ACL owner-transfer 唯一 nested layer、persistent rail 共存规则、初始焦点、Tab trap、handoff、逐层 Escape/resize restore、selection/draft 不丢；More→Rename/ACL/Delete Cancel/成功回交有 oracle。
-- [ ] axe 场景实跑 1536/1280 inspector、1179 palette modal、390 NodePicker/Inspector/Connection、More→Rename/ACL/Delete 与 ACL→owner-transfer（至少一组 light/dark）；单层查唯一 top-level Dialog，nested 按 topmost scope 查 name/heading/close、parent inert/无重复 focus。renderer exclusion 另有 node/port/action component keyboard gate。
-- [ ] task-detail 与 dynamic-workflow preview rendered/visual oracle 证明 editor surface CSS 未泄漏。
+- [x] 纯键盘/触摸、不用 drag/right-click/help：空白 → 添加两节点 → 连接 → 修校验 → Launch；另锁空 git/loop/fanout wrapper 内部 Add 与 Undo。
+- [x] edge insert E2E 锁合法普通 edge 的 target/mirror/Undo 守恒；boundary/clarify/control/inner/cross-wrapper/fanout inner-chain 不显示入口或 fail closed，Cancel 零 mutation。
+- [x] 1536/1535、1280、1180/1179、1280×521/520、901/900、721/720、390×844、640×400 几何门直接量 bounding box：wide/mid inspector open canvas >=520px、390 block >=560px、landscape summary-only canvas >=240px、side <=420px；无 body overflow、最后字段可达；Validation 1/N own-scroll 且 canvas 尺寸不变，1280×521/520 独立锁 short-height overlay→modal，compact/short modal 打开时改量 full-screen surface/最后 issue/focus handoff。
+- [x] top-level modal 单实例、ACL owner-transfer 唯一 nested layer、persistent rail 共存规则、初始焦点、Tab trap、handoff、逐层 Escape/resize restore、selection/draft 不丢；More→Rename/ACL/Delete Cancel/成功回交有 oracle。
+- [x] axe 场景实跑 1536/1280 inspector、1179 palette modal、390 NodePicker/Inspector/Connection、More→Rename/ACL/Delete 与 ACL→owner-transfer（至少一组 light/dark）；单层查唯一 top-level Dialog，nested 按 topmost scope 查 name/heading/close、parent inert/无重复 focus。renderer exclusion 另有 node/port/action component keyboard gate。
+- [x] task-detail 与 dynamic-workflow preview rendered/visual oracle 证明 editor surface CSS 未泄漏。
+
+**B9 验证（2026-07-19）**：四档 workspace/short-height/zoom/resize、route-owned rail 与单一 modalSurface、ACL 唯一 nested Dialog、More handoff、zero-drag/edge-insert、keyboard/touch/focus/axe 及 task/dynamic-preview 隔离均由 component/source/Chromium E2E 覆盖；完整 E2E `126 passed / 30 skipped / 0 failed`。
 
 ## 12. B10 — 收口与发布验证
 
-- [ ] T16.1 将 `e2e/workflow-editor.spec.ts` 加入 root lint/format 精确清单；不靠未被 gate 覆盖的文件宣称完成。
-- [ ] T16.2 E2E：zero-drag + empty-wrapper Add、真实 drag NEW/REUSE、edge insert target/mirror/Undo + forbidden-edge fail-closed、delayed save、offline before PUT/response-loss+offline/recovery/foreign-commit conflict、two-tab conflict、editor→wizard mismatch、mobile non-drag、validation focus、strict undo/redo oracle。
-- [ ] T16.3 visual scenes：1536 三栏、1280 inspector light/dark、1179 palette/inspector side modal、390 empty+picker、390 full-screen inspector；保留既有 task-detail baseline，并**新增** deterministic dynamic-workflow preview component/page baseline。固定 fixture、mask 随机 id/version、禁动画/caret并同步新增 scene count。
+- [x] T16.1 将 `e2e/workflow-editor.spec.ts` 加入 root lint/format 精确清单；不靠未被 gate 覆盖的文件宣称完成。
+- [x] T16.2 E2E：zero-drag + empty-wrapper Add、真实 drag NEW/REUSE、edge insert target/mirror/Undo + forbidden-edge fail-closed、delayed save、offline before PUT/response-loss+offline/recovery/foreign-commit conflict、two-tab conflict、editor→wizard mismatch、mobile non-drag、validation focus、strict undo/redo oracle。
+- [x] T16.3 visual scenes：1536 三栏、1280 inspector light/dark、1179 palette/inspector side modal、390 empty+picker、390 full-screen inspector；保留既有 task-detail baseline，并**新增** deterministic dynamic-workflow preview component/page baseline。固定 fixture、mask 随机 id/version、禁动画/caret并同步新增 scene count。
 - [ ] T16.4 同步 visual scene count、README、nightly 注释与 Darwin/Linux baseline；不扩大 threshold 吞差异。
-- [ ] T16.5 focused tests 后跑仓库正式门：
+- [x] T16.5 focused tests 后跑仓库正式门：
   - `bun run typecheck`
   - `bun run test`
   - `bun run format:check`
   - `bun run lint`
   - `bun run build:binary` 及既有单二进制 smoke
   - RFC-199 Playwright/axe/visual 精确项目，最后按 CI 约定跑完整 e2e
-- [ ] T16.6 检查 source/AST ratchets：content writer 无 unfenced update；所有 production workflow INSERT definition（显列 agentLaunch/workgroupLaunch）必经 canonical helper；metadata-only update 仅 allowlist且不触碰 editable columns/version；DB delete 仅 fenced service，禁 `deleteWorkflow(db,id)`/route direct delete；无裸 setDraft、第二 connection builder、editor vertical stack 或新增 native alert/prompt/confirm。
+- [x] T16.6 检查 source/AST ratchets：content writer 无 unfenced update；所有 production workflow INSERT definition（显列 agentLaunch/workgroupLaunch）必经 canonical helper；metadata-only update 仅 allowlist且不触碰 editable columns/version；DB delete 仅 fenced service，禁 `deleteWorkflow(db,id)`/route direct delete；无裸 setDraft、第二 connection builder、editor vertical stack 或新增 native alert/prompt/confirm。
 - [ ] T16.7 更新 RFC 状态、`STATE.md`、`design/plan.md`；精确路径提交，保留并行改动。若获 push 授权，按仓库要求验证 commit attribution、push 后检查该 SHA CI。
+
+**B10 本地验证（2026-07-19）**：workspace typecheck/lint/format、depcheck、`git diff --check`、完整 backend/shared/frontend 单测、单二进制构建/version/doctor smoke、完整 Chromium E2E、RFC-199 axe/source ratchet 与 Darwin visual `25/25` 全绿；1280 light/dark Darwin 各重复 5 次零 diff。T16.4 保持未勾：本地 MCR `ubuntu-24.04` 容器与 GitHub 托管 runner 的字体/栅格库存不同，所产 9 张 Linux 图仅作诊断且尚未由 hosted runner 验证，不扩大 threshold。T16.7 保持未勾：尚未获 commit/push 授权，也没有 exact-SHA CI。
 
 ## 13. 回滚与停线条件
 

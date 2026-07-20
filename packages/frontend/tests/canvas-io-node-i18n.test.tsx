@@ -23,6 +23,7 @@ afterEach(() => {
 
 function inputData(overrides: Partial<CanvasNodeData> = {}): CanvasNodeData {
   return {
+    surface: 'task',
     nodeId: 'i1',
     kind: 'input',
     title: 'requirement',
@@ -33,6 +34,7 @@ function inputData(overrides: Partial<CanvasNodeData> = {}): CanvasNodeData {
 }
 function outputData(overrides: Partial<CanvasNodeData> = {}): CanvasNodeData {
   return {
+    surface: 'task',
     nodeId: 'o1',
     kind: 'output',
     title: 'final',

@@ -18,7 +18,7 @@ import { ReactFlowProvider } from '@xyflow/react'
 import { useState } from 'react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { I18nextProvider } from 'react-i18next'
-import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import type { Agent, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { EdgeInspector } from '../src/components/canvas/EdgeInspector'
 import { NodeInspector } from '../src/components/canvas/NodeInspector'
 import { ReviewNode } from '../src/components/canvas/nodes/ReviewNode'
@@ -34,6 +34,29 @@ afterEach(() => {
   // removeChild and crashes happy-dom.
   cleanup()
 })
+
+const STUB_AGENT: Agent = {
+  id: 'agent-stub',
+  name: 'stub',
+  description: '',
+  outputs: ['design'],
+  syncOutputsOnIterate: true,
+  permission: {},
+  skills: [],
+  dependsOn: [],
+  mcp: [],
+  plugins: [],
+  frontmatterExtra: {},
+  bodyMd: '',
+  schemaVersion: 1,
+  createdAt: 0,
+  updatedAt: 0,
+}
+
+function pickSelect(trigger: HTMLElement, label: string): void {
+  fireEvent.click(trigger)
+  fireEvent.mouseDown(within(screen.getByRole('listbox')).getByText(label))
+}
 
 function makeReviewDef(inputSource = { nodeId: '', portName: '' }): WorkflowDefinition {
   return {
@@ -81,7 +104,7 @@ function Host({
       <NodeInspector
         definition={def}
         selectedNodeId={selectedNodeId}
-        agents={[]}
+        agents={[STUB_AGENT]}
         onChange={(next) => {
           setDef(next)
           onChangeSpy(next)
@@ -93,7 +116,7 @@ function Host({
 }
 
 describe('Review NodeInspector — RFC-007 form ↔ edge sync', () => {
-  test('typing into inputSource.portName → adds matching edge to definition.edges', () => {
+  test('selecting inputSource.portName → adds matching edge to definition.edges', () => {
     const spy = vi.fn()
     render(
       <Host
@@ -102,10 +125,10 @@ describe('Review NodeInspector — RFC-007 form ↔ edge sync', () => {
         onChangeSpy={spy}
       />,
     )
-    // Fill the portName — both halves are now non-empty, so an edge should
-    // materialize.
-    const portInput = screen.getByPlaceholderText('design') as HTMLInputElement
-    fireEvent.change(portInput, { target: { value: 'design' } })
+    // RFC-199 migrated the editable node/port ids to searchable selectors.
+    // Pick the declared port — both halves are now non-empty, so an edge
+    // should materialize through the single transition path.
+    pickSelect(screen.getByRole('combobox', { name: 'Source port' }), 'design')
     expect(spy).toHaveBeenCalled()
     const last = spy.mock.calls[spy.mock.calls.length - 1]![0] as WorkflowDefinition
     expect(last.edges).toHaveLength(1)
@@ -133,10 +156,8 @@ describe('Review NodeInspector — RFC-007 form ↔ edge sync', () => {
     render(<Host initialDef={def} selectedNodeId="r" onChangeSpy={spy} />)
     // The upstream nodeId picker is the shared <Select>; clearing = picking
     // the leading "—" (empty) option from its portaled listbox.
-    const upstream = screen.getByRole('combobox')
-    fireEvent.click(upstream)
-    const list = document.getElementById(upstream.getAttribute('aria-controls')!)!
-    fireEvent.mouseDown(within(list).getByText('—'))
+    const upstream = screen.getByRole('combobox', { name: 'Source node' })
+    pickSelect(upstream, '—')
     expect(spy).toHaveBeenCalled()
     const last = spy.mock.calls[spy.mock.calls.length - 1]![0] as WorkflowDefinition
     expect(last.edges).toHaveLength(0)
@@ -144,17 +165,15 @@ describe('Review NodeInspector — RFC-007 form ↔ edge sync', () => {
 })
 
 describe('Output NodeInspector — RFC-007 form ↔ edge sync', () => {
-  test('typing into a port.bind → adds matching edge', () => {
+  test('selecting a port.bind → adds matching edge', () => {
     const spy = vi.fn()
     render(<Host initialDef={makeOutputDef()} selectedNodeId="o" onChangeSpy={spy} />)
-    // For each row there are 3 mono inputs: name, bind.nodeId, bind.portName.
-    // Targets the first row (final_doc).
-    const monoInputs = document.querySelectorAll(
-      'input.form-input--mono',
-    ) as NodeListOf<HTMLInputElement>
-    expect(monoInputs.length).toBeGreaterThanOrEqual(4)
-    fireEvent.change(monoInputs[0]!, { target: { value: 'a' } })
-    fireEvent.change(monoInputs[1]!, { target: { value: 'design' } })
+    // Each row now has searchable upstream-node and port selectors. Target
+    // the first row (final_doc) and choose the agent's declared output.
+    const upstreams = screen.getAllByRole('combobox', { name: 'upstream nodeId' })
+    pickSelect(upstreams[0]!, 'stub (a)')
+    const ports = screen.getAllByRole('combobox', { name: 'port' })
+    pickSelect(ports[0]!, 'design')
     const last = spy.mock.calls[spy.mock.calls.length - 1]![0] as WorkflowDefinition
     expect(last.edges).toHaveLength(1)
     const edge = last.edges[0]!

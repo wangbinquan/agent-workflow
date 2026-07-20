@@ -11,6 +11,7 @@ import {
   DeleteWorkflowSchema,
   ImportWorkflowRequestSchema,
   UpdateWorkflowSchema,
+  WorkflowDraftValidationRequestSchema,
   WorkflowExactRevisionSchema,
   WorkflowValidationRequestSchema,
 } from '@agent-workflow/shared'
@@ -20,7 +21,11 @@ import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
 import { canViewResource, filterVisibleRows } from '@/services/resourceAcl'
 import { excludeBuiltinWorkflows } from '@/services/systemResources'
-import { assertNewRefsUsable, extractWorkflowAgentNames } from '@/services/resourceRefs'
+import {
+  assertNewRefsUsable,
+  diffNewNames,
+  extractWorkflowAgentNames,
+} from '@/services/resourceRefs'
 import {
   createWorkflow,
   deleteWorkflow,
@@ -32,6 +37,7 @@ import {
 import {
   loadWorkflowValidationContext,
   validateWorkflowDefinition,
+  workflowDefinitionCandidateHashOf,
   workflowValidationContextHashOf,
 } from '@/services/workflow.validator'
 import { importWorkflowYaml, stringifyWorkflowYaml } from '@/services/workflow.yaml'
@@ -126,6 +132,46 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
     const result = validateWorkflowDefinition(workflow.definition, context)
     return c.json({
       revision,
+      validationContextHash: workflowValidationContextHashOf(context),
+      validatedAt: Date.now(),
+      ...result,
+    })
+  })
+
+  app.post('/api/workflows/:id/validate-draft', async (c) => {
+    // Capture the stored reference baseline once. This endpoint validates only
+    // in-memory bytes: it never creates a temporary workflow row and never
+    // writes the captured workflow.
+    const actor = actorOf(c)
+    const workflow = await loadVisibleWorkflow(actor, c.req.param('id'))
+    const parsed = WorkflowDraftValidationRequestSchema.safeParse(await safeJson(c.req.raw))
+    if (!parsed.success) {
+      throw new ValidationError(
+        'workflow-draft-validation-invalid',
+        'invalid workflow draft validation payload',
+        { issues: parsed.error.issues },
+      )
+    }
+
+    const candidateHash = workflowDefinitionCandidateHashOf(parsed.data.definition)
+    if (candidateHash !== parsed.data.claimedCandidateHash) {
+      throw new ValidationError(
+        'workflow-candidate-hash-mismatch',
+        'workflow candidate does not match the claimed hash',
+        { claimed: parsed.data.claimedCandidateHash, actual: candidateHash },
+      )
+    }
+
+    const addedAgentNames = diffNewNames(
+      extractWorkflowAgentNames(workflow.definition),
+      extractWorkflowAgentNames(parsed.data.definition),
+    )
+    await assertNewRefsUsable(deps.db, actor, [{ type: 'agent', names: addedAgentNames }])
+
+    const context = await loadWorkflowValidationContext(deps.db)
+    const result = validateWorkflowDefinition(parsed.data.definition, context)
+    return c.json({
+      candidateHash,
       validationContextHash: workflowValidationContextHashOf(context),
       validatedAt: Date.now(),
       ...result,

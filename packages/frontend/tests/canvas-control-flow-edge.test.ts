@@ -118,8 +118,8 @@ describe('sourcePortKind', () => {
   test('derives a wrapper-fanout __done__ outlet as signal', () => {
     expect(sourcePortKind(edgeById('e_fanout'), DEF, agentByName)).toBe('signal')
   })
-  test('non-agent / non-fanout source ports are undefined', () => {
-    expect(sourcePortKind(edgeById('e_git'), DEF, agentByName)).toBeUndefined()
+  test('wrapper-git exposes the shared grammar-valid path-list kind', () => {
+    expect(sourcePortKind(edgeById('e_git'), DEF, agentByName)).toBe('list<path<*>>')
   })
   test('a missing source node is undefined (stale snapshot tolerance)', () => {
     const ghost = {

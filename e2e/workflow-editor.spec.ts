@@ -33,6 +33,7 @@
 // drive HTML5 drag in Playwright today.
 
 import { test, expect, type Page } from '@playwright/test'
+import AxeBuilder from '@axe-core/playwright'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -73,6 +74,7 @@ async function seedAgent(name: string): Promise<void> {
       name,
       description: 'W2-3 editor fixture',
       outputs: ['answer'],
+      outputKinds: { answer: 'markdown' },
       readonly: true,
       bodyMd: '',
     }),
@@ -161,6 +163,25 @@ async function openEditor(page: Page, expectedNodeCount = 3): Promise<void> {
     await page.waitForSelector('.react-flow__node', { state: 'visible' })
   }
   await expect(page.locator('.react-flow__node')).toHaveCount(expectedNodeCount)
+}
+
+async function expectEditorAxeClean(page: Page, label: string): Promise<void> {
+  const result = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa'])
+    .exclude('.react-flow__renderer')
+    .exclude('.react-flow__attribution')
+    .analyze()
+  const blocking = result.violations.filter(
+    (violation) => violation.impact === 'critical' || violation.impact === 'serious',
+  )
+  expect(
+    blocking.map((violation) => ({
+      id: violation.id,
+      impact: violation.impact,
+      targets: violation.nodes.map((node) => node.target.join(' ')),
+    })),
+    `${label} axe violations`,
+  ).toEqual([])
 }
 
 // ---------------------------------------------------------------------------
@@ -255,20 +276,22 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
   })
 
   test('drag-from-sidebar synthesizes HTML5 drag → new node appended', async ({ page }) => {
+    await page.setViewportSize({ width: 1536, height: 900 })
     await openEditor(page)
     const before = await page.locator('.react-flow__node').count()
     expect(before).toBe(3)
 
-    // Find the first draggable palette item in the sidebar.
-    const paletteItem = page.locator('.editor-sidebar__item').first()
-    await expect(paletteItem).toBeVisible()
+    // The row is a zero-drag click target; its explicit grip owns native
+    // HTML5 drag so pointer activation cannot accidentally start a drag.
+    const dragGrip = page.locator('.workflow-node-picker__drag-grip').first()
+    await expect(dragGrip).toBeVisible()
 
     // Synthesize an HTML5 drag from the palette item to a canvas
     // location. Playwright's `dragTo` uses the mouse pipeline which
     // skips dragstart/drop event firing for HTML5 drag — we use
     // page.evaluate with a real DataTransfer instead.
     await page.evaluate(() => {
-      const src = document.querySelector('.editor-sidebar__item') as HTMLElement | null
+      const src = document.querySelector('.workflow-node-picker__drag-grip') as HTMLElement | null
       const canvas = document.querySelector('.react-flow__pane') as HTMLElement | null
       if (!src || !canvas) throw new Error('palette or canvas missing')
       const box = canvas.getBoundingClientRect()
@@ -310,29 +333,37 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     await page.setViewportSize({ width: 390, height: 844 })
     await openEditor(page)
     const nodes = page.locator('.react-flow__node')
-    const paletteItem = page.locator('.editor-sidebar__item').first()
     const before = await nodes.count()
 
-    // Pointer/touch-equivalent activation: the palette row is a real button,
-    // so mobile users do not depend on unsupported HTML5 touch dragging.
-    await paletteItem.click()
+    // Pointer/touch-equivalent activation: Add opens the full-screen palette,
+    // whose rows are real buttons. Mobile users never depend on HTML5 drag.
+    await page.getByTestId('workflow-add-step').click()
+    const palette = page.getByTestId('workflow-editor-palette-surface')
+    await expect(palette).toBeVisible()
+    await palette.locator('.editor-sidebar__item').first().click()
     await expect(nodes).toHaveCount(before + 1)
     await expect(page.locator('.react-flow__node.selected')).toHaveCount(1)
-    await expect(page.locator('.editor-layout--with-inspector > .inspector')).toBeVisible()
+    await expect(page.getByTestId('workflow-editor-inspector-surface')).toBeVisible()
+    await expect(page.getByRole('dialog')).toHaveCount(1)
     await page.waitForTimeout(100)
     expect(await nodes.count()).toBe(before + 1)
 
-    // Restore the fixture count, then exercise the native keyboard activation
-    // path. Space must synthesize one click, not double-fire through a custom
-    // key handler.
-    await page.locator('.react-flow__node.selected').click()
-    await page.keyboard.press('Backspace')
+    // Close Inspector (which clears selection), restore the fixture with the
+    // visible Undo action, then exercise native keyboard activation. Space
+    // must synthesize one click, not double-fire through a custom key handler.
+    await page.getByTestId('workflow-editor-inspector-surface').locator('.dialog__close').click()
+    await page.getByTestId('workflow-undo').click()
     await expect(nodes).toHaveCount(before)
-    await paletteItem.focus()
+    await page.getByTestId('workflow-add-step').click()
+    const keyboardItem = page
+      .getByTestId('workflow-editor-palette-surface')
+      .locator('.editor-sidebar__item')
+      .first()
+    await keyboardItem.focus()
     await page.keyboard.press('Space')
     await expect(nodes).toHaveCount(before + 1)
     await expect(page.locator('.react-flow__node.selected')).toHaveCount(1)
-    await expect(page.locator('.editor-layout--with-inspector > .inspector')).toBeVisible()
+    await expect(page.getByTestId('workflow-editor-inspector-surface')).toBeVisible()
     await page.waitForTimeout(100)
     expect(await nodes.count()).toBe(before + 1)
 
@@ -342,6 +373,74 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     }))
     expect(overflow.body).toBeLessThanOrEqual(1)
     expect(overflow.root).toBeLessThanOrEqual(1)
+  })
+
+  test('390px zero-drag path adds, follows validation, connects, revalidates, and launches', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    workflowId = await seedWorkflow({
+      $schema_version: 4,
+      inputs: [],
+      nodes: [],
+      edges: [],
+    })
+    await openEditor(page, 0)
+
+    // Empty-state → agent. The canvas-owned picker hands off directly to the
+    // single compact Inspector surface after insertion.
+    await page.getByTestId('workflow-empty-add-first').click()
+    const firstPicker = page.getByTestId('workflow-node-picker-dialog')
+    await expect(firstPicker).toBeVisible()
+    await firstPicker.getByTestId('workflow-node-picker-item-agent-w2-3-agent-a').first().click()
+    await expect(page.locator('.react-flow__node')).toHaveCount(1)
+    let inspector = page.getByTestId('workflow-editor-inspector-surface')
+    await expect(inspector).toBeVisible()
+    await inspector.locator('.dialog__close').click()
+
+    // Header Add → review, still without drag/touch precision gestures. A
+    // review without inputSource is intentionally invalid; the seeded agent's
+    // markdown output is compatible and the same connection planner repairs it.
+    await page.getByTestId('workflow-add-step').click()
+    const palette = page.getByTestId('workflow-editor-palette-surface')
+    await palette.getByTestId('workflow-node-picker-item-kind-review').first().click()
+    await expect(page.locator('.react-flow__node')).toHaveCount(2)
+    inspector = page.getByTestId('workflow-editor-inspector-surface')
+    await expect(inspector).toBeVisible()
+    await inspector.locator('.dialog__close').click()
+
+    // The first validation is intentionally red. Its issue button performs a
+    // validation→selection→Inspector handoff rather than leaving a dead list.
+    await page.getByRole('button', { name: 'Validate', exact: true }).click()
+    const validationSummary = page.getByTestId('workflow-validation-summary')
+    await expect(validationSummary).toBeVisible()
+    await expect(validationSummary).not.toContainText('Validated')
+    await validationSummary.click()
+    const validationDialog = page.getByTestId('workflow-validation-dialog')
+    await expect(validationDialog).toBeVisible()
+    await validationDialog.locator('.workflow-validation__issue').first().click()
+    inspector = page.getByTestId('workflow-editor-inspector-surface')
+    await expect(inspector).toBeVisible()
+
+    // The issue lands directly on Review's source field. Repair the connection
+    // there instead of asking a phone user to find a producer that focus/fitView
+    // may have moved outside the viewport. These Select changes use the same
+    // transition that writes both inputSource and its synchronized edge.
+    await inspector.getByRole('combobox', { name: 'Source node', exact: true }).click()
+    await page.getByRole('option').filter({ hasText: 'w2-3-agent-a' }).click()
+    await inspector.getByRole('combobox', { name: 'Source port', exact: true }).click()
+    await page.getByRole('option', { name: 'answer', exact: true }).click()
+    await inspector.locator('.dialog__close').click()
+
+    // Revalidate the exact saved revision, then Launch through the fresh gate.
+    await page.getByRole('button', { name: 'Validate', exact: true }).click()
+    await expect(validationSummary).toContainText('Validated')
+    await page.getByRole('button', { name: /Launch task/ }).click()
+    await expect(page).toHaveURL(/\/tasks\/new\?/)
+    const launchUrl = new URL(page.url())
+    expect(launchUrl.searchParams.get('kind')).toBe('workflow')
+    expect(launchUrl.searchParams.get('workflow')).toBe(workflowId)
+    expect(launchUrl.searchParams.get('workflowVersion')).toMatch(/^\d+$/)
   })
 
   test('canvas pan does not break subsequent click hit-test (RFC-016 pre-fix regression)', async ({
@@ -367,17 +466,20 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
 
   test('palette filter input narrows the visible drag items', async ({ page }) => {
     await openEditor(page)
-    // The palette filter is a search input above the sections.
-    const filter = page.locator('input[type="search"]').first()
+    // At the canonical 1280px medium mode the palette is a Dialog.
+    await page.getByTestId('workflow-add-step').click()
+    const palette = page.getByTestId('workflow-editor-palette-surface')
+    const filter = palette.locator('input[type="search"]')
     await expect(filter).toBeVisible()
-    const totalBefore = await page.locator('.editor-sidebar__item').count()
+    const items = palette.locator('.editor-sidebar__item')
+    const totalBefore = await items.count()
     expect(totalBefore).toBeGreaterThan(0)
 
     // Type a string that should narrow the list. "agent" should
     // remain (palette has agent-single + agent-multi entries).
     await filter.fill('agent')
     await page.waitForTimeout(200)
-    const afterAgent = await page.locator('.editor-sidebar__item').count()
+    const afterAgent = await items.count()
     // At minimum the agent rows remain; at most the original count.
     expect(afterAgent).toBeGreaterThan(0)
     expect(afterAgent).toBeLessThanOrEqual(totalBefore)
@@ -385,7 +487,7 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     // Type a string that should match nothing.
     await filter.fill('zzz-no-such-item-1729')
     await page.waitForTimeout(200)
-    await expect(page.locator('.editor-sidebar__item')).toHaveCount(0)
+    await expect(items).toHaveCount(0)
   })
 
   test('react-flow controls panel renders zoom / fit-view buttons', async ({ page }) => {
@@ -404,99 +506,169 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     expect(page.url()).toContain(`/workflows/${workflowId}`)
   })
 
-  test('RFC-199 B0 records the five legacy editor geometry baselines', async ({
+  test('validation details switch at the 521/520 short-height boundary without resizing canvas', async ({
+    page,
+  }) => {
+    for (const height of [521, 520]) {
+      await page.setViewportSize({ width: 1280, height })
+      await openEditor(page)
+      await page.getByRole('button', { name: 'Validate', exact: true }).click()
+      const summary = page.getByTestId('workflow-validation-summary')
+      await expect(summary).toBeVisible()
+      const before = await page.locator('.canvas-frame').boundingBox()
+      if (before === null) throw new Error('canvas frame missing before validation details')
+
+      await summary.click()
+      if (height === 521) {
+        await expect(page.getByTestId('workflow-validation-overlay')).toBeVisible()
+        await expect(page.getByTestId('workflow-validation-dialog')).toHaveCount(0)
+        await page.getByTestId('workflow-validation-overlay').locator('button').first().click()
+      } else {
+        const dialog = page.getByTestId('workflow-validation-dialog')
+        await expect(dialog).toBeVisible()
+        await expect(page.getByRole('dialog')).toHaveCount(1)
+        const panel = await dialog.locator('.dialog__panel').boundingBox()
+        if (panel === null) throw new Error('short-height validation panel missing')
+        expect(panel.width).toBeCloseTo(1280, 0)
+        expect(panel.height).toBeCloseTo(520, 0)
+        await dialog.locator('.dialog__close').click()
+      }
+
+      const after = await page.locator('.canvas-frame').boundingBox()
+      if (after === null) throw new Error('canvas frame missing after validation details')
+      expect(after.width).toBeCloseTo(before.width, 0)
+      expect(after.height).toBeCloseTo(before.height, 0)
+    }
+  })
+
+  test('RFC-199 four-mode workspace preserves canvas geometry and one inspector surface', async ({
     page,
   }, testInfo) => {
     type Geometry = {
       viewport: { width: number; height: number }
+      mode: string
       columns: string
-      layoutClientHeight: number
-      layoutScrollHeight: number
-      palette: { x: number; y: number; width: number; height: number; bottom: number }
-      canvas: { x: number; y: number; width: number; height: number; bottom: number }
-      inspector: { x: number; y: number; width: number; height: number; bottom: number }
+      canvas: { width: number; height: number }
+      paletteWidth: number | null
+      inspectorWidth: number | null
+      dialogWidth: number | null
+      dialogCount: number
+      bodyOverflow: number
+      rootOverflow: number
     }
 
-    const samples: Geometry[] = []
-    for (const viewport of [
+    const viewports = [
       { width: 1536, height: 900 },
+      { width: 1535, height: 900 },
       { width: 1280, height: 800 },
+      { width: 1180, height: 800 },
       { width: 1179, height: 800 },
+      { width: 901, height: 800 },
+      { width: 900, height: 800 },
+      { width: 721, height: 800 },
       { width: 720, height: 800 },
       { width: 390, height: 844 },
-    ]) {
+      { width: 640, height: 400 },
+    ]
+    const samples: Geometry[] = []
+
+    for (const viewport of viewports) {
       await page.setViewportSize(viewport)
       await openEditor(page)
       await page.locator('.react-flow__node[data-id="agent_1"]').click()
-      await expect(page.locator('.editor-layout > .inspector')).toBeVisible()
+      const expectedMode =
+        viewport.width >= 1536
+          ? 'wide'
+          : viewport.width >= 1180
+            ? 'medium'
+            : viewport.width >= 721
+              ? 'compact'
+              : 'phone'
+      await expect(page.locator('.editor-layout')).toHaveAttribute(
+        'data-workspace-mode',
+        expectedMode,
+      )
+      if (expectedMode === 'wide' || expectedMode === 'medium') {
+        await expect(page.locator('.editor-layout > .inspector')).toBeVisible()
+      } else {
+        await expect(page.getByTestId('workflow-editor-inspector-surface')).toBeVisible()
+      }
 
       samples.push(
-        await page.locator('.editor-layout').evaluate((layout, currentViewport) => {
-          const relativeRect = (element: Element) => {
-            const layoutBox = layout.getBoundingClientRect()
-            const box = element.getBoundingClientRect()
-            const x = box.left - layoutBox.left + layout.scrollLeft
-            const y = box.top - layoutBox.top + layout.scrollTop
-            return {
-              x,
-              y,
-              width: box.width,
-              height: box.height,
-              bottom: y + box.height,
-            }
-          }
-          const palette = layout.querySelector(':scope > .editor-sidebar')
-          const canvas = layout.querySelector(':scope > .canvas-frame')
-          const inspector = layout.querySelector(':scope > .inspector')
-          if (palette === null || canvas === null || inspector === null) {
-            throw new Error('legacy editor columns missing')
-          }
+        await page.evaluate((currentViewport) => {
+          const layout = document.querySelector<HTMLElement>('.editor-layout')
+          const canvas = document.querySelector<HTMLElement>('.editor-layout > .canvas-frame')
+          if (layout === null || canvas === null) throw new Error('editor geometry owner missing')
+          const palette = layout.querySelector<HTMLElement>(':scope > .editor-sidebar')
+          const inspector = layout.querySelector<HTMLElement>(':scope > .inspector')
+          const dialog = document.querySelector<HTMLElement>(
+            '[data-testid="workflow-editor-inspector-surface"] .dialog__panel',
+          )
+          const canvasBox = canvas.getBoundingClientRect()
           return {
             viewport: currentViewport,
+            mode: layout.dataset.workspaceMode ?? '',
             columns: getComputedStyle(layout).gridTemplateColumns,
-            layoutClientHeight: layout.clientHeight,
-            layoutScrollHeight: layout.scrollHeight,
-            palette: relativeRect(palette),
-            canvas: relativeRect(canvas),
-            inspector: relativeRect(inspector),
+            canvas: { width: canvasBox.width, height: canvasBox.height },
+            paletteWidth: palette?.getBoundingClientRect().width ?? null,
+            inspectorWidth: inspector?.getBoundingClientRect().width ?? null,
+            dialogWidth: dialog?.getBoundingClientRect().width ?? null,
+            dialogCount: document.querySelectorAll('[role="dialog"]').length,
+            bodyOverflow: document.body.scrollWidth - document.body.clientWidth,
+            rootOverflow:
+              document.documentElement.scrollWidth - document.documentElement.clientWidth,
           }
         }, viewport),
       )
     }
 
-    await testInfo.attach('rfc199-b0-editor-geometry.json', {
+    await testInfo.attach('rfc199-responsive-editor-geometry.json', {
       body: JSON.stringify(samples, null, 2),
       contentType: 'application/json',
     })
 
-    const byWidth = new Map(samples.map((sample) => [sample.viewport.width, sample]))
-    const wide = byWidth.get(1536)!
-    const cramped = byWidth.get(1280)!
-    const compactDesktop = byWidth.get(1179)!
-    const boundary = byWidth.get(720)!
-    const phone = byWidth.get(390)!
+    const sample = (width: number, height: number) =>
+      samples.find((entry) => entry.viewport.width === width && entry.viewport.height === height)!
+    const wide = sample(1536, 900)
+    expect(wide.paletteWidth).toBeCloseTo(240, 0)
+    expect(wide.inspectorWidth).toBeGreaterThanOrEqual(359)
+    expect(wide.inspectorWidth).toBeLessThanOrEqual(421)
+    expect(wide.canvas.width).toBeGreaterThanOrEqual(519)
 
-    // Legacy desktop is always three rails. The 1280 fixture proves the
-    // RFC's motivating defect directly: the actual canvas is far below the
-    // future 520px floor, and 1179 gets squeezed even further.
-    expect(wide.palette.width).toBeCloseTo(240, 0)
-    expect(wide.inspector.width).toBeCloseTo(480, 0)
-    expect(cramped.palette.width).toBeCloseTo(240, 0)
-    expect(cramped.inspector.width).toBeCloseTo(480, 0)
-    expect(cramped.canvas.width).toBeLessThan(520)
-    expect(compactDesktop.canvas.width).toBeLessThan(cramped.canvas.width)
+    for (const current of [sample(1535, 900), sample(1280, 800), sample(1180, 800)]) {
+      expect(current.paletteWidth).toBeNull()
+      expect(current.inspectorWidth).toBeGreaterThanOrEqual(359)
+      expect(current.inspectorWidth).toBeLessThanOrEqual(421)
+      expect(current.canvas.width).toBeGreaterThanOrEqual(519)
+      expect(current.dialogWidth).toBeNull()
+    }
 
-    // <=720 is the RFC-198 vertical-stack baseline being superseded. At
-    // 390px all three surfaces are laid out one after another and overflow
-    // the bounded editor viewport: this is a measured long tower, not a
-    // screenshot-only observation.
-    expect(boundary.palette.bottom).toBeLessThanOrEqual(boundary.canvas.y + 1)
-    expect(boundary.canvas.bottom).toBeLessThanOrEqual(boundary.inspector.y + 1)
-    expect(phone.palette.bottom).toBeLessThanOrEqual(phone.canvas.y + 1)
-    expect(phone.canvas.bottom).toBeLessThanOrEqual(phone.inspector.y + 1)
-    expect(phone.canvas.height).toBeGreaterThanOrEqual(560)
-    expect(phone.inspector.height).toBeGreaterThanOrEqual(384)
-    expect(phone.layoutScrollHeight).toBeGreaterThan(phone.layoutClientHeight + 300)
+    for (const current of [
+      sample(1179, 800),
+      sample(901, 800),
+      sample(900, 800),
+      sample(721, 800),
+    ]) {
+      expect(current.paletteWidth).toBeNull()
+      expect(current.inspectorWidth).toBeNull()
+      expect(current.dialogWidth).toBeGreaterThan(0)
+      expect(current.dialogWidth).toBeLessThanOrEqual(420.5)
+      expect(current.dialogCount).toBe(1)
+    }
+
+    for (const current of [sample(720, 800), sample(390, 844), sample(640, 400)]) {
+      expect(current.paletteWidth).toBeNull()
+      expect(current.inspectorWidth).toBeNull()
+      expect(current.dialogWidth).toBeCloseTo(current.viewport.width, 0)
+      expect(current.dialogCount).toBe(1)
+    }
+    expect(sample(390, 844).canvas.height).toBeGreaterThanOrEqual(560)
+    expect(sample(640, 400).canvas.height).toBeGreaterThanOrEqual(240)
+
+    for (const current of samples) {
+      expect(current.bodyOverflow).toBeLessThanOrEqual(1)
+      expect(current.rootOverflow).toBeLessThanOrEqual(1)
+    }
   })
 
   test('RFC-199 B0 screen-to-flow placement survives a zoomed viewport', async ({ page }) => {
@@ -540,7 +712,12 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
       y: paneBox.y + paneBox.height / 2,
     }
 
-    await page.locator('.editor-sidebar__item').first().click()
+    await page.getByTestId('workflow-add-step').click()
+    await page
+      .getByTestId('workflow-editor-palette-surface')
+      .locator('.editor-sidebar__item')
+      .first()
+      .click()
     await expect(page.locator('.react-flow__node')).toHaveCount(before.length + 1)
     const insertedId = await page
       .locator('.react-flow__node')
@@ -562,5 +739,98 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     // pane center even though the flow viewport is no longer identity.
     expect(Math.abs(insertedBox.x - expectedTopLeft.x)).toBeLessThanOrEqual(3)
     expect(Math.abs(insertedBox.y - expectedTopLeft.y)).toBeLessThanOrEqual(3)
+  })
+
+  test('editor rails and modal handoffs have no critical/serious axe violations', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1536, height: 900 })
+    await openEditor(page)
+    await page.locator('.react-flow__node[data-id="agent_1"]').click()
+    await expect(page.locator('.editor-layout > .inspector')).toBeVisible()
+    await expectEditorAxeClean(page, '1536 editor inspector rail')
+
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await openEditor(page)
+    await page.locator('.react-flow__node[data-id="agent_1"]').click()
+    await expect(page.locator('.editor-layout > .inspector')).toBeVisible()
+    await expectEditorAxeClean(page, '1280 editor inspector rail')
+
+    await page.setViewportSize({ width: 1179, height: 800 })
+    await openEditor(page)
+    await page.getByTestId('workflow-add-step').click()
+    await expect(page.getByTestId('workflow-editor-palette-surface')).toBeVisible()
+    await expect(page.getByRole('dialog')).toHaveCount(1)
+    await expectEditorAxeClean(page, '1179 editor palette dialog')
+    await page.getByTestId('workflow-editor-palette-surface').locator('.dialog__close').click()
+
+    await page.setViewportSize({ width: 390, height: 844 })
+    await openEditor(page)
+    await page.getByTestId('workflow-add-step').click()
+    let dialog = page.getByTestId('workflow-editor-palette-surface')
+    await expect(dialog).toBeVisible()
+    await expect(page.getByRole('dialog')).toHaveCount(1)
+    await expectEditorAxeClean(page, '390 editor NodePicker dialog')
+    await dialog.locator('.dialog__close').click()
+
+    await page.locator('.react-flow__node[data-id="agent_1"]').click()
+    dialog = page.getByTestId('workflow-editor-inspector-surface')
+    await expect(dialog).toBeVisible()
+    await expectEditorAxeClean(page, '390 editor inspector dialog')
+    await dialog.getByTestId('inspector-connect-next').click()
+    dialog = page.getByRole('dialog', { name: 'Connect workflow steps' })
+    await expect(dialog).toBeVisible()
+    await expect(page.getByRole('dialog')).toHaveCount(1)
+    await expectEditorAxeClean(page, '390 editor connection dialog')
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+
+    dialog = page.getByTestId('workflow-editor-inspector-surface')
+    await expect(dialog).toBeVisible()
+    await dialog.locator('.dialog__close').click()
+    await page.getByTestId('workflow-more-actions').click()
+    dialog = page.getByTestId('workflow-actions-dialog')
+    await expect(dialog).toBeVisible()
+    await expectEditorAxeClean(page, '390 editor More actions dialog')
+    await dialog.getByTestId('workflow-rename-button').click()
+    dialog = page.getByTestId('workflow-rename-dialog')
+    await expect(dialog).toBeVisible()
+    await expect(page.getByRole('dialog')).toHaveCount(1)
+    await expectEditorAxeClean(page, '390 editor Rename dialog')
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+
+    await page.getByTestId('workflow-more-actions').click()
+    dialog = page.getByTestId('workflow-actions-dialog')
+    await dialog.getByTestId('workflow-delete-button').click()
+    dialog = page.getByRole('dialog', { name: 'Delete workflow' })
+    await expect(dialog).toBeVisible()
+    await expect(page.getByRole('dialog')).toHaveCount(1)
+    await expectEditorAxeClean(page, '390 editor Delete dialog')
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await expect(page.getByTestId('workflow-more-actions')).toBeFocused()
+
+    // One dark representative catches token/contrast regressions too.
+    const dark = await fetch(`${daemon.baseUrl}/api/config`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${daemon.token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ theme: 'dark' }),
+    })
+    expect(dark.ok).toBe(true)
+    await page.reload()
+    await expect(page.locator('.workflow-canvas')).toBeVisible()
+    await page.getByTestId('workflow-more-actions').click()
+    await expectEditorAxeClean(page, '390 dark editor More actions dialog')
+
+    const light = await fetch(`${daemon.baseUrl}/api/config`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${daemon.token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ theme: 'light' }),
+    })
+    expect(light.ok).toBe(true)
   })
 })

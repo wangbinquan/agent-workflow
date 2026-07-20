@@ -17,6 +17,7 @@ import {
 } from './schemas/workflow'
 
 export const WORKFLOW_EDITABLE_SNAPSHOT_DOMAIN_V1 = 'workflow-editable-snapshot/v1\n'
+export const WORKFLOW_DEFINITION_CANDIDATE_DOMAIN_V1 = 'workflow-definition-candidate/v1\n'
 
 /** Deterministic JSON with recursively sorted object keys and ordered arrays. */
 export function canonicalJson(value: unknown): string {
@@ -45,6 +46,13 @@ function emitCanonicalJson(value: JsonValue): string {
  */
 export function serializeWorkflowDefinitionStorageV1(definition: WorkflowDefinition): string {
   return canonicalJson(WorkflowDefinitionSchema.parse(definition))
+}
+
+/** Domain-separated canonical bytes for a client-only starter/draft candidate. */
+export function serializeWorkflowDefinitionCandidateV1(definition: WorkflowDefinition): string {
+  return `${WORKFLOW_DEFINITION_CANDIDATE_DOMAIN_V1}${serializeWorkflowDefinitionStorageV1(
+    definition,
+  )}`
 }
 
 /**

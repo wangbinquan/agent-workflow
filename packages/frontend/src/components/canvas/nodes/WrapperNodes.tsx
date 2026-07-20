@@ -24,6 +24,8 @@ import { useTranslation } from 'react-i18next'
 import { FANOUT_DONE_PORT_NAME } from '@agent-workflow/shared'
 import { PortHandles } from './PortHandles'
 import { INBOUND_HANDLE_ID, type CanvasNodeData } from './types'
+import { NodeValidationBadge } from './NodeValidationBadge'
+import { NodeConfigurationSummary } from './NodeConfigurationSummary'
 
 /** Extra fields the canvas injects beyond the shared CanvasNodeData. */
 export interface WrapperNodeData extends CanvasNodeData {
@@ -90,13 +92,35 @@ export function GroupWrapperNode({ data, selected }: Props) {
         .join(' ')}
       data-status={data.status ?? 'default'}
       data-loop-body={data.loopBody ? 'true' : undefined}
+      data-surface={data.surface}
     >
+      <NodeValidationBadge data={data} />
       <div className="canvas-node__header">
-        <span className="canvas-node__kind">
-          {icon} {label}
+        <span className="canvas-node__heading-copy">
+          <span className="canvas-node__kind">
+            {icon} {label}
+          </span>
+          {data.surface === 'editor' ? (
+            <span className="canvas-node__title">{data.title}</span>
+          ) : null}
         </span>
         <WrapperHeaderPill kind={kind} />
       </div>
+      <NodeConfigurationSummary data={data} />
+      {data.onAddInsideWrapper !== undefined ? (
+        <button
+          type="button"
+          className="canvas-node__add-inside nodrag nowheel"
+          data-testid={`wrapper-add-inside-${data.nodeId}`}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation()
+            data.onAddInsideWrapper?.(data.nodeId, event.currentTarget)
+          }}
+        >
+          + {t('editor.nodeActions.addInside')}
+        </button>
+      ) : null}
       {data.innerCount === 0 ? (
         <div className="canvas-node__wrapper-empty-hint">{t('wrapperNode.dropHere')}</div>
       ) : null}

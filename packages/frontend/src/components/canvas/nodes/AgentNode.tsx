@@ -7,6 +7,8 @@ import { PortHandles } from './PortHandles'
 import { QuestionBadge } from './QuestionBadge'
 import { ClarifyDirectiveToggle } from './ClarifyDirectiveToggle'
 import { INBOUND_HANDLE_ID, type CanvasNodeData } from './types'
+import { NodeValidationBadge } from './NodeValidationBadge'
+import { NodeConfigurationSummary } from './NodeConfigurationSummary'
 
 interface Props extends NodeProps {
   data: CanvasNodeData
@@ -19,15 +21,21 @@ export function AgentNode({ data, selected }: Props) {
       className={`canvas-node canvas-node--agent ${selected ? 'canvas-node--selected' : ''}`}
       data-status={data.status ?? 'default'}
       data-loop-body={data.loopBody ? 'true' : undefined}
+      data-surface={data.surface}
     >
       <QuestionBadge data={data} />
+      <NodeValidationBadge data={data} />
       <div className="canvas-node__header">
         <span className="canvas-node__kind">
           {NODE_GLYPHS['agent-single']} {t('agentNode.label')}
         </span>
         <span className="canvas-node__title">{data.title}</span>
       </div>
-      <div className="canvas-node__id">{data.nodeId}</div>
+      {data.surface === 'editor' ? (
+        <NodeConfigurationSummary data={data} />
+      ) : (
+        <div className="canvas-node__id">{data.nodeId}</div>
+      )}
       {/* RFC-122: per-(task, asking-node) clarify directive toggle — only on
           asking-agent nodes in the task canvas (data.clarifyDirective set). */}
       <ClarifyDirectiveToggle data={data} />

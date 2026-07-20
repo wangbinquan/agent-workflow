@@ -210,11 +210,11 @@ export function computeFitBounds(
  * `node.x + node.width` by HANDLE_SLACK. The top number folds in the
  * wrapper header strip so the inner node doesn't tuck under the chip row.
  */
-const AUTO_FIT_HANDLE_SLACK = 16
-const AUTO_FIT_LEFT_CLEARANCE = WRAPPER_DEFAULT_PADDING + AUTO_FIT_HANDLE_SLACK
-const AUTO_FIT_RIGHT_CLEARANCE = WRAPPER_DEFAULT_PADDING + AUTO_FIT_HANDLE_SLACK
-const AUTO_FIT_TOP_CLEARANCE = WRAPPER_DEFAULT_PADDING + WRAPPER_HEADER_HEIGHT
-const AUTO_FIT_BOTTOM_CLEARANCE = WRAPPER_DEFAULT_PADDING
+export const AUTO_FIT_HANDLE_SLACK = 16
+export const AUTO_FIT_LEFT_CLEARANCE = WRAPPER_DEFAULT_PADDING + AUTO_FIT_HANDLE_SLACK
+export const AUTO_FIT_RIGHT_CLEARANCE = WRAPPER_DEFAULT_PADDING + AUTO_FIT_HANDLE_SLACK
+export const AUTO_FIT_TOP_CLEARANCE = WRAPPER_DEFAULT_PADDING + WRAPPER_HEADER_HEIGHT
+export const AUTO_FIT_BOTTOM_CLEARANCE = WRAPPER_DEFAULT_PADDING
 
 /** Snap the wrapper's persisted `position` + `size` so each side sits
  * exactly the target clearance from the inner-node bbox — grows when an

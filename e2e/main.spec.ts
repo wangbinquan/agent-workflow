@@ -377,14 +377,9 @@ test('RFC-016: wrapper-git renders as a group container with inner node inside i
 
   // The inner agent node should be visually contained in the wrapper rect.
   const containment = await page.evaluate(() => {
-    const wrap = document.querySelector('.canvas-node--wrapper-group')
-    const inner = Array.from(document.querySelectorAll('.canvas-node')).find(
-      (n) =>
-        !n.classList.contains('canvas-node--wrapper-group') &&
-        n.textContent !== null &&
-        n.textContent.includes('agent_inside'),
-    )
-    if (wrap === null || inner === undefined) return { found: false }
+    const wrap = document.querySelector('.react-flow__node[data-id="w_git_1"]')
+    const inner = document.querySelector('.react-flow__node[data-id="agent_inside"]')
+    if (wrap === null || inner === null) return { found: false }
     const wr = wrap.getBoundingClientRect()
     const ir = inner.getBoundingClientRect()
     return {

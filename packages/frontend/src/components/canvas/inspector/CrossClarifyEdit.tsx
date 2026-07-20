@@ -22,6 +22,7 @@ import {
   type InspectorChangeMeta,
 } from './historyMeta'
 import { NodeTitleField } from './NodeTitleField'
+import { InspectorFieldAnchor } from './InspectorFieldAnchor'
 import type { EditProps } from './types'
 
 export function CrossClarifyEdit({ node, definition, onPatch, onHistoryBoundary }: EditProps) {
@@ -122,35 +123,37 @@ export function CrossClarifyEdit({ node, definition, onPatch, onHistoryBoundary 
           </div>
         )}
       </Field>
-      <Field
-        label={t('crossClarify.inspector.sessionModeForQuestioner')}
-        hint={t('crossClarify.inspector.sessionModeHint')}
-        group
-      >
-        <Segmented<'isolated' | 'inline'>
-          value={sessionModeForQuestioner}
-          onChange={(mode) =>
-            patchCrossClarify(
-              { sessionModeForQuestioner: mode },
-              atomicNodeInspectorChange(
-                node.id,
-                'sessionModeForQuestioner',
-                t('crossClarify.inspector.sessionModeForQuestioner'),
-              ),
-            )
-          }
-          allowActiveReselect
-          options={(['isolated', 'inline'] as const).map((mode) => ({
-            value: mode,
-            label:
-              mode === 'isolated'
-                ? t('crossClarify.inspector.sessionModeIsolated')
-                : t('crossClarify.inspector.sessionModeInline'),
-          }))}
-          ariaLabel={t('crossClarify.inspector.sessionModeForQuestioner')}
-          testidPrefix="cross-clarify-session-mode-questioner"
-        />
-      </Field>
+      <InspectorFieldAnchor nodeId={node.id} field="cross-clarify-session-mode">
+        <Field
+          label={t('crossClarify.inspector.sessionModeForQuestioner')}
+          hint={t('crossClarify.inspector.sessionModeHint')}
+          group
+        >
+          <Segmented<'isolated' | 'inline'>
+            value={sessionModeForQuestioner}
+            onChange={(mode) =>
+              patchCrossClarify(
+                { sessionModeForQuestioner: mode },
+                atomicNodeInspectorChange(
+                  node.id,
+                  'sessionModeForQuestioner',
+                  t('crossClarify.inspector.sessionModeForQuestioner'),
+                ),
+              )
+            }
+            allowActiveReselect
+            options={(['isolated', 'inline'] as const).map((mode) => ({
+              value: mode,
+              label:
+                mode === 'isolated'
+                  ? t('crossClarify.inspector.sessionModeIsolated')
+                  : t('crossClarify.inspector.sessionModeInline'),
+            }))}
+            ariaLabel={t('crossClarify.inspector.sessionModeForQuestioner')}
+            testidPrefix="cross-clarify-session-mode-questioner"
+          />
+        </Field>
+      </InspectorFieldAnchor>
     </div>
   )
 }

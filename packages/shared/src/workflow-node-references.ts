@@ -77,6 +77,7 @@ export type WorkflowNodeReferenceWarningCode =
   | 'copy-reference-outside-slice'
   | 'copy-node-id-unmapped'
   | 'deleted-node-reference-pruned'
+  | 'disappeared-port-reference-pruned'
   | 'node-reference-inventory-malformed'
   | 'node-reference-inventory-unmanaged'
 
@@ -89,6 +90,8 @@ export interface WorkflowNodeReferenceWarning {
   /** Stable field path, with list indices rendered as `[n]`. */
   field: string
   referencedNodeId?: string
+  /** Present when a warning identifies one node-scoped port. */
+  referencedPortName?: string
   action: 'clear' | 'filter' | 'drop' | 'abort'
   message: string
   /** Present for wrapper membership cycles. */
@@ -134,6 +137,11 @@ export interface WorkflowPortRename {
   nodeId: string
   fromPortName: string
   toPortName: string
+}
+
+export interface WorkflowPortReference {
+  nodeId: string
+  portName: string
 }
 
 type PortRefValue = { nodeId: string; portName: string }
@@ -205,7 +213,8 @@ function pushWarning(
       candidate.nodeId === warning.nodeId &&
       candidate.edgeId === warning.edgeId &&
       candidate.field === warning.field &&
-      candidate.referencedNodeId === warning.referencedNodeId,
+      candidate.referencedNodeId === warning.referencedNodeId &&
+      candidate.referencedPortName === warning.referencedPortName,
   )
   if (!duplicate) warnings.push(warning)
 }
@@ -751,6 +760,93 @@ export function pruneDeletedNodeReferences(
 
 function portRenameKey(nodeId: string, portName: string): string {
   return `${nodeId}\u0000${portName}`
+}
+
+/**
+ * Remove references to derived ports that no longer exist. Edges and
+ * top-level workflow outputs are dropped; inventoried node PortRefs are kept
+ * as explicit incomplete values so validation can focus the repair field.
+ * The same descriptor inventory/ratchet used by copy, delete, and rename is
+ * deliberately reused here.
+ */
+export function pruneWorkflowPortReferences(
+  definition: WorkflowDefinition,
+  removedPorts: readonly WorkflowPortReference[],
+): WorkflowDefinitionReferenceResult {
+  const removed = new Set(removedPorts.map((port) => portRenameKey(port.nodeId, port.portName)))
+  if (removed.size === 0) {
+    return { definition, warnings: [], safe: true }
+  }
+
+  const base = cloneJsonValue(definition)
+  const warnings: WorkflowNodeReferenceWarning[] = []
+  const isRemoved = (ref: PortRefValue): boolean =>
+    removed.has(portRenameKey(ref.nodeId, ref.portName))
+  const policy: NodeReferencePolicy = {
+    mapNodeId: (nodeId) => nodeId,
+    mapPortRef: (ref, ownerNodeId, field) => {
+      if (!isRemoved(ref)) return ref
+      pushWarning(warnings, {
+        code: 'disappeared-port-reference-pruned',
+        nodeId: ownerNodeId,
+        field,
+        referencedNodeId: ref.nodeId,
+        referencedPortName: ref.portName,
+        action: 'clear',
+        message: `node '${ownerNodeId}' field '${field}' referenced disappeared port '${ref.nodeId}.${ref.portName}'`,
+      })
+      return null
+    },
+  }
+
+  let safe = true
+  const nodes = base.nodes.map((node) => {
+    const transformed = transformNodeReferences(node, policy)
+    warnings.push(...transformed.warnings)
+    safe &&= transformed.safe
+    return transformed.node
+  })
+  const edges = base.edges.filter((edge) => {
+    const endpoint = isRemoved(edge.source)
+      ? { field: 'source', ref: edge.source }
+      : isRemoved(edge.target)
+        ? { field: 'target', ref: edge.target }
+        : null
+    if (endpoint === null) return true
+    pushWarning(warnings, {
+      code: 'disappeared-port-reference-pruned',
+      edgeId: edge.id,
+      field: endpoint.field,
+      referencedNodeId: endpoint.ref.nodeId,
+      referencedPortName: endpoint.ref.portName,
+      action: 'drop',
+      message: `edge '${edge.id}' referenced disappeared port '${endpoint.ref.nodeId}.${endpoint.ref.portName}'`,
+    })
+    return false
+  })
+  const outputs = base.outputs?.filter((output, index) => {
+    if (!isRemoved(output.bind)) return true
+    pushWarning(warnings, {
+      code: 'disappeared-port-reference-pruned',
+      field: `outputs[${index}].bind`,
+      referencedNodeId: output.bind.nodeId,
+      referencedPortName: output.bind.portName,
+      action: 'drop',
+      message: `workflow output '${output.name}' referenced disappeared port '${output.bind.nodeId}.${output.bind.portName}'`,
+    })
+    return false
+  })
+
+  return {
+    definition: {
+      ...base,
+      nodes,
+      edges,
+      ...(outputs !== undefined ? { outputs } : {}),
+    },
+    warnings,
+    safe,
+  }
 }
 
 /**
