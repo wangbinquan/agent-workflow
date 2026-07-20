@@ -96,11 +96,38 @@ describe('focus ring — inset for full-bleed form controls', () => {
     expect(ruleBody(':root {')).toMatch(/--focus-ring-gutter:\s*4px/)
   })
 
-  it('tab strips and segmented bars use the inset ring (scroll-flush by construction)', () => {
-    // .tabs and .page-filter are deliberately overflow-x:auto so long strips
-    // can scroll, which puts their children exactly on the clip edge.
-    const body = ruleBody(':where(.tabs__tab, .segmented__option):focus-visible {')
-    expect(body).toMatch(/outline-offset:\s*var\(--focus-ring-offset-inset\)/)
+  it('every scroll-flush strip control shares the inset ring group', () => {
+    // Their rails (.tabs, .page-filter, .page-section-nav__*,
+    // .task-outputs-panel__list) are deliberately overflow-x/auto so long
+    // strips can scroll, which puts the children exactly on the clip edge.
+    //
+    // Matched structurally rather than by exact selector text — the group is a
+    // multi-line :where() list that prettier reflows whenever a member is added.
+    const groups = css.match(/:where\([^)]*\):focus-visible\s*\{[^}]*\}/g) ?? []
+    const inset = groups.find((r) => r.includes('--focus-ring-offset-inset'))
+    expect(inset, 'no inset :where(...):focus-visible group found').toBeDefined()
+    for (const cls of [
+      '.tabs__tab',
+      '.segmented__option',
+      '.page-section-nav__group-trigger',
+      '.page-section-nav__leaf',
+      '.task-outputs-panel__option',
+    ]) {
+      expect(inset, `${cls} must be in the inset ring group`).toContain(cls)
+    }
+    // …and must NOT also sit in the outset group.
+    const outset = groups.find((r) => r.includes('var(--focus-ring-offset)'))
+    expect(outset, 'no outset :where(...):focus-visible group found').toBeDefined()
+    expect(outset).not.toContain('.tabs__tab')
+  })
+
+  it.each([
+    ['.task-outputs-panel__detail', /padding:\s*var\(--focus-ring-gutter\)/],
+    ['.task-detail__pane', /padding:\s*var\(--focus-ring-gutter\)/],
+    ['.page--task-detail', /padding:\s*var\(--focus-ring-gutter\)/],
+    ['.react-flow__controls', /padding:\s*var\(--focus-ring-gutter\)/],
+  ])('%s reserves a gutter for the OUTSET rings it contains', (selector, re) => {
+    expect(ruleBody(`${selector} {`)).toMatch(re)
   })
 
   it('the workgroup member card stretch-overlay ring is inset', () => {
@@ -131,6 +158,9 @@ describe('focus ring — no scroll-flush control may reintroduce an outset ring'
     '.select__search-input',
     '.tabs__tab',
     '.segmented__option',
+    '.page-section-nav__group-trigger',
+    '.page-section-nav__leaf',
+    '.task-outputs-panel__option',
   ]
 
   /**

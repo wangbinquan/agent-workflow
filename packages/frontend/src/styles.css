@@ -5092,7 +5092,9 @@ details.form-section[open] > summary {
   justify-content: flex-start;
   overflow-x: auto;
   overscroll-behavior-inline: contain;
-  padding: 2px 2px 4px;
+  /* RFC-206 T5' — was `2px 2px 4px`, sized for a 2px .form-input ring; the
+     buttons that actually live here carry the 4px OUTSET ring and were cut. */
+  padding: var(--focus-ring-gutter);
   scrollbar-width: thin;
 }
 
@@ -6300,12 +6302,16 @@ details.form-section[open] > summary {
  * without inheriting it — so these selectors are intentionally global.
  * Works in both modes because --panel / --border / --text / --muted resolve
  * per data-theme. */
+/* RFC-206 T5' — `overflow: hidden` here is only for the rounded corner, but it
+   also clips each .react-flow__controls-button's focus ring on all four sides
+   (xyflow ships no focus styling of its own, so the UA ring applies). */
 .react-flow__controls {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 6px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
   overflow: hidden;
+  padding: var(--focus-ring-gutter);
 }
 .react-flow__controls-button {
   background: var(--panel);
@@ -7689,11 +7695,14 @@ details.form-section[open] > summary {
   white-space: nowrap;
 }
 
+/* RFC-206 T5' — scroll box with no padding of its own; the detail actions
+   (.btn, 4px outset ring) sit flush against its edges. */
 .task-outputs-panel__detail {
   display: flex;
   flex-direction: column;
   min-height: 0;
   overflow: auto;
+  padding: var(--focus-ring-gutter);
 }
 
 .task-outputs-panel__tabpanel:not([hidden]) {
@@ -9758,6 +9767,8 @@ mark.comment-anchor[data-active='true'] {
 /* The page itself is locked to the content area's height so the only
  * scrollable surfaces are individual tab panes (node-runs table, details
  * dl, diff body, etc.). Mirrors `.page--editor`. */
+/* RFC-206 T5' — `overflow: hidden` (viewport-filling layout) with no padding
+   clipped the header's .btn / .data-table__link rings against the page edge. */
 .page--task-detail {
   max-width: none;
   display: flex;
@@ -9766,6 +9777,7 @@ mark.comment-anchor[data-active='true'] {
   height: 100%;
   min-height: 0;
   overflow: hidden;
+  padding: var(--focus-ring-gutter);
 }
 
 /* Same chrome trim as the workflow editor — h1 / hint default margins
@@ -9809,6 +9821,9 @@ mark.comment-anchor[data-active='true'] {
  * switches) and toggled via the native `hidden` attribute. Explicit
  * `display: none` here is defensive — without it a CSS reset that sets
  * `display: block !important` on `div` would unhide all panes. */
+/* RFC-206 T5' — the pane is a scroll box with no padding, so every flush child
+   lost its ring. Previously only `> .workgroup-room` was patched (one reported
+   symptom); this covers the rest of the panes' buttons and links. */
 .task-detail__pane {
   height: 100%;
   min-height: 0;
@@ -9816,6 +9831,7 @@ mark.comment-anchor[data-active='true'] {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  padding: var(--focus-ring-gutter);
 }
 
 .task-detail__pane[hidden] {
@@ -16847,8 +16863,23 @@ button.status-chip {
    flush by design, fix the RING (O(1)) rather than every container that will
    ever hold it (O(containers), the habit that made this bug recur five times).
    Intrinsically-sized chrome that is NOT flush by construction (.btn,
-   .nav-item, .sidebar__link, .dialog__close) keeps the outset ring above. */
-:where(.tabs__tab, .segmented__option):focus-visible {
+   .nav-item, .sidebar__link, .dialog__close) keeps the outset ring above.
+
+   RFC-206 T5' widened this list once the audit could reach fixture-backed
+   surfaces. `.page-section-nav__group-trigger` / `__leaf` live in
+   `.page-section-nav__group-triggers` / `__active-group-leaves` — the same
+   shape as `.tabs` (overflow-x:auto, padding:0), and `.task-outputs-panel__option`
+   in `.task-outputs-panel__list` likewise. All three previously had NO app
+   focus rule at all, so they fell back to the UA ring — which is painted
+   outside too, and was being cut. Adopting the shared token both fixes the
+   clip and brings them onto the design system's focus treatment. */
+:where(
+  .tabs__tab,
+  .segmented__option,
+  .page-section-nav__group-trigger,
+  .page-section-nav__leaf,
+  .task-outputs-panel__option
+):focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: var(--focus-ring-offset-inset);
 }

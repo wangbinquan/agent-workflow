@@ -30,23 +30,97 @@ let daemon: DaemonHandle
  *  leave `.tabs` (used by EVERY tabbed page) entirely unaudited. */
 const SEEDED_AGENT = 'focus-ring-audit-agent'
 
-test.beforeAll(async () => {
-  daemon = await startDaemon()
-  const res = await fetch(`${daemon.baseUrl}/api/agents`, {
+/** RFC-206 T5' — fixture-backed surfaces. The list/new routes render from an
+ *  empty install, but the heaviest chrome in the app (workflow editor
+ *  inspector + sidebar, task detail panes) only mounts with real data, so
+ *  without these seeds those surfaces stay completely unaudited. */
+let seededWorkflowId = ''
+let seededTaskId = ''
+
+async function api(path: string, body: unknown): Promise<Response> {
+  return fetch(`${daemon.baseUrl}${path}`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${daemon.token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      name: SEEDED_AGENT,
-      description: 'RFC-206 focus-ring clip audit fixture',
-      outputs: ['answer'],
-      readonly: true,
-      bodyMd: '',
-    }),
+    body: JSON.stringify(body),
+  })
+}
+
+test.beforeAll(async () => {
+  daemon = await startDaemon()
+  const res = await api('/api/agents', {
+    name: SEEDED_AGENT,
+    description: 'RFC-206 focus-ring clip audit fixture',
+    outputs: ['answer'],
+    readonly: true,
+    bodyMd: '',
   })
   expect(res.ok, `failed to seed agent (${res.status})`).toBe(true)
+
+  const wfRes = await api('/api/workflows', {
+    name: 'focus-ring-audit-workflow',
+    description: 'RFC-206 focus-ring clip audit fixture',
+    definition: {
+      $schema_version: 1,
+      inputs: [{ kind: 'text', key: 'topic', label: 'Topic', required: true }],
+      nodes: [
+        { id: 'in_1', kind: 'input', inputKey: 'topic', position: { x: 0, y: 0 } },
+        {
+          id: 'agent_1',
+          kind: 'agent-single',
+          agentName: SEEDED_AGENT,
+          promptTemplate: 'Explain {{topic}} briefly.',
+          position: { x: 320, y: 0 },
+        },
+        {
+          id: 'out_1',
+          kind: 'output',
+          ports: [{ name: 'answer', bind: { nodeId: 'agent_1', portName: 'answer' } }],
+          position: { x: 640, y: 0 },
+        },
+      ],
+      edges: [
+        {
+          id: 'e_in_agent',
+          source: { nodeId: 'in_1', portName: 'topic' },
+          target: { nodeId: 'agent_1', portName: 'topic' },
+        },
+        {
+          id: 'e_agent_out',
+          source: { nodeId: 'agent_1', portName: 'answer' },
+          target: { nodeId: 'out_1', portName: 'answer' },
+        },
+      ],
+    },
+  })
+  expect(wfRes.ok, `failed to seed workflow (${wfRes.status})`).toBe(true)
+  seededWorkflowId = ((await wfRes.json()) as { id: string }).id
+
+  const taskRes = await api('/api/tasks', {
+    workflowId: seededWorkflowId,
+    name: 'Focus ring audit task',
+    scratch: true,
+    inputs: { topic: 'clipped focus rings' },
+  })
+  expect(taskRes.ok, `failed to seed task (${taskRes.status})`).toBe(true)
+  seededTaskId = ((await taskRes.json()) as { id: string }).id
+
+  // Drive it to a terminal state so the detail page renders its real panes
+  // (outputs, worktree diff, run log) rather than a spinner.
+  const deadline = Date.now() + 60_000
+  for (;;) {
+    const r = await fetch(`${daemon.baseUrl}/api/tasks/${seededTaskId}`, {
+      headers: { Authorization: `Bearer ${daemon.token}` },
+    })
+    if (r.ok) {
+      const { status } = (await r.json()) as { status: string }
+      if (['done', 'failed', 'canceled', 'interrupted'].includes(status)) break
+    }
+    expect(Date.now() < deadline, 'seeded task never reached a terminal state').toBe(true)
+    await new Promise((resolve) => setTimeout(resolve, 150))
+  }
 })
 
 test.afterAll(async () => {
@@ -642,6 +716,55 @@ test('focus rings are not clipped anywhere', async ({ page }) => {
     await tabs.nth(i).click()
     await page.waitForTimeout(200)
     record('/agents/{name}(tabs)', await sweep())
+  }
+
+  // ── RFC-206 T5': fixture-backed surfaces ──────────────────────────────
+  // These carry the app's densest chrome and none of it renders on an empty
+  // install, so before T5' they were entirely unaudited.
+
+  // Workflow editor: canvas + right inspector + left node sidebar. Its panels
+  // are the zero-padding scroll boxes the static audit flagged (.inspector,
+  // .editor-sidebar, .workflow-node-picker__groups).
+  await page.goto(`${daemon.baseUrl}/workflows/${seededWorkflowId}`)
+  await expect(page.locator('.workflow-canvas, .canvas-frame').first()).toBeVisible()
+  await page.waitForTimeout(1200) // xyflow mounts asynchronously
+  record('/workflows/{id}(editor)', await sweep())
+
+  // …and again with a node selected, which is the only way the right-hand
+  // inspector (its own scroll box, full-width form controls) ever mounts.
+  const node = page.locator('.react-flow__node').first()
+  if (await node.count()) {
+    await node.click()
+    await page.waitForTimeout(500)
+    record('/workflows/{id}(editor+inspector)', await sweep())
+  }
+
+  // Task detail: .task-detail__pane is overflow:auto with NO padding of its
+  // own — only `> .workgroup-room` was ever protected, so every other pane is
+  // unguarded. Walk its tabs the same way as the agent form.
+  await page.goto(`${daemon.baseUrl}/tasks/${seededTaskId}`)
+  await expect(page.locator('.page--task-detail, .task-detail__panes').first()).toBeVisible()
+  await page.waitForTimeout(600)
+  record('/tasks/{id}', await sweep())
+  // Task detail navigates by `?tab=` (PageSectionNav, not a role=tab TabBar),
+  // so drive it by URL — deterministic, and it avoids the outputs panel's own
+  // hidden [role="tab"] list, which is unclickable and just times out.
+  const TASK_TABS = [
+    'details',
+    'execution',
+    'node-runs',
+    'outputs',
+    'artifacts',
+    'worktree-diff',
+    'worktree-files',
+    'task-questions',
+    'feedback',
+  ]
+  for (const tab of TASK_TABS) {
+    await page.goto(`${daemon.baseUrl}/tasks/${seededTaskId}?tab=${tab}`)
+    await expect(page.locator('.page--task-detail, .task-detail__panes').first()).toBeVisible()
+    await page.waitForTimeout(350)
+    record(`/tasks/{id}?tab=${tab}`, await sweep())
   }
 
   // The originally reported repro: the batch-import dialog's textarea lost the

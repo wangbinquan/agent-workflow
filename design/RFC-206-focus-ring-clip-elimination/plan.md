@@ -143,6 +143,25 @@
 
 做法：照 `a11y.spec.ts` 的 seed 套路补 fixture，把这些面加进 `ROUTES` / 弹窗用例。**每加一面都可能带出新违规，属预期**。
 
+**状态：第一批已完成（工作流编辑器 + 任务详情）。**
+
+新 fixture：seed 一个 workflow + 一个跑到终态的 task，覆盖 `/workflows/{id}`（编辑器，含选中节点后才挂载的右侧 inspector）与 `/tasks/{id}` 的 **9 个 `?tab=`**（任务详情走 `PageSectionNav` + `?tab=` 查询参，不是 `role=tab` 的 TabBar；且输出面板自带一组**不可见**的 `[role="tab"]`，点它只会超时——必须按 URL 驱动）。
+
+**一加覆盖就报出 274 条**，来自 12 个根因——这正好证实了此前「0 违规只在已覆盖面上成立」的保留意见。已全部清零：
+
+| 数量 | 控件 | 容器 | 处置 |
+| --- | --- | --- | --- |
+| 100 | `.page-section-nav__group-trigger` | `.page-section-nav__group-triggers` | 环内移 |
+| 60 | `.page-section-nav__leaf` | `.page-section-nav__active-group-leaves` | 环内移 |
+| 40 | `.react-flow__controls-button` | `.react-flow__panel` | 容器 gutter |
+| 42 | `.btn` / `.data-table__link` | `.page--task-detail`（`overflow:hidden` 无 padding） | 容器 gutter |
+| 12 | `.btn` | `.page--editor > .page__header > .page__actions`（原 `2px` 是按 2px 输入框环定的，按钮是 4px） | 容器 gutter |
+| 6 | `.btn` / `.task-outputs-panel__option` | `.task-detail__pane`、`.task-outputs-panel__*` | gutter + 环内移 |
+
+三个 nav / option 控件**此前根本没有 app 焦点样式**，用的是 UA 默认环（同样画在盒外、同样被切）。纳入共享 inset 组既修了裁剪，也把它们拉回设计系统的焦点样式。
+
+明暗验证：任务详情与编辑器截图复核，4px gutter 视觉上不可察觉。
+
 ---
 
 ## T6 · 已有补丁的补齐与归位
@@ -152,7 +171,11 @@
 - `.task-detail__pane` —— 仅 `> .workgroup-room` 受保护，其它 pane 子项裸奔。
 - 复查四处历史补丁：失效的删（连同源码锁），仍有用的补注释说明「为谁保留」（design.md §5、验收标准 AC6）。
 
-**依赖**：T2，以及 **T5'**——前三条都在尚未覆盖的面上，必须先让几何审计能走到那里，否则是在凭静态推测改代码（正是本 RFC 要根除的做法）。四处历史补丁的注释归位已在 T0/T3 完成。
+**依赖**：T2，以及 **T5'**——必须先让几何审计能走到那里，否则是在凭静态推测改代码（正是本 RFC 要根除的做法）。
+
+**状态：部分完成。** T5' 第一批覆盖上来后，`.page--editor > .page__header > .page__actions`（2px → gutter）与 `.task-detail__pane`（此前只有 `> .workgroup-room` 受保护）**已由实测驱动修掉**，不是照静态清单猜的。四处历史补丁的注释归位已在 T0/T3 完成。
+
+**仍未覆盖 ⇒ 未验证**：`.review-detail__layout`（只有 `padding-right: 14px`）与 `.page--editor > .form-grid`（`padding-inline: 2px`）所在的评审详情 / 编辑器表单面还没进审计，**不要凭静态推测去改**，等 T5' 第二批把它们覆盖到再说。
 
 ---
 
