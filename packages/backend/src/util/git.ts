@@ -747,7 +747,11 @@ export async function createWorktree(opts: CreateWorktreeOptions): Promise<Creat
       const { syncSubmodules } = await import('@/services/gitSubmodule')
       const { resolveSubmoduleParams } = await import('@/services/gitRepoCache')
       const effective = resolveSubmoduleParams(opts.submoduleMode, opts.submoduleJobs)
+      // RFC-210 G8: the ONE place `--remote` applies. Every other sync site
+      // (iso creation, materialize) deliberately omits it so the baseline stays
+      // pinned for the whole task.
       return await syncSubmodules(worktreePath, {
+        ...(effective.remote ? { remote: true } : {}),
         mode: effective.mode,
         jobs: effective.jobs,
       })

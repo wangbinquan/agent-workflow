@@ -306,13 +306,14 @@ export async function syncBranchToRemote(
  * missing, and a git helper must not have that side effect. A malformed config
  * degrades to defaults rather than failing the git operation around it.
  */
-function submoduleConfigFromDisk(): { mode?: SubmoduleMode; jobs?: number } {
+function submoduleConfigFromDisk(): { mode?: SubmoduleMode; jobs?: number; remote?: boolean } {
   try {
     if (!existsSync(Paths.config)) return {}
     const cfg = loadConfig(Paths.config)
-    const out: { mode?: SubmoduleMode; jobs?: number } = {}
+    const out: { mode?: SubmoduleMode; jobs?: number; remote?: boolean } = {}
     if (cfg.gitRecurseSubmodules !== undefined) out.mode = cfg.gitRecurseSubmodules
     if (cfg.gitSubmoduleJobs !== undefined) out.jobs = cfg.gitSubmoduleJobs
+    if (cfg.gitSubmoduleRemote !== undefined) out.remote = cfg.gitSubmoduleRemote
     return out
   } catch {
     return {}
@@ -322,7 +323,7 @@ function submoduleConfigFromDisk(): { mode?: SubmoduleMode; jobs?: number } {
 export function resolveSubmoduleParams(
   inMode: SubmoduleMode | undefined,
   inJobs: number | undefined,
-): { mode: SubmoduleMode; jobs: number } {
+): { mode: SubmoduleMode; jobs: number; remote: boolean } {
   const caps = getCachedGitCapabilities()
   // Precedence: explicit argument > settings > built-in default. Both settings
   // are optional and absent from a default config.json, so an untouched install
@@ -336,7 +337,10 @@ export function resolveSubmoduleParams(
   if (caps && !caps.supportsSubmoduleJobs) {
     jobs = 1
   }
-  return { mode, jobs }
+  // RFC-210 G8: `--remote` pulls each submodule to its upstream branch tip
+  // instead of the commit the superproject records. Off by default — it makes a
+  // task's baseline drift with whatever upstream did, which costs reproducibility.
+  return { mode, jobs, remote: fromDisk.remote ?? false }
 }
 
 async function detectDefaultBranchInRepo(dir: string): Promise<string | null> {

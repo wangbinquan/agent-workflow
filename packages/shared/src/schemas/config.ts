@@ -252,6 +252,18 @@ export const ConfigSchema = z.object({
    */
   gitSubmoduleJobs: z.number().int().min(1).max(32).optional(),
 
+  /**
+   * RFC-210 G8: pull each submodule to its upstream branch tip when a task
+   * worktree is created, instead of the commit the superproject records.
+   *
+   * Applied ONCE, at worktree creation — never during the run. A task's nodes
+   * must all see the same submodule state; letting it move mid-task would make
+   * two nodes of one workflow disagree about what the code is.
+   *
+   * Default off: it trades reproducibility for freshness.
+   */
+  gitSubmoduleRemote: z.boolean().optional(),
+
   // --- RFC-210 recursive submodule isolation ---
   /**
    * Periodic background refresh of cached repos + their submodules. Without it

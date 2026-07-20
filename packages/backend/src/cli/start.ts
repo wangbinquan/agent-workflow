@@ -19,6 +19,7 @@ import { buildScheduleLaunch } from '@/services/scheduleLaunch'
 import { startScheduledTaskLoop } from '@/services/scheduledTaskScheduler'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { startEventsArchiver } from '@/services/eventsArchive'
+import { startSubmoduleRefreshLoop } from '@/services/submoduleRefresh'
 import { startWorktreeGc } from '@/services/gc'
 import { registerTerminalTaskHook } from '@/services/lifecycle'
 import { startLifecycleInvariantsLoop } from '@/services/lifecycleInvariants'
@@ -466,6 +467,14 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   const limitsTicker = startLimitsTicker(db)
   const gcTicker = startWorktreeGc(db, () => loadConfig(Paths.config), undefined, Paths.root)
   const archiveTicker = startEventsArchiver(db, () => loadConfig(Paths.config), Paths.logsDir)
+  // RFC-210 G7: keep cached mirrors (and their submodules) from going stale when
+  // nobody launches a task against them. Reads its own enable flag each tick.
+  const submoduleRefreshTicker = startSubmoduleRefreshLoop(
+    db,
+    () => loadConfig(Paths.config),
+    undefined,
+    Paths.root,
+  )
   const batchImportCfg = loadConfig(Paths.config)
   const batchImportGcTicker = startBatchImportGc(
     undefined,
@@ -625,6 +634,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     limitsTicker.stop()
     gcTicker.stop()
     archiveTicker.stop()
+    submoduleRefreshTicker.stop()
     batchImportGcTicker.stop()
     pluginGenerationGcTicker.stop()
     memoryDistillTicker.stop()
