@@ -85,11 +85,20 @@ export function mergeTreeGateError(caps: GitCapabilities): string | null {
 }
 
 /** Run `git --version`, parse, cache. Idempotent — call multiple times safely. */
+/** RFC-208 — see BOOT_PROBE_TIMEOUT_MS; finite matters far more than tight. */
+export const GIT_PROBE_TIMEOUT_MS = 20_000
+
 export async function detectGitCapabilities(): Promise<GitCapabilities> {
   let v: GitSemver | null = null
   try {
     // runGit(cwd, ['--version']) is fine — git ignores -C for --version
-    const r = await runGit(process.cwd(), ['--version'])
+    //
+    // RFC-208: bounded. This runs at boot while the daemon holds the PID lock,
+    // so a hanging git wrapper wedges startup exactly the way a hanging
+    // opencode wrapper does — daemon alive, port never listening, restart
+    // useless. A timeout surfaces as exitCode != 0, which the existing gate
+    // already renders as "no capabilities" and refuses to boot on (fail-closed).
+    const r = await runGit(process.cwd(), ['--version'], { timeoutMs: GIT_PROBE_TIMEOUT_MS })
     v = r.exitCode === 0 ? parseGitVersion(r.stdout) : null
   } catch {
     // git missing entirely (spawn failure): same "no capabilities" shape — the

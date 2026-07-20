@@ -91,13 +91,41 @@ export type PlantumlRenderResult =
  * Stops early on a step-1 PlantUML diagnostic 4xx. The `authHeader` is sent only
  * here (server→endpoint) and never returned to the browser.
  */
+/**
+ * RFC-208 — ceiling for one PlantUML round trip.
+ *
+ * This is the only place the daemon calls a USER-CONFIGURED EXTERNAL host, which
+ * makes it far likelier to black-hole than anything on 127.0.0.1. All three
+ * fallbacks used a bare `fetch` with no AbortSignal, and `await r.text()` was
+ * unbounded on top of that — so a stalled endpoint pinned the request forever.
+ * Applied per attempt, so the three-step fallback stays bounded overall.
+ */
+export const PLANTUML_ATTEMPT_TIMEOUT_MS = 15_000
+
 export async function renderPlantuml(opts: {
   source: string
   endpoint: string
   authHeader: string | undefined
   fetchImpl?: typeof fetch
+  /** Override the per-attempt ceiling (tests). */
+  timeoutMs?: number
 }): Promise<PlantumlRenderResult> {
-  const doFetch = opts.fetchImpl ?? fetch
+  const attemptMs = opts.timeoutMs ?? PLANTUML_ATTEMPT_TIMEOUT_MS
+  const baseFetch = opts.fetchImpl ?? fetch
+  // Bound the body read as well as the request: a stalled host can send headers
+  // and then stop, leaving `.text()` waiting on an EOF that never comes.
+  const doFetch = ((url: string, init?: RequestInit) =>
+    baseFetch(url, { ...init, signal: AbortSignal.timeout(attemptMs) })) as typeof fetch
+  const textOf = async (r: Response): Promise<string> =>
+    await Promise.race([
+      r.text(),
+      new Promise<string>((_ok, reject) =>
+        setTimeout(() => {
+          void r.body?.cancel().catch(() => {})
+          reject(new Error(`plantuml body read timed out after ${attemptMs}ms`))
+        }, attemptMs),
+      ),
+    ])
   const headers: Record<string, string> = {}
   if (opts.authHeader !== undefined && opts.authHeader.length > 0) {
     headers['Authorization'] = opts.authHeader
@@ -108,7 +136,7 @@ export async function renderPlantuml(opts: {
   // 1) GET plantuml-alpha.
   try {
     const r = await doFetch(`${base}/plantuml/svg/${encodeForPlantuml(opts.source)}`, { headers })
-    const text = await r.text()
+    const text = await textOf(r)
     if (r.ok && text.includes('<svg')) return { kind: 'svg', svg: text }
     if (!r.ok && looksLikePlantumlError(text)) return { kind: 'error-svg', errorSvg: text }
     lastErr = `GET(plantuml) ${r.status}`
@@ -119,7 +147,7 @@ export async function renderPlantuml(opts: {
   // 2) GET kroki base64url.
   try {
     const r = await doFetch(`${base}/plantuml/svg/${encodeForGet(opts.source)}`, { headers })
-    const text = await r.text()
+    const text = await textOf(r)
     if (r.ok && text.includes('<svg')) return { kind: 'svg', svg: text }
     lastErr = `GET(base64url) ${r.status}`
   } catch (err) {
@@ -133,7 +161,7 @@ export async function renderPlantuml(opts: {
       headers: { ...headers, 'content-type': 'text/plain' },
       body: opts.source,
     })
-    const text = await r.text()
+    const text = await textOf(r)
     if (r.ok && text.includes('<svg')) return { kind: 'svg', svg: text }
     lastErr = `POST ${r.status}`
   } catch (err) {

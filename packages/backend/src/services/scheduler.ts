@@ -2435,6 +2435,14 @@ async function resolveMergeConflicts(
       gitUserEmail: task.gitUserEmail,
       ...(state.opts.opencodeCmd ? { opencodeCmd: state.opts.opencodeCmd } : {}),
       ...(state.opts.signal ? { signal: state.opts.signal } : {}),
+      // RFC-208: this was the ONLY runNode call site without a timeout, and it
+      // runs inside the per-task writeSem — so a merge agent that hangs blocks
+      // every other writer for that task (review decisions, clarify dispatch)
+      // with no SIGTERM→SIGKILL escalation ever armed. Same budget as every
+      // other node.
+      ...(state.opts.defaultPerNodeTimeoutMs !== undefined
+        ? { timeoutMs: state.opts.defaultPerNodeTimeoutMs }
+        : {}),
     })
   }
   let allResolved = true

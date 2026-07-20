@@ -45,6 +45,16 @@ export interface StartOptions {
   host?: string
 }
 
+/**
+ * RFC-208 — ceiling for the mandatory boot probes (opencode + git).
+ *
+ * Generous: a cold binary on a slow/networked volume can legitimately take a
+ * few seconds. The point is not to be tight, it is to be FINITE — an unbounded
+ * probe leaves the daemon holding the PID lock while never listening, and a
+ * restart cannot recover from that.
+ */
+export const BOOT_PROBE_TIMEOUT_MS = 20_000
+
 export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // 1. Logger — must come before lock so failures land in stdout/file.
   configureLogger({
@@ -82,7 +92,18 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // RFC-143: opencode is the hard-required boot runtime — probe it via its
   // driver (the exit-on-incompatible gate stays here, a boot-policy call).
   const ocDriver = getRuntimeDriver('opencode')
-  const probe = await ocDriver.probe(ocDriver.defaultBinary(config)[0]!)
+  // RFC-208: bound the probe. `opencode` on PATH is frequently a wrapper
+  // (nvm/asdf/mise shim, corporate proxy script) that can hang; unbounded, the
+  // daemon holds the PID lock and NEVER reaches `listen`, which is the one
+  // failure in this codebase that a restart cannot clear — the next `start`
+  // just reports "another daemon is already running".
+  //
+  // Bounded, but still FAIL-CLOSED: a timed-out required-runtime probe reports
+  // version null below and exits after releasing the lock. Continuing to listen
+  // would serve a daemon that cannot run its mandatory runtime.
+  const probe = await ocDriver.probe(ocDriver.defaultBinary(config)[0]!, {
+    timeoutMs: BOOT_PROBE_TIMEOUT_MS,
+  })
   if (probe.version === null) {
     log.error('opencode binary not found or unreadable', { binary: probe.binary })
     console.error(
