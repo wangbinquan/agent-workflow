@@ -18,7 +18,7 @@ import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { cachedRepos, taskRepos, tasks, workflows } from '../src/db/schema'
+import { cachedRepos, scheduledTasks, taskRepos, tasks, workflows } from '../src/db/schema'
 import { gitUrlCacheKeyWith, parseGitUrl } from '@agent-workflow/shared'
 import { createHash } from 'node:crypto'
 import { ensureCredentialsSealed, unsealRepoUrl } from '../src/services/repoCredentials'
@@ -189,5 +189,85 @@ describe('RFC-204 T7 — credential sealing gate', () => {
     expect(unsealRepoUrl(row, undefined)).toBeNull()
     // wrong key → also null, never a partial/garbage URL
     expect(unsealRepoUrl(row, createSecretBoxFromKey(Buffer.alloc(32, 9)))).toBeNull()
+  })
+})
+
+describe('RFC-204 T5 — scheduled launch payloads hold no credential', () => {
+  let db: DbClient
+  beforeEach(() => {
+    db = createInMemoryDb(MIGRATIONS)
+  })
+
+  function seedSchedule(payload: unknown): string {
+    const id = ulid()
+    const now = Date.now()
+    db.insert(scheduledTasks)
+      .values({
+        id,
+        name: 'nightly',
+        ownerUserId: '__system__',
+        launchKind: 'workflow',
+        launchPayload: JSON.stringify(payload),
+        scheduleSpec: JSON.stringify({ kind: 'interval', everyMs: 3600000 }),
+        enabled: true,
+        nextRunAt: now,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .run()
+    return id
+  }
+
+  test('a stored credentialed repoUrl is rewritten to a cachedRepoId reference', () => {
+    seedRepo(db, 'cr-1', CRED_URL)
+    const id = seedSchedule({ workflowId: 'w', name: 'n', repoUrl: CRED_URL, inputs: {} })
+
+    ensureCredentialsSealed(db, box)
+
+    const row = db
+      .select()
+      .from(scheduledTasks)
+      .all()
+      .find((r) => r.id === id)!
+    expect(row.launchPayload).not.toContain(TOKEN)
+    const after = JSON.parse(row.launchPayload) as Record<string, unknown>
+    // still launchable — just by id now, which the launch schema accepts
+    expect(after['cachedRepoId']).toBe('cr-1')
+    expect(after['repoUrl']).toBeUndefined()
+  })
+
+  test('multi-repo entries are converted too', () => {
+    seedRepo(db, 'cr-1', CRED_URL)
+    const id = seedSchedule({
+      workflowId: 'w',
+      name: 'n',
+      repos: [{ repoUrl: CRED_URL, ref: 'main' }],
+      inputs: {},
+    })
+
+    ensureCredentialsSealed(db, box)
+
+    const row = db
+      .select()
+      .from(scheduledTasks)
+      .all()
+      .find((r) => r.id === id)!
+    expect(row.launchPayload).not.toContain(TOKEN)
+    const repos = (JSON.parse(row.launchPayload) as { repos: Array<Record<string, unknown>> }).repos
+    expect(repos[0]?.cachedRepoId).toBe('cr-1')
+    expect(repos[0]?.ref).toBe('main') // ref survives the rewrite
+  })
+
+  test('a payload with no matching mirror is left launchable (not destroyed)', () => {
+    // No cache row: the URL is the only way to launch it, so the gate must not
+    // strip it. The read-side mapper is what keeps it off the wire.
+    const id = seedSchedule({ workflowId: 'w', name: 'n', repoUrl: CRED_URL, inputs: {} })
+    ensureCredentialsSealed(db, box)
+    const row = db
+      .select()
+      .from(scheduledTasks)
+      .all()
+      .find((r) => r.id === id)!
+    expect(JSON.parse(row.launchPayload)['repoUrl']).toBe(CRED_URL)
   })
 })

@@ -21,7 +21,7 @@ import { and, eq, sql } from 'drizzle-orm'
 import { createHash } from 'node:crypto'
 import type { SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
-import { cachedRepos, taskRepos, tasks } from '@/db/schema'
+import { cachedRepos, scheduledTasks, taskRepos, tasks } from '@/db/schema'
 import { createLogger } from '@/util/log'
 import { redactSensitiveString } from '@/util/redact'
 
@@ -162,6 +162,48 @@ export function ensureCredentialsSealed(
     if (id === null) continue
     db.update(tasks).set({ cachedRepoId: id }).where(eq(tasks.id, row.id)).run()
     result.linked++
+  }
+
+  // 2b. Scheduled tasks store the WHOLE launch body, so a credentialed repoUrl
+  //     sat in `launch_payload` as plaintext (and went out through the API).
+  //     Rewrite it to reference the mirror by id — `cachedRepoId` is already a
+  //     first-class launch source (RFC-204 T1), so the payload stays valid and
+  //     replayable while holding no secret. Rows with no matching mirror are
+  //     left alone: they still need their URL to launch, and the read-side
+  //     mapper redacts them on the way out.
+  for (const row of db.select().from(scheduledTasks).all()) {
+    let payload: Record<string, unknown>
+    try {
+      const raw: unknown = JSON.parse(row.launchPayload)
+      if (raw === null || typeof raw !== 'object') continue
+      payload = raw as Record<string, unknown>
+    } catch {
+      continue // corrupt payload — the migration/repair path owns it
+    }
+    let changed = false
+    const convert = (obj: Record<string, unknown>): void => {
+      const url = obj['repoUrl']
+      if (typeof url !== 'string' || url.length === 0) return
+      const id = linkFromUrl(url)
+      if (id === null) return
+      delete obj['repoUrl']
+      obj['cachedRepoId'] = id
+      changed = true
+    }
+    convert(payload)
+    const repos = payload['repos']
+    if (Array.isArray(repos)) {
+      for (const r of repos) {
+        if (r !== null && typeof r === 'object') convert(r as Record<string, unknown>)
+      }
+    }
+    if (changed) {
+      db.update(scheduledTasks)
+        .set({ launchPayload: JSON.stringify(payload) })
+        .where(eq(scheduledTasks.id, row.id))
+        .run()
+      result.scrubbed++
+    }
   }
 
   // 3. Re-redact history written before redactGitUrl learned about query

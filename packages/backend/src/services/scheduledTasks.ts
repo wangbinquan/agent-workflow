@@ -19,6 +19,7 @@ import {
   scheduledPayloadSchemaFor,
   type ScheduledLaunchKind,
   wallClockAt,
+  redactGitUrl,
 } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import { existsSync, realpathSync } from 'node:fs'
@@ -89,6 +90,33 @@ function parseJsonField<T>(
   }
 }
 
+/**
+ * RFC-204 — mask a credentialed `repoUrl` anywhere inside a stored launch body
+ * before it leaves the daemon. Shallow by design: `repoUrl` only ever appears at
+ * the top level or inside `repos[]`.
+ */
+function redactPayloadCredentials(payload: unknown): unknown {
+  if (payload === null || typeof payload !== 'object') return payload
+  const clone = { ...(payload as Record<string, unknown>) }
+  if (typeof clone['repoUrl'] === 'string') {
+    clone['repoUrl'] = redactGitUrl(clone['repoUrl'])
+  }
+  const repos = clone['repos']
+  if (Array.isArray(repos)) {
+    clone['repos'] = repos.map((r) =>
+      r !== null &&
+      typeof r === 'object' &&
+      typeof (r as Record<string, unknown>)['repoUrl'] === 'string'
+        ? {
+            ...(r as Record<string, unknown>),
+            repoUrl: redactGitUrl((r as Record<string, unknown>)['repoUrl'] as string),
+          }
+        : r,
+    )
+  }
+  return clone
+}
+
 function rowToScheduledTask(row: Row): ScheduledTask {
   const kind = (row.launchKind ?? 'workflow') as ScheduledLaunchKind
   const payload = parseJsonField(
@@ -116,7 +144,13 @@ function rowToScheduledTask(row: Row): ScheduledTask {
     name: row.name,
     ownerUserId: row.ownerUserId,
     launchKind: kind,
-    launchPayload: payload.value,
+    // RFC-204: a schedule stores the whole launch body, so a credentialed
+    // repoUrl used to be handed straight back out by this mapper (and into
+    // every backup). The sealing gate rewrites stored payloads to reference the
+    // mirror by `cachedRepoId`; this is the read-side backstop for rows it
+    // could not convert (no matching cache row) and for anything written before
+    // the gate ran. Redaction only — the value stays launchable via the id.
+    launchPayload: redactPayloadCredentials(payload.value),
     scheduleSpec: spec.value,
     migrationNeeded: payload.legacy,
     migrationError: hasError ? { launchPayload: payload.error, scheduleSpec: spec.error } : null,
