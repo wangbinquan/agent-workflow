@@ -33,7 +33,6 @@ import {
   WG_CLARIFY_BUDGET_DEFAULT,
 } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { clarifySessions } from '../src/db/schema'
 import {
   clarifyRounds,
   clarifySessions,
@@ -201,7 +200,6 @@ describe('RFC-181 A2/C — isTaskClarifySuppressed + dismissOpenClarifyParksForA
         briefMd: 'ask first',
         status: 'awaiting_human',
         createdAt: Date.now(),
-        updatedAt: Date.now(),
       })
     }
     const clarifyRunId = await mintNodeRun(db, {
@@ -274,7 +272,6 @@ describe('RFC-181 A2/C — isTaskClarifySuppressed + dismissOpenClarifyParksForA
         questionsJson: '[]',
         status: 'awaiting_human',
         createdAt: Date.now(),
-        updatedAt: Date.now(),
       })
     }
 
