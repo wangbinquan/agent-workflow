@@ -6,6 +6,7 @@
 // edit (design.md finding 4). `db` is a required dep (not derivable from configPath),
 // so it is an explicit parameter (design.md R2-e).
 import { loadConfig } from '@/config'
+import type { SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import type { StartTaskDeps } from '@/services/task'
@@ -36,11 +37,14 @@ export function buildStartTaskDeps(
   configPath: string,
   actorUserId: string,
   opencodeCmd?: string[],
+  /** RFC-204: needed to unseal a cached repo for a reuse-by-id launch. */
+  secretBox?: SecretBox,
 ): StartTaskDeps {
   const subagentLiveCapture = resolveSubagentLiveCapture(configPath)
   return {
     db,
     actorUserId,
+    ...(secretBox !== undefined ? { secretBox } : {}),
     ...(opencodeCmd ? { opencodeCmd } : {}),
     ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
     // RFC-103 T2: commit&push + maxConcurrentNodes + per-node timeout floor.

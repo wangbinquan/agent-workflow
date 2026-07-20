@@ -49,6 +49,10 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   // RFC-164: persistGate writes workgroup_config_json only (gate state on the
   // task's config copy) — never the status column.
   'services/workgroupRunner.ts': 1,
+  // RFC-204 T7: the credential sealing gate backfills tasks.cached_repo_id and
+  // re-redacts a legacy tasks.repo_url. Both are credential-hygiene columns —
+  // the gate never reads or writes `status`.
+  'services/repoCredentials.ts': 2,
   'services/limits.ts': 1,
   // RFC-108 T11 (AR-09): circuit-breaker accounting — recordAutoRecoveryAttempt
   // updates auto_recovery_{attempts,window_started_at,suspended};

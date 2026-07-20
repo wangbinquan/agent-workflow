@@ -57,6 +57,8 @@ import {
   workflows,
 } from '@/db/schema'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
+import type { SecretBox } from '@/auth/secretBox'
+import { unsealRepoUrl } from '@/services/repoCredentials'
 import { buildLaunchCollabRows } from '@/services/taskCollab'
 import { getWorkflow } from '@/services/workflow'
 import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
@@ -135,6 +137,12 @@ export function abortAllActiveTasks(reason?: string): string[] {
 }
 
 export interface StartTaskDeps {
+  /**
+   * RFC-204: needed to unseal `cached_repos.url_enc` for a reuse-by-id launch.
+   * Optional so tests / internal faces that never reuse can omit it; when a row
+   * IS sealed and this is missing, the launch fails closed rather than guessing.
+   */
+  secretBox?: SecretBox
   db: DbClient
   /** Override app home (tests). Defaults to `Paths.root`. */
   appHome?: string
@@ -524,7 +532,15 @@ export async function resolveRepoSourceSingle(
         `cached repo '${specCachedRepoId}' not found`,
       )
     }
-    sourceUrl = row.url
+    const plain = unsealRepoUrl(row, deps.secretBox)
+    if (plain === null) {
+      throw new DomainError(
+        'cached-repo-credential-unavailable',
+        `cached repo '${specCachedRepoId}' has no readable URL (sealed with a different secret.key?)`,
+        409,
+      )
+    }
+    sourceUrl = plain
     sourceCachedRepoId = row.id
   } else {
     // Value-based, not `'repoUrl' in spec`: internal-face callers hand us specs

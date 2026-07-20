@@ -241,7 +241,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     await assertWorkflowLaunchable(deps.db, actor, parsed.data.workflowId)
     const task = await startTask(
       parsed.data,
-      buildStartTaskDeps(deps.db, deps.configPath, actor.user.id, opencodeCmd),
+      buildStartTaskDeps(deps.db, deps.configPath, actor.user.id, opencodeCmd, deps.secretBox),
     )
     return c.json(task, 201)
   })
@@ -991,6 +991,7 @@ async function handleMultipartTaskStart(
     const task = await startTask(startInput, {
       db: deps.db,
       actorUserId: actor.user.id,
+      ...(deps.secretBox !== undefined ? { secretBox: deps.secretBox } : {}),
       ...(opencodeCmd ? { opencodeCmd } : {}),
       ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
       // RFC-103 T2: multipart (upload) start must thread runtime config too.
@@ -1029,6 +1030,7 @@ async function handleMultipartTaskStart(
     {
       db: deps.db,
       actorUserId: actor.user.id,
+      ...(deps.secretBox !== undefined ? { secretBox: deps.secretBox } : {}),
       ...(opencodeCmd ? { opencodeCmd } : {}),
       ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
       // RFC-103 T2: multipart (upload) start must thread runtime config too.

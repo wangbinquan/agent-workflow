@@ -1,6 +1,7 @@
 // `agent-workflow start` — daemon foreground entry.
 
 import { createSecretBox } from '@/auth/secretBox'
+import { ensureCredentialsSealed } from '@/services/repoCredentials'
 import { ensureTokenFile } from '@/auth/token'
 import { loadConfig } from '@/config'
 import { openDb } from '@/db/client'
@@ -358,6 +359,11 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // previously-stored secret unreadable — flag it in backup docs.
   const secretBox = createSecretBox(Paths.secretKeyFile)
   log.info('secret box ready', { keyFile: Paths.secretKeyFile })
+
+  // 6c. RFC-204 — seal repo credentials at rest. Idempotent and network-free
+  // (it never re-clones), so it is safe on every boot and cannot stall an
+  // upgrade on an unreachable remote.
+  ensureCredentialsSealed(db, secretBox)
 
   // 7. HTTP server.
   const app = createApp({

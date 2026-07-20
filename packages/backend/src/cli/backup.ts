@@ -1,7 +1,9 @@
 // `agent-workflow backup` — produce a tarball of agent-workflow state.
 
+import { createSecretBox } from '@/auth/secretBox'
 import { openDb } from '@/db/client'
 import { createBackup } from '@/services/backup'
+import { ensureCredentialsSealed } from '@/services/repoCredentials'
 import { Paths } from '@/util/paths'
 
 export interface BackupCommandResult {
@@ -12,6 +14,11 @@ export interface BackupCommandResult {
 export async function backupCommand(): Promise<BackupCommandResult> {
   const db = openDb({ path: Paths.db, migrationsFolder: Paths.migrationsDir })
   try {
+    // RFC-204: seal BEFORE `VACUUM INTO` copies the database. This command runs
+    // migrations itself and never touches the daemon's startup path, so without
+    // this the first backup after an upgrade would faithfully preserve every
+    // legacy plaintext credential in the tarball.
+    ensureCredentialsSealed(db, createSecretBox(Paths.secretKeyFile))
     const r = await createBackup({ db })
     const sizeMb = (r.sizeBytes / 1024 / 1024).toFixed(2)
     const lines = [
