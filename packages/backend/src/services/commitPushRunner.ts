@@ -505,11 +505,28 @@ async function commitPushSubmodules(args: {
       error: null,
     }
 
+    // Only submodules this task actually changed are ours to touch. Design §5.1②
+    // says "对每个有本地新提交或脏内容的子仓"; the predicate was missing, so a
+    // clean, untouched submodule still got `checkout -B` + `push`. Two things
+    // followed, both bad and both measured:
+    //   * a vendored third-party submodule with a read-only remote failed to
+    //     push and withheld the ENTIRE parent commit-push — the parent never
+    //     even committed locally, inverting RFC-075's "a push that can't be
+    //     honored never loses the agent's work".
+    //   * every autoCommitPush task wrote a branch ref into every submodule's
+    //     remote, including repos we merely vendor.
+    // "Changed" = dirty working tree, or HEAD ahead of the gitlink the
+    // superproject currently records.
+    const recorded = await runGit(worktreePath, ['rev-parse', `HEAD:${s.path}`])
+    const dirty = await sg(['status', '--porcelain', '--untracked-files=all'])
+    const isDirty = dirty.exitCode === 0 && dirty.stdout.trim() !== ''
+    const movedAhead = recorded.exitCode === 0 && recorded.stdout.trim() !== s.headSha
+    if (!isDirty && !movedAhead) continue
+
     // --- local writes, under the lock ---
     const release = args.acquireWrite ? await args.acquireWrite() : null
     try {
-      const dirty = await sg(['status', '--porcelain', '--untracked-files=all'])
-      if (dirty.exitCode === 0 && dirty.stdout.trim() !== '') {
+      if (isDirty) {
         // Detached HEAD is the norm here; give the commit a branch to land on.
         const co = await sg(['checkout', '-B', branch])
         if (co.exitCode !== 0) {
@@ -531,8 +548,10 @@ async function commitPushSubmodules(args: {
         }
         entry.committed = true
       } else {
-        // Clean, but its HEAD may still be a commit the agent made itself — it
-        // needs a branch and a push just the same.
+        // Clean, but `movedAhead` — HEAD is a commit the agent made itself, past
+        // the gitlink the superproject records. Nothing to commit, but it still
+        // needs a branch and a push. (Reaching here at all now requires that;
+        // an untouched submodule was skipped before the lock.)
         const co = await sg(['checkout', '-B', branch])
         if (co.exitCode !== 0) {
           entry.error = redactPushError(co.stderr)
@@ -549,24 +568,18 @@ async function commitPushSubmodules(args: {
     // --- network push, outside the lock ---
     const pushed = await sg(['push', '-u', remote, `${branch}:${branch}`])
     if (pushed.exitCode !== 0) {
-      // One non-fast-forward repair attempt, same shape as the parent's.
-      const fetched = await sg(['fetch', remote, branch])
-      const merged =
-        fetched.exitCode === 0 ? await sgc(['merge', '--no-edit', 'FETCH_HEAD']) : fetched
-      if (merged.exitCode === 0) {
-        const retry = await sg(['push', '-u', remote, `${branch}:${branch}`])
-        if (retry.exitCode === 0) {
-          entry.pushed = true
-          const head2 = await sg(['rev-parse', 'HEAD'])
-          if (head2.exitCode === 0) entry.toSha = head2.stdout.trim()
-          out.push(entry)
-          continue
-        }
-        entry.error = redactPushError(retry.stderr)
-      } else {
-        await sg(['merge', '--abort'])
-        entry.error = redactPushError(pushed.stderr)
-      }
+      // NO fetch+merge repair here, deliberately — this used to mirror the
+      // parent's non-fast-forward repair, and inside a submodule that is
+      // destructive. Measured: superproject pins `vendor` at v1, upstream has
+      // moved to v2, the task runs with workingBranch `main`. `checkout -B main`
+      // puts the pinned commit on local main, the push is rejected non-FF,
+      // `merge FETCH_HEAD` FAST-FORWARDS to the upstream tip, the retry
+      // "succeeds", and the parent then commits the moved gitlink under the
+      // agent's message. The pin is destroyed and published, with nobody having
+      // asked for a submodule bump — exactly the drift `gitSubmoduleRemote` is
+      // defaulted off to prevent. A non-FF in a submodule means that branch is
+      // not ours; report it and let a human decide.
+      entry.error = redactPushError(pushed.stderr)
       args.log?.warn('submodule push failed — withholding parent gitlink', {
         subPath: s.path,
         error: entry.error ?? '',
