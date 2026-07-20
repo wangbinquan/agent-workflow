@@ -292,7 +292,16 @@ const AUDIT_ENGINE = `
   function inkOf(cs) {
     const ink = { top: 0, right: 0, bottom: 0, left: 0 };
     if (cs.outlineStyle !== 'none') {
-      const v = (parseFloat(cs.outlineWidth) || 0) + (parseFloat(cs.outlineOffset) || 0);
+      let v = (parseFloat(cs.outlineWidth) || 0) + (parseFloat(cs.outlineOffset) || 0);
+      // outline-style:auto is Chrome's UA focus ring, and getComputedStyle
+      // UNDER-REPORTS it: Chrome says auto/1px/offset-0 but actually paints
+      // ~2px outside the border box. Measured by rendering the same focused
+      // button inside clippers with padding 0..4 and magnifying: padding 0 and
+      // 1 are visibly cut, 2 is clean. Trusting the reported 1px would let a
+      // container with 1px of room pass while the ring is visibly clipped —
+      // a false negative of exactly the kind this audit exists to prevent.
+      // Locked by the 'UA auto ring' self-check below.
+      if (cs.outlineStyle === 'auto') v = Math.max(v, 2);
       if (v > 0) for (const s of SIDES) ink[s] = Math.max(ink[s], v);
     }
     if (cs.boxShadow && cs.boxShadow !== 'none') {
@@ -725,6 +734,29 @@ test.describe('RFC-206 — audit engine self-checks', () => {
       sides,
       `overhanging control must still be judged on its other edges, got:\n${found.map(describe).join('\n')}`,
     ).toEqual(['left', 'top'])
+  })
+
+  test('measures the UA `outline-style: auto` ring at its PAINTED width', async ({ page }) => {
+    // getComputedStyle reports `auto 1px / offset 0`, but Chrome paints ~2px
+    // outside. A clipper with exactly 1px of room therefore visibly cuts the
+    // ring while a naive reading says it fits. Empirically verified by
+    // magnified screenshots (padding 0 and 1 clipped, 2 clean).
+    await page.setContent(`<!doctype html><meta charset=utf-8>
+      <style>
+        .clip{overflow:hidden;display:inline-block;background:#eee}
+        .btn{display:block;width:90px;height:22px}
+      </style>
+      <span class="clip" style="padding:1px"><button class="btn" id="tight">b</button></span>`)
+    const cdp = await page.context().newCDPSession(page)
+    await cdp.send('DOM.enable')
+    await cdp.send('CSS.enable')
+    const { found } = await auditPage(page, cdp)
+    await cdp.detach()
+    expect(
+      found.length,
+      `a UA-focus-ring button with only 1px of room must be reported; got:\n${found.map(describe).join('\n')}`,
+    ).toBeGreaterThan(0)
+    expect(found.every((v) => v.ink >= 2)).toBe(true)
   })
 
   test('does not report elements scrolled out of the scrollport', async ({ page }) => {
