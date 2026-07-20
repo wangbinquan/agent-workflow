@@ -43,6 +43,28 @@ function stripLineComments(src: string): string {
     .join('\n')
 }
 
+// RFC-099 mounts GET/PUT `${base}/:${param}/acl` through a helper, using a
+// COMPUTED path (`const path = \`${cfg.base}/:${cfg.param}/acl\``). ROUTE_RE
+// requires a string literal, so all ten of those endpoints — the write entry
+// point for owner transfer and grants — were invisible to this guard and had no
+// registry entry, hence no 401 gate and no contract test of any kind.
+// Reconstruct them from the call sites.
+// See design/test-guard-audit-2026-07-21 gap B1-routes-3.
+const ACL_MOUNT_RE =
+  /mountAclEndpoints\s*\(\s*app\s*,\s*deps\s*,\s*\{[\s\S]{0,400}?base:\s*['"]([^'"]+)['"][\s\S]{0,400}?param:\s*['"]([^'"]+)['"]/g
+
+function discoverAclRoutes(src: string, source: string): DiscoveredRoute[] {
+  const out: DiscoveredRoute[] = []
+  let m: RegExpExecArray | null
+  ACL_MOUNT_RE.lastIndex = 0
+  while ((m = ACL_MOUNT_RE.exec(src)) !== null) {
+    const path = `${m[1]!}/:${m[2]!}/acl`
+    out.push({ method: 'GET', path, source })
+    out.push({ method: 'PUT', path, source })
+  }
+  return out
+}
+
 function discoverRoutes(): DiscoveredRoute[] {
   const out: DiscoveredRoute[] = []
   for (const f of listRouteFiles()) {
@@ -55,6 +77,27 @@ function discoverRoutes(): DiscoveredRoute[] {
         path: m[2]!,
         source: f,
       })
+    }
+    out.push(...discoverAclRoutes(src, f))
+  }
+  return out
+}
+
+/**
+ * Route registrations whose path is not a string literal, i.e. the ones
+ * `ROUTE_RE` structurally cannot see. Every such call site needs a bespoke
+ * reconstruction above; the meta-test below fails when a new one appears so the
+ * blind spot cannot grow silently a second time.
+ */
+function discoverNonLiteralMounts(): string[] {
+  const out: string[] = []
+  for (const f of listRouteFiles()) {
+    const src = stripLineComments(readFileSync(f, 'utf-8'))
+    const re = /\bapp\.(get|post|put|delete|patch)\s*\(\s*([^'"\s)])/g
+    let m: RegExpExecArray | null
+    while ((m = re.exec(src)) !== null) {
+      const line = src.slice(0, m.index).split('\n').length
+      out.push(`${f.split('/').slice(-1)[0]}:${line} app.${m[1]}(${m[2]}…)`)
     }
   }
   return out
@@ -102,6 +145,39 @@ describe('API contract registry coverage', () => {
           '\n\nEither restore the route or drop the entry.',
       )
     }
+  })
+
+  test('every RFC-099 ACL endpoint is discovered and registered', () => {
+    // Explicit, not just implied by the generic test above: these are the
+    // owner-transfer / grant-editing endpoints for every ACL'd resource type,
+    // and they spent their whole life outside the contract suite. Asserting the
+    // exact set (rather than a count) means a SIXTH resource type gaining ACL
+    // endpoints — as workgroups did — cannot slip in unregistered.
+    const acl = discovered
+      .filter((d) => d.path.endsWith('/acl'))
+      .map((d) => `${d.method} ${d.path}`)
+      .sort()
+    expect(acl).toEqual(
+      [
+        '/api/agents/:name',
+        '/api/skills/:name',
+        '/api/mcps/:name',
+        '/api/workgroups/:name',
+        '/api/plugins/:id',
+        '/api/workflows/:id',
+      ]
+        .flatMap((base) => [`GET ${base}/acl`, `PUT ${base}/acl`])
+        .sort(),
+    )
+  })
+
+  test('every non-literal route mount has a bespoke discovery rule', () => {
+    // A guard that cannot see a route reports "all registered" — the failure
+    // mode is silent completeness. Keep the set of blind spots explicit and
+    // frozen; a new computed-path mount must either use a literal or teach
+    // discoverRoutes() how to reconstruct it.
+    const known = ['resourceAcl.ts:46 app.get(p…)', 'resourceAcl.ts:56 app.put(p…)']
+    expect(discoverNonLiteralMounts().sort()).toEqual(known.sort())
   })
 
   test('no duplicate registry entries (same method+path twice)', () => {

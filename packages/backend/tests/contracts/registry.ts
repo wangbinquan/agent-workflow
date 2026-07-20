@@ -296,6 +296,24 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'POST', path: '/api/workgroups' },
   { method: 'PUT', path: '/api/workgroups/:name' },
   { method: 'DELETE', path: '/api/workgroups/:name' },
+
+  // ---- onboarding (RFC-211 guided sandbox) ----
+  {
+    method: 'GET',
+    path: '/api/onboarding/runs',
+    happy: { schema: z.array(z.any()) },
+  },
+  { method: 'POST', path: '/api/onboarding/runs' },
+  { method: 'PATCH', path: '/api/onboarding/runs/:id' },
+  { method: 'POST', path: '/api/onboarding/runs/:id/provision' },
+  { method: 'POST', path: '/api/onboarding/runs/:id/adopt' },
+  {
+    method: 'GET',
+    path: '/api/onboarding/examples',
+    happy: { schema: z.object({ scope: z.string(), entries: z.array(z.any()) }) },
+  },
+  // Destructive sweep — no happy fixture (it would delete real rows).
+  { method: 'DELETE', path: '/api/onboarding/examples' },
   { method: 'POST', path: '/api/workgroups/:name/rename' },
   { method: 'POST', path: '/api/workgroups/:name/tasks' },
   { method: 'GET', path: '/api/workgroup-tasks/pending-count' },
@@ -501,6 +519,29 @@ export const ENDPOINTS: EndpointSpec[] = [
 
   // ---- backup ----
   { method: 'POST', path: '/api/backup' },
+
+  // ---- RFC-099 resource ACL (mounted via mountAclEndpoints in resourceAcl.ts) ----
+  //
+  // These twelve were absent for their entire life: `mountAclEndpoints` builds
+  // the path at runtime (`${cfg.base}/:${cfg.param}/acl`), and the coverage
+  // guard's route scanner only matches string literals — so it reported the
+  // registry as complete while the owner-transfer and grant-editing entry point
+  // of every ACL'd resource type sat outside the contract suite entirely (no
+  // 401 gate, no shape check, nothing). The scanner now reconstructs them from
+  // the call sites; see api-contract-coverage.test.ts and
+  // design/test-guard-audit-2026-07-21 gap B1-routes-3.
+  { method: 'GET', path: '/api/agents/:name/acl' },
+  { method: 'PUT', path: '/api/agents/:name/acl' },
+  { method: 'GET', path: '/api/skills/:name/acl' },
+  { method: 'PUT', path: '/api/skills/:name/acl' },
+  { method: 'GET', path: '/api/mcps/:name/acl' },
+  { method: 'PUT', path: '/api/mcps/:name/acl' },
+  { method: 'GET', path: '/api/plugins/:id/acl' },
+  { method: 'PUT', path: '/api/plugins/:id/acl' },
+  { method: 'GET', path: '/api/workflows/:id/acl' },
+  { method: 'PUT', path: '/api/workflows/:id/acl' },
+  { method: 'GET', path: '/api/workgroups/:name/acl' },
+  { method: 'PUT', path: '/api/workgroups/:name/acl' },
 ]
 
 // ----------------------------------------------------------------------------
