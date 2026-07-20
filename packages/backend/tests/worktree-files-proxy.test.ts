@@ -118,38 +118,69 @@ describe('GET /api/worktree-files/:taskId/* — RFC-005 T13', () => {
     expect(await res.text()).toContain('# Spec')
   })
 
-  test('attack 1: ../ traversal returns 422 / 400 (ValidationError)', async () => {
+  // The attack cases below assert the specific rejection `code`, not just "some
+  // 4xx". A range check passes no matter WHICH branch fired — and tightening
+  // these three revealed that two of them were not testing what their names
+  // claimed: WHATWG URL parsing collapses `..` and `%2e%2e` path segments BEFORE
+  // routing, so those requests never reach the handler's containment check at
+  // all. They land on a different task id and get a plain 404. The containment
+  // branch (`worktree-file-escapes-worktree`) therefore had ZERO real coverage
+  // while three tests appeared to guard it. `attack 4` below is the vector that
+  // actually reaches it. (design/test-guard-audit-2026-07-21 gap B1-routes-7.)
+  test('attack 1: a literal ../ segment is collapsed by URL parsing, never reaching the worktree', async () => {
     const res = await h.app.fetch(
       new Request(`http://localhost/api/worktree-files/${h.taskId}/../outside/secrets.txt`, {
         headers: HEADERS,
       }),
     )
-    expect(res.status).toBeGreaterThanOrEqual(400)
-    expect(res.status).toBeLessThan(500)
-    const body = await res.text()
-    expect(body).not.toContain('TOP SECRET')
+    // Normalised to /api/worktree-files/outside/secrets.txt — a different,
+    // non-existent task. Refused before any filesystem access.
+    expect(res.status).toBe(404)
+    expect(await res.text()).not.toContain('TOP SECRET')
   })
 
-  test('attack 2: absolute path /etc/passwd → 4xx, no leak', async () => {
+  test('attack 2: absolute path /etc/passwd is refused as absolute, not merely 4xx', async () => {
     const res = await h.app.fetch(
       new Request(`http://localhost/api/worktree-files/${h.taskId}//etc/passwd`, {
         headers: HEADERS,
       }),
     )
-    expect(res.status).toBeGreaterThanOrEqual(400)
-    expect(res.status).toBeLessThan(500)
+    expect(res.status).toBe(422)
+    expect((await res.clone().json()) as { code: string }).toMatchObject({
+      code: 'worktree-file-absolute-path',
+    })
+    expect(await res.text()).not.toContain('root:')
   })
 
-  test('attack 3: encoded ../ traversal still 4xx', async () => {
+  test('attack 3: %2E%2E is a dot-segment too — also collapsed before routing', async () => {
+    // The URL spec treats `%2e%2e` as a double-dot segment (case-insensitive),
+    // so this is the same shape as attack 1, not a distinct bypass.
     const res = await h.app.fetch(
       new Request(`http://localhost/api/worktree-files/${h.taskId}/%2E%2E/outside/secrets.txt`, {
         headers: HEADERS,
       }),
     )
-    expect(res.status).toBeGreaterThanOrEqual(400)
-    expect(res.status).toBeLessThan(500)
-    const body = await res.text()
-    expect(body).not.toContain('TOP SECRET')
+    expect(res.status).toBe(404)
+    expect(await res.text()).not.toContain('TOP SECRET')
+  })
+
+  test('attack 4: encoded SLASH survives normalisation and is caught by the containment check', async () => {
+    // `..%2Foutside%2Fsecrets.txt` is a single path segment as far as the URL
+    // parser is concerned (no dot-segment to collapse), so it arrives intact;
+    // the handler's single decodeURIComponent then turns it into
+    // `../outside/secrets.txt`. This is the request that must be stopped by
+    // resolve()+prefix containment, and the only one in this file that
+    // exercises it. Deleting that check turns this red — and nothing else.
+    const res = await h.app.fetch(
+      new Request(`http://localhost/api/worktree-files/${h.taskId}/..%2Foutside%2Fsecrets.txt`, {
+        headers: HEADERS,
+      }),
+    )
+    expect(res.status).toBe(422)
+    expect((await res.clone().json()) as { code: string }).toMatchObject({
+      code: 'worktree-file-escapes-worktree',
+    })
+    expect(await res.text()).not.toContain('TOP SECRET')
   })
 
   test('malformed percent encoding is a client error, never an uncaught 500', async () => {
