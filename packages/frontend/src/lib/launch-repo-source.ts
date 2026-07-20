@@ -12,7 +12,18 @@ import { canonicalRepoKey, parseGitUrl, type CachedRepo } from '@agent-workflow/
  * checks keep compiling; local repos ride `file:///abs/path` URLs through the
  * same cached-mirror pipeline.
  */
-export type RepoSource = { kind: 'url'; repoUrl: string; ref: string }
+export type RepoSource = {
+  kind: 'url'
+  repoUrl: string
+  /**
+   * RFC-204 — set when the user picked an already-cached mirror from the recent
+   * list. The wire no longer carries the credentialed URL, so reuse travels as
+   * an id and the daemon resolves the real URL itself; `repoUrl` then holds only
+   * the redacted label for display. Cleared as soon as the user types a URL.
+   */
+  cachedRepoId?: string
+  ref: string
+}
 
 export interface LaunchCommonPayload {
   workflowId: string
@@ -128,7 +139,11 @@ export function validateRepoUrl(input: string): 'empty' | 'invalid' | null {
 export function resolveUrlRepoPath(source: RepoSource, cached: CachedRepo[]): string {
   const key = canonicalRepoKey(source.repoUrl)
   if (key === null) return ''
-  const hit = cached.find((c) => canonicalRepoKey(c.url) === key)
+  // RFC-204: `url` is gone from the wire. canonicalForHash drops userinfo, so
+  // the redacted form canonicalizes identically for the userinfo shape (locked
+  // by rfc204-query-credential.test.ts) — this keeps the local-path preview
+  // working without the plaintext ever being served.
+  const hit = cached.find((c) => canonicalRepoKey(c.urlRedacted) === key)
   return hit?.localPath ?? ''
 }
 
@@ -253,7 +268,11 @@ export function buildLaunchBodyMultiRepo(
     name: common.name,
     inputs: common.inputs,
     repos: repos.map((r) => {
-      const entry: Record<string, unknown> = { repoUrl: r.repoUrl }
+      // RFC-204: reuse rides as an id; a typed URL still rides as a URL.
+      const entry: Record<string, unknown> =
+        r.cachedRepoId !== undefined && r.cachedRepoId.length > 0
+          ? { cachedRepoId: r.cachedRepoId }
+          : { repoUrl: r.repoUrl }
       if (r.ref.trim().length > 0) entry.ref = r.ref.trim()
       return entry
     }),

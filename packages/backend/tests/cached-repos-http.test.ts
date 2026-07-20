@@ -174,7 +174,7 @@ describe('cached-repos HTTP routes (RFC-024 T5)', () => {
         workflowId: wfId,
         workflowSnapshot: '{}',
         repoPath: r.cached.localPath,
-        repoUrl: r.cached.url,
+        repoUrl: r.cached.urlRedacted,
         worktreePath: r.cached.localPath,
         baseBranch: 'main',
         branch: 'agent-workflow/x',

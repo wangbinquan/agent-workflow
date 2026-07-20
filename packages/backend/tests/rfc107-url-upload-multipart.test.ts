@@ -785,6 +785,7 @@ describe('RFC-107 — startTask preResolvedSource (resolve-once + redaction)', (
           repoPath: realRepo,
           baseBranch: 'main',
           repoUrl: credentialedUrl,
+          cachedRepoId: null,
           pathFetchError: null,
           ffWarnings: [],
         },

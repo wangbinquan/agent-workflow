@@ -1,6 +1,7 @@
 // Task schemas. Mirrors design.md §3 (tasks table) + plan.md P-1-14.
 
 import { z } from 'zod'
+import { hasQueryCredential } from '../git-url'
 import { InjectedMemorySnapshotSchema } from './memory'
 
 export const TASK_STATUS = [
@@ -83,11 +84,65 @@ export function isLooseValidBranchName(name: string): boolean {
  * `deps.internalSource` instead). `ref` optional → the cached repo's default
  * branch.
  */
-export const StartTaskRepoSchema = z.object({
-  repoUrl: z.string().min(1),
-  ref: z.string().min(1).optional(),
-})
+export const StartTaskRepoSchema = z
+  .object({
+    repoUrl: z.string().min(1).optional(),
+    /**
+     * RFC-204 — reuse an already-cached mirror by id instead of re-sending a
+     * credentialed URL (the wire no longer carries one). XOR with `repoUrl`.
+     */
+    cachedRepoId: z.string().min(1).optional(),
+    ref: z.string().min(1).optional(),
+  })
+  .superRefine((value, ctx) => {
+    refineRepoSourceFields(value, ctx, { requireSource: true })
+  })
 export type StartTaskRepo = z.infer<typeof StartTaskRepoSchema>
+
+/**
+ * RFC-204 — per-repo-source rules defined ONCE and reused by both
+ * `StartTaskRepoSchema` entries and the legacy top-level fields so they cannot
+ * drift:
+ *   - `repoUrl` ⊕ `cachedRepoId` (`requireSource` adds "never neither")
+ *   - a `repoUrl` carrying a query-string credential is REJECTED, not sealed:
+ *     `parseGitUrl` keeps the query in `parsed.path`, so it would leak into the
+ *     cache slug → `local_path` → worktree paths, and into `url_hash`. Refusing
+ *     it at the door is what lets us leave `canonicalForHash` (and every
+ *     existing cache key) untouched.
+ */
+export function refineRepoSourceFields(
+  value: { repoUrl?: string | undefined; cachedRepoId?: string | undefined },
+  ctx: z.RefinementCtx,
+  opts: { requireSource: boolean },
+): void {
+  const hasUrl = typeof value.repoUrl === 'string' && value.repoUrl.length > 0
+  const hasId = typeof value.cachedRepoId === 'string' && value.cachedRepoId.length > 0
+  if (hasUrl && hasId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'repo-source-conflict',
+      path: ['cachedRepoId'],
+    })
+    return
+  }
+  if (!hasUrl && !hasId) {
+    if (opts.requireSource) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'start-task-source-required',
+        path: ['repoUrl'],
+      })
+    }
+    return
+  }
+  if (hasUrl && hasQueryCredential(value.repoUrl as string)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'repo-url-query-credential',
+      path: ['repoUrl'],
+    })
+  }
+}
 
 /**
  * RFC-066: one row of `task_repos`, returned as `Task.repos[i]`. Single-repo
@@ -102,6 +157,12 @@ export const TaskRepoSchema = z.object({
   repoPath: z.string(),
   /** RFC-024 redacted; null for path-mode entries. */
   repoUrl: z.string().nullable(),
+  /**
+   * RFC-204: cached mirror this entry came from — drives relaunch + repo memory
+   * scope. `.default(null)` (same idiom as `workingBranch` below) so pre-RFC-204
+   * rows and fixtures keep parsing.
+   */
+  cachedRepoId: z.string().nullable().default(null),
   baseBranch: z.string(),
   branch: z.string(),
   /**
@@ -187,10 +248,15 @@ export const TaskSchema = z.object({
   repoPath: z.string(),
   /**
    * RFC-024: original Git URL the task was launched from (when the user picked
-   * the "remote URL" tab). `null` for path-mode tasks. May contain credentials —
-   * UI MUST render via `redactGitUrl`.
+   * the "remote URL" tab). `null` for path-mode tasks.
+   *
+   * ALREADY REDACTED at write time since RFC-054 W3-4 — RFC-204 verified this
+   * and added a lock. Safe to render directly; it CANNOT authenticate, so a
+   * relaunch must go through `cachedRepoId`, never this value.
    */
   repoUrl: z.string().nullable(),
+  /** RFC-204: cached mirror id backing this task (null for legacy/scratch rows). */
+  cachedRepoId: z.string().nullable().default(null),
   worktreePath: z.string(),
   baseBranch: z.string(),
   branch: z.string(),
@@ -306,8 +372,10 @@ export const TaskSummarySchema = z.object({
   /** Joined display name (null when the workflow row no longer exists). */
   workflowName: z.string().nullable(),
   repoPath: z.string(),
-  /** RFC-024: provenance URL; null for path-mode tasks. UI must redact before render. */
+  /** RFC-024: provenance URL; null for path-mode tasks. Already redacted at write (RFC-054 W3-4). */
   repoUrl: z.string().nullable(),
+  /** RFC-204: cached mirror id backing this task (null for legacy/scratch rows). */
+  cachedRepoId: z.string().nullable().default(null),
   status: TaskStatusSchema,
   startedAt: z.number().int(),
   finishedAt: z.number().int().nullable(),
@@ -396,6 +464,8 @@ export const StartTaskSchema = z
     scratch: z.boolean().optional(),
     /** RFC-024: remote Git URL (SSH / HTTP(S) / file://). Triggers clone-or-reuse. */
     repoUrl: z.string().min(1).optional(),
+    /** RFC-204: legacy single-repo counterpart of `repos[].cachedRepoId`. XOR with `repoUrl`. */
+    cachedRepoId: z.string().min(1).optional(),
     /** RFC-024: branch / tag / commit to check out from the cached repo. Optional. */
     ref: z.string().min(1).optional(),
     inputs: z.record(z.string(), z.string()).default({}),
@@ -456,8 +526,15 @@ export const StartTaskSchema = z
   })
   .superRefine((value, ctx) => {
     const hasLegacyUrl = typeof value.repoUrl === 'string' && value.repoUrl.length > 0
-    const hasLegacy = hasLegacyUrl
+    // RFC-204: the legacy single-repo source can now also be a cached-mirror id.
+    const hasLegacyCachedId =
+      typeof value.cachedRepoId === 'string' && value.cachedRepoId.length > 0
+    const hasLegacy = hasLegacyUrl || hasLegacyCachedId
     const hasRepos = Array.isArray(value.repos) && value.repos.length > 0
+
+    // RFC-204: same url ⊕ id + query-credential rules the repos[] entries get.
+    // requireSource:false — "at least one source" is decided below vs scratch/repos.
+    refineRepoSourceFields(value, ctx, { requireSource: false })
 
     // RFC-067: Git identity XOR + format check — runs for EVERY space kind
     // (implementation-gate P2 fix: the scratch early-return below used to
@@ -554,6 +631,13 @@ export type StartTask = z.infer<typeof StartTaskSchema>
 export interface LaunchSpaceFields {
   scratch?: boolean
   repoUrl?: string
+  /**
+   * RFC-204 — MUST be carried and stamped: agent / workgroup launches assemble
+   * their candidate through `applySpaceFields`, so a field only added to the
+   * schemas would be silently dropped and "reuse a cached repo" would fail with
+   * `start-task-source-required` in exactly those two modes.
+   */
+  cachedRepoId?: string
   ref?: string
   repos?: StartTaskRepo[]
 }
@@ -566,6 +650,7 @@ export function applySpaceFields<T extends Record<string, unknown>>(
     ...candidate,
     ...(body.scratch !== undefined ? { scratch: body.scratch } : {}),
     ...(body.repoUrl !== undefined ? { repoUrl: body.repoUrl } : {}),
+    ...(body.cachedRepoId !== undefined ? { cachedRepoId: body.cachedRepoId } : {}),
     ...(body.ref !== undefined ? { ref: body.ref } : {}),
     ...(body.repos !== undefined ? { repos: body.repos } : {}),
   }
@@ -1027,6 +1112,8 @@ export const StartAgentTaskSchema = z.object({
   /** RFC-165: temporary-space launch (see StartTaskSchema.scratch). */
   scratch: z.boolean().optional(),
   repoUrl: z.string().min(1).optional(),
+  /** RFC-204: reuse a cached mirror by id (XOR `repoUrl`; enforced by StartTaskSchema downstream). */
+  cachedRepoId: z.string().min(1).optional(),
   ref: z.string().min(1).optional(),
   repos: z.array(z.unknown()).min(1).max(16).optional(),
   collaboratorUserIds: z.array(z.string().min(1)).max(64).optional(),

@@ -16,6 +16,7 @@ function row(name: string, overrides: Partial<TaskSummary> = {}): TaskSummary {
     workflowName: 'wf-one',
     repoPath: '/repo',
     repoUrl: null,
+    cachedRepoId: null,
     status: 'done',
     startedAt: 1,
     finishedAt: 2,

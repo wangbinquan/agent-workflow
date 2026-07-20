@@ -26,7 +26,6 @@ function happyResolver(): Resolver {
     return {
       cached: {
         id,
-        url: input.url,
         urlRedacted: input.url,
         localPath: `/tmp/${id}`,
         defaultBranch: 'main',
@@ -55,7 +54,6 @@ function flakyOnceResolver(failingUrl: string): Resolver {
     return {
       cached: {
         id,
-        url: input.url,
         urlRedacted: input.url,
         localPath: `/tmp/${id}`,
         defaultBranch: 'main',
@@ -126,7 +124,6 @@ describe('retryBatchRow (RFC-033-T2)', () => {
       return {
         cached: {
           id: 'cr-1',
-          url: input.url,
           urlRedacted: input.url,
           localPath: '/tmp/cr-1',
           defaultBranch: 'main',
@@ -171,7 +168,6 @@ describe('retryBatchRow (RFC-033-T2)', () => {
       return {
         cached: {
           id: 'cr-1',
-          url: input.url,
           urlRedacted: input.url,
           localPath: '/tmp/cr-1',
           defaultBranch: 'main',

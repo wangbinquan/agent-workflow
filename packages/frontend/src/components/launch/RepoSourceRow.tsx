@@ -79,21 +79,29 @@ export function RepoSourceRow({
             data-testid={`repo-source-recent-urls${idxSuffix}`}
             ariaLabel={t('launch.repoSource.recentUrlsPlaceholder')}
             placeholder={t('launch.repoSource.recentUrlsPlaceholder')}
-            value={cached.data.items.some((it) => it.url === source.repoUrl) ? source.repoUrl : ''}
-            onChange={(url) => {
-              if (url !== '') {
-                onChange({ kind: 'url', repoUrl: url, ref: source.ref })
+            value={source.cachedRepoId ?? ''}
+            onChange={(id) => {
+              if (id !== '') {
+                // RFC-204: reuse by id — the credentialed URL is never sent to
+                // the client, so we carry the id and show the redacted label.
+                const hit = cached.data?.items.find((it) => it.id === id)
+                onChange({
+                  kind: 'url',
+                  repoUrl: hit?.urlRedacted ?? '',
+                  cachedRepoId: id,
+                  ref: source.ref,
+                })
               }
             }}
             options={[
               { value: '', label: t('launch.repoSource.recentUrlsPlaceholder') },
-              ...cached.data.items.map((it) => ({ value: it.url, label: it.urlRedacted })),
+              ...cached.data.items.map((it) => ({ value: it.id, label: it.urlRedacted })),
             ]}
           />
         )}
         <TextInput
           value={source.repoUrl}
-          onChange={(v) => onChange({ ...source, repoUrl: v })}
+          onChange={(v) => onChange({ kind: 'url', repoUrl: v, ref: source.ref })}
           placeholder={t('launch.repoSource.urlPlaceholder')}
           data-testid={`repo-source-url${idxSuffix}`}
         />

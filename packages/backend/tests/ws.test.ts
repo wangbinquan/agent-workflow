@@ -257,6 +257,7 @@ describe('WebSocket channels', () => {
       workflowVersion: null,
       repoPath: t.repoPath,
       repoUrl: null,
+      cachedRepoId: null,
       worktreePath: t.worktreePath,
       baseBranch: t.baseBranch,
       branch: t.branch,

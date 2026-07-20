@@ -4,11 +4,20 @@ import { z } from 'zod'
 
 export const CachedRepoSchema = z.object({
   id: z.string(),
-  /** Original URL as stored — may contain credentials. UI MUST render `urlRedacted` instead. */
-  url: z.string(),
-  /** Safe-to-display form (credentials masked). */
+  /**
+   * RFC-204: the plaintext `url` field is GONE from the wire. `cached_repos` is
+   * a global shared pool and `repos:read` sits in the user baseline, so serving
+   * the original URL handed every logged-in user (and every narrow PAT) the
+   * credentials embedded in other people's private-repo URLs. Clients reuse a
+   * mirror by `id` (`StartTask.cachedRepoId`) — the daemon resolves the real
+   * URL server-side and it never travels back out.
+   */
   urlRedacted: z.string(),
-  /** Absolute path on disk, e.g. `~/.agent-workflow/repos/abcd1234-bar`. */
+  /**
+   * Absolute path on disk, e.g. `~/.agent-workflow/repos/abcd1234-bar`.
+   * RFC-204: redacted on the way out — `parseGitUrl` keeps a `?access_token=`
+   * query inside `parsed.path`, so historical slugs can embed a token.
+   */
   localPath: z.string(),
   /** Default branch detected at clone time. `null` if HEAD was detached / unborn. */
   defaultBranch: z.string().nullable(),

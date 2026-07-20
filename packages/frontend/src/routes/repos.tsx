@@ -8,7 +8,6 @@ import { createRoute } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { CachedRepo, ListCachedReposResponse } from '@agent-workflow/shared'
-import { redactGitUrl } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
 import { EmptyState } from '@/components/EmptyState'
@@ -213,7 +212,7 @@ function ReposPage() {
         <p>
           {pendingDelete !== null &&
             t('repos.deleteConfirmBody', {
-              url: redactGitUrl(pendingDelete.url),
+              url: pendingDelete.urlRedacted,
               count: pendingDelete.referencingTaskCount,
             })}
         </p>

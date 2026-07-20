@@ -43,6 +43,7 @@ import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import {
   agents,
+  cachedRepos,
   clarifyRounds,
   docVersions,
   lifecycleAlerts,
@@ -412,7 +413,10 @@ export async function materializeWorktree(opts: {
 export interface ResolvedRepoSource {
   repoPath: string
   baseBranch: string | undefined
+  /** RAW source URL — may carry credentials. Redact before logging/persisting. */
   repoUrl: string | null
+  /** RFC-204: the cached mirror this resolved to (deterministic ref key). */
+  cachedRepoId: string | null
   /** RFC-068: path-mode opt-in fetch error message. null when feature was off or succeeded. */
   pathFetchError: string | null
   /** RFC-068: URL-mode FF warnings. Empty when nothing relevant. */
@@ -436,11 +440,30 @@ export interface ResolvedRepoSource {
  */
 export type RepoSourceSpec =
   | { repoUrl: string; ref?: string }
+  /** RFC-204: reuse an existing mirror; the daemon resolves the real URL itself. */
+  | { cachedRepoId: string; ref?: string }
   | { repoPath: string; baseBranch: string }
 
 export function normalizeStartTaskRepos(input: StartTask): RepoSourceSpec[] {
+  // RFC-204: an entry is `repoUrl` XOR `cachedRepoId` (refineRepoSourceFields),
+  // but both are optional on the wire type — narrow to the discriminated
+  // RepoSourceSpec here so nothing downstream has to re-guess.
+  const withRef = <T extends object>(base: T, ref: string | undefined): T & { ref?: string } =>
+    ref !== undefined ? { ...base, ref } : base
   if (Array.isArray(input.repos) && input.repos.length > 0) {
-    return input.repos
+    return input.repos.map((r) => {
+      // The framework-internal face (fusion / test helpers) hands us path specs
+      // that never went through the wire schema — pass those through untouched.
+      if (typeof (r as { repoPath?: unknown }).repoPath === 'string') {
+        return r as unknown as RepoSourceSpec
+      }
+      return typeof r.cachedRepoId === 'string' && r.cachedRepoId.length > 0
+        ? withRef({ cachedRepoId: r.cachedRepoId }, r.ref)
+        : withRef({ repoUrl: r.repoUrl as string }, r.ref)
+    })
+  }
+  if (typeof input.cachedRepoId === 'string' && input.cachedRepoId.length > 0) {
+    return [withRef({ cachedRepoId: input.cachedRepoId }, input.ref)]
   }
   if (typeof input.repoUrl === 'string' && input.repoUrl.length > 0) {
     return [{ repoUrl: input.repoUrl, ...(input.ref !== undefined ? { ref: input.ref } : {}) }]
@@ -476,18 +499,52 @@ export async function resolveRepoSourceSingle(
       repoPath: spec.repoPath,
       baseBranch: spec.baseBranch,
       repoUrl: null,
+      cachedRepoId: null,
       pathFetchError: null,
       ffWarnings: [],
     }
   }
-  if (!('repoUrl' in spec) || spec.repoUrl.length === 0) {
-    throw new ValidationError('start-task-source-required', 'a repoUrl source is required')
+  // RFC-204: a reuse-by-id source. The wire no longer carries the credentialed
+  // URL, so the daemon looks it up itself and it never round-trips through the
+  // client. 404 (not 422) and the same not-found shape as everything else so a
+  // probe can't distinguish "not yours" from "doesn't exist".
+  let sourceUrl: string
+  let sourceCachedRepoId: string | null = null
+  const specCachedRepoId = (spec as { cachedRepoId?: unknown }).cachedRepoId
+  if (typeof specCachedRepoId === 'string' && specCachedRepoId.length > 0) {
+    const row = deps.db
+      .select()
+      .from(cachedRepos)
+      .where(eq(cachedRepos.id, specCachedRepoId))
+      .limit(1)
+      .all()[0]
+    if (row === undefined) {
+      throw new NotFoundError(
+        'cached-repo-not-found',
+        `cached repo '${specCachedRepoId}' not found`,
+      )
+    }
+    sourceUrl = row.url
+    sourceCachedRepoId = row.id
+  } else {
+    // Value-based, not `'repoUrl' in spec`: internal-face callers hand us specs
+    // that carry the key with an undefined value, which the key test accepts and
+    // then explodes on `.length`.
+    const specUrl = (spec as { repoUrl?: unknown }).repoUrl
+    if (typeof specUrl !== 'string' || specUrl.length === 0) {
+      throw new ValidationError('start-task-source-required', 'a repoUrl source is required')
+    }
+    sourceUrl = specUrl
   }
   const appHome = deps.appHome ?? Paths.root
-  const syncCandidates = [spec.ref].filter((s): s is string => typeof s === 'string')
+  // `spec` here is the url-or-id shape; read `ref` defensively for the same
+  // reason as above (internal callers may carry the key with no value).
+  const specRefRaw = (spec as { ref?: unknown }).ref
+  const specRef = typeof specRefRaw === 'string' && specRefRaw.length > 0 ? specRefRaw : undefined
+  const syncCandidates = [specRef].filter((s): s is string => typeof s === 'string')
   const resolved = await resolveCachedRepo(
     { db: deps.db, appHome, syncBranches: syncCandidates },
-    { url: spec.repoUrl },
+    { url: sourceUrl },
   )
   if (!resolved.fetchOk) {
     throw new DomainError(
@@ -500,7 +557,7 @@ export async function resolveRepoSourceSingle(
       },
     )
   }
-  const baseBranch = spec.ref ?? resolved.cached.defaultBranch ?? undefined
+  const baseBranch = specRef ?? resolved.cached.defaultBranch ?? undefined
   let ffWarnings: Array<{ branch: string; warning: string }> = resolved.ffOutcomes
     .filter((o) => o.warning !== null)
     .map((o) => ({ branch: o.branch, warning: o.warning as string }))
@@ -517,7 +574,7 @@ export async function resolveRepoSourceSingle(
         syncBranches: [resolved.cached.defaultBranch],
         fetchOnReuse: false,
       },
-      { url: spec.repoUrl },
+      { url: sourceUrl },
     )
     ffWarnings = ffWarnings.concat(
       second.ffOutcomes
@@ -528,7 +585,8 @@ export async function resolveRepoSourceSingle(
   return {
     repoPath: resolved.cached.localPath,
     baseBranch,
-    repoUrl: spec.repoUrl,
+    repoUrl: sourceUrl,
+    cachedRepoId: sourceCachedRepoId ?? resolved.cached.id,
     pathFetchError: null,
     ffWarnings,
   }
@@ -538,6 +596,7 @@ interface MaterializedRepo {
   repoIndex: number
   repoPath: string
   repoUrl: string | null
+  cachedRepoId: string | null
   baseBranch: string
   branch: string
   baseCommit: string | null
@@ -940,6 +999,7 @@ export async function materializeSpace(
             repoIndex: 0,
             repoPath: scratchDir,
             repoUrl: null,
+            cachedRepoId: null,
             baseBranch: 'main',
             branch: 'main',
             baseCommit: init.rootCommit,
@@ -1009,7 +1069,10 @@ export async function materializeSpace(
     }
     if (r.ffWarnings.length > 0) {
       log.warn('rfc068/ff-warnings', {
-        repoUrl: r.repoUrl,
+        // RFC-204: r.repoUrl is the RAW source URL (spec.repoUrl / the resolved
+        // mirror URL), not the redacted column — logging it verbatim leaked
+        // userinfo/query credentials into the daemon log.
+        repoUrl: r.repoUrl !== null ? redactGitUrl(r.repoUrl) : null,
         warnings: r.ffWarnings,
       })
     }
@@ -1078,6 +1141,7 @@ export async function materializeSpace(
           repoIndex: 0,
           repoPath: source.repoPath,
           repoUrl: source.repoUrl,
+          cachedRepoId: source.cachedRepoId,
           baseBranch: source.baseBranch ?? '',
           branch: wt.branch !== '' ? wt.branch : `agent-workflow/${taskId}`,
           baseCommit: wt.baseCommit,
@@ -1158,6 +1222,7 @@ export async function materializeSpace(
         repoIndex: i,
         repoPath: source.repoPath,
         repoUrl: source.repoUrl,
+        cachedRepoId: source.cachedRepoId,
         baseBranch: source.baseBranch ?? '',
         branch: wt.branch,
         baseCommit: wt.baseCommit,
@@ -1411,6 +1476,7 @@ async function startTaskImpl(
           repoIndex: 0,
           repoPath: source.repoPath,
           repoUrl: source.repoUrl,
+          cachedRepoId: source.cachedRepoId,
           baseBranch: source.baseBranch ?? '',
           branch: pre.branch,
           baseCommit: pre.baseCommit,
@@ -1454,6 +1520,9 @@ async function startTaskImpl(
   const fallbackSource: ResolvedRepoSource | undefined = resolvedSources[0]
   const headRepoPath = head?.repoPath ?? fallbackSource?.repoPath ?? ''
   const headRepoUrl = head?.repoUrl ?? fallbackSource?.repoUrl ?? null
+  // RFC-204: the deterministic mirror ref. repo_url is stored REDACTED (RFC-054
+  // W3-4) so it can never drive a relaunch; this id is what does.
+  const headCachedRepoId = head?.cachedRepoId ?? fallbackSource?.cachedRepoId ?? null
   const headBaseBranch = head?.baseBranch ?? fallbackSource?.baseBranch ?? ''
   const headBranch = head?.branch ?? (branch !== '' ? branch : `agent-workflow/${taskId}`)
   const headBaseCommit = head?.baseCommit ?? baseCommit
@@ -1545,6 +1614,7 @@ async function startTaskImpl(
           // cleartext URL is reachable only ephemerally via the cache key
           // hash, so even DB-level access can't reconstruct it.
           repoUrl: headRepoUrl !== null ? redactGitUrl(headRepoUrl) : null,
+          cachedRepoId: headCachedRepoId,
           worktreePath,
           baseBranch: headBaseBranch,
           branch: headBranch !== '' ? headBranch : `agent-workflow/${taskId}`,
@@ -1607,6 +1677,7 @@ async function startTaskImpl(
               repoIndex: r.repoIndex,
               repoPath: r.repoPath,
               repoUrl: r.repoUrl !== null ? redactGitUrl(r.repoUrl) : null,
+              cachedRepoId: r.cachedRepoId,
               baseBranch: r.baseBranch,
               branch: r.branch,
               // RFC-075: the single working-branch name is applied to every repo
@@ -1694,6 +1765,7 @@ async function startTaskImpl(
       workflowName: task.workflowName,
       repoPath: task.repoPath,
       repoUrl: task.repoUrl,
+      cachedRepoId: task.cachedRepoId,
       status: task.status,
       startedAt: task.startedAt,
       finishedAt: task.finishedAt,
@@ -3512,6 +3584,7 @@ function rowToTask(
 
     repoPath: row.repoPath,
     repoUrl: row.repoUrl ?? null,
+    cachedRepoId: row.cachedRepoId ?? null,
     worktreePath: row.worktreePath,
     baseBranch: row.baseBranch,
     branch: row.branch,
@@ -3612,6 +3685,7 @@ function rowToSummary(row: typeof tasks.$inferSelect, workflowName: string | nul
     workflowName,
     repoPath: row.repoPath,
     repoUrl: row.repoUrl ?? null,
+    cachedRepoId: row.cachedRepoId ?? null,
     status: row.status,
     startedAt: row.startedAt,
     finishedAt: row.finishedAt,
@@ -3642,6 +3716,7 @@ function mapTaskRepoRow(row: typeof taskRepos.$inferSelect): TaskRepo {
     repoIndex: row.repoIndex,
     repoPath: row.repoPath,
     repoUrl: row.repoUrl ?? null,
+    cachedRepoId: row.cachedRepoId ?? null,
     baseBranch: row.baseBranch,
     branch: row.branch,
     // RFC-075: per-repo working-branch mirror (NULL → isolation branch).
@@ -3667,6 +3742,7 @@ function synthesizeRepoFromTaskRow(row: typeof tasks.$inferSelect): TaskRepo {
     repoIndex: 0,
     repoPath: row.repoPath,
     repoUrl: row.repoUrl ?? null,
+    cachedRepoId: row.cachedRepoId ?? null,
     baseBranch: row.baseBranch,
     branch: row.branch,
     // RFC-075: mirror the task-level working branch onto the synthesized repo.

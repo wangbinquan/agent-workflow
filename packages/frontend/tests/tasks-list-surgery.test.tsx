@@ -49,6 +49,7 @@ function row(name: string, overrides: Partial<TaskSummary> = {}): TaskSummary {
     workflowName: 'wf-one',
     repoPath: '/Users/w/proj/agent-workflow',
     repoUrl: null,
+    cachedRepoId: null,
     status: 'done',
     startedAt: Date.now() - 3_600_000,
     finishedAt: Date.now() - 3_000_000,
@@ -164,6 +165,7 @@ describe('/tasks — run-monitor table (RFC-192)', () => {
         repoCount: 3,
         repoPath: '/home/.aw/repos/deadbeef-monorepo',
         repoUrl: 'https://user:pw@github.com/org/monorepo.git',
+        cachedRepoId: null,
       }),
       row('single'),
     ])

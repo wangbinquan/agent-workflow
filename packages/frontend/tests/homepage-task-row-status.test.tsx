@@ -26,6 +26,7 @@ function fakeTask(id: string, status: TaskStatus): TaskSummary {
     workflowName: 'wf-x',
     repoPath: '/tmp/x',
     repoUrl: null,
+    cachedRepoId: null,
     status,
     startedAt: 1_700_000_000_000,
     finishedAt: null,

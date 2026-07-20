@@ -150,7 +150,9 @@ describe('RepoSourceRow RFC-165 retirement (source-level)', () => {
 function cachedRepo(url: string, localPath: string): CachedRepo {
   return {
     id: `id-${localPath}`,
-    url,
+    // RFC-204: no plaintext `url` on the wire any more; the helper takes a URL
+    // and exposes it as the redacted form (these fixtures use credential-free
+    // URLs, for which redaction is identity).
     urlRedacted: url,
     localPath,
     defaultBranch: 'main',

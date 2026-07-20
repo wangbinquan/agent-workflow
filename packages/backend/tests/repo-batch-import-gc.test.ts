@@ -22,7 +22,6 @@ function happyResolver(): Resolver {
     return {
       cached: {
         id: 'cr-1',
-        url: input.url,
         urlRedacted: input.url,
         localPath: '/tmp/cr-1',
         defaultBranch: 'main',

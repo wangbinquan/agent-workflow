@@ -85,18 +85,18 @@ describe('cached-repos HTTP RFC-034 submodule telemetry', () => {
     expect(res.status).toBe(200)
     const body = (await res.json()) as {
       items: Array<{
-        url: string
+        urlRedacted: string
         hasSubmodules: boolean | null
         lastSubmoduleSyncOk: boolean | null
         lastSubmoduleSyncError: string | null
       }>
     }
-    const subRow = body.items.find((r) => r.url.includes('with-subs'))!
+    const subRow = body.items.find((r) => r.urlRedacted.includes('with-subs'))!
     expect(subRow.hasSubmodules).toBe(true)
     expect(subRow.lastSubmoduleSyncOk).toBe(false)
     expect(subRow.lastSubmoduleSyncError).toContain('permission denied')
 
-    const legacy = body.items.find((r) => r.url.includes('no-subs'))!
+    const legacy = body.items.find((r) => r.urlRedacted.includes('no-subs'))!
     expect(legacy.hasSubmodules).toBeNull()
     expect(legacy.lastSubmoduleSyncOk).toBeNull()
     expect(legacy.lastSubmoduleSyncError).toBeNull()

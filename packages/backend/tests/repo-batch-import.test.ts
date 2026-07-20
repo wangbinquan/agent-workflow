@@ -57,7 +57,6 @@ function stubResolver(
       return {
         cached: {
           id: cachedId,
-          url: input.url,
           urlRedacted: input.url,
           localPath: `/tmp/${cachedId}`,
           defaultBranch: 'main',

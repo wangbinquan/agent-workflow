@@ -356,6 +356,8 @@ export const StartWorkgroupTaskSchema = z.object({
   /** RFC-165: temporary-space launch (see StartTaskSchema.scratch). */
   scratch: z.boolean().optional(),
   repoUrl: z.string().min(1).optional(),
+  /** RFC-204: reuse a cached mirror by id (XOR `repoUrl`; enforced by StartTaskSchema downstream). */
+  cachedRepoId: z.string().min(1).optional(),
   ref: z.string().min(1).optional(),
   repos: z.array(z.unknown()).min(1).max(16).optional(),
   collaboratorUserIds: z.array(z.string().min(1)).max(64).optional(),

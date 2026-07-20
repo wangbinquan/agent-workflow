@@ -34,6 +34,7 @@ import { cachedRepos, tasks } from '@/db/schema'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { classifyBaseRef, nonInteractiveGitEnv, runGit } from '@/util/git'
 import { createLogger } from '@/util/log'
+import { redactSensitiveString } from '@/util/redact'
 import { Paths } from '@/util/paths'
 import { getCachedGitCapabilities } from '@/services/gitVersion'
 import { detectSubmodules, syncSubmodules, type SubmoduleMode } from '@/services/gitSubmodule'
@@ -165,9 +166,15 @@ export interface FastForwardOutcome {
 function rowToCached(row: typeof cachedRepos.$inferSelect, referencingTaskCount = 0): CachedRepo {
   return {
     id: row.id,
-    url: row.url,
-    urlRedacted: redactGitUrl(row.url),
-    localPath: row.localPath,
+    // RFC-204: the plaintext `url` no longer leaves the daemon — cached_repos is
+    // a shared pool behind `repos:read` (user baseline), so emitting it handed
+    // every logged-in user the credentials in other people's private repo URLs.
+    // Prefer the stored redacted column; fall back to redacting the legacy one
+    // so rows predating the sealing gate are still safe.
+    urlRedacted: row.urlRedacted ?? redactGitUrl(row.url),
+    // Historical slugs can embed `?access_token=` (parseGitUrl keeps the query
+    // in parsed.path), so the path needs redacting on the wire too.
+    localPath: redactSensitiveString(row.localPath),
     defaultBranch: row.defaultBranch ?? null,
     lastFetchedAt: new Date(row.lastFetchedAt).toISOString(),
     createdAt: new Date(row.createdAt).toISOString(),
@@ -550,6 +557,8 @@ export async function resolveCachedRepo(
         id,
         urlHash: hash,
         url: input.url,
+        // RFC-204: store the safe display form rather than deriving it per read.
+        urlRedacted: redacted,
         localPath: cacheDir,
         defaultBranch: defaultBr,
         lastFetchedAt: ts,
@@ -603,9 +612,8 @@ export async function resolveCachedRepo(
           id,
           urlHash: hash,
           url: input.url,
-          // RFC-204 T2: columns exist as of 0098; the sealing gate fills them.
           urlEnc: null,
-          urlRedacted: null,
+          urlRedacted: redacted,
           localPath: cacheDir,
           defaultBranch: defaultBr,
           lastFetchedAt: ts,
