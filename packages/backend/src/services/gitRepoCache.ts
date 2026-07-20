@@ -26,13 +26,13 @@ import {
 import { and, eq, sql } from 'drizzle-orm'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, rmSync } from 'node:fs'
-import { rename } from 'node:fs/promises'
+import { rename, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { cachedRepos, scheduledTasks, taskRepos } from '@/db/schema'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
-import { classifyBaseRef, nonInteractiveGitEnv, runGit } from '@/util/git'
+import { classifyBaseRef, GIT_TIMEOUT_EXIT_CODE, nonInteractiveGitEnv, runGit } from '@/util/git'
 import { createLogger } from '@/util/log'
 import { redactSensitiveString } from '@/util/redact'
 import { Paths } from '@/util/paths'
@@ -77,6 +77,7 @@ async function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise
  */
 async function spawnGit(
   args: string[],
+  opts?: { timeoutMs?: number },
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const proc = Bun.spawn({
     cmd: ['git', ...args],
@@ -87,13 +88,45 @@ async function spawnGit(
     stdout: 'pipe',
     stderr: 'pipe',
     stdin: 'ignore',
+    // RFC-208: with a deadline, run in our own process group so the timer can
+    // SIGKILL the whole tree. `git clone` delegates to ssh / credential helpers,
+    // and killing only the direct child leaves those alive holding the pipes.
+    ...(opts?.timeoutMs !== undefined ? { detached: true } : {}),
   })
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ])
-  return { stdout, stderr, exitCode }
+  if (opts?.timeoutMs === undefined) {
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ])
+    return { stdout, stderr, exitCode }
+  }
+  let timedOut = false
+  const timer = setTimeout(() => {
+    timedOut = true
+    try {
+      process.kill(-proc.pid, 'SIGKILL')
+    } catch {
+      proc.kill('SIGKILL')
+    }
+  }, opts.timeoutMs)
+  try {
+    const outP = new Response(proc.stdout).text().catch(() => '')
+    const errP = new Response(proc.stderr).text().catch(() => '')
+    const exitCode = await proc.exited
+    const drained = <T>(p: Promise<T>, fallback: T): Promise<T> =>
+      Promise.race([p, new Promise<T>((r) => setTimeout(() => r(fallback), 250))])
+    const stdout = await drained(outP, '')
+    const stderr = await drained(errP, '')
+    if (!timedOut) return { stdout, stderr, exitCode }
+    return {
+      stdout,
+      stderr: `${stderr}\ngit timed out after ${opts.timeoutMs}ms (killed)`.trim(),
+      exitCode: exitCode === 0 ? GIT_TIMEOUT_EXIT_CODE : exitCode,
+    }
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 export interface GitRepoCacheDeps {
@@ -366,7 +399,9 @@ export async function resolveCachedRepo(
       let fetchOk = true
       let fetchError: string | null = null
       if (fetchOnReuse) {
-        const r = await runGit(row.localPath, ['fetch', '--all', '--prune', '--tags'])
+        const r = await runGit(row.localPath, ['fetch', '--all', '--prune', '--tags'], {
+          timeoutMs,
+        })
         if (r.exitCode !== 0) {
           fetchOk = false
           fetchError = redactGitUrl(r.stderr.trim())
@@ -504,7 +539,7 @@ export async function resolveCachedRepo(
       }
     }
     cloneArgs.push(input.url, tmpDir)
-    const r = await spawnGit(cloneArgs)
+    const r = await spawnGit(cloneArgs, { timeoutMs })
     if (r.exitCode !== 0) {
       // Wipe whatever git may have left behind.
       try {
@@ -722,7 +757,13 @@ export async function refreshCachedRepo(
         { url: redacted, localPath: row.localPath },
       )
     }
-    const r = await runGit(row.localPath, ['fetch', '--all', '--prune', '--tags'])
+    // RFC-208: manual refresh had NO budget at all — `withTimeout` (a bare
+    // Promise.race) was never applied here, and even where it is applied it only
+    // rejects the caller: the git child keeps running and the per-URL queue
+    // stays held. Bounding the child itself is what actually frees both.
+    const r = await runGit(row.localPath, ['fetch', '--all', '--prune', '--tags'], {
+      timeoutMs: deps.cloneTimeoutMs ?? DEFAULT_CLONE_TIMEOUT_MS,
+    })
     const ts = now()
     let fetchOk = true
     let fetchError: string | null = null
@@ -811,7 +852,12 @@ export async function deleteCachedRepo(
   }
   return await withUrlLock(row.urlHash, async () => {
     try {
-      rmSync(row.localPath, { recursive: true, force: true })
+      // RFC-208: async removal. `rmSync` on a large mirror blocks Bun's single
+      // event loop for the whole walk — which also means any timeout racing it
+      // can never fire, since the timer callback cannot be serviced. Every other
+      // request to the daemon stalls for the duration. `rm` yields between
+      // entries, so the loop keeps serving and a deadline stays meaningful.
+      await rm(row.localPath, { recursive: true, force: true })
     } catch (err) {
       log.warn('failed to rm cache dir; deleting DB row anyway', {
         url: redactGitUrl(row.url),

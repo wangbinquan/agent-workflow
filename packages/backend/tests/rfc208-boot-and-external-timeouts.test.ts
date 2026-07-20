@@ -110,3 +110,44 @@ describe('RFC-208 · a failed filesystem rollback cannot strand a skill operatio
     )
   })
 })
+
+describe('RFC-208 · git cache work is killable, not just race-able', () => {
+  const cacheSource = readFileSync(
+    resolve(import.meta.dir, '..', 'src', 'services', 'gitRepoCache.ts'),
+    'utf8',
+  )
+
+  // The pre-existing `withTimeout` here is only a Promise.race: it rejects the
+  // CALLER while the git child keeps running and the per-URL serial queue stays
+  // held, so the next request for that URL waits behind a corpse. Bounding the
+  // child is what actually frees both. Design gate §6-5 / §6-13.
+  test('cold clone and both fetch paths pass a timeout to the git child', () => {
+    expect(cacheSource).toContain('spawnGit(cloneArgs, { timeoutMs })')
+    const fetches = cacheSource.match(/runGit\([^\n]*'fetch', '--all'[\s\S]{0,120}?timeoutMs/g)
+    // warm reuse (inside resolveCachedRepo) + manual refresh
+    expect(fetches?.length ?? 0).toBeGreaterThanOrEqual(2)
+  })
+
+  test('spawnGit kills the whole process group, like runGit', () => {
+    // `git clone` delegates to ssh / credential helpers; killing only the direct
+    // child leaves those holding the pipes.
+    const fn = cacheSource.slice(
+      cacheSource.indexOf('async function spawnGit'),
+      cacheSource.indexOf('export interface GitRepoCacheDeps'),
+    )
+    expect(fn).toContain('detached: true')
+    expect(fn).toContain("process.kill(-proc.pid, 'SIGKILL')")
+  })
+
+  test('cache-dir deletion is async so it cannot block the event loop', () => {
+    // rmSync on a large mirror stalls Bun's single loop for the whole walk —
+    // during which no timer can fire, so any racing timeout is inert and every
+    // other request to the daemon stalls too.
+    const del = cacheSource.slice(
+      cacheSource.indexOf('withUrlLock(row.urlHash, async () => {\n    try {'),
+      cacheSource.indexOf('deleting DB row anyway'),
+    )
+    expect(del).toContain('await rm(row.localPath')
+    expect(del).not.toContain('rmSync(row.localPath')
+  })
+})

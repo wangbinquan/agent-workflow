@@ -31,7 +31,15 @@ export function mountCachedRepoRoutes(app: Hono, deps: AppDeps): void {
 
   app.post('/api/cached-repos/:id/refresh', async (c) => {
     const id = c.req.param('id')
-    const r = await refreshCachedRepo({ db: deps.db }, id)
+    // RFC-208: `gitCloneTimeoutMs` was dead config — the schema accepted it but
+    // nothing ever passed it to `cloneTimeoutMs`, so an operator tightening the
+    // window had no effect. Manual refresh shells out to `git fetch` against a
+    // remote host, which is exactly the call that needs a bound.
+    const cfg = loadConfig(deps.configPath)
+    const r = await refreshCachedRepo(
+      { db: deps.db, ...(cfg.gitCloneTimeoutMs ? { cloneTimeoutMs: cfg.gitCloneTimeoutMs } : {}) },
+      id,
+    )
     return c.json(r)
   })
 
