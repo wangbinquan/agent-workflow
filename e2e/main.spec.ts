@@ -510,9 +510,9 @@ test('RFC-024: launch task from git URL clones into cache and renders redacted U
   })
   expectOk(cachedRes, 'GET cached-repos')
   const cachedBody = (await cachedRes.json()) as {
-    items: Array<{ id: string; url: string; referencingTaskCount: number }>
+    items: Array<{ id: string; urlRedacted: string; referencingTaskCount: number }>
   }
-  const match = cachedBody.items.find((it) => it.url === remoteUrl)
+  const match = cachedBody.items.find((it) => it.urlRedacted === remoteUrl)
   expect(match).toBeDefined()
   expect(match!.referencingTaskCount).toBeGreaterThanOrEqual(1)
 
@@ -595,14 +595,14 @@ test('RFC-033: batch import remote repos on /repos page', async ({ page }) => {
   // Main /repos table should now list both URLs.
   const cachedRes = await fetch(`${daemon.baseUrl}/api/cached-repos`, { headers })
   expectOk(cachedRes, 'GET cached-repos after batch import')
-  const cached = (await cachedRes.json()) as { items: Array<{ id: string; url: string }> }
+  const cached = (await cachedRes.json()) as { items: Array<{ id: string; urlRedacted: string }> }
   for (const u of urls) {
-    expect(cached.items.some((it) => it.url === u)).toBe(true)
+    expect(cached.items.some((it) => it.urlRedacted === u)).toBe(true)
   }
 
   // Cleanup cached entries + tmp dir.
   for (const u of urls) {
-    const it = cached.items.find((c) => c.url === u)
+    const it = cached.items.find((c) => c.urlRedacted === u)
     if (it !== undefined) {
       await fetch(`${daemon.baseUrl}/api/cached-repos/${it.id}?force=1`, {
         method: 'DELETE',
