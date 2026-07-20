@@ -6302,16 +6302,23 @@ details.form-section[open] > summary {
  * without inheriting it — so these selectors are intentionally global.
  * Works in both modes because --panel / --border / --text / --muted resolve
  * per data-theme. */
-/* RFC-206 T5' — `overflow: hidden` here is only for the rounded corner, but it
-   also clips each .react-flow__controls-button's focus ring on all four sides
-   (xyflow ships no focus styling of its own, so the UA ring applies). */
 .react-flow__controls {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 6px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
   overflow: hidden;
-  padding: var(--focus-ring-gutter);
+}
+
+/* RFC-206 T5' — the cluster is `overflow: hidden` (for the rounded corner) and
+   its buttons FILL it edge to edge, i.e. flush by construction — the same case
+   as .tabs__tab. xyflow ships no focus styling, so the UA ring applied and was
+   cut on all four sides of every button. Inset the ring rather than padding the
+   cluster: padding would visibly grow the on-canvas control and churn every
+   workflow-editor visual baseline for no user benefit. */
+.react-flow__controls-button:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset-inset);
 }
 .react-flow__controls-button {
   background: var(--panel);

@@ -125,7 +125,6 @@ describe('focus ring — inset for full-bleed form controls', () => {
     ['.task-outputs-panel__detail', /padding:\s*var\(--focus-ring-gutter\)/],
     ['.task-detail__pane', /padding:\s*var\(--focus-ring-gutter\)/],
     ['.page--task-detail', /padding:\s*var\(--focus-ring-gutter\)/],
-    ['.react-flow__controls', /padding:\s*var\(--focus-ring-gutter\)/],
     ['.page--review-detail', /padding:\s*var\(--focus-ring-gutter\)/],
   ])('%s reserves a gutter for the OUTSET rings it contains', (selector, re) => {
     expect(ruleBody(`${selector} {`)).toMatch(re)
@@ -171,6 +170,7 @@ describe('focus ring — no scroll-flush control may reintroduce an outset ring'
     '.page-section-nav__leaf',
     '.task-outputs-panel__option',
     '.workgroup-room__runlog-row',
+    '.react-flow__controls-button',
   ]
 
   /**
