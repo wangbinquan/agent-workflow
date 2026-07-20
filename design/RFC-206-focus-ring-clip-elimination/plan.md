@@ -170,7 +170,23 @@
 
 ---
 
-## T8 · 收口
+## T8 · 收口（进行中）
+
+**已做**：STATE.md 与 `design/plan.md` RFC 索引状态翻新（Draft → In Progress，列明已交付/剩余）。
+
+**未做（阻塞）**：**实现门 Codex review 没跑成**。两次尝试：第一次 `Turn failed / Reviewer failed to output a response`；第二次明确报 `You've hit your usage limit … try again at Jul 25th, 2026 12:03 PM`。**配额恢复后必须补跑**——按 `feedback_codex_review_after_changes`，设计门与实现门是两道独立的门，设计门过了不代表实现门可以省。补跑方法（共享树必须隔离，否则会被并发 session 的 diff 淹没）：
+
+```
+git worktree add --detach <wt> b1ac247a
+cd <wt> && git cherry-pick 72dd7572 588591b0 9306a143
+node <codex-companion> review --wait --base b1ac247a --scope branch
+```
+
+**未做**：单二进制 smoke 与 Playwright e2e 在 CI 上尚未跑过我的守卫（被 backend 红项 gate 掉，红项归属并发 session 的 `7ee8df92`）。下一次 CI 转绿时需确认 `focus-ring-clip.spec.ts` 真的在 CI 里跑过、而不是又被 skip。
+
+---
+
+## T8 原始清单
 
 - STATE.md 翻 Done + `design/plan.md` RFC 索引状态更新。
 - Codex **实现门** review（按 `feedback_codex_review_after_changes`，与设计门相互独立）。
