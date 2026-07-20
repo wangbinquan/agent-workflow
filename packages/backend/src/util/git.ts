@@ -2193,7 +2193,15 @@ async function checkoutMergedGitlinks(
   prefix = '',
 ): Promise<void> {
   if (effective.mode === 'never') return
-  const listed = await runGit(worktreePath, ['ls-tree', tree])
+  // `-r` is load-bearing, not an optimization. Without it this lists only the
+  // root level, and a submodule at `libs/vendor` shows up as `040000 tree libs`
+  // — skipped by the `!== 'commit'` guard below, so its merged gitlink was
+  // never checked out and the node's work in it vanished while merge-back still
+  // reported clean. `-r` descends through plain trees and yields gitlinks at
+  // their full path; it does NOT descend into a gitlink (that commit belongs to
+  // another repository), so the explicit recursion further down still does the
+  // nested-submodule work.
+  const listed = await runGit(worktreePath, ['ls-tree', '-r', tree])
   if (listed.exitCode !== 0) return
   for (const line of listed.stdout.split('\n')) {
     // `<mode> <type> <sha>\t<name>`; gitlinks are type `commit`.
@@ -2205,7 +2213,18 @@ async function checkoutMergedGitlinks(
     if (sha === undefined) continue
     const relPath = prefix === '' ? name : `${prefix}/${name}`
     const subPath = join(worktreePath, name)
-    if (!existsSync(subPath)) continue // uninitialized — nothing to move
+    // An uninitialized submodule is an EMPTY DIRECTORY, not a missing one — git
+    // creates it for the gitlink — so `existsSync(subPath)` is always true and
+    // never skipped anything. `git -C <empty dir> checkout` then walks up and
+    // runs in the SUPERPROJECT, which does not have that object: exit 128
+    // `unable to read tree`, which does not match the dirty-worktree pattern
+    // below and so threw `materialize-failed` on every merge-back — after steps
+    // ①–⑤ had already mutated canonical, with no rollback. Same shape for a
+    // deinit'd submodule and for a stray nested git repo that was committed by
+    // accident (gitlink present, no `.gitmodules` entry at all).
+    // `.git` (file or dir) is what actually distinguishes an initialized one —
+    // the same test `expandSubmodulePaths` already uses.
+    if (!existsSync(join(subPath, '.git'))) continue
     const co = await runGit(subPath, ['checkout', '--detach', sha])
     if (co.exitCode !== 0) {
       const stderr = co.stderr.trim()
