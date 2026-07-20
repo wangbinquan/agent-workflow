@@ -318,9 +318,8 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // below, which stop far earlier) builds from scratch, where
     // `lastDbMigration` is undefined and all entries apply unconditionally. New
     // migrations must continue the synthetic axis: previous `when` + 86400000.
-    const entries = JSON.parse(
-      readFileSync(join(MIGRATIONS, 'meta', '_journal.json'), 'utf-8'),
-    ).entries as Array<{ idx: number; when: number; tag: string }>
+    const entries = JSON.parse(readFileSync(join(MIGRATIONS, 'meta', '_journal.json'), 'utf-8'))
+      .entries as Array<{ idx: number; when: number; tag: string }>
     for (let i = 1; i < entries.length; i++) {
       const prev = entries[i - 1]!
       const cur = entries[i]!
