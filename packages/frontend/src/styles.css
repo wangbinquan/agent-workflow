@@ -83,6 +83,18 @@
   --focus-ring-color: var(--accent);
   --focus-ring-width: 2px;
   --focus-ring-offset: 2px;
+  /* Ring drawn INSIDE the control's own border box instead of outside it.
+     `outline` (and a spread box-shadow) always paints outside the border box,
+     so ANY ancestor with overflow != visible clips it at that ancestor's
+     padding box — and overflow clipping cannot be opted out of per-axis (the
+     CSS overflow spec forces the other axis to `auto` as soon as one is set).
+     Intrinsically-sized chrome (buttons, tabs, nav items) is never flush
+     against a clip edge, so it keeps the outset --focus-ring-offset. Full-bleed
+     form controls (width:100%) are flush BY CONSTRUCTION, so they use this
+     inset offset and become clip-proof in every container, on every axis,
+     forever — no per-container patch required. Locked by
+     tests/focus-ring-inset.test.ts. */
+  --focus-ring-offset-inset: calc(-1 * var(--focus-ring-width));
 }
 
 /* P-5-04 dark theme — applied when the resolved theme is dark, which the
@@ -526,11 +538,16 @@ code {
   border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
 }
 
+/* `inset` for the same reason .form-input:focus uses a negative outline-offset:
+   a spread box-shadow paints outside the border box and gets clipped by any
+   overflow ancestor (the trigger is width:100% inside .form-field, so it is
+   flush by construction — visibly cut on /agents → 高级). Inset keeps the halo
+   inside the trigger, where nothing can clip it. */
 .select__trigger:focus-visible,
 .select[data-open='true'] > .select__trigger {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 .select__trigger:disabled {
@@ -3757,9 +3774,17 @@ code {
   resize: vertical;
 }
 
+/* Inset ring — see --focus-ring-offset-inset. A .form-input is width:100% by
+   design, so it sits flush against whatever scroll box contains it; an outset
+   ring was clipped on whichever edge happened to be flush (dialog body top,
+   split detail-body left/right, workgroup pane left/bottom, …), which is the
+   recurring "选中输入框时边框被切掉" bug. Drawing the ring inside the control's
+   own border box makes it structurally unclippable. `border-color: transparent`
+   stays: the ring now covers the border area, so the border must not paint a
+   second line underneath it. */
 .form-input:focus {
   outline: 2px solid var(--accent);
-  outline-offset: 0;
+  outline-offset: var(--focus-ring-offset-inset);
   border-color: transparent;
 }
 
@@ -10335,10 +10360,11 @@ mark.comment-anchor[data-active='true'] {
   resize: vertical;
   min-height: 56px;
 }
+/* inset — same clip-proofing rationale as .select__trigger:focus-visible. */
 .clarify-custom-input:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 .clarify-custom-input:disabled {
   cursor: not-allowed;
@@ -11465,7 +11491,16 @@ mark.comment-anchor[data-active='true'] {
      visible shift) but the scroll box now has 4px of horizontal room for the
      outline to paint. This lifts RFC-101's .fuse-dialog-scoped patch (further
      down) onto the shared rule; that scoped block now overlaps here harmlessly.
-     Locked by tests/dialog-body-focus-outline-clip.test.ts. */
+     Locked by tests/dialog-body-focus-outline-clip.test.ts.
+
+     UPDATE: this inset only ever covered the INLINE axis, so the same bug kept
+     showing on the BLOCK axis — a dialog whose first body child is a bare
+     control lost the top 2px of its ring (reported on /repos → 批量导入). The
+     real root fix is elsewhere: .form-input's ring is now drawn INSIDE its own
+     border box (--focus-ring-offset-inset), which no container can clip on any
+     axis. The 4px here is deliberately KEPT because it still does real work for
+     OUTSET-ring controls — a .btn or .table-viewport__scroller in a dialog body
+     paints 4px outside and would otherwise clip. */
   padding-left: 4px;
   padding-right: 4px;
   margin-left: -4px;
@@ -14007,9 +14042,11 @@ mark.comment-anchor[data-active='true'] {
   cursor: text;
 }
 
+/* Same inset ring as .form-input:focus — this row deliberately mirrors the
+   standard input chrome, so it must mirror the clip-proofing too. */
 .user-picker .chips-input__row:focus-within {
   outline: 2px solid var(--accent);
-  outline-offset: 0;
+  outline-offset: var(--focus-ring-offset-inset);
   border-color: transparent;
 }
 
@@ -14838,7 +14875,12 @@ mark.comment-anchor[data-active='true'] {
      pane has none, so we plainly inset the whole room a few px instead —
      box-sizing:border-box keeps it flush to the pane, and the composer's outline
      now paints inside the clip box. Locked by
-     workgroup-room-composer-outline-clip.test.ts. */
+     workgroup-room-composer-outline-clip.test.ts.
+
+     UPDATE: the composer no longer depends on this — .form-input's ring moved
+     INSIDE its border box (--focus-ring-offset-inset). Kept because the room
+     also holds OUTSET-ring controls (.btn, .status-chip--clickable,
+     .workgroup-room__member-open — all 4px) that are still flush here. */
   padding: 4px;
 }
 
@@ -16061,8 +16103,16 @@ button.status-chip {
 .agent-form > .tabs-viewport {
   flex-shrink: 0;
 }
+/* This element IS the scroll box (it also carries .split__detail-body, which is
+   `overflow: auto`), so its padding is the only room a child's focus ring has.
+   Full-bleed form controls no longer need it — their ring is inset (see
+   --focus-ring-offset-inset) — but the panel also holds OUTSET-ring controls
+   that are flush by construction: the <Switch> checkbox is grid column 1 at
+   x=0 with a 4px ring, and .btn rows sit flush at the bottom. 4px covers the
+   widest outset ring (2px width + 2px offset). Locked by
+   tests/focus-ring-inset.test.ts. */
 .agent-form__panel {
-  padding-top: var(--space-3);
+  padding: var(--space-3) 4px 4px;
 }
 /* Scoped to :not([hidden]) — a bare `display: flex` would override the keep-
    mounted panel's `hidden` attribute (UA `[hidden] { display: none }` is lower

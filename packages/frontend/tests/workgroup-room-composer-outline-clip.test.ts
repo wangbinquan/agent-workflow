@@ -60,9 +60,18 @@ describe('workgroup room composer focus-outline clip', () => {
     expect(ruleBody('.task-detail__pane {')).toMatch(/overflow:\s*auto/)
   })
 
-  it('documents the precondition: .form-input:focus paints a border-edge outline (what gets clipped)', () => {
+  // Superseded: this used to assert `outline-offset: 0` as "the precondition
+  // that makes the bug possible". That precondition is now gone — .form-input's
+  // ring moved INSIDE the border box (--focus-ring-offset-inset), so no overflow
+  // ancestor can clip it on any axis. See focus-ring-inset.test.ts for the root
+  // fix. The inset above is deliberately KEPT rather than reverted: controls
+  // that still use an OUTSET ring (.btn and friends, 2px width + 2px offset =
+  // 4px outside) can also sit flush in this pane, and the 4px inset is exactly
+  // what keeps their ring paintable.
+  it('documents that .form-input:focus now paints its ring INSIDE the border box', () => {
     const body = ruleBody('.form-input:focus {')
     expect(body).toMatch(/outline:\s*2px\s+solid/)
-    expect(body).toMatch(/outline-offset:\s*0/)
+    expect(body).toMatch(/outline-offset:\s*var\(--focus-ring-offset-inset\)/)
+    expect(body).not.toMatch(/outline-offset:\s*0/)
   })
 })
