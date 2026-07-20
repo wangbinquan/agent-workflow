@@ -1755,6 +1755,7 @@ export const enUS: Resources = {
     commitOutcomePushed: 'Pushed',
     commitOutcomeLocalAuth: 'Committed locally (push blocked)',
     commitOutcomeLocalFailed: 'Committed locally (push failed)',
+    commitOutcomeSubrepoFailed: 'Submodule push failed; parent not pushed',
     commitOutcomeSkippedEmpty: 'No changes',
     commitFiles: '{{files}} files, +{{ins}}/-{{del}}',
     metaStarted: 'Started',

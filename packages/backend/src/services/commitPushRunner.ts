@@ -14,12 +14,20 @@
 // honored never loses the agent's work — the local commit always lands first.
 
 import { eq } from 'drizzle-orm'
-import type { CommitPushMeta, CommitPushOutcome } from '@agent-workflow/shared'
+import type { CommitPushMeta, CommitPushOutcome, SubrepoPushResult } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { nodeRuns } from '@/db/schema'
 import { mintNodeRun } from '@/services/nodeRunMint'
 import { createLogger, type Logger } from '@/util/log'
-import { AW_INTERNAL_GIT_IDENTITY, runGit as realRunGit } from '@/util/git'
+import { AW_INTERNAL_GIT_IDENTITY, runGit, runGit as realRunGit } from '@/util/git'
+import { join } from 'node:path'
+// RFC-210: recursive submodule commit&push.
+import {
+  bottomUp,
+  detectSubmodules,
+  listSubmodules,
+  usableSubmodules,
+} from '@/services/gitSubmodule'
 import {
   buildFallbackMessage,
   classifyPushFailure,
@@ -141,6 +149,10 @@ export async function runCommitPush(
 
   const pushTarget = `${remote}/${params.repoBranch}`
   let sessionId: string | null = null
+  // RFC-210: filled by the submodule stage below and attached by EVERY finalize
+  // path — threading it through each call site individually is how the happy
+  // path silently lost it the first time.
+  let subrepos: SubrepoPushResult[] = []
 
   const finalize = async (
     outcome: CommitPushOutcome,
@@ -167,11 +179,18 @@ export async function runCommitPush(
       repairAttempts: extra.repairAttempts ?? 0,
       pushOutcome: outcome,
       pushError: extra.pushError ?? null,
+      ...(subrepos.length > 0 ? { subrepos } : {}),
     }
     // `commit-local-failed` is the only failed status; everything else
     // (pushed / commit-local-auth degraded / skipped-empty) is a done row so a
     // push problem the framework can't fix never aborts the task.
-    const status = outcome === 'commit-local-failed' ? 'failed' : 'done'
+    // RFC-210: a withheld parent (because a submodule could not be pushed) is a
+    // FAILED row too — the node produced work that never reached the remote, and
+    // showing it as done would hide that.
+    const status =
+      outcome === 'commit-local-failed' || outcome === 'commit-local-subrepo-failed'
+        ? 'failed'
+        : 'done'
     await db
       .update(nodeRuns)
       .set({
@@ -182,6 +201,31 @@ export async function runCommitPush(
       })
       .where(eq(nodeRuns.id, nodeRunId))
     return { nodeRunId, meta }
+  }
+
+  // 0. RFC-210 — recurse into submodules FIRST.
+  //
+  // Two things go wrong without this. A submodule with uncommitted content makes
+  // the parent's `status --porcelain` non-empty (` M sub`) yet contributes
+  // NOTHING to `diff --cached` — so the run ends as `skipped-empty` and the work
+  // is silently dropped. And if the agent committed inside the submodule itself,
+  // the parent happily pushes a gitlink pointing at a commit that exists only in
+  // this worktree, leaving the remote with an unresolvable submodule.
+  subrepos = await commitPushSubmodules({
+    worktreePath: W,
+    branch: params.repoBranch,
+    remote,
+    idEnv,
+    acquireWrite: params.acquireWrite,
+  })
+  const failedSub = subrepos.find((r) => r.error !== null)
+  if (failedSub !== undefined) {
+    // Atomicity (per-repo, matching RFC-066's per-repo commit-push loop): the
+    // parent's gitlink bump is withheld so the remote never sees a gitlink whose
+    // target was never published.
+    return await finalize('commit-local-subrepo-failed', {
+      pushError: `submodule '${failedSub.path}': ${failedSub.error ?? 'unknown error'}`,
+    })
   }
 
   // 1+2. Stage everything (respects .gitignore) and capture the change set —
@@ -229,6 +273,9 @@ export async function runCommitPush(
   // Nothing staged → skip (no commit).
   const { filesChanged, insertions, deletions } = parseNumstat(numstat)
   if (filesChanged === 0) {
+    // RFC-210: reaching here with committed submodules would mean their gitlink
+    // bump produced no parent-level change, which cannot happen — but report the
+    // results either way so the UI never loses them.
     return finalize('skipped-empty', { filesChanged: 0 })
   }
   const diffTruncated = truncateDiff(diffRaw, params.diffMaxBytes)
@@ -411,4 +458,124 @@ function identityEnv(name: string | null, email: string | null): Record<string, 
 function basenameOf(p: string): string {
   const parts = p.replace(/\/+$/, '').split('/')
   return parts[parts.length - 1] ?? p
+}
+
+/**
+ * RFC-210 — commit & push every submodule of one repo, deepest path first.
+ *
+ * Ordering matters: committing a nested submodule moves its parent's gitlink, so
+ * the child must be settled before the level above stages anything.
+ *
+ * A submodule checked out by `submodule update` sits on a DETACHED HEAD, so a
+ * plain `git push` has no branch to push. Each one is put on the same working
+ * branch name the parent uses before committing.
+ *
+ * Lock discipline mirrors the parent's (RFC-076 C4): local writes happen under
+ * the write lock so a sibling writer cannot split changes across commits, while
+ * the network push is deliberately OUTSIDE it — holding a per-task lock across N
+ * pushes would stall every other writer for the duration.
+ *
+ * Errors are returned, never thrown: the caller decides (and it withholds the
+ * parent, which is the whole point of collecting them).
+ */
+async function commitPushSubmodules(args: {
+  worktreePath: string
+  branch: string
+  remote: string
+  idEnv: Record<string, string>
+  acquireWrite?: (() => Promise<() => void>) | undefined
+  log?: Logger
+}): Promise<SubrepoPushResult[]> {
+  const { worktreePath, branch, remote, idEnv } = args
+  if (!detectSubmodules(worktreePath)) return []
+  const subs = bottomUp(usableSubmodules(await listSubmodules(worktreePath)))
+  if (subs.length === 0) return []
+
+  const out: SubrepoPushResult[] = []
+  for (const s of subs) {
+    const dir = join(worktreePath, s.path)
+    const sg = (a: string[]) => runGit(dir, a)
+    const sgc = (a: string[]) => runGit(dir, a, { env: idEnv })
+    const entry: SubrepoPushResult = {
+      path: s.path,
+      fromSha: s.headSha,
+      toSha: s.headSha,
+      committed: false,
+      pushed: false,
+      error: null,
+    }
+
+    // --- local writes, under the lock ---
+    const release = args.acquireWrite ? await args.acquireWrite() : null
+    try {
+      const dirty = await sg(['status', '--porcelain', '--untracked-files=all'])
+      if (dirty.exitCode === 0 && dirty.stdout.trim() !== '') {
+        // Detached HEAD is the norm here; give the commit a branch to land on.
+        const co = await sg(['checkout', '-B', branch])
+        if (co.exitCode !== 0) {
+          entry.error = redactPushError(co.stderr)
+          out.push(entry)
+          break
+        }
+        const staged = await sg(['add', '-A'])
+        if (staged.exitCode !== 0) {
+          entry.error = redactPushError(staged.stderr)
+          out.push(entry)
+          break
+        }
+        const committed = await sgc(['commit', '-q', '-m', `aw: submodule changes (${branch})`])
+        if (committed.exitCode !== 0) {
+          entry.error = redactPushError(committed.stderr)
+          out.push(entry)
+          break
+        }
+        entry.committed = true
+      } else {
+        // Clean, but its HEAD may still be a commit the agent made itself — it
+        // needs a branch and a push just the same.
+        const co = await sg(['checkout', '-B', branch])
+        if (co.exitCode !== 0) {
+          entry.error = redactPushError(co.stderr)
+          out.push(entry)
+          break
+        }
+      }
+      const head = await sg(['rev-parse', 'HEAD'])
+      if (head.exitCode === 0) entry.toSha = head.stdout.trim()
+    } finally {
+      release?.()
+    }
+
+    // --- network push, outside the lock ---
+    const pushed = await sg(['push', '-u', remote, `${branch}:${branch}`])
+    if (pushed.exitCode !== 0) {
+      // One non-fast-forward repair attempt, same shape as the parent's.
+      const fetched = await sg(['fetch', remote, branch])
+      const merged =
+        fetched.exitCode === 0 ? await sgc(['merge', '--no-edit', 'FETCH_HEAD']) : fetched
+      if (merged.exitCode === 0) {
+        const retry = await sg(['push', '-u', remote, `${branch}:${branch}`])
+        if (retry.exitCode === 0) {
+          entry.pushed = true
+          const head2 = await sg(['rev-parse', 'HEAD'])
+          if (head2.exitCode === 0) entry.toSha = head2.stdout.trim()
+          out.push(entry)
+          continue
+        }
+        entry.error = redactPushError(retry.stderr)
+      } else {
+        await sg(['merge', '--abort'])
+        entry.error = redactPushError(pushed.stderr)
+      }
+      args.log?.warn('submodule push failed — withholding parent gitlink', {
+        subPath: s.path,
+        error: entry.error ?? '',
+      })
+      out.push(entry)
+      break
+    }
+    entry.pushed = true
+    out.push(entry)
+  }
+  return out
 }

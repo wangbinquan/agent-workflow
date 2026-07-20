@@ -830,6 +830,13 @@ export const COMMIT_PUSH_OUTCOME = [
   'commit-local-failed',
   /** no net change since the last commit → nothing committed */
   'skipped-empty',
+  /**
+   * RFC-210: a SUBMODULE of this repo could not be pushed, so the parent's
+   * gitlink bump was deliberately withheld. Committing the parent anyway would
+   * publish a gitlink pointing at a commit that exists nowhere the remote can
+   * reach — anyone cloning would fail `submodule update`.
+   */
+  'commit-local-subrepo-failed',
 ] as const
 export const CommitPushOutcomeSchema = z.enum(COMMIT_PUSH_OUTCOME)
 export type CommitPushOutcome = z.infer<typeof CommitPushOutcomeSchema>
@@ -868,6 +875,21 @@ export const IsoSubmodulesSchema = z.object({
 })
 export type IsoSubmodules = z.infer<typeof IsoSubmodulesSchema>
 
+/** RFC-210 — per-submodule outcome of a recursive commit&push. */
+export const SubrepoPushResultSchema = z.object({
+  /** Path relative to the superproject root. */
+  path: z.string(),
+  /** Submodule HEAD before the platform touched it. */
+  fromSha: z.string(),
+  /** Submodule HEAD after (equals fromSha when nothing needed committing). */
+  toSha: z.string(),
+  committed: z.boolean(),
+  pushed: z.boolean(),
+  /** Redacted push/commit error, or null. */
+  error: z.string().nullable(),
+})
+export type SubrepoPushResult = z.infer<typeof SubrepoPushResultSchema>
+
 export const CommitPushMetaSchema = z.object({
   /** Absolute path to the repo worktree this commit row targets. */
   repoPath: z.string(),
@@ -889,6 +911,13 @@ export const CommitPushMetaSchema = z.object({
   pushOutcome: CommitPushOutcomeSchema,
   /** Redacted push stderr summary, or null. */
   pushError: z.string().nullable(),
+  /**
+   * RFC-210: per-submodule results, deepest path first. Optional so pre-RFC-210
+   * rows keep parsing — and note the schema is non-strict, so a field that is
+   * NOT declared here gets silently stripped on the way out rather than
+   * surfacing as an error.
+   */
+  subrepos: z.array(SubrepoPushResultSchema).optional(),
 })
 export type CommitPushMeta = z.infer<typeof CommitPushMetaSchema>
 

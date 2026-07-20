@@ -1603,6 +1603,11 @@ function commitOutcomeKey(outcome: string): string {
       return 'tasks.commitOutcomeLocalAuth'
     case 'commit-local-failed':
       return 'tasks.commitOutcomeLocalFailed'
+    // RFC-210: without this case the parent-withheld outcome falls into the
+    // default below and renders as "skipped: no changes" — the exact opposite of
+    // what happened. The switch has a default, so typecheck cannot catch it.
+    case 'commit-local-subrepo-failed':
+      return 'tasks.commitOutcomeSubrepoFailed'
     default:
       return 'tasks.commitOutcomeSkippedEmpty'
   }

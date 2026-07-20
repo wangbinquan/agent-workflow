@@ -1639,6 +1639,7 @@ export interface Resources {
     commitOutcomePushed: string
     commitOutcomeLocalAuth: string
     commitOutcomeLocalFailed: string
+    commitOutcomeSubrepoFailed: string
     commitOutcomeSkippedEmpty: string
     commitFiles: string
     metaStarted: string
@@ -5323,6 +5324,7 @@ export const zhCN: Resources = {
     commitOutcomePushed: '已推送',
     commitOutcomeLocalAuth: '仅本地提交（推送受限）',
     commitOutcomeLocalFailed: '仅本地提交（推送失败）',
+    commitOutcomeSubrepoFailed: '子模块推送失败，父仓未推送',
     commitOutcomeSkippedEmpty: '无改动',
     commitFiles: '{{files}} 个文件，+{{ins}}/-{{del}}',
     metaStarted: '开始',

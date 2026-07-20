@@ -14,6 +14,7 @@ import {
   COMMIT_PUSH_NODE_PREFIX,
   envelopeOpenTag,
   fenceUntrusted,
+  redactGitUrl,
   sanitizeInlineField,
 } from '@agent-workflow/shared'
 
@@ -304,9 +305,12 @@ export function parseCommitMessageFromEnvelope(
 
 /** Redact credentials from push stderr and cap its length for storage. */
 export function redactPushError(stderr: string, maxLen = 600): string {
-  // Strip `scheme://user:token@host` credentials.
-  let out = stderr.replace(/([a-z]+:\/\/)[^/@\s]*@/gi, '$1***@')
-  out = out.trim()
+  // RFC-210: delegate to the shared redactor instead of keeping a second,
+  // weaker regex here. This one only stripped `scheme://user:token@host`, so a
+  // credential carried in the QUERY STRING (`?access_token=…`) went into
+  // node_runs.commit_push_json verbatim — shared/git-url.ts已经处理了那种形态，
+  // and having two implementations is how they drifted apart in the first place.
+  let out = redactGitUrl(stderr).trim()
   if (out.length > maxLen) out = `${out.slice(0, maxLen)}…`
   return out
 }
