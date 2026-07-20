@@ -42,8 +42,64 @@ async function seed(): Promise<{ db: DbClient; nodeRunId: string }> {
 }
 
 describe('captureClaudeSessions (RFC-111 PR-D)', () => {
-  test('cwdSlug replaces / with -', () => {
+  test("cwdSlug replaces / with - (fast-path guess only, NOT claude's rule)", () => {
     expect(cwdSlug('/Users/x/proj')).toBe('-Users-x-proj')
+    // Evidence that this guess is not claude's actual rule: a real
+    // ~/.claude/projects entry on a dev machine reads
+    //   -Users-…-Library-Application-Support-CodexBar-ClaudeProbe
+    // for the cwd `…/Library/Application Support/CodexBar/ClaudeProbe`, so the
+    // SPACE was normalised too. The platform's own worktrees sit under
+    // `~/.agent-workflow/…`, whose leading dot this guess likewise keeps, so on
+    // the real path it is guaranteed to miss. Capture must therefore not depend
+    // on it — see the directory-scan cases below.
+    expect(cwdSlug('/Users/x/.agent-workflow/worktrees/r/t')).toBe(
+      '-Users-x-.agent-workflow-worktrees-r-t',
+    )
+  })
+
+  test('captures even when claude slugified the cwd differently than we guess', async () => {
+    // THE regression this file previously could not catch: the original test
+    // built its fixture directory with `cwdSlug(worktree)` — the very function
+    // under test — so any slug algorithm was correct by construction and the
+    // production mismatch was invisible. Here the directory is named the way
+    // real claude names it (every non-alphanumeric run collapsed to `-`), which
+    // `cwdSlug` provably does NOT produce for this path.
+    const { db, nodeRunId } = await seed()
+    const root = mkdtempSync(join(tmpdir(), 'aw-claude-cap-slug-'))
+    const worktree = join(root, '.agent-workflow', 'worktrees', 'repo x', 'task-1')
+    mkdirSync(worktree, { recursive: true })
+    const configDir = join(root, '.claude')
+    const rootSession = 'sess-root-slug'
+    const claudeStyleSlug = worktree.replace(/[^a-zA-Z0-9]/g, '-')
+    expect(claudeStyleSlug).not.toBe(cwdSlug(worktree))
+
+    const subDir = join(configDir, 'projects', claudeStyleSlug, rootSession, 'subagents')
+    mkdirSync(subDir, { recursive: true })
+    writeFileSync(
+      join(subDir, 'agent-slugcase.jsonl'),
+      JSON.stringify({
+        type: 'assistant',
+        sessionId: 'sub-slug',
+        timestamp: '2026-07-20T10:00:00.000Z',
+        message: { content: [{ type: 'text', text: 'found despite the slug' }] },
+      }),
+    )
+
+    await captureClaudeSessions({
+      rootSessionId: rootSession,
+      nodeRunId,
+      taskId: 'ignored',
+      db,
+      log: createLogger('test'),
+      configDir,
+      worktreePath: worktree,
+    })
+
+    const rows = await db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId))
+    expect(rows.length).toBe(1)
+    expect(rows[0]?.sessionId).toBe('agent-slugcase')
+    expect(rows[0]?.parentSessionId).toBe(rootSession)
+    rmSync(root, { recursive: true, force: true })
   })
 
   test('captures subagent JSONL turns into node_run_events under the parent session', async () => {
