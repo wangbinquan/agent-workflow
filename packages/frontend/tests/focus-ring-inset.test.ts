@@ -126,8 +126,17 @@ describe('focus ring — inset for full-bleed form controls', () => {
     ['.task-detail__pane', /padding:\s*var\(--focus-ring-gutter\)/],
     ['.page--task-detail', /padding:\s*var\(--focus-ring-gutter\)/],
     ['.react-flow__controls', /padding:\s*var\(--focus-ring-gutter\)/],
+    ['.page--review-detail', /padding:\s*var\(--focus-ring-gutter\)/],
   ])('%s reserves a gutter for the OUTSET rings it contains', (selector, re) => {
     expect(ruleBody(`${selector} {`)).toMatch(re)
+  })
+
+  it('the workgroup run-log row ring is inset (flush on all four sides)', () => {
+    // Rows are full-width children of `.workgroup-room__runlog` — overflow-y:
+    // auto with padding:0 — so the outset ring was cut on every side of every
+    // row. Padding the list instead would misalign the log's own gutters.
+    const body = ruleBody('.workgroup-room__runlog-row:focus-visible {')
+    expect(body).toMatch(/outline-offset:\s*var\(--focus-ring-offset-inset\)/)
   })
 
   it('the workgroup member card stretch-overlay ring is inset', () => {
@@ -161,6 +170,7 @@ describe('focus ring — no scroll-flush control may reintroduce an outset ring'
     '.page-section-nav__group-trigger',
     '.page-section-nav__leaf',
     '.task-outputs-panel__option',
+    '.workgroup-room__runlog-row',
   ]
 
   /**

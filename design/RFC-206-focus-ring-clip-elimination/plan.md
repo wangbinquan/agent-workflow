@@ -162,6 +162,34 @@
 
 明暗验证：任务详情与编辑器截图复核，4px gutter 视觉上不可察觉。
 
+**第二批已完成（评审详情 + 工作组房间 + 次级弹窗）。** 新 fixture：一个停在
+`awaiting_review` 的任务（评审节点的 `inputSource` 必须是 `markdown` kind 的
+输出端口，且入边端口名是 `__review_input__` 而非 `input`）、一个工作组任务
+（走 `POST /api/workgroups/:name/tasks`，body 是 `{name, goal}`，**不是**
+`/api/tasks` + `workgroupId`），以及三个弹窗。又报出 **11 条**，全部清零：
+
+| 数量 | 控件 | 容器 | 处置 |
+| --- | --- | --- | --- |
+| 7 | `.btn` / `.link`（评审决策按钮、任务回链） | `.page--review-detail`（`overflow:hidden` 无 padding） | 容器 gutter |
+| 4 | `.workgroup-room__runlog-row` | `.workgroup-room__runlog`（`overflow-y:auto`、`padding:0`） | 环内移（四边全被切） |
+
+**顺带用实测否掉了一个静态推测**：T6 一直挂着「`.review-detail__layout` 只有
+`padding-right: 14px`，左/上/下为 0」这条待办——真实几何显示**它没问题**，
+真正的裁剪者是外层的 `.page--review-detail`。这正是本 RFC 坚持「让几何说话、
+不照静态清单改代码」的价值。
+
+### ⚠️ 覆盖门（本批新增的关键防线）
+
+本批一开始「0 违规」是**假的**——两个新 fixture 静默失败了（工作组任务和评审
+任务的 API 契约都用错），审计对这两个面**一个控件都没量**，却和「干净」长得
+一模一样。为此新增**覆盖门**：审计记录每个面实际测量了多少个可聚焦控件，并
+硬性要求 10 个关键面非零；三个弹窗的触发按钮找不到时也从静默 `continue` 改成
+**直接失败**（`/agents`、`/skills` 头部根本没有 import 按钮，原写法一直在空跑，
+正是被这道门抓出来的）。
+
+覆盖面现状：21 条列表/新建路由 + agent 详情 5 页签 + 工作流编辑器（含 inspector）
++ 任务详情 9 个 `?tab=` + 评审详情 + 工作组聊天室 + 3 个弹窗。
+
 ---
 
 ## T6 · 已有补丁的补齐与归位
@@ -175,7 +203,14 @@
 
 **状态：部分完成。** T5' 第一批覆盖上来后，`.page--editor > .page__header > .page__actions`（2px → gutter）与 `.task-detail__pane`（此前只有 `> .workgroup-room` 受保护）**已由实测驱动修掉**，不是照静态清单猜的。四处历史补丁的注释归位已在 T0/T3 完成。
 
-**仍未覆盖 ⇒ 未验证**：`.review-detail__layout`（只有 `padding-right: 14px`）与 `.page--editor > .form-grid`（`padding-inline: 2px`）所在的评审详情 / 编辑器表单面还没进审计，**不要凭静态推测去改**，等 T5' 第二批把它们覆盖到再说。
+**已由实测收敛**（T5' 两批覆盖上来之后）：
+
+- `.review-detail__layout`（`padding-right: 14px`）—— **实测无问题，不改**。真正的裁剪者是外层 `.page--review-detail`，已补 gutter。这条静态推测被证伪，正是本 RFC 的方法论价值。
+- `.page--editor > .form-grid`（`padding-inline: 2px`）—— 编辑器面已进审计（`/workflows/{id}` + 选中节点），**未报违规**，说明 2px 对实际住在里面的控件够用（满宽表单控件的环已内移）。**不改**。
+- `.task-detail__pane`、`.page--editor > .page__header > .page__actions` —— 已在 T5' 第一批由实测驱动修掉。
+- 四处历史补丁的注释归位已在 T0/T3 完成。
+
+**结论：T6 无剩余动作。** 原清单里其余条目要么被环内移一并解决，要么经实测确认本就不违规。
 
 ---
 
@@ -221,13 +256,14 @@ node <codex-companion> review --wait --base b1ac247a --scope branch
 
 ## 验收清单
 
-- [ ] AC1 几何审计遍历全部主要路由/弹窗，失败信息含元素/容器/边/差值
-- [ ] AC2 变异测试：`.form-input:focus` offset 改回 `0` ⇒ 审计红
-- [ ] AC3 静态层全表扫描，新增满宽控件外扩环立刻红
-- [ ] AC4 两个白名单均有陈旧条目检测
-- [ ] AC5 白名单清空、转硬失败
-- [ ] AC6 四处历史补丁去留明确，无无主补丁
-- [ ] AC7 typecheck / lint / test / format:check + Playwright chromium + binary smoke 全绿
+- [x] AC1 几何审计遍历全部主要路由/弹窗，失败信息含元素/容器/边/差值/实例序号
+- [x] AC2 变异测试：`.form-input:focus` offset 改回 `0` ⇒ 审计红（另加两条：级联赢家、blur-only 光晕）
+- [x] AC3 静态层全表扫描，新增 scroll-flush 控件外扩环立刻红
+- [x] AC4 白名单陈旧条目检测（几何层双向变异验证过）
+- [x] AC5 白名单清空、已转硬失败
+- [x] AC6 四处历史补丁去留明确：`.dialog__body` / `.task-detail__pane>.workgroup-room` 保留并注明「为谁保留」；`.agent-form__panel` 特例收敛回 `padding-top`；`.page--editor > .form-grid` 经实测确认无需改动
+- [x] AC7 typecheck / lint / frontend 4987 / format:check + Playwright chromium 5/5 + binary smoke 全绿
+- [x] **附加**：覆盖门——每个面必须实测到非零控件数，防 fixture 静默失效导致的假绿
 
 ## 存量清单
 

@@ -36,6 +36,10 @@ const SEEDED_AGENT = 'focus-ring-audit-agent'
  *  without these seeds those surfaces stay completely unaudited. */
 let seededWorkflowId = ''
 let seededTaskId = ''
+/** node_run id of a task parked at awaiting_review — the /reviews/{id} page. */
+let seededReviewId = ''
+/** A workgroup task, so the chatroom pane (member cards, run log) renders. */
+let seededWorkgroupTaskId = ''
 
 async function api(path: string, body: unknown): Promise<Response> {
   return fetch(`${daemon.baseUrl}${path}`, {
@@ -54,6 +58,9 @@ test.beforeAll(async () => {
     name: SEEDED_AGENT,
     description: 'RFC-206 focus-ring clip audit fixture',
     outputs: ['answer'],
+    // markdown kind is required by the review node's inputSource check, and it
+    // also makes the task detail output pane render its rich (not raw) view.
+    outputKinds: { answer: 'markdown' },
     readonly: true,
     bodyMd: '',
   })
@@ -121,6 +128,122 @@ test.beforeAll(async () => {
     expect(Date.now() < deadline, 'seeded task never reached a terminal state').toBe(true)
     await new Promise((resolve) => setTimeout(resolve, 150))
   }
+
+  // ── T5' batch 2 fixtures ──────────────────────────────────────────────
+  // A task parked at awaiting_review, so /reviews/{id} renders its real
+  // two-pane layout (.review-detail__layout has padding-right only).
+  const revWf = (await api('/api/workflows', {
+    name: 'focus-ring-audit-review-wf',
+    description: 'RFC-206 review-surface fixture',
+    definition: {
+      $schema_version: 2,
+      inputs: [{ kind: 'text', key: 'topic', label: 'Topic', required: true }],
+      nodes: [
+        { id: 'in_1', kind: 'input', inputKey: 'topic', position: { x: 0, y: 0 } },
+        {
+          id: 'agent_1',
+          kind: 'agent-single',
+          agentName: SEEDED_AGENT,
+          promptTemplate: 'Write a design for {{topic}}.',
+          position: { x: 320, y: 0 },
+        },
+        {
+          id: 'review_1',
+          kind: 'review',
+          title: 'focus ring audit review',
+          description: '',
+          inputSource: { nodeId: 'agent_1', portName: 'answer' },
+          rerunnableOnReject: [],
+          rerunnableOnIterate: [],
+          rollbackFilesOnReject: false,
+          rollbackFilesOnIterate: false,
+          position: { x: 640, y: 0 },
+        },
+        {
+          id: 'out_1',
+          kind: 'output',
+          ports: [{ name: 'doc', bind: { nodeId: 'review_1', portName: 'approved_doc' } }],
+          position: { x: 960, y: 0 },
+        },
+      ],
+      edges: [
+        {
+          id: 'e1',
+          source: { nodeId: 'in_1', portName: 'topic' },
+          target: { nodeId: 'agent_1', portName: 'topic' },
+        },
+        {
+          id: 'e2',
+          source: { nodeId: 'agent_1', portName: 'answer' },
+          target: { nodeId: 'review_1', portName: '__review_input__' },
+        },
+        {
+          id: 'e3',
+          source: { nodeId: 'review_1', portName: 'approved_doc' },
+          target: { nodeId: 'out_1', portName: 'doc' },
+        },
+      ],
+    },
+  })) as Response
+  expect(revWf.ok, `failed to seed review workflow (${revWf.status})`).toBe(true)
+  {
+    const revWfId = ((await revWf.json()) as { id: string }).id
+    const revTask = await api('/api/tasks', {
+      workflowId: revWfId,
+      name: 'Focus ring audit review task',
+      scratch: true,
+      inputs: { topic: 'focus rings' },
+    })
+    expect(revTask.ok, `failed to launch review task (${revTask.status})`).toBe(true)
+    {
+      const revTaskId = ((await revTask.json()) as { id: string }).id
+      const revDeadline = Date.now() + 60_000
+      while (Date.now() < revDeadline) {
+        const r = await fetch(`${daemon.baseUrl}/api/reviews?status=pending`, {
+          headers: { Authorization: `Bearer ${daemon.token}` },
+        })
+        if (r.ok) {
+          const rows = (await r.json()) as Array<{
+            taskId: string
+            nodeRunId: string
+            awaitingReview: boolean
+          }>
+          const row = rows.find((x) => x.taskId === revTaskId && x.awaitingReview)
+          if (row) {
+            seededReviewId = row.nodeRunId
+            break
+          }
+        }
+        await new Promise((resolve) => setTimeout(resolve, 250))
+      }
+      expect(seededReviewId, 'review task never parked at awaiting_review').not.toBe('')
+    }
+  }
+
+  // A workgroup task, so the chatroom pane renders member cards + run log —
+  // where T4's "focus ring 100% invisible" bug lived, found by the STATIC
+  // audit because the geometry audit could not reach this surface.
+  const wg = await api('/api/workgroups', {
+    name: 'focus-ring-audit-wg',
+    description: '',
+    instructions: '',
+    mode: 'leader_worker',
+    leaderDisplayName: 'Lead',
+    maxRounds: 2,
+    completionGate: false,
+    members: [
+      { memberType: 'agent', agentName: SEEDED_AGENT, displayName: 'Lead' },
+      { memberType: 'agent', agentName: SEEDED_AGENT, displayName: 'Member' },
+    ],
+  })
+  expect(wg.ok, `failed to seed workgroup (${wg.status})`).toBe(true)
+  const wgTask = await api('/api/workgroups/focus-ring-audit-wg/tasks', {
+    name: 'Focus ring audit workgroup task',
+    goal: 'audit the focus rings',
+    scratch: true,
+  })
+  expect(wgTask.ok, `failed to launch workgroup task (${wgTask.status})`).toBe(true)
+  seededWorkgroupTaskId = ((await wgTask.json()) as { id: string }).id
 })
 
 test.afterAll(async () => {
@@ -397,7 +520,10 @@ declare global {
  * total stays non-zero, so a naive "it found some violations, so it works"
  * sanity check still passes while most of the surface is dark.
  */
-async function auditPage(page: Page, cdp: CDPSession): Promise<Violation[]> {
+async function auditPage(
+  page: Page,
+  cdp: CDPSession,
+): Promise<{ found: Violation[]; measured: number }> {
   await page.evaluate(AUDIT_ENGINE)
   const count = await page.evaluate(() => window.__frAudit.tag())
 
@@ -423,7 +549,7 @@ async function auditPage(page: Page, cdp: CDPSession): Promise<Violation[]> {
   }
 
   await page.evaluate(() => window.__frAudit.untag())
-  return found
+  return { found, measured: count }
 }
 
 /** Assign a per-instance occurrence index so one waiver cannot cover a NEW
@@ -542,7 +668,7 @@ test.describe('RFC-206 — audit engine self-checks', () => {
     const cdp = await page.context().newCDPSession(page)
     await cdp.send('DOM.enable')
     await cdp.send('CSS.enable')
-    const found = await auditPage(page, cdp)
+    const { found } = await auditPage(page, cdp)
     await cdp.detach()
 
     expect(
@@ -588,7 +714,7 @@ test.describe('RFC-206 — audit engine self-checks', () => {
     const cdp = await page.context().newCDPSession(page)
     await cdp.send('DOM.enable')
     await cdp.send('CSS.enable')
-    const found = await auditPage(page, cdp)
+    const { found } = await auditPage(page, cdp)
     await cdp.detach()
 
     const sides = found
@@ -613,7 +739,7 @@ test.describe('RFC-206 — audit engine self-checks', () => {
     const cdp = await page.context().newCDPSession(page)
     await cdp.send('DOM.enable')
     await cdp.send('CSS.enable')
-    const found = await auditPage(page, cdp)
+    const { found } = await auditPage(page, cdp)
     await cdp.detach()
     // 8px padding ≥ 4px ring, so nothing here is a real clip; the partially
     // scrolled-out rows must not be mistaken for one.
@@ -684,14 +810,22 @@ test('focus rings are not clipped anywhere', async ({ page }) => {
   const seen = new Set<string>()
   const blocking: Array<{ route: string; v: Violation }> = []
 
-  const record = (route: string, found: Violation[]) => {
+  // Which surfaces were actually reached, and how many controls each one
+  // measured. A fixture that silently fails to render would otherwise show up
+  // as "0 violations" — indistinguishable from "clean" — which is the exact
+  // vacuity failure this whole RFC exists to prevent. Asserted at the end.
+  const coverage = new Map<string, number>()
+
+  const record = (route: string, result: { found: Violation[]; measured: number }) => {
+    const { found, measured } = result
+    coverage.set(route, (coverage.get(route) ?? 0) + measured)
     for (const { key, v } of keyed(route, found)) {
       seen.add(key)
       if (!KNOWN_CLIPS.has(key)) blocking.push({ route, v })
     }
   }
 
-  const sweep = async (): Promise<Violation[]> => {
+  const sweep = async (): Promise<{ found: Violation[]; measured: number }> => {
     await cdp.send('DOM.enable')
     await cdp.send('CSS.enable')
     return auditPage(page, cdp)
@@ -767,6 +901,43 @@ test('focus rings are not clipped anywhere', async ({ page }) => {
     record(`/tasks/{id}?tab=${tab}`, await sweep())
   }
 
+  // Review detail: .review-detail__layout carries `padding-right: 14px` only
+  // (added for a different clip report), so left/top/bottom had zero room.
+  if (seededReviewId) {
+    await page.goto(`${daemon.baseUrl}/reviews/${seededReviewId}`)
+    await expect(page.locator('.page--review-detail, .review-detail__layout').first()).toBeVisible()
+    await page.waitForTimeout(700)
+    record('/reviews/{id}', await sweep())
+  }
+
+  // Workgroup room (chatroom pane): member cards + run log rows. T4's
+  // "focus ring 100% invisible" bug lived here and the geometry audit could
+  // not see it until this fixture existed.
+  if (seededWorkgroupTaskId) {
+    await page.goto(`${daemon.baseUrl}/tasks/${seededWorkgroupTaskId}?tab=chatroom`)
+    await expect(page.locator('.page--task-detail').first()).toBeVisible()
+    await page.waitForTimeout(900)
+    record('/tasks/{id}?tab=chatroom', await sweep())
+  }
+
+  // Secondary dialogs reachable from list pages. Each is a .dialog__body
+  // scroll box holding form controls + buttons.
+  const DIALOGS: Array<{ route: string; open: RegExp; label: string }> = [
+    { route: '/workflows', open: /import yaml/i, label: '/workflows(import-dialog)' },
+    { route: '/memory', open: /new memory/i, label: '/memory(new-dialog)' },
+  ]
+  for (const d of DIALOGS) {
+    await page.goto(`${daemon.baseUrl}${d.route}`)
+    await expect(page.locator('.app-shell, .page, main').first()).toBeVisible()
+    const btn = page.getByRole('button', { name: d.open })
+    expect(await btn.count(), `${d.label}: no trigger button matched ${d.open}`).toBeGreaterThan(0)
+    await btn.first().click()
+    await expect(page.locator('.dialog__panel').first()).toBeVisible()
+    await page.waitForTimeout(400)
+    record(d.label, await sweep())
+    await page.keyboard.press('Escape')
+  }
+
   // The originally reported repro: the batch-import dialog's textarea lost the
   // top 2px of its ring because `.dialog__body` only ever got a HORIZONTAL inset.
   await page.goto(`${daemon.baseUrl}/repos`)
@@ -782,6 +953,32 @@ test('focus rings are not clipped anywhere', async ({ page }) => {
     const lines = [...seen].sort().map((k) => `  ['${k}', 'RFC-206 baseline'],`)
     console.log(`\n===RFC206_BASELINE_BEGIN===\n${lines.join('\n')}\n===RFC206_BASELINE_END===\n`)
   }
+
+  // Coverage gate. Every fixture-backed surface below is reached through a
+  // conditional (`if (seededReviewId)`, `if (!(await btn.count())) continue`),
+  // so a fixture that stopped rendering would quietly contribute nothing and
+  // the run would still say "0 clipped" — green for the wrong reason. Require
+  // each one to have actually measured controls.
+  const REQUIRED_SURFACES = [
+    '/agents/{name}(tabs)',
+    '/workflows/{id}(editor)',
+    '/workflows/{id}(editor+inspector)',
+    '/tasks/{id}',
+    '/tasks/{id}?tab=outputs',
+    '/reviews/{id}',
+    '/tasks/{id}?tab=chatroom',
+    '/repos(batch-import-dialog)',
+    '/workflows(import-dialog)',
+    '/memory(new-dialog)',
+  ]
+  const uncovered = REQUIRED_SURFACES.filter((s) => (coverage.get(s) ?? 0) === 0)
+  expect(
+    uncovered,
+    `these surfaces measured ZERO focusable controls — their fixture or navigation ` +
+      `broke, so "no clips" here means "nothing was looked at":\n  ${uncovered.join('\n  ')}\n` +
+      `\nCoverage actually observed:\n` +
+      [...coverage].map(([k, n]) => `  ${k}: ${n}`).join('\n'),
+  ).toEqual([])
 
   const byRoute = new Map<string, Violation[]>()
   for (const { route, v } of blocking) byRoute.set(route, [...(byRoute.get(route) ?? []), v])
