@@ -1288,7 +1288,90 @@ export async function gitChangedFiles(worktreePath: string, fromCommit: string):
     seen.add(trimmed)
     out.push(trimmed)
   }
+  return expandSubmodulePaths(worktreePath, fromCommit, out)
+}
+
+/**
+ * RFC-210 G6 — replace a bare submodule path with the files that actually
+ * changed inside it.
+ *
+ * A superproject reports a submodule as ONE entry (`vendor`), and
+ * `ls-files --others` never looks inside one, so a `git_diff` port used to hand
+ * downstream agents a directory instead of a file list — a whole submodule's
+ * worth of changes collapsed into a single shard pointing at a folder.
+ *
+ * The diff is taken between GITLINKS, not from `submodule foreach ... status`:
+ * by the time this runs the inner node's work has already been merged back and
+ * the submodule working tree is CLEAN, so a porcelain-based approach reports
+ * nothing at all. Comparing the baseline gitlink with the submodule's current
+ * HEAD is what actually describes the change.
+ *
+ * Every failure mode degrades to "keep the bare path" rather than throwing —
+ * `gitChangedFiles` also feeds structural diff and the RFC-098 preDirty
+ * baseline, so turning a submodule edge case into an exception would take down
+ * three unrelated chains.
+ */
+async function expandSubmodulePaths(
+  worktreePath: string,
+  fromCommit: string,
+  paths: string[],
+): Promise<string[]> {
+  if (!existsSync(join(worktreePath, '.gitmodules'))) return paths
+  const out: string[] = []
+  for (const p of paths) {
+    const subDir = join(worktreePath, p)
+    // Only a directory that is itself a git work tree can be a submodule.
+    if (!existsSync(join(subDir, '.git'))) {
+      out.push(p)
+      continue
+    }
+    const expanded = await submoduleChangedFiles(worktreePath, subDir, fromCommit, p)
+    if (expanded === null) out.push(p)
+    else out.push(...expanded)
+  }
   return out
+}
+
+/** Returns `<sub>/<file>` paths, or null when the caller should keep the bare path. */
+async function submoduleChangedFiles(
+  worktreePath: string,
+  subDir: string,
+  fromCommit: string,
+  subPath: string,
+): Promise<string[] | null> {
+  // Read the baseline gitlink from the TREE, via `ls-tree`.
+  //
+  // Two tempting alternatives are both wrong. `rev-parse <commit>:<path>` exits 0
+  // for a plain directory as well, handing back a TREE sha that then blows up as
+  // a diff endpoint ("bad object"). And `cat-file -t` cannot be used to tell the
+  // two apart either: a gitlink names a commit belonging to ANOTHER repository,
+  // so the superproject's object store does not have it and `cat-file` fails on
+  // every submodule (measured). `ls-tree` reports mode+type straight out of the
+  // tree without needing the object itself — `160000 commit` is the gitlink.
+  const listed = await runGit(worktreePath, ['ls-tree', fromCommit, '--', subPath])
+  if (listed.exitCode !== 0) return null
+  const [meta, name] = listed.stdout.split('\n')[0]?.split('\t') ?? []
+  if (meta === undefined || name === undefined) return null // absent in baseline
+  const parts = meta.trim().split(/\s+/)
+  if (parts[0] !== '160000' || parts[1] !== 'commit') return null // a plain directory
+  const from = parts[2]
+  if (from === undefined) return null
+
+  const head = await runGit(subDir, ['rev-parse', 'HEAD'])
+  if (head.exitCode !== 0) return null
+  const to = head.stdout.trim()
+  if (from === to) return [] // gitlink unchanged ⟹ nothing from this submodule
+
+  const diff = await runGit(subDir, ['-c', 'core.quotepath=false', 'diff', '--name-only', from, to])
+  if (diff.exitCode !== 0) return null
+  const files = diff.stdout
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0)
+    .map((l) => `${subPath}/${l}`)
+  // A gitlink that moved but produced no file delta (e.g. an empty commit) still
+  // deserves a mention, so fall back to the bare path.
+  return files.length > 0 ? files : null
 }
 
 /**
