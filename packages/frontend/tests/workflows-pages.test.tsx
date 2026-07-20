@@ -766,19 +766,24 @@ describe('/workflows/new removal wiring', () => {
     expect(edit).not.toContain('NewRoute')
   })
 
-  test('Onboarding manual-create CTA points at the list page (dialog lives there)', () => {
+  // RFC-211 replaced the first-run screen's bundled demo import with a hand-off
+  // to the guided tour, so the two locks that used to pin that mutation's wire
+  // shape no longer have a subject. What survives is the part that was never
+  // about the demo: the retired '/workflows/new' route must not creep back in,
+  // and the first-run screen must not hand-roll HTTP.
+  test('Onboarding never revives the retired /workflows/new route', () => {
     const ob = readSrc('components/Onboarding.tsx')
     expect(ob).not.toContain('/workflows/new')
-    expect(ob).toContain('to="/workflows"')
   })
 
-  test('Onboarding demo import shares the structured JSON writer without a raw fallback', () => {
+  test('Onboarding writes nothing by itself — no raw fetch, no import mutation', () => {
     const ob = readSrc('components/Onboarding.tsx')
-    expect(ob).toContain("api.post<ImportWorkflowResult>('/api/workflows/import'")
-    expect(ob).toContain("mode: 'new'")
     expect(ob).not.toContain('getBaseUrl')
-    expect(ob).not.toContain('onConflict')
     expect(ob).not.toContain("'content-type': 'text/yaml'")
+    // Looking at the first-run screen must not create anything; resources are
+    // created explicitly inside the tour.
+    expect(ob).not.toContain('api.post')
+    expect(ob).not.toContain('useMutation')
   })
 
   test('BOTH list pages compose the shared QuickCreateDialog (用户 2026-07-10 拍板抽公共组件)', () => {

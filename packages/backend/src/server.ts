@@ -42,6 +42,7 @@ import { mountReviewRoutes } from '@/routes/reviews'
 import { mountTaskRoutes } from '@/routes/tasks'
 import { mountScheduledTaskRoutes } from '@/routes/scheduledTasks'
 import { mountWorkflowRoutes } from '@/routes/workflows'
+import { mountOnboardingRoutes } from '@/routes/onboarding' // RFC-211
 import { mountWorkgroupRoutes } from '@/routes/workgroups'
 import { mountWorkgroupTaskRoutes } from '@/routes/workgroupTasks'
 import { mountWorktreeFilesRoutes } from '@/routes/worktree-files'
@@ -206,6 +207,7 @@ export function createApp(deps: AppDeps): Hono {
   mountCachedRepoRoutes(app, deps)
   mountWorkflowRoutes(app, deps)
   mountWorkgroupRoutes(app, deps) // RFC-164
+  mountOnboardingRoutes(app, deps) // RFC-211
   mountWorkgroupTaskRoutes(app, deps) // RFC-164 PR-4
   mountTaskRoutes(app, deps)
   mountScheduledTaskRoutes(app, deps) // RFC-159

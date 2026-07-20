@@ -89,7 +89,14 @@ describe('RFC-189 迁移 0095 — 回填互 oracle', () => {
     const mkTask = async (mode: 'leader_worker' | 'free_collab'): Promise<string> => {
       const wfId = ulid()
       const taskId = ulid()
-      await db.insert(workflows).values({ id: wfId, name: `wf-${taskId}`, definition: '{}' })
+      // Same reason as the `tasks` INSERT below (RFC-211 T1 hit it for real):
+      // drizzle emits EVERY HEAD column, so `workflows.example` (0103) made the
+      // ORM form fail with "table workflows has no column named example" on this
+      // 0094-frozen DB. Spell the 0094-era columns out.
+      db.run(sql`
+        INSERT INTO workflows (id, name, description, definition)
+        VALUES (${wfId}, ${`wf-${taskId}`}, '', '{}')
+      `)
       // NOTE (RFC-204 T2): this row is inserted into a table frozen at 0094,
       // but drizzle emits EVERY column of the HEAD schema in its INSERT — so
       // any later migration that merely ADDs a `tasks` column made this line

@@ -22,6 +22,7 @@ import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
 import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
+import { excludeForeignExamples } from '@/services/systemResources'
 import { assertNewRefsUsable } from '@/services/resourceRefs'
 import {
   createWorkgroup,
@@ -51,7 +52,11 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
 
   app.get('/api/workgroups', async (c) => {
     const list = await listWorkgroups(deps.db)
-    return c.json(await filterVisibleRows(deps.db, actorOf(c), 'workgroup', list))
+    const actor = actorOf(c)
+    // RFC-211: guided-tour practice resources belong to their owner's list
+    // only — admins included (filterVisibleRows short-circuits for them).
+    const scoped = excludeForeignExamples(actor.user.id, list)
+    return c.json(await filterVisibleRows(deps.db, actor, 'workgroup', scoped))
   })
 
   app.get('/api/workgroups/:name', async (c) => {

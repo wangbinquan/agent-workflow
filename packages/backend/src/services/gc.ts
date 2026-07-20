@@ -72,7 +72,11 @@ export interface GcRunResult {
  * still terminal, not yet pruned, and not claimed (or the claim is stale past
  * the lease). Returns whether THIS caller owns the delete.
  */
-async function claimWorkspacePrune(db: DbClient, taskId: string, now: number): Promise<boolean> {
+export async function claimWorkspacePrune(
+  db: DbClient,
+  taskId: string,
+  now: number,
+): Promise<boolean> {
   const updated = await db
     .update(tasks)
     .set({ workspacePruningAt: now })

@@ -80,6 +80,11 @@ export const agents = sqliteTable('agents', {
   // (assertNotBuiltin) + list-hide (excludeBuiltin*). Immutable identity anchor:
   // survives owner/visibility drift, unlike the old owner+name heuristic.
   builtin: integer('builtin', { mode: 'boolean' }).notNull().default(false),
+  // RFC-211: guided-onboarding sandbox artifact. Orthogonal to `builtin` —
+  // example rows stay visible, editable, launchable and deletable; they are just
+  // scoped to their owner in list views (excludeForeignExamples) and swept by the
+  // one-click cleanup. Never writable via Create*/Update* schemas.
+  example: integer('example', { mode: 'boolean' }).notNull().default(false),
   schemaVersion: integer('schema_version').notNull().default(1),
   createdAt: integer('created_at')
     .notNull()
@@ -310,6 +315,7 @@ export const skills = sqliteTable('skills', {
     .default('legacy-unbackfilled'), // §3 snapshot authority lifecycle
   // RFC-178: authority_kind / source_state / origin_source_id /
   // authority_owner_user_id were dropped in migration 0092 (external/source-only).
+  example: integer('example', { mode: 'boolean' }).notNull().default(false), // RFC-211 (see agents)
   createdAt: integer('created_at')
     .notNull()
     .default(sql`(unixepoch() * 1000)`),
@@ -428,6 +434,7 @@ export const workflows = sqliteTable('workflows', {
     .default('public'),
   aclRevision: integer('acl_revision').notNull().default(0), // RFC-170 §8 aclRevision CAS
   builtin: integer('builtin', { mode: 'boolean' }).notNull().default(false), // RFC-104 (see agents)
+  example: integer('example', { mode: 'boolean' }).notNull().default(false), // RFC-211 (see agents)
   schemaVersion: integer('schema_version').notNull().default(1),
   createdAt: integer('created_at')
     .notNull()
@@ -504,6 +511,7 @@ export const workgroups = sqliteTable('workgroups', {
     .notNull()
     .default('public'),
   aclRevision: integer('acl_revision').notNull().default(0), // RFC-170 §8 aclRevision CAS
+  example: integer('example', { mode: 'boolean' }).notNull().default(false), // RFC-211 (see agents)
   schemaVersion: integer('schema_version').notNull().default(1),
   createdAt: integer('created_at')
     .notNull()
@@ -842,6 +850,15 @@ export const tasks = sqliteTable(
      */
     workspacePruningAt: integer('workspace_pruning_at'),
     workspacePrunedAt: integer('workspace_pruned_at'),
+    /**
+     * RFC-211: this task was launched against a guided-onboarding sandbox
+     * resource. DERIVED at INSERT time from the source resource's `example`
+     * flag (workflow / agent / workgroup) — never written by an UPDATE, which
+     * is what makes relaunch-from and scheduled fires inherit it too. Without
+     * that inheritance a relaunched task would pin its example workflow
+     * forever (countReferencingTasksInTx ignores task status).
+     */
+    example: integer('example', { mode: 'boolean' }).notNull().default(false),
     // （RFC-120 的 deferred_question_dispatch 列已由 RFC-132 T8 + migration 0073 物理删除——
     // universal deferred model 下所有任务同路径，无 per-task 开关。）
   },
@@ -2278,5 +2295,83 @@ export const taskQuestions = sqliteTable(
       t.questionId,
       t.roleKind,
     ),
+  }),
+)
+
+// -----------------------------------------------------------------------------
+// onboarding_runs / onboarding_artifacts — RFC-211 guided onboarding sandbox.
+//
+// A "run" is one user walking one tutorial track. Everything the guide creates
+// (or the user creates while inside the guide) is registered as an artifact and
+// flagged `example = true` on its own table. The pair exists on purpose:
+//   - the artifacts table owns the BATCH view (what belongs to which run, what
+//     the one-click cleanup will sweep, in which order);
+//   - the per-table `example` column owns the ROW view (list badge + owner-scoped
+//     list filtering) without forcing a join on every list query.
+// rfc211-example-marker-consistency locks the two against drift.
+//
+// A run carries no process state and holds no lease, so it needs no boot-time
+// reconciliation: a stale `active` run is simply reused when the same user picks
+// the same track again.
+export const onboardingRuns = sqliteTable(
+  'onboarding_runs',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    track: text('track', { enum: ['agent', 'skill', 'workflow', 'workgroup'] }).notNull(),
+    status: text('status', { enum: ['active', 'completed', 'abandoned'] })
+      .notNull()
+      .default('active'),
+    currentStep: text('current_step'),
+    /** JSON string array of completed step keys. */
+    completedSteps: text('completed_steps').notNull().default('[]'),
+    /**
+     * Lowercase name suffix shared by every resource this run creates
+     * (`guide-coder-7f3a2bkx`). Not a readability nicety — agents/skills/
+     * workgroups have a GLOBAL unique name and their 409 echoes the name back
+     * without any ACL filter, so a fixed name would both wedge the second
+     * concurrent user and leak existence of other people's private resources
+     * (RFC-099 D1). Must stay lowercase: the four name regexes reject uppercase.
+     */
+    suffix: text('suffix').notNull(),
+    createdAt: integer('created_at')
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: integer('updated_at')
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => ({
+    userIdx: index('idx_onboarding_runs_user').on(t.userId, t.status),
+  }),
+)
+
+export const onboardingArtifacts = sqliteTable(
+  'onboarding_artifacts',
+  {
+    id: text('id').primaryKey(),
+    runId: text('run_id')
+      .notNull()
+      .references(() => onboardingRuns.id, { onDelete: 'cascade' }),
+    resourceType: text('resource_type', {
+      enum: ['agent', 'skill', 'workflow', 'workgroup', 'task'],
+    }).notNull(),
+    /**
+     * Resource PRIMARY KEY, never the name: renameAgent / renameWorkgroup keep
+     * the id and swap the name, and deleteWorkgroup has no id fence, so a
+     * name-keyed artifact would point at a stand-in row after a same-name
+     * rebuild. `resourceName` below is a display/audit snapshot only.
+     */
+    resourceId: text('resource_id').notNull(),
+    resourceName: text('resource_name').notNull(),
+    createdAt: integer('created_at')
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => ({
+    // One resource belongs to at most one run.
+    resourceIdx: uniqueIndex('uq_onboarding_artifacts_resource').on(t.resourceType, t.resourceId),
   }),
 )

@@ -151,8 +151,10 @@ describe('RFC-032 / route — locks first-run vs. non-first-run branching', () =
     const Comp = (Route.options as any).component as React.ComponentType
     wrap(<Comp />)
     await waitFor(() => {
-      // Onboarding renders a button labelled "Import demo workflow" in en-US.
-      expect(screen.queryByText(/Import demo workflow|导入示例工作流/)).not.toBeNull()
+      // RFC-211: the first-run surface hands off to the guided tour instead of
+      // importing a demo workflow (the old demo referenced an agent that was
+      // never created, so its first click failed at launch).
+      expect(screen.queryByTestId('onboarding-start')).not.toBeNull()
     })
     expect(screen.queryByTestId('homepage')).toBeNull()
   })

@@ -1,16 +1,23 @@
-// P-5-10: tests for the first-run onboarding component.
+// P-5-10 / RFC-211: tests for the first-run onboarding surface.
 //
-// `computeIsFirstRun` covers the decision rule directly. The render tests
-// stub `@tanstack/react-router`'s Link as a plain <a> so we don't need a
-// full RouterProvider — the component's responsibility here is layout +
-// the "import demo" mutation wiring, not navigation.
+// `computeIsFirstRun` covers the decision rule directly. The render tests stub
+// `@tanstack/react-router`'s Link as a plain <a> so we don't need a full
+// RouterProvider — the component's job here is layout and the hand-off to the
+// guided tour, not navigation.
+//
+// RFC-211 replaced the four hard-coded steps and the "import demo workflow"
+// button. The old demo imported a workflow that referenced an agent named
+// `coder` which nothing ever created, so the first action a new user took
+// failed at launch with agent-not-found; the tour provisions a matched,
+// runnable set instead. The assertions that survive verbatim are the ones that
+// were never about the demo: one primary action, the shared page header, the
+// hero + intro grid, and no /api/overview traffic on a fresh install.
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
 import type * as RouterModule from '@tanstack/react-router'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { computeIsFirstRun, Onboarding, useOnboardingProbe } from '../src/components/Onboarding'
-import { DEMO_WORKFLOW_YAML } from '../src/fixtures/demo-workflow'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 
 vi.mock('@tanstack/react-router', async () => {
@@ -198,82 +205,46 @@ describe('Onboarding render', () => {
     expect(retry).toHaveBeenCalledTimes(1)
   })
 
-  test('renders all four step titles', () => {
+  test('offers every tutorial track and exactly one way in', () => {
+    // The tracks are described here so a brand-new user can see what the tour
+    // covers before committing to it; the single entry point is what keeps the
+    // screen from turning back into a wall of equal-weight links.
     wrap(<Onboarding />)
-    expect(screen.getByText(/1\..*agent/i)).toBeTruthy()
-    expect(screen.getByText(/2\..*skill/i)).toBeTruthy()
-    expect(screen.getByText(/3\..*workflow/i)).toBeTruthy()
-    expect(screen.getByText(/4\..*task/i)).toBeTruthy()
+    // Role-based: the track titles are headings, which is also what makes the
+    // list navigable with a screen reader.
+    for (const title of [
+      /agent that can do work|能干活的代理/i,
+      /give an agent a skill|装一个技能/i,
+      /chain agents into a pipeline|串成流水线/i,
+      /team of agents collaborate|一组代理协作/i,
+    ]) {
+      expect(screen.getByRole('heading', { name: title })).toBeTruthy()
+    }
+    const start = screen.getByTestId('onboarding-start')
+    expect(start.getAttribute('href')).toBe('/onboarding')
   })
 
-  test('Import demo workflow POSTs the bundled YAML and shows a success hint', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ outcome: 'created', workflow: { id: 'wf-x' } }), {
-        status: 201,
-        headers: { 'content-type': 'application/json' },
-      }),
-    )
-    wrap(<Onboarding />)
-    const btn = screen.getByText(/Import demo workflow/i)
-    fireEvent.click(btn)
-
-    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1))
-    const [url, init] = fetchSpy.mock.calls[0]!
-    expect(String(url)).toContain('/api/workflows/import')
-    expect(String(url)).not.toContain('onConflict')
-    expect((init as RequestInit).method).toBe('POST')
-    const headers = (init as RequestInit).headers as Record<string, string>
-    expect(headers['Content-Type']).toBe('application/json')
-    expect(headers.Authorization).toBe('Bearer tok')
-    expect(JSON.parse(String((init as RequestInit).body))).toEqual({
-      yamlText: DEMO_WORKFLOW_YAML,
-      mode: 'new',
-    })
-
-    await waitFor(() => expect(screen.getByText(/imported|已导入/i)).toBeTruthy())
-  })
-
-  test('Import demo surfaces backend error code on 422 / 409', async () => {
+  test('renders without firing any mutation — nothing is created until asked', async () => {
+    // The predecessor POSTed a bundled YAML the moment you clicked. Creating
+    // resources is now an explicit act inside the tour, so simply LOOKING at
+    // the first-run screen must not write anything.
     const fetchSpy = vi
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            error: {
-              code: 'workflow-yaml-invalid',
-              message: 'definition failed schema validation',
-            },
-          }),
-          { status: 422, headers: { 'content-type': 'application/json' } },
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ outcome: 'created', workflow: { id: 'wf-retry' } }), {
-          status: 201,
-          headers: { 'content-type': 'application/json' },
-        }),
+      .mockResolvedValue(
+        new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } }),
       )
     wrap(<Onboarding />)
-    fireEvent.click(screen.getByText(/Import demo workflow/i))
-    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy())
-    // RFC-203 T5a: the private describeError fork leaked `code: message`; the
-    // shared resolver shows the localized L1 sentence and keeps the backend
-    // diagnostic in the raw fold — the machine code never leaks as copy.
-    const alertText = screen.getByRole('alert').textContent ?? ''
-    expect(alertText).toMatch(/did not parse to a workflow object|无法解析为工作流对象/)
-    expect(alertText).toContain('definition failed schema validation')
-    expect(alertText).not.toContain('workflow-yaml-invalid')
-    const retry = screen.getByRole('button', { name: /Retry|重试/ })
-    expect(retry.getAttribute('aria-busy')).toBe('false')
-    fireEvent.click(retry)
-    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2))
-    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
+    await waitFor(() => expect(screen.getByTestId('onboarding-start')).toBeTruthy())
+    const writes = fetchSpy.mock.calls.filter(
+      (c) => ((c[1] as RequestInit | undefined)?.method ?? 'GET') !== 'GET',
+    )
+    expect(writes).toEqual([])
   })
 })
 
 // ---------------------------------------------------------------------------
-// RFC-190 — first-run hero + capability intro grid. The four-step walkthrough
-// above stays byte-identical; the renewal only ADDS the pipeline hero and the
+// RFC-190 — first-run hero + capability intro grid. RFC-211 replaced the step
+// list below the hero but kept this surface intact: the pipeline hero and the
 // count-less intro tiles (which must not fire /api/overview on a fresh,
 // unauthenticated install).
 // ---------------------------------------------------------------------------

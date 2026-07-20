@@ -697,30 +697,94 @@ export const enUS: Resources = {
   onboarding: {
     title: 'Welcome to Agent Workflow',
     intro:
-      "It looks like a fresh setup — there aren't any agents or workflows yet. Follow these four steps to build a minimal pipeline.",
+      "It looks like a fresh install — there aren't any agents or workflows yet. Take a few minutes and learn by doing.",
     heroTitle: 'Draw the multi-agent pipeline, then run it',
     heroIntro:
       'Every agent runs in its own process with a clean context; snapshot → run → fan-out → aggregate is orchestrated by a deterministic engine, and reviews or clarifications pull a human back into the loop at any point.',
-    step1Title: '1. Create your first agent',
-    step1Body:
-      "Name it 'coder', set outputs to [code], and paste any short instruction into the prompt body.",
-    step1Cta: 'Create agent →',
-    step2Title: '2. (Optional) add a skill',
-    step2Body:
-      'Skills are .md files or directories injected per-run; useful for shared prompts or reference docs. Skip if you do not need one yet.',
-    step2Cta: 'Manage skills →',
-    step3Title: '3. Build a workflow',
-    step3Body:
-      'Click below to import the demo (a 3-node input → coder agent → output pipeline), or start from a blank canvas.',
-    step3Import: 'Import demo workflow',
-    step3ImportRunning: 'Importing…',
-    step3Manual: 'or start from a blank workflow →',
-    step4Title: '4. Launch a task',
-    step4Body:
-      'From the workflows list hit Launch, pick a local git repo + base branch, fill the inputs, and submit. The task page shows node status, prompts, outputs, and the diff.',
-    step4Cta: 'Open workflows list →',
-    importedHint: 'Imported; head to the workflows list to launch it.',
-    skipLink: 'Skip onboarding, open the agent list →',
+    startCta: 'Start the guided tour',
+    tracksIntro:
+      'Four tracks: build an agent that can do work, give an agent a skill, chain agents into a pipeline, and let a team of agents collaborate. Take any of them on its own; leave whenever you like.',
+    skipLink: 'Look around on my own, open the agent list →',
+  },
+  guide: {
+    title: 'Guided tour',
+    intro:
+      'Pick a track. Every step can either build a working example for you, or send you to the real form to do it yourself.',
+    sandboxNotice:
+      'Everything the tour creates is **your own practice material**: only you can see it, and you can wipe all of it below in one click (together with the tasks and artifacts it produced).',
+    pickTrack: 'What would you like to learn first?',
+    resume: 'Resume',
+    start: 'Start',
+    provision: 'Build it for me',
+    provisionRunning: 'Building…',
+    selfServe: "I'll do it myself",
+    stepDone: 'Done',
+    openResource: 'Open it →',
+    runtimeUnready:
+      'The runtime is not ready, so a task may fail to start. Check the runtime and credentials in Settings first.',
+    artifactsTitle: 'What this track created',
+    artifactsEmpty: 'Nothing created yet.',
+    artifactMissing: 'deleted',
+    cleanupCta: 'Clean up my tour material',
+    cleanupTitle: 'Clean up tour material',
+    cleanupConfirm: 'Delete them',
+    cleanupWarning:
+      'These resources and tasks will be deleted, along with their workspaces, run logs and artifacts. This cannot be undone.',
+    cleanupAdminCta: 'Clean up the whole instance (admin)',
+    cleanupAdminWarning:
+      "This deletes **every user's** tour material, including tours other people are in the middle of. Make sure nobody is using it.",
+    cleanupEmpty: 'There is no tour material right now.',
+    cleanupDone: 'All cleaned up.',
+    cleanupPartial: 'Some items could not be removed — the reasons are listed below.',
+    outcomeDeleted: 'deleted',
+    outcomeSkipped: 'skipped',
+    outcomeFailed: 'failed',
+    inGuideBanner: "You're inside the guided tour. Save, and you'll come straight back to it.",
+    backToGuide: 'Back to the tour',
+    track: {
+      agent: 'Build an agent that can do work',
+      agentDesc: 'Create an agent, understand its output ports, then actually run it once.',
+      skill: 'Give an agent a skill',
+      skillDesc: 'A skill is a procedure injected on demand; build one and attach it.',
+      workflow: 'Chain agents into a pipeline',
+      workflowDesc: 'One agent does the work, another reviews it. Wire them up and launch.',
+      workgroup: 'Let a team of agents collaborate',
+      workgroupDesc: 'Form a squad, pick a lead and a worker, then hand it a goal.',
+    },
+    step: {
+      agentCreate: 'Create an agent',
+      agentCreateBody:
+        'An agent is a system prompt plus a set of output ports. Ports are how it hands results back — it needs at least one.',
+      agentPorts: 'Understand output ports',
+      agentPortsBody:
+        'Open the port configuration: every port declared here becomes a connection point you can draw an edge from on the workflow canvas.',
+      agentRun: 'Run it once',
+      agentRunBody:
+        'No repository needed — the tour runs it in a scratch space. Describe one thing you want it to do, then launch.',
+      skillCreate: 'Create a skill',
+      skillCreateBody:
+        'A skill is a SKILL.md: one line saying when to use it, plus the steps in the body. The description is mandatory in practice — without it the model never sees the skill at all.',
+      skillAttach: 'Attach it to the agent',
+      skillAttachBody:
+        "Add the skill to the agent's skill list and it gets injected into that agent's process at run time.",
+      workflowCreate: 'Create a workflow',
+      workflowCreateBody:
+        'A minimal pipeline: input → the agent that does the work → the agent that reviews it → output.',
+      workflowEdit: 'Change something on the canvas',
+      workflowEditBody:
+        "Open the editor and try editing a node's prompt or drawing a new edge. Every {{variable}} in a prompt needs an inbound edge whose port has that exact name.",
+      workflowRun: 'Launch the pipeline',
+      workflowRunBody:
+        'Fill in the inputs and launch. The task page shows each node’s status, prompt, outputs and diff.',
+      workgroupCreate: 'Create a workgroup',
+      workgroupCreateBody:
+        'Workgroups come in three modes. The tour uses leader/worker: the lead splits the work and hands it out, the members do it.',
+      workgroupMembers: 'Configure members and the lead',
+      workgroupMembersBody:
+        'You want at least two agent members — a group whose only member is the lead does start, but has nobody to delegate to and finishes without doing anything.',
+      workgroupRun: 'Hand it a goal',
+      workgroupRunBody: 'One sentence is enough; the lead decides how to split it up.',
+    },
   },
   common: {
     searchEllipsis: 'Search…',

@@ -227,7 +227,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
   })
   afterEach(() => h?.cleanup())
 
-  test('HEAD journal has 102 entries (sanity — locks the freeze target indices)', () => {
+  test('HEAD journal has 103 entries (sanity — locks the freeze target indices)', () => {
     // If a future migration is added, raise FREEZE_TARGETS' upper index
     // accordingly or this assertion will block the cascade. RFC-058 PR-B T11
     // bumped to 31 with migration 0031_rfc058_clarify_rounds_unify; RFC-059 T2
@@ -300,7 +300,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // RFC-204 T2 bumped to 98 with 0101_rfc207_directive_shard.
     // RFC-210 T10 bumped to 102 with 0102_rfc210_submodule_isolation.
     // RFC-211 T1 bumped to 103 with 0103_rfc211_onboarding.
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(102)
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(103)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

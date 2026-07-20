@@ -120,6 +120,13 @@ export function HomepageGreeting() {
           >
             {t('home.newWorkflow')}
           </Link>
+          {/* RFC-211: the guided tour is a PERMANENT entry point, not a
+              first-run one. The first-run surface only appears while the whole
+              instance is empty, so a second user joining a populated instance
+              would otherwise never be offered it. */}
+          <Link to="/onboarding" className="btn" data-testid="homepage-onboarding">
+            {t('onboarding.startCta')}
+          </Link>
         </div>
       </div>
       <PipelineHero />

@@ -1,20 +1,25 @@
-// First-run onboarding card (P-5-10).
+// First-run surface (P-5-10, hero from RFC-190, rebuilt for RFC-211).
 //
-// Rendered by the / route when both /api/agents and /api/workflows come
-// back empty. Shows a four-step walkthrough plus a one-click "import demo
-// workflow" button that POSTs a bundled YAML fixture.
+// Rendered by the / route when both /api/agents and /api/workflows come back
+// empty. It used to hard-code four steps plus a one-click "import demo
+// workflow" button — which imported a workflow referencing an agent named
+// `coder` that nothing ever created, so the very first thing a new user did
+// failed validation at launch. It now hands off to the guided tour, which
+// creates a matched, runnable set instead.
+//
+// Exactly ONE `.btn--primary` lives here on purpose (locked by a test): a
+// first-run screen with four equally-weighted calls to action is a screen with
+// no call to action.
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
-import type { Agent, ImportWorkflowResult, Workflow } from '@agent-workflow/shared'
+import { ONBOARDING_TRACK_STEPS, type Agent, type Workflow } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { CapabilityGrid } from '@/components/home/CapabilityGrid'
 import { PipelineHero } from '@/components/home/PipelineHero'
-import { NoticeBanner } from '@/components/NoticeBanner'
 import { PageHeader } from '@/components/PageHeader'
-import { DEMO_WORKFLOW_YAML } from '@/fixtures/demo-workflow'
 
 export interface OnboardingProbe {
   isFirstRun: boolean
@@ -78,11 +83,7 @@ export interface OnboardingProps {
 
 export function Onboarding(props: OnboardingProps = {}) {
   const { t } = useTranslation()
-  const qc = useQueryClient()
-  const importDemo = useMutation<void, Error>({
-    mutationFn: () => postDemoYaml(DEMO_WORKFLOW_YAML),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['workflows'] }),
-  })
+  const tracks = Object.keys(ONBOARDING_TRACK_STEPS) as Array<keyof typeof ONBOARDING_TRACK_STEPS>
 
   return (
     <div className="page onboarding">
@@ -122,76 +123,26 @@ export function Onboarding(props: OnboardingProps = {}) {
       </section>
       <CapabilityGrid variant="intro" />
 
-      <ol className="onboarding__steps">
-        <li className="onboarding__step">
-          <h2>{t('onboarding.step1Title')}</h2>
-          <p>{t('onboarding.step1Body')}</p>
-          <Link to="/agents/new" className="btn btn--primary">
-            {t('onboarding.step1Cta')}
+      <section className="onboarding__steps-intro">
+        <p>{t('onboarding.tracksIntro')}</p>
+        <ul className="onboarding__steps">
+          {tracks.map((track) => (
+            <li className="onboarding__step" key={track}>
+              <h2>{t(`guide.track.${track}`)}</h2>
+              <p>{t(`guide.track.${track}Desc`)}</p>
+            </li>
+          ))}
+        </ul>
+        <div className="onboarding__actions">
+          <Link to="/onboarding" className="btn btn--primary" data-testid="onboarding-start">
+            {t('onboarding.startCta')}
           </Link>
-        </li>
-
-        <li className="onboarding__step">
-          <h2>{t('onboarding.step2Title')}</h2>
-          <p>{t('onboarding.step2Body')}</p>
-          <Link to="/skills" className="btn">
-            {t('onboarding.step2Cta')}
-          </Link>
-        </li>
-
-        <li className="onboarding__step">
-          <h2>{t('onboarding.step3Title')}</h2>
-          <p>{t('onboarding.step3Body')}</p>
-          <div className="stack--sm">
-            <div className="onboarding__actions">
-              <button
-                type="button"
-                className="btn"
-                disabled={importDemo.isPending || importDemo.isSuccess}
-                aria-busy={importDemo.isPending}
-                onClick={() => importDemo.mutate()}
-              >
-                {importDemo.isPending
-                  ? t('onboarding.step3ImportRunning')
-                  : importDemo.error !== null
-                    ? t('common.retry')
-                    : t('onboarding.step3Import')}
-              </button>
-              {/* Creation is a quick-create dialog on the workflows list page. */}
-              <Link to="/workflows" className="btn">
-                {t('onboarding.step3Manual')}
-              </Link>
-            </div>
-            {importDemo.isSuccess && (
-              <NoticeBanner tone="success" size="compact">
-                {t('onboarding.importedHint')}
-              </NoticeBanner>
-            )}
-            {importDemo.error !== null && importDemo.error !== undefined && (
-              <ErrorBanner error={importDemo.error} />
-            )}
-          </div>
-        </li>
-
-        <li className="onboarding__step">
-          <h2>{t('onboarding.step4Title')}</h2>
-          <p>{t('onboarding.step4Body')}</p>
-          <Link to="/workflows" className="btn">
-            {t('onboarding.step4Cta')}
-          </Link>
-        </li>
-      </ol>
+        </div>
+      </section>
 
       <div className="onboarding__skip">
         <Link to="/agents">{t('onboarding.skipLink')}</Link>
       </div>
     </div>
   )
-}
-
-async function postDemoYaml(yamlText: string): Promise<void> {
-  await api.post<ImportWorkflowResult>('/api/workflows/import', {
-    yamlText,
-    mode: 'new',
-  })
 }

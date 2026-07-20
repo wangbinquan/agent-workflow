@@ -27,6 +27,7 @@ import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
 import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
+import { excludeForeignExamples } from '@/services/systemResources'
 import { Paths } from '@/util/paths'
 import {
   createManagedSkill,
@@ -65,7 +66,15 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
   }
 
   app.get('/api/skills', async (c) =>
-    c.json(await filterVisibleRows(deps.db, actorOf(c), 'skill', await listSkills(deps.db))),
+    c.json(
+      await filterVisibleRows(
+        deps.db,
+        actorOf(c),
+        'skill',
+        // RFC-211: see the same call in routes/agents.ts.
+        excludeForeignExamples(actorOf(c).user.id, await listSkills(deps.db)),
+      ),
+    ),
   )
 
   app.post('/api/skills', async (c) => {

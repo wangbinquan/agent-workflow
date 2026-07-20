@@ -141,6 +141,8 @@ export const WorkgroupSchema = z.object({
   ownerUserId: z.string().nullable().optional(),
   /** RFC-099 ACL — 'public' = every user; 'private' = owner + grants. Absent ⇒ 'public'. */
   visibility: ResourceVisibilitySchema.optional(),
+  /** RFC-211 — guided-onboarding sandbox artifact (response-only). */
+  example: z.boolean().optional(),
   schemaVersion: z.number().int(),
   createdAt: z.number().int(),
   updatedAt: z.number().int(),

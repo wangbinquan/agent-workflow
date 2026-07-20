@@ -10,6 +10,7 @@ import type {
   RenameAgent,
   UpdateAgent,
 } from '@agent-workflow/shared'
+import type { ResourceVisibility } from '@agent-workflow/shared'
 import { AgentInputPortSchema, AgentInputPortsSchema } from '@agent-workflow/shared'
 import { and, eq, inArray, like, notInArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
@@ -56,7 +57,12 @@ export async function getAgentById(db: DbClient, id: string): Promise<Agent | nu
 export async function createAgent(
   db: DbClient,
   input: CreateAgent,
-  opts?: { ownerUserId?: string; builtin?: boolean },
+  opts?: {
+    ownerUserId?: string
+    builtin?: boolean
+    visibility?: ResourceVisibility
+    example?: boolean
+  },
 ): Promise<Agent> {
   const existing = await getAgent(db, input.name)
   if (existing !== null) {
@@ -125,7 +131,14 @@ export async function createAgent(
     bodyMd: input.bodyMd,
     // RFC-099: creator becomes owner; new resources default to 'public' (D18).
     ownerUserId: opts?.ownerUserId ?? null,
-    visibility: 'public',
+    /**
+     * RFC-211: the guided-onboarding sandbox creates its artifacts as PRIVATE so
+     * concurrent learners never pollute (or see) each other's resource lists. The
+     * default stays 'public' (RFC-099 D18) — every existing caller is unchanged.
+     */
+    visibility: opts?.visibility ?? 'public',
+    // RFC-211: guided-onboarding sandbox artifact (see schema comment).
+    example: opts?.example ?? false,
     // RFC-104: built-in marker — only seedFusionResources passes builtin:true;
     // never set via any HTTP path (CreateAgentSchema omits it).
     builtin: opts?.builtin ?? false,
@@ -829,6 +842,8 @@ function rowToAgent(row: AgentRow): Agent {
     visibility: row.visibility,
     // RFC-104 built-in marker (read-only response field).
     builtin: row.builtin,
+    // RFC-211 guided-onboarding sandbox marker (read-only response field).
+    example: row.example,
     schemaVersion: row.schemaVersion,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,

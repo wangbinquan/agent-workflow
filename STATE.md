@@ -2,6 +2,8 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+🚧 **进行中 RFC（2026-07-20）：[RFC-211 引导式沙盒：新用户上手引导与 example 产物生命周期](design/RFC-211-guided-onboarding-sandbox/proposal.md)** —— 用户要求「新装完内置几个工作流/工作组/agent/skill 快速进入状态 + 每个新用户登录能看到向导 + 引导学会六个核心动作」，设计问答后收敛为**不做开机播种、一切由用户点「开始引导」时创建**：产物 owner=本人 / `visibility=private` / 名字带该 run 的小写短后缀（多人并发跑引导互不冲突、互不可见），可一键清除（连 worktree/scratch/运行日志一起回收）。**技术地基缺口**：仓里根本没有删除任务的能力，而 `countReferencingTasksInTx`（`workflow.ts:401`）不分状态 ⇒ 跑过一次的 example 工作流永久删不掉，本 RFC 自带 example 任务删除。**两个必修洞**（对抗复核）：`isResourceOwner` 对 admin 恒真 ⇒ 归属必须写进 SQL WHERE 否则 admin 自清=清全实例；name 全局 UNIQUE + 409 原样回显 ⇒ uuid 后缀是安全必需项。用户已授权「RFC 完成后直接实施」。
+
 ✅ **已完成 RFC（2026-07-20）：[RFC-206 焦点环裁剪问题的一次性根治与杜绝](design/RFC-206-focus-ring-clip-elimination/proposal.md)** —— **T0–T8 全部交付**（`72dd7572` / `588591b0` / `9306a143` / `077b99fe` + 收口批）。全部 7 条验收标准已勾。**唯一遗留：实现门 Codex review 因配额耗尽未跑（Jul 25 恢复后补，补跑步骤见 plan.md T8）。**源自用户报告的**第五次**同类复发（`/repos` 批量导入输入框上边被切、`/agents 高级` 输入框左右被切，均已本机实测 `room < ink` 确认）。根因：**集合 A（36 条把焦点指示画在 border box 外的规则）× 集合 B（100+ 条 `overflow != visible` 容器）的笛卡尔积无人负责**；此前四处补丁每次只补当次被报的那一条轴，且 **jsdom 无布局引擎、现存相关测试全是源码文本断言，物理上测不到「被切」**。方案：修法从 O(容器数) 改为 O(1)（环画进控件内部），并建静态（vitest）+ 几何（Playwright + CDP `CSS.forcePseudoState`）双层守卫，先出基线白名单止血、再逐条清零、最后转硬失败。
 
 > ⚠️ **接手须知（已用独立 Playwright 探针实测四场景确认）**：`:focus-visible` 是否匹配取决于页面**交互历史**——全新页面上程序化 `.focus()` **能**匹配，但**只要发生过一次真实鼠标点击**（即所有现实 e2e 流程）此后恒为 `false`、ink 归零。所以天真实现的审计是**部分空跑**：总数非零、「它报出了违规说明它在工作」这种朴素自检照样通过，实际大半覆盖面为空——比完全失效更难察觉。必须走 CDP `CSS.forcePseudoState` 强制（测完 `[]` 清除、nodeId 跨导航失效），并保留反向自检探针 + 变异测试。

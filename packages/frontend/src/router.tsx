@@ -43,6 +43,7 @@ import { ReposRoute as reposRoute } from '@/routes/repos'
 import { Route as memoryRoute } from '@/routes/memory'
 import { Route as memoryDistillJobDetailRoute } from '@/routes/memory.distill-jobs.$jobId'
 import { Route as fusionDetailRoute } from '@/routes/fusions.detail'
+import { Route as onboardingRoute } from '@/routes/onboarding' // RFC-211
 import { workflowLaunchWizardSearch } from '@/lib/workflow-launch-handoff'
 
 // RFC-165 (T14): both legacy launcher pages are retired — their URLs redirect
@@ -75,6 +76,10 @@ const workgroupLaunchRedirect = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   authRoute,
+  // RFC-211: the guided tour. Intentionally NOT in the sidebar — it is entered
+  // from the homepage, so `resolveActiveNav` leaves it unhighlighted the same
+  // way it does for /tasks/new.
+  onboardingRoute,
   // RFC-177: /agents/by-id/$id — id→name resolver + redirect (root child, so it
   // bypasses the split layout). Two-segment path is arity-distinct from
   // /agents/$name, so a "by-id"-named agent still resolves normally.

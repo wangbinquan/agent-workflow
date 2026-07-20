@@ -29,6 +29,7 @@ import type {
   WorkgroupMember,
   WorkgroupMode,
 } from '@agent-workflow/shared'
+import type { ResourceVisibility } from '@agent-workflow/shared'
 import { WG_CLARIFY_BUDGET_DEFAULT } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
 import { discloseScheduleRefs } from './resourceAcl'
@@ -93,7 +94,7 @@ export async function getWorkgroupById(db: DbClient, id: string): Promise<Workgr
 export async function createWorkgroup(
   db: DbClient,
   input: CreateWorkgroup,
-  aclOpts?: { ownerUserId?: string },
+  aclOpts?: { ownerUserId?: string; visibility?: ResourceVisibility; example?: boolean },
 ): Promise<Workgroup> {
   if ((await getWorkgroup(db, input.name)) !== null) {
     throw new ConflictError('workgroup-name-in-use', `workgroup '${input.name}' already exists`)
@@ -127,7 +128,14 @@ export async function createWorkgroup(
         fanOut: input.fanOut ?? false,
         // RFC-099: creator becomes owner; new resources default to 'public' (D18).
         ownerUserId: aclOpts?.ownerUserId ?? null,
-        visibility: 'public',
+        /**
+         * RFC-211: the guided-onboarding sandbox creates its artifacts as PRIVATE so
+         * concurrent learners never pollute (or see) each other's resource lists. The
+         * default stays 'public' (RFC-099 D18) — every existing caller is unchanged.
+         */
+        visibility: aclOpts?.visibility ?? 'public',
+        // RFC-211: guided-onboarding sandbox artifact (see schema comment).
+        example: aclOpts?.example ?? false,
         createdAt: now,
         updatedAt: now,
       })
@@ -425,6 +433,8 @@ function rowToWorkgroup(row: WorkgroupRow, memberRows: MemberRow[]): Workgroup {
     members,
     ownerUserId: row.ownerUserId,
     visibility: row.visibility,
+    // RFC-211 guided-onboarding sandbox marker (read-only response field).
+    example: row.example,
     schemaVersion: row.schemaVersion,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,

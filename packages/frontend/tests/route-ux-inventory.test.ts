@@ -315,6 +315,19 @@ export const ROUTE_UX_INVENTORY = {
     classification: 'specialized',
     owners: [rendered('index-page-routing.test.tsx')],
   },
+  // RFC-211 guided tour. 'standard' because it is an ordinary page built from
+  // the shared primitives (PageHeader / ChoiceCards / Stepper), which is the
+  // whole point — the tour is not an overlay.
+  '@/routes/onboarding#Route': {
+    surface: '/onboarding',
+    classification: 'standard',
+    header: {
+      mode: 'direct',
+      sourceFile: 'routes/onboarding.tsx',
+      primitive: 'PageHeader',
+    },
+    owners: [rendered('onboarding-guide.test.tsx')],
+  },
   '@/routes/auth#Route': {
     surface: '/auth',
     classification: 'specialized',
