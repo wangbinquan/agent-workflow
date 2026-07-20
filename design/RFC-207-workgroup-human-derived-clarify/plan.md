@@ -25,9 +25,9 @@
 ### 阶段 B —— backend 引擎与 hook
 
 - **T5** `services/workgroupContext.ts:457` 邀请块判据换 `workgroupHasHumanMember(config.members)`。
-- **T6** `services/workgroupRunner.ts`：`:1520/:1813/:1989` 三处 `clarifyEnabled`；`:1121` 完工门复检；`:977-989` 重入不变式换 `isTaskClarifySuppressed`；`:1536-1544` / `:1828-1833` 重提示文案（收场逻辑不动）。
+- **T6** `services/workgroupRunner.ts`：`:1518-1520/:1807-1813/:1987-1989` 三处**算一次 `clarifyAllowed` 同时喂 renderer 与 `clarifyEnabled`**（见 T28d）；`:1121` 完工门复检；`:977-989` 重入不变式改用 `!workgroupHasHumanMember(rec.config.members)`（**只看花名册这一维**，预算/喊停不遣散在途 park）；`:1536-1544` / `:1828-1833` 重提示文案（收场逻辑不动）。
 - **T7** `services/workgroupWake.ts`：`:308-311` 完工门；`:315-322` **删 autonomous 分支**、催办统一（design §3.3）；`WG_NUDGE_BODY` 文案去 autonomous。
-- **T8** `services/workgroupLifecycle.ts`：`isTaskAutonomous` → `isTaskClarifySuppressed`（:166-181，fail-open 语义见 D12）；`dismissOpenClarifyParksForAutonomous` → `dismissOpenClarifyParks`（:208+）；留痕字面量 `:262` → `'wg-clarify-disabled'`。
+- **T8** `services/workgroupLifecycle.ts`：`isTaskAutonomous` → **`resolveWgClarifyAllowed(db, taskId, nodeId, shardKey)`**（design §1.3——三条件串联的**全仓唯一求值出口**，fail-open 语义见 D12）；`dismissOpenClarifyParksForAutonomous` → `dismissOpenClarifyParks`（:208+）；留痕字面量 `:262` → `'wg-clarify-disabled'`。
 - **T9** `services/scheduler.ts:863-865/936-937/990-999` 三处换新活判据 + 新 dismiss 名；`services/runner.ts:1266-1278` 压制文案。
 - **T10** `services/workgroupRunner.ts:583-607` `persistGate` **无需改动**（已核实是整份 reload-merge、无字段白名单，`members` 天然保留，design §3.5）；仅补一条并发回归测试：引擎持久化 gate 的同时路由删成员，断言成员变更不被覆盖——锁住「整份 merge」这个性质，防未来被优化成白名单而静默丢成员。
 

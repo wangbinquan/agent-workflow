@@ -60,17 +60,34 @@ export function resolveCompletionGate(
 
 ```ts
 /**
- * RFC-207 —— 这个任务的**冻结花名册**里已无人工成员 ⇒ 反问压制。
- * 读 tasks.workgroup_config_json（引擎与中途 PATCH 的共同事实源），
- * 每次调用当场求值，故中途增删成员下一次判定即生效（D9）。
- * 快照缺失 / 不可解析 ⇒ false（不压制），与旧 isTaskAutonomous 的兜底同向：
+ * RFC-207 —— 这个提问方现在**能不能**反问。三条件串联（§3.7.2）：
+ *   ① 冻结花名册里有人工成员（§1.1 判据）
+ *   ② 该提问方的反问次数未用满（§3.6，按 clarify_sessions 真实提问记录计数）
+ *   ③ 该提问方没有被人喊停（§3.7，task_node_clarify_directives 的 asker-key 行）
+ * asker key 由 wgClarifyAskerKey(nodeId, shardKey) 归一化（§3.6.3）。
+ * 读 tasks.workgroup_config_json（引擎与中途 PATCH 的共同事实源），每次调用
+ * 当场求值，故中途增删成员 / 改预算 / 喊停，下一次判定即生效（D9）。
+ * 快照缺失 / 不可解析 ⇒ 视为允许（不压制），与旧 isTaskAutonomous 的兜底同向：
  * 异常态下让人来看是安全阀，不是打扰（D12）。
  */
-export async function isTaskClarifySuppressed(db: Db, taskId: string): Promise<boolean>
+export async function resolveWgClarifyAllowed(
+  db: Db,
+  taskId: string,
+  nodeId: string,
+  shardKey: string | null,
+): Promise<boolean>
 ```
 
-四个调用点全部要负向语义，故只导出这一个负向函数，避免调用点散落 `!`：
-`scheduler.ts:864`（`clarifySuppressed` 回调）、`scheduler.ts:936`（late-suppress）、`scheduler.ts:990`（`createClarifySession` 后的 TOCTOU 补偿）、`workgroupRunner.ts:977-989`（引擎重入不变式重申）。
+**这是全仓唯一的求值出口**，派发期与 envelope 期都走它——不是两处各自算一遍再祈祷一致（二轮设计门 P1 的教训）：
+
+| 时点 | 调用方 | 用途 |
+|---|---|---|
+| 派发期 | `workgroupRunner.ts` 三个 turn（`:1518-1520` / `:1807-1813` / `:1987-1989`） | 算一次，**同时**喂给 `renderWgProtocolBlock(..., clarifyAllowed)` 与 `clarifyEnabled` |
+| envelope 期 | `scheduler.ts:863-865` `clarifySuppressed` | 取反，**并叠加 §3.4a 的派发期地板** |
+| envelope 后补偿 | `scheduler.ts:936`（late-suppress）、`:990`（TOCTOU 补偿） | 同上 |
+| 引擎重入 | `workgroupRunner.ts:977-989` 不变式重申 | 只关心「花名册已无人」这一维（遣散只针对成员归零，不因预算/停止而遣散在途 park） |
+
+> **注意最后一行的差异**：预算耗尽 / 被喊停**只影响新反问**，不遣散已经开着的 park——人已经被问了，答案还是要收。只有「花名册里最后一个人被移走」才遣散（D7），因为那时确实没人能答了。
 
 `dismissOpenClarifyParksForAutonomous` → **`dismissOpenClarifyParks`**（`workgroupLifecycle.ts:208+`）。事务内容不变：clarify_sessions + clarify_rounds 双表 canceled、中介 park run canceled、assignment `awaiting_human→dispatched/open` 重排队（`WORKGROUP_ASSIGNMENT_TRANSITIONS` 的两条 A2 边保留）。
 
@@ -82,13 +99,13 @@ export async function isTaskClarifySuppressed(db: Db, taskId: string): Promise<b
 | 2 | `workgroupRunner.ts:1518-1520` leader turn | `renderWgProtocolBlock('leader', config, nonce)` + `clarifyEnabled: resolveClarifyEnabled(...)` | 先算一次 `clarifyAllowed`（花名册 ∧ 预算 ∧ 未被停），**同时**喂给 renderer 与 `clarifyEnabled` |
 | 3 | `workgroupRunner.ts:1807-1813` assignment turn | 同上 | 同上（asker key = `asg:<assignmentId>`） |
 | 4 | `workgroupRunner.ts:1987-1989` message turn | 同上 | 同上（asker key = `mem:<memberId>`，§3.6.3） |
-| 5 | `scheduler.ts:863-865` | `clarifySuppressed: () => isTaskAutonomous(db, taskId)` | `clarifySuppressed: () => req.clarifyEnabled === false ? true : isTaskClarifySuppressed(db, taskId)`——**派发期 false 是压制地板**，见 §3.4a（`req.clarifyEnabled !== undefined` 的 wiring 条件不变，它只是「这是 wg host run」的标记） |
-| 6 | `scheduler.ts:936-937` late-suppress | `await isTaskAutonomous(...)` | `await isTaskClarifySuppressed(...)` |
+| 5 | `scheduler.ts:863-865` | `clarifySuppressed: () => isTaskAutonomous(db, taskId)` | `clarifySuppressed: () => req.clarifyEnabled === false ? true : !(await resolveWgClarifyAllowed(db, taskId, req.nodeId, runShardKey))`——**派发期 false 是压制地板**，见 §3.4a（`req.clarifyEnabled !== undefined` 的 wiring 条件不变，它只是「这是 wg host run」的标记；`runShardKey` 已在 `:797-804` 查出） |
+| 6 | `scheduler.ts:936-937` late-suppress | `await isTaskAutonomous(...)` | 同 5 的取反式 |
 | 7 | `scheduler.ts:990-999` TOCTOU 补偿 | 同上 + `dismissOpenClarifyParksForAutonomous` | 同上 + `dismissOpenClarifyParks` |
 | 8 | `workgroupWake.ts:308-311` 完工门 | `resolveCompletionGate(input.config.autonomous ?? false, input.config.completionGate)` | `resolveCompletionGate(input.config.members, input.config.completionGate)` |
 | 9 | `workgroupRunner.ts:1121` done 分支复检 | 同上 | 同上 |
 | 10 | `workgroupWake.ts:315-322` leader 空转 | `if (autonomous) { nudge<LIMIT ⇒ leader-nudge }` 否则直接 park | **删条件**：恒 `nudges < WG_LEADER_IDLE_NUDGE_LIMIT ⇒ leader-nudge`，否则 park `leader-idle` |
-| 11 | `workgroupRunner.ts:977-989` 重入不变式 | `(rec.config.autonomous ?? false) && mode !== 'dynamic_workflow' && 有 open session ⇒ dismiss` | `(await isTaskClarifySuppressed(db, taskId)) && mode !== 'dynamic_workflow' && 有 open session ⇒ dismiss` |
+| 11 | `workgroupRunner.ts:977-989` 重入不变式 | `(rec.config.autonomous ?? false) && mode !== 'dynamic_workflow' && 有 open session ⇒ dismiss` | `!workgroupHasHumanMember(rec.config.members) && mode !== 'dynamic_workflow' && 有 open session ⇒ dismiss`——**只看花名册这一维**，预算耗尽 / 被喊停不遣散在途 park（人已经被问了，答案还是要收，§1.3 表末注） |
 | 12 | `runner.ts:1266-1278` 硬压制文案 | `clarify-forbidden: ask-back is OFF in this autonomous group; …` | 文案改「本组没有人工成员」，语义不变（详见 §3.2） |
 | 13 | `workgroupRunner.ts:1536-1544` / `:1828-1833` 重提示 | `Ask-back is OFF in this autonomous group…` | 同上改文案；**drop-and-continue / assignment failed 的收场逻辑一律不动** |
 
@@ -133,14 +150,14 @@ willHave  = workgroupHasHumanMember(<写入的 nextConfig.members>)
 
 ### 3.4a 派发期地板：加人不得让「本轮没被邀请」的 turn 反问（**Codex 设计门 P1**）
 
-活判据（`isTaskClarifySuppressed`）单独用会破坏 invite/accept 对称性：一个在**无人工**时起跑的 turn，其 prompt 里根本没有邀请块；若此时有人往任务里加了第一个人工成员，活判据立刻返回「不压制」，而 `scheduler.ts` 只按 `req.clarifyEnabled !== undefined` 决定要不要接线——于是**这个从未被邀请的 turn 硬发的 `<workflow-clarify>` 会被接受并建 session、把任务泊住**。这既违反 §3.4 声明的「下一轮起生效」，也正是 RFC-183 要守的「邀请⟺接受」对称契约。
+活判据（`resolveWgClarifyAllowed`）单独用会破坏 invite/accept 对称性：一个在**不允许反问**时起跑的 turn，其 prompt 里根本没有邀请块；若此时状态翻转（加入第一个人工成员、调大预算、撤销喊停），活判据立刻返回「允许」，而 `scheduler.ts` 只按 `req.clarifyEnabled !== undefined` 决定要不要接线——于是**这个从未被邀请的 turn 硬发的 `<workflow-clarify>` 会被接受并建 session、把任务泊住**。这既违反 §3.4 声明的「下一轮起生效」，也正是 RFC-183 要守的「邀请⟺接受」对称契约。
 
 因此两个方向必须分别由不同的时点判定：
 
 | 方向 | 判定时点 | 理由 |
 |---|---|---|
-| **不压制 →压制**（人被移走） | envelope 到达时的**活 DB 读** | 起跑时有人、落地时没人 ⇒ 必须当场压住（RFC-181 C 的 TOCTOU 论证原样成立） |
-| **压制 → 不压制**（人被加入） | **派发期快照**（`req.clarifyEnabled`）为地板 | 该轮 prompt 没有邀请块，它就不该问；新加的人从**下一轮**起才让 agent 被邀请 |
+| **允许 → 不允许**（人被移走 / 预算被调小 / 被喊停） | envelope 到达时的**活 DB 读** | 起跑时能问、落地时不能了 ⇒ 必须当场压住（RFC-181 C 的 TOCTOU 论证原样成立） |
+| **不允许 → 允许**（加入第一个人 / 调大预算 / 撤销喊停） | **派发期快照**（`req.clarifyEnabled`）为地板 | 该轮 prompt 没有邀请块，它就不该问；状态翻转从**下一轮**起才让 agent 被邀请 |
 
 即：`suppressed = (dispatchClarifyEnabled === false) || liveSuppressed`。派发期地板与活读合围，才把两个方向都关严。测试须显式覆盖「无人工起跑 → 中途加人 → 该 turn 硬发 clarify 仍被驳回、任务不 park；下一轮才拿到邀请块」。
 
