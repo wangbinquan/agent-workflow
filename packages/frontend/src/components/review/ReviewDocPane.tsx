@@ -31,6 +31,7 @@ import { useTranslation } from 'react-i18next'
 import type { ReviewComment, ReviewCommentAnchor } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { AttributionChip } from '@/components/AttributionChip'
+import { copyText } from '@/lib/clipboard'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { TextArea } from '@/components/Form'
 import { useUserLookup } from '@/hooks/useUserLookup'
@@ -362,21 +363,17 @@ export function ReviewDocPane(props: ReviewDocPaneProps) {
   })
 
   const onCopy = useCallback((commentId: string, text: string) => {
-    if (typeof navigator === 'undefined' || navigator.clipboard === undefined) {
-      setCopyFailedId(commentId)
-      setTimeout(() => setCopyFailedId(null), 1500)
-      return
-    }
-    navigator.clipboard.writeText(text).then(
-      () => {
+    // copyText falls back to execCommand on insecure http:// hosts, where the
+    // old guard here reported failure even though a copy was possible.
+    void copyText(text).then((ok) => {
+      if (ok) {
         setCopiedId(commentId)
         setTimeout(() => setCopiedId(null), 1500)
-      },
-      () => {
+      } else {
         setCopyFailedId(commentId)
         setTimeout(() => setCopyFailedId(null), 1500)
-      },
-    )
+      }
+    })
   }, [])
 
   const onStartEdit = useCallback((c: ReviewComment) => {

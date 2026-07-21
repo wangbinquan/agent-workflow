@@ -32,6 +32,7 @@ import { WrapperFanoutEdit } from './inspector/WrapperFanoutEdit'
 import { WrapperGitLoopEdit } from './inspector/WrapperGitLoopEdit'
 import type { InspectorChangeMeta } from './inspector/historyMeta'
 import type { EditProps } from './inspector/types'
+import { copyText } from '@/lib/clipboard'
 import { createWorkflowSemanticContext } from '@/lib/workflow-connection-plan'
 import {
   focusWorkflowInspectorAnchor,
@@ -238,7 +239,7 @@ export function NodeInspector({
             <button
               type="button"
               className="btn btn--xs btn--ghost"
-              onClick={() => void navigator.clipboard?.writeText(node.id)}
+              onClick={() => void copyText(node.id)}
             >
               {t('editor.nodeActions.copy')}
             </button>

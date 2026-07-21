@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, ApiError } from '@/api/client'
 import { Card } from '@/components/Card'
+import { copyText } from '@/lib/clipboard'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { Field, TextInput } from '@/components/Form'
@@ -545,7 +546,7 @@ function PatSection() {
             className="btn btn--ghost btn--xs"
             type="button"
             onClick={() => {
-              void navigator.clipboard?.writeText(shown)
+              void copyText(shown)
             }}
           >
             {t('account.copy', { defaultValue: 'Copy' })}

@@ -82,9 +82,13 @@ describe('RFC-009 sidebar enhancements — ReviewDocPane surface', () => {
     expect(src).toMatch(/if\s*\(\s*editingId\s*!==\s*null\s*\)\s*return/)
   })
 
-  test('reviews.detail.tsx wires the copy button to navigator.clipboard', () => {
+  test('reviews.detail.tsx wires the copy button through copyText with feedback', () => {
+    // 2026-07-21: the direct Clipboard API dereference moved behind
+    // lib/clipboard.ts#copyText (secure-context fallback); the repo-wide ban
+    // lives in clipboard-insecure-context.test.ts.
     const src = readFileSync(PANE_TSX, 'utf8')
-    expect(src).toMatch(/navigator\.clipboard\.writeText/)
+    expect(src).toMatch(/copyText\(/)
+    expect(src).toContain("from '@/lib/clipboard'")
     expect(src).toContain('copiedId')
     expect(src).toContain('copyFailedId')
     // Transient label flicker — checked indirectly via the i18n key list.

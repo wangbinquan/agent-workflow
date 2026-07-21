@@ -13,6 +13,7 @@ import { Field } from '@/components/Form'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { Select } from '@/components/Select'
 import { atomicEdgeInspectorChange, type InspectorChangeMeta } from './inspector/historyMeta'
+import { copyText } from '@/lib/clipboard'
 import { createWorkflowSemanticContext } from '@/lib/workflow-connection-plan'
 import { applyWorkflowTransition, isEdgeTargetPortRenameable } from '@/lib/workflow-transition'
 import {
@@ -191,7 +192,7 @@ export function EdgeInspector({
                 <button
                   type="button"
                   className="btn btn--xs btn--ghost"
-                  onClick={() => void navigator.clipboard?.writeText(edge.id)}
+                  onClick={() => void copyText(edge.id)}
                 >
                   {t('editor.nodeActions.copy')}
                 </button>

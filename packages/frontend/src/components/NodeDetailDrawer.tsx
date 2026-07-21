@@ -9,6 +9,7 @@
 //   - Stats   — start/finish/duration, exit code, token usage.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { copyText } from '@/lib/clipboard'
 import { describeTaskFailure } from '@/lib/task-failure'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -612,7 +613,10 @@ function CopyButton({ text }: { text: string }) {
   const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
   function copy() {
-    void navigator.clipboard.writeText(text).then(() => {
+    // copyText survives insecure http:// contexts, where the async Clipboard
+    // API is undefined — the bare dereference threw there (2026-07-21 sweep).
+    void copyText(text).then((ok) => {
+      if (!ok) return
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     })
