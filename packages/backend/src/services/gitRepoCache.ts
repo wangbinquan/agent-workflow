@@ -34,6 +34,7 @@ import { cachedRepos, scheduledTasks, taskRepos } from '@/db/schema'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { classifyBaseRef, GIT_TIMEOUT_EXIT_CODE, nonInteractiveGitEnv, runGit } from '@/util/git'
 import { createLogger } from '@/util/log'
+import { leaseGitCredential } from '@/services/gitCredential'
 import { redactSensitiveString } from '@/util/redact'
 import { Paths } from '@/util/paths'
 import { getCachedGitCapabilities } from '@/services/gitVersion'
@@ -81,14 +82,15 @@ async function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise
  */
 async function spawnGit(
   args: string[],
-  opts?: { timeoutMs?: number },
+  opts?: { timeoutMs?: number; env?: Record<string, string> },
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const proc = Bun.spawn({
     cmd: ['git', ...args],
     // Explicit env passthrough — see runGit() in util/git.ts for rationale.
     // nonInteractiveGitEnv() also stops ssh from hanging the daemon on first
     // connect to an unknown host (ssh reads /dev/tty, not stdin, for prompts).
-    env: nonInteractiveGitEnv(),
+    // RFC-205 G1: opts.env carries the askpass lease (paths only, no secrets).
+    env: { ...nonInteractiveGitEnv(), ...(opts?.env ?? {}) },
     stdout: 'pipe',
     stderr: 'pipe',
     stdin: 'ignore',
@@ -441,9 +443,21 @@ export async function resolveCachedRepo(
       let fetchOk = true
       let fetchError: string | null = null
       if (fetchOnReuse) {
-        const r = await runGit(row.localPath, ['fetch', '--all', '--prune', '--tags'], {
-          timeoutMs,
-        })
+        // RFC-205 G1 — credentials never live in the mirror's .git/config:
+        // idempotently normalise origin to the redacted URL (also the one-time
+        // scrub for pre-RFC-205 mirrors), then feed the credential through a
+        // one-shot askpass lease for THIS fetch only.
+        await runGit(row.localPath, ['remote', 'set-url', 'origin', redacted]).catch(() => null)
+        const lease = leaseGitCredential(input.url)
+        let r: Awaited<ReturnType<typeof runGit>>
+        try {
+          r = await runGit(row.localPath, ['fetch', '--all', '--prune', '--tags'], {
+            timeoutMs,
+            ...(lease !== null ? { env: lease.env } : {}),
+          })
+        } finally {
+          lease?.cleanup()
+        }
         if (r.exitCode !== 0) {
           fetchOk = false
           fetchError = redactGitUrl(r.stderr.trim())
@@ -580,8 +594,20 @@ export async function resolveCachedRepo(
         cloneArgs.push('--jobs', String(submodule.jobs))
       }
     }
-    cloneArgs.push(input.url, tmpDir)
-    const r = await spawnGit(cloneArgs, { timeoutMs })
+    // RFC-205 G1: clone with the REDACTED URL (argv shows in ps; the mirror's
+    // origin is then born credential-free) and feed the secret via a one-shot
+    // askpass lease instead.
+    cloneArgs.push(redacted, tmpDir)
+    const lease = leaseGitCredential(input.url)
+    let r: Awaited<ReturnType<typeof spawnGit>>
+    try {
+      r = await spawnGit(cloneArgs, {
+        timeoutMs,
+        ...(lease !== null ? { env: lease.env } : {}),
+      })
+    } finally {
+      lease?.cleanup()
+    }
     if (r.exitCode !== 0) {
       // Wipe whatever git may have left behind.
       try {

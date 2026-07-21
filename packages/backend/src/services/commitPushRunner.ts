@@ -18,6 +18,7 @@ import type { CommitPushMeta, CommitPushOutcome, SubrepoPushResult } from '@agen
 import type { DbClient } from '@/db/client'
 import { nodeRuns } from '@/db/schema'
 import { mintNodeRun } from '@/services/nodeRunMint'
+import { leasePushCredential } from '@/services/gitCredential'
 import { createLogger, type Logger } from '@/util/log'
 import { AW_INTERNAL_GIT_IDENTITY, runGit, runGit as realRunGit } from '@/util/git'
 import { join } from 'node:path'
@@ -329,7 +330,15 @@ export async function runCommitPush(
   // 5. Push, with a bounded repair / non-FF-merge loop.
   let attempts = 0
   while (true) {
-    const push = await g(['push', '-u', remote, `${params.repoBranch}:${params.repoBranch}`])
+    const pushLease = await leasePushCredential(params.taskId)
+    let push: Awaited<ReturnType<typeof g>>
+    try {
+      push = await runGit(W, ['push', '-u', remote, `${params.repoBranch}:${params.repoBranch}`], {
+        ...(pushLease !== null ? { env: pushLease.env } : {}),
+      })
+    } finally {
+      pushLease?.cleanup()
+    }
     if (push.exitCode === 0) {
       return finalize('pushed', {
         commitSha,

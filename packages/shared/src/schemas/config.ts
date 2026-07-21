@@ -134,6 +134,13 @@ export const ConfigSchema = z.object({
    *  0 = no cap (default). Protected kinds (manual / pre-restore /
    *  pre-migration) are never auto-pruned — recorded limitation. */
   backupMaxTotalBytes: z.number().int().nonnegative().default(0),
+
+  // --- RFC-205 runtime sandbox ---
+  /** OS-level FS sandbox around agent processes (macOS sandbox-exec / Linux
+   *  bwrap): 'enforce' = refuse to launch tasks when the mechanism is
+   *  unavailable; 'warn' (default) = degrade to unsandboxed with a loud alert;
+   *  'off' = never wrap (pre-RFC-205 behaviour). */
+  sandboxMode: z.enum(['enforce', 'warn', 'off']).default('warn'),
   /** Take a raw (byte-copy) pre-migration backup before applying pending
    *  migrations on boot, so a botched upgrade can be rolled back. */
   backupOnMigration: z.boolean().default(true),
@@ -444,6 +451,7 @@ export const DEFAULT_CONFIG: Config = {
   backupRetentionCount: 7,
   backupRetentionDays: 30,
   backupMaxTotalBytes: 0,
+  sandboxMode: 'warn',
   backupOnMigration: true,
   sqliteSynchronous: 'NORMAL',
   walCheckpointIntervalMs: 0,

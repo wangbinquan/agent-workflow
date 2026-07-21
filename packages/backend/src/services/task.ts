@@ -59,6 +59,7 @@ import {
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import type { SecretBox } from '@/auth/secretBox'
 import { unsealRepoUrl } from '@/services/repoCredentials'
+import { getSandboxProvider } from '@/services/sandbox'
 import { buildLaunchCollabRows } from '@/services/taskCollab'
 import { getWorkflow } from '@/services/workflow'
 import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
@@ -1310,6 +1311,24 @@ function cleanupFromPreCreated(pre: PreCreatedWorktree): MaterializedSpaceCleanu
  * so even an initial exact-version mismatch must release their workspace.
  */
 export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<Task> {
+  // RFC-205 D5 — enforce mode: when the OS sandbox mechanism is unavailable,
+  // refuse to launch at the door (a task that would silently run UNsandboxed
+  // is exactly what enforce promises never happens). warn/off never block.
+  const sandboxProvider = getSandboxProvider()
+  if (
+    sandboxProvider !== null &&
+    sandboxProvider.mode === 'enforce' &&
+    !sandboxProvider.status.available
+  ) {
+    throw new DomainError(
+      'sandbox-unavailable',
+      `sandboxMode=enforce but no OS sandbox mechanism is usable ` +
+        `(${sandboxProvider.status.detail ?? 'unknown'}); install it ` +
+        `(macOS: sandbox-exec ships with the OS; Linux: install bubblewrap) ` +
+        `or lower sandboxMode to 'warn'/'off' in Settings`,
+      409,
+    )
+  }
   const ownership: StartTaskOwnership = {
     cleanup:
       deps.materializedSpace?.cleanup ??

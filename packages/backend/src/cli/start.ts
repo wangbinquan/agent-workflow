@@ -1,10 +1,15 @@
 // `agent-workflow start` — daemon foreground entry.
 
 import { createSecretBox } from '@/auth/secretBox'
+import { setSandboxProvider } from '@/services/sandbox'
+import { setPushCredentialResolver } from '@/services/gitCredential'
+import { getSandboxStatus } from '@/services/sandbox/probe'
 import { ensureCredentialsSealed } from '@/services/repoCredentials'
 import { ensureTokenFile } from '@/auth/token'
 import { loadConfig } from '@/config'
 import { openDb, DbCorruptionError } from '@/db/client'
+import { cachedRepos, tasks } from '@/db/schema'
+import { eq } from 'drizzle-orm'
 import { extractMigrationsTo, IS_EMBEDDED } from '@/embed'
 import { createApp } from '@/server'
 import { startFusionReconcileLoop } from '@/services/fusion'
@@ -255,6 +260,26 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     }
   }
 
+  // 4.5 — RFC-205: probe the OS sandbox mechanism once and install the daemon
+  // provider (mode from config). Soft like the claude probe: 'warn' (default)
+  // boots regardless and degrades loudly per task; 'enforce' makes task LAUNCH
+  // refuse while the daemon itself stays up (Settings must stay reachable to
+  // lower the mode).
+  {
+    const sandboxStatus = await getSandboxStatus()
+    setSandboxProvider({ mode: config.sandboxMode, status: sandboxStatus, appHome: Paths.root })
+    if (config.sandboxMode === 'off') {
+      log.info('sandbox off (config)', {})
+    } else if (sandboxStatus.available) {
+      log.info('sandbox mechanism ready', { mechanism: sandboxStatus.mechanism })
+    } else {
+      log.warn('sandbox mechanism UNAVAILABLE', {
+        mode: config.sandboxMode,
+        detail: sandboxStatus.detail,
+      })
+    }
+  }
+
   // 5. DB — open + apply migrations. dbVersion = number of SQL files in the
   // bundled migrations folder (== the highest version we've applied, since
   // openDb() applies all pending migrations on startup). The migrations folder
@@ -486,6 +511,28 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // (it never re-clones), so it is safe on every boot and cannot stall an
   // upgrade on an unreachable remote.
   ensureCredentialsSealed(db, secretBox)
+  // RFC-205 G1 — push credential resolver: the mirror origin is
+  // credential-free now, so the framework's own auto-push leases the secret
+  // per push (askpass file, never argv/env/on-disk-config). Agents can't reach
+  // it: no resolver in their process, no credential in the worktree's origin.
+  setPushCredentialResolver(async (taskId) => {
+    const rows = await db
+      .select({ urlEnc: cachedRepos.urlEnc, url: cachedRepos.url })
+      .from(cachedRepos)
+      .innerJoin(tasks, eq(tasks.cachedRepoId, cachedRepos.id))
+      .where(eq(tasks.id, taskId))
+      .limit(1)
+    const row = rows[0]
+    if (row === undefined) return null
+    if (row.urlEnc !== null) {
+      try {
+        return secretBox.unseal(row.urlEnc)
+      } catch {
+        return null
+      }
+    }
+    return row.url !== '' ? row.url : null
+  })
 
   // 7. HTTP server.
   const app = createApp({

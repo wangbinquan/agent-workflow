@@ -7,6 +7,7 @@
 import type { Hono } from 'hono'
 import { z } from 'zod'
 import { loadConfig } from '@/config'
+import { getSandboxProvider } from '@/services/sandbox'
 import type { AppDeps } from '@/server'
 import { actorOf } from '@/auth/actor'
 import { requireAdmin, requirePermission } from '@/auth/permissions'
@@ -150,7 +151,15 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
         }
       }),
     )
-    return c.json({ runtimes })
+    // RFC-205 D6 — sandbox availability + mode for the Settings chip. Provider
+    // is null before start.ts installs it (tests) → report config mode with
+    // unknown availability.
+    const provider = getSandboxProvider()
+    const sandbox =
+      provider !== null
+        ? { mode: provider.mode, mechanism: provider.status.mechanism, available: provider.status.available }
+        : { mode: cfg.sandboxMode, mechanism: null, available: false }
+    return c.json({ runtimes, sandbox })
   })
 
   // Deep-smoke a given (protocol, binary) WITHOUT saving — registration preflight

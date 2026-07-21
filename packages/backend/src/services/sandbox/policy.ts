@@ -1,0 +1,119 @@
+// RFC-205 — sandbox policy: the single source of truth for what an agent
+// process may touch inside ~/.agent-workflow, rendered per mechanism.
+//
+// Threat model (proposal §1): an agent runs at the daemon's uid, so without an
+// OS boundary it can read secret.key (A1), db.sqlite (A2), backups/ (A3), the
+// mirror origin credential (A4 — killed separately by G1 un-disking), and every
+// OTHER task's worktree/run dir (A5). The policy denies the platform home
+// wholesale and allows back exactly what THIS task's agent legitimately needs:
+//
+//   - its own worktree(s)      (read-write — that's the job)
+//   - its own run dir          (read-write — config dir, transcripts, inventory)
+//   - the mirror repos dir     (read-write — the worktree's gitdir/index lives
+//     in <mirror>/.git/worktrees/<id>/ and commits write .git/objects + refs;
+//     read-only here would break `git commit` (design Q4). Credential safety
+//     comes from G1: nothing secret is ON DISK in the mirror anymore.)
+//
+// skills/ is NOT allowed back: managed skills are copied into the run dir
+// before spawn and external skills no longer exist (RFC-178) — the agent has
+// zero runtime dependency on the source dir (design Q5).
+//
+// Everything outside appHome ($HOME auth baselines, /tmp, toolchains) stays
+// untouched — this is a targeted boundary, not a jail.
+
+import { join } from 'node:path'
+
+export interface SandboxPolicyInput {
+  /** ~/.agent-workflow (or the test appHome). */
+  appHome: string
+  /** THIS task's worktree roots (multi-repo tasks have several). */
+  taskWorktrees: readonly string[]
+  /** THIS run's private dir: runs/{taskId}/{nodeRunId}. */
+  runDir: string
+}
+
+export interface SandboxPolicy {
+  /** Deny read+write on these whole subtrees. */
+  denySubtrees: string[]
+  /** Deny read+write on these single files (literal paths). */
+  denyFiles: string[]
+  /** Allowed back INSIDE denied subtrees (must win over the denies). */
+  allowSubtrees: string[]
+}
+
+/** The one place the deny/allow sets are computed. Pure — no fs access. */
+export function computeSandboxPolicy(input: SandboxPolicyInput): SandboxPolicy {
+  const h = input.appHome
+  const denySubtrees = [
+    join(h, 'backups'),
+    join(h, 'logs'),
+    join(h, 'worktrees'), // A5 — every task's worktree; ours is allowed back below
+    join(h, 'runs'), // A5 — every run dir; ours is allowed back below
+    join(h, 'plugins'),
+    join(h, 'skills'),
+    join(h, 'snapshots'),
+    join(h, '.restore-pending'),
+    join(h, '.restore-upload'),
+  ]
+  const denyFiles = [
+    join(h, 'secret.key'), // A1
+    join(h, 'db.sqlite'), // A2
+    join(h, 'db.sqlite-wal'),
+    join(h, 'db.sqlite-shm'),
+    join(h, 'token'),
+    join(h, 'config.json'),
+    join(h, '.daemon.lock'),
+    join(h, '.daemon.info'),
+  ]
+  const allowSubtrees = [...input.taskWorktrees, input.runDir]
+  return { denySubtrees, denyFiles, allowSubtrees }
+}
+
+/** SBPL string literal escaping: backslash and double-quote. */
+function sbplString(s: string): string {
+  return `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+}
+
+/**
+ * Render the macOS Seatbelt profile. SBPL evaluates rules LAST-MATCH-WINS, so
+ * the order is load-bearing: allow-default, then the denies, then the
+ * allow-backs (which must override the denies for their subtrees).
+ */
+export function renderSeatbeltProfile(policy: SandboxPolicy): string {
+  const lines: string[] = ['(version 1)', '(allow default)']
+  const denyTargets = [
+    ...policy.denySubtrees.map((p) => `(subpath ${sbplString(p)})`),
+    ...policy.denyFiles.map((p) => `(literal ${sbplString(p)})`),
+  ]
+  for (const t of denyTargets) {
+    lines.push(`(deny file-read* file-write* ${t})`)
+  }
+  for (const p of policy.allowSubtrees) {
+    lines.push(`(allow file-read* file-write* (subpath ${sbplString(p)}))`)
+  }
+  return lines.join('\n')
+}
+
+/**
+ * Render the bwrap argv (everything between `bwrap` and `--`). Order is
+ * load-bearing: later mounts stack over earlier ones, so the appHome tmpfs
+ * comes first and the allow-back binds after it.
+ *
+ * `--bind / /` keeps the rest of the filesystem (auth baselines, /tmp,
+ * toolchains) read-write; `--dev /dev` restores a usable /dev over the bind;
+ * `--tmpfs appHome` masks the platform dir wholesale; then this task's
+ * worktrees + run dir + the mirrors dir are bound back read-write. deny FILES
+ * need no explicit handling on linux — they live under appHome and the tmpfs
+ * already hides them.
+ */
+export function renderBwrapArgs(policy: SandboxPolicy, opts: { appHome: string }): string[] {
+  const args = ['--die-with-parent', '--bind', '/', '/', '--dev', '/dev']
+  args.push('--tmpfs', opts.appHome)
+  // The mirrors dir is an allow in spirit but lives OUTSIDE the deny list on
+  // darwin (deny-list model) — on linux the tmpfs hides it, so bind it back.
+  args.push('--bind', join(opts.appHome, 'repos'), join(opts.appHome, 'repos'))
+  for (const p of policy.allowSubtrees) {
+    args.push('--bind', p, p)
+  }
+  return args
+}

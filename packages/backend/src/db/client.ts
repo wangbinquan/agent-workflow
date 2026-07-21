@@ -4,7 +4,7 @@
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
-import { mkdirSync } from 'node:fs'
+import { chmodSync, mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import * as schema from './schema'
 
@@ -54,6 +54,14 @@ export function openDb(opts: OpenDbOptions): DbClient {
   let sqlite: Database
   try {
     sqlite = new Database(opts.path, { create: true })
+    // RFC-205 D9 — best-effort 0600, matching secret.key: the DB holds every
+    // sealed credential and umask-default perms leak it to other local users.
+    // (Same-uid agents are handled by the sandbox, not by mode bits.)
+    try {
+      chmodSync(opts.path, 0o600)
+    } catch {
+      /* read-only fs / exotic mounts — never block open */
+    }
     // Per design.md §11.0: WAL + synchronous + 5s busy timeout. journal_mode=WAL
     // is where a malformed header typically throws.
     sqlite.exec('PRAGMA journal_mode = WAL;')

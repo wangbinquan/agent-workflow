@@ -47,6 +47,16 @@ import type { DbClient } from '@/db/client'
 import { nodeRunEvents, nodeRunOutputs, nodeRuns } from '@/db/schema'
 import { createLogger, type Logger } from '@/util/log'
 import {
+  buildRunSandboxCtx,
+  getSandboxProvider,
+  sandboxActive,
+  wrapSandbox,
+  type SandboxCtx,
+} from '@/services/sandbox'
+import { lifecycleAlerts } from '@/db/schema'
+import { and, isNull } from 'drizzle-orm'
+import { ulid } from 'ulid'
+import {
   CLARIFY_FORBIDDEN_PREFIX,
   CLARIFY_REQUIRED_PREFIX,
   detectEnvelopeKind,
@@ -92,8 +102,50 @@ import { loadRunEnvelopeNonce } from '@/services/nodeRunMint'
 // type their skill inputs there); re-exported so scheduler/tests keep resolving.
 export type { SkillSource, ResolvedSkill } from './runtime/types'
 
+/** RFC-205 — one OPEN `sandbox-degraded` lifecycle alert per task.
+ *  Exported for the dedupe unit test. */
+export async function alertSandboxDegradedOnce(
+  db: DbClient,
+  taskId: string,
+  detail: string | null,
+  log: Logger,
+): Promise<void> {
+  try {
+    const open = await db
+      .select({ id: lifecycleAlerts.id })
+      .from(lifecycleAlerts)
+      .where(
+        and(
+          eq(lifecycleAlerts.taskId, taskId),
+          eq(lifecycleAlerts.rule, 'sandbox-degraded'),
+          isNull(lifecycleAlerts.resolvedAt),
+        ),
+      )
+      .limit(1)
+    if (open.length > 0) return
+    await db.insert(lifecycleAlerts).values({
+      id: ulid(),
+      taskId,
+      rule: 'sandbox-degraded',
+      severity: 'warn',
+      detail: JSON.stringify({ reason: detail ?? 'sandbox mechanism unavailable' }),
+      detectedAt: Date.now(),
+    })
+  } catch (err) {
+    // Alerting must never take a run down.
+    log.warn('sandbox-degraded alert failed', {
+      taskId,
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+}
+
 export interface RunNodeOptions {
   taskId: string
+  /** RFC-205 — OS sandbox context. ABSENT (tests, sandboxMode=off, mechanism
+   *  unavailable) means the spawn argv passes through untouched; the daemon
+   *  (start.ts) assembles it for production runs. */
+  sandbox?: SandboxCtx
   /** ULID of a pre-existing node_runs row in 'pending' state. */
   nodeRunId: string
   /**
@@ -822,21 +874,37 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // "the runtime received it but ignored it" without dumping the full config.
   // Names/counts only — never config bodies (env / headers may contain user
   // tokens; docs/OPENCODE_CONFIG.md §6).
+  // RFC-205: wrap at the LAST moment — plan.cmd stays pristine for
+  // spawnBinaryPath / version-registry / logs; only the argv handed to the OS
+  // gets the sandbox head. No ctx AND no daemon provider (tests, sandboxMode
+  // off) → identical to the pre-RFC-205 spawn.
+  const sandboxCtx =
+    opts.sandbox ??
+    buildRunSandboxCtx(getSandboxProvider(), opts.taskId, opts.worktreePath, runRoot)
+  if (sandboxCtx !== undefined && sandboxCtx.mode === 'warn' && !sandboxCtx.status.available) {
+    // Degraded: mechanism missing under warn — run unsandboxed but LOUDLY.
+    // One open alert per task (rule-deduped), so a 50-node task doesn't spam.
+    await alertSandboxDegradedOnce(opts.db, opts.taskId, sandboxCtx.status.detail, log)
+  }
+
   log.info('spawning agent runtime', {
     runtime,
     bin: cmd[0],
     agent: opts.agent.name,
     cwd: opts.worktreePath,
     nodeRunId: opts.nodeRunId,
+    // RFC-205 AC-7: per-spawn sandbox traceability (alerts carry degradations).
+    sandboxed: sandboxActive(sandboxCtx),
     ...(plan.diagnostics ?? {}),
   })
 
   // env (PWD fix / OPENCODE_CONFIG_DIR+CONTENT / RFC-029 inventory path /
   // RFC-067 git identity) is assembled by the driver — see
   // ./runtime/opencode/spawn.ts for the byte-for-byte construction.
+  const spawnCmd = wrapSandbox(cmd, sandboxCtx)
   const trySpawn = (): Bun.Subprocess<'ignore' | 'pipe', 'pipe', 'pipe'> =>
     Bun.spawn({
-      cmd,
+      cmd: spawnCmd,
       cwd: opts.worktreePath,
       env,
       stdout: 'pipe',
