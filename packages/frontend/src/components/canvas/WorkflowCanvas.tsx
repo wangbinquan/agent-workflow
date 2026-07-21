@@ -99,7 +99,11 @@ import {
   type WrapperHitInput,
 } from './wrapperMembership'
 import { DEFAULT_NODE_SIZE_BY_KIND, fitWrapperToInner } from './wrapperFit'
-import { effectiveWorkflowNodePosition, findOpenPlacement } from '../../lib/workflow-placement'
+import {
+  centerAnchoredTopLeft,
+  effectiveWorkflowNodePosition,
+  findOpenPlacement,
+} from '../../lib/workflow-placement'
 import {
   createWorkflowSemanticContext,
   isWorkflowEdgeInsertable,
@@ -1645,7 +1649,14 @@ function CanvasInner({
     (item: PaletteItem) => {
       const box = wrapperRef.current?.getBoundingClientRect()
       if (box === undefined) return
-      insertPaletteItem(item, rf.screenToFlowPosition(viewportCenter(box)), true)
+      insertPaletteItem(
+        item,
+        centerAnchoredTopLeft(
+          rf.screenToFlowPosition(viewportCenter(box)),
+          DEFAULT_NODE_SIZE_BY_KIND[item.kind],
+        ),
+        true,
+      )
     },
     [insertPaletteItem, rf],
   )
@@ -1752,7 +1763,12 @@ function CanvasInner({
       const intent = nodePickerIntent
       if (intent === null) return
       if (intent.kind === 'free') {
-        insertPaletteItem(item, intent.viewportPoint, true, intent.scope)
+        insertPaletteItem(
+          item,
+          centerAnchoredTopLeft(intent.viewportPoint, DEFAULT_NODE_SIZE_BY_KIND[item.kind]),
+          true,
+          intent.scope,
+        )
       } else if (intent.kind === 'after-node') {
         const sourceIndex = definition.nodes.findIndex((node) => node.id === intent.nodeId)
         if (sourceIndex >= 0) {
@@ -1899,7 +1915,16 @@ function CanvasInner({
     const item = deserialize(raw)
     if (item === null) return
     e.preventDefault()
-    insertPaletteItem(item, rf.screenToFlowPosition({ x: e.clientX, y: e.clientY }), false)
+    // The cursor is where the user aimed — center the node there instead of
+    // hanging the whole rect off the cursor's bottom-right.
+    insertPaletteItem(
+      item,
+      centerAnchoredTopLeft(
+        rf.screenToFlowPosition({ x: e.clientX, y: e.clientY }),
+        DEFAULT_NODE_SIZE_BY_KIND[item.kind],
+      ),
+      false,
+    )
   }
 
   function handleNodeContextMenu(e: React.MouseEvent, node: Node) {

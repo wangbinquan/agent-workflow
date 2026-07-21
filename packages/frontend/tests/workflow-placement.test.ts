@@ -6,8 +6,10 @@
 
 import { describe, expect, test } from 'vitest'
 import {
+  centerAnchoredTopLeft,
   effectiveWorkflowNodePosition,
   findOpenPlacement,
+  PLACEMENT_SEARCH_STEP,
   type WorkflowPlacementNode,
   type WorkflowPlacementRect,
 } from '../src/lib/workflow-placement'
@@ -72,12 +74,15 @@ describe('findOpenPlacement', () => {
     ).toEqual({ x: 412.5, y: 275.25 })
   })
 
-  test('consecutive adds use a deterministic spiral and never overlap', () => {
+  test('consecutive adds resolve to the nearest open shell deterministically and never overlap', () => {
     const desiredPoint = { x: 0, y: 0 }
     const candidateSize = { width: 100, height: 80 }
     const gap = 10
     const occupied: WorkflowPlacementNode[] = [node('existing', 0, 0, 100, 80)]
 
+    // Vertical clearance (90) is nearer than horizontal (110), so the first
+    // open 16px shell is ring 6 straight below the origin — not a full
+    // node-stride jump to the right like the pre-fix stride spiral.
     const first = findOpenPlacement({
       desiredPoint,
       candidateSize,
@@ -86,9 +91,10 @@ describe('findOpenPlacement', () => {
       wrapperRects: [],
       gap,
     })
-    expect(first).toEqual({ x: 110, y: 0 })
+    expect(first).toEqual({ x: 0, y: 6 * PLACEMENT_SEARCH_STEP })
     occupied.push(node('first', first.x, first.y, 100, 80))
 
+    // With below occupied too, the same distance opens upward next.
     const second = findOpenPlacement({
       desiredPoint,
       candidateSize,
@@ -97,7 +103,7 @@ describe('findOpenPlacement', () => {
       wrapperRects: [],
       gap,
     })
-    expect(second).toEqual({ x: 110, y: 90 })
+    expect(second).toEqual({ x: 0, y: -6 * PLACEMENT_SEARCH_STEP })
 
     const secondRect = { ...second, ...candidateSize }
     for (const existing of occupied) {
@@ -122,6 +128,39 @@ describe('findOpenPlacement', () => {
         gap,
       }),
     ).toEqual(second)
+  })
+
+  test('a near-miss drop nudges by one 16px step, not a full node stride', () => {
+    // Desired sits 5px shy of horizontal clearance (needs x >= 110). The fix
+    // must resolve this with a minimal nudge; the pre-fix stride spiral
+    // teleported to x = 215 (desired + width + gap) instead.
+    const placed = findOpenPlacement({
+      desiredPoint: { x: 105, y: 0 },
+      candidateSize: { width: 100, height: 80 },
+      scope: { kind: 'top-level' },
+      nodes: [node('existing', 0, 0, 100, 80)],
+      wrapperRects: [],
+      gap: 10,
+    })
+    expect(placed).toEqual({ x: 105 + PLACEMENT_SEARCH_STEP, y: 0 })
+  })
+
+  test('a drop over a top-level wrapper lands adjacent to the wrapper, not a stride away', () => {
+    // Dropping onto a large wrapper rect must eject the node, but only just
+    // past the nearest wrapper edge (up: 30 -> -82 clears 400px-tall rect plus
+    // the 16px gap), never a whole extra node stride beyond it.
+    const placed = findOpenPlacement({
+      desiredPoint: { x: 300, y: 30 },
+      candidateSize: { width: 80, height: 60 },
+      scope: { kind: 'top-level' },
+      nodes: [],
+      wrapperRects: [{ id: 'big', x: 0, y: 0, width: 600, height: 400 }],
+      gap: 16,
+    })
+    expect(placed).toEqual({ x: 300, y: 30 - 7 * PLACEMENT_SEARCH_STEP })
+    expect(
+      noOverlap({ ...placed, width: 80, height: 60 }, { x: 0, y: 0, width: 600, height: 400 }, 16),
+    ).toBe(true)
   })
 
   test('an occupied center moves, and measured node size wins over its default rect', () => {
@@ -306,5 +345,18 @@ describe('findOpenPlacement', () => {
     expect(inOuter.x + candidateSize.width).toBeLessThanOrEqual(outer.x + outer.width)
     expect(inOuter.y + candidateSize.height).toBeLessThanOrEqual(outer.y + outer.height)
     expect(inOther).toEqual({ x: 120, y: 120 })
+  })
+})
+
+describe('centerAnchoredTopLeft', () => {
+  test('centers the candidate under the anchor point and rounds zoom fractions', () => {
+    expect(centerAnchoredTopLeft({ x: 300.7, y: 100.2 }, { width: 280, height: 180 })).toEqual({
+      x: 161,
+      y: 10,
+    })
+    expect(centerAnchoredTopLeft({ x: 0, y: 0 }, { width: 220, height: 120 })).toEqual({
+      x: -110,
+      y: -60,
+    })
   })
 })

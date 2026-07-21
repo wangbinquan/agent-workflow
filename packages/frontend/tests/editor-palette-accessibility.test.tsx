@@ -181,11 +181,13 @@ describe('accessible workflow palette activation', () => {
       resolve(__dirname, '../src/components/canvas/WorkflowCanvas.tsx'),
       'utf8',
     )
+    // 2026-07-21 落点修复：插入点是"锚点"（视口中心 / 拖放光标），节点必须
+    // 以它为中心（centerAnchoredTopLeft），不是把整个矩形挂在锚点右下方。
     expect(src).toMatch(
-      /insertPaletteItem\(item, rf\.screenToFlowPosition\(viewportCenter\(box\)\), true\)/,
+      /centerAnchoredTopLeft\(\s*rf\.screenToFlowPosition\(viewportCenter\(box\)\),\s*DEFAULT_NODE_SIZE_BY_KIND\[item\.kind\],\s*\)/,
     )
     expect(src).toMatch(
-      /insertPaletteItem\(item, rf\.screenToFlowPosition\(\{ x: e\.clientX, y: e\.clientY \}\), false\)/,
+      /centerAnchoredTopLeft\(\s*rf\.screenToFlowPosition\(\{ x: e\.clientX, y: e\.clientY \}\),\s*DEFAULT_NODE_SIZE_BY_KIND\[item\.kind\],\s*\)/,
     )
   })
 })

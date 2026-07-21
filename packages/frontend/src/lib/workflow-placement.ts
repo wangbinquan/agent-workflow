@@ -47,6 +47,22 @@ export function effectiveWorkflowNodePosition(
   }
 }
 
+/**
+ * Project a pointer-style anchor (drop cursor, viewport center) to the
+ * candidate's top-left, so the inserted node is centered under the point the
+ * user aimed at. Rounded because pointer coordinates pass through the flow
+ * transform and pick up zoom fractions.
+ */
+export function centerAnchoredTopLeft(
+  point: WorkflowPlacementPoint,
+  size: WorkflowPlacementSize,
+): WorkflowPlacementPoint {
+  return {
+    x: Math.round(point.x - size.width / 2),
+    y: Math.round(point.y - size.height / 2),
+  }
+}
+
 /** A definition node's canonical position and the two possible size sources.
  * A valid measured size wins; defaultSize is the required pre-measure fallback.
  * Wrappers may also be present here, but wrapperRects is authoritative for an
@@ -83,12 +99,20 @@ export interface FindOpenPlacementInput {
   readonly wrapperRects: readonly WorkflowPlacementWrapperRect[]
   /** Required clear space between the candidate and every occupied rect. */
   readonly gap?: number
-  /** Maximum rectangular-spiral rings to inspect after the desired point. */
+  /** Maximum Chebyshev shells (PLACEMENT_SEARCH_STEP px each) to inspect
+   * after the desired point. */
   readonly maxRings?: number
 }
 
 const DEFAULT_GAP = 16
-const DEFAULT_MAX_RINGS = 64
+/** Candidate-scan granularity in px. Deliberately much smaller than a node so
+ * a blocked drop nudges to the nearest open spot instead of teleporting a
+ * full node-plus-gap stride away (the pre-fix behavior read as "the node runs
+ * off on its own"). */
+export const PLACEMENT_SEARCH_STEP = 16
+/** 256 shells × 16px = 4096px search radius — beyond any realistic canvas
+ * neighborhood while keeping a failed search bounded. */
+const DEFAULT_MAX_RINGS = 256
 
 function isFinitePoint(point: WorkflowPlacementPoint): boolean {
   return Number.isFinite(point.x) && Number.isFinite(point.y)
@@ -160,22 +184,24 @@ interface GridOffset {
   readonly y: number
 }
 
-/** One rectangular-grid ring, ordered clockwise from the positive X axis. */
+/** One rectangular-grid ring (Chebyshev shell), nearest-Euclidean first so a
+ * blocked point resolves to the closest open spot; clockwise angle from the
+ * positive X axis breaks distance ties deterministically. */
 function spiralRing(ring: number): GridOffset[] {
-  const offsets: GridOffset[] = []
+  const entries: Array<{ offset: GridOffset; euclid: number; angle: number }> = []
   for (let y = -ring; y <= ring; y += 1) {
     for (let x = -ring; x <= ring; x += 1) {
-      if (Math.max(Math.abs(x), Math.abs(y)) === ring) offsets.push({ x, y })
+      if (Math.max(Math.abs(x), Math.abs(y)) !== ring) continue
+      entries.push({ offset: { x, y }, euclid: Math.hypot(x, y), angle: clockwiseAngle({ x, y }) })
     }
   }
-  offsets.sort((a, b) => {
-    const angleA = clockwiseAngle(a)
-    const angleB = clockwiseAngle(b)
-    if (angleA !== angleB) return angleA - angleB
-    if (a.x !== b.x) return a.x - b.x
-    return a.y - b.y
+  entries.sort((a, b) => {
+    if (a.euclid !== b.euclid) return a.euclid - b.euclid
+    if (a.angle !== b.angle) return a.angle - b.angle
+    if (a.offset.x !== b.offset.x) return a.offset.x - b.offset.x
+    return a.offset.y - b.offset.y
   })
-  return offsets
+  return entries.map((entry) => entry.offset)
 }
 
 function clockwiseAngle(offset: GridOffset): number {
@@ -186,8 +212,10 @@ function clockwiseAngle(offset: GridOffset): number {
 /**
  * Find the first collision-free canonical absolute top-left point.
  *
- * The desired point is tried first. Subsequent candidates follow a stable
- * clockwise rectangular spiral whose X/Y stride is candidate size + gap. At
+ * The desired point is tried first. Subsequent candidates scan outward in
+ * PLACEMENT_SEARCH_STEP-sized Chebyshev shells, nearest-Euclidean first within
+ * each shell, so a blocked point resolves to (approximately) the closest open
+ * spot in a stable deterministic order — never a full node-stride teleport. At
  * top level, top-level wrapper rectangles are occupied so a visually-contained
  * but non-member node is never created. Inside a wrapper, only explicit direct
  * members are occupied; neither containment nor transitive descendants are
@@ -281,13 +309,24 @@ export function findOpenPlacement(input: FindOpenPlacementInput): WorkflowPlacem
     return { x: searchOrigin.x, y: searchOrigin.y }
   }
 
-  const stepX = input.candidateSize.width + gap
-  const stepY = input.candidateSize.height + gap
-  for (let ring = 1; ring <= maxRings; ring += 1) {
+  // Inside a wrapper the clamped origin plus any offset beyond the wrapper's
+  // own extent is out of bounds by construction — cap the shells accordingly
+  // so a full wrapper fails fast instead of scanning the whole radius.
+  const ringCap =
+    wrapperContentBounds === undefined
+      ? maxRings
+      : Math.min(
+          maxRings,
+          Math.ceil(
+            Math.max(wrapperContentBounds.width, wrapperContentBounds.height) /
+              PLACEMENT_SEARCH_STEP,
+          ) + 1,
+        )
+  for (let ring = 1; ring <= ringCap; ring += 1) {
     for (const offset of spiralRing(ring)) {
       const point = {
-        x: searchOrigin.x + offset.x * stepX,
-        y: searchOrigin.y + offset.y * stepY,
+        x: searchOrigin.x + offset.x * PLACEMENT_SEARCH_STEP,
+        y: searchOrigin.y + offset.y * PLACEMENT_SEARCH_STEP,
       }
       if (isOpen(point)) return point
     }
