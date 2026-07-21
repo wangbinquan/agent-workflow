@@ -199,6 +199,29 @@ describe('AclPanel', () => {
     expect(screen.getByTestId('acl-transfer-owner')).toBeTruthy()
   })
 
+  // Regression: closing the nested owner-transfer dialog must return focus to
+  // the transfer button. WebKit (e2e-webkit-nightly run 29818632077, RFC-199
+  // commit 21c2ab8a) failed e2e/rfc099-ownership-acl.spec.ts:245 because the
+  // dialog auto-captured `document.activeElement` at open time and WebKit does
+  // NOT focus a <button> on mouse click, so its close-time restore was a no-op.
+  // The fix hands the Dialog an explicit `triggerRef`. happy-dom's fireEvent
+  // click likewise leaves the button unfocused, so this reproduces the bug in
+  // the main-CI suite: without the triggerRef, activeElement never lands back
+  // on the button here.
+  test('closing the owner-transfer dialog restores focus to the transfer button', async () => {
+    setupGet({ canManage: true })
+    wrap(<AclPanel resourceBaseUrl="/api/agents/x" invalidateKey={['agents']} />)
+    await waitFor(() => expect(screen.queryByTestId('acl-panel')).toBeTruthy())
+    const transferBtn = screen.getByTestId('acl-transfer-owner')
+    // Deliberately do NOT focus the button first (mirrors WebKit's mouse click).
+    expect(document.activeElement).not.toBe(transferBtn)
+    fireEvent.click(transferBtn)
+    await waitFor(() => expect(screen.queryByTestId('acl-transfer-dialog')).toBeTruthy())
+    fireEvent.keyDown(window, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByTestId('acl-transfer-dialog')).toBeNull())
+    await waitFor(() => expect(document.activeElement).toBe(transferBtn))
+  })
+
   test('daemon-token actor (single-user mode) renders nothing (D19)', async () => {
     setupGet({ canManage: true, source: 'daemon' })
     wrap(<AclPanel resourceBaseUrl="/api/agents/x" invalidateKey={['agents']} />)

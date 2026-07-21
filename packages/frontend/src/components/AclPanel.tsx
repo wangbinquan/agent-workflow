@@ -13,7 +13,7 @@
 // the daemon token (single-user mode — D19).
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ResourceAcl, ResourceVisibility, UserPublic } from '@agent-workflow/shared'
 import { api } from '@/api/client'
@@ -107,6 +107,13 @@ export function AclPanel({
   const [dirty, setDirty] = useState(false)
   const [transferOpen, setTransferOpen] = useState(false)
   const [transferTo, setTransferTo] = useState<UserPublic[]>([])
+  // WebKit doesn't focus a <button> on mouse click, so the transfer Dialog's
+  // auto-captured `document.activeElement` at open time is <body> and its
+  // close-time focus-restore becomes a no-op. Hand the Dialog this explicit
+  // trigger ref so focus lands back on the transfer button on close (the
+  // Dialog contract for this exact case — see Dialog.tsx triggerRef doc).
+  // Locked by e2e/rfc099-ownership-acl.spec.ts (Escape→focus-restore, webkit).
+  const transferBtnRef = useRef<HTMLButtonElement | null>(null)
 
   useEffect(() => {
     if (query.data !== undefined && !dirty) {
@@ -175,6 +182,7 @@ export function AclPanel({
           )}
           {canManage && canTransferOwner && (
             <button
+              ref={transferBtnRef}
               type="button"
               className="btn btn--sm"
               onClick={() => setTransferOpen(true)}
@@ -265,6 +273,7 @@ export function AclPanel({
         title={t('acl.transferTitle')}
         size="sm"
         data-testid="acl-transfer-dialog"
+        triggerRef={transferBtnRef}
         footer={
           <>
             <button type="button" className="btn" onClick={() => setTransferOpen(false)}>
