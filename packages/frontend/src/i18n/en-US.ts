@@ -706,10 +706,49 @@ export const enUS: Resources = {
       'Four tracks: build an agent that can do work, give an agent a skill, chain agents into a pipeline, and let a team of agents collaborate. Take any of them on its own; leave whenever you like.',
     skipLink: 'Look around on my own, open the agent list →',
   },
+  tour: {
+    ariaLabel: 'Guided tour',
+    progress: 'Step {{current}} of {{total}}',
+    goToPage: 'Take me to this step',
+    skip: 'Exit tour',
+    back: 'Back',
+    next: 'Next',
+    done: 'Done',
+    firstTask: {
+      openAgents: {
+        title: 'Start at the agents list',
+        body: 'Click the highlighted “Agents” in the sidebar. An agent is a worker role — build one first.',
+      },
+      newAgent: { title: 'Create an agent', body: 'Click the highlighted “New agent” button.' },
+      name: {
+        title: 'Give it a name',
+        body: 'Type a name (lowercase letters/digits/hyphens) in the highlighted box, e.g. my-coder.',
+      },
+      saveAgent: {
+        title: 'Save the agent',
+        body: 'Click the highlighted “Create” button. Saving moves you to the next step automatically.',
+      },
+      launch: {
+        title: 'Launch a task with it',
+        body: 'On the agent page, click the highlighted “Launch task”. We run it in a scratch space — no repo needed.',
+      },
+      submit: {
+        title: 'Describe a task, then launch',
+        body: 'Write one sentence of what it should do, then click the highlighted “Launch”.',
+      },
+      result: {
+        title: 'Watch it run',
+        body: 'This is the task’s live status. When it finishes you can read each node’s output and diff — you just went end to end!',
+      },
+    },
+  },
   guide: {
     title: 'Guided tour',
     intro:
       'Pick a track. Every step can either build a working example for you, or send you to the real form to do it yourself.',
+    handholdIntro:
+      'Want me to walk you through the real screens, step by step? From building an agent to launching a task and reading the result — highlighted the whole way.',
+    startTour: 'Walk me through it',
     sandboxNotice:
       'Everything the tour creates is your own practice material: only you can see it, and you can wipe all of it below in one click (together with the tasks and artifacts it produced).',
     pickTrack: 'What would you like to learn first?',

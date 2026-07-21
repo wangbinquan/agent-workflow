@@ -489,6 +489,7 @@ export function ResourceSplitPage(props: ResourceSplitPageProps) {
               to={props.newTo}
               className={'btn btn--primary split__new' + (props.newActive ? ' is-active' : '')}
               data-testid="split-new-button"
+              data-tour="split-new"
             >
               {props.newLabel}
             </Link>

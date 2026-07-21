@@ -481,7 +481,7 @@ function TaskDetailPage() {
           /* RFC-037: user-supplied display name is the primary heading; the
              ULID drops to muted metadata so it stays copyable without
              dominating the page. */
-          <span className="task-detail__title">
+          <span className="task-detail__title" data-tour="task-status">
             <span className="task-detail__name">{tk.name}</span>{' '}
             <TaskStatusChip status={tk.status} />
           </span>

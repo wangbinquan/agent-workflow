@@ -12,6 +12,7 @@
 import { Outlet, createRootRoute, redirect, useRouterState } from '@tanstack/react-router'
 import { useEffect, useSyncExternalStore, type ReactNode } from 'react'
 import { AppShell } from '@/components/shell/AppShell'
+import { TourProvider } from '@/components/tour/SpotlightTour'
 import { RouteTransitionState } from '@/components/shell/RouteTransitionState'
 import { useApplyLanguage } from '@/hooks/useLanguage'
 import { useApplyTheme } from '@/hooks/useTheme'
@@ -87,7 +88,11 @@ export function RootShell({
       </BareShell>
     )
   }
-  return <AppShell pathname={pathname}>{children}</AppShell>
+  return (
+    <TourProvider pathname={pathname}>
+      <AppShell pathname={pathname}>{children}</AppShell>
+    </TourProvider>
+  )
 }
 
 function BareShell({ children }: { children: ReactNode }) {

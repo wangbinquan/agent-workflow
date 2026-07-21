@@ -52,6 +52,8 @@ function NavItem({ item, isActive, accessory }: NavItemProps) {
         search={item.to === '/memory' ? { tab: 'all' } : undefined}
         className={`${className} nav-item__main`}
         activeProps={{ className: `${className} nav-item__main nav-item--active` }}
+        // RFC-211 §12: spotlight-tour anchor (e.g. nav-/agents).
+        data-tour={`nav-${item.to}`}
       >
         <span className="nav-item__icon" aria-hidden="true">
           <ResourceIcon name={item.icon} />

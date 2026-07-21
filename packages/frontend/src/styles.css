@@ -8051,6 +8051,83 @@ details.form-section[open] > summary {
   flex-shrink: 0;
 }
 
+/* =============================================================================
+   RFC-211 §12 — hand-holding spotlight tour overlay.
+   ============================================================================= */
+.spotlight-tour {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+/* The hole: a transparent box over the anchor whose huge spread shadow dims the
+   rest of the page while leaving the target fully clickable. */
+.spotlight-tour__hole {
+  position: fixed;
+  border-radius: 8px;
+  box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.55);
+  transition: all 0.15s ease;
+  pointer-events: none;
+}
+
+/* Used when the step's anchor isn't on screen yet (wrong page): dim everything
+   and centre the bubble with its "go here" nudge. */
+.spotlight-tour__scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  pointer-events: auto;
+}
+
+.spotlight-tour__bubble {
+  position: fixed;
+  z-index: 1001;
+  width: min(360px, calc(100vw - 24px));
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  box-shadow: var(--shadow-lg, 0 12px 32px rgba(0, 0, 0, 0.28));
+  pointer-events: auto;
+  outline: none;
+}
+
+.spotlight-tour__progress {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.spotlight-tour__title {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+
+.spotlight-tour__body {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.spotlight-tour__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.spotlight-tour__spacer {
+  margin-inline-start: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spotlight-tour__hole {
+    transition: none;
+  }
+}
+
 /* ---- Reviews list group heading ---- */
 
 .reviews-group {

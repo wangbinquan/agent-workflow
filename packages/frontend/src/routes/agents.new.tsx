@@ -168,6 +168,7 @@ function AgentCreatePage() {
                 }
               }}
               data-testid="agent-create-button"
+              data-tour="agent-save"
             >
               {create.isPending ? t('common.creating') : t('agents.createButton')}
             </button>

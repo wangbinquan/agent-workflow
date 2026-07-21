@@ -175,6 +175,7 @@ function AgentDetailPage() {
               search={{ kind: 'agent', agent: name }}
               className="btn"
               data-testid="agent-launch-button"
+              data-tour="agent-launch"
             >
               {t('taskWizard.launchEntry')}
             </Link>

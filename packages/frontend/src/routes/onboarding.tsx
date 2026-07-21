@@ -48,6 +48,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { Select } from '@/components/Select'
 import { Stepper } from '@/components/Stepper'
 import { useActor, useIsAdmin } from '@/hooks/useActor'
+import { useTour } from '@/components/tour/SpotlightTour'
 
 const TRACKS: readonly OnboardingTrack[] = ['agent', 'skill', 'workflow', 'workgroup']
 
@@ -112,6 +113,7 @@ function OnboardingPage() {
   const qc = useQueryClient()
   const isAdmin = useIsAdmin()
   const actor = useActor()
+  const tour = useTour()
   const [track, setTrack] = useState<OnboardingTrack | null>(null)
   const [stepIndex, setStepIndex] = useState(0)
   const [adoptPick, setAdoptPick] = useState<string>('')
@@ -242,6 +244,24 @@ function OnboardingPage() {
       <PageHeader title={t('guide.title')} data-testid="guide-page">
         <p className="page__hint">{t('guide.intro')}</p>
       </PageHeader>
+
+      <NoticeBanner
+        tone="info"
+        size="compact"
+        testid="guide-handhold"
+        action={
+          <button
+            type="button"
+            className="btn btn--primary btn--sm"
+            data-testid="guide-start-tour"
+            onClick={() => tour.start('first-task')}
+          >
+            {t('guide.startTour')}
+          </button>
+        }
+      >
+        {t('guide.handholdIntro')}
+      </NoticeBanner>
 
       <NoticeBanner tone="info" size="compact" testid="guide-sandbox-notice">
         {t('guide.sandboxNotice')}

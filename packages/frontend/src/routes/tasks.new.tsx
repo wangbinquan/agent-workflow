@@ -1139,6 +1139,7 @@ function TaskWizardPage() {
                   onClick={() => start.mutate()}
                   disabled={!canSubmit}
                   data-testid="wizard-launch"
+                  data-tour="task-submit"
                 >
                   {start.isPending ? t('launch.starting') : t('taskWizard.launch')}
                 </button>
@@ -1151,6 +1152,7 @@ function TaskWizardPage() {
                   onClick={() => start.mutate()}
                   disabled={!canSubmit}
                   data-testid="wizard-launch"
+                  data-tour="task-submit"
                 >
                   {start.isPending ? t('launch.starting') : t('taskWizard.launch')}
                 </button>

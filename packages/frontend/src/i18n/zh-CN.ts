@@ -838,10 +838,31 @@ export interface Resources {
     tracksIntro: string
     skipLink: string
   }
+  // RFC-211 §12 手把手 spotlight tour。
+  tour: {
+    ariaLabel: string
+    progress: string
+    goToPage: string
+    skip: string
+    back: string
+    next: string
+    done: string
+    firstTask: {
+      openAgents: { title: string; body: string }
+      newAgent: { title: string; body: string }
+      name: { title: string; body: string }
+      saveAgent: { title: string; body: string }
+      launch: { title: string; body: string }
+      submit: { title: string; body: string }
+      result: { title: string; body: string }
+    }
+  }
   // RFC-211 引导式沙盒。
   guide: {
     title: string
     intro: string
+    handholdIntro: string
+    startTour: string
     sandboxNotice: string
     pickTrack: string
     resume: string
@@ -4421,9 +4442,47 @@ export const zhCN: Resources = {
       '引导分四条线：造一个能干活的代理、给代理装一个技能、把代理串成流水线、让一组代理协作。每条线都能单独走，随时可以退出。',
     skipLink: '先自己逛逛，打开代理列表 →',
   },
+  tour: {
+    ariaLabel: '上手引导',
+    progress: '第 {{current}} / {{total}} 步',
+    goToPage: '带我去这一步的页面',
+    skip: '退出引导',
+    back: '上一步',
+    next: '下一步',
+    done: '完成',
+    firstTask: {
+      openAgents: {
+        title: '先去代理列表',
+        body: '点侧边栏高亮的「代理」。代理是干活的角色，第一步先建一个。',
+      },
+      newAgent: { title: '新建一个代理', body: '点高亮的「新建代理」按钮。' },
+      name: {
+        title: '给它起个名字',
+        body: '在高亮的名称框里填个名字（小写字母/数字/连字符），比如 my-coder。',
+      },
+      saveAgent: {
+        title: '保存这个代理',
+        body: '填好后点高亮的「创建」按钮。保存后会自动进入下一步。',
+      },
+      launch: {
+        title: '用它启动一个任务',
+        body: '在代理详情页点高亮的「启动任务」，我们用一块临时空间跑一次、不用接仓库。',
+      },
+      submit: {
+        title: '填一句任务、然后启动',
+        body: '在描述里写一句你想让它做的事，点高亮的「启动」。',
+      },
+      result: {
+        title: '看它跑起来',
+        body: '这里是任务的实时状态。跑完你能看到每个节点的产出与 diff——你已经走通了一整条链路！',
+      },
+    },
+  },
   guide: {
     title: '上手引导',
     intro: '选一条线开始。每一步都可以让引导替你生成一份能跑的样板，也可以自己动手建。',
+    handholdIntro: '想让我在真实界面上一步步带你走一遍？从建代理到启动任务、看结果，全程高亮指引。',
+    startTour: '手把手带我走一遍',
     sandboxNotice:
       '引导里创建的都是你自己的练习资源：只有你看得见，随时可以在下面一键清除（连同它们产生的任务与产物）。',
     pickTrack: '你想先学哪一块？',

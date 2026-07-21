@@ -1,0 +1,303 @@
+// RFC-211 §12 — hand-holding spotlight tour.
+//
+// The user asked for a walk-through that guides a newcomer through the REAL
+// interface step by step, not a page where you press "build it for me". That
+// deliberately overrides RFC-199's "no tutorial overlay" stance (user decision,
+// 2026-07-21).
+//
+// How it works: a persistent provider (mounted in the app shell, so it survives
+// route changes) holds "which tour, which step". A portaled overlay dims the
+// page, cuts a hole around the step's anchor element (found by a `data-tour`
+// attribute), and floats a bubble next to it with the instruction and the
+// controls. A step either advances when the user lands on a target route
+// (`advanceOnRoute`) or when they press Next — so the tour follows the user as
+// they actually operate the product, and never traps them (Skip is always one
+// key away).
+//
+// Anchors live on the real components (nav items, form fields, buttons) as
+// `data-tour="…"`; the tour script (tourScript.ts) references them by name.
+
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
+import { createPortal } from 'react-dom'
+import { useNavigate } from '@tanstack/react-router'
+import { useTranslation } from 'react-i18next'
+import { getTour, type TourId, type TourStep } from './tourScript'
+
+interface TourState {
+  tourId: TourId
+  stepIndex: number
+}
+
+interface TourContextValue {
+  active: TourState | null
+  start: (tourId: TourId) => void
+  stop: () => void
+  next: () => void
+  back: () => void
+}
+
+const TourContext = createContext<TourContextValue | null>(null)
+
+/** Per-browser persistence — the tour is UI progress, not server state. */
+const STORAGE_KEY = 'aw-tour'
+
+function loadState(): TourState | null {
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY)
+    if (raw === null) return null
+    const parsed = JSON.parse(raw) as TourState
+    if (typeof parsed?.tourId === 'string' && typeof parsed?.stepIndex === 'number') return parsed
+    return null
+  } catch {
+    return null
+  }
+}
+
+function saveState(s: TourState | null): void {
+  try {
+    if (s === null) window.localStorage.removeItem(STORAGE_KEY)
+    else window.localStorage.setItem(STORAGE_KEY, JSON.stringify(s))
+  } catch {
+    /* private mode / disabled storage — the tour just won't persist */
+  }
+}
+
+export function useTour(): TourContextValue {
+  const ctx = useContext(TourContext)
+  if (ctx === null) throw new Error('useTour must be used inside <TourProvider>')
+  return ctx
+}
+
+/**
+ * Mounts the tour state + overlay. Place high in the tree (app shell) so a step
+ * can span routes without the overlay unmounting between pages.
+ */
+export function TourProvider({ pathname, children }: { pathname: string; children: ReactNode }) {
+  const [active, setActive] = useState<TourState | null>(() => loadState())
+
+  const commit = useCallback((s: TourState | null) => {
+    setActive(s)
+    saveState(s)
+  }, [])
+
+  const start = useCallback(
+    (tourId: TourId) => {
+      commit({ tourId, stepIndex: 0 })
+    },
+    [commit],
+  )
+  const stop = useCallback(() => commit(null), [commit])
+
+  const next = useCallback(() => {
+    setActive((prev) => {
+      if (prev === null) return null
+      const tour = getTour(prev.tourId)
+      if (prev.stepIndex + 1 >= tour.steps.length) {
+        saveState(null)
+        return null
+      }
+      const nextState = { ...prev, stepIndex: prev.stepIndex + 1 }
+      saveState(nextState)
+      return nextState
+    })
+  }, [])
+
+  const back = useCallback(() => {
+    setActive((prev) => {
+      if (prev === null || prev.stepIndex === 0) return prev
+      const nextState = { ...prev, stepIndex: prev.stepIndex - 1 }
+      saveState(nextState)
+      return nextState
+    })
+  }, [])
+
+  const value = useMemo<TourContextValue>(
+    () => ({ active, start, stop, next, back }),
+    [active, start, stop, next, back],
+  )
+
+  return (
+    <TourContext.Provider value={value}>
+      {children}
+      {active !== null && <SpotlightOverlay pathname={pathname} state={active} />}
+    </TourContext.Provider>
+  )
+}
+
+interface Rect {
+  top: number
+  left: number
+  width: number
+  height: number
+}
+
+/**
+ * Poll the anchor's position. Elements move (layout, async render, scroll), and
+ * the target may not exist yet when a step first activates because the user has
+ * not navigated to its page — in that case we render a "go to X" prompt instead
+ * of a hole over nothing.
+ */
+function useAnchorRect(selector: string, deps: unknown[]): Rect | null {
+  const [rect, setRect] = useState<Rect | null>(null)
+  useLayoutEffect(() => {
+    let raf = 0
+    const measure = (): void => {
+      const el = document.querySelector(selector)
+      if (el === null) {
+        setRect(null)
+      } else {
+        const r = el.getBoundingClientRect()
+        setRect({ top: r.top, left: r.left, width: r.width, height: r.height })
+      }
+      raf = window.requestAnimationFrame(measure)
+    }
+    measure()
+    return () => window.cancelAnimationFrame(raf)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps)
+  return rect
+}
+
+function SpotlightOverlay({ pathname, state }: { pathname: string; state: TourState }) {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const { next, back, stop } = useTour()
+  const tour = getTour(state.tourId)
+  const step: TourStep | undefined = tour.steps[state.stepIndex]
+  const bubbleRef = useRef<HTMLDivElement | null>(null)
+
+  const onRightPage =
+    step?.route === undefined || pathname === step.route || pathname.startsWith(step.route)
+  const rect = useAnchorRect(step?.anchor ?? '', [step?.anchor, pathname, state.stepIndex])
+
+  // Route-driven advance: the user did the thing (saved, launched) and the app
+  // moved them; step forward automatically.
+  useEffect(() => {
+    if (step?.advanceOnRoute !== undefined && pathname.startsWith(step.advanceOnRoute)) {
+      next()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname, state.stepIndex])
+
+  // Keyboard: Esc = skip, ArrowRight/Left = next/back (when manual).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') stop()
+      else if (e.key === 'ArrowRight' && step?.advanceOnRoute === undefined) next()
+      else if (e.key === 'ArrowLeft') back()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [next, back, stop, step?.advanceOnRoute])
+
+  useLayoutEffect(() => {
+    bubbleRef.current?.focus()
+  }, [state.stepIndex])
+
+  if (step === undefined) return null
+
+  const total = tour.steps.length
+  const isLast = state.stepIndex === total - 1
+
+  // Bubble placement: below the anchor if there's room, else above; centred when
+  // the anchor is missing (off-page prompt).
+  const PAD = 8
+  const bubbleStyle: React.CSSProperties =
+    rect === null
+      ? { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }
+      : rect.top + rect.height + 220 < window.innerHeight
+        ? { top: rect.top + rect.height + PAD, left: Math.max(PAD, rect.left) }
+        : { top: Math.max(PAD, rect.top - 200), left: Math.max(PAD, rect.left) }
+
+  const body = (
+    <div className="spotlight-tour" data-testid="spotlight-tour">
+      {/* The hole: a transparent box over the anchor with a huge spread shadow
+          dims everything else, so the target stays fully interactive. */}
+      {rect !== null && onRightPage && (
+        <div
+          className="spotlight-tour__hole"
+          style={{
+            top: rect.top - 4,
+            left: rect.left - 4,
+            width: rect.width + 8,
+            height: rect.height + 8,
+          }}
+        />
+      )}
+      {(rect === null || !onRightPage) && <div className="spotlight-tour__scrim" />}
+
+      <div
+        className="spotlight-tour__bubble"
+        style={bubbleStyle}
+        role="dialog"
+        aria-label={t('tour.ariaLabel')}
+        tabIndex={-1}
+        ref={bubbleRef}
+        data-testid="spotlight-tour-bubble"
+      >
+        <div className="spotlight-tour__progress">
+          {t('tour.progress', { current: state.stepIndex + 1, total })}
+        </div>
+        <h3 className="spotlight-tour__title">{t(step.titleKey)}</h3>
+        <p className="spotlight-tour__body">{t(step.bodyKey)}</p>
+
+        {!onRightPage && step.route !== undefined && (
+          <button
+            type="button"
+            className="btn btn--primary btn--sm"
+            data-testid="spotlight-tour-goto"
+            onClick={() => void navigate({ to: step.route as never } as never)}
+          >
+            {t('tour.goToPage')}
+          </button>
+        )}
+
+        <div className="spotlight-tour__actions">
+          <button
+            type="button"
+            className="btn btn--xs"
+            data-testid="spotlight-tour-skip"
+            onClick={stop}
+          >
+            {t('tour.skip')}
+          </button>
+          <span className="spotlight-tour__spacer" />
+          {state.stepIndex > 0 && (
+            <button
+              type="button"
+              className="btn btn--sm"
+              data-testid="spotlight-tour-back"
+              onClick={back}
+            >
+              {t('tour.back')}
+            </button>
+          )}
+          {/* A route-advance step has no Next — the user advances it by DOING
+              the thing. Only manual/explanatory steps carry a Next button. */}
+          {step.advanceOnRoute === undefined && (
+            <button
+              type="button"
+              className="btn btn--primary btn--sm"
+              data-testid="spotlight-tour-next"
+              onClick={next}
+            >
+              {isLast ? t('tour.done') : t('tour.next')}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+
+  return createPortal(body, document.body)
+}

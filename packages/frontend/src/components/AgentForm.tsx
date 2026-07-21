@@ -288,16 +288,20 @@ export function AgentForm({
 
   const basics = (
     <>
-      <Field label={t('agentForm.fieldName')} required hint={t('agentForm.fieldNameHint')}>
-        <TextInput
-          value={value.name}
-          onChange={(v) => patch('name', v)}
-          disabled={nameLocked === true}
-          required
-          pattern={AGENT_NAME_RE.source}
-          placeholder={t('agentForm.fieldNamePlaceholder')}
-        />
-      </Field>
+      {/* RFC-211 §12: spotlight-tour anchor spans wrap the field so the
+          highlight frames the label + input together. */}
+      <div data-tour="agent-name">
+        <Field label={t('agentForm.fieldName')} required hint={t('agentForm.fieldNameHint')}>
+          <TextInput
+            value={value.name}
+            onChange={(v) => patch('name', v)}
+            disabled={nameLocked === true}
+            required
+            pattern={AGENT_NAME_RE.source}
+            placeholder={t('agentForm.fieldNamePlaceholder')}
+          />
+        </Field>
+      </div>
 
       <Field label={t('agentForm.fieldDescription')}>
         <TextInput
@@ -361,16 +365,18 @@ export function AgentForm({
         hasExternalPortAlert={hasExternalPortAlert}
         onChange={(inputs) => onChange({ ...value, inputs })}
       />
-      <OutputsEditor
-        outputs={value.outputs ?? []}
-        outputKinds={value.outputKinds}
-        outputWrapperPortNames={value.outputWrapperPortNames}
-        aggregator={value.role === 'aggregator'}
-        hasExternalPortAlert={hasExternalPortAlert}
-        onChange={(outputs, outputKinds, outputWrapperPortNames) =>
-          onChange({ ...value, outputs, outputKinds, outputWrapperPortNames })
-        }
-      />
+      <div data-tour="agent-outputs">
+        <OutputsEditor
+          outputs={value.outputs ?? []}
+          outputKinds={value.outputKinds}
+          outputWrapperPortNames={value.outputWrapperPortNames}
+          aggregator={value.role === 'aggregator'}
+          hasExternalPortAlert={hasExternalPortAlert}
+          onChange={(outputs, outputKinds, outputWrapperPortNames) =>
+            onChange({ ...value, outputs, outputKinds, outputWrapperPortNames })
+          }
+        />
+      </div>
     </div>
   )
 
