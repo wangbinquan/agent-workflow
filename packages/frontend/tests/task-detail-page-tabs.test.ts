@@ -35,10 +35,12 @@ describe('TaskDetailPage page-section structure', () => {
     expect(SRC).toContain(
       'task.data === undefined && task.error !== null && task.error !== undefined',
     )
-    expect(SRC).toMatch(/onClick=\{\(\) => void task\.refetch\(\)\}/)
-    expect(SRC).toMatch(/onClick=\{\(\) => void nodeRuns\.refetch\(\)\}/)
-    expect(SRC).toMatch(/onClick=\{\(\) => void diff\.refetch\(\)\}/)
-    expect(SRC).toMatch(/onClick=\{\(\) => void structuralDiff\.refetch\(\)\}/)
+    // RFC-214: single-query error banners收编到 ErrorBanner.onRetry (was hand-written
+    // button onClick). The room banner (compound Details+retry action) stays onClick — see below.
+    expect(SRC).toMatch(/onRetry=\{\(\) => void task\.refetch\(\)\}/)
+    expect(SRC).toMatch(/onRetry=\{\(\) => void nodeRuns\.refetch\(\)\}/)
+    expect(SRC).toMatch(/onRetry=\{\(\) => void diff\.refetch\(\)\}/)
+    expect(SRC).toMatch(/onRetry=\{\(\) => void structuralDiff\.refetch\(\)\}/)
     expect(SRC).toContain("tab === 'workflow-status' || tab === 'node-runs' || tab === 'outputs'")
     expect(SRC).toContain(
       'nodeRunsConsumerActive && nodeRuns.data === undefined && nodeRuns.isLoading',

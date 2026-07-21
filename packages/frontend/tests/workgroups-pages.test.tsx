@@ -942,7 +942,8 @@ describe('RFC-164 /workgroups wiring', () => {
     expect(edit).toContain('workgroupLaunchReadiness')
     expect(edit).toContain('<PageHeader title={name} />')
     expect(edit).toContain('error={query.error}')
-    expect(edit).toContain('onClick={() => void query.refetch()}')
+    // RFC-214: loading-gate retry收编到 ErrorBanner.onRetry (was hand-written button onClick).
+    expect(edit).toContain('onRetry={() => void query.refetch()}')
     // The config form lives INSIDE the panel now, not on the page directly.
     const panel = readSrc('components/workgroup/WorkgroupContextPanel.tsx')
     expect(panel).toContain("import { WorkgroupForm } from './WorkgroupForm'")

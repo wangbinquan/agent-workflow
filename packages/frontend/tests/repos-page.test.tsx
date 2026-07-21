@@ -41,7 +41,10 @@ describe('/repos page wiring (RFC-024)', () => {
     expect(REPOS_SRC).toContain("import { TableViewport } from '@/components/TableViewport'")
     expect(REPOS_SRC).toContain("import { ErrorBanner } from '@/components/ErrorBanner'")
     expect(REPOS_SRC).toContain("<TableViewport label={t('repos.title')}>")
-    expect(REPOS_SRC).toContain('<ErrorBanner error={list.error} action={retryAction} />')
+    // RFC-214: retry收编到 ErrorBanner.onRetry (was a hand-written retryAction button).
+    expect(REPOS_SRC).toContain(
+      '<ErrorBanner error={list.error} onRetry={() => void list.refetch()} />',
+    )
     expect(REPOS_SRC).toContain('<ErrorBanner error={refresh.error} />')
     expect(REPOS_SRC).not.toContain('<div className="error-box">')
   })

@@ -82,11 +82,6 @@ function ReposPage() {
       {t('repos.batchImport.button')}
     </button>
   )
-  const retryAction = (
-    <button type="button" className="btn btn--sm" onClick={() => void list.refetch()}>
-      {t('common.retry')}
-    </button>
-  )
 
   return (
     <div className="page repos-page">
@@ -105,7 +100,7 @@ function ReposPage() {
 
       {list.isLoading && <LoadingState label={t('repos.loading')} data-testid="repos-loading" />}
       {list.error !== null && list.error !== undefined && (
-        <ErrorBanner error={list.error} action={retryAction} />
+        <ErrorBanner error={list.error} onRetry={() => void list.refetch()} />
       )}
       {isInitialEmpty && (
         <EmptyState

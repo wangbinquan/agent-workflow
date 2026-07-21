@@ -98,30 +98,19 @@ export function SkillVersionHistory({
     onPendingChange?.(restore.isPending)
   }, [restore.isPending, onPendingChange])
 
-  const versionsRetry = (
-    <button type="button" className="btn btn--sm" onClick={() => void versions.refetch()}>
-      {t('common.retry')}
-    </button>
-  )
-  const diffRetry = (
-    <button type="button" className="btn btn--sm" onClick={() => void diff.refetch()}>
-      {t('common.retry')}
-    </button>
-  )
-
   return (
     <section className="page__section">
       <h2>{t('skills.versionsSection')}</h2>
       {versions.data === undefined && versions.isLoading ? (
         <LoadingState size="compact" />
       ) : versions.data === undefined ? (
-        <ErrorBanner error={versions.error} action={versionsRetry} />
+        <ErrorBanner error={versions.error} onRetry={() => void versions.refetch()} />
       ) : versions.data.length === 0 ? (
         <EmptyState size="compact" title={t('skills.versionsEmpty')} />
       ) : (
         <>
           {versions.error !== null && versions.error !== undefined && (
-            <ErrorBanner error={versions.error} action={versionsRetry} />
+            <ErrorBanner error={versions.error} onRetry={() => void versions.refetch()} />
           )}
           {restore.error !== null && restore.error !== undefined && (
             <ErrorBanner error={restore.error} />
@@ -198,11 +187,11 @@ export function SkillVersionHistory({
         {diff.data === undefined && diff.isLoading ? (
           <LoadingState size="compact" />
         ) : diff.data === undefined ? (
-          <ErrorBanner error={diff.error} action={diffRetry} />
+          <ErrorBanner error={diff.error} onRetry={() => void diff.refetch()} />
         ) : (
           <>
             {diff.error !== null && diff.error !== undefined && (
-              <ErrorBanner error={diff.error} action={diffRetry} />
+              <ErrorBanner error={diff.error} onRetry={() => void diff.refetch()} />
             )}
             <DiffViewer diff={diff.data.diff} />
           </>

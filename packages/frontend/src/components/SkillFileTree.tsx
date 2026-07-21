@@ -136,14 +136,7 @@ export function SkillFileTree({
         <div className="file-tree__header">{t('skills.fileTreeHeader')}</div>
         {tree.isLoading && <LoadingState size="compact" />}
         {tree.error !== null && tree.error !== undefined && (
-          <ErrorBanner
-            error={tree.error}
-            action={
-              <button type="button" className="btn btn--sm" onClick={() => void tree.refetch()}>
-                {t('common.retry')}
-              </button>
-            }
-          />
+          <ErrorBanner error={tree.error} onRetry={() => void tree.refetch()} />
         )}
         {tree.data !== undefined && rows.length === 0 && (
           <EmptyState title={t('skills.fileTreeEmpty')} size="compact" />
@@ -194,14 +187,7 @@ export function SkillFileTree({
         ) : selectedScope === undefined && file.isLoading ? (
           <LoadingState label={t('skills.fileLoadingNamed', { name: selected })} size="compact" />
         ) : file.error !== null && file.error !== undefined && selectedScope === undefined ? (
-          <ErrorBanner
-            error={file.error}
-            action={
-              <button type="button" className="btn btn--sm" onClick={() => void file.refetch()}>
-                {t('common.retry')}
-              </button>
-            }
-          />
+          <ErrorBanner error={file.error} onRetry={() => void file.refetch()} />
         ) : selectedScope === undefined ? (
           <LoadingState label={t('skills.fileLoadingNamed', { name: selected })} size="compact" />
         ) : !selectedScope.draft.exists ? (

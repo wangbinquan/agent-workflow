@@ -179,7 +179,6 @@ function remapMatchingRemoteMembers(
 }
 
 function WorkgroupDetailPage() {
-  const { t } = useTranslation()
   const { name } = Route.useParams()
   const query = useQuery<Workgroup>({
     queryKey: ['workgroups', name],
@@ -188,16 +187,11 @@ function WorkgroupDetailPage() {
   })
 
   if (query.data === undefined) {
-    const retry = (
-      <button type="button" className="btn btn--sm" onClick={() => void query.refetch()}>
-        {t('common.retry')}
-      </button>
-    )
     if (query.error !== null && query.error !== undefined) {
       return (
         <div className="page">
           <PageHeader title={name} />
-          <ErrorBanner error={query.error} action={retry} />
+          <ErrorBanner error={query.error} onRetry={() => void query.refetch()} />
         </div>
       )
     }

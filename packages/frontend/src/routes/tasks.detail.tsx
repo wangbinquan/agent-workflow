@@ -368,14 +368,7 @@ function TaskDetailPage() {
     return (
       <div className="page page--task-detail">
         <PageHeader title={id} />
-        <ErrorBanner
-          error={task.error}
-          action={
-            <button type="button" className="btn btn--sm" onClick={() => void task.refetch()}>
-              {t('common.retry')}
-            </button>
-          }
-        />
+        <ErrorBanner error={task.error} onRetry={() => void task.refetch()} />
       </div>
     )
   }
@@ -384,14 +377,7 @@ function TaskDetailPage() {
     return (
       <div className="page page--task-detail">
         <PageHeader title={task.data.name} />
-        <ErrorBanner
-          error={actor.error}
-          action={
-            <button type="button" className="btn btn--sm" onClick={() => void actor.refetch()}>
-              {t('common.retry')}
-            </button>
-          }
-        />
+        <ErrorBanner error={actor.error} onRetry={() => void actor.refetch()} />
       </div>
     )
   }
@@ -404,11 +390,7 @@ function TaskDetailPage() {
           !dismissedBanners.has(taskQueryBannerKey) && (
             <ErrorBanner
               error={task.error}
-              action={
-                <button type="button" className="btn btn--sm" onClick={() => void task.refetch()}>
-                  {t('common.retry')}
-                </button>
-              }
+              onRetry={() => void task.refetch()}
               onDismiss={() => dismissBanner(taskQueryBannerKey)}
             />
           )}
@@ -545,11 +527,7 @@ function TaskDetailPage() {
           !dismissedBanners.has(taskQueryBannerKey) && (
             <ErrorBanner
               error={task.error}
-              action={
-                <button type="button" className="btn btn--sm" onClick={() => void task.refetch()}>
-                  {t('common.retry')}
-                </button>
-              }
+              onRetry={() => void task.refetch()}
               onDismiss={() => dismissBanner(taskQueryBannerKey)}
             />
           )}
@@ -745,15 +723,7 @@ function TaskDetailPage() {
           !dismissedBanners.has(nodeRunsErrorBannerKey) && (
             <ErrorBanner
               error={nodeRuns.error}
-              action={
-                <button
-                  type="button"
-                  className="btn btn--sm"
-                  onClick={() => void nodeRuns.refetch()}
-                >
-                  {t('common.retry')}
-                </button>
-              }
+              onRetry={() => void nodeRuns.refetch()}
               onDismiss={() => dismissBanner(nodeRunsErrorBannerKey)}
             />
           )}
@@ -1005,18 +975,7 @@ function TaskDetailPage() {
               {diff.data !== undefined ? (
                 <>
                   {diff.error !== null && diff.error !== undefined && (
-                    <ErrorBanner
-                      error={diff.error}
-                      action={
-                        <button
-                          type="button"
-                          className="btn btn--sm"
-                          onClick={() => void diff.refetch()}
-                        >
-                          {t('common.retry')}
-                        </button>
-                      }
-                    />
+                    <ErrorBanner error={diff.error} onRetry={() => void diff.refetch()} />
                   )}
                   <WorktreeDiffPanel
                     diff={diff.data.diff}
@@ -1028,18 +987,7 @@ function TaskDetailPage() {
               ) : diff.isLoading ? (
                 <LoadingState size="compact" label={t('tasks.loadingDiff')} />
               ) : diff.error !== null && diff.error !== undefined ? (
-                <ErrorBanner
-                  error={diff.error}
-                  action={
-                    <button
-                      type="button"
-                      className="btn btn--sm"
-                      onClick={() => void diff.refetch()}
-                    >
-                      {t('common.retry')}
-                    </button>
-                  }
-                />
+                <ErrorBanner error={diff.error} onRetry={() => void diff.refetch()} />
               ) : null}
             </section>
           )}
@@ -1095,15 +1043,7 @@ function TaskDetailPage() {
                       {structuralDiff.error !== null && structuralDiff.error !== undefined && (
                         <ErrorBanner
                           error={structuralDiff.error}
-                          action={
-                            <button
-                              type="button"
-                              className="btn btn--sm"
-                              onClick={() => void structuralDiff.refetch()}
-                            >
-                              {t('common.retry')}
-                            </button>
-                          }
+                          onRetry={() => void structuralDiff.refetch()}
                         />
                       )}
                       <StructuralDiffView
@@ -1119,15 +1059,7 @@ function TaskDetailPage() {
                   ) : structuralDiff.error !== null && structuralDiff.error !== undefined ? (
                     <ErrorBanner
                       error={structuralDiff.error}
-                      action={
-                        <button
-                          type="button"
-                          className="btn btn--sm"
-                          onClick={() => void structuralDiff.refetch()}
-                        >
-                          {t('common.retry')}
-                        </button>
-                      }
+                      onRetry={() => void structuralDiff.refetch()}
                     />
                   ) : null}
                 </div>

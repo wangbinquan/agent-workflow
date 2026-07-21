@@ -170,29 +170,14 @@ export function McpInventoryPanel(props: McpInventoryPanelProps) {
       ) : probeMut.error !== null ? (
         <ErrorBanner
           error={probeMut.error}
-          action={
-            hash === undefined ? undefined : (
-              <button
-                type="button"
-                className="btn btn--sm"
-                onClick={() => void runSaved(hash).catch(() => undefined)}
-              >
-                {t('common.retry')}
-              </button>
-            )
+          onRetry={
+            hash === undefined ? undefined : () => void runSaved(hash).catch(() => undefined)
           }
         />
       ) : probeQ.isLoading ? (
         <LoadingState data-testid="mcp-probe-loading" />
       ) : probeQ.error !== null ? (
-        <ErrorBanner
-          error={probeQ.error}
-          action={
-            <button type="button" className="btn btn--sm" onClick={() => void probeQ.refetch()}>
-              {t('common.retry')}
-            </button>
-          }
-        />
+        <ErrorBanner error={probeQ.error} onRetry={() => void probeQ.refetch()} />
       ) : persistedProbeExpired ? (
         <EmptyState
           title={t('mcps.probe.savedResultExpired')}
