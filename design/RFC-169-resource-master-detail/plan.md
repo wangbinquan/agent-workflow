@@ -46,12 +46,25 @@
 
 ## 验收清单（对 proposal §6 逐条）
 
-- [ ] 四页双栏 + 搜索过滤 + 徽标 + 「+ 新建」（§6.1）
-- [ ] 右栏三段结构 + 页签划分 + 提示词满高 + 徽标计数 + 切资源复位（§6.1a）
-- [ ] 深链三 URL 直达、选中态正确、外部入口零适配（§6.2）
-- [ ] 保存留原地/创建选中/删除回空态（§6.3）
-- [ ] 脏点 + 站内拦截 + beforeunload + 程序化导航不拦（§6.4）
-- [ ] 行级操作迁移：mcps 展开行退役不丢信息、plugins 更新页签、agents 启动在 header（§6.5）
-- [ ] skills：空态源面板全功能、文件页签不破版、四模式新建完整（§6.6）
-- [ ] 门禁全绿 + `agents.png` 刷新 + 明暗/窄视口自查（§6.7）
-- [ ] i18n 双语零硬编码（§6.8）
+- [x] 四页双栏 + 搜索过滤 + 徽标 + 「+ 新建」（§6.1）
+- [x] 右栏三段结构 + 页签划分 + 提示词满高 + 徽标计数 + 切资源复位（§6.1a）
+- [x] 深链三 URL 直达、选中态正确、外部入口零适配（§6.2）
+- [x] 保存留原地/创建选中/删除回空态（§6.3）
+- [x] 脏点 + 站内拦截 + beforeunload + 程序化导航不拦（§6.4）
+- [x] 行级操作迁移：mcps 展开行退役不丢信息、plugins 更新页签、agents 启动在 header（§6.5）
+- [x] skills：空态源面板全功能、文件页签不破版、四模式新建完整（§6.6）
+- [x] 门禁全绿 + `agents.png` 刷新 + 明暗/窄视口自查（§6.7）
+- [x] i18n 双语零硬编码（§6.8）
+## 终态注记（T21 归档，2026-07-21）
+
+批次 A–D 四页（agents/skills/mcps/plugins）双栏化已逐批交付并推送（批次D 收尾 `cd5e6294`、探针
+startedAt 前移 `faccc35c`、跟进修 `3f75d93f`）。批次E：
+
+- **T19**：残余 grep 复核完成（四页无 `data-table`；`page--wide` 仍被 workgroups/fusions 合法使用、非孤儿；
+  无 `McpExpandedSummary`/`SkillSourcePill` 孤儿；`col*` i18n 键被 wiring 测试锁定、有意保留）——记录见 `8c7f26b0`。
+- **T20**：e2e 适配完成（a11y.spec /agents/new 页签交互、main.spec rfc022 依赖树先开 Resources 页签）；
+  `agents.png` 双 OS 基线经 nightly visual 回填 `37518c0f`，nightly 三连红清零、HEAD `33d1b00a` nightly 绿。
+- **T21**：`design/plan.md` RFC 索引置 Done + STATE.md 落地记录 + 本注记（2026-07-21 归档批）。
+
+验收清单逐条依据以上证据勾选。RFC-170（combined-save/CAS/版本一致性等技能保存协议深化）为既定
+后续入口，与本 RFC 交付边界见 T12/T13/T14 括注。
