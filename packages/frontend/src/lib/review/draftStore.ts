@@ -6,9 +6,13 @@
 // would do, but IDB keeps the data per-origin without bumping the localStorage
 // quota for hundreds of in-flight drafts.
 
-const DB_NAME = 'agent-workflow-drafts'
+import { openDraftDb } from '../draftDb'
+
+// RFC-005 — the review store shares `agent-workflow-drafts` with clarify. It
+// MUST go through the shared façade (openDraftDb): opening the DB itself with a
+// local version diverges from clarify's and throws VersionError, silently
+// killing review draft persistence (design/test-guard-audit-2026-07-21 F3).
 const STORE = 'review-drafts'
-const VERSION = 1
 
 export interface DraftKey {
   taskId: string
@@ -21,26 +25,8 @@ export function draftKey(k: DraftKey): string {
   return `${k.taskId}:${k.nodeRunId}:${k.docVersionId}:${k.anchorHash}`
 }
 
-let dbPromise: Promise<IDBDatabase | null> | null = null
-
 function openDb(): Promise<IDBDatabase | null> {
-  if (dbPromise !== null) return dbPromise
-  dbPromise = new Promise((resolve) => {
-    if (typeof indexedDB === 'undefined') {
-      resolve(null)
-      return
-    }
-    const req = indexedDB.open(DB_NAME, VERSION)
-    req.onupgradeneeded = () => {
-      const db = req.result
-      if (!db.objectStoreNames.contains(STORE)) {
-        db.createObjectStore(STORE)
-      }
-    }
-    req.onsuccess = () => resolve(req.result)
-    req.onerror = () => resolve(null)
-  })
-  return dbPromise
+  return openDraftDb()
 }
 
 export async function getDraft(k: DraftKey): Promise<string | null> {

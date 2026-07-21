@@ -12,10 +12,12 @@
 // features can evolve independently. Same IDB facade for parity.
 
 import type { ClarifyAnswer } from '@agent-workflow/shared'
+import { openDraftDb } from '../draftDb'
 
-const DB_NAME = 'agent-workflow-drafts'
+// RFC-023/058 — clarify shares `agent-workflow-drafts` with review, through the
+// single shared façade (openDraftDb) so the two can never diverge on version
+// again (design/test-guard-audit-2026-07-21 F3).
 const STORE = 'clarify-drafts'
-const VERSION = 2 // bumped from 1 to add the clarify-drafts store
 
 export interface ClarifyDraftKey {
   taskId: string
@@ -31,31 +33,8 @@ export function clarifyDraftKey(k: ClarifyDraftKey): string {
   return `clarify-round:${k.taskId}:${k.intermediaryNodeRunId}:${k.roundId}`
 }
 
-let dbPromise: Promise<IDBDatabase | null> | null = null
-
 function openDb(): Promise<IDBDatabase | null> {
-  if (dbPromise !== null) return dbPromise
-  dbPromise = new Promise((resolve) => {
-    if (typeof indexedDB === 'undefined') {
-      resolve(null)
-      return
-    }
-    const req = indexedDB.open(DB_NAME, VERSION)
-    req.onupgradeneeded = () => {
-      const db = req.result
-      // Keep the older 'review-drafts' store on upgrade so the review draft
-      // facade continues to work unchanged.
-      if (!db.objectStoreNames.contains('review-drafts')) {
-        db.createObjectStore('review-drafts')
-      }
-      if (!db.objectStoreNames.contains(STORE)) {
-        db.createObjectStore(STORE)
-      }
-    }
-    req.onsuccess = () => resolve(req.result)
-    req.onerror = () => resolve(null)
-  })
-  return dbPromise
+  return openDraftDb()
 }
 
 export async function getClarifyDraft(k: ClarifyDraftKey): Promise<ClarifyAnswer[] | null> {
