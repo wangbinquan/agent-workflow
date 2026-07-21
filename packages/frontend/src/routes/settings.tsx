@@ -17,10 +17,10 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useRouterState } from '@tanstack/react-router'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Config, ConfigPatch } from '@agent-workflow/shared'
-import { api, ApiError } from '@/api/client'
+import { api, apiPostMultipart, ApiError } from '@/api/client'
 import { Card } from '@/components/Card'
 import {
   SettingsDraftProvider,
@@ -800,11 +800,15 @@ function GcTab({ config }: TabProps) {
   )
 }
 
-function BackupCard() {
+export function BackupCard() {
   const { t } = useTranslation()
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<{ path: string; sizeBytes: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [restoreBusy, setRestoreBusy] = useState(false)
+  const [restoreStaged, setRestoreStaged] = useState(false)
+  const [restoreError, setRestoreError] = useState<string | null>(null)
+  const restoreInputRef = useRef<HTMLInputElement>(null)
   const runBackup = async () => {
     setBusy(true)
     setError(null)
@@ -816,6 +820,24 @@ function BackupCard() {
       setError(describeApiError(err))
     } finally {
       setBusy(false)
+    }
+  }
+  const onRestoreFile = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = '' // allow re-selecting the same file
+    if (file === undefined) return
+    setRestoreBusy(true)
+    setRestoreStaged(false)
+    setRestoreError(null)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      await apiPostMultipart<{ status: string }>('/api/restore', form)
+      setRestoreStaged(true)
+    } catch (err) {
+      setRestoreError(describeApiError(err))
+    } finally {
+      setRestoreBusy(false)
     }
   }
   return (
@@ -835,6 +857,30 @@ function BackupCard() {
         </p>
       )}
       {error !== null && <ErrorBanner error={error} />}
+
+      <p className="settings-hint stack-top--md">{t('settings.restoreHint')}</p>
+      <input
+        ref={restoreInputRef}
+        type="file"
+        accept=".gz,.tgz,.tar.gz,application/gzip"
+        hidden
+        onChange={onRestoreFile}
+        data-testid="restore-file-input"
+      />
+      <button
+        type="button"
+        className="btn btn--danger"
+        onClick={() => restoreInputRef.current?.click()}
+        disabled={restoreBusy}
+      >
+        {restoreBusy ? t('settings.restoreBusy') : t('settings.restoreButton')}
+      </button>
+      {restoreStaged && (
+        <p className="muted settings-hint settings-hint--tight stack-top--sm">
+          {t('settings.restoreStaged')}
+        </p>
+      )}
+      {restoreError !== null && <ErrorBanner error={restoreError} />}
     </Card>
   )
 }

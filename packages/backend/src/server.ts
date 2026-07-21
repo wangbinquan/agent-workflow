@@ -16,6 +16,7 @@ import { getEmbeddedAsset, IS_EMBEDDED } from '@/embed'
 import { mountAgentRoutes } from '@/routes/agents'
 import { mountAuthRoutes } from '@/routes/auth'
 import { mountBackupRoutes } from '@/routes/backup'
+import { mountRestoreRoutes } from '@/routes/restore'
 import { mountCachedRepoRoutes } from '@/routes/cached-repos'
 import { mountConfigRoutes } from '@/routes/config'
 import { mountDaemonRoutes } from '@/routes/daemon'
@@ -187,6 +188,7 @@ export function createApp(deps: AppDeps): Hono {
   app.use('/api/daemon', requirePermission('settings:read'))
   app.use('/api/backup', requirePermission('backup:run'))
   app.use('/api/backup/*', requirePermission('backup:run'))
+  app.use('/api/restore', requirePermission('backup:run'))
 
   // runtime is admin+user — homepage runtime dot relies on it.
   app.use('/api/runtime', requirePermission('runtime:read'))
@@ -210,6 +212,7 @@ export function createApp(deps: AppDeps): Hono {
   mountTaskRoutes(app, deps)
   mountScheduledTaskRoutes(app, deps) // RFC-159
   mountBackupRoutes(app, deps)
+  mountRestoreRoutes(app, deps)
   mountWorktreeFilesRoutes(app, deps)
   mountPortArtifactRoutes(app, deps)
   mountReviewRoutes(app, deps)

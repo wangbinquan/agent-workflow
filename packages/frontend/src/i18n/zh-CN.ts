@@ -719,6 +719,10 @@ export interface Resources {
     backupCreate: string
     backupRunning: string
     backupSavedAs: string
+    restoreHint: string
+    restoreButton: string
+    restoreBusy: string
+    restoreStaged: string
     themeLabel: string
     themeHint: string
     themeSystem: string
@@ -4333,6 +4337,11 @@ export const zhCN: Resources = {
     backupCreate: '创建备份',
     backupRunning: '正在创建备份…',
     backupSavedAs: '已保存 ',
+    restoreHint:
+      '上传一个备份包，在 daemon 下次启动时恢复（不会热替换正在运行的库；恢复前会自动安全备份当前状态）。',
+    restoreButton: '从备份恢复…',
+    restoreBusy: '正在上传备份…',
+    restoreStaged: '已暂存，重启 daemon 生效',
     themeLabel: '主题',
     themeHint: '系统：跟随操作系统的浅色 / 深色偏好。',
     themeSystem: '跟随系统',

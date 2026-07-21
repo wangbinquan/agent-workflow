@@ -572,6 +572,11 @@ export const enUS: Resources = {
     backupCreate: 'Create backup',
     backupRunning: 'Creating backup…',
     backupSavedAs: 'Saved ',
+    restoreHint:
+      "Upload a backup to restore it on the daemon's next start (never hot-swaps the running DB; the current state is safety-backed-up first).",
+    restoreButton: 'Restore from backup…',
+    restoreBusy: 'Uploading backup…',
+    restoreStaged: 'Staged — restart the daemon to apply',
     themeLabel: 'Theme',
     themeHint: 'System: follow the OS light/dark preference.',
     themeSystem: 'Follow system',
