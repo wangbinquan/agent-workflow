@@ -66,7 +66,7 @@ PR 拆分：**5 个 PR**（设计门把 v1 的 PR-1 拆成 1a 冷 / 1b 热，因
 - [x] AC-5 损坏 fail-closed（页级 fixture + 归一 catch）— rfc213-boot-integrity.test.ts
 - [x] AC-6 定时备份 + 轮转（KEEP/DELETE 规则 + interval=0 零文件 + 重入）— rfc213-backup-retention.test.ts
 - [x] AC-7 pre-migration rawCopyDb（仅 pending + 绑版本）— rfc213-pre-migration-backup.test.ts
-- [~] AC-8 worktree 同机增量往返 — **部分**：mismatch-protect（恢复后挂起非终态任务 auto-recovery，`36c3b84b`）已落；worktree **捕获/重建**（inspection nicety）**遗留**，见 memory `project_rfc213_disaster_recovery`
+- [x] AC-8 worktree 同机增量往返 — rfc213-worktree-capture.test.ts（捕获→删→重建 MODIFIED+untracked 复原；终态不捕获；已存在不覆盖；超限跳过）+ mismatch-protect（`36c3b84b`）。**设计裁定**（面向代码最合理）：不做「首次 resume 跳过 clean」——那会让重跑节点在自己部分产物上运行、违背 rollbackToSnapshot 语义；重建 worktree 供查看/手工救，resume 照常正确回滚，失活由 mismatch-protect 兜底
 - [x] AC-9 synchronous 可配真实下发 — rfc213-sqlite-synchronous.test.ts
 - [x] AC-10 doctor 只读断言（readonly + 写抛）— rfc213-boot-integrity.test.ts（源锁）
 - [x] AC-11 WAL checkpoint 纪律 — rfc213-wal-checkpoint.test.ts
