@@ -951,7 +951,17 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   //    agent's text reply (which carries the <workflow-output> envelope)
   //    is inside the `part.text` field of `text` events. We accumulate
   //    text-event payloads here and parse the envelope from that buffer.
-  const agentText: string[] = []
+  // RFC — bounded accumulator for the agent's text (the envelope is parsed from
+  // this at the end). A runaway/hostile child emitting millions of lines would
+  // grow an unbounded `string[]` and OOM the shared daemon. Keep a ROLLING TAIL:
+  // the winning <workflow-output> envelope is always the LAST one in the output,
+  // so the tail preserves it. Slicing only when the buffer reaches 2× the cap
+  // amortizes the copy cost. See design/test-guard-audit-2026-07-21 gap
+  // B4-runtime-6 / Top-14.
+  let agentTextBuf = ''
+  const appendAgentText = (s: string): void => {
+    agentTextBuf = appendBoundedTail(agentTextBuf, s, MAX_AGENT_TEXT_CHARS)
+  }
   const tokenUsage: RunResult['tokenUsage'] = {
     input: 0,
     output: 0,
@@ -1005,7 +1015,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         tokenUsage.total =
           tokenUsage.input + tokenUsage.output + tokenUsage.cacheCreate + tokenUsage.cacheRead
       }
-      if (typeof ev.text === 'string') agentText.push(ev.text)
+      if (typeof ev.text === 'string') appendAgentText(ev.text)
       const ts = ev.timestamp ?? Date.now()
       // RFC-027: tag every stdout-derived row with the (root) sessionID +
       // parent_session_id=null so the SessionTab parser can bucket parent
@@ -1029,7 +1039,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         kind: 'text',
         payload: line,
       })
-      agentText.push(line)
+      appendAgentText(line)
       broadcastParentRunning()
     }
   })
@@ -1207,7 +1217,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     | { questions: ClarifyQuestion[]; truncationWarnings: ClarifyTruncationWarning[] }
     | undefined
   if (status === 'done') {
-    const accumulatedText = agentText.join('\n')
+    const accumulatedText = agentTextBuf
     const kind = detectEnvelopeKind(accumulatedText, envelopeNonce)
     // RFC-100: while mandatory ask-back is ACTIVE (channel wired AND the user
     // has not clicked "Stop clarifying" — RFC-148: directive === 'mandatory'
@@ -1802,7 +1812,42 @@ interface LinePump {
  * Drain a ReadableStream of UTF-8 bytes, calling `onLine` for each complete
  * line. Awaits each callback so the caller's DB writes serialize naturally.
  */
-function pumpLines(
+/**
+ * Per-line cap (code units) for a child's stdout/stderr. A runaway or hostile
+ * child that emits data with NO newline would otherwise grow `buffer`
+ * without bound and OOM the daemon (which is shared by every concurrent task).
+ * A single >1 MiB "line" is never a valid `--format json` event, so truncate it
+ * with a marker and discard the rest of that monster line until the next
+ * newline resumes normal parsing.
+ * See design/test-guard-audit-2026-07-21 gap B4-runtime-6 / Top-14.
+ */
+export const MAX_STREAM_LINE_CHARS = 1024 * 1024
+const LINE_TRUNCATED_MARKER = '…[line truncated: exceeded MAX_STREAM_LINE_CHARS]'
+
+/**
+ * Rolling-tail cap (code units) for the accumulated agent text the envelope is
+ * parsed from. 8 MiB comfortably holds any realistic `<workflow-output>`
+ * envelope (which is the LAST thing in the output), while bounding the daemon's
+ * RSS against a runaway loop that emits millions of small lines. See
+ * appendAgentText in runNode / gap B4-runtime-6.
+ */
+export const MAX_AGENT_TEXT_CHARS = 8 * 1024 * 1024
+
+/**
+ * Append `addition` (newline-joined) to `current`, keeping only the last
+ * `maxChars` code units. Slices only when the buffer reaches 2× the cap, so the
+ * O(cap) copy is amortized across many appends rather than paid on every one.
+ * Pure — extracted so the rolling-tail bound can be tested without a live child.
+ */
+export function appendBoundedTail(current: string, addition: string, maxChars: number): string {
+  const joined = current.length > 0 ? current + '\n' + addition : addition
+  if (joined.length > 2 * maxChars) {
+    return joined.slice(joined.length - maxChars)
+  }
+  return joined
+}
+
+export function pumpLines(
   stream: ReadableStream<Uint8Array>,
   onLine: (line: string) => Promise<void> | void,
 ): LinePump {
@@ -1811,20 +1856,46 @@ function pumpLines(
   const done = (async (): Promise<void> => {
     const decoder = new TextDecoder()
     let buffer = ''
+    // True while discarding the tail of an over-long line until its newline.
+    let dropping = false
     try {
       for (;;) {
         const { value, done: eof } = await reader.read()
         if (eof) break
         buffer += decoder.decode(value, { stream: true })
-        let idx: number
-        while ((idx = buffer.indexOf('\n')) >= 0) {
+        for (;;) {
+          const idx = buffer.indexOf('\n')
+          if (idx < 0) {
+            // No complete line yet. Bound the in-memory buffer: if it has grown
+            // past the cap with no newline, flush a truncated marker once and
+            // discard the rest of this line.
+            if (dropping) {
+              buffer = ''
+            } else if (buffer.length > MAX_STREAM_LINE_CHARS) {
+              await onLine(buffer.slice(0, MAX_STREAM_LINE_CHARS) + LINE_TRUNCATED_MARKER)
+              buffer = ''
+              dropping = true
+            }
+            break
+          }
           const line = buffer.slice(0, idx)
           buffer = buffer.slice(idx + 1)
+          if (dropping) {
+            // This newline ends the monster line; its tail is discarded.
+            dropping = false
+            continue
+          }
           if (line.length > 0) await onLine(line)
         }
       }
       // Flush remaining tail (process emitted a line without trailing newline).
-      if (buffer.length > 0 && !canceled) await onLine(buffer)
+      if (buffer.length > 0 && !canceled && !dropping) {
+        const tail =
+          buffer.length > MAX_STREAM_LINE_CHARS
+            ? buffer.slice(0, MAX_STREAM_LINE_CHARS) + LINE_TRUNCATED_MARKER
+            : buffer
+        await onLine(tail)
+      }
     } finally {
       reader.releaseLock()
     }
