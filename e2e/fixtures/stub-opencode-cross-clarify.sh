@@ -47,7 +47,7 @@ mkdir -p "$state_dir"
 
 # Capture prompt (first positional after 'run') before flag-parsing eats it.
 shift
-RAW_PROMPT="${1-}"
+RAW_PROMPT="$*"
 envelope_nonce=$(printf '%s\n' "$RAW_PROMPT" | sed -n 's/.*nonce="\([^"]*\)".*/\1/p' | tail -n 1)
 if [ -z "$envelope_nonce" ]; then
   echo "stub-opencode-cross-clarify: prompt is missing the RFC-200 envelope nonce" >&2

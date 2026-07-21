@@ -50,7 +50,7 @@ mkdir -p "$state_dir"
 # for shard-key extraction further down.
 agent="default"
 shift  # drop the leading 'run'
-RAW_PROMPT="${1-}"
+RAW_PROMPT="$*"
 envelope_nonce=$(printf '%s\n' "$RAW_PROMPT" | sed -n 's/.*nonce="\([^"]*\)".*/\1/p' | tail -n 1)
 if [ -z "$envelope_nonce" ]; then
   echo "stub-opencode-clarify: prompt is missing the RFC-200 envelope nonce" >&2
