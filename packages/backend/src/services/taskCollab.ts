@@ -16,6 +16,7 @@ import type { tasks } from '@/db/schema'
 import { taskCollaborators, tasks as tasksTable, users } from '@/db/schema'
 import { isAdminActor, resolveTaskRole } from '@/services/resourceAcl'
 import { ForbiddenError, ValidationError } from '@/util/errors'
+import { triggerRevalidation } from '@/ws/revalidationHook'
 
 /** Row-shape that visibility checks accept. The full `tasks` row is supersets of this. */
 export type TaskRowForVisibility = Pick<typeof tasks.$inferSelect, 'id' | 'ownerUserId'>
@@ -204,6 +205,11 @@ export async function updateTaskMembers(
       tx.insert(taskCollaborators).values(values).run()
     }
   })
+
+  // RFC-212 — AFTER the transaction commits: a member just lost access, so any
+  // WS they have open on this task must be re-checked. Triggering inside/before
+  // the tx would let the rescan read the pre-change membership and never close.
+  triggerRevalidation(db, 'task-members-changed')
 
   return getTaskMembers(db, actor, { id: task.id, ownerUserId: nextOwner })
 }

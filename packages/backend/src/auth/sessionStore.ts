@@ -8,6 +8,7 @@ import { ulid } from 'ulid'
 import { SESSION_TOKEN_PREFIX } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { userSessions, users } from '@/db/schema'
+import { triggerRevalidation } from '@/ws/revalidationHook'
 
 /** 7 days by default — matches design.md §R4. */
 export const SESSION_DEFAULT_TTL_MS = 7 * 24 * 60 * 60 * 1000
@@ -141,6 +142,8 @@ export async function revokeSession(
   now: number = Date.now(),
 ): Promise<void> {
   await db.update(userSessions).set({ revokedAt: now }).where(eq(userSessions.id, sessionId))
+  // RFC-212 — close any live WS the revoked session opened. After the write.
+  triggerRevalidation(db, 'session-revoked')
 }
 
 export async function revokeAllSessionsForUser(
@@ -152,6 +155,9 @@ export async function revokeAllSessionsForUser(
     .update(userSessions)
     .set({ revokedAt: now })
     .where(and(eq(userSessions.userId, userId), isNull(userSessions.revokedAt)))
+  // RFC-212 — the bulk path (change-password / "log out other sessions") does
+  // NOT go through revokeSession, so it needs its own trigger.
+  triggerRevalidation(db, 'sessions-revoked-bulk')
 }
 
 export async function sweepExpiredSessions(

@@ -43,6 +43,7 @@ import {
   workgroups,
 } from '@/db/schema'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import { triggerRevalidation } from '@/ws/revalidationHook'
 
 /**
  * Minimal row shape every ACL check accepts; full resource rows AND mapped
@@ -426,6 +427,10 @@ export async function updateResourceAcl(
     }
     return { id: row.id, ownerUserId: nextOwner, visibility: nextVisibility }
   })
+
+  // RFC-212 — AFTER commit: a grant may have been revoked or the resource made
+  // private, so WS channels that surface this resource must re-check.
+  triggerRevalidation(db, 'resource-acl-changed')
 
   return getResourceAcl(db, actor, type, updatedRow)
 }

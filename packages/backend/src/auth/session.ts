@@ -18,8 +18,12 @@ import type { DbClient } from '@/db/client'
 import { users } from '@/db/schema'
 import { UnauthorizedError } from '@/util/errors'
 import { buildActor, SYSTEM_USER_ID, type Actor } from './actor'
-import { hashToken as hashPatToken, lookupActivePat } from './patStore'
-import { hashToken as hashSessionToken, lookupActiveSession } from './sessionStore'
+import { hashToken as hashPatToken, lookupActivePat, lookupActivePatByHash } from './patStore'
+import {
+  hashToken as hashSessionToken,
+  lookupActiveSession,
+  lookupActiveSessionByHash,
+} from './sessionStore'
 
 export interface MultiAuthDeps {
   db: DbClient
@@ -60,8 +64,9 @@ export function multiAuth(deps: MultiAuthDeps): MiddlewareHandler {
 }
 
 /**
- * RFC-212 — classify a raw token into the fingerprint a live WebSocket keeps for
- * revalidation. Mirrors `resolveActor`'s prefix dispatch exactly, so the two can
+ * RFC-212 — classify a raw token into a WebSocket credential fingerprint, WITHOUT
+ * its expiry (the frame-path expiry check needs expiry; the revalidation lookup
+ * does not). Mirrors `resolveActor`'s prefix dispatch exactly so the two can
  * never disagree about which store a credential belongs to.
  */
 export function describeCredential(raw: string): WsCredentialFingerprint {
@@ -72,6 +77,37 @@ export function describeCredential(raw: string): WsCredentialFingerprint {
 
 export type WsCredentialFingerprint =
   | { readonly kind: 'session' | 'pat'; readonly hash: string }
+  | { readonly kind: 'daemon' }
+
+/**
+ * RFC-212 — the fingerprint a live WebSocket stores, carrying the credential's
+ * expiry so the frame path can close a silently-expired connection with zero DB
+ * (natural expiry has no write hook to fire a revocation). Reads the expiry once
+ * at upgrade time; the actor itself is resolved separately by `resolveActor`.
+ */
+export async function buildWsCredential(
+  db: DbClient,
+  raw: string,
+): Promise<WsCredentialWithExpiry> {
+  if (raw.startsWith(SESSION_TOKEN_PREFIX)) {
+    const resolved = await lookupActiveSession(db, raw)
+    return {
+      kind: 'session',
+      hash: hashSessionToken(raw),
+      expiresAt: resolved?.session.expiresAt ?? null,
+    }
+  }
+  if (raw.startsWith(PAT_TOKEN_PREFIX)) {
+    const resolved = await lookupActivePatByHash(db, hashPatToken(raw), Date.now(), {
+      touch: false,
+    })
+    return { kind: 'pat', hash: hashPatToken(raw), expiresAt: resolved?.expiresAt ?? null }
+  }
+  return { kind: 'daemon' }
+}
+
+export type WsCredentialWithExpiry =
+  | { readonly kind: 'session' | 'pat'; readonly hash: string; readonly expiresAt: number | null }
   | { readonly kind: 'daemon' }
 
 export async function resolveActor(
@@ -117,6 +153,66 @@ export async function resolveActor(
   const sysRows = await db.select().from(users).where(eq(users.id, SYSTEM_USER_ID)).limit(1)
   const sys = sysRows[0]
   if (!sys) return null
+  return buildActor({
+    user: {
+      id: sys.id,
+      username: sys.username,
+      displayName: sys.displayName,
+      role: sys.role as Role,
+      status: sys.status as 'active' | 'disabled' | 'invited',
+    },
+    source: 'daemon',
+  })
+}
+
+/**
+ * RFC-212 — re-resolve an actor from a stored credential FINGERPRINT (see
+ * describeCredential), for the revocation rescan. Read-only: it never writes
+ * `last_used_at` (the rescan runs once per live socket on every revocation).
+ * Returns null when the credential is revoked / expired / the user is disabled
+ * — the caller closes the socket on null. The daemon-kind fingerprint has no
+ * stored token row; it re-reads the __system__ user so a deleted system user
+ * still closes the socket.
+ */
+export async function reresolveActor(
+  db: DbClient,
+  credential: WsCredentialFingerprint,
+  now: number = Date.now(),
+): Promise<Actor | null> {
+  if (credential.kind === 'session') {
+    const resolved = await lookupActiveSessionByHash(db, credential.hash, now, { touch: false })
+    if (!resolved) return null
+    return buildActor({
+      user: {
+        id: resolved.user.id,
+        username: resolved.user.username,
+        displayName: resolved.user.displayName,
+        role: resolved.user.role as Role,
+        status: resolved.user.status as 'active' | 'disabled' | 'invited',
+      },
+      source: 'session',
+    })
+  }
+  if (credential.kind === 'pat') {
+    const resolved = await lookupActivePatByHash(db, credential.hash, now, { touch: false })
+    if (!resolved) return null
+    return buildActor({
+      user: {
+        id: resolved.user.id,
+        username: resolved.user.username,
+        displayName: resolved.user.displayName,
+        role: resolved.user.role as Role,
+        status: resolved.user.status as 'active' | 'disabled' | 'invited',
+      },
+      source: 'pat',
+      patScopes: resolved.scopes as ReadonlyArray<Permission>,
+    })
+  }
+  // daemon: the process-level admin token. It is never revoked at runtime, but
+  // re-resolve the __system__ row so a deleted system user closes the socket.
+  const sysRows = await db.select().from(users).where(eq(users.id, SYSTEM_USER_ID)).limit(1)
+  const sys = sysRows[0]
+  if (!sys || sys.status !== 'active') return null
   return buildActor({
     user: {
       id: sys.id,

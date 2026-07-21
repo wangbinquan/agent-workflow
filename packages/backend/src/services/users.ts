@@ -16,6 +16,7 @@ import { revokeAllSessionsForUser } from '@/auth/sessionStore'
 import type { DbClient } from '@/db/client'
 import { users } from '@/db/schema'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { triggerRevalidation } from '@/ws/revalidationHook'
 
 export type UserRow = typeof users.$inferSelect
 
@@ -154,6 +155,9 @@ export async function disableUser(
   }
   await db.update(users).set({ status: 'disabled', updatedAt: now }).where(eq(users.id, id))
   await revokeAllSessionsForUser(db, id, now)
+  // RFC-212 — revokeAllSessionsForUser already fires a trigger, but disable also
+  // narrows anything a still-live PAT could see; make the intent explicit.
+  triggerRevalidation(db, 'user-disabled')
 }
 
 /**
@@ -233,6 +237,10 @@ export async function patchUser(
     updates.forcePasswordChange = patch.forcePasswordChange
   }
   await db.update(users).set(updates).where(eq(users.id, id))
+  // RFC-212 — patchUser writes BOTH role and status (users.ts is the Web UI's
+  // demote AND disable path). Trigger unconditionally so neither branch can be
+  // forgotten — a per-branch trigger is exactly the omission the audit warned of.
+  triggerRevalidation(db, 'user-patched')
   return (await findById(db, id))!
 }
 

@@ -15,7 +15,7 @@
 // listeners after JSON-parse; non-JSON frames are silently dropped.
 
 import { useEffect, useRef, useState } from 'react'
-import { getBaseUrl, getToken, subscribeAuth } from '@/stores/auth'
+import { clearToken, getBaseUrl, getToken, subscribeAuth } from '@/stores/auth'
 
 type Listener = (msg: unknown) => void
 type ConnectionStateListener = (state: WebSocketConnectionState) => void
@@ -36,6 +36,12 @@ export interface UseWebSocketOptions {
   enabled?: boolean
 }
 
+// RFC-212 — the daemon closes a socket with 4401 when its credential was revoked
+// / expired / the account disabled (private WS close-code range 4000-4999). The
+// token is now dead, so keep reconnecting on it would be a silent 30s-interval
+// loop; clear it and let the app fall back to the login flow (mirrors the HTTP
+// 401 handling in api/client.ts).
+const WS_CLOSE_AUTH_REVOKED = 4401
 const BASE_BACKOFF_MS = 500
 const MAX_BACKOFF_MS = 30_000
 
@@ -183,13 +189,18 @@ function connect(conn: SharedConn): void {
     conn.connectionEpoch += 1
     publishConnectionState(conn)
   })
-  ws.addEventListener('close', () => {
+  ws.addEventListener('close', (e) => {
     // A socket superseded by forceReconnect (or detached on release) is no
     // longer the conn's current socket — its close must not reschedule, or
     // an auth rotation would end up with TWO live sockets on the path.
     if (conn.socket !== ws) return
     conn.socket = null
     markDisconnected(conn)
+    // RFC-212 — an auth-revoked close means the token is dead. Clearing it
+    // stops the reconnect loop from retrying a doomed token every 30s and
+    // surfaces the login flow. connect() already no-ops on a null token, so
+    // the scheduled reconnect below becomes a harmless 2s recheck.
+    if (e.code === WS_CLOSE_AUTH_REVOKED) clearToken()
     scheduleReconnect(conn)
   })
   ws.addEventListener('error', () => {

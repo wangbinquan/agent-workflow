@@ -8,6 +8,7 @@ import { ulid } from 'ulid'
 import { PAT_TOKEN_PREFIX, type Permission, type PatPublic } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { userPats, users } from '@/db/schema'
+import { triggerRevalidation } from '@/ws/revalidationHook'
 
 export interface CreatePatInput {
   db: DbClient
@@ -67,6 +68,8 @@ export interface ResolvedPat {
   user: typeof users.$inferSelect
   scopes: ReadonlyArray<Permission>
   patId: string
+  /** RFC-212 — surfaced so a WS credential can carry the PAT's expiry. */
+  expiresAt: number | null
 }
 
 export async function lookupActivePat(
@@ -103,6 +106,7 @@ export async function lookupActivePatByHash(
     user,
     scopes: safeParseScopes(pat.scopesJson),
     patId: pat.id,
+    expiresAt: pat.expiresAt,
   }
 }
 
@@ -122,6 +126,8 @@ export async function revokePat(
   now: number = Date.now(),
 ): Promise<void> {
   await db.update(userPats).set({ revokedAt: now }).where(eq(userPats.id, patId))
+  // RFC-212 — close any live WS the revoked PAT opened.
+  triggerRevalidation(db, 'pat-revoked')
 }
 
 export async function listPatsForUser(db: DbClient, userId: string): Promise<PatPublic[]> {

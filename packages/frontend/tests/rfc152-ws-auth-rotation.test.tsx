@@ -25,7 +25,7 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { act, render } from '@testing-library/react'
-import { clearToken, setBaseUrl, setToken } from '../src/stores/auth'
+import { clearToken, getToken, setBaseUrl, setToken } from '../src/stores/auth'
 import { useWebSocket } from '../src/hooks/useWebSocket'
 
 class MockSocket {
@@ -56,6 +56,10 @@ class MockSocket {
   }
   fireOpen(): void {
     for (const fn of this.listeners.open ?? []) fn(null)
+  }
+  // RFC-212 — a server-initiated close carries a code (4401 = auth revoked).
+  fireClose(code = 1006): void {
+    for (const fn of this.listeners.close ?? []) fn({ code })
   }
 }
 
@@ -199,5 +203,44 @@ describe('RFC-152 — shared WS pool rotates on auth changes', () => {
 
     act(() => MockSocket.instances[2]!.fireMessage({ n: 3 }))
     expect(seen).toEqual([{ n: 3 }])
+  })
+})
+
+describe('RFC-212 — WS close code 4401 clears the token (AC-9)', () => {
+  test('an auth-revoked close clears the token and stops retrying the dead one', () => {
+    vi.useFakeTimers()
+    try {
+      render(<Sub path="/ws/tasks/t1" />)
+      const sock = MockSocket.instances[0]!
+      expect(sock.url).toContain('token=tok')
+
+      // Server revokes the credential and closes with 4401.
+      act(() => sock.fireClose(4401))
+      // Token is cleared → getToken() is null → the scheduled reconnect no-ops
+      // instead of hammering the dead token every backoff window.
+      expect(getToken()).toBeNull()
+
+      act(() => {
+        vi.advanceTimersByTime(10_000)
+      })
+      // getToken() is null, so connect() no-ops (2s recheck) instead of
+      // constructing a socket — no new instance beyond the original appears,
+      // and certainly none carrying the revoked token.
+      expect(MockSocket.instances).toHaveLength(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test('a NON-4401 close (network blip) does NOT clear the token', () => {
+    vi.useFakeTimers()
+    try {
+      render(<Sub path="/ws/tasks/t1" />)
+      const sock = MockSocket.instances[0]!
+      act(() => sock.fireClose(1006)) // abnormal closure — transient
+      expect(getToken()).toBe('tok')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

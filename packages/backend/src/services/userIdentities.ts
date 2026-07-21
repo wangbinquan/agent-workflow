@@ -8,6 +8,7 @@ import type { UserIdentity } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { oidcProviders, userIdentities } from '@/db/schema'
 import { ConflictError, NotFoundError } from '@/util/errors'
+import { triggerRevalidation } from '@/ws/revalidationHook'
 
 export async function listIdentitiesForUser(db: DbClient, userId: string): Promise<UserIdentity[]> {
   const rows = await db
@@ -84,4 +85,7 @@ export async function deleteIdentity(db: DbClient, identityId: string): Promise<
     throw new NotFoundError('identity-not-found', `identity ${identityId} not found`)
   }
   await db.delete(userIdentities).where(eq(userIdentities.id, identityId))
+  // RFC-212 — conservative: identity deletion does not touch sessions/PATs, so
+  // this rarely closes anything, but keep the write surface uniformly covered.
+  triggerRevalidation(db, 'identity-deleted')
 }

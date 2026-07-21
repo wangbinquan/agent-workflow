@@ -26,7 +26,7 @@
 
 import type { ServerWebSocket } from 'bun'
 import type { Actor } from '@/auth/actor'
-import { describeCredential, resolveActor } from '@/auth/session'
+import { buildWsCredential, resolveActor } from '@/auth/session'
 import type { DbClient } from '@/db/client'
 import { createLogger } from '@/util/log'
 import { checkUpgradeGate, openWsChannel, parseWsChannel, type WsConnectionData } from './registry'
@@ -137,9 +137,10 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
       channel,
       actor,
       // RFC-212 — fingerprint (never the raw token) so a live socket can be
-      // re-checked when a credential is revoked. Computed from the same token
-      // resolveActor just consumed, via the same prefix dispatch.
-      credential: describeCredential(queryToken),
+      // re-checked when a credential is revoked; also carries the credential's
+      // expiry for the zero-DB frame-path expiry check. Computed from the same
+      // token resolveActor just consumed.
+      credential: await buildWsCredential(deps.db, queryToken),
       closing: false,
       unsubscribe: () => {
         /* set on open */

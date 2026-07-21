@@ -132,7 +132,16 @@ export type WsOutboundMessage = AnyChannelMessage | WsControlMessage
  * credential into the rotated daemon log.
  */
 export type WsCredential =
-  | { readonly kind: 'session' | 'pat'; readonly hash: string }
+  | {
+      readonly kind: 'session' | 'pat'
+      readonly hash: string
+      /**
+       * RFC-212 — credential expiry, captured at upgrade. Natural expiry has no
+       * write hook to fire a revocation, so the frame path does a purely local
+       * `now > expiresAt` check (zero DB). `null` = a PAT with no expiry.
+       */
+      readonly expiresAt: number | null
+    }
   /** Legacy daemon token — process-level admin, nothing to look up. */
   | { readonly kind: 'daemon' }
 
@@ -628,6 +637,7 @@ export const WS_CHANNEL_KINDS = Object.keys(WS_CHANNELS) as readonly WsChannelKi
 
 interface ErasedChannelSpec {
   kind: WsChannelKind
+  revalidation: ChannelRevalidation
   helloName: (p: AnyChannelParams) => string
   pathRe: RegExp
   parse: (m: RegExpMatchArray, url: URL) => AnyChannelParams | null
@@ -653,7 +663,7 @@ interface ErasedChannelSpec {
 
 type AnyBroadcastContext = ChannelBroadcastContextByKind[WsChannelKind]
 
-function erasedSpecOf(kind: WsChannelKind): ErasedChannelSpec {
+export function erasedSpecOf(kind: WsChannelKind): ErasedChannelSpec {
   return WS_CHANNELS[kind] as unknown as ErasedChannelSpec
 }
 
@@ -692,6 +702,20 @@ export async function checkUpgradeGate(
  * Channels without a frameGate forward every frame (their gate, if any, ran
  * at upgrade time).
  */
+/**
+ * RFC-212 — hook invoked when the frame path finds an expired credential.
+ * Registered by connections.ts (which owns the close sequence) so registry.ts
+ * never imports connections.ts — that back-edge would create a module cycle,
+ * which the single-binary build is sensitive to (see memory
+ * reference_binary_build_module_cycle).
+ */
+let onExpiredCredential: ((ws: ServerWebSocket<WsConnectionData>) => void) | undefined
+export function setExpiredCredentialHandler(
+  fn: (ws: ServerWebSocket<WsConnectionData>) => void,
+): void {
+  onExpiredCredential = fn
+}
+
 export function gatedSubscribe(
   ws: ServerWebSocket<WsConnectionData>,
   spec: WsChannelRegistry[WsChannelKind],
@@ -701,6 +725,21 @@ export function gatedSubscribe(
   const erased = spec as unknown as ErasedChannelSpec
   const channelKey = erased.channelKeyOf(params)
   ws.data.unsubscribe = erased.broadcaster.subscribe(channelKey, (msg, context) => {
+    // RFC-212 — a revalidation pass that decided to close this socket sets
+    // `closing` and unsubscribes synchronously, but a frame already mid-fan-out
+    // (broadcast is a synchronous for-of) can still reach here. Drop it. This
+    // check is synchronous, so it does not affect the two delivery-ordering
+    // locks in rfc152-ws-channel-registry.test.ts (closing is false there).
+    if (ws.data.closing) return
+    // RFC-212 T7 — natural expiry has no write hook to fire a revocation, so a
+    // silently-expired credential would otherwise keep this socket alive past
+    // its TTL. Purely local `now > expiresAt` comparison — zero DB, so AC-6 is
+    // untouched. onExpiredCredential closes it out-of-band on the next tick.
+    const cred = ws.data.credential
+    if (cred.kind !== 'daemon' && cred.expiresAt !== null && Date.now() > cred.expiresAt) {
+      onExpiredCredential?.(ws)
+      return
+    }
     if (erased.adminShortCircuit === true && ws.data.actor.user.role === 'admin') {
       sendJson(ws, msg)
       return
