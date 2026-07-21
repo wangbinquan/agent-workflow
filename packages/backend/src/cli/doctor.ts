@@ -4,6 +4,7 @@
 import { Database } from 'bun:sqlite'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { createSecretBox } from '@/auth/secretBox'
 import { loadConfig } from '@/config'
 import { quickCheckDbFile } from '@/db/integrity'
 import { countEmbeddedSqlMigrations, IS_EMBEDDED } from '@/embed'
@@ -78,12 +79,73 @@ export async function doctorCommand(): Promise<DoctorResult> {
   // runtime states, not setup errors).
   checks.push(checkLifecycleHealth())
 
-  // 8. RFC-213: DB integrity (fails doctor on corruption) + backup health (info).
+  // 8. RFC-213: DB integrity (fails doctor on corruption) + backup health (info)
+  // + sealed-credential decryptability (AC-12: cross-machine restore brick).
   checks.push(checkDbIntegrity())
   checks.push(checkBackups())
+  checks.push(checkSealedCredentials())
 
   const ok = checks.every((c) => c.ok)
   return { ok, checks }
+}
+
+/**
+ * RFC-213 AC-12 — after a cross-machine restore, `cached_repos` URLs sealed with
+ * the OLD machine's secret.key can no longer be decrypted (the backup correctly
+ * excludes secret.key). Surface that LOUDLY (fails doctor) so the operator knows
+ * to re-launch those repos and re-enter credentials, rather than hit silent
+ * clone failures. Read-only + immutable so a bare-WAL / stopped daemon still works.
+ */
+export function checkSealedCredentials(): CheckResult {
+  if (!existsSync(Paths.db)) {
+    return { name: 'repo credentials', ok: true, message: '(no database yet)' }
+  }
+  let db: Database | null = null
+  try {
+    const uri = `file:${Paths.db.replace(/\?/g, '%3f').replace(/#/g, '%23')}?immutable=1`
+    db = new Database(uri, { readonly: true })
+    const rows = db
+      .query(
+        "SELECT url_enc AS urlEnc FROM cached_repos WHERE url_enc IS NOT NULL AND url_enc != ''",
+      )
+      .all() as { urlEnc: string }[]
+    if (rows.length === 0) {
+      return { name: 'repo credentials', ok: true, message: 'no sealed credentials' }
+    }
+    if (!existsSync(Paths.secretKeyFile)) {
+      return {
+        name: 'repo credentials',
+        ok: false,
+        message: `${rows.length} sealed repo credential(s) but secret.key is MISSING — re-launch those repos to re-enter (restored from another machine?)`,
+      }
+    }
+    const box = createSecretBox(Paths.secretKeyFile)
+    let bricked = 0
+    for (const r of rows) {
+      try {
+        box.unseal(r.urlEnc)
+      } catch {
+        bricked++
+      }
+    }
+    if (bricked > 0) {
+      return {
+        name: 'repo credentials',
+        ok: false,
+        message: `${bricked}/${rows.length} sealed repo credential(s) cannot be decrypted (lost/mismatched secret.key) — re-launch those repos to re-enter`,
+      }
+    }
+    return { name: 'repo credentials', ok: true, message: `${rows.length} sealed, all decryptable` }
+  } catch (err) {
+    // cached_repos absent (old schema) / DB unreadable — informational.
+    return {
+      name: 'repo credentials',
+      ok: true,
+      message: `(unavailable: ${(err as Error).message})`,
+    }
+  } finally {
+    db?.close()
+  }
 }
 
 /**
