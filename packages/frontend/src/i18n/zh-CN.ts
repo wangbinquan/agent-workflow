@@ -723,6 +723,17 @@ export interface Resources {
     restoreButton: string
     restoreBusy: string
     restoreStaged: string
+    restoreConfirmTitle: string
+    restoreConfirmBody: string
+    restoreConfirmAction: string
+    restorePendingTitle: string
+    restorePendingBody: string
+    restorePendingSizeUnknown: string
+    restorePendingCancel: string
+    restoreFailedTitle: string
+    restoreFailedBody: string
+    restoreFailedNoError: string
+    restoreFailedDirHint: string
     themeLabel: string
     themeHint: string
     themeSystem: string
@@ -4277,6 +4288,18 @@ export const zhCN: Resources = {
     restoreButton: '从备份恢复…',
     restoreBusy: '正在上传备份…',
     restoreStaged: '已暂存，重启 daemon 生效',
+    restoreConfirmTitle: '确认从备份恢复整个实例？',
+    restoreConfirmBody:
+      '这会把整个实例回滚到备份 {{name}}（{{size}}）——所有用户的任务与资源都将回到备份时刻。恢复现在只是暂存，重启守护进程后正式生效。',
+    restoreConfirmAction: '确认恢复',
+    restorePendingTitle: '已暂存待恢复备份',
+    restorePendingBody: '暂存于 {{when}}（{{size}}）——重启守护进程后，整个实例将回滚到该备份。',
+    restorePendingSizeUnknown: '大小未知',
+    restorePendingCancel: '取消暂存',
+    restoreFailedTitle: '上次恢复尝试失败',
+    restoreFailedBody: '{{when}} — {{error}}',
+    restoreFailedNoError: '未记录错误详情',
+    restoreFailedDirHint: '失败残留目录仍在磁盘上，可检查后手工清理：',
     themeLabel: '主题',
     themeHint: '系统：跟随操作系统的浅色 / 深色偏好。',
     themeSystem: '跟随系统',

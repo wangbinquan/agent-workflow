@@ -163,6 +163,23 @@ export function isWorkgroupKickResumable(status: string | undefined): boolean {
   return status === 'awaiting_human' || status === 'interrupted'
 }
 
+/**
+ * 2026-07-21 —— 房间响应的 `pauseReason`：任务当前停在 awaiting_human 时读
+ * `wgPause` 槽（引擎在返回 awaiting_human 前写入），否则恒 null（读方门槛，
+ * 见 workgroupRunner.writeWgPauseReason 的注释）。纯函数导出供测试直锁——
+ * 与 isWorkgroupKickResumable 同款先例。
+ */
+export function resolveRoomPauseReason(
+  taskStatus: string,
+  raw: Record<string, unknown>,
+): string | null {
+  if (taskStatus !== 'awaiting_human') return null
+  const slot = raw.wgPause
+  if (slot === null || typeof slot !== 'object' || Array.isArray(slot)) return null
+  const reason = (slot as Record<string, unknown>).reason
+  return typeof reason === 'string' && reason.length > 0 ? reason : null
+}
+
 export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
   function buildResumeDeps(): Parameters<typeof resumeTask>[2] {
     const opencodeCmd = resolveOpencodeCmd(deps.configPath)
@@ -396,6 +413,11 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
       config,
       clarifyStops,
       roundsUsed,
+      // 2026-07-21 —— awaiting_human 的成因（引擎写入 wgPause 槽；见
+      // workgroupRunner.writeWgPauseReason）。读方门槛：只在任务当前就停在
+      // awaiting_human 时外泄，陈值（上次停机残留）永不出现——所以槽无需清理。
+      // 前端据此把「预算触顶待处置」与「等待回答」区分开。
+      pauseReason: resolveRoomPauseReason(task.status, raw),
       gate: {
         declaredDone: gateRaw.declaredDone === true,
         awaitingConfirmation: gateRaw.awaitingConfirmation === true,

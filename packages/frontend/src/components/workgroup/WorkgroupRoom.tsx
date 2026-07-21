@@ -60,6 +60,7 @@ import {
   mentionExecutingPills,
   mentionCandidates,
   mentionQueryAt,
+  pauseReasonCopyKey,
   resolveComposerKey,
   resultBodyFor,
   sendChordModLabel,
@@ -704,6 +705,23 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
             </ul>
           )}
         </Card>
+
+        {/* 2026-07-21 —— awaiting_human 成因说明：此前所有 awaiting_human 都被
+            任务徽章渲染成「等待回答」，max-rounds wrap-up 停机被误读成有问题要答。
+            徽章文案已中性化（等待人工），这里在认识成因时给精确说明与处置提示。 */}
+        {data.taskStatus === 'awaiting_human' &&
+          pauseReasonCopyKey(data.pauseReason ?? null) !== null && (
+            <Card
+              header={
+                <h3 className="workgroup-room__side-title">{t('workgroups.room.pauseTitle')}</h3>
+              }
+              data-testid="workgroup-room-pause-reason"
+            >
+              <p className="workgroup-room__gate-state">
+                {t(pauseReasonCopyKey(data.pauseReason ?? null) as string)}
+              </p>
+            </Card>
+          )}
 
         {data.gate.awaitingConfirmation && (
           <Card

@@ -74,6 +74,33 @@ export interface WorkgroupRoomResponse {
    *  `deriveRoundsUsed`）。上限走 `config.maxRounds`。自由协作的右栏据此显示
    *  「成员发言预算 已用 / 上限」——那才是真正决定任务生死的数。 */
   roundsUsed: number
+  /** 2026-07-21 —— awaiting_human 的成因（引擎 wgPause 槽）：
+   *  'max-rounds-wrapup' | 'leader-idle' | 'leader-clarify' |
+   *  'clarify-or-delivery' | 'engine-stall'（前向兼容任意字符串）。
+   *  仅任务当前停在 awaiting_human 时非 null；旧 daemon 无此字段。 */
+  pauseReason?: string | null
+}
+
+/**
+ * 2026-07-21 —— pauseReason → 文案 key（`workgroups.room.pause.*`）。未知
+ * reason（前向兼容）与 null 落到 generic：任务徽章的中性「等待人工」已经
+ * 兜底，这里只在认识成因时给精确说明。纯函数，供 vitest 直锁。
+ */
+export function pauseReasonCopyKey(reason: string | null | undefined): string | null {
+  switch (reason) {
+    case 'max-rounds-wrapup':
+      return 'workgroups.room.pause.maxRoundsWrapup'
+    case 'leader-idle':
+      return 'workgroups.room.pause.leaderIdle'
+    case 'leader-clarify':
+      return 'workgroups.room.pause.leaderClarify'
+    case 'clarify-or-delivery':
+      return 'workgroups.room.pause.clarifyOrDelivery'
+    case 'engine-stall':
+      return 'workgroups.room.pause.engineStall'
+    default:
+      return null
+  }
 }
 
 /**

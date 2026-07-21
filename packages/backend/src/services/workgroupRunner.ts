@@ -56,12 +56,13 @@ import {
   type WorkgroupMessage,
   type WorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
-import { and, asc, eq, inArray, isNull } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { monotonicFactory, ulid } from 'ulid'
 import { KeyedSerialQueue } from '@/util/keyedSerialQueue'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
 import {
+  agents,
   clarifySessions,
   nodeRuns,
   tasks,
@@ -103,6 +104,7 @@ import {
   decideWorkgroupOutcome,
   deriveWakeSet,
   hasSalvageableWork,
+  isReadonlyAgentPermission,
   WG_NUDGE_BODY,
   type WakeInput,
   type WakeItem,
@@ -353,6 +355,60 @@ async function reviveKilledClarifyContinuations(
 
 /** Apply {@link decideAssignmentReconcile} to every `running` assignment ONCE at
  *  engine (re)entry so a resumed task makes progress instead of re-parking. */
+/**
+ * 2026-07-21 —— fc 新认领的只读成员集（见 WakeInput.readonlyMemberIds）。
+ * 每 pass 查一次 agents 表（roster ≤64、fc pass 频率低）；agent 行缺失/
+ * permission 解析失败一律按可写处理（保守——误判只读会让成员永远领不到卡）。
+ */
+async function deriveReadonlyMemberIds(
+  db: DbClient,
+  config: WorkgroupRuntimeConfig,
+): Promise<ReadonlySet<string>> {
+  const agentMembers = config.members.filter(
+    (m) => m.memberType === 'agent' && m.agentName !== null,
+  )
+  if (agentMembers.length === 0) return new Set()
+  const names = [...new Set(agentMembers.map((m) => m.agentName as string))]
+  const rows = await db
+    .select({ name: agents.name, permission: agents.permission })
+    .from(agents)
+    .where(inArray(agents.name, names))
+  const roNames = new Set<string>()
+  for (const r of rows) {
+    try {
+      if (isReadonlyAgentPermission(JSON.parse(r.permission))) roNames.add(r.name)
+    } catch {
+      // 坏 JSON ⇒ 当可写
+    }
+  }
+  return new Set(agentMembers.filter((m) => roNames.has(m.agentName as string)).map((m) => m.id))
+}
+
+/**
+ * 2026-07-21 —— awaiting_human 成因槽（`tasks.workgroup_config_json` 的 `wgPause`
+ * 键，gate/dw 槽的同款存放处）。scheduler 的 awaiting_human 分支丢弃 detail
+ * （它同时服务普通任务 clarify，不该带工作组语义），所以引擎在返回前自己落
+ * 成因，房间 API 借此把「预算触顶待处置」和「等待回答」区分开——此前前端把
+ * 一切 awaiting_human 渲染成「等待回答」，wrap-up 停机被用户误读为有问题要答。
+ *
+ * 用 `json_set` 做单键原子更新（不整体读改写），不碰 gate/dw 等兄弟键。
+ * 不清理：房间 API 只在 task.status === 'awaiting_human' 时读它（读方门槛），
+ * 陈值永不外泄。PUT /config 的全量 JSON 覆写理论上可能吞掉一次并发写入——
+ * 后果只是横幅缺失一次，可接受。
+ */
+export async function writeWgPauseReason(
+  db: DbClient,
+  taskId: string,
+  reason: string,
+): Promise<void> {
+  await db
+    .update(tasks)
+    .set({
+      workgroupConfigJson: sql`json_set(coalesce(${tasks.workgroupConfigJson}, '{}'), '$.wgPause', json_object('reason', ${reason}))`,
+    })
+    .where(eq(tasks.id, taskId))
+}
+
 async function reconcileRunningAssignments(
   db: DbClient,
   taskId: string,
@@ -1153,6 +1209,11 @@ export async function runWorkgroupEngine(
     // `hostRuns` didn't even load). Kept OUT of `leaderRunning` so the outcome is a
     // proper `leader-clarify` park, not a generic `running`.
     const leaderClarifyParked = deriveLeaderClarifyPark(state.clarifySessions)
+    // 2026-07-21 —— 只在 fc 下取只读成员集（lw 由 leader 点名派单，不代领）。
+    const readonlyMemberIds =
+      state.config.mode === 'free_collab'
+        ? await deriveReadonlyMemberIds(db, state.config)
+        : undefined
     const wakeInput: WakeInput = {
       config: state.config,
       assignments: state.assignments,
@@ -1165,6 +1226,7 @@ export async function runWorkgroupEngine(
         taskTurnMemberIds: inflightMeta.taskTurnMemberIds,
       },
       leaderClarifyParked,
+      ...(readonlyMemberIds !== undefined ? { readonlyMemberIds } : {}),
       roundsUsed: countRoundsUsed(state),
       gate: {
         declaredDone: state.gate.declaredDone,
@@ -1194,6 +1256,7 @@ export async function runWorkgroupEngine(
           // Nothing driveable yet nothing terminal — should not happen; avoid
           // a hot loop by treating it as a human-parking stall.
           log.warn('workgroup engine: running outcome with empty in-flight set', { taskId })
+          await writeWgPauseReason(db, taskId, 'engine-stall')
           return { kind: 'awaiting_human' }
         case 'done': {
           if (state.config.mode === 'free_collab') {
@@ -1264,6 +1327,9 @@ export async function runWorkgroupEngine(
           continue
         }
         case 'awaiting_human':
+          // 2026-07-21 —— scheduler 的 awaiting_human 分支丢弃 detail（它同时
+          // 服务普通任务 clarify），成因经 wgPause 槽落库给房间 API。
+          await writeWgPauseReason(db, taskId, outcome.reason)
           return {
             kind: 'awaiting_human',
             detail: {

@@ -43,6 +43,17 @@ export interface WakeInput {
   /** lw: completed-or-started leader turns; fc: total member runs (incl. message turns). */
   roundsUsed: number
   /**
+   * 2026-07-21（T3B 实测 3 次 ROLE MISROUTE）—— roster 里 agent permission 为
+   * 「只读」（edit 与 write 均显式 'deny'，见 isReadonlyAgentPermission）的成员 id
+   * 集合。fc 的**新认领**配对跳过这些成员：平台代领的卡几乎全是落盘写活，派给
+   * 只读成员只能整批报「NOT executable」→ 整批 attempt +1 → 反复错派烧穿
+   * attempt_count 把卡打成 failed（T3B 26 张 failed 的可防成因）。只影响
+   * 1fc-b 新认领：fc_initial（首轮拆解）与 message_turn（讨论）是只读角色的
+   * 正当参与面，恢复批（1fc-a）派给谁是既成事实、过滤会制造永久孤儿卡。
+   * Optional：缺省空集 = 旧行为（与 taskTurnMemberIds 同款先例）。
+   */
+  readonlyMemberIds?: ReadonlySet<string>
+  /**
    * RFC-187 F3 — the leader host run asked a human via `<workflow-clarify>` and is
    * parked awaiting the answer (an open `__wg_clarify__` run with a null shardKey —
    * leader host runs are unsharded, members always sharded). Derived by
@@ -130,6 +141,23 @@ function countTrailingNudges(messages: readonly WorkgroupMessage[]): number {
 
 function agentMemberIds(config: WorkgroupRuntimeConfig): string[] {
   return config.members.filter((m) => m.memberType === 'agent').map((m) => m.id)
+}
+
+/**
+ * 2026-07-21 —— agent 的 permission map 是否「只读」：edit 与 write 都**显式**
+ * 'deny' 才算（保守判定——缺省/ask/对象形状一律当可写，宁可派错也不误伤）。
+ * 形状对齐本仓只读代理的既有惯例（task-completion-checker / code-auditor /
+ * refactor-analyst：`{"read":"allow","edit":"deny","write":"deny",…}`）。
+ * opencode 的 permission Rule 允许字符串或对象（core/v1/config/permission.ts），
+ * 对象形（如 `{"*":"deny"}`）语义等价但此处不展开解析——误判为可写的代价只是
+ * 回到旧行为（错派一次），而把可写误判成只读会让成员永远领不到卡。
+ */
+export function isReadonlyAgentPermission(permission: unknown): boolean {
+  if (permission === null || typeof permission !== 'object' || Array.isArray(permission)) {
+    return false
+  }
+  const p = permission as Record<string, unknown>
+  return p.edit === 'deny' && p.write === 'deny'
 }
 
 function isAgentAssignee(config: WorkgroupRuntimeConfig, a: WorkgroupAssignment): boolean {
@@ -306,9 +334,15 @@ export function deriveWakeSet(input: WakeInput): WakeSet {
   if (!capExceeded) {
     const taskBusy = taskBusyMemberIds(input)
     const open = input.assignments.filter((a) => a.status === 'open').map((a) => a.id)
-    const idle = agentMemberIds(config).filter(
+    const idleAll = agentMemberIds(config).filter(
       (id) => !taskBusy.has(id) && !claimedThisWake.has(id),
     )
+    // 2026-07-21 —— 新认领跳过只读成员（见 WakeInput.readonlyMemberIds 注释）。
+    // 兜底：过滤后无人可派而过滤前有 ⇒ 回退不过滤——全只读 roster 保持旧行为
+    // （错派后成员自述干不了），绝不把「能跑但派错」升级成 fc-deadlock。
+    const ro = input.readonlyMemberIds ?? new Set<string>()
+    const writable = idleAll.filter((id) => !ro.has(id))
+    const idle = writable.length > 0 || idleAll.length === 0 ? writable : idleAll
     if (open.length > 0 && idle.length > 0) {
       const batchSize = Math.min(WG_FC_CLAIM_BATCH_LIMIT, Math.ceil(open.length / idle.length))
       for (let k = 0; k < idle.length; k++) {
