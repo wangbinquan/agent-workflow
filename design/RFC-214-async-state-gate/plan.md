@@ -9,7 +9,8 @@
 | **T1** | `ErrorBanner` 加 `onRetry?`/`retryLabel?`：`action` 缺省时渲染 `.btn.btn--sm` 重试按钮进 `action` 槽（design.md §1.1）。`action` 显式传入时优先，保 RFC-203 零涟漪。**含 MAJOR-5**：`hasAction`/className 改基于 `resolvedAction` 重算（onRetry-only 不丢 `error-banner--with-action`） | — | PR-1 |
 | **T2** | 新建 `components/QueryState.tsx`（design.md §1.2）：loading(**`isLoading` 优先**,MAJOR-4)→error(onRetry=refetch)→**`keepDataOnError` 叠加档**(BLOCKER-1)→empty(两档,默认轻量)→data(render-prop) | — | PR-1 |
 | **T3** | `error-banner-retry.test.tsx` + `query-state.test.tsx`（design.md §5.1 全部 case，含 disabled 查询不转圈 / keepDataOnError 叠加 / onRetry-only with-action class） | T1,T2 | PR-1 |
-| **T4** | 迁移 `components/home/*`（4）+ `components/memory/*`（8）。**BLOCKER-1**：memory 面板**必须传 `keepDataOnError`**，迁移后 `memory-panels-async-state.test.tsx` 的「保留缓存行」断言仍绿（不是「DOM 不变大概率绿」）；home 按钮 `.btn--xs → .btn--sm`（唯一 xs 查询 retry，只在 error 态可见，多半无需刷基线，见 design.md §5.3） | T1,T2 | PR-2 |
+| **T4** | 迁移 `components/home/*`：RunningTaskList/RecentlyDoneList 套 QueryState（data 传派生 running/recent），InboxPreviewList 多查询保留结构、仅 action→onRetry；三处 retry `.btn--xs → .btn--sm`（home.section.error.retry 与 common.retry 同文案，零文案变化）。CapabilityGrid（bespoke 低调内联叠加）/ HomepageGreeting（probe）→ PR-5 白名单。**✅ 已交付 `e9a0a240`** | T1,T2 | PR-2 |
+| **T4b** | 迁移 `components/memory/*`（8）——**用户 2026-07-21 拍板逐面板评估、挪 PR-4**：简单叠加（只在有数据时叠 error）走 `keepDataOnError` 迁 QueryState（`memory-panels-async-state.test.tsx` 保留缓存行断言仍绿）；**bespoke 双叠加**（empty 分支也叠 error，如 `MemoryScopedList.tsx:52/64`——QueryState error 先于 empty 短路覆盖不了）保留原样、PR-5 白名单豁免 | T1,T2 | PR-4 |
 | **T5** | **收编列表页三壳**（MAJOR-6，非「迁移手写三态」）：`ResourceSplitPage`（`:344-347`→`:389`）/ `ResourceGalleryPage`（`:95-98`→`:123`）/ `tasks.preview.tsx` RetryAction 内部改用 `ErrorBanner.onRetry`（它们已 sm+common.retry，收编＝内部简化，消灭第 4 个并存 gate）。agents/skills/mcps 等**本就走壳**、随收编自动统一 | T4 | PR-3 |
 | **T6** | 迁移**详情页 + 其余组件**：`routes/*.detail.tsx` / `*.by-id.tsx` + `components/{workgroup,review,node-session,launch,tasks,agents,clarify}/*`（**排除** `components/canvas/**` xyflow 区 + `NodeDetailDrawer`，carve-out）；`SkillFileTree.tsx` / `Onboarding.tsx` / `WorkflowImportDialog.tsx` / `components/shell/*`。注意 `enabled` 门控查询用 `isLoading`（MAJOR-4 已在原语兜底） | T4 | PR-4 |
 | **T7** | i18n 键收敛：把 `home.section.error.retry` 等各域**查询** retry 键统一走默认 `common.retry`（或经 `retryLabel` 保留有意差异）；**不新增 key**；中英双 bundle 同步。**不碰 mutation retry 键** | T4-T6 | 随各 PR |
@@ -22,7 +23,7 @@
 - **PR-2｜home+memory 试点**（T4）：density 最高、含派生空态与 memory stale-data 锁，先验证迁移范式 + `keepDataOnError` + 既有锁适配。
   - 验收：`memory-panels-async-state.test.tsx` 的「刷新失败保留缓存行」断言**迁移后仍绿**（memory 传 `keepDataOnError`）；home xs→sm error 态截图核对（多半无需刷基线）。
 - **PR-3｜收编列表三壳**（T5+T7 分片）。验收：三壳内部改用 `ErrorBanner.onRetry`，其上层 agents/skills/mcps 列表页 page-wiring 测试原样绿；三壳暂入 §5.2 白名单待 PR-5 收口。
-- **PR-4｜详情页 + 组件清扫**（T6+T7 分片）。验收：`canvas/**` 与 `NodeDetailDrawer` carve-out 并在 PR 描述点名；review/clarify/workgroup 三态迁移；`enabled` 门控查询不误转圈。
+- **PR-4｜详情页 + 组件 + memory 逐面板**（T6+T4b+T7 分片）。验收：`canvas/**` 与 `NodeDetailDrawer` carve-out 并在 PR 描述点名；review/clarify/workgroup 三态迁移；memory 简单叠加走 keepDataOnError（保留缓存行断言仍绿）、bespoke 双叠加白名单；`enabled` 门控查询不误转圈。
 - **PR-5｜上锁**（T8）：命中集清零后翻开源码守卫。验收：守卫全绿且**四条变异各自必红**——① 非白名单文件手写 `<button onClick>…refetch()`；② 显式空态键清单里的键被手拼进 `<div className="muted">`；③ 绕过 QueryState 手拼 loading→error→empty 三态级联；④ 新增查询 retry 键但不走 `ErrorBanner.onRetry`/QueryState。（图标按钮 / `<Trans>` retry 属锁的已知盲区，design.md §5.2 已声明。）
 
 > 每个 PR：`bun run typecheck && bun run test && bun run format:check` + 前端 vitest 全套 + 单二进制冒烟；push 后按 [feedback_post_commit_ci_check] 查 CI。提交按精确路径 `git commit -- <paths>`，绝不 `git add -A` / `--amend`。
