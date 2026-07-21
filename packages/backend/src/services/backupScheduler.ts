@@ -119,6 +119,37 @@ export function startBackupScheduler(opts: BackupSchedulerOptions): BackupSchedu
   return { stop: () => clearInterval(handle) }
 }
 
+/** RFC-213 G4c — one `wal_checkpoint(TRUNCATE)` on the live DB. Exported so the
+ *  truncation behaviour is unit-tested directly (the ticker is just a timer). */
+export function checkpointWal(db: DbClient): void {
+  const sqlite = (db as unknown as { $client: { exec: (s: string) => void } }).$client
+  sqlite.exec('PRAGMA wal_checkpoint(TRUNCATE);')
+}
+
+export interface WalCheckpointOptions {
+  db: DbClient
+  intervalMs: number
+}
+
+/** Periodically checkpoint(TRUNCATE) the WAL to bound -wal growth. 0 = off. */
+export function startWalCheckpointLoop(opts: WalCheckpointOptions): BackupSchedulerHandle {
+  if (!opts.intervalMs || opts.intervalMs <= 0) return { stop: () => {} }
+  let running = false
+  const handle = setInterval(() => {
+    if (running) return
+    running = true
+    try {
+      checkpointWal(opts.db)
+    } catch (err) {
+      log.warn('wal checkpoint failed', { error: (err as Error).message })
+    } finally {
+      running = false
+    }
+  }, opts.intervalMs)
+  ;(handle as { unref?: () => void }).unref?.()
+  return { stop: () => clearInterval(handle) }
+}
+
 export interface PreMigrationBackupOptions {
   appHome: string
   dbPath: string

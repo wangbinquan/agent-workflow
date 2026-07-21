@@ -21,7 +21,11 @@ import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { startEventsArchiver } from '@/services/eventsArchive'
 import { startSubmoduleRefreshLoop } from '@/services/submoduleRefresh'
 import { startWorktreeGc } from '@/services/gc'
-import { startBackupScheduler, maybePreMigrationBackup } from '@/services/backupScheduler'
+import {
+  startBackupScheduler,
+  startWalCheckpointLoop,
+  maybePreMigrationBackup,
+} from '@/services/backupScheduler'
 import { registerTerminalTaskHook } from '@/services/lifecycle'
 import { startLifecycleInvariantsLoop } from '@/services/lifecycleInvariants'
 import { sealOpenHumanGatesForTask } from '@/services/terminalSweep'
@@ -541,6 +545,11 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     retentionDays: config.backupRetentionDays,
     appHome: Paths.root,
   })
+  // RFC-213 G4c: bound -wal growth (disabled by default — walCheckpointIntervalMs=0).
+  const walCheckpointTicker = startWalCheckpointLoop({
+    db,
+    intervalMs: config.walCheckpointIntervalMs,
+  })
   // RFC-210 G7: keep cached mirrors (and their submodules) from going stale when
   // nobody launches a task against them. Reads its own enable flag each tick.
   const submoduleRefreshTicker = startSubmoduleRefreshLoop(
@@ -709,6 +718,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     gcTicker.stop()
     archiveTicker.stop()
     backupTicker.stop()
+    walCheckpointTicker.stop()
     submoduleRefreshTicker.stop()
     batchImportGcTicker.stop()
     pluginGenerationGcTicker.stop()
