@@ -233,8 +233,20 @@ function SpotlightOverlay({ pathname, state }: { pathname: string; state: TourSt
 
   // Route-driven advance: the user did the thing (saved, launched) and the app
   // moved them; step forward automatically.
+  //
+  // Guard against `pathname === step.route`: a step whose advanceOnRoute is a
+  // prefix of its OWN page would otherwise auto-complete the instant it opens,
+  // before the user acts. Concretely, the "save the agent" step lives on
+  // `/agents/new` and advances on `/agents/` (the detail page it lands on) — but
+  // `/agents/new`.startsWith('/agents/') is true, so without this guard the step
+  // fires immediately and skips the save. Only advance once the app has actually
+  // moved the user OFF the step's page.
   useEffect(() => {
-    if (step?.advanceOnRoute !== undefined && pathname.startsWith(step.advanceOnRoute)) {
+    if (
+      step?.advanceOnRoute !== undefined &&
+      pathname.startsWith(step.advanceOnRoute) &&
+      pathname !== step.route
+    ) {
       next()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

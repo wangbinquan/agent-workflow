@@ -109,6 +109,47 @@ describe('RFC-211 tour route-cascade invariant', () => {
     }
     expect(offenders).toEqual([])
   })
+
+  test('a step whose advanceOnRoute prefixes its own page waits until the user leaves it', () => {
+    // Regression (full-journey): saveAgent.advanceOnRoute '/agents/' is a prefix
+    // of its own page '/agents/new', so without the pathname!==route guard the
+    // step fired the instant it opened and skipped the actual save — stranding
+    // the tour on the launch step with no agent and nothing to point at. Drive
+    // the real provider: on /agents/new it must hold; only a move to the detail
+    // page advances it.
+    const steps = getTour('first-task').steps
+    const saveIdx = steps.findIndex((s) => s.titleKey === 'tour.firstTask.saveAgent.title')
+    expect(saveIdx).toBeGreaterThan(-1)
+    expect(steps[saveIdx]?.advanceOnRoute).toBe('/agents/')
+    expect(steps[saveIdx]?.route).toBe('/agents/new')
+
+    const seedAt = (): void =>
+      window.localStorage.setItem(
+        'aw-tour',
+        JSON.stringify({ tourId: 'first-task', stepIndex: saveIdx }),
+      )
+    const stepNow = (): number =>
+      JSON.parse(window.localStorage.getItem('aw-tour') ?? '{}').stepIndex
+
+    // On its own page → must NOT auto-advance.
+    seedAt()
+    const held = render(
+      <TourProvider pathname="/agents/new">
+        <div />
+      </TourProvider>,
+    )
+    expect(stepNow()).toBe(saveIdx)
+    held.unmount()
+
+    // Moved to the detail page (save succeeded) → advances exactly one step.
+    seedAt()
+    render(
+      <TourProvider pathname="/agents/my-coder">
+        <div />
+      </TourProvider>,
+    )
+    expect(stepNow()).toBe(saveIdx + 1)
+  })
 })
 
 describe('RFC-211 spotlight overlay', () => {
