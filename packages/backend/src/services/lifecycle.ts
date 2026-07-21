@@ -297,11 +297,14 @@ export type TaskStatusUpdateExtra = Partial<
     | 'workflowSnapshot'
     | 'workflowVersion'
     | 'workgroupConfigJson'
-    // RFC-207 §3.8 — written ONLY by writeStatus below, never by callers.
-    | 'runningMs'
-    | 'runningSince'
   >
 >
+// RFC-207 §3.8 — `runningMs` / `runningSince` are DELIBERATELY excluded from the
+// caller-writable extra: they are computed by writeStatus below, and `extra`
+// spreads AFTER that computation, so allowing them here would let any caller
+// silently clobber the run-time accounting (and every existing test would stay
+// green). Making them unrepresentable at the type level is the s14-style guard.
+// See design/test-guard-audit-2026-07-21 gap B2-lifecycle-3.
 
 export class ConcurrentTaskTransition extends ConflictError {
   constructor(taskId: string, expectedFrom: readonly string[], reason: string) {
@@ -335,6 +338,8 @@ export async function setTaskStatus(args: {
    * would otherwise tear if resume loses or preflight fails.
    */
   onTransitionTx?: (tx: DbTxSync, transition: { from: TaskStatus; to: TaskStatus }) => void
+  /** RFC-207 — injectable clock for the run-time accounting (test determinism). */
+  now?: number
   reason: string
 }): Promise<{ from: TaskStatus; to: TaskStatus }> {
   const rows = await args.db
@@ -409,6 +414,10 @@ export async function setTaskStatus(args: {
     }
   }
   const transition = { from, to: args.to }
+  // RFC-207 — one clock read for the whole accounting so `runningSince` and the
+  // `runningMs` delta are computed against the same instant (and are injectable
+  // for deterministic tests).
+  const now = args.now ?? Date.now()
   const writeStatus = (writer: Pick<DbClient, 'update'>) =>
     // rfc097-allow-direct-task-status-write -- single allowlisted writer
     writer
@@ -421,10 +430,10 @@ export async function setTaskStatus(args: {
         // stretch into the accumulated total. Time spent parked, awaiting review or
         // awaiting a human answer therefore costs nothing against maxDurationMs.
         ...(args.to === 'running'
-          ? { runningSince: Date.now() }
+          ? { runningSince: now }
           : from === 'running'
             ? {
-                runningMs: sql`${tasks.runningMs} + (${Date.now()} - COALESCE(${tasks.runningSince}, ${Date.now()}))`,
+                runningMs: sql`${tasks.runningMs} + (${now} - COALESCE(${tasks.runningSince}, ${now}))`,
                 runningSince: null,
               }
             : {}),
