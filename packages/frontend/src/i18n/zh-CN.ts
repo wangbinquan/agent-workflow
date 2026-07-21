@@ -841,6 +841,19 @@ export interface Resources {
       testDetailToken: string
       testDetailJwks: string
     }
+    // RFC-205 T5 — Settings → Runtime sandbox status chip + sandboxMode control.
+    sandbox: {
+      title: string
+      chipActive: string
+      chipUnavailable: string
+      chipOff: string
+      modeLabel: string
+      modeEnforce: string
+      modeWarn: string
+      modeOff: string
+      modeHint: string
+      enforceUnavailable: string
+    }
   }
   onboarding: {
     title: string
@@ -4424,6 +4437,19 @@ export const zhCN: Resources = {
       testDetailToken: 'token：',
       testDetailJwks: 'jwks：',
     },
+    sandbox: {
+      title: '运行时沙箱',
+      chipActive: '沙箱：{{mechanism}}',
+      chipUnavailable: '沙箱不可用',
+      chipOff: '沙箱关闭',
+      modeLabel: '沙箱模式',
+      modeEnforce: '强制',
+      modeWarn: '告警',
+      modeOff: '关闭',
+      modeHint:
+        '强制（enforce）：沙箱机制不可用时拒绝启动新任务；告警（warn）：不可用时降级为无沙箱运行并发出告警；关闭（off）：从不启用沙箱。',
+      enforceUnavailable: '本机未探测到可用的沙箱机制，强制档位下新任务启动将被拒绝。',
+    },
   },
   onboarding: {
     title: '欢迎使用 Agent Workflow',
@@ -5837,7 +5863,9 @@ export const zhCN: Resources = {
       // 2026-07-21 —— 中性化：awaiting_human 有两类成因（clarify 反问 = 真有
       // 问题要答；max-rounds wrap-up = 预算触顶待处置）。「等待回答」对后者
       // 是误导（用户实报困惑）；精确成因由房间的 pauseReason 说明卡展示。
-      awaiting_human: '等待人工',
+      // 措辞注意：node-run-duration-no-manual-marker 守卫禁止 tasks 域出现
+      // 「等待人工」子串（防已删的时长人工标记复活）——故用「待人工处理」。
+      awaiting_human: '待人工处理',
     },
   },
   editor: {

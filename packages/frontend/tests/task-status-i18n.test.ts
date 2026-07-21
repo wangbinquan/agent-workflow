@@ -31,7 +31,9 @@ describe('task status i18n', () => {
     expect(i18n.t('tasks.status.awaiting_review')).toBe('等待审核')
     // 2026-07-21 —— 中性化（原「等待回答」）：awaiting_human 也覆盖 max-rounds
     // wrap-up（预算触顶、无问题要答），精确成因由房间 pauseReason 卡展示。
-    expect(i18n.t('tasks.status.awaiting_human')).toBe('等待人工')
+    // 「待人工处理」而非「等待人工」——后者撞 node-run-duration-no-manual-marker
+    // 守卫的子串禁令（防已删的时长人工标记复活）。
+    expect(i18n.t('tasks.status.awaiting_human')).toBe('待人工处理')
     expect(i18n.t('tasks.status.running')).toBe('运行中')
     setLanguage('zh-CN')
   })
@@ -70,7 +72,7 @@ describe('task status i18n', () => {
       canceled: { zh: '已取消', en: 'Canceled' },
       interrupted: { zh: '已中断', en: 'Interrupted' },
       awaiting_review: { zh: '等待审核', en: 'Awaiting review' },
-      awaiting_human: { zh: '等待人工', en: 'Awaiting human' },
+      awaiting_human: { zh: '待人工处理', en: 'Awaiting input' },
     }
     setLanguage('zh-CN')
     for (const s of TASK_STATUS) {

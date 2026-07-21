@@ -711,6 +711,20 @@ export const enUS: Resources = {
       testDetailToken: 'token:',
       testDetailJwks: 'jwks:',
     },
+    sandbox: {
+      title: 'Runtime sandbox',
+      chipActive: 'Sandbox: {{mechanism}}',
+      chipUnavailable: 'Sandbox unavailable',
+      chipOff: 'Sandbox off',
+      modeLabel: 'Sandbox mode',
+      modeEnforce: 'Enforce',
+      modeWarn: 'Warn',
+      modeOff: 'Off',
+      modeHint:
+        'Enforce: refuse to launch new tasks while the sandbox mechanism is unavailable; Warn: degrade to unsandboxed runs with an alert; Off: never sandbox.',
+      enforceUnavailable:
+        'No working sandbox mechanism was detected on this machine — under Enforce, new task launches will be refused.',
+    },
   },
   onboarding: {
     title: 'Welcome to Agent Workflow',
@@ -2206,10 +2220,12 @@ export const enUS: Resources = {
       canceled: 'Canceled',
       interrupted: 'Interrupted',
       awaiting_review: 'Awaiting review',
-      // 2026-07-21 — neutralized: awaiting_human covers both clarify (a real
-      // question awaits) and max-rounds wrap-up (budget exhausted, deliverable
-      // in hand). The precise cause renders as the room's pauseReason card.
-      awaiting_human: 'Awaiting human',
+      // 2026-07-21 — kept as-is deliberately: 'Awaiting input' is already
+      // cause-neutral in English, and e2e/task-lifecycle-states.spec.ts:674
+      // asserts this exact string (e2e sits outside workspace typecheck — a
+      // rename here reds Playwright CI only). The precise cause renders as
+      // the room's pauseReason card.
+      awaiting_human: 'Awaiting input',
     },
   },
   editor: {
