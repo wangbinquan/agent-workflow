@@ -1,0 +1,48 @@
+# RFC-215 — free_collab 双轨调度与批量认领（plan）
+
+- 状态：Draft v2（2026-07-21，随设计门修订同步）
+- 默认单 PR 交付（规模可控、改动集中 fc 链路）；commit 前缀
+  `feat(workgroup): RFC-215 …`。
+
+## 任务分解
+
+| # | 任务 | 依赖 | 内容 | 验收 |
+| --- | --- | --- | --- | --- |
+| RFC-215-T1 | shared 协议原语 | — | `WG_PORT_TASK_RESULTS` / `WG_FC_CLAIM_BATCH_LIMIT` / `WgTaskResultItemSchema` / `parseWgTaskResultsPort(raw, batchSize)`（missing 覆盖检查）/ `parseBatchShardKey`（memberId+ids 编解码单一事实源）/ `wgClarifyAskerKey` 批分支（`asg:batch:{memberId}`，design §6.3） | 设计 §10-17 单测 + askerKey 稳定性 |
+| RFC-215-T2 | migration 0105 `attempt_count` | — | ALTER TABLE 加列；journal `when=1786464000000` 接轴；`upgrade-rolling`（:230,:304）104→105 bump；`rfc189-wg-round.test.ts:151` 冻结 fixture 改显式列裸 SQL（design §5 点名） | 设计 §10-19 |
+| RFC-215-T3 | wake 双轨拆分 + 批量配对 | T1 | `WakeInput.inFlight.taskTurnMemberIds?`（optional，先例 leaderClarifyParked）；配对排除/恢复判定两维度拆分（design §2.1，lw 保合并）；fc 派发重排（恢复批→新配批→消息轨）；均分算法 + 边界短路（idle=0/open=0/空切片不产 item）；`fc_claim.assignmentIds[]` | 设计 §10-1..7 纯函数测 |
+| RFC-215-T4 | 引擎批量 drive + `batch:` 消费点适配 | T1,T2,T3 | `driveBatchTurn`（逐卡 CAS+`bumpAttempt`、`batch:{member}:{ids}` shardKey mint、逐卡落库、漏报/自报 failed/整批失败回 open、clarify 整批泊/续、throw 收口批量化 §3.2-8）；`wakeKey`/`markInflight`/领养环适配（含 `msg:` 行补登记 §3.1）；**§9 清单逐点**：`reconcileRunningAssignments` 改按 `nodeRunId` 直查、`dismissOpenClarifyParksForAutonomous` 批 inArray requeue、`workgroupRoom.ts` `runKindOf`/presence/clarify 投影批分支；fc 游标移交（删批路径 `advanceMemberCursor`，lw 保留） | 设计 §10-8..16 引擎测 + §10-20 源锁 |
+| RFC-215-T5 | 注入与协议块 | T1 | `composeMemberPrompt` 按调用方劈开（lw 单卡逐字不变；fc 恒批形态含 N=1，design §4）；`selectMemberSlices` `omitMentions` + 尾窗模式；`wgHostRolePorts(role, batch?)` + `renderWgProtocolBlock` 批量分支（明示不用 `wg_result`）+ 镜像锁平移扩展 | 设计 §10-18 + lw 零 diff 断言 |
+| RFC-215-T6 | 既有测试改动清单落实 | T3,T4,T5 | design §11 逐行：rfc164-core claim pairing 改写、rfc164-engine fc 链 fixture 改 `wg_task_results`、`retry-budget-single-source` 锁串同步、`rfc186-resume-reconcile` cursor 计数核对 | §11 表全绿 |
+| RFC-215-T7 | 前端批徽记 | T4 | 清单区按 `nodeRunId` 分组"批 ×N" chip（复用既有 chip 类）；i18n zh/en；vitest | 设计 §7 / AC-10 |
+| RFC-215-T8 | 收尾登记 | T1–T7 | `design/plan.md` 索引置 Done、`STATE.md` 执行日志、AC 清单勾核、**回写 RFC-164 design §4.2/§4.3/§6.3 修订标注**（指向本 RFC，design §12-15） | 门槛四件套 + build:binary + CI 绿 |
+
+## 验收清单（对应 proposal AC）
+
+- [ ] AC-1 两轨互不占用（正反两向 + 同轨互斥）
+- [ ] AC-2 均分 + 上限 5（含边界短路 / 空切片 / 剩卡下一波）
+- [ ] AC-3 `wg_task_results` 逐卡汇报 + 缺卡回 open（含误发 `wg_result` 走重试不静默）
+- [ ] AC-4 失败语义 + `attempt_count` 预算（含 drive throw 收口）
+- [ ] AC-5 游标单一归属（fc 批不推 / 消息轨推 / lw 不变）
+- [ ] AC-6 预算末端批优先
+- [ ] AC-7 崩溃恢复矩阵 v2（失驱重配 / interrupted-reconcile / done 收卡不重跑）
+- [ ] AC-8 lw 零变化回归锁
+- [ ] AC-9 收敛/终局判定不变
+- [ ] AC-10 前端批徽记 + 房间可见性（runKindOf 批分支）+ i18n
+- [ ] AC-11 askerKey 跨批稳定（预算连续 + stop 命中）
+
+## 风险与缓释
+
+- **`batch:` shardKey 存量消费点**：设计门盘出全量清单（design §9，6 处需适配 + 3 处
+  免改），T4 逐点落实——这是 v1 最大盲区（3 镜头交叉坐实 3 条 P1），实现时以 §9 表
+  为准逐项勾核。
+- **既有测试锁**：design §11 是"会红清单"，T6 专项处理；按
+  [feedback_grep_locks_before_push] 改符号前再全量盘一遍锁。
+- **改动半径**：wake 纯函数独测充分；引擎批量路径与 lw 单卡路径共享落库/失败收尾
+  子例程（§3.5 反 fork 红线），lw 走原路径不动。
+- **迁移**：单列 ADD COLUMN 回滚安全；工程纪律见设计 §5（journal 单调 / 计数 bump /
+  冻结 fixture 点名改裸 SQL）。
+- **模块环**：`workgroupRounds` 头部已有初始化环警告——本 RFC 不新增顶层派生 const；
+  push 前必跑 `bun run build:binary`。
+- **门槛**：`bun run typecheck && bun run lint && bun run test && bun run format:check`
+  全绿 + push 后按 sha 查 CI。
