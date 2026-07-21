@@ -64,18 +64,10 @@ export function InboxPreviewList({ onCount }: InboxPreviewListProps) {
       <ErrorBanner
         error={reviews.error ?? clarify.error}
         message={t('home.section.error.generic')}
-        action={
-          <button
-            type="button"
-            className="btn btn--xs"
-            onClick={() => {
-              void reviews.refetch()
-              void clarify.refetch()
-            }}
-          >
-            {t('home.section.error.retry')}
-          </button>
-        }
+        onRetry={() => {
+          void reviews.refetch()
+          void clarify.refetch()
+        }}
       />
     )
   }

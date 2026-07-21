@@ -12,10 +12,9 @@ import { useTranslation } from 'react-i18next'
 import { isTerminalTaskStatus } from '@agent-workflow/shared'
 import type { TaskSummary } from '@agent-workflow/shared'
 import { api } from '@/api/client'
-import { LoadingState } from '@/components/LoadingState'
+import { QueryState } from '@/components/QueryState'
 import { TASKS_HOMEPAGE_QUERY_KEY } from './RunningTaskList'
 import { TaskRow } from './task-row'
-import { ErrorBanner } from '@/components/ErrorBanner'
 
 // flag-audit W0: single source — shared/lifecycle.ts TERMINAL_TASK_STATUSES
 // (was a hand-copied 4-value list that could drift from the state machine).
@@ -48,30 +47,21 @@ export function RecentlyDoneList({ onCount }: RecentlyDoneListProps) {
     onCount?.(recent.length)
   }, [recent.length, onCount])
 
-  if (tasks.isLoading) {
-    return <LoadingState size="compact" />
-  }
-  if (tasks.error !== null && tasks.error !== undefined) {
-    return (
-      <ErrorBanner
-        error={tasks.error}
-        message={t('home.section.error.generic')}
-        action={
-          <button type="button" className="btn btn--xs" onClick={() => void tasks.refetch()}>
-            {t('home.section.error.retry')}
-          </button>
-        }
-      />
-    )
-  }
-  if (recent.length === 0) {
-    return <div className="muted">{t('home.section.empty.recent')}</div>
-  }
   return (
-    <div className="task-list">
-      {recent.map((task) => (
-        <TaskRow key={task.id} task={task} nowMs={nowMs} />
-      ))}
-    </div>
+    <QueryState
+      query={tasks}
+      data={recent}
+      loadingSize="compact"
+      errorMessage={t('home.section.error.generic')}
+      emptyText={t('home.section.empty.recent')}
+    >
+      {(rows) => (
+        <div className="task-list">
+          {rows.map((task) => (
+            <TaskRow key={task.id} task={task} nowMs={nowMs} />
+          ))}
+        </div>
+      )}
+    </QueryState>
   )
 }

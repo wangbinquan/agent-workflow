@@ -11,9 +11,8 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TaskStatus, TaskSummary } from '@agent-workflow/shared'
 import { api } from '@/api/client'
-import { LoadingState } from '@/components/LoadingState'
+import { QueryState } from '@/components/QueryState'
 import { TaskRow } from './task-row'
-import { ErrorBanner } from '@/components/ErrorBanner'
 
 export const TASKS_HOMEPAGE_QUERY_KEY = ['tasks', 'homepage', 'recent50'] as const
 
@@ -48,30 +47,21 @@ export function RunningTaskList({ onCount }: RunningTaskListProps) {
     onCount?.(running.length)
   }, [running.length, onCount])
 
-  if (tasks.isLoading) {
-    return <LoadingState size="compact" />
-  }
-  if (tasks.error !== null && tasks.error !== undefined) {
-    return (
-      <ErrorBanner
-        error={tasks.error}
-        message={t('home.section.error.generic')}
-        action={
-          <button type="button" className="btn btn--xs" onClick={() => void tasks.refetch()}>
-            {t('home.section.error.retry')}
-          </button>
-        }
-      />
-    )
-  }
-  if (running.length === 0) {
-    return <div className="muted">{t('home.section.empty.running')}</div>
-  }
   return (
-    <div className="task-list">
-      {running.map((task) => (
-        <TaskRow key={task.id} task={task} nowMs={nowMs} />
-      ))}
-    </div>
+    <QueryState
+      query={tasks}
+      data={running}
+      loadingSize="compact"
+      errorMessage={t('home.section.error.generic')}
+      emptyText={t('home.section.empty.running')}
+    >
+      {(rows) => (
+        <div className="task-list">
+          {rows.map((task) => (
+            <TaskRow key={task.id} task={task} nowMs={nowMs} />
+          ))}
+        </div>
+      )}
+    </QueryState>
   )
 }
