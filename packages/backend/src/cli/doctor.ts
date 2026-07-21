@@ -102,8 +102,9 @@ export function checkSealedCredentials(): CheckResult {
   }
   let db: Database | null = null
   try {
-    const uri = `file:${Paths.db.replace(/\?/g, '%3f').replace(/#/g, '%23')}?immutable=1`
-    db = new Database(uri, { readonly: true })
+    // Plain read-only (sidecars persist after checkpoint+close). Not the
+    // `file:…?immutable=1` URI — bun:sqlite rejects it on Linux.
+    db = new Database(Paths.db, { readonly: true })
     const rows = db
       .query(
         "SELECT url_enc AS urlEnc FROM cached_repos WHERE url_enc IS NOT NULL AND url_enc != ''",

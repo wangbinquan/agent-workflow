@@ -32,33 +32,21 @@ export interface IntegrityResult {
  * missing file is reported corrupt/absent, never silently created as empty.)
  */
 export function quickCheckDbFile(dbPath: string): IntegrityResult {
-  // immutable=1 reads the base db.sqlite DIRECTLY — no -wal/-shm, no locking — so a
-  // cleanly-closed WAL DB (daemon stopped; sidecars gone) can still be checked,
-  // where a plain read-only open throws "unable to open"/"disk I/O". Safe because
-  // every caller checks a QUIESCENT file (daemon down, or a temp restore copy):
-  // there are no concurrent writers to tear a page under the immutable assumption.
-  const immutableUri = `file:${dbPath.replace(/\?/g, '%3f').replace(/#/g, '%23')}?immutable=1`
-  const opens: Array<() => Database> = [
-    () => new Database(dbPath, { readonly: true }),
-    () => new Database(immutableUri, { readonly: true }),
-  ]
-  let lastErr = 'unable to open database for integrity check'
-  for (let i = 0; i < opens.length; i++) {
-    let db: Database | null = null
-    try {
-      db = opens[i]!()
-      const rows = db.query('PRAGMA quick_check;').all() as { quick_check: string }[]
-      const ok = rows.length === 1 && rows[0]?.quick_check === 'ok'
-      return { ok, errors: ok ? [] : rows.map((r) => r.quick_check) }
-    } catch (err) {
-      lastErr = err instanceof Error ? err.message : String(err)
-      // A plain read-only open can fail on a bare WAL DB — not proof of corruption;
-      // fall through to the immutable read, which reports the truth.
-      if (i < opens.length - 1) continue
-      return { ok: false, errors: [lastErr] }
-    } finally {
-      db?.close()
-    }
+  // Plain read-only open. In normal operation SQLite leaves the -wal/-shm
+  // sidecars on disk after a checkpoint+close, so a read-only connection opens
+  // fine and sees the full state. (An earlier `file:…?immutable=1` fallback was
+  // removed: bun:sqlite does not honour that URI on Linux — it throws — and it is
+  // only needed for a bare-WAL DB with the sidecars manually deleted, which does
+  // not occur in the restore-incoming / doctor paths.)
+  let db: Database | null = null
+  try {
+    db = new Database(dbPath, { readonly: true })
+    const rows = db.query('PRAGMA quick_check;').all() as { quick_check: string }[]
+    const ok = rows.length === 1 && rows[0]?.quick_check === 'ok'
+    return { ok, errors: ok ? [] : rows.map((r) => r.quick_check) }
+  } catch (err) {
+    return { ok: false, errors: [err instanceof Error ? err.message : String(err)] }
+  } finally {
+    db?.close()
   }
-  return { ok: false, errors: [lastErr] }
 }
