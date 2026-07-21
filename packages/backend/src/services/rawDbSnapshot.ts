@@ -17,6 +17,7 @@
 import { Database } from 'bun:sqlite'
 import { cpSync, existsSync, mkdirSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { quickCheckDbFile } from '@/db/integrity'
 import { tarGz } from '@/util/archive'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
@@ -102,6 +103,23 @@ export async function rawCopyDb(opts: RawCopyOptions): Promise<RawCopyResult> {
     if (existsSync(dbPath)) {
       cpSync(dbPath, join(stagingDir, 'db.sqlite'))
       copied.db = true
+      // Impl-gate P2-19 (AC-2): verify the copy — a torn / zero-byte copy
+      // silently defeats the whole safety net exactly when it matters. Size
+      // must match the source; quick_check is best-effort WARN only (the
+      // source may legitimately be the corrupt DB being restored away from).
+      const srcSize = statSync(dbPath).size
+      const copySize = statSync(join(stagingDir, 'db.sqlite')).size
+      if (copySize !== srcSize || copySize === 0) {
+        throw new Error(`raw db copy verification failed (src=${srcSize}B copy=${copySize}B)`)
+      }
+      if (checkpointed) {
+        const chk = quickCheckDbFile(join(stagingDir, 'db.sqlite'))
+        if (!chk.ok) {
+          log.warn('raw db copy fails quick_check (copying anyway — may be the point)', {
+            errors: chk.errors.slice(0, 3),
+          })
+        }
+      }
     }
     // -wal / -shm may or may not exist depending on checkpoint success and
     // whether the daemon closed cleanly. Copy whatever is there.

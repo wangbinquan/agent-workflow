@@ -14,6 +14,7 @@
 import { Database } from 'bun:sqlite'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { appVersion } from '@/util/version'
 
 export const MANIFEST_FILENAME = 'manifest.json'
 
@@ -37,9 +38,12 @@ export interface BackupManifest {
   migration: MigrationIdentity
 }
 
-/** The running binary's version. `0.0.0` until the project versions releases. */
+/** The running binary's identity for the pre-migration gate. Impl-gate P1-3
+ *  (2026-07-22): was `env ?? '0.0.0'` with nothing setting the env — every two
+ *  binaries compared equal and the gate never fired. Now delegates to
+ *  util/version (build-time `--define` from git describe; dev = '0.0.0-dev'). */
 export function currentAppVersion(): string {
-  return process.env.AGENT_WORKFLOW_VERSION ?? '0.0.0'
+  return appVersion()
 }
 
 /**

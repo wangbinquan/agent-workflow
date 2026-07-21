@@ -128,6 +128,12 @@ export const ConfigSchema = z.object({
   backupRetentionCount: z.number().int().positive().default(7),
   /** See backupRetentionCount. */
   backupRetentionDays: z.number().int().positive().default(30),
+  /** RFC-213 impl-gate P2-6 (AC-6 total-size cap): hard byte ceiling for the
+   *  ROTATABLE (scheduled/auto) backup set — beyond count/days retention, the
+   *  oldest rotatable backups are pruned until the set fits (never to 0).
+   *  0 = no cap (default). Protected kinds (manual / pre-restore /
+   *  pre-migration) are never auto-pruned — recorded limitation. */
+  backupMaxTotalBytes: z.number().int().nonnegative().default(0),
   /** Take a raw (byte-copy) pre-migration backup before applying pending
    *  migrations on boot, so a botched upgrade can be rolled back. */
   backupOnMigration: z.boolean().default(true),
@@ -437,6 +443,7 @@ export const DEFAULT_CONFIG: Config = {
   backupIntervalMs: 0,
   backupRetentionCount: 7,
   backupRetentionDays: 30,
+  backupMaxTotalBytes: 0,
   backupOnMigration: true,
   sqliteSynchronous: 'NORMAL',
   walCheckpointIntervalMs: 0,

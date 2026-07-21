@@ -31,6 +31,8 @@ export interface PruneOptions {
   count: number
   days: number
   now: number
+  /** Impl-gate P2-6 — total-size cap over the ROTATABLE set (0/undefined = off). */
+  maxTotalBytes?: number
 }
 
 export interface PruneResult {
@@ -42,13 +44,14 @@ export interface PruneResult {
  *  the dir, deletes files), returns what it did. */
 export function pruneBackups(opts: PruneOptions): PruneResult {
   const { dir, count, days, now } = opts
-  let files: { name: string; path: string; mtime: number }[]
+  let files: { name: string; path: string; mtime: number; size: number }[]
   try {
     files = readdirSync(dir)
       .filter((f) => f.endsWith('.tar.gz'))
       .map((f) => {
         const p = join(dir, f)
-        return { name: f, path: p, mtime: statSync(p).mtimeMs }
+        const st = statSync(p)
+        return { name: f, path: p, mtime: st.mtimeMs, size: st.size }
       })
   } catch {
     return { deleted: [], kept: [] }
@@ -61,6 +64,20 @@ export function pruneBackups(opts: PruneOptions): PruneResult {
     const withinDays = f.mtime > cutoff
     return !withinCount && !withinDays // DELETE only when it fails BOTH
   })
+
+  // Impl-gate P2-6 (AC-6): total-size cap over the ROTATABLE set. count/days
+  // alone let a large DB's scheduled set grow unbounded between prunes; once
+  // the surviving rotatable backups exceed the cap, drop oldest-first (the
+  // never-to-0 guard below still applies). Protected kinds are untouched.
+  if (opts.maxTotalBytes !== undefined && opts.maxTotalBytes > 0) {
+    const surviving = rotatable.filter((f) => !toDelete.includes(f)) // newest-first
+    let total = surviving.reduce((s, f) => s + f.size, 0)
+    for (let i = surviving.length - 1; i >= 1 && total > opts.maxTotalBytes; i--) {
+      const victim = surviving[i]!
+      toDelete.push(victim)
+      total -= victim.size
+    }
+  }
 
   // Never delete the last backup on disk (protected ones usually survive; this
   // covers the all-rotatable-and-old case).
@@ -86,6 +103,8 @@ export interface BackupSchedulerOptions {
   intervalMs: number
   retentionCount: number
   retentionDays: number
+  /** Impl-gate P2-6 — see PruneOptions.maxTotalBytes (0 = off). */
+  maxTotalBytes?: number
   appHome?: string
 }
 
@@ -107,6 +126,7 @@ export function startBackupScheduler(opts: BackupSchedulerOptions): BackupSchedu
         dir: join(appHome, 'backups'),
         count: opts.retentionCount,
         days: opts.retentionDays,
+        maxTotalBytes: opts.maxTotalBytes,
         now: Date.now(),
       })
     })()

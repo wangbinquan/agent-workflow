@@ -120,6 +120,44 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   }
   log.info('lock acquired', { pid: lock.pid, lock: lock.path })
 
+  // 2.5 — RFC-213: resolve the migrations folder and apply a staged ("hot")
+  // restore BEFORE anything reads state. We hold the lock (acquired above), so
+  // exactly one process consumes it; the DB is not open yet. Impl-gate P2-12
+  // (2026-07-22): this used to run AFTER loadConfig, so the config.json the
+  // restore just brought back only took effect one restart later — moved ahead
+  // of loadConfig so the applying boot already runs on the restored config.
+  //
+  // P-5-05: in the compiled single-binary, the .sql files + meta/_journal.json
+  // live inside the executable. drizzle's migrator needs a filesystem path,
+  // so we extract them once per start into ~/.agent-workflow/runtime/migrations
+  // and point the migrator there.
+  let migrationsFolder = Paths.migrationsDir
+  if (IS_EMBEDDED) {
+    migrationsFolder = join(Paths.root, 'runtime', 'migrations')
+    const extracted = await extractMigrationsTo(migrationsFolder)
+    log.info('extracted embedded migrations', { count: extracted, dir: migrationsFolder })
+  }
+  // A failure inside applyPendingRestoreIfAny self-heals (impl-gate P1-1): the
+  // staged dir is quarantined and the boot continues on the untouched DB. The
+  // catch below only guards truly unexpected filesystem-level throws.
+  try {
+    const applied = await applyPendingRestoreIfAny({
+      appHome: Paths.root,
+      dbPath: Paths.db,
+      migrationsFolder,
+    })
+    if (applied) log.warn('staged restore applied on boot', { db: Paths.db })
+  } catch (err) {
+    lock.release()
+    console.error(
+      `agent-workflow: staged restore failed unexpectedly — refusing to boot with an unknown DB state.\n` +
+        `  ${err instanceof Error ? err.message : String(err)}\n` +
+        `  The pre-restore safety backup (if taken) is under ${join(Paths.root, 'backups')}/.\n` +
+        `  To abandon the staged restore and boot normally: rm -rf ${join(Paths.root, '.restore-pending')}`,
+    )
+    process.exit(1)
+  }
+
   // 3. Load config; honor logLevel if user set non-default in config.
   const config = loadConfig(Paths.config)
   if (config.logLevel !== 'info') {
@@ -219,38 +257,8 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
 
   // 5. DB — open + apply migrations. dbVersion = number of SQL files in the
   // bundled migrations folder (== the highest version we've applied, since
-  // openDb() applies all pending migrations on startup).
-  //
-  // P-5-05: in the compiled single-binary, the .sql files + meta/_journal.json
-  // live inside the executable. drizzle's migrator needs a filesystem path,
-  // so we extract them once per start into ~/.agent-workflow/runtime/migrations
-  // and point the migrator there.
-  let migrationsFolder = Paths.migrationsDir
-  if (IS_EMBEDDED) {
-    migrationsFolder = join(Paths.root, 'runtime', 'migrations')
-    const extracted = await extractMigrationsTo(migrationsFolder)
-    log.info('extracted embedded migrations', { count: extracted, dir: migrationsFolder })
-  }
-  // RFC-213: apply a staged ("hot") restore BEFORE openDb, so the DB swap runs
-  // on a closed database. We hold the lock (acquired above), so exactly one
-  // process consumes it. A failure here is fatal (we must not boot a
-  // half-restored DB) — but the restore itself is crash-safe + idempotent.
-  try {
-    const applied = await applyPendingRestoreIfAny({
-      appHome: Paths.root,
-      dbPath: Paths.db,
-      migrationsFolder,
-    })
-    if (applied) log.warn('staged restore applied on boot', { db: Paths.db })
-  } catch (err) {
-    lock.release()
-    console.error(
-      `agent-workflow: staged restore failed — refusing to boot with a half-restored DB.\n` +
-        `  ${err instanceof Error ? err.message : String(err)}\n` +
-        `  The pre-restore safety backup (if taken) is under ~/.agent-workflow/backups/.`,
-    )
-    process.exit(1)
-  }
+  // openDb() applies all pending migrations on startup). The migrations folder
+  // itself (and any staged restore) was already resolved/applied at step 2.5.
 
   // RFC-213: raw pre-migration safety backup BEFORE openDb applies migrations, so
   // a botched upgrade can be rolled back. Best-effort — never blocks boot.
@@ -565,6 +573,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     intervalMs: config.backupIntervalMs,
     retentionCount: config.backupRetentionCount,
     retentionDays: config.backupRetentionDays,
+    maxTotalBytes: config.backupMaxTotalBytes,
     appHome: Paths.root,
   })
   // RFC-213 G4c: bound -wal growth (disabled by default — walCheckpointIntervalMs=0).

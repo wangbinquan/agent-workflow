@@ -30,9 +30,9 @@ const DAY = 86_400_000
 const NOW = 1_000_000_000_000
 
 /** Create an empty backup file with a controlled mtime (ms since epoch). */
-function mkBackup(dir: string, name: string, mtimeMs: number): void {
+function mkBackup(dir: string, name: string, mtimeMs: number, bytes = 1): void {
   const p = join(dir, name)
-  writeFileSync(p, 'x')
+  writeFileSync(p, 'x'.repeat(bytes))
   const secs = mtimeMs / 1000
   utimesSync(p, secs, secs)
 }
@@ -84,6 +84,39 @@ describe('pruneBackups retention policy (AC-6)', () => {
     mkBackup(dir, 'scheduled-0.tar.gz', NOW - 999 * DAY)
     pruneBackups({ dir, count: 1, days: 1, now: NOW })
     expect(names(dir)).toEqual(['scheduled-0.tar.gz'])
+  })
+})
+
+describe('impl-gate P2-6 — total-size cap over the rotatable set (AC-6)', () => {
+  test('oldest rotatable backups fall to the cap; protected + newest survive', () => {
+    const dir = tmp()
+    // 4 scheduled × 100B (newest→oldest) + 1 protected × 1000B; all recent (days
+    // keep them, count keeps them) — ONLY the cap can prune. Cap 250B ⇒ newest
+    // two scheduled fit (200B), older two go. Protected is not even counted.
+    mkBackup(dir, 'scheduled-1.tar.gz', NOW - 1 * DAY, 100)
+    mkBackup(dir, 'scheduled-2.tar.gz', NOW - 2 * DAY, 100)
+    mkBackup(dir, 'scheduled-3.tar.gz', NOW - 3 * DAY, 100)
+    mkBackup(dir, 'scheduled-4.tar.gz', NOW - 4 * DAY, 100)
+    mkBackup(dir, 'manual-keep.tar.gz', NOW - 30 * DAY, 1000)
+    const res = pruneBackups({ dir, count: 10, days: 30, now: NOW, maxTotalBytes: 250 })
+    expect(res.deleted.sort()).toEqual(['scheduled-3.tar.gz', 'scheduled-4.tar.gz'])
+    expect(names(dir)).toEqual(['manual-keep.tar.gz', 'scheduled-1.tar.gz', 'scheduled-2.tar.gz'])
+  })
+
+  test('cap never deletes down to zero rotatable backups', () => {
+    const dir = tmp()
+    mkBackup(dir, 'scheduled-only.tar.gz', NOW - 1 * DAY, 500)
+    const res = pruneBackups({ dir, count: 10, days: 30, now: NOW, maxTotalBytes: 100 })
+    expect(res.deleted).toEqual([])
+    expect(names(dir)).toEqual(['scheduled-only.tar.gz'])
+  })
+
+  test('cap 0 / undefined = off (existing behaviour untouched)', () => {
+    const dir = tmp()
+    mkBackup(dir, 'scheduled-1.tar.gz', NOW - 1 * DAY, 1000)
+    mkBackup(dir, 'scheduled-2.tar.gz', NOW - 2 * DAY, 1000)
+    const res = pruneBackups({ dir, count: 10, days: 30, now: NOW, maxTotalBytes: 0 })
+    expect(res.deleted).toEqual([])
   })
 })
 

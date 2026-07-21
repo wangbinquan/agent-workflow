@@ -269,9 +269,30 @@ async function main(): Promise<void> {
 
   // 3. bun build --compile.
   const outfile = join(outDir, `agent-workflow-${platformSuffix()}`)
+  // RFC-213 impl-gate P1-3: stamp a real binary identity into the executable so
+  // the pre-migration restore gate can tell two releases apart (util/version.ts).
+  // git describe gives the tag on releases and tag-N-gSHA on intermediate builds;
+  // outside a git checkout fall back to a non-release marker.
+  let buildVersion = '0.0.0-unknown'
+  try {
+    const proc = Bun.spawnSync(['git', 'describe', '--tags', '--always'], { cwd: repoRoot })
+    const out = proc.stdout.toString().trim()
+    if (proc.exitCode === 0 && out.length > 0) buildVersion = out
+  } catch {
+    /* no git — keep the fallback */
+  }
   try {
     await run(
-      ['bun', 'build', mainEntry, '--compile', '--target=bun', '--minify', `--outfile=${outfile}`],
+      [
+        'bun',
+        'build',
+        mainEntry,
+        '--compile',
+        '--target=bun',
+        '--minify',
+        `--define=AW_BUILD_VERSION="${buildVersion}"`,
+        `--outfile=${outfile}`,
+      ],
       repoRoot,
     )
     const size = statSync(outfile).size

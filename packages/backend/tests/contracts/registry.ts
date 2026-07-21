@@ -503,6 +503,9 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'POST', path: '/api/backup' },
   // ---- RFC-213 disaster recovery ----
   { method: 'POST', path: '/api/restore' },
+  // RFC-213 impl-gate P1-5 — staged-restore visibility + cancel (admin-only).
+  { method: 'GET', path: '/api/restore/pending' },
+  { method: 'DELETE', path: '/api/restore/pending' },
   // ---- RFC-099 resource ACL (mounted via mountAclEndpoints in resourceAcl.ts) ----
   //
   // These twelve were absent for their entire life: `mountAclEndpoints` builds

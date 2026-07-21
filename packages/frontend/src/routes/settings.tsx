@@ -33,6 +33,7 @@ import {
   useFusionAgentDraft,
   type FusionAgentDraftController,
 } from '@/components/settings/useFusionAgentDraft'
+import { ConfirmButton } from '@/components/ConfirmButton'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { Dialog } from '@/components/Dialog'
 import { EmptyState } from '@/components/EmptyState'
@@ -43,6 +44,7 @@ import { NoticeBanner } from '@/components/NoticeBanner'
 import { PageHeader } from '@/components/PageHeader'
 import { PageSectionLink, PageSectionNav, type PageSectionGroup } from '@/components/PageSectionNav'
 import { RuntimeSelect } from '@/components/RuntimeSelect'
+import { SandboxCard } from '@/components/settings/SandboxCard'
 import { Select } from '@/components/Select'
 import { StatusChip } from '@/components/StatusChip'
 import { TableViewport } from '@/components/TableViewport'
@@ -416,7 +418,7 @@ interface TabProps {
   config: Config
 }
 
-function RuntimeTab({
+export function RuntimeTab({
   flashKey = 0,
   claimFlash,
   focusFallbackRef,
@@ -442,13 +444,17 @@ function RuntimeTab({
   // setting (binary, model, variant, temperature, steps + the in-table default
   // marker) lives on the rows now; the global execution knobs (concurrency / log
   // level / auto commit&push) moved to the Limits tab.
+  // RFC-205 T5: plus the sandbox status chip + sandboxMode control on top.
   return (
     <div
       ref={runtimeRef}
       className={`runtime-status-anchor${flashing ? ' runtime-status-anchor--flash' : ''}`}
       data-flash={flashing ? '1' : '0'}
     >
-      <RuntimeList showHeading={false} restoreFocusFallbackRef={focusFallbackRef} />
+      <SandboxCard />
+      <div className="stack-top--md">
+        <RuntimeList showHeading={false} restoreFocusFallbackRef={focusFallbackRef} />
+      </div>
     </div>
   )
 }
@@ -800,15 +806,55 @@ function GcTab({ config }: TabProps) {
   )
 }
 
+// GET /api/restore/pending payload (RFC-213 impl-gate P1-5) — the armed
+// staged-restore marker plus any failed-restore quarantine dirs.
+interface RestorePendingInfo {
+  requestedAt: number
+  stagedBytes: number | null
+  noMigrate: boolean
+  skipIntegrityCheck: boolean
+}
+
+interface RestoreFailedInfo {
+  dir: string
+  failedAt: number | null
+  error: string | null
+}
+
+function formatMb(bytes: number): string {
+  return `${(bytes / 1024 / 1024).toFixed(2)} MB`
+}
+
 export function BackupCard() {
   const { t } = useTranslation()
+  const qc = useQueryClient()
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<{ path: string; sizeBytes: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [restoreBusy, setRestoreBusy] = useState(false)
   const [restoreStaged, setRestoreStaged] = useState(false)
-  const [restoreError, setRestoreError] = useState<string | null>(null)
+  // RFC-213 impl-gate P1-5: the picked file is held here until the destructive
+  // confirmation dialog is answered — NOTHING is uploaded before "Confirm".
+  // A mis-picked file used to silently arm a whole-platform rollback.
+  const [restoreCandidate, setRestoreCandidate] = useState<File | null>(null)
   const restoreInputRef = useRef<HTMLInputElement>(null)
+  const restoreButtonRef = useRef<HTMLButtonElement>(null)
+  // Armed staged-restore visibility. The endpoint is admin-only; for
+  // non-admins the query 403s and the banners below simply stay hidden.
+  const restorePending = useQuery<{
+    pending: RestorePendingInfo | null
+    failed: RestoreFailedInfo[]
+  }>({
+    queryKey: ['restore-pending'],
+    queryFn: ({ signal }) => api.get('/api/restore/pending', undefined, signal),
+    retry: false,
+  })
+  const cancelStaged = useMutation({
+    mutationFn: () => api.delete<{ cleared: boolean }>('/api/restore/pending'),
+    onSuccess: () => {
+      setRestoreStaged(false)
+      void qc.invalidateQueries({ queryKey: ['restore-pending'] })
+    },
+  })
   const runBackup = async () => {
     setBusy(true)
     setError(null)
@@ -822,24 +868,26 @@ export function BackupCard() {
       setBusy(false)
     }
   }
-  const onRestoreFile = async (e: ChangeEvent<HTMLInputElement>) => {
+  const onRestoreFile = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     e.target.value = '' // allow re-selecting the same file
     if (file === undefined) return
-    setRestoreBusy(true)
     setRestoreStaged(false)
-    setRestoreError(null)
-    try {
-      const form = new FormData()
-      form.append('file', file)
-      await apiPostMultipart<{ status: string }>('/api/restore', form)
-      setRestoreStaged(true)
-    } catch (err) {
-      setRestoreError(describeApiError(err))
-    } finally {
-      setRestoreBusy(false)
-    }
+    setRestoreCandidate(file)
   }
+  // Runs inside ConfirmDialog: a rejection keeps the dialog open with the
+  // ErrorBanner (bad tarballs 400 with the validation error); only a
+  // fulfilled upload closes it.
+  const confirmRestore = async () => {
+    if (restoreCandidate === null) return
+    const form = new FormData()
+    form.append('file', restoreCandidate)
+    await apiPostMultipart<{ status: string }>('/api/restore', form)
+    setRestoreStaged(true)
+    void qc.invalidateQueries({ queryKey: ['restore-pending'] })
+  }
+  const pending = restorePending.data?.pending ?? null
+  const lastFailed = restorePending.data?.failed[0]
   return (
     <Card
       as="section"
@@ -853,7 +901,7 @@ export function BackupCard() {
       {result !== null && (
         <p className="muted settings-hint settings-hint--tight stack-top--sm">
           {t('settings.backupSavedAs')}
-          <code>{result.path}</code> ({(result.sizeBytes / 1024 / 1024).toFixed(2)} MB)
+          <code>{result.path}</code> ({formatMb(result.sizeBytes)})
         </p>
       )}
       {error !== null && <ErrorBanner error={error} />}
@@ -868,19 +916,79 @@ export function BackupCard() {
         data-testid="restore-file-input"
       />
       <button
+        ref={restoreButtonRef}
         type="button"
         className="btn btn--danger"
         onClick={() => restoreInputRef.current?.click()}
-        disabled={restoreBusy}
       >
-        {restoreBusy ? t('settings.restoreBusy') : t('settings.restoreButton')}
+        {t('settings.restoreButton')}
       </button>
       {restoreStaged && (
         <p className="muted settings-hint settings-hint--tight stack-top--sm">
           {t('settings.restoreStaged')}
         </p>
       )}
-      {restoreError !== null && <ErrorBanner error={restoreError} />}
+      {pending !== null && (
+        <NoticeBanner
+          tone="warning"
+          className="stack-top--md"
+          title={t('settings.restorePendingTitle')}
+          testid="restore-pending-banner"
+          action={
+            <ConfirmButton
+              label={t('settings.restorePendingCancel')}
+              variant="danger"
+              size="sm"
+              disabled={cancelStaged.isPending}
+              onConfirm={() => cancelStaged.mutateAsync()}
+            />
+          }
+        >
+          {t('settings.restorePendingBody', {
+            when: new Date(pending.requestedAt).toLocaleString(),
+            size:
+              pending.stagedBytes === null
+                ? t('settings.restorePendingSizeUnknown')
+                : formatMb(pending.stagedBytes),
+          })}
+        </NoticeBanner>
+      )}
+      {cancelStaged.error !== null && <ErrorBanner error={cancelStaged.error} />}
+      {lastFailed !== undefined && (
+        <NoticeBanner
+          tone="error"
+          size="compact"
+          className="stack-top--md"
+          title={t('settings.restoreFailedTitle')}
+          testid="restore-failed-banner"
+        >
+          <div>
+            {t('settings.restoreFailedBody', {
+              when:
+                lastFailed.failedAt === null
+                  ? t('common.emDash')
+                  : new Date(lastFailed.failedAt).toLocaleString(),
+              error: lastFailed.error ?? t('settings.restoreFailedNoError'),
+            })}
+          </div>
+          <div>
+            {t('settings.restoreFailedDirHint')} <code>{lastFailed.dir}</code>
+          </div>
+        </NoticeBanner>
+      )}
+      <ConfirmDialog
+        open={restoreCandidate !== null}
+        title={t('settings.restoreConfirmTitle')}
+        description={t('settings.restoreConfirmBody', {
+          name: restoreCandidate?.name ?? '',
+          size: formatMb(restoreCandidate?.size ?? 0),
+        })}
+        confirmLabel={t('settings.restoreConfirmAction')}
+        tone="danger"
+        onConfirm={confirmRestore}
+        onClose={() => setRestoreCandidate(null)}
+        triggerRef={restoreButtonRef}
+      />
     </Card>
   )
 }

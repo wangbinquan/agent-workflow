@@ -87,3 +87,41 @@ PR 拆分：**5 个 PR**（设计门把 v1 的 PR-1 拆成 1a 冷 / 1b 热，因
 - 异机 → 封印凭据失效告警（AC-12）+ 文档同机。
 - config 字段 → JSON blob 不走列迁移；若引入新表遵守 statement-breakpoint / journal `when` 单调 / 全量套件（[reference_migration_statement_breakpoint] / [reference_journal_when_must_be_monotonic] / [feedback_full_suite_after_migration]）。
 - 共享树并发 → 索引登记（plan.md/STATE.md）精确 pathspec 单步提交，避让并发 RFC-211 收尾（[feedback_shared_index_commit_race]）。
+
+## 实现门对抗自评审（2026-07-21 评审 / 2026-07-22 修复，Claude 接手不等 Codex 7/25）
+
+12 AC 逐条核验（4 PASS / 7 PARTIAL / 详见评审记录），5 P1 + 一批 P2 全部修复或补交：
+
+- **P1-1 热暂存砖死循环**：`--stage`/`POST /api/restore` 只跑 planRestore（读 manifest），
+  坏包照样 staged；boot apply 失败 exit(1) 且 marker/tarball 存活 ⇒ 每次启动确定性重败、
+  文案不提解法。修：①入口全深度校验 `validateBackupForStage`（db.sqlite 存在 + WAL 合并 +
+  quick_check〔尊重逃生舱〕+ downgrade 拒）双入口共用；②boot apply 失败**自愈**——隔离到
+  `.restore-pending.failed-<ts>`（含 error.txt 取证）+ 照常 boot 原库；③staged apply 上移到
+  loadConfig 之前（P2-12：恢复出的 config 当次生效）；start 兜底文案补 rm -rf 指引。
+- **P1-2 逃生舱自败**：`--skip-integrity-check` 未转发进 swap 后 openDb——用户显式越权仍
+  被门拦在**半完成态**（库已换、suspend/重建没跑）。修：一行转发 + 源码锁。
+- **P1-3 版本闸死代码**：`currentAppVersion()` 恒 '0.0.0'（env 无人设置）⇒ 任意两个发布
+  二进制比较相等、pre-migration 拒前滚永不触发。修：`util/version.ts`（env → build 时
+  `--define AW_BUILD_VERSION`〔git describe〕→ '0.0.0-dev'）+ build-binary 注入 +
+  `agent-workflow version` 输出真实身份 + 行为测试（变异实证：恒 0.0.0 回退必红）。
+- **P1-4 fs 态无安全网**：restore 覆盖 config.json、rmSync skills/（文件系统即 source of
+  truth）而安全备份只有 DB。修：`pre-restore-fs-<ts>.tar.gz`（config+skills）与 DB 安全份
+  同 fail-closed 契约；行为测试锁内容物。
+- **P1-5 前端零确认 + pending 不可见不可取消 + 无 admin 门**：三端点补 admin-only(403)；
+  新增 `GET/DELETE /api/restore/pending`（pending 元数据 + failed 残留列表）；Settings
+  改 ConfirmDialog 破坏性二次确认 + NoticeBanner pending 状态条（取消=ConfirmButton）+
+  failed 残留条；i18n 11 键三处纯追加；`rfc213-restore-ui.test.tsx` 3 锁（变异实证）。
+- **P2 批**：P2-6 备份总量上限 `backupMaxTotalBytes`（rotatable 集 oldest-first、never-to-0、
+  默认 0=off；manual/pre-* 不轮转登记为已知限制）；P2-7 worktree 单树 tar 失败 skip-not-fail
+  （含半成品 tar/meta 清除）；P2-10 冷恢复全程持 daemon flock（TOCTOU 关闭）；P2-11 两测试
+  文件裸控制字节转义 + no-nul 守卫扩 tests/（变异必红）；P2-15 dry-run/计划打印免停机；
+  P2-16 上传路径 ulid 化（并发互删关闭）；P2-17/18/19/20 路径常量/floating promise/拷贝
+  校验/注释去重。
+- **T10 文档补交**：`docs/disaster-recovery.md`（备份/恢复/恢复后状态/异机凭据/supervisor/
+  已知限制/体检速查,全部按 HEAD 源码核对）+ README 索引一行。
+- **诚实登记（不修,评审 PLAUSIBLE/设计级）**：P2-8 worktree 整树捕获非 delta（大仓超
+  64MiB 被跳过、未提交删除重建时被复活）——需 delta 捕获设计,另立；P3-14 recovery_event
+  无 UI 告警面；老备份(<0052)+--no-migrate 组合;--no-safety-backup 崩溃窗。
+- **测试**：rfc213 家族 64→80+（新增 validate 门/自愈/pending 原语/route admin/fs 安全网/
+  版本闸/cap/tar-fail/cli 顺序）;三发生产变异（自愈撤除/版本恒 0.0.0/cap 撤除）全红。
+

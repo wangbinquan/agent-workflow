@@ -17,9 +17,18 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
-const SCAN_DIRS = ['packages/backend/src', 'packages/frontend/src', 'packages/shared/src'].map(
-  (d) => join(REPO_ROOT, d),
-)
+// Impl-gate RFC-213 P2-11 (2026-07-22): tests/ joined the scan — two rfc213
+// test files carried raw 0x00-0x02 inside string literals, which flips git diff
+// to "Bin" and makes rg/grep silently skip the file: the whole
+// [feedback_grep_locks_before_push] lock-sweep workflow goes blind on it.
+const SCAN_DIRS = [
+  'packages/backend/src',
+  'packages/frontend/src',
+  'packages/shared/src',
+  'packages/backend/tests',
+  'packages/frontend/tests',
+  'packages/shared/tests',
+].map((d) => join(REPO_ROOT, d))
 
 const SOURCE_EXT = /\.(ts|tsx|js|jsx|css|json|md|sql)$/
 

@@ -9,6 +9,7 @@
 //   migrate  P-1-05 ✓
 //   backup   P-5-02
 
+import { appVersion } from './util/version'
 import { backupCommand } from './cli/backup'
 import { restoreCommand } from './cli/restore'
 import { configGetCommand, configSetCommand } from './cli/config-cli'
@@ -99,7 +100,10 @@ async function main(): Promise<void> {
     }
 
     case 'version':
-      console.log('agent-workflow 0.0.0 (M1, P-1-01..P-1-05)')
+      // RFC-213 impl-gate P1-3: real binary identity (build-time injected tag;
+      // dev prints 0.0.0-dev) — the same value the pre-migration restore gate
+      // compares, so `version` output is what you match backups against.
+      console.log(`agent-workflow ${appVersion()}`)
       break
 
     case 'backup': {

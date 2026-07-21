@@ -10,7 +10,15 @@
 
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { Database } from 'bun:sqlite'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
@@ -226,5 +234,50 @@ describe('RFC-213 G4a worktree capture + reconstruct', () => {
     await extractTarGz(res.path, out)
     expect(readManifest(out)!.includesWorktrees).toBe(true)
     expect(existsSync(join(out, 'worktrees', `${taskId}.tar.gz`))).toBe(true)
+  })
+})
+
+describe('impl-gate P2-7 — one un-tarrable worktree skips, not aborts', () => {
+  test('unreadable file in one worktree → that task lands in skipped (no meta orphan), backup continues', async () => {
+    if (typeof process.getuid === 'function' && process.getuid() === 0) {
+      // root reads chmod-000 files fine — the fixture can't fail. Skip.
+      return
+    }
+    const appHome = tmp()
+    const db = openDb({ path: join(appHome, 'db.sqlite'), migrationsFolder: MIGRATIONS })
+    const wfId = ulid()
+    db.insert(workflows)
+      .values({
+        id: wfId,
+        name: 'wf',
+        definition: '{"$schema_version":3,"inputs":[],"nodes":[],"edges":[]}',
+      })
+      .run()
+    const a = await setup(appHome, 'aw/ok-task')
+    // second worktree off the SAME mirror (setup() commits once; a re-run would
+    // make an empty commit and fail)
+    const badWt = join(appHome, 'worktrees', 'aw_bad-task')
+    await git(a.repoPath, ['worktree', 'add', '-b', 'aw/bad-task', badWt])
+    const okId = seedTask(db, wfId, 'running', a.repoPath, a.worktreePath, 'aw/ok-task')
+    const badId = seedTask(db, wfId, 'running', a.repoPath, badWt, 'aw/bad-task')
+    // make ONE file unreadable → tar exits non-zero for that worktree only
+    writeFileSync(join(badWt, 'secret.bin'), 'x')
+    chmodSync(join(badWt, 'secret.bin'), 0o000)
+
+    const staging = tmp()
+    const cap = await captureWorktrees(db, staging)
+    try {
+      expect(cap.captured).toEqual([okId])
+      expect(cap.skipped.map((s) => s.taskId)).toEqual([badId])
+      expect(cap.skipped[0]?.reason ?? '').toContain('tar failed')
+      const wtDir = join(staging, 'worktrees')
+      expect(existsSync(join(wtDir, `${okId}.tar.gz`))).toBe(true)
+      expect(existsSync(join(wtDir, `${badId}.tar.gz`))).toBe(false)
+      // no meta-without-tar orphan for reconstruct to trip on
+      expect(existsSync(join(wtDir, `${badId}.json`))).toBe(false)
+    } finally {
+      chmodSync(join(badWt, 'secret.bin'), 0o644)
+      ;(db as unknown as { $client: Database }).$client.close()
+    }
   })
 })

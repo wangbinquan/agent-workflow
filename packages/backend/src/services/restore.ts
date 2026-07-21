@@ -29,7 +29,7 @@ import { dirname, join } from 'node:path'
 import { openDb, type DbClient } from '@/db/client'
 import { quickCheckDbFile } from '@/db/integrity'
 import { recordRecoveryEvent } from '@/services/recovery'
-import { extractTarGz } from '@/util/archive'
+import { extractTarGz, tarGz } from '@/util/archive'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 import {
@@ -153,6 +153,59 @@ export async function planRestore(
   }
 }
 
+/**
+ * Impl-gate P1-1 (2026-07-22) — FULL entry validation before STAGING a hot
+ * restore. `planRestore` only reads the manifest; a staged tarball that later
+ * failed `restoreBackup` on boot used to loop forever: marker + tarball survive
+ * a failed apply, so every startup re-failed identically until someone hand-rm'd
+ * `.restore-pending/` (which no error message mentioned). Validate here exactly
+ * what the boot apply will enforce — db.sqlite present, WAL consolidated,
+ * quick_check (unless the caller passes the same escape hatch it will stage),
+ * downgrade refused — so a bad upload is rejected at the door with the daemon
+ * still healthy. (Boot-side failures are additionally self-healing now — see
+ * applyPendingRestoreIfAny — but door-front rejection is the primary defence.)
+ */
+export async function validateBackupForStage(
+  tarballPath: string,
+  opts: { migrationsFolder?: string; appHome?: string; skipIntegrityCheck?: boolean } = {},
+): Promise<RestorePlan> {
+  const appHome = opts.appHome ?? Paths.root
+  const staging = join(appHome, 'backups', `.stage-validate-${Date.now()}-${process.pid}`)
+  mkdirSync(staging, { recursive: true })
+  try {
+    await extractTarGz(tarballPath, staging)
+    const manifest = readManifest(staging)
+    const currentMaxWhen = readMigrationAxisFromJournal(
+      opts.migrationsFolder ?? Paths.migrationsDir,
+    ).maxWhen
+    const backupLastCreatedAt = manifest?.migration.lastCreatedAt ?? null
+    const direction = computeRestoreDirection(backupLastCreatedAt, currentMaxWhen)
+    if (direction === 'downgrade') {
+      throw new RestoreDowngradeError(backupLastCreatedAt!, currentMaxWhen)
+    }
+    const incomingDb = join(staging, 'db.sqlite')
+    if (!existsSync(incomingDb)) {
+      throw new Error('stage refused: backup contains no db.sqlite (not a backup tarball?)')
+    }
+    if (existsSync(`${incomingDb}-wal`)) {
+      try {
+        const c = new Database(incomingDb, { readwrite: true })
+        c.exec('PRAGMA wal_checkpoint(TRUNCATE);')
+        c.close()
+      } catch {
+        /* corrupt — quick_check below will refuse it */
+      }
+    }
+    if (opts.skipIntegrityCheck !== true) {
+      const check = quickCheckDbFile(incomingDb)
+      if (!check.ok) throw new RestoreIntegrityError(check.errors)
+    }
+    return { manifest, backupLastCreatedAt, currentMaxWhen, direction }
+  } finally {
+    rmSync(staging, { recursive: true, force: true })
+  }
+}
+
 function fsyncDir(dir: string): void {
   // Directory fsync for durability of the rename. Best-effort — some platforms
   // reject O_RDONLY fsync on a directory; the rename itself is still atomic.
@@ -227,6 +280,34 @@ function suspendNonTerminalTasksAfterRestore(db: DbClient): number {
 }
 
 /**
+ * Impl-gate P1-4 — safety copy of the FILESYSTEM state a restore destroys:
+ * config.json (overwritten) + skills/ (deleted then replaced; its source of
+ * truth IS the filesystem). Bundled as `pre-restore-fs-<ts>.tar.gz` next to the
+ * DB safety copy. Fail-closed like the DB copy (caller wraps in
+ * RestoreSafetyBackupError). Returns the tarball path, or null when neither
+ * exists (fresh home — nothing to protect).
+ */
+async function snapshotFsStateForSafety(appHome: string, now: number): Promise<string | null> {
+  const config = join(appHome, 'config.json')
+  const skills = join(appHome, 'skills')
+  if (!existsSync(config) && !existsSync(skills)) return null
+  const backupsDir = join(appHome, 'backups')
+  mkdirSync(backupsDir, { recursive: true })
+  const staging = join(backupsDir, `.pre-restore-fs-${now}-${process.pid}`)
+  if (existsSync(staging)) rmSync(staging, { recursive: true, force: true })
+  mkdirSync(staging, { recursive: true })
+  try {
+    if (existsSync(config)) cpSync(config, join(staging, 'config.json'))
+    if (existsSync(skills)) cpSync(skills, join(staging, 'skills'), { recursive: true })
+    const out = join(backupsDir, `pre-restore-fs-${now}.tar.gz`)
+    await tarGz(staging, out)
+    return out
+  } finally {
+    rmSync(staging, { recursive: true, force: true })
+  }
+}
+
+/**
  * Cold restore. The daemon MUST be stopped (the caller checks the lock). Throws
  * on refusal (downgrade / integrity / safety-backup-failed / pre-migration
  * binary mismatch) BEFORE touching the live DB; once the swap begins it runs the
@@ -296,6 +377,11 @@ export async function restoreBackup(
       try {
         const safety = await rawCopyDb({ kind: 'pre-restore', appHome, dbPath, now })
         safetyBackupPath = safety.path
+        // Impl-gate P1-4 (2026-07-22): config.json is overwritten and skills/
+        // (whose SOURCE OF TRUTH is the filesystem) is DELETED below — without a
+        // safety copy, "误恢复也能再翻回来" (US-2) held for the DB only. Same
+        // fail-closed contract as the DB safety copy.
+        await snapshotFsStateForSafety(appHome, now)
       } catch (err) {
         throw new RestoreSafetyBackupError(err)
       }
@@ -322,7 +408,17 @@ export async function restoreBackup(
     // Forward-migrate the swapped-in DB (also re-runs the boot integrity gate).
     const migrated = willMigrate
     {
-      const db = openDb({ path: dbPath, migrationsFolder, skipMigrations: !willMigrate })
+      // Impl-gate P1-2 (2026-07-22): thread the escape hatch through. Without
+      // it, `--skip-integrity-check` skipped the INCOMING gate but openDb's own
+      // quick_check then threw AFTER the swap — the flag's whole purpose
+      // (salvage a quick_check-failing but readable backup) self-defeated, and
+      // the abort landed mid-restore (DB swapped, suspend/reconstruct skipped).
+      const db = openDb({
+        path: dbPath,
+        migrationsFolder,
+        skipMigrations: !willMigrate,
+        skipIntegrityCheck: opts.skipIntegrityCheck,
+      })
       // RFC-213 G4a mismatch-protect: the restored rows are backup-era, but the
       // on-disk worktrees are current. Suspend auto-recovery for every non-terminal
       // task so the auto-resume loop can't silently roll a NEWER worktree back to a

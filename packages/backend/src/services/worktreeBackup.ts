@@ -16,7 +16,7 @@
 // the backup excludes.
 
 import { eq, inArray } from 'drizzle-orm'
-import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import type { DbClient } from '@/db/client'
 import { tasks } from '@/db/schema'
@@ -123,8 +123,27 @@ export async function captureWorktrees(
       repoPath: t.repoPath,
       baseCommit: t.baseCommit,
     }
-    Bun.write(join(wtDir, `${t.id}.json`), JSON.stringify(meta))
-    await tarGz(t.worktreePath, join(wtDir, `${t.id}.tar.gz`), { exclude: ['.git'] })
+    // Impl-gate P2-18: await the meta write (a floating promise turned an IO
+    // error into an unhandled rejection instead of a caught skip).
+    await Bun.write(join(wtDir, `${t.id}.json`), JSON.stringify(meta))
+    // Impl-gate P2-7: one un-tarrable worktree (agent writing files mid-tar →
+    // GNU tar "file changed as we read it", files vanishing) must SKIP that
+    // task, not abort the whole backup — same skip-not-fail contract as the
+    // size cap above. Drop the meta json so reconstruct never sees a
+    // meta-without-tar orphan.
+    try {
+      await tarGz(t.worktreePath, join(wtDir, `${t.id}.tar.gz`), { exclude: ['.git'] })
+    } catch (err) {
+      // Drop BOTH halves: the meta json (reconstruct is json-driven) AND the
+      // partial tar the failed run already flushed (a torn archive in the
+      // backup would read as a capture that never happened).
+      rmSync(join(wtDir, `${t.id}.json`), { force: true })
+      rmSync(join(wtDir, `${t.id}.tar.gz`), { force: true })
+      const reason = `tar failed: ${err instanceof Error ? err.message : String(err)}`
+      skipped.push({ taskId: t.id, reason })
+      log.warn('worktree capture skipped (tar failed)', { taskId: t.id, reason })
+      continue
+    }
     captured.push(t.id)
   }
   log.info('worktrees captured', { captured: captured.length, skipped: skipped.length })

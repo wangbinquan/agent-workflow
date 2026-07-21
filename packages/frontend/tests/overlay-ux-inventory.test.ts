@@ -80,7 +80,9 @@ const OVERLAY_CALLSITES = {
   'components/AclPanel.tsx': { family: 'access-and-settings', count: 2 },
   // Runtime edit/add dialog plus RFC-201's shared destructive confirmation.
   'components/RuntimeList.tsx': { family: 'access-and-settings', count: 2 },
-  'routes/settings.tsx': { family: 'access-and-settings', count: 2 },
+  // count 3 = OIDC provider form Dialog + OIDC delete ConfirmDialog + RFC-213
+  // P1-5 restore-from-backup destructive confirm (whole-instance rollback).
+  'routes/settings.tsx': { family: 'access-and-settings', count: 3 },
   'routes/users.tsx': { family: 'access-and-settings', count: 1 },
 
   'components/AgentImportDialog.tsx': { family: 'resource-management', count: 1 },

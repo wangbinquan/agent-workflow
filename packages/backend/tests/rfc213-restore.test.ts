@@ -41,7 +41,11 @@ import {
   RestoreSafetyBackupError,
 } from '../src/services/restore'
 import { writeManifest, type BackupManifest } from '../src/services/backupManifest'
-import { tarGz } from '../src/util/archive'
+import { restoreCommand } from '../src/cli/restore'
+import { hasPendingRestore } from '../src/services/pendingRestore'
+import { writePidFileForTest } from '../src/util/lock'
+import { appVersion } from '../src/util/version'
+import { extractTarGz, tarGz } from '../src/util/archive'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -368,5 +372,158 @@ describe('restore CLI wrapper guard rails', () => {
     const missing = await restoreCommand([join(tmp('rfc213-cli-'), 'nope.tar.gz')])
     expect(missing.status).toBe('error')
     expect(missing.output).toContain('no such file')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 实现门（2026-07-22）回归锁 — P1-2 / P1-3 / P1-4 / P2-19
+// ---------------------------------------------------------------------------
+
+describe('impl-gate P1-4 — restore takes a FILESYSTEM safety copy (config.json + skills/)', () => {
+  test('pre-restore-fs tarball contains the pre-restore config + skills; skipped with --no-safety-backup', async () => {
+    const appHome = tmp('rfc213-fs-safety-')
+    const dbPath = join(appHome, 'db.sqlite')
+    const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+    const backup = await createBackup({ db, appHome, now: 1 })
+    ;(db as unknown as { $client: Database }).$client.close()
+
+    // live filesystem state that the restore will destroy
+    writeFileSync(join(appHome, 'config.json'), '{"marker":"LIVE-CONFIG"}')
+    mkdirSync(join(appHome, 'skills', 'my-skill', 'files'), { recursive: true })
+    writeFileSync(join(appHome, 'skills', 'my-skill', 'files', 'SKILL.md'), 'LIVE-SKILL')
+
+    await restoreBackup(backup.path, { appHome, dbPath, migrationsFolder: MIGRATIONS, now: 555 })
+
+    const fsTar = join(appHome, 'backups', 'pre-restore-fs-555.tar.gz')
+    expect(existsSync(fsTar)).toBe(true)
+    const out = tmp('rfc213-fs-safety-out-')
+    await extractTarGz(fsTar, out)
+    expect(readFileSync(join(out, 'config.json'), 'utf-8')).toContain('LIVE-CONFIG')
+    expect(readFileSync(join(out, 'skills', 'my-skill', 'files', 'SKILL.md'), 'utf-8')).toBe(
+      'LIVE-SKILL',
+    )
+
+    // and the flag really skips it
+    const appHome2 = tmp('rfc213-fs-safety2-')
+    const dbPath2 = join(appHome2, 'db.sqlite')
+    const db2 = openDb({ path: dbPath2, migrationsFolder: MIGRATIONS })
+    const backup2 = await createBackup({ db: db2, appHome: appHome2, now: 1 })
+    ;(db2 as unknown as { $client: Database }).$client.close()
+    writeFileSync(join(appHome2, 'config.json'), '{}')
+    await restoreBackup(backup2.path, {
+      appHome: appHome2,
+      dbPath: dbPath2,
+      migrationsFolder: MIGRATIONS,
+      noSafetyBackup: true,
+      now: 556,
+    })
+    expect(existsSync(join(appHome2, 'backups', 'pre-restore-fs-556.tar.gz'))).toBe(false)
+  })
+})
+
+describe('impl-gate P1-3 — the pre-migration binary gate actually fires', () => {
+  test('forward-rolling a pre-migration backup on a DIFFERENT binary refuses; same binary passes', async () => {
+    const appHome = tmp('rfc213-vergate-')
+    const dbPath = join(appHome, 'db.sqlite')
+    // crafted pre-migration backup: valid empty DB + manifest pinned to binary
+    // 'vA' with an OLD migration axis (forces direction=forward → willMigrate).
+    const staging = join(appHome, 'mk')
+    mkdirSync(staging, { recursive: true })
+    const sdb = openDb({ path: join(staging, 'db.sqlite'), migrationsFolder: MIGRATIONS })
+    ;(sdb as unknown as { $client: Database }).$client.close()
+    writeManifest(staging, {
+      manifestVersion: 1,
+      kind: 'pre-migration',
+      createdAt: 1,
+      appVersion: 'vA',
+      includesWorktrees: false,
+      migration: { lastHash: null, lastCreatedAt: 1 },
+    })
+    const tarPath = join(appHome, 'premig.tar.gz')
+    await tarGz(staging, tarPath)
+
+    const saved = process.env.AGENT_WORKFLOW_VERSION
+    try {
+      process.env.AGENT_WORKFLOW_VERSION = 'vB'
+      expect(appVersion()).toBe('vB') // env is the identity override
+      await expect(
+        restoreBackup(tarPath, { appHome, dbPath, migrationsFolder: MIGRATIONS }),
+      ).rejects.toThrow(/pre-migration backup from binary vA/)
+
+      // same binary → the gate passes and the restore completes (migrates).
+      process.env.AGENT_WORKFLOW_VERSION = 'vA'
+      const res = await restoreBackup(tarPath, { appHome, dbPath, migrationsFolder: MIGRATIONS })
+      expect(res.migrated).toBe(true)
+    } finally {
+      if (saved === undefined) delete process.env.AGENT_WORKFLOW_VERSION
+      else process.env.AGENT_WORKFLOW_VERSION = saved
+    }
+  })
+
+  test('dev fallback identity is 0.0.0-dev (not the dead 0.0.0 constant)', () => {
+    const saved = process.env.AGENT_WORKFLOW_VERSION
+    try {
+      delete process.env.AGENT_WORKFLOW_VERSION
+      expect(appVersion()).toBe('0.0.0-dev')
+    } finally {
+      if (saved !== undefined) process.env.AGENT_WORKFLOW_VERSION = saved
+    }
+  })
+})
+
+describe('impl-gate P1-2 — --skip-integrity-check threads through to the post-swap openDb', () => {
+  test('source lock: restoreBackup forwards skipIntegrityCheck into openDb', () => {
+    // The behavioural repro needs a DB that fails quick_check yet survives
+    // UPDATE/INSERT — too corruption-shape-dependent to build reliably. The
+    // one-line contract is locked at source level instead: the post-swap openDb
+    // call must carry the flag (dropping it re-runs the gate the user just
+    // explicitly skipped, aborting MID-restore with the DB already swapped).
+    const src = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'restore.ts'),
+      'utf-8',
+    )
+    const call = src.slice(src.indexOf('// Forward-migrate the swapped-in DB'))
+    expect(call).toContain('skipIntegrityCheck: opts.skipIntegrityCheck')
+  })
+})
+
+describe('impl-gate P2-15 / P1-1 — restore CLI ordering', () => {
+  test('--dry-run answers while a daemon is running (read-only must not be refused)', async () => {
+    const appHome = tmp('rfc213-cli-')
+    const saved = process.env.AGENT_WORKFLOW_HOME
+    process.env.AGENT_WORKFLOW_HOME = appHome
+    try {
+      const db = openDb({ path: join(appHome, 'db.sqlite'), migrationsFolder: MIGRATIONS })
+      const backup = await createBackup({ db, appHome, now: 1 })
+      ;(db as unknown as { $client: Database }).$client.close()
+      // simulate a LIVE daemon: our own pid is alive by definition
+      writePidFileForTest(join(appHome, '.daemon.lock'), process.pid)
+      const res = await restoreCommand([backup.path, '--dry-run'])
+      expect(res.status).toBe('ok')
+      expect(res.output).toContain('dry-run')
+      // …while an actual apply is still refused
+      const apply = await restoreCommand([backup.path, '--yes'])
+      expect(apply.status).toBe('error')
+      expect(apply.output).toContain('daemon is running')
+    } finally {
+      if (saved === undefined) delete process.env.AGENT_WORKFLOW_HOME
+      else process.env.AGENT_WORKFLOW_HOME = saved
+    }
+  })
+
+  test('--stage refuses a non-backup tarball at the door (nothing armed)', async () => {
+    const appHome = tmp('rfc213-cli2-')
+    const saved = process.env.AGENT_WORKFLOW_HOME
+    process.env.AGENT_WORKFLOW_HOME = appHome
+    try {
+      const junk = join(appHome, 'junk.tar.gz')
+      writeFileSync(junk, 'not a tarball')
+      const res = await restoreCommand([junk, '--stage'])
+      expect(res.status).toBe('error')
+      expect(hasPendingRestore(appHome)).toBe(false)
+    } finally {
+      if (saved === undefined) delete process.env.AGENT_WORKFLOW_HOME
+      else process.env.AGENT_WORKFLOW_HOME = saved
+    }
   })
 })

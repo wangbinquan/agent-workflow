@@ -324,6 +324,7 @@ unreadable.
 - [Runtime config layering](./docs/OPENCODE_CONFIG.md) — injected and discovered
   opencode configuration
 - [Troubleshooting](./docs/troubleshooting.md) — startup and runtime problems
+- [Disaster recovery](./docs/disaster-recovery.md) — backups, restore, and DB integrity (中文)
 - [Performance notes](./docs/performance-notes.md) — tuning and benchmarks
 - [Why an AI-native workflow](./docs/blog/01-ai-native-workflow-why.md) and
   [how Agent Workflow is built](./docs/blog/02-agent-workflow-how.md)
