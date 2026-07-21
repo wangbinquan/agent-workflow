@@ -28,7 +28,7 @@ export function generatePatToken(): string {
   return `${PAT_TOKEN_PREFIX}${randomBytes(32).toString('hex')}`
 }
 
-function hashToken(raw: string): string {
+export function hashToken(raw: string): string {
   return createHash('sha256').update(raw, 'utf8').digest('hex')
 }
 
@@ -75,7 +75,17 @@ export async function lookupActivePat(
   now: number = Date.now(),
 ): Promise<ResolvedPat | null> {
   if (!raw.startsWith(PAT_TOKEN_PREFIX)) return null
-  const hash = hashToken(raw)
+  return lookupActivePatByHash(db, hashToken(raw), now)
+}
+
+/** RFC-212 — hash-keyed twin of `lookupActivePat`; see lookupActiveSessionByHash. */
+export async function lookupActivePatByHash(
+  db: DbClient,
+  hash: string,
+  now: number = Date.now(),
+  opts: { touch?: boolean } = {},
+): Promise<ResolvedPat | null> {
+  const touch = opts.touch ?? true
   const rows = await db.select().from(userPats).where(eq(userPats.tokenHash, hash)).limit(1)
   const pat = rows[0]
   if (!pat) return null
@@ -86,7 +96,9 @@ export async function lookupActivePat(
   const user = userRows[0]
   if (!user || user.status !== 'active') return null
 
-  await db.update(userPats).set({ lastUsedAt: now }).where(eq(userPats.id, pat.id))
+  if (touch) {
+    await db.update(userPats).set({ lastUsedAt: now }).where(eq(userPats.id, pat.id))
+  }
   return {
     user,
     scopes: safeParseScopes(pat.scopesJson),

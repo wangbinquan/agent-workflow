@@ -26,10 +26,11 @@
 
 import type { ServerWebSocket } from 'bun'
 import type { Actor } from '@/auth/actor'
-import { resolveActor } from '@/auth/session'
+import { describeCredential, resolveActor } from '@/auth/session'
 import type { DbClient } from '@/db/client'
 import { createLogger } from '@/util/log'
 import { checkUpgradeGate, openWsChannel, parseWsChannel, type WsConnectionData } from './registry'
+import { trackConnection, untrackConnection } from './connections'
 
 const log = createLogger('ws.server')
 
@@ -135,6 +136,11 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
     const data: ConnectionData = {
       channel,
       actor,
+      // RFC-212 — fingerprint (never the raw token) so a live socket can be
+      // re-checked when a credential is revoked. Computed from the same token
+      // resolveActor just consumed, via the same prefix dispatch.
+      credential: describeCredential(queryToken),
+      closing: false,
       unsubscribe: () => {
         /* set on open */
       },
@@ -150,6 +156,11 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
   async function handleOpen(ws: ServerWebSocket<ConnectionData>): Promise<void> {
     const ch = ws.data.channel
     log.debug('open', { channel: ch })
+    // RFC-212 — join the live set BEFORE subscribing, so a revocation racing
+    // this upgrade cannot slip past: either the rescan sees this connection (and
+    // re-checks the actor it just resolved), or it completed earlier and the
+    // actor resolved above is already newer than that revocation.
+    trackConnection(ws)
     // RFC-152 — gatedSubscribe (admin short-circuit → frameGate → error ⇒
     // drop) + hello frame + onOpenExtra (task `?since` replay), all driven
     // by the channel's registry spec.
@@ -157,6 +168,7 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
   }
 
   function handleClose(ws: ServerWebSocket<ConnectionData>): void {
+    untrackConnection(ws)
     try {
       ws.data.unsubscribe()
     } catch (err) {

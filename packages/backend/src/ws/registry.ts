@@ -121,10 +121,39 @@ export type WsOutboundMessage = AnyChannelMessage | WsControlMessage
  * ConnectionData server.ts has always used; server.ts aliases this type once
  * the task channel migrates (PR-4).
  */
+/**
+ * RFC-212 — how to re-check this connection's credential WITHOUT keeping the
+ * plaintext token around. `hash` feeds `lookupActive{Session,Pat}ByHash`, which
+ * run the exact same query the upgrade path ran.
+ *
+ * Storing the raw token instead would be strictly worse: `util/log.ts`'s
+ * `formatVal` JSON.stringifies arbitrary objects with no redaction, so a single
+ * `log.debug('…', { data: ws.data })` while debugging would write a long-lived
+ * credential into the rotated daemon log.
+ */
+export type WsCredential =
+  | { readonly kind: 'session' | 'pat'; readonly hash: string }
+  /** Legacy daemon token — process-level admin, nothing to look up. */
+  | { readonly kind: 'daemon' }
+
 export interface WsConnectionData {
   channel: AnyChannelParams
-  /** Resolved actor pinned at upgrade — no per-frame token re-resolution. */
+  /**
+   * Resolved actor. RFC-212 makes this MUTABLE: the revalidation pass replaces
+   * it wholesale so that `adminShortCircuit` (which reads
+   * `actor.user.role` per frame) and permission-set gates pick up a demotion.
+   * Its only writer is that pass.
+   */
   actor: Actor
+  /** RFC-212 — credential fingerprint used by the revalidation pass. */
+  credential: WsCredential
+  /**
+   * RFC-212 — set synchronously right before `ws.close()`, so a frame that
+   * arrives between the close call and Bun's async close callback is dropped.
+   * `broadcaster.broadcast` is a synchronous for-of, so without this the socket
+   * keeps receiving during that window.
+   */
+  closing: boolean
   unsubscribe: () => void
   /**
    * RFC-054 W2-4 — per-connection visibility cache. tasks-list entries are
@@ -153,8 +182,40 @@ export interface WsBroadcasterLike<M, C = never> {
   subscribe(channel: string, listener: (msg: M, context: C | undefined) => void): () => void
 }
 
+/**
+ * RFC-212 — how a channel must be re-checked when authorization is revoked.
+ *
+ * REQUIRED on every ChannelSpec. `WsChannelRegistry` is a mapped type over
+ * `WsChannelKind`, so adding a channel without declaring this is a COMPILE
+ * error — which is the whole point: the audit found 7 channels x 4 revocation
+ * kinds = 28 cells with exactly one implemented, precisely because the matrix
+ * only ever existed in someone's head.
+ * See design/RFC-212-ws-authorization-revalidation §3.4.
+ */
+export interface ChannelRevalidation {
+  /**
+   * Always true. Replacing `ws.data.actor` is what makes a demotion take effect
+   * — `adminShortCircuit` reads `actor.user.role` per frame and several gates
+   * read `actor.permissions`. Modelled as a required literal rather than an
+   * optional flag so no channel can silently opt out.
+   */
+  readonly refreshActor: true
+  /**
+   * Whether this channel actually keeps a per-connection visibility cache.
+   * Most do NOT — stating that explicitly stops "cleared the cache" from being
+   * mistaken for "re-checked this channel".
+   */
+  readonly cache:
+    | { readonly kind: 'none'; readonly why: string }
+    | { readonly kind: 'prefixes'; readonly prefixes: readonly string[] }
+  /** Re-run `upgradeGate` after a revocation. Channels without one say why. */
+  readonly rerunUpgradeGate: boolean | { readonly na: string }
+}
+
 export interface ChannelSpec<K extends WsChannelKind, M> {
   kind: K
+  /** RFC-212 — required; see ChannelRevalidation. */
+  revalidation: ChannelRevalidation
   /** hello-frame channel name (parametrized channels compose with params). */
   helloName: (p: ChannelParamsByKind[K]) => string
   pathRe: RegExp
@@ -334,6 +395,16 @@ export type WsChannelRegistry = {
 export const WS_CHANNELS: WsChannelRegistry = {
   task: {
     kind: 'task',
+    // RFC-212: gated once at upgrade (taskVisibleTo); a member removal must
+    // therefore re-run that gate. No frame cache — no frameGate at all.
+    revalidation: {
+      refreshActor: true,
+      cache: {
+        kind: 'none',
+        why: 'no frameGate — every frame forwards once the upgrade gate passed',
+      },
+      rerunUpgradeGate: true,
+    },
     helloName: (p) => `tasks/${p.taskId}`,
     pathRe: /^\/ws\/tasks\/([^/?#]+)$/,
     parse: (m, url) => {
@@ -361,6 +432,14 @@ export const WS_CHANNELS: WsChannelRegistry = {
   },
   'tasks-list': {
     kind: 'tasks-list',
+    // RFC-212: caches per-task visibility under the RAW taskId. Stale sources
+    // are BOTH the cached `true` and the frozen actor (canViewTask short-circuits
+    // internally on `tasks:read:all`, so a demotion must reach it).
+    revalidation: {
+      refreshActor: true,
+      cache: { kind: 'prefixes', prefixes: [''] },
+      rerunUpgradeGate: { na: 'no upgradeGate — this channel filters per frame' },
+    },
     helloName: () => 'tasks',
     pathRe: /^\/ws\/tasks$/,
     parse: () => ({ kind: 'tasks-list' }),
@@ -378,6 +457,12 @@ export const WS_CHANNELS: WsChannelRegistry = {
   },
   workflows: {
     kind: 'workflows',
+    // RFC-212: caches under `wf:`; also short-circuits on actor.user.role.
+    revalidation: {
+      refreshActor: true,
+      cache: { kind: 'prefixes', prefixes: ['wf:'] },
+      rerunUpgradeGate: { na: 'no upgradeGate — this channel filters per frame' },
+    },
     helloName: () => 'workflows',
     pathRe: /^\/ws\/workflows$/,
     parse: () => ({ kind: 'workflows' }),
@@ -414,6 +499,14 @@ export const WS_CHANNELS: WsChannelRegistry = {
   },
   'repo-import': {
     kind: 'repo-import',
+    // RFC-212: no gate of any kind (RFC-152 D4 leftover). Revalidation can only
+    // enforce credential validity here; adding a gate is out of scope and is
+    // recorded as a known gap rather than papered over.
+    revalidation: {
+      refreshActor: true,
+      cache: { kind: 'none', why: 'ungated channel — nothing is filtered per frame' },
+      rerunUpgradeGate: { na: 'RFC-152 D4 leftover: this channel has no gate at all' },
+    },
     helloName: (p) => `repo-imports/${p.batchId}`,
     pathRe: /^\/ws\/repo-imports\/([^/?#]+)$/,
     parse: (m) => ({ kind: 'repo-import', batchId: decodeURIComponent(m[1] ?? '') }),
@@ -424,6 +517,17 @@ export const WS_CHANNELS: WsChannelRegistry = {
   },
   memories: {
     kind: 'memories',
+    // RFC-212: deliberately UNcached (RFC-045 edits move rows between scopes),
+    // so clearing a cache would be a no-op here — the only stale source is the
+    // frozen actor behind adminShortCircuit.
+    revalidation: {
+      refreshActor: true,
+      cache: {
+        kind: 'none',
+        why: 'deliberately uncached — RFC-045 edits move rows between scopes',
+      },
+      rerunUpgradeGate: { na: 'no upgradeGate — this channel filters per frame' },
+    },
     helloName: () => 'memories',
     pathRe: /^\/ws\/memories$/,
     parse: () => ({ kind: 'memories' }),
@@ -472,6 +576,12 @@ export const WS_CHANNELS: WsChannelRegistry = {
   },
   'memory-distill-jobs': {
     kind: 'memory-distill-jobs',
+    // RFC-212: admin-only whole-connection gate; a demotion must re-run it.
+    revalidation: {
+      refreshActor: true,
+      cache: { kind: 'none', why: 'no frameGate — admin-only gate at upgrade' },
+      rerunUpgradeGate: true,
+    },
     helloName: () => 'memory-distill-jobs',
     pathRe: /^\/ws\/memory-distill-jobs$/,
     parse: () => ({ kind: 'memory-distill-jobs' }),
@@ -487,6 +597,13 @@ export const WS_CHANNELS: WsChannelRegistry = {
   },
   'scheduled-tasks': {
     kind: 'scheduled-tasks',
+    // RFC-212: pure in-memory decision (actor.permissions + msg.ownerUserId),
+    // no cache — the stale source is the frozen permission set.
+    revalidation: {
+      refreshActor: true,
+      cache: { kind: 'none', why: 'pure in-memory check on actor.permissions + ownerUserId' },
+      rerunUpgradeGate: { na: 'no upgradeGate — this channel filters per frame' },
+    },
     helloName: () => 'scheduled-tasks',
     pathRe: /^\/ws\/scheduled-tasks$/,
     parse: () => ({ kind: 'scheduled-tasks' }),

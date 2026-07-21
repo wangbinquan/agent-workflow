@@ -18,8 +18,8 @@ import type { DbClient } from '@/db/client'
 import { users } from '@/db/schema'
 import { UnauthorizedError } from '@/util/errors'
 import { buildActor, SYSTEM_USER_ID, type Actor } from './actor'
-import { lookupActivePat } from './patStore'
-import { lookupActiveSession } from './sessionStore'
+import { hashToken as hashPatToken, lookupActivePat } from './patStore'
+import { hashToken as hashSessionToken, lookupActiveSession } from './sessionStore'
 
 export interface MultiAuthDeps {
   db: DbClient
@@ -58,6 +58,21 @@ export function multiAuth(deps: MultiAuthDeps): MiddlewareHandler {
     await next()
   }
 }
+
+/**
+ * RFC-212 — classify a raw token into the fingerprint a live WebSocket keeps for
+ * revalidation. Mirrors `resolveActor`'s prefix dispatch exactly, so the two can
+ * never disagree about which store a credential belongs to.
+ */
+export function describeCredential(raw: string): WsCredentialFingerprint {
+  if (raw.startsWith(SESSION_TOKEN_PREFIX)) return { kind: 'session', hash: hashSessionToken(raw) }
+  if (raw.startsWith(PAT_TOKEN_PREFIX)) return { kind: 'pat', hash: hashPatToken(raw) }
+  return { kind: 'daemon' }
+}
+
+export type WsCredentialFingerprint =
+  | { readonly kind: 'session' | 'pat'; readonly hash: string }
+  | { readonly kind: 'daemon' }
 
 export async function resolveActor(
   db: DbClient,

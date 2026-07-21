@@ -85,7 +85,27 @@ export async function lookupActiveSession(
   now: number = Date.now(),
 ): Promise<ResolvedSession | null> {
   if (!raw.startsWith(SESSION_TOKEN_PREFIX)) return null
-  const hash = hashToken(raw)
+  return lookupActiveSessionByHash(db, hashToken(raw), now)
+}
+
+/**
+ * RFC-212 — the same lookup keyed by the token HASH instead of the raw token,
+ * so a live WebSocket can be re-checked without keeping the plaintext
+ * credential in memory for the lifetime of the connection.
+ *
+ * `touch: false` additionally skips the rolling `last_used_at` write. The
+ * revalidation pass runs once per live connection on every revocation, so
+ * leaving the write in would turn a single ACL edit into one write per open
+ * socket AND make `last_used_at` (surfaced on /account) report a credential as
+ * "just used" merely because a tab was left open.
+ */
+export async function lookupActiveSessionByHash(
+  db: DbClient,
+  hash: string,
+  now: number = Date.now(),
+  opts: { touch?: boolean } = {},
+): Promise<ResolvedSession | null> {
+  const touch = opts.touch ?? true
   const rows = await db.select().from(userSessions).where(eq(userSessions.tokenHash, hash)).limit(1)
   const session = rows[0]
   if (!session) return null
@@ -96,8 +116,11 @@ export async function lookupActiveSession(
   const user = userRows[0]
   if (!user || user.status !== 'active') return null
 
-  // Rolling renewal: bump last_used_at on every successful lookup.
-  await db.update(userSessions).set({ lastUsedAt: now }).where(eq(userSessions.id, session.id))
+  // Rolling renewal: bump last_used_at on every successful lookup — except on
+  // the read-only revalidation path (RFC-212), see the doc comment above.
+  if (touch) {
+    await db.update(userSessions).set({ lastUsedAt: now }).where(eq(userSessions.id, session.id))
+  }
   return {
     user,
     session: {
@@ -105,7 +128,7 @@ export async function lookupActiveSession(
       userId: session.userId,
       userAgent: session.userAgent,
       createdAt: session.createdAt,
-      lastUsedAt: now,
+      lastUsedAt: touch ? now : session.lastUsedAt,
       expiresAt: session.expiresAt,
       revokedAt: null,
     },

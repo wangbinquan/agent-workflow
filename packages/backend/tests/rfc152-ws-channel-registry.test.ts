@@ -58,6 +58,10 @@ function makeFakeWs(actor: Actor): {
   const data: WsConnectionData = {
     channel: { kind: 'tasks-list' },
     actor,
+    // RFC-212 — the registry never reads these; they exist so the fixture stays
+    // structurally identical to a real connection.
+    credential: { kind: 'daemon' },
+    closing: false,
     unsubscribe: () => {},
     visibilityCache: new Map(),
   }
