@@ -26,6 +26,7 @@ import {
   startWalCheckpointLoop,
   maybePreMigrationBackup,
 } from '@/services/backupScheduler'
+import { applyPendingRestoreIfAny } from '@/services/pendingRestore'
 import { registerTerminalTaskHook } from '@/services/lifecycle'
 import { startLifecycleInvariantsLoop } from '@/services/lifecycleInvariants'
 import { sealOpenHumanGatesForTask } from '@/services/terminalSweep'
@@ -230,6 +231,27 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     const extracted = await extractMigrationsTo(migrationsFolder)
     log.info('extracted embedded migrations', { count: extracted, dir: migrationsFolder })
   }
+  // RFC-213: apply a staged ("hot") restore BEFORE openDb, so the DB swap runs
+  // on a closed database. We hold the lock (acquired above), so exactly one
+  // process consumes it. A failure here is fatal (we must not boot a
+  // half-restored DB) — but the restore itself is crash-safe + idempotent.
+  try {
+    const applied = await applyPendingRestoreIfAny({
+      appHome: Paths.root,
+      dbPath: Paths.db,
+      migrationsFolder,
+    })
+    if (applied) log.warn('staged restore applied on boot', { db: Paths.db })
+  } catch (err) {
+    lock.release()
+    console.error(
+      `agent-workflow: staged restore failed — refusing to boot with a half-restored DB.\n` +
+        `  ${err instanceof Error ? err.message : String(err)}\n` +
+        `  The pre-restore safety backup (if taken) is under ~/.agent-workflow/backups/.`,
+    )
+    process.exit(1)
+  }
+
   // RFC-213: raw pre-migration safety backup BEFORE openDb applies migrations, so
   // a botched upgrade can be rolled back. Best-effort — never blocks boot.
   try {

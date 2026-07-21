@@ -7,6 +7,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { extractMigrationsTo, IS_EMBEDDED } from '@/embed'
 import { planRestore, restoreBackup } from '@/services/restore'
+import { stagePendingRestore } from '@/services/pendingRestore'
 import { isProcessAlive, readPidFromLock } from '@/util/lock'
 import { Paths } from '@/util/paths'
 
@@ -16,7 +17,7 @@ export interface RestoreCommandResult {
 }
 
 const USAGE =
-  'usage: agent-workflow restore <tarball> [--yes] [--dry-run] ' +
+  'usage: agent-workflow restore <tarball> [--yes] [--stage] [--dry-run] ' +
   '[--no-safety-backup] [--no-migrate] [--skip-integrity-check]\n'
 
 export async function restoreCommand(argv: string[]): Promise<RestoreCommandResult> {
@@ -25,18 +26,6 @@ export async function restoreCommand(argv: string[]): Promise<RestoreCommandResu
   if (tarball === undefined) return { output: USAGE, status: 'error' }
   if (!existsSync(tarball)) {
     return { output: `restore failed: no such file: ${tarball}\n`, status: 'error' }
-  }
-
-  // Real single-instance check (NOT a flock): a stale/dead-pid lock — the exact
-  // state after the crash that motivates a restore — must NOT block us.
-  const pid = readPidFromLock(Paths.lock)
-  if (pid !== null && isProcessAlive(pid)) {
-    return {
-      output:
-        `restore refused: a daemon is running (pid ${pid}). ` +
-        `Stop it first: agent-workflow stop\n`,
-      status: 'error',
-    }
   }
 
   // Resolve the migrations folder (the version gate reads its _journal.json).
@@ -64,6 +53,36 @@ export async function restoreCommand(argv: string[]): Promise<RestoreCommandResu
       }
     }
 
+    const applyOpts = {
+      noSafetyBackup: flags.has('--no-safety-backup'),
+      noMigrate: flags.has('--no-migrate'),
+      skipIntegrityCheck: flags.has('--skip-integrity-check'),
+    }
+
+    // --stage: write a pending marker to apply on the NEXT daemon boot (the swap
+    // then runs while the DB is closed). Safe to run WHILE the daemon is up.
+    if (flags.has('--stage')) {
+      stagePendingRestore(tarball, { ...applyOpts, now: Date.now() })
+      return {
+        output:
+          planLines.join('\n') +
+          '\nSTAGED — restart the daemon to apply (agent-workflow stop && agent-workflow start).\n',
+        status: 'ok',
+      }
+    }
+
+    // Cold restore requires the daemon STOPPED. A stale/dead-pid lock (the exact
+    // state after the crash that motivates a restore) must NOT block us.
+    const pid = readPidFromLock(Paths.lock)
+    if (pid !== null && isProcessAlive(pid)) {
+      return {
+        output:
+          `restore refused: a daemon is running (pid ${pid}). ` +
+          `Stop it first (or use --stage to apply on next boot): agent-workflow stop\n`,
+        status: 'error',
+      }
+    }
+
     if (flags.has('--dry-run') || !flags.has('--yes')) {
       const hint = flags.has('--dry-run')
         ? '\n(dry-run — nothing changed)\n'
@@ -71,12 +90,7 @@ export async function restoreCommand(argv: string[]): Promise<RestoreCommandResu
       return { output: planLines.join('\n') + hint, status: 'ok' }
     }
 
-    const res = await restoreBackup(tarball, {
-      migrationsFolder,
-      noSafetyBackup: flags.has('--no-safety-backup'),
-      noMigrate: flags.has('--no-migrate'),
-      skipIntegrityCheck: flags.has('--skip-integrity-check'),
-    })
+    const res = await restoreBackup(tarball, { migrationsFolder, ...applyOpts })
     const lines = [
       'restore complete:',
       `  direction:     ${res.direction}`,
