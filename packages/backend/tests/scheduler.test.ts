@@ -646,7 +646,8 @@ describe('runTask: linear DAG (M1)', () => {
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 writeFileSync(join(process.cwd(), 'src.txt'), 'after writer\\n')
-const prompt = process.argv.slice(2)[1] ?? ''
+const __awArgv = process.argv.slice(2)
+const prompt = __awArgv.includes('--') ? __awArgv.slice(__awArgv.indexOf('--') + 1).join(' ') : (__awArgv[1] ?? '')
 const nonce = /\\bnonce="([^"]+)"/.exec(prompt)?.[1]
 const open = nonce === undefined ? '<workflow-output>' : '<workflow-output nonce="' + nonce + '">'
 const envl = open + '\\n  <port name="summary">done</port>\\n</workflow-output>'

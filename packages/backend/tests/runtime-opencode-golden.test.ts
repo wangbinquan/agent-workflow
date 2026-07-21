@@ -20,18 +20,23 @@ const BASE = {
 } as const
 
 describe('buildOpencodeSpawn — argv golden (RFC-111 A2)', () => {
-  it('default argv: run/prompt/--agent/--format json/--thinking/--dangerously-skip-permissions', () => {
+  // The prompt is a TRAILING positional after a `--` end-of-options separator —
+  // NOT a bare positional after `run`. opencode's parser is `.strict()`, so a
+  // prompt starting with `-` (e.g. the RFC-200 `---` injection boundary) would be
+  // scanned as an unknown option → usage dump + exit 1. See spawn.ts buildCommand.
+  it('default argv: run/--agent/--format json/--thinking/--dangerously-skip-permissions/-- <prompt>', () => {
     const { cmd } = buildOpencodeSpawn({ ...BASE })
     expect(cmd).toEqual([
       'opencode',
       'run',
-      'THE PROMPT',
       '--agent',
       'my-agent',
       '--format',
       'json',
       '--thinking',
       '--dangerously-skip-permissions',
+      '--',
+      'THE PROMPT',
     ])
   })
 
@@ -39,6 +44,8 @@ describe('buildOpencodeSpawn — argv golden (RFC-111 A2)', () => {
     // flag-audit W0（§3 假旋钮）：`dangerouslySkipPermissions?: boolean` 参数已删——
     // 生产端从未有人传值，且 CLI 模式没有 permission 应答通道，非跳过运行会在第一个
     // tool 提示上挂死（假旋钮）。flag 现在无条件出现。
+    // `--session <id>` precedes the `--`/prompt tail (a flag, must stay in the
+    // parsed region), so the prompt remains the very last token.
     const { cmd } = buildOpencodeSpawn({
       ...BASE,
       opencodeCmd: ['bun', 'run', '/mock.ts'],
@@ -49,7 +56,6 @@ describe('buildOpencodeSpawn — argv golden (RFC-111 A2)', () => {
       'run',
       '/mock.ts',
       'run',
-      'THE PROMPT',
       '--agent',
       'my-agent',
       '--format',
@@ -58,12 +64,26 @@ describe('buildOpencodeSpawn — argv golden (RFC-111 A2)', () => {
       '--dangerously-skip-permissions',
       '--session',
       'opc_9',
+      '--',
+      'THE PROMPT',
     ])
   })
 
   it('empty resumeSessionId is treated as absent (no --session)', () => {
     const { cmd } = buildOpencodeSpawn({ ...BASE, resumeSessionId: '' })
     expect(cmd).not.toContain('--session')
+  })
+
+  it('prompt is the last token, right after the `--` separator (dash-leading safe)', () => {
+    // Regression lock for the workgroup outage: the RFC-200 wrapper makes every
+    // untrusted-input prompt start with `---`. buildCommand MUST keep it behind
+    // `--` so opencode's strict parser never treats it as a flag.
+    const dashLeading = '---\n**Untrusted input boundary.** blah'
+    const { cmd } = buildOpencodeSpawn({ ...BASE, prompt: dashLeading })
+    const sep = cmd.lastIndexOf('--')
+    expect(sep).toBeGreaterThan(-1)
+    expect(cmd.slice(sep + 1)).toEqual([dashLeading])
+    expect(cmd[cmd.length - 1]).toBe(dashLeading)
   })
 })
 

@@ -67,7 +67,7 @@ if (argv.includes('--version')) {
 }
 const i = argv.indexOf('--agent')
 const agent = i >= 0 ? (argv[i + 1] ?? '') : ''
-const prompt = argv[1] ?? ''
+const prompt = argv.includes('--') ? argv.slice(argv.indexOf('--') + 1).join(' ') : (argv[1] ?? '')
 const nonce = /\\bnonce="([^"]+)"/.exec(prompt)?.[1]
 const outputOpen =
   nonce === undefined ? '<workflow-output>' : '<workflow-output nonce="' + nonce + '">'

@@ -1,6 +1,7 @@
 // RFC-026 T4 — locks `buildCommand(opts, prompt)` argv assembly:
 //   - When `opts.resumeSessionId` is a non-empty string, the opencode CLI
-//     receives `--session <id>` at the tail.
+//     receives `--session <id>` in the parsed flag region (before the `--`
+//     end-of-options separator that fronts the trailing prompt positional).
 //   - When `opts.resumeSessionId` is undefined / empty, NO `--session` flag
 //     is emitted — review reject / iterate / technical retry / loop paths
 //     must never accidentally inherit a clarify-inline-only behavior.
@@ -62,10 +63,14 @@ describe('RFC-026 runner buildCommand — resumeSessionId', () => {
     expect(cmd).toContain('--session')
     const flagIdx = cmd.indexOf('--session')
     expect(cmd[flagIdx + 1]).toBe('opc_abc123')
-    // First three args remain the legacy positional layout
+    // Head is `opencode run`; the prompt is the trailing positional after `--`
+    // (opencode strict-parser safety for `-`-leading prompts). `--session <id>`
+    // sits in the parsed flag region, i.e. before that `--` separator.
     expect(cmd[0]).toBe('opencode')
     expect(cmd[1]).toBe('run')
-    expect(cmd[2]).toBe('PROMPT')
+    expect(cmd[cmd.length - 1]).toBe('PROMPT')
+    expect(cmd[cmd.length - 2]).toBe('--')
+    expect(cmd.indexOf('--session')).toBeLessThan(cmd.lastIndexOf('--'))
   })
 
   test('undefined resumeSessionId does NOT emit `--session`', () => {

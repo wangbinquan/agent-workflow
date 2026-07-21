@@ -63,7 +63,7 @@ const GATES: Record<string, string> = ${JSON.stringify(paths.gates)}
 const argv = process.argv.slice(2)
 if (argv.includes('--version')) { process.stdout.write('rfc098-gate-mock 1.14.99\\n'); process.exit(0) }
 if (argv[0] !== 'run') { process.stderr.write('rfc098-gate-mock: expected run\\n'); process.exit(2) }
-const prompt = argv[1] ?? ''
+const prompt = argv.includes('--') ? argv.slice(argv.indexOf('--') + 1).join(' ') : (argv[1] ?? '')
 const nonce = /\\bnonce="([^"]+)"/.exec(prompt)?.[1]
 const outputOpen = nonce === undefined ? '<workflow-output>' : '<workflow-output nonce="' + nonce + '">'
 const clarifyOpen = nonce === undefined ? '<workflow-clarify>' : '<workflow-clarify nonce="' + nonce + '">'

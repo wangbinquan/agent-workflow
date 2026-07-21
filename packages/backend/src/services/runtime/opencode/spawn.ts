@@ -58,7 +58,6 @@ export function buildCommand(opts: OpencodeCommandOptions, prompt: string): stri
   const cmd = [
     ...head,
     'run',
-    prompt,
     '--agent',
     opts.agent.name,
     '--format',
@@ -73,6 +72,21 @@ export function buildCommand(opts: OpencodeCommandOptions, prompt: string): stri
   if (opts.resumeSessionId !== undefined && opts.resumeSessionId.length > 0) {
     cmd.push('--session', opts.resumeSessionId)
   }
+  // The user prompt is delivered as a TRAILING positional after an explicit `--`
+  // end-of-options separator — never as a bare positional right after `run`.
+  // opencode's top-level parser is `.strict()` (opencode/src/index.ts:116), so a
+  // bare positional whose first character is `-` is scanned as an option, and an
+  // unknown one makes opencode print the `run` usage to stderr and exit 1 BEFORE
+  // doing any work. This bites every prompt starting with a dash — most notably
+  // the RFC-200 injection-boundary wrapper (prompt.ts prepends
+  // `---\n**Untrusted input boundary.…`, present on every run that carries an
+  // <aw-input> block, i.e. all workgroup runs), but also any agent prompt whose
+  // first line is a markdown list. Routing the prompt through `--` lands it in
+  // yargs' `args["--"]` bucket, which run.ts merges straight back into the
+  // message (`[...args.message, ...(args["--"] || [])].join(" ")`, run.ts:250/264
+  // — opencode sets `parserConfiguration({"populate--": true})`), so the prompt
+  // arrives byte-for-byte while never being scanned for flags. Keep this LAST.
+  cmd.push('--', prompt)
   return cmd
 }
 

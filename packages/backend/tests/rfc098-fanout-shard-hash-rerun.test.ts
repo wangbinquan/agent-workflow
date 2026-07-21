@@ -239,10 +239,10 @@ describe('RFC-098 B3 — restart + changed upstream content re-runs ONLY the aff
     const invocations = readFileSync(argvCapture, 'utf-8')
       .trim()
       .split('\n')
-      .map((l) => JSON.parse(l) as { agent: string; argv: string[] })
+      .map((l) => JSON.parse(l) as { agent: string; argv: string[]; prompt?: string })
     expect(invocations.length).toBe(1)
     expect(invocations[0]?.agent).toBe('worker')
-    const prompt = invocations[0]?.argv[1] ?? ''
+    const prompt = invocations[0]?.prompt ?? invocations[0]?.argv[1] ?? ''
     expect(prompt).toContain('beta-NEW')
     expect(prompt).not.toContain('alpha')
 

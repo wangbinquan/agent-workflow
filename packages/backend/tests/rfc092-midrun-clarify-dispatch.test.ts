@@ -63,7 +63,8 @@ const GATES: Record<string, string> = ${JSON.stringify(paths.gates)}
 const argv = process.argv.slice(2)
 if (argv.includes('--version')) { process.stdout.write('midrun-gate-mock 1.14.99\\n'); process.exit(0) }
 if (argv[0] !== 'run') { process.stderr.write('midrun-gate-mock: expected run\\n'); process.exit(2) }
-const nonce = /\\bnonce="([^"]+)"/.exec(argv[1] ?? '')?.[1]
+const prompt = argv.includes('--') ? argv.slice(argv.indexOf('--') + 1).join(' ') : (argv[1] ?? '')
+const nonce = /\\bnonce="([^"]+)"/.exec(prompt)?.[1]
 const outputOpen = nonce === undefined ? '<workflow-output>' : '<workflow-output nonce="' + nonce + '">'
 const clarifyOpen = nonce === undefined ? '<workflow-clarify>' : '<workflow-clarify nonce="' + nonce + '">'
 const ai = argv.indexOf('--agent')
@@ -75,7 +76,7 @@ let n = 0
 if (existsSync(counterFile)) n = Number(readFileSync(counterFile, 'utf-8').trim()) || 0
 const callIndex = n
 writeFileSync(counterFile, String(n + 1))
-appendFileSync(join(STATE_DIR, 'argv.jsonl'), JSON.stringify({ agent, callIndex, argv }) + '\\n')
+appendFileSync(join(STATE_DIR, 'argv.jsonl'), JSON.stringify({ agent, callIndex, argv, prompt }) + '\\n')
 const gate = GATES[agent]
 if (gate !== undefined) {
   const deadline = Date.now() + 20000
@@ -225,10 +226,16 @@ function readSpawns(stateDir: string): Array<{ agent: string; callIndex: number;
     .split('\n')
     .filter((l) => l.trim().length > 0)
     .map((l) => {
-      const row = JSON.parse(l) as { agent: string; callIndex: number; argv: string[] }
-      // runner 以 `run "<prompt>" --agent NAME ...` 调起 mock；argv 已 slice(2)，
-      // 所以 argv[1] 即渲染后的完整 user prompt（同 scheduler-audit-s05）。
-      return { agent: row.agent, callIndex: row.callIndex, prompt: row.argv[1] ?? '' }
+      const row = JSON.parse(l) as {
+        agent: string
+        callIndex: number
+        argv: string[]
+        prompt?: string
+      }
+      // runner 以 `run --agent NAME ... -- "<prompt>"` 调起 mock：prompt 是 `--`
+      // 之后的尾随位置参（spawn.ts，避免 `-` 开头 prompt 被 opencode 严格解析器
+      // 当成选项）；mock 落盘时已把它抽成 `prompt` 字段，argv[1] 仅作旧布局兜底。
+      return { agent: row.agent, callIndex: row.callIndex, prompt: row.prompt ?? row.argv[1] ?? '' }
     })
 }
 

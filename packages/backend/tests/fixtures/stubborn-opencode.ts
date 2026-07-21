@@ -17,7 +17,7 @@
 //     leaking detached process trees on developer machines / CI.
 //
 // Invoked exactly like mock-opencode:
-//   bun run stubborn-opencode.ts run "<prompt>" --agent NAME --format json ...
+//   bun run stubborn-opencode.ts run --agent NAME --format json ... -- "<prompt>"
 
 import process from 'node:process'
 import { writeFileSync } from 'node:fs'

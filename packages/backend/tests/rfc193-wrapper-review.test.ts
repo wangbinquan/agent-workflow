@@ -34,7 +34,7 @@ import { dirname, join } from 'node:path'
 const argv = process.argv.slice(2)
 if (argv.includes('--version')) { process.stdout.write('rfc193-wr-mock 1.14.99\\n'); process.exit(0) }
 if (argv[0] !== 'run') { process.stderr.write('rfc193-wr-mock: expected run\\n'); process.exit(2) }
-const nonce = /\\bnonce="([^"]+)"/.exec(argv[1] ?? '')?.[1]
+const nonce = /\\bnonce="([^"]+)"/.exec(argv.includes('--') ? argv.slice(argv.indexOf('--') + 1).join(' ') : (argv[1] ?? ''))?.[1]
 const outputOpen =
   nonce === undefined ? '<workflow-output>' : '<workflow-output nonce="' + nonce + '">'
 const ai = argv.indexOf('--agent')

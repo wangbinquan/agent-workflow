@@ -59,7 +59,7 @@ if (argv.includes('--version')) {
   process.stdout.write('cp-shim 1.0.0\\n')
   process.exit(0)
 }
-const nonce = /\\bnonce="([^"]+)"/.exec(argv[1] ?? '')?.[1]
+const nonce = /\\bnonce="([^"]+)"/.exec(argv.includes('--') ? argv.slice(argv.indexOf('--') + 1).join(' ') : (argv[1] ?? ''))?.[1]
 const outputOpen =
   nonce === undefined ? '<workflow-output>' : '<workflow-output nonce="' + nonce + '">'
 const ai = argv.indexOf('--agent')

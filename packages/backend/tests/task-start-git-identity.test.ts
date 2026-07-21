@@ -122,7 +122,7 @@ function makeEnvCapturingStub(dir: string, captureDir: string): string {
 set -e
 if [[ "$1" == "--version" ]]; then echo 'stub-opencode 1.14.99'; exit 0; fi
 if [[ "$1" == "run" ]]; then
-  NONCE=$(printf '%s' "$2" | sed -n 's/.*nonce="\\([^"]*\\)".*/\\1/p' | head -n 1)
+  NONCE=$(printf '%s' "$*" | sed -n 's/.*nonce="\\([^"]*\\)".*/\\1/p' | head -n 1)
   OPEN='<workflow-output>'; if [[ -n "$NONCE" ]]; then OPEN='<workflow-output nonce="'"$NONCE"'">'; fi
   KEY="$(basename "\${OPENCODE_CONFIG_DIR:-pid-$$}")"
   KEY="\${KEY%%.opencode}"

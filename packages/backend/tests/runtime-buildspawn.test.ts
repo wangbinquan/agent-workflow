@@ -29,18 +29,21 @@ const BASE: SystemAgentSpawnContext = {
 }
 
 describe('opencodeDriver.buildSpawn (RFC-117 system agent)', () => {
-  test('argv = opencode run/prompt/--agent/--format json/--thinking/--dangerously; stdin ignored', () => {
+  test('argv = opencode run/--agent/--format json/--thinking/--dangerously/-- <prompt>; stdin ignored', () => {
     const plan = opencodeDriver.buildSpawn(BASE)
+    // Prompt is the trailing positional after `--` (opencode strict-parser safety
+    // for `-`-leading prompts) — see runtime/opencode/spawn.ts buildCommand.
     expect(plan.cmd).toEqual([
       'opencode',
       'run',
-      'USER PROMPT',
       '--agent',
       'aw-memory-distiller',
       '--format',
       'json',
       '--thinking',
       '--dangerously-skip-permissions',
+      '--',
+      'USER PROMPT',
     ])
     expect(plan.stdin).toEqual({ mode: 'ignore' })
   })
@@ -71,7 +74,9 @@ describe('opencodeDriver.buildSpawn (RFC-117 system agent)', () => {
   test('runtimeBinary overrides the opencode head (RFC-112 custom fork)', () => {
     const plan = opencodeDriver.buildSpawn({ ...BASE, runtimeBinary: '/opt/my-oc' })
     expect(plan.cmd[0]).toBe('/opt/my-oc')
-    expect(plan.cmd.slice(1, 3)).toEqual(['run', 'USER PROMPT'])
+    expect(plan.cmd[1]).toBe('run')
+    // prompt stays the trailing positional after `--`
+    expect(plan.cmd.slice(-2)).toEqual(['--', 'USER PROMPT'])
   })
 
   // IS_SANDBOX is a claude-code-only root-gate escape hatch; opencode has no

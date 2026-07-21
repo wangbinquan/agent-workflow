@@ -278,14 +278,14 @@ describe('scheduler-audit S-21 — fanout aggregator idempotency + done-filter (
     const invocations = readFileSync(argvCapture, 'utf-8')
       .trim()
       .split('\n')
-      .map((l) => JSON.parse(l) as { agent: string; argv: string[] })
+      .map((l) => JSON.parse(l) as { agent: string; argv: string[]; prompt?: string })
     expect(invocations.length).toBe(1)
     expect(invocations[0]?.agent).toBe('agg')
-    // 复用的 done 子行输出真实喂进了聚合 prompt（argv[0]==='run'，argv[1] 即
-    // 渲染后的完整 user prompt —— 同 scheduler-audit-s05 的捕获约定）：
+    // 复用的 done 子行输出真实喂进了聚合 prompt（mock 把 `-- ` 之后的尾随
+    // prompt 位置参抽成 `prompt` 字段 —— 同 scheduler-audit-s05 的捕获约定）：
     // `### shardKey\n内容` 块、shardKey 字典序。这证明聚合读到的是
     // pre-seed 行持久化的输出（A-out/B-out），而不是任何新 spawn 的产物。
-    const aggPrompt = invocations[0]?.argv[1] ?? ''
+    const aggPrompt = invocations[0]?.prompt ?? invocations[0]?.argv[1] ?? ''
     expect(aggPrompt).toContain('### a.md\nA-out')
     expect(aggPrompt).toContain('### b.md\nB-out')
     expect(aggPrompt.indexOf('### a.md')).toBeLessThan(aggPrompt.indexOf('### b.md'))

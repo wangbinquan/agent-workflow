@@ -393,10 +393,11 @@ function readCapturedSpawns(captureFile: string): Array<{ agent: string; prompt:
     .split('\n')
     .filter((l) => l.trim().length > 0)
   return lines.map((l) => {
-    const row = JSON.parse(l) as { agent: string; argv: string[] }
-    // mock-opencode 以 `run "<prompt>" --agent NAME ...` 被调起；argv 已
-    // slice(2)，所以 argv[0]==='run'、argv[1] 即渲染后的完整 user prompt。
-    return { agent: row.agent, prompt: row.argv[1] ?? '' }
+    const row = JSON.parse(l) as { agent: string; argv: string[]; prompt?: string }
+    // mock-opencode 以 `run --agent NAME ... -- "<prompt>"` 被调起；prompt 是
+    // `--` 之后的尾随位置参（spawn.ts，防 `-` 开头 prompt 被 opencode 严格解析
+    // 器当成选项），mock 落盘时抽成 `prompt` 字段；argv[1] 仅作旧布局兜底。
+    return { agent: row.agent, prompt: row.prompt ?? row.argv[1] ?? '' }
   })
 }
 

@@ -101,7 +101,7 @@ if [[ "$1" == "--version" ]]; then
   exit 0
 fi
 if [[ "$1" == "run" ]]; then
-  NONCE=$(printf '%s' "$2" | sed -n 's/.*nonce="\\([^"]*\\)".*/\\1/p' | head -n 1)
+  NONCE=$(printf '%s' "$*" | sed -n 's/.*nonce="\\([^"]*\\)".*/\\1/p' | head -n 1)
   OPEN='<workflow-output>'; if [[ -n "$NONCE" ]]; then OPEN='<workflow-output nonce="'"$NONCE"'">'; fi
   COUNTER_FILE='${counterFile}'
   N=$(cat "$COUNTER_FILE")

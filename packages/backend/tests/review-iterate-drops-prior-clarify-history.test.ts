@@ -111,7 +111,7 @@ if [[ "$1" == "--version" ]]; then
   exit 0
 fi
 if [[ "$1" == "run" ]]; then
-  NONCE=$(printf '%s' "$2" | sed -n 's/.*nonce="\\([^"]*\\)".*/\\1/p' | head -n 1)
+  NONCE=$(printf '%s' "$*" | sed -n 's/.*nonce="\\([^"]*\\)".*/\\1/p' | head -n 1)
   OUTPUT_OPEN='<workflow-output>'; CLARIFY_OPEN='<workflow-clarify>'
   if [[ -n "$NONCE" ]]; then
     OUTPUT_OPEN='<workflow-output nonce="'"$NONCE"'">'

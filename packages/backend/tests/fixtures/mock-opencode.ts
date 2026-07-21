@@ -1,5 +1,6 @@
 // Mock opencode binary for runner tests.
-// Invoked as: bun run mock-opencode.ts run "<prompt>" --agent NAME --format json [--dangerously-skip-permissions]
+// Invoked as: bun run mock-opencode.ts run --agent NAME --format json [--dangerously-skip-permissions] -- "<prompt>"
+// (the prompt is the trailing positional after `--`; see runtime/opencode/spawn.ts)
 //
 // Behavior driven by env vars (so tests can inject without parsing argv):
 //   MOCK_OPENCODE_EVENTS         JSON array of objects, emitted one-per-line on stdout
@@ -98,7 +99,15 @@ const argv = process.argv.slice(2)
 if (argv[0] !== 'run') {
   fail(`expected first positional arg 'run', got '${argv[0]}'`)
 }
-const prompt = argv[1] ?? ''
+// The framework passes the prompt as a trailing positional after a `--`
+// end-of-options separator (runtime/opencode/spawn.ts) so a prompt whose first
+// character is `-` (e.g. the RFC-200 `---` untrusted-input boundary) is never
+// parsed as an option by opencode's strict yargs. Mirror real opencode, which
+// merges the after-`--` bucket into the message
+// (`[...args.message, ...(args["--"])]`, run.ts). Fallback to argv[1] keeps any
+// legacy positional-prompt caller working.
+const dashDashIdx = argv.indexOf('--')
+const prompt = dashDashIdx >= 0 ? argv.slice(dashDashIdx + 1).join(' ') : (argv[1] ?? '')
 const envelopeNonce = [...prompt.matchAll(/\bnonce="([^"]+)"/g)].at(-1)?.[1]
 const openEnvelope = (kind: 'output' | 'clarify'): string =>
   envelopeNonce === undefined ? `<workflow-${kind}>` : `<workflow-${kind} nonce="${envelopeNonce}">`
@@ -162,9 +171,12 @@ const mockedAgentName = argv[agentFlagIdx + 1] ?? ''
 if (env.MOCK_OPENCODE_CAPTURE_ARGV_TO) {
   try {
     const agentName = argv[agentFlagIdx + 1] ?? ''
+    // `prompt` is captured explicitly: the framework now passes it as a trailing
+    // `-- <prompt>` positional (spawn.ts), so `argv[1]` is no longer the prompt.
+    // Readers should assert on `row.prompt`, not `row.argv[1]`.
     appendFileSync(
       env.MOCK_OPENCODE_CAPTURE_ARGV_TO,
-      JSON.stringify({ agent: agentName, argv }) + '\n',
+      JSON.stringify({ agent: agentName, argv, prompt }) + '\n',
     )
   } catch (e) {
     fail(`MOCK_OPENCODE_CAPTURE_ARGV_TO write failed: ${(e as Error).message}`)
@@ -178,7 +190,7 @@ if (env.MOCK_OPENCODE_EXPECT_FOLLOWUP_ARGV) {
     const agentName = argv[agentFlagIdx + 1] ?? ''
     appendFileSync(
       env.MOCK_OPENCODE_EXPECT_FOLLOWUP_ARGV,
-      JSON.stringify({ agent: agentName, argv }) + '\n',
+      JSON.stringify({ agent: agentName, argv, prompt }) + '\n',
     )
   } catch (e) {
     fail(`MOCK_OPENCODE_EXPECT_FOLLOWUP_ARGV write failed: ${(e as Error).message}`)
@@ -308,7 +320,7 @@ if (env.MOCK_OPENCODE_ECHO_PROMPT === '1') {
     JSON.stringify({
       type: 'text',
       timestamp: Date.now(),
-      part: { type: 'text', text: argv[1] ?? '' },
+      part: { type: 'text', text: prompt },
     }) + '\n',
   )
 }

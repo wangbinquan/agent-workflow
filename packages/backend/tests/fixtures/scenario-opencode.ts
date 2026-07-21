@@ -38,7 +38,11 @@ if (argv[0] === '--version' || argv.includes('--version')) {
   process.exit(0)
 }
 if (argv[0] !== 'run') fail(`expected 'run', got '${argv[0]}'`)
-const prompt = argv[1] ?? ''
+// Prompt is the trailing positional after `--` (runtime/opencode/spawn.ts) so a
+// `-`-leading prompt isn't parsed as a flag by opencode's strict yargs; mirror
+// real opencode's message = args.message + args["--"]. Fallback to argv[1].
+const dashDashIdx = argv.indexOf('--')
+const prompt = dashDashIdx >= 0 ? argv.slice(dashDashIdx + 1).join(' ') : (argv[1] ?? '')
 const envelopeNonce = [...prompt.matchAll(/\bnonce="([^"]+)"/g)].at(-1)?.[1]
 const openEnvelope = (kind: 'output' | 'clarify'): string =>
   envelopeNonce === undefined ? `<workflow-${kind}>` : `<workflow-${kind} nonce="${envelopeNonce}">`

@@ -161,7 +161,8 @@ function emit(text: string): void {
     JSON.stringify({ type: 'text', timestamp: Date.now(), part: { type: 'text', text } }) + '\\n',
   )
 }
-const prompt = process.argv.slice(2)[1] ?? ''
+const __awArgv = process.argv.slice(2)
+const prompt = __awArgv.includes('--') ? __awArgv.slice(__awArgv.indexOf('--') + 1).join(' ') : (__awArgv[1] ?? '')
 const nonce = /\\bnonce="([^"]+)"/.exec(prompt)?.[1]
 const outputOpen =
   nonce === undefined ? '<workflow-output>' : '<workflow-output nonce="' + nonce + '">'

@@ -57,7 +57,8 @@ const MINI_MOCK_SOURCE = `
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 const env = process.env
-const prompt = process.argv.slice(2)[1] ?? ''
+const __awArgv = process.argv.slice(2)
+const prompt = __awArgv.includes('--') ? __awArgv.slice(__awArgv.indexOf('--') + 1).join(' ') : (__awArgv[1] ?? '')
 const nonce = /\\bnonce="([^"]+)"/.exec(prompt)?.[1]
 const outputOpen =
   nonce === undefined ? '<workflow-output>' : '<workflow-output nonce="' + nonce + '">'
