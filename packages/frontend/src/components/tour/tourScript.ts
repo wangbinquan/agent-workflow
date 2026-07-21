@@ -207,4 +207,15 @@ export function getTour(id: TourId): Tour {
   return TOURS[id]
 }
 
+/**
+ * Runtime guard for ids that arrive from OUTSIDE the type system — persisted
+ * localStorage state survives renames/deletions of tours across upgrades, so
+ * the restore path must domain-check before indexing TOURS (impl-gate P1-2:
+ * an unknown id used to crash the whole app on every load until the key was
+ * hand-deleted).
+ */
+export function isTourId(id: string): id is TourId {
+  return Object.prototype.hasOwnProperty.call(TOURS, id)
+}
+
 export const ALL_TOUR_IDS: readonly TourId[] = Object.keys(TOURS) as TourId[]

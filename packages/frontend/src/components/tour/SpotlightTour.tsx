@@ -31,7 +31,7 @@ import {
 import { createPortal } from 'react-dom'
 import { useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
-import { getTour, type TourId, type TourStep } from './tourScript'
+import { getTour, isTourId, type TourId, type TourStep } from './tourScript'
 
 interface TourState {
   tourId: TourId
@@ -68,9 +68,28 @@ function loadState(): TourState | null {
     const raw = window.localStorage.getItem(STORAGE_KEY)
     if (raw === null) return null
     const parsed = JSON.parse(raw) as TourState
-    if (typeof parsed?.tourId === 'string' && typeof parsed?.stepIndex === 'number') return parsed
+    // Impl-gate P1-2: domain-check, not just shape-check. Persisted state
+    // outlives tour-script edits (renamed tour, shortened steps) and can be
+    // hand-mangled (NaN passes `typeof === 'number'`); an out-of-domain value
+    // used to crash the overlay on EVERY load with no in-product recovery.
+    // Bad state self-heals: drop it and start clean.
+    if (
+      typeof parsed?.tourId === 'string' &&
+      isTourId(parsed.tourId) &&
+      typeof parsed?.stepIndex === 'number' &&
+      Number.isInteger(parsed.stepIndex) &&
+      parsed.stepIndex >= 0 &&
+      parsed.stepIndex < getTour(parsed.tourId).steps.length
+    )
+      return parsed
+    window.localStorage.removeItem(STORAGE_KEY)
     return null
   } catch {
+    try {
+      window.localStorage.removeItem(STORAGE_KEY)
+    } catch {
+      // ignore — private mode etc.; a null return is already safe
+    }
     return null
   }
 }
@@ -184,10 +203,21 @@ function useAnchorRect(selector: string, deps: unknown[]): Rect | null {
     const measure = (): void => {
       const el = document.querySelector(selector)
       if (el === null) {
-        setRect(null)
+        setRect((prev) => (prev === null ? prev : null))
       } else {
         const r = el.getBoundingClientRect()
-        setRect({ top: r.top, left: r.left, width: r.width, height: r.height })
+        // Impl-gate P2-3: compare before set — an unconditional fresh object
+        // every frame re-rendered the whole overlay at 60fps for the entire
+        // duration of every step.
+        setRect((prev) =>
+          prev !== null &&
+          prev.top === r.top &&
+          prev.left === r.left &&
+          prev.width === r.width &&
+          prev.height === r.height
+            ? prev
+            : { top: r.top, left: r.left, width: r.width, height: r.height },
+        )
       }
       raf = window.requestAnimationFrame(measure)
     }
@@ -209,6 +239,20 @@ function SpotlightOverlay({ pathname, state }: { pathname: string; state: TourSt
   const onRightPage =
     step?.route === undefined || pathname === step.route || pathname.startsWith(step.route)
   const rect = useAnchorRect(step?.anchor ?? '', [step?.anchor, pathname, state.stepIndex])
+
+  // Impl-gate P2-2: "right page but the anchor never showed up" is a dead end
+  // for a do-the-thing step (no Next by design, nothing to click). A missing
+  // anchor is normal for a moment while the page renders — so only after it
+  // stays missing do we offer an escape-hatch Next. Reset on every step/route
+  // change and whenever the anchor appears.
+  const anchorMissing = rect === null
+  const [anchorStale, setAnchorStale] = useState(false)
+  useEffect(() => {
+    setAnchorStale(false)
+    if (!onRightPage || !anchorMissing) return
+    const id = window.setTimeout(() => setAnchorStale(true), 3000)
+    return () => window.clearTimeout(id)
+  }, [onRightPage, anchorMissing, state.stepIndex, pathname])
 
   // Prefill the step's field once it exists — the user watches the example
   // value land instead of typing it. Retries briefly because the form may still
@@ -274,8 +318,32 @@ function SpotlightOverlay({ pathname, state }: { pathname: string; state: TourSt
   // Keyboard: Esc = skip, ArrowRight/Left = next/back (when manual).
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') stop()
-      else if (
+      // Impl-gate P1-1: never hijack keys aimed at an editable element. The
+      // tour's own steps tell the user to TYPE (name / port fields) — an arrow
+      // press there used to back()/next() mid-edit, after which the fill
+      // effect overwrote what the user had typed; Escape killed the tour.
+      const target = e.target
+      if (
+        target instanceof HTMLElement &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      )
+        return
+      if (e.key === 'Escape') {
+        // Impl-gate P2-1: an open modal owns Escape. Dialog closes itself via
+        // its own window listener (sibling listeners still see the event), so
+        // without this check one Esc on e.g. the quick-create dialog also
+        // silently killed the whole tour. The bubble itself is role=dialog —
+        // exclude it from the probe.
+        if (
+          document.querySelector('[role="dialog"]:not([data-testid="spotlight-tour-bubble"])') !==
+          null
+        )
+          return
+        stop()
+      } else if (
         e.key === 'ArrowRight' &&
         step?.advanceOnRoute === undefined &&
         step?.advanceOnClick !== true
@@ -379,8 +447,14 @@ function SpotlightOverlay({ pathname, state }: { pathname: string; state: TourSt
           )}
           {/* A route-advance OR click-advance step has no Next — the user
               advances it by DOING the thing. Only manual/explanatory steps
-              carry a Next button. */}
-          {step.advanceOnRoute === undefined && step.advanceOnClick !== true && (
+              carry a Next button. Impl-gate P2-2 escape hatch: when the user
+              is on the right page but the anchor has stayed missing (control
+              gone — e.g. an action failed and the page moved on), the
+              do-the-thing contract is unfulfillable, so offer Next rather
+              than trapping them at Back/Skip. Delayed (anchorStale) so the
+              normal render-in-progress window never flashes a Next. */}
+          {((step.advanceOnRoute === undefined && step.advanceOnClick !== true) ||
+            (onRightPage && rect === null && anchorStale)) && (
             <button
               type="button"
               className="btn btn--primary btn--sm"

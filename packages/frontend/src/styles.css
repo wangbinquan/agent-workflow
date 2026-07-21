@@ -8098,7 +8098,11 @@ details.form-section[open] > summary {
   position: fixed;
   inset: 0;
   background: rgba(15, 23, 42, 0.55);
-  pointer-events: auto;
+  /* Impl-gate P2-2: the scrim shows when the anchor is missing / wrong page.
+     It must NOT swallow clicks there — the user needs the real UI to navigate
+     themselves out (advanceOnRoute follows them); a click-blocking scrim over
+     a missing anchor was a dead end. */
+  pointer-events: none;
 }
 
 .spotlight-tour__bubble {

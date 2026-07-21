@@ -879,81 +879,15 @@ export interface Resources {
   // RFC-211 引导式沙盒。
   guide: {
     title: string
-    intro: string
     handholdIntro: string
     startTour: string
-    tourFirstTask: string
-    tourBuildWorkflow: string
-    tourUseWorkgroup: string
-    sandboxNotice: string
-    pickTrack: string
-    resume: string
-    start: string
-    provision: string
-    provisionRunning: string
-    provisionAgain: string
-    launch: string
-    launching: string
-    launched: string
-    viewTask: string
-    finish: string
-    selfServe: string
-    stepDone: string
-    openResource: string
-    open: string
-    openEditorNewTab: string
-    runtimeUnready: string
-    artifactsTitle: string
-    artifactsEmpty: string
-    artifactMissing: string
-    releaseArtifact: string
-    cleanupCta: string
-    cleanupTitle: string
-    cleanupConfirm: string
-    cleanupWarning: string
-    cleanupAdminCta: string
-    cleanupAdminWarning: string
-    cleanupEmpty: string
-    cleanupDone: string
-    cleanupPartial: string
-    outcomeDeleted: string
-    outcomeSkipped: string
-    outcomeFailed: string
-    inGuideBanner: string
-    backToGuide: string
     track: {
       agent: string
       agentDesc: string
-      skill: string
-      skillDesc: string
       workflow: string
       workflowDesc: string
       workgroup: string
       workgroupDesc: string
-    }
-    step: {
-      agentCreate: string
-      agentCreateBody: string
-      agentPorts: string
-      agentPortsBody: string
-      agentRun: string
-      agentRunBody: string
-      skillCreate: string
-      skillCreateBody: string
-      skillAttach: string
-      skillAttachBody: string
-      workflowCreate: string
-      workflowCreateBody: string
-      workflowEdit: string
-      workflowEditBody: string
-      workflowRun: string
-      workflowRunBody: string
-      workgroupCreate: string
-      workgroupCreateBody: string
-      workgroupMembers: string
-      workgroupMembersBody: string
-      workgroupRun: string
-      workgroupRunBody: string
     }
   }
   common: {
@@ -4549,91 +4483,17 @@ export const zhCN: Resources = {
     },
   },
   guide: {
+    // RFC-211 §12 impl-gate P3-1（2026-07-21）：沙盒时代死键随 example 概念一并清除，仅存 tour 启动页 9 个活键。
     title: '上手引导',
-    intro: '选一条线开始。每一步都可以让引导替你生成一份能跑的样板，也可以自己动手建。',
     handholdIntro: '想让我在真实界面上一步步带你走一遍？从建代理到启动任务、看结果，全程高亮指引。',
     startTour: '手把手带我走一遍',
-    tourFirstTask: '造一个代理并跑一次',
-    tourBuildWorkflow: '搭一条工作流',
-    tourUseWorkgroup: '用一个工作组',
-    sandboxNotice:
-      '引导里创建的都是你自己的练习资源：只有你看得见，随时可以在下面一键清除（连同它们产生的任务与产物）。',
-    pickTrack: '你想先学哪一块？',
-    resume: '继续',
-    start: '开始',
-    provision: '帮我建一个',
-    provisionRunning: '正在生成…',
-    provisionAgain: '再生成一份',
-    launch: '启动一次',
-    launching: '正在启动…',
-    launched: '已启动',
-    viewTask: '查看任务运行 ↗',
-    finish: '完成这条线',
-    selfServe: '我自己来',
-    stepDone: '已完成',
-    openResource: '打开它 →',
-    open: '打开',
-    openEditorNewTab: '在新标签打开 {{name}} 看看/改改 ↗',
-    runtimeUnready: '运行时还没就绪，任务可能跑不起来。先到设置里检查运行时与凭据。',
-    artifactsTitle: '本次引导产生的资源',
-    artifactsEmpty: '还没有产生任何资源。',
-    artifactMissing: '已被删除',
-    releaseArtifact: '移出引导集合',
-    cleanupCta: '清除我的引导产物',
-    cleanupTitle: '清除引导产物',
-    cleanupConfirm: '确认清除',
-    cleanupWarning:
-      '下列资源与任务会被删除，它们的工作区、运行日志和产物也会一并清掉。此操作不可撤销。',
-    cleanupAdminCta: '清除全实例的引导产物（管理员）',
-    cleanupAdminWarning:
-      '这会删掉所有用户的引导产物，包括别人正在进行的引导。请确认没有人正在使用。',
-    cleanupEmpty: '当前没有引导产物。',
-    cleanupDone: '已全部清除。',
-    cleanupPartial: '部分项目未能清除，下面列出了原因。',
-    outcomeDeleted: '已删除',
-    outcomeSkipped: '已跳过',
-    outcomeFailed: '失败',
-    inGuideBanner: '你正在上手引导里操作。保存后回到引导即可继续。',
-    backToGuide: '返回引导',
     track: {
       agent: '造一个能干活的代理',
       agentDesc: '创建代理、看懂输出端口，然后让它真跑一次。',
-      skill: '给代理装一个技能',
-      skillDesc: '技能是按需注入的一份操作手册；建一个并挂到代理上。',
       workflow: '把代理串成流水线',
       workflowDesc: '一个代理干活、另一个代理评审，在画布上连起来并启动。',
       workgroup: '让一组代理协作',
       workgroupDesc: '组一个小队，指定组长与成员，然后交给它一个目标。',
-    },
-    step: {
-      agentCreate: '创建一个代理',
-      agentCreateBody:
-        '代理 = 一段系统提示词 + 一组输出端口。输出端口是它把结果交出来的通道，至少要有一个。',
-      agentPorts: '看懂输出端口',
-      agentPortsBody:
-        '打开代理的端口配置：这里声明的每个端口，都会变成工作流画布上可以往外连的一个接点。',
-      agentRun: '让它跑一次',
-      agentRunBody: '不用先接仓库——引导会用一块临时空间跑。填一句你想让它做的事，然后启动。',
-      skillCreate: '创建一个技能',
-      skillCreateBody:
-        '技能是一份 SKILL.md：一句说明什么时候该用它，加上正文里的具体步骤。说明必须写，否则模型根本看不到这个技能。',
-      skillAttach: '挂到代理上',
-      skillAttachBody: '把技能加进代理的技能列表，运行时它就会被注入到那个进程里。',
-      workflowCreate: '创建一个工作流',
-      workflowCreateBody: '一条最小流水线：输入 → 干活的代理 → 评审的代理 → 输出。',
-      workflowEdit: '在画布上改一改',
-      workflowEditBody:
-        '打开编辑器，试着改一个节点的提示词、或者拖一条新的连线。提示词里的 {{变量}} 必须有同名的入边端口喂给它。',
-      workflowRun: '启动这条流水线',
-      workflowRunBody: '填好输入后启动，任务详情页会显示每个节点的状态、提示词、产物与 diff。',
-      workgroupCreate: '创建一个工作组',
-      workgroupCreateBody:
-        '工作组有三种模式。引导用的是「组长-成员」：组长负责拆任务派活，成员负责干。',
-      workgroupMembers: '配置成员与组长',
-      workgroupMembersBody:
-        '至少要两个代理成员——只有组长一个人的组虽然能启动，但没人可派活，会跑完却什么也没做。',
-      workgroupRun: '交给它一个目标',
-      workgroupRunBody: '给一句目标就行，剩下的分工由组长决定。',
     },
   },
   common: {

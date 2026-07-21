@@ -791,98 +791,20 @@ export const enUS: Resources = {
     },
   },
   guide: {
+    // RFC-211 §12 impl-gate P3-1 (2026-07-21): the sandbox-era keys (provision/
+    // cleanup/artifacts/step.*/…) died with the example concept; only the tour
+    // launcher's 9 live keys remain.
     title: 'Guided tour',
-    intro:
-      'Pick a track. Every step can either build a working example for you, or send you to the real form to do it yourself.',
     handholdIntro:
       'Want me to walk you through the real screens, step by step? From building an agent to launching a task and reading the result — highlighted the whole way.',
     startTour: 'Walk me through it',
-    tourFirstTask: 'Build an agent & run it',
-    tourBuildWorkflow: 'Build a workflow',
-    tourUseWorkgroup: 'Use a workgroup',
-    sandboxNotice:
-      'Everything the tour creates is your own practice material: only you can see it, and you can wipe all of it below in one click (together with the tasks and artifacts it produced).',
-    pickTrack: 'What would you like to learn first?',
-    resume: 'Resume',
-    start: 'Start',
-    provision: 'Build it for me',
-    provisionRunning: 'Building…',
-    provisionAgain: 'Build another',
-    launch: 'Run it once',
-    launching: 'Starting…',
-    launched: 'Started',
-    viewTask: 'View the run ↗',
-    finish: 'Finish this track',
-    selfServe: "I'll do it myself",
-    stepDone: 'Done',
-    openResource: 'Open it →',
-    open: 'Open',
-    openEditorNewTab: 'Open {{name}} in a new tab ↗',
-    runtimeUnready:
-      'The runtime is not ready, so a task may fail to start. Check the runtime and credentials in Settings first.',
-    artifactsTitle: 'What this tour created',
-    artifactsEmpty: 'Nothing created yet.',
-    artifactMissing: 'deleted',
-    releaseArtifact: 'Remove from tour',
-    cleanupCta: 'Clean up my tour material',
-    cleanupTitle: 'Clean up tour material',
-    cleanupConfirm: 'Delete them',
-    cleanupWarning:
-      'These resources and tasks will be deleted, along with their workspaces, run logs and artifacts. This cannot be undone.',
-    cleanupAdminCta: 'Clean up the whole instance (admin)',
-    cleanupAdminWarning:
-      "This deletes EVERY user's tour material, including tours other people are in the middle of. Make sure nobody is using it.",
-    cleanupEmpty: 'There is no tour material right now.',
-    cleanupDone: 'All cleaned up.',
-    cleanupPartial: 'Some items could not be removed — the reasons are listed below.',
-    outcomeDeleted: 'deleted',
-    outcomeSkipped: 'skipped',
-    outcomeFailed: 'failed',
-    inGuideBanner: "You're inside the guided tour. Save, and you'll come straight back to it.",
-    backToGuide: 'Back to the tour',
     track: {
       agent: 'Build an agent that can do work',
       agentDesc: 'Create an agent, understand its output ports, then actually run it once.',
-      skill: 'Give an agent a skill',
-      skillDesc: 'A skill is a procedure injected on demand; build one and attach it.',
       workflow: 'Chain agents into a pipeline',
       workflowDesc: 'One agent does the work, another reviews it. Wire them up and launch.',
       workgroup: 'Let a team of agents collaborate',
       workgroupDesc: 'Form a squad, pick a lead and a worker, then hand it a goal.',
-    },
-    step: {
-      agentCreate: 'Create an agent',
-      agentCreateBody:
-        'An agent is a system prompt plus a set of output ports. Ports are how it hands results back — it needs at least one.',
-      agentPorts: 'Understand output ports',
-      agentPortsBody:
-        'Open the port configuration: every port declared here becomes a connection point you can draw an edge from on the workflow canvas.',
-      agentRun: 'Run it once',
-      agentRunBody:
-        'No repository needed — the tour runs it in a scratch space. Describe one thing you want it to do, then launch.',
-      skillCreate: 'Create a skill',
-      skillCreateBody:
-        'A skill is a SKILL.md: one line saying when to use it, plus the steps in the body. The description is mandatory in practice — without it the model never sees the skill at all.',
-      skillAttach: 'Attach it to the agent',
-      skillAttachBody:
-        "Add the skill to the agent's skill list and it gets injected into that agent's process at run time.",
-      workflowCreate: 'Create a workflow',
-      workflowCreateBody:
-        'A minimal pipeline: input → the agent that does the work → the agent that reviews it → output.',
-      workflowEdit: 'Change something on the canvas',
-      workflowEditBody:
-        "Open the editor and try editing a node's prompt or drawing a new edge. Every {{variable}} in a prompt needs an inbound edge whose port has that exact name.",
-      workflowRun: 'Launch the pipeline',
-      workflowRunBody:
-        'Fill in the inputs and launch. The task page shows each node’s status, prompt, outputs and diff.',
-      workgroupCreate: 'Create a workgroup',
-      workgroupCreateBody:
-        'Workgroups come in three modes. The tour uses leader/worker: the lead splits the work and hands it out, the members do it.',
-      workgroupMembers: 'Configure members and the lead',
-      workgroupMembersBody:
-        'You want at least two agent members — a group whose only member is the lead does start, but has nobody to delegate to and finishes without doing anything.',
-      workgroupRun: 'Hand it a goal',
-      workgroupRunBody: 'One sentence is enough; the lead decides how to split it up.',
     },
   },
   common: {
