@@ -5,9 +5,15 @@
 // hand-rolled `Bun.spawn(['tar', …])` calls that could drift. We shell out to
 // the system `tar` (present on macOS + Linux, the only shipped targets).
 
-/** Create `outPath` as a gzip'd tarball of everything under `srcDir`. */
-export async function tarGz(srcDir: string, outPath: string): Promise<void> {
-  const proc = Bun.spawn(['tar', '-czf', outPath, '-C', srcDir, '.'], {
+/** Create `outPath` as a gzip'd tarball of everything under `srcDir`. `exclude`
+ *  paths are relative to `srcDir` (e.g. `.git`) and passed to tar `--exclude`. */
+export async function tarGz(
+  srcDir: string,
+  outPath: string,
+  opts?: { exclude?: string[] },
+): Promise<void> {
+  const excludeArgs = (opts?.exclude ?? []).map((p) => `--exclude=./${p}`)
+  const proc = Bun.spawn(['tar', '-czf', outPath, '-C', srcDir, ...excludeArgs, '.'], {
     stdout: 'pipe',
     stderr: 'pipe',
   })

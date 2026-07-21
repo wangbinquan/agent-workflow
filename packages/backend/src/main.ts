@@ -103,7 +103,7 @@ async function main(): Promise<void> {
       break
 
     case 'backup': {
-      const result = await backupCommand()
+      const result = await backupCommand(Bun.argv.slice(3))
       process.stdout.write(result.output)
       if (result.status !== 'ok') process.exit(1)
       break

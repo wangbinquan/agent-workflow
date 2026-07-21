@@ -39,6 +39,7 @@ import {
   readMigrationAxisFromJournal,
 } from './backupManifest'
 import { rawCopyDb } from './rawDbSnapshot'
+import { reconstructWorktrees } from './worktreeBackup'
 
 const log = createLogger('restore')
 
@@ -328,10 +329,18 @@ export async function restoreBackup(
       // STALE pre_snapshot (design gate). Manual resume stays the user's informed
       // choice; auto-resume is blocked until they clear the suspension.
       const suspended = suspendNonTerminalTasksAfterRestore(db)
+      // RFC-213 G4a: reconstruct any non-terminal task worktree that the backup
+      // captured and is now MISSING on disk (same-machine, inspection/salvage).
+      const wt = manifest?.includesWorktrees ? await reconstructWorktrees(db, staging) : null
       await recordRecoveryEvent(db, {
         kind: 'restore',
         reason: `restored ${tarballPath} (direction=${direction}, ${migrated ? 'migrated' : 'no-migrate'})`,
-        after: { safetyBackupPath, direction, suspendedTasks: suspended },
+        after: {
+          safetyBackupPath,
+          direction,
+          suspendedTasks: suspended,
+          worktreesReconstructed: wt?.reconstructed.length ?? 0,
+        },
         now,
       })
       ;(db as unknown as { $client: Database }).$client.close()

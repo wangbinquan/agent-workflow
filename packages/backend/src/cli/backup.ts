@@ -11,7 +11,8 @@ export interface BackupCommandResult {
   status: 'ok' | 'error'
 }
 
-export async function backupCommand(): Promise<BackupCommandResult> {
+export async function backupCommand(argv: string[] = []): Promise<BackupCommandResult> {
+  const includeWorktrees = argv.includes('--include-worktrees')
   const db = openDb({ path: Paths.db, migrationsFolder: Paths.migrationsDir })
   try {
     // RFC-204: seal BEFORE `VACUUM INTO` copies the database. This command runs
@@ -19,7 +20,7 @@ export async function backupCommand(): Promise<BackupCommandResult> {
     // this the first backup after an upgrade would faithfully preserve every
     // legacy plaintext credential in the tarball.
     ensureCredentialsSealed(db, createSecretBox(Paths.secretKeyFile))
-    const r = await createBackup({ db })
+    const r = await createBackup({ db, includeWorktrees })
     const sizeMb = (r.sizeBytes / 1024 / 1024).toFixed(2)
     const lines = [
       `backup written: ${r.path}`,

@@ -29,6 +29,7 @@ import { join } from 'node:path'
 import type { DbClient } from '@/db/client'
 import { stringifyWorkflowYaml } from '@/services/workflow.yaml'
 import { listWorkflows } from '@/services/workflow'
+import { captureWorktrees } from '@/services/worktreeBackup'
 import { tarGz } from '@/util/archive'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
@@ -47,6 +48,9 @@ export interface BackupOptions {
   /** RFC-213: what produced this backup. Drives retention (scheduled/auto are
    *  rotated; manual/pre-* are kept). Defaults to 'manual'. */
   kind?: BackupKind
+  /** RFC-213 G4a: also capture non-terminal tasks' worktree working state
+   *  (same-machine). Default false. */
+  includeWorktrees?: boolean
   /** Override app home for tests. Defaults to Paths.root. */
   appHome?: string
   /** Override `now` for deterministic filenames in tests. */
@@ -131,6 +135,16 @@ export async function createBackup(opts: BackupOptions): Promise<BackupResult> {
       contents.workflows += 1
     }
 
+    // 4b. RFC-213 G4a: capture non-terminal tasks' worktree working state.
+    const includeWorktrees = opts.includeWorktrees === true
+    if (includeWorktrees) {
+      const wt = await captureWorktrees(opts.db, stagingDir)
+      log.info('backup captured worktrees', {
+        captured: wt.captured.length,
+        skipped: wt.skipped.length,
+      })
+    }
+
     // 5. RFC-213 manifest — migration identity read from the just-VACUUM'd
     //    snapshot (dbDest), so restore's version gate compares like-for-like.
     const manifest: BackupManifest = {
@@ -138,7 +152,7 @@ export async function createBackup(opts: BackupOptions): Promise<BackupResult> {
       kind: opts.kind ?? 'manual',
       createdAt: opts.now ?? Date.now(),
       appVersion: currentAppVersion(),
-      includesWorktrees: false,
+      includesWorktrees: includeWorktrees,
       migration: readDbMigrationIdentity(dbDest) ?? { lastHash: null, lastCreatedAt: null },
     }
     writeManifest(stagingDir, manifest)
