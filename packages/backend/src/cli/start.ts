@@ -4,7 +4,7 @@ import { createSecretBox } from '@/auth/secretBox'
 import { ensureCredentialsSealed } from '@/services/repoCredentials'
 import { ensureTokenFile } from '@/auth/token'
 import { loadConfig } from '@/config'
-import { openDb } from '@/db/client'
+import { openDb, DbCorruptionError } from '@/db/client'
 import { extractMigrationsTo, IS_EMBEDDED } from '@/embed'
 import { createApp } from '@/server'
 import { startFusionReconcileLoop } from '@/services/fusion'
@@ -38,7 +38,7 @@ import { configureLogger, createLogger, type LogLevel } from '@/util/log'
 import { getRuntimeDriver } from '@/services/runtime'
 import { Paths } from '@/util/paths'
 import { buildWebSocketAdapter } from '@/ws/server'
-import { existsSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 export interface StartOptions {
@@ -55,6 +55,38 @@ export interface StartOptions {
  * restart cannot recover from that.
  */
 export const BOOT_PROBE_TIMEOUT_MS = 20_000
+
+/** RFC-213 — human-facing fail-closed message: list backups + the restore command. */
+function formatDbCorruptionGuidance(err: DbCorruptionError): string {
+  const lines = [
+    '',
+    '✖ agent-workflow: database corruption detected — refusing to start.',
+    `  db:          ${err.dbPath}`,
+    `  quick_check: ${err.checkErrors.slice(0, 3).join('; ')}`,
+    '',
+  ]
+  let backups: string[] = []
+  try {
+    backups = readdirSync(Paths.backupsDir)
+      .filter((f) => f.endsWith('.tar.gz'))
+      .map((f) => join(Paths.backupsDir, f))
+      .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)
+  } catch {
+    /* no backups dir */
+  }
+  if (backups.length === 0) {
+    lines.push(`  No backups found under ${Paths.backupsDir}.`)
+    lines.push('  If you have a backup tarball elsewhere: agent-workflow restore <tarball>')
+  } else {
+    lines.push('  Available backups (newest first):')
+    for (const b of backups.slice(0, 5)) lines.push(`    ${b}`)
+    lines.push('')
+    lines.push(`  Recover with: agent-workflow restore ${backups[0]}`)
+  }
+  lines.push('  (Last resort, unsafe: AGENT_WORKFLOW_SKIP_INTEGRITY_CHECK=1 agent-workflow start)')
+  lines.push('')
+  return lines.join('\n')
+}
 
 export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // 1. Logger — must come before lock so failures land in stdout/file.
@@ -193,7 +225,24 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     const extracted = await extractMigrationsTo(migrationsFolder)
     log.info('extracted embedded migrations', { count: extracted, dir: migrationsFolder })
   }
-  const db = openDb({ path: Paths.db, migrationsFolder })
+  let db: ReturnType<typeof openDb>
+  try {
+    db = openDb({
+      path: Paths.db,
+      migrationsFolder,
+      skipIntegrityCheck: process.env.AGENT_WORKFLOW_SKIP_INTEGRITY_CHECK === '1',
+    })
+  } catch (err) {
+    if (err instanceof DbCorruptionError) {
+      // RFC-213 fail-closed: never serve a corrupt DB. Print the available
+      // backups + the exact restore command, then exit non-zero. The DB is
+      // unwritable, so this does NOT record a recovery_event.
+      lock.release()
+      process.stderr.write(formatDbCorruptionGuidance(err))
+      process.exit(1)
+    }
+    throw err
+  }
   const dbVersion = existsSync(migrationsFolder)
     ? readdirSync(migrationsFolder).filter((f) => f.endsWith('.sql')).length
     : 0
