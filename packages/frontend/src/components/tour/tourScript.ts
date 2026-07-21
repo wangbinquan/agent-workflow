@@ -106,9 +106,15 @@ const FIRST_TASK: Tour = {
       bodyKey: 'tour.firstTask.launch.body',
     },
     {
+      // The launch entry deep-links with `tour=first-task`, so the wizard opens
+      // on its Confirm step with a sample task name + prompt prefilled and a
+      // scratch (no-repo) space — the submit button is on screen and enabled.
+      // Advance on the CLICK, not on a `/tasks/` route: `/tasks/` is a prefix of
+      // `/tasks/new`, so a route-advance here would fire the instant the wizard
+      // loaded and skip this step (the bug that stranded the tour at launch).
       anchor: '[data-tour="task-submit"]',
       route: '/tasks/new',
-      advanceOnRoute: '/tasks/',
+      advanceOnClick: true,
       titleKey: 'tour.firstTask.submit.title',
       bodyKey: 'tour.firstTask.submit.body',
     },

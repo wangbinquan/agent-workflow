@@ -23,6 +23,19 @@ let daemon: DaemonHandle
 
 test.beforeAll(async () => {
   daemon = await startDaemon()
+  // The launch/create-task segment of the tour needs a real agent to launch.
+  const res = await fetch(`${daemon.baseUrl}/api/agents`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${daemon.token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: 'my-coder',
+      description: 'RFC-211 tour fixture agent',
+      outputs: ['result'],
+      readonly: false,
+      bodyMd: '',
+    }),
+  })
+  expect(res.ok, `failed to seed agent (${res.status})`).toBe(true)
 })
 
 test.afterAll(async () => {
@@ -81,4 +94,68 @@ test('a click-advance step hides Next and advances only when the highlighted tab
     expect(box.x + box.width).toBeLessThanOrEqual(vp.width)
     expect(box.y + box.height).toBeLessThanOrEqual(vp.height)
   }
+})
+
+// RFC-211 §12 — the create-task segment (steps 7→8→9). The reported dead-end:
+// clicking Launch (step 7) landed on /tasks/new, but the "submit" step's
+// advanceOnRoute '/tasks/' was a prefix of '/tasks/new', so the tour auto-
+// skipped it and jumped to "watch result" over a blank, unsubmitted wizard.
+// The fix: the launch entry deep-links `tour=first-task`, the wizard opens on
+// Confirm with a scratch space + prefilled name/prompt (submit button present &
+// enabled), and the submit step advances on the click — not on the route.
+test('launch step opens a ready-to-submit wizard and does not skip the submit step', async ({
+  page,
+}) => {
+  // Seed at the launch step (index 6 / "Step 7 of 9") on the agent detail page.
+  await primeTour(page, 6)
+  await page.goto(`${daemon.baseUrl}/agents/my-coder`)
+
+  const bubble = page.getByTestId('spotlight-tour-bubble')
+  await expect(bubble).toBeVisible()
+  await expect(bubble).toContainText('Step 7 of 9')
+
+  // Click the highlighted Launch entry.
+  await page.getByTestId('agent-launch-button').click()
+
+  // It deep-links the wizard into tour mode.
+  await expect(page).toHaveURL(/\/tasks\/new\?.*tour=first-task/)
+
+  // The tour must land on the SUBMIT step (8 of 9) — NOT cascade past it to the
+  // result step (9 of 9). This is the exact regression.
+  await expect(bubble).toContainText('Step 8 of 9')
+
+  // The wizard opened on Confirm with everything prefilled, so the real launch
+  // button is present AND enabled (canSubmit true) — the anchor the tour points
+  // at actually exists and is actionable.
+  const launch = page.getByTestId('wizard-launch')
+  await expect(launch).toBeVisible()
+  await expect(launch).toBeEnabled()
+  await expect(launch).toHaveAttribute('data-tour', 'task-submit')
+
+  // The bubble is anchored (not floating centred over a missing target).
+  const box = await bubble.boundingBox()
+  expect(box).not.toBeNull()
+})
+
+test('clicking Launch submits the task and advances the tour to the result step', async ({
+  page,
+}) => {
+  await primeTour(page, 6)
+  await page.goto(`${daemon.baseUrl}/agents/my-coder`)
+  await page.getByTestId('agent-launch-button').click()
+  await expect(page).toHaveURL(/\/tasks\/new\?.*tour=first-task/)
+
+  const bubble = page.getByTestId('spotlight-tour-bubble')
+  await expect(bubble).toContainText('Step 8 of 9')
+
+  // Submit the prefilled task. This both fires the tour's click-advance and
+  // launches the task, which navigates to the task detail page.
+  await page.getByTestId('wizard-launch').click()
+
+  // Landed on the task detail page (/tasks/<id>, not /tasks/new).
+  await expect(page).toHaveURL(/\/tasks\/(?!new)[^/]+/)
+
+  // The final step (9 of 9) spotlights the live task status on the detail page.
+  await expect(bubble).toContainText('Step 9 of 9')
+  await expect(page.locator('[data-tour="task-status"]')).toBeVisible()
 })

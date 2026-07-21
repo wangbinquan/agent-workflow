@@ -15,8 +15,11 @@ const SRC = readFileSync(
 )
 
 describe('tasks.new.tsx — RFC-037 task name wiring', () => {
-  test('declares taskName state', () => {
-    expect(SRC).toMatch(/const \[taskName, setTaskName\] = useState\(['"]['"]\)/)
+  test('declares taskName state — empty by default, prefilled only from the tour', () => {
+    // RFC-211 §12: the onboarding tour seeds a sample task name so it can walk
+    // build → run → result; every other launch still starts from an empty name.
+    expect(SRC).toMatch(/const \[taskName, setTaskName\] = useState\(/)
+    expect(SRC).toContain("fromTour ? t('tour.firstTask.seedTaskName') : ''")
   })
 
   test('renders the task-name Field with maxLength=255', () => {

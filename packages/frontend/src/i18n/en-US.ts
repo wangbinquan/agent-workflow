@@ -741,13 +741,16 @@ export const enUS: Resources = {
         body: 'On the agent page, click the highlighted “Launch task”. We run it in a scratch space — no repo needed.',
       },
       submit: {
-        title: 'Describe a task, then launch',
-        body: 'Write one sentence of what it should do, then click the highlighted “Launch”.',
+        title: 'Launch the task',
+        body: 'We prefilled a sample task name and prompt and picked a scratch space (no repo), so it’s ready to go — click the highlighted “Launch”. You can edit the prompt first if you like.',
       },
       result: {
         title: 'Watch it run',
         body: 'This is the task’s live status. When it finishes you can read each node’s output and diff — you just went end to end!',
       },
+      // Prefilled into the task wizard when the launch comes from this tour.
+      seedTaskName: 'My first task',
+      seedTaskPrompt: 'Create a file named HELLO.md with a short, friendly greeting inside.',
     },
     buildWorkflow: {
       openWorkflows: {

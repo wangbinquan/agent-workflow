@@ -82,6 +82,35 @@ function Harness() {
   )
 }
 
+describe('RFC-211 tour route-cascade invariant', () => {
+  test('landing on a step’s advanceOnRoute does not also satisfy the next step(s)', () => {
+    // Regression: the task-submit step used advanceOnRoute '/tasks/', which is a
+    // prefix of the launch step's target '/tasks/new'. So the instant the user
+    // landed on /tasks/new (advancing the launch step), the submit step ALSO
+    // matched and auto-skipped — the tour leapt to "watch the result" over a
+    // blank, never-submitted wizard. Model it: use each step's advanceOnRoute as
+    // the representative pathname it triggers on, then walk forward; if a later
+    // step's advanceOnRoute is ALSO a prefix of that pathname, it would cascade.
+    const offenders: string[] = []
+    for (const id of ALL_TOUR_IDS) {
+      const steps = getTour(id).steps
+      steps.forEach((step, i) => {
+        const probe = step.advanceOnRoute
+        if (probe === undefined) return
+        for (let k = i + 1; k < steps.length; k++) {
+          const next = steps[k]?.advanceOnRoute
+          if (next === undefined) break // a non-route step halts any cascade
+          if (probe.startsWith(next)) {
+            offenders.push(`${id}: step ${i} (${probe}) cascades into step ${k} (${next})`)
+          }
+          break // only the immediately-following route step can auto-cascade
+        }
+      })
+    }
+    expect(offenders).toEqual([])
+  })
+})
+
 describe('RFC-211 spotlight overlay', () => {
   test('a route-advance step has no Next; Skip stops the tour', () => {
     render(

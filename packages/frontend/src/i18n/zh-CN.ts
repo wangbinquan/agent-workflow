@@ -857,6 +857,8 @@ export interface Resources {
       launch: { title: string; body: string }
       submit: { title: string; body: string }
       result: { title: string; body: string }
+      seedTaskName: string
+      seedTaskPrompt: string
     }
     buildWorkflow: {
       openWorkflows: { title: string; body: string }
@@ -4493,13 +4495,15 @@ export const zhCN: Resources = {
         body: '在代理详情页点高亮的「启动任务」，我们用一块临时空间跑一次、不用接仓库。',
       },
       submit: {
-        title: '填一句任务、然后启动',
-        body: '在描述里写一句你想让它做的事，点高亮的「启动」。',
+        title: '启动任务',
+        body: '我们已帮你填好任务名和一段示例提示词，并选了临时空间（不用接仓库），可以直接点高亮的「启动」。想改提示词也行。',
       },
       result: {
         title: '看它跑起来',
         body: '这里是任务的实时状态。跑完你能看到每个节点的产出与 diff——你已经走通了一整条链路！',
       },
+      seedTaskName: '我的第一个任务',
+      seedTaskPrompt: '新建一个名为 HELLO.md 的文件，在里面写一句简短友好的问候语。',
     },
     buildWorkflow: {
       openWorkflows: {

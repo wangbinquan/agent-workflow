@@ -31,6 +31,7 @@ import {
   type AgentTab,
 } from '@/components/AgentForm'
 import { AgentPortValidationSummary } from '@/components/agent-ports/AgentPortValidationSummary'
+import { useTour } from '@/components/tour/SpotlightTour'
 import { DetailHeaderActions } from '@/components/DetailHeaderActions'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
@@ -51,6 +52,7 @@ function AgentDetailPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const { beginBusy, report } = useSplitDirty()
+  const tour = useTour()
   const [activeTab, setActiveTab] = useState<AgentTab>('basics')
   const [jsonFocusTarget, setJsonFocusTarget] = useState<AgentJsonFieldKey>()
   const clearJsonFocusTarget = useCallback(() => setJsonFocusTarget(undefined), [])
@@ -172,7 +174,14 @@ function AgentDetailPage() {
           query.data?.builtin !== true && (
             <Link
               to="/tasks/new"
-              search={{ kind: 'agent', agent: name }}
+              // RFC-211 §12: while the onboarding tour is running, deep-link the
+              // wizard into its prefilled, ready-to-submit tour mode so the tour
+              // can complete build → run → result. Normal launches are untouched.
+              search={
+                tour.active?.tourId === 'first-task'
+                  ? { kind: 'agent', agent: name, tour: 'first-task' }
+                  : { kind: 'agent', agent: name }
+              }
               className="btn"
               data-testid="agent-launch-button"
               data-tour="agent-launch"

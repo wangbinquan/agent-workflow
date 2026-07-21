@@ -85,6 +85,13 @@ interface TaskWizardSearch {
   editScheduled?: string
   /** RFC-175 — "relaunch": pre-fill from a terminal task's persisted params. */
   relaunchFrom?: string
+  /**
+   * RFC-211 §12 — the onboarding tour's launch entry. When set, the wizard opens
+   * ready to submit: a sample task name + prompt are prefilled, the space is
+   * forced to scratch (no repo needed), and it starts on the Confirm step so the
+   * spotlight tour can point at a real, enabled launch button.
+   */
+  tour?: 'first-task'
 }
 
 export const TaskWizardRoute = createRoute({
@@ -114,6 +121,7 @@ export const TaskWizardRoute = createRoute({
       out.workflowVersion = numericWorkflowVersion
     }
     if (raw.schedule === true || raw.schedule === 1 || raw.schedule === '1') out.schedule = true
+    if (raw.tour === 'first-task') out.tour = 'first-task'
     return out
   },
 })
@@ -180,16 +188,22 @@ function TaskWizardPage() {
     current: number
   } | null>(null)
 
+  // RFC-211 §12 — launched from the onboarding tour. Seeds a runnable sample so
+  // the tour can walk build → run → result without the user typing anything.
+  const fromTour = search.tour === 'first-task' && !isEdit && !isRelaunch
+
   // --- Step 2 state: execution space (D9: default remote, remember last) ---
   const [space, setSpace] = useState(() =>
-    defaultWizardSpace(isEdit ? 'remote' : loadSpaceKindPref()),
+    defaultWizardSpace(fromTour ? 'scratch' : isEdit ? 'remote' : loadSpaceKindPref()),
   )
 
   // --- Step 3 state: name + content + advanced fold -------------------------
-  const [taskName, setTaskName] = useState('')
+  const [taskName, setTaskName] = useState(() => (fromTour ? t('tour.firstTask.seedTaskName') : ''))
   const [inputs, setInputs] = useState<Record<string, string>>({})
   const [uploads, setUploads] = useState<Record<string, File[]>>({})
-  const [description, setDescription] = useState('')
+  const [description, setDescription] = useState(() =>
+    fromTour ? t('tour.firstTask.seedTaskPrompt') : '',
+  )
   const [goal, setGoal] = useState('')
   // 单 agent 全新启动默认「不允许反问」（用户 2026-07-14）——保留开关，用户可按需勾选。
   // 后端 StartAgentTaskSchema.allowClarify 仍 default(true)：那是 RFC-175 relaunch/edit
@@ -206,8 +220,12 @@ function TaskWizardPage() {
 
   // --- Wizard chrome: current step + reachable frontier ---------------------
   const deepLinked = search.kind !== undefined && deepObject !== undefined && !isEdit
-  const [step, setStep] = useState(deepLinked ? STEP_SPACE : STEP_MODE)
-  const [maxVisited, setMaxVisited] = useState(deepLinked ? STEP_SPACE : STEP_MODE)
+  // From the tour, everything is prefilled — open straight on Confirm so the
+  // spotlight lands on a real, enabled launch button (all steps reachable).
+  const [step, setStep] = useState(fromTour ? STEP_CONFIRM : deepLinked ? STEP_SPACE : STEP_MODE)
+  const [maxVisited, setMaxVisited] = useState(
+    fromTour ? STEP_CONFIRM : deepLinked ? STEP_SPACE : STEP_MODE,
+  )
   const [saveScheduledOpen, setSaveScheduledOpen] = useState(false)
 
   // --- Object lists (Step 1) -------------------------------------------------
