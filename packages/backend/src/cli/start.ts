@@ -21,6 +21,7 @@ import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { startEventsArchiver } from '@/services/eventsArchive'
 import { startSubmoduleRefreshLoop } from '@/services/submoduleRefresh'
 import { startWorktreeGc } from '@/services/gc'
+import { startBackupScheduler, maybePreMigrationBackup } from '@/services/backupScheduler'
 import { registerTerminalTaskHook } from '@/services/lifecycle'
 import { startLifecycleInvariantsLoop } from '@/services/lifecycleInvariants'
 import { sealOpenHumanGatesForTask } from '@/services/terminalSweep'
@@ -225,11 +226,27 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     const extracted = await extractMigrationsTo(migrationsFolder)
     log.info('extracted embedded migrations', { count: extracted, dir: migrationsFolder })
   }
+  // RFC-213: raw pre-migration safety backup BEFORE openDb applies migrations, so
+  // a botched upgrade can be rolled back. Best-effort — never blocks boot.
+  try {
+    await maybePreMigrationBackup({
+      appHome: Paths.root,
+      dbPath: Paths.db,
+      migrationsFolder,
+      enabled: config.backupOnMigration,
+    })
+  } catch (err) {
+    log.warn('pre-migration backup failed (continuing)', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+
   let db: ReturnType<typeof openDb>
   try {
     db = openDb({
       path: Paths.db,
       migrationsFolder,
+      synchronous: config.sqliteSynchronous,
       skipIntegrityCheck: process.env.AGENT_WORKFLOW_SKIP_INTEGRITY_CHECK === '1',
     })
   } catch (err) {
@@ -516,6 +533,14 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   const limitsTicker = startLimitsTicker(db)
   const gcTicker = startWorktreeGc(db, () => loadConfig(Paths.config), undefined, Paths.root)
   const archiveTicker = startEventsArchiver(db, () => loadConfig(Paths.config), Paths.logsDir)
+  // RFC-213: scheduled backup + retention (disabled by default — backupIntervalMs=0).
+  const backupTicker = startBackupScheduler({
+    db,
+    intervalMs: config.backupIntervalMs,
+    retentionCount: config.backupRetentionCount,
+    retentionDays: config.backupRetentionDays,
+    appHome: Paths.root,
+  })
   // RFC-210 G7: keep cached mirrors (and their submodules) from going stale when
   // nobody launches a task against them. Reads its own enable flag each tick.
   const submoduleRefreshTicker = startSubmoduleRefreshLoop(
@@ -683,6 +708,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     limitsTicker.stop()
     gcTicker.stop()
     archiveTicker.stop()
+    backupTicker.stop()
     submoduleRefreshTicker.stop()
     batchImportGcTicker.stop()
     pluginGenerationGcTicker.stop()

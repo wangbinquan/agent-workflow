@@ -77,7 +77,11 @@ export async function createBackup(opts: BackupOptions): Promise<BackupResult> {
 
   const ts = stampForFilename(opts.now ?? Date.now())
   const stagingDir = join(backupsDir, `.staging-${ts}`)
-  const outPath = join(backupsDir, `agent-workflow-${ts}.tar.gz`)
+  // RFC-213: name scheduled/auto backups by kind so retention can find + rotate
+  // them; manual keeps the historical `agent-workflow-<ts>` name (protected).
+  const kind = opts.kind ?? 'manual'
+  const stem = kind === 'manual' ? 'agent-workflow' : kind
+  const outPath = join(backupsDir, `${stem}-${ts}.tar.gz`)
   if (existsSync(stagingDir)) rmSync(stagingDir, { recursive: true, force: true })
   mkdirSync(stagingDir, { recursive: true })
 

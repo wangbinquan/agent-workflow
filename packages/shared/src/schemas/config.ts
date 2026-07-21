@@ -118,6 +118,25 @@ export const ConfigSchema = z.object({
   /** RFC-159: consecutive fire failures before a schedule auto-disables. */
   scheduledTasksMaxFailures: z.number().int().positive().default(10),
 
+  // --- RFC-213 disaster recovery ---
+  /** Auto-backup cadence (ms). 0 = disabled (default — existing installs don't
+   *  silently start growing a backups/ dir). >0 fires createBackup on that tick. */
+  backupIntervalMs: z.number().int().nonnegative().default(0),
+  /** Retention: KEEP a scheduled/auto backup iff it is within the newest N OR
+   *  newer than backupRetentionDays; DELETE only when it fails BOTH. Manual and
+   *  pre-restore/pre-migration backups are NEVER auto-pruned. Never deletes to 0. */
+  backupRetentionCount: z.number().int().positive().default(7),
+  /** See backupRetentionCount. */
+  backupRetentionDays: z.number().int().positive().default(30),
+  /** Take a raw (byte-copy) pre-migration backup before applying pending
+   *  migrations on boot, so a botched upgrade can be rolled back. */
+  backupOnMigration: z.boolean().default(true),
+  /** PRAGMA synchronous mode. FULL trades throughput for stronger power-loss
+   *  durability; NORMAL (default) is byte-equivalent to the historical setting. */
+  sqliteSynchronous: z.enum(['NORMAL', 'FULL']).default('NORMAL'),
+  /** Periodic `wal_checkpoint(TRUNCATE)` cadence (ms) to bound -wal growth. 0 = off. */
+  walCheckpointIntervalMs: z.number().int().nonnegative().default(0),
+
   // --- GC ---
   worktreeAutoGc: WorktreeGcSchema,
   eventsArchiveThresholds: EventsArchiveThresholdsSchema,
@@ -414,6 +433,13 @@ export const DEFAULT_CONFIG: Config = {
   periodicOrphanReconcileMs: 10 * 60 * 1000,
   scheduledTasksEnabled: true,
   scheduledTasksMaxFailures: 10,
+  // RFC-213 disaster recovery
+  backupIntervalMs: 0,
+  backupRetentionCount: 7,
+  backupRetentionDays: 30,
+  backupOnMigration: true,
+  sqliteSynchronous: 'NORMAL',
+  walCheckpointIntervalMs: 0,
   worktreeAutoGc: { enabled: false },
   eventsArchiveThresholds: {
     perNodeRunRows: 50_000,
