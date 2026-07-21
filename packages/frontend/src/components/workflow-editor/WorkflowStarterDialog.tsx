@@ -13,6 +13,7 @@ import { ErrorBanner } from '@/components/ErrorBanner'
 import { Field } from '@/components/Form'
 import { useManagedLiveRegion } from '@/components/ManagedLiveRegion'
 import { Select } from '@/components/Select'
+import { sha256Hex } from '@/lib/sha256'
 import {
   WORKFLOW_STARTER_CATALOG,
   planWorkflowStarter,
@@ -35,11 +36,10 @@ export type WorkflowStarterDraftValidator = (
 export async function workflowStarterCandidateHash(
   definition: WorkflowDefinition,
 ): Promise<WorkflowCandidateHash> {
+  // sha256Hex survives insecure http:// contexts where SubtleCrypto is
+  // undefined (2026-07-21 incident) — never dereference it directly here.
   const bytes = new TextEncoder().encode(serializeWorkflowDefinitionCandidateV1(definition))
-  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes)
-  return [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('') as WorkflowCandidateHash
+  return (await sha256Hex(bytes)) as WorkflowCandidateHash
 }
 
 export const validateWorkflowStarterDraft: WorkflowStarterDraftValidator = async ({

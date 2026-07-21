@@ -26,6 +26,7 @@ import {
   type WorkflowDraftChangeMeta,
   type WorkflowEditorHistoryState,
 } from '@/lib/workflow-editor-history'
+import { sha256Hex, type Sha256Subtle } from '@/lib/sha256'
 
 export type WorkflowDraftPhase =
   | 'clean'
@@ -206,20 +207,16 @@ export function workflowDraftSnapshotBytes(snapshot: WorkflowDraftSnapshot): Uin
   return new TextEncoder().encode(serializeWorkflowEditableSnapshotV1(snapshot))
 }
 
-/** Browser-safe SHA-256; no node:crypto enters the frontend bundle. */
+/** Browser-safe SHA-256; no node:crypto enters the frontend bundle. Insecure
+ *  http:// contexts (LAN-IP deployments) have no SubtleCrypto, so sha256Hex
+ *  falls back to pure JS instead of throwing — the whole save pipeline hangs
+ *  otherwise (2026-07-21 incident). */
 export async function hashWorkflowDraftSnapshot(
   snapshot: WorkflowDraftSnapshot,
-  subtle: Pick<SubtleCrypto, 'digest'> = globalThis.crypto.subtle,
+  subtle: Sha256Subtle | undefined = globalThis.crypto?.subtle,
 ): Promise<WorkflowSnapshotHash> {
-  // Copy into an owned ArrayBuffer so TS's BufferSource contract cannot see a
-  // possible SharedArrayBuffer behind Uint8Array<ArrayBufferLike>.
-  const bytes = workflowDraftSnapshotBytes(snapshot)
-  const buffer = new ArrayBuffer(bytes.byteLength)
-  new Uint8Array(buffer).set(bytes)
-  const digest = await subtle.digest('SHA-256', buffer)
-  return [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('') as WorkflowSnapshotHash
+  const hex = await sha256Hex(workflowDraftSnapshotBytes(snapshot), subtle)
+  return hex as WorkflowSnapshotHash
 }
 
 /**
