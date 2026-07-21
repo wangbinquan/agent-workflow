@@ -21,7 +21,31 @@ export interface OpencodeCommandOptions {
   resumeSessionId?: string
 }
 
+/**
+ * Linux caps a single argv element (execve MAX_ARG_STRLEN) at 128 KiB —
+ * independent of the larger ARG_MAX total-size limit, and not raisable by
+ * ulimit. opencode takes the prompt as a POSITIONAL argument, so a large
+ * `{{git_diff}}` expansion makes the spawn fail with E2BIG: the child never
+ * starts and the user sees a raw kernel error instead of an actionable one.
+ * Guard with headroom (the rest of argv + the ~128 KiB env also count toward
+ * ARG_MAX) and fail READABLY here — buildCommand runs during spawn assembly,
+ * which the runner catches and turns into the node's errorMessage
+ * (runner.ts "runtime-spawn-failed"). claude is unaffected: its driver pipes
+ * the prompt through stdin, never argv.
+ * See design/test-guard-audit-2026-07-21 gap B4-runtime-5 / Top-14.
+ */
+export const MAX_OPENCODE_PROMPT_BYTES = 120 * 1024
+
 export function buildCommand(opts: OpencodeCommandOptions, prompt: string): string[] {
+  // Measure BYTES, not code units — a CJK-heavy prompt is ~3x its `.length`.
+  const promptBytes = Buffer.byteLength(prompt, 'utf8')
+  if (promptBytes > MAX_OPENCODE_PROMPT_BYTES) {
+    throw new Error(
+      `prompt-too-large: opencode prompt is ${promptBytes} bytes, over the ` +
+        `${MAX_OPENCODE_PROMPT_BYTES}-byte argv limit (Linux caps one argument at ` +
+        `128 KiB); reduce the diff or inputs feeding this node`,
+    )
+  }
   const head = opts.opencodeCmd ?? ['opencode']
   // `--thinking` makes opencode emit `reasoning` events to stdout in
   // `--format json` mode; without it `cli/cmd/run.ts:671` filters them

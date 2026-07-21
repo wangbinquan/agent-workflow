@@ -5,7 +5,11 @@
 // cmd/env from the same raw materials — this test pins opencode's).
 
 import { describe, expect, it } from 'bun:test'
-import { buildOpencodeSpawn } from '@/services/runtime/opencode/spawn'
+import {
+  buildCommand,
+  buildOpencodeSpawn,
+  MAX_OPENCODE_PROMPT_BYTES,
+} from '@/services/runtime/opencode/spawn'
 
 const BASE = {
   agentName: 'my-agent',
@@ -92,5 +96,39 @@ describe('buildOpencodeSpawn — env golden (RFC-111 A2)', () => {
     expect(half.GIT_AUTHOR_NAME).toBeUndefined()
     const nullEmail = buildOpencodeSpawn({ ...BASE, gitUserName: 'Ada', gitUserEmail: null }).env
     expect(nullEmail.GIT_AUTHOR_NAME).toBeUndefined()
+  })
+})
+
+// design/test-guard-audit-2026-07-21 gap B4-runtime-5 (Top-14) — a prompt that
+// overflows Linux's 128 KiB per-argv-element limit must fail READABLY at spawn
+// assembly (the runner turns a buildCommand throw into the node's errorMessage),
+// not with a raw E2BIG kernel error once execve is attempted.
+describe('opencode prompt argv size guard (B4-runtime-5)', () => {
+  const OPTS = { agent: { name: 'a' } } as const
+
+  it('accepts a prompt right at the limit', () => {
+    const prompt = 'x'.repeat(MAX_OPENCODE_PROMPT_BYTES)
+    expect(() => buildCommand(OPTS, prompt)).not.toThrow()
+  })
+
+  it('rejects a prompt one byte over the limit with an actionable message', () => {
+    const prompt = 'x'.repeat(MAX_OPENCODE_PROMPT_BYTES + 1)
+    expect(() => buildCommand(OPTS, prompt)).toThrow(/prompt-too-large/)
+  })
+
+  it('measures BYTES not code units — a CJK prompt overflows below the .length limit', () => {
+    // '字' is 3 UTF-8 bytes. A string of MAX/3 + 1 chars is under the char count
+    // but over the byte limit, and must still be refused.
+    const chars = Math.floor(MAX_OPENCODE_PROMPT_BYTES / 3) + 1
+    const prompt = '字'.repeat(chars)
+    expect(prompt.length).toBeLessThan(MAX_OPENCODE_PROMPT_BYTES)
+    expect(Buffer.byteLength(prompt, 'utf8')).toBeGreaterThan(MAX_OPENCODE_PROMPT_BYTES)
+    expect(() => buildCommand(OPTS, prompt)).toThrow(/prompt-too-large/)
+  })
+
+  it('the limit leaves headroom under the 128 KiB kernel cap', () => {
+    // argv also carries the other flags and shares ARG_MAX with the ~128 KiB
+    // env block; the guard must sit strictly below 128 KiB.
+    expect(MAX_OPENCODE_PROMPT_BYTES).toBeLessThan(128 * 1024)
   })
 })
