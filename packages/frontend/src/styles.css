@@ -5102,6 +5102,15 @@ details.form-section[open] > summary {
   flex: 0 0 auto;
 }
 
+/* Right-align the action strip when it fits (visual parity with every other
+ * page header) while keeping overflow scrollable: an auto start margin on the
+ * first action collapses to 0 once the row overflows, which `justify-content:
+ * flex-end` on a scroll container cannot do — it would clip the start side
+ * unreachably. */
+.page--editor > .page__header > .page__actions > :first-child {
+  margin-inline-start: auto;
+}
+
 .page--editor h1 {
   font-size: 18px;
   line-height: 1.3;

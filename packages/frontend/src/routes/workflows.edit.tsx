@@ -828,17 +828,6 @@ export function WorkflowEditorLoaded({
       </button>
       <button
         type="button"
-        className="btn btn--sm"
-        ref={(node) => {
-          if (modalSurface !== 'starter') starterTriggerRef.current = node
-        }}
-        onClick={(event) => openStarter(event.currentTarget)}
-        data-testid="workflow-start-template"
-      >
-        {t('editor.emptyCanvas.startTemplate')}
-      </button>
-      <button
-        type="button"
         className="btn btn--sm workflow-history-action"
         onClick={controller.undo}
         disabled={!controller.canUndo}

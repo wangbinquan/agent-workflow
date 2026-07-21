@@ -152,7 +152,11 @@ const BUILD_WORKFLOW: Tour = {
       bodyKey: 'tour.buildWorkflow.newWorkflow.body',
     },
     {
-      anchor: '[data-testid="workflow-start-template"]',
+      // The empty-canvas starter button — the header duplicate was removed;
+      // a freshly created workflow always shows the empty state, so the
+      // anchor is present exactly when this step runs (and the step copy
+      // already says 「空画布上点…」).
+      anchor: '[data-testid="workflow-empty-start-template"]',
       route: '/workflows/',
       titleKey: 'tour.buildWorkflow.template.title',
       bodyKey: 'tour.buildWorkflow.template.body',

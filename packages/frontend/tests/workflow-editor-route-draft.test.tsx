@@ -159,8 +159,9 @@ vi.mock('@/components/canvas/WorkflowCanvas', async () => {
         definition: WorkflowDefinition
         onChange: (definition: WorkflowDefinition) => void
         onSelect?: (selection: { kind: 'node' | 'edge'; id: string } | null) => void
+        onStartFromTemplate?: (trigger: HTMLElement) => void
       }
-    >(function MockWorkflowCanvas({ definition, onChange, onSelect }, ref) {
+    >(function MockWorkflowCanvas({ definition, onChange, onSelect, onStartFromTemplate }, ref) {
       React.useImperativeHandle(ref, () => ({
         addPaletteItemAtViewportCenter: () => undefined,
         openNodePicker: canvasHistoryHarness.openNodePicker,
@@ -172,6 +173,15 @@ vi.mock('@/components/canvas/WorkflowCanvas', async () => {
       return (
         <>
           <output data-testid="canvas-input-count">{definition.inputs.length}</output>
+          {onStartFromTemplate !== undefined ? (
+            <button
+              type="button"
+              data-testid="workflow-empty-start-template"
+              onClick={(event) => onStartFromTemplate(event.currentTarget)}
+            >
+              start from template
+            </button>
+          ) : null}
           {definition.nodes[0] !== undefined ? (
             <button
               type="button"
@@ -352,7 +362,10 @@ describe('WorkflowEditorLoaded RFC-199 draft integration', () => {
     renderEditor(detail())
     await flushEffects()
 
-    fireEvent.click(screen.getByTestId('workflow-start-template'))
+    // The starter entry lives only on the empty canvas now — the header
+    // duplicate was removed (user decision, 2026-07-21).
+    expect(screen.queryByTestId('workflow-start-template')).toBeNull()
+    fireEvent.click(screen.getByTestId('workflow-empty-start-template'))
     fireEvent.click(screen.getByTestId('mock-starter-apply'))
     expect(screen.getByTestId('canvas-input-count').textContent).toBe('1')
     expect(screen.getByTestId('workflow-undo').textContent).toContain('Apply workflow starter')
