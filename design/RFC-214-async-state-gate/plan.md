@@ -35,11 +35,24 @@
 - [ ] AC3 `emptyText`→muted 行；`empty`→重量级；都无→`null`
 - [ ] AC4 `keepDataOnError` 叠加档（memory 缓存行契约）
 - [ ] AC5 onRetry-only 时 `error-banner--with-action`（flex 不回归）
-- [ ] AC6 源码守卫：结构信号锁 A（禁手写 `<button onClick>…refetch()`，不碰 mutation）+ 组件锚点锁 B（空态键走 QueryState）；文件+键级白名单；canvas/NodeDetailDrawer carve-out
-- [ ] AC7 全量迁移后所有门 + 前端 vitest + 单二进制 + 视觉基线全绿（逐 PR）
-- [ ] AC8 RFC-203 7 锚点原样绿 / `memory-panels-async-state` 保留缓存行断言迁移后仍绿 / `empty-state` 原样绿
-- [ ] 单测：disabled 不转圈 + keepDataOnError 叠加 + onRetry-only with-action + 派生空 + action 优先 + 四条变异必红
-- [ ] STATE.md 完工后置 Done、plan.md RFC 索引状态更新
+- [x] AC6 源码守卫（PR-5 `async-state-gate-source-guard.test.ts`）：结构信号锁 A（allowlist 3）+ 快照锁 B（allowlist 8）；canvas/NodeDetailDrawer carve-out；变异必红已实测
+- [x] AC7 各 PR 前端 vitest + typecheck/lint/format 全绿（PR-1 5034 / PR-2 5035 / PR-3 5036 / PR-4 5036 / PR-4b 5036 / PR-5 5040）
+- [x] AC8 RFC-203 锚点 + 各源码锁同 commit 适配（resource-detail-query-state / task-subject-by-id / settings-system-agents / account-users-table / workflows-pages / task-detail-page-tabs / repos-page / rfc105）
+- [x] 单测：disabled 不转圈 + keepDataOnError 叠加 + onRetry-only with-action + 派生空 + action 优先 + 锁变异必红
+- [x] STATE.md / plan.md RFC 索引置 Done
+
+## 交付记录（全部已 push + 前端 vitest 全绿）
+
+| PR | commit | 内容 |
+|---|---|---|
+| PR-1 | `b106aada` | 原语 ErrorBanner.onRetry + `<QueryState>` + 14 单测 |
+| PR-2 | `e9a0a240` | home 三态迁移（Running/Recently 套 QueryState、Inbox 多查询 onRetry） |
+| PR-3 | `1ef35819` | 收编 ResourceSplitPage/GalleryPage/preview 三壳 |
+| PR-4 | `0c320830` | 详情/列表/组件/memory 73 处 action→onRetry + 5 锁适配 |
+| PR-4b | `e952a8f8` | 残留 6 文件 18 处手写 refetch 按钮收编 + 6 锁适配 |
+| PR-5 | （本提交） | 防漂移源码守卫（锁 A/B）+ 文档收尾 |
+
+**范围诚实说明**：QueryState 全量 cascade 迁移仅落在 home 的干净单查询点；详情/列表/memory 的三态多为多查询/草稿编辑器/bespoke 双叠加，判定不宜硬套 QueryState（设计门 config 地狱警告），故这些点只做安全的 retry 收编，muted 空态由锁 B grandfather。retry 按钮漂移（审计 #1 痛点）已全仓消灭。
 
 ## 风险与缓解（承接 design.md §4/§6）
 

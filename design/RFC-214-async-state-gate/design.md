@@ -164,6 +164,13 @@ QueryState ──┬─ loading ─▶ LoadingState (RFC-035)
 - **白名单粒度 = 文件 + i18n 键**（非仅两文件）：显式枚举 mutation-retry 豁免文件（`NodeDetailDrawer` / `BatchImportDialog` / `WorkflowDraftStatus` / `InboxDrawer` / `MemoryDistillJobsTable` per-row action）；若豁免项多于受管项，在本节**如实写明锁的剩余约束力**。
 - 守卫用**允许清单 + 命中集**而非逐文件禁止，新增文件默认纳管。
 
+**已实现（PR-5，`tests/async-state-gate-source-guard.test.ts`）**：
+- **锁 A**（结构信号）：正则 `onClick={…refetch(…)` / `onClick={x.refetch}` 扫非测试 tsx，命中集 ⊆ `ALLOW_RETRY = { routes/tasks.detail.tsx（room 复合 Details+retry 双按钮）, components/home/CapabilityGrid.tsx（低调内联叠加）, routes/reviews.tsx（bespoke reviews-version-error 内联条）}`。另一条测试反向保证 allowlist 不注水（每个条目仍须命中，否则提示删除）。ErrorBanner/QueryState 自身断言 0 手写 refetch 按钮。
+- **锁 B**（快照 ratchet）：正则 `<div className="muted">{t('<非 common.empty 的 empty 类键>')` 命中集 ⊆ `ALLOW_EMPTY`（8 个 bespoke/内联面板：AclPanel/WorktreeFilesPanel/NodeDependencyTreeSection/FuseDialog/McpInventoryPanel/SourceEventsList/BatchImportDialog/TaskMembersPanel）。**诚实降级**：RFC-214 收编了全部 retry 按钮并迁移了 home 的干净列表 cascade，但多数 muted 空态是**多查询/草稿编辑器/bespoke 双叠加/内联占位**，QueryState v1 不宜硬套（设计门警告的 config 地狱），故 allowlist grandfather 现存、只禁新增（新列表页须走 QueryState.emptyText/empty）。
+- **carve-out**：`components/canvas/**` + `NodeDetailDrawer.tsx` 从扫描排除。
+- **变异验证**：非白名单文件注入手写 refetch 按钮 → 锁 A 必红；注入 muted 空态 → 锁 B 必红（已实测）。
+- **已知盲区（不夸大）**：图标按钮 / `<Trans>` / 新造文案键 / `mutation.mutate()` 的 retry 不在锁 A 覆盖内；锁 B 只认清单内的空态键形态。
+
 ### 5.3 既有测试同 commit 适配（改断言不删测试，注释写明意图）
 - `memory-panels-async-state.test.tsx`：**该套锁死「刷新失败保留缓存行」**（`:1-6` 头注、`:201` 用例名、`:210/:220/:225` 断言）。memory 面板迁移**必须传 `keepDataOnError`**（BLOCKER-1），迁移后**「保留 rows」的断言必须仍绿**——不是「DOM 不变大概率绿」，而是**功能契约必须继续满足**，同 commit 核。
 - `empty-state.test.tsx`：EmptyState 本体不改，应原样绿。
