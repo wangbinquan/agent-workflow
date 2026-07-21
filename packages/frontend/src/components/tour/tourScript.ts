@@ -1,27 +1,33 @@
 // RFC-211 §12 — tour scripts.
 //
-// A step points at a real element by its `data-tour` name and tells the user
-// what to do. It advances one of two ways:
+// A step points at a real element (by `data-tour` OR an existing `data-testid`)
+// and tells the user what to do. It advances one of two ways:
 //   - `advanceOnRoute`: the user did the thing and the app moved them (saved an
 //     agent → landed on its page). No Next button; the tour follows the action.
-//   - otherwise: an explanatory step the user dismisses with Next.
+//   - otherwise: an explanatory / in-page step the user dismisses with Next.
 //
 // `route` is where the step's anchor lives; if the user isn't there, the bubble
 // offers a "go to page" button instead of pointing at nothing.
 //
-// Anchors are defined ON the real components (search the codebase for the
-// matching `data-tour="…"`). Keep this script and those attributes in lockstep
-// — tour-anchors.test.tsx fails if a referenced anchor has no home.
+// Anchors are defined ON the real components. tour-anchors.test.tsx fails if a
+// referenced anchor has no `data-tour`/`data-testid` home.
 
-export type TourId = 'first-task'
+export type TourId = 'first-task' | 'build-workflow' | 'use-workgroup'
 
 export interface TourStep {
-  /** CSS selector for the element to spotlight (a `[data-tour="…"]`). */
+  /** CSS selector for the element to spotlight (a `[data-tour]`/`[data-testid]`). */
   anchor: string
   /** The route this step's anchor lives on (offers a "go here" nudge if away). */
   route?: string
   /** Auto-advance when the user reaches a route starting with this. */
   advanceOnRoute?: string
+  /**
+   * Pre-fill a real form field so the user doesn't have to type. `selector`
+   * targets an <input>/<textarea>; the tour sets its value the React-friendly
+   * way (native setter + input event) when the step opens. The user can still
+   * edit it — it's a head start, not a lock.
+   */
+  fill?: { selector: string; value: string }
   titleKey: string
   bodyKey: string
 }
@@ -32,9 +38,9 @@ export interface Tour {
 }
 
 /**
- * The canonical first run: build an agent, wire it into a workflow, launch it,
- * and read the result — the whole Code→(review)→result loop, done by hand on
- * the real screens.
+ * The canonical first run: build an agent (name + an output port), launch it,
+ * and read the result — the whole build → run → result loop, done by hand on the
+ * real screens.
  */
 const FIRST_TASK: Tour = {
   id: 'first-task',
@@ -56,8 +62,22 @@ const FIRST_TASK: Tour = {
     {
       anchor: '[data-tour="agent-name"]',
       route: '/agents/new',
+      // Prefilled so the user just watches it land, then moves on.
+      fill: { selector: '[data-tour="agent-name"] input', value: 'my-coder' },
       titleKey: 'tour.firstTask.name.title',
       bodyKey: 'tour.firstTask.name.body',
+    },
+    {
+      anchor: '[data-testid="agent-tab-ports"]',
+      route: '/agents/new',
+      titleKey: 'tour.firstTask.portsTab.title',
+      bodyKey: 'tour.firstTask.portsTab.body',
+    },
+    {
+      anchor: '[data-testid="agent-output-port-add"]',
+      route: '/agents/new',
+      titleKey: 'tour.firstTask.addPort.title',
+      bodyKey: 'tour.firstTask.addPort.body',
     },
     {
       anchor: '[data-tour="agent-save"]',
@@ -90,8 +110,73 @@ const FIRST_TASK: Tour = {
   ],
 }
 
+/**
+ * Chain agents into a pipeline. The canvas is a dynamic node graph, so the tour
+ * guides to the editor and explains the moves rather than spotlighting each
+ * (unstable) node — the reliable anchors are the entry points and the launch.
+ */
+const BUILD_WORKFLOW: Tour = {
+  id: 'build-workflow',
+  steps: [
+    {
+      anchor: '[data-tour="nav-/workflows"]',
+      route: '/',
+      advanceOnRoute: '/workflows',
+      titleKey: 'tour.buildWorkflow.openWorkflows.title',
+      bodyKey: 'tour.buildWorkflow.openWorkflows.body',
+    },
+    {
+      anchor: '[data-testid="workflow-new-button"]',
+      route: '/workflows',
+      titleKey: 'tour.buildWorkflow.newWorkflow.title',
+      bodyKey: 'tour.buildWorkflow.newWorkflow.body',
+    },
+    {
+      anchor: '[data-testid="workflow-start-template"]',
+      route: '/workflows/',
+      titleKey: 'tour.buildWorkflow.template.title',
+      bodyKey: 'tour.buildWorkflow.template.body',
+    },
+  ],
+}
+
+/** Form a squad, add members, and launch it. */
+const USE_WORKGROUP: Tour = {
+  id: 'use-workgroup',
+  steps: [
+    {
+      anchor: '[data-tour="nav-/workgroups"]',
+      route: '/',
+      advanceOnRoute: '/workgroups',
+      titleKey: 'tour.useWorkgroup.openWorkgroups.title',
+      bodyKey: 'tour.useWorkgroup.openWorkgroups.body',
+    },
+    {
+      anchor: '[data-testid="workgroup-new-button"]',
+      route: '/workgroups',
+      advanceOnRoute: '/workgroups/',
+      titleKey: 'tour.useWorkgroup.newWorkgroup.title',
+      bodyKey: 'tour.useWorkgroup.newWorkgroup.body',
+    },
+    {
+      anchor: '[data-testid="workgroup-add-agent-member"]',
+      route: '/workgroups/',
+      titleKey: 'tour.useWorkgroup.addMember.title',
+      bodyKey: 'tour.useWorkgroup.addMember.body',
+    },
+    {
+      anchor: '[data-testid="workgroup-launch-button"]',
+      route: '/workgroups/',
+      titleKey: 'tour.useWorkgroup.launch.title',
+      bodyKey: 'tour.useWorkgroup.launch.body',
+    },
+  ],
+}
+
 const TOURS: Record<TourId, Tour> = {
   'first-task': FIRST_TASK,
+  'build-workflow': BUILD_WORKFLOW,
+  'use-workgroup': USE_WORKGROUP,
 }
 
 export function getTour(id: TourId): Tour {

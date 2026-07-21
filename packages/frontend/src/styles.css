@@ -8051,6 +8051,18 @@ details.form-section[open] > summary {
   flex-shrink: 0;
 }
 
+/* RFC-211 §12: guided-tour launcher — one card per learning flow. */
+.onboarding__flows {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.onboarding__flow-title {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+
 /* =============================================================================
    RFC-211 §12 — hand-holding spotlight tour overlay.
    ============================================================================= */

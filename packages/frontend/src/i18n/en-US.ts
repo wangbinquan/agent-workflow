@@ -724,6 +724,14 @@ export const enUS: Resources = {
         title: 'Give it a name',
         body: 'Type a name (lowercase letters/digits/hyphens) in the highlighted box, e.g. my-coder.',
       },
+      portsTab: {
+        title: 'Open the ports tab',
+        body: 'Click the highlighted “Ports” tab. An output port is how the agent hands results back — it needs at least one to connect edges in a workflow.',
+      },
+      addPort: {
+        title: 'Add an output port',
+        body: 'Click the highlighted button to add an output port, e.g. result. Then go back to the “Basics” tab.',
+      },
       saveAgent: {
         title: 'Save the agent',
         body: 'Click the highlighted “Create” button. Saving moves you to the next step automatically.',
@@ -741,6 +749,38 @@ export const enUS: Resources = {
         body: 'This is the task’s live status. When it finishes you can read each node’s output and diff — you just went end to end!',
       },
     },
+    buildWorkflow: {
+      openWorkflows: {
+        title: 'Go to Workflows',
+        body: 'Click the highlighted “Workflows” in the sidebar. A workflow chains several agents into a pipeline.',
+      },
+      newWorkflow: {
+        title: 'Create a workflow',
+        body: 'Click the highlighted “New workflow” and give it a name.',
+      },
+      template: {
+        title: 'Start from a template',
+        body: 'On the empty canvas click “Start from a template”, pick a ready-made multi-agent pipeline, then drag nodes and connect ports before launching from the top-right.',
+      },
+    },
+    useWorkgroup: {
+      openWorkgroups: {
+        title: 'Go to Workgroups',
+        body: 'Click the highlighted “Workgroups” in the sidebar. A workgroup is a team of agents working a goal together.',
+      },
+      newWorkgroup: {
+        title: 'Create a workgroup',
+        body: 'Click the highlighted “New workgroup” and give it a name.',
+      },
+      addMember: {
+        title: 'Add members',
+        body: 'Click the highlighted “Add agent member” — add at least two (a lead and a worker).',
+      },
+      launch: {
+        title: 'Hand it a goal',
+        body: 'Click the highlighted “Launch”, write one sentence of the goal, and let the lead split the work.',
+      },
+    },
   },
   guide: {
     title: 'Guided tour',
@@ -749,6 +789,9 @@ export const enUS: Resources = {
     handholdIntro:
       'Want me to walk you through the real screens, step by step? From building an agent to launching a task and reading the result — highlighted the whole way.',
     startTour: 'Walk me through it',
+    tourFirstTask: 'Build an agent & run it',
+    tourBuildWorkflow: 'Build a workflow',
+    tourUseWorkgroup: 'Use a workgroup',
     sandboxNotice:
       'Everything the tour creates is your own practice material: only you can see it, and you can wipe all of it below in one click (together with the tasks and artifacts it produced).',
     pickTrack: 'What would you like to learn first?',

@@ -142,6 +142,19 @@ interface Rect {
 }
 
 /**
+ * Set a React-controlled input's value from outside React: the native setter
+ * bypasses React's value tracker, and the dispatched input event makes onChange
+ * fire so the component state actually updates.
+ */
+function setNativeValue(el: HTMLInputElement | HTMLTextAreaElement, value: string): void {
+  const proto =
+    el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype
+  const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set
+  setter?.call(el, value)
+  el.dispatchEvent(new Event('input', { bubbles: true }))
+}
+
+/**
  * Poll the anchor's position. Elements move (layout, async render, scroll), and
  * the target may not exist yet when a step first activates because the user has
  * not navigated to its page — in that case we render a "go to X" prompt instead
@@ -179,6 +192,27 @@ function SpotlightOverlay({ pathname, state }: { pathname: string; state: TourSt
   const onRightPage =
     step?.route === undefined || pathname === step.route || pathname.startsWith(step.route)
   const rect = useAnchorRect(step?.anchor ?? '', [step?.anchor, pathname, state.stepIndex])
+
+  // Prefill the step's field once it exists — the user watches the example
+  // value land instead of typing it. Retries briefly because the form may still
+  // be mounting when the step opens.
+  useEffect(() => {
+    const fill = step?.fill
+    if (fill === undefined) return
+    let tries = 0
+    let done = false
+    const id = window.setInterval(() => {
+      tries += 1
+      const el = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(fill.selector)
+      if (el !== null) {
+        if (el.value !== fill.value) setNativeValue(el, fill.value)
+        done = true
+      }
+      if (done || tries > 20) window.clearInterval(id)
+    }, 100)
+    return () => window.clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.stepIndex, pathname])
 
   // Route-driven advance: the user did the thing (saved, launched) and the app
   // moved them; step forward automatically.

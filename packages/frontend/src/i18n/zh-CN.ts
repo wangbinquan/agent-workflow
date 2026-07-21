@@ -851,10 +851,23 @@ export interface Resources {
       openAgents: { title: string; body: string }
       newAgent: { title: string; body: string }
       name: { title: string; body: string }
+      portsTab: { title: string; body: string }
+      addPort: { title: string; body: string }
       saveAgent: { title: string; body: string }
       launch: { title: string; body: string }
       submit: { title: string; body: string }
       result: { title: string; body: string }
+    }
+    buildWorkflow: {
+      openWorkflows: { title: string; body: string }
+      newWorkflow: { title: string; body: string }
+      template: { title: string; body: string }
+    }
+    useWorkgroup: {
+      openWorkgroups: { title: string; body: string }
+      newWorkgroup: { title: string; body: string }
+      addMember: { title: string; body: string }
+      launch: { title: string; body: string }
     }
   }
   // RFC-211 引导式沙盒。
@@ -863,6 +876,9 @@ export interface Resources {
     intro: string
     handholdIntro: string
     startTour: string
+    tourFirstTask: string
+    tourBuildWorkflow: string
+    tourUseWorkgroup: string
     sandboxNotice: string
     pickTrack: string
     resume: string
@@ -4460,6 +4476,14 @@ export const zhCN: Resources = {
         title: '给它起个名字',
         body: '在高亮的名称框里填个名字（小写字母/数字/连字符），比如 my-coder。',
       },
+      portsTab: {
+        title: '打开端口配置',
+        body: '点高亮的「端口」页签。输出端口是代理把结果交出来的通道——至少要有一个，工作流里才连得出边。',
+      },
+      addPort: {
+        title: '加一个输出端口',
+        body: '点高亮的按钮加一个输出端口，比如 result。加好后回到「基础」页签。',
+      },
       saveAgent: {
         title: '保存这个代理',
         body: '填好后点高亮的「创建」按钮。保存后会自动进入下一步。',
@@ -4477,12 +4501,47 @@ export const zhCN: Resources = {
         body: '这里是任务的实时状态。跑完你能看到每个节点的产出与 diff——你已经走通了一整条链路！',
       },
     },
+    buildWorkflow: {
+      openWorkflows: {
+        title: '去工作流',
+        body: '点侧边栏高亮的「工作流」。工作流把多个代理连成一条流水线。',
+      },
+      newWorkflow: {
+        title: '新建一个工作流',
+        body: '点高亮的「新建工作流」，填个名字创建。',
+      },
+      template: {
+        title: '从模板开始',
+        body: '空画布上点「从模板开始」，选一套现成的多代理流水线；之后在画布上拖节点、连端口，再点右上角启动。',
+      },
+    },
+    useWorkgroup: {
+      openWorkgroups: {
+        title: '去工作组',
+        body: '点侧边栏高亮的「工作组」。工作组是一队代理协作完成一个目标。',
+      },
+      newWorkgroup: {
+        title: '新建一个工作组',
+        body: '点高亮的「新建工作组」，填个名字创建。',
+      },
+      addMember: {
+        title: '加成员',
+        body: '点高亮的「添加代理成员」，至少加两个（一个当组长、一个干活）。',
+      },
+      launch: {
+        title: '交给它一个目标',
+        body: '点高亮的「启动」，写一句目标，剩下的分工交给组长。',
+      },
+    },
   },
   guide: {
     title: '上手引导',
     intro: '选一条线开始。每一步都可以让引导替你生成一份能跑的样板，也可以自己动手建。',
     handholdIntro: '想让我在真实界面上一步步带你走一遍？从建代理到启动任务、看结果，全程高亮指引。',
     startTour: '手把手带我走一遍',
+    tourFirstTask: '造一个代理并跑一次',
+    tourBuildWorkflow: '搭一条工作流',
+    tourUseWorkgroup: '用一个工作组',
     sandboxNotice:
       '引导里创建的都是你自己的练习资源：只有你看得见，随时可以在下面一键清除（连同它们产生的任务与产物）。',
     pickTrack: '你想先学哪一块？',

@@ -130,11 +130,6 @@ const OVERLAY_CALLSITES = {
   'components/tasks/WorkflowSyncDialog.tsx': { family: 'task-execution', count: 1 },
   'routes/tasks.detail.tsx': { family: 'task-execution', count: 1 },
 
-  // RFC-211 guided tour — the cleanup confirmation. It is the single most
-  // destructive action in the product (it deletes tasks, workspaces and run
-  // logs, not just rows), so it must stay a real ConfirmDialog with a preview.
-  'routes/onboarding.tsx': { family: 'resource-management', count: 1 },
-
   'components/clarify/CentralizedAnswerDialog.tsx': {
     family: 'review-and-clarify',
     count: 1,

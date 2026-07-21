@@ -25,19 +25,22 @@ afterEach(() => {
   window.localStorage.clear()
 })
 
-/** All `data-tour="…"` values defined anywhere under src/. */
+/**
+ * All `data-tour="…"` and `data-testid="…"` values defined under src/. A tour
+ * step may anchor on either — reusing an existing testid is cheaper than adding
+ * a bespoke tour attribute, and both are equally stable identifiers.
+ */
 function definedAnchors(): Set<string> {
   const root = resolve(__dirname, '..', 'src')
   const out = new Set<string>()
-  // ripgrep is available in this repo's toolchain; fall back to a node walk.
   let hits = ''
   try {
-    hits = execSync(`grep -rhoE 'data-tour=(\\{\`nav-|"[^"]+")' ${root}`, { encoding: 'utf8' })
+    hits = execSync(`grep -rhoE 'data-(tour|testid)="[^"]+"' ${root}`, { encoding: 'utf8' })
   } catch {
     hits = ''
   }
   for (const line of hits.split('\n')) {
-    const m = /data-tour="([^"]+)"/.exec(line)
+    const m = /data-(?:tour|testid)="([^"]+)"/.exec(line)
     if (m?.[1] !== undefined) out.add(m[1])
   }
   return out
@@ -56,7 +59,7 @@ describe('RFC-211 tour anchors', () => {
     const missing: string[] = []
     for (const id of ALL_TOUR_IDS) {
       for (const step of getTour(id).steps) {
-        const m = /\[data-tour="([^"]+)"\]/.exec(step.anchor)
+        const m = /\[data-(?:tour|testid)="([^"]+)"\]/.exec(step.anchor)
         const name = m?.[1]
         if (name === undefined) continue
         if (name.startsWith('nav-')) {
