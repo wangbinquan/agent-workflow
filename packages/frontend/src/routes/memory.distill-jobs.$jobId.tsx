@@ -79,14 +79,7 @@ function DistillJobDetailPage() {
     return (
       <div className="page page--memory page--distill-job-detail">
         <PageHeader title={jobId} />
-        <ErrorBanner
-          error={actor.error}
-          action={
-            <button type="button" className="btn btn--sm" onClick={() => void actor.refetch()}>
-              {t('common.retry')}
-            </button>
-          }
-        />
+        <ErrorBanner error={actor.error} onRetry={() => void actor.refetch()} />
       </div>
     )
   }
@@ -120,11 +113,7 @@ function DistillJobDetailPage() {
           <ErrorBanner
             error={detailQ.error}
             message={`${t('memory.distillJobDetail.loadError')}: ${describeApiError(detailQ.error)}`}
-            action={
-              <button type="button" className="btn btn--sm" onClick={() => void detailQ.refetch()}>
-                {t('common.retry')}
-              </button>
-            }
+            onRetry={() => void detailQ.refetch()}
           />
         </div>
       )
@@ -142,15 +131,7 @@ function DistillJobDetailPage() {
               <ErrorBanner
                 error={detailQ.error}
                 message={`${t('memory.distillJobDetail.loadError')}: ${describeApiError(detailQ.error)}`}
-                action={
-                  <button
-                    type="button"
-                    className="btn btn--sm"
-                    onClick={() => void detailQ.refetch()}
-                  >
-                    {t('common.retry')}
-                  </button>
-                }
+                onRetry={() => void detailQ.refetch()}
               />
             )}
             <FailureDiagnostics job={detail.job} />
@@ -197,15 +178,7 @@ function DistillJobDetailPage() {
                       <ErrorBanner
                         error={sessionQ.error}
                         message={`${t('memory.distillJobDetail.sessionLoadError')}: ${describeApiError(sessionQ.error)}`}
-                        action={
-                          <button
-                            type="button"
-                            className="btn btn--sm"
-                            onClick={() => void sessionQ.refetch()}
-                          >
-                            {t('common.retry')}
-                          </button>
-                        }
+                        onRetry={() => void sessionQ.refetch()}
                       />
                     </div>
                   ) : null

@@ -148,16 +148,10 @@ function McpDetailPage() {
     onSettled: (_deleted, _error, { release }) => release(),
   })
 
-  const retryDetailAction = (
-    <button type="button" className="btn btn--sm" onClick={() => void query.refetch()}>
-      {t('common.retry')}
-    </button>
-  )
-
   if (form === undefined) {
     if (query.isLoading) return <LoadingState data-testid="mcp-detail-loading" />
     if (query.error !== null && query.error !== undefined)
-      return <ErrorBanner error={query.error} action={retryDetailAction} />
+      return <ErrorBanner error={query.error} onRetry={() => void query.refetch()} />
     return null
   }
 
@@ -193,7 +187,7 @@ function McpDetailPage() {
       />
 
       {query.error !== null && query.error !== undefined && (
-        <ErrorBanner error={query.error} action={retryDetailAction} />
+        <ErrorBanner error={query.error} onRetry={() => void query.refetch()} />
       )}
 
       <div className="agent-form">

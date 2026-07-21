@@ -43,14 +43,7 @@ function AgentByIdRedirect() {
     return (
       <div className="page">
         <PageHeader title={t('agents.title')} />
-        <ErrorBanner
-          error={error}
-          action={
-            <button type="button" className="btn btn--sm" onClick={refetch}>
-              {t('common.retry')}
-            </button>
-          }
-        />
+        <ErrorBanner error={error} onRetry={() => void refetch()} />
       </div>
     )
   }

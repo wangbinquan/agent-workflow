@@ -119,11 +119,6 @@ function TasksPage() {
       {t('tasks.newButton')}
     </Link>
   )
-  const retryAction = (
-    <button type="button" className="btn btn--sm" onClick={() => void refetch()}>
-      {t('common.retry')}
-    </button>
-  )
   const clearFiltersAction = (
     <button
       type="button"
@@ -207,7 +202,9 @@ function TasksPage() {
       </div>
 
       {isLoading && <LoadingState data-testid="tasks-loading" />}
-      {error !== null && error !== undefined && <ErrorBanner error={error} action={retryAction} />}
+      {error !== null && error !== undefined && (
+        <ErrorBanner error={error} onRetry={() => void refetch()} />
+      )}
       {isInitialEmpty && (
         <EmptyState
           title={t('tasks.emptyList')}

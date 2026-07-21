@@ -309,15 +309,7 @@ function AuthPage() {
         <ErrorBanner
           error={oidcDiscovery.error}
           message={t('auth.oidcDiscoveryError')}
-          action={
-            <button
-              type="button"
-              className="btn btn--sm"
-              onClick={() => void discoverOidcProviders()}
-            >
-              {t('common.retry')}
-            </button>
-          }
+          onRetry={() => void discoverOidcProviders()}
         />
       )}
       {oidcDiscovery.status === 'success' && providers.length === 0 && (

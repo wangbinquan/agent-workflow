@@ -127,7 +127,7 @@ describe('by-id redirect routes wire the resolver to a typed Navigate', () => {
     expect(wg).toContain('replace: true')
     expect(wg).toContain('EmptyState')
     expect(wg).toContain('ErrorBanner')
-    expect(wg).toContain('onClick={refetch}')
+    expect(wg).toContain('onRetry={() => void refetch()}') // RFC-214: retry via ErrorBanner.onRetry
   })
 
   test('agent route resolves then redirects to /agents/$name (replace) + EmptyState on error', () => {
@@ -136,6 +136,6 @@ describe('by-id redirect routes wire the resolver to a typed Navigate', () => {
     expect(ag).toContain('replace: true')
     expect(ag).toContain('EmptyState')
     expect(ag).toContain('ErrorBanner')
-    expect(ag).toContain('onClick={refetch}')
+    expect(ag).toContain('onRetry={() => void refetch()}') // RFC-214: retry via ErrorBanner.onRetry
   })
 })

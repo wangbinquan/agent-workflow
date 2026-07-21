@@ -54,14 +54,7 @@ function WorkgroupByIdRedirect() {
     return (
       <div className="page">
         <PageHeader title={t('workgroups.title')} />
-        <ErrorBanner
-          error={error}
-          action={
-            <button type="button" className="btn btn--sm" onClick={refetch}>
-              {t('common.retry')}
-            </button>
-          }
-        />
+        <ErrorBanner error={error} onRetry={() => void refetch()} />
       </div>
     )
   }

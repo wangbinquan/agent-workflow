@@ -79,7 +79,10 @@ describe('RFC-198 account and admin table shells', () => {
     )
 
     expect(authentication).toContain("<LoadingState label={t('settings.loading')} />")
-    expect(authentication).toContain('<ErrorBanner error={list.error} action={retryAction} />')
+    // RFC-214: retry收编到 ErrorBanner.onRetry (was a hand-written retryAction button).
+    expect(authentication).toContain(
+      '<ErrorBanner error={list.error} onRetry={() => void list.refetch()} />',
+    )
     expect(authentication).toContain('<EmptyState')
     expect(authentication).toContain("<StatusChip kind={p.enabled ? 'success' : 'neutral'}")
     expect(authentication).toContain('<TableViewport')

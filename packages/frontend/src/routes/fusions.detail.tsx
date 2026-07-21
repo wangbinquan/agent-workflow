@@ -98,14 +98,7 @@ function FusionDetailPage() {
     return (
       <div className="page">
         <PageHeader title={t('fusion.detailTitle')} />
-        <ErrorBanner
-          error={fusion.error}
-          action={
-            <button type="button" className="btn btn--sm" onClick={() => void fusion.refetch()}>
-              {t('common.retry')}
-            </button>
-          }
-        />
+        <ErrorBanner error={fusion.error} onRetry={() => void fusion.refetch()} />
       </div>
     )
   }
@@ -144,14 +137,7 @@ function FusionDetailPage() {
       />
 
       {fusion.error ? (
-        <ErrorBanner
-          error={fusion.error}
-          action={
-            <button type="button" className="btn btn--sm" onClick={() => void fusion.refetch()}>
-              {t('common.retry')}
-            </button>
-          }
-        />
+        <ErrorBanner error={fusion.error} onRetry={() => void fusion.refetch()} />
       ) : null}
       {approve.error ? <ErrorBanner error={approve.error} /> : null}
       {cancel.error ? <ErrorBanner error={cancel.error} /> : null}

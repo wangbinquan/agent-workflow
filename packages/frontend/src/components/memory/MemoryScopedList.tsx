@@ -33,15 +33,10 @@ export function MemoryScopedList(props: MemoryScopedListProps) {
     queryFn: ({ signal }) => api.get<ListResponse>('/api/memories', query, signal),
   })
   const listError = list.error !== null && list.error !== undefined
-  const retryAction = (
-    <button type="button" className="btn btn--sm" onClick={() => void list.refetch()}>
-      {t('common.retry')}
-    </button>
-  )
   if (list.data === undefined) {
     if (list.isLoading) return <LoadingState size="compact" />
     if (listError) {
-      return <ErrorBanner error={list.error} action={retryAction} />
+      return <ErrorBanner error={list.error} onRetry={() => void list.refetch()} />
     }
     return <LoadingState size="compact" />
   }
@@ -49,7 +44,7 @@ export function MemoryScopedList(props: MemoryScopedListProps) {
   if (rows.length === 0) {
     return (
       <>
-        {listError && <ErrorBanner error={list.error} action={retryAction} />}
+        {listError && <ErrorBanner error={list.error} onRetry={() => void list.refetch()} />}
         <EmptyState
           title={t('memory.emptyStates.scope')}
           description={t('memory.emptyStates.scopeDescription')}
@@ -61,7 +56,7 @@ export function MemoryScopedList(props: MemoryScopedListProps) {
 
   return (
     <>
-      {listError && <ErrorBanner error={list.error} action={retryAction} />}
+      {listError && <ErrorBanner error={list.error} onRetry={() => void list.refetch()} />}
       <ul className="memory-scoped-list" data-testid={props['data-testid'] ?? 'memory-scoped-list'}>
         {rows.map((m) => (
           <MemoryRow

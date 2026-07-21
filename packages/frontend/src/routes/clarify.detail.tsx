@@ -606,14 +606,7 @@ export function ClarifyDetailPage() {
     return (
       <div className="page">
         <PageHeader title={nodeRunId} />
-        <ErrorBanner
-          error={session.error}
-          action={
-            <button type="button" className="btn btn--sm" onClick={() => void session.refetch()}>
-              {t('common.retry')}
-            </button>
-          }
-        />
+        <ErrorBanner error={session.error} onRetry={() => void session.refetch()} />
       </div>
     )
   }
@@ -696,25 +689,11 @@ export function ClarifyDetailPage() {
       </PageHeader>
 
       {session.error !== null && session.error !== undefined && (
-        <ErrorBanner
-          error={session.error}
-          action={
-            <button type="button" className="btn btn--sm" onClick={() => void session.refetch()}>
-              {t('common.retry')}
-            </button>
-          }
-        />
+        <ErrorBanner error={session.error} onRetry={() => void session.refetch()} />
       )}
 
       {peers.error !== null && peers.error !== undefined && (
-        <ErrorBanner
-          error={peers.error}
-          action={
-            <button type="button" className="btn btn--sm" onClick={() => void peers.refetch()}>
-              {t('common.retry')}
-            </button>
-          }
-        />
+        <ErrorBanner error={peers.error} onRetry={() => void peers.refetch()} />
       )}
 
       {truncationWarnings !== undefined && truncationWarnings.length > 0 && (

@@ -355,16 +355,10 @@ function PluginDetailPage() {
     upgrade.mutate({ ...request, release: beginBusy(id) })
   }
 
-  const retryDetailAction = (
-    <button type="button" className="btn btn--sm" onClick={() => void query.refetch()}>
-      {t('common.retry')}
-    </button>
-  )
-
   if (form === undefined) {
     if (query.isLoading) return <LoadingState data-testid="plugin-detail-loading" />
     if (query.error !== null && query.error !== undefined)
-      return <ErrorBanner error={query.error} action={retryDetailAction} />
+      return <ErrorBanner error={query.error} onRetry={() => void query.refetch()} />
     return null
   }
 
@@ -496,15 +490,7 @@ function PluginDetailPage() {
       {(checkUpdate.error ?? upgrade.error) != null && (
         <ErrorBanner
           error={checkUpdate.error ?? upgrade.error}
-          action={
-            <button
-              type="button"
-              className="btn btn--sm"
-              onClick={() => (lastOperationKind === 'check' ? void runCheck() : runUpgrade())}
-            >
-              {t('common.retry')}
-            </button>
-          }
+          onRetry={() => (lastOperationKind === 'check' ? void runCheck() : runUpgrade())}
         />
       )}
     </div>
@@ -537,7 +523,7 @@ function PluginDetailPage() {
       />
 
       {query.error !== null && query.error !== undefined && (
-        <ErrorBanner error={query.error} action={retryDetailAction} />
+        <ErrorBanner error={query.error} onRetry={() => void query.refetch()} />
       )}
 
       <div className="agent-form">

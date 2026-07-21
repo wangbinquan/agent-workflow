@@ -28,11 +28,6 @@ function AccountPage() {
   const { t } = useTranslation()
   const { data, isLoading, error, refetch } = useActor()
   const actorError = error !== null && error !== undefined
-  const retryAction = (
-    <button type="button" className="btn btn--sm" onClick={() => void refetch()}>
-      {t('common.retry')}
-    </button>
-  )
   return (
     <div className="page account-page">
       <PageHeader title={t('account.title', { defaultValue: 'My account' })} />
@@ -40,13 +35,13 @@ function AccountPage() {
         isLoading ? (
           <LoadingState />
         ) : actorError ? (
-          <ErrorBanner error={error} action={retryAction} />
+          <ErrorBanner error={error} onRetry={() => void refetch()} />
         ) : (
           <LoadingState />
         )
       ) : (
         <>
-          {actorError && <ErrorBanner error={error} action={retryAction} />}
+          {actorError && <ErrorBanner error={error} onRetry={() => void refetch()} />}
           {!data ? (
             <EmptyState title={t('account.pleaseSignIn')} size="compact" />
           ) : (
@@ -563,27 +558,11 @@ function PatSection() {
         isLoading ? (
           <LoadingState size="compact" />
         ) : error !== null ? (
-          <ErrorBanner
-            error={error}
-            action={
-              <button type="button" className="btn btn--sm" onClick={() => void refetch()}>
-                {t('common.retry')}
-              </button>
-            }
-          />
+          <ErrorBanner error={error} onRetry={() => void refetch()} />
         ) : null
       ) : (
         <>
-          {error !== null && (
-            <ErrorBanner
-              error={error}
-              action={
-                <button type="button" className="btn btn--sm" onClick={() => void refetch()}>
-                  {t('common.retry')}
-                </button>
-              }
-            />
-          )}
+          {error !== null && <ErrorBanner error={error} onRetry={() => void refetch()} />}
           {data.length === 0 ? (
             <p className="account-empty">
               {t('account.noPats', { defaultValue: 'No tokens yet.' })}
@@ -671,27 +650,11 @@ function SessionsSection() {
         isLoading ? (
           <LoadingState size="compact" />
         ) : error !== null ? (
-          <ErrorBanner
-            error={error}
-            action={
-              <button type="button" className="btn btn--sm" onClick={() => void refetch()}>
-                {t('common.retry')}
-              </button>
-            }
-          />
+          <ErrorBanner error={error} onRetry={() => void refetch()} />
         ) : null
       ) : (
         <>
-          {error !== null && (
-            <ErrorBanner
-              error={error}
-              action={
-                <button type="button" className="btn btn--sm" onClick={() => void refetch()}>
-                  {t('common.retry')}
-                </button>
-              }
-            />
-          )}
+          {error !== null && <ErrorBanner error={error} onRetry={() => void refetch()} />}
           {data.length === 0 ? (
             <p className="account-empty">
               {t('account.noSessions', { defaultValue: 'No active sessions.' })}
@@ -769,27 +732,11 @@ function IdentitiesSection() {
         isLoading ? (
           <LoadingState size="compact" />
         ) : error !== null ? (
-          <ErrorBanner
-            error={error}
-            action={
-              <button type="button" className="btn btn--sm" onClick={() => void refetch()}>
-                {t('common.retry')}
-              </button>
-            }
-          />
+          <ErrorBanner error={error} onRetry={() => void refetch()} />
         ) : null
       ) : (
         <>
-          {error !== null && (
-            <ErrorBanner
-              error={error}
-              action={
-                <button type="button" className="btn btn--sm" onClick={() => void refetch()}>
-                  {t('common.retry')}
-                </button>
-              }
-            />
-          )}
+          {error !== null && <ErrorBanner error={error} onRetry={() => void refetch()} />}
           {data.length === 0 ? (
             <p className="account-empty">
               {t('account.noIdentities', { defaultValue: 'No linked identities yet.' })}

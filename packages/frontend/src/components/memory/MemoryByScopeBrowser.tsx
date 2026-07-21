@@ -24,15 +24,10 @@ export function MemoryByScopeBrowser() {
     queryFn: ({ signal }) => api.get<ListResponse>('/api/memories', { status: 'approved' }, signal),
   })
   const approvedError = approved.error !== null && approved.error !== undefined
-  const retryAction = (
-    <button type="button" className="btn btn--sm" onClick={() => void approved.refetch()}>
-      {t('common.retry')}
-    </button>
-  )
   if (approved.data === undefined) {
     if (approved.isLoading) return <LoadingState />
     if (approvedError) {
-      return <ErrorBanner error={approved.error} action={retryAction} />
+      return <ErrorBanner error={approved.error} onRetry={() => void approved.refetch()} />
     }
     return <LoadingState />
   }
@@ -40,7 +35,9 @@ export function MemoryByScopeBrowser() {
 
   return (
     <div className="memory-by-scope" data-testid="memory-by-scope">
-      {approvedError && <ErrorBanner error={approved.error} action={retryAction} />}
+      {approvedError && (
+        <ErrorBanner error={approved.error} onRetry={() => void approved.refetch()} />
+      )}
       {SCOPE_TABS.map((scope) => (
         <section key={scope} className="memory-by-scope__section" data-scope={scope}>
           <h3 className="memory-by-scope__heading">

@@ -56,15 +56,10 @@ export function MemoryApprovalQueue() {
   // immediately; the dialog owns the canonical detail fetch.
   const [editingId, setEditingId] = useState<string | null>(null)
   const candidatesError = candidates.error !== null && candidates.error !== undefined
-  const retryAction = (
-    <button type="button" className="btn btn--sm" onClick={() => void candidates.refetch()}>
-      {t('common.retry')}
-    </button>
-  )
   if (candidates.data === undefined) {
     if (candidates.isLoading) return <LoadingState />
     if (candidatesError) {
-      return <ErrorBanner error={candidates.error} action={retryAction} />
+      return <ErrorBanner error={candidates.error} onRetry={() => void candidates.refetch()} />
     }
     return <LoadingState />
   }
@@ -74,7 +69,9 @@ export function MemoryApprovalQueue() {
   if (rows.length === 0) {
     return (
       <>
-        {candidatesError && <ErrorBanner error={candidates.error} action={retryAction} />}
+        {candidatesError && (
+          <ErrorBanner error={candidates.error} onRetry={() => void candidates.refetch()} />
+        )}
         <EmptyState
           title={t('memory.emptyStates.candidates')}
           description={t('memory.emptyStates.candidatesDescription')}
@@ -86,7 +83,9 @@ export function MemoryApprovalQueue() {
 
   return (
     <div className="memory-approval-queue" data-testid="memory-approval-queue">
-      {candidatesError && <ErrorBanner error={candidates.error} action={retryAction} />}
+      {candidatesError && (
+        <ErrorBanner error={candidates.error} onRetry={() => void candidates.refetch()} />
+      )}
       <ul className="memory-approval-queue__list">
         {rows.map((mem) => (
           <CandidateCard

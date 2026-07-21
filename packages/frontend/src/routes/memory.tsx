@@ -125,12 +125,6 @@ function MemoryPage() {
   useMemoryWs()
   useMemoryDistillJobWs({ enabled: isAdmin })
 
-  const retryActorAction = (
-    <button type="button" className="btn btn--sm" onClick={() => void actor.refetch()}>
-      {t('common.retry')}
-    </button>
-  )
-
   return (
     <div className="page page--memory">
       <PageHeader
@@ -164,13 +158,13 @@ function MemoryPage() {
         actor.isLoading ? (
           <LoadingState />
         ) : actorError ? (
-          <ErrorBanner error={actor.error} action={retryActorAction} />
+          <ErrorBanner error={actor.error} onRetry={() => void actor.refetch()} />
         ) : (
           <LoadingState />
         )
       ) : (
         <>
-          {actorError && <ErrorBanner error={actor.error} action={retryActorAction} />}
+          {actorError && <ErrorBanner error={actor.error} onRetry={() => void actor.refetch()} />}
           {showUnavailableNotice && (
             <NoticeBanner tone="info" size="compact" className="memory-section-notice">
               {t('memory.sectionUnavailable')}

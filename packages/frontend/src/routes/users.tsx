@@ -95,11 +95,6 @@ export function UsersPage() {
       {t('users.new', { defaultValue: 'New user' })}
     </button>
   )
-  const retryAction = (
-    <button type="button" className="btn btn--sm" onClick={() => void refetch()}>
-      {t('common.retry')}
-    </button>
-  )
 
   return (
     <div className="page">
@@ -122,7 +117,7 @@ export function UsersPage() {
       ) : (
         <>
           {isLoading && data === undefined && <LoadingState />}
-          {error !== null && <ErrorBanner error={error} action={retryAction} />}
+          {error !== null && <ErrorBanner error={error} onRetry={() => void refetch()} />}
           {isInitialEmpty && (
             <EmptyState
               title={t('users.empty')}

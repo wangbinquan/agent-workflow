@@ -222,16 +222,11 @@ function renderBody(args: BodyArgs) {
     t,
   } = args
   const listError = list.error !== null && list.error !== undefined
-  const retryAction = (
-    <button type="button" className="btn btn--sm" onClick={() => void list.refetch()}>
-      {t('common.retry')}
-    </button>
-  )
 
   if (list.data === undefined) {
     if (list.isLoading) return <LoadingState />
     if (listError) {
-      return <ErrorBanner error={list.error} action={retryAction} />
+      return <ErrorBanner error={list.error} onRetry={() => void list.refetch()} />
     }
     return <LoadingState />
   }
@@ -239,7 +234,7 @@ function renderBody(args: BodyArgs) {
 
   return (
     <>
-      {listError && <ErrorBanner error={list.error} action={retryAction} />}
+      {listError && <ErrorBanner error={list.error} onRetry={() => void list.refetch()} />}
       {rows.length === 0 ? (
         <EmptyState
           title={t(

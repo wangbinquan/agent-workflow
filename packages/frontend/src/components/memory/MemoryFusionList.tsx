@@ -29,17 +29,12 @@ export function MemoryFusionList() {
   })
 
   const fusionsError = fusions.error !== null && fusions.error !== undefined
-  const retryAction = (
-    <button type="button" className="btn btn--sm" onClick={() => void fusions.refetch()}>
-      {t('common.retry')}
-    </button>
-  )
   if (fusions.data === undefined) {
     if (fusions.isLoading) return <LoadingState />
     if (fusionsError) {
       return (
         <div data-testid="memory-fusion-error">
-          <ErrorBanner error={fusions.error} action={retryAction} />
+          <ErrorBanner error={fusions.error} onRetry={() => void fusions.refetch()} />
         </div>
       )
     }
@@ -51,7 +46,7 @@ export function MemoryFusionList() {
       <>
         {fusionsError && (
           <div data-testid="memory-fusion-error">
-            <ErrorBanner error={fusions.error} action={retryAction} />
+            <ErrorBanner error={fusions.error} onRetry={() => void fusions.refetch()} />
           </div>
         )}
         <EmptyState
@@ -67,7 +62,7 @@ export function MemoryFusionList() {
     <>
       {fusionsError && (
         <div data-testid="memory-fusion-error">
-          <ErrorBanner error={fusions.error} action={retryAction} />
+          <ErrorBanner error={fusions.error} onRetry={() => void fusions.refetch()} />
         </div>
       )}
       <ul className="memory-fusion-list" data-testid="memory-fusion-list">

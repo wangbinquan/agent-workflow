@@ -34,15 +34,10 @@ export function MemoryDistillJobsTable() {
   })
 
   const listError = list.error !== null && list.error !== undefined
-  const retryAction = (
-    <button type="button" className="btn btn--sm" onClick={() => void list.refetch()}>
-      {t('common.retry')}
-    </button>
-  )
   if (list.data === undefined) {
     if (list.isLoading) return <LoadingState />
     if (listError) {
-      return <ErrorBanner error={list.error} action={retryAction} />
+      return <ErrorBanner error={list.error} onRetry={() => void list.refetch()} />
     }
     return <LoadingState />
   }
@@ -50,7 +45,7 @@ export function MemoryDistillJobsTable() {
   if (rows.length === 0) {
     return (
       <>
-        {listError && <ErrorBanner error={list.error} action={retryAction} />}
+        {listError && <ErrorBanner error={list.error} onRetry={() => void list.refetch()} />}
         <EmptyState
           title={t('memory.distillJobs.empty')}
           description={t('memory.distillJobs.emptyDescription')}
@@ -61,7 +56,7 @@ export function MemoryDistillJobsTable() {
 
   return (
     <div className="memory-distill-jobs" data-testid="memory-distill-jobs">
-      {listError && <ErrorBanner error={list.error} action={retryAction} />}
+      {listError && <ErrorBanner error={list.error} onRetry={() => void list.refetch()} />}
       <TableViewport label={t('memory.tab.distillJobs')} minWidth="lg">
         <table className="data-table">
           <thead>

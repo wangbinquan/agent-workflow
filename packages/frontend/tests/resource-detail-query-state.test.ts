@@ -24,12 +24,14 @@ describe('RFC-198 resource detail query-state contract', () => {
   ]) {
     test(`${file} exposes retry for both initial and stale query failures`, () => {
       const source = readRoute(file)
-      expect(source).toContain("{t('common.retry')}")
-      expect(source).toContain('action={retryDetailAction}')
-      expect(source.match(/action=\{retryDetailAction\}/g)?.length ?? 0).toBeGreaterThanOrEqual(2)
+      // RFC-214: the inline retry affordance is now ErrorBanner.onRetry (was a
+      // hand-written `retryDetailAction` button rendering {t('common.retry')}).
+      // Intent unchanged — retry for BOTH the initial-load banner and the
+      // stale-overlay banner, the latter after <DetailHeaderActions>.
+      expect(source.match(/onRetry=/g)?.length ?? 0).toBeGreaterThanOrEqual(2)
 
       const detailHeader = source.indexOf('<DetailHeaderActions')
-      const staleBanner = source.indexOf('action={retryDetailAction}', detailHeader)
+      const staleBanner = source.indexOf('onRetry=', detailHeader)
       expect(detailHeader).toBeGreaterThan(0)
       expect(staleBanner).toBeGreaterThan(detailHeader)
     })

@@ -121,18 +121,13 @@ function AgentDetailPage() {
   })
   const portValidation = validateAgentPortState(draft ?? emptyAgent())
   const blockingPortIssues = portValidation.issues.filter((issue) => issue.severity === 'error')
-  const retryDetailAction = (
-    <button type="button" className="btn btn--sm" onClick={() => void query.refetch()}>
-      {t('common.retry')}
-    </button>
-  )
 
   // §6 error-state narrowing: only a missing draft shows the full error/loading;
   // once seeded, a background failure keeps the editor and shows a top banner.
   if (draft === undefined) {
     if (query.isLoading) return <LoadingState data-testid="agent-detail-loading" />
     if (query.error !== null && query.error !== undefined)
-      return <ErrorBanner error={query.error} action={retryDetailAction} />
+      return <ErrorBanner error={query.error} onRetry={() => void query.refetch()} />
   }
 
   return (
@@ -208,7 +203,7 @@ function AgentDetailPage() {
         />
       )}
       {draft !== undefined && query.error !== null && query.error !== undefined && (
-        <ErrorBanner error={query.error} action={retryDetailAction} />
+        <ErrorBanner error={query.error} onRetry={() => void query.refetch()} />
       )}
       <AgentForm
         value={draft ?? emptyAgent()}

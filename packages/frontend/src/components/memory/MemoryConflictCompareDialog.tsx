@@ -57,18 +57,7 @@ export function MemoryConflictCompareDialog(props: MemoryConflictCompareDialogPr
           {existing.isLoading ? (
             <LoadingState size="compact" />
           ) : existing.error !== null && existing.error !== undefined ? (
-            <ErrorBanner
-              error={existing.error}
-              action={
-                <button
-                  type="button"
-                  className="btn btn--sm"
-                  onClick={() => void existing.refetch()}
-                >
-                  {t('common.retry')}
-                </button>
-              }
-            />
+            <ErrorBanner error={existing.error} onRetry={() => void existing.refetch()} />
           ) : existing.data !== undefined ? (
             <MemoryPreview memory={existing.data.memory} />
           ) : null}

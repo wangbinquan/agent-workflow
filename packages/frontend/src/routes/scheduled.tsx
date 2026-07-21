@@ -88,12 +88,6 @@ function ScheduledPage() {
       {t('scheduled.new')}
     </button>
   )
-  const retryAction = (
-    <button type="button" className="btn btn--sm" onClick={() => void refetch()}>
-      {t('common.retry')}
-    </button>
-  )
-
   return (
     <div className="page">
       <PageHeader
@@ -102,7 +96,9 @@ function ScheduledPage() {
       />
 
       {isLoading && <LoadingState data-testid="scheduled-loading" />}
-      {error !== null && error !== undefined && <ErrorBanner error={error} action={retryAction} />}
+      {error !== null && error !== undefined && (
+        <ErrorBanner error={error} onRetry={() => void refetch()} />
+      )}
       {toggle.error != null && <ErrorBanner error={toggle.error} />}
       {runNow.error != null && <ErrorBanner error={runNow.error} />}
       {isInitialEmpty && (

@@ -244,11 +244,6 @@ function SettingsPage() {
     })
   }, [hash, navigate, search.tab])
 
-  const retryAction = (
-    <button type="button" className="btn btn--sm" onClick={() => void config.refetch()}>
-      {t('common.retry')}
-    </button>
-  )
   const sectionGroups: readonly PageSectionGroup<SettingsTab>[] = [
     {
       key: 'execution',
@@ -332,12 +327,14 @@ function SettingsPage() {
   if (config.data === undefined) {
     if (config.isLoading) panelContent = <LoadingState label={t('settings.loading')} />
     else if (config.error !== null) {
-      panelContent = <ErrorBanner error={config.error} action={retryAction} />
+      panelContent = <ErrorBanner error={config.error} onRetry={() => void config.refetch()} />
     }
   } else {
     panelContent = (
       <>
-        {config.error !== null && <ErrorBanner error={config.error} action={retryAction} />}
+        {config.error !== null && (
+          <ErrorBanner error={config.error} onRetry={() => void config.refetch()} />
+        )}
         {tab === 'runtime' && (
           <RuntimeTab
             flashKey={runtimeFlashKey}
@@ -1412,12 +1409,6 @@ function AuthenticationTab() {
     }
     setDeleteTarget(null)
   }
-  const retryAction = (
-    <button type="button" className="btn btn--sm" onClick={() => void list.refetch()}>
-      {t('common.retry')}
-    </button>
-  )
-
   return (
     <div className="auth-tab">
       <header className="auth-tab__header">
@@ -1443,7 +1434,9 @@ function AuthenticationTab() {
       </header>
 
       {list.isLoading && list.data === undefined && <LoadingState label={t('settings.loading')} />}
-      {list.error !== null && <ErrorBanner error={list.error} action={retryAction} />}
+      {list.error !== null && (
+        <ErrorBanner error={list.error} onRetry={() => void list.refetch()} />
+      )}
 
       {list.data && list.data.length === 0 && (
         <EmptyState

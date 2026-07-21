@@ -301,14 +301,7 @@ export function MultiDocReviewView({
       <div className="page review-multidoc">
         <PageHeader title={t('reviews.title')} />
         {detail.error !== null && detail.error !== undefined ? (
-          <ErrorBanner
-            error={detail.error}
-            action={
-              <button type="button" className="btn btn--sm" onClick={() => void detail.refetch()}>
-                {t('common.retry')}
-              </button>
-            }
-          />
+          <ErrorBanner error={detail.error} onRetry={() => void detail.refetch()} />
         ) : (
           <LoadingState />
         )}
@@ -329,14 +322,7 @@ export function MultiDocReviewView({
     return (
       <div className="page review-multidoc">
         <PageHeader title={t('reviews.title')} />
-        <ErrorBanner
-          error={rounds.error}
-          action={
-            <button type="button" className="btn btn--sm" onClick={() => void rounds.refetch()}>
-              {t('common.retry')}
-            </button>
-          }
-        />
+        <ErrorBanner error={rounds.error} onRetry={() => void rounds.refetch()} />
       </div>
     )
   }
@@ -456,24 +442,10 @@ export function MultiDocReviewView({
       )}
 
       {detail.error !== null && detail.error !== undefined && (
-        <ErrorBanner
-          error={detail.error}
-          action={
-            <button type="button" className="btn btn--sm" onClick={() => void detail.refetch()}>
-              {t('common.retry')}
-            </button>
-          }
-        />
+        <ErrorBanner error={detail.error} onRetry={() => void detail.refetch()} />
       )}
       {rounds.data !== undefined && rounds.error !== null && rounds.error !== undefined && (
-        <ErrorBanner
-          error={rounds.error}
-          action={
-            <button type="button" className="btn btn--sm" onClick={() => void rounds.refetch()}>
-              {t('common.retry')}
-            </button>
-          }
-        />
+        <ErrorBanner error={rounds.error} onRetry={() => void rounds.refetch()} />
       )}
 
       {view.mode === 'historical' && (
@@ -553,18 +525,7 @@ export function MultiDocReviewView({
             anchored comment sidebar exactly like the single-document page. */}
         <div className="review-multidoc__pane">
           {!isFirst && selectedDoc.error !== null && selectedDoc.error !== undefined && (
-            <ErrorBanner
-              error={selectedDoc.error}
-              action={
-                <button
-                  type="button"
-                  className="btn btn--sm"
-                  onClick={() => void selectedDoc.refetch()}
-                >
-                  {t('common.retry')}
-                </button>
-              }
-            />
+            <ErrorBanner error={selectedDoc.error} onRetry={() => void selectedDoc.refetch()} />
           )}
           {mode !== 'historical' && current !== undefined && (
             <div className="review-multidoc__doc-actions" aria-busy={selectionMut.isPending}>

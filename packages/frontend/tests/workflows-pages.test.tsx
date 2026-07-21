@@ -715,7 +715,8 @@ describe('/workflows/new removal wiring', () => {
     expect(edit).toContain('<PageHeader title={id} />')
     expect(edit).toContain("<LoadingState label={t('editor.loadingWorkflow')} />")
     expect(edit).toContain('error={query.error}')
-    expect(edit).toContain('onClick={() => void query.refetch()}')
+    // RFC-214: retry收编到 ErrorBanner.onRetry (was a hand-written button onClick).
+    expect(edit).toContain('onRetry={() => void query.refetch()}')
     expect(edit).not.toContain('<div className="page error-box">')
   })
 

@@ -748,11 +748,6 @@ function WorkgroupEditor(props: {
 
   const readiness = workgroupLaunchReadiness(props.group)
   const configErrors = built.ok ? {} : built.errors
-  const retryDetailAction = (
-    <button type="button" className="btn btn--sm" onClick={() => void props.refetch()}>
-      {t('common.retry')}
-    </button>
-  )
   const mutationPending = save.isPending || del.isPending || rename.isPending || outcomeUnknown
   const destructiveDisabled = registry.dirty || mutationPending
   const saveDisabled =
@@ -853,7 +848,7 @@ function WorkgroupEditor(props: {
       />
 
       {props.queryError !== null && props.queryError !== undefined && (
-        <ErrorBanner error={props.queryError} action={retryDetailAction} />
+        <ErrorBanner error={props.queryError} onRetry={() => void props.refetch()} />
       )}
 
       {authoritativeConflict !== null && (

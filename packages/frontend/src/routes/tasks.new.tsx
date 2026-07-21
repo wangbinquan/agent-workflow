@@ -970,14 +970,7 @@ function TaskWizardPage() {
     return (
       <div className="page">
         <PageHeader title={pageTitle} />
-        <ErrorBanner
-          error={scheduleQ.error}
-          action={
-            <button type="button" className="btn btn--sm" onClick={() => void scheduleQ.refetch()}>
-              {t('common.retry')}
-            </button>
-          }
-        />
+        <ErrorBanner error={scheduleQ.error} onRetry={() => void scheduleQ.refetch()} />
       </div>
     )
   }
@@ -1006,18 +999,7 @@ function TaskWizardPage() {
 
       {isEdit && scheduleQ.isError && (
         <div data-testid="wizard-schedule-stale-error">
-          <ErrorBanner
-            error={scheduleQ.error}
-            action={
-              <button
-                type="button"
-                className="btn btn--sm"
-                onClick={() => void scheduleQ.refetch()}
-              >
-                {t('common.retry')}
-              </button>
-            }
-          />
+          <ErrorBanner error={scheduleQ.error} onRetry={() => void scheduleQ.refetch()} />
         </div>
       )}
 
@@ -1031,15 +1013,7 @@ function TaskWizardPage() {
         <div data-testid="wizard-relaunch-error">
           <ErrorBanner
             error={relaunchErrorQ?.error}
-            action={
-              <button
-                type="button"
-                className="btn btn--sm"
-                onClick={() => void relaunchErrorQ?.refetch()}
-              >
-                {t('common.retry')}
-              </button>
-            }
+            onRetry={() => void relaunchErrorQ?.refetch()}
           />
         </div>
       )}
@@ -1266,15 +1240,7 @@ function TaskWizardPage() {
                   <div data-testid="wizard-object-load-error">
                     <ErrorBanner
                       error={activeInventoryQ.error}
-                      action={
-                        <button
-                          type="button"
-                          className="btn btn--sm"
-                          onClick={() => void activeInventoryQ.refetch()}
-                        >
-                          {t('common.retry')}
-                        </button>
-                      }
+                      onRetry={() => void activeInventoryQ.refetch()}
                     />
                   </div>
                   {!activeInventoryEmpty && objectPicker}
@@ -1398,18 +1364,7 @@ function TaskWizardPage() {
             {kind === 'workflow' && workflowQ.isLoading && <LoadingState />}
             {kind === 'workflow' && workflowQ.error !== null && workflowQ.error !== undefined && (
               <div data-testid="wizard-workflow-load-error">
-                <ErrorBanner
-                  error={workflowQ.error}
-                  action={
-                    <button
-                      type="button"
-                      className="btn btn--sm"
-                      onClick={() => void workflowQ.refetch()}
-                    >
-                      {t('common.retry')}
-                    </button>
-                  }
-                />
+                <ErrorBanner error={workflowQ.error} onRetry={() => void workflowQ.refetch()} />
               </div>
             )}
             {kind === 'workflow' && workflowQ.data !== undefined && inputDefs.length === 0 && (

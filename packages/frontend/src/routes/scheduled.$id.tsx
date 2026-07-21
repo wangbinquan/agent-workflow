@@ -79,14 +79,7 @@ function ScheduledDetailPage() {
     return (
       <div className="page">
         <PageHeader title={id} />
-        <ErrorBanner
-          error={detailQ.error}
-          action={
-            <button type="button" className="btn btn--sm" onClick={() => void detailQ.refetch()}>
-              {t('common.retry')}
-            </button>
-          }
-        />
+        <ErrorBanner error={detailQ.error} onRetry={() => void detailQ.refetch()} />
       </div>
     )
   }
@@ -150,14 +143,7 @@ function ScheduledDetailPage() {
       />
 
       {detailQ.error != null && (
-        <ErrorBanner
-          error={detailQ.error}
-          action={
-            <button type="button" className="btn btn--sm" onClick={() => void detailQ.refetch()}>
-              {t('common.retry')}
-            </button>
-          }
-        />
+        <ErrorBanner error={detailQ.error} onRetry={() => void detailQ.refetch()} />
       )}
 
       {/* RFC-165: degraded/legacy rows surface the repair guidance + the
@@ -217,14 +203,7 @@ function ScheduledDetailPage() {
         <h2>{t('scheduled.runHistory')}</h2>
         {historyQ.isLoading && <LoadingState size="compact" />}
         {historyQ.error !== null && historyQ.error !== undefined && (
-          <ErrorBanner
-            error={historyQ.error}
-            action={
-              <button type="button" className="btn btn--sm" onClick={() => void historyQ.refetch()}>
-                {t('common.retry')}
-              </button>
-            }
-          />
+          <ErrorBanner error={historyQ.error} onRetry={() => void historyQ.refetch()} />
         )}
         {historyQ.data !== undefined && historyQ.data.length === 0 && (
           <EmptyState size="compact" title={t('scheduled.noRuns')} />

@@ -412,14 +412,7 @@ function ReviewDetailPage() {
       <div className="page review-detail page--review-detail">
         <PageHeader title={nodeRunId} />
         {detail.error !== null && detail.error !== undefined ? (
-          <ErrorBanner
-            error={detail.error}
-            action={
-              <button type="button" className="btn btn--sm" onClick={() => void detail.refetch()}>
-                {t('common.retry')}
-              </button>
-            }
-          />
+          <ErrorBanner error={detail.error} onRetry={() => void detail.refetch()} />
         ) : (
           <LoadingState />
         )}
@@ -468,14 +461,7 @@ function ReviewDetailPage() {
 
   const queryError = (error: unknown, refetch: () => unknown, testId: string) => (
     <div data-testid={testId}>
-      <ErrorBanner
-        error={error}
-        action={
-          <button type="button" className="btn btn--sm" onClick={() => void refetch()}>
-            {t('common.retry')}
-          </button>
-        }
-      />
+      <ErrorBanner error={error} onRetry={() => void refetch()} />
     </div>
   )
 
@@ -660,14 +646,7 @@ function ReviewDetailPage() {
       )}
 
       {detail.error !== null && detail.error !== undefined && (
-        <ErrorBanner
-          error={detail.error}
-          action={
-            <button type="button" className="btn btn--sm" onClick={() => void detail.refetch()}>
-              {t('common.retry')}
-            </button>
-          }
-        />
+        <ErrorBanner error={detail.error} onRetry={() => void detail.refetch()} />
       )}
 
       {/* Historical bodies can still be usable while version-list validation

@@ -763,21 +763,13 @@ function SkillDetailPage() {
     onSettled: (_deleted, _error, { release }) => release(),
   })
 
-  const retryDetailAction = (
-    <button
-      type="button"
-      className="btn btn--sm"
-      onClick={() => void Promise.all([meta.refetch(), content.refetch()])}
-    >
-      {t('common.retry')}
-    </button>
-  )
+  const retryDetail = () => void Promise.all([meta.refetch(), content.refetch()])
 
   if (composite === null) {
     if (meta.error !== null && meta.error !== undefined)
-      return <ErrorBanner error={meta.error} action={retryDetailAction} />
+      return <ErrorBanner error={meta.error} onRetry={retryDetail} />
     if (content.error !== null && content.error !== undefined)
-      return <ErrorBanner error={content.error} action={retryDetailAction} />
+      return <ErrorBanner error={content.error} onRetry={retryDetail} />
     if (meta.isLoading || content.isLoading || meta.data !== undefined)
       return <LoadingState data-testid="skill-detail-loading" />
     return null
@@ -906,7 +898,7 @@ function SkillDetailPage() {
 
       {(meta.error !== null && meta.error !== undefined) ||
       (content.error !== null && content.error !== undefined) ? (
-        <ErrorBanner error={meta.error ?? content.error} action={retryDetailAction} />
+        <ErrorBanner error={meta.error ?? content.error} onRetry={retryDetail} />
       ) : null}
 
       {aggregate.outcomeUnknown && (

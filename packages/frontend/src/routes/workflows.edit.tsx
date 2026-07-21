@@ -231,14 +231,7 @@ function WorkflowEditPage() {
       return (
         <div className="page">
           <PageHeader title={id} />
-          <ErrorBanner
-            error={query.error}
-            action={
-              <button type="button" className="btn btn--sm" onClick={() => void query.refetch()}>
-                {t('common.retry')}
-              </button>
-            }
-          />
+          <ErrorBanner error={query.error} onRetry={() => void query.refetch()} />
         </div>
       )
     }
@@ -960,16 +953,7 @@ export function WorkflowEditorLoaded({
           actions={headerActions}
         />
 
-        {backgroundQueryError && (
-          <ErrorBanner
-            error={queryError}
-            action={
-              <button type="button" className="btn btn--sm" onClick={onRefetch}>
-                {t('common.retry')}
-              </button>
-            }
-          />
-        )}
+        {backgroundQueryError && <ErrorBanner error={queryError} onRetry={onRefetch} />}
         {/* RFC-203 T2: the scheduled-reference list (visibleScheduled +
           hiddenCount) now renders via ErrorBanner's shared <ErrorDetails>
           — the RFC-202 call-site-local renderer moved there. */}

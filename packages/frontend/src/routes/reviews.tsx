@@ -104,20 +104,7 @@ export function ReviewsListPage() {
       </div>
       {list.isLoading && <LoadingState data-testid="reviews-loading" />}
       {list.error !== null && list.error !== undefined && (
-        <ErrorBanner
-          error={list.error}
-          action={
-            <button
-              type="button"
-              className="btn btn--sm"
-              onClick={() => {
-                void list.refetch()
-              }}
-            >
-              {t('common.retry')}
-            </button>
-          }
-        />
+        <ErrorBanner error={list.error} onRetry={() => void list.refetch()} />
       )}
       {list.data !== undefined && list.data.length === 0 && (
         <EmptyState

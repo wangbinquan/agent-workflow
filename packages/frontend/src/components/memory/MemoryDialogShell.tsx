@@ -120,14 +120,7 @@ export function MemoryDialogShell(props: MemoryDialogShellProps) {
       {props.contentState?.status === 'loading' ? (
         <LoadingState label={t('memory.loadingEdit')} />
       ) : props.contentState?.status === 'error' ? (
-        <ErrorBanner
-          error={props.contentState.error}
-          action={
-            <button type="button" className="btn btn--sm" onClick={props.contentState.onRetry}>
-              {t('common.retry')}
-            </button>
-          }
-        />
+        <ErrorBanner error={props.contentState.error} onRetry={props.contentState.onRetry} />
       ) : (
         <>
           {props.errorText !== null && (

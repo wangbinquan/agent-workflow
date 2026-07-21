@@ -65,7 +65,10 @@ describe('RFC-198 — Settings URL tab shell', () => {
   test('shared shell and async states replace settings-local chrome', () => {
     expect(SETTINGS).toContain("<PageHeader title={t('settings.title')} />")
     expect(SETTINGS).toContain("<LoadingState label={t('settings.loading')} />")
-    expect(SETTINGS).toContain('<ErrorBanner error={config.error} action={retryAction} />')
+    // RFC-214: retry收编到 ErrorBanner.onRetry (was a hand-written retryAction button).
+    expect(SETTINGS).toContain(
+      '<ErrorBanner error={config.error} onRetry={() => void config.refetch()} />',
+    )
   })
 })
 
