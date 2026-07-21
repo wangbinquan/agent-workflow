@@ -1,8 +1,10 @@
 # RFC-213 — 灾难恢复（Disaster Recovery）
 
-状态：Draft
+状态：Draft（已过 4 视角对抗设计门；`design.md` 为 v2）
 作者：Claude（session 2026-07-21）
 来源：`design/test-guard-audit-2026-07-21` 批评 #1「无 restore / 无 boot 完整性校验 / 无自动备份」；用户 2026-07-21 拍板纳入四层全部范围、损坏时 fail-closed。
+
+> **设计门**：本 RFC 经 feasibility/data-loss/test-adequacy/scope-coherence 四视角对抗自审（33 findings / 7 blocker / 18 major，多条经真实 bun:sqlite 实证）。硬伤已在 `design.md v2 §10 订正账` 逐条修正——下方 AC 已随之更新（安全备份改原始拷贝、换库崩溃安全序、热恢复只暂存不自重启、版本闸比迁移身份、worktree 缩为同机增量）。
 
 ---
 
@@ -40,7 +42,9 @@
 
 - **完整 point-in-time recovery（PITR）/ WAL 帧归档**：G4c 只做 checkpoint 纪律；连续 WAL 归档 + 任意时刻回放是独立大特性，本 RFC 显式不做，留后续。
 - **异地 / 云备份上传**：只做本地 `backups/` 目录；对象存储上传另起。
-- **终态任务的 worktree 恢复**：终态任务的工作树按现状可被 GC 回收，不纳入恢复物料（只保 base commit 引用够溯源）。
+- **终态任务的 worktree 恢复**：终态任务的工作树按现状可被 GC 回收，不纳入恢复物料。
+- **跨机 / 整机 worktree 恢复**（设计门新增）：worktree 的 base/snapshot 在**备份排除的** `repos/` 镜像里，跨机恢复需先把 `repos/` 镜像纳入备份 + 改 snapshot pin 为 `stash create -u`——是更大特性。G4a 只做**同机、仅未提交 delta**。异机 restore 会使封印的 `cached_repos` 凭据失效（AC-12 告警），需用户另行保管 `secret.key`。
+- **daemon 自重启 / 内建 supervisor**（设计门新增）：daemon `process.exit(0)` 后不自拉起；热 restore 的自动应用依赖外部 supervisor（systemd `Restart=always` / launchd），本 RFC 只文档化、不内建。
 - **多机 / 主从复制**：单机单进程模型不变。
 - **加密备份**：备份继续排除 `token`/`secret.key`（RFC-204 既有约束，`backup.test.ts:129` 锁定），不引入备份加密。
 
@@ -54,17 +58,18 @@
 
 ## 4. 验收标准（AC）
 
-- **AC-1｜restore 往返**：`backup` 产出的包，经 `restore` 后 DB 内容逐表等价（任务/工作流/ACL/记忆行数与关键字段一致），config/skills/workflows 复原；`token`/`secret.key` 不被备份带走、也不被 restore 触碰（沿用现有 seal）。
-- **AC-2｜restore 前自动安全备份**：restore 执行前，当前 `~/.agent-workflow` 状态被自动备份到 `backups/pre-restore-<ts>.tar.gz`；即便恢复错了包也能翻回。
-- **AC-3｜schema 版本闸**：restore 一个**更旧**的包 → 恢复后自动前滚迁移到当前二进制版本，daemon 正常起；restore 一个**更新**（来自更高版本二进制）的包 → **拒绝**并明确报「不能降级」，不动现有库。
-- **AC-4｜热 restore 走暂存重启**：`POST /api/restore` 上传 + 校验通过后写 `restore-pending` 标记与暂存包，触发 graceful restart；重启在**打开 DB 之前**应用恢复（swap + 完整性校验 + 迁移），清标记后继续启动。全程不在活跃 DB 上热插拔。
-- **AC-5｜损坏 fail-closed**：一个被写坏的 `db.sqlite`（quick_check 失败）→ daemon **拒绝启动**、退出码非 0、stderr 打印可用备份清单 + restore 命令；**绝不**继续用损坏库服务。健康库 → quick_check 通过、零行为变化。
-- **AC-6｜定时备份 + 轮转**：`backupIntervalMs>0` 时 ticker 到点产出备份；`backupRetentionCount=N` 时只保留最近 N 份（+ 不早于 `backupRetentionDays`），**永不删到 0**；`backupIntervalMs=0` 关闭调度、零副作用。
-- **AC-7｜pre-migration 备份**：起库检测到 pending 迁移且 `backupOnMigration=true` 时，迁移前先产出 `backups/pre-migration-<from>-<to>.tar.gz`；无 pending 迁移则不备份。
-- **AC-8｜worktree 往返（活跃任务）**：`--include-worktrees`（或对应 config）时，非终态任务的工作树 delta 随备份捕获，restore 后这些任务的 `worktreePath` 内容（含未提交改动 + snapshot ref）复原；终态任务不纳入。
-- **AC-9｜synchronous 可配**：`sqliteSynchronous='FULL'` 时 `openDb` 实际下发 `PRAGMA synchronous=FULL`；默认/缺省 = NORMAL，与现状字节等价。
-- **AC-10｜doctor 体检**：`doctor` 报告 DB 完整性（只读 quick_check）、最近备份时间戳、备份份数与占用；损坏库时 doctor 明确标红并给 restore 指引（只读、绝不改库）。
-- **AC-11｜WAL checkpoint 纪律**：checkpoint ticker 周期性 `wal_checkpoint(TRUNCATE)`，`-wal` 文件尺寸被有效约束（测试可断言 checkpoint 调用与 WAL 尺寸回落）。
+- **AC-1｜restore 往返**：`backup` 产出的包，经 `restore` 后 DB 内容**逐表**等价——测试须在 backup 与 restore 之间**改动 live DB**（多表插/删），再断言 restore 把状态还原到备份（从 `sqlite_master` **动态枚举全部表** count + 内容 hash，非 cherry-pick 少数表）；config/skills/workflows 复原；`token`/`secret.key`/`secret` 不被备份带走、也不被 restore 触碰。
+- **AC-2｜restore 前自动安全备份（原始拷贝，fail-closed）**：restore 执行前，当前 DB 以**原始文件拷贝**（`rawCopyDb`，非 VACUUM/createBackup——耐损坏、不开库）存到 `backups/pre-restore-<ts>.tar.gz`；**安全备份失败即中止 restore**、原库一字节不动（除非 `--no-safety-backup`）。
+- **AC-3｜schema 版本闸（迁移身份）**：按**迁移身份**（备份 `__drizzle_migrations` 末条 `(hash,created_at)` vs 当前二进制 `_journal.json` 的 `when`，用 `countEmbeddedSqlMigrations()` 处理单二进制）判定：**更旧**包 → 前滚且**旧库播种行跨前滚存活**（不只「起库」）；**更新/发散**包（`created_at > 二进制 maxFolderMillis`）→ **拒绝**、不动现有库。
+- **AC-4｜热 restore 只暂存、下次启动应用**：`POST /api/restore` 校验通过后写 `.restore-pending`（暂存包 + marker），触发 graceful shutdown 并响应**「已暂存，将在 daemon 下次启动时应用」**（daemon **无自重启**——自动应用需 supervisor）。下次 `start` 在 **acquireLock 之后、openDb 之前**应用恢复（崩溃安全 swap + 完整性校验 + 迁移），严格幂等消费 marker。
+- **AC-5｜损坏 fail-closed（页级 fixture）**：**header 完好、深层页损坏**的 `db.sqlite`（quick_check 失败）→ daemon **拒绝启动**、退出码非 0、stderr 打印可用备份清单 + restore 命令；truncate/篡改 header 的库走归一 catch 同样拒起。健康库零行为变化。
+- **AC-6｜定时备份 + 轮转**：`backupIntervalMs>0` 到点产出；保留规则 **KEEP iff 最近 N 份 ∪ 新于 D 天，DELETE 仅当双不满足**，只轮转 scheduled/auto、**永不删到 0**、有总量上限；`backupIntervalMs=0` 时**推进假时钟数 tick 后零备份文件 + 无 timer 句柄**；备份 ticker 有重入门（慢备份双 tick 只跑一次）。
+- **AC-7｜pre-migration 备份（原始拷贝、绑版本）**：起库检测到 pending 迁移且 `backupOnMigration=true` → 迁移前 **`rawCopyDb`**（**绝不** `listWorkflows`/VACUUM——新二进制 schema select 旧库必 `no such column`）产出绑 `appVersion` 的 `pre-migration-<from>-<to>.tar.gz`，可配 `restore --no-migrate` 回滚（需先换回旧二进制）；无 pending 则不备份。
+- **AC-8｜worktree 往返（同机、活跃任务、增量）**：`--include-worktrees` 时，非终态任务 worktree 的**未提交 delta + untracked**随备份捕获（base/snapshot 本机镜像已有，不打 bundle）；restore 只对 **worktreePath 缺失**的非终态任务重建、**首次 resume 跳过 clean/reset**（否则 `git clean -fd` 会删 untracked）；worktree **在但与恢复行不符**→ 先 `git stash -u` 安全存 + 标 `needs-manual-review`、禁 auto-resume；终态任务不纳入。**跨机整机恢复非目标。**
+- **AC-9｜synchronous 可配**：`sqliteSynchronous='FULL'`（由 start.ts 线程进 openDb）→ `PRAGMA synchronous` 读回 2(FULL)；默认 = NORMAL，与现状字节等价。
+- **AC-10｜doctor 体检（正确只读断言）**：`doctor` 用自己的 `{readonly:true}` 连接跑 quick_check + 报最近备份时间/份数/占用；损坏标红给 restore 指引。守卫断言**连接以 readonly 打开且写抛**（非 byte-equality——integrity_check 本不写、无鉴别力）。
+- **AC-11｜WAL checkpoint 纪律**：`walCheckpointIntervalMs>0` 周期 `wal_checkpoint(TRUNCATE)`，`-wal` 尺寸被约束。
+- **AC-12｜异机凭据告警**：restore 后若 `cached_repos` 有用本机 `secret.key` 解不开的封印 URL（异机恢复）→ doctor/UI **响亮告警「重录凭据」** + recovery_event；文档写清 restore 默认同机。
 
 ## 5. 测试策略摘要
 
