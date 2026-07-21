@@ -18,13 +18,13 @@ import { Link } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
-  OnboardingRun,
   OverviewTasks,
   RuntimeStatusEntry,
   RuntimesStatusResponse,
 } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { NoticeBanner } from '@/components/NoticeBanner'
+import { hasSeenTour } from '@/components/tour/SpotlightTour'
 import { pickGreetingKey } from '@/lib/homepage'
 import { PipelineHero } from './PipelineHero'
 import { useOverview } from './useOverview'
@@ -42,12 +42,10 @@ export const RUNTIMES_STATUS_HOME_QUERY_KEY = ['runtimes', 'status', 'home'] as 
  */
 function FirstVisitGuidePrompt() {
   const { t } = useTranslation()
-  const runs = useQuery<OnboardingRun[]>({
-    queryKey: ['onboarding', 'runs'],
-    queryFn: ({ signal }) => api.get('/api/onboarding/runs', undefined, signal),
-    staleTime: 60_000,
-  })
-  if (runs.data === undefined || runs.data.length > 0) return null
+  // Show the invitation until the user has started the spotlight tour at least
+  // once. The tour records that in localStorage (see SpotlightTour.tsx); this is
+  // a soft nudge, so a per-browser flag is enough — no server round-trip.
+  if (hasSeenTour()) return null
   return (
     <div className="stack-top--sm">
       <NoticeBanner

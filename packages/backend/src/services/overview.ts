@@ -28,11 +28,7 @@ import { listPlugins } from '@/services/plugin'
 import { filterVisibleRows } from '@/services/resourceAcl'
 import { canViewScheduledTask, listScheduledTasks } from '@/services/scheduledTasks'
 import { listSkills } from '@/services/skill'
-import {
-  excludeBuiltinAgents,
-  excludeBuiltinWorkflows,
-  excludeForeignExamples,
-} from '@/services/systemResources'
+import { excludeBuiltinAgents, excludeBuiltinWorkflows } from '@/services/systemResources'
 import { taskVisibilityCondition } from '@/services/task'
 import { listWorkflows } from '@/services/workflow'
 import { listWorkgroups } from '@/services/workgroups'
@@ -100,32 +96,13 @@ export async function buildOverview(
       actor,
       'agents:read',
       async () =>
-        (
-          await filterVisibleRows(
-            db,
-            actor,
-            'agent',
-            // RFC-211: mirror the list route exactly. This file's contract is
-            // that every count equals the length of its list endpoint, and
-            // filterVisibleRows short-circuits for admins — so without this an
-            // admin's tile would count every learner's practice material while
-            // the page it links to shows none of it.
-            excludeForeignExamples(actor.user.id, excludeBuiltinAgents(await listAgents(db))),
-          )
-        ).length,
+        (await filterVisibleRows(db, actor, 'agent', excludeBuiltinAgents(await listAgents(db))))
+          .length,
     ),
     gatedCount(
       actor,
       'skills:read',
-      async () =>
-        (
-          await filterVisibleRows(
-            db,
-            actor,
-            'skill',
-            excludeForeignExamples(actor.user.id, await listSkills(db)),
-          )
-        ).length,
+      async () => (await filterVisibleRows(db, actor, 'skill', await listSkills(db))).length,
     ),
     gatedCount(
       actor,
@@ -146,20 +123,13 @@ export async function buildOverview(
             db,
             actor,
             'workflow',
-            excludeForeignExamples(actor.user.id, excludeBuiltinWorkflows(await listWorkflows(db))),
+            excludeBuiltinWorkflows(await listWorkflows(db)),
           )
         ).length,
     ),
     // No coarse gate on the workgroups list route — always a number.
     (async () =>
-      (
-        await filterVisibleRows(
-          db,
-          actor,
-          'workgroup',
-          excludeForeignExamples(actor.user.id, await listWorkgroups(db)),
-        )
-      ).length)(),
+      (await filterVisibleRows(db, actor, 'workgroup', await listWorkgroups(db))).length)(),
     gatedCount(actor, 'repos:read', () => countCachedRepos(db)),
     // No coarse gate on the scheduled-tasks list route — row filter only.
     (async () =>

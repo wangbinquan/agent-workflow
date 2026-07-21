@@ -17,7 +17,6 @@ import type {
   WorkflowSnapshotHash,
   WorkflowValidationResult,
 } from '@agent-workflow/shared'
-import type { ResourceVisibility } from '@agent-workflow/shared'
 import {
   DeleteWorkflowSchema,
   serializeWorkflowDefinitionStorageV1,
@@ -62,12 +61,7 @@ export async function getWorkflow(db: DbClient, id: string): Promise<WorkflowDet
 export async function createWorkflow(
   db: DbClient,
   input: CreateWorkflow,
-  opts?: {
-    ownerUserId?: string
-    builtin?: boolean
-    visibility?: ResourceVisibility
-    example?: boolean
-  },
+  opts?: { ownerUserId?: string; builtin?: boolean },
 ): Promise<WorkflowDetail> {
   const id = ulid()
   const now = Date.now()
@@ -84,14 +78,7 @@ export async function createWorkflow(
       version: 1,
       // RFC-099: creator becomes owner; new resources default to 'public' (D18).
       ownerUserId: opts?.ownerUserId ?? null,
-      /**
-       * RFC-211: the guided-onboarding sandbox creates its artifacts as PRIVATE so
-       * concurrent learners never pollute (or see) each other's resource lists. The
-       * default stays 'public' (RFC-099 D18) — every existing caller is unchanged.
-       */
-      visibility: opts?.visibility ?? 'public',
-      // RFC-211: guided-onboarding sandbox artifact (see schema comment).
-      example: opts?.example ?? false,
+      visibility: 'public',
       // RFC-104: built-in marker — only seedFusionResources passes builtin:true;
       // never set via any HTTP path (CreateWorkflowSchema omits it).
       builtin: opts?.builtin ?? false,
@@ -451,8 +438,6 @@ function rowToWorkflow(row: WorkflowRow): Workflow {
     visibility: row.visibility,
     // RFC-104 built-in marker (read-only response field).
     builtin: row.builtin,
-    // RFC-211 guided-onboarding sandbox marker (read-only response field).
-    example: row.example,
     schemaVersion: row.schemaVersion,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,

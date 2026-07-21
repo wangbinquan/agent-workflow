@@ -28,12 +28,7 @@ import {
 } from '@/services/agent'
 import { resolveDependsClosure, validateDependsOn } from '@/services/agentDeps'
 import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
-import {
-  assertNotBuiltin,
-  excludeBuiltinAgents,
-  excludeForeignExamples,
-  isBuiltinRow,
-} from '@/services/systemResources'
+import { assertNotBuiltin, excludeBuiltinAgents, isBuiltinRow } from '@/services/systemResources'
 import { assertNewRefsUsable, diffNewNames } from '@/services/resourceRefs'
 import { startAgentTask } from '@/services/agentLaunch'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
@@ -72,12 +67,8 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
     // Hide framework built-ins (RFC-101 aw-skill-merger): infrastructure, never
     // a user-managed list row. Discriminator = reserved name AND __system__
     // owner (see systemResources.ts) — neither half alone is safe.
-    const actor = actorOf(c)
     const list = excludeBuiltinAgents(await listAgents(deps.db))
-    // RFC-211: guided-tour practice resources belong to their owner's list
-    // only — admins included (filterVisibleRows short-circuits for them).
-    const scoped = excludeForeignExamples(actor.user.id, list)
-    return c.json(await filterVisibleRows(deps.db, actor, 'agent', scoped))
+    return c.json(await filterVisibleRows(deps.db, actorOf(c), 'agent', list))
   })
 
   app.get('/api/agents/:name', async (c) => {

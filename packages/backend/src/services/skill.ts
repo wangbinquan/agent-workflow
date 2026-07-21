@@ -17,7 +17,6 @@ import type {
   SkillContent,
   UpdateSkillContent,
 } from '@agent-workflow/shared'
-import type { ResourceVisibility } from '@agent-workflow/shared'
 import { isProtectedSkillMainFile } from '@agent-workflow/shared'
 import { and, eq } from 'drizzle-orm'
 import {
@@ -124,18 +123,12 @@ export async function createManagedSkill(
   db: DbClient,
   opts: SkillFsOptions,
   input: CreateManagedSkill,
-  aclOpts?: { ownerUserId?: string; visibility?: ResourceVisibility; example?: boolean },
+  aclOpts?: { ownerUserId?: string },
 ): Promise<Skill> {
   return createManagedSkillWithFiles(
     db,
     opts,
-    {
-      name: input.name,
-      description: input.description,
-      ownerUserId: aclOpts?.ownerUserId,
-      visibility: aclOpts?.visibility,
-      example: aclOpts?.example,
-    },
+    { name: input.name, description: input.description, ownerUserId: aclOpts?.ownerUserId },
     (filesDir) => {
       const skillMd = stringifyFrontmatter({
         data: { name: input.name, description: input.description, ...input.frontmatterExtra },
@@ -163,15 +156,7 @@ export async function createManagedSkill(
 export async function createManagedSkillWithFiles(
   db: DbClient,
   opts: SkillFsOptions,
-  meta: {
-    name: string
-    description: string
-    ownerUserId?: string
-    /** RFC-211: see createAgent's opts.visibility. */
-    visibility?: ResourceVisibility
-    /** RFC-211: guided-onboarding sandbox artifact. */
-    example?: boolean
-  },
+  meta: { name: string; description: string; ownerUserId?: string },
   produceFiles: (filesDir: string) => void,
 ): Promise<Skill> {
   // Fast-path occupancy check — RAW (any row, even gate-hidden), so a squatted
@@ -201,9 +186,7 @@ export async function createManagedSkillWithFiles(
           managedPath: `skills/${meta.name}/files`,
           // RFC-099: creator becomes owner; new resources default to 'public' (D18).
           ownerUserId: meta.ownerUserId ?? null,
-          visibility: meta.visibility ?? 'public',
-          // RFC-211: guided-onboarding sandbox artifact (see schema comment).
-          example: meta.example ?? false,
+          visibility: 'public',
           reservationState: 'reserving',
           createdAt: now,
           updatedAt: now,
@@ -792,8 +775,6 @@ function rowToSkill(row: SkillRow): Skill {
     // RFC-099 ACL projection — routes filter on these.
     ownerUserId: row.ownerUserId,
     visibility: row.visibility,
-    // RFC-211 guided-onboarding sandbox marker (read-only response field).
-    example: row.example,
     // RFC-178: skills are managed-only.
     sourceKind: 'managed',
     schemaVersion: row.schemaVersion,

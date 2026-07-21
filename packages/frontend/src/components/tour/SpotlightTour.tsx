@@ -50,6 +50,18 @@ const TourContext = createContext<TourContextValue | null>(null)
 
 /** Per-browser persistence — the tour is UI progress, not server state. */
 const STORAGE_KEY = 'aw-tour'
+/** Sticky flag: set the first time any tour starts, so the homepage stops
+ *  inviting a user who has already taken (or dismissed) the tour. */
+const TOUR_SEEN_KEY = 'aw-tour-seen'
+
+/** True once the user has started a tour at least once (per browser). */
+export function hasSeenTour(): boolean {
+  try {
+    return window.localStorage.getItem(TOUR_SEEN_KEY) === '1'
+  } catch {
+    return false
+  }
+}
 
 function loadState(): TourState | null {
   try {
@@ -92,6 +104,11 @@ export function TourProvider({ pathname, children }: { pathname: string; childre
 
   const start = useCallback(
     (tourId: TourId) => {
+      try {
+        window.localStorage.setItem(TOUR_SEEN_KEY, '1')
+      } catch {
+        /* storage disabled — the homepage nudge just keeps showing */
+      }
       commit({ tourId, stepIndex: 0 })
     },
     [commit],
@@ -244,14 +261,22 @@ function SpotlightOverlay({ pathname, state }: { pathname: string; state: TourSt
   const isLast = state.stepIndex === total - 1
 
   // Bubble placement: below the anchor if there's room, else above; centred when
-  // the anchor is missing (off-page prompt).
+  // the anchor is missing (off-page prompt). Both axes are clamped to the
+  // viewport so an anchor near the right/bottom edge (e.g. the "add output port"
+  // button) never pushes the bubble off screen.
   const PAD = 8
+  const BUBBLE_W = Math.min(360, window.innerWidth - 2 * PAD)
+  const BUBBLE_H = 200
+  const clampLeft = (x: number): number =>
+    Math.max(PAD, Math.min(x, window.innerWidth - BUBBLE_W - PAD))
+  const clampTop = (y: number): number =>
+    Math.max(PAD, Math.min(y, window.innerHeight - BUBBLE_H - PAD))
   const bubbleStyle: React.CSSProperties =
     rect === null
       ? { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }
-      : rect.top + rect.height + 220 < window.innerHeight
-        ? { top: rect.top + rect.height + PAD, left: Math.max(PAD, rect.left) }
-        : { top: Math.max(PAD, rect.top - 200), left: Math.max(PAD, rect.left) }
+      : rect.top + rect.height + BUBBLE_H + PAD < window.innerHeight
+        ? { top: clampTop(rect.top + rect.height + PAD), left: clampLeft(rect.left) }
+        : { top: clampTop(rect.top - BUBBLE_H - PAD), left: clampLeft(rect.left) }
 
   const body = (
     <div className="spotlight-tour" data-testid="spotlight-tour">

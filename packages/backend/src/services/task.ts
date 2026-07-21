@@ -55,7 +55,6 @@ import {
   tasks,
   users,
   workflows,
-  workgroups,
 } from '@/db/schema'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import type { SecretBox } from '@/auth/secretBox'
@@ -1588,16 +1587,9 @@ async function startTaskImpl(
 
       // F17: a concurrent agent delete between the service-level 404 gate and
       // this insert must fail the launch — never mint a task for a ghost.
-      // RFC-211: a task inherits the guided-onboarding `example` flag from the
-      // resource it was launched against, resolved HERE (inside the launch tx)
-      // rather than read off the request. That is what makes relaunch-from and
-      // scheduled fires inherit it too — and inheritance is load-bearing:
-      // countReferencingTasksInTx ignores task status, so one un-flagged task
-      // would pin its example workflow undeletable forever.
-      let exampleTask = workflow.example === true
       if (deps.agentLaunch !== undefined) {
         const live = tx
-          .select({ id: agents.id, example: agents.example })
+          .select({ id: agents.id })
           .from(agents)
           .where(eq(agents.name, deps.agentLaunch.agentName))
           .get()
@@ -1618,15 +1610,6 @@ async function startTaskImpl(
             `agent '${deps.agentLaunch.agentName}' was replaced during launch`,
           )
         }
-        exampleTask = live.example
-      }
-      if (deps.workgroupLaunch !== undefined) {
-        const wg = tx
-          .select({ example: workgroups.example })
-          .from(workgroups)
-          .where(eq(workgroups.id, deps.workgroupLaunch.workgroupId))
-          .get()
-        if (wg !== undefined) exampleTask = wg.example
       }
       tx.insert(tasks)
         .values({
@@ -1694,8 +1677,6 @@ async function startTaskImpl(
           // stamp the tombstone atomically with the row so retry / sync-workflow can
           // never CAS it back to pending against a missing directory.
           workspacePrunedAt: earlyError !== null && worktreePath === '' ? now : null,
-          // RFC-211: derived above from the launch source (see comment there).
-          example: exampleTask,
         })
         .run()
 
@@ -3661,8 +3642,6 @@ function rowToTask(
     sourceAgentName: row.sourceAgentName ?? null,
     // RFC-175 (§2e): stable agent id (NULL for non-agent + pre-0091 tasks).
     sourceAgentId: row.sourceAgentId ?? null,
-    // RFC-211 guided-onboarding sandbox marker (derived at launch; read-only).
-    example: row.example,
     repos,
   }
 }

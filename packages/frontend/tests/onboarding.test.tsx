@@ -205,16 +205,14 @@ describe('Onboarding render', () => {
     expect(retry).toHaveBeenCalledTimes(1)
   })
 
-  test('offers every tutorial track and exactly one way in', () => {
-    // The tracks are described here so a brand-new user can see what the tour
-    // covers before committing to it; the single entry point is what keeps the
-    // screen from turning back into a wall of equal-weight links.
+  test('names the tour flows and offers exactly one way in', () => {
+    // The three learning flows are described so a brand-new user can see what the
+    // tour covers; the single entry point keeps the screen from turning back into
+    // a wall of equal-weight links. (Skill is folded into the agent flow now, so
+    // there are three flows, not four.)
     wrap(<Onboarding />)
-    // Role-based: the track titles are headings, which is also what makes the
-    // list navigable with a screen reader.
     for (const title of [
       /agent that can do work|能干活的代理/i,
-      /give an agent a skill|装一个技能/i,
       /chain agents into a pipeline|串成流水线/i,
       /team of agents collaborate|一组代理协作/i,
     ]) {

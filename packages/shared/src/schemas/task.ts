@@ -360,11 +360,6 @@ export const TaskSchema = z.object({
    * workgroup tasks.
    */
   sourceAgentName: z.string().nullable().optional(),
-  /**
-   * RFC-211: launched against a guided-onboarding sandbox resource. Derived at
-   * INSERT time from the source resource, never accepted on the wire.
-   */
-  example: z.boolean().optional(),
 })
 export type Task = z.infer<typeof TaskSchema>
 

@@ -20,7 +20,7 @@ import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
 import { canViewResource, filterVisibleRows } from '@/services/resourceAcl'
-import { excludeBuiltinWorkflows, excludeForeignExamples } from '@/services/systemResources'
+import { excludeBuiltinWorkflows } from '@/services/systemResources'
 import {
   assertNewRefsUsable,
   diffNewNames,
@@ -64,12 +64,7 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
         deps.db,
         actorOf(c),
         'workflow',
-        // RFC-211: guided-tour practice resources belong to their owner's list
-        // only — admins included (filterVisibleRows short-circuits for them).
-        excludeForeignExamples(
-          actorOf(c).user.id,
-          excludeBuiltinWorkflows(await listWorkflows(deps.db)),
-        ),
+        excludeBuiltinWorkflows(await listWorkflows(deps.db)),
       ),
     ),
   )

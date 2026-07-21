@@ -46,12 +46,6 @@ interface BuiltinCandidate {
   builtin?: boolean | null
 }
 
-/** Minimal row shape for the RFC-211 example filter (rows AND mapped DTOs). */
-interface ExampleCandidate {
-  example?: boolean | null
-  ownerUserId?: string | null
-}
-
 /** A row is a framework built-in iff its immutable `builtin` column is set. */
 export function isBuiltinRow(row: BuiltinCandidate): boolean {
   return row.builtin === true
@@ -65,25 +59,6 @@ export function excludeBuiltinAgents<T extends BuiltinCandidate>(rows: readonly 
 /** Strip framework-seeded built-in WORKFLOWS from a user-facing list. */
 export function excludeBuiltinWorkflows<T extends BuiltinCandidate>(rows: readonly T[]): T[] {
   return rows.filter((r) => !isBuiltinRow(r))
-}
-
-/**
- * RFC-211 personal-sandbox scoping. Guided-tour artifacts are practice
- * resources, so they only belong in their OWNER's lists.
- *
- * This is deliberately NOT expressed as visibility. `filterVisibleRows` and
- * `isVisibleRow` short-circuit for admins (an admin sees every private row and
- * the grants query is skipped entirely), so on a shared instance an admin's
- * /agents page would fill up with every learner's `guide-coder-*`. Being a
- * usability boundary rather than a security one, it lives here next to the
- * built-in filters instead of inside the ACL layer — detail reads and the
- * admin-scoped cleanup preview intentionally still see them.
- */
-export function excludeForeignExamples<T extends ExampleCandidate>(
-  actorUserId: string,
-  rows: readonly T[],
-): T[] {
-  return rows.filter((r) => r.example !== true || r.ownerUserId === actorUserId)
 }
 
 /**

@@ -77,18 +77,6 @@ async function renderLauncher() {
   return wrap(<Comp />)
 }
 
-const RUN = {
-  id: '01JGUIDE0000000000000000AA',
-  track: 'agent',
-  status: 'active',
-  currentStep: 'agent.create',
-  completedSteps: [],
-  suffix: 'abcd1234',
-  artifacts: [],
-  createdAt: 1,
-  updatedAt: 1,
-}
-
 beforeEach(() => {
   setBaseUrl('http://daemon.test')
   setToken('tok')
@@ -152,14 +140,17 @@ describe('RFC-211 homepage invitation', () => {
       { match: /\/api\/runtimes\/status/, body: { runtimes: [] } },
     ]
 
-    stubFetch([...HERO, { match: /\/api\/onboarding\/runs/, body: [] }])
+    // Not seen yet (fresh localStorage) → invited.
+    stubFetch([...HERO])
     const first = wrap(<HomepageGreeting />)
     await waitFor(() => expect(screen.getByTestId('homepage-guide-prompt')).toBeTruthy())
     expect(screen.getByTestId('homepage-guide-prompt-cta').getAttribute('href')).toBe('/onboarding')
     first.unmount()
 
+    // Once a tour has been started (per-browser flag) → no longer invited.
     vi.restoreAllMocks()
-    stubFetch([...HERO, { match: /\/api\/onboarding\/runs/, body: [RUN] }])
+    window.localStorage.setItem('aw-tour-seen', '1')
+    stubFetch([...HERO])
     wrap(<HomepageGreeting />)
     await waitFor(() => expect(screen.getByTestId('homepage-start-task')).toBeTruthy())
     expect(screen.queryByTestId('homepage-guide-prompt')).toBeNull()

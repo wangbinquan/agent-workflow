@@ -14,7 +14,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
-import { ONBOARDING_TRACK_STEPS, type Agent, type Workflow } from '@agent-workflow/shared'
+import type { Agent, Workflow } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { CapabilityGrid } from '@/components/home/CapabilityGrid'
@@ -83,7 +83,8 @@ export interface OnboardingProps {
 
 export function Onboarding(props: OnboardingProps = {}) {
   const { t } = useTranslation()
-  const tracks = Object.keys(ONBOARDING_TRACK_STEPS) as Array<keyof typeof ONBOARDING_TRACK_STEPS>
+  // The three learning flows the guided tour covers.
+  const tracks = ['agent', 'workflow', 'workgroup'] as const
 
   return (
     <div className="page onboarding">

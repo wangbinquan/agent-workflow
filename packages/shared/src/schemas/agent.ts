@@ -114,8 +114,6 @@ export const AgentSchema = z.object({
   /** RFC-104 — read-only built-in marker. Response-only: Create/Update bodies
    *  are separate schemas that never accept it, and zod strips it if sent. */
   builtin: z.boolean().optional(),
-  /** RFC-211 — guided-onboarding sandbox artifact (response-only; see builtin). */
-  example: z.boolean().optional(),
   outputs: z.array(z.string()),
   outputKinds: AgentOutputKindsMapSchema.optional(),
   /** RFC-166 — declarative input ports. OPTIONAL on the DTO (same as

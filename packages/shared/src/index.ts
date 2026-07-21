@@ -20,7 +20,6 @@ export * from './schemas/fusion'
 export * from './schemas/memory'
 export * from './schemas/plugin'
 export * from './schemas/repoBatchImport'
-export * from './schemas/onboarding' // RFC-211
 export * from './schemas/skill'
 export * from './schemas/skillVersion'
 export * from './schemas/overview' // RFC-190

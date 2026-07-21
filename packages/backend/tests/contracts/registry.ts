@@ -501,25 +501,6 @@ export const ENDPOINTS: EndpointSpec[] = [
 
   // ---- backup ----
   { method: 'POST', path: '/api/backup' },
-
-  // ---- onboarding (RFC-211 guided sandbox) ----
-  {
-    method: 'GET',
-    path: '/api/onboarding/runs',
-    happy: { schema: z.array(z.any()) },
-  },
-  { method: 'POST', path: '/api/onboarding/runs' },
-  { method: 'PATCH', path: '/api/onboarding/runs/:id' },
-  { method: 'POST', path: '/api/onboarding/runs/:id/provision' },
-  { method: 'POST', path: '/api/onboarding/runs/:id/adopt' },
-  { method: 'DELETE', path: '/api/onboarding/runs/:id/artifacts/:artifactId' },
-  {
-    method: 'GET',
-    path: '/api/onboarding/examples',
-    happy: { schema: z.object({ scope: z.string(), entries: z.array(z.any()) }) },
-  },
-  // Destructive sweep — no happy fixture (it would delete real rows).
-  { method: 'DELETE', path: '/api/onboarding/examples' },
   // ---- RFC-099 resource ACL (mounted via mountAclEndpoints in resourceAcl.ts) ----
   //
   // These twelve were absent for their entire life: `mountAclEndpoints` builds
