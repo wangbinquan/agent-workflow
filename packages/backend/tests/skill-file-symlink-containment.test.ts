@@ -5,12 +5,21 @@
 // Design-gate round 3 caught this while adversarially reviewing RFC-170.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   createManagedSkill,
+  deleteSkillFile,
   getSkill,
   readSkillContent,
   readSkillFile,
@@ -103,5 +112,79 @@ describe('readSkillFile symlink containment', () => {
     rmSync(v1SkillMd)
     symlinkSync(join(outsideDir, 'host-secret.txt'), v1SkillMd)
     expect(() => getSkillVersionContent(db, fsOpts, 'foo', 1)).toThrow(ValidationError)
+  })
+
+  // ---------------------------------------------------------------------------
+  // RFC-170 G3-1 WRITE/DELETE parity — design/test-guard-audit-2026-07-21 gap
+  // B5-security-8. The read path resolved symlinks + verified containment; the
+  // write and delete callbacks only did a LEXICAL safeJoin, and writeFileSync /
+  // unlinkSync / rmSync FOLLOW symlinks — so a symlink planted in the live
+  // files/ tree (which commitSkillVersion cpSync's into staging as-is) let a
+  // write escape to an arbitrary host path, as the daemon uid (often root).
+  //
+  // These plant fixtures in the LIVE files/ dir (skills/foo/files) because that
+  // is what the write/delete path copies into staging — NOT the version snapshot
+  // the read tests above use.
+  // ---------------------------------------------------------------------------
+  function liveRoot(): string {
+    return join(appHome, 'skills', 'foo', 'files')
+  }
+
+  test('writeSkillFile refuses to follow a leaf symlink that escapes the root', async () => {
+    const secret = join(outsideDir, 'host-secret.txt')
+    writeFileSync(secret, 'ORIGINAL HOST CONTENT', 'utf-8')
+    // A symlink in the live tree pointing at a host file.
+    symlinkSync(secret, join(liveRoot(), 'escape'))
+
+    await expect(writeSkillFile(db, fsOpts, 'foo', 'escape', 'PWNED')).rejects.toBeInstanceOf(
+      ValidationError,
+    )
+    // The host file must be untouched — the write did not follow the link.
+    expect(readFileSync(secret, 'utf-8')).toBe('ORIGINAL HOST CONTENT')
+  })
+
+  test('writeSkillFile refuses when a parent directory component is an escaping symlink', async () => {
+    // `sub` is a symlink to a host directory; writing sub/child would follow it.
+    symlinkSync(outsideDir, join(liveRoot(), 'sub'))
+    await expect(
+      writeSkillFile(db, fsOpts, 'foo', 'sub/child.txt', 'PWNED'),
+    ).rejects.toBeInstanceOf(ValidationError)
+    // No file was created in the host directory through the link.
+    expect(existsSync(join(outsideDir, 'child.txt'))).toBe(false)
+  })
+
+  test('deleteSkillFile refuses an escaping symlink (fail-closed) and never touches its target', async () => {
+    const secret = join(outsideDir, 'host-secret.txt')
+    writeFileSync(secret, 'ORIGINAL HOST CONTENT', 'utf-8')
+    symlinkSync(secret, join(liveRoot(), 'escape'))
+
+    // Fail closed: rather than risk rmSync/statSync following the link, the
+    // delete is refused outright. The host file is untouched either way — the
+    // whole point. (Such a link cannot legitimately exist in a managed skill;
+    // zip import does not create symlinks.)
+    await expect(deleteSkillFile(db, fsOpts, 'foo', 'escape')).rejects.toBeInstanceOf(
+      ValidationError,
+    )
+    expect(readFileSync(secret, 'utf-8')).toBe('ORIGINAL HOST CONTENT')
+  })
+
+  test('positive control — a write/delete of an in-root path still works', async () => {
+    await writeSkillFile(db, fsOpts, 'foo', 'docs/keep.txt', 'kept')
+    expect(await readSkillFile(db, fsOpts, 'foo', 'docs/keep.txt')).toBe('kept')
+    await deleteSkillFile(db, fsOpts, 'foo', 'docs/keep.txt')
+    await expect(readSkillFile(db, fsOpts, 'foo', 'docs/keep.txt')).rejects.toBeInstanceOf(Error)
+  })
+
+  test('positive control — a write THROUGH a symlink that stays inside the root works', async () => {
+    // Parity with the read path's "symlink inside root still resolves" test.
+    const root = liveRoot()
+    mkdirSync(join(root, 'real'), { recursive: true })
+    // RELATIVE target — an absolute symlink would, once cpSync'd into a fresh
+    // staging dir, point back at the LIVE files/ dir (outside staging) and be
+    // correctly refused. A relative in-root link stays contained across the copy.
+    symlinkSync('real', join(root, 'link'))
+    await writeSkillFile(db, fsOpts, 'foo', 'link/inside.txt', 'contained')
+    // It landed on the real (contained) target.
+    expect(await readSkillFile(db, fsOpts, 'foo', 'real/inside.txt')).toBe('contained')
   })
 })

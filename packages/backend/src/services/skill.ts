@@ -22,6 +22,7 @@ import { isProtectedSkillMainFile } from '@agent-workflow/shared'
 import { and, eq } from 'drizzle-orm'
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   readFileSync,
   readdirSync,
@@ -46,7 +47,7 @@ import {
   finishOperation,
 } from '@/services/skillOperations'
 import { parseFrontmatter, stringifyFrontmatter } from '@/util/frontmatter'
-import { realpathInside, safeJoin } from '@/util/safePath'
+import { realpathInside, realpathWriteInside, safeJoin } from '@/util/safePath'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { discloseRefs } from './resourceAcl'
 import type { Actor } from '@/auth/actor'
@@ -701,8 +702,15 @@ export async function writeSkillFile(
     name,
     (staging) => {
       const abs = safeJoin(staging, relPath)
-      mkdirSync(dirname(abs), { recursive: true })
-      writeFileSync(abs, content, 'utf-8')
+      // RFC-170 G3-1 parity with the read path: safeJoin is lexical, but
+      // writeFileSync FOLLOWS symlinks. A symlinked path component (or leaf)
+      // copied into staging would otherwise let this write escape the skill root
+      // — as the daemon uid, often root. Refuse an escaping ancestor BEFORE
+      // mkdir (which also follows links), then an escaping leaf symlink.
+      // See design/test-guard-audit-2026-07-21 gap B5-security-8.
+      const target = realpathWriteInside(staging, abs)
+      mkdirSync(dirname(target), { recursive: true })
+      writeFileSync(target, content, 'utf-8')
     },
     {
       source: 'editor',
@@ -752,8 +760,18 @@ export async function deleteSkillFile(
     (staging) => {
       const abs = safeJoin(staging, relPath)
       if (!existsSync(abs)) return
-      if (statSync(abs).isDirectory()) rmSync(abs, { recursive: true })
-      else unlinkSync(abs)
+      // A symlink at the leaf: remove the LINK, never its target. lstat (no
+      // follow) decides link-ness; realpathWriteInside refuses an escaping
+      // ancestor and verifies an escaping leaf link before we touch it.
+      const target = realpathWriteInside(staging, abs)
+      if (lstatSync(target).isSymbolicLink()) {
+        unlinkSync(target) // removes the symlink itself, not what it points to
+        return
+      }
+      // statSync (follows) is safe now: the ancestor chain is verified contained
+      // and the leaf is not a symlink.
+      if (statSync(target).isDirectory()) rmSync(target, { recursive: true })
+      else unlinkSync(target)
     },
     {
       source: 'editor',

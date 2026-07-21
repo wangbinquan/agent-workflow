@@ -2,8 +2,8 @@
 // strictly under the skill's root directory. ValidationError on any attempt to
 // escape via `..`, absolute paths, or symlinks pointing outside.
 
-import { realpathSync } from 'node:fs'
-import { isAbsolute, normalize, resolve, sep } from 'node:path'
+import { existsSync, lstatSync, realpathSync } from 'node:fs'
+import { dirname, isAbsolute, normalize, resolve, sep } from 'node:path'
 import { ValidationError } from '@/util/errors'
 
 /**
@@ -59,4 +59,58 @@ export function realpathInside(root: string, target: string): string {
     throw new ValidationError('path-traversal', 'symlink escapes the allowed root')
   }
   return real
+}
+
+/**
+ * Assert that the deepest EXISTING ancestor of `target` resolves inside `root`.
+ *
+ * `realpathInside` only checks a target that already exists, so it is blind to a
+ * WRITE whose leaf does not exist yet but whose parent directory is a symlink
+ * pointing out of `root`. `mkdirSync(dirname, {recursive:true})` and
+ * `writeFileSync` both FOLLOW such a link, so the write escapes. This walks up
+ * from `dirname(target)` to the first component that exists and realpath-checks
+ * it — refusing before any directory is created through an escaping link.
+ *
+ * See RFC-170 G3-1 / design/test-guard-audit-2026-07-21 gap B5-security-8.
+ */
+export function assertWriteAncestorInside(root: string, target: string): void {
+  const rootReal = realpathSync(root)
+  const rootPrefix = rootReal.endsWith(sep) ? rootReal : rootReal + sep
+  let cur = dirname(resolve(target))
+  // The lexical safeJoin guarantee means `target` is under `root` textually;
+  // walk up until we hit a component that actually exists on disk.
+  for (;;) {
+    if (existsSync(cur)) {
+      const real = realpathSync(cur)
+      if (real !== rootReal && !real.startsWith(rootPrefix)) {
+        throw new ValidationError('path-traversal', 'path escapes the allowed root')
+      }
+      return
+    }
+    const up = dirname(cur)
+    if (up === cur) return // reached the filesystem root — nothing to escape through
+    cur = up
+  }
+}
+
+/**
+ * Resolve `target` (built via `safeJoin`) into a filesystem path that is safe to
+ * WRITE or DELETE inside `root`, following the read path's symlink discipline.
+ * `writeFileSync` / `unlinkSync` / `rmSync` all follow symlinks, and a skill dir
+ * can contain one, so a lexical join alone lets a write/delete escape to e.g.
+ * `~/.ssh/id_rsa` — with the daemon frequently running as root.
+ *
+ * Refuses when a parent component escapes (assertWriteAncestorInside) or when the
+ * leaf itself is a symlink pointing out of `root` (realpathInside). A symlink
+ * that stays inside `root` is allowed — parity with the read path, which reads
+ * through contained links.
+ */
+export function realpathWriteInside(root: string, target: string): string {
+  assertWriteAncestorInside(root, target)
+  if (existsSync(target) && lstatSync(target).isSymbolicLink()) {
+    // Resolve + verify the link stays inside root; throws otherwise. The write
+    // then follows it to a contained target, or the delete removes the link.
+    realpathInside(root, target)
+  }
+  return target
 }
