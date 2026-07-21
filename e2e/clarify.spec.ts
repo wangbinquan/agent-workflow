@@ -840,17 +840,16 @@ test.describe('RFC-026 clarify e2e — inline session resume', () => {
     // 4. Round 1 → done.
     await pollTaskStatus(daemon, taskId, (t) => t.status === 'done', 30_000)
 
-    // 5. Assertion A: the stub captured TWO argv lines; the second one contains
-    //    `--session opc_e2e_e2e-rfc026-designer`. The first one MUST NOT.
-    const log = readFileSync(argvLog, 'utf-8')
-      .trim()
-      .split('\n')
-      .filter((l) => l.length > 0)
-    expect(log.length).toBeGreaterThanOrEqual(2)
-    expect(log[0]).not.toContain('--session')
-    const round1 = log[log.length - 1]!
-    expect(round1).toContain('--session')
-    expect(round1).toContain('opc_e2e_e2e-rfc026-designer')
+    // 5. Assertion A: the stub logs each invocation's FULL argv (`printf '%s\n' "$*"`).
+    //    The prompt is multi-line AND now trails after `--` (RFC opencode spawn.ts
+    //    buildCommand: prompt is the tail positional so a `-`-leading prompt isn't
+    //    parsed as a flag), so each invocation spans several lines and `--session`
+    //    sits on the FIRST line of round 1's block, not the last — a line index is
+    //    fragile. Assert on the whole log instead: round 0 (clarify) forwards NO
+    //    `--session`; round 1 (resume) forwards exactly one, carrying the prior id.
+    const raw = readFileSync(argvLog, 'utf-8')
+    expect(raw.split('--session').length - 1).toBe(1)
+    expect(raw).toContain('--session opc_e2e_e2e-rfc026-designer')
 
     // 6. Assertion B: the persisted node_runs row for round 0 (RFC-074 PR-C:
     //    the earliest 'designer' run by ULID id — clarify generation 0)
