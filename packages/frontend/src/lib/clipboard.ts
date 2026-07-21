@@ -21,6 +21,11 @@ export async function copyText(text: string): Promise<boolean> {
 
 function execCommandCopy(text: string): boolean {
   if (typeof document === 'undefined') return false
+  // Caution (2026-07-21 review): `ta.focus()` below synchronously triggers
+  // Dialog.tsx's focus-trap focusin yank. Every current copyText caller sits
+  // OUTSIDE dialogs; if you add one inside a Dialog, the trap steals focus
+  // back before select() and this fallback likely copies nothing — verify on
+  // an insecure http:// host (where the async Clipboard API is absent).
   const ta = document.createElement('textarea')
   ta.value = text
   // Keep it out of view and out of layout flow while still selectable.

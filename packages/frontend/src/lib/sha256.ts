@@ -16,7 +16,11 @@
 
 export type Sha256Subtle = Pick<SubtleCrypto, 'digest'>
 
-/** SHA-256 of `bytes` as lowercase hex; WebCrypto when available, else pure JS. */
+/** SHA-256 of `bytes` as lowercase hex; WebCrypto when available, else pure JS.
+ *
+ *  Sharp edge: passing `undefined` explicitly re-evaluates the DEFAULT (the
+ *  ambient SubtleCrypto) — it does not force the JS path. Call sha256DigestJs
+ *  directly when you need the fallback unconditionally (tests do). */
 export async function sha256Hex(
   bytes: Uint8Array,
   subtle: Sha256Subtle | undefined = globalThis.crypto?.subtle,
