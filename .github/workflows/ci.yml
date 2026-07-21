@@ -253,7 +253,26 @@ jobs:
         # range and is still in the affected set (<=1.8.3), so there is no fix
         # to update to yet. Scoped --ignore per the policy above; REMOVE when
         # drizzle bumps its transitive shell-quote past the advisory.
-        run: bun audit --audit-level=high --ignore GHSA-w7jw-789q-3m8p
+        #
+        # 2026-07-21 — three more high advisories surfaced in the FLOATING
+        # advisory DB (not from any lockfile change; a plain re-run started
+        # failing). All three are dev/tooling-only transitive deps, none in the
+        # shipped single binary, and forcing patched versions would major-bump
+        # internals of eslint/minimatch/drizzle-kit for the whole repo — so
+        # scoped --ignore per the documented policy, REMOVE each when its parent
+        # tool bumps past the range:
+        #   GHSA-395f-4hp3-45gv (shell-quote quadratic-DoS in parse()):
+        #     drizzle-kit / drizzle-orm — dev migration tooling.
+        #   GHSA-3jxr-9vmj-r5cp (brace-expansion DoS): eslint / eslint-plugin-
+        #     react / typescript-eslint › minimatch — lint tooling.
+        #   GHSA-52cp-r559-cp3m (js-yaml merge-key quadratic CPU): eslint ›
+        #     @eslint/eslintrc — lint tooling.
+        run: >-
+          bun audit --audit-level=high
+          --ignore GHSA-w7jw-789q-3m8p
+          --ignore GHSA-395f-4hp3-45gv
+          --ignore GHSA-3jxr-9vmj-r5cp
+          --ignore GHSA-52cp-r559-cp3m
 
       - name: actionlint (GitHub Actions workflow lint)
         # Pinned via the official downloader script so the version moves only
