@@ -849,6 +849,10 @@ export interface Resources {
     provision: string
     provisionRunning: string
     provisionAgain: string
+    launch: string
+    launching: string
+    launched: string
+    viewTask: string
     finish: string
     selfServe: string
     stepDone: string
@@ -4428,6 +4432,10 @@ export const zhCN: Resources = {
     provision: '帮我建一个',
     provisionRunning: '正在生成…',
     provisionAgain: '再生成一份',
+    launch: '启动一次',
+    launching: '正在启动…',
+    launched: '已启动',
+    viewTask: '查看任务运行 ↗',
     finish: '完成这条线',
     selfServe: '我自己来',
     stepDone: '已完成',

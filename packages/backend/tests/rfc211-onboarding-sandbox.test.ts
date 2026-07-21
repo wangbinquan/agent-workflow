@@ -44,6 +44,7 @@ import { cleanupExamples, collectExamples } from '../src/services/exampleCleanup
 import { createAgent, deleteAgent, getAgent, listAgents } from '../src/services/agent'
 import { createWorkflow, getWorkflow } from '../src/services/workflow'
 import { getWorkgroup } from '../src/services/workgroups'
+import type { OnboardingLauncher } from '../src/services/onboarding'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -722,5 +723,122 @@ describe('RFC-211 — review regressions', () => {
     expect(result.complete).toBe(true)
     const rows = await listRuns(db, actor)
     expect(rows[0]?.artifacts).toEqual([])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The `.run` steps launch a REAL scratch task (RFC-211 D6). The heavy launch
+// subsystem is injected as an OnboardingLauncher so the service stays decoupled;
+// these tests drive it with a stub and assert the task is registered as an
+// artifact (and therefore swept by cleanup) and that "run it once" is once.
+// ---------------------------------------------------------------------------
+
+describe('RFC-211 — run steps launch a scratch task', () => {
+  let db: DbClient
+
+  beforeEach(() => {
+    db = createInMemoryDb(MIGRATIONS)
+  })
+
+  /** Records a task row so the artifact's liveResourceName resolves it. */
+  function stubLauncher(): {
+    launcher: OnboardingLauncher
+    calls: string[]
+  } {
+    const calls: string[] = []
+    const mkTask = async (label: string): Promise<{ id: string; name: string }> => {
+      const id = ulid()
+      const name = `guide-run-task-${id.slice(-4).toLowerCase()}`
+      calls.push(label)
+      // tasks.workflow_id has a FK; the real __agent_host__ builtin isn't seeded
+      // into an in-memory db, so mint a throwaway host row to satisfy it.
+      const hostId = ulid()
+      await db
+        .insert(workflows)
+        .values({ id: hostId, name: `host-${hostId}`, description: '', definition: '{}' })
+      await db.insert(tasks).values({
+        id,
+        name,
+        workflowId: hostId,
+        workflowSnapshot: '{}',
+        repoPath: '/tmp/never',
+        worktreePath: '',
+        baseBranch: 'main',
+        branch: `agent-workflow/${id}`,
+        status: 'pending',
+        inputs: '{}',
+        startedAt: Date.now(),
+        ownerUserId: 'u1',
+        spaceKind: 'scratch',
+        example: true,
+      })
+      return { id, name }
+    }
+    return {
+      calls,
+      launcher: {
+        launchAgent: () => mkTask('agent'),
+        launchWorkflow: () => mkTask('workflow'),
+        launchWorkgroup: () => mkTask('workgroup'),
+      },
+    }
+  }
+
+  test('agent.run launches once and registers the task as an artifact', async () => {
+    const actor = await seedUser(db, 'u1')
+    const fs = skillFs()
+    const { launcher, calls } = stubLauncher()
+    const run = await startRun(db, actor, 'agent')
+    // Prereq steps first (create the agent the run needs).
+    await provisionStep(db, actor, run.id, 'agent.create', { skillFs: fs, launcher })
+
+    const res = await provisionStep(db, actor, run.id, 'agent.run', { skillFs: fs, launcher })
+    expect(res.resourceType).toBe('task')
+    expect(calls).toEqual(['agent'])
+
+    // The task rides the one-click cleanup because it is example-flagged.
+    const inv = await collectExamples(db, actor, 'mine')
+    expect(inv.entries.some((e) => e.resourceType === 'task')).toBe(true)
+
+    // "Run it once" is once: a second press reuses the same task, no re-launch.
+    const again = await provisionStep(db, actor, run.id, 'agent.run', { skillFs: fs, launcher })
+    expect(again.reused).toBe(true)
+    expect(again.resourceId).toBe(res.resourceId)
+    expect(calls).toEqual(['agent'])
+  })
+
+  test('a run step without a launcher fails cleanly instead of silently no-op', async () => {
+    const actor = await seedUser(db, 'u1')
+    const fs = skillFs()
+    const run = await startRun(db, actor, 'agent')
+    await provisionStep(db, actor, run.id, 'agent.create', { skillFs: fs })
+    await expect(provisionStep(db, actor, run.id, 'agent.run', { skillFs: fs })).rejects.toThrow(
+      /launch is not available/i,
+    )
+  })
+
+  test('workflow.run and workgroup.run go through their own launchers', async () => {
+    const actor = await seedUser(db, 'u1')
+    const fs = skillFs()
+    const wf = stubLauncher()
+    const wfRun = await startRun(db, actor, 'workflow')
+    await provisionStep(db, actor, wfRun.id, 'workflow.create', {
+      skillFs: fs,
+      launcher: wf.launcher,
+    })
+    await provisionStep(db, actor, wfRun.id, 'workflow.run', { skillFs: fs, launcher: wf.launcher })
+    expect(wf.calls).toEqual(['workflow'])
+
+    const wg = stubLauncher()
+    const wgRun = await startRun(db, actor, 'workgroup')
+    await provisionStep(db, actor, wgRun.id, 'workgroup.create', {
+      skillFs: fs,
+      launcher: wg.launcher,
+    })
+    await provisionStep(db, actor, wgRun.id, 'workgroup.run', {
+      skillFs: fs,
+      launcher: wg.launcher,
+    })
+    expect(wg.calls).toEqual(['workgroup'])
   })
 })

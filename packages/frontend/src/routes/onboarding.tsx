@@ -132,13 +132,19 @@ function OnboardingPage() {
   const steps = track === null ? [] : ONBOARDING_TRACK_STEPS[track]
   const currentStep = steps[stepIndex] ?? null
   const completed = new Set(run?.completedSteps ?? [])
+  // A `.run` step launches a real task rather than building an editable
+  // resource; everything else builds one. That split drives the button label
+  // ("run it once" vs "build it for me") and which in-place link is shown.
+  const isRunStep = currentStep !== null && currentStep.endsWith('.run')
   // The resource this step is about, if it exists yet — powers the in-place
   // "open editor (new tab)" link so the user never has to leave the tour to see
   // what was built.
   const stepArtifact =
-    currentStep === null
+    currentStep === null || isRunStep
       ? undefined
       : run?.artifacts.find((a) => a.resourceType === stepResourceType(currentStep) && a.alive)
+  // The task a run step launched, if any — its "view run" link goes to /tasks.
+  const taskArtifact = run?.artifacts.find((a) => a.resourceType === 'task' && a.alive)
 
   /**
    * The tour writes real resources through the server, so every mutation has to
@@ -320,38 +326,63 @@ function OnboardingPage() {
               {currentStep.endsWith('.run') && <RuntimeReadiness />}
 
               <div className="onboarding__actions">
-                <button
-                  type="button"
-                  className="btn btn--primary"
-                  data-testid="guide-provision"
-                  disabled={provision.isPending}
-                  aria-busy={provision.isPending}
-                  onClick={() => provision.mutate(currentStep)}
-                >
-                  {provision.isPending
-                    ? t('guide.provisionRunning')
-                    : completed.has(currentStep)
-                      ? t('guide.provisionAgain')
-                      : t('guide.provision')}
-                </button>
+                {/* On a run step, once the task is launched the button is gone:
+                    "run it once" means once, not "spawn a real task on every
+                    click" (launchOnce is idempotent, but hiding it makes that
+                    obvious and keeps token spend intentional). */}
+                {!(isRunStep && completed.has(currentStep)) && (
+                  <button
+                    type="button"
+                    className="btn btn--primary"
+                    data-testid="guide-provision"
+                    disabled={provision.isPending}
+                    aria-busy={provision.isPending}
+                    onClick={() => provision.mutate(currentStep)}
+                  >
+                    {provision.isPending
+                      ? isRunStep
+                        ? t('guide.launching')
+                        : t('guide.provisionRunning')
+                      : isRunStep
+                        ? t('guide.launch')
+                        : completed.has(currentStep)
+                          ? t('guide.provisionAgain')
+                          : t('guide.provision')}
+                  </button>
+                )}
                 {completed.has(currentStep) && (
                   <span className="onboarding__step-done" data-testid="guide-step-done">
-                    ✓ {t('guide.stepDone')}
+                    ✓ {isRunStep ? t('guide.launched') : t('guide.stepDone')}
                   </span>
                 )}
-                {/* Both escapes open in a NEW TAB so the tour tab stays put —
-                    "build it for me" no longer teleports you onto the edit page
-                    and strands you there. */}
-                <a
-                  href={onboardingSelfServeHref(currentStep)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn"
-                  data-testid="guide-self-serve"
-                >
-                  {t('guide.selfServe')}
-                </a>
+                {/* "I'll do it myself" only makes sense for the build steps —
+                    you don't hand-build a task run. Opens in a NEW TAB so the
+                    tour tab stays put. */}
+                {!isRunStep && (
+                  <a
+                    href={onboardingSelfServeHref(currentStep)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn"
+                    data-testid="guide-self-serve"
+                  >
+                    {t('guide.selfServe')}
+                  </a>
+                )}
               </div>
+              {isRunStep && taskArtifact !== undefined && (
+                <div className="onboarding__actions">
+                  <a
+                    href={`/tasks/${encodeURIComponent(taskArtifact.resourceId)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn--sm"
+                    data-testid="guide-open-task"
+                  >
+                    {t('guide.viewTask')}
+                  </a>
+                </div>
+              )}
               {stepArtifact !== undefined && (
                 <div className="onboarding__actions">
                   <a
@@ -371,15 +402,19 @@ function OnboardingPage() {
               )}
               {provision.error !== null && <ErrorBanner error={provision.error} />}
 
-              <AdoptPicker
-                step={currentStep}
-                value={adoptPick}
-                onChange={setAdoptPick}
-                onAdopt={() => adopt.mutate({ step: currentStep, key: adoptPick })}
-                pending={adopt.isPending}
-                ownerUserId={actor.data?.user.id ?? null}
-              />
-              {adopt.error !== null && <ErrorBanner error={adopt.error} />}
+              {!isRunStep && (
+                <>
+                  <AdoptPicker
+                    step={currentStep}
+                    value={adoptPick}
+                    onChange={setAdoptPick}
+                    onAdopt={() => adopt.mutate({ step: currentStep, key: adoptPick })}
+                    pending={adopt.isPending}
+                    ownerUserId={actor.data?.user.id ?? null}
+                  />
+                  {adopt.error !== null && <ErrorBanner error={adopt.error} />}
+                </>
+              )}
             </div>
           </Stepper>
         </section>
@@ -400,17 +435,19 @@ function OnboardingPage() {
                     {/* One trailing action cluster so every row's buttons line
                         up regardless of how long its name is. */}
                     <span className="onboarding__artifact-actions">
-                      {a.resourceType !== 'task' && (
-                        <a
-                          href={onboardingEditHref(a.resourceType, a.resourceId, a.resourceName)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="btn btn--xs"
-                          data-testid={`guide-artifact-open-${a.resourceType}`}
-                        >
-                          {t('guide.open')}
-                        </a>
-                      )}
+                      <a
+                        href={
+                          a.resourceType === 'task'
+                            ? `/tasks/${encodeURIComponent(a.resourceId)}`
+                            : onboardingEditHref(a.resourceType, a.resourceId, a.resourceName)
+                        }
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn btn--xs"
+                        data-testid={`guide-artifact-open-${a.resourceType}`}
+                      >
+                        {t('guide.open')}
+                      </a>
                       {/* Escape hatch for the adopt picker: without it, one
                           mis-click would enrol a real resource in a destructive
                           sweep with no way back. */}

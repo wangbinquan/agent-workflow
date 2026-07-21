@@ -376,6 +376,46 @@ describe('RFC-211 guided tour page', () => {
     expect(screen.queryByTestId('guide-runtime-unready')).toBeNull()
   })
 
+  test('the run step launches a task and links to it — no in-place editor link', async () => {
+    // RFC-211 D6: "run it once" starts a REAL scratch task. The button says
+    // launch, not "build it for me", and once a task exists the row links to
+    // /tasks (not to an editor), all without leaving the tour.
+    stubFetch([
+      {
+        match: /\/api\/onboarding\/runs$/,
+        body: [
+          {
+            ...RUN,
+            completedSteps: ['agent.create', 'agent.ports', 'agent.run'],
+            artifacts: [
+              {
+                id: 'task1',
+                runId: RUN.id,
+                resourceType: 'task',
+                resourceId: '01TASKID',
+                resourceName: 'guide-run-abcd1234',
+                alive: true,
+                createdAt: 1,
+              },
+            ],
+          },
+        ],
+      },
+      { match: /\/api\/runtimes\/status/, body: { runtimes: [{ name: 'opencode', ok: true }] } },
+    ])
+    await renderGuide()
+    fireEvent.click(await screen.findByTestId('guide-track-agent'))
+    fireEvent.click(await screen.findByTestId('stepper-step-agent.run'))
+    const open = await screen.findByTestId('guide-open-task')
+    expect(open.getAttribute('href')).toBe('/tasks/01TASKID')
+    expect(open.getAttribute('target')).toBe('_blank')
+    // A completed run step hides the launch button (run it ONCE) and shows no
+    // editor link or adopt picker.
+    expect(screen.queryByTestId('guide-provision')).toBeNull()
+    expect(screen.queryByTestId('guide-open-editor')).toBeNull()
+    expect(screen.queryByTestId('guide-adopt')).toBeNull()
+  })
+
   test('cleanup requires confirmation and shows what will be deleted first', async () => {
     const spy = stubFetch([
       { match: /\/api\/onboarding\/runs$/, body: [RUN] },

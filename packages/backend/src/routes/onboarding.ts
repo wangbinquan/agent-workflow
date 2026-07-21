@@ -42,7 +42,20 @@ import {
   provisionStep,
   releaseArtifact,
   startRun,
+  type OnboardingLauncher,
 } from '@/services/onboarding'
+import { startAgentTask } from '@/services/agentLaunch'
+import { startTask } from '@/services/task'
+import { startWorkgroupTask } from '@/services/workgroupLaunch'
+import { assertWorkflowLaunchable } from '@/services/taskLaunchGate'
+import { buildStartTaskDeps } from '@/services/startTaskDeps'
+import { resolveOpencodeCmd } from '@/util/opencode'
+import type { Actor } from '@/auth/actor'
+import {
+  StartAgentTaskSchema,
+  StartTaskSchema,
+  StartWorkgroupTaskSchema,
+} from '@agent-workflow/shared'
 
 export function mountOnboardingRoutes(app: Hono, deps: AppDeps): void {
   const skillFs: SkillFsOptions = { appHome: Paths.root }
@@ -84,8 +97,14 @@ export function mountOnboardingRoutes(app: Hono, deps: AppDeps): void {
     ensurePermission(c, 'agents:write')
     if (parsed.data.step.startsWith('skill.')) ensurePermission(c, 'skills:write')
     if (parsed.data.step.startsWith('workflow.')) ensurePermission(c, 'workflows:write')
+    // A `.run` step launches a real scratch task; it needs the launch permission
+    // (and the launcher below performs the launch through the normal services).
+    if (parsed.data.step.endsWith('.run')) ensurePermission(c, 'tasks:launch')
     return c.json(
-      await provisionStep(deps.db, actor, c.req.param('id'), parsed.data.step, { skillFs }),
+      await provisionStep(deps.db, actor, c.req.param('id'), parsed.data.step, {
+        skillFs,
+        launcher: buildOnboardingLauncher(deps, actor),
+      }),
     )
   })
 
@@ -135,6 +154,42 @@ export function mountOnboardingRoutes(app: Hono, deps: AppDeps): void {
 function requireAdminActor(actor: { user: { role: string } }): void {
   if (actor.user.role !== 'admin') {
     throw new ForbiddenError('forbidden', 'admin only')
+  }
+}
+
+/**
+ * The `.run` steps launch through the SAME services the real launch endpoints
+ * use — every one forced to `scratch: true` (no repo, no repos:write needed) and
+ * routed through the ordinary launch gate. Kept at the route edge so the
+ * onboarding service never has to import the task subsystem.
+ */
+function buildOnboardingLauncher(deps: AppDeps, actor: Actor): OnboardingLauncher {
+  const startDeps = () =>
+    buildStartTaskDeps(
+      deps.db,
+      deps.configPath,
+      actor.user.id,
+      resolveOpencodeCmd(deps.configPath),
+      deps.secretBox,
+    )
+  return {
+    async launchAgent(agentName, taskName, description) {
+      const input = StartAgentTaskSchema.parse({ name: taskName, description, scratch: true })
+      const task = await startAgentTask(deps.db, actor, agentName, input, startDeps())
+      return { id: task.id, name: task.name }
+    },
+    async launchWorkflow(workflowId, taskName, inputs) {
+      // Same gate the POST /api/tasks handler runs: visible + not built-in.
+      await assertWorkflowLaunchable(deps.db, actor, workflowId)
+      const input = StartTaskSchema.parse({ workflowId, name: taskName, inputs, scratch: true })
+      const task = await startTask(input, startDeps())
+      return { id: task.id, name: task.name }
+    },
+    async launchWorkgroup(workgroupName, taskName, goal) {
+      const input = StartWorkgroupTaskSchema.parse({ name: taskName, goal, scratch: true })
+      const task = await startWorkgroupTask(deps.db, actor, workgroupName, input, startDeps())
+      return { id: task.id, name: task.name }
+    },
   }
 }
 

@@ -39,6 +39,7 @@ import {
   onboardingArtifacts,
   onboardingRuns,
   skills,
+  tasks,
   workflows,
   workgroups,
 } from '@/db/schema'
@@ -49,8 +50,34 @@ import { createManagedSkill, type SkillFsOptions } from '@/services/skill'
 import { createWorkflow } from '@/services/workflow'
 import { createWorkgroup } from '@/services/workgroups'
 
+/**
+ * Launching a real task pulls in the whole task/agent-launch subsystem, which
+ * this service must not import directly (module-cycle risk, and it keeps the
+ * heavy launch wiring at the route edge). The route injects these three, each
+ * of which starts a SCRATCH task — no repo required — off an example resource.
+ */
+export interface OnboardingLauncher {
+  launchAgent(
+    agentName: string,
+    taskName: string,
+    description: string,
+  ): Promise<{ id: string; name: string }>
+  launchWorkflow(
+    workflowId: string,
+    taskName: string,
+    inputs: Record<string, string>,
+  ): Promise<{ id: string; name: string }>
+  launchWorkgroup(
+    workgroupName: string,
+    taskName: string,
+    goal: string,
+  ): Promise<{ id: string; name: string }>
+}
+
 export interface OnboardingDeps {
   skillFs: SkillFsOptions
+  /** Present only when a `.run` step may need to launch (route-supplied). */
+  launcher?: OnboardingLauncher
 }
 
 type RunRow = typeof onboardingRuns.$inferSelect
@@ -101,9 +128,10 @@ async function hydrateArtifacts(db: DbClient, runId: string): Promise<Onboarding
     // practice resources, and every checkbox in the guide is keyed off whether
     // the resource is still there RIGHT NOW, never off a cached snapshot.
     const live = await liveResourceName(db, row.resourceType, row.resourceId)
-    if (live === null && row.resourceType !== 'task') {
-      // The user deleted it through the ordinary UI. Drop the bookkeeping row
-      // instead of showing a permanent "deleted" tombstone nothing can clear.
+    if (live === null) {
+      // The resource is gone (deleted through the ordinary UI, or the task was
+      // swept). Drop the bookkeeping row instead of showing a permanent
+      // "deleted" tombstone that nothing can clear.
       await db.delete(onboardingArtifacts).where(eq(onboardingArtifacts.id, row.id))
       continue
     }
@@ -150,10 +178,10 @@ async function liveResourceName(
         .get()
       return r?.name ?? null
     }
-    case 'task':
-      // Tasks are addressed by id in the UI and cleaned up by the same sweep;
-      // the creation-time name snapshot is good enough for the artifact list.
-      return null
+    case 'task': {
+      const r = await db.select({ name: tasks.name }).from(tasks).where(eq(tasks.id, id)).get()
+      return r?.name ?? null
+    }
   }
 }
 
@@ -319,7 +347,6 @@ async function findArtifact(
     .from(onboardingArtifacts)
     .where(and(eq(onboardingArtifacts.runId, runId), eq(onboardingArtifacts.resourceType, type)))
   for (const row of rows) {
-    if (row.resourceType === 'task') return row
     if ((await liveResourceName(db, row.resourceType, row.resourceId)) !== null) return row
     await db.delete(onboardingArtifacts).where(eq(onboardingArtifacts.id, row.id))
   }
@@ -591,10 +618,20 @@ async function provisionForStep(
 ): Promise<Provisioned> {
   switch (step) {
     case 'agent.create':
-    case 'agent.ports':
-    case 'agent.run': {
+    case 'agent.ports': {
       const agent = await ensureCoderAgent(db, actor, run)
       return { type: 'agent', id: agent.id, name: agent.name, reused: agent.reused }
+    }
+
+    case 'agent.run': {
+      const agent = await ensureCoderAgent(db, actor, run)
+      return launchOnce(db, run, deps, (launcher) =>
+        launcher.launchAgent(
+          agent.name,
+          `guide-run-${run.suffix}`,
+          'Introduce yourself in one sentence, then describe one small improvement you could make to a README.',
+        ),
+      )
     }
 
     case 'skill.create': {
@@ -638,75 +675,129 @@ async function provisionForStep(
     }
 
     case 'workflow.create':
-    case 'workflow.edit':
+    case 'workflow.edit': {
+      return ensureWorkflow(db, actor, run)
+    }
+
     case 'workflow.run': {
-      const existing = await findArtifact(db, run.id, 'workflow')
-      if (existing !== undefined) {
-        const live = await liveResourceName(db, 'workflow', existing.resourceId)
-        if (live !== null)
-          return { type: 'workflow', id: existing.resourceId, name: live, reused: true }
-      }
-      const coder = await ensureCoderAgent(db, actor, run)
-      const auditor = await ensureSecondaryAgent(db, actor, run, auditorInput(run.suffix))
-      const created = await createWorkflow(
-        db,
-        {
-          name: `guide-review-pipeline-${run.suffix}`,
-          description: 'Guided-tour example: one agent does the work, a second one reviews it.',
-          definition: buildGuideWorkflowDefinition(coder.name, auditor.name),
-        },
-        { ownerUserId: actor.user.id, visibility: 'private', example: true },
+      const wf = await ensureWorkflow(db, actor, run)
+      return launchOnce(db, run, deps, (launcher) =>
+        launcher.launchWorkflow(wf.id, `guide-run-${run.suffix}`, {
+          // The guide workflow declares a single 'task' input.
+          task: 'Add a one-line summary to the top of the README.',
+        }),
       )
-      recordArtifact(db, run.id, 'workflow', created.id, created.name)
-      return { type: 'workflow', id: created.id, name: created.name, reused: false }
     }
 
     case 'workgroup.create':
-    case 'workgroup.members':
+    case 'workgroup.members': {
+      return ensureWorkgroup(db, actor, run)
+    }
+
     case 'workgroup.run': {
-      const existing = await findArtifact(db, run.id, 'workgroup')
-      if (existing !== undefined) {
-        const live = await liveResourceName(db, 'workgroup', existing.resourceId)
-        if (live !== null)
-          return { type: 'workgroup', id: existing.resourceId, name: live, reused: true }
-      }
-      const coder = await ensureCoderAgent(db, actor, run)
-      const lead = await ensureSecondaryAgent(db, actor, run, leadInput(run.suffix))
-      // Two agent members, not one: a leader_worker group whose only member is
-      // the leader still passes the readiness check (with an advisory warning),
-      // then runs with nobody to delegate to — a green run that did nothing.
-      const created = await createWorkgroup(
-        db,
-        CreateWorkgroupSchema.parse({
-          name: `guide-squad-${run.suffix}`,
-          description: 'Guided-tour example: a lead agent delegating to one worker.',
-          instructions: 'Deliver the goal with the smallest reasonable change.',
-          mode: 'leader_worker',
-          leaderDisplayName: 'lead',
-          switches: { shareOutputs: true, directMessages: false, blackboard: false },
-          maxRounds: 20,
-          completionGate: true,
-          members: [
-            {
-              memberType: 'agent',
-              agentName: lead.name,
-              displayName: 'lead',
-              roleDesc: 'Coordinates the work.',
-            },
-            {
-              memberType: 'agent',
-              agentName: coder.name,
-              displayName: 'worker',
-              roleDesc: 'Does the implementation.',
-            },
-          ],
-        }),
-        { ownerUserId: actor.user.id, visibility: 'private', example: true },
+      const wg = await ensureWorkgroup(db, actor, run)
+      return launchOnce(db, run, deps, (launcher) =>
+        launcher.launchWorkgroup(
+          wg.name,
+          `guide-run-${run.suffix}`,
+          'Improve the README: add a short intro and a usage example.',
+        ),
       )
-      recordArtifact(db, run.id, 'workgroup', created.id, created.name)
-      return { type: 'workgroup', id: created.id, name: created.name, reused: false }
     }
   }
+}
+
+/** Create the guide's two-agent review pipeline, or return the existing one. */
+async function ensureWorkflow(db: DbClient, actor: Actor, run: RunRow): Promise<Provisioned> {
+  const existing = await findArtifact(db, run.id, 'workflow')
+  if (existing !== undefined) {
+    const live = await liveResourceName(db, 'workflow', existing.resourceId)
+    if (live !== null)
+      return { type: 'workflow', id: existing.resourceId, name: live, reused: true }
+  }
+  const coder = await ensureCoderAgent(db, actor, run)
+  const auditor = await ensureSecondaryAgent(db, actor, run, auditorInput(run.suffix))
+  const created = await createWorkflow(
+    db,
+    {
+      name: `guide-review-pipeline-${run.suffix}`,
+      description: 'Guided-tour example: one agent does the work, a second one reviews it.',
+      definition: buildGuideWorkflowDefinition(coder.name, auditor.name),
+    },
+    { ownerUserId: actor.user.id, visibility: 'private', example: true },
+  )
+  recordArtifact(db, run.id, 'workflow', created.id, created.name)
+  return { type: 'workflow', id: created.id, name: created.name, reused: false }
+}
+
+/** Create the guide's leader+worker squad, or return the existing one. */
+async function ensureWorkgroup(db: DbClient, actor: Actor, run: RunRow): Promise<Provisioned> {
+  const existing = await findArtifact(db, run.id, 'workgroup')
+  if (existing !== undefined) {
+    const live = await liveResourceName(db, 'workgroup', existing.resourceId)
+    if (live !== null)
+      return { type: 'workgroup', id: existing.resourceId, name: live, reused: true }
+  }
+  const coder = await ensureCoderAgent(db, actor, run)
+  const lead = await ensureSecondaryAgent(db, actor, run, leadInput(run.suffix))
+  // Two agent members, not one: a leader_worker group whose only member is the
+  // leader still passes the readiness check (with an advisory warning), then
+  // runs with nobody to delegate to — a green run that did nothing.
+  const created = await createWorkgroup(
+    db,
+    CreateWorkgroupSchema.parse({
+      name: `guide-squad-${run.suffix}`,
+      description: 'Guided-tour example: a lead agent delegating to one worker.',
+      instructions: 'Deliver the goal with the smallest reasonable change.',
+      mode: 'leader_worker',
+      leaderDisplayName: 'lead',
+      switches: { shareOutputs: true, directMessages: false, blackboard: false },
+      maxRounds: 20,
+      completionGate: true,
+      members: [
+        {
+          memberType: 'agent',
+          agentName: lead.name,
+          displayName: 'lead',
+          roleDesc: 'Coordinates the work.',
+        },
+        {
+          memberType: 'agent',
+          agentName: coder.name,
+          displayName: 'worker',
+          roleDesc: 'Does the implementation.',
+        },
+      ],
+    }),
+    { ownerUserId: actor.user.id, visibility: 'private', example: true },
+  )
+  recordArtifact(db, run.id, 'workgroup', created.id, created.name)
+  return { type: 'workgroup', id: created.id, name: created.name, reused: false }
+}
+
+/**
+ * Launch a scratch task for this run, once. A run keeps a single task artifact:
+ * a `.run` step re-press returns that task rather than spending real tokens on
+ * another one — "run it once" is emphatically not "run it every time you click".
+ * The task inherits `example` from its source resource (derived at INSERT time),
+ * so the one-click cleanup sweeps it.
+ */
+async function launchOnce(
+  db: DbClient,
+  run: RunRow,
+  deps: OnboardingDeps,
+  launch: (launcher: OnboardingLauncher) => Promise<{ id: string; name: string }>,
+): Promise<Provisioned> {
+  const existing = await findArtifact(db, run.id, 'task')
+  if (existing !== undefined) {
+    return { type: 'task', id: existing.resourceId, name: existing.resourceName, reused: true }
+  }
+  if (deps.launcher === undefined) {
+    throw new ValidationError('onboarding-launch-unavailable', 'task launch is not available here')
+  }
+  const task = await launch(deps.launcher)
+  recordArtifact(db, run.id, 'task', task.id, task.name)
+  return { type: 'task', id: task.id, name: task.name, reused: false }
 }
 
 // --- adoption ("我自己来") ----------------------------------------------------
