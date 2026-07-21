@@ -71,10 +71,16 @@ function cfg(overrides: Partial<WorkgroupRuntimeConfig> = {}): WorkgroupRuntimeC
 }
 
 /** ports the protocol block ACTUALLY instructs the agent to emit, from its text. */
-function portsInProtocolBlock(role: 'leader' | 'worker' | 'fc_member'): Set<string> {
+function portsInProtocolBlock(
+  role: 'leader' | 'worker' | 'fc_member',
+  batch?: { count: number },
+): Set<string> {
   const block = renderWgProtocolBlock(
     role,
     cfg({ mode: role === 'fc_member' ? 'free_collab' : 'leader_worker' }),
+    '',
+    undefined,
+    batch,
   )
   const found = new Set<string>()
   for (const m of block.matchAll(/<port name="(wg_[^"]+)">/g)) found.add(m[1]!)
@@ -103,6 +109,26 @@ describe('RFC-184 — wgHostRolePorts', () => {
       expect(new Set(wgHostRolePorts(role))).toEqual(portsInProtocolBlock(role))
     },
   )
+
+  // RFC-215 批分支镜像锁（实现门 C-3(a) 补交——design §6.2/§10-18 承诺）：批协议
+  // 块换 wg_task_results、禁 wg_result，解析端口集合必须与协议块文本恒等；任一侧
+  // （含 wg_tasks_add）漂移即红。含 N=1 批（恢复批只剩一卡也是批）。
+  test.each([1, 2, 5])(
+    'fc_member batch(count=%i) port list mirrors the batch protocol block',
+    (count) => {
+      expect(new Set(wgHostRolePorts('fc_member', { count }))).toEqual(
+        portsInProtocolBlock('fc_member', { count }),
+      )
+    },
+  )
+
+  test('fc_member batch swaps wg_result for wg_task_results (tasks_add kept)', () => {
+    const batch = new Set(wgHostRolePorts('fc_member', { count: 2 }))
+    expect(batch.has('wg_task_results')).toBe(true)
+    expect(batch.has('wg_result')).toBe(false)
+    expect(batch.has(WG_PORT_MESSAGES)).toBe(true)
+    expect(batch.has(WG_PORT_TASKS_ADD)).toBe(true)
+  })
 })
 
 // ---------------------------------------------------------------------------

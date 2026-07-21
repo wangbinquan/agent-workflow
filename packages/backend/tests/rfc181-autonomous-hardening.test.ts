@@ -27,6 +27,7 @@ import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
 import type { TaskWsMessage } from '@agent-workflow/shared'
+import { buildBatchShardKey } from '@agent-workflow/shared'
 import {
   CreateWorkgroupSchema,
   UpdateWorkgroupSchema,
@@ -326,6 +327,43 @@ describe('RFC-181 A2/C — isTaskClarifySuppressed + dismissOpenClarifyParksForA
     const none = await seedTask(null)
     expect(await isTaskClarifySuppressed(db, none)).toBe(false)
     expect(await isTaskClarifySuppressed(db, 'no-such-task')).toBe(false)
+  })
+
+  test('fc 批 run 的 park：batch: shardKey 遣散时整组卡 awaiting_human→open（清 assignee/nodeRunId）', async () => {
+    // RFC-215 §9 / 设计门 ①P1-3=②F2 的修复点直接回归（实现门 C-3(b) 补交——
+    // design §10-14 承诺）：v1 的单卡等值匹配对 `batch:` 键恒 0 行 ⇒ 遣散只取消
+    // park run、整批卡永滞留 awaiting_human。parseBatchShardKey 解出整组卡 id
+    // 后 fc 回 open（清 assignee 让其他成员可接手）。
+    const cardA = `A${ulid()}`
+    const cardB = `B${ulid()}`
+    for (const id of [cardA, cardB]) {
+      await db.insert(workgroupAssignments).values({
+        id,
+        taskId,
+        round: 1,
+        source: 'self_claim',
+        assigneeMemberId: 'm-coder',
+        title: `batched-${id}`,
+        briefMd: 'ask first',
+        status: 'awaiting_human',
+        createdAt: Date.now(),
+      })
+    }
+    const park = await seedClarifyPark({ shard: buildBatchShardKey('m-coder', [cardA, cardB]) })
+    const res = await dismissOpenClarifyParksForAutonomous(db, taskId, 'free_collab')
+    expect(res.dismissedSessions).toBe(1)
+    expect(res.canceledParkRuns.map((r) => r.nodeRunId)).toEqual([park.clarifyRunId])
+    expect(new Set(res.requeuedAssignments.map((r) => `${r.id}:${r.to}`))).toEqual(
+      new Set([`${cardA}:open`, `${cardB}:open`]),
+    )
+    for (const id of [cardA, cardB]) {
+      const card = (
+        await db.select().from(workgroupAssignments).where(eq(workgroupAssignments.id, id))
+      )[0]
+      expect(card?.status).toBe('open')
+      expect(card?.assigneeMemberId).toBeNull()
+      expect(card?.nodeRunId).toBeNull()
+    }
   })
 
   test('lw：session 双状态 canceled + 中介 run canceled + 卡 awaiting_human→dispatched（保 assignee、清 nodeRunId）+ 双帧广播', async () => {

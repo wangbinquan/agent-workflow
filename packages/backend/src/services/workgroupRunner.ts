@@ -877,11 +877,12 @@ function composeLeaderPrompt(state: EngineDbState, envelopeNonce = ''): string {
   return blocks.filter((b) => b.length > 0).join('\n\n')
 }
 
-function composeMemberPrompt(
+export function composeMemberPrompt(
   state: EngineDbState,
   memberId: string,
   assignments: readonly WorkgroupAssignment[] | null,
   envelopeNonce = '',
+  opts: { singleCard?: boolean } = {},
 ): string {
   const { config } = state
   // RFC-215 §4 — fc 任务 run：@ 消息由消息轨专职消费（不注入、不推游标），
@@ -910,8 +911,14 @@ function composeMemberPrompt(
       envelopeNonce,
     ),
   )
-  if (assignments !== null && config.mode === 'leader_worker') {
+  if (assignments !== null && (config.mode === 'leader_worker' || opts.singleCard === true)) {
     // lw：恒单卡，块与 RFC-215 之前逐字一致（AC-8 零 diff）。
+    // fc + singleCard（实现门 C-2，2026-07-21）：driveAssignmentTurn 领养的
+    // pre-215 单卡行，其协议块/hostOutputPorts/解析侧全是 wg_result 单卡形态
+    // （不带 batch count）——prompt 必须同形。旧版恒走下面的批形态，同一
+    // prompt 里「Report EACH in wg_task_results」与协议块「emit wg_result」
+    // 互斥指令并存，模型按任务块发 wg_task_results 即烧协议重试，最坏烧穿
+    // 预算 failed。仅升级窗口的领养路径可达；正规 fc 批走 driveBatchTurn。
     const assignment = assignments[0] as WorkgroupAssignment
     const title =
       envelopeNonce.length > 0 ? sanitizeInlineField(assignment.title) : assignment.title
@@ -1940,7 +1947,7 @@ async function driveAssignmentTurn(
     }
 
     const prompt =
-      composeMemberPrompt(state, memberId, [assignment], envelopeNonce) +
+      composeMemberPrompt(state, memberId, [assignment], envelopeNonce, { singleCard: true }) +
       (errorNotice !== null
         ? `\n\n## Protocol errors in your previous reply\n\n${fenceUntrusted(
             'protocol-error',
@@ -2088,8 +2095,13 @@ async function driveBatchTurn(
   const config = state.config
   const agent = await resolveMemberAgent(args, state, memberId)
   if (agent === null) {
-    // 成员配置坏（agent 不可解析）不牵连卡：open 卡未认领留池；dispatched 恢复卡
-    // 走失败收尾回 open 让其他成员接手。
+    // 成员配置坏（agent 不可解析）。实现门 C-1（2026-07-21）：open 卡也必须
+    // 认领（bumpAttempt）后走失败收尾——旧版把 open 卡原样留池，而
+    // deriveWakeSet 不感知 agent 可解析性，下一 pass 对同一成员重派同一批：
+    // 不 mint ⇒ roundsUsed 永不增长、items 恒非空 ⇒ 引擎以 DB 往返速度空转，
+    // 且每圈追加一条 system 消息（房间消息无限增长）。认领+失败收尾让
+    // attempt_count 预算封顶自然收敛：预算内回 open 可被其他成员接手，耗尽
+    // failed 终态——与单卡时代 agent-null → failed 的收敛语义一致。
     await postMessage(db, taskId, roundMode(config), {
       authorKind: 'system',
       kind: 'system',
@@ -2097,9 +2109,20 @@ async function driveBatchTurn(
     })
     for (const id of candidateIds) {
       const card = state.assignments.find((a) => a.id === id)
-      if (card !== undefined && card.status !== 'open') {
-        await settleCardAfterFailure(db, state, id)
+      if (card === undefined) continue
+      if (card.status === 'open') {
+        const claimed = await casAssignmentStatus(
+          db,
+          id,
+          'open',
+          'dispatched',
+          { assigneeMemberId: memberId },
+          { bumpAttempt: true },
+        )
+        if (claimed) await settleCardAfterFailure(db, state, id)
+        continue
       }
+      await settleCardAfterFailure(db, state, id)
     }
     return
   }

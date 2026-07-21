@@ -57,3 +57,30 @@
   push 前必跑 `bun run build:binary`。
 - **门槛**：`bun run typecheck && bun run lint && bun run test && bun run format:check`
   全绿 + push 后按 sha 查 CI。
+
+## 实现门对抗自评审（2026-07-21，Claude 接手不等 Codex 7/25）
+
+11 AC 与 §12 17 条修订逐条核验通过、§9 六消费点无漏网；三项发现全部修复：
+
+- **C-1（P1，生产级回归）**：`driveBatchTurn` agent-null 分支把 open 卡原样留池，而
+  `deriveWakeSet` 不感知 agent 可解析性 ⇒ fc 运行中删除 roster 成员的 agent（deleteAgent
+  对工作组引用无守卫）时，引擎对同一成员每 pass 重派同一批——不 mint ⇒ 轮次预算不涨、
+  items 恒非空 ⇒ **零预算热循环 + 房间 system 消息无限增长**（变异实证：还原旧版该用例
+  40s 无输出=真死循环）。修复：open 卡也认领（bumpAttempt）后走 `settleCardAfterFailure`，
+  attempt_count 预算封顶收敛（预算内回 open 可被他人接手、耗尽 failed），与单卡时代
+  agent-null 收敛语义一致。回归锁 `rfc215-batch-engine.test.ts` C-1 用例。
+- **C-2（P2，升级窗）**：`driveAssignmentTurn` 领养 pre-215 fc 单卡行时协议块/端口/解析
+  全是 `wg_result` 单卡形态，而 `composeMemberPrompt` 对 fc 恒渲染批文案（Report EACH in
+  wg_task_results）——同一 prompt 互斥指令并存，按任务块发 `wg_task_results` 即烧协议
+  重试。修复：`composeMemberPrompt` 增 `{ singleCard }`，领养单卡走 lw 同构单卡块（变异
+  实证红）；`rfc200-source-lock` 逐字锁同步适配。
+- **C-3（承诺测试补交）**：(a) `workgroup-host-output-isolation` 批分支镜像锁（count=1/2/5
+  端口集合 ≡ 批协议块文本 + wg_result⇄wg_task_results 换轨断言）；(b)
+  `dismissOpenClarifyParksForAutonomous` 批键遣散回归（`batch:` shardKey 整组卡
+  awaiting_human→open，设计门 ①P1-3=②F2 修复点的直接锁）；(c) 双轨并发引擎级断言
+  （同 pass 同成员批 run + 消息 run 并发成立，abort 收口绕开假 hook 的收敛限制）。
+
+T4/T5 验收表述勘正：§10-14 批 clarify 遣散与 §6.2 批镜像锁在本自评审前**并未**有测试
+覆盖（勾核过实），以上 (a)(b) 为补交；PLAUSIBLE 级观察（耗尽×崩溃双故障窗、
+assignmentId 裸批串语义扩宽、askerKey 手写 split 等）登记于评审记录不阻塞。
+
