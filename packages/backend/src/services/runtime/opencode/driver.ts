@@ -29,6 +29,7 @@ import { buildInlineConfig } from './inlineConfig'
 import { pickRuntimeHead } from '../head'
 import { stageSkills } from '../stageSkills'
 import { MIN_OPENCODE_VERSION, probeOpencode } from '@/util/opencode'
+import { getOpencodeBinaryVersion } from '@/util/opencode-version-registry'
 import { listOpencodeModels } from '@/util/opencode-models'
 import { captureChildSessions } from '@/services/sessionCapture'
 import { readSnapshotFromRunDir } from '@/services/inventory'
@@ -91,6 +92,9 @@ export const opencodeDriver: RuntimeDriver = {
           : undefined
     const { cmd, env } = buildOpencodeSpawn({
       ...(head !== undefined ? { opencodeCmd: head } : {}),
+      // 2026-07-21: flag-spelling version gate — the registry is seeded by
+      // probeOpencode (daemon boot probes the default binary before any spawn).
+      binaryVersion: getOpencodeBinaryVersion(head?.[0] ?? 'opencode'),
       agentName: ctx.agentName,
       prompt: ctx.prompt,
       worktreePath: ctx.worktreePath,
@@ -172,11 +176,16 @@ export const opencodeDriver: RuntimeDriver = {
       })
     }
 
+    // RFC-112: a custom opencode fork's binary wins; else the RFC-111 head
+    // (production config.opencodePath via resolveOpencodeCmd, or a test mock)
+    // — byte-for-byte unchanged for built-ins.
+    const businessHead = pickRuntimeHead(ctx.runtimeBinary, ctx.opencodeCmd)
     const { cmd, env } = buildOpencodeSpawn({
-      // RFC-112: a custom opencode fork's binary wins; else the RFC-111 head
-      // (production config.opencodePath via resolveOpencodeCmd, or a test mock)
-      // — byte-for-byte unchanged for built-ins.
-      opencodeCmd: pickRuntimeHead(ctx.runtimeBinary, ctx.opencodeCmd),
+      opencodeCmd: businessHead,
+      // 2026-07-21: flag-spelling version gate (see buildSpawn above). Key =
+      // head[0] exactly as spawned; default-head runs resolve 'opencode', the
+      // same token the boot probe recorded.
+      binaryVersion: getOpencodeBinaryVersion(businessHead?.[0] ?? 'opencode'),
       agentName: ctx.agent.name,
       prompt: ctx.prompt,
       resumeSessionId: ctx.resumeSessionId,

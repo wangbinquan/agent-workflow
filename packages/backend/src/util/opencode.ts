@@ -6,6 +6,7 @@
 import { createLogger } from './log'
 import { loadConfig } from '@/config'
 import { compareSemver, extractVersion } from './semver'
+import { recordOpencodeBinaryVersion } from './opencode-version-registry'
 
 // RFC-143 PR-5: extractVersion/compareSemver live in ./semver (single copy,
 // shared with the claude probe); re-exported so existing import sites
@@ -127,6 +128,14 @@ export async function probeOpencode(
               ])
             : await outPromise
         version = extractVersion(out)
+        // 2026-07-21: seed the spawn-time flag-spelling registry. Every probe
+        // path funnels through here (daemon boot / runtime-row save / status
+        // poll), so a successful probe is exactly when we know which spelling
+        // of the auto-approve flag this binary takes — see
+        // opencode-version-registry.ts + spawn.ts resolveAutoApproveFlag.
+        // Only on ran=true: a transient probe failure must not clobber a good
+        // record with null.
+        recordOpencodeBinaryVersion(binary, version)
       } else {
         warn('opencode --version non-zero exit', { binary, exitCode })
       }

@@ -37,6 +37,8 @@ import { join } from 'node:path'
 
 import { detectEnvelopeKind, extractLastEnvelope, parseEnvelope } from '@/services/envelope'
 import { accumulateTokens, extractTextFromEvent, inferEventKind } from '@/services/runner'
+import { resolveAutoApproveFlag } from '@/services/runtime/opencode/spawn'
+import { probeOpencode } from '@/util/opencode'
 
 const RUN_INTEGRATION = process.env.RUN_OPENCODE_INTEGRATION === '1'
 
@@ -55,6 +57,15 @@ const AUTH_AVAILABLE = detectAuthAvailable()
 const SKIP = !RUN_INTEGRATION || !AUTH_AVAILABLE
 
 const OPENCODE_BIN = process.env.OPENCODE_BIN ?? 'opencode'
+
+// 2026-07-21: opencode ≥1.18 renamed `--dangerously-skip-permissions` →
+// `--auto`; this suite drives the REAL local binary, so probe once and pick
+// the spelling the same way the production driver does.
+let autoFlagPromise: Promise<string> | null = null
+function liveAutoApproveFlag(): Promise<string> {
+  autoFlagPromise ??= probeOpencode(OPENCODE_BIN).then((p) => resolveAutoApproveFlag(p.version))
+  return autoFlagPromise
+}
 
 interface RunResult {
   exitCode: number
@@ -93,7 +104,7 @@ async function runOpencode(
     prompt,
     '--format',
     'json',
-    '--dangerously-skip-permissions',
+    await liveAutoApproveFlag(),
     ...(opts.extraArgs ?? []),
   ]
   const t0 = Date.now()

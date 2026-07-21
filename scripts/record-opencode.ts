@@ -129,6 +129,21 @@ function ensureGitRepo(): string {
   return tmp
 }
 
+/**
+ * opencode ≥1.18 renamed `run --dangerously-skip-permissions` → `--auto`
+ * (pure rename; the legacy spelling is REMOVED and the strict parser rejects
+ * it with a bare usage dump). Keep in sync with resolveAutoApproveFlag in
+ * packages/backend/src/services/runtime/opencode/spawn.ts — this script can't
+ * import backend '@/…' aliases, so the 3-line pick is duplicated here.
+ */
+function autoApproveFlag(version: string): string {
+  const m = version.match(/^(\d+)\.(\d+)\./)
+  if (!m) return '--dangerously-skip-permissions'
+  const major = Number(m[1])
+  const minor = Number(m[2])
+  return major > 1 || (major === 1 && minor >= 18) ? '--auto' : '--dangerously-skip-permissions'
+}
+
 async function runOpencode(args: CliArgs, cwd: string): Promise<string[]> {
   return new Promise((resolveP, rejectP) => {
     const argv = [
@@ -136,7 +151,7 @@ async function runOpencode(args: CliArgs, cwd: string): Promise<string[]> {
       args.prompt,
       '--format',
       'json',
-      '--dangerously-skip-permissions',
+      autoApproveFlag(probeOpencodeVersion(args.opencodeBin)),
       ...args.extraArgs,
     ]
     const child = spawn(args.opencodeBin, argv, {

@@ -11,6 +11,7 @@
 // (RFC-154: the shared config-dir profile is a cross-package leaf import.)
 
 import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
+import { compareSemver, extractVersion } from '@/util/semver'
 
 /** Minimal shape buildCommand needs (a structural subset of RunNodeOptions). */
 export interface OpencodeCommandOptions {
@@ -19,6 +20,51 @@ export interface OpencodeCommandOptions {
   agent: { name: string }
   /** RFC-026 clarify-inline rerun: resume the prior opencode session. */
   resumeSessionId?: string
+  /**
+   * Probed version of the binary this argv will be fed to (drivers read it
+   * from util/opencode-version-registry). Picks the auto-approve flag
+   * SPELLING — see resolveAutoApproveFlag. Omitted/null/unparseable → the
+   * legacy spelling (deliberate: every test stub reports ≤1.14.99 or is never
+   * probed, so the golden argv and both stub families stay byte-identical).
+   */
+  binaryVersion?: string | null
+}
+
+/**
+ * opencode ≥ this version renamed `run --dangerously-skip-permissions` →
+ * `--auto` (pure rename — identical describe string; the legacy spelling is
+ * REMOVED, not aliased).
+ */
+export const OPENCODE_AUTO_FLAG_MIN_VERSION = '1.18.0'
+
+/**
+ * Pick the auto-approve flag spelling for the probed binary version.
+ *
+ * 2026-07-21 incident: on opencode 1.18.3 the legacy spelling is an unknown
+ * argument to the `.strict()` parser, and opencode's custom `.fail()`
+ * (opencode/src/index.ts:104-114) swallows the "Unknown argument" line and
+ * prints ONLY the `run` usage before exit 1 — so every spawn on this machine
+ * died with a bare usage dump and zero stdout. Version-gate the spelling
+ * instead of flipping it wholesale: MIN_OPENCODE_VERSION is 1.14.0, both
+ * generations must keep working.
+ *
+ * Unknown (null/undefined/unparseable) → LEGACY spelling, deliberately:
+ *  - the daemon boot-probes the default binary before anything can spawn, so
+ *    real runs always resolve a version (this machine: 1.18.3 → `--auto`);
+ *  - the TS mocks (`['bun','run',…]` heads) and the six e2e shell stubs
+ *    (report 1.14.99) then keep today's argv byte-for-byte.
+ */
+export function resolveAutoApproveFlag(
+  binaryVersion: string | null | undefined,
+): '--auto' | '--dangerously-skip-permissions' {
+  if (binaryVersion == null) return '--dangerously-skip-permissions'
+  // Normalize through extractVersion FIRST: compareSemver returns 0 ("equal")
+  // for unparseable input, which would silently pick `--auto` for garbage.
+  const parsed = extractVersion(binaryVersion)
+  if (parsed === null) return '--dangerously-skip-permissions'
+  return compareSemver(parsed, OPENCODE_AUTO_FLAG_MIN_VERSION) >= 0
+    ? '--auto'
+    : '--dangerously-skip-permissions'
 }
 
 /**
@@ -51,10 +97,13 @@ export function buildCommand(opts: OpencodeCommandOptions, prompt: string): stri
   // `--format json` mode; without it `cli/cmd/run.ts:671` filters them
   // out and the SessionTab can never show the model's thinking blocks.
   //
-  // `--dangerously-skip-permissions` is UNCONDITIONAL: the CLI run has no
+  // The auto-approve flag is UNCONDITIONAL: the CLI run has no
   // permission-answer channel, so a non-skip run would hang on the first
   // tool prompt. flag-audit W0（§3 假旋钮）删掉了从未有生产调用方传值的
   // `dangerouslySkipPermissions?: boolean` 参数——想恢复可配置需先解决应答通道。
+  // Its SPELLING is version-gated: opencode ≥1.18 removed
+  // `--dangerously-skip-permissions` in favor of `--auto` — see
+  // resolveAutoApproveFlag above (2026-07-21 incident lock).
   const cmd = [
     ...head,
     'run',
@@ -63,7 +112,7 @@ export function buildCommand(opts: OpencodeCommandOptions, prompt: string): stri
     '--format',
     'json',
     '--thinking',
-    '--dangerously-skip-permissions',
+    resolveAutoApproveFlag(opts.binaryVersion),
   ]
   // RFC-026: clarify-inline rerun — resume the prior opencode session so the
   // agent has its full prior transcript + state. Only ever populated by the
@@ -161,6 +210,8 @@ export interface OpencodeSpawnContext extends OpencodeEnvContext {
   agentName: string
   prompt: string
   resumeSessionId?: string
+  /** See OpencodeCommandOptions.binaryVersion (flag-spelling version gate). */
+  binaryVersion?: string | null
 }
 
 /** Combine argv + env into one spawn plan (the opencode driver's buildSpawn). */
@@ -173,6 +224,7 @@ export function buildOpencodeSpawn(ctx: OpencodeSpawnContext): {
       opencodeCmd: ctx.opencodeCmd,
       agent: { name: ctx.agentName },
       resumeSessionId: ctx.resumeSessionId,
+      binaryVersion: ctx.binaryVersion,
     },
     ctx.prompt,
   )

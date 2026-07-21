@@ -69,6 +69,32 @@ describe('buildOpencodeSpawn — argv golden (RFC-111 A2)', () => {
     ])
   })
 
+  it('binaryVersion ≥1.18 spells the auto-approve flag --auto (2026-07-21 incident lock)', () => {
+    // opencode 1.18.0 REMOVED --dangerously-skip-permissions (renamed --auto,
+    // identical describe). On 1.18.3 the legacy spelling is an unknown argument:
+    // the strict parser's .fail() swallows the error line and prints the bare
+    // `run` usage before exit 1 — every spawn on the machine died that way.
+    // The two goldens above pass NO binaryVersion and must stay legacy-spelled
+    // byte-for-byte (that is what every TS/shell test stub receives).
+    const { cmd } = buildOpencodeSpawn({ ...BASE, binaryVersion: '1.18.3' })
+    expect(cmd).toEqual([
+      'opencode',
+      'run',
+      '--agent',
+      'my-agent',
+      '--format',
+      'json',
+      '--thinking',
+      '--auto',
+      '--',
+      'THE PROMPT',
+    ])
+    // Below the rename boundary the legacy spelling is preserved.
+    const legacy = buildOpencodeSpawn({ ...BASE, binaryVersion: '1.17.8' })
+    expect(legacy.cmd).toContain('--dangerously-skip-permissions')
+    expect(legacy.cmd).not.toContain('--auto')
+  })
+
   it('empty resumeSessionId is treated as absent (no --session)', () => {
     const { cmd } = buildOpencodeSpawn({ ...BASE, resumeSessionId: '' })
     expect(cmd).not.toContain('--session')

@@ -33,8 +33,9 @@ Required: `--prompt`, `--out`, `--id`. The script:
 
 1. Probes `opencode --version` (fails fast if missing).
 2. Creates a throwaway git repo cwd (or accepts `--cwd path/to/repo`).
-3. Spawns `opencode run "<prompt>" --format json
---dangerously-skip-permissions`.
+3. Spawns `opencode run "<prompt>" --format json` plus the version-matched
+   auto-approve flag (`--auto` on opencode ≥1.18, `--dangerously-skip-permissions`
+   below — the 1.18 rename removed the legacy spelling).
 4. Writes the magic header + captured stdout to `--out`.
 
 Filename convention: `<opencodeVersion>-<recordingId>.ndjson`.
