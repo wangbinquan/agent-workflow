@@ -118,6 +118,18 @@ export function deriveRoundsUsed(
     (r) =>
       r.nodeId === WG_MEMBER_NODE_ID &&
       r.status !== 'canceled' &&
+      // 2026-07-21（T3B 实测回归）—— `interrupted` 的 fc 成员行不计费。
+      // orphan reap 自己定义它是「安全默认 → auto-RESUME」（orphanReconcile.ts:8）：
+      // 语义上没跑完、注定由重派/重跑行接手，重跑行照常计 1 格；若被杀前身也计入，
+      // 同一逻辑消耗就被双重计费。与 `wg-protocol-retry` 的豁免同构（方向相反：
+      // 协议重试豁免**重试行**、这里豁免**前身行**——都保证一次逻辑消耗只计一次）。
+      // 实测（任务 01KY25DM…10B1）：daemon 反复重启把 33/160 = 20.6% 预算烧在
+      // interrupted 前身行上，直接把任务逼进 max-rounds-wrapup 假触顶。
+      // lw 分支**故意不动**：lw 走 max(wg_round)+NULL 尾口径，重跑同轮对 max 天然
+      // 免疫；NULL 尾的被杀行双计已由 supersededKilledClarifyIds 处理（RFC-209 T7），
+      // 「未被取代的 NULL 尾计入」是 rfc209-round-ledger.test.ts 锁定的既有裁定，
+      // 改它需要独立的 lw 实测证据。
+      r.status !== 'interrupted' &&
       r.rerunCause !== 'wg-protocol-retry' &&
       !superseded.has(r.id),
   ).length

@@ -8,7 +8,8 @@
 //
 // 本文件锁：
 //   1. `deriveRoundsUsed` 与 RFC-209 之前的 `countRoundsUsed` 口径**互 oracle**
-//      （唯一允许的差异 = 被取代的被杀反问续跑行排除）；
+//      （允许的差异只有两条：① 被取代的被杀反问续跑行排除【T7】；② fc 分支豁免
+//      `interrupted` 前身行【2026-07-21 T3B 回归，见文件尾 describe】）；
 //   2. 被取代行排除在 **lw 与 fc 都**生效（v1 的打戳方案对 fc 是 no-op —— fc 分支
 //      根本不读 wg_round，这一条是它的红→绿）；
 //   3. `resolveMessageRound` 的两模式语义：lw = 账本读数、fc 恒 0；
@@ -200,17 +201,69 @@ describe('RFC-209 T7 — 被重铸的反问续跑不再双计', () => {
     expect(legacyCountRoundsUsed('leader_worker', rows)).toBe(6)
   })
 
-  test('分组按 (nodeId, shardKey)：不同 shard 之间不互相取代', () => {
+  test('分组按 (nodeId, shardKey)：不同 shard 之间不互相取代（lw 口径）', () => {
+    // 原 fc 版本断言「shard a 的 interrupted 未被 shard b 取代 ⇒ 仍计入 ⇒ 2」。
+    // 2026-07-21 起 fc 直接豁免全部 interrupted（见下一个 describe），
+    // 「不互相取代」这个分组语义改用 lw 场景锁：a 的 interrupted NULL 尾不被
+    // b 的 pending 取代 ⇒ 两条 NULL 尾各计 1。
     const rows = [
       row({
-        nodeId: WG_MEMBER,
+        nodeId: WG_LEADER,
         shardKey: 'a',
         status: 'interrupted',
         rerunCause: 'clarify-answer',
       }),
-      row({ nodeId: WG_MEMBER, shardKey: 'b', status: 'pending', rerunCause: 'clarify-answer' }),
+      row({ nodeId: WG_LEADER, shardKey: 'b', status: 'pending', rerunCause: 'clarify-answer' }),
+    ]
+    expect(deriveRoundsUsed('leader_worker', rows)).toBe(2)
+  })
+})
+
+describe('2026-07-21 T3B 回归 — fc 的 interrupted 前身行不计费', () => {
+  // 事故：daemon（并发开发的 --watch）反复重启，orphan reap 把在跑的 fc 成员行
+  // 杀成 `interrupted`（orphanReconcile.ts 注释自述这是「安全默认 → auto-RESUME」），
+  // 恢复后卡片由**新 run** 重跑。旧口径把前身行也计入 max_rounds ⇒ 同一逻辑消耗
+  // 双重计费。实测任务 01KY25DM7EC2T7J2ZKGMQA10B1：160 格预算里 33 格（20.6%）
+  // 烧在 interrupted 前身行上，任务被逼进 max-rounds-wrapup 假触顶——8 张 open 卡
+  // 明明还有真实预算可用。修法与 `wg-protocol-retry` 豁免同构：一次逻辑消耗只计一次
+  // （协议重试豁免重试行；中断豁免前身行，重跑行照常计费）。
+  // lw 故意不在本次范围（max+NULL 尾口径另有 T7 窄口，见上一个 describe）。
+
+  test('fc：interrupted 前身 + 重跑 done ⇒ 只计重跑那 1 格', () => {
+    const rows = [
+      row({ nodeId: WG_MEMBER, shardKey: 'card-1', status: 'interrupted' }), // 被 reap 的前身
+      row({ nodeId: WG_MEMBER, shardKey: 'card-1', status: 'done' }), // resume 后的重跑
+    ]
+    expect(deriveRoundsUsed('free_collab', rows)).toBe(1)
+  })
+
+  test('fc：T3B 事故形状 —— done×3 + interrupted×2 + protocol-retry×1 ⇒ 3', () => {
+    const rows = [
+      row({ nodeId: WG_MEMBER, status: 'done' }),
+      row({ nodeId: WG_MEMBER, status: 'done' }),
+      row({ nodeId: WG_MEMBER, status: 'done' }),
+      row({ nodeId: WG_MEMBER, status: 'interrupted' }), // daemon 重启收割，无 revive 对应行
+      row({ nodeId: WG_MEMBER, status: 'interrupted', rerunCause: 'wg-assignment' }),
+      row({ nodeId: WG_MEMBER, rerunCause: 'wg-protocol-retry' }),
+    ]
+    expect(deriveRoundsUsed('free_collab', rows)).toBe(3)
+  })
+
+  test('fc：还在跑（running/pending）照常占格 —— 豁免只针对 interrupted', () => {
+    const rows = [
+      row({ nodeId: WG_MEMBER, status: 'running' }),
+      row({ nodeId: WG_MEMBER, status: 'pending' }),
+      row({ nodeId: WG_MEMBER, status: 'interrupted' }),
     ]
     expect(deriveRoundsUsed('free_collab', rows)).toBe(2)
+  })
+
+  test('lw 口径不受影响：interrupted NULL 尾仍按 T7 既有裁定计入', () => {
+    const rows = [
+      row({ nodeId: WG_LEADER, wgRound: 3, rerunCause: 'wg-leader-round' }),
+      row({ nodeId: WG_LEADER, rerunCause: 'clarify-answer', status: 'interrupted' }),
+    ]
+    expect(deriveRoundsUsed('leader_worker', rows)).toBe(4)
   })
 })
 
