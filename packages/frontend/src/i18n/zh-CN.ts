@@ -853,6 +853,8 @@ export interface Resources {
     selfServe: string
     stepDone: string
     openResource: string
+    open: string
+    openEditorNewTab: string
     runtimeUnready: string
     artifactsTitle: string
     artifactsEmpty: string
@@ -4430,6 +4432,8 @@ export const zhCN: Resources = {
     selfServe: '我自己来',
     stepDone: '已完成',
     openResource: '打开它 →',
+    open: '打开',
+    openEditorNewTab: '在新标签打开 {{name}} 看看/改改 ↗',
     runtimeUnready: '运行时还没就绪，任务可能跑不起来。先到设置里检查运行时与凭据。',
     artifactsTitle: '本次引导产生的资源',
     artifactsEmpty: '还没有产生任何资源。',

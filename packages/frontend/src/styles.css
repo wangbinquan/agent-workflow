@@ -8042,10 +8042,13 @@ details.form-section[open] > summary {
   font-size: 12px;
 }
 
-/* Push the row action to the trailing edge so a list of artifacts reads as a
-   column of names with one action rail, not ragged inline text. */
-.onboarding__artifact > .btn {
+/* Push the row's actions to the trailing edge so a list of artifacts reads as a
+   column of names with one aligned action rail, not ragged inline text. */
+.onboarding__artifact-actions {
   margin-inline-start: auto;
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 /* ---- Reviews list group heading ---- */

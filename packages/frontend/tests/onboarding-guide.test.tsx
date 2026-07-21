@@ -179,27 +179,58 @@ describe('RFC-211 homepage invitation', () => {
 })
 
 describe('RFC-211 guide navigation targets', () => {
-  test('every post-provision destination is a route that actually exists', () => {
+  test('every open-editor link points at a real route shape', async () => {
     // Caught by walking the tour in a real browser: the workflow track sent
     // people to '/workflows/$id/edit', which renders "Not Found" — the editor
-    // route is '/workflows/$id'. Unit tests could not see it (the router is
-    // mocked) and typecheck could not either (TanStack's `to` is widened with
-    // `as never` here). So compare the strings against the registered paths.
+    // route is '/workflows/$id'. The unit tests could not see it (router is
+    // mocked) and typecheck could not either (`as never`). These links are now
+    // plain hrefs from a pure function, so assert each has EXACTLY the shape its
+    // route declares — one dynamic trailing segment, no stray '/edit'.
+    const { onboardingEditHref, onboardingSelfServeHref } = await import('../src/routes/onboarding')
     const readSrc = (rel: string): string =>
       readFileSync(resolve(__dirname, '..', 'src', rel), 'utf8')
 
-    const guide = readSrc('routes/onboarding.tsx')
-    const targets = [...guide.matchAll(/to: '(\/[^']*\$[^']*)'/g)].map((m) => m[1]!)
-    expect(targets.length).toBeGreaterThan(0)
+    const cases = [
+      {
+        type: 'agent',
+        re: /^\/agents\/[^/?]+$/,
+        file: 'routes/agents.detail.tsx',
+        pathRe: /path: '\/\$name'/,
+      },
+      {
+        type: 'skill',
+        re: /^\/skills\/[^/?]+$/,
+        file: 'routes/skills.detail.tsx',
+        pathRe: /path: '\/\$name'/,
+      },
+      {
+        type: 'workflow',
+        re: /^\/workflows\/[^/?]+$/,
+        file: 'routes/workflows.edit.tsx',
+        pathRe: /path: '\/workflows\/\$id'/,
+      },
+      {
+        type: 'workgroup',
+        re: /^\/workgroups\/[^/?]+$/,
+        file: 'routes/workgroups.detail.tsx',
+        pathRe: /path: '\/workgroups\/\$name'/,
+      },
+    ] as const
 
-    // Registered leaf paths, reassembled from each route file's own definition.
-    const registered = new Set([
-      '/agents' + /path: '(\/\$name)'/.exec(readSrc('routes/agents.detail.tsx'))![1]!,
-      '/skills' + /path: '(\/\$name)'/.exec(readSrc('routes/skills.detail.tsx'))![1]!,
-      /path: '(\/workflows\/\$id)'/.exec(readSrc('routes/workflows.edit.tsx'))![1]!,
-      /path: '(\/workgroups\/\$name)'/.exec(readSrc('routes/workgroups.detail.tsx'))![1]!,
-    ])
-    expect(targets.filter((t) => !registered.has(t))).toEqual([])
+    for (const c of cases) {
+      const href = onboardingEditHref(c.type, 'SAMPLEULID', 'sample-name')
+      expect({ type: c.type, href, ok: c.re.test(href) }).toEqual({ type: c.type, href, ok: true })
+      expect({ type: c.type, routeExists: c.pathRe.test(readSrc(c.file)) }).toEqual({
+        type: c.type,
+        routeExists: true,
+      })
+    }
+
+    // The "I'll do it myself" destinations exist too.
+    expect(/path: '\/new'/.test(readSrc('routes/agents.new.tsx'))).toBe(true)
+    expect(/path: '\/new'/.test(readSrc('routes/skills.new.tsx'))).toBe(true)
+    expect(onboardingSelfServeHref('workflow.create')).toBe('/workflows?create=true')
+    expect(onboardingSelfServeHref('workgroup.create')).toBe('/workgroups?create=true')
   })
 })
 
@@ -266,12 +297,49 @@ describe('RFC-211 guided tour page', () => {
     })
   })
 
-  test('"I\'ll do it myself" deep-links to the real create form', async () => {
+  test('"I\'ll do it myself" opens the real create form in a NEW TAB', async () => {
+    // New tab, not in-place navigation: the tour tab must stay put so the user
+    // does not have to find their way back to a page that isn't in the sidebar.
     stubFetch([{ match: /\/api\/onboarding\/runs$/, body: [RUN] }])
     await renderGuide()
     fireEvent.click(await screen.findByTestId('guide-track-agent'))
     const link = await screen.findByTestId('guide-self-serve')
     expect(link.getAttribute('href')).toBe('/agents/new')
+    expect(link.getAttribute('target')).toBe('_blank')
+  })
+
+  test('"build it for me" keeps you ON the tour and surfaces an in-place open-editor link', async () => {
+    // The whole point of this change: provisioning must NOT navigate away. The
+    // built resource appears right here, with a new-tab link to its editor.
+    stubFetch([
+      {
+        match: /\/api\/onboarding\/runs$/,
+        body: [
+          {
+            ...RUN,
+            completedSteps: ['agent.create'],
+            artifacts: [
+              {
+                id: 'art1',
+                runId: RUN.id,
+                resourceType: 'agent',
+                resourceId: '01AGENTID',
+                resourceName: 'guide-coder-abcd1234',
+                alive: true,
+                createdAt: 1,
+              },
+            ],
+          },
+        ],
+      },
+    ])
+    await renderGuide()
+    fireEvent.click(await screen.findByTestId('guide-track-agent'))
+    const open = await screen.findByTestId('guide-open-editor')
+    expect(open.getAttribute('href')).toBe('/agents/guide-coder-abcd1234')
+    expect(open.getAttribute('target')).toBe('_blank')
+    // Still on the tour, not navigated to the agent page.
+    expect(screen.getByTestId('guide-page')).toBeTruthy()
   })
 
   test('the run step warns when no runtime is ready, and stays quiet when one is', async () => {

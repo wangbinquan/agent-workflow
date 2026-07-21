@@ -722,6 +722,8 @@ export const enUS: Resources = {
     selfServe: "I'll do it myself",
     stepDone: 'Done',
     openResource: 'Open it →',
+    open: 'Open',
+    openEditorNewTab: 'Open {{name}} in a new tab ↗',
     runtimeUnready:
       'The runtime is not ready, so a task may fail to start. Check the runtime and credentials in Settings first.',
     artifactsTitle: 'What this tour created',

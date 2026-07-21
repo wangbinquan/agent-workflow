@@ -7,16 +7,18 @@
 // modal that hijacks the app — this is an ordinary page you can leave at any
 // time, and the thing it produces is real, editable resources.
 //
-// Every step offers both paths:
-//   - "build it for me" provisions a working example server-side and drops you
-//     on its edit page, so the first thing you see is the real form;
-//   - "I'll do it myself" links to the ordinary create form, and the adopt
-//     picker below it registers whatever you built into the tour.
+// Every step offers both paths, and NEITHER navigates away — being bounced onto
+// an edit page with no way back to a tour that isn't in the sidebar was the
+// "jumping back and forth" the page used to cause:
+//   - "build it for me" provisions a working example server-side; it appears in
+//     the artifacts card right here, with an "open editor" link (new tab);
+//   - "I'll do it myself" opens the ordinary create form in a new tab, and the
+//     adopt picker registers whatever you built into the tour.
 // Completion is never inferred from list length: another user's public resource
 // (or, for an admin, literally everyone's) would tick the box for you.
 
 import { useMemo, useState } from 'react'
-import { createRoute, Link, useNavigate } from '@tanstack/react-router'
+import { createRoute } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import {
@@ -63,25 +65,51 @@ function stepResourceType(step: OnboardingStep): 'agent' | 'skill' | 'workflow' 
   return track
 }
 
-function selfServePath(step: OnboardingStep): { to: string; search?: Record<string, unknown> } {
+/**
+ * "I'll do it myself" — the ordinary create form, as a plain URL so it can open
+ * in a NEW TAB. Keeping the guide tab put is the whole point: the tour is a home
+ * base you return to, not a place you get bounced out of.
+ */
+export function onboardingSelfServeHref(step: OnboardingStep): string {
   switch (stepResourceType(step)) {
     case 'agent':
-      return { to: '/agents/new' }
+      return '/agents/new'
     case 'skill':
-      return { to: '/skills/new' }
+      return '/skills/new'
     case 'workflow':
       // Workflows retired their /new route; creation is a quick-create dialog
       // on the list page, opened by ?create=true.
-      return { to: '/workflows', search: { create: true } }
+      return '/workflows?create=true'
     case 'workgroup':
-      return { to: '/workgroups', search: { create: true } }
+      return '/workgroups?create=true'
+  }
+}
+
+/**
+ * The edit surface for a resource the guide built. Opened in a new tab too, so
+ * "let me look at what it made" never costs you your place in the tour.
+ */
+export function onboardingEditHref(
+  type: 'agent' | 'skill' | 'workflow' | 'workgroup',
+  resourceId: string,
+  resourceName: string,
+): string {
+  switch (type) {
+    case 'agent':
+      return `/agents/${encodeURIComponent(resourceName)}`
+    case 'skill':
+      return `/skills/${encodeURIComponent(resourceName)}`
+    case 'workflow':
+      // Workflows are addressed by id (names are not unique).
+      return `/workflows/${encodeURIComponent(resourceId)}`
+    case 'workgroup':
+      return `/workgroups/${encodeURIComponent(resourceName)}`
   }
 }
 
 function OnboardingPage() {
   const { t } = useTranslation()
   const qc = useQueryClient()
-  const navigate = useNavigate()
   const isAdmin = useIsAdmin()
   const actor = useActor()
   const [track, setTrack] = useState<OnboardingTrack | null>(null)
@@ -104,6 +132,13 @@ function OnboardingPage() {
   const steps = track === null ? [] : ONBOARDING_TRACK_STEPS[track]
   const currentStep = steps[stepIndex] ?? null
   const completed = new Set(run?.completedSteps ?? [])
+  // The resource this step is about, if it exists yet — powers the in-place
+  // "open editor (new tab)" link so the user never has to leave the tour to see
+  // what was built.
+  const stepArtifact =
+    currentStep === null
+      ? undefined
+      : run?.artifacts.find((a) => a.resourceType === stepResourceType(currentStep) && a.alive)
 
   /**
    * The tour writes real resources through the server, so every mutation has to
@@ -135,26 +170,13 @@ function OnboardingPage() {
   const provision = useMutation<ProvisionOnboardingResult, Error, OnboardingStep>({
     mutationFn: (step) =>
       api.post(`/api/onboarding/runs/${encodeURIComponent(run?.id ?? '')}/provision`, { step }),
-    onSuccess: async (res) => {
+    // Deliberately does NOT navigate. Bouncing the user onto the edit page (with
+    // no way back to a tour that isn't in the sidebar) is exactly the "jumping
+    // back and forth" complaint. The built resource shows up right here in the
+    // artifacts card, and an "open editor" link (new tab) is there for anyone
+    // who wants to actually look at it.
+    onSuccess: async () => {
       await invalidateResourceLists()
-      // Land on the EDIT surface, not a read-only detail: seeing the real form
-      // pre-filled is the part that teaches.
-      if (res.resourceType === 'agent') {
-        void navigate({ to: '/agents/$name', params: { name: res.resourceName } as never } as never)
-      } else if (res.resourceType === 'skill') {
-        void navigate({ to: '/skills/$name', params: { name: res.resourceName } as never } as never)
-      } else if (res.resourceType === 'workflow') {
-        // The editor route is '/workflows/$id' — there is no '/edit' segment.
-        void navigate({
-          to: '/workflows/$id',
-          params: { id: res.resourceId } as never,
-        } as never)
-      } else if (res.resourceType === 'workgroup') {
-        void navigate({
-          to: '/workgroups/$name',
-          params: { name: res.resourceName } as never,
-        } as never)
-      }
     },
   })
 
@@ -317,15 +339,36 @@ function OnboardingPage() {
                     ✓ {t('guide.stepDone')}
                   </span>
                 )}
-                <Link
-                  to={selfServePath(currentStep).to as never}
-                  search={selfServePath(currentStep).search as never}
+                {/* Both escapes open in a NEW TAB so the tour tab stays put —
+                    "build it for me" no longer teleports you onto the edit page
+                    and strands you there. */}
+                <a
+                  href={onboardingSelfServeHref(currentStep)}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="btn"
                   data-testid="guide-self-serve"
                 >
                   {t('guide.selfServe')}
-                </Link>
+                </a>
               </div>
+              {stepArtifact !== undefined && (
+                <div className="onboarding__actions">
+                  <a
+                    href={onboardingEditHref(
+                      stepResourceType(currentStep),
+                      stepArtifact.resourceId,
+                      stepArtifact.resourceName,
+                    )}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn--sm"
+                    data-testid="guide-open-editor"
+                  >
+                    {t('guide.openEditorNewTab', { name: stepArtifact.resourceName })}
+                  </a>
+                </div>
+              )}
               {provision.error !== null && <ErrorBanner error={provision.error} />}
 
               <AdoptPicker
@@ -354,18 +397,33 @@ function OnboardingPage() {
                   <li key={a.id} className="onboarding__artifact">
                     <span className="onboarding__artifact-name mono">{a.resourceName}</span>
                     <span className="onboarding__artifact-kind muted">{a.resourceType}</span>
-                    {/* Escape hatch for the adopt picker: without it, one
-                        mis-click would enrol a real resource in a destructive
-                        sweep with no way back. */}
-                    <button
-                      type="button"
-                      className="btn btn--xs"
-                      data-testid={`guide-artifact-release-${a.resourceType}`}
-                      disabled={release.isPending}
-                      onClick={() => release.mutate(a.id)}
-                    >
-                      {t('guide.releaseArtifact')}
-                    </button>
+                    {/* One trailing action cluster so every row's buttons line
+                        up regardless of how long its name is. */}
+                    <span className="onboarding__artifact-actions">
+                      {a.resourceType !== 'task' && (
+                        <a
+                          href={onboardingEditHref(a.resourceType, a.resourceId, a.resourceName)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn btn--xs"
+                          data-testid={`guide-artifact-open-${a.resourceType}`}
+                        >
+                          {t('guide.open')}
+                        </a>
+                      )}
+                      {/* Escape hatch for the adopt picker: without it, one
+                          mis-click would enrol a real resource in a destructive
+                          sweep with no way back. */}
+                      <button
+                        type="button"
+                        className="btn btn--xs"
+                        data-testid={`guide-artifact-release-${a.resourceType}`}
+                        disabled={release.isPending}
+                        onClick={() => release.mutate(a.id)}
+                      >
+                        {t('guide.releaseArtifact')}
+                      </button>
+                    </span>
                   </li>
                 ))}
               </ul>
