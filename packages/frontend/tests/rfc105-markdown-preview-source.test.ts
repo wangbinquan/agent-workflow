@@ -26,7 +26,10 @@ describe('RFC-105 WP-A — preview route + wiring', () => {
     expect(route).toContain("from '@/components/prose/Prose'")
     expect(route).toContain('<PageHeader')
     expect(route).toContain('<Prose')
-    expect(route).toContain('<RetryAction onRetry={() => void q.refetch()} />')
+    // RFC-214: the preview route's retry affordance is 收编 into
+    // ErrorBanner.onRetry (was a bespoke <RetryAction> button). Still pins that
+    // retry is wired to refetch — now directly on the banner.
+    expect(route).toContain('onRetry={() => void q.refetch()}')
     expect(route).not.toContain('<div className="error-box" data-testid="md-preview-invalid">')
     // No bespoke react-markdown instance in the preview route.
     expect(route).not.toContain('react-markdown')

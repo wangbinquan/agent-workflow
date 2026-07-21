@@ -341,13 +341,6 @@ export function ResourceSplitPage(props: ResourceSplitPageProps) {
     mobileBackRef.current?.focus({ preventScroll: true })
   }, [props.selectedKey])
 
-  const retryAction =
-    props.onRetry === undefined ? undefined : (
-      <button type="button" className="btn btn--sm" onClick={props.onRetry}>
-        {t('common.retry')}
-      </button>
-    )
-
   const clearSearch = useCallback(() => {
     setSearch('')
     searchInputRef.current?.focus()
@@ -386,7 +379,7 @@ export function ResourceSplitPage(props: ResourceSplitPageProps) {
             <div className="split__cards" data-testid="split-cards">
               {props.isLoading && items === undefined && <LoadingState size="compact" />}
               {props.error !== null && props.error !== undefined && (
-                <ErrorBanner error={props.error} action={retryAction} />
+                <ErrorBanner error={props.error} onRetry={props.onRetry} />
               )}
               {filteredEmpty && (
                 <EmptyState

@@ -92,13 +92,6 @@ export function ResourceGalleryPage(props: ResourceGalleryPageProps): ReactEleme
   const visibleCount = filtered?.length ?? 0
   const headerActions =
     isGenuineEmpty && hasEmptyAction ? props.emptyHeaderActions : props.headerActions
-  const retryAction =
-    props.onRetry === undefined ? undefined : (
-      <button type="button" className="btn btn--sm" onClick={props.onRetry}>
-        {t('common.retry')}
-      </button>
-    )
-
   const clearSearch = () => {
     setSearch('')
     props.onClearSearch?.()
@@ -120,7 +113,7 @@ export function ResourceGalleryPage(props: ResourceGalleryPageProps): ReactEleme
 
       {props.isLoading && <LoadingState data-testid={props.loadingTestid} />}
       {props.error !== null && props.error !== undefined && (
-        <ErrorBanner error={props.error} action={retryAction} />
+        <ErrorBanner error={props.error} onRetry={props.onRetry} />
       )}
       {isGenuineEmpty && (
         <EmptyState

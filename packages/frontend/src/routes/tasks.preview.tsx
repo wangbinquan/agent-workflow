@@ -50,15 +50,6 @@ function deriveTitle(source: PreviewResolution, explicit: string | undefined): s
   return ''
 }
 
-function RetryAction({ onRetry }: { onRetry: () => void }) {
-  const { t } = useTranslation()
-  return (
-    <button type="button" className="btn btn--sm" onClick={onRetry}>
-      {t('common.retry')}
-    </button>
-  )
-}
-
 export function TaskMarkdownPreviewPage() {
   const { t } = useTranslation()
   const { id } = Route.useParams()
@@ -153,9 +144,7 @@ function ArtifactPreviewBody({
   const data = q.data
   if (data === undefined) {
     if (q.error !== null && q.error !== undefined)
-      return (
-        <ErrorBanner error={q.error} action={<RetryAction onRetry={() => void q.refetch()} />} />
-      )
+      return <ErrorBanner error={q.error} onRetry={() => void q.refetch()} />
     if (q.isLoading) return <LoadingState size="compact" />
     return null
   }
@@ -163,7 +152,7 @@ function ArtifactPreviewBody({
   return (
     <>
       {q.error !== null && q.error !== undefined && (
-        <ErrorBanner error={q.error} action={<RetryAction onRetry={() => void q.refetch()} />} />
+        <ErrorBanner error={q.error} onRetry={() => void q.refetch()} />
       )}
       {data.truncated && (
         <div className="md-preview__truncated muted" role="note" data-testid="md-preview-truncated">
@@ -186,16 +175,14 @@ function FilePreviewBody({ taskId, path }: { taskId: string; path: string }) {
   const data = q.data
   if (data === undefined) {
     if (q.error !== null && q.error !== undefined)
-      return (
-        <ErrorBanner error={q.error} action={<RetryAction onRetry={() => void q.refetch()} />} />
-      )
+      return <ErrorBanner error={q.error} onRetry={() => void q.refetch()} />
     if (q.isLoading) return <LoadingState size="compact" />
     return null
   }
   return (
     <>
       {q.error !== null && q.error !== undefined && (
-        <ErrorBanner error={q.error} action={<RetryAction onRetry={() => void q.refetch()} />} />
+        <ErrorBanner error={q.error} onRetry={() => void q.refetch()} />
       )}
       {data.oversized ? (
         <OversizedHint taskId={taskId} path={path} size={data.size} />
@@ -215,9 +202,7 @@ function PortPreviewBody({ taskId, runId, port }: { taskId: string; runId: strin
   const data = q.data
   if (data === undefined) {
     if (q.error !== null && q.error !== undefined)
-      return (
-        <ErrorBanner error={q.error} action={<RetryAction onRetry={() => void q.refetch()} />} />
-      )
+      return <ErrorBanner error={q.error} onRetry={() => void q.refetch()} />
     if (q.isLoading) return <LoadingState size="compact" />
     return null
   }
@@ -225,7 +210,7 @@ function PortPreviewBody({ taskId, runId, port }: { taskId: string; runId: strin
   return (
     <>
       {q.error !== null && q.error !== undefined && (
-        <ErrorBanner error={q.error} action={<RetryAction onRetry={() => void q.refetch()} />} />
+        <ErrorBanner error={q.error} onRetry={() => void q.refetch()} />
       )}
       <PreviewContent body={out?.value ?? null} taskId={taskId} />
     </>
