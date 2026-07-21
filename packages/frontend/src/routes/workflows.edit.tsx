@@ -814,18 +814,22 @@ export function WorkflowEditorLoaded({
 
   const headerActions = (
     <>
-      <button
-        type="button"
-        className="btn btn--sm"
-        data-testid="workflow-add-step"
-        ref={paletteTriggerRef}
-        onClick={() => {
-          if (hasPaletteRail) paletteSearchRef.current?.focus()
-          else setModalSurface('palette')
-        }}
-      >
-        + {t('editor.nodePicker.addButton')}
-      </button>
+      {/* With the palette rail visible (wide) the sidebar IS the add-step
+        entry, so the header button only renders when the rail is absent —
+        there it is the sole free-insert entry (390 mobile e2e locks this;
+        HTML5 drag is unavailable there). Header duplicate removed on wide by
+        user decision, 2026-07-21. */}
+      {!hasPaletteRail && (
+        <button
+          type="button"
+          className="btn btn--sm"
+          data-testid="workflow-add-step"
+          ref={paletteTriggerRef}
+          onClick={() => setModalSurface('palette')}
+        >
+          + {t('editor.nodePicker.addButton')}
+        </button>
+      )}
       <button
         type="button"
         className="btn btn--sm workflow-history-action"

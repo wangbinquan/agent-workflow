@@ -47,3 +47,13 @@ describe('editor header starter entry removal', () => {
     expect(tourScript.includes('data-testid="workflow-start-template"')).toBe(false)
   })
 })
+
+describe('editor header add-step entry gating', () => {
+  test('the add-step button renders only when the palette rail is absent', () => {
+    // On wide the sidebar palette IS the entry (header duplicate removed by
+    // user decision, 2026-07-21); below wide the header button must stay —
+    // it is the sole free-insert entry there (390 mobile e2e depends on it).
+    expect(editorRoute).toMatch(/\{!hasPaletteRail && \([\s\S]{0,400}?workflow-add-step/)
+    expect(editorRoute.includes('workflow-add-step')).toBe(true)
+  })
+})
