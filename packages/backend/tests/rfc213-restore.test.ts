@@ -30,7 +30,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { openDb, type DbClient } from '../src/db/client'
-import { workflows } from '../src/db/schema'
+import { tasks, workflows } from '../src/db/schema'
 import { createBackup } from '../src/services/backup'
 import {
   computeRestoreDirection,
@@ -295,6 +295,66 @@ describe('RFC-213 restore refusals leave the live DB untouched', () => {
     })
     expect(r.safetyBackupPath).toBeNull()
     expect(r.restored.db).toBe(true)
+  })
+})
+
+describe('RFC-213 G4a mismatch-protect: restore suspends auto-recovery for non-terminal tasks', () => {
+  // Prevents the design-gate data loss: after a restore the DB rows are backup-era
+  // but the worktrees are current, so auto-resume must NOT silently roll a newer
+  // worktree back to a stale pre_snapshot. Reuses auto_recovery_suspended (which
+  // both auto loops already skip). MUTATION: skip the suspend UPDATE → the running
+  // task stays unsuspended → this reds.
+  test('non-terminal tasks are suspended; terminal tasks are not', async () => {
+    const appHome = tmp('rfc213-suspend-')
+    const dbPath = join(appHome, 'db.sqlite')
+    const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+    const wfId = ulid()
+    db.insert(workflows)
+      .values({
+        id: wfId,
+        name: 'wf',
+        definition: JSON.stringify({ $schema_version: 3, inputs: [], nodes: [], edges: [] }),
+      })
+      .run()
+    const mkTask = (status: string): string => {
+      const id = ulid()
+      db.insert(tasks)
+        .values({
+          id,
+          name: 't',
+          workflowId: wfId,
+          workflowSnapshot: '{}',
+          repoPath: '/r',
+          worktreePath: '/w',
+          baseBranch: 'main',
+          branch: `agent-workflow/${id}`,
+          status: status as never,
+          inputs: '{}',
+          startedAt: 0,
+        })
+        .run()
+      return id
+    }
+    const runningId = mkTask('running')
+    const doneId = mkTask('done')
+    const backup = await createBackup({ db, appHome, now: 1 })
+    sqliteOf(db).close()
+
+    await restoreBackup(backup.path, { appHome, dbPath, migrationsFolder: MIGRATIONS, now: 2 })
+
+    const check = new Database(dbPath, { readonly: true })
+    const suspended = (id: string): number =>
+      (
+        check.query('SELECT auto_recovery_suspended AS s FROM tasks WHERE id = ?').get(id) as {
+          s: number
+        }
+      ).s
+    try {
+      expect(suspended(runningId)).toBe(1) // non-terminal → suspended
+      expect(suspended(doneId)).toBe(0) // terminal → untouched
+    } finally {
+      check.close()
+    }
   })
 })
 

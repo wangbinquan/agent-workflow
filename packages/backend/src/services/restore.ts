@@ -26,7 +26,7 @@ import {
   unlinkSync,
 } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { openDb } from '@/db/client'
+import { openDb, type DbClient } from '@/db/client'
 import { quickCheckDbFile } from '@/db/integrity'
 import { recordRecoveryEvent } from '@/services/recovery'
 import { extractTarGz } from '@/util/archive'
@@ -197,6 +197,34 @@ export function swapInDbFile(incomingDb: string, dbPath: string): void {
   fsyncDir(dirname(dbPath))
 }
 
+// Non-terminal (still-active / recoverable) task statuses. Terminal = done /
+// failed / canceled. Kept local so restore doesn't couple to the lifecycle module.
+const NON_TERMINAL_TASK_STATUSES = [
+  'running',
+  'pending',
+  'awaiting_review',
+  'awaiting_human',
+  'interrupted',
+] as const
+
+/**
+ * RFC-213 G4a — after a restore, set `auto_recovery_suspended = 1` on every
+ * non-terminal task so the auto-resume / auto-repair loops skip them (they may be
+ * paired with an on-disk worktree that no longer matches the restored row).
+ * Returns how many rows were suspended.
+ */
+function suspendNonTerminalTasksAfterRestore(db: DbClient): number {
+  const sqlite = (db as unknown as { $client: Database }).$client
+  const placeholders = NON_TERMINAL_TASK_STATUSES.map(() => '?').join(',')
+  const res = sqlite
+    .query(
+      `UPDATE tasks SET auto_recovery_suspended = 1 ` +
+        `WHERE auto_recovery_suspended = 0 AND status IN (${placeholders})`,
+    )
+    .run(...NON_TERMINAL_TASK_STATUSES)
+  return res.changes
+}
+
 /**
  * Cold restore. The daemon MUST be stopped (the caller checks the lock). Throws
  * on refusal (downgrade / integrity / safety-backup-failed / pre-migration
@@ -291,24 +319,19 @@ export async function restoreBackup(
     }
 
     // Forward-migrate the swapped-in DB (also re-runs the boot integrity gate).
-    let migrated = false
-    if (willMigrate) {
-      const db = openDb({ path: dbPath, migrationsFolder })
-      migrated = true
+    const migrated = willMigrate
+    {
+      const db = openDb({ path: dbPath, migrationsFolder, skipMigrations: !willMigrate })
+      // RFC-213 G4a mismatch-protect: the restored rows are backup-era, but the
+      // on-disk worktrees are current. Suspend auto-recovery for every non-terminal
+      // task so the auto-resume loop can't silently roll a NEWER worktree back to a
+      // STALE pre_snapshot (design gate). Manual resume stays the user's informed
+      // choice; auto-resume is blocked until they clear the suspension.
+      const suspended = suspendNonTerminalTasksAfterRestore(db)
       await recordRecoveryEvent(db, {
         kind: 'restore',
-        reason: `restored ${tarballPath} (direction=${direction}, migrated)`,
-        after: { safetyBackupPath, direction },
-        now,
-      })
-      ;(db as unknown as { $client: Database }).$client.close()
-    } else {
-      // no-migrate: still record the event on the (already-current-schema) DB.
-      const db = openDb({ path: dbPath, migrationsFolder, skipMigrations: true })
-      await recordRecoveryEvent(db, {
-        kind: 'restore',
-        reason: `restored ${tarballPath} (direction=${direction}, no-migrate)`,
-        after: { safetyBackupPath, direction },
+        reason: `restored ${tarballPath} (direction=${direction}, ${migrated ? 'migrated' : 'no-migrate'})`,
+        after: { safetyBackupPath, direction, suspendedTasks: suspended },
         now,
       })
       ;(db as unknown as { $client: Database }).$client.close()
