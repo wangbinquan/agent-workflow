@@ -103,9 +103,7 @@ describe('RFC-205 sandbox status chip', () => {
     render(<SandboxCard />, { wrapper: wrap(newQc()) })
     const chip = await screen.findByTestId('sandbox-status-chip')
     expect(chip.className).toContain('status-chip--success')
-    expect(chip.textContent).toBe(
-      i18n.t('settings.sandbox.chipActive', { mechanism: 'seatbelt' }),
-    )
+    expect(chip.textContent).toBe(i18n.t('settings.sandbox.chipActive', { mechanism: 'seatbelt' }))
   })
 
   test('bwrap mechanism is named too', async () => {

@@ -31,8 +31,24 @@ export const RuntimeStatusEntrySchema = z.object({
 })
 export type RuntimeStatusEntry = z.infer<typeof RuntimeStatusEntrySchema>
 
+/**
+ * RFC-205 D6 — FS-sandbox observability block on GET /api/runtimes/status.
+ * `mode` echoes the effective config.sandboxMode; `mechanism` is what the
+ * boot-time probe identified for this platform (kept even when the trial run
+ * failed, so the UI can name what is missing; null = unsupported platform /
+ * not probed); `available` is the trial-run verdict.
+ */
+export const SandboxStatusSchema = z.object({
+  mode: z.enum(['enforce', 'warn', 'off']),
+  mechanism: z.enum(['seatbelt', 'bwrap']).nullable(),
+  available: z.boolean(),
+})
+export type SandboxStatus = z.infer<typeof SandboxStatusSchema>
+
 export const RuntimesStatusResponseSchema = z.object({
   runtimes: z.array(RuntimeStatusEntrySchema),
+  /** RFC-205 D6 — optional so pre-sandbox daemon responses stay parseable. */
+  sandbox: SandboxStatusSchema.optional(),
 })
 export type RuntimesStatusResponse = z.infer<typeof RuntimesStatusResponseSchema>
 

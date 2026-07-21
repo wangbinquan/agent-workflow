@@ -122,7 +122,11 @@ describe('RFC-208 · git cache work is killable, not just race-able', () => {
   // held, so the next request for that URL waits behind a corpse. Bounding the
   // child is what actually frees both. Design gate §6-5 / §6-13.
   test('cold clone and both fetch paths pass a timeout to the git child', () => {
-    expect(cacheSource).toContain('spawnGit(cloneArgs, { timeoutMs })')
+    // RFC-205 G1 adapted (2026-07-22): the clone spawn now threads an askpass
+    // lease env ALONGSIDE the same timeoutMs (multi-line call). The lock's
+    // point — the git child is time-bounded — holds; pin the whitespace-
+    // normalised fragment instead of the exact old single-line call.
+    expect(cacheSource.replace(/\s+/g, ' ')).toContain('spawnGit(cloneArgs, { timeoutMs,')
     const fetches = cacheSource.match(/runGit\([^\n]*'fetch', '--all'[\s\S]{0,120}?timeoutMs/g)
     // warm reuse (inside resolveCachedRepo) + manual refresh
     expect(fetches?.length ?? 0).toBeGreaterThanOrEqual(2)
