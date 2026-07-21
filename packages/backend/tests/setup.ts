@@ -71,7 +71,16 @@ afterEach(() => {
   if (entriesBefore !== undefined && cwd !== undefined) {
     const after = listEntries(cwd)
     if (after !== undefined) {
-      const leaked = [...after].filter((entry) => !entriesBefore.has(entry)).sort()
+      const leaked = [...after]
+        .filter((entry) => !entriesBefore.has(entry))
+        // Bun writes a transient `.<hash>-<n>.bun-build` file into cwd while
+        // `Bun.build({ compile })` runs and removes it asynchronously (a few
+        // tests shell out to the binary build). It is not a real leak — the
+        // afterEach snapshot just catches it mid-flight. Ignoring the exact
+        // pattern keeps the guard sound for genuine leaks without racing Bun's
+        // own cleanup.
+        .filter((entry) => !/^\.[0-9a-f]+-[0-9a-f]+\.bun-build$/.test(entry))
+        .sort()
       if (leaked.length > 0) {
         throw new Error(
           `Test leaked ${leaked.length} entr${leaked.length === 1 ? 'y' : 'ies'} into its working directory (${cwd}):\n` +
