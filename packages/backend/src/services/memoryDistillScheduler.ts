@@ -399,7 +399,20 @@ export function startMemoryDistillLoop(options: StartLoopOptions): DistillLoopHa
     })
   })
   const interval = options.intervalMs ?? 1000
+  // Reentrancy guard — mirrors the sibling tickers (gc.ts, eventsArchive.ts).
+  // distillTick is async and awaits a real LLM spawn (runDistill) that can take
+  // seconds, while the interval is 1Hz. Without this guard, tick N+1 fires while
+  // tick N is still awaiting: both SELECT the same `pending` rows before either
+  // has UPDATE'd them to `running` (there are awaits between the SELECT at the
+  // top of distillTick and the per-head claim), so the same debounce_key gets
+  // distilled twice — duplicate memory candidates + double token spend +
+  // attempts/lastError clobbering each other. Single-process deployment (flock
+  // single-instance) means this in-process guard fully closes the overlap.
+  // See design/test-guard-audit-2026-07-21 gap B6-data-4 / Top-16.
+  let running = false
   const handle = setInterval(() => {
+    if (running) return
+    running = true
     distillTick({
       db: options.db,
       spawnFn: options.spawnFn,
@@ -407,9 +420,13 @@ export function startMemoryDistillLoop(options: StartLoopOptions): DistillLoopHa
       defaultRuntime: options.defaultRuntime,
       model: options.model,
       sourceContextBudget: options.sourceContextBudget,
-    }).catch((err) => {
-      log.warn('tick threw', { error: err instanceof Error ? err.message : String(err) })
     })
+      .catch((err) => {
+        log.warn('tick threw', { error: err instanceof Error ? err.message : String(err) })
+      })
+      .finally(() => {
+        running = false
+      })
   }, interval)
   return {
     stop: () => {

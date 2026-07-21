@@ -32,6 +32,7 @@ import {
   listDistillJobs,
   recoverRunning,
   retryFailedJob,
+  startMemoryDistillLoop,
 } from '../src/services/memoryDistillScheduler'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { DistillerSpawnFn } from '../src/services/memoryDistiller'
@@ -577,5 +578,80 @@ describe('recoverRunning + manual control', () => {
       .run()
     expect((await listDistillJobs(db, { status: 'failed' })).length).toBe(1)
     expect((await listDistillJobs(db, {})).length).toBe(2)
+  })
+})
+
+// RFC-041 / design/test-guard-audit-2026-07-21 gap B6-data-4 (Top-16) — the
+// 1Hz loop must not run two ticks concurrently. distillTick awaits a real LLM
+// spawn mid-tick; without a reentrancy guard, tick N+1 fires while tick N is
+// still awaiting and claims a row tick N has not yet flipped to `running`,
+// distilling the same debounce_key twice. startMemoryDistillLoop had ZERO test
+// coverage before this.
+describe('startMemoryDistillLoop reentrancy', () => {
+  let db: DbClient
+  beforeEach(() => {
+    db = createInMemoryDb(MIGRATIONS)
+    resetBroadcastersForTests()
+  })
+
+  test('a slow tick is not overlapped by the next interval fire', async () => {
+    // Two jobs, DIFFERENT debounce keys, both due now. One tick (batch limit 5)
+    // picks both and processes them SEQUENTIALLY. The first spawn blocks on a
+    // gate; while it is blocked the interval keeps firing. With the guard the
+    // second head is not reached until the first spawn returns, so at most one
+    // spawn is ever in-flight. Without the guard, a second tick fires, finds the
+    // still-`pending` second head, claims it and spawns CONCURRENTLY → 2.
+    const { taskId } = seedTask(db)
+    await enqueueDistillJob(db, {
+      sourceKind: 'clarify',
+      sourceEventId: 'c1',
+      taskId,
+      debounceMs: 0,
+    })
+    await enqueueDistillJob(db, {
+      sourceKind: 'review',
+      sourceEventId: 'r1',
+      taskId,
+      debounceMs: 0,
+    })
+
+    let inFlight = 0
+    let maxInFlight = 0
+    let calls = 0
+    let release!: () => void
+    const gate = new Promise<void>((r) => {
+      release = r
+    })
+    const slowSpawn: DistillerSpawnFn = async (input) => {
+      calls += 1
+      inFlight += 1
+      maxInFlight = Math.max(maxInFlight, inFlight)
+      await gate
+      inFlight -= 1
+      return { exitCode: 0, stderr: '', stdout: emptyDistillerStdout(input) }
+    }
+
+    const loop = startMemoryDistillLoop({ db, spawnFn: slowSpawn, intervalMs: 5 })
+    try {
+      // Let many interval fires happen while the first spawn is blocked.
+      await new Promise((r) => setTimeout(r, 80))
+      // The guard serialises: exactly one spawn in-flight, only the first head
+      // claimed so far.
+      expect(maxInFlight).toBe(1)
+      expect(calls).toBe(1)
+
+      // Release; the tick finishes both heads sequentially, no duplicates.
+      release()
+      await new Promise((r) => setTimeout(r, 80))
+      expect(maxInFlight).toBe(1)
+      expect(calls).toBe(2)
+    } finally {
+      loop.stop()
+      release()
+    }
+
+    // Both jobs ended `done` exactly once — no double-distill.
+    const rows = db.select().from(memoryDistillJobs).all()
+    expect(rows.map((r) => r.status).sort()).toEqual(['done', 'done'])
   })
 })
