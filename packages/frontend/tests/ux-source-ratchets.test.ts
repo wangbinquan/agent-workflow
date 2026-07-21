@@ -88,6 +88,10 @@ const ROLE_DIALOG_ALLOWLIST = new Map([
     'components/workflow-editor/ValidationPanel.tsx',
     'non-modal anchored validation detail on wide editor surfaces',
   ],
+  // RFC-211 §12: the spotlight-tour bubble is a non-modal coach-mark anchored to
+  // a real page element — the page under it stays interactive by design (you
+  // click the highlighted control), so it must NOT be a focus-trapping Dialog.
+  ['components/tour/SpotlightTour.tsx', 'non-modal spotlight-tour coach-mark'],
 ])
 
 const INPUT_IMPLEMENTATION_ALLOWLIST = new Map([

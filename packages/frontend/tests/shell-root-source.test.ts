@@ -18,7 +18,10 @@ describe('RFC-198 root shell source contract', () => {
   test('keeps the fixed auth -> token-null transition -> authenticated branch order', () => {
     const authBranch = rootSource.indexOf("if (pathname === '/auth')")
     const tokenBranch = rootSource.indexOf('if (token === null)')
-    const authenticatedBranch = rootSource.indexOf('return <AppShell')
+    // RFC-211 §12: the authenticated branch now wraps AppShell in a
+    // TourProvider (persistent spotlight-tour overlay); anchor on <AppShell
+    // pathname to keep the branch-ORDER check meaningful.
+    const authenticatedBranch = rootSource.indexOf('<AppShell pathname')
     expect(authBranch).toBeGreaterThan(-1)
     expect(tokenBranch).toBeGreaterThan(authBranch)
     expect(authenticatedBranch).toBeGreaterThan(tokenBranch)

@@ -17,6 +17,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { setBaseUrl, setToken } from '../src/stores/auth'
+import { TourProvider } from '../src/components/tour/SpotlightTour'
 
 vi.mock('@tanstack/react-router', async () => {
   const actual = await vi.importActual<typeof RouterModule>('@tanstack/react-router')
@@ -73,7 +74,13 @@ function wrap(node: React.ReactElement) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   })
-  return render(<QueryClientProvider client={qc}>{node}</QueryClientProvider>)
+  // The guide page reads useTour() for its "walk me through it" button, so it
+  // must render inside a TourProvider (mounted app-wide in RootShell).
+  return render(
+    <QueryClientProvider client={qc}>
+      <TourProvider pathname="/onboarding">{node}</TourProvider>
+    </QueryClientProvider>,
+  )
 }
 
 async function renderGuide() {
