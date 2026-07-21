@@ -63,7 +63,10 @@ describe('RFC-200 source wiring locks', () => {
 
     const workgroup = read('packages/backend/src/services/workgroupRunner.ts')
     expect(workgroup.match(/loadRunEnvelopeNonce\(db, runId\)/g)?.length).toBeGreaterThanOrEqual(3)
-    expect(workgroup).toContain('composeMemberPrompt(state, memberId, assignment, envelopeNonce)')
+    // RFC-215 — composeMemberPrompt 收数组（lw 单卡包一层；fc 批直传），nonce
+    // 线程不变（本锁真正关心的事）。
+    expect(workgroup).toContain('composeMemberPrompt(state, memberId, [assignment], envelopeNonce)')
+    expect(workgroup).toContain('composeMemberPrompt(state, memberId, batch, envelopeNonce)')
     // RFC-207 — the renderer gained a 4th arg (resolved ask-back permission); the
     // nonce must still be threaded, which is what this lock is actually about.
     expect(workgroup).toContain(

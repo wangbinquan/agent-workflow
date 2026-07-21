@@ -1778,6 +1778,7 @@ export const enUS: Resources = {
       fcActive: 'In progress',
       fcDone: 'Done',
       fcEmpty: 'The list is still empty.',
+      fcBatch: 'batch ×{{count}}',
       infoTitle: 'Group info',
       infoGoal: 'Goal',
       infoMode: 'Mode',

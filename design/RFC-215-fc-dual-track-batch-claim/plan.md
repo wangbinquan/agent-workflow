@@ -1,6 +1,6 @@
 # RFC-215 — free_collab 双轨调度与批量认领（plan）
 
-- 状态：Draft v2（2026-07-21，随设计门修订同步）
+- 状态：Done（2026-07-21 实现落地；见下方交付记录）
 - 默认单 PR 交付（规模可控、改动集中 fc 链路）；commit 前缀
   `feat(workgroup): RFC-215 …`。
 
@@ -19,17 +19,28 @@
 
 ## 验收清单（对应 proposal AC）
 
-- [ ] AC-1 两轨互不占用（正反两向 + 同轨互斥）
-- [ ] AC-2 均分 + 上限 5（含边界短路 / 空切片 / 剩卡下一波）
-- [ ] AC-3 `wg_task_results` 逐卡汇报 + 缺卡回 open（含误发 `wg_result` 走重试不静默）
-- [ ] AC-4 失败语义 + `attempt_count` 预算（含 drive throw 收口）
-- [ ] AC-5 游标单一归属（fc 批不推 / 消息轨推 / lw 不变）
-- [ ] AC-6 预算末端批优先
-- [ ] AC-7 崩溃恢复矩阵 v2（失驱重配 / interrupted-reconcile / done 收卡不重跑）
-- [ ] AC-8 lw 零变化回归锁
-- [ ] AC-9 收敛/终局判定不变
-- [ ] AC-10 前端批徽记 + 房间可见性（runKindOf 批分支）+ i18n
-- [ ] AC-11 askerKey 跨批稳定（预算连续 + stop 命中）
+- [x] AC-1 两轨互不占用（`rfc215-fc-dual-track.test.ts`：S2 反转正反两向 + 同轨互斥 + S1 反转双轨合法）
+- [x] AC-2 均分 + 上限 5（同上：7/2⇒4+3、11/2⇒5+5 剩 1、3/5⇒1+1+1 无空批、idle=0/open=0 短路）
+- [x] AC-3 `wg_task_results` 逐卡汇报（`rfc215-batch-engine.test.ts`：漏报重试点名缺卡→耗尽已报卡照落缺卡回 open；误发 `wg_result` 走同一重试路径点名换端口，不静默）
+- [x] AC-4 失败语义 + `attempt_count`（认领即计数、自报 failed 回 open、预算封顶留 failed、整 run 失败整批回 open；drive throw 收口经共享 `settleCardAfterFailure` 子例程覆盖）
+- [x] AC-5 游标单一归属（批 run 后 cursor 表零行；lw 路径保留推进——`rfc186-resume-reconcile` 计数锁原样绿）
+- [x] AC-6 预算末端批优先（S3 反转：剩 1 格批占格、消息 capExceeded）
+- [x] AC-7 崩溃恢复矩阵 v2 三行全测（失驱重配不重计数 / interrupted⇒redispatch 重跑 / host done⇒0 次调用收卡）——顺手实锤并修复 RFC-186 遗留 bug：转移表从无 `running→dispatched`，单卡时代 reconcile redispatch 一触即抛炸引擎重入
+- [x] AC-8 lw 零变化（rfc164 全套原样绿 + 新增 lw merged-busy 锁 + lw 恒无 fc_claim 锁）
+- [x] AC-9 收敛/终局判定不变（rfc164-engine fc 收敛/确认门/deadlock 原测试绿）
+- [x] AC-10 前端批徽记（`wg-fc-batch-*` chip 复用 `.chip--tight`）+ 房间可见性（`runKindOf`/classify 批分支，`rfc179-member-current-run` 新锁：卡表为空也能按 key 归属）+ zh/en i18n
+- [x] AC-11 askerKey 跨批稳定（`rfc215-batch-claim-primitives.test.ts`：同成员两批同 key `asg:batch:{member}`；lw/msg key 不变）
+
+## 交付记录（2026-07-21）
+
+- 实现按 T1→T8 单批落地；`design.md §11` 既有测试改动清单逐行兑现：core claim-pairing
+  改写为批断言、engine fc fixture 换 `wg_task_results`（`doneBatchMember`）、
+  `retry-budget-single-source` 锁串 `priorRuns`→`attemptCount`、
+  `rfc186-resume-reconcile` cursor 计数 3 处不变原样绿、镜像锁 arity 兼容原样绿、
+  `rfc189-wg-round` 冻结 fixture 改显式列裸 SQL、`WakeInput` 新字段 optional 九处
+  字面量免改。
+- 门槛：typecheck / lint / format:check / shared 1354 / frontend 5044（含新批徽记锁）
+  / `build:binary` smoke 全绿；后端全量见 STATE.md 记录。
 
 ## 风险与缓释
 

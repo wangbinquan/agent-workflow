@@ -1400,6 +1400,13 @@ function FcTaskListCard({
 }) {
   const { t } = useTranslation()
   const groups = groupFcAssignments(assignments)
+  // RFC-215 — 同批徽记：批量认领后多张卡共享一个 run（nodeRunId），按 run 分组
+  // 计数,>1 的卡行挂「同批 ×N」chip,让"这几张是一个成员一次跑掉的"可见。
+  const batchSizeByRun = new Map<string, number>()
+  for (const a of assignments) {
+    if (a.nodeRunId === null) continue
+    batchSizeByRun.set(a.nodeRunId, (batchSizeByRun.get(a.nodeRunId) ?? 0) + 1)
+  }
   const sections = [
     { key: 'open', label: t('workgroups.room.fcOpen'), rows: groups.open },
     { key: 'active', label: t('workgroups.room.fcActive'), rows: groups.active },
@@ -1431,6 +1438,13 @@ function FcTaskListCard({
                     {a.title}
                   </span>
                   {assignee !== undefined && <span className="muted">@{assignee.displayName}</span>}
+                  {a.nodeRunId !== null && (batchSizeByRun.get(a.nodeRunId) ?? 0) > 1 && (
+                    <span className="chip chip--tight" data-testid={`wg-fc-batch-${a.id}`}>
+                      {t('workgroups.room.fcBatch', {
+                        count: batchSizeByRun.get(a.nodeRunId) ?? 0,
+                      })}
+                    </span>
+                  )}
                   {a.status === 'open' && (
                     <ConfirmButton
                       label={t('workgroups.room.cancelCard')}

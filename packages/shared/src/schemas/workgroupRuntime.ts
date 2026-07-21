@@ -198,6 +198,11 @@ export const WG_PORT_MESSAGES = 'wg_messages'
 export const WG_PORT_DECISION = 'wg_decision'
 export const WG_PORT_RESULT = 'wg_result'
 export const WG_PORT_TASKS_ADD = 'wg_tasks_add'
+/** RFC-215 — fc 任务批 run 的逐卡汇报端口（wg_result 仍属消息回合/lw worker）。 */
+export const WG_PORT_TASK_RESULTS = 'wg_task_results'
+
+/** RFC-215 — fc 批量认领单批上限（design §2.2；v1 常数，后续可升级为配置）。 */
+export const WG_FC_CLAIM_BATCH_LIMIT = 5
 
 /** Per-turn safety caps (design §12 消息风暴). */
 export const WG_MAX_ASSIGNMENTS_PER_TURN = 16
@@ -255,6 +260,20 @@ export const WgResultSchema = z.object({
   detail: z.string().max(65536).optional(),
 })
 export type WgResult = z.infer<typeof WgResultSchema>
+
+/**
+ * RFC-215 — 批 run 的逐卡结果（design §6.1）。`task` 是 prompt 里 `### Task k`
+ * 的批内序号（1 起），不让模型抄 ULID；`status:'failed'` = agent 自报该卡无法
+ * 完成（回 open 计预算），缺省 done。
+ */
+export const WgTaskResultItemSchema = z.object({
+  task: z.number().int().min(1),
+  status: z.enum(['done', 'failed']).default('done'),
+  summary: z.string().trim().min(1).max(16384),
+  detail: z.string().max(65536).optional(),
+})
+export type WgTaskResultItem = z.infer<typeof WgTaskResultItemSchema>
+export const WgTaskResultsPortSchema = z.array(WgTaskResultItemSchema).max(WG_FC_CLAIM_BATCH_LIMIT)
 
 export const WgTaskAddItemSchema = z.object({
   title: z.string().trim().min(1).max(200),
@@ -378,6 +397,63 @@ export function parseWgResultPort(raw: string): WgPortParseResult<WgResult> {
 
 export function parseWgTasksAddPort(raw: string): WgPortParseResult<WgTaskAddItem[]> {
   return parseJsonPort(WgTasksAddPortSchema, raw)
+}
+
+/**
+ * RFC-215 — 批 run 逐卡汇报解析（design §6.1）。序号越界/重复整 port 拒绝
+ * （malformed-retry 语义，与派单原子性同理）；**缺卡不是解析错误**——`missing`
+ * 列出 [1..batchSize] 中未覆盖的序号，由 drive 层决定协议重试还是回 open。
+ */
+export type WgTaskResultsParse =
+  | { ok: true; value: WgTaskResultItem[]; missing: number[] }
+  | { ok: false; errors: string[] }
+
+export function parseWgTaskResultsPort(raw: string, batchSize: number): WgTaskResultsParse {
+  const r = parseJsonPort(WgTaskResultsPortSchema, raw)
+  if (!r.ok) return r
+  const errors: string[] = []
+  const seen = new Set<number>()
+  for (const item of r.value) {
+    if (item.task > batchSize) {
+      errors.push(`task ${item.task} out of range (batch has ${batchSize})`)
+      continue
+    }
+    if (seen.has(item.task)) errors.push(`duplicate entry for task ${item.task}`)
+    seen.add(item.task)
+  }
+  if (errors.length > 0) return { ok: false, errors }
+  const missing: number[] = []
+  for (let k = 1; k <= batchSize; k++) if (!seen.has(k)) missing.push(k)
+  return { ok: true, value: r.value, missing }
+}
+
+// ---------------------------------------------------------------------------
+// Batch shard key (RFC-215 design §3.1) — the single codec every consumer of
+// a `batch:` shardKey shares (engine registration, reconcile, autonomous
+// requeue, room classification, clarify asker key). memberId is ENCODED so
+// recovery paths never depend on a DB back-reference that the autonomous
+// requeue nulls out (design §12-4).
+// ---------------------------------------------------------------------------
+
+/** `batch:<memberId>:<id1>+<id2>...` — memberId/卡 id 均为 ULID（不含 `:`/`+`）。 */
+export function buildBatchShardKey(memberId: string, assignmentIds: readonly string[]): string {
+  return `batch:${memberId}:${assignmentIds.join('+')}`
+}
+
+export function parseBatchShardKey(
+  shardKey: string | null,
+): { memberId: string; assignmentIds: string[] } | null {
+  if (shardKey === null || !shardKey.startsWith('batch:')) return null
+  const rest = shardKey.slice('batch:'.length)
+  const sep = rest.indexOf(':')
+  if (sep <= 0) return null
+  const memberId = rest.slice(0, sep)
+  const ids = rest
+    .slice(sep + 1)
+    .split('+')
+    .filter((s) => s.length > 0)
+  if (ids.length === 0) return null
+  return { memberId, assignmentIds: ids }
 }
 
 /**

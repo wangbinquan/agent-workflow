@@ -147,19 +147,18 @@ describe('RFC-189 迁移 0095 — 回填互 oracle', () => {
       await insertOldRow(id, lwTask, r)
     }
     // lw member：assignment 行（取 wa.round=3）+ msg 行（窗口号）。
+    // RFC-215 T2：与上面 tasks 同理——0094 冻结库上 drizzle 会按 HEAD schema 全列
+    // 生成 INSERT（含 0105 的 attempt_count），必须裸 SQL 显式列钉住 0094 形状。
     const waId = ulid()
-    await db.insert(workgroupAssignments).values({
-      id: waId,
-      taskId: lwTask,
-      round: 3,
-      source: 'leader',
-      assigneeMemberId: 'm1',
-      title: 't',
-      briefMd: 'b',
-      status: 'done',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
+    await db.run(sql`
+      INSERT INTO workgroup_assignments (
+        id, task_id, round, source, assignee_member_id, title, brief_md,
+        status, created_at, updated_at
+      ) VALUES (
+        ${waId}, ${lwTask}, 3, 'leader', 'm1', 't', 'b',
+        'done', ${Date.now()}, ${Date.now()}
+      )
+    `)
     const lwMemberAssignId = 'M01'
     await insertOldRow(lwMemberAssignId, lwTask, {
       nodeId: '__wg_member__',

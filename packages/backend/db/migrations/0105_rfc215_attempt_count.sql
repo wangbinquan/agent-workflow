@@ -1,0 +1,1 @@
+ALTER TABLE `workgroup_assignments` ADD `attempt_count` integer DEFAULT 0 NOT NULL;

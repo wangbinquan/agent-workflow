@@ -589,6 +589,12 @@ export const workgroupAssignments = sqliteTable(
     resultMessageId: text('result_message_id'),
     /** free_collab title-dedup key (normalizeWgTaskTitle), design §7.3. */
     dedupKey: text('dedup_key'),
+    /**
+     * RFC-215 §5 — 该卡被编入批次（open→dispatched CAS 成功）的累计次数；失败回
+     * open 的预算判据（attempt_count < DEFAULT_PROTOCOL_RETRY_BUDGET）。批量
+     * shardKey 下按 shard 数 node_runs 行的旧口径失效，改由本列单一记账。
+     */
+    attemptCount: integer('attempt_count').notNull().default(0),
     createdAt: integer('created_at')
       .notNull()
       .default(sql`(unixepoch() * 1000)`),

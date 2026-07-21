@@ -16,11 +16,12 @@
 
 import type { WorkgroupAssignmentStatus } from '@agent-workflow/shared'
 import {
+  parseBatchShardKey,
   resolveClarifyBudget,
   wgClarifyAskerKey,
   workgroupHasHumanMember,
 } from '@agent-workflow/shared'
-import { and, eq, sql } from 'drizzle-orm'
+import { and, eq, inArray, sql } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import {
@@ -41,7 +42,12 @@ export const WORKGROUP_ASSIGNMENT_TRANSITIONS: Record<
 > = {
   open: ['dispatched', 'canceled'],
   dispatched: ['running', 'delivered', 'failed', 'canceled'],
-  running: ['done', 'failed', 'awaiting_human', 'canceled'],
+  // 'dispatched': RFC-215 §3.4 — reconcileRunningAssignments 的 redispatch 腿
+  // （daemon 崩溃后 host 行 interrupted，失驱的 running 卡打回 dispatched 重配）。
+  // RFC-186 写下该 CAS 时表里从没有这条边：单卡时代一进 redispatch 分支即抛
+  // IllegalWorkgroupAssignmentTransition 炸掉整个引擎重入（RFC-215 批恢复矩阵
+  // 测试首次实锤；此前无 DB 级崩溃恢复测试覆盖到这条腿）。
+  running: ['done', 'failed', 'awaiting_human', 'canceled', 'dispatched'],
   // 'dispatched'/'open': RFC-181 A2 — flipping autonomous ON dismisses an
   // in-flight clarify park and requeues the card (lw → same member; fc → pool).
   awaiting_human: ['running', 'failed', 'canceled', 'dispatched', 'open'],
@@ -96,11 +102,26 @@ export async function casAssignmentStatus(
   from: WorkgroupAssignmentStatus,
   to: WorkgroupAssignmentStatus,
   set: Partial<typeof workgroupAssignments.$inferInsert> = {},
+  opts: {
+    /**
+     * RFC-215 §3.2-2 — 认领即计数：open→dispatched 落地的同一条守卫 UPDATE 里
+     * SQL 自增 attempt_count。必须走表达式（快照+1 有丢增窗口——同 pass 另一
+     * drive 让卡走完 claim→failed→open 后，陈旧快照会覆盖真值）。
+     */
+    bumpAttempt?: boolean
+  } = {},
 ): Promise<boolean> {
   assertAssignmentTransition(from, to)
   const rows = await db
     .update(workgroupAssignments)
-    .set({ ...set, status: to, updatedAt: Date.now() })
+    .set({
+      ...set,
+      status: to,
+      updatedAt: Date.now(),
+      ...(opts.bumpAttempt === true
+        ? { attemptCount: sql`${workgroupAssignments.attemptCount} + 1` }
+        : {}),
+    })
     .where(and(eq(workgroupAssignments.id, assignmentId), eq(workgroupAssignments.status, from)))
     .returning({ taskId: workgroupAssignments.taskId })
   const landed = rows.length > 0
@@ -321,6 +342,10 @@ export async function dismissOpenClarifyParksForAutonomous(
         .run()
       const shard = s.sourceShardKey
       if (shard !== null && !shard.startsWith('msg:')) {
+        // RFC-215 §9 — 批 run 的 park 卡是一组：shardKey 编入整批卡 id，单卡等值
+        // 匹配对 `batch:` 键恒 0 行（设计门 ①P1-3/②F2：整批永滞留 awaiting_human）。
+        const batch = parseBatchShardKey(shard)
+        const cardIds = batch !== null ? batch.assignmentIds : [shard]
         const to: WorkgroupAssignmentStatus = resolvedMode === 'free_collab' ? 'open' : 'dispatched'
         assertAssignmentTransition('awaiting_human', to)
         const requeued = tx
@@ -333,14 +358,14 @@ export async function dismissOpenClarifyParksForAutonomous(
           })
           .where(
             and(
-              eq(workgroupAssignments.id, shard),
+              inArray(workgroupAssignments.id, cardIds),
               eq(workgroupAssignments.taskId, taskId),
               eq(workgroupAssignments.status, 'awaiting_human'),
             ),
           )
           .returning({ id: workgroupAssignments.id })
           .all()
-        if (requeued.length > 0) result.requeuedAssignments.push({ id: shard, to })
+        for (const r of requeued) result.requeuedAssignments.push({ id: r.id, to })
       }
     }
   })

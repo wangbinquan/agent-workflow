@@ -1237,6 +1237,28 @@ describe('WorkgroupRoom — fc task list panel (PR-5)', () => {
     await screen.findByTestId('workgroup-room')
     expect(screen.queryByTestId('workgroup-room-fc-list')).toBeNull()
   })
+
+  // RFC-215 — 批量认领:同 run（nodeRunId）的多张卡挂「同批 ×N」chip；单卡 run 不挂。
+  test('cards sharing one nodeRunId show a batch chip; solo runs do not', async () => {
+    const base = fcRoom()
+    const room = {
+      ...base,
+      assignments: base.assignments.map((a) =>
+        a.id === 'r1' || a.id === 'd1'
+          ? { ...a, status: 'running' as const, nodeRunId: 'run-batch-1' }
+          : a.id === 'done1'
+            ? { ...a, nodeRunId: 'run-solo' }
+            : a,
+      ),
+    }
+    installFetch(room)
+    renderRoom(room)
+    const panel = await screen.findByTestId('workgroup-room-fc-list')
+    expect(within(panel).getByTestId('wg-fc-batch-r1').textContent).toBe('batch ×2')
+    expect(within(panel).getByTestId('wg-fc-batch-d1').textContent).toBe('batch ×2')
+    expect(within(panel).queryByTestId('wg-fc-batch-done1')).toBeNull()
+    expect(within(panel).queryByTestId('wg-fc-batch-o1')).toBeNull()
+  })
 })
 
 describe('WorkgroupRoom — mid-run config entry + decision highlight (PR-5/6)', () => {

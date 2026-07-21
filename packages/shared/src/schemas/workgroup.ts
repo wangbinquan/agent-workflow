@@ -379,6 +379,9 @@ export function wgClarifyAskerKey(
   if (nodeId === leaderNodeId) return 'leader'
   if (shardKey === null) return 'leader'
   if (shardKey.startsWith('msg:')) return `mem:${shardKey.split(':')[1] ?? ''}`
+  // RFC-215 §6.3 — fc 任务批 run 折叠到成员：批 shardKey 编卡集合，卡回 open 重组
+  // 批次会换 key，若直用则预算清零 + stop 指令成孤儿（同上 R12 的旁路在任务轨重开）。
+  if (shardKey.startsWith('batch:')) return `asg:batch:${shardKey.split(':')[1] ?? ''}`
   return `asg:${shardKey}`
 }
 

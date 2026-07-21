@@ -729,6 +729,13 @@
       "when": 1786377600000,
       "tag": "0104_rfc211_drop_onboarding",
       "breakpoints": true
+    },
+    {
+      "idx": 104,
+      "version": "6",
+      "when": 1786464000000,
+      "tag": "0105_rfc215_attempt_count",
+      "breakpoints": true
     }
   ]
 }

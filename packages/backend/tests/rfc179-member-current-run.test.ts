@@ -61,6 +61,30 @@ describe('deriveMemberCurrentRuns (RFC-179)', () => {
     expect(out[A2]).toBeNull()
   })
 
+  // RFC-215 §3.6 — 批 run（shardKey=batch:member:ids）必须在房间可见：成员归属取
+  // key 里编码的 memberId（mint 时冻结，卡重领/requeue 置空 assignee 都不影响）。
+  // 修复前 runKindOf 对 batch 行返回 null ⇒ 批执行期 presence 显示空闲、
+  // runHistory 整行丢失（设计门 ②F3）。
+  test('batch run (RFC-215) → member from the shardKey, visible as assignment kind', () => {
+    const out = deriveMemberCurrentRuns(
+      members,
+      LEADER,
+      [assignRun('R1', `batch:${A1}:ASG1+ASG2`, 'running')],
+      [], // 卡表为空也能归属（key 自足）
+      [],
+    )
+    expect(out[A1]?.nodeRunId).toBe('R1')
+    expect(out[A1]?.kind).toBe('assignment')
+    const history = deriveWorkgroupRunHistory(
+      members,
+      LEADER,
+      [assignRun('R1', `batch:${A1}:ASG1+ASG2`, 'done')],
+      [],
+      [],
+    )
+    expect(history.map((e) => e.nodeRunId)).toContain('R1')
+  })
+
   test('message-turn run → memberId parsed from shardKey', () => {
     const out = deriveMemberCurrentRuns(
       members,

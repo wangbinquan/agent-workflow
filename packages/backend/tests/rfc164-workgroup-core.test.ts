@@ -561,14 +561,16 @@ describe('RFC-164 core — deriveWakeSet (free_collab)', () => {
     ])
   })
 
-  test('claim pairing: open tasks × idle members, one per member, deterministic', () => {
+  // RFC-215 改写：原「一人一张」单卡配对由批量均分取代（design §2.2/§11——
+  // 3 卡 2 闲 ⇒ ceil(3/2)=2 张 + 1 张，连续切片保创建序）。
+  test('claim pairing: open tasks evenly batched across idle members, deterministic', () => {
     const t1 = asg({ status: 'open', assigneeMemberId: null, source: 'self_claim' })
     const t2 = asg({ status: 'open', assigneeMemberId: null, source: 'self_claim' })
     const t3 = asg({ status: 'open', assigneeMemberId: null, source: 'self_claim' })
     const w = deriveWakeSet(wakeInput({ config: fcCfg, assignments: [t1, t2, t3], roundsUsed: 2 }))
     expect(w.items).toEqual([
-      { kind: 'fc_claim', memberId: 'm-lead', assignmentId: t1.id },
-      { kind: 'fc_claim', memberId: 'm-coder', assignmentId: t2.id },
+      { kind: 'fc_claim', memberId: 'm-lead', assignmentIds: [t1.id, t2.id] },
+      { kind: 'fc_claim', memberId: 'm-coder', assignmentIds: [t3.id] },
     ])
   })
 

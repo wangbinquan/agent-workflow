@@ -30,9 +30,12 @@ describe('DEFAULT_PROTOCOL_RETRY_BUDGET 单源', () => {
   test('workgroupRunner：协议重试 + fc 重开预算走共享常量', () => {
     const s = SRC('services/workgroupRunner.ts')
     expect(s).toContain('const WG_PROTOCOL_RETRIES = DEFAULT_PROTOCOL_RETRY_BUDGET')
-    expect(s).toContain('priorRuns < DEFAULT_PROTOCOL_RETRY_BUDGET')
+    // RFC-215：fc 重开预算从「按 shardKey 数 node_runs 行（priorRuns）」改为
+    // workgroup_assignments.attempt_count 列（批量 shardKey 下行计数失效），
+    // 判据仍必须走共享常量。
+    expect(s).toContain('attemptCount < DEFAULT_PROTOCOL_RETRY_BUDGET')
     expect(s).not.toContain('WG_PROTOCOL_RETRIES = 3')
-    expect(s).not.toContain('priorRuns < 3')
+    expect(s).not.toContain('attemptCount < 3')
   })
 
   test('dynamicWorkflowRunner：生成尝试上限走共享常量', () => {

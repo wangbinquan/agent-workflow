@@ -28,6 +28,7 @@ import {
   WG_PORT_DECISION,
   WG_PORT_MESSAGES,
   WG_PORT_RESULT,
+  WG_PORT_TASK_RESULTS,
   WG_PORT_TASKS_ADD,
 } from '@agent-workflow/shared'
 
@@ -129,6 +130,13 @@ export function selectMemberSlices(
   config: WorkgroupRuntimeConfig,
   memberId: string,
   state: WorkgroupSliceState,
+  opts: {
+    /**
+     * RFC-215 §4 — fc 任务批 run 不消费 @ 消息（消息轨专职，游标单一归属）：
+     * 任务 run 的注入跳过 mentions 切片，@ 消息由该成员的消息回合消费并推游标。
+     */
+    omitMentions?: boolean
+  } = {},
 ): MemberSlices {
   const switches = resolveWorkgroupSwitches(config.mode, config.switches)
   const fresh = sliceMessagesAfter(state.messages, state.cursorMessageId)
@@ -146,7 +154,7 @@ export function selectMemberSlices(
 
   let mentions: WorkgroupMessage[] = []
   let mentionsDropped = 0
-  if (switches.directMessages) {
+  if (switches.directMessages && opts.omitMentions !== true) {
     const all = fresh.filter(
       (m) => m.mentionMemberIds.includes(memberId) && m.authorMemberId !== memberId,
     )
@@ -360,6 +368,13 @@ export function renderWgProtocolBlock(
    * budget and failing the assignment for nothing.
    */
   clarifyAllowed = false,
+  /**
+   * RFC-215 §6.2 — non-null marks an fc TASK-BATCH run: the result port becomes
+   * `wg_task_results` (per-task array keyed by the prompt's Task numbers) and
+   * `wg_result` is EXPLICITLY ruled out. Message turns / lw workers pass
+   * nothing and keep the single-object `wg_result` protocol verbatim.
+   */
+  batch: { count: number } | null = null,
 ): string {
   const switches = resolveWorkgroupSwitches(config.mode, config.switches)
   const msgTargets = switches.directMessages
@@ -435,6 +450,14 @@ export function renderWgProtocolBlock(
         'other members — if the assignment should be split, say so in your',
         'result (or message the leader) and the leader will decide.',
       )
+    } else if (batch !== null) {
+      lines.push(
+        'You are a member of a leaderless workgroup, executing a BATCH of',
+        `${batch.count} task(s) from the shared list (see "Your assignments"). Work`,
+        'through ALL of them in this run, then report each one individually. You',
+        'may also add any NEW tasks you discover — check the current task list',
+        'first, do NOT add duplicates.',
+      )
     } else {
       lines.push(
         'You are a member of a leaderless workgroup. Work the shared task list:',
@@ -442,13 +465,26 @@ export function renderWgProtocolBlock(
         'you discover. Check the current task list first — do NOT add duplicates.',
       )
     }
-    lines.push(
-      '',
-      'Ports:',
-      '- <port name="wg_result">JSON {"summary","detail"?}. summary is what the',
-      '  group sees — make it self-contained. REQUIRED when you did any work.</port>',
-      `- <port name="wg_messages">JSON array of {"to","body"}; to = ${msgTargets}.</port>`,
-    )
+    lines.push('', 'Ports:')
+    if (batch !== null) {
+      // RFC-215 §6.2 — 批任务 run：逐卡数组端口；wg_result 明示排除（模型在消息
+      // 回合习惯了单对象端口，交替出现时必须点名切换——误发 wg_result 会因缺
+      // wg_task_results 进入协议重试并再次收到本提示）。
+      lines.push(
+        `- <port name="wg_task_results">JSON array of {"task","status"?,"summary","detail"?}.`,
+        `  EXACTLY ONE entry per task: task = the Task number (1..${batch.count}) from`,
+        '  "Your assignments"; status = "done" (default) or "failed" if you could',
+        '  not complete that task (say why in summary). Every summary is what the',
+        '  group sees — make it self-contained. Do NOT use wg_result in this run;',
+        '  this batch run reports ONLY through wg_task_results.</port>',
+      )
+    } else {
+      lines.push(
+        '- <port name="wg_result">JSON {"summary","detail"?}. summary is what the',
+        '  group sees — make it self-contained. REQUIRED when you did any work.</port>',
+      )
+    }
+    lines.push(`- <port name="wg_messages">JSON array of {"to","body"}; to = ${msgTargets}.</port>`)
     if (role === 'fc_member') {
       lines.push(
         '- <port name="wg_tasks_add">JSON array of {"title","brief"?} — new tasks',
@@ -482,9 +518,17 @@ export function renderWgProtocolBlock(
  * renderWgProtocolBlock above — the mirror-lock test asserts equality against
  * the ports grepped out of that function's text.
  */
-export function wgHostRolePorts(role: WorkgroupProtocolRole): string[] {
+export function wgHostRolePorts(
+  role: WorkgroupProtocolRole,
+  /** RFC-215 §6.2 — non-null (fc task-batch run) swaps wg_result → wg_task_results. */
+  batch: { count: number } | null = null,
+): string[] {
   if (role === 'leader') return [WG_PORT_ASSIGNMENTS, WG_PORT_MESSAGES, WG_PORT_DECISION]
-  if (role === 'fc_member') return [WG_PORT_RESULT, WG_PORT_MESSAGES, WG_PORT_TASKS_ADD]
+  if (role === 'fc_member') {
+    return batch !== null
+      ? [WG_PORT_TASK_RESULTS, WG_PORT_MESSAGES, WG_PORT_TASKS_ADD]
+      : [WG_PORT_RESULT, WG_PORT_MESSAGES, WG_PORT_TASKS_ADD]
+  }
   return [WG_PORT_RESULT, WG_PORT_MESSAGES] // worker
 }
 

@@ -30,9 +30,11 @@ describe('RFC-182 — pending 帧源级锁', () => {
     expect(block).toContain("status: 'pending'")
   })
 
-  test('workgroupRunner：broadcastPendingMint 恒 1 定义 + 3 真 mint 调用（adopted 不重发）', () => {
+  test('workgroupRunner：broadcastPendingMint 恒 1 定义 + 4 真 mint 调用（adopted 不重发）', () => {
+    // RFC-215：driveBatchTurn（fc 批 run）新增第 4 个真 mint 调用点（leader /
+    // 单卡 assignment / message turn / batch）；adopted 续跑仍不重发。
     const src = SRC('services/workgroupRunner.ts')
-    expect(src.split('broadcastPendingMint(').length - 1).toBe(4)
+    expect(src.split('broadcastPendingMint(').length - 1).toBe(5)
   })
 })
 

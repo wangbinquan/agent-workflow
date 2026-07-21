@@ -56,9 +56,26 @@ case "$WG_PROMPT" in
     # leader: close the group immediately (empty assignments = no new work).
     wg_envelope="$output_open"'\n  <port name=\"wg_assignments\">[]</port>\n  <port name=\"wg_decision\">{\"action\":\"done\",\"summary\":\"stub e2e leader done\"}</port>\n</workflow-output>'
     ;;
+  *'name="wg_task_results"'*)
+    # RFC-215 fc TASK-BATCH run: the protocol demands one entry per Task number
+    # (1..N, prompt says "batch of N"); wg_result is explicitly ruled out for
+    # this run kind. Matched BEFORE wg_result so the batch protocol's prose
+    # mention of wg_result can never shadow this branch.
+    wg_batch_n=$(printf '%s' "$WG_PROMPT" | sed -n 's/.*batch of \([0-9][0-9]*\).*/\1/p' | head -1)
+    [ -n "$wg_batch_n" ] || wg_batch_n=1
+    wg_entries=''
+    wg_i=1
+    while [ "$wg_i" -le "$wg_batch_n" ]; do
+      [ -n "$wg_entries" ] && wg_entries="$wg_entries,"
+      wg_entries="$wg_entries{\\\"task\\\":$wg_i,\\\"summary\\\":\\\"stub e2e batch task $wg_i done\\\"}"
+      wg_i=$((wg_i + 1))
+    done
+    wg_envelope="$output_open"'\n  <port name=\"wg_task_results\">['"$wg_entries"']</port>\n  <port name=\"wg_tasks_add\">[]</port>\n</workflow-output>'
+    ;;
   *'name="wg_result"'*)
-    # worker / fc member: report done, add no follow-up tasks (wg_tasks_add is
-    # fc-only; a worker never declares it, so the projection just drops it).
+    # lw worker / fc message turn: report done, add no follow-up tasks
+    # (wg_tasks_add is fc-only; a worker never declares it, so the projection
+    # just drops it).
     wg_envelope="$output_open"'\n  <port name=\"wg_result\">{\"summary\":\"stub e2e member result\"}</port>\n  <port name=\"wg_tasks_add\">[]</port>\n</workflow-output>'
     ;;
 esac

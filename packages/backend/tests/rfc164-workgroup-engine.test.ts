@@ -202,6 +202,15 @@ const doneMember = (summary: string): WorkgroupHostRunResult => ({
   outputs: { wg_result: JSON.stringify({ summary }) },
 })
 
+// RFC-215 — fc 认领执行是批 run（含单卡批）：逐卡 wg_task_results，wg_result 不再
+// 是批 run 的合法端口（design §6.2 端口拆分）。lw worker 仍走上面的单对象形态。
+const doneBatchMember = (...summaries: string[]): WorkgroupHostRunResult => ({
+  status: 'done',
+  outputs: {
+    wg_task_results: JSON.stringify(summaries.map((summary, i) => ({ task: i + 1, summary }))),
+  },
+})
+
 // ---------------------------------------------------------------------------
 // host snapshot
 // ---------------------------------------------------------------------------
@@ -930,8 +939,8 @@ describe('RFC-164 engine — free_collab orchestration', () => {
         },
       },
       // 认领执行两条任务
-      doneMember('login flow fixed'),
-      doneMember('todos cleaned'),
+      doneBatchMember('login flow fixed'),
+      doneBatchMember('todos cleaned'),
     ]
     const { hooks, requests } = scriptedHooks({ leader: [], member: memberScript })
     const result = await runWorkgroupEngine({ db, taskId, log, hooks })
@@ -993,7 +1002,7 @@ describe('RFC-164 engine — free_collab orchestration', () => {
           outputs: { wg_tasks_add: JSON.stringify([{ title: 't1', brief: 'b' }]) },
         },
         { status: 'done', outputs: {} }, // 第二个成员首轮无提案
-        doneMember('t1 done'),
+        doneBatchMember('t1 done'),
       ],
     })
     const result = await runWorkgroupEngine({ db, taskId, log, hooks })
@@ -1162,8 +1171,8 @@ describe('RFC-176 — goal directive injection & launch kickoff', () => {
           status: 'done',
           outputs: { wg_tasks_add: JSON.stringify([{ title: 't-b', brief: 'do b' }]) },
         },
-        doneMember('a done'),
-        doneMember('b done'),
+        doneBatchMember('a done'),
+        doneBatchMember('b done'),
       ],
     })
     const result = await runWorkgroupEngine({ db, taskId, log, hooks })

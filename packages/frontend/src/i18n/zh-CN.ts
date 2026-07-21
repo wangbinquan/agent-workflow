@@ -1607,6 +1607,7 @@ export interface Resources {
       fcActive: string
       fcDone: string
       fcEmpty: string
+      fcBatch: string
       infoTitle: string
       infoGoal: string
       infoMode: string
@@ -5473,6 +5474,7 @@ export const zhCN: Resources = {
       fcActive: '进行中',
       fcDone: '已完成',
       fcEmpty: '清单还是空的。',
+      fcBatch: '同批 ×{{count}}',
       infoTitle: '工作组信息',
       infoGoal: '目标',
       infoMode: '模式',

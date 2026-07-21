@@ -21,14 +21,17 @@
 // pass instead of re-minted.
 
 import {
+  buildBatchShardKey,
   DEFAULT_PROTOCOL_RETRY_BUDGET,
   FOLLOWUP_POLICY,
   fenceUntrusted,
   normalizeWgTaskTitle,
+  parseBatchShardKey,
   parseWgAssignmentsPort,
   parseWgDecisionPort,
   parseWgMessagesPort,
   parseWgResultPort,
+  parseWgTaskResultsPort,
   parseWgTasksAddPort,
   perCardInputDescriptionBudget,
   renderAgentCapabilityCard,
@@ -40,6 +43,7 @@ import {
   WG_PORT_DECISION,
   WG_PORT_MESSAGES,
   WG_PORT_RESULT,
+  WG_PORT_TASK_RESULTS,
   WG_PORT_TASKS_ADD,
   WorkgroupRuntimeConfigSchema,
   type Agent,
@@ -47,6 +51,7 @@ import {
   type FailureCode,
   type RerunCause,
   type WgMessageItem,
+  type WgTaskResultItem,
   type WorkgroupAssignment,
   type WorkgroupMessage,
   type WorkgroupRuntimeConfig,
@@ -357,8 +362,19 @@ async function reconcileRunningAssignments(
   let count = 0
   for (const a of state.assignments) {
     if (a.status !== 'running') continue
-    const runs = state.hostRuns.filter((r) => r.nodeId === WG_MEMBER_NODE_ID && r.shardKey === a.id)
-    const latest = runs[runs.length - 1]
+    // RFC-215 §3.4 — match by the card's OWN nodeRunId (it always points at the
+    // freshest run driving the card, incl. protocol-retry re-mints), not by
+    // `shardKey === a.id`: a batch shard encodes ALL its card ids, so the old
+    // equality never matched and every crashed batch card was mis-judged
+    // `redispatch` — re-running work whose host row already finished `done`
+    // (design gate ①P1-2/②F4/③F1). nodeRunId works for single-card rows too.
+    const byShard = state.hostRuns.filter(
+      (r) => r.nodeId === WG_MEMBER_NODE_ID && r.shardKey === a.id,
+    )
+    const latest =
+      a.nodeRunId !== null
+        ? state.hostRuns.find((r) => r.nodeId === WG_MEMBER_NODE_ID && r.id === a.nodeRunId)
+        : byShard[byShard.length - 1] // running-without-run defensive fallback (pre-batch rows)
     const action = decideAssignmentReconcile(latest?.status)
     if (action === 'done') {
       if (await casAssignmentStatus(db, a.id, 'running', 'done')) count++
@@ -864,15 +880,24 @@ function composeLeaderPrompt(state: EngineDbState, envelopeNonce = ''): string {
 function composeMemberPrompt(
   state: EngineDbState,
   memberId: string,
-  assignment: WorkgroupAssignment | null,
+  assignments: readonly WorkgroupAssignment[] | null,
   envelopeNonce = '',
 ): string {
   const { config } = state
-  const slices = selectMemberSlices(config, memberId, {
-    assignments: state.assignments,
-    messages: state.messages,
-    cursorMessageId: state.cursors.get(memberId) ?? '',
-  })
+  // RFC-215 §4 — fc 任务 run：@ 消息由消息轨专职消费（不注入、不推游标），
+  // peerResults/blackboard 改尾窗模式（cursor 无关，char budget 兜底有界）。
+  // lw 单卡与消息回合保持原 cursor 语义。
+  const fcTaskRun = config.mode === 'free_collab' && assignments !== null
+  const slices = selectMemberSlices(
+    config,
+    memberId,
+    {
+      assignments: state.assignments,
+      messages: state.messages,
+      cursorMessageId: fcTaskRun ? '' : (state.cursors.get(memberId) ?? ''),
+    },
+    { omitMentions: fcTaskRun },
+  )
   const blocks = [renderCharterBlock(config, envelopeNonce)]
   // RFC-176: free_collab has no leader to decompose the goal — every member
   // owns it, so all members see it. A leader_worker worker never does: it acts
@@ -885,7 +910,9 @@ function composeMemberPrompt(
       envelopeNonce,
     ),
   )
-  if (assignment !== null) {
+  if (assignments !== null && config.mode === 'leader_worker') {
+    // lw：恒单卡，块与 RFC-215 之前逐字一致（AC-8 零 diff）。
+    const assignment = assignments[0] as WorkgroupAssignment
     const title =
       envelopeNonce.length > 0 ? sanitizeInlineField(assignment.title) : assignment.title
     blocks.push(
@@ -897,6 +924,24 @@ function composeMemberPrompt(
         fenceUntrusted('assignment-brief', assignment.briefMd, envelopeNonce),
       ].join('\n'),
     )
+  } else if (assignments !== null) {
+    // fc 批（含 N=1，RFC-215 §4）：Task k 锚点与 wg_task_results 的序号恒同在。
+    const lines = [`## Your assignments (batch of ${assignments.length})`]
+    for (const [i, a] of assignments.entries()) {
+      const title = envelopeNonce.length > 0 ? sanitizeInlineField(a.title) : a.title
+      lines.push(
+        '',
+        `### Task ${i + 1}: ${title}`,
+        '',
+        fenceUntrusted('assignment-brief', a.briefMd, envelopeNonce),
+      )
+    }
+    lines.push(
+      '',
+      'Work through every task above. Report EACH one in wg_task_results by its',
+      'Task number. You may also post wg_messages / add wg_tasks_add as usual.',
+    )
+    blocks.push(lines.join('\n'))
   } else {
     blocks.push(
       [
@@ -951,6 +996,9 @@ export async function runWorkgroupEngine(
     leaderRunning: false,
     runningAssignmentIds: new Set<string>(),
     messageTurnMemberIds: new Set<string>(),
+    // RFC-215 §2.1 — fc 任务轨 in-flight 成员（批 drive / 领养批行）。lw 不读它
+    // （合并占用走卡状态腿），故 assignment item 不维护。
+    taskTurnMemberIds: new Set<string>(),
   }
 
   // RFC-176: seed the goal into the room as an opening directive, ONCE, before
@@ -1046,6 +1094,33 @@ export async function runWorkgroupEngine(
     )
     for (const row of adoptable) {
       const key = `run:${row.id}`
+      // RFC-215 §3.1 — 领养行的 in-flight 登记与 markInflight 对称：批行解析出
+      // 全部卡 id + 成员（parseBatchShardKey 单一编解码）；`msg:` 行补登记消息轨
+      // 成员（设计门 ②F9-2：此前漏登记 ⇒ 领养消息回合在飞时同成员可被派第二个
+      // 消息回合、双推游标）。
+      const markAdopted = (on: boolean): void => {
+        if (row.nodeId === WG_LEADER_NODE_ID) {
+          inflightMeta.leaderRunning = on
+          return
+        }
+        const shard = row.shardKey
+        if (shard === null) return
+        const setOp = <T>(s: Set<T>, v: T): void => void (on ? s.add(v) : s.delete(v))
+        if (shard.startsWith('msg:')) {
+          const memberId = shard.split(':')[1]
+          if (memberId !== undefined) setOp(inflightMeta.messageTurnMemberIds, memberId)
+          return
+        }
+        const batch = parseBatchShardKey(shard)
+        if (batch !== null) {
+          for (const id of batch.assignmentIds) setOp(inflightMeta.runningAssignmentIds, id)
+          setOp(inflightMeta.taskTurnMemberIds, batch.memberId)
+          return
+        }
+        setOp(inflightMeta.runningAssignmentIds, shard)
+        const assignee = state.assignments.find((a) => a.id === shard)?.assigneeMemberId
+        if (assignee != null) setOp(inflightMeta.taskTurnMemberIds, assignee)
+      }
       inflight.set(
         key,
         driveAdoptedRun(args, state, row)
@@ -1058,16 +1133,10 @@ export async function runWorkgroupEngine(
           })
           .finally(() => {
             inflight.delete(key)
-            if (row.nodeId === WG_LEADER_NODE_ID) inflightMeta.leaderRunning = false
-            else if (row.shardKey !== null && !row.shardKey.startsWith('msg:')) {
-              inflightMeta.runningAssignmentIds.delete(row.shardKey)
-            }
+            markAdopted(false)
           }),
       )
-      if (row.nodeId === WG_LEADER_NODE_ID) inflightMeta.leaderRunning = true
-      else if (row.shardKey !== null && !row.shardKey.startsWith('msg:')) {
-        inflightMeta.runningAssignmentIds.add(row.shardKey)
-      }
+      markAdopted(true)
     }
 
     // RFC-187 F3 — a leader-host run parked on a clarify resumes via an adopted
@@ -1086,6 +1155,7 @@ export async function runWorkgroupEngine(
         leaderRunning: inflightMeta.leaderRunning,
         runningAssignmentIds: inflightMeta.runningAssignmentIds,
         messageTurnMemberIds: inflightMeta.messageTurnMemberIds,
+        taskTurnMemberIds: inflightMeta.taskTurnMemberIds,
       },
       leaderClarifyParked,
       roundsUsed: countRoundsUsed(state),
@@ -1234,7 +1304,8 @@ function wakeKey(item: WakeItem): string {
     case 'fc_initial':
       return `fc-init:${item.memberId}`
     case 'fc_claim':
-      return `claim:${item.assignmentId}`
+      // RFC-215 §3.1 — 成员维互斥：同成员至多一个 in-flight 批。
+      return `claim:${item.memberId}`
   }
 }
 
@@ -1243,6 +1314,7 @@ function markInflight(
     leaderRunning: boolean
     runningAssignmentIds: Set<string>
     messageTurnMemberIds: Set<string>
+    taskTurnMemberIds: Set<string>
   },
   item: WakeItem,
   on: boolean,
@@ -1252,9 +1324,17 @@ function markInflight(
       meta.leaderRunning = on
       break
     case 'assignment':
-    case 'fc_claim':
       if (on) meta.runningAssignmentIds.add(item.assignmentId)
       else meta.runningAssignmentIds.delete(item.assignmentId)
+      break
+    case 'fc_claim':
+      // RFC-215 §3.1 — 批内全部卡 + 成员一起登记（wake 的恢复判定/配对排除都读）。
+      for (const id of item.assignmentIds) {
+        if (on) meta.runningAssignmentIds.add(id)
+        else meta.runningAssignmentIds.delete(id)
+      }
+      if (on) meta.taskTurnMemberIds.add(item.memberId)
+      else meta.taskTurnMemberIds.delete(item.memberId)
       break
     case 'message_turn':
     case 'fc_initial':
@@ -1354,25 +1434,7 @@ async function driveWakeItem(
         return
       }
       case 'fc_claim': {
-        const assignment = state.assignments.find((a) => a.id === item.assignmentId)
-        if (assignment === undefined) return
-        // Platform-side claim (CAS open→dispatched); a lost race just skips.
-        const claimed = await casAssignmentStatus(db, assignment.id, 'open', 'dispatched', {
-          assigneeMemberId: item.memberId,
-        })
-        if (!claimed) return
-        await driveAssignmentTurn(
-          args,
-          {
-            ...state,
-            assignments: state.assignments.map((a) =>
-              a.id === assignment.id
-                ? { ...a, assigneeMemberId: item.memberId, status: 'dispatched' }
-                : a,
-            ),
-          },
-          { ...assignment, assigneeMemberId: item.memberId, status: 'dispatched' },
-        )
+        await driveBatchTurn(args, state, item.memberId, item.assignmentIds)
         return
       }
       case 'message_turn':
@@ -1395,17 +1457,57 @@ async function driveWakeItem(
     // pass would re-derive and re-throw it forever (the 2026-07-10 hang).
     if (item.kind === 'leader') {
       reportFatal('workgroup leader turn failed', message)
-    } else if (item.kind === 'assignment' || item.kind === 'fc_claim') {
-      const failedFromDispatched = await casAssignmentStatus(
-        db,
-        item.assignmentId,
-        'dispatched',
-        'failed',
-      ).catch(() => false)
-      if (!failedFromDispatched) {
-        await casAssignmentStatus(db, item.assignmentId, 'running', 'failed').catch(() => false)
+    } else if (item.kind === 'assignment') {
+      await settleCardAfterFailure(db, state, item.assignmentId)
+    } else if (item.kind === 'fc_claim') {
+      // RFC-215 §3.2-8 — 批量收口：单卡 CAS 只收一张会让其余卡留 failed 终态假收敛
+      // （fc openOrActive=false ⇒ 任务假 done，设计门 ①P2-7/③F8-1）。逐卡 failed 后
+      // 预算内回 open，与 driveBatchTurn 的失败路径共享同一收尾。
+      for (const id of item.assignmentIds) {
+        await settleCardAfterFailure(db, state, id)
       }
     }
+  }
+}
+
+/**
+ * RFC-215 §3.2/§3.5 — 卡失败收尾的单一子例程（drive throw / run 失败 / 漏报耗尽
+ * 共用，禁 fork）：dispatched/running → failed，fc 下预算内（attempt_count <
+ * DEFAULT_PROTOCOL_RETRY_BUDGET）再 failed → open 重新入池。lw 卡停在 failed
+ * （leader 下轮决策重派/放弃，RFC-164 §4.3 原语义）。
+ */
+async function settleCardAfterFailure(
+  db: DbClient,
+  state: EngineDbState,
+  assignmentId: string,
+): Promise<void> {
+  const failedFromDispatched = await casAssignmentStatus(
+    db,
+    assignmentId,
+    'dispatched',
+    'failed',
+  ).catch(() => false)
+  if (!failedFromDispatched) {
+    const failedFromRunning = await casAssignmentStatus(
+      db,
+      assignmentId,
+      'running',
+      'failed',
+    ).catch(() => false)
+    if (!failedFromRunning) return // already terminal / moved on — nothing to reopen
+  }
+  if (state.config.mode !== 'free_collab') return
+  const row = (
+    await db
+      .select({ attemptCount: workgroupAssignments.attemptCount })
+      .from(workgroupAssignments)
+      .where(eq(workgroupAssignments.id, assignmentId))
+  )[0]
+  if (row !== undefined && row.attemptCount < DEFAULT_PROTOCOL_RETRY_BUDGET) {
+    await casAssignmentStatus(db, assignmentId, 'failed', 'open', {
+      assigneeMemberId: null,
+      nodeRunId: null,
+    }).catch(() => false)
   }
 }
 
@@ -1431,6 +1533,14 @@ async function driveAdoptedRun(
     // adopted message turn — re-drive with the member parsed from the key
     const memberId = shardKey?.split(':')[1]
     if (memberId !== undefined) await driveMessageTurn(args, state, memberId, false, row.id)
+    return
+  }
+  // RFC-215 §3.1/§3.4 — adopted batch row (clarify-answer rerun on a batch
+  // shard): rebuild the batch from the key itself (memberId + card ids are
+  // both encoded — no DB back-reference that a requeue could null out).
+  const batch = parseBatchShardKey(shardKey)
+  if (batch !== null) {
+    await driveBatchTurn(args, state, batch.memberId, batch.assignmentIds, row.id)
     return
   }
   const assignment = state.assignments.find((a) => a.id === shardKey)
@@ -1830,7 +1940,7 @@ async function driveAssignmentTurn(
     }
 
     const prompt =
-      composeMemberPrompt(state, memberId, assignment, envelopeNonce) +
+      composeMemberPrompt(state, memberId, [assignment], envelopeNonce) +
       (errorNotice !== null
         ? `\n\n## Protocol errors in your previous reply\n\n${fenceUntrusted(
             'protocol-error',
@@ -1893,30 +2003,15 @@ async function driveAssignmentTurn(
         errorNotice = wgFollowupNotice(fu.reason)
         continue
       }
-      await casAssignmentStatus(db, assignment.id, 'running', 'failed')
+      // RFC-215 §3.5 — 失败收尾走共享子例程：fc 预算判据从「按 shardKey 数
+      // node_runs 行」改为 attempt_count 列（批量 shardKey 下行计数失效；且
+      // 协议重试不再误耗预算——attempt_count 只在 open→dispatched 认领时自增）。
+      await settleCardAfterFailure(db, state, assignment.id)
       await postAssignmentMessage(db, taskId, roundMode(config), assignment, {
         authorKind: 'system',
         kind: 'system',
         bodyMd: `assignment '${assignment.title}' failed: ${result.errorMessage ?? 'run failed'}`,
       })
-      if (config.mode === 'free_collab') {
-        // bounded re-open (retry budget) — count LIVE, not the turn-start
-        // snapshot, or every failure sees a stale low count and reopens
-        // past the cap. Budget = shared DEFAULT_PROTOCOL_RETRY_BUDGET, read
-        // here as TOTAL runs for the assignment (not retries-after-first).
-        const priorRuns = (
-          await db
-            .select({ id: nodeRuns.id })
-            .from(nodeRuns)
-            .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.shardKey, assignment.id)))
-        ).length
-        if (priorRuns < DEFAULT_PROTOCOL_RETRY_BUDGET) {
-          await casAssignmentStatus(db, assignment.id, 'failed', 'open', {
-            assigneeMemberId: null,
-            nodeRunId: null,
-          })
-        }
-      }
       return
     }
 
@@ -1966,8 +2061,304 @@ async function driveAssignmentTurn(
     // RFC-186 T5 (audit §5 F6): advance the worker cursor AFTER the assignment's
     // effects (result message / done / tasks_add) persist — a mid-turn crash
     // leaves it un-advanced so the resumed engine doesn't skip consumed content.
-    await advanceMemberCursor(db, taskId, memberId, maxMessageId(state.messages))
+    // RFC-215 §4 (G3) — lw ONLY: fc 任务 run 不消费消息（mentions 未注入），推游标
+    // 会把消息轨该消费的 @ 消息静默标已读（双轨并发下的双推竞态正是 v1 探针 S1）。
+    if (config.mode === 'leader_worker') {
+      await advanceMemberCursor(db, taskId, memberId, maxMessageId(state.messages))
+    }
     return
+  }
+}
+
+/**
+ * RFC-215 §3.2 — fc 任务批：一个成员一批卡一个 run。逐卡 CAS 认领（bumpAttempt
+ * 计预算）、单 host 行（shardKey 编 memberId+全部卡 id）、`wg_task_results` 逐卡
+ * 汇报落库；失败/漏报经 {@link settleCardAfterFailure} 预算内回 open。游标不推
+ * （G3——消息轨专职）。`candidateIds` 允许混合来源：open（新配）、dispatched
+ * （恢复批/CAS 后崩溃）、running/awaiting_human（领养续跑）。
+ */
+async function driveBatchTurn(
+  args: WorkgroupEngineArgs,
+  state: EngineDbState,
+  memberId: string,
+  candidateIds: readonly string[],
+  adoptedRunId?: string,
+): Promise<void> {
+  const { db, taskId, hooks } = args
+  const config = state.config
+  const agent = await resolveMemberAgent(args, state, memberId)
+  if (agent === null) {
+    // 成员配置坏（agent 不可解析）不牵连卡：open 卡未认领留池；dispatched 恢复卡
+    // 走失败收尾回 open 让其他成员接手。
+    await postMessage(db, taskId, roundMode(config), {
+      authorKind: 'system',
+      kind: 'system',
+      bodyMd: `batch for @${memberDisplayName(config, memberId)} skipped: agent unresolvable`,
+    })
+    for (const id of candidateIds) {
+      const card = state.assignments.find((a) => a.id === id)
+      if (card !== undefined && card.status !== 'open') {
+        await settleCardAfterFailure(db, state, id)
+      }
+    }
+    return
+  }
+
+  // 1. 认领/纳入：拷贝卡对象为本 run 的批内快照（Task k 序 = 数组序）。
+  const batch: WorkgroupAssignment[] = []
+  for (const id of candidateIds) {
+    const card = state.assignments.find((a) => a.id === id)
+    if (card === undefined) continue
+    if (card.status === 'open') {
+      const claimed = await casAssignmentStatus(
+        db,
+        id,
+        'open',
+        'dispatched',
+        { assigneeMemberId: memberId },
+        { bumpAttempt: true },
+      )
+      // Lost race (another engine pass / manual op) just skips this card.
+      if (claimed) batch.push({ ...card, status: 'dispatched', assigneeMemberId: memberId })
+      continue
+    }
+    if (card.assigneeMemberId !== memberId) continue // stale candidate — not ours
+    if (card.status === 'dispatched' || card.status === 'running') {
+      batch.push({ ...card })
+      continue
+    }
+    if (card.status === 'awaiting_human' && adoptedRunId !== undefined) {
+      // clarify-answer 续跑：泊卡回 running（同单卡领养语义）。
+      const moved = await casAssignmentStatus(db, id, 'awaiting_human', 'running', {
+        nodeRunId: adoptedRunId,
+      })
+      if (moved) batch.push({ ...card, status: 'running', assigneeMemberId: memberId })
+    }
+  }
+  if (batch.length === 0) return // 全部被抢/失效：不 mint、不烧预算（design §8）
+
+  const shardKey = buildBatchShardKey(
+    memberId,
+    batch.map((b) => b.id),
+  )
+  const adoptedRow =
+    adoptedRunId !== undefined ? state.hostRuns.find((r) => r.id === adoptedRunId) : undefined
+  const retryBase = adoptedRow?.retryIndex ?? 0
+
+  let errorNotice: string | null = null
+  for (let attempt = 0; attempt <= WG_PROTOCOL_RETRIES; attempt++) {
+    let runId = adoptedRunId
+    if (runId === undefined || attempt > 0) {
+      runId = await mintNodeRun(db, {
+        taskId,
+        nodeId: WG_MEMBER_NODE_ID,
+        status: 'pending',
+        cause: attempt > 0 ? 'wg-protocol-retry' : 'wg-assignment',
+        retryIndex: retryBase + attempt,
+        overrides: {
+          shardKey,
+          agentOverrideName: agent.name,
+          wgRound: null, // fc member rows stay NULL (RFC-189 count-based budget)
+        },
+      })
+      args.registerMint?.(runId)
+      broadcastPendingMint(taskId, runId, WG_MEMBER_NODE_ID)
+    }
+    adoptedRunId = undefined
+    const envelopeNonce = await loadRunEnvelopeNonce(db, runId)
+
+    // 2. 逐卡 running + nodeRunId 刷新（协议重试轮把卡指向最新行，同单卡语义）。
+    for (const card of batch) {
+      if (card.status === 'dispatched') {
+        await casAssignmentStatus(db, card.id, 'dispatched', 'running', { nodeRunId: runId })
+        card.status = 'running'
+        card.nodeRunId = runId
+      } else if (card.nodeRunId !== runId) {
+        await db
+          .update(workgroupAssignments)
+          .set({ nodeRunId: runId, updatedAt: Date.now() })
+          .where(eq(workgroupAssignments.id, card.id))
+        card.nodeRunId = runId
+      }
+    }
+
+    const prompt =
+      composeMemberPrompt(state, memberId, batch, envelopeNonce) +
+      (errorNotice !== null
+        ? `\n\n## Protocol errors in your previous reply\n\n${fenceUntrusted(
+            'protocol-error',
+            errorNotice,
+            envelopeNonce,
+          )}\n\nRe-emit a CORRECT envelope.`
+        : '')
+
+    const clarifyAllowed = await resolveWgClarifyAllowed(
+      db,
+      taskId,
+      config.members,
+      config.clarifyBudget,
+      WG_MEMBER_NODE_ID,
+      shardKey,
+    )
+    const result = await hooks.runHostNode({
+      nodeRunId: runId,
+      nodeId: WG_MEMBER_NODE_ID,
+      agent,
+      promptTemplate: prompt,
+      workgroupProtocolBlock: renderWgProtocolBlock(
+        'fc_member',
+        config,
+        envelopeNonce,
+        clarifyAllowed,
+        {
+          count: batch.length,
+        },
+      ),
+      hostOutputPorts: wgHostRolePorts('fc_member', { count: batch.length }),
+      clarifyEnabled: clarifyAllowed,
+    })
+    if (result.status === 'canceled') {
+      for (const card of batch) {
+        await casAssignmentStatus(db, card.id, 'running', 'canceled').catch(() => false)
+      }
+      return
+    }
+    if (result.status === 'awaiting') {
+      // 整批同泊（design §3.2）：clarify shard 即批 shardKey，答案续跑经领养重建整批。
+      for (const card of batch) {
+        await casAssignmentStatus(db, card.id, 'running', 'awaiting_human').catch(() => false)
+      }
+      return
+    }
+    if (result.status === 'failed') {
+      if (result.failureCode === 'clarify-forbidden' && attempt < WG_PROTOCOL_RETRIES) {
+        errorNotice =
+          '- Ask-back is OFF in this autonomous group. Do NOT emit <workflow-clarify>.\n' +
+          '  Proceed with your best judgment and emit wg_task_results as usual.'
+        continue
+      }
+      const fu = followupForFailure(result.failureCode)
+      if (fu.retry && attempt < WG_PROTOCOL_RETRIES) {
+        errorNotice = wgFollowupNotice(fu.reason)
+        continue
+      }
+      await postMessage(db, taskId, roundMode(config), {
+        authorKind: 'system',
+        kind: 'system',
+        bodyMd: `batch of ${batch.length} task(s) for @${memberDisplayName(config, memberId)} failed: ${result.errorMessage ?? 'run failed'}`,
+      })
+      for (const card of batch) {
+        await settleCardAfterFailure(db, state, card.id)
+      }
+      return
+    }
+
+    // done — wg_task_results 全覆盖或协议重试。
+    const roster = rosterDisplayNames(config)
+    const resultsRaw = result.outputs[WG_PORT_TASK_RESULTS]
+    const parsed =
+      resultsRaw !== undefined
+        ? parseWgTaskResultsPort(resultsRaw, batch.length)
+        : ({
+            ok: false,
+            errors: [
+              `missing required port ${WG_PORT_TASK_RESULTS} (this batch run does NOT use ${WG_PORT_RESULT})`,
+            ],
+          } as const)
+    const messagesRaw = result.outputs[WG_PORT_MESSAGES]
+    const outMessages =
+      messagesRaw !== undefined
+        ? parseWgMessagesPort(messagesRaw, roster)
+        : { ok: true as const, value: [] }
+
+    const errors: string[] = []
+    if (!parsed.ok) errors.push(...parsed.errors.map((e) => `${WG_PORT_TASK_RESULTS}: ${e}`))
+    else if (parsed.missing.length > 0) {
+      errors.push(
+        `${WG_PORT_TASK_RESULTS}: missing entries for ${parsed.missing
+          .map((k) => `Task ${k}`)
+          .join(', ')} — EVERY task in the batch must be reported exactly once`,
+      )
+    }
+    if (!outMessages.ok) errors.push(...outMessages.errors.map((e) => `wg_messages: ${e}`))
+
+    if (errors.length > 0) {
+      errorNotice = errors.map((e) => `- ${e}`).join('\n')
+      if (attempt === WG_PROTOCOL_RETRIES) {
+        // 耗尽：已合法汇报的卡照落（design §3.2），未汇报/不可解析的走失败收尾。
+        const reported = parsed.ok ? parsed.value : []
+        await settleBatchResults(args, state, batch, reported)
+        const unreported = parsed.ok ? parsed.missing : batch.map((_, i) => i + 1) // whole port unusable — nothing landed
+        await postMessage(db, taskId, roundMode(config), {
+          authorKind: 'system',
+          kind: 'system',
+          bodyMd: `batch for @${memberDisplayName(config, memberId)}: protocol violation after retries (${errors.join('; ')})`,
+        })
+        for (const k of unreported) {
+          const card = batch[k - 1]
+          if (card !== undefined) await settleCardAfterFailure(db, state, card.id)
+        }
+        return
+      }
+      continue
+    }
+
+    // 全绿：先旁路端口（消息/新卡），再逐卡落结果。
+    const switches = resolveWorkgroupSwitches(config.mode, config.switches)
+    if (outMessages.ok && outMessages.value.length > 0) {
+      await persistWgMessages(
+        db,
+        taskId,
+        config,
+        batch[0]?.round ?? 0,
+        memberId,
+        outMessages.value,
+        {
+          allowDirect: switches.directMessages,
+          allowBlackboard: switches.blackboard,
+        },
+      )
+    }
+    await consumeTasksAdd(db, taskId, state, memberId, result.outputs[WG_PORT_TASKS_ADD])
+    await settleBatchResults(args, state, batch, parsed.ok ? parsed.value : [])
+    // G3：不推游标——@ 消息由消息轨消费。
+    return
+  }
+}
+
+/**
+ * RFC-215 §3.2-6 — 批结果逐卡落库（全绿与耗尽两条路径共用）：`done` 卡落 result
+ * 消息 + CAS done；`failed` 卡落系统消息 + 失败收尾（预算内回 open）。
+ */
+async function settleBatchResults(
+  args: WorkgroupEngineArgs,
+  state: EngineDbState,
+  batch: readonly WorkgroupAssignment[],
+  reported: readonly WgTaskResultItem[],
+): Promise<void> {
+  const { db, taskId } = args
+  const config = state.config
+  for (const item of reported) {
+    const card = batch[item.task - 1]
+    if (card === undefined) continue
+    if (item.status === 'done') {
+      const resultMessageId = await postAssignmentMessage(db, taskId, roundMode(config), card, {
+        authorKind: 'member',
+        authorMemberId: card.assigneeMemberId,
+        kind: 'result',
+        bodyMd: item.summary,
+      })
+      await casAssignmentStatus(db, card.id, 'running', 'done', { resultMessageId }).catch(
+        () => false,
+      )
+    } else {
+      await postAssignmentMessage(db, taskId, roundMode(config), card, {
+        authorKind: 'system',
+        kind: 'system',
+        bodyMd: `assignment '${card.title}' reported failed by @${memberDisplayName(config, card.assigneeMemberId ?? '')}: ${item.summary}`,
+      })
+      await settleCardAfterFailure(db, state, card.id)
+    }
   }
 }
 

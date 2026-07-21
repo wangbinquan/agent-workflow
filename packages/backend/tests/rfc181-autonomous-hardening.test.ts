@@ -460,10 +460,12 @@ describe('RFC-181 C — 源级契约锁', () => {
     expect(hits).toBeGreaterThanOrEqual(2) // leader 分支 + worker 分支
     expect(runner).not.toContain('startsWith(CLARIFY_FORBIDDEN_PREFIX)')
     expect(runner).toContain('Ask-back is OFF')
-    // RFC-207 §3.7.2 — each of the three turns resolves the permission ONCE and
-    // feeds it to BOTH the protocol renderer and `clarifyEnabled`. Counting the
+    // RFC-207 §3.7.2 — each turn resolves the permission ONCE and feeds it to
+    // BOTH the protocol renderer and `clarifyEnabled`. Counting the
     // `clarifyEnabled:` sites keeps that wiring from silently losing one.
-    expect(runner.split('clarifyEnabled: ').length - 1).toBe(3)
+    // RFC-215: driveBatchTurn (fc 批 run) is the 4th site (leader / lw
+    // assignment / message turn / batch), same resolve-once discipline.
+    expect(runner.split('clarifyEnabled: ').length - 1).toBe(4)
   })
 
   test('route：A2 对 dynamic_workflow 免疫 + 遣散后新鲜状态复读 kick（实现门 P2）', () => {

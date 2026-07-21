@@ -21,6 +21,7 @@ import type {
   WorkgroupRunEntry,
   WorkgroupRunKind,
 } from '@agent-workflow/shared'
+import { parseBatchShardKey } from '@agent-workflow/shared'
 import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from './workgroupLaunch'
 
 /** Minimal node_run shape the derivation reads (subset of the DB row). The
@@ -85,6 +86,11 @@ function runKindOf(run: HostRunLite, assignmentIds: ReadonlySet<string>): Workgr
   if (run.nodeId === WG_MEMBER_NODE_ID && run.shardKey !== null) {
     if (MESSAGE_TURN_SHARD_RE.test(run.shardKey)) return 'message-turn'
     if (assignmentIds.has(run.shardKey)) return 'assignment'
+    // RFC-215 §3.6 — fc task-batch rows (shardKey = batch:member:ids). Without
+    // this branch every batch run vanished from runHistory, presence showed the
+    // member idle for the whole batch, and the clarify-park projection dropped
+    // it (design gate ②F3).
+    if (parseBatchShardKey(run.shardKey) !== null) return 'assignment'
   }
   return null
 }
@@ -110,6 +116,10 @@ function classify(
     return { run, kind, memberId: leaderMemberId, maxMsgId: null }
   }
   if (kind === 'assignment') {
+    // RFC-215 §3.6 — batch rows carry their member IN the key (immutable at
+    // mint time, survives card re-claims and the autonomous requeue nulling
+    // assignees) — strongest identity, checked first.
+    const viaBatch = parseBatchShardKey(run.shardKey ?? null)?.memberId ?? null
     // Impl-gate P2（二审收紧）— the card's assignee is MUTABLE in free-collab
     // (a failed card recycles to open and may be RE-CLAIMED by someone else,
     // which would relabel A's old attempts as B's). The run's mint-time agent
@@ -119,7 +129,7 @@ function classify(
     const viaAgent =
       run.agentOverrideName != null ? (uniqueAgentMember.get(run.agentOverrideName) ?? null) : null
     const viaCard = run.shardKey ? (assignmentToMember.get(run.shardKey) ?? null) : null
-    const memberId = viaAgent ?? viaCard
+    const memberId = viaBatch ?? viaAgent ?? viaCard
     if (memberId === null) return null
     return { run, kind, memberId, maxMsgId: null }
   }

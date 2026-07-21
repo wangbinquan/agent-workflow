@@ -12,6 +12,7 @@ import type {
 import {
   resolveCompletionGate,
   resolveWorkgroupSwitches,
+  WG_FC_CLAIM_BATCH_LIMIT,
   WG_LEADER_IDLE_NUDGE_LIMIT,
 } from '@agent-workflow/shared'
 import { sliceMessagesAfter } from './workgroupContext'
@@ -29,6 +30,15 @@ export interface WakeInput {
     runningAssignmentIds: ReadonlySet<string>
     /** member ids with an in-flight message turn. */
     messageTurnMemberIds: ReadonlySet<string>
+    /**
+     * RFC-215 §2.1 — member ids with an in-flight TASK-track run (fc batch /
+     * lw assignment assignee). Optional so existing WakeInput literals default
+     * to empty (same precedent as `leaderClarifyParked`). fc pairs new batches
+     * against this + the card-status leg; recovery of orphaned dispatched
+     * cards checks ONLY the in-flight legs (a dispatched card's assignee is
+     * otherwise busy-by-definition and could never be recovered).
+     */
+    taskTurnMemberIds?: ReadonlySet<string>
   }
   /** lw: completed-or-started leader turns; fc: total member runs (incl. message turns). */
   roundsUsed: number
@@ -61,7 +71,9 @@ export type WakeItem =
   | { kind: 'assignment'; assignmentId: string }
   | { kind: 'message_turn'; memberId: string }
   | { kind: 'fc_initial'; memberId: string }
-  | { kind: 'fc_claim'; memberId: string; assignmentId: string }
+  // RFC-215 — one BATCH of cards per member per pass (design §2.2): platform
+  // claims them all into a single member run (one budget slot). Non-empty.
+  | { kind: 'fc_claim'; memberId: string; assignmentIds: string[] }
 
 export interface WakeSet {
   // RFC-170 CI unblock (user-authorized 2026-07-14): `readonly` so a caller can pass
@@ -142,8 +154,8 @@ function hasUnconsumedMention(input: WakeInput, memberId: string): boolean {
   )
 }
 
-/** Member ids that currently have an active (dispatched/running/awaiting) assignment. */
-function busyMemberIds(input: WakeInput): Set<string> {
+/** Member ids with an active (dispatched/running/awaiting) assignment — the card-status leg. */
+function cardBusyMemberIds(input: WakeInput): Set<string> {
   const busy = new Set<string>()
   for (const a of input.assignments) {
     if (a.assigneeMemberId === null) continue
@@ -151,7 +163,23 @@ function busyMemberIds(input: WakeInput): Set<string> {
       busy.add(a.assigneeMemberId)
     }
   }
+  return busy
+}
+
+/**
+ * lw 合并占用（RFC-215 之前的 `busyMemberIds` 逐位保留）：lw 的 worker 有 active
+ * 单或在跑消息回合都不再唤消息回合——AC-8 回归锁的对象。
+ */
+function mergedBusyMemberIds(input: WakeInput): Set<string> {
+  const busy = cardBusyMemberIds(input)
   for (const id of input.inFlight.messageTurnMemberIds) busy.add(id)
+  return busy
+}
+
+/** fc 任务轨占用（RFC-215 §2.1）：卡状态腿 ∪ in-flight 任务批成员。 */
+function taskBusyMemberIds(input: WakeInput): Set<string> {
+  const busy = cardBusyMemberIds(input)
+  for (const id of input.inFlight.taskTurnMemberIds ?? []) busy.add(id)
   return busy
 }
 
@@ -164,34 +192,26 @@ export function deriveWakeSet(input: WakeInput): WakeSet {
   // Gate parked: nothing runs until the human decides (design §8.2).
   if (input.gate.awaitingConfirmation) return { items: [], capExceeded: false }
 
-  // 1. Dispatched agent assignments start immediately (both modes, §4.2).
-  for (const a of input.assignments) {
-    if (a.status !== 'dispatched') continue
-    if (!isAgentAssignee(config, a)) continue // human assignments wait for delivery
-    if (input.inFlight.runningAssignmentIds.has(a.id)) continue
-    if (config.mode === 'free_collab' && input.roundsUsed + items.length >= config.maxRounds) {
-      capExceeded = true
-      continue
-    }
-    items.push({ kind: 'assignment', assignmentId: a.id })
-  }
-
-  // 2. Message turns (direct_messages gated, both modes, §6.3).
-  if (switches.directMessages) {
-    const busy = busyMemberIds(input)
-    for (const memberId of agentMemberIds(config)) {
-      if (config.mode === 'leader_worker' && memberId === config.leaderMemberId) continue
-      if (busy.has(memberId)) continue
-      if (!hasUnconsumedMention(input, memberId)) continue
-      if (config.mode === 'free_collab' && input.roundsUsed + items.length >= config.maxRounds) {
-        capExceeded = true
-        continue
-      }
-      items.push({ kind: 'message_turn', memberId })
-    }
-  }
-
   if (config.mode === 'leader_worker') {
+    // 1lw. Dispatched agent assignments start immediately (§4.2).
+    for (const a of input.assignments) {
+      if (a.status !== 'dispatched') continue
+      if (!isAgentAssignee(config, a)) continue // human assignments wait for delivery
+      if (input.inFlight.runningAssignmentIds.has(a.id)) continue
+      items.push({ kind: 'assignment', assignmentId: a.id })
+    }
+
+    // 2lw. Message turns — merged busy, pre-RFC-215 semantics preserved (§6.3).
+    if (switches.directMessages) {
+      const busy = mergedBusyMemberIds(input)
+      for (const memberId of agentMemberIds(config)) {
+        if (memberId === config.leaderMemberId) continue
+        if (busy.has(memberId)) continue
+        if (!hasUnconsumedMention(input, memberId)) continue
+        items.push({ kind: 'message_turn', memberId })
+      }
+    }
+
     // 3lw. Leader batch-wake: no agent assignment still dispatched/running and
     // (initial | new content since the leader's cursor | gate rejection).
     const leaderId = config.leaderMemberId
@@ -228,39 +248,94 @@ export function deriveWakeSet(input: WakeInput): WakeSet {
         }
       }
     }
-  } else {
-    // 3fc. Initial planning burst: every agent member, in parallel (决策 #17).
-    const nothingStarted =
-      input.roundsUsed === 0 &&
-      input.assignments.length === 0 &&
-      input.inFlight.runningAssignmentIds.size === 0 &&
-      input.inFlight.messageTurnMemberIds.size === 0
-    if (nothingStarted) {
-      for (const memberId of agentMemberIds(config)) {
-        if (input.roundsUsed + items.length >= config.maxRounds) {
-          capExceeded = true
-          break
-        }
-        items.push({ kind: 'fc_initial', memberId })
-      }
-      return { items, capExceeded }
-    }
+    return { items, capExceeded }
+  }
 
-    // 4fc. Platform claims open tasks for idle agent members (CAS at the
-    // engine layer makes it race-free; here we just pair deterministically:
-    // open tasks in creation order × idle members in roster order, one each).
-    const busy = busyMemberIds(input)
-    const claimedThisWake = new Set<string>()
-    const open = input.assignments.filter((a) => a.status === 'open')
-    for (const a of open) {
-      const member = agentMemberIds(config).find((id) => !busy.has(id) && !claimedThisWake.has(id))
-      if (member === undefined) break
+  // ---- free_collab (RFC-215 dual-track ordering: batches first, §2.2) ----
+
+  // 0fc. Initial planning burst: every agent member, in parallel (决策 #17).
+  const nothingStarted =
+    input.roundsUsed === 0 &&
+    input.assignments.length === 0 &&
+    input.inFlight.runningAssignmentIds.size === 0 &&
+    input.inFlight.messageTurnMemberIds.size === 0
+  if (nothingStarted) {
+    for (const memberId of agentMemberIds(config)) {
       if (input.roundsUsed + items.length >= config.maxRounds) {
         capExceeded = true
         break
       }
-      claimedThisWake.add(member)
-      items.push({ kind: 'fc_claim', memberId: member, assignmentId: a.id })
+      items.push({ kind: 'fc_initial', memberId })
+    }
+    return { items, capExceeded }
+  }
+
+  // 1fc-a. TASK track, recovery batches first (design §2.2/§3.4): dispatched
+  // cards with NO in-flight run driving them (crash between CAS and mint, or
+  // reconcile's redispatch). Checked against the in-flight legs ONLY — a
+  // dispatched card's assignee is busy-by-definition on the card-status leg,
+  // which is exactly why taskBusy cannot serve here (design §12-1).
+  const taskTurn = input.inFlight.taskTurnMemberIds ?? new Set<string>()
+  const claimedThisWake = new Set<string>()
+  const orphaned = new Map<string, string[]>()
+  for (const a of input.assignments) {
+    if (a.status !== 'dispatched') continue
+    if (!isAgentAssignee(config, a)) continue // human assignments wait for delivery
+    if (a.assigneeMemberId === null) continue
+    if (input.inFlight.runningAssignmentIds.has(a.id)) continue
+    if (taskTurn.has(a.assigneeMemberId)) continue
+    const g = orphaned.get(a.assigneeMemberId)
+    if (g === undefined) orphaned.set(a.assigneeMemberId, [a.id])
+    else g.push(a.id)
+  }
+  for (const [memberId, ids] of orphaned) {
+    if (input.roundsUsed + items.length >= config.maxRounds) {
+      capExceeded = true
+      break
+    }
+    claimedThisWake.add(memberId)
+    // Cap at the constant (design §2.2 — NOT batchSize): overflow re-batches
+    // for the same member on the next pass once this batch settles.
+    items.push({ kind: 'fc_claim', memberId, assignmentIds: ids.slice(0, WG_FC_CLAIM_BATCH_LIMIT) })
+  }
+
+  // 1fc-b. TASK track, new claims: open cards in creation (id) order, evenly
+  // split across idle members in roster order, one batch (= one budget slot)
+  // per member. Empty-slice guard covers idle > open; zero-idle/zero-open
+  // short-circuits the division.
+  if (!capExceeded) {
+    const taskBusy = taskBusyMemberIds(input)
+    const open = input.assignments.filter((a) => a.status === 'open').map((a) => a.id)
+    const idle = agentMemberIds(config).filter(
+      (id) => !taskBusy.has(id) && !claimedThisWake.has(id),
+    )
+    if (open.length > 0 && idle.length > 0) {
+      const batchSize = Math.min(WG_FC_CLAIM_BATCH_LIMIT, Math.ceil(open.length / idle.length))
+      for (let k = 0; k < idle.length; k++) {
+        const memberId = idle[k] as string
+        const ids = open.slice(k * batchSize, (k + 1) * batchSize)
+        if (ids.length === 0) break // empty slice: more idle members than cards
+        if (input.roundsUsed + items.length >= config.maxRounds) {
+          capExceeded = true
+          break
+        }
+        items.push({ kind: 'fc_claim', memberId, assignmentIds: ids })
+      }
+    }
+  }
+
+  // 2fc. MESSAGE track — checked against the message-track leg ONLY (§2.1):
+  // a member deep in a task batch still gets its message turn (G1), and
+  // budget-wise message turns rank AFTER batches (G4).
+  if (switches.directMessages) {
+    for (const memberId of agentMemberIds(config)) {
+      if (input.inFlight.messageTurnMemberIds.has(memberId)) continue
+      if (!hasUnconsumedMention(input, memberId)) continue
+      if (input.roundsUsed + items.length >= config.maxRounds) {
+        capExceeded = true
+        continue
+      }
+      items.push({ kind: 'message_turn', memberId })
     }
   }
 
