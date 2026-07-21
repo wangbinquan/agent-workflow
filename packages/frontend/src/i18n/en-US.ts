@@ -1684,6 +1684,19 @@ export const enUS: Resources = {
       runLogTitle: 'Run log · {{count}}',
       runLogEmpty: 'No runs yet',
       backToLatest: 'Back to latest',
+      pauseTitle: 'Why it stopped',
+      pause: {
+        maxRoundsWrapup:
+          'The round budget is exhausted, but completed work is in hand. Nothing is waiting for an answer — review the deliverables below; to continue, raise maxRounds in the task config and post any room message to resume.',
+        leaderIdle:
+          'The leader idled for consecutive rounds; paused for a human push. Post a room message (optionally @member to dispatch directly) to continue.',
+        leaderClarify:
+          'The leader asked a clarify question and is waiting for your answer (see the question card in the log).',
+        clarifyOrDelivery:
+          'A member clarify or a human delivery is waiting on you (see the task cards and the log).',
+        engineStall:
+          'The engine had nothing to drive but the task has not converged (defensive stall). Post any room message to retry.',
+      },
       gateTitle: 'Completion gate',
       gateAwaiting: 'The leader declared done; awaiting human confirmation.',
       gateConfirm: 'Confirm',
@@ -2193,7 +2206,10 @@ export const enUS: Resources = {
       canceled: 'Canceled',
       interrupted: 'Interrupted',
       awaiting_review: 'Awaiting review',
-      awaiting_human: 'Awaiting input',
+      // 2026-07-21 — neutralized: awaiting_human covers both clarify (a real
+      // question awaits) and max-rounds wrap-up (budget exhausted, deliverable
+      // in hand). The precise cause renders as the room's pauseReason card.
+      awaiting_human: 'Awaiting human',
     },
   },
   editor: {

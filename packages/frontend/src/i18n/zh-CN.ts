@@ -1519,6 +1519,15 @@ export interface Resources {
       runLogTitle: string
       runLogEmpty: string
       backToLatest: string
+      // 2026-07-21 —— awaiting_human 成因说明卡（wgPause 槽 → room.pauseReason）。
+      pauseTitle: string
+      pause: {
+        maxRoundsWrapup: string
+        leaderIdle: string
+        leaderClarify: string
+        clarifyOrDelivery: string
+        engineStall: string
+      }
       gateTitle: string
       gateAwaiting: string
       gateConfirm: string
@@ -5328,6 +5337,16 @@ export const zhCN: Resources = {
       runLogTitle: '执行记录 · {{count}}',
       runLogEmpty: '还没有任何执行',
       backToLatest: '回到最新',
+      pauseTitle: '为什么停下了',
+      pause: {
+        maxRoundsWrapup:
+          '回合预算已触顶，但已有完成的产出。没有问题在等你回答——可在下方查看交付内容；如需继续，提高任务配置里的回合上限后在房间发一条消息即可续跑。',
+        leaderIdle:
+          'Leader 连续空转，已暂停等待人工推进。在房间发消息（可 @成员 直接派活）即可继续。',
+        leaderClarify: 'Leader 提出了反问，正在等你回答（见上方消息流的提问卡片）。',
+        clarifyOrDelivery: '有成员的反问或人工交付在等你处理（见任务卡与消息流）。',
+        engineStall: '引擎无事可做但任务未收敛（异常兜底暂停）。在房间发一条消息可尝试续跑。',
+      },
       gateTitle: '完成门',
       gateAwaiting: 'Leader 已宣布完成，等待人工确认。',
       gateConfirm: '确认完成',
@@ -5815,7 +5834,10 @@ export const zhCN: Resources = {
       canceled: '已取消',
       interrupted: '已中断',
       awaiting_review: '等待审核',
-      awaiting_human: '等待回答',
+      // 2026-07-21 —— 中性化：awaiting_human 有两类成因（clarify 反问 = 真有
+      // 问题要答；max-rounds wrap-up = 预算触顶待处置）。「等待回答」对后者
+      // 是误导（用户实报困惑）；精确成因由房间的 pauseReason 说明卡展示。
+      awaiting_human: '等待人工',
     },
   },
   editor: {
