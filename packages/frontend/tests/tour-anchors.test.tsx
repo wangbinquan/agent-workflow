@@ -217,4 +217,25 @@ describe('RFC-211 spotlight overlay', () => {
       expect(JSON.parse(raw ?? '{}').stepIndex).toBe(idx + 1)
     })
   })
+
+  test('the off-page "go here" button is a full-width action, not an orphaned inline button', () => {
+    // Regression: when the user wandered off a step's page, the "go to page"
+    // button rendered inline ABOVE the Skip/Back row, reading as a stray
+    // button that had wrapped onto its own line. It must carry the full-width
+    // class so the footer looks deliberate.
+    const steps = getTour('first-task').steps
+    // The name step (route '/agents/new') shows the go-here button when viewed
+    // from a different route.
+    const idx = steps.findIndex((s) => s.route === '/agents/new' && s.fill !== undefined)
+    expect(idx).toBeGreaterThan(-1)
+    window.localStorage.setItem('aw-tour', JSON.stringify({ tourId: 'first-task', stepIndex: idx }))
+
+    render(
+      <TourProvider pathname="/">
+        <div />
+      </TourProvider>,
+    )
+    const goto = screen.getByTestId('spotlight-tour-goto')
+    expect(goto.className).toContain('spotlight-tour__goto')
+  })
 })

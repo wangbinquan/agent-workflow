@@ -349,7 +349,7 @@ function SpotlightOverlay({ pathname, state }: { pathname: string; state: TourSt
         {!onRightPage && step.route !== undefined && (
           <button
             type="button"
-            className="btn btn--primary btn--sm"
+            className="btn btn--primary btn--sm spotlight-tour__goto"
             data-testid="spotlight-tour-goto"
             onClick={() => void navigate({ to: step.route as never } as never)}
           >

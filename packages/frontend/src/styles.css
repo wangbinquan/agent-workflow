@@ -8124,10 +8124,26 @@ details.form-section[open] > summary {
   line-height: 1.5;
 }
 
+/* The "go to this step's page" button (shown when the user wandered off the
+   step's route). Full-width so it reads as the primary action instead of an
+   orphaned button floating above the Skip/Back row. */
+.spotlight-tour__goto {
+  display: block;
+  width: 100%;
+  margin-bottom: 10px;
+}
+
 .spotlight-tour__actions {
   display: flex;
   align-items: center;
   gap: 8px;
+  /* Keep Skip / Back / Next on one line — the labels are short by design; a
+     narrow bubble should not wrap them into a ragged stack. */
+  flex-wrap: nowrap;
+}
+
+.spotlight-tour__actions .btn {
+  white-space: nowrap;
 }
 
 .spotlight-tour__spacer {
