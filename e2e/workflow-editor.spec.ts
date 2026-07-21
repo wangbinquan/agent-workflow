@@ -715,7 +715,7 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
       .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-id')))
     const paneBox = await pane.boundingBox()
     if (paneBox === null) throw new Error('canvas pane missing')
-    const expectedTopLeft = {
+    const paneCenter = {
       x: paneBox.x + paneBox.width / 2,
       y: paneBox.y + paneBox.height / 2,
     }
@@ -736,17 +736,38 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
         before,
       )
     if (insertedId === null) throw new Error('inserted node id missing')
-    const insertedBox = await page
-      .locator(`.react-flow__node[data-id="${insertedId}"]`)
-      .boundingBox()
-    if (insertedBox === null) throw new Error('inserted node box missing')
 
-    // addPaletteItemAtViewportCenter takes a screen point, converts it with
-    // screenToFlowPosition, and xyflow projects it back through the active
-    // zoom transform. The new node's top-left therefore lands on the visible
-    // pane center even though the flow viewport is no longer identity.
-    expect(Math.abs(insertedBox.x - expectedTopLeft.x)).toBeLessThanOrEqual(3)
-    expect(Math.abs(insertedBox.y - expectedTopLeft.y)).toBeLessThanOrEqual(3)
+    // The insert converts the aimed screen point (pane centre) with
+    // screenToFlowPosition and then anchors the node's CENTER there via
+    // centerAnchoredTopLeft (2026-07-21 落点修复), using
+    // DEFAULT_NODE_SIZE_BY_KIND for the pre-measure size — agent-single is
+    // 280×180, so the flow top-left is the projected centre minus (140, 90).
+    // Assert in FLOW space (the node element's translate()) so rendered card
+    // size cannot skew the anchor check; zoom-projection drift is what this
+    // case isolates.
+    const viewportMatrix = await page
+      .locator('.react-flow__viewport')
+      .evaluate((element) => getComputedStyle(element).transform)
+    const matrixParts = viewportMatrix
+      .match(/matrix\(([^)]+)\)/)?.[1]
+      ?.split(',')
+      .map(Number)
+    if (matrixParts === undefined || matrixParts.length !== 6) {
+      throw new Error(`unexpected viewport transform: ${viewportMatrix}`)
+    }
+    const scale = matrixParts[0]!
+    const flowCenter = {
+      x: (paneCenter.x - paneBox.x - matrixParts[4]!) / scale,
+      y: (paneCenter.y - paneBox.y - matrixParts[5]!) / scale,
+    }
+    const nodeTransform = await page
+      .locator(`.react-flow__node[data-id="${insertedId}"]`)
+      .evaluate((element) => element.style.transform)
+    const translated = nodeTransform.match(/translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/)
+    if (translated === null) throw new Error(`unexpected node transform: ${nodeTransform}`)
+    const actualTopLeft = { x: Number(translated[1]), y: Number(translated[2]) }
+    expect(Math.abs(actualTopLeft.x - (flowCenter.x - 140))).toBeLessThanOrEqual(3)
+    expect(Math.abs(actualTopLeft.y - (flowCenter.y - 90))).toBeLessThanOrEqual(3)
   })
 
   test('editor rails and modal handoffs have no critical/serious axe violations', async ({
