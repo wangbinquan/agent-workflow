@@ -59,22 +59,22 @@ PR 拆分：**5 个 PR**（设计门把 v1 的 PR-1 拆成 1a 冷 / 1b 热，因
 
 ## 全局验收清单
 
-- [ ] AC-1 restore 往返（改 live 后全表 hash 还原）
-- [ ] AC-2 安全备份原始拷贝 + 失败 fail-closed
-- [ ] AC-3 版本闸（迁移身份 + 旧包行存活 / 新包拒绝）
-- [ ] AC-4 热 restore 只暂存 + 下次启动幂等应用
-- [ ] AC-5 损坏 fail-closed（页级 fixture + 归一 catch）
-- [ ] AC-6 定时备份 + 轮转（KEEP/DELETE 规则 + interval=0 零文件 + 重入）
-- [ ] AC-7 pre-migration rawCopyDb（仅 pending + 绑版本）
-- [ ] AC-8 worktree 同机增量往返（缺失才重建 / mismatch 保护 / 首次跳 clean）
-- [ ] AC-9 synchronous 可配真实下发
-- [ ] AC-10 doctor 只读断言（readonly + 写抛）
-- [ ] AC-11 WAL checkpoint 纪律
-- [ ] AC-12 异机凭据告警
-- [ ] 每个新守卫/失败路径已变异实证（写反 → 对应测试必红）
-- [ ] DR 测试全部 file-based openDb（非 createInMemoryDb）
-- [ ] 实现门每 PR 跑 Codex review（配额恢复后，[feedback_codex_review_after_changes]）
-- [ ] 单二进制 build smoke + push 后 CI 三绿
+- [x] AC-1 restore 往返（改 live 后全表 hash 还原）— rfc213-restore.test.ts
+- [x] AC-2 安全备份原始拷贝 + 失败 fail-closed — rfc213-restore.test.ts
+- [x] AC-3 版本闸（迁移身份 + 旧包行存活 / 新包拒绝）— rfc213-restore.test.ts
+- [x] AC-4 热 restore 只暂存 + 下次启动幂等应用 — rfc213-pending-restore.test.ts（`restore --stage`）
+- [x] AC-5 损坏 fail-closed（页级 fixture + 归一 catch）— rfc213-boot-integrity.test.ts
+- [x] AC-6 定时备份 + 轮转（KEEP/DELETE 规则 + interval=0 零文件 + 重入）— rfc213-backup-retention.test.ts
+- [x] AC-7 pre-migration rawCopyDb（仅 pending + 绑版本）— rfc213-pre-migration-backup.test.ts
+- [~] AC-8 worktree 同机增量往返 — **部分**：mismatch-protect（恢复后挂起非终态任务 auto-recovery，`36c3b84b`）已落；worktree **捕获/重建**（inspection nicety）**遗留**，见 memory `project_rfc213_disaster_recovery`
+- [x] AC-9 synchronous 可配真实下发 — rfc213-sqlite-synchronous.test.ts
+- [x] AC-10 doctor 只读断言（readonly + 写抛）— rfc213-boot-integrity.test.ts（源锁）
+- [x] AC-11 WAL checkpoint 纪律 — rfc213-wal-checkpoint.test.ts
+- [x] AC-12 异机凭据告警 — rfc213-credential-brick.test.ts
+- [x] 每个新守卫/失败路径已变异实证（写反 → 对应测试必红）
+- [x] DR 测试全部 file-based openDb（非 createInMemoryDb）
+- [ ] 实现门每 PR 跑 Codex review（配额恢复后 7/25，[feedback_codex_review_after_changes]）— **遗留**
+- [x] 单二进制 build smoke + push 后 CI 三绿 — 逐 PR CI 全绿（含 build-binary smoke job）
 
 ## 风险登记（含设计门补充）
 
