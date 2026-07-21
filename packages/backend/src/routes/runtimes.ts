@@ -157,7 +157,11 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
     const provider = getSandboxProvider()
     const sandbox =
       provider !== null
-        ? { mode: provider.mode, mechanism: provider.status.mechanism, available: provider.status.available }
+        ? {
+            mode: provider.mode,
+            mechanism: provider.status.mechanism,
+            available: provider.status.available,
+          }
         : { mode: cfg.sandboxMode, mechanism: null, available: false }
     return c.json({ runtimes, sandbox })
   })

@@ -297,6 +297,10 @@ async function startDaemonWithPortAllocator(
           {
             $schema_version: 1,
             opencodePath: stubOpencode,
+            // RFC-205: e2e boxes (esp. linux CI, no bwrap) must not grow a
+            // per-task sandbox-degraded alert — it trips every "no banner"
+            // assertion. The sandbox has its own gated suite; e2e opts out.
+            sandboxMode: 'off',
             maxConcurrentNodes: 4,
             multiProcessSubprocessConcurrency: 4,
             defaultPerTaskMaxDurationMs: 60 * 60 * 1000,

@@ -54,6 +54,10 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   'packages/backend/tests/integration-opencode/opencode-live.integration.test.ts#skipIf': 1,
   'packages/backend/tests/mcp-probe-http-integration.test.ts#skipIf': 1,
   'packages/backend/tests/mcp-probe-stdio-integration.test.ts#skipIf': 1,
+  // RFC-205: the REAL-mechanism sandbox smoke is RUN_SANDBOX_ITEST-gated
+  // (activated on the macOS CI shards; the test re-probes and no-ops where
+  // the mechanism is unusable).
+  'packages/backend/tests/rfc205-sandbox-integration.test.ts#skip': 1,
   'packages/backend/tests/worktree-submodule-init.test.ts#skipIf': 1,
 }
 
@@ -83,6 +87,9 @@ const REQUIRED_GATE_ACTIVATIONS: Record<string, GateActivationCheck[]> = {
   RUN_GIT_PROTOCOLS: [
     { file: '.github/workflows/git-protocols-e2e.yml', marker: "RUN_GIT_PROTOCOLS: '1'" },
   ],
+  // RFC-205: real-mechanism sandbox smoke — macOS backend shards have
+  // sandbox-exec; the test itself re-probes and no-ops where unusable.
+  RUN_SANDBOX_ITEST: [{ file: '.github/workflows/ci.yml', marker: "RUN_SANDBOX_ITEST: '1'" }],
   RUN_OPENCODE_INTEGRATION: [
     {
       file: '.github/workflows/integration-opencode.yml',

@@ -150,6 +150,10 @@ jobs:
         run: bun test --isolate --randomize --seed="$BUN_TEST_SEED" --shard=${{ matrix.shard }}/4
         env:
           RUN_GIT_NETWORK: '1'
+          # RFC-205: macOS runners ship sandbox-exec — run the REAL-mechanism
+          # sandbox smoke here (ubuntu has no bwrap; the test double-gates on
+          # the probe anyway).
+          RUN_SANDBOX_ITEST: '1'
 
       - name: Upload backend coverage to Codecov (ubuntu shards)
         # Each ubuntu shard emits an lcov covering its quarter of the files;
