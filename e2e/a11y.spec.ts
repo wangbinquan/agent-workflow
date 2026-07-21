@@ -381,18 +381,23 @@ test.describe('RFC-054 W2-6 — accessibility (axe-core) on key pages', () => {
   })
 
   // RFC-211: the guided tour is a brand-new page whose whole point is that it
-  // is built from the shared primitives rather than bespoke chrome — the
-  // radiogroup track picker, the stepper and the destructive-confirm dialog all
+  // is built from the shared primitives rather than bespoke chrome — the flow
+  // cards and the spotlight bubble (a labelled role="dialog" with real buttons)
   // carry roles/labels only because those primitives provide them. Axe is what
-  // proves that stayed true.
+  // proves that stayed true. (The old example-sandbox track picker / stepper /
+  // destructive-confirm dialog were removed; the tour now builds real resources
+  // in place, so the interactive surface to scan is the spotlight overlay.)
   test('/onboarding (guided tour) passes a11y', async ({ page }) => {
     await primeAuth(page, daemon)
     await page.goto(`${daemon.baseUrl}/onboarding`)
     await page.waitForLoadState('networkidle')
     await expect(page.getByTestId('guide-page')).toBeVisible()
-    // Exercise the track picker so the stepper (and its step list) is on screen
-    // for the scan, not just the empty landing state.
-    await page.getByTestId('guide-track-agent').click()
+    // Scan the launcher landing (the three flow cards) first...
+    await expectNoCriticalOrSeriousAxeViolations(page, '/onboarding (launcher)')
+    // ...then start a flow so the spotlight overlay is on screen and scan the
+    // dialog bubble too — that's the surface a keyboard/AT user actually drives.
+    await page.getByTestId('guide-start-first-task').click()
+    await expect(page.getByTestId('spotlight-tour-bubble')).toBeVisible()
     await expectNoCriticalOrSeriousAxeViolations(page, '/onboarding (guided tour)')
   })
 

@@ -22,6 +22,14 @@ export interface TourStep {
   /** Auto-advance when the user reaches a route starting with this. */
   advanceOnRoute?: string
   /**
+   * Advance only when the user CLICKS the highlighted element (no Next button).
+   * Use this when the next step's anchor only exists AFTER this click — e.g.
+   * switching to a tab, opening a picker — so a user who pressed Next instead
+   * would land on a step whose target isn't on screen yet and the bubble would
+   * float over nothing.
+   */
+  advanceOnClick?: boolean
+  /**
    * Pre-fill a real form field so the user doesn't have to type. `selector`
    * targets an <input>/<textarea>; the tour sets its value the React-friendly
    * way (native setter + input event) when the step opens. The user can still
@@ -70,6 +78,9 @@ const FIRST_TASK: Tour = {
     {
       anchor: '[data-testid="agent-tab-ports"]',
       route: '/agents/new',
+      // The next step (add-output-port) only exists once the ports tab is open,
+      // so require the click rather than offering a Next that would skip it.
+      advanceOnClick: true,
       titleKey: 'tour.firstTask.portsTab.title',
       bodyKey: 'tour.firstTask.portsTab.body',
     },
@@ -128,6 +139,9 @@ const BUILD_WORKFLOW: Tour = {
     {
       anchor: '[data-testid="workflow-new-button"]',
       route: '/workflows',
+      // Creating a workflow lands on its editor (/workflows/$id) where the next
+      // step's anchor lives.
+      advanceOnRoute: '/workflows/',
       titleKey: 'tour.buildWorkflow.newWorkflow.title',
       bodyKey: 'tour.buildWorkflow.newWorkflow.body',
     },

@@ -240,16 +240,40 @@ function SpotlightOverlay({ pathname, state }: { pathname: string; state: TourSt
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname, state.stepIndex])
 
+  // Click-driven advance: the highlighted control must be clicked (e.g. to open
+  // a tab) before the next step's target exists — there is no Next button for
+  // these steps. Delegate from the document in the CAPTURE phase and match the
+  // anchor by selector at click time rather than holding a node reference: the
+  // real target (a React-managed tab button) is re-rendered/reconciled, so a
+  // listener bound once to the node goes stale, and `closest()` also handles a
+  // click that lands on a child (e.g. the tab's badge span).
+  useEffect(() => {
+    if (step?.advanceOnClick !== true) return
+    const anchor = step.anchor
+    const onDocClick = (e: MouseEvent): void => {
+      const target = e.target
+      if (target instanceof Element && target.closest(anchor) !== null) next()
+    }
+    document.addEventListener('click', onDocClick, true)
+    return () => document.removeEventListener('click', onDocClick, true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.stepIndex])
+
   // Keyboard: Esc = skip, ArrowRight/Left = next/back (when manual).
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') stop()
-      else if (e.key === 'ArrowRight' && step?.advanceOnRoute === undefined) next()
+      else if (
+        e.key === 'ArrowRight' &&
+        step?.advanceOnRoute === undefined &&
+        step?.advanceOnClick !== true
+      )
+        next()
       else if (e.key === 'ArrowLeft') back()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [next, back, stop, step?.advanceOnRoute])
+  }, [next, back, stop, step?.advanceOnRoute, step?.advanceOnClick])
 
   useLayoutEffect(() => {
     bubbleRef.current?.focus()
@@ -341,9 +365,10 @@ function SpotlightOverlay({ pathname, state }: { pathname: string; state: TourSt
               {t('tour.back')}
             </button>
           )}
-          {/* A route-advance step has no Next — the user advances it by DOING
-              the thing. Only manual/explanatory steps carry a Next button. */}
-          {step.advanceOnRoute === undefined && (
+          {/* A route-advance OR click-advance step has no Next — the user
+              advances it by DOING the thing. Only manual/explanatory steps
+              carry a Next button. */}
+          {step.advanceOnRoute === undefined && step.advanceOnClick !== true && (
             <button
               type="button"
               className="btn btn--primary btn--sm"

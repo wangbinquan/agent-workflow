@@ -8,7 +8,7 @@
 // step shows no Next button (you advance it by DOING the thing), a manual step
 // does, and Skip always stops the tour.
 
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { afterEach, describe, expect, test, vi } from 'vitest'
@@ -108,7 +108,43 @@ describe('RFC-211 spotlight overlay', () => {
     // Jump to the "name" step (manual) by advancing twice would need routes;
     // instead assert the overlay renders and the script has at least one manual
     // step (the name step). Structural check keeps this router-mock-free.
-    const manual = getTour('first-task').steps.filter((s) => s.advanceOnRoute === undefined)
+    const manual = getTour('first-task').steps.filter(
+      (s) => s.advanceOnRoute === undefined && s.advanceOnClick !== true,
+    )
     expect(manual.length).toBeGreaterThan(0)
+  })
+
+  test('a click-advance step hides Next and advances when the anchor is clicked', async () => {
+    // Regression: pressing Next on the ports-tab step used to jump to a step
+    // whose target (the add-output-port button) only exists once the tab is
+    // open — so the bubble floated over nothing and lost its anchor. A
+    // click-advance step therefore has NO Next; it advances only when the user
+    // clicks the highlighted element itself.
+    const steps = getTour('first-task').steps
+    const idx = steps.findIndex((s) => s.advanceOnClick === true)
+    expect(idx).toBeGreaterThan(-1)
+    window.localStorage.setItem('aw-tour', JSON.stringify({ tourId: 'first-task', stepIndex: idx }))
+
+    render(
+      <TourProvider pathname="/agents/new">
+        {/* Stand-in for the real ports tab the step anchors on. */}
+        <button type="button" data-testid="agent-tab-ports">
+          Ports
+        </button>
+      </TourProvider>,
+    )
+
+    expect(screen.getByTestId('spotlight-tour-bubble')).toBeTruthy()
+    expect(screen.queryByTestId('spotlight-tour-next')).toBeNull()
+
+    // The click listener attaches on a short poll; retry the click until the
+    // tour has stepped forward. Once advanced, the next step is not click-mode,
+    // so extra clicks are inert and the assertion stays satisfied.
+    const anchor = screen.getByTestId('agent-tab-ports')
+    await waitFor(() => {
+      fireEvent.click(anchor)
+      const raw = window.localStorage.getItem('aw-tour')
+      expect(JSON.parse(raw ?? '{}').stepIndex).toBe(idx + 1)
+    })
   })
 })
