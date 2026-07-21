@@ -200,7 +200,7 @@ function connect(conn: SharedConn): void {
     // stops the reconnect loop from retrying a doomed token every 30s and
     // surfaces the login flow. connect() already no-ops on a null token, so
     // the scheduled reconnect below becomes a harmless 2s recheck.
-    if (e.code === WS_CLOSE_AUTH_REVOKED) clearToken()
+    if (e?.code === WS_CLOSE_AUTH_REVOKED) clearToken()
     scheduleReconnect(conn)
   })
   ws.addEventListener('error', () => {

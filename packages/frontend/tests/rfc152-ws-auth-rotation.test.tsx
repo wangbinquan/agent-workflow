@@ -232,6 +232,17 @@ describe('RFC-212 — WS close code 4401 clears the token (AC-9)', () => {
     }
   })
 
+  test('a close event fired with null (mock sockets do this) does not crash the handler', () => {
+    // Real browsers deliver a CloseEvent, but several test mocks fire the close
+    // listener with `null`. The 4401 handler must read the code defensively —
+    // `e?.code` — or every such test throws inside the listener. Regression for
+    // RFC-212 PR-2's useWebSocket change.
+    render(<Sub path="/ws/tasks/t1" />)
+    const sock = MockSocket.instances[0]!
+    expect(() => act(() => sock.close())).not.toThrow() // MockSocket.close fires fn(null)
+    expect(getToken()).toBe('tok')
+  })
+
   test('a NON-4401 close (network blip) does NOT clear the token', () => {
     vi.useFakeTimers()
     try {

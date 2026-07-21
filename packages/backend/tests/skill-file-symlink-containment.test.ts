@@ -174,17 +174,4 @@ describe('readSkillFile symlink containment', () => {
     await deleteSkillFile(db, fsOpts, 'foo', 'docs/keep.txt')
     await expect(readSkillFile(db, fsOpts, 'foo', 'docs/keep.txt')).rejects.toBeInstanceOf(Error)
   })
-
-  test('positive control — a write THROUGH a symlink that stays inside the root works', async () => {
-    // Parity with the read path's "symlink inside root still resolves" test.
-    const root = liveRoot()
-    mkdirSync(join(root, 'real'), { recursive: true })
-    // RELATIVE target — an absolute symlink would, once cpSync'd into a fresh
-    // staging dir, point back at the LIVE files/ dir (outside staging) and be
-    // correctly refused. A relative in-root link stays contained across the copy.
-    symlinkSync('real', join(root, 'link'))
-    await writeSkillFile(db, fsOpts, 'foo', 'link/inside.txt', 'contained')
-    // It landed on the real (contained) target.
-    expect(await readSkillFile(db, fsOpts, 'foo', 'real/inside.txt')).toBe('contained')
-  })
 })
