@@ -29,13 +29,24 @@ import { join } from 'node:path'
 import type { DbClient } from '@/db/client'
 import { stringifyWorkflowYaml } from '@/services/workflow.yaml'
 import { listWorkflows } from '@/services/workflow'
+import { tarGz } from '@/util/archive'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
+import {
+  type BackupKind,
+  type BackupManifest,
+  currentAppVersion,
+  readDbMigrationIdentity,
+  writeManifest,
+} from './backupManifest'
 
 const log = createLogger('backup')
 
 export interface BackupOptions {
   db: DbClient
+  /** RFC-213: what produced this backup. Drives retention (scheduled/auto are
+   *  rotated; manual/pre-* are kept). Defaults to 'manual'. */
+  kind?: BackupKind
   /** Override app home for tests. Defaults to Paths.root. */
   appHome?: string
   /** Override `now` for deterministic filenames in tests. */
@@ -116,7 +127,19 @@ export async function createBackup(opts: BackupOptions): Promise<BackupResult> {
       contents.workflows += 1
     }
 
-    // 5. tarball.
+    // 5. RFC-213 manifest — migration identity read from the just-VACUUM'd
+    //    snapshot (dbDest), so restore's version gate compares like-for-like.
+    const manifest: BackupManifest = {
+      manifestVersion: 1,
+      kind: opts.kind ?? 'manual',
+      createdAt: opts.now ?? Date.now(),
+      appVersion: currentAppVersion(),
+      includesWorktrees: false,
+      migration: readDbMigrationIdentity(dbDest) ?? { lastHash: null, lastCreatedAt: null },
+    }
+    writeManifest(stagingDir, manifest)
+
+    // 6. tarball.
     await tarGz(stagingDir, outPath)
     log.info('backup created', {
       path: outPath,
@@ -149,16 +172,4 @@ function countDirEntries(dir: string): number {
     }
   }
   return n
-}
-
-async function tarGz(stagingDir: string, outPath: string): Promise<void> {
-  const proc = Bun.spawn(['tar', '-czf', outPath, '-C', stagingDir, '.'], {
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-  const exit = await proc.exited
-  if (exit !== 0) {
-    const stderr = await new Response(proc.stderr).text()
-    throw new Error(`tar exited with code ${exit}: ${stderr.trim()}`)
-  }
 }

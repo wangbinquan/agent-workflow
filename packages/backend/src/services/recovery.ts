@@ -26,6 +26,12 @@ export type RecoveryEventKind =
   | 'auto-repair'
   | 'heartbeat-kill'
   | 'quarantine'
+  // RFC-213 disaster-recovery. `restore` is written on the db reopened AFTER the
+  // swap (the pre-swap db may be gone/corrupt); `pre-migration` after the fresh
+  // db opens; `worktree-skip` when a task's worktree capture exceeds the cap.
+  | 'restore'
+  | 'pre-migration'
+  | 'worktree-skip'
 
 export interface RecordRecoveryEventArgs {
   taskId?: string | null
