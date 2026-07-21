@@ -91,7 +91,7 @@
 
 | # | id | 域 | 风险 |
 | --- | --- | --- | --- |
-| 1 | `B4-runtime-1` | 运行时 | claude slug 算法错位 → 子代理转写 100% 静默丢失（已用本机 claude 2.1.215 二进制取证：真实规则是 `replace(/[^a-zA-Z0-9]/g,'-')` + 200 截断，我们只替换 `/`；worktree 路径恒含 `.agent-workflow` 故**必然**错位） |
+| 1 | `B4-runtime-1` | 运行时 | ✅ **已修（2026-07-21）**。claude slug 算法错位 → 子代理转写 100% 静默丢失（已取证）。修法：改为扫 `projects/` 按 sessionId 定位、不复刻其私有算法，未定位到打 warn。 |
 | 2 | `B3-git-1` | submodule | 子仓冲突 fail-closed 闸门从未被非空 `pendingSubResolves` 驱动过 → 失效即不可回滚的数据丢失 |
 | 3 | `B3-git-2` | submodule | 并列子仓 poolDir 单值 → materialize 500 / gitlink 指向不可达对象 |
 | 4 | `A-fanout-errors-port` | 文档 | **CLAUDE.md:138 与 proposal.md 宣称 fan-out 自动 errors port 已交付，design.md:783-786 明写 v1 未实现**——每个新 session 的第一入口就是错的 |
@@ -104,14 +104,14 @@
 | 11 | `B2-lifecycle-3` | 生命周期 | RFC-207 运行时长记账零行为覆盖 → 限额永不触发 或 人在 `awaiting_human` 期间继续计时被秒杀 |
 | 12 | `B6-data-5` | 备份 | 「备份 tarball 不含 `secret.key`」只是一行注释，排除清单测试没断言它 |
 | 13 | `D-commitpush-clean-sub` | commit-push | 未被触碰的干净 submodule 也被 `checkout -B` + 无条件 push → 第三方 vendor 仓一次也提交不了 |
-| 14 | `B4-runtime-5+6` | 资源 | prompt 走 argv 与 stdout **双向都无体量上限** → Linux `MAX_ARG_STRLEN` 128KB spawn 失败 / daemon OOM |
+| 14 | `B4-runtime-5` | 资源 | ✅ **已修 argv 方向（2026-07-21）**：opencode prompt 超 120KiB 在装配期可读失败（prompt-too-large），不再 E2BIG。**遗留 `B4-runtime-6`**：stdout/agentText 无上限（daemon OOM）是更大的流式缓冲改动，另立跟进。 |
 | 15 | `B1-routes-7` | 路由 | 95 个 route-local 错误码里 **51 个零命中**；契约表 205 条 0 条拒绝夹具 |
-| 16 | `B6-data-4` | 记忆蒸馏 | 蒸馏 ticker 缺重入守卫且认领在 for 循环内 → 同一 job 蒸馏两遍（重复记忆 + 双倍 token） |
+| 16 | `B6-data-4` | 记忆蒸馏 | ✅ **已修（2026-07-21）**：startMemoryDistillLoop 补重入守卫（对齐 gc/eventsArchive），单进程下消除重叠 tick 的并发蒸馏。**遗留**：13 个 start*Loop 收敛成共享 createTicker + 源码棘轮，另立。 |
 | 17 | `B3-git-3` | submodule | 递归 submodule（sub-in-sub）的 iso → merge-back → materialize 全链路零覆盖 |
 | 18 | `B3-git-4` | submodule | 「gitlink 冲突一律扣住整仓、绝不 salvage」是一条**从没跑过的 if**，它专防的 `rm -rf` 场景从未复现 |
 | 19 | `D-terminalsweep` | 人类闸门 | `terminalSweep` 手写枚举 5 张表，RFC-120 的 `task_questions` 三个开放态不在其中 → 死任务的反问永久停在看板 |
 | 20 | `B1-routes-2+4+5` | 路由 | fusions 7 条 + OIDC 公开登录 3 条 + OIDC 管理 6 条，共 16 个 endpoint 后端零测试（OIDC 三条是**未认证即可访问**的最外层攻击面） |
-| 21 | `B5-security-8` | 安全 | `writeSkillFile` / `deleteSkillFile` 缺少读路径已有的 `realpath` 遏制 → 跟随 symlink 以 daemon uid（本机常为 root）写/删任意宿主路径 |
+| 21 | `B5-security-8` | 安全 | ✅ **已修（2026-07-21）**：write/delete 经 `realpathWriteInside` 与读路径对齐 symlink 遏制（叶子 + 父目录逃逸都拒，内部 symlink 放行），逃逸 delete fail-closed。 |
 | 22 | `B6-data-2` | 迁移 | 手写多语句迁移缺 `--> statement-breakpoint` 无全仓守卫（bun:sqlite 只执行第一条且**不报错**） |
 | 23 | `A-dedup-residue` | 公共原语 | dedup 审计「已咬人」项中 5 项仍在原地（`redactPushError` 窄脱敏、4 处手抄 resume deps 漏 `subagentLiveCapture`、IDB 双 version…） |
 | 24 | `D-errorsummary` | 前后端契约 | 后端 `errorSummary` 字面量集合远大于前端手抄的 15 条翻译表 → 用户看到「任务失败」+ 一行英文机器码 |
