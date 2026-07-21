@@ -121,4 +121,27 @@ describe('docs ↔ implementation parity', () => {
       )
     }
   })
+
+  test("RFC-212's status in the plan index matches whether the code shipped", () => {
+    // RFC-212 v1's plan.md claimed T10 was "protected by docs-implementation-
+    // parity.test.ts" — which was false, because that lock is a hand-written
+    // set that would not cover RFC-212 unless someone added this very entry.
+    // This is that entry. Implementation signal: the revalidation trigger being
+    // wired into the credential write points. If it is wired, the plan index
+    // must say Done (not Draft); if it is not, it must not say Done.
+    const sessionStore = read('packages/backend/src/auth/sessionStore.ts')
+    const shipped = sessionStore.includes("triggerRevalidation(db, 'session-revoked')")
+
+    const planRow = read('design', 'plan.md')
+      .split(/\r?\n/)
+      .find((line) => line.includes('RFC-212-ws-authorization-revalidation'))
+    expect(planRow).toBeDefined()
+
+    // The status is the last `| … |` cell on the row.
+    const status = (planRow as string).trimEnd().replace(/\s*\|\s*$/, '')
+    const saysDone = /\|\s*Done\b/.test(status) || /\bDone\b[^|]*$/.test(status)
+    expect(`RFC-212 wired=${shipped} plan-says-done=${saysDone}`).toBe(
+      `RFC-212 wired=${shipped} plan-says-done=${shipped}`,
+    )
+  })
 })

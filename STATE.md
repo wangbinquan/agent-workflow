@@ -2,7 +2,9 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-🚧 **进行中 RFC（2026-07-21，待批准）：[RFC-212 WebSocket 授权撤销的逐帧复核](design/RFC-212-ws-authorization-revalidation/proposal.md)** —— 源自 [`design/test-guard-audit-2026-07-21`](design/test-guard-audit-2026-07-21/00-SYNTHESIS.md) 跨域 Top-6。`ws/server.ts:114-142` 在 upgrade 时把 actor 快照进 `ws.data` 后**终生不再复核**，七个通道里只有 `workflows` 有一处针对 `workflow.acl.updated` 的缓存 bust ⇒ **7 通道 × 4 类撤销 = 28 格只实现 1 格**：任务成员被移除 / 用户被降级 / 会话·PAT 被吊销 / 账号被停用 / 资源 ACL 被收回之后，已建立的 socket 继续推，其中 `task` 通道推的是 agent 完整 stdout。方案＝进程内单调 auth epoch（七个撤销写入点各 bump 一次）+ 帧投递前惰性复核（epoch 未变零额外查询）+ 「通道 × 复核策略」落成 `satisfies Record<WsChannelKind,…>` 编译期矩阵。**三件套已写完，等用户批准后进入实现**。
+✅ **已交付 RFC（2026-07-21）：[RFC-212 WebSocket 授权撤销的逐帧复核](design/RFC-212-ws-authorization-revalidation/proposal.md)** —— 源自 [`design/test-guard-audit-2026-07-21`](design/test-guard-audit-2026-07-21/00-SYNTHESIS.md) 跨域 Top-6。**设计门**（Codex 配额耗尽到 7/25，改跑 4 视角对抗自审 + 裁决，全文存 `design-gate-review.md`）**判死 v1 选型**「全局 epoch + 帧投递前惰性复核」——它要把异步复核塞进 `broadcaster.ts:46-59` 的同步广播扇出、且会撞红 `rfc152-ws-channel-registry.test.ts:277/:290` 两条同步投递锁；8 条阻断项里还有「五步从不写回 `ws.data.actor` ⇒ AC-2 不可达」「`updateUser` 在仓里不存在（真名 `patchUser`）+ 漏 `revokeAllSessionsForUser`」「bump 写在事务提交前 = 永久漏检」「`memories`/`scheduled-tasks` 根本没有缓存（v1 写成缓存永不失效）」。改走**方案 D**「进程级连接集合 + 撤销时异步全量重扫」，复核跑在撤销方 async 上下文、**帧路径一行不改**。`PR-1`（`8ddf7a5d`）基建 + `PR-2`（`7e9adcb6`）行为，AC-1~4b/8/9 全绿、四条变异各自必红、单二进制 build+smoke 通过、全量后端 6172 pass。**遗留**：实现门 Codex review 待配额恢复补跑。
+
+> 同批已交付的加固（测试/守卫类，见审计报告 §5）：CI 拓扑（`if: !cancelled()` + 漂移哨兵补 push）· 迁移多语句守卫 · 工作目录泄漏不变式 · 备份不带 secret.key · 文档反向锁 · OIDC 登录链路 20 例 · 账号自服务 IDOR 6 例（拒绝形状统一 403）· 12 条 ACL 端点纳管 + 六类资源跨用户矩阵 · 路由错误码棘轮 · claude 子代理转写按会话目录定位（Top-1 生产缺陷）· 三条 dev-only 浮动公告 --ignore 止血。
 
 > 同批已交付的加固（不走 RFC 的测试/守卫类，见审计报告 §5 路线）：CI 拓扑（`if: !cancelled()` + 两个漂移哨兵补 push 触发）· 迁移多语句全仓守卫 · 工作目录泄漏不变式 · 备份不带走 secret.key · 文档反向锁 · OIDC 登录链路 20 例 · 账号自服务 IDOR 6 例 · 12 条 ACL 端点纳管 + 六类资源跨用户矩阵 25 例 · 路由错误码棘轮 · claude 子代理转写按会话目录定位（Top-1 生产缺陷）· 撤销会话拒绝形状统一为 403。
 

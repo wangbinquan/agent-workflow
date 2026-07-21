@@ -96,7 +96,7 @@
 | 3 | `B3-git-2` | submodule | 并列子仓 poolDir 单值 → materialize 500 / gitlink 指向不可达对象 |
 | 4 | `A-fanout-errors-port` | 文档 | **CLAUDE.md:138 与 proposal.md 宣称 fan-out 自动 errors port 已交付，design.md:783-786 明写 v1 未实现**——每个新 session 的第一入口就是错的 |
 | 5 | `B5-ACL-cluster` | ACL | skills 18 条路由 + mcps/plugins 全部 ACL 门只在 daemon token（=admin，直接短路 ACL）下跑过 |
-| 6 | `D-ws-revocation` | WebSocket | 7 通道 × 4 类授权撤销 = 28 格只实现 1 格；actor 在 upgrade 时快照后**永不复核** → 成员被移除 / 降级 / token 吊销后旧连接继续收 agent stdout |
+| 6 | `D-ws-revocation` | WebSocket | ✅ **已闭环（RFC-212，2026-07-21）**。原缺陷：7 通道 × 4 类授权撤销 = 28 格只实现 1 格；actor 在 upgrade 时快照后**永不复核** → 成员被移除 / 降级 / token 吊销后旧连接继续收 agent stdout。修法：进程级连接集合 + 撤销时全量重扫，复核策略落成 `ChannelSpec` 必填矩阵（新增通道不表态即编译失败） |
 | 7 | `D-multirepo-memory` | 记忆 | 多仓任务的 repo 作用域记忆只读 `tasks.cached_repo_id`（= repo[0] 镜像列），注入与蒸馏**双向都错**且无失败信号 |
 | 8 | `D-portartifact-wrapper` | 端口归档 | wrapper 自产的 `git_diff` 的 `archive_json` 恒为 NULL → worktree GC 后端口内容永久不可读 |
 | 9 | `A-ci-topology` | CI | e2e 与二进制 smoke 被 backend 分片红**静默吞掉**；「守卫没跑」与「守卫跑了没问题」是同一个绿 |
