@@ -98,7 +98,7 @@ export function Onboarding(props: OnboardingProps = {}) {
                 props.onRetryProbe !== undefined ? (
                   <button
                     type="button"
-                    className="btn"
+                    className="btn btn--sm"
                     disabled={props.probeRetrying === true}
                     aria-busy={props.probeRetrying === true}
                     onClick={props.onRetryProbe}

@@ -27,7 +27,7 @@ function IndexPage() {
   const retryAction = (
     <button
       type="button"
-      className="btn"
+      className="btn btn--sm"
       disabled={probe.isLoading}
       aria-busy={probe.isLoading}
       onClick={probe.retry}

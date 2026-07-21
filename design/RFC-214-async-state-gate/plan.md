@@ -30,12 +30,12 @@
 
 ## 验收清单（整 RFC）
 
-- [ ] AC1 `ErrorBanner.onRetry` → `.btn.btn--sm` 重试按钮；`action` 优先（向后兼容锁）
-- [ ] AC2 `QueryState` loading(`isLoading` 优先/disabled 不转圈)→error(retry)→empty→data；`data` 支持派生值；`isEmpty` 可自定义
-- [ ] AC3 `emptyText`→muted 行；`empty`→重量级；都无→`null`
-- [ ] AC4 `keepDataOnError` 叠加档（memory 缓存行契约）
-- [ ] AC5 onRetry-only 时 `error-banner--with-action`（flex 不回归）
-- [x] AC6 源码守卫（PR-5 `async-state-gate-source-guard.test.ts`）：结构信号锁 A（allowlist 3）+ 快照锁 B（allowlist 8）；canvas/NodeDetailDrawer carve-out；变异必红已实测
+- [x] AC1 `ErrorBanner.onRetry` → `.btn.btn--sm` 重试按钮；`action` 优先（向后兼容锁）
+- [x] AC2 `QueryState` loading(`isLoading` 优先/disabled 不转圈)→error(retry)→empty→data；`data` 支持派生值；`isEmpty` 可自定义
+- [x] AC3 `emptyText`→muted 行；`empty`→重量级；都无→`null`
+- [x] AC4 `keepDataOnError` 叠加档（memory 缓存行契约）
+- [x] AC5 onRetry-only 时 `error-banner--with-action`（flex 不回归）
+- [x] AC6 源码守卫（PR-5 `async-state-gate-source-guard.test.ts`）：结构信号锁 A（allowlist 3）+ 快照锁 B（allowlist 11）；canvas/NodeDetailDrawer carve-out；变异必红已实测（实现门 P1-1/P1-2 修订 2026-07-21：锁 A 补裸 `refetch()`/`onClick={refetch}` 形态、锁 B 穿透属性与换行,变异实测覆盖两个新形态;三个旧正则漏网活体〔TaskDiagnosePanel/RepairChoiceDialog/tasks.new〕按声明过的 bespoke 类入 grandfather〕
 - [x] AC7 各 PR 前端 vitest + typecheck/lint/format 全绿（PR-1 5034 / PR-2 5035 / PR-3 5036 / PR-4 5036 / PR-4b 5036 / PR-5 5040）
 - [x] AC8 RFC-203 锚点 + 各源码锁同 commit 适配（resource-detail-query-state / task-subject-by-id / settings-system-agents / account-users-table / workflows-pages / task-detail-page-tabs / repos-page / rfc105）
 - [x] 单测：disabled 不转圈 + keepDataOnError 叠加 + onRetry-only with-action + 派生空 + action 优先 + 锁变异必红

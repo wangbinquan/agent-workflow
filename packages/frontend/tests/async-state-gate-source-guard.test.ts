@@ -6,18 +6,24 @@
 //
 // HONEST COVERAGE (documented blind spots — do not pretend otherwise):
 //   * Lock A is a STRUCTURAL signal — it catches a hand-written `<button>`
-//     whose onClick chains `.refetch()`. It does NOT catch icon-only retries,
-//     <Trans>-wrapped retries, a brand-new i18n key, or `mutation.mutate()`
-//     retries (those are a different affordance and out of scope). The
-//     enforced contract is narrow but real: "no new hand-written refetch
-//     <button>". Everything else routes through ErrorBanner.onRetry / QueryState.
+//     whose onClick calls `refetch(` (member `x.refetch()` AND destructured bare
+//     `refetch()`, impl-gate P1-1) or passes a refetch reference. It does NOT
+//     catch icon-only retries, <Trans>-wrapped retries, a brand-new i18n key,
+//     named-handler indirection (`onClick={doRetry}`), `invalidateQueries`-style
+//     retries, or `mutation.mutate()` retries (different affordances, out of
+//     scope). The enforced contract is narrow but real: "no new hand-written
+//     refetch <button>". Everything else routes through ErrorBanner.onRetry /
+//     QueryState.
 //   * Lock B is a snapshot ratchet over hand-written `<div className="muted">`
-//     query-empties. RFC-214 migrated the clean list-page cascades (home) and
-//     收编 every retry button, but the remaining muted empties are bespoke /
-//     inline (dialog pickers, side panels, tree stubs) that QueryState v1 does
-//     not cleanly express. The allowlist grandfathers those and forbids growth:
-//     a NEW clean list page must express its empty via QueryState.emptyText /
-//     empty.
+//     query-empties. The regex sees through extra attributes and line breaks
+//     (impl-gate P1-2); it still only fires on the listed key vocabulary, so a
+//     brand-new key word stays a documented blind spot. RFC-214 migrated the
+//     clean list-page cascades (home) and 收编 every retry button, but the
+//     remaining muted empties are bespoke / inline (dialog pickers, side
+//     panels, tree stubs, in-data empty sections, wizard branches) that
+//     QueryState v1 does not cleanly express. The allowlist grandfathers those
+//     and forbids growth: a NEW clean list page must express its empty via
+//     QueryState.emptyText / empty.
 //   * canvas/** and NodeDetailDrawer.tsx are carved out (xyflow render
 //     constraints / inline node-inspector placeholders), per design.md §5.2.
 
@@ -53,9 +59,19 @@ const ALLOW_RETRY = new Set([
   'components/home/CapabilityGrid.tsx',
   'routes/reviews.tsx',
 ])
-const RETRY_BUTTON = /onClick=\{[^}]*\.refetch\(|onClick=\{[A-Za-z0-9_]+\.refetch\}/
+// Impl-gate P1-1 (2026-07-21): `\brefetch\(` + optional member prefix so the
+// pre-migration mainstream forms — destructured `onClick={() => void refetch()}`
+// and bare `onClick={refetch}` — are caught too, not just `x.refetch(`.
+// (`\b` cannot fire inside `prefetch`: `p` is a word char, so no false hit.)
+const RETRY_BUTTON = /onClick=\{[^}]*\brefetch\(|onClick=\{(?:[A-Za-z0-9_$]+\.)?refetch\}/
 
 // Lock B: grandfathered bespoke / inline muted query-empties (may shrink).
+// Impl-gate P1-2 (2026-07-21): the last three were live escapees of the old
+// tight-adjacency regex (`"muted">` immediately followed by `{t('`) — extra
+// attributes (data-testid) and prettier line breaks both dodged it. All three
+// are the declared-bespoke kinds (in-data empty section / dialog picker /
+// wizard branch), so they join the grandfather set rather than force-fitting
+// QueryState; the regex below now sees through attributes and newlines.
 const ALLOW_EMPTY = new Set([
   'components/AclPanel.tsx',
   'components/WorktreeFilesPanel.tsx',
@@ -65,9 +81,12 @@ const ALLOW_EMPTY = new Set([
   'components/memory/distill-job-detail/SourceEventsList.tsx',
   'components/repos/BatchImportDialog.tsx',
   'components/tasks/TaskMembersPanel.tsx',
+  'components/tasks/TaskDiagnosePanel.tsx',
+  'components/tasks/RepairChoiceDialog.tsx',
+  'routes/tasks.new.tsx',
 ])
 const MUTED_EMPTY =
-  /className="muted">\{t\('(?!common\.empty')[^']*(?:[Ee]mpty|noMembers|noUsers|noEvents|noManaged|noSelectable|outputNone|noPorts|sourceDeleted)/
+  /className="muted"[^>]*>\s*\{t\('(?!common\.empty')[^']*(?:[Ee]mpty|noMembers|noUsers|noEvents|noManaged|noSelectable|outputNone|noPorts|sourceDeleted)/
 
 describe('RFC-214 async-state-gate source guards', () => {
   test('Lock A — a hand-written <button onClick refetch> lives only in the grandfathered bespoke banners', () => {
