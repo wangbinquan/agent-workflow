@@ -82,7 +82,7 @@
 | `M3-ci-gates-5` | codecov 的 patch 70% 门在「直推 main、无 PR」下**恒不生效**；前端 / shared 从不上传 lcov |
 | `M4-test-quality-1` | 登出清客户端私有状态：唯一防护是文件级源码 grep，4 条真实 session 拆除路径全部漏网（跨账号数据泄漏） |
 | `F2-canvas-1` | 拖拽连线整条手势在 unit / integration / e2e 三层都无行为防护，只有纯规划器 + 源码文本断言 |
-| `F3-review-1` | review 草稿 IndexedDB 门面零测试，且与 clarify 共库版本号冲突会让草稿静默失效 |
+| `F3-review-1` | ✅ **已修（2026-07-21）**：clarify/review 收敛到共享 IDB façade（单一版本、一次 upgrade 建所有 store），版本再不可能分叉；结构锁 + null 路径行为兜底。 |
 | `F4-clarify-1` | 服务端逐题协作草稿的**前端一半**（远端合并 / 本地优先 / 逐题 PUT diff / 403-409 熔断）零行为测试 |
 | `F4-clarify-2` | 集中回答面板（RFC-137）只写草稿不读回、不订阅 `clarify.draft.updated`，与 `/clarify` 详情页语义不对称，双向无测试 |
 | `F5-tasks-2` | relaunch / editScheduled 的仓库预填被整行清空：反向映射不认 `cachedRepoId` |
@@ -101,7 +101,7 @@
 | 8 | `D-portartifact-wrapper` | 端口归档 | wrapper 自产的 `git_diff` 的 `archive_json` 恒为 NULL → worktree GC 后端口内容永久不可读 |
 | 9 | `A-ci-topology` | CI | e2e 与二进制 smoke 被 backend 分片红**静默吞掉**；「守卫没跑」与「守卫跑了没问题」是同一个绿 |
 | 10 | `D-runtime-question` | 运行时 | claude 无 opencode `question:deny` 等价物，`AskUserQuestion` 默认超时是 `never` → RFC-073 挂死链条每一环都成立 |
-| 11 | `B2-lifecycle-3` | 生命周期 | RFC-207 运行时长记账零行为覆盖 → 限额永不触发 或 人在 `awaiting_human` 期间继续计时被秒杀 |
+| 11 | `B2-lifecycle-3` | 生命周期 | ✅ **已修（2026-07-21）**：setTaskStatus 增注入时钟 + 9 例经真实转移的记账行为测试（两方向）；runningMs/runningSince 从 extra 类型删除（编译期不可篡改）。 |
 | 12 | `B6-data-5` | 备份 | 「备份 tarball 不含 `secret.key`」只是一行注释，排除清单测试没断言它 |
 | 13 | `D-commitpush-clean-sub` | commit-push | 未被触碰的干净 submodule 也被 `checkout -B` + 无条件 push → 第三方 vendor 仓一次也提交不了 |
 | 14 | `B4-runtime-5` | 资源 | ✅ **已修 argv 方向（2026-07-21）**：opencode prompt 超 120KiB 在装配期可读失败（prompt-too-large），不再 E2BIG。**遗留 `B4-runtime-6`**：stdout/agentText 无上限（daemon OOM）是更大的流式缓冲改动，另立跟进。 |
