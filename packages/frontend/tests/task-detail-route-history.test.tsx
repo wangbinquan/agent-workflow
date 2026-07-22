@@ -81,7 +81,7 @@ vi.mock('@/components/WorktreeDiffPanel', () => ({
 vi.mock('@/components/structure/StructuralDiffView', () => ({
   StructuralDiffView: () => <div data-testid="structural-diff-stub" />,
 }))
-vi.mock('@/components/workgroup/WorkgroupRoom', () => ({
+vi.mock('@/components/workgroup/room/WorkgroupRoom', () => ({
   WorkgroupRoom: ({ taskId }: { taskId: string }) => (
     <div data-testid={`workgroup-room-${taskId}`} />
   ),

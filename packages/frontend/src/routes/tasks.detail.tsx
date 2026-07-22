@@ -36,7 +36,7 @@ import { WorkflowSyncBanner } from '@/components/tasks/WorkflowSyncBanner'
 import { TaskFeedbackList } from '@/components/tasks/TaskFeedbackList'
 import { TaskQuestionList, type TaskQuestionEntry } from '@/components/tasks/TaskQuestionList'
 import { TaskMembersDialogButton } from '@/components/tasks/TaskMembersPanel'
-import { WorkgroupRoom } from '@/components/workgroup/WorkgroupRoom'
+import { WorkgroupRoom } from '@/components/workgroup/room/WorkgroupRoom'
 import { DynamicWorkflowPanel } from '@/components/workgroup/DynamicWorkflowPanel'
 import { NodeDetailDrawer } from '@/components/NodeDetailDrawer'
 import { Dialog } from '@/components/Dialog'
@@ -230,11 +230,24 @@ function TaskDetailPage() {
   // the orchestration panel + (post-confirm) the REAL DAG canvas. RFC-198
   // treats this async room aggregate as the classification authority: a
   // workgroup stays pending rather than flashing/canonicalizing turn-engine.
+  // RFC-217 T10 (G9): THE single workgroupRoomKey useQuery — WorkgroupRoom and
+  // DynamicWorkflowPanel consume it via props. The poll policy is the union of
+  // the two former per-component declarations: WS frames carry live updates,
+  // the 15s interval is the no-WS fallback, and it only stops once the ROOM
+  // AGGREGATE ITSELF has observed the terminal status (the page's faster task
+  // query may see `done` first; cutting the poll on that alone would freeze a
+  // stale awaiting_confirm gate forever when the WS frame was missed).
   const room = useQuery<WorkgroupRoomResponse>({
     queryKey: workgroupRoomKey(id),
     queryFn: ({ signal }) =>
       api.get(`/api/workgroup-tasks/${encodeURIComponent(id)}/room`, undefined, signal),
     enabled: isWorkgroup,
+    refetchInterval: (q) => {
+      const status = task.data?.status
+      const terminal = status === 'done' || status === 'failed' || status === 'canceled'
+      if (terminal && q.state.data?.taskStatus === status) return false
+      return 15_000
+    },
   })
   const taskQueryBannerKey = `${id}:task-query:${task.dataUpdatedAt}:${bannerErrorSignature(task.error)}`
   const roomErrorBannerKey = `${id}:room-query:${room.dataUpdatedAt}:${bannerErrorSignature(room.error)}`
@@ -741,7 +754,7 @@ function TaskDetailPage() {
               className="task-detail__pane"
               hidden={tab !== 'chatroom'}
             >
-              <WorkgroupRoom taskId={id} taskStatus={tk.status} />
+              <WorkgroupRoom taskId={id} taskStatus={tk.status} room={room} />
             </section>
           )}
 
@@ -757,6 +770,7 @@ function TaskDetailPage() {
                 taskId={id}
                 taskStatus={tk.status}
                 errorSummary={tk.errorSummary ?? null}
+                room={room}
               />
             </section>
           )}

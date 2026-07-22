@@ -283,3 +283,28 @@ describe('rfc217 G8 — clarify 单地层（遗留标识符归零）', () => {
     expect(offenders).toEqual([])
   })
 })
+
+describe('rfc217 G9 — 房间 query 单 owner', () => {
+  test('workgroupRoomKey 作为 queryKey 的 useQuery 声明全前端只有 tasks.detail.tsx 一处', () => {
+    // T10 数据流：tasks.detail.tsx 持有唯一房间聚合 query，WorkgroupRoom /
+    // DynamicWorkflowPanel 经 props 接 data+refetch。此前 3 处各自声明
+    // （轮询策略随之分叉）正是本锁要钉死的回归形态。invalidateQueries 引用
+    // key 不受限（写端失效必须到处可用）。
+    const offenders: string[] = []
+    const walk = (dir: string): void => {
+      for (const e of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
+        const rel = `${dir}/${e.name}`
+        if (e.isDirectory()) walk(rel)
+        else if (e.name.endsWith('.ts') || e.name.endsWith('.tsx')) {
+          const src = read(rel)
+          // 声明形态锚点：useQuery<WorkgroupRoomResponse> —— 失效端
+          // invalidateQueries({ queryKey: workgroupRoomKey(...) }) 不受限
+          // （写端失效必须到处可用），只有 query 声明本身被钉死单点。
+          if (src.includes('useQuery<WorkgroupRoomResponse>')) offenders.push(rel)
+        }
+      }
+    }
+    walk('packages/frontend/src')
+    expect(offenders).toEqual(['packages/frontend/src/routes/tasks.detail.tsx'])
+  })
+})

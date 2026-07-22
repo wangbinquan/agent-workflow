@@ -127,7 +127,7 @@ describe('tasks.detail.tsx — workgroup wiring (source locks)', () => {
     expect(SRC).toMatch(/\{taskCapabilities\.chatroom && \(/)
     expect(SRC).toMatch(/taskSectionProps\(t, 'chatroom'\)/)
     expect(SRC).toMatch(/hidden=\{tab !== 'chatroom'\}/)
-    expect(SRC).toMatch(/<WorkgroupRoom taskId=\{id\} taskStatus=\{tk\.status\} \/>/)
+    expect(SRC).toMatch(/<WorkgroupRoom taskId=\{id\} taskStatus=\{tk\.status\} room=\{room\} \/>/)
   })
 
   test('the host-graph canvas never mounts for turn-engine group tasks; a dynamic task unlocks it only in the executing phase', () => {

@@ -15,7 +15,7 @@
 // Data: the SAME GET /room aggregate the chat room uses (workgroupRoomKey —
 // one cache entry, invalidated by task.status WS frames via useTaskSync).
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
 import { describeTaskFailure } from '@/lib/task-failure'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -39,32 +39,20 @@ export interface DynamicWorkflowPanelProps {
   taskStatus: TaskStatus
   /** Task error summary — shown when generation exhausted (task failed). */
   errorSummary: string | null
+  /** THE room aggregate query — owned by tasks.detail.tsx (single
+   *  workgroupRoomKey declaration, RFC-217 T10 G9). Its refetchInterval
+   *  carries the terminal-aware poll policy this panel used to declare. */
+  room: UseQueryResult<WorkgroupRoomResponse>
 }
 
 export function DynamicWorkflowPanel({
   taskId,
   taskStatus,
   errorSummary,
+  room,
 }: DynamicWorkflowPanelProps) {
   const { t } = useTranslation()
   const qc = useQueryClient()
-
-  const room = useQuery<WorkgroupRoomResponse>({
-    queryKey: workgroupRoomKey(taskId),
-    queryFn: ({ signal }) =>
-      api.get(`/api/workgroup-tasks/${encodeURIComponent(taskId)}/room`, undefined, signal),
-    // WS task.status frames carry the live phase flips; slow-poll fallback
-    // while the task is still moving. Codex impl-gate P2: the poll only stops
-    // once the ROOM AGGREGATE ITSELF has observed the terminal status — the
-    // page's faster task query may see `done` first, and cutting the poll on
-    // that alone would freeze a stale awaiting_confirm gate forever when the
-    // WS frame was missed.
-    refetchInterval: (q) => {
-      const terminal = taskStatus === 'done' || taskStatus === 'failed' || taskStatus === 'canceled'
-      if (terminal && q.state.data?.taskStatus === taskStatus) return false
-      return 15_000
-    },
-  })
 
   // Shared with TaskStatusCanvas / the editor — one cache entry.
   const agents = useQuery<Agent[]>({

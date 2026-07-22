@@ -21,16 +21,30 @@
 // workgroup-room-composer-outline-clip.test.ts); the DOM half is asserted
 // against the rendered room.
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import type { NodeRun } from '@agent-workflow/shared'
+import { api } from '../src/api/client'
 import { setBaseUrl, setToken } from '../src/stores/auth'
-import { WorkgroupRoom } from '../src/components/workgroup/WorkgroupRoom'
+import { WorkgroupRoom } from '../src/components/workgroup/room/WorkgroupRoom'
+import { workgroupRoomKey } from '../src/lib/workgroup-room'
 import type { WorkgroupRoomResponse } from '../src/lib/workgroup-room'
+import type { TaskStatus } from '@agent-workflow/shared'
 import '../src/i18n'
+
+// RFC-217 T10 — the room query moved up to tasks.detail.tsx (single owner,
+// G9); tests reproduce that owner with this thin host.
+function RoomHost(props: { taskId: string; taskStatus: TaskStatus }) {
+  const room = useQuery<WorkgroupRoomResponse>({
+    queryKey: workgroupRoomKey(props.taskId),
+    queryFn: ({ signal }) =>
+      api.get(`/api/workgroup-tasks/${encodeURIComponent(props.taskId)}/room`, undefined, signal),
+  })
+  return <WorkgroupRoom taskId={props.taskId} taskStatus={props.taskStatus} room={room} />
+}
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const css = readFileSync(path.resolve(here, '../src/styles.css'), 'utf8')
@@ -152,7 +166,7 @@ function renderRoom() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={qc}>
-      <WorkgroupRoom taskId="t1" taskStatus="running" />
+      <RoomHost taskId="t1" taskStatus="running" />
     </QueryClientProvider>,
   )
 }

@@ -24,13 +24,26 @@
 //      modifier (PR-6).
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { NodeRun, TaskStatus } from '@agent-workflow/shared'
+import { api } from '../src/api/client'
 import { setBaseUrl, setToken } from '../src/stores/auth'
-import { WorkgroupRoom } from '../src/components/workgroup/WorkgroupRoom'
+import { WorkgroupRoom } from '../src/components/workgroup/room/WorkgroupRoom'
+import { workgroupRoomKey } from '../src/lib/workgroup-room'
 import type { WorkgroupRoomResponse } from '../src/lib/workgroup-room'
 import '../src/i18n'
+
+// RFC-217 T10 — the room query moved up to tasks.detail.tsx (single owner,
+// G9); tests reproduce that owner with this thin host.
+function RoomHost(props: { taskId: string; taskStatus: TaskStatus }) {
+  const room = useQuery<WorkgroupRoomResponse>({
+    queryKey: workgroupRoomKey(props.taskId),
+    queryFn: ({ signal }) =>
+      api.get(`/api/workgroup-tasks/${encodeURIComponent(props.taskId)}/room`, undefined, signal),
+  })
+  return <WorkgroupRoom taskId={props.taskId} taskStatus={props.taskStatus} room={room} />
+}
 
 function makeRun(over: Partial<NodeRun>): NodeRun {
   return {
@@ -276,7 +289,7 @@ function renderRoom(room: WorkgroupRoomResponse, taskStatus: TaskStatus = 'runni
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={qc}>
-      <WorkgroupRoom taskId="t1" taskStatus={taskStatus} />
+      <RoomHost taskId="t1" taskStatus={taskStatus} />
     </QueryClientProvider>,
   )
 }

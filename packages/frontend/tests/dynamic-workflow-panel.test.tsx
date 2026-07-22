@@ -17,11 +17,13 @@
 //   7. a 409 from the gate (e.g. dw-generated-def-stale) renders in-panel.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { DwState, TaskStatus } from '@agent-workflow/shared'
+import { api } from '../src/api/client'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { DynamicWorkflowPanel } from '../src/components/workgroup/DynamicWorkflowPanel'
+import { workgroupRoomKey } from '../src/lib/workgroup-room'
 import type { WorkgroupRoomResponse } from '../src/lib/workgroup-room'
 import '../src/i18n'
 
@@ -127,11 +129,28 @@ function installFetch(
   return calls
 }
 
+// RFC-217 T10 — the room query moved up to tasks.detail.tsx (single owner,
+// G9); this host reproduces that owner for the panel under test.
+function PanelHost(props: { taskStatus: TaskStatus; errorSummary: string | null }) {
+  const room = useQuery<WorkgroupRoomResponse>({
+    queryKey: workgroupRoomKey('t1'),
+    queryFn: ({ signal }) => api.get(`/api/workgroup-tasks/t1/room`, undefined, signal),
+  })
+  return (
+    <DynamicWorkflowPanel
+      taskId="t1"
+      taskStatus={props.taskStatus}
+      errorSummary={props.errorSummary}
+      room={room}
+    />
+  )
+}
+
 function renderPanel(taskStatus: TaskStatus = 'running', errorSummary: string | null = null) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={qc}>
-      <DynamicWorkflowPanel taskId="t1" taskStatus={taskStatus} errorSummary={errorSummary} />
+      <PanelHost taskStatus={taskStatus} errorSummary={errorSummary} />
     </QueryClientProvider>,
   )
 }
