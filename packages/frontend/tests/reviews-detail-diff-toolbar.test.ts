@@ -69,4 +69,14 @@ describe('review detail — diff mode segmented control', () => {
     expect(css).toMatch(/\.diff-mode-segmented\s*\{[^}]*border-radius:\s*999px/)
     expect(css).toMatch(/\.segmented__option--active[^}]*background:\s*var\(--accent-fill\)/)
   })
+
+  // 回归防护：pill 容器（999px）里的选项也必须是 pill，否则 shared
+  // `.segmented__option` 自带的 4px 方角在首段（原文）/末段（段）被选中或 hover
+  // 时会顶出圆弧容器之外（用户报告的"选中的方块跑到边框外面，很丑"）。RFC-150
+  // 把手写的按钮规则（曾带 999px）迁到 `.segmented__option` 时丢了这个半径——
+  // 任何回退到方角选项都会让首尾段重新外溢，这条断言即刻变红。
+  test('styles.css: diff-mode pill 容器内的选项同为 pill（首尾段无方角外溢）', () => {
+    const css = readFileSync(STYLES_CSS, 'utf8')
+    expect(css).toMatch(/\.diff-mode-segmented \.segmented__option\s*\{[^}]*border-radius:\s*999px/)
+  })
 })

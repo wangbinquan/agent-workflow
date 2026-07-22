@@ -9216,34 +9216,14 @@ mark.comment-anchor[data-active='true'] {
   padding: 2px;
   background: color-mix(in srgb, var(--border) 35%, transparent);
 }
-.diff-mode-segmented__btn {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  padding: 4px 14px;
-  font-size: 13px;
-  line-height: 1.4;
-  cursor: pointer;
+/* 容器是 pill（999px），选项也必须是 pill。shared `.segmented__option` 自带
+   4px 方角，放进圆弧容器后，选中/hover 的填充在首段（原文）和末段（段）会把
+   方角顶出圆弧之外——即用户看到的"方块跑到边框外面"。option 胶囊半径与容器内
+   圈半径同心（2px padding + 24px 高 → 12px == 容器内圈 12px），首尾段填充正好
+   贴着圆弧。历史包袱：RFC-150 把手写 `.diff-mode-segmented__btn`（本就带 999px）
+   迁到 `.segmented__option` 时丢了这个半径，此规则把它补回。 */
+.diff-mode-segmented .segmented__option {
   border-radius: 999px;
-  transition:
-    background 0.12s ease,
-    color 0.12s ease;
-  white-space: nowrap;
-}
-.diff-mode-segmented__btn:hover {
-  color: var(--text);
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-}
-.diff-mode-segmented__btn--active,
-.diff-mode-segmented__btn--active:hover {
-  background: var(--accent-fill);
-  color: var(--on-accent);
-  font-weight: 500;
-}
-.diff-mode-segmented__btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
 }
 
 /* ---- RFC-197 Agent import task flow ---- */
