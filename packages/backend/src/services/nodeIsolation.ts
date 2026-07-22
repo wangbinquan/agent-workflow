@@ -497,8 +497,12 @@ async function mergeSubmodulesIntoTheirs(
     resolveSubConflict?: (conflict: MergeBackConflict) => Promise<{ resolved: boolean }>
   },
 ): Promise<{ theirs: string; conflicts: string[] }> {
+  // Both maps matter: a NEW path (the node added the submodule) has a pool but
+  // no base, and still needs its in-lock worktree re-anchor below.
   const paths = Object.keys(r.subBases)
-  if (paths.length === 0) return { theirs: theirsCommit, conflicts: [] }
+  if (paths.length === 0 && Object.keys(r.poolDirs).length === 0) {
+    return { theirs: theirsCommit, conflicts: [] }
+  }
 
   const conflicts: string[] = []
   let theirs = theirsCommit
@@ -580,6 +584,28 @@ async function mergeSubmodulesIntoTheirs(
       continue
     }
     theirs = rewritten
+  }
+  // NEW paths (pool but no base — the node added the submodule) never pass
+  // through the merge loop above, so re-point their worktree anchor HERE,
+  // under the caller's write lock, at the sha the parent merge is about to
+  // adopt. The publish-time anchor is create-only and can belong to a sibling
+  // that published first but merges second (or never): without this in-lock
+  // re-anchor the sha canonical actually lands could be left dangling once
+  // this node's refs are discarded (Codex review round 2, P1). Nested paths
+  // whose gitlink `rev-parse` cannot pierce keep the publish-time anchor.
+  for (const [subPath, pool] of Object.entries(r.poolDirs)) {
+    if (r.subBases[subPath] !== undefined) continue
+    const adopted = await runGit(r.canonWorktreePath, ['rev-parse', `${theirs}:${subPath}`])
+    if (adopted.exitCode !== 0) continue
+    const sha = adopted.stdout.trim()
+    if (!/^[0-9a-f]{40,64}$/.test(sha)) continue
+    const re = await runGit(pool, ['update-ref', worktreeRefName(handleTaskIdOf(r), subPath), sha])
+    if (re.exitCode !== 0) {
+      throw new Error(
+        `submodule worktree anchor failed for '${subPath}' at ${sha}: ` +
+          `${re.stderr.trim() || 'unknown error'} — refusing to land a gitlink the next gc can orphan`,
+      )
+    }
   }
   return { theirs, conflicts }
 }
@@ -779,8 +805,21 @@ async function publishSubmoduleHeads(handle: IsoHandle, r: IsoRepo): Promise<voi
       // (mergeSubmodulesIntoTheirs); a NEW path never passes through there —
       // no base, nothing to merge — yet canonical may adopt its gitlink
       // verbatim, so the durable anchor must be written here.
-      const wt = await runGit(pool, ['update-ref', worktreeRefName(handle.taskId, s.path), sha])
-      if (wt.exitCode !== 0) fail(s.path, 'anchor', wt.stderr.trim())
+      //
+      // CREATE-ONLY (empty oldvalue ⟹ ref must not exist): two siblings adding
+      // the same path both publish BEFORE the merge lock, and an unconditional
+      // write let the LOSER overwrite the anchor with its rejected sha — the
+      // winner's canonical-adopted commit then survived only on node refs and
+      // died at discard (Codex review round 2, P1). The winner's merge
+      // re-points the anchor under the lock (mergeSubmodulesIntoTheirs); a
+      // failed create with the ref already present just means a sibling got
+      // here first — our sha stays reachable via the node ref until merged.
+      const wtRef = worktreeRefName(handle.taskId, s.path)
+      const wt = await runGit(pool, ['update-ref', wtRef, sha, ''])
+      if (wt.exitCode !== 0) {
+        const existing = await runGit(pool, ['rev-parse', '--verify', '--quiet', wtRef])
+        if (existing.exitCode !== 0) fail(s.path, 'anchor', wt.stderr.trim())
+      }
     }
   }
 }

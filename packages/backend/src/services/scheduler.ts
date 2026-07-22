@@ -749,6 +749,11 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
 
     const releaseGlobal = await state.globalSem.acquire()
     let iso: IsoHandle
+    // RFC-210 impl-gate A1-fix (review round 2): a merge/snapshot THROW keeps
+    // the iso. The publish path hard-fails BEFORE the node tree is persisted,
+    // so entry replay has nothing to work from and the iso can hold the sole
+    // copy of the run's submodule work.
+    let keepHookIso = false
     try {
       iso = await createIsoUnderLock({
         writeSem: state.writeSem,
@@ -1072,23 +1077,31 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
         // catch-all (returns failed) and merge_state stays 'pending-merge'
         // for entry replay — unlike the DAG sites' markMergeFailed stamp
         // (isolatedAgentRun.ts header documents the tri-state disposition).
-        const merge = await mergeBackAndSettle({
-          db,
-          writeSem: state.writeSem,
-          handle: iso,
-          nodeRunId: req.nodeRunId,
-          repoCount: task.repoCount,
-          via: 'live',
-          conflictResolver: (conflicts, containerPath) =>
-            resolveMergeConflicts(state, {
-              conflicts,
-              containerPath,
-              conflictNodeRunId: req.nodeRunId,
-              nodeId: req.nodeId,
-              iteration: 0,
-            }),
-          log,
-        })
+        // The iso is KEPT on that throw: replay works from persisted trees,
+        // and a snapshot-phase failure never persisted any.
+        let merge: Awaited<ReturnType<typeof mergeBackAndSettle>>
+        try {
+          merge = await mergeBackAndSettle({
+            db,
+            writeSem: state.writeSem,
+            handle: iso,
+            nodeRunId: req.nodeRunId,
+            repoCount: task.repoCount,
+            via: 'live',
+            conflictResolver: (conflicts, containerPath) =>
+              resolveMergeConflicts(state, {
+                conflicts,
+                containerPath,
+                conflictNodeRunId: req.nodeRunId,
+                nodeId: req.nodeId,
+                iteration: 0,
+              }),
+            log,
+          })
+        } catch (err) {
+          keepHookIso = true
+          throw err
+        }
         if (merge.kind === 'conflict-human') {
           // RFC-187 T8 (audit §4-4) — `park-conflict-human` promises a human will finish
           // the merge in the PRESERVED resolve-iso and that a later resume re-merges it
@@ -1126,7 +1139,7 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
       // runHostNode able to resolve at all.
       releaseGlobal()
       try {
-        await discardNodeIso(iso, log)
+        if (!keepHookIso) await discardNodeIso(iso, log)
       } catch {
         /* best-effort */
       }
@@ -5120,6 +5133,10 @@ async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchSha
   const releaseGlobal = await state.globalSem.acquire()
   const releaseSub = await state.subprocessSem.acquire()
   let shardIso: IsoHandle
+  // RFC-210 impl-gate A1-fix (review round 2): a merge/snapshot THROW keeps the
+  // shard iso — the publish path hard-fails BEFORE the node tree is persisted,
+  // so the iso can hold the sole copy of the shard's submodule work.
+  let keepShardIso = false
   try {
     shardIso = await createIsoUnderLock({
       writeSem: state.writeSem,
@@ -5275,6 +5292,7 @@ async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchSha
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
+        keepShardIso = true
         await markMergeFailed(db, shardRunId, msg, log)
         return { kind: 'failed', shardKey, outputs: {}, message: `merge-back-failed: ${msg}` }
       }
@@ -5287,7 +5305,7 @@ async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchSha
   } finally {
     releaseSub()
     releaseGlobal()
-    await discardNodeIso(shardIso, log)
+    if (!keepShardIso) await discardNodeIso(shardIso, log)
   }
 }
 
@@ -5513,6 +5531,9 @@ async function dispatchFanoutAggregator(
   const releaseGlobal = await state.globalSem.acquire()
   const releaseSub = await state.subprocessSem.acquire()
   let aggIso: IsoHandle
+  // RFC-210 impl-gate A1-fix (review round 2): keep the iso on a merge/snapshot
+  // throw — it can hold the sole copy of the aggregator's submodule work.
+  let keepAggIso = false
   try {
     aggIso = await createIsoUnderLock({
       writeSem: state.writeSem,
@@ -5633,6 +5654,7 @@ async function dispatchFanoutAggregator(
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
+        keepAggIso = true
         await markMergeFailed(db, aggRunId, msg, log)
         return {
           kind: 'failed',
@@ -5653,7 +5675,7 @@ async function dispatchFanoutAggregator(
   } finally {
     releaseSub()
     releaseGlobal()
-    await discardNodeIso(aggIso, log)
+    if (!keepAggIso) await discardNodeIso(aggIso, log)
   }
 }
 

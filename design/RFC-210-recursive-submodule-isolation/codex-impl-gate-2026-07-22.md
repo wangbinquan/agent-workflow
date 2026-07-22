@@ -1,9 +1,10 @@
 # Codex Adversarial Review
 
 > **处置（2026-07-22）**：4 条 critical 已全部闭环（修复口径与红→绿测试见
-> `design.md §17`）；[medium] onlyRecentDays 自续期已由 `900d1ff6`（G7）先行修
-> 复；4 条 high + 3 个 Question 仍开放（`design.md §17.3`）。以下为报告原文，
-> 未改动。
+> `design.md §17`）；修复补丁的复审轮又折出 4 P1 + 2 P2，全部采纳
+> （`design.md §17.3a`）；[medium] onlyRecentDays 自续期已由 `900d1ff6`（G7）
+> 先行修复；4 条 high + 3 个 Question 仍开放（`design.md §17.3`）。以下为报告
+> 原文，未改动。
 
 Target: branch diff against 1b99caea
 Verdict: needs-attention

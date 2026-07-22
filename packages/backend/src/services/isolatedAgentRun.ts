@@ -10,8 +10,11 @@
 //   - node_run minting / retry loops / prompt & runNode argument assembly /
 //     clarify session creation — per-site semantics;
 //   - the iso KEEP-vs-DISCARD finally discipline and semaphore sets — they
-//     genuinely differ per site (mainline keepIso on park; shard discards
-//     always; shard holds global+subprocess);
+//     genuinely differ per site (mainline keepIso on park; shard holds
+//     global+subprocess). One rule IS shared since the RFC-210 impl-gate
+//     A1-fix: every site keeps the iso when the merge/snapshot phase THROWS —
+//     the publish path hard-fails before the node tree is persisted, so the
+//     iso can be the sole copy of the run's submodule work;
 //   - the merge-throw disposition: mainline/shard/aggregator stamp
 //     `mark-merge-failed` in their catch, the workgroup hook deliberately
 //     leaves 'pending-merge' for entry replay — mergeBackAndSettle therefore

@@ -8,7 +8,7 @@
 
 import { redactGitUrl } from '@agent-workflow/shared'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -231,9 +231,25 @@ export async function listEffectiveSubmodules(
   const out = await listSubmodules(worktreePath, opts)
   const seen = new Set(out.map((e) => e.path))
   const run = opts?.runGitImpl ?? runGit
+  // `.gitmodules` is AGENT-AUTHORED content (that is the whole point of this
+  // lister), so its declared paths are untrusted: `path = .` would recurse
+  // forever, `path = ..`/absolute/symlinked paths would walk git operations
+  // OUT of the task worktree. Containment-check every path via realpath and
+  // never visit the same directory twice (Codex review round 2, P1).
+  const realOf = (d: string): string | null => {
+    try {
+      return realpathSync(d)
+    } catch {
+      return null
+    }
+  }
+  const visited = new Set<string>()
 
   const walk = async (levelPath: string, prefix: string): Promise<void> => {
     if (!existsSync(join(levelPath, '.gitmodules'))) return
+    const levelReal = realOf(levelPath)
+    if (levelReal === null || visited.has(levelReal)) return
+    visited.add(levelReal)
     const declared = await run(levelPath, [
       'config',
       '-f',
@@ -250,6 +266,10 @@ export async function listEffectiveSubmodules(
       const p = line.slice(sp + 1).trim()
       if (p === '') continue
       const abs = join(levelPath, p)
+      // Strict containment: the resolved path must live INSIDE this level
+      // (rejects '.', '..', absolute paths and symlinks that point out).
+      const absReal = realOf(abs)
+      if (absReal === null || !absReal.startsWith(levelReal + '/')) continue
       if (!existsSync(join(abs, '.git'))) continue
       const rel = prefix === '' ? p : `${prefix}/${p}`
       if (!seen.has(rel)) {
@@ -466,7 +486,7 @@ export async function attachSubmoduleFromPool(
     ok: false,
     error: redactGitUrl(msg.trim()) || 'submodule attach failed',
   })
-  try {
+  const body = async (): Promise<{ ok: boolean; error: string | null }> => {
     const inject = await runGit(levelPath, [
       'update-index',
       '--add',
@@ -478,7 +498,14 @@ export async function attachSubmoduleFromPool(
     if (init.exitCode !== 0) return fail(`submodule init: ${init.stderr}`)
     const url = await runGit(levelPath, ['config', `submodule.${name}.url`, pool])
     if (url.exitCode !== 0) return fail(`config url: ${url.stderr}`)
+    // `-c protocol.file.allow=always` is REQUIRED, command-scoped: since the
+    // 2.38.4 lockdown git rejects local-path clone URLs by default (`fatal:
+    // transport 'file' not allowed`), and the pool url IS a local path. The
+    // pool is platform-owned — this does not widen trust for user-configured
+    // submodule urls, which never pass through here (Codex review round 2, P1).
     const update = await runGit(levelPath, [
+      '-c',
+      'protocol.file.allow=always',
       'submodule',
       'update',
       '--init',
@@ -488,21 +515,35 @@ export async function attachSubmoduleFromPool(
     ])
     // Restore the real url from .gitmodules whether or not the update worked —
     // leaving the pool as the recorded remote would leak an internal path into
-    // the user's config and break later legitimate fetches.
-    await runGit(levelPath, ['submodule', 'sync', '--', relPath])
+    // the user's config and, worse, make a later auto-commit-push publish the
+    // submodule INTO THE POOL while the parent's gitlink claims the real
+    // remote has it. A failed restore therefore fails the attach even when
+    // the update itself succeeded (Codex review round 2, P2).
+    const sync = await runGit(levelPath, ['submodule', 'sync', '--', relPath])
     if (update.exitCode !== 0) return fail(`submodule update: ${update.stderr}`)
+    if (sync.exitCode !== 0) return fail(`submodule sync (url restore): ${sync.stderr}`)
     const head = await runGit(join(levelPath, relPath), ['rev-parse', 'HEAD'])
     if (head.exitCode !== 0 || head.stdout.trim() !== sha) {
       return fail(`attached HEAD is ${head.stdout.trim() || '(none)'}, wanted ${sha}`)
     }
     return { ok: true, error: null }
-  } finally {
-    if (priorLine === '') {
-      await runGit(levelPath, ['update-index', '--force-remove', '--', relPath])
-    } else {
-      await runGit(levelPath, ['update-index', '--index-info'], { stdin: priorLine + '\n' })
-    }
   }
+  const result = await body()
+  // The transient index injection MUST be rolled back — a leftover entry
+  // breaks the unstaged-materialization contract (D23/D28) and can replace
+  // the caller's staged state. A failed restore (index.lock contention, fs
+  // error) turns the whole attach into a failure even if the body succeeded
+  // (Codex review round 2, P2).
+  const restored =
+    priorLine === ''
+      ? await runGit(levelPath, ['update-index', '--force-remove', '--', relPath])
+      : await runGit(levelPath, ['update-index', '--index-info'], { stdin: priorLine + '\n' })
+  if (restored.exitCode !== 0) {
+    return fail(
+      `index restore: ${restored.stderr.trim()}${result.error !== null ? ` (after: ${result.error})` : ''}`,
+    )
+  }
+  return result
 }
 
 /** Read the alternates file as a list of object-dir paths (missing file ⟹ []). */

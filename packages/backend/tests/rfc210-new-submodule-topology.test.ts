@@ -32,7 +32,12 @@ import {
   snapshotNodeIsoFinal,
   type CanonRepo,
 } from '@/services/nodeIsolation'
-import { subSlug, worktreeRefName } from '@/services/gitSubmodule'
+import {
+  attachSubmoduleFromPool,
+  listEffectiveSubmodules,
+  subSlug,
+  worktreeRefName,
+} from '@/services/gitSubmodule'
 import { runGit, snapshotFullState } from '@/util/git'
 
 const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc210-ns-home-'))
@@ -294,5 +299,135 @@ describe('RFC-210 — a submodule the node itself added', () => {
     expect(readFileSync(join(canon, 'twice', 'a.txt'), 'utf8')).toBe('from-canon\n')
     // subSlug sanity: the conflicted path is representable for future anchors.
     expect(subSlug('twice')).toMatch(/^[0-9a-f]{16}$/)
+  }, 120_000)
+})
+
+describe('RFC-210 — review-round hardening', () => {
+  test('attach works WITHOUT a global protocol.file.allow override', async () => {
+    // Since the 2.38.4 lockdown git rejects local-path clone urls by default;
+    // the pool url IS a local path, so the attach must carry a command-scoped
+    // `-c protocol.file.allow=always`. The suite-wide GIT_CONFIG_GLOBAL sets
+    // the allowance for fixture building — masking exactly this bug — so this
+    // test swaps in a config WITHOUT it for the merge-back itself.
+    const subSrc = tmp('aw-rfc210-ns5-src-')
+    await initRepo(subSrc, 's.txt', 's1\n')
+    const host = tmp('aw-rfc210-ns5-host-')
+    await initRepo(host, 'README.md', 'root\n')
+    const canon = join(tmp('aw-rfc210-ns5-wt-'), 'canon')
+    await runGit(host, ['worktree', 'add', '-q', '--detach', canon, 'HEAD'])
+
+    const handle = await createNodeIso({
+      appHome,
+      taskId: 'tns5',
+      nodeRunId: 'rns5',
+      canonRepos: [canonRepo(canon)],
+    })
+    const iso = handle.repos[0]!.isoWorktreePath
+    await runGit(iso, [...ADD, subSrc, 'newsub'])
+    writeFileSync(join(iso, 'newsub', 'work.txt'), 'no-global-allow\n')
+    const agentSha = await commitIn(join(iso, 'newsub'), 'agent work')
+    const trees = await snapshotNodeIsoFinal(handle)
+
+    const strictCfg = join(gitCfgDir, 'gitconfig-strict')
+    writeFileSync(strictCfg, '[user]\n\tname = t\n\temail = t@e.com\n')
+    const prev = process.env.GIT_CONFIG_GLOBAL
+    process.env.GIT_CONFIG_GLOBAL = strictCfg
+    try {
+      const res = await mergeBackNodeIso(handle, trees)
+      expect(res.clean).toBe(true)
+    } finally {
+      process.env.GIT_CONFIG_GLOBAL = prev
+    }
+    expect((await runGit(join(canon, 'newsub'), ['rev-parse', 'HEAD'])).stdout.trim()).toBe(
+      agentSha,
+    )
+    expect(readFileSync(join(canon, 'newsub', 'work.txt'), 'utf8')).toBe('no-global-allow\n')
+  }, 120_000)
+
+  test('cyclic and escaping .gitmodules paths are rejected by the effective lister', async () => {
+    // `.gitmodules` is agent-authored: `path = .` used to recurse forever and
+    // `path = ..` walked git operations out of the task worktree.
+    const outside = tmp('aw-rfc210-ns6-outside-')
+    await initRepo(outside, 'o.txt', 'o1\n')
+    const host = tmp('aw-rfc210-ns6-host-')
+    await initRepo(host, 'README.md', 'root\n')
+    const legit = tmp('aw-rfc210-ns6-legit-')
+    await initRepo(legit, 'l.txt', 'l1\n')
+    await runGit(host, [...ADD, legit, 'legit'])
+    writeFileSync(
+      join(host, '.gitmodules'),
+      (readFileSync(join(host, '.gitmodules'), 'utf8') ?? '') +
+        '[submodule "self"]\n\tpath = .\n\turl = ./x\n' +
+        '[submodule "esc"]\n\tpath = ../escape\n\turl = ./y\n' +
+        '[submodule "abs"]\n\tpath = /tmp\n\turl = ./z\n',
+    )
+    const listed = await listEffectiveSubmodules(host)
+    const paths = listed.map((e) => e.path)
+    expect(paths).toContain('legit')
+    expect(paths).not.toContain('.')
+    expect(paths).not.toContain('../escape')
+    expect(paths).not.toContain('/tmp')
+  }, 120_000)
+
+  test('a stale sibling anchor is not clobbered at publish and is re-pointed at merge', async () => {
+    // Two siblings adding the same path both publish BEFORE the merge lock.
+    // Publish must be create-only (never overwrite a sibling's anchor); the
+    // merge, under the lock, re-points the anchor at the sha canonical
+    // actually adopts.
+    const subSrc = tmp('aw-rfc210-ns7-src-')
+    await initRepo(subSrc, 's.txt', 's1\n')
+    const host = tmp('aw-rfc210-ns7-host-')
+    await initRepo(host, 'README.md', 'root\n')
+    const canon = join(tmp('aw-rfc210-ns7-wt-'), 'canon')
+    await runGit(host, ['worktree', 'add', '-q', '--detach', canon, 'HEAD'])
+
+    const handle = await createNodeIso({
+      appHome,
+      taskId: 'tns7',
+      nodeRunId: 'rns7',
+      canonRepos: [canonRepo(canon)],
+    })
+    const iso = handle.repos[0]!.isoWorktreePath
+    await runGit(iso, [...ADD, subSrc, 'newsub'])
+    writeFileSync(join(iso, 'newsub', 'work.txt'), 'winner\n')
+    const agentSha = await commitIn(join(iso, 'newsub'), 'winner work')
+
+    // A "sibling" anchored first at a DIFFERENT (stale) sha — the submodule
+    // source base commit stands in for it.
+    const pool = join(host, '.git', 'modules', 'newsub')
+    await runGit(host, ['init', '-q', '--bare', pool])
+    const staleSha = (await runGit(subSrc, ['rev-parse', 'HEAD'])).stdout.trim()
+    await runGit(pool, ['fetch', '-q', '--no-tags', subSrc, staleSha])
+    const wtRef = worktreeRefName('tns7', 'newsub')
+    await runGit(pool, ['update-ref', wtRef, staleSha])
+
+    const trees = await snapshotNodeIsoFinal(handle)
+    // Publish must NOT have overwritten the sibling's anchor…
+    expect((await runGit(pool, ['rev-parse', wtRef])).stdout.trim()).toBe(staleSha)
+    // …but the merge (in-lock) re-points it at the adopted sha.
+    const res = await mergeBackNodeIso(handle, trees)
+    expect(res.clean).toBe(true)
+    expect((await runGit(pool, ['rev-parse', wtRef])).stdout.trim()).toBe(agentSha)
+  }, 120_000)
+
+  test('a failed attach reports failure AND restores the injected index entry', async () => {
+    const host = tmp('aw-rfc210-ns8-host-')
+    await initRepo(host, 'README.md', 'root\n')
+    writeFileSync(
+      join(host, '.gitmodules'),
+      '[submodule "ghost"]\n\tpath = ghost\n\turl = ./ghost-src\n',
+    )
+    const bogusSha = '1'.repeat(40)
+    const missingPool = join(tmp('aw-rfc210-ns8-pool-'), 'not-a-repo')
+    const res = await attachSubmoduleFromPool(host, {
+      relPath: 'ghost',
+      sha: bogusSha,
+      pool: missingPool,
+    })
+    expect(res.ok).toBe(false)
+    expect(res.error).not.toBeNull()
+    // The transient gitlink injection must be rolled back (unstaged contract).
+    const staged = await runGit(host, ['ls-files', '-s', '--', 'ghost'])
+    expect(staged.stdout.trim()).toBe('')
   }, 120_000)
 })

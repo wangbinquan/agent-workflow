@@ -898,6 +898,19 @@ unresolved；嵌套 `rewriteGitlinkInCommit` 往超级项目 tree 写 `vendor/in
 | critical #3（新增拓扑，T24 补落地） | 运行中新增的首个/并列/嵌套 submodule 完全绕过池与合并：对象死在 per-worktree module dir，canonical 静默拿空目录；二阶丢失——下一个节点把 unstaged 新子仓读成"theirs 删除"再删掉 | publish 对新路径 `ensureSubmodulePool`（`<hostGitDir>/modules/...` bare 建池）+ 回写 + 节点/worktree 双 ref 锚；`checkoutMergedGitlinks` 带 currentTree 变更判据——**未动的未初始化 gitlink 保持静默跳过**（A3 语义不回退），有变化的走 `attachSubmoduleFromPool`（gitlink 临时注入 index → `submodule init` → url 指池 → `update --checkout` → `sync` 还原 → index 恢复原状，全程 unstaged 契约不破）；iso 创建后 `alignWorktreeGitlinks` 按 base snapshot 对齐并**重采拓扑**（防二阶删除 + 顺带修掉 iso 子仓 stale view）；拓扑随 `persistIsoNodeTree` 重新持久化（crash replay 可见新路径）；`dropNodePoolRefs` 改按 `poolDirs` 遍历（新路径 node ref 不再泄漏）；both-added gitlink 冲突经 poolDirs + ls-tree 160000 探测拦在 salvage 之前（`rfc210-new-submodule-topology.test.ts`，4 例） |
 | critical #4（A8 嵌套） | `rev-parse HEAD:vendor/inner` 穿不透 gitlink（实测 exit 128）⟹ clean 预提交的嵌套子仓被判"没动"跳过 ⟹ 父层发布悬空 gitlink | recorded 从**直接父仓**读（最长前缀匹配定位直接父层）；recorded 查不到（新增子仓）按"必须推"处理；commit-push 列举改 `listEffectiveSubmodules`；未动子仓零 ref 语义保持（`rfc210-commitpush-nested-precommitted.test.ts`） |
 
+### 17.3a 复审轮（同日，针对本批修复的 Codex review）
+
+对 4 条 critical 的修复补丁又跑了一轮 Codex review，折出 **4 P1 + 2 P2，全部采纳**：
+
+| # | 发现 | 修复 |
+|---|---|---|
+| P1 | `listEffectiveSubmodules` 对 agent 可写的 `.gitmodules` 无防护：`path = .` 死循环（实测 120s 超时）、`..`/绝对路径/symlink 可把 git 操作带出任务 worktree | realpath 严格包含判定 + visited 集去环 |
+| P1 | attach 用本地路径当 clone url，git ≥2.38.4 默认拒绝 `file` transport——**测试的全局 `protocol.file.allow` 恰好掩蔽了它**（生产必炸） | `submodule update` 加命令级 `-c protocol.file.allow=always`（池是平台自有路径，不放宽用户配置的 url）；新增「无全局 allow」红→绿测试 |
+| P1 | 新路径 wt 锚在 publish（锁外）无条件写，两兄弟同加一路径时后发布者可用被拒 sha 覆写获胜者的锚 → 获胜 sha 在 discard 后被 gc | publish 改 **create-only CAS**（存在即让位，本方 sha 由 node ref 兜底）+ merge 锁内把锚重指**实际采纳**的 sha |
+| P1 | keepIso 只加在主线——workgroup hook / fanout shard / aggregator 的 `finally` 仍无条件 discard，publish 失败时唯一副本照删 | 三站点补 keep-on-merge-throw（hook 在 rethrow 前置位）；`isolatedAgentRun.ts` 头注的 per-site 纪律同步更新；源码级四站点锁 |
+| P2 | attach 的 `submodule sync`（url 还原）失败被吞——子仓可能长期指着池，后续 auto-push 推进池里而父层 gitlink 声称在真远端 | sync 非零即整体失败 |
+| P2 | attach 的 index 恢复失败被吞——瞬时 gitlink 滞留 index，破坏 unstaged 契约 | 恢复非零即整体失败（即使 body 成功） |
+
 ### 17.3 仍开放（本批不动）
 
 实现门的 4 条 high：递归 push 未冻结 SHA 图（写锁外网络窗口 + 崩溃重入

@@ -172,23 +172,35 @@ describe('RFC-210 — submodule publish failures fail the snapshot', () => {
     await expect(mergeBackNodeIso(handle, trees)).rejects.toThrow(/worktree anchor failed/)
   }, 120_000)
 
-  test('scheduler keeps the iso when merge-back throws (source-level lock)', () => {
+  test('EVERY scheduler site keeps the iso when merge-back throws (source-level lock)', () => {
     // The full scheduler loop is too heavy to spin here; lock the disposition
     // at the source level instead (repo policy: minimum one source-text
-    // assertion when the runtime shape is impractical to integrate). The catch
-    // that stamps merge-failed MUST also keep the iso — it can hold the only
-    // copy of the node's product when the snapshot phase itself failed.
+    // assertion when the runtime shape is impractical to integrate). Each
+    // execution mode's merge-throw path MUST keep the iso — it can hold the
+    // only copy of the node's product when the snapshot phase itself failed.
+    // Codex review round 2 (P1): the mainline alone is not enough; the
+    // workgroup hook, fanout shard and aggregator discard in `finally` too.
     const src = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
       'utf8',
     )
-    const catchBlock = src.match(
-      /log\.warn\('merge-back failed'[\s\S]{0,900}?markMergeFailed\(db, nodeRunId, msg, log\)/,
+    // Mainline DAG: the merge-failed catch flips keepIso.
+    const mainline = src.match(
+      /log\.warn\('merge-back failed'[\s\S]{0,1200}?markMergeFailed\(db, nodeRunId, msg, log\)/,
     )
-    expect(catchBlock).not.toBeNull()
-    expect(catchBlock![0]).toContain('keepIso = true')
+    expect(mainline).not.toBeNull()
+    expect(mainline![0]).toContain('keepIso = true')
+    // Fanout shard: flag set in the merge catch, discard gated on it.
+    expect(src).toContain('keepShardIso = true')
+    expect(src).toContain('if (!keepShardIso) await discardNodeIso(shardIso, log)')
+    // Fanout aggregator: same shape.
+    expect(src).toContain('keepAggIso = true')
+    expect(src).toContain('if (!keepAggIso) await discardNodeIso(aggIso, log)')
+    // Workgroup hook: merge throw flags before rethrowing to the outer catch.
+    expect(src).toContain('keepHookIso = true')
+    expect(src).toContain('if (!keepHookIso) await discardNodeIso(iso, log)')
     // And the iso worktree remains on disk in the unit-level flows above; the
-    // existence of the discard-in-finally is exactly why the flag must flip.
+    // existence of the discard-in-finally is exactly why the flags must flip.
     expect(existsSync(appHome)).toBe(true)
   })
 })
