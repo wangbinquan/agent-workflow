@@ -18,16 +18,20 @@ import { createLogger } from '@/util/log'
 const log = createLogger('config')
 
 /**
- * Load the config from disk, backfilling missing fields with defaults.
- * Returns a fully-typed Config. Throws on invalid JSON or schema mismatch.
+ * Read the config from disk WITHOUT any write side effect (RFC-216 §2/§3):
+ *   - missing file      → `null` (the caller decides a default; nothing is written)
+ *   - present + valid   → fully-typed Config (defaults backfilled)
+ *   - present + corrupt → throws (bad JSON / schema mismatch), same message as before
+ *
+ * `loadConfig` is the write-on-missing wrapper around this. Read-only callers —
+ * the `agent-workflow sandbox` preflight, whose whole contract is "touches no
+ * files" — must use THIS, because `loadConfig` materializes defaults to disk on
+ * a fresh machine (which would create ~/.agent-workflow/config.json out of a
+ * pure diagnostic command).
  */
-export function loadConfig(path: string): Config {
+export function readConfig(path: string): Config | null {
   assertConfigPath(path)
-  if (!existsSync(path)) {
-    log.info('no config found, writing defaults', { path })
-    saveConfigRaw(path, DEFAULT_CONFIG)
-    return DEFAULT_CONFIG
-  }
+  if (!existsSync(path)) return null
 
   let raw: unknown
   try {
@@ -46,6 +50,21 @@ export function loadConfig(path: string): Config {
     throw new Error(`config: validation failed: ${JSON.stringify(parsed.error.issues)}`)
   }
   return parsed.data
+}
+
+/**
+ * Load the config from disk, backfilling missing fields with defaults.
+ * Returns a fully-typed Config. Throws on invalid JSON or schema mismatch.
+ * On a MISSING file this writes the defaults to disk (byte-identical to the
+ * historical behavior); use `readConfig` when a write must never happen.
+ */
+export function loadConfig(path: string): Config {
+  const existing = readConfig(path)
+  if (existing !== null) return existing
+
+  log.info('no config found, writing defaults', { path })
+  saveConfigRaw(path, DEFAULT_CONFIG)
+  return DEFAULT_CONFIG
 }
 
 /**

@@ -15,6 +15,7 @@ import { restoreCommand } from './cli/restore'
 import { configGetCommand, configSetCommand } from './cli/config-cli'
 import { doctorCommand, formatDoctor } from './cli/doctor'
 import { migrateCommand } from './cli/migrate'
+import { sandboxCommand } from './cli/sandbox'
 import { startCommand } from './cli/start'
 import { statusCommand, formatStatus } from './cli/status'
 import { stopCommand } from './cli/stop'
@@ -128,6 +129,15 @@ async function main(): Promise<void> {
       break
     }
 
+    case 'sandbox': {
+      // RFC-216: read-only sandbox preflight. Returns its own exit code (0
+      // available/off · 1 unavailable · 2 argv error / unreadable config).
+      const result = await sandboxCommand(Bun.argv.slice(3))
+      process.stdout.write(result.output)
+      process.exit(result.exitCode)
+      break
+    }
+
     case 'help':
     case '--help':
     case '-h':
@@ -159,6 +169,9 @@ async function main(): Promise<void> {
       )
       console.log('  user list                         list all users (id, username, role, status)')
       console.log('  user disable --username <name>    disable (soft-delete) a user')
+      console.log(
+        '  sandbox [--require-available]     read-only sandbox preflight (install/fix guidance)',
+      )
       if (sub !== 'help' && sub !== '--help' && sub !== '-h') {
         console.error(`unknown subcommand: ${sub}`)
         process.exit(2)

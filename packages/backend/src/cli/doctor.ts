@@ -5,12 +5,15 @@ import { Database } from 'bun:sqlite'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { createSecretBox } from '@/auth/secretBox'
-import { loadConfig } from '@/config'
+import { loadConfig, readConfig } from '@/config'
 import { quickCheckDbFile } from '@/db/integrity'
 import { countEmbeddedSqlMigrations, IS_EMBEDDED } from '@/embed'
 import { capabilitiesFromVersion, MIN_GIT_VERSION, parseGitVersion } from '@/services/gitVersion'
 import { getRuntimeDriver } from '@/services/runtime'
+import type { SandboxMode } from '@/services/sandbox/guidance'
+import { probeSandboxMechanism } from '@/services/sandbox/probe'
 import { Paths } from '@/util/paths'
+import { makeBoundedSpawn } from './sandbox'
 
 export interface CheckResult {
   name: string
@@ -85,8 +88,62 @@ export async function doctorCommand(): Promise<DoctorResult> {
   checks.push(checkBackups())
   checks.push(checkSealedCredentials())
 
+  // 9. RFC-216: OS sandbox mechanism. Only enforce+unavailable is a genuine
+  //    failure (it 409s every task launch); warn/off are informational so a box
+  //    without bwrap in the default warn mode never reds the doctor smoke.
+  checks.push(await checkSandbox())
+
   const ok = checks.every((c) => c.ok)
   return { ok, checks }
+}
+
+/**
+ * RFC-216 — sandbox mechanism health. Reused via `boundedSpawn` so a hung
+ * mechanism can't wedge doctor. `ok = !(enforce && !available)`; a corrupt
+ * config is caught here (assume warn) so it can NEVER propagate and truncate the
+ * whole doctor report — the config corruption itself is reported by checkConfig.
+ * The `agent-workflow sandbox` exit-2-on-corrupt semantics belong to that command
+ * only; doctor keeps its CheckResult contract.
+ */
+export async function checkSandbox(
+  deps: {
+    boundedSpawn?: ReturnType<typeof makeBoundedSpawn>
+    configPath?: string
+    platform?: NodeJS.Platform
+  } = {},
+): Promise<CheckResult> {
+  const name = 'sandbox'
+  let mode: SandboxMode = 'warn'
+  let configNote = ''
+  try {
+    const cfg = readConfig(deps.configPath ?? Paths.config)
+    mode = (cfg?.sandboxMode ?? 'warn') as SandboxMode
+  } catch {
+    configNote = '（config 不可读，按 warn 判定；见 config 检查）'
+  }
+
+  const bounded = deps.boundedSpawn ?? makeBoundedSpawn()
+  const status = await probeSandboxMechanism(deps.platform ?? process.platform, bounded.spawn)
+
+  if (status.available) {
+    return { name, ok: true, message: `${status.mechanism ?? 'sandbox'} 可用${configNote}` }
+  }
+  const detail = status.detail ?? 'unknown'
+  if (mode === 'enforce') {
+    return {
+      name,
+      ok: false,
+      message: `enforce 档但机制不可用（${detail}）——所有任务将被 409 拒；见 \`agent-workflow sandbox\`${configNote}`,
+    }
+  }
+  if (mode === 'off') {
+    return { name, ok: true, message: `沙箱由配置关闭（机制不可用：${detail}）${configNote}` }
+  }
+  return {
+    name,
+    ok: true,
+    message: `机制不可用（${detail}）；warn 档任务将裸跑，安装指引见 \`agent-workflow sandbox\`${configNote}`,
+  }
 }
 
 /**
