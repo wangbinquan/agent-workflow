@@ -521,3 +521,12 @@ mode/leader/repo）。写 `workgroup_config_json` 副本 + 系统消息。语义
   `scheduled_tasks.launch_kind` 判别列 + 三主体 payload 封套已落地，组任务可定时启动，
   触发时按组资源当次配置冻结）。
 - 现有工作流/任务/反问/评审路径零改动（分流点唯一：runTask 入口 + tabs 扩参 + 收件箱加源）。
+
+---
+
+> **勘误指针（RFC-217，2026-07-22）**：本文所述 `services/workgroupRunner.ts` 单文件引擎已由
+> RFC-217 T3 解体为 `services/workgroup/{engine,turnExecution,memberTurns,prompts}.ts` +
+> `strategies/{leaderWorker,freeCollab}.ts`；`routes/workgroupTasks.ts` 的写 handler 本体
+> 下沉 `services/workgroup/{taskActions,configActions,dwActions}.ts`（routes 仅余 transport）；
+> gate/暂停成因等运行时槽位由 `workgroup_task_state` 真表（migration 0106）取代 config JSON
+> 槽。行为语义不变处以本文为准，落点以 RFC-217 design/plan 为准。

@@ -182,3 +182,11 @@ WS 面零新增：`node.status` → 房间失效沿用 f55ede4b 规则；`node.e
 明暗 × 窄屏：回合卡三态（排队 / 执行中脉冲 / 定格）、「反问已压制」辅 chip、执行记录卡、浮标、第三列开合；与 /tasks 详情、/agents 等核心页 side-by-side 比按钮高度 / 圆角 / spacing；按 memory 用最小 repro + chrome 截图流程核验（settings 基线无涉）。
 
 Codex 设计门：批准前跑（与 RFC-181 修订一并送审），findings 全折再请用户批准。
+
+---
+
+> **勘误指针（RFC-217，2026-07-22）**：本文所述 `WorkgroupRoom.tsx` 单组件内的接线已由
+> RFC-217 T10 拆至 `components/workgroup/room/`（壳 + RoomComposer + RoomTimeline +
+> RoomSideCards + DispatchCard/TurnCard/DeliverFormDialog/FcTaskListCard/RunStatusRow）；
+> 滚动锚定在 RoomTimeline，drawer 成员作用域在壳；源级锁（rfc182-room-source-locks）已随
+> 落点重锚。语义（D1/D4/D5/D7/D9/P1-1 等）全部保留。

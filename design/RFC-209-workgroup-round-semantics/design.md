@@ -547,3 +547,9 @@ Codex CLI 配额耗尽（提示 2026-07-25 恢复），按 RFC-185 / RFC-164 先
 | 17 | P2 | `task-detail-route-history.test.tsx` 用 `as unknown as` ⇒ 新字段静默 undefined 溜过类型门 | §7.1 必改清单 |
 | 18 | P2 | fc AC-1 今天**零覆盖**（`fcRoom()` 是 `messages: []`） | §7.5 要求 fc fixture 带非零 round 消息 |
 | — | — | 契约注册表无需注册 / e2e 无基线刷新 / 无 migration 影响 / i18n 集合 parity 安全 | 已核实，见 §2.6 §4 §7.6 |
+
+---
+
+> **勘误指针（RFC-217，2026-07-22）**：本文的 fc 预算计数 wire 字段 `round`（聚合响应顶层）
+> 已由 RFC-217 T5 改名 `budgetUsed`（fc 消息级 round 显式 null）；右栏预算显示等语义不变。
+> 消费点以 `lib/workgroup-room.ts` 与 `components/workgroup/room/RoomSideCards.tsx` 为准。

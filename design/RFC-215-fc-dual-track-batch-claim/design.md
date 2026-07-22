@@ -392,3 +392,11 @@ export const WgTaskResultsPortSchema = z
   agent.outputs，端口名无注册表约束）。
 - node_runs 无覆盖 wg 行的唯一索引，同 shardKey 重铸安全。
 - 单二进制冒烟必跑（workgroupRounds 模块环前科，`build:binary` 是唯一能抓的门）。
+
+---
+
+> **勘误指针（RFC-217，2026-07-22）**：本文 §9 shardKey 六消费点清单中位于
+> `workgroupRunner.ts` 的条目已随 RFC-217 T3 解体迁移——codec 单源在
+> `shared/src/schemas/workgroup.ts`（buildMsgShardKey/parseMsgShardKey，G7 锁），
+> 重开预算判据 `attempt_count < DEFAULT_PROTOCOL_RETRY_BUDGET` 在
+> `services/workgroup/lifecycle.ts`，协议重试常量在 `services/workgroup/turnExecution.ts`。
