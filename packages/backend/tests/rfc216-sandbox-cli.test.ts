@@ -5,7 +5,7 @@
 // mechanism is probed and no file outside the test tmp is touched.
 
 import { afterEach, describe, expect, it } from 'bun:test'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { makeBoundedSpawn, sandboxCommand, type RawSpawn, type SpawnedProbe } from '@/cli/sandbox'
@@ -205,5 +205,49 @@ describe('makeBoundedSpawn — normalizes every failure to unavailable, never th
     expect(code).toBe(127)
     expect(b.getDiag()).toEqual({ kind: 'timeout' })
     expect(killed.some(([pid, sig]) => pid === 555 && sig === 'SIGKILL')).toBe(true)
+  })
+})
+
+// REAL-process lifecycle — the tests above use a kill spy that resolves `exited`;
+// these exercise the REAL Bun.spawn + REAL killProcessTree so a genuine hang /
+// grandchild leak can't hide behind the mock (impl-gate coverage gap: the timeout
+// path only SENDS SIGKILL then awaits proc.exited, and readCappedStderr swallows a
+// stream error — both are proven bounded/correct here rather than mocked).
+describe('makeBoundedSpawn — REAL process (bounded reap, zero survivor, stderr non-fatal)', () => {
+  it('a hanging mechanism is SIGKILL-reaped at the deadline — bounded, not the 30s sleep', async () => {
+    const b = makeBoundedSpawn(undefined, undefined, 200) // real spawn + real killProcessTree
+    const start = Date.now()
+    const code = await b.spawn(['/bin/sh', '-c', 'sleep 30'])
+    expect(Date.now() - start).toBeLessThan(6000) // bounded — awaiting proc.exited resolves after the group SIGKILL
+    expect(b.getDiag()).toEqual({ kind: 'timeout' })
+    expect(code).toBe(127)
+  }, 10_000)
+
+  it('a wrapper that forks a grandchild then exits fast leaves NO survivor (finally group-reap)', async () => {
+    const dir = tmp()
+    const marker = join(dir, 'survivor')
+    // sh backgrounds a grandchild (sleep 3 → touch marker) in the SAME group, then
+    // exits 0 immediately (before any timeout). The finally killProcessTree(SIGKILL)
+    // must reap the whole detached group so the marker is never written.
+    const b = makeBoundedSpawn(undefined, undefined, 10_000)
+    const code = await b.spawn(['/bin/sh', '-c', `( sleep 3; touch "${marker}" ) & exit 0`])
+    expect(code).toBe(0)
+    await new Promise((r) => setTimeout(r, 3_500)) // wait past the grandchild's sleep
+    expect(existsSync(marker)).toBe(false) // grandchild was group-killed → never touched marker
+  }, 10_000)
+
+  it('a stderr stream error is NON-FATAL — the outcome comes from the exit code, not the stderr read', async () => {
+    const errStream = new ReadableStream<Uint8Array>({
+      start(c) {
+        c.error(new Error('stderr stream boom'))
+      },
+    })
+    const rawSpawn: RawSpawn = () => fakeProc({ exited: Promise.resolve(0), stderr: errStream })
+    const b = makeBoundedSpawn(rawSpawn)
+    const code = await b.spawn(['bwrap'])
+    // The mechanism DID exit 0 → available. A failed stderr READ (supplementary,
+    // best-effort) must not flip that into error/unavailable.
+    expect(code).toBe(0)
+    expect(b.getDiag()).toMatchObject({ kind: 'exit', exitCode: 0 })
   })
 })

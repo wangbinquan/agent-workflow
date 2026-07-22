@@ -39,9 +39,12 @@ config 从而知道生效 mode）。**绝不用篡改 `SandboxStatus.available` 
      SIGKILL 非可忽略 SIGTERM）；`diag={kind:'timeout'}`。
    - **stderr**：**流式 capped reader**——**固定字节上限**边读边丢弃超限（**不 buffer-all-then-
      slice**，防 OOM，P2#1-r4）；不绑死 exit 等待（孙进程占 pipe 使 EOF 不来）。
-   - **整生命周期归一（P1#2-r3 + P2#1-r4）**：`Bun.spawn` **启动抛** / `proc.exited` reject /
-     stderr reader reject —— **一律 catch** → `diag={kind:'error',message}` + 返回哨兵 127 给
-     探测器（得 unavailable）。**`boundedSpawn` 永不 throw、永不把异常泄漏到 renderer 之外。**
+   - **整生命周期归一（P1#2-r3 + P2#1-r4）**：`Bun.spawn` **启动抛** / `proc.exited` reject
+     —— **catch** → `diag={kind:'error',message}` + 返回哨兵 127（得 unavailable）。**stderr 读
+     流错误是非致命的**（best-effort 摘要，在 `readCappedStderr` 内吞掉、返回已收部分）——探测
+     结论由 exit code 决定，一次 stderr 读失败不该翻成 error/unavailable（实现门实测坐实，见
+     `rfc216-sandbox-cli.test.ts` 真实进程组）。**`boundedSpawn` 永不 throw、永不把异常泄漏到
+     renderer 之外。**
    - **正常退出**：`diag={kind:'exit',exitCode,stderrSnippet}`；返回真实 `exitCode`（同源）。
    - **`finally` 无条件回收（P1#3-r3）**：direct child settle 后**无条件**再
      `killProcessTree(pid,'SIGKILL')`（收「父先退+孙进程」泄漏，仿 `opencode.ts:142-154`；真实
