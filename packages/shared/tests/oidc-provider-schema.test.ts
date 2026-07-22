@@ -94,6 +94,16 @@ describe('OidcProviderPublicSchema', () => {
       allowedEmailDomains: [],
       iconUrl: null,
       enabled: true,
+      // RFC-220 — server-side config knobs; the public projection below must
+      // keep stripping them (endpoints/claim selectors never reach the
+      // anonymous login page).
+      authorizationEndpoint: 'https://github.com/login/oauth/authorize',
+      tokenEndpoint: null,
+      userinfoEndpoint: null,
+      jwksUri: null,
+      trustEmailVerified: false,
+      usernameClaim: 'login',
+      subjectClaim: 'id',
       createdAt: 0,
       updatedAt: 0,
     })
