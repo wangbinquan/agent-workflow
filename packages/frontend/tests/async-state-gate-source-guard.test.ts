@@ -71,9 +71,12 @@ const ALLOW_RETRY = new Map<string, number>([
   ['components/home/CapabilityGrid.tsx', 1],
   ['routes/reviews.tsx', 2],
 ])
-// P1-1: member `x.refetch(` OR destructured bare `refetch(` / `refetch}` reference.
-// `\b` cannot fire inside `prefetch` (`p` is a word char), so no false hit.
-const RETRY_BUTTON = String.raw`onClick=\{[^}]*\brefetch\(|onClick=\{(?:[A-Za-z0-9_$]+\.)?refetch\}`
+// P1-1 + P3-r2 (Codex re-review): every DIRECT inline refetch shape — member
+// `x.refetch(`, optional-call `x.refetch?.(` (QueryState.tsx:84's own idiom),
+// computed `x['refetch'](`, and destructured bare `refetch(` / `refetch}`. `\b`
+// cannot fire inside `prefetch`. NAMED-HANDLER indirection (`onClick={doRetry}`)
+// stays the honestly-declared out-of-scope (needs AST).
+const RETRY_BUTTON = String.raw`onClick=\{[^}]*\brefetch\s*(?:\?\.)?\s*\(|onClick=\{[^}]*\[["']refetch["']\]\s*\(|onClick=\{(?:[A-Za-z0-9_$]+\.)?refetch\}`
 
 // ---------------------------------------------------------------------------
 // Lock B: hand-written muted query-empties. EXACT per-file occurrence allowlist.
@@ -101,8 +104,12 @@ const ALLOW_EMPTY = new Map<string, number>([
   ['components/node-session/ConversationFlow.tsx', 1],
   ['components/structure/StructuralGraph.tsx', 1],
 ])
-// P3: `"muted"` OR `"muted <extra classes>"` — combined className no longer dodges.
-const MUTED_EMPTY = String.raw`className="muted(?: [^"]*)?"[^>]*>\s*\{t\('(?!common\.empty')[^']*(?:[Ee]mpty|noMembers|noUsers|noEvents|noManaged|noSelectable|outputNone|noPorts|sourceDeleted)`
+// P3 + P3-r2: `muted` as a WHITESPACE-SEPARATED TOKEN anywhere in the class list
+// (`"muted"`, `"muted x"`, `"x muted"`, `"a muted b"`) — position no longer dodges.
+// The `(?:[^"]*\s)?` / `(?:\s[^"]*)?` fences require a real token boundary, so
+// `"x-muted"` / `"mutedX"` do NOT false-hit. Dynamic `className={…}` stays a
+// documented blind spot (out-of-scope, needs AST).
+const MUTED_EMPTY = String.raw`className="(?:[^"]*\s)?muted(?:\s[^"]*)?"[^>]*>\s*\{t\('(?!common\.empty')[^']*(?:[Ee]mpty|noMembers|noUsers|noEvents|noManaged|noSelectable|outputNone|noPorts|sourceDeleted)`
 
 describe('RFC-214 async-state-gate source guards', () => {
   // Shared: a lock's offenders are files whose occurrence count EXCEEDS the
@@ -155,5 +162,51 @@ describe('RFC-214 async-state-gate source guards', () => {
     expect(queryState).toContain('export function QueryState')
     // The primitives must NOT themselves contain a hand-written refetch button.
     expect(occurrences(errorBanner, RETRY_BUTTON)).toBe(0)
+  })
+})
+
+// P3-r2 (Codex re-review) — table-driven coverage of the DIRECT inline shapes the
+// regexes must catch, and the ones honestly left out-of-scope. Synthetic inputs,
+// so this is independent of the current tree's occurrence counts.
+describe('RFC-214 guard regexes — direct-shape coverage', () => {
+  const A = new RegExp(RETRY_BUTTON)
+  const B = new RegExp(MUTED_EMPTY)
+
+  test.each([
+    ['member call', 'onClick={() => void q.refetch()}'],
+    ['optional call (QueryState idiom)', 'onClick={() => void q.refetch?.()}'],
+    ['computed access', "onClick={() => q['refetch']()}"],
+    ['bare destructured', 'onClick={() => refetch()}'],
+    ['reference', 'onClick={refetch}'],
+  ])('Lock A catches inline refetch: %s', (_n, s) => {
+    expect(A.test(s)).toBe(true)
+  })
+
+  test.each([
+    // Honestly out-of-scope (need AST/data-flow) — documented, not silently missed.
+    ['named-handler indirection', 'onClick={doRetry}'],
+    ['object-literal before refetch', 'onClick={() => { setX({ a: 1 }); q.refetch() }}'],
+    // Must never false-hit.
+    ['prefetch', 'onClick={() => prefetch()}'],
+  ])('Lock A does NOT catch: %s', (_n, s) => {
+    expect(A.test(s)).toBe(false)
+  })
+
+  test.each([
+    ['muted only', 'className="muted">{t(\'x.empty\')'],
+    ['muted first of many', 'className="muted section__x">{t(\'x.empty\')'],
+    ['muted last', 'className="section__x muted">{t(\'x.empty\')'],
+    ['muted in the middle', 'className="a muted b">{t(\'x.noPorts\')'],
+  ])('Lock B catches muted-token empty: %s', (_n, s) => {
+    expect(B.test(s)).toBe(true)
+  })
+
+  test.each([
+    ['hyphenated non-token', 'className="section-muted">{t(\'x.empty\')'],
+    ['common.empty is routed', 'className="muted">{t(\'common.empty\')'],
+    // Dynamic className is honestly out-of-scope (needs AST).
+    ['dynamic className', "className={cx('muted', x)}>{t('x.empty')"],
+  ])('Lock B does NOT catch: %s', (_n, s) => {
+    expect(B.test(s)).toBe(false)
   })
 })
