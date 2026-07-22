@@ -40,17 +40,47 @@ export async function getProviderMetadata(
   return entry
 }
 
-async function fetchDiscovery(issuerUrl: string, fetcher: typeof fetch): Promise<OidcMetadata> {
+// RFC-220 — discovery probes must not hang a login request forever: the
+// resolver treats a timeout as "discovery failed" and falls back to manual
+// endpoints, so a bounded wait is what makes the fallback reachable at all.
+const DISCOVERY_TIMEOUT_MS = 10_000
+
+/**
+ * RFC-220 — lenient discovery fetch: HTTP 2xx + a plain JSON object counts as
+ * success, every field optional. Partial documents are a legitimate input for
+ * the per-field merge in auth/oidc/endpoints.ts (D1); completeness is judged
+ * there against the merged result, not here. Pure fetch — caching (positive,
+ * negative, viability-gated) lives in the resolver, which needs per-key
+ * control this module could not offer.
+ */
+export async function fetchDiscoveryDocument(
+  issuerUrl: string,
+  fetcher: typeof fetch = globalThis.fetch,
+): Promise<Partial<OidcMetadata>> {
   const trimmed = issuerUrl.replace(/\/$/, '')
   const url = `${trimmed}/.well-known/openid-configuration`
   const res = await fetcher(url, {
     method: 'GET',
     headers: { accept: 'application/json' },
+    signal: AbortSignal.timeout(DISCOVERY_TIMEOUT_MS),
   })
   if (!res.ok) {
     throw new Error(`oidc-discovery-failed status=${res.status}`)
   }
-  const json = (await res.json()) as Partial<OidcMetadata>
+  let json: unknown
+  try {
+    json = await res.json()
+  } catch {
+    throw new Error('oidc-discovery-not-json')
+  }
+  if (typeof json !== 'object' || json === null || Array.isArray(json)) {
+    throw new Error('oidc-discovery-not-object')
+  }
+  return json as Partial<OidcMetadata>
+}
+
+async function fetchDiscovery(issuerUrl: string, fetcher: typeof fetch): Promise<OidcMetadata> {
+  const json = await fetchDiscoveryDocument(issuerUrl, fetcher)
   if (!json.issuer || !json.authorization_endpoint || !json.token_endpoint || !json.jwks_uri) {
     throw new Error('oidc-discovery-incomplete')
   }
