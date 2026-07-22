@@ -2,7 +2,7 @@
 // strictly under the skill's root directory. ValidationError on any attempt to
 // escape via `..`, absolute paths, or symlinks pointing outside.
 
-import { existsSync, lstatSync, realpathSync } from 'node:fs'
+import { existsSync, lstatSync, readlinkSync, realpathSync } from 'node:fs'
 import { dirname, isAbsolute, normalize, resolve, sep } from 'node:path'
 import { ValidationError } from '@/util/errors'
 
@@ -107,10 +107,29 @@ export function assertWriteAncestorInside(root: string, target: string): void {
  */
 export function realpathWriteInside(root: string, target: string): string {
   assertWriteAncestorInside(root, target)
-  if (existsSync(target) && lstatSync(target).isSymbolicLink()) {
-    // Resolve + verify the link stays inside root; throws otherwise. The write
-    // then follows it to a contained target, or the delete removes the link.
-    realpathInside(root, target)
+  // Detect a leaf symlink with lstat (NO-follow). The old `existsSync(target)`
+  // FOLLOWS the link and returns false for a DANGLING one (points at a
+  // not-yet-existing file), which short-circuited the isSymbolicLink() check and
+  // let a subsequent writeFileSync create the target THROUGH the escaping link
+  // (RFC-170 impl-gate, Codex 2026-07-22). NOTE: check-then-write is still a
+  // TOCTOU window (a concurrent actor could swap the leaf between this and the
+  // write); closing it fully needs openat2/RESOLVE_BENEATH, tracked separately.
+  let leafIsLink = false
+  try {
+    leafIsLink = lstatSync(target).isSymbolicLink()
+  } catch {
+    // ENOENT — the leaf does not exist at all; the ancestor walk above suffices.
+  }
+  if (leafIsLink) {
+    if (existsSync(target)) {
+      // Resolvable link: full-chain realpath + containment (unchanged).
+      realpathInside(root, target)
+    } else {
+      // Dangling link: realpathSync would throw ENOENT, so validate the link's
+      // (possibly relative) destination via the deepest-existing-ancestor walk.
+      const dest = resolve(dirname(resolve(target)), readlinkSync(target))
+      assertWriteAncestorInside(root, dest)
+    }
   }
   return target
 }

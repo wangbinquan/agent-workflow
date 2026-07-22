@@ -498,7 +498,13 @@ export async function writeSkillContent(
     opts,
     name,
     (staging) => {
-      writeFileSync(join(staging, 'SKILL.md'), md, 'utf-8')
+      // RFC-170 impl-gate (Codex 2026-07-22): commitSkillVersion cpSync-copies
+      // the prior files/ into `staging` WITHOUT dereferencing links, so a live
+      // `SKILL.md` that is a symlink lands here as a symlink and a raw
+      // writeFileSync would FOLLOW it to overwrite the host target. Route through
+      // the same no-follow containment guard the file-tree writer uses (~L694).
+      const target = realpathWriteInside(staging, join(staging, 'SKILL.md'))
+      writeFileSync(target, md, 'utf-8')
     },
     {
       source: 'editor',

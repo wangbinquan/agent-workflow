@@ -16,6 +16,7 @@ import {
   readSkillContent,
   readSkillFile,
   skillRoot,
+  writeSkillContent,
   writeSkillFile,
   type SkillFsOptions,
 } from '../src/services/skill'
@@ -157,6 +158,24 @@ describe('readSkillFile symlink containment', () => {
     await expect(deleteSkillFile(db, fsOpts, 'foo', 'escape')).rejects.toBeInstanceOf(
       ValidationError,
     )
+    expect(readFileSync(secret, 'utf-8')).toBe('ORIGINAL HOST CONTENT')
+  })
+
+  // RFC-170 impl-gate (Codex 2026-07-22): the SKILL.md writer inside
+  // commitSkillVersion (writeSkillContent's callback) used a raw writeFileSync
+  // with no containment — distinct from the writeSkillFile path guarded above.
+  // commitSkillVersion cpSync's the live files/ (symlinks and all) into staging,
+  // so a live SKILL.md symlinked to a host file let the write escape.
+  test('writeSkillContent refuses when the LIVE SKILL.md is an escaping symlink', async () => {
+    const secret = join(outsideDir, 'host-secret.txt')
+    writeFileSync(secret, 'ORIGINAL HOST CONTENT', 'utf-8')
+    const liveSkillMd = join(liveRoot(), 'SKILL.md')
+    rmSync(liveSkillMd)
+    symlinkSync(secret, liveSkillMd)
+    await expect(
+      writeSkillContent(db, fsOpts, 'foo', { bodyMd: 'PWNED body', description: '' }),
+    ).rejects.toBeInstanceOf(ValidationError)
+    // The host file must be untouched — the SKILL.md write did not follow the link.
     expect(readFileSync(secret, 'utf-8')).toBe('ORIGINAL HOST CONTENT')
   })
 

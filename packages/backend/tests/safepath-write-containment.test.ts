@@ -54,6 +54,28 @@ describe('realpathWriteInside', () => {
     expect(() => realpathWriteInside(root, join(root, 'link.txt'))).not.toThrow()
   })
 
+  // RFC-170 impl-gate (Codex 2026-07-22): a DANGLING leaf symlink (points at a
+  // not-yet-existing host file) slipped past the guard — existsSync FOLLOWS the
+  // link and returns false for a dangling one, short-circuiting the
+  // isSymbolicLink() check, so a subsequent writeFileSync would create the file
+  // THROUGH the escaping link.
+  test('refuses a DANGLING leaf symlink escaping root', () => {
+    symlinkSync(join(outside, 'not-yet-there'), join(root, 'dangling'))
+    expect(() => realpathWriteInside(root, join(root, 'dangling'))).toThrow(ValidationError)
+  })
+
+  test('allows a dangling leaf symlink that stays inside root', () => {
+    // Points at a not-yet-existing file INSIDE root — the write legitimately
+    // materializes it; containment holds.
+    symlinkSync(join(root, 'will-exist.txt'), join(root, 'inlink'))
+    expect(() => realpathWriteInside(root, join(root, 'inlink'))).not.toThrow()
+  })
+
+  test('refuses a dangling leaf symlink with a relative escape target', () => {
+    symlinkSync('../../etc/shadow', join(root, 'relesc'))
+    expect(() => realpathWriteInside(root, join(root, 'relesc'))).toThrow(ValidationError)
+  })
+
   test('assertWriteAncestorInside refuses before any directory is created through a link', () => {
     symlinkSync(outside, join(root, 'sub'))
     expect(() => assertWriteAncestorInside(root, join(root, 'sub', 'deep', 'x.txt'))).toThrow(
