@@ -15,6 +15,16 @@ const REASON_TO_TEXT: Record<string, string> = {
   'nonce-mismatch': 'OIDC nonce check failed (possible replay).',
   'identity-already-linked':
     'That identity is already linked to a different user. Sign in with the other account first.',
+  // RFC-220 — manual-endpoint fallback + userinfo identity source.
+  'endpoints-unresolved':
+    'The identity provider endpoints could not be resolved. Contact your administrator.',
+  'userinfo-unavailable':
+    'The identity provider returned no id_token and no userinfo endpoint is configured. Contact your administrator.',
+  'jwks-unavailable':
+    'The id_token cannot be verified (no JWKS available) and no userinfo endpoint is configured. Contact your administrator.',
+  'userinfo-fetch-failed': 'Could not fetch identity information from the provider.',
+  'userinfo-shape-invalid': 'The provider returned an unusable userinfo response.',
+  'provider-config-changed': 'The provider configuration changed during sign-in. Please try again.',
   'email-domain-not-allowed':
     'Your email domain is not on the allowlist. Please contact your administrator.',
   'email-not-verified': 'Your identity provider has not verified your email.',

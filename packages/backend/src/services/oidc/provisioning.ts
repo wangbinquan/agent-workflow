@@ -30,6 +30,18 @@ export type ProvisioningDecision =
   | { action: 'reject'; reason: string }
 
 /**
+ * RFC-220 D3 — per-provider email trust: when the admin explicitly declared
+ * the IdP's emails trustworthy, a present email counts as verified on BOTH
+ * identity paths (pure OAuth2 userinfo rarely carries email_verified, and
+ * plenty of OIDC IdPs omit it too). Pure; applied by the callback before
+ * decideProvisioning so the decision tree itself stays untouched.
+ */
+export function applyEmailTrust(claims: IdTokenClaims, trustEmailVerified: boolean): IdTokenClaims {
+  if (trustEmailVerified && claims.email) return { ...claims, email_verified: true }
+  return claims
+}
+
+/**
  * Pure function — given the persisted provider config, the IdP-issued id_token
  * claims, and any pre-existing user_identities / invited users matched by
  * email, decide what the framework should do next.

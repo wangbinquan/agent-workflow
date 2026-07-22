@@ -4,7 +4,7 @@
 // ---------------
 // The 2026-07-21 test-guard audit (gap M1-lcov-1, P0) found the entire
 // third-party login chain at zero behavioural coverage: `exchangeCodeForTokens`,
-// `verifyIdToken`, `getProviderMetadata`, `consumeFlow` and `sweepExpiredFlows`
+// `verifyIdToken`, discovery fetching, `consumeFlow` and `sweepExpiredFlows`
 // had ZERO hits across all four test roots; only `startFlow` appeared once, in
 // the redirect-sanitisation test. The provider CRUD service was tested; the code
 // that actually turns an IdP redirect into a session was not.
@@ -26,7 +26,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { SignJWT, generateKeyPair, type CryptoKey } from 'jose'
-import { clearDiscoveryCache, getProviderMetadata } from '../src/auth/oidc/discovery'
+import { fetchDiscoveryDocument } from '../src/auth/oidc/discovery'
 import { clearPendingFlows, consumeFlow, startFlow, sweepExpiredFlows } from '../src/auth/oidc/flow'
 import {
   OidcTokenError,
@@ -128,15 +128,49 @@ describe('OIDC token exchange', () => {
     expect((err as OidcTokenError).code).toBe('token-exchange-failed')
   })
 
-  test('a 200 response missing id_token is rejected instead of flowing onward', async () => {
+  test('a 200 response missing access_token is rejected instead of flowing onward', async () => {
     // A broken or hostile IdP answering `200 {}` must not produce a session.
-    // Without the shape check the undefined id_token would reach verifyIdToken.
-    for (const body of [{}, { access_token: 'at' }, { id_token: 'it' }, { access_token: 1 }]) {
+    // RFC-220 relaxed id_token to OPTIONAL (pure OAuth2 servers never send
+    // one — identity then comes from userinfo, gated in identity.ts), so the
+    // shape check now anchors on access_token alone.
+    for (const body of [{}, { id_token: 'it' }, { access_token: 1 }]) {
       const { fetcher } = stubFetch(() => ({ body }))
       const err = await exchangeCodeForTokens({ ...base, fetcher }).catch((e: unknown) => e)
       expect(err).toBeInstanceOf(OidcTokenError)
       expect((err as OidcTokenError).code).toBe('token-exchange-failed')
     }
+  })
+
+  test('RFC-220: an access-token-only response succeeds with id_token absent', async () => {
+    const { fetcher } = stubFetch(() => ({ body: { access_token: 'at' } }))
+    const tokens = await exchangeCodeForTokens({ ...base, fetcher })
+    expect(tokens.access_token).toBe('at')
+    expect(tokens.id_token).toBeUndefined()
+    // dirty non-string id_token fields are treated as absent, not fatal
+    const dirty = stubFetch(() => ({ body: { access_token: 'at', id_token: null } }))
+    const tokens2 = await exchangeCodeForTokens({ ...base, fetcher: dirty.fetcher })
+    expect(tokens2.id_token).toBeUndefined()
+  })
+
+  test('RFC-220: transport failures and non-JSON bodies are typed token-exchange failures', async () => {
+    // Behavior change #3 support: these used to escape as bare exceptions and
+    // collapse into the generic verify-failed page.
+    const throwing = (async () => {
+      throw new Error('connection reset')
+    }) as unknown as typeof fetch
+    const err1 = await exchangeCodeForTokens({ ...base, fetcher: throwing }).catch(
+      (e: unknown) => e,
+    )
+    expect(err1).toBeInstanceOf(OidcTokenError)
+    expect((err1 as OidcTokenError).code).toBe('token-exchange-failed')
+
+    const notJson = (async () =>
+      new Response('<html>gateway error</html>', { status: 200 })) as unknown as typeof fetch
+    const err2 = await exchangeCodeForTokens({ ...base, fetcher: notJson }).catch(
+      (e: unknown) => e,
+    )
+    expect(err2).toBeInstanceOf(OidcTokenError)
+    expect((err2 as OidcTokenError).code).toBe('token-exchange-failed')
   })
 })
 
@@ -319,6 +353,17 @@ describe('OIDC pending-flow state', () => {
 })
 
 describe('OIDC discovery', () => {
+  // RFC-220 migrated this block: the strict 4-field `getProviderMetadata`
+  // (and its metadata cache) was DELETED when login moved to the per-field
+  // merge resolver. Lock migration map (design/RFC-220 §3.3):
+  //   - trailing-slash normalisation      → kept here on fetchDiscoveryDocument
+  //   - TTL caching / "failure is never cached as success"
+  //                                       → rfc220-endpoint-resolution.test.ts
+  //   - "incomplete document rejected"    → SUPERSEDED by D1: partial
+  //     documents are now a legitimate per-field-merge input; the protective
+  //     intent (a broken doc must not brick logins) is carried by the
+  //     loginViable cache gate + malformed-field sanitize locks in
+  //     rfc220-endpoint-resolution.test.ts.
   const metadata = {
     issuer: ISSUER,
     authorization_endpoint: `${ISSUER}/authorize`,
@@ -326,51 +371,21 @@ describe('OIDC discovery', () => {
     jwks_uri: `${ISSUER}/jwks`,
   }
 
-  beforeEach(() => {
-    clearDiscoveryCache()
-  })
-
   test('requests the well-known document at the normalised issuer URL', async () => {
     const { fetcher, calls } = stubFetch(() => ({ body: metadata }))
     // Trailing slash must not produce a double-slash path.
-    await getProviderMetadata(`${ISSUER}/`, Date.now(), fetcher)
+    await fetchDiscoveryDocument(`${ISSUER}/`, fetcher)
     expect(calls[0]?.url).toBe(`${ISSUER}/.well-known/openid-configuration`)
   })
 
-  test('caches within the TTL and refetches after it', async () => {
-    const { fetcher, calls } = stubFetch(() => ({ body: metadata }))
-    const t0 = 10_000_000
-    await getProviderMetadata(ISSUER, t0, fetcher)
-    await getProviderMetadata(ISSUER, t0 + 60 * 60 * 1000 - 1, fetcher)
-    expect(calls.length).toBe(1)
-    await getProviderMetadata(ISSUER, t0 + 60 * 60 * 1000 + 1, fetcher)
-    expect(calls.length).toBe(2)
-  })
-
-  test('rejects an incomplete discovery document instead of caching a broken one', async () => {
-    // Missing jwks_uri would otherwise reach createRemoteJWKSet(new URL(undefined)).
-    for (const field of ['issuer', 'authorization_endpoint', 'token_endpoint', 'jwks_uri']) {
-      clearDiscoveryCache()
-      const partial: Record<string, unknown> = { ...metadata }
-      delete partial[field]
-      const { fetcher } = stubFetch(() => ({ body: partial }))
-      await expect(getProviderMetadata(ISSUER, Date.now(), fetcher)).rejects.toThrow(
-        'oidc-discovery-incomplete',
-      )
-    }
-  })
-
-  test('a failed discovery fetch is not cached as a success', async () => {
-    let status = 500
-    const { fetcher, calls } = stubFetch(() => ({ status, body: {} }))
-    await expect(getProviderMetadata(ISSUER, Date.now(), fetcher)).rejects.toThrow(
+  test('non-2xx and non-object bodies are typed failures', async () => {
+    const bad = stubFetch(() => ({ status: 500, body: {} }))
+    await expect(fetchDiscoveryDocument(ISSUER, bad.fetcher)).rejects.toThrow(
       'oidc-discovery-failed',
     )
-    status = 200
-    // Second call must go back out to the network rather than serve a poisoned
-    // cache entry.
-    const before = calls.length
-    await getProviderMetadata(ISSUER, Date.now(), stubFetch(() => ({ body: metadata })).fetcher)
-    expect(calls.length).toBe(before)
+    const arr = stubFetch(() => ({ body: [1, 2] }))
+    await expect(fetchDiscoveryDocument(ISSUER, arr.fetcher)).rejects.toThrow(
+      'oidc-discovery-not-object',
+    )
   })
 })

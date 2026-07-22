@@ -1,7 +1,9 @@
-// RFC-036 — OIDC discovery + JWKS fetcher with an in-memory LRU cache (TTL 1h
-// per design.md §5.3). Pure HTTP; no DB writes.
+// RFC-036 → RFC-220 — OIDC discovery, now a PURE fetch layer: the strict
+// 4-field `getProviderMetadata` (plus its metadata/JWKS cache) was deleted in
+// RFC-220 when the login routes moved to the per-field merge resolver
+// (auth/oidc/endpoints.ts, which owns all caching). Pure HTTP; no DB writes.
 
-import { createRemoteJWKSet, type JSONWebKeySet } from 'jose'
+import { type JSONWebKeySet } from 'jose'
 
 export interface OidcMetadata {
   issuer: string
@@ -11,33 +13,6 @@ export interface OidcMetadata {
   scopes_supported?: string[]
   userinfo_endpoint?: string
   end_session_endpoint?: string
-}
-
-interface CacheEntry {
-  metadata: OidcMetadata
-  jwks: ReturnType<typeof createRemoteJWKSet>
-  fetchedAt: number
-}
-
-const TTL_MS = 60 * 60 * 1000
-const cache = new Map<string, CacheEntry>()
-
-export function clearDiscoveryCache(): void {
-  cache.clear()
-}
-
-export async function getProviderMetadata(
-  issuerUrl: string,
-  now: number = Date.now(),
-  fetcher: typeof fetch = globalThis.fetch,
-): Promise<CacheEntry> {
-  const hit = cache.get(issuerUrl)
-  if (hit && now - hit.fetchedAt < TTL_MS) return hit
-  const metadata = await fetchDiscovery(issuerUrl, fetcher)
-  const jwks = createRemoteJWKSet(new URL(metadata.jwks_uri))
-  const entry: CacheEntry = { metadata, jwks, fetchedAt: now }
-  cache.set(issuerUrl, entry)
-  return entry
 }
 
 // RFC-220 — discovery probes must not hang a login request forever: the

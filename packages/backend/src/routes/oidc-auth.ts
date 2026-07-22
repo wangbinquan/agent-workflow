@@ -5,17 +5,29 @@
 
 import type { Context, Hono } from 'hono'
 import { loadConfig } from '@/config'
-import { getProviderMetadata } from '@/auth/oidc/discovery'
+import { resolveEndpoints } from '@/auth/oidc/endpoints'
+import { acquireIdentityClaims } from '@/auth/oidc/identity'
 import { consumeFlow, startFlow } from '@/auth/oidc/flow'
-import { exchangeCodeForTokens, verifyIdToken } from '@/auth/oidc/tokens'
+import { OidcTokenError, exchangeCodeForTokens } from '@/auth/oidc/tokens'
 import { createSession } from '@/auth/sessionStore'
 import { createOidcProvidersService } from '@/services/oidcProviders'
-import { createIdentity, findByProviderSubject } from '@/services/userIdentities'
-import { decideProvisioning, type IdTokenClaims } from '@/services/oidc/provisioning'
-import { createUser, findByUsername } from '@/services/users'
+import {
+  bindInvitedUserWithIdentity,
+  createIdentity,
+  createUserWithIdentity,
+  findByProviderSubject,
+  syncPreferredSnapshot,
+} from '@/services/userIdentities'
+import {
+  applyEmailTrust,
+  decideProvisioning,
+  type IdTokenClaims,
+} from '@/services/oidc/provisioning'
+import { findByUsername } from '@/services/users'
 import type { AppDeps } from '@/server'
 import { eq } from 'drizzle-orm'
 import { users } from '@/db/schema'
+import { DomainError } from '@/util/errors'
 import { BadRequestErrorOrFriendlyHtml, friendly } from '@/util/oidcResponse'
 
 export function mountOidcAuthRoutes(app: Hono, deps: AppDeps): void {
@@ -36,12 +48,27 @@ export function mountOidcAuthRoutes(app: Hono, deps: AppDeps): void {
     const postLoginRedirect =
       typeof body.postLoginRedirect === 'string' ? body.postLoginRedirect : undefined
     const redirectUri = resolveRedirectUri(c, provider.slug, deps)
+    // RFC-220 — discovery merged over manual fallbacks; a failure used to
+    // escape as an unhandled 500 here (behavior change #1).
+    const eff = await resolveEndpoints(provider)
+    if (!eff.authorizationEndpoint) {
+      return c.json(
+        {
+          ok: false,
+          code: 'oidc-endpoints-unresolved',
+          // message must be present: the frontend error decoder only keeps a
+          // structured code when code AND message are both strings
+          // (api/client.ts extractErrorBody).
+          message: 'identity provider endpoints could not be resolved',
+        },
+        503,
+      )
+    }
     const flow = startFlow(provider.id, {
       redirectUri,
       ...(postLoginRedirect ? { postLoginRedirect } : {}),
     })
-    const { metadata } = await getProviderMetadata(provider.issuerUrl)
-    const authorizeUrl = buildAuthorizeUrl(metadata.authorization_endpoint, {
+    const authorizeUrl = buildAuthorizeUrl(eff.authorizationEndpoint, {
       clientId: provider.clientId,
       scopes: provider.scopes,
       state: flow.state,
@@ -68,45 +95,45 @@ export function mountOidcAuthRoutes(app: Hono, deps: AppDeps): void {
     const clientSecret = await svc.resolveClientSecret(provider.id)
     if (!clientSecret) return c.html(friendly('client-secret-missing'), 500)
 
-    let metadata: Awaited<ReturnType<typeof getProviderMetadata>>['metadata']
-    let jwks: Awaited<ReturnType<typeof getProviderMetadata>>['jwks']
-    try {
-      const m = await getProviderMetadata(provider.issuerUrl)
-      metadata = m.metadata
-      jwks = m.jwks
-    } catch {
-      return c.html(friendly('discovery-failed'), 503)
-    }
+    // RFC-220 — effective endpoints: discovery merged over manual fallbacks.
+    const eff = await resolveEndpoints(provider)
+    if (!eff.tokenEndpoint) return c.html(friendly('endpoints-unresolved'), 503)
 
     let claims: IdTokenClaims
     try {
       const tokens = await exchangeCodeForTokens({
-        tokenEndpoint: metadata.token_endpoint,
+        tokenEndpoint: eff.tokenEndpoint,
         clientId: provider.clientId,
         clientSecret,
         code,
         codeVerifier: flow.codeVerifier,
         redirectUri: flow.redirectUri,
       })
-      const payload = await verifyIdToken({
-        idToken: tokens.id_token,
-        jwks,
-        issuer: metadata.issuer,
-        audience: provider.clientId,
-        nonce: flow.nonce,
-      })
-      claims = {
-        sub: String(payload.sub ?? ''),
-        email: typeof payload.email === 'string' ? payload.email : null,
-        email_verified: payload.email_verified === true,
-        name: typeof payload.name === 'string' ? payload.name : null,
-        preferred_username:
-          typeof payload.preferred_username === 'string' ? payload.preferred_username : null,
-      }
+      claims = applyEmailTrust(
+        await acquireIdentityClaims({
+          tokens,
+          effective: eff,
+          clientId: provider.clientId,
+          nonce: flow.nonce,
+          usernameClaim: provider.usernameClaim,
+          subjectClaim: provider.subjectClaim,
+        }),
+        provider.trustEmailVerified,
+      )
     } catch (err) {
-      const code = err instanceof BadRequestErrorOrFriendlyHtml ? err.code : 'verify-failed'
+      const code =
+        err instanceof BadRequestErrorOrFriendlyHtml
+          ? err.code
+          : err instanceof OidcTokenError
+            ? err.code
+            : 'verify-failed'
       return c.html(friendly(code), 400)
     }
+
+    // RFC-220 D7 — identity snapshot seed ('' = observed-but-absent sentinel);
+    // only meaningful when usernameClaim is configured.
+    const snapshotInit =
+      provider.usernameClaim !== null ? (claims.preferred_username ?? '') : null
 
     if (flow.linkUserId) {
       try {
@@ -116,8 +143,13 @@ export function mountOidcAuthRoutes(app: Hono, deps: AppDeps): void {
           subject: claims.sub,
           email: claims.email ?? null,
           emailVerified: !!claims.email_verified,
+          preferredSnapshot: snapshotInit,
+          expectedSubjectClaim: provider.subjectClaim,
         })
-      } catch {
+      } catch (err) {
+        if (isDomainCode(err, 'provider-config-changed')) {
+          return c.html(friendly('provider-config-changed'), 400)
+        }
         return c.html(friendly('identity-already-linked'), 409)
       }
       return c.redirect(flow.postLoginRedirect ?? `/account?linked=${provider.slug}`)
@@ -132,50 +164,71 @@ export function mountOidcAuthRoutes(app: Hono, deps: AppDeps): void {
       existingIdentity ? { userId: existingIdentity.userId } : null,
       invited,
     )
+    if (decision.action === 'reject') {
+      return c.html(friendly(decision.reason), 403)
+    }
 
+    const identitySeed = {
+      providerId: provider.id,
+      subject: claims.sub,
+      email: claims.email ?? null,
+      emailVerified: !!claims.email_verified,
+      preferredSnapshot: snapshotInit,
+      expectedSubjectClaim: provider.subjectClaim,
+    }
     let userId: string
-    switch (decision.action) {
-      case 'login':
-        userId = decision.userId
-        break
-      case 'create': {
-        const created = await createUser(deps.db, {
-          username: await pickUniqueUsername(deps, claims),
-          displayName: claims.name ?? claims.email ?? 'OIDC User',
-          email: claims.email ?? undefined,
-          role: 'user',
-          // OIDC auto-provisioning: the IdP verified the identity, so the
-          // user lands as `active` immediately. Without this override
-          // createUser would default to `invited` (password is null) and
-          // every subsequent /api/auth/me call would 401.
-          status: 'active',
-        })
-        await createIdentity(deps.db, {
-          userId: created.id,
-          providerId: provider.id,
-          subject: claims.sub,
-          email: claims.email ?? null,
-          emailVerified: !!claims.email_verified,
-        })
-        userId = created.id
-        break
+    try {
+      switch (decision.action) {
+        case 'login':
+          userId = decision.userId
+          // RFC-220 D7 — presented-name follow + email_verified sync for the
+          // existing identity (three-way snapshot merge, design §5.3).
+          syncPreferredSnapshot(deps.db, {
+            providerId: provider.id,
+            subject: claims.sub,
+            userId,
+            composed: provider.usernameClaim !== null ? (claims.preferred_username ?? null) : null,
+            emailVerified: !!claims.email_verified,
+            usernameClaimConfigured: provider.usernameClaim !== null,
+          })
+          break
+        case 'create': {
+          // OIDC auto-provisioning: the IdP verified the identity, so the user
+          // lands as `active` immediately. User row + identity row commit in
+          // ONE transaction — a subjectClaim race must roll back both instead
+          // of leaving an identity-less active account (design §6.2).
+          const created = await createUserWithIdentity(deps.db, {
+            username: await pickUniqueUsername(deps, claims),
+            displayName:
+              (provider.usernameClaim !== null ? claims.preferred_username : null) ??
+              claims.name ??
+              claims.email ??
+              'OIDC User',
+            email: claims.email ?? null,
+            identity: identitySeed,
+          })
+          userId = created.userId
+          break
+        }
+        case 'bindInvited':
+          await bindInvitedUserWithIdentity(deps.db, {
+            userId: decision.userId,
+            identity: identitySeed,
+          })
+          userId = decision.userId
+          break
       }
-      case 'bindInvited':
-        await deps.db
-          .update(users)
-          .set({ status: 'active', updatedAt: Date.now() })
-          .where(eq(users.id, decision.userId))
-        await createIdentity(deps.db, {
-          userId: decision.userId,
-          providerId: provider.id,
-          subject: claims.sub,
-          email: claims.email ?? null,
-          emailVerified: !!claims.email_verified,
-        })
-        userId = decision.userId
-        break
-      case 'reject':
-        return c.html(friendly(decision.reason), 403)
+    } catch (err) {
+      // The write-time subjectClaim recheck throws AFTER the claims try/catch;
+      // without this second net it would surface as a JSON 500 instead of the
+      // promised friendly page (design §6.2).
+      if (isDomainCode(err, 'provider-config-changed')) {
+        return c.html(friendly('provider-config-changed'), 400)
+      }
+      if (isDomainCode(err, 'identity-already-linked')) {
+        return c.html(friendly('identity-already-linked'), 409)
+      }
+      throw err
     }
 
     const { token } = await createSession({ db: deps.db, userId })
@@ -191,6 +244,10 @@ async function safeJson(req: Request): Promise<unknown> {
   } catch {
     return {}
   }
+}
+
+function isDomainCode(err: unknown, code: string): boolean {
+  return err instanceof DomainError && err.code === code
 }
 
 function resolveRedirectUri(c: Context, slug: string, deps: AppDeps): string {
