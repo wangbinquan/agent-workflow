@@ -58,6 +58,19 @@
 - 视觉自查(与 /settings 其它 tab 对齐;复用公共原语零新 chrome)。
 - 测试:S2(probe 锁迁移)/ S10。
 
+## RFC-220-T6 D8 userinfo 请求方式(交付后追加,2026-07-22)
+
+- shared `UserinfoRequestStyleSchema` + Provider 字段;migration 0109
+  (`userinfo_request_style` NOT NULL DEFAULT 'get_bearer');upgrade-rolling
+  108→109。
+- tokens.fetchUserinfo 双风格(post_json:POST/JSON 三成员/无鉴权头)+
+  identity/callback 透传 provider.scopes。
+- 前端手动端点组 `<Segmented>` 两选项 + i18n;shared fixture 补字段。
+- 测试:S5 扩 POST 断言(方法/头/三成员精确)、S1/S2 枚举 roundtrip、S9 0109 列、
+  S8 假 IdP 仅收 POST 的全链、前端 segmented 默认/切换/回填。
+- (D9)fetchUserinfo 识别 200 错误对象(非空 error/非零 errorCode → fetch-failed
+  携带 IdP 错误串;零值成功包装不误伤),S5 双向锁。
+
 ## RFC-220-T5 收尾
 
 - `bun run typecheck && bun run lint && bun run test && bun run format:check` +
@@ -83,6 +96,7 @@
 - [x] AC-8 迁移与兼容(T1/T5;S9 两表 8 列逐列断言 + 全量后端套件)
 - [x] AC-9 身份字段选择器(T1/T3/T4;S12/S13,大数拒绝 + 同值异型语义锁)
 - [x] AC-10 呈现名刷新(T1/T3;S14 三态/哨兵/存量保护/dbTxSync 原子)
+- [x] AC-11 userinfo 请求方式 D8(T6;S1/S2/S5/S8/S9/S10 扩)
 
 ## 交付记录(2026-07-22)
 

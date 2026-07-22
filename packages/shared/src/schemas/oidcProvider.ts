@@ -7,6 +7,14 @@ import { z } from 'zod'
 export const ProvisioningSchema = z.enum(['auto', 'allowlist', 'invite'])
 export type ProvisioningPolicy = z.infer<typeof ProvisioningSchema>
 
+// RFC-220 D8 — how the userinfo endpoint is invoked:
+//   get_bearer — standard OIDC: GET + `Authorization: Bearer` (default).
+//   post_json  — non-standard platform style: POST with a JSON body of exactly
+//                { client_id, access_token, scope } and NO Authorization
+//                header (scope = the provider's configured scopes verbatim).
+export const UserinfoRequestStyleSchema = z.enum(['get_bearer', 'post_json'])
+export type UserinfoRequestStyle = z.infer<typeof UserinfoRequestStyleSchema>
+
 export const PROVIDER_SLUG_REGEX = /^[a-z0-9][a-z0-9-]{0,63}$/
 export const EMAIL_DOMAIN_REGEX = /^@[a-z0-9.-]+$/i
 
@@ -55,6 +63,7 @@ export const OidcProviderSchema = z.object({
   authorizationEndpoint: HttpUrlSchema.nullable(),
   tokenEndpoint: HttpUrlSchema.nullable(),
   userinfoEndpoint: HttpUrlSchema.nullable(),
+  userinfoRequestStyle: UserinfoRequestStyleSchema,
   jwksUri: HttpUrlSchema.nullable(),
   trustEmailVerified: z.boolean(),
   usernameClaim: ClaimNameListSchema.nullable(),
@@ -85,6 +94,7 @@ export const CreateOidcProviderBodySchema = OidcProviderSchema.omit({
   authorizationEndpoint: HttpUrlSchema.nullable().optional(),
   tokenEndpoint: HttpUrlSchema.nullable().optional(),
   userinfoEndpoint: HttpUrlSchema.nullable().optional(),
+  userinfoRequestStyle: UserinfoRequestStyleSchema.optional(),
   jwksUri: HttpUrlSchema.nullable().optional(),
   trustEmailVerified: z.boolean().optional(),
   usernameClaim: ClaimNameListSchema.nullable().optional(),

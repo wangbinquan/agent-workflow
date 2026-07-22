@@ -60,6 +60,7 @@ const FULL_ROW = {
   authorizationEndpoint: 'https://idp.example.test/oauth/authorize',
   tokenEndpoint: 'https://idp.example.test/oauth/token',
   userinfoEndpoint: 'https://idp.example.test/api/user',
+  userinfoRequestStyle: 'post_json' as const,
   jwksUri: null,
   trustEmailVerified: true,
   usernameClaim: 'login sig',
@@ -148,6 +149,43 @@ describe('RFC-220 S10 — provider dialog fields', () => {
     expect(body.usernameClaim).toBeNull()
     expect(body.subjectClaim).toBe('id')
     expect(body.trustEmailVerified).toBe(false)
+    expect(body.userinfoRequestStyle).toBe('get_bearer') // untouched default
+  })
+
+  test('D8: userinfo request style segmented — default, switch, and edit回填', async () => {
+    renderAuthentication([])
+    ;(api.post as ReturnType<typeof vi.fn>).mockResolvedValue({})
+    fireEvent.click(await screen.findByTestId('oidc-add-provider'))
+    await screen.findByRole('dialog')
+    // default = standard GET+Bearer
+    expect(screen.getByTestId('oidc-userinfo-style-get_bearer').getAttribute('aria-checked')).toBe(
+      'true',
+    )
+    fireEvent.change(screen.getByPlaceholderText('github-enterprise'), { target: { value: 'p' } })
+    fireEvent.change(screen.getByPlaceholderText('GitHub Enterprise'), { target: { value: 'P' } })
+    fireEvent.change(screen.getByPlaceholderText('https://github.corp.com'), {
+      target: { value: 'https://idp.example.test' },
+    })
+    const [clientIdInput] = screen
+      .getAllByRole('textbox')
+      .filter((el) => (el as HTMLInputElement).required && (el as HTMLInputElement).value === '')
+    fireEvent.change(clientIdInput!, { target: { value: 'c' } })
+    fireEvent.change(document.querySelector('input[type="password"]')!, {
+      target: { value: 's' },
+    })
+    fireEvent.click(screen.getByTestId('oidc-userinfo-style-post_json'))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1))
+    const body = (api.post as ReturnType<typeof vi.fn>).mock.calls[0]![1] as Record<string, unknown>
+    expect(body.userinfoRequestStyle).toBe('post_json')
+    cleanup()
+    // edit回填 from the row value
+    renderAuthentication([FULL_ROW])
+    fireEvent.click(await screen.findByTestId('oidc-edit-p1'))
+    await screen.findByRole('dialog')
+    expect(screen.getByTestId('oidc-userinfo-style-post_json').getAttribute('aria-checked')).toBe(
+      'true',
+    )
   })
 
   test('edit: new fields回填 from the row and PATCH carries the edits', async () => {

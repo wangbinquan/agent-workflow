@@ -52,6 +52,23 @@ const idp = Bun.serve({
       }
       return Response.json(idpState.userinfoBody)
     }
+    if (url.pathname === '/api/user-post') {
+      // D8 platform-style endpoint: ONLY a JSON-body POST with the exact
+      // three members works — GET/Bearer would prove the wrong wiring.
+      if (req.method !== 'POST') return new Response('method', { status: 405 })
+      if (req.headers.get('authorization') !== null) {
+        return Response.json({ error: 'unexpected auth header' }, { status: 400 })
+      }
+      const body = (await req.json()) as Record<string, unknown>
+      if (
+        body.client_id !== 'client-1' ||
+        body.access_token !== 'at-1' ||
+        body.scope !== 'read:user'
+      ) {
+        return Response.json({ error: 'bad body' }, { status: 400 })
+      }
+      return Response.json(idpState.userinfoBody)
+    }
     return new Response('not found', { status: 404 })
   },
 })
@@ -207,6 +224,20 @@ describe('RFC-220 S8 — route-level OAuth-only chain', () => {
     const humans = await h.db.select().from(users).where(ne(users.id, SYSTEM_USER_ID))
     expect(humans.length).toBe(0)
     expect((await h.db.select().from(userIdentities)).length).toBe(0)
+  })
+
+  test('D8 post_json userinfo: full chain against an IdP that ONLY accepts the JSON-body POST', async () => {
+    const h = await buildHarness({
+      userinfoEndpoint: `${IDP}/api/user-post`,
+      userinfoRequestStyle: 'post_json',
+    })
+    idpState.userinfoBody = { id: 77, login: 'poster' }
+    const { state } = await startLogin(h)
+    const res = await h.app.request(`/api/auth/oidc/pure/callback?code=abc&state=${state}`)
+    expect(res.status).toBe(302)
+    const identities = await h.db.select().from(userIdentities)
+    expect(identities.length).toBe(1)
+    expect(identities[0]!.subject).toBe('77')
   })
 
   test('no userinfo configured (subjectClaim mode) → 400 userinfo-unavailable page', async () => {

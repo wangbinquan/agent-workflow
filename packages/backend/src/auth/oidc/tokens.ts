@@ -107,6 +107,16 @@ const USERINFO_MAX_BODY_BYTES = 256 * 1024
 export interface FetchUserinfoInput {
   userinfoEndpoint: string
   accessToken: string
+  /**
+   * RFC-220 D8 — invocation style. 'get_bearer' (default) is standard OIDC.
+   * 'post_json' sends POST with a JSON body of exactly
+   * { client_id, access_token, scope } and NO Authorization header —
+   * clientId/scope are required in that mode (scope = the provider's
+   * configured scopes verbatim, user decision 2026-07-22).
+   */
+  requestStyle?: 'get_bearer' | 'post_json'
+  clientId?: string
+  scope?: string
   fetcher?: typeof fetch
 }
 
@@ -117,16 +127,32 @@ export interface FetchUserinfoInput {
  */
 export async function fetchUserinfo(input: FetchUserinfoInput): Promise<unknown> {
   const fetcher = input.fetcher ?? globalThis.fetch
+  const request: RequestInit =
+    input.requestStyle === 'post_json'
+      ? {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            accept: 'application/json',
+          },
+          body: JSON.stringify({
+            client_id: input.clientId ?? '',
+            access_token: input.accessToken,
+            scope: input.scope ?? '',
+          }),
+          signal: AbortSignal.timeout(USERINFO_TIMEOUT_MS),
+        }
+      : {
+          method: 'GET',
+          headers: {
+            authorization: `Bearer ${input.accessToken}`,
+            accept: 'application/json',
+          },
+          signal: AbortSignal.timeout(USERINFO_TIMEOUT_MS),
+        }
   let res: Response
   try {
-    res = await fetcher(input.userinfoEndpoint, {
-      method: 'GET',
-      headers: {
-        authorization: `Bearer ${input.accessToken}`,
-        accept: 'application/json',
-      },
-      signal: AbortSignal.timeout(USERINFO_TIMEOUT_MS),
-    })
+    res = await fetcher(input.userinfoEndpoint, request)
   } catch (err) {
     throw new OidcTokenError(
       `userinfo-fetch-failed transport: ${err instanceof Error ? err.message : String(err)}`,
@@ -147,7 +173,38 @@ export async function fetchUserinfo(input: FetchUserinfoInput): Promise<unknown>
   if (typeof json !== 'object' || json === null || Array.isArray(json)) {
     throw new OidcTokenError('userinfo-shape-invalid', 'userinfo-shape-invalid')
   }
+  // RFC-220 D9 — a 200 whose body is an ERROR object ({ error: ... } /
+  // { errorCode: ... }) must fail here carrying the IdP's own message, not
+  // stumble into claims extraction and surface as a confusing
+  // missing-subject shape error.
+  const idpError = idpErrorOf(json as Record<string, unknown>)
+  if (idpError !== null) {
+    throw new OidcTokenError(`userinfo-fetch-failed idp-error ${idpError}`, 'userinfo-fetch-failed')
+  }
   return json
+}
+
+/**
+ * RFC-220 D9 — detect an in-band error object. Zero/empty values are NOT
+ * errors: plenty of platform APIs wrap success as `{ errorCode: 0, ... }` or
+ * carry `error: null`, and treating those as failures would brick every
+ * login on such IdPs.
+ */
+function idpErrorOf(obj: Record<string, unknown>): string | null {
+  let found: string | null = null
+  for (const key of ['error', 'errorCode'] as const) {
+    if (!Object.prototype.hasOwnProperty.call(obj, key)) continue
+    const value = obj[key]
+    if (typeof value === 'string' && value.length > 0) found = `${key}=${value}`
+    else if (typeof value === 'number' && value !== 0) found = `${key}=${value}`
+    if (found !== null) break
+  }
+  if (found === null) return null
+  for (const descKey of ['error_description', 'errorMessage', 'message'] as const) {
+    const desc = obj[descKey]
+    if (typeof desc === 'string' && desc.length > 0) return `${found}: ${desc}`
+  }
+  return found
 }
 
 async function readBodyCapped(res: Response, maxBytes: number): Promise<string> {

@@ -117,6 +117,8 @@ export function mountOidcAuthRoutes(app: Hono, deps: AppDeps): void {
           nonce: flow.nonce,
           usernameClaim: provider.usernameClaim,
           subjectClaim: provider.subjectClaim,
+          userinfoRequestStyle: provider.userinfoRequestStyle,
+          scopes: provider.scopes,
         }),
         provider.trustEmailVerified,
       )

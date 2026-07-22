@@ -821,6 +821,10 @@ export interface Resources {
       authorizationEndpoint: string
       tokenEndpoint: string
       userinfoEndpoint: string
+      userinfoRequestStyle: string
+      userinfoRequestStyleHint: string
+      userinfoStyleGet: string
+      userinfoStylePost: string
       jwksUri: string
       groupCreds: string
       groupCredsHint: string
@@ -4451,6 +4455,11 @@ export const zhCN: Resources = {
       authorizationEndpoint: '授权端点',
       tokenEndpoint: 'Token 端点',
       userinfoEndpoint: 'Userinfo 端点',
+      userinfoRequestStyle: 'Userinfo 请求方式',
+      userinfoRequestStyleHint:
+        '标准：GET + Authorization: Bearer 头。POST JSON：POST 请求、JSON body 含 { client_id, access_token, scope } 三成员且不带鉴权头——用于 userinfo 接口非标准的平台。',
+      userinfoStyleGet: 'GET + Bearer',
+      userinfoStylePost: 'POST JSON',
       jwksUri: 'JWKS URI',
       groupCreds: '凭据',
       groupCredsHint:

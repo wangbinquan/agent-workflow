@@ -79,6 +79,7 @@ export function createOidcProvidersService(deps: {
       authorizationEndpoint: row.authorizationEndpoint ?? null,
       tokenEndpoint: row.tokenEndpoint ?? null,
       userinfoEndpoint: row.userinfoEndpoint ?? null,
+      userinfoRequestStyle: row.userinfoRequestStyle,
       jwksUri: row.jwksUri ?? null,
       trustEmailVerified: row.trustEmailVerified,
       usernameClaim: row.usernameClaim ?? null,
@@ -135,6 +136,7 @@ export function createOidcProvidersService(deps: {
         authorizationEndpoint: body.authorizationEndpoint ?? null,
         tokenEndpoint: body.tokenEndpoint ?? null,
         userinfoEndpoint: body.userinfoEndpoint ?? null,
+        userinfoRequestStyle: body.userinfoRequestStyle ?? 'get_bearer',
         jwksUri: body.jwksUri ?? null,
         trustEmailVerified: body.trustEmailVerified ?? false,
         usernameClaim: body.usernameClaim ?? null,
@@ -169,6 +171,9 @@ export function createOidcProvidersService(deps: {
       }
       if (body.tokenEndpoint !== undefined) updates.tokenEndpoint = body.tokenEndpoint
       if (body.userinfoEndpoint !== undefined) updates.userinfoEndpoint = body.userinfoEndpoint
+      if (body.userinfoRequestStyle !== undefined) {
+        updates.userinfoRequestStyle = body.userinfoRequestStyle
+      }
       if (body.jwksUri !== undefined) updates.jwksUri = body.jwksUri
       if (body.trustEmailVerified !== undefined)
         updates.trustEmailVerified = body.trustEmailVerified

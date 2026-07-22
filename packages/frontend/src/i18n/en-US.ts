@@ -690,6 +690,11 @@ export const enUS: Resources = {
       authorizationEndpoint: 'Authorization endpoint',
       tokenEndpoint: 'Token endpoint',
       userinfoEndpoint: 'Userinfo endpoint',
+      userinfoRequestStyle: 'Userinfo request style',
+      userinfoRequestStyleHint:
+        'Standard: GET with an Authorization: Bearer header. POST JSON: POST with a JSON body of { client_id, access_token, scope } and no auth header — for platforms with a non-standard userinfo API.',
+      userinfoStyleGet: 'GET + Bearer',
+      userinfoStylePost: 'POST JSON',
       jwksUri: 'JWKS URI',
       groupCreds: 'Credentials',
       groupCredsHint:

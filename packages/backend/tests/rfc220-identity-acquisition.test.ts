@@ -393,6 +393,43 @@ describe('RFC-220 acquireIdentityClaims matrix (D4/D6)', () => {
     expect(seen!.accept).toBe('application/json')
   })
 
+  test('D8 post_json style: POST + JSON body of exactly {client_id, access_token, scope}, NO auth header', async () => {
+    let seen: {
+      method: string | undefined
+      contentType: string | null
+      auth: string | null
+      body: unknown
+    } | null = null
+    const fetcher = (async (_input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      const headers = new Headers(init?.headers)
+      seen = {
+        method: init?.method,
+        contentType: headers.get('content-type'),
+        auth: headers.get('authorization'),
+        body: JSON.parse(String(init?.body)),
+      }
+      return new Response(JSON.stringify({ sub: 'ui-1' }), { status: 200 })
+    }) as unknown as typeof fetch
+    const claims = await acquireIdentityClaims({
+      tokens: { access_token: 'the-token' },
+      effective: effective({ userinfoEndpoint: `${ISSUER}/me` }),
+      clientId: 'client-9',
+      nonce: NONCE,
+      userinfoRequestStyle: 'post_json',
+      scopes: 'read:user profile',
+      fetcher,
+    })
+    expect(claims.sub).toBe('ui-1')
+    expect(seen!.method).toBe('POST')
+    expect(seen!.contentType).toBe('application/json')
+    expect(seen!.auth).toBeNull() // pure body, no Authorization header (user decision)
+    expect(seen!.body).toEqual({
+      client_id: 'client-9',
+      access_token: 'the-token',
+      scope: 'read:user profile', // provider.scopes verbatim (user decision)
+    })
+  })
+
   test('userinfo 401 → userinfo-fetch-failed', async () => {
     await expectTokenError(
       acquireIdentityClaims({
@@ -404,6 +441,50 @@ describe('RFC-220 acquireIdentityClaims matrix (D4/D6)', () => {
       }),
       'userinfo-fetch-failed',
     )
+  })
+
+  test('D9: a 200 error OBJECT fails as fetch error with the IdP message, not shape-invalid', async () => {
+    const err = await acquireIdentityClaims({
+      tokens: { access_token: 'at' },
+      effective: effective({ userinfoEndpoint: `${ISSUER}/me` }),
+      clientId: AUDIENCE,
+      nonce: NONCE,
+      fetcher: userinfoFetcher({ error: 'invalid_token', error_description: 'token expired' }),
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(OidcTokenError)
+    expect((err as OidcTokenError).code).toBe('userinfo-fetch-failed')
+    expect((err as OidcTokenError).message).toContain('error=invalid_token')
+    expect((err as OidcTokenError).message).toContain('token expired')
+
+    const numeric = await acquireIdentityClaims({
+      tokens: { access_token: 'at' },
+      effective: effective({ userinfoEndpoint: `${ISSUER}/me` }),
+      clientId: AUDIENCE,
+      nonce: NONCE,
+      fetcher: userinfoFetcher({ errorCode: 40003, errorMessage: 'bad token' }),
+    }).catch((e: unknown) => e)
+    expect(numeric).toBeInstanceOf(OidcTokenError)
+    expect((numeric as OidcTokenError).code).toBe('userinfo-fetch-failed')
+    expect((numeric as OidcTokenError).message).toContain('errorCode=40003')
+  })
+
+  test('D9: zero/empty error markers are success wrappers, claims extraction proceeds', async () => {
+    // { errorCode: 0, ... } / { error: null, ... } / { error: '', ... } are
+    // common platform SUCCESS shapes — they must not brick the login.
+    for (const body of [
+      { errorCode: 0, sub: 'ui-1' },
+      { error: null, sub: 'ui-1' },
+      { error: '', sub: 'ui-1' },
+    ]) {
+      const claims = await acquireIdentityClaims({
+        tokens: { access_token: 'at' },
+        effective: effective({ userinfoEndpoint: `${ISSUER}/me` }),
+        clientId: AUDIENCE,
+        nonce: NONCE,
+        fetcher: userinfoFetcher(body),
+      })
+      expect(claims.sub).toBe('ui-1')
+    }
   })
 
   test('userinfo non-JSON body (signed userinfo) → userinfo-shape-invalid', async () => {

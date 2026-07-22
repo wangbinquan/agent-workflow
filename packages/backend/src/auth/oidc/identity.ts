@@ -137,6 +137,10 @@ export interface AcquireIdentityInput {
   nonce: string
   usernameClaim?: string | null
   subjectClaim?: string | null
+  /** RFC-220 D8 — userinfo invocation style + the scope string the post_json
+   * body carries (provider.scopes verbatim). */
+  userinfoRequestStyle?: 'get_bearer' | 'post_json'
+  scopes?: string
   fetcher?: typeof fetch
   /** Test injection; production default = getJwksInstance(effective.jwksUri). */
   jwks?: VerifyIdTokenInput['jwks']
@@ -164,6 +168,9 @@ export async function acquireIdentityClaims(input: AcquireIdentityInput): Promis
     const raw = await fetchUserinfo({
       userinfoEndpoint: effective.userinfoEndpoint,
       accessToken: tokens.access_token,
+      requestStyle: input.userinfoRequestStyle ?? 'get_bearer',
+      clientId: input.clientId,
+      ...(input.scopes !== undefined ? { scope: input.scopes } : {}),
       ...(input.fetcher ? { fetcher: input.fetcher } : {}),
     })
     return extractUserinfoClaims(raw, { subjectClaim, usernameClaim })

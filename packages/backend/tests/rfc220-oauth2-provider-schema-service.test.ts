@@ -135,6 +135,13 @@ describe('RFC-220 S1 — CreateOidcProviderBodySchema field validation', () => {
     expect(parse({ subjectClaim: '' }).success).toBe(false)
   })
 
+  test('D8 userinfoRequestStyle: enum only, optional on the wire', () => {
+    expect(parse({ userinfoRequestStyle: 'get_bearer' }).success).toBe(true)
+    expect(parse({ userinfoRequestStyle: 'post_json' }).success).toBe(true)
+    expect(parse({ userinfoRequestStyle: 'form_post' }).success).toBe(false)
+    expect(parse({ userinfoRequestStyle: null }).success).toBe(false)
+  })
+
   test('usernameClaim: space-separated list grammar (D7)', () => {
     expect(parse({ usernameClaim: 'preferred_username' }).success).toBe(true)
     expect(parse({ usernameClaim: 'name signature' }).success).toBe(true)
@@ -162,6 +169,7 @@ describe('RFC-220 S2 — provider service', () => {
 
   test('create defaults new fields to null/false when omitted', async () => {
     const p = await h.svc.create(BASE)
+    expect(p.userinfoRequestStyle).toBe('get_bearer')
     expect(p.authorizationEndpoint).toBeNull()
     expect(p.tokenEndpoint).toBeNull()
     expect(p.userinfoEndpoint).toBeNull()
@@ -184,6 +192,16 @@ describe('RFC-220 S2 — provider service', () => {
     expect(redacted.userinfoEndpoint).toBe(MANUAL.userinfoEndpoint)
     expect(redacted.subjectClaim).toBe(MANUAL.subjectClaim)
     expect(redacted.clientSecret).toBe('***')
+  })
+
+  test('D8 userinfoRequestStyle roundtrips through create and patch', async () => {
+    const p = await h.svc.create({ ...BASE, userinfoRequestStyle: 'post_json' })
+    expect(p.userinfoRequestStyle).toBe('post_json')
+    const back = await h.svc.patch(p.id, { userinfoRequestStyle: 'get_bearer' })
+    expect(back.userinfoRequestStyle).toBe('get_bearer')
+    // untouched by unrelated patches
+    const after = await h.svc.patch(p.id, { displayName: 'renamed' })
+    expect(after.userinfoRequestStyle).toBe('get_bearer')
   })
 
   test('patch sets, keeps, and null-clears the new fields', async () => {
@@ -270,6 +288,11 @@ describe('RFC-220 S9 — migration columns', () => {
     expect(trust).toBeDefined()
     expect(trust!.notnull).toBe(1)
     expect(String(trust!.dflt_value)).toBe('false')
+    // 0109 (D8): userinfo_request_style NOT NULL DEFAULT 'get_bearer'
+    const style = byName.get('userinfo_request_style')
+    expect(style).toBeDefined()
+    expect(style!.notnull).toBe(1)
+    expect(String(style!.dflt_value)).toBe("'get_bearer'")
   })
 
   test('user_identities gained nullable preferred_snapshot with no default', () => {

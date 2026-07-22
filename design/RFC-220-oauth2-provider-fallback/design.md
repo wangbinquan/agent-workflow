@@ -311,6 +311,17 @@ export async function fetchUserinfo(input: {
 - 非 2xx → `OidcTokenError('userinfo-fetch-failed status=N', 'userinfo-fetch-failed')`。
 - body 非 JSON / 非普通对象(含 signed userinfo 的 application/jwt 文本)→
   `OidcTokenError('userinfo-shape-invalid', 'userinfo-shape-invalid')`。
+- **请求方式(D8,交付后追加)**:input 增 `requestStyle`(`get_bearer` 默认 /
+  `post_json`)与 `clientId`/`scope`。`post_json` = POST + `content-type:
+  application/json` + body 恰好三成员 `{ client_id, access_token, scope }`,
+  **不带** Authorization 头;`scope` 取 provider.scopes 原样(用户两拍板,
+  2026-07-22)。对应 Provider 新列 `userinfo_request_style`(migration 0109,
+  NOT NULL DEFAULT 'get_bearer')、shared 枚举 `UserinfoRequestStyleSchema`、
+  前端手动端点组 `<Segmented>`;acquire 经 `userinfoRequestStyle`/`scopes` 透传。
+- **200 错误对象识别(D9,交付后追加)**:body 为合法 JSON 对象但携带非空
+  `error` / 非零 `errorCode` → 直接抛 `userinfo-fetch-failed idp-error …`
+  (附 description 类字段),不进提取层;零值/空串/null 是平台成功包装
+  (`{errorCode:0,…}`),照常提取。S5 双向锁。
 - **claims 提取不在本模块**(设计门 P1 模块环勘正:提取要用 D5 的
   `readUsernameField`,若放 tokens.ts 则 tokens ⇄ identity 互引成环,踩
   no-circular 仓规)。`extractUserinfoClaims` 定义在 `identity.ts`(§5.2),

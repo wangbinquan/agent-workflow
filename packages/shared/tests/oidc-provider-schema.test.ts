@@ -100,6 +100,7 @@ describe('OidcProviderPublicSchema', () => {
       authorizationEndpoint: 'https://github.com/login/oauth/authorize',
       tokenEndpoint: null,
       userinfoEndpoint: null,
+      userinfoRequestStyle: 'get_bearer',
       jwksUri: null,
       trustEmailVerified: false,
       usernameClaim: 'login',

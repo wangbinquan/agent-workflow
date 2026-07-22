@@ -1755,6 +1755,13 @@ export const oidcProviders = sqliteTable(
     authorizationEndpoint: text('authorization_endpoint'),
     tokenEndpoint: text('token_endpoint'),
     userinfoEndpoint: text('userinfo_endpoint'),
+    // RFC-220 D8 — how userinfo is invoked: standard GET+Bearer, or the
+    // non-standard POST { client_id, access_token, scope } JSON body.
+    userinfoRequestStyle: text('userinfo_request_style', {
+      enum: ['get_bearer', 'post_json'],
+    })
+      .notNull()
+      .default('get_bearer'),
     jwksUri: text('jwks_uri'),
     trustEmailVerified: integer('trust_email_verified', { mode: 'boolean' })
       .notNull()

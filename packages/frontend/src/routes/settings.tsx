@@ -36,6 +36,7 @@ import {
 import { ConfirmButton } from '@/components/ConfirmButton'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { Dialog } from '@/components/Dialog'
+import { Segmented } from '@/components/Segmented'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { Field, NumberInput, Switch, TextInput } from '@/components/Form'
@@ -1722,6 +1723,7 @@ interface OidcProviderRow {
   authorizationEndpoint: string | null
   tokenEndpoint: string | null
   userinfoEndpoint: string | null
+  userinfoRequestStyle: 'get_bearer' | 'post_json'
   jwksUri: string | null
   trustEmailVerified: boolean
   usernameClaim: string | null
@@ -1777,6 +1779,9 @@ function OidcProviderDialog(props: {
   )
   const [tokenEndpoint, setTokenEndpoint] = useState(initial?.tokenEndpoint ?? '')
   const [userinfoEndpoint, setUserinfoEndpoint] = useState(initial?.userinfoEndpoint ?? '')
+  const [userinfoRequestStyle, setUserinfoRequestStyle] = useState<'get_bearer' | 'post_json'>(
+    initial?.userinfoRequestStyle ?? 'get_bearer',
+  )
   const [jwksUri, setJwksUri] = useState(initial?.jwksUri ?? '')
   const [trustEmailVerified, setTrustEmailVerified] = useState(initial?.trustEmailVerified ?? false)
   const [usernameClaim, setUsernameClaim] = useState(initial?.usernameClaim ?? '')
@@ -1840,6 +1845,7 @@ function OidcProviderDialog(props: {
         authorizationEndpoint: blankToNull(authorizationEndpoint),
         tokenEndpoint: blankToNull(tokenEndpoint),
         userinfoEndpoint: blankToNull(userinfoEndpoint),
+        userinfoRequestStyle,
         jwksUri: blankToNull(jwksUri),
         trustEmailVerified,
         usernameClaim: blankToNull(usernameClaim),
@@ -2023,6 +2029,35 @@ function OidcProviderDialog(props: {
               />
             </Field>
           </div>
+          <Field
+            label={t('settings.auth.userinfoRequestStyle', {
+              defaultValue: 'Userinfo request style',
+            })}
+            labelId="oidc-userinfo-style-label"
+            hint={t('settings.auth.userinfoRequestStyleHint', {
+              defaultValue:
+                'Standard: GET with an Authorization: Bearer header. POST JSON: POST with a JSON body of { client_id, access_token, scope } and no auth header — for platforms with a non-standard userinfo API.',
+            })}
+          >
+            <Segmented<'get_bearer' | 'post_json'>
+              value={userinfoRequestStyle}
+              onChange={setUserinfoRequestStyle}
+              ariaLabel={t('settings.auth.userinfoRequestStyle', {
+                defaultValue: 'Userinfo request style',
+              })}
+              testidPrefix="oidc-userinfo-style"
+              options={[
+                {
+                  value: 'get_bearer',
+                  label: t('settings.auth.userinfoStyleGet', { defaultValue: 'GET + Bearer' }),
+                },
+                {
+                  value: 'post_json',
+                  label: t('settings.auth.userinfoStylePost', { defaultValue: 'POST JSON' }),
+                },
+              ]}
+            />
+          </Field>
         </fieldset>
 
         <fieldset className="oidc-form__group">
