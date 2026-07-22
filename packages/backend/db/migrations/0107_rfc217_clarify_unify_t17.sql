@@ -19,12 +19,15 @@
 --      (design-gate P2: the node/shard toggle cannot express "this old round
 --      was answered with stop"; dropping it would let a later 'continue'
 --      revive designer rows from stopped rounds).
+-- Codex impl-gate P2-1: `answered_by` is deliberately NOT in this SET — the
+-- pre-T7 repair paths that created the divergence only maintained the legacy
+-- lifecycle fields (answered_by stayed NULL there), while the unified row's
+-- answered_by is real RFC-099 attribution that must survive the reconcile.
 UPDATE `clarify_rounds`
 SET
 	`status` = (SELECT s.`status` FROM `clarify_sessions` s WHERE s.`id` = `clarify_rounds`.`id`),
 	`answers_json` = (SELECT s.`answers_json` FROM `clarify_sessions` s WHERE s.`id` = `clarify_rounds`.`id`),
 	`answered_at` = (SELECT s.`answered_at` FROM `clarify_sessions` s WHERE s.`id` = `clarify_rounds`.`id`),
-	`answered_by` = (SELECT s.`answered_by` FROM `clarify_sessions` s WHERE s.`id` = `clarify_rounds`.`id`),
 	`directive` = (SELECT s.`directive` FROM `clarify_sessions` s WHERE s.`id` = `clarify_rounds`.`id`)
 WHERE `kind` = 'self'
 	AND EXISTS (
@@ -145,6 +148,10 @@ WHERE c.`directive` = 'stop'
 		SELECT 1 FROM `task_node_clarify_directives` d
 		WHERE d.`task_id` = c.`task_id`
 			AND d.`node_id` = c.`source_questioner_node_id`
+			-- Codex impl-gate P2-2: only the GLOBAL row counts as coverage —
+			-- resolveCrossNodeStopped reads shard-less (node-level); a
+			-- shard-scoped row must not suppress the global stop backfill.
+			AND d.`shard_key` = ''
 	);
 --> statement-breakpoint
 DROP TABLE `clarify_sessions`;

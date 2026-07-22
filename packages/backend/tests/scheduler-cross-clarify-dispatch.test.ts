@@ -864,3 +864,28 @@ describe('RFC-056 A16 — cross-clarify questioner inline session resume', () =>
     expect(rerun.argv[rerun.argv.indexOf('--session') + 1]).toBe('opc_Q0')
   })
 })
+
+describe('RFC-217 T9 跟修（Codex impl-gate P2-3）— 调度器尊重短路裁决', () => {
+  // 竞态：外层 stopped 读取之后、dispatchCrossClarifyNode 内部复读之前，用户把
+  // questioner 的 directive 从 stop 翻回 continue → helper 返回 'awaiting'，
+  // 新 mint 的行停在 pending。调度器若无视裁决仍广播 done + 返回
+  // persistent-stop，客户端与持久态就此分叉、pending 行搁浅。源锁钉死分支形态。
+  test('source — done 广播与 persistent-stop 返回只在 short-circuit-stop 裁决下发生', () => {
+    const src = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+      'utf8',
+    )
+    const branch = src.slice(
+      src.indexOf('const dispatched = await dispatchCrossClarifyNode({'),
+      src.indexOf("message: 'cross-clarify-persistent-stop'"),
+    )
+    expect(branch).toContain("if (dispatched.kind !== 'short-circuit-stop')")
+    // 竞态分支回收 speculative mint（pending→canceled）且不广播 done。
+    expect(branch).toContain("reason: 'cross-clarify-stop-race'")
+    expect(branch).toContain("message: 'cross-clarify-stop-race'")
+    const raceIdx = branch.indexOf("if (dispatched.kind !== 'short-circuit-stop')")
+    const broadcastIdx = branch.indexOf('broadcastNodeStatus(taskId, stopRunId')
+    expect(raceIdx).toBeGreaterThan(-1)
+    expect(broadcastIdx).toBeGreaterThan(raceIdx) // done 广播在竞态分支 return 之后
+  })
+})

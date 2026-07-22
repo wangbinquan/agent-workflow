@@ -2771,13 +2771,30 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
       })
       // RFC-217 T9: the pending→done short-circuit transition (+ its reason
       // string) is owned by the clarify service — single dispatch policy.
-      await dispatchCrossClarifyNode({
+      const dispatched = await dispatchCrossClarifyNode({
         db,
         taskId,
         crossClarifyNodeId: node.id,
         nodeRunId: stopRunId,
         definition,
       })
+      // Codex impl-gate P2-3: honor the helper's verdict. A user flipping the
+      // questioner's directive stop→continue between the outer read and the
+      // helper's re-read leaves the fresh row PENDING ('awaiting') — reporting
+      // completion then would let clients disagree with persisted state and
+      // strand the pending row. Retire the speculative mint and fall through
+      // to the common awaiting path (the runner mints its own row on emit).
+      if (dispatched.kind !== 'short-circuit-stop') {
+        await setNodeRunStatus({
+          db,
+          nodeRunId: stopRunId,
+          to: 'canceled',
+          allowedFrom: ['pending'],
+          reason: 'cross-clarify-stop-race',
+          extra: { finishedAt: Date.now() },
+        })
+        return { kind: 'ok', summary: '', message: 'cross-clarify-stop-race' }
+      }
       broadcastNodeStatus(taskId, stopRunId, node.id, 'done')
       return { kind: 'ok', summary: '', message: 'cross-clarify-persistent-stop' }
     }

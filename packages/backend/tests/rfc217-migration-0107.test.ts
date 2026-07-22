@@ -61,9 +61,9 @@ describe('rfc217 — migration 0107（T17）', () => {
     sqlite.run(
       `INSERT INTO clarify_rounds (id, task_id, kind, asking_node_id, asking_node_run_id,
          intermediary_node_id, intermediary_node_run_id, loop_iter, iteration, questions_json,
-         status, answers_json, answered_at, created_at, draft_answers_json)
+         status, answers_json, answered_at, answered_by, created_at, draft_answers_json)
        VALUES ('r-div', 't-1', 'self', 'asker', 'nr-ask', 'clarify-1', 'nr-int', 0, 0, '[]',
-         'answered', '["stale"]', 99, 10, '{"q1":"draft"}')`,
+         'answered', '["stale"]', 99, 'user-42', 10, '{"q1":"draft"}')`,
     )
 
     // B) 仅遗留表有的尾行。
@@ -96,11 +96,14 @@ describe('rfc217 — migration 0107（T17）', () => {
        VALUES ('r-cross-stop', 't-1', 'cc-1', 'nr-cross-int', 'questioner', 'nr-cross-ask', 0, 0,
          '[]', 'stop', 'answered', 13),
               ('r-cross-keep', 't-1', 'cc-2', 'nr-cross-int', 'q-keep', 'nr-cross-ask', 0, 0,
-         '[]', 'stop', 'answered', 14)`,
+         '[]', 'stop', 'answered', 14),
+              ('r-cross-shardonly', 't-1', 'cc-3', 'nr-cross-int', 'q-shardonly', 'nr-cross-ask', 0, 0,
+         '[]', 'stop', 'answered', 15)`,
     )
     sqlite.run(
       `INSERT INTO task_node_clarify_directives (task_id, node_id, shard_key, directive, updated_at)
-       VALUES ('t-1', 'q-keep', '', 'continue', 1)`,
+       VALUES ('t-1', 'q-keep', '', 'continue', 1),
+              ('t-1', 'q-shardonly', 'asker-1', 'continue', 1)`,
     )
 
     migrate(db, { migrationsFolder: MIGRATIONS }) // applies 0107
@@ -112,6 +115,9 @@ describe('rfc217 — migration 0107（T17）', () => {
     expect(row('r-div').status).toBe('awaiting_human')
     expect(row('r-div').answers_json).toBeNull()
     expect(row('r-div').draft_answers_json).toBe('{"q1":"draft"}')
+    // Codex impl-gate P2-1：answered_by 是 RFC-099 归属，reconcile 不覆盖——
+    // 遗留修复路径从不维护它（NULL），拷贝会不可逆抹掉真实提交人。
+    expect(row('r-div').answered_by).toBe('user-42')
     // B) 尾行补齐。
     expect(row('r-only-legacy').kind).toBe('self')
     expect(row('r-only-legacy').iteration).toBe(1)
@@ -128,12 +134,22 @@ describe('rfc217 — migration 0107（T17）', () => {
       (
         sqlite
           .query(
-            'SELECT directive FROM task_node_clarify_directives WHERE task_id = ? AND node_id = ?',
+            "SELECT directive FROM task_node_clarify_directives WHERE task_id = ? AND node_id = ? AND shard_key = ''",
           )
           .get('t-1', node) as { directive: string } | null
       )?.directive
     expect(dir('questioner')).toBe('stop')
     expect(dir('q-keep')).toBe('continue')
+    // Codex impl-gate P2-2：只有 GLOBAL（shard_key=''）行才算覆盖——只有
+    // shard 级行的 stopped questioner 仍须补全局 stop 行（resolveCrossNodeStopped
+    // 无 shard 读取），且既有 shard 行原样保留。
+    expect(dir('q-shardonly')).toBe('stop')
+    const shardRow = sqlite
+      .query(
+        "SELECT directive FROM task_node_clarify_directives WHERE task_id = 't-1' AND node_id = 'q-shardonly' AND shard_key = 'asker-1'",
+      )
+      .get() as { directive: string } | null
+    expect(shardRow?.directive).toBe('continue')
     // 4) 表面收口：遗留表消失、scopes 列消失、协作列存活、索引齐全。
     const tables = sqlite
       .query(
