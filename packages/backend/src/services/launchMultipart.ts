@@ -27,16 +27,30 @@ import { DomainError, ValidationError } from '@/util/errors'
 /** Match `files[<key>][]` field names; allowed keys mirror WorkflowInput.key. */
 const UPLOAD_FIELD_RE = /^files\[([A-Za-z0-9_-]+)\]\[\]$/
 
+/**
+ * A bound-but-not-yet-buffered file part. Bytes are copied out of the form
+ * only AFTER the caller has validated the target + input keys
+ * (`bufferUploadParts`) — copying first would let any `tasks:launch` caller
+ * force a second in-memory copy of arbitrarily large parts on a request that
+ * must be rejected anyway (impl-gate P2-4).
+ */
+export interface MultipartFilePart {
+  inputKey: string
+  filename: string
+  declaredMime: string
+  blob: Blob
+}
+
 export interface ParsedMultipartLaunch {
   payloadJson: unknown
-  files: UploadFile[]
+  parts: MultipartFilePart[]
 }
 
 /**
  * Parse a multipart launch request: pull the JSON `payload` field and bind
- * every `files[<key>][]` blob. Field-grammar errors throw here; whether a
- * bound key actually exists as an upload input is the caller's check
- * (`assertUploadFilesMatchDefs`) because only the caller knows its defs.
+ * every `files[<key>][]` part (WITHOUT buffering bytes). Field-grammar errors
+ * throw here; key-vs-defs membership and byte copies happen in
+ * `bufferUploadParts` because only the caller knows its defs.
  */
 export async function parseMultipartLaunch(req: Request): Promise<ParsedMultipartLaunch> {
   let form: Awaited<ReturnType<typeof req.formData>>
@@ -67,7 +81,7 @@ export async function parseMultipartLaunch(req: Request): Promise<ParsedMultipar
     )
   }
 
-  const files: UploadFile[] = []
+  const parts: MultipartFilePart[] = []
   // Cast: bun's undici FormData type narrows to [string, string]; the real
   // value can be a File too — that's what we actually receive at runtime.
   const entries = form.entries() as unknown as Iterable<[string, string | File]>
@@ -86,34 +100,47 @@ export async function parseMultipartLaunch(req: Request): Promise<ParsedMultipar
         `field '${fieldName}' must carry a file, got string`,
       )
     }
-    const buf = new Uint8Array(await value.arrayBuffer())
     // bun parses a part whose Content-Disposition carries `filename=""` (a
     // browser Blob that was never named) as a File whose `.name` is
     // `undefined`, NOT ''. Treat both empty and missing names as unnamed so we
     // don't hand a non-string filename to sanitizeFilename.
-    files.push({
+    parts.push({
       inputKey: m[1]!,
       filename: value.name ? value.name : 'upload.bin',
       declaredMime: value.type,
-      bytes: buf,
+      blob: value,
     })
   }
-  return { payloadJson, files }
+  return { payloadJson, parts }
 }
 
-/** Every bound file must target a declared upload input. */
-export function assertUploadFilesMatchDefs(
-  files: readonly UploadFile[],
+/**
+ * Membership-check every bound part against the declared upload inputs, THEN
+ * copy bytes out (in that order — see MultipartFilePart). Throws
+ * `task-multipart-unknown-input` before a single byte is duplicated.
+ */
+export async function bufferUploadParts(
+  parts: readonly MultipartFilePart[],
   defs: ReadonlyMap<string, UploadInputDef>,
-): void {
-  for (const f of files) {
-    if (!defs.has(f.inputKey)) {
+): Promise<UploadFile[]> {
+  for (const p of parts) {
+    if (!defs.has(p.inputKey)) {
       throw new ValidationError(
         'task-multipart-unknown-input',
-        `multipart files target unknown upload input '${f.inputKey}'`,
+        `multipart files target unknown upload input '${p.inputKey}'`,
       )
     }
   }
+  const files: UploadFile[] = []
+  for (const p of parts) {
+    files.push({
+      inputKey: p.inputKey,
+      filename: p.filename,
+      declaredMime: p.declaredMime,
+      bytes: new Uint8Array(await p.blob.arrayBuffer()),
+    })
+  }
+  return files
 }
 
 /**

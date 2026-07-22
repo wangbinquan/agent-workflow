@@ -54,9 +54,14 @@ const TOKEN_RE = /^[A-Za-z_][A-Za-z0-9_]*$/
 // silently shadowed), deprecated tokens (render as ''), and system-channel
 // port names all live here, and `__proto__` is a record poison key on top.
 // Rejecting the whole family beats enumerating registries that keep growing
-// (design.md D13). `constructor`/`prototype` are the remaining poison keys.
+// (design.md D13). On top of that, EVERY `Object.prototype` property name is
+// poison (impl-gate P2-2): launch inputs travel as plain objects, so a port
+// named `toString`/`hasOwnProperty`/… would read the inherited function when
+// omitted — `.trim()` on a function is a 500, and downstream `?? ''`
+// fallbacks never fire. `prototype` is the one extra key not on
+// Object.prototype that still poisons class-object interop.
 const RESERVED_DUNDER_RE = /^__[\s\S]*__$/
-const POISON_KEYS = new Set(['constructor', 'prototype'])
+const POISON_KEYS = new Set(['prototype', ...Object.getOwnPropertyNames(Object.prototype)])
 
 function kindContainsSignal(p: ParsedKind): boolean {
   if (p.kind === 'base') return p.name === 'signal'

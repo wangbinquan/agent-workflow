@@ -76,6 +76,9 @@ describe('AgentPortDialog transaction + focus', () => {
     )
 
     fireEvent.change(screen.getByTestId('agent-port-name'), { target: { value: 'source_file' } })
+    // RFC-218: new drafts seed required=true (launch is required-by-default,
+    // D5) — this click UNchecks it, and the explicit false must persist (it
+    // is the only way to make the port optional at launch).
     fireEvent.click(screen.getByTestId('agent-port-required'))
     const description = screen.getByTestId('agent-port-description')
     expect(description.getAttribute('maxlength')).toBe('2048')
@@ -89,7 +92,7 @@ describe('AgentPortDialog transaction + focus', () => {
       {
         name: 'source_file',
         kind: 'string',
-        required: true,
+        required: false,
         description: 'Main source document',
       },
     ])

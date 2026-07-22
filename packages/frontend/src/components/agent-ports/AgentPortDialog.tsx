@@ -72,7 +72,10 @@ function emptyDraft(): AgentPortDialogDraft {
   return {
     name: '',
     kind: DEFAULT_OUTPUT_KIND,
-    required: false,
+    // RFC-218 (impl-gate P1): declared inputs are required-by-default at
+    // launch (D5) — the editor seeds and renders the same default so what
+    // the author sees is what the launch form enforces.
+    required: true,
     description: '',
     wrapperPortName: '',
   }
@@ -135,7 +138,8 @@ function seedLocalState(props: AgentPortDialogProps): LocalState {
       draft: {
         name: port.name,
         kind: port.kind === '' ? DEFAULT_OUTPUT_KIND : port.kind,
-        required: port.required === true,
+        // RFC-218 (impl-gate P1): absence means required (D5 default).
+        required: port.required !== false,
         description: port.description ?? '',
         wrapperPortName: '',
       },

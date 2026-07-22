@@ -306,6 +306,19 @@ describe('RFC-218 — port-driven agent launch form', () => {
     expect(body.description).toBeUndefined()
   })
 
+  test('P9 deep link to a missing agent: not-found notice, not an eternal spinner', async () => {
+    installFetch()
+    await renderWizard('/tasks/new?kind=agent&agent=ghost-agent')
+    next() // space → content
+    await screen.findByTestId('wizard-task-name')
+    // Impl-gate P2-8: list loaded successfully but no row matches — this must
+    // read as recoverable not-found, never LoadingState (which would spin
+    // forever) and never a guessed description form.
+    await screen.findByTestId('wizard-agent-not-found')
+    expect(screen.queryByTestId('wizard-description')).toBeNull()
+    expect(nextButton().disabled).toBe(true)
+  })
+
   test('P8 deep link + slow agents list: loading state, never a guessed form', async () => {
     let resolveAgents!: (r: Response) => void
     const agentsPromise = new Promise<Response>((res) => {

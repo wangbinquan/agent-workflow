@@ -506,6 +506,39 @@ describe('B7 — scheduled save gate (design P2-2)', () => {
     ).rejects.toMatchObject({ code: 'agent-launch-invalid' })
   })
 
+  test('disabled PUT that replaces the payload still validates (impl-gate P2-5)', async () => {
+    await createAgent(db, { ...AGENT_FIELDS, name: 'ported', inputs: [...PORTS] })
+    const created = await createScheduledTask(
+      db,
+      {
+        name: 's',
+        launchKind: 'agent',
+        launchPayload: {
+          agentName: 'ported',
+          name: 't',
+          inputs: { report: 'weekly' },
+          scratch: true,
+        },
+        scheduleSpec: SPEC,
+        enabled: false,
+      },
+      { actor: actor() },
+    )
+    const { updateScheduledTask } = await import('../src/services/scheduledTasks')
+    // Result stays disabled — the payload replacement must STILL be shape-
+    // checked (description on a ported agent can never fire successfully).
+    await expect(
+      updateScheduledTask(
+        db,
+        created.id,
+        {
+          launchPayload: { agentName: 'ported', name: 't', description: 'd', scratch: true },
+        },
+        { actor: actor() },
+      ),
+    ).rejects.toMatchObject({ code: 'agent-launch-invalid' })
+  })
+
   test('text-port payload saves and stamps inputs into the envelope', async () => {
     await createAgent(db, { ...AGENT_FIELDS, name: 'ported', inputs: [...PORTS] })
     const created = await createScheduledTask(

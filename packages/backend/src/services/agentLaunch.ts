@@ -34,16 +34,12 @@ import {
   startTask,
   type StartTaskDeps,
 } from '@/services/task'
+import { applyUploadsToWorktree, validateUploadPlan, type UploadLimits } from '@/services/upload'
 import {
-  applyUploadsToWorktree,
-  validateUploadPlan,
-  type UploadFile,
-  type UploadLimits,
-} from '@/services/upload'
-import {
-  assertUploadFilesMatchDefs,
   attachWorkspaceCleanupToMultipartError,
+  bufferUploadParts,
   collectUploadInputDefs,
+  type MultipartFilePart,
 } from '@/services/launchMultipart'
 import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
 import type { Actor } from '@/auth/actor'
@@ -277,11 +273,16 @@ export function validateAgentLaunchShape(
     )
   }
 
+  // Own-property reads only (impl-gate P2-2 defense-in-depth): the blocker
+  // set already rejects Object.prototype names, but a plain-object lookup on
+  // an inherited key must never leak a function into `.trim()`.
+  const ownValue = (key: string): string | undefined =>
+    Object.prototype.hasOwnProperty.call(payload.inputs, key) ? payload.inputs![key] : undefined
   const missing = form.inputs.filter(
     (d) =>
       d.kind !== 'upload' &&
       d.required === true &&
-      (payload.inputs![d.key] === undefined || payload.inputs![d.key]!.trim() === ''),
+      (ownValue(d.key) === undefined || ownValue(d.key)!.trim() === ''),
   )
   if (missing.length > 0) {
     throw new ValidationError('agent-launch-invalid', 'required input ports are missing', {
@@ -313,7 +314,7 @@ export async function startAgentTask(
   agentName: string,
   input: StartAgentTask,
   deps: StartTaskDeps,
-  uploads?: { files: UploadFile[]; limits: UploadLimits },
+  uploads?: { parts: MultipartFilePart[]; limits: UploadLimits },
 ): Promise<Task> {
   const agent = await getAgent(db, agentName)
   if (agent === null || !(await canViewResource(db, actor, 'agent', agent))) {
@@ -436,9 +437,12 @@ export async function startAgentTask(
     // (validate plan → materialize → land files → hand off), inside the
     // reservation held above.
     const uploadDefs = form !== null ? collectUploadInputDefs(form.inputs) : new Map()
-    if (uploads !== undefined && (uploadDefs.size > 0 || uploads.files.length > 0)) {
-      assertUploadFilesMatchDefs(uploads.files, uploadDefs)
-      validateUploadPlan({ defs: uploadDefs, files: uploads.files, limits: uploads.limits })
+    if (uploads !== undefined && (uploadDefs.size > 0 || uploads.parts.length > 0)) {
+      // Membership check BEFORE buffering (impl-gate P2-4), and buffering
+      // AFTER the whole preflight chain above (P1-2) — bytes are only copied
+      // for a launch that has already passed ACL/OCC/blockers/F14.
+      const files = await bufferUploadParts(uploads.parts, uploadDefs)
+      validateUploadPlan({ defs: uploadDefs, files, limits: uploads.limits })
       if (Array.isArray(parsed.data.repos) && parsed.data.repos.length > 1) {
         throw new ValidationError(
           'multi-repo-upload-unsupported',
@@ -457,7 +461,7 @@ export async function startAgentTask(
         const result = await applyUploadsToWorktree({
           worktreePath: space.worktreePath,
           defs: uploadDefs,
-          files: uploads.files,
+          files,
           limits: uploads.limits,
         })
         inputsOut = { ...parsed.data.inputs }

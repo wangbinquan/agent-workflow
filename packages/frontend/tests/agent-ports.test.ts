@@ -114,9 +114,11 @@ describe('RFC-194 input port mutations', () => {
       description: '  repository root  ',
     })
 
+    // RFC-218: required-by-default — explicit false PERSISTS (it's the only
+    // way to make a port optional at launch); true is canonical-absent.
     expect(next).toEqual([
       { name: 'request', kind: 'string' },
-      { name: 'repo', kind: 'path<*>', description: 'repository root' },
+      { name: 'repo', kind: 'path<*>', required: false, description: 'repository root' },
     ])
     expect(inputs).toEqual([{ name: 'request', kind: 'string' }])
   })
@@ -129,11 +131,11 @@ describe('RFC-194 input port mutations', () => {
       required: true,
       description: '  new description ',
     })
+    // RFC-218: `required: true` folds to canonical-absent (absent ⇒ required).
     expect(next).toEqual([
       {
         name: 'Legacy Input',
         kind: 'list<string>',
-        required: true,
         description: 'new description',
       },
     ])

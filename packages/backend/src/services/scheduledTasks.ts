@@ -393,8 +393,11 @@ export async function updateScheduledTask(
 
   // R3-1: re-gate whenever the RESULT is enabled (spec-only / re-enable / payload
   // change). Skip when the result is disabled so a user can still stop/clean up a
-  // schedule whose target vanished.
-  if (enabled && patchedPayload !== null) {
+  // schedule whose target vanished — EXCEPT when the payload itself is being
+  // replaced (RFC-218 impl-gate P2-5): new payload content must validate
+  // regardless of enabled state, or a disabled edit can persist a shape that
+  // deterministically fails every future fire and "save" still reports success.
+  if ((enabled || patch.launchPayload !== undefined) && patchedPayload !== null) {
     await assertScheduledTargetUsable(
       db,
       opts.actor,

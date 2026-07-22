@@ -59,8 +59,8 @@ import type { ResolvedDeepConfig } from '@/services/structuralDiff/deep/service'
 import { structuralScopeSchema } from '@agent-workflow/shared'
 import { applyUploadsToWorktree, validateUploadPlan } from '@/services/upload'
 import {
-  assertUploadFilesMatchDefs,
   attachWorkspaceCleanupToMultipartError,
+  bufferUploadParts,
   collectUploadInputDefs,
   parseMultipartLaunch,
   resolveUploadLimits,
@@ -725,8 +725,9 @@ async function handleMultipartTaskStart(
   opencodeCmd: string[] | undefined,
   actor: ReturnType<typeof actorOf>,
 ) {
-  // 1. Parse the form: JSON `payload` field + `files[<key>][]` blobs.
-  const { payloadJson, files: uploadFiles } = await parseMultipartLaunch(req)
+  // 1. Parse the form: JSON `payload` field + `files[<key>][]` parts (bytes
+  // are NOT buffered yet — that waits for the defs membership check below).
+  const { payloadJson, parts: uploadParts } = await parseMultipartLaunch(req)
   // RFC-099 (D6): reject payloads still carrying the removed assignments field.
   if (
     typeof payloadJson === 'object' &&
@@ -779,8 +780,9 @@ async function handleMultipartTaskStart(
   }
   const uploadDefs = collectUploadInputDefs(workflow.definition.inputs)
 
-  // 3. Every bound file must target a declared upload input.
-  assertUploadFilesMatchDefs(uploadFiles, uploadDefs)
+  // 3. Every bound part must target a declared upload input; only then are
+  // bytes copied out of the form (impl-gate P2-4).
+  const uploadFiles = await bufferUploadParts(uploadParts, uploadDefs)
 
   // 4. Materialize the space first so we have a real path to write into.
   const appHome = Paths.root

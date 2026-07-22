@@ -31,8 +31,12 @@ import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/serv
 import { assertNotBuiltin, excludeBuiltinAgents, isBuiltinRow } from '@/services/systemResources'
 import { assertNewRefsUsable, diffNewNames } from '@/services/resourceRefs'
 import { startAgentTask } from '@/services/agentLaunch'
-import { parseMultipartLaunch, resolveUploadLimits } from '@/services/launchMultipart'
-import type { UploadFile, UploadLimits } from '@/services/upload'
+import {
+  parseMultipartLaunch,
+  resolveUploadLimits,
+  type MultipartFilePart,
+} from '@/services/launchMultipart'
+import type { UploadLimits } from '@/services/upload'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import { resolveOpencodeCmd } from '@/util/opencode'
 import { mountAclEndpoints } from './resourceAcl'
@@ -194,11 +198,11 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
     // only shape for text-port / zero-port launches.
     const ct = c.req.header('content-type') ?? ''
     let body: unknown
-    let uploads: { files: UploadFile[]; limits: UploadLimits } | undefined
+    let uploads: { parts: MultipartFilePart[]; limits: UploadLimits } | undefined
     if (ct.toLowerCase().startsWith('multipart/form-data')) {
       const parsedForm = await parseMultipartLaunch(c.req.raw)
       body = parsedForm.payloadJson
-      uploads = { files: parsedForm.files, limits: resolveUploadLimits(deps.configPath) }
+      uploads = { parts: parsedForm.parts, limits: resolveUploadLimits(deps.configPath) }
     } else {
       try {
         body = await c.req.raw.json()

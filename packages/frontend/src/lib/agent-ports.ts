@@ -81,7 +81,11 @@ function compactInputPort(draft: InputPortDraft, originalName?: string): AgentIn
   return {
     name,
     kind: draft.kind,
-    ...(draft.required === true ? { required: true } : {}),
+    // RFC-218 (impl-gate P1): launch semantics are required-by-default
+    // (`required !== false` ⇒ required, D5). Persist the EXPLICIT false and
+    // let true stay canonical-absent — the old shape (persist true, drop
+    // false) silently flipped every unchecked port to required at launch.
+    ...(draft.required === false ? { required: false } : {}),
     ...(description !== undefined && description.length > 0 ? { description } : {}),
   }
 }

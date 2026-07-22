@@ -161,7 +161,10 @@ describe('launch blockers (§2.3 / D13)', () => {
         { kind: 'invalid-port-name', port: bad, reason: 'reserved-name' },
       ])
     }
-    for (const bad of ['constructor', 'prototype']) {
+    // Impl-gate P2-2: EVERY Object.prototype property name is poison — launch
+    // inputs are plain objects, and an omitted port named `toString` would
+    // read the inherited function (`.trim()` on a function = 500).
+    for (const bad of ['constructor', 'prototype', 'toString', 'hasOwnProperty', 'valueOf']) {
       expect(agentLaunchBlockers([port(bad)])).toEqual([
         { kind: 'invalid-port-name', port: bad, reason: 'reserved-name' },
       ])

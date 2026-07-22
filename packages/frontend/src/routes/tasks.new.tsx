@@ -754,11 +754,15 @@ function TaskWizardPage() {
   const hasWrapperGitNode =
     kind === 'workflow' &&
     (normalizedWorkflowDefinition?.nodes ?? []).some((n) => n.kind === 'wrapper-git')
+  // RFC-218 (impl-gate P2-6): the upload arm applies to agent port forms too —
+  // multipart + multi-repo is refused server-side (multi-repo-upload-
+  // unsupported), so the wizard must gate it for BOTH kinds that can carry
+  // upload inputs. wrapper-git stays workflow-only (agents have no canvas).
   const multiRepoBlockedReason: MultiRepoBlockedReason | null =
-    kind === 'workflow' && space.kind === 'remote' && space.repos.length > 1
-      ? hasWrapperGitNode
+    space.kind === 'remote' && space.repos.length > 1
+      ? kind === 'workflow' && hasWrapperGitNode
         ? 'wrapper-git'
-        : hasUploadInput
+        : (kind === 'workflow' || kind === 'agent') && hasUploadInput
           ? 'upload'
           : null
       : null
@@ -1036,7 +1040,11 @@ function TaskWizardPage() {
     !relaunchError &&
     !submitPending
   // RFC-159: upload files can't be persisted into a schedule's JSON payload.
-  const scheduleUnsupported = kind === 'workflow' && (hasUploadInput || hasUploads)
+  // RFC-218 (impl-gate P2-7): agent path<ext> ports are upload inputs too —
+  // scheduled fires are JSON-only, so scheduling them is refused server-side;
+  // don't advertise a Save-scheduled that can only 422.
+  const scheduleUnsupported =
+    (kind === 'workflow' || kind === 'agent') && (hasUploadInput || hasUploads)
   const pageTitle = isEdit
     ? t('taskWizard.titleEdit')
     : search.schedule === true
@@ -1408,12 +1416,19 @@ function TaskWizardPage() {
             </Field>
 
             {/* RFC-218 P1-5: never render a form shape before the agent row is
-                known — an unloaded list is indistinguishable from "zero-port". */}
+                known — an unloaded list is indistinguishable from "zero-port".
+                Impl-gate P2-8: a SUCCESSFUL load without a matching row is
+                not-found (stale/deleted/invisible deep link), not "loading" —
+                say so, recoverable by re-picking on step 1. */}
             {kind === 'agent' &&
               !agentDataReady &&
               (agentsQ.isError ? (
                 <div data-testid="wizard-agent-load-error">
                   <ErrorBanner error={agentsQ.error} onRetry={() => void agentsQ.refetch()} />
+                </div>
+              ) : agentsQ.isSuccess ? (
+                <div className="error-text" role="alert" data-testid="wizard-agent-not-found">
+                  {t('taskWizard.agentNotFound', { name: agentName })}
                 </div>
               ) : (
                 <LoadingState />
@@ -1492,7 +1507,7 @@ function TaskWizardPage() {
                   key={def.key}
                   label={def.label === def.key ? def.key : `${def.label} (${def.key})`}
                   required={def.required === true}
-                  hint={def.description}
+                  hint={def.description ?? portKindHint(def, t)}
                 >
                   {def.kind === 'upload' ? (
                     <UploadPicker
@@ -1829,6 +1844,22 @@ function RemoteIcon() {
       <path d="M7 8.2v7.6M9 17l6-4M9 7l6 4" />
     </svg>
   )
+}
+
+/**
+ * RFC-218 (impl-gate P2-9): for an agent-port field with no author
+ * description, surface the declared kind when it isn't a plain text shape —
+ * a fallback composite kind (e.g. `list<list<string>>`) renders as a raw
+ * textarea, and the user deserves to know what shape the agent expects.
+ */
+function portKindHint(
+  def: { description?: string } & Record<string, unknown>,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+): string | undefined {
+  const agentKind = typeof def.agentKind === 'string' ? def.agentKind : undefined
+  if (agentKind === undefined || agentKind === 'string' || agentKind === 'markdown')
+    return undefined
+  return t('taskWizard.portKindHint', { kind: agentKind })
 }
 
 function truncate(s: string): string {

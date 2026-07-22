@@ -1314,24 +1314,6 @@ function cleanupFromPreCreated(pre: PreCreatedWorktree): MaterializedSpaceCleanu
  * so even an initial exact-version mismatch must release their workspace.
  */
 export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<Task> {
-  // RFC-205 D5 — enforce mode: when the OS sandbox mechanism is unavailable,
-  // refuse to launch at the door (a task that would silently run UNsandboxed
-  // is exactly what enforce promises never happens). warn/off never block.
-  const sandboxProvider = getSandboxProvider()
-  if (
-    sandboxProvider !== null &&
-    sandboxProvider.mode === 'enforce' &&
-    !sandboxProvider.status.available
-  ) {
-    throw new DomainError(
-      'sandbox-unavailable',
-      `sandboxMode=enforce but no OS sandbox mechanism is usable ` +
-        `(${sandboxProvider.status.detail ?? 'unknown'}); install it ` +
-        `(macOS: sandbox-exec ships with the OS; Linux: install bubblewrap) ` +
-        `or lower sandboxMode to 'warn'/'off' in Settings`,
-      409,
-    )
-  }
   const ownership: StartTaskOwnership = {
     cleanup:
       deps.materializedSpace?.cleanup ??
@@ -1341,6 +1323,28 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
     taskRowCommitted: false,
   }
   try {
+    // RFC-205 D5 — enforce mode: when the OS sandbox mechanism is unavailable,
+    // refuse to launch at the door (a task that would silently run UNsandboxed
+    // is exactly what enforce promises never happens). warn/off never block.
+    // RFC-218 impl-gate P2-3: this gate must sit INSIDE the ownership try —
+    // multipart callers (workflow route / startAgentTask) materialize + write
+    // uploads BEFORE handing off, so throwing above the ownership composition
+    // leaked their worktree (and the materializingSpaces lease) on refusal.
+    const sandboxProvider = getSandboxProvider()
+    if (
+      sandboxProvider !== null &&
+      sandboxProvider.mode === 'enforce' &&
+      !sandboxProvider.status.available
+    ) {
+      throw new DomainError(
+        'sandbox-unavailable',
+        `sandboxMode=enforce but no OS sandbox mechanism is usable ` +
+          `(${sandboxProvider.status.detail ?? 'unknown'}); install it ` +
+          `(macOS: sandbox-exec ships with the OS; Linux: install bubblewrap) ` +
+          `or lower sandboxMode to 'warn'/'off' in Settings`,
+        409,
+      )
+    }
     return await startTaskImpl(input, deps, ownership)
   } catch (error) {
     if (!ownership.taskRowCommitted && ownership.cleanup !== null) {

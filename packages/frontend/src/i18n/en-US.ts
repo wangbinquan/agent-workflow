@@ -2521,6 +2521,9 @@ export const enUS: Resources = {
     contentDescription: 'Task description',
     contentDescriptionHint: 'Passed to the agent verbatim as its prompt.',
     agentPortsBlocked: 'This agent’s declared input ports block manual launch:',
+    agentNotFound:
+      'Agent “{{name}}” was not found — it may have been deleted or is not visible to you; go back to step 1 and pick again.',
+    portKindHint: 'Expected shape: {{kind}}',
     agentPortBlockedSignal: 'port {{port}} has a signal kind and cannot be filled by hand',
     agentPortBlockedName: 'port name {{port}} cannot be a template token (invalid or reserved)',
     advanced: 'Advanced settings',

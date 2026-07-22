@@ -62,6 +62,9 @@ export function DynamicInput({
           onChange={onChange}
           required={def.required === true}
           maxLength={maxLength}
+          // RFC-218 (impl-gate P2-9): markdown-kind agent ports edit in
+          // monospace — the declared kind is a real rendering contract.
+          monospace={rec.agentKind === 'markdown'}
         />
       )
     }

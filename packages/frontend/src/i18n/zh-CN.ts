@@ -2285,6 +2285,8 @@ export interface Resources {
     contentDescription: string
     contentDescriptionHint: string
     agentPortsBlocked: string
+    agentNotFound: string
+    portKindHint: string
     agentPortBlockedSignal: string
     agentPortBlockedName: string
     advanced: string
@@ -6155,6 +6157,8 @@ export const zhCN: Resources = {
     contentDescription: '任务描述',
     contentDescriptionHint: '将作为提示词直接交给 Agent。',
     agentPortsBlocked: '该 Agent 的输入端口声明阻止手动启动：',
+    agentNotFound: '找不到 Agent「{{name}}」——它可能已被删除或不可见，请回到第一步重新选择。',
+    portKindHint: '期望格式：{{kind}}',
     agentPortBlockedSignal: '端口 {{port}} 是 signal 类型，不能手动填写',
     agentPortBlockedName: '端口名 {{port}} 不能用作模板变量（非法字符或保留名）',
     advanced: '高级设置',
