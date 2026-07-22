@@ -2,7 +2,6 @@
 // host run → per-card settle) and its result settling (moved verbatim from
 // runner.ts).
 
-import { eq } from 'drizzle-orm'
 import { workgroupAssignments } from '@/db/schema'
 import {
   parseWgMessagesPort,
