@@ -42,6 +42,7 @@ import {
 import type { DbClient } from '@/db/client'
 import { getRuntimeDriver } from '@/services/runtime'
 import type { RuntimeKind } from '@/services/runtime/types'
+import { getSandboxProvider, wrapSandbox, type SandboxCtx } from '@/services/sandbox'
 import {
   clarifySessions,
   docVersions,
@@ -929,6 +930,20 @@ export async function validateAndPersistCandidate(
 // -----------------------------------------------------------------------------
 
 /**
+ * RFC-205 impl-gate P0-4 (Codex 2026-07-22): the distiller sandbox context. It
+ * feeds UNTRUSTED content (source-agent transcripts + reviewed document bodies)
+ * into the prompt, so a prompt injection could otherwise run a same-uid shell
+ * that reads secret.key / db.sqlite / backups. Sandbox it like a task node —
+ * tmpfs-shadow appHome, allow ONLY the distiller's own working dir. No provider
+ * (tests / off) → undefined → wrapSandbox is a no-op (byte-identical spawn).
+ */
+export function distillerSandboxCtx(cwd: string): SandboxCtx | undefined {
+  const p = getSandboxProvider()
+  if (p === null) return undefined
+  return { mode: p.mode, status: p.status, appHome: p.appHome, taskWorktrees: [cwd], runDir: cwd }
+}
+
+/**
  * Real Bun.spawn-based distiller spawn. Held behind `spawnFn` so tests can
  * substitute a deterministic fake without paying for a subprocess.
  */
@@ -959,8 +974,10 @@ export async function defaultDistillerSpawn(
     bridgeCredentials: true,
   })
   const wantStdin = plan.stdin?.mode === 'pipe'
+  // P0-4: wrap the spawn in the platform sandbox (no-op when no provider is set).
+  const cmd = wrapSandbox(plan.cmd, distillerSandboxCtx(input.cwd))
   const child = Bun.spawn({
-    cmd: plan.cmd,
+    cmd,
     cwd: input.cwd,
     env: plan.env,
     stdout: 'pipe',
