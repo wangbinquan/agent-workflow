@@ -13,6 +13,7 @@ import type {
 import { OidcProviderSchema } from '@agent-workflow/shared'
 import type { SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
+import { dbTxSync } from '@/db/txSync'
 import { oidcProviders, userIdentities } from '@/db/schema'
 import { testDiscovery as runDiscovery } from '@/auth/oidc/discovery'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
@@ -50,6 +51,13 @@ export function createOidcProvidersService(deps: {
       allowedEmailDomains: safeJson<string[]>(row.allowedEmailDomainsJson) ?? [],
       iconUrl: row.iconUrl,
       enabled: row.enabled,
+      authorizationEndpoint: row.authorizationEndpoint ?? null,
+      tokenEndpoint: row.tokenEndpoint ?? null,
+      userinfoEndpoint: row.userinfoEndpoint ?? null,
+      jwksUri: row.jwksUri ?? null,
+      trustEmailVerified: row.trustEmailVerified,
+      usernameClaim: row.usernameClaim ?? null,
+      subjectClaim: row.subjectClaim ?? null,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     })
@@ -99,6 +107,13 @@ export function createOidcProvidersService(deps: {
         allowedEmailDomainsJson: JSON.stringify(body.allowedEmailDomains ?? []),
         iconUrl: body.iconUrl,
         enabled: body.enabled,
+        authorizationEndpoint: body.authorizationEndpoint ?? null,
+        tokenEndpoint: body.tokenEndpoint ?? null,
+        userinfoEndpoint: body.userinfoEndpoint ?? null,
+        jwksUri: body.jwksUri ?? null,
+        trustEmailVerified: body.trustEmailVerified ?? false,
+        usernameClaim: body.usernameClaim ?? null,
+        subjectClaim: body.subjectClaim ?? null,
         createdAt: now,
         updatedAt: now,
         schemaVersion: 1,
@@ -124,9 +139,45 @@ export function createOidcProvidersService(deps: {
       }
       if (body.iconUrl !== undefined) updates.iconUrl = body.iconUrl
       if (body.enabled !== undefined) updates.enabled = body.enabled
+      if (body.authorizationEndpoint !== undefined) {
+        updates.authorizationEndpoint = body.authorizationEndpoint
+      }
+      if (body.tokenEndpoint !== undefined) updates.tokenEndpoint = body.tokenEndpoint
+      if (body.userinfoEndpoint !== undefined) updates.userinfoEndpoint = body.userinfoEndpoint
+      if (body.jwksUri !== undefined) updates.jwksUri = body.jwksUri
+      if (body.trustEmailVerified !== undefined) updates.trustEmailVerified = body.trustEmailVerified
+      if (body.usernameClaim !== undefined) updates.usernameClaim = body.usernameClaim
       // Empty clientSecret in PATCH = keep existing; non-empty = re-seal.
       if (typeof body.clientSecret === 'string' && body.clientSecret.length > 0) {
         updates.clientSecretEnc = secretBox.seal(body.clientSecret)
+      }
+      // RFC-220 — subject namespace lock. Changing subjectClaim re-keys future
+      // identities; rows written under the old namespace could then miss
+      // (duplicate accounts) or collide with another user's old subject (login
+      // as someone else). While ANY identity exists the change is refused; the
+      // zero-identity predicate and the provider update share one synchronous
+      // transaction so an in-flight callback's identity insert (also dbTxSync,
+      // userIdentities.ts) serializes strictly before or after us — either we
+      // 409 here or the callback's write-time recheck rejects with
+      // provider-config-changed. Equal-value rewrites pass untouched.
+      if (body.subjectClaim !== undefined && body.subjectClaim !== cur.subjectClaim) {
+        updates.subjectClaim = body.subjectClaim
+        dbTxSync(db, (tx) => {
+          const linked = tx
+            .select({ id: userIdentities.id })
+            .from(userIdentities)
+            .where(eq(userIdentities.providerId, id))
+            .limit(1)
+            .all()
+          if (linked.length > 0) {
+            throw new ConflictError(
+              'subject-claim-locked-by-identities',
+              'subjectClaim cannot change while identities are linked to this provider; delete and recreate the provider instead',
+            )
+          }
+          tx.update(oidcProviders).set(updates).where(eq(oidcProviders.id, id)).run()
+        })
+        return (await this.findById(id))!
       }
       await db.update(oidcProviders).set(updates).where(eq(oidcProviders.id, id))
       return (await this.findById(id))!

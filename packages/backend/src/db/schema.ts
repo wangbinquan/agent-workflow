@@ -1751,6 +1751,16 @@ export const oidcProviders = sqliteTable(
     allowedEmailDomainsJson: text('allowed_email_domains_json').notNull().default('[]'),
     iconUrl: text('icon_url'),
     enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+    // RFC-220 — manual endpoint fallbacks + pure-OAuth2 identity knobs.
+    authorizationEndpoint: text('authorization_endpoint'),
+    tokenEndpoint: text('token_endpoint'),
+    userinfoEndpoint: text('userinfo_endpoint'),
+    jwksUri: text('jwks_uri'),
+    trustEmailVerified: integer('trust_email_verified', { mode: 'boolean' })
+      .notNull()
+      .default(false),
+    usernameClaim: text('username_claim'),
+    subjectClaim: text('subject_claim'),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),
     schemaVersion: integer('schema_version').notNull().default(1),
@@ -1778,6 +1788,10 @@ export const userIdentities = sqliteTable(
     subject: text('subject').notNull(),
     email: text('email'),
     emailVerified: integer('email_verified').notNull().default(0),
+    // RFC-220 D7 — last-seen IdP presented-name (composePreferred) snapshot.
+    // '' = observed-but-absent sentinel; NULL only on pre-RFC-220 rows (legacy
+    // rows must NOT have their displayName overwritten on first sight).
+    preferredSnapshot: text('preferred_snapshot'),
     linkedAt: integer('linked_at').notNull(),
   },
   (t) => ({

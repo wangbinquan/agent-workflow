@@ -750,6 +750,13 @@
       "when": 1786636800000,
       "tag": "0107_rfc217_clarify_unify_t17",
       "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "6",
+      "when": 1786723200000,
+      "tag": "0108_rfc220_oauth2_manual_endpoints",
+      "breakpoints": true
     }
   ]
 }
