@@ -140,10 +140,7 @@ describe('RFC-220 S10 — provider dialog fields', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1))
-    const body = (api.post as ReturnType<typeof vi.fn>).mock.calls[0]![1] as Record<
-      string,
-      unknown
-    >
+    const body = (api.post as ReturnType<typeof vi.fn>).mock.calls[0]![1] as Record<string, unknown>
     expect(body.tokenEndpoint).toBe('https://idp.example.test/oauth/token') // trimmed
     expect(body.authorizationEndpoint).toBeNull() // blank ⇔ null, never ''
     expect(body.userinfoEndpoint).toBeNull()
@@ -163,9 +160,9 @@ describe('RFC-220 S10 — provider dialog fields', () => {
       (screen.getByPlaceholderText('https://idp.corp.com/oauth/authorize') as HTMLInputElement)
         .value,
     ).toBe(FULL_ROW.authorizationEndpoint)
-    expect(
-      (screen.getByPlaceholderText('preferred_username') as HTMLInputElement).value,
-    ).toBe('login sig')
+    expect((screen.getByPlaceholderText('preferred_username') as HTMLInputElement).value).toBe(
+      'login sig',
+    )
     const trust = screen.getByRole('checkbox', {
       name: /Trust emails as verified/,
     }) as HTMLInputElement

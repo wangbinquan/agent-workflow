@@ -90,7 +90,7 @@ describe('RFC-220 readClaimField / composePreferred', () => {
   test('string and SAFE-integer numbers normalize; everything else is null', () => {
     expect(readClaimField({ id: 42 }, 'id')).toBe('42')
     expect(readClaimField({ id: '42' }, 'id')).toBe('42')
-    expect(readClaimField({ id: 9007199254740993 }, 'id')).toBeNull() // > MAX_SAFE_INTEGER
+    expect(readClaimField({ id: 2 ** 53 }, 'id')).toBeNull() // > MAX_SAFE_INTEGER
     expect(readClaimField({ id: 1.5 }, 'id')).toBeNull()
     expect(readClaimField({ id: { toString: () => 'x' } }, 'id')).toBeNull()
     expect(readClaimField({ id: '' }, 'id')).toBeNull()
@@ -151,9 +151,7 @@ describe('RFC-220 extractUserinfoClaims', () => {
     // miss → hard failure, never falls back to sub/id
     expect(() => extractUserinfoClaims({ sub: 'present' }, withSubject)).toThrow(OidcTokenError)
     // unsafe-integer id is rejected, not rounded into a colliding subject
-    expect(() => extractUserinfoClaims({ id: 9007199254740993 }, withSubject)).toThrow(
-      OidcTokenError,
-    )
+    expect(() => extractUserinfoClaims({ id: 2 ** 53 }, withSubject)).toThrow(OidcTokenError)
   })
 
   test('same normalized value from string and number folds to one key (documented)', () => {

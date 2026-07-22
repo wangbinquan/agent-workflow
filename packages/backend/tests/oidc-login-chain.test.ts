@@ -166,9 +166,7 @@ describe('OIDC token exchange', () => {
 
     const notJson = (async () =>
       new Response('<html>gateway error</html>', { status: 200 })) as unknown as typeof fetch
-    const err2 = await exchangeCodeForTokens({ ...base, fetcher: notJson }).catch(
-      (e: unknown) => e,
-    )
+    const err2 = await exchangeCodeForTokens({ ...base, fetcher: notJson }).catch((e: unknown) => e)
     expect(err2).toBeInstanceOf(OidcTokenError)
     expect((err2 as OidcTokenError).code).toBe('token-exchange-failed')
   })

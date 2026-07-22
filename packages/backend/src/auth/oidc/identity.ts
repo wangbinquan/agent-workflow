@@ -51,7 +51,10 @@ export function readClaimField(source: Record<string, unknown>, key: string): st
  * fields come and go), all absent → null. Capped at 128 chars to match
  * UserSchema.displayName (shared/schemas/user.ts).
  */
-export function composePreferred(source: Record<string, unknown>, claimList: string): string | null {
+export function composePreferred(
+  source: Record<string, unknown>,
+  claimList: string,
+): string | null {
   const parts = claimList
     .split(' ')
     .map((key) => readClaimField(source, key))
@@ -68,7 +71,10 @@ export function composePreferred(source: Record<string, unknown>, claimList: str
  * derivation falls back to email/subject) instead of silently re-reading the
  * standard claim, which would mask a misconfigured field name.
  */
-function readPreferred(source: Record<string, unknown>, usernameClaim: string | null): string | null {
+function readPreferred(
+  source: Record<string, unknown>,
+  usernameClaim: string | null,
+): string | null {
   if (usernameClaim !== null) return composePreferred(source, usernameClaim)
   const value = source['preferred_username']
   return typeof value === 'string' && value.length > 0 ? value : null

@@ -1778,9 +1778,7 @@ function OidcProviderDialog(props: {
   const [tokenEndpoint, setTokenEndpoint] = useState(initial?.tokenEndpoint ?? '')
   const [userinfoEndpoint, setUserinfoEndpoint] = useState(initial?.userinfoEndpoint ?? '')
   const [jwksUri, setJwksUri] = useState(initial?.jwksUri ?? '')
-  const [trustEmailVerified, setTrustEmailVerified] = useState(
-    initial?.trustEmailVerified ?? false,
-  )
+  const [trustEmailVerified, setTrustEmailVerified] = useState(initial?.trustEmailVerified ?? false)
   const [usernameClaim, setUsernameClaim] = useState(initial?.usernameClaim ?? '')
   const [subjectClaim, setSubjectClaim] = useState(initial?.subjectClaim ?? '')
   const [testResult, setTestResult] = useState<null | OidcTestView>(null)
@@ -1973,7 +1971,9 @@ function OidcProviderDialog(props: {
 
         <fieldset className="oidc-form__group">
           <legend className="oidc-form__group-title">
-            {t('settings.auth.groupManualEndpoints', { defaultValue: 'Manual endpoints (optional)' })}
+            {t('settings.auth.groupManualEndpoints', {
+              defaultValue: 'Manual endpoints (optional)',
+            })}
           </legend>
           <p className="oidc-form__group-hint">
             {t('settings.auth.groupManualEndpointsHint', {
@@ -2221,7 +2221,8 @@ function OidcProviderDialog(props: {
                 <>
                   <br />
                   {t('settings.auth.testJwksUnreachable', {
-                    defaultValue: 'JWKS is configured but unreachable — id_token sign-ins will fail.',
+                    defaultValue:
+                      'JWKS is configured but unreachable — id_token sign-ins will fail.',
                   })}
                 </>
               )}

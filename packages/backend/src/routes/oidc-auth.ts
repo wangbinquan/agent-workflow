@@ -132,8 +132,7 @@ export function mountOidcAuthRoutes(app: Hono, deps: AppDeps): void {
 
     // RFC-220 D7 — identity snapshot seed ('' = observed-but-absent sentinel);
     // only meaningful when usernameClaim is configured.
-    const snapshotInit =
-      provider.usernameClaim !== null ? (claims.preferred_username ?? '') : null
+    const snapshotInit = provider.usernameClaim !== null ? (claims.preferred_username ?? '') : null
 
     if (flow.linkUserId) {
       try {

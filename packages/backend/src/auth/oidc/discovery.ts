@@ -53,4 +53,3 @@ export async function fetchDiscoveryDocument(
   }
   return json as Partial<OidcMetadata>
 }
-

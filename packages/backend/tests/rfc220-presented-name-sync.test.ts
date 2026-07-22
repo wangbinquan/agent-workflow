@@ -73,7 +73,10 @@ async function displayNameOf(db: DbClient, userId: string): Promise<string> {
 }
 
 async function snapshotOf(db: DbClient, providerId: string, subject: string) {
-  const rows = await db.select().from(userIdentities).where(eq(userIdentities.providerId, providerId))
+  const rows = await db
+    .select()
+    .from(userIdentities)
+    .where(eq(userIdentities.providerId, providerId))
   return rows.find((r) => r.subject === subject) ?? null
 }
 
@@ -166,9 +169,19 @@ describe('RFC-220 S14 — syncPreferredSnapshot', () => {
 
   test('email_verified follows normalized claims bidirectionally (S7 存量同步)', async () => {
     await seedIdentity('zhang hello')
-    syncPreferredSnapshot(db, { ...baseArgs, providerId, composed: 'zhang hello', emailVerified: true })
+    syncPreferredSnapshot(db, {
+      ...baseArgs,
+      providerId,
+      composed: 'zhang hello',
+      emailVerified: true,
+    })
     expect((await snapshotOf(db, providerId, 's1'))!.emailVerified).toBe(1)
-    syncPreferredSnapshot(db, { ...baseArgs, providerId, composed: 'zhang hello', emailVerified: false })
+    syncPreferredSnapshot(db, {
+      ...baseArgs,
+      providerId,
+      composed: 'zhang hello',
+      emailVerified: false,
+    })
     expect((await snapshotOf(db, providerId, 's1'))!.emailVerified).toBe(0)
   })
 })

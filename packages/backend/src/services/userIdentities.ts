@@ -63,7 +63,10 @@ export interface CreateIdentityArgs {
   now?: number
 }
 
-function insertIdentityTx(tx: DbTxSync, args: CreateIdentityArgs): typeof userIdentities.$inferSelect {
+function insertIdentityTx(
+  tx: DbTxSync,
+  args: CreateIdentityArgs,
+): typeof userIdentities.$inferSelect {
   if (args.expectedSubjectClaim !== undefined) {
     const provider = tx
       .select({ subjectClaim: oidcProviders.subjectClaim })
@@ -178,7 +181,10 @@ export async function bindInvitedUserWithIdentity(
 ): Promise<void> {
   const now = args.now ?? Date.now()
   dbTxSync(db, (tx) => {
-    tx.update(users).set({ status: 'active', updatedAt: now }).where(eq(users.id, args.userId)).run()
+    tx.update(users)
+      .set({ status: 'active', updatedAt: now })
+      .where(eq(users.id, args.userId))
+      .run()
     insertIdentityTx(tx, { ...args.identity, userId: args.userId, now })
     return undefined
   })
