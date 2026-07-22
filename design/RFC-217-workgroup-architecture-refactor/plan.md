@@ -2,21 +2,21 @@
 
 > 单 RFC 分期多 PR（用户拍板）。三条线：**D 线**（引擎/状态/route）、**C 线**（clarify 归一）、**F 线**（前端）。
 > 依赖关系：PR-1 是一切结构 PR 的前置；PR-2 是 PR-4/5 的前置；C 线内部严格 A→B→C；F 线仅 F1 依赖 D 线的 wire 改名（PR-5）。
-> 每 PR 门槛：`typecheck + lint + test + format:check` 全绿；结构 PR（标 ★）加 `build:binary`；push 后按本人 sha 查 CI。
+> 每 PR 门槛：`typecheck + lint + test + format:check + depcheck` 全绿（depcheck 自 T1 接线起）；结构 PR（标 ★）加 `build:binary`；push 后按本人 sha 查 CI。
 
 ## D 线（引擎 / 状态 / route）
 
 - **RFC-217-T1（PR-1 ★）地基与守卫**
-  常量迁 `workgroup/constants.ts`（WG_*_NODE_ID / 端口 / 预算）+ 全仓 import 改指；dependency-cruiser 加 `no-circular`（既有环若>1 白名单登记）；既有工作组 service 文件平移进 `services/workgroup/`（纯移动+改 import，不改逻辑）；`buildWorkgroupHooks` 迁 `workgroup/hooks.ts`（必要时先抽中立执行原语模块）；守卫文件 `rfc217-architecture-locks.test.ts` 立 G1/G6 两条。
-  验收：no-circular 绿；build:binary 绿；全量测试绿（纯搬家零断言变化）。
+  常量迁 `workgroup/constants.ts`（WG_*_NODE_ID / 端口 / 预算）+ 全仓 import 改指；dependency-cruiser 加 `no-circular`（既有环若>1 白名单登记）**并接线 CI**：`bun run depcheck` 进 ci.yml 与本 plan 门槛行（设计门 P2：脚本存在但 lint/CI 均不调）；既有工作组 service 文件平移进 `services/workgroup/`（纯移动+改 import，不改逻辑）；`buildWorkgroupHooks` 迁 `workgroup/hooks.ts`（必要时先抽中立执行原语模块）；守卫文件 `rfc217-architecture-locks.test.ts` 立 G1/G6 两条。
+  验收：depcheck 在 CI 真跑且绿；build:binary 绿；全量测试绿（纯搬家零断言变化）。
 
 - **RFC-217-T2（PR-2）状态真表**
-  migration 0106（建表 + backfill + json_remove 剥 gate/dw/wgPause/autonomous + nudge 行打 kind）；`state.ts` 编解码 + `casGateStatus` 转换表；三种写法两入口全部改走 state.ts（`persistGate` / route 覆写 / json_set 删除）；config schema strict 化；journal 计数测试 bump。
-  验收：G2/G3 锁生效 + 变异实证；冻结旧库 fixture → 迁移 → resume/confirm 集成测试；gate 派生字段等值测试。
+  migration 0106（建表 + backfill〔gate 五态含 `declared` 中断窗口 + `$.dw` 整槽入 `dw_state_json`〕+ json_remove 剥 gate/dw/wgPause/autonomous + nudge 行打 kind）；`state.ts` 编解码 + `casGateStatus` 转换表（含 `rejected→idle` 消费边与 `declared` 两写窗口态）；**dw 翻转与 resume CAS/snapshot swap 同事务**（经 `resumeTaskWithAtomicSideEffects`）；三种写法两入口全部改走 state.ts（`persistGate` / route 覆写 / json_set 删除）；config schema strict 化；journal 计数测试 bump。
+  验收：G2/G3（全退役槽）锁生效 + 变异实证；冻结旧库 fixture（含 declared-only 中断快照、awaiting_confirm 的 dw 任务带 generatedDef/rejectRounds）→ 迁移 → resume/confirm 集成测试；gate 派生字段等值测试。
 
 - **RFC-217-T3（PR-3 ★）turnExecution + 策略拆分**
-  先落「四 driver 行为并集」快照测试；抽 `turnExecution.ts`；4 driver + dw-runner 重试块收编；`strategies/leaderWorker.ts` / `freeCollab.ts` 落地，wake/outcome 模式分支迁入；`?? 'free_collab'` 删除改 fail-loud；rerun cause 枚举化；`msg:` shardKey codec。engine.ts 主循环成形，`workgroupRunner.ts` 删除。
-  验收：AC-1/2/5；G5/G6/G7 变异实证；真子进程 e2e 全绿；策略表测平移完成。
+  先落「四 driver 行为并集」快照测试；抽 `turnExecution.ts`（`retryPolicy` 为 TurnSpec 入参：message turn 单发 maxAttempts=1、dw **不套循环**只复用重提示构造器/解析助手，各配行为锁）；4 driver 重试块收编；`strategies/leaderWorker.ts` / `freeCollab.ts` 落地，wake/outcome 模式分支迁入；`?? 'free_collab'` 删除改 fail-loud；rerun cause 枚举化；`msg:` shardKey codec。engine.ts 主循环成形，`workgroupRunner.ts` 删除。
+  验收：AC-1/2/5；G5/G6/G7 变异实证；message 单发与 dw 预算行为锁；真子进程 e2e 全绿；策略表测平移完成。
 
 - **RFC-217-T4（PR-4）route 下沉 + oracle**
   `taskActions.ts` 落地，七个肥 handler 下沉（config PUT 拆四步骤函数）；5 处裸 insert 消灭；`ConfigPatchSchema` 复用 shared switches；WS 广播进 service；`oracle.ts` 落地 + 全仓 20+ 判别点改造。
@@ -32,13 +32,13 @@
 
 ## C 线（clarify 归一）
 
-- **RFC-217-T7（PR-7）读侧统一 + 双盲调修复**（依赖：无；可与 D 线穿插）
-  读侧全切 `clarify_rounds`；答题广播按 kind 单发；baseline 测试改造。
-  验收：读侧对遗留表引用归零（除双写点）；广播单发集成测试。
+- **RFC-217-T7（PR-7）读侧统一 + 写侧补齐 + 双盲调修复**（依赖：无；可与 D 线穿插）
+  读侧全切 `clarify_rounds`；**lifecycleRepair options-C1/S2 等「只写遗留表」修复路径改同事务双写统一表**（设计门 P1，双表分歧制造源）；答题广播按 kind 单发；baseline 测试改造。
+  验收：读侧对遗留表引用归零（除双写点）；修复路径双写集成测试；广播单发集成测试。
 
 - **RFC-217-T8（PR-8）T17 删表 + directive 收敛**
-  migration 0107（幂等 backfill + directive 收编垫片逻辑 + DROP 双表 + clarify_rounds 重建剥 directive/question_scopes_json）；双写代码删除；`clarifyMigration.ts` 整删；dual-write 测试家族退役。
-  验收：AC-8 前半；G8 变异实证；冻结旧库迁移测试（含仅存在于遗留表的尾数据）。
+  migration 0107（**字段级 reconcile**：同 ID 生命周期字段以遗留表为准、统一表独有列保留；仅遗留有则 INSERT + directive 收编垫片逻辑 + DROP 双表 + clarify_rounds 重建**只剥 question_scopes_json、directive 列保留为 round 级处置记录**）；双写代码删除；`clarifyMigration.ts` 整删；dual-write 测试家族退役。
+  验收：AC-8 前半；G8 变异实证；冻结旧库迁移测试（含仅存在于遗留表的尾数据 + 同 ID 双表分歧样本 + 已 stop 旧轮不被后续 continue 复活）。
 
 - **RFC-217-T9（PR-9）self/cross 服务合并**
   `services/clarify/service.ts` kind 泛化（DTO/broadcast 单份）；`terminatedAs` DTO 归一 + 前端消费点；`sessionModeFallback.ts` 改名迁出；dispatch/autoDispatch 文件内拆函数 + conflict code 枚举化（锁契约不动）。

@@ -59,6 +59,10 @@ interface TurnSpec {
   role: WorkgroupProtocolRole            // leader | worker | fc_member
   nodeId: string; shardKey: string | null
   rerunCause: WgRerunCause               // 新枚举，见 §7 命名
+  retryPolicy: {                          // 设计门 P2：重试策略是入参，不是骨架常量
+    maxAttempts: number                  //   leader/assignment/batch = WG_PROTOCOL_RETRIES；message turn = 1（现状单发不重试，锁死）
+    retryCause: WgRerunCause             //   常规 'wg-protocol-retry'（不计预算，RFC-187 §2.1）
+  }
   composePrompt(state, attempt: TurnAttemptCtx): string   // attempt>0 时注入协议错误重提示
   hostOutputPorts: string[]              // wgHostRolePorts(...)
   clarify: { allowed: boolean; forbiddenReprompt: string }  // resolveWgClarifyAllowed 结果
@@ -68,7 +72,9 @@ interface TurnSpec {
 async function executeTurn(args, state, spec): Promise<TurnOutcome>
 ```
 
-骨架统一持有：mint（`mintNodeRun`）、attempt 循环（`WG_PROTOCOL_RETRIES`）、`## Protocol errors in your previous reply` + `fenceUntrusted` 重提示（现 4 处逐字复制：`1713-1719` / `2017-2023` / `2276-2282` / dw）、`clarify-forbidden` 重提示（现 3 处：`1761-1768` / `2064-2069` / `2323-2327`）、`FOLLOWUP_POLICY` 分支（现 3 处：`1781` / `2074` / `2329`）、失败收尾 `settleCardAfterFailure` 接线。**语义不变式**：重试计数、followup 分类、`wg-protocol-retry` 不计预算（RFC-187 §2.1）逐条保持，由既有 rfc186/187 测试锁证。
+骨架统一持有：mint（`mintNodeRun`）、attempt 循环（按 `retryPolicy`）、`## Protocol errors in your previous reply` + `fenceUntrusted` 重提示（现 4 处逐字复制：`1713-1719` / `2017-2023` / `2276-2282` / dw）、`clarify-forbidden` 重提示（现 3 处：`1761-1768` / `2064-2069` / `2323-2327`）、`FOLLOWUP_POLICY` 分支（现 3 处：`1781` / `2074` / `2329`）、失败收尾 `settleCardAfterFailure` 接线。**语义不变式**：重试计数、followup 分类、`wg-protocol-retry` 不计预算（RFC-187 §2.1）逐条保持，由既有 rfc186/187 测试锁证。
+
+**dynamicWorkflowRunner 的收编边界**（设计门 P2 勘误）：dw 生成轮的重试是**持久化总预算** `generateAttempts`（DwState 字段）且 cause 用 `dw-generate`，与回合引擎的进程内 attempt 循环语义不同——dw **不套用 executeTurn 的循环**，只复用**重提示文案构造器与端口解析助手**（G6 锁的是文案定义点唯一，四处消费仍成立）。message turn 单发语义与 dw 预算语义各配行为锁测试。
 
 ### 1.4 策略接口
 
@@ -85,7 +91,7 @@ interface WorkgroupStrategy {
 - `wake.ts` 保留纯函数底座（切片、占用集、游标推导等共享原语），**模式分支迁入策略**；`deriveWakeSet` 变成 `strategyOf(mode).deriveWake` 的转发壳，保住既有表测。
 - engine.ts 主循环模式无关：`loadDbState → strategy.deriveWake → executeTurn(spec) → strategy.settleTurn → race`。
 - `roundedModeOf(...) ?? 'free_collab'`（`workgroupRunner.ts:717,787`）删除：`strategyOf(mode)` 对 `dynamic_workflow` **抛错 fail-loud**（scheduler 分流已保证不可达，抛错是防御，配回归测试）。
-- dispatch 分流维持 `deriveWorkgroupDispatchFromConfig` 三态（`dw-generate` / `dw-execute` / turn-engine），但改读 `workgroup_task_state.dw_phase`（见 §2）。
+- dispatch 分流维持 `deriveWorkgroupDispatchFromConfig` 三态（`dw-generate` / `dw-execute` / turn-engine），但改读 `workgroup_task_state.dw_state_json` 的 phase（见 §2）。
 
 ## 2. D2 运行时状态真表 `workgroup_task_state`
 
@@ -99,26 +105,28 @@ interface WorkgroupStrategy {
 CREATE TABLE workgroup_task_state (
   task_id TEXT PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE,
   gate_status TEXT NOT NULL DEFAULT 'idle'
-    CHECK (gate_status IN ('idle','awaiting_confirmation','approved','rejected')),
+    CHECK (gate_status IN ('idle','declared','awaiting_confirmation','approved','rejected')),
   gate_summary TEXT,            -- leader declare 时的总结（原 gate.summary）
   gate_rejected_comment TEXT,   -- 驳回意见（原 gate.rejectedComment）
   pause_reason TEXT,            -- 原 $.wgPause.reason（NULL=未暂停）
-  dw_phase TEXT CHECK (dw_phase IN ('generating','awaiting_confirm','rejected','executing')),
-  dw_attempts INTEGER NOT NULL DEFAULT 0,
+  dw_state_json TEXT,           -- 完整 DwState 检查点（原 $.dw 整槽），zod 校验单写者
   updated_at INTEGER NOT NULL
 );
 ```
 
 - **新表而非 tasks 加列**：避免撞冻结旧 migration 的 fixture 断言（[reference_new_column_breaks_frozen_migration_tests]），且 1:1 运行时状态与 tasks 业务列分离。
+- **dw 整槽平移而非拆列**（设计门 P1 勘误）：`DwStateSchema` 是完整幂等恢复检查点——除 `phase` 外还有 `generateAttempts` / `rejectRounds` / `rejectionComment` / `generatedDef`（`shared/dynamicWorkflow.ts:51-63`），生成、确认、save-as、executing UI 都在读。只落 phase/attempts 两列会让 awaiting_confirm / rejected 任务迁移后不可确认、丢失驳回预算。故 dw **保留 JSON 形态**（它本就有 zod）整槽迁入 `dw_state_json` 列：达成「出 config blob + 单写者」目标，不损一字段。`workgroupDispatchOf` 读该列 `json_extract('$.phase')`（或解码后传参）。
 - 行创建时机：工作组任务 startTask 时随插（`startTaskImpl` 同事务）；migration backfill 存量。
-- **gate 状态机**（转换表 + CAS，对齐 `workgroupLifecycle.ts:39` 范式）：
-  - `idle → awaiting_confirmation`（leader declare 且门开；写 summary）
+- **gate 状态机**（转换表 + CAS，对齐 `workgroupLifecycle.ts:39` 范式；含设计门 P1 补的两条边）：
+  - `idle → declared`（leader declare 且门开；写 summary。对应现状 `driveLeaderTurn` 落 `declaredDone` 与 `openCompletionGate` 落 `awaitingConfirmation` 是**两笔分离写**的前半窗口）
+  - `declared → awaiting_confirmation`（完成门 holder run 开启成功）
   - `awaiting_confirmation → approved`（人工确认；终态）
   - `awaiting_confirmation → rejected`（驳回；写 comment）
-  - `rejected → awaiting_confirmation`（leader 重新 declare）
+  - `rejected → declared`（leader 重新 declare；再走 holder 开启）
+  - `rejected → idle`（**驳回被消费**：leader 下一轮不再 declare 而是继续干活/派单——现状 `workgroupRunner.ts:1467` 的 `rejected:false` 消费写。comment 随之清空，其内容已在该轮 prompt 注入过，`workgroupRunner.ts:916-923`）
   - 门关（花名册无人工成员 ∨ completionGate=off）时 declare 不进 gate 状态机，任务直接收尾（现行为，`resolveCompletionGate` 判据不变，RFC-207）。
-  - 旧字段派生：`declaredDone ≡ gate_status ∈ {awaiting_confirmation, approved}`；`awaitingConfirmation ≡ gate_status='awaiting_confirmation'`。
-- 写路径唯一化：`state.ts` 暴露 `casGateStatus(tx, taskId, {from[], to, patch})` 与 `setPauseReason` / `setDwPhase`（普通 UPDATE，单写者：pause 只引擎写、dw 只 dw-runner 与 dw-confirm 服务写）。`persistGate` / route 全量覆写 / `json_set` 三写法全部删除。
+  - 旧字段派生：`declaredDone ≡ gate_status ∈ {declared, awaiting_confirmation, approved}`；`awaitingConfirmation ≡ gate_status='awaiting_confirmation'`（wire 形状不变）。
+- 写路径唯一化：`state.ts` 暴露 `casGateStatus(tx, taskId, {from[], to, patch})` / `setPauseReason(tx,…)` / `setDwState(tx,…)`——**全部 tx 入参**。尤其 dw：**confirm/reject 的 phase 翻转必须与任务 `awaiting_review` resume CAS、workflow-snapshot swap 同事务**（现 `resumeTaskWithAtomicSideEffects` 语义，设计门 P1：孤立 `setDwPhase` 会在 preflight 失败/CAS 落败时把任务搁浅在错误 phase，使确认端点拒绝重试）。`persistGate` / route 全量覆写 / `json_set` 三写法全部删除。
 - **`workgroupConfigJson` 退化为纯冻结 config**：读侧 `WorkgroupRuntimeConfigSchema` strict 化（拒绝未知键，防止状态槽复活）；config PUT 仍改它（成员/开关变更，reload-merge 语义保留）。
 
 ### 2.3 backfill 与兼容
@@ -126,7 +134,7 @@ CREATE TABLE workgroup_task_state (
 migration 0106 步骤（multi-statement，`--> statement-breakpoint` 分隔；journal `when` = 1786464000000+86400000 接合成轴）：
 
 1. CREATE TABLE。
-2. `INSERT INTO workgroup_task_state SELECT id, CASE 派生 gate_status…` —— 用 `json_extract(workgroup_config_json,'$.gate.approved')` 等映射：`approved=1→'approved'`；`awaitingConfirmation=1→'awaiting_confirmation'`；`rejected=1→'rejected'`；其余 `'idle'`。同法带出 summary/comment/pause/dw。范围 `WHERE workgroup_id IS NOT NULL`。
+2. `INSERT INTO workgroup_task_state SELECT id, CASE 派生 gate_status…` —— 用 `json_extract(workgroup_config_json,'$.gate.*')` 映射，**按此优先级**：`approved=1→'approved'`；`awaitingConfirmation=1→'awaiting_confirmation'`；`rejected=1→'rejected'`；**`declaredDone=1 且以上皆非 →'declared'`**（设计门 P1：升级前任务可能恰在「declare 已落、holder 未开」的两写窗口被打断——映成 idle 会丢 leader 的完成声明，AC-12 违约；此快照必须迁成 declared 并配中断窗口 fixture 测试）；其余 `'idle'`。summary/comment/pause 同法带出；`$.dw` 整槽原样搬入 `dw_state_json`。范围 `WHERE workgroup_id IS NOT NULL`。野值兜底：gate 布尔非法组合落 `'idle'` + 迁移测试用真实历史形状 fixture 覆盖。
 3. `UPDATE tasks SET workgroup_config_json = json_remove(workgroup_config_json,'$.gate','$.dw','$.wgPause') WHERE workgroup_id IS NOT NULL`（物理剥离，含 `autonomous` 残留键一并 `json_remove`——RFC-207 遗留尸体清扫）。
 4. 断言式收尾：无（SQLite migration 无断言原语），由 upgrade-rolling 测试补（见 §12）；`_journal` 计数测试同步 bump（[reference_migration_bumps_journal_count_test]）。
 
@@ -177,14 +185,16 @@ taskActions.ts:
 
 ## 6. D6 kind 判别单一 oracle
 
-`workgroup/oracle.ts`：
+**正典放 shared 层**（设计门 P2 勘误：前端/共享代码也在做同类判别，且禁止前端 import 后端——backend-only oracle 无法满足全仓 G4；shared 已有 `schemas/task.ts::taskExecutionKind` / `dynamicWorkflow.ts` 两个跨包分类点，应收敛而非另立第二 oracle）：
 
 ```ts
+// packages/shared/src/（并入既有分类点，不新造平行体系）
 export function isWorkgroupTask(row: { workgroupId: string | null }): boolean
-export function workgroupDispatchOf(row): WorkgroupDispatch | null   // 包 deriveWorkgroupDispatch（改读 dw_phase）
+export function workgroupDispatchOf(row): WorkgroupDispatch | null   // 收编 deriveWorkgroupDispatch（改读 dw_state）
+// packages/backend/src/services/workgroup/oracle.ts —— 薄包装：drizzle 行形状适配 + re-export
 ```
 
-- 全仓 `workgroupId !== null` / `!= null` / `=== null` 判别（`scheduler.ts:576,594`、`routes/tasks.ts:680`、`stuckTaskDetector.ts:317`、`task.ts:3651,3733`、`routes/workgroupTasks.ts:233` 等）改走 oracle；grep 锁只放行 `oracle.ts` 与 `db/schema.ts`。
+- 全仓（含前端）`workgroupId !== null` / `!= null` / `=== null` 判别（`scheduler.ts:576,594`、`routes/tasks.ts:680`、`stuckTaskDetector.ts:317`、`task.ts:3651,3733`、`routes/workgroupTasks.ts:233`、前端 `tasks.detail.tsx:227` 等）改走 oracle；grep 锁覆盖 backend+frontend，只放行 shared 正典文件、`oracle.ts` 包装与 `db/schema.ts`。
 - `launchKind === 'workgroup'`（scheduledTasks 面）是**另一概念**（定时启动信封类型），保留枚举 switch，不并入 oracle；在 oracle.ts 顶注写明这条边界，防误收敛。
 - `mode ===` 直接比较收进 `strategies/`；shared 层保留 `roundedModeOf` / `workgroupModeOf` 纯函数（前端也用）。
 
@@ -197,20 +207,23 @@ export function workgroupDispatchOf(row): WorkgroupDispatch | null   // 包 deri
 
 ## 8. D7 clarify 全量归一（四阶段）
 
-### 8.1 C-A 读侧统一 + 双盲调修复（先行，不动 DB）
+### 8.1 C-A 读侧统一 + 写侧补齐 + 双盲调修复（先行，不动 DB）
 
-- 读侧全部切 `clarify_rounds`：`listClarifySummaries`（`clarify.ts:292`）、detail、agent 队列投影（`clarifyQueue.ts` 已统一，核对）等逐点迁移；遗留表暂保双写（本阶段唯一职责是「读单源」）。
+- 读侧全部切 `clarify_rounds`：`listClarifySummaries`（`clarify.ts:292`）、detail、agent 队列投影（`clarifyQueue.ts` 已统一，核对）等逐点迁移；遗留表暂保双写（本阶段职责是「读单源」）。
+- **写侧补齐**（设计门 P1：`lifecycleRepair/options-C1.ts` / `options-S2.ts` 今天**只 UPDATE `clarify_sessions`**——正是同 ID 双表分歧的制造源）：全部「只写遗留表」的修复路径改为同事务双写统一表，从此双表对同 ID 不再新增分歧。
 - 答题路由双盲调（`routes/clarify.ts:342-361` 同时调 self/cross broadcast）修复：由 `clarify_rounds.kind` 精确路由单 broadcast。
 - baseline 对称测试（`clarify-baseline-*` / `cross-clarify-baseline-*`）改断言统一读路径。
 
 ### 8.2 C-B T17 落地（migration 0107）
 
-1. 幂等 backfill：`INSERT OR IGNORE INTO clarify_rounds SELECT … FROM clarify_sessions / cross_clarify_sessions`（映射沿用 migration 0031 的 INSERT FROM 子句；理论上 RFC-058 起已双写，backfill 兜 0031 前尾数据）。
-2. directive 收敛：把两遗留表及 `clarify_rounds.directive` 上仍为 `'stop'` 且 `task_node_clarify_directives` 无对应行的，写入 node/shard 级 directive 行（**收编 `clarifyMigration.ts:160` 垫片逻辑为一次性 migration**）；同法收编垫片另一半（`dispatched_at` 丢答案 reconcile）。
+1. **字段级 reconcile 而非 INSERT OR IGNORE**（设计门 P1：同 ID 行可能双表分歧——8.1 之前的历史修复只动过遗留表，OR IGNORE 会把陈旧统一行原样保留，DROP 后修复永久丢失）：
+   - 同 ID 皆在：**生命周期字段以遗留表为准 UPDATE 统一表**（status / answers / answered_at / directive——迁移时点遗留表仍是读权威），**统一表独有字段原样保留**（协作草稿、逐题归属等 RFC-099 列）。
+   - 仅遗留表有：INSERT（映射沿用 migration 0031 的 INSERT FROM 子句）。
+2. directive 垫片收编：把遗留表上仍为 `'stop'` 且 `task_node_clarify_directives` 无对应行的，写入 node/shard 级 directive 行（**收编 `clarifyMigration.ts:160` 垫片逻辑为一次性 migration**）；同法收编垫片另一半（`dispatched_at` 丢答案 reconcile）。
 3. `DROP TABLE clarify_sessions; DROP TABLE cross_clarify_sessions;`
-4. `clarify_rounds` 表重建（sqlite 无 DROP COLUMN 组合场景）：剥 `directive` 列与 `question_scopes_json` 休眠列（`schema.ts:1666-1667`）。
+4. `clarify_rounds` 表重建：**只剥 `question_scopes_json` 休眠列**（`schema.ts:1666-1667`）。**`directive` 列保留**（设计门 P2 勘误：它是 **round 级处置记录**——`fetchDesignerParkEntries` 靠 `directive='continue'` 过滤已被 stop 的具体轮次；node/shard 级开关是「最新拨杆」，无法表达「旧轮已终止」，若只留开关，后来的 continue 会复活旧 stop 轮的 designer 行）。
 5. 代码侧：双写删除（`clarify.ts:185+208` / `crossClarify.ts:207` / `clarifySeal.ts:347-349`）、`clarifyMigration.ts` 整删（boot 接线一并拆）、dual-write 一致性测试家族退役改为「单表不变式」测试。
-- directive 唯一真理源 = `task_node_clarify_directives`（RFC-122/207 语义不变：per-shard 优先、回落节点级）。
+- **directive 收敛后的终态 = 两个语义不同的真理源**（从 4 处收到 2 处）：`task_node_clarify_directives` = node/shard 级「还要不要问」开关（RFC-122/207 语义不变：per-shard 优先、回落节点级）；`clarify_rounds.directive` = 单轮回答时的处置记录。二者职责在 schema 注释里写明，防止再次误并。
 
 ### 8.3 C-C self/cross 服务合并
 
@@ -255,10 +268,10 @@ vitest：composer 下放后的重渲隔离断言（draft 输入不触发 timelin
 
 | # | 锁 | 实现 |
 |---|---|---|
-| G1 | no-circular | dependency-cruiser 规则（PR-1 起 CI 生效） |
+| G1 | no-circular | dependency-cruiser 规则 + **接线**：`bun run depcheck` 加入 CI workflow 与 pre-push 门槛（设计门 P2：`package.json:29` 已有 depcheck 脚本但 `lint` 与 `ci.yml` 均不调它——只加规则不接线等于没锁） |
 | G2 | route 禁裸写 | grep：`routes/` 内禁 `insert(workgroupMessages` / `insert(workgroupAssignments` / `update(tasks).set({ workgroupConfigJson` |
-| G3 | gate 编解码唯一 | grep：`declaredDone` / `awaitingConfirmation` 字面量只允 `workgroup/state.ts` + 测试 |
-| G4 | kind oracle | grep：`workgroupId !==` / `workgroupId !=` / `workgroupId ===` 只允 `oracle.ts` / `schema.ts` |
+| G3 | 退役槽全禁 | grep：`declaredDone` / `awaitingConfirmation` 字面量只允 `workgroup/state.ts` + 测试；**并禁一切对 `workgroupConfigJson` 的 `$.gate` / `$.dw` / `$.wgPause` 键访问与 `json_set(workgroup_config_json` 模式**（设计门 P2：只锁两个 gate 布尔挡不住状态槽复活），migration SQL 显式白名单 |
+| G4 | kind oracle | grep：`workgroupId !==` / `workgroupId !=` / `workgroupId ===` 覆盖 backend+frontend，只允 shared 正典 / `oracle.ts` / `schema.ts` |
 | G5 | mode 收敛 | grep：`mode === '` 于 `services/workgroup/` 只允 `strategies/` 与 `oracle.ts` |
 | G6 | 骨架去重 | grep：`Protocol errors in your previous reply` 字面量全仓唯一定义点 |
 | G7 | shardKey codec | grep：`services/` 内 shardKey 相关 `.split(':')` 禁令（codec 文件白名单） |
@@ -290,12 +303,12 @@ vitest：composer 下放后的重渲隔离断言（draft 输入不触发 timelin
 
 | 模块 | 波及 | 说明 |
 |---|---|---|
-| `scheduler.ts` | −~390 行 | hooks 外迁；分流三元改读 oracle + dw_phase；其余调度语义零改动 |
+| `scheduler.ts` | −~390 行 | hooks 外迁；分流三元改读 oracle + dw_state phase；其余调度语义零改动 |
 | `services/task.ts` | 小 | startTaskImpl 增 workgroup_task_state 插行；rowToSummary/Detail 改 oracle |
 | `taskQuestionDispatch.ts` / `clarifyQueue.ts` / `clarifySeal.ts` | 中 | WG 常量 import 路径、shard codec、C 阶段读侧切换 |
 | `autoResume.ts` / `stuckTaskDetector.ts` / `limits.ts` | 小 | oracle 化 |
 | `routes/tasks.ts` | 小 | `:680` 特判改 oracle |
-| shared `workgroupRuntime.ts` / `dynamicWorkflow.ts` | 中 | config strict 化、dispatch 改签名（读 dw_phase 入参）、budgetUsed 命名 |
+| shared `workgroupRuntime.ts` / `dynamicWorkflow.ts` | 中 | config strict 化、dispatch 改签名（读 dw_state phase 入参）、budgetUsed 命名 |
 | WS `ws.ts` | 零 | 帧不变 |
 | 前端 `useTaskSync.ts` | 零 | 规则表不变（room key 失效逻辑照旧） |
 | e2e | 中 | wire 改名点 + 房间选择器随组件拆分调整 |

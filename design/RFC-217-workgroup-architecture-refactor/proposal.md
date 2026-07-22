@@ -45,12 +45,12 @@
 
 - **AC-1** `workgroupRunner.ts` 不复存在；引擎按 `services/workgroup/` 目标布局分文件，单文件 ≤800 行。
 - **AC-2** 4 个 driver 的复制骨架消灭：协议重试块 / `clarify-forbidden` 重提示 / followup 分支各只有一处实现（含 `dynamicWorkflowRunner` 的第 4 份），由源码守卫锁定。
-- **AC-3** gate/dw/wgPause 出 JSON 槽：`workgroup_task_state` 真表 + gate 转换表 CAS；全仓无第二处 `workgroupConfigJson` 里 gate/dw/wgPause 的读写（grep 锁）；route 层不再出现 `update(tasks).set({workgroupConfigJson...})`。
+- **AC-3** gate/dw/wgPause 出 JSON 槽：`workgroup_task_state` 真表 + gate 五态转换表 CAS（含 declared 中断窗口态与 rejected 消费边）；dw 以**完整 DwState 检查点**整槽迁入 `dw_state_json`（generateAttempts/rejectRounds/rejectionComment/generatedDef 一个不丢），翻转与 resume CAS 同事务；全仓无第二处 `workgroupConfigJson` 里 gate/dw/wgPause 的读写（grep 锁）；route 层不再出现 `update(tasks).set({workgroupConfigJson...})`。
 - **AC-4** `routes/workgroupTasks.ts` 每个 handler 收敛为 parse+ACL+service 调用；5 处裸 `insert(workgroupMessages)` 与裸 assignment 写消灭（表级 grep 锁）。
 - **AC-5** 引擎内 `mode === '...'` 直接比较归零（策略文件内除外）；`?? 'free_collab'` 兜底删除，dynamic_workflow 误入回合引擎 fail-loud。
-- **AC-6** kind 判别收敛：裸 `workgroupId !== null` 判定只允许 oracle 模块一处（grep 锁），其余 20+ 处改走 oracle。
+- **AC-6** kind 判别收敛：裸 `workgroupId !== null` 判定只允许 shared 正典（+backend 薄包装 oracle）一处（grep 锁覆盖 backend+frontend），其余 20+ 处改走 oracle。
 - **AC-7** round 三概念在 API / 代码层显式分离命名（budgetUsed / displayRound / dispatchRound），预算判定行为有回归测试证明不变。
-- **AC-8** `clarify_sessions` / `cross_clarify_sessions` 两表删除，读侧全走 `clarify_rounds`；directive 唯一真理源 `task_node_clarify_directives`；答题路由双盲调 broadcast 消灭；`clarifyMigration.ts` / `question_scopes_json` 清除。
+- **AC-8** `clarify_sessions` / `cross_clarify_sessions` 两表删除（迁移做同 ID 字段级 reconcile，历史修复不丢），读侧全走 `clarify_rounds`；directive 收敛为两个语义明确的真理源（node/shard 级开关 `task_node_clarify_directives` + round 级处置记录 `clarify_rounds.directive`）；答题路由双盲调 broadcast 消灭；`clarifyMigration.ts` / `question_scopes_json` 清除。
 - **AC-9** dependency-cruiser 增加 `no-circular` 规则且全仓绿；每个触碰模块边界的 PR 跑 `build:binary` smoke。
 - **AC-10** `WorkgroupRoom.tsx` ≤400 行；composer 状态下放子组件；`workgroupRoomKey` 单一 useQuery owner；`useOwnedEditScope` 提炼为公共 hook。
 - **AC-11** 全程真子进程 e2e（rfc186/187 家族）不 stub 化、持续绿；每个行为纠偏点有先红后绿的回归测试。
