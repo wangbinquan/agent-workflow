@@ -466,6 +466,17 @@ describe('RFC-220 acquireIdentityClaims matrix (D4/D6)', () => {
     expect(numeric).toBeInstanceOf(OidcTokenError)
     expect((numeric as OidcTokenError).code).toBe('userinfo-fetch-failed')
     expect((numeric as OidcTokenError).message).toContain('errorCode=40003')
+
+    // string-typed NON-zero codes are still errors
+    const stringly = await acquireIdentityClaims({
+      tokens: { access_token: 'at' },
+      effective: effective({ userinfoEndpoint: `${ISSUER}/me` }),
+      clientId: AUDIENCE,
+      nonce: NONCE,
+      fetcher: userinfoFetcher({ errorCode: '40003' }),
+    }).catch((e: unknown) => e)
+    expect(stringly).toBeInstanceOf(OidcTokenError)
+    expect((stringly as OidcTokenError).message).toContain('errorCode=40003')
   })
 
   test('D9: zero/empty error markers are success wrappers, claims extraction proceeds', async () => {
@@ -473,6 +484,7 @@ describe('RFC-220 acquireIdentityClaims matrix (D4/D6)', () => {
     // common platform SUCCESS shapes — they must not brick the login.
     for (const body of [
       { errorCode: 0, sub: 'ui-1' },
+      { errorCode: '0', sub: 'ui-1' }, // stringly-API zero (impl-gate P2)
       { error: null, sub: 'ui-1' },
       { error: '', sub: 'ui-1' },
     ]) {

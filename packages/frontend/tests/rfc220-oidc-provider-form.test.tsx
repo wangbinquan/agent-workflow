@@ -174,6 +174,12 @@ describe('RFC-220 S10 — provider dialog fields', () => {
       target: { value: 's' },
     })
     fireEvent.click(screen.getByTestId('oidc-userinfo-style-post_json'))
+    // clicking the field LABEL must not proxy to the first radio and silently
+    // reset the choice (impl-gate P2: Field needs group rendering here)
+    fireEvent.click(screen.getByText('Userinfo request style', { selector: 'span' }))
+    expect(screen.getByTestId('oidc-userinfo-style-post_json').getAttribute('aria-checked')).toBe(
+      'true',
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1))
     const body = (api.post as ReturnType<typeof vi.fn>).mock.calls[0]![1] as Record<string, unknown>

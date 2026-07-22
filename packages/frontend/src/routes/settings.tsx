@@ -2033,6 +2033,10 @@ function OidcProviderDialog(props: {
             label={t('settings.auth.userinfoRequestStyle', {
               defaultValue: 'Userinfo request style',
             })}
+            // group: without it Field renders a <label> wrapping BOTH radio
+            // buttons — clicking the label/hint text would proxy to the first
+            // option and silently reset a saved post_json selection.
+            group
             labelId="oidc-userinfo-style-label"
             hint={t('settings.auth.userinfoRequestStyleHint', {
               defaultValue:

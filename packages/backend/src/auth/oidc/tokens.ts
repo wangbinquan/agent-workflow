@@ -195,8 +195,17 @@ function idpErrorOf(obj: Record<string, unknown>): string | null {
   for (const key of ['error', 'errorCode'] as const) {
     if (!Object.prototype.hasOwnProperty.call(obj, key)) continue
     const value = obj[key]
-    if (typeof value === 'string' && value.length > 0) found = `${key}=${value}`
-    else if (typeof value === 'number' && value !== 0) found = `${key}=${value}`
+    if (typeof value === 'string' && value.length > 0) {
+      // Stringly APIs serialize the zero-success convention too:
+      // { "errorCode": "0" } is a SUCCESS wrapper, not an error (impl-gate
+      // P2). Only errorCode gets this exemption — the standard OAuth `error`
+      // member is a bare error identifier, never a status number.
+      const numeric = Number(value)
+      if (key === 'errorCode' && Number.isFinite(numeric) && numeric === 0) continue
+      found = `${key}=${value}`
+    } else if (typeof value === 'number' && value !== 0) {
+      found = `${key}=${value}`
+    }
     if (found !== null) break
   }
   if (found === null) return null
