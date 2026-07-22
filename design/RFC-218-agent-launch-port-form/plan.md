@@ -1,0 +1,82 @@
+# RFC-218 单 agent 启动端口化表单与启动上传控件收敛 — plan
+
+状态：Draft（2026-07-22）。依赖：无（RFC-165/166 已交付；与 RFC-217 重构无耦合面——本 RFC 不触
+workgroup 代码）。
+
+## PR 拆分
+
+- **PR-1（独立先行，纯前端）**：上传控件收敛（T1–T3）。不依赖端口化任何改动，先落先受益
+  （workflow 启动路径立即改善）。
+- **PR-2（主体）**：端口化启动表单（T4–T12）。upload 端口的控件直接站在 PR-1 上。
+
+## 任务
+
+### PR-1 上传控件收敛
+
+- **RFC-218-T1** `FilesDropzone` 原语：`FileDropzone.tsx` 内 sibling 组件（多文件受控 props、
+  拖拽深度计数高亮、accept、maxCount、name+size 去重、逐文件删除、error role=alert、
+  `data-testid` 家族），共享 `.file-dropzone` 命名空间 + 新增 `__list` 行样式；单文件 API 零改动。
+  vitest（design §9-15 前半）。
+- **RFC-218-T2** `UploadPicker` 重写为薄适配层（def 解析 + hint 行 + FilesDropzone）；删除
+  `.upload-picker__drop` 手搓 drag 样式与代码；i18n 补 dropzone 标题/描述键（`launch.upload.*`
+  命名空间内）。源码层文本断言锁（design §9-15 后半）。
+- **RFC-218-T3** 视觉自查：最小 repro + chrome 截图 light/dark，与 skills 导入 / agent 导入
+  side-by-side 对齐记录；确认 settings 双 OS 视觉基线不受影响（启动页不在基线场景内，预期零刷新）。
+
+### PR-2 端口化启动表单
+
+- **RFC-218-T4** shared 派生层 `agentLaunchForm.ts`：`deriveAgentLaunchForm`（kind 映射矩阵、
+  required 默认、blocker：signal/非法名/内建 token 撞名）+ promptTemplate 合成（golden 字节）。
+  测试 design §9-1..4。【是后续一切的地基】
+- **RFC-218-T5** wire：`StartAgentTaskSchema.description` → optional + 新增 `inputs`；
+  scheduled payload 随 extend 继承；`rejectRetiredStartTaskKeys` 键清单核对。e2e 字段 grep
+  （[reference_e2e_outside_workspace_typecheck]）。
+- **RFC-218-T6** backend 快照合成：`buildAgentHostSnapshot(agent, allowClarify)` 端口化分支
+  （input 节点 `__agent_input_{i}__` / 边 / 模板），零端口路径字节不动；`startAgentTask` 形态
+  校验矩阵（description/inputs 互斥、未知键、缺必填、blocker 400）。测试 design §9-5..7、9。
+- **RFC-218-T7** multipart 共通化：从 `handleMultipartTaskStart` 抽 `services/launchMultipart.ts`
+  公共骨架（defs 来源 + start 回调参数化），`/api/tasks` 迁移到共用层（行为字节不变），
+  `/api/agents/:name/tasks` 接入 multipart 分支；`.agent-inputs/{port}` 落盘。测试 design §9-8。
+- **RFC-218-T8** 前端向导：agent `inputs` 数据可达性核实（列表 DTO 或补 detail query）→
+  `inputDefs` 三元来源 → 第 3 步复用 DynamicInput/uploads/必填/multipart 判定 → blocker
+  ErrorBanner + 禁用 → 摘要步分支。`DynamicInput` 增加 chips presentation 分支。
+  测试 design §9-12。
+- **RFC-218-T9** 启动 body：`buildAgentStartBody` 按形态 stamp `inputs`/`description` 二选一
+  （白名单前科，独立任务 + 锁）。测试 design §9-13。
+- **RFC-218-T10** relaunch + scheduled：`taskToLaunchPayload` agent 分支端口化识别 + 文本预填 +
+  upload 键剔除；scheduled 保存期含上传端口拒绝；火时按当时 agent 重派生（既有路径自然获得，
+  补失败面断言）。测试 design §9-10、11、14。
+- **RFC-218-T11** e2e：`task-wizard.spec.ts` 增双文本端口 stub agent 场景（design §9-16）；
+  既有 agent 用例零改动确认。
+- **RFC-218-T12** 守卫与收尾：`tasks.new.tsx` inputDefs 表级 grep 锁（design §9-17）；
+  `design/plan.md` 索引 + `STATE.md` 状态翻转；release note 草稿注明行为变化
+  （proposal §6）。
+
+## 依赖关系
+
+```
+T1 → T2 → T3           （PR-1 线性）
+T4 → T6 → T7            T4 → T5
+T4,T5 → T8 → T9 → T10 → T11 → T12
+T2 ⇢ T8（upload 端口控件视觉依赖 PR-1，功能不阻塞）
+```
+
+## 验收清单（对照 proposal §5）
+
+- [ ] AC-1 端口化 agent 端口表单替换描述框，body 带 inputs 无 description
+- [ ] AC-2 零端口 agent 字节级现状（rfc165 锁保持绿）
+- [ ] AC-3 kind 映射矩阵逐条（含 path\<*\> 与嵌套 list 兜底）
+- [ ] AC-4 signal 前端禁用 + 后端 400
+- [ ] AC-5 required 默认必填双端拦截；required:false 空值空端口块
+- [ ] AC-6 XML 端口块统一信封；`{{…}}` 不二次展开回归锁
+- [ ] AC-7 上传端口 `.agent-inputs/{port}` 落盘 + 换行路径 wire + multipart 共用护栏
+- [ ] AC-8 非法端口名/内建撞名启动拦截 + 保存警告
+- [ ] AC-9 relaunch 文本预填 / 上传重选 / 零端口不变
+- [ ] AC-10 scheduled 文本可定时、上传端口保存拒绝
+- [ ] AC-11 上传控件 FileDropzone 家族体验 + 手搓 drag 删除 + 双主题截图自查
+- [ ] AC-12 门槛四件套 + 前端 vitest + e2e + build:binary 全绿
+
+## 实现门
+
+- 设计门：Codex review（落档后、请求用户批准前）——本文件提交后立即跑。
+- 实现门：每 PR 合入前 Codex review + CI 按 [feedback_post_commit_ci_check] 查绿。
