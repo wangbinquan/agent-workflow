@@ -30,13 +30,17 @@ type RefreshConfig = Pick<Config, 'submoduleAutoRefresh'>
  *
  * Two conditions, both deliberate:
  *  - never auto-refreshed, or last auto-refresh older than one interval;
- *  - fetched (by ANY path — task launch or manual) within `onlyRecentDays`.
+ *  - fetched by a USER path (task-launch warm fetch or manual refresh) within
+ *    `onlyRecentDays`.
  *
  * The second is what keeps this from being a network storm: a machine can
  * accumulate dozens of mirrors from one-off experiments, and re-fetching those
- * forever serves nobody. `last_auto_refresh_at` is tracked separately from
- * `last_fetched_at` precisely so this cadence can be reasoned about independently
- * of task traffic.
+ * forever serves nobody. Critically, the background loop itself does NOT advance
+ * `last_fetched_at` (`refreshCachedRepo(..., { touchRecency: false })`) — if it
+ * did, every tick would renew this very recency gate and an abandoned mirror
+ * would never age out. The loop's cadence lives in `last_auto_refresh_at`, which
+ * is tracked separately precisely so it can be reasoned about independently of
+ * user traffic.
  */
 export async function selectDueRepos(
   db: DbClient,
@@ -86,14 +90,24 @@ export async function refreshDueRepos(
   for (const repo of due) {
     try {
       const res = await refreshCachedRepo(
-        { db, ...(opts?.appHome !== undefined ? { appHome: opts.appHome } : {}) },
+        // Thread the tick's clock through so every timestamp in one sweep — the
+        // selection cut-off, last_auto_refresh_at, and refreshCachedRepo's own
+        // internal `now` — shares a single source. In production `now` is
+        // Date.now, so behaviour is unchanged; tests can drive time deterministically.
+        { db, now, ...(opts?.appHome !== undefined ? { appHome: opts.appHome } : {}) },
         repo.id,
+        // RFC-210 G7 self-renewal fix: advance the mirror WITHOUT touching
+        // last_fetched_at, else this loop keeps its own selection alive forever
+        // (selectDueRepos gates on last_fetched_at) and abandoned mirrors never
+        // age out. The loop's own cadence lives in last_auto_refresh_at.
+        { touchRecency: false },
       )
       refreshed += 1
       if (!res.submoduleSyncOk) {
-        // Not a failure of the refresh itself — the parent fetch succeeded and
-        // `last_fetched_at` advanced. Surfaced through the repo row's existing
-        // submodule telemetry columns, which /repos already renders.
+        // Not a failure of the refresh itself — the parent fetch succeeded (the
+        // submodule telemetry columns advance regardless; only last_fetched_at
+        // is held back). Surfaced through the repo row's existing submodule
+        // telemetry columns, which /repos already renders.
         log.warn('submodule sync failed during auto-refresh', {
           repoId: repo.id,
           url: repo.urlRedacted ?? '',

@@ -841,9 +841,22 @@ export interface RefreshCachedRepoResult {
   hasSubmodules: boolean
 }
 
+/**
+ * Fetch + submodule-sync a single cached mirror.
+ *
+ * `opts.touchRecency` (default `true`) controls whether a successful fetch
+ * advances `last_fetched_at`. Manual refresh and the task-launch warm fetch
+ * ARE user activity, so they leave it `true`. The background auto-refresh loop
+ * (RFC-210 G7) passes `false`: it must advance the mirror's objects without
+ * counting as "someone used this repo", otherwise the recency window in
+ * `selectDueRepos` — which reads `last_fetched_at` — would renew itself every
+ * tick and an abandoned mirror would generate network traffic forever. The
+ * loop records its own cadence in `last_auto_refresh_at` instead.
+ */
 export async function refreshCachedRepo(
   deps: GitRepoCacheDeps,
   id: string,
+  opts?: { touchRecency?: boolean },
 ): Promise<RefreshCachedRepoResult> {
   const rows = deps.db.select().from(cachedRepos).where(eq(cachedRepos.id, id)).limit(1).all()
   const row = rows[0]
@@ -894,10 +907,14 @@ export async function refreshCachedRepo(
         stderr: sub.error ?? '',
       })
     }
+    // RFC-210 G7: auto-refresh advances the mirror's objects but must NOT renew
+    // the recency window (see this function's doc + selectDueRepos). Everything
+    // except last_fetched_at still reflects the fresh fetch either way.
+    const touchRecency = opts?.touchRecency ?? true
     deps.db
       .update(cachedRepos)
       .set({
-        lastFetchedAt: ts,
+        ...(touchRecency ? { lastFetchedAt: ts } : {}),
         hasSubmodules: sub.hasGitmodules,
         lastSubmoduleSyncOk: sub.ok,
         lastSubmoduleSyncError: sub.error,
@@ -906,7 +923,7 @@ export async function refreshCachedRepo(
       .run()
     const updated = {
       ...row,
-      lastFetchedAt: ts,
+      lastFetchedAt: touchRecency ? ts : row.lastFetchedAt,
       hasSubmodules: sub.hasGitmodules,
       lastSubmoduleSyncOk: sub.ok,
       lastSubmoduleSyncError: sub.error,
