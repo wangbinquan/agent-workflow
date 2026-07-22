@@ -98,4 +98,18 @@ describe('renderBwrapArgs', () => {
     }
     expect(args).toContain('--die-with-parent')
   })
+
+  // RFC-205 impl-gate P0-5 (Codex 2026-07-22): private PID namespace + fresh /proc
+  // so an agent can't read /proc/<daemonPid>/{root,fd}/… to bypass the tmpfs.
+  test('unshares the PID namespace and mounts a fresh /proc AFTER the root bind', () => {
+    const args = renderBwrapArgs(computeSandboxPolicy(input), { appHome: HOME })
+    expect(args).toContain('--unshare-pid')
+    const procIdx = args.indexOf('--proc')
+    expect(procIdx).toBeGreaterThan(-1)
+    expect(args[procIdx + 1]).toBe('/proc')
+    // the fresh /proc must be mounted AFTER `--bind / /` (which maps the host
+    // /proc), otherwise the host /proc wins and the daemon's PID stays visible.
+    const rootBindIdx = args.findIndex((a, i) => a === '--bind' && args[i + 1] === '/')
+    expect(procIdx).toBeGreaterThan(rootBindIdx)
+  })
 })

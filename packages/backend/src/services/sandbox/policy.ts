@@ -105,7 +105,24 @@ export function renderSeatbeltProfile(policy: SandboxPolicy): string {
  * already hides them.
  */
 export function renderBwrapArgs(policy: SandboxPolicy, opts: { appHome: string }): string[] {
-  const args = ['--die-with-parent', '--bind', '/', '/', '--dev', '/dev']
+  // RFC-205 impl-gate P0-5 (Codex 2026-07-22): `--bind / /` maps the host root
+  // (incl. /proc) into the namespace, so without a private PID namespace + a fresh
+  // /proc an agent could read /proc/<daemonPid>/root/.../secret.key or
+  // /proc/<daemonPid>/fd/<sqlite-fd> — bypassing the appHome tmpfs entirely.
+  // --unshare-pid gives a private PID namespace (bwrap becomes its init/reaper;
+  // --die-with-parent + the runner's setsid process-group kill still reap it);
+  // --proc mounts a fresh /proc AFTER the bind so it only shows namespace-local PIDs.
+  const args = [
+    '--die-with-parent',
+    '--unshare-pid',
+    '--bind',
+    '/',
+    '/',
+    '--proc',
+    '/proc',
+    '--dev',
+    '/dev',
+  ]
   args.push('--tmpfs', opts.appHome)
   // The mirrors dir is an allow in spirit but lives OUTSIDE the deny list on
   // darwin (deny-list model) — on linux the tmpfs hides it, so bind it back.
