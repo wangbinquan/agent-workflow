@@ -88,7 +88,9 @@ export function InputsEditor({ inputs, onChange, hasExternalPortAlert }: InputsE
               name={port.name}
               kind={port.kind}
               description={port.description}
-              required={port.required === true}
+              // RFC-218 D5: absence means required — the card chip must agree
+              // with launch semantics (true now folds to canonical-absent).
+              required={port.required !== false}
               legacy={!AGENT_PORT_NAME_RE.test(port.name)}
               duplicate={(counts.get(port.name) ?? 0) > 1}
               editButtonRef={(node) => {
