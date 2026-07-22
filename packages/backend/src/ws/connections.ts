@@ -204,6 +204,17 @@ export async function revalidateAllConnections(
 
 const revalidateLog = createLogger('ws.revalidate')
 
+// RFC-212 impl-gate (Codex 2026-07-22): the production trigger is fire-and-forget,
+// so an end-to-end test (revocation write → trigger → sockets close) has no promise
+// to await. This test-only seam resolves after the NEXT trigger's revalidation pass
+// settles, letting AC-1-via-service assert the REAL trigger chain deterministically.
+// Production callers never touch it — the waiter list is empty for them, so the
+// finally-hook is a no-op.
+let revalidateSettledWaiters: Array<() => void> = []
+export function __nextRevalidationSettledForTests(): Promise<void> {
+  return new Promise((r) => revalidateSettledWaiters.push(r))
+}
+
 // RFC-212 T6 — register the real trigger so revocation write points (which only
 // import the light revalidationHook module) fan out here. Fire-and-forget: the
 // write point does not wait for sockets to close. Tests drive
@@ -221,10 +232,16 @@ registerRevalidationTrigger((db, reason) => {
   for (const ws of liveConnections()) {
     if (!ws.data.closing) ws.data.revalidating = true
   }
-  void revalidateAllConnections({ db, log: revalidateLog }, reason).catch((err) => {
-    revalidateLog.warn('ws-revalidate-threw', {
-      reason,
-      err: err instanceof Error ? err.message : String(err),
+  void revalidateAllConnections({ db, log: revalidateLog }, reason)
+    .catch((err) => {
+      revalidateLog.warn('ws-revalidate-threw', {
+        reason,
+        err: err instanceof Error ? err.message : String(err),
+      })
     })
-  })
+    .finally(() => {
+      const waiters = revalidateSettledWaiters
+      revalidateSettledWaiters = []
+      for (const r of waiters) r()
+    })
 })
