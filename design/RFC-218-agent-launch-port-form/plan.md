@@ -1,7 +1,7 @@
 # RFC-218 单 agent 启动端口化表单与启动上传控件收敛 — plan
 
-状态：Draft（2026-07-22）。依赖：无（RFC-165/166 已交付；与 RFC-217 重构无耦合面——本 RFC 不触
-workgroup 代码）。
+状态：Done（2026-07-22 交付，见文末交付记录）。依赖：无（RFC-165/166 已交付；与 RFC-217 重构无
+耦合面——本 RFC 不触 workgroup 代码）。
 
 ## PR 拆分
 
@@ -73,21 +73,36 @@ T2 ⇢ T8（upload 端口控件视觉依赖 PR-1，功能不阻塞）
 
 ## 验收清单（对照 proposal §5）
 
-- [ ] AC-1 端口化 agent 端口表单替换描述框，body 带 inputs 无 description
-- [ ] AC-2 零端口 agent 字节级现状（rfc165 锁保持绿）
-- [ ] AC-3 kind 映射矩阵逐条（含 path\<*\> 与嵌套 list 兜底）
-- [ ] AC-4 signal 前端禁用 + 后端 400
-- [ ] AC-5 required 默认必填双端拦截；required:false 空值空端口块
-- [ ] AC-6 XML 端口块统一信封；`{{…}}` 不二次展开回归锁
-- [ ] AC-7 上传端口 `.agent-inputs/{port}` 落盘 + 换行路径 wire + multipart 共用护栏
-- [ ] AC-8 非法端口名/内建撞名启动拦截 + 保存警告
-- [ ] AC-9 relaunch 文本预填 / 上传重选 / 零端口不变
-- [ ] AC-10 scheduled 文本可定时、上传端口保存拒绝
-- [ ] AC-11 上传控件 FileDropzone 家族体验 + 手搓 drag 删除 + 双主题截图自查
-- [ ] AC-12 门槛四件套 + 前端 vitest + e2e + build:binary 全绿
+- [x] AC-1 端口化 agent 端口表单替换描述框，body 带 inputs 无 description（P1/P2 vitest + e2e）
+- [x] AC-2 零端口 agent 字节级现状（rfc218 B2 深等锁 + rfc165 全家族绿）
+- [x] AC-3 kind 映射矩阵逐条（shared 矩阵测试含 path\<*\> 与嵌套 list 兜底）
+- [x] AC-4 signal 前端禁用 + 后端 422（B3 + P4）
+- [x] AC-5 required 默认必填双端拦截（实现门 P1 补编辑器对齐：显式 false 持久化、true 折叠缺省）
+- [x] AC-6 XML 端口块统一信封 golden；`{{…}}` verbatim 断言（B4）
+- [x] AC-7 上传端口 `.agent-inputs/{port}` 落盘 + 换行路径 wire + multipart-only（JSON 伪造 422）+ 共用护栏（B5）
+- [x] AC-8 非法端口名/保留族启动拦截 + 端口编辑器警告（P2-3 落 validateAgentPortState）
+- [x] AC-9 relaunch 文本预填 / 上传重选 / 零端口不变（P7 + B4 + P1-1 精确判别反例锁）
+- [x] AC-10 scheduled 文本可定时、上传端口保存拒绝 + disabled PUT 替换 payload 也校验（P2-5）
+- [x] AC-11 上传控件 FileDropzone 家族体验 + 手搓 drag 删除 + 双主题截图自查（PR-1）
+- [x] AC-12 门槛四件套 + 前端 vitest 全绿 + e2e 本地全过 + build:binary smoke 绿；CI 按 sha 追认
 
 ## 实现门
 
 - 设计门：**已跑（2026-07-22，Codex review @ abadee24）**——5 P1 + 4 P2 全部裁定有效并修订入
   design.md v2（修订账 design §10，原文 `codex-design-gate-2026-07-22.md`）。
-- 实现门：每 PR 合入前 Codex review + CI 按 [feedback_post_commit_ci_check] 查绿。
+- 实现门：**已跑（2026-07-22）**——PR-2（@ eb262a02）1 P1 + 8 P2 全采纳修入 `2e785c69`
+  （原文 `codex-impl-gate-2026-07-22.md`；含 startTask sandbox 闸移位根修 RFC-205 同病）；
+  PR-1（@ 0e9e2681）**零 findings**（原文 `codex-impl-gate-pr1-2026-07-22.md`，已核非空转）。
+  CI 红两轮均已归属：rfc200-source-lock/工作组三连 = RFC-217 T3a 拆解期间（T3b 已修）；
+  agent-port-editor e2e required 徽记 = 本 RFC P1 语义翻转漏改显示点（`129f7f3c` 修）。
+
+## 交付记录（2026-07-22）
+
+- `abadee24` 三件套落档 · `5bf4895c` 设计门修订 v2 · `0e9e2681` PR-1 上传控件收敛 ·
+  `eb262a02` PR-2 端口化表单主体 · `cea9201d` routes-no-cast 白名单跟修 ·
+  `2e785c69` 实现门九条 · `87fc4dd3` AgentForm-inputs 锁适配 · `129f7f3c` required 徽记跟修
+- 测试面：shared agent-launch-form 17 · backend rfc218 17 · frontend rfc218 两套 18 +
+  三处旧锁随契约更新（agent-ports/agent-port-dialog/AgentForm-inputs，注明 RFC-218 出处）·
+  e2e task-wizard 端口场景 + agent-port-editor 全绿
+- 行为变化（proposal §6）已生效：存量声明过 inputs 的 agent 下次启动即端口表单；
+  默认必填语义 = `required !== false`
