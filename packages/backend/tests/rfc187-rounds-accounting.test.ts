@@ -52,9 +52,13 @@ describe('RFC-187 §3-3 — source locks', () => {
 
   test('protocol retries (attempt>0) mint the wg-protocol-retry cause (leader + assignment)', () => {
     // leader
-    expect(RUNNER).toMatch(/attempt > 0 \? 'wg-protocol-retry' : 'wg-leader-round'/)
+    expect(RUNNER).toMatch(
+      /attempt > 0 \? WG_RERUN_CAUSE\.protocolRetry : WG_RERUN_CAUSE\.leaderRound/,
+    )
     // member assignment
-    expect(RUNNER).toMatch(/attempt > 0 \? 'wg-protocol-retry' : 'wg-assignment'/)
+    expect(RUNNER).toMatch(
+      /attempt > 0 \? WG_RERUN_CAUSE\.protocolRetry : WG_RERUN_CAUSE\.assignment/,
+    )
   })
 
   test('countRoundsUsed excludes wg-protocol-retry in BOTH modes', () => {

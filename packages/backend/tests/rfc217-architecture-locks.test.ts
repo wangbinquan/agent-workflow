@@ -139,3 +139,57 @@ describe('rfc217 G6 — the protocol-error reprompt has ONE definition site', ()
     expect(offenders).toEqual(['packages/backend/src/services/workgroup/turnExecution.ts'])
   })
 })
+
+describe('rfc217 G5/G7 — mode branches ratcheted, shardKey goes through codecs', () => {
+  const WG = 'packages/backend/src/services/workgroup'
+
+  test("G5 ratchet: per-file `mode === '` count may only shrink", () => {
+    // T3b 收形后的快照（原 runner 单文件 15 处+全仓 40+ 散射）。新增比较必须
+    // 落在 strategies/（或先收掉别处一处）；数字只许降不许升。
+    const SNAPSHOT: Record<string, number> = {
+      'memberTurns.ts': 6,
+      'engine.ts': 4,
+      'rounds.ts': 4,
+      'prompts.ts': 3,
+      'wake.ts': 2,
+      'strategies/leaderWorker.ts': 1,
+      'lifecycle.ts': 1,
+      'launch.ts': 1,
+    }
+    const files: string[] = []
+    const walk = (dir: string): void => {
+      for (const e of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
+        if (e.isDirectory()) walk(`${dir}/${e.name}`)
+        else if (e.name.endsWith('.ts')) files.push(`${dir}/${e.name}`)
+      }
+    }
+    walk(WG)
+    for (const f of files) {
+      const rel = f.slice(WG.length + 1)
+      const count = read(f).split("mode === '").length - 1
+      const cap = SNAPSHOT[rel] ?? (rel.startsWith('strategies/') ? Infinity : 0)
+      expect(count, `${rel} 的 mode=== 计数 ${count} 超过棘轮上限 ${cap}`).toBeLessThanOrEqual(cap)
+    }
+  })
+
+  test('G7: no hand-rolled shardKey split/startsWith outside the shared codecs', () => {
+    const offenders: string[] = []
+    const walk = (dir: string): void => {
+      for (const e of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
+        const rel = `${dir}/${e.name}`
+        if (e.isDirectory()) walk(rel)
+        else if (e.name.endsWith('.ts')) {
+          const src = read(rel)
+          if (
+            src.includes("startsWith('msg:") ||
+            src.includes("startsWith('batch:") ||
+            /shardKey[^\n]*\.split\(':'\)/.test(src)
+          )
+            offenders.push(rel)
+        }
+      }
+    }
+    walk(WG)
+    expect(offenders).toEqual([])
+  })
+})

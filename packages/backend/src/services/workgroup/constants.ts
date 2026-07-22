@@ -18,3 +18,17 @@ export const WORKGROUP_HOST_WORKFLOW_NAME = '__workgroup_host__'
 export const WG_LEADER_NODE_ID = '__wg_leader__'
 export const WG_MEMBER_NODE_ID = '__wg_member__'
 export const WG_CLARIFY_NODE_ID = '__wg_clarify__'
+
+/**
+ * RFC-217 §7 — workgroup rerun_cause vocabulary (node_runs.rerun_cause). The
+ * literal VALUES are wire-frozen (stored rows / round-ledger exclusions /
+ * clarify aging all key on them); produce new rows through these named
+ * constants, never a bare string.
+ */
+export const WG_RERUN_CAUSE = {
+  leaderRound: 'wg-leader-round',
+  assignment: 'wg-assignment',
+  messageTurn: 'wg-message-turn',
+  protocolRetry: 'wg-protocol-retry',
+  gate: 'wg-gate',
+} as const

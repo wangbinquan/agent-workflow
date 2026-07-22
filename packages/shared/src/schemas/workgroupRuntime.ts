@@ -11,11 +11,14 @@
 
 import { z } from 'zod'
 import {
+  buildMsgShardKey,
+  parseMsgShardKey,
   WorkgroupMemberDisplayNameSchema,
   WorkgroupMemberTypeSchema,
   WorkgroupModeSchema,
   WorkgroupSwitchesSchema,
 } from './workgroup'
+export { buildMsgShardKey, parseMsgShardKey }
 
 // ---------------------------------------------------------------------------
 // Task-level config snapshot (tasks.workgroup_config_json, design §1.3)

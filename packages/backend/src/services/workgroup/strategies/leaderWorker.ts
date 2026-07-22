@@ -12,7 +12,7 @@ import {
   WG_PORT_DECISION,
   WG_PORT_MESSAGES,
 } from '@agent-workflow/shared'
-import { WG_LEADER_NODE_ID } from '@/services/workgroup/constants'
+import { WG_LEADER_NODE_ID, WG_RERUN_CAUSE } from '@/services/workgroup/constants'
 import { casAssignmentStatus, advanceMemberCursor } from '@/services/workgroup/lifecycle'
 import { executeTurn, WG_PROTOCOL_RETRIES } from '@/services/workgroup/turnExecution'
 import { casGateStatus, type EngineDbState } from '@/services/workgroup/state'
@@ -43,7 +43,7 @@ export async function openCompletionGate(
     taskId,
     nodeId: WG_LEADER_NODE_ID,
     status: 'pending',
-    cause: 'wg-gate',
+    cause: WG_RERUN_CAUSE.gate,
     // RFC-189 — the gate holder belongs to the CURRENT round (display only;
     // wg-gate rows never advance the round budget, ≤ max by construction).
     overrides: { wgRound: gateRound },
@@ -228,7 +228,7 @@ export async function driveLeaderTurn(
       // tag it so round accounting excludes it. RFC-189 — retryIndex is the
       // plain attempt ordinal (the round lives in wg_round).
       mintRow: (attempt, retryBase) => ({
-        cause: attempt > 0 ? 'wg-protocol-retry' : 'wg-leader-round',
+        cause: attempt > 0 ? WG_RERUN_CAUSE.protocolRetry : WG_RERUN_CAUSE.leaderRound,
         retryIndex: retryBase + attempt,
         overrides: { wgRound },
       }),

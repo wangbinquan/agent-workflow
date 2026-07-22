@@ -15,6 +15,22 @@
 import { z } from 'zod'
 import { ResourceVisibilitySchema } from './resourceAcl'
 
+/**
+ * RFC-217 T3 (G7) — message-turn shardKey codec: `msg:<memberId>:<maxMsgId>`.
+ * The SINGLE build/parse pair for the `msg:` wire family (engine adoption,
+ * room kind derivation, clarify asker folding all consume it) — hand-rolled
+ * `.split(':')` on shard keys is grep-banned in the workgroup dir.
+ */
+export function buildMsgShardKey(memberId: string, maxMessageId: string): string {
+  return `msg:${memberId}:${maxMessageId || '0'}`
+}
+export function parseMsgShardKey(
+  shardKey: string,
+): { memberId: string; maxMessageId: string } | null {
+  const m = /^msg:([^:]+):(.*)$/.exec(shardKey)
+  return m === null ? null : { memberId: m[1] as string, maxMessageId: m[2] as string }
+}
+
 /** Permitted characters in workgroup name (URL-safe; matches `/api/workgroups/:name`). */
 export const WORKGROUP_NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 
@@ -378,7 +394,10 @@ export function wgClarifyAskerKey(
 ): string {
   if (nodeId === leaderNodeId) return 'leader'
   if (shardKey === null) return 'leader'
-  if (shardKey.startsWith('msg:')) return `mem:${shardKey.split(':')[1] ?? ''}`
+  {
+    const msg = parseMsgShardKey(shardKey)
+    if (msg !== null) return `mem:${msg.memberId}`
+  }
   // RFC-215 §6.3 — fc 任务批 run 折叠到成员：批 shardKey 编卡集合，卡回 open 重组
   // 批次会换 key，若直用则预算清零 + stop 指令成孤儿（同上 R12 的旁路在任务轨重开）。
   if (shardKey.startsWith('batch:')) return `asg:batch:${shardKey.split(':')[1] ?? ''}`

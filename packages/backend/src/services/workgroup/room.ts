@@ -21,7 +21,7 @@ import type {
   WorkgroupRunEntry,
   WorkgroupRunKind,
 } from '@agent-workflow/shared'
-import { parseBatchShardKey } from '@agent-workflow/shared'
+import { parseBatchShardKey, parseMsgShardKey } from '@agent-workflow/shared'
 import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from './constants'
 
 /** Minimal node_run shape the derivation reads (subset of the DB row). The
@@ -76,7 +76,6 @@ export interface MemberLite {
 // message-turn shardKey format: `msg:${memberId}:${maxMsgId}` (workgroupRunner.ts:1251).
 // memberId is a colon-free ULID; maxMsgId is a ULID or '0'. A drift in this
 // format is locked by the shardKey-prefix contract test (design §8.2).
-const MESSAGE_TURN_SHARD_RE = /^msg:([^:]+):(.*)$/
 
 function runKindOf(run: HostRunLite, assignmentIds: ReadonlySet<string>): WorkgroupRunKind | null {
   if (run.nodeId === WG_LEADER_NODE_ID) {
@@ -84,7 +83,7 @@ function runKindOf(run: HostRunLite, assignmentIds: ReadonlySet<string>): Workgr
     return run.rerunCause === 'wg-gate' ? null : 'leader-round'
   }
   if (run.nodeId === WG_MEMBER_NODE_ID && run.shardKey !== null) {
-    if (MESSAGE_TURN_SHARD_RE.test(run.shardKey)) return 'message-turn'
+    if (parseMsgShardKey(run.shardKey) !== null) return 'message-turn'
     if (assignmentIds.has(run.shardKey)) return 'assignment'
     // RFC-215 §3.6 — fc task-batch rows (shardKey = batch:member:ids). Without
     // this branch every batch run vanished from runHistory, presence showed the
@@ -134,11 +133,11 @@ function classify(
     return { run, kind, memberId, maxMsgId: null }
   }
   // message-turn
-  const m = run.shardKey ? MESSAGE_TURN_SHARD_RE.exec(run.shardKey) : null
+  const m = run.shardKey ? parseMsgShardKey(run.shardKey) : null
   if (m === null) return null
-  const memberId = m[1] ?? ''
+  const memberId = m?.memberId ?? ''
   if (memberId.length === 0) return null
-  return { run, kind, memberId, maxMsgId: m[2] ?? null }
+  return { run, kind, memberId, maxMsgId: m?.maxMessageId ?? null }
 }
 
 /** running wins; else newest by id (ULID monotonic) — pending or terminal. */

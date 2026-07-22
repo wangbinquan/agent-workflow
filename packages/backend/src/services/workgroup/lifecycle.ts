@@ -16,6 +16,7 @@
 
 import type { WorkgroupAssignmentStatus } from '@agent-workflow/shared'
 import {
+  parseMsgShardKey,
   parseBatchShardKey,
   resolveClarifyBudget,
   wgClarifyAskerKey,
@@ -353,7 +354,7 @@ export async function dismissOpenClarifyParksForAutonomous(
         )
         .run()
       const shard = s.sourceShardKey
-      if (shard !== null && !shard.startsWith('msg:')) {
+      if (shard !== null && parseMsgShardKey(shard) === null) {
         // RFC-215 §9 — 批 run 的 park 卡是一组：shardKey 编入整批卡 id，单卡等值
         // 匹配对 `batch:` 键恒 0 行（设计门 ①P1-3/②F2：整批永滞留 awaiting_human）。
         const batch = parseBatchShardKey(shard)

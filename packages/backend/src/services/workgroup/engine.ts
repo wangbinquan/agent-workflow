@@ -22,6 +22,7 @@
 
 import {
   parseBatchShardKey,
+  parseMsgShardKey,
   workgroupHasHumanMember,
   resolveCompletionGate,
   type RerunCause,
@@ -411,9 +412,9 @@ export async function runWorkgroupEngine(
         const shard = row.shardKey
         if (shard === null) return
         const setOp = <T>(s: Set<T>, v: T): void => void (on ? s.add(v) : s.delete(v))
-        if (shard.startsWith('msg:')) {
-          const memberId = shard.split(':')[1]
-          if (memberId !== undefined) setOp(inflightMeta.messageTurnMemberIds, memberId)
+        const parsedMsg = parseMsgShardKey(shard)
+        if (parsedMsg !== null) {
+          setOp(inflightMeta.messageTurnMemberIds, parsedMsg.memberId)
           return
         }
         const batch = parseBatchShardKey(shard)
@@ -749,10 +750,10 @@ async function driveAdoptedRun(
     return
   }
   const shardKey = row.shardKey
-  if (shardKey === null || shardKey.startsWith('msg:')) {
+  const adoptedMsg = shardKey === null ? null : parseMsgShardKey(shardKey)
+  if (shardKey === null || adoptedMsg !== null) {
     // adopted message turn — re-drive with the member parsed from the key
-    const memberId = shardKey?.split(':')[1]
-    if (memberId !== undefined) await driveMessageTurn(args, state, memberId, false, row.id)
+    if (adoptedMsg !== null) await driveMessageTurn(args, state, adoptedMsg.memberId, false, row.id)
     return
   }
   // RFC-215 §3.1/§3.4 — adopted batch row (clarify-answer rerun on a batch

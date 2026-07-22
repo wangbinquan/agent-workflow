@@ -16,7 +16,7 @@ import {
   type WgTaskResultItem,
   type WorkgroupAssignment,
 } from '@agent-workflow/shared'
-import { WG_MEMBER_NODE_ID } from '@/services/workgroup/constants'
+import { WG_MEMBER_NODE_ID, WG_RERUN_CAUSE } from '@/services/workgroup/constants'
 import {
   casAssignmentStatus,
   consumeTasksAdd,
@@ -163,7 +163,7 @@ export async function driveBatchTurn(
         '  Proceed with your best judgment and emit wg_task_results as usual.',
       protocolOpts: { count: batch.length },
       mintRow: (attempt, retryBase) => ({
-        cause: attempt > 0 ? 'wg-protocol-retry' : 'wg-assignment',
+        cause: attempt > 0 ? WG_RERUN_CAUSE.protocolRetry : WG_RERUN_CAUSE.assignment,
         retryIndex: retryBase + attempt,
         overrides: {
           shardKey,

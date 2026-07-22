@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm'
 import { workgroupAssignments } from '@/db/schema'
 import { getAgent } from '@/services/agent'
 import {
+  buildMsgShardKey,
   parseWgMessagesPort,
   parseWgResultPort,
   resolveWorkgroupSwitches,
@@ -15,7 +16,7 @@ import {
   type Agent,
   type WorkgroupAssignment,
 } from '@agent-workflow/shared'
-import { WG_MEMBER_NODE_ID } from '@/services/workgroup/constants'
+import { WG_MEMBER_NODE_ID, WG_RERUN_CAUSE } from '@/services/workgroup/constants'
 import {
   casAssignmentStatus,
   advanceMemberCursor,
@@ -122,7 +123,7 @@ export async function driveAssignmentTurn(
       // RFC-187 §3-3 / RFC-189 — retry rows are budget-excluded; retryIndex is
       // the plain attempt ordinal (round lives in wg_round).
       mintRow: (attempt, retryBase) => ({
-        cause: attempt > 0 ? 'wg-protocol-retry' : 'wg-assignment',
+        cause: attempt > 0 ? WG_RERUN_CAUSE.protocolRetry : WG_RERUN_CAUSE.assignment,
         retryIndex: retryBase + attempt,
         overrides: {
           shardKey: assignment.id,
@@ -277,17 +278,17 @@ export async function driveMessageTurn(
       config,
       // The shard key embeds the member; only that part identifies the asker
       // (RFC-207 §3.6.3) — the message id is irrelevant to the clarify gate.
-      clarifyShardKey: `msg:${memberId}:0`,
+      clarifyShardKey: buildMsgShardKey(memberId, '0'),
       maxAttempts: 1,
       clarifyForbiddenNotice: '', // unreachable at maxAttempts=1 — exhaustion path only
       mintRow: () => ({
-        cause: 'wg-message-turn',
+        cause: WG_RERUN_CAUSE.messageTurn,
         // RFC-189 — single-shot turn ⇒ plain attempt 0; the lw round it belongs
         // to rides wg_round (fc: NULL — count-based budget, where each message
         // turn IS one budget row and needs no ordinal).
         retryIndex: 0,
         overrides: {
-          shardKey: `msg:${memberId}:${maxMessageId(state.messages) || '0'}`,
+          shardKey: buildMsgShardKey(memberId, maxMessageId(state.messages)),
           agentOverrideName: agent.name,
           wgRound: config.mode === 'leader_worker' ? currentRound(state) : null,
         },
