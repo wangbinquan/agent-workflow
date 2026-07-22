@@ -92,8 +92,6 @@ export const ENDPOINTS: EndpointSpec[] = [
 
   // ---- auth (RFC-036) ----
   { method: 'POST', path: '/api/auth/login', public: true },
-  { method: 'GET', path: '/api/auth/bootstrap/status' },
-  { method: 'POST', path: '/api/auth/bootstrap/admin' },
   { method: 'POST', path: '/api/auth/logout' },
   { method: 'GET', path: '/api/auth/me' },
   { method: 'POST', path: '/api/auth/change-password' },
@@ -111,8 +109,6 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'GET', path: '/api/auth/oidc/:slug/callback', public: true },
 
   // ---- oidc (admin) ----
-  { method: 'GET', path: '/api/oidc/login-policy' },
-  { method: 'PUT', path: '/api/oidc/login-policy' },
   { method: 'GET', path: '/api/oidc/providers' },
   { method: 'POST', path: '/api/oidc/providers' },
   { method: 'GET', path: '/api/oidc/providers/:id' },
