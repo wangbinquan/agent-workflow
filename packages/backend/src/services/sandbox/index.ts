@@ -115,12 +115,16 @@ export function buildRunSandboxCtx(
   // allow-back every git command in the agent's cwd dies EPERM under the
   // appHome-wide deny while file writes still succeed (2026-07-22 task
   // …QGENNV: members declared the workspace unusable and worked in the
-  // user's REAL repo instead, which sits outside the boundary). Gated on
-  // existence: non-scratch tasks have no such dir, and bwrap `--bind` of a
-  // missing source path errors the spawn.
-  const scratchBase = join(p.appHome, 'scratch', taskId)
-  if (existsSync(scratchBase) && !taskWorktrees.includes(scratchBase)) {
-    taskWorktrees.push(scratchBase)
+  // user's REAL repo instead, which sits outside the boundary). Allow back
+  // ONLY the git common dir, NOT the canonical working tree: canonical files
+  // are writable solely through the daemon's writeSem merge-back, and an iso
+  // agent handed the whole canonical tree could race sibling nodes or leave
+  // dirt that survives a failed run (RFC-130 boundary; Codex impl-gate P1
+  // 2026-07-22). Gated on existence: non-scratch tasks have no such dir, and
+  // bwrap `--bind` of a missing source path errors the spawn.
+  const scratchGitDir = join(p.appHome, 'scratch', taskId, '.git')
+  if (existsSync(scratchGitDir) && !taskWorktrees.includes(scratchGitDir)) {
+    taskWorktrees.push(scratchGitDir)
   }
   return { mode: p.mode, status: p.status, appHome: p.appHome, taskWorktrees, runDir }
 }
