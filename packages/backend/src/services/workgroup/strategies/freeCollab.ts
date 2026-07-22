@@ -19,6 +19,7 @@ import {
 import { WG_MEMBER_NODE_ID, WG_RERUN_CAUSE } from '@/services/workgroup/constants'
 import {
   casAssignmentStatus,
+  repointAssignmentRun,
   consumeTasksAdd,
   settleCardAfterFailure,
 } from '@/services/workgroup/lifecycle'
@@ -179,10 +180,7 @@ export async function driveBatchTurn(
             card.status = 'running'
             card.nodeRunId = runId
           } else if (card.nodeRunId !== runId) {
-            await db
-              .update(workgroupAssignments)
-              .set({ nodeRunId: runId, updatedAt: Date.now() })
-              .where(eq(workgroupAssignments.id, card.id))
+            await repointAssignmentRun(db, card.id, runId)
             card.nodeRunId = runId
           }
         }

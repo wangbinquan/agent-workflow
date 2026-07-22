@@ -236,3 +236,21 @@ describe('rfc217 G4 — the workgroup discriminator has ONE oracle', () => {
     expect(offenders).toEqual([])
   })
 })
+
+describe('rfc217 T6 — assignment writes have ONE owning module', () => {
+  test('update(workgroupAssignments) lives only in workgroup/lifecycle.ts', () => {
+    // 状态迁移走 casAssignmentStatus（转换表 CAS），run 指针刷新走
+    // repointAssignmentRun——第二个 update 站点=有人绕开了 D4 写侧收口。
+    const offenders: string[] = []
+    const walk = (dir: string): void => {
+      for (const e of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
+        const rel = `${dir}/${e.name}`
+        if (e.isDirectory()) walk(rel)
+        else if (e.name.endsWith('.ts') && read(rel).includes('update(workgroupAssignments)'))
+          offenders.push(rel)
+      }
+    }
+    walk('packages/backend/src')
+    expect(offenders).toEqual(['packages/backend/src/services/workgroup/lifecycle.ts'])
+  })
+})

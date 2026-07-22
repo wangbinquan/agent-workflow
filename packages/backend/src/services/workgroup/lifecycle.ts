@@ -103,6 +103,22 @@ export function assertAssignmentTransition(
 }
 
 /**
+ * RFC-217 T6 — non-status run-pointer refresh (protocol retries re-point the
+ * card at the newest attempt row). Kept here so `update(workgroupAssignments)`
+ * has ONE owning module (write-side single source; the D4 drift family).
+ */
+export async function repointAssignmentRun(
+  db: DbClient,
+  assignmentId: string,
+  nodeRunId: string,
+): Promise<void> {
+  await db
+    .update(workgroupAssignments)
+    .set({ nodeRunId, updatedAt: Date.now() })
+    .where(eq(workgroupAssignments.id, assignmentId))
+}
+
+/**
  * Compare-and-set an assignment's status: the UPDATE only lands when the row
  * is still in `from` (concurrent engine/HTTP writers race safely — the loser
  * gets `false` and re-reads). Illegal (from → to) pairs throw regardless.

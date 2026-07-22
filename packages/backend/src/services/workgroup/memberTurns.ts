@@ -19,6 +19,7 @@ import {
 import { WG_MEMBER_NODE_ID, WG_RERUN_CAUSE } from '@/services/workgroup/constants'
 import {
   casAssignmentStatus,
+  repointAssignmentRun,
   advanceMemberCursor,
   consumeTasksAdd,
   settleCardAfterFailure,
@@ -136,10 +137,7 @@ export async function driveAssignmentTurn(
           await casAssignmentStatus(db, card.id, 'dispatched', 'running', { nodeRunId: runId })
           card = { ...card, status: 'running', nodeRunId: runId }
         } else if (card.nodeRunId !== runId) {
-          await db
-            .update(workgroupAssignments)
-            .set({ nodeRunId: runId, updatedAt: Date.now() })
-            .where(eq(workgroupAssignments.id, card.id))
+          await repointAssignmentRun(db, card.id, runId)
           card = { ...card, nodeRunId: runId }
         }
       },
