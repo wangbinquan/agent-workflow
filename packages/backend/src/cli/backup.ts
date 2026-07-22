@@ -19,7 +19,9 @@ export async function backupCommand(argv: string[] = []): Promise<BackupCommandR
     // migrations itself and never touches the daemon's startup path, so without
     // this the first backup after an upgrade would faithfully preserve every
     // legacy plaintext credential in the tarball.
-    ensureCredentialsSealed(db, createSecretBox(Paths.secretKeyFile))
+    ensureCredentialsSealed(db, createSecretBox(Paths.secretKeyFile), {
+      blockOnCredentialedPath: true,
+    })
     const r = await createBackup({ db, includeWorktrees })
     const sizeMb = (r.sizeBytes / 1024 / 1024).toFixed(2)
     const lines = [

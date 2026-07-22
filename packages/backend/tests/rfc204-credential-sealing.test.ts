@@ -304,3 +304,53 @@ describe('RFC-204 — the delete guard sees schedule references', () => {
     expect(rows[0]?.launchPayload).toContain('"cachedRepoId":"cr-1"')
   })
 })
+
+describe('RFC-204 impl-gate P0-1 — backup refuses a query-credential on-disk path', () => {
+  test('startup seals but does NOT block; backup context throws (token would ship)', () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    // Historical row onboarded from a ?access_token= URL — the token is slugged
+    // into local_path, which VACUUM INTO copies verbatim into the backup.
+    db.insert(cachedRepos)
+      .values({
+        id: ulid(),
+        urlHash: 'h1',
+        url: 'https://h/r.git?access_token=TOPSECRET',
+        urlRedacted: null,
+        localPath: '/h/.agent-workflow/repos/h1-r.git-access_token-TOPSECRET',
+        defaultBranch: 'main',
+        lastFetchedAt: 1,
+        createdAt: 1,
+      })
+      .run()
+
+    // Startup context (no flag): must NOT block — the daemon has to boot. It
+    // seals the URL column (blanks it) but leaves urlRedacted with the query key.
+    expect(() => ensureCredentialsSealed(db, box)).not.toThrow()
+
+    // Backup context: refuse — the local_path still embeds the plaintext token.
+    let code: string | undefined
+    try {
+      ensureCredentialsSealed(db, box, { blockOnCredentialedPath: true })
+    } catch (e) {
+      code = (e as { code?: string }).code
+    }
+    expect(code).toBe('backup-credentialed-path')
+  })
+
+  test('a credential-free cached repo never blocks a backup', () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    db.insert(cachedRepos)
+      .values({
+        id: ulid(),
+        urlHash: 'h2',
+        url: 'https://h/clean.git',
+        urlRedacted: null,
+        localPath: '/h/.agent-workflow/repos/h2-clean',
+        defaultBranch: 'main',
+        lastFetchedAt: 1,
+        createdAt: 1,
+      })
+      .run()
+    expect(() => ensureCredentialsSealed(db, box, { blockOnCredentialedPath: true })).not.toThrow()
+  })
+})

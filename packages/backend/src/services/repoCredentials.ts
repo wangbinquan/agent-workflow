@@ -16,7 +16,13 @@
 // both `secret.key` and `db.sqlite` directly. That isolation needs a runtime
 // sandbox and is deliberately out of scope — see RFC-205.
 
-import { gitUrlCacheKeyWith, parseGitUrl, redactGitUrl } from '@agent-workflow/shared'
+import {
+  gitUrlCacheKeyWith,
+  hasQueryCredential,
+  parseGitUrl,
+  redactGitUrl,
+} from '@agent-workflow/shared'
+import { DomainError } from '@/util/errors'
 import { and, eq, sql } from 'drizzle-orm'
 import { createHash } from 'node:crypto'
 import type { SecretBox } from '@/auth/secretBox'
@@ -115,8 +121,37 @@ export interface SealResult {
 export function ensureCredentialsSealed(
   db: DbClient,
   secretBox: SecretBox | undefined,
+  opts?: { blockOnCredentialedPath?: boolean },
 ): SealResult {
   const result: SealResult = { sealed: 0, linked: 0, scrubbed: 0 }
+
+  // RFC-204 impl-gate P0-1 (Codex 2026-07-22): a cached repo onboarded from a
+  // historical `?access_token=` URL slugged the token INTO cached_repos.local_path
+  // (e.g. `<hash>-repo.git-access_token-TOPSECRET`). The seal only blanks the URL
+  // column — the on-disk path (and its DB copy) still carries the token, and
+  // `POST /api/backup` / `agent-workflow backup` VACUUM-INTO the local_path column
+  // verbatim. New such URLs are now rejected at the door (schemas/task.ts +
+  // repoBatchImport), but pre-existing rows remain. In a BACKUP context, refuse
+  // rather than ship a plaintext token in the tarball. (Startup does not pass the
+  // flag, so the daemon still boots — the operator deletes + re-adds the repo.)
+  if (opts?.blockOnCredentialedPath === true) {
+    const credentialed = db
+      .select()
+      .from(cachedRepos)
+      .all()
+      .filter((r) => hasQueryCredential(r.url.length > 0 ? r.url : (r.urlRedacted ?? '')))
+    if (credentialed.length > 0) {
+      throw new DomainError(
+        'backup-credentialed-path',
+        `refusing to back up: ${credentialed.length} cached repo(s) embed a query-string ` +
+          `credential in their on-disk path (local_path), which VACUUM INTO would copy into ` +
+          `the backup. Delete and re-add them (query credentials are now rejected — use a ` +
+          `userinfo URL) before backing up.`,
+        409,
+        undefined,
+      )
+    }
+  }
 
   // 1. Seal cached_repos and blank the plaintext column.
   if (secretBox !== undefined) {
