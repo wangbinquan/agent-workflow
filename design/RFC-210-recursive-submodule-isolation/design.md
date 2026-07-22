@@ -918,6 +918,18 @@ sha 反而失去锚（获胜方 node ref 已随 discard 消亡 ⟹ 一次 pool g
 tree 读实际落地的 gitlink），冲突/失败路径一律不动锚；红→绿测试「a LOSING sibling merge
 conflict does not clobber the landed anchor」（败者冲突后锚仍指获胜 sha 且扛 `gc --prune=now`）。
 
+四轮复审再折出 **2 P1，以一个机制统一采纳**：三轮的"merge 后重锚"仍有两个洞——
+①解决冲突的两条落地路径（merge agent §6.2④ / human resume §6.3）materialize 采纳的
+gitlink 时根本不经过 merge 循环，无人重锚；②materialize 之后再写 ref，一次 ref 失败就把
+"已落地的 merge"标成 merge-failed（分裂状态）。统一修法：**新增路径的 wt 锚移交发生在
+`discardNodeIso`**（`anchorNewPathsAtDiscard`）——node-scoped pool ref 在 discard 前恒兜底
+可达性，discard 时从 canonical 实际挂载状态读真值写锚；锚写不上（用户已把 canonical 子仓
+推进到池外 commit、ref 锁、fs 错误）则**保留该路径的 node ref（宁漏不丢）**，绝不抛错制造
+分裂。known 路径不需要此机制：子仓层 merge commit 以 `-p ours -p theirs` 双 parent 保住两
+个 lineage 的可达性（§2.3 不变量），锚前移不会造成丢失。publish 侧 create-only CAS 保留作
+为兜底。红→绿：ns7 改锁 discard 移交、ns9 增补"弃置败者不污染锚"、新增 leak-not-lose 例
+（用户推进后 discard 保留 node ref 且 merged commit 扛 `gc --prune=now`）。
+
 ### 17.3 仍开放（本批不动）
 
 实现门的 4 条 high：递归 push 未冻结 SHA 图（写锁外网络窗口 + 崩溃重入

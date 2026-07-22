@@ -369,11 +369,13 @@ describe('RFC-210 — review-round hardening', () => {
     expect(paths).not.toContain('/tmp')
   }, 120_000)
 
-  test('a stale sibling anchor is not clobbered at publish and is re-pointed at merge', async () => {
+  test('a stale sibling anchor is not clobbered at publish and is re-pointed at discard', async () => {
     // Two siblings adding the same path both publish BEFORE the merge lock.
     // Publish must be create-only (never overwrite a sibling's anchor); the
-    // merge, under the lock, re-points the anchor at the sha canonical
-    // actually adopts.
+    // DISCARD then hands the anchor over from canonical's actual state — the
+    // merge itself never touches it (rounds 3+4: pre-decision stamping tainted
+    // the anchor on conflict, post-materialize stamping made a fallible ref
+    // write able to fail an already-landed merge).
     const subSrc = tmp('aw-rfc210-ns7-src-')
     await initRepo(subSrc, 's.txt', 's1\n')
     const host = tmp('aw-rfc210-ns7-host-')
@@ -404,9 +406,12 @@ describe('RFC-210 — review-round hardening', () => {
     const trees = await snapshotNodeIsoFinal(handle)
     // Publish must NOT have overwritten the sibling's anchor…
     expect((await runGit(pool, ['rev-parse', wtRef])).stdout.trim()).toBe(staleSha)
-    // …but the merge (in-lock) re-points it at the adopted sha.
+    // …nor does the merge itself (node refs still hold everything)…
     const res = await mergeBackNodeIso(handle, trees)
     expect(res.clean).toBe(true)
+    expect((await runGit(pool, ['rev-parse', wtRef])).stdout.trim()).toBe(staleSha)
+    // …the DISCARD hands the anchor over from canonical's landed state.
+    await discardNodeIso(handle)
     expect((await runGit(pool, ['rev-parse', wtRef])).stdout.trim()).toBe(agentSha)
   }, 120_000)
 
@@ -478,8 +483,54 @@ describe('RFC-210 — review-round hardening', () => {
     // Canonical kept the winner; so must the anchor.
     expect((await runGit(join(canon, 'both'), ['rev-parse', 'HEAD'])).stdout.trim()).toBe(shaA)
     expect((await runGit(pool, ['rev-parse', wtRef])).stdout.trim()).toBe(shaA)
+    // Even abandoning the loser (discard) re-reads canonical truth = shaA.
+    await discardNodeIso(hB)
+    expect((await runGit(pool, ['rev-parse', wtRef])).stdout.trim()).toBe(shaA)
     // The winner's commit survives an aggressive gc on the strength of it.
     await runGit(pool, ['gc', '--prune=now', '--quiet'])
     expect((await runGit(pool, ['cat-file', '-e', shaA])).exitCode).toBe(0)
+  }, 120_000)
+
+  test('an unanchorable new path keeps its node refs at discard (leak-not-lose)', async () => {
+    // The user advances the canonical submodule to a commit the pool never saw
+    // BEFORE the discard runs: the truth anchor cannot be written, and dropping
+    // the node refs anyway would let pool gc eat the merged commit. The refs
+    // must be kept instead.
+    const subSrc = tmp('aw-rfc210-nsA-src-')
+    await initRepo(subSrc, 's.txt', 's1\n')
+    const host = tmp('aw-rfc210-nsA-host-')
+    await initRepo(host, 'README.md', 'root\n')
+    const canon = join(tmp('aw-rfc210-nsA-wt-'), 'canon')
+    await runGit(host, ['worktree', 'add', '-q', '--detach', canon, 'HEAD'])
+
+    const handle = await createNodeIso({
+      appHome,
+      taskId: 'tnsA',
+      nodeRunId: 'rnsA',
+      canonRepos: [canonRepo(canon)],
+    })
+    const iso = handle.repos[0]!.isoWorktreePath
+    await runGit(iso, [...ADD, subSrc, 'newsub'])
+    writeFileSync(join(iso, 'newsub', 'work.txt'), 'agent\n')
+    const agentSha = await commitIn(join(iso, 'newsub'), 'agent work')
+    expect((await mergeBackNodeIso(handle, await snapshotNodeIsoFinal(handle))).clean).toBe(true)
+
+    // User advances canonical's submodule; the new commit lives only in
+    // canonical's module dir, not in the pool.
+    writeFileSync(join(canon, 'newsub', 'user.txt'), 'user work\n')
+    await commitIn(join(canon, 'newsub'), 'user advance')
+
+    await discardNodeIso(handle)
+    const pool = handle.repos[0]!.poolDirs['newsub']!
+    // The node-scoped ref survives the discard (leak-not-lose)…
+    const nodeRefs = await runGit(pool, [
+      'for-each-ref',
+      '--format=%(refname)',
+      'refs/agent-workflow/pool/tnsA/',
+    ])
+    expect(nodeRefs.stdout.trim()).not.toBe('')
+    // …so the merged commit still survives an aggressive gc.
+    await runGit(pool, ['gc', '--prune=now', '--quiet'])
+    expect((await runGit(pool, ['cat-file', '-e', agentSha])).exitCode).toBe(0)
   }, 120_000)
 })

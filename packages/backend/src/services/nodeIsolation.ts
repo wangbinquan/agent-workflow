@@ -585,37 +585,67 @@ async function mergeSubmodulesIntoTheirs(
 }
 
 /**
- * RFC-210 — re-point NEW paths' worktree anchors at the sha canonical ACTUALLY
- * adopted, after the parent merge accepted it and the materialize landed.
+ * RFC-210 — durable-anchor NEW paths (pool but no base — the node added the
+ * submodule) at DISCARD time, reading the truth from the canonical worktree.
  *
- * New paths (pool but no base — the node added the submodule) never pass
- * through the merge loop above, so their durable anchor comes from here. The
- * publish-time anchor is create-only and can belong to a sibling that
- * published first but merges second (or never); and re-anchoring BEFORE the
- * parent merge was just as wrong — a second node adding the same path would
- * stamp its own candidate, the add/add conflict would then reject it, and the
- * sha canonical kept was left dangling once the first node's refs died
- * (Codex review round 3, P1). Reading the adopted sha from the LANDED tree,
- * post-materialize, is what makes the anchor truthful. A path the lookup
- * cannot pierce (nested under another gitlink) keeps its publish-time anchor.
+ * Why here and not in the merge (Codex review rounds 3 + 4): anchoring before
+ * the parent merge decided stamped candidates a later add/add conflict would
+ * reject; anchoring after materialize created a failure window where a bad
+ * `update-ref` failed the merge AFTER canonical was already mutated; and the
+ * conflict-resolution paths (merge agent §6.2④, human resume §6.3) materialize
+ * adopted gitlinks without ever passing through the merge loop. All of those
+ * share one invariant instead: the NODE-scoped pool refs keep every published
+ * sha reachable until `discardNodeIso` — so the moment the wt anchor must take
+ * over is the discard itself, and the sha to anchor is whatever canonical
+ * ACTUALLY has attached at that moment (two independent candidates for a new
+ * path share the same per-path pool, so the landed one is present either way;
+ * unlike KNOWN paths there is no merge-ancestry between them to lean on).
  *
- * Anchor failures THROW — same policy as the merge-loop anchor above.
+ * FAIL-SOFT, leak-not-lose: a path whose anchor cannot be written (canonical
+ * head advanced to a commit the pool never saw, ref lock, fs error) keeps its
+ * node-scoped ref — the caller skips deleting it. Canonical is long settled by
+ * now, so throwing could only create split states; a kept ref costs disk.
+ *
+ * Returns the sub paths whose node refs must be KEPT.
  */
-async function anchorAdoptedNewPaths(r: IsoRepo, landedTree: string): Promise<void> {
+async function anchorNewPathsAtDiscard(
+  r: IsoRepo,
+  taskId: string,
+  log?: Logger,
+): Promise<Set<string>> {
+  const keep = new Set<string>()
   for (const [subPath, pool] of Object.entries(r.poolDirs)) {
-    if (r.subBases[subPath] !== undefined) continue
-    const adopted = await runGit(r.canonWorktreePath, ['rev-parse', `${landedTree}:${subPath}`])
-    if (adopted.exitCode !== 0) continue
-    const sha = adopted.stdout.trim()
-    if (!/^[0-9a-f]{40,64}$/.test(sha)) continue
-    const re = await runGit(pool, ['update-ref', worktreeRefName(handleTaskIdOf(r), subPath), sha])
-    if (re.exitCode !== 0) {
-      throw new Error(
-        `submodule worktree anchor failed for '${subPath}' at ${sha}: ` +
-          `${re.stderr.trim() || 'unknown error'} — refusing to land a gitlink the next gc can orphan`,
-      )
+    if (r.subBases[subPath] !== undefined) continue // known paths: merge-ancestry covers them
+    const subAbs = join(r.canonWorktreePath, subPath)
+    // Never landed in canonical (merge failed / conflict abandoned / retry
+    // discard): nothing adopted, so nothing to protect beyond this run's own
+    // refs — which the discard is abandoning by design.
+    if (!existsSync(join(subAbs, '.git'))) continue
+    const head = await runGit(subAbs, ['rev-parse', 'HEAD'], {
+      timeoutMs: ISO_DISCARD_GIT_TIMEOUT_MS,
+    })
+    const sha = head.stdout.trim()
+    if (head.exitCode !== 0 || !/^[0-9a-f]{40,64}$/.test(sha)) {
+      log?.warn('discard anchor: canonical submodule head unreadable — keeping node refs', {
+        subPath,
+        error: head.stderr.trim(),
+      })
+      keep.add(subPath)
+      continue
+    }
+    const anchored = await runGit(pool, ['update-ref', worktreeRefName(taskId, subPath), sha], {
+      timeoutMs: ISO_DISCARD_GIT_TIMEOUT_MS,
+    })
+    if (anchored.exitCode !== 0) {
+      log?.warn('discard anchor failed — keeping node refs (leak-not-lose)', {
+        subPath,
+        sha,
+        error: anchored.stderr.trim(),
+      })
+      keep.add(subPath)
     }
   }
+  return keep
 }
 
 /**
@@ -1026,9 +1056,6 @@ export async function mergeBackNodeIso(
           taskBaseHead: r.taskBaseHead,
         })
         salvagedPaths = salvage.landedPaths
-        // A NEW gitlink that merged clean rides the salvage tree even while
-        // OTHER paths conflicted — canonical adopted it, so anchor it now.
-        await anchorAdoptedNewPaths(r, salvage.tree)
       }
       conflicts.push({
         worktreeDirName: r.worktreeDirName,
@@ -1049,9 +1076,6 @@ export async function mergeBackNodeIso(
       canonCurrentTree,
       taskBaseHead: r.taskBaseHead,
     })
-    // Post-materialize, not before: the anchor must record what canonical
-    // ACTUALLY holds (Codex review round 3, P1 — see anchorAdoptedNewPaths).
-    await anchorAdoptedNewPaths(r, merge.mergedTree)
   }
   return { clean: conflicts.length === 0, conflicts }
 }
@@ -1212,7 +1236,11 @@ export async function discardNodeIso(handle: IsoHandle, log?: Logger): Promise<v
     await deleteIsoRefs(r.canonWorktreePath, handle.taskId, handle.nodeRunId, {
       timeoutMs: ISO_DISCARD_GIT_TIMEOUT_MS,
     })
-    await dropNodePoolRefs(r, handle.taskId, handle.nodeRunId, log)
+    // RFC-210 (review round 4): hand NEW paths their durable worktree anchor
+    // from canonical's actual state BEFORE this run's node refs go away; a
+    // path that cannot be anchored keeps its node refs (leak-not-lose).
+    const keepRefs = await anchorNewPathsAtDiscard(r, handle.taskId, log)
+    await dropNodePoolRefs(r, handle.taskId, handle.nodeRunId, log, keepRefs)
   }
 }
 
@@ -1232,11 +1260,14 @@ async function dropNodePoolRefs(
   taskId: string,
   nodeRunId: string,
   log?: Logger,
+  /** Paths whose node refs must be KEPT (anchor handover failed — leak-not-lose). */
+  keep?: Set<string>,
 ): Promise<void> {
   // `poolDirs`, not `subBases`: node-scoped refs are created exactly for the
   // pooled paths, and a NEW path the node added has a pool but no base — keyed
   // off subBases its ref would never be deleted and would leak (impl-gate).
   for (const [subPath, pool] of Object.entries(r.poolDirs)) {
+    if (keep?.has(subPath) === true) continue
     // Delete each ref from the pool it was CREATED in. With the old repo-level
     // poolDir every ref was deleted from the first submodule's pool, so all the
     // others silently failed and leaked.
