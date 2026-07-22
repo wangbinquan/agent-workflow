@@ -37,8 +37,9 @@
   + `extractUserinfoClaims` + usernameClaim/subjectClaim 语义(D5/D6/D7,design
   §5.2;subject 不回落是对抗性锁)。
 - `services/userIdentities.ts`:`preferred_snapshot` 读写 + `syncPreferredSnapshot`
-  三态(design §5.3)+ createIdentity 快照初值;callback login/create/bindInvited/
-  link 四路径接线(design §6.2)。
+  (design §5.3 哨兵语义,displayName/快照/updatedAt 同事务)+ createIdentity 快照
+  初值;callback login/create/bindInvited 三路径接线(link 分支现树不可达,
+  design §5.3;快照落在 createIdentity 共用点,未来接通即生效)。
 - `services/oidc/provisioning.ts`:`applyEmailTrust`。
 - `routes/oidc-auth.ts`:start/callback 改接 `resolveEndpoints` + `acquireIdentityClaims`
   + OidcTokenError 塌码纠偏(design §6)。
