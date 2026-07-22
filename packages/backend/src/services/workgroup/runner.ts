@@ -23,7 +23,6 @@
 import {
   buildBatchShardKey,
   DEFAULT_PROTOCOL_RETRY_BUDGET,
-  FOLLOWUP_POLICY,
   fenceUntrusted,
   normalizeWgTaskTitle,
   parseBatchShardKey,
@@ -47,8 +46,6 @@ import {
   WG_PORT_TASKS_ADD,
   WorkgroupRuntimeConfigSchema,
   type Agent,
-  type EnvelopeFollowupReason,
-  type FailureCode,
   type RerunCause,
   type WgMessageItem,
   type WgTaskResultItem,
@@ -124,70 +121,12 @@ import type { Logger } from '@/util/log'
 // public contract (scheduler-facing)
 // ---------------------------------------------------------------------------
 
-export interface WorkgroupHostRunRequest {
-  nodeRunId: string
-  nodeId: string
-  agent: Agent
-  /** Fully-composed prompt text (charter/roster/brief/slices). */
-  promptTemplate: string
-  /** Replaces the agent-outputs protocol block (design §5). Workgroup turns
-   *  always pass one; the RFC-167 orchestrator run omits it so the STANDARD
-   *  <workflow-output> protocol for its declared ports applies. */
-  workgroupProtocolBlock?: string
-  /** RFC-167 (Codex impl-gate P1): drop the run's iso-worktree delta instead
-   *  of merging it back — the orchestrator GENERATION run only produces an
-   *  envelope; its worktree writes must never reach canonical (validation +
-   *  the human confirm gate happen after the run). Workgroup turns leave this
-   *  unset (their writes are the work product). */
-  discardWrites?: boolean
-  /** RFC-181 C — resolveClarifyEnabled(config.autonomous) at dispatch time.
-   *  false ⇒ the hook runs the node with the 'stopped' clarify directive, so a
-   *  voluntary <workflow-clarify> is REJECTED inside runNode (persisted
-   *  failed + clarify-forbidden, no session, no park) and the runner branches
-   *  below re-prompt / drop-and-continue. Undefined (dynamic orchestrator)
-   *  keeps the legacy no-channel behavior. The hook additionally re-reads the
-   *  task's CURRENT autonomous right before opening a session (mid-run toggle
-   *  race — design-gate P1-①). */
-  clarifyEnabled?: boolean
-  /** RFC-184: the wg protocol output ports this host role may emit
-   *  ({@link wgHostRolePorts}). When set, the hook projects the member agent's
-   *  `outputs` to this list and clears `outputKinds` before runNode, so the
-   *  runner parses/returns the wg_* ports and NEVER validates the member's own
-   *  business output kinds (root cause of the F42SE port-validation-path-empty
-   *  failure). Also gates `persistDeclaredOutputs:false` so host runs keep the
-   *  "zero node_run_outputs rows" invariant (design.md §2.4). Undefined
-   *  (dynamic orchestrator) ⇒ no projection, agent's declared outputs apply. */
-  hostOutputPorts?: string[]
-}
-
-export interface WorkgroupHostRunResult {
-  status: 'done' | 'failed' | 'canceled' | 'awaiting'
-  /** Envelope port map (present when status='done'). */
-  outputs: Record<string, string>
-  /** Set when the agent voluntarily asked back (status='awaiting'). */
-  clarifyQuestionCount?: number
-  errorMessage?: string
-  /** RFC-185 e2e hardening — runNode's structured failure code (RFC-145: the
-   *  ONLY machine routing key; errorMessage is human breadcrumbs). Lets the
-   *  turn drivers treat envelope-missing as a retryable protocol slip. */
-  failureCode?: FailureCode
-}
-
-export interface WorkgroupEngineHooks {
-  /**
-   * Drive ONE host-node run end to end: frozen runtime + iso worktree +
-   * runNode + merge-back + node_run status. `status:'awaiting'` means the
-   * agent emitted <workflow-clarify> and the hook already created the clarify
-   * session (parked awaiting_human).
-   */
-  runHostNode: (req: WorkgroupHostRunRequest) => Promise<WorkgroupHostRunResult>
-  /** node.status WS broadcast (optional in tests). */
-  broadcastNodeStatus?: (nodeRunId: string, nodeId: string, status: string) => void
-  /** RFC-187 §4 — files changed in the canonical worktree vs its base commit
-   *  (incl. untracked). Provided by scheduler (git); absent in pure-engine tests
-   *  (the zero-delta warn is then skipped). */
-  getCanonicalFilesChanged?: () => Promise<number>
-}
+export type {
+  WorkgroupHostRunRequest,
+  WorkgroupHostRunResult,
+  WorkgroupEngineHooks,
+} from '@/services/workgroup/hooks'
+import type { WorkgroupEngineHooks } from '@/services/workgroup/hooks'
 
 export interface WorkgroupEngineArgs {
   db: DbClient
@@ -211,71 +150,8 @@ export interface WorkgroupEngineResult {
  *  everywhere — the comment-only alignment is gone). */
 const WG_PROTOCOL_RETRIES = DEFAULT_PROTOCOL_RETRY_BUDGET
 
-/**
- * RFC-186 §2.2 — unify the workgroup turn's retry-vs-fatal decision on the SAME
- * `FOLLOWUP_POLICY` table normal nodes use (`decideEnvelopeFollowup`), replacing
- * the order-sensitive `errorMessage.startsWith(...)` chain + the per-code
- * `failureCode === 'envelope-missing'` special-case (audit §2 P1-5). A failure
- * with a structured `FailureCode` in the table is retryable; an unstructured
- * failure (`failureCode` undefined — iso-setup / injection / subprocess crash /
- * merge-back conflict) is genuinely fatal. `clarify-forbidden` is handled by its
- * OWN branch BEFORE this (workgroup autonomous soft-reject semantics, RFC-181/183)
- * — never routed here as a normal envelope-missing retry.
- */
-export function followupForFailure(
-  failureCode: FailureCode | undefined,
-): { retry: true; reason: EnvelopeFollowupReason } | { retry: false } {
-  if (failureCode === undefined) return { retry: false }
-  const policy = FOLLOWUP_POLICY[failureCode] as { reason: EnvelopeFollowupReason } | undefined
-  return policy ? { retry: true, reason: policy.reason } : { retry: false }
-}
-
-/**
- * RFC-186 §2.3 — reason-tailored re-prompt for a workgroup turn. Unlike the
- * normal node, we do NOT reuse `renderEnvelopeFollowupPrompt` verbatim: that
- * renderer REPLACES the whole prompt, which would drop the `workgroupProtocolBlock`
- * (where the wg_* port contract lives) on the fresh retry subprocess. Instead we
- * return a concise `errorNotice` appended to the FULL turn prompt (which still
- * carries the wg protocol block via runHostNode), reason-mapped from the same
- * 6-value `EnvelopeFollowupReason` domain.
- */
-export function wgFollowupNotice(reason: EnvelopeFollowupReason): string {
-  switch (reason) {
-    case 'envelope-missing':
-      return (
-        '- Your previous reply had NO <workflow-output> envelope. Re-read the\n' +
-        '  Workgroup output protocol above and re-emit your FULL reply as ONE\n' +
-        '  <workflow-output> envelope with <port name="..."> children (literal\n' +
-        '  tag names — never invent your own tags).'
-      )
-    case 'both-present':
-      return (
-        '- You emitted BOTH <workflow-output> and <workflow-clarify>. Emit exactly\n' +
-        '  ONE — the <workflow-output> envelope with your wg_* ports.'
-      )
-    case 'clarify-malformed':
-      return (
-        '- Your <workflow-clarify> reply was malformed. Re-emit a VALID\n' +
-        '  <workflow-clarify> envelope (see the clarify format above) OR, if nothing\n' +
-        '  needs a human, proceed with a <workflow-output> envelope.'
-      )
-    case 'envelope-port-malformed':
-      return (
-        '- A <port> tag in your envelope was unclosed or corrupted. Re-emit ONE\n' +
-        '  clean <workflow-output> with each port properly closed by </port>.'
-      )
-    case 'port-validation':
-      return (
-        '- A port in your envelope failed validation. Re-emit a <workflow-output>\n' +
-        '  whose port bodies are valid JSON matching the protocol above.'
-      )
-    case 'clarify-required':
-      return (
-        '- This turn requires a <workflow-clarify> envelope. Re-emit your reply as\n' +
-        '  a single valid <workflow-clarify> envelope.'
-      )
-  }
-}
+export { followupForFailure, wgFollowupNotice } from '@/services/workgroup/turnExecution'
+import { followupForFailure, wgFollowupNotice } from '@/services/workgroup/turnExecution'
 
 /**
  * RFC-186 PR-2 (audit §4 F1 / §5 F1) — the reconcile action for a `running`
