@@ -271,12 +271,22 @@ jobs:
         #     react / typescript-eslint › minimatch — lint tooling.
         #   GHSA-52cp-r559-cp3m (js-yaml merge-key quadratic CPU): eslint ›
         #     @eslint/eslintrc — lint tooling.
+        #
+        # 2026-07-22 — fast-uri（@modelcontextprotocol/sdk 与 eslint › ajv 的
+        # 传递依赖）同日爆两条 high。GHSA-4c8g-83qw-93j6（IDN 规范化）已由
+        # 根 overrides 钉 3.1.3 修掉；GHSA-v2hh-gcrm-f6hx（反斜杠 authority
+        # 混淆）当日范围 >=3.0.0 <=3.1.3，v3 线尚无修复版、强推 v4 会跨大
+        # 版本改 ajv/MCP SDK 运行时解析。本仓 fast-uri 只解析受信配置的
+        # MCP URL 与 JSON-schema format，不面向敌意 URI。上游发 3.1.4+ 修复
+        # 后：bump overrides 并 REMOVE 本条。
+        #   GHSA-v2hh-gcrm-f6hx (fast-uri backslash authority host confusion)
         run: >-
           bun audit --audit-level=high
           --ignore GHSA-w7jw-789q-3m8p
           --ignore GHSA-395f-4hp3-45gv
           --ignore GHSA-3jxr-9vmj-r5cp
           --ignore GHSA-52cp-r559-cp3m
+          --ignore GHSA-v2hh-gcrm-f6hx
 
       - name: actionlint (GitHub Actions workflow lint)
         # Pinned via the official downloader script so the version moves only
