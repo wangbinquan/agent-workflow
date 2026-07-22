@@ -73,13 +73,23 @@
 
 ## 验收清单(对照 proposal §7)
 
-- [ ] AC-1 Schema/API(T1;S1/S2)
-- [ ] AC-2 逐字段合并(T2;S3)
-- [ ] AC-3 无 id_token 全链(T3;S5/S6/S8)
-- [ ] AC-4 有 id_token 不回归(T2/T3;S4/S6 + 既有 oidc 套件绿)
-- [ ] AC-5 D4 矩阵(T3;S6)
-- [ ] AC-6 trustEmailVerified(T3;S7)
-- [ ] AC-7 诊断与前端(T4;S10)
-- [ ] AC-8 迁移与兼容(T1/T5;S9 + 全量套件)
-- [ ] AC-9 身份字段选择器(T1/T3/T4;S12/S13)
-- [ ] AC-10 呈现名刷新(T1/T3;S14)
+- [x] AC-1 Schema/API(T1;S1/S2——`a38fa0e1`,变更锁三形 + 等值放行)
+- [x] AC-2 逐字段合并(T2;S3——`1e23a141`,含缓存条件命中/负缓存通道门槛)
+- [x] AC-3 无 id_token 全链(T3;S5/S6/S8——`106de2ff`,本地假 IdP 路由级全链)
+- [x] AC-4 有 id_token 不回归(T2/T3;S4/S6 + oidc-login-chain 迁移后全绿)
+- [x] AC-5 D4/D6 矩阵(T3;S6 五行 + 模式开关单命名空间锁)
+- [x] AC-6 trustEmailVerified(T3;S7 四象限 + 存量双向同步)
+- [x] AC-7 诊断与前端(T4;S2-probe/S10——`7e30b6dc`,恒 200 ProbeResult)
+- [x] AC-8 迁移与兼容(T1/T5;S9 两表 8 列逐列断言 + 全量后端套件)
+- [x] AC-9 身份字段选择器(T1/T3/T4;S12/S13,大数拒绝 + 同值异型语义锁)
+- [x] AC-10 呈现名刷新(T1/T3;S14 三态/哨兵/存量保护/dbTxSync 原子)
+
+## 交付记录(2026-07-22)
+
+`a38fa0e1` T1 存储层 → `1e23a141` T2 解析层 → `106de2ff` T3 身份层+路由 →
+`7e30b6dc` T4 诊断+前端 → `c11b930f` T5 格式批。测试:backend rfc220 五件
+(schema-service 11 / endpoint-resolution 13 / identity-acquisition 27 /
+presented-name-sync 13 / probe 5 / callback-route 5)+ oidc-login-chain 迁移
+(20)+ frontend rfc220 表单 4;全量门槛 typecheck/lint/format/build:binary 绿。
+T2 的严格 discovery 入口删除按「逐提交绿」原则实际分两步落地(getProviderMetadata
+在 T3、testDiscovery 在 T4),与 plan 的 T2 归属差异仅为提交边界,终态一致。
