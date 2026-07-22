@@ -127,6 +127,8 @@ export interface TurnSpec<T> {
   maxAttempts: number
   /** role-tailored clarify-forbidden nudge (leader vs member wording). */
   clarifyForbiddenNotice: string
+  /** batch runs parametrize the protocol block + port set (RFC-215 count). */
+  protocolOpts?: { count: number }
   /** row spec for a fresh mint at `attempt` (cause/shard/overrides per role). */
   mintRow(attempt: number, retryBase: number): TurnMintRow
   /** per-attempt durable side-effects after the run row exists (card flips). */
@@ -145,7 +147,7 @@ export type TurnOutcome<T> =
   | { kind: 'canceled'; runId: string }
   | { kind: 'awaiting'; runId: string }
   /** clarify hard-suppressed and the retry budget is gone — caller settles per role. */
-  | { kind: 'clarify-forbidden-exhausted'; runId: string }
+  | { kind: 'clarify-forbidden-exhausted'; runId: string; errorMessage: string }
   /** run failed: `retryable` says the FOLLOWUP table matched but budget ran out. */
   | { kind: 'failed'; runId: string; errorMessage: string; retryable: boolean }
   /** the model kept emitting an invalid envelope until the budget ran out. */
@@ -214,8 +216,9 @@ export async function executeTurn<T>(args: TurnArgs, spec: TurnSpec<T>): Promise
         spec.config,
         envelopeNonce,
         clarifyAllowed,
+        spec.protocolOpts ?? null,
       ),
-      hostOutputPorts: wgHostRolePorts(spec.role),
+      hostOutputPorts: wgHostRolePorts(spec.role, spec.protocolOpts ?? null),
       clarifyEnabled: clarifyAllowed,
     })
     if (result.status === 'canceled') return { kind: 'canceled', runId }
@@ -230,7 +233,7 @@ export async function executeTurn<T>(args: TurnArgs, spec: TurnSpec<T>): Promise
           errorNotice = spec.clarifyForbiddenNotice
           continue
         }
-        return { kind: 'clarify-forbidden-exhausted', runId }
+        return { kind: 'clarify-forbidden-exhausted', runId, errorMessage: msg }
       }
       // RFC-186 §2.2 — every other failure routes through the SAME
       // FOLLOWUP_POLICY table normal nodes use: a listed code is a retryable

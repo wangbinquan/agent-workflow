@@ -338,10 +338,12 @@ describe('RFC-184 — source wiring locks', () => {
   const SRC = resolve(import.meta.dir, '..', 'src', 'services')
   const read = (f: string) => readFileSync(join(SRC, f), 'utf8')
 
-  test('workgroupRunner wires hostOutputPorts at all three host call sites', () => {
-    const src = read('workgroup/runner.ts')
-    const count = (src.match(/hostOutputPorts:/g) ?? []).length
-    expect(count).toBeGreaterThanOrEqual(3)
+  test('hostOutputPorts wiring lives ONLY in the turn skeleton (RFC-217 T3)', () => {
+    // 投影布线唯一存在于 executeTurn（wgHostRolePorts(spec.role, …) 单点）；
+    // runner 直连 runHostNode 已被 rfc181 锁禁——此处锁投影不丢。
+    const skeleton = read('workgroup/turnExecution.ts')
+    expect((skeleton.match(/hostOutputPorts:/g) ?? []).length).toBe(1)
+    expect(skeleton).toContain('wgHostRolePorts(spec.role')
   })
 
   test('scheduler runHostNode projects (clears outputKinds), skips persistence, and filters empties', () => {

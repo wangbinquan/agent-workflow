@@ -120,3 +120,22 @@ describe('rfc217 G2/G3 — retired runtime-state slots stay retired', () => {
     expect(puts).toBe(1)
   })
 })
+
+describe('rfc217 G6 — the protocol-error reprompt has ONE definition site', () => {
+  test('`## Protocol errors in your previous reply` lives only in turnExecution.ts', () => {
+    const offenders: string[] = []
+    const walk = (dir: string): void => {
+      for (const e of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
+        const rel = `${dir}/${e.name}`
+        if (e.isDirectory()) walk(rel)
+        else if (
+          e.name.endsWith('.ts') &&
+          read(rel).includes('## Protocol errors in your previous reply')
+        )
+          offenders.push(rel)
+      }
+    }
+    walk('packages/backend/src')
+    expect(offenders).toEqual(['packages/backend/src/services/workgroup/turnExecution.ts'])
+  })
+})

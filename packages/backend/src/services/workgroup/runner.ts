@@ -67,7 +67,7 @@ import {
   workgroupMessages,
 } from '@/db/schema'
 import { getAgent } from '@/services/agent'
-import { isClarifyRerunCause, loadRunEnvelopeNonce, mintNodeRun } from '@/services/nodeRunMint'
+import { isClarifyRerunCause, mintNodeRun } from '@/services/nodeRunMint'
 import { setNodeRunStatus } from '@/services/lifecycle'
 import { buildRoomMessageRow } from '@/services/workgroup/messages'
 import {
@@ -88,7 +88,6 @@ import {
   advanceMemberCursor,
   casAssignmentStatus,
   dismissOpenClarifyParksForAutonomous,
-  resolveWgClarifyAllowed,
 } from '@/services/workgroup/lifecycle'
 import {
   maxMessageId,
@@ -99,10 +98,9 @@ import {
   renderLeaderLedger,
   renderMessagesBlock,
   renderRosterBlock,
-  renderWgProtocolBlock,
   rosterDisplayNames,
   selectMemberSlices,
-  wgHostRolePorts,
+  type WorkgroupProtocolRole,
 } from '@/services/workgroup/context'
 import {
   decideWorkgroupOutcome,
@@ -151,7 +149,7 @@ export interface WorkgroupEngineResult {
 const WG_PROTOCOL_RETRIES = DEFAULT_PROTOCOL_RETRY_BUDGET
 
 export { followupForFailure, wgFollowupNotice } from '@/services/workgroup/turnExecution'
-import { followupForFailure, wgFollowupNotice } from '@/services/workgroup/turnExecution'
+import { executeTurn } from '@/services/workgroup/turnExecution'
 
 /**
  * RFC-186 PR-2 (audit §4 F1 / §5 F1) — the reconcile action for a `running`
@@ -1466,7 +1464,7 @@ async function driveLeaderTurn(
   // rounds remain to run it).
   wrapUp = false,
 ): Promise<void> {
-  const { db, taskId, hooks } = args
+  const { db, taskId } = args
   const config = state.config
   const leaderId = config.leaderMemberId
   if (leaderId === null) return
@@ -1494,268 +1492,204 @@ async function driveLeaderTurn(
   if (adoptedRow !== undefined && adoptedRow.wgRound === null) {
     await stampWgRound(db, adoptedRow.id, wgRound)
   }
-  // Codex 实现门 P2-1 — retries of an ADOPTED turn continue from the adopted
-  // row's stored index (a clarify-answer continuation carries the standard
-  // dispatch's lineage max+1; a crash-adopted protocol retry carries its own
-  // attempt) so a follow-up retry can never re-mint a duplicate
-  // (node, shard, retry_index). Fresh turns start at 0 — plain attempt.
-  const retryBase = adoptedRow?.retryIndex ?? 0
 
-  let errorNotice: string | null = null
-  for (let attempt = 0; attempt <= WG_PROTOCOL_RETRIES; attempt++) {
-    let runId = adoptedRunId
-    if (runId === undefined || attempt > 0) {
-      runId = await mintNodeRun(db, {
-        taskId,
-        nodeId: WG_LEADER_NODE_ID,
-        status: 'pending',
-        // RFC-187 §3-3 — a protocol retry (attempt>0) is the SAME logical round;
-        // tag it so round accounting excludes it and it doesn't inflate max_rounds.
-        // RFC-189 — retryIndex is the plain ATTEMPT ordinal now (the round lives
-        // in wg_round); the old "prior-row count + attempt" overload is gone.
+  interface LeaderTurnValue {
+    decision: ReturnType<typeof parseWgDecisionPort> | null
+    dispatches: { value: readonly { member: string; title: string; brief: string }[] }
+    outMessages: ReturnType<typeof parseWgMessagesPort>
+    wrapUpDroppedDispatch: boolean
+  }
+  const roster = rosterDisplayNames(config)
+  const outcome = await executeTurn<LeaderTurnValue>(
+    {
+      db,
+      taskId,
+      hooks: args.hooks,
+      ...(args.registerMint !== undefined ? { registerMint: args.registerMint } : {}),
+      broadcastPendingMint,
+      ...(adoptedRunId !== undefined ? { adoptedRunId } : {}),
+      // Codex 实现门 P2-1 — retries of an ADOPTED turn continue from the adopted
+      // row's stored index so a follow-up retry never re-mints a duplicate
+      // (node, shard, retry_index). Fresh turns start at 0.
+      retryBase: adoptedRow?.retryIndex ?? 0,
+    },
+    {
+      nodeId: WG_LEADER_NODE_ID,
+      agent: leaderAgent,
+      role: 'leader',
+      config,
+      clarifyShardKey: null,
+      maxAttempts: WG_PROTOCOL_RETRIES + 1,
+      clarifyForbiddenNotice:
+        '- Ask-back is OFF in this autonomous group. Do NOT emit <workflow-clarify>.\n' +
+        '  Proceed with your best judgment and emit wg_decision / wg_assignments as usual.',
+      // RFC-187 §3-3 — a protocol retry (attempt>0) is the SAME logical round;
+      // tag it so round accounting excludes it. RFC-189 — retryIndex is the
+      // plain attempt ordinal (the round lives in wg_round).
+      mintRow: (attempt, retryBase) => ({
         cause: attempt > 0 ? 'wg-protocol-retry' : 'wg-leader-round',
         retryIndex: retryBase + attempt,
         overrides: { wgRound },
-      })
-      args.registerMint?.(runId)
-      broadcastPendingMint(taskId, runId, WG_LEADER_NODE_ID)
-    }
-    adoptedRunId = undefined
-    const envelopeNonce = await loadRunEnvelopeNonce(db, runId)
-
-    const prompt =
-      composeLeaderPrompt(state, envelopeNonce) +
-      (wrapUp
-        ? '\n\n## FINAL round — the round cap has been reached\n\nThis is your LAST turn. Do NOT dispatch new work (there are no rounds left to run it). ' +
-          'Aggregate the completed results and emit `wg_decision` with action `done`. Any `wg_assignments` you emit now will be ignored.'
-        : '') +
-      (errorNotice !== null
-        ? `\n\n## Protocol errors in your previous reply\n\n${fenceUntrusted(
-            'protocol-error',
-            errorNotice,
-            envelopeNonce,
-          )}\n\nRe-emit a CORRECT envelope.`
-        : '')
-
-    // RFC-207 §3.7.2 — resolve ONCE and feed BOTH the protocol block (whether to
-    // invite an ask-back) and `clarifyEnabled` (whether to accept one). Deriving
-    // it separately in each place is how a prompt ends up inviting a question the
-    // envelope gate then rejects.
-    const leaderClarifyAllowed = await resolveWgClarifyAllowed(
-      db,
-      taskId,
-      config.members,
-      config.clarifyBudget,
-      WG_LEADER_NODE_ID,
-      null,
-    )
-    const result = await hooks.runHostNode({
-      nodeRunId: runId,
-      nodeId: WG_LEADER_NODE_ID,
-      agent: leaderAgent,
-      promptTemplate: prompt,
-      workgroupProtocolBlock: renderWgProtocolBlock(
-        'leader',
-        config,
-        envelopeNonce,
-        leaderClarifyAllowed,
-      ),
-      hostOutputPorts: wgHostRolePorts('leader'),
-      clarifyEnabled: leaderClarifyAllowed,
-    })
-    if (result.status === 'canceled') return
-    if (result.status === 'awaiting') return // leader asked the human — task parks via outcome pass
-    if (result.status === 'failed') {
-      const msg = result.errorMessage ?? 'leader run failed'
-      // RFC-181 C — the run's <workflow-clarify> was hard-suppressed
-      // (autonomous; persisted failed:clarify-forbidden by runNode / the
-      // hook's mid-run-toggle correction). Re-prompt the leader to decide by
-      // itself; when retries run dry, DROP-AND-CONTINUE (no throw, no park) —
-      // the leader slides into idle and the autonomous nudge / round caps
-      // take over (design §2.2). Distinct from the malformed
-      // `clarify-questions-` family below, whose exhaustion is fatal.
-      // Routed on the structured failureCode (RFC-145 ratchet) — both producer
-      // paths (runNode envelope-time reject AND the hook's late-suppress
-      // correction) carry it; errorMessage stays human-only.
-      if (result.failureCode === 'clarify-forbidden') {
-        if (attempt < WG_PROTOCOL_RETRIES) {
-          errorNotice =
-            '- Ask-back is OFF in this autonomous group. Do NOT emit <workflow-clarify>.\n' +
-            '  Proceed with your best judgment and emit wg_decision / wg_assignments as usual.'
-          continue
+      }),
+      composePrompt: (envelopeNonce) =>
+        composeLeaderPrompt(state, envelopeNonce) +
+        (wrapUp
+          ? '\n\n## FINAL round — the round cap has been reached\n\nThis is your LAST turn. Do NOT dispatch new work (there are no rounds left to run it). ' +
+            'Aggregate the completed results and emit `wg_decision` with action `done`. Any `wg_assignments` you emit now will be ignored.'
+          : ''),
+      parse: (outputs) => {
+        const decisionRaw = outputs[WG_PORT_DECISION]
+        const assignmentsRaw = outputs[WG_PORT_ASSIGNMENTS]
+        const messagesRaw = outputs[WG_PORT_MESSAGES]
+        const errors: string[] = []
+        const decision = decisionRaw !== undefined ? parseWgDecisionPort(decisionRaw) : null
+        if (decision === null) errors.push('missing required port wg_decision')
+        else if (!decision.ok) errors.push(...decision.errors.map((e) => `wg_decision: ${e}`))
+        let dispatches =
+          assignmentsRaw !== undefined
+            ? parseWgAssignmentsPort(assignmentsRaw, roster, {
+                // RFC-185 D4 (Codex T6 P1) — OFF is enforced here, not just in
+                // the prompt: same-member duplicates reject the port whole.
+                allowSameMemberFanOut: config.fanOut === true,
+              })
+            : { ok: true as const, value: [] }
+        if (!dispatches.ok) errors.push(...dispatches.errors.map((e) => `wg_assignments: ${e}`))
+        // RFC-187 §3-7 (Codex P0-3): the grace wrap-up round cannot dispatch new
+        // work. DROP any new assignments (don't error, so the wg_decision still
+        // lands) and note it in the room during settle.
+        let wrapUpDroppedDispatch = false
+        if (wrapUp && dispatches.ok && dispatches.value.length > 0) {
+          wrapUpDroppedDispatch = true
+          dispatches = { ok: true as const, value: [] }
         }
-        return
-      }
-      // RFC-186 §2.2 — every OTHER failure routes through the SAME
-      // `FOLLOWUP_POLICY` table normal nodes use. This collapses the old
-      // order-sensitive `startsWith('clarify-questions-')` string chain AND the
-      // per-code `failureCode === 'envelope-missing'` special-case into one
-      // structured decision: a code in the table (envelope-missing /
-      // clarify-questions-malformed / envelope-port-malformed / port-validation
-      // / both-present / clarify-required) is a RETRYABLE model slip — one FRESH
-      // turn with a reason-tailored notice (keeping the wg protocol block) beats
-      // fataling the whole multi-agent task on model noise. An unstructured
-      // failure (undefined failureCode: iso-setup, injection, subprocess crash,
-      // merge-back conflict) is genuinely fatal → throw → reportFatal.
-      const fu = followupForFailure(result.failureCode)
-      if (fu.retry && attempt < WG_PROTOCOL_RETRIES) {
-        errorNotice = wgFollowupNotice(fu.reason)
-        continue
-      }
-      throw new Error(msg)
-    }
+        const outMessages =
+          messagesRaw !== undefined
+            ? parseWgMessagesPort(messagesRaw, roster)
+            : { ok: true as const, value: [] }
+        if (!outMessages.ok) errors.push(...outMessages.errors.map((e) => `wg_messages: ${e}`))
+        // RFC-186 Phase 3 (audit §3-6): `done` co-emitted with NEW assignments is
+        // contradictory — reject so the leader re-decides: dispatch OR done.
+        if (
+          decision !== null &&
+          decision.ok &&
+          decision.value.action === 'done' &&
+          dispatches.ok &&
+          dispatches.value.length > 0
+        ) {
+          errors.push(
+            'wg_decision: action "done" cannot be emitted together with new wg_assignments — dispatch OR declare done, not both',
+          )
+        }
+        if (errors.length > 0) return { ok: false, errors }
+        return {
+          ok: true,
+          value: {
+            decision,
+            dispatches: dispatches as {
+              value: readonly { member: string; title: string; brief: string }[]
+            },
+            outMessages,
+            wrapUpDroppedDispatch,
+          },
+        }
+      },
+    },
+  )
 
-    const roster = rosterDisplayNames(config)
-    const decisionRaw = result.outputs[WG_PORT_DECISION]
-    const assignmentsRaw = result.outputs[WG_PORT_ASSIGNMENTS]
-    const messagesRaw = result.outputs[WG_PORT_MESSAGES]
-    const errors: string[] = []
-    const decision = decisionRaw !== undefined ? parseWgDecisionPort(decisionRaw) : null
-    if (decision === null) errors.push('missing required port wg_decision')
-    else if (!decision.ok) errors.push(...decision.errors.map((e) => `wg_decision: ${e}`))
-    let dispatches =
-      assignmentsRaw !== undefined
-        ? parseWgAssignmentsPort(assignmentsRaw, roster, {
-            // RFC-185 D4 (Codex T6 P1) — OFF is enforced here, not just in the
-            // prompt: same-member duplicates reject the port whole and re-
-            // prompt via the malformed-retry channel.
-            allowSameMemberFanOut: config.fanOut === true,
-          })
-        : { ok: true as const, value: [] }
-    if (!dispatches.ok) errors.push(...dispatches.errors.map((e) => `wg_assignments: ${e}`))
-    // RFC-187 §3-7 (Codex P0-3): the grace wrap-up round cannot dispatch new work —
-    // there are no rounds left to aggregate it. DROP any new assignments (don't error,
-    // so the leader's wg_decision — ideally `done` — still lands and the deliverable-
-    // in-hand task finishes) and note it in the room.
-    let wrapUpDroppedDispatch = false
-    if (wrapUp && dispatches.ok && dispatches.value.length > 0) {
-      wrapUpDroppedDispatch = true
-      dispatches = { ok: true as const, value: [] }
-    }
-    const outMessages =
-      messagesRaw !== undefined
-        ? parseWgMessagesPort(messagesRaw, roster)
-        : { ok: true as const, value: [] }
-    if (!outMessages.ok) errors.push(...outMessages.errors.map((e) => `wg_messages: ${e}`))
-    // RFC-186 Phase 3 (audit §3-6): `done` co-emitted with NEW assignments is
-    // contradictory — the freshly dispatched work would run but its results would
-    // never be aggregated (the leader is suppressed once declaredDone), and the
-    // task reports done with that work silently discarded. Reject as a protocol
-    // violation so the leader re-decides: dispatch OR declare done, not both.
-    if (
-      decision !== null &&
-      decision.ok &&
-      decision.value.action === 'done' &&
-      dispatches.ok &&
-      dispatches.value.length > 0
-    ) {
-      errors.push(
-        'wg_decision: action "done" cannot be emitted together with new wg_assignments — dispatch OR declare done, not both',
-      )
-    }
+  if (outcome.kind === 'canceled') return
+  if (outcome.kind === 'awaiting') return // leader asked the human — task parks via outcome pass
+  // RFC-181 C — suppressed ask-back exhaustion: DROP-AND-CONTINUE (no throw, no
+  // park) — the leader slides into idle; nudge / round caps take over.
+  if (outcome.kind === 'clarify-forbidden-exhausted') return
+  if (outcome.kind === 'failed') throw new Error(outcome.errorMessage)
+  if (outcome.kind === 'protocol-exhausted') {
+    throw new Error(`leader protocol violation: ${outcome.errors.join('; ')}`)
+  }
 
-    if (errors.length > 0) {
-      errorNotice = errors.map((e) => `- ${e}`).join('\n')
-      if (attempt === WG_PROTOCOL_RETRIES) {
-        throw new Error(`leader protocol violation: ${errors.join('; ')}`)
-      }
-      continue
+  const { decision, dispatches, outMessages, wrapUpDroppedDispatch } = outcome.value
+  const runId = outcome.runId
+  // Codex 实现门 P2-2 — the turn's EFFECTS share the SAME authoritative round
+  // as the run row's stamp.
+  const round = wgRound
+  // 1. persist leader messages (targets validated; leader may always DM).
+  if (outMessages.ok) {
+    await persistWgMessages(db, taskId, config, round, leaderId, outMessages.value, {
+      allowDirect: true,
+      allowBlackboard: true,
+    })
+  }
+  // 2. dispatch assignments (agent members start immediately via next pass;
+  //    human members become awaiting-delivery cards — PR-5 unlocks launch).
+  for (const d of dispatches.value) {
+    const member = config.members.find((m) => m.displayName === d.member)
+    if (member === undefined) continue
+    const id = ulid()
+    await db.insert(workgroupAssignments).values({
+      id,
+      taskId,
+      round,
+      source: 'leader',
+      createdByRunId: runId,
+      assigneeMemberId: member.id,
+      title: d.title,
+      briefMd: d.brief,
+      status: 'dispatched',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    })
+    await postMessage(db, taskId, roundMode(config), {
+      round,
+      authorKind: 'member',
+      authorMemberId: leaderId,
+      kind: 'dispatch',
+      bodyMd: `@${d.member} ${d.title}`,
+      mentionMemberIds: [member.id],
+      assignmentId: id,
+    })
+  }
+  // RFC-187 §3-7 — surface the dropped wrap-up dispatch (see the drop above).
+  if (wrapUpDroppedDispatch) {
+    await postMessage(db, taskId, roundMode(config), {
+      round,
+      authorKind: 'system',
+      kind: 'system',
+      bodyMd:
+        'Round cap reached — new assignments in this final wrap-up round were ignored. ' +
+        'Aggregating the completed work.',
+    })
+  }
+  // 3. deliveries the leader just consumed flip delivered→done (design
+  //    §1.4: delivered = 交付已落, done = 下一回合已消费).
+  for (const a of state.assignments) {
+    if (a.status === 'delivered') {
+      await casAssignmentStatus(db, a.id, 'delivered', 'done').catch(() => false)
     }
-
-    // Codex 实现门 P2-2 — the turn's EFFECTS (messages / dispatched assignments,
-    // whose round workers inherit) share the SAME authoritative round as the
-    // run row's stamp. Fresh turn: wgRound == currentRound+1 (byte-identical to
-    // the old expression); ADOPTED turn: wgRound == currentRound (the adopted
-    // row already sits in the ledger) — the old +1 split one turn across two
-    // round labels (run stamped N, effects N+1).
-    const round = wgRound
-    // 1. persist leader messages (targets validated; leader may always DM).
-    if (outMessages.ok) {
-      await persistWgMessages(db, taskId, config, round, leaderId, outMessages.value, {
-        allowDirect: true,
-        allowBlackboard: true,
-      })
-    }
-    // 2. dispatch assignments (agent members start immediately via next pass;
-    //    human members become awaiting-delivery cards — PR-5 unlocks launch).
-    if (dispatches.ok) {
-      for (const d of dispatches.value) {
-        const member = config.members.find((m) => m.displayName === d.member)
-        if (member === undefined) continue
-        const id = ulid()
-        await db.insert(workgroupAssignments).values({
-          id,
-          taskId,
-          round,
-          source: 'leader',
-          createdByRunId: runId,
-          assigneeMemberId: member.id,
-          title: d.title,
-          briefMd: d.brief,
-          status: 'dispatched',
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        })
-        await postMessage(db, taskId, roundMode(config), {
-          round,
-          authorKind: 'member',
-          authorMemberId: leaderId,
-          kind: 'dispatch',
-          bodyMd: `@${d.member} ${d.title}`,
-          mentionMemberIds: [member.id],
-          assignmentId: id,
-        })
-      }
-    }
-    // RFC-187 §3-7 — surface the dropped wrap-up dispatch (see the drop above).
-    if (wrapUpDroppedDispatch) {
+  }
+  // 4. decision.
+  if (decision !== null && decision.ok) {
+    if (decision.value.action === 'done') {
       await postMessage(db, taskId, roundMode(config), {
         round,
-        authorKind: 'system',
-        kind: 'system',
-        bodyMd:
-          'Round cap reached — new assignments in this final wrap-up round were ignored. ' +
-          'Aggregating the completed work.',
+        authorKind: 'member',
+        authorMemberId: leaderId,
+        kind: 'decision',
+        bodyMd: decision.value.summary ?? '',
       })
+      await casGateStatus(db, taskId, {
+        from: ['idle', 'rejected'],
+        to: 'declared',
+        ...(decision.value.summary !== undefined ? { summary: decision.value.summary } : {}),
+      })
+    } else if (state.gate.rejected) {
+      // leader consumed the rejection (kept working instead of re-declaring)
+      // — the rejected→idle edge clears the surfaced comment.
+      await casGateStatus(db, taskId, { from: ['rejected'], to: 'idle' })
     }
-    // 3. deliveries the leader just consumed flip delivered→done (design
-    //    §1.4: delivered = 交付已落, done = 下一回合已消费).
-    for (const a of state.assignments) {
-      if (a.status === 'delivered') {
-        await casAssignmentStatus(db, a.id, 'delivered', 'done').catch(() => false)
-      }
-    }
-    // 4. decision.
-    if (decision !== null && decision.ok) {
-      if (decision.value.action === 'done') {
-        await postMessage(db, taskId, roundMode(config), {
-          round,
-          authorKind: 'member',
-          authorMemberId: leaderId,
-          kind: 'decision',
-          bodyMd: decision.value.summary ?? '',
-        })
-        await casGateStatus(db, taskId, {
-          from: ['idle', 'rejected'],
-          to: 'declared',
-          ...(decision.value.summary !== undefined ? { summary: decision.value.summary } : {}),
-        })
-      } else if (state.gate.rejected) {
-        // leader consumed the rejection (kept working instead of re-declaring)
-        // — the rejected→idle edge clears the surfaced comment.
-        await casGateStatus(db, taskId, { from: ['rejected'], to: 'idle' })
-      }
-    }
-    // RFC-186 T5 (audit §5 F6): advance the leader cursor to the turn-start max
-    // ONLY here, AFTER this turn's effects (messages / assignments / deliveries /
-    // decision / gate) are durably persisted. If a daemon restart kills the turn
-    // mid-flight (before this point), the cursor stays put so the resumed engine
-    // re-derives the turn instead of silently skipping it (was: advanced BEFORE
-    // runHostNode). `maxMessageId(state.messages)` is the turn-start snapshot, so
-    // the value is identical to the old pre-turn advance — only the timing moved.
-    await advanceMemberCursor(db, taskId, leaderId, maxMessageId(state.messages))
-    return
   }
+  // RFC-186 T5 (audit §5 F6): advance the leader cursor to the turn-start max
+  // ONLY here, AFTER this turn's effects are durably persisted (crash before
+  // this point ⇒ the resumed engine re-derives the turn instead of skipping).
+  await advanceMemberCursor(db, taskId, leaderId, maxMessageId(state.messages))
 }
 
 async function driveAssignmentTurn(
@@ -1764,7 +1698,7 @@ async function driveAssignmentTurn(
   assignment: WorkgroupAssignment,
   adoptedRunId?: string,
 ): Promise<void> {
-  const { db, taskId, hooks } = args
+  const { db, taskId } = args
   const config = state.config
   const memberId = assignment.assigneeMemberId
   if (memberId === null) return
@@ -1792,21 +1726,40 @@ async function driveAssignmentTurn(
   ) {
     await stampWgRound(db, adoptedMemberRow.id, memberWgRound)
   }
-  // Codex 实现门 P2-1（member 侧同形）— adopted 续跑的重试从其存量 index 续排，
-  // 防 (node, shard, retry_index) 重复铸行。
-  const retryBase = adoptedMemberRow?.retryIndex ?? 0
 
-  let errorNotice: string | null = null
-  for (let attempt = 0; attempt <= WG_PROTOCOL_RETRIES; attempt++) {
-    let runId = adoptedRunId
-    if (runId === undefined || attempt > 0) {
-      runId = await mintNodeRun(db, {
-        taskId,
-        nodeId: WG_MEMBER_NODE_ID,
-        status: 'pending',
-        // RFC-187 §3-3 — protocol retry (attempt>0) = same logical round; excluded
-        // from round accounting (matters for fc, which counts member runs as rounds).
-        // RFC-189 — retryIndex = plain attempt ordinal (round lives in wg_round).
+  const role: WorkgroupProtocolRole = config.mode === 'free_collab' ? 'fc_member' : 'worker'
+  const roster = rosterDisplayNames(config)
+  interface AssignmentTurnValue {
+    summary: string
+    outMessages: ReturnType<typeof parseWgMessagesPort>
+    tasksAddRaw: string | undefined
+  }
+  let card = assignment
+  const outcome = await executeTurn<AssignmentTurnValue>(
+    {
+      db,
+      taskId,
+      hooks: args.hooks,
+      ...(args.registerMint !== undefined ? { registerMint: args.registerMint } : {}),
+      broadcastPendingMint,
+      ...(adoptedRunId !== undefined ? { adoptedRunId } : {}),
+      // Codex 实现门 P2-1（member 侧同形）— adopted 续跑的重试从其存量 index
+      // 续排，防 (node, shard, retry_index) 重复铸行。
+      retryBase: adoptedMemberRow?.retryIndex ?? 0,
+    },
+    {
+      nodeId: WG_MEMBER_NODE_ID,
+      agent,
+      role,
+      config,
+      clarifyShardKey: assignment.id,
+      maxAttempts: WG_PROTOCOL_RETRIES + 1,
+      clarifyForbiddenNotice:
+        '- Ask-back is OFF in this autonomous group. Do NOT emit <workflow-clarify>.\n' +
+        '  Proceed with your best judgment and emit wg_result as usual.',
+      // RFC-187 §3-3 / RFC-189 — retry rows are budget-excluded; retryIndex is
+      // the plain attempt ordinal (round lives in wg_round).
+      mintRow: (attempt, retryBase) => ({
         cause: attempt > 0 ? 'wg-protocol-retry' : 'wg-assignment',
         retryIndex: retryBase + attempt,
         overrides: {
@@ -1814,151 +1767,96 @@ async function driveAssignmentTurn(
           agentOverrideName: agent.name,
           wgRound: memberWgRound,
         },
-      })
-      args.registerMint?.(runId)
-      broadcastPendingMint(taskId, runId, WG_MEMBER_NODE_ID)
-    }
-    adoptedRunId = undefined
-    const envelopeNonce = await loadRunEnvelopeNonce(db, runId)
+      }),
+      onAttemptStart: async (runId) => {
+        if (card.status === 'dispatched') {
+          await casAssignmentStatus(db, card.id, 'dispatched', 'running', { nodeRunId: runId })
+          card = { ...card, status: 'running', nodeRunId: runId }
+        } else if (card.nodeRunId !== runId) {
+          await db
+            .update(workgroupAssignments)
+            .set({ nodeRunId: runId, updatedAt: Date.now() })
+            .where(eq(workgroupAssignments.id, card.id))
+          card = { ...card, nodeRunId: runId }
+        }
+      },
+      composePrompt: (envelopeNonce) =>
+        composeMemberPrompt(state, memberId, [card], envelopeNonce, { singleCard: true }),
+      parse: (outputs) => {
+        const resultRaw = outputs[WG_PORT_RESULT]
+        const parsedResult = resultRaw !== undefined ? parseWgResultPort(resultRaw) : null
+        const errors: string[] = []
+        if (parsedResult === null) errors.push('missing required port wg_result')
+        else if (!parsedResult.ok) errors.push(...parsedResult.errors.map((e) => `wg_result: ${e}`))
+        const messagesRaw = outputs[WG_PORT_MESSAGES]
+        const outMessages =
+          messagesRaw !== undefined
+            ? parseWgMessagesPort(messagesRaw, roster)
+            : { ok: true as const, value: [] }
+        if (!outMessages.ok) errors.push(...outMessages.errors.map((e) => `wg_messages: ${e}`))
+        if (errors.length > 0) return { ok: false, errors }
+        return {
+          ok: true,
+          value: {
+            summary: parsedResult !== null && parsedResult.ok ? parsedResult.value.summary : '',
+            outMessages,
+            tasksAddRaw: outputs[WG_PORT_TASKS_ADD],
+          },
+        }
+      },
+    },
+  )
 
-    if (assignment.status === 'dispatched') {
-      await casAssignmentStatus(db, assignment.id, 'dispatched', 'running', { nodeRunId: runId })
-      assignment = { ...assignment, status: 'running', nodeRunId: runId }
-    } else {
-      await db
-        .update(workgroupAssignments)
-        .set({ nodeRunId: runId, updatedAt: Date.now() })
-        .where(eq(workgroupAssignments.id, assignment.id))
-    }
-
-    const prompt =
-      composeMemberPrompt(state, memberId, [assignment], envelopeNonce, { singleCard: true }) +
-      (errorNotice !== null
-        ? `\n\n## Protocol errors in your previous reply\n\n${fenceUntrusted(
-            'protocol-error',
-            errorNotice,
-            envelopeNonce,
-          )}\n\nRe-emit a CORRECT envelope.`
-        : '')
-
-    // RFC-207 §3.7.2 — resolve ONCE and feed BOTH the protocol block (whether to
-    // invite an ask-back) and `clarifyEnabled` (whether to accept one). Deriving
-    // it separately in each place is how a prompt ends up inviting a question the
-    // envelope gate then rejects.
-    const assignmentClarifyAllowed = await resolveWgClarifyAllowed(
-      db,
-      taskId,
-      config.members,
-      config.clarifyBudget,
-      WG_MEMBER_NODE_ID,
-      assignment.id,
-    )
-    const result = await hooks.runHostNode({
-      nodeRunId: runId,
-      nodeId: WG_MEMBER_NODE_ID,
-      agent,
-      promptTemplate: prompt,
-      workgroupProtocolBlock: renderWgProtocolBlock(
-        config.mode === 'free_collab' ? 'fc_member' : 'worker',
-        config,
-        envelopeNonce,
-        assignmentClarifyAllowed,
-      ),
-      hostOutputPorts: wgHostRolePorts(config.mode === 'free_collab' ? 'fc_member' : 'worker'),
-      clarifyEnabled: assignmentClarifyAllowed,
-    })
-    if (result.status === 'canceled') {
-      await casAssignmentStatus(db, assignment.id, 'running', 'canceled').catch(() => false)
-      return
-    }
-    if (result.status === 'awaiting') {
-      await casAssignmentStatus(db, assignment.id, 'running', 'awaiting_human')
-      return
-    }
-    if (result.status === 'failed') {
-      // RFC-181 C — suppressed ask-back is a RETRYABLE protocol nudge for the
-      // member too: re-prompt it to proceed on its own; exhaustion falls
-      // through to the normal failed handling (assignment failed floats up on
-      // the card — never a park). Structured failureCode routing (RFC-145).
-      if (result.failureCode === 'clarify-forbidden' && attempt < WG_PROTOCOL_RETRIES) {
-        errorNotice =
-          '- Ask-back is OFF in this autonomous group. Do NOT emit <workflow-clarify>.\n' +
-          '  Proceed with your best judgment and emit wg_result as usual.'
-        continue
-      }
-      // RFC-186 §2.2 — same unified FOLLOWUP_POLICY routing as the leader turn:
-      // a structured (retryable) failureCode → one fresh reason-tailored retry;
-      // unstructured (fatal) or exhausted → assignment failed (floats up on the
-      // card, never a park). Collapses the old envelope-missing special-case.
-      const fu = followupForFailure(result.failureCode)
-      if (fu.retry && attempt < WG_PROTOCOL_RETRIES) {
-        errorNotice = wgFollowupNotice(fu.reason)
-        continue
-      }
-      // RFC-215 §3.5 — 失败收尾走共享子例程：fc 预算判据从「按 shardKey 数
-      // node_runs 行」改为 attempt_count 列（批量 shardKey 下行计数失效；且
-      // 协议重试不再误耗预算——attempt_count 只在 open→dispatched 认领时自增）。
-      await settleCardAfterFailure(db, state, assignment.id)
-      await postAssignmentMessage(db, taskId, roundMode(config), assignment, {
-        authorKind: 'system',
-        kind: 'system',
-        bodyMd: `assignment '${assignment.title}' failed: ${result.errorMessage ?? 'run failed'}`,
-      })
-      return
-    }
-
-    // done — require wg_result.
-    const roster = rosterDisplayNames(config)
-    const resultRaw = result.outputs[WG_PORT_RESULT]
-    const parsedResult = resultRaw !== undefined ? parseWgResultPort(resultRaw) : null
-    const errors: string[] = []
-    if (parsedResult === null) errors.push('missing required port wg_result')
-    else if (!parsedResult.ok) errors.push(...parsedResult.errors.map((e) => `wg_result: ${e}`))
-    const messagesRaw = result.outputs[WG_PORT_MESSAGES]
-    const outMessages =
-      messagesRaw !== undefined
-        ? parseWgMessagesPort(messagesRaw, roster)
-        : { ok: true as const, value: [] }
-    if (!outMessages.ok) errors.push(...outMessages.errors.map((e) => `wg_messages: ${e}`))
-
-    if (errors.length > 0) {
-      errorNotice = errors.map((e) => `- ${e}`).join('\n')
-      if (attempt === WG_PROTOCOL_RETRIES) {
-        await casAssignmentStatus(db, assignment.id, 'running', 'failed')
-        await postAssignmentMessage(db, taskId, roundMode(config), assignment, {
-          authorKind: 'system',
-          kind: 'system',
-          bodyMd: `assignment '${assignment.title}' failed: protocol violation (${errors.join('; ')})`,
-        })
-        return
-      }
-      continue
-    }
-
-    const switches = resolveWorkgroupSwitches(config.mode, config.switches)
-    if (outMessages.ok && outMessages.value.length > 0) {
-      await persistWgMessages(db, taskId, config, assignment.round, memberId, outMessages.value, {
-        allowDirect: switches.directMessages,
-        allowBlackboard: switches.blackboard,
-      })
-    }
-    await consumeTasksAdd(db, taskId, state, memberId, result.outputs[WG_PORT_TASKS_ADD])
-    const resultMessageId = await postAssignmentMessage(db, taskId, roundMode(config), assignment, {
-      authorKind: 'member',
-      authorMemberId: memberId,
-      kind: 'result',
-      bodyMd: parsedResult !== null && parsedResult.ok ? parsedResult.value.summary : '',
-    })
-    await casAssignmentStatus(db, assignment.id, 'running', 'done', { resultMessageId })
-    // RFC-186 T5 (audit §5 F6): advance the worker cursor AFTER the assignment's
-    // effects (result message / done / tasks_add) persist — a mid-turn crash
-    // leaves it un-advanced so the resumed engine doesn't skip consumed content.
-    // RFC-215 §4 (G3) — lw ONLY: fc 任务 run 不消费消息（mentions 未注入），推游标
-    // 会把消息轨该消费的 @ 消息静默标已读（双轨并发下的双推竞态正是 v1 探针 S1）。
-    if (config.mode === 'leader_worker') {
-      await advanceMemberCursor(db, taskId, memberId, maxMessageId(state.messages))
-    }
+  if (outcome.kind === 'canceled') {
+    await casAssignmentStatus(db, assignment.id, 'running', 'canceled').catch(() => false)
     return
+  }
+  if (outcome.kind === 'awaiting') {
+    await casAssignmentStatus(db, assignment.id, 'running', 'awaiting_human')
+    return
+  }
+  if (outcome.kind === 'clarify-forbidden-exhausted' || outcome.kind === 'failed') {
+    // RFC-215 §3.5 — 失败收尾走共享子例程：fc 预算判据用 attempt_count 列
+    // （协议重试不误耗预算——只在 open→dispatched 认领时自增）。suppressed
+    // ask-back 耗尽与普通失败同路：卡面浮出 failed，绝不 park（RFC-181 C）。
+    await settleCardAfterFailure(db, state, assignment.id)
+    await postAssignmentMessage(db, taskId, roundMode(config), assignment, {
+      authorKind: 'system',
+      kind: 'system',
+      bodyMd: `assignment '${assignment.title}' failed: ${outcome.errorMessage}`,
+    })
+    return
+  }
+  if (outcome.kind === 'protocol-exhausted') {
+    await casAssignmentStatus(db, assignment.id, 'running', 'failed')
+    await postAssignmentMessage(db, taskId, roundMode(config), assignment, {
+      authorKind: 'system',
+      kind: 'system',
+      bodyMd: `assignment '${assignment.title}' failed: protocol violation (${outcome.errors.join('; ')})`,
+    })
+    return
+  }
+
+  const { summary, outMessages, tasksAddRaw } = outcome.value
+  const switches = resolveWorkgroupSwitches(config.mode, config.switches)
+  if (outMessages.ok && outMessages.value.length > 0) {
+    await persistWgMessages(db, taskId, config, assignment.round, memberId, outMessages.value, {
+      allowDirect: switches.directMessages,
+      allowBlackboard: switches.blackboard,
+    })
+  }
+  await consumeTasksAdd(db, taskId, state, memberId, tasksAddRaw)
+  const resultMessageId = await postAssignmentMessage(db, taskId, roundMode(config), assignment, {
+    authorKind: 'member',
+    authorMemberId: memberId,
+    kind: 'result',
+    bodyMd: summary,
+  })
+  await casAssignmentStatus(db, assignment.id, 'running', 'done', { resultMessageId })
+  // RFC-186 T5 (audit §5 F6): advance the worker cursor AFTER the effects
+  // persist. RFC-215 §4 (G3) — lw ONLY: fc 任务 run 不消费消息、不推游标。
+  if (config.mode === 'leader_worker') {
+    await advanceMemberCursor(db, taskId, memberId, maxMessageId(state.messages))
   }
 }
 
@@ -1976,7 +1874,7 @@ async function driveBatchTurn(
   candidateIds: readonly string[],
   adoptedRunId?: string,
 ): Promise<void> {
-  const { db, taskId, hooks } = args
+  const { db, taskId } = args
   const config = state.config
   const agent = await resolveMemberAgent(args, state, memberId)
   if (agent === null) {
@@ -2051,16 +1949,46 @@ async function driveBatchTurn(
   )
   const adoptedRow =
     adoptedRunId !== undefined ? state.hostRuns.find((r) => r.id === adoptedRunId) : undefined
-  const retryBase = adoptedRow?.retryIndex ?? 0
 
-  let errorNotice: string | null = null
-  for (let attempt = 0; attempt <= WG_PROTOCOL_RETRIES; attempt++) {
-    let runId = adoptedRunId
-    if (runId === undefined || attempt > 0) {
-      runId = await mintNodeRun(db, {
-        taskId,
-        nodeId: WG_MEMBER_NODE_ID,
-        status: 'pending',
+  const roster = rosterDisplayNames(config)
+  interface BatchTurnValue {
+    reported: ReturnType<typeof parseWgTaskResultsPort> extends { ok: true; value: infer V }
+      ? V
+      : never
+    outMessages: ReturnType<typeof parseWgMessagesPort>
+    tasksAddRaw: string | undefined
+  }
+  // 耗尽时的部分落卡（design §3.2）：parse 闭包每轮捕获「已合法汇报」的子集，
+  // protocol-exhausted 收尾据此照落合法项、只失败未汇报项。
+  let lastReported: {
+    task: number
+    status: 'done' | 'failed'
+    summary: string
+    detail?: string
+  }[] = []
+  let lastMissing: number[] = batch.map((_, i) => i + 1)
+  const outcome = await executeTurn<BatchTurnValue>(
+    {
+      db,
+      taskId,
+      hooks: args.hooks,
+      ...(args.registerMint !== undefined ? { registerMint: args.registerMint } : {}),
+      broadcastPendingMint,
+      ...(adoptedRunId !== undefined ? { adoptedRunId } : {}),
+      retryBase: adoptedRow?.retryIndex ?? 0,
+    },
+    {
+      nodeId: WG_MEMBER_NODE_ID,
+      agent,
+      role: 'fc_member',
+      config,
+      clarifyShardKey: shardKey,
+      maxAttempts: WG_PROTOCOL_RETRIES + 1,
+      clarifyForbiddenNotice:
+        '- Ask-back is OFF in this autonomous group. Do NOT emit <workflow-clarify>.\n' +
+        '  Proceed with your best judgment and emit wg_task_results as usual.',
+      protocolOpts: { count: batch.length },
+      mintRow: (attempt, retryBase) => ({
         cause: attempt > 0 ? 'wg-protocol-retry' : 'wg-assignment',
         retryIndex: retryBase + attempt,
         overrides: {
@@ -2068,170 +1996,116 @@ async function driveBatchTurn(
           agentOverrideName: agent.name,
           wgRound: null, // fc member rows stay NULL (RFC-189 count-based budget)
         },
-      })
-      args.registerMint?.(runId)
-      broadcastPendingMint(taskId, runId, WG_MEMBER_NODE_ID)
-    }
-    adoptedRunId = undefined
-    const envelopeNonce = await loadRunEnvelopeNonce(db, runId)
-
-    // 2. 逐卡 running + nodeRunId 刷新（协议重试轮把卡指向最新行，同单卡语义）。
-    for (const card of batch) {
-      if (card.status === 'dispatched') {
-        await casAssignmentStatus(db, card.id, 'dispatched', 'running', { nodeRunId: runId })
-        card.status = 'running'
-        card.nodeRunId = runId
-      } else if (card.nodeRunId !== runId) {
-        await db
-          .update(workgroupAssignments)
-          .set({ nodeRunId: runId, updatedAt: Date.now() })
-          .where(eq(workgroupAssignments.id, card.id))
-        card.nodeRunId = runId
-      }
-    }
-
-    const prompt =
-      composeMemberPrompt(state, memberId, batch, envelopeNonce) +
-      (errorNotice !== null
-        ? `\n\n## Protocol errors in your previous reply\n\n${fenceUntrusted(
-            'protocol-error',
-            errorNotice,
-            envelopeNonce,
-          )}\n\nRe-emit a CORRECT envelope.`
-        : '')
-
-    const clarifyAllowed = await resolveWgClarifyAllowed(
-      db,
-      taskId,
-      config.members,
-      config.clarifyBudget,
-      WG_MEMBER_NODE_ID,
-      shardKey,
-    )
-    const result = await hooks.runHostNode({
-      nodeRunId: runId,
-      nodeId: WG_MEMBER_NODE_ID,
-      agent,
-      promptTemplate: prompt,
-      workgroupProtocolBlock: renderWgProtocolBlock(
-        'fc_member',
-        config,
-        envelopeNonce,
-        clarifyAllowed,
-        {
-          count: batch.length,
-        },
-      ),
-      hostOutputPorts: wgHostRolePorts('fc_member', { count: batch.length }),
-      clarifyEnabled: clarifyAllowed,
-    })
-    if (result.status === 'canceled') {
-      for (const card of batch) {
-        await casAssignmentStatus(db, card.id, 'running', 'canceled').catch(() => false)
-      }
-      return
-    }
-    if (result.status === 'awaiting') {
-      // 整批同泊（design §3.2）：clarify shard 即批 shardKey，答案续跑经领养重建整批。
-      for (const card of batch) {
-        await casAssignmentStatus(db, card.id, 'running', 'awaiting_human').catch(() => false)
-      }
-      return
-    }
-    if (result.status === 'failed') {
-      if (result.failureCode === 'clarify-forbidden' && attempt < WG_PROTOCOL_RETRIES) {
-        errorNotice =
-          '- Ask-back is OFF in this autonomous group. Do NOT emit <workflow-clarify>.\n' +
-          '  Proceed with your best judgment and emit wg_task_results as usual.'
-        continue
-      }
-      const fu = followupForFailure(result.failureCode)
-      if (fu.retry && attempt < WG_PROTOCOL_RETRIES) {
-        errorNotice = wgFollowupNotice(fu.reason)
-        continue
-      }
-      await postMessage(db, taskId, roundMode(config), {
-        authorKind: 'system',
-        kind: 'system',
-        bodyMd: `batch of ${batch.length} task(s) for @${memberDisplayName(config, memberId)} failed: ${result.errorMessage ?? 'run failed'}`,
-      })
-      for (const card of batch) {
-        await settleCardAfterFailure(db, state, card.id)
-      }
-      return
-    }
-
-    // done — wg_task_results 全覆盖或协议重试。
-    const roster = rosterDisplayNames(config)
-    const resultsRaw = result.outputs[WG_PORT_TASK_RESULTS]
-    const parsed =
-      resultsRaw !== undefined
-        ? parseWgTaskResultsPort(resultsRaw, batch.length)
-        : ({
-            ok: false,
-            errors: [
-              `missing required port ${WG_PORT_TASK_RESULTS} (this batch run does NOT use ${WG_PORT_RESULT})`,
-            ],
-          } as const)
-    const messagesRaw = result.outputs[WG_PORT_MESSAGES]
-    const outMessages =
-      messagesRaw !== undefined
-        ? parseWgMessagesPort(messagesRaw, roster)
-        : { ok: true as const, value: [] }
-
-    const errors: string[] = []
-    if (!parsed.ok) errors.push(...parsed.errors.map((e) => `${WG_PORT_TASK_RESULTS}: ${e}`))
-    else if (parsed.missing.length > 0) {
-      errors.push(
-        `${WG_PORT_TASK_RESULTS}: missing entries for ${parsed.missing
-          .map((k) => `Task ${k}`)
-          .join(', ')} — EVERY task in the batch must be reported exactly once`,
-      )
-    }
-    if (!outMessages.ok) errors.push(...outMessages.errors.map((e) => `wg_messages: ${e}`))
-
-    if (errors.length > 0) {
-      errorNotice = errors.map((e) => `- ${e}`).join('\n')
-      if (attempt === WG_PROTOCOL_RETRIES) {
-        // 耗尽：已合法汇报的卡照落（design §3.2），未汇报/不可解析的走失败收尾。
-        const reported = parsed.ok ? parsed.value : []
-        await settleBatchResults(args, state, batch, reported)
-        const unreported = parsed.ok ? parsed.missing : batch.map((_, i) => i + 1) // whole port unusable — nothing landed
-        await postMessage(db, taskId, roundMode(config), {
-          authorKind: 'system',
-          kind: 'system',
-          bodyMd: `batch for @${memberDisplayName(config, memberId)}: protocol violation after retries (${errors.join('; ')})`,
-        })
-        for (const k of unreported) {
-          const card = batch[k - 1]
-          if (card !== undefined) await settleCardAfterFailure(db, state, card.id)
+      }),
+      // 2. 逐卡 running + nodeRunId 刷新（协议重试轮把卡指向最新行，同单卡语义）。
+      onAttemptStart: async (runId) => {
+        for (const card of batch) {
+          if (card.status === 'dispatched') {
+            await casAssignmentStatus(db, card.id, 'dispatched', 'running', { nodeRunId: runId })
+            card.status = 'running'
+            card.nodeRunId = runId
+          } else if (card.nodeRunId !== runId) {
+            await db
+              .update(workgroupAssignments)
+              .set({ nodeRunId: runId, updatedAt: Date.now() })
+              .where(eq(workgroupAssignments.id, card.id))
+            card.nodeRunId = runId
+          }
         }
-        return
-      }
-      continue
-    }
+      },
+      composePrompt: (envelopeNonce) => composeMemberPrompt(state, memberId, batch, envelopeNonce),
+      parse: (outputs) => {
+        const resultsRaw = outputs[WG_PORT_TASK_RESULTS]
+        const parsed =
+          resultsRaw !== undefined
+            ? parseWgTaskResultsPort(resultsRaw, batch.length)
+            : ({
+                ok: false,
+                errors: [
+                  `missing required port ${WG_PORT_TASK_RESULTS} (this batch run does NOT use ${WG_PORT_RESULT})`,
+                ],
+              } as const)
+        const messagesRaw = outputs[WG_PORT_MESSAGES]
+        const outMessages =
+          messagesRaw !== undefined
+            ? parseWgMessagesPort(messagesRaw, roster)
+            : { ok: true as const, value: [] }
+        lastReported = parsed.ok ? [...parsed.value] : []
+        lastMissing = parsed.ok ? [...parsed.missing] : batch.map((_, i) => i + 1)
+        const errors: string[] = []
+        if (!parsed.ok) errors.push(...parsed.errors.map((e) => `${WG_PORT_TASK_RESULTS}: ${e}`))
+        else if (parsed.missing.length > 0) {
+          errors.push(
+            `${WG_PORT_TASK_RESULTS}: missing entries for ${parsed.missing
+              .map((k) => `Task ${k}`)
+              .join(', ')} — EVERY task in the batch must be reported exactly once`,
+          )
+        }
+        if (!outMessages.ok) errors.push(...outMessages.errors.map((e) => `wg_messages: ${e}`))
+        if (errors.length > 0) return { ok: false, errors }
+        return {
+          ok: true,
+          value: {
+            reported: (parsed.ok ? parsed.value : []) as BatchTurnValue['reported'],
+            outMessages,
+            tasksAddRaw: outputs[WG_PORT_TASKS_ADD],
+          },
+        }
+      },
+    },
+  )
 
-    // 全绿：先旁路端口（消息/新卡），再逐卡落结果。
-    const switches = resolveWorkgroupSwitches(config.mode, config.switches)
-    if (outMessages.ok && outMessages.value.length > 0) {
-      await persistWgMessages(
-        db,
-        taskId,
-        config,
-        batch[0]?.round ?? 0,
-        memberId,
-        outMessages.value,
-        {
-          allowDirect: switches.directMessages,
-          allowBlackboard: switches.blackboard,
-        },
-      )
+  if (outcome.kind === 'canceled') {
+    for (const card of batch) {
+      await casAssignmentStatus(db, card.id, 'running', 'canceled').catch(() => false)
     }
-    await consumeTasksAdd(db, taskId, state, memberId, result.outputs[WG_PORT_TASKS_ADD])
-    await settleBatchResults(args, state, batch, parsed.ok ? parsed.value : [])
-    // G3：不推游标——@ 消息由消息轨消费。
     return
   }
+  if (outcome.kind === 'awaiting') {
+    // 整批同泊（design §3.2）：clarify shard 即批 shardKey，答案续跑经领养重建整批。
+    for (const card of batch) {
+      await casAssignmentStatus(db, card.id, 'running', 'awaiting_human').catch(() => false)
+    }
+    return
+  }
+  if (outcome.kind === 'clarify-forbidden-exhausted' || outcome.kind === 'failed') {
+    await postMessage(db, taskId, roundMode(config), {
+      authorKind: 'system',
+      kind: 'system',
+      bodyMd: `batch of ${batch.length} task(s) for @${memberDisplayName(config, memberId)} failed: ${outcome.errorMessage}`,
+    })
+    for (const card of batch) {
+      await settleCardAfterFailure(db, state, card.id)
+    }
+    return
+  }
+  if (outcome.kind === 'protocol-exhausted') {
+    // 耗尽：已合法汇报的卡照落（design §3.2），未汇报/不可解析的走失败收尾。
+    await settleBatchResults(args, state, batch, lastReported)
+    await postMessage(db, taskId, roundMode(config), {
+      authorKind: 'system',
+      kind: 'system',
+      bodyMd: `batch for @${memberDisplayName(config, memberId)}: protocol violation after retries (${outcome.errors.join('; ')})`,
+    })
+    for (const k of lastMissing) {
+      const card = batch[k - 1]
+      if (card !== undefined) await settleCardAfterFailure(db, state, card.id)
+    }
+    return
+  }
+
+  // 全绿：先旁路端口（消息/新卡），再逐卡落结果。
+  const { reported, outMessages, tasksAddRaw } = outcome.value
+  const switches = resolveWorkgroupSwitches(config.mode, config.switches)
+  if (outMessages.ok && outMessages.value.length > 0) {
+    await persistWgMessages(db, taskId, config, batch[0]?.round ?? 0, memberId, outMessages.value, {
+      allowDirect: switches.directMessages,
+      allowBlackboard: switches.blackboard,
+    })
+  }
+  await consumeTasksAdd(db, taskId, state, memberId, tasksAddRaw)
+  await settleBatchResults(args, state, batch, reported)
+  // G3：不推游标——@ 消息由消息轨消费。
 }
 
 /**
@@ -2277,38 +2151,18 @@ async function driveMessageTurn(
   isFcInitial: boolean,
   adoptedRunId?: string,
 ): Promise<void> {
-  const { db, taskId, hooks } = args
+  const { db, taskId } = args
   const config = state.config
   const agent = await resolveMemberAgent(args, state, memberId)
   if (agent === null) return
 
-  let runId = adoptedRunId
-  if (runId === undefined) {
-    runId = await mintNodeRun(db, {
-      taskId,
-      nodeId: WG_MEMBER_NODE_ID,
-      status: 'pending',
-      cause: 'wg-message-turn',
-      // RFC-189 — single-shot turn (no attempt loop) ⇒ plain attempt 0; the
-      // lw round it belongs to rides wg_round (fc: NULL — count-based budget,
-      // where each message turn IS one budget row and needs no ordinal).
-      retryIndex: 0,
-      overrides: {
-        shardKey: `msg:${memberId}:${maxMessageId(state.messages) || '0'}`,
-        agentOverrideName: agent.name,
-        wgRound: config.mode === 'leader_worker' ? currentRound(state) : null,
-      },
-    })
-    args.registerMint?.(runId)
-    broadcastPendingMint(taskId, runId, WG_MEMBER_NODE_ID)
-  } else if (config.mode === 'leader_worker') {
+  if (adoptedRunId !== undefined && config.mode === 'leader_worker') {
     // Codex 实现门 P2-4 — an ADOPTED msg continuation (clarify-answer rerun on
     // a msg:* shard, minted outside without a stamp) gets its round in place;
     // display-only in lw (message turns never advance the ledger), idempotent
     // via the IS NULL guard.
-    await stampWgRound(db, runId, currentRound(state))
+    await stampWgRound(db, adoptedRunId, currentRound(state))
   }
-  const envelopeNonce = await loadRunEnvelopeNonce(db, runId)
 
   const fcAddendum = isFcInitial
     ? [
@@ -2320,65 +2174,88 @@ async function driveMessageTurn(
         'wg_result.',
       ].join('\n')
     : null
-  const prompt =
-    composeMemberPrompt(state, memberId, null, envelopeNonce) +
-    (fcAddendum !== null ? `\n\n${fcAddendum}` : '')
-
   const role = config.mode === 'free_collab' ? ('fc_member' as const) : ('worker' as const)
-  // RFC-207 §3.7.2 — resolve ONCE and feed BOTH the protocol block (whether to
-  // invite an ask-back) and `clarifyEnabled` (whether to accept one). Deriving
-  // it separately in each place is how a prompt ends up inviting a question the
-  // envelope gate then rejects.
-  // The shard key of a message turn embeds the member; only that part is used to
-  // identify the asker, so the message id is irrelevant here (RFC-207 §3.6.3).
-  const msgClarifyAllowed = await resolveWgClarifyAllowed(
-    db,
-    taskId,
-    config.members,
-    config.clarifyBudget,
-    WG_MEMBER_NODE_ID,
-    `msg:${memberId}:0`,
+  const roster = rosterDisplayNames(config)
+  interface MessageTurnValue {
+    outMessages: ReturnType<typeof parseWgMessagesPort>
+    resultRaw: string | undefined
+    tasksAddRaw: string | undefined
+  }
+  // 单发（RFC-186 §2.2 deferred retry）——maxAttempts=1：协议/端口问题不重试、
+  // 容错跳过（parse 恒 ok），与旧实现逐字同语义；骨架只贡献 mint/领养/nonce/
+  // clarify resolve-once/结果分派的公共面（设计门 P2：重试预算是 spec 入参）。
+  const outcome = await executeTurn<MessageTurnValue>(
+    {
+      db,
+      taskId,
+      hooks: args.hooks,
+      ...(args.registerMint !== undefined ? { registerMint: args.registerMint } : {}),
+      broadcastPendingMint,
+      ...(adoptedRunId !== undefined ? { adoptedRunId } : {}),
+    },
+    {
+      nodeId: WG_MEMBER_NODE_ID,
+      agent,
+      role,
+      config,
+      // The shard key embeds the member; only that part identifies the asker
+      // (RFC-207 §3.6.3) — the message id is irrelevant to the clarify gate.
+      clarifyShardKey: `msg:${memberId}:0`,
+      maxAttempts: 1,
+      clarifyForbiddenNotice: '', // unreachable at maxAttempts=1 — exhaustion path only
+      mintRow: () => ({
+        cause: 'wg-message-turn',
+        // RFC-189 — single-shot turn ⇒ plain attempt 0; the lw round it belongs
+        // to rides wg_round (fc: NULL — count-based budget, where each message
+        // turn IS one budget row and needs no ordinal).
+        retryIndex: 0,
+        overrides: {
+          shardKey: `msg:${memberId}:${maxMessageId(state.messages) || '0'}`,
+          agentOverrideName: agent.name,
+          wgRound: config.mode === 'leader_worker' ? currentRound(state) : null,
+        },
+      }),
+      composePrompt: (envelopeNonce) =>
+        composeMemberPrompt(state, memberId, null, envelopeNonce) +
+        (fcAddendum !== null ? `\n\n${fcAddendum}` : ''),
+      parse: (outputs) => {
+        const messagesRaw = outputs[WG_PORT_MESSAGES]
+        const outMessages =
+          messagesRaw !== undefined
+            ? parseWgMessagesPort(messagesRaw, roster)
+            : { ok: true as const, value: [] }
+        return {
+          ok: true,
+          value: {
+            outMessages,
+            resultRaw: outputs[WG_PORT_RESULT],
+            tasksAddRaw: outputs[WG_PORT_TASKS_ADD],
+          },
+        }
+      },
+    },
   )
-  const result = await hooks.runHostNode({
-    nodeRunId: runId,
-    nodeId: WG_MEMBER_NODE_ID,
-    agent,
-    promptTemplate: prompt,
-    workgroupProtocolBlock: renderWgProtocolBlock(role, config, envelopeNonce, msgClarifyAllowed),
-    hostOutputPorts: wgHostRolePorts(role),
-    clarifyEnabled: msgClarifyAllowed,
-  })
+
   // RFC-186 T5 (audit §5 F6): advance the member cursor AFTER the hook RETURNS
-  // (done OR failed — both consume the @-mention so it can't re-loop), but never
+  // (any outcome — each consumes the @-mention so it can't re-loop), but never
   // BEFORE the hook. A mid-turn daemon crash (hook never returns) leaves it
-  // un-advanced so the resumed engine re-derives the turn instead of skipping it.
-  // (Message turns are cursor-driven, unlike the status-driven leader/assignment
-  // turns whose advance sits after their durable effects.)
+  // un-advanced so the resumed engine re-derives the turn instead of skipping.
   await advanceMemberCursor(db, taskId, memberId, maxMessageId(state.messages))
-  // RFC-186 §2.2 (audit §2 P1-7) — a failed message turn used to `return`
-  // silently: the @-mentioned member appeared to ignore the message, the room
-  // showed nothing, and debugging was blind. Surface the failure as a system
-  // note so the black hole is visible. (A bounded RETRY loop for message turns
-  // — mirroring leader/assignment — is deferred: this path is off the
-  // dispatch-to-done critical line; the visibility fix addresses the real harm.)
-  if (result.status !== 'done') {
-    if (result.status === 'failed') {
-      await postMessage(db, taskId, roundMode(config), {
-        authorKind: 'system',
-        kind: 'system',
-        bodyMd: `message turn for ${memberDisplayName(config, memberId)} failed: ${result.errorMessage ?? 'run failed'}`,
-      })
-    }
+  // RFC-186 §2.2 (audit §2 P1-7) — surface a failed message turn as a system
+  // note so the black hole is visible (the member otherwise appears to ignore
+  // the message).
+  if (outcome.kind === 'failed' || outcome.kind === 'clarify-forbidden-exhausted') {
+    await postMessage(db, taskId, roundMode(config), {
+      authorKind: 'system',
+      kind: 'system',
+      bodyMd: `message turn for ${memberDisplayName(config, memberId)} failed: ${outcome.errorMessage}`,
+    })
     return
   }
+  if (outcome.kind !== 'done') return // canceled / awaiting — parks or ends upstream
 
-  const roster = rosterDisplayNames(config)
+  const { outMessages, resultRaw, tasksAddRaw } = outcome.value
   const switches = resolveWorkgroupSwitches(config.mode, config.switches)
-  const messagesRaw = result.outputs[WG_PORT_MESSAGES]
-  const outMessages =
-    messagesRaw !== undefined
-      ? parseWgMessagesPort(messagesRaw, roster)
-      : { ok: true as const, value: [] }
   // RFC-209 —— 解析一次，本轮产出的所有消息共用（此前读的是**过期快照**：这个 turn 可能是
   // 好几个引擎 pass 之前启动的，它的 `state` 早就不是当前值了，fc 首轮因此永远写 round 0）。
   const turnRound = await resolveMessageRound(db, taskId, roundMode(config))
@@ -2388,7 +2265,6 @@ async function driveMessageTurn(
       allowBlackboard: switches.blackboard,
     })
   }
-  const resultRaw = result.outputs[WG_PORT_RESULT]
   if (resultRaw !== undefined) {
     const parsed = parseWgResultPort(resultRaw)
     if (parsed.ok) {
@@ -2401,7 +2277,7 @@ async function driveMessageTurn(
       })
     }
   }
-  await consumeTasksAdd(db, taskId, state, memberId, result.outputs[WG_PORT_TASKS_ADD])
+  await consumeTasksAdd(db, taskId, state, memberId, tasksAddRaw)
 }
 
 // Per-task serialization for tasks_add consumption: two member turns

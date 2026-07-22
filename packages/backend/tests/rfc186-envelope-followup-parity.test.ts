@@ -118,10 +118,15 @@ describe('RFC-186 — source locks (workgroupRunner)', () => {
     expect(src).not.toContain("result.failureCode === 'envelope-missing' && attempt")
   })
 
-  test('turn drivers route through followupForFailure', () => {
-    // leader + assignment failed branches both call it.
-    const count = (src.match(/followupForFailure\(result\.failureCode\)/g) ?? []).length
-    expect(count).toBeGreaterThanOrEqual(2)
+  test('turn drivers route through followupForFailure (RFC-217 T3: ONE consult in the skeleton)', () => {
+    // 收编后所有 driver 经 executeTurn 走同一次 FOLLOWUP_POLICY consult —— runner
+    // 里不允许再长出第二个消费点（那意味着有人绕开骨架手写失败路由）。
+    const skeleton = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'turnExecution.ts'),
+      'utf8',
+    )
+    expect((skeleton.match(/followupForFailure\(result\.failureCode\)/g) ?? []).length).toBe(1)
+    expect((src.match(/followupForFailure\(result\.failureCode\)/g) ?? []).length).toBe(0)
   })
 
   test('retry budget rides the shared normal-node budget (parity by construction)', () => {

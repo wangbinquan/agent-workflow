@@ -494,16 +494,18 @@ describe('RFC-181 C — 源级契约锁', () => {
     // 调度架构审视 2026-07-14：软拒分支改按结构化 failureCode 路由（leader +
     // worker 各一处）。RFC-145 棘轮：errorMessage 是人读面包屑，绝不再当机器键
     // —— startsWith(CLARIFY_FORBIDDEN_PREFIX) 回潮即红。
-    const hits = runner.split("result.failureCode === 'clarify-forbidden'").length - 1
-    expect(hits).toBeGreaterThanOrEqual(2) // leader 分支 + worker 分支
+    // RFC-217 T3 —— 软拒分支收编进 executeTurn（唯一一处结构化路由）；各 driver
+    // 只提供角色化 notice。runner 里回潮出第二个分支/直连 runHostNode 即红。
+    const skeleton = SRC('services/workgroup/turnExecution.ts')
+    expect(skeleton.split("result.failureCode === 'clarify-forbidden'").length - 1).toBe(1)
+    expect(runner.split("result.failureCode === 'clarify-forbidden'").length - 1).toBe(0)
     expect(runner).not.toContain('startsWith(CLARIFY_FORBIDDEN_PREFIX)')
-    expect(runner).toContain('Ask-back is OFF')
-    // RFC-207 §3.7.2 — each turn resolves the permission ONCE and feeds it to
-    // BOTH the protocol renderer and `clarifyEnabled`. Counting the
-    // `clarifyEnabled:` sites keeps that wiring from silently losing one.
-    // RFC-215: driveBatchTurn (fc 批 run) is the 4th site (leader / lw
-    // assignment / message turn / batch), same resolve-once discipline.
-    expect(runner.split('clarifyEnabled: ').length - 1).toBe(4)
+    expect(runner).toContain('Ask-back is OFF') // 角色化 notice 仍由 driver 提供
+    // RFC-207 §3.7.2 resolve-once：clarifyEnabled 布线唯一存在于骨架（解析一次、
+    // 双喂 renderer + clarifyEnabled）；runner 不允许再出现直连调用点。
+    expect(skeleton.split('clarifyEnabled: ').length - 1).toBe(1)
+    expect(runner.split('clarifyEnabled: ').length - 1).toBe(0)
+    expect(runner.split('hooks.runHostNode(').length - 1).toBe(0)
   })
 
   test('route：A2 对 dynamic_workflow 免疫 + 遣散后新鲜状态复读 kick（实现门 P2）', () => {
