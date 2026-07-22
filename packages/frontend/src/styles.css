@@ -4619,20 +4619,27 @@ details.form-section[open] > summary {
 .tabs--segment {
   display: inline-flex;
   align-self: flex-start;
-  /* Wrap instead of scrolling when the strip is wider than its container
-     (long-locale labels, zoom, narrow cards). The 44px viewport scroll arrows
-     are page-tab-strip chrome; inside a narrow card (420px /auth) they crowded
-     the card and hid method options behind a scroll (user report: 英文登录页
-     方法选项框乱了). A segmented control is a small closed set — every option
-     must stay visible. Single-row rendering is unchanged: the 2px row-gap only
-     engages once a second row exists. */
-  flex-wrap: wrap;
-  gap: 2px 0;
+  gap: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: 2px;
   margin-bottom: var(--space-3);
   background: var(--panel);
+}
+
+/* /auth only: wrap instead of scrolling when the method strip is wider than
+   the 420px card (long-locale labels, zoom). The 44px viewport scroll arrows
+   are page-tab-strip chrome; inside the login card they crowded the layout and
+   hid sign-in methods behind a scroll (user report: 英文登录页方法选项框乱了).
+   A login method picker is a closed 2-3 option set — every option must stay
+   visible. Single-row rendering is unchanged: the 2px row-gap only engages
+   once a second row exists. Deliberately NOT on the base variant: RFC-219
+   contracts the workflow node picker's category strip to内部横向滚动 + arrow
+   affordance at the 240px rail (proposal §UX / design §196, locked by
+   e2e/workflow-editor.spec.ts category-overflow assertions). */
+.auth-page .tabs--segment {
+  flex-wrap: wrap;
+  gap: 2px 0;
 }
 .tabs--segment .tabs__tab {
   border-bottom: none;
