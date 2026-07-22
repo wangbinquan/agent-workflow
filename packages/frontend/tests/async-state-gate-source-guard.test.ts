@@ -76,7 +76,7 @@ const ALLOW_RETRY = new Map<string, number>([
 // bare `refetch(`, and reference `refetch}` / `x['refetch']}`. `\b` cannot fire
 // inside `prefetch`. NAMED-HANDLER indirection (`onClick={doRetry}`) stays the
 // honestly-declared out-of-scope (needs AST).
-const RETRY_BUTTON = String.raw`onClick=\{[^}]*\brefetch\s*(?:\?\.)?\s*\(|onClick=\{[^}]*\[["']refetch["']\]\s*(?:\?\.)?\s*\(|onClick=\{[^}]*\[["']refetch["']\]\s*\}|onClick=\{(?:[A-Za-z0-9_$]+\.)?refetch\}`
+const RETRY_BUTTON = String.raw`onClick=\{[^}]*\brefetch\s*(?:\?\.)?\s*\(|onClick=\{[^}]*\[["']refetch["']\]\s*(?:\?\.)?\s*\(|onClick=\{[^}]*\[["']refetch["']\]\s*\}|onClick=\{(?:[A-Za-z0-9_$]+\??\.)?refetch\}`
 
 // ---------------------------------------------------------------------------
 // Lock B: hand-written muted query-empties. EXACT per-file occurrence allowlist.
@@ -180,6 +180,7 @@ describe('RFC-214 guard regexes — direct-shape coverage', () => {
     ['computed reference', "onClick={q['refetch']}"],
     ['bare destructured', 'onClick={() => refetch()}'],
     ['reference', 'onClick={refetch}'],
+    ['optional-chain reference', 'onClick={q?.refetch}'],
   ])('Lock A catches inline refetch: %s', (_n, s) => {
     expect(A.test(s)).toBe(true)
   })
