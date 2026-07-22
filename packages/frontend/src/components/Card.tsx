@@ -13,7 +13,15 @@ import { Link, type LinkProps } from '@tanstack/react-router'
 import type { ReactElement, ReactNode } from 'react'
 
 export interface CardProps {
-  /** Optional header slot (e.g. selection checkbox / badges), above the body. */
+  /** RFC-217 T11 (minimal extension): card heading rendered as the canonical
+   *  `.card__title` <h3> in the header row. Replaces per-feature title
+   *  classes (e.g. the retired `.workgroup-room__side-title` 13px hardcode). */
+  title?: ReactNode
+  /** RFC-217 T11: optional header-right action cluster, laid out opposite
+   *  `title` in the same header row. */
+  actions?: ReactNode
+  /** Optional header slot (e.g. selection checkbox / badges), above the body.
+   *  Composes with `title`/`actions` (renders after the title row). */
   header?: ReactNode
   /** Body content (title / answer / meta …). */
   children: ReactNode
@@ -48,11 +56,28 @@ export function Card(props: CardProps): ReactElement {
   // Treat undefined / null / false slots as absent so the common JSX pattern
   // `header={cond && node}` (which yields `false` when cond is falsy) does not
   // render an empty `.card__header` / `.card__footer` wrapper (RFC-124 Codex P3).
-  const hasHeader = props.header != null && props.header !== false
+  const hasTitleRow =
+    (props.title != null && props.title !== false) ||
+    (props.actions != null && props.actions !== false)
+  const hasHeader = hasTitleRow || (props.header != null && props.header !== false)
   const hasFooter = props.footer != null && props.footer !== false
   const inner = (
     <>
-      {hasHeader && <div className="card__header">{props.header}</div>}
+      {hasHeader && (
+        <div className="card__header">
+          {hasTitleRow && (
+            <div className="card__title-row">
+              {props.title != null && props.title !== false && (
+                <h3 className="card__title">{props.title}</h3>
+              )}
+              {props.actions != null && props.actions !== false && (
+                <div className="card__title-actions">{props.actions}</div>
+              )}
+            </div>
+          )}
+          {props.header != null && props.header !== false && props.header}
+        </div>
+      )}
       <div className="card__body">{props.children}</div>
       {hasFooter && <div className="card__footer">{props.footer}</div>}
     </>

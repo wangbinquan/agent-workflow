@@ -8,7 +8,12 @@
 import { useTranslation } from 'react-i18next'
 import type { NodeRun, WorkgroupRunEntry } from '@agent-workflow/shared'
 import { StatusChip } from '@/components/StatusChip'
-import { displayNoderunStatusKey, nodeRunStatusToKind } from '@/lib/noderun-status'
+import {
+  displayNoderunStatusKey,
+  nodeRunStatusToKind,
+  statusKeyForRawStatus,
+} from '@/lib/noderun-status'
+import type { NodeRunStatus } from '@agent-workflow/shared'
 
 export function turnKindLabel(
   t: ReturnType<typeof useTranslation>['t'],
@@ -45,7 +50,11 @@ export function RunStatusRow({ entry, live, statusTestId, noteTestId }: RunStatu
         withDot={status === 'running'}
         {...(statusTestId !== undefined ? { 'data-testid': statusTestId } : {})}
       >
-        {live !== undefined ? t(displayNoderunStatusKey(live)) : status}
+        {/* RFC-217 T11 i18n 缺口修复：refetch 间隙的 history 快照状态也走
+            noderunStatus.* 键，不再裸出机器串。 */}
+        {live !== undefined
+          ? t(displayNoderunStatusKey(live))
+          : t(statusKeyForRawStatus(status as NodeRunStatus))}
       </StatusChip>
       {entry.note === 'clarify-suppressed' && noteTestId !== undefined && (
         <StatusChip kind="warn" size="sm" data-testid={noteTestId}>

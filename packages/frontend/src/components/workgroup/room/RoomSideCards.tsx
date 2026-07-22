@@ -66,10 +66,7 @@ function RoomSideCardsInner({
   renderCount.current += 1
   return (
     <aside className="workgroup-room__side" data-render-count={renderCount.current}>
-      <Card
-        header={<h3 className="workgroup-room__side-title">{t('workgroups.room.membersTitle')}</h3>}
-        data-testid="workgroup-room-members"
-      >
+      <Card title={t('workgroups.room.membersTitle')} data-testid="workgroup-room-members">
         <ul className="workgroup-room__members">
           {data.config.members.map((m) => {
             // RFC-179 — click a member (leader included, as a peer) to open its
@@ -146,11 +143,7 @@ function RoomSideCardsInner({
       </Card>
 
       <Card
-        header={
-          <h3 className="workgroup-room__side-title">
-            {t('workgroups.room.runLogTitle', { count: data.runHistory.length })}
-          </h3>
-        }
+        title={t('workgroups.room.runLogTitle', { count: data.runHistory.length })}
         data-testid="workgroup-room-runlog"
       >
         {data.runHistory.length === 0 ? (
@@ -206,12 +199,7 @@ function RoomSideCardsInner({
           徽章文案已中性化（等待人工），这里在认识成因时给精确说明与处置提示。 */}
       {data.taskStatus === 'awaiting_human' &&
         pauseReasonCopyKey(data.pauseReason ?? null) !== null && (
-          <Card
-            header={
-              <h3 className="workgroup-room__side-title">{t('workgroups.room.pauseTitle')}</h3>
-            }
-            data-testid="workgroup-room-pause-reason"
-          >
+          <Card title={t('workgroups.room.pauseTitle')} data-testid="workgroup-room-pause-reason">
             <p className="workgroup-room__gate-state">
               {t(pauseReasonCopyKey(data.pauseReason ?? null) as string)}
             </p>
@@ -220,7 +208,7 @@ function RoomSideCardsInner({
 
       {data.gate.awaitingConfirmation && (
         <Card
-          header={<h3 className="workgroup-room__side-title">{t('workgroups.room.gateTitle')}</h3>}
+          title={t('workgroups.room.gateTitle')}
           data-testid="workgroup-room-gate"
           footer={
             <div className="workgroup-room__card-actions">
@@ -268,7 +256,7 @@ function RoomSideCardsInner({
       )}
 
       <Card
-        header={<h3 className="workgroup-room__side-title">{t('workgroups.room.infoTitle')}</h3>}
+        title={t('workgroups.room.infoTitle')}
         data-testid="workgroup-room-info"
         footer={
           // PR-5: mid-run config edits (switches / rounds / gate / members)

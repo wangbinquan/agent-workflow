@@ -29,7 +29,6 @@ import { Field, TextArea, TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
 import { TaskStatusChip } from '@/components/TaskStatusChip'
 import { WorkflowCanvas } from '@/components/canvas/WorkflowCanvas'
-import { describeApiError } from '@/i18n'
 import { workgroupRoomKey, type WorkgroupRoomResponse } from '@/lib/workgroup-room'
 import { ErrorBanner } from '@/components/ErrorBanner'
 
@@ -147,15 +146,13 @@ export function DynamicWorkflowPanel({
           approval) and save-as stays available on terminal tasks. ── */}
       {canceled && (
         <Card
-          header={<h3 className="workgroup-room__side-title">{t('workgroups.dw.title')}</h3>}
+          title={t('workgroups.dw.title')}
           data-testid="dw-canceled-notice"
-          footer={
-            saveAsButton && <div className="workgroup-room__card-actions">{saveAsButton}</div>
-          }
+          footer={saveAsButton && <div className="dw-panel__actions">{saveAsButton}</div>}
         >
-          <p className="workgroup-room__gate-state">{t('workgroups.dw.canceledNotice')}</p>
+          <p className="dw-panel__state">{t('workgroups.dw.canceledNotice')}</p>
           {savedName !== null && (
-            <p className="workgroup-room__gate-state" data-testid="dw-saved-note">
+            <p className="dw-panel__state" data-testid="dw-saved-note">
               {t('workgroups.dw.saved', { name: savedName })}
             </p>
           )}
@@ -164,10 +161,7 @@ export function DynamicWorkflowPanel({
 
       {/* ── generating / rejected: progress (or exhaustion) card ────────── */}
       {!canceled && (dw.phase === 'generating' || dw.phase === 'rejected') && (
-        <Card
-          header={<h3 className="workgroup-room__side-title">{t('workgroups.dw.title')}</h3>}
-          data-testid="dw-generating-card"
-        >
+        <Card title={t('workgroups.dw.title')} data-testid="dw-generating-card">
           {/* RFC-203 T4: dw-generate-exhausted (and friends) localize via
               the shared failure oracle; unknown summaries fall back to the
               existing exhausted copy instead of raw machine tokens. */}
@@ -187,15 +181,15 @@ export function DynamicWorkflowPanel({
           ) : (
             <>
               <LoadingState size="compact" />
-              <p className="workgroup-room__gate-state">
+              <p className="dw-panel__state">
                 {t('workgroups.dw.generating', { n: dw.generateAttempts + 1 })}
               </p>
             </>
           )}
           {dw.rejectionComment !== undefined && dw.rejectionComment !== '' && (
             <>
-              <p className="workgroup-room__gate-state">{t('workgroups.dw.rejectionFeedback')}</p>
-              <div className="workgroup-room__body" data-testid="dw-rejection-feedback">
+              <p className="dw-panel__state">{t('workgroups.dw.rejectionFeedback')}</p>
+              <div className="dw-panel__body" data-testid="dw-rejection-feedback">
                 {dw.rejectionComment}
               </div>
             </>
@@ -207,10 +201,10 @@ export function DynamicWorkflowPanel({
       {!canceled && dw.phase === 'awaiting_confirm' && (
         <>
           <Card
-            header={<h3 className="workgroup-room__side-title">{t('workgroups.dw.gateTitle')}</h3>}
+            title={t('workgroups.dw.gateTitle')}
             data-testid="dw-confirm-card"
             footer={
-              <div className="workgroup-room__card-actions">
+              <div className="dw-panel__actions">
                 <button
                   type="button"
                   className="btn btn--sm btn--primary"
@@ -233,14 +227,14 @@ export function DynamicWorkflowPanel({
               </div>
             }
           >
-            <p className="workgroup-room__gate-state">{t('workgroups.dw.awaiting')}</p>
+            <p className="dw-panel__state">{t('workgroups.dw.awaiting')}</p>
             {dw.generateAttempts > 0 && (
-              <p className="workgroup-room__gate-state">
+              <p className="dw-panel__state">
                 {t('workgroups.dw.attemptsUsed', { n: dw.generateAttempts })}
               </p>
             )}
             {savedName !== null && (
-              <p className="workgroup-room__gate-state" data-testid="dw-saved-note">
+              <p className="dw-panel__state" data-testid="dw-saved-note">
                 {t('workgroups.dw.saved', { name: savedName })}
               </p>
             )}
@@ -269,16 +263,14 @@ export function DynamicWorkflowPanel({
           is never labeled as still running. ── */}
       {!canceled && dw.phase === 'executing' && (
         <Card
-          header={<h3 className="workgroup-room__side-title">{t('workgroups.dw.title')}</h3>}
+          title={t('workgroups.dw.title')}
           data-testid="dw-executing-card"
-          footer={
-            saveAsButton && <div className="workgroup-room__card-actions">{saveAsButton}</div>
-          }
+          footer={saveAsButton && <div className="dw-panel__actions">{saveAsButton}</div>}
         >
-          <p className="workgroup-room__gate-state">
+          <p className="dw-panel__state">
             <TaskStatusChip status={taskStatus} />
           </p>
-          <p className="workgroup-room__gate-state">
+          <p className="dw-panel__state">
             {taskStatus === 'done'
               ? t('workgroups.dw.executingDone')
               : taskStatus === 'failed'
@@ -286,7 +278,7 @@ export function DynamicWorkflowPanel({
                 : t('workgroups.dw.executing')}
           </p>
           {savedName !== null && (
-            <p className="workgroup-room__gate-state" data-testid="dw-saved-note">
+            <p className="dw-panel__state" data-testid="dw-saved-note">
               {t('workgroups.dw.saved', { name: savedName })}
             </p>
           )}
@@ -303,7 +295,7 @@ export function DynamicWorkflowPanel({
         footer={
           <>
             {confirm.error !== null && confirm.error !== undefined && (
-              <span className="form-actions__error">{describeApiError(confirm.error)}</span>
+              <ErrorBanner error={confirm.error} testid="dw-reject-error" />
             )}
             <button type="button" className="btn" onClick={() => setRejectOpen(false)}>
               {t('common.cancel')}
@@ -345,7 +337,7 @@ export function DynamicWorkflowPanel({
         footer={
           <>
             {saveAs.error !== null && saveAs.error !== undefined && (
-              <span className="form-actions__error">{describeApiError(saveAs.error)}</span>
+              <ErrorBanner error={saveAs.error} testid="dw-save-as-error" />
             )}
             <button type="button" className="btn" onClick={() => setSaveAsOpen(false)}>
               {t('common.cancel')}

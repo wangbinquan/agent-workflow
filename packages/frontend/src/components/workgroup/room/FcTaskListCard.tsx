@@ -31,10 +31,7 @@ export function FcTaskListCard({ assignments, members, canceling, onCancel }: Fc
     { key: 'done', label: t('workgroups.room.fcDone'), rows: groups.done },
   ] as const
   return (
-    <Card
-      header={<h3 className="workgroup-room__side-title">{t('workgroups.room.fcListTitle')}</h3>}
-      data-testid="workgroup-room-fc-list"
-    >
+    <Card title={t('workgroups.room.fcListTitle')} data-testid="workgroup-room-fc-list">
       {assignments.length === 0 && (
         <p className="form-field__hint">{t('workgroups.room.fcEmpty')}</p>
       )}

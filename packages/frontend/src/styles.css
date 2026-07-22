@@ -14569,6 +14569,21 @@ mark.comment-anchor[data-active='true'] {
   font-weight: 600;
   color: var(--text);
   line-height: 1.45;
+  /* RFC-217 T11: the Card `title` prop renders an <h3> — neutralize the UA
+     heading margin so slot and prop titles align identically. */
+  margin: 0;
+}
+.card__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+}
+.card__title-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 .card__body {
   display: flex;
@@ -15386,12 +15401,6 @@ mark.comment-anchor[data-active='true'] {
   overflow-y: auto;
 }
 
-.workgroup-room__side-title {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-}
-
 .workgroup-room__members {
   list-style: none;
   margin: 0;
@@ -15553,6 +15562,24 @@ button.status-chip {
 .workgroup-room__gate-state {
   margin: 0;
   font-size: 13px;
+}
+/* RFC-217 T11 —— DynamicWorkflowPanel 摘掉盗用的 .workgroup-room__* 皮肤，
+   落中性 .dw-panel__* 命名空间（规则值与房间原版一致，语义解耦）。 */
+.dw-panel__state {
+  margin: 0;
+  font-size: 13px;
+}
+.dw-panel__body {
+  margin: 0;
+  font-size: 13px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.dw-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 /* RFC-207 — silenced-asker chips + their resume buttons. */

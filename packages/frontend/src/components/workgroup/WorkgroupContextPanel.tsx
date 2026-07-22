@@ -22,7 +22,7 @@ import { Field, TextInput } from '@/components/Form'
 import { StatusChip } from '@/components/StatusChip'
 import { useAgentsList } from '@/hooks/useAgentsList'
 import { useUserLookup } from '@/hooks/useUserLookup'
-import { describeApiError } from '@/i18n'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import {
   validateMemberDraft,
   type WorkgroupConfigDraft,
@@ -333,11 +333,7 @@ function MemberBody(props: {
       </div>
 
       {props.applyError != null && (
-        <div className="form-actions">
-          <span className="form-actions__error" data-testid="workgroup-panel-error">
-            {describeApiError(props.applyError)}
-          </span>
-        </div>
+        <ErrorBanner error={props.applyError} testid="workgroup-panel-error" />
       )}
 
       {row.memberType === 'agent' && (
@@ -402,11 +398,7 @@ function AddActions(props: {
         </button>
       </div>
       {props.applyError != null && (
-        <div className="form-actions">
-          <span className="form-actions__error" data-testid="workgroup-panel-error">
-            {describeApiError(props.applyError)}
-          </span>
-        </div>
+        <ErrorBanner error={props.applyError} testid="workgroup-panel-error" />
       )}
     </>
   )

@@ -15,7 +15,7 @@
 
 import { useTranslation } from 'react-i18next'
 import { Dialog } from '@/components/Dialog'
-import { describeApiError } from '@/i18n'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import type { WorkgroupMemberRowState } from '@/lib/workgroup-form'
 import {
   AgentMemberFields,
@@ -48,7 +48,7 @@ export function AgentMemberDialog(
       footer={
         <>
           {props.applyError != null && (
-            <span className="form-actions__error">{describeApiError(props.applyError)}</span>
+            <ErrorBanner error={props.applyError} testid="workgroup-member-dialog-error" />
           )}
           <button type="button" className="btn" onClick={props.onClose}>
             {t('common.cancel')}
@@ -86,7 +86,7 @@ export function HumanMemberDialog(
       footer={
         <>
           {props.applyError != null && (
-            <span className="form-actions__error">{describeApiError(props.applyError)}</span>
+            <ErrorBanner error={props.applyError} testid="workgroup-member-dialog-error" />
           )}
           <button type="button" className="btn" onClick={props.onClose}>
             {t('common.cancel')}

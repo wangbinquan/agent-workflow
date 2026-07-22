@@ -27,12 +27,10 @@ import {
 } from '@/components/workgroup/WorkgroupContextPanel'
 import { WorkgroupMemberGallery } from '@/components/workgroup/WorkgroupMemberGallery'
 import { describeApiError } from '@/i18n'
+import { useOwnedEditScope, type ScopeController } from '@/hooks/useOwnedEditScope'
 import {
   aggregateEditScopeStates,
-  createEditScopeState,
-  defaultEditScopeSemanticEqual,
   editScopeReducer,
-  type EditScopeEvent,
   type EditScopeSemanticEqual,
   type EditScopeState,
 } from '@/lib/edit-scope'
@@ -71,34 +69,6 @@ function focusCardButton(key: string): void {
   document
     .querySelector<HTMLElement>(`[data-member-key="${CSS.escape(key)}"] .workgroup-card__open`)
     ?.focus()
-}
-
-interface ScopeController<T> {
-  state: EditScopeState<T>
-  ref: RefObject<EditScopeState<T>>
-  dispatch: (event: EditScopeEvent<T>) => EditScopeState<T>
-  replace: (next: EditScopeState<T>) => EditScopeState<T>
-  semanticEqual: EditScopeSemanticEqual<T>
-}
-
-function useOwnedEditScope<T>(
-  initial: T,
-  semanticEqual: EditScopeSemanticEqual<T> = defaultEditScopeSemanticEqual,
-): ScopeController<T> {
-  const [state, setState] = useState(() => createEditScopeState(initial))
-  const ref = useRef(state)
-  ref.current = state
-
-  const replace = useCallback((next: EditScopeState<T>) => {
-    ref.current = next
-    setState(next)
-    return next
-  }, [])
-  const dispatch = useCallback(
-    (event: EditScopeEvent<T>) => replace(editScopeReducer(ref.current, event, semanticEqual)),
-    [replace, semanticEqual],
-  )
-  return { state, ref, dispatch, replace, semanticEqual }
 }
 
 const workgroupMembersSemanticEqual: EditScopeSemanticEqual<WorkgroupMembersState> = (
