@@ -20,6 +20,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { join } from 'node:path'
+import { DomainError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 import { restoreBackup, RestorePostSwapError } from './restore'
@@ -123,8 +124,25 @@ export interface StagePendingRestoreOptions {
 export function stagePendingRestore(tarballPath: string, opts: StagePendingRestoreOptions): void {
   const appHome = opts.appHome ?? Paths.root
   const dir = pendingDir(appHome)
-  if (existsSync(dir)) rmSync(dir, { recursive: true, force: true })
-  mkdirSync(dir, { recursive: true })
+  // Impl-gate P0-3 (Codex 2026-07-22): the old unconditional rm+recreate raced two
+  // concurrent stagers (CLI + API) into a spliced state — B's tarball left under
+  // A's marker/options. Use a NON-recursive mkdir as an atomic O_EXCL lock: the
+  // second stager gets EEXIST → 409. Replacing an existing staged restore requires
+  // an explicit cancel first (DELETE /api/restore/pending).
+  mkdirSync(appHome, { recursive: true })
+  try {
+    mkdirSync(dir)
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
+      throw new DomainError(
+        'restore-already-pending',
+        'a restore is already staged; cancel it (DELETE /api/restore/pending) before staging another',
+        409,
+        undefined,
+      )
+    }
+    throw err
+  }
   cpSync(tarballPath, stagedPath(appHome))
   const marker: PendingRestoreMarker = {
     stagedTarball: stagedPath(appHome),

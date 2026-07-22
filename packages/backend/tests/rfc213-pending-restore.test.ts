@@ -162,6 +162,34 @@ describe('RFC-213 staged restore', () => {
     expect(listFailedRestores(appHome).length).toBeGreaterThan(0)
   })
 
+  // Impl-gate P0-3 (Codex 2026-07-22): the old unconditional rm+recreate raced two
+  // concurrent stagers into a spliced state (B's tarball + A's marker/options).
+  // Staging is now an atomic lock — a second stage over an existing pending one is
+  // refused (409) until it is explicitly cancelled.
+  test('staging over an existing pending restore is refused (atomic lock)', async () => {
+    const appHome = tmp()
+    const dbPath = join(appHome, 'db.sqlite')
+    const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+    await addWorkflows(db, 1)
+    const backup = await createBackup({ db, appHome, now: 1 })
+    sqliteOf(db).close()
+
+    stagePendingRestore(backup.path, { appHome, now: 2 })
+    expect(hasPendingRestore(appHome)).toBe(true)
+
+    let code: string | undefined
+    try {
+      stagePendingRestore(backup.path, { appHome, now: 3 })
+    } catch (e) {
+      code = (e as { code?: string }).code
+    }
+    expect(code).toBe('restore-already-pending')
+
+    // After an explicit cancel, staging works again.
+    clearPendingRestore(appHome)
+    expect(() => stagePendingRestore(backup.path, { appHome, now: 4 })).not.toThrow()
+  })
+
   test('a marker whose staged tarball is gone is treated as already-consumed', async () => {
     const appHome = tmp()
     const dbPath = join(appHome, 'db.sqlite')
