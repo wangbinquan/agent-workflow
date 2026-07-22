@@ -20,12 +20,13 @@
 
 - 前置:全量盘 oidc 符号测试锁
   (`grep -rn 'getProviderMetadata|testDiscovery|exchangeCodeForTokens|verifyIdToken' packages/backend/tests`)。
-- `auth/oidc/discovery.ts`:改造为宽松 `fetchDiscoveryDocument` + 文档正缓存 +
-  10s 超时;**删除** `getProviderMetadata`/`testDiscovery`/`oidc-discovery-incomplete`
-  (生产调用方归零,design §3.3);oidc-login-chain discovery describe 4 条锁按
-  §3.3 迁移(3 条语义保留 + 1 条被 D1 有意取代并注释)。
-- 新 `auth/oidc/endpoints.ts`:`resolveEndpoints`(D1 逐字段合并)+ 负缓存(5min,
-  仅 resolver 路径)+ `getJwksInstance`(按 jwksUri 键)+ `clearEndpointCaches`。
+- `auth/oidc/discovery.ts`:改造为宽松纯 fetch `fetchDiscoveryDocument` + 10s 超时
+  (**无缓存**,五轮 P2);**删除** `getProviderMetadata`/`testDiscovery`/
+  `oidc-discovery-incomplete`(生产调用方归零,design §3.3);oidc-login-chain
+  discovery describe 4 条锁按 §3.3 迁移(3 条语义保留 + 1 条被 D1 有意取代并注释)。
+- 新 `auth/oidc/endpoints.ts`:`resolveEndpoints`(D1 逐字段合并 + `forceFresh`)+
+  两级缓存(1h 正 + 5min 负,`loginViable` 条件命中、单键覆盖,design §3.2)+
+  `getJwksInstance`(按 jwksUri 键)+ `clearEndpointCaches`。
 - 测试:S3。
 
 ## RFC-220-T3 身份层 + 路由接线
