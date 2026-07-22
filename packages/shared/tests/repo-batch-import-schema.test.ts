@@ -35,6 +35,25 @@ describe('StartBatchImportRequestSchema', () => {
   test('rejects empty string entries', () => {
     expect(() => StartBatchImportRequestSchema.parse({ urls: [''] })).toThrow()
   })
+
+  // RFC-204 impl-gate (Codex 2026-07-22, P0-4): batch-import was a hole in the
+  // query-credential gate — a `?access_token=` URL would slug the token into
+  // cached_repos.local_path (which is on the wire). The schema must reject it,
+  // same as the launch gate (schemas/task.ts). Percent-encoded keys included.
+  test('rejects a query-credential url (plain and percent-encoded)', () => {
+    expect(() =>
+      StartBatchImportRequestSchema.parse({ urls: ['https://h/r.git?access_token=SECRET'] }),
+    ).toThrow()
+    expect(() =>
+      StartBatchImportRequestSchema.parse({ urls: ['https://h/r.git?access%5Ftoken=SECRET'] }),
+    ).toThrow()
+  })
+
+  test('still accepts a userinfo-credential url (sealing covers it)', () => {
+    expect(() =>
+      StartBatchImportRequestSchema.parse({ urls: ['https://user:tok@h/r.git'] }),
+    ).not.toThrow()
+  })
 })
 
 describe('BatchImportRowSchema', () => {
@@ -161,5 +180,13 @@ describe('RetryBatchImportRowRequestSchema', () => {
 
   test('rejects empty url string', () => {
     expect(() => RetryBatchImportRowRequestSchema.parse({ url: '' })).toThrow()
+  })
+
+  // RFC-204 impl-gate (Codex 2026-07-22, P0-4): the retry override is a second
+  // entry point that must enforce the same query-credential gate.
+  test('rejects a query-credential url override', () => {
+    expect(() =>
+      RetryBatchImportRowRequestSchema.parse({ url: 'https://h/r.git?private_token=x' }),
+    ).toThrow()
   })
 })

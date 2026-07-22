@@ -6,6 +6,7 @@ import {
   canonicalRepoKey,
   gitUrlCacheKey,
   gitUrlCacheKeyWith,
+  hasQueryCredential,
   parseGitUrl,
   redactGitUrl,
 } from '../src/git-url'
@@ -144,6 +145,49 @@ describe('redactGitUrl', () => {
     expect(redactGitUrl('https://u:p@h.example:8443/x.git')).toBe(
       'https://***@h.example:8443/x.git',
     )
+  })
+
+  // RFC-204 impl-gate (Codex 2026-07-22, P0-4): parseGitUrl splits the authority
+  // at the LAST `@` (git-url.ts `authority.lastIndexOf('@')`), but pass-1 used
+  // `[^/@\s]+@` which stopped at the FIRST `@` and left the rest of the userinfo
+  // (a second credential segment) verbatim in the "redacted" output. Redaction
+  // must consume through to the same last `@` the parser uses.
+  test('multi-@ userinfo redacts fully — parity with parseGitUrl authority split', () => {
+    expect(redactGitUrl('https://user:part1@part2@example.com/o/r.git')).toBe(
+      'https://***@example.com/o/r.git',
+    )
+    // Sanity: the parser really does treat everything before the last @ as userinfo.
+    const parsed = parseGitUrl('https://user:part1@part2@example.com/o/r.git')
+    expect(parsed?.kind).toBe('https')
+    if (parsed?.kind === 'https') expect(parsed.host).toBe('example.com')
+  })
+
+  test('ssh multi-@ user:pass redacts fully', () => {
+    expect(redactGitUrl('ssh://alice:sec@ret@host.example/o/r.git')).toBe(
+      'ssh://***:***@host.example/o/r.git',
+    )
+  })
+})
+
+describe('hasQueryCredential (RFC-204 launch gate)', () => {
+  test('plain query credential is caught', () => {
+    expect(hasQueryCredential('https://h.example/r.git?access_token=SECRET')).toBe(true)
+    expect(hasQueryCredential('https://h.example/r.git?ref=main&private_token=x')).toBe(true)
+  })
+
+  // RFC-204 impl-gate (Codex 2026-07-22, P0-4): `%5F` percent-encodes the `_`
+  // in `access_token`, so the literal `[?&]access_token=` regex missed it and
+  // batch-import/retry would slug the token into cached_repos.local_path. The
+  // gate must decode each query param NAME before matching the sensitive set.
+  test('percent-encoded key bypass is caught (fail-closed)', () => {
+    expect(hasQueryCredential('https://h.example/r.git?access%5Ftoken=SECRET')).toBe(true)
+    expect(hasQueryCredential('https://h.example/r.git?access%5ftoken=SECRET')).toBe(true)
+    expect(hasQueryCredential('https://h.example/r.git?a=1&personal%5Faccess%5Ftoken=z')).toBe(true)
+  })
+
+  test('non-credential query passes through', () => {
+    expect(hasQueryCredential('https://h.example/r.git?ref=main&depth=1')).toBe(false)
+    expect(hasQueryCredential('https://h.example/r.git')).toBe(false)
   })
 })
 

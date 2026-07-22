@@ -164,13 +164,19 @@ export function parseGitUrl(input: string): GitUrl | null {
 export function redactGitUrl(input: string): string {
   if (typeof input !== 'string') return ''
   // Pass 1: http(s) — redact entire userinfo (legacy).
-  let out = input.replace(/(https?:\/\/)[^/@\s]+@/gi, '$1***@')
+  // RFC-204 impl-gate: the userinfo class must NOT exclude `@`, so a
+  // multi-`@` authority (`user:part1@part2@host`) is consumed through to the
+  // LAST `@` — the same boundary `parseGitUrl` uses (`authority.lastIndexOf`).
+  // The old `[^/@\s]+@` stopped at the first `@` and leaked the rest. `[^/\s]+`
+  // still can't cross `/`, so a path-embedded `@` (`host/a@b`) is untouched.
+  let out = input.replace(/(https?:\/\/)[^/\s]+@/gi, '$1***@')
   // Pass 2: other schemes — redact only `user:pass@` (preserve plain
   // `user@` for SSH login names that aren't secrets).
   // Excludes http(s) by virtue of pass 1 already producing `***@` which
   // doesn't contain a colon — pattern below requires `:` between user
-  // and password, so it can't re-match pass-1 output.
-  out = out.replace(/([a-z][a-z0-9+.-]*:\/\/)[^/@\s:]+:[^/@\s]+@/gi, '$1***:***@')
+  // and password, so it can't re-match pass-1 output. The password class also
+  // consumes through to the last `@` (RFC-204 impl-gate: `ssh://a:sec@ret@h`).
+  out = out.replace(/([a-z][a-z0-9+.-]*:\/\/)[^/@\s:]+:[^/\s]+@/gi, '$1***:***@')
   // Pass 3 (RFC-204 T0): query-string credentials — `?access_token=X`,
   // `&private_token=Y`. Passes 1/2 only cover URI *userinfo*, so before this
   // the token survived verbatim into `url_redacted`, task columns and daemon
@@ -217,7 +223,28 @@ const QUERY_CREDENTIAL_RE = new RegExp(QUERY_CREDENTIAL_SRC, 'gi')
  */
 export function hasQueryCredential(input: string): boolean {
   if (typeof input !== 'string') return false
-  return new RegExp(QUERY_CREDENTIAL_SRC, 'i').test(input)
+  if (new RegExp(QUERY_CREDENTIAL_SRC, 'i').test(input)) return true
+  // RFC-204 impl-gate: the literal matcher above misses a percent-encoded key
+  // (`?access%5Ftoken=` → `access_token`). Decode each query param NAME and
+  // re-test so an encoded key can't slip a token past the gate into the cache
+  // slug. Fail-closed: an undecodable name is compared in its raw lowercase
+  // form (still catches nothing legitimate, rejects nothing safe).
+  const qIdx = input.indexOf('?')
+  if (qIdx < 0) return false
+  const query = (input.slice(qIdx + 1).split('#', 1)[0] ?? '').split(/[?]/, 1)[0] ?? ''
+  for (const pair of query.split('&')) {
+    if (pair.length === 0) continue
+    const eqIdx = pair.indexOf('=')
+    const rawKey = eqIdx >= 0 ? pair.slice(0, eqIdx) : pair
+    let key: string
+    try {
+      key = decodeURIComponent(rawKey).toLowerCase()
+    } catch {
+      key = rawKey.toLowerCase()
+    }
+    if ((SENSITIVE_QUERY_KEYS as readonly string[]).includes(key)) return true
+  }
+  return false
 }
 
 /**
