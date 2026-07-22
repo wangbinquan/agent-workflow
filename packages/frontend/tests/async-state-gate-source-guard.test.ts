@@ -80,7 +80,7 @@ const ALLOW_RETRY = new Map<string, number>([
 // object-literal-before-refetch, and dynamic className are the honestly-declared
 // AST-level out-of-scope — per Codex, complete MemberExpression coverage wants a
 // focused JSX AST check, NOT an ever-growing receiver regex.
-const RETRY_BUTTON = String.raw`onClick=\{[^}]*\brefetch\s*(?:\?\.)?\s*\(|onClick=\{[^}]*\[["']refetch["']\]\s*(?:\?\.)?\s*\(|onClick=\{[^}]*\[["']refetch["']\]\s*\}|onClick=\{(?:[A-Za-z0-9_$]+\??\.)*\brefetch\}`
+const RETRY_BUTTON = String.raw`onClick=\{[^}]*\brefetch\s*(?:\?\.)?\s*\(|onClick=\{[^}]*\[["']refetch["']\]\s*(?:\?\.)?\s*\(|onClick=\{[^}]*\[["']refetch["']\]\s*\}|onClick=\{\s*(?:[A-Za-z0-9_$]+\s*\??\.\s*)*\brefetch\s*\}`
 
 // ---------------------------------------------------------------------------
 // Lock B: hand-written muted query-empties. EXACT per-file occurrence allowlist.
@@ -187,6 +187,8 @@ describe('RFC-214 guard regexes — direct-shape coverage', () => {
     ['optional-chain reference', 'onClick={q?.refetch}'],
     ['nested member reference', 'onClick={props.query.refetch}'],
     ['nested optional reference', 'onClick={props.query?.refetch}'],
+    // Prettier wraps long dot-chains across lines; the guard must see through it.
+    ['prettier-wrapped dot-chain', 'onClick={\n  long.receiver\n    .query.refetch\n}'],
   ])('Lock A catches inline refetch: %s', (_n, s) => {
     expect(A.test(s)).toBe(true)
   })
