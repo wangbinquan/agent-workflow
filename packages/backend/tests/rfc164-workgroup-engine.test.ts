@@ -848,8 +848,9 @@ describe('RFC-164 engine — source locks', () => {
     // member human ask-back is now a first-class, shard-isolated round-trip (S0–S3, R2-T3, R2-T7).
     expect(SCHEDULER_SRC).not.toContain('clarify-not-supported')
     // …and the host clarify GENERATION is now shardKey-aware (R2-T6: a member's/leader's 2nd round
-    // no longer shares the 1st's clarify node_run), not the old hardcoded iterationIndex: 0.
-    expect(SCHEDULER_SRC).toContain('iterationIndex: askingGeneration')
+    // no longer shares the 1st's clarify node_run), not the old hardcoded round index 0.
+    // (RFC-217 T9: createClarifyRound's unified arg name is `iteration`.)
+    expect(SCHEDULER_SRC).toContain('iteration: askingGeneration')
   })
 })
 

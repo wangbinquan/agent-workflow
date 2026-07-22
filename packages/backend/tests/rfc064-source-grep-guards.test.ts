@@ -108,13 +108,15 @@ describe('RFC-064 C9 / RFC-132 PR-C — applyLatestDirective plumbing removed (d
 })
 
 describe('RFC-064 C4 — services exports', () => {
-  test('services/clarify.ts is the canonical home for clarify lifecycle helpers', () => {
-    const src = readFileSync(resolve(REPO_ROOT, 'packages/backend/src/services/clarify.ts'), 'utf8')
-    // These exports are the public surface other modules call. PR-B kept
-    // crossClarify.ts as a deferred-merge file (the helper functions live
-    // there); when a follow-up moves them into clarify.ts, this list grows.
+  test('services/clarify/service.ts is the canonical home for clarify lifecycle helpers', () => {
+    // RFC-217 T9 completed the merge RFC-064 anticipated: clarify.ts +
+    // crossClarify.ts → services/clarify/service.ts, kind-generalized create.
     // (RFC-132 PR-E2: the legacy quick-channel submit export is no longer part
     // of the locked surface — answers flow through services/clarifyAutoDispatch.)
-    expect(src).toContain('export async function createClarifySession')
+    const src = readFileSync(
+      resolve(REPO_ROOT, 'packages/backend/src/services/clarify/service.ts'),
+      'utf8',
+    )
+    expect(src).toContain('export async function createClarifyRound')
   })
 })

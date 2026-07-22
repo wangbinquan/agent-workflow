@@ -38,7 +38,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, taskRepos, tasks, workflows } from '../src/db/schema'
-import { createClarifySession } from '../src/services/clarify'
+import { createClarifyRound } from '../src/services/clarify/service'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { gcTaskWriteSem, getTaskWriteSem, taskWriteLockCount } from '../src/services/taskWriteLocks'
 import { gitStashSnapshot, runGit } from '../src/util/git'
@@ -266,18 +266,19 @@ async function seedClarifyTask(
     preSnapshot: opts.preSnapshot ?? null,
     preSnapshotReposJson: opts.preSnapshotReposJson ?? null,
   })
-  const sess = await createClarifySession({
+  const sess = await createClarifyRound({
+    kind: 'self',
     db,
     taskId,
-    sourceAgentNodeId: 'agent_x',
-    sourceAgentNodeRunId: agentRunId,
-    sourceShardKey: null,
-    clarifyNodeId: 'clarify_x',
-    iterationIndex: 0,
+    askingNodeId: 'agent_x',
+    askingNodeRunId: agentRunId,
+    askingShardKey: null,
+    intermediaryNodeId: 'clarify_x',
+    iteration: 0,
     questions: [makeQ('q1')],
     truncationWarnings: [],
   })
-  return { taskId, agentRunId, clarifyNodeRunId: sess.clarifyNodeRunId }
+  return { taskId, agentRunId, clarifyNodeRunId: sess.intermediaryNodeRunId }
 }
 
 // ---------------------------------------------------------------------------

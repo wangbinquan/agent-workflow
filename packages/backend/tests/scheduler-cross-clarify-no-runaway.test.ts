@@ -14,7 +14,7 @@
 // LOCKS:
 //   1. After a scheduler dispatch that finds NO live row + NO persistent
 //      stop, the scheduler does NOT mint a new pending cross-clarify row
-//      — the runner's createCrossClarifySession owns row creation.
+//      — the runner's createClarifyRound owns row creation.
 //   2. If a live pending or awaiting_human row already exists, scheduler
 //      dispatch is a no-op (no second row minted).
 //   3. Persistent-stop short-circuit still works: when prior directive=
@@ -153,7 +153,7 @@ describe('RFC-056 scheduler — no runaway pending cross-clarify rows', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTaskAndWorkflow(db)
     // Seed a pre-existing pending cross-clarify row (simulating the
-    // runner having created one via createCrossClarifySession on a
+    // runner having created one via createClarifyRound on a
     // prior questioner emit).
     const preId = ulid()
     await db.insert(nodeRuns).values({
@@ -191,11 +191,11 @@ describe('RFC-056 scheduler — no runaway pending cross-clarify rows', () => {
     expect(after[0]?.status).toBe('pending')
   })
 
-  test('scheduler does NOT pre-create pending cross-clarify rows on the common path (deferred to runner createCrossClarifySession)', async () => {
+  test('scheduler does NOT pre-create pending cross-clarify rows on the common path (deferred to runner createClarifyRound)', async () => {
     // Direct assertion: after seeding a task with cross-clarify topology
     // but BEFORE any dispatch, the DB has zero cross-clarify node_runs.
     // The runner is the only path that should mint rows for cross-clarify
-    // (via createCrossClarifySession when questioner emits clarify).
+    // (via createClarifyRound when questioner emits clarify).
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTaskAndWorkflow(db)
     const rows = await db

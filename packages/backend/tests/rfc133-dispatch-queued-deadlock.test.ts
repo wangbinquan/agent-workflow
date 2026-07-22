@@ -18,6 +18,7 @@
 //      seals the answer and PARKS the dispatch — dispatchDeferredReason — instead of the
 //      legacy pre-seal reject).
 
+import { createClarifyRound } from '../src/services/clarify/service'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
@@ -26,8 +27,6 @@ import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRunOutputs, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
-import { createClarifySession } from '../src/services/clarify'
-import { createCrossClarifySession } from '../src/services/crossClarify'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { ConflictError } from '../src/util/errors'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
@@ -375,14 +374,15 @@ describe('RFC-133 quick-channel mint guards — same-cause queued entry no longe
     await seedTask(db, taskId)
     // QMGP5-style: the asking run is DONE (it finished by asking); no other ASKER runs.
     const askRun = await seedRun(db, taskId, ASKER, { status: 'done' })
-    const { clarifyNodeRunId } = await createClarifySession({
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+      kind: 'self',
       db,
       taskId,
-      sourceAgentNodeId: ASKER,
-      sourceAgentNodeRunId: askRun,
-      sourceShardKey: null,
-      clarifyNodeId: CL,
-      iterationIndex: 0,
+      askingNodeId: ASKER,
+      askingNodeRunId: askRun,
+      askingShardKey: null,
+      intermediaryNodeId: CL,
+      iteration: 0,
       questions: [mkQ('q1')],
     })
     // Another round's SELF entry on home ASKER: dispatched but never bound (queued).
@@ -414,14 +414,15 @@ describe('RFC-133 quick-channel mint guards — same-cause queued entry no longe
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const askRun = await seedRun(db, taskId, ASKER, { status: 'done' })
-    const { clarifyNodeRunId } = await createClarifySession({
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+      kind: 'self',
       db,
       taskId,
-      sourceAgentNodeId: ASKER,
-      sourceAgentNodeRunId: askRun,
-      sourceShardKey: null,
-      clarifyNodeId: CL,
-      iterationIndex: 0,
+      askingNodeId: ASKER,
+      askingNodeRunId: askRun,
+      askingShardKey: null,
+      intermediaryNodeId: CL,
+      iteration: 0,
       questions: [mkQ('q1')],
     })
     const ccOrigin = await seedRun(db, taskId, CC, { status: 'done' })
@@ -454,13 +455,14 @@ describe('RFC-133 quick-channel mint guards — same-cause queued entry no longe
     // designer (feedback consumer) has a prior done draft; questioner home DOWN asked and is done.
     await seedRun(db, taskId, ASKER, { status: 'done', hasOutput: true })
     const qRun = await seedRun(db, taskId, DOWN, { status: 'done' })
-    const { crossClarifyNodeRunId } = await createCrossClarifySession({
+    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: CC,
-      sourceQuestionerNodeId: DOWN,
-      sourceQuestionerNodeRunId: qRun,
-      targetDesignerNodeId: ASKER,
+      intermediaryNodeId: CC,
+      askingNodeId: DOWN,
+      askingNodeRunId: qRun,
+      targetConsumerNodeId: ASKER,
       loopIter: 0,
       questions: [mkQ('q1')],
     })

@@ -25,6 +25,7 @@ import type { DbClient } from '@/db/client'
 import { clarifyRounds, nodeRunOutputs, nodeRuns, taskQuestions, tasks } from '@/db/schema'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { TASK_QUESTION_CONFLICT } from '@/services/taskQuestionConflicts'
 import {
   canReassign,
   deriveQuestionPhase,
@@ -735,7 +736,8 @@ export interface TaskQuestionActor {
 
 async function loadEntry(db: DbClient, entryId: string): Promise<TaskQuestionRow> {
   const [e] = await db.select().from(taskQuestions).where(eq(taskQuestions.id, entryId)).limit(1)
-  if (!e) throw new NotFoundError('task-question-not-found', `task question ${entryId} not found`)
+  if (!e)
+    throw new NotFoundError(TASK_QUESTION_CONFLICT.notFound, `task question ${entryId} not found`)
   return e
 }
 
@@ -874,7 +876,7 @@ export async function confirmTaskQuestion(
   const phase = await deriveEntryPhase(db, entry)
   if (phase !== 'awaiting_confirm') {
     throw new ConflictError(
-      'task-question-not-awaiting-confirm',
+      TASK_QUESTION_CONFLICT.notAwaitingConfirm,
       `task question is '${phase}', not awaiting_confirm`,
     )
   }
@@ -919,7 +921,7 @@ export async function reassignTaskQuestion(
   const agentNodeIds = await agentNodeIdsForTask(db, entry.taskId)
   if (!canReassign(targetNodeId, agentNodeIds)) {
     throw new ValidationError(
-      'task-question-reassign-invalid',
+      TASK_QUESTION_CONFLICT.reassignInvalid,
       `cannot reassign '${entry.roleKind}' entry to '${targetNodeId}' (target must be a workflow agent node)`,
     )
   }
@@ -930,7 +932,10 @@ export async function reassignTaskQuestion(
     // Codex impl gate F3: don't re-target a terminal (confirmed) entry.
     const phase = await deriveEntryPhase(db, entry)
     if (phase === 'done') {
-      throw new ConflictError('task-question-terminal', `cannot reassign a '${phase}' question`)
+      throw new ConflictError(
+        TASK_QUESTION_CONFLICT.terminal,
+        `cannot reassign a '${phase}' question`,
+      )
     }
     // RFC-120 §15 (Codex re-gate): a manual question reruns its handler, so the handler must
     // have run at least once (else the §18 park gate parks it on a target dispatch can never mint).
@@ -966,7 +971,7 @@ export async function reassignTaskQuestion(
     })
     if (!updated) {
       throw new ConflictError(
-        'task-question-already-dispatched',
+        TASK_QUESTION_CONFLICT.alreadyDispatched,
         `cannot reassign a dispatched question (dispatched_at is set) — use reopen to re-target after dispatch`,
       )
     }
@@ -978,7 +983,10 @@ export async function reassignTaskQuestion(
   // adding/removing a handler there only records moot intent.
   const phase = await deriveEntryPhase(db, entry)
   if (phase === 'done') {
-    throw new ConflictError('task-question-terminal', `cannot reassign a '${phase}' question`)
+    throw new ConflictError(
+      TASK_QUESTION_CONFLICT.terminal,
+      `cannot reassign a '${phase}' question`,
+    )
   }
   const round = (
     await db
@@ -989,7 +997,7 @@ export async function reassignTaskQuestion(
   )[0]
   if (round === undefined) {
     throw new ConflictError(
-      'task-question-round-missing',
+      TASK_QUESTION_CONFLICT.roundMissing,
       `cannot reassign question ${entryId}: its clarify round is gone`,
     )
   }
@@ -1019,7 +1027,7 @@ export async function reassignTaskQuestion(
     })
     if (dispatched) {
       throw new ConflictError(
-        'task-question-already-dispatched',
+        TASK_QUESTION_CONFLICT.alreadyDispatched,
         `cannot remove a dispatched designer handler (dispatched_at is set) — use reopen after dispatch`,
       )
     }
@@ -1107,7 +1115,7 @@ export async function reassignTaskQuestion(
   })
   if (dispatched) {
     throw new ConflictError(
-      'task-question-already-dispatched',
+      TASK_QUESTION_CONFLICT.alreadyDispatched,
       `cannot re-target a dispatched designer handler (dispatched_at is set) — use reopen after dispatch`,
     )
   }
@@ -1155,7 +1163,7 @@ export async function stageTaskQuestion(
   // a mistaken stage can be undone even before the question is sealed.
   if (staged && !(await isEntrySealed(db, entry))) {
     throw new ConflictError(
-      'task-question-not-sealed',
+      TASK_QUESTION_CONFLICT.notSealed,
       `task question ${entryId} is not yet sealed; answer (seal) it before staging it for dispatch`,
     )
   }
@@ -1179,7 +1187,7 @@ export async function stageTaskQuestion(
       const changes = (result as unknown as { changes?: number }).changes
       if (typeof changes !== 'number' || changes !== 1) {
         throw new ConflictError(
-          'task-question-already-dispatched',
+          TASK_QUESTION_CONFLICT.alreadyDispatched,
           `cannot stage a dispatched question (dispatched_at is set) — it is already committed for execution`,
         )
       }

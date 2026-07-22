@@ -52,6 +52,7 @@
 // If any of these go red, do NOT relax — re-read
 // design/RFC-056-clarify-cross-agent/patch-2026-05-25-questioner-cascade-no-skip.md.
 
+import { createClarifyRound } from '../src/services/clarify/service'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { insertLegacyCrossClarify } from './clarify-fixtures'
 import { resolve } from 'node:path'
@@ -60,8 +61,6 @@ import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
-import { createCrossClarifySession } from '../src/services/crossClarify'
-import { createClarifySession } from '../src/services/clarify'
 import { listTaskQuestions, reassignTaskQuestion } from '../src/services/taskQuestions'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
@@ -332,27 +331,28 @@ describe('RFC-056 patch 2026-05-25 — questioner cascade no-skip + cci inherita
 
     // New session HWDACF-equivalent (iteration=1, awaiting_human, from
     // questioner_v1 emitting clarify).
-    const sess = await createCrossClarifySession({
+    const sess = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cross1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: questionerV1,
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: questionerV1,
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQ('hwdacf')],
     })
-    expect(sess.session.iteration).toBe(1)
+    expect(sess.round.iteration).toBe(1)
 
     // User continues.
     await autoDispatchClarifyRound({
       db,
-      originNodeRunId: sess.crossClarifyNodeRunId,
+      originNodeRunId: sess.intermediaryNodeRunId,
       answers: [makeAns('hwdacf')],
       actor,
     })
     // RFC-162: the designer revision is an explicit reassign+dispatch of the answered round.
-    const disp = await reassignThenDispatchDesigner(db, taskId, sess.crossClarifyNodeRunId)
+    const disp = await reassignThenDispatchDesigner(db, taskId, sess.intermediaryNodeRunId)
     expect(disp.reruns.some((r) => r.targetNodeId === 'designer')).toBe(true)
 
     // Fix B — designer rerun must jump to cci=2, NOT 1. With the pre-patch
@@ -407,21 +407,22 @@ describe('RFC-056 patch 2026-05-25 — questioner cascade no-skip + cci inherita
       preSnapshot: 'snap-x-v1',
     })
 
-    const sess = await createClarifySession({
+    const sess = await createClarifyRound({
+      kind: 'self',
       db,
       taskId,
-      sourceAgentNodeId: 'agent_x',
-      sourceAgentNodeRunId: agentRunId,
-      sourceShardKey: null,
-      clarifyNodeId: 'clarify_x',
-      iterationIndex: 0,
+      askingNodeId: 'agent_x',
+      askingNodeRunId: agentRunId,
+      askingShardKey: null,
+      intermediaryNodeId: 'clarify_x',
+      iteration: 0,
       questions: [makeQ('cx1')],
       truncationWarnings: [],
     })
 
     await autoDispatchClarifyRound({
       db,
-      originNodeRunId: sess.clarifyNodeRunId,
+      originNodeRunId: sess.intermediaryNodeRunId,
       answers: [makeAns('cx1')],
       actor,
     })
@@ -470,20 +471,21 @@ describe('RFC-056 patch 2026-05-25 — questioner cascade no-skip + cci inherita
       // Clarify-only — empty outputs.
     })
 
-    const sess = await createCrossClarifySession({
+    const sess = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cross1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: questionerV1,
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: questionerV1,
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQ('q1')],
     })
 
     await autoDispatchClarifyRound({
       db,
-      originNodeRunId: sess.crossClarifyNodeRunId,
+      originNodeRunId: sess.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       actor,
     })

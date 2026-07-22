@@ -21,7 +21,7 @@ import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
-import { createCrossClarifySession } from '../src/services/crossClarify'
+import { createClarifyRound } from '../src/services/clarify/service'
 import { listTaskQuestions, reassignTaskQuestion } from '../src/services/taskQuestions'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
@@ -153,13 +153,14 @@ async function spawnSession(
     iteration: 0,
     startedAt: Date.now(),
   })
-  const { crossClarifyNodeRunId } = await createCrossClarifySession({
+  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+    kind: 'cross',
     db,
     taskId,
-    crossClarifyNodeId: args.ccNodeId,
-    sourceQuestionerNodeId: args.questionerNodeId,
-    sourceQuestionerNodeRunId: args.questionerRunId,
-    targetDesignerNodeId: 'designer',
+    intermediaryNodeId: args.ccNodeId,
+    askingNodeId: args.questionerNodeId,
+    askingNodeRunId: args.questionerRunId,
+    targetConsumerNodeId: 'designer',
     loopIter: 0,
     questions: args.questions,
   })

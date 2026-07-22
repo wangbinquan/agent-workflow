@@ -17,7 +17,7 @@ import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { createSession } from '../src/auth/sessionStore'
 import { createUser } from '../src/services/users'
-import { createClarifySession } from '../src/services/clarify'
+import { createClarifyRound } from '../src/services/clarify/service'
 import { resetBroadcastersForTests, TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
@@ -126,14 +126,15 @@ async function seedSelfRound(
     iteration: 0,
     preSnapshot: '',
   })
-  const { clarifyNodeRunId } = await createClarifySession({
+  const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+    kind: 'self',
     db,
     taskId,
-    sourceAgentNodeId: 'designer',
-    sourceAgentNodeRunId: sourceRunId,
-    sourceShardKey: null,
-    clarifyNodeId: 'c1',
-    iterationIndex: 0,
+    askingNodeId: 'designer',
+    askingNodeRunId: sourceRunId,
+    askingShardKey: null,
+    intermediaryNodeId: 'c1',
+    iteration: 0,
     questions,
   })
   return { taskId, nodeRunId: clarifyNodeRunId }

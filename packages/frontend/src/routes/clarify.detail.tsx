@@ -785,7 +785,9 @@ export function ClarifyDetailPage() {
           autonomous dismissal) needs a human-readable reason — the old page
           rendered a bare read-only form whose footer still claimed the draft
           was safely saved. Copy branches on the owning task's status. */}
-      {(s.status === 'canceled' || s.status === 'abandoned') &&
+      {/* RFC-217 T9: terminatedAs is the normalized terminal discriminator —
+          non-null exactly for the {canceled, abandoned} pair. */}
+      {s.terminatedAs !== null &&
         (() => {
           // Codex impl-gate P2: branch on the TRANSITION-TIME cause the
           // backend recorded (sealedCause), never the task's mutable current
@@ -908,7 +910,7 @@ export function ClarifyDetailPage() {
 
       <footer className="clarify-detail__footer">
         <span className="muted" data-testid="clarify-draft-indicator">
-          {s.status === 'canceled' || s.status === 'abandoned'
+          {s.terminatedAs !== null
             ? t('clarify.detail.roundSealedFooter')
             : draftSaving
               ? t('clarify.detail.draftSaving')

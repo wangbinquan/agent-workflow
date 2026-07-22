@@ -25,6 +25,7 @@
 // 黄金锁：不传 defer/questionIds 的整轮提交语义不变——轮 answered + 恰好一条 clarify-answer 续跑
 // （RFC-132 后由统一 autoDispatchClarifyRound 驱动 + resume；legacy immediate mint 已删）。
 
+import { createClarifyRound, resolveCrossNodeStopped } from '../src/services/clarify/service'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -37,8 +38,6 @@ import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { createSession } from '../src/auth/sessionStore'
 import { createUser } from '../src/services/users'
-import { createClarifySession } from '../src/services/clarify'
-import { createCrossClarifySession, resolveCrossNodeStopped } from '../src/services/crossClarify'
 import { loadUndispatchedSelfQuestionerTargets } from '../src/services/taskQuestions'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ClarifyAnswer, ClarifyQuestion } from '@agent-workflow/shared'
@@ -192,14 +191,15 @@ async function seedSelfRound(
     iteration: 0,
     preSnapshot: '',
   })
-  const { clarifyNodeRunId } = await createClarifySession({
+  const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+    kind: 'self',
     db,
     taskId,
-    sourceAgentNodeId: 'designer',
-    sourceAgentNodeRunId: sourceRunId,
-    sourceShardKey: null,
-    clarifyNodeId: 'c1',
-    iterationIndex: 0,
+    askingNodeId: 'designer',
+    askingNodeRunId: sourceRunId,
+    askingShardKey: null,
+    intermediaryNodeId: 'c1',
+    iteration: 0,
     questions,
   })
   return { taskId, nodeRunId: clarifyNodeRunId }
@@ -218,13 +218,14 @@ async function seedCrossRound(
     { id: questionerRunId, taskId, nodeId: 'questioner', status: 'done', iteration: 0 },
     { id: ulid(), taskId, nodeId: 'designer', status: 'done', iteration: 0, preSnapshot: 'stub' },
   ])
-  const { crossClarifyNodeRunId } = await createCrossClarifySession({
+  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+    kind: 'cross',
     db,
     taskId,
-    crossClarifyNodeId: 'cross1',
-    sourceQuestionerNodeId: 'questioner',
-    sourceQuestionerNodeRunId: questionerRunId,
-    targetDesignerNodeId: 'designer',
+    intermediaryNodeId: 'cross1',
+    askingNodeId: 'questioner',
+    askingNodeRunId: questionerRunId,
+    targetConsumerNodeId: 'designer',
     loopIter: 0,
     questions,
   })

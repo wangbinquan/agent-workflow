@@ -9,7 +9,7 @@ import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
-import { listClarifySummaries } from '../src/services/clarify'
+import { listClarifyRoundSummaries } from '../src/services/clarifyRounds'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -87,7 +87,7 @@ describe('RFC-037 — listClarifySummaries joins tasks.name → taskName', () =>
   test('summary row carries taskName equal to tasks.name', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     await seed(db, { taskName: 'PR-1234 fix' })
-    const summaries = await listClarifySummaries(db, { status: 'awaiting_human' })
+    const summaries = await listClarifyRoundSummaries(db, { status: 'awaiting_human' })
     expect(summaries.length).toBe(1)
     expect(summaries[0]?.taskName).toBe('PR-1234 fix')
   })
@@ -96,7 +96,7 @@ describe('RFC-037 — listClarifySummaries joins tasks.name → taskName', () =>
     const db = createInMemoryDb(MIGRATIONS)
     await seed(db, { taskName: 'alpha' })
     await seed(db, { taskName: 'beta' })
-    const summaries = await listClarifySummaries(db, { status: 'awaiting_human' })
+    const summaries = await listClarifyRoundSummaries(db, { status: 'awaiting_human' })
     expect(summaries.length).toBe(2)
     const names = summaries.map((s) => s.taskName).sort()
     expect(names).toEqual(['alpha', 'beta'])
@@ -105,7 +105,7 @@ describe('RFC-037 — listClarifySummaries joins tasks.name → taskName', () =>
   test('summary still includes taskName when status filter narrows results', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     await seed(db, { taskName: 'answered-task', status: 'answered' })
-    const summaries = await listClarifySummaries(db, { status: 'answered' })
+    const summaries = await listClarifyRoundSummaries(db, { status: 'answered' })
     expect(summaries[0]?.taskName).toBe('answered-task')
   })
 })

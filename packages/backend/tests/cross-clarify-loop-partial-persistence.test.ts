@@ -39,11 +39,11 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import {
-  createCrossClarifySession,
+  createClarifyRound,
   dispatchCrossClarifyNode,
   evaluateDesignerRerunReadiness,
   resolveCrossNodeStopped,
-} from '../src/services/crossClarify'
+} from '../src/services/clarify/service'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -170,19 +170,20 @@ describe('RFC-056 C5 — wrapper-loop partial persistence', () => {
     const taskId = await seedTask(db)
     await seedDesignerRun(db, taskId, 0)
     const qIter0 = await seedQRun(db, taskId, 'questioner', 0)
-    const a = await createCrossClarifySession({
+    const a = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cross1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: qIter0,
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: qIter0,
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQ('q1')],
     })
     await autoDispatchClarifyRound({
       db,
-      originNodeRunId: a.crossClarifyNodeRunId,
+      originNodeRunId: a.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       directive: 'stop',
       actor,
@@ -196,20 +197,21 @@ describe('RFC-056 C5 — wrapper-loop partial persistence', () => {
     const taskId = await seedTask(db)
     await seedDesignerRun(db, taskId, 0)
     const qIter0 = await seedQRun(db, taskId, 'questioner', 0)
-    const iter0Session = await createCrossClarifySession({
+    const iter0Session = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cross1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: qIter0,
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: qIter0,
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQ('q1')],
     })
     // Iter 0 user submitted continue — designer reran already in iter 0.
     await autoDispatchClarifyRound({
       db,
-      originNodeRunId: iter0Session.crossClarifyNodeRunId,
+      originNodeRunId: iter0Session.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       actor,
     })
@@ -235,19 +237,20 @@ describe('RFC-056 C5 — wrapper-loop partial persistence', () => {
     const taskId = await seedTask(db)
     await seedDesignerRun(db, taskId, 0)
     const qIter0 = await seedQRun(db, taskId, 'questioner', 0)
-    const a = await createCrossClarifySession({
+    const a = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cross1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: qIter0,
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: qIter0,
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQ('q1')],
     })
     await autoDispatchClarifyRound({
       db,
-      originNodeRunId: a.crossClarifyNodeRunId,
+      originNodeRunId: a.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       directive: 'stop',
       actor,
@@ -290,19 +293,20 @@ describe('RFC-056 C5 — wrapper-loop partial persistence', () => {
     const taskId = await seedTask(db)
     await seedDesignerRun(db, taskId, 0)
     const qIter0 = await seedQRun(db, taskId, 'questioner', 0)
-    const a = await createCrossClarifySession({
+    const a = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cross1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: qIter0,
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: qIter0,
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQ('q1')],
     })
     await autoDispatchClarifyRound({
       db,
-      originNodeRunId: a.crossClarifyNodeRunId,
+      originNodeRunId: a.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       directive: 'stop',
       actor,

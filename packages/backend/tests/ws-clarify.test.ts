@@ -3,7 +3,7 @@
 //
 // The WS server itself just forwards every message dispatched to the
 // channel, so this test pins the contract at the broadcaster boundary:
-//   - createClarifySession dispatches a `clarify.created` event whose
+//   - createClarifyRound dispatches a `clarify.created` event whose
 //     payload includes sourceShardKey + iterationIndex + a compact summary.
 //   - answering the round dispatches a `clarify.answered` event whose
 //     payload includes the rerunNodeRunId so subscribers can switch focus.
@@ -20,7 +20,10 @@ import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
-import { broadcastSelfClarifyAnsweredForRound, createClarifySession } from '../src/services/clarify'
+import {
+  broadcastClarifyAnsweredForRound,
+  createClarifyRound,
+} from '../src/services/clarify/service'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { resetBroadcastersForTests, TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 import type { TaskWsMessage, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
@@ -93,21 +96,22 @@ afterEach(() => {
 })
 
 describe('clarify.* events broadcast on TASK_CHANNEL (RFC-023 T14)', () => {
-  test('createClarifySession dispatches clarify.created with sourceShardKey + iterationIndex + session summary', async () => {
+  test('createClarifyRound dispatches clarify.created with sourceShardKey + iterationIndex + session summary', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const { taskId, sourceRunId } = await seedTask(db)
 
     const received: TaskWsMessage[] = []
     taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m))
 
-    await createClarifySession({
+    await createClarifyRound({
+      kind: 'self',
       db,
       taskId,
-      sourceAgentNodeId: 'designer',
-      sourceAgentNodeRunId: sourceRunId,
-      sourceShardKey: 'shard-A',
-      clarifyNodeId: 'c1',
-      iterationIndex: 0,
+      askingNodeId: 'designer',
+      askingNodeRunId: sourceRunId,
+      askingShardKey: 'shard-A',
+      intermediaryNodeId: 'c1',
+      iteration: 0,
       questions: [QUESTION],
     })
 
@@ -124,14 +128,15 @@ describe('clarify.* events broadcast on TASK_CHANNEL (RFC-023 T14)', () => {
   test('answering the round dispatches clarify.answered with rerunNodeRunId so subscribers can refocus', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const { taskId, sourceRunId } = await seedTask(db)
-    const { clarifyNodeRunId } = await createClarifySession({
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+      kind: 'self',
       db,
       taskId,
-      sourceAgentNodeId: 'designer',
-      sourceAgentNodeRunId: sourceRunId,
-      sourceShardKey: null,
-      clarifyNodeId: 'c1',
-      iterationIndex: 0,
+      askingNodeId: 'designer',
+      askingNodeRunId: sourceRunId,
+      askingShardKey: null,
+      intermediaryNodeId: 'c1',
+      iteration: 0,
       questions: [QUESTION],
     })
 
@@ -154,7 +159,9 @@ describe('clarify.* events broadcast on TASK_CHANNEL (RFC-023 T14)', () => {
     expect(res.dispatch.reruns).toHaveLength(1)
     const rerunNodeRunId = res.dispatch.reruns[0]!.nodeRunId
     // Mirror the route (RFC-132): re-emit clarify.answered with the dispatched rerun id.
-    await broadcastSelfClarifyAnsweredForRound(db, clarifyNodeRunId, rerunNodeRunId)
+    await broadcastClarifyAnsweredForRound(db, 'self', clarifyNodeRunId, {
+      rerunNodeRunId: rerunNodeRunId,
+    })
     const answered = received.find((m) => m.type === 'clarify.answered')
     expect(answered).toBeDefined()
     if (answered?.type !== 'clarify.answered') throw new Error('type narrowing')

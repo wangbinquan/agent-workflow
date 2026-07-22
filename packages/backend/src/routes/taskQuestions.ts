@@ -34,6 +34,7 @@ import { resumeTask } from '@/services/task'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
+import { TASK_QUESTION_CONFLICT } from '@/services/taskQuestionConflicts'
 
 const log = createLogger('task-questions-route')
 
@@ -62,7 +63,7 @@ async function gateMemberEntry(
     .where(eq(taskQuestions.id, entryId))
     .limit(1)
   if (!e || e.taskId !== taskId) {
-    throw new NotFoundError('task-question-not-found', `task question ${entryId} not found`)
+    throw new NotFoundError(TASK_QUESTION_CONFLICT.notFound, `task question ${entryId} not found`)
   }
   return { entryId, role, actor }
 }

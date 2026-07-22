@@ -28,7 +28,7 @@ import { and, eq } from 'drizzle-orm'
 import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
-import { createClarifySession } from '../src/services/clarify'
+import { createClarifyRound } from '../src/services/clarify/service'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
@@ -130,21 +130,22 @@ describe('RFC-076 PR-0 — clarify rerun write-ordering', () => {
       preSnapshot: 'snap-x',
     })
 
-    const sess = await createClarifySession({
+    const sess = await createClarifyRound({
+      kind: 'self',
       db,
       taskId,
-      sourceAgentNodeId: 'agent_x',
-      sourceAgentNodeRunId: agentRunId,
-      sourceShardKey: null,
-      clarifyNodeId: 'clarify_x',
-      iterationIndex: 0,
+      askingNodeId: 'agent_x',
+      askingNodeRunId: agentRunId,
+      askingShardKey: null,
+      intermediaryNodeId: 'clarify_x',
+      iteration: 0,
       questions: [makeQ('q1')],
       truncationWarnings: [],
     })
 
     await autoDispatchClarifyRound({
       db,
-      originNodeRunId: sess.clarifyNodeRunId,
+      originNodeRunId: sess.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       directive: 'continue',
       actor: { userId: 'u1', role: 'owner' },
@@ -152,7 +153,7 @@ describe('RFC-076 PR-0 — clarify rerun write-ordering', () => {
 
     // Clarify node row is done.
     const clarifyRow = (
-      await db.select().from(nodeRuns).where(eq(nodeRuns.id, sess.clarifyNodeRunId)).limit(1)
+      await db.select().from(nodeRuns).where(eq(nodeRuns.id, sess.intermediaryNodeRunId)).limit(1)
     )[0]
     expect(clarifyRow?.status).toBe('done')
 

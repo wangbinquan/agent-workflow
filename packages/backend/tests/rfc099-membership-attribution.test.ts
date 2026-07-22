@@ -29,7 +29,7 @@ import {
   workflows,
 } from '../src/db/schema'
 import { createApp } from '../src/server'
-import { createClarifySession } from '../src/services/clarify'
+import { createClarifyRound } from '../src/services/clarify/service'
 import { createUser } from '../src/services/users'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
@@ -274,7 +274,7 @@ describe('RFC-099 — review membership + attribution', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Clarify side — createClarifySession fixture + collaborative drafts
+// Clarify side — createClarifyRound fixture + collaborative drafts
 // ---------------------------------------------------------------------------
 
 const QUESTIONS = [
@@ -363,18 +363,19 @@ describe('RFC-099 — clarify membership, drafts, attribution freeze', () => {
       retryIndex: 0,
       iteration: 0,
     })
-    const created = await createClarifySession({
+    const created = await createClarifyRound({
+      kind: 'self',
       db,
       taskId,
-      sourceAgentNodeId: 'designer',
-      sourceAgentNodeRunId: sourceRunId,
-      sourceShardKey: null,
-      clarifyNodeId: 'c1',
-      iterationIndex: 0,
+      askingNodeId: 'designer',
+      askingNodeRunId: sourceRunId,
+      askingShardKey: null,
+      intermediaryNodeId: 'c1',
+      iteration: 0,
       questions: QUESTIONS,
     })
-    clarifyNodeRunId = created.clarifyNodeRunId
-    roundId = created.session.id
+    clarifyNodeRunId = created.intermediaryNodeRunId
+    roundId = created.round.id
   })
 
   function draftBody(questionId: string, optionIdx: number, customText = '') {

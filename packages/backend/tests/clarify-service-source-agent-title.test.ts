@@ -15,7 +15,7 @@ import { insertLegacySelfClarify } from './clarify-fixtures'
 import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
-import { listClarifySummaries } from '../src/services/clarify'
+import { listClarifyRoundSummaries } from '../src/services/clarifyRounds'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
@@ -114,11 +114,11 @@ describe('listClarifySummaries — sourceAgentNodeTitle enrichment', () => {
     } as WorkflowNode)
     const { taskId } = await seedSessionForSnapshot(db, JSON.stringify(def), 'agent_coder_01')
 
-    const out = await listClarifySummaries(db)
+    const out = await listClarifyRoundSummaries(db)
     const row = out.find((r) => r.taskId === taskId)
     expect(row).toBeDefined()
-    expect(row?.sourceAgentNodeId).toBe('agent_coder_01')
-    expect(row?.sourceAgentNodeTitle).toBe('Implementation Coder')
+    expect(row?.askingNodeId).toBe('agent_coder_01')
+    expect(row?.askingNodeTitle).toBe('Implementation Coder')
   })
 
   test('returns null when the agent node has no title set', async () => {
@@ -130,10 +130,10 @@ describe('listClarifySummaries — sourceAgentNodeTitle enrichment', () => {
     } as WorkflowNode)
     const { taskId } = await seedSessionForSnapshot(db, JSON.stringify(def), 'agent_designer_07')
 
-    const out = await listClarifySummaries(db)
+    const out = await listClarifyRoundSummaries(db)
     const row = out.find((r) => r.taskId === taskId)
-    expect(row?.sourceAgentNodeTitle).toBeNull()
-    expect(row?.sourceAgentNodeId).toBe('agent_designer_07')
+    expect(row?.askingNodeTitle).toBeNull()
+    expect(row?.askingNodeId).toBe('agent_designer_07')
   })
 
   test('returns null when the title is an empty / whitespace-only string', async () => {
@@ -146,19 +146,19 @@ describe('listClarifySummaries — sourceAgentNodeTitle enrichment', () => {
     } as WorkflowNode)
     const { taskId } = await seedSessionForSnapshot(db, JSON.stringify(def), 'agent_writer_03')
 
-    const out = await listClarifySummaries(db)
+    const out = await listClarifyRoundSummaries(db)
     const row = out.find((r) => r.taskId === taskId)
-    expect(row?.sourceAgentNodeTitle).toBeNull()
+    expect(row?.askingNodeTitle).toBeNull()
   })
 
   test('returns null when the workflow snapshot is corrupt (no throw)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const { taskId } = await seedSessionForSnapshot(db, '{not valid json', 'agent_ghost')
 
-    const out = await listClarifySummaries(db)
+    const out = await listClarifyRoundSummaries(db)
     const row = out.find((r) => r.taskId === taskId)
-    expect(row?.sourceAgentNodeTitle).toBeNull()
-    expect(row?.sourceAgentNodeId).toBe('agent_ghost')
+    expect(row?.askingNodeTitle).toBeNull()
+    expect(row?.askingNodeId).toBe('agent_ghost')
   })
 
   test('returns null when the snapshot does not contain the source agent node id', async () => {
@@ -173,9 +173,9 @@ describe('listClarifySummaries — sourceAgentNodeTitle enrichment', () => {
     } as WorkflowNode)
     const { taskId } = await seedSessionForSnapshot(db, JSON.stringify(def), 'agent_typo_99')
 
-    const out = await listClarifySummaries(db)
+    const out = await listClarifyRoundSummaries(db)
     const row = out.find((r) => r.taskId === taskId)
-    expect(row?.sourceAgentNodeTitle).toBeNull()
-    expect(row?.sourceAgentNodeId).toBe('agent_typo_99')
+    expect(row?.askingNodeTitle).toBeNull()
+    expect(row?.askingNodeId).toBe('agent_typo_99')
   })
 })

@@ -100,6 +100,7 @@ function crossSession(overrides: CrossLegacyOverrides = {}): ClarifyRound {
     ],
     directive: null,
     status: 'awaiting_human',
+    terminatedAs: null,
     sessionMode: null,
     designerRunTriggeredAt: null,
     createdAt: 1_700_000_000_000,

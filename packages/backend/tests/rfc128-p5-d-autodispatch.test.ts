@@ -12,6 +12,10 @@
 // per-round single path (auto and manual never double-dispatch); RFC-125 single-path invariant
 // (flag never flipped); lock non-reentry; the P5-0 guard (RFC-132: lifted universally).
 
+import {
+  broadcastClarifyAnsweredForRound,
+  createClarifyRound,
+} from '../src/services/clarify/service'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { join, resolve } from 'node:path'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -22,8 +26,6 @@ import { gitStashSnapshot, runGit } from '../src/util/git'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { clarifyRounds, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
-import { broadcastSelfClarifyAnsweredForRound, createClarifySession } from '../src/services/clarify'
-import { broadcastCrossClarifyAnsweredForRound } from '../src/services/crossClarify'
 import { sealRoundQuestions } from '../src/services/clarifySeal'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 import {
@@ -148,24 +150,25 @@ async function seedRun(
 }
 
 /** Seed a SEALABLE self round (awaiting_human, no answers yet) + the asking P run (the dispatch
- *  inherit target) + the clarify node_run. Mirrors the runner's createClarifySession. */
+ *  inherit target) + the clarify node_run. Mirrors the runner's createClarifyRound. */
 async function seedSealableSelfRound(
   db: DbClient,
   taskId: string,
   questions: ClarifyQuestion[],
-): Promise<{ clarifyNodeRunId: string; askingRunId: string }> {
+): Promise<{ intermediaryNodeRunId: string; askingRunId: string }> {
   const askingRunId = await seedRun(db, taskId, P, { status: 'awaiting_human', iteration: 0 })
-  const { clarifyNodeRunId } = await createClarifySession({
+  const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+    kind: 'self',
     db,
     taskId,
-    sourceAgentNodeId: P,
-    sourceAgentNodeRunId: askingRunId,
-    sourceShardKey: null,
-    clarifyNodeId: CL,
-    iterationIndex: 0,
+    askingNodeId: P,
+    askingNodeRunId: askingRunId,
+    askingShardKey: null,
+    intermediaryNodeId: CL,
+    iteration: 0,
     questions,
   })
-  return { clarifyNodeRunId, askingRunId }
+  return { intermediaryNodeRunId: clarifyNodeRunId, askingRunId }
 }
 
 /** Seed a SEALABLE cross round (awaiting_human, no answers) + the questioner Q run + the cross
@@ -268,7 +271,9 @@ describe('RFC-128 P5-D — quick-channel seal + autodispatch (fast-path → auto
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
-    const { clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [mkQ('q1', 't')])
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [
+      mkQ('q1', 't'),
+    ])
 
     const res = await autoDispatchClarifyRound({
       db,
@@ -311,7 +316,9 @@ describe('RFC-128 P5-D — quick-channel seal + autodispatch (fast-path → auto
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
-    const { clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [mkQ('q1', 't')])
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [
+      mkQ('q1', 't'),
+    ])
     // Simulate a pre-submit reassign-to-upstream: an undispatched designer handler row for the
     // SAME (round, question) coexists with the asker. autoDispatch's own reconcile (step 3)
     // creates the self entry; this designer sits alongside it (reconcile never touches designer).
@@ -490,7 +497,7 @@ describe('RFC-128 P5-D golden-lock (full-seal autodispatch keeps the legacy whol
     const a = await seedSealableSelfRound(dbA, taskA, [mkQ('q1', 't')])
     const resA = await autoDispatchClarifyRound({
       db: dbA,
-      originNodeRunId: a.clarifyNodeRunId,
+      originNodeRunId: a.intermediaryNodeRunId,
       answers: [ans('q1')],
       actor,
     })
@@ -502,7 +509,9 @@ describe('RFC-128 P5-D golden-lock (full-seal autodispatch keeps the legacy whol
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId, false) // formerly "non-deferred" — the flag is now vestigial
-    const { clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [mkQ('q1', 't')])
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [
+      mkQ('q1', 't'),
+    ])
     // The unified path seals + auto-dispatches on every task now (no 'task-not-deferred-dispatch').
     const result = await autoDispatchClarifyRound({
       db,
@@ -520,7 +529,9 @@ describe('RFC-128 P5-D golden-lock (full-seal autodispatch keeps the legacy whol
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
-    const { clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [mkQ('q1', 't')])
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [
+      mkQ('q1', 't'),
+    ])
     let caught: unknown
     try {
       await autoDispatchClarifyRound({
@@ -554,7 +565,7 @@ describe('RFC-128 P5-D golden-lock (full-seal autodispatch keeps the legacy whol
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
-    const { clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [
       mkQ('q1', 't'),
       mkQ('q2', 't'),
     ])
@@ -583,7 +594,9 @@ describe('RFC-128 P5-D golden-lock (full-seal autodispatch keeps the legacy whol
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
-    const { clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [mkQ('q1', 't')])
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [
+      mkQ('q1', 't'),
+    ])
     // Control channel: FULLY seal the round (defer=true equivalent), leaving it staged for MANUAL
     // dispatch (no autodispatch).
     const sealed = await sealRoundQuestions({
@@ -630,7 +643,9 @@ describe('RFC-128 P5-D single-path (auto + manual never double-dispatch; RFC-125
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
-    const { clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [mkQ('q1', 't')])
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [
+      mkQ('q1', 't'),
+    ])
     const res = await autoDispatchClarifyRound({
       db,
       originNodeRunId: clarifyNodeRunId,
@@ -661,7 +676,9 @@ describe('RFC-128 P5-D single-path (auto + manual never double-dispatch; RFC-125
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId, true)
-    const { clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [mkQ('q1', 't')])
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [
+      mkQ('q1', 't'),
+    ])
     await autoDispatchClarifyRound({
       db,
       originNodeRunId: clarifyNodeRunId,
@@ -674,7 +691,7 @@ describe('RFC-128 P5-D single-path (auto + manual never double-dispatch; RFC-125
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
-    const { clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [
       mkQ('q1', 't'),
       mkQ('q2', 't'),
     ])
@@ -730,7 +747,7 @@ describe('RFC-128 P5-D P5-0 guard relationship', () => {
     const def = await seedSealableSelfRound(dbDef, taskDef, [mkQ('q1', 't')])
     const okSeal = await sealRoundQuestions({
       db: dbDef,
-      originNodeRunId: def.clarifyNodeRunId,
+      originNodeRunId: def.intermediaryNodeRunId,
       answers: [ans('q1')],
     })
     expect(okSeal.roundFullySealed).toBe(true)
@@ -743,7 +760,7 @@ describe('RFC-128 P5-D P5-0 guard relationship', () => {
     const non = await seedSealableSelfRound(dbNon, taskNon, [mkQ('q1', 't')])
     const nonSeal = await sealRoundQuestions({
       db: dbNon,
-      originNodeRunId: non.clarifyNodeRunId,
+      originNodeRunId: non.intermediaryNodeRunId,
       answers: [ans('q1')],
     })
     expect(nonSeal.roundFullySealed).toBe(true)
@@ -758,7 +775,9 @@ describe('RFC-128 P5-D lock-B non-reentry', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
-    const { clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [mkQ('q1', 't')])
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [
+      mkQ('q1', 't'),
+    ])
     // If autoDispatchClarifyRound held lock B across the dispatch (reentry), dispatchTaskQuestions'
     // own getTaskQuestionWriteSem(taskId).run would queue forever → this await never resolves.
     const res = await Promise.race([
@@ -798,7 +817,13 @@ describe('RFC-128 P5-D lock-B non-reentry', () => {
     expect(rollbackIdx).toBeGreaterThan(preflightIdx) // rollback AFTER the preflight, under B
     expect(releaseCheckIdx).toBeGreaterThan(rollbackIdx) // B released after the rollback
     expect(dispatchCallIdx).toBeGreaterThan(releaseCheckIdx) // dispatch AFTER B released → no B-in-B
-    expect(fn).toContain('sealRoundQuestions(') // seal before dispatch; takes its own B independently
+    // RFC-217 T9: the seal moved into sealRoundAsWholeFinalize (module-private,
+    // §8.3 拆函数) — the main fn must still call it BEFORE the A-lock block
+    // (seal takes its own B independently, never nested in A).
+    const sealCallIdx = fn.indexOf('await sealRoundAsWholeFinalize(')
+    expect(sealCallIdx).toBeGreaterThan(0)
+    expect(sealCallIdx).toBeLessThan(aIdx)
+    expect(src).toContain('sealRoundQuestions(') // the seal primitive call lives in the helper
   })
 })
 
@@ -908,9 +933,11 @@ describe('RFC-128 P5-D self-clarify isolated rollback (RFC-098 B1, Codex round-4
       const taskId = `t_${ulid()}`
       await seedTask(db, taskId)
       await db.update(tasks).set({ worktreePath: repo }).where(eq(tasks.id, taskId))
-      const { clarifyNodeRunId, askingRunId } = await seedSealableSelfRound(db, taskId, [
-        mkQ('q1', 't'),
-      ])
+      const { intermediaryNodeRunId: clarifyNodeRunId, askingRunId } = await seedSealableSelfRound(
+        db,
+        taskId,
+        [mkQ('q1', 't')],
+      )
       await db.update(nodeRuns).set({ preSnapshot: snap }).where(eq(nodeRuns.id, askingRunId))
 
       // Dirty the worktree AFTER the snapshot (edits the isolated rerun must NOT inherit).
@@ -995,7 +1022,9 @@ describe('RFC-128 P5-D post-seal dispatch conflict → deferred to manual (idemp
       triggerRunId: null,
     })
     // New self round on the SAME home P → quick autodispatch.
-    const { clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [mkQ('q1', 't')])
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [
+      mkQ('q1', 't'),
+    ])
     const res = await autoDispatchClarifyRound({
       db,
       originNodeRunId: clarifyNodeRunId,
@@ -1020,7 +1049,9 @@ describe('RFC-128 P5-D post-seal dispatch conflict → deferred to manual (idemp
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
-    const { clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [mkQ('q1', 't')])
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [
+      mkQ('q1', 't'),
+    ])
     const res = await autoDispatchClarifyRound({
       db,
       originNodeRunId: clarifyNodeRunId,
@@ -1040,7 +1071,9 @@ describe('RFC-128 P5-D answered WS broadcast (Codex round-6 finding 1)', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
-    const { clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [mkQ('q1', 't')])
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [
+      mkQ('q1', 't'),
+    ])
     const res = await autoDispatchClarifyRound({
       db,
       originNodeRunId: clarifyNodeRunId,
@@ -1049,11 +1082,9 @@ describe('RFC-128 P5-D answered WS broadcast (Codex round-6 finding 1)', () => {
     })
     const received: Array<{ type: string }> = []
     taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m as { type: string }))
-    await broadcastSelfClarifyAnsweredForRound(
-      db,
-      clarifyNodeRunId,
-      res.dispatch.reruns[0]?.nodeRunId ?? '',
-    )
+    await broadcastClarifyAnsweredForRound(db, 'self', clarifyNodeRunId, {
+      rerunNodeRunId: res.dispatch.reruns[0]?.nodeRunId ?? '',
+    })
     expect(received.find((m) => m.type === 'clarify.answered')).toBeDefined()
   })
 
@@ -1071,7 +1102,7 @@ describe('RFC-128 P5-D answered WS broadcast (Codex round-6 finding 1)', () => {
     })
     const received: Array<{ type: string }> = []
     taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m as { type: string }))
-    await broadcastCrossClarifyAnsweredForRound(db, crossNodeRunId, {
+    await broadcastClarifyAnsweredForRound(db, 'cross', crossNodeRunId, {
       rejectedQuestionerNodeRunId: '',
     })
     expect(received.find((m) => m.type === 'cross-clarify.answered')).toBeDefined()
@@ -1082,18 +1113,21 @@ describe('RFC-128 P5-D answered WS broadcast (Codex round-6 finding 1)', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
-    const { clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [mkQ('q1', 't')])
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [
+      mkQ('q1', 't'),
+    ])
     // NOT answered (no autodispatch / seal).
     const received: Array<{ type: string }> = []
     taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m as { type: string }))
-    await broadcastSelfClarifyAnsweredForRound(db, clarifyNodeRunId, '')
+    await broadcastClarifyAnsweredForRound(db, 'self', clarifyNodeRunId, { rerunNodeRunId: '' })
     expect(received.find((m) => m.type === 'clarify.answered')).toBeUndefined()
   })
 
   test('source — the route autodispatch branch emits the answered broadcast for both self and cross', () => {
+    // RFC-217 T9: the self/cross pair merged into ONE kind-routed re-emit.
     const src = readFileSync(resolve(import.meta.dir, '../src/routes/clarify.ts'), 'utf8')
-    expect(src).toContain('broadcastSelfClarifyAnsweredForRound(deps.db, nodeRunId')
-    expect(src).toContain('broadcastCrossClarifyAnsweredForRound(deps.db, nodeRunId')
+    expect(src).toContain('await broadcastClarifyAnsweredForRound(')
+    expect(src).toContain("kindRow?.kind === 'cross' ? 'cross' : 'self'")
   })
 })
 
@@ -1102,7 +1136,9 @@ describe('RFC-128 P5-D non-recoverable dispatch conflict NOT swallowed (Codex ro
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
-    const { clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [mkQ('q1', 't')])
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [
+      mkQ('q1', 't'),
+    ])
     // Corrupt the snapshot AFTER seeding (worktreePath stays '' so the rollback path is skipped and
     // only dispatchTaskQuestions' parseDefinition hits it → task-question-snapshot-unparseable).
     await db.update(tasks).set({ workflowSnapshot: 'not json{' }).where(eq(tasks.id, taskId))
@@ -1125,7 +1161,7 @@ describe('RFC-128 P5-D non-recoverable dispatch conflict NOT swallowed (Codex ro
     expect((await roundByOrigin(db, clarifyNodeRunId))[0]?.status).toBe('answered')
     const received: Array<{ type: string }> = []
     taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m as { type: string }))
-    await broadcastSelfClarifyAnsweredForRound(db, clarifyNodeRunId, '')
+    await broadcastClarifyAnsweredForRound(db, 'self', clarifyNodeRunId, { rerunNodeRunId: '' })
     expect(received.find((m) => m.type === 'clarify.answered')).toBeDefined()
   })
 
@@ -1174,9 +1210,11 @@ describe('RFC-128 P5-D self rollback pre-flight (Codex round-8 finding 1 — no 
         triggerRunId: null,
       })
       // New self round on the SAME home P, with a pre_snapshot (would trigger the rollback path).
-      const { clarifyNodeRunId, askingRunId } = await seedSealableSelfRound(db, taskId, [
-        mkQ('q1', 't'),
-      ])
+      const { intermediaryNodeRunId: clarifyNodeRunId, askingRunId } = await seedSealableSelfRound(
+        db,
+        taskId,
+        [mkQ('q1', 't')],
+      )
       await db.update(nodeRuns).set({ preSnapshot: snap }).where(eq(nodeRuns.id, askingRunId))
       // Dirty the worktree — it must SURVIVE (the rollback is skipped because we defer).
       writeFileSync(join(repo, 'data.txt'), 'DIRTY\n')

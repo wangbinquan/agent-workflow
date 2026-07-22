@@ -16,18 +16,11 @@ import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
-  broadcastSelfClarifyAnsweredForRound,
-  createClarifySession,
-  getClarifyDetail,
-  listClarifySummaries,
-} from '../src/services/clarify'
+  broadcastClarifyAnsweredForRound,
+  createClarifyRound,
+} from '../src/services/clarify/service'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
-import {
-  broadcastCrossClarifyAnsweredForRound,
-  createCrossClarifySession,
-  getCrossClarifyDetail,
-  listCrossClarifySummaries,
-} from '../src/services/crossClarify'
+import { getClarifyRoundDetail, listClarifyRoundSummaries } from '../src/services/clarifyRounds'
 import { listTaskQuestions, reassignTaskQuestion } from '../src/services/taskQuestions'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 import { resetBroadcastersForTests, TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
@@ -179,24 +172,25 @@ describe('RFC-058 baseline T6 — list summaries shape', () => {
       retryIndex: 0,
       iteration: 0,
     })
-    await createClarifySession({
+    await createClarifyRound({
+      kind: 'self',
       db,
       taskId,
-      sourceAgentNodeId: 'designer',
-      sourceAgentNodeRunId: 'nr_src',
-      sourceShardKey: null,
-      clarifyNodeId: 'clarify1',
-      iterationIndex: 0,
+      askingNodeId: 'designer',
+      askingNodeRunId: 'nr_src',
+      askingShardKey: null,
+      intermediaryNodeId: 'clarify1',
+      iteration: 0,
       questions: [makeQuestion()],
     })
-    const list = await listClarifySummaries(db, { taskId })
+    const list = await listClarifyRoundSummaries(db, { taskId, kind: 'self' })
     expect(list.length).toBe(1)
     const row = list[0]!
     // RFC-058 baseline locks: ClarifySessionSummary wire fields
     expect(row.taskId).toBe(taskId)
     expect(row.taskName).toBe('rest-baseline-task')
-    expect(row.sourceAgentNodeId).toBe('designer')
-    expect(row.iterationIndex).toBe(0)
+    expect(row.askingNodeId).toBe('designer')
+    expect(row.iteration).toBe(0)
     expect(row.status).toBe('awaiting_human')
     expect(row.questionCount).toBe(1)
   })
@@ -212,23 +206,24 @@ describe('RFC-058 baseline T6 — list summaries shape', () => {
       retryIndex: 0,
       iteration: 0,
     })
-    await createCrossClarifySession({
+    await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cc1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: 'nr_q1',
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cc1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: 'nr_q1',
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQuestion()],
     })
-    const list = await listCrossClarifySummaries(db, { taskId })
+    const list = await listClarifyRoundSummaries(db, { taskId, kind: 'cross' })
     expect(list.length).toBe(1)
     const row = list[0]!
     expect(row.taskId).toBe(taskId)
-    expect(row.crossClarifyNodeId).toBe('cc1')
-    expect(row.sourceQuestionerNodeId).toBe('questioner')
-    expect(row.targetDesignerNodeId).toBe('designer')
+    expect(row.intermediaryNodeId).toBe('cc1')
+    expect(row.askingNodeId).toBe('questioner')
+    expect(row.targetConsumerNodeId).toBe('designer')
     expect(row.iteration).toBe(0)
     expect(row.status).toBe('awaiting_human')
   })
@@ -254,29 +249,31 @@ describe('RFC-058 baseline T6 — list summaries shape', () => {
         iteration: 0,
       },
     ])
-    await createClarifySession({
+    await createClarifyRound({
+      kind: 'self',
       db,
       taskId,
-      sourceAgentNodeId: 'designer',
-      sourceAgentNodeRunId: 'nr_src',
-      sourceShardKey: null,
-      clarifyNodeId: 'clarify1',
-      iterationIndex: 0,
+      askingNodeId: 'designer',
+      askingNodeRunId: 'nr_src',
+      askingShardKey: null,
+      intermediaryNodeId: 'clarify1',
+      iteration: 0,
       questions: [makeQuestion()],
     })
     await new Promise((r) => setTimeout(r, 5))
-    await createCrossClarifySession({
+    await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cc1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: 'nr_q1',
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cc1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: 'nr_q1',
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQuestion()],
     })
-    const selfList = await listClarifySummaries(db, { taskId })
-    const crossList = await listCrossClarifySummaries(db, { taskId })
+    const selfList = await listClarifyRoundSummaries(db, { taskId, kind: 'self' })
+    const crossList = await listClarifyRoundSummaries(db, { taskId, kind: 'cross' })
     // Simulating the REST route's merge + tag logic.
     const merged = [
       ...selfList.map((r) => ({ ...r, kind: 'self' as const })),
@@ -299,19 +296,20 @@ describe('RFC-058 baseline T6 — detail wire shape', () => {
       retryIndex: 0,
       iteration: 0,
     })
-    const { clarifyNodeRunId } = await createClarifySession({
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+      kind: 'self',
       db,
       taskId,
-      sourceAgentNodeId: 'designer',
-      sourceAgentNodeRunId: 'nr_src',
-      sourceShardKey: null,
-      clarifyNodeId: 'clarify1',
-      iterationIndex: 0,
+      askingNodeId: 'designer',
+      askingNodeRunId: 'nr_src',
+      askingShardKey: null,
+      intermediaryNodeId: 'clarify1',
+      iteration: 0,
       questions: [makeQuestion({ title: 'detail Q' })],
     })
-    const detail = await getClarifyDetail(db, clarifyNodeRunId)
+    const detail = await getClarifyRoundDetail(db, clarifyNodeRunId)
     expect(detail.taskId).toBe(taskId)
-    expect(detail.clarifyNodeId).toBe('clarify1')
+    expect(detail.intermediaryNodeId).toBe('clarify1')
     expect(detail.questions[0]?.title).toBe('detail Q')
     expect(detail.status).toBe('awaiting_human')
   })
@@ -327,20 +325,21 @@ describe('RFC-058 baseline T6 — detail wire shape', () => {
       retryIndex: 0,
       iteration: 0,
     })
-    const { crossClarifyNodeRunId } = await createCrossClarifySession({
+    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cc1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: 'nr_q1',
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cc1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: 'nr_q1',
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQuestion({ title: 'cross detail Q' })],
     })
-    const detail = await getCrossClarifyDetail(db, crossClarifyNodeRunId)
+    const detail = await getClarifyRoundDetail(db, crossClarifyNodeRunId)
     expect(detail.taskId).toBe(taskId)
-    expect(detail.crossClarifyNodeId).toBe('cc1')
-    expect(detail.targetDesignerNodeId).toBe('designer')
+    expect(detail.intermediaryNodeId).toBe('cc1')
+    expect(detail.targetConsumerNodeId).toBe('designer')
     expect(detail.questions[0]?.title).toBe('cross detail Q')
   })
 })
@@ -359,14 +358,15 @@ describe('RFC-058 baseline T6 — WS event payload shape', () => {
     })
     const received: TaskWsMessage[] = []
     taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m))
-    await createClarifySession({
+    await createClarifyRound({
+      kind: 'self',
       db,
       taskId,
-      sourceAgentNodeId: 'designer',
-      sourceAgentNodeRunId: 'nr_src',
-      sourceShardKey: null,
-      clarifyNodeId: 'clarify1',
-      iterationIndex: 0,
+      askingNodeId: 'designer',
+      askingNodeRunId: 'nr_src',
+      askingShardKey: null,
+      intermediaryNodeId: 'clarify1',
+      iteration: 0,
       questions: [makeQuestion()],
     })
     expect(received.length).toBe(1)
@@ -389,13 +389,14 @@ describe('RFC-058 baseline T6 — WS event payload shape', () => {
     })
     const received: TaskWsMessage[] = []
     taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m))
-    await createCrossClarifySession({
+    await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cc1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: 'nr_q1',
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cc1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: 'nr_q1',
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQuestion()],
     })
@@ -426,13 +427,14 @@ describe('RFC-058 baseline T6 — WS event payload shape', () => {
         iteration: 0,
       },
     ])
-    const { crossClarifyNodeRunId } = await createCrossClarifySession({
+    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cc1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: 'nr_q1',
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cc1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: 'nr_q1',
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQuestion()],
     })
@@ -448,7 +450,7 @@ describe('RFC-058 baseline T6 — WS event payload shape', () => {
     })
     // Mirror the route (RFC-132): the unified driver broadcasts nothing itself; the
     // route re-emits the answered event after the auto-dispatch.
-    await broadcastCrossClarifyAnsweredForRound(db, crossClarifyNodeRunId, {})
+    await broadcastClarifyAnsweredForRound(db, 'cross', crossClarifyNodeRunId, {})
     const types = received.map((m) => m.type)
     // RFC-058 baseline, RFC-132 update: continue submit fires .answered. The legacy
     // .designer-rerun-batched event was emitted only by the deleted immediate-mint path.
@@ -481,13 +483,14 @@ describe('RFC-058 baseline T6 — WS event payload shape', () => {
         iteration: 0,
       },
     ])
-    const { crossClarifyNodeRunId } = await createCrossClarifySession({
+    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cc1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: 'nr_q1',
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cc1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: 'nr_q1',
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQuestion()],
     })
@@ -505,7 +508,7 @@ describe('RFC-058 baseline T6 — WS event payload shape', () => {
     // carrying the dispatched questioner rerun id.
     const questionerRerunId =
       res.dispatch.reruns.find((r) => r.targetNodeId === 'questioner')?.nodeRunId ?? ''
-    await broadcastCrossClarifyAnsweredForRound(db, crossClarifyNodeRunId, {
+    await broadcastClarifyAnsweredForRound(db, 'cross', crossClarifyNodeRunId, {
       rejectedQuestionerNodeRunId: questionerRerunId,
     })
     const types = received.map((m) => m.type)
@@ -524,14 +527,15 @@ describe('RFC-058 baseline T6 — WS event payload shape', () => {
       retryIndex: 0,
       iteration: 0,
     })
-    const { clarifyNodeRunId } = await createClarifySession({
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+      kind: 'self',
       db,
       taskId,
-      sourceAgentNodeId: 'designer',
-      sourceAgentNodeRunId: 'nr_src',
-      sourceShardKey: null,
-      clarifyNodeId: 'clarify1',
-      iterationIndex: 0,
+      askingNodeId: 'designer',
+      askingNodeRunId: 'nr_src',
+      askingShardKey: null,
+      intermediaryNodeId: 'clarify1',
+      iteration: 0,
       questions: [makeQuestion()],
     })
     const received: TaskWsMessage[] = []
@@ -545,11 +549,9 @@ describe('RFC-058 baseline T6 — WS event payload shape', () => {
       actor,
     })
     // Mirror the route (RFC-132): re-emit clarify.answered with the dispatched rerun id.
-    await broadcastSelfClarifyAnsweredForRound(
-      db,
-      clarifyNodeRunId,
-      res.dispatch.reruns[0]?.nodeRunId ?? '',
-    )
+    await broadcastClarifyAnsweredForRound(db, 'self', clarifyNodeRunId, {
+      rerunNodeRunId: res.dispatch.reruns[0]?.nodeRunId ?? '',
+    })
     const types = received.map((m) => m.type)
     expect(types).toContain('clarify.answered')
   })

@@ -91,6 +91,7 @@ function mkSummary(overrides: LegacyOverrides = {}): ClarifyRoundSummary {
     iteration: iterationIndex ?? 0,
     questionCount: 2,
     status: 'awaiting_human',
+    terminatedAs: null,
     directive: null,
     createdAt: 1_700_000_000_000,
     answeredAt: null,

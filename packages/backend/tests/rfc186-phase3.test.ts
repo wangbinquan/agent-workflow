@@ -9,7 +9,8 @@ import { resolve } from 'node:path'
 // RFC-217 T3 — the engine split runner.ts into engine loop + strategies +
 // messages IO; these string locks span the relocated modules, so read them all.
 const SRC = [
-  ['runner.ts'],
+  ['engine.ts'],
+  ['turnExecution.ts'],
   ['strategies', 'leaderWorker.ts'],
   ['strategies', 'freeCollab.ts'],
   ['memberTurns.ts'],

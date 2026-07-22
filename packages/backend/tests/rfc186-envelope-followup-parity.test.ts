@@ -107,8 +107,11 @@ describe('RFC-186 — source locks (workgroup engine, RFC-217 T3 split layout)',
   // memberTurns; the banned branches must stay out of ALL of them.
   const wg = (...seg: string[]): string =>
     readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', ...seg), 'utf8')
-  const src = wg('engine.ts')
-    .concat(wg('memberTurns.ts'), wg('strategies', 'leaderWorker.ts'), wg('strategies', 'freeCollab.ts'))
+  const src = wg('engine.ts').concat(
+    wg('memberTurns.ts'),
+    wg('strategies', 'leaderWorker.ts'),
+    wg('strategies', 'freeCollab.ts'),
+  )
 
   // Match the LIVE branch form (`&& attempt`), not the explanatory comments that
   // document what was removed.

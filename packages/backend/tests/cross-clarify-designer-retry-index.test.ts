@@ -33,7 +33,7 @@ import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
-import { createCrossClarifySession } from '../src/services/crossClarify'
+import { createClarifyRound } from '../src/services/clarify/service'
 import { listTaskQuestions, reassignTaskQuestion } from '../src/services/taskQuestions'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
@@ -212,24 +212,25 @@ describe('RFC-056 patch 2026-05-23 — designer rerun retry_index bump', () => {
     })
     const qRun = await seedRun(db, taskId, 'questioner', { retryIndex: 2 })
 
-    const sess = await createCrossClarifySession({
+    const sess = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cross1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: qRun,
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: qRun,
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQ('q1')],
     })
 
     await autoDispatchClarifyRound({
       db,
-      originNodeRunId: sess.crossClarifyNodeRunId,
+      originNodeRunId: sess.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       actor,
     })
-    const disp = await reassignThenDispatchDesigner(db, taskId, sess.crossClarifyNodeRunId)
+    const disp = await reassignThenDispatchDesigner(db, taskId, sess.intermediaryNodeRunId)
     expect(disp.reruns.some((r) => r.targetNodeId === 'designer')).toBe(true)
 
     const designerRows = await db
@@ -256,23 +257,24 @@ describe('RFC-056 patch 2026-05-23 — designer rerun retry_index bump', () => {
     await seedRun(db, taskId, 'designer', { retryIndex: 0, preSnapshot: 'snap-d' })
     const qRun = await seedRun(db, taskId, 'questioner', { retryIndex: 0 })
 
-    const sess = await createCrossClarifySession({
+    const sess = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cross1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: qRun,
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: qRun,
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQ('q1')],
     })
     await autoDispatchClarifyRound({
       db,
-      originNodeRunId: sess.crossClarifyNodeRunId,
+      originNodeRunId: sess.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       actor,
     })
-    await reassignThenDispatchDesigner(db, taskId, sess.crossClarifyNodeRunId)
+    await reassignThenDispatchDesigner(db, taskId, sess.intermediaryNodeRunId)
 
     const designerRows = await db
       .select()
@@ -305,23 +307,24 @@ describe('RFC-056 patch 2026-05-23 — designer rerun retry_index bump', () => {
       startedAt: 400,
     })
 
-    const sess = await createCrossClarifySession({
+    const sess = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cross1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: qRun,
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: qRun,
+      targetConsumerNodeId: 'designer',
       loopIter: 1,
       questions: [makeQ('q1')],
     })
     await autoDispatchClarifyRound({
       db,
-      originNodeRunId: sess.crossClarifyNodeRunId,
+      originNodeRunId: sess.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       actor,
     })
-    await reassignThenDispatchDesigner(db, taskId, sess.crossClarifyNodeRunId)
+    await reassignThenDispatchDesigner(db, taskId, sess.intermediaryNodeRunId)
 
     const designerRows = await db
       .select()

@@ -53,6 +53,7 @@ function clarify(overrides: Partial<ClarifyRoundSummary> = {}): ClarifyRoundSumm
     iteration: 2,
     questionCount: 1,
     status: 'awaiting_human',
+    terminatedAs: null,
     directive: null,
     createdAt: 1_700_000_100_000,
     answeredAt: null,

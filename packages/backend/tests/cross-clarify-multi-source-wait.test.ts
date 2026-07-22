@@ -29,10 +29,7 @@ import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
-import {
-  createCrossClarifySession,
-  evaluateDesignerRerunReadiness,
-} from '../src/services/crossClarify'
+import { createClarifyRound, evaluateDesignerRerunReadiness } from '../src/services/clarify/service'
 import { listTaskQuestions, reassignTaskQuestion } from '../src/services/taskQuestions'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
@@ -200,42 +197,45 @@ async function buildHarness(): Promise<{
   const qSec = await seedQRun(db, taskId, 'qSec')
   const qUx = await seedQRun(db, taskId, 'qUx')
   const qPerf = await seedQRun(db, taskId, 'qPerf')
-  const sec = await createCrossClarifySession({
+  const sec = await createClarifyRound({
+    kind: 'cross',
     db,
     taskId,
-    crossClarifyNodeId: 'crossSec',
-    sourceQuestionerNodeId: 'qSec',
-    sourceQuestionerNodeRunId: qSec,
-    targetDesignerNodeId: 'designer',
+    intermediaryNodeId: 'crossSec',
+    askingNodeId: 'qSec',
+    askingNodeRunId: qSec,
+    targetConsumerNodeId: 'designer',
     loopIter: 0,
     questions: [makeQ('q1')],
   })
-  const ux = await createCrossClarifySession({
+  const ux = await createClarifyRound({
+    kind: 'cross',
     db,
     taskId,
-    crossClarifyNodeId: 'crossUx',
-    sourceQuestionerNodeId: 'qUx',
-    sourceQuestionerNodeRunId: qUx,
-    targetDesignerNodeId: 'designer',
+    intermediaryNodeId: 'crossUx',
+    askingNodeId: 'qUx',
+    askingNodeRunId: qUx,
+    targetConsumerNodeId: 'designer',
     loopIter: 0,
     questions: [makeQ('q1')],
   })
-  const perf = await createCrossClarifySession({
+  const perf = await createClarifyRound({
+    kind: 'cross',
     db,
     taskId,
-    crossClarifyNodeId: 'crossPerf',
-    sourceQuestionerNodeId: 'qPerf',
-    sourceQuestionerNodeRunId: qPerf,
-    targetDesignerNodeId: 'designer',
+    intermediaryNodeId: 'crossPerf',
+    askingNodeId: 'qPerf',
+    askingNodeRunId: qPerf,
+    targetConsumerNodeId: 'designer',
     loopIter: 0,
     questions: [makeQ('q1')],
   })
   return {
     db,
     taskId,
-    sec: sec.crossClarifyNodeRunId,
-    ux: ux.crossClarifyNodeRunId,
-    perf: perf.crossClarifyNodeRunId,
+    sec: sec.intermediaryNodeRunId,
+    ux: ux.intermediaryNodeRunId,
+    perf: perf.intermediaryNodeRunId,
   }
 }
 

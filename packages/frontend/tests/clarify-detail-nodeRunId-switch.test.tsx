@@ -79,6 +79,7 @@ function mkSession(over: Partial<ClarifyRound>): ClarifyRound {
       },
     ],
     status: 'awaiting_human',
+    terminatedAs: null,
     createdAt: 1_700_000_000_000,
     answeredAt: null,
     answeredBy: null,

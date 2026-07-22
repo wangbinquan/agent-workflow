@@ -38,6 +38,7 @@ const CLARIFY: ClarifyRoundSummary = {
   iteration: 0,
   questionCount: 2,
   status: 'awaiting_human',
+  terminatedAs: null,
   directive: null,
   createdAt: 2000,
   answeredAt: null,

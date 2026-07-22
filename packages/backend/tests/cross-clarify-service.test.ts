@@ -2,7 +2,7 @@
 // drive the unified quick channel, autoDispatchClarifyRound).
 //
 // LOCKS:
-//   1. createCrossClarifySession round-trips a row, parks cross-clarify
+//   1. createClarifyRound round-trips a row, parks cross-clarify
 //      node_run at awaiting_human, broadcasts 'cross-clarify.created'.
 //   2. evaluateDesignerRerunReadiness (the dispatch's multi-source gate
 //      reuses it):
@@ -38,10 +38,10 @@ import {
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import {
-  createCrossClarifySession,
+  createClarifyRound,
   dispatchCrossClarifyNode,
   evaluateDesignerRerunReadiness,
-} from '../src/services/crossClarify'
+} from '../src/services/clarify/service'
 import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
 import { resetBroadcastersForTests, taskBroadcaster, TASK_CHANNEL } from '../src/ws/broadcaster'
 import type {
@@ -212,7 +212,7 @@ afterAll(() => {
   resetBroadcastersForTests()
 })
 
-describe('RFC-056 createCrossClarifySession', () => {
+describe('RFC-056 createClarifyRound', () => {
   test('mints row + parks cross-clarify node_run awaiting_human + broadcasts cross-clarify.created', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const { taskId } = await seedTask(db)
@@ -221,20 +221,22 @@ describe('RFC-056 createCrossClarifySession', () => {
     const received: TaskWsMessage[] = []
     taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m))
 
-    const { session, crossClarifyNodeRunId } = await createCrossClarifySession({
-      db,
-      taskId,
-      crossClarifyNodeId: 'cross1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: qRunId,
-      targetDesignerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQ('q1', 'Why Redis?'), makeQ('q2', 'Sharding?')],
-    })
+    const { round: session, intermediaryNodeRunId: crossClarifyNodeRunId } =
+      await createClarifyRound({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cross1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: qRunId,
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQ('q1', 'Why Redis?'), makeQ('q2', 'Sharding?')],
+      })
 
     expect(session.status).toBe('awaiting_human')
     expect(session.iteration).toBe(0)
-    expect(session.crossClarifyNodeRunId).toBe(crossClarifyNodeRunId)
+    expect(session.intermediaryNodeRunId).toBe(crossClarifyNodeRunId)
     expect(session.questions).toHaveLength(2)
 
     const row = (await db.select().from(clarifyRounds).where(eq(clarifyRounds.id, session.id)))[0]
@@ -254,29 +256,31 @@ describe('RFC-056 createCrossClarifySession', () => {
     const qRunId1 = await seedQuestionerRun(db, taskId)
     const qRunId2 = await seedQuestionerRun(db, taskId)
 
-    const r1 = await createCrossClarifySession({
+    const r1 = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cross1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: qRunId1,
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: qRunId1,
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQ('q1', 't')],
     })
-    expect(r1.session.iteration).toBe(0)
+    expect(r1.round.iteration).toBe(0)
 
-    const r2 = await createCrossClarifySession({
+    const r2 = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cross1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: qRunId2,
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: qRunId2,
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQ('q1', 't')],
     })
-    expect(r2.session.iteration).toBe(1)
+    expect(r2.round.iteration).toBe(1)
   })
 })
 
@@ -292,13 +296,14 @@ describe('RFC-056 evaluateDesignerRerunReadiness — multi-source aggregation', 
     const { taskId } = await seedTask(db, { definition: def })
     const qRunId = await seedQuestionerRun(db, taskId)
     await seedDesignerRun(db, taskId)
-    const { crossClarifyNodeRunId } = await createCrossClarifySession({
+    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cross1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: qRunId,
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: qRunId,
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQ('q1', 't')],
     })
@@ -313,13 +318,14 @@ describe('RFC-056 evaluateDesignerRerunReadiness — multi-source aggregation', 
     // Insert a SECOND awaiting session to verify the readiness scan
     // correctly handles the "fresh source after a prior consumed batch" case.
     const qRunId2 = await seedQuestionerRun(db, taskId)
-    await createCrossClarifySession({
+    await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cross1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: qRunId2,
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: qRunId2,
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQ('q1', 't2')],
     })
@@ -395,23 +401,25 @@ describe('RFC-056 evaluateDesignerRerunReadiness — multi-source aggregation', 
     const qSecRun = await seedQuestionerRun(db, taskId, { nodeId: 'qSec' })
     const qUxRun = await seedQuestionerRun(db, taskId, { nodeId: 'qUx' })
     await seedDesignerRun(db, taskId)
-    await createCrossClarifySession({
+    await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'crossSec',
-      sourceQuestionerNodeId: 'qSec',
-      sourceQuestionerNodeRunId: qSecRun,
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'crossSec',
+      askingNodeId: 'qSec',
+      askingNodeRunId: qSecRun,
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQ('q1', 'sec')],
     })
-    const ux = await createCrossClarifySession({
+    const ux = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'crossUx',
-      sourceQuestionerNodeId: 'qUx',
-      sourceQuestionerNodeRunId: qUxRun,
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'crossUx',
+      askingNodeId: 'qUx',
+      askingNodeRunId: qUxRun,
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQ('q1', 'ux')],
     })
@@ -420,7 +428,7 @@ describe('RFC-056 evaluateDesignerRerunReadiness — multi-source aggregation', 
     // (no designer rerun) and the readiness scan lists crossSec pending.
     const ret = await autoDispatchClarifyRound({
       db,
-      originNodeRunId: ux.crossClarifyNodeRunId,
+      originNodeRunId: ux.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       actor: { userId: 'u1', role: 'owner' },
     })
@@ -476,23 +484,25 @@ describe('RFC-056 evaluateDesignerRerunReadiness — multi-source aggregation', 
     const qSecRun = await seedQuestionerRun(db, taskId, { nodeId: 'qSec' })
     const qUxRun = await seedQuestionerRun(db, taskId, { nodeId: 'qUx' })
     await seedDesignerRun(db, taskId)
-    const sec = await createCrossClarifySession({
+    const sec = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'crossSec',
-      sourceQuestionerNodeId: 'qSec',
-      sourceQuestionerNodeRunId: qSecRun,
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'crossSec',
+      askingNodeId: 'qSec',
+      askingNodeRunId: qSecRun,
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQ('q1', 'sec')],
     })
-    const ux = await createCrossClarifySession({
+    const ux = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'crossUx',
-      sourceQuestionerNodeId: 'qUx',
-      sourceQuestionerNodeRunId: qUxRun,
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'crossUx',
+      askingNodeId: 'qUx',
+      askingNodeRunId: qUxRun,
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQ('q1', 'ux')],
     })
@@ -501,7 +511,7 @@ describe('RFC-056 evaluateDesignerRerunReadiness — multi-source aggregation', 
     // designer entries at all).
     await autoDispatchClarifyRound({
       db,
-      originNodeRunId: sec.crossClarifyNodeRunId,
+      originNodeRunId: sec.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       directive: 'stop',
       actor: { userId: 'u1', role: 'owner' },
@@ -512,11 +522,11 @@ describe('RFC-056 evaluateDesignerRerunReadiness — multi-source aggregation', 
     // ONLY ux's designer entry (the legacy sources=[ux only] / sourceCount=1).
     await autoDispatchClarifyRound({
       db,
-      originNodeRunId: ux.crossClarifyNodeRunId,
+      originNodeRunId: ux.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       actor: { userId: 'u1', role: 'owner' },
     })
-    const disp = await reassignThenDispatchDesigner(db, taskId, ux.crossClarifyNodeRunId)
+    const disp = await reassignThenDispatchDesigner(db, taskId, ux.intermediaryNodeRunId)
     const designerRerun = disp.reruns.find((r) => r.targetNodeId === 'designer')
     expect(designerRerun).toBeDefined()
     expect(designerRerun!.entryIds).toHaveLength(1)
@@ -579,13 +589,14 @@ describe('RFC-125 follow-up — failed→resume must NOT drop answered cross-cla
     const { taskId } = await seedTask(db, { definition: def })
     const qRunId = await seedQuestionerRun(db, taskId)
     await seedDesignerRun(db, taskId)
-    const { crossClarifyNodeRunId } = await createCrossClarifySession({
+    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cross1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: qRunId,
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: qRunId,
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQ('q1', 'Why Redis?')],
     })
@@ -634,13 +645,14 @@ describe('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const { taskId } = await seedTask(db, { deferred: true })
     const qRunId = await seedQuestionerRun(db, taskId)
-    const { crossClarifyNodeRunId } = await createCrossClarifySession({
+    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cross1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: qRunId,
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: qRunId,
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQ('q1', 't'), makeQ('q2', 't')],
     })
@@ -686,13 +698,14 @@ describe('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const { taskId } = await seedTask(db, { deferred: true })
     const qRunId = await seedQuestionerRun(db, taskId)
-    const { crossClarifyNodeRunId } = await createCrossClarifySession({
+    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cross1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: qRunId,
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: qRunId,
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQ('q1', 't')],
     })
@@ -734,13 +747,14 @@ describe('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const { taskId } = await seedTask(db, { deferred: true })
     const qRunId = await seedQuestionerRun(db, taskId)
-    const { crossClarifyNodeRunId } = await createCrossClarifySession({
+    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cross1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: qRunId,
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: qRunId,
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQ('q1', 't')],
     })

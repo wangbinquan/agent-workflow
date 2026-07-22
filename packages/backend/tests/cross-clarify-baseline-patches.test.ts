@@ -22,7 +22,7 @@ import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
-import { createCrossClarifySession } from '../src/services/crossClarify'
+import { createClarifyRound } from '../src/services/clarify/service'
 import { listTaskQuestions, reassignTaskQuestion } from '../src/services/taskQuestions'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
@@ -163,13 +163,14 @@ describe('RFC-058 baseline T4 — patch-2026-05-23 designer retry index', () => 
       retryIndex: 0,
       iteration: 0,
     })
-    const { crossClarifyNodeRunId } = await createCrossClarifySession({
+    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cc1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: 'nr_q1',
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cc1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: 'nr_q1',
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQuestion()],
     })
@@ -207,17 +208,18 @@ describe('RFC-058 baseline T4 — patch-2026-05-24 cci inheritance', () => {
       iteration: 0,
       startedAt: Date.now() - 100,
     })
-    // createCrossClarifySession iteration counter is per (cc node, loopIter)
+    // createClarifyRound iteration counter is per (cc node, loopIter)
     // — cci on the cross-clarify node_run is the session iteration. So this
     // test pivots to: session iteration is per (cc, loopIter), not inheriting
     // from the questioner's cci.
-    const { session } = await createCrossClarifySession({
+    const { round: session } = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cc1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: 'nr_q3',
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cc1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: 'nr_q3',
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQuestion()],
     })
@@ -225,7 +227,7 @@ describe('RFC-058 baseline T4 — patch-2026-05-24 cci inheritance', () => {
     // RFC-074 PR-C: the cross-clarify node_run no longer carries a cci counter;
     // assert the row exists and is parked for human input.
     const nr = (
-      await db.select().from(nodeRuns).where(eq(nodeRuns.id, session.crossClarifyNodeRunId))
+      await db.select().from(nodeRuns).where(eq(nodeRuns.id, session.intermediaryNodeRunId))
     )[0]
     expect(nr?.status).toBe('awaiting_human')
   })
@@ -283,13 +285,14 @@ describe('RFC-058 baseline T4 — patch-2026-05-22 cascade BFS smoke', () => {
         iteration: 0,
       },
     ])
-    const { crossClarifyNodeRunId } = await createCrossClarifySession({
+    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cc1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: 'nr_q1',
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cc1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: 'nr_q1',
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQuestion()],
     })
@@ -329,13 +332,14 @@ describe('RFC-058 baseline T4 — patch-2026-05-25 questioner cascade visibility
         iteration: 0,
       },
     ])
-    const { crossClarifyNodeRunId } = await createCrossClarifySession({
+    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cc1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: 'nr_q1',
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cc1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: 'nr_q1',
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQuestion()],
     })
@@ -383,13 +387,14 @@ describe('RFC-058 baseline T4 — patch-2026-05-25 questioner cascade visibility
         iteration: 0,
       },
     ])
-    const { crossClarifyNodeRunId } = await createCrossClarifySession({
+    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cc1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: 'nr_q1',
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cc1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: 'nr_q1',
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQuestion()],
     })

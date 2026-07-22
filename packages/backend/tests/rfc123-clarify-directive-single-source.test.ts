@@ -20,6 +20,11 @@
 //
 // 若任一变红 = 双向单一事实源契约漂移，先查再放。
 
+import {
+  createClarifyRound,
+  dispatchCrossClarifyNode,
+  resolveCrossNodeStopped,
+} from '../src/services/clarify/service'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -32,13 +37,7 @@ import type {
 } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, taskNodeClarifyDirectives, tasks, workflows } from '../src/db/schema'
-import { createClarifySession } from '../src/services/clarify'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
-import {
-  createCrossClarifySession,
-  dispatchCrossClarifyNode,
-  resolveCrossNodeStopped,
-} from '../src/services/crossClarify'
 import {
   getNodeClarifyDirective,
   listNodeClarifyDirectives,
@@ -161,14 +160,15 @@ async function seedSelfStopAnswered(
     retryIndex: 0,
     iteration: 0,
   })
-  const { clarifyNodeRunId } = await createClarifySession({
+  const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+    kind: 'self',
     db,
     taskId,
-    sourceAgentNodeId: 'designer',
-    sourceAgentNodeRunId: srcId,
-    sourceShardKey: null,
-    clarifyNodeId: 'clarify1',
-    iterationIndex: opts.iterationIndex ?? 0,
+    askingNodeId: 'designer',
+    askingNodeRunId: srcId,
+    askingShardKey: null,
+    intermediaryNodeId: 'clarify1',
+    iteration: opts.iterationIndex ?? 0,
     questions: [makeQ()],
   })
   await autoDispatchClarifyRound({
@@ -204,13 +204,14 @@ async function seedCrossStopAnswered(
     retryIndex: 0,
     iteration: 0,
   })
-  const { crossClarifyNodeRunId } = await createCrossClarifySession({
+  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+    kind: 'cross',
     db,
     taskId,
-    crossClarifyNodeId: 'cross1',
-    sourceQuestionerNodeId: 'qA',
-    sourceQuestionerNodeRunId: 'nr_qA',
-    targetDesignerNodeId: 'designer',
+    intermediaryNodeId: 'cross1',
+    askingNodeId: 'qA',
+    askingNodeRunId: 'nr_qA',
+    targetConsumerNodeId: 'designer',
     loopIter: 0,
     questions: [makeQ()],
   })
@@ -365,8 +366,9 @@ describe('RFC-123 D: 源码 wiring 守卫', () => {
     resolve(import.meta.dir, '..', 'src', 'services', 'clarifySeal.ts'),
     'utf8',
   )
+  // RFC-217 T9: crossClarify.ts merged into the unified clarify service.
   const crossSrc = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'crossClarify.ts'),
+    resolve(import.meta.dir, '..', 'src', 'services', 'clarify', 'service.ts'),
     'utf8',
   )
 

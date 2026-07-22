@@ -40,7 +40,7 @@ import {
   decideResumeSessionId,
   detectSessionNotFoundFromStderr,
   type ClarifyInlineFallbackReason,
-} from '../src/services/clarifyFallback'
+} from '../src/services/sessionModeFallback'
 
 function ccNode(overrides: Partial<ClarifyCrossAgentNode> = {}): ClarifyCrossAgentNode {
   return {

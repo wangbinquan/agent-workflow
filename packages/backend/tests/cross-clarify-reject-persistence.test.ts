@@ -32,10 +32,10 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import {
-  createCrossClarifySession,
+  createClarifyRound,
   dispatchCrossClarifyNode,
   resolveCrossNodeStopped,
-} from '../src/services/crossClarify'
+} from '../src/services/clarify/service'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -164,19 +164,20 @@ describe('RFC-056 C4 — reject persistence cross-cascade', () => {
     const taskId = await seedTask(db)
     await seedDesignerRun(db, taskId)
     const qA = await seedQRun(db, taskId, 'qA')
-    const sess = await createCrossClarifySession({
+    const sess = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cross1',
-      sourceQuestionerNodeId: 'qA',
-      sourceQuestionerNodeRunId: qA,
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'qA',
+      askingNodeRunId: qA,
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQ('q1')],
     })
     await autoDispatchClarifyRound({
       db,
-      originNodeRunId: sess.crossClarifyNodeRunId,
+      originNodeRunId: sess.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       directive: 'stop',
       actor,
@@ -192,37 +193,39 @@ describe('RFC-056 C4 — reject persistence cross-cascade', () => {
     const qA = await seedQRun(db, taskId, 'qA')
     const qB = await seedQRun(db, taskId, 'qB')
     // Reject on cross1.
-    const a = await createCrossClarifySession({
+    const a = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cross1',
-      sourceQuestionerNodeId: 'qA',
-      sourceQuestionerNodeRunId: qA,
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'qA',
+      askingNodeRunId: qA,
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQ('q1')],
     })
     await autoDispatchClarifyRound({
       db,
-      originNodeRunId: a.crossClarifyNodeRunId,
+      originNodeRunId: a.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       directive: 'stop',
       actor,
     })
     // Sibling cross2 submits continue — unrelated.
-    const b = await createCrossClarifySession({
+    const b = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cross2',
-      sourceQuestionerNodeId: 'qB',
-      sourceQuestionerNodeRunId: qB,
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cross2',
+      askingNodeId: 'qB',
+      askingNodeRunId: qB,
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQ('q1')],
     })
     await autoDispatchClarifyRound({
       db,
-      originNodeRunId: b.crossClarifyNodeRunId,
+      originNodeRunId: b.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       actor,
     })
@@ -234,19 +237,20 @@ describe('RFC-056 C4 — reject persistence cross-cascade', () => {
     const taskId = await seedTask(db)
     await seedDesignerRun(db, taskId)
     const qA = await seedQRun(db, taskId, 'qA')
-    const a = await createCrossClarifySession({
+    const a = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cross1',
-      sourceQuestionerNodeId: 'qA',
-      sourceQuestionerNodeRunId: qA,
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'qA',
+      askingNodeRunId: qA,
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQ('q1')],
     })
     await autoDispatchClarifyRound({
       db,
-      originNodeRunId: a.crossClarifyNodeRunId,
+      originNodeRunId: a.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       directive: 'stop',
       actor,
@@ -284,19 +288,20 @@ describe('RFC-056 C4 — reject persistence cross-cascade', () => {
     const taskId = await seedTask(db)
     await seedDesignerRun(db, taskId)
     const qA = await seedQRun(db, taskId, 'qA')
-    const a = await createCrossClarifySession({
+    const a = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cross1',
-      sourceQuestionerNodeId: 'qA',
-      sourceQuestionerNodeRunId: qA,
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'qA',
+      askingNodeRunId: qA,
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQ('q1')],
     })
     await autoDispatchClarifyRound({
       db,
-      originNodeRunId: a.crossClarifyNodeRunId,
+      originNodeRunId: a.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       directive: 'stop',
       actor,
@@ -310,19 +315,20 @@ describe('RFC-056 C4 — reject persistence cross-cascade', () => {
     const taskId = await seedTask(db)
     await seedDesignerRun(db, taskId)
     const qA = await seedQRun(db, taskId, 'qA')
-    const a = await createCrossClarifySession({
+    const a = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cross1',
-      sourceQuestionerNodeId: 'qA',
-      sourceQuestionerNodeRunId: qA,
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'qA',
+      askingNodeRunId: qA,
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQ('q1')],
     })
     await autoDispatchClarifyRound({
       db,
-      originNodeRunId: a.crossClarifyNodeRunId,
+      originNodeRunId: a.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       directive: 'stop',
       actor,

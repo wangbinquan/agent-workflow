@@ -1,9 +1,9 @@
 // RFC-023 PR-B T9 — lock the clarify service contract.
 //
 // Covers, in order:
-//   1. createClarifySession round-trips a session row, marks the clarify
+//   1. createClarifyRound round-trips a session row, marks the clarify
 //      node_run awaiting_human, and broadcasts clarify.created.
-//   2. createClarifySession passes through sourceShardKey + parentNodeRunId
+//   2. createClarifyRound passes through sourceShardKey + parentNodeRunId
 //      for agent-multi shard children.
 //   3. sealAnswersServerSide seals selectedOptionLabels server-side from
 //      question.options (defends against client-supplied label forgery) and
@@ -24,7 +24,7 @@ import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { createClarifySession, sealAnswersServerSide } from '../src/services/clarify'
+import { createClarifyRound, sealAnswersServerSide } from '../src/services/clarify/service'
 import { resetBroadcastersForTests, taskBroadcaster, TASK_CHANNEL } from '../src/ws/broadcaster'
 import type {
   ClarifyAnswer,
@@ -121,7 +121,7 @@ afterAll(() => {
   resetBroadcastersForTests()
 })
 
-describe('createClarifySession', () => {
+describe('createClarifyRound', () => {
   test('inserts row, parks clarify node_run awaiting_human, broadcasts clarify.created', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const { taskId } = await seedTask(db)
@@ -140,19 +140,20 @@ describe('createClarifySession', () => {
     const received: TaskWsMessage[] = []
     taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m))
 
-    const { session, clarifyNodeRunId } = await createClarifySession({
+    const { round: session, intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+      kind: 'self',
       db,
       taskId,
-      sourceAgentNodeId: 'designer',
-      sourceAgentNodeRunId: sourceRunId,
-      sourceShardKey: null,
-      clarifyNodeId: 'clarify1',
-      iterationIndex: 0,
+      askingNodeId: 'designer',
+      askingNodeRunId: sourceRunId,
+      askingShardKey: null,
+      intermediaryNodeId: 'clarify1',
+      iteration: 0,
       questions: [makeQuestion()],
     })
 
     expect(session.status).toBe('awaiting_human')
-    expect(session.clarifyNodeRunId).toBe(clarifyNodeRunId)
+    expect(session.intermediaryNodeRunId).toBe(clarifyNodeRunId)
     expect(session.questions).toHaveLength(1)
 
     const sessionRows = await db
@@ -184,14 +185,15 @@ describe('createClarifySession', () => {
       parentNodeRunId: 'parent-multi-run',
     })
 
-    const { clarifyNodeRunId } = await createClarifySession({
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+      kind: 'self',
       db,
       taskId,
-      sourceAgentNodeId: 'designer',
-      sourceAgentNodeRunId: sourceRunId,
-      sourceShardKey: 'shard-A',
-      clarifyNodeId: 'clarify1',
-      iterationIndex: 1,
+      askingNodeId: 'designer',
+      askingNodeRunId: sourceRunId,
+      askingShardKey: 'shard-A',
+      intermediaryNodeId: 'clarify1',
+      iteration: 1,
       questions: [makeQuestion()],
       parentNodeRunId: 'parent-multi-run',
     })

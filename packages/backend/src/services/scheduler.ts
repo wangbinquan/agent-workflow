@@ -82,8 +82,12 @@ import { getAgent } from '@/services/agent'
 import { resolveDependsClosure } from '@/services/agentDeps'
 import { collectMcpNamesFromClosure, loadMcpsByNames } from '@/services/mcpClosure'
 import { collectPluginNamesFromClosure, loadPluginsByNames } from '@/services/pluginClosure'
-import { createClarifySession, findClarifyNode } from '@/services/clarify'
-import { createCrossClarifySession, resolveCrossNodeStopped } from '@/services/crossClarify'
+import {
+  createClarifyRound,
+  dispatchCrossClarifyNode,
+  findClarifyNode,
+  resolveCrossNodeStopped,
+} from '@/services/clarify/service'
 import {
   computeRemaining,
   resolveEffectiveClarifyChannel,
@@ -95,7 +99,7 @@ import {
   decideResumeSessionId,
   detectSessionNotFoundFromStderr,
   type ClarifyInlineFallbackReason,
-} from '@/services/clarifyFallback'
+} from '@/services/sessionModeFallback'
 import { evaluateExitCondition, parseExitCondition } from '@/services/exitCondition'
 import { loadUndispatchedParkTargets } from '@/services/taskQuestions'
 import { resolveBorrowForNode } from '@/services/taskQuestionDispatch'
@@ -996,14 +1000,15 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
               })
             ).length
           : 0
-        await createClarifySession({
+        await createClarifyRound({
+          kind: 'self',
           db,
           taskId,
-          sourceAgentNodeId: req.nodeId,
-          sourceAgentNodeRunId: req.nodeRunId,
-          sourceShardKey: currentRunRow?.shardKey ?? null,
-          clarifyNodeId,
-          iterationIndex: askingGeneration,
+          askingNodeId: req.nodeId,
+          askingNodeRunId: req.nodeRunId,
+          askingShardKey: currentRunRow?.shardKey ?? null,
+          intermediaryNodeId: clarifyNodeId,
+          iteration: askingGeneration,
           questions: result.clarify.questions,
           ...(result.clarify.truncationWarnings.length > 0
             ? { truncationWarnings: result.clarify.truncationWarnings }
@@ -1516,7 +1521,7 @@ function detailFor(
  *
  *   - `clarifyNodeIds` (N6): clarify / cross-clarify NODE ids with an open
  *     session. Positive evidence that prevents settling a clarify leaf without a
- *     row during the "agent emitted <workflow-clarify>, createClarifySession
+ *     row during the "agent emitted <workflow-clarify>, createClarifyRound(kind='self')
  *     mid-write" window (the session row can land before the clarify node_run).
  *
  *   - `askingRunIds`: the node_run ids of the ASKING agent / questioner runs
@@ -1855,7 +1860,7 @@ function isLiveStatus(status: string): boolean {
  * @param openClarifyNodeIds       clarify / clarify-cross-agent node ids with an
  *   UNANSWERED session (N6 positive evidence — caller queries clarify_sessions /
  *   cross_clarify_sessions). A no-row clarify leaf only settles when NOT here,
- *   closing the "agent done, createClarifySession not yet written" window.
+ *   closing the "agent done, createClarifyRound(kind='self') not yet written" window.
  * @param dispatchedThisInvocation nodes already dispatched this runScope call
  *   (N3 — recovers the old remaining.delete per-invocation dedup; pure status
  *   read can't tell "already-dispatched parked wrapper" from "fresh resume").
@@ -2676,7 +2681,7 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
     // by the runner when the asking agent emits <workflow-clarify>. If the
     // scheduler reaches a clarify node directly (as part of its dataflow
     // graph), it is a no-op pass: ready signals from upstream agents are
-    // routed through createClarifySession instead. Mark this graph-level
+    // routed through createClarifyRound(kind='self') instead. Mark this graph-level
     // visit done so downstream nodes (typically the answers→agent edge
     // marking the clarify node "complete" in the canvas) can proceed once a
     // session is closed.
@@ -2685,12 +2690,12 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
 
   if (node.kind === 'clarify-cross-agent') {
     // RFC-056: cross-clarify nodes are activated by the questioner emitting
-    // <workflow-clarify> — the runner forwards into createCrossClarifySession
+    // <workflow-clarify> — the runner forwards into createClarifyRound(kind='cross')
     // which mints a fresh node_run row and parks it at 'awaiting_human'. The
     // scheduler should NOT eagerly insert a pending row on every scan; doing
     // so accumulates orphan pending rows (one per scheduler tick, the user
     // saw 21 pile up on a parked task) because nothing consumes them — the
-    // runner path always inserts its OWN row via createCrossClarifySession
+    // runner path always inserts its OWN row via createClarifyRound(kind='cross')
     // rather than upgrading whatever the scheduler pre-baked.
     //
     // Two legitimate scheduler responsibilities remain:
@@ -2764,19 +2769,20 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         cause: 'cross-clarify-guard',
         iteration,
       })
-      await setNodeRunStatus({
+      // RFC-217 T9: the pending→done short-circuit transition (+ its reason
+      // string) is owned by the clarify service — single dispatch policy.
+      await dispatchCrossClarifyNode({
         db,
+        taskId,
+        crossClarifyNodeId: node.id,
         nodeRunId: stopRunId,
-        to: 'done',
-        allowedFrom: ['pending'],
-        reason: 'cross-clarify-persistent-stop',
-        extra: { finishedAt: Date.now() },
+        definition,
       })
       broadcastNodeStatus(taskId, stopRunId, node.id, 'done')
       return { kind: 'ok', summary: '', message: 'cross-clarify-persistent-stop' }
     }
     // Common path: no live row, no persistent stop, questioner valid. Don't
-    // pre-create — the runner's createCrossClarifySession will create a row
+    // pre-create — the runner's createClarifyRound(kind='cross') will create a row
     // when the questioner emits <workflow-clarify>. Return ok so the
     // dispatcher marks this node "scheduled for this pass"; the lifecycle
     // hand-off to awaiting_human happens later via the runner path.
@@ -3853,13 +3859,14 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         .where(eq(nodeRuns.taskId, taskId))
         .limit(1)
       void persistentRow
-      await createCrossClarifySession({
+      await createClarifyRound({
+        kind: 'cross',
         db,
         taskId,
-        crossClarifyNodeId,
-        sourceQuestionerNodeId: node.id,
-        sourceQuestionerNodeRunId: nodeRunId,
-        targetDesignerNodeId: designerNodeId ?? null,
+        intermediaryNodeId: crossClarifyNodeId,
+        askingNodeId: node.id,
+        askingNodeRunId: nodeRunId,
+        targetConsumerNodeId: designerNodeId ?? null,
         loopIter: currentRunRowXc?.iteration ?? 0,
         questions: lastResult.clarify.questions,
         ...(lastResult.clarify.truncationWarnings.length > 0
@@ -3899,14 +3906,15 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
           })
         ).length
       : 0
-    await createClarifySession({
+    await createClarifyRound({
+      kind: 'self',
       db,
       taskId,
-      sourceAgentNodeId: node.id,
-      sourceAgentNodeRunId: nodeRunId,
-      sourceShardKey: currentRunRow?.shardKey ?? null,
-      clarifyNodeId,
-      iterationIndex: askingGeneration,
+      askingNodeId: node.id,
+      askingNodeRunId: nodeRunId,
+      askingShardKey: currentRunRow?.shardKey ?? null,
+      intermediaryNodeId: clarifyNodeId,
+      iteration: askingGeneration,
       questions: lastResult.clarify.questions,
       ...(lastResult.clarify.truncationWarnings.length > 0
         ? { truncationWarnings: lastResult.clarify.truncationWarnings }

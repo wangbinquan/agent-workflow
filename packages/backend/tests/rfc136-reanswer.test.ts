@@ -11,13 +11,12 @@
 // 回归意图：任何 refactor 让「移出待下发的已答题」再次不可重答（409）、或让重答冲掉
 // answered 轮的 answeredAt / directive / 长出 stop 轮 designer 条目，这里立刻变红。
 
+import { createClarifyRound } from '../src/services/clarify/service'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { clarifyRounds, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
-import { createClarifySession } from '../src/services/clarify'
-import { createCrossClarifySession } from '../src/services/crossClarify'
 import { sealRoundQuestions } from '../src/services/clarifySeal'
 import {
   listTaskQuestions,
@@ -129,14 +128,15 @@ async function seedSelfRound(
     iteration: 0,
     preSnapshot: '',
   })
-  const { clarifyNodeRunId } = await createClarifySession({
+  const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+    kind: 'self',
     db,
     taskId,
-    sourceAgentNodeId: 'designer',
-    sourceAgentNodeRunId: sourceRunId,
-    sourceShardKey: null,
-    clarifyNodeId: 'clarify1',
-    iterationIndex: 0,
+    askingNodeId: 'designer',
+    askingNodeRunId: sourceRunId,
+    askingShardKey: null,
+    intermediaryNodeId: 'clarify1',
+    iteration: 0,
     questions,
   })
   return { taskId, originNodeRunId: clarifyNodeRunId }
@@ -159,13 +159,14 @@ async function seedCrossRound(
       preSnapshot: 'stub',
     },
   ])
-  const { crossClarifyNodeRunId } = await createCrossClarifySession({
+  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+    kind: 'cross',
     db,
     taskId,
-    crossClarifyNodeId: 'cross1',
-    sourceQuestionerNodeId: 'questioner',
-    sourceQuestionerNodeRunId: questionerRunId,
-    targetDesignerNodeId: 'designer',
+    intermediaryNodeId: 'cross1',
+    askingNodeId: 'questioner',
+    askingNodeRunId: questionerRunId,
+    targetConsumerNodeId: 'designer',
     loopIter: 0,
     questions,
   })

@@ -25,8 +25,7 @@ import { actorOf, type Actor } from '@/auth/actor'
 import { resolveOpencodeCmd } from '@/util/opencode'
 import { clarifyRounds, nodeRuns, tasks as tasksTable } from '@/db/schema'
 import type { AppDeps } from '@/server'
-import { broadcastSelfClarifyAnsweredForRound } from '@/services/clarify'
-import { broadcastCrossClarifyAnsweredForRound } from '@/services/crossClarify'
+import { broadcastClarifyAnsweredForRound } from '@/services/clarify/service'
 import { sealRoundQuestions } from '@/services/clarifySeal'
 import { autoDispatchClarifyRound } from '@/services/clarifyAutoDispatch'
 import {
@@ -347,13 +346,17 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
             .limit(1)
         )[0]
         try {
-          if (kindRow?.kind === 'cross') {
-            await broadcastCrossClarifyAnsweredForRound(deps.db, nodeRunId, {
-              ...(parsed.data.directive === 'stop' ? { rejectedQuestionerNodeRunId: rerunId } : {}),
-            })
-          } else {
-            await broadcastSelfClarifyAnsweredForRound(deps.db, nodeRunId, rerunId)
-          }
+          // RFC-217 T9: single kind-routed re-emit (was the self/cross pair).
+          await broadcastClarifyAnsweredForRound(
+            deps.db,
+            kindRow?.kind === 'cross' ? 'cross' : 'self',
+            nodeRunId,
+            kindRow?.kind === 'cross'
+              ? parsed.data.directive === 'stop'
+                ? { rejectedQuestionerNodeRunId: rerunId }
+                : {}
+              : { rerunNodeRunId: rerunId },
+          )
         } catch (err) {
           log.warn('clarify autodispatch answered-broadcast threw', {
             taskId: nrRow?.taskId,

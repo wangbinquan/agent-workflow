@@ -42,7 +42,7 @@ import {
   causeClassForEntry,
   isDispatchedEntryConsumed,
 } from '@/services/clarifyRerunLedger'
-import { evaluateDesignerRerunReadiness } from '@/services/crossClarify'
+import { evaluateDesignerRerunReadiness } from '@/services/clarify/service'
 import { pickFreshestRun } from '@/services/freshness'
 import { abandonSupersededMergeStates } from '@/services/lifecycle'
 import { buildMintNodeRunValues } from '@/services/nodeRunMint'
@@ -55,6 +55,7 @@ import {
 } from '@/services/taskQuestions'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
+import { TASK_QUESTION_CONFLICT } from '@/services/taskQuestionConflicts'
 import {
   isClarifyChannelEdge,
   isTurnEngineWorkgroupTask,
@@ -188,7 +189,7 @@ async function assertRequestedEntriesSealed(
   const stillUnsealed = unsealed.filter((e) => !answeredOrigins.has(e.originNodeRunId))
   if (stillUnsealed.length > 0) {
     throw new ConflictError(
-      'task-question-not-sealed',
+      TASK_QUESTION_CONFLICT.notSealed,
       `cannot dispatch ${stillUnsealed.length} question(s) (${stillUnsealed
         .map((e) => e.id)
         .join(
@@ -398,6 +399,206 @@ export async function dispatchDeferredTaskQuestions(
   })
 }
 
+/** RFC-217 T9 (§8.3 拆函数) — steps 3–4b: group the requested entries by
+ *  (effective target, rerun-cause class) and AUTO-SPLIT mixed-cause homes
+ *  (aging fairness, R3-2). Pure — no IO. Returns the batch to dispatch now,
+ *  the deferred remainder, and the per-target grouping (empty ⇒ nothing to do). */
+function selectDispatchBatch(requested: TaskQuestionRow[]): {
+  dispatchEntries: TaskQuestionRow[]
+  deferredEntries: Array<{ entryId: string; homeNodeId: string; reason: string }>
+  byTarget: Map<string, TaskQuestionRow[]>
+} {
+  // 3. Group the requested entries by (TARGET node, rerun-cause class). RFC-131 T4 去借壳: mint the
+  //    rerun on the EFFECTIVE TARGET (override ?? default) — a reassign MOVES the run to the target
+  //    node, which runs its OWN agent (no RFC-127 借壳). A non-reassigned entry (override NULL) has
+  //    effectiveTarget == default, so it still mints on the origin designer (golden-lock unchanged).
+  //    RFC-128 P5-BC: the cause class (self→clarify-answer / questioner→cross-clarify-questioner-rerun
+  //    / designer→cross-clarify-answer) discriminates which entries can share ONE rerun — a single
+  //    node_run carries ONE rerun_cause (§5.2.12 F3), so different causes on the same target are
+  //    SEPARATE reruns that must serialize, never collapse.
+  const byHomeCause = new Map<string, Map<CauseClass, TaskQuestionRow[]>>()
+  for (const e of requested) {
+    const home = effectiveTarget(e)
+    if (home === null) continue
+    const cause = causeClassForEntry(e)
+    const causes = byHomeCause.get(home) ?? new Map<CauseClass, TaskQuestionRow[]>()
+    const list = causes.get(cause) ?? []
+    list.push(e)
+    causes.set(cause, list)
+    byHomeCause.set(home, causes)
+  }
+  if (byHomeCause.size === 0) {
+    return { dispatchEntries: [], deferredEntries: [], byTarget: new Map() }
+  }
+
+  // 4a. RFC-131 T4 去借壳: NO single-borrow gate. Pre-131 a (home, cause) group minted ONE borrowed
+  //     rerun that ran ONE agent, so a group naming >1 agent was rejected (task-question-home-multi-
+  //     borrow). De-borrow keys the group on the EFFECTIVE TARGET and mints on that node running its
+  //     OWN agent — every reassigned question goes to its own target (never sharing one rerun's
+  //     borrowed agent), so the gate is obsolete. A mixed native+reassigned group on one target all
+  //     rides that target's per-node queue (buildNodeQueueExternalFeedback) into its single rerun.
+
+  // 4b. RFC-128 P5-BC route auto-split (R2-3, §5.2.13): a home with MIXED cause classes (e.g. a
+  //     sealed self question + a sealed designer question both staged onto the same node) cannot
+  //     dispatch both in one batch — they are separate reruns with mutually-exclusive causes
+  //     (§5.2.12). Because §11.1 made "批量下发 = ALL staged" (no per-card checkbox),整批 reject
+  //     would dead-loop the user (全量提交 → 全量 reject). Instead AUTO-SPLIT: dispatch ONE cause
+  //     class per home this batch, DEFER the rest (stays staged). Each home keeps ≥1 cause, so the
+  //     affected-home set is UNCHANGED (only WHICH entries on a home dispatch changes). The next
+  //     "批量下发" dispatches the deferred cause once the first batch's rerun is done+output (the
+  //     in-flight gate releases it). Manual/single-cause homes are a no-op (golden-lock).
+  //
+  //     R3-2 (Codex design gate round 3, anti-starvation FAIRNESS): the cause to dispatch is the
+  //     one whose OLDEST queued entry is oldest (aging by `staged_at ?? created_at`). A fixed
+  //     "self/questioner ALWAYS first" order would starve an older delayed designer if a NEW
+  //     same-home self/questioner keeps getting (re-)staged after each batch — the next "all
+  //     staged" would forever re-pick self/questioner. Aging guarantees the delayed cause wins
+  //     once its entries are older than the newcomers. Ties (equal age) break to self/questioner
+  //     first (§0 blocking-output) so a fresh mixed batch keeps the intended ordering.
+  const dispatchEntries: TaskQuestionRow[] = []
+  const deferredEntries: Array<{ entryId: string; homeNodeId: string; reason: string }> = []
+  const byTarget = new Map<string, TaskQuestionRow[]>()
+  for (const [home, causes] of byHomeCause) {
+    // Aging key per cause = the OLDEST queued entry's (staged_at ?? created_at). The cause with
+    // the smallest key (oldest waiting) is dispatched first; CAUSE_PRIORITY tiebreaks equal ages.
+    const causeAge = (cause: CauseClass): number =>
+      Math.min(...causes.get(cause)!.map((e) => e.stagedAt ?? e.createdAt))
+    const sortedCauses = [...causes.keys()].sort((a, b) => {
+      const ageDiff = causeAge(a) - causeAge(b)
+      return ageDiff !== 0 ? ageDiff : CAUSE_PRIORITY[a] - CAUSE_PRIORITY[b]
+    })
+    const selected = sortedCauses[0]!
+    byTarget.set(home, causes.get(selected)!)
+    for (const cause of sortedCauses) {
+      if (cause === selected) {
+        dispatchEntries.push(...causes.get(cause)!)
+      } else {
+        for (const e of causes.get(cause)!) {
+          deferredEntries.push({
+            entryId: e.id,
+            homeNodeId: home,
+            reason: `node '${home}' is dispatching a different question type first (${selected}); dispatch this one after that rerun finishes (done with output).`,
+          })
+        }
+      }
+    }
+  }
+
+  return { dispatchEntries, deferredEntries, byTarget }
+}
+
+/** RFC-217 T9 (§8.3 拆函数) — steps 4–6 frontier 计划: parse the snapshot,
+ *  compute the upstream frontier, run the readiness/safety/in-flight
+ *  prechecks, resolve per-entry shards, and precompute the mint plans (all
+ *  async reads happen HERE so the commit tx body stays purely synchronous). */
+async function planDispatchFrontier(
+  db: DbClient,
+  taskId: string,
+  snapshot: string,
+  byTarget: Map<string, TaskQuestionRow[]>,
+  dispatchEntries: TaskQuestionRow[],
+): Promise<{
+  affected: ReadonlySet<string>
+  mintPlans: Awaited<ReturnType<typeof buildFrontierMintPlan>>[]
+  mintCauseByTarget: ReadonlyMap<string, CauseClass>
+  mintShardsByTarget: Map<string, Set<string | null>>
+  shardOf: (e: TaskQuestionRow) => string | null
+}> {
+  // 4. The UPSTREAM FRONTIER of the affected set (the only nodes we mint).
+  const definition = parseDefinition(snapshot)
+  if (definition === null) {
+    throw new ConflictError(
+      TASK_QUESTION_CONFLICT.snapshotUnparseable,
+      `task ${taskId} workflow snapshot is not valid JSON; cannot compute dispatch frontier`,
+    )
+  }
+  const affected = new Set(byTarget.keys())
+  const frontier = computeUpstreamFrontier(definition, affected)
+
+  // 5. Multi-source readiness — for EVERY affected GRAPH-DESIGNER node (frontier AND
+  //    non-frontier), BEFORE stamping any dispatched_at (Codex H2 re-gate). The deferred
+  //    submit skipped the immediate multi-source readiness gate, so dispatch is the ONLY
+  //    guard: a non-frontier affected graph designer would otherwise get dispatched_at with
+  //    no check, then the scheduler cascade runs it with a sibling cross-clarify source
+  //    still awaiting_human → partial feedback. assertDesignerReady self-scopes to the
+  //    graph-designer subset of the group (default_target == node), so a pure-override
+  //    target is a no-op (it rides the per-node queue, not the graph siblings). Reject the
+  //    WHOLE dispatch if any affected graph designer isn't ready (fail fast, nothing stamped).
+  for (const nodeId of affected) {
+    await assertDesignerReady(db, taskId, nodeId, byTarget.get(nodeId) ?? [], definition)
+  }
+
+  // 5b. Safety (prior node_run to inherit) — on the FRONTIER nodes only (the ones we mint
+  //     here). A frontier mint inherits the node's freshest run, so a never-run frontier
+  //     target is rejected (safe first-run minting is the deferred F3 item). Cascade
+  //     (non-frontier) affected nodes are minted by the scheduler (first-run / demote
+  //     naturally), so they carry no prior-run precondition here.
+  for (const nodeId of frontier) {
+    await assertSafeFrontierTarget(db, taskId, nodeId)
+  }
+
+  // 5c. Codex (ship-gate) — DO NOT mint a second cross-clarify-answer rerun on a node that
+  //     already holds an OPEN (unconsumed) dispatched designer question: two reruns on the
+  //     same (node, iteration) conflict (ULID freshness picks the newer, the older's bound
+  //     question strands; a NEWER rerun also becomes the upper bound of the prior question's
+  //     lineage window, so a failed-then-revived run never re-renders its feedback). REJECT
+  //     the dispatch when ANY affected target node has an open dispatched question — open ==
+  //     NOT consumed, where "consumed" is the SAME resolveHandlerRun lineage the read-side
+  //     uses. This covers a pending/running rerun AND a FAILED one.
+  //     RFC-133 (live deadlock QMGP5): a QUEUED (trigger NULL) entry is open only while its
+  //     target owes a RUN OBLIGATION (non-done top-level run) or this batch mints an ALIEN
+  //     cause there — a never-run / all-done target releases (its next run binds the queue).
+  //     mintCauseByTarget = the cause this batch mints per FRONTIER node (non-frontier
+  //     affected nodes are not minted here → pure run-obligation check for them).
+  const mintCauseByTarget: ReadonlyMap<string, CauseClass> = new Map(
+    [...frontier].map((n) => [n, causeClassForEntry(byTarget.get(n)![0]!)]),
+  )
+  // RFC-172 (route 2, S2a): resolve each dispatched entry's fan-out shard (null for every
+  // non-workgroup path — one group per node, byte-equivalent to today). A workgroup member node
+  // (__wg_member__) fans out to one mint per assignment shard so each rerun carries the CORRECT
+  // shard_key (P1-1), instead of one node-wide rerun inheriting the globally-freshest member's shard.
+  // RFC-172b (T5): this now also feeds the in-flight gate, so it is resolved BEFORE it.
+  const entryShardById = await resolveEntryShardKeys(db, dispatchEntries)
+  const shardOf = (e: TaskQuestionRow): string | null => entryShardById.get(e.id) ?? null
+  // RFC-172b (T5): the (target → shards this batch mints) map. Keyed by byTarget (== `affected`), so
+  // every target the gate reaches is present. Non-workgroup: {home → {null}} → shard-blind
+  // (golden-lock). Workgroup member: {__wg_member__ → {the dispatched member's shard}} → a SIBLING
+  // member's in-flight rerun (a different shard) no longer blocks this dispatch.
+  const mintShardsByTarget = new Map<string, Set<string | null>>()
+  for (const [home, homeEntries] of byTarget) {
+    mintShardsByTarget.set(home, new Set(homeEntries.map(shardOf)))
+  }
+  await assertNoInFlightDispatch(db, taskId, affected, mintCauseByTarget, mintShardsByTarget)
+  // (RFC-132 ③: the 5d immediate-ledger precheck is gone with the immediate quick channel.)
+
+  // 6. Pre-compute each frontier mint's inherited values (async reads) BEFORE the tx so the
+  //    tx body is purely synchronous (atomic with the dispatched_at stamp).
+  const mintPlans = await Promise.all(
+    // RFC-131 T4 去借壳: NO borrow — the rerun is minted ON the effective target, which runs its OWN
+    // agent (pass null, never an agent_override_name). RFC-128 P5-BC: one ROLE-derived cause per
+    // target (auto-split). RFC-172: split by shard — `null` (every non-workgroup group) is passed as
+    // `undefined` to keep the shard-blind inheritance/mint byte-identical to today.
+    [...frontier].flatMap((nodeId) => {
+      const nodeEntries = dispatchEntries.filter((e) => effectiveTarget(e) === nodeId)
+      const cause = causeClassForEntry(nodeEntries[0]!)
+      const shards = [...new Set(nodeEntries.map(shardOf))]
+      return shards.map((sk) =>
+        buildFrontierMintPlan(
+          db,
+          taskId,
+          nodeId,
+          null,
+          cause,
+          definition,
+          sk === null ? undefined : sk,
+        ),
+      )
+    }),
+  )
+
+  return { affected, mintPlans, mintCauseByTarget, mintShardsByTarget, shardOf }
+}
+
 async function dispatchTaskQuestionsLocked(
   db: DbClient,
   taskId: string,
@@ -526,178 +727,49 @@ async function dispatchTaskQuestionsLocked(
     )
     if (targets.size > 1) {
       throw new ConflictError(
-        'task-question-round-multi-target',
+        TASK_QUESTION_CONFLICT.roundMultiTarget,
         `round ${roundOrigin} has open designer questions for multiple handler nodes (${[...targets].join(', ')}); a cross-clarify round is consumed as a unit in v1 — reassign its designer questions to a single handler before dispatching.`,
       )
     }
   }
 
-  // 3. Group the requested entries by (TARGET node, rerun-cause class). RFC-131 T4 去借壳: mint the
-  //    rerun on the EFFECTIVE TARGET (override ?? default) — a reassign MOVES the run to the target
-  //    node, which runs its OWN agent (no RFC-127 借壳). A non-reassigned entry (override NULL) has
-  //    effectiveTarget == default, so it still mints on the origin designer (golden-lock unchanged).
-  //    RFC-128 P5-BC: the cause class (self→clarify-answer / questioner→cross-clarify-questioner-rerun
-  //    / designer→cross-clarify-answer) discriminates which entries can share ONE rerun — a single
-  //    node_run carries ONE rerun_cause (§5.2.12 F3), so different causes on the same target are
-  //    SEPARATE reruns that must serialize, never collapse.
-  const byHomeCause = new Map<string, Map<CauseClass, TaskQuestionRow[]>>()
-  for (const e of requested) {
-    const home = effectiveTarget(e)
-    if (home === null) continue
-    const cause = causeClassForEntry(e)
-    const causes = byHomeCause.get(home) ?? new Map<CauseClass, TaskQuestionRow[]>()
-    const list = causes.get(cause) ?? []
-    list.push(e)
-    causes.set(cause, list)
-    byHomeCause.set(home, causes)
-  }
-  if (byHomeCause.size === 0) return EMPTY_RESULT
+  const { dispatchEntries, deferredEntries, byTarget } = selectDispatchBatch(requested)
+  if (byTarget.size === 0) return EMPTY_RESULT
 
-  // 4a. RFC-131 T4 去借壳: NO single-borrow gate. Pre-131 a (home, cause) group minted ONE borrowed
-  //     rerun that ran ONE agent, so a group naming >1 agent was rejected (task-question-home-multi-
-  //     borrow). De-borrow keys the group on the EFFECTIVE TARGET and mints on that node running its
-  //     OWN agent — every reassigned question goes to its own target (never sharing one rerun's
-  //     borrowed agent), so the gate is obsolete. A mixed native+reassigned group on one target all
-  //     rides that target's per-node queue (buildNodeQueueExternalFeedback) into its single rerun.
+  const { affected, mintPlans, mintCauseByTarget, mintShardsByTarget, shardOf } =
+    await planDispatchFrontier(db, taskId, taskRow.snapshot, byTarget, dispatchEntries)
 
-  // 4b. RFC-128 P5-BC route auto-split (R2-3, §5.2.13): a home with MIXED cause classes (e.g. a
-  //     sealed self question + a sealed designer question both staged onto the same node) cannot
-  //     dispatch both in one batch — they are separate reruns with mutually-exclusive causes
-  //     (§5.2.12). Because §11.1 made "批量下发 = ALL staged" (no per-card checkbox),整批 reject
-  //     would dead-loop the user (全量提交 → 全量 reject). Instead AUTO-SPLIT: dispatch ONE cause
-  //     class per home this batch, DEFER the rest (stays staged). Each home keeps ≥1 cause, so the
-  //     affected-home set is UNCHANGED (only WHICH entries on a home dispatch changes). The next
-  //     "批量下发" dispatches the deferred cause once the first batch's rerun is done+output (the
-  //     in-flight gate releases it). Manual/single-cause homes are a no-op (golden-lock).
-  //
-  //     R3-2 (Codex design gate round 3, anti-starvation FAIRNESS): the cause to dispatch is the
-  //     one whose OLDEST queued entry is oldest (aging by `staged_at ?? created_at`). A fixed
-  //     "self/questioner ALWAYS first" order would starve an older delayed designer if a NEW
-  //     same-home self/questioner keeps getting (re-)staged after each batch — the next "all
-  //     staged" would forever re-pick self/questioner. Aging guarantees the delayed cause wins
-  //     once its entries are older than the newcomers. Ties (equal age) break to self/questioner
-  //     first (§0 blocking-output) so a fresh mixed batch keeps the intended ordering.
-  const dispatchEntries: TaskQuestionRow[] = []
-  const deferredEntries: Array<{ entryId: string; homeNodeId: string; reason: string }> = []
-  const byTarget = new Map<string, TaskQuestionRow[]>()
-  for (const [home, causes] of byHomeCause) {
-    // Aging key per cause = the OLDEST queued entry's (staged_at ?? created_at). The cause with
-    // the smallest key (oldest waiting) is dispatched first; CAUSE_PRIORITY tiebreaks equal ages.
-    const causeAge = (cause: CauseClass): number =>
-      Math.min(...causes.get(cause)!.map((e) => e.stagedAt ?? e.createdAt))
-    const sortedCauses = [...causes.keys()].sort((a, b) => {
-      const ageDiff = causeAge(a) - causeAge(b)
-      return ageDiff !== 0 ? ageDiff : CAUSE_PRIORITY[a] - CAUSE_PRIORITY[b]
-    })
-    const selected = sortedCauses[0]!
-    byTarget.set(home, causes.get(selected)!)
-    for (const cause of sortedCauses) {
-      if (cause === selected) {
-        dispatchEntries.push(...causes.get(cause)!)
-      } else {
-        for (const e of causes.get(cause)!) {
-          deferredEntries.push({
-            entryId: e.id,
-            homeNodeId: home,
-            reason: `node '${home}' is dispatching a different question type first (${selected}); dispatch this one after that rerun finishes (done with output).`,
-          })
-        }
-      }
-    }
-  }
+  return commitDispatchPlan(db, taskId, actor, {
+    dispatchEntries,
+    deferredEntries,
+    affected,
+    mintPlans,
+    mintCauseByTarget,
+    mintShardsByTarget,
+    shardOf,
+  })
+}
 
-  // 4. The UPSTREAM FRONTIER of the affected set (the only nodes we mint).
-  const definition = parseDefinition(taskRow.snapshot)
-  if (definition === null) {
-    throw new ConflictError(
-      'task-question-snapshot-unparseable',
-      `task ${taskId} workflow snapshot is not valid JSON; cannot compute dispatch frontier`,
-    )
-  }
-  const affected = new Set(byTarget.keys())
-  const frontier = computeUpstreamFrontier(definition, affected)
-
-  // 5. Multi-source readiness — for EVERY affected GRAPH-DESIGNER node (frontier AND
-  //    non-frontier), BEFORE stamping any dispatched_at (Codex H2 re-gate). The deferred
-  //    submit skipped the immediate multi-source readiness gate, so dispatch is the ONLY
-  //    guard: a non-frontier affected graph designer would otherwise get dispatched_at with
-  //    no check, then the scheduler cascade runs it with a sibling cross-clarify source
-  //    still awaiting_human → partial feedback. assertDesignerReady self-scopes to the
-  //    graph-designer subset of the group (default_target == node), so a pure-override
-  //    target is a no-op (it rides the per-node queue, not the graph siblings). Reject the
-  //    WHOLE dispatch if any affected graph designer isn't ready (fail fast, nothing stamped).
-  for (const nodeId of affected) {
-    await assertDesignerReady(db, taskId, nodeId, byTarget.get(nodeId) ?? [], definition)
-  }
-
-  // 5b. Safety (prior node_run to inherit) — on the FRONTIER nodes only (the ones we mint
-  //     here). A frontier mint inherits the node's freshest run, so a never-run frontier
-  //     target is rejected (safe first-run minting is the deferred F3 item). Cascade
-  //     (non-frontier) affected nodes are minted by the scheduler (first-run / demote
-  //     naturally), so they carry no prior-run precondition here.
-  for (const nodeId of frontier) {
-    await assertSafeFrontierTarget(db, taskId, nodeId)
-  }
-
-  // 5c. Codex (ship-gate) — DO NOT mint a second cross-clarify-answer rerun on a node that
-  //     already holds an OPEN (unconsumed) dispatched designer question: two reruns on the
-  //     same (node, iteration) conflict (ULID freshness picks the newer, the older's bound
-  //     question strands; a NEWER rerun also becomes the upper bound of the prior question's
-  //     lineage window, so a failed-then-revived run never re-renders its feedback). REJECT
-  //     the dispatch when ANY affected target node has an open dispatched question — open ==
-  //     NOT consumed, where "consumed" is the SAME resolveHandlerRun lineage the read-side
-  //     uses. This covers a pending/running rerun AND a FAILED one.
-  //     RFC-133 (live deadlock QMGP5): a QUEUED (trigger NULL) entry is open only while its
-  //     target owes a RUN OBLIGATION (non-done top-level run) or this batch mints an ALIEN
-  //     cause there — a never-run / all-done target releases (its next run binds the queue).
-  //     mintCauseByTarget = the cause this batch mints per FRONTIER node (non-frontier
-  //     affected nodes are not minted here → pure run-obligation check for them).
-  const mintCauseByTarget: ReadonlyMap<string, CauseClass> = new Map(
-    [...frontier].map((n) => [n, causeClassForEntry(byTarget.get(n)![0]!)]),
-  )
-  // RFC-172 (route 2, S2a): resolve each dispatched entry's fan-out shard (null for every
-  // non-workgroup path — one group per node, byte-equivalent to today). A workgroup member node
-  // (__wg_member__) fans out to one mint per assignment shard so each rerun carries the CORRECT
-  // shard_key (P1-1), instead of one node-wide rerun inheriting the globally-freshest member's shard.
-  // RFC-172b (T5): this now also feeds the in-flight gate, so it is resolved BEFORE it.
-  const entryShardById = await resolveEntryShardKeys(db, dispatchEntries)
-  const shardOf = (e: TaskQuestionRow): string | null => entryShardById.get(e.id) ?? null
-  // RFC-172b (T5): the (target → shards this batch mints) map. Keyed by byTarget (== `affected`), so
-  // every target the gate reaches is present. Non-workgroup: {home → {null}} → shard-blind
-  // (golden-lock). Workgroup member: {__wg_member__ → {the dispatched member's shard}} → a SIBLING
-  // member's in-flight rerun (a different shard) no longer blocks this dispatch.
-  const mintShardsByTarget = new Map<string, Set<string | null>>()
-  for (const [home, homeEntries] of byTarget) {
-    mintShardsByTarget.set(home, new Set(homeEntries.map(shardOf)))
-  }
-  await assertNoInFlightDispatch(db, taskId, affected, mintCauseByTarget, mintShardsByTarget)
-  // (RFC-132 ③: the 5d immediate-ledger precheck is gone with the immediate quick channel.)
-
-  // 6. Pre-compute each frontier mint's inherited values (async reads) BEFORE the tx so the
-  //    tx body is purely synchronous (atomic with the dispatched_at stamp).
-  const mintPlans = await Promise.all(
-    // RFC-131 T4 去借壳: NO borrow — the rerun is minted ON the effective target, which runs its OWN
-    // agent (pass null, never an agent_override_name). RFC-128 P5-BC: one ROLE-derived cause per
-    // target (auto-split). RFC-172: split by shard — `null` (every non-workgroup group) is passed as
-    // `undefined` to keep the shard-blind inheritance/mint byte-identical to today.
-    [...frontier].flatMap((nodeId) => {
-      const nodeEntries = dispatchEntries.filter((e) => effectiveTarget(e) === nodeId)
-      const cause = causeClassForEntry(nodeEntries[0]!)
-      const shards = [...new Set(nodeEntries.map(shardOf))]
-      return shards.map((sk) =>
-        buildFrontierMintPlan(
-          db,
-          taskId,
-          nodeId,
-          null,
-          cause,
-          definition,
-          sk === null ? undefined : sk,
-        ),
-      )
-    }),
-  )
-
+/** RFC-217 T9 (§8.3 拆函数) — step 7 锁编排: the ONE dbTxSync (terminal recheck
+ *  → CAS stamp → snapshot re-verify → in-tx in-flight recheck → mint) + the
+ *  retryable-error mapping and post-commit broadcasts/result assembly. Runs
+ *  with question-write lock B held by the dispatchTaskQuestions entry. */
+async function commitDispatchPlan(
+  db: DbClient,
+  taskId: string,
+  actor: DispatchTaskQuestionsActor,
+  plan: {
+    dispatchEntries: TaskQuestionRow[]
+    deferredEntries: Array<{ entryId: string; homeNodeId: string; reason: string }>
+    affected: ReadonlySet<string>
+    mintPlans: Awaited<ReturnType<typeof buildFrontierMintPlan>>[]
+    mintCauseByTarget: ReadonlyMap<string, CauseClass>
+    mintShardsByTarget: ReadonlyMap<string, Set<string | null>>
+    shardOf: (e: TaskQuestionRow) => string | null
+  },
+): Promise<DispatchTaskQuestionsResult> {
+  const { dispatchEntries, deferredEntries, affected, mintPlans } = plan
+  const { mintCauseByTarget, mintShardsByTarget, shardOf } = plan
   // 7. ONE dbTxSync: CAS-stamp dispatched_at on the requested entries + insert the frontier
   //    node_runs. A concurrent dispatcher that already claimed ≥1 → ConcurrentClaim →
   //    rollback (no stamp, no mint, no orphan). The open-dispatch check is RE-RUN
@@ -922,7 +994,7 @@ async function dispatchTaskQuestionsLocked(
     if (e instanceof ConcurrentClaim) return EMPTY_RESULT
     if (e instanceof NodeDispatchInFlight) {
       throw new ConflictError(
-        'task-question-node-dispatch-in-flight',
+        TASK_QUESTION_CONFLICT.nodeDispatchInFlight,
         `cannot dispatch to '${e.blocker.nodeId}': it has an unfinished rerun obligation${
           e.blocker.runStatus !== undefined
             ? ` (run ${e.blocker.runId}: ${e.blocker.runStatus})`
@@ -933,7 +1005,7 @@ async function dispatchTaskQuestionsLocked(
     }
     if (e instanceof TargetChanged) {
       throw new ConflictError(
-        'task-question-target-changed',
+        TASK_QUESTION_CONFLICT.targetChanged,
         `task question ${e.entryId} was reassigned to a different handler while this dispatch was being planned. Re-run the dispatch to plan against the new target.`,
       )
     }
@@ -1187,7 +1259,7 @@ async function assertNoInFlightDispatch(
   )
   if (blocker !== null) {
     throw new ConflictError(
-      'task-question-node-dispatch-in-flight',
+      TASK_QUESTION_CONFLICT.nodeDispatchInFlight,
       `cannot dispatch to '${blocker.nodeId}': it has an unfinished rerun obligation${
         blocker.runStatus !== undefined ? ` (run ${blocker.runId}: ${blocker.runStatus})` : ''
       } or an open dispatched question of a different kind. Dispatch the remaining questions after that node's run finishes.`,
@@ -1337,7 +1409,7 @@ export async function resolveBorrowForNode(
     const coalesced = [...a.anchorRunIds].some((id) => b.anchorRunIds.has(id))
     if (!coalesced) {
       throw new ConflictError(
-        'task-question-borrow-ledger-conflict',
+        TASK_QUESTION_CONFLICT.borrowLedgerConflict,
         `node '${nodeId}' (iter ${iteration}) has multiple open reassignment ledgers (dispatched designer ${ledgerDesc(designer)}, dispatched self/questioner ${ledgerDesc(deferredSelfQ)}); they are separate pending reruns with mutually-exclusive causes that would duplicate execution — resolve / serialize them before the node reruns.`,
       )
     }
@@ -1430,7 +1502,7 @@ async function resolveDeferredSelfQuestionerBorrowForNode(
   )
   if (borrows.size > 1) {
     throw new ConflictError(
-      'task-question-home-multi-borrow',
+      TASK_QUESTION_CONFLICT.homeMultiBorrow,
       `node '${nodeId}' (iter ${iteration}) has dispatched self/questioner questions reassigned to conflicting handlers (${[
         ...borrows,
       ]
@@ -1542,7 +1614,7 @@ async function assertSafeFrontierTarget(
   // "runnable" via taskNodeHasRun, so a manual/override target accepted upstream is dispatchable.
   if (!(await taskNodeHasRun(db, taskId, targetNodeId))) {
     throw new ConflictError(
-      'task-question-unsafe-dispatch-target',
+      TASK_QUESTION_CONFLICT.unsafeDispatchTarget,
       `cannot dispatch to frontier '${targetNodeId}': no prior node_run to inherit. Safe first-run minting for never-run frontier targets is the next layer (RFC-120 §16 F3).`,
     )
   }
@@ -1593,7 +1665,7 @@ async function assertDesignerReady(
     })
     if (!readiness.ready) {
       throw new ConflictError(
-        'task-question-designer-not-ready',
+        TASK_QUESTION_CONFLICT.designerNotReady,
         `cannot dispatch designer '${targetNodeId}' (loop ${loopIter}): sibling cross-clarify node(s) still awaiting an answer (${readiness.pendingCrossClarifyNodeIds.join(', ')}). Answer all of the designer's cross-clarify rounds before dispatching so it reruns with the full feedback in one batch.`,
       )
     }
@@ -1646,7 +1718,7 @@ export async function buildFrontierMintPlan(
   const last = pickFreshestRun(scoped, { topLevelOnly: false })
   if (last === undefined) {
     throw new ConflictError(
-      'task-question-unsafe-dispatch-target',
+      TASK_QUESTION_CONFLICT.unsafeDispatchTarget,
       `cannot dispatch to frontier '${targetNodeId}'${shardKey !== undefined ? ` (shard '${shardKey}')` : ''}: no prior node_run to inherit`,
     )
   }

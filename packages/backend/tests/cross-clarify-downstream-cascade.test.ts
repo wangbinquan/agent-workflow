@@ -31,7 +31,7 @@ import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
-import { createCrossClarifySession } from '../src/services/crossClarify'
+import { createClarifyRound } from '../src/services/clarify/service'
 import { listTaskQuestions, reassignTaskQuestion } from '../src/services/taskQuestions'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
@@ -205,24 +205,25 @@ describe('RFC-074 — designer rerun no longer eagerly cascades downstream', () 
     const qRun = await seedDoneRun(db, taskId, 'questioner')
     // rev2 / out haven't run yet — exercise the "node never ran" branch.
 
-    const sess = await createCrossClarifySession({
+    const sess = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cross1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: qRun,
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: qRun,
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQ('q1')],
     })
 
     await autoDispatchClarifyRound({
       db,
-      originNodeRunId: sess.crossClarifyNodeRunId,
+      originNodeRunId: sess.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       actor,
     })
-    const disp = await reassignThenDispatchDesigner(db, taskId, sess.crossClarifyNodeRunId)
+    const disp = await reassignThenDispatchDesigner(db, taskId, sess.intermediaryNodeRunId)
     expect(disp.reruns.some((r) => r.targetNodeId === 'designer')).toBe(true)
 
     // Designer's new pending row carries clarifyIteration=1.
@@ -283,19 +284,20 @@ describe('RFC-074 — designer rerun no longer eagerly cascades downstream', () 
     await seedDoneRun(db, taskId, 'rev1')
     const qRun = await seedDoneRun(db, taskId, 'questioner')
 
-    const sess = await createCrossClarifySession({
+    const sess = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cross1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: qRun,
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: qRun,
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQ('q1')],
     })
     await autoDispatchClarifyRound({
       db,
-      originNodeRunId: sess.crossClarifyNodeRunId,
+      originNodeRunId: sess.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       actor,
     })
@@ -317,26 +319,27 @@ describe('RFC-074 — designer rerun no longer eagerly cascades downstream', () 
     await seedDoneRun(db, taskId, 'designer')
     const qRun = await seedDoneRun(db, taskId, 'questioner')
 
-    const sess = await createCrossClarifySession({
+    const sess = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cross1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: qRun,
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: qRun,
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQ('q1')],
     })
     await autoDispatchClarifyRound({
       db,
-      originNodeRunId: sess.crossClarifyNodeRunId,
+      originNodeRunId: sess.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       actor,
     })
     // The cross-clarify node itself is reachable from designer ONLY via
     // a clarify-channel edge (to_designer → __external_feedback__), so
     // the BFS skips it. The cross-clarify node_run minted by
-    // createCrossClarifySession is the only row, and it transitioned
+    // createClarifyRound is the only row, and it transitioned
     // pending → awaiting_human → done via the answer's full seal.
     const crossRows = await db
       .select()
@@ -359,19 +362,20 @@ describe('RFC-074 — designer rerun no longer eagerly cascades downstream', () 
       preSnapshot: 'snap-q-final',
     })
 
-    const sess = await createCrossClarifySession({
+    const sess = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cross1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: qRun,
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: qRun,
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQ('q1')],
     })
     await autoDispatchClarifyRound({
       db,
-      originNodeRunId: sess.crossClarifyNodeRunId,
+      originNodeRunId: sess.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       actor,
     })

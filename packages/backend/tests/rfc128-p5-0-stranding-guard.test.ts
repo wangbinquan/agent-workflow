@@ -29,14 +29,13 @@
 // rfc128-p2-per-question-endpoint.test.ts 的 P5-0 块）。任一断言变红 = guard 行为被改，
 // 须确认是 P5-B/C 有意放开（届时把锁迁移到逐题重跑语义），而非误删。
 
+import { createClarifyRound } from '../src/services/clarify/service'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { createClarifySession } from '../src/services/clarify'
-import { createCrossClarifySession } from '../src/services/crossClarify'
 import { sealRoundQuestions } from '../src/services/clarifySeal'
 import { listTaskQuestions } from '../src/services/taskQuestions'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
@@ -142,14 +141,15 @@ async function seedSelfRound(
     iteration: 0,
     preSnapshot: '',
   })
-  const { clarifyNodeRunId } = await createClarifySession({
+  const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+    kind: 'self',
     db,
     taskId,
-    sourceAgentNodeId: 'designer',
-    sourceAgentNodeRunId: sourceRunId,
-    sourceShardKey: null,
-    clarifyNodeId: 'clarify1',
-    iterationIndex: 0,
+    askingNodeId: 'designer',
+    askingNodeRunId: sourceRunId,
+    askingShardKey: null,
+    intermediaryNodeId: 'clarify1',
+    iteration: 0,
     questions,
   })
   return { taskId, originNodeRunId: clarifyNodeRunId }
@@ -172,13 +172,14 @@ async function seedCrossRound(
       preSnapshot: 'stub',
     },
   ])
-  const { crossClarifyNodeRunId } = await createCrossClarifySession({
+  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+    kind: 'cross',
     db,
     taskId,
-    crossClarifyNodeId: 'cross1',
-    sourceQuestionerNodeId: 'questioner',
-    sourceQuestionerNodeRunId: questionerRunId,
-    targetDesignerNodeId: 'designer',
+    intermediaryNodeId: 'cross1',
+    askingNodeId: 'questioner',
+    askingNodeRunId: questionerRunId,
+    targetConsumerNodeId: 'designer',
     loopIter: 0,
     questions,
   })

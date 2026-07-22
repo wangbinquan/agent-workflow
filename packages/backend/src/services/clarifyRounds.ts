@@ -30,6 +30,8 @@ import {
   type ClarifyRoundSummary,
   type TaskActorRole,
   type WorkflowDefinition,
+  terminatedAsForStatus,
+  type ClarifyRoundStatus,
 } from '@agent-workflow/shared'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
@@ -274,6 +276,7 @@ function rowToSummary(
     taskId: row.taskId,
     taskName: taskNameByTaskId.get(row.taskId) ?? '',
     kind: row.kind as 'self' | 'cross',
+    terminatedAs: terminatedAsForStatus(row.status as ClarifyRoundStatus),
     askingNodeId: row.askingNodeId,
     askingNodeTitle: typeof askingTitle === 'string' && askingTitle.length > 0 ? askingTitle : null,
     askingShardKey: row.askingShardKey,
@@ -328,6 +331,7 @@ function rowToDetail(
     id: row.id,
     taskId: row.taskId,
     kind: row.kind as 'self' | 'cross',
+    terminatedAs: terminatedAsForStatus(row.status as ClarifyRoundStatus),
     askingNodeId: row.askingNodeId,
     askingNodeRunId: row.askingNodeRunId,
     askingShardKey: row.askingShardKey,

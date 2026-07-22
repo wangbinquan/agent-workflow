@@ -72,6 +72,7 @@ function twoQuestionSelfRound(): ClarifyRound {
       },
     ],
     status: 'awaiting_human',
+    terminatedAs: null,
     directive: null,
     sessionMode: null,
     designerRunTriggeredAt: null,

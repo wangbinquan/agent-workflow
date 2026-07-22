@@ -27,7 +27,7 @@ import { ulid } from 'ulid'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
-import { createCrossClarifySession } from '../src/services/crossClarify'
+import { createClarifyRound } from '../src/services/clarify/service'
 import { sealRoundQuestions } from '../src/services/clarifySeal'
 import { reassignTaskQuestion } from '../src/services/taskQuestions'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
@@ -144,13 +144,14 @@ async function seedTask(db: DbClient): Promise<{ taskId: string; crossClarifyNod
     iteration: 0,
     startedAt: Date.now(),
   })
-  const { crossClarifyNodeRunId } = await createCrossClarifySession({
+  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+    kind: 'cross',
     db,
     taskId,
-    crossClarifyNodeId: CC,
-    sourceQuestionerNodeId: QUESTIONER,
-    sourceQuestionerNodeRunId: questionerRunId,
-    targetDesignerNodeId: DESIGNER,
+    intermediaryNodeId: CC,
+    askingNodeId: QUESTIONER,
+    askingNodeRunId: questionerRunId,
+    targetConsumerNodeId: DESIGNER,
     loopIter: 0,
     questions: [mkQ('q1', 'designer-scoped?')],
   })

@@ -140,7 +140,7 @@ async function seedRun(
 }
 
 /** An ANSWERED cross round on CC (dual-written round + legacy session, the
- *  createCrossClarifySession shape). RFC-162: reconcile emits ONE questioner entry; a designer
+ *  createClarifyRound shape). RFC-162: reconcile emits ONE questioner entry; a designer
  *  handler is added by an explicit reassign (see the test), then dispatched. Seeding the round
  *  `answered` lets the reassign-added designer pass the dispatch seal gate
  *  (assertRequestedEntriesSealed treats an answered round as sealed). */

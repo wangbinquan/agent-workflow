@@ -99,6 +99,7 @@ function round(over: Partial<ClarifyRound> & { intermediaryNodeRunId: string }):
       },
     ],
     status: 'awaiting_human',
+    terminatedAs: null,
     directive: null,
     sessionMode: null,
     designerRunTriggeredAt: null,

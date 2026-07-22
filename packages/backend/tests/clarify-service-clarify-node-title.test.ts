@@ -15,7 +15,7 @@ import { insertLegacySelfClarify } from './clarify-fixtures'
 import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
-import { getClarifyDetail, listClarifySummaries } from '../src/services/clarify'
+import { getClarifyRoundDetail, listClarifyRoundSummaries } from '../src/services/clarifyRounds'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
@@ -49,7 +49,7 @@ async function seedSessionForSnapshot(
   db: DbClient,
   snapshotJson: string,
   clarifyNodeId: string,
-): Promise<{ taskId: string; clarifyNodeRunId: string }> {
+): Promise<{ taskId: string; intermediaryNodeRunId: string }> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   await db.insert(workflows).values({
     id: `wf_${taskId}`,
@@ -95,7 +95,7 @@ async function seedSessionForSnapshot(
     questionsJson: '[]',
     createdAt: Date.now(),
   })
-  return { taskId, clarifyNodeRunId }
+  return { taskId, intermediaryNodeRunId: clarifyNodeRunId }
 }
 
 beforeEach(() => {
@@ -115,11 +115,11 @@ describe('clarify summary + detail — clarifyNodeTitle enrichment', () => {
     } as WorkflowNode)
     const { taskId } = await seedSessionForSnapshot(db, JSON.stringify(def), 'clarify_db')
 
-    const out = await listClarifySummaries(db)
+    const out = await listClarifyRoundSummaries(db)
     const row = out.find((r) => r.taskId === taskId)
     expect(row).toBeDefined()
-    expect(row?.clarifyNodeId).toBe('clarify_db')
-    expect(row?.clarifyNodeTitle).toBe('Ask user about the DB')
+    expect(row?.intermediaryNodeId).toBe('clarify_db')
+    expect(row?.intermediaryNodeTitle).toBe('Ask user about the DB')
   })
 
   test('detail surfaces clarify node title from the workflow snapshot', async () => {
@@ -129,10 +129,14 @@ describe('clarify summary + detail — clarifyNodeTitle enrichment', () => {
       kind: 'clarify',
       title: 'Ask user about the DB',
     } as WorkflowNode)
-    const { clarifyNodeRunId } = await seedSessionForSnapshot(db, JSON.stringify(def), 'clarify_db')
-    const session = await getClarifyDetail(db, clarifyNodeRunId)
-    expect(session.clarifyNodeId).toBe('clarify_db')
-    expect(session.clarifyNodeTitle).toBe('Ask user about the DB')
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSessionForSnapshot(
+      db,
+      JSON.stringify(def),
+      'clarify_db',
+    )
+    const session = await getClarifyRoundDetail(db, clarifyNodeRunId)
+    expect(session.intermediaryNodeId).toBe('clarify_db')
+    expect(session.intermediaryNodeTitle).toBe('Ask user about the DB')
   })
 
   test('list returns null clarifyNodeTitle when the clarify node has no title set', async () => {
@@ -140,10 +144,10 @@ describe('clarify summary + detail — clarifyNodeTitle enrichment', () => {
     const def = buildDef({ id: 'clarify_legacy', kind: 'clarify' } as WorkflowNode)
     const { taskId } = await seedSessionForSnapshot(db, JSON.stringify(def), 'clarify_legacy')
 
-    const out = await listClarifySummaries(db)
+    const out = await listClarifyRoundSummaries(db)
     const row = out.find((r) => r.taskId === taskId)
-    expect(row?.clarifyNodeTitle).toBeNull()
-    expect(row?.clarifyNodeId).toBe('clarify_legacy')
+    expect(row?.intermediaryNodeTitle).toBeNull()
+    expect(row?.intermediaryNodeId).toBe('clarify_legacy')
   })
 
   test('detail returns null clarifyNodeTitle for whitespace-only title (no false-positive)', async () => {
@@ -153,22 +157,22 @@ describe('clarify summary + detail — clarifyNodeTitle enrichment', () => {
       kind: 'clarify',
       title: '   ',
     } as WorkflowNode)
-    const { clarifyNodeRunId } = await seedSessionForSnapshot(
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSessionForSnapshot(
       db,
       JSON.stringify(def),
       'clarify_blank',
     )
-    const session = await getClarifyDetail(db, clarifyNodeRunId)
-    expect(session.clarifyNodeTitle).toBeNull()
+    const session = await getClarifyRoundDetail(db, clarifyNodeRunId)
+    expect(session.intermediaryNodeTitle).toBeNull()
   })
 
   test('list returns null clarifyNodeTitle when the workflow snapshot is corrupt', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const { taskId } = await seedSessionForSnapshot(db, '{not valid json', 'clarify_ghost')
 
-    const out = await listClarifySummaries(db)
+    const out = await listClarifyRoundSummaries(db)
     const row = out.find((r) => r.taskId === taskId)
-    expect(row?.clarifyNodeTitle).toBeNull()
-    expect(row?.clarifyNodeId).toBe('clarify_ghost')
+    expect(row?.intermediaryNodeTitle).toBeNull()
+    expect(row?.intermediaryNodeId).toBe('clarify_ghost')
   })
 })

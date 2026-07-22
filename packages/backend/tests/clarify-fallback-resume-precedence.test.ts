@@ -3,7 +3,7 @@
 // Supplements clarify-fallback.test.ts / cross-clarify-inline-fallback.test.ts,
 // which each exercise ONE failure condition at a time. This file locks the two
 // cases where MULTIPLE short-circuits/failures are simultaneously true, so the
-// ORDER of the guard clauses in clarifyFallback.ts (L74 isolated short-circuit,
+// ORDER of the guard clauses in sessionModeFallback.ts (L74 isolated short-circuit,
 // L78 strict `opencodeSupportsResume === false`, L81 missing-session-id) is
 // pinned down — operators triage off the exact fallbackReason recorded into
 // node_run_events, so a refactor that reorders these guards (or loosens the
@@ -20,7 +20,7 @@
 // they are already covered by the two existing fallback test files.)
 
 import { describe, expect, test } from 'bun:test'
-import { decideResumeSessionId } from '../src/services/clarifyFallback'
+import { decideResumeSessionId } from '../src/services/sessionModeFallback'
 
 describe('RFC-026 decideResumeSessionId guard precedence (simultaneous failures)', () => {
   test('inline + missing session id + unsupported version → version reason wins (L78 before L81), no resume', () => {

@@ -24,7 +24,7 @@ import { ulid } from 'ulid'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRunOutputs, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
-import { createCrossClarifySession } from '../src/services/crossClarify'
+import { createClarifyRound } from '../src/services/clarify/service'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { buildClarifyQueueContext } from '../src/services/clarifyQueue'
 import {
@@ -654,13 +654,14 @@ describe('RFC-120 §15 — golden-lock (no manual rows ⇒ clarify unchanged)', 
       iteration: 0,
       startedAt: Date.now() - 700,
     })
-    const { crossClarifyNodeRunId } = await createCrossClarifySession({
+    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: CC,
-      sourceQuestionerNodeId: QUESTIONER,
-      sourceQuestionerNodeRunId: qRunId,
-      targetDesignerNodeId: DESIGNER,
+      intermediaryNodeId: CC,
+      askingNodeId: QUESTIONER,
+      askingNodeRunId: qRunId,
+      targetConsumerNodeId: DESIGNER,
       loopIter: 0,
       questions: [mkQ('q1', 'CLARIFY-Q-MARKER?')],
     })

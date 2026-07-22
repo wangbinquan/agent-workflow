@@ -29,7 +29,7 @@ import { clarifyRounds, agents, nodeRuns, tasks, workflows } from '../src/db/sch
 import { runTask } from '../src/services/scheduler'
 import { runGit } from '../src/util/git'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
-import { createCrossClarifySession } from '../src/services/crossClarify'
+import { createClarifyRound } from '../src/services/clarify/service'
 import { listTaskQuestions, reassignTaskQuestion } from '../src/services/taskQuestions'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 
@@ -446,7 +446,7 @@ describe('RFC-056 scheduler cross-clarify dispatch', () => {
     // node_run row directly and dispatching it through the scheduler again.
     // The dispatchCrossClarifyNode helper (called inside scheduler) should
     // short-circuit it to done.
-    const { dispatchCrossClarifyNode } = await import('../src/services/crossClarify')
+    const { dispatchCrossClarifyNode } = await import('../src/services/clarify/service')
     const nrId = ulid()
     await h.db.insert(nodeRuns).values({
       id: nrId,
@@ -516,13 +516,14 @@ describe('RFC-056 scheduler cross-clarify dispatch', () => {
       retryIndex: 0,
       iteration: 0,
     })
-    const { session } = await createCrossClarifySession({
+    const { round: session } = await createClarifyRound({
+      kind: 'cross',
       db: h.db,
       taskId,
-      crossClarifyNodeId: 'cross1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: qRunId,
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: qRunId,
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [
         {
@@ -544,7 +545,7 @@ describe('RFC-056 scheduler cross-clarify dispatch', () => {
     // shape as rfc096-port-read-done-only) — the test's subject is the DESIGNER rerun prompt.
     await autoDispatchClarifyRound({
       db: h.db,
-      originNodeRunId: session.crossClarifyNodeRunId,
+      originNodeRunId: session.intermediaryNodeRunId,
       answers: [
         { questionId: 'q1', selectedOptionIndices: [0], selectedOptionLabels: [], customText: '' },
       ],
@@ -552,7 +553,7 @@ describe('RFC-056 scheduler cross-clarify dispatch', () => {
       actor,
     })
     // RFC-162: reassign the answered round to the designer + dispatch it to mint the designer rerun.
-    const disp = await reassignThenDispatchDesigner(h.db, taskId, session.crossClarifyNodeRunId)
+    const disp = await reassignThenDispatchDesigner(h.db, taskId, session.intermediaryNodeRunId)
     const designerRerun = disp.reruns.find((r) => r.targetNodeId === 'designer')
     expect(designerRerun).toBeDefined()
     const designerRunId = designerRerun!.nodeRunId
@@ -623,13 +624,14 @@ describe('RFC-056 scheduler cross-clarify dispatch', () => {
     })
 
     // The questioner asked a cross-clarify question (target = designer); answered.
-    const { session } = await createCrossClarifySession({
+    const { round: session } = await createClarifyRound({
+      kind: 'cross',
       db: h.db,
       taskId,
-      crossClarifyNodeId: 'cross1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: qRunId,
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: qRunId,
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [
         {
@@ -650,7 +652,7 @@ describe('RFC-056 scheduler cross-clarify dispatch', () => {
     // questioner run results, its prompt must carry the prior cross Q&A so it does not re-ask.
     await autoDispatchClarifyRound({
       db: h.db,
-      originNodeRunId: session.crossClarifyNodeRunId,
+      originNodeRunId: session.intermediaryNodeRunId,
       answers: [
         {
           questionId: 'q1',
@@ -664,7 +666,7 @@ describe('RFC-056 scheduler cross-clarify dispatch', () => {
     })
     // RFC-162: reassign the answered round to the designer + dispatch it so the designer reruns
     // (fresh output) → the downstream questioner rerun consumes it.
-    const disp = await reassignThenDispatchDesigner(h.db, taskId, session.crossClarifyNodeRunId)
+    const disp = await reassignThenDispatchDesigner(h.db, taskId, session.intermediaryNodeRunId)
     expect(disp.reruns.some((r) => r.targetNodeId === 'designer')).toBe(true)
 
     // Designer reruns (fresh output) → the questioner rerun consumes it → prompt is built.

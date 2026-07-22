@@ -24,7 +24,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import {
   rollbackSubmodule,
   rollbackSubmodulesRecursive,
@@ -192,7 +192,7 @@ describe('RFC-210 detectSubmodules performance gate', () => {
     // Behavioural assertions cannot observe "zero processes spawned" here, so the
     // ordering is pinned in source. If someone moves the probe below the git call,
     // AC-11 ("never ⟹ zero submodule argv") silently regresses.
-    const src = readFileSync('packages/backend/src/util/git.ts', 'utf8')
+    const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'util', 'git.ts'), 'utf8')
     const fn = src.slice(src.indexOf('export async function hasDirtySubmoduleContent'))
     const body = fn.slice(0, fn.indexOf('\n}\n'))
     const gateAt = body.indexOf(".gitmodules'")

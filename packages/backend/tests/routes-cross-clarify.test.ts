@@ -18,6 +18,7 @@
 //   5. If-Match mismatch returns 409 cross-clarify-iteration-mismatch.
 //   6. POST fails for cross-clarify with non-admin / non-target actor (auth gate).
 
+import { createClarifyRound } from '../src/services/clarify/service'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { resolve } from 'node:path'
@@ -27,8 +28,6 @@ import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createApp } from '../src/server'
-import { createClarifySession } from '../src/services/clarify'
-import { createCrossClarifySession } from '../src/services/crossClarify'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
 
@@ -127,7 +126,7 @@ async function seedTask(db: DbClient, opts: { taskId?: string } = {}): Promise<{
 async function seedCrossClarifySession(
   db: DbClient,
   opts: { taskId?: string } = {},
-): Promise<{ taskId: string; crossClarifyNodeRunId: string; sessionId: string }> {
+): Promise<{ taskId: string; intermediaryNodeRunId: string; sessionId: string }> {
   const { taskId } = await seedTask(db, opts.taskId ? { taskId: opts.taskId } : {})
   const questionerRunId = ulid()
   // Seed prior designer + questioner node_runs so the answer's auto-dispatch has
@@ -148,17 +147,20 @@ async function seedCrossClarifySession(
     retryIndex: 0,
     iteration: 0,
   })
-  const { session, crossClarifyNodeRunId } = await createCrossClarifySession({
-    db,
-    taskId,
-    crossClarifyNodeId: 'cross1',
-    sourceQuestionerNodeId: 'questioner',
-    sourceQuestionerNodeRunId: questionerRunId,
-    targetDesignerNodeId: 'designer',
-    loopIter: 0,
-    questions: [Q1],
-  })
-  return { taskId, crossClarifyNodeRunId, sessionId: session.id }
+  const { round: session, intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
+    {
+      kind: 'cross',
+      db,
+      taskId,
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: questionerRunId,
+      targetConsumerNodeId: 'designer',
+      loopIter: 0,
+      questions: [Q1],
+    },
+  )
+  return { taskId, intermediaryNodeRunId: crossClarifyNodeRunId, sessionId: session.id }
 }
 
 beforeEach(() => {
@@ -213,14 +215,15 @@ describe('GET /api/clarify — mixed self + cross with kind chip', () => {
       retryIndex: 0,
       iteration: 0,
     })
-    await createClarifySession({
+    await createClarifyRound({
+      kind: 'self',
       db,
       taskId: taskA,
-      sourceAgentNodeId: 'designer',
-      sourceAgentNodeRunId: sourceRunId,
-      sourceShardKey: null,
-      clarifyNodeId: 'c1',
-      iterationIndex: 0,
+      askingNodeId: 'designer',
+      askingNodeRunId: sourceRunId,
+      askingShardKey: null,
+      intermediaryNodeId: 'c1',
+      iteration: 0,
       questions: [Q1],
     })
 
@@ -241,7 +244,7 @@ describe('GET /api/clarify/:nodeRunId — branches by node kind', () => {
     // cross-clarify rows surface as `kind: 'cross'` + `intermediaryNodeId`
     // (formerly `crossClarifyNodeId`).
     const { db, app } = buildApp()
-    const { crossClarifyNodeRunId } = await seedCrossClarifySession(db)
+    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await seedCrossClarifySession(db)
 
     const res = await req(app, `/api/clarify/${crossClarifyNodeRunId}`)
     expect(res.status).toBe(200)
@@ -267,7 +270,8 @@ describe('POST /api/clarify/:nodeRunId/answers — cross-clarify directive branc
   // explicit board reassign, not an implicit designer-scope. The response is the autodispatch shape.
   test('directive=continue auto-dispatches the questioner rerun (no designer)', async () => {
     const { db, app } = buildApp()
-    const { taskId, crossClarifyNodeRunId } = await seedCrossClarifySession(db)
+    const { taskId, intermediaryNodeRunId: crossClarifyNodeRunId } =
+      await seedCrossClarifySession(db)
     const res = await req(app, `/api/clarify/${crossClarifyNodeRunId}/answers`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -301,7 +305,8 @@ describe('POST /api/clarify/:nodeRunId/answers — cross-clarify directive branc
 
   test('directive=stop auto-dispatches the questioner stop rerun (no designer)', async () => {
     const { db, app } = buildApp()
-    const { taskId, crossClarifyNodeRunId } = await seedCrossClarifySession(db)
+    const { taskId, intermediaryNodeRunId: crossClarifyNodeRunId } =
+      await seedCrossClarifySession(db)
     const res = await req(app, `/api/clarify/${crossClarifyNodeRunId}/answers`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -346,7 +351,7 @@ describe('POST /api/clarify/:nodeRunId/answers — cross-clarify directive branc
   // the shared 'clarify-iteration-mismatch' (not the cross-specific code) — the single path.
   test('If-Match header mismatch → 409 clarify-iteration-mismatch', async () => {
     const { db, app } = buildApp()
-    const { crossClarifyNodeRunId } = await seedCrossClarifySession(db)
+    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await seedCrossClarifySession(db)
     const res = await req(app, `/api/clarify/${crossClarifyNodeRunId}/answers`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'If-Match': '99' },

@@ -1,4 +1,7 @@
-// RFC-026 — clarify-inline-mode fallback detection.
+// RFC-026 — inline-session-mode fallback detection.
+// (RFC-217 T9: renamed clarifyFallback.ts → sessionModeFallback.ts and moved
+// out of the clarify namespace — this is a session-resume concern, pure and
+// orthogonal to the clarify round lifecycle.)
 //
 // Inline mode is an optimization on top of RFC-023's clarify rerun path: when
 // the upstream clarify node is configured `sessionMode: 'inline'`, the

@@ -76,6 +76,7 @@ function clarify(overrides: LegacyClarifyOverrides = {}): ClarifyRoundSummary {
     iteration: overrides.iterationIndex ?? 0,
     questionCount: overrides.questionCount ?? 2,
     status: overrides.status ?? 'awaiting_human',
+    terminatedAs: null,
     directive: null,
     createdAt: overrides.createdAt ?? 1_700_000_500_000,
     answeredAt: overrides.answeredAt ?? null,

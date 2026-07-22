@@ -49,9 +49,9 @@ describe('scheduler ↔ runner clarify prompt wire-up (RFC-023 T12)', () => {
     expect(src).toContain('agentHasClarifyChannel')
   })
 
-  test('scheduler.ts wires createClarifySession into the agent-single path', () => {
+  test('scheduler.ts wires createClarifyRound into the agent-single path', () => {
     const src = readFileSync(join(BACKEND_SRC, 'scheduler.ts'), 'utf8')
-    expect(src).toContain('createClarifySession')
+    expect(src).toContain('createClarifyRound')
   })
 
   test('runner.ts threads the clarifyChannel ADT into renderUserPrompt', () => {

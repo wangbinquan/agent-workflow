@@ -17,7 +17,7 @@ import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createApp } from '../src/server'
-import { createClarifySession } from '../src/services/clarify'
+import { createClarifyRound } from '../src/services/clarify/service'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type {
   ClarifyAnswer,
@@ -67,7 +67,7 @@ async function seedSession(
     sourceShardKey?: string | null
     iterationIndex?: number
   } = {},
-): Promise<{ taskId: string; clarifyNodeRunId: string; sessionId: string }> {
+): Promise<{ taskId: string; intermediaryNodeRunId: string; sessionId: string }> {
   const taskId = opts.taskId ?? `task_${ulid()}`
   const def: WorkflowDefinition = {
     $schema_version: 3,
@@ -119,17 +119,18 @@ async function seedSession(
     iteration: 0,
     shardKey: opts.sourceShardKey ?? null,
   })
-  const { session, clarifyNodeRunId } = await createClarifySession({
+  const { round: session, intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+    kind: 'self',
     db,
     taskId,
-    sourceAgentNodeId: 'designer',
-    sourceAgentNodeRunId: sourceRunId,
-    sourceShardKey: opts.sourceShardKey ?? null,
-    clarifyNodeId: 'c1',
-    iterationIndex: opts.iterationIndex ?? 0,
+    askingNodeId: 'designer',
+    askingNodeRunId: sourceRunId,
+    askingShardKey: opts.sourceShardKey ?? null,
+    intermediaryNodeId: 'c1',
+    iteration: opts.iterationIndex ?? 0,
     questions: [QUESTION],
   })
-  return { taskId, clarifyNodeRunId, sessionId: session.id }
+  return { taskId, intermediaryNodeRunId: clarifyNodeRunId, sessionId: session.id }
 }
 
 beforeEach(() => {
@@ -184,7 +185,7 @@ describe('GET /api/clarify/pending-count', () => {
 describe('GET /api/clarify/:nodeRunId', () => {
   test('returns full session payload (questions + null answers + status)', async () => {
     const { db, app } = buildApp()
-    const { clarifyNodeRunId } = await seedSession(db)
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSession(db)
     const res = await req(app, `/api/clarify/${clarifyNodeRunId}`)
     expect(res.status).toBe(200)
     const body = (await res.json()) as ClarifySession
@@ -206,7 +207,7 @@ describe('POST /api/clarify/:nodeRunId/answers', () => {
   // roundKind, reruns }); the server-sealed labels + answered flip persist on the round.
   test('valid submission seals labels, marks round answered, auto-dispatches a rerun', async () => {
     const { db, app } = buildApp()
-    const { clarifyNodeRunId } = await seedSession(db)
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSession(db)
     const res = await req(app, `/api/clarify/${clarifyNodeRunId}/answers`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -248,7 +249,7 @@ describe('POST /api/clarify/:nodeRunId/answers', () => {
 
   test('If-Match header optimistic lock: mismatched iteration returns ConflictError (409)', async () => {
     const { db, app } = buildApp()
-    const { clarifyNodeRunId } = await seedSession(db)
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSession(db)
     const res = await req(app, `/api/clarify/${clarifyNodeRunId}/answers`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'If-Match': '99' },
@@ -270,7 +271,7 @@ describe('POST /api/clarify/:nodeRunId/answers', () => {
 
   test('schema-invalid payload returns 422 with clarify-answers-invalid', async () => {
     const { db, app } = buildApp()
-    const { clarifyNodeRunId } = await seedSession(db)
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSession(db)
     const res = await req(app, `/api/clarify/${clarifyNodeRunId}/answers`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -289,7 +290,7 @@ describe('POST /api/clarify/:nodeRunId/answers', () => {
   describe('POST /answers — directive iteration', () => {
     test('omitted directive defaults to "continue" on the persisted session', async () => {
       const { db, app } = buildApp()
-      const { clarifyNodeRunId } = await seedSession(db)
+      const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSession(db)
       const res = await req(app, `/api/clarify/${clarifyNodeRunId}/answers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -318,7 +319,7 @@ describe('POST /api/clarify/:nodeRunId/answers', () => {
 
     test('explicit directive="stop" round-trips to the session row', async () => {
       const { db, app } = buildApp()
-      const { clarifyNodeRunId } = await seedSession(db)
+      const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSession(db)
       const res = await req(app, `/api/clarify/${clarifyNodeRunId}/answers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -348,7 +349,7 @@ describe('POST /api/clarify/:nodeRunId/answers', () => {
 
     test('unknown directive value returns 422 (schema enum guard)', async () => {
       const { db, app } = buildApp()
-      const { clarifyNodeRunId } = await seedSession(db)
+      const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSession(db)
       const res = await req(app, `/api/clarify/${clarifyNodeRunId}/answers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

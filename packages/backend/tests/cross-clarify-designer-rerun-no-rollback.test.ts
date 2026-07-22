@@ -30,7 +30,7 @@ import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
-import { createCrossClarifySession } from '../src/services/crossClarify'
+import { createClarifyRound } from '../src/services/clarify/service'
 import { listTaskQuestions, reassignTaskQuestion } from '../src/services/taskQuestions'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 import { gitStashSnapshot, runGit } from '../src/util/git'
@@ -202,13 +202,14 @@ describe('RFC-056 patch 2026-06-22: cross-clarify designer rerun does not roll b
 
     // Seed an awaiting cross round, answer it, then reassign to the designer + dispatch — the
     // designer rerun comes out of the unified dispatch (RFC-162: via reassign, not scope).
-    const { crossClarifyNodeRunId } = await createCrossClarifySession({
+    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: 'cross1',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: 'nr_questioner_done',
-      targetDesignerNodeId: 'designer',
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: 'nr_questioner_done',
+      targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [makeQ('q1')],
     })
@@ -237,9 +238,10 @@ describe('RFC-056 patch 2026-06-22: cross-clarify designer rerun does not roll b
   })
 
   test('source guard: the cross-clarify service + the unified dispatch mint do not reference the rollback helpers', () => {
-    // crossClarify.ts (readiness / stop / session logic) must stay rollback-free …
+    // the unified clarify service (readiness / stop / round logic; RFC-217 T9
+    // merged crossClarify.ts into it) must stay rollback-free …
     const crossSrc = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'crossClarify.ts'),
+      resolve(import.meta.dir, '..', 'src', 'services', 'clarify', 'service.ts'),
       'utf8',
     )
     expect(crossSrc).not.toContain('rollbackNodeRunWorktrees')

@@ -13,7 +13,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   decideResumeSessionId,
   detectSessionNotFoundFromStderr,
-} from '../src/services/clarifyFallback'
+} from '../src/services/sessionModeFallback'
 
 describe('RFC-026 decideResumeSessionId', () => {
   test('isolated mode never inline-rerides and emits no fallback warning', () => {

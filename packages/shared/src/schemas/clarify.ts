@@ -338,6 +338,18 @@ export const ClarifyRoundStatusSchema = z.enum([
 ])
 export type ClarifyRoundStatus = z.infer<typeof ClarifyRoundStatusSchema>
 
+/** RFC-217 T9 — normalized terminal discriminator. The status enum carries two
+ *  kind-specific terminal values ('canceled' for self, 'abandoned' for cross,
+ *  DB CHECK-enforced); consumers that only care about "is this round dead"
+ *  read `terminatedAs !== null` instead of kind-switching on the disjunction. */
+export const ClarifyTerminatedAsSchema = z.enum(['canceled', 'abandoned'])
+export type ClarifyTerminatedAs = z.infer<typeof ClarifyTerminatedAsSchema>
+
+/** Pure derivation: status → terminatedAs (null while the round is live). */
+export function terminatedAsForStatus(status: ClarifyRoundStatus): ClarifyTerminatedAs | null {
+  return status === 'canceled' || status === 'abandoned' ? status : null
+}
+
 /**
  * RFC-161: the task-detail canvas click target kind for a clarify / cross-clarify
  * node_run. `getTaskNodeRuns` stamps `NodeRunSchema.clarifyNavKind` from the run's
@@ -410,6 +422,8 @@ export const ClarifyRoundSchema = z.object({
   answers: z.array(ClarifyAnswerSchema).optional(),
   directive: ClarifyDirectiveSchema.nullable().default(null),
   status: ClarifyRoundStatusSchema,
+  /** RFC-217 T9 — derived: non-null iff status is a terminal ({canceled,abandoned}). */
+  terminatedAs: ClarifyTerminatedAsSchema.nullable().default(null),
 
   truncationWarnings: z.array(ClarifyTruncationWarningSchema).optional(),
 
@@ -486,6 +500,8 @@ export const ClarifyRoundSummarySchema = z.object({
   iteration: z.number().int().nonnegative(),
   questionCount: z.number().int().nonnegative(),
   status: ClarifyRoundStatusSchema,
+  /** RFC-217 T9 — derived: non-null iff status is a terminal ({canceled,abandoned}). */
+  terminatedAs: ClarifyTerminatedAsSchema.nullable().default(null),
   directive: ClarifyDirectiveSchema.nullable(),
   createdAt: z.number().int(),
   answeredAt: z.number().int().nullable(),

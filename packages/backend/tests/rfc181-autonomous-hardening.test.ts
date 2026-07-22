@@ -16,7 +16,7 @@
 //     不碰卡；已终态 session no-op；幂等；广播 node.status{canceled} +
 //     wg.assignment.updated。
 //   - C 源级锁（与 RFC-182 的 note 派生互为契约）：scheduler 在
-//     createClarifySession 前 `await isTaskClarifySuppressed(db, taskId)` 重读 +
+//     createClarifyRound 前 `await isTaskClarifySuppressed(db, taskId)` 重读 +
 //     autonomous 下 clarifyChannel 走 'stopped'（复用 RFC-123 runNode
 //     clarify-forbidden 持久拒绝）；workgroupRunner 的 leader / worker 失败
 //     分支带 CLARIFY_FORBIDDEN_PREFIX 重试。改任一侧即红。
@@ -456,7 +456,7 @@ describe('RFC-181 C — 源级契约锁', () => {
     const preCheck = scheduler.indexOf(
       'await isTaskClarifySuppressed(db, taskId, req.nodeId, runShardKey)',
     )
-    const create = scheduler.indexOf('await createClarifySession(')
+    const create = scheduler.indexOf('await createClarifyRound(')
     const compensate = scheduler.indexOf('await dismissOpenClarifyParksForAutonomous(db, taskId)')
     expect(preCheck).toBeGreaterThan(-1)
     expect(create).toBeGreaterThan(preCheck)

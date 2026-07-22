@@ -32,7 +32,7 @@ import {
   loadUndispatchedSelfQuestionerTargets,
   reconcileTaskQuestionsForRound,
 } from '../src/services/taskQuestions'
-import { createClarifySession } from '../src/services/clarify'
+import { createClarifyRound } from '../src/services/clarify/service'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { sealRoundQuestions } from '../src/services/clarifySeal'
 import { getTaskQuestionWriteSem, getTaskWriteSem } from '../src/services/taskWriteLocks'
@@ -836,14 +836,15 @@ describe('RFC-128 P5-BC §5.2.14 mixed-path write-flow', () => {
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const pRun = await seedRun(db, taskId, P, { status: 'awaiting_human', iteration: 0 })
-    const { clarifyNodeRunId } = await createClarifySession({
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+      kind: 'self',
       db,
       taskId,
-      sourceAgentNodeId: P,
-      sourceAgentNodeRunId: pRun,
-      sourceShardKey: null,
-      clarifyNodeId: CL,
-      iterationIndex: 0,
+      askingNodeId: P,
+      askingNodeRunId: pRun,
+      askingShardKey: null,
+      intermediaryNodeId: CL,
+      iteration: 0,
       questions: [mkQ('q1', 't'), mkQ('q2', 't')],
     })
     // Virgin: no listTaskQuestions / no seal before the quick finalize.
@@ -895,14 +896,15 @@ describe('RFC-128 P5-BC §5.2.14 mixed-path write-flow', () => {
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const pRun = await seedRun(db, taskId, P, { status: 'awaiting_human', iteration: 0 })
-    const { clarifyNodeRunId } = await createClarifySession({
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+      kind: 'self',
       db,
       taskId,
-      sourceAgentNodeId: P,
-      sourceAgentNodeRunId: pRun,
-      sourceShardKey: null,
-      clarifyNodeId: CL,
-      iterationIndex: 0,
+      askingNodeId: P,
+      askingNodeRunId: pRun,
+      askingShardKey: null,
+      intermediaryNodeId: CL,
+      iteration: 0,
       questions: [mkQ('q1', 't')],
     })
     const res = await autoDispatchClarifyRound({
@@ -941,14 +943,15 @@ describe('RFC-128 P5-BC §5.2.14 mixed-path write-flow', () => {
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const pRun = await seedRun(db, taskId, P, { status: 'awaiting_human', iteration: 0 })
-    const { clarifyNodeRunId } = await createClarifySession({
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+      kind: 'self',
       db,
       taskId,
-      sourceAgentNodeId: P,
-      sourceAgentNodeRunId: pRun,
-      sourceShardKey: null,
-      clarifyNodeId: CL,
-      iterationIndex: 0,
+      askingNodeId: P,
+      askingNodeRunId: pRun,
+      askingShardKey: null,
+      intermediaryNodeId: CL,
+      iteration: 0,
       questions: [mkQ('q1', 't')],
     })
     const results = await Promise.allSettled([
@@ -1002,14 +1005,15 @@ describe('RFC-128 P5-BC §5.2.14 mixed-path write-flow', () => {
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const pRun = await seedRun(db, taskId, P, { status: 'awaiting_human', iteration: 0 })
-    const { clarifyNodeRunId } = await createClarifySession({
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+      kind: 'self',
       db,
       taskId,
-      sourceAgentNodeId: P,
-      sourceAgentNodeRunId: pRun,
-      sourceShardKey: null,
-      clarifyNodeId: CL,
-      iterationIndex: 0,
+      askingNodeId: P,
+      askingNodeRunId: pRun,
+      askingShardKey: null,
+      intermediaryNodeId: CL,
+      iteration: 0,
       questions: [mkQ('q1', 't'), mkQ('q2', 't')],
     })
     // q1 control-sealed-undispatched → dispatchable; the round is still awaiting (quick-finalizable).
@@ -1077,14 +1081,15 @@ describe('RFC-128 §5.2.14 final-gate (2nd round) — seal/merge/deferred critic
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const dRun = await seedRun(db, taskId, D, { status: 'awaiting_human', iteration: 0 })
-    const { clarifyNodeRunId } = await createClarifySession({
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+      kind: 'self',
       db,
       taskId,
-      sourceAgentNodeId: D,
-      sourceAgentNodeRunId: dRun,
-      sourceShardKey: null,
-      clarifyNodeId: CL,
-      iterationIndex: 0,
+      askingNodeId: D,
+      askingNodeRunId: dRun,
+      askingShardKey: null,
+      intermediaryNodeId: CL,
+      iteration: 0,
       questions: [mkQ('q1', 't'), mkQ('q2', 't')],
     })
     // control-seal q1 = option A.

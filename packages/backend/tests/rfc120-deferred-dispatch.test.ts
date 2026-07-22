@@ -39,7 +39,7 @@ import {
   tasks,
   workflows,
 } from '../src/db/schema'
-import { createCrossClarifySession } from '../src/services/crossClarify'
+import { createClarifyRound } from '../src/services/clarify/service'
 import { sealRoundQuestions } from '../src/services/clarifySeal'
 import { bindTriggerRun, buildClarifyQueueContext } from '../src/services/clarifyQueue'
 import {
@@ -172,13 +172,14 @@ async function seedTask(
     iteration: 0,
     startedAt: Date.now(),
   })
-  const { crossClarifyNodeRunId } = await createCrossClarifySession({
+  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+    kind: 'cross',
     db,
     taskId,
-    crossClarifyNodeId: CC,
-    sourceQuestionerNodeId: QUESTIONER,
-    sourceQuestionerNodeRunId: questionerRunId,
-    targetDesignerNodeId: DESIGNER,
+    intermediaryNodeId: CC,
+    askingNodeId: QUESTIONER,
+    askingNodeRunId: questionerRunId,
+    targetConsumerNodeId: DESIGNER,
     loopIter: 0,
     questions: opts.questions ?? [mkQ('q1', 'designer-scoped?')],
   })
@@ -255,13 +256,14 @@ async function seedTwoSource(
     await db
       .insert(nodeRuns)
       .values({ id: runId, taskId, nodeId: q, status: 'done', retryIndex: 0, iteration: 0 })
-    const { crossClarifyNodeRunId } = await createCrossClarifySession({
+    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+      kind: 'cross',
       db,
       taskId,
-      crossClarifyNodeId: cc,
-      sourceQuestionerNodeId: q,
-      sourceQuestionerNodeRunId: runId,
-      targetDesignerNodeId: DESIGNER,
+      intermediaryNodeId: cc,
+      askingNodeId: q,
+      askingNodeRunId: runId,
+      targetConsumerNodeId: DESIGNER,
       loopIter: 0,
       questions: [mkQ(cc === 'cc_a' ? 'a1' : 'b1', 'designer-scoped?')],
     })
@@ -1570,13 +1572,14 @@ describe('RFC-120 T9 — run-scoped layer Codex folds (H1/M1/H2)', () => {
       await db
         .insert(nodeRuns)
         .values({ id: runId, taskId, nodeId: q, status: 'done', retryIndex: 0, iteration: 0 })
-      const { crossClarifyNodeRunId } = await createCrossClarifySession({
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+        kind: 'cross',
         db,
         taskId,
-        crossClarifyNodeId: cc,
-        sourceQuestionerNodeId: q,
-        sourceQuestionerNodeRunId: runId,
-        targetDesignerNodeId: d,
+        intermediaryNodeId: cc,
+        askingNodeId: q,
+        askingNodeRunId: runId,
+        targetConsumerNodeId: d,
         loopIter: 0,
         questions: [mkQ(qid, 'designer-scoped?')],
       })
@@ -1705,13 +1708,14 @@ describe('RFC-120 T9 — run-scoped layer Codex folds (H1/M1/H2)', () => {
       await db
         .insert(nodeRuns)
         .values({ id: runId, taskId, nodeId: q, status: 'done', retryIndex: 0, iteration: 0 })
-      const { crossClarifyNodeRunId } = await createCrossClarifySession({
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+        kind: 'cross',
         db,
         taskId,
-        crossClarifyNodeId: cc,
-        sourceQuestionerNodeId: q,
-        sourceQuestionerNodeRunId: runId,
-        targetDesignerNodeId: d,
+        intermediaryNodeId: cc,
+        askingNodeId: q,
+        askingNodeRunId: runId,
+        targetConsumerNodeId: d,
         loopIter: 0,
         questions: [mkQ(qid, 'designer-scoped?')],
       })
@@ -1921,13 +1925,14 @@ describe('RFC-120 T9 — run-scoped layer Codex folds (H1/M1/H2)', () => {
       await db
         .insert(nodeRuns)
         .values({ id: runId, taskId, nodeId: q, status: 'done', retryIndex: 0, iteration: 0 })
-      const { crossClarifyNodeRunId } = await createCrossClarifySession({
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+        kind: 'cross',
         db,
         taskId,
-        crossClarifyNodeId: cc,
-        sourceQuestionerNodeId: q,
-        sourceQuestionerNodeRunId: runId,
-        targetDesignerNodeId: d,
+        intermediaryNodeId: cc,
+        askingNodeId: q,
+        askingNodeRunId: runId,
+        targetConsumerNodeId: d,
         loopIter: 0,
         questions: [mkQ(qid, 'designer-scoped?')],
       })
@@ -2109,13 +2114,14 @@ describe('RFC-120 §18 — frontier mint + per-node queue + consumption', () => 
       await db
         .insert(nodeRuns)
         .values({ id: runId, taskId, nodeId: q, status: 'done', retryIndex: 0, iteration: 0 })
-      const { crossClarifyNodeRunId } = await createCrossClarifySession({
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+        kind: 'cross',
         db,
         taskId,
-        crossClarifyNodeId: cc,
-        sourceQuestionerNodeId: q,
-        sourceQuestionerNodeRunId: runId,
-        targetDesignerNodeId: d,
+        intermediaryNodeId: cc,
+        askingNodeId: q,
+        askingNodeRunId: runId,
+        targetConsumerNodeId: d,
         loopIter: 0,
         questions: [mkQ(cc === 'cc_a' ? 'a1' : 'b1', 'designer-scoped?')],
       })
