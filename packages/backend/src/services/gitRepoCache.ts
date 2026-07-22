@@ -29,6 +29,7 @@ import { existsSync, mkdirSync, rmSync } from 'node:fs'
 import { rename, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
+import type { SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
 import { cachedRepos, scheduledTasks, taskRepos } from '@/db/schema'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
@@ -166,6 +167,15 @@ export interface GitRepoCacheDeps {
    * already at origin/HEAD).
    */
   syncBranches?: string[]
+  /**
+   * RFC-204 impl-gate P0-2 — seal the credentialed URL AT INSERT time on the
+   * cold-clone path. When present, a fresh row stores `url_enc` + a blanked
+   * `url` instead of the plaintext, so a private repo's token never lingers in
+   * db.sqlite/WAL waiting for the next `ensureCredentialsSealed` pass (daemon
+   * start / pre-backup). Omitted (tests / key-less installs) → legacy plaintext,
+   * which the startup gate still seals later.
+   */
+  secretBox?: SecretBox
 }
 
 export interface ResolveCachedRepoInput {
@@ -654,12 +664,20 @@ export async function resolveCachedRepo(
 
     const ts = now()
     const id = ulid()
+    // RFC-204 impl-gate P0-2: seal the credentialed URL at INSERT time so a
+    // cold-cloned private repo never persists its token as plaintext. Without a
+    // SecretBox (tests / key-less installs) fall back to the legacy plaintext
+    // column, which the startup sealing gate converts on the next run.
+    const box = deps.secretBox
+    const urlEnc = box !== undefined ? box.seal(input.url) : null
+    const storedUrl = box !== undefined ? '' : input.url
     deps.db
       .insert(cachedRepos)
       .values({
         id,
         urlHash: hash,
-        url: input.url,
+        url: storedUrl,
+        urlEnc,
         // RFC-204: store the safe display form rather than deriving it per read.
         urlRedacted: redacted,
         localPath: cacheDir,
@@ -714,8 +732,8 @@ export async function resolveCachedRepo(
         {
           id,
           urlHash: hash,
-          url: input.url,
-          urlEnc: null,
+          url: storedUrl,
+          urlEnc,
           urlRedacted: redacted,
           localPath: cacheDir,
           defaultBranch: defaultBr,

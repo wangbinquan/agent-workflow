@@ -560,7 +560,7 @@ export async function resolveRepoSourceSingle(
   const specRef = typeof specRefRaw === 'string' && specRefRaw.length > 0 ? specRefRaw : undefined
   const syncCandidates = [specRef].filter((s): s is string => typeof s === 'string')
   const resolved = await resolveCachedRepo(
-    { db: deps.db, appHome, syncBranches: syncCandidates },
+    { db: deps.db, appHome, syncBranches: syncCandidates, secretBox: deps.secretBox },
     { url: sourceUrl },
   )
   if (!resolved.fetchOk) {
@@ -590,6 +590,7 @@ export async function resolveRepoSourceSingle(
         appHome,
         syncBranches: [resolved.cached.defaultBranch],
         fetchOnReuse: false,
+        secretBox: deps.secretBox,
       },
       { url: sourceUrl },
     )
