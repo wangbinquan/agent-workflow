@@ -31,21 +31,31 @@ workgroup 代码）。
 - **RFC-218-T5** wire：`StartAgentTaskSchema.description` → optional + 新增 `inputs`；
   scheduled payload 随 extend 继承；`rejectRetiredStartTaskKeys` 键清单核对。e2e 字段 grep
   （[reference_e2e_outside_workspace_typecheck]）。
-- **RFC-218-T6** backend 快照合成：`buildAgentHostSnapshot(agent, allowClarify)` 端口化分支
-  （input 节点 `__agent_input_{i}__` / 边 / 模板），零端口路径字节不动；`startAgentTask` 形态
-  校验矩阵（description/inputs 互斥、未知键、缺必填、blocker 400）。测试 design §9-5..7、9。
-- **RFC-218-T7** multipart 共通化：从 `handleMultipartTaskStart` 抽 `services/launchMultipart.ts`
-  公共骨架（defs 来源 + start 回调参数化），`/api/tasks` 迁移到共用层（行为字节不变），
-  `/api/agents/:name/tasks` 接入 multipart 分支；`.agent-inputs/{port}` 落盘。测试 design §9-8。
+- **RFC-218-T6** backend 快照合成与形态校验：`buildAgentHostSnapshot(agent, allowClarify)`
+  端口化分支（input 节点 `__agent_input_{i}__` / 边 / 模板），零端口路径字节不动；形态校验
+  矩阵抽成 `validateAgentLaunchShape(agent, payload)`（description/inputs 互斥、未知键、
+  缺必填、blocker、含上传端口的 multipart-only 判定——设计门 P2-2 的共用点）。
+  测试 design §9-5..7、9、20、23。
+- **RFC-218-T7** multipart 共通化 + 生命周期：从 `handleMultipartTaskStart` 抽
+  `services/launchMultipart.ts` 公共骨架（defs 来源 + start 回调参数化），`/api/tasks` 迁移到
+  共用层（行为字节不变），`/api/agents/:name/tasks` 接入 multipart 分支、`.agent-inputs/{port}`
+  落盘；**执行序按 design §5.2 固定**：内存解析 → `startAgentTask` 完整预检链（ACL/OCC/预约/
+  recheck/blocker/F14/字段校验）→ worktree 就绪后落盘 → finally 释放（设计门 P1-2/P1-3）。
+  测试 design §9-8、19、20。
 - **RFC-218-T8** 前端向导：agent `inputs` 数据可达性核实（列表 DTO 或补 detail query）→
-  `inputDefs` 三元来源 → 第 3 步复用 DynamicInput/uploads/必填/multipart 判定 → blocker
-  ErrorBanner + 禁用 → 摘要步分支。`DynamicInput` 增加 chips presentation 分支。
-  测试 design §9-12。
+  **数据就绪屏障**（agentsQ 成功且命中行前 LoadingState/ErrorBanner、canProceed false，
+  设计门 P1-5）→ `inputDefs` 三元来源 → seed/prune effect 泛化到「以当前 inputDefs 为准」
+  （含 uploads 清理，设计门 P1-4）→ 复用 DynamicInput/必填/multipart 判定 → maxLength 贯通
+  （设计门 P2-4）→ blocker ErrorBanner + 禁用 → 摘要步分支。`DynamicInput` 增加 chips
+  presentation 分支。编辑器侧：shared blocker 接入 `validateAgentPortState` 警告
+  （设计门 P2-3）。测试 design §9-12、21、22、23（vitest 部分）、25。
 - **RFC-218-T9** 启动 body：`buildAgentStartBody` 按形态 stamp `inputs`/`description` 二选一
-  （白名单前科，独立任务 + 锁）。测试 design §9-13。
-- **RFC-218-T10** relaunch + scheduled：`taskToLaunchPayload` agent 分支端口化识别 + 文本预填 +
-  upload 键剔除；scheduled 保存期含上传端口拒绝；火时按当时 agent 重派生（既有路径自然获得，
-  补失败面断言）。测试 design §9-10、11、14。
+  （白名单前科，独立任务 + 锁），且按当前派生 defs 过滤键（设计门 P1-4 第二层）。
+  测试 design §9-13。
+- **RFC-218-T10** relaunch + scheduled：`taskToLaunchPayload` agent 分支端口化识别用
+  `/^__agent_input_\d+__$/` **精确匹配**（设计门 P1-1，附真实零端口快照反例锁）+ 文本预填 +
+  upload 键剔除；scheduled create/update 接入 `validateAgentLaunchShape`（设计门 P2-2）；
+  火时按当时 agent 重派生（既有路径自然获得，补失败面断言）。测试 design §9-10、11、14、18、24。
 - **RFC-218-T11** e2e：`task-wizard.spec.ts` 增双文本端口 stub agent 场景（design §9-16）；
   既有 agent 用例零改动确认。
 - **RFC-218-T12** 守卫与收尾：`tasks.new.tsx` inputDefs 表级 grep 锁（design §9-17）；
@@ -78,5 +88,6 @@ T2 ⇢ T8（upload 端口控件视觉依赖 PR-1，功能不阻塞）
 
 ## 实现门
 
-- 设计门：Codex review（落档后、请求用户批准前）——本文件提交后立即跑。
+- 设计门：**已跑（2026-07-22，Codex review @ abadee24）**——5 P1 + 4 P2 全部裁定有效并修订入
+  design.md v2（修订账 design §10，原文 `codex-design-gate-2026-07-22.md`）。
 - 实现门：每 PR 合入前 Codex review + CI 按 [feedback_post_commit_ci_check] 查绿。

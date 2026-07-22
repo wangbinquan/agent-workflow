@@ -1,0 +1,34 @@
+# Codex Review
+
+Target: branch diff against abadee24^
+
+The design has blocking lifecycle and compatibility defects: upload launches move identity and static checks after side effects, the relaunch discriminator matches legacy snapshots, and normal wizard state/loading paths can generate invalid bodies. Reserved-name and scheduled-task contracts are also incomplete, so implementing the RFC as written would break existing relaunches and permit failed or incorrect launches.
+
+Full review comments:
+
+- [P1] Exclude the legacy node from portized relaunch detection — /private/tmp/claude-501/-Users-wangbinquan-dev-proj-agent-workflow/a7ea24b5-6f0c-4b39-a1b9-7fa19fd3dec8/scratchpad/rfc218-review-wt/design/RFC-218-agent-launch-port-form/design.md:194-196
+  The legacy zero-port host uses node id `__agent_input__`, which also starts with `__agent_input_`; therefore the proposed prefix test classifies every real legacy/zero-port agent task as portized. `taskToLaunchPayload` would emit `inputs` instead of `description`, losing the saved description and violating AC-2/AC-9. Match the indexed form exactly or persist an explicit discriminator, and test against an actual RFC-165 snapshot.
+
+- [P1] Run agent preflight before multipart side effects — /private/tmp/claude-501/-Users-wangbinquan-dev-proj-agent-workflow/a7ea24b5-6f0c-4b39-a1b9-7fa19fd3dec8/scratchpad/rfc218-review-wt/design/RFC-218-agent-launch-port-form/design.md:173-177
+  For an upload-bearing launch, this shared skeleton materializes the space and writes files before it can invoke the supplied `startAgentTask` callback. That callback currently owns the ACL/identity check, `expectedAgentId` fence, launch reservation and recheck, plus F14 snapshot validation, so stale or invalid requests perform filesystem/network side effects first and delete/rename can win during upload. Split out an agent preflight/reservation scope that runs before multipart work and remains held through the `startTask` handoff.
+
+- [P1] Require multipart proof for upload-bearing launches — /private/tmp/claude-501/-Users-wangbinquan-dev-proj-agent-workflow/a7ea24b5-6f0c-4b39-a1b9-7fa19fd3dec8/scratchpad/rfc218-review-wt/design/RFC-218-agent-launch-port-form/design.md:178-180
+  For a `path<...>` port, the JSON branch can still submit `inputs[key]: 'anything'`; §5.1 only checks that required values are nonblank, while only the multipart helper validates files and writes `.agent-inputs`. Direct API calls—and schedules whose text port later changes to a path kind—can therefore launch with unvalidated or nonexistent paths. Require a trusted multipart/materialization result whenever current derived definitions contain upload ports, and test JSON rejection.
+
+- [P1] Reset port state when the selected agent changes — /private/tmp/claude-501/-Users-wangbinquan-dev-proj-agent-workflow/a7ea24b5-6f0c-4b39-a1b9-7fa19fd3dec8/scratchpad/rfc218-review-wt/design/RFC-218-agent-launch-port-form/design.md:207-210
+  When a user fills agent A's ports and then selects agent B, or switches from a workflow, the current `inputs` and `uploads` state retains A's keys because its pruning/normalization effect is guarded by `kind === 'workflow'`. Reusing only the renderer and stamping the whole map sends undeclared keys, which the proposed service matrix rejects, so a normal object switch cannot launch. Generalize that effect or filter the body against the current derived definitions, including upload state.
+
+- [P1] Wait for agent data before choosing the form shape — /private/tmp/claude-501/-Users-wangbinquan-dev-proj-agent-workflow/a7ea24b5-6f0c-4b39-a1b9-7fa19fd3dec8/scratchpad/rfc218-review-wt/design/RFC-218-agent-launch-port-form/design.md:204-206
+  With a deep-linked `agentName`, the wizard can reach the content step while `agentsQ` is still loading or failed. A missing selected row is then indistinguishable from a loaded agent whose `inputs` is `[]`, so the wizard can render the legacy description form and submit a body that a portized agent rejects. Mirror the workflow detail success barrier, or fetch per-agent detail, and require a matching row before deciding between zero-port and portized UI.
+
+- [P2] Reserve every runtime-special input name — /private/tmp/claude-501/-Users-wangbinquan-dev-proj-agent-workflow/a7ea24b5-6f0c-4b39-a1b9-7fa19fd3dec8/scratchpad/rfc218-review-wt/design/RFC-218-agent-launch-port-form/design.md:91-95
+  Checking only built-in variables still admits names the runtime treats specially: deprecated tokens such as `__clarify_questions__` render as an empty string, system-channel names such as `__clarify_response__` make the synthesized data edge fail or be removed by channel handling, and `__proto__` is dropped by the specified Zod record/object pipeline. These agents pass the new blocker but lose input or fail later; derive the reserved set from built-ins, deprecated tokens, the system-channel registry, and poison record keys.
+
+- [P2] Validate scheduled agent bodies before saving — /private/tmp/claude-501/-Users-wangbinquan-dev-proj-agent-workflow/a7ea24b5-6f0c-4b39-a1b9-7fa19fd3dec8/scratchpad/rfc218-review-wt/design/RFC-218-agent-launch-port-form/design.md:184-188
+  After both `description` and `inputs` become optional, payloads with neither field, stale or unknown keys, missing required ports, or a signal/name blocker all pass `ScheduledAgentPayloadSchema`; the current create/update gate only checks target usability, and this section adds only the upload check. Such schedules can be persisted even though every fire must fail. Extract the conditional launch validator and run it during scheduled create/update as well as at fire time.
+
+- [P2] Route save-time name warnings to the editor — /private/tmp/claude-501/-Users-wangbinquan-dev-proj-agent-workflow/a7ea24b5-6f0c-4b39-a1b9-7fa19fd3dec8/scratchpad/rfc218-review-wt/design/RFC-218-agent-launch-port-form/design.md:97-99
+  `createAgent`/`updateAgent` and their HTTP routes currently return only an `Agent`, so appending a warning in `services/agent.ts` provides no channel by which the author can see AC-8's save-time warning. Feed the shared blocker result into the existing frontend `validateAgentPortState`/`AgentPortValidationSummary`, or define an explicit response envelope, and cover the legacy-name save path.
+
+- [P2] Enforce the input length limit in reused controls — /private/tmp/claude-501/-Users-wangbinquan-dev-proj-agent-workflow/a7ea24b5-6f0c-4b39-a1b9-7fa19fd3dec8/scratchpad/rfc218-review-wt/design/RFC-218-agent-launch-port-form/design.md:207-212
+  For text, markdown, and chips ports, `StartAgentTaskSchema` caps each value at 65,536 characters, but the reused `DynamicInput` and `ChipsInput` controls have no corresponding limit, unlike the current agent-description textarea. A user can pass every frontend readiness check and receive a 422 only on submit; carry the limit through the derived definition/control and test the boundary.

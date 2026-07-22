@@ -71,13 +71,16 @@ CLAUDE.md「Frontend UI consistency」原则这是遗留回归面。
   进入 agent prompt；单端口也走信封；用户文本中的 `{{…}}` 不被二次展开（继承 RFC-165 性质）。
 - **AC-7** 上传端口：文件落 worktree `.agent-inputs/{port}/`，端口值 = 换行拼接的 repo 相对路径
   （与 workflow upload/files 端口的既有 wire 约定一致）；`POST /api/agents/:name/tasks` 支持
-  multipart，与 `/api/tasks` 共用同一套解析 / 落盘 / 安全护栏（路径逃逸、MIME 嗅探、大小限制）。
-- **AC-8** 端口名不能作模板 token（非 `\w+`、或与内建 token / 保留键撞名）时：启动被明确拒绝，
-  错误信息指出端口名与原因；agent 保存时对这类名字给出警告（不阻断保存）。
+  multipart，与 `/api/tasks` 共用同一套解析 / 落盘 / 安全护栏（路径逃逸、MIME 嗅探、大小限制）；
+  upload 端口**只认 multipart**——纯 JSON 为其直传路径字符串被 400 拒绝，multipart 下服务端
+  落盘结果覆写客户端同名文本；校验全部通过之前零文件落盘，启动预约罩住整个上传+启动窗口。
+- **AC-8** 端口名不能作模板 token（非 `\w+`、`/^__.*__$/` 保留族、record 毒键）时：启动被明确
+  拒绝，错误信息指出端口名与原因；agent 端口编辑器对这类名字实时警告（不阻断保存）。
 - **AC-9** relaunch：文本类端口预填原值；上传类端口要求重选（旧路径不复用）；零端口老任务
   relaunch 行为不变。
 - **AC-10** scheduled：纯文本端口 agent 可定时（payload 携带 `inputs`，触发时按当时的 agent 定义
-  重新校验）；含上传端口的 agent 保存定时任务时明确拒绝。
+  重新校验）；保存期跑与启动同一套形态校验（两者皆无 / 未知键 / 缺必填 / blocker / 含上传端口
+  → 保存即 400，不允许存下必然每次火失败的定时任务）。
 - **AC-11** 上传控件收敛：启动页 upload 输入呈现 FileDropzone 家族体验（拖拽高亮 / 已选卡片 /
   逐文件删除 / a11y），`UploadPicker` 手搓 drag 处理删除；与 skill/agent 导入对话框视觉对齐
   （截图自查，light + dark）。
