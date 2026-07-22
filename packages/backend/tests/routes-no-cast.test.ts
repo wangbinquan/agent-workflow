@@ -54,9 +54,9 @@ const FILE_LINE_ALLOWLIST = new Set<string>([
   'oidc-auth.ts:const body = (await safeJson(c.req.raw)) as Record<string, unknown>',
   // (RFC-099: the tasks.ts assignments PATCH handler that carried the same
   // cast was removed along with the node-assignment mechanism.)
-  // tasks.ts:496 — multipart FormData entries; web spec types are wrong-shape.
-  // Re-typing FormData iterators upstream is out of scope here.
-  'tasks.ts:const entries = form.entries() as unknown as Iterable<[string, string | File]>',
+  // (RFC-218: the multipart FormData-entries cast moved out of routes/tasks.ts
+  // into services/launchMultipart.ts when the parser was extracted for the
+  // agent launch route to share — no cast remains in routes/*.ts for it.)
   // (RFC-066 PR-A: the legacy `tasks.ts:repoPath: startInput.repoPath as
   // string,` entry was retired when the multipart handler was refactored
   // to narrow via an explicit `if (!multipartRepoPath) throw …` guard;
