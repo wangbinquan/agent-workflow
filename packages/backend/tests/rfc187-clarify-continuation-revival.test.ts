@@ -156,8 +156,9 @@ describe('RFC-187 T13 — auto-resume sweeps the answer-handoff wedge', () => {
 })
 
 describe('RFC-187 T13 — source locks (engine-entry revive)', () => {
+  // RFC-217 T3: the engine entry lives in engine.ts (runner.ts dissolved).
   const RUNNER = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'runner.ts'),
+    resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'engine.ts'),
     'utf8',
   )
 

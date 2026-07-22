@@ -102,11 +102,13 @@ describe('RFC-186 — protocol block carries the literal <workflow-output> examp
 // Source locks — the string-prefix chain + per-code special-case must be GONE
 // from the turn drivers (they are the fragility RFC-186 removed), and the budget
 // must be the aligned value.
-describe('RFC-186 — source locks (workgroupRunner)', () => {
-  const src = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'runner.ts'),
-    'utf8',
-  )
+describe('RFC-186 — source locks (workgroup engine, RFC-217 T3 split layout)', () => {
+  // RFC-217 T3 dissolved workgroupRunner.ts into engine + strategies +
+  // memberTurns; the banned branches must stay out of ALL of them.
+  const wg = (...seg: string[]): string =>
+    readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', ...seg), 'utf8')
+  const src = wg('engine.ts')
+    .concat(wg('memberTurns.ts'), wg('strategies', 'leaderWorker.ts'), wg('strategies', 'freeCollab.ts'))
 
   // Match the LIVE branch form (`&& attempt`), not the explanatory comments that
   // document what was removed.
@@ -133,8 +135,10 @@ describe('RFC-186 — source locks (workgroupRunner)', () => {
     // 调度架构审视 2026-07-14：字面量 `= 3` 收敛为跨引擎共享常量——parity 从
     // 「注释对齐」升级为「同一符号」；常量取值 3 由
     // retry-budget-single-source.test.ts / envelope-followup-source-grep 锁定。
-    expect(src).toContain('const WG_PROTOCOL_RETRIES = DEFAULT_PROTOCOL_RETRY_BUDGET')
-    expect(src).not.toContain('const WG_PROTOCOL_RETRIES = 3')
+    // RFC-217 T5 起该常量的家在 turnExecution.ts（executeTurn 的 retryPolicy 单源）。
+    const skeleton = wg('turnExecution.ts')
+    expect(skeleton).toContain('const WG_PROTOCOL_RETRIES = DEFAULT_PROTOCOL_RETRY_BUDGET')
+    expect(skeleton).not.toContain('const WG_PROTOCOL_RETRIES = 3')
   })
 
   test('failed message turn is surfaced to the room, not silently swallowed', () => {

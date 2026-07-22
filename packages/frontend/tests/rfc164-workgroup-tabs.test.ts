@@ -93,7 +93,9 @@ describe('availableTabs — non-workgroup tasks stay item-by-item unchanged', ()
 
 describe('tasks.detail.tsx — workgroup wiring (source locks)', () => {
   test('derives capabilities once and delegates URL resolution to the RFC-201 oracle', () => {
-    expect(SRC).toMatch(/const isWorkgroup = task\.data\?\.workgroupId != null/)
+    // RFC-217 T4b: the workgroup discriminator is the shared isWorkgroupTask
+    // oracle (G4 bans raw workgroupId != null scattering).
+    expect(SRC).toMatch(/const isWorkgroup = task\.data !== undefined && isWorkgroupTask\(task\.data\)/)
     expect(SRC).toMatch(/deriveTaskDetailCapabilities\(task\.data, \{/)
     expect(SRC).toMatch(/canReadQuestions: true/)
     expect(SRC).toMatch(/canReadFeedback: actor\.data\?\.permissions\.includes\('memory:read'\)/)
