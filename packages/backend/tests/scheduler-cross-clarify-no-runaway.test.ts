@@ -178,7 +178,8 @@ describe('RFC-056 scheduler — no runaway pending cross-clarify rows', () => {
     expect(branchIdx).toBeGreaterThan(-1)
     // Window sized for the branch body; RFC-098 WP-10 widened it (the two
     // guard mints now go through the multi-line mintNodeRun factory call).
-    const body = src.slice(branchIdx, branchIdx + 4500)
+    // RFC-217 跟修（797f8d24）在 stopped 分支插入了裁决处理，窗口随之放宽。
+    const body = src.slice(branchIdx, branchIdx + 7000)
     // Three locks: live-row probe, persistent-stop fallback, and the
     // common path explicitly returning without minting a row.
     expect(body).toContain('cross-clarify-live-row-exists')
