@@ -117,11 +117,13 @@ describe('AgentForm input port cards and Dialog', () => {
     )
 
     openInputEditor('diff')
+    // RFC-218: absence means required (D5), so the dialog opens CHECKED and
+    // this click turns Required off — the explicit false must persist.
     fireEvent.click(screen.getByTestId('agent-input-port-required'))
     await saveInputDialog()
 
     expect(lastPayload(onChange).inputs).toEqual([
-      { name: 'diff', kind: 'path<md>', required: true, description: 'Patch file' },
+      { name: 'diff', kind: 'path<md>', required: false, description: 'Patch file' },
     ])
   })
 
