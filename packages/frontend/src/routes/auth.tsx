@@ -1,6 +1,7 @@
 // RFC-036 — three-tab login screen:
-//   - Password (default)
-//   - OIDC provider (shown when /api/auth/oidc/providers returns ≥1 entry)
+//   - Password (default when no identity provider is configured)
+//   - OIDC provider (shown when /api/auth/oidc/providers returns ≥1 entry;
+//     becomes the default landing tab when at least one provider exists)
 //   - Daemon token (admin / break-glass fallback)
 // Shown when localStorage has no token, after a 401, or on first visit. The
 // daemon URL field is no longer surfaced — the SPA always talks to its own
@@ -74,17 +75,11 @@ function AuthPage() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const usernameRef = useRef<HTMLInputElement>(null)
-  const initialFocusDoneRef = useRef(false)
+  // True once the user has picked a tab or typed into any method form; a
+  // late discovery response must never displace what the user is doing.
+  const interactedRef = useRef(false)
+  const initialLandingDoneRef = useRef(false)
   const discoveryRequestRef = useRef(0)
-
-  // Focus the first password-method field exactly once for this Auth-page
-  // landing. Panels stay mounted below, so keyboard tab activation never
-  // remounts an autoFocus input and steals focus from the active tab.
-  useEffect(() => {
-    if (initialFocusDoneRef.current) return
-    initialFocusDoneRef.current = true
-    usernameRef.current?.focus()
-  }, [])
 
   const discoverOidcProviders = useCallback(async () => {
     const request = ++discoveryRequestRef.current
@@ -110,6 +105,24 @@ function AuthPage() {
 
   const providers = oidcDiscovery.status === 'success' ? oidcDiscovery.providers : []
 
+  // Initial landing decision, one-shot on the first discovery settle: an
+  // installation with ≥1 identity provider defaults to the OIDC tab (SSO
+  // deployments sign in there, not with local passwords); otherwise stay on
+  // the password tab and focus its first field. Focus intentionally waits for
+  // settle — focusing at mount would put the caret in a panel the decision
+  // may immediately hide. Panels stay mounted below, so this never re-runs on
+  // tab activation and cannot steal focus later.
+  useEffect(() => {
+    if (initialLandingDoneRef.current || oidcDiscovery.status === 'loading') return
+    initialLandingDoneRef.current = true
+    if (interactedRef.current) return
+    if (oidcDiscovery.status === 'success' && oidcDiscovery.providers.length > 0) {
+      setTab('oidc')
+    } else {
+      usernameRef.current?.focus()
+    }
+  }, [oidcDiscovery])
+
   // Note: the `#aw_session=` fragment from the OIDC callback is handled
   // globally in __root.tsx (so any postLoginRedirect target picks it up),
   // not here. If the token lands while we're on /auth the SPA still
@@ -122,8 +135,17 @@ function AuthPage() {
   // form. We deliberately keep input values so accidental tab clicks don't
   // wipe what they typed.
   function switchTab(next: AuthTab) {
+    interactedRef.current = true
     setTab(next)
     setError(null)
+  }
+
+  /** Wrap a draft setter so typing pins the current tab against late discovery. */
+  function draftSetter(setter: (value: string) => void) {
+    return (value: string) => {
+      interactedRef.current = true
+      setter(value)
+    }
   }
 
   async function handlePasswordSubmit(e: React.FormEvent) {
@@ -201,7 +223,7 @@ function AuthPage() {
               type="text"
               autoComplete="username"
               value={username}
-              onChange={setUsername}
+              onChange={draftSetter(setUsername)}
               placeholder={t('auth.usernamePlaceholder', { defaultValue: 'alice' })}
             />
           </Field>
@@ -210,7 +232,7 @@ function AuthPage() {
               type="password"
               autoComplete="current-password"
               value={password}
-              onChange={setPassword}
+              onChange={draftSetter(setPassword)}
               placeholder={t('auth.passwordPlaceholder', { defaultValue: '••••••••' })}
             />
           </Field>
@@ -269,7 +291,7 @@ function AuthPage() {
           <TextInput
             type="password"
             value={tokenInput}
-            onChange={setTokenInput}
+            onChange={draftSetter(setTokenInput)}
             placeholder={t('auth.tokenPlaceholder')}
           />
         </Field>

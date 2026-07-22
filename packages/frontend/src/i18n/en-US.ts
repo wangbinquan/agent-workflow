@@ -314,7 +314,7 @@ export const enUS: Resources = {
     or: 'or',
     loginWith: 'Login with {{name}}',
     useDaemonToken: 'Use daemon token',
-    tabPassword: 'Username & password',
+    tabPassword: 'Password',
     tabOidc: 'Identity provider',
     tabToken: 'Token sign-in',
     oidcHint: 'Sign in with an external identity provider.',

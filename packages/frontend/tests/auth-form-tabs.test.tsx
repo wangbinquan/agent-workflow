@@ -1,6 +1,12 @@
 // RFC-198 PR5 — Auth is a real shared-tab surface. These rendered locks keep
 // late OIDC discovery, keep-mounted form drafts, linked tab/panel semantics,
 // and the one-time initial focus contract from regressing.
+//
+// Default-landing contract (user report 2026-07-22): an installation with ≥1
+// configured identity provider lands on the OIDC tab; the password tab stays
+// the default otherwise. Any user interaction before discovery settles (tab
+// pick or typed draft) pins the current tab — the late response never
+// displaces the user.
 
 import {
   Outlet,
@@ -90,7 +96,11 @@ describe('/auth shared forms and tabs', () => {
     const username = (await screen.findByRole('textbox', {
       name: enUS.auth.username,
     })) as HTMLInputElement
-    const password = screen.getByLabelText(enUS.auth.password) as HTMLInputElement
+    // selector narrows past the password TABPANEL, which shares the
+    // accessible name "Password" via aria-labelledby → the tab.
+    const password = screen.getByLabelText(enUS.auth.password, {
+      selector: 'input',
+    }) as HTMLInputElement
     await waitFor(() => expect(document.activeElement).toBe(username))
 
     fireEvent.change(username, { target: { value: 'alice' } })
@@ -124,6 +134,54 @@ describe('/auth shared forms and tabs', () => {
       expect(panel?.getAttribute('role')).toBe('tabpanel')
       expect(panel?.getAttribute('aria-labelledby')).toBe(tab.id)
     }
+  })
+
+  test('lands on the OIDC tab by default when a provider is configured', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      json({ providers: [{ slug: 'corp', displayName: 'Corporate SSO', iconUrl: null }] }),
+    )
+    renderAuth()
+
+    const oidcTab = await screen.findByRole('tab', { name: enUS.auth.tabOidc })
+    await waitFor(() => expect(oidcTab.getAttribute('aria-selected')).toBe('true'))
+    expect(screen.getByRole('button', { name: 'Login with Corporate SSO' })).toBeTruthy()
+    // The password panel is hidden, so the initial username autofocus must
+    // not have fired into it.
+    expect(document.activeElement).toBe(document.body)
+    expect(screen.getByTestId('auth-tabpanel-password').hidden).toBe(true)
+
+    // Password sign-in stays one click away.
+    fireEvent.click(screen.getByRole('tab', { name: enUS.auth.tabPassword }))
+    await waitFor(() => expect(screen.getByTestId('auth-tabpanel-password').hidden).toBe(false))
+  })
+
+  test('a typed draft pins the password tab against late provider discovery', async () => {
+    let resolveProviders: ((response: Response) => void) | undefined
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveProviders = resolve
+        }),
+    )
+    renderAuth()
+
+    fireEvent.change(await screen.findByRole('textbox', { name: enUS.auth.username }), {
+      target: { value: 'alice' },
+    })
+    await waitFor(() => expect(resolveProviders).toBeTypeOf('function'))
+    await act(async () => {
+      resolveProviders!(
+        json({ providers: [{ slug: 'corp', displayName: 'Corporate SSO', iconUrl: null }] }),
+      )
+    })
+
+    const oidcTab = await screen.findByRole('tab', { name: enUS.auth.tabOidc })
+    expect(oidcTab.getAttribute('aria-selected')).toBe('false')
+    const passwordTab = screen.getByRole('tab', { name: enUS.auth.tabPassword })
+    expect(passwordTab.getAttribute('aria-selected')).toBe('true')
+    expect(
+      (screen.getByRole('textbox', { name: enUS.auth.username }) as HTMLInputElement).value,
+    ).toBe('alice')
   })
 
   test('adds a late OIDC method without displacing the active token tab or stealing focus', async () => {
@@ -185,7 +243,7 @@ describe('/auth shared forms and tabs', () => {
     fireEvent.change(await screen.findByRole('textbox', { name: enUS.auth.username }), {
       target: { value: 'alice' },
     })
-    fireEvent.change(screen.getByLabelText(enUS.auth.password), {
+    fireEvent.change(screen.getByLabelText(enUS.auth.password, { selector: 'input' }), {
       target: { value: 'correct horse' },
     })
     fireEvent.click(screen.getByRole('button', { name: enUS.auth.signIn }))
