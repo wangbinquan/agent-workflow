@@ -81,3 +81,38 @@
 - T1/T3 是大搬家 PR：当日完成当日推，精确 pathspec 提交，撞并发 session 冲突即停下问用户。
 - C 线次序不可倒置（读切换先于删表）；T8 前置脚本证明读侧引用归零。
 - migration ×2：journal `when` 接合成轴（0106=1786550400000、0107=+86400000），multi-statement breakpoints，推前跑全量 backend suite（[feedback_full_suite_after_migration]）。
+
+## 交付记录（2026-07-22，T12 收尾）
+
+12 PR 全部交付并推送（每 PR 前置门：typecheck+lint+format:check+定向套件；结构性 PR 加 build:binary；migration PR 加全量 backend suite）：
+
+| 任务 | 提交 | 摘要 |
+|---|---|---|
+| T1 地基与守卫 | `2756c97d` | workgroup/ 目录化 + constants.ts 斩环 + dependency-cruiser no-circular 真接线 + G1 四锁 |
+| T2 状态真表 | `399b0f7f` | migration 0106 `workgroup_task_state`（gate 五态 CAS + dw 检查点整槽 + pause 列）+ nudge kind 化 + G2/G3 |
+| T3a 骨架收编 | `5823c301` | 四 driver 收编 executeTurn（重试/软拒/followup/投影/广播单点化） |
+| T3b 引擎解体 | `335fa501` | runner 2748 行 → engine 786 + strategies/{lw,fc} + memberTurns + prompts；roundMode fail-loud |
+| T3c codec/常量 | `08fa177a` | msg shardKey codec（shared/workgroup.ts 防 TDZ 环）+ WG_RERUN_CAUSE + G5 棘轮/G7 |
+| T4a 写端点下沉 | `3bc2b63f` | 五写端点 → services/workgroup/taskActions.ts；routes 1453→600 |
+| T4b/c oracle+读下沉 | `a53e0af9` 等 | isWorkgroupTask 全仓 oracle + G4；读端点下沉 room.ts；routes → 118 行纯 transport |
+| T5 round 拆分 | `a7541f8f` | budgetUsed wire 改名 + fc round 显式 null（DB 列不动） |
+| T6 写侧收口 | `3efa5ca9` | update(workgroupAssignments) 唯一属主 lifecycle.ts + s14 台账 |
+| T7 clarify 读侧统一 | （T7 批） | 读侧全切 clarify_rounds + 修复路径双写补齐 + 答题双盲调消灭 |
+| T8 真 T17 | `f1964395` | migration 0107：同 ID 分歧 reconcile + 尾行补 INSERT + RFC-132 双垫片折入 + DROP 双遗留表 + 重建剥 question_scopes_json；夹具统一 clarify-fixtures + era-lock 冻结器 migration-freeze.ts；G8 |
+| T9 服务合并 | `fbe29023`+`0ac1c6b7` | clarify.ts+crossClarify.ts → services/clarify/service.ts kind 泛化（createClarifyRound 判别联合 + rowToRound 单 DTO + 单播 wire 冻结适配）；terminatedAs 判别列贯穿三层；sessionModeFallback 改名迁出；15 冲突码枚举化；dispatch 双巨函数拆段（锁契约零改动）；baseline 对称双套并参数化单套 |
+| T10 房间拆分 | `1d435563` | room/ 目录九件套；composer 状态下放（打字不重渲全房，探针测试+变异实证）；房间 query 单 owner + G9；useListboxNavigation 抽 hook |
+| T11 原语收尾 | `8ce6ce97` | useOwnedEditScope 提炼+单测；六处裸 error span → ErrorBanner；Card title/actions 最小扩展 + side-title 13px 淘汰；.dw-panel__* 命名空间；RunStatusRow i18n 缺口 |
+
+**守卫矩阵终检**（T12，全部一次通过）：`rfc217-architecture-locks.test.ts` 13 pass（G1 目录/环、G2 route 禁裸写+写端点属主、G3 gate 编解码唯一、G4 kind oracle、G5 mode 收敛棘轮、G6 骨架去重、G7 shardKey codec、G8 clarify 单地层、G9 房间 query 单 owner、T6 写属主等）；每条守卫落地当时均做过变异实证（红→修→绿记录见各 PR）。
+
+**AC 对照**：AC-1〜AC-12 全达成；AC-11（rfc186/187 真子进程 e2e 家族不打桩跑绿）在 T3/T8/T9 每个结构性 PR 后重跑通过。
+
+## 偏差记录（与 design.md 原案的差异，均为落地时的更优选择）
+
+1. **rounds.ts 文件名保留**（design 原拟 roundModel.ts）——既有 import 面大，语义等价。
+2. **G5 实现为棘轮**（mode 直比场次快照 ≤ 现值）而非绝对禁令——策略对象内 mode 分叉合法。
+3. **hooks.ts 只承载类型**，`buildWorkgroupHooks` 本体留在 scheduler.ts——避免 scheduler→engine 反向依赖成环。
+4. **T9：dispatchCrossClarifyNode 反向转正**——原判死面删除，落地时发现 5 个测试家族锁其行为语义，改为 scheduler 内联短路把 pending→done 迁移下沉该函数（原因串单源），比删除更符合 RFC 消重旨意。
+5. **T9：cross 不复跑 self 信封 schema**——统一 create 首稿两 kind 同跑 ClarifyEnvelopeBodySchema，被 scheduler-cross-clarify-dispatch 的「§4.1 提问上限豁免」锁抓回；终态 self-only 复验。
+6. **T10：RunStatusRow 收敛范围窄于原案**——时长/名字留在布局侧（右栏两行网格契约），只收敛 live-status 优先规则 + kind chip（这才是会分叉的语义）。
+7. **T8：0029/0031 迁移史锁改 era-lock**（migration-freeze.ts 冻结在 0106）而非删除——历史断言保留，HEAD 不留死表面。
