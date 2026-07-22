@@ -86,6 +86,24 @@ export class RestorePreMigrationBinaryError extends Error {
   }
 }
 
+// RFC-213 impl-gate P0-1 (Codex 2026-07-22): thrown when a step AFTER the DB
+// swap fails. The live DB is now the restored generation, so the boot MUST NOT
+// silently fall back to "give up on the staged restore, boot the still-healthy
+// DB" (that healthy DB no longer exists at dbPath). applyPendingRestoreIfAny
+// rethrows this so the daemon fail-closes instead of booting a mixed state.
+export class RestorePostSwapError extends Error {
+  constructor(readonly cause: unknown) {
+    super(
+      `restore FAILED AFTER swapping in the new database ` +
+        `(${cause instanceof Error ? cause.message : String(cause)}). The live DB is now the ` +
+        `restored generation but post-swap steps (config/skills copy, migrate, worktree ` +
+        `reconstruct, task suspend) did not finish — the instance is in a mixed state and must ` +
+        `NOT boot on it. Recover from the pre-restore safety backup, then retry`,
+    )
+    this.name = 'RestorePostSwapError'
+  }
+}
+
 export interface RestorePlan {
   manifest: BackupManifest | null
   backupLastCreatedAt: number | null
@@ -118,6 +136,10 @@ export interface RestoreOptions {
   /** Skip the incoming-DB quick_check (escape hatch; default false). */
   skipIntegrityCheck?: boolean
   now?: number
+  /** Test-only fault-injection seam: invoked immediately AFTER the DB swap so a
+   *  test can force a post-swap failure and assert the RestorePostSwapError /
+   *  fail-closed path (P0-1). Never set in production. */
+  __afterSwapForTest?: () => void | Promise<void>
 }
 
 export interface RestoreResult {
@@ -389,61 +411,75 @@ export async function restoreBackup(
 
     swapInDbFile(incomingDb, dbPath)
 
-    // Filesystem-sourced state (NOT in the DB): config.json + skills/. Workflows
-    // ride in the DB (just swapped), so their YAML in the tarball is redundant here.
-    const restored = { db: true, config: false, skills: false }
-    const stagedConfig = join(staging, 'config.json')
-    if (existsSync(stagedConfig)) {
-      cpSync(stagedConfig, join(appHome, 'config.json'))
-      restored.config = true
-    }
-    const stagedSkills = join(staging, 'skills')
-    if (existsSync(stagedSkills)) {
-      const liveSkills = join(appHome, 'skills')
-      rmSync(liveSkills, { recursive: true, force: true })
-      cpSync(stagedSkills, liveSkills, { recursive: true })
-      restored.skills = true
-    }
+    // Impl-gate P0-1 (Codex 2026-07-22): PAST THIS POINT the live DB is the
+    // restored generation. Any failure here is NOT "the current data is
+    // untouched" — the boot must fail-closed rather than silently continue on a
+    // DB that no longer matches config/skills/migrations. Wrap every post-swap
+    // step so its error is tagged RestorePostSwapError and applyPendingRestoreIfAny
+    // can distinguish it from a pre-swap refusal.
+    try {
+      // Test-only seam to force a post-swap failure (never set in production).
+      if (opts.__afterSwapForTest !== undefined) await opts.__afterSwapForTest()
 
-    // Forward-migrate the swapped-in DB (also re-runs the boot integrity gate).
-    const migrated = willMigrate
-    {
-      // Impl-gate P1-2 (2026-07-22): thread the escape hatch through. Without
-      // it, `--skip-integrity-check` skipped the INCOMING gate but openDb's own
-      // quick_check then threw AFTER the swap — the flag's whole purpose
-      // (salvage a quick_check-failing but readable backup) self-defeated, and
-      // the abort landed mid-restore (DB swapped, suspend/reconstruct skipped).
-      const db = openDb({
-        path: dbPath,
-        migrationsFolder,
-        skipMigrations: !willMigrate,
-        skipIntegrityCheck: opts.skipIntegrityCheck,
-      })
-      // RFC-213 G4a mismatch-protect: the restored rows are backup-era, but the
-      // on-disk worktrees are current. Suspend auto-recovery for every non-terminal
-      // task so the auto-resume loop can't silently roll a NEWER worktree back to a
-      // STALE pre_snapshot (design gate). Manual resume stays the user's informed
-      // choice; auto-resume is blocked until they clear the suspension.
-      const suspended = suspendNonTerminalTasksAfterRestore(db)
-      // RFC-213 G4a: reconstruct any non-terminal task worktree that the backup
-      // captured and is now MISSING on disk (same-machine, inspection/salvage).
-      const wt = manifest?.includesWorktrees ? await reconstructWorktrees(db, staging) : null
-      await recordRecoveryEvent(db, {
-        kind: 'restore',
-        reason: `restored ${tarballPath} (direction=${direction}, ${migrated ? 'migrated' : 'no-migrate'})`,
-        after: {
-          safetyBackupPath,
-          direction,
-          suspendedTasks: suspended,
-          worktreesReconstructed: wt?.reconstructed.length ?? 0,
-        },
-        now,
-      })
-      ;(db as unknown as { $client: Database }).$client.close()
-    }
+      // Filesystem-sourced state (NOT in the DB): config.json + skills/. Workflows
+      // ride in the DB (just swapped), so their YAML in the tarball is redundant here.
+      const restored = { db: true, config: false, skills: false }
+      const stagedConfig = join(staging, 'config.json')
+      if (existsSync(stagedConfig)) {
+        cpSync(stagedConfig, join(appHome, 'config.json'))
+        restored.config = true
+      }
+      const stagedSkills = join(staging, 'skills')
+      if (existsSync(stagedSkills)) {
+        const liveSkills = join(appHome, 'skills')
+        rmSync(liveSkills, { recursive: true, force: true })
+        cpSync(stagedSkills, liveSkills, { recursive: true })
+        restored.skills = true
+      }
 
-    log.info('restore complete', { tarballPath, direction, migrated, safetyBackupPath })
-    return { direction, safetyBackupPath, migrated, restored }
+      // Forward-migrate the swapped-in DB (also re-runs the boot integrity gate).
+      const migrated = willMigrate
+      {
+        // Impl-gate P1-2 (2026-07-22): thread the escape hatch through. Without
+        // it, `--skip-integrity-check` skipped the INCOMING gate but openDb's own
+        // quick_check then threw AFTER the swap — the flag's whole purpose
+        // (salvage a quick_check-failing but readable backup) self-defeated, and
+        // the abort landed mid-restore (DB swapped, suspend/reconstruct skipped).
+        const db = openDb({
+          path: dbPath,
+          migrationsFolder,
+          skipMigrations: !willMigrate,
+          skipIntegrityCheck: opts.skipIntegrityCheck,
+        })
+        // RFC-213 G4a mismatch-protect: the restored rows are backup-era, but the
+        // on-disk worktrees are current. Suspend auto-recovery for every non-terminal
+        // task so the auto-resume loop can't silently roll a NEWER worktree back to a
+        // STALE pre_snapshot (design gate). Manual resume stays the user's informed
+        // choice; auto-resume is blocked until they clear the suspension.
+        const suspended = suspendNonTerminalTasksAfterRestore(db)
+        // RFC-213 G4a: reconstruct any non-terminal task worktree that the backup
+        // captured and is now MISSING on disk (same-machine, inspection/salvage).
+        const wt = manifest?.includesWorktrees ? await reconstructWorktrees(db, staging) : null
+        await recordRecoveryEvent(db, {
+          kind: 'restore',
+          reason: `restored ${tarballPath} (direction=${direction}, ${migrated ? 'migrated' : 'no-migrate'})`,
+          after: {
+            safetyBackupPath,
+            direction,
+            suspendedTasks: suspended,
+            worktreesReconstructed: wt?.reconstructed.length ?? 0,
+          },
+          now,
+        })
+        ;(db as unknown as { $client: Database }).$client.close()
+      }
+
+      log.info('restore complete', { tarballPath, direction, migrated, safetyBackupPath })
+      return { direction, safetyBackupPath, migrated, restored }
+    } catch (err) {
+      if (err instanceof RestorePostSwapError) throw err
+      throw new RestorePostSwapError(err)
+    }
   } finally {
     if (existsSync(staging)) rmSync(staging, { recursive: true, force: true })
   }

@@ -32,6 +32,7 @@ import {
 import {
   RestoreDowngradeError,
   RestoreIntegrityError,
+  RestorePostSwapError,
   validateBackupForStage,
 } from '../src/services/restore'
 import { readMigrationAxisFromJournal, writeManifest } from '../src/services/backupManifest'
@@ -119,6 +120,46 @@ describe('RFC-213 staged restore', () => {
     expect(await applyPendingRestoreIfAny({ appHome, dbPath, migrationsFolder: MIGRATIONS })).toBe(
       false,
     )
+  })
+
+  // Impl-gate P0-1 (Codex 2026-07-22): a failure AFTER the DB swap must fail
+  // closed (rethrow) — the live DB is already the restored generation, so
+  // quarantine-and-continue would boot a mixed state. It still quarantines so the
+  // next boot doesn't loop on the same fault.
+  test('a post-swap failure rethrows RestorePostSwapError; DB is swapped; marker quarantined', async () => {
+    const appHome = tmp()
+    const dbPath = join(appHome, 'db.sqlite')
+    // State A (1 wf) backed up; State B (2 wf) live.
+    let db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+    await addWorkflows(db, 1)
+    const backup = await createBackup({ db, appHome, now: 1 })
+    sqliteOf(db).close()
+    db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+    await addWorkflows(db, 1)
+    sqliteOf(db).close()
+    expect(countWorkflows(dbPath)).toBe(2)
+
+    stagePendingRestore(backup.path, { appHome, now: 2 })
+
+    await expect(
+      applyPendingRestoreIfAny({
+        appHome,
+        dbPath,
+        migrationsFolder: MIGRATIONS,
+        now: 3,
+        __afterSwapForTest: () => {
+          throw new Error('boom after swap')
+        },
+      }),
+    ).rejects.toBeInstanceOf(RestorePostSwapError)
+
+    // The swap ALREADY happened (it precedes the injected fault) → DB is state A.
+    expect(countWorkflows(dbPath)).toBe(1)
+    // Anti-brick: the pending marker is quarantined (a naive reboot won't re-run
+    // the same failing apply), and it is surfaced as a failed restore.
+    expect(hasPendingRestore(appHome)).toBe(false)
+    expect(existsSync(join(appHome, '.restore-pending.failed-3'))).toBe(true)
+    expect(listFailedRestores(appHome).length).toBeGreaterThan(0)
   })
 
   test('a marker whose staged tarball is gone is treated as already-consumed', async () => {

@@ -22,7 +22,7 @@ import {
 import { join } from 'node:path'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
-import { restoreBackup } from './restore'
+import { restoreBackup, RestorePostSwapError } from './restore'
 
 const log = createLogger('pendingRestore')
 
@@ -142,6 +142,9 @@ export interface ApplyPendingRestoreOptions {
   dbPath?: string
   migrationsFolder: string
   now?: number
+  /** Test-only: forwarded to restoreBackup's post-swap fault seam so a test can
+   *  exercise the fail-closed rethrow path (P0-1). Never set in production. */
+  __afterSwapForTest?: () => void | Promise<void>
 }
 
 /**
@@ -181,17 +184,13 @@ export async function applyPendingRestoreIfAny(opts: ApplyPendingRestoreOptions)
       noMigrate: marker.noMigrate,
       skipIntegrityCheck: marker.skipIntegrityCheck,
       now: opts.now,
+      __afterSwapForTest: opts.__afterSwapForTest,
     })
   } catch (err) {
-    // Impl-gate P1-1 (2026-07-22): a failed staged apply must NEVER brick the
-    // boot loop. The marker + tarball survive a throw, so exiting here made
-    // every subsequent startup re-fail identically (deterministic inputs) with
-    // no in-product escape. `restoreBackup` throws BEFORE touching the live DB
-    // for every refusal class (validation, safety-backup failure), and its swap
-    // sequence is crash-safe — so "give up on the staged restore, boot the
-    // still-healthy DB" is sound. Quarantine the staged dir for forensics and
-    // surface it via listFailedRestores / GET /api/restore/pending.
     const message = err instanceof Error ? err.message : String(err)
+    // Quarantine the staged dir for BOTH failure classes so the NEXT boot never
+    // re-runs the same failing apply (P1-1 anti-brick) and it stays visible via
+    // listFailedRestores / GET /api/restore/pending.
     const quarantine = `${pendingDir(appHome)}.failed-${opts.now ?? Date.now()}`
     try {
       renameSync(pendingDir(appHome), quarantine)
@@ -200,7 +199,21 @@ export async function applyPendingRestoreIfAny(opts: ApplyPendingRestoreOptions)
       // rename failed (exotic fs state) — fall back to clearing so we still boot.
       rmSync(pendingDir(appHome), { recursive: true, force: true })
     }
-    log.error('staged restore FAILED — quarantined, booting WITHOUT applying it', {
+    // Impl-gate P0-1 (Codex 2026-07-22): a POST-SWAP failure means the live DB is
+    // ALREADY the restored generation, so config/skills/migrations may be
+    // half-applied and non-terminal tasks are not suspended. Quarantine (above,
+    // so the next boot doesn't loop) but then FAIL CLOSED — rethrow so start.ts
+    // refuses to boot this mixed state and points the operator at the pre-restore
+    // safety backup. A PRE-swap refusal instead leaves the live DB untouched, so
+    // returning false to boot the still-healthy DB is sound (the P1-1 path).
+    if (err instanceof RestorePostSwapError) {
+      log.error('staged restore FAILED AFTER db swap — quarantined + failing closed', {
+        error: message,
+        quarantine,
+      })
+      throw err
+    }
+    log.error('staged restore FAILED (pre-swap) — quarantined, booting WITHOUT applying it', {
       error: message,
       quarantine,
     })
