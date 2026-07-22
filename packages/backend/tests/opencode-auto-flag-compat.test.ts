@@ -180,62 +180,9 @@ describe('driver 两条 spawn 路径都吃版本门', () => {
     expect(modern.cmd).toContain('--auto')
     expect(modern.cmd).not.toContain(LEGACY)
 
-    // 同 ctx、无记录 + 不存在的二进制 → 探测失败 → 仍旧拼写（默认不漂移）。
+    // 同 ctx、无记录 → 旧拼写（默认不漂移）。
     resetOpencodeBinaryVersionsForTests()
     const unknown = await opencodeDriver.buildBusinessSpawn(ctx)
     expect(unknown.cmd).toContain(LEGACY)
-  })
-
-  test('buildBusinessSpawn 对未探测的 CUSTOM fork 惰性探测 → 解析出 --auto（1964a0d0：headless 首次不再用旧 flag）', async () => {
-    // The accident's headless shape: a 1.18 fork whose runtime row was never
-    // probed (daemon restart + cron/resume/API spawn, no status poll). Registry is
-    // empty → before 1964a0d0 the business path picked the legacy flag and the fork
-    // failed EVERY spawn. The lazy-probe must resolve the real version right here.
-    const dir = mkdtempSync(join(tmpdir(), 'aw-oc-flag-lazy-'))
-    const fork = join(dir, 'fork-oc-118.sh')
-    writeFileSync(fork, '#!/bin/sh\necho "fork-opencode 1.18.4"\n')
-    chmodSync(fork, 0o755)
-    const agent: Agent = {
-      id: 'agent-lazy',
-      name: 'a',
-      description: '',
-      outputs: [],
-      syncOutputsOnIterate: true,
-      permission: {},
-      skills: [],
-      dependsOn: [],
-      mcp: [],
-      plugins: [],
-      frontmatterExtra: {},
-      bodyMd: '',
-      schemaVersion: 1,
-      createdAt: 0,
-      updatedAt: 0,
-    }
-    const runRoot = mkdtempSync(join(tmpdir(), 'aw-oc-flag-lazy-run-'))
-    const ctx: BusinessNodeSpawnContext = {
-      agent,
-      prompt: 'P',
-      injectedMemoryBlock: null,
-      dependents: [],
-      mcps: [],
-      plugins: [],
-      resolvedParamsByAgent: new Map(),
-      skills: [],
-      worktreePath: '/wt',
-      runRoot,
-      configDir: DEFAULT_CONFIG_DIR_PROFILE.opencode,
-      runtimeBinary: fork,
-      wantsInventory: false,
-      nodeRunId: 'nr-lazy',
-      log: createLogger('oc-flag-lazy'),
-    }
-    // Registry empty (beforeEach reset) — the headless-first-spawn condition.
-    expect(getOpencodeBinaryVersion(fork)).toBeNull()
-    const plan = await opencodeDriver.buildBusinessSpawn(ctx)
-    // lazy-probe seeded 1.18.4 → --auto, not the legacy spelling.
-    expect(plan.cmd).toContain('--auto')
-    expect(plan.cmd).not.toContain(LEGACY)
-    expect(getOpencodeBinaryVersion(fork)).toBe('1.18.4') // probe recorded it
   })
 })

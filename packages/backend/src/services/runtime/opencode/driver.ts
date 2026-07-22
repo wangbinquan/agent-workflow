@@ -180,35 +180,12 @@ export const opencodeDriver: RuntimeDriver = {
     // (production config.opencodePath via resolveOpencodeCmd, or a test mock)
     // — byte-for-byte unchanged for built-ins.
     const businessHead = pickRuntimeHead(ctx.runtimeBinary, ctx.opencodeCmd)
-    const headBin = businessHead?.[0] ?? 'opencode'
-    // 1964a0d0: a CUSTOM runtime binary (an opencode fork) spawned HEADLESS — cron
-    // resume, auto-recovery, or a no-browser API launch, none of which hit the
-    // /api/runtimes/status poll — has no registry entry on the daemon's first spawn
-    // after a restart. resolveAutoApproveFlag then falls back to the legacy spelling
-    // and a 1.18+ fork fails EVERY spawn (a failed spawn never seeds the registry,
-    // so unlike the doc's "fails once, self-heals" it never recovers headless).
-    // Lazy-probe here, in this async path, so a headless first-spawn resolves the
-    // real version. Gated on runtimeBinary: the default 'opencode' is boot-probed
-    // and test mock cmds are never custom forks, so neither trips this. probeOpencode
-    // records on success; on failure the registry stays unknown → legacy (unchanged
-    // pre-fix behavior, self-heals on the next poll).
-    if (
-      ctx.runtimeBinary != null &&
-      ctx.runtimeBinary !== '' &&
-      getOpencodeBinaryVersion(headBin) === null
-    ) {
-      try {
-        await probeOpencode(headBin)
-      } catch {
-        /* probe failed → registry stays unknown → legacy fallback */
-      }
-    }
     const { cmd, env } = buildOpencodeSpawn({
       opencodeCmd: businessHead,
       // 2026-07-21: flag-spelling version gate (see buildSpawn above). Key =
       // head[0] exactly as spawned; default-head runs resolve 'opencode', the
       // same token the boot probe recorded.
-      binaryVersion: getOpencodeBinaryVersion(headBin),
+      binaryVersion: getOpencodeBinaryVersion(businessHead?.[0] ?? 'opencode'),
       agentName: ctx.agent.name,
       prompt: ctx.prompt,
       resumeSessionId: ctx.resumeSessionId,
