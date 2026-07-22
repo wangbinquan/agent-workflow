@@ -6,9 +6,11 @@
 
 import { describe, expect, it } from 'bun:test'
 import {
+  assertOpencodeSpawnSize,
   buildCommand,
   buildOpencodeSpawn,
   MAX_OPENCODE_PROMPT_BYTES,
+  MAX_SPAWN_TOTAL_BYTES,
 } from '@/services/runtime/opencode/spawn'
 
 const BASE = {
@@ -176,5 +178,60 @@ describe('opencode prompt argv size guard (B4-runtime-5)', () => {
     // argv also carries the other flags and shares ARG_MAX with the ~128 KiB
     // env block; the guard must sit strictly below 128 KiB.
     expect(MAX_OPENCODE_PROMPT_BYTES).toBeLessThan(128 * 1024)
+  })
+})
+
+// misc impl-gate [medium] b56190a3 — a prompt UNDER buildCommand's per-argv-string
+// limit can still make execve E2BIG: buildOpencodeEnv injects OPENCODE_CONFIG_CONTENT
+// (a large inline agent/MCP/config) with NO size check, so one env string can cross
+// the 128 KiB per-string cap, or the whole argv+env block can cross ARG_MAX even when
+// every individual string is under it. This locks the readable-failure guard so the
+// runner reports runtime-spawn-failed instead of a raw kernel code.
+describe('opencode env + total spawn size guard (misc impl-gate b56190a3)', () => {
+  it('rejects a single env string over the 128 KiB per-string cap', () => {
+    const big = 'x'.repeat(MAX_OPENCODE_PROMPT_BYTES + 1)
+    expect(() => assertOpencodeSpawnSize(['opencode'], { OPENCODE_CONFIG_CONTENT: big })).toThrow(
+      /spawn-env-too-large/,
+    )
+  })
+
+  it('measures env BYTES not code units — a CJK config overflows below .length', () => {
+    // '字' = 3 UTF-8 bytes; MAX/3 + 1 chars is under the char count, over the byte cap.
+    const cjk = '字'.repeat(Math.floor(MAX_OPENCODE_PROMPT_BYTES / 3) + 1)
+    expect(cjk.length).toBeLessThan(MAX_OPENCODE_PROMPT_BYTES)
+    expect(() => assertOpencodeSpawnSize(['opencode'], { OPENCODE_CONFIG_CONTENT: cjk })).toThrow(
+      /spawn-env-too-large/,
+    )
+  })
+
+  it('rejects when the argv+env TOTAL crosses ARG_MAX though every string is under the per-string cap', () => {
+    // Three 90 KiB strings (each well under the 120 KiB per-string cap) sum to
+    // ~270 KiB, over the 240 KiB total budget.
+    const chunk = 'x'.repeat(90 * 1024)
+    expect(() => assertOpencodeSpawnSize(['opencode', chunk], { AA: chunk, BB: chunk })).toThrow(
+      /spawn-args-too-large/,
+    )
+  })
+
+  it('accepts a normal argv+env block', () => {
+    expect(() =>
+      assertOpencodeSpawnSize(['opencode', 'run', '--', 'hi'], {
+        OPENCODE_CONFIG_CONTENT: '{"agent":{"a":{}}}',
+        PWD: '/wt',
+      }),
+    ).not.toThrow()
+  })
+
+  it('buildOpencodeSpawn WIRES the guard: a large inline config throws here, not at execve', () => {
+    expect(() =>
+      buildOpencodeSpawn({
+        ...BASE,
+        inlineConfigSerialized: 'x'.repeat(MAX_OPENCODE_PROMPT_BYTES + 1),
+      }),
+    ).toThrow(/spawn-env-too-large/)
+  })
+
+  it('the total budget sits under macOS ARG_MAX (256 KiB)', () => {
+    expect(MAX_SPAWN_TOTAL_BYTES).toBeLessThan(256 * 1024)
   })
 })
