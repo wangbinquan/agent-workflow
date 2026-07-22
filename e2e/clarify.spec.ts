@@ -852,10 +852,16 @@ test.describe('RFC-026 clarify e2e — inline session resume', () => {
     //    text would fool (Codex 191bc32c re-review). Round 0 (clarify) forwards NO
     //    session (empty line, filtered out); round 1 (resume) forwards exactly the
     //    prior id and nothing else.
-    const sessions = readFileSync(sessionLog, 'utf-8')
-      .split('\n')
-      .filter((l) => l !== '')
-    expect(sessions).toEqual(['opc_e2e_e2e-rfc026-designer'])
+    // Assert the EXACT ordered per-invocation log — including the empty round-0
+    // line AND the trailing-newline tail — so a reversed, duplicated, or
+    // wrong-generation resume all FAIL rather than being filtered into
+    // equivalence (Codex round-4). round 0 (clarify) parses no --session (empty);
+    // round 1 (resume) parses exactly the prior id.
+    expect(readFileSync(sessionLog, 'utf-8').split('\n')).toEqual([
+      '',
+      'opc_e2e_e2e-rfc026-designer',
+      '',
+    ])
 
     // 6. Assertion B: the persisted node_runs row for round 0 (RFC-074 PR-C:
     //    the earliest 'designer' run by ULID id — clarify generation 0)
