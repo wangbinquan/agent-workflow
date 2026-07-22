@@ -3,7 +3,12 @@
 // handlers call actorOf(c) to access the current identity.
 
 import type { Context } from 'hono'
-import { ROLE_PERMISSIONS, type Permission, type Role } from '@agent-workflow/shared'
+import {
+  PAT_EXPLICIT_ONLY_PERMISSIONS,
+  ROLE_PERMISSIONS,
+  type Permission,
+  type Role,
+} from '@agent-workflow/shared'
 import { UnauthorizedError } from '@/util/errors'
 
 export interface ActorUser {
@@ -38,6 +43,16 @@ export function buildActor(opts: {
     set = new Set(opts.patScopes.filter((p) => baseline.has(p)))
   } else {
     set = new Set(rolePerms)
+  }
+  // RFC-222 (P1-3): explicit-only permissions never ride the role baseline into
+  // a PAT. Even an empty-scoped PAT (which otherwise inherits the full role
+  // baseline via the else-branch above) must name them, else they're stripped.
+  // Protects high-blast-radius points (tasks:delete) from silently widening a
+  // historical token as the catalog grows. Session/daemon actors are untouched.
+  if (opts.source === 'pat') {
+    for (const perm of PAT_EXPLICIT_ONLY_PERMISSIONS) {
+      if (!(opts.patScopes?.includes(perm) ?? false)) set.delete(perm)
+    }
   }
   return { user: opts.user, source: opts.source, permissions: set }
 }

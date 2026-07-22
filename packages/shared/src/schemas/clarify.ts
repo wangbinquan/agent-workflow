@@ -10,6 +10,7 @@
 // node fails with the standard retries path.
 
 import { z } from 'zod'
+import { TaskActorRoleSchema } from './resourceAcl'
 
 export const CLARIFY_MAX_QUESTIONS = 5
 export const CLARIFY_MAX_OPTIONS_PER_QUESTION = 4
@@ -442,7 +443,7 @@ export const ClarifyRoundSchema = z.object({
   answeredBy: z.string().nullable().default(null),
   /** RFC-099 (D7) — task-relationship role snapshot of answeredBy. UI-only.
    *  Optional so pre-RFC-099 fixtures keep compiling; backend always sets it. */
-  submittedByRole: z.enum(['owner', 'user', 'admin']).nullable().optional(),
+  submittedByRole: TaskActorRoleSchema.nullable().optional(),
   /** RFC-099 (D8) — Record<questionId, {userId, role, updatedAt}>; live during
    *  drafting, frozen at submit. NEVER injected into agent prompts. */
   answerAttributions: z
@@ -450,7 +451,7 @@ export const ClarifyRoundSchema = z.object({
       z.string(),
       z.object({
         userId: z.string(),
-        role: z.enum(['owner', 'user', 'admin']),
+        role: TaskActorRoleSchema,
         updatedAt: z.number().int(),
       }),
     )

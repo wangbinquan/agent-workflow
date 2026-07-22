@@ -10,6 +10,7 @@
 // via GET /api/tasks?scheduledTaskId= (see routes/tasks.ts).
 import {
   CreateScheduledTaskSchema,
+  isResourceAdminRole,
   rejectRetiredStartTaskKeys,
   UpdateScheduledTaskSchema,
 } from '@agent-workflow/shared'
@@ -30,10 +31,10 @@ import {
 } from '@/services/scheduledTasks'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 
-/** Write authority: owner or an admin. */
+/** Write authority: owner or a resource admin (admin OR manager — RFC-222 D2). */
 function requireWriteAccess(actor: Actor, row: ScheduledTask): void {
   if (row.ownerUserId === actor.user.id) return
-  if (actor.user.role === 'admin') return
+  if (isResourceAdminRole(actor.user.role)) return
   throw new ForbiddenError('scheduled-task-forbidden', `not permitted to modify '${row.id}'`)
 }
 

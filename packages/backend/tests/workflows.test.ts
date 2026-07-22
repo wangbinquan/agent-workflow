@@ -83,8 +83,9 @@ function saveInput(
   }
 }
 
-function deleteInput(workflow: Pick<WorkflowDetail, 'version'>): DeleteWorkflow {
-  return { expectedVersion: workflow.version, clientMutationId: ulid() }
+function deleteInput(workflow: Pick<WorkflowDetail, 'version' | 'name'>): DeleteWorkflow {
+  // RFC-222 (D5): the route requires confirm === the workflow name.
+  return { expectedVersion: workflow.version, clientMutationId: ulid(), confirm: workflow.name }
 }
 
 describe('workflow service', () => {

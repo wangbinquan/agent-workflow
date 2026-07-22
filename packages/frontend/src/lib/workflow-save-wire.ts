@@ -24,10 +24,15 @@ export function makeWorkflowSaveRequest(
   }
 }
 
-export function makeWorkflowDeleteRequest(expectedVersion: number): DeleteWorkflow {
+export function makeWorkflowDeleteRequest(
+  expectedVersion: number,
+  confirm: string,
+): DeleteWorkflow {
   return {
     expectedVersion,
     clientMutationId: ulid(),
+    // RFC-222 (D5): the user's typed confirmation, echoed to the server.
+    confirm,
   }
 }
 

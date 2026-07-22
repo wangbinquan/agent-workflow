@@ -9,7 +9,7 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { RouterProvider, createMemoryHistory, createRouter } from '@tanstack/react-router'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { Route as RootRoute } from '../src/routes/__root'
@@ -343,8 +343,11 @@ describe('/agents split page', () => {
     const router = renderAgents('/agents/alpha')
     await waitFor(() => screen.getByRole('heading', { level: 2, name: 'alpha' }))
 
-    fireEvent.click(screen.getByRole('button', { name: /^Delete$/ }))
-    fireEvent.click(screen.getByRole('button', { name: /Confirm/i }))
+    // RFC-222 (D5): delete opens a type-to-confirm dialog — type the name.
+    fireEvent.click(screen.getByTestId('detail-delete-button'))
+    const delDialog = await screen.findByRole('dialog')
+    fireEvent.change(within(delDialog).getByTestId('confirm-input'), { target: { value: 'alpha' } })
+    fireEvent.click(within(delDialog).getByRole('button', { name: /^Delete$/ }))
     fireEvent.click(screen.getByTestId('split-card-beta'))
 
     const dialog = await screen.findByTestId('unsaved-guard-dialog')
@@ -809,8 +812,11 @@ describe('/agents split page', () => {
   test('deleting an agent navigates to the empty pane and removes its card', async () => {
     const router = renderAgents('/agents/alpha')
     await waitFor(() => screen.getByRole('heading', { level: 2, name: 'alpha' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Delete' })) // arm ConfirmButton
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm?' })) // confirm
+    // RFC-222 (D5): delete opens a type-to-confirm dialog — type the name.
+    fireEvent.click(screen.getByTestId('detail-delete-button'))
+    const delDialog = await screen.findByRole('dialog')
+    fireEvent.change(within(delDialog).getByTestId('confirm-input'), { target: { value: 'alpha' } })
+    fireEvent.click(within(delDialog).getByRole('button', { name: /^Delete$/ }))
     await waitFor(() => expect(router.state.location.pathname).toBe('/agents'))
     await waitFor(() => expect(screen.queryByTestId('split-card-alpha')).toBeNull())
     expect(screen.getByText('Nothing selected')).toBeTruthy()

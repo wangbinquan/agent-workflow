@@ -76,7 +76,8 @@ import {
   withTaskDetailTab,
 } from '@/lib/task-detail-route-tabs'
 import { workgroupRoomKey, type WorkgroupRoomResponse } from '@/lib/workgroup-room'
-import { useActor } from '@/hooks/useActor'
+import { useActor, usePermission } from '@/hooks/useActor'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { useTaskSync } from '@/hooks/useTaskSync'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Route as RootRoute } from './__root'
@@ -214,6 +215,19 @@ function TaskDetailPage() {
       qc.setQueryData(['tasks', id], tk)
       void qc.invalidateQueries({ queryKey: ['tasks', id, 'node-runs'] })
       void qc.invalidateQueries({ queryKey: ['tasks'] })
+    },
+  })
+
+  // RFC-222 — admin-only hard delete (type-to-confirm). Gated in the UI by the
+  // tasks:delete permission; the server re-checks name + terminality.
+  const canDeleteTask = usePermission('tasks:delete')
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const del = useMutation({
+    mutationFn: (confirm: string) =>
+      api.deleteJson<{ taskId: string }>(`/api/tasks/${encodeURIComponent(id)}`, { confirm }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['tasks'] })
+      void navigateTaskRoute({ to: '/tasks' })
     },
   })
 
@@ -532,8 +546,37 @@ function TaskDetailPage() {
                 disabled={cancel.isPending}
               />
             )}
+            {/* RFC-222 — delete only shows for admins on a terminal, non-internal
+                task (server enforces the same). */}
+            {canDeleteTask && isTerminal(tk.status) && tk.spaceKind !== 'internal' && (
+              <button
+                type="button"
+                className="btn btn--danger"
+                onClick={() => setDeleteOpen(true)}
+                disabled={del.isPending}
+                data-testid="task-detail-delete"
+              >
+                {t('common.delete')}
+              </button>
+            )}
           </>
         }
+      />
+      <ConfirmDialog
+        open={deleteOpen}
+        title={t('common.deleteConfirm.title', { name: tk.name })}
+        description={t('common.deleteConfirm.body')}
+        confirmLabel={t('common.delete')}
+        tone="danger"
+        confirmInput={{
+          expected: tk.name,
+          label: t('common.deleteConfirm.inputLabel', { name: tk.name }),
+          placeholder: tk.name,
+        }}
+        onConfirm={async (ctx) => {
+          await del.mutateAsync(ctx?.typedConfirm ?? '')
+        }}
+        onClose={() => setDeleteOpen(false)}
       />
       <div className="task-detail__banner-stack">
         {task.error !== null &&

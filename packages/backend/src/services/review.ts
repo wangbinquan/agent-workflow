@@ -41,6 +41,7 @@ import type {
   WorkflowNode,
 } from '@agent-workflow/shared'
 import {
+  type TaskActorRole,
   isMultiMarkdownUpstream,
   selectCurrentReviewRound,
   SIBLING_OUTPUTS_INSTRUCTION,
@@ -1602,7 +1603,7 @@ export interface DocVersionRound<R extends RoundGroupRow> {
   decisionReason: string | null
   decidedAt: number | null
   decidedBy: string | null
-  decidedByRole: 'owner' | 'user' | 'admin' | null
+  decidedByRole: TaskActorRole | null
   createdAt: number
   isCurrent: boolean
   /** item_index ascending. */
@@ -1747,7 +1748,7 @@ export interface AddReviewCommentArgs {
   commentText: string
   author?: string
   /** RFC-099 (D7) — task-relationship role snapshot; UI/audit only. */
-  authorRole?: 'owner' | 'user' | 'admin'
+  authorRole?: TaskActorRole
   /**
    * RFC-079: in a multi-document round several doc_versions are pending at once;
    * the caller passes the specific document the comment anchors to. Single-doc
@@ -2005,7 +2006,7 @@ export interface SubmitReviewDecisionArgs {
   expectedReviewIteration: number
   author?: string
   /** RFC-099 (D7) — task-relationship role snapshot of the decider. */
-  authorRole?: 'owner' | 'user' | 'admin'
+  authorRole?: TaskActorRole
 }
 
 export interface SubmitReviewDecisionResult {

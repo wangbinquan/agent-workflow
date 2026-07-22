@@ -217,7 +217,11 @@ describe('/api/plugins CRUD (DB-seeded)', () => {
       frontmatterExtra: {},
       bodyMd: '',
     })
-    const r = await req(app, '/api/plugins/seeded', { method: 'DELETE' })
+    // RFC-222 (D5, N-5): confirm passes first, then the in-use refusal fires.
+    const r = await req(app, '/api/plugins/seeded', {
+      method: 'DELETE',
+      body: JSON.stringify({ confirm: 'seeded' }),
+    })
     expect(r.status).toBe(409)
     // RFC-203 T6: principal-aware shape (visible[] + hiddenCount).
     const body = (await r.json()) as {
@@ -230,7 +234,11 @@ describe('/api/plugins CRUD (DB-seeded)', () => {
   })
 
   test('DELETE 204 when not referenced', async () => {
-    const r = await req(app, '/api/plugins/seeded', { method: 'DELETE' })
+    // RFC-222 (D5): DELETE requires a { confirm } body echoing the plugin name.
+    const r = await req(app, '/api/plugins/seeded', {
+      method: 'DELETE',
+      body: JSON.stringify({ confirm: 'seeded' }),
+    })
     expect(r.status).toBe(204)
     const r2 = await req(app, '/api/plugins/seeded')
     expect(r2.status).toBe(404)

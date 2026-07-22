@@ -27,6 +27,7 @@ import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
 import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
+import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
 import { Paths } from '@/util/paths'
 import {
   createManagedSkill,
@@ -147,6 +148,8 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
     const actor = actorOf(c)
     const existing = await loadVisibleSkill(actor, c.req.param('name'))
     await requireResourceOwner(deps.db, actor, 'skill', existing)
+    // RFC-222 (D5): type-to-confirm (N-5 order).
+    assertDeleteConfirm(await readDeleteBody(c), existing.name, 'skill')
     await deleteSkill(deps.db, fsOpts, c.req.param('name'), actor)
     return c.body(null, 204)
   })

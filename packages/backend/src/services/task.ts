@@ -123,6 +123,13 @@ export function isTaskActive(taskId: string): boolean {
   return activeTasks.has(taskId)
 }
 
+/** RFC-222 — test-only: inject/clear the in-memory active-task set so the delete
+ *  front-gate ('task-active') can be exercised without a live scheduler loop. */
+export function __setActiveTaskForTesting(taskId: string | undefined): void {
+  activeTasks.clear()
+  if (taskId !== undefined) activeTasks.set(taskId, new AbortController())
+}
+
 /**
  * P-4-06: abort every in-flight task. Used by daemon shutdown. The runner
  * SIGTERMs each opencode child via the controller's signal; the scheduler

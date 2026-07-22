@@ -147,8 +147,8 @@ function PluginDetailPage() {
   })
 
   const del = useMutation({
-    mutationFn: (_variables: { release: SplitBusyRelease }) =>
-      api.delete(`/api/plugins/${encodeURIComponent(id)}`),
+    mutationFn: ({ confirm, release: _release }: { confirm: string; release: SplitBusyRelease }) =>
+      api.deleteJson(`/api/plugins/${encodeURIComponent(id)}`, { confirm }),
     onSuccess: async (_deleted, { release }) => {
       report(id, false)
       await qc.cancelQueries({ queryKey: ['plugins'], exact: true })
@@ -513,9 +513,11 @@ function PluginDetailPage() {
         }}
         del={{
           label: t('common.delete'),
-          onConfirm: () => {
+          confirmName: displayName,
+          resourceType: 'plugin',
+          onConfirm: (ctx) => {
             if (save.isPending || del.isPending || operationBusy) return Promise.resolve()
-            return del.mutateAsync({ release: beginBusy(id) })
+            return del.mutateAsync({ confirm: ctx?.typedConfirm ?? '', release: beginBusy(id) })
           },
           disabled: del.isPending || save.isPending || operationBusy,
         }}

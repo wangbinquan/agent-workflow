@@ -27,7 +27,7 @@ import {
 // RFC-143 PR-5: resolveOpencodeCmd deduped to util/opencode (was 5 route-local copies).
 import { resolveOpencodeCmd } from '@/util/opencode'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
-import { isAdminActor } from '@/services/resourceAcl'
+import { isResourceAdminActor } from '@/services/resourceAcl'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { Paths } from '@/util/paths'
 
@@ -75,7 +75,9 @@ export function mountFusionRoutes(app: Hono, deps: AppDeps): void {
       ...(skillName ? { skillName } : {}),
       ...(status ? { status } : {}),
     })
-    const visible = isAdminActor(actor) ? all : all.filter((f) => f.ownerUserId === actor.user.id)
+    const visible = isResourceAdminActor(actor)
+      ? all
+      : all.filter((f) => f.ownerUserId === actor.user.id)
     return c.json(visible)
   })
 
@@ -86,7 +88,7 @@ export function mountFusionRoutes(app: Hono, deps: AppDeps): void {
   app.get('/api/fusions/pending-count', async (c) => {
     const actor = actorOf(c)
     const owners = await awaitingApprovalFusionOwners(fusionDeps())
-    const count = isAdminActor(actor)
+    const count = isResourceAdminActor(actor)
       ? owners.length
       : owners.filter((o) => o.ownerUserId === actor.user.id).length
     return c.json({ count })
@@ -96,7 +98,7 @@ export function mountFusionRoutes(app: Hono, deps: AppDeps): void {
     const actor = actorOf(c)
     const fusion = await getFusion(fusionDeps(), c.req.param('id'))
     // RFC-099-style existence isolation: not-owner / not-found are identical.
-    if (fusion === null || (!isAdminActor(actor) && fusion.ownerUserId !== actor.user.id)) {
+    if (fusion === null || (!isResourceAdminActor(actor) && fusion.ownerUserId !== actor.user.id)) {
       throw new NotFoundError('fusion-not-found', `fusion '${c.req.param('id')}' not found`)
     }
     return c.json(fusion)

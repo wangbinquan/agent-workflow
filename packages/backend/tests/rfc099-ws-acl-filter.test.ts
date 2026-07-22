@@ -164,6 +164,7 @@ async function deleteViaHttp(
   workflowId: string,
   expectedVersion: number,
   clientMutationId: string,
+  confirm: string, // RFC-222 (D5): type-to-confirm — the workflow's name
 ): Promise<Response> {
   return fetch(`${h.url.replace(/^ws:/, 'http:')}/api/workflows/${workflowId}`, {
     method: 'DELETE',
@@ -171,7 +172,7 @@ async function deleteViaHttp(
       authorization: `Bearer ${h.aliceToken}`,
       'content-type': 'application/json',
     },
-    body: JSON.stringify({ expectedVersion, clientMutationId }),
+    body: JSON.stringify({ expectedVersion, clientMutationId, confirm }),
   })
 }
 
@@ -266,7 +267,7 @@ describe('RFC-099 — /ws/workflows per-frame ACL filter', () => {
       deletedVersion: 1,
     }
     try {
-      const response = await deleteViaHttp(h, privateWfId, 1, clientMutationId)
+      const response = await deleteViaHttp(h, privateWfId, 1, clientMutationId, 'private-flow')
       expect(response.status).toBe(204)
       await waitUntil(
         () =>
@@ -302,7 +303,7 @@ describe('RFC-099 — /ws/workflows per-frame ACL filter', () => {
       deletedVersion: 1,
     }
     try {
-      const response = await deleteViaHttp(h, privateWfId, 1, clientMutationId)
+      const response = await deleteViaHttp(h, privateWfId, 1, clientMutationId, 'private-flow')
       expect(response.status).toBe(204)
       await waitUntil(
         () =>

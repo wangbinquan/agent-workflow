@@ -22,7 +22,7 @@ import { agentsDependingOnIn, validateDependsOn } from './agentDeps'
 import {
   discloseRefsSync,
   discloseScheduleRefs,
-  isAdminActor,
+  isResourceAdminActor,
   listGrantedResourceIds,
 } from './resourceAcl'
 import type { Actor } from '@/auth/actor'
@@ -259,10 +259,10 @@ export async function deleteAgent(db: DbClient, name: string, actor: Actor): Pro
   // RFC-203 T6: reference-disclosure grant sets, pre-fetched OUTSIDE the
   // guard transaction (dbTxSync is sync) — used only to decide which
   // referencing resource NAMES the refusal details may show.
-  const wfGranted = isAdminActor(actor)
+  const wfGranted = isResourceAdminActor(actor)
     ? new Set<string>()
     : await listGrantedResourceIds(db, actor, 'workflow')
-  const agGranted = isAdminActor(actor)
+  const agGranted = isResourceAdminActor(actor)
     ? new Set<string>()
     : await listGrantedResourceIds(db, actor, 'agent')
   // RFC-165 (F17-r3): guards + the delete run in ONE dbTxSync — the old
@@ -406,10 +406,10 @@ export async function renameAgent(
   // deleteAgent; the old await gaps let references land mid-flight).
   // RFC-203 T6: disclosure grant sets (see deleteAgent) — pre-fetched
   // outside the sync guard transaction.
-  const wfGranted = isAdminActor(actor)
+  const wfGranted = isResourceAdminActor(actor)
     ? new Set<string>()
     : await listGrantedResourceIds(db, actor, 'workflow')
-  const agGranted = isAdminActor(actor)
+  const agGranted = isResourceAdminActor(actor)
     ? new Set<string>()
     : await listGrantedResourceIds(db, actor, 'agent')
   dbTxSync(db, (tx) => {

@@ -456,8 +456,11 @@ export const enUS: Resources = {
     roleOption: {
       user: 'user',
       admin: 'admin',
+      manager: 'resource admin',
       userDesc: 'Resource read + launch tasks + manage own account.',
       adminDesc: 'Full access: users, settings, OIDC, all tasks.',
+      managerDesc:
+        'Manage all resources, memory, repos & tasks — no user/system admin, no task deletion.',
     },
     selfRoleLocked: 'You cannot change your own role — ask another admin.',
     noPermission: {
@@ -915,6 +918,12 @@ export const enUS: Resources = {
     optionalPlaceholder: '(optional)',
     confirmPrompt: 'Confirm?',
     confirmDelete: 'Confirm delete',
+    // RFC-222 (D5) — type-to-confirm delete dialog.
+    deleteConfirm: {
+      title: 'Delete {{name}}?',
+      body: 'This cannot be undone. Type the name below to confirm deletion.',
+      inputLabel: 'Type {{name}} to confirm',
+    },
     close: 'Close',
     cancel: 'Cancel',
     selectAnOption: 'Select an option',
@@ -4771,7 +4780,7 @@ export const enUS: Resources = {
   },
   attribution: {
     localHistoric: 'Local user (historic)',
-    role: { owner: 'Owner', user: 'User', admin: 'Admin' },
+    role: { owner: 'Owner', user: 'User', admin: 'Admin', manager: 'Resource Admin' },
     submittedBy: 'Submitted by',
     lastEditedBy: 'Last edited by',
     decidedBy: 'Decided by',

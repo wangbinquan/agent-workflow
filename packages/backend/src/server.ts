@@ -139,6 +139,8 @@ export function createApp(deps: AppDeps): Hono {
   app.on('POST', '/api/tasks', requirePermission('tasks:launch'))
   app.on('POST', '/api/workgroups/:name/tasks', requirePermission('tasks:launch'))
   app.on('POST', '/api/agents/:name/tasks', requirePermission('tasks:launch'))
+  // RFC-222 — task deletion is admin-only (tasks:delete ∉ manager/user).
+  app.on('DELETE', '/api/tasks/:id', requirePermission('tasks:delete'))
   app.use(
     '/api/agents',
     resourcePermissionGate('agents', {

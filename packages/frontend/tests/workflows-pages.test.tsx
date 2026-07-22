@@ -288,7 +288,7 @@ describe('RFC-199 B1 workflow revision wire adapter', () => {
     }
     const first = makeWorkflowSaveRequest(7, snapshot)
     const second = makeWorkflowSaveRequest(7, snapshot)
-    const deletion = makeWorkflowDeleteRequest(7)
+    const deletion = makeWorkflowDeleteRequest(7, 'wf-name')
 
     expect(first).toMatchObject({ expectedVersion: 7, snapshot })
     expect(first.clientMutationId).toMatch(/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/)
@@ -743,11 +743,14 @@ describe('/workflows/new removal wiring', () => {
     )
     expect(edit).toContain('onChange={commitDefinition}')
     expect(edit).toContain('<UnsavedChangesGuard dirtyRef={unsafeNavigationRef} />')
-    expect(edit).toContain('makeWorkflowDeleteRequest(expectedVersion)')
+    // RFC-222 (D5): the delete request now threads the typed confirmation.
+    expect(edit).toContain('makeWorkflowDeleteRequest(expectedVersion, confirm)')
     expect(edit).toContain('<ConfirmDialog')
     expect(edit).toContain('key={deleteConfirmationKey}')
     expect(edit).toContain("open={modalSurface === 'delete'}")
-    expect(edit).toContain('del.mutateAsync({ expectedVersion: deleteExpectedVersion })')
+    // RFC-222 (D5): mutateAsync now also carries the typed confirmation.
+    expect(edit).toContain('expectedVersion: deleteExpectedVersion,')
+    expect(edit).toContain("confirm: ctx?.typedConfirm ?? ''")
     // RFC-203 T2: the workflow-scheduled-referenced list (visibleScheduled +
     // hiddenCount) now renders via the shared <ErrorDetails> inside
     // ErrorBanner — the RFC-202 call-site-local `.workflow-delete-refs`

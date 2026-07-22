@@ -748,8 +748,8 @@ function SkillDetailPage() {
   }, [beginBusy, content, finishRestoreIfIdle, name, replaceComposite])
 
   const del = useMutation({
-    mutationFn: (_variables: { release: SplitBusyRelease }) =>
-      api.delete(`/api/skills/${encodeURIComponent(name)}`),
+    mutationFn: ({ confirm, release: _release }: { confirm: string; release: SplitBusyRelease }) =>
+      api.deleteJson(`/api/skills/${encodeURIComponent(name)}`, { confirm }),
     onSuccess: async (_deleted, { release }) => {
       report(name, false)
       await qc.cancelQueries({ queryKey: ['skills'], exact: true })
@@ -880,7 +880,10 @@ function SkillDetailPage() {
         }}
         del={{
           label: t('common.delete'),
-          onConfirm: () => del.mutateAsync({ release: beginBusy(name) }),
+          confirmName: name,
+          resourceType: 'skill',
+          onConfirm: (ctx) =>
+            del.mutateAsync({ confirm: ctx?.typedConfirm ?? '', release: beginBusy(name) }),
           disabled: del.isPending || aggregate.dirty || operationBusy || aggregate.outcomeUnknown,
         }}
         extra={

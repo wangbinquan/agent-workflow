@@ -309,6 +309,55 @@ export async function runScratchOrphanGc(
 }
 
 /**
+ * RFC-222 (§6.4) — GC orphan TASK worktrees. Task worktrees live at
+ * `worktrees/{repo-slug}/{task-id}`. When a task is hard-deleted (or the daemon
+ * crashes between the delete transaction and the best-effort disk cleanup), the
+ * worktree dir has no anchoring tasks row and becomes a reapable orphan. This is
+ * the backstop that makes "delete row first, clean disk best-effort" safe
+ * (Codex round-1 P1-8: runWorktreeGc only visits EXISTING task rows, so it never
+ * reaped these). Mirrors runScratchOrphanGc, descending one extra repo-slug
+ * level, and rmSync's the dir (the iso-GC precedent for git-worktree dirs).
+ */
+export async function runWorktreeOrphanGc(
+  db: DbClient,
+  appHome: string,
+  now: number = Date.now(),
+): Promise<{ scanned: number; removed: string[] }> {
+  const worktreesRoot = join(appHome, 'worktrees')
+  if (!existsSync(worktreesRoot)) return { scanned: 0, removed: [] }
+  // Collect every {repo-slug}/{task-id} leaf and the task ids under it.
+  const leaves: Array<{ taskId: string; path: string }> = []
+  for (const slug of readdirSync(worktreesRoot, { withFileTypes: true })) {
+    if (!slug.isDirectory()) continue
+    const slugDir = join(worktreesRoot, slug.name)
+    for (const t of readdirSync(slugDir, { withFileTypes: true })) {
+      if (t.isDirectory()) leaves.push({ taskId: t.name, path: join(slugDir, t.name) })
+    }
+  }
+  if (leaves.length === 0) return { scanned: 0, removed: [] }
+  const ids = [...new Set(leaves.map((l) => l.taskId))]
+  const rows = await db.select({ id: tasks.id }).from(tasks).where(inArray(tasks.id, ids))
+  const anchored = new Set(rows.map((r) => r.id))
+  const leased = new Set([...materializingSpaces.keys()])
+  const removed: string[] = []
+  for (const leaf of leaves) {
+    if (anchored.has(leaf.taskId) || leased.has(leaf.taskId)) continue
+    try {
+      const age = now - statSync(leaf.path).mtimeMs
+      if (age < SCRATCH_ORPHAN_MIN_AGE_MS) continue
+      rmSync(leaf.path, { recursive: true, force: true })
+      removed.push(leaf.taskId)
+    } catch (err) {
+      log.warn('worktree orphan reap failed', {
+        dir: leaf.path,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+  return { scanned: leaves.length, removed }
+}
+
+/**
  * RFC-130 PR-E — GC orphan iso worktrees. A node run normally `discardNodeIso`s its
  * iso worktree on completion, but a crash between create + discard, a kept
  * conflict-human resolve-iso, or a daemon restart can leave `{appHome}/iso/{taskId}/*`
@@ -432,6 +481,8 @@ export function startWorktreeGc(
     runWorktreeGc(db, loadConfig())
       .then(() => (appHome !== undefined ? runIsoWorktreeGc(db, appHome) : undefined))
       .then(() => (appHome !== undefined ? runScratchOrphanGc(db, appHome) : undefined))
+      // RFC-222 — sweep orphan task worktrees (deleted-task backstop, §6.4).
+      .then(() => (appHome !== undefined ? runWorktreeOrphanGc(db, appHome) : undefined))
       .catch((err: unknown) => {
         log.error('runWorktreeGc failed', {
           error: err instanceof Error ? err.message : String(err),

@@ -63,6 +63,7 @@ import {
   type ClarifyAnswer,
   type ClarifyDirective,
   type ClarifyQuestion,
+  type TaskActorRole,
 } from '@agent-workflow/shared'
 
 const log = createLogger('clarify-auto-dispatch')
@@ -249,7 +250,7 @@ export interface AutoDispatchClarifyRoundArgs {
    *  sends it. */
   ifMatchIteration?: number
   /** Audit-only actor; NEVER enters a prompt (RFC-099). */
-  actor: { userId: string; role: 'owner' | 'user' | 'admin' }
+  actor: { userId: string; role: TaskActorRole }
   now?: () => number
 }
 

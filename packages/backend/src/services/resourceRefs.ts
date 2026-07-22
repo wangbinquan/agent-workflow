@@ -21,7 +21,7 @@ import type { DbClient } from '@/db/client'
 import { ValidationError } from '@/util/errors'
 import {
   ACL_TABLES,
-  isAdminActor,
+  isResourceAdminActor,
   isVisibleRow,
   listGrantedResourceIds,
   type AclRow,
@@ -66,7 +66,7 @@ export async function assertNewRefsUsable(
   actor: Actor,
   groups: readonly RefCheckGroup[],
 ): Promise<void> {
-  if (isAdminActor(actor)) return
+  if (isResourceAdminActor(actor)) return
   const missing: Array<{ type: AclResourceType; name: string }> = []
   for (const group of groups) {
     const names = [...new Set(group.names)].filter((n) => n.length > 0)

@@ -1661,7 +1661,9 @@ export const users = sqliteTable(
     email: text('email').unique(), // nullable; SQLite UNIQUE allows multiple NULL
     displayName: text('display_name').notNull(),
     passwordHash: text('password_hash'), // NULL = OIDC-only or invited user
-    role: text('role', { enum: ['admin', 'user'] })
+    // RFC-222 — 'manager' (资源管理员) added. Type-only widening: the SQLite
+    // column has no CHECK constraint (0018_rfc036_users.sql), so no migration.
+    role: text('role', { enum: ['admin', 'user', 'manager'] })
       .notNull()
       .default('user'),
     status: text('status', { enum: ['active', 'disabled', 'invited'] })

@@ -609,8 +609,10 @@ export interface Resources {
     roleOption: {
       user: string
       admin: string
+      manager: string
       userDesc: string
       adminDesc: string
+      managerDesc: string
     }
     selfRoleLocked: string
     noPermission: {
@@ -992,6 +994,11 @@ export interface Resources {
     optionalPlaceholder: string
     confirmPrompt: string
     confirmDelete: string
+    deleteConfirm: {
+      title: string
+      body: string
+      inputLabel: string
+    }
     close: string
     cancel: string
     selectAnOption: string
@@ -3786,7 +3793,7 @@ export interface Resources {
   }
   attribution: {
     localHistoric: string
-    role: { owner: string; user: string; admin: string }
+    role: { owner: string; user: string; admin: string; manager: string }
     submittedBy: string
     lastEditedBy: string
     decidedBy: string
@@ -4228,8 +4235,10 @@ export const zhCN: Resources = {
     roleOption: {
       user: '普通用户',
       admin: '管理员',
+      manager: '资源管理员',
       userDesc: '只读资源 + 启动任务 + 管理自己的账户。',
       adminDesc: '完整权限：用户、设置、OIDC、所有任务。',
+      managerDesc: '管理所有资源、记忆、仓库与任务——不含用户/系统管理，不能删除任务。',
     },
     selfRoleLocked: '不能修改自己的角色 —— 需要另一位管理员代为操作。',
     noPermission: {
@@ -4673,6 +4682,11 @@ export const zhCN: Resources = {
     optionalPlaceholder: '（可选）',
     confirmPrompt: '确认？',
     confirmDelete: '确认删除',
+    deleteConfirm: {
+      title: '删除 {{name}}？',
+      body: '此操作不可撤销。请在下方输入名称以确认删除。',
+      inputLabel: '输入 {{name}} 以确认',
+    },
     close: '关闭',
     cancel: '取消',
     selectAnOption: '请选择',
@@ -8271,7 +8285,7 @@ export const zhCN: Resources = {
   },
   attribution: {
     localHistoric: '本地用户（历史）',
-    role: { owner: '所有者', user: '用户', admin: '管理员' },
+    role: { owner: '所有者', user: '用户', admin: '管理员', manager: '资源管理员' },
     submittedBy: '提交人',
     lastEditedBy: '最后修改',
     decidedBy: '决策人',

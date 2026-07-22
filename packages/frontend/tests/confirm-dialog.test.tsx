@@ -235,3 +235,82 @@ describe('<ConfirmDialog />', () => {
     )
   })
 })
+
+// RFC-222 (D5, F-5/F-6) — type-to-confirm mode.
+describe('<ConfirmDialog /> type-to-confirm', () => {
+  function renderTTC(onConfirm: (ctx?: { typedConfirm?: string }) => void | Promise<void>) {
+    return render(
+      <ConfirmDialog
+        open
+        title="Delete my-agent?"
+        description="This cannot be undone."
+        confirmLabel="Delete"
+        tone="danger"
+        confirmInput={{ expected: 'my-agent', label: 'Type my-agent to confirm' }}
+        onConfirm={onConfirm}
+        onClose={() => {}}
+      />,
+    )
+  }
+
+  test('confirm button is disabled until the input EXACTLY matches (trim-tolerant)', () => {
+    renderTTC(() => {})
+    const btn = screen.getByRole('button', { name: 'Delete' }) as HTMLButtonElement
+    const input = screen.getByTestId('confirm-input') as HTMLInputElement
+    expect(btn.disabled).toBe(true)
+    fireEvent.change(input, { target: { value: 'my-age' } })
+    expect(btn.disabled).toBe(true)
+    fireEvent.change(input, { target: { value: 'My-Agent' } }) // case-sensitive
+    expect(btn.disabled).toBe(true)
+    fireEvent.change(input, { target: { value: '  my-agent  ' } }) // trimmed → match
+    expect(btn.disabled).toBe(false)
+  })
+
+  test('submits the user’s ACTUAL typed text (trimmed), never the expected constant', async () => {
+    const onConfirm = vi.fn(() => Promise.resolve())
+    renderTTC(onConfirm)
+    fireEvent.change(screen.getByTestId('confirm-input'), { target: { value: ' my-agent ' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    await waitFor(() => expect(onConfirm).toHaveBeenCalled())
+    expect(onConfirm).toHaveBeenCalledWith({ typedConfirm: 'my-agent' })
+  })
+
+  test('a keyboard Enter cannot bypass a non-matching input', () => {
+    const onConfirm = vi.fn(() => Promise.resolve())
+    renderTTC(onConfirm)
+    const input = screen.getByTestId('confirm-input')
+    fireEvent.change(input, { target: { value: 'wrong' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onConfirm).not.toHaveBeenCalled()
+  })
+
+  test('reopening clears the previous input', () => {
+    const { rerender } = renderTTC(() => {})
+    const input = () => screen.getByTestId('confirm-input') as HTMLInputElement
+    fireEvent.change(input(), { target: { value: 'my-agent' } })
+    expect(input().value).toBe('my-agent')
+    rerender(
+      <ConfirmDialog
+        open={false}
+        title="Delete my-agent?"
+        description="x"
+        confirmLabel="Delete"
+        confirmInput={{ expected: 'my-agent', label: 'Type my-agent to confirm' }}
+        onConfirm={() => {}}
+        onClose={() => {}}
+      />,
+    )
+    rerender(
+      <ConfirmDialog
+        open
+        title="Delete my-agent?"
+        description="x"
+        confirmLabel="Delete"
+        confirmInput={{ expected: 'my-agent', label: 'Type my-agent to confirm' }}
+        onConfirm={() => {}}
+        onClose={() => {}}
+      />,
+    )
+    expect(input().value).toBe('')
+  })
+})

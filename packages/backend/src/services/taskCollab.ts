@@ -14,7 +14,7 @@ import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
 import type { tasks } from '@/db/schema'
 import { taskCollaborators, tasks as tasksTable, users } from '@/db/schema'
-import { isAdminActor, resolveTaskRole } from '@/services/resourceAcl'
+import { isResourceAdminActor, resolveTaskRole } from '@/services/resourceAcl'
 import { ForbiddenError, ValidationError } from '@/util/errors'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 
@@ -112,7 +112,7 @@ export async function getTaskMembers(
     .filter((u): u is UserRow => u !== undefined)
     .map(toUserPublic)
   const canManage =
-    isAdminActor(actor) || (task.ownerUserId != null && task.ownerUserId === actor.user.id)
+    isResourceAdminActor(actor) || (task.ownerUserId != null && task.ownerUserId === actor.user.id)
   return {
     taskId: task.id,
     ownerUserId: task.ownerUserId ?? null,
@@ -135,7 +135,7 @@ export async function updateTaskMembers(
   body: { ownerUserId?: string; userIds?: string[] },
 ): Promise<TaskMembers> {
   const canManage =
-    isAdminActor(actor) || (task.ownerUserId != null && task.ownerUserId === actor.user.id)
+    isResourceAdminActor(actor) || (task.ownerUserId != null && task.ownerUserId === actor.user.id)
   if (!canManage) {
     throw new ForbiddenError('forbidden', 'only the task owner or an admin can manage members')
   }

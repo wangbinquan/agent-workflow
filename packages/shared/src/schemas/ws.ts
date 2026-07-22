@@ -3,6 +3,7 @@
 // binary frames in v1.
 
 import { z } from 'zod'
+import { TaskActorRoleSchema } from './resourceAcl'
 import { TaskStatusSchema, TaskSummarySchema } from './task'
 import { NodeRunStatusSchema } from './task'
 import { DocVersionDecisionSchema, ReviewCommentSchema, ReviewDecisionKindSchema } from './review'
@@ -180,7 +181,7 @@ export const TaskWsMessageSchema = z.discriminatedUnion('type', [
     editor: z.object({
       userId: z.string(),
       displayName: z.string(),
-      role: z.enum(['owner', 'user', 'admin']),
+      role: TaskActorRoleSchema,
     }),
     ts: z.number().int(),
   }),

@@ -19,8 +19,14 @@ import type { WorkflowDetail, WorkflowExactRevision } from '@agent-workflow/shar
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
-import { canViewResource, filterVisibleRows } from '@/services/resourceAcl'
-import { excludeBuiltinWorkflows } from '@/services/systemResources'
+import {
+  canViewResource,
+  filterVisibleRows,
+  requireResourceOwner,
+  requireResourceView,
+} from '@/services/resourceAcl'
+import { assertDeleteConfirm } from '@/services/deleteConfirm'
+import { assertNotBuiltin, excludeBuiltinWorkflows } from '@/services/systemResources'
 import {
   assertNewRefsUsable,
   diffNewNames,
@@ -30,6 +36,7 @@ import {
   createWorkflow,
   deleteWorkflow,
   getWorkflow,
+  getWorkflowAclRow,
   listWorkflows,
   updateWorkflow,
   workflowRevisionOf,
@@ -102,13 +109,27 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
   })
 
   app.delete('/api/workflows/:id', async (c) => {
+    const actor = actorOf(c)
+    // RFC-222 (N-5 order): existence 404 → visibility 404 → builtin/owner 403 →
+    // confirm 422 → deleteWorkflow (OCC + reference refusal, re-checked in-tx).
+    // Uses the raw ACL row (NOT loadVisibleWorkflow) so a workflow with a corrupt
+    // stored definition is still deletable — deletion must not require a
+    // parseable definition.
+    const row = await getWorkflowAclRow(deps.db, c.req.param('id'))
+    if (row === null) {
+      throw new NotFoundError('workflow-not-found', `workflow '${c.req.param('id')}' not found`)
+    }
+    await requireResourceView(deps.db, actor, 'workflow', row)
+    assertNotBuiltin('workflow', row) // RFC-104: built-ins are read-only
+    await requireResourceOwner(deps.db, actor, 'workflow', row)
     const parsed = DeleteWorkflowSchema.safeParse(await safeJson(c.req.raw))
     if (!parsed.success) {
       throw new ValidationError('workflow-invalid', 'invalid workflow delete payload', {
         issues: parsed.error.issues,
       })
     }
-    const actor = actorOf(c)
+    // RFC-222 (D5, N-1): confirm against the workflow's current name (id ≠ name).
+    assertDeleteConfirm(parsed.data, row.name, 'workflow')
     await deleteWorkflow(deps.db, c.req.param('id'), parsed.data, { kind: 'actor', actor })
     return c.body(null, 204)
   })

@@ -41,7 +41,7 @@ import { dbTxSync } from '@/db/txSync'
 import { agents, fusions, skills, skillVersions, workflows } from '@/db/schema'
 import { createAgent } from '@/services/agent'
 import { canManageMemory, fuseMemoriesTx, getMemoryById } from '@/services/memory'
-import { canViewResource, isAdminActor, isResourceOwner } from '@/services/resourceAcl'
+import { canViewResource, isResourceAdminActor, isResourceOwner } from '@/services/resourceAcl'
 import { getSkill, getSkillPreconditionTokenById } from '@/services/skill'
 import { decodeSkillToken, encodeSkillToken } from '@/services/skillToken'
 import { commitSkillVersion, type SkillVersionFsOptions } from '@/services/skillVersion'
@@ -166,7 +166,7 @@ function loadFusionRow(db: DbClient, id: string): FusionRow | null {
 
 /** Owner or admin may decide (approve/reject/cancel) a fusion. */
 function canDecide(actor: Actor, row: FusionRow): boolean {
-  return isAdminActor(actor) || actor.user.id === row.ownerUserId
+  return isResourceAdminActor(actor) || actor.user.id === row.ownerUserId
 }
 
 // ---------------------------------------------------------------------------
@@ -441,7 +441,7 @@ export async function createFusion(
   if (skill.sourceKind !== 'managed') {
     throw new ConflictError('fusion-skill-not-managed', 'can only fuse into a managed skill')
   }
-  if (!isAdminActor(actor) && !isResourceOwner(actor, skill)) {
+  if (!isResourceAdminActor(actor) && !isResourceOwner(actor, skill)) {
     throw new ConflictError('fusion-skill-forbidden', 'you cannot write this skill')
   }
 
@@ -894,7 +894,7 @@ async function requireCurrentSkillWritable(
       'the target skill no longer exists; re-initiate the fusion',
     )
   }
-  if (!isAdminActor(actor) && !isResourceOwner(actor, skill)) {
+  if (!isResourceAdminActor(actor) && !isResourceOwner(actor, skill)) {
     throw new ConflictError(
       'fusion-skill-forbidden',
       'you no longer have write access to the target skill',
@@ -955,7 +955,7 @@ function claimFusionDecision(
     // managed ACL transfer doesn't drift the token, so an owner check outside the
     // claim is TOCTOU). The pre-claim `requireCurrentSkillWritable` is a fast-fail;
     // this is the authoritative gate atomic with the status transition.
-    if (!isAdminActor(actor) && live!.ownerUserId !== actor.user.id) {
+    if (!isResourceAdminActor(actor) && live!.ownerUserId !== actor.user.id) {
       throw new ConflictError(
         'fusion-skill-forbidden',
         'you no longer have write access to the target skill',

@@ -170,7 +170,11 @@ describe('DELETE /api/mcps/:name', () => {
 
   test('happy path → 204', async () => {
     await req(app, '/api/mcps', { method: 'POST', body: JSON.stringify(localPayload('m')) })
-    const res = await req(app, '/api/mcps/m', { method: 'DELETE' })
+    // RFC-222 (D5): DELETE requires a { confirm } body echoing the mcp name.
+    const res = await req(app, '/api/mcps/m', {
+      method: 'DELETE',
+      body: JSON.stringify({ confirm: 'm' }),
+    })
     expect(res.status).toBe(204)
   })
 
@@ -189,7 +193,11 @@ describe('DELETE /api/mcps/:name', () => {
       frontmatterExtra: {},
       bodyMd: '',
     })
-    const res = await req(app, '/api/mcps/m', { method: 'DELETE' })
+    // RFC-222 (D5, N-5): confirm passes first, then the in-use refusal fires.
+    const res = await req(app, '/api/mcps/m', {
+      method: 'DELETE',
+      body: JSON.stringify({ confirm: 'm' }),
+    })
     expect(res.status).toBe(409)
     const body = (await res.json()) as Record<string, unknown>
     expect(body.code).toBe('mcp-still-referenced')

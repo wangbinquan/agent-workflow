@@ -27,6 +27,7 @@ import {
   updateAgent,
 } from '@/services/agent'
 import { resolveDependsClosure, validateDependsOn } from '@/services/agentDeps'
+import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
 import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
 import { assertNotBuiltin, excludeBuiltinAgents, isBuiltinRow } from '@/services/systemResources'
 import { assertNewRefsUsable, diffNewNames } from '@/services/resourceRefs'
@@ -181,6 +182,8 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
     const existing = await loadVisibleAgent(actor, name)
     assertNotBuiltin('agent', existing) // RFC-104: built-ins are read-only
     await requireResourceOwner(deps.db, actor, 'agent', existing)
+    // RFC-222 (D5): type-to-confirm — echo the current name (N-5 order).
+    assertDeleteConfirm(await readDeleteBody(c), existing.name, 'agent')
     await deleteAgent(deps.db, name, actor)
     return c.body(null, 204)
   })

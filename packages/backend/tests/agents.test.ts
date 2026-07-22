@@ -454,7 +454,11 @@ describe('agent HTTP routes', () => {
 
   test('DELETE returns 204 and the agent is gone', async () => {
     await req(app, '/api/agents', { method: 'POST', body: JSON.stringify(samplePayload('a1')) })
-    const delRes = await req(app, '/api/agents/a1', { method: 'DELETE' })
+    // RFC-222 (D5): DELETE now requires a { confirm } body echoing the name.
+    const delRes = await req(app, '/api/agents/a1', {
+      method: 'DELETE',
+      body: JSON.stringify({ confirm: 'a1' }),
+    })
     expect(delRes.status).toBe(204)
     const after = await req(app, '/api/agents/a1')
     expect(after.status).toBe(404)

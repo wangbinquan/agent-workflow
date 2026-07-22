@@ -552,10 +552,10 @@ export function WorkflowEditorLoaded({
     : null
 
   const del = useMutation({
-    mutationFn: ({ expectedVersion }: { expectedVersion: number }) =>
+    mutationFn: ({ expectedVersion, confirm }: { expectedVersion: number; confirm: string }) =>
       api.deleteJson<void>(
         `/api/workflows/${encodeURIComponent(workflowId)}`,
-        makeWorkflowDeleteRequest(expectedVersion),
+        makeWorkflowDeleteRequest(expectedVersion, confirm),
       ),
     onSuccess: () => {
       // Delete is an explicit local-discard decision. Clear the synchronous
@@ -1170,9 +1170,19 @@ export function WorkflowEditorLoaded({
           confirmLabel={t('common.delete')}
           tone="danger"
           triggerRef={moreTriggerRef}
+          confirmInput={{
+            expected: controller.state.local.name || workflowId,
+            label: t('common.deleteConfirm.inputLabel', {
+              name: controller.state.local.name || workflowId,
+            }),
+            placeholder: controller.state.local.name || workflowId,
+          }}
           onClose={() => setModalSurface('none')}
-          onConfirm={async () => {
-            await del.mutateAsync({ expectedVersion: deleteExpectedVersion })
+          onConfirm={async (ctx) => {
+            await del.mutateAsync({
+              expectedVersion: deleteExpectedVersion,
+              confirm: ctx?.typedConfirm ?? '',
+            })
           }}
         />
 

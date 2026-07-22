@@ -35,6 +35,7 @@ import {
   withPluginOperationConfigHash,
 } from '@/services/pluginOperationRevision'
 import { pluginOperationCoordinator } from '@/services/resourceOperationCoordinator'
+import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
 import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { mountAclEndpoints } from './resourceAcl'
@@ -117,7 +118,9 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
     const actor = actorOf(c)
     const initial = await loadVisiblePlugin(actor, c.req.param('id'))
     await pluginOperationCoordinator.runExclusive(initial.id, async () => {
-      await loadFreshOwned(actor, initial.id)
+      const fresh = await loadFreshOwned(actor, initial.id)
+      // RFC-222 (D5, N-6): confirm against the fresh name in the exclusive section.
+      assertDeleteConfirm(await readDeleteBody(c), fresh.name, 'plugin')
       await deletePlugin(deps.db, initial.id, actor)
     })
     return c.body(null, 204)

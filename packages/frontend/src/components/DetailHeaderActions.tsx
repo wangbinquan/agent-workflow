@@ -19,10 +19,10 @@
 //     the error row remains its sibling (one flex row for title + actions,
 //     errors on their own row below).
 
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AclDialogButton } from '@/components/AclPanel'
-import { ConfirmButton } from '@/components/ConfirmButton'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { PageHeader } from '@/components/PageHeader'
 
@@ -51,9 +51,18 @@ export interface DetailHeaderActionsProps {
   }
   del: {
     label: string
-    onConfirm: () => unknown | Promise<unknown>
+    /**
+     * RFC-222 (D5): receives the user's typed confirmation text. The caller
+     * MUST forward `ctx.typedConfirm` into the DELETE body (never the known
+     * name constant) so the server-side check is authoritative.
+     */
+    onConfirm: (ctx?: { typedConfirm?: string }) => unknown | Promise<unknown>
     /** Typically del.isPending — blocks double-fire while in flight. */
     disabled?: boolean
+    /** RFC-222 (D5): the exact current name the user must type to confirm. */
+    confirmName: string
+    /** Resource-type slug for the dialog copy (agent / skill / workflow …). */
+    resourceType: string
   }
   /** Page-specific leading actions (e.g. skills' Fuse button). */
   extra?: ReactNode
@@ -65,6 +74,8 @@ export interface DetailHeaderActionsProps {
 export function DetailHeaderActions(props: DetailHeaderActionsProps) {
   const { t } = useTranslation()
   const present = props.errors.filter((e) => e !== null && e !== undefined)
+  // RFC-222 (D5): destructive delete now opens a type-to-confirm modal.
+  const [confirmOpen, setConfirmOpen] = useState(false)
   return (
     <>
       <PageHeader
@@ -88,14 +99,33 @@ export function DetailHeaderActions(props: DetailHeaderActionsProps) {
             >
               {props.save.label ?? t('common.save')}
             </button>
-            <ConfirmButton
-              label={props.del.label}
-              onConfirm={props.del.onConfirm}
-              variant="danger"
+            <button
+              type="button"
+              className="btn btn--danger"
               disabled={props.del.disabled}
-            />
+              onClick={() => setConfirmOpen(true)}
+              data-testid="detail-delete-button"
+            >
+              {props.del.label}
+            </button>
           </>
         }
+      />
+      <ConfirmDialog
+        open={confirmOpen}
+        title={t('common.deleteConfirm.title', { name: props.del.confirmName })}
+        description={t('common.deleteConfirm.body')}
+        confirmLabel={props.del.label}
+        tone="danger"
+        confirmInput={{
+          expected: props.del.confirmName,
+          label: t('common.deleteConfirm.inputLabel', { name: props.del.confirmName }),
+          placeholder: props.del.confirmName,
+        }}
+        onConfirm={async (ctx) => {
+          await props.del.onConfirm(ctx)
+        }}
+        onClose={() => setConfirmOpen(false)}
       />
       {present.map((e, i) => (
         <ErrorBanner error={e} key={i} />

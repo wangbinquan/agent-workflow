@@ -18,7 +18,7 @@
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import type { ServerWebSocket } from 'bun'
-import type { Actor } from '../src/auth/actor'
+import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb } from '../src/db/client'
 import {
   MEMORY_CHANNEL,
@@ -41,12 +41,14 @@ import {
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
-function makeActor(role: 'admin' | 'user', id = 'u-test'): Actor {
-  return {
+// RFC-222: build a REALISTIC actor (permissions resolved from the role
+// baseline) — the memory-distill-jobs gate is now a double-check (identity AND
+// memory:approve), so an empty permission set no longer reflects a real admin.
+function makeActor(role: 'admin' | 'user' | 'manager', id = 'u-test'): Actor {
+  return buildActor({
     user: { id, username: id, displayName: id, role, status: 'active' },
     source: 'session',
-    permissions: new Set(),
-  }
+  })
 }
 
 /** Minimal ServerWebSocket stand-in — gatedSubscribe only touches data+send. */
@@ -200,15 +202,18 @@ describe('RFC-152 — WS_CHANNELS exhaustion lock', () => {
 })
 
 describe('RFC-152 — upgrade gates (registry semantics == pre-registry branches)', () => {
-  test('memory-distill-jobs: non-admin refused with admin-required; admin passes', async () => {
+  test('memory-distill-jobs: non-resource-admin refused; admin + manager pass (RFC-222 D3)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const params: AnyChannelParams = { kind: 'memory-distill-jobs' }
     const refusal = await checkUpgradeGate(db, makeActor('user'), params)
     expect(refusal).toEqual({
       code: 'admin-required',
-      message: 'memory-distill-jobs channel is admin-only',
+      message: 'memory-distill-jobs channel is resource-admin only',
     })
     expect(await checkUpgradeGate(db, makeActor('admin'), params)).toBe(true)
+    // RFC-222: manager reaches the distill-job ops surface (double-gate:
+    // isResourceAdminRole ∧ memory:approve — both hold for manager).
+    expect(await checkUpgradeGate(db, makeActor('manager'), params)).toBe(true)
   })
 
   test('task: missing task row refused with task-not-visible (fail closed)', async () => {

@@ -60,6 +60,7 @@ import {
   isClarifyChannelEdge,
   isTurnEngineWorkgroupTask,
   type RunLineageView,
+  type TaskActorRole,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
 
@@ -68,7 +69,7 @@ const log = createLogger('task-questions.dispatch')
 /** Audit-only actor identity. NEVER enters a prompt (RFC-099 prompt-isolation). */
 export interface DispatchTaskQuestionsActor {
   userId: string
-  role: 'owner' | 'user' | 'admin'
+  role: TaskActorRole
 }
 
 export interface DispatchedRerun {

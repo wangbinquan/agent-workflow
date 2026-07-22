@@ -10,6 +10,7 @@
 // will consume.
 
 import { z } from 'zod'
+import { TaskActorRoleSchema } from './resourceAcl'
 import {
   isNestedListPathKindString,
   isRegisteredKindString,
@@ -330,7 +331,7 @@ export const DocVersionSchema = z.object({
   decidedAt: z.number().int().nullable(),
   decidedBy: z.string().nullable(),
   /** RFC-099 (D7) — role snapshot of the decider; null on historic/system rows. */
-  decidedByRole: z.enum(['owner', 'user', 'admin']).nullable().optional(),
+  decidedByRole: TaskActorRoleSchema.nullable().optional(),
 })
 export type DocVersion = z.infer<typeof DocVersionSchema>
 
@@ -368,9 +369,9 @@ export const ReviewCommentSchema = z.object({
   anchor: ReviewCommentAnchorSchema,
   commentText: z.string().min(1),
   author: z.string(),
-  /** RFC-099 (D7) — task-relationship role snapshot ('owner'|'user'|'admin');
+  /** RFC-099 (D7) — task-relationship role snapshot (TaskActorRole; owner|user|admin|manager);
    *  null on historic rows. UI-only; renderCommentsForPrompt never reads it. */
-  authorRole: z.enum(['owner', 'user', 'admin']).nullable().optional(),
+  authorRole: TaskActorRoleSchema.nullable().optional(),
   createdAt: z.number().int(),
 })
 export type ReviewComment = z.infer<typeof ReviewCommentSchema>
@@ -553,7 +554,7 @@ export const ReviewRoundSummarySchema = z.object({
   decisionReason: z.string().nullable(),
   decidedAt: z.number().int().nullable(),
   decidedBy: z.string().nullable(),
-  decidedByRole: z.enum(['owner', 'user', 'admin']).nullable(),
+  decidedByRole: TaskActorRoleSchema.nullable(),
   /** min(member.createdAt) — when the round was minted. */
   createdAt: z.number().int(),
   /** True on the round the interactive detail view renders (pending, else newest). */

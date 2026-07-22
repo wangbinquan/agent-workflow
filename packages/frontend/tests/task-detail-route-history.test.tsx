@@ -32,6 +32,8 @@ vi.mock('@/hooks/useActor', () => ({
     isError: actorState.error !== null,
     refetch: actorState.refetch,
   }),
+  // RFC-222 — tasks.detail now gates its delete button on usePermission.
+  usePermission: (perm: string) => actorState.permissions.includes(perm),
 }))
 vi.mock('@/components/tasks/RecoverySection', () => ({ RecoverySection: () => null }))
 vi.mock('@/components/tasks/StuckTaskBanner', () => ({ StuckTaskBanner: () => null }))

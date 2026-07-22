@@ -7,6 +7,7 @@
 import type {
   CreateWorkflow,
   DeleteWorkflow,
+  ResourceVisibility,
   SaveWorkflowReceipt,
   UpdateWorkflow,
   Workflow,
@@ -41,7 +42,7 @@ import {
   type WorkflowDeletedAudienceContext,
 } from '@/ws/broadcaster'
 import { assertNewRefsUsable, diffNewNames, extractWorkflowAgentNames } from './resourceRefs'
-import { canViewResource, isAdminActor, isResourceOwner } from './resourceAcl'
+import { canViewResource, isResourceAdminActor, isResourceOwner } from './resourceAcl'
 import { assertNotBuiltin } from './systemResources'
 import { validateWorkflowById } from './workflow.validator'
 
@@ -56,6 +57,44 @@ export async function getWorkflow(db: DbClient, id: string): Promise<WorkflowDet
   const rows = await db.select().from(workflows).where(eq(workflows.id, id)).limit(1)
   const row = rows[0]
   return row ? rowToWorkflowDetail(row) : null
+}
+
+/**
+ * RFC-222 — raw ACL identity of a workflow (name + owner/visibility/builtin)
+ * WITHOUT parsing its definition. The delete path must work even on a workflow
+ * whose stored definition is corrupt (you must be able to delete a broken
+ * workflow), so it cannot go through getWorkflow's schema validation.
+ */
+export async function getWorkflowAclRow(
+  db: DbClient,
+  id: string,
+): Promise<{
+  id: string
+  name: string
+  ownerUserId: string | null
+  visibility: ResourceVisibility
+  builtin: boolean
+} | null> {
+  const rows = await db
+    .select({
+      id: workflows.id,
+      name: workflows.name,
+      ownerUserId: workflows.ownerUserId,
+      visibility: workflows.visibility,
+      builtin: workflows.builtin,
+    })
+    .from(workflows)
+    .where(eq(workflows.id, id))
+    .limit(1)
+  const row = rows[0]
+  if (row === undefined) return null
+  return {
+    id: row.id,
+    name: row.name,
+    ownerUserId: row.ownerUserId ?? null,
+    visibility: (row.visibility ?? 'public') as ResourceVisibility,
+    builtin: row.builtin === true,
+  }
 }
 
 export async function createWorkflow(
@@ -528,7 +567,7 @@ function assertPrincipalCanWriteInTx(
   }
 
   const actor = principal.actor
-  const isAdmin = isAdminActor(actor)
+  const isAdmin = isResourceAdminActor(actor)
   const isOwner = row.ownerUserId !== null && row.ownerUserId === actor.user.id
   let visible = isAdmin || isOwner || row.visibility === 'public'
   if (!visible) {

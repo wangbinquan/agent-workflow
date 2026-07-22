@@ -307,6 +307,14 @@ export const DeleteWorkflowSchema = z
   .object({
     expectedVersion: z.number().int().positive(),
     clientMutationId: WorkflowMutationIdSchema,
+    // RFC-222 (D5, N-1): type-to-confirm rides the existing OCC schema. Kept
+    // OPTIONAL here so the route's assertDeleteConfirm owns BOTH the presence
+    // check (→ delete-confirm-required) and the match check (→
+    // delete-confirm-mismatch) — the same unified error codes the other six
+    // DELETE endpoints emit. The HTTP contract still requires it (a body
+    // without confirm is rejected at the route); only direct service callers,
+    // which never consume confirm, are spared the field.
+    confirm: z.string().optional(),
   })
   .strict()
 export type DeleteWorkflow = z.infer<typeof DeleteWorkflowSchema>

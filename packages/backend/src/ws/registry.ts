@@ -46,6 +46,7 @@ import type {
   WorkflowsWsMessage,
   WsControlMessage,
 } from '@agent-workflow/shared'
+import { isResourceAdminRole } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { memories as memoriesTable, nodeRunEvents, nodeRuns, tasks, workflows } from '@/db/schema'
@@ -616,11 +617,17 @@ export const WS_CHANNELS: WsChannelRegistry = {
     channelKeyOf: () => MEMORY_DISTILL_JOB_CHANNEL,
     // RFC-152 P0 (682de313) — declared admin-only since RFC-041 (4 comment
     // sites + all HTTP routes requireAdmin) but the WS upgrade never
-    // enforced it. Same gate as HTTP: non-admin upgrades are 403-refused.
+    // enforced it. Same gate as HTTP: non-resource-admin upgrades are refused.
+    // RFC-222 (D3): opened to manager alongside admin — the double-gate's
+    // permission half (memory:approve) sits in every logged-in baseline, so
+    // the identity predicate is the operative check here.
     upgradeGate: async (_db, actor) =>
-      actor.user.role === 'admin'
+      isResourceAdminRole(actor.user.role) && actor.permissions.has('memory:approve')
         ? true
-        : { code: 'admin-required', message: 'memory-distill-jobs channel is admin-only' },
+        : {
+            code: 'admin-required',
+            message: 'memory-distill-jobs channel is resource-admin only',
+          },
   },
   'scheduled-tasks': {
     kind: 'scheduled-tasks',
@@ -763,7 +770,10 @@ export function gatedSubscribe(
       onExpiredCredential?.(ws)
       return
     }
-    if (erased.adminShortCircuit === true && ws.data.actor.user.role === 'admin') {
+    // RFC-222: row-level bypass short-circuit widens to resource admin (admin OR
+    // manager) — pure identity, mirroring filterVisibleRows (§2.3 rationale:
+    // this is the row-visibility免计算 fast-path, not a capability gate).
+    if (erased.adminShortCircuit === true && isResourceAdminRole(ws.data.actor.user.role)) {
       sendJson(ws, msg)
       return
     }

@@ -29,6 +29,8 @@ import { tasks as tasksTable } from '@/db/schema'
 import type { AppDeps } from '@/server'
 import { canViewTask, getTaskMembers, updateTaskMembers } from '@/services/taskCollab'
 import { canViewResource } from '@/services/resourceAcl'
+import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
+import { deleteTask } from '@/services/taskDelete'
 import { assertNotBuiltin } from '@/services/systemResources'
 import { ForbiddenError } from '@/util/errors'
 import { parseBoolQuery } from '@/util/http'
@@ -272,6 +274,24 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
   app.post('/api/tasks/:id/cancel', async (c) => {
     const task = await cancelTask(deps.db, c.req.param('id'))
     return c.json(task)
+  })
+
+  // RFC-222 — admin-only hard delete of a terminal task. Route gate
+  // tasks:delete is registered in server.ts; visibilityCheck (the /:id
+  // middleware) has already confirmed the task exists + is admin-visible.
+  app.delete('/api/tasks/:id', async (c) => {
+    const id = c.req.param('id')
+    const row = await deps.db
+      .select({ name: tasksTable.name })
+      .from(tasksTable)
+      .where(eq(tasksTable.id, id))
+      .limit(1)
+    if (row[0] === undefined) throw new NotFoundError('task-not-found', `task '${id}' not found`)
+    // RFC-222 (D5): type-to-confirm against the task's name (N-5 order — after
+    // existence/authz, before the deleteTask business gates).
+    assertDeleteConfirm(await readDeleteBody(c), row[0].name, 'task')
+    const result = await deleteTask(deps.db, id)
+    return c.json(result)
   })
 
   app.get('/api/tasks/:id/node-runs', async (c) => {

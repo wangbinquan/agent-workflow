@@ -31,7 +31,9 @@ export type AclResourceType = z.infer<typeof AclResourceTypeSchema>
 export const ResourceVisibilitySchema = z.enum(['private', 'public'])
 export type ResourceVisibility = z.infer<typeof ResourceVisibilitySchema>
 
-export const TaskActorRoleSchema = z.enum(['owner', 'user', 'admin'])
+// RFC-222 — 'manager' added: a resource admin acting on a task from outside its
+// membership is attributed truthfully, not folded into 'admin'.
+export const TaskActorRoleSchema = z.enum(['owner', 'user', 'admin', 'manager'])
 export type TaskActorRole = z.infer<typeof TaskActorRoleSchema>
 
 /** GET /api/{res}/:id/acl response. */

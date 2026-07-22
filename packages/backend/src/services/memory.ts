@@ -686,7 +686,7 @@ import { agents as agentsTable, workflows as workflowsTable } from '@/db/schema'
 import {
   canViewResource,
   filterVisibleRows,
-  isAdminActor,
+  isResourceAdminActor,
   isResourceOwner,
   type AclRow,
 } from '@/services/resourceAcl'
@@ -731,7 +731,7 @@ export async function canViewMemory(
   actor: Actor,
   scope: MemoryScopeRef,
 ): Promise<boolean> {
-  if (isAdminActor(actor)) return true
+  if (isResourceAdminActor(actor)) return true
   if (scope.scopeType === 'repo' || scope.scopeType === 'global') return true
   const row = await loadScopeAclRow(db, scope)
   // Scope resource vanished → fail closed for non-admins (nothing to anchor
@@ -746,7 +746,7 @@ export async function canManageMemory(
   actor: Actor,
   scope: MemoryScopeRef,
 ): Promise<boolean> {
-  if (isAdminActor(actor)) return true
+  if (isResourceAdminActor(actor)) return true
   if (scope.scopeType === 'repo' || scope.scopeType === 'global') return false
   const row = await loadScopeAclRow(db, scope)
   if (row === null) return false
@@ -762,7 +762,7 @@ export async function filterMemoriesByScopeVisibility<T extends MemoryScopeRef>(
   actor: Actor,
   rows: readonly T[],
 ): Promise<T[]> {
-  if (isAdminActor(actor)) return [...rows]
+  if (isResourceAdminActor(actor)) return [...rows]
   const agentIds = new Set(
     rows.filter((r) => r.scopeType === 'agent' && r.scopeId !== null).map((r) => r.scopeId!),
   )
@@ -812,7 +812,7 @@ export async function annotateMemoryManageRights<T extends MemoryScopeRef>(
   actor: Actor,
   rows: readonly T[],
 ): Promise<Array<T & { canManage: boolean }>> {
-  if (isAdminActor(actor)) return rows.map((r) => ({ ...r, canManage: true }))
+  if (isResourceAdminActor(actor)) return rows.map((r) => ({ ...r, canManage: true }))
   const agentIds = [
     ...new Set(
       rows.filter((r) => r.scopeType === 'agent' && r.scopeId !== null).map((r) => r.scopeId!),

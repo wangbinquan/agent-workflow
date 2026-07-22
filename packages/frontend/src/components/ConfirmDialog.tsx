@@ -16,6 +16,7 @@ import {
 import { useTranslation } from 'react-i18next'
 import { Dialog } from './Dialog'
 import { ErrorBanner } from './ErrorBanner'
+import { Field, TextInput } from './Form'
 
 export interface ConfirmDialogProps {
   open: boolean
@@ -24,7 +25,15 @@ export interface ConfirmDialogProps {
   confirmLabel: string
   cancelLabel?: string
   tone?: 'default' | 'danger'
-  onConfirm: () => void | Promise<void>
+  /**
+   * RFC-222 (D5) — type-to-confirm mode. When set, the dialog renders a name
+   * input; the confirm button stays disabled until the trimmed input EXACTLY
+   * equals `expected`. On confirm, the trimmed value is handed to onConfirm as
+   * `{ typedConfirm }` — callers MUST send THAT (the user's actual keystrokes),
+   * never the known `expected` constant, so the server-side check is real.
+   */
+  confirmInput?: { expected: string; label: string; placeholder?: string }
+  onConfirm: (ctx?: { typedConfirm?: string }) => void | Promise<void>
   onClose: () => void
   triggerRef?: RefObject<HTMLElement | null>
   restoreFocusFallbackRef?: RefObject<HTMLElement | null>
@@ -34,6 +43,8 @@ export function ConfirmDialog(props: ConfirmDialogProps): ReactElement {
   const { t } = useTranslation()
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<unknown | null>(null)
+  // RFC-222 (D5) — type-to-confirm input value (empty when the mode is off).
+  const [typed, setTyped] = useState('')
   const inFlightRef = useRef(false)
   const operationRef = useRef(0)
   const mountedRef = useRef(true)
@@ -57,6 +68,7 @@ export function ConfirmDialog(props: ConfirmDialogProps): ReactElement {
     inFlightRef.current = false
     setPending(false)
     setError(null)
+    setTyped('') // RFC-222 — every open session starts with an empty input.
   }, [props.open])
 
   const requestClose = (): void => {
@@ -64,15 +76,25 @@ export function ConfirmDialog(props: ConfirmDialogProps): ReactElement {
     props.onClose()
   }
 
+  const trimmedTyped = typed.trim()
+  const confirmMatched =
+    props.confirmInput === undefined || trimmedTyped === props.confirmInput.expected
+
   const runConfirmation = async (): Promise<void> => {
     if (!props.open || inFlightRef.current) return
+    // Guard the type-to-confirm gate here too (not just the disabled button), so
+    // a keyboard-submit can never bypass it.
+    if (!confirmMatched) return
     inFlightRef.current = true
     const operation = ++operationRef.current
     setError(null)
     setPending(true)
 
     try {
-      await props.onConfirm()
+      // Hand the caller the user's ACTUAL keystrokes — never props.expected.
+      await props.onConfirm(
+        props.confirmInput !== undefined ? { typedConfirm: trimmedTyped } : undefined,
+      )
       if (!mountedRef.current || !openRef.current || operationRef.current !== operation) return
       props.onClose()
     } catch (nextError) {
@@ -104,7 +126,7 @@ export function ConfirmDialog(props: ConfirmDialogProps): ReactElement {
             type="button"
             className={props.tone === 'danger' ? 'btn btn--danger' : 'btn btn--primary'}
             onClick={() => void runConfirmation()}
-            disabled={pending}
+            disabled={pending || !confirmMatched}
             aria-busy={pending || undefined}
           >
             {props.confirmLabel}
@@ -113,6 +135,21 @@ export function ConfirmDialog(props: ConfirmDialogProps): ReactElement {
       }
     >
       <div className="confirm-dialog__description">{props.description}</div>
+      {props.confirmInput !== undefined && (
+        <Field label={props.confirmInput.label}>
+          <TextInput
+            value={typed}
+            onChange={setTyped}
+            placeholder={props.confirmInput.placeholder}
+            disabled={pending}
+            autoFocus
+            data-testid="confirm-input"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && confirmMatched) void runConfirmation()
+            }}
+          />
+        </Field>
+      )}
       {error !== null && <ErrorBanner error={error} />}
     </Dialog>
   )

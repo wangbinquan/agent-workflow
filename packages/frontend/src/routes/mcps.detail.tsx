@@ -133,8 +133,8 @@ function McpDetailPage() {
   }
 
   const del = useMutation({
-    mutationFn: (_variables: { release: SplitBusyRelease }) =>
-      api.delete(`/api/mcps/${encodeURIComponent(name)}`),
+    mutationFn: ({ confirm, release: _release }: { confirm: string; release: SplitBusyRelease }) =>
+      api.deleteJson(`/api/mcps/${encodeURIComponent(name)}`, { confirm }),
     onSuccess: async (_deleted, { release }) => {
       report(name, false)
       await qc.cancelQueries({ queryKey: ['mcps'], exact: true })
@@ -177,9 +177,11 @@ function McpDetailPage() {
         }}
         del={{
           label: t('common.delete'),
-          onConfirm: () => {
+          confirmName: name,
+          resourceType: 'mcp',
+          onConfirm: (ctx) => {
             if (save.isPending || del.isPending) return Promise.resolve()
-            return del.mutateAsync({ release: beginBusy(name) })
+            return del.mutateAsync({ confirm: ctx?.typedConfirm ?? '', release: beginBusy(name) })
           },
           disabled: del.isPending || save.isPending,
         }}

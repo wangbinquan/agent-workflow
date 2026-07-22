@@ -18,7 +18,7 @@
 // rule's side-effect slot.
 
 import type { QueryKey } from '@tanstack/react-query'
-import type { TaskWsMessage } from '@agent-workflow/shared'
+import type { TaskActorRole, TaskWsMessage } from '@agent-workflow/shared'
 import { WS_PATHS } from '@agent-workflow/shared'
 import { useWsInvalidation, type WsInvalidationRules } from './useWsInvalidation'
 
@@ -32,7 +32,7 @@ export interface UseClarifyWsOpts {
    *  round (frames for other node_runs are ignored). */
   onDraftUpdated?: (frame: {
     questionId: string
-    editor: { userId: string; displayName: string; role: 'owner' | 'user' | 'admin' }
+    editor: { userId: string; displayName: string; role: TaskActorRole }
   }) => void
 }
 

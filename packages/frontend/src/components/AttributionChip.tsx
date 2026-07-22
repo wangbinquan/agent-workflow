@@ -9,7 +9,9 @@
 import { useTranslation } from 'react-i18next'
 import type { UserPublic } from '@agent-workflow/shared'
 
-export type AttributionRole = 'owner' | 'user' | 'admin' | null | undefined
+// RFC-222 — 'manager' added: a resource admin acting on a task is attributed
+// truthfully (not folded into admin). Kept aligned with shared TaskActorRole.
+export type AttributionRole = 'owner' | 'user' | 'admin' | 'manager' | null | undefined
 
 interface AttributionChipProps {
   userId: string | null | undefined
@@ -31,7 +33,9 @@ export function AttributionChip({ userId, role, user, className }: AttributionCh
         ? t('attribution.role.user')
         : role === 'admin'
           ? t('attribution.role.admin')
-          : null
+          : role === 'manager'
+            ? t('attribution.role.manager')
+            : null
   return (
     <span className={`chip chip--tight attribution-chip${className ? ` ${className}` : ''}`}>
       {name}

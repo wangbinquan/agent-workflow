@@ -6,6 +6,7 @@
 
 import type { MiddlewareHandler } from 'hono'
 import type { Permission } from '@agent-workflow/shared'
+import { isResourceAdminRole } from '@agent-workflow/shared'
 import { actorOf } from './actor'
 import { ForbiddenError } from '@/util/errors'
 
@@ -34,6 +35,32 @@ export function requireAdmin(): MiddlewareHandler {
     const actor = actorOf(c)
     if (actor.user.role !== 'admin') {
       throw new ForbiddenError('forbidden', 'admin only')
+    }
+    await next()
+  }
+}
+
+/**
+ * RFC-222 — resource-admin gate (admin OR manager) with a DOUBLE check: the
+ * identity predicate AND a permission point. The identity door rejects `user`;
+ * the permission door lets a narrowed PAT still take effect (a plain
+ * `requireAdmin()`-style identity-only gate would let a scope-stripped token
+ * through — the very hole RFC-099's route-gate contract warns about). Used for
+ * route/channel gates that D3 opens to manager (memory-distill-jobs). Row-level
+ * resource bypass stays pure-identity via isResourceAdminActor — see
+ * services/resourceAcl.ts.
+ */
+export function requireResourceAdmin(perm: Permission): MiddlewareHandler {
+  return async (c, next) => {
+    const actor = actorOf(c)
+    if (!isResourceAdminRole(actor.user.role)) {
+      throw new ForbiddenError('forbidden', 'resource admin only')
+    }
+    if (!actor.permissions.has(perm)) {
+      throw new ForbiddenError('forbidden', `missing permission: ${perm}`, {
+        requiredPermission: perm,
+        actorPermissions: [...actor.permissions],
+      })
     }
     await next()
   }

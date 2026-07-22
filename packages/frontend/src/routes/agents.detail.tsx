@@ -103,8 +103,8 @@ function AgentDetailPage() {
   })
 
   const del = useMutation({
-    mutationFn: ({ release: _release }: { release: SplitBusyRelease }) =>
-      api.delete(`/api/agents/${encodeURIComponent(name)}`),
+    mutationFn: ({ confirm, release: _release }: { confirm: string; release: SplitBusyRelease }) =>
+      api.deleteJson(`/api/agents/${encodeURIComponent(name)}`, { confirm }),
     onSuccess: async (_deleted, { release }) => {
       // Sync-clear the dirty ref so the guard doesn't block THIS navigation
       // (the resource no longer exists — nothing to save).
@@ -158,9 +158,11 @@ function AgentDetailPage() {
         }}
         del={{
           label: t('common.delete'),
-          onConfirm: () => {
+          confirmName: name,
+          resourceType: 'agent',
+          onConfirm: (ctx) => {
             if (save.isPending || del.isPending) return Promise.resolve()
-            return del.mutateAsync({ release: beginBusy(name) })
+            return del.mutateAsync({ confirm: ctx?.typedConfirm ?? '', release: beginBusy(name) })
           },
           disabled: del.isPending || save.isPending,
         }}

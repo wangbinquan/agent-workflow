@@ -36,6 +36,7 @@ import {
   withMcpOperationConfigHash,
 } from '@/services/mcpOperationRevision'
 import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
+import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
 import { mountAclEndpoints } from './resourceAcl'
 import { probeMcp, type ProbeOptions } from '@/services/mcpProbe'
 import { getProbeByMcpId, listProbes, upsertProbe } from '@/services/mcpProbeStore'
@@ -143,6 +144,9 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
     await mcpOperationCoordinator.runExclusive(resolved.id, async () => {
       const fresh = await loadVisibleMcpById(actor, resolved.id)
       await requireResourceOwner(deps.db, actor, 'mcp', fresh)
+      // RFC-222 (D5, N-6): confirm against the FRESH name inside the exclusive
+      // section, so a concurrent rename is caught as a mismatch.
+      assertDeleteConfirm(await readDeleteBody(c), fresh.name, 'mcp')
       await deleteMcp(deps.db, fresh.name, actor, { existing: fresh })
     })
     return c.body(null, 204)

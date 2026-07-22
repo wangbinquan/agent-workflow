@@ -395,7 +395,11 @@ describe('skill HTTP routes', () => {
       method: 'POST',
       body: JSON.stringify({ name: 'a1', skills: ['foo'] }),
     })
-    const res = await req(h.app, '/api/skills/foo', { method: 'DELETE' })
+    // RFC-222 (D5, N-5): confirm passes first, then the in-use refusal fires.
+    const res = await req(h.app, '/api/skills/foo', {
+      method: 'DELETE',
+      body: JSON.stringify({ confirm: 'foo' }),
+    })
     expect(res.status).toBe(409)
     expect(((await res.json()) as { code: string }).code).toBe('skill-in-use')
   })

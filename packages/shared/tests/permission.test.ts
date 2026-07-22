@@ -7,14 +7,19 @@ import { describe, expect, test } from 'bun:test'
 import {
   ADMIN_ONLY_PERMISSIONS,
   hasPermission,
+  isResourceAdminRole,
+  MANAGER_DENIED_PERMISSIONS,
+  PAT_EXPLICIT_ONLY_PERMISSIONS,
   PERMISSIONS,
   ROLE_PERMISSIONS,
+  RoleSchema,
   type Permission,
 } from '../src/schemas/permission'
 
 describe('PERMISSIONS catalog', () => {
-  test('contains the documented 33 entries', () => {
-    expect(PERMISSIONS.length).toBe(33)
+  test('contains the documented 34 entries', () => {
+    // RFC-222 added tasks:delete (33 → 34).
+    expect(PERMISSIONS.length).toBe(34)
   })
 
   test('admin role is the full PERMISSIONS set', () => {
@@ -72,10 +77,15 @@ describe('PERMISSIONS catalog', () => {
       'backup:run',
       'tasks:read:all',
       'tasks:cancel:all',
+      // RFC-222 — task deletion is admin-only (NOT manager, NOT user).
+      'tasks:delete',
     ]
     for (const p of adminOnly) {
       expect(ROLE_PERMISSIONS.user.includes(p)).toBe(false)
     }
+    // ADMIN_ONLY_PERMISSIONS is still "PERMISSIONS − user baseline" — it stays
+    // admin-vs-user by design even though some members (repos:write etc.) are
+    // now ALSO manager's. Manager's negative set is MANAGER_DENIED below.
     expect([...ADMIN_ONLY_PERMISSIONS].sort()).toEqual(adminOnly.sort())
   })
 
@@ -92,5 +102,80 @@ describe('PERMISSIONS catalog', () => {
     expect(hasPermission('user', 'users:search')).toBe(true)
     expect(hasPermission('user', 'tasks:read:all')).toBe(false)
     expect(hasPermission('user', 'tasks:read:own')).toBe(true)
+  })
+})
+
+// RFC-222 — the `manager` (资源管理员) role. manager = admin minus user
+// management, system settings/ops, and task deletion; plus every resource-
+// domain capability. Both the positive and negative sets are pinned so a future
+// edit that hands manager a system-domain point (or drops a resource one) reds.
+describe('RFC-222 manager role', () => {
+  test('RoleSchema accepts exactly the three roles', () => {
+    expect(RoleSchema.options).toEqual(['admin', 'user', 'manager'])
+    expect(RoleSchema.safeParse('manager').success).toBe(true)
+    expect(RoleSchema.safeParse('auditor').success).toBe(false)
+  })
+
+  test('manager = user baseline + repos:write + tasks:read:all + tasks:cancel:all', () => {
+    const expected: Permission[] = [
+      ...ROLE_PERMISSIONS.user,
+      'repos:write',
+      'tasks:read:all',
+      'tasks:cancel:all',
+    ]
+    expect([...ROLE_PERMISSIONS.manager].sort()).toEqual([...new Set(expected)].sort())
+  })
+
+  test('manager positive resource-domain points', () => {
+    for (const p of [
+      'agents:write',
+      'skills:write',
+      'mcps:write',
+      'plugins:write',
+      'workflows:write',
+      'repos:write',
+      'tasks:read:all',
+      'tasks:cancel:all',
+      'memory:approve',
+      'memory:delete',
+    ] as const) {
+      expect(hasPermission('manager', p)).toBe(true)
+    }
+  })
+
+  test('MANAGER_DENIED points are ∈ admin and ∉ manager (and ∉ user)', () => {
+    expect([...MANAGER_DENIED_PERMISSIONS].sort()).toEqual(
+      [
+        'users:read',
+        'users:write',
+        'settings:read',
+        'settings:write',
+        'oidc:read',
+        'oidc:configure',
+        'backup:run',
+        'tasks:delete',
+      ].sort(),
+    )
+    for (const p of MANAGER_DENIED_PERMISSIONS) {
+      expect(hasPermission('admin', p)).toBe(true)
+      expect(hasPermission('manager', p)).toBe(false)
+      expect(hasPermission('user', p)).toBe(false)
+    }
+  })
+
+  test('tasks:delete belongs to admin only', () => {
+    expect(hasPermission('admin', 'tasks:delete')).toBe(true)
+    expect(hasPermission('manager', 'tasks:delete')).toBe(false)
+    expect(hasPermission('user', 'tasks:delete')).toBe(false)
+  })
+
+  test('isResourceAdminRole: admin ∪ manager, not user', () => {
+    expect(isResourceAdminRole('admin')).toBe(true)
+    expect(isResourceAdminRole('manager')).toBe(true)
+    expect(isResourceAdminRole('user')).toBe(false)
+  })
+
+  test('PAT_EXPLICIT_ONLY holds tasks:delete', () => {
+    expect([...PAT_EXPLICIT_ONLY_PERMISSIONS]).toEqual(['tasks:delete'])
   })
 })

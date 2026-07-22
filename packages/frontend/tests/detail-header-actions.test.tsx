@@ -28,7 +28,8 @@ function wrap(node: React.ReactElement) {
 
 const BASE = {
   acl: { resourceBaseUrl: '/api/agents/x', invalidateKey: ['agents'] as const },
-  del: { label: 'Delete it', onConfirm: () => {} },
+  // RFC-222 (D5): del now carries the type-to-confirm name + resource type.
+  del: { label: 'Delete it', onConfirm: () => {}, confirmName: 'x', resourceType: 'agent' },
 }
 
 beforeEach(() => {

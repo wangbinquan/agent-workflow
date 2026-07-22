@@ -5,10 +5,12 @@
 // in resource_grants. This module is the single authority for "can this actor
 // see / modify this resource":
 //
-//   - admins bypass everything. The bypass keys off `actor.user.role` (the
-//     identity), NOT the resolved permission set — a PAT with narrowed scopes
-//     still belongs to an admin and must not flip row visibility, only route
-//     gates (auth/actor.ts buildActor narrows permissions, never the role).
+//   - resource admins (admin OR manager — RFC-222) bypass everything. The bypass
+//     keys off `actor.user.role` (the identity), NOT the resolved permission set
+//     — a PAT with narrowed scopes still belongs to a resource admin and must
+//     not flip row visibility, only route gates (auth/actor.ts buildActor
+//     narrows permissions, never the role). The identity predicate lives in
+//     shared (isResourceAdminRole); isResourceAdminActor wraps it here.
 //   - the daemon-token actor is the '__system__' admin, so the runner /
 //     scheduler / opencode injection paths are structurally unaffected.
 //   - non-granted non-admin users must not observe the resource at all:
@@ -27,6 +29,7 @@ import type {
   UpdateResourceAclBody,
   UserPublic,
 } from '@agent-workflow/shared'
+import { isResourceAdminRole } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import { SYSTEM_USER_ID } from '@/auth/actor'
@@ -71,8 +74,18 @@ export const ACL_TABLES = {
   workgroup: workgroups, // RFC-164
 } as const
 
+/** Global system-admin identity (system domain: users / settings / oidc /
+ *  backup / runtimes / task deletion). Kept distinct from the resource-admin
+ *  predicate below — manager is NOT a system admin. */
 export function isAdminActor(actor: Actor): boolean {
   return actor.user.role === 'admin'
+}
+
+/** RFC-222 — resource-domain admin identity (admin ∪ manager). Every row-level
+ *  ACL bypass in this file and its callers keys off THIS, not isAdminActor.
+ *  Derived from the shared single-source predicate. */
+export function isResourceAdminActor(actor: Actor): boolean {
+  return isResourceAdminRole(actor.user.role)
 }
 
 /** All resource ids of `type` granted to this user (one query; empty for admins — they don't need it). */
@@ -90,7 +103,7 @@ export async function listGrantedResourceIds(
 
 /** Pure visibility predicate against a pre-fetched grant set. */
 export function isVisibleRow(actor: Actor, row: AclRow, grantedIds: ReadonlySet<string>): boolean {
-  if (isAdminActor(actor)) return true
+  if (isResourceAdminActor(actor)) return true
   if ((row.visibility ?? 'public') === 'public') return true
   if (row.ownerUserId != null && row.ownerUserId === actor.user.id) return true
   return grantedIds.has(row.id)
@@ -128,7 +141,7 @@ export async function discloseRefs(
   type: AclResourceType,
   rows: ReadonlyArray<AclRow & { name: string }>,
 ): Promise<DisclosedRefs> {
-  const granted = isAdminActor(actor)
+  const granted = isResourceAdminActor(actor)
     ? new Set<string>()
     : await listGrantedResourceIds(db, actor, type)
   return discloseRefsSync(actor, rows, granted)
@@ -161,7 +174,7 @@ export async function filterVisibleRows<T extends AclRow>(
   type: AclResourceType,
   rows: readonly T[],
 ): Promise<T[]> {
-  if (isAdminActor(actor)) return [...rows]
+  if (isResourceAdminActor(actor)) return [...rows]
   const granted = await listGrantedResourceIds(db, actor, type)
   return rows.filter((r) => isVisibleRow(actor, r, granted))
 }
@@ -173,7 +186,7 @@ export async function canViewResource(
   type: AclResourceType,
   row: AclRow,
 ): Promise<boolean> {
-  if (isAdminActor(actor)) return true
+  if (isResourceAdminActor(actor)) return true
   if ((row.visibility ?? 'public') === 'public') return true
   if (row.ownerUserId != null && row.ownerUserId === actor.user.id) return true
   const rows = await db
@@ -205,7 +218,7 @@ export async function requireResourceView(
 }
 
 export function isResourceOwner(actor: Actor, row: AclRow): boolean {
-  if (isAdminActor(actor)) return true
+  if (isResourceAdminActor(actor)) return true
   return row.ownerUserId != null && row.ownerUserId === actor.user.id
 }
 
@@ -223,14 +236,16 @@ export async function requireResourceOwner(
 ): Promise<void> {
   await requireResourceView(db, actor, type, row)
   if (isResourceOwner(actor, row)) return
-  throw new ForbiddenError('forbidden', `only the ${type} owner or an admin can modify it`)
+  throw new ForbiddenError('forbidden', `only the ${type} owner or a resource admin can modify it`)
 }
 
 /**
  * Task-relationship role snapshot (D7/D17) — member identity first:
- *   task owner → 'owner'; collaborator → 'user'; otherwise an admin acting
- *   from outside the membership → 'admin'; anyone else → null (caller must
- *   have rejected already).
+ *   task owner → 'owner'; collaborator → 'user'; otherwise a system admin
+ *   acting from outside the membership → 'admin'; a manager acting from
+ *   outside → 'manager' (RFC-222: recorded truthfully, never impersonating
+ *   admin, and — like all attribution — never entering an agent prompt);
+ *   anyone else → null (caller must have rejected already).
  */
 export function resolveTaskRole(
   actor: Actor,
@@ -239,7 +254,8 @@ export function resolveTaskRole(
 ): TaskActorRole | null {
   if (taskOwnerUserId !== null && taskOwnerUserId === actor.user.id) return 'owner'
   if (isMember) return 'user'
-  if (isAdminActor(actor)) return 'admin'
+  if (actor.user.role === 'admin') return 'admin'
+  if (actor.user.role === 'manager') return 'manager'
   return null
 }
 

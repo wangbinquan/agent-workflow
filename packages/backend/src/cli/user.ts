@@ -14,7 +14,7 @@ import {
   listAllUsers,
   resetPassword,
 } from '@/services/users'
-import type { Role } from '@agent-workflow/shared'
+import { RoleSchema, type Role } from '@agent-workflow/shared'
 
 interface ParsedFlags {
   username?: string
@@ -22,7 +22,8 @@ interface ParsedFlags {
   email?: string
   password?: string
   newPassword?: string
-  role?: Role
+  /** RFC-222 (P2-4): raw --role string, validated with RoleSchema at use time. */
+  role?: string
   admin?: boolean
 }
 
@@ -52,7 +53,7 @@ function parseFlags(argv: string[]): ParsedFlags {
         out.newPassword = consume()
         break
       case '--role':
-        out.role = consume() as Role
+        out.role = consume()
         break
       case '--admin':
         out.admin = true
@@ -89,7 +90,7 @@ export async function userCommand(
     return {
       output:
         'usage: agent-workflow user <create|reset-password|list|disable|enable> [options]\n' +
-        '  user create --username <name> [--admin] [--role admin|user]\n' +
+        '  user create --username <name> [--admin] [--role admin|user|manager]\n' +
         '               [--display "Name"] [--email <em>] [--password <pw>]\n' +
         '  user reset-password --username <name> --new-password <pw>\n' +
         '  user list\n' +
@@ -105,7 +106,18 @@ export async function userCommand(
   try {
     if (sub === 'create') {
       if (!flags.username) return badUsage('--username is required')
-      const role: Role = flags.admin ? 'admin' : (flags.role ?? 'user')
+      // RFC-222 (P2-4): validate --role at runtime instead of a blind `as Role`
+      // cast — an unknown role string must be rejected, never silently written.
+      let role: Role = 'user'
+      if (flags.admin) {
+        role = 'admin'
+      } else if (flags.role !== undefined) {
+        const parsed = RoleSchema.safeParse(flags.role)
+        if (!parsed.success) {
+          return badUsage(`invalid --role '${flags.role}' (expected admin|user|manager)`)
+        }
+        role = parsed.data
+      }
       const created = await createUser(db, {
         username: flags.username,
         displayName: flags.displayName ?? flags.username,

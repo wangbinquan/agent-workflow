@@ -665,7 +665,8 @@ function WorkgroupEditor(props: {
   }
 
   const del = useMutation({
-    mutationFn: () => api.delete(`/api/workgroups/${encodeURIComponent(name)}`),
+    mutationFn: (confirm: string) =>
+      api.deleteJson(`/api/workgroups/${encodeURIComponent(name)}`, { confirm }),
     onSuccess: () => {
       // Self-navigation must observe a released synchronous guard token.
       releaseAuxiliaryBusy(deleteInFlightRef)
@@ -675,10 +676,10 @@ function WorkgroupEditor(props: {
     onSettled: () => releaseAuxiliaryBusy(deleteInFlightRef),
   })
 
-  function startDelete(): Promise<unknown> {
+  function startDelete(confirm: string): Promise<unknown> {
     deleteInFlightRef.current = true
     busyRef.current = true
-    return del.mutateAsync()
+    return del.mutateAsync(confirm)
   }
 
   const [renameOpen, setRenameOpen] = useState(false)
@@ -777,7 +778,9 @@ function WorkgroupEditor(props: {
         }}
         del={{
           label: t('common.delete'),
-          onConfirm: startDelete,
+          confirmName: name,
+          resourceType: 'workgroup',
+          onConfirm: (ctx) => startDelete(ctx?.typedConfirm ?? ''),
           disabled: del.isPending || destructiveDisabled,
         }}
         extra={

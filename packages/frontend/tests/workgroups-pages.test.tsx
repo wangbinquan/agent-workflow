@@ -729,9 +729,13 @@ describe('/workgroups/$name — config editing', () => {
     })
     const router = await renderPage('/workgroups/review-squad')
 
-    const remove = await screen.findByRole('button', { name: /^Delete$/i })
-    fireEvent.click(remove)
-    fireEvent.click(screen.getByRole('button', { name: /Confirm/i }))
+    // RFC-222 (D5): delete now opens a type-to-confirm dialog — type the name.
+    fireEvent.click(await screen.findByTestId('detail-delete-button'))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByTestId('confirm-input'), {
+      target: { value: 'review-squad' },
+    })
+    fireEvent.click(within(dialog).getByRole('button', { name: /^Delete$/i }))
     void router.navigate({ to: '/workgroups' })
 
     const guard = await screen.findByTestId('unsaved-guard-dialog')
