@@ -22,9 +22,11 @@ const input = {
 }
 
 describe('computeSandboxPolicy', () => {
-  test('threat list → denies; own dirs → allows; skills stays denied', () => {
+  // RFC-205 impl-gate P0-3 (Codex 2026-07-22): the whole appHome is denied — an
+  // enumerated deny-list missed iso/ (cross-task read/write) and .gitcred-* leases.
+  test('deny WHOLE appHome; own dirs + mirror allowed back; secrets stay denied', () => {
     const p = computeSandboxPolicy(input)
-    // A1/A2 + platform secrets as files
+    // A1/A2 + platform secrets as files (redundant under the appHome deny, kept).
     for (const f of [
       'secret.key',
       'db.sqlite',
@@ -35,14 +37,16 @@ describe('computeSandboxPolicy', () => {
     ]) {
       expect(p.denyFiles).toContain(join(HOME, f))
     }
-    // A3/A5 + platform subtrees
-    for (const d of ['backups', 'logs', 'worktrees', 'runs', 'skills', 'plugins']) {
-      expect(p.denySubtrees).toContain(join(HOME, d))
-    }
-    // own task dirs allowed back (multi-repo = both worktrees)
-    expect(p.allowSubtrees).toEqual([...input.taskWorktrees, input.runDir])
-    // skills is NOT allowed back (design Q5)
+    // The entire appHome is denied — no subdir can leak by omission.
+    expect(p.denySubtrees).toEqual([HOME])
+    // own task dirs + the shared git mirror (git commit needs repos/) allowed back.
+    expect(p.allowSubtrees).toEqual([...input.taskWorktrees, input.runDir, join(HOME, 'repos')])
+    // skills is NOT allowed back (design Q5).
     expect(p.allowSubtrees.some((a) => a.includes('skills'))).toBe(false)
+    // Regression: iso/ + .gitcred-* were the missed holes — now under the deny.
+    for (const missed of ['iso', '.gitcred-01ABC', 'scratch', 'fusions']) {
+      expect(join(HOME, missed).startsWith(p.denySubtrees[0]!)).toBe(true)
+    }
   })
 })
 

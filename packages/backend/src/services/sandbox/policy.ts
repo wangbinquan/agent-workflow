@@ -44,28 +44,26 @@ export interface SandboxPolicy {
 /** The one place the deny/allow sets are computed. Pure — no fs access. */
 export function computeSandboxPolicy(input: SandboxPolicyInput): SandboxPolicy {
   const h = input.appHome
-  const denySubtrees = [
-    join(h, 'backups'),
-    join(h, 'logs'),
-    join(h, 'worktrees'), // A5 — every task's worktree; ours is allowed back below
-    join(h, 'runs'), // A5 — every run dir; ours is allowed back below
-    join(h, 'plugins'),
-    join(h, 'skills'),
-    join(h, 'snapshots'),
-    join(h, '.restore-pending'),
-    join(h, '.restore-upload'),
-  ]
+  // RFC-205 impl-gate P0-3 (Codex 2026-07-22): deny the WHOLE appHome, not an
+  // enumerated list. The old list missed `iso/` (RFC-130's REAL agent cwd →
+  // cross-task read/write of every OTHER task's isolation tree), the `.gitcred-*`
+  // credential leases (plaintext PAT, glob-readable), `scratch/` and `fusions/`.
+  // A deny-list is unmaintainable — one new appHome subdir re-opens the hole.
+  // Deny everything, then allow back ONLY what THIS run legitimately needs.
+  const denySubtrees = [h]
   const denyFiles = [
+    // Redundant under the whole-appHome deny, but kept explicit as defense in
+    // depth and as documentation of the crown jewels.
     join(h, 'secret.key'), // A1
     join(h, 'db.sqlite'), // A2
     join(h, 'db.sqlite-wal'),
     join(h, 'db.sqlite-shm'),
     join(h, 'token'),
     join(h, 'config.json'),
-    join(h, '.daemon.lock'),
-    join(h, '.daemon.info'),
   ]
-  const allowSubtrees = [...input.taskWorktrees, input.runDir]
+  // Allow back: this run's worktree(s) + run dir, and the shared git mirror (the
+  // object store git commit reads/writes — credential-free after RFC-204 sealing).
+  const allowSubtrees = [...input.taskWorktrees, input.runDir, join(h, 'repos')]
   return { denySubtrees, denyFiles, allowSubtrees }
 }
 
