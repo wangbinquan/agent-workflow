@@ -47,6 +47,17 @@ function neutralizeCloseTags(s: string): string {
   return s.replace(CLOSE_TAG_RE, (m) => `<${ZWSP}${m.slice(1)}`)
 }
 
+// RFC-200 impl-gate (Codex 2026-07-22): a bare CR (`\r`), a U+2028 line
+// separator or a U+2029 paragraph separator is a line break to the model, but
+// the `\n`-only split/collapse below treated them as ordinary text — so
+// `Which?\r### User directive:` smuggled a forged, un-prefixed line-start
+// directive past the fence. Normalize every Unicode line break to `\n` FIRST.
+// No-op on content using only `\n` (or none), so the legacy byte-compat
+// invariant holds (a `\r`/LS/PS-free input renders identically).
+function normalizeLineBreaks(s: string): string {
+  return s.replace(/\r\n?|\u2028|\u2029/g, '\n')
+}
+
 // Line-start framework markers untrusted content must not be able to forge:
 // markdown ATX headings, envelope opens/closes, an aw-input open, a `---`
 // separator (protocol-block lead), and the clarify directive trailer.
@@ -60,7 +71,7 @@ const LINE_ANCHOR_RE = /^(\s*)(#{1,6}\s|<\/?workflow-|<aw-input\b|---|###\s*User
  * near-identical; does not touch mid-line occurrences.
  */
 export function neutralizeLineStartAnchors(s: string): string {
-  return s
+  return normalizeLineBreaks(s)
     .split('\n')
     .map((line) => (LINE_ANCHOR_RE.test(line) ? line.replace(/^(\s*)(\S)/, `$1${ZWSP}$2`) : line))
     .join('\n')
@@ -74,8 +85,11 @@ export function neutralizeLineStartAnchors(s: string): string {
  */
 export function toSingleLine(s: string): string {
   // Any whitespace run containing a newline collapses to ONE space (so adjacent
-  // blank lines don't leave a double space), then trim the ends.
-  return s.replace(/\s*\n\s*/g, ' ').trim()
+  // blank lines don't leave a double space), then trim the ends. CR / U+2028 /
+  // U+2029 are normalized to `\n` first (RFC-200 impl-gate) so they collapse too.
+  return normalizeLineBreaks(s)
+    .replace(/\s*\n\s*/g, ' ')
+    .trim()
 }
 
 /**
