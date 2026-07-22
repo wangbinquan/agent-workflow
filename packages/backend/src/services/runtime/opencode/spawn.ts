@@ -10,7 +10,6 @@
 // Leaf module: imports nothing from runner.ts → no module-init cycle.
 // (RFC-154: the shared config-dir profile is a cross-package leaf import.)
 
-import { spawnSync } from 'node:child_process'
 import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
 import { compareSemver, extractVersion } from '@/util/semver'
 
@@ -206,86 +205,6 @@ export function buildOpencodeEnv(ctx: OpencodeEnvContext): Record<string, string
   return env
 }
 
-/**
- * Linux's execve caps a SINGLE argv/env string at MAX_ARG_STRLEN, which the
- * kernel defines as 32 PAGES — not a fixed byte count. A 4 KiB-page kernel gives
- * 128 KiB, but Linux arm64 (a supported target) can be built with 16 KiB or
- * 64 KiB pages, raising the real per-string limit to 512 KiB / 2 MiB. Hardcoding
- * 128 KiB would false-reject a legitimate large config on those kernels, so the
- * page size is probed at runtime and this is only the MULTIPLIER.
- */
-export const MAX_ARG_STRLEN_PAGES = 32
-
-let cachedLinuxPageSize: number | null | undefined
-/**
- * Kernel page size on Linux via `getconf PAGESIZE`, cached for the process.
- * Returns null when it can't be determined (non-Linux, getconf missing, garbage
- * output) — callers then SKIP the check rather than guess and risk false-reject.
- */
-function linuxPageSize(): number | null {
-  if (cachedLinuxPageSize !== undefined) return cachedLinuxPageSize
-  try {
-    const r = spawnSync('getconf', ['PAGESIZE'], { encoding: 'utf8', timeout: 2000 })
-    const n = Number.parseInt((r.stdout ?? '').trim(), 10)
-    cachedLinuxPageSize = r.status === 0 && Number.isInteger(n) && n > 0 ? n : null
-  } catch {
-    cachedLinuxPageSize = null
-  }
-  return cachedLinuxPageSize
-}
-
-/**
- * Fail READABLY when the one env string this driver injects unbounded —
- * OPENCODE_CONFIG_CONTENT, a large inline agent/MCP/config body that
- * buildOpencodeEnv writes with no size check of its own (upstream only emits a
- * UTF-16 `.length` warning) — would cross Linux's per-string execve limit,
- * instead of a raw E2BIG the user cannot act on. The runner maps the throw to
- * the node's `runtime-spawn-failed` errorMessage.
- *
- * Scoped deliberately narrow, because getting a spawn-size guard WRONG breaks
- * every spawn rather than an oversized one:
- *  - only OPENCODE_CONFIG_CONTENT, never the inherited process.env — a legitimate
- *    ambient variable must not be able to fail an otherwise-valid spawn;
- *  - only on Linux — macOS enforces no per-string cap, so the same value that
- *    would E2BIG on Linux spawns fine there and a fixed guard would false-reject;
- *  - against 32 × the RUNTIME page size, not a hardcoded 128 KiB, so a large-page
- *    arm64 kernel (16/64 KiB pages) is not false-rejected; if the page size can't
- *    be probed the check is skipped entirely.
- *
- * The TOTAL argv+env budget is a SEPARATE, platform- and sandbox-dependent
- * concern: it needs the runtime `getconf ARG_MAX` (macOS is ~1 MiB, NOT 256 KiB;
- * Linux's is bounded by RLIMIT_STACK and page size), plus the sandbox wrapper's
- * own argv and the envp pointer slots — none of which a fixed constant can stand
- * in for without false-rejecting legitimate large-but-valid spawns. It is left to
- * a future platform-aware guard measured at the real spawn boundary. claude is
- * unaffected (its driver pipes the prompt through stdin, never argv).
- */
-export function assertOpencodeSpawnSize(
-  env: Record<string, string>,
-  opts: { platform?: NodeJS.Platform; pageSize?: number | null } = {},
-): void {
-  const platform = opts.platform ?? process.platform
-  if (platform !== 'linux') return
-  const pageSize = opts.pageSize !== undefined ? opts.pageSize : linuxPageSize()
-  if (pageSize === null) return // page size unknown → skip rather than false-reject
-  const maxArgStrlen = MAX_ARG_STRLEN_PAGES * pageSize
-  const value = env.OPENCODE_CONFIG_CONTENT
-  if (value === undefined) return
-  // The kernel measures the whole `KEY=VALUE\0` entry against MAX_ARG_STRLEN.
-  const bytes =
-    Buffer.byteLength('OPENCODE_CONFIG_CONTENT', 'utf8') +
-    1 /* '=' */ +
-    Buffer.byteLength(value, 'utf8') +
-    1 /* NUL */
-  if (bytes > maxArgStrlen) {
-    throw new Error(
-      `spawn-config-too-large: OPENCODE_CONFIG_CONTENT is ${bytes} bytes, over the ` +
-        `${maxArgStrlen}-byte per-argv-string execve limit (MAX_ARG_STRLEN = 32 × ${pageSize}-byte ` +
-        `page); reduce the inline agent/MCP/config bodies feeding this node`,
-    )
-  }
-}
-
 export interface OpencodeSpawnContext extends OpencodeEnvContext {
   opencodeCmd?: string[]
   agentName: string
@@ -310,8 +229,5 @@ export function buildOpencodeSpawn(ctx: OpencodeSpawnContext): {
     ctx.prompt,
   )
   const env = buildOpencodeEnv(ctx)
-  // Fail readably before Linux execve would reject an oversized inline config
-  // with a raw E2BIG (see assertOpencodeSpawnSize — scoped to that one string).
-  assertOpencodeSpawnSize(env)
   return { cmd, env }
 }
