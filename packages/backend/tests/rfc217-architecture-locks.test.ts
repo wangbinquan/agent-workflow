@@ -55,7 +55,8 @@ describe('rfc217 G1 — no-circular guard is real', () => {
         if (e.isDirectory()) walk(rel)
         else if (e.name.endsWith('.ts')) {
           const src = read(rel)
-          const re = /import\s*\{([^}]*)\}\s*from\s*'(?:@\/services\/workgroup\/launch|\.\/launch|\.\.\/workgroup\/launch)'/g
+          const re =
+            /import\s*\{([^}]*)\}\s*from\s*'(?:@\/services\/workgroup\/launch|\.\/launch|\.\.\/workgroup\/launch)'/g
           for (const m of src.matchAll(re)) {
             if (/WG_|WORKGROUP_HOST/.test(m[1] ?? '')) offenders.push(rel)
           }
