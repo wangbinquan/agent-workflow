@@ -7,7 +7,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { isTargetNodeConsumed } from '../src/services/clarifyRerunLedger'
-import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '../src/services/workgroupLaunch'
+import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '../src/services/workgroup/launch'
 
 type Row = Parameters<typeof isTargetNodeConsumed>[3][number]
 function run(over: Partial<Row>): Row {

@@ -48,7 +48,7 @@ import {
   canTransitionAssignment,
   dismissOpenClarifyParksForAutonomous,
   isTaskClarifySuppressed,
-} from '../src/services/workgroupLifecycle'
+} from '../src/services/workgroup/lifecycle'
 import { TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -490,7 +490,7 @@ describe('RFC-181 C — 源级契约锁', () => {
   })
 
   test('workgroupRunner：leader/worker 均有 clarify-forbidden 重试分支（结构化路由）+ 三调用点传 clarifyEnabled', () => {
-    const runner = SRC('services/workgroupRunner.ts')
+    const runner = SRC('services/workgroup/runner.ts')
     // 调度架构审视 2026-07-14：软拒分支改按结构化 failureCode 路由（leader +
     // worker 各一处）。RFC-145 棘轮：errorMessage 是人读面包屑，绝不再当机器键
     // —— startsWith(CLARIFY_FORBIDDEN_PREFIX) 回潮即红。

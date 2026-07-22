@@ -24,7 +24,7 @@ import { createAgent } from '../src/services/agent'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { resumeTask } from '../src/services/task'
 import { createWorkgroup } from '../src/services/workgroups'
-import { startWorkgroupTask } from '../src/services/workgroupLaunch'
+import { startWorkgroupTask } from '../src/services/workgroup/launch'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SCENARIO_STUB = resolve(import.meta.dir, 'fixtures', 'scenario-opencode.ts')

@@ -8,7 +8,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { detectZeroDeltaDone } from '../src/services/workgroupRunner'
+import { detectZeroDeltaDone } from '../src/services/workgroup/runner'
 
 describe('RFC-187 §4 — detectZeroDeltaDone', () => {
   test('zero files + completed work = suspect (probe A shape)', () => {
@@ -29,7 +29,7 @@ describe('RFC-187 §4 — detectZeroDeltaDone', () => {
 describe('RFC-187 §4 — source locks', () => {
   test('the leader protocol tells briefs to use relative, not absolute, paths', () => {
     const ctx = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'workgroupContext.ts'),
+      resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'context.ts'),
       'utf8',
     )
     expect(ctx).toContain('RELATIVE path')
@@ -38,7 +38,7 @@ describe('RFC-187 §4 — source locks', () => {
 
   test('the engine wires a zero-delta warn on done (both the gated and un-gated finish)', () => {
     const runner = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'workgroupRunner.ts'),
+      resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'runner.ts'),
       'utf8',
     )
     // called before BOTH `return { kind: 'ok' }` sites (autonomous done + gate-approved done).

@@ -21,7 +21,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { autoResumeInterruptedTasks } from '../src/services/autoResume'
-import { isKilledClarifyContinuation } from '../src/services/workgroupRunner'
+import { isKilledClarifyContinuation } from '../src/services/workgroup/runner'
 import { CLARIFY_RERUN_CAUSES, isClarifyRerunCause } from '../src/services/nodeRunMint'
 
 // RFC-187: this suite drives REAL auto-resume, which bumps the process-global
@@ -157,7 +157,7 @@ describe('RFC-187 T13 — auto-resume sweeps the answer-handoff wedge', () => {
 
 describe('RFC-187 T13 — source locks (engine-entry revive)', () => {
   const RUNNER = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'workgroupRunner.ts'),
+    resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'runner.ts'),
     'utf8',
   )
 

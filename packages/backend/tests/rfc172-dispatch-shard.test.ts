@@ -18,7 +18,7 @@ import {
   dispatchTaskQuestions,
   resolveEntryShardKeys,
 } from '../src/services/taskQuestionDispatch'
-import { buildWorkgroupHostSnapshot, WG_MEMBER_NODE_ID } from '../src/services/workgroupLaunch'
+import { buildWorkgroupHostSnapshot, WG_MEMBER_NODE_ID } from '../src/services/workgroup/launch'
 import { createManualTaskQuestion, reassignTaskQuestion } from '../src/services/taskQuestions'
 import { hasOpenDispatchedEntryOnHome } from '../src/services/clarifyRerunLedger'
 import { abandonSupersededMergeStates } from '../src/services/lifecycle'

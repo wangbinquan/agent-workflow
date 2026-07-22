@@ -554,7 +554,7 @@ export const workgroupMembers = sqliteTable(
 // workgroup_assignments — RFC-164 PR-2 (design §1.4). Dispatch cards AND the
 // free_collab shared task list in one table. `id` doubles as the member run's
 // shard_key on the __wg_member__ host node (PR-3). Status machine lives in
-// services/workgroupLifecycle.ts — writes go through casAssignmentStatus, not
+// services/workgroup/lifecycle.ts — writes go through casAssignmentStatus, not
 // raw UPDATEs. `created_by_user_id` is audit-only and never reaches prompts
 // (design §11).
 // -----------------------------------------------------------------------------
@@ -611,7 +611,7 @@ export const workgroupAssignments = sqliteTable(
 // workgroup_messages — RFC-164 PR-2 (design §1.5). The room = the blackboard:
 // dispatch anchors, result summaries, human chat, system markers. Humans (task
 // members) always see everything; what AGENTS see is sliced per the three
-// switches (services/workgroupContext.ts). `author_user_id` is audit/UI only.
+// switches (services/workgroup/context.ts). `author_user_id` is audit/UI only.
 // Ordering key is the ULID id (lexical == chronological).
 // -----------------------------------------------------------------------------
 export const workgroupMessages = sqliteTable(

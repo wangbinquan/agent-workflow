@@ -14,8 +14,8 @@ import { FOLLOWUP_POLICY, type FailureCode } from '@agent-workflow/shared'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { followupForFailure, wgFollowupNotice } from '../src/services/workgroupRunner'
-import { renderWgProtocolBlock } from '../src/services/workgroupContext'
+import { followupForFailure, wgFollowupNotice } from '../src/services/workgroup/runner'
+import { renderWgProtocolBlock } from '../src/services/workgroup/context'
 import type { WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 
 // Every FailureCode in the shared policy table is retryable in the workgroup
@@ -104,7 +104,7 @@ describe('RFC-186 — protocol block carries the literal <workflow-output> examp
 // must be the aligned value.
 describe('RFC-186 — source locks (workgroupRunner)', () => {
   const src = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'workgroupRunner.ts'),
+    resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'runner.ts'),
     'utf8',
   )
 

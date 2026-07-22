@@ -16,7 +16,7 @@ import type {
   WorkgroupMessage,
   WorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
-import { deriveWakeSet, type WakeInput, type WakeItem } from '../src/services/workgroupWake'
+import { deriveWakeSet, type WakeInput, type WakeItem } from '../src/services/workgroup/wake'
 
 function fcCfg(overrides: Partial<WorkgroupRuntimeConfig> = {}): WorkgroupRuntimeConfig {
   return {
@@ -355,7 +355,7 @@ describe('RFC-215 — source locks', () => {
     // 游标单一归属消息轨：driveBatchTurn / settleBatchResults 里出现
     // advanceMemberCursor 即回归（双轨并发双推游标 = v1 探针 S1 的竞态）。
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'workgroupRunner.ts'),
+      resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'runner.ts'),
       'utf-8',
     )
     const batchFn = src.slice(

@@ -27,9 +27,9 @@ import {
   isReadonlyAgentPermission,
   type WakeInput,
   type WakeItem,
-} from '../src/services/workgroupWake'
+} from '../src/services/workgroup/wake'
 import { resolveRoomPauseReason } from '../src/routes/workgroupTasks'
-import { writeWgPauseReason } from '../src/services/workgroupRunner'
+import { writeWgPauseReason } from '../src/services/workgroup/runner'
 
 // ---------------------------------------------------------------------------
 // fixtures（形状照抄 rfc215-fc-dual-track.test.ts）

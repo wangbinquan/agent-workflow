@@ -51,7 +51,7 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   // 2026-07-21 +1: writeWgPauseReason —— awaiting_human 成因写进同一 config
   // copy 的 wgPause 槽（json_set 单键，永不触碰 status 列；房间 API 只在任务
   // 当前停在 awaiting_human 时读出）。
-  'services/workgroupRunner.ts': 2,
+  'services/workgroup/runner.ts': 2,
   // RFC-204 T7: the credential sealing gate backfills tasks.cached_repo_id and
   // re-redacts a legacy tasks.repo_url. Both are credential-hygiene columns —
   // the gate never reads or writes `status`.

@@ -73,19 +73,19 @@ import {
 import { getAgent } from '@/services/agent'
 import { isClarifyRerunCause, loadRunEnvelopeNonce, mintNodeRun } from '@/services/nodeRunMint'
 import { setNodeRunStatus } from '@/services/lifecycle'
-import { buildRoomMessageRow } from '@/services/workgroupMessages'
+import { buildRoomMessageRow } from '@/services/workgroup/messages'
 import {
   deriveRoundsUsed,
   resolveMessageRound,
   roundedModeOf,
   type RoundedWorkgroupMode,
-} from '@/services/workgroupRounds'
+} from '@/services/workgroup/rounds'
 import {
   advanceMemberCursor,
   casAssignmentStatus,
   dismissOpenClarifyParksForAutonomous,
   resolveWgClarifyAllowed,
-} from '@/services/workgroupLifecycle'
+} from '@/services/workgroup/lifecycle'
 import {
   maxMessageId,
   memberById,
@@ -99,7 +99,7 @@ import {
   rosterDisplayNames,
   selectMemberSlices,
   wgHostRolePorts,
-} from '@/services/workgroupContext'
+} from '@/services/workgroup/context'
 import {
   decideWorkgroupOutcome,
   deriveWakeSet,
@@ -108,8 +108,8 @@ import {
   WG_NUDGE_BODY,
   type WakeInput,
   type WakeItem,
-} from '@/services/workgroupWake'
-import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '@/services/workgroupLaunch'
+} from '@/services/workgroup/wake'
+import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '@/services/workgroup/constants'
 import { taskBroadcaster, TASK_CHANNEL } from '@/ws/broadcaster'
 import type { Logger } from '@/util/log'
 
@@ -777,7 +777,7 @@ async function postAssignmentMessage(
 // round counting (durable — derived from node_runs each pass)
 // ---------------------------------------------------------------------------
 
-// RFC-209 — 推导本体搬到 services/workgroupRounds.ts（回合账本单一事实源），
+// RFC-209 — 推导本体搬到 services/workgroup/rounds.ts（回合账本单一事实源），
 // 引擎 / 写入侧 / 房间聚合三方读同一个数。口径未变：lw = max(wg_round) + NULL 尾巴、
 // fc = 成员 run 行计数；唯一新增是「已被取代的被杀反问续跑行」排除（RFC-209 T7，
 // 修的是同一逻辑回合被数两次）。

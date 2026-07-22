@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const SRC = readFileSync(
-  resolve(import.meta.dir, '..', 'src', 'services', 'workgroupRunner.ts'),
+  resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'runner.ts'),
   'utf8',
 )
 
@@ -59,7 +59,7 @@ describe('RFC-186 Phase 3 — engine hardening locks', () => {
   // WgMemberRefSchema). Reconcile the copy so a weak model isn't confused.
   test('TRAP-2: protocol no longer contradicts the roster on the @ prefix', () => {
     const ctx = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'workgroupContext.ts'),
+      resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'context.ts'),
       'utf8',
     )
     expect(ctx).toContain('the leading @ shown in the')

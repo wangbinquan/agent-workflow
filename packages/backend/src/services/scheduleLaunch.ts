@@ -13,7 +13,7 @@ import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import { startAgentTask } from '@/services/agentLaunch'
 import { startTask } from '@/services/task'
-import { startWorkgroupTask } from '@/services/workgroupLaunch'
+import { startWorkgroupTask } from '@/services/workgroup/launch'
 import type {
   ScheduledAgentPayload,
   ScheduledWorkgroupPayload,

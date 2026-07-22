@@ -9,7 +9,7 @@
 // longer silences shard 7. That narrowing is intentional and disclosed.
 
 import { wgClarifyAskerKey } from '@agent-workflow/shared'
-import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from './workgroupLaunch'
+import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from './constants'
 
 export function wgClarifyAskerKeyForRound(nodeId: string, shardKey: string | null): string {
   if (nodeId === WG_LEADER_NODE_ID || nodeId === WG_MEMBER_NODE_ID) {

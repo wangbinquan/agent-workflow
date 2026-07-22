@@ -58,6 +58,9 @@ jobs:
       - name: Lint
         run: bun run lint
 
+      - name: Dependency rules (import seams + no-circular)
+        run: bun run depcheck
+
       - name: Typecheck
         run: bun run typecheck
 

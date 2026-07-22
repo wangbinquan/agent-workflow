@@ -59,16 +59,16 @@ import {
   casAssignmentStatus,
   casAssignmentStatusTx,
   dismissOpenClarifyParksForAutonomous,
-} from '@/services/workgroupLifecycle'
+} from '@/services/workgroup/lifecycle'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
-import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '@/services/workgroupLaunch'
-import { buildRoomMessageRow } from '@/services/workgroupMessages'
-import { deriveMemberCurrentRuns, deriveWorkgroupRunHistory } from '@/services/workgroupRoom'
+import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '@/services/workgroup/constants'
+import { buildRoomMessageRow } from '@/services/workgroup/messages'
+import { deriveMemberCurrentRuns, deriveWorkgroupRunHistory } from '@/services/workgroup/room'
 import {
   deriveRoundsUsed,
   resolveRoomMessageRound,
   roundedModeOf,
-} from '@/services/workgroupRounds'
+} from '@/services/workgroup/rounds'
 import { Paths } from '@/util/paths'
 import { resolveOpencodeCmd } from '@/util/opencode'
 import { taskBroadcaster, TASK_CHANNEL } from '@/ws/broadcaster'

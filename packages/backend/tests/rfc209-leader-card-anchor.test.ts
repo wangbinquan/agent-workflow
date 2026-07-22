@@ -19,8 +19,8 @@ import {
   deriveWorkgroupRunHistory,
   type HostRunLite,
   type MemberLite,
-} from '../src/services/workgroupRoom'
-import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '../src/services/workgroupLaunch'
+} from '../src/services/workgroup/room'
+import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '../src/services/workgroup/launch'
 
 const LEADER = 'M_leader'
 const A1 = 'M_agent1'

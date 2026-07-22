@@ -42,13 +42,23 @@ import { getWorkgroup } from '@/services/workgroups'
 import { startTask, type StartTaskDeps } from '@/services/task'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 
-/** Fixed ULID-shaped id of the builtin host workflow (lazy seed, ensureWorkgroupHostWorkflow). */
-export const WORKGROUP_HOST_WORKFLOW_ID = '00000000000000WORKGROUP00'
-export const WORKGROUP_HOST_WORKFLOW_NAME = '__workgroup_host__'
-
-export const WG_LEADER_NODE_ID = '__wg_leader__'
-export const WG_MEMBER_NODE_ID = '__wg_member__'
-export const WG_CLARIFY_NODE_ID = '__wg_clarify__'
+// RFC-217 T1 — sentinel constants moved to ./constants (zero-dep leaf; cycle
+// fix). Re-exported here for existing test-side importers only; PRODUCTION
+// code must import '@/services/workgroup/constants' directly.
+export {
+  WORKGROUP_HOST_WORKFLOW_ID,
+  WORKGROUP_HOST_WORKFLOW_NAME,
+  WG_LEADER_NODE_ID,
+  WG_MEMBER_NODE_ID,
+  WG_CLARIFY_NODE_ID,
+} from './constants'
+import {
+  WORKGROUP_HOST_WORKFLOW_ID,
+  WORKGROUP_HOST_WORKFLOW_NAME,
+  WG_LEADER_NODE_ID,
+  WG_MEMBER_NODE_ID,
+  WG_CLARIFY_NODE_ID,
+} from './constants'
 
 /**
  * Synthesize the frozen workflow snapshot for a workgroup task. The host

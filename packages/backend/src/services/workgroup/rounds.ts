@@ -21,7 +21,7 @@ import type { WorkgroupMode } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { nodeRuns } from '@/db/schema'
 import { isClarifyRerunCause } from '@/services/nodeRunMint'
-import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '@/services/workgroupLaunch'
+import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '@/services/workgroup/constants'
 
 /** 账本推导所需的最小 node_runs 投影。 */
 export interface RoundLedgerRow {

@@ -22,7 +22,7 @@ import type {
   WorkgroupRunKind,
 } from '@agent-workflow/shared'
 import { parseBatchShardKey } from '@agent-workflow/shared'
-import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from './workgroupLaunch'
+import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from './constants'
 
 /** Minimal node_run shape the derivation reads (subset of the DB row). The
  *  RFC-182 columns are optional so RFC-179-era callers/fixtures stay valid —

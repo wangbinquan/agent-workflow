@@ -45,6 +45,37 @@ module.exports = {
       from: { path: '^packages/shared/src/' },
       to: { path: '^packages/(backend|frontend)/' },
     },
+    {
+      // RFC-217 T1 (G1) — ban RUNTIME import cycles. The workgroup constants
+      // cycle (`launch → task → scheduler → runner → rounds → launch`,
+      // workgroupRounds pre-move header) was cut by extracting
+      // services/workgroup/constants.ts; this rule keeps every future cycle
+      // out. `viaOnly.dependencyTypesNot` skips cycles that only close over
+      // `import type` edges — those vanish at emit and cannot produce the
+      // RFC-079 "undefined top-level const under unlucky init order" class.
+      //
+      // KNOWN pre-existing runtime cycles, excluded from `from` below and
+      // tracked for their own fixes (a cycle is reported from EVERY
+      // participant, so any NEW cycle that includes at least one file
+      // outside this list still fails):
+      //   1. shared outputKinds list.ts ↔ registry.ts — recursive list-kind
+      //      handler lookup (fix: DI the lookup into a list-handler factory).
+      //   2. frontend ConversationFlow.tsx ↔ SubagentBlock.tsx — recursive
+      //      subagent rendering (fix candidate in RFC-217 F-line).
+      //   3. backend services agent.ts ↔ agentDeps.ts — deps closure calls
+      //      getAgent while agent.ts uses resolveDependsClosure (fix: pass
+      //      the lookup as a parameter).
+      name: 'no-circular',
+      severity: 'error',
+      from: {
+        pathNot: [
+          '^packages/shared/src/outputKinds/(list|registry)\\.ts$',
+          '^packages/frontend/src/components/node-session/(ConversationFlow|SubagentBlock)\\.tsx$',
+          '^packages/backend/src/services/(agent|agentDeps)\\.ts$',
+        ],
+      },
+      to: { circular: true, viaOnly: { dependencyTypesNot: ['type-only'] } },
+    },
   ],
   options: {
     // Tree-shake the dep graph so we don't analyze test scaffolding or

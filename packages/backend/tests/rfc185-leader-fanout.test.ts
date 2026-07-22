@@ -35,21 +35,21 @@ import {
   workgroupMessages,
 } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
-import { renderWgProtocolBlock } from '../src/services/workgroupContext'
+import { renderWgProtocolBlock } from '../src/services/workgroup/context'
 import {
   buildWorkgroupHostSnapshot,
   buildWorkgroupRuntimeConfig,
   WG_LEADER_NODE_ID,
   WG_MEMBER_NODE_ID,
-} from '../src/services/workgroupLaunch'
+} from '../src/services/workgroup/launch'
 import { createWorkgroup, getWorkgroup, updateWorkgroup } from '../src/services/workgroups'
 import {
   runWorkgroupEngine,
   type WorkgroupEngineHooks,
   type WorkgroupHostRunRequest,
   type WorkgroupHostRunResult,
-} from '../src/services/workgroupRunner'
-import { deriveWakeSet, type WakeInput } from '../src/services/workgroupWake'
+} from '../src/services/workgroup/runner'
+import { deriveWakeSet, type WakeInput } from '../src/services/workgroup/wake'
 import { createLogger } from '../src/util/log'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

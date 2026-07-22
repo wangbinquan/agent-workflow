@@ -35,7 +35,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runNode } from '../src/services/runner'
-import { renderWgProtocolBlock, wgHostRolePorts } from '../src/services/workgroupContext'
+import { renderWgProtocolBlock, wgHostRolePorts } from '../src/services/workgroup/context'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
@@ -339,7 +339,7 @@ describe('RFC-184 — source wiring locks', () => {
   const read = (f: string) => readFileSync(join(SRC, f), 'utf8')
 
   test('workgroupRunner wires hostOutputPorts at all three host call sites', () => {
-    const src = read('workgroupRunner.ts')
+    const src = read('workgroup/runner.ts')
     const count = (src.match(/hostOutputPorts:/g) ?? []).length
     expect(count).toBeGreaterThanOrEqual(3)
   })

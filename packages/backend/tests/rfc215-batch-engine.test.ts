@@ -22,13 +22,13 @@ import {
   workgroupMessages,
 } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
-import { WG_MEMBER_NODE_ID } from '../src/services/workgroupLaunch'
+import { WG_MEMBER_NODE_ID } from '../src/services/workgroup/launch'
 import {
   runWorkgroupEngine,
   type WorkgroupEngineHooks,
   type WorkgroupHostRunRequest,
   type WorkgroupHostRunResult,
-} from '../src/services/workgroupRunner'
+} from '../src/services/workgroup/runner'
 import { createLogger } from '../src/util/log'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

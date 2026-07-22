@@ -18,7 +18,7 @@ import {
   decideWorkgroupOutcome,
   WG_NUDGE_BODY,
   type WakeInput,
-} from '../src/services/workgroupWake'
+} from '../src/services/workgroup/wake'
 
 function cfg(overrides: Partial<WorkgroupRuntimeConfig> = {}): WorkgroupRuntimeConfig {
   return {
@@ -130,7 +130,7 @@ describe('RFC-187 §3-2 — continue-no-dispatch recovery (locked, must not regr
 
 describe('RFC-187 §3-2 — the leader must say WHAT is blocking (AC-12)', () => {
   const CTX = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'workgroupContext.ts'),
+    resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'context.ts'),
     'utf8',
   )
 

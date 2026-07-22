@@ -20,13 +20,13 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { buildRoomMessageRow } from '../src/services/workgroupMessages'
+import { buildRoomMessageRow } from '../src/services/workgroup/messages'
 import {
   deriveRoundsUsed,
   roundedModeOf,
   type RoundLedgerRow,
   type RoundedWorkgroupMode,
-} from '../src/services/workgroupRounds'
+} from '../src/services/workgroup/rounds'
 
 const WG_LEADER = '__wg_leader__'
 const WG_MEMBER = '__wg_member__'
@@ -295,7 +295,7 @@ describe('RFC-209 §2.2 — 消息行构造器是唯一写入闸口', () => {
 
   test('round 是必填字段（类型层锁 —— schema 的 .default(0) 会让省略静默写 0）', () => {
     const SRC = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'workgroupMessages.ts'),
+      resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'messages.ts'),
       'utf8',
     )
     // 必填 = 没有 `?`；有默认值会让「忘了带回合号」重新变成静默 round 0。

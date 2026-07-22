@@ -61,7 +61,7 @@ describe('RFC-200 source wiring locks', () => {
     const memory = read('packages/backend/src/services/memoryInject.ts')
     expect(memory).toContain('fenceUntrusted(`memory:${m.id}`, m.bodyMd, envelopeNonce)')
 
-    const workgroup = read('packages/backend/src/services/workgroupRunner.ts')
+    const workgroup = read('packages/backend/src/services/workgroup/runner.ts')
     expect(workgroup.match(/loadRunEnvelopeNonce\(db, runId\)/g)?.length).toBeGreaterThanOrEqual(3)
     // RFC-215 — composeMemberPrompt 收数组（lw 单卡包一层；fc 批直传），nonce
     // 线程不变（本锁真正关心的事）。RFC-215 实现门 C-2（2026-07-21）：领养单卡

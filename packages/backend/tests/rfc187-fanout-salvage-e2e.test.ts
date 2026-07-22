@@ -21,7 +21,7 @@ import { tasks, workgroupAssignments, workgroupMessages } from '../src/db/schema
 import { buildActor } from '../src/auth/actor'
 import { createAgent } from '../src/services/agent'
 import { createWorkgroup } from '../src/services/workgroups'
-import { startWorkgroupTask } from '../src/services/workgroupLaunch'
+import { startWorkgroupTask } from '../src/services/workgroup/launch'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SCENARIO_STUB = resolve(import.meta.dir, 'fixtures', 'scenario-opencode.ts')

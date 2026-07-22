@@ -16,8 +16,8 @@ import {
   decideWorkgroupOutcome,
   deriveWakeSet,
   type WakeInput,
-} from '../src/services/workgroupWake'
-import { deriveLeaderClarifyPark } from '../src/services/workgroupRunner'
+} from '../src/services/workgroup/wake'
+import { deriveLeaderClarifyPark } from '../src/services/workgroup/runner'
 
 function cfg(overrides: Partial<WorkgroupRuntimeConfig> = {}): WorkgroupRuntimeConfig {
   return {
@@ -172,7 +172,7 @@ describe('RFC-187 F3 — deriveWakeSet does not re-drive a clarify-parked leader
 
 describe('RFC-187 F3 — source locks (engine wiring)', () => {
   const RUNNER = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'workgroupRunner.ts'),
+    resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'runner.ts'),
     'utf8',
   )
 

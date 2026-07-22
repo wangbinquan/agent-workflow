@@ -47,7 +47,7 @@ import {
   validateDynamicWorkflowDef,
 } from '@/services/orchestratorAgent'
 import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
-import type { WorkgroupEngineHooks, WorkgroupEngineResult } from '@/services/workgroupRunner'
+import type { WorkgroupEngineHooks, WorkgroupEngineResult } from '@/services/workgroup/runner'
 import type { Logger } from '@/util/log'
 
 /** Total generation attempts per pass (bad JSON / schema / validation all count).

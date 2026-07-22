@@ -22,13 +22,13 @@ import {
   type WorkgroupMessage,
   type WorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
-import { renderWgProtocolBlock } from '../src/services/workgroupContext'
-import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '../src/services/workgroupLaunch'
+import { renderWgProtocolBlock } from '../src/services/workgroup/context'
+import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '../src/services/workgroup/launch'
 import {
   decideWorkgroupOutcome,
   WG_NUDGE_BODY,
   type WakeInput,
-} from '../src/services/workgroupWake'
+} from '../src/services/workgroup/wake'
 
 function cfg(over: Partial<WorkgroupRuntimeConfig> = {}): WorkgroupRuntimeConfig {
   return {

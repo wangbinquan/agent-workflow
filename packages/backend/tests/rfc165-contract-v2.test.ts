@@ -224,7 +224,7 @@ describe('RFC-165 T1 — applySpaceFields shared assembly point', () => {
     // RFC-125-style silent field drops happen. If this lock reds, wire the
     // candidate through applySpaceFields instead of deleting the assertion.
     const src = readFileSync(
-      join(import.meta.dir, '..', 'src', 'services', 'workgroupLaunch.ts'),
+      join(import.meta.dir, '..', 'src', 'services', 'workgroup', 'launch.ts'),
       'utf8',
     )
     expect(src.includes('applySpaceFields(')).toBe(true)

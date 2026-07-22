@@ -33,7 +33,7 @@ import {
   renameWorkgroup,
   updateWorkgroup,
 } from '@/services/workgroups'
-import { startWorkgroupTask } from '@/services/workgroupLaunch'
+import { startWorkgroupTask } from '@/services/workgroup/launch'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import { resolveOpencodeCmd } from '@/util/opencode'
 import { NotFoundError, ValidationError } from '@/util/errors'

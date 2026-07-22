@@ -46,7 +46,7 @@ import { evaluateDesignerRerunReadiness } from '@/services/crossClarify'
 import { pickFreshestRun } from '@/services/freshness'
 import { abandonSupersededMergeStates } from '@/services/lifecycle'
 import { buildMintNodeRunValues } from '@/services/nodeRunMint'
-import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '@/services/workgroupLaunch'
+import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '@/services/workgroup/constants'
 import { taskBroadcaster, TASK_CHANNEL } from '@/ws/broadcaster'
 import {
   assertTaskAcceptsQuestions,

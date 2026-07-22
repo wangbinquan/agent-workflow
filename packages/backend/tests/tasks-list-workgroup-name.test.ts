@@ -1,7 +1,7 @@
 // RFC-164 follow-up — the /tasks list must link a workgroup task to its GROUP,
 // not to the builtin `__workgroup_host__` workflow it is FK-anchored to (tasks
 // .workflow_id / workflow_snapshot are NOT NULL, so every workgroup task points
-// at the shared host workflow — see services/workgroupLaunch.ts).
+// at the shared host workflow — see services/workgroup/launch.ts).
 //
 // Before the fix the list showed `workflowName` (=== "__workgroup_host__") and
 // linked to /workflows/$hostId. This locks the data half of the fix: listTasks
@@ -27,7 +27,7 @@ import { getTask, listTasks } from '../src/services/task'
 import {
   WORKGROUP_HOST_WORKFLOW_ID,
   WORKGROUP_HOST_WORKFLOW_NAME,
-} from '../src/services/workgroupLaunch'
+} from '../src/services/workgroup/launch'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 

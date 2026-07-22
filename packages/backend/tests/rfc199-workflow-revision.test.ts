@@ -33,7 +33,7 @@ import { DomainError } from '../src/util/errors'
 import {
   ensureWorkgroupHostWorkflow,
   WORKGROUP_HOST_WORKFLOW_ID,
-} from '../src/services/workgroupLaunch'
+} from '../src/services/workgroup/launch'
 import {
   resetBroadcastersForTests,
   WORKFLOWS_CHANNEL,

@@ -50,13 +50,13 @@ import {
   WG_LEADER_NODE_ID,
   WG_MEMBER_NODE_ID,
   WORKGROUP_HOST_WORKFLOW_ID,
-} from '../src/services/workgroupLaunch'
+} from '../src/services/workgroup/launch'
 import {
   runWorkgroupEngine,
   type WorkgroupEngineHooks,
   type WorkgroupHostRunRequest,
   type WorkgroupHostRunResult,
-} from '../src/services/workgroupRunner'
+} from '../src/services/workgroup/runner'
 import { createLogger } from '../src/util/log'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -394,7 +394,7 @@ describe('RFC-164 engine — launch path', () => {
     // 目标 6). A real launch would need a repo source and couple the test to
     // the concurrent RFC-165 space-schema migration (scratch/repoUrl), so we
     // lock the wiring at the pure boundary.
-    const { resolveWorkgroupCollaborators } = await import('../src/services/workgroupLaunch')
+    const { resolveWorkgroupCollaborators } = await import('../src/services/workgroup/launch')
     const members = [
       { memberType: 'agent' as const, userId: null },
       { memberType: 'human' as const, userId: 'u-pm' },

@@ -16,7 +16,7 @@ const EXPECTED_WRITERS = {
   insert: {
     'services/agentLaunch.ts': 1,
     'services/workflow.ts': 1,
-    'services/workgroupLaunch.ts': 1,
+    'services/workgroup/launch.ts': 1,
   },
   updateEditable: { 'services/workflow.ts': 1 },
   updateMetadata: { 'services/fusion.ts': 2 },

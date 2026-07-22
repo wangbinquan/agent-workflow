@@ -60,12 +60,12 @@ import {
 import { runTask } from '../src/services/scheduler'
 import { createUser } from '../src/services/users'
 import { createWorkgroup } from '../src/services/workgroups'
-import { startWorkgroupTask } from '../src/services/workgroupLaunch'
+import { startWorkgroupTask } from '../src/services/workgroup/launch'
 import type {
   WorkgroupEngineHooks,
   WorkgroupHostRunRequest,
   WorkgroupHostRunResult,
-} from '../src/services/workgroupRunner'
+} from '../src/services/workgroup/runner'
 import { createLogger } from '../src/util/log'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

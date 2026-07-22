@@ -146,7 +146,7 @@ import { CLARIFY_FORBIDDEN_PREFIX, parsePortValidationFailuresJson } from '@/ser
 import {
   dismissOpenClarifyParksForAutonomous,
   isTaskClarifySuppressed,
-} from '@/services/workgroupLifecycle'
+} from '@/services/workgroup/lifecycle'
 import { runCommitPush } from '@/services/commitPushRunner'
 import {
   buildCommitAgent,
@@ -209,7 +209,7 @@ import {
   type WorkgroupEngineHooks,
   type WorkgroupHostRunRequest,
   type WorkgroupHostRunResult,
-} from '@/services/workgroupRunner'
+} from '@/services/workgroup/runner'
 import { runDynamicWorkflowGenerate } from '@/services/dynamicWorkflowRunner'
 import { DW_ORCHESTRATOR_NODE_ID } from '@/services/orchestratorAgent'
 import { deriveWorkgroupDispatchFromConfig, type WorkgroupDispatch } from '@agent-workflow/shared'

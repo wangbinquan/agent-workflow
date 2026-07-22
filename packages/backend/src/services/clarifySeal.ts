@@ -49,7 +49,7 @@ import {
 import { parseAnswersArray, sealAnswersServerSide } from '@/services/clarify'
 import { getTaskQuestionWriteSem } from '@/services/taskWriteLocks'
 import { reconcileRoundEntriesTx } from '@/services/taskQuestions'
-import { wgClarifyAskerKeyForRound } from './wgAskerKey'
+import { wgClarifyAskerKeyForRound } from './workgroup/askerKey'
 import { setNodeClarifyDirective } from '@/services/taskClarifyDirective'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import {

@@ -28,7 +28,7 @@ import {
   ensureWorkgroupHostWorkflow,
   startWorkgroupTask,
   WORKGROUP_HOST_WORKFLOW_ID,
-} from '../src/services/workgroupLaunch'
+} from '../src/services/workgroup/launch'
 import { runTestCommand, runTestGit } from './helpers/testCommand'
 
 // RFC-187: this suite drives REAL auto-resume, which bumps the process-global

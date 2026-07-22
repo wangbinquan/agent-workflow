@@ -33,8 +33,8 @@ import {
   workgroupMemberCursors,
 } from '@/db/schema'
 import { taskBroadcaster, TASK_CHANNEL } from '@/ws/broadcaster'
-import { getNodeClarifyDirective } from './taskClarifyDirective'
-import { WG_LEADER_NODE_ID } from './workgroupLaunch'
+import { getNodeClarifyDirective } from '../taskClarifyDirective'
+import { WG_LEADER_NODE_ID } from './constants'
 
 export const WORKGROUP_ASSIGNMENT_TRANSITIONS: Record<
   WorkgroupAssignmentStatus,
