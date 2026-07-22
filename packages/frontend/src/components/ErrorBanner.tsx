@@ -23,6 +23,10 @@ interface ErrorBannerProps {
   onRetry?: () => void
   /** RFC-214: overrides the retry button label (default `common.retry`). */
   retryLabel?: string
+  /** RFC-214 impl-gate: accessible name for the retry button when the visible
+   *  label is generic ("Retry") but the control targets a specific feed/list —
+   *  lets callers with per-item retries migrate to onRetry without losing a11y. */
+  retryAriaLabel?: string
   onDismiss?: () => void
   overrides?: Record<string, string>
   /** Root data-testid passthrough (RFC-203 T5b migrations keep anchors). */
@@ -35,6 +39,7 @@ export function ErrorBanner({
   action,
   onRetry,
   retryLabel,
+  retryAriaLabel,
   onDismiss,
   overrides,
   testid,
@@ -54,6 +59,7 @@ export function ErrorBanner({
     <button
       type="button"
       className="btn btn--sm"
+      {...(retryAriaLabel !== undefined ? { 'aria-label': retryAriaLabel } : {})}
       onClick={() => {
         onRetry()
       }}

@@ -54,4 +54,16 @@ describe('<ErrorBanner onRetry />', () => {
     expect(container.querySelector('.error-banner--with-action')).toBeNull()
     expect(container.querySelector('.error-box')).not.toBeNull()
   })
+
+  // RFC-214 impl-gate (Codex 2026-07-22): retryAriaLabel gives the canonical retry
+  // button a specific accessible name while the visible label stays generic — so a
+  // per-feed retry (InboxDrawer) can migrate to onRetry without losing a11y.
+  test('retryAriaLabel sets the accessible name while keeping the visible label', () => {
+    const { getByRole } = render(
+      <ErrorBanner error={new Error('x')} onRetry={() => {}} retryAriaLabel="Retry Reviews" />,
+    )
+    const btn = getByRole('button', { name: 'Retry Reviews' })
+    expect(btn.textContent).toBe('Retry')
+    expect(btn.getAttribute('aria-label')).toBe('Retry Reviews')
+  })
 })

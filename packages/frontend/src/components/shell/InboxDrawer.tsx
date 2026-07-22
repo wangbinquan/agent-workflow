@@ -302,16 +302,9 @@ function InboxFeedErrors(props: InboxFeedErrorsProps) {
           key={entry.key}
           error={entry.error}
           message={entry.message}
-          action={
-            <button
-              type="button"
-              className="btn btn--ghost btn--xs"
-              aria-label={t('nav.inbox.retryFeed', { feed: entry.feedLabel })}
-              onClick={entry.retry}
-            >
-              {t('nav.inbox.retry')}
-            </button>
-          }
+          onRetry={entry.retry}
+          retryLabel={t('nav.inbox.retry')}
+          retryAriaLabel={t('nav.inbox.retryFeed', { feed: entry.feedLabel })}
         />
       ))}
     </div>
