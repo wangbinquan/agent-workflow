@@ -21,7 +21,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { autoResumeInterruptedTasks } from '../src/services/autoResume'
-import { isKilledClarifyContinuation } from '../src/services/workgroup/runner'
+import { isKilledClarifyContinuation } from '../src/services/workgroup/engine'
 import { CLARIFY_RERUN_CAUSES, isClarifyRerunCause } from '../src/services/nodeRunMint'
 
 // RFC-187: this suite drives REAL auto-resume, which bumps the process-global

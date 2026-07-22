@@ -31,7 +31,7 @@ import {
   type WorkgroupEngineHooks,
   type WorkgroupHostRunRequest,
   type WorkgroupHostRunResult,
-} from '../src/services/workgroup/runner'
+} from '../src/services/workgroup/engine'
 import { buildWorkgroupHostSnapshot } from '../src/services/workgroup/launch'
 import { createLogger } from '../src/util/log'
 

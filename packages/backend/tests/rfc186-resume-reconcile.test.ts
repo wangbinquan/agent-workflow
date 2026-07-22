@@ -13,7 +13,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { decideAssignmentReconcile } from '../src/services/workgroup/runner'
+import { decideAssignmentReconcile } from '../src/services/workgroup/engine'
 
 describe('RFC-186 PR-2 — decideAssignmentReconcile', () => {
   test('interrupted before the worker run was minted → re-dispatch', () => {
@@ -49,7 +49,14 @@ describe('RFC-186 PR-2 — source wiring locks', () => {
   })
 
   test('reconcileRunningAssignments is wired into the engine (re)entry', () => {
-    const src = read('workgroup/runner.ts')
+    const src = [
+      'workgroup/engine.ts',
+      'workgroup/memberTurns.ts',
+      'workgroup/strategies/leaderWorker.ts',
+      'workgroup/strategies/freeCollab.ts',
+    ]
+      .map(read)
+      .join('\n')
     expect(src).toContain('reconcileRunningAssignments(db, taskId')
   })
 
@@ -58,7 +65,14 @@ describe('RFC-186 PR-2 — source wiring locks', () => {
   // assignment) or after the hook returns (message), so a mid-turn daemon crash
   // leaves the cursor un-advanced and the resumed engine re-derives the turn.
   test('T5: no advanceMemberCursor immediately precedes runHostNode (F6 pattern removed)', () => {
-    const src = read('workgroup/runner.ts')
+    const src = [
+      'workgroup/engine.ts',
+      'workgroup/memberTurns.ts',
+      'workgroup/strategies/leaderWorker.ts',
+      'workgroup/strategies/freeCollab.ts',
+    ]
+      .map(read)
+      .join('\n')
     expect(src).not.toMatch(
       /advanceMemberCursor\([^)]*\)\s*\n\s*\n\s*const result = await hooks\.runHostNode/,
     )

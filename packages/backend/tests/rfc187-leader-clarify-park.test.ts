@@ -17,7 +17,7 @@ import {
   deriveWakeSet,
   type WakeInput,
 } from '../src/services/workgroup/wake'
-import { deriveLeaderClarifyPark } from '../src/services/workgroup/runner'
+import { deriveLeaderClarifyPark } from '../src/services/workgroup/strategies/leaderWorker'
 
 function cfg(overrides: Partial<WorkgroupRuntimeConfig> = {}): WorkgroupRuntimeConfig {
   return {
@@ -172,15 +172,20 @@ describe('RFC-187 F3 — deriveWakeSet does not re-drive a clarify-parked leader
 
 describe('RFC-187 F3 — source locks (engine wiring)', () => {
   const RUNNER = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'runner.ts'),
+    resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'engine.ts'),
+    'utf8',
+  )
+  // RFC-217 T3 — loadDbState 迁入 state.ts（EngineDbState 的家）；锁随迁。
+  const STATE = readFileSync(
+    resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'state.ts'),
     'utf8',
   )
 
   test('loadDbState loads clarify SESSIONS (Codex P0-1: the answerable park signal)', () => {
-    expect(RUNNER).toContain('.from(clarifySessions)')
-    expect(RUNNER).toContain('clarifySessions: clarifySessionRows')
+    expect(STATE).toContain('.from(clarifySessions)')
+    expect(STATE).toContain('clarifySessions: clarifySessionRows')
     // hostRuns is back to leader/member only (clarify park no longer keyed on the run).
-    expect(RUNNER).toMatch(/inArray\(nodeRuns\.nodeId, \[WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID\]\)/)
+    expect(STATE).toMatch(/inArray\(nodeRuns\.nodeId, \[WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID\]\)/)
   })
 
   test('leaderParked is derived from clarify SESSIONS, not the dead hostRuns check', () => {

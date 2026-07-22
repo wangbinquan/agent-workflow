@@ -1,5 +1,5 @@
 // Regression guard: the workgroup "## Message turn" directive built by
-// composeMemberPrompt (services/workgroup/runner.ts) is agent-facing ENGLISH
+// composeMemberPrompt (services/workgroup/engine.ts) is agent-facing ENGLISH
 // prompt text. A stray CJK char had leaked into it — the literal read
 // `'... Do NOT claim or start任务 work in this turn.'` — which renders to the
 // member agent as the garbled token "start[任务] work". This locks the directive
@@ -16,8 +16,29 @@ import { resolve } from 'node:path'
 
 describe('workgroup message-turn directive stays English', () => {
   const src = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'runner.ts'),
+    resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'engine.ts'),
     'utf8',
+  ).concat(
+    readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'memberTurns.ts'),
+      'utf8',
+    ),
+    readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'services',
+        'workgroup',
+        'strategies',
+        'leaderWorker.ts',
+      ),
+      'utf8',
+    ),
+    readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'strategies', 'freeCollab.ts'),
+      'utf8',
+    ),
   )
 
   test('the message-turn directive is present and fully English', () => {

@@ -14,11 +14,31 @@
 // G3 grep-locks (rfc217-architecture-locks.test.ts) keep gate-field literals
 // and retired-slot accesses out of every other module.
 
-import { DwStateSchema, type DwState } from '@agent-workflow/shared'
-import { and, eq, inArray } from 'drizzle-orm'
+import {
+  DwStateSchema,
+  perCardInputDescriptionBudget,
+  renderAgentCapabilityCard,
+  WorkgroupRuntimeConfigSchema,
+  type Agent,
+  type DwState,
+  type WorkgroupAssignment,
+  type WorkgroupMessage,
+  type WorkgroupRuntimeConfig,
+} from '@agent-workflow/shared'
+import { and, asc, eq, inArray } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
-import { workgroupTaskState } from '@/db/schema'
+import {
+  clarifySessions,
+  nodeRuns,
+  workgroupAssignments,
+  workgroupMemberCursors,
+  workgroupMessages,
+  workgroupTaskState,
+  tasks,
+} from '@/db/schema'
+import { getAgent } from '@/services/agent'
+import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '@/services/workgroup/constants'
 
 export type WorkgroupGateStatus =
   | 'idle'
@@ -237,4 +257,185 @@ export async function setDwState(db: DbClient, taskId: string, dw: DwState): Pro
     .update(workgroupTaskState)
     .set({ dwStateJson: JSON.stringify(DwStateSchema.parse(dw)), updatedAt: Date.now() })
     .where(eq(workgroupTaskState.taskId, taskId))
+}
+
+// ---------------------------------------------------------------------------
+// RFC-217 T3 — engine durable-state I/O (moved from runner.ts): the pass-start
+// snapshot every wake derivation / driver reads.
+// ---------------------------------------------------------------------------
+
+export interface EngineDbState {
+  config: WorkgroupRuntimeConfig
+  gate: WorkgroupGateView
+  rawConfig: Record<string, unknown>
+  assignments: WorkgroupAssignment[]
+  messages: WorkgroupMessage[]
+  cursors: Map<string, string>
+  hostRuns: Array<typeof nodeRuns.$inferSelect>
+  /** RFC-187 F3 — open/closed clarify sessions for the task (source node + status).
+   *  Feeds `deriveLeaderClarifyPark`; the SESSION (not the __wg_clarify__ run) is the
+   *  authoritative, answerable park signal (Codex P0-1). */
+  clarifySessions: Array<{ sourceAgentNodeId: string; status: string }>
+  /** RFC-166 — pre-rendered capability card per AGENT member (memberId → card).
+   *  Injected into the roster block so the leader / peers coordinate against
+   *  each member's real declared capability. human members are absent (prompt
+   *  isolation — never render a card for a human). */
+  agentCards: Map<string, string>
+}
+
+/** RFC-166 — capability-card prompt-summary budget inside a workgroup roster.
+ *  Smaller than the standalone default (600) because a leader roster may list
+ *  many members and every card rides in every leader/peer turn — keep tokens
+ *  bounded. The description + port lines are always shown in full; only the
+ *  bodyMd prompt summary is clipped to this budget. */
+const ROSTER_CARD_PROMPT_BUDGET = 240
+const ROSTER_INPUT_DESCRIPTION_TOTAL_BUDGET = 2_400
+const ROSTER_CARD_INPUT_DESCRIPTION_MAX = 240
+
+/**
+ * RFC-166 — preload each AGENT member's capability card once per engine pass.
+ * agentName is a soft reference (launch-validated, may dangle if the agent was
+ * later deleted); a missing agent simply yields no card (the roster row still
+ * renders with displayName + roleDesc). human members are skipped entirely so
+ * no user identity can leak into the prompt.
+ */
+export async function buildRosterAgentCards(
+  db: DbClient,
+  config: WorkgroupRuntimeConfig,
+): Promise<Map<string, string>> {
+  const cards = new Map<string, string>()
+  const agentMemberCount = config.members.filter((m) => m.memberType === 'agent').length
+  const inputDescriptionBudget = perCardInputDescriptionBudget(
+    ROSTER_INPUT_DESCRIPTION_TOTAL_BUDGET,
+    agentMemberCount,
+    ROSTER_CARD_INPUT_DESCRIPTION_MAX,
+  )
+  // De-dupe DB reads: several members may reference the same agentName.
+  const agentByName = new Map<string, Agent | null>()
+  for (const m of config.members) {
+    if (m.memberType !== 'agent' || m.agentName === null) continue
+    let agent = agentByName.get(m.agentName)
+    if (agent === undefined) {
+      agent = await getAgent(db, m.agentName)
+      agentByName.set(m.agentName, agent)
+    }
+    if (agent === null) continue
+    cards.set(
+      m.id,
+      renderAgentCapabilityCard(agent, {
+        promptBudget: ROSTER_CARD_PROMPT_BUDGET,
+        inputDescriptionBudget,
+      }),
+    )
+  }
+  return cards
+}
+
+export function rowToAssignment(r: typeof workgroupAssignments.$inferSelect): WorkgroupAssignment {
+  return {
+    id: r.id,
+    taskId: r.taskId,
+    round: r.round,
+    source: r.source,
+    createdByRunId: r.createdByRunId,
+    createdByUserId: r.createdByUserId,
+    assigneeMemberId: r.assigneeMemberId,
+    title: r.title,
+    briefMd: r.briefMd,
+    status: r.status,
+    nodeRunId: r.nodeRunId,
+    resultMessageId: r.resultMessageId,
+    dedupKey: r.dedupKey,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+  }
+}
+
+export function rowToMessage(r: typeof workgroupMessages.$inferSelect): WorkgroupMessage {
+  let mentions: string[] = []
+  try {
+    const parsed = JSON.parse(r.mentionsJson) as unknown
+    mentions = Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : []
+  } catch {
+    mentions = []
+  }
+  return {
+    id: r.id,
+    taskId: r.taskId,
+    round: r.round,
+    authorKind: r.authorKind,
+    authorMemberId: r.authorMemberId,
+    authorUserId: r.authorUserId,
+    kind: r.kind,
+    bodyMd: r.bodyMd,
+    mentionMemberIds: mentions,
+    assignmentId: r.assignmentId,
+    createdAt: r.createdAt,
+  }
+}
+
+export async function loadDbState(db: DbClient, taskId: string): Promise<EngineDbState | null> {
+  const taskRow = (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
+  if (taskRow === undefined || taskRow.workgroupConfigJson === null) return null
+  let rawConfig: Record<string, unknown>
+  try {
+    rawConfig = JSON.parse(taskRow.workgroupConfigJson) as Record<string, unknown>
+  } catch {
+    return null
+  }
+  const parsed = WorkgroupRuntimeConfigSchema.safeParse(rawConfig)
+  if (!parsed.success) return null
+  // RFC-217 T2 — gate/pause live in workgroup_task_state; the engine consumes
+  // the derived legacy view (wire-frozen booleans), CAS writes go by status.
+  const taskState = await loadWorkgroupTaskState(db, taskId)
+  const gate = gateViewOf(taskState)
+  const [assignmentRows, messageRows, cursorRows, hostRuns, clarifySessionRows] = await Promise.all(
+    [
+      db
+        .select()
+        .from(workgroupAssignments)
+        .where(eq(workgroupAssignments.taskId, taskId))
+        .orderBy(asc(workgroupAssignments.id)),
+      db
+        .select()
+        .from(workgroupMessages)
+        .where(eq(workgroupMessages.taskId, taskId))
+        .orderBy(asc(workgroupMessages.id)),
+      db.select().from(workgroupMemberCursors).where(eq(workgroupMemberCursors.taskId, taskId)),
+      db
+        .select()
+        .from(nodeRuns)
+        .where(
+          and(
+            eq(nodeRuns.taskId, taskId),
+            inArray(nodeRuns.nodeId, [WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID]),
+          ),
+        )
+        .orderBy(asc(nodeRuns.id)),
+      // RFC-187 F3 (Codex design-gate P0-1) — key the leader-clarify park on the
+      // clarify SESSION, not the __wg_clarify__ run's shardKey: the run is minted
+      // BEFORE the session/round in a non-atomic sequence, so a crash between them
+      // leaves an orphan awaiting_human run with nothing to answer — a run-only signal
+      // would park that forever. An open session proves the park is both a LEADER
+      // clarify (sourceAgentNodeId) AND answerable.
+      db
+        .select({
+          sourceAgentNodeId: clarifySessions.sourceAgentNodeId,
+          status: clarifySessions.status,
+        })
+        .from(clarifySessions)
+        .where(eq(clarifySessions.taskId, taskId)),
+    ],
+  )
+  return {
+    config: parsed.data,
+    gate,
+    rawConfig,
+    assignments: assignmentRows.map(rowToAssignment),
+    messages: messageRows.map(rowToMessage),
+    cursors: new Map(cursorRows.map((c) => [c.memberId, c.lastConsumedMessageId])),
+    hostRuns,
+    clarifySessions: clarifySessionRows,
+    agentCards: await buildRosterAgentCards(db, parsed.data),
+  }
 }

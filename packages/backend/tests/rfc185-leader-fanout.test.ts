@@ -49,7 +49,7 @@ import {
   type WorkgroupEngineHooks,
   type WorkgroupHostRunRequest,
   type WorkgroupHostRunResult,
-} from '../src/services/workgroup/runner'
+} from '../src/services/workgroup/engine'
 import { deriveWakeSet, type WakeInput } from '../src/services/workgroup/wake'
 import { createLogger } from '../src/util/log'
 

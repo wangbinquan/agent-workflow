@@ -14,7 +14,7 @@ import { FOLLOWUP_POLICY, type FailureCode } from '@agent-workflow/shared'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { followupForFailure, wgFollowupNotice } from '../src/services/workgroup/runner'
+import { followupForFailure, wgFollowupNotice } from '../src/services/workgroup/engine'
 import { renderWgProtocolBlock } from '../src/services/workgroup/context'
 import type { WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 

@@ -490,7 +490,7 @@ describe('RFC-181 C — 源级契约锁', () => {
   })
 
   test('workgroupRunner：leader/worker 均有 clarify-forbidden 重试分支（结构化路由）+ 三调用点传 clarifyEnabled', () => {
-    const runner = SRC('services/workgroup/runner.ts')
+    const runner = SRC('services/workgroup/engine.ts')
     // 调度架构审视 2026-07-14：软拒分支改按结构化 failureCode 路由（leader +
     // worker 各一处）。RFC-145 棘轮：errorMessage 是人读面包屑，绝不再当机器键
     // —— startsWith(CLARIFY_FORBIDDEN_PREFIX) 回潮即红。
@@ -500,7 +500,13 @@ describe('RFC-181 C — 源级契约锁', () => {
     expect(skeleton.split("result.failureCode === 'clarify-forbidden'").length - 1).toBe(1)
     expect(runner.split("result.failureCode === 'clarify-forbidden'").length - 1).toBe(0)
     expect(runner).not.toContain('startsWith(CLARIFY_FORBIDDEN_PREFIX)')
-    expect(runner).toContain('Ask-back is OFF') // 角色化 notice 仍由 driver 提供
+    // RFC-217 T3b：角色化 notice 随 driver 迁至策略/成员模块。
+    const lw = SRC('services/workgroup/strategies/leaderWorker.ts')
+    const member = SRC('services/workgroup/memberTurns.ts')
+    const fc = SRC('services/workgroup/strategies/freeCollab.ts')
+    expect(lw).toContain('Ask-back is OFF')
+    expect(member).toContain('Ask-back is OFF')
+    expect(fc).toContain('Ask-back is OFF')
     // RFC-207 §3.7.2 resolve-once：clarifyEnabled 布线唯一存在于骨架（解析一次、
     // 双喂 renderer + clarifyEnabled）；runner 不允许再出现直连调用点。
     expect(skeleton.split('clarifyEnabled: ').length - 1).toBe(1)

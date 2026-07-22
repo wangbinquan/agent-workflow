@@ -20,8 +20,29 @@ describe('RFC-187 §3-3 — wg-protocol-retry cause', () => {
 
 describe('RFC-187 §3-3 — source locks', () => {
   const RUNNER = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'runner.ts'),
+    resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'engine.ts'),
     'utf8',
+  ).concat(
+    readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'memberTurns.ts'),
+      'utf8',
+    ),
+    readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'services',
+        'workgroup',
+        'strategies',
+        'leaderWorker.ts',
+      ),
+      'utf8',
+    ),
+    readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'strategies', 'freeCollab.ts'),
+      'utf8',
+    ),
   )
   // RFC-209 —— 回合账本的推导本体（原先在 workgroupRunner.ts 的 countRoundsUsed 里）。
   const ROUNDS = readFileSync(

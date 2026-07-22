@@ -25,6 +25,8 @@ import {
   type FailureCode,
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
+import { broadcastPendingMint } from '@/services/workgroup/messages'
+import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import { loadRunEnvelopeNonce, mintNodeRun } from '@/services/nodeRunMint'
 import type { RerunCause } from '@agent-workflow/shared'
 import { resolveWgClarifyAllowed } from '@/services/workgroup/lifecycle'
@@ -159,7 +161,6 @@ export interface TurnArgs {
   hooks: WorkgroupEngineHooks
   /** engine bookkeeping — mirror of the drivers' registerMint. */
   registerMint?: (runId: string) => void
-  broadcastPendingMint: (taskId: string, nodeRunId: string, nodeId: string) => void
   /** adopt an existing pending/awaiting row for attempt 0 (resume paths). */
   adoptedRunId?: string
   retryBase?: number
@@ -185,7 +186,7 @@ export async function executeTurn<T>(args: TurnArgs, spec: TurnSpec<T>): Promise
         ...(row.overrides !== undefined ? { overrides: row.overrides } : {}),
       })
       args.registerMint?.(runId)
-      args.broadcastPendingMint(taskId, runId, spec.nodeId)
+      broadcastPendingMint(taskId, runId, spec.nodeId)
     }
     adoptedRunId = undefined
     const envelopeNonce = await loadRunEnvelopeNonce(db, runId)
@@ -260,3 +261,6 @@ export async function executeTurn<T>(args: TurnArgs, spec: TurnSpec<T>): Promise
   // unreachable: every loop path returns or continues within budget
   return { kind: 'failed', runId, errorMessage: 'turn budget exhausted', retryable: false }
 }
+
+/** Per-turn protocol-violation retries (RFC-186 §2.4 — the shared normal-node budget). */
+export const WG_PROTOCOL_RETRIES = DEFAULT_PROTOCOL_RETRY_BUDGET

@@ -354,17 +354,18 @@ describe('RFC-215 — source locks', () => {
   test('fc batch drive path never advances the member cursor (G3)', () => {
     // 游标单一归属消息轨：driveBatchTurn / settleBatchResults 里出现
     // advanceMemberCursor 即回归（双轨并发双推游标 = v1 探针 S1 的竞态）。
-    const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'runner.ts'),
+    // RFC-217 T3b：批 driver 迁 strategies/freeCollab.ts（整文件即 fc 批域）。
+    const fc = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'strategies', 'freeCollab.ts'),
       'utf-8',
     )
-    const batchFn = src.slice(
-      src.indexOf('async function driveBatchTurn'),
-      src.indexOf('async function driveMessageTurn'),
+    expect(fc).toContain('async function driveBatchTurn')
+    expect(fc).not.toContain('advanceMemberCursor')
+    // lw 单卡路径保留推进（AC-5 对照面）：memberTurns 仍有调用。
+    const member = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'memberTurns.ts'),
+      'utf-8',
     )
-    expect(batchFn.length).toBeGreaterThan(0)
-    expect(batchFn).not.toContain('advanceMemberCursor')
-    // lw 单卡路径保留推进（AC-5 对照面）：整文件仍有调用。
-    expect(src).toContain('advanceMemberCursor')
+    expect(member).toContain('advanceMemberCursor')
   })
 })

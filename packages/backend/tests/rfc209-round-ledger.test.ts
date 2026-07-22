@@ -299,8 +299,14 @@ describe('RFC-209 §2.2 — 消息行构造器是唯一写入闸口', () => {
       'utf8',
     )
     // 必填 = 没有 `?`；有默认值会让「忘了带回合号」重新变成静默 round 0。
-    expect(SRC).toMatch(/\n\s*round: number\n/)
-    expect(SRC).not.toMatch(/round\?:/)
+    // RFC-217 T3 起 messages.ts 还承载 PostMessageArgs（round?: 是 §2.3 的
+    // 有意省略=写入时实时解析），锁面窄化到 RoomMessageRowArgs 块本身。
+    const block = SRC.slice(
+      SRC.indexOf('export interface RoomMessageRowArgs'),
+      SRC.indexOf('}', SRC.indexOf('export interface RoomMessageRowArgs')),
+    )
+    expect(block).toMatch(/\n\s*round: number\n/)
+    expect(block).not.toMatch(/round\?:/)
   })
 })
 

@@ -50,7 +50,7 @@ describe('KeyedSerialQueue', () => {
 
   test('workgroup and git cache use the cleanup-capable primitive', () => {
     const workgroup = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'runner.ts'),
+      resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'lifecycle.ts'),
       'utf8',
     )
     const gitCache = readFileSync(

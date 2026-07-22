@@ -19,7 +19,7 @@ import {
   deriveWakeSet,
   type WakeInput,
 } from '../src/services/workgroup/wake'
-import { isLeaderWrapUpContinuation } from '../src/services/workgroup/runner'
+import { isLeaderWrapUpContinuation } from '../src/services/workgroup/strategies/leaderWorker'
 
 function cfg(overrides: Partial<WorkgroupRuntimeConfig> = {}): WorkgroupRuntimeConfig {
   return {
@@ -195,7 +195,7 @@ describe('RFC-187 §3-7 — decideWorkgroupOutcome preserves the deliverable', (
 
 describe('RFC-187 §3-7 — wrap-up round dispatch-ban + directive (Codex P0-3)', () => {
   const RUNNER = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'runner.ts'),
+    resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'strategies', 'leaderWorker.ts'),
     'utf8',
   )
 

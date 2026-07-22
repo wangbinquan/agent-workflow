@@ -28,7 +28,7 @@ import {
   type WorkgroupEngineHooks,
   type WorkgroupHostRunRequest,
   type WorkgroupHostRunResult,
-} from '../src/services/workgroup/runner'
+} from '../src/services/workgroup/engine'
 import { createLogger } from '../src/util/log'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

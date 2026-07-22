@@ -56,7 +56,7 @@ import {
   type WorkgroupEngineHooks,
   type WorkgroupHostRunRequest,
   type WorkgroupHostRunResult,
-} from '../src/services/workgroup/runner'
+} from '../src/services/workgroup/engine'
 import { gateViewOf, loadWorkgroupTaskState } from '../src/services/workgroup/state'
 import { createLogger } from '../src/util/log'
 

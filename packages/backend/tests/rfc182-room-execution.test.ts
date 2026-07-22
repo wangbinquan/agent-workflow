@@ -33,12 +33,11 @@ describe('RFC-182 — pending 帧源级锁', () => {
   test('broadcastPendingMint：runner 恒 1 定义、骨架恒 1 真 mint 调用（adopted 不重发）', () => {
     // RFC-217 T3：四个 driver 的真 mint 收编进 executeTurn——广播点随之唯一
     //（args.broadcastPendingMint 注入）。runner 里再出现调用点=有人绕开骨架。
-    const src = SRC('services/workgroup/runner.ts')
-    expect(src).toContain('function broadcastPendingMint(')
-    expect(src.split('broadcastPendingMint(').length - 1).toBe(1) // 仅定义
-    expect(src.split('broadcastPendingMint,').length - 1).toBeGreaterThanOrEqual(4) // 四 driver 注入
+    // RFC-217 T3b：定义迁 messages.ts；骨架直连调用（唯一真 mint 广播点）。
+    const messages = SRC('services/workgroup/messages.ts')
+    expect(messages).toContain('export function broadcastPendingMint(')
     const skeleton = SRC('services/workgroup/turnExecution.ts')
-    expect(skeleton.split('args.broadcastPendingMint(').length - 1).toBe(1)
+    expect(skeleton.split('broadcastPendingMint(taskId, runId, spec.nodeId)').length - 1).toBe(1)
   })
 })
 

@@ -35,6 +35,18 @@ import {
 import { taskBroadcaster, TASK_CHANNEL } from '@/ws/broadcaster'
 import { getNodeClarifyDirective } from '../taskClarifyDirective'
 import { WG_LEADER_NODE_ID } from './constants'
+import { ulid } from 'ulid'
+import { KeyedSerialQueue } from '@/util/keyedSerialQueue'
+import {
+  DEFAULT_PROTOCOL_RETRY_BUDGET,
+  normalizeWgTaskTitle,
+  parseWgTasksAddPort,
+} from '@agent-workflow/shared'
+import type { EngineDbState } from '@/services/workgroup/state'
+import { roundMode } from '@/services/workgroup/rounds'
+import { memberDisplayName } from '@/services/workgroup/context'
+import { postMessage } from '@/services/workgroup/messages'
+import { resolveMessageRound } from '@/services/workgroup/rounds'
 
 export const WORKGROUP_ASSIGNMENT_TRANSITIONS: Record<
   WorkgroupAssignmentStatus,
@@ -436,4 +448,153 @@ export async function resolveWgClarifyAllowed(
   if ((await getNodeClarifyDirective(db, taskId, nodeId, askerKey)) === 'stop') return false
   const asked = await countWgClarifyAsks(db, taskId, askerKey)
   return asked < budget
+}
+
+// ---------------------------------------------------------------------------
+// RFC-217 T3 — wg_tasks_add consumption (moved verbatim from runner.ts): fc
+// card creation with normalized-title dedup, serialized per task.
+// ---------------------------------------------------------------------------
+
+// Per-task serialization for tasks_add consumption: two member turns
+// finishing in the same tick would otherwise interleave their dedup read
+// and insert (TOCTOU). One engine instance per task is guaranteed by the
+// runTask CAS claim, so an in-process chain fully closes the race.
+const tasksAddQueue = new KeyedSerialQueue<string>()
+function serializeTasksAdd<T>(taskId: string, fn: () => Promise<T>): Promise<T> {
+  return tasksAddQueue.run(taskId, fn)
+}
+
+/**
+ * PR-6 (design §7.3) — consume a member's wg_tasks_add: normalized-title
+ * dedup against every non-canceled card; dropped duplicates get a system
+ * note instead of failing the run. Returns how many landed. Serialized
+ * per task (see serializeTasksAdd).
+ */
+export async function consumeTasksAdd(
+  db: DbClient,
+  taskId: string,
+  state: EngineDbState,
+  authorMemberId: string,
+  raw: string | undefined,
+): Promise<number> {
+  if (raw === undefined || state.config.mode !== 'free_collab') return 0
+  return serializeTasksAdd(taskId, () =>
+    consumeTasksAddInner(db, taskId, state, authorMemberId, raw),
+  )
+}
+
+async function consumeTasksAddInner(
+  db: DbClient,
+  taskId: string,
+  state: EngineDbState,
+  authorMemberId: string,
+  raw: string,
+): Promise<number> {
+  const parsed = parseWgTasksAddPort(raw)
+  if (!parsed.ok) {
+    await postMessage(db, taskId, roundMode(state.config), {
+      authorKind: 'system',
+      kind: 'system',
+      bodyMd: `wg_tasks_add from @${memberDisplayName(state.config, authorMemberId)} rejected: ${parsed.errors.join('; ')}`,
+    })
+    return 0
+  }
+  // RFC-209 — 解析一次，本次消费产出的所有卡与消息共用（同一批产出必须同回合号）。
+  const cardRound = await resolveMessageRound(db, taskId, roundMode(state.config))
+  // LIVE read (not the turn-start snapshot): concurrent initial turns must
+  // see each other's just-landed cards or the dedup guard is a no-op
+  // (fc-debug 2026-07-10: dup card claimed 4×). A same-instant insert race
+  // remains theoretically possible and is documented as v1 residual.
+  const liveRows = await db
+    .select({ dedupKey: workgroupAssignments.dedupKey, status: workgroupAssignments.status })
+    .from(workgroupAssignments)
+    .where(eq(workgroupAssignments.taskId, taskId))
+  const existing = new Set(
+    liveRows
+      .filter((a) => a.status !== 'canceled' && a.dedupKey !== null)
+      .map((a) => a.dedupKey as string),
+  )
+  let added = 0
+  let dropped = 0
+  for (const item of parsed.value) {
+    const key = normalizeWgTaskTitle(item.title)
+    if (existing.has(key)) {
+      dropped++
+      continue
+    }
+    existing.add(key)
+    const id = ulid()
+    await db.insert(workgroupAssignments).values({
+      id,
+      taskId,
+      // RFC-209 — 卡的回合号取写入时刻的解析值（`consumeTasksAdd` 只在 fc 下进来，
+      // 故恒 0：自由协作没有回合语义，此前这里写的是**过期快照**里的成员 run 累计数）。
+      round: cardRound,
+      source: 'self_claim',
+      assigneeMemberId: null,
+      title: item.title,
+      briefMd: item.brief,
+      status: 'open',
+      dedupKey: key,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    })
+    await postMessage(db, taskId, roundMode(state.config), {
+      authorKind: 'member',
+      authorMemberId,
+      kind: 'dispatch',
+      bodyMd: `+ task: ${item.title}`,
+      assignmentId: id,
+    })
+    added++
+  }
+  if (dropped > 0) {
+    await postMessage(db, taskId, roundMode(state.config), {
+      authorKind: 'system',
+      kind: 'system',
+      bodyMd: `${dropped} duplicate task(s) from @${memberDisplayName(state.config, authorMemberId)} dropped (title dedup)`,
+    })
+  }
+  return added
+}
+
+/**
+ * RFC-215 §3.2/§3.5 — 卡失败收尾的单一子例程（drive throw / run 失败 / 漏报耗尽
+ * 共用，禁 fork）：dispatched/running → failed，fc 下预算内（attempt_count <
+ * DEFAULT_PROTOCOL_RETRY_BUDGET）再 failed → open 重新入池。lw 卡停在 failed
+ * （leader 下轮决策重派/放弃，RFC-164 §4.3 原语义）。
+ */
+export async function settleCardAfterFailure(
+  db: DbClient,
+  state: EngineDbState,
+  assignmentId: string,
+): Promise<void> {
+  const failedFromDispatched = await casAssignmentStatus(
+    db,
+    assignmentId,
+    'dispatched',
+    'failed',
+  ).catch(() => false)
+  if (!failedFromDispatched) {
+    const failedFromRunning = await casAssignmentStatus(
+      db,
+      assignmentId,
+      'running',
+      'failed',
+    ).catch(() => false)
+    if (!failedFromRunning) return // already terminal / moved on — nothing to reopen
+  }
+  if (state.config.mode !== 'free_collab') return
+  const row = (
+    await db
+      .select({ attemptCount: workgroupAssignments.attemptCount })
+      .from(workgroupAssignments)
+      .where(eq(workgroupAssignments.id, assignmentId))
+  )[0]
+  if (row !== undefined && row.attemptCount < DEFAULT_PROTOCOL_RETRY_BUDGET) {
+    await casAssignmentStatus(db, assignmentId, 'failed', 'open', {
+      assigneeMemberId: null,
+      nodeRunId: null,
+    }).catch(() => false)
+  }
 }

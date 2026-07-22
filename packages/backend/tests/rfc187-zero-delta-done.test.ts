@@ -8,7 +8,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { detectZeroDeltaDone } from '../src/services/workgroup/runner'
+import { detectZeroDeltaDone } from '../src/services/workgroup/strategies/leaderWorker'
 
 describe('RFC-187 §4 — detectZeroDeltaDone', () => {
   test('zero files + completed work = suspect (probe A shape)', () => {
@@ -38,7 +38,7 @@ describe('RFC-187 §4 — source locks', () => {
 
   test('the engine wires a zero-delta warn on done (both the gated and un-gated finish)', () => {
     const runner = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'runner.ts'),
+      resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'engine.ts'),
       'utf8',
     )
     // called before BOTH `return { kind: 'ok' }` sites (autonomous done + gate-approved done).

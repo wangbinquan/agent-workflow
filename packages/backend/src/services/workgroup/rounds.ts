@@ -16,8 +16,9 @@
 // 顶层 const 都可能在不巧的初始化序下求值成 `undefined`，把账本静默清零
 // （RFC-079 先例：这类问题只有 `bun run build:binary` 能抓到）。
 
-import { and, eq, inArray } from 'drizzle-orm'
-import type { WorkgroupMode } from '@agent-workflow/shared'
+import { and, eq, inArray, isNull } from 'drizzle-orm'
+import type { WorkgroupMode, WorkgroupRuntimeConfig } from '@agent-workflow/shared'
+import type { EngineDbState } from '@/services/workgroup/state'
 import type { DbClient } from '@/db/client'
 import { nodeRuns } from '@/db/schema'
 import { isClarifyRerunCause } from '@/services/nodeRunMint'
@@ -188,4 +189,46 @@ export async function resolveRoomMessageRound(
 ): Promise<number> {
   const rounded = roundedModeOf(mode)
   return rounded === null ? 0 : resolveMessageRound(db, taskId, rounded)
+}
+
+/** 引擎侧的账本模式。dynamic_workflow 到不了回合引擎（见 countRoundsUsed 注释）。 */
+/**
+ * RFC-217 T3 (AC-5) — the round-engine mode, FAIL-LOUD. dynamic_workflow can
+ * never reach the round engine (scheduler dispatches it to the dw engines);
+ * the old `?? 'free_collab'` silently mis-billed a mis-dispatched dw task as
+ * fc. Throwing surfaces the dispatch bug at its first touch instead.
+ */
+export function roundMode(config: WorkgroupRuntimeConfig): RoundedWorkgroupMode {
+  const mode = roundedModeOf(config.mode)
+  if (mode === null) {
+    throw new Error(`round engine reached with non-rounded mode '${config.mode}' (dispatch bug)`)
+  }
+  return mode
+}
+
+export function countRoundsUsed(state: EngineDbState): number {
+  // RFC-217 T3 (AC-5)：经 roundMode fail-loud——误派 dw 任务在这里立刻炸响，
+  // 而不是被静默按 fc 计费（旧 `?? 'free_collab'` 兜底已删）。
+  return deriveRoundsUsed(roundMode(state.config), state.hostRuns)
+}
+
+export function currentRound(state: EngineDbState): number {
+  return countRoundsUsed(state)
+}
+
+/**
+ * RFC-189 — stamp an ADOPTED host row's round in place (rows minted outside the
+ * engine — clarify-answer reruns / crash leftovers — carry no ordinal). Plain
+ * column update: wg_round is accounting metadata, not a lifecycle column (no
+ * CAS surface); `WHERE wg_round IS NULL` keeps re-drives idempotent.
+ */
+export async function stampWgRound(
+  db: DbClient,
+  nodeRunId: string,
+  wgRound: number,
+): Promise<void> {
+  await db
+    .update(nodeRuns)
+    .set({ wgRound })
+    .where(and(eq(nodeRuns.id, nodeRunId), isNull(nodeRuns.wgRound)))
 }

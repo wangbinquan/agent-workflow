@@ -6,10 +6,19 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-const SRC = readFileSync(
-  resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'runner.ts'),
-  'utf8',
-)
+// RFC-217 T3 — the engine split runner.ts into engine loop + strategies +
+// messages IO; these string locks span the relocated modules, so read them all.
+const SRC = [
+  ['runner.ts'],
+  ['strategies', 'leaderWorker.ts'],
+  ['strategies', 'freeCollab.ts'],
+  ['memberTurns.ts'],
+  ['messages.ts'],
+]
+  .map((parts) =>
+    readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', ...parts), 'utf8'),
+  )
+  .join('\n')
 
 describe('RFC-186 Phase 3 — engine hardening locks', () => {
   // §3-6: `done` co-emitted with new assignments is a protocol violation (the

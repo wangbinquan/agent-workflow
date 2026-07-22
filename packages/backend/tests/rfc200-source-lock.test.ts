@@ -61,20 +61,18 @@ describe('RFC-200 source wiring locks', () => {
     const memory = read('packages/backend/src/services/memoryInject.ts')
     expect(memory).toContain('fenceUntrusted(`memory:${m.id}`, m.bodyMd, envelopeNonce)')
 
-    const workgroup = read('packages/backend/src/services/workgroup/runner.ts')
-    expect(workgroup.match(/loadRunEnvelopeNonce\(db, runId\)/g)?.length).toBeGreaterThanOrEqual(3)
-    // RFC-215 — composeMemberPrompt 收数组（lw 单卡包一层；fc 批直传），nonce
-    // 线程不变（本锁真正关心的事）。RFC-215 实现门 C-2（2026-07-21）：领养单卡
-    // 调用追加 { singleCard: true }（协议块/解析是 wg_result 单卡形态，prompt 同形）。
-    expect(workgroup).toContain(
-      'composeMemberPrompt(state, memberId, [assignment], envelopeNonce, { singleCard: true })',
+    // RFC-217 T3 — nonce 线程收编进 executeTurn（唯一 load 点），prompt 组装
+    // 迁至 memberTurns/strategies；本锁真正关心的「nonce 必须先取再渲染」不变。
+    const skeleton = read('packages/backend/src/services/workgroup/turnExecution.ts')
+    expect(skeleton.match(/loadRunEnvelopeNonce\(db, runId\)/g)?.length).toBe(1)
+    expect(skeleton).toContain('spec.composePrompt(envelopeNonce)')
+    expect(skeleton).toContain('renderWgProtocolBlock(')
+    const member = read('packages/backend/src/services/workgroup/memberTurns.ts')
+    expect(member).toContain(
+      'composeMemberPrompt(state, memberId, [card], envelopeNonce, { singleCard: true })',
     )
-    expect(workgroup).toContain('composeMemberPrompt(state, memberId, batch, envelopeNonce)')
-    // RFC-207 — the renderer gained a 4th arg (resolved ask-back permission); the
-    // nonce must still be threaded, which is what this lock is actually about.
-    expect(workgroup).toContain(
-      "renderWgProtocolBlock(\n        'leader',\n        config,\n        envelopeNonce,",
-    )
+    const fc = read('packages/backend/src/services/workgroup/strategies/freeCollab.ts')
+    expect(fc).toContain('composeMemberPrompt(state, memberId, batch, envelopeNonce)')
 
     const dynamic = read('packages/backend/src/services/dynamicWorkflowRunner.ts')
     expect(dynamic).toContain('const envelopeNonce = await loadRunEnvelopeNonce(db, runId)')
