@@ -31,7 +31,7 @@ import {
   snapshotNodeIsoFinal,
   type CanonRepo,
 } from '@/services/nodeIsolation'
-import { runGit } from '@/util/git'
+import { materializeTree, runGit } from '@/util/git'
 
 const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc210-np-home-'))
 const created: string[] = []
@@ -212,5 +212,62 @@ describe('RFC-210 — gitlink with no initialized working tree', () => {
     const res = await mergeBackNodeIso(handle, await snapshotNodeIsoFinal(handle))
     expect(res.clean).toBe(true)
     expect(readFileSync(join(canon, 'README.md'), 'utf8')).toBe('parent edited\n')
+  }, 120_000)
+
+  test('materialize leaves an undeclared INITIALIZED gitlink untouched even when the tree records an older sha', async () => {
+    // Codex review round 8, P1: an INITIALIZED stray nested repo (has `.git`,
+    // no `.gitmodules` entry) whose working HEAD is AHEAD of the gitlink the
+    // materialized tree records, with the recorded commit present in its ODB.
+    // Round 7's HEAD-based fast path saw `actual !== sha` and fell through to
+    // `checkout --detach sha`, which — because the older commit IS reachable —
+    // SUCCEEDS and silently rewinds user-owned work in a repo the platform
+    // never claimed. The materialize must skip an undeclared gitlink whole.
+    //
+    // The nested repo must be a REAL initialized repo in the worktree sharing
+    // the recorded commit: `git worktree add` leaves an undeclared embedded
+    // repo as an EMPTY dir (no `.git`), which the uninitialized branch already
+    // guards — the vulnerable path is only reached once the user has actually
+    // populated it (clone / manual init), which is exactly this fixture.
+    const nestedSrc = tmp('aw-rfc210-np-strsrc-')
+    await initRepo(nestedSrc, 'inner.txt', 'v1\n')
+    const c0 = (await runGit(nestedSrc, ['rev-parse', 'HEAD'])).stdout.trim()
+
+    const host = tmp('aw-rfc210-np-strinit-host-')
+    await initRepo(host, 'README.md', 'root\n')
+    // Record the nested repo as a gitlink at c0 — a `git add .` accident, no
+    // `.gitmodules` entry.
+    await runGit(host, ['update-index', '--add', '--cacheinfo', `160000,${c0},nestedrepo`])
+    await runGit(host, ['commit', '-q', '-m', 'oops, committed a nested repo at c0'])
+    expect(existsSync(join(host, '.gitmodules'))).toBe(false)
+    const headTree = (await runGit(host, ['rev-parse', 'HEAD^{tree}'])).stdout.trim()
+    const taskBaseHead = (await runGit(host, ['rev-parse', 'HEAD'])).stdout.trim()
+
+    const canonRoot = tmp('aw-rfc210-np-strinit-wt-')
+    const canon = join(canonRoot, 'canon')
+    await runGit(host, ['worktree', 'add', '-q', '--detach', canon, 'HEAD'])
+    // The user actually initializes + advances the embedded repo (clone shares
+    // c0's objects, so `checkout --detach c0` WOULD succeed and rewind).
+    rmSync(join(canon, 'nestedrepo'), { recursive: true, force: true })
+    await runGit(canonRoot, ['clone', '-q', nestedSrc, join(canon, 'nestedrepo')])
+    const canonNested = join(canon, 'nestedrepo')
+    writeFileSync(join(canonNested, 'inner.txt'), 'user-precious-work\n')
+    const userSha = await commitIn(canonNested, 'user work in stray repo')
+    expect(userSha).not.toBe(c0)
+    expect(existsSync(join(canonNested, '.git'))).toBe(true)
+    // c0 IS reachable from the initialized nested repo — the rewind is possible.
+    expect((await runGit(canonNested, ['cat-file', '-e', c0])).exitCode).toBe(0)
+
+    // Materialize a tree that STILL records c0 for the stray (the HEAD tree) —
+    // exactly what a merge result that never touched it looks like.
+    await materializeTree(canon, {
+      mergedTree: headTree,
+      canonCurrentTree: headTree,
+      taskBaseHead,
+    })
+
+    // The stray repo must stay at the USER's HEAD, its work intact — never
+    // rewound to the gitlink the tree records.
+    expect((await runGit(canonNested, ['rev-parse', 'HEAD'])).stdout.trim()).toBe(userSha)
+    expect(readFileSync(join(canonNested, 'inner.txt'), 'utf8')).toBe('user-precious-work\n')
   }, 120_000)
 })

@@ -2292,6 +2292,24 @@ async function checkoutMergedGitlinks(
       const cur = await runGit(worktreePath, ['rev-parse', `${ctx.currentTree}:${name}`])
       if (cur.exitCode === 0 && cur.stdout.trim() !== '') currentSha = cur.stdout.trim()
     }
+    const initialized = existsSync(join(subPath, '.git'))
+    // An INITIALIZED gitlink with no `.gitmodules` entry is a stray committed
+    // nested repo (the `git add .` accident) — unmanaged, exactly like the
+    // uninitialized-stray case below. The platform must not checkout OR descend
+    // into it: the fast path would recurse, and a HEAD the user advanced past
+    // the recorded gitlink would fall through to `checkout --detach` and
+    // silently rewind user-owned work in a repo we never claimed (Codex review
+    // round 8, P1 — round 7's HEAD-based fast path introduced this; the old
+    // `currentSha === sha` shortcut happened to skip it whole). Leave it alone.
+    if (initialized) {
+      const { submoduleNameForPath } = await import('@/services/gitSubmodule')
+      if ((await submoduleNameForPath(worktreePath, name)) === null) {
+        log?.warn('initialized gitlink not declared in .gitmodules — leaving untouched', {
+          subPath: relPath,
+        })
+        continue
+      }
+    }
     // Fast path for an INITIALIZED, already-at-target submodule — but decided
     // on the ACTUAL worktree HEAD, never on tree bookkeeping alone: the sync
     // that populated these checkouts is fail-soft, so a module can lag behind
@@ -2303,7 +2321,7 @@ async function checkoutMergedGitlinks(
     // O(submodules) rev-parses instead of O(submodules) checkouts — the
     // checkout-everything version pushed two pre-existing merge-back tests
     // over their 5s default timeout on loaded CI hosts.
-    if (existsSync(join(subPath, '.git'))) {
+    if (initialized) {
       const actual = await runGit(subPath, ['rev-parse', 'HEAD'])
       if (actual.exitCode === 0 && actual.stdout.trim() === sha) {
         const subTree = await runGit(subPath, ['rev-parse', `${sha}^{tree}`])
