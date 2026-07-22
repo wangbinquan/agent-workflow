@@ -112,7 +112,7 @@ function input(overrides: Partial<WakeInput> = {}): WakeInput {
       messageTurnMemberIds: new Set(),
       taskTurnMemberIds: new Set(),
     },
-    roundsUsed: 5,
+    budgetUsed: 5,
     gate: { declaredDone: false, awaitingConfirmation: false, rejected: false },
     ...overrides,
   }
@@ -187,7 +187,7 @@ describe('fc 新认领跳过只读成员（2026-07-21 ROLE-MISROUTE 回归）', 
 
   test('fc_initial 首轮拆解不过滤：只读成员照常参与', () => {
     const w = deriveWakeSet(
-      input({ roundsUsed: 0, readonlyMemberIds: new Set(['m-a', 'm-b', 'm-c']) }),
+      input({ budgetUsed: 0, readonlyMemberIds: new Set(['m-a', 'm-b', 'm-c']) }),
     )
     const inits = w.items.filter((i) => i.kind === 'fc_initial')
     expect(inits.length).toBe(3)

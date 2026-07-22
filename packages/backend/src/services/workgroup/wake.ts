@@ -41,7 +41,7 @@ export interface WakeInput {
     taskTurnMemberIds?: ReadonlySet<string>
   }
   /** lw: completed-or-started leader turns; fc: total member runs (incl. message turns). */
-  roundsUsed: number
+  budgetUsed: number
   /**
    * 2026-07-21（T3B 实测 3 次 ROLE MISROUTE）—— roster 里 agent permission 为
    * 「只读」（edit 与 write 均显式 'deny'，见 isReadonlyAgentPermission）的成员 id
@@ -77,7 +77,7 @@ export type WakeItem =
   // RFC-187 §3-7 — `wrap-up` is a single grace leader round past max_rounds, granted
   // only when there is completed work to aggregate, so a deliverable-in-hand task can
   // reach `done` instead of hard-failing. It is a normal (counted) leader run, so the
-  // next pass has roundsUsed > maxRounds and no second grace round is possible.
+  // next pass has budgetUsed > maxRounds and no second grace round is possible.
   | { kind: 'leader'; reason: 'initial' | 'new-content' | 'gate-rejected' | 'wrap-up' }
   | { kind: 'assignment'; assignmentId: string }
   | { kind: 'message_turn'; memberId: string }
@@ -252,7 +252,7 @@ export function deriveWakeSet(input: WakeInput): WakeSet {
       )
       const anyPending = items.some((i) => i.kind === 'assignment')
       if (!blocking && !anyPending && !input.gate.declaredDone) {
-        const initial = input.roundsUsed === 0
+        const initial = input.budgetUsed === 0
         const reason: 'initial' | 'new-content' | 'gate-rejected' | null = initial
           ? 'initial'
           : input.gate.rejected
@@ -261,12 +261,12 @@ export function deriveWakeSet(input: WakeInput): WakeSet {
               ? 'new-content'
               : null
         if (reason !== null) {
-          if (input.roundsUsed >= config.maxRounds) {
+          if (input.budgetUsed >= config.maxRounds) {
             // RFC-187 §3-7 — grant ONE grace wrap-up round exactly AT the cap when
             // there's completed work to aggregate, so the leader can declare done
             // rather than the task hard-failing with a deliverable in hand. Counted,
-            // so roundsUsed > maxRounds next pass ⇒ no second grace round.
-            if (input.roundsUsed === config.maxRounds && hasSalvageableWork(input.assignments)) {
+            // so budgetUsed > maxRounds next pass ⇒ no second grace round.
+            if (input.budgetUsed === config.maxRounds && hasSalvageableWork(input.assignments)) {
               items.push({ kind: 'leader', reason: 'wrap-up' })
             } else {
               capExceeded = true
@@ -284,13 +284,13 @@ export function deriveWakeSet(input: WakeInput): WakeSet {
 
   // 0fc. Initial planning burst: every agent member, in parallel (决策 #17).
   const nothingStarted =
-    input.roundsUsed === 0 &&
+    input.budgetUsed === 0 &&
     input.assignments.length === 0 &&
     input.inFlight.runningAssignmentIds.size === 0 &&
     input.inFlight.messageTurnMemberIds.size === 0
   if (nothingStarted) {
     for (const memberId of agentMemberIds(config)) {
-      if (input.roundsUsed + items.length >= config.maxRounds) {
+      if (input.budgetUsed + items.length >= config.maxRounds) {
         capExceeded = true
         break
       }
@@ -318,7 +318,7 @@ export function deriveWakeSet(input: WakeInput): WakeSet {
     else g.push(a.id)
   }
   for (const [memberId, ids] of orphaned) {
-    if (input.roundsUsed + items.length >= config.maxRounds) {
+    if (input.budgetUsed + items.length >= config.maxRounds) {
       capExceeded = true
       break
     }
@@ -350,7 +350,7 @@ export function deriveWakeSet(input: WakeInput): WakeSet {
         const memberId = idle[k] as string
         const ids = open.slice(k * batchSize, (k + 1) * batchSize)
         if (ids.length === 0) break // empty slice: more idle members than cards
-        if (input.roundsUsed + items.length >= config.maxRounds) {
+        if (input.budgetUsed + items.length >= config.maxRounds) {
           capExceeded = true
           break
         }
@@ -366,7 +366,7 @@ export function deriveWakeSet(input: WakeInput): WakeSet {
     for (const memberId of agentMemberIds(config)) {
       if (input.inFlight.messageTurnMemberIds.has(memberId)) continue
       if (!hasUnconsumedMention(input, memberId)) continue
-      if (input.roundsUsed + items.length >= config.maxRounds) {
+      if (input.budgetUsed + items.length >= config.maxRounds) {
         capExceeded = true
         continue
       }

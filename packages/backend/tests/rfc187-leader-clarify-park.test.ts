@@ -75,7 +75,7 @@ function wakeInput(overrides: Partial<WakeInput> = {}): WakeInput {
       runningAssignmentIds: new Set(),
       messageTurnMemberIds: new Set(),
     },
-    roundsUsed: 0,
+    budgetUsed: 0,
     gate: { declaredDone: false, awaitingConfirmation: false, rejected: false },
     ...overrides,
   }
@@ -129,7 +129,7 @@ describe('RFC-187 F3/F8 — decideWorkgroupOutcome surfaces leader-clarify', () 
   test('leader-clarify park BEATS max_rounds (a blocked leader is not a failure)', () => {
     // this is exactly probe B: without the park signal the same state returned
     // { failed, max-rounds }.
-    const out = decideWorkgroupOutcome(wakeInput({ leaderClarifyParked: true, roundsUsed: 10 }), {
+    const out = decideWorkgroupOutcome(wakeInput({ leaderClarifyParked: true, budgetUsed: 10 }), {
       items: [],
       capExceeded: true,
     })
@@ -137,7 +137,7 @@ describe('RFC-187 F3/F8 — decideWorkgroupOutcome surfaces leader-clarify', () 
   })
 
   test('without the park signal, the same empty state hits max_rounds (regression contrast)', () => {
-    const out = decideWorkgroupOutcome(wakeInput({ roundsUsed: 10 }), {
+    const out = decideWorkgroupOutcome(wakeInput({ budgetUsed: 10 }), {
       items: [],
       capExceeded: true,
     })

@@ -66,7 +66,7 @@ function makeRun(over: Partial<NodeRun>): NodeRun {
 function makeRoom(over: Partial<WorkgroupRoomResponse> = {}): WorkgroupRoomResponse {
   return {
     // RFC-209 —— 已用回合数（fc 右栏预算表的数据源；与 max_rounds 触顶判据同源）。
-    roundsUsed: 0,
+    budgetUsed: 0,
     taskId: 't1',
     taskStatus: 'running',
     config: {

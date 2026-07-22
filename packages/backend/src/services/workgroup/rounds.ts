@@ -1,13 +1,13 @@
 // RFC-209 — 工作组「回合账本」的单一事实源。
 //
-// 背景：`countRoundsUsed` 同时扮演两个角色——① `max_rounds` 的**预算表**，
+// 背景：`countBudgetUsed` 同时扮演两个角色——① `max_rounds` 的**预算表**，
 // ② 房间里「第 X 回合」的**显示序数**。这两件事在 free_collab 下根本不是同一个东西
 // （fc 分支返回的是成员 run 累计行数，与「回合」无关，见 design/RFC-164 §4.4
 // 「硬顶 成员 run 总数 > max_rounds」），于是房间里出现 0→3→5→8 的跳号。
 // RFC-209 把推导抽到这里，让三方读同一个数：
-//   - 引擎（唤醒判定 / 触顶 / 宽限收尾轮）—— workgroupRunner.countRoundsUsed
+//   - 引擎（唤醒判定 / 触顶 / 宽限收尾轮）—— workgroupRunner.countBudgetUsed
 //   - 写入侧（消息 round）—— resolveMessageRound
-//   - 房间聚合（右栏预算表）—— GET /room 的 roundsUsed
+//   - 房间聚合（右栏预算表）—— GET /room 的 budgetUsed
 //
 // ⚠️ 初始化环（RFC-209 design §2.1）：本模块经
 // `workgroupLaunch → services/task → scheduler → workgroupRunner` 处在一个**已存在**的
@@ -94,9 +94,9 @@ function supersededKilledClarifyIds(rows: readonly RoundLedgerRow[]): Set<string
  * 每个成员 run 消耗一格预算。
  *
  * 除 {@link supersededKilledClarifyIds} 的排除外，返回值与 RFC-209 之前的
- * `countRoundsUsed` 逐值相同（互 oracle 测试锁）。
+ * `countBudgetUsed` 逐值相同（互 oracle 测试锁）。
  */
-export function deriveRoundsUsed(
+export function deriveBudgetUsed(
   mode: RoundedWorkgroupMode,
   rows: readonly RoundLedgerRow[],
 ): number {
@@ -175,7 +175,7 @@ export async function resolveMessageRound(
   mode: RoundedWorkgroupMode,
 ): Promise<number> {
   if (mode === 'free_collab') return 0
-  return deriveRoundsUsed(mode, await readRoundLedgerRows(db, taskId))
+  return deriveBudgetUsed(mode, await readRoundLedgerRows(db, taskId))
 }
 
 /**
@@ -191,7 +191,7 @@ export async function resolveRoomMessageRound(
   return rounded === null ? 0 : resolveMessageRound(db, taskId, rounded)
 }
 
-/** 引擎侧的账本模式。dynamic_workflow 到不了回合引擎（见 countRoundsUsed 注释）。 */
+/** 引擎侧的账本模式。dynamic_workflow 到不了回合引擎（见 countBudgetUsed 注释）。 */
 /**
  * RFC-217 T3 (AC-5) — the round-engine mode, FAIL-LOUD. dynamic_workflow can
  * never reach the round engine (scheduler dispatches it to the dw engines);
@@ -206,14 +206,14 @@ export function roundMode(config: WorkgroupRuntimeConfig): RoundedWorkgroupMode 
   return mode
 }
 
-export function countRoundsUsed(state: EngineDbState): number {
+export function countBudgetUsed(state: EngineDbState): number {
   // RFC-217 T3 (AC-5)：经 roundMode fail-loud——误派 dw 任务在这里立刻炸响，
   // 而不是被静默按 fc 计费（旧 `?? 'free_collab'` 兜底已删）。
-  return deriveRoundsUsed(roundMode(state.config), state.hostRuns)
+  return deriveBudgetUsed(roundMode(state.config), state.hostRuns)
 }
 
 export function currentRound(state: EngineDbState): number {
-  return countRoundsUsed(state)
+  return countBudgetUsed(state)
 }
 
 /**

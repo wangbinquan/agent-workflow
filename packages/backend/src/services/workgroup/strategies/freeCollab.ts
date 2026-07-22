@@ -56,7 +56,7 @@ export async function driveBatchTurn(
     // 成员配置坏（agent 不可解析）。实现门 C-1（2026-07-21）：open 卡也必须
     // 认领（bumpAttempt）后走失败收尾——旧版把 open 卡原样留池，而
     // deriveWakeSet 不感知 agent 可解析性，下一 pass 对同一成员重派同一批：
-    // 不 mint ⇒ roundsUsed 永不增长、items 恒非空 ⇒ 引擎以 DB 往返速度空转，
+    // 不 mint ⇒ budgetUsed 永不增长、items 恒非空 ⇒ 引擎以 DB 往返速度空转，
     // 且每圈追加一条 system 消息（房间消息无限增长）。认领+失败收尾让
     // attempt_count 预算封顶自然收敛：预算内回 open 可被其他成员接手，耗尽
     // failed 终态——与单卡时代 agent-null → failed 的收敛语义一致。

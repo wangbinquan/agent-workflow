@@ -89,7 +89,7 @@ import {
 import { driveBatchTurn } from '@/services/workgroup/strategies/freeCollab'
 import { driveAssignmentTurn, driveMessageTurn } from '@/services/workgroup/memberTurns'
 import { settleCardAfterFailure } from '@/services/workgroup/lifecycle'
-import { countRoundsUsed, roundMode } from '@/services/workgroup/rounds'
+import { countBudgetUsed, roundMode } from '@/services/workgroup/rounds'
 
 /**
  * RFC-186 PR-2 (audit §4 F1 / §5 F1) — the reconcile action for a `running`
@@ -319,14 +319,14 @@ export async function runWorkgroupEngine(
     if (
       seed !== null &&
       seed.config.mode !== 'dynamic_workflow' &&
-      countRoundsUsed(seed) === 0 &&
+      countBudgetUsed(seed) === 0 &&
       seed.messages.length === 0 &&
       seed.config.goal.trim().length > 0
     ) {
       const leaderId = seed.config.leaderMemberId
       const directed = seed.config.mode === 'leader_worker' && leaderId !== null
       await postMessage(db, taskId, roundMode(seed.config), {
-        // RFC-209 — 前奏：开场目标先于任何回合，显式 0（countRoundsUsed(seed)===0 已由上面的守卫保证同值）。
+        // RFC-209 — 前奏：开场目标先于任何回合，显式 0（countBudgetUsed(seed)===0 已由上面的守卫保证同值）。
         round: 0,
         authorKind: 'system',
         kind: 'chat',
@@ -470,7 +470,7 @@ export async function runWorkgroupEngine(
       },
       leaderClarifyParked,
       ...(readonlyMemberIds !== undefined ? { readonlyMemberIds } : {}),
-      roundsUsed: countRoundsUsed(state),
+      budgetUsed: countBudgetUsed(state),
       gate: {
         declaredDone: state.gate.declaredDone,
         awaitingConfirmation: state.gate.awaitingConfirmation,

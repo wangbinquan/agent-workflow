@@ -1,7 +1,7 @@
 // RFC-187 §3-3 (audit design/workgroup-e2e-audit.md §3-3; Codex P1-8) — a workgroup
 // host turn that fumbles the envelope/wg-json retries in-place (WG_PROTOCOL_RETRIES,
 // raised 1→3 by RFC-186), and EACH attempt mints a fresh __wg_leader__/__wg_member__
-// run. `countRoundsUsed` counted them all, so one logical round could burn up to 4 of
+// run. `countBudgetUsed` counted them all, so one logical round could burn up to 4 of
 // max_rounds. Fix: tag attempt>0 rows `wg-protocol-retry` and exclude that cause from
 // the round count (both the lw leader branch AND the fc member branch).
 
@@ -44,7 +44,7 @@ describe('RFC-187 §3-3 — source locks', () => {
       'utf8',
     ),
   )
-  // RFC-209 —— 回合账本的推导本体（原先在 workgroupRunner.ts 的 countRoundsUsed 里）。
+  // RFC-209 —— 回合账本的推导本体（原先在 workgroupRunner.ts 的 countBudgetUsed 里）。
   const ROUNDS = readFileSync(
     resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'rounds.ts'),
     'utf8',
@@ -61,7 +61,7 @@ describe('RFC-187 §3-3 — source locks', () => {
     )
   })
 
-  test('countRoundsUsed excludes wg-protocol-retry in BOTH modes', () => {
+  test('countBudgetUsed excludes wg-protocol-retry in BOTH modes', () => {
     // there must be a rerunCause !== 'wg-protocol-retry' guard for both the lw (leader)
     // and fc (member) counting branches.
     //

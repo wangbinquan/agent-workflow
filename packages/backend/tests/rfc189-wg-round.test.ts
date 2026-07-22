@@ -365,7 +365,7 @@ describe('RFC-189 引擎打戳（lw）', () => {
     expect(res.kind).toBe('ok') // maxRounds=2 未被重试膨胀击穿
     const leaders = (await hostRows(db, taskId)).filter((r) => r.nodeId === '__wg_leader__')
     // 同毫秒 mint 的普通 ULID 不保证 id 序 → 断言用集合/排序口径（账本语义
-    // 本就与行序无关：countRoundsUsed 走 max）。
+    // 本就与行序无关：countBudgetUsed 走 max）。
     expect(leaders.map((r) => r.wgRound)).toEqual([1, 1, 1, 1])
     expect([...leaders.map((r) => r.retryIndex)].sort()).toEqual([0, 1, 2, 3])
     expect(leaders.filter((r) => r.rerunCause === 'wg-leader-round')).toHaveLength(1)

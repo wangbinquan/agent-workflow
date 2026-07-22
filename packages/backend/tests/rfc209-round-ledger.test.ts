@@ -7,7 +7,7 @@
 //   ③ 路由层四处**硬编码 round: 0**（且 schema 有 .default(0)，省略也静默写 0）。
 //
 // 本文件锁：
-//   1. `deriveRoundsUsed` 与 RFC-209 之前的 `countRoundsUsed` 口径**互 oracle**
+//   1. `deriveBudgetUsed` 与 RFC-209 之前的 `countBudgetUsed` 口径**互 oracle**
 //      （允许的差异只有两条：① 被取代的被杀反问续跑行排除【T7】；② fc 分支豁免
 //      `interrupted` 前身行【2026-07-21 T3B 回归，见文件尾 describe】）；
 //   2. 被取代行排除在 **lw 与 fc 都**生效（v1 的打戳方案对 fc 是 no-op —— fc 分支
@@ -22,7 +22,7 @@ import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { buildRoomMessageRow } from '../src/services/workgroup/messages'
 import {
-  deriveRoundsUsed,
+  deriveBudgetUsed,
   roundedModeOf,
   type RoundLedgerRow,
   type RoundedWorkgroupMode,
@@ -46,7 +46,7 @@ function row(p: Partial<RoundLedgerRow> & { nodeId: string }): RoundLedgerRow {
 }
 
 /**
- * RFC-209 之前 `countRoundsUsed` 的逐字复刻（workgroupRunner.ts:657-690 @ 194f067d），
+ * RFC-209 之前 `countBudgetUsed` 的逐字复刻（workgroupRunner.ts:657-690 @ 194f067d），
  * 作为互 oracle 的对照实现。**不要**把它改成调用新实现——它的价值就在于是一份独立副本。
  */
 function legacyCountRoundsUsed(
@@ -72,7 +72,7 @@ function legacyCountRoundsUsed(
   ).length
 }
 
-describe('RFC-209 §1 — deriveRoundsUsed 与旧口径互 oracle', () => {
+describe('RFC-209 §1 — deriveBudgetUsed 与旧口径互 oracle', () => {
   const fixtures: { name: string; mode: RoundedWorkgroupMode; rows: RoundLedgerRow[] }[] = [
     { name: '空账本', mode: 'leader_worker', rows: [] },
     {
@@ -117,7 +117,7 @@ describe('RFC-209 §1 — deriveRoundsUsed 与旧口径互 oracle', () => {
 
   for (const f of fixtures) {
     test(`${f.name} —— 新旧逐值相同`, () => {
-      expect(deriveRoundsUsed(f.mode, f.rows)).toBe(legacyCountRoundsUsed(f.mode, f.rows))
+      expect(deriveBudgetUsed(f.mode, f.rows)).toBe(legacyCountRoundsUsed(f.mode, f.rows))
     })
   }
 
@@ -126,8 +126,8 @@ describe('RFC-209 §1 — deriveRoundsUsed 与旧口径互 oracle', () => {
       row({ nodeId: WG_LEADER, wgRound: 3, rerunCause: 'wg-leader-round' }),
       row({ nodeId: WG_LEADER, rerunCause: 'clarify-answer', status: 'interrupted' }),
     ]
-    expect(deriveRoundsUsed('leader_worker', rows)).toBe(4)
-    expect(deriveRoundsUsed('leader_worker', rows)).toBe(
+    expect(deriveBudgetUsed('leader_worker', rows)).toBe(4)
+    expect(deriveBudgetUsed('leader_worker', rows)).toBe(
       legacyCountRoundsUsed('leader_worker', rows),
     )
   })
@@ -157,7 +157,7 @@ describe('RFC-209 T7 — 被重铸的反问续跑不再双计', () => {
       killed,
       revived,
     ]
-    expect(deriveRoundsUsed('leader_worker', rows)).toBe(4)
+    expect(deriveBudgetUsed('leader_worker', rows)).toBe(4)
     // 旧口径把同一个逻辑回合数了两次
     expect(legacyCountRoundsUsed('leader_worker', rows)).toBe(5)
   })
@@ -177,7 +177,7 @@ describe('RFC-209 T7 — 被重铸的反问续跑不再双计', () => {
       rerunCause: 'clarify-answer',
     })
     const rows = [row({ nodeId: WG_MEMBER, rerunCause: 'wg-message-turn' }), killed, revived]
-    expect(deriveRoundsUsed('free_collab', rows)).toBe(2)
+    expect(deriveBudgetUsed('free_collab', rows)).toBe(2)
     expect(legacyCountRoundsUsed('free_collab', rows)).toBe(3)
   })
 
@@ -197,7 +197,7 @@ describe('RFC-209 T7 — 被重铸的反问续跑不再双计', () => {
       ...mk('b'),
     ]
     // 两个 lineage 各贡献 1（取代者），而不是各 2
-    expect(deriveRoundsUsed('leader_worker', rows)).toBe(4)
+    expect(deriveBudgetUsed('leader_worker', rows)).toBe(4)
     expect(legacyCountRoundsUsed('leader_worker', rows)).toBe(6)
   })
 
@@ -215,7 +215,7 @@ describe('RFC-209 T7 — 被重铸的反问续跑不再双计', () => {
       }),
       row({ nodeId: WG_LEADER, shardKey: 'b', status: 'pending', rerunCause: 'clarify-answer' }),
     ]
-    expect(deriveRoundsUsed('leader_worker', rows)).toBe(2)
+    expect(deriveBudgetUsed('leader_worker', rows)).toBe(2)
   })
 })
 
@@ -234,7 +234,7 @@ describe('2026-07-21 T3B 回归 — fc 的 interrupted 前身行不计费', () =
       row({ nodeId: WG_MEMBER, shardKey: 'card-1', status: 'interrupted' }), // 被 reap 的前身
       row({ nodeId: WG_MEMBER, shardKey: 'card-1', status: 'done' }), // resume 后的重跑
     ]
-    expect(deriveRoundsUsed('free_collab', rows)).toBe(1)
+    expect(deriveBudgetUsed('free_collab', rows)).toBe(1)
   })
 
   test('fc：T3B 事故形状 —— done×3 + interrupted×2 + protocol-retry×1 ⇒ 3', () => {
@@ -246,7 +246,7 @@ describe('2026-07-21 T3B 回归 — fc 的 interrupted 前身行不计费', () =
       row({ nodeId: WG_MEMBER, status: 'interrupted', rerunCause: 'wg-assignment' }),
       row({ nodeId: WG_MEMBER, rerunCause: 'wg-protocol-retry' }),
     ]
-    expect(deriveRoundsUsed('free_collab', rows)).toBe(3)
+    expect(deriveBudgetUsed('free_collab', rows)).toBe(3)
   })
 
   test('fc：还在跑（running/pending）照常占格 —— 豁免只针对 interrupted', () => {
@@ -255,7 +255,7 @@ describe('2026-07-21 T3B 回归 — fc 的 interrupted 前身行不计费', () =
       row({ nodeId: WG_MEMBER, status: 'pending' }),
       row({ nodeId: WG_MEMBER, status: 'interrupted' }),
     ]
-    expect(deriveRoundsUsed('free_collab', rows)).toBe(2)
+    expect(deriveBudgetUsed('free_collab', rows)).toBe(2)
   })
 
   test('lw 口径不受影响：interrupted NULL 尾仍按 T7 既有裁定计入', () => {
@@ -263,7 +263,7 @@ describe('2026-07-21 T3B 回归 — fc 的 interrupted 前身行不计费', () =
       row({ nodeId: WG_LEADER, wgRound: 3, rerunCause: 'wg-leader-round' }),
       row({ nodeId: WG_LEADER, rerunCause: 'clarify-answer', status: 'interrupted' }),
     ]
-    expect(deriveRoundsUsed('leader_worker', rows)).toBe(4)
+    expect(deriveBudgetUsed('leader_worker', rows)).toBe(4)
   })
 })
 

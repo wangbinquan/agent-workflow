@@ -843,7 +843,7 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
                 <dt>{t('workgroups.room.infoMemberTurnBudget')}</dt>
                 <dd data-testid="workgroup-room-turn-budget">
                   {t('workgroups.room.memberTurnBudgetValue', {
-                    used: data.roundsUsed,
+                    used: data.budgetUsed,
                     max: data.config.maxRounds,
                   })}
                   {/* 复用 Field 的 hint 原语（font-size 12 + --muted），零新 CSS。 */}

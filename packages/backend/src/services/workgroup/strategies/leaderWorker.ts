@@ -16,7 +16,7 @@ import { WG_LEADER_NODE_ID, WG_RERUN_CAUSE } from '@/services/workgroup/constant
 import { casAssignmentStatus, advanceMemberCursor } from '@/services/workgroup/lifecycle'
 import { executeTurn, WG_PROTOCOL_RETRIES } from '@/services/workgroup/turnExecution'
 import { casGateStatus, type EngineDbState } from '@/services/workgroup/state'
-import { countRoundsUsed, currentRound, roundMode, stampWgRound } from '@/services/workgroup/rounds'
+import { countBudgetUsed, currentRound, roundMode, stampWgRound } from '@/services/workgroup/rounds'
 import { maxMessageId, memberDisplayName, rosterDisplayNames } from '@/services/workgroup/context'
 import { persistWgMessages, postMessage } from '@/services/workgroup/messages'
 import { composeLeaderPrompt } from '@/services/workgroup/prompts'
@@ -80,12 +80,12 @@ export async function openCompletionGate(
  * silently loses the FINAL directive AND the dispatch-ban — letting the leader answer with
  * `continue + wg_assignments` and dispatch work past the cap that no later round can
  * aggregate. The cap only ever grants ONE grace leader round, so a leader continuation
- * while roundsUsed is already at/past maxRounds (with completed work) IS that round.
+ * while budgetUsed is already at/past maxRounds (with completed work) IS that round.
  */
 export function isLeaderWrapUpContinuation(state: EngineDbState): boolean {
   return (
     state.config.mode === 'leader_worker' &&
-    countRoundsUsed(state) >= state.config.maxRounds &&
+    countBudgetUsed(state) >= state.config.maxRounds &&
     hasSalvageableWork(state.assignments)
   )
 }
@@ -183,14 +183,14 @@ export async function driveLeaderTurn(
   // RFC-189 — this turn's ROUND ordinal, shared by every attempt row (protocol
   // retries are the same logical round). A fresh turn is round N+1; an ADOPTED
   // row (clarify-answer rerun / crash recovery, minted outside without a stamp)
-  // is already inside countRoundsUsed's NULL-qualifying tail, so its round is
+  // is already inside countBudgetUsed's NULL-qualifying tail, so its round is
   // the CURRENT count — stamped in place before driving.
   const adoptedRow =
     adoptedRunId !== undefined ? state.hostRuns.find((r) => r.id === adoptedRunId) : undefined
   const wgRound =
     adoptedRow !== undefined
-      ? (adoptedRow.wgRound ?? countRoundsUsed(state))
-      : countRoundsUsed(state) + 1
+      ? (adoptedRow.wgRound ?? countBudgetUsed(state))
+      : countBudgetUsed(state) + 1
   if (adoptedRow !== undefined && adoptedRow.wgRound === null) {
     await stampWgRound(db, adoptedRow.id, wgRound)
   }

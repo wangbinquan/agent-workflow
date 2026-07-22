@@ -181,7 +181,7 @@ function turnRoom(taskId: string): WorkgroupRoomResponse {
     runHistory: [],
     // RFC-209 —— 这个 fixture 走 `as unknown as`，缺字段**不会**报类型错、只会静默
     // undefined，所以新增的 wire 字段必须手动补齐（对抗设计门专门点名的漏网点）。
-    roundsUsed: 0,
+    budgetUsed: 0,
   } as unknown as WorkgroupRoomResponse
 }
 

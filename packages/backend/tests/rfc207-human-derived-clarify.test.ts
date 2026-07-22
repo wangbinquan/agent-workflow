@@ -74,7 +74,7 @@ function wakeInput(over: Partial<WakeInput> = {}): WakeInput {
       runningAssignmentIds: new Set(),
       messageTurnMemberIds: new Set(),
     },
-    roundsUsed: 0,
+    budgetUsed: 0,
     gate: { declaredDone: false, awaitingConfirmation: false, rejected: false },
     ...over,
   }

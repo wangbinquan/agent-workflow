@@ -34,12 +34,12 @@ function msg(id: string, round: number): WorkgroupRoomMessage {
 function room(
   mode: 'leader_worker' | 'free_collab',
   messages: WorkgroupRoomMessage[],
-  roundsUsed: number,
+  budgetUsed: number,
 ): WorkgroupRoomResponse {
   return {
     taskId: 't1',
     taskStatus: 'running',
-    roundsUsed,
+    budgetUsed,
     config: {
       workgroupId: 'wg1',
       workgroupName: 'squad',
@@ -121,7 +121,7 @@ describe('RFC-209 — 自由协作房间', () => {
     const budget = await screen.findByTestId('workgroup-room-turn-budget')
     expect(budget.textContent).toContain('7 / 20')
     // 如实标注：一批唤醒要整批放得下才会启动，所以会提前触顶（fc 的门是
-    // roundsUsed + items.length >= maxRounds）。
+    // budgetUsed + items.length >= maxRounds）。
     expect(budget.textContent).toMatch(/整批|batch/i)
   })
 

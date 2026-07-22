@@ -30,13 +30,17 @@ import type { StatusChipKind } from '@/components/StatusChip'
 // ---------------------------------------------------------------------------
 
 /** Message row as the room endpoint returns it (no taskId echo). */
-export type WorkgroupRoomMessage = Omit<WorkgroupMessage, 'taskId'>
+// RFC-217 T5 —— 房间 wire 形态：fc 的 round 显式 null（无波次语义）；shared
+// 的 WorkgroupMessage 仍是 DB DTO（number）。
+export type WorkgroupRoomMessage = Omit<WorkgroupMessage, 'taskId' | 'round'> & {
+  round: number | null
+}
 
 /** Assignment row as the room endpoint returns it (server-only columns cut). */
 export type WorkgroupRoomAssignment = Omit<
   WorkgroupAssignment,
-  'taskId' | 'createdByRunId' | 'dedupKey'
->
+  'taskId' | 'round' | 'createdByRunId' | 'dedupKey'
+> & { round: number | null }
 
 export interface WorkgroupRoomGate {
   declaredDone: boolean
@@ -73,7 +77,7 @@ export interface WorkgroupRoomResponse {
   /** RFC-209 — 已用回合数，与 max_rounds 触顶判据**同源**（后端同一个
    *  `deriveRoundsUsed`）。上限走 `config.maxRounds`。自由协作的右栏据此显示
    *  「成员发言预算 已用 / 上限」——那才是真正决定任务生死的数。 */
-  roundsUsed: number
+  budgetUsed: number
   /** 2026-07-21 —— awaiting_human 的成因（引擎 wgPause 槽）：
    *  'max-rounds-wrapup' | 'leader-idle' | 'leader-clarify' |
    *  'clarify-or-delivery' | 'engine-stall'（前向兼容任意字符串）。
@@ -164,12 +168,13 @@ export function buildRoomTimeline(
   let prevRound: number | null = null
   let maxRound = 0
   for (const m of sorted) {
-    if (prevRound === null || m.round !== prevRound) {
+    // RFC-217 T5 —— fc 的 round 现为显式 null（无波次语义）；null 不进水位线。
+    if (m.round !== null && (prevRound === null || m.round !== prevRound)) {
       base.push({ type: 'round', round: m.round, visible: dividers && m.round > maxRound })
     }
-    if (m.round > maxRound) maxRound = m.round
+    if (m.round !== null && m.round > maxRound) maxRound = m.round
     base.push({ type: 'message', message: m })
-    prevRound = m.round
+    if (m.round !== null) prevRound = m.round
   }
   const strip = (entries: readonly InternalEntry[]): RoomTimelineEntry[] =>
     entries

@@ -111,7 +111,7 @@ function input(overrides: Partial<WakeInput> = {}): WakeInput {
       messageTurnMemberIds: new Set(),
       taskTurnMemberIds: new Set(),
     },
-    roundsUsed: 5,
+    budgetUsed: 5,
     gate: { declaredDone: false, awaitingConfirmation: false, rejected: false },
     ...overrides,
   }
@@ -304,7 +304,7 @@ describe('RFC-215 — budget: batches outrank message turns at the cap (S3 反�
     const w = deriveWakeSet(
       input({
         config: fcCfg({ maxRounds: 6 }),
-        roundsUsed: 5,
+        budgetUsed: 5,
         messages: [mention],
         assignments: [open],
       }),
@@ -328,7 +328,7 @@ describe('RFC-215 — lw merged-busy semantics unchanged (AC-8)', () => {
     const w = deriveWakeSet(
       input({
         config: lwCfg,
-        roundsUsed: 1,
+        budgetUsed: 1,
         assignments: [card],
         messages: [mention],
         inFlight: {
@@ -344,7 +344,7 @@ describe('RFC-215 — lw merged-busy semantics unchanged (AC-8)', () => {
 
   test('lw never produces fc_claim items', () => {
     const open = asg({ status: 'dispatched', assigneeMemberId: 'm-b', source: 'leader' })
-    const w = deriveWakeSet(input({ config: lwCfg, roundsUsed: 1, assignments: [open] }))
+    const w = deriveWakeSet(input({ config: lwCfg, budgetUsed: 1, assignments: [open] }))
     expect(claims(w.items)).toHaveLength(0)
     expect(w.items.some((i) => i.kind === 'assignment')).toBe(true)
   })

@@ -98,7 +98,7 @@ async function seedTask(db: DbClient, config: WorkgroupRuntimeConfig): Promise<s
   return taskId
 }
 
-/** 直插 open 卡（跳过 initial 规划轮：roundsUsed>0 由预置 host 行保证）。
+/** 直插 open 卡（跳过 initial 规划轮：budgetUsed>0 由预置 host 行保证）。
  *  显式递增 id：同毫秒 ulid() 不保证序，而均分按 id 升序切片（rfc189 同款坑）。 */
 let cardSeq = 0
 async function seedOpenCard(db: DbClient, taskId: string, title: string): Promise<string> {
@@ -438,7 +438,7 @@ describe('RFC-215 impl-gate C-1 — unresolvable member agent converges instead 
     // 生产可达：fc 任务运行中删除/重命名 roster 成员的 agent（deleteAgent 对
     // 工作组 roster 引用无守卫、注释明示允许悬垂）。旧版 agent-null 分支把
     // open 卡原样留池，而 deriveWakeSet 不感知 agent 可解析性 ⇒ 每 pass 重派
-    // 同一批：不 mint ⇒ roundsUsed 不增、items 恒非空 ⇒ 引擎空转 + 每圈一条
+    // 同一批：不 mint ⇒ budgetUsed 不增、items 恒非空 ⇒ 引擎空转 + 每圈一条
     // system 消息（房间消息无限增长）。修复后：open 卡认领（bumpAttempt）+
     // 失败收尾，attempt_count 预算封顶 → failed 终态，与单卡时代收敛语义一致。
     const taskId = await seedTask(db, fcCfg())

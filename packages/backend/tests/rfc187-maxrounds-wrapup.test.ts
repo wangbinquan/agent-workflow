@@ -104,7 +104,7 @@ function wakeInput(overrides: Partial<WakeInput> = {}): WakeInput {
       runningAssignmentIds: new Set(),
       messageTurnMemberIds: new Set(),
     },
-    roundsUsed: 0,
+    budgetUsed: 0,
     gate: { declaredDone: false, awaitingConfirmation: false, rejected: false },
     ...overrides,
   }
@@ -118,7 +118,7 @@ describe('RFC-187 §3-7 — grace wrap-up round at the cap', () => {
       wakeInput({
         assignments: [doneAsg()],
         messages: [resultMsg()], // leader cursor empty ⇒ unconsumed ⇒ would wake
-        roundsUsed: 1,
+        budgetUsed: 1,
       }),
     )
     const leaderItems = wake.items.filter((i) => i.kind === 'leader')
@@ -132,20 +132,20 @@ describe('RFC-187 §3-7 — grace wrap-up round at the cap', () => {
       wakeInput({
         assignments: [], // nothing produced
         messages: [resultMsg()],
-        roundsUsed: 1,
+        budgetUsed: 1,
       }),
     )
     expect(wake.items.filter((i) => i.kind === 'leader')).toHaveLength(0)
     expect(wake.capExceeded).toBe(true)
   })
 
-  test('PAST the cap (roundsUsed = maxRounds+1) → no second grace round even with work', () => {
+  test('PAST the cap (budgetUsed = maxRounds+1) → no second grace round even with work', () => {
     // the grace round already ran and was counted; only one is ever granted.
     const wake = deriveWakeSet(
       wakeInput({
         assignments: [doneAsg()],
         messages: [resultMsg()],
-        roundsUsed: 2, // maxRounds=1, grace already consumed
+        budgetUsed: 2, // maxRounds=1, grace already consumed
       }),
     )
     expect(wake.items.filter((i) => i.kind === 'leader')).toHaveLength(0)
@@ -155,7 +155,7 @@ describe('RFC-187 §3-7 — grace wrap-up round at the cap', () => {
 
 describe('RFC-187 §3-7 — decideWorkgroupOutcome preserves the deliverable', () => {
   test('capExceeded WITH completed work → awaiting_human max-rounds-wrapup (not failed)', () => {
-    const out = decideWorkgroupOutcome(wakeInput({ assignments: [doneAsg()], roundsUsed: 2 }), {
+    const out = decideWorkgroupOutcome(wakeInput({ assignments: [doneAsg()], budgetUsed: 2 }), {
       items: [],
       capExceeded: true,
     })
@@ -163,7 +163,7 @@ describe('RFC-187 §3-7 — decideWorkgroupOutcome preserves the deliverable', (
   })
 
   test('capExceeded with NO completed work → failed max-rounds (genuine spin)', () => {
-    const out = decideWorkgroupOutcome(wakeInput({ assignments: [], roundsUsed: 2 }), {
+    const out = decideWorkgroupOutcome(wakeInput({ assignments: [], budgetUsed: 2 }), {
       items: [],
       capExceeded: true,
     })
@@ -172,7 +172,7 @@ describe('RFC-187 §3-7 — decideWorkgroupOutcome preserves the deliverable', (
 
   test('a delivered (human-handoff) assignment also counts as salvageable', () => {
     const delivered = { ...doneAsg(), status: 'delivered' as const }
-    const out = decideWorkgroupOutcome(wakeInput({ assignments: [delivered], roundsUsed: 2 }), {
+    const out = decideWorkgroupOutcome(wakeInput({ assignments: [delivered], budgetUsed: 2 }), {
       items: [],
       capExceeded: true,
     })
@@ -184,7 +184,7 @@ describe('RFC-187 §3-7 — decideWorkgroupOutcome preserves the deliverable', (
     const out = decideWorkgroupOutcome(
       wakeInput({
         assignments: [doneAsg()],
-        roundsUsed: 2,
+        budgetUsed: 2,
         gate: { declaredDone: true, awaitingConfirmation: false, rejected: false },
       }),
       { items: [], capExceeded: false },
@@ -194,10 +194,16 @@ describe('RFC-187 §3-7 — decideWorkgroupOutcome preserves the deliverable', (
 })
 
 describe('RFC-187 §3-7 — wrap-up round dispatch-ban + directive (Codex P0-3)', () => {
-  const RUNNER = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'strategies', 'leaderWorker.ts'),
-    'utf8',
-  )
+  // RFC-217 T3b：wrap-up 逻辑分居 engine（wake item 路由）与 leaderWorker
+  //（directive/drop）——锁面并读两处。
+  const RUNNER = [['engine.ts'], ['strategies', 'leaderWorker.ts']]
+    .map((parts) =>
+      readFileSync(
+        resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', ...parts),
+        'utf8',
+      ),
+    )
+    .join('\n')
 
   test('the wrap-up round injects a forced "declare done, do not dispatch" directive', () => {
     expect(RUNNER).toContain('FINAL round — the round cap has been reached')
@@ -232,7 +238,7 @@ describe('RFC-187 §3-7 — isLeaderWrapUpContinuation (adopted clarify-answer k
     return {
       config: { ...cfg({ maxRounds: over.maxRounds ?? 1 }), mode: over.mode ?? 'leader_worker' },
       assignments: over.done === false ? [] : [doneAsg()],
-      // countRoundsUsed(lw) reads max(wgRound) over non-canceled leader rows.
+      // countBudgetUsed(lw) reads max(wgRound) over non-canceled leader rows.
       hostRuns:
         rounds > 0
           ? [

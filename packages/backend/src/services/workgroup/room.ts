@@ -45,7 +45,7 @@ import {
 import { canViewTask } from '@/services/taskCollab'
 import { gateViewOf, type WorkgroupTaskState } from '@/services/workgroup/state'
 import { resolveRoomPauseReason, safeMentions } from '@/services/workgroup/taskActions'
-import { deriveRoundsUsed, roundedModeOf } from '@/services/workgroup/rounds'
+import { deriveBudgetUsed, roundedModeOf } from '@/services/workgroup/rounds'
 import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from './constants'
 
 /** Minimal node_run shape the derivation reads (subset of the DB row). The
@@ -451,7 +451,7 @@ export function buildRoomReads(
           finishedAt: nodeRuns.finishedAt,
           failureCode: nodeRuns.failureCode,
           agentOverrideName: nodeRuns.agentOverrideName,
-          // RFC-209 —— 两个用途共用这一列：① 回合账本读数（右栏预算表 roundsUsed）；
+          // RFC-209 —— 两个用途共用这一列：① 回合账本读数（右栏预算表 budgetUsed）；
           // ② leader 回合卡的轮序数（RFC-189 之后它才是权威，取代从消息 round 反推）。
           wgRound: nodeRuns.wgRound,
         })
@@ -500,12 +500,12 @@ export function buildRoomReads(
       messagesLite,
       { openClarifySourceRunIds },
     )
-    // RFC-209 —— 已用回合数：与 max_rounds 触顶判据**同源**（同一个 deriveRoundsUsed，
+    // RFC-209 —— 已用回合数：与 max_rounds 触顶判据**同源**（同一个 deriveBudgetUsed，
     // 且这里的 host-run 过滤条件与引擎 loadDbState 逐字相同），所以右栏预算表显示的
     // 数字就是真正决定任务生死的那个。零新查询——复用上面已经加载的 hostRuns。
     // dynamic_workflow 没有回合账本 ⇒ 0（UI 只在 free_collab 渲染）。
     const roundedMode = roundedModeOf(config.mode)
-    const roundsUsed = roundedMode === null ? 0 : deriveRoundsUsed(roundedMode, hostRuns)
+    const budgetUsed = roundedMode === null ? 0 : deriveBudgetUsed(roundedMode, hostRuns)
     // RFC-207 §3.7.5 — which askers a human has silenced. Stopping is a REVERSIBLE
     // state, not a one-way door: without surfacing it the room offers no way back
     // (the canvas toggle that ordinary tasks use does not exist for workgroups).
@@ -527,7 +527,7 @@ export function buildRoomReads(
       taskStatus: task.status,
       config,
       clarifyStops,
-      roundsUsed,
+      budgetUsed,
       // 2026-07-21 —— awaiting_human 的成因（引擎写入 wgPause 槽；见
       // workgroupRunner.writeWgPauseReason）。读方门槛：只在任务当前就停在
       // awaiting_human 时外泄，陈值（上次停机残留）永不出现——所以槽无需清理。
@@ -548,9 +548,12 @@ export function buildRoomReads(
       // rejection bookkeeping). null for turn-engine tasks; served straight
       // from workgroup_task_state.
       dw: state.dwState,
+      // RFC-217 T5（design §3）—— fc 无波次语义：round 对外显式 null（DB 仍存
+      // 0；lw 原值直出）。前端据 null 跳过分隔线/回合徽记，而不是靠「恒 0 不
+      // 触发水位线」的隐式巧合。
       messages: messages.map((m) => ({
         id: m.id,
-        round: m.round,
+        round: roundedMode === 'free_collab' ? null : m.round,
         authorKind: m.authorKind,
         authorMemberId: m.authorMemberId,
         authorUserId: m.authorUserId,
@@ -562,7 +565,7 @@ export function buildRoomReads(
       })),
       assignments: assignments.map((a) => ({
         id: a.id,
-        round: a.round,
+        round: roundedMode === 'free_collab' ? null : a.round,
         source: a.source,
         createdByUserId: a.createdByUserId,
         assigneeMemberId: a.assigneeMemberId,

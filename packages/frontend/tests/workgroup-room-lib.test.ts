@@ -757,3 +757,23 @@ describe('RFC-182 timeline interleave + time helpers', () => {
     ).toBeNull() // pending（未起跑）→ em-dash
   })
 })
+
+describe('RFC-217 T5 — fc round 对外显式 null', () => {
+  it('round:null 的消息不产生分隔线、不进水位线（fc 无波次语义的显式形态）', () => {
+    const timeline = buildRoomTimeline(
+      [msg({ id: '01A', round: null }), msg({ id: '01B', round: null })],
+      [],
+      { dividers: false },
+    )
+    expect(timeline.filter((e) => e.type === 'round')).toHaveLength(0)
+  })
+
+  it('lw 混入 null（防御位）不打断既有水位线', () => {
+    const timeline = buildRoomTimeline(
+      [msg({ id: '01A', round: 1 }), msg({ id: '01B', round: null }), msg({ id: '01C', round: 2 })],
+      [],
+    )
+    const rounds = timeline.filter((e) => e.type === 'round')
+    expect(rounds.map((r) => (r.type === 'round' ? r.round : -1))).toEqual([1, 2])
+  })
+})

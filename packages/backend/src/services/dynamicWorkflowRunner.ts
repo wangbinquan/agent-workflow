@@ -47,7 +47,7 @@ import {
 } from '@/services/orchestratorAgent'
 import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
 import { loadWorkgroupTaskState, setDwState } from '@/services/workgroup/state'
-import type { WorkgroupEngineHooks, WorkgroupEngineResult } from '@/services/workgroup/runner'
+import type { WorkgroupEngineHooks, WorkgroupEngineResult } from '@/services/workgroup/engine'
 import type { Logger } from '@/util/log'
 
 /** Total generation attempts per pass (bad JSON / schema / validation all count).

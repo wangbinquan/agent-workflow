@@ -90,7 +90,7 @@ function wakeInput(overrides: Partial<WakeInput> = {}): WakeInput {
       runningAssignmentIds: new Set(),
       messageTurnMemberIds: new Set(),
     },
-    roundsUsed: 1,
+    budgetUsed: 1,
     gate: { declaredDone: false, awaitingConfirmation: false, rejected: false },
     ...overrides,
   }
