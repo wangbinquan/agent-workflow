@@ -64,7 +64,7 @@ afterAll(() => {
  */
 function runStub(
   stub: string,
-  opts: { env?: Record<string, string>; cwd?: string } = {},
+  opts: { env?: Record<string, string>; cwd?: string; agentName?: string } = {},
 ): { code: number | null; stdout: string; stderr: string; extractedPrompt: string | null } {
   const stubPath = resolve(STUB_DIR, stub)
   // AW_STUB_PROMPT_OUT makes every stub write the prompt it EXTRACTED to this
@@ -74,7 +74,10 @@ function runStub(
   // opencodeCmd replaces `head`, so cmd = ['/bin/sh', stubPath, 'run', '--agent',
   // 'x', '--format', 'json', '--thinking', '--dangerously-skip-permissions',
   // '--', PROMPT] — byte-identical flag order to a real opencode spawn.
-  const cmd = buildCommand({ agent: { name: 'x' }, opencodeCmd: ['/bin/sh', stubPath] }, PROMPT)
+  const cmd = buildCommand(
+    { agent: { name: opts.agentName ?? 'x' }, opencodeCmd: ['/bin/sh', stubPath] },
+    PROMPT,
+  )
   const r = spawnSync(cmd[0]!, cmd.slice(1), {
     cwd: opts.cwd ?? tmp(),
     env: { ...process.env, AW_STUB_PROMPT_OUT: promptOut, ...(opts.env ?? {}) },
@@ -131,5 +134,21 @@ describe('e2e shell stubs parse the buildCommand argv layout (post-191bc32c `--`
     expect(dd).toBeGreaterThanOrEqual(0)
     expect(cmd[dd + 1]).toBe(PROMPT)
     expect(cmd.slice(dd + 1)).toHaveLength(1) // prompt is the LAST element
+  })
+
+  // Codex re-review of 191bc32c: fixing RAW_PROMPT extraction was not enough — the
+  // commit stub's ROLE decision (`commit_message` port vs `answer` port) still read
+  // `$*`, so a worker whose agent is NAMED `commit_message` (→ `--agent
+  // commit_message` in argv) was misrouted to the commit branch. The exact-prompt
+  // assertion above can't catch this: it verifies extraction, not the downstream
+  // consumer of the extracted value. This negative case ties the role to the PROMPT.
+  test('commit stub picks its role from the PROMPT, not argv (`--agent commit_message` must not hijack a worker)', () => {
+    // PROMPT carries no `commit_message` text of its own, so a worker run must emit
+    // the `answer` port even when `--agent commit_message` sits in argv. A `$*` stub
+    // sees the flag and wrongly emits the commit_message port.
+    const r = runStub('stub-opencode-commit.sh', { agentName: 'commit_message' })
+    expect(r.code).toBe(0)
+    expect(r.stdout).toContain('name=\\"answer\\"')
+    expect(r.stdout).not.toContain('name=\\"commit_message\\"')
   })
 })

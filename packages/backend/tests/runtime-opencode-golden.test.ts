@@ -9,7 +9,7 @@ import {
   assertOpencodeSpawnSize,
   buildCommand,
   buildOpencodeSpawn,
-  LINUX_MAX_ARG_STRLEN,
+  MAX_ARG_STRLEN_PAGES,
   MAX_OPENCODE_PROMPT_BYTES,
 } from '@/services/runtime/opencode/spawn'
 
@@ -181,65 +181,129 @@ describe('opencode prompt argv size guard (B4-runtime-5)', () => {
   })
 })
 
-// misc impl-gate [medium] b56190a3 (Codex re-review) — buildOpencodeEnv injects
+// misc impl-gate [medium] b56190a3 (2× Codex re-review) — buildOpencodeEnv injects
 // OPENCODE_CONFIG_CONTENT (a large inline agent/MCP/config) with NO size check, so
 // on Linux one oversized value crosses MAX_ARG_STRLEN and execve fails with a raw
 // E2BIG. assertOpencodeSpawnSize turns that into a readable runtime-spawn-failed.
 //
-// Scoped deliberately (the first cut used a fixed 240 KiB TOTAL budget on a WRONG
-// "macOS ARG_MAX = 256 KiB" premise — macOS is ~1 MiB — and measured inherited
-// process.env, so it false-rejected legitimate large-but-valid spawns): ONLY
-// OPENCODE_CONFIG_CONTENT, never inherited env, and ONLY on Linux (macOS has no
-// per-string cap). The total argv+env budget is left to a future platform-aware
-// guard measured at the real spawn boundary.
+// Scoped through two rounds of false-reject bugs:
+//  - the first cut used a fixed 240 KiB TOTAL budget on a WRONG "macOS ARG_MAX =
+//    256 KiB" premise (it is ~1 MiB) and measured inherited process.env;
+//  - the second used a fixed 128 KiB per-string cap, which is only MAX_ARG_STRLEN
+//    on a 4 KiB-page kernel — Linux arm64 with 16/64 KiB pages has a 512 KiB/2 MiB
+//    real limit, so a legitimate large config was false-rejected there.
+// The guard now checks ONLY OPENCODE_CONFIG_CONTENT, ONLY on Linux, against
+// 32 × the RUNTIME page size, and SKIPS when the page size can't be probed. The
+// total argv+env budget is left to a future platform-aware guard.
 describe('opencode inline-config size guard (misc impl-gate b56190a3)', () => {
-  // key + '=' + value + NUL, so a value AT the cap already puts the entry over it.
-  const over = 'x'.repeat(LINUX_MAX_ARG_STRLEN)
   const under = '{"agent":{"a":{}}}'
+  const KEY_OVERHEAD = 'OPENCODE_CONFIG_CONTENT'.length + 1 /* '=' */ + 1 /* NUL */
+  // A value that fills 32 × 4 KiB pages — over the cap on a 4 KiB kernel.
+  const over4k = 'x'.repeat(MAX_ARG_STRLEN_PAGES * 4096)
 
-  it('rejects an OPENCODE_CONFIG_CONTENT over the Linux MAX_ARG_STRLEN per-string cap', () => {
-    expect(() => assertOpencodeSpawnSize({ OPENCODE_CONFIG_CONTENT: over }, 'linux')).toThrow(
-      /spawn-config-too-large/,
-    )
+  it('rejects an oversized config against 32 × the (injected) page size', () => {
+    expect(() =>
+      assertOpencodeSpawnSize(
+        { OPENCODE_CONFIG_CONTENT: over4k },
+        { platform: 'linux', pageSize: 4096 },
+      ),
+    ).toThrow(/spawn-config-too-large/)
+  })
+
+  it('does NOT false-reject on a large-page kernel — the SAME value fits under 32 × 64 KiB', () => {
+    // The arm64 regression the 2nd Codex round caught: 128 KiB is fine when
+    // MAX_ARG_STRLEN is 32 × 64 KiB = 2 MiB.
+    expect(() =>
+      assertOpencodeSpawnSize(
+        { OPENCODE_CONFIG_CONTENT: over4k },
+        { platform: 'linux', pageSize: 65536 },
+      ),
+    ).not.toThrow()
+  })
+
+  it('scales the cap with page size at the exact KEY=VALUE\\0 boundary (4/16/64 KiB)', () => {
+    for (const page of [4096, 16384, 65536]) {
+      const cap = MAX_ARG_STRLEN_PAGES * page
+      const atCap = 'x'.repeat(cap - KEY_OVERHEAD) // whole entry == cap exactly
+      const overByOne = 'x'.repeat(cap - KEY_OVERHEAD + 1)
+      expect(() =>
+        assertOpencodeSpawnSize(
+          { OPENCODE_CONFIG_CONTENT: atCap },
+          { platform: 'linux', pageSize: page },
+        ),
+      ).not.toThrow()
+      expect(() =>
+        assertOpencodeSpawnSize(
+          { OPENCODE_CONFIG_CONTENT: overByOne },
+          { platform: 'linux', pageSize: page },
+        ),
+      ).toThrow(/spawn-config-too-large/)
+    }
+  })
+
+  it('skips entirely when the page size cannot be probed (never false-reject)', () => {
+    expect(() =>
+      assertOpencodeSpawnSize(
+        { OPENCODE_CONFIG_CONTENT: over4k },
+        { platform: 'linux', pageSize: null },
+      ),
+    ).not.toThrow()
   })
 
   it('measures BYTES not code units — a CJK config overflows below .length', () => {
-    // '字' = 3 UTF-8 bytes; CAP/3 + 1 chars is under the char count, over the byte cap.
-    const cjk = '字'.repeat(Math.floor(LINUX_MAX_ARG_STRLEN / 3) + 1)
-    expect(cjk.length).toBeLessThan(LINUX_MAX_ARG_STRLEN)
-    expect(() => assertOpencodeSpawnSize({ OPENCODE_CONFIG_CONTENT: cjk }, 'linux')).toThrow(
-      /spawn-config-too-large/,
-    )
+    const cap = MAX_ARG_STRLEN_PAGES * 4096
+    const cjk = '字'.repeat(Math.floor(cap / 3) + 1)
+    expect(cjk.length).toBeLessThan(cap)
+    expect(() =>
+      assertOpencodeSpawnSize(
+        { OPENCODE_CONFIG_CONTENT: cjk },
+        { platform: 'linux', pageSize: 4096 },
+      ),
+    ).toThrow(/spawn-config-too-large/)
   })
 
-  it('does NOT reject on macOS — no per-string cap there, a fixed guard would false-reject', () => {
-    expect(() => assertOpencodeSpawnSize({ OPENCODE_CONFIG_CONTENT: over }, 'darwin')).not.toThrow()
+  it('does NOT reject on macOS — no per-string cap there', () => {
+    expect(() =>
+      assertOpencodeSpawnSize(
+        { OPENCODE_CONFIG_CONTENT: over4k },
+        { platform: 'darwin', pageSize: 4096 },
+      ),
+    ).not.toThrow()
   })
 
   it('NEVER inspects inherited env — a huge ambient variable cannot fail a valid spawn', () => {
-    // The exact regression the first cut caused: a legitimate big env var breaking
+    // The regression the 1st Codex round caught: a legitimate big env var breaking
     // every spawn. Only OPENCODE_CONFIG_CONTENT is measured.
     expect(() =>
       assertOpencodeSpawnSize(
-        { SOME_INHERITED_VAR: over, OPENCODE_CONFIG_CONTENT: under },
-        'linux',
+        { SOME_INHERITED_VAR: over4k, OPENCODE_CONFIG_CONTENT: under },
+        { platform: 'linux', pageSize: 4096 },
       ),
     ).not.toThrow()
   })
 
   it('accepts a normal inline config on Linux', () => {
-    expect(() => assertOpencodeSpawnSize({ OPENCODE_CONFIG_CONTENT: under }, 'linux')).not.toThrow()
+    expect(() =>
+      assertOpencodeSpawnSize(
+        { OPENCODE_CONFIG_CONTENT: under },
+        { platform: 'linux', pageSize: 4096 },
+      ),
+    ).not.toThrow()
   })
 
-  it('buildOpencodeSpawn wires the guard (Linux throws on oversized config; macOS passes through)', () => {
-    const call = () => buildOpencodeSpawn({ ...BASE, inlineConfigSerialized: over })
+  it('buildOpencodeSpawn wires the guard (throws on a config over even a 64 KiB-page limit)', () => {
+    // >2 MiB exceeds 32 × even a 64 KiB page, so buildOpencodeSpawn's own probe
+    // (real getconf on Linux) must reject it there; macOS has no per-string cap.
+    const huge = 'x'.repeat(2 * 1024 * 1024 + 128)
+    const call = () => buildOpencodeSpawn({ ...BASE, inlineConfigSerialized: huge })
     if (process.platform === 'linux') {
       expect(call).toThrow(/spawn-config-too-large/)
     } else {
-      // macOS: buildOpencodeSpawn's own guard is a no-op, but prove the wiring
-      // by re-checking the env IT produced under the Linux rule.
       expect(call).not.toThrow()
-      expect(() => assertOpencodeSpawnSize(call().env, 'linux')).toThrow(/spawn-config-too-large/)
+      // Prove the wiring: the env it produced trips the guard under the Linux rule.
+      expect(() =>
+        assertOpencodeSpawnSize(call().env, { platform: 'linux', pageSize: 4096 }),
+      ).toThrow(/spawn-config-too-large/)
     }
   })
 })

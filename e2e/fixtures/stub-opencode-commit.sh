@@ -43,7 +43,7 @@ if [ -z "$envelope_nonce" ]; then
 fi
 output_open='<workflow-output nonce=\"'"$envelope_nonce"'\">'
 
-case "$*" in
+case "$RAW_PROMPT" in
   *commit_message*)
     printf '%s\n' "{\"type\":\"text\",\"timestamp\":0,\"part\":{\"type\":\"text\",\"text\":\"$output_open<port name=\\\"commit_message\\\">feat: e2e stub commit</port></workflow-output>\"}}"
     ;;
