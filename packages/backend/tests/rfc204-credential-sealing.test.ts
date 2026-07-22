@@ -354,3 +354,50 @@ describe('RFC-204 impl-gate P0-1 — backup refuses a query-credential on-disk p
     expect(() => ensureCredentialsSealed(db, box, { blockOnCredentialedPath: true })).not.toThrow()
   })
 })
+
+describe('RFC-204 impl-gate P0-3 — backup refuses a scheduled plaintext credentialed repoUrl', () => {
+  function insertSchedule(db: DbClient, payload: object): void {
+    const now = Date.now()
+    db.insert(scheduledTasks)
+      .values({
+        id: ulid(),
+        name: 'nightly',
+        ownerUserId: '__system__',
+        launchKind: 'workflow',
+        launchPayload: JSON.stringify(payload),
+        scheduleSpec: JSON.stringify({ kind: 'interval', everyMs: 3600000 }),
+        enabled: true,
+        nextRunAt: now,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .run()
+  }
+
+  test('startup does not block; backup refuses a credentialed repoUrl with no cache row', () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    // A userinfo-credentialed repoUrl, no matching cached_repos row → 2b can't
+    // migrate it to a cachedRepoId, so it stays plaintext in the payload.
+    insertSchedule(db, { workflowId: 'w', name: 'n', repoUrl: 'https://user:tok@h/r.git' })
+    expect(() => ensureCredentialsSealed(db, box)).not.toThrow() // daemon boots
+    let code: string | undefined
+    try {
+      ensureCredentialsSealed(db, box, { blockOnCredentialedPath: true })
+    } catch (e) {
+      code = (e as { code?: string }).code
+    }
+    expect(code).toBe('backup-credentialed-path')
+  })
+
+  test('a cachedRepoId payload (no plaintext repoUrl) never blocks a backup', () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    insertSchedule(db, { workflowId: 'w', name: 'n', cachedRepoId: 'cr-1' })
+    expect(() => ensureCredentialsSealed(db, box, { blockOnCredentialedPath: true })).not.toThrow()
+  })
+
+  test('a credential-free repoUrl (public https) never blocks a backup', () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    insertSchedule(db, { workflowId: 'w', name: 'n', repoUrl: 'https://h/public.git' })
+    expect(() => ensureCredentialsSealed(db, box, { blockOnCredentialedPath: true })).not.toThrow()
+  })
+})

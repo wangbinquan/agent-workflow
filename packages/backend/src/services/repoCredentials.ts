@@ -289,6 +289,47 @@ export function ensureCredentialsSealed(
     }
   }
 
+  // RFC-204 impl-gate P0-3 (Codex 2026-07-22): step 2b migrated every MATCHABLE
+  // scheduled repoUrl to a cachedRepoId (no plaintext). Any REMAINING plaintext
+  // credentialed repoUrl in a launch payload (no matching cache row) can't be
+  // sealed by reference — VACUUM INTO would ship it in the backup. In a backup
+  // context, refuse. (Startup doesn't set the flag; the operator re-saves the
+  // schedule with a cachedRepoId source or a userinfo URL.)
+  if (opts?.blockOnCredentialedPath === true) {
+    const scheduledCred = db
+      .select()
+      .from(scheduledTasks)
+      .all()
+      .filter((r) => {
+        let payload: unknown
+        try {
+          payload = JSON.parse(r.launchPayload)
+        } catch {
+          return false
+        }
+        if (payload === null || typeof payload !== 'object') return false
+        const p = payload as Record<string, unknown>
+        const urls: unknown[] = [p['repoUrl']]
+        if (Array.isArray(p['repos'])) {
+          for (const x of p['repos']) {
+            if (x !== null && typeof x === 'object')
+              urls.push((x as Record<string, unknown>)['repoUrl'])
+          }
+        }
+        return urls.some((u) => typeof u === 'string' && u.length > 0 && redactGitUrl(u) !== u)
+      })
+    if (scheduledCred.length > 0) {
+      throw new DomainError(
+        'backup-credentialed-path',
+        `refusing to back up: ${scheduledCred.length} scheduled task(s) hold a plaintext ` +
+          `credentialed repoUrl in their launch payload (no matching cache row to seal by ` +
+          `reference). Re-save them with a cachedRepoId source or a userinfo URL first.`,
+        409,
+        undefined,
+      )
+    }
+  }
+
   // 4. Physical erase. Blanking a cell only changes the logical value; the WAL
   //    and freed pages keep the old bytes, which defeats the whole point for a
   //    stolen db.sqlite. secure_delete zeroes freed content, the checkpoint
