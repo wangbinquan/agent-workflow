@@ -170,7 +170,8 @@ export function createOidcProvidersService(deps: {
       if (body.tokenEndpoint !== undefined) updates.tokenEndpoint = body.tokenEndpoint
       if (body.userinfoEndpoint !== undefined) updates.userinfoEndpoint = body.userinfoEndpoint
       if (body.jwksUri !== undefined) updates.jwksUri = body.jwksUri
-      if (body.trustEmailVerified !== undefined) updates.trustEmailVerified = body.trustEmailVerified
+      if (body.trustEmailVerified !== undefined)
+        updates.trustEmailVerified = body.trustEmailVerified
       if (body.usernameClaim !== undefined) updates.usernameClaim = body.usernameClaim
       // Empty clientSecret in PATCH = keep existing; non-empty = re-seal.
       if (typeof body.clientSecret === 'string' && body.clientSecret.length > 0) {
@@ -258,9 +259,7 @@ export function createOidcProvidersService(deps: {
           : eff.userinfoEndpoint !== null
       return {
         ok:
-          eff.authorizationEndpoint !== null &&
-          eff.tokenEndpoint !== null &&
-          identityChannelReady,
+          eff.authorizationEndpoint !== null && eff.tokenEndpoint !== null && identityChannelReady,
         discovery: {
           ok: eff.discoveryOk,
           ...(eff.discoveryError !== undefined ? { error: eff.discoveryError } : {}),

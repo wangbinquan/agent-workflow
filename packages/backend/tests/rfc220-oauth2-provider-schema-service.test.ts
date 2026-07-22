@@ -207,9 +207,15 @@ describe('RFC-220 S2 — provider service', () => {
     const p = await h.svc.create({ ...BASE, ...MANUAL }) // subjectClaim: 'id'
     await seedUserAndIdentity(h, p.id)
     // value → value
-    await expectCode(h.svc.patch(p.id, { subjectClaim: 'uid' }), 'subject-claim-locked-by-identities')
+    await expectCode(
+      h.svc.patch(p.id, { subjectClaim: 'uid' }),
+      'subject-claim-locked-by-identities',
+    )
     // value → null
-    await expectCode(h.svc.patch(p.id, { subjectClaim: null }), 'subject-claim-locked-by-identities')
+    await expectCode(
+      h.svc.patch(p.id, { subjectClaim: null }),
+      'subject-claim-locked-by-identities',
+    )
     // equal-value rewrite is NOT a change — passes
     const same = await h.svc.patch(p.id, { subjectClaim: 'id', displayName: 'renamed' })
     expect(same.subjectClaim).toBe('id')
@@ -221,7 +227,10 @@ describe('RFC-220 S2 — provider service', () => {
   test('subjectClaim null → value is also a namespace change and locked', async () => {
     const p = await h.svc.create(BASE) // subjectClaim: null
     await seedUserAndIdentity(h, p.id)
-    await expectCode(h.svc.patch(p.id, { subjectClaim: 'id' }), 'subject-claim-locked-by-identities')
+    await expectCode(
+      h.svc.patch(p.id, { subjectClaim: 'id' }),
+      'subject-claim-locked-by-identities',
+    )
   })
 
   test('subjectClaim changes freely while no identity exists', async () => {

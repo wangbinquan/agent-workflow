@@ -154,7 +154,8 @@ function merge(
     tokenEndpoint: token.url,
     userinfoEndpoint: userinfo.url,
     jwksUri: jwks.url,
-    issuer: (typeof doc?.issuer === 'string' && doc.issuer !== '' && doc.issuer) || provider.issuerUrl,
+    issuer:
+      (typeof doc?.issuer === 'string' && doc.issuer !== '' && doc.issuer) || provider.issuerUrl,
     sources: {
       authorizationEndpoint: authorization.source,
       tokenEndpoint: token.source,

@@ -13,7 +13,11 @@ export const EMAIL_DOMAIN_REGEX = /^@[a-z0-9.-]+$/i
 // RFC-220 — manual endpoint overrides must be http(s): the authorize URL is
 // followed via a raw browser redirect (frontend auth.tsx), so a javascript:
 // value in admin config would execute on the login page.
-const HttpUrlSchema = z.string().url().max(2048).regex(/^https?:\/\//i)
+const HttpUrlSchema = z
+  .string()
+  .url()
+  .max(2048)
+  .regex(/^https?:\/\//i)
 
 // RFC-220 D5/D6 — claim-name selectors: plain-key whitelist plus a prototype
 // pollution blocklist (same defense family as RFC-218 port names).
