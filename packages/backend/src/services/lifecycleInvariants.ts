@@ -39,11 +39,12 @@ import type {
   WorkflowDefinition,
   NodeKind,
 } from '@agent-workflow/shared'
+import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 
 import type { DbClient } from '@/db/client'
 import { clarifyRounds, docVersions, lifecycleAlerts, nodeRuns, tasks } from '@/db/schema'
 import { hasUndispatchedDesignerQuestions } from '@/services/taskQuestions'
-import { createLogger } from '@/util/log'
+import { createLogger, type Logger } from '@/util/log'
 
 const log = createLogger('lifecycle.invariants')
 
@@ -626,6 +627,94 @@ function keyOf(taskId: string, rule: string): string {
 }
 
 // =============================================================================
+// open-alert summary + tiered boot/periodic logging (shared by both scans)
+// =============================================================================
+
+/** Task statuses past which a task will not self-progress. A finding on a
+ *  terminal task is permanent + benign (the task is over — only resume/retry or
+ *  delete moves it), so those are logged at warn, not error, keeping daemon-boot
+ *  logs from going red every restart over historic bookkeeping gaps on
+ *  long-finished tasks. */
+const TERMINAL_STATUSES: ReadonlySet<string> = new Set(TERMINAL_TASK_STATUSES)
+
+export interface OpenAlertSummary {
+  /** Total open alerts in scope (all severities). */
+  open: number
+  /** How many are error-severity (i.e. past the 24h grace window). */
+  errorCount: number
+  /** Error-severity alerts on still-live tasks (pending / running /
+   *  awaiting_review / awaiting_human) — the actionable subset a human can
+   *  still clear via resume / answer / cancel. Error alerts on terminal tasks
+   *  are excluded: they are benign historic inconsistencies. */
+  liveErrorCount: number
+  /** Open-alert tally keyed by rule, for an at-a-glance shape of the backlog. */
+  byRule: Record<string, number>
+}
+
+/**
+ * Classify the open alerts a reconcile pass returned. Pure, so it is trivially
+ * unit-testable; both scan entry points (invariants scan + stuck-task detector)
+ * share it so their log lines stay consistent and self-explanatory.
+ *
+ * `statusByTask` maps each *scanned* taskId → its lifecycle status. A taskId
+ * absent from the map is treated as live (conservative — never downgrade a
+ * finding we cannot classify).
+ */
+export function summarizeOpenAlerts(
+  openAlerts: readonly LifecycleAlertRow[],
+  statusByTask: ReadonlyMap<string, string>,
+): OpenAlertSummary {
+  const byRule: Record<string, number> = {}
+  let errorCount = 0
+  let liveErrorCount = 0
+  for (const a of openAlerts) {
+    byRule[a.rule] = (byRule[a.rule] ?? 0) + 1
+    if (a.severity !== 'error') continue
+    errorCount++
+    const status = statusByTask.get(a.taskId)
+    if (status === undefined || !TERMINAL_STATUSES.has(status)) liveErrorCount++
+  }
+  return { open: openAlerts.length, errorCount, liveErrorCount, byRule }
+}
+
+/**
+ * Emit the tiered aggregate log line for a scan:
+ *   - error  — at least one error-severity finding sits on a live/parked task
+ *              (actionable now).
+ *   - warn   — there are error-severity findings but every one is on a terminal
+ *              task (benign historic backlog; delete or repair to clear).
+ *   - (none) — no error-severity findings; the INFO 'scan complete' line already
+ *              carries the new/promoted/resolved deltas.
+ *
+ * Fresh warning-severity findings intentionally do NOT raise the tier: the 24h
+ * grace is by design, and the per-alert `onAlert` WS broadcast already surfaces
+ * them in the UI immediately.
+ */
+export function logAlertSummary(
+  logger: Logger,
+  messages: { actionable: string; benign: string },
+  summary: OpenAlertSummary,
+  promotedThisScan: number,
+): void {
+  if (summary.liveErrorCount > 0) {
+    logger.error(messages.actionable, {
+      open: summary.open,
+      errorCount: summary.errorCount,
+      liveErrorCount: summary.liveErrorCount,
+      promotedThisScan,
+      byRule: summary.byRule,
+    })
+  } else if (summary.errorCount > 0) {
+    logger.warn(messages.benign, {
+      open: summary.open,
+      errorCount: summary.errorCount,
+      byRule: summary.byRule,
+      hint: 'all on terminal tasks (done/failed/canceled/interrupted) — delete or repair via the Diagnose panel to clear',
+    })
+  }
+}
+
+// =============================================================================
 // public entry
 // =============================================================================
 
@@ -681,12 +770,16 @@ export async function runLifecycleInvariants(
     promotedAlerts: reconciled.promotedAlerts,
     resolvedAlerts: reconciled.resolvedAlerts,
   })
-  if (reconciled.promotedAlerts > 0 || reconciled.openAlerts.some((a) => a.severity === 'error')) {
-    log.error('lifecycle invariants violated', {
-      open: reconciled.openAlerts.length,
-      errorCount: reconciled.openAlerts.filter((a) => a.severity === 'error').length,
-    })
-  }
+  const statusByTask = new Map(taskRows.map((t) => [t.id, t.status]))
+  logAlertSummary(
+    log,
+    {
+      actionable: 'lifecycle invariants violated',
+      benign: 'lifecycle invariants: historic findings on terminal tasks (benign)',
+    },
+    summarizeOpenAlerts(reconciled.openAlerts, statusByTask),
+    reconciled.promotedAlerts,
+  )
   return { scanned: taskIds.length, ...reconciled }
 }
 

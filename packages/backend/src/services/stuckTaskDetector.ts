@@ -48,8 +48,10 @@ import { SYSTEM_USER_ID } from '@/auth/actor'
 import { createLogger } from '@/util/log'
 
 import {
+  logAlertSummary,
   reconcileLifecycleAlerts,
   STUCK_RULES,
+  summarizeOpenAlerts,
   type LifecycleAlertFinding,
   type LifecycleAlertRow,
   type StuckRule,
@@ -529,12 +531,16 @@ export async function runStuckTaskDetector(
     promotedAlerts: reconciled.promotedAlerts,
     resolvedAlerts: reconciled.resolvedAlerts,
   })
-  if (reconciled.promotedAlerts > 0 || reconciled.openAlerts.some((a) => a.severity === 'error')) {
-    log.error('stuck tasks detected', {
-      open: reconciled.openAlerts.length,
-      errorCount: reconciled.openAlerts.filter((a) => a.severity === 'error').length,
-    })
-  }
+  const statusByTask = new Map(candidates.map((c) => [c.taskId, c.status]))
+  logAlertSummary(
+    log,
+    {
+      actionable: 'stuck tasks detected',
+      benign: 'stuck tasks: historic findings on terminal tasks (benign)',
+    },
+    summarizeOpenAlerts(reconciled.openAlerts, statusByTask),
+    reconciled.promotedAlerts,
+  )
   return { scanned: candidates.length, ...reconciled }
 }
 
