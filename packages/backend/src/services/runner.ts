@@ -50,6 +50,7 @@ import {
   buildRunSandboxCtx,
   getSandboxProvider,
   sandboxActive,
+  sandboxEnforceBlocked,
   wrapSandbox,
   type SandboxCtx,
 } from '@/services/sandbox'
@@ -901,6 +902,35 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // env (PWD fix / OPENCODE_CONFIG_DIR+CONTENT / RFC-029 inventory path /
   // RFC-067 git identity) is assembled by the driver — see
   // ./runtime/opencode/spawn.ts for the byte-for-byte construction.
+  // RFC-205 impl-gate P0-1 (Codex 2026-07-22): enforce + unavailable must FAIL
+  // here — the single spawn decision point every launch/resume/retry/auto-resume
+  // funnels through. The launch-time 409 only covers NEW tasks, so without this an
+  // enforce host silently ran unsandboxed agents on resume / retry / boot
+  // auto-resume. Mark the node failed cleanly (same shape as an unspawnable binary).
+  if (sandboxEnforceBlocked(sandboxCtx)) {
+    const detail = sandboxCtx?.status.detail
+    const errorMessage =
+      `sandbox mode is 'enforce' but the platform sandbox is unavailable` +
+      `${detail != null ? ` (${detail})` : ''}; refusing to run the agent unsandboxed`
+    log.warn('sandbox-enforce-unavailable', { nodeRunId: opts.nodeRunId, errorMessage })
+    plan.cleanup?.()
+    await setNodeRunStatus({
+      db: opts.db,
+      nodeRunId: opts.nodeRunId,
+      to: 'failed',
+      allowedFrom: ['running', 'pending'],
+      reason: 'sandbox-unavailable',
+      extra: { finishedAt: Date.now(), errorMessage },
+    })
+    return {
+      status: 'failed',
+      exitCode: null,
+      outputs: {},
+      tokenUsage: { input: 0, output: 0, cacheCreate: 0, cacheRead: 0, total: 0 },
+      prompt,
+      errorMessage,
+    }
+  }
   const spawnCmd = wrapSandbox(cmd, sandboxCtx)
   const trySpawn = (): Bun.Subprocess<'ignore' | 'pipe', 'pipe', 'pipe'> =>
     Bun.spawn({

@@ -29,6 +29,18 @@ export function sandboxActive(ctx: SandboxCtx | undefined): boolean {
 }
 
 /**
+ * RFC-205 impl-gate P0-1 (Codex 2026-07-22): true when the mode is `enforce` but
+ * the platform sandbox is unavailable — the spawn MUST fail closed instead of
+ * running the agent unsandboxed. The launch-time 409 only guards NEW tasks; every
+ * launch/resume/retry/auto-resume path funnels through the runner spawn, so the
+ * single decision point there calls this to close the resume/retry/auto-resume
+ * bypass. (`warn` + unavailable degrades loudly; `off` never blocks.)
+ */
+export function sandboxEnforceBlocked(ctx: SandboxCtx | undefined): boolean {
+  return ctx !== undefined && ctx.mode === 'enforce' && !ctx.status.available
+}
+
+/**
  * Wrap a final argv in the platform sandbox. Returns a NEW array — the input
  * (plan.cmd) is never mutated (spawnBinaryPath/registry keep reading it).
  */

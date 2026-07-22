@@ -9,7 +9,14 @@ import {
   probeSandboxMechanism,
   resetSandboxStatusForTest,
 } from '../src/services/sandbox/probe'
-import { sandboxActive, wrapSandbox, type SandboxCtx } from '../src/services/sandbox/index'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import {
+  sandboxActive,
+  sandboxEnforceBlocked,
+  wrapSandbox,
+  type SandboxCtx,
+} from '../src/services/sandbox/index'
 
 afterEach(() => resetSandboxStatusForTest())
 
@@ -58,6 +65,44 @@ const CTX_BASE: Omit<SandboxCtx, 'mode' | 'status'> = {
   taskWorktrees: ['/h/.agent-workflow/worktrees/r/t'],
   runDir: '/h/.agent-workflow/runs/t/n',
 }
+
+describe('sandboxEnforceBlocked (RFC-205 P0-1 — enforce fails closed)', () => {
+  const enforceUnavail: SandboxCtx = {
+    ...CTX_BASE,
+    mode: 'enforce',
+    status: { mechanism: null, available: false, detail: 'bwrap missing' },
+  }
+  test('enforce + unavailable → blocked; every other combo → not blocked', () => {
+    expect(sandboxEnforceBlocked(enforceUnavail)).toBe(true)
+    // enforce + available → runs wrapped (not blocked)
+    expect(
+      sandboxEnforceBlocked({
+        ...enforceUnavail,
+        status: { mechanism: 'bwrap', available: true, detail: null },
+      }),
+    ).toBe(false)
+    // warn + unavailable → degrades loudly (not blocked)
+    expect(sandboxEnforceBlocked({ ...enforceUnavail, mode: 'warn' })).toBe(false)
+    // off → never blocks
+    expect(sandboxEnforceBlocked({ ...enforceUnavail, mode: 'off' })).toBe(false)
+    // no ctx (tests / no provider) → not blocked
+    expect(sandboxEnforceBlocked(undefined)).toBe(false)
+  })
+
+  // The runner is the single spawn decision point every launch/resume/retry/
+  // auto-resume funnels through — the check must gate the spawn, BEFORE wrapSandbox.
+  test('runner fails closed on enforce+unavailable before spawning (source lock)', () => {
+    const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'runner.ts'), 'utf8')
+    const blockIdx = src.indexOf('sandboxEnforceBlocked(sandboxCtx)')
+    const wrapIdx = src.indexOf('const spawnCmd = wrapSandbox(cmd, sandboxCtx)')
+    expect(blockIdx).toBeGreaterThan(0)
+    expect(wrapIdx).toBeGreaterThan(blockIdx)
+    // and it returns a failed node run (does not throw out / does not spawn).
+    const slice = src.slice(blockIdx, wrapIdx)
+    expect(slice).toContain("status: 'failed'")
+    expect(slice).toContain('sandbox-unavailable')
+  })
+})
 
 describe('wrapSandbox (spawn-boundary)', () => {
   const cmd = ['opencode', 'run', '--agent', 'x', '--', 'prompt'] as const
