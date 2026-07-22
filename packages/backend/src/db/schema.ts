@@ -626,7 +626,7 @@ export const workgroupMessages = sqliteTable(
     authorMemberId: text('author_member_id'),
     authorUserId: text('author_user_id'),
     kind: text('kind', {
-      enum: ['chat', 'dispatch', 'result', 'delivery', 'decision', 'system'],
+      enum: ['chat', 'dispatch', 'result', 'delivery', 'decision', 'system', 'nudge'],
     }).notNull(),
     bodyMd: text('body_md').notNull(),
     /** JSON string[] of mentioned member ids. */
@@ -640,6 +640,39 @@ export const workgroupMessages = sqliteTable(
     taskIdx: index('idx_wg_msg_task').on(t.taskId, t.id),
   }),
 )
+
+// -----------------------------------------------------------------------------
+// workgroup_task_state — RFC-217 T2 (design §2). Per-task workgroup RUNTIME
+// state, extracted from the untyped `$.gate` / `$.dw` / `$.wgPause` slots that
+// used to hide inside tasks.workgroup_config_json (three write styles, two
+// writers, self-admitted concurrent-clobber risk). One row per workgroup task,
+// created in the same transaction as the task INSERT; migration 0106 backfills
+// stock rows and strips the retired JSON slots.
+//
+// gate_status is a REAL state machine (transition table + CAS live in
+// services/workgroup/state.ts — the single codec; G3 grep-locks every other
+// reader/writer out). 'declared' captures the historically two-write window
+// between the leader's declare and the gate holder opening (design-gate P1).
+// dw_state_json carries the COMPLETE DwState checkpoint (zod-validated,
+// single writer) — phase-only columns would strand awaiting_confirm tasks
+// (design-gate P1: generatedDef / rejectRounds / rejectionComment are load-
+// bearing for confirm / reject / save-as).
+// -----------------------------------------------------------------------------
+export const workgroupTaskState = sqliteTable('workgroup_task_state', {
+  taskId: text('task_id')
+    .primaryKey()
+    .references(() => tasks.id, { onDelete: 'cascade' }),
+  gateStatus: text('gate_status', {
+    enum: ['idle', 'declared', 'awaiting_confirmation', 'approved', 'rejected'],
+  })
+    .notNull()
+    .default('idle'),
+  gateSummary: text('gate_summary'),
+  gateRejectedComment: text('gate_rejected_comment'),
+  pauseReason: text('pause_reason'),
+  dwStateJson: text('dw_state_json'),
+  updatedAt: integer('updated_at').notNull(),
+})
 
 // -----------------------------------------------------------------------------
 // workgroup_member_cursors — RFC-164 PR-2 (design §1.6, 设计门 Finding-3).

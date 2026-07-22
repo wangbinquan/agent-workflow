@@ -11,13 +11,12 @@
 //    - 字段缺省 ⇒ 旧行为逐字不变。
 //
 // ② awaiting_human 成因链（用户实报困惑：wrap-up 停机被「等待回答」文案误导）：
-//    引擎在返回 awaiting_human 前把 outcome.reason 写进 tasks.workgroup_config_json
-//    的 wgPause 槽（json_set 单键原子，不 clobber gate/dw 兄弟键）；房间 API 经
+//    引擎在返回 awaiting_human 前把 outcome.reason 写进 workgroup_task_state.
+//    pause_reason（RFC-217 T2 出 JSON 槽，setPauseReason 单列写）；房间 API 经
 //    resolveRoomPauseReason 输出——读方门槛：仅任务当前停在 awaiting_human 时
-//    非 null，陈值永不外泄（槽因此无需清理）。
+//    非 null，陈值永不外泄（列因此无需清理）。
 
 import { describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { WorkgroupAssignment, WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 import { createInMemoryDb } from '../src/db/client'
@@ -29,7 +28,8 @@ import {
   type WakeItem,
 } from '../src/services/workgroup/wake'
 import { resolveRoomPauseReason } from '../src/routes/workgroupTasks'
-import { writeWgPauseReason } from '../src/services/workgroup/runner'
+import { loadWorkgroupTaskState, setPauseReason } from '../src/services/workgroup/state'
+import { workgroupTaskState } from '../src/db/schema'
 
 // ---------------------------------------------------------------------------
 // fixtures（形状照抄 rfc215-fc-dual-track.test.ts）
@@ -206,34 +206,28 @@ describe('fc 新认领跳过只读成员（2026-07-21 ROLE-MISROUTE 回归）', 
 // ---------------------------------------------------------------------------
 
 describe('resolveRoomPauseReason — 仅 awaiting_human 时外泄，陈值屏蔽', () => {
-  test('awaiting_human + 合法槽 ⇒ reason', () => {
-    expect(
-      resolveRoomPauseReason('awaiting_human', { wgPause: { reason: 'max-rounds-wrapup' } }),
-    ).toBe('max-rounds-wrapup')
+  test('awaiting_human + 有值 ⇒ reason', () => {
+    expect(resolveRoomPauseReason('awaiting_human', 'max-rounds-wrapup')).toBe('max-rounds-wrapup')
   })
 
   test('非 awaiting_human ⇒ 恒 null（陈值屏蔽——running/done/interrupted 全覆盖）', () => {
     for (const st of ['running', 'done', 'failed', 'interrupted', 'awaiting_review']) {
-      expect(resolveRoomPauseReason(st, { wgPause: { reason: 'max-rounds-wrapup' } })).toBeNull()
+      expect(resolveRoomPauseReason(st, 'max-rounds-wrapup')).toBeNull()
     }
   })
 
-  test('槽缺失 / 形状坏 ⇒ null', () => {
-    expect(resolveRoomPauseReason('awaiting_human', {})).toBeNull()
-    expect(resolveRoomPauseReason('awaiting_human', { wgPause: null })).toBeNull()
-    expect(resolveRoomPauseReason('awaiting_human', { wgPause: 'wrapup' })).toBeNull()
-    expect(resolveRoomPauseReason('awaiting_human', { wgPause: ['x'] })).toBeNull()
-    expect(resolveRoomPauseReason('awaiting_human', { wgPause: { reason: '' } })).toBeNull()
-    expect(resolveRoomPauseReason('awaiting_human', { wgPause: { reason: 7 } })).toBeNull()
+  test('列空 / 空串 ⇒ null', () => {
+    expect(resolveRoomPauseReason('awaiting_human', null)).toBeNull()
+    expect(resolveRoomPauseReason('awaiting_human', '')).toBeNull()
   })
 })
 
 // ---------------------------------------------------------------------------
-// ② writeWgPauseReason —— json_set 单键原子：写 reason 不 clobber 兄弟键
+// ② setPauseReason —— workgroup_task_state.pause_reason 单列写（DB 级）
 // ---------------------------------------------------------------------------
 
-describe('writeWgPauseReason — 单键原子更新（DB 级）', () => {
-  test('写入 wgPause 保留 gate/dw 等兄弟键；重复写幂等覆盖；NULL config 起底为 {}', async () => {
+describe('setPauseReason — 状态表单列更新（DB 级）', () => {
+  test('写入/幂等覆盖 pause_reason；gate 列无损；无行时为空操作', async () => {
     const db = createInMemoryDb(new URL('../db/migrations', import.meta.url).pathname)
     const wfId = ulid()
     await db.insert(workflows).values({ id: wfId, name: 'wf-pause', definition: '{}' })
@@ -250,45 +244,30 @@ describe('writeWgPauseReason — 单键原子更新（DB 级）', () => {
       status: 'awaiting_human',
       inputs: '{}',
       startedAt: Date.now(),
-      workgroupConfigJson: JSON.stringify({ gate: { declaredDone: true }, maxRounds: 9 }),
+      workgroupConfigJson: JSON.stringify({ maxRounds: 9 }),
+    })
+    await db.insert(workgroupTaskState).values({
+      taskId,
+      gateStatus: 'declared',
+      gateSummary: 'done-ish',
+      updatedAt: Date.now(),
     })
 
-    await writeWgPauseReason(db, taskId, 'max-rounds-wrapup')
-    let raw = JSON.parse(
-      (await db.select({ c: tasks.workgroupConfigJson }).from(tasks).where(eq(tasks.id, taskId)))[0]
-        ?.c as string,
-    ) as Record<string, unknown>
-    expect(raw.wgPause).toEqual({ reason: 'max-rounds-wrapup' })
-    expect(raw.gate).toEqual({ declaredDone: true }) // 兄弟键无损
-    expect(raw.maxRounds).toBe(9)
+    await setPauseReason(db, taskId, 'max-rounds-wrapup')
+    let st = await loadWorkgroupTaskState(db, taskId)
+    expect(st.pauseReason).toBe('max-rounds-wrapup')
+    expect(st.gateStatus).toBe('declared') // 兄弟列无损
+    expect(st.gateSummary).toBe('done-ish')
 
-    await writeWgPauseReason(db, taskId, 'leader-idle')
-    raw = JSON.parse(
-      (await db.select({ c: tasks.workgroupConfigJson }).from(tasks).where(eq(tasks.id, taskId)))[0]
-        ?.c as string,
-    ) as Record<string, unknown>
-    expect(raw.wgPause).toEqual({ reason: 'leader-idle' })
+    await setPauseReason(db, taskId, 'leader-idle')
+    st = await loadWorkgroupTaskState(db, taskId)
+    expect(st.pauseReason).toBe('leader-idle')
 
-    // NULL config（非工作组任务防御位）：json_set 从 '{}' 起底
+    // 无状态行（防御位）：更新是空操作、读回默认态
     const bareId = ulid()
-    await db.insert(tasks).values({
-      id: bareId,
-      name: 'bare-task',
-      workflowId: wfId,
-      workflowSnapshot: '{}',
-      repoPath: '/tmp/never-read',
-      worktreePath: '/tmp/never-read-wt2',
-      baseBranch: 'main',
-      branch: `agent-workflow/${bareId}`,
-      status: 'awaiting_human',
-      inputs: '{}',
-      startedAt: Date.now(),
-    })
-    await writeWgPauseReason(db, bareId, 'engine-stall')
-    const bare = JSON.parse(
-      (await db.select({ c: tasks.workgroupConfigJson }).from(tasks).where(eq(tasks.id, bareId)))[0]
-        ?.c as string,
-    ) as Record<string, unknown>
-    expect(bare.wgPause).toEqual({ reason: 'engine-stall' })
+    await setPauseReason(db, bareId, 'engine-stall')
+    const bare = await loadWorkgroupTaskState(db, bareId)
+    expect(bare.pauseReason).toBeNull()
+    expect(bare.gateStatus).toBe('idle')
   })
 })

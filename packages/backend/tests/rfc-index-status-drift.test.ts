@@ -51,9 +51,14 @@ describe('RFC 索引状态漂移守卫', () => {
   // 硬信号 1：schema 都上库了，不可能还是 Draft。
   // 校准：当时陈旧的 RFC-180 有 `0093_rfc180_workgroup_autonomous.sql` → 会被抓到；
   // 当时在途的 190/191/192 没有 migration → 不误报。
-  test('已合并 migration 的 RFC，状态不得仍是 Draft/In Progress', () => {
+  test('已合并 migration 的 RFC，状态不得仍是 Draft', () => {
+    // 2026-07-22 校准（RFC-217 首例分期 RFC）：migration 信号只抓 **Draft**。
+    // In Progress + 已上库 migration 不是漂移——分期交付的 RFC（T2 先落表、
+    // T5/T8 还在路上）状态格「仍在做」就是准确回填；本文件顶注也明确保护
+    // 在途 RFC 不被误伤。整改文案从立守卫第一天就写着「或 In Progress
+    //（若仍在做）」，过滤器此前与它相悖，以文案为准。
     const drift: string[] = []
-    for (const n of OPEN) {
+    for (const n of [...STATUSES].filter(([, s]) => s === 'Draft').map(([n]) => n)) {
       // 用 (?![0-9]) 而非 \b：migration 文件名是 `0093_rfc180_workgroup_autonomous.sql`，
       // 而 `_` 是正则的 word 字符，`rfc180\b` 在 `rfc180_` 处**不成立**——这条规则曾因此
       // 静默失效（负向验证时 A/B 都响了只有它不响，才暴露出来）。

@@ -113,6 +113,11 @@ export const WORKGROUP_MESSAGE_KINDS = [
   'delivery', // human member delivery
   'decision', // leader decision (done summary)
   'system', // round markers, config changes, gate events, warnings
+  // RFC-217 D3/§7 — leader idle-nudge marker. Previously a 'system' message
+  // whose EXACT bodyMd equalled WG_NUDGE_BODY doubled as the idle-round
+  // counter (string-equality protocol); a copy tweak would silently reset the
+  // leader-idle park. The counter now keys on this kind; the body is free text.
+  'nudge',
 ] as const
 export const WorkgroupMessageKindSchema = z.enum(WORKGROUP_MESSAGE_KINDS)
 export type WorkgroupMessageKind = z.infer<typeof WorkgroupMessageKindSchema>

@@ -23,13 +23,13 @@ import {
   DAEMON_RESTART_ERROR_SUMMARY,
   DEFAULT_PROTOCOL_RETRY_BUDGET,
   initialDwState,
-  parseDwState,
   WorkflowDefinitionSchema,
   type DwState,
 } from '@agent-workflow/shared'
 import { buildActor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
+import { nodeRuns, tasks, workflows, workgroupTaskState } from '../src/db/schema'
+import { loadWorkgroupTaskState } from '../src/services/workgroup/state'
 import { createAgent } from '../src/services/agent'
 import { autoResumeInterruptedTasks } from '../src/services/autoResume'
 import { DW_GATE_CAUSE, DW_GENERATE_CAUSE } from '../src/services/dynamicWorkflowRunner'
@@ -151,8 +151,9 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
 
       const afterGen = (await db.select().from(tasks).where(eq(tasks.id, task.id)))[0]
       expect(afterGen?.status).toBe('awaiting_review')
-      const rawGen = JSON.parse(afterGen?.workgroupConfigJson ?? '{}') as Record<string, unknown>
-      const dwGen = parseDwState(rawGen.dw)
+      // RFC-217 T2 — the dw checkpoint rides workgroup_task_state now.
+      const stateGen = await loadWorkgroupTaskState(db, task.id)
+      const dwGen = stateGen.dwState
       expect(dwGen?.phase).toBe('awaiting_confirm')
       const generatedDef = WorkflowDefinitionSchema.parse(dwGen?.generatedDef)
       expect(generatedDef.nodes.map((n) => n.id)).toEqual(['plan-step'])
@@ -192,7 +193,7 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
             },
             {
               workflowSnapshot: JSON.stringify(generatedDef),
-              workgroupConfigJson: JSON.stringify({ ...rawGen, dw: nextDw }),
+              dw: nextDw,
             },
           ),
         ),
@@ -201,9 +202,7 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
       const final = (await db.select().from(tasks).where(eq(tasks.id, task.id)))[0]
       expect(final?.status).toBe('done')
       expect(JSON.parse(final?.workflowSnapshot ?? '{}')).toEqual(generatedDef)
-      const finalDw = parseDwState(
-        (JSON.parse(final?.workgroupConfigJson ?? '{}') as Record<string, unknown>).dw,
-      )
+      const finalDw = (await loadWorkgroupTaskState(db, task.id)).dwState
       expect(finalDw?.phase).toBe('executing')
       const planRuns = await db
         .select()
@@ -297,8 +296,15 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
               roleDesc: '',
             },
           ],
-          dw: { ...initialDwState(), phase: 'executing' },
         }),
+      })
+      // RFC-217 T2 — the dispatch oracle reads the phase from
+      // workgroup_task_state; the fixture seeds it like startTaskImpl would.
+      await db.insert(workgroupTaskState).values({
+        taskId,
+        gateStatus: 'idle',
+        dwStateJson: JSON.stringify({ ...initialDwState(), phase: 'executing' }),
+        updatedAt: Date.now(),
       })
 
       const res = await withActiveTaskDeadline(() =>

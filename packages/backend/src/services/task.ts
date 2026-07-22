@@ -15,6 +15,7 @@ import type {
   TaskRepo,
   TaskSummary,
 } from '@agent-workflow/shared'
+import type { DwState } from '@agent-workflow/shared'
 import {
   CommitPushMetaSchema,
   NODE_KIND_BEHAVIORS,
@@ -41,6 +42,7 @@ import { rm } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
+import { insertWorkgroupTaskStateTx, setDwStateTx } from '@/services/workgroup/state'
 import {
   agents,
   cachedRepos,
@@ -263,7 +265,7 @@ export interface StartTaskDeps {
    * an FK anchor; the real per-launch structure is synthesized — design §2/§3).
    * Stamped atomically with the task INSERT like scheduledTaskId.
    */
-  workgroupLaunch?: { workgroupId: string; configJson: string; snapshotJson: string }
+  workgroupLaunch?: { workgroupId: string; configJson: string; snapshotJson: string; dw?: DwState }
   /**
    * RFC-165 §4: single-agent launch payload. `snapshotJson` (the synthesized
    * `__agent_host__` snapshot) replaces the FK-anchor row's stub definition
@@ -1731,6 +1733,14 @@ async function startTaskImpl(
           .run()
       }
 
+      // RFC-217 T2 — workgroup runtime state row, atomically with the task
+      // row. gate starts 'idle'; a dynamic_workflow launch seeds the complete
+      // DwState checkpoint (phase 'generating') here instead of smuggling it
+      // inside workgroup_config_json.
+      if (deps.workgroupLaunch) {
+        insertWorkgroupTaskStateTx(tx, taskId, deps.workgroupLaunch.dw ?? null)
+      }
+
       // RFC-067 NOTE: an earlier draft of this RFC also wrote `user.name` /
       // `user.email` into the worktree's local `.git/config` as a defense-in-
       // depth fallback for git invocations that bypass the runner's spawn env.
@@ -2135,16 +2145,23 @@ export async function resumeDynamicWorkflowExecution(
   db: DbClient,
   id: string,
   deps: StartTaskDeps,
-  swap: { workflowSnapshot?: string; workgroupConfigJson: string },
+  swap: { workflowSnapshot?: string; dw: DwState },
 ): Promise<Task> {
   return resumeKick(db, id, deps, {
     event: { kind: 'resume' },
-    extra: swap,
+    ...(swap.workflowSnapshot !== undefined
+      ? { extra: { workflowSnapshot: swap.workflowSnapshot } }
+      : {}),
     selectRollback: (runs) => selectResumeRollbackTargets(runs),
     reason: 'resumeTask',
     conflictCode: 'task-not-resumable',
     verb: 'resume',
     worktreePreflight: true,
+    // RFC-217 T2 (design-gate P1) — the phase flip MUST ride the resume
+    // ownership CAS: a lost CAS / failed worktree preflight leaves the gate
+    // open and the decision retryable; a standalone phase write would strand
+    // the task in 'executing'/'generating' while still awaiting_review.
+    onClaimTx: (tx) => setDwStateTx(tx, id, swap.dw),
   })
 }
 

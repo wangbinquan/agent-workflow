@@ -117,28 +117,6 @@ export function workgroupModeOf(configJson: string | null | undefined): Workgrou
 }
 
 /**
- * The dispatch oracle applied straight to a task row's config JSON (what the
- * scheduler reads at runTask entry). An unreadable config or unknown mode
- * routes to the turn engine, which fails with its own precise "config missing
- * or invalid" diagnostics (the pre-RFC-167 behavior for corrupt config).
- */
-export function deriveWorkgroupDispatchFromConfig(
-  configJson: string | null | undefined,
-): WorkgroupDispatch {
-  const mode = workgroupModeOf(configJson)
-  if (mode === null) return 'turn-engine'
-  if (mode !== 'dynamic_workflow') return 'turn-engine'
-  let dwPhase: DynamicWorkflowPhase | null = null
-  try {
-    const raw = JSON.parse(configJson as string) as Record<string, unknown>
-    dwPhase = parseDwState(raw.dw)?.phase ?? null
-  } catch {
-    dwPhase = null
-  }
-  return deriveWorkgroupDispatch(mode, dwPhase)
-}
-
-/**
  * True when a task row belongs to a TURN-ENGINE workgroup (leader_worker /
  * free_collab) — the modes whose recovery is RFC-164 engine re-entry, not
  * generic resume/retry/repair (those guards refuse them). dynamic_workflow

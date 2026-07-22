@@ -33,7 +33,6 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import {
   initialDwState,
-  parseDwState,
   WorkflowDefinitionSchema,
   type DwState,
   type WorkgroupRuntimeConfig,
@@ -41,7 +40,8 @@ import {
 import { buildActor } from '../src/auth/actor'
 import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { nodeRuns, runtimes, tasks, workflows } from '../src/db/schema'
+import { nodeRuns, runtimes, tasks, workflows, workgroupTaskState } from '../src/db/schema'
+import { loadWorkgroupTaskState } from '../src/services/workgroup/state'
 import { createApp } from '../src/server'
 import { createAgent } from '../src/services/agent'
 import {
@@ -186,8 +186,16 @@ async function seedDynamicTask(
     inputs: '{}',
     startedAt: Date.now(),
     workgroupId: config.workgroupId,
-    workgroupConfigJson: JSON.stringify({ ...config, dw: opts.dw }),
+    workgroupConfigJson: JSON.stringify(config),
     ...(opts.ownerUserId !== undefined ? { ownerUserId: opts.ownerUserId } : {}),
+  })
+  // RFC-217 T2 — the dw checkpoint rides workgroup_task_state (startTaskImpl
+  // seeds it in production; the fixture mirrors that).
+  await db.insert(workgroupTaskState).values({
+    taskId,
+    gateStatus: 'idle',
+    dwStateJson: JSON.stringify(opts.dw),
+    updatedAt: Date.now(),
   })
   return { taskId }
 }
@@ -231,9 +239,7 @@ const goodResult = (gen: unknown = GOOD_GEN): WorkgroupHostRunResult => ({
 })
 
 async function readDw(db: DbClient, taskId: string): Promise<DwState | null> {
-  const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
-  const raw = JSON.parse(row?.workgroupConfigJson ?? '{}') as Record<string, unknown>
-  return parseDwState(raw.dw)
+  return (await loadWorkgroupTaskState(db, taskId)).dwState
 }
 
 // ---------------------------------------------------------------------------
@@ -442,7 +448,7 @@ describe('RFC-167 engine — generation pass', () => {
     const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     const cfg = JSON.parse(row?.workgroupConfigJson ?? '{}') as Record<string, unknown>
     expect(cfg.probe).toBe('keep-me') // the concurrent edit was NOT stomped
-    expect(parseDwState(cfg.dw)?.phase).toBe('awaiting_confirm') // dw still landed
+    expect((await readDw(db, taskId))?.phase).toBe('awaiting_confirm') // dw still landed
     expect(requests).toHaveLength(1)
   })
 
@@ -604,10 +610,9 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
       const snapshot = WorkflowDefinitionSchema.parse(JSON.parse(row?.workflowSnapshot ?? '{}'))
       expect(snapshot.nodes).toHaveLength(1)
       expect(snapshot.nodes[0]?.id).toBe(DW_ORCHESTRATOR_NODE_ID)
-      const raw = JSON.parse(row?.workgroupConfigJson ?? '{}') as Record<string, unknown>
       // The mock orchestrator's proposal proves runTask dispatched to the
       // GENERATE engine (not the turn engine or runScope).
-      expect(parseDwState(raw.dw)?.phase).toBe('awaiting_confirm')
+      expect((await loadWorkgroupTaskState(db, task.id)).dwState?.phase).toBe('awaiting_confirm')
       expect(row?.status).toBe('awaiting_review')
     } finally {
       if (previousOutputs === undefined) delete process.env.MOCK_OPENCODE_OUTPUTS
@@ -657,7 +662,11 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
       'utf8',
     )
     expect(src).toContain('task.workgroupId !== null') // RFC-164 lock stays
-    expect(src).toContain('deriveWorkgroupDispatchFromConfig(task.workgroupConfigJson)')
+    // RFC-217 T2: mode still comes from the frozen config; the dw phase comes
+    // from workgroup_task_state (the FromConfig oracle over raw JSON retired).
+    expect(src).toContain('deriveWorkgroupDispatch(')
+    expect(src).toContain('workgroupModeOf(task.workgroupConfigJson)')
+    expect(src).toContain('loadWorkgroupTaskState(db, taskId)')
     expect(src).toContain("wgDispatch === 'dw-generate'")
     expect(src).toContain('runDynamicWorkflowGenerate({')
     expect(src).toContain("'dw-phase-invariant'")
@@ -781,8 +790,7 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
 
       const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
       expect(JSON.parse(row?.workflowSnapshot ?? '{}')).toEqual(POOL_DEF)
-      const raw = JSON.parse(row?.workgroupConfigJson ?? '{}') as Record<string, unknown>
-      expect(parseDwState(raw.dw)?.phase).toBe('executing')
+      expect((await loadWorkgroupTaskState(db, taskId)).dwState?.phase).toBe('executing')
       const holders = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
         (r) => r.rerunCause === DW_GATE_CAUSE,
       )
@@ -841,7 +849,7 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
       const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
       const cfg = JSON.parse(row?.workgroupConfigJson ?? '{}') as Record<string, unknown>
       expect(cfg.probe).toBe('keep-me') // fresh compose kept the edit
-      expect(parseDwState(cfg.dw)?.phase).toBe('executing')
+      expect((await loadWorkgroupTaskState(db, taskId)).dwState?.phase).toBe('executing')
       await settleTask(taskId)
     } finally {
       rmSync(wt, { recursive: true, force: true })
@@ -1049,14 +1057,11 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
       status: 'running',
       ownerUserId: ownerId,
     })
-    // strip the dw slot the seed helper stamps — lw tasks never carry one
-    const row = (await db.select().from(tasks).where(eq(tasks.id, lwTask)))[0]
-    const cfg = JSON.parse(row?.workgroupConfigJson ?? '{}') as Record<string, unknown>
-    delete cfg.dw
+    // strip the dw checkpoint the seed helper stamps — lw tasks never carry one
     await db
-      .update(tasks)
-      .set({ workgroupConfigJson: JSON.stringify(cfg) })
-      .where(eq(tasks.id, lwTask))
+      .update(workgroupTaskState)
+      .set({ dwStateJson: null })
+      .where(eq(workgroupTaskState.taskId, lwTask))
     const lwRes = await req(`/api/workgroup-tasks/${lwTask}/room`)
     expect(lwRes.status).toBe(200)
     expect(((await lwRes.json()) as { dw: DwState | null }).dw).toBeNull()

@@ -215,7 +215,9 @@ export async function startWorkgroupTask(
   const snapshot = isDynamic
     ? buildDynamicWorkflowGenerateSnapshot()
     : buildWorkgroupHostSnapshot(config)
-  const configJson = JSON.stringify(isDynamic ? { ...config, dw: initialDwState() } : config)
+  // RFC-217 T2 — the config column is a PURE frozen config again; the dw
+  // checkpoint seeds workgroup_task_state via startTaskImpl (same tx).
+  const configJson = JSON.stringify(config)
 
   // Compose the full StartTask candidate and validate through StartTaskSchema
   // so repo-source cross-field rules stay single-sourced (schemas/task.ts).
@@ -284,6 +286,7 @@ export async function startWorkgroupTask(
       workgroupId: group.id,
       configJson,
       snapshotJson: JSON.stringify(snapshot),
+      ...(isDynamic ? { dw: initialDwState() } : {}),
     },
   })
 }

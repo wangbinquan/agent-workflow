@@ -67,3 +67,56 @@ describe('rfc217 G1 — no-circular guard is real', () => {
     expect(offenders).toEqual([])
   })
 })
+
+describe('rfc217 G2/G3 — retired runtime-state slots stay retired', () => {
+  const SRC = 'packages/backend/src'
+  const walkTs = (dir: string, out: string[] = []): string[] => {
+    for (const e of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
+      const rel = `${dir}/${e.name}`
+      if (e.isDirectory()) walkTs(rel, out)
+      else if (e.name.endsWith('.ts')) out.push(rel)
+    }
+    return out
+  }
+
+  test('G3: no backend code touches the retired $.gate / $.dw / $.wgPause slots', () => {
+    // migration SQL lives outside src/ and is implicitly allowlisted. Comments
+    // may reference history; these patterns only match CODE shapes.
+    const banned = [
+      "'$.gate'",
+      "'$.dw'",
+      "'$.wgPause'",
+      'raw.gate',
+      'rawConfig.gate',
+      'raw.dw',
+      'rawConfig.dw',
+      'raw.wgPause',
+      'json_set(${tasks.workgroupConfigJson}',
+    ]
+    const offenders: string[] = []
+    for (const f of walkTs(SRC)) {
+      const src = read(f)
+      for (const b of banned) if (src.includes(b)) offenders.push(`${f} ⇒ ${b}`)
+    }
+    expect(offenders).toEqual([])
+  })
+
+  test('G2 (T2 slice): workgroupConfigJson UPDATE writes only at the whitelisted sites', () => {
+    // Whitelist until T4 moves the config PUT into taskActions:
+    //   - routes/workgroupTasks.ts — the member/switch edit endpoint
+    // (task.ts only INSERTs the frozen config at launch; everything else must
+    // go through services/workgroup/state.ts, which owns no config writes.)
+    const allow = new Set(['packages/backend/src/routes/workgroupTasks.ts'])
+    const offenders: string[] = []
+    for (const f of walkTs(SRC)) {
+      const src = read(f)
+      if (src.includes('.set({ workgroupConfigJson') && !allow.has(f)) offenders.push(f)
+    }
+    expect(offenders).toEqual([])
+    // and the whitelisted file carries exactly ONE such write (config PUT)
+    const puts =
+      read('packages/backend/src/routes/workgroupTasks.ts').split('.set({ workgroupConfigJson')
+        .length - 1
+    expect(puts).toBe(1)
+  })
+})

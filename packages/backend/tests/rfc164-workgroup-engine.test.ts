@@ -57,6 +57,7 @@ import {
   type WorkgroupHostRunRequest,
   type WorkgroupHostRunResult,
 } from '../src/services/workgroup/runner'
+import { gateViewOf, loadWorkgroupTaskState } from '../src/services/workgroup/state'
 import { createLogger } from '../src/util/log'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -690,13 +691,12 @@ describe('RFC-164 engine — lw round orchestration', () => {
     )
     expect(gateRuns).toHaveLength(1)
     expect(gateRuns[0]?.status).toBe('awaiting_review')
-    // gate state persisted on the task's config copy
-    const taskRow = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
-    const raw = JSON.parse(taskRow?.workgroupConfigJson ?? '{}') as {
-      gate?: { awaitingConfirmation?: boolean; declaredDone?: boolean }
-    }
-    expect(raw.gate?.awaitingConfirmation).toBe(true)
-    expect(raw.gate?.declaredDone).toBe(true)
+    // RFC-217 T2 — gate state persisted in workgroup_task_state (the config
+    // column no longer carries runtime slots).
+    const st = await loadWorkgroupTaskState(db, taskId)
+    expect(st.gateStatus).toBe('awaiting_confirmation')
+    expect(gateViewOf(st).awaitingConfirmation).toBe(true)
+    expect(gateViewOf(st).declaredDone).toBe(true)
   })
 
   test('prompt isolation (design §11): human user ids never reach any prompt', async () => {

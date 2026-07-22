@@ -80,7 +80,11 @@ function wakeInput(over: Partial<WakeInput> = {}): WakeInput {
   }
 }
 
-function nudgeMsg(id: string, bodyMd = WG_NUDGE_BODY): WorkgroupMessage {
+function nudgeMsg(
+  id: string,
+  bodyMd = WG_NUDGE_BODY,
+  kind: WorkgroupMessage['kind'] = 'nudge',
+): WorkgroupMessage {
   return {
     id,
     taskId: 't',
@@ -88,7 +92,7 @@ function nudgeMsg(id: string, bodyMd = WG_NUDGE_BODY): WorkgroupMessage {
     authorKind: 'system',
     authorMemberId: null,
     authorUserId: null,
-    kind: 'chat',
+    kind,
     bodyMd,
     mentionMemberIds: [],
     assignmentId: null,
@@ -225,7 +229,9 @@ describe('RFC-207 engine — leader-idle auto-nudge (now unconditional)', () => 
   test('a non-nudge message after nudges resets the count (progress)', () => {
     const input = wakeInput({
       config: cfg(),
-      messages: [nudgeMsg('n0'), nudgeMsg('n1'), nudgeMsg('n2', 'real work dispatched')],
+      // RFC-217 T2 — the counter keys on kind, so「进展」以非 nudge kind 表达
+      // （真实进展消息是 chat/dispatch/result，从不是 nudge）。
+      messages: [nudgeMsg('n0'), nudgeMsg('n1'), nudgeMsg('n2', 'real work dispatched', 'chat')],
     })
     expect(decideWorkgroupOutcome(input, EMPTY_WAKE)).toEqual({
       kind: 'leader-nudge',

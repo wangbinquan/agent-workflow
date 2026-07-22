@@ -19,7 +19,6 @@ import {
   CreateWorkgroupSchema,
   DW_PHASES,
   deriveWorkgroupDispatch,
-  deriveWorkgroupDispatchFromConfig,
   initialDwState,
   isTurnEngineWorkgroupTask,
   parseDwState,
@@ -176,28 +175,16 @@ describe('deriveWorkgroupDispatch — single dispatch oracle (design §3)', () =
     expect(workgroupModeOf(undefined)).toBeNull()
   })
 
-  test('deriveWorkgroupDispatchFromConfig — the runTask-entry oracle over raw JSON', () => {
-    expect(
-      deriveWorkgroupDispatchFromConfig(
-        JSON.stringify({ mode: 'dynamic_workflow', dw: { phase: 'executing' } }),
-      ),
-    ).toBe('dw-execute')
-    expect(
-      deriveWorkgroupDispatchFromConfig(
-        JSON.stringify({ mode: 'dynamic_workflow', dw: { phase: 'generating' } }),
-      ),
-    ).toBe('dw-generate')
-    // missing dw slot / corrupt dw → generate (fail-closed toward the engine
-    // that cannot corrupt a worktree)
-    expect(deriveWorkgroupDispatchFromConfig(JSON.stringify({ mode: 'dynamic_workflow' }))).toBe(
-      'dw-generate',
-    )
-    expect(deriveWorkgroupDispatchFromConfig(JSON.stringify({ mode: 'leader_worker' }))).toBe(
-      'turn-engine',
-    )
-    // corrupt / missing config → turn engine (its loader reports precisely)
-    expect(deriveWorkgroupDispatchFromConfig('not json')).toBe('turn-engine')
-    expect(deriveWorkgroupDispatchFromConfig(null)).toBe('turn-engine')
+  test('deriveWorkgroupDispatch — mode × phase dispatch matrix (RFC-217: phase now rides workgroup_task_state)', () => {
+    expect(deriveWorkgroupDispatch('dynamic_workflow', 'executing')).toBe('dw-execute')
+    expect(deriveWorkgroupDispatch('dynamic_workflow', 'generating')).toBe('dw-generate')
+    expect(deriveWorkgroupDispatch('dynamic_workflow', 'awaiting_confirm')).toBe('dw-generate')
+    expect(deriveWorkgroupDispatch('dynamic_workflow', 'rejected')).toBe('dw-generate')
+    // missing phase → generate (fail-closed toward the engine that cannot
+    // corrupt a worktree)
+    expect(deriveWorkgroupDispatch('dynamic_workflow', null)).toBe('dw-generate')
+    expect(deriveWorkgroupDispatch('leader_worker', null)).toBe('turn-engine')
+    expect(deriveWorkgroupDispatch('free_collab', 'executing')).toBe('turn-engine')
   })
 
   test('isTurnEngineWorkgroupTask — the generic-recovery guard discriminator (Codex P1)', () => {

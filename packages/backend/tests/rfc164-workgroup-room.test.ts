@@ -29,6 +29,12 @@ import {
   workgroupAssignments,
   workgroupMessages,
 } from '../src/db/schema'
+import {
+  casGateStatus,
+  ensureWorkgroupTaskStateRow,
+  gateViewOf,
+  loadWorkgroupTaskState,
+} from '../src/services/workgroup/state'
 import { createApp } from '../src/server'
 import { createAgent } from '../src/services/agent'
 import { createUser } from '../src/services/users'
@@ -552,14 +558,12 @@ describe('RFC-164 room — PR-5 surfaces', () => {
   })
 
   async function openGate(): Promise<void> {
-    const raw = JSON.parse(
-      (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.workgroupConfigJson ?? '{}',
-    ) as Record<string, unknown>
-    raw.gate = { declaredDone: true, awaitingConfirmation: true, rejected: false, approved: false }
-    await db
-      .update(tasks)
-      .set({ workgroupConfigJson: JSON.stringify(raw), status: 'awaiting_review' })
-      .where(eq(tasks.id, taskId))
+    // RFC-217 T2 — gate state rides workgroup_task_state; the fixture walks
+    // the real machine (idle→declared→awaiting_confirmation).
+    await ensureWorkgroupTaskStateRow(db, taskId)
+    await casGateStatus(db, taskId, { from: ['idle', 'rejected'], to: 'declared' })
+    await casGateStatus(db, taskId, { from: ['declared'], to: 'awaiting_confirmation' })
+    await db.update(tasks).set({ status: 'awaiting_review' }).where(eq(tasks.id, taskId))
     await db.insert(nodeRuns).values({
       id: ulid(),
       taskId,
@@ -587,11 +591,9 @@ describe('RFC-164 room — PR-5 surfaces', () => {
       body: JSON.stringify({ decision: 'approve' }),
     })
     expect(res.status).toBe(200)
-    const raw = JSON.parse(
-      (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.workgroupConfigJson ?? '{}',
-    ) as { gate: { approved: boolean; awaitingConfirmation: boolean } }
-    expect(raw.gate.approved).toBe(true)
-    expect(raw.gate.awaitingConfirmation).toBe(false)
+    const gate = gateViewOf(await loadWorkgroupTaskState(db, taskId))
+    expect(gate.approved).toBe(true)
+    expect(gate.awaitingConfirmation).toBe(false)
     const holders = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
       (r) => r.rerunCause === 'wg-gate',
     )
@@ -614,12 +616,10 @@ describe('RFC-164 room — PR-5 surfaces', () => {
       body: JSON.stringify({ decision: 'reject', comment: '测试没覆盖并发场景' }),
     })
     expect(res.status).toBe(200)
-    const raw = JSON.parse(
-      (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.workgroupConfigJson ?? '{}',
-    ) as { gate: { rejected: boolean; declaredDone: boolean; rejectedComment: string } }
-    expect(raw.gate.rejected).toBe(true)
-    expect(raw.gate.declaredDone).toBe(false)
-    expect(raw.gate.rejectedComment).toBe('测试没覆盖并发场景')
+    const gate = gateViewOf(await loadWorkgroupTaskState(db, taskId))
+    expect(gate.rejected).toBe(true)
+    expect(gate.declaredDone).toBe(false)
+    expect(gate.rejectedComment).toBe('测试没覆盖并发场景')
   })
 
   test('上线前加固：confirm 恢复失败时 gate、holder 与消息全部保持可重试', async () => {
@@ -639,12 +639,10 @@ describe('RFC-164 room — PR-5 surfaces', () => {
     expect(res.status).toBe(410)
 
     const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
-    const raw = JSON.parse(task?.workgroupConfigJson ?? '{}') as {
-      gate: { approved: boolean; awaitingConfirmation: boolean }
-    }
+    const gate = gateViewOf(await loadWorkgroupTaskState(db, taskId))
     expect(task?.status).toBe('awaiting_review')
-    expect(raw.gate.approved).toBe(false)
-    expect(raw.gate.awaitingConfirmation).toBe(true)
+    expect(gate.approved).toBe(false)
+    expect(gate.awaitingConfirmation).toBe(true)
     const holders = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
       (r) => r.rerunCause === 'wg-gate',
     )

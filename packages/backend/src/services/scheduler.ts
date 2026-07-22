@@ -210,9 +210,14 @@ import {
   type WorkgroupHostRunRequest,
   type WorkgroupHostRunResult,
 } from '@/services/workgroup/runner'
+import { loadWorkgroupTaskState } from '@/services/workgroup/state'
 import { runDynamicWorkflowGenerate } from '@/services/dynamicWorkflowRunner'
 import { DW_ORCHESTRATOR_NODE_ID } from '@/services/orchestratorAgent'
-import { deriveWorkgroupDispatchFromConfig, type WorkgroupDispatch } from '@agent-workflow/shared'
+import {
+  deriveWorkgroupDispatch,
+  workgroupModeOf,
+  type WorkgroupDispatch,
+} from '@agent-workflow/shared'
 // RFC-210 replay: submodule topology read-back + the fail-closed gate around it.
 import { IsoSubmodulesSchema } from '@agent-workflow/shared'
 import { existsSync } from 'node:fs'
@@ -568,12 +573,19 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
     // DAG frontier (design §4). The host snapshot's nodes exist only as mint
     // anchors + clarify wiring; runScope/deriveFrontier must not see them.
     // RFC-167: dynamic_workflow workgroups are the exception — their dispatch
-    // follows dw.phase (deriveWorkgroupDispatchFromConfig, the shared single
+    // follows the dw phase (deriveWorkgroupDispatch, the shared single
     // oracle): the GENERATE engine until the human-confirmed DAG is swapped
     // into the snapshot (phase 'executing'), after which runScope executes it
-    // like any ordinary workflow task.
+    // like any ordinary workflow task. RFC-217 T2: the phase lives in
+    // workgroup_task_state (an unknown mode still routes to the turn engine,
+    // which fails with its own precise config diagnostics).
     const wgDispatch: WorkgroupDispatch | null =
-      task.workgroupId !== null ? deriveWorkgroupDispatchFromConfig(task.workgroupConfigJson) : null
+      task.workgroupId !== null
+        ? deriveWorkgroupDispatch(
+            workgroupModeOf(task.workgroupConfigJson) ?? 'leader_worker',
+            (await loadWorkgroupTaskState(db, taskId)).dwState?.phase ?? null,
+          )
+        : null
     if (
       wgDispatch === 'dw-execute' &&
       definition.nodes.some((n) => n.id === DW_ORCHESTRATOR_NODE_ID)

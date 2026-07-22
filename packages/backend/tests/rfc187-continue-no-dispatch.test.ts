@@ -72,7 +72,7 @@ const nudge = (n: number): WorkgroupMessage[] =>
     authorKind: 'system' as const,
     authorMemberId: null,
     authorUserId: null,
-    kind: 'chat' as const,
+    kind: 'nudge' as const,
     bodyMd: WG_NUDGE_BODY,
     mentionMemberIds: [],
     assignmentId: null,

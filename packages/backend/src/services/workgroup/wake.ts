@@ -121,9 +121,10 @@ export function hasSalvageableWork(assignments: readonly WorkgroupAssignment[]):
 }
 
 /**
- * RFC-180 — the auto-nudge an「全自动」leader gets on an idle round (posted as a
- * system chat directed at the leader). Identifying nudges by this exact body is
- * the single source both the poster (runner) and the counter (below) share.
+ * RFC-180 — the auto-nudge an idle leader gets (posted as a system message
+ * directed at the leader). RFC-217 T2: nudges are identified by the dedicated
+ * message kind 'nudge' (migration 0106 stamped historical rows); the body is
+ * display text only — free to reword without resetting the idle counter.
  */
 export const WG_NUDGE_BODY =
   'Autonomous mode: you ended a round without dispatching work or declaring done. If the goal is complete, emit wg_decision done; otherwise dispatch the next assignment(s) or say what is blocking.'
@@ -133,7 +134,7 @@ function countTrailingNudges(messages: readonly WorkgroupMessage[]): number {
   let n = 0
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i] as WorkgroupMessage
-    if (m.authorKind === 'system' && m.bodyMd === WG_NUDGE_BODY) n++
+    if (m.kind === 'nudge') n++
     else break
   }
   return n

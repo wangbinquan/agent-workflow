@@ -34,6 +34,7 @@ import {
   workgroupAssignments,
   workgroupMessages,
 } from '../src/db/schema'
+import { gateViewOf, loadWorkgroupTaskState } from '../src/services/workgroup/state'
 import { createAgent } from '../src/services/agent'
 import { renderWgProtocolBlock } from '../src/services/workgroup/context'
 import {
@@ -729,12 +730,12 @@ describe('RFC-185 T6 — engine hard guarantees (Codex P1/P2)', () => {
         .from(tasks)
         .where(eq(tasks.id, taskId))
     )[0]
-    const final = JSON.parse(row?.workgroupConfigJson ?? '{}') as {
-      fanOut?: boolean
-      gate?: { declaredDone?: boolean }
-    }
-    // the gate landed AND the concurrent toggle survived
-    expect(final.gate?.declaredDone).toBe(true)
+    const final = JSON.parse(row?.workgroupConfigJson ?? '{}') as { fanOut?: boolean }
+    // RFC-217 T2 — the gate landed in workgroup_task_state AND the concurrent
+    // config toggle survived untouched (separate tables make the old
+    // reload-and-merge clobber structurally impossible; this test keeps the
+    // invariant locked from the caller's viewpoint).
+    expect(gateViewOf(await loadWorkgroupTaskState(db, taskId)).declaredDone).toBe(true)
     expect(final.fanOut).toBe(true)
   })
 })

@@ -15,7 +15,6 @@
 
 import type { DwState, WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 import {
-  parseDwState,
   WORKGROUP_MAX_ROUNDS_LIMIT,
   WorkflowDefinitionSchema,
   WorkflowNameSchema,
@@ -39,6 +38,7 @@ import {
   workgroupMemberCursors,
   taskNodeClarifyDirectives,
   workgroupMessages,
+  workgroupTaskState,
 } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
 import { DW_GATE_CAUSE, DW_MAX_REJECT_ROUNDS } from '@/services/dynamicWorkflowRunner'
@@ -62,6 +62,13 @@ import {
 } from '@/services/workgroup/lifecycle'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '@/services/workgroup/constants'
+import {
+  casGateStatusTx,
+  gateViewOf,
+  loadWorkgroupTaskState,
+  setDwState,
+  type WorkgroupTaskState,
+} from '@/services/workgroup/state'
 import { buildRoomMessageRow } from '@/services/workgroup/messages'
 import { deriveMemberCurrentRuns, deriveWorkgroupRunHistory } from '@/services/workgroup/room'
 import {
@@ -165,19 +172,16 @@ export function isWorkgroupKickResumable(status: string | undefined): boolean {
 
 /**
  * 2026-07-21 —— 房间响应的 `pauseReason`：任务当前停在 awaiting_human 时读
- * `wgPause` 槽（引擎在返回 awaiting_human 前写入），否则恒 null（读方门槛，
- * 见 workgroupRunner.writeWgPauseReason 的注释）。纯函数导出供测试直锁——
- * 与 isWorkgroupKickResumable 同款先例。
+ * workgroup_task_state.pause_reason（引擎在返回 awaiting_human 前写入，RFC-217
+ * T2 出 JSON 槽），否则恒 null（读方门槛：陈值永不外泄，列无需清理）。纯函数
+ * 导出供测试直锁——与 isWorkgroupKickResumable 同款先例。
  */
 export function resolveRoomPauseReason(
   taskStatus: string,
-  raw: Record<string, unknown>,
+  pauseReason: string | null,
 ): string | null {
   if (taskStatus !== 'awaiting_human') return null
-  const slot = raw.wgPause
-  if (slot === null || typeof slot !== 'object' || Array.isArray(slot)) return null
-  const reason = (slot as Record<string, unknown>).reason
-  return typeof reason === 'string' && reason.length > 0 ? reason : null
+  return pauseReason !== null && pauseReason.length > 0 ? pauseReason : null
 }
 
 export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
@@ -214,6 +218,7 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
     task: WorkgroupTaskRow
     config: WorkgroupRuntimeConfig
     raw: Record<string, unknown>
+    state: WorkgroupTaskState
   }> {
     const row = (
       await deps.db
@@ -246,7 +251,9 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
     if (!parsed.success) {
       throw new NotFoundError('workgroup-task-not-found', `workgroup task '${taskId}' not found`)
     }
-    return { task: row, config: parsed.data, raw }
+    // RFC-217 T2 — gate/dw/pause ride workgroup_task_state, loaded once here.
+    const state = await loadWorkgroupTaskState(deps.db, taskId)
+    return { task: row, config: parsed.data, raw, state }
   }
 
   // PR-5 — inbox third source: my pending human-deliveries + confirmable
@@ -267,6 +274,24 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
           inArray(tasks.status, ['pending', 'running', 'awaiting_review', 'awaiting_human']),
         ),
       )
+    // RFC-217 T2 — one batch read for every candidate's gate status (the old
+    // per-row `$.gate` JSON poke is retired with the slot itself).
+    const stateRows =
+      rows.length > 0
+        ? await deps.db
+            .select({
+              taskId: workgroupTaskState.taskId,
+              gateStatus: workgroupTaskState.gateStatus,
+            })
+            .from(workgroupTaskState)
+            .where(
+              inArray(
+                workgroupTaskState.taskId,
+                rows.map((r) => r.id),
+              ),
+            )
+        : []
+    const gateStatusById = new Map(stateRows.map((r) => [r.taskId, r.gateStatus]))
     let deliveries = 0
     let gates = 0
     for (const row of rows) {
@@ -280,8 +305,11 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
       }
       const parsed = WorkgroupRuntimeConfigSchema.safeParse(raw)
       if (!parsed.success) continue
-      const gateRaw = JsonObjectSchema.parse(raw.gate ?? {})
-      if (gateRaw.awaitingConfirmation === true && row.status === 'awaiting_review') gates++
+      if (
+        gateStatusById.get(row.id) === 'awaiting_confirmation' &&
+        row.status === 'awaiting_review'
+      )
+        gates++
       const myMemberIds = new Set(
         parsed.data.members
           .filter((m) => m.memberType === 'human' && m.userId === actor.user.id)
@@ -306,7 +334,7 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
 
   app.get('/api/workgroup-tasks/:taskId/room', async (c) => {
     const taskId = c.req.param('taskId')
-    const { task, config, raw } = await loadVisibleWorkgroupTask(actorOf(c), taskId)
+    const { task, config, state } = await loadVisibleWorkgroupTask(actorOf(c), taskId)
     const [messages, assignments, hostRuns] = await Promise.all([
       deps.db
         .select()
@@ -384,7 +412,6 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
       messagesLite,
       { openClarifySourceRunIds },
     )
-    const gateRaw = JsonObjectSchema.parse(raw.gate ?? {})
     // RFC-209 —— 已用回合数：与 max_rounds 触顶判据**同源**（同一个 deriveRoundsUsed，
     // 且这里的 host-run 过滤条件与引擎 loadDbState 逐字相同），所以右栏预算表显示的
     // 数字就是真正决定任务生死的那个。零新查询——复用上面已经加载的 hostRuns。
@@ -417,17 +444,22 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
       // workgroupRunner.writeWgPauseReason）。读方门槛：只在任务当前就停在
       // awaiting_human 时外泄，陈值（上次停机残留）永不出现——所以槽无需清理。
       // 前端据此把「预算触顶待处置」与「等待回答」区分开。
-      pauseReason: resolveRoomPauseReason(task.status, raw),
-      gate: {
-        declaredDone: gateRaw.declaredDone === true,
-        awaitingConfirmation: gateRaw.awaitingConfirmation === true,
-        rejected: gateRaw.rejected === true,
-        summary: typeof gateRaw.summary === 'string' ? gateRaw.summary : null,
-      },
-      // RFC-167 PR-3 — the dynamic-workflow state slot (phase / generatedDef /
-      // rejection bookkeeping). null for turn-engine tasks (and for a corrupt
-      // slot); the confirm-gate UI and the phase-driven tab default read it.
-      dw: parseDwState(raw.dw),
+      pauseReason: resolveRoomPauseReason(task.status, state.pauseReason),
+      // RFC-217 T2 — the wire shape stays the legacy boolean view; the stored
+      // truth is workgroup_task_state.gate_status (gateViewOf derivation).
+      gate: (() => {
+        const v = gateViewOf(state)
+        return {
+          declaredDone: v.declaredDone,
+          awaitingConfirmation: v.awaitingConfirmation,
+          rejected: v.rejected,
+          summary: v.summary ?? null,
+        }
+      })(),
+      // RFC-167 PR-3 — the dynamic-workflow checkpoint (phase / generatedDef /
+      // rejection bookkeeping). null for turn-engine tasks; served straight
+      // from workgroup_task_state.
+      dw: state.dwState,
       messages: messages.map((m) => ({
         id: m.id,
         round: m.round,
@@ -622,15 +654,14 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
   app.post('/api/workgroup-tasks/:taskId/confirm', async (c) => {
     const taskId = c.req.param('taskId')
     const actor = actorOf(c)
-    const { task, raw, config } = await loadVisibleWorkgroupTask(actor, taskId)
+    const { task, config, state } = await loadVisibleWorkgroupTask(actor, taskId)
     const parsed = ConfirmSchema.safeParse(await safeJson(c.req.raw))
     if (!parsed.success) {
       throw new ValidationError('workgroup-confirm-invalid', 'invalid confirm payload', {
         issues: parsed.error.issues,
       })
     }
-    const gateRaw = JsonObjectSchema.parse(raw.gate ?? {})
-    if (gateRaw.awaitingConfirmation !== true || task.status !== 'awaiting_review') {
+    if (state.gateStatus !== 'awaiting_confirmation' || task.status !== 'awaiting_review') {
       throw new ConflictError(
         'workgroup-gate-not-open',
         'the completion gate is not awaiting confirmation',
@@ -650,34 +681,20 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
           'the completion gate is not awaiting confirmation',
         )
       }
-      const fresh = tx
-        .select({ workgroupConfigJson: tasks.workgroupConfigJson })
-        .from(tasks)
-        .where(eq(tasks.id, taskId))
-        .limit(1)
-        .get()
-      const freshRaw = JsonObjectSchema.parse(JSON.parse(fresh?.workgroupConfigJson ?? '{}'))
-      const freshGate = JsonObjectSchema.parse(freshRaw.gate ?? {})
-      if (freshGate.awaitingConfirmation !== true) {
+      // RFC-217 T2 — the CAS IS the fresh re-check: it only lands from
+      // awaiting_confirmation, so a concurrent decision (or a raced engine
+      // transition) surfaces as gate-not-open instead of a silent overwrite.
+      const landed = casGateStatusTx(tx, taskId, {
+        from: ['awaiting_confirmation'],
+        to: approve ? 'approved' : 'rejected',
+        ...(approve ? {} : { rejectedComment: parsed.data.comment ?? '' }),
+      })
+      if (!landed) {
         throw new ConflictError(
           'workgroup-gate-not-open',
           'the completion gate is not awaiting confirmation',
         )
       }
-      const nextGate = approve
-        ? { ...freshGate, awaitingConfirmation: false, approved: true, rejected: false }
-        : {
-            ...freshGate,
-            awaitingConfirmation: false,
-            approved: false,
-            declaredDone: false,
-            rejected: true,
-            rejectedComment: parsed.data.comment ?? '',
-          }
-      tx.update(tasks)
-        .set({ workgroupConfigJson: JSON.stringify({ ...freshRaw, gate: nextGate }) })
-        .where(eq(tasks.id, taskId))
-        .run()
 
       const holders = tx
         .select({ id: nodeRuns.id })
@@ -743,14 +760,14 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
   app.post('/api/workgroup-tasks/:taskId/dw-confirm', async (c) => {
     const taskId = c.req.param('taskId')
     const actor = actorOf(c)
-    const { task, config, raw } = await loadVisibleWorkgroupTask(actor, taskId)
+    const { task, config, state } = await loadVisibleWorkgroupTask(actor, taskId)
     const parsed = ConfirmSchema.safeParse(await safeJson(c.req.raw))
     if (!parsed.success) {
       throw new ValidationError('workgroup-confirm-invalid', 'invalid confirm payload', {
         issues: parsed.error.issues,
       })
     }
-    const dw = parseDwState(raw.dw)
+    const dw = state.dwState
     if (
       config.mode !== 'dynamic_workflow' ||
       dw === null ||
@@ -771,12 +788,11 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
     // microsecond window is a documented v1 residual (same posture as
     // consumeTasksAdd's same-instant insert race).
     async function freshGateView(): Promise<{
-      raw: Record<string, unknown>
       config: WorkgroupRuntimeConfig
       dw: DwState
     }> {
       const fresh = await loadVisibleWorkgroupTask(actor, taskId)
-      const freshDw = parseDwState(fresh.raw.dw)
+      const freshDw = fresh.state.dwState
       if (
         fresh.config.mode !== 'dynamic_workflow' ||
         freshDw === null ||
@@ -788,7 +804,7 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
           'the dynamic workflow confirm gate is not awaiting confirmation',
         )
       }
-      return { raw: fresh.raw, config: fresh.config, dw: freshDw }
+      return { config: fresh.config, dw: freshDw }
     }
 
     // Close the gate holder run(s) first (wg-confirm ordering precedent): the
@@ -846,7 +862,7 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
       const nextDw: DwState = { ...dwRest, phase: 'executing' }
       await resumeDynamicWorkflowExecution(deps.db, taskId, buildResumeDeps(), {
         workflowSnapshot: JSON.stringify(generated.data),
-        workgroupConfigJson: JSON.stringify({ ...fresh.raw, dw: nextDw }),
+        dw: nextDw,
       })
       return c.json({ decision: 'approve' })
     }
@@ -884,10 +900,16 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
           finishedAt: Date.now(),
           errorSummary: 'dw-reject-exhausted',
           errorMessage: `dynamic workflow rejected ${rejectRounds} time(s) — DW_MAX_REJECT_ROUNDS reached`,
-          workgroupConfigJson: JSON.stringify({ ...fresh.raw, dw: nextDw }),
         },
         reason: 'dw-reject-exhausted',
       })
+      // RFC-217 T2 — the checkpoint write follows the status CAS instead of
+      // riding its extra-columns (dw now lives in workgroup_task_state). A
+      // crash between the two leaves status=failed with phase stuck at
+      // awaiting_confirm — benign: every dw gate requires status
+      // awaiting_review, so nothing re-opens; the phase is display-only on a
+      // terminal task.
+      await setDwState(deps.db, taskId, nextDw)
       const failed = await getTask(deps.db, taskId)
       if (failed !== null) emitTaskStatus(failed)
       return c.json({ decision: 'reject', exhausted: true })
@@ -908,9 +930,8 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
     // tasks, so that stranding had no recovery path). The already-closed
     // holder is benign: the gate check reads (phase, status), and the
     // generate engine re-mints a holder on its awaiting_confirm branch.
-    await resumeDynamicWorkflowExecution(deps.db, taskId, buildResumeDeps(), {
-      workgroupConfigJson: JSON.stringify({ ...fresh.raw, dw: nextDw }),
-    })
+    // RFC-217 T2: the write itself is setDwStateTx inside the claim tx.
+    await resumeDynamicWorkflowExecution(deps.db, taskId, buildResumeDeps(), { dw: nextDw })
     return c.json({ decision: 'reject' })
   })
 
@@ -921,14 +942,14 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
   app.post('/api/workgroup-tasks/:taskId/dw-save-as-workflow', async (c) => {
     const taskId = c.req.param('taskId')
     const actor = actorOf(c)
-    const { config, raw } = await loadVisibleWorkgroupTask(actor, taskId)
+    const { config, state } = await loadVisibleWorkgroupTask(actor, taskId)
     const parsed = SaveAsWorkflowSchema.safeParse(await safeJson(c.req.raw))
     if (!parsed.success) {
       throw new ValidationError('workgroup-save-as-invalid', 'invalid save-as-workflow body', {
         issues: parsed.error.issues,
       })
     }
-    const dw = parseDwState(raw.dw)
+    const dw = state.dwState
     if (config.mode !== 'dynamic_workflow' || dw === null || dw.generatedDef === undefined) {
       throw new ConflictError(
         'dw-no-generated-workflow',

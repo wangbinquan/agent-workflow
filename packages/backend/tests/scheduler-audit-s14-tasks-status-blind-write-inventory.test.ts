@@ -51,7 +51,6 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   // 2026-07-21 +1: writeWgPauseReason —— awaiting_human 成因写进同一 config
   // copy 的 wgPause 槽（json_set 单键，永不触碰 status 列；房间 API 只在任务
   // 当前停在 awaiting_human 时读出）。
-  'services/workgroup/runner.ts': 2,
   // RFC-204 T7: the credential sealing gate backfills tasks.cached_repo_id and
   // re-redacts a legacy tasks.repo_url. Both are credential-hygiene columns —
   // the gate never reads or writes `status`.
@@ -77,11 +76,11 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   // slot through resumeKick's status CAS, and the reject-exhausted round
   // rides it through setTaskStatus extra (Codex impl-gate P1 — the phase
   // and the status can never tear).
-  'routes/workgroupTasks.ts': 2,
+  // RFC-217 T2 — gate 写改走 workgroup_task_state CAS，仅剩 config PUT 一处。
+  'routes/workgroupTasks.ts': 1,
   // RFC-167: persistDwState writes workgroup_config_json only (dw phase /
   // attempts / generatedDef on the task's config copy) — never `status`
   // (workgroupRunner persistGate 同款).
-  'services/dynamicWorkflowRunner.ts': 1,
 }
 
 function walkTsFiles(dir: string): string[] {

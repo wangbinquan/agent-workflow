@@ -56,11 +56,10 @@ import {
   type WorkgroupMessage,
   type WorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
-import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm'
 import { monotonicFactory, ulid } from 'ulid'
 import { KeyedSerialQueue } from '@/util/keyedSerialQueue'
 import type { DbClient } from '@/db/client'
-import { dbTxSync } from '@/db/txSync'
 import {
   agents,
   clarifySessions,
@@ -74,6 +73,14 @@ import { getAgent } from '@/services/agent'
 import { isClarifyRerunCause, loadRunEnvelopeNonce, mintNodeRun } from '@/services/nodeRunMint'
 import { setNodeRunStatus } from '@/services/lifecycle'
 import { buildRoomMessageRow } from '@/services/workgroup/messages'
+import {
+  casGateStatus,
+  ensureWorkgroupTaskStateRow,
+  gateViewOf,
+  loadWorkgroupTaskState,
+  setPauseReason,
+  type WorkgroupGateView,
+} from '@/services/workgroup/state'
 import {
   deriveRoundsUsed,
   resolveMessageRound,
@@ -385,7 +392,7 @@ async function deriveReadonlyMemberIds(
 }
 
 /**
- * 2026-07-21 —— awaiting_human 成因槽（`tasks.workgroup_config_json` 的 `wgPause`
+ * 2026-07-21 —— awaiting_human 成因（RFC-217 T2：workgroup_task_state.pause_reason
  * 键，gate/dw 槽的同款存放处）。scheduler 的 awaiting_human 分支丢弃 detail
  * （它同时服务普通任务 clarify，不该带工作组语义），所以引擎在返回前自己落
  * 成因，房间 API 借此把「预算触顶待处置」和「等待回答」区分开——此前前端把
@@ -396,19 +403,6 @@ async function deriveReadonlyMemberIds(
  * 陈值永不外泄。PUT /config 的全量 JSON 覆写理论上可能吞掉一次并发写入——
  * 后果只是横幅缺失一次，可接受。
  */
-export async function writeWgPauseReason(
-  db: DbClient,
-  taskId: string,
-  reason: string,
-): Promise<void> {
-  await db
-    .update(tasks)
-    .set({
-      workgroupConfigJson: sql`json_set(coalesce(${tasks.workgroupConfigJson}, '{}'), '$.wgPause', json_object('reason', ${reason}))`,
-    })
-    .where(eq(tasks.id, taskId))
-}
-
 async function reconcileRunningAssignments(
   db: DbClient,
   taskId: string,
@@ -461,19 +455,9 @@ function broadcastPendingMint(taskId: string, nodeRunId: string, nodeId: string)
 // durable state I/O
 // ---------------------------------------------------------------------------
 
-interface GateState {
-  declaredDone: boolean
-  rejected: boolean
-  rejectedComment?: string
-  awaitingConfirmation: boolean
-  /** PR-5: human approved the completion gate — the engine may finish. */
-  approved: boolean
-  summary?: string
-}
-
 interface EngineDbState {
   config: WorkgroupRuntimeConfig
-  gate: GateState
+  gate: WorkgroupGateView
   rawConfig: Record<string, unknown>
   assignments: WorkgroupAssignment[]
   messages: WorkgroupMessage[]
@@ -592,17 +576,10 @@ async function loadDbState(db: DbClient, taskId: string): Promise<EngineDbState 
   }
   const parsed = WorkgroupRuntimeConfigSchema.safeParse(rawConfig)
   if (!parsed.success) return null
-  const gateRaw = (rawConfig.gate ?? {}) as Partial<GateState>
-  const gate: GateState = {
-    declaredDone: gateRaw.declaredDone === true,
-    rejected: gateRaw.rejected === true,
-    awaitingConfirmation: gateRaw.awaitingConfirmation === true,
-    approved: gateRaw.approved === true,
-    ...(typeof gateRaw.rejectedComment === 'string'
-      ? { rejectedComment: gateRaw.rejectedComment }
-      : {}),
-    ...(typeof gateRaw.summary === 'string' ? { summary: gateRaw.summary } : {}),
-  }
+  // RFC-217 T2 — gate/pause live in workgroup_task_state; the engine consumes
+  // the derived legacy view (wire-frozen booleans), CAS writes go by status.
+  const taskState = await loadWorkgroupTaskState(db, taskId)
+  const gate = gateViewOf(taskState)
   const [assignmentRows, messageRows, cursorRows, hostRuns, clarifySessionRows] = await Promise.all(
     [
       db
@@ -652,40 +629,6 @@ async function loadDbState(db: DbClient, taskId: string): Promise<EngineDbState 
     clarifySessions: clarifySessionRows,
     agentCards: await buildRosterAgentCards(db, parsed.data),
   }
-}
-
-async function persistGate(
-  db: DbClient,
-  taskId: string,
-  rawConfig: Record<string, unknown>,
-  gate: GateState,
-): Promise<void> {
-  // Codex T6 impl-gate P2 — reload-and-merge inside ONE sync transaction
-  // instead of overwriting with the engine's pass-start snapshot: a whole-
-  // JSON write from a stale rawConfig would silently drop a concurrent
-  // per-task config PATCH (autonomous / fanOut mid-run toggles — RFC-181 A /
-  // RFC-185 D4; the race predates fanOut and could lose autonomous too).
-  // rawConfig stays as the fallback when the row's JSON is missing or
-  // unreadable mid-flight (legacy behavior for that edge).
-  dbTxSync(db, (tx) => {
-    const row = tx
-      .select({ workgroupConfigJson: tasks.workgroupConfigJson })
-      .from(tasks)
-      .where(eq(tasks.id, taskId))
-      .get()
-    let base = rawConfig
-    if (row?.workgroupConfigJson != null) {
-      try {
-        base = JSON.parse(row.workgroupConfigJson) as Record<string, unknown>
-      } catch {
-        // fall back to the engine snapshot
-      }
-    }
-    tx.update(tasks)
-      .set({ workgroupConfigJson: JSON.stringify({ ...base, gate }) })
-      .where(eq(tasks.id, taskId))
-      .run()
-  })
 }
 
 interface PostMessageArgs {
@@ -1038,6 +981,7 @@ export function composeMemberPrompt(
 export async function runWorkgroupEngine(
   args: WorkgroupEngineArgs,
 ): Promise<WorkgroupEngineResult> {
+  await ensureWorkgroupTaskStateRow(args.db, args.taskId)
   const { db, taskId, log } = args
 
   // In-flight turns keyed by a stable wake-item key. Values resolve when the
@@ -1256,7 +1200,7 @@ export async function runWorkgroupEngine(
           // Nothing driveable yet nothing terminal — should not happen; avoid
           // a hot loop by treating it as a human-parking stall.
           log.warn('workgroup engine: running outcome with empty in-flight set', { taskId })
-          await writeWgPauseReason(db, taskId, 'engine-stall')
+          await setPauseReason(db, taskId, 'engine-stall')
           return { kind: 'awaiting_human' }
         case 'done': {
           if (state.config.mode === 'free_collab') {
@@ -1320,7 +1264,7 @@ export async function runWorkgroupEngine(
           const leaderId = state.config.leaderMemberId
           await postMessage(db, taskId, roundMode(state.config), {
             authorKind: 'system',
-            kind: 'chat',
+            kind: 'nudge',
             bodyMd: WG_NUDGE_BODY,
             mentionMemberIds: leaderId !== null ? [leaderId] : [],
           })
@@ -1328,8 +1272,8 @@ export async function runWorkgroupEngine(
         }
         case 'awaiting_human':
           // 2026-07-21 —— scheduler 的 awaiting_human 分支丢弃 detail（它同时
-          // 服务普通任务 clarify），成因经 wgPause 槽落库给房间 API。
-          await writeWgPauseReason(db, taskId, outcome.reason)
+          // 服务普通任务 clarify），成因经 pause_reason 列落库给房间 API。
+          await setPauseReason(db, taskId, outcome.reason)
           return {
             kind: 'awaiting_human',
             detail: {
@@ -1461,12 +1405,11 @@ async function openCompletionGate(args: WorkgroupEngineArgs, state: EngineDbStat
     kind: 'system',
     bodyMd: `completion gate: waiting for human confirmation${state.gate.summary ? ` — ${state.gate.summary}` : ''}`,
   })
-  await persistGate(db, taskId, state.rawConfig, {
-    ...state.gate,
-    awaitingConfirmation: true,
-    rejected: false,
-    approved: false,
-  })
+  if (!(await casGateStatus(db, taskId, { from: ['declared'], to: 'awaiting_confirmation' }))) {
+    // lost to a concurrent transition (e.g. resumed engine raced a stale pass)
+    // — respect the winner; the holder run above still parks the task.
+    return
+  }
   taskBroadcaster.broadcast(TASK_CHANNEL(taskId), {
     id: -1,
     type: 'wg.gate.updated',
@@ -1916,15 +1859,15 @@ async function driveLeaderTurn(
           kind: 'decision',
           bodyMd: decision.value.summary ?? '',
         })
-        await persistGate(db, taskId, state.rawConfig, {
-          ...state.gate,
-          declaredDone: true,
-          rejected: false,
+        await casGateStatus(db, taskId, {
+          from: ['idle', 'rejected'],
+          to: 'declared',
           ...(decision.value.summary !== undefined ? { summary: decision.value.summary } : {}),
         })
       } else if (state.gate.rejected) {
-        // leader consumed the rejection — clear the flag so it doesn't re-wake.
-        await persistGate(db, taskId, state.rawConfig, { ...state.gate, rejected: false })
+        // leader consumed the rejection (kept working instead of re-declaring)
+        // — the rejected→idle edge clears the surfaced comment.
+        await casGateStatus(db, taskId, { from: ['rejected'], to: 'idle' })
       }
     }
     // RFC-186 T5 (audit §5 F6): advance the leader cursor to the turn-start max
