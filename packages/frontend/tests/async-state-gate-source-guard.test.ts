@@ -10,6 +10,20 @@
 // UP (new violation in a listed file) OR DOWN (the listed one was removed — stale
 // entry) now reds. Both locks carry a two-way honesty check.
 //
+// GUARD NOT CLOSED — AST-ification warranted (Codex P3 r2..r6, 2026-07-22). Eight
+// rounds of regex tightening (combined className → optional-call → muted-token →
+// computed call/ref → optional-chain → multi-segment dot-member → Prettier
+// line-wrap) each closed a real-but-narrower receiver-syntax variant, and Codex
+// confirmed the next one — a Prettier-preserved COMMENT inside a pure dot-member
+// chain (`onClick={/* … */ a.b.refetch}`) — is the definitive signal to STOP
+// enumerating regex and move to a focused JSX/TS AST check. The lock below is the
+// strongest REGEX ratchet (occurrence-exact, both honesty directions, dot-member
+// chains single-line + Prettier-wrapped); its remaining gaps — comment-interleaved
+// dot-member, computed/mixed receivers, named-handler indirection, dynamic
+// className, data-flow — are DEFERRED to a "guard AST-ification" RFC (an AST check
+// matching any onClick MemberExpression ending in `refetch`, with Prettier-
+// round-tripped leading/interleaved/trailing-comment fixtures).
+//
 // HONEST COVERAGE (documented blind spots — do not pretend otherwise):
 //   * Lock A is a STRUCTURAL signal — it catches a hand-written `<button>`
 //     whose onClick calls `refetch(` (member `x.refetch()` AND destructured bare
