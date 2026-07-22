@@ -105,7 +105,7 @@ describe('rfc217 G2/G3 — retired runtime-state slots stay retired', () => {
     // RFC-217 T4 终态：workgroupConfigJson 唯一 UPDATE 写点在 taskActions
     //（config PUT 编排）；routes/ 里任何房间表裸写（messages/assignments/
     // configJson）都是回归。
-    const allow = new Set(['packages/backend/src/services/workgroup/taskActions.ts'])
+    const allow = new Set(['packages/backend/src/services/workgroup/configActions.ts'])
     const offenders: string[] = []
     for (const f of walkTs(SRC)) {
       const src = read(f)
@@ -124,7 +124,7 @@ describe('rfc217 G2/G3 — retired runtime-state slots stay retired', () => {
     }
     expect(offenders).toEqual([])
     const puts =
-      read('packages/backend/src/services/workgroup/taskActions.ts').split(
+      read('packages/backend/src/services/workgroup/configActions.ts').split(
         '.set({ workgroupConfigJson',
       ).length - 1
     expect(puts).toBe(1)
@@ -165,8 +165,10 @@ describe('rfc217 G5/G7 — mode branches ratcheted, shardKey goes through codecs
       'strategies/leaderWorker.ts': 1,
       'lifecycle.ts': 1,
       'launch.ts': 1,
-      // T4：config PUT 编排随迁带入一处 dynamic_workflow 免疫判断（原 route 同款）
-      'taskActions.ts': 1,
+      // T4：config PUT 编排（含 dynamic_workflow 免疫判断）落 configActions
+      'configActions.ts': 1,
+      'dwActions.ts': 2,
+      'room.ts': 1,
     }
     const files: string[] = []
     const walk = (dir: string): void => {

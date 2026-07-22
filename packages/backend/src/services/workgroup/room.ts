@@ -21,7 +21,31 @@ import type {
   WorkgroupRunEntry,
   WorkgroupRunKind,
 } from '@agent-workflow/shared'
-import { parseBatchShardKey, parseMsgShardKey } from '@agent-workflow/shared'
+import {
+  parseBatchShardKey,
+  parseMsgShardKey,
+  WorkgroupRuntimeConfigSchema,
+  type WorkgroupRuntimeConfig,
+} from '@agent-workflow/shared'
+import { z } from 'zod'
+
+const JsonObjectSchema = z.record(z.string(), z.unknown())
+import { and, asc, eq, inArray, isNotNull } from 'drizzle-orm'
+import type { Actor } from '@/auth/actor'
+import type { DbClient } from '@/db/client'
+import {
+  clarifySessions,
+  nodeRuns,
+  taskNodeClarifyDirectives,
+  tasks,
+  workgroupAssignments,
+  workgroupMessages,
+  workgroupTaskState,
+} from '@/db/schema'
+import { canViewTask } from '@/services/taskCollab'
+import { gateViewOf, type WorkgroupTaskState } from '@/services/workgroup/state'
+import { resolveRoomPauseReason, safeMentions } from '@/services/workgroup/taskActions'
+import { deriveRoundsUsed, roundedModeOf } from '@/services/workgroup/rounds'
 import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from './constants'
 
 /** Minimal node_run shape the derivation reads (subset of the DB row). The
@@ -296,4 +320,266 @@ export function deriveMemberCurrentRuns(
           }
   }
   return out
+}
+
+// ---------------------------------------------------------------------------
+// RFC-217 T4 — room aggregate + inbox pending-count (moved from routes; the
+// projection primitives above stay pure, these two own the queries).
+// ---------------------------------------------------------------------------
+
+export function buildRoomReads(
+  deps: { db: DbClient },
+  core: {
+    loadVisibleWorkgroupTask: (
+      actor: Actor,
+      taskId: string,
+    ) => Promise<{
+      task: {
+        id: string
+        ownerUserId: string | null
+        status: string
+        workgroupId: string | null
+        workgroupConfigJson: string | null
+      }
+      config: WorkgroupRuntimeConfig
+      raw: Record<string, unknown>
+      state: WorkgroupTaskState
+    }>
+  },
+) {
+  const { loadVisibleWorkgroupTask } = core
+  async function pendingCount(actor: Actor) {
+    const rows = await deps.db
+      .select({
+        id: tasks.id,
+        ownerUserId: tasks.ownerUserId,
+        status: tasks.status,
+        workgroupConfigJson: tasks.workgroupConfigJson,
+      })
+      .from(tasks)
+      .where(
+        and(
+          isNotNull(tasks.workgroupId),
+          inArray(tasks.status, ['pending', 'running', 'awaiting_review', 'awaiting_human']),
+        ),
+      )
+    // RFC-217 T2 — one batch read for every candidate's gate status (the old
+    // per-row `$.gate` JSON poke is retired with the slot itself).
+    const stateRows =
+      rows.length > 0
+        ? await deps.db
+            .select({
+              taskId: workgroupTaskState.taskId,
+              gateStatus: workgroupTaskState.gateStatus,
+            })
+            .from(workgroupTaskState)
+            .where(
+              inArray(
+                workgroupTaskState.taskId,
+                rows.map((r) => r.id),
+              ),
+            )
+        : []
+    const gateStatusById = new Map(stateRows.map((r) => [r.taskId, r.gateStatus]))
+    let deliveries = 0
+    let gates = 0
+    for (const row of rows) {
+      if (row.workgroupConfigJson === null) continue
+      if (!(await canViewTask(deps.db, actor, row))) continue
+      let raw: Record<string, unknown>
+      try {
+        raw = JsonObjectSchema.parse(JSON.parse(row.workgroupConfigJson))
+      } catch {
+        continue
+      }
+      const parsed = WorkgroupRuntimeConfigSchema.safeParse(raw)
+      if (!parsed.success) continue
+      if (
+        gateStatusById.get(row.id) === 'awaiting_confirmation' &&
+        row.status === 'awaiting_review'
+      )
+        gates++
+      const myMemberIds = new Set(
+        parsed.data.members
+          .filter((m) => m.memberType === 'human' && m.userId === actor.user.id)
+          .map((m) => m.id),
+      )
+      if (myMemberIds.size === 0) continue
+      const cards = await deps.db
+        .select({ assigneeMemberId: workgroupAssignments.assigneeMemberId })
+        .from(workgroupAssignments)
+        .where(
+          and(
+            eq(workgroupAssignments.taskId, row.id),
+            eq(workgroupAssignments.status, 'dispatched'),
+          ),
+        )
+      deliveries += cards.filter(
+        (c2) => c2.assigneeMemberId !== null && myMemberIds.has(c2.assigneeMemberId),
+      ).length
+    }
+    return { deliveries, gates, total: deliveries + gates }
+  }
+
+  async function roomAggregate(actor: Actor, taskId: string) {
+    const { task, config, state } = await loadVisibleWorkgroupTask(actor, taskId)
+    const [messages, assignments, hostRuns] = await Promise.all([
+      deps.db
+        .select()
+        .from(workgroupMessages)
+        .where(eq(workgroupMessages.taskId, taskId))
+        .orderBy(asc(workgroupMessages.id)),
+      deps.db
+        .select()
+        .from(workgroupAssignments)
+        .where(eq(workgroupAssignments.taskId, taskId))
+        .orderBy(asc(workgroupAssignments.id)),
+      // RFC-179/182 — host runs (leader-round / assignment / message-turn) for
+      // the runHistory + per-member currentRun derivation; read-only, never
+      // enters a prompt. startedAt/finishedAt feed the turn cards' durations;
+      // failureCode ONLY feeds the server-side `note` derivation (structured
+      // column — RFC-145 forbids errorMessage machine reads; the protocol
+      // strings never cross the wire — RFC-182 D11).
+      deps.db
+        .select({
+          id: nodeRuns.id,
+          nodeId: nodeRuns.nodeId,
+          shardKey: nodeRuns.shardKey,
+          status: nodeRuns.status,
+          rerunCause: nodeRuns.rerunCause,
+          startedAt: nodeRuns.startedAt,
+          finishedAt: nodeRuns.finishedAt,
+          failureCode: nodeRuns.failureCode,
+          agentOverrideName: nodeRuns.agentOverrideName,
+          // RFC-209 —— 两个用途共用这一列：① 回合账本读数（右栏预算表 roundsUsed）；
+          // ② leader 回合卡的轮序数（RFC-189 之后它才是权威，取代从消息 round 反推）。
+          wgRound: nodeRuns.wgRound,
+        })
+        .from(nodeRuns)
+        .where(
+          and(
+            eq(nodeRuns.taskId, taskId),
+            inArray(nodeRuns.nodeId, [WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID]),
+          ),
+        ),
+    ])
+    const assignmentsLite = assignments.map((a) => ({
+      id: a.id,
+      assigneeMemberId: a.assigneeMemberId,
+    }))
+    const messagesLite = messages.map((m) => ({
+      id: m.id,
+      mentionMemberIds: safeMentions(m.mentionsJson),
+      round: m.round,
+    }))
+    // RFC-182 impl-gate P1 — open clarify parks: the asking host run's DB row
+    // is `done` while the park lives on the intermediary clarify run, so the
+    // derivation projects `awaiting_human` onto entries whose run has an OPEN
+    // session (turn card / presence read「等待回答」instead of「完成/空闲」).
+    const openClarify = await deps.db
+      .select({ sourceRunId: clarifySessions.sourceAgentNodeRunId })
+      .from(clarifySessions)
+      .where(and(eq(clarifySessions.taskId, taskId), eq(clarifySessions.status, 'awaiting_human')))
+    const openClarifySourceRunIds = new Set(openClarify.map((r) => r.sourceRunId))
+    // RFC-182 G5 — the room's full execution history (ascending, single
+    // source); RFC-179's memberRuns is its projection (running wins, else
+    // newest) so the two can never drift.
+    const runHistory = deriveWorkgroupRunHistory(
+      config.members,
+      config.leaderMemberId,
+      hostRuns,
+      assignmentsLite,
+      messagesLite,
+      { openClarifySourceRunIds },
+    )
+    const memberRuns = deriveMemberCurrentRuns(
+      config.members,
+      config.leaderMemberId,
+      hostRuns,
+      assignmentsLite,
+      messagesLite,
+      { openClarifySourceRunIds },
+    )
+    // RFC-209 —— 已用回合数：与 max_rounds 触顶判据**同源**（同一个 deriveRoundsUsed，
+    // 且这里的 host-run 过滤条件与引擎 loadDbState 逐字相同），所以右栏预算表显示的
+    // 数字就是真正决定任务生死的那个。零新查询——复用上面已经加载的 hostRuns。
+    // dynamic_workflow 没有回合账本 ⇒ 0（UI 只在 free_collab 渲染）。
+    const roundedMode = roundedModeOf(config.mode)
+    const roundsUsed = roundedMode === null ? 0 : deriveRoundsUsed(roundedMode, hostRuns)
+    // RFC-207 §3.7.5 — which askers a human has silenced. Stopping is a REVERSIBLE
+    // state, not a one-way door: without surfacing it the room offers no way back
+    // (the canvas toggle that ordinary tasks use does not exist for workgroups).
+    // Keyed by asker (leader / asg:<id> / mem:<id>) so each can be resumed alone.
+    const stopRows = await deps.db
+      .select({
+        nodeId: taskNodeClarifyDirectives.nodeId,
+        shardKey: taskNodeClarifyDirectives.shardKey,
+        directive: taskNodeClarifyDirectives.directive,
+      })
+      .from(taskNodeClarifyDirectives)
+      .where(eq(taskNodeClarifyDirectives.taskId, taskId))
+    const clarifyStops = stopRows
+      .filter((r) => r.directive === 'stop' && r.shardKey !== '')
+      .map((r) => ({ nodeId: r.nodeId, askerKey: r.shardKey }))
+
+    return {
+      taskId,
+      taskStatus: task.status,
+      config,
+      clarifyStops,
+      roundsUsed,
+      // 2026-07-21 —— awaiting_human 的成因（引擎写入 wgPause 槽；见
+      // workgroupRunner.writeWgPauseReason）。读方门槛：只在任务当前就停在
+      // awaiting_human 时外泄，陈值（上次停机残留）永不出现——所以槽无需清理。
+      // 前端据此把「预算触顶待处置」与「等待回答」区分开。
+      pauseReason: resolveRoomPauseReason(task.status, state.pauseReason),
+      // RFC-217 T2 — the wire shape stays the legacy boolean view; the stored
+      // truth is workgroup_task_state.gate_status (gateViewOf derivation).
+      gate: (() => {
+        const v = gateViewOf(state)
+        return {
+          declaredDone: v.declaredDone,
+          awaitingConfirmation: v.awaitingConfirmation,
+          rejected: v.rejected,
+          summary: v.summary ?? null,
+        }
+      })(),
+      // RFC-167 PR-3 — the dynamic-workflow checkpoint (phase / generatedDef /
+      // rejection bookkeeping). null for turn-engine tasks; served straight
+      // from workgroup_task_state.
+      dw: state.dwState,
+      messages: messages.map((m) => ({
+        id: m.id,
+        round: m.round,
+        authorKind: m.authorKind,
+        authorMemberId: m.authorMemberId,
+        authorUserId: m.authorUserId,
+        kind: m.kind,
+        bodyMd: m.bodyMd,
+        mentionMemberIds: safeMentions(m.mentionsJson),
+        assignmentId: m.assignmentId,
+        createdAt: m.createdAt,
+      })),
+      assignments: assignments.map((a) => ({
+        id: a.id,
+        round: a.round,
+        source: a.source,
+        createdByUserId: a.createdByUserId,
+        assigneeMemberId: a.assigneeMemberId,
+        title: a.title,
+        briefMd: a.briefMd,
+        status: a.status,
+        nodeRunId: a.nodeRunId,
+        resultMessageId: a.resultMessageId,
+        createdAt: a.createdAt,
+        updatedAt: a.updatedAt,
+      })),
+      // RFC-179 — { [memberId]: currentRun | null }; drives 点成员看 session + 执行中指示.
+      memberRuns,
+      // RFC-182 — 全量回合历史（升序）；回合卡 / 执行记录 / drawer 成员历轮的单一数据源。
+      runHistory,
+    }
+  }
+
+  return { pendingCount, roomAggregate }
 }
