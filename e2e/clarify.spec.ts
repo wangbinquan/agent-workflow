@@ -682,14 +682,20 @@ test.describe('RFC-026 clarify e2e — inline session resume', () => {
   let repoDir: string
   let stubState: string
   let argvLog: string
+  let sessionLog: string
   let fixtures: { workflowId: string; repoPath: string; clarifyNodeId: string }
 
   test.beforeAll(async () => {
     stubState = mkdtempSync(join(tmpdir(), 'aw-e2e-rfc026-state-'))
     argvLog = join(stubState, 'argv.log')
+    sessionLog = join(stubState, 'session.log')
     daemon = await startDaemon({
       stubOpencode: stubClarifyInline,
-      extraEnv: { CLARIFY_STUB_STATE: stubState, CLARIFY_INLINE_ARGV_LOG: argvLog },
+      extraEnv: {
+        CLARIFY_STUB_STATE: stubState,
+        CLARIFY_INLINE_ARGV_LOG: argvLog,
+        CLARIFY_INLINE_SESSION_LOG: sessionLog,
+      },
     })
     repoDir = mkdtempSync(join(tmpdir(), 'aw-e2e-rfc026-repo-'))
     writeFileSync(join(repoDir, 'README.md'), '# rfc026 e2e fixture\n', 'utf-8')
@@ -840,16 +846,16 @@ test.describe('RFC-026 clarify e2e — inline session resume', () => {
     // 4. Round 1 → done.
     await pollTaskStatus(daemon, taskId, (t) => t.status === 'done', 30_000)
 
-    // 5. Assertion A: the stub logs each invocation's FULL argv (`printf '%s\n' "$*"`).
-    //    The prompt is multi-line AND now trails after `--` (RFC opencode spawn.ts
-    //    buildCommand: prompt is the tail positional so a `-`-leading prompt isn't
-    //    parsed as a flag), so each invocation spans several lines and `--session`
-    //    sits on the FIRST line of round 1's block, not the last — a line index is
-    //    fragile. Assert on the whole log instead: round 0 (clarify) forwards NO
-    //    `--session`; round 1 (resume) forwards exactly one, carrying the prior id.
-    const raw = readFileSync(argvLog, 'utf-8')
-    expect(raw.split('--session').length - 1).toBe(1)
-    expect(raw).toContain('--session opc_e2e_e2e-rfc026-designer')
+    // 5. Assertion A: the stub records the PARSED --session value per invocation
+    //    (from the FLAG, into CLARIFY_INLINE_SESSION_LOG) — NOT by grepping the
+    //    whole argv for `--session`, which a prompt carrying `--session`-like body
+    //    text would fool (Codex 191bc32c re-review). Round 0 (clarify) forwards NO
+    //    session (empty line, filtered out); round 1 (resume) forwards exactly the
+    //    prior id and nothing else.
+    const sessions = readFileSync(sessionLog, 'utf-8')
+      .split('\n')
+      .filter((l) => l !== '')
+    expect(sessions).toEqual(['opc_e2e_e2e-rfc026-designer'])
 
     // 6. Assertion B: the persisted node_runs row for round 0 (RFC-074 PR-C:
     //    the earliest 'designer' run by ULID id — clarify generation 0)

@@ -151,4 +151,19 @@ describe('e2e shell stubs parse the buildCommand argv layout (post-191bc32c `--`
     expect(r.stdout).toContain('name=\\"answer\\"')
     expect(r.stdout).not.toContain('name=\\"commit_message\\"')
   })
+
+  // Codex 191bc32c re-review (finding 3): the clarify-inline stub previously let the
+  // e2e grep the whole argv (`$*`) for `--session`; a prompt with session-like body
+  // text could fool that oracle. The stub now records the PARSED --session value
+  // (from the FLAG) into CLARIFY_INLINE_SESSION_LOG. With no real flag in argv it
+  // MUST be empty even though this PROMPT body carries `--session opc_...`.
+  test('clarify-inline stub reads --session from the FLAG, immune to prompt body text', () => {
+    const sessionLog = resolve(tmp(), 'session.log')
+    const r = runStub('stub-opencode-clarify-inline.sh', {
+      env: { CLARIFY_STUB_STATE: tmp(), CLARIFY_INLINE_SESSION_LOG: sessionLog },
+    })
+    expect(r.code).toBe(0)
+    // no real --session flag → empty parsed session, despite the prompt body text
+    expect(readFileSync(sessionLog, 'utf-8').trim()).toBe('')
+  })
 })

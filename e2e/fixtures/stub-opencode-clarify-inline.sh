@@ -76,6 +76,12 @@ while [ "$#" -gt 0 ]; do
   shift || true
 done
 
+# Contract/e2e oracle hook (Codex 191bc32c re-review): record the PARSED --session
+# value — empty when the flag is absent — so the e2e asserts the real resume id
+# from the FLAG, not by grepping the whole argv for `--session` (which a prompt
+# carrying `--session`-like body text would fool).
+[ -n "${CLARIFY_INLINE_SESSION_LOG:-}" ] && printf '%s\n' "$session_resume" >>"$CLARIFY_INLINE_SESSION_LOG"
+
 key="$state_dir/$(printf '%s' "$agent" | tr -c 'A-Za-z0-9._-' '_')"
 session_id="opc_e2e_$(printf '%s' "$agent" | tr -c 'A-Za-z0-9._-' '_')"
 
