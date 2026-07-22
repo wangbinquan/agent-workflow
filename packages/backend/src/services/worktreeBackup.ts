@@ -17,7 +17,7 @@
 
 import { eq, inArray } from 'drizzle-orm'
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { isAbsolute, join, sep } from 'node:path'
 import type { DbClient } from '@/db/client'
 import { tasks } from '@/db/schema'
 import { extractTarGz, tarGz } from '@/util/archive'
@@ -36,6 +36,9 @@ const NON_TERMINAL_TASK_STATUSES = [
 
 /** Per-task worktree that exceeding this is skipped (recorded), not captured. */
 export const DEFAULT_MAX_WORKTREE_BYTES = 64 * 1024 * 1024
+
+/** Crockford base32, 26 chars — a ULID. Validates the archive's only trusted field. */
+const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/i
 
 interface WorktreeMeta {
   taskId: string
@@ -182,6 +185,15 @@ export async function reconstructWorktrees(
     } catch {
       continue
     }
+    // Impl-gate P0-2 (Codex 2026-07-22): trust ONLY the taskId from the archive —
+    // and only after validating it as a ULID, since it names the tarball we `join`
+    // and keys the DB lookup (a `../` id would escape wtDir). Every filesystem PATH
+    // below comes from the DB row, NOT the JSON, so a forged backup cannot aim
+    // `git worktree add` / extractTarGz at an arbitrary host path.
+    if (typeof meta.taskId !== 'string' || !ULID_RE.test(meta.taskId)) {
+      skipped.push({ taskId: String(meta.taskId), reason: 'invalid task id in worktree meta' })
+      continue
+    }
     const row = db.select().from(tasks).where(eq(tasks.id, meta.taskId)).get()
     if (row === undefined) {
       skipped.push({ taskId: meta.taskId, reason: 'task no longer in DB' })
@@ -191,7 +203,17 @@ export async function reconstructWorktrees(
       skipped.push({ taskId: meta.taskId, reason: `terminal (${row.status})` })
       continue
     }
-    if (existsSync(meta.worktreePath)) {
+    // Paths are the daemon-written DB values, never the archive's.
+    const worktreePath = row.worktreePath
+    const repoPath = row.repoPath
+    const branch = row.branch
+    // Defense-in-depth lexical sanity on the DB-sourced worktree path (guards a
+    // tampered DB): must be absolute with no `..` traversal component.
+    if (!isAbsolute(worktreePath) || worktreePath.split(sep).includes('..')) {
+      skipped.push({ taskId: meta.taskId, reason: 'worktree path is not a sane absolute path' })
+      continue
+    }
+    if (existsSync(worktreePath)) {
       skipped.push({ taskId: meta.taskId, reason: 'worktree already present (not overwritten)' })
       continue
     }
@@ -200,19 +222,19 @@ export async function reconstructWorktrees(
       skipped.push({ taskId: meta.taskId, reason: 'captured tarball missing' })
       continue
     }
-    if (!existsSync(meta.repoPath)) {
+    if (!existsSync(repoPath)) {
       skipped.push({ taskId: meta.taskId, reason: 'source mirror gone (cross-machine?)' })
       continue
     }
     // Clear any stale worktree registration, then re-create + overlay.
-    await runGit(meta.repoPath, ['worktree', 'prune'])
-    const add = await runGit(meta.repoPath, ['worktree', 'add', meta.worktreePath, meta.branch])
+    await runGit(repoPath, ['worktree', 'prune'])
+    const add = await runGit(repoPath, ['worktree', 'add', worktreePath, branch])
     if (add.exitCode !== 0) {
       skipped.push({ taskId: meta.taskId, reason: `worktree add failed: ${add.stderr.trim()}` })
       log.warn('worktree reconstruct failed', { taskId: meta.taskId, error: add.stderr.trim() })
       continue
     }
-    await extractTarGz(tarball, meta.worktreePath)
+    await extractTarGz(tarball, worktreePath)
     reconstructed.push(meta.taskId)
   }
   log.info('worktrees reconstructed', {

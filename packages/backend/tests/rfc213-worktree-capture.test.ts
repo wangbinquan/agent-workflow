@@ -237,6 +237,47 @@ describe('RFC-213 G4a worktree capture + reconstruct', () => {
   })
 })
 
+describe('impl-gate P0-2 — reconstruct trusts the DB row path, not the archive JSON', () => {
+  // Codex 2026-07-22: reconstructWorktrees used the archive-supplied
+  // meta.worktreePath / meta.repoPath verbatim, so a forged JSON in an uploaded
+  // backup could aim `git worktree add` + extractTarGz at any host path (a
+  // filesystem-write primitive for an admin-uploaded backup). The paths must come
+  // from the DB row, and the target must be lexically sane (absolute, no `..`).
+  test('a forged worktreePath in the captured JSON cannot redirect the write', async () => {
+    const appHome = tmp()
+    const branch = `agent-workflow/${ulid()}`
+    const { repoPath, worktreePath } = await setup(appHome, branch)
+    writeFileSync(join(worktreePath, 'file.txt'), 'REAL\n')
+    const db = openDb({ path: join(appHome, 'db.sqlite'), migrationsFolder: MIGRATIONS })
+    const wfId = ulid()
+    db.insert(workflows)
+      .values({
+        id: wfId,
+        name: 'wf',
+        definition: '{"$schema_version":3,"inputs":[],"nodes":[],"edges":[]}',
+      })
+      .run()
+    const taskId = seedTask(db, wfId, 'running', repoPath, worktreePath, branch)
+    const staging = tmp()
+    await captureWorktrees(db, staging)
+    rmSync(worktreePath, { recursive: true, force: true })
+
+    // FORGE the captured metadata: aim the reconstruction at an arbitrary host path.
+    const pwned = join(tmp(), 'PWNED-worktree')
+    const metaPath = join(staging, 'worktrees', `${taskId}.json`)
+    const meta = JSON.parse(readFileSync(metaPath, 'utf-8')) as Record<string, unknown>
+    meta.worktreePath = pwned
+    writeFileSync(metaPath, JSON.stringify(meta))
+
+    await reconstructWorktrees(db, staging)
+    // The forged host path must NOT be created — reconstruct uses the DB row's own
+    // worktreePath, so the real (controlled) worktree is what gets rebuilt.
+    expect(existsSync(pwned)).toBe(false)
+    expect(existsSync(join(worktreePath, 'file.txt'))).toBe(true)
+    ;(db as unknown as { $client: Database }).$client.close()
+  })
+})
+
 describe('impl-gate P2-7 — one un-tarrable worktree skips, not aborts', () => {
   test('unreadable file in one worktree → that task lands in skipped (no meta orphan), backup continues', async () => {
     if (typeof process.getuid === 'function' && process.getuid() === 0) {
