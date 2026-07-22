@@ -97,6 +97,31 @@ describe('RFC-220 S2 — probe readiness', () => {
     expect(r.scopesSupported).toEqual(['openid'])
   })
 
+  test('jwks 200 with a non-JWKS body counts as unreachable (impl-gate P2)', async () => {
+    const p = await h.svc.create(BASE)
+    const calls: string[] = []
+    const fetcher = (async (input: Parameters<typeof fetch>[0]) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      calls.push(url)
+      if (url.includes('.well-known')) {
+        return new Response(
+          JSON.stringify({
+            issuer: ISSUER,
+            authorization_endpoint: `${ISSUER}/a`,
+            token_endpoint: `${ISSUER}/t`,
+            jwks_uri: `${ISSUER}/jwks`,
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
+      }
+      // 200 but an HTML error page — createRemoteJWKSet would fail every verify
+      return new Response('<html>gateway</html>', { status: 200 })
+    }) as unknown as typeof fetch
+    const r = await h.svc.probe(p, fetcher)
+    expect(r.jwksReachable).toBe(false)
+    expect(r.ok).toBe(false)
+  })
+
   test('jwks unreachable → NOT ready even with userinfo configured (fail-closed)', async () => {
     const p = await h.svc.create({ ...BASE, userinfoEndpoint: 'https://m.test/me' })
     const { fetcher } = stubFetch({

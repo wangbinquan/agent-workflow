@@ -435,6 +435,30 @@ describe('RFC-220 acquireIdentityClaims matrix (D4/D6)', () => {
     )
   })
 
+  test('mid-body stream failure is a typed userinfo error, not verify-failed (impl-gate P2)', async () => {
+    // Headers resolve fine, then the body stream resets — the throw happens in
+    // reader.read(), outside fetchUserinfo's transport catch.
+    const streamFail = (async () =>
+      new Response(
+        new ReadableStream({
+          pull() {
+            throw new Error('connection reset mid-body')
+          },
+        }),
+        { status: 200 },
+      )) as unknown as typeof fetch
+    const err = await acquireIdentityClaims({
+      tokens: { access_token: 'at' },
+      effective: effective({ userinfoEndpoint: `${ISSUER}/me` }),
+      clientId: AUDIENCE,
+      nonce: NONCE,
+      fetcher: streamFail,
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(OidcTokenError)
+    expect((err as OidcTokenError).code).toBe('userinfo-fetch-failed')
+    expect((err as OidcTokenError).message).toContain('body-read')
+  })
+
   test('userinfo body over 256 KiB is cut off → userinfo-fetch-failed (body-too-large)', async () => {
     const huge = `{"sub":"u-1","pad":"${'x'.repeat(300 * 1024)}"}`
     const err = await acquireIdentityClaims({

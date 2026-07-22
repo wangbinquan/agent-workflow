@@ -728,6 +728,7 @@ export const enUS: Resources = {
       testNotReady: 'Configuration cannot complete a sign-in',
       testDiscoveryOk: 'discovery: reachable',
       testDiscoveryDown: 'discovery unavailable — manual endpoints in use',
+      testDiscoveryError: 'discovery unavailable: {{error}}',
       testDetailIssuer: 'issuer:',
       sourceManual: '(manual)',
       sourceDiscovery: '(discovery)',

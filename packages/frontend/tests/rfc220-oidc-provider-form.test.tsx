@@ -220,7 +220,9 @@ describe('RFC-220 S10 — provider dialog fields', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Test connection' }))
     await screen.findByText(/Configuration cannot complete a sign-in/)
     expect(api.post).toHaveBeenCalledWith('/api/oidc/providers/p1/test')
-    expect(screen.getByText(/discovery unavailable/)).toBeTruthy()
+    // not-ready + discovery down must surface the REAL failure reason, not
+    // the "manual endpoints in use" fallback wording (impl-gate P2)
+    expect(screen.getByText(/discovery unavailable: network down/)).toBeTruthy()
     expect(screen.getAllByText('(manual)', { exact: false }).length).toBe(2) // authorize + jwks
     expect(screen.getAllByText('(discovery)', { exact: false }).length).toBe(1) // token
     expect(screen.getByText(/not configured/)).toBeTruthy()

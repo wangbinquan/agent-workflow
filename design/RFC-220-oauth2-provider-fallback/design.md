@@ -937,3 +937,12 @@ discovery」两条非目标明示(proposal §3)。
 **收口判定**:六轮 P1 归零、findings 降为纯一致性修订(P2×4),对照一至五轮
 (6→11→8→5→8 findings、P1 计 14 条)已收敛;设计门就此关闭,剩余把关移交实现门
 (Codex impl review)与 S1-S14 测试面。
+
+### 14.6 实现门(Codex @ 实现全链合成提交,基座 1152d219;0 P1 + 4 P2,全采纳)
+
+| # | 级别 | 发现 | 处置 |
+| --- | --- | --- | --- |
+| 1 | P2 | fresh 探测失败只写负缓存不删正缓存条目:负窗口(5min)过后,仍在 1h TTL 内的陈旧正条复活,返回过期 discovery 端点 | 失败路径无条件 `positiveCache.delete`(最新事实优先);S3 增「fresh 失败驱逐陈条」锁 |
+| 2 | P2 | probe 的 jwks 可达性只看 `res.ok`,200+HTML/空体也报 reachable,而运行时 `createRemoteJWKSet` 必败(旧 testDiscovery 本会消费 body) | 探测解析 body 并校验 `{ keys: [...] }` 形状;probe 测试增 200 非 JWKS 体 case |
+| 3 | P2 | userinfo 头部已回、body 流中途 reset/abort 时异常抛在 `reader.read()`(transport catch 之外),塌成 verify-failed | `readBodyCapped` 内 catch 流读异常包 `userinfo-fetch-failed body-read`(body-too-large 原样透传);S5 增流中断 case |
+| 4 | P2 | 前端 discovery-down 文案在 not-ready 配置下仍称「正在使用手动端点」且丢弃 `discovery.error` | 文案按 `result.ok` 分支:ready 才用回退措辞,否则展示真实失败原因(新 i18n key `testDiscoveryError`);前端测试断言真实错误串 |

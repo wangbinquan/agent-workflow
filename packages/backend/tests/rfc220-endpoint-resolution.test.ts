@@ -228,6 +228,25 @@ describe('RFC-220 S3 — resolveEndpoints', () => {
     expect(calls.length).toBe(1)
   })
 
+  test('a fresh failure evicts the stale positive entry (impl-gate P2)', async () => {
+    // healthy → cached; then a forceFresh probe fails; once the (shorter)
+    // negative window lapses, the old positive entry must NOT resurrect the
+    // stale discovery URLs — the next resolve goes back to the network.
+    const healthy = stubFetch(() => ({ body: FULL_DOC }))
+    await resolveEndpoints(FULL_MANUAL, { fetcher: healthy.fetcher, now: 1000 })
+    const failing = failingFetch()
+    await resolveEndpoints(FULL_MANUAL, { fetcher: failing.fetcher, now: 2000, forceFresh: true })
+    const after = stubFetch(() => ({
+      body: { ...FULL_DOC, token_endpoint: 'https://disc.test/v3/token' },
+    }))
+    const eff = await resolveEndpoints(FULL_MANUAL, {
+      fetcher: after.fetcher,
+      now: 2000 + 5 * 60 * 1000 + 1,
+    })
+    expect(after.calls.length).toBe(1) // refetched, not served from the old entry
+    expect(eff.tokenEndpoint).toBe('https://disc.test/v3/token')
+  })
+
   test('failure is never cached as success', async () => {
     const bad = failingFetch()
     await resolveEndpoints(FULL_MANUAL, { fetcher: bad.fetcher, now: 1000 })

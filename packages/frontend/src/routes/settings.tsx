@@ -2192,9 +2192,17 @@ function OidcProviderDialog(props: {
             <span className="oidc-form__test-detail">
               {testResult.result.discovery.ok
                 ? t('settings.auth.testDiscoveryOk', { defaultValue: 'discovery: reachable' })
-                : t('settings.auth.testDiscoveryDown', {
-                    defaultValue: 'discovery unavailable — manual endpoints in use',
-                  })}
+                : testResult.result.ok
+                  ? // "manual endpoints in use" is only true when the manual set
+                    // actually carries a login — a broken config must show the
+                    // real discovery failure instead (impl-gate P2).
+                    t('settings.auth.testDiscoveryDown', {
+                      defaultValue: 'discovery unavailable — manual endpoints in use',
+                    })
+                  : t('settings.auth.testDiscoveryError', {
+                      defaultValue: 'discovery unavailable: {{error}}',
+                      error: testResult.result.discovery.error ?? 'unknown error',
+                    })}
               <br />
               {t('settings.auth.testDetailIssuer', { defaultValue: 'issuer:' })}{' '}
               <code>{testResult.result.issuer}</code>

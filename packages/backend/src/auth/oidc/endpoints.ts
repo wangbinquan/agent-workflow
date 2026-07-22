@@ -199,6 +199,10 @@ export async function resolveEndpoints(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     const manualOnly = merge(null, provider, { ok: false, error: message })
+    // A fresh failure is the newest fact about this issuer: a surviving
+    // positive entry would resurrect up-to-1h-stale discovery URLs the moment
+    // the (shorter) negative window lapses (impl-gate P2).
+    positiveCache.delete(provider.issuerUrl)
     // Failures are cached AS failures, and only for configs that can actually
     // continue through manual endpoints — anything else keeps per-request
     // retry semantics so IdP recovery is picked up immediately.

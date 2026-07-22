@@ -157,8 +157,20 @@ async function readBodyCapped(res: Response, maxBytes: number): Promise<string> 
   const chunks: Uint8Array[] = []
   let total = 0
   for (;;) {
-    const { done, value } = await reader.read()
-    if (done) break
+    let step: Awaited<ReturnType<typeof reader.read>>
+    try {
+      step = await reader.read()
+    } catch (err) {
+      // The headers already resolved, so a mid-body stall/reset/abort throws
+      // HERE, outside the transport catch in fetchUserinfo — untyped it would
+      // collapse into the generic verify-failed page (impl-gate P2).
+      throw new OidcTokenError(
+        `userinfo-fetch-failed body-read: ${err instanceof Error ? err.message : String(err)}`,
+        'userinfo-fetch-failed',
+      )
+    }
+    if (step.done) break
+    const value = step.value
     if (value) {
       total += value.byteLength
       if (total > maxBytes) {

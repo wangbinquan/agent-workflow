@@ -853,6 +853,7 @@ export interface Resources {
       testNotReady: string
       testDiscoveryOk: string
       testDiscoveryDown: string
+      testDiscoveryError: string
       testDetailIssuer: string
       sourceManual: string
       sourceDiscovery: string
@@ -4487,6 +4488,7 @@ export const zhCN: Resources = {
       testNotReady: '当前配置无法完成登录',
       testDiscoveryOk: 'discovery：可达',
       testDiscoveryDown: 'discovery 不可用——正在使用手动端点',
+      testDiscoveryError: 'discovery 不可达：{{error}}',
       testDetailIssuer: 'issuer：',
       sourceManual: '（手动）',
       sourceDiscovery: '（discovery）',

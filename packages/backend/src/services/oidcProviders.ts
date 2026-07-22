@@ -247,7 +247,17 @@ export function createOidcProvidersService(deps: {
             method: 'GET',
             signal: AbortSignal.timeout(10_000),
           })
-          jwksReachable = res.ok
+          // A 200 with an HTML/empty/malformed body would still fail every
+          // id-token verification — "reachable" means "serves a JWKS", so the
+          // body must parse to a `{ keys: [...] }` document (impl-gate P2;
+          // the pre-RFC-220 probe consumed the body too).
+          if (!res.ok) {
+            jwksReachable = false
+          } else {
+            const jwksBody = (await res.json()) as { keys?: unknown }
+            jwksReachable =
+              typeof jwksBody === 'object' && jwksBody !== null && Array.isArray(jwksBody.keys)
+          }
         } catch {
           jwksReachable = false
         }
