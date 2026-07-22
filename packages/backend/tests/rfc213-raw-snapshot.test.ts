@@ -128,3 +128,25 @@ describe('RFC-213 createBackup manifest (PR-0 T2)', () => {
     expect(manifest!.migration.lastCreatedAt).toBe(identity!.lastCreatedAt)
   })
 })
+
+// RFC-213 impl-gate P0-4 (Codex 2026-07-22): the pre-restore safety tarball must
+// be fsync'd (file + dir) BEFORE the caller (restore) unlinks the old WAL and
+// swaps the DB — a power loss otherwise loses both the (still-buffered) safety
+// tarball and the (already-unlinked) old WAL, making the old generation
+// unrecoverable. Durability can't be unit-tested, so lock the source guarantee:
+// the fsync of the output path AND the backups dir happens AFTER the tarGz write.
+// Mutation: delete either fsyncPath call → this reds.
+describe('impl-gate P0-4 — safety tarball durability (source guard)', () => {
+  test('rawDbSnapshot fsyncs the tarball + backups dir after writing it', () => {
+    const src = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'rawDbSnapshot.ts'),
+      'utf-8',
+    )
+    const tarIdx = src.indexOf('await tarGz(stagingDir, outPath)')
+    const fsyncOutIdx = src.indexOf('fsyncPath(outPath)')
+    const fsyncDirIdx = src.indexOf('fsyncPath(backupsDir)')
+    expect(tarIdx).toBeGreaterThan(0)
+    expect(fsyncOutIdx).toBeGreaterThan(tarIdx)
+    expect(fsyncDirIdx).toBeGreaterThan(tarIdx)
+  })
+})

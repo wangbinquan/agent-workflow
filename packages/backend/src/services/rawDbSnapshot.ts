@@ -15,7 +15,16 @@
 // split from createBackup (services/backup.ts, VACUUM INTO — healthy DB only).
 
 import { Database } from 'bun:sqlite'
-import { cpSync, existsSync, mkdirSync, rmSync, statSync } from 'node:fs'
+import {
+  closeSync,
+  cpSync,
+  existsSync,
+  fsyncSync,
+  mkdirSync,
+  openSync,
+  rmSync,
+  statSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import { quickCheckDbFile } from '@/db/integrity'
 import { tarGz } from '@/util/archive'
@@ -30,6 +39,23 @@ import {
 } from './backupManifest'
 
 const log = createLogger('rawDbSnapshot')
+
+// RFC-213 impl-gate P0-4 (Codex 2026-07-22): best-effort fsync so the safety
+// tarball is DURABLE before the caller (restore) deletes the old WAL and swaps
+// the DB. Mirror of the same helpers in restore.ts (kept local to avoid a
+// restore↔rawDbSnapshot import cycle; both are trivial + stable).
+function fsyncPath(path: string): void {
+  try {
+    const fd = openSync(path, 'r')
+    try {
+      fsyncSync(fd)
+    } finally {
+      closeSync(fd)
+    }
+  } catch {
+    /* best-effort — some platforms reject directory fsync; durability only */
+  }
+}
 
 export interface RawCopyOptions {
   kind: BackupKind
@@ -143,6 +169,12 @@ export async function rawCopyDb(opts: RawCopyOptions): Promise<RawCopyResult> {
     writeManifest(stagingDir, manifest)
 
     await tarGz(stagingDir, outPath)
+    // P0-4: land the safety tarball + its directory entry durably BEFORE the
+    // caller destroys the old DB generation. Without this, a power loss after the
+    // pre-restore copy but before the swap's fsync could lose BOTH the safety
+    // tarball (still buffered) and the old WAL (already unlinked by swapInDbFile).
+    fsyncPath(outPath)
+    fsyncPath(backupsDir)
     log.info('raw db snapshot created', { path: outPath, kind: opts.kind, checkpointed, copied })
   } finally {
     if (existsSync(stagingDir)) rmSync(stagingDir, { recursive: true, force: true })
