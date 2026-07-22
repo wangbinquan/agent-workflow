@@ -21,12 +21,14 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { userPats, users, userSessions } from '../src/db/schema'
 import { createUser } from '../src/services/users'
 import {
+  currentRevalidationEpoch,
   liveConnectionCount,
   liveConnections,
   resetConnectionsForTest,
   trackConnection,
   untrackConnection,
 } from '../src/ws/connections'
+import { triggerRevalidation } from '../src/ws/revalidationHook'
 import { WS_CHANNELS, type WsChannelKind, type WsConnectionData } from '../src/ws/registry'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -280,5 +282,29 @@ describe('RFC-212 T4 — every channel declares its revalidation strategy (AC-5)
     // @ts-expect-error — `revalidation` is REQUIRED on ChannelSpec (RFC-212 AC-5)
     const incomplete: Spec = withoutRevalidation
     expect(incomplete).toBeDefined()
+  })
+})
+
+describe('RFC-212 impl-gate finding 2 — upgrade-race epoch', () => {
+  test('a revocation trigger bumps the epoch (so an in-flight upgrade detects the race)', () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const before = currentRevalidationEpoch()
+    triggerRevalidation(db, 'user-patched')
+    expect(currentRevalidationEpoch()).toBe(before + 1)
+    triggerRevalidation(db, 'session-revoked')
+    expect(currentRevalidationEpoch()).toBe(before + 2)
+  })
+
+  test('server.ts captures the epoch pre-resolve + re-resolves on mismatch before subscribing', () => {
+    const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'ws', 'server.ts'), 'utf8')
+    // captured BEFORE resolveActor, stored on data, compared after track.
+    expect(src).toContain('const upgradeEpoch = currentRevalidationEpoch()')
+    expect(src).toContain('upgradeEpoch,')
+    expect(src).toContain('currentRevalidationEpoch() !== ws.data.upgradeEpoch')
+    // the re-resolve/close happens BEFORE the subscribe (no frame under a stale actor).
+    const cmpIdx = src.indexOf('currentRevalidationEpoch() !== ws.data.upgradeEpoch')
+    const subIdx = src.indexOf('await openWsChannel(ws, ch, deps.db)')
+    expect(cmpIdx).toBeGreaterThan(0)
+    expect(subIdx).toBeGreaterThan(cmpIdx)
   })
 })

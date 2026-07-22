@@ -26,11 +26,17 @@
 
 import type { ServerWebSocket } from 'bun'
 import type { Actor } from '@/auth/actor'
-import { buildWsCredential, resolveActor } from '@/auth/session'
+import { buildWsCredential, reresolveActor, resolveActor } from '@/auth/session'
 import type { DbClient } from '@/db/client'
 import { createLogger } from '@/util/log'
 import { checkUpgradeGate, openWsChannel, parseWsChannel, type WsConnectionData } from './registry'
-import { trackConnection, untrackConnection } from './connections'
+import {
+  closeConnection,
+  currentRevalidationEpoch,
+  trackConnection,
+  untrackConnection,
+  WS_CLOSE_AUTH_REVOKED,
+} from './connections'
 
 const log = createLogger('ws.server')
 
@@ -112,6 +118,10 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
     // received a session token failed every WS upgrade with 401 — the
     // SessionTab fell back to remount-on-tab-switch refetches and looked
     // "not live" even though the runner was broadcasting correctly.
+    // RFC-212 impl-gate finding 2: capture the revocation epoch BEFORE resolving
+    // the actor, so a revocation that commits during this upgrade (any of the
+    // awaits below) is detectable at open time.
+    const upgradeEpoch = currentRevalidationEpoch()
     let actor: Actor | null = null
     try {
       actor = await resolveActor(deps.db, queryToken, daemonTokenBuf)
@@ -143,6 +153,7 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
       credential: await buildWsCredential(deps.db, queryToken),
       closing: false,
       revalidating: false,
+      upgradeEpoch,
       unsubscribe: () => {
         /* set on open */
       },
@@ -163,6 +174,20 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
     // re-checks the actor it just resolved), or it completed earlier and the
     // actor resolved above is already newer than that revocation.
     trackConnection(ws)
+    // RFC-212 impl-gate finding 2: if a revocation committed DURING this upgrade
+    // (epoch changed), this connection was resolved with a possibly-stale actor
+    // and was invisible to that rescan's live snapshot. It's tracked now, so
+    // re-resolve it once against the post-revocation DB before it can receive any
+    // frame — close it if the credential was revoked, refresh the actor otherwise
+    // (a role demotion). The subscribe below then runs under the fresh actor.
+    if (currentRevalidationEpoch() !== ws.data.upgradeEpoch) {
+      const fresh = await reresolveActor(deps.db, ws.data.credential, Date.now()).catch(() => null)
+      if (fresh === null) {
+        closeConnection(ws, WS_CLOSE_AUTH_REVOKED, 'auth-revoked-mid-upgrade')
+        return
+      }
+      ws.data.actor = fresh
+    }
     // RFC-152 — gatedSubscribe (admin short-circuit → frameGate → error ⇒
     // drop) + hello frame + onOpenExtra (task `?since` replay), all driven
     // by the channel's registry spec.

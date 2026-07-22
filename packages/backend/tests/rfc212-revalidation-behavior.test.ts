@@ -51,6 +51,7 @@ function fakeConn(actor: Actor, credential: WsCredential, channel: AnyChannelPar
     credential,
     closing: false,
     revalidating: false,
+    upgradeEpoch: 0,
     unsubscribe: () => {},
     visibilityCache: new Map(),
   }

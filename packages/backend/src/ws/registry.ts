@@ -173,6 +173,14 @@ export interface WsConnectionData {
    * the running subscription during every `await` inside the serial rescan.
    */
   revalidating: boolean
+  /**
+   * RFC-212 impl-gate finding 2 (Codex 2026-07-22): the revocation epoch captured
+   * at the START of this connection's upgrade (before resolveActor). If it differs
+   * from the current epoch by the time the connection is tracked, a revocation
+   * raced the upgrade — the actor may be stale AND this connection was invisible
+   * to that rescan's live snapshot — so handleOpen re-checks it once on open.
+   */
+  upgradeEpoch: number
   unsubscribe: () => void
   /**
    * RFC-054 W2-4 — per-connection visibility cache. tasks-list entries are

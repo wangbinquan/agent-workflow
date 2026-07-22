@@ -34,6 +34,16 @@ import {
 
 const live = new Set<ServerWebSocket<WsConnectionData>>()
 
+// RFC-212 impl-gate finding 2 (Codex 2026-07-22): a monotonic counter bumped on
+// every revocation. A connection captures it at the START of its upgrade (before
+// resolveActor); if it differs by the time the connection is tracked, a
+// revocation raced the upgrade and this connection — resolved with a possibly
+// stale actor and NOT seen by that rescan's live snapshot — must be re-checked.
+let revalidationEpoch = 0
+export function currentRevalidationEpoch(): number {
+  return revalidationEpoch
+}
+
 /** Private WebSocket close codes (4000-4999) the frontend maps to user copy. */
 export const WS_CLOSE_AUTH_REVOKED = 4401
 export const WS_CLOSE_NOT_VISIBLE = 4403
@@ -85,7 +95,7 @@ export function resetConnectionsForTest(): void {
 }
 
 /** Close a connection, dropping in-flight frames synchronously first. */
-function closeConnection(
+export function closeConnection(
   ws: ServerWebSocket<WsConnectionData>,
   code: number,
   reason: string,
@@ -199,6 +209,9 @@ const revalidateLog = createLogger('ws.revalidate')
 // write point does not wait for sockets to close. Tests drive
 // revalidateAllConnections directly for determinism.
 registerRevalidationTrigger((db, reason) => {
+  // finding 2: bump the epoch FIRST so an upgrade in flight (which already
+  // captured the old epoch) can detect that it raced this revocation.
+  revalidationEpoch += 1
   // RFC-212 impl-gate (Codex 2026-07-22): SYNCHRONOUSLY freeze every live
   // connection BEFORE the async pass starts. The revocation write has already
   // committed by the time the trigger fires, so between here and each

@@ -63,6 +63,7 @@ function makeFakeWs(actor: Actor): {
     credential: { kind: 'daemon' },
     closing: false,
     revalidating: false,
+    upgradeEpoch: 0,
     unsubscribe: () => {},
     visibilityCache: new Map(),
   }
