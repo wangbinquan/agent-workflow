@@ -71,12 +71,12 @@ const ALLOW_RETRY = new Map<string, number>([
   ['components/home/CapabilityGrid.tsx', 1],
   ['routes/reviews.tsx', 2],
 ])
-// P1-1 + P3-r2 (Codex re-review): every DIRECT inline refetch shape — member
-// `x.refetch(`, optional-call `x.refetch?.(` (QueryState.tsx:84's own idiom),
-// computed `x['refetch'](`, and destructured bare `refetch(` / `refetch}`. `\b`
-// cannot fire inside `prefetch`. NAMED-HANDLER indirection (`onClick={doRetry}`)
-// stays the honestly-declared out-of-scope (needs AST).
-const RETRY_BUTTON = String.raw`onClick=\{[^}]*\brefetch\s*(?:\?\.)?\s*\(|onClick=\{[^}]*\[["']refetch["']\]\s*\(|onClick=\{(?:[A-Za-z0-9_$]+\.)?refetch\}`
+// P1-1 + P3-r2/r3 (Codex re-review): every DIRECT inline refetch shape — member
+// `x.refetch(` / `x.refetch?.(`, computed `x['refetch'](` / `x['refetch']?.(`,
+// bare `refetch(`, and reference `refetch}` / `x['refetch']}`. `\b` cannot fire
+// inside `prefetch`. NAMED-HANDLER indirection (`onClick={doRetry}`) stays the
+// honestly-declared out-of-scope (needs AST).
+const RETRY_BUTTON = String.raw`onClick=\{[^}]*\brefetch\s*(?:\?\.)?\s*\(|onClick=\{[^}]*\[["']refetch["']\]\s*(?:\?\.)?\s*\(|onClick=\{[^}]*\[["']refetch["']\]\s*\}|onClick=\{(?:[A-Za-z0-9_$]+\.)?refetch\}`
 
 // ---------------------------------------------------------------------------
 // Lock B: hand-written muted query-empties. EXACT per-file occurrence allowlist.
@@ -176,6 +176,8 @@ describe('RFC-214 guard regexes — direct-shape coverage', () => {
     ['member call', 'onClick={() => void q.refetch()}'],
     ['optional call (QueryState idiom)', 'onClick={() => void q.refetch?.()}'],
     ['computed access', "onClick={() => q['refetch']()}"],
+    ['computed optional-call', "onClick={() => q['refetch']?.()}"],
+    ['computed reference', "onClick={q['refetch']}"],
     ['bare destructured', 'onClick={() => refetch()}'],
     ['reference', 'onClick={refetch}'],
   ])('Lock A catches inline refetch: %s', (_n, s) => {
