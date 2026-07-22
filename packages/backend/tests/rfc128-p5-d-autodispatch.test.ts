@@ -20,14 +20,7 @@ import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 import { gitStashSnapshot, runGit } from '../src/util/git'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import {
-  clarifyRounds,
-  crossClarifySessions,
-  nodeRuns,
-  taskQuestions,
-  tasks,
-  workflows,
-} from '../src/db/schema'
+import { clarifyRounds, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { broadcastSelfClarifyAnsweredForRound, createClarifySession } from '../src/services/clarify'
 import { broadcastCrossClarifyAnsweredForRound } from '../src/services/crossClarify'
@@ -207,14 +200,6 @@ async function seedSealableCrossRound(
     intermediaryNodeId: CC,
     intermediaryNodeRunId: crossNodeRunId,
     targetConsumerNodeId: D,
-  })
-  await db.insert(crossClarifySessions).values({
-    ...common,
-    crossClarifyNodeId: CC,
-    crossClarifyNodeRunId: crossNodeRunId,
-    sourceQuestionerNodeId: Q,
-    sourceQuestionerNodeRunId: questionerRunId,
-    targetDesignerNodeId: D,
   })
   return { crossNodeRunId, questionerRunId, roundId }
 }

@@ -30,14 +30,7 @@ import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 const ulid = monotonicFactory()
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import {
-  agents,
-  clarifySessions,
-  nodeRunOutputs,
-  nodeRuns,
-  tasks,
-  workflows,
-} from '../src/db/schema'
+import { clarifyRounds, agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { submitReviewDecision } from '../src/services/review'
 import { runTask } from '../src/services/scheduler'
@@ -479,9 +472,9 @@ describe('RFC-098 B3 — RFC-092 已知限制解除：wrapper 内 clarify mid-ru
         const s = (
           await h.db
             .select()
-            .from(clarifySessions)
+            .from(clarifyRounds)
             .where(
-              and(eq(clarifySessions.taskId, taskId), eq(clarifySessions.status, 'awaiting_human')),
+              and(eq(clarifyRounds.taskId, taskId), eq(clarifyRounds.status, 'awaiting_human')),
             )
         )[0]
         if (s === undefined) return undefined
@@ -496,7 +489,7 @@ describe('RFC-098 B3 — RFC-092 已知限制解除：wrapper 内 clarify mid-ru
 
       await autoDispatchClarifyRound({
         db: h.db,
-        originNodeRunId: session.clarifyNodeRunId,
+        originNodeRunId: session.intermediaryNodeRunId,
         answers: [CLARIFY_ANSWER],
         directive: 'stop', // RFC-100: finalize round → wrapper-inner agent's <workflow-output> accepted
         actor,
@@ -530,10 +523,7 @@ describe('RFC-098 B3 — RFC-092 已知限制解除：wrapper 内 clarify mid-ru
     const slowRuns = await nodeRows(h.db, taskId, 'slow')
     expect(slowRuns).toHaveLength(1)
     expect(slowRuns[0]!.status).toBe('done')
-    const sessions = await h.db
-      .select()
-      .from(clarifySessions)
-      .where(eq(clarifySessions.taskId, taskId))
+    const sessions = await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     expect(sessions).toHaveLength(1)
     expect(sessions[0]!.status).toBe('answered')
   }, 20_000)

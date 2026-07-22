@@ -68,7 +68,17 @@ function stripComments(src: string): string {
   return stripLineComments(src.replace(/\/\*[\s\S]*?\*\//g, ' '))
 }
 
-const routeFiles = trackedFiles('packages/backend/src/routes/*.ts')
+// RFC-217 T4 moved the workgroup route-handler bodies (and the error codes
+// they throw) into services/workgroup/{taskActions,configActions,dwActions}.ts;
+// routes/workgroupTasks.ts is pure transport now. Those codes are still
+// client-reachable route surface, so the scan follows them — narrowing the
+// corpus would silently drop the ratchet's pressure on exactly those branches.
+const routeFiles = [
+  ...trackedFiles('packages/backend/src/routes/*.ts'),
+  ...trackedFiles('packages/backend/src/services/workgroup/taskActions.ts'),
+  ...trackedFiles('packages/backend/src/services/workgroup/configActions.ts'),
+  ...trackedFiles('packages/backend/src/services/workgroup/dwActions.ts'),
+]
 
 const codeToFiles = new Map<string, Set<string>>()
 for (const rel of routeFiles) {

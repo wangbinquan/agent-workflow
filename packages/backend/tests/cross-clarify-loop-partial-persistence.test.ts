@@ -36,7 +36,7 @@ import { resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { crossClarifySessions, nodeRuns, tasks, workflows } from '../src/db/schema'
+import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import {
   createCrossClarifySession,
@@ -274,12 +274,12 @@ describe('RFC-056 C5 — wrapper-loop partial persistence', () => {
     // No new awaiting_human session was minted for iter 1.
     const iter1Awaiting = await db
       .select()
-      .from(crossClarifySessions)
+      .from(clarifyRounds)
       .where(
         and(
-          eq(crossClarifySessions.taskId, taskId),
-          eq(crossClarifySessions.crossClarifyNodeId, 'cross1'),
-          eq(crossClarifySessions.loopIter, 1),
+          eq(clarifyRounds.taskId, taskId),
+          eq(clarifyRounds.intermediaryNodeId, 'cross1'),
+          eq(clarifyRounds.loopIter, 1),
         ),
       )
     expect(iter1Awaiting.length).toBe(0)
@@ -313,12 +313,12 @@ describe('RFC-056 C5 — wrapper-loop partial persistence', () => {
     // which would lose the iter-0 audit trail.)
     const iter0Rows = await db
       .select()
-      .from(crossClarifySessions)
+      .from(clarifyRounds)
       .where(
         and(
-          eq(crossClarifySessions.taskId, taskId),
-          eq(crossClarifySessions.crossClarifyNodeId, 'cross1'),
-          eq(crossClarifySessions.directive, 'stop'),
+          eq(clarifyRounds.taskId, taskId),
+          eq(clarifyRounds.intermediaryNodeId, 'cross1'),
+          eq(clarifyRounds.directive, 'stop'),
         ),
       )
     expect(iter0Rows.length).toBe(1)

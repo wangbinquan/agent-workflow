@@ -1526,7 +1526,7 @@ export function validateWorkflowDef(
       // `to_questioner` auto-edge present? Looks for an edge from this node's
       // to_questioner port back to questioner.__clarify_response__. The
       // reverse-drag mints it; user-deletion is allowed (the runtime injects
-      // answers via cross_clarify_sessions, not via this edge) but the canvas
+      // answers via clarify_rounds, not via this edge) but the canvas
       // hides the closed feedback loop and that warrants a warning.
       const toQuestionerOut = outboundEdges.filter(
         (e) => e.source.portName === CROSS_CLARIFY_OUT_TO_QUESTIONER_PORT,

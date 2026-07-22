@@ -18,7 +18,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { clarifySessions, nodeRuns, tasks, workgroupMessages, users } from '../src/db/schema'
+import { clarifyRounds, nodeRuns, tasks, workgroupMessages, users } from '../src/db/schema'
 import { buildActor } from '../src/auth/actor'
 import { createAgent } from '../src/services/agent'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
@@ -188,18 +188,16 @@ describe('RFC-187 F3 — non-autonomous leader clarify parks (does not spin to m
       const clar = (
         await h.db
           .select()
-          .from(clarifySessions)
-          .where(
-            and(eq(clarifySessions.taskId, task.id), eq(clarifySessions.status, 'awaiting_human')),
-          )
+          .from(clarifyRounds)
+          .where(and(eq(clarifyRounds.taskId, task.id), eq(clarifyRounds.status, 'awaiting_human')))
       )[0]
       expect(clar).toBeDefined()
-      expect(clar?.sourceAgentNodeId).toBe('__wg_leader__')
+      expect(clar?.askingNodeId).toBe('__wg_leader__')
 
       // answer the clarify → resume → leader continues → dispatch → worker → done.
       await autoDispatchClarifyRound({
         db: h.db,
-        originNodeRunId: clar!.clarifyNodeRunId,
+        originNodeRunId: clar!.intermediaryNodeRunId,
         answers: [
           {
             questionId: 'q1',

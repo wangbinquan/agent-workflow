@@ -11,9 +11,10 @@
 // review nodes (see services/review.ts listReviewSummaries).
 
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
+import { insertLegacySelfClarify } from './clarify-fixtures'
 import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { clarifySessions, nodeRuns, tasks, workflows } from '../src/db/schema'
+import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { listClarifySummaries } from '../src/services/clarify'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
@@ -79,7 +80,7 @@ async function seedSessionForSnapshot(
     iteration: 0,
   })
   const sessionId = `cs_${taskId}`
-  await db.insert(clarifySessions).values({
+  await insertLegacySelfClarify(db, {
     id: sessionId,
     taskId,
     sourceAgentNodeId: agentNodeId,

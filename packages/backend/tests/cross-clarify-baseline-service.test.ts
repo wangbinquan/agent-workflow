@@ -20,7 +20,7 @@ import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { crossClarifySessions, nodeRuns, tasks, workflows } from '../src/db/schema'
+import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import {
   createCrossClarifySession,
@@ -338,9 +338,9 @@ describe('RFC-058 baseline T3 — evaluateDesignerRerunReadiness ready/pending l
     // not-ready sibling). cc_zeta still awaiting_human.
     const ccAlphaRunRows = await db
       .select()
-      .from(crossClarifySessions)
-      .where(eq(crossClarifySessions.crossClarifyNodeId, 'cc_alpha'))
-    const cnrA = ccAlphaRunRows[0]!.crossClarifyNodeRunId
+      .from(clarifyRounds)
+      .where(eq(clarifyRounds.intermediaryNodeId, 'cc_alpha'))
+    const cnrA = ccAlphaRunRows[0]!.intermediaryNodeRunId
     await autoDispatchClarifyRound({
       db,
       originNodeRunId: cnrA,

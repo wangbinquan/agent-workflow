@@ -18,6 +18,7 @@
 //     daemon-related tests)
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { insertLegacySelfClarify } from './clarify-fixtures'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -28,7 +29,6 @@ import { createInMemoryDb } from '../src/db/client'
 import {
   agents as agentsTable,
   clarifyRounds,
-  clarifySessions,
   docVersions,
   nodeRunOutputs,
   nodeRuns,
@@ -685,7 +685,7 @@ describe('RFC-053 PR-A T1a — node_run.status transition matrix (current behavi
           ],
         },
       ]
-      await h.db.insert(clarifySessions).values({
+      await insertLegacySelfClarify(h.db, {
         id: sessionId,
         taskId: h.taskId,
         clarifyNodeId: 'clarify_x',
@@ -698,24 +698,6 @@ describe('RFC-053 PR-A T1a — node_run.status transition matrix (current behavi
         answersJson: '{}',
         createdAt: Date.now() - 30,
       })
-      // RFC-132: the unified driver reads clarify_rounds (not the legacy session
-      // table) — mirror the hand-inserted session row (same id, kind 'self').
-      await h.db.insert(clarifyRounds).values({
-        id: sessionId,
-        taskId: h.taskId,
-        kind: 'self',
-        askingNodeId: 'doc',
-        askingNodeRunId: agentRunId,
-        intermediaryNodeId: 'clarify_x',
-        intermediaryNodeRunId: clarifyRunId,
-        iteration: 0,
-        loopIter: 0,
-        status: 'awaiting_human',
-        questionsJson: JSON.stringify(questions),
-        answersJson: '[]',
-        createdAt: Date.now() - 30,
-      })
-
       await autoDispatchClarifyRound({
         db: h.db,
         originNodeRunId: clarifyRunId,
@@ -738,7 +720,7 @@ describe('RFC-053 PR-A T1a — node_run.status transition matrix (current behavi
       expect(clarifyAfter.finishedAt).not.toBeNull()
       // Session closed.
       const sessAfter = (
-        await h.db.select().from(clarifySessions).where(eq(clarifySessions.id, sessionId))
+        await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.id, sessionId))
       )[0]!
       expect(sessAfter.status).toBe('answered')
 

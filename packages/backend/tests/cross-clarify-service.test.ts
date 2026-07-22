@@ -29,7 +29,7 @@ import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { crossClarifySessions, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
+import { clarifyRounds, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import {
   listTaskQuestions,
   loadUndispatchedSelfQuestionerTargets,
@@ -41,9 +41,7 @@ import {
   createCrossClarifySession,
   dispatchCrossClarifyNode,
   evaluateDesignerRerunReadiness,
-  resolveCrossNodeStopped,
 } from '../src/services/crossClarify'
-import { reconcileLegacyCrossPersistentStop } from '../src/services/clarifyMigration'
 import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
 import { resetBroadcastersForTests, taskBroadcaster, TASK_CHANNEL } from '../src/ws/broadcaster'
 import type {
@@ -239,9 +237,7 @@ describe('RFC-056 createCrossClarifySession', () => {
     expect(session.crossClarifyNodeRunId).toBe(crossClarifyNodeRunId)
     expect(session.questions).toHaveLength(2)
 
-    const row = (
-      await db.select().from(crossClarifySessions).where(eq(crossClarifySessions.id, session.id))
-    )[0]
+    const row = (await db.select().from(clarifyRounds).where(eq(clarifyRounds.id, session.id)))[0]
     expect(row?.status).toBe('awaiting_human')
     expect(row?.iteration).toBe(0)
 
@@ -534,70 +530,6 @@ describe('RFC-056 evaluateDesignerRerunReadiness — multi-source aggregation', 
 // buildMintNodeRunValues coverage.)
 
 describe('RFC-056 dispatchCrossClarifyNode persistent-stop short-circuit', () => {
-  test('cross-clarify node_run flips pending → done when a prior directive=stop session exists for the same node_id (any loop_iter)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const def = defaultDef()
-    const { taskId } = await seedTask(db, { definition: def })
-    const qRunId = await seedQuestionerRun(db, taskId)
-    await seedDesignerRun(db, taskId)
-    // Seed a directive='stop' row directly (simulating prior reject).
-    await db.insert(crossClarifySessions).values({
-      id: 'old-stop',
-      taskId,
-      crossClarifyNodeId: 'cross1',
-      crossClarifyNodeRunId: (
-        await createCrossClarifySession({
-          db,
-          taskId,
-          crossClarifyNodeId: 'cross1',
-          sourceQuestionerNodeId: 'questioner',
-          sourceQuestionerNodeRunId: qRunId,
-          targetDesignerNodeId: 'designer',
-          loopIter: 0,
-          questions: [makeQ('q1', 't')],
-        })
-      ).crossClarifyNodeRunId, // any valid node_run row, just to satisfy FK
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: qRunId,
-      targetDesignerNodeId: 'designer',
-      loopIter: 0,
-      iteration: 99,
-      questionsJson: '[]',
-      answersJson: '[]',
-      directive: 'stop',
-      status: 'answered',
-      createdAt: Date.now(),
-      answeredAt: Date.now(),
-    })
-
-    // RFC-132 T7: a legacy crossClarifySessions.directive='stop' (written pre-migration, with no
-    // node-level directive) is reconciled onto the questioner node's node-level directive by the
-    // boot migration shim; resolveCrossNodeStopped / dispatchCrossClarifyNode then read it.
-    await reconcileLegacyCrossPersistentStop(db)
-    expect(await resolveCrossNodeStopped(db, taskId, 'questioner')).toBe(true)
-
-    // Now mint a fresh cross-clarify node_run pending and dispatch it.
-    const nrId = `nr_cross_${Math.random().toString(36).slice(2, 8)}`
-    await db.insert(nodeRuns).values({
-      id: nrId,
-      taskId,
-      nodeId: 'cross1',
-      status: 'pending',
-      retryIndex: 0,
-      iteration: 0,
-    })
-    const out = await dispatchCrossClarifyNode({
-      db,
-      taskId,
-      crossClarifyNodeId: 'cross1',
-      nodeRunId: nrId,
-      definition: def,
-    })
-    expect(out.kind).toBe('short-circuit-stop')
-    const fresh = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, nrId)))[0]
-    expect(fresh?.status).toBe('done')
-  })
-
   test('no persistent stop → dispatch returns "awaiting" (no row mutation)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const def = defaultDef()
@@ -671,16 +603,14 @@ describe('RFC-125 follow-up — failed→resume must NOT drop answered cross-cla
     // so the human's answer is preserved (the deferred queue re-injects it on resume).
     await db.update(tasks).set({ status: 'failed' }).where(eq(tasks.id, taskId))
     await runLifecycleInvariants({ db })
-    const sess = (
-      await db.select().from(crossClarifySessions).where(eq(crossClarifySessions.taskId, taskId))
-    )[0]
+    const sess = (await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId)))[0]
     expect(sess?.status).toBe('answered') // RFC-126: NOT abandoned anymore
 
     // RESUME the task. RFC-126 fix: the answered round survives — never abandoned —
     // so its human answer stays available to the designer rerun.
     await db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, taskId))
     const afterResume = (
-      await db.select().from(crossClarifySessions).where(eq(crossClarifySessions.taskId, taskId))
+      await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     )[0]
     expect(afterResume?.status).toBe('answered')
   })
@@ -858,8 +788,8 @@ describe('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', () => {
     const sess = (
       await db
         .select()
-        .from(crossClarifySessions)
-        .where(eq(crossClarifySessions.crossClarifyNodeRunId, crossClarifyNodeRunId))
+        .from(clarifyRounds)
+        .where(eq(clarifyRounds.intermediaryNodeRunId, crossClarifyNodeRunId))
     )[0]
     expect(sess?.status).toBe('answered')
     // No SECOND questioner rerun minted (the existing in-flight rerun stands).

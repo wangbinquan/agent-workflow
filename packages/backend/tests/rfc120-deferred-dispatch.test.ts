@@ -32,7 +32,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createApp } from '../src/server'
 import {
-  crossClarifySessions,
+  clarifyRounds,
   nodeRunOutputs,
   nodeRuns,
   taskQuestions,
@@ -123,7 +123,7 @@ function mkQ(id: string, title: string): ClarifyQuestion {
 async function seedTask(
   db: DbClient,
   opts: { deferred: boolean; questions?: ClarifyQuestion[]; ownerUserId?: string },
-): Promise<{ taskId: string; crossClarifyNodeRunId: string }> {
+): Promise<{ taskId: string; intermediaryNodeRunId: string }> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const def = liveDef()
   const workflowId = `wf_${taskId}`
@@ -182,7 +182,7 @@ async function seedTask(
     loopIter: 0,
     questions: opts.questions ?? [mkQ('q1', 'designer-scoped?')],
   })
-  return { taskId, crossClarifyNodeRunId }
+  return { taskId, intermediaryNodeRunId: crossClarifyNodeRunId }
 }
 
 /** Seed a DEFERRED task whose designer has TWO sibling cross-clarify nodes
@@ -309,10 +309,10 @@ afterAll(() => resetBroadcastersForTests())
 describe('RFC-120 T9 — answer outcomes (control-channel park vs quick-channel dispatch)', () => {
   test('control-channel seal (designer scope) → PARK: NO rerun + undispatched entry', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, crossClarifyNodeRunId } = await seedTask(db, { deferred: true })
+    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
     const sealed = await sealRoundQuestions({
       db,
-      originNodeRunId: crossClarifyNodeRunId,
+      originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1')],
       directive: 'continue',
     })
@@ -340,10 +340,10 @@ describe('RFC-120 T9 — answer outcomes (control-channel park vs quick-channel 
 
   test('quick-channel questioner-only answer → questioner rerun via dispatch + gate empty', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, crossClarifyNodeRunId } = await seedTask(db, { deferred: true })
+    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
     const ret = await autoDispatchClarifyRound({
       db,
-      originNodeRunId: crossClarifyNodeRunId,
+      originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1')],
       directive: 'continue',
       actor: { userId: 'u1', role: 'owner' },
@@ -437,10 +437,10 @@ describe('RFC-120 T9 — frontier park gate', () => {
 describe('RFC-120 T9 — T2 / S2 treat the park as valid (deferred) and corrupt (control)', () => {
   test('T2: deferred task awaiting_human + undispatched designer → no T2 alert', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, crossClarifyNodeRunId } = await seedTask(db, { deferred: true })
+    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
     await sealRoundQuestions({
       db,
-      originNodeRunId: crossClarifyNodeRunId,
+      originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1')],
       directive: 'continue',
     })
@@ -455,11 +455,11 @@ describe('RFC-120 T9 — T2 / S2 treat the park as valid (deferred) and corrupt 
 
   test('T2 control: fully-DISPATCHED task awaiting_human + no awaiting_human run → T2 fires', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, crossClarifyNodeRunId } = await seedTask(db, { deferred: false })
+    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: false })
     // The unified quick channel dispatches everything (designer + questioner) → no park.
     await autoDispatchClarifyRound({
       db,
-      originNodeRunId: crossClarifyNodeRunId,
+      originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1')],
       directive: 'continue',
       actor: { userId: 'u1', role: 'owner' },
@@ -472,10 +472,10 @@ describe('RFC-120 T9 — T2 / S2 treat the park as valid (deferred) and corrupt 
 
   test('S2: deferred task awaiting_human + undispatched designer → no S2 finding', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, crossClarifyNodeRunId } = await seedTask(db, { deferred: true })
+    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
     await sealRoundQuestions({
       db,
-      originNodeRunId: crossClarifyNodeRunId,
+      originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1')],
       directive: 'continue',
     })
@@ -503,10 +503,10 @@ describe('RFC-120 T9 — T2 / S2 treat the park as valid (deferred) and corrupt 
 // 已 sealed 后」，CAS / frontier mint / 一节点一条 rerun 的语义须逐字保留）。
 describe('RFC-120 T9 — dispatchTaskQuestions', () => {
   async function seedDeferredAnswered(db: DbClient) {
-    const { taskId, crossClarifyNodeRunId } = await seedTask(db, { deferred: true })
+    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
     await sealRoundQuestions({
       db,
-      originNodeRunId: crossClarifyNodeRunId,
+      originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1')],
       directive: 'continue',
     })
@@ -586,13 +586,13 @@ describe('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', () =>
 
   test('a round → one node: dispatching its designer questions mints exactly ONE frontier rerun', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, crossClarifyNodeRunId } = await seedTask(db, {
+    const { taskId, intermediaryNodeRunId } = await seedTask(db, {
       deferred: true,
       questions: [mkQ('q1', 'first?'), mkQ('q2', 'second?')],
     })
     await sealRoundQuestions({
       db,
-      originNodeRunId: crossClarifyNodeRunId,
+      originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1'), ans('q2')],
       directive: 'continue',
     })
@@ -621,13 +621,13 @@ describe('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', () =>
 
   test('H1(re-gate): subset dispatch does NOT park the node while q1 is in-flight (q1 runs, q2 stays staged); re-parks once q1 is consumed', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, crossClarifyNodeRunId } = await seedTask(db, {
+    const { taskId, intermediaryNodeRunId } = await seedTask(db, {
       deferred: true,
       questions: [mkQ('q1', 'first?'), mkQ('q2', 'second?')],
     })
     await sealRoundQuestions({
       db,
-      originNodeRunId: crossClarifyNodeRunId,
+      originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1'), ans('q2')],
       directive: 'continue',
     })
@@ -660,13 +660,13 @@ describe('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', () =>
 
   test('H1(re-gate): a node with an in-flight dispatched question is DISPATCHABLE in deriveFrontier (not parked)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, crossClarifyNodeRunId } = await seedTask(db, {
+    const { taskId, intermediaryNodeRunId } = await seedTask(db, {
       deferred: true,
       questions: [mkQ('q1', 'first?'), mkQ('q2', 'second?')],
     })
     await sealRoundQuestions({
       db,
-      originNodeRunId: crossClarifyNodeRunId,
+      originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1'), ans('q2')],
       directive: 'continue',
     })
@@ -700,13 +700,13 @@ describe('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', () =>
 
   test('(a) one batch of two same-node questions → exactly ONE rerun rendering BOTH', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, crossClarifyNodeRunId } = await seedTask(db, {
+    const { taskId, intermediaryNodeRunId } = await seedTask(db, {
       deferred: true,
       questions: [mkQ('q1', 'first?'), mkQ('q2', 'second?')],
     })
     await sealRoundQuestions({
       db,
-      originNodeRunId: crossClarifyNodeRunId,
+      originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1'), ans('q2')],
       directive: 'continue',
     })
@@ -732,13 +732,13 @@ describe('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', () =>
 
   test('(b) dispatching q2 while the node has an IN-FLIGHT rerun → rejected task-question-node-dispatch-in-flight (nothing stamped)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, crossClarifyNodeRunId } = await seedTask(db, {
+    const { taskId, intermediaryNodeRunId } = await seedTask(db, {
       deferred: true,
       questions: [mkQ('q1', 'first?'), mkQ('q2', 'second?')],
     })
     await sealRoundQuestions({
       db,
-      originNodeRunId: crossClarifyNodeRunId,
+      originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1'), ans('q2')],
       directive: 'continue',
     })
@@ -776,13 +776,13 @@ describe('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', () =>
 
   test('(c) after the node rerun is DONE, dispatching q2 succeeds with a fresh rerun', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, crossClarifyNodeRunId } = await seedTask(db, {
+    const { taskId, intermediaryNodeRunId } = await seedTask(db, {
       deferred: true,
       questions: [mkQ('q1', 'first?'), mkQ('q2', 'second?')],
     })
     await sealRoundQuestions({
       db,
-      originNodeRunId: crossClarifyNodeRunId,
+      originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1'), ans('q2')],
       directive: 'continue',
     })
@@ -812,13 +812,13 @@ describe('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', () =>
 
   test('(failed-run guard) q1 bound + its handler run FAILED (unconsumed) → dispatching q2 to the SAME node is REJECTED', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, crossClarifyNodeRunId } = await seedTask(db, {
+    const { taskId, intermediaryNodeRunId } = await seedTask(db, {
       deferred: true,
       questions: [mkQ('q1', 'first?'), mkQ('q2', 'second?')],
     })
     await sealRoundQuestions({
       db,
-      originNodeRunId: crossClarifyNodeRunId,
+      originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1'), ans('q2')],
       directive: 'continue',
     })
@@ -870,7 +870,7 @@ describe('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', () =>
 
   test('(dispatch/reassign race) a concurrent reassign before the tx → ROLLS BACK task-question-target-changed; re-run with the new target succeeds', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, crossClarifyNodeRunId } = await seedTask(db, { deferred: true })
+    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
     // OTHER (the reassign target B) needs a prior run to be a valid frontier mint target.
     await db.insert(nodeRuns).values({
       id: ulid(),
@@ -883,7 +883,7 @@ describe('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', () =>
     })
     await sealRoundQuestions({
       db,
-      originNodeRunId: crossClarifyNodeRunId,
+      originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1')],
       directive: 'continue',
     })
@@ -959,10 +959,10 @@ describe('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', () =>
 
   test('a stamped frontier rerun always resolves to an EXISTING node_run (no phantom / orphan)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, crossClarifyNodeRunId } = await seedTask(db, { deferred: true })
+    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
     await sealRoundQuestions({
       db,
-      originNodeRunId: crossClarifyNodeRunId,
+      originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1')],
       directive: 'continue',
     })
@@ -988,7 +988,7 @@ describe('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', () =>
   // and ITS rerun (running OTHER's OWN agent) binds + injects the answer from its per-node queue.
   test('reassign to a run-but-no-edge node → 去借壳: mint the TARGET itself (own agent); the target queue injection carries + binds the answer', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, crossClarifyNodeRunId } = await seedTask(db, { deferred: true })
+    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
     // OTHER has a prior node_run + no feedback edge — a valid reassign target.
     await db.insert(nodeRuns).values({
       id: ulid(),
@@ -1001,7 +1001,7 @@ describe('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', () =>
     })
     await sealRoundQuestions({
       db,
-      originNodeRunId: crossClarifyNodeRunId,
+      originNodeRunId: intermediaryNodeRunId,
       answers: [{ ...ans('q1'), selectedOptionLabels: ['A'] }],
       directive: 'continue',
     })
@@ -1042,11 +1042,11 @@ describe('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', () =>
 
   test('never-run reassign target → REJECTED (去借壳: the rerun mints ON the target, which has no prior run to inherit)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, crossClarifyNodeRunId } = await seedTask(db, { deferred: true })
+    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
     // OTHER has NO prior node_run.
     await sealRoundQuestions({
       db,
-      originNodeRunId: crossClarifyNodeRunId,
+      originNodeRunId: intermediaryNodeRunId,
       answers: [{ ...ans('q1'), selectedOptionLabels: ['A'] }],
       directive: 'continue',
     })
@@ -1077,7 +1077,7 @@ describe('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', () =>
 
   test('per-node queue is authoritative for deferred (去借壳): the TARGET injects the reassigned question (mint on target, own agent); the origin designer has no queue', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, crossClarifyNodeRunId } = await seedTask(db, { deferred: true })
+    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
     await db.insert(nodeRuns).values({
       id: ulid(),
       taskId,
@@ -1089,7 +1089,7 @@ describe('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', () =>
     })
     await sealRoundQuestions({
       db,
-      originNodeRunId: crossClarifyNodeRunId,
+      originNodeRunId: intermediaryNodeRunId,
       answers: [{ ...ans('q1'), selectedOptionLabels: ['A'] }],
       directive: 'continue',
     })
@@ -1140,7 +1140,7 @@ describe('RFC-120 T9 — run-scoped layer Codex folds (H1/M1/H2)', () => {
 
   test('H1: a round split q1→override / q2→graph-designer is REJECTED per-origin (nothing stamped/minted)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, crossClarifyNodeRunId } = await seedTask(db, {
+    const { taskId, intermediaryNodeRunId } = await seedTask(db, {
       deferred: true,
       questions: [mkQ('q1', 'first?'), mkQ('q2', 'second?')],
     })
@@ -1155,7 +1155,7 @@ describe('RFC-120 T9 — run-scoped layer Codex folds (H1/M1/H2)', () => {
     })
     await sealRoundQuestions({
       db,
-      originNodeRunId: crossClarifyNodeRunId,
+      originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1'), ans('q2')],
       directive: 'continue',
     })
@@ -1196,7 +1196,7 @@ describe('RFC-120 T9 — run-scoped layer Codex folds (H1/M1/H2)', () => {
 
   test('M1: the override handoff mints the rerun ON the target (RFC-141: no Update-Directive suppression anymore)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, crossClarifyNodeRunId } = await seedTask(db, { deferred: true })
+    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
     await db.insert(nodeRuns).values({
       id: ulid(),
       taskId,
@@ -1208,7 +1208,7 @@ describe('RFC-120 T9 — run-scoped layer Codex folds (H1/M1/H2)', () => {
     })
     await sealRoundQuestions({
       db,
-      originNodeRunId: crossClarifyNodeRunId,
+      originNodeRunId: intermediaryNodeRunId,
       answers: [{ ...ans('q1'), selectedOptionLabels: ['A'] }],
       directive: 'continue',
     })
@@ -1236,14 +1236,14 @@ describe('RFC-120 T9 — run-scoped layer Codex folds (H1/M1/H2)', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const app = makeApp(db)
     // owner = the daemon TOKEN actor (__system__) so the member gate passes.
-    const { taskId, crossClarifyNodeRunId } = await seedTask(db, {
+    const { taskId, intermediaryNodeRunId } = await seedTask(db, {
       deferred: true,
       ownerUserId: '__system__',
     })
     // designer-scoped control seal → parked (entry created, no rerun); simulate the park.
     const sealed = await sealRoundQuestions({
       db,
-      originNodeRunId: crossClarifyNodeRunId,
+      originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1')],
       directive: 'continue',
     })
@@ -1302,12 +1302,12 @@ describe('RFC-120 T9 — run-scoped layer Codex folds (H1/M1/H2)', () => {
   // prevented by the SINGLE path (an already-dispatched entry is a no-op), not by a flag gate.
   test('PR-B: the unified quick channel dispatches the designer on any task — exactly one rerun, no double-mint', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, crossClarifyNodeRunId } = await seedTask(db, { deferred: false })
+    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: false })
     // The unified quick channel seals + auto-dispatches the QUESTIONER (autoDispatch never
     // auto-dispatches designers — they ride the board's 批量下发, RFC-162 reconcile derives none).
     await autoDispatchClarifyRound({
       db,
-      originNodeRunId: crossClarifyNodeRunId,
+      originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1')],
       directive: 'continue',
       actor,
@@ -1340,10 +1340,10 @@ describe('RFC-120 T9 — run-scoped layer Codex folds (H1/M1/H2)', () => {
 
   test('read-side phase: pending→staged pre-dispatch, processing (dispatched, queued) → awaiting_confirm after the run BINDS + finishes', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, crossClarifyNodeRunId } = await seedTask(db, { deferred: true })
+    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
     await sealRoundQuestions({
       db,
-      originNodeRunId: crossClarifyNodeRunId,
+      originNodeRunId: intermediaryNodeRunId,
       answers: [{ ...ans('q1'), selectedOptionLabels: ['A'] }],
       directive: 'continue',
     })
@@ -1375,7 +1375,7 @@ describe('RFC-120 T9 — run-scoped layer Codex folds (H1/M1/H2)', () => {
 
   test('M1(re-gate): reassign allowed pre-dispatch (NULL trigger) but rejected post-dispatch (stamped)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, crossClarifyNodeRunId } = await seedTask(db, { deferred: true })
+    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
     await db.insert(nodeRuns).values({
       id: ulid(),
       taskId,
@@ -1387,7 +1387,7 @@ describe('RFC-120 T9 — run-scoped layer Codex folds (H1/M1/H2)', () => {
     })
     await sealRoundQuestions({
       db,
-      originNodeRunId: crossClarifyNodeRunId,
+      originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1')],
       directive: 'continue',
     })
@@ -1415,10 +1415,10 @@ describe('RFC-120 T9 — run-scoped layer Codex folds (H1/M1/H2)', () => {
 
   test('H1(final): a process-retry of the dispatched run resolves awaiting_confirm (not stuck on the failed anchor); confirm works', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, crossClarifyNodeRunId } = await seedTask(db, { deferred: true })
+    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
     await sealRoundQuestions({
       db,
-      originNodeRunId: crossClarifyNodeRunId,
+      originNodeRunId: intermediaryNodeRunId,
       answers: [{ ...ans('q1'), selectedOptionLabels: ['A'] }],
       directive: 'continue',
     })
@@ -1463,10 +1463,10 @@ describe('RFC-120 T9 — run-scoped layer Codex folds (H1/M1/H2)', () => {
 
   test('H2(re-gate): a fresh process-retry STILL carries the External Feedback (lineage select, not == run id)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, crossClarifyNodeRunId } = await seedTask(db, { deferred: true })
+    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
     await sealRoundQuestions({
       db,
-      originNodeRunId: crossClarifyNodeRunId,
+      originNodeRunId: intermediaryNodeRunId,
       answers: [{ ...ans('q1'), selectedOptionLabels: ['A'] }],
       directive: 'continue',
     })
@@ -1762,14 +1762,9 @@ describe('RFC-120 T9 — run-scoped layer Codex folds (H1/M1/H2)', () => {
     const ccB2Run = (
       await db
         .select()
-        .from(crossClarifySessions)
-        .where(
-          and(
-            eq(crossClarifySessions.taskId, taskId),
-            eq(crossClarifySessions.crossClarifyNodeId, 'cc_b2'),
-          ),
-        )
-    )[0]!.crossClarifyNodeRunId
+        .from(clarifyRounds)
+        .where(and(eq(clarifyRounds.taskId, taskId), eq(clarifyRounds.intermediaryNodeId, 'cc_b2')))
+    )[0]!.intermediaryNodeRunId
     await sealRoundQuestions({
       db,
       originNodeRunId: ccB2Run,
@@ -1785,10 +1780,10 @@ describe('RFC-120 T9 — run-scoped layer Codex folds (H1/M1/H2)', () => {
 
   test('H2(final): reassign is a CAS on dispatched_at — a concurrent dispatch makes it affect 0 rows → rejected', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, crossClarifyNodeRunId } = await seedTask(db, { deferred: true })
+    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
     await sealRoundQuestions({
       db,
-      originNodeRunId: crossClarifyNodeRunId,
+      originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1')],
       directive: 'continue',
     })
@@ -1970,12 +1965,12 @@ describe('RFC-120 T9 — run-scoped layer Codex folds (H1/M1/H2)', () => {
 
   test('H2(final): a directive=stop designer-scoped round never creates a deferred park', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, crossClarifyNodeRunId } = await seedTask(db, { deferred: true })
+    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
     // A REJECT (directive='stop') round — intentionally skips the designer rerun; the unified
     // quick channel still reruns the QUESTIONER (stop) via dispatch.
     const submit = await autoDispatchClarifyRound({
       db,
-      originNodeRunId: crossClarifyNodeRunId,
+      originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1')],
       directive: 'stop',
       actor: { userId: 'u1', role: 'owner' },
@@ -2340,7 +2335,7 @@ describe('RFC-120 §18 → RFC-141 — prior output on override handoffs (deferr
     // removed the flag — OTHER now gets its own prior output as background; this test locks that
     // the context still builds and the suppress member is gone at runtime.
     const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, crossClarifyNodeRunId } = await seedTask(db, { deferred: true })
+    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
     await db.insert(nodeRuns).values({
       id: ulid(),
       taskId,
@@ -2352,7 +2347,7 @@ describe('RFC-120 §18 → RFC-141 — prior output on override handoffs (deferr
     })
     await sealRoundQuestions({
       db,
-      originNodeRunId: crossClarifyNodeRunId,
+      originNodeRunId: intermediaryNodeRunId,
       answers: [{ ...ans('q1'), selectedOptionLabels: ['A'] }],
       directive: 'continue',
     })
@@ -2385,10 +2380,10 @@ describe('RFC-120 §18 → RFC-141 — prior output on override handoffs (deferr
 
   test('RFC-141: a genuine graph-designer round builds the same suppress-free context (both handoff shapes uniform)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, crossClarifyNodeRunId } = await seedTask(db, { deferred: true })
+    const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
     await sealRoundQuestions({
       db,
-      originNodeRunId: crossClarifyNodeRunId,
+      originNodeRunId: intermediaryNodeRunId,
       answers: [{ ...ans('q1'), selectedOptionLabels: ['A'] }],
       directive: 'continue',
     })

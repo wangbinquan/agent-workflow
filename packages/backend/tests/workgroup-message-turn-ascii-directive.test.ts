@@ -1,44 +1,28 @@
 // Regression guard: the workgroup "## Message turn" directive built by
-// composeMemberPrompt (services/workgroup/engine.ts) is agent-facing ENGLISH
-// prompt text. A stray CJK char had leaked into it — the literal read
-// `'... Do NOT claim or start任务 work in this turn.'` — which renders to the
-// member agent as the garbled token "start[任务] work". This locks the directive
-// back to plain English so any future edit that re-introduces mixed-language
-// wording INTO the directive string reds immediately.
+// composeMemberPrompt (services/workgroup/prompts.ts since RFC-217 T3) is
+// agent-facing ENGLISH prompt text. A stray CJK char had leaked into it — the
+// literal read `'... Do NOT claim or start任务 work in this turn.'` — which
+// renders to the member agent as the garbled token "start[任务] work". This
+// locks the directive back to plain English so any future edit that
+// re-introduces mixed-language wording INTO the directive string reds
+// immediately.
 //
-// Scope note: workgroupRunner.ts legitimately contains CJK in code COMMENTS
-// elsewhere, so this guard keys on the specific directive substrings rather than
-// scanning the whole file.
+// Scope note: the workgroup modules legitimately contain CJK in code COMMENTS
+// elsewhere, so this guard keys on the specific directive substrings rather
+// than scanning the whole file.
 
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 describe('workgroup message-turn directive stays English', () => {
-  const src = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'engine.ts'),
-    'utf8',
-  ).concat(
-    readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'memberTurns.ts'),
-      'utf8',
-    ),
-    readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'services',
-        'workgroup',
-        'strategies',
-        'leaderWorker.ts',
-      ),
-      'utf8',
-    ),
-    readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'strategies', 'freeCollab.ts'),
-      'utf8',
-    ),
+  const wg = (...p: string[]): string =>
+    readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', ...p), 'utf8')
+  const src = wg('engine.ts').concat(
+    wg('memberTurns.ts'),
+    wg('prompts.ts'),
+    wg('strategies', 'leaderWorker.ts'),
+    wg('strategies', 'freeCollab.ts'),
   )
 
   test('the message-turn directive is present and fully English', () => {

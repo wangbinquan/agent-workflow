@@ -3,30 +3,24 @@
 // must not break the original decision path).
 
 import { beforeEach, describe, expect, test } from 'bun:test'
+import { insertClarifyRoundRaw } from './clarify-fixtures'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import {
-  clarifyRounds,
-  clarifySessions,
-  memoryDistillJobs,
-  nodeRuns,
-  tasks,
-  workflows,
-} from '../src/db/schema'
+import { clarifyRounds, memoryDistillJobs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
-function seedFixture(db: DbClient): {
+async function seedFixture(db: DbClient): Promise<{
   taskId: string
   workflowId: string
-  clarifyNodeRunId: string
-  sourceAgentNodeRunId: string
+  intermediaryNodeRunId: string
+  askingNodeRunId: string
   clarifySessionId: string
-} {
+}> {
   const wfId = ulid()
   db.insert(workflows)
     .values({
@@ -82,55 +76,27 @@ function seedFixture(db: DbClient): {
     })
     .run()
   const clarifyRunId = ulid()
-  db.insert(nodeRuns)
-    .values({
-      id: clarifyRunId,
-      taskId,
-      nodeId: 'clarify-1',
-      iteration: 0,
-      retryIndex: 0,
-      reviewIteration: 0,
-      status: 'awaiting_human',
-    })
-    .run()
   const sessionId = ulid()
-  db.insert(clarifySessions)
-    .values({
-      id: sessionId,
-      taskId,
-      sourceAgentNodeId: 'agent-1',
-      sourceAgentNodeRunId: sourceRunId,
-      sourceShardKey: null,
-      clarifyNodeId: 'clarify-1',
-      clarifyNodeRunId: clarifyRunId,
-      iterationIndex: 0,
-      questionsJson: JSON.stringify([{ id: 'q1', title: 'what?', kind: 'open' }]),
-      status: 'awaiting_human',
-    })
-    .run()
-  // RFC-132: the unified driver (autoDispatchClarifyRound) reads clarify_rounds — mirror the
-  // legacy session row (RFC-058 dual-write shape, same id).
-  db.insert(clarifyRounds)
-    .values({
-      id: sessionId,
-      taskId,
-      kind: 'self',
-      askingNodeId: 'agent-1',
-      askingNodeRunId: sourceRunId,
-      intermediaryNodeId: 'clarify-1',
-      intermediaryNodeRunId: clarifyRunId,
-      targetConsumerNodeId: null,
-      iteration: 0,
-      loopIter: 0,
-      questionsJson: JSON.stringify([{ id: 'q1', title: 'what?', kind: 'open' }]),
-      status: 'awaiting_human',
-    })
-    .run()
+  // RFC-217 T8：clarify_rounds 唯一数据源（原双写镜像退役为单播）。
+  await insertClarifyRoundRaw(db, {
+    id: sessionId,
+    taskId,
+    kind: 'self',
+    askingNodeId: 'agent-1',
+    askingNodeRunId: sourceRunId,
+    intermediaryNodeId: 'clarify-1',
+    intermediaryNodeRunId: clarifyRunId,
+    targetConsumerNodeId: null,
+    iteration: 0,
+    loopIter: 0,
+    questionsJson: JSON.stringify([{ id: 'q1', title: 'what?', kind: 'open' }]),
+    status: 'awaiting_human',
+  })
   return {
     taskId,
     workflowId: wfId,
-    clarifyNodeRunId: clarifyRunId,
-    sourceAgentNodeRunId: sourceRunId,
+    intermediaryNodeRunId: clarifyRunId,
+    askingNodeRunId: sourceRunId,
     clarifySessionId: sessionId,
   }
 }
@@ -143,10 +109,10 @@ describe('autoDispatchClarifyRound enqueues a distill job (RFC-132 缺口① 回
   })
 
   test('after a successful finalize, exactly one feedback-source-job row exists with the matching debounce key', async () => {
-    const fx = seedFixture(db)
+    const fx = await seedFixture(db)
     await autoDispatchClarifyRound({
       db,
-      originNodeRunId: fx.clarifyNodeRunId,
+      originNodeRunId: fx.intermediaryNodeRunId,
       answers: [
         {
           questionId: 'q1',
@@ -168,10 +134,10 @@ describe('autoDispatchClarifyRound enqueues a distill job (RFC-132 缺口① 回
   })
 
   test('clarify session row reflects the answered status (independent of the enqueue side-effect)', async () => {
-    const fx = seedFixture(db)
+    const fx = await seedFixture(db)
     await autoDispatchClarifyRound({
       db,
-      originNodeRunId: fx.clarifyNodeRunId,
+      originNodeRunId: fx.intermediaryNodeRunId,
       answers: [
         {
           questionId: 'q1',
@@ -186,8 +152,8 @@ describe('autoDispatchClarifyRound enqueues a distill job (RFC-132 缺口① 回
     })
     const row = db
       .select()
-      .from(clarifySessions)
-      .where(eq(clarifySessions.id, fx.clarifySessionId))
+      .from(clarifyRounds)
+      .where(eq(clarifyRounds.id, fx.clarifySessionId))
       .all()[0]!
     expect(row.status).toBe('answered')
     expect(row.answeredAt).not.toBeNull()

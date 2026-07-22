@@ -7,12 +7,14 @@
 // before relaxing.
 
 import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 import { sql } from 'drizzle-orm'
 
 import { createInMemoryDb } from '../src/db/client'
+// RFC-217 T8: migration 0107 drops cross_clarify_sessions — the table-shape
+// locks below are era-locks, frozen at the last idx where the table exists.
+import { LAST_LEGACY_CLARIFY_IDX, MIGRATIONS, freezeAt } from './migration-freeze'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const FROZEN = freezeAt(LAST_LEGACY_CLARIFY_IDX)
 
 interface SqlMaster {
   type: string
@@ -32,7 +34,7 @@ interface ColumnInfo {
 
 describe('RFC-056 — migration 0029 cross_clarify_sessions', () => {
   test('cross_clarify_sessions table exists with all expected columns', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb(FROZEN)
     const rows = (await db.all(
       sql`SELECT type, name, tbl_name, sql FROM sqlite_master WHERE name='cross_clarify_sessions'`,
     )) as SqlMaster[]
@@ -62,7 +64,7 @@ describe('RFC-056 — migration 0029 cross_clarify_sessions', () => {
   })
 
   test('FK to tasks + node_runs(2 — RFC-132 PR-F dropped the RFC-070 consumption-stamp FKs) with cascade delete', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb(FROZEN)
     const rows = (await db.all(
       sql`SELECT sql FROM sqlite_master WHERE name='cross_clarify_sessions'`,
     )) as SqlMaster[]
@@ -81,7 +83,7 @@ describe('RFC-056 — migration 0029 cross_clarify_sessions', () => {
   })
 
   test('all 4 indexes exist', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb(FROZEN)
     const rows = (await db.all(
       sql`SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='cross_clarify_sessions'`,
     )) as { name: string }[]
@@ -93,7 +95,7 @@ describe('RFC-056 — migration 0029 cross_clarify_sessions', () => {
   })
 
   test('status column default is "awaiting_human"', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb(FROZEN)
     const cols = (await db.all(sql`PRAGMA table_info(cross_clarify_sessions)`)) as ColumnInfo[]
     const statusCol = cols.find((c) => c.name === 'status')
     expect(statusCol).toBeDefined()
@@ -102,7 +104,7 @@ describe('RFC-056 — migration 0029 cross_clarify_sessions', () => {
   })
 
   test('directive column is nullable (NULL while awaiting_human)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb(FROZEN)
     const cols = (await db.all(sql`PRAGMA table_info(cross_clarify_sessions)`)) as ColumnInfo[]
     const directiveCol = cols.find((c) => c.name === 'directive')
     expect(directiveCol).toBeDefined()

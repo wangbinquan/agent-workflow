@@ -33,7 +33,7 @@ import type { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { clarifyRounds, crossClarifySessions, nodeRuns, tasks, workflows } from '../src/db/schema'
+import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { createSession } from '../src/auth/sessionStore'
 import { createUser } from '../src/services/users'
@@ -698,10 +698,7 @@ describe('RFC-128 P2/P5-BC — defer 透传 directive (stop): full deferred→20
     const [round] = await roundOf(h.db, taskId)
     expect(round?.status).toBe('answered')
     expect(round?.directive).toBe('stop')
-    const [legacy] = await h.db
-      .select()
-      .from(crossClarifySessions)
-      .where(eq(crossClarifySessions.id, round!.id))
+    const [legacy] = await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.id, round!.id))
     expect(legacy?.directive).toBe('stop')
     expect(await nodeRunStatus(h.db, nodeRunId)).toBe('done')
     expect((await loadUndispatchedSelfQuestionerTargets(h.db, taskId)).has('questioner')).toBe(true)
@@ -732,10 +729,7 @@ describe('RFC-128 P2/P5-BC — defer 透传 directive (stop): full deferred→20
     const [round] = await roundOf(h.db, taskId)
     expect(round?.status).toBe('awaiting_human')
     expect(round?.directive ?? null).toBeNull() // clarify_rounds: not prematurely 'stop'
-    const [legacy] = await h.db
-      .select()
-      .from(crossClarifySessions)
-      .where(eq(crossClarifySessions.id, round!.id))
+    const [legacy] = await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.id, round!.id))
     expect(legacy?.directive ?? null).toBeNull() // legacy session: still NULL
     // node NOT short-circuited (questioner node-level directive not written on a partial seal)
     expect(await resolveCrossNodeStopped(h.db, taskId, 'questioner')).toBe(false)

@@ -254,3 +254,32 @@ describe('rfc217 T6 — assignment writes have ONE owning module', () => {
     expect(offenders).toEqual(['packages/backend/src/services/workgroup/lifecycle.ts'])
   })
 })
+
+describe('rfc217 G8 — clarify 单地层（遗留标识符归零）', () => {
+  test('backend src 不再出现 clarify_sessions / cross_clarify_sessions / clarifyMigration', () => {
+    const banned = [
+      "'clarify_sessions'",
+      "'cross_clarify_sessions'",
+      'clarifyMigration',
+      'insert(clarifySessions',
+      'from(clarifySessions',
+      'update(clarifySessions',
+      'insert(crossClarifySessions',
+      'from(crossClarifySessions',
+      'update(crossClarifySessions',
+    ]
+    const offenders: string[] = []
+    const walk = (dir: string): void => {
+      for (const e of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
+        const rel = `${dir}/${e.name}`
+        if (e.isDirectory()) walk(rel)
+        else if (e.name.endsWith('.ts')) {
+          const src = read(rel)
+          for (const b of banned) if (src.includes(b)) offenders.push(`${rel} ⇒ ${b}`)
+        }
+      }
+    }
+    walk('packages/backend/src')
+    expect(offenders).toEqual([])
+  })
+})

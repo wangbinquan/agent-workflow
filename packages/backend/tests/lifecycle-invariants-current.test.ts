@@ -16,6 +16,7 @@
 //   U1  per (task, nodeId, iteration), ≤ 1 row in {awaiting_review, awaiting_human}
 
 import { afterEach, describe, expect, test } from 'bun:test'
+import { insertLegacySelfClarify } from './clarify-fixtures'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -23,7 +24,7 @@ import { eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
-import { clarifySessions, docVersions, nodeRuns, tasks, workflows } from '../src/db/schema'
+import { clarifyRounds, docVersions, nodeRuns, tasks, workflows } from '../src/db/schema'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -52,10 +53,7 @@ async function checkInvariants(db: DbClient, taskId: string): Promise<Violation[
   }
   const allRuns = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
   const allDocs = await db.select().from(docVersions).where(eq(docVersions.taskId, taskId))
-  const allSessions = await db
-    .select()
-    .from(clarifySessions)
-    .where(eq(clarifySessions.taskId, taskId))
+  const allSessions = await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
 
   // R1: approved doc_versions ⟹ review node_run done
   for (const dv of allDocs) {
@@ -91,7 +89,7 @@ async function checkInvariants(db: DbClient, taskId: string): Promise<Violation[
   const RESOLVED_SESSION = new Set(['answered', 'timed_out', 'canceled', 'closed'])
   for (const s of allSessions) {
     if (!RESOLVED_SESSION.has(s.status)) continue
-    const run = allRuns.find((r) => r.id === s.clarifyNodeRunId)
+    const run = allRuns.find((r) => r.id === s.intermediaryNodeRunId)
     if (run === undefined) {
       v.push({ rule: 'C1', detail: `resolved clarify_session ${s.id} has no clarify node_run` })
       continue
@@ -366,7 +364,7 @@ describe('RFC-053 PR-A T1c — double-layer invariants', () => {
       nodeId: 'doc',
       status: 'awaiting_human',
     })
-    await h.db.insert(clarifySessions).values({
+    await insertLegacySelfClarify(h.db, {
       id: ulid(),
       taskId: h.taskId,
       clarifyNodeId: 'clarify_x',
@@ -394,7 +392,7 @@ describe('RFC-053 PR-A T1c — double-layer invariants', () => {
       nodeId: 'doc',
       status: 'awaiting_human',
     })
-    await h.db.insert(clarifySessions).values({
+    await insertLegacySelfClarify(h.db, {
       id: ulid(),
       taskId: h.taskId,
       clarifyNodeId: 'clarify_x',

@@ -247,12 +247,9 @@ async function buildHarness(): Promise<Harness> {
   // consumed_by_consumer_run_id = the v1 output run (RFC-070, runner.ts mark
   // gate) — exactly the state this test needs (a prior ANSWERED, CONSUMED clarify
   // round), now via the real flow instead of retroactive staging + manual stamp.
-  const { clarifySessions } = await import('../src/db/schema')
-  const sessionRows = await db
-    .select()
-    .from(clarifySessions)
-    .where(eq(clarifySessions.taskId, task.id))
-  const clarifyNodeRunId = sessionRows[0]?.clarifyNodeRunId
+  const { clarifyRounds } = await import('../src/db/schema')
+  const sessionRows = await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, task.id))
+  const clarifyNodeRunId = sessionRows[0]?.intermediaryNodeRunId
   if (clarifyNodeRunId === undefined) throw new Error('clarify session not created on first run')
   await autoDispatchClarifyRound({
     db,

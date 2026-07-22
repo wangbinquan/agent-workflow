@@ -22,14 +22,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import {
-  agents,
-  clarifySessions,
-  nodeRunEvents,
-  nodeRuns,
-  tasks,
-  workflows,
-} from '../src/db/schema'
+import { clarifyRounds, agents, nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 // RFC-132 (PR-C): the unified flat injector reads DISPATCHED task_questions, so these tests answer
 // via the real PR-B path (autoDispatchClarifyRound = seal + auto-dispatch + mint the 承接 rerun +
 // write the node clarify state) instead of the legacy immediate mint, which created no dispatched
@@ -246,12 +239,12 @@ describe('RFC-026 scheduler clarify inline-mode', () => {
 
     // User submits answers → mints rerun row (clarifyIteration=1).
     const sessionRow = (
-      await h.db.select().from(clarifySessions).where(eq(clarifySessions.taskId, taskId))
+      await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     )[0]
     expect(sessionRow).toBeDefined()
     await autoDispatchClarifyRound({
       db: h.db,
-      originNodeRunId: sessionRow!.clarifyNodeRunId,
+      originNodeRunId: sessionRow!.intermediaryNodeRunId,
       directive: 'stop', // RFC-100: finalize round → <workflow-output> accepted
       answers: [
         {
@@ -347,11 +340,11 @@ describe('RFC-026 scheduler clarify inline-mode', () => {
     )
 
     const sessionRow = (
-      await h.db.select().from(clarifySessions).where(eq(clarifySessions.taskId, taskId))
+      await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     )[0]
     await autoDispatchClarifyRound({
       db: h.db,
-      originNodeRunId: sessionRow!.clarifyNodeRunId,
+      originNodeRunId: sessionRow!.intermediaryNodeRunId,
       directive: 'stop', // RFC-100: finalize round → <workflow-output> accepted
       answers: [
         {
@@ -415,12 +408,12 @@ describe('RFC-026 scheduler clarify inline-mode', () => {
         }),
     )
     const sessionRow = (
-      await h.db.select().from(clarifySessions).where(eq(clarifySessions.taskId, taskId))
+      await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     )[0]
     expect(sessionRow).toBeDefined()
     await autoDispatchClarifyRound({
       db: h.db,
-      originNodeRunId: sessionRow!.clarifyNodeRunId,
+      originNodeRunId: sessionRow!.intermediaryNodeRunId,
       directive: 'stop', // RFC-100: finalize round → <workflow-output> accepted
       answers: [
         {

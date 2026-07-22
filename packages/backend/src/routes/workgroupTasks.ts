@@ -13,18 +13,13 @@
 // (design §8.3 — resumeTask kicks the engine; leader picks it up as
 // new-content).
 
-import {} from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { actorOf } from '@/auth/actor'
 import type { AppDeps } from '@/server'
-import {} from '@/db/schema'
 import { buildConfigActions } from '@/services/workgroup/configActions'
 import { buildDwActions } from '@/services/workgroup/dwActions'
 import { buildRoomReads } from '@/services/workgroup/room'
 import { buildWorkgroupTaskActions, safeJson } from '@/services/workgroup/taskActions'
-
-/** RFC-054 W1-7: zod-parse instead of `as Record` for reading our own
- * task-owned config JSON (routes/*.ts may not `as`-cast). */
 
 export { isWorkgroupKickResumable, resolveMentions } from '@/services/workgroup/taskActions'
 

@@ -24,11 +24,12 @@
 // before relaxing.
 
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
+import { insertLegacySelfClarify } from './clarify-fixtures'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { clarifySessions, nodeRuns, tasks, workflows } from '../src/db/schema'
+import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import {
   createCrossClarifySession,
@@ -260,7 +261,7 @@ describe('RFC-056 C4 — reject persistence cross-cascade', () => {
       retryIndex: 0,
       iteration: 0,
     })
-    await db.insert(clarifySessions).values({
+    await insertLegacySelfClarify(db, {
       id: `cs_${Math.random().toString(36).slice(2, 6)}`,
       taskId,
       sourceAgentNodeId: 'designer',

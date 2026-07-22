@@ -30,7 +30,6 @@ import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   clarifyRounds,
-  crossClarifySessions,
   nodeRuns,
   nodeRunOutputs,
   taskQuestions,
@@ -159,7 +158,7 @@ async function seedCrossRound(
   db: DbClient,
   taskId: string,
   questions: ClarifyQuestion[],
-  opts: { scopesJson?: string | null } = {},
+  _opts: { scopesJson?: string | null } = {},
 ): Promise<{ roundId: string; origin: string }> {
   const askingRunId = await seedRun(db, taskId, ASKER, { status: 'done' })
   const intRunId = await seedRun(db, taskId, CC, { status: 'done' })
@@ -178,22 +177,7 @@ async function seedCrossRound(
     iteration: 0,
     questionsJson,
     answersJson,
-    questionScopesJson: opts.scopesJson ?? null,
     directive: 'continue',
-    status: 'answered',
-    answeredAt: Date.now(),
-  })
-  await db.insert(crossClarifySessions).values({
-    id: roundId,
-    taskId,
-    crossClarifyNodeId: CC,
-    crossClarifyNodeRunId: intRunId,
-    sourceQuestionerNodeId: ASKER,
-    sourceQuestionerNodeRunId: askingRunId,
-    targetDesignerNodeId: DESIGNER,
-    questionsJson,
-    answersJson,
-    questionScopesJson: opts.scopesJson ?? null,
     status: 'answered',
     answeredAt: Date.now(),
   })

@@ -53,18 +53,12 @@
 // design/RFC-056-clarify-cross-agent/patch-2026-05-25-questioner-cascade-no-skip.md.
 
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
+import { insertLegacyCrossClarify } from './clarify-fixtures'
 import { resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import {
-  clarifySessions,
-  crossClarifySessions,
-  nodeRunOutputs,
-  nodeRuns,
-  tasks,
-  workflows,
-} from '../src/db/schema'
+import { nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { createCrossClarifySession } from '../src/services/crossClarify'
 import { createClarifySession } from '../src/services/clarify'
@@ -83,17 +77,17 @@ const actor = { userId: 'u1', role: 'owner' as const }
 async function reassignThenDispatchDesigner(
   db: DbClient,
   taskId: string,
-  crossClarifyNodeRunId: string,
+  intermediaryNodeRunId: string,
 ) {
   const questioner = (await listTaskQuestions(db, taskId)).find(
-    (e) => e.roleKind === 'questioner' && e.originNodeRunId === crossClarifyNodeRunId,
+    (e) => e.roleKind === 'questioner' && e.originNodeRunId === intermediaryNodeRunId,
   )
-  if (!questioner) throw new Error(`no questioner entry for round ${crossClarifyNodeRunId}`)
+  if (!questioner) throw new Error(`no questioner entry for round ${intermediaryNodeRunId}`)
   await reassignTaskQuestion(db, questioner.id, 'designer', actor)
   const designer = (await listTaskQuestions(db, taskId)).find(
-    (e) => e.roleKind === 'designer' && e.originNodeRunId === crossClarifyNodeRunId,
+    (e) => e.roleKind === 'designer' && e.originNodeRunId === intermediaryNodeRunId,
   )
-  if (!designer) throw new Error(`no designer entry after reassign for ${crossClarifyNodeRunId}`)
+  if (!designer) throw new Error(`no designer entry after reassign for ${intermediaryNodeRunId}`)
   return dispatchTaskQuestions(db, taskId, [designer.id], actor)
 }
 
@@ -316,7 +310,7 @@ describe('RFC-056 patch 2026-05-25 — questioner cascade no-skip + cci inherita
       startedAt: Date.now() - 120_000,
       finishedAt: Date.now() - 90_000,
     })
-    await db.insert(crossClarifySessions).values({
+    await insertLegacyCrossClarify(db, {
       id: 'sess_iter0',
       taskId,
       crossClarifyNodeId: 'cross1',
@@ -516,7 +510,3 @@ describe('RFC-056 patch 2026-05-25 — questioner cascade no-skip + cci inherita
   // max-aware cci bump — exactly the mechanics this RFC retires. Freshness is
   // pure id-order; there is no cci to preserve or bump.
 })
-
-// Avoid unused-import warning for clarifySessions when the test layout is
-// rearranged in a follow-up.
-void clarifySessions

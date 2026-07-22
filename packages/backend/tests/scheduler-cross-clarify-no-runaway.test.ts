@@ -35,7 +35,7 @@ import { ulid } from 'ulid'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { crossClarifySessions, nodeRuns, tasks, workflows } from '../src/db/schema'
+import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -209,51 +209,5 @@ describe('RFC-056 scheduler — no runaway pending cross-clarify rows', () => {
     const src = readFileSync(SCHEDULER_TS, 'utf-8')
     expect(src).toContain('runner will create the node_run')
     expect(src).toContain('common case (no stop, has questioner), do NOTHING')
-  })
-
-  test('persistent-stop case still mints a done row so cascade reset advances', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTaskAndWorkflow(db)
-    // Seed a legacy directive='stop' session; the boot migration shim backfills the questioner
-    // node-level directive so resolveCrossNodeStopped returns true (RFC-132 T7).
-    const prevQRunId = ulid()
-    await db.insert(nodeRuns).values({
-      id: prevQRunId,
-      taskId,
-      nodeId: 'questioner',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-    })
-    const prevCrossRunId = ulid()
-    await db.insert(nodeRuns).values({
-      id: prevCrossRunId,
-      taskId,
-      nodeId: 'cross1',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-    })
-    await db.insert(crossClarifySessions).values({
-      id: ulid(),
-      taskId,
-      crossClarifyNodeId: 'cross1',
-      crossClarifyNodeRunId: prevCrossRunId,
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: prevQRunId,
-      targetDesignerNodeId: 'designer',
-      loopIter: 0,
-      iteration: 0,
-      questionsJson: '[]',
-      answersJson: '[]',
-      directive: 'stop',
-      status: 'answered',
-      createdAt: Date.now() - 1000,
-      answeredAt: Date.now() - 500,
-    })
-    const { resolveCrossNodeStopped } = await import('../src/services/crossClarify')
-    const { reconcileLegacyCrossPersistentStop } = await import('../src/services/clarifyMigration')
-    await reconcileLegacyCrossPersistentStop(db)
-    expect(await resolveCrossNodeStopped(db, taskId, 'questioner')).toBe(true)
   })
 })

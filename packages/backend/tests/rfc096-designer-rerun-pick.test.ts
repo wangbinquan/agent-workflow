@@ -35,7 +35,7 @@ import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { clarifyRounds, crossClarifySessions, nodeRuns, tasks, workflows } from '../src/db/schema'
+import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { listTaskQuestions, reassignTaskQuestion } from '../src/services/taskQuestions'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 
@@ -171,14 +171,6 @@ async function seedAnsweredCrossRound(
     intermediaryNodeId: CC,
     intermediaryNodeRunId: crossNodeRunId,
     targetConsumerNodeId: D,
-  })
-  await db.insert(crossClarifySessions).values({
-    ...common,
-    crossClarifyNodeId: CC,
-    crossClarifyNodeRunId: crossNodeRunId,
-    sourceQuestionerNodeId: Q,
-    sourceQuestionerNodeRunId: questionerRunId,
-    targetDesignerNodeId: D,
   })
   return crossNodeRunId
 }

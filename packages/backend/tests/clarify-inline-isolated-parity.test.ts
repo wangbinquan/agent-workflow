@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb } from '../src/db/client'
-import { agents, clarifySessions, tasks, workflows } from '../src/db/schema'
+import { clarifyRounds, agents, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { runTask } from '../src/services/scheduler'
 import { runGit } from '../src/util/git'
@@ -167,11 +167,11 @@ describe('RFC-026 regression — isolated mode never resumes', () => {
           }),
       )
       const sessionRow = (
-        await h.db.select().from(clarifySessions).where(eq(clarifySessions.taskId, taskId))
+        await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
       )[0]
       await autoDispatchClarifyRound({
         db: h.db,
-        originNodeRunId: sessionRow!.clarifyNodeRunId,
+        originNodeRunId: sessionRow!.intermediaryNodeRunId,
         directive: 'stop', // RFC-100: finalize round → <workflow-output> accepted
         answers: [
           {

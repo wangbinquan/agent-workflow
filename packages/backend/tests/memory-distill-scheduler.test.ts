@@ -6,6 +6,7 @@
 // of leftover `running` rows.
 
 import { beforeEach, describe, expect, test } from 'bun:test'
+import { insertClarifyRoundRaw } from './clarify-fixtures'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
@@ -13,7 +14,6 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   agents,
   cachedRepos,
-  clarifySessions,
   memoryDistillJobs,
   nodeRunEvents,
   nodeRuns,
@@ -392,21 +392,21 @@ describe('distillTick', () => {
       })
       .run()
     const clarifyId = ulid()
-    db.insert(clarifySessions)
-      .values({
-        id: clarifyId,
-        taskId,
-        sourceAgentNodeId: 'agent-1',
-        sourceAgentNodeRunId: sourceRunId,
-        sourceShardKey: null,
-        clarifyNodeId: 'clarify-1',
-        clarifyNodeRunId: clarifyRunId,
-        iterationIndex: 0,
-        questionsJson: '[]',
-        answersJson: '[]',
-        status: 'answered',
-      })
-      .run()
+    await insertClarifyRoundRaw(db, {
+      kind: 'self' as const,
+      id: clarifyId,
+      taskId,
+      askingNodeId: 'agent-1',
+      askingNodeRunId: sourceRunId,
+      askingShardKey: null,
+      intermediaryNodeId: 'clarify-1',
+      intermediaryNodeRunId: clarifyRunId,
+      iteration: 0,
+      questionsJson: '[]',
+      answersJson: '[]',
+      status: 'answered',
+      createdAt: Date.now(),
+    })
     db.insert(nodeRunEvents)
       .values({
         nodeRunId: sourceRunId,
@@ -453,7 +453,6 @@ describe('distillTick', () => {
     await db
       .update(memoryDistillJobs)
       .set({ status: 'pending', attempts: 0, nextRunAt: Date.now() - 1 })
-      .run()
     capturedPrompt = null
     await distillTick({ db, spawnFn: captureSpawn })
     expect(capturedPrompt!).toContain('Source agent transcript:')

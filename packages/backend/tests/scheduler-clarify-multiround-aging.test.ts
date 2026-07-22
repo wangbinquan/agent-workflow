@@ -17,7 +17,7 @@ import { join, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { clarifySessions, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
+import { clarifyRounds, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { runTask } from '../src/services/scheduler'
 import { sealRoundQuestions } from '../src/services/clarifySeal'
@@ -193,11 +193,11 @@ describe('RFC-131 T5 — deferred self-clarify 多轮 scheduler e2e (派生老�
       'awaiting_human',
     )
     const r1sess = (
-      await h.db.select().from(clarifySessions).where(eq(clarifySessions.taskId, taskId))
+      await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     )[0]!
     await sealRoundQuestions({
       db: h.db,
-      originNodeRunId: r1sess.clarifyNodeRunId,
+      originNodeRunId: r1sess.intermediaryNodeRunId,
       answers: [ans('r1q', 0, 'R1_ANS_REACT')],
       directive: 'continue',
       autoStage: true,
@@ -206,7 +206,7 @@ describe('RFC-131 T5 — deferred self-clarify 多轮 scheduler e2e (派生老�
     await dispatchTaskQuestions(
       h.db,
       taskId,
-      [await selfEntryId(h, taskId, r1sess.clarifyNodeRunId)],
+      [await selfEntryId(h, taskId, r1sess.intermediaryNodeRunId)],
       actor,
     )
     await h.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, taskId))
@@ -218,11 +218,11 @@ describe('RFC-131 T5 — deferred self-clarify 多轮 scheduler e2e (派生老�
       'awaiting_human',
     )
     const r2sess = (
-      await h.db.select().from(clarifySessions).where(eq(clarifySessions.taskId, taskId))
-    ).find((s) => s.iterationIndex === 1)!
+      await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
+    ).find((s) => s.iteration === 1)!
     await sealRoundQuestions({
       db: h.db,
-      originNodeRunId: r2sess.clarifyNodeRunId,
+      originNodeRunId: r2sess.intermediaryNodeRunId,
       answers: [ans('r2q', 0, 'R2_ANS_TYPESCRIPT')],
       directive: 'stop',
       autoStage: true,
@@ -231,7 +231,7 @@ describe('RFC-131 T5 — deferred self-clarify 多轮 scheduler e2e (派生老�
     const d2 = await dispatchTaskQuestions(
       h.db,
       taskId,
-      [await selfEntryId(h, taskId, r2sess.clarifyNodeRunId)],
+      [await selfEntryId(h, taskId, r2sess.intermediaryNodeRunId)],
       actor,
     )
     const finalRerunId = d2.reruns[0]!.nodeRunId

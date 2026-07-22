@@ -15,6 +15,7 @@
 //     them out of prompts, not out of the member-gated UI).
 
 import { beforeEach, describe, expect, test } from 'bun:test'
+import { insertLegacySelfClarify } from './clarify-fixtures'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
@@ -912,7 +913,7 @@ describe('RFC-164 room — PR-5 surfaces', () => {
   // RFC-181 A/A2 — autonomous 进 per-task PATCH（对称 on/off + system 消息），
   // false→true 单事务遣散在途 clarify park 并 requeue 卡（design §2.1/§2.1a）。
   test('RFC-207：移除最后一个人工成员 → 遣散在途 clarify park', async () => {
-    const { clarifySessions } = await import('../src/db/schema')
+    const { clarifyRounds } = await import('../src/db/schema')
     const { mintNodeRun } = await import('../src/services/nodeRunMint')
 
     // RFC-207 — the autonomous switch this test used to drive is gone. Losing the
@@ -948,7 +949,7 @@ describe('RFC-164 room — PR-5 surfaces', () => {
       overrides: { shardKey: cardId, startedAt: Date.now() },
     })
     const sessionId = ulid()
-    await db.insert(clarifySessions).values({
+    await insertLegacySelfClarify(db, {
       id: sessionId,
       taskId,
       sourceAgentNodeId: '__wg_member__',
@@ -969,7 +970,7 @@ describe('RFC-164 room — PR-5 surfaces', () => {
     const changes2 = ((await on2.json()) as { changes: string[] }).changes
     expect(changes2.some((c) => c.includes('dismissed 1 open clarify session'))).toBe(true)
     expect(
-      (await db.select().from(clarifySessions).where(eq(clarifySessions.id, sessionId)))[0]?.status,
+      (await db.select().from(clarifyRounds).where(eq(clarifyRounds.id, sessionId)))[0]?.status,
     ).toBe('canceled')
     expect(
       (await db.select().from(workgroupAssignments).where(eq(workgroupAssignments.id, cardId)))[0]

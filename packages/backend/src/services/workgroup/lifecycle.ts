@@ -27,7 +27,6 @@ import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import {
   clarifyRounds,
-  clarifySessions,
   nodeRuns,
   tasks,
   workgroupAssignments,
@@ -343,10 +342,6 @@ export async function dismissOpenClarifyParksForAutonomous(
       )
       .all()
     for (const s of open) {
-      tx.update(clarifySessions)
-        .set({ status: 'canceled' })
-        .where(and(eq(clarifySessions.id, s.id), eq(clarifySessions.status, 'awaiting_human')))
-        .run()
       result.dismissedSessions++
       // Park-carrier clarify run → canceled in the SAME transaction (the
       // asking host run already closed as done/failed — RFC-181 design §2.1a).

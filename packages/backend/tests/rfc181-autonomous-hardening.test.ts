@@ -22,6 +22,7 @@
 //     分支带 CLARIFY_FORBIDDEN_PREFIX 重试。改任一侧即红。
 
 import { beforeEach, describe, expect, test } from 'bun:test'
+import { insertLegacySelfClarify, insertClarifyRoundRaw } from './clarify-fixtures'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
@@ -34,14 +35,7 @@ import {
   WG_CLARIFY_BUDGET_DEFAULT,
 } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import {
-  clarifyRounds,
-  clarifySessions,
-  nodeRuns,
-  tasks,
-  workflows,
-  workgroupAssignments,
-} from '../src/db/schema'
+import { clarifyRounds, nodeRuns, tasks, workflows, workgroupAssignments } from '../src/db/schema'
 import { mintNodeRun } from '../src/services/nodeRunMint'
 import { createWorkgroup, getWorkgroup, updateWorkgroup } from '../src/services/workgroups'
 import {
@@ -211,23 +205,10 @@ describe('RFC-181 A2/C — isTaskClarifySuppressed + dismissOpenClarifyParksForA
       overrides: { shardKey: opts.shard, startedAt: Date.now() },
     })
     const sessionId = ulid()
-    await db.insert(clarifySessions).values({
-      id: sessionId,
-      taskId,
-      sourceAgentNodeId: '__wg_member__',
-      sourceAgentNodeRunId: ulid(),
-      sourceShardKey: opts.shard,
-      clarifyNodeId: '__wg_clarify__',
-      clarifyNodeRunId: clarifyRunId,
-      iterationIndex: 0,
-      questionsJson: JSON.stringify([{ id: 'q1', question: '哪个口径？' }]),
-      status: 'awaiting_human',
-      createdAt: Date.now(),
-    })
     // RFC-058 双写的权威轮行（实现门 P1-②：/api/clarify、草稿、seal 都读它——
     // 只取消 legacy session 行会让问题仍可答、陈旧答案仍可 seal+mint 续跑）。
-    await db.insert(clarifyRounds).values({
-      id: ulid(),
+    await insertClarifyRoundRaw(db, {
+      id: sessionId,
       taskId,
       kind: 'self',
       askingNodeId: '__wg_member__',
@@ -261,7 +242,7 @@ describe('RFC-181 A2/C — isTaskClarifySuppressed + dismissOpenClarifyParksForA
       clarifyBudget: 2,
     })
     async function ask(taskId: string, nodeId: string, shard: string | null): Promise<void> {
-      await db.insert(clarifySessions).values({
+      await insertLegacySelfClarify(db, {
         id: ulid(),
         taskId,
         sourceAgentNodeId: nodeId,
@@ -377,7 +358,7 @@ describe('RFC-181 A2/C — isTaskClarifySuppressed + dismissOpenClarifyParksForA
     expect(res.requeuedAssignments).toEqual([{ id: park.assignmentId ?? '', to: 'dispatched' }])
 
     const session = (
-      await db.select().from(clarifySessions).where(eq(clarifySessions.id, park.sessionId))
+      await db.select().from(clarifyRounds).where(eq(clarifyRounds.id, park.sessionId))
     )[0]
     expect(session?.status).toBe('canceled')
     const run = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, park.clarifyRunId)))[0]
@@ -431,9 +412,9 @@ describe('RFC-181 A2/C — isTaskClarifySuppressed + dismissOpenClarifyParksForA
   test('已 answered / canceled 的 session no-op；重复调用幂等（陈旧答案回流的根被掐死）', async () => {
     const park = await seedClarifyPark({ shard: ulid(), withAssignment: true })
     await db
-      .update(clarifySessions)
+      .update(clarifyRounds)
       .set({ status: 'answered' })
-      .where(eq(clarifySessions.id, park.sessionId))
+      .where(eq(clarifyRounds.id, park.sessionId))
     const res = await dismissOpenClarifyParksForAutonomous(db, taskId, 'leader_worker')
     expect(res.dismissedSessions).toBe(0)
     expect(res.requeuedAssignments).toEqual([])
@@ -515,7 +496,9 @@ describe('RFC-181 C — 源级契约锁', () => {
   })
 
   test('route：A2 对 dynamic_workflow 免疫 + 遣散后新鲜状态复读 kick（实现门 P2）', () => {
-    const route = SRC('routes/workgroupTasks.ts')
+    // RFC-217 T4：业务体在 taskActions/configActions（routes 纯 transport）。
+    const route =
+      SRC('services/workgroup/taskActions.ts') + SRC('services/workgroup/configActions.ts')
     expect(route).toContain("config.mode !== 'dynamic_workflow'")
     expect(route).toContain('const kickIfParked')
     expect(route).toContain('lateKick.unref?.()')

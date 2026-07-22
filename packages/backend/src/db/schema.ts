@@ -1507,118 +1507,9 @@ export const nodeRunEvents = sqliteTable(
 )
 
 // -----------------------------------------------------------------------------
-// clarify_sessions — RFC-023. One row per agent reply that contained a
-// <workflow-clarify> envelope. The clarify node's node_run sits in
-// 'awaiting_human' until the user submits answers via the REST API; the
-// runtime then mints a fresh source-agent node_run (clarify_iteration + 1)
-// and the asking agent runs again with the answers injected.
-//
-// For agent-multi: each reaching shard mints its OWN clarify node_run row
-// + its own clarify_session, keyed by (clarify_node_id, source_shard_key).
-// -----------------------------------------------------------------------------
-// -----------------------------------------------------------------------------
-// RFC-023 clarify_sessions — RETAINED through RFC-058 staged refactor.
-// Migration 0031 builds `clarify_rounds` and copies rows over; this table
-// stays live until services migrate (then migration 0032 drops it).
-// -----------------------------------------------------------------------------
-export const clarifySessions = sqliteTable(
-  'clarify_sessions',
-  {
-    id: text('id').primaryKey(),
-    taskId: text('task_id')
-      .notNull()
-      .references(() => tasks.id, { onDelete: 'cascade' }),
-    sourceAgentNodeId: text('source_agent_node_id').notNull(),
-    sourceAgentNodeRunId: text('source_agent_node_run_id').notNull(),
-    sourceShardKey: text('source_shard_key'),
-    clarifyNodeId: text('clarify_node_id').notNull(),
-    clarifyNodeRunId: text('clarify_node_run_id').notNull(),
-    iterationIndex: integer('iteration_index').notNull(),
-    questionsJson: text('questions_json').notNull(),
-    answersJson: text('answers_json'),
-    status: text('status', {
-      enum: ['awaiting_human', 'answered', 'canceled'],
-    })
-      .notNull()
-      .default('awaiting_human'),
-    truncationWarningsJson: text('truncation_warnings_json'),
-    createdAt: integer('created_at')
-      .notNull()
-      .default(sql`(unixepoch() * 1000)`),
-    answeredAt: integer('answered_at'),
-    answeredBy: text('answered_by'),
-    directive: text('directive', { enum: ['continue', 'stop'] }),
-    // (RFC-132 PR-F: the RFC-070 consumption-stamp column was dropped —
-    // derived aging via isTargetNodeConsumed replaced it; migration 0073.)
-  },
-  (t) => ({
-    taskIdx: index('idx_clarify_sessions_task').on(t.taskId),
-    clarifyRunIdx: index('idx_clarify_sessions_clarify_run').on(
-      t.clarifyNodeRunId,
-      t.iterationIndex,
-    ),
-    sourceRunIdx: index('idx_clarify_sessions_source_run').on(t.sourceAgentNodeRunId),
-    nodeShardIdx: index('idx_clarify_sessions_node_shard').on(t.clarifyNodeId, t.sourceShardKey),
-  }),
-)
-
-// -----------------------------------------------------------------------------
-// RFC-056 cross_clarify_sessions — RETAINED through RFC-058 staged refactor
-// (see clarifySessions comment above).
-// -----------------------------------------------------------------------------
-export const crossClarifySessions = sqliteTable(
-  'cross_clarify_sessions',
-  {
-    id: text('id').primaryKey(),
-    taskId: text('task_id')
-      .notNull()
-      .references(() => tasks.id, { onDelete: 'cascade' }),
-    crossClarifyNodeId: text('cross_clarify_node_id').notNull(),
-    crossClarifyNodeRunId: text('cross_clarify_node_run_id')
-      .notNull()
-      .references(() => nodeRuns.id, { onDelete: 'cascade' }),
-    sourceQuestionerNodeId: text('source_questioner_node_id').notNull(),
-    sourceQuestionerNodeRunId: text('source_questioner_node_run_id')
-      .notNull()
-      .references(() => nodeRuns.id, { onDelete: 'cascade' }),
-    targetDesignerNodeId: text('target_designer_node_id'),
-    loopIter: integer('loop_iter').notNull().default(0),
-    iteration: integer('iteration').notNull().default(0),
-    questionsJson: text('questions_json').notNull(),
-    answersJson: text('answers_json'),
-    directive: text('directive', { enum: ['continue', 'stop'] }),
-    status: text('status', {
-      enum: ['awaiting_human', 'answered', 'abandoned'],
-    })
-      .notNull()
-      .default('awaiting_human'),
-    designerRunTriggeredAt: integer('designer_run_triggered_at'),
-    createdAt: integer('created_at')
-      .notNull()
-      .default(sql`(unixepoch() * 1000)`),
-    answeredAt: integer('answered_at'),
-    abandonedAt: integer('abandoned_at'),
-    // RFC-059 per-question scope column. RFC-162 DELETED scope — this column is now DORMANT
-    // (never read or written; kept to avoid a 12-step table rebuild for no functional gain).
-    questionScopesJson: text('question_scopes_json'),
-    // (RFC-132 PR-F: the RFC-070 consumption-stamp columns were dropped — derived aging
-    // via isTargetNodeConsumed replaced them; migration 0073.)
-  },
-  (t) => ({
-    taskIdx: index('idx_cross_clarify_sessions_task').on(t.taskId),
-    nodeIdx: index('idx_cross_clarify_sessions_node').on(
-      t.crossClarifyNodeId,
-      t.loopIter,
-      t.iteration,
-    ),
-    designerIdx: index('idx_cross_clarify_sessions_designer').on(t.targetDesignerNodeId, t.status),
-    statusIdx: index('idx_cross_clarify_sessions_status').on(t.status),
-  }),
-)
-
-// -----------------------------------------------------------------------------
-// RFC-058 clarify_rounds — unified replacement for clarify_sessions (RFC-023)
-// and cross_clarify_sessions (RFC-056). The `kind` discriminator decides
+// RFC-058 clarify_rounds — unified replacement for the RFC-023 self-clarify
+// and RFC-056 cross-clarify legacy tables (both dropped by migration 0107,
+// RFC-217 T8). The `kind` discriminator decides
 // which lifecycle the row participates in:
 //   - kind='self'  → RFC-023 self-clarify. asking agent IS the consumer.
 //                     target_consumer_node_id is NULL; loop_iter is 0.
@@ -1697,7 +1588,6 @@ export const clarifyRounds = sqliteTable(
     answerAttributionsJson: text('answer_attributions_json'),
     draftAnswersJson: text('draft_answers_json'),
     // RFC-059 per-question scope column. RFC-162 DELETED scope — DORMANT (never read/written).
-    questionScopesJson: text('question_scopes_json'),
     // (RFC-132 PR-F: the RFC-070 consumption-stamp columns were dropped — derived aging
     // via isTargetNodeConsumed replaced them; migration 0073.)
   },

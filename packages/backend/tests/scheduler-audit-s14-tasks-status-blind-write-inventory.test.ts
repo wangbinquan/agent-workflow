@@ -76,8 +76,10 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   // slot through resumeKick's status CAS, and the reject-exhausted round
   // rides it through setTaskStatus extra (Codex impl-gate P1 — the phase
   // and the status can never tear).
-  // RFC-217 T2 — gate 写改走 workgroup_task_state CAS，仅剩 config PUT 一处。
-  'routes/workgroupTasks.ts': 1,
+  // RFC-217 T2 — gate 写改走 workgroup_task_state CAS，仅剩 config PUT 一处；
+  // T4/T6 把该写点随 handler 本体下沉 services/workgroup/configActions.ts
+  // （updateTaskConfig 是 workgroupConfigJson 的唯一 UPDATE 属主）。
+  'services/workgroup/configActions.ts': 1,
   // RFC-167: persistDwState writes workgroup_config_json only (dw phase /
   // attempts / generatedDef on the task's config copy) — never `status`
   // (workgroupRunner persistGate 同款).

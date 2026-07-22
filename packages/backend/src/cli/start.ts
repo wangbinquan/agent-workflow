@@ -353,31 +353,9 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     log.warn('orphan reap failed', { error: err instanceof Error ? err.message : String(err) })
   }
 
-  // 5b2. RFC-132 PR-D' 步骤0: reconcile 升级前遗留的 immediate 反问 round（answered 但没打
-  // dispatched_at）—— 补 sealed+dispatched 并把 trigger_run_id 绑到【已存在】的 continuation
-  // run，令统一注入器 buildClarifyQueueContext 能重新注入用户答案。必须在任何 resume 之前跑
-  // （否则 continuation 恢复时注入空 → 丢答案，design §13 更正①）。幂等 + best-effort（自带 log）。
-  try {
-    const { reconcileLegacyImmediateRounds } = await import('@/services/clarifyMigration')
-    await reconcileLegacyImmediateRounds(db)
-  } catch (err) {
-    log.warn('legacy immediate clarify reconcile on boot failed', {
-      error: err instanceof Error ? err.message : String(err),
-    })
-  }
-
-  // 5b3. RFC-132 T7: reconcile 升级前遗留的 cross 'stop'。resolveCrossNodeStopped 现只读
-  // questioner 节点的 node 级 directive；未镜像到 node 级的 legacy cross stop 会"复活"（cross
-  // 节点不再 short-circuit）。补 node 级 'stop'（幂等 + 不覆盖已有 row，含用户 re-enable）。
-  // 同样在 resume 之前跑。幂等 + best-effort（自带 log）。
-  try {
-    const { reconcileLegacyCrossPersistentStop } = await import('@/services/clarifyMigration')
-    await reconcileLegacyCrossPersistentStop(db)
-  } catch (err) {
-    log.warn('legacy cross persistent-stop reconcile on boot failed', {
-      error: err instanceof Error ? err.message : String(err),
-    })
-  }
+  // 5b2/5b3（已退役）—— RFC-132 的两个 boot 垫片（legacy immediate rounds /
+  // legacy cross stop）由 RFC-217 T8 收编为一次性 migration 0107（垫片模块
+  // 随之删除）；migration 恰好一次的语义取代 boot-once 幂等重放。
 
   // 5b4. RFC-165 (R3-2-r4): backfill workspace tombstones for terminal tasks
   // whose directory vanished before the tombstone columns existed (pre-165 GC

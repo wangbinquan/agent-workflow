@@ -2,6 +2,7 @@
 // Not a *.test.ts file so bun:test doesn't try to run it.
 
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { insertLegacySelfClarify } from './clarify-fixtures'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -13,8 +14,6 @@ import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import {
-  clarifyRounds,
-  clarifySessions,
   docVersions,
   lifecycleAlerts,
   lifecycleRepairAudit,
@@ -186,7 +185,7 @@ export async function insertClarifySession(
   },
 ): Promise<string> {
   const id = ulid()
-  await db.insert(clarifySessions).values({
+  await insertLegacySelfClarify(db, {
     id,
     taskId,
     sourceAgentNodeId: 'src',
@@ -198,26 +197,6 @@ export async function insertClarifySession(
     status: opts.status,
     answersJson: opts.status === 'awaiting_human' ? null : '[]',
     answeredAt: opts.status === 'awaiting_human' ? null : Date.now(),
-  })
-  // RFC-217 T7 —— 读侧已切统一表；fixture 与生产双写同真（T8 删遗留表后
-  // 本函数只播 clarify_rounds）。
-  await db.insert(clarifyRounds).values({
-    id,
-    taskId,
-    kind: 'self',
-    askingNodeId: 'src',
-    // clarify_rounds 的 asking_node_run_id NOT NULL + FK；fixture 复用
-    // intermediary run 满足约束（测试只按 intermediary 查询，asking 不参断言）。
-    askingNodeRunId: opts.clarifyNodeRunId,
-    intermediaryNodeId: opts.clarifyNodeId,
-    intermediaryNodeRunId: opts.clarifyNodeRunId,
-    loopIter: 0,
-    iteration: 0,
-    questionsJson: '[]',
-    status: opts.status,
-    answersJson: opts.status === 'awaiting_human' ? null : '[]',
-    answeredAt: opts.status === 'awaiting_human' ? null : Date.now(),
-    createdAt: Date.now(),
   })
   return id
 }

@@ -16,7 +16,7 @@ import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { clarifyRounds, clarifySessions, nodeRuns, tasks, workflows } from '../src/db/schema'
+import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createClarifySession } from '../src/services/clarify'
 import { createCrossClarifySession } from '../src/services/crossClarify'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
@@ -251,10 +251,7 @@ describe('RFC-128 P1 — AC-3 轮 answered 仅全 seal 才翻', () => {
     expect(round?.status).toBe('answered')
     expect(round?.answeredAt).not.toBeNull()
     // dual-write: legacy clarify_sessions 同步翻 answered + 同一 answers_json。
-    const [legacy] = await db
-      .select()
-      .from(clarifySessions)
-      .where(eq(clarifySessions.id, round!.id))
+    const [legacy] = await db.select().from(clarifyRounds).where(eq(clarifyRounds.id, round!.id))
     expect(legacy?.status).toBe('answered')
     expect(legacy?.answersJson).toBe(round?.answersJson)
   })

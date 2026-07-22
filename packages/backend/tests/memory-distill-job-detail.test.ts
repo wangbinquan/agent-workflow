@@ -1,11 +1,11 @@
 // RFC-043 T4 — getDistillJobDetail aggregator unit tests.
 
 import { beforeEach, describe, expect, test } from 'bun:test'
+import { insertClarifyRoundRaw } from './clarify-fixtures'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
-  clarifySessions,
   docVersions,
   memories,
   memoryDistillJobs,
@@ -213,23 +213,22 @@ describe('getDistillJobDetail', () => {
   test('clarify source event resolves to its first question title', async () => {
     const { taskId, nodeRunId } = seedTaskWithReviewRun(db)
     const sessId = ulid()
-    db.insert(clarifySessions)
-      .values({
-        id: sessId,
-        taskId,
-        sourceAgentNodeId: 'src',
-        sourceAgentNodeRunId: nodeRunId,
-        sourceShardKey: null,
-        clarifyNodeId: 'c1',
-        clarifyNodeRunId: nodeRunId,
-        iterationIndex: 0,
-        questionsJson: JSON.stringify([
-          { id: 'q1', title: 'Which framework should we use?', kind: 'single', options: [] },
-        ]),
-        answersJson: null,
-        status: 'awaiting_human',
-      })
-      .run()
+    await insertClarifyRoundRaw(db, {
+      kind: 'self' as const,
+      id: sessId,
+      taskId,
+      askingNodeId: 'src',
+      askingNodeRunId: nodeRunId,
+      askingShardKey: null,
+      intermediaryNodeId: 'c1',
+      intermediaryNodeRunId: nodeRunId,
+      iteration: 0,
+      questionsJson: JSON.stringify([
+        { id: 'q1', title: 'Which framework should we use?', kind: 'single', options: [] },
+      ]),
+      answersJson: null,
+      status: 'awaiting_human',
+    })
     const jobId = seedJob(db, {
       sourceKind: 'clarify',
       sourceEventId: sessId,

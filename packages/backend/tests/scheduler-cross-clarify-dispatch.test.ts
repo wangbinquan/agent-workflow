@@ -25,7 +25,7 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, crossClarifySessions, nodeRuns, tasks, workflows } from '../src/db/schema'
+import { clarifyRounds, agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTask } from '../src/services/scheduler'
 import { runGit } from '../src/util/git'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
@@ -49,17 +49,17 @@ const actor = { userId: 'u1', role: 'owner' as const }
 async function reassignThenDispatchDesigner(
   db: DbClient,
   taskId: string,
-  crossClarifyNodeRunId: string,
+  intermediaryNodeRunId: string,
 ) {
   const questioner = (await listTaskQuestions(db, taskId)).find(
-    (e) => e.roleKind === 'questioner' && e.originNodeRunId === crossClarifyNodeRunId,
+    (e) => e.roleKind === 'questioner' && e.originNodeRunId === intermediaryNodeRunId,
   )
-  if (!questioner) throw new Error(`no questioner entry for round ${crossClarifyNodeRunId}`)
+  if (!questioner) throw new Error(`no questioner entry for round ${intermediaryNodeRunId}`)
   await reassignTaskQuestion(db, questioner.id, 'designer', actor)
   const designer = (await listTaskQuestions(db, taskId)).find(
-    (e) => e.roleKind === 'designer' && e.originNodeRunId === crossClarifyNodeRunId,
+    (e) => e.roleKind === 'designer' && e.originNodeRunId === intermediaryNodeRunId,
   )
-  if (!designer) throw new Error(`no designer entry after reassign for ${crossClarifyNodeRunId}`)
+  if (!designer) throw new Error(`no designer entry after reassign for ${intermediaryNodeRunId}`)
   return dispatchTaskQuestions(db, taskId, [designer.id], actor)
 }
 
@@ -298,12 +298,12 @@ describe('RFC-056 scheduler cross-clarify dispatch', () => {
 
     const sessions = await h.db
       .select()
-      .from(crossClarifySessions)
-      .where(eq(crossClarifySessions.taskId, t2.taskId))
+      .from(clarifyRounds)
+      .where(eq(clarifyRounds.taskId, t2.taskId))
     expect(sessions.length).toBe(1)
     expect(sessions[0]?.status).toBe('awaiting_human')
-    expect(sessions[0]?.sourceQuestionerNodeId).toBe('questioner')
-    expect(sessions[0]?.targetDesignerNodeId).toBe('designer')
+    expect(sessions[0]?.askingNodeId).toBe('questioner')
+    expect(sessions[0]?.targetConsumerNodeId).toBe('designer')
     expect(sessions[0]?.iteration).toBe(0)
 
     const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, t2.taskId))
@@ -363,10 +363,7 @@ describe('RFC-056 scheduler cross-clarify dispatch', () => {
       }),
     )
 
-    const sessions = await h.db
-      .select()
-      .from(crossClarifySessions)
-      .where(eq(crossClarifySessions.taskId, taskId))
+    const sessions = await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     expect(sessions.length).toBe(1)
     const qs = JSON.parse(sessions[0]?.questionsJson ?? '[]') as unknown[]
     expect(qs.length).toBe(7) // RFC-023 path would have truncated to 5.
@@ -422,11 +419,11 @@ describe('RFC-056 scheduler cross-clarify dispatch', () => {
     )
     const sessionRows = await h.db
       .select()
-      .from(crossClarifySessions)
-      .where(eq(crossClarifySessions.taskId, taskId))
+      .from(clarifyRounds)
+      .where(eq(clarifyRounds.taskId, taskId))
     expect(sessionRows.length).toBe(1)
     const sessionId = sessionRows[0]!.id
-    const crossNodeRunId = sessionRows[0]!.crossClarifyNodeRunId
+    const crossNodeRunId = sessionRows[0]!.intermediaryNodeRunId
 
     // Reject. A 'stop' answer (unified driver) seals directive='stop' (dual-written to the legacy
     // session), mints the questioner stop-rerun via dispatch, and persists the node-level STOP
@@ -441,7 +438,7 @@ describe('RFC-056 scheduler cross-clarify dispatch', () => {
       actor,
     })
     const updated = (
-      await h.db.select().from(crossClarifySessions).where(eq(crossClarifySessions.id, sessionId))
+      await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.id, sessionId))
     )[0]
     expect(updated?.directive).toBe('stop')
 
@@ -797,7 +794,7 @@ describe('RFC-056 A16 — cross-clarify questioner inline session resume', () =>
         }),
     )
     const sess = (
-      await h.db.select().from(crossClarifySessions).where(eq(crossClarifySessions.taskId, taskId))
+      await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     )[0]!
     expect(sess.status).toBe('awaiting_human')
 
@@ -805,7 +802,7 @@ describe('RFC-056 A16 — cross-clarify questioner inline session resume', () =>
     // dispatch (stop suppresses designer entries; only the questioner rerun mints).
     await autoDispatchClarifyRound({
       db: h.db,
-      originNodeRunId: sess.crossClarifyNodeRunId,
+      originNodeRunId: sess.intermediaryNodeRunId,
       answers: [
         { questionId: 'q1', selectedOptionIndices: [0], selectedOptionLabels: [], customText: '' },
       ],

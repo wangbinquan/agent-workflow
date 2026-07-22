@@ -24,7 +24,7 @@ import { join, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { clarifySessions, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
+import { clarifyRounds, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { runTask } from '../src/services/scheduler'
 import { sealRoundQuestions } from '../src/services/clarifySeal'
@@ -231,12 +231,12 @@ async function driveToRejectRerun(h: Harness, taskId: string) {
     'awaiting_human',
   )
   const r1sess = (
-    await h.db.select().from(clarifySessions).where(eq(clarifySessions.taskId, taskId))
+    await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
   )[0]!
   // Answer with directive STOP → the 承接 rerun finalizes with <workflow-output> (not another clarify).
   await sealRoundQuestions({
     db: h.db,
-    originNodeRunId: r1sess.clarifyNodeRunId,
+    originNodeRunId: r1sess.intermediaryNodeRunId,
     answers: [ans('r1q', 0, CLARIFY_ANS)],
     directive: 'stop',
     autoStage: true,
@@ -245,7 +245,7 @@ async function driveToRejectRerun(h: Harness, taskId: string) {
   await dispatchTaskQuestions(
     h.db,
     taskId,
-    [await selfEntryId(h, taskId, r1sess.clarifyNodeRunId)],
+    [await selfEntryId(h, taskId, r1sess.intermediaryNodeRunId)],
     actor,
   )
   await h.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, taskId))

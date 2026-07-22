@@ -27,15 +27,18 @@ describe('DEFAULT_PROTOCOL_RETRY_BUDGET 单源', () => {
     expect(s).not.toContain('defaultNodeRetries ?? 3')
   })
 
-  test('workgroupRunner：协议重试 + fc 重开预算走共享常量', () => {
-    const s = SRC('services/workgroup/engine.ts')
-    expect(s).toContain('const WG_PROTOCOL_RETRIES = DEFAULT_PROTOCOL_RETRY_BUDGET')
+  test('workgroup 引擎：协议重试 + fc 重开预算走共享常量（RFC-217 拆分后锚点）', () => {
+    // RFC-217 T5 把协议重试预算挪进 turnExecution.ts（executeTurn 的
+    // retryPolicy 单源），fc 重开预算判据在 lifecycle.ts settle 路径。
+    const turn = SRC('services/workgroup/turnExecution.ts')
+    expect(turn).toContain('const WG_PROTOCOL_RETRIES = DEFAULT_PROTOCOL_RETRY_BUDGET')
+    expect(turn).not.toContain('WG_PROTOCOL_RETRIES = 3')
     // RFC-215：fc 重开预算从「按 shardKey 数 node_runs 行（priorRuns）」改为
     // workgroup_assignments.attempt_count 列（批量 shardKey 下行计数失效），
     // 判据仍必须走共享常量。
-    expect(s).toContain('attemptCount < DEFAULT_PROTOCOL_RETRY_BUDGET')
-    expect(s).not.toContain('WG_PROTOCOL_RETRIES = 3')
-    expect(s).not.toContain('attemptCount < 3')
+    const lifecycle = SRC('services/workgroup/lifecycle.ts')
+    expect(lifecycle).toContain('attemptCount < DEFAULT_PROTOCOL_RETRY_BUDGET')
+    expect(lifecycle).not.toContain('attemptCount < 3')
   })
 
   test('dynamicWorkflowRunner：生成尝试上限走共享常量', () => {

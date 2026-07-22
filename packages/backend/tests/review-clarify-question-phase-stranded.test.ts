@@ -23,7 +23,7 @@ import { join, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
-import { clarifySessions, nodeRuns, tasks } from '../src/db/schema'
+import { clarifyRounds, nodeRuns, tasks } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
@@ -168,9 +168,9 @@ async function awaitingReviewRun(taskId: string, nodeId: string) {
 async function openClarifyRunId(taskId: string): Promise<string> {
   const rows = await db
     .select()
-    .from(clarifySessions)
-    .where(and(eq(clarifySessions.taskId, taskId), eq(clarifySessions.status, 'awaiting_human')))
-  const id = rows[0]?.clarifyNodeRunId
+    .from(clarifyRounds)
+    .where(and(eq(clarifyRounds.taskId, taskId), eq(clarifyRounds.status, 'awaiting_human')))
+  const id = rows[0]?.intermediaryNodeRunId
   if (!id) throw new Error('no awaiting clarify session')
   return id
 }

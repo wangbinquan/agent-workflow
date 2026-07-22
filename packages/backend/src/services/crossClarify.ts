@@ -71,7 +71,7 @@ import { and, desc, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { DbClient } from '@/db/client'
-import { clarifyRounds, crossClarifySessions, tasks } from '@/db/schema'
+import { clarifyRounds, tasks } from '@/db/schema'
 import { setNodeRunStatus } from '@/services/lifecycle'
 import { mintNodeRun } from '@/services/nodeRunMint'
 import { NotFoundError } from '@/util/errors'
@@ -167,15 +167,33 @@ export interface CreateCrossClarifySessionResult {
  * the legacy cross-session column names the DTO mappers consume (mirror of
  * clarify.ts's selfRoundAsSession; both drop with the tables in T8).
  */
-type CrossSessionShape = typeof crossClarifySessions.$inferSelect
+interface CrossSessionShape {
+  id: string
+  taskId: string
+  crossClarifyNodeId: string
+  crossClarifyNodeRunId: string
+  sourceQuestionerNodeId: string
+  sourceQuestionerNodeRunId: string
+  targetDesignerNodeId: string | null
+  loopIter: number
+  iteration: number
+  questionsJson: string
+  answersJson: string | null
+  directive: 'continue' | 'stop' | null
+  status: 'awaiting_human' | 'answered' | 'abandoned'
+  designerRunTriggeredAt: number | null
+  createdAt: number
+  answeredAt: number | null
+  abandonedAt: number | null
+}
 function crossRoundAsSession(r: typeof clarifyRounds.$inferSelect): CrossSessionShape {
   return {
     id: r.id,
     taskId: r.taskId,
     crossClarifyNodeId: r.intermediaryNodeId,
-    crossClarifyNodeRunId: r.intermediaryNodeRunId,
+    crossClarifyNodeRunId: r.intermediaryNodeRunId ?? '',
     sourceQuestionerNodeId: r.askingNodeId,
-    sourceQuestionerNodeRunId: r.askingNodeRunId,
+    sourceQuestionerNodeRunId: r.askingNodeRunId ?? '',
     targetDesignerNodeId: r.targetConsumerNodeId,
     loopIter: r.loopIter,
     iteration: r.iteration,
@@ -187,7 +205,6 @@ function crossRoundAsSession(r: typeof clarifyRounds.$inferSelect): CrossSession
     createdAt: r.createdAt,
     answeredAt: r.answeredAt,
     abandonedAt: r.abandonedAt,
-    questionScopesJson: r.questionScopesJson,
   }
 }
 
@@ -236,25 +253,6 @@ export async function createCrossClarifySession(
 
   const sessionId = ulid()
   const questionsJson = JSON.stringify(args.questions)
-  await args.db.insert(crossClarifySessions).values({
-    id: sessionId,
-    taskId: args.taskId,
-    crossClarifyNodeId: args.crossClarifyNodeId,
-    crossClarifyNodeRunId,
-    sourceQuestionerNodeId: args.sourceQuestionerNodeId,
-    sourceQuestionerNodeRunId: args.sourceQuestionerNodeRunId,
-    targetDesignerNodeId: args.targetDesignerNodeId,
-    loopIter: args.loopIter,
-    iteration,
-    questionsJson,
-    answersJson: null,
-    directive: null,
-    status: 'awaiting_human',
-    designerRunTriggeredAt: null,
-    createdAt,
-    answeredAt: null,
-    abandonedAt: null,
-  })
 
   // RFC-058 T12 dual-write — mirror to clarify_rounds with kind='cross'.
   // RFC-056 v1 keeps cross-clarify on agent-single, so askingShardKey = null.
@@ -603,7 +601,9 @@ export async function cleanupCrossClarifySessionsForTask(
   db: DbClient,
   taskId: string,
 ): Promise<void> {
-  await db.delete(crossClarifySessions).where(eq(crossClarifySessions.taskId, taskId))
+  await db
+    .delete(clarifyRounds)
+    .where(and(eq(clarifyRounds.kind, 'cross'), eq(clarifyRounds.taskId, taskId)))
   // RFC-058 T12 dual-write — mirror cleanup on clarify_rounds (cross slice).
   await db
     .delete(clarifyRounds)
@@ -616,7 +616,7 @@ export async function cleanupCrossClarifySessionsForTask(
 
 // RFC-162: `validateQuestionScopes` / `parseQuestionScopesJson` deleted with scope.
 
-function rowToSession(row: typeof crossClarifySessions.$inferSelect): CrossClarifySession {
+function rowToSession(row: CrossSessionShape): CrossClarifySession {
   const questions = JSON.parse(row.questionsJson) as ClarifyQuestion[]
   const out: CrossClarifySession = {
     id: row.id,
@@ -646,10 +646,7 @@ function rowToSession(row: typeof crossClarifySessions.$inferSelect): CrossClari
   return out
 }
 
-function rowToSummary(
-  row: typeof crossClarifySessions.$inferSelect,
-  taskName = '',
-): CrossClarifySessionSummary {
+function rowToSummary(row: CrossSessionShape, taskName = ''): CrossClarifySessionSummary {
   let questionCount = 0
   try {
     const qs = JSON.parse(row.questionsJson) as ClarifyQuestion[]

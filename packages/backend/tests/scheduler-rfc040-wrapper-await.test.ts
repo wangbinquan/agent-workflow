@@ -32,14 +32,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import {
-  agents,
-  clarifySessions,
-  nodeRunOutputs,
-  nodeRuns,
-  tasks,
-  workflows,
-} from '../src/db/schema'
+import { clarifyRounds, agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTask } from '../src/services/scheduler'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { decodeWrapperProgress } from '../src/services/wrapperProgress'
@@ -215,10 +208,7 @@ describe('RFC-040 wrapper-loop bubbles awaiting_human (clarify inside loop)', ()
     )
 
     // The fundamental RFC-040 fix: exactly ONE clarify_session, not 3.
-    const sessions = await h.db
-      .select()
-      .from(clarifySessions)
-      .where(eq(clarifySessions.taskId, taskId))
+    const sessions = await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     expect(sessions.length).toBe(1)
     expect(sessions[0]?.status).toBe('awaiting_human')
 
@@ -306,10 +296,10 @@ describe('RFC-040 wrapper-loop bubbles awaiting_human (clarify inside loop)', ()
 
     const sessionsBefore = await h.db
       .select()
-      .from(clarifySessions)
-      .where(eq(clarifySessions.taskId, taskId))
+      .from(clarifyRounds)
+      .where(eq(clarifyRounds.taskId, taskId))
     expect(sessionsBefore.length).toBe(1)
-    const clarifyRunId = sessionsBefore[0]!.clarifyNodeRunId
+    const clarifyRunId = sessionsBefore[0]!.intermediaryNodeRunId
 
     // User answers clarify (unified driver: seal + auto-dispatch mints the rerun).
     await autoDispatchClarifyRound({
@@ -375,8 +365,8 @@ describe('RFC-040 wrapper-loop bubbles awaiting_human (clarify inside loop)', ()
     // Still only 1 clarify_session (idempotent + same iteration).
     const sessionsAfter = await h.db
       .select()
-      .from(clarifySessions)
-      .where(eq(clarifySessions.taskId, taskId))
+      .from(clarifyRounds)
+      .where(eq(clarifyRounds.taskId, taskId))
     expect(sessionsAfter.length).toBe(1)
     expect(sessionsAfter[0]?.status).toBe('answered')
 
@@ -519,15 +509,12 @@ describe('RFC-040 wrapper-git bubbles awaiting_human (clarify inside git wrapper
     )?.baseline
     expect(typeof baselineBefore).toBe('string')
 
-    const sessions = await h.db
-      .select()
-      .from(clarifySessions)
-      .where(eq(clarifySessions.taskId, taskId))
+    const sessions = await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     expect(sessions.length).toBe(1)
 
     await autoDispatchClarifyRound({
       db: h.db,
-      originNodeRunId: sessions[0]!.clarifyNodeRunId,
+      originNodeRunId: sessions[0]!.intermediaryNodeRunId,
       directive: 'stop', // RFC-100: finalize round → wrapper-inner agent's <workflow-output> accepted
       answers: [
         {
@@ -652,10 +639,7 @@ describe('RFC-040 nested wrapper-git ∋ wrapper-loop ∋ {agent, clarify}', () 
     expect(gwOuts.find((o) => o.portName === 'git_diff')).toBeUndefined()
 
     // Only 1 clarify_session despite nested wrappers.
-    const sessions = await h.db
-      .select()
-      .from(clarifySessions)
-      .where(eq(clarifySessions.taskId, taskId))
+    const sessions = await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     expect(sessions.length).toBe(1)
   })
 })

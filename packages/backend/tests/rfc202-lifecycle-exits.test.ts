@@ -8,14 +8,13 @@
 // refactor turns any of these red, one of those audit P0/P1s is back.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
+import { insertClarifyRoundRaw } from './clarify-fixtures'
+import { and, eq } from 'drizzle-orm'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   clarifyRounds,
-  clarifySessions,
-  crossClarifySessions,
   docVersions,
   nodeRuns,
   scheduledTasks,
@@ -92,31 +91,29 @@ function seedRun(db: DbClient, taskId: string, nodeId: string, status: NodeRunSt
   return id
 }
 
-function seedClarifyRound(
+async function seedClarifyRound(
   db: DbClient,
   taskId: string,
   kind: 'self' | 'cross',
   intermediaryNodeRunId: string,
   status: (typeof clarifyRounds.$inferInsert)['status'] = 'awaiting_human',
-): string {
+): Promise<string> {
   const id = ulid()
-  db.insert(clarifyRounds)
-    .values({
-      id,
-      taskId,
-      kind,
-      askingNodeId: 'asker',
-      askingNodeRunId: intermediaryNodeRunId,
-      ...(kind === 'cross' ? { designerNodeId: 'designer' } : {}),
-      intermediaryNodeId: kind === 'self' ? 'clarify_x' : 'xclarify_x',
-      intermediaryNodeRunId,
-      loopIter: 0,
-      iteration: 0,
-      questionsJson: JSON.stringify([{ id: 'q1', question: 'which?' }]),
-      status,
-      createdAt: Date.now(),
-    })
-    .run()
+  await insertClarifyRoundRaw(db, {
+    id,
+    taskId,
+    kind,
+    askingNodeId: 'asker',
+    askingNodeRunId: intermediaryNodeRunId,
+    ...(kind === 'cross' ? { designerNodeId: 'designer' } : {}),
+    intermediaryNodeId: kind === 'self' ? 'clarify_x' : 'xclarify_x',
+    intermediaryNodeRunId,
+    loopIter: 0,
+    iteration: 0,
+    questionsJson: JSON.stringify([{ id: 'q1', question: 'which?' }]),
+    status,
+    createdAt: Date.now(),
+  })
   return id
 }
 
@@ -125,48 +122,17 @@ describe('RFC-202 T2 — terminal sweep', () => {
   beforeEach(() => {
     db = createInMemoryDb(MIGRATIONS)
   })
-  afterEach(() => {
+  afterEach(async () => {
     registerTerminalTaskHook(null)
   })
 
-  test('mixed self+cross sweep: self→canceled, cross→abandoned (0031 CHECK safe), review parks canceled, one call', () => {
+  test('mixed self+cross sweep: self→canceled, cross→abandoned (0031 CHECK safe), review parks canceled, one call', async () => {
     const { taskId } = seedTask(db, { status: 'canceled' })
     const selfRun = seedRun(db, taskId, 'clarify_x', 'awaiting_human')
     const crossRun = seedRun(db, taskId, 'xclarify_x', 'awaiting_human')
     const reviewRun = seedRun(db, taskId, 'rev_x', 'awaiting_review')
-    seedClarifyRound(db, taskId, 'self', selfRun)
-    seedClarifyRound(db, taskId, 'cross', crossRun)
-    db.insert(clarifySessions)
-      .values({
-        id: ulid(),
-        taskId,
-        sourceAgentNodeId: 'asker',
-        sourceAgentNodeRunId: selfRun,
-        sourceShardKey: null,
-        clarifyNodeId: 'clarify_x',
-        clarifyNodeRunId: selfRun,
-        iterationIndex: 0,
-        questionsJson: '[]',
-        status: 'awaiting_human',
-        createdAt: Date.now(),
-      })
-      .run()
-    db.insert(crossClarifySessions)
-      .values({
-        id: ulid(),
-        taskId,
-        crossClarifyNodeId: 'xclarify_x',
-        crossClarifyNodeRunId: crossRun,
-        sourceQuestionerNodeId: 'asker',
-        sourceQuestionerNodeRunId: crossRun,
-        targetDesignerNodeId: 'designer',
-        loopIter: 0,
-        iteration: 0,
-        questionsJson: '[]',
-        status: 'awaiting_human',
-        createdAt: Date.now(),
-      })
-      .run()
+    await seedClarifyRound(db, taskId, 'self', selfRun)
+    await seedClarifyRound(db, taskId, 'cross', crossRun)
 
     const result = sealOpenHumanGatesForTask(db, taskId, 'task-canceled')
     expect(result.sealedSelfRounds).toBe(1)
@@ -186,14 +152,14 @@ describe('RFC-202 T2 — terminal sweep', () => {
 
     const sessions = db
       .select()
-      .from(clarifySessions)
-      .where(eq(clarifySessions.taskId, taskId))
+      .from(clarifyRounds)
+      .where(and(eq(clarifyRounds.taskId, taskId), eq(clarifyRounds.kind, 'self')))
       .all()
     expect(sessions[0]?.status).toBe('canceled')
     const xsessions = db
       .select()
-      .from(crossClarifySessions)
-      .where(eq(crossClarifySessions.taskId, taskId))
+      .from(clarifyRounds)
+      .where(and(eq(clarifyRounds.taskId, taskId), eq(clarifyRounds.kind, 'cross')))
       .all()
     expect(xsessions[0]?.status).toBe('abandoned')
 
@@ -251,7 +217,7 @@ describe('RFC-202 T3 — cancel from awaiting_*', () => {
   test('awaiting_human task cancels via the fallback CAS and its open round is sealed', async () => {
     const { taskId } = seedTask(db, { status: 'awaiting_human' })
     const run = seedRun(db, taskId, 'clarify_x', 'awaiting_human')
-    seedClarifyRound(db, taskId, 'self', run)
+    await seedClarifyRound(db, taskId, 'self', run)
     const out = await cancelTask(db, taskId)
     expect(out.status).toBe('canceled')
     const round = db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId)).all()[0]!
@@ -282,7 +248,7 @@ describe('RFC-202 T2-4 — write-path terminal guards', () => {
   test('sealRoundQuestions refuses answers into a done/canceled task BEFORE persisting', async () => {
     const { taskId } = seedTask(db, { status: 'done' })
     const run = seedRun(db, taskId, 'clarify_x', 'awaiting_human')
-    seedClarifyRound(db, taskId, 'self', run)
+    await seedClarifyRound(db, taskId, 'self', run)
     await expect(
       sealRoundQuestions({
         db,
@@ -344,11 +310,11 @@ describe('RFC-202 T6 — inbox terminal filtering (before pagination)', () => {
     const dead = seedTask(db, { status: 'failed' })
     const live = seedTask(db, { status: 'running' })
     const liveRun = seedRun(db, live.taskId, 'clarify_x', 'awaiting_human')
-    seedClarifyRound(db, live.taskId, 'self', liveRun)
+    await seedClarifyRound(db, live.taskId, 'self', liveRun)
     await Bun.sleep(2) // ensure zombies sort newer (createdAt desc)
     for (let i = 0; i < 3; i++) {
       const r = seedRun(db, dead.taskId, `clarify_z${i}`, 'awaiting_human')
-      seedClarifyRound(db, dead.taskId, 'self', r)
+      await seedClarifyRound(db, dead.taskId, 'self', r)
     }
     // limit=2 < zombie count: without filter-before-slice the live round vanishes.
     const page = await listClarifyRoundSummaries(db, { status: 'awaiting_human', limit: 2 })

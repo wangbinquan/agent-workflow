@@ -26,10 +26,12 @@ describe('RFC-187 F2 — isWorkgroupKickResumable', () => {
 })
 
 describe('RFC-187 F2 — source lock (all gated kick sites use the resumable gate)', () => {
-  const SRC = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'routes', 'workgroupTasks.ts'),
-    'utf8',
-  )
+  // RFC-217 T4 moved the write endpoints (and their kick sites) out of
+  // routes/workgroupTasks.ts into services/workgroup/{taskActions,configActions}.
+  const SRC = ['routes/workgroupTasks.ts', 'services/workgroup/taskActions.ts']
+    .concat(['services/workgroup/configActions.ts', 'services/workgroup/dwActions.ts'])
+    .map((p) => readFileSync(resolve(import.meta.dir, '..', 'src', ...p.split('/')), 'utf8'))
+    .join('\n')
 
   test('the message/delivery/patch sites gate on isWorkgroupKickResumable, not awaiting_human alone', () => {
     // the old awaiting_human-only gate on kickResume must be gone.

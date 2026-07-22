@@ -30,7 +30,7 @@
 import { and, eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
-import { clarifyRounds, clarifySessions, crossClarifySessions, nodeRuns } from '@/db/schema'
+import { clarifyRounds, nodeRuns } from '@/db/schema'
 import { taskBroadcaster, TASK_CHANNEL } from '@/ws/broadcaster'
 import { createLogger } from '@/util/log'
 
@@ -61,10 +61,6 @@ export function sealOpenHumanGatesForTask(
   dbTxSync(db, (tx) => {
     // 1) Legacy self-clarify session rows (clarify_sessions is still the
     //    read model for parts of the self flow).
-    tx.update(clarifySessions)
-      .set({ status: 'canceled' })
-      .where(and(eq(clarifySessions.taskId, taskId), eq(clarifySessions.status, 'awaiting_human')))
-      .run()
     // 2) Authoritative clarify rounds, split by kind (migration 0031 CHECK:
     //    self never 'abandoned', cross never 'canceled').
     const openRounds = tx
@@ -110,15 +106,6 @@ export function sealOpenHumanGatesForTask(
       }
     }
     // 3) Legacy cross session rows (RFC-056 read model).
-    tx.update(crossClarifySessions)
-      .set({ status: 'abandoned', abandonedAt: now })
-      .where(
-        and(
-          eq(crossClarifySessions.taskId, taskId),
-          eq(crossClarifySessions.status, 'awaiting_human'),
-        ),
-      )
-      .run()
     // 4) Any remaining awaiting_human node_runs the round rows didn't cover
     //    (defensive: legacy rows without a round), and review parks. The
     //    shared table's `mark-canceled` edge covers both awaiting statuses.

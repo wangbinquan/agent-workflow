@@ -18,13 +18,7 @@ import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
-import {
-  clarifySessions,
-  crossClarifySessions,
-  nodeRunOutputs,
-  nodeRuns,
-  tasks,
-} from '../src/db/schema'
+import { clarifyRounds, nodeRunOutputs, nodeRuns, tasks } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
 // RFC-132 ②a 缺口② 回归锁: S3 + S6 drive answers through the unified autoDispatchClarifyRound.
@@ -189,9 +183,9 @@ async function topLevel(db: DbClient, taskId: string, nodeId: string) {
 async function openClarifyRunId(db: DbClient, taskId: string): Promise<string> {
   const rows = await db
     .select()
-    .from(clarifySessions)
-    .where(and(eq(clarifySessions.taskId, taskId), eq(clarifySessions.status, 'awaiting_human')))
-  const id = rows[0]?.clarifyNodeRunId
+    .from(clarifyRounds)
+    .where(and(eq(clarifyRounds.taskId, taskId), eq(clarifyRounds.status, 'awaiting_human')))
+  const id = rows[0]?.intermediaryNodeRunId
   if (!id) throw new Error('no awaiting clarify session')
   return id
 }
@@ -1746,17 +1740,12 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     // answer cross-clarify with continue → designer reruns + cascade
     const ccRows = await c.db
       .select()
-      .from(crossClarifySessions)
-      .where(
-        and(
-          eq(crossClarifySessions.taskId, task.id),
-          eq(crossClarifySessions.status, 'awaiting_human'),
-        ),
-      )
+      .from(clarifyRounds)
+      .where(and(eq(clarifyRounds.taskId, task.id), eq(clarifyRounds.status, 'awaiting_human')))
     expect(ccRows.length).toBe(1)
     await autoDispatchClarifyRound({
       db: c.db,
-      originNodeRunId: ccRows[0]!.crossClarifyNodeRunId,
+      originNodeRunId: ccRows[0]!.intermediaryNodeRunId,
       answers: [CLARIFY_ANSWER],
       directive: 'stop',
       actor,

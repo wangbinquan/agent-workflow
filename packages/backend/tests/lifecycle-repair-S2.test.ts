@@ -2,9 +2,9 @@
 // 2 options × 3 cases = 6 tests.
 
 import { afterEach, describe, expect, test } from 'bun:test'
+import { clarifyRounds } from '../src/db/schema'
 import { eq } from 'drizzle-orm'
 
-import { clarifySessions } from '../src/db/schema'
 import { applyRepairOption, listRepairOptionsForAlert } from '../src/services/lifecycleRepair'
 import {
   buildHarness,
@@ -102,7 +102,7 @@ describe('RFC-057 — S2.reopen-session', () => {
     })
     expect(res.outcome).toBe('success')
     const sess = (
-      await h.db.select().from(clarifySessions).where(eq(clarifySessions.id, sessId)).limit(1)
+      await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.id, sessId)).limit(1)
     )[0]!
     expect(sess.status).toBe('awaiting_human')
   })

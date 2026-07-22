@@ -20,8 +20,6 @@ import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   clarifyRounds,
-  clarifySessions,
-  crossClarifySessions,
   nodeRuns,
   nodeRunOutputs,
   taskQuestions,
@@ -199,26 +197,6 @@ async function seedAnsweredRound(
     status,
     answeredAt: Date.now(),
   })
-  // Dual-write the legacy cross_clarify_sessions (RFC-058) so evaluateDesignerRerunReadiness
-  // (which reads the legacy table) sees the cross round as a resolved source.
-  if (opts.kind === 'cross') {
-    await db.insert(crossClarifySessions).values({
-      id: roundId,
-      taskId,
-      crossClarifyNodeId: CC,
-      crossClarifyNodeRunId: intRunId,
-      sourceQuestionerNodeId: opts.askingNodeId,
-      sourceQuestionerNodeRunId: askingRunId,
-      targetDesignerNodeId: D,
-      loopIter: opts.loopIter ?? 0,
-      iteration: 0,
-      questionsJson: JSON.stringify(opts.questions),
-      answersJson: JSON.stringify(opts.questions.map((q) => ans(q.id))),
-      directive: 'continue',
-      status,
-      answeredAt: Date.now(),
-    })
-  }
   return { roundId, askingRunId, intermediaryNodeRunId: intRunId }
 }
 
@@ -943,8 +921,8 @@ describe('RFC-128 P5-BC §5.2.14 mixed-path write-flow', () => {
     const sess = (
       await db
         .select()
-        .from(clarifySessions)
-        .where(eq(clarifySessions.clarifyNodeRunId, clarifyNodeRunId))
+        .from(clarifyRounds)
+        .where(eq(clarifyRounds.intermediaryNodeRunId, clarifyNodeRunId))
     )[0]
     expect(sess?.status).toBe('answered')
     // clarify node closed (done) — the LAST step, after the rerun is committed.
@@ -1129,8 +1107,8 @@ describe('RFC-128 §5.2.14 final-gate (2nd round) — seal/merge/deferred critic
     const sess = (
       await db
         .select()
-        .from(clarifySessions)
-        .where(eq(clarifySessions.clarifyNodeRunId, clarifyNodeRunId))
+        .from(clarifyRounds)
+        .where(eq(clarifyRounds.intermediaryNodeRunId, clarifyNodeRunId))
     )[0]
     expect(sess?.status).toBe('answered')
     const finalAnswers = JSON.parse(sess!.answersJson ?? '[]') as Array<{

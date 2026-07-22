@@ -9,7 +9,7 @@
 
 import { and, desc, eq } from 'drizzle-orm'
 
-import { clarifyRounds, clarifySessions, nodeRuns } from '@/db/schema'
+import { clarifyRounds, nodeRuns } from '@/db/schema'
 import { setTaskStatus } from '@/services/lifecycle'
 
 import { schedulerLivenessGate } from './helpers'
@@ -144,12 +144,7 @@ const S2_REOPEN_SESSION: RepairOptionDef = {
     const sessionId = pre.ctx['sessionId'] as string
     const previousStatus = pre.ctx['previousStatus'] as string
     const before = { session: { id: sessionId, status: previousStatus } }
-    await rc.db
-      .update(clarifySessions)
-      .set({ status: 'awaiting_human', answersJson: null, answeredAt: null })
-      .where(eq(clarifySessions.id, sessionId))
-    // RFC-217 T7（设计门 P1）——修复路径此前只写遗留表，正是同 ID 双表分歧的
-    // 制造源；补上统一表同步（同一次修复动作的另一半，T8 删表后仅此为真）。
+    // RFC-217 T8 —— clarify_rounds 唯一数据源（遗留表已删）。
     await rc.db
       .update(clarifyRounds)
       .set({ status: 'awaiting_human', answersJson: null, answeredAt: null })

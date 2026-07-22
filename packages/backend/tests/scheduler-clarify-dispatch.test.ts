@@ -36,15 +36,7 @@ import { monotonicFactory } from 'ulid'
 // later-seeded rerun always sorts freshest — mirrors scheduler-clarify-mid-batch.test.ts.
 const ulid = monotonicFactory()
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import {
-  agents,
-  clarifyRounds,
-  clarifySessions,
-  nodeRuns,
-  taskQuestions,
-  tasks,
-  workflows,
-} from '../src/db/schema'
+import { agents, clarifyRounds, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import { runTask } from '../src/services/scheduler'
 import { setNodeClarifyDirective } from '../src/services/taskClarifyDirective'
 import { runGit } from '../src/util/git'
@@ -276,14 +268,11 @@ describe('scheduler RFC-023 clarify dispatch', () => {
     const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(taskRow?.status).toBe('awaiting_human')
 
-    const sessions = await h.db
-      .select()
-      .from(clarifySessions)
-      .where(eq(clarifySessions.taskId, taskId))
+    const sessions = await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     expect(sessions.length).toBe(1)
     expect(sessions[0]?.status).toBe('awaiting_human')
-    expect(sessions[0]?.sourceAgentNodeId).toBe('d')
-    expect(sessions[0]?.sourceShardKey).toBeNull()
+    expect(sessions[0]?.askingNodeId).toBe('d')
+    expect(sessions[0]?.askingShardKey).toBeNull()
 
     const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     const dRun = runs.find((r) => r.nodeId === 'd' && r.parentNodeRunId === null)
@@ -335,10 +324,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
     expect(taskRow?.errorMessage ?? '').toContain('clarify-required')
 
     // The agent never emitted a clarify envelope, so no session was ever created.
-    const sessions = await h.db
-      .select()
-      .from(clarifySessions)
-      .where(eq(clarifySessions.taskId, taskId))
+    const sessions = await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     expect(sessions.length).toBe(0)
   })
 
@@ -414,7 +400,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
     // answer dispatch normally does — we exercise scheduler->runner here
     // without invoking the REST path).
     const sessRow = (
-      await h.db.select().from(clarifySessions).where(eq(clarifySessions.taskId, taskId))
+      await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     )[0]!
     const ANSWERS_JSON_S2 = JSON.stringify([
       {
@@ -425,14 +411,14 @@ describe('scheduler RFC-023 clarify dispatch', () => {
       },
     ])
     await h.db
-      .update(clarifySessions)
+      .update(clarifyRounds)
       .set({
         status: 'answered',
         answeredAt: Date.now(),
         answeredBy: 'local',
         answersJson: ANSWERS_JSON_S2,
       })
-      .where(eq(clarifySessions.id, sessRow.id))
+      .where(eq(clarifyRounds.id, sessRow.id))
     // RFC-100: directive='stop' so this rerun is the finalize round — the agent
     // is released from ask-back mode and its <workflow-output> is accepted.
     await mirrorClarifyAnswered(h.db, sessRow.id, {
@@ -442,7 +428,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
     await h.db
       .update(nodeRuns)
       .set({ status: 'done', finishedAt: Date.now() })
-      .where(eq(nodeRuns.id, sessRow.clarifyNodeRunId))
+      .where(eq(nodeRuns.id, sessRow.intermediaryNodeRunId))
     const rerunId = ulid()
     await h.db.insert(nodeRuns).values({
       id: rerunId,
@@ -456,7 +442,14 @@ describe('scheduler RFC-023 clarify dispatch', () => {
       rerunCause: 'clarify-answer',
     })
     // RFC-132 (PR-C): dispatch the answered round to the rerun + record the 'stop' node state.
-    await seedDispatchedSelfQuestions(h.db, taskId, sessRow.clarifyNodeRunId, ['qdb'], 'd', rerunId)
+    await seedDispatchedSelfQuestions(
+      h.db,
+      taskId,
+      sessRow.intermediaryNodeRunId,
+      ['qdb'],
+      'd',
+      rerunId,
+    )
     await setNodeClarifyDirective(h.db, taskId, 'd', 'stop', 'u1')
     await h.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, taskId))
 
@@ -547,7 +540,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
     // — the production incident's exact shape; the comparator must beat it
     // by pure id order regardless of retryIndex).
     const sessRow = (
-      await h.db.select().from(clarifySessions).where(eq(clarifySessions.taskId, taskId))
+      await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     )[0]!
     const ANSWERS_JSON_S3A = JSON.stringify([
       {
@@ -558,7 +551,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
       },
     ])
     await h.db
-      .update(clarifySessions)
+      .update(clarifyRounds)
       .set({
         status: 'answered',
         answeredAt: Date.now(),
@@ -567,7 +560,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         directive: 'stop',
         answersJson: ANSWERS_JSON_S3A,
       })
-      .where(eq(clarifySessions.id, sessRow.id))
+      .where(eq(clarifyRounds.id, sessRow.id))
     await mirrorClarifyAnswered(h.db, sessRow.id, {
       answersJson: ANSWERS_JSON_S3A,
       directive: 'stop',
@@ -575,7 +568,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
     await h.db
       .update(nodeRuns)
       .set({ status: 'done', finishedAt: Date.now() })
-      .where(eq(nodeRuns.id, sessRow.clarifyNodeRunId))
+      .where(eq(nodeRuns.id, sessRow.intermediaryNodeRunId))
     const rerunId = ulid()
     await h.db.insert(nodeRuns).values({
       id: rerunId,
@@ -591,7 +584,14 @@ describe('scheduler RFC-023 clarify dispatch', () => {
     // RFC-132 (PR-C): dispatch to the fresh rerun (triggerRunId=rerunId, minted AFTER the stale
     // retry=6 done row, so derived aging keys off the fresher id — the stale row can't age it out)
     // + record the 'stop' node state so the finalize round is released.
-    await seedDispatchedSelfQuestions(h.db, taskId, sessRow.clarifyNodeRunId, ['qdb'], 'd', rerunId)
+    await seedDispatchedSelfQuestions(
+      h.db,
+      taskId,
+      sessRow.intermediaryNodeRunId,
+      ['qdb'],
+      'd',
+      rerunId,
+    )
     await setNodeClarifyDirective(h.db, taskId, 'd', 'stop', 'u1')
     await h.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, taskId))
 
@@ -665,7 +665,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
     // Step 2: synthesize the answered session + the clarify-rerun row the
     // answer channel normally mints (synthesized here at retry=0).
     const sessRow = (
-      await h.db.select().from(clarifySessions).where(eq(clarifySessions.taskId, taskId))
+      await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     )[0]!
     const ANSWERS_JSON_S2B = JSON.stringify([
       {
@@ -676,7 +676,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
       },
     ])
     await h.db
-      .update(clarifySessions)
+      .update(clarifyRounds)
       .set({
         status: 'answered',
         answeredAt: Date.now(),
@@ -691,7 +691,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         directive: 'continue',
         answersJson: ANSWERS_JSON_S2B,
       })
-      .where(eq(clarifySessions.id, sessRow.id))
+      .where(eq(clarifyRounds.id, sessRow.id))
     await mirrorClarifyAnswered(h.db, sessRow.id, {
       answersJson: ANSWERS_JSON_S2B,
       directive: 'continue',
@@ -699,7 +699,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
     await h.db
       .update(nodeRuns)
       .set({ status: 'done', finishedAt: Date.now() })
-      .where(eq(nodeRuns.id, sessRow.clarifyNodeRunId))
+      .where(eq(nodeRuns.id, sessRow.intermediaryNodeRunId))
     const rerunId = ulid()
     await h.db.insert(nodeRuns).values({
       id: rerunId,
@@ -714,7 +714,14 @@ describe('scheduler RFC-023 clarify dispatch', () => {
     })
     // RFC-132 (PR-C): dispatch the answered 'continue' round to this rerun (bound now; the fresh
     // revival attempt re-binds + re-injects since an interrupted rerun never produced output).
-    await seedDispatchedSelfQuestions(h.db, taskId, sessRow.clarifyNodeRunId, ['qdb'], 'd', rerunId)
+    await seedDispatchedSelfQuestions(
+      h.db,
+      taskId,
+      sessRow.intermediaryNodeRunId,
+      ['qdb'],
+      'd',
+      rerunId,
+    )
 
     // Step 3: simulate the daemon restart sweep — the rerun row never got a
     // chance to run; orphans.ts flips pending/running rows to 'interrupted'.
@@ -796,7 +803,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
     // Step 2: synthesize the answered session with directive='stop' (the user
     // clicked Stop → finalize round) + the clarify-rerun row.
     const sessRow = (
-      await h.db.select().from(clarifySessions).where(eq(clarifySessions.taskId, taskId))
+      await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     )[0]!
     const ANSWERS_JSON = JSON.stringify([
       {
@@ -807,7 +814,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
       },
     ])
     await h.db
-      .update(clarifySessions)
+      .update(clarifyRounds)
       .set({
         status: 'answered',
         answeredAt: Date.now(),
@@ -815,12 +822,12 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         directive: 'stop',
         answersJson: ANSWERS_JSON,
       })
-      .where(eq(clarifySessions.id, sessRow.id))
+      .where(eq(clarifyRounds.id, sessRow.id))
     await mirrorClarifyAnswered(h.db, sessRow.id, { answersJson: ANSWERS_JSON, directive: 'stop' })
     await h.db
       .update(nodeRuns)
       .set({ status: 'done', finishedAt: Date.now() })
-      .where(eq(nodeRuns.id, sessRow.clarifyNodeRunId))
+      .where(eq(nodeRuns.id, sessRow.intermediaryNodeRunId))
     const rerunId = ulid()
     await h.db.insert(nodeRuns).values({
       id: rerunId,
@@ -833,7 +840,14 @@ describe('scheduler RFC-023 clarify dispatch', () => {
     })
     // RFC-132 (PR-C): dispatch the answered 'stop' round + record the 'stop' node state so the
     // revived finalize round stays RELEASED (nodeStopOverride → effectiveHasClarifyChannel=false).
-    await seedDispatchedSelfQuestions(h.db, taskId, sessRow.clarifyNodeRunId, ['qdb'], 'd', rerunId)
+    await seedDispatchedSelfQuestions(
+      h.db,
+      taskId,
+      sessRow.intermediaryNodeRunId,
+      ['qdb'],
+      'd',
+      rerunId,
+    )
     await setNodeClarifyDirective(h.db, taskId, 'd', 'stop', 'u1')
 
     // Step 3: simulate the daemon restart sweep → the rerun row is interrupted.
@@ -909,7 +923,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
       }),
     )
     const round1Sess = (
-      await h.db.select().from(clarifySessions).where(eq(clarifySessions.taskId, taskId))
+      await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     )[0]!
     const ANSWERS_JSON_R1 = JSON.stringify([
       {
@@ -920,7 +934,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
       },
     ])
     await h.db
-      .update(clarifySessions)
+      .update(clarifyRounds)
       .set({
         status: 'answered',
         answeredAt: Date.now(),
@@ -928,7 +942,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         directive: 'continue',
         answersJson: ANSWERS_JSON_R1,
       })
-      .where(eq(clarifySessions.id, round1Sess.id))
+      .where(eq(clarifyRounds.id, round1Sess.id))
     await mirrorClarifyAnswered(h.db, round1Sess.id, {
       answersJson: ANSWERS_JSON_R1,
       directive: 'continue',
@@ -936,7 +950,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
     await h.db
       .update(nodeRuns)
       .set({ status: 'done', finishedAt: Date.now() })
-      .where(eq(nodeRuns.id, round1Sess.clarifyNodeRunId))
+      .where(eq(nodeRuns.id, round1Sess.intermediaryNodeRunId))
 
     // Round 2 (ci=1): mint rerun row, drive it through to ask "Which env?".
     const ci1Id = ulid()
@@ -957,7 +971,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
     await seedDispatchedSelfQuestions(
       h.db,
       taskId,
-      round1Sess.clarifyNodeRunId,
+      round1Sess.intermediaryNodeRunId,
       ['qdb'],
       'd',
       ci1Id,
@@ -982,11 +996,8 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
-    const allSess = await h.db
-      .select()
-      .from(clarifySessions)
-      .where(eq(clarifySessions.taskId, taskId))
-    const round2Sess = allSess.find((s) => s.iterationIndex === 1)!
+    const allSess = await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
+    const round2Sess = allSess.find((s) => s.iteration === 1)!
     const ANSWERS_JSON_R2 = JSON.stringify([
       {
         questionId: 'qenv',
@@ -996,7 +1007,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
       },
     ])
     await h.db
-      .update(clarifySessions)
+      .update(clarifyRounds)
       .set({
         status: 'answered',
         answeredAt: Date.now(),
@@ -1008,7 +1019,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         directive: 'continue',
         answersJson: ANSWERS_JSON_R2,
       })
-      .where(eq(clarifySessions.id, round2Sess.id))
+      .where(eq(clarifyRounds.id, round2Sess.id))
     await mirrorClarifyAnswered(h.db, round2Sess.id, {
       answersJson: ANSWERS_JSON_R2,
       directive: 'continue',
@@ -1016,7 +1027,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
     await h.db
       .update(nodeRuns)
       .set({ status: 'done', finishedAt: Date.now() })
-      .where(eq(nodeRuns.id, round2Sess.clarifyNodeRunId))
+      .where(eq(nodeRuns.id, round2Sess.intermediaryNodeRunId))
 
     // Mint the ci=2 rerun row, immediately mark interrupted (daemon restart).
     const ci2Id = ulid()
@@ -1034,7 +1045,7 @@ describe('scheduler RFC-023 clarify dispatch', () => {
     await seedDispatchedSelfQuestions(
       h.db,
       taskId,
-      round2Sess.clarifyNodeRunId,
+      round2Sess.intermediaryNodeRunId,
       ['qenv'],
       'd',
       ci2Id,

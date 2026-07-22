@@ -7,18 +7,13 @@
 // switch to read/write the new table.
 
 import { describe, expect, test } from 'bun:test'
+import { insertLegacySelfClarify, insertLegacyCrossClarify } from './clarify-fixtures'
 import { resolve } from 'node:path'
 import { eq, sql } from 'drizzle-orm'
 
 import { createInMemoryDb } from '../src/db/client'
-import {
-  clarifyRounds,
-  clarifySessions,
-  crossClarifySessions,
-  nodeRuns,
-  tasks,
-  workflows,
-} from '../src/db/schema'
+import { LAST_LEGACY_CLARIFY_IDX, freezeAt } from './migration-freeze'
+import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -74,8 +69,8 @@ describe('RFC-058 migration 0031 — clarify_rounds table shape', () => {
     expect(idxNames).toContain('idx_clarify_rounds_target_consumer')
   })
 
-  test('legacy clarify_sessions and cross_clarify_sessions still exist post-stage-1', () => {
-    const db = createInMemoryDb(MIGRATIONS)
+  test('legacy clarify_sessions and cross_clarify_sessions still exist post-stage-1 (era-locked at 0106; 0107 drops them)', () => {
+    const db = createInMemoryDb(freezeAt(LAST_LEGACY_CLARIFY_IDX))
     const t = db
       .select({ name: sql<string>`name` })
       .from(sql`sqlite_master`)
@@ -290,8 +285,8 @@ describe('RFC-058 migration 0031 — kind enum + directive CHECK', () => {
   })
 })
 
-describe('RFC-058 migration 0031 — legacy rows continue to be writable (stage-1 dual-table)', () => {
-  test('clarify_sessions and cross_clarify_sessions can still be written + read in stage 1', async () => {
+describe('RFC-058 migration 0031 →（RFC-217 T8 终态）legacy 形状经 fixtures 落统一表', () => {
+  test('legacy 键名 fixture 助手写入 clarify_rounds 并可读回（双表时代结束）', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db)
     await db.insert(nodeRuns).values({
@@ -302,7 +297,7 @@ describe('RFC-058 migration 0031 — legacy rows continue to be writable (stage-
       retryIndex: 0,
       iteration: 0,
     })
-    await db.insert(clarifySessions).values({
+    await insertLegacySelfClarify(db, {
       id: 'legacy-self',
       taskId,
       sourceAgentNodeId: 'designer',
@@ -314,8 +309,8 @@ describe('RFC-058 migration 0031 — legacy rows continue to be writable (stage-
     })
     const selfRows = await db
       .select()
-      .from(clarifySessions)
-      .where(eq(clarifySessions.id, 'legacy-self'))
+      .from(clarifyRounds)
+      .where(eq(clarifyRounds.id, 'legacy-self'))
     expect(selfRows.length).toBe(1)
 
     await db.insert(nodeRuns).values({
@@ -326,7 +321,7 @@ describe('RFC-058 migration 0031 — legacy rows continue to be writable (stage-
       retryIndex: 0,
       iteration: 0,
     })
-    await db.insert(crossClarifySessions).values({
+    await insertLegacyCrossClarify(db, {
       id: 'legacy-cross',
       taskId,
       crossClarifyNodeId: 'cc1',
@@ -337,8 +332,8 @@ describe('RFC-058 migration 0031 — legacy rows continue to be writable (stage-
     })
     const crossRows = await db
       .select()
-      .from(crossClarifySessions)
-      .where(eq(crossClarifySessions.id, 'legacy-cross'))
+      .from(clarifyRounds)
+      .where(eq(clarifyRounds.id, 'legacy-cross'))
     expect(crossRows.length).toBe(1)
   })
 })

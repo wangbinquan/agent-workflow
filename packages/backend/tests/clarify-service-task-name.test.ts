@@ -4,15 +4,16 @@
 // renders empty.
 
 import { describe, expect, test } from 'bun:test'
+import { insertClarifyRoundRaw } from './clarify-fixtures'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb } from '../src/db/client'
-import { clarifySessions, nodeRuns, tasks, workflows } from '../src/db/schema'
+import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { listClarifySummaries } from '../src/services/clarify'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
-function seed(
+async function seed(
   db: ReturnType<typeof createInMemoryDb>,
   args: { taskName: string; status?: 'awaiting_human' | 'answered' },
 ) {
@@ -59,34 +60,33 @@ function seed(
       startedAt: now,
     })
     .run()
-  db.insert(clarifySessions)
-    .values({
-      id: csId,
-      taskId: tId,
-      sourceAgentNodeId: 'agent-1',
-      sourceAgentNodeRunId: 'nr-source',
-      sourceShardKey: null,
-      clarifyNodeId: 'clarify-1',
-      clarifyNodeRunId: nrId,
-      iterationIndex: 0,
-      questionsJson: JSON.stringify([
-        { id: 'q1', title: 'Q?', kind: 'single', options: [{ label: 'a' }, { label: 'b' }] },
-      ]),
-      answersJson: null,
-      status: args.status ?? 'awaiting_human',
-      truncationWarningsJson: null,
-      createdAt: now,
-      answeredAt: null,
-      answeredBy: null,
-    })
-    .run()
+  await insertClarifyRoundRaw(db, {
+    id: csId,
+    taskId: tId,
+    kind: 'self' as const,
+    askingNodeId: 'agent-1',
+    askingNodeRunId: 'nr-source',
+    askingShardKey: null,
+    intermediaryNodeId: 'clarify-1',
+    intermediaryNodeRunId: nrId,
+    iteration: 0,
+    questionsJson: JSON.stringify([
+      { id: 'q1', title: 'Q?', kind: 'single', options: [{ label: 'a' }, { label: 'b' }] },
+    ]),
+    answersJson: null,
+    status: args.status ?? 'awaiting_human',
+    truncationWarningsJson: null,
+    createdAt: now,
+    answeredAt: null,
+    answeredBy: null,
+  })
   return { tId, csId }
 }
 
 describe('RFC-037 — listClarifySummaries joins tasks.name → taskName', () => {
   test('summary row carries taskName equal to tasks.name', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    seed(db, { taskName: 'PR-1234 fix' })
+    await seed(db, { taskName: 'PR-1234 fix' })
     const summaries = await listClarifySummaries(db, { status: 'awaiting_human' })
     expect(summaries.length).toBe(1)
     expect(summaries[0]?.taskName).toBe('PR-1234 fix')
@@ -94,8 +94,8 @@ describe('RFC-037 — listClarifySummaries joins tasks.name → taskName', () =>
 
   test('multiple sessions across multiple tasks → each row has its own taskName', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    seed(db, { taskName: 'alpha' })
-    seed(db, { taskName: 'beta' })
+    await seed(db, { taskName: 'alpha' })
+    await seed(db, { taskName: 'beta' })
     const summaries = await listClarifySummaries(db, { status: 'awaiting_human' })
     expect(summaries.length).toBe(2)
     const names = summaries.map((s) => s.taskName).sort()
@@ -104,7 +104,7 @@ describe('RFC-037 — listClarifySummaries joins tasks.name → taskName', () =>
 
   test('summary still includes taskName when status filter narrows results', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    seed(db, { taskName: 'answered-task', status: 'answered' })
+    await seed(db, { taskName: 'answered-task', status: 'answered' })
     const summaries = await listClarifySummaries(db, { status: 'answered' })
     expect(summaries[0]?.taskName).toBe('answered-task')
   })

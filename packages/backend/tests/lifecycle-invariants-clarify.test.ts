@@ -7,6 +7,7 @@
 // permanently parked.
 
 import { afterEach, describe, expect, test } from 'bun:test'
+import { insertLegacySelfClarify } from './clarify-fixtures'
 import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -17,7 +18,7 @@ import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
-import { clarifySessions, nodeRuns, tasks, workflows } from '../src/db/schema'
+import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -87,7 +88,7 @@ async function insertClarifySession(
   },
 ): Promise<string> {
   const id = ulid()
-  await db.insert(clarifySessions).values({
+  await insertLegacySelfClarify(db, {
     id,
     taskId,
     sourceAgentNodeId: 'src',

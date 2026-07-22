@@ -7,12 +7,12 @@
 // hardcoded agent name + system prompt anchors).
 
 import { readFileSync } from 'node:fs'
+import { insertClarifyRoundRaw } from './clarify-fixtures'
 import { resolve } from 'node:path'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
-  clarifySessions,
   memories,
   memoryDistillJobs,
   nodeRuns,
@@ -251,21 +251,20 @@ describe('loadSourceEvents + loadScopeContexts', () => {
       })
       .run()
     const clarifyId = ulid()
-    db.insert(clarifySessions)
-      .values({
-        id: clarifyId,
-        taskId,
-        sourceAgentNodeId: 'agent-1',
-        sourceAgentNodeRunId: sourceRunId,
-        sourceShardKey: null,
-        clarifyNodeId: 'clarify-1',
-        clarifyNodeRunId: clarifyRunId,
-        iterationIndex: 0,
-        questionsJson: JSON.stringify([{ id: 'q1', kind: 'open', text: 'what?' }]),
-        answersJson: JSON.stringify([{ questionId: 'q1', text: 'answer' }]),
-        status: 'answered',
-      })
-      .run()
+    await insertClarifyRoundRaw(db, {
+      kind: 'self' as const,
+      id: clarifyId,
+      taskId,
+      askingNodeId: 'agent-1',
+      askingNodeRunId: sourceRunId,
+      askingShardKey: null,
+      intermediaryNodeId: 'clarify-1',
+      intermediaryNodeRunId: clarifyRunId,
+      iteration: 0,
+      questionsJson: JSON.stringify([{ id: 'q1', kind: 'open', text: 'what?' }]),
+      answersJson: JSON.stringify([{ questionId: 'q1', text: 'answer' }]),
+      status: 'answered',
+    })
     const feedbackId = ulid()
     db.insert(taskFeedback)
       .values({

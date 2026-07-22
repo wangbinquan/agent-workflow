@@ -23,7 +23,7 @@ import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { clarifySessions, nodeRuns, tasks, workflows } from '../src/db/schema'
+import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createClarifySession, sealAnswersServerSide } from '../src/services/clarify'
 import { resetBroadcastersForTests, taskBroadcaster, TASK_CHANNEL } from '../src/ws/broadcaster'
 import type {
@@ -157,8 +157,8 @@ describe('createClarifySession', () => {
 
     const sessionRows = await db
       .select()
-      .from(clarifySessions)
-      .where(eq(clarifySessions.id, session.id))
+      .from(clarifyRounds)
+      .where(eq(clarifyRounds.id, session.id))
     expect(sessionRows[0]?.status).toBe('awaiting_human')
 
     const nrRows = await db.select().from(nodeRuns).where(eq(nodeRuns.id, clarifyNodeRunId))
@@ -203,10 +203,10 @@ describe('createClarifySession', () => {
     const sess = (
       await db
         .select()
-        .from(clarifySessions)
-        .where(eq(clarifySessions.clarifyNodeRunId, clarifyNodeRunId))
+        .from(clarifyRounds)
+        .where(eq(clarifyRounds.intermediaryNodeRunId, clarifyNodeRunId))
     )[0]
-    expect(sess?.sourceShardKey).toBe('shard-A')
+    expect(sess?.askingShardKey).toBe('shard-A')
   })
 })
 

@@ -38,14 +38,7 @@ import { and, eq, inArray, isNull } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
-import {
-  clarifyRounds,
-  clarifySessions,
-  crossClarifySessions,
-  nodeRuns,
-  taskQuestions,
-  tasks,
-} from '@/db/schema'
+import { clarifyRounds, nodeRuns, taskQuestions, tasks } from '@/db/schema'
 import { parseAnswersArray, sealAnswersServerSide } from '@/services/clarify'
 import { getTaskQuestionWriteSem } from '@/services/taskWriteLocks'
 import { reconcileRoundEntriesTx } from '@/services/taskQuestions'
@@ -334,23 +327,7 @@ export async function sealRoundQuestions(
         .where(eq(clarifyRounds.id, round.id))
         .run()
 
-      // Dual-write the legacy session table (RFC-058 keeps both in lockstep on the
-      // overlapping columns) by the SHARED row id. crossClarifySessions has no answered_by
-      // column (matches submitCrossClarifyAnswers), so we mirror answers + scopes + (on full
-      // seal only) directive + status + answeredAt — the fields the dual-write-consistency nets
-      // assert. Directive is gated on fullySealed for the stop-detection reason above.
-      const legacySet = {
-        answersJson: mergedJson,
-        ...(flipNow ? { status: 'answered' as const, answeredAt: ts, ...directiveSet } : {}),
-      }
-      if (round.kind === 'self') {
-        tx.update(clarifySessions).set(legacySet).where(eq(clarifySessions.id, round.id)).run()
-      } else {
-        tx.update(crossClarifySessions)
-          .set(legacySet)
-          .where(eq(crossClarifySessions.id, round.id))
-          .run()
-      }
+      // RFC-217 T8（真 T17）—— 双写退役：clarify_rounds 即唯一数据源。
 
       // RFC-128 P2 (Codex P1) — on FULL seal, close the intermediary clarify/cross-clarify
       // node_run (awaiting_human → done) ATOMICALLY with the round flip (same dbTxSync).

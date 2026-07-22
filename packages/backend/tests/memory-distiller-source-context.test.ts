@@ -15,20 +15,15 @@
 // `memory-distiller.test.ts` so this file is free to focus on behaviour.
 
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { insertClarifyRoundRaw } from './clarify-fixtures'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import { resolve } from 'node:path'
+import { eq, sql } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import {
-  clarifySessions,
-  docVersions,
-  nodeRunEvents,
-  nodeRuns,
-  tasks,
-  workflows,
-} from '../src/db/schema'
+import { docVersions, nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   buildDistillerUserPrompt,
   loadSourceEvents,
@@ -98,11 +93,11 @@ function seedSourceAgentNodeRun(
   return id
 }
 
-function seedClarifySession(
+async function seedClarifySession(
   db: DbClient,
   taskId: string,
   sourceRunId: string,
-): { clarifyId: string; clarifyRunId: string } {
+): Promise<{ clarifyId: string; clarifyRunId: string }> {
   const clarifyRunId = ulid()
   db.insert(nodeRuns)
     .values({
@@ -116,21 +111,20 @@ function seedClarifySession(
     })
     .run()
   const clarifyId = ulid()
-  db.insert(clarifySessions)
-    .values({
-      id: clarifyId,
-      taskId,
-      sourceAgentNodeId: 'agent-1',
-      sourceAgentNodeRunId: sourceRunId,
-      sourceShardKey: null,
-      clarifyNodeId: 'clarify-1',
-      clarifyNodeRunId: clarifyRunId,
-      iterationIndex: 0,
-      questionsJson: JSON.stringify([{ id: 'q1', kind: 'open', text: 'which db?' }]),
-      answersJson: JSON.stringify([{ questionId: 'q1', text: 'postgres' }]),
-      status: 'answered',
-    })
-    .run()
+  await insertClarifyRoundRaw(db, {
+    kind: 'self' as const,
+    id: clarifyId,
+    taskId,
+    askingNodeId: 'agent-1',
+    askingNodeRunId: sourceRunId,
+    askingShardKey: null,
+    intermediaryNodeId: 'clarify-1',
+    intermediaryNodeRunId: clarifyRunId,
+    iteration: 0,
+    questionsJson: JSON.stringify([{ id: 'q1', kind: 'open', text: 'which db?' }]),
+    answersJson: JSON.stringify([{ questionId: 'q1', text: 'postgres' }]),
+    status: 'answered',
+  })
   return { clarifyId, clarifyRunId }
 }
 
@@ -216,7 +210,7 @@ describe('loadSourceEvents — clarify transcript', () => {
     const sourceRunId = seedSourceAgentNodeRun(db, taskId, {
       promptText: 'Add a hello endpoint',
     })
-    const { clarifyId } = seedClarifySession(db, taskId, sourceRunId)
+    const { clarifyId } = await seedClarifySession(db, taskId, sourceRunId)
     insertTextEvent(db, sourceRunId, 1, 'I will start by reading the routes.')
     insertTextEvent(db, sourceRunId, 2, 'Should the endpoint live in /api/hello?')
 
@@ -246,21 +240,27 @@ describe('loadSourceEvents — clarify transcript', () => {
       })
       .run()
     const clarifyId = ulid()
-    db.insert(clarifySessions)
-      .values({
-        id: clarifyId,
-        taskId,
-        sourceAgentNodeId: 'agent-x',
-        sourceAgentNodeRunId: orphanRunId,
-        sourceShardKey: null,
-        clarifyNodeId: 'clarify-1',
-        clarifyNodeRunId: clarifyRunId,
-        iterationIndex: 0,
-        questionsJson: '[]',
-        answersJson: '[]',
-        status: 'answered',
-      })
-      .run()
+    await insertClarifyRoundRaw(db, {
+      kind: 'self' as const,
+      id: clarifyId,
+      taskId,
+      askingNodeId: 'agent-x',
+      askingNodeRunId: orphanRunId,
+      askingShardKey: null,
+      intermediaryNodeId: 'clarify-1',
+      intermediaryNodeRunId: clarifyRunId,
+      iteration: 0,
+      questionsJson: '[]',
+      answersJson: '[]',
+      status: 'answered',
+      createdAt: Date.now(),
+    })
+    // RFC-217 T8：clarify_rounds 对 asking_node_run_id 有 FK（遗留表没有），
+    // 夹具会自动补 run 桩——要驱动「源 run 行缺失」的防御分支，插完 round 后
+    // 关 FK 删掉桩，构造出 FK 之外才可能出现的孤儿 round。
+    db.run(sql`PRAGMA foreign_keys = OFF`)
+    db.delete(nodeRuns).where(eq(nodeRuns.id, orphanRunId)).run()
+    db.run(sql`PRAGMA foreign_keys = ON`)
     const loaded = await loadSourceEvents(db, [mkClarifyJob(taskId, clarifyId)])
     const c = loaded.clarify[0]!
     expect(c.sourceTranscriptMd).toBeNull()
@@ -270,7 +270,7 @@ describe('loadSourceEvents — clarify transcript', () => {
   test('returns null + reason when source node_run has no events', async () => {
     const { taskId } = seedTask(db)
     const sourceRunId = seedSourceAgentNodeRun(db, taskId)
-    const { clarifyId } = seedClarifySession(db, taskId, sourceRunId)
+    const { clarifyId } = await seedClarifySession(db, taskId, sourceRunId)
     // intentionally no events
     const loaded = await loadSourceEvents(db, [mkClarifyJob(taskId, clarifyId)])
     const c = loaded.clarify[0]!
@@ -281,7 +281,7 @@ describe('loadSourceEvents — clarify transcript', () => {
   test('byte-clips transcript larger than budget with truncated marker', async () => {
     const { taskId } = seedTask(db)
     const sourceRunId = seedSourceAgentNodeRun(db, taskId)
-    const { clarifyId } = seedClarifySession(db, taskId, sourceRunId)
+    const { clarifyId } = await seedClarifySession(db, taskId, sourceRunId)
     const longChunk = 'x'.repeat(8000)
     insertTextEvent(db, sourceRunId, 1, longChunk)
     insertTextEvent(db, sourceRunId, 2, longChunk)
@@ -301,7 +301,7 @@ describe('loadSourceEvents — clarify transcript', () => {
   test('budget.clarifyTranscriptMaxBytes=0 disables clarify transcript', async () => {
     const { taskId } = seedTask(db)
     const sourceRunId = seedSourceAgentNodeRun(db, taskId)
-    const { clarifyId } = seedClarifySession(db, taskId, sourceRunId)
+    const { clarifyId } = await seedClarifySession(db, taskId, sourceRunId)
     insertTextEvent(db, sourceRunId, 1, 'something the model said')
     const loaded = await loadSourceEvents(db, [mkClarifyJob(taskId, clarifyId)], {
       clarifyTranscriptMaxBytes: 0,

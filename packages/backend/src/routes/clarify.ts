@@ -167,7 +167,7 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
   app.get('/api/clarify/pending-count', async (c) => {
     // RFC-099: badge counts only rounds on tasks visible to the actor.
     // RFC-202 T6: both branches now count via the SAME clarify_rounds path —
-    // the old admin branch queried the legacy clarify_sessions table, which
+    // the old admin branch queried the legacy self-clarify table, which
     // (a) missed every cross-agent round (audit P2: admin badge undercounted)
     // and (b) kept counting rounds of terminal tasks forever. The uncapped
     // limit keeps the count exact (never truncated by the list page size).

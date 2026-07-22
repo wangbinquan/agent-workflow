@@ -55,7 +55,7 @@ import {
   findClarifyNodeForAgent,
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
-import { clarifyRounds, clarifySessions, nodeRuns, tasks } from '@/db/schema'
+import { clarifyRounds, nodeRuns, tasks } from '@/db/schema'
 import { transitionNodeRunStatus } from '@/services/lifecycle'
 import { mintNodeRun } from '@/services/nodeRunMint'
 import { NotFoundError, ValidationError } from '@/util/errors'
@@ -182,29 +182,8 @@ export async function createClarifySession(
   const questionsJson = JSON.stringify(validated.questions)
   const truncationWarningsJson =
     truncationWarnings && truncationWarnings.length > 0 ? JSON.stringify(truncationWarnings) : null
-  await db.insert(clarifySessions).values({
-    id: sessionId,
-    taskId,
-    sourceAgentNodeId,
-    sourceAgentNodeRunId,
-    sourceShardKey,
-    clarifyNodeId,
-    clarifyNodeRunId,
-    iterationIndex,
-    questionsJson,
-    answersJson: null,
-    status: 'awaiting_human',
-    truncationWarningsJson,
-    createdAt,
-    answeredAt: null,
-    answeredBy: null,
-  })
 
-  // RFC-058 T12 — dual-write to clarify_rounds so the unified service
-  // (services/clarifyRounds.ts) sees every new self-clarify round. The
-  // legacy clarify_sessions row above is still authoritative for reads;
-  // T17 drops the legacy table once all readers migrate. Schema mapping
-  // mirrors migration 0031's INSERT FROM clauses verbatim.
+  // RFC-217 T8（真 T17）—— clarify_rounds 是唯一数据源（遗留双表已删）。
   await db.insert(clarifyRounds).values({
     id: sessionId,
     taskId,
@@ -291,7 +270,24 @@ export interface ListClarifySummariesFilter {
  * unified table has been dual-written since RFC-058; reads flip here first,
  * the legacy tables drop in T8 (the real T17).
  */
-type SelfSessionShape = typeof clarifySessions.$inferSelect
+interface SelfSessionShape {
+  id: string
+  taskId: string
+  sourceAgentNodeId: string
+  sourceAgentNodeRunId: string
+  sourceShardKey: string | null
+  clarifyNodeId: string
+  clarifyNodeRunId: string
+  iterationIndex: number
+  questionsJson: string
+  answersJson: string | null
+  status: 'awaiting_human' | 'answered' | 'canceled'
+  truncationWarningsJson: string | null
+  createdAt: number
+  answeredAt: number | null
+  answeredBy: string | null
+  directive: 'continue' | 'stop' | null
+}
 function selfRoundAsSession(r: typeof clarifyRounds.$inferSelect): SelfSessionShape {
   return {
     id: r.id,
@@ -466,7 +462,7 @@ export async function getClarifyDetail(
  * a clarify.canceled event).
  */
 export async function cleanupSessionsForTask(db: DbClient, taskId: string): Promise<void> {
-  await db.delete(clarifySessions).where(eq(clarifySessions.taskId, taskId))
+  await db.delete(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
   // RFC-058 T12 dual-write — mirror cleanup on clarify_rounds so the unified
   // table doesn't accumulate orphaned rows after task delete.
   await db
@@ -635,7 +631,7 @@ export async function broadcastSelfClarifyAnsweredForRound(
   broadcastClarifyAnswered(row.taskId, rowToSession(row), rerunNodeRunId)
 }
 
-function rowToSession(row: typeof clarifySessions.$inferSelect): ClarifySession {
+function rowToSession(row: SelfSessionShape): ClarifySession {
   const questions = JSON.parse(row.questionsJson) as ClarifyQuestion[]
   const out: ClarifySession = {
     id: row.id,
@@ -672,10 +668,7 @@ function rowToSession(row: typeof clarifySessions.$inferSelect): ClarifySession 
   return out
 }
 
-function rowToSummary(
-  row: typeof clarifySessions.$inferSelect,
-  taskName: string,
-): ClarifySessionSummary {
+function rowToSummary(row: SelfSessionShape, taskName: string): ClarifySessionSummary {
   let questionCount = 0
   try {
     const qs = JSON.parse(row.questionsJson) as ClarifyQuestion[]

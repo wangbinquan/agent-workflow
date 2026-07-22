@@ -18,7 +18,7 @@ import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { clarifySessions, nodeRuns, nodeRunOutputs, tasks, workflows } from '../src/db/schema'
+import { clarifyRounds, nodeRuns, nodeRunOutputs, tasks, workflows } from '../src/db/schema'
 import {
   cleanupSessionsForTask,
   createClarifySession,
@@ -170,10 +170,10 @@ describe('RFC-058 baseline T2 — createClarifySession / row shape', () => {
     const sess = (
       await db
         .select()
-        .from(clarifySessions)
-        .where(eq(clarifySessions.clarifyNodeRunId, clarifyNodeRunId))
+        .from(clarifyRounds)
+        .where(eq(clarifyRounds.intermediaryNodeRunId, clarifyNodeRunId))
     )[0]
-    expect(sess?.sourceShardKey).toBe('shard-A')
+    expect(sess?.askingShardKey).toBe('shard-A')
     const cnr = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, clarifyNodeRunId)))[0]
     expect(cnr?.shardKey).toBe('shard-A')
     expect(cnr?.parentNodeRunId).toBe('parent-multi')
@@ -226,7 +226,7 @@ describe('RFC-058 baseline T2 — cleanupSessionsForTask (task delete path)', ()
     })
     expect(session.status).toBe('awaiting_human')
     await cleanupSessionsForTask(db, taskId)
-    const fresh = await db.select().from(clarifySessions).where(eq(clarifySessions.taskId, taskId))
+    const fresh = await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     // RFC-058 baseline locks: cleanup deletes the row (does NOT transition to
     // canceled). Cancel-on-task-end is RFC-053 invariant CR-1 territory and
     // happens at a different layer.
