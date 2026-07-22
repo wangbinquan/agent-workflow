@@ -655,21 +655,17 @@ function describe(v: Violation): string {
   )
 }
 
-// ───────────────────────── baseline allowlist ─────────────────────────
+// ───────────────────────── hard-failure mode ─────────────────────────
 //
-// key -> reason (mandatory).
-//
-// EMPTY, and it must stay that way — this audit is in hard-failure mode.
-//
-// It opened at 37 entries (T2 baseline) from four root causes; T3/T4 cleared
-// all of them, so there is no such thing as a "pre-existing" clip any more.
-// Adding an entry here is claiming a clipped focus ring is acceptable, which
-// needs an RFC-206 amendment and a reason string saying who it is waived for.
-// Prefer the two real fixes:
+// RFC-206 impl-gate (Codex 2026-07-22): there is NO waiver allowlist. It opened
+// at 37 entries (T2 baseline) from four root causes; T3/T4 cleared all of them,
+// and the escape hatch (KNOWN_CLIPS + the record()-filter + the stale-waiver
+// check) is now deleted entirely — a clipped focus ring is an unconditional hard
+// failure. The only fixes are the two real ones:
 //   * the control is flush by construction  -> give it the INSET ring
 //                                              (var(--focus-ring-offset-inset))
 //   * the container merely lacks room       -> give it var(--focus-ring-gutter)
-const KNOWN_CLIPS = new Map<string, string>()
+// Re-introducing an allowlist requires an RFC-206 amendment, not a one-line add.
 
 // ───────────────────────── engine self-checks ─────────────────────────
 //
@@ -941,7 +937,6 @@ test('focus rings are not clipped anywhere', async ({ page }) => {
   await primeAuth(page, daemon)
 
   const cdp = await page.context().newCDPSession(page)
-  const seen = new Set<string>()
   const blocking: Array<{ route: string; v: Violation }> = []
 
   // Which surfaces were actually reached, and how many controls each one
@@ -953,9 +948,11 @@ test('focus rings are not clipped anywhere', async ({ page }) => {
   const record = (route: string, result: { found: Violation[]; measured: number }) => {
     const { found, measured } = result
     coverage.set(route, (coverage.get(route) ?? 0) + measured)
-    for (const { key, v } of keyed(route, found)) {
-      seen.add(key)
-      if (!KNOWN_CLIPS.has(key)) blocking.push({ route, v })
+    // RFC-206 impl-gate (Codex 2026-07-22): unconditional — the KNOWN_CLIPS waiver
+    // channel is gone, so every clipped focus ring is a blocking failure. There is
+    // no longer any way to silently pass a violation by adding an allowlist key.
+    for (const { v } of keyed(route, found)) {
+      blocking.push({ route, v })
     }
   }
 
@@ -1108,13 +1105,6 @@ test('focus rings are not clipped anywhere', async ({ page }) => {
 
   await cdp.detach()
 
-  if (process.env.RFC206_DUMP_BASELINE) {
-    // Regenerate the allowlist mechanically instead of hand-transcribing:
-    //   RFC206_DUMP_BASELINE=1 npx playwright test e2e/focus-ring-clip.spec.ts --project=chromium
-    const lines = [...seen].sort().map((k) => `  ['${k}', 'RFC-206 baseline'],`)
-    console.log(`\n===RFC206_BASELINE_BEGIN===\n${lines.join('\n')}\n===RFC206_BASELINE_END===\n`)
-  }
-
   // Coverage gate. Every fixture-backed surface below is reached through a
   // conditional (`if (seededReviewId)`, `if (!(await btn.count())) continue`),
   // so a fixture that stopped rendering would quietly contribute nothing and
@@ -1149,20 +1139,13 @@ test('focus rings are not clipped anywhere', async ({ page }) => {
     .map(([r, vs]) => `  ${r} — ${vs.length} clipped:\n${vs.map(describe).join('\n')}`)
     .join('\n')
 
-  // Stale waivers absorb future regressions at the same spot, so they are a
-  // failure too — checked here, where `seen` is guaranteed complete.
-  const stale = [...KNOWN_CLIPS.keys()].filter((k) => !seen.has(k))
-
   expect(
-    { clipped: blocking.length, staleWaivers: stale },
-    blocking.length === 0 && stale.length === 0
+    { clipped: blocking.length },
+    blocking.length === 0
       ? ''
       : `${blocking.length} clipped focus ring(s):\n${report}\n` +
-          (stale.length
-            ? `\nStale KNOWN_CLIPS entries (delete them):\n  ${stale.join('\n  ')}\n`
-            : '') +
           `\n  Fix the container (give it >= var(--focus-ring-gutter) of padding) or make the\n` +
-          `  control's ring inset (var(--focus-ring-offset-inset)). Only add a KNOWN_CLIPS\n` +
-          `  entry if this is pre-existing and tracked by an RFC-206 batch.`,
-  ).toEqual({ clipped: 0, staleWaivers: [] })
+          `  control's ring inset (var(--focus-ring-offset-inset)). There is NO waiver channel\n` +
+          `  — a clipped ring is a hard failure (RFC-206 impl-gate).`,
+  ).toEqual({ clipped: 0 })
 })
