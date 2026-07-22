@@ -71,12 +71,16 @@ const ALLOW_RETRY = new Map<string, number>([
   ['components/home/CapabilityGrid.tsx', 1],
   ['routes/reviews.tsx', 2],
 ])
-// P1-1 + P3-r2/r3 (Codex re-review): every DIRECT inline refetch shape — member
-// `x.refetch(` / `x.refetch?.(`, computed `x['refetch'](` / `x['refetch']?.(`,
-// bare `refetch(`, and reference `refetch}` / `x['refetch']}`. `\b` cannot fire
-// inside `prefetch`. NAMED-HANDLER indirection (`onClick={doRetry}`) stays the
-// honestly-declared out-of-scope (needs AST).
-const RETRY_BUTTON = String.raw`onClick=\{[^}]*\brefetch\s*(?:\?\.)?\s*\(|onClick=\{[^}]*\[["']refetch["']\]\s*(?:\?\.)?\s*\(|onClick=\{[^}]*\[["']refetch["']\]\s*\}|onClick=\{(?:[A-Za-z0-9_$]+\??\.)?refetch\}`
+// P1-1 + P3-r2..r5 (Codex re-review): every regex-reachable DIRECT inline refetch
+// shape — member `x.refetch(` / `x.refetch?.(`, computed `x['refetch'](` /
+// `x['refetch']?.(`, bare `refetch(`, and a DOT-member reference chain
+// `refetch}` / `x.refetch}` / `props.query?.refetch}`. `\b` fences off `xrefetch`.
+// The receiver regex STOPS at dot chains: a COMPUTED-segment receiver
+// (`queries[id].refetch`), NAMED-HANDLER indirection (`onClick={doRetry}`),
+// object-literal-before-refetch, and dynamic className are the honestly-declared
+// AST-level out-of-scope — per Codex, complete MemberExpression coverage wants a
+// focused JSX AST check, NOT an ever-growing receiver regex.
+const RETRY_BUTTON = String.raw`onClick=\{[^}]*\brefetch\s*(?:\?\.)?\s*\(|onClick=\{[^}]*\[["']refetch["']\]\s*(?:\?\.)?\s*\(|onClick=\{[^}]*\[["']refetch["']\]\s*\}|onClick=\{(?:[A-Za-z0-9_$]+\??\.)*\brefetch\}`
 
 // ---------------------------------------------------------------------------
 // Lock B: hand-written muted query-empties. EXACT per-file occurrence allowlist.
@@ -181,16 +185,22 @@ describe('RFC-214 guard regexes — direct-shape coverage', () => {
     ['bare destructured', 'onClick={() => refetch()}'],
     ['reference', 'onClick={refetch}'],
     ['optional-chain reference', 'onClick={q?.refetch}'],
+    ['nested member reference', 'onClick={props.query.refetch}'],
+    ['nested optional reference', 'onClick={props.query?.refetch}'],
   ])('Lock A catches inline refetch: %s', (_n, s) => {
     expect(A.test(s)).toBe(true)
   })
 
   test.each([
-    // Honestly out-of-scope (need AST/data-flow) — documented, not silently missed.
+    // Honestly out-of-scope (need AST — a computed/mixed receiver chain or data
+    // flow, not more syntax enumeration; per Codex, complete MemberExpression
+    // coverage wants a focused JSX AST check, not an ever-growing receiver regex).
     ['named-handler indirection', 'onClick={doRetry}'],
     ['object-literal before refetch', 'onClick={() => { setX({ a: 1 }); q.refetch() }}'],
+    ['computed-segment receiver', 'onClick={queries[id].refetch}'],
     // Must never false-hit.
     ['prefetch', 'onClick={() => prefetch()}'],
+    ['xrefetch (word-boundary guard)', 'onClick={xrefetch}'],
   ])('Lock A does NOT catch: %s', (_n, s) => {
     expect(A.test(s)).toBe(false)
   })
