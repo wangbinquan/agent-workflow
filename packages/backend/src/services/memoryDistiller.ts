@@ -44,7 +44,7 @@ import { getRuntimeDriver } from '@/services/runtime'
 import type { RuntimeKind } from '@/services/runtime/types'
 import { getSandboxProvider, wrapSandbox, type SandboxCtx } from '@/services/sandbox'
 import {
-  clarifySessions,
+  clarifyRounds,
   docVersions,
   memories,
   memoryDistillJobs,
@@ -324,7 +324,10 @@ export async function loadSourceEvents(
 
   const clarifyRows =
     clarifyIds.length > 0
-      ? await db.select().from(clarifySessions).where(inArray(clarifySessions.id, clarifyIds))
+      ? await db
+          .select()
+          .from(clarifyRounds)
+          .where(and(eq(clarifyRounds.kind, 'self'), inArray(clarifyRounds.id, clarifyIds)))
       : []
   const reviewRows =
     reviewIds.length > 0
@@ -373,7 +376,7 @@ export async function loadSourceEvents(
       return {
         id: r.id,
         taskId: r.taskId,
-        nodeId: r.clarifyNodeId,
+        nodeId: r.intermediaryNodeId,
         questions: r.questionsJson,
         answers: r.answersJson ?? '[]',
         sourceTranscriptMd: t.md,
@@ -421,13 +424,15 @@ interface SourceContextResult {
  */
 async function loadClarifyTranscripts(
   db: DbClient,
-  clarifyRows: Array<{ id: string; sourceAgentNodeRunId: string }>,
+  clarifyRows: Array<{ id: string; askingNodeRunId: string | null }>,
   budget: SourceContextBudget,
 ): Promise<Map<string, SourceContextResult>> {
   const out = new Map<string, SourceContextResult>()
   if (budget.clarifyTranscriptMaxBytes === 0 || clarifyRows.length === 0) return out
 
-  const sourceRunIds = [...new Set(clarifyRows.map((r) => r.sourceAgentNodeRunId))]
+  const sourceRunIds = [
+    ...new Set(clarifyRows.flatMap((r) => (r.askingNodeRunId !== null ? [r.askingNodeRunId] : []))),
+  ]
   const runRows = await db
     .select({
       id: nodeRuns.id,
@@ -470,7 +475,7 @@ async function loadClarifyTranscripts(
   }
 
   for (const c of clarifyRows) {
-    const run = runById.get(c.sourceAgentNodeRunId)
+    const run = c.askingNodeRunId !== null ? runById.get(c.askingNodeRunId) : undefined
     if (run === undefined) {
       out.set(c.id, { md: null, reason: 'source node_run not found' })
       continue

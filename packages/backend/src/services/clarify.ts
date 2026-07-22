@@ -285,11 +285,45 @@ export interface ListClarifySummariesFilter {
   limit?: number
 }
 
+/**
+ * RFC-217 T7 (C-A) — READ adapter: a `clarify_rounds` self row re-shaped into
+ * the legacy session column names every DTO mapper below consumes. The
+ * unified table has been dual-written since RFC-058; reads flip here first,
+ * the legacy tables drop in T8 (the real T17).
+ */
+type SelfSessionShape = typeof clarifySessions.$inferSelect
+function selfRoundAsSession(r: typeof clarifyRounds.$inferSelect): SelfSessionShape {
+  return {
+    id: r.id,
+    taskId: r.taskId,
+    sourceAgentNodeId: r.askingNodeId,
+    sourceAgentNodeRunId: r.askingNodeRunId ?? '',
+    sourceShardKey: r.askingShardKey,
+    clarifyNodeId: r.intermediaryNodeId,
+    clarifyNodeRunId: r.intermediaryNodeRunId ?? '',
+    iterationIndex: r.iteration,
+    questionsJson: r.questionsJson,
+    answersJson: r.answersJson,
+    // kind='self' rows only ever use the self status subset (DB CHECK per
+    // kind, schema.ts) — the cast narrows 'abandoned' away.
+    status: r.status as SelfSessionShape['status'],
+    truncationWarningsJson: r.truncationWarningsJson,
+    createdAt: r.createdAt,
+    answeredAt: r.answeredAt,
+    answeredBy: r.answeredBy,
+    directive: r.directive,
+  }
+}
+
+const selfRounds = () => eq(clarifyRounds.kind, 'self')
+
 export async function listClarifySummaries(
   db: DbClient,
   filter: ListClarifySummariesFilter = {},
 ): Promise<ClarifySessionSummary[]> {
-  const all = await db.select().from(clarifySessions).orderBy(desc(clarifySessions.createdAt))
+  const all = (
+    await db.select().from(clarifyRounds).where(selfRounds()).orderBy(desc(clarifyRounds.createdAt))
+  ).map(selfRoundAsSession)
   const desired = filter.status ?? 'awaiting_human'
   const filtered = all.filter((r) => {
     if (filter.taskId !== undefined && r.taskId !== filter.taskId) return false
@@ -384,8 +418,8 @@ async function loadNodeTitlesByTask(
 export async function countPendingClarifications(db: DbClient): Promise<number> {
   const rows = await db
     .select({ n: count() })
-    .from(clarifySessions)
-    .where(eq(clarifySessions.status, 'awaiting_human'))
+    .from(clarifyRounds)
+    .where(and(selfRounds(), eq(clarifyRounds.status, 'awaiting_human')))
   return rows[0]?.n ?? 0
 }
 
@@ -395,11 +429,11 @@ export async function getClarifyDetail(
 ): Promise<ClarifySession> {
   const rows = await db
     .select()
-    .from(clarifySessions)
-    .where(eq(clarifySessions.clarifyNodeRunId, clarifyNodeRunId))
-    .orderBy(desc(clarifySessions.createdAt))
+    .from(clarifyRounds)
+    .where(and(selfRounds(), eq(clarifyRounds.intermediaryNodeRunId, clarifyNodeRunId)))
+    .orderBy(desc(clarifyRounds.createdAt))
     .limit(1)
-  const row = rows[0]
+  const row = rows[0] === undefined ? undefined : selfRoundAsSession(rows[0])
   if (row === undefined) {
     throw new NotFoundError(
       'clarify-session-not-found',
@@ -458,20 +492,21 @@ async function findClarifyNodeRunForShard(
   // re-emit within the same round finds the prior session and reuses its node
   // run; a new round has no session yet and falls through to a fresh mint.
   const sessionRows = await db
-    .select({ clarifyNodeRunId: clarifySessions.clarifyNodeRunId })
-    .from(clarifySessions)
+    .select({ clarifyNodeRunId: clarifyRounds.intermediaryNodeRunId })
+    .from(clarifyRounds)
     .where(
       and(
-        eq(clarifySessions.taskId, taskId),
-        eq(clarifySessions.clarifyNodeId, clarifyNodeId),
-        eq(clarifySessions.iterationIndex, iterationIndex),
+        selfRounds(),
+        eq(clarifyRounds.taskId, taskId),
+        eq(clarifyRounds.intermediaryNodeId, clarifyNodeId),
+        eq(clarifyRounds.iteration, iterationIndex),
         shardKey === null
-          ? isNull(clarifySessions.sourceShardKey)
-          : eq(clarifySessions.sourceShardKey, shardKey),
+          ? isNull(clarifyRounds.askingShardKey)
+          : eq(clarifyRounds.askingShardKey, shardKey),
       ),
     )
-    .orderBy(asc(clarifySessions.createdAt))
-  const owningRunId = sessionRows[0]?.clarifyNodeRunId
+    .orderBy(asc(clarifyRounds.createdAt))
+  const owningRunId = sessionRows[0]?.clarifyNodeRunId ?? undefined
   if (owningRunId === undefined) return undefined
   const runRows = await db.select().from(nodeRuns).where(eq(nodeRuns.id, owningRunId)).limit(1)
   return runRows[0]
@@ -587,14 +622,15 @@ export async function broadcastSelfClarifyAnsweredForRound(
   clarifyNodeRunId: string,
   rerunNodeRunId: string,
 ): Promise<void> {
-  const row = (
+  const raw = (
     await db
       .select()
-      .from(clarifySessions)
-      .where(eq(clarifySessions.clarifyNodeRunId, clarifyNodeRunId))
-      .orderBy(desc(clarifySessions.createdAt))
+      .from(clarifyRounds)
+      .where(and(selfRounds(), eq(clarifyRounds.intermediaryNodeRunId, clarifyNodeRunId)))
+      .orderBy(desc(clarifyRounds.createdAt))
       .limit(1)
   )[0]
+  const row = raw === undefined ? undefined : selfRoundAsSession(raw)
   if (row === undefined || row.status !== 'answered') return
   broadcastClarifyAnswered(row.taskId, rowToSession(row), rerunNodeRunId)
 }

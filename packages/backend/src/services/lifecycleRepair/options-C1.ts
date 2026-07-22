@@ -12,9 +12,9 @@
 //     drop the answers; useful when the operator wants the user to redo
 //     the answer cycle rather than auto-finalize.
 
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 
-import { clarifySessions, nodeRuns } from '@/db/schema'
+import { clarifyRounds, clarifySessions, nodeRuns } from '@/db/schema'
 import { transitionNodeRunStatus } from '@/services/lifecycle'
 
 import type { ApplyResult, PreflightResult, RepairContext, RepairOptionDef } from './types'
@@ -51,9 +51,9 @@ async function loadC1State(rc: RepairContext): Promise<C1State | null> {
   if (detail === null) return null
   const sess = (
     await rc.db
-      .select({ status: clarifySessions.status })
-      .from(clarifySessions)
-      .where(eq(clarifySessions.id, detail.clarifySessionId))
+      .select({ status: clarifyRounds.status })
+      .from(clarifyRounds)
+      .where(and(eq(clarifyRounds.kind, 'self'), eq(clarifyRounds.id, detail.clarifySessionId)))
       .limit(1)
   )[0]
   if (sess === undefined) return null
@@ -168,6 +168,12 @@ const C1_REOPEN_SESSION: RepairOptionDef = {
       .update(clarifySessions)
       .set({ status: 'awaiting_human', answersJson: null, answeredAt: null })
       .where(eq(clarifySessions.id, st.detail.clarifySessionId))
+    // RFC-217 T7（设计门 P1）——修复路径此前只写遗留表，正是同 ID 双表分歧的
+    // 制造源；补上统一表同步（T8 删表后仅此为真）。
+    await rc.db
+      .update(clarifyRounds)
+      .set({ status: 'awaiting_human', answersJson: null, answeredAt: null })
+      .where(eq(clarifyRounds.id, st.detail.clarifySessionId))
     return {
       beforeSnapshot: before,
       afterSnapshot: { session: { id: st.detail.clarifySessionId, status: 'awaiting_human' } },

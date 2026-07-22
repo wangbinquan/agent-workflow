@@ -163,6 +163,37 @@ export interface CreateCrossClarifySessionResult {
 }
 
 /**
+ * RFC-217 T7 (C-A) — READ adapter: a `clarify_rounds` cross row re-shaped into
+ * the legacy cross-session column names the DTO mappers consume (mirror of
+ * clarify.ts's selfRoundAsSession; both drop with the tables in T8).
+ */
+type CrossSessionShape = typeof crossClarifySessions.$inferSelect
+function crossRoundAsSession(r: typeof clarifyRounds.$inferSelect): CrossSessionShape {
+  return {
+    id: r.id,
+    taskId: r.taskId,
+    crossClarifyNodeId: r.intermediaryNodeId,
+    crossClarifyNodeRunId: r.intermediaryNodeRunId,
+    sourceQuestionerNodeId: r.askingNodeId,
+    sourceQuestionerNodeRunId: r.askingNodeRunId,
+    targetDesignerNodeId: r.targetConsumerNodeId,
+    loopIter: r.loopIter,
+    iteration: r.iteration,
+    questionsJson: r.questionsJson,
+    answersJson: r.answersJson,
+    directive: r.directive,
+    status: r.status as CrossSessionShape['status'],
+    designerRunTriggeredAt: r.designerRunTriggeredAt,
+    createdAt: r.createdAt,
+    answeredAt: r.answeredAt,
+    abandonedAt: r.abandonedAt,
+    questionScopesJson: r.questionScopesJson,
+  }
+}
+
+const crossRounds = () => eq(clarifyRounds.kind, 'cross')
+
+/**
  * Mint a cross_clarify_sessions row + parked cross-clarify node_run. Iteration
  * counter is derived from the latest existing row for the same
  * (crossClarifyNodeId, loopIter) — fresh, prior row's iteration + 1.
@@ -176,16 +207,17 @@ export async function createCrossClarifySession(
   // Compute new iteration index: max(existing.iteration) + 1 in the same
   // (node, loopIter); 0 if no prior session for this loop_iter.
   const prior = await args.db
-    .select({ iteration: crossClarifySessions.iteration })
-    .from(crossClarifySessions)
+    .select({ iteration: clarifyRounds.iteration })
+    .from(clarifyRounds)
     .where(
       and(
-        eq(crossClarifySessions.taskId, args.taskId),
-        eq(crossClarifySessions.crossClarifyNodeId, args.crossClarifyNodeId),
-        eq(crossClarifySessions.loopIter, args.loopIter),
+        crossRounds(),
+        eq(clarifyRounds.taskId, args.taskId),
+        eq(clarifyRounds.intermediaryNodeId, args.crossClarifyNodeId),
+        eq(clarifyRounds.loopIter, args.loopIter),
       ),
     )
-    .orderBy(desc(crossClarifySessions.iteration))
+    .orderBy(desc(clarifyRounds.iteration))
     .limit(1)
   const iteration = prior.length === 0 ? 0 : (prior[0]?.iteration ?? 0) + 1
 
@@ -358,19 +390,20 @@ export async function evaluateDesignerRerunReadiness(
   const pending: string[] = []
   for (const nodeId of siblingNodeIds) {
     // Latest session for this (nodeId, loop_iter).
-    const rows = await args.db
+    const rawRows = await args.db
       .select()
-      .from(crossClarifySessions)
+      .from(clarifyRounds)
       .where(
         and(
-          eq(crossClarifySessions.taskId, args.taskId),
-          eq(crossClarifySessions.crossClarifyNodeId, nodeId),
-          eq(crossClarifySessions.loopIter, args.loopIter),
+          crossRounds(),
+          eq(clarifyRounds.taskId, args.taskId),
+          eq(clarifyRounds.intermediaryNodeId, nodeId),
+          eq(clarifyRounds.loopIter, args.loopIter),
         ),
       )
-      .orderBy(desc(crossClarifySessions.iteration))
+      .orderBy(desc(clarifyRounds.iteration))
       .limit(1)
-    const latest = rows[0]
+    const latest = rawRows[0] === undefined ? undefined : crossRoundAsSession(rawRows[0])
     if (latest === undefined) {
       pending.push(nodeId)
       continue
@@ -514,10 +547,13 @@ export async function listCrossClarifySummaries(
   db: DbClient,
   filter: ListCrossClarifySummariesFilter = {},
 ): Promise<CrossClarifySessionSummary[]> {
-  const all = await db
-    .select()
-    .from(crossClarifySessions)
-    .orderBy(desc(crossClarifySessions.createdAt))
+  const all = (
+    await db
+      .select()
+      .from(clarifyRounds)
+      .where(crossRounds())
+      .orderBy(desc(clarifyRounds.createdAt))
+  ).map(crossRoundAsSession)
   const desired = filter.status ?? 'awaiting_human'
   const filtered = all.filter((r) => {
     if (filter.taskId !== undefined && r.taskId !== filter.taskId) return false
@@ -544,9 +580,9 @@ export async function getCrossClarifyDetail(
 ): Promise<CrossClarifySession> {
   const rows = await db
     .select()
-    .from(crossClarifySessions)
-    .where(eq(crossClarifySessions.crossClarifyNodeRunId, crossClarifyNodeRunId))
-    .orderBy(desc(crossClarifySessions.createdAt))
+    .from(clarifyRounds)
+    .where(and(crossRounds(), eq(clarifyRounds.intermediaryNodeRunId, crossClarifyNodeRunId)))
+    .orderBy(desc(clarifyRounds.createdAt))
     .limit(1)
   const row = rows[0]
   if (row === undefined) {
@@ -555,7 +591,7 @@ export async function getCrossClarifyDetail(
       `no cross_clarify_session for node_run ${crossClarifyNodeRunId}`,
     )
   }
-  return rowToSession(row)
+  return rowToSession(crossRoundAsSession(row))
 }
 
 /**
@@ -693,14 +729,16 @@ export async function broadcastCrossClarifyAnsweredForRound(
   const row = (
     await db
       .select()
-      .from(crossClarifySessions)
-      .where(eq(crossClarifySessions.crossClarifyNodeRunId, crossClarifyNodeRunId))
-      .orderBy(desc(crossClarifySessions.createdAt))
+      .from(clarifyRounds)
+      .where(and(crossRounds(), eq(clarifyRounds.intermediaryNodeRunId, crossClarifyNodeRunId)))
+      .orderBy(desc(clarifyRounds.createdAt))
       .limit(1)
   )[0]
-  if (row === undefined || row.status !== 'answered') return
-  const session = rowToSession(row)
-  broadcastCrossClarifyAnswered(row.taskId, session)
+  if (row === undefined) return
+  const legacy = crossRoundAsSession(row)
+  if (legacy.status !== 'answered') return
+  const session = rowToSession(legacy)
+  broadcastCrossClarifyAnswered(legacy.taskId, session)
   if (opts.rejectedQuestionerNodeRunId !== undefined) {
     broadcastCrossClarifyRejected(row.taskId, session, opts.rejectedQuestionerNodeRunId)
   }

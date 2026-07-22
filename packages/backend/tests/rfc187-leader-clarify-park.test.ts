@@ -181,8 +181,9 @@ describe('RFC-187 F3 — source locks (engine wiring)', () => {
     'utf8',
   )
 
-  test('loadDbState loads clarify SESSIONS (Codex P0-1: the answerable park signal)', () => {
-    expect(STATE).toContain('.from(clarifySessions)')
+  test('loadDbState loads clarify ROUNDS (Codex P0-1: the answerable park signal; RFC-217 T7 读切统一表)', () => {
+    expect(STATE).toContain('.from(clarifyRounds)')
+    expect(STATE).toContain("eq(clarifyRounds.kind, 'self')")
     expect(STATE).toContain('clarifySessions: clarifySessionRows')
     // hostRuns is back to leader/member only (clarify park no longer keyed on the run).
     expect(STATE).toMatch(/inArray\(nodeRuns\.nodeId, \[WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID\]\)/)

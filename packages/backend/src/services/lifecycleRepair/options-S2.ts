@@ -9,7 +9,7 @@
 
 import { and, desc, eq } from 'drizzle-orm'
 
-import { clarifySessions, nodeRuns } from '@/db/schema'
+import { clarifyRounds, clarifySessions, nodeRuns } from '@/db/schema'
 import { setTaskStatus } from '@/services/lifecycle'
 
 import { schedulerLivenessGate } from './helpers'
@@ -104,10 +104,15 @@ const S2_REOPEN_SESSION: RepairOptionDef = {
     // Find a closed clarify_session for it.
     const closed = (
       await rc.db
-        .select({ id: clarifySessions.id, status: clarifySessions.status })
-        .from(clarifySessions)
-        .where(eq(clarifySessions.clarifyNodeRunId, awaitingRun.id))
-        .orderBy(desc(clarifySessions.createdAt))
+        .select({ id: clarifyRounds.id, status: clarifyRounds.status })
+        .from(clarifyRounds)
+        .where(
+          and(
+            eq(clarifyRounds.kind, 'self'),
+            eq(clarifyRounds.intermediaryNodeRunId, awaitingRun.id),
+          ),
+        )
+        .orderBy(desc(clarifyRounds.createdAt))
         .limit(1)
     )[0]
     if (closed === undefined) {
@@ -143,6 +148,12 @@ const S2_REOPEN_SESSION: RepairOptionDef = {
       .update(clarifySessions)
       .set({ status: 'awaiting_human', answersJson: null, answeredAt: null })
       .where(eq(clarifySessions.id, sessionId))
+    // RFC-217 T7（设计门 P1）——修复路径此前只写遗留表，正是同 ID 双表分歧的
+    // 制造源；补上统一表同步（同一次修复动作的另一半，T8 删表后仅此为真）。
+    await rc.db
+      .update(clarifyRounds)
+      .set({ status: 'awaiting_human', answersJson: null, answeredAt: null })
+      .where(eq(clarifyRounds.id, sessionId))
     return {
       beforeSnapshot: before,
       afterSnapshot: { session: { id: sessionId, status: 'awaiting_human' } },

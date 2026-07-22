@@ -70,8 +70,7 @@ import { and, asc, desc, eq, isNotNull, sql } from 'drizzle-orm'
 import { createHash } from 'node:crypto'
 import type { DbClient } from '@/db/client'
 import {
-  clarifySessions,
-  crossClarifySessions,
+  clarifyRounds,
   nodeRunEvents,
   nodeRunOutputs,
   nodeRuns,
@@ -1543,25 +1542,32 @@ async function loadOpenClarify(
   const askingRunIds = new Set<string>()
   const self = await db
     .select({
-      nodeId: clarifySessions.clarifyNodeId,
-      askingRunId: clarifySessions.sourceAgentNodeRunId,
+      nodeId: clarifyRounds.intermediaryNodeId,
+      askingRunId: clarifyRounds.askingNodeRunId,
     })
-    .from(clarifySessions)
-    .where(and(eq(clarifySessions.taskId, taskId), eq(clarifySessions.status, 'awaiting_human')))
+    .from(clarifyRounds)
+    .where(
+      and(
+        eq(clarifyRounds.kind, 'self'),
+        eq(clarifyRounds.taskId, taskId),
+        eq(clarifyRounds.status, 'awaiting_human'),
+      ),
+    )
   for (const r of self) {
     clarifyNodeIds.add(r.nodeId)
     if (r.askingRunId !== null && r.askingRunId !== '') askingRunIds.add(r.askingRunId)
   }
   const cross = await db
     .select({
-      nodeId: crossClarifySessions.crossClarifyNodeId,
-      askingRunId: crossClarifySessions.sourceQuestionerNodeRunId,
+      nodeId: clarifyRounds.intermediaryNodeId,
+      askingRunId: clarifyRounds.askingNodeRunId,
     })
-    .from(crossClarifySessions)
+    .from(clarifyRounds)
     .where(
       and(
-        eq(crossClarifySessions.taskId, taskId),
-        eq(crossClarifySessions.status, 'awaiting_human'),
+        eq(clarifyRounds.kind, 'cross'),
+        eq(clarifyRounds.taskId, taskId),
+        eq(clarifyRounds.status, 'awaiting_human'),
       ),
     )
   for (const r of cross) {

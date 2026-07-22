@@ -325,10 +325,22 @@ export async function dismissOpenClarifyParksForAutonomous(
       }
     })())
   dbTxSync(db, (tx) => {
+    // RFC-217 T7 —— 读切统一表（kind='self'；intermediary 即原 clarifyNodeRunId）。
     const open = tx
-      .select()
-      .from(clarifySessions)
-      .where(and(eq(clarifySessions.taskId, taskId), eq(clarifySessions.status, 'awaiting_human')))
+      .select({
+        id: clarifyRounds.id,
+        clarifyNodeRunId: clarifyRounds.intermediaryNodeRunId,
+        clarifyNodeId: clarifyRounds.intermediaryNodeId,
+        sourceShardKey: clarifyRounds.askingShardKey,
+      })
+      .from(clarifyRounds)
+      .where(
+        and(
+          eq(clarifyRounds.kind, 'self'),
+          eq(clarifyRounds.taskId, taskId),
+          eq(clarifyRounds.status, 'awaiting_human'),
+        ),
+      )
       .all()
     for (const s of open) {
       tx.update(clarifySessions)
@@ -436,9 +448,9 @@ export async function countWgClarifyAsks(
   askerKey: string,
 ): Promise<number> {
   const rows = await db
-    .select({ nodeId: clarifySessions.sourceAgentNodeId, shard: clarifySessions.sourceShardKey })
-    .from(clarifySessions)
-    .where(eq(clarifySessions.taskId, taskId))
+    .select({ nodeId: clarifyRounds.askingNodeId, shard: clarifyRounds.askingShardKey })
+    .from(clarifyRounds)
+    .where(and(eq(clarifyRounds.kind, 'self'), eq(clarifyRounds.taskId, taskId)))
   return rows.filter((r) => wgClarifyAskerKey(r.nodeId, r.shard, WG_LEADER_NODE_ID) === askerKey)
     .length
 }

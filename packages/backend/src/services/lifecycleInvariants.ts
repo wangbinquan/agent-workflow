@@ -41,7 +41,7 @@ import type {
 } from '@agent-workflow/shared'
 
 import type { DbClient } from '@/db/client'
-import { clarifySessions, docVersions, lifecycleAlerts, nodeRuns, tasks } from '@/db/schema'
+import { clarifyRounds, docVersions, lifecycleAlerts, nodeRuns, tasks } from '@/db/schema'
 import { hasUndispatchedDesignerQuestions } from '@/services/taskQuestions'
 import { createLogger } from '@/util/log'
 
@@ -306,16 +306,17 @@ async function checkC1(db: DbClient, ctx: TaskScanContext): Promise<LifecycleInv
   const out: LifecycleInvariantFinding[] = []
   const closedSessions = await db
     .select({
-      id: clarifySessions.id,
-      status: clarifySessions.status,
-      clarifyNodeRunId: clarifySessions.clarifyNodeRunId,
-      clarifyNodeId: clarifySessions.clarifyNodeId,
+      id: clarifyRounds.id,
+      status: clarifyRounds.status,
+      clarifyNodeRunId: clarifyRounds.intermediaryNodeRunId,
+      clarifyNodeId: clarifyRounds.intermediaryNodeId,
     })
-    .from(clarifySessions)
+    .from(clarifyRounds)
     .where(
       and(
-        eq(clarifySessions.taskId, ctx.taskId),
-        inArray(clarifySessions.status, ['answered', 'canceled']),
+        eq(clarifyRounds.kind, 'self'),
+        eq(clarifyRounds.taskId, ctx.taskId),
+        inArray(clarifyRounds.status, ['answered', 'canceled']),
       ),
     )
   if (closedSessions.length === 0) return out

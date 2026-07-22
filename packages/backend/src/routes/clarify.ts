@@ -332,29 +332,32 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
       // it may RETHROW a non-recoverable dispatch conflict — round-7: without broadcasting on the error
       // path the committed answer would be hidden behind a failed response with no invalidation. A
       // 'stop' cross round also fires the rejected event (parity with submitCrossClarifyAnswers).
-      // Best-effort — a broadcast failure must not affect the answer/error outcome. Codex round-8: do
-      // NOT route by the snapshot-derived nodeKind (a malformed/missing snapshot would mis-route a
-      // SEALED cross round to the self helper → no-op → the answered cross round stays hidden behind an
-      // error with no invalidation). Instead call BOTH no-op-safe helpers: each loads ITS OWN session
-      // table (clarify_sessions vs cross_clarify_sessions) and fires ONLY if that row exists AND is
-      // answered, so exactly the right one broadcasts regardless of the snapshot. The stop rejected
-      // event only attaches to the cross helper (the self helper ignores it).
+      // Best-effort — a broadcast failure must not affect the answer/error outcome.
+      // RFC-217 T7（消灭双盲调）：kind 由统一表 clarify_rounds 精确判定（本行
+      // 就是这轮的 intermediary run id），不再「两个 no-op-safe 的都调一遍」——
+      // 那是数据模型二分时代 snapshot 判 kind 不可靠逼出来的防御式浪费；统一
+      // 表的 kind 列是权威判别。stop 的 rejected 事件仍只属 cross。
       const emitAutoAnswered = async (rerunId: string): Promise<void> => {
+        const kindRow = (
+          await deps.db
+            .select({ kind: clarifyRounds.kind })
+            .from(clarifyRounds)
+            .where(eq(clarifyRounds.intermediaryNodeRunId, nodeRunId))
+            .orderBy(desc(clarifyRounds.createdAt))
+            .limit(1)
+        )[0]
         try {
-          await broadcastSelfClarifyAnsweredForRound(deps.db, nodeRunId, rerunId)
+          if (kindRow?.kind === 'cross') {
+            await broadcastCrossClarifyAnsweredForRound(deps.db, nodeRunId, {
+              ...(parsed.data.directive === 'stop' ? { rejectedQuestionerNodeRunId: rerunId } : {}),
+            })
+          } else {
+            await broadcastSelfClarifyAnsweredForRound(deps.db, nodeRunId, rerunId)
+          }
         } catch (err) {
-          log.warn('clarify autodispatch self answered-broadcast threw', {
+          log.warn('clarify autodispatch answered-broadcast threw', {
             taskId: nrRow?.taskId,
-            error: err instanceof Error ? err.message : String(err),
-          })
-        }
-        try {
-          await broadcastCrossClarifyAnsweredForRound(deps.db, nodeRunId, {
-            ...(parsed.data.directive === 'stop' ? { rejectedQuestionerNodeRunId: rerunId } : {}),
-          })
-        } catch (err) {
-          log.warn('clarify autodispatch cross answered-broadcast threw', {
-            taskId: nrRow?.taskId,
+            kind: kindRow?.kind ?? 'unknown',
             error: err instanceof Error ? err.message : String(err),
           })
         }

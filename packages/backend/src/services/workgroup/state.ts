@@ -29,7 +29,7 @@ import { and, asc, eq, inArray } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import {
-  clarifySessions,
+  clarifyRounds,
   nodeRuns,
   workgroupAssignments,
   workgroupMemberCursors,
@@ -420,11 +420,11 @@ export async function loadDbState(db: DbClient, taskId: string): Promise<EngineD
       // clarify (sourceAgentNodeId) AND answerable.
       db
         .select({
-          sourceAgentNodeId: clarifySessions.sourceAgentNodeId,
-          status: clarifySessions.status,
+          sourceAgentNodeId: clarifyRounds.askingNodeId,
+          status: clarifyRounds.status,
         })
-        .from(clarifySessions)
-        .where(eq(clarifySessions.taskId, taskId)),
+        .from(clarifyRounds)
+        .where(and(eq(clarifyRounds.kind, 'self'), eq(clarifyRounds.taskId, taskId))),
     ],
   )
   return {

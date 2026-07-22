@@ -27,13 +27,7 @@ import type {
   MemoryStatus,
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
-import {
-  clarifySessions,
-  docVersions,
-  memories,
-  memoryDistillJobs,
-  taskFeedback,
-} from '@/db/schema'
+import { clarifyRounds, docVersions, memories, memoryDistillJobs, taskFeedback } from '@/db/schema'
 import { rowToDistillJob } from '@/services/memoryDistiller'
 import { NotFoundError } from '@/util/errors'
 import { createLogger } from '@/util/log'
@@ -150,8 +144,11 @@ async function safeLoadSourceEvents(
 
   const [clarifyRows, reviewRows, feedbackRows] = await Promise.all([
     clarifyIds.length > 0
-      ? db.select().from(clarifySessions).where(inArray(clarifySessions.id, clarifyIds))
-      : Promise.resolve([] as Array<typeof clarifySessions.$inferSelect>),
+      ? db
+          .select()
+          .from(clarifyRounds)
+          .where(and(eq(clarifyRounds.kind, 'self'), inArray(clarifyRounds.id, clarifyIds)))
+      : Promise.resolve([] as Array<typeof clarifyRounds.$inferSelect>),
     reviewIds.length > 0
       ? db.select().from(docVersions).where(inArray(docVersions.id, reviewIds))
       : Promise.resolve([] as Array<typeof docVersions.$inferSelect>),

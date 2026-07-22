@@ -12,7 +12,7 @@
 
 import { and, eq } from 'drizzle-orm'
 
-import { clarifySessions } from '@/db/schema'
+import { clarifyRounds } from '@/db/schema'
 import { setNodeRunStatus, setTaskStatus } from '@/services/lifecycle'
 
 import { isTerminalNonDone, loadAllNodeRunsForTask, schedulerLivenessGate } from './helpers'
@@ -153,12 +153,13 @@ const T2_RESURRECT_CLARIFY_RUN: RepairOptionDef = {
     // the run to awaiting_human leaves the UI with no questions to show.
     const openSess = (
       await rc.db
-        .select({ id: clarifySessions.id })
-        .from(clarifySessions)
+        .select({ id: clarifyRounds.id })
+        .from(clarifyRounds)
         .where(
           and(
-            eq(clarifySessions.clarifyNodeRunId, cand.nodeRunId),
-            eq(clarifySessions.status, 'awaiting_human'),
+            eq(clarifyRounds.kind, 'self'),
+            eq(clarifyRounds.intermediaryNodeRunId, cand.nodeRunId),
+            eq(clarifyRounds.status, 'awaiting_human'),
           ),
         )
         .limit(1)

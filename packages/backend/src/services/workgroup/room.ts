@@ -34,7 +34,7 @@ import { and, asc, eq, inArray, isNotNull } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import {
-  clarifySessions,
+  clarifyRounds,
   nodeRuns,
   taskNodeClarifyDirectives,
   tasks,
@@ -477,9 +477,15 @@ export function buildRoomReads(
     // derivation projects `awaiting_human` onto entries whose run has an OPEN
     // session (turn card / presence read「等待回答」instead of「完成/空闲」).
     const openClarify = await deps.db
-      .select({ sourceRunId: clarifySessions.sourceAgentNodeRunId })
-      .from(clarifySessions)
-      .where(and(eq(clarifySessions.taskId, taskId), eq(clarifySessions.status, 'awaiting_human')))
+      .select({ sourceRunId: clarifyRounds.askingNodeRunId })
+      .from(clarifyRounds)
+      .where(
+        and(
+          eq(clarifyRounds.kind, 'self'),
+          eq(clarifyRounds.taskId, taskId),
+          eq(clarifyRounds.status, 'awaiting_human'),
+        ),
+      )
     const openClarifySourceRunIds = new Set(openClarify.map((r) => r.sourceRunId))
     // RFC-182 G5 — the room's full execution history (ascending, single
     // source); RFC-179's memberRuns is its projection (running wins, else
