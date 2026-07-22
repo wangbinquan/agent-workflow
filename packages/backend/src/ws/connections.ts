@@ -179,8 +179,12 @@ export async function revalidateAllConnections(
       if (verdict !== true) {
         closeConnection(ws, WS_CLOSE_NOT_VISIBLE, verdict.code)
         stats.closedGate += 1
+        continue
       }
     }
+    // Survived the pass with a refreshed actor — unfreeze so the broadcast path
+    // delivers again (impl-gate: the frame freeze is only for the pass duration).
+    if (!ws.data.closing) ws.data.revalidating = false
   }
   if (stats.closedAuth > 0 || stats.closedGate > 0) {
     deps.log.info('ws-revalidate', { reason, ...stats })
@@ -195,6 +199,15 @@ const revalidateLog = createLogger('ws.revalidate')
 // write point does not wait for sockets to close. Tests drive
 // revalidateAllConnections directly for determinism.
 registerRevalidationTrigger((db, reason) => {
+  // RFC-212 impl-gate (Codex 2026-07-22): SYNCHRONOUSLY freeze every live
+  // connection BEFORE the async pass starts. The revocation write has already
+  // committed by the time the trigger fires, so between here and each
+  // connection's re-resolve the synchronous broadcast for-of must not deliver a
+  // frame under the stale actor. `revalidating` is cleared per-connection by the
+  // pass once its actor is refreshed (or the socket is closed).
+  for (const ws of liveConnections()) {
+    if (!ws.data.closing) ws.data.revalidating = true
+  }
   void revalidateAllConnections({ db, log: revalidateLog }, reason).catch((err) => {
     revalidateLog.warn('ws-revalidate-threw', {
       reason,

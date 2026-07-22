@@ -163,6 +163,16 @@ export interface WsConnectionData {
    * keeps receiving during that window.
    */
   closing: boolean
+  /**
+   * RFC-212 impl-gate (Codex 2026-07-22): set SYNCHRONOUSLY by the revocation
+   * trigger BEFORE the async revalidation pass runs, so the synchronous broadcast
+   * for-of cannot deliver a frame under the connection's OLD actor/permissions
+   * while the pass is still re-resolving it. The pass clears it once the actor is
+   * refreshed (or the connection is closed). Without this, a task-member removal
+   * that commits, then fires the fire-and-forget rescan, still leaked frames to
+   * the running subscription during every `await` inside the serial rescan.
+   */
+  revalidating: boolean
   unsubscribe: () => void
   /**
    * RFC-054 W2-4 — per-connection visibility cache. tasks-list entries are
@@ -730,7 +740,12 @@ export function gatedSubscribe(
     // (broadcast is a synchronous for-of) can still reach here. Drop it. This
     // check is synchronous, so it does not affect the two delivery-ordering
     // locks in rfc152-ws-channel-registry.test.ts (closing is false there).
-    if (ws.data.closing) return
+    //
+    // RFC-212 impl-gate: `revalidating` is the same synchronous short-circuit, but
+    // set for the DURATION of an in-flight revocation rescan — the frame is held
+    // back until the pass has re-resolved this connection's actor (then it clears
+    // the flag) or closed it. Both flags are false on the hot path.
+    if (ws.data.closing || ws.data.revalidating) return
     // RFC-212 T7 — natural expiry has no write hook to fire a revocation, so a
     // silently-expired credential would otherwise keep this socket alive past
     // its TTL. Purely local `now > expiresAt` comparison — zero DB, so AC-6 is

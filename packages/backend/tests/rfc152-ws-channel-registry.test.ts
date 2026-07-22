@@ -62,6 +62,7 @@ function makeFakeWs(actor: Actor): {
     // structurally identical to a real connection.
     credential: { kind: 'daemon' },
     closing: false,
+    revalidating: false,
     unsubscribe: () => {},
     visibilityCache: new Map(),
   }
@@ -289,6 +290,27 @@ describe('RFC-152 — gatedSubscribe pipeline (admin short-circuit → frameGate
     ])
     ws.data.unsubscribe()
     expect(probe.wasUnsubscribed()).toBe(true)
+  })
+
+  // RFC-212 impl-gate (Codex 2026-07-22): `revalidating` is a synchronous frame
+  // short-circuit set for the DURATION of an in-flight revocation rescan, so no
+  // frame is delivered under a stale actor while the async pass re-resolves it.
+  test('revalidating=true synchronously drops frames; clearing it resumes delivery', () => {
+    const probe = makeProbeSpec({})
+    const { ws, sent } = makeFakeWs(makeActor('user'))
+    gatedSubscribe(ws, probe.spec, { kind: 'tasks-list' }, db)
+    expect(sent).toEqual([{ type: 'hello', channel: 'probe' }])
+    // Freeze for an in-flight rescan → the frame is dropped (not queued).
+    ws.data.revalidating = true
+    probe.fire({ type: 'x', n: 1 })
+    expect(sent).toEqual([{ type: 'hello', channel: 'probe' }])
+    // The pass refreshed the actor and unfroze → delivery resumes.
+    ws.data.revalidating = false
+    probe.fire({ type: 'x', n: 2 })
+    expect(sent).toEqual([
+      { type: 'hello', channel: 'probe' },
+      { type: 'x', n: 2 },
+    ])
   })
 
   test('adminShortCircuit sends synchronously for admins without consulting the gate', () => {

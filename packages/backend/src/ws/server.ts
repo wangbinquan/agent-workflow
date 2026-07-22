@@ -142,6 +142,7 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
       // token resolveActor just consumed.
       credential: await buildWsCredential(deps.db, queryToken),
       closing: false,
+      revalidating: false,
       unsubscribe: () => {
         /* set on open */
       },
