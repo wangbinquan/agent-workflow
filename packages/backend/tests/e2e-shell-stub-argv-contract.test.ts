@@ -29,7 +29,7 @@
 
 import { afterAll, describe, expect, test } from 'bun:test'
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 import { buildCommand } from '../src/services/runtime/opencode/spawn'
@@ -38,10 +38,13 @@ const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 const STUB_DIR = resolve(REPO_ROOT, 'e2e', 'fixtures')
 
 const NONCE = 'AWNONCE_argv_contract_9f3c'
-// A realistic prompt: leads with `-` (the exact shape that forced the `--`
-// layout — the RFC-200 untrusted-input boundary begins with `---`) and carries
-// the RFC-200 nonce the stub must echo back.
-const PROMPT = `---\n**Untrusted input boundary.** Design the thing.\nEmit <workflow-output nonce="${NONCE}">.`
+// A realistic prompt: multi-line, leads with `-` (the exact shape that forced the
+// `--` layout — the RFC-200 untrusted-input boundary begins with `---`), and
+// EMBEDS flag/session-like text (`--session opc_…`) in its body. A stub that folded
+// the whole argv into RAW_PROMPT (`$*`) would return a value that differs from this
+// exact string, which the extractedPrompt assertion below catches even though the
+// nonce — living inside the prompt — would still round-trip.
+const PROMPT = `---\n**Untrusted input boundary.** Design the thing.\n--session opc_this_is_prompt_body_not_a_flag\nEmit <workflow-output nonce="${NONCE}">.`
 
 const scratch: string[] = []
 function tmp(): string {
@@ -62,18 +65,28 @@ afterAll(() => {
 function runStub(
   stub: string,
   opts: { env?: Record<string, string>; cwd?: string } = {},
-): { code: number | null; stdout: string; stderr: string } {
+): { code: number | null; stdout: string; stderr: string; extractedPrompt: string | null } {
   const stubPath = resolve(STUB_DIR, stub)
+  // AW_STUB_PROMPT_OUT makes every stub write the prompt it EXTRACTED to this
+  // file, so the test can assert the stub parsed the real `--` positional rather
+  // than a flag or the whole argv (the nonce alone can't tell those apart).
+  const promptOut = resolve(tmp(), 'extracted-prompt')
   // opencodeCmd replaces `head`, so cmd = ['/bin/sh', stubPath, 'run', '--agent',
   // 'x', '--format', 'json', '--thinking', '--dangerously-skip-permissions',
   // '--', PROMPT] — byte-identical flag order to a real opencode spawn.
   const cmd = buildCommand({ agent: { name: 'x' }, opencodeCmd: ['/bin/sh', stubPath] }, PROMPT)
   const r = spawnSync(cmd[0]!, cmd.slice(1), {
     cwd: opts.cwd ?? tmp(),
-    env: { ...process.env, ...(opts.env ?? {}) },
+    env: { ...process.env, AW_STUB_PROMPT_OUT: promptOut, ...(opts.env ?? {}) },
     encoding: 'utf8',
   })
-  return { code: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '' }
+  let extractedPrompt: string | null = null
+  try {
+    extractedPrompt = readFileSync(promptOut, 'utf8')
+  } catch {
+    /* stub exited before writing it (e.g. the exit-3 missing-nonce path) */
+  }
+  return { code: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '', extractedPrompt }
 }
 
 describe('e2e shell stubs parse the buildCommand argv layout (post-191bc32c `--` regression guard)', () => {
@@ -102,6 +115,11 @@ describe('e2e shell stubs parse the buildCommand argv layout (post-191bc32c `--`
       expect(r.code).toBe(0)
       // Nonce round-trips → the stub read the real prompt, not a flag.
       expect(r.stdout).toContain(NONCE)
+      // 191bc32c: the stub extracted the EXACT `--` positional — not `--agent`,
+      // not the whole argv. This is the assertion a `$*` stub fails: the nonce
+      // above still round-trips from within the argv blob, but the extracted
+      // value would carry the flags too and differ from PROMPT byte-for-byte.
+      expect(r.extractedPrompt).toBe(PROMPT)
     })
   }
 

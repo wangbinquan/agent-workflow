@@ -37,7 +37,19 @@ case "${1-}" in
     ;;
 esac
 
-RAW_PROMPT="$*"
+# The prompt is the SINGLE positional after buildCommand's `--` end-of-options
+# separator (`run --agent … -- <prompt>`), exactly as the TS fixtures read it.
+# Reading `$*` instead folds every flag into RAW_PROMPT and makes this stub blind
+# to an argv-layout regression — see tests/e2e-shell-stub-argv-contract.test.ts.
+RAW_PROMPT=""
+_seen_dd=0
+for _a in "$@"; do
+  if [ "$_seen_dd" = 1 ]; then RAW_PROMPT="$_a"; break; fi
+  [ "$_a" = "--" ] && _seen_dd=1
+done
+# Contract-test hook: echo the extracted prompt verbatim so the guard can assert
+# the stub parsed the REAL prompt, not a flag or the whole argv.
+[ -n "${AW_STUB_PROMPT_OUT:-}" ] && printf '%s' "$RAW_PROMPT" >"$AW_STUB_PROMPT_OUT"
 envelope_nonce=$(printf '%s\n' "$RAW_PROMPT" | sed -n 's/.*nonce="\([^"]*\)".*/\1/p' | tail -n 1)
 if [ -z "$envelope_nonce" ]; then
   echo "stub-opencode-slow: prompt is missing the RFC-200 envelope nonce" >&2
