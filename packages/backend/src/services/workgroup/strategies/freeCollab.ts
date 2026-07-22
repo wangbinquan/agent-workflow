@@ -2,7 +2,6 @@
 // host run → per-card settle) and its result settling (moved verbatim from
 // runner.ts).
 
-import { workgroupAssignments } from '@/db/schema'
 import {
   parseWgMessagesPort,
   parseWgTaskResultsPort,
