@@ -206,52 +206,56 @@ export function buildOpencodeEnv(ctx: OpencodeEnvContext): Record<string, string
 }
 
 /**
- * macOS caps the WHOLE argv+env block at ARG_MAX (`getconf ARG_MAX` = 256 KiB)
- * and is the tighter of the two platforms (Linux's ARG_MAX is ~2 MiB). Guard
- * below it with headroom so a spawn that would E2BIG on macOS fails readably on
- * every OS. This is the total-size companion to buildCommand's per-string
- * MAX_OPENCODE_PROMPT_BYTES (the 128 KiB single-argument cap).
+ * Linux's execve caps a SINGLE argv/env string at MAX_ARG_STRLEN = 32 pages =
+ * 128 KiB on a 4 KiB-page kernel (`man 2 execve`). Unlike the total ARG_MAX
+ * budget this is a fixed per-string limit, and unlike macOS (which enforces only
+ * the ~1 MiB total ARG_MAX, with no per-string cap) it can reject one oversized
+ * env value on its own. This is the ONE spawn-size bound that is a hard, portable
+ * constant rather than a runtime- and sandbox-dependent estimate.
  */
-export const MAX_SPAWN_TOTAL_BYTES = 240 * 1024
+export const LINUX_MAX_ARG_STRLEN = 128 * 1024
 
 /**
- * Fail READABLY when the assembled argv+env would exceed execve's limits,
- * instead of letting the kernel reject the spawn with a raw E2BIG the user
- * cannot act on. buildCommand already bounds the prompt (the biggest argv
- * string); this covers the two gaps it cannot see:
+ * Fail READABLY when the one env string this driver injects unbounded —
+ * OPENCODE_CONFIG_CONTENT, a large inline agent/MCP/config body that
+ * buildOpencodeEnv writes with no size check of its own (upstream only emits a
+ * UTF-16 `.length` warning) — would cross Linux's per-string execve limit,
+ * instead of a raw E2BIG the user cannot act on. The runner maps the throw to
+ * the node's `runtime-spawn-failed` errorMessage.
  *
- *  - any SINGLE env string (`KEY=VALUE`) over the 128 KiB per-string cap
- *    (Linux MAX_ARG_STRLEN) — in practice OPENCODE_CONFIG_CONTENT carrying a
- *    large inline agent/MCP/config body, which buildOpencodeEnv injects with no
- *    size check of its own (upstream only emits a UTF-16 `.length` warning);
- *  - the TOTAL argv+env block over ARG_MAX, which a prompt and a config that are
- *    each individually under the per-string cap can still cross together.
+ * Scoped deliberately narrow, because getting a spawn-size guard WRONG breaks
+ * every spawn rather than an oversized one:
+ *  - only OPENCODE_CONFIG_CONTENT, never the inherited process.env — a legitimate
+ *    ambient variable must not be able to fail an otherwise-valid spawn;
+ *  - only on Linux — macOS enforces no per-string cap, so the same value that
+ *    would E2BIG on Linux spawns fine there and a fixed guard would false-reject.
  *
- * Runs during spawn assembly, so the runner maps the throw to the node's
- * `runtime-spawn-failed` errorMessage — actionable, not a bare kernel code.
- * claude is unaffected (its driver pipes the prompt through stdin, never argv).
+ * The TOTAL argv+env budget is a SEPARATE, platform- and sandbox-dependent
+ * concern: it needs the runtime `getconf ARG_MAX` (macOS is ~1 MiB, NOT 256 KiB;
+ * Linux's is bounded by RLIMIT_STACK and page size), plus the sandbox wrapper's
+ * own argv and the envp pointer slots — none of which a fixed constant can stand
+ * in for without false-rejecting legitimate large-but-valid spawns. It is left to
+ * a future platform-aware guard measured at the real spawn boundary. claude is
+ * unaffected (its driver pipes the prompt through stdin, never argv).
  */
-export function assertOpencodeSpawnSize(cmd: string[], env: Record<string, string>): void {
-  // Each argv/env string contributes its bytes + a NUL terminator to the block.
-  let total = 0
-  for (const arg of cmd) total += Buffer.byteLength(arg, 'utf8') + 1
-  for (const [key, value] of Object.entries(env)) {
-    const pairBytes =
-      Buffer.byteLength(key, 'utf8') + 1 /* '=' */ + Buffer.byteLength(value, 'utf8')
-    if (pairBytes > MAX_OPENCODE_PROMPT_BYTES) {
-      throw new Error(
-        `spawn-env-too-large: env ${key} is ${pairBytes} bytes, over the ` +
-          `${MAX_OPENCODE_PROMPT_BYTES}-byte per-string execve limit (Linux caps one ` +
-          `env string at 128 KiB); reduce the inline agent/MCP/config bodies feeding this node`,
-      )
-    }
-    total += pairBytes + 1 /* NUL */
-  }
-  if (total > MAX_SPAWN_TOTAL_BYTES) {
+export function assertOpencodeSpawnSize(
+  env: Record<string, string>,
+  platform: NodeJS.Platform = process.platform,
+): void {
+  if (platform !== 'linux') return
+  const value = env.OPENCODE_CONFIG_CONTENT
+  if (value === undefined) return
+  // The kernel measures the whole `KEY=VALUE\0` entry against MAX_ARG_STRLEN.
+  const bytes =
+    Buffer.byteLength('OPENCODE_CONFIG_CONTENT', 'utf8') +
+    1 /* '=' */ +
+    Buffer.byteLength(value, 'utf8') +
+    1 /* NUL */
+  if (bytes > LINUX_MAX_ARG_STRLEN) {
     throw new Error(
-      `spawn-args-too-large: the argv+env block totals ${total} bytes, over the ` +
-        `${MAX_SPAWN_TOTAL_BYTES}-byte ARG_MAX budget (macOS caps the whole block at ` +
-        `256 KiB); reduce the prompt/diff or inline config feeding this node`,
+      `spawn-config-too-large: OPENCODE_CONFIG_CONTENT is ${bytes} bytes, over Linux's ` +
+        `${LINUX_MAX_ARG_STRLEN}-byte per-argv-string execve limit (MAX_ARG_STRLEN); ` +
+        `reduce the inline agent/MCP/config bodies feeding this node`,
     )
   }
 }
@@ -280,7 +284,8 @@ export function buildOpencodeSpawn(ctx: OpencodeSpawnContext): {
     ctx.prompt,
   )
   const env = buildOpencodeEnv(ctx)
-  // Fail readably before execve would reject the block with a raw E2BIG.
-  assertOpencodeSpawnSize(cmd, env)
+  // Fail readably before Linux execve would reject an oversized inline config
+  // with a raw E2BIG (see assertOpencodeSpawnSize — scoped to that one string).
+  assertOpencodeSpawnSize(env)
   return { cmd, env }
 }
