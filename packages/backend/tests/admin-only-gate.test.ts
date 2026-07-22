@@ -158,6 +158,24 @@ describe('regular-user session token — admin-only endpoints all return 403', (
     const res = await reqAs(h.app, h.userToken, '/api/backup', { method: 'POST' })
     expect(res.status).toBe(403)
   })
+
+  // RFC-213 impl-gate P0-5 (Codex 2026-07-22): the whole /api/restore subtree is
+  // backup:run — the sub-path gate used to be missing so the pending endpoints
+  // fell through to an in-handler role check only.
+  test('POST /api/restore → 403', async () => {
+    const res = await reqAs(h.app, h.userToken, '/api/restore', { method: 'POST' })
+    expect(res.status).toBe(403)
+  })
+
+  test('GET /api/restore/pending → 403', async () => {
+    const res = await reqAs(h.app, h.userToken, '/api/restore/pending')
+    expect(res.status).toBe(403)
+  })
+
+  test('DELETE /api/restore/pending → 403', async () => {
+    const res = await reqAs(h.app, h.userToken, '/api/restore/pending', { method: 'DELETE' })
+    expect(res.status).toBe(403)
+  })
 })
 
 describe('regular-user session token — endpoints that are intentionally open', () => {
@@ -213,5 +231,33 @@ describe('PAT-bearing actor cannot escape role limits', () => {
     })
     const res = await reqAs(app, token, '/api/users')
     expect(res.status).toBe(403)
+  })
+
+  // RFC-213 impl-gate P0-5 (Codex 2026-07-22): an ADMIN whose PAT is scoped away
+  // from backup:run passes the restore route's in-handler `role === 'admin'`
+  // check, so ONLY the /api/restore/* middleware gate stops it. Before the fix
+  // that gate was absent for the subtree and this actor could read failed-restore
+  // state + dis-arm a pending restore. (Mutation: drop the `/api/restore/*` gate
+  // in server.ts → these two go 200.)
+  test('admin PAT scoped without backup:run is still 403 on the restore subtree', async () => {
+    const { db, app } = await buildHarness()
+    const { createPat } = await import('../src/auth/patStore')
+    const { createUser } = await import('../src/services/users')
+    const admin = await createUser(db, {
+      username: 'adm',
+      displayName: 'Adm',
+      role: 'admin',
+      password: 'longEnoughPassword',
+    })
+    const { token } = await createPat({
+      db,
+      userId: admin.id,
+      name: 'narrow',
+      scopes: ['settings:read'], // admin role kept, backup:run dropped
+    })
+    const get = await reqAs(app, token, '/api/restore/pending')
+    expect(get.status).toBe(403)
+    const del = await reqAs(app, token, '/api/restore/pending', { method: 'DELETE' })
+    expect(del.status).toBe(403)
   })
 })

@@ -189,6 +189,12 @@ export function createApp(deps: AppDeps): Hono {
   app.use('/api/backup', requirePermission('backup:run'))
   app.use('/api/backup/*', requirePermission('backup:run'))
   app.use('/api/restore', requirePermission('backup:run'))
+  // RFC-213 impl-gate P0-5 (Codex 2026-07-22): the sub-path gate was missing, so
+  // GET/DELETE /api/restore/pending only enforced the in-handler admin-role check
+  // — a scoped PAT that narrows away `backup:run` (but keeps the admin role) could
+  // still read failed-restore state and dis-arm a pending restore. Gate the whole
+  // subtree like /api/backup/*.
+  app.use('/api/restore/*', requirePermission('backup:run'))
 
   // runtime is admin+user — homepage runtime dot relies on it.
   app.use('/api/runtime', requirePermission('runtime:read'))
