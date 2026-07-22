@@ -1855,11 +1855,19 @@ export async function snapshotFullState(
     if (opts?.pinRef !== undefined) {
       const pin = await runGit(worktreePath, ['update-ref', opts.pinRef, sha])
       if (pin.exitCode !== 0) {
-        opts.log?.warn('iso snapshot ref pin failed (snapshot stays gc-exposed)', {
-          pinRef: opts.pinRef,
-          sha,
-          error: pin.stderr.trim(),
-        })
+        // Impl-gate A5-fix: a pin failure is FATAL, not a warning. Every caller
+        // that asks for a pinRef does so because the snapshot must survive gc
+        // (iso base / node result / pre-force-checkout recovery point); handing
+        // back a dangling commit and logging lets the caller proceed — for the
+        // subsnap case straight into `checkout -f`, destroying the user's
+        // uncommitted work with a recovery point that is one prune away from
+        // gone. Ref namespace collisions, lock contention, disk and permission
+        // errors all land here.
+        throw new DomainError(
+          'iso-snapshot-failed',
+          `update-ref ${opts.pinRef}: ${pin.stderr.trim()}`,
+          500,
+        )
       }
     }
     return sha
@@ -1922,6 +1930,43 @@ export async function createIsolatedWorktree(opts: CreateIsolatedWorktreeOptions
   const { resolveSubmoduleParams } = await import('@/services/gitRepoCache')
   const effective = resolveSubmoduleParams(opts.submoduleMode, opts.submoduleJobs)
   await syncSubmodules(opts.isoPath, { mode: effective.mode, jobs: effective.jobs })
+}
+
+/**
+ * RFC-210 impl-gate A3-fix — align a worktree's SUBMODULE checkouts with the
+ * gitlinks `tree` records, attaching not-yet-initialized ones from their
+ * shared pool.
+ *
+ * Needed right after `createIsolatedWorktree`: `submodule update` there obeys
+ * the INDEX, which the reset pinned to the TASK BASE — so submodule working
+ * dirs sit at the task-base gitlinks while the parent files show the
+ * accumulated snapshot. For a submodule an earlier node ADDED (present only in
+ * the accumulated state, attached in canonical as an unstaged delta) the
+ * update does nothing at all; the fresh iso would see an empty dir, its final
+ * snapshot would omit the gitlink, and merge-back would read that as the node
+ * DELETING the submodule — silently removing a sibling's product from
+ * canonical.
+ *
+ * Callers must attach pool alternates FIRST (a moved gitlink's target commit
+ * usually lives only in the pool). `currentTree` null ⟹ treat every gitlink as
+ * changed.
+ */
+export async function alignWorktreeGitlinks(
+  worktreePath: string,
+  tree: string,
+  currentTree: string | null,
+  opts?: {
+    submoduleMode?: 'auto' | 'always' | 'never'
+    submoduleJobs?: number
+    log?: Logger
+  },
+): Promise<void> {
+  const { resolveSubmoduleParams } = await import('@/services/gitRepoCache')
+  const effective = resolveSubmoduleParams(opts?.submoduleMode, opts?.submoduleJobs)
+  await checkoutMergedGitlinks(worktreePath, tree, effective, opts?.log, '', {
+    rootPath: worktreePath,
+    currentTree,
+  })
 }
 
 export interface MergeTreeResult {
@@ -2165,7 +2210,15 @@ export async function materializeTree(
   // Without this step the whole merge result for a submodule is silently thrown
   // away: `checkout-index` in ③ never writes gitlinks, so ⑤ leaves the submodule
   // sitting at the base commit and the superproject looks untouched.
-  await checkoutMergedGitlinks(worktreePath, opts.mergedTree, effective, opts.log)
+  //
+  // `canonCurrentTree` rides along as the change oracle: a gitlink the merge
+  // did NOT move keeps the old skip-if-unattached behavior, while a moved or
+  // ADDED one that cannot be materialized is a hard error instead of a silent
+  // drop (impl-gate A3-fix).
+  await checkoutMergedGitlinks(worktreePath, opts.mergedTree, effective, opts.log, '', {
+    rootPath: worktreePath,
+    currentTree: opts.canonCurrentTree,
+  })
 }
 
 /**
@@ -2185,14 +2238,31 @@ export async function materializeTree(
  *    fails. Turning "user left edits in a submodule" into a hard merge-back
  *    failure would just move RFC-130 D22's block to a later, more expensive point.
  */
+/** Monotonic per-process nonce for subsnap pin refs (impl-gate A5-fix: two
+ *  snapshots of the same pre-checkout HEAD must not overwrite each other —
+ *  the older one may be the only copy of work a later round destroyed). */
+let subsnapNonce = 0
+
 async function checkoutMergedGitlinks(
   worktreePath: string,
   tree: string,
   effective: { mode: 'auto' | 'always' | 'never'; jobs: number },
   log?: Logger,
   prefix = '',
+  ctx?: {
+    /** The ROOT worktree — pool resolution is host-relative, keyed by relPath. */
+    rootPath: string
+    /**
+     * Tree-ish of this LEVEL'S current (pre-materialize) state, or null when
+     * nothing at this level existed before (a freshly attached submodule).
+     * The change oracle: an unattached gitlink the merge did not move keeps
+     * the old silent skip; a moved/added one must materialize or fail loud.
+     */
+    currentTree: string | null
+  },
 ): Promise<void> {
   if (effective.mode === 'never') return
+  const rootPath = ctx?.rootPath ?? worktreePath
   // `-r` is load-bearing, not an optimization. Without it this lists only the
   // root level, and a submodule at `libs/vendor` shows up as `040000 tree libs`
   // — skipped by the `!== 'commit'` guard below, so its merged gitlink was
@@ -2213,6 +2283,14 @@ async function checkoutMergedGitlinks(
     if (sha === undefined) continue
     const relPath = prefix === '' ? name : `${prefix}/${name}`
     const subPath = join(worktreePath, name)
+    // What did this level record for the path BEFORE the materialize? Null when
+    // the level had no prior state at all, or the entry did not exist (added
+    // gitlink) / was not a gitlink (type change).
+    let currentSha: string | null = null
+    if (ctx?.currentTree != null) {
+      const cur = await runGit(worktreePath, ['rev-parse', `${ctx.currentTree}:${name}`])
+      if (cur.exitCode === 0 && cur.stdout.trim() !== '') currentSha = cur.stdout.trim()
+    }
     // An uninitialized submodule is an EMPTY DIRECTORY, not a missing one — git
     // creates it for the gitlink — so `existsSync(subPath)` is always true and
     // never skipped anything. `git -C <empty dir> checkout` then walks up and
@@ -2224,7 +2302,62 @@ async function checkoutMergedGitlinks(
     // accident (gitlink present, no `.gitmodules` entry at all).
     // `.git` (file or dir) is what actually distinguishes an initialized one —
     // the same test `expandSubmodulePaths` already uses.
-    if (!existsSync(join(subPath, '.git'))) continue
+    if (!existsSync(join(subPath, '.git'))) {
+      // Untouched (same gitlink as before): the old silent skip is faithful —
+      // an unfetchable / deinit'd / stray gitlink the merge never moved stays
+      // exactly as it was (impl-gate baseline: NOT an error).
+      if (currentSha === sha) continue
+      // The merge ADDED or MOVED this gitlink and there is no working tree to
+      // express it in. A node-created submodule lands here: its module dir was
+      // private to the discarded iso worktree, so the ONLY durable object
+      // source is the shared pool the publish step wrote. Attach from it —
+      // silently skipping would drop the node's submodule from the accumulated
+      // task state (and the next node's snapshot would then read the vanished
+      // path as a DELETION and delete it from canonical too).
+      const { attachSubmoduleFromPool, resolveSubmodulePool, submoduleNameForPath } =
+        await import('@/services/gitSubmodule')
+      if ((await submoduleNameForPath(worktreePath, name)) === null) {
+        // Not declared in .gitmodules — a stray committed nested repo. The
+        // platform never claimed ownership (publish skips it too, so nothing
+        // of it was ever pooled); leave it unmaterialized, as before.
+        log?.warn('gitlink not declared in .gitmodules — leaving unmaterialized', {
+          subPath: relPath,
+          sha,
+        })
+        continue
+      }
+      const pool = await resolveSubmodulePool(rootPath, relPath)
+      if (pool === null) {
+        // Declared but never pooled ⟹ the objects were never published (the
+        // submodule was uninitialized in the iso as well — flag '-' skips it
+        // end to end). Nothing was lost; reproduce the iso's own state.
+        log?.warn('gitlink moved but has no pool — leaving unmaterialized', {
+          subPath: relPath,
+          sha,
+        })
+        continue
+      }
+      const attached = await attachSubmoduleFromPool(worktreePath, { relPath: name, sha, pool })
+      if (!attached.ok) {
+        throw new DomainError(
+          'materialize-failed',
+          `submodule '${relPath}' cannot be attached at ${sha}: ${attached.error ?? 'unknown error'}`,
+          500,
+        )
+      }
+      // Fall through to the recursion below — a freshly attached submodule may
+      // itself contain gitlinks (checked out non-recursively on purpose; each
+      // nested level attaches from ITS OWN pool right here).
+      const attachedTree = await runGit(subPath, ['rev-parse', `${sha}^{tree}`])
+      if (attachedTree.exitCode === 0) {
+        await checkoutMergedGitlinks(subPath, attachedTree.stdout.trim(), effective, log, relPath, {
+          rootPath,
+          currentTree: null,
+        })
+      }
+      continue
+    }
+    const preHead = (await runGit(subPath, ['rev-parse', 'HEAD'])).stdout.trim()
     const co = await runGit(subPath, ['checkout', '--detach', sha])
     if (co.exitCode !== 0) {
       const stderr = co.stderr.trim()
@@ -2237,9 +2370,10 @@ async function checkoutMergedGitlinks(
         // and tell the user the ref. This is what G10's `snapshotSubmodule` was
         // written for; it had no caller until now, which is exactly why the
         // comment below it claimed "snapshotting is the caller's job".
+        // The pid+nonce suffix keeps a SECOND snapshot at the same HEAD from
+        // overwriting the first recovery point (impl-gate A5-fix).
         const { snapshotSubmodule, subSlug } = await import('@/services/gitSubmodule')
-        const preHead = (await runGit(subPath, ['rev-parse', 'HEAD'])).stdout.trim()
-        const pinRef = `refs/agent-workflow/subsnap/${subSlug(relPath)}/${preHead}`
+        const pinRef = `refs/agent-workflow/subsnap/${subSlug(relPath)}/${preHead}-${process.pid}-${subsnapNonce++}`
         try {
           const snap = await snapshotSubmodule(subPath, pinRef)
           log?.warn('submodule had uncommitted changes — pinned before force checkout', {
@@ -2275,10 +2409,16 @@ async function checkoutMergedGitlinks(
       }
     }
     // Recurse: this submodule may itself contain submodules, and their gitlinks
-    // live in ITS tree, not the one we just listed.
+    // live in ITS tree, not the one we just listed. The pre-checkout HEAD tree
+    // is the nested level's change oracle.
     const subTree = await runGit(subPath, ['rev-parse', `${sha}^{tree}`])
     if (subTree.exitCode === 0) {
-      await checkoutMergedGitlinks(subPath, subTree.stdout.trim(), effective, log, relPath)
+      const preTree =
+        preHead === '' ? null : (await runGit(subPath, ['rev-parse', `${preHead}^{tree}`])).stdout
+      await checkoutMergedGitlinks(subPath, subTree.stdout.trim(), effective, log, relPath, {
+        rootPath,
+        currentTree: preTree === null || preTree.trim() === '' ? null : preTree.trim(),
+      })
     }
   }
 }

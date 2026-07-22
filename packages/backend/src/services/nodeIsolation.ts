@@ -14,6 +14,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
+  alignWorktreeGitlinks,
   AW_INTERNAL_GIT_IDENTITY,
   buildSalvageTree,
   commitTree,
@@ -43,7 +44,8 @@ import {
   bottomUp,
   detectSubmodules,
   ensureSubmoduleAlternates,
-  listSubmodules,
+  ensureSubmodulePool,
+  listEffectiveSubmodules,
   mergeSubmoduleTrees,
   poolRefName,
   pushObjectsToPool,
@@ -245,11 +247,32 @@ export async function createNodeIso(opts: {
       ...(opts.submoduleMode !== undefined ? { submoduleMode: opts.submoduleMode } : {}),
       ...(opts.submoduleJobs !== undefined ? { submoduleJobs: opts.submoduleJobs } : {}),
     })
-    const { subBases, poolDirs } = await captureSubmoduleTopology(
+    let { subBases, poolDirs } = await captureSubmoduleTopology(
       isoWorktreePath,
       r.worktreePath,
       opts.log,
     )
+    // Impl-gate A3-fix: the sync inside createIsolatedWorktree obeys the index
+    // (= task base), so submodule checkouts lag the accumulated snapshot the
+    // parent files show — and a submodule an EARLIER node added is not attached
+    // at all (its gitlink lives only in the accumulated state). Align gitlinks
+    // to the base snapshot — attaching new paths from their pools — then
+    // re-capture so `subBases` records the heads the node ACTUALLY starts
+    // from. Runs after the capture above because a moved gitlink's target
+    // usually exists only in the pool, reachable via the alternates that
+    // capture just attached.
+    if (detectSubmodules(isoWorktreePath)) {
+      await alignWorktreeGitlinks(isoWorktreePath, baseSnapshot, taskBaseHead, {
+        ...(opts.submoduleMode !== undefined ? { submoduleMode: opts.submoduleMode } : {}),
+        ...(opts.submoduleJobs !== undefined ? { submoduleJobs: opts.submoduleJobs } : {}),
+        ...(opts.log !== undefined ? { log: opts.log } : {}),
+      })
+      ;({ subBases, poolDirs } = await captureSubmoduleTopology(
+        isoWorktreePath,
+        r.worktreePath,
+        opts.log,
+      ))
+    }
     repos.push({
       repoPath: r.repoPath,
       canonWorktreePath: r.worktreePath,
@@ -297,7 +320,11 @@ async function captureSubmoduleTopology(
   log?: Logger,
 ): Promise<{ subBases: Record<string, string>; poolDirs: Record<string, string> }> {
   if (!detectSubmodules(isoWorktreePath)) return { subBases: {}, poolDirs: {} }
-  const subs = usableSubmodules(await listSubmodules(isoWorktreePath))
+  // Effective list, not `git submodule status`: a submodule an earlier node
+  // ADDED exists only as an unstaged delta, and `submodule status` iterates
+  // INDEX gitlinks — it prints nothing for an attached-but-unstaged path
+  // (measured), which would drop the new submodule from this node's topology.
+  const subs = usableSubmodules(await listEffectiveSubmodules(isoWorktreePath))
   if (subs.length === 0) return { subBases: {}, poolDirs: {} }
 
   const subBases: Record<string, string> = {}
@@ -429,7 +456,7 @@ export async function snapshotNodeIsoFinal(
     // exists ONLY in this iso's module dir. `git worktree remove --force` then
     // takes that module dir with it, and the commit is gone for good — canonical
     // would later resolve the gitlink to an unreachable object.
-    await publishSubmoduleHeads(handle, r, log)
+    await publishSubmoduleHeads(handle, r)
 
     out[r.worktreeDirName] = await snapshotFullState(r.isoWorktreePath, {
       pinRef: isoRefName(handle.taskId, handle.nodeRunId, 'node'),
@@ -524,13 +551,22 @@ async function mergeSubmodulesIntoTheirs(
     // after that this worktree-scoped ref is the only thing keeping canonical's
     // gitlink target reachable; a plain "take theirs" result needs it just as
     // much as a merge does.
+    //
+    // Impl-gate A1-fix: a failed anchor is a hard error, not a warning. With
+    // only the node-scoped ref holding the objects, the next pool gc after
+    // `discardNodeIso` turns canonical's gitlink into `bad object` — the
+    // superproject's own `git status` (hence every later snapshot) dies with
+    // it. Failing the merge-back keeps the node refs (and the iso) alive.
     const anchored = await runGit(pool, [
       'update-ref',
       worktreeRefName(handleTaskIdOf(r), subPath),
       mergedSha,
     ])
     if (anchored.exitCode !== 0) {
-      log?.warn('submodule anchor failed', { subPath, sha: mergedSha })
+      throw new Error(
+        `submodule worktree anchor failed for '${subPath}' at ${mergedSha}: ` +
+          `${anchored.stderr.trim() || 'unknown error'} — refusing to land a gitlink the next gc can orphan`,
+      )
     }
     if (mergedSha === sub) continue // theirs already carries it — nothing to rewrite
     const rewritten = await rewriteGitlinkInCommit(r.canonWorktreePath, {
@@ -656,15 +692,31 @@ function handleTaskIdOf(r: IsoRepo): string {
  * canonical's submodule into `bad object HEAD` and taking the superproject's
  * `git status` (hence `snapshotFullState`) down with it.
  *
- * Fail-soft: a repo running degraded (no pool) keeps today's behaviour rather
- * than failing the node here. Merge-back is where an unreachable gitlink
- * actually becomes fatal, and it reports the problem with far better context.
+ * Impl-gate A1-fix — failures here THROW instead of warning. The iso worktree
+ * is the ONLY copy of this work: the parent snapshot records just the gitlink,
+ * so a swallowed auto-commit / publish failure let the settle report clean and
+ * `discardNodeIso` then deleted the sole copy (hook rejection and index errors
+ * are everyday triggers). The one deliberate skip that remains is a KNOWN path
+ * running degraded — no pool by design (D11 path mode / mock harness), where
+ * the module dir is durable on the user's host and there is nothing to
+ * publish. A NEW path (the node ran `git submodule add`) gets a pool CREATED:
+ * its module dir is private to the iso worktree's admin area and dies with it,
+ * so "degraded" is not survivable there.
  */
-async function publishSubmoduleHeads(handle: IsoHandle, r: IsoRepo, log?: Logger): Promise<void> {
-  if (Object.keys(r.subBases).length === 0) return
+async function publishSubmoduleHeads(handle: IsoHandle, r: IsoRepo): Promise<void> {
+  if (Object.keys(r.subBases).length === 0 && !detectSubmodules(r.isoWorktreePath)) return
+  const fail = (subPath: string, step: string, detail: string): never => {
+    throw new Error(
+      `submodule publish failed for '${subPath}' (${step}): ${detail || 'unknown error'} — ` +
+        `failing the snapshot so the iso (sole copy of the work) is not discarded as merged`,
+    )
+  }
   // Bottom-up: committing a nested submodule moves ITS gitlink, and that change
   // is only visible to the level above if the child is committed first.
-  for (const s of bottomUp(usableSubmodules(await listSubmodules(r.isoWorktreePath)))) {
+  // Effective list: an unstaged-new submodule (this node's own `submodule add`,
+  // or one inherited from the accumulated task state) has no index entry and is
+  // invisible to `git submodule status` (measured).
+  for (const s of bottomUp(usableSubmodules(await listEffectiveSubmodules(r.isoWorktreePath)))) {
     const subAbs = join(r.isoWorktreePath, s.path)
 
     // RFC-210 (this is what retires RFC-130 D22): commit whatever the node left
@@ -676,41 +728,59 @@ async function publishSubmoduleHeads(handle: IsoHandle, r: IsoRepo, log?: Logger
     // (shared pool + gitlink checkout at materialize), turning the edits into a
     // real commit carries the work through instead of rejecting it.
     const status = await runGit(subAbs, ['status', '--porcelain', '--untracked-files=all'])
-    if (status.exitCode === 0 && status.stdout.trim() !== '') {
+    if (status.exitCode !== 0) fail(s.path, 'status', status.stderr.trim())
+    if (status.stdout.trim() !== '') {
       const staged = await runGit(subAbs, ['add', '-A'])
-      if (staged.exitCode === 0) {
-        const committed = await runGit(
-          subAbs,
-          ['commit', '-q', '-m', `aw: submodule changes from node ${handle.nodeRunId}`],
-          { env: AW_INTERNAL_GIT_IDENTITY },
-        )
-        if (committed.exitCode !== 0) {
-          log?.warn('submodule auto-commit failed', {
-            subPath: s.path,
-            error: committed.stderr.trim(),
-          })
-        }
-      }
+      if (staged.exitCode !== 0) fail(s.path, 'add', staged.stderr.trim())
+      const committed = await runGit(
+        subAbs,
+        ['commit', '-q', '-m', `aw: submodule changes from node ${handle.nodeRunId}`],
+        { env: AW_INTERNAL_GIT_IDENTITY },
+      )
+      if (committed.exitCode !== 0) fail(s.path, 'commit', committed.stderr.trim())
     }
 
     // This submodule's own pool. Publishing into a sibling's pool (what the
     // repo-level poolDir did) put the objects somewhere merge-back never looks.
-    const pool = r.poolDirs[s.path]
-    if (pool === undefined) continue // degraded (path mode / no host) — nowhere to publish
+    let pool = r.poolDirs[s.path]
+    const isNewPath = r.subBases[s.path] === undefined
+    if (pool === undefined) {
+      // Known path without a pool = degraded BY DESIGN (D11) — skip, as ever.
+      if (!isNewPath) continue
+      // New path: create the durable pool now. Refusing beats proceeding — the
+      // gitlink would reach canonical while its objects die with the iso.
+      const created = await ensureSubmodulePool(r.isoWorktreePath, s.path)
+      if (created === null) fail(s.path, 'ensure-pool', 'cannot resolve or create a shared pool')
+      pool = created as string
+      r.poolDirs[s.path] = pool
+    }
     // Re-read HEAD: the auto-commit above may have moved it.
     const head = await runGit(subAbs, ['rev-parse', 'HEAD'])
-    if (head.exitCode !== 0) continue
+    if (head.exitCode !== 0) fail(s.path, 'rev-parse HEAD', head.stderr.trim())
     const sha = head.stdout.trim()
     const gitDir = await submoduleGitDir(r.isoWorktreePath, s.path)
-    if (gitDir === null) continue
-    const res = await pushObjectsToPool(
-      pool,
-      gitDir,
-      sha,
-      poolRefName(handle.taskId, handle.nodeRunId, s.path),
-    )
-    if (!res.ok) {
-      log?.warn('submodule object publish failed', { subPath: s.path, sha, error: res.error ?? '' })
+    if (gitDir === null) fail(s.path, 'git-dir', 'submodule git dir not resolvable')
+    const ref = poolRefName(handle.taskId, handle.nodeRunId, s.path)
+    const res = await pushObjectsToPool(pool, gitDir as string, sha, ref)
+    if (!res.ok) fail(s.path, 'publish', res.error ?? '')
+    // Read the anchor BACK: only a pool ref that provably resolves to the
+    // published head counts as durable (impl-gate A1-fix recommendation).
+    const pinned = await runGit(pool, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])
+    if (pinned.exitCode !== 0 || pinned.stdout.trim() !== sha) {
+      fail(
+        s.path,
+        'publish-verify',
+        `pool ref resolves to '${pinned.stdout.trim()}', wanted ${sha}`,
+      )
+    }
+    if (isNewPath) {
+      // The node-scoped anchor above dies with `discardNodeIso`. A KNOWN path
+      // gets its long-lived worktree anchor when the merge folds it in
+      // (mergeSubmodulesIntoTheirs); a NEW path never passes through there —
+      // no base, nothing to merge — yet canonical may adopt its gitlink
+      // verbatim, so the durable anchor must be written here.
+      const wt = await runGit(pool, ['update-ref', worktreeRefName(handle.taskId, s.path), sha])
+      if (wt.exitCode !== 0) fail(s.path, 'anchor', wt.stderr.trim())
     }
   }
 }
@@ -849,7 +919,26 @@ export async function mergeBackNodeIso(
       // deletion, and materializeTree step ① then `rm -rf`s the submodule
       // directory out of the canonical worktree. Withhold the whole repo and let
       // a human decide instead.
-      const gitlinkConflict = merge.conflicts.find((p) => r.subBases[p] !== undefined)
+      //
+      // Impl-gate A3-fix: the base topology is not the full oracle — a path
+      // BOTH sides newly added (two nodes `git submodule add`ed the same path
+      // at different shas) is in neither `subBases` nor necessarily `poolDirs`
+      // on the ours side, yet salvaging it would silently pick ours and drop
+      // this node's submodule. Probe the trees for a 160000 entry as well.
+      let gitlinkConflict = merge.conflicts.find(
+        (p) => r.subBases[p] !== undefined || r.poolDirs[p] !== undefined,
+      )
+      if (gitlinkConflict === undefined) {
+        for (const p of merge.conflicts) {
+          if (
+            (await isGitlinkInTree(r.canonWorktreePath, ours, p)) ||
+            (await isGitlinkInTree(r.canonWorktreePath, theirs, p))
+          ) {
+            gitlinkConflict = p
+            break
+          }
+        }
+      }
       if (gitlinkConflict !== undefined) {
         log?.warn('gitlink conflict — withholding repo instead of salvaging', {
           worktreeDirName: r.worktreeDirName,
@@ -1005,6 +1094,12 @@ export async function undoPriorShardDeltaInIso(
   return true
 }
 
+/** Does `treeish` record a gitlink (mode 160000) at `path`? */
+async function isGitlinkInTree(repoPath: string, treeish: string, path: string): Promise<boolean> {
+  const r = await runGit(repoPath, ['ls-tree', treeish, '--', path])
+  return r.exitCode === 0 && /^160000 commit /m.test(r.stdout)
+}
+
 /**
  * RFC-210 — can every gitlink in `tree` actually be checked out here?
  *
@@ -1085,12 +1180,13 @@ async function dropNodePoolRefs(
   nodeRunId: string,
   log?: Logger,
 ): Promise<void> {
-  for (const subPath of Object.keys(r.subBases)) {
+  // `poolDirs`, not `subBases`: node-scoped refs are created exactly for the
+  // pooled paths, and a NEW path the node added has a pool but no base — keyed
+  // off subBases its ref would never be deleted and would leak (impl-gate).
+  for (const [subPath, pool] of Object.entries(r.poolDirs)) {
     // Delete each ref from the pool it was CREATED in. With the old repo-level
     // poolDir every ref was deleted from the first submodule's pool, so all the
     // others silently failed and leaked.
-    const pool = r.poolDirs[subPath]
-    if (pool === undefined) continue
     const ref = poolRefName(taskId, nodeRunId, subPath)
     const res = await runGit(pool, ['update-ref', '-d', ref], {
       timeoutMs: ISO_DISCARD_GIT_TIMEOUT_MS,

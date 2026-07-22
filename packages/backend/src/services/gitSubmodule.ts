@@ -211,6 +211,68 @@ export function usableSubmodules(entries: SubmoduleEntry[]): SubmoduleEntry[] {
   return entries.filter((e) => e.flag !== '-')
 }
 
+/**
+ * RFC-210 impl-gate A-fix — `listSubmodules` PLUS submodules that are declared
+ * in `.gitmodules` and attached (have a `.git`) but are NOT in the index yet.
+ *
+ * `git submodule status` iterates INDEX gitlinks, so a submodule the platform
+ * materialized as an UNSTAGED delta (a node ran `git submodule add`; the
+ * accumulated task state carries it as `?? newsub/` until commit-push) is
+ * invisible to it — measured: `status --recursive` prints nothing for an
+ * attached submodule with no index entry. Every consumer that must see the
+ * task's REAL topology (topology capture, head publish, recursive commit&push)
+ * goes through this union; a declared-but-unattached path stays invisible, the
+ * same as before.
+ */
+export async function listEffectiveSubmodules(
+  worktreePath: string,
+  opts?: { runGitImpl?: typeof runGit },
+): Promise<SubmoduleEntry[]> {
+  const out = await listSubmodules(worktreePath, opts)
+  const seen = new Set(out.map((e) => e.path))
+  const run = opts?.runGitImpl ?? runGit
+
+  const walk = async (levelPath: string, prefix: string): Promise<void> => {
+    if (!existsSync(join(levelPath, '.gitmodules'))) return
+    const declared = await run(levelPath, [
+      'config',
+      '-f',
+      '.gitmodules',
+      '--get-regexp',
+      String.raw`^submodule\..*\.path$`,
+    ])
+    if (declared.exitCode !== 0) return
+    for (const line of declared.stdout.split('\n')) {
+      if (line.trim() === '') continue
+      // `submodule.<name>.path <value>` — the value may contain spaces.
+      const sp = line.indexOf(' ')
+      if (sp < 0) continue
+      const p = line.slice(sp + 1).trim()
+      if (p === '') continue
+      const abs = join(levelPath, p)
+      if (!existsSync(join(abs, '.git'))) continue
+      const rel = prefix === '' ? p : `${prefix}/${p}`
+      if (!seen.has(rel)) {
+        const head = await run(abs, ['rev-parse', 'HEAD'])
+        if (head.exitCode === 0 && head.stdout.trim() !== '') {
+          seen.add(rel)
+          out.push({
+            path: rel,
+            headSha: head.stdout.trim(),
+            flag: ' ',
+            pathDepth: rel.split('/').length,
+          })
+        }
+      }
+      // Recurse regardless of who listed this level: an INDEXED outer submodule
+      // can still contain an unstaged-new inner one, and vice versa.
+      await walk(abs, rel)
+    }
+  }
+  await walk(worktreePath, '')
+  return out
+}
+
 /** Bottom-up order: deepest paths first, so a child's gitlink bump is visible to its parent. */
 export function bottomUp(entries: SubmoduleEntry[]): SubmoduleEntry[] {
   return [...entries].sort((a, b) => b.pathDepth - a.pathDepth || b.path.localeCompare(a.path))
@@ -299,6 +361,148 @@ export async function resolveSubmodulePool(
     ...subPath.split('/').flatMap((s, i) => (i === 0 ? [s] : ['modules', s])),
   )
   return existsSync(guess) ? guess : null
+}
+
+/**
+ * RFC-210 impl-gate A3-fix — resolve a submodule's pool, CREATING it when the
+ * path is new to the host.
+ *
+ * A submodule the node itself `git submodule add`ed has no pool to resolve:
+ * its module dir lands in the ISO WORKTREE'S private admin dir
+ * (`<host>/.git/worktrees/<iso>/modules/<path>` — measured; `modules/` is
+ * per-worktree for a first-time add), which `git worktree remove --force`
+ * deletes wholesale. Without a durable pool the node's commits inside the new
+ * submodule cease to exist the moment the iso is discarded, while the parent
+ * snapshot still records their gitlink — exactly the dangling-object class
+ * RFC-210 exists to prevent. So for a new path the pool is created at the
+ * host's canonical layout (`<hostGitDir>/modules/...`, bare — it only ever
+ * stores objects and refs) before the first publish.
+ *
+ * Returns null when the host cannot be resolved at all (mock harness) or the
+ * pool cannot be created.
+ */
+export async function ensureSubmodulePool(
+  worktreePath: string,
+  subPath: string,
+): Promise<string | null> {
+  const existing = await resolveSubmodulePool(worktreePath, subPath)
+  if (existing !== null) return existing
+  const common = await runGit(worktreePath, [
+    'rev-parse',
+    '--path-format=absolute',
+    '--git-common-dir',
+  ])
+  if (common.exitCode !== 0) return null
+  const hostGitDir = common.stdout.trim()
+  if (hostGitDir === '') return null
+  const pool = join(
+    hostGitDir,
+    'modules',
+    ...subPath.split('/').flatMap((s, i) => (i === 0 ? [s] : ['modules', s])),
+  )
+  const init = await runGit(hostGitDir, ['init', '-q', '--bare', pool])
+  if (init.exitCode !== 0) return null
+  return pool
+}
+
+/**
+ * RFC-210 — the `.gitmodules` NAME for a submodule path at ONE level (path
+ * relative to `levelPath`, no slashes across gitlink boundaries). Needed to
+ * address `submodule.<name>.url` config; name and path differ whenever the
+ * submodule was added with a custom `--name` or later moved.
+ */
+export async function submoduleNameForPath(
+  levelPath: string,
+  relPath: string,
+): Promise<string | null> {
+  const declared = await runGit(levelPath, [
+    'config',
+    '-f',
+    '.gitmodules',
+    '--get-regexp',
+    String.raw`^submodule\..*\.path$`,
+  ])
+  if (declared.exitCode !== 0) return null
+  for (const line of declared.stdout.split('\n')) {
+    const sp = line.indexOf(' ')
+    if (sp < 0) continue
+    if (line.slice(sp + 1).trim() !== relPath) continue
+    const key = line.slice(0, sp)
+    const m = /^submodule\.(.*)\.path$/.exec(key)
+    if (m?.[1] !== undefined && m[1] !== '') return m[1]
+  }
+  return null
+}
+
+/**
+ * RFC-210 impl-gate A3-fix — initialize + check out a submodule whose gitlink
+ * exists only as tree data, sourcing objects from the shared POOL instead of
+ * the network.
+ *
+ * `git submodule update --init` clones from `submodule.<name>.url` and then
+ * direct-fetches the wanted sha — both steps that fail for a commit that only
+ * exists locally (a node's own work is on no remote; measured:
+ * `upload-pack: not our ref <sha>`). The url is therefore pointed at the pool
+ * for the duration of the clone and restored via `submodule sync` afterwards.
+ *
+ * The gitlink is injected into the REAL index only transiently (`submodule
+ * update` reads its target sha from the index) and the prior index state is
+ * restored in `finally`, so the materialized delta stays UNSTAGED (D23/D28).
+ *
+ * Never throws; the caller decides how a failure escalates.
+ */
+export async function attachSubmoduleFromPool(
+  levelPath: string,
+  args: { relPath: string; sha: string; pool: string },
+): Promise<{ ok: boolean; error: string | null }> {
+  const { relPath, sha, pool } = args
+  const name = await submoduleNameForPath(levelPath, relPath)
+  if (name === null) {
+    return { ok: false, error: `no .gitmodules entry for '${relPath}'` }
+  }
+  const prior = await runGit(levelPath, ['ls-files', '-s', '--', relPath])
+  const priorLine = prior.exitCode === 0 ? prior.stdout.trimEnd() : ''
+  const fail = (msg: string): { ok: false; error: string } => ({
+    ok: false,
+    error: redactGitUrl(msg.trim()) || 'submodule attach failed',
+  })
+  try {
+    const inject = await runGit(levelPath, [
+      'update-index',
+      '--add',
+      '--cacheinfo',
+      `160000,${sha},${relPath}`,
+    ])
+    if (inject.exitCode !== 0) return fail(`update-index: ${inject.stderr}`)
+    const init = await runGit(levelPath, ['submodule', 'init', '--', relPath])
+    if (init.exitCode !== 0) return fail(`submodule init: ${init.stderr}`)
+    const url = await runGit(levelPath, ['config', `submodule.${name}.url`, pool])
+    if (url.exitCode !== 0) return fail(`config url: ${url.stderr}`)
+    const update = await runGit(levelPath, [
+      'submodule',
+      'update',
+      '--init',
+      '--checkout',
+      '--',
+      relPath,
+    ])
+    // Restore the real url from .gitmodules whether or not the update worked —
+    // leaving the pool as the recorded remote would leak an internal path into
+    // the user's config and break later legitimate fetches.
+    await runGit(levelPath, ['submodule', 'sync', '--', relPath])
+    if (update.exitCode !== 0) return fail(`submodule update: ${update.stderr}`)
+    const head = await runGit(join(levelPath, relPath), ['rev-parse', 'HEAD'])
+    if (head.exitCode !== 0 || head.stdout.trim() !== sha) {
+      return fail(`attached HEAD is ${head.stdout.trim() || '(none)'}, wanted ${sha}`)
+    }
+    return { ok: true, error: null }
+  } finally {
+    if (priorLine === '') {
+      await runGit(levelPath, ['update-index', '--force-remove', '--', relPath])
+    } else {
+      await runGit(levelPath, ['update-index', '--index-info'], { stdin: priorLine + '\n' })
+    }
+  }
 }
 
 /** Read the alternates file as a list of object-dir paths (missing file ⟹ []). */
@@ -411,6 +615,18 @@ export async function snapshotSubmodule(subPath: string, pinRef: string): Promis
     )
   }
   const snapshot = await snapshotFullState(subPath, { pinRef })
+  // Impl-gate A5-fix: read the ref BACK and require it to resolve to the
+  // snapshot before anyone treats this as a recovery point. `snapshotFullState`
+  // now throws on a failed `update-ref`, but a pin that raced a concurrent
+  // writer (or landed on a case-folding filesystem alias) can still point
+  // elsewhere — and the only caller of this function is about to `checkout -f`
+  // away the user's uncommitted work on the strength of this snapshot.
+  const pinned = await runGit(subPath, ['rev-parse', '--verify', '--quiet', `${pinRef}^{commit}`])
+  if (pinned.exitCode !== 0 || pinned.stdout.trim() !== snapshot) {
+    throw new Error(
+      `submodule snapshot: pin ${pinRef} resolves to '${pinned.stdout.trim()}', expected ${snapshot}`,
+    )
+  }
   return { head: head.stdout.trim(), snapshot, pinRef }
 }
 

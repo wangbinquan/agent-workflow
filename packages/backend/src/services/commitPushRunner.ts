@@ -26,7 +26,7 @@ import { join } from 'node:path'
 import {
   bottomUp,
   detectSubmodules,
-  listSubmodules,
+  listEffectiveSubmodules,
   usableSubmodules,
 } from '@/services/gitSubmodule'
 import {
@@ -470,6 +470,26 @@ function basenameOf(p: string): string {
 }
 
 /**
+ * RFC-210 impl-gate A8-fix — the submodule that DIRECTLY contains `path`, or
+ * null when the superproject does. The longest listed submodule path that is a
+ * proper prefix of `path`: for `vendor/inner` with `vendor` listed that is
+ * `vendor`; a first-level submodule at `libs/vendor` (plain directory `libs`)
+ * has no containing submodule and stays with the superproject.
+ */
+function directParentOf(
+  path: string,
+  subs: { path: string; headSha: string }[],
+): { path: string; headSha: string } | null {
+  let best: { path: string; headSha: string } | null = null
+  for (const s of subs) {
+    if (s.path === path) continue
+    if (!path.startsWith(s.path + '/')) continue
+    if (best === null || s.path.length > best.path.length) best = s
+  }
+  return best
+}
+
+/**
  * RFC-210 — commit & push every submodule of one repo, deepest path first.
  *
  * Ordering matters: committing a nested submodule moves its parent's gitlink, so
@@ -497,7 +517,11 @@ async function commitPushSubmodules(args: {
 }): Promise<SubrepoPushResult[]> {
   const { worktreePath, branch, remote, idEnv } = args
   if (!detectSubmodules(worktreePath)) return []
-  const subs = bottomUp(usableSubmodules(await listSubmodules(worktreePath)))
+  // Effective list: a submodule the task ADDED exists only as an unstaged
+  // delta with no index entry, which `git submodule status` cannot see
+  // (measured) — plain listing would push the parent with a gitlink whose
+  // target repository was never published anywhere.
+  const subs = bottomUp(usableSubmodules(await listEffectiveSubmodules(worktreePath)))
   if (subs.length === 0) return []
 
   const out: SubrepoPushResult[] = []
@@ -526,10 +550,23 @@ async function commitPushSubmodules(args: {
     //     remote, including repos we merely vendor.
     // "Changed" = dirty working tree, or HEAD ahead of the gitlink the
     // superproject currently records.
-    const recorded = await runGit(worktreePath, ['rev-parse', `HEAD:${s.path}`])
+    //
+    // Impl-gate A8-fix: the recorded gitlink must be read from the DIRECT
+    // parent repository. `rev-parse HEAD:vendor/inner` in the superproject
+    // cannot pierce the `vendor` gitlink (measured: exit 128), so a nested
+    // submodule the agent pre-committed (clean, but ahead of what its parent
+    // records) read as untouched and was skipped — while `vendor` and the
+    // superproject went on to publish gitlinks pointing at commits that never
+    // reached inner's remote. And a recorded lookup that fails (path absent
+    // from the parent's HEAD — a newly added submodule) means the sha is NOT
+    // on record anywhere, i.e. it must be pushed, not skipped.
+    const parent = directParentOf(s.path, subs)
+    const parentDir = parent === null ? worktreePath : join(worktreePath, parent.path)
+    const relInParent = parent === null ? s.path : s.path.slice(parent.path.length + 1)
+    const recorded = await runGit(parentDir, ['rev-parse', `HEAD:${relInParent}`])
     const dirty = await sg(['status', '--porcelain', '--untracked-files=all'])
     const isDirty = dirty.exitCode === 0 && dirty.stdout.trim() !== ''
-    const movedAhead = recorded.exitCode === 0 && recorded.stdout.trim() !== s.headSha
+    const movedAhead = recorded.exitCode !== 0 || recorded.stdout.trim() !== s.headSha
     if (!isDirty && !movedAhead) continue
 
     // --- local writes, under the lock ---

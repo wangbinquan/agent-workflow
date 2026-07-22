@@ -3814,8 +3814,17 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         // RFC-130 robustness: a merge-back that THROWS (iso corrupted, .git gone,
         // a git op error) must fail the node loudly — never leave a 'done' row
         // whose delta never reached canonical.
+        //
+        // RFC-210 impl-gate A1-fix: KEEP the iso on a merge-back throw. The iso
+        // worktree can be the ONLY copy of the node's product — most acutely
+        // when the snapshot phase itself failed (submodule auto-commit rejected
+        // by a hook, object publish failed): nothing has reached canonical or
+        // the pool yet, and the old discard-in-finally deleted the sole copy.
+        // A later fresh-session retry builds its own iso under a new run id;
+        // this one stays for manual salvage until the container GC sweeps it.
         const msg = err instanceof Error ? err.message : String(err)
         log.warn('merge-back failed', { nodeId: node.id, error: msg })
+        keepIso = true
         await markMergeFailed(db, nodeRunId, msg, log)
         lastResult = { ...lastResult, status: 'failed', errorMessage: `merge-back-failed: ${msg}` }
       }
@@ -5939,7 +5948,9 @@ async function mergeBackWrapperIso(
       log,
       await forcedPortPathsForTask(db, taskId),
     )
-    await persistIsoNodeTree(db, wrapperRunId, task.repoCount, nodeTrees)
+    // RFC-210 impl-gate: the handle rides along so a topology the snapshot
+    // extended (submodule added inside the wrapper) survives into crash replay.
+    await persistIsoNodeTree(db, wrapperRunId, task.repoCount, nodeTrees, wrapperIso)
     const merge = await state.writeSem.run(async () => {
       const mr = await mergeBackNodeIso(wrapperIso, nodeTrees, log)
       if (mr.clean) return { kind: 'merged' as const }

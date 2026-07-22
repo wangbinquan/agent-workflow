@@ -129,9 +129,15 @@ export async function persistIsoBase(
  * NULL rather than `{}` for the submodule-free case (the overwhelming majority)
  * keeps those rows byte-identical to pre-RFC-210 and lets replay distinguish
  * "this repo has no submodules" from "the topology was never recorded".
+ *
+ * Gated on subBases AND poolDirs: a submodule the node itself added has a pool
+ * but no base (impl-gate A3-fix), and dropping it here would strand its
+ * crash-replay on a poolless topology.
  */
 function submodulesJsonFor(repo: IsoRepo | undefined): string | null {
-  if (repo === undefined || Object.keys(repo.subBases).length === 0) return null
+  if (repo === undefined) return null
+  if (Object.keys(repo.subBases).length === 0 && Object.keys(repo.poolDirs).length === 0)
+    return null
   return JSON.stringify({ poolDirs: repo.poolDirs, subBases: repo.subBases })
 }
 
@@ -142,7 +148,7 @@ function submodulesReposJsonFor(handle: IsoHandle): string | null {
     { poolDirs: Record<string, string>; subBases: Record<string, string> }
   > = {}
   for (const r of handle.repos) {
-    if (Object.keys(r.subBases).length === 0) continue
+    if (Object.keys(r.subBases).length === 0 && Object.keys(r.poolDirs).length === 0) continue
     map[r.worktreeDirName] = { poolDirs: r.poolDirs, subBases: r.subBases }
   }
   return Object.keys(map).length === 0 ? null : JSON.stringify(map)
@@ -151,21 +157,35 @@ function submodulesReposJsonFor(handle: IsoHandle): string | null {
 /** RFC-130: persist the iso node_tree columns + merge_state on agent success (D15).
  *  RFC-144: isolating → pending-merge via the merge_state CAS; the former
  *  `mergeState: string` parameter was a dead knob (all 4 callers passed the
- *  literal 'pending-merge') — the event now fixes the target. */
+ *  literal 'pending-merge') — the event now fixes the target.
+ *
+ *  RFC-210 impl-gate A3-fix: when the caller passes the handle, the submodule
+ *  topology columns are RE-persisted alongside the trees. The snapshot phase
+ *  can extend the topology (a submodule the node itself added gets a pool
+ *  created at publish time); a crash between here and the merge would replay
+ *  with the CREATION-time topology otherwise, and the new path's objects —
+ *  though durable in their pool — would be invisible to the replay. */
 export async function persistIsoNodeTree(
   db: DbClient,
   nodeRunId: string,
   repoCount: number,
   nodeTrees: Record<string, string>,
+  handle?: IsoHandle,
 ): Promise<void> {
+  const topology =
+    handle === undefined
+      ? {}
+      : repoCount === 1
+        ? { isoSubmodulesJson: submodulesJsonFor(handle.repos[0]) }
+        : { isoSubmodulesReposJson: submodulesReposJsonFor(handle) }
   await transitionMergeState({
     db,
     nodeRunId,
     event: { kind: 'mark-pending-merge' },
     extra:
       repoCount === 1
-        ? { isoNodeTree: nodeTrees[''] ?? null, isoNodeTreeReposJson: null }
-        : { isoNodeTree: null, isoNodeTreeReposJson: JSON.stringify(nodeTrees) },
+        ? { isoNodeTree: nodeTrees[''] ?? null, isoNodeTreeReposJson: null, ...topology }
+        : { isoNodeTree: null, isoNodeTreeReposJson: JSON.stringify(nodeTrees), ...topology },
   })
 }
 
@@ -229,7 +249,7 @@ export async function mergeBackAndSettle(args: {
   let nodeTrees = args.nodeTrees
   if (nodeTrees === undefined) {
     nodeTrees = await snapshotNodeIsoFinal(handle, log)
-    await persistIsoNodeTree(db, nodeRunId, args.repoCount, nodeTrees)
+    await persistIsoNodeTree(db, nodeRunId, args.repoCount, nodeTrees, handle)
   }
   const trees = nodeTrees
   const merge = await writeSem.run(async () => {
