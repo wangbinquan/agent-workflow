@@ -5497,66 +5497,19 @@ details.form-section[open] > summary {
   background: var(--panel);
 }
 
-/* RFC-020 upload picker — borrows the .files-picker visual language. */
+/* RFC-020 → RFC-218 upload picker — the drop surface itself is the shared
+   .file-dropzone primitive (FilesDropzone); this wrapper only stacks it with
+   the targetDir / accept / size hint rows. */
 .upload-picker {
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg);
-  padding: 8px;
   display: flex;
   flex-direction: column;
   gap: 6px;
-}
-
-.upload-picker__drop {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px;
-  border: 1px dashed var(--border);
-  border-radius: 6px;
-  background: var(--panel);
-}
-
-.upload-picker__hint {
-  font-size: 12px;
 }
 
 .upload-picker__targetdir,
 .upload-picker__accept,
 .upload-picker__maxsize {
   font-size: 12px;
-}
-
-.upload-picker__list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  max-height: 200px;
-  overflow: auto;
-}
-
-.upload-picker__row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 6px;
-  border-radius: 4px;
-  font-size: 13px;
-}
-
-.upload-picker__row:hover {
-  background: var(--panel);
-}
-
-.upload-picker__row > code {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .enum-picker__list {
@@ -9541,6 +9494,33 @@ mark.comment-anchor[data-active='true'] {
   color: var(--danger);
   font-size: var(--font-sm);
   overflow-wrap: anywhere;
+}
+
+/* RFC-218 — multi-file list rows (FilesDropzone). */
+.file-dropzone__files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: min(100%, 560px);
+  /* 260px, not 240px — the 240px form of this declaration is table-banned by
+     task-output-panel-source-guards.test.ts (RFC-072 card-grid tombstone). */
+  max-height: 260px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.file-dropzone__files-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  text-align: left;
 }
 
 .skill-import,

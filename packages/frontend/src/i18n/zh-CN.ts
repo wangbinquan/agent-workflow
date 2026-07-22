@@ -2333,6 +2333,7 @@ export interface Resources {
     starting: string
     repoNoCommits: string
     upload: {
+      dropTitle: string
       chooseFiles: string
       selectedCount_one: string
       selectedCount_other: string
@@ -6201,6 +6202,7 @@ export const zhCN: Resources = {
     starting: '启动中…',
     repoNoCommits: '该仓库还没有任何提交 —— 先做一次初始提交再启动任务，否则 worktree 无法创建。',
     upload: {
+      dropTitle: '拖拽文件到此处，或从本地选择',
       chooseFiles: '选择文件…',
       selectedCount_one: '已选 {{count}} 个',
       selectedCount_other: '已选 {{count}} 个',

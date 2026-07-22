@@ -165,6 +165,163 @@ export function FileDropzone(props: FileDropzoneProps) {
   )
 }
 
+export interface FilesDropzoneProps {
+  files: File[]
+  onFilesChange: (next: File[]) => void
+  accept?: string
+  disabled?: boolean
+  title: string
+  description?: string
+  chooseLabel: string
+  removeLabel: string
+  /** Hard cap on selected files; extra picks are dropped, choose disables at cap. */
+  maxCount?: number
+  error?: string
+  icon?: ReactNode
+  'data-testid'?: string
+}
+
+/**
+ * RFC-218 — multi-file sibling of FileDropzone (NOT a `multiple` flag on it:
+ * the controlled props differ in shape, `file: File|null` vs `files: File[]`).
+ * Shares the `.file-dropzone` style namespace and byte formatter. Duplicate
+ * picks (same name + size) are skipped so re-picking stays tidy.
+ */
+export function FilesDropzone(props: FilesDropzoneProps) {
+  const inputRef = useRef<HTMLInputElement | null>(null)
+  const [dragDepth, setDragDepth] = useState(0)
+  const descriptionId = useId()
+  const errorId = useId()
+  const testid = props['data-testid']
+  const dragActive = dragDepth > 0
+  const atCap = props.maxCount !== undefined && props.files.length >= props.maxCount
+
+  function chooseFiles() {
+    if (props.disabled === true || atCap) return
+    inputRef.current?.click()
+  }
+
+  function addFiles(picked: FileList | null) {
+    if (picked === null || picked.length === 0) return
+    const next = [...props.files]
+    for (const f of Array.from(picked)) {
+      if (props.maxCount !== undefined && next.length >= props.maxCount) break
+      if (next.some((x) => x.name === f.name && x.size === f.size)) continue
+      next.push(f)
+    }
+    if (next.length !== props.files.length) props.onFilesChange(next)
+  }
+
+  const describedBy = [
+    props.description === undefined ? null : descriptionId,
+    props.error ? errorId : null,
+  ]
+    .filter(Boolean)
+    .join(' ')
+
+  return (
+    <div
+      className={[
+        'file-dropzone',
+        dragActive ? 'file-dropzone--active' : '',
+        props.files.length > 0 ? 'file-dropzone--selected' : '',
+        props.error ? 'file-dropzone--invalid' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      data-testid={testid === undefined ? undefined : `${testid}-dropzone`}
+      onDragEnter={(event) => {
+        event.preventDefault()
+        if (props.disabled !== true) setDragDepth((depth) => depth + 1)
+      }}
+      onDragOver={(event) => {
+        event.preventDefault()
+        if (props.disabled !== true) event.dataTransfer.dropEffect = 'copy'
+      }}
+      onDragLeave={(event) => {
+        event.preventDefault()
+        if (props.disabled !== true) setDragDepth((depth) => Math.max(0, depth - 1))
+      }}
+      onDrop={(event) => {
+        event.preventDefault()
+        setDragDepth(0)
+        if (props.disabled === true) return
+        addFiles(event.dataTransfer.files)
+      }}
+      aria-disabled={props.disabled || undefined}
+    >
+      <input
+        ref={inputRef}
+        hidden
+        multiple
+        type="file"
+        accept={props.accept}
+        disabled={props.disabled}
+        onChange={(event) => {
+          addFiles(event.currentTarget.files)
+          // A user must be able to re-pick the same file after removing it.
+          event.currentTarget.value = ''
+        }}
+        data-testid={testid}
+      />
+
+      {props.icon !== undefined && (
+        <div className="file-dropzone__icon" aria-hidden="true">
+          {props.icon}
+        </div>
+      )}
+
+      <div className="file-dropzone__copy">
+        <strong className="file-dropzone__title">{props.title}</strong>
+        {props.description !== undefined && (
+          <span id={descriptionId} className="file-dropzone__description">
+            {props.description}
+          </span>
+        )}
+      </div>
+
+      <button
+        type="button"
+        className={props.files.length === 0 ? 'btn btn--primary' : 'btn btn--sm'}
+        disabled={props.disabled || atCap}
+        aria-describedby={describedBy || undefined}
+        onClick={chooseFiles}
+        data-testid={testid === undefined ? undefined : `${testid}-button`}
+      >
+        {props.chooseLabel}
+      </button>
+
+      {props.files.length > 0 && (
+        <ul className="file-dropzone__files">
+          {props.files.map((f, i) => (
+            <li key={`${f.name}-${f.size}-${i}`} className="file-dropzone__files-row">
+              <div className="file-dropzone__file" title={f.name}>
+                <span className="file-dropzone__file-name">{f.name}</span>
+                <span className="file-dropzone__file-size">{formatShortBytes(f.size)}</span>
+              </div>
+              <button
+                type="button"
+                className="btn btn--xs btn--ghost"
+                disabled={props.disabled}
+                onClick={() => props.onFilesChange(props.files.filter((_, idx) => idx !== i))}
+                data-testid={testid === undefined ? undefined : `${testid}-remove-${i}`}
+              >
+                {props.removeLabel}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {props.error !== undefined && props.error !== '' && (
+        <div id={errorId} className="file-dropzone__error" role="alert">
+          {props.error}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function assignRef<T>(ref: Ref<T> | undefined, value: T | null): void {
   if (ref === undefined || ref === null) return
   if (typeof ref === 'function') ref(value)

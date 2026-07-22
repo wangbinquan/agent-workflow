@@ -2578,6 +2578,7 @@ export const enUS: Resources = {
     repoNoCommits:
       "This repo has no commits yet — make an initial commit before launching, otherwise the worktree can't be created.",
     upload: {
+      dropTitle: 'Drag files here, or choose from disk',
       chooseFiles: 'Choose files…',
       selectedCount_one: '{{count}} selected',
       selectedCount_other: '{{count}} selected',
