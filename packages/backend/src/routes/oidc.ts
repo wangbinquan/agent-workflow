@@ -60,16 +60,10 @@ export function mountOidcRoutes(app: Hono, deps: AppDeps): void {
   app.post('/api/oidc/providers/:id/test', requirePermission('oidc:configure'), async (c) => {
     const p = await svc.findById(c.req.param('id'))
     if (!p) throw new NotFoundError('oidc-provider-not-found', 'provider not found')
-    const result = await svc.testDiscovery(p.issuerUrl)
-    if (!result.ok) return c.json({ ok: false, error: result.error }, 422)
-    return c.json({
-      ok: true,
-      issuer: result.metadata.issuer,
-      authorizationEndpoint: result.metadata.authorization_endpoint,
-      tokenEndpoint: result.metadata.token_endpoint,
-      jwksUri: result.metadata.jwks_uri,
-      scopesSupported: result.metadata.scopes_supported ?? [],
-    })
+    // RFC-220 — always 200 + ProbeResult: the per-field diagnosis matters
+    // most when the config is broken, and a 422 would strip the structured
+    // body in the frontend error path (behavior change #6).
+    return c.json(await svc.probe(p))
   })
 }
 

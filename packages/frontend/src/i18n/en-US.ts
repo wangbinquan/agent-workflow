@@ -684,6 +684,13 @@ export const enUS: Resources = {
       displayNameHint: 'Shown on the login page button.',
       issuerUrl: 'Issuer URL',
       issuerUrlHint: 'Daemon fetches <issuer>/.well-known/openid-configuration.',
+      groupManualEndpoints: 'Manual endpoints (optional)',
+      groupManualEndpointsHint:
+        'Used per field when discovery fails or omits it. A pure OAuth 2.0 IdP needs at least authorize + token + userinfo.',
+      authorizationEndpoint: 'Authorization endpoint',
+      tokenEndpoint: 'Token endpoint',
+      userinfoEndpoint: 'Userinfo endpoint',
+      jwksUri: 'JWKS URI',
       groupCreds: 'Credentials',
       groupCredsHint:
         'OAuth 2.0 client your daemon impersonates against the IdP. Secret is AES-256-GCM-sealed at rest.',
@@ -691,7 +698,8 @@ export const enUS: Resources = {
       clientSecret: 'Client secret',
       clientSecretEditHint: 'leave blank to keep current',
       scopes: 'Scopes',
-      scopesHint: 'Space-separated. openid is required; profile + email recommended.',
+      scopesHint:
+        'Space-separated. OIDC IdPs must include openid; for pure OAuth 2.0 IdPs follow their docs (omit openid when unsupported).',
       groupBehavior: 'Behavior',
       provisioning: 'Provisioning policy',
       optInvite: 'invite (recommended)',
@@ -703,13 +711,28 @@ export const enUS: Resources = {
       allowedDomains: 'Allowed email domains',
       allowedDomainsHint:
         'Comma-separated, each prefixed with @. email_verified=true is also required.',
+      trustEmailLabel: 'Trust emails as verified',
+      trustEmailHint:
+        'Treat every email from this IdP as verified (needed for invite/allowlist with pure OAuth 2.0 IdPs). Leave off if users can set unverified emails there.',
+      usernameClaim: 'Username fields',
+      usernameClaimHint:
+        'Claim names read as the presented name; space-separate several to join them in order (e.g. "name signature"). Blank = standard preferred_username. When set, the display name follows the IdP on every sign-in.',
+      subjectClaim: 'Subject field',
+      subjectClaimHint:
+        'Userinfo field carrying the stable unique user ID (e.g. id). Blank = standard sub. Pure OAuth 2.0 only — when set, id_token verification is skipped and the field cannot change once identities exist.',
       enabledLabel: 'Enabled',
       enabledHint: 'Visible on the login page when on; hidden when off.',
       testOk: 'Connection successful',
       testFail: 'Connection failed',
+      testReady: 'Configuration can complete a sign-in',
+      testNotReady: 'Configuration cannot complete a sign-in',
+      testDiscoveryOk: 'discovery: reachable',
+      testDiscoveryDown: 'discovery unavailable — manual endpoints in use',
       testDetailIssuer: 'issuer:',
-      testDetailToken: 'token:',
-      testDetailJwks: 'jwks:',
+      sourceManual: '(manual)',
+      sourceDiscovery: '(discovery)',
+      testEndpointMissing: 'not configured',
+      testJwksUnreachable: 'JWKS is configured but unreachable — id_token sign-ins will fail.',
     },
     sandbox: {
       title: 'Runtime sandbox',

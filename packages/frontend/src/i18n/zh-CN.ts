@@ -816,6 +816,12 @@ export interface Resources {
       displayNameHint: string
       issuerUrl: string
       issuerUrlHint: string
+      groupManualEndpoints: string
+      groupManualEndpointsHint: string
+      authorizationEndpoint: string
+      tokenEndpoint: string
+      userinfoEndpoint: string
+      jwksUri: string
       groupCreds: string
       groupCredsHint: string
       clientId: string
@@ -833,13 +839,25 @@ export interface Resources {
       autoDesc: string
       allowedDomains: string
       allowedDomainsHint: string
+      trustEmailLabel: string
+      trustEmailHint: string
+      usernameClaim: string
+      usernameClaimHint: string
+      subjectClaim: string
+      subjectClaimHint: string
       enabledLabel: string
       enabledHint: string
       testOk: string
       testFail: string
+      testReady: string
+      testNotReady: string
+      testDiscoveryOk: string
+      testDiscoveryDown: string
       testDetailIssuer: string
-      testDetailToken: string
-      testDetailJwks: string
+      sourceManual: string
+      sourceDiscovery: string
+      testEndpointMissing: string
+      testJwksUnreachable: string
     }
     // RFC-205 T5 — Settings → Runtime sandbox status chip + sandboxMode control.
     sandbox: {
@@ -4426,6 +4444,13 @@ export const zhCN: Resources = {
       displayNameHint: '登录页按钮上的文字。',
       issuerUrl: 'Issuer URL',
       issuerUrlHint: 'daemon 会请求 <issuer>/.well-known/openid-configuration。',
+      groupManualEndpoints: '手动端点（可选）',
+      groupManualEndpointsHint:
+        'discovery 失败或缺字段时逐字段启用。纯 OAuth 2.0 IdP 至少需填 authorize + token + userinfo。',
+      authorizationEndpoint: '授权端点',
+      tokenEndpoint: 'Token 端点',
+      userinfoEndpoint: 'Userinfo 端点',
+      jwksUri: 'JWKS URI',
       groupCreds: '凭据',
       groupCredsHint:
         'daemon 用来访问 IdP 的 OAuth 2.0 客户端凭据。Secret 落盘前 AES-256-GCM 加密。',
@@ -4433,7 +4458,8 @@ export const zhCN: Resources = {
       clientSecret: 'Client Secret',
       clientSecretEditHint: '留空则保留现有值',
       scopes: 'Scopes',
-      scopesHint: '空格分隔。openid 是必需的；推荐同时申请 profile + email。',
+      scopesHint:
+        '空格分隔。OIDC IdP 必须包含 openid；纯 OAuth 2.0 IdP 按其文档填写（不支持时勿带 openid）。',
       groupBehavior: '行为',
       provisioning: '准入策略',
       optInvite: '邀请制（推荐）',
@@ -4444,13 +4470,28 @@ export const zhCN: Resources = {
       autoDesc: '任何成功完成 IdP 登录的用户都自动开通。仅在 IdP 完全可信时使用。',
       allowedDomains: '允许的邮箱域名',
       allowedDomainsHint: '逗号分隔，每个域名以 @ 开头；同时要求 email_verified=true。',
+      trustEmailLabel: '信任邮箱已验证',
+      trustEmailHint:
+        '该 IdP 返回的 email 一律视为已验证（纯 OAuth 2.0 IdP 配合邀请制/白名单时必开）。若 IdP 允许用户自填未验证邮箱请勿开启。',
+      usernameClaim: '呈现名字段',
+      usernameClaimHint:
+        '从身份响应读取呈现名的字段名，可空格分隔多个、按序拼接（如 name signature）。留空用标准 preferred_username。配置后每次登录跟随 IdP 刷新呈现名。',
+      subjectClaim: '用户标识字段',
+      subjectClaimHint:
+        'userinfo 中承载用户唯一 ID 的字段名（如 id）。留空用标准 sub。仅纯 OAuth 2.0 IdP 需要配置——配置后不再走 id_token 验签，且存在关联身份后不可再改。',
       enabledLabel: '启用',
       enabledHint: '开启后会出现在登录页；关闭则隐藏。',
       testOk: '连接成功',
       testFail: '连接失败',
+      testReady: '当前配置可完成登录',
+      testNotReady: '当前配置无法完成登录',
+      testDiscoveryOk: 'discovery：可达',
+      testDiscoveryDown: 'discovery 不可用——正在使用手动端点',
       testDetailIssuer: 'issuer：',
-      testDetailToken: 'token：',
-      testDetailJwks: 'jwks：',
+      sourceManual: '（手动）',
+      sourceDiscovery: '（discovery）',
+      testEndpointMissing: '未配置',
+      testJwksUnreachable: 'JWKS 已配置但不可达——携带 id_token 的登录将失败。',
     },
     sandbox: {
       title: '运行时沙箱',

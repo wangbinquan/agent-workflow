@@ -1,9 +1,9 @@
 // RFC-036 → RFC-220 — OIDC discovery, now a PURE fetch layer: the strict
-// 4-field `getProviderMetadata` (plus its metadata/JWKS cache) was deleted in
-// RFC-220 when the login routes moved to the per-field merge resolver
-// (auth/oidc/endpoints.ts, which owns all caching). Pure HTTP; no DB writes.
-
-import { type JSONWebKeySet } from 'jose'
+// 4-field `getProviderMetadata`/`testDiscovery` (plus the metadata/JWKS
+// cache) were deleted in RFC-220 when the login routes moved to the
+// per-field merge resolver (auth/oidc/endpoints.ts, which owns all caching)
+// and /test moved to the resolver-backed probe (services/oidcProviders.ts).
+// Pure HTTP; no DB writes.
 
 export interface OidcMetadata {
   issuer: string
@@ -54,30 +54,3 @@ export async function fetchDiscoveryDocument(
   return json as Partial<OidcMetadata>
 }
 
-async function fetchDiscovery(issuerUrl: string, fetcher: typeof fetch): Promise<OidcMetadata> {
-  const json = await fetchDiscoveryDocument(issuerUrl, fetcher)
-  if (!json.issuer || !json.authorization_endpoint || !json.token_endpoint || !json.jwks_uri) {
-    throw new Error('oidc-discovery-incomplete')
-  }
-  return json as OidcMetadata
-}
-
-/** Used by the admin /test endpoint — fetch + return metadata, do not cache. */
-export async function testDiscovery(
-  issuerUrl: string,
-  fetcher: typeof fetch = globalThis.fetch,
-): Promise<{ ok: true; metadata: OidcMetadata } | { ok: false; error: string }> {
-  try {
-    const metadata = await fetchDiscovery(issuerUrl, fetcher)
-    // Touch JWKS just to make sure it is reachable.
-    const jwksRes = await fetcher(metadata.jwks_uri, { method: 'GET' })
-    if (!jwksRes.ok) {
-      return { ok: false, error: `jwks-fetch-failed status=${jwksRes.status}` }
-    }
-    const _jwks = (await jwksRes.json()) as JSONWebKeySet
-    void _jwks
-    return { ok: true, metadata }
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) }
-  }
-}

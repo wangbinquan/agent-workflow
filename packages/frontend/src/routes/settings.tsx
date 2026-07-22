@@ -1718,13 +1718,37 @@ interface OidcProviderRow {
   allowedEmailDomains: string[]
   iconUrl: string | null
   enabled: boolean
+  // RFC-220 — manual endpoint fallbacks + pure-OAuth2 identity knobs.
+  authorizationEndpoint: string | null
+  tokenEndpoint: string | null
+  userinfoEndpoint: string | null
+  jwksUri: string | null
+  trustEmailVerified: boolean
+  usernameClaim: string | null
+  subjectClaim: string | null
   createdAt: number
   updatedAt: number
 }
 
-type OidcTestResult =
-  | { ok: true; issuer: string; tokenEndpoint: string; jwksUri: string }
-  | { ok: false; error: string }
+// RFC-220 — ProbeResult mirror (backend services/oidcProviders.ts): the /test
+// endpoint always answers 200 with this shape; `ok` is the login-readiness
+// verdict, per-endpoint rows carry the effective value + its source.
+const OIDC_ENDPOINT_KEYS = [
+  'authorizationEndpoint',
+  'tokenEndpoint',
+  'userinfoEndpoint',
+  'jwksUri',
+] as const
+type OidcEndpointKey = (typeof OIDC_ENDPOINT_KEYS)[number]
+interface OidcTestResult {
+  ok: boolean
+  discovery: { ok: boolean; error?: string }
+  issuer: string
+  endpoints: Record<OidcEndpointKey, { url: string; source: 'discovery' | 'manual' } | null>
+  jwksReachable?: boolean
+  scopesSupported: string[]
+}
+type OidcTestView = { kind: 'probe'; result: OidcTestResult } | { kind: 'error'; message: string }
 
 function OidcProviderDialog(props: {
   mode: 'create' | 'edit'
@@ -1747,7 +1771,19 @@ function OidcProviderDialog(props: {
     (initial?.allowedEmailDomains ?? []).join(', '),
   )
   const [enabled, setEnabled] = useState(initial?.enabled ?? true)
-  const [testResult, setTestResult] = useState<null | OidcTestResult>(null)
+  // RFC-220 — manual endpoints + identity knobs ('' in the form ⇔ null on the wire).
+  const [authorizationEndpoint, setAuthorizationEndpoint] = useState(
+    initial?.authorizationEndpoint ?? '',
+  )
+  const [tokenEndpoint, setTokenEndpoint] = useState(initial?.tokenEndpoint ?? '')
+  const [userinfoEndpoint, setUserinfoEndpoint] = useState(initial?.userinfoEndpoint ?? '')
+  const [jwksUri, setJwksUri] = useState(initial?.jwksUri ?? '')
+  const [trustEmailVerified, setTrustEmailVerified] = useState(
+    initial?.trustEmailVerified ?? false,
+  )
+  const [usernameClaim, setUsernameClaim] = useState(initial?.usernameClaim ?? '')
+  const [subjectClaim, setSubjectClaim] = useState(initial?.subjectClaim ?? '')
+  const [testResult, setTestResult] = useState<null | OidcTestView>(null)
   const [error, setError] = useState<string | null>(null)
 
   // RFC-151 PR-4 — the seven scattered per-mode branches collapsed into one
@@ -1786,6 +1822,9 @@ function OidcProviderDialog(props: {
 
   const save = useMutation({
     mutationFn: () => {
+      // RFC-220 — an empty input means "not configured": the wire value is
+      // null (z.string().url() rejects empty strings by design).
+      const blankToNull = (v: string): string | null => (v.trim() === '' ? null : v.trim())
       const body = {
         slug,
         displayName,
@@ -1800,6 +1839,13 @@ function OidcProviderDialog(props: {
           .filter((s) => s.length > 0),
         iconUrl: null,
         enabled,
+        authorizationEndpoint: blankToNull(authorizationEndpoint),
+        tokenEndpoint: blankToNull(tokenEndpoint),
+        userinfoEndpoint: blankToNull(userinfoEndpoint),
+        jwksUri: blankToNull(jwksUri),
+        trustEmailVerified,
+        usernameClaim: blankToNull(usernameClaim),
+        subjectClaim: blankToNull(subjectClaim),
       }
       return strategy.submit(body)
     },
@@ -1817,9 +1863,11 @@ function OidcProviderDialog(props: {
       }
       return strategy.testConnection()
     },
-    onSuccess: (r) => setTestResult(r),
+    // RFC-220 — /test always answers 200 + ProbeResult (`ok` carries the
+    // verdict); the error path is transport-level only.
+    onSuccess: (r) => setTestResult({ kind: 'probe', result: r }),
     onError: (e: unknown) =>
-      setTestResult({ ok: false, error: e instanceof Error ? e.message : String(e) }),
+      setTestResult({ kind: 'error', message: e instanceof Error ? e.message : String(e) }),
   })
 
   return (
@@ -1925,6 +1973,60 @@ function OidcProviderDialog(props: {
 
         <fieldset className="oidc-form__group">
           <legend className="oidc-form__group-title">
+            {t('settings.auth.groupManualEndpoints', { defaultValue: 'Manual endpoints (optional)' })}
+          </legend>
+          <p className="oidc-form__group-hint">
+            {t('settings.auth.groupManualEndpointsHint', {
+              defaultValue:
+                'Used per field when discovery fails or omits it. A pure OAuth 2.0 IdP needs at least authorize + token + userinfo.',
+            })}
+          </p>
+          <div className="oidc-form__row oidc-form__row--cols-2">
+            <Field
+              label={t('settings.auth.authorizationEndpoint', {
+                defaultValue: 'Authorization endpoint',
+              })}
+            >
+              <TextInput
+                type="url"
+                value={authorizationEndpoint}
+                onChange={setAuthorizationEndpoint}
+                placeholder="https://idp.corp.com/oauth/authorize"
+              />
+            </Field>
+            <Field label={t('settings.auth.tokenEndpoint', { defaultValue: 'Token endpoint' })}>
+              <TextInput
+                type="url"
+                value={tokenEndpoint}
+                onChange={setTokenEndpoint}
+                placeholder="https://idp.corp.com/oauth/token"
+              />
+            </Field>
+          </div>
+          <div className="oidc-form__row oidc-form__row--cols-2">
+            <Field
+              label={t('settings.auth.userinfoEndpoint', { defaultValue: 'Userinfo endpoint' })}
+            >
+              <TextInput
+                type="url"
+                value={userinfoEndpoint}
+                onChange={setUserinfoEndpoint}
+                placeholder="https://idp.corp.com/api/user"
+              />
+            </Field>
+            <Field label={t('settings.auth.jwksUri', { defaultValue: 'JWKS URI' })}>
+              <TextInput
+                type="url"
+                value={jwksUri}
+                onChange={setJwksUri}
+                placeholder="https://idp.corp.com/jwks.json"
+              />
+            </Field>
+          </div>
+        </fieldset>
+
+        <fieldset className="oidc-form__group">
+          <legend className="oidc-form__group-title">
             {t('settings.auth.groupCreds', { defaultValue: 'Credentials' })}
           </legend>
           <p className="oidc-form__group-hint">
@@ -2022,6 +2124,41 @@ function OidcProviderDialog(props: {
             </Field>
           )}
           <Switch
+            checked={trustEmailVerified}
+            onChange={setTrustEmailVerified}
+            label={t('settings.auth.trustEmailLabel', {
+              defaultValue: 'Trust emails as verified',
+            })}
+            hint={t('settings.auth.trustEmailHint', {
+              defaultValue:
+                'Treat every email from this IdP as verified (needed for invite/allowlist with pure OAuth 2.0 IdPs). Leave off if users can set unverified emails there.',
+            })}
+          />
+          <div className="oidc-form__row oidc-form__row--cols-2">
+            <Field
+              label={t('settings.auth.usernameClaim', { defaultValue: 'Username fields' })}
+              hint={t('settings.auth.usernameClaimHint', {
+                defaultValue:
+                  'Claim names read as the presented name; space-separate several to join them in order (e.g. "name signature"). Blank = standard preferred_username. When set, the display name follows the IdP on every sign-in.',
+              })}
+            >
+              <TextInput
+                value={usernameClaim}
+                onChange={setUsernameClaim}
+                placeholder="preferred_username"
+              />
+            </Field>
+            <Field
+              label={t('settings.auth.subjectClaim', { defaultValue: 'Subject field' })}
+              hint={t('settings.auth.subjectClaimHint', {
+                defaultValue:
+                  'Userinfo field carrying the stable unique user ID (e.g. id). Blank = standard sub. Pure OAuth 2.0 only — when set, id_token verification is skipped and the field cannot change once identities exist.',
+              })}
+            >
+              <TextInput value={subjectClaim} onChange={setSubjectClaim} placeholder="sub" />
+            </Field>
+          </div>
+          <Switch
             checked={enabled}
             onChange={setEnabled}
             label={t('settings.auth.enabledLabel', { defaultValue: 'Enabled' })}
@@ -2031,35 +2168,64 @@ function OidcProviderDialog(props: {
           />
         </fieldset>
 
-        {testResult && (
+        {testResult && testResult.kind === 'error' && (
+          <div className="oidc-form__test-result oidc-form__test-result--err">
+            <strong>✗ {t('settings.auth.testFail', { defaultValue: 'Connection failed' })}</strong>
+            <span className="oidc-form__test-detail">{testResult.message}</span>
+          </div>
+        )}
+        {testResult && testResult.kind === 'probe' && (
           <div
             className={`oidc-form__test-result oidc-form__test-result--${
-              testResult.ok ? 'ok' : 'err'
+              testResult.result.ok ? 'ok' : 'err'
             }`}
           >
-            {testResult.ok ? (
-              <>
-                <strong>
-                  ✓ {t('settings.auth.testOk', { defaultValue: 'Connection successful' })}
-                </strong>
-                <span className="oidc-form__test-detail">
-                  {t('settings.auth.testDetailIssuer')} <code>{testResult.issuer}</code>
+            <strong>
+              {testResult.result.ok
+                ? `✓ ${t('settings.auth.testReady', {
+                    defaultValue: 'Configuration can complete a sign-in',
+                  })}`
+                : `✗ ${t('settings.auth.testNotReady', {
+                    defaultValue: 'Configuration cannot complete a sign-in',
+                  })}`}
+            </strong>
+            <span className="oidc-form__test-detail">
+              {testResult.result.discovery.ok
+                ? t('settings.auth.testDiscoveryOk', { defaultValue: 'discovery: reachable' })
+                : t('settings.auth.testDiscoveryDown', {
+                    defaultValue: 'discovery unavailable — manual endpoints in use',
+                  })}
+              <br />
+              {t('settings.auth.testDetailIssuer', { defaultValue: 'issuer:' })}{' '}
+              <code>{testResult.result.issuer}</code>
+              {OIDC_ENDPOINT_KEYS.map((key) => {
+                const entry = testResult.result.endpoints[key]
+                return (
+                  <span key={key} className="oidc-form__test-endpoint">
+                    <br />
+                    {t(`settings.auth.${key}`)}{' '}
+                    {entry ? (
+                      <>
+                        <code>{entry.url}</code>{' '}
+                        {entry.source === 'manual'
+                          ? t('settings.auth.sourceManual', { defaultValue: '(manual)' })
+                          : t('settings.auth.sourceDiscovery', { defaultValue: '(discovery)' })}
+                      </>
+                    ) : (
+                      t('settings.auth.testEndpointMissing', { defaultValue: 'not configured' })
+                    )}
+                  </span>
+                )
+              })}
+              {testResult.result.jwksReachable === false && (
+                <>
                   <br />
-                  {t('settings.auth.testDetailToken')}{' '}
-                  <code>{new URL(testResult.tokenEndpoint).host}</code>
-                  <br />
-                  {t('settings.auth.testDetailJwks')}{' '}
-                  <code>{new URL(testResult.jwksUri).host}</code>
-                </span>
-              </>
-            ) : (
-              <>
-                <strong>
-                  ✗ {t('settings.auth.testFail', { defaultValue: 'Connection failed' })}
-                </strong>
-                <span className="oidc-form__test-detail">{testResult.error}</span>
-              </>
-            )}
+                  {t('settings.auth.testJwksUnreachable', {
+                    defaultValue: 'JWKS is configured but unreachable — id_token sign-ins will fail.',
+                  })}
+                </>
+              )}
+            </span>
           </div>
         )}
         {error !== null && <ErrorBanner error={error} />}

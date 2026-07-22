@@ -15,10 +15,35 @@ import type { SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
 import { oidcProviders, userIdentities } from '@/db/schema'
-import { testDiscovery as runDiscovery } from '@/auth/oidc/discovery'
+import { resolveEndpoints, type EndpointSource } from '@/auth/oidc/endpoints'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 
 type Row = typeof oidcProviders.$inferSelect
+
+// RFC-220 — admin diagnostic result for POST /:id/test (design §7). Always
+// carried on a 200: the per-field diagnosis is MOST valuable when the
+// configuration is broken, and a 4xx would strip the structured body in the
+// frontend error path.
+export interface ProbeResult {
+  /**
+   * loginReady under the runtime branch rules (§5): authorization + token
+   * plus an identity channel that can actually carry a callback —
+   * subjectClaim mode requires userinfo (jwks is not an identity channel
+   * there); otherwise a configured jwks_uri must probe reachable (an IdP
+   * that sends an id_token hard-fails on unreachable JWKS, userinfo cannot
+   * rescue it), and with no jwks_uri userinfo must be configured.
+   */
+  ok: boolean
+  discovery: { ok: boolean; error?: string }
+  issuer: string
+  endpoints: Record<
+    'authorizationEndpoint' | 'tokenEndpoint' | 'userinfoEndpoint' | 'jwksUri',
+    { url: string; source: EndpointSource } | null
+  >
+  /** Probed only when jwks participates (subjectClaim NOT configured). */
+  jwksReachable?: boolean
+  scopesSupported: string[]
+}
 
 export interface OidcProvidersService {
   list(): Promise<OidcProvider[]>
@@ -30,7 +55,7 @@ export interface OidcProvidersService {
   create(body: CreateOidcProviderBody, now?: number): Promise<OidcProvider>
   patch(id: string, body: PatchOidcProviderBody, now?: number): Promise<OidcProvider>
   remove(id: string, force?: boolean): Promise<void>
-  testDiscovery(issuerUrl: string): ReturnType<typeof runDiscovery>
+  probe(provider: OidcProvider, fetcher?: typeof fetch): Promise<ProbeResult>
 }
 
 export function createOidcProvidersService(deps: {
@@ -203,11 +228,56 @@ export function createOidcProvidersService(deps: {
       }
       await db.delete(oidcProviders).where(eq(oidcProviders.id, id))
     },
-    testDiscovery(issuerUrl) {
-      if (!/^https?:\/\//.test(issuerUrl)) {
-        return Promise.resolve({ ok: false, error: 'bad-issuer-url' } as const)
+    async probe(provider, fetcher = globalThis.fetch) {
+      // forceFresh: an admin pressing "Test connection" wants the IdP's
+      // CURRENT state, not up to an hour of positive cache — and the fresh
+      // result backfills both caches through the resolver's own rules.
+      const eff = await resolveEndpoints(provider, { fetcher, forceFresh: true })
+      const endpointOf = (
+        url: string | null,
+        source: EndpointSource | 'none',
+      ): { url: string; source: EndpointSource } | null =>
+        url !== null && source !== 'none' ? { url, source } : null
+      const subjectMode = provider.subjectClaim !== null
+      let jwksReachable: boolean | undefined
+      if (!subjectMode && eff.jwksUri !== null) {
+        try {
+          const res = await fetcher(eff.jwksUri, {
+            method: 'GET',
+            signal: AbortSignal.timeout(10_000),
+          })
+          jwksReachable = res.ok
+        } catch {
+          jwksReachable = false
+        }
       }
-      return runDiscovery(issuerUrl)
+      const identityChannelReady = subjectMode
+        ? eff.userinfoEndpoint !== null
+        : eff.jwksUri !== null
+          ? jwksReachable === true
+          : eff.userinfoEndpoint !== null
+      return {
+        ok:
+          eff.authorizationEndpoint !== null &&
+          eff.tokenEndpoint !== null &&
+          identityChannelReady,
+        discovery: {
+          ok: eff.discoveryOk,
+          ...(eff.discoveryError !== undefined ? { error: eff.discoveryError } : {}),
+        },
+        issuer: eff.issuer,
+        endpoints: {
+          authorizationEndpoint: endpointOf(
+            eff.authorizationEndpoint,
+            eff.sources.authorizationEndpoint,
+          ),
+          tokenEndpoint: endpointOf(eff.tokenEndpoint, eff.sources.tokenEndpoint),
+          userinfoEndpoint: endpointOf(eff.userinfoEndpoint, eff.sources.userinfoEndpoint),
+          jwksUri: endpointOf(eff.jwksUri, eff.sources.jwksUri),
+        },
+        ...(jwksReachable !== undefined ? { jwksReachable } : {}),
+        scopesSupported: eff.scopesSupported,
+      }
     },
   }
 }
