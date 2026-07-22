@@ -47,16 +47,28 @@ on:
       - 'packages/backend/src/services/runner.ts'
       - 'packages/backend/src/services/envelope.ts'
       - 'packages/backend/src/services/protocol.ts'
+      # 6adf3ea1: the whole opencode compat surface — driver/spawn/events + the
+      # version-registry/flag utils + the shell stubs — a CLI-flag rename here
+      # (e.g. 1964a0d0) must trigger the live sweep, not slip through.
+      - 'packages/backend/src/services/runtime/opencode/**'
+      - 'packages/backend/src/util/opencode*.ts'
       - 'packages/backend/src/opencode-plugin/**'
       - 'packages/backend/tests/integration-opencode/**'
+      - 'e2e/fixtures/stub-opencode*.sh'
       - '.github/workflows/integration-opencode.yml'
   pull_request:
     paths:
       - 'packages/backend/src/services/runner.ts'
       - 'packages/backend/src/services/envelope.ts'
       - 'packages/backend/src/services/protocol.ts'
+      # 6adf3ea1: the whole opencode compat surface — driver/spawn/events + the
+      # version-registry/flag utils + the shell stubs — a CLI-flag rename here
+      # (e.g. 1964a0d0) must trigger the live sweep, not slip through.
+      - 'packages/backend/src/services/runtime/opencode/**'
+      - 'packages/backend/src/util/opencode*.ts'
       - 'packages/backend/src/opencode-plugin/**'
       - 'packages/backend/tests/integration-opencode/**'
+      - 'e2e/fixtures/stub-opencode*.sh'
       - '.github/workflows/integration-opencode.yml'
 
 concurrency:
