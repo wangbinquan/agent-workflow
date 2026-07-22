@@ -911,6 +911,13 @@ unresolved；嵌套 `rewriteGitlinkInCommit` 往超级项目 tree 写 `vendor/in
 | P2 | attach 的 `submodule sync`（url 还原）失败被吞——子仓可能长期指着池，后续 auto-push 推进池里而父层 gitlink 声称在真远端 | sync 非零即整体失败 |
 | P2 | attach 的 index 恢复失败被吞——瞬时 gitlink 滞留 index，破坏 unstaged 契约 | 恢复非零即整体失败（即使 body 成功） |
 
+三轮复审再折出 **1 P1，已采纳**：二轮的"锁内重锚"跑在**父层 merge 判定之前**——并发双加同
+路径时，后合并者先把锚改成自己的候选 sha，随后 add/add 冲突把它拒掉，canonical 保住的获胜
+sha 反而失去锚（获胜方 node ref 已随 discard 消亡 ⟹ 一次 pool gc 即 `bad object`）。修：重锚
+移到 **merge 采纳且 materialize 成功之后**（clean 分支按 merged tree、salvage 分支按 salvage
+tree 读实际落地的 gitlink），冲突/失败路径一律不动锚；红→绿测试「a LOSING sibling merge
+conflict does not clobber the landed anchor」（败者冲突后锚仍指获胜 sha 且扛 `gc --prune=now`）。
+
 ### 17.3 仍开放（本批不动）
 
 实现门的 4 条 high：递归 push 未冻结 SHA 图（写锁外网络窗口 + 崩溃重入

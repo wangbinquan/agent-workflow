@@ -430,4 +430,56 @@ describe('RFC-210 — review-round hardening', () => {
     const staged = await runGit(host, ['ls-files', '-s', '--', 'ghost'])
     expect(staged.stdout.trim()).toBe('')
   }, 120_000)
+
+  test('a LOSING sibling merge conflict does not clobber the landed anchor', async () => {
+    // Round-3 P1: the re-anchor used to run BEFORE the parent merge decided.
+    // Sibling A lands path `both` at shaA (anchor → shaA, A's node refs then
+    // die with its discard); sibling B, whose iso predates A's merge, brings
+    // shaB — the add/add conflict rejects B, canonical stays at shaA, and the
+    // anchor MUST still say shaA. Stamping shaB pre-decision left shaA one
+    // pool gc away from `bad object`.
+    const srcA = tmp('aw-rfc210-ns9-a-')
+    await initRepo(srcA, 'a.txt', 'winner\n')
+    const srcB = tmp('aw-rfc210-ns9-b-')
+    await initRepo(srcB, 'b.txt', 'loser\n')
+    const host = tmp('aw-rfc210-ns9-host-')
+    await initRepo(host, 'README.md', 'root\n')
+    const canon = join(tmp('aw-rfc210-ns9-wt-'), 'canon')
+    await runGit(host, ['worktree', 'add', '-q', '--detach', canon, 'HEAD'])
+
+    // BOTH isos branch from the path-less base.
+    const hA = await createNodeIso({
+      appHome,
+      taskId: 'tns9',
+      nodeRunId: 'rns9a',
+      canonRepos: [canonRepo(canon)],
+    })
+    const hB = await createNodeIso({
+      appHome,
+      taskId: 'tns9',
+      nodeRunId: 'rns9b',
+      canonRepos: [canonRepo(canon)],
+    })
+    await runGit(hA.repos[0]!.isoWorktreePath, [...ADD, srcA, 'both'])
+    const shaA = (
+      await runGit(join(hA.repos[0]!.isoWorktreePath, 'both'), ['rev-parse', 'HEAD'])
+    ).stdout.trim()
+    expect((await mergeBackNodeIso(hA, await snapshotNodeIsoFinal(hA))).clean).toBe(true)
+    await discardNodeIso(hA)
+
+    const pool = hA.repos[0]!.poolDirs['both']!
+    const wtRef = worktreeRefName('tns9', 'both')
+    expect((await runGit(pool, ['rev-parse', wtRef])).stdout.trim()).toBe(shaA)
+
+    await runGit(hB.repos[0]!.isoWorktreePath, [...ADD, srcB, 'both'])
+    const resB = await mergeBackNodeIso(hB, await snapshotNodeIsoFinal(hB))
+    expect(resB.clean).toBe(false)
+    expect(resB.conflicts[0]!.paths).toContain('both')
+    // Canonical kept the winner; so must the anchor.
+    expect((await runGit(join(canon, 'both'), ['rev-parse', 'HEAD'])).stdout.trim()).toBe(shaA)
+    expect((await runGit(pool, ['rev-parse', wtRef])).stdout.trim()).toBe(shaA)
+    // The winner's commit survives an aggressive gc on the strength of it.
+    await runGit(pool, ['gc', '--prune=now', '--quiet'])
+    expect((await runGit(pool, ['cat-file', '-e', shaA])).exitCode).toBe(0)
+  }, 120_000)
 })

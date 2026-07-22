@@ -497,12 +497,8 @@ async function mergeSubmodulesIntoTheirs(
     resolveSubConflict?: (conflict: MergeBackConflict) => Promise<{ resolved: boolean }>
   },
 ): Promise<{ theirs: string; conflicts: string[] }> {
-  // Both maps matter: a NEW path (the node added the submodule) has a pool but
-  // no base, and still needs its in-lock worktree re-anchor below.
   const paths = Object.keys(r.subBases)
-  if (paths.length === 0 && Object.keys(r.poolDirs).length === 0) {
-    return { theirs: theirsCommit, conflicts: [] }
-  }
+  if (paths.length === 0) return { theirs: theirsCommit, conflicts: [] }
 
   const conflicts: string[] = []
   let theirs = theirsCommit
@@ -585,17 +581,30 @@ async function mergeSubmodulesIntoTheirs(
     }
     theirs = rewritten
   }
-  // NEW paths (pool but no base — the node added the submodule) never pass
-  // through the merge loop above, so re-point their worktree anchor HERE,
-  // under the caller's write lock, at the sha the parent merge is about to
-  // adopt. The publish-time anchor is create-only and can belong to a sibling
-  // that published first but merges second (or never): without this in-lock
-  // re-anchor the sha canonical actually lands could be left dangling once
-  // this node's refs are discarded (Codex review round 2, P1). Nested paths
-  // whose gitlink `rev-parse` cannot pierce keep the publish-time anchor.
+  return { theirs, conflicts }
+}
+
+/**
+ * RFC-210 — re-point NEW paths' worktree anchors at the sha canonical ACTUALLY
+ * adopted, after the parent merge accepted it and the materialize landed.
+ *
+ * New paths (pool but no base — the node added the submodule) never pass
+ * through the merge loop above, so their durable anchor comes from here. The
+ * publish-time anchor is create-only and can belong to a sibling that
+ * published first but merges second (or never); and re-anchoring BEFORE the
+ * parent merge was just as wrong — a second node adding the same path would
+ * stamp its own candidate, the add/add conflict would then reject it, and the
+ * sha canonical kept was left dangling once the first node's refs died
+ * (Codex review round 3, P1). Reading the adopted sha from the LANDED tree,
+ * post-materialize, is what makes the anchor truthful. A path the lookup
+ * cannot pierce (nested under another gitlink) keeps its publish-time anchor.
+ *
+ * Anchor failures THROW — same policy as the merge-loop anchor above.
+ */
+async function anchorAdoptedNewPaths(r: IsoRepo, landedTree: string): Promise<void> {
   for (const [subPath, pool] of Object.entries(r.poolDirs)) {
     if (r.subBases[subPath] !== undefined) continue
-    const adopted = await runGit(r.canonWorktreePath, ['rev-parse', `${theirs}:${subPath}`])
+    const adopted = await runGit(r.canonWorktreePath, ['rev-parse', `${landedTree}:${subPath}`])
     if (adopted.exitCode !== 0) continue
     const sha = adopted.stdout.trim()
     if (!/^[0-9a-f]{40,64}$/.test(sha)) continue
@@ -607,7 +616,6 @@ async function mergeSubmodulesIntoTheirs(
       )
     }
   }
-  return { theirs, conflicts }
 }
 
 /**
@@ -1018,6 +1026,9 @@ export async function mergeBackNodeIso(
           taskBaseHead: r.taskBaseHead,
         })
         salvagedPaths = salvage.landedPaths
+        // A NEW gitlink that merged clean rides the salvage tree even while
+        // OTHER paths conflicted — canonical adopted it, so anchor it now.
+        await anchorAdoptedNewPaths(r, salvage.tree)
       }
       conflicts.push({
         worktreeDirName: r.worktreeDirName,
@@ -1038,6 +1049,9 @@ export async function mergeBackNodeIso(
       canonCurrentTree,
       taskBaseHead: r.taskBaseHead,
     })
+    // Post-materialize, not before: the anchor must record what canonical
+    // ACTUALLY holds (Codex review round 3, P1 — see anchorAdoptedNewPaths).
+    await anchorAdoptedNewPaths(r, merge.mergedTree)
   }
   return { clean: conflicts.length === 0, conflicts }
 }
