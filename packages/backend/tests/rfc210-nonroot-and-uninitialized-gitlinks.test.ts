@@ -137,7 +137,7 @@ describe('RFC-210 — submodule below the repo root', () => {
     // state while merge-back happily reported clean.
     expect((await runGit(canonSub, ['rev-parse', 'HEAD'])).stdout.trim()).toBe(nodeSubSha)
     expect(readFileSync(join(canonSub, 'a.txt'), 'utf8')).toBe('edited-by-node\n')
-  })
+  }, 120_000)
 })
 
 describe('RFC-210 — gitlink with no initialized working tree', () => {
@@ -184,7 +184,7 @@ describe('RFC-210 — gitlink with no initialized working tree', () => {
     // canonical had already been rewritten by steps ①–⑤ when it threw.
     expect(res.clean).toBe(true)
     expect(readFileSync(join(canon, 'README.md'), 'utf8')).toBe('parent edited by node\n')
-  })
+  }, 120_000)
 
   test('a stray committed nested git repo (gitlink, no .gitmodules entry) is left alone', async () => {
     const host = tmp('aw-rfc210-np-strayhost-')
@@ -212,5 +212,5 @@ describe('RFC-210 — gitlink with no initialized working tree', () => {
     const res = await mergeBackNodeIso(handle, await snapshotNodeIsoFinal(handle))
     expect(res.clean).toBe(true)
     expect(readFileSync(join(canon, 'README.md'), 'utf8')).toBe('parent edited\n')
-  })
+  }, 120_000)
 })

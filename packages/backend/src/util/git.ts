@@ -2292,12 +2292,35 @@ async function checkoutMergedGitlinks(
       const cur = await runGit(worktreePath, ['rev-parse', `${ctx.currentTree}:${name}`])
       if (cur.exitCode === 0 && cur.stdout.trim() !== '') currentSha = cur.stdout.trim()
     }
-    // Unchanged gitlink ⟹ nothing to do at this level OR below it (the target
-    // commit — and therefore every nested gitlink it records — is identical).
-    // This is what keeps the alignment pass O(changed), not O(submodules):
-    // slow CI hosts pushed two pre-existing merge-back tests over their 5s
-    // default timeout when every iso creation re-checked-out every submodule.
-    if (currentSha !== null && currentSha === sha && existsSync(join(subPath, '.git'))) continue
+    // Fast path for an INITIALIZED, already-at-target submodule — but decided
+    // on the ACTUAL worktree HEAD, never on tree bookkeeping alone: the sync
+    // that populated these checkouts is fail-soft, so a module can lag behind
+    // even when the recorded and target gitlinks agree (Codex review round 7,
+    // P1 — a tree-OID shortcut here skipped the repair and let the node run
+    // from a stale submodule base). Reading HEAD is one cheap process; the
+    // recursion below still verifies NESTED actual state (a child can lag
+    // while its parent is at target). This keeps the alignment pass at
+    // O(submodules) rev-parses instead of O(submodules) checkouts — the
+    // checkout-everything version pushed two pre-existing merge-back tests
+    // over their 5s default timeout on loaded CI hosts.
+    if (existsSync(join(subPath, '.git'))) {
+      const actual = await runGit(subPath, ['rev-parse', 'HEAD'])
+      if (actual.exitCode === 0 && actual.stdout.trim() === sha) {
+        const subTree = await runGit(subPath, ['rev-parse', `${sha}^{tree}`])
+        if (subTree.exitCode === 0) {
+          const nested = await checkoutMergedGitlinks(
+            subPath,
+            subTree.stdout.trim(),
+            effective,
+            log,
+            relPath,
+            { rootPath, currentTree: subTree.stdout.trim() },
+          )
+          changed = changed || nested
+        }
+        continue
+      }
+    }
     // An uninitialized submodule is an EMPTY DIRECTORY, not a missing one — git
     // creates it for the gitlink — so `existsSync(subPath)` is always true and
     // never skipped anything. `git -C <empty dir> checkout` then walks up and

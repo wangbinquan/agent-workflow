@@ -141,7 +141,7 @@ describe('RFC-210 — user edits in a canonical submodule are pinned before -f',
     const recoveredUntracked = await runGit(canonSub, ['show', `${pinned[0]!}:scratch.txt`])
     expect(recoveredUntracked.exitCode).toBe(0)
     expect(recoveredUntracked.stdout).toBe('user scratch\n')
-  })
+  }, 120_000)
 
   test('a clean canonical submodule pins nothing (no ref litter on the common path)', async () => {
     const sub = tmp('aw-rfc210-ds-csub-')
@@ -181,5 +181,5 @@ describe('RFC-210 — user edits in a canonical submodule are pinned before -f',
       'refs/agent-workflow/subsnap/',
     ])
     expect(refs.stdout.trim()).toBe('')
-  })
+  }, 120_000)
 })

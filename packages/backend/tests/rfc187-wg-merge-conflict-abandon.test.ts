@@ -53,19 +53,31 @@ describe('RFC-187 T8 — source lock (the wg hook abandons instead of stranding)
     )
   })
 
-  test('the wg hook still discards its iso unconditionally (why the abandon is required)', () => {
-    // if this ever becomes keepIso-style preservation, the abandon above must be
-    // revisited — the two decisions are one contract.
-    //
-    // RFC-208 changed the SHAPE of this finally without changing that contract:
-    // `releaseGlobal()` now runs BEFORE the cleanup await (a wedged
-    // `git worktree remove` used to strand the daemon-wide semaphore permit
-    // forever), and the reordering carries an explanatory comment. The original
-    // assertion was a 200-character proximity window, so it broke on the added
-    // prose while the behaviour it guards was untouched. Assert the contract
-    // itself instead: this finally discards, and it discards UNCONDITIONALLY.
-    const wgFinally = /finally \{([\s\S]{0,900}?)discardNodeIso\(iso, log\)/.exec(SCHED)
+  test('the wg hook discards on the conflict path; only a merge THROW keeps the iso', () => {
+    // The original contract read "discards unconditionally — if this ever
+    // becomes keepIso-style preservation, the abandon above must be revisited".
+    // RFC-210's impl-gate remediation DID revisit it (review round 2, P1): a
+    // merge/snapshot THROW now keeps the iso, because the publish path
+    // hard-fails BEFORE any node tree is persisted and the iso can be the sole
+    // copy of the run's submodule work. The abandon rationale is intact
+    // because the two paths differ in what they leave behind:
+    //  - conflict-human (this abandon): the hook cannot preserve a resolve-iso
+    //    promise, so it abandons AND STILL DISCARDS — keepHookIso is never set
+    //    on this path;
+    //  - merge THROW: merge_state stays 'pending-merge' (replayable state) and
+    //    the KEPT iso backs it; the replay's own success path closes the
+    //    lifecycle (replayPendingMerges → discardNodeIso, RFC-210 round 5).
+    const wgFinally = /finally \{([\s\S]{0,900}?)discardNodeIso\(iso, log, state\.writeSem\)/.exec(
+      SCHED,
+    )
     expect(wgFinally).not.toBeNull()
-    expect(wgFinally?.[1] ?? '').not.toMatch(/keepIso/)
+    // The discard is gated on the merge-throw flag and nothing else.
+    expect(wgFinally?.[1] ?? '').toContain('if (!keepHookIso)')
+    // The flag is set ONLY in the merge-throw rethrow, never on the conflict
+    // path (the abandon block must stay a discarding path).
+    const flagSets = SCHED.match(/keepHookIso = true/g) ?? []
+    expect(flagSets).toHaveLength(1)
+    expect(SCHED).toMatch(/keepHookIso = true\s*\n\s*throw err/)
+    expect(SCHED).not.toMatch(/wg-merge-conflict-unresolved[\s\S]{0,600}?keepHookIso = true/)
   })
 })
