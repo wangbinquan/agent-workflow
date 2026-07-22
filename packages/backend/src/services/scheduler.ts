@@ -2412,6 +2412,11 @@ async function replayPendingMerges(state: SchedulerState, log: Logger): Promise<
     })
     if (merge.kind === 'merged') {
       log.info('pending-merge replay merged', { nodeRunId: r.id })
+      // RFC-210 (review round 5, P2): a replayed merge never passes a live
+      // site's discard — without this the node-scoped pool refs leak forever
+      // and a NEW path's worktree anchor is never handed over. Best-effort:
+      // the iso worktree is usually already gone (that is why we replayed).
+      await discardNodeIso(handle, log)
     } else {
       log.warn('pending-merge replay conflict → conflict-human (merge agent could not resolve)', {
         nodeRunId: r.id,
@@ -2478,6 +2483,10 @@ async function replayConflictHumanResolutions(state: SchedulerState, log: Logger
         event: { kind: 'complete-human-resolution' },
       })
       log.info('conflict-human resume: human resolution merged back', { nodeRunId: r.id })
+      // RFC-210 (review round 5, P2): the park kept the iso for the human;
+      // now that the resolution landed, close its lifecycle — anchor handoff
+      // for NEW paths + node pool ref cleanup happen inside the discard.
+      await discardNodeIso(handle, log)
     } else {
       log.info('conflict-human resume: still unresolved — staying parked', {
         nodeRunId: r.id,

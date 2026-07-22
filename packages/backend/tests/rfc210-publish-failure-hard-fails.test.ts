@@ -199,6 +199,24 @@ describe('RFC-210 — submodule publish failures fail the snapshot', () => {
     // Workgroup hook: merge throw flags before rethrowing to the outer catch.
     expect(src).toContain('keepHookIso = true')
     expect(src).toContain('if (!keepHookIso) await discardNodeIso(iso, log)')
+    // Round 5 (P2): successfully REPLAYED merges must close the iso lifecycle
+    // too — without these, node pool refs leak forever and a new path's
+    // worktree anchor is never handed over.
+    const replayMerged = src.match(
+      /pending-merge replay merged[\s\S]{0,600}?discardNodeIso\(handle, log\)/,
+    )
+    expect(replayMerged).not.toBeNull()
+    const humanResolved = src.match(
+      /human resolution merged back[\s\S]{0,600}?discardNodeIso\(handle, log\)/,
+    )
+    expect(humanResolved).not.toBeNull()
+    // Round 5 (P1): the discard-time anchor handoff must be a CAS (expected-old
+    // guard) — an unconditional write races concurrent merge-backs.
+    const iso = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'nodeIsolation.ts'),
+      'utf8',
+    )
+    expect(iso).toContain("['update-ref', wtRef, sha, expectedOld]")
     // And the iso worktree remains on disk in the unit-level flows above; the
     // existence of the discard-in-finally is exactly why the flags must flip.
     expect(existsSync(appHome)).toBe(true)

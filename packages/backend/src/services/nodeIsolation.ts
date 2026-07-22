@@ -621,6 +621,17 @@ async function anchorNewPathsAtDiscard(
     // discard): nothing adopted, so nothing to protect beyond this run's own
     // refs — which the discard is abandoning by design.
     if (!existsSync(join(subAbs, '.git'))) continue
+    // CAS discipline (Codex review round 5, P1): this runs OUTSIDE the task
+    // write lock, so between our reads and our write a sibling can land a
+    // NEWER sha and anchor it from its own discard. The expected-old guard
+    // makes any such stale write fail instead of clobbering: the ref only
+    // moves if it still is what we read ('' ⟹ must not exist). A failed CAS
+    // keeps our node refs — converging is the surviving discarder's job.
+    const wtRef = worktreeRefName(taskId, subPath)
+    const oldRef = await runGit(pool, ['rev-parse', '--verify', '--quiet', wtRef], {
+      timeoutMs: ISO_DISCARD_GIT_TIMEOUT_MS,
+    })
+    const expectedOld = oldRef.exitCode === 0 ? oldRef.stdout.trim() : ''
     const head = await runGit(subAbs, ['rev-parse', 'HEAD'], {
       timeoutMs: ISO_DISCARD_GIT_TIMEOUT_MS,
     })
@@ -633,11 +644,11 @@ async function anchorNewPathsAtDiscard(
       keep.add(subPath)
       continue
     }
-    const anchored = await runGit(pool, ['update-ref', worktreeRefName(taskId, subPath), sha], {
+    const anchored = await runGit(pool, ['update-ref', wtRef, sha, expectedOld], {
       timeoutMs: ISO_DISCARD_GIT_TIMEOUT_MS,
     })
     if (anchored.exitCode !== 0) {
-      log?.warn('discard anchor failed — keeping node refs (leak-not-lose)', {
+      log?.warn('discard anchor failed or lost the CAS — keeping node refs (leak-not-lose)', {
         subPath,
         sha,
         error: anchored.stderr.trim(),
