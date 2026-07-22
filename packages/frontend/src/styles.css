@@ -5809,7 +5809,9 @@ details.form-section[open] > summary {
  * the small grip is the optional mouse-only drag enhancement. */
 .workflow-node-picker {
   display: flex;
+  width: 100%;
   min-height: 0;
+  min-width: 0;
   flex-direction: column;
   gap: 10px;
 }
@@ -5823,7 +5825,29 @@ details.form-section[open] > summary {
   padding: 8px;
 }
 
+.workflow-node-picker > .tabs-viewport--segment {
+  flex: 0 0 auto;
+  width: 100%;
+}
+
+.workflow-node-picker__category-tabs.tabs--segment {
+  margin-bottom: 0;
+}
+
+.workflow-node-picker__panel {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.workflow-node-picker__panel[hidden] {
+  display: none;
+}
+
 .workflow-node-picker__groups {
+  flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
   display: flex;
@@ -5859,6 +5883,72 @@ details.form-section[open] > summary {
   display: flex;
   flex: 1;
   flex-direction: column;
+}
+
+.workflow-node-picker__item-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.workflow-node-picker__item-heading .editor-sidebar__item-label {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workflow-node-picker__type-chip.chip--tight {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.workflow-node-picker__item[data-category='agents'] {
+  border-inline-start-width: 3px;
+  border-inline-start-color: var(--accent);
+}
+
+.workflow-node-picker__type-chip[data-category='agents'] {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent) 9%, var(--panel));
+  color: var(--accent);
+}
+
+.workflow-node-picker__item[data-category='wrappers'] {
+  border-inline-start-width: 3px;
+  border-inline-start-color: #7a4ea6;
+}
+
+.workflow-node-picker__type-chip[data-category='wrappers'] {
+  border-color: color-mix(in srgb, #7a4ea6 45%, var(--border));
+  background: color-mix(in srgb, #7a4ea6 10%, var(--panel));
+  color: color-mix(in srgb, #7a4ea6 72%, var(--text));
+}
+
+.workflow-node-picker__item[data-category='io'] {
+  border-inline-start-width: 3px;
+  border-inline-start-color: #0f766e;
+}
+
+.workflow-node-picker__type-chip[data-category='io'] {
+  border-color: color-mix(in srgb, #0f766e 45%, var(--border));
+  background: color-mix(in srgb, #0f766e 10%, var(--panel));
+  color: color-mix(in srgb, #0f766e 72%, var(--text));
+}
+
+.workflow-node-picker__item[data-category='human'] {
+  border-inline-start-width: 3px;
+  border-inline-start-color: #d97706;
+}
+
+.workflow-node-picker__type-chip[data-category='human'] {
+  border-color: color-mix(in srgb, #d97706 45%, var(--border));
+  background: color-mix(in srgb, #d97706 10%, var(--panel));
+  color: color-mix(in srgb, #b45309 72%, var(--text));
 }
 
 .workflow-node-picker__item[aria-disabled='true'] {

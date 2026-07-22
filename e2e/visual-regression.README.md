@@ -1,4 +1,4 @@
-# visual-regression — 25 full-page + 6 component pixel baselines (RFC-054 / RFC-198 / RFC-199)
+# visual-regression — 26 full-page + 6 component pixel baselines (RFC-054 / RFC-198 / RFC-199 / RFC-219)
 
 Spec: `e2e/visual-regression.spec.ts`. Baselines: `e2e/visual-regression.spec.ts-snapshots/`.
 
@@ -22,10 +22,10 @@ Threshold: `maxDiffPixelRatio: 0.002` (0.2%) per RFC-054 plan §risk 9.
 | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1536×900 desktop | workflow editor with palette and inspector rails                                                                                             |
 | 1280×800 desktop | auth, agents, workflows, repos, memory, settings, onboarding, seeded homepage, tasks, three inbox states, editor light/dark, dynamic preview |
-| 1179×800 compact | workflow editor palette and inspector side modals                                                                                            |
+| 1179×800 compact | workflow editor palette and inspector side modals, plus the RFC-219 50-Agent Human category in dark mode                                     |
 | 390×844 mobile   | seeded home + navigation, workflow gallery, agent split detail, settings network form, terminal task detail, editor picker/inspector         |
 
-The 25 scenes each own a full-page baseline. Six focused locator baselines lock
+The 26 scenes each own a full-page baseline. Six focused locator baselines lock
 mobile navigation open, PageHeader actions, a real overflowing TableViewport
 edge, an empty state, a Dialog footer, and the deterministic dynamic-workflow
 preview canvas so the full-page 0.2% threshold cannot hide a small but important

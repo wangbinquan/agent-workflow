@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -12,12 +13,22 @@ import type { Agent } from '@agent-workflow/shared'
 import { Dialog } from '@/components/Dialog'
 import { TextInput } from '@/components/Form'
 import { useManagedLiveRegion } from '@/components/ManagedLiveRegion'
+import { TabBar, type TabDef } from '@/components/TabBar'
+import { TabPanels } from '@/components/split/TabPanels'
 import {
   PALETTE_MIME,
   buildPalette,
   serialize,
   type PaletteItem,
+  type PaletteSectionKey,
 } from '@/components/canvas/nodePalette'
+import {
+  deriveNodePickerCatalog,
+  type NodePickerCategory,
+  type NodePickerEntry,
+} from '@/lib/workflow-node-picker'
+
+export { workflowNodePickerIdentity } from '@/lib/workflow-node-picker'
 
 export const NODE_PICKER_RECENT_STORAGE_KEY = 'agent-workflow.workflow-node-picker.recent.v1'
 
@@ -34,13 +45,6 @@ export type WorkflowNodePickerIntent =
   | { kind: 'after-node'; nodeId: string; scope: WorkflowNodePickerScope }
   | { kind: 'inside-wrapper'; wrapperNodeId: string }
   | { kind: 'insert-edge'; edgeId: string }
-
-interface PickerEntry {
-  identity: string
-  item: PaletteItem
-  label: string
-  description: string
-}
 
 export interface WorkflowNodePickerCatalogProps {
   agents: Agent[]
@@ -61,10 +65,6 @@ export interface WorkflowNodePickerProps extends Omit<
   onClose: () => void
   triggerRef?: RefObject<HTMLElement | null>
   restoreFocusFallbackRef?: RefObject<HTMLElement | null>
-}
-
-export function workflowNodePickerIdentity(item: PaletteItem): string {
-  return item.kind === 'agent-single' ? `agent:${item.agentName}` : `kind:${item.kind}`
 }
 
 function readRecentIdentities(): string[] {
@@ -91,26 +91,6 @@ function writeRecentIdentity(identity: string, previous: readonly string[]): str
   return next
 }
 
-function buildEntries(agents: Agent[], t: (key: string) => string): PickerEntry[] {
-  return buildPalette(agents, t).flatMap((section) =>
-    section.items.map((entry) => ({
-      identity: workflowNodePickerIdentity(entry.item),
-      item: entry.item,
-      label: entry.label,
-      description: entry.description,
-    })),
-  )
-}
-
-function recommendedEntries(entries: readonly PickerEntry[]): PickerEntry[] {
-  const agents = entries.filter((entry) => entry.item.kind === 'agent-single').slice(0, 3)
-  const commonKinds = new Set(['input', 'output', 'review'])
-  const common = entries.filter((entry) => commonKinds.has(entry.item.kind))
-  const chosen = [...agents, ...common]
-  if (chosen.length > 0) return chosen.slice(0, 6)
-  return entries.slice(0, 6)
-}
-
 export function WorkflowNodePickerCatalog({
   agents,
   onPick,
@@ -124,48 +104,71 @@ export function WorkflowNodePickerCatalog({
   const managedLiveRegion = useManagedLiveRegion()
   const ownSearchRef = useRef<HTMLInputElement | null>(null)
   const searchRef = initialFocusRef ?? ownSearchRef
+  const categoryTabsId = `workflow-node-picker-category-${useId().replace(/:/g, '')}`
   const [query, setQuery] = useState('')
+  const [activeCategory, setActiveCategory] = useState<NodePickerCategory>('all')
   const [recent, setRecent] = useState<string[]>(readRecentIdentities)
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([])
-  const entries = useMemo(() => buildEntries(agents, t), [agents, t])
-  const byIdentity = useMemo(
-    () => new Map(entries.map((entry) => [entry.identity, entry] as const)),
-    [entries],
+  const sections = useMemo(() => buildPalette(agents, t), [agents, t])
+  const categoryLabels = useMemo<Record<PaletteSectionKey, string>>(
+    () => ({
+      agents: t('editor.nodePicker.categoryAgent'),
+      wrappers: t('editor.nodePicker.categoryWrapper'),
+      io: t('editor.nodePicker.categoryIo'),
+      human: t('editor.nodePicker.categoryHuman'),
+    }),
+    [t],
   )
-  const recentEntries = recent.flatMap((identity) => {
-    const entry = byIdentity.get(identity)
-    return entry === undefined ? [] : [entry]
-  })
-  const trimmedQuery = query.trim().toLowerCase()
-  const filtered =
-    trimmedQuery === ''
-      ? entries
-      : entries.filter((entry) => {
-          const haystack = [
-            entry.label,
-            entry.description,
-            entry.item.kind,
-            entry.item.kind === 'agent-single' ? entry.item.agentName : '',
-          ]
-            .join('\n')
-            .toLowerCase()
-          return haystack.includes(trimmedQuery)
-        })
-  const groups =
-    trimmedQuery === ''
-      ? [
-          {
-            key: 'recommended',
-            label: t('editor.nodePicker.recommended'),
-            entries: recommendedEntries(entries),
-          },
-          ...(recentEntries.length > 0
-            ? [{ key: 'recent', label: t('editor.nodePicker.recent'), entries: recentEntries }]
-            : []),
-          { key: 'all', label: t('editor.nodePicker.all'), entries },
-        ]
-      : [{ key: 'all', label: t('editor.nodePicker.all'), entries: filtered }]
-  const flattened = groups.flatMap((group) =>
+  const model = useMemo(
+    () =>
+      deriveNodePickerCatalog({
+        sections,
+        activeCategory,
+        query,
+        recentIdentities: recent,
+        labels: {
+          recommended: t('editor.nodePicker.recommended'),
+          recent: t('editor.nodePicker.recent'),
+        },
+      }),
+    [activeCategory, query, recent, sections, t],
+  )
+  const categoryTabs = useMemo<ReadonlyArray<TabDef<NodePickerCategory>>>(
+    () => [
+      {
+        key: 'all',
+        label: t('editor.nodePicker.categoryAll'),
+        badge: model.categoryCounts.all,
+        testid: 'workflow-node-picker-category-all',
+      },
+      {
+        key: 'agents',
+        label: categoryLabels.agents,
+        badge: model.categoryCounts.agents,
+        testid: 'workflow-node-picker-category-agents',
+      },
+      {
+        key: 'wrappers',
+        label: categoryLabels.wrappers,
+        badge: model.categoryCounts.wrappers,
+        testid: 'workflow-node-picker-category-wrappers',
+      },
+      {
+        key: 'io',
+        label: categoryLabels.io,
+        badge: model.categoryCounts.io,
+        testid: 'workflow-node-picker-category-io',
+      },
+      {
+        key: 'human',
+        label: categoryLabels.human,
+        badge: model.categoryCounts.human,
+        testid: 'workflow-node-picker-category-human',
+      },
+    ],
+    [categoryLabels, model.categoryCounts, t],
+  )
+  const flattened = model.groups.flatMap((group) =>
     group.entries.map((entry) => ({ groupKey: group.key, entry })),
   )
   itemRefs.current.length = flattened.length
@@ -177,11 +180,16 @@ export function WorkflowNodePickerCatalog({
   useEffect(() => {
     if (managedLiveRegion === null) return
     managedLiveRegion.announce(
-      filtered.length === 0
+      model.visibleEntryCount === 0
         ? t('editor.nodePicker.noMatches')
-        : t('editor.nodePicker.resultsCount', { n: filtered.length }),
+        : activeCategory === 'all'
+          ? t('editor.nodePicker.resultsCount', { n: model.visibleEntryCount })
+          : t('editor.nodePicker.resultsCountInCategory', {
+              n: model.visibleEntryCount,
+              category: categoryLabels[activeCategory],
+            }),
     )
-  }, [filtered.length, managedLiveRegion, t])
+  }, [activeCategory, categoryLabels, managedLiveRegion, model.visibleEntryCount, t])
 
   const focusIndex = (index: number) => {
     if (flattened.length === 0) return
@@ -189,7 +197,7 @@ export function WorkflowNodePickerCatalog({
     itemRefs.current[wrapped]?.focus()
   }
 
-  const choose = (entry: PickerEntry) => {
+  const choose = (entry: NodePickerEntry) => {
     if (disabledReason?.(entry.item) !== null && disabledReason?.(entry.item) !== undefined) return
     setRecent((previous) => writeRecentIdentity(entry.identity, previous))
     onPick(entry.item)
@@ -198,7 +206,7 @@ export function WorkflowNodePickerCatalog({
   const onItemKeyDown = (
     event: KeyboardEvent<HTMLButtonElement>,
     index: number,
-    entry: PickerEntry,
+    entry: NodePickerEntry,
   ) => {
     if (event.nativeEvent.isComposing) return
     if (event.key === 'ArrowDown') {
@@ -259,61 +267,101 @@ export function WorkflowNodePickerCatalog({
           }
         }}
       />
-      <div
-        className="workflow-node-picker__groups"
-        aria-live={managedLiveRegion === null ? 'polite' : undefined}
-      >
-        {groups.map((group) => (
-          <section key={group.key} className="workflow-node-picker__group">
-            <h3 className="workflow-node-picker__group-title">{group.label}</h3>
-            <ul className="workflow-node-picker__list">
-              {group.entries.map((entry) => {
-                const index = flatIndex++
-                const reason = disabledReason?.(entry.item) ?? null
-                return (
-                  <li key={`${group.key}:${entry.identity}`} className="workflow-node-picker__row">
-                    <button
-                      ref={(node) => {
-                        itemRefs.current[index] = node
-                      }}
-                      type="button"
-                      className="workflow-node-picker__item editor-sidebar__item"
-                      aria-disabled={reason === null ? undefined : true}
-                      data-testid={`workflow-node-picker-item-${entry.item.kind === 'agent-single' ? `agent-${entry.item.agentName}` : `kind-${entry.item.kind}`}`}
-                      onClick={() => choose(entry)}
-                      onKeyDown={(event) => onItemKeyDown(event, index, entry)}
-                    >
-                      <span className="workflow-node-picker__item-copy">
-                        <span className="editor-sidebar__item-label">{entry.label}</span>
-                        <span className="editor-sidebar__item-hint">{entry.description}</span>
-                        {reason !== null ? (
-                          <span className="workflow-node-picker__disabled-reason">{reason}</span>
-                        ) : null}
-                      </span>
-                      {showDragGrip ? (
-                        <span
-                          className="workflow-node-picker__drag-grip"
-                          draggable
-                          onDragStart={(event) => onDragStart(event, entry.item)}
-                          title={t('editor.nodePicker.dragHint')}
-                          aria-hidden="true"
-                        >
-                          ⠿
-                        </span>
-                      ) : null}
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
-          </section>
-        ))}
-        {flattened.length === 0 ? (
-          <div className="muted workflow-node-picker__empty">
-            {t('editor.nodePicker.noMatches')}
-          </div>
-        ) : null}
-      </div>
+      <TabBar
+        tabs={categoryTabs}
+        active={activeCategory}
+        onSelect={setActiveCategory}
+        variant="segment"
+        className="workflow-node-picker__category-tabs"
+        rootTestid="workflow-node-picker-categories"
+        idPrefix={categoryTabsId}
+        ariaLabel={t('editor.nodePicker.categoriesLabel')}
+      />
+      <TabPanels
+        active={activeCategory}
+        idPrefix={categoryTabsId}
+        className="workflow-node-picker__panel"
+        panels={categoryTabs.map((tab) => ({
+          key: tab.key,
+          testid: `workflow-node-picker-category-panel-${tab.key}`,
+          content:
+            tab.key === activeCategory ? (
+              <div
+                className="workflow-node-picker__groups"
+                aria-live={managedLiveRegion === null ? 'polite' : undefined}
+              >
+                {model.groups.map((group) => (
+                  <section key={group.key} className="workflow-node-picker__group">
+                    <h3 className="workflow-node-picker__group-title">{group.label}</h3>
+                    <ul className="workflow-node-picker__list">
+                      {group.entries.map((entry) => {
+                        const index = flatIndex++
+                        const reason = disabledReason?.(entry.item) ?? null
+                        return (
+                          <li
+                            key={`${group.key}:${entry.identity}`}
+                            className="workflow-node-picker__row"
+                          >
+                            <button
+                              ref={(node) => {
+                                itemRefs.current[index] = node
+                              }}
+                              type="button"
+                              className="workflow-node-picker__item editor-sidebar__item"
+                              aria-disabled={reason === null ? undefined : true}
+                              data-category={entry.sectionKey}
+                              data-testid={`workflow-node-picker-item-${entry.item.kind === 'agent-single' ? `agent-${entry.item.agentName}` : `kind-${entry.item.kind}`}`}
+                              onClick={() => choose(entry)}
+                              onKeyDown={(event) => onItemKeyDown(event, index, entry)}
+                            >
+                              <span className="workflow-node-picker__item-copy">
+                                <span className="workflow-node-picker__item-heading">
+                                  <span className="editor-sidebar__item-label" title={entry.label}>
+                                    {entry.label}
+                                  </span>
+                                  <span
+                                    className="chip chip--tight workflow-node-picker__type-chip"
+                                    data-category={entry.sectionKey}
+                                  >
+                                    {categoryLabels[entry.sectionKey]}
+                                  </span>
+                                </span>
+                                <span className="editor-sidebar__item-hint">
+                                  {entry.description}
+                                </span>
+                                {reason !== null ? (
+                                  <span className="workflow-node-picker__disabled-reason">
+                                    {reason}
+                                  </span>
+                                ) : null}
+                              </span>
+                              {showDragGrip ? (
+                                <span
+                                  className="workflow-node-picker__drag-grip"
+                                  draggable
+                                  onDragStart={(event) => onDragStart(event, entry.item)}
+                                  title={t('editor.nodePicker.dragHint')}
+                                  aria-hidden="true"
+                                >
+                                  ⠿
+                                </span>
+                              ) : null}
+                            </button>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  </section>
+                ))}
+                {flattened.length === 0 ? (
+                  <div className="muted workflow-node-picker__empty">
+                    {t('editor.nodePicker.noMatches')}
+                  </div>
+                ) : null}
+              </div>
+            ) : null,
+        }))}
+      />
     </div>
   )
 }

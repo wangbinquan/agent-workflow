@@ -233,12 +233,15 @@ function uniqueInputKey(existing: Set<string>): string {
 
 /** A flat list of palette entries used by the sidebar UI. */
 export interface PaletteSection {
+  key: PaletteSectionKey
   label: string
-  items: Array<{
-    item: PaletteItem
-    label: string
-    description: string
-  }>
+  items: PaletteSectionItem[]
+}
+
+export interface PaletteSectionItem {
+  item: PaletteItem
+  label: string
+  description: string
 }
 
 /**
@@ -249,7 +252,7 @@ export interface PaletteSection {
  */
 export type PaletteTranslator = (key: string) => string
 
-const SECTION_ORDER: Array<{ key: PaletteSectionKey; labelKey: string }> = [
+export const PALETTE_SECTIONS = [
   { key: 'agents', labelKey: 'editor.paletteAgents' },
   // RFC-060 PR-E: removed the "agent-multi fanout" palette section —
   // fan-out is now done via wrapper-fanout (a Wrappers entry). Drop a
@@ -257,12 +260,13 @@ const SECTION_ORDER: Array<{ key: PaletteSectionKey; labelKey: string }> = [
   { key: 'wrappers', labelKey: 'editor.paletteWrappers' },
   { key: 'io', labelKey: 'editor.paletteIo' },
   { key: 'human', labelKey: 'editor.paletteHuman' },
-]
+] as const satisfies ReadonlyArray<{ key: PaletteSectionKey; labelKey: string }>
 
 export function buildPalette(agents: Agent[], t: PaletteTranslator): PaletteSection[] {
-  return SECTION_ORDER.map(({ key, labelKey }) => {
+  return PALETTE_SECTIONS.map(({ key, labelKey }) => {
     if (key === 'agents') {
       return {
+        key,
         label: t(labelKey),
         items: agents.map((a) => ({
           item: { kind: 'agent-single', agentName: a.name } as PaletteItem,
@@ -276,6 +280,7 @@ export function buildPalette(agents: Agent[], t: PaletteTranslator): PaletteSect
       }
     }
     return {
+      key,
       label: t(labelKey),
       // NODE_KIND declaration order fixes the within-section order
       // (wrappers: git → loop → fanout; io: input → output;

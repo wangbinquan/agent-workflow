@@ -1,6 +1,6 @@
-// RFC-054 W2-5 + RFC-198 T8 + RFC-199 T16 — visual regression baselines
-// for the canonical shell pages, workflow-editor workspace modes, and a
-// deterministic dynamic-workflow preview.
+// RFC-054 W2-5 + RFC-198 T8 + RFC-199 T16 + RFC-219 T6 — visual regression
+// baselines for the canonical shell pages, workflow-editor workspace modes,
+// a large categorized node catalog, and a deterministic dynamic-workflow preview.
 //
 // LOCKS: a chunk of pixels for each canonical page. Catches UI changes
 // that:
@@ -34,7 +34,7 @@ import { startDaemon, type DaemonHandle } from './harness'
 import { routePopulatedInbox } from './inbox-fixtures'
 
 const RUN_VISUAL_REGRESSION = process.env.RUN_VISUAL_REGRESSION === '1'
-const EXPECTED_VISUAL_SCENE_COUNT = 25
+const EXPECTED_VISUAL_SCENE_COUNT = 26
 
 let daemon: DaemonHandle | undefined
 
@@ -239,6 +239,28 @@ async function openEditorScene(
   await page.goto(`${requireDaemon().baseUrl}/workflows/${workflowId}`)
   await expect(page.locator('.workflow-canvas')).toBeVisible()
   await expect(page.locator('.react-flow__node')).toHaveCount(expectedNodes)
+}
+
+async function routeLargeAgentCatalog(page: Page, total = 50): Promise<void> {
+  await page.route(/\/api\/agents(?:\?.*)?$/, async (route) => {
+    const response = await route.fetch()
+    if (!response.ok()) {
+      await route.fulfill({ response })
+      return
+    }
+    const existing = (await response.json()) as Array<Record<string, unknown>>
+    const template = existing[0]
+    if (template === undefined) {
+      throw new Error('visual-regression: large Agent catalog needs one seeded template')
+    }
+    const synthetic = Array.from({ length: Math.max(0, total - existing.length) }, (_, index) => ({
+      ...template,
+      id: `rfc219-visual-agent-${index}`,
+      name: `rfc219-visual-agent-${String(index).padStart(2, '0')}`,
+      description: `Deterministic RFC-219 visual capability ${index}`,
+    }))
+    await route.fulfill({ response, json: [...existing, ...synthetic] })
+  })
 }
 
 async function seedTerminalTask(): Promise<string> {
@@ -705,6 +727,25 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await expect(page.locator('.editor-layout')).toHaveAttribute('data-workspace-mode', 'compact')
     await expect(page.getByTestId('workflow-editor-palette-surface')).toBeVisible()
     await expect(page).toHaveScreenshot('workflow-editor-1179-palette-light.png', {
+      ...SNAPSHOT_OPTS,
+      mask: [page.locator('.page--editor .page__meta code')],
+    })
+  })
+
+  test('RFC-219 editor 1179 large catalog Human category (dark)', async ({ page }) => {
+    await page.setViewportSize({ width: 1179, height: 800 })
+    await prepareScene(page, { theme: 'dark', fixture: 'clean' })
+    const workflowId = await seedEditorWorkflow()
+    await routeLargeAgentCatalog(page, 50)
+    await openEditorScene(page, workflowId, 3)
+    await page.getByTestId('workflow-add-step').click()
+    const palette = page.getByTestId('workflow-editor-palette-surface')
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    await expect(palette.getByTestId('workflow-node-picker-category-agents')).toContainText('50')
+    await palette.getByTestId('workflow-node-picker-category-human').click()
+    await expect(palette.getByTestId('workflow-node-picker-category-panel-human')).toBeVisible()
+    await expect(palette.getByTestId('workflow-node-picker-item-kind-review')).toBeVisible()
+    await expect(page).toHaveScreenshot('workflow-node-picker-1179-large-human-dark.png', {
       ...SNAPSHOT_OPTS,
       mask: [page.locator('.page--editor .page__meta code')],
     })

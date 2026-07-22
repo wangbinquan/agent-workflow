@@ -123,6 +123,34 @@ describe('Phase C bundles', () => {
     expect(i18n.t('crossClarify.canvas.paletteLabel')).toBe('cross-clarify')
   })
 
+  test('RFC-219 node-picker categories and live-result copy stay localized', () => {
+    setLanguage('zh-CN')
+    expect(i18n.t('editor.nodePicker.categoryAll')).toBe('全部')
+    expect(i18n.t('editor.nodePicker.categoryAgent')).toBe('Agent')
+    expect(i18n.t('editor.nodePicker.categoryWrapper')).toBe('包装器')
+    expect(i18n.t('editor.nodePicker.categoryIo')).toBe('输入输出')
+    expect(i18n.t('editor.nodePicker.categoryHuman')).toBe('人工节点')
+    expect(
+      i18n.t('editor.nodePicker.resultsCountInCategory', {
+        category: '包装器',
+        n: 3,
+      }),
+    ).toBe('包装器分类有 3 个步骤可用。')
+
+    setLanguage('en-US')
+    expect(i18n.t('editor.nodePicker.categoryAll')).toBe('All')
+    expect(i18n.t('editor.nodePicker.categoryAgent')).toBe('Agent')
+    expect(i18n.t('editor.nodePicker.categoryWrapper')).toBe('Wrapper')
+    expect(i18n.t('editor.nodePicker.categoryIo')).toBe('I/O')
+    expect(i18n.t('editor.nodePicker.categoryHuman')).toBe('Human')
+    expect(
+      i18n.t('editor.nodePicker.resultsCountInCategory', {
+        category: 'Wrapper',
+        n: 3,
+      }),
+    ).toBe('3 Wrapper steps available.')
+  })
+
   // Locks in the second follow-up: agent / review / clarify / cross-clarify
   // canvas chip labels now route through i18n instead of being hardcoded
   // English literals inside the renderer. AgentNode also picked up a

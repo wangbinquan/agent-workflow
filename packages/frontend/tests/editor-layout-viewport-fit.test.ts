@@ -125,3 +125,37 @@ describe('palette item description is clamped to 2 lines', () => {
     expect(body).toMatch(/overflow:\s*hidden/)
   })
 })
+
+describe('RFC-219 categorized picker remains bounded inside the 240px rail', () => {
+  test('picker and active tab panel may shrink while keeping their own scroll surface', () => {
+    const picker = ruleBody('.workflow-node-picker')
+    const panel = ruleBody('.workflow-node-picker__panel')
+    const groups = ruleBody('.workflow-node-picker__groups')
+    expect(picker).toMatch(/min-width:\s*0/)
+    expect(picker).toMatch(/width:\s*100%/)
+    expect(panel).toMatch(/min-width:\s*0/)
+    expect(panel).toMatch(/min-height:\s*0/)
+    expect(groups).toMatch(/overflow:\s*auto/)
+  })
+
+  test('long names ellipsize before the type chip or drag grip can overlap them', () => {
+    const heading = ruleBody('.workflow-node-picker__item-heading .editor-sidebar__item-label')
+    const chip = ruleBody('.workflow-node-picker__type-chip.chip--tight')
+    expect(heading).toMatch(/min-width:\s*0/)
+    expect(heading).toMatch(/overflow:\s*hidden/)
+    expect(heading).toMatch(/text-overflow:\s*ellipsis/)
+    expect(heading).toMatch(/white-space:\s*nowrap/)
+    expect(chip).toMatch(/flex:\s*0 0 auto/)
+  })
+
+  test('every category has a non-default visual accent in addition to its text chip', () => {
+    for (const category of ['agents', 'wrappers', 'io', 'human']) {
+      const row = ruleBody(`.workflow-node-picker__item[data-category='${category}']`)
+      const chip = ruleBody(`.workflow-node-picker__type-chip[data-category='${category}']`)
+      expect(row).toMatch(/border-inline-start-width:\s*3px/)
+      expect(row).toMatch(/border-inline-start-color:/)
+      expect(chip).toMatch(/background:/)
+      expect(chip).toMatch(/color:/)
+    }
+  })
+})

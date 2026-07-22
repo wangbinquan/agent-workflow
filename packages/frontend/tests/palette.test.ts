@@ -6,7 +6,10 @@
 
 import { describe, expect, test } from 'vitest'
 import type { Agent } from '@agent-workflow/shared'
+import { NODE_KIND } from '@agent-workflow/shared'
 import {
+  PALETTE_DESCRIPTORS,
+  PALETTE_SECTIONS,
   buildPalette,
   deserialize,
   makeNode,
@@ -137,6 +140,7 @@ describe('buildPalette', () => {
 
   test('groups agents into Agents + Wrappers + IO + Human sections (RFC-060 PR-E dropped Fan-out)', () => {
     const sections = buildPalette([AGENT_A], identityT)
+    expect(sections.map((s) => s.key)).toEqual(['agents', 'wrappers', 'io', 'human'])
     const labels = sections.map((s) => s.label)
     expect(labels).toEqual([
       'editor.paletteAgents',
@@ -145,6 +149,16 @@ describe('buildPalette', () => {
       'editor.paletteHuman',
     ])
     expect(sections[0]?.items[0]?.item).toEqual({ kind: 'agent-single', agentName: 'coder' })
+  })
+
+  test('every NodeKind belongs to exactly one declared RFC-219 category', () => {
+    const declaredSections = new Set(PALETTE_SECTIONS.map((section) => section.key))
+    expect(NODE_KIND.map((kind) => PALETTE_DESCRIPTORS[kind].section)).toHaveLength(
+      NODE_KIND.length,
+    )
+    for (const kind of NODE_KIND) {
+      expect(declaredSections.has(PALETTE_DESCRIPTORS[kind].section)).toBe(true)
+    }
   })
 
   test('always includes wrapper + IO entries regardless of agents', () => {

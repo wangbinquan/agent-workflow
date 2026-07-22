@@ -2067,8 +2067,15 @@ export interface Resources {
       recommended: string
       recent: string
       all: string
+      categoriesLabel: string
+      categoryAll: string
+      categoryAgent: string
+      categoryWrapper: string
+      categoryIo: string
+      categoryHuman: string
       noMatches: string
       resultsCount: string
+      resultsCountInCategory: string
       dragHint: string
     }
     starter: {
@@ -5937,8 +5944,15 @@ export const zhCN: Resources = {
       recommended: '推荐',
       recent: '最近使用',
       all: '全部步骤',
+      categoriesLabel: '按节点类型筛选',
+      categoryAll: '全部',
+      categoryAgent: 'Agent',
+      categoryWrapper: '包装器',
+      categoryIo: '输入输出',
+      categoryHuman: '人工节点',
       noMatches: '没有匹配的步骤。',
       resultsCount: '有 {{n}} 个工作流步骤可用。',
+      resultsCountInCategory: '{{category}}分类有 {{n}} 个步骤可用。',
       dragHint: '拖到画布上',
     },
     starter: {

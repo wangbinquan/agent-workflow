@@ -164,6 +164,7 @@ const TRUE_TAB_CALLSITES = [
   'components/AgentImportDialog.tsx::agent-import-source',
   'components/NodeDetailDrawer.tsx::node-detail-drawer',
   'components/canvas/NodeInspector.tsx::workflow-node-inspector',
+  'components/workflow-editor/WorkflowNodePicker.tsx::{categoryTabsId}',
   'routes/auth.tsx::auth-method',
   'routes/mcps.detail.tsx::mcps-detail',
   'routes/plugins.detail.tsx::plugins-detail',

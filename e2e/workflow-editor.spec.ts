@@ -84,6 +84,29 @@ async function seedAgent(name: string): Promise<void> {
   }
 }
 
+async function useLargeAgentCatalog(page: Page, total = 50): Promise<void> {
+  await page.route(/\/api\/agents(?:\?.*)?$/, async (route) => {
+    const response = await route.fetch()
+    if (!response.ok()) {
+      await route.fulfill({ response })
+      return
+    }
+    const existing = (await response.json()) as Array<Record<string, unknown>>
+    const template = existing[0]
+    if (template === undefined) throw new Error('large Agent catalog needs one seeded template')
+    const synthetic = Array.from({ length: Math.max(0, total - existing.length) }, (_, index) => ({
+      ...template,
+      id: `rfc219-agent-${index}`,
+      name:
+        index === 0
+          ? 'rfc219-agent-with-a-name-long-enough-to-prove-the-type-chip-never-overlaps'
+          : `rfc219-agent-${String(index).padStart(2, '0')}`,
+      description: `RFC-219 large catalog capability ${index}`,
+    }))
+    await route.fulfill({ response, json: [...existing, ...synthetic] })
+  })
+}
+
 async function seedWorkflow(
   definition: Record<string, unknown> = {
     $schema_version: 3,
@@ -281,6 +304,18 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     const before = await page.locator('.react-flow__node').count()
     expect(before).toBe(3)
 
+    // The five RFC-219 categories stay inside the 240px rail. Their shared
+    // TabBar owns horizontal overflow; the editor page itself never does.
+    const categories = page.getByTestId('workflow-node-picker-categories')
+    await expect(categories).toBeVisible()
+    const categoryOverflow = await categories.evaluate((element) => ({
+      client: element.clientWidth,
+      scroll: element.scrollWidth,
+      body: document.body.scrollWidth - document.body.clientWidth,
+    }))
+    expect(categoryOverflow.scroll).toBeGreaterThan(categoryOverflow.client)
+    expect(categoryOverflow.body).toBeLessThanOrEqual(1)
+
     // The row is a zero-drag click target; its explicit grip owns native
     // HTML5 drag so pointer activation cannot accidentally start a drag.
     const dragGrip = page.locator('.workflow-node-picker__drag-grip').first()
@@ -340,6 +375,7 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     await page.getByTestId('workflow-add-step').click()
     const palette = page.getByTestId('workflow-editor-palette-surface')
     await expect(palette).toBeVisible()
+    await expect(palette.getByRole('tablist', { name: 'Filter by node type' })).toBeVisible()
     await palette.locator('.editor-sidebar__item').first().click()
     await expect(nodes).toHaveCount(before + 1)
     await expect(page.locator('.react-flow__node.selected')).toHaveCount(1)
@@ -496,6 +532,49 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     await filter.fill('zzz-no-such-item-1729')
     await page.waitForTimeout(200)
     await expect(items).toHaveCount(0)
+  })
+
+  test('RFC-219 large catalog reaches Wrapper and Human in one category action', async ({
+    page,
+  }) => {
+    await useLargeAgentCatalog(page, 50)
+    await page.setViewportSize({ width: 1179, height: 800 })
+    await openEditor(page)
+    const nodes = page.locator('.react-flow__node')
+    const before = await nodes.count()
+
+    await page.getByTestId('workflow-add-step').click()
+    const palette = page.getByTestId('workflow-editor-palette-surface')
+    await expect(palette).toBeVisible()
+    await expect(palette.getByTestId('workflow-node-picker-category-agents')).toContainText('50')
+    await expect(palette.getByTestId('workflow-node-picker-category-wrappers')).toContainText('3')
+    await expect(palette.getByTestId('workflow-node-picker-category-human')).toContainText('3')
+
+    await palette.getByTestId('workflow-node-picker-category-wrappers').click()
+    await expect(palette.locator('[data-testid^="workflow-node-picker-item-agent-"]')).toHaveCount(
+      0,
+    )
+    await expect(
+      palette.locator('[data-testid^="workflow-node-picker-item-kind-wrapper-"]'),
+    ).toHaveCount(3)
+    await expect(palette.getByTestId('workflow-node-picker-category-panel-wrappers')).toBeVisible()
+
+    await palette.getByTestId('workflow-node-picker-category-human').click()
+    await expect(palette.locator('[data-testid^="workflow-node-picker-item-agent-"]')).toHaveCount(
+      0,
+    )
+    const review = palette.getByTestId('workflow-node-picker-item-kind-review')
+    await expect(review).toBeVisible()
+    await expect(review.locator('.workflow-node-picker__type-chip')).toHaveText('Human')
+    await review.click()
+    await expect(nodes).toHaveCount(before + 1)
+
+    const overflow = await page.evaluate(() => ({
+      body: document.body.scrollWidth - document.body.clientWidth,
+      root: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    }))
+    expect(overflow.body).toBeLessThanOrEqual(1)
+    expect(overflow.root).toBeLessThanOrEqual(1)
   })
 
   test('react-flow controls panel renders zoom / fit-view buttons', async ({ page }) => {

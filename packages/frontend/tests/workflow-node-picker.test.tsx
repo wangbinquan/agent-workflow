@@ -18,6 +18,15 @@ const agents = [
   },
 ] as Agent[]
 
+function manyAgents(count: number): Agent[] {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `agent-${index}`,
+    name: `agent-${String(index).padStart(2, '0')}`,
+    description: index === count - 1 ? 'Audits security boundaries' : `Capability ${index}`,
+    outputs: ['out'],
+  })) as Agent[]
+}
+
 beforeEach(() => localStorage.clear())
 afterEach(() => cleanup())
 
@@ -37,15 +46,81 @@ function renderPicker(props: Partial<React.ComponentProps<typeof WorkflowNodePic
 }
 
 describe('WorkflowNodePicker', () => {
-  test('uses the shared search input and exposes recommended/recent/all groups', () => {
+  test('uses shared search/category primitives and exposes stable counts plus discovery groups', () => {
     localStorage.setItem(NODE_PICKER_RECENT_STORAGE_KEY, JSON.stringify(['agent:builder']))
-    const { getByTestId, getAllByText } = renderPicker()
+    const { getByRole, getByTestId, getAllByText } = renderPicker()
     const search = getByTestId('workflow-node-picker-search')
     expect(search.getAttribute('type')).toBe('search')
     expect(search.getAttribute('aria-label')).not.toBeNull()
+    expect(getByRole('tablist', { name: /node type|节点类型/ })).toBeTruthy()
+    expect(getByTestId('workflow-node-picker-category-all').textContent).toMatch(/9/)
+    expect(getByTestId('workflow-node-picker-category-agents').textContent).toMatch(/1/)
+    expect(getByTestId('workflow-node-picker-category-wrappers').textContent).toMatch(/3/)
+    expect(getByTestId('workflow-node-picker-category-io').textContent).toMatch(/2/)
+    expect(getByTestId('workflow-node-picker-category-human').textContent).toMatch(/3/)
     expect(getAllByText(/Recommended|推荐/).length).toBeGreaterThan(0)
     expect(getAllByText(/Recent|最近/).length).toBeGreaterThan(0)
-    expect(getAllByText(/All|全部/).length).toBeGreaterThan(0)
+    expect(getAllByText(/Agents|代理/).length).toBeGreaterThan(0)
+    expect(getAllByText(/Wrappers|包装器/).length).toBeGreaterThan(0)
+  })
+
+  test('50 Agents cannot bury Wrapper or Human rows behind the Agent catalog', () => {
+    const { getByTestId, queryAllByTestId } = renderPicker({ agents: manyAgents(50) })
+    expect(getByTestId('workflow-node-picker-category-agents').textContent).toContain('50')
+
+    fireEvent.click(getByTestId('workflow-node-picker-category-wrappers'))
+    expect(queryAllByTestId(/^workflow-node-picker-item-agent-/)).toHaveLength(0)
+    expect(queryAllByTestId(/^workflow-node-picker-item-kind-wrapper-/)).toHaveLength(3)
+
+    fireEvent.click(getByTestId('workflow-node-picker-category-human'))
+    expect(queryAllByTestId(/^workflow-node-picker-item-agent-/)).toHaveLength(0)
+    expect(queryAllByTestId(/^workflow-node-picker-item-kind-(review|clarify)/)).toHaveLength(3)
+  })
+
+  test('category tabs own uniquely linked panels and support automatic arrow-key activation', () => {
+    const { getByTestId } = renderPicker()
+    const allTab = getByTestId('workflow-node-picker-category-all')
+    const allPanelId = allTab.getAttribute('aria-controls')
+    expect(allPanelId).not.toBeNull()
+    const allPanel = document.getElementById(allPanelId ?? '')
+    expect(allPanel?.getAttribute('aria-labelledby')).toBe(allTab.id)
+    expect(allPanel?.hidden).toBe(false)
+
+    allTab.focus()
+    fireEvent.keyDown(allTab, { key: 'ArrowRight' })
+    const agentsTab = getByTestId('workflow-node-picker-category-agents')
+    expect(document.activeElement).toBe(agentsTab)
+    expect(agentsTab.getAttribute('aria-selected')).toBe('true')
+    expect(allPanel?.hidden).toBe(true)
+    const agentPanel = document.getElementById(agentsTab.getAttribute('aria-controls') ?? '')
+    expect(agentPanel?.hidden).toBe(false)
+  })
+
+  test('category and search compose without clearing the query', () => {
+    const { getByTestId, queryAllByTestId } = renderPicker({ agents: manyAgents(5) })
+    const search = getByTestId('workflow-node-picker-search')
+    fireEvent.change(search, { target: { value: 'security' } })
+    expect(queryAllByTestId(/^workflow-node-picker-item-agent-/)).toHaveLength(1)
+
+    fireEvent.click(getByTestId('workflow-node-picker-category-wrappers'))
+    expect((search as HTMLInputElement).value).toBe('security')
+    expect(queryAllByTestId(/^workflow-node-picker-item-/)).toHaveLength(0)
+
+    fireEvent.click(getByTestId('workflow-node-picker-category-agents'))
+    expect((search as HTMLInputElement).value).toBe('security')
+    expect(queryAllByTestId(/^workflow-node-picker-item-agent-/)).toHaveLength(1)
+  })
+
+  test('every mixed discovery row carries a visible non-color category label', () => {
+    const { getAllByTestId } = renderPicker()
+    const agentRow = getAllByTestId('workflow-node-picker-item-agent-builder')[0]!
+    const reviewRow = getAllByTestId('workflow-node-picker-item-kind-review')[0]!
+    expect(agentRow.dataset.category).toBe('agents')
+    expect(agentRow.querySelector('.workflow-node-picker__type-chip')?.textContent).toMatch(/Agent/)
+    expect(reviewRow.dataset.category).toBe('human')
+    expect(reviewRow.querySelector('.workflow-node-picker__type-chip')?.textContent).toMatch(
+      /Human|人工/,
+    )
   })
 
   test('search covers labels, kinds and descriptions', () => {
@@ -87,6 +162,24 @@ describe('WorkflowNodePicker', () => {
     expect(stored).toHaveLength(1)
     expect(typeof stored[0]).toBe('string')
     expect(stored[0]).not.toContain('workflow')
+  })
+
+  test('search ArrowDown only enters the active category panel', async () => {
+    const { getByTestId } = renderPicker()
+    fireEvent.click(getByTestId('workflow-node-picker-category-human'))
+    const search = getByTestId('workflow-node-picker-search')
+    search.focus()
+    fireEvent.keyDown(search, { key: 'ArrowDown' })
+    const active = document.activeElement as HTMLElement
+    expect(active.dataset.category).toBe('human')
+  })
+
+  test('zero-Agent category remains selectable and explains the empty result', () => {
+    const { getByTestId, getByText, queryAllByTestId } = renderPicker({ agents: [] })
+    expect(getByTestId('workflow-node-picker-category-agents').textContent).toContain('0')
+    fireEvent.click(getByTestId('workflow-node-picker-category-agents'))
+    expect(queryAllByTestId(/^workflow-node-picker-item-/)).toHaveLength(0)
+    expect(getByText(/No matching steps|没有匹配的步骤/)).toBeTruthy()
   })
 
   test('Escape closes and restores focus to the explicit trigger', async () => {
