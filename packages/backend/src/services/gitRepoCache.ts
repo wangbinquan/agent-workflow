@@ -458,6 +458,23 @@ export async function resolveCachedRepo(
         // scrub for pre-RFC-205 mirrors), then feed the credential through a
         // one-shot askpass lease for THIS fetch only.
         await runGit(row.localPath, ['remote', 'set-url', 'origin', redacted]).catch(() => null)
+        // Impl-gate P0-6 (Codex 2026-07-22): runGit does NOT reject on a nonzero
+        // git exit, so the `.catch()` above silently masked a FAILED set-url
+        // (read-only / locked / corrupt config). We must not then fetch off an
+        // origin that STILL holds a plaintext token. Verify the origin is
+        // credential-free; if it can't be proven clean, refuse the mirror.
+        const originNow = await runGit(row.localPath, ['remote', 'get-url', 'origin'])
+        const originUrl = originNow.stdout.trim()
+        if (originNow.exitCode !== 0 || redactGitUrl(originUrl) !== originUrl) {
+          throw new DomainError(
+            'repo-origin-not-sanitized',
+            `refusing to reuse the mirror for ${redacted}: stripping the credential from its ` +
+              `origin failed (.git/config may be read-only, locked, or corrupt), so a plaintext ` +
+              `token may remain in .git/config`,
+            500,
+            { url: redacted },
+          )
+        }
         const lease = leaseGitCredential(input.url)
         let r: Awaited<ReturnType<typeof runGit>>
         try {
