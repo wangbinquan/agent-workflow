@@ -339,11 +339,16 @@ export function deriveWakeSet(input: WakeInput): WakeSet {
       (id) => !taskBusy.has(id) && !claimedThisWake.has(id),
     )
     // 2026-07-21 —— 新认领跳过只读成员（见 WakeInput.readonlyMemberIds 注释）。
-    // 兜底：过滤后无人可派而过滤前有 ⇒ 回退不过滤——全只读 roster 保持旧行为
-    // （错派后成员自述干不了），绝不把「能跑但派错」升级成 fc-deadlock。
+    // 兜底回退（不过滤）只允许在「roster 根本没有可写成员」时发生——那时宁可
+    // 旧行为错派（成员自述干不了）也不制造 fc-deadlock。判定必须看 roster 而非
+    // 当下 idle 集：可写成员只是暂时忙（批未settle）时卡应留在 open 等人空闲；
+    // 按 idle 集回退会把写活反复盲派给恰好空闲的只读成员，每卡烧满 attempt
+    // 预算并逐次刷 "reported failed by" 系统消息后硬失败（2026-07-22 任务
+    // …QGENNV 实测：4 卡 ×3 攻击位 = 14 条失败消息，4 卡全部烧穿）。
     const ro = input.readonlyMemberIds ?? new Set<string>()
     const writable = idleAll.filter((id) => !ro.has(id))
-    const idle = writable.length > 0 || idleAll.length === 0 ? writable : idleAll
+    const rosterHasWritable = agentMemberIds(config).some((id) => !ro.has(id))
+    const idle = rosterHasWritable ? writable : idleAll
     if (open.length > 0 && idle.length > 0) {
       const batchSize = Math.min(WG_FC_CLAIM_BATCH_LIMIT, Math.ceil(open.length / idle.length))
       for (let k = 0; k < idle.length; k++) {

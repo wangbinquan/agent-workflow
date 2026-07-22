@@ -7,7 +7,11 @@
 //    引擎每 pass 从 agents.permission 推导）。边界（本文件逐条锁）：
 //    - fc_initial（首轮拆解）与 message_turn 不过滤——只读角色的正当参与面；
 //    - 恢复批（1fc-a dispatched 集结）不过滤——已派是既成事实，过滤=永久孤儿卡；
-//    - 全员只读 ⇒ 回退不过滤（宁可旧行为错派，绝不制造 fc-deadlock）；
+//    - roster 全只读 ⇒ 回退不过滤（宁可旧行为错派，绝不制造 fc-deadlock）；
+//    - 回退判定看 roster 而非当下 idle 集：可写成员只是暂时忙 ⇒ 不回退、卡留
+//      open 等人（2026-07-22 任务 01KY4VWED21MH6VAE5MSQGENNV 回归——按 idle 集
+//      回退把写活反复盲派给唯一空闲的只读 auditor，4 卡各烧 3 次 attempt 预算、
+//      刷 14 条 "reported failed by" 系统消息后硬失败）；
 //    - 字段缺省 ⇒ 旧行为逐字不变。
 //
 // ② awaiting_human 成因链（用户实报困惑：wrap-up 停机被「等待回答」文案误导）：
@@ -174,6 +178,45 @@ describe('fc 新认领跳过只读成员（2026-07-21 ROLE-MISROUTE 回归）', 
     const baseline = deriveWakeSet(input({ assignments: cards }))
     expect(claims(filtered.items)).toEqual(claims(baseline.items))
     expect(claims(filtered.items).length).toBeGreaterThan(0)
+  })
+
+  test('可写成员只是忙 ⇒ 不回退：open 卡滞留，零盲派（…QGENNV 盲派循环回归）', () => {
+    // 2026-07-22 实测形态：coder/tester（可写）整程在批里，wake 时唯一空闲的
+    // 是只读成员——旧实现按「idle 集过滤后为空」回退不过滤，写活被反复盲派。
+    const cards = [asg(), asg(), asg()]
+    const w = deriveWakeSet(
+      input({
+        assignments: cards,
+        readonlyMemberIds: new Set(['m-a']),
+        inFlight: {
+          leaderRunning: false,
+          runningAssignmentIds: new Set(),
+          messageTurnMemberIds: new Set(),
+          taskTurnMemberIds: new Set(['m-b', 'm-c']), // 可写成员批在途
+        },
+      }),
+    )
+    expect(claims(w.items)).toEqual([])
+  })
+
+  test('roster 全只读 + 部分忙 ⇒ 仍回退给空闲只读成员（deadlock 防线不受 roster 判定影响）', () => {
+    const cards = [asg(), asg()]
+    const w = deriveWakeSet(
+      input({
+        assignments: cards,
+        readonlyMemberIds: new Set(['m-a', 'm-b', 'm-c']),
+        inFlight: {
+          leaderRunning: false,
+          runningAssignmentIds: new Set(),
+          messageTurnMemberIds: new Set(),
+          taskTurnMemberIds: new Set(['m-b', 'm-c']),
+        },
+      }),
+    )
+    const got = claims(w.items)
+    expect(got.length).toBe(1)
+    expect(got[0]?.memberId).toBe('m-a')
+    expect(got[0]?.assignmentIds.length).toBe(2)
   })
 
   test('恢复批（dispatched 集结）不过滤：只读 assignee 的既派卡照常恢复', () => {

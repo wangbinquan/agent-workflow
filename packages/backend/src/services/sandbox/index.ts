@@ -6,8 +6,8 @@
 // reaches Bun.spawn. No ctx (tests, sandboxMode=off, mechanism unavailable)
 // → the argv passes through untouched.
 
-import { realpathSync } from 'node:fs'
-import { basename, dirname } from 'node:path'
+import { existsSync, realpathSync } from 'node:fs'
+import { basename, dirname, join } from 'node:path'
 import { computeSandboxPolicy, renderBwrapArgs, renderSeatbeltProfile } from './policy'
 import type { SandboxStatus } from './probe'
 
@@ -109,5 +109,18 @@ export function buildRunSandboxCtx(
   if (p === null) return undefined
   const parent = dirname(worktreePath)
   const taskWorktrees = basename(parent) === taskId ? [parent] : [worktreePath]
+  // Scratch-space tasks are the one case where the task's BASE repo lives
+  // INSIDE appHome (scratch/{taskId}) — an RFC-130 iso worktree's `.git` file
+  // points at scratch/{taskId}/.git/worktrees/{runId}, so without this
+  // allow-back every git command in the agent's cwd dies EPERM under the
+  // appHome-wide deny while file writes still succeed (2026-07-22 task
+  // …QGENNV: members declared the workspace unusable and worked in the
+  // user's REAL repo instead, which sits outside the boundary). Gated on
+  // existence: non-scratch tasks have no such dir, and bwrap `--bind` of a
+  // missing source path errors the spawn.
+  const scratchBase = join(p.appHome, 'scratch', taskId)
+  if (existsSync(scratchBase) && !taskWorktrees.includes(scratchBase)) {
+    taskWorktrees.push(scratchBase)
+  }
   return { mode: p.mode, status: p.status, appHome: p.appHome, taskWorktrees, runDir }
 }
