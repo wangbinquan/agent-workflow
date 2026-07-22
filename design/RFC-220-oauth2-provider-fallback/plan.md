@@ -5,12 +5,14 @@
 ## RFC-220-T1 存储层:schema + migration + service
 
 - shared `schemas/oidcProvider.ts`:`HttpUrlSchema` + 4 端点字段 + `trustEmailVerified`
-  + `usernameClaim`(D5,毒键黑名单)(输出 schema 必填,create/patch 可选,见
+  + `usernameClaim`(D5+D7 列表形,`ClaimNameListSchema`)/`subjectClaim`(D6,
+  `ClaimNameSchema`),毒键黑名单共用(输出 schema 必填,create/patch 可选,见
   design §2.1)。
-- `db/schema.ts` oidc_providers 6 新列;migration `0108_rfc220_oauth2_manual_endpoints`
-  (6 条 ALTER + `--> statement-breakpoint`;journal `when=1786723200000`;编号以落地
-  当天 journal 尾部为准,被并发占号则顺延并回改本文)。
-- `upgrade-rolling.test.ts` journal 计数锁 bump。
+- `db/schema.ts`:oidc_providers 7 新列 + user_identities `preferred_snapshot`
+  (D7);migration `0108_rfc220_oauth2_manual_endpoints`(共 8 条 ALTER +
+  `--> statement-breakpoint`;journal `when=1786723200000`;编号以落地当天 journal
+  尾部为准,被并发占号则顺延并回改本文)。
+- `upgrade-rolling.test.ts` journal 计数锁 bump(107→108,design §2.2)。
 - `services/oidcProviders.ts`:materialize / create / patch / redacted 接新字段。
 - 测试:S1 / S2(roundtrip 部分)/ S9。
 
@@ -18,32 +20,39 @@
 
 - 前置:全量盘 oidc 符号测试锁
   (`grep -rn 'getProviderMetadata|testDiscovery|exchangeCodeForTokens|verifyIdToken' packages/backend/tests`)。
-- `auth/oidc/discovery.ts`:拆宽松 `fetchDiscoveryDocument` + 默认 fetcher 10s 超时;
-  `getProviderMetadata`/`testDiscovery` 语义不变。
+- `auth/oidc/discovery.ts`:改造为宽松 `fetchDiscoveryDocument` + 文档正缓存 +
+  10s 超时;**删除** `getProviderMetadata`/`testDiscovery`/`oidc-discovery-incomplete`
+  (生产调用方归零,design §3.3);oidc-login-chain discovery describe 4 条锁按
+  §3.3 迁移(3 条语义保留 + 1 条被 D1 有意取代并注释)。
 - 新 `auth/oidc/endpoints.ts`:`resolveEndpoints`(D1 逐字段合并)+ 负缓存(5min,
   仅 resolver 路径)+ `getJwksInstance`(按 jwksUri 键)+ `clearEndpointCaches`。
 - 测试:S3。
 
 ## RFC-220-T3 身份层 + 路由接线
 
-- `auth/oidc/tokens.ts`:`id_token` 可选化 + `fetchUserinfo` + `extractUserinfoClaims`
-  + OidcTokenError code 扩员(design §4)。
+- `auth/oidc/tokens.ts`:`id_token` 可选化 + `fetchUserinfo`(raw JSON + 10s 超时)
+  + OidcTokenError code 扩四员(design §4;claims 提取不在此,防模块环)。
 - 新 `auth/oidc/identity.ts`:`acquireIdentityClaims` 五行矩阵(design §5,含「配置态
-  判定/未验签不采信/sub 非空」三不变量)+ `readUsernameField`(D5,design §5.2,两
-  路径共用)。
+  判定/未验签不采信/sub 非空」三不变量)+ `readClaimField` + `composePreferred`
+  + `extractUserinfoClaims` + usernameClaim/subjectClaim 语义(D5/D6/D7,design
+  §5.2;subject 不回落是对抗性锁)。
+- `services/userIdentities.ts`:`preferred_snapshot` 读写 + `syncPreferredSnapshot`
+  三态(design §5.3)+ createIdentity 快照初值;callback login/create/bindInvited/
+  link 四路径接线(design §6.2)。
 - `services/oidc/provisioning.ts`:`applyEmailTrust`。
 - `routes/oidc-auth.ts`:start/callback 改接 `resolveEndpoints` + `acquireIdentityClaims`
   + OidcTokenError 塌码纠偏(design §6)。
 - `util/oidcResponse.ts`:新 friendly 码四条。
-- 测试:S4 / S5 / S6 / S7 / S8 / S11 / S12。
+- 测试:S4 / S5 / S6 / S7 / S8 / S11 / S12 / S13 / S14。
 
 ## RFC-220-T4 诊断 + 前端
 
 - `services/oidcProviders.ts`:`testDiscovery` → `probe(provider)`(ProbeResult,
   绕负缓存);`routes/oidc.ts` /test 换新 shape(design §7)。
 - `frontend/routes/settings.tsx`:手动端点 fieldset + trustEmailVerified Switch +
-  usernameClaim 输入(Behavior 组)+ ProbeResult 展示 +
-  `OidcProviderRow`/`OidcTestResult` 类型;i18n zh/en 全 key;空串→null 归一。
+  usernameClaim/subjectClaim 双输入(Behavior 组,cols-2)+ ProbeResult 展示
+  (恒 200,含 jwks 唯一通道可达性判定)+ `OidcProviderRow`/`OidcTestResult` 类型;
+  i18n zh/en 全 key;空串→null 归一。
 - 视觉自查(与 /settings 其它 tab 对齐;复用公共原语零新 chrome)。
 - 测试:S2(probe 锁迁移)/ S10。
 
@@ -70,4 +79,5 @@
 - [ ] AC-6 trustEmailVerified(T3;S7)
 - [ ] AC-7 诊断与前端(T4;S10)
 - [ ] AC-8 迁移与兼容(T1/T5;S9 + 全量套件)
-- [ ] AC-9 usernameClaim(T1/T3/T4;S12)
+- [ ] AC-9 身份字段选择器(T1/T3/T4;S12/S13)
+- [ ] AC-10 呈现名刷新(T1/T3;S14)
