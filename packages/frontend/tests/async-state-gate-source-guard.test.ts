@@ -4,26 +4,33 @@
 // code-size measure: once the sweep收编 the hand-written retry buttons and
 // muted empties, the guards keep a NEW one from silently reappearing.
 //
+// Impl-gate P3 (2026-07-22, Codex re-review) — the allowlists now pin an EXACT
+// per-file OCCURRENCE COUNT, not a whole-file boolean. The prior boolean form let
+// a grandfathered file grow a SECOND violation and stay green; a count that drifts
+// UP (new violation in a listed file) OR DOWN (the listed one was removed — stale
+// entry) now reds. Both locks carry a two-way honesty check.
+//
 // HONEST COVERAGE (documented blind spots — do not pretend otherwise):
 //   * Lock A is a STRUCTURAL signal — it catches a hand-written `<button>`
 //     whose onClick calls `refetch(` (member `x.refetch()` AND destructured bare
 //     `refetch()`, impl-gate P1-1) or passes a refetch reference. It does NOT
 //     catch icon-only retries, <Trans>-wrapped retries, a brand-new i18n key,
-//     named-handler indirection (`onClick={doRetry}`), `invalidateQueries`-style
-//     retries, or `mutation.mutate()` retries (different affordances, out of
-//     scope). The enforced contract is narrow but real: "no new hand-written
-//     refetch <button>". Everything else routes through ErrorBanner.onRetry /
-//     QueryState.
-//   * Lock B is a snapshot ratchet over hand-written `<div className="muted">`
-//     query-empties. The regex sees through extra attributes and line breaks
-//     (impl-gate P1-2); it still only fires on the listed key vocabulary, so a
-//     brand-new key word stays a documented blind spot. RFC-214 migrated the
-//     clean list-page cascades (home) and 收编 every retry button, but the
-//     remaining muted empties are bespoke / inline (dialog pickers, side
-//     panels, tree stubs, in-data empty sections, wizard branches) that
-//     QueryState v1 does not cleanly express. The allowlist grandfathers those
-//     and forbids growth: a NEW clean list page must express its empty via
-//     QueryState.emptyText / empty.
+//     NAMED-HANDLER indirection (`onClick={doRetry}` where doRetry calls refetch),
+//     `invalidateQueries`-style retries, or `mutation.mutate()` retries. Catching
+//     those needs AST/data-flow, deferred to a "guard AST-ification" pass; the
+//     enforced contract stays narrow-but-real: "no new hand-written refetch
+//     <button>". (A retry CALLBACK passed as a prop — e.g. InboxDrawer's
+//     `retry*={() => void x.refetch()}` feeding a child's ErrorBanner.onRetry —
+//     is the SANCTIONED shape, not an escapee: it is the onRetry data source.)
+//   * Lock B is a snapshot ratchet over hand-written `<div className="muted…">`
+//     query-empties. Impl-gate P3: the regex now also fires on COMBINED classes
+//     (`className="muted inventory-section__empty"`), not just the exact `"muted"`
+//     — closing the escape Codex found (7 files). It still only fires on the
+//     listed key vocabulary, so a brand-new key word stays a documented blind
+//     spot. The allowlist grandfathers the bespoke/inline empties (dialog
+//     pickers, side panels, tree stubs, in-data empty sections, wizard branches,
+//     table empties) and forbids growth: a NEW clean list page must express its
+//     empty via QueryState.emptyText / empty.
 //   * canvas/** and NodeDetailDrawer.tsx are carved out (xyflow render
 //     constraints / inline node-inspector placeholders), per design.md §5.2.
 
@@ -48,74 +55,97 @@ const FILES = walkTsx(SRC)
   .map((p) => ({ abs: p, rel: rel(p) }))
   .filter((f) => !CARVE_OUT.test(f.rel))
 
-// Lock A: the only hand-written refetch buttons that survive by design.
-//   - tasks.detail.tsx  — the room banner's compound "Details + retry" action
-//     (two buttons, not a single retry → not an ErrorBanner.onRetry shape).
-//   - CapabilityGrid.tsx — the deliberately low-key `.home-cap__error muted`
-//     inline overlay strip (btn--xs, always-shown grid; not a三态 gate).
-//   - reviews.tsx — the bespoke `reviews-version-error` inline strips.
-const ALLOW_RETRY = new Set([
-  'routes/tasks.detail.tsx',
-  'components/home/CapabilityGrid.tsx',
-  'routes/reviews.tsx',
-])
-// Impl-gate P1-1 (2026-07-21): `\brefetch\(` + optional member prefix so the
-// pre-migration mainstream forms — destructured `onClick={() => void refetch()}`
-// and bare `onClick={refetch}` — are caught too, not just `x.refetch(`.
-// (`\b` cannot fire inside `prefetch`: `p` is a word char, so no false hit.)
-const RETRY_BUTTON = /onClick=\{[^}]*\brefetch\(|onClick=\{(?:[A-Za-z0-9_$]+\.)?refetch\}/
+/** Count non-overlapping matches of a pattern's source in a file. */
+function occurrences(content: string, source: string): number {
+  return (content.match(new RegExp(source, 'g')) || []).length
+}
 
-// Lock B: grandfathered bespoke / inline muted query-empties (may shrink).
-// Impl-gate P1-2 (2026-07-21): the last three were live escapees of the old
-// tight-adjacency regex (`"muted">` immediately followed by `{t('`) — extra
-// attributes (data-testid) and prettier line breaks both dodged it. All three
-// are the declared-bespoke kinds (in-data empty section / dialog picker /
-// wizard branch), so they join the grandfather set rather than force-fitting
-// QueryState; the regex below now sees through attributes and newlines.
-const ALLOW_EMPTY = new Set([
-  'components/AclPanel.tsx',
-  'components/WorktreeFilesPanel.tsx',
-  'components/agents/NodeDependencyTreeSection.tsx',
-  'components/fusion/FuseDialog.tsx',
-  'components/mcps/McpInventoryPanel.tsx',
-  'components/memory/distill-job-detail/SourceEventsList.tsx',
-  'components/repos/BatchImportDialog.tsx',
-  'components/tasks/TaskMembersPanel.tsx',
-  'components/tasks/TaskDiagnosePanel.tsx',
-  'components/tasks/RepairChoiceDialog.tsx',
-  'routes/tasks.new.tsx',
+// ---------------------------------------------------------------------------
+// Lock A: hand-written refetch <button>. EXACT per-file occurrence allowlist.
+//   - tasks.detail.tsx  — the room banner's compound "Details + retry" action.
+//   - CapabilityGrid.tsx — the low-key `.home-cap__error muted` inline strip.
+//   - reviews.tsx — the two bespoke `reviews-version-error` inline strips.
+// ---------------------------------------------------------------------------
+const ALLOW_RETRY = new Map<string, number>([
+  ['routes/tasks.detail.tsx', 1],
+  ['components/home/CapabilityGrid.tsx', 1],
+  ['routes/reviews.tsx', 2],
 ])
-const MUTED_EMPTY =
-  /className="muted"[^>]*>\s*\{t\('(?!common\.empty')[^']*(?:[Ee]mpty|noMembers|noUsers|noEvents|noManaged|noSelectable|outputNone|noPorts|sourceDeleted)/
+// P1-1: member `x.refetch(` OR destructured bare `refetch(` / `refetch}` reference.
+// `\b` cannot fire inside `prefetch` (`p` is a word char), so no false hit.
+const RETRY_BUTTON = String.raw`onClick=\{[^}]*\brefetch\(|onClick=\{(?:[A-Za-z0-9_$]+\.)?refetch\}`
+
+// ---------------------------------------------------------------------------
+// Lock B: hand-written muted query-empties. EXACT per-file occurrence allowlist.
+// The combined-className regex (P3) sees `className="muted …"` too, so the seven
+// former escapees join the grandfather set with their real counts.
+// ---------------------------------------------------------------------------
+const ALLOW_EMPTY = new Map<string, number>([
+  ['components/AclPanel.tsx', 1],
+  ['components/WorktreeFilesPanel.tsx', 1],
+  ['components/agents/NodeDependencyTreeSection.tsx', 1],
+  ['components/fusion/FuseDialog.tsx', 2],
+  ['components/mcps/McpInventoryPanel.tsx', 4],
+  ['components/memory/distill-job-detail/SourceEventsList.tsx', 1],
+  ['components/repos/BatchImportDialog.tsx', 1],
+  ['components/tasks/TaskMembersPanel.tsx', 1],
+  ['components/tasks/TaskDiagnosePanel.tsx', 1],
+  ['components/tasks/RepairChoiceDialog.tsx', 1],
+  ['routes/tasks.new.tsx', 1],
+  // P3 (Codex re-review): combined-className escapees the exact-`"muted"` regex missed.
+  ['components/agents/DependencyTreePreview.tsx', 3],
+  ['components/inventory/AgentsTable.tsx', 1],
+  ['components/inventory/McpsTable.tsx', 1],
+  ['components/inventory/PluginsTable.tsx', 1],
+  ['components/inventory/SkillsTable.tsx', 1],
+  ['components/node-session/ConversationFlow.tsx', 1],
+  ['components/structure/StructuralGraph.tsx', 1],
+])
+// P3: `"muted"` OR `"muted <extra classes>"` — combined className no longer dodges.
+const MUTED_EMPTY = String.raw`className="muted(?: [^"]*)?"[^>]*>\s*\{t\('(?!common\.empty')[^']*(?:[Ee]mpty|noMembers|noUsers|noEvents|noManaged|noSelectable|outputNone|noPorts|sourceDeleted)`
 
 describe('RFC-214 async-state-gate source guards', () => {
-  test('Lock A — a hand-written <button onClick refetch> lives only in the grandfathered bespoke banners', () => {
-    const offenders = FILES.filter((f) => RETRY_BUTTON.test(readFileSync(f.abs, 'utf8')))
-      .map((f) => f.rel)
-      .filter((f) => !ALLOW_RETRY.has(f))
-    expect(
-      offenders,
-      `New hand-written retry button(s). Route retry through ErrorBanner.onRetry / QueryState instead of a hand-written <button onClick={() => void x.refetch()}>:\n  ${offenders.join('\n  ')}`,
-    ).toEqual([])
-  })
-
-  test('Lock A allowlist stays honest — every entry still carries the pattern', () => {
-    for (const f of ALLOW_RETRY) {
+  // Shared: a lock's offenders are files whose occurrence count EXCEEDS the
+  // allowlisted count (a fresh violation, or a second one in a listed file).
+  function offendersOver(source: string, allow: Map<string, number>): string[] {
+    return FILES.filter(
+      (f) => occurrences(readFileSync(f.abs, 'utf8'), source) > (allow.get(f.rel) ?? 0),
+    ).map(
+      (f) =>
+        `${f.rel} (${occurrences(readFileSync(f.abs, 'utf8'), source)} > ${allow.get(f.rel) ?? 0} allowed)`,
+    )
+  }
+  // Shared honesty: every listed file STILL carries EXACTLY its allowlisted count
+  // — a drift down means the entry is stale (remove it); up is caught above too.
+  function assertHonest(source: string, allow: Map<string, number>): void {
+    for (const [f, expected] of allow) {
       expect(
-        RETRY_BUTTON.test(readFileSync(path.join(SRC, f), 'utf8')),
-        `${f} no longer has a hand-written refetch button — remove it from ALLOW_RETRY.`,
-      ).toBe(true)
+        occurrences(readFileSync(path.join(SRC, f), 'utf8'), source),
+        `${f} occurrence count drifted from ${expected}`,
+      ).toBe(expected)
     }
+  }
+
+  test('Lock A — no hand-written refetch <button> beyond the grandfathered exact counts', () => {
+    expect(
+      offendersOver(RETRY_BUTTON, ALLOW_RETRY),
+      'New/extra hand-written retry button(s). Route retry through ErrorBanner.onRetry / QueryState.',
+    ).toEqual([])
   })
 
-  test('Lock B — a hand-written muted query-empty lives only in the grandfathered set', () => {
-    const offenders = FILES.filter((f) => MUTED_EMPTY.test(readFileSync(f.abs, 'utf8')))
-      .map((f) => f.rel)
-      .filter((f) => !ALLOW_EMPTY.has(f))
+  test('Lock A honesty — every allowlist entry still carries EXACTLY its count', () => {
+    assertHonest(RETRY_BUTTON, ALLOW_RETRY)
+  })
+
+  test('Lock B — no hand-written muted query-empty beyond the grandfathered exact counts', () => {
     expect(
-      offenders,
-      `New hand-written muted empty. Express query empties through QueryState.emptyText / empty:\n  ${offenders.join('\n  ')}`,
+      offendersOver(MUTED_EMPTY, ALLOW_EMPTY),
+      'New/extra hand-written muted empty. Express query empties through QueryState.emptyText / empty.',
     ).toEqual([])
+  })
+
+  test('Lock B honesty — every allowlist entry still carries EXACTLY its count', () => {
+    assertHonest(MUTED_EMPTY, ALLOW_EMPTY)
   })
 
   test('the sanctioned homes exist and stay clean', () => {
@@ -124,6 +154,6 @@ describe('RFC-214 async-state-gate source guards', () => {
     expect(errorBanner).toContain('onRetry')
     expect(queryState).toContain('export function QueryState')
     // The primitives must NOT themselves contain a hand-written refetch button.
-    expect(RETRY_BUTTON.test(errorBanner)).toBe(false)
+    expect(occurrences(errorBanner, RETRY_BUTTON)).toBe(0)
   })
 })
