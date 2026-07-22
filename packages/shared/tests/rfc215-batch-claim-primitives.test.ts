@@ -3,6 +3,8 @@
 // 这些原语是引擎 6 个 `batch:` 消费点（design §9 清单）共享的单一事实源——
 // 任何一处 fork 私有解析都会在恢复/重排队路径静默错配，故在源头锁死格式。
 import { describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import {
   buildBatchShardKey,
   parseBatchShardKey,
@@ -101,5 +103,21 @@ describe('RFC-215 — clarify askerKey collapses batch to the member (design §6
     expect(wgClarifyAskerKey('__wg_member__', '01CARDA', LEADER)).toBe('asg:01CARDA')
     expect(wgClarifyAskerKey('__wg_member__', 'msg:m-a:01M1', LEADER)).toBe('mem:m-a')
     expect(wgClarifyAskerKey(LEADER, null, LEADER)).toBe('leader')
+  })
+
+  // RFC-215 finding 回归锁（design §9 第六消费点）：批 shardKey 的 askerKey 曾 fork
+  // 私有 `.split(':')[1]`，与其余 5 个 `batch:` 消费点漂移风险。锁死它走单源
+  // parseBatchShardKey、且不含手工 split(':')——批 key 格式一旦变，askerKey 身份随单源
+  // 联动而非静默错配（预算计数 + stop 指令都 key 在它上）。行为等价由上面两条断言锁。
+  test('askerKey 走单源 parseBatchShardKey，不再手工 split(":")', () => {
+    const src = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'schemas', 'workgroup.ts'),
+      'utf-8',
+    )
+    const start = src.indexOf('export function wgClarifyAskerKey')
+    expect(start).toBeGreaterThan(-1)
+    const body = src.slice(start, src.indexOf('\nexport ', start + 1))
+    expect(body).toContain('parseBatchShardKey')
+    expect(body).not.toContain(".split(':')")
   })
 })

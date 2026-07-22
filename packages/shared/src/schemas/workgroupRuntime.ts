@@ -11,14 +11,16 @@
 
 import { z } from 'zod'
 import {
+  buildBatchShardKey,
   buildMsgShardKey,
+  parseBatchShardKey,
   parseMsgShardKey,
   WorkgroupMemberDisplayNameSchema,
   WorkgroupMemberTypeSchema,
   WorkgroupModeSchema,
   WorkgroupSwitchesSchema,
 } from './workgroup'
-export { buildMsgShardKey, parseMsgShardKey }
+export { buildBatchShardKey, buildMsgShardKey, parseBatchShardKey, parseMsgShardKey }
 
 // ---------------------------------------------------------------------------
 // Task-level config snapshot (tasks.workgroup_config_json, design §1.3)
@@ -435,34 +437,13 @@ export function parseWgTaskResultsPort(raw: string, batchSize: number): WgTaskRe
   return { ok: true, value: r.value, missing }
 }
 
-// ---------------------------------------------------------------------------
-// Batch shard key (RFC-215 design §3.1) — the single codec every consumer of
-// a `batch:` shardKey shares (engine registration, reconcile, autonomous
-// requeue, room classification, clarify asker key). memberId is ENCODED so
-// recovery paths never depend on a DB back-reference that the autonomous
-// requeue nulls out (design §12-4).
-// ---------------------------------------------------------------------------
-
-/** `batch:<memberId>:<id1>+<id2>...` — memberId/卡 id 均为 ULID（不含 `:`/`+`）。 */
-export function buildBatchShardKey(memberId: string, assignmentIds: readonly string[]): string {
-  return `batch:${memberId}:${assignmentIds.join('+')}`
-}
-
-export function parseBatchShardKey(
-  shardKey: string | null,
-): { memberId: string; assignmentIds: string[] } | null {
-  if (shardKey === null || !shardKey.startsWith('batch:')) return null
-  const rest = shardKey.slice('batch:'.length)
-  const sep = rest.indexOf(':')
-  if (sep <= 0) return null
-  const memberId = rest.slice(0, sep)
-  const ids = rest
-    .slice(sep + 1)
-    .split('+')
-    .filter((s) => s.length > 0)
-  if (ids.length === 0) return null
-  return { memberId, assignmentIds: ids }
-}
+// Batch shard key codec (RFC-215 §3.1) — the single codec every consumer of a
+// `batch:` shardKey shares (engine registration, reconcile, autonomous requeue,
+// room classification, AND clarify asker key). memberId is ENCODED so recovery
+// paths never depend on a DB back-reference the autonomous requeue nulls out
+// (design §12-4). It now LIVES in workgroup.ts (re-exported above) so the sixth
+// consumer wgClarifyAskerKey can use it without the workgroup→workgroupRuntime
+// import cycle — see design §9.
 
 /**
  * free_collab duplicate-task guard key (design §7.3): NFKC + lower + strip

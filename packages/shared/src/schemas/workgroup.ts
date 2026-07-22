@@ -31,6 +31,34 @@ export function parseMsgShardKey(
   return m === null ? null : { memberId: m[1] as string, maxMessageId: m[2] as string }
 }
 
+/**
+ * RFC-215 §3.1 — fc task-batch shard key: `batch:<memberId>:<id1>+<id2>...`.
+ * memberId/卡 id 均为 ULID（不含 `:`/`+`）. The SINGLE-SOURCE codec every batch
+ * consumer keys on (design §9); lives here (not workgroupRuntime.ts) so the
+ * in-module wgClarifyAskerKey can use it too — workgroupRuntime imports FROM this
+ * file, so a helper it owned would be unreachable here without a cycle. Parses
+ * via indexOf/slice, never the grep-banned `.split(':')`.
+ */
+export function buildBatchShardKey(memberId: string, assignmentIds: readonly string[]): string {
+  return `batch:${memberId}:${assignmentIds.join('+')}`
+}
+
+export function parseBatchShardKey(
+  shardKey: string | null,
+): { memberId: string; assignmentIds: string[] } | null {
+  if (shardKey === null || !shardKey.startsWith('batch:')) return null
+  const rest = shardKey.slice('batch:'.length)
+  const sep = rest.indexOf(':')
+  if (sep <= 0) return null
+  const memberId = rest.slice(0, sep)
+  const ids = rest
+    .slice(sep + 1)
+    .split('+')
+    .filter((s) => s.length > 0)
+  if (ids.length === 0) return null
+  return { memberId, assignmentIds: ids }
+}
+
 /** Permitted characters in workgroup name (URL-safe; matches `/api/workgroups/:name`). */
 export const WORKGROUP_NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 
@@ -400,7 +428,9 @@ export function wgClarifyAskerKey(
   }
   // RFC-215 §6.3 — fc 任务批 run 折叠到成员：批 shardKey 编卡集合，卡回 open 重组
   // 批次会换 key，若直用则预算清零 + stop 指令成孤儿（同上 R12 的旁路在任务轨重开）。
-  if (shardKey.startsWith('batch:')) return `asg:batch:${shardKey.split(':')[1] ?? ''}`
+  // 单源 parseBatchShardKey（design §9 六消费点承诺），不再手工 split(':')。
+  const batch = parseBatchShardKey(shardKey)
+  if (batch !== null) return `asg:batch:${batch.memberId}`
   return `asg:${shardKey}`
 }
 
