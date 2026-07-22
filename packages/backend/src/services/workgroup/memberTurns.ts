@@ -2,7 +2,6 @@
 // verbatim from runner.ts): the single-card assignment turn (lw + fc adopt
 // paths) and the single-shot message turn, plus the roster→Agent resolver.
 
-import { workgroupAssignments } from '@/db/schema'
 import { getAgent } from '@/services/agent'
 import {
   buildMsgShardKey,
