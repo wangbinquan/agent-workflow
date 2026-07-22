@@ -34,6 +34,7 @@ import {
   nodeKindSettlesWithoutRow,
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
+import { isWorkgroupTask } from '@agent-workflow/shared'
 import {
   clarifyRounds,
   docVersions,
@@ -314,7 +315,7 @@ async function checkOne(
   // gate holder run and NO doc_version, and park awaiting_human on
   // leader-idle / clarify / delivery — all by design, engine-owned. S1/S2's
   // review/clarify heuristics would permanently misfire; S3/S4/S5 still apply.
-  if (c.workgroupId !== null && (c.status === 'awaiting_review' || c.status === 'awaiting_human')) {
+  if (isWorkgroupTask(c) && (c.status === 'awaiting_review' || c.status === 'awaiting_human')) {
     return out
   }
 

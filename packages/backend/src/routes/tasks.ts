@@ -18,6 +18,7 @@ import {
   TaskStatusSchema,
 } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
+import { isWorkgroupTask } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import type { Context } from 'hono'
 import { actorOf } from '@/auth/actor'
@@ -674,7 +675,7 @@ async function assertTaskWorkflowNotBuiltin(deps: AppDeps, taskId: string): Prom
   const task = await getTask(deps.db, taskId)
   if (task === null) return
   if (taskExecutionKind(task) === 'agent') return
-  if (task.workgroupId != null && task.workgroupId !== '') {
+  if (isWorkgroupTask(task)) {
     const row = (
       await deps.db
         .select({ workgroupConfigJson: tasksTable.workgroupConfigJson })

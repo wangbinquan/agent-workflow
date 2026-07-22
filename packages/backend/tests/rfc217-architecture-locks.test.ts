@@ -205,3 +205,32 @@ describe('rfc217 G5/G7 — mode branches ratcheted, shardKey goes through codecs
     expect(offenders).toEqual([])
   })
 })
+
+describe('rfc217 G4 — the workgroup discriminator has ONE oracle', () => {
+  test('raw workgroupId null-checks are banned outside the shared oracle', () => {
+    // taskExecutionKind / isWorkgroupTask (packages/shared/src/schemas/task.ts)
+    // are the ONLY places allowed to read the raw discriminator; every other
+    // site (backend + frontend) goes through them (flag-audit kind-scatter).
+    const roots = ['packages/backend/src', 'packages/frontend/src']
+    const banned = [
+      'workgroupId !== null',
+      'workgroupId != null',
+      'workgroupId === null',
+      'workgroupId == null',
+      'workgroupId !== undefined',
+    ]
+    const offenders: string[] = []
+    const walk = (dir: string): void => {
+      for (const e of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
+        const rel = `${dir}/${e.name}`
+        if (e.isDirectory()) walk(rel)
+        else if (/\.(ts|tsx)$/.test(e.name)) {
+          const src = read(rel)
+          for (const b of banned) if (src.includes(b)) offenders.push(`${rel} ⇒ ${b}`)
+        }
+      }
+    }
+    for (const r of roots) walk(r)
+    expect(offenders).toEqual([])
+  })
+})

@@ -438,6 +438,11 @@ export function taskExecutionKind(t: {
   return 'workflow'
 }
 
+/** RFC-217 G4 — the ONE workgroup-task discriminator (thin veneer over taskExecutionKind). */
+export function isWorkgroupTask(t: { workgroupId?: string | null }): boolean {
+  return taskExecutionKind(t) === 'workgroup'
+}
+
 /**
  * POST /api/tasks body.
  *

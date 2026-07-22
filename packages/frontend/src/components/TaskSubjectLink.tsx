@@ -25,6 +25,7 @@
 
 import type { ReactElement } from 'react'
 import { Link } from '@tanstack/react-router'
+import { isWorkgroupTask } from '@agent-workflow/shared'
 import { useTranslation } from 'react-i18next'
 import { taskExecutionKind } from '@agent-workflow/shared'
 import { StatusChip } from '@/components/StatusChip'
@@ -96,7 +97,7 @@ export function TaskSubjectLink({ task, taskId, badge = false }: TaskSubjectLink
     if (name === null) {
       // Deleted group (frozen name unavailable): keep the badge, drop the dead link.
       subject = <span className="data-table__muted">{t('common.emDash')}</span>
-    } else if (isWorkgroup && task.workgroupId != null) {
+    } else if (isWorkgroup && typeof task.workgroupId === 'string' && isWorkgroupTask(task)) {
       subject = (
         <Link
           to="/workgroups/by-id/$id"

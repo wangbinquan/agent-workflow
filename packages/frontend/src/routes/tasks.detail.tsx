@@ -2,6 +2,7 @@
 // diff viewer. Polls each section independently so a slow `diff` request
 // doesn't stall the node-run progress feed.
 
+import { isWorkgroupTask } from '@agent-workflow/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
@@ -224,7 +225,7 @@ function TaskDetailPage() {
     task.data === undefined ? false : collectPorts(task.data.workflowSnapshot).length > 0
   // RFC-164 PR-4: workgroup tasks swap the tab set (chat room first, canvas +
   // outputs hidden — the builtin host graph is not an observation surface).
-  const isWorkgroup = task.data?.workgroupId != null
+  const isWorkgroup = task.data !== undefined && isWorkgroupTask(task.data)
   // RFC-167 PR-3: dynamic_workflow groups are the exception — no chatroom;
   // the orchestration panel + (post-confirm) the REAL DAG canvas. RFC-198
   // treats this async room aggregate as the classification authority: a

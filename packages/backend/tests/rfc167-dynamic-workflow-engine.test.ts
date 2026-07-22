@@ -661,7 +661,7 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
       resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
       'utf8',
     )
-    expect(src).toContain('task.workgroupId !== null') // RFC-164 lock stays
+    expect(src).toContain('isWorkgroupTask(task)') // RFC-164 lock stays (RFC-217 G4: oracle form)
     // RFC-217 T2: mode still comes from the frozen config; the dw phase comes
     // from workgroup_task_state (the FromConfig oracle over raw JSON retired).
     expect(src).toContain('deriveWorkgroupDispatch(')

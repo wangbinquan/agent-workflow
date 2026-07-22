@@ -26,6 +26,7 @@ import {
   workgroupMessages,
 } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
+import { isWorkgroupTask } from '@agent-workflow/shared'
 import { setNodeRunStatusTx } from '@/services/lifecycle'
 import { resumeTask, resumeTaskWithAtomicSideEffects } from '@/services/task'
 import { canViewTask } from '@/services/taskCollab'
@@ -185,7 +186,7 @@ export function buildWorkgroupTaskActions(deps: WorkgroupTaskActionDeps) {
     )[0]
     if (
       row === undefined ||
-      row.workgroupId === null ||
+      !isWorkgroupTask(row) ||
       row.workgroupConfigJson === null ||
       !(await canViewTask(deps.db, actor, row))
     ) {

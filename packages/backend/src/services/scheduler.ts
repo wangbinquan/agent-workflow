@@ -209,12 +209,13 @@ import {
   type WorkgroupEngineHooks,
   type WorkgroupHostRunRequest,
   type WorkgroupHostRunResult,
-} from '@/services/workgroup/runner'
+} from '@/services/workgroup/engine'
 import { loadWorkgroupTaskState } from '@/services/workgroup/state'
 import { runDynamicWorkflowGenerate } from '@/services/dynamicWorkflowRunner'
 import { DW_ORCHESTRATOR_NODE_ID } from '@/services/orchestratorAgent'
 import {
   deriveWorkgroupDispatch,
+  isWorkgroupTask,
   workgroupModeOf,
   type WorkgroupDispatch,
 } from '@agent-workflow/shared'
@@ -579,13 +580,12 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
     // like any ordinary workflow task. RFC-217 T2: the phase lives in
     // workgroup_task_state (an unknown mode still routes to the turn engine,
     // which fails with its own precise config diagnostics).
-    const wgDispatch: WorkgroupDispatch | null =
-      task.workgroupId !== null
-        ? deriveWorkgroupDispatch(
-            workgroupModeOf(task.workgroupConfigJson) ?? 'leader_worker',
-            (await loadWorkgroupTaskState(db, taskId)).dwState?.phase ?? null,
-          )
-        : null
+    const wgDispatch: WorkgroupDispatch | null = isWorkgroupTask(task)
+      ? deriveWorkgroupDispatch(
+          workgroupModeOf(task.workgroupConfigJson) ?? 'leader_worker',
+          (await loadWorkgroupTaskState(db, taskId)).dwState?.phase ?? null,
+        )
+      : null
     if (
       wgDispatch === 'dw-execute' &&
       definition.nodes.some((n) => n.id === DW_ORCHESTRATOR_NODE_ID)
@@ -603,7 +603,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
       return
     }
     result =
-      task.workgroupId !== null && wgDispatch !== 'dw-execute'
+      isWorkgroupTask(task) && wgDispatch !== 'dw-execute'
         ? wgDispatch === 'dw-generate'
           ? await runDynamicWorkflowGenerate({
               db,

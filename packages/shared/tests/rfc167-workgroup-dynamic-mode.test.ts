@@ -16,6 +16,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import {
+  isWorkgroupTask,
   CreateWorkgroupSchema,
   DW_PHASES,
   deriveWorkgroupDispatch,
@@ -205,5 +206,14 @@ describe('deriveWorkgroupDispatch — single dispatch oracle (design §3)', () =
     // corrupt / missing config on a workgroup task → fail-closed (blocked)
     expect(isTurnEngineWorkgroupTask({ workgroupId: 'wg', workgroupConfigJson: null })).toBe(true)
     expect(isTurnEngineWorkgroupTask({ workgroupId: 'wg', workgroupConfigJson: '{{' })).toBe(true)
+  })
+})
+
+describe('RFC-217 G4 — isWorkgroupTask veneer', () => {
+  test('mirrors taskExecutionKind exactly (incl. empty-string legacy rows)', () => {
+    expect(isWorkgroupTask({ workgroupId: 'wg1' })).toBe(true)
+    expect(isWorkgroupTask({ workgroupId: null })).toBe(false)
+    expect(isWorkgroupTask({ workgroupId: '' })).toBe(false)
+    expect(isWorkgroupTask({})).toBe(false)
   })
 })

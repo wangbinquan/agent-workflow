@@ -3,6 +3,7 @@
 // Lives outside `routes/tasks.detail.tsx` so the React component can stay
 // focused on JSX wiring while these branches get exhaustive unit coverage.
 
+import { isWorkgroupTask } from '@agent-workflow/shared'
 import { isTerminalTaskStatus } from '@agent-workflow/shared'
 import type { DynamicWorkflowPhase, NodeRun, Task } from '@agent-workflow/shared'
 
@@ -122,7 +123,7 @@ export function deriveTaskDetailCapabilities(
         worktreePath: task.worktreePath,
         baseCommit: task.baseCommit,
       })
-  const isWorkgroup = task.workgroupId !== null && task.workgroupId !== undefined
+  const isWorkgroup = isWorkgroupTask(task)
   const stableRoom = isWorkgroup && relatedData.room.status === 'ready'
 
   return {

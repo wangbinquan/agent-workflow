@@ -775,7 +775,7 @@ describe('RFC-164 engine — source locks', () => {
   )
 
   test('runTask branches to the workgroup engine BEFORE runScope (never frontier)', () => {
-    expect(SCHEDULER_SRC).toContain('task.workgroupId !== null')
+    expect(SCHEDULER_SRC).toContain('isWorkgroupTask(task)')
     expect(SCHEDULER_SRC).toContain('runWorkgroupEngine(')
   })
 
