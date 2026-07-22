@@ -262,16 +262,20 @@ export async function createNodeIso(opts: {
     // usually exists only in the pool, reachable via the alternates that
     // capture just attached.
     if (detectSubmodules(isoWorktreePath)) {
-      await alignWorktreeGitlinks(isoWorktreePath, baseSnapshot, taskBaseHead, {
+      const aligned = await alignWorktreeGitlinks(isoWorktreePath, baseSnapshot, taskBaseHead, {
         ...(opts.submoduleMode !== undefined ? { submoduleMode: opts.submoduleMode } : {}),
         ...(opts.submoduleJobs !== undefined ? { submoduleJobs: opts.submoduleJobs } : {}),
         ...(opts.log !== undefined ? { log: opts.log } : {}),
       })
-      ;({ subBases, poolDirs } = await captureSubmoduleTopology(
-        isoWorktreePath,
-        r.worktreePath,
-        opts.log,
-      ))
+      // Re-capture only when the alignment actually moved/attached something —
+      // the common no-drift case keeps iso creation at one capture.
+      if (aligned) {
+        ;({ subBases, poolDirs } = await captureSubmoduleTopology(
+          isoWorktreePath,
+          r.worktreePath,
+          opts.log,
+        ))
+      }
     }
     repos.push({
       repoPath: r.repoPath,
@@ -1227,8 +1231,29 @@ async function gitlinksReachable(worktreePath: string, tree: string): Promise<bo
  */
 export const ISO_DISCARD_GIT_TIMEOUT_MS = 60_000
 
-/** Remove all iso worktrees + delete the base/node pin refs for a run (best-effort). */
-export async function discardNodeIso(handle: IsoHandle, log?: Logger): Promise<void> {
+/** Structural slice of the per-task write lock (TaskWriteSem shape) — declared
+ *  here because this module may not import isolatedAgentRun (edge direction). */
+export interface DiscardLock {
+  run<T>(fn: () => Promise<T>): Promise<T>
+}
+
+/** Remove all iso worktrees + delete the base/node pin refs for a run (best-effort).
+ *
+ *  `writeSem` (RFC-210 review round 6, P1): when given, the NEW-path anchor
+ *  handoff + node-ref drop run under the task write lock. Outside it, a
+ *  known-path merge could anchor its candidate, this discard could then read
+ *  the still-unmaterialized canonical and CAS the ref BACKWARD (the sibling's
+ *  in-merge write is the CAS's expected-old), and the sibling — seeing the
+ *  path as known — would never re-anchor at its own discard: its landed
+ *  commit ends one pool gc away from `bad object`. Under the lock no merge
+ *  interleaves the read and the write; the CAS stays as the cross-discard
+ *  guard. Callers that cannot supply the lock (tests, GC sweeps) keep the
+ *  CAS-only behavior. */
+export async function discardNodeIso(
+  handle: IsoHandle,
+  log?: Logger,
+  writeSem?: DiscardLock,
+): Promise<void> {
   if (handle.passthrough) return // in-place run — the canonical worktree is NOT ours to remove
   for (const r of handle.repos) {
     try {
@@ -1250,8 +1275,15 @@ export async function discardNodeIso(handle: IsoHandle, log?: Logger): Promise<v
     // RFC-210 (review round 4): hand NEW paths their durable worktree anchor
     // from canonical's actual state BEFORE this run's node refs go away; a
     // path that cannot be anchored keeps its node refs (leak-not-lose).
-    const keepRefs = await anchorNewPathsAtDiscard(r, handle.taskId, log)
-    await dropNodePoolRefs(r, handle.taskId, handle.nodeRunId, log, keepRefs)
+    const handoff = async (): Promise<void> => {
+      const keepRefs = await anchorNewPathsAtDiscard(r, handle.taskId, log)
+      await dropNodePoolRefs(r, handle.taskId, handle.nodeRunId, log, keepRefs)
+    }
+    if (writeSem !== undefined && Object.keys(r.poolDirs).length > 0) {
+      await writeSem.run(handoff)
+    } else {
+      await handoff()
+    }
   }
 }
 

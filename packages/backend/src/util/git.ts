@@ -1960,10 +1960,10 @@ export async function alignWorktreeGitlinks(
     submoduleJobs?: number
     log?: Logger
   },
-): Promise<void> {
+): Promise<boolean> {
   const { resolveSubmoduleParams } = await import('@/services/gitRepoCache')
   const effective = resolveSubmoduleParams(opts?.submoduleMode, opts?.submoduleJobs)
-  await checkoutMergedGitlinks(worktreePath, tree, effective, opts?.log, '', {
+  return checkoutMergedGitlinks(worktreePath, tree, effective, opts?.log, '', {
     rootPath: worktreePath,
     currentTree,
   })
@@ -2260,8 +2260,9 @@ async function checkoutMergedGitlinks(
      */
     currentTree: string | null
   },
-): Promise<void> {
-  if (effective.mode === 'never') return
+): Promise<boolean> {
+  if (effective.mode === 'never') return false
+  let changed = false
   const rootPath = ctx?.rootPath ?? worktreePath
   // `-r` is load-bearing, not an optimization. Without it this lists only the
   // root level, and a submodule at `libs/vendor` shows up as `040000 tree libs`
@@ -2272,7 +2273,7 @@ async function checkoutMergedGitlinks(
   // another repository), so the explicit recursion further down still does the
   // nested-submodule work.
   const listed = await runGit(worktreePath, ['ls-tree', '-r', tree])
-  if (listed.exitCode !== 0) return
+  if (listed.exitCode !== 0) return changed
   for (const line of listed.stdout.split('\n')) {
     // `<mode> <type> <sha>\t<name>`; gitlinks are type `commit`.
     const [meta, name] = line.split('\t')
@@ -2291,6 +2292,12 @@ async function checkoutMergedGitlinks(
       const cur = await runGit(worktreePath, ['rev-parse', `${ctx.currentTree}:${name}`])
       if (cur.exitCode === 0 && cur.stdout.trim() !== '') currentSha = cur.stdout.trim()
     }
+    // Unchanged gitlink ⟹ nothing to do at this level OR below it (the target
+    // commit — and therefore every nested gitlink it records — is identical).
+    // This is what keeps the alignment pass O(changed), not O(submodules):
+    // slow CI hosts pushed two pre-existing merge-back tests over their 5s
+    // default timeout when every iso creation re-checked-out every submodule.
+    if (currentSha !== null && currentSha === sha && existsSync(join(subPath, '.git'))) continue
     // An uninitialized submodule is an EMPTY DIRECTORY, not a missing one — git
     // creates it for the gitlink — so `existsSync(subPath)` is always true and
     // never skipped anything. `git -C <empty dir> checkout` then walks up and
@@ -2345,6 +2352,7 @@ async function checkoutMergedGitlinks(
           500,
         )
       }
+      changed = true
       // Fall through to the recursion below — a freshly attached submodule may
       // itself contain gitlinks (checked out non-recursively on purpose; each
       // nested level attaches from ITS OWN pool right here).
@@ -2358,6 +2366,7 @@ async function checkoutMergedGitlinks(
       continue
     }
     const preHead = (await runGit(subPath, ['rev-parse', 'HEAD'])).stdout.trim()
+    changed = true
     const co = await runGit(subPath, ['checkout', '--detach', sha])
     if (co.exitCode !== 0) {
       const stderr = co.stderr.trim()
@@ -2421,6 +2430,7 @@ async function checkoutMergedGitlinks(
       })
     }
   }
+  return changed
 }
 
 /** `git diff --name-only --diff-filter=<filter> <from> <to>` (RFC-130 materialize helper). */

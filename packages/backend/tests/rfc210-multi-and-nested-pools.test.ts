@@ -125,7 +125,9 @@ describe('RFC-210 — two sibling submodules', () => {
     expect(readFileSync(join(canonZ, 'z.txt'), 'utf8')).toBe('edited-by-node\n')
     // The untouched sibling stays put.
     expect(readFileSync(join(canon, 'aaa', 'a.txt'), 'utf8')).toBe('a1\n')
-  })
+    // Explicit timeout: real-git fixtures on loaded CI hosts have breached the
+    // 5s default (RFC-210 review round 6 — sibling files carry the same).
+  }, 120_000)
 })
 
 describe('RFC-210 — nested submodule (AC-4)', () => {
@@ -173,5 +175,5 @@ describe('RFC-210 — nested submodule (AC-4)', () => {
     const canonInner = join(canon, 'vendor', 'inner')
     expect((await runGit(canonInner, ['rev-parse', 'HEAD'])).stdout.trim()).toBe(innerSha)
     expect(readFileSync(join(canonInner, 'i.txt'), 'utf8')).toBe('edited-by-node\n')
-  })
+  }, 120_000)
 })

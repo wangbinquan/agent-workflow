@@ -225,7 +225,7 @@ import {
 // RFC-210 replay: submodule topology read-back + the fail-closed gate around it.
 import { IsoSubmodulesSchema } from '@agent-workflow/shared'
 import { existsSync } from 'node:fs'
-import { join as pathJoin } from 'node:path'
+import { basename, join as pathJoin } from 'node:path'
 import { Semaphore } from '@/util/semaphore'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 
@@ -1139,7 +1139,7 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
       // runHostNode able to resolve at all.
       releaseGlobal()
       try {
-        if (!keepHookIso) await discardNodeIso(iso, log)
+        if (!keepHookIso) await discardNodeIso(iso, log, state.writeSem)
       } catch {
         /* best-effort */
       }
@@ -2241,6 +2241,16 @@ function parseIsoJsonMap(s: string | null): Record<string, string> {
   }
 }
 
+/** RFC-210 round 6 P2 — the run id that KEYS the physical iso (worktree path +
+ *  ref namespaces), recovered from the persisted container path. A
+ *  process-retry keeps the original row's iso (D17) while its DB row is the
+ *  retry mint; falling back to the row id preserves pre-column-era rows. */
+function isoKeyOf(isoWorktreePath: string | null, rowId: string): string {
+  if (isoWorktreePath === null || isoWorktreePath === '') return rowId
+  const base = basename(isoWorktreePath)
+  return base === '' ? rowId : base
+}
+
 /**
  * RFC-210 — read a node_run's persisted submodule topology back for replay.
  *
@@ -2378,7 +2388,11 @@ async function replayPendingMerges(state: SchedulerState, log: Logger): Promise<
     const handle = rebuildIsoHandle({
       appHome: state.opts.appHome,
       taskId,
-      nodeRunId: r.id,
+      // Round 6 P2: the PHYSICAL iso identity — a process-retry keeps the
+      // worktree + ref namespace keyed by the ORIGINAL row id (D17) while
+      // pending-merge lands on the retry row; rebuild from the persisted
+      // path so discard/refs address what actually exists.
+      nodeRunId: isoKeyOf(r.isoWorktreePath, r.id),
       canonRepos: state.repos,
       baseSnapshots,
       taskBaseHeads,
@@ -2416,7 +2430,7 @@ async function replayPendingMerges(state: SchedulerState, log: Logger): Promise<
       // site's discard — without this the node-scoped pool refs leak forever
       // and a NEW path's worktree anchor is never handed over. Best-effort:
       // the iso worktree is usually already gone (that is why we replayed).
-      await discardNodeIso(handle, log)
+      await discardNodeIso(handle, log, state.writeSem)
     } else {
       log.warn('pending-merge replay conflict → conflict-human (merge agent could not resolve)', {
         nodeRunId: r.id,
@@ -2464,7 +2478,11 @@ async function replayConflictHumanResolutions(state: SchedulerState, log: Logger
     const handle = rebuildIsoHandle({
       appHome: state.opts.appHome,
       taskId,
-      nodeRunId: r.id,
+      // Round 6 P2 (same as replayPendingMerges): rebuild the PHYSICAL iso
+      // identity from the persisted path — this is also what makes the
+      // resolve-iso lookup inside completeHumanResolvedConflict hit the
+      // container a process-retry actually used.
+      nodeRunId: isoKeyOf(r.isoWorktreePath, r.id),
       canonRepos: state.repos,
       baseSnapshots,
       taskBaseHeads,
@@ -2486,7 +2504,7 @@ async function replayConflictHumanResolutions(state: SchedulerState, log: Logger
       // RFC-210 (review round 5, P2): the park kept the iso for the human;
       // now that the resolution landed, close its lifecycle — anchor handoff
       // for NEW paths + node pool ref cleanup happen inside the discard.
-      await discardNodeIso(handle, log)
+      await discardNodeIso(handle, log, state.writeSem)
     } else {
       log.info('conflict-human resume: still unresolved — staying parked', {
         nodeRunId: r.id,
@@ -3148,7 +3166,7 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
           // from the CURRENT canonical state. No rollback of canonical: the iso
           // model never wrote it, so it stays clean (I-5). Same-session follow-up
           // does NOT enter this block — it keeps the same iso worktree (D17).
-          await discardNodeIso(isoHandle, log)
+          await discardNodeIso(isoHandle, log, writeSem)
           try {
             isoHandle = await createIsoUnderLock({
               writeSem,
@@ -3856,7 +3874,7 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
     // Discard the iso worktree on a terminal exit; keep it when the node is
     // parked (awaiting_human / merge conflict) so the resume path (D19) + the
     // future merge agent (PR-B) can reuse the exact same worktree state.
-    if (!keepIso) await discardNodeIso(isoHandle, log)
+    if (!keepIso) await discardNodeIso(isoHandle, log, writeSem)
   }
 
   if (lastResult === null) {
@@ -5314,7 +5332,7 @@ async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchSha
   } finally {
     releaseSub()
     releaseGlobal()
-    if (!keepShardIso) await discardNodeIso(shardIso, log)
+    if (!keepShardIso) await discardNodeIso(shardIso, log, state.writeSem)
   }
 }
 
@@ -5684,7 +5702,7 @@ async function dispatchFanoutAggregator(
   } finally {
     releaseSub()
     releaseGlobal()
-    if (!keepAggIso) await discardNodeIso(aggIso, log)
+    if (!keepAggIso) await discardNodeIso(aggIso, log, state.writeSem)
   }
 }
 
@@ -5930,6 +5948,7 @@ export async function createOrRebuildWrapperIso(
         taskBaseHeads: {},
       }),
       state.log,
+      state.writeSem,
     )
   }
   const handle = await createNodeIso({
@@ -6014,7 +6033,7 @@ async function mergeBackWrapperIso(
       nodeRunId: wrapperRunId,
       event: { kind: 'mark-merged', via: 'live' },
     })
-    await discardNodeIso(wrapperIso, log)
+    await discardNodeIso(wrapperIso, log, state.writeSem)
     return { kind: 'merged' }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)

@@ -192,22 +192,22 @@ describe('RFC-210 — submodule publish failures fail the snapshot', () => {
     expect(mainline![0]).toContain('keepIso = true')
     // Fanout shard: flag set in the merge catch, discard gated on it.
     expect(src).toContain('keepShardIso = true')
-    expect(src).toContain('if (!keepShardIso) await discardNodeIso(shardIso, log)')
+    expect(src).toContain('if (!keepShardIso) await discardNodeIso(shardIso, log, state.writeSem)')
     // Fanout aggregator: same shape.
     expect(src).toContain('keepAggIso = true')
-    expect(src).toContain('if (!keepAggIso) await discardNodeIso(aggIso, log)')
+    expect(src).toContain('if (!keepAggIso) await discardNodeIso(aggIso, log, state.writeSem)')
     // Workgroup hook: merge throw flags before rethrowing to the outer catch.
     expect(src).toContain('keepHookIso = true')
-    expect(src).toContain('if (!keepHookIso) await discardNodeIso(iso, log)')
+    expect(src).toContain('if (!keepHookIso) await discardNodeIso(iso, log, state.writeSem)')
     // Round 5 (P2): successfully REPLAYED merges must close the iso lifecycle
     // too — without these, node pool refs leak forever and a new path's
     // worktree anchor is never handed over.
     const replayMerged = src.match(
-      /pending-merge replay merged[\s\S]{0,600}?discardNodeIso\(handle, log\)/,
+      /pending-merge replay merged[\s\S]{0,600}?discardNodeIso\(handle, log, state\.writeSem\)/,
     )
     expect(replayMerged).not.toBeNull()
     const humanResolved = src.match(
-      /human resolution merged back[\s\S]{0,600}?discardNodeIso\(handle, log\)/,
+      /human resolution merged back[\s\S]{0,600}?discardNodeIso\(handle, log, state\.writeSem\)/,
     )
     expect(humanResolved).not.toBeNull()
     // Round 5 (P1): the discard-time anchor handoff must be a CAS (expected-old
@@ -217,6 +217,18 @@ describe('RFC-210 — submodule publish failures fail the snapshot', () => {
       'utf8',
     )
     expect(iso).toContain("['update-ref', wtRef, sha, expectedOld]")
+    // Round 6 (P1): the handoff must be offered the task write lock at every
+    // scheduler discard — outside it a known-path merge can interleave and the
+    // CAS can move the anchor backward.
+    // Ratchet: every single-line discard passes the lock; the one multiline
+    // call (wrapper stale cleanup) is asserted by its trailing args. A NEW
+    // discard site must consciously join this accounting.
+    const singleLine = src.match(/discardNodeIso\([^\n)]*\)/g) ?? []
+    expect(singleLine.length).toBeGreaterThanOrEqual(8)
+    for (const call of singleLine) expect(call).toContain('writeSem')
+    expect(src).toContain('state.log,\n      state.writeSem,\n    )')
+    // Round 6 (P2): replay rebuilds must address the PHYSICAL iso identity.
+    expect(src).toContain('nodeRunId: isoKeyOf(r.isoWorktreePath, r.id)')
     // And the iso worktree remains on disk in the unit-level flows above; the
     // existence of the discard-in-finally is exactly why the flags must flip.
     expect(existsSync(appHome)).toBe(true)
