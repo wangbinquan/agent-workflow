@@ -75,6 +75,7 @@ function AuthPage() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const usernameRef = useRef<HTMLInputElement>(null)
+  const pageRef = useRef<HTMLDivElement>(null)
   // True once the user has picked a tab or typed into any method form; a
   // late discovery response must never displace what the user is doing.
   const interactedRef = useRef(false)
@@ -116,6 +117,12 @@ function AuthPage() {
     if (initialLandingDoneRef.current || oidcDiscovery.status === 'loading') return
     initialLandingDoneRef.current = true
     if (interactedRef.current) return
+    // Focus already inside the login card (Tab / click into a field, even
+    // without typing yet) counts as interaction too: switching tabs would
+    // hide the focused control, and refocusing username would steal focus.
+    const active = document.activeElement
+    if (active !== null && active !== document.body && pageRef.current?.contains(active) === true)
+      return
     if (oidcDiscovery.status === 'success' && oidcDiscovery.providers.length > 0) {
       setTab('oidc')
     } else {
@@ -309,7 +316,7 @@ function AuthPage() {
   })
 
   return (
-    <div className="auth-page">
+    <div className="auth-page" ref={pageRef}>
       <h1>{t('auth.title')}</h1>
       <p className="auth-page__hint">{t('auth.subtitle', { defaultValue: t('auth.hint') })}</p>
       <TabBar<AuthTab>

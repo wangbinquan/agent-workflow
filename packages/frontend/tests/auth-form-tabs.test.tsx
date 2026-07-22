@@ -155,6 +155,38 @@ describe('/auth shared forms and tabs', () => {
     await waitFor(() => expect(screen.getByTestId('auth-tabpanel-password').hidden).toBe(false))
   })
 
+  test('bare focus in the login card pins the password tab against late discovery', async () => {
+    // Codex re-review P2 (2026-07-22): Tab/click INTO a field without typing
+    // must count as interaction — switching to OIDC would hide the focused
+    // control mid-use.
+    let resolveProviders: ((response: Response) => void) | undefined
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveProviders = resolve
+        }),
+    )
+    renderAuth()
+
+    const username = (await screen.findByRole('textbox', {
+      name: enUS.auth.username,
+    })) as HTMLInputElement
+    username.focus()
+    await waitFor(() => expect(resolveProviders).toBeTypeOf('function'))
+    await act(async () => {
+      resolveProviders!(
+        json({ providers: [{ slug: 'corp', displayName: 'Corporate SSO', iconUrl: null }] }),
+      )
+    })
+
+    const oidcTab = await screen.findByRole('tab', { name: enUS.auth.tabOidc })
+    expect(oidcTab.getAttribute('aria-selected')).toBe('false')
+    expect(
+      screen.getByRole('tab', { name: enUS.auth.tabPassword }).getAttribute('aria-selected'),
+    ).toBe('true')
+    expect(document.activeElement).toBe(username)
+  })
+
   test('a typed draft pins the password tab against late provider discovery', async () => {
     let resolveProviders: ((response: Response) => void) | undefined
     vi.spyOn(globalThis, 'fetch').mockImplementation(
