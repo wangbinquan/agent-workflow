@@ -320,11 +320,16 @@ describe('RFC-209 §1.3 — 路由层不再硬编码 round: 0', () => {
     expect(ROUTES.split('round: 0').length - 1).toBe(0)
   })
 
-  test('每一处 insert(workgroupMessages) 都经 buildRoomMessageRow', () => {
-    // 表级登记：四个曾经硬编码 round: 0 的站点 + 两个派单卡族站点。
-    const inserts = ROUTES.split('insert(workgroupMessages)').length - 1
-    const builders = ROUTES.split('buildRoomMessageRow(').length - 1
-    expect(inserts).toBeGreaterThanOrEqual(5)
+  test('每一处 insert(workgroupMessages) 都经 buildRoomMessageRow（RFC-217 T4：写编排全量迁 service）', () => {
+    // G2 终态：route 层裸写归零；taskActions 里每个 insert 都经构造器。
+    expect(ROUTES.split('insert(workgroupMessages)').length - 1).toBe(0)
+    const ACTIONS = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'taskActions.ts'),
+      'utf8',
+    )
+    const inserts = ACTIONS.split('insert(workgroupMessages)').length - 1
+    const builders = ACTIONS.split('buildRoomMessageRow(').length - 1
+    expect(inserts).toBeGreaterThanOrEqual(4)
     expect(builders).toBeGreaterThanOrEqual(inserts)
   })
 })

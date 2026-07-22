@@ -101,22 +101,32 @@ describe('rfc217 G2/G3 — retired runtime-state slots stay retired', () => {
     expect(offenders).toEqual([])
   })
 
-  test('G2 (T2 slice): workgroupConfigJson UPDATE writes only at the whitelisted sites', () => {
-    // Whitelist until T4 moves the config PUT into taskActions:
-    //   - routes/workgroupTasks.ts — the member/switch edit endpoint
-    // (task.ts only INSERTs the frozen config at launch; everything else must
-    // go through services/workgroup/state.ts, which owns no config writes.)
-    const allow = new Set(['packages/backend/src/routes/workgroupTasks.ts'])
+  test('G2: room-table writes live in services (routes are transport only)', () => {
+    // RFC-217 T4 终态：workgroupConfigJson 唯一 UPDATE 写点在 taskActions
+    //（config PUT 编排）；routes/ 里任何房间表裸写（messages/assignments/
+    // configJson）都是回归。
+    const allow = new Set(['packages/backend/src/services/workgroup/taskActions.ts'])
     const offenders: string[] = []
     for (const f of walkTs(SRC)) {
       const src = read(f)
+      if (
+        src.includes('workgroupConfigJson:') &&
+        src.includes('.update(tasks)') &&
+        f.startsWith('packages/backend/src/routes/')
+      )
+        offenders.push(`${f} ⇒ config write`)
       if (src.includes('.set({ workgroupConfigJson') && !allow.has(f)) offenders.push(f)
+      if (f.startsWith('packages/backend/src/routes/')) {
+        for (const b of ['insert(workgroupMessages)', 'insert(workgroupAssignments)']) {
+          if (src.includes(b)) offenders.push(`${f} ⇒ ${b}`)
+        }
+      }
     }
     expect(offenders).toEqual([])
-    // and the whitelisted file carries exactly ONE such write (config PUT)
     const puts =
-      read('packages/backend/src/routes/workgroupTasks.ts').split('.set({ workgroupConfigJson')
-        .length - 1
+      read('packages/backend/src/services/workgroup/taskActions.ts').split(
+        '.set({ workgroupConfigJson',
+      ).length - 1
     expect(puts).toBe(1)
   })
 })
@@ -155,6 +165,8 @@ describe('rfc217 G5/G7 — mode branches ratcheted, shardKey goes through codecs
       'strategies/leaderWorker.ts': 1,
       'lifecycle.ts': 1,
       'launch.ts': 1,
+      // T4：config PUT 编排随迁带入一处 dynamic_workflow 免疫判断（原 route 同款）
+      'taskActions.ts': 1,
     }
     const files: string[] = []
     const walk = (dir: string): void => {
