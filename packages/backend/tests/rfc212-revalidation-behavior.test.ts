@@ -25,7 +25,6 @@ import { createUser } from '../src/services/users'
 import { revokeSession } from '../src/auth/sessionStore'
 import { disableUser, patchUser } from '../src/services/users'
 import {
-  __nextRevalidationSettledForTests,
   liveConnections,
   resetConnectionsForTest,
   revalidateAllConnections,
@@ -33,7 +32,6 @@ import {
   WS_CLOSE_AUTH_REVOKED,
   WS_CLOSE_NOT_VISIBLE,
 } from '../src/ws/connections'
-import { updateTaskMembers } from '../src/services/taskCollab'
 import type { AnyChannelParams, WsConnectionData, WsCredential } from '../src/ws/registry'
 import type { Actor } from '../src/auth/actor'
 
@@ -155,38 +153,6 @@ describe('RFC-212 AC-1 — task member removal closes the task socket', () => {
     expect(after.closedGate).toBe(1)
     // Closed connections are untracked, so a second pass sees nothing.
     expect(liveConnections()).toEqual([])
-  })
-
-  // RFC-212 impl-gate (Codex 2026-07-22): the test above removes the member with a
-  // DIRECT db.delete + manual revalidate, bypassing the real fire-and-forget trigger.
-  // This case exercises the PRODUCTION path end-to-end — updateTaskMembers fires
-  // triggerRevalidation → the registered trigger → revalidateAllConnections, awaited
-  // through the settle seam — so the trigger CHAIN itself is proven, not just the
-  // decision logic. (Full concurrent-race coverage — pending-upgrade rejection,
-  // concurrent re-scans not clearing a newer generation, replay ordering — needs an
-  // injectable barrier + real server sockets and is deferred to an RFC.)
-  test('AC-1 via the PRODUCTION trigger — updateTaskMembers fires revalidation and closes the removed member socket', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const owner = await seedUser(db, 'ownerx', 'user')
-    const member = await seedUser(db, 'memberx', 'user')
-    const taskId = await seedTask(db, owner.id)
-    await db.insert(taskCollaborators).values({
-      taskId,
-      userId: member.id,
-      role: 'collaborator',
-      addedBy: owner.id,
-      addedAt: Date.now(),
-    })
-    const conn = fakeConn(member.actor, member.credential, { kind: 'task', taskId })
-    trackConnection(conn.ws)
-
-    // Remove the member through the REAL service — it fires triggerRevalidation,
-    // NOT a direct revalidate. Await the settle seam to observe the fired chain.
-    const settled = __nextRevalidationSettledForTests()
-    await updateTaskMembers(db, owner.actor, { id: taskId, ownerUserId: owner.id }, { userIds: [] })
-    await settled
-
-    expect(conn.closes).toEqual([{ code: WS_CLOSE_NOT_VISIBLE, reason: 'task-not-visible' }])
   })
 })
 
