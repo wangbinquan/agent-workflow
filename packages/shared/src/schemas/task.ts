@@ -1174,8 +1174,21 @@ export type SyncWorkflowBody = z.infer<typeof SyncWorkflowBodySchema>
  */
 export const StartAgentTaskSchema = z.object({
   name: z.string().trim().min(1).max(255),
-  /** The task prompt for the agent (proposal: 描述即提示词). */
-  description: z.string().trim().min(1).max(65536),
+  /**
+   * The task prompt for a ZERO-PORT agent (proposal: 描述即提示词). RFC-218
+   * made it optional at the schema layer because port-declaring agents launch
+   * with `inputs` instead; which one is required depends on the agent's
+   * declared ports, so the conditional matrix lives in the service
+   * (`validateAgentLaunchShape`), not here.
+   */
+  description: z.string().trim().min(1).max(65536).optional(),
+  /**
+   * RFC-218 — port-driven launch values for an agent that declares input
+   * ports (`agent.inputs`, RFC-166). Keys must match declared port names
+   * (service-validated); upload-kind ports are multipart-only and their
+   * values are server-written (client strings ignored, design D14).
+   */
+  inputs: z.record(z.string(), z.string().max(65536)).optional(),
   /**
    * RFC-165 D7: whether the host snapshot wires an OPTIONAL clarify channel
    * (the agent may ask the user questions before/instead of finishing).

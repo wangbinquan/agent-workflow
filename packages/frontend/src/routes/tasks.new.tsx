@@ -16,7 +16,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useNavigate } from '@tanstack/react-router'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
   Agent,
@@ -30,6 +30,7 @@ import type {
   Workgroup,
 } from '@agent-workflow/shared'
 import {
+  deriveAgentLaunchForm,
   isLooseValidBranchName,
   taskExecutionKind,
   workgroupLaunchReadiness,
@@ -53,6 +54,7 @@ import { useUserLookup } from '@/hooks/useUserLookup'
 import { resolveUrlRepoPath, validateRepoUrl } from '@/lib/launch-repo-source'
 import {
   buildAgentStartBody,
+  buildAgentStartFormData,
   buildScheduledEnvelope,
   taskToLaunchPayload,
   type WizardSeed,
@@ -514,6 +516,24 @@ function TaskWizardPage() {
     actor.isPending,
   ])
 
+  // --- RFC-218: port-driven single-agent launch form -------------------------
+  const selectedAgent =
+    kind === 'agent' && agentName !== ''
+      ? (agentsQ.data ?? []).find((a) => a.name === agentName)
+      : undefined
+  const agentLaunchForm = useMemo(
+    () => (selectedAgent !== undefined ? deriveAgentLaunchForm(selectedAgent.inputs) : null),
+    [selectedAgent],
+  )
+  const agentPorted = agentLaunchForm !== null
+  const agentBlockers = agentLaunchForm?.blockers ?? []
+  // Design P1-5 barrier: with a deep-linked agent name, "row not loaded yet"
+  // is indistinguishable from "zero-port agent" — never guess the form shape
+  // (a ported agent would reject the description body). Require a successful
+  // list load AND a matching row before rendering step 3's content.
+  const agentDataReady =
+    kind !== 'agent' || agentName === '' || (agentsQ.isSuccess && selectedAgent !== undefined)
+
   // Seed the inputs map from the selected workflow's declared keys (merge:
   // stale keys drop, new keys start blank, user-typed values survive). The
   // uploads map is filtered in lockstep — leaving files picked for a PREVIOUS
@@ -578,6 +598,30 @@ function TaskWizardPage() {
     workflowQ.isFetchedAfterMount,
     workflowQ.isSuccess,
   ])
+
+  // RFC-218 (design P1-4): the agent-kind sibling of the workflow seeding
+  // effect above — keep inputs/uploads keyed to the CURRENT agent's derived
+  // port defs. Switching agent A→B (or workflow↔agent) must not leak A's keys
+  // onto the wire: the service rejects undeclared keys, so a leaked map would
+  // make a perfectly normal "pick a different agent" launch fail. Values for
+  // surviving keys are preserved; upload keys are pruned in lockstep.
+  useEffect(() => {
+    // The readiness guard doubles as relaunch-seed protection: while the list
+    // is still loading, agentLaunchForm is null and running would wipe the
+    // just-applied seed values before the real defs arrive.
+    if (kind !== 'agent' || !agentDataReady) return
+    const defs = agentLaunchForm?.inputs ?? []
+    setInputs((prev) => {
+      const seeded: Record<string, string> = {}
+      for (const d of defs) seeded[d.key] = normalizeSeededInput(d, prev[d.key] ?? '')
+      return seeded
+    })
+    const uploadKeys = new Set(defs.filter((d) => d.kind === 'upload').map((d) => d.key))
+    setUploads((prev) => {
+      const kept = Object.entries(prev).filter(([k]) => uploadKeys.has(k))
+      return kept.length === Object.keys(prev).length ? prev : Object.fromEntries(kept)
+    })
+  }, [kind, agentDataReady, agentLaunchForm])
 
   // --- Step 1 filtering (launchability projection) ---------------------------
   const workflowOptions = (workflowsQ.data ?? [])
@@ -675,7 +719,12 @@ function TaskWizardPage() {
       : selectedObject
 
   // --- Gating ---------------------------------------------------------------
-  const inputDefs = kind === 'workflow' ? (normalizedWorkflowDefinition?.inputs ?? []) : []
+  // Launch-form field defs: authored (workflow) or derived from the agent's
+  // declared input ports (RFC-218) — one render/validation path for both.
+  const inputDefs =
+    kind === 'workflow'
+      ? (normalizedWorkflowDefinition?.inputs ?? [])
+      : (agentLaunchForm?.inputs ?? [])
   const missingRequired = inputDefs.some((def) => {
     if (def.kind === 'upload') {
       const list = uploads[def.key] ?? []
@@ -734,7 +783,13 @@ function TaskWizardPage() {
         activeWorkflowVersionMismatch === null &&
         !missingRequired
       : kind === 'agent'
-        ? description.trim().length > 0
+        ? // RFC-218: the P1-5 barrier gates BOTH shapes (an unloaded list must
+          // not read as "zero-port"); ported agents launch on their port form,
+          // blockers (signal / reserved names) hard-disable the launch.
+          agentDataReady &&
+          (agentPorted
+            ? agentBlockers.length === 0 && !missingRequired
+            : description.trim().length > 0)
         : goal.trim().length > 0
   const gitNameTrim = gitUserName.trim()
   const gitEmailTrim = gitUserEmail.trim()
@@ -809,11 +864,24 @@ function TaskWizardPage() {
     ...(maxTotalTokens !== undefined && maxTotalTokens > 0 ? { maxTotalTokens } : {}),
   })
 
+  // RFC-218: the ported inputs map is filtered against the CURRENT derived
+  // defs at assembly time — defense-in-depth behind the seeding effect (a
+  // leaked stale key must never reach the wire; the service 422s it). Upload
+  // keys are excluded: their values are server-written from landed files.
+  const agentPortInputs = (): Record<string, string> => {
+    const out: Record<string, string> = {}
+    for (const def of agentLaunchForm?.inputs ?? []) {
+      if (def.kind === 'upload') continue
+      out[def.key] = inputs[def.key] ?? ''
+    }
+    return out
+  }
+
   const buildImmediateBody = (): Record<string, unknown> => {
     if (kind === 'agent') {
       return buildAgentStartBody(space, {
         name: taskName.trim(),
-        description: description.trim(),
+        ...(agentPorted ? { inputs: agentPortInputs() } : { description: description.trim() }),
         allowClarify,
         ...collectAdvanced(),
       })
@@ -849,6 +917,25 @@ function TaskWizardPage() {
   const start = useMutation({
     mutationFn: () => {
       if (kind === 'agent') {
+        // RFC-218: upload-kind ports (path<ext>) are multipart-only — the
+        // backend refuses JSON for them (path values are server-written).
+        // Same "any upload def → multipart" rule as the workflow arm.
+        if (agentPorted && (hasUploadInput || hasUploads)) {
+          return api.postMultipart<Task>(
+            `/api/agents/${encodeURIComponent(agentName)}/tasks`,
+            buildAgentStartFormData(
+              space,
+              {
+                name: taskName.trim(),
+                inputs: agentPortInputs(),
+                allowClarify,
+                ...collectAdvanced(),
+              },
+              uploads,
+              immediateGuards(),
+            ),
+          )
+        }
         return api.post<Task>(`/api/agents/${encodeURIComponent(agentName)}/tasks`, {
           ...buildImmediateBody(),
           ...immediateGuards(),
@@ -1320,21 +1407,48 @@ function TaskWizardPage() {
               />
             </Field>
 
-            {kind === 'agent' && (
+            {/* RFC-218 P1-5: never render a form shape before the agent row is
+                known — an unloaded list is indistinguishable from "zero-port". */}
+            {kind === 'agent' &&
+              !agentDataReady &&
+              (agentsQ.isError ? (
+                <div data-testid="wizard-agent-load-error">
+                  <ErrorBanner error={agentsQ.error} onRetry={() => void agentsQ.refetch()} />
+                </div>
+              ) : (
+                <LoadingState />
+              ))}
+            {kind === 'agent' && agentDataReady && (
               <>
-                <Field
-                  label={t('taskWizard.contentDescription')}
-                  required
-                  hint={t('taskWizard.contentDescriptionHint')}
-                >
-                  <TextArea
-                    value={description}
-                    onChange={setDescription}
-                    rows={8}
-                    maxLength={65536}
-                    data-testid="wizard-description"
-                  />
-                </Field>
+                {!agentPorted && (
+                  <Field
+                    label={t('taskWizard.contentDescription')}
+                    required
+                    hint={t('taskWizard.contentDescriptionHint')}
+                  >
+                    <TextArea
+                      value={description}
+                      onChange={setDescription}
+                      rows={8}
+                      maxLength={65536}
+                      data-testid="wizard-description"
+                    />
+                  </Field>
+                )}
+                {agentPorted && agentBlockers.length > 0 && (
+                  <div className="error-text" role="alert" data-testid="wizard-agent-blockers">
+                    {t('taskWizard.agentPortsBlocked')}
+                    <ul>
+                      {agentBlockers.map((b) => (
+                        <li key={`${b.kind}-${b.port}`}>
+                          {b.kind === 'signal-port'
+                            ? t('taskWizard.agentPortBlockedSignal', { port: b.port })
+                            : t('taskWizard.agentPortBlockedName', { port: b.port })}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 {/* 用户 2026-07-11：反问开关是核心行为选择，不藏进高级折叠。 */}
                 <Switch
                   checked={allowClarify}
@@ -1370,11 +1484,13 @@ function TaskWizardPage() {
             {kind === 'workflow' && workflowQ.data !== undefined && inputDefs.length === 0 && (
               <div className="muted">{t('launch.noInputs')}</div>
             )}
-            {kind === 'workflow' &&
+            {/* RFC-218: one field-render path for authored workflow inputs AND
+                agent-port derived defs (the defs source is the ternary above). */}
+            {(kind === 'workflow' || (kind === 'agent' && agentDataReady)) &&
               inputDefs.map((def) => (
                 <Field
                   key={def.key}
-                  label={`${def.label} (${def.key})`}
+                  label={def.label === def.key ? def.key : `${def.label} (${def.key})`}
                   required={def.required === true}
                   hint={def.description}
                 >
@@ -1544,9 +1660,13 @@ function TaskWizardPage() {
             <div className="wizard-summary__row">
               <dt>{t('taskWizard.stepContent')}</dt>
               <dd data-testid="wizard-summary-content">
-                {kind === 'workflow' ? (
+                {kind === 'workflow' || (kind === 'agent' && agentPorted) ? (
                   inputDefs.length === 0 ? (
-                    t('launch.noInputs')
+                    kind === 'workflow' ? (
+                      t('launch.noInputs')
+                    ) : (
+                      '—'
+                    )
                   ) : (
                     <ul className="wizard-summary__inputs">
                       {inputDefs.map((def) => (

@@ -16,6 +16,7 @@ export interface AgentPortValidationSummaryProps {
 
 const ISSUE_KEY: Record<AgentPortValidationIssueCode, string> = {
   'input-name-schema': 'inputNameSchema',
+  'input-name-launch-blocked': 'inputNameLaunchBlocked',
   'input-name-duplicate': 'inputNameDuplicate',
   'output-name-duplicate': 'outputNameDuplicate',
   'output-kind-invalid': 'outputKindInvalid',
@@ -27,6 +28,8 @@ const ISSUE_KEY: Record<AgentPortValidationIssueCode, string> = {
 
 const ISSUE_DEFAULT: Record<AgentPortValidationIssueCode, string> = {
   'input-name-schema': 'Input port {{position}} ({{name}}) has an invalid name.',
+  'input-name-launch-blocked':
+    'Input port {{name}} cannot be a template token (invalid or reserved) — this agent will not be manually launchable.',
   'input-name-duplicate': 'Input port {{name}} is duplicated at items {{positions}}.',
   'output-name-duplicate': 'Output port {{name}} is duplicated at items {{positions}}.',
   'output-kind-invalid': 'Output kind for {{key}} is invalid: {{value}}.',

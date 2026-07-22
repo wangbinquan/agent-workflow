@@ -142,6 +142,56 @@ test.describe('RFC-165 — /tasks/new wizard', () => {
     await expect(page.locator('[data-task-detail-section="worktree-diff"]')).toBeVisible()
   })
 
+  // RFC-218: an agent that DECLARES input ports launches through a port form —
+  // one field per port, no description textarea — and the task lands with the
+  // port values riding task.inputs (the host snapshot injects them via the
+  // XML port envelope). Zero-port agents keep the description form above.
+  test('agent with declared input ports: port form replaces description', async ({ page }) => {
+    const d = daemon!
+    const res = await fetch(`${d.baseUrl}/api/agents`, {
+      method: 'POST',
+      headers: authHeaders(d),
+      body: JSON.stringify({
+        name: 'wizard-ported-agent',
+        description: 'rfc218 e2e ported agent',
+        outputs: ['answer'],
+        inputs: [
+          { name: 'report', kind: 'string' },
+          { name: 'style_guide', kind: 'string', required: false },
+        ],
+        readonly: true,
+        bodyMd: '',
+      }),
+    })
+    expectOk(res, 'create ported agent')
+    await primeAuthLocalStorage(page, d)
+
+    await page.goto(`${d.baseUrl}/tasks/new?kind=agent&agent=wizard-ported-agent`)
+    await expect(page.getByTestId('task-wizard')).toBeVisible({ timeout: 10_000 })
+    await page.getByTestId('wizard-space-scratch').click()
+    await page.getByTestId('stepper-next').click()
+
+    // Step 3 — port fields, no description textarea.
+    await page.fill('[data-testid="wizard-task-name"]', 'wizard-ported-run')
+    await expect(page.getByTestId('wizard-description')).toHaveCount(0)
+    await page.getByLabel(/^report/).fill('weekly numbers look fine')
+    await page.getByTestId('stepper-next').click()
+
+    await page.getByTestId('wizard-launch').click()
+    await page.waitForURL(/\/tasks\/[A-Z0-9]{26}$/i, { timeout: 15_000 })
+    const taskId = page.url().match(/\/tasks\/([A-Z0-9]{26})/i)![1]!
+
+    // Wire truth: the task row carries the port values, not a description.
+    const taskRes = await fetch(`${d.baseUrl}/api/tasks/${taskId}`, { headers: authHeaders(d) })
+    expectOk(taskRes, 'fetch ported task')
+    const task = (await taskRes.json()) as { inputs: Record<string, string> }
+    expect(task.inputs.report).toBe('weekly numbers look fine')
+    expect(task.inputs.description).toBeUndefined()
+
+    const final = await pollUntilTerminal(d, taskId, 60_000)
+    expect(final.status).toBe('done')
+  })
+
   test('workgroup + scratch: wizard chain reaches done (real wg envelope)', async ({ page }) => {
     const d = daemon!
     await createStubAgent(d, 'wizard-wg-lead')

@@ -108,7 +108,7 @@ describe('RFC-165 §4 — agent host snapshot (A1/A2)', () => {
   test('A1 shape: clarify ON → optional channel wired; OFF → absent; both validate', async () => {
     await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
 
-    const on = buildAgentHostSnapshot('solo', true)
+    const on = buildAgentHostSnapshot({ name: 'solo' }, true)
     const onDef = WorkflowDefinitionSchema.parse(on)
     expect(onDef.nodes.map((n) => n.id).sort()).toEqual(
       ['__agent_clarify__', '__agent_input__', '__agent_main__'].sort(),
@@ -129,7 +129,7 @@ describe('RFC-165 §4 — agent host snapshot (A1/A2)', () => {
     const ctx = await buildWorkflowValidationContext(db)
     expect(validateWorkflowDef(onDef, ctx).ok).toBe(true)
 
-    const off = buildAgentHostSnapshot('solo', false)
+    const off = buildAgentHostSnapshot({ name: 'solo' }, false)
     const offDef = WorkflowDefinitionSchema.parse(off)
     expect(offDef.nodes.map((n) => n.id).sort()).toEqual(
       ['__agent_input__', '__agent_main__'].sort(),
@@ -140,11 +140,15 @@ describe('RFC-165 §4 — agent host snapshot (A1/A2)', () => {
 
   test('A2 negative matrix: missing agent / skill / plugin all fail validation', async () => {
     const ctxNoAgent = await buildWorkflowValidationContext(db)
-    const ghost = WorkflowDefinitionSchema.parse(buildAgentHostSnapshot('no-such-agent', true))
+    const ghost = WorkflowDefinitionSchema.parse(
+      buildAgentHostSnapshot({ name: 'no-such-agent' }, true),
+    )
     expect(validateWorkflowDef(ghost, ctxNoAgent).ok).toBe(false)
 
     await createAgent(db, { ...AGENT_FIELDS, name: 'skilly', skills: ['no-such-skill'] })
-    const skillDef = WorkflowDefinitionSchema.parse(buildAgentHostSnapshot('skilly', true))
+    const skillDef = WorkflowDefinitionSchema.parse(
+      buildAgentHostSnapshot({ name: 'skilly' }, true),
+    )
     expect(validateWorkflowDef(skillDef, await buildWorkflowValidationContext(db)).ok).toBe(false)
 
     // createAgent validates plugin refs at SAVE time — simulate the historical
@@ -164,7 +168,7 @@ describe('RFC-165 §4 — agent host snapshot (A1/A2)', () => {
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })
-    const plugDef = WorkflowDefinitionSchema.parse(buildAgentHostSnapshot('pluggy', true))
+    const plugDef = WorkflowDefinitionSchema.parse(buildAgentHostSnapshot({ name: 'pluggy' }, true))
     // The load-bearing R3-3 case: with a partial {agents,skills} ctx this
     // passed silently; the full production ctx must reject it.
     expect(validateWorkflowDef(plugDef, await buildWorkflowValidationContext(db)).ok).toBe(false)

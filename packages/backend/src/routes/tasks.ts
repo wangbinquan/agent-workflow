@@ -16,8 +16,6 @@ import {
   StartTaskSchema,
   taskExecutionKind,
   TaskStatusSchema,
-  UploadInputSchema,
-  type WorkflowInput,
 } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
@@ -54,20 +52,19 @@ import {
   retryNode,
   startTask,
   syncTaskWorkflow,
-  type WorkspaceCleanupReport,
 } from '@/services/task'
 import { getTaskStructuralDiff } from '@/services/structuralDiff/service'
 import { getCallTargets } from '@/services/structuralDiff/callGraph/expandService'
 import type { ResolvedDeepConfig } from '@/services/structuralDiff/deep/service'
 import { structuralScopeSchema } from '@agent-workflow/shared'
+import { applyUploadsToWorktree, validateUploadPlan } from '@/services/upload'
 import {
-  applyUploadsToWorktree,
-  DEFAULT_UPLOAD_LIMITS,
-  type UploadFile,
-  type UploadInputDef,
-  type UploadLimits,
-  validateUploadPlan,
-} from '@/services/upload'
+  assertUploadFilesMatchDefs,
+  attachWorkspaceCleanupToMultipartError,
+  collectUploadInputDefs,
+  parseMultipartLaunch,
+  resolveUploadLimits,
+} from '@/services/launchMultipart'
 import { getSessionTree } from '@/services/sessionView'
 import { getInventorySnapshot } from '@/services/inventory'
 import { listWorktreeDir, readWorktreeFile } from '@/services/worktreeFiles'
@@ -83,7 +80,7 @@ import { getWorkflow } from '@/services/workflow'
 import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
 import { tasksListBroadcaster, TASKS_LIST_CHANNEL } from '@/ws/broadcaster'
 import { Paths } from '@/util/paths'
-import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 
 /** RFC-083: resolve deep-mode indexer path overrides + timeout from settings.
  *  Unreadable config → PATH lookup + default timeout. */
@@ -717,85 +714,10 @@ async function assertTaskSyncable(deps: AppDeps, taskId: string): Promise<void> 
   if (wf !== null) assertNotBuiltin('workflow', wf)
 }
 
-/**
- * RFC-020: read `uploadLimits` from settings, falling back to defaults. Kept
- * narrow so the multipart handler stays declarative.
- */
-function resolveUploadLimits(configPath: string): UploadLimits {
-  try {
-    const cfg = loadConfig(configPath)
-    const u = cfg.uploadLimits
-    if (u !== undefined) {
-      return {
-        perFile: u.perFile,
-        perRequest: u.perRequest,
-        perCount: u.perCount,
-      }
-    }
-  } catch {
-    // unreadable config → defaults
-  }
-  return { ...DEFAULT_UPLOAD_LIMITS }
-}
-
-/**
- * Extract upload-kind input declarations from a workflow definition. Each
- * one must pass UploadInputSchema (strict-on-write) — anything that snuck
- * through the workflow save path with a bad targetDir is rejected here too.
- */
-function collectUploadInputDefs(inputs: readonly WorkflowInput[]): Map<string, UploadInputDef> {
-  const out = new Map<string, UploadInputDef>()
-  for (const inp of inputs) {
-    if (inp.kind !== 'upload') continue
-    const parsed = UploadInputSchema.safeParse(inp)
-    if (!parsed.success) {
-      throw new ValidationError(
-        'upload-input-invalid',
-        `workflow input '${inp.key}' (kind=upload) is malformed`,
-        { issues: parsed.error.issues },
-      )
-    }
-    const def: UploadInputDef = {
-      key: parsed.data.key,
-      targetDir: parsed.data.targetDir,
-    }
-    if (parsed.data.accept !== undefined) def.accept = parsed.data.accept
-    if (parsed.data.maxFileSize !== undefined) def.maxFileSize = parsed.data.maxFileSize
-    if (parsed.data.minCount !== undefined) def.minCount = parsed.data.minCount
-    if (parsed.data.maxCount !== undefined) def.maxCount = parsed.data.maxCount
-    out.set(def.key, def)
-  }
-  return out
-}
-
-/**
- * Keep the upload failure as the primary API error even when reclaiming its
- * not-yet-owned workspace also fails. The cleanup report is recovery metadata,
- * not a reason to erase the actionable upload code/status/details.
- */
-export function attachWorkspaceCleanupToMultipartError(
-  error: unknown,
-  report: WorkspaceCleanupReport,
-): DomainError {
-  const primary =
-    error instanceof DomainError
-      ? error
-      : new ValidationError(
-          'task-upload-failed',
-          `failed to land uploads into worktree: ${error instanceof Error ? error.message : String(error)}`,
-        )
-  if (report.complete) return primary
-  const details =
-    typeof primary.details === 'object' &&
-    primary.details !== null &&
-    !Array.isArray(primary.details)
-      ? { ...primary.details, workspaceCleanup: report }
-      : { causeDetails: primary.details, workspaceCleanup: report }
-  return new DomainError(primary.code, primary.message, primary.status, details)
-}
-
-/** Match `files[<key>][]` field names; allowed keys mirror WorkflowInput.key. */
-const UPLOAD_FIELD_RE = /^files\[([A-Za-z0-9_-]+)\]\[\]$/
+// RFC-218: the multipart parsing / defs / limits / cleanup-decoration skeleton
+// moved to services/launchMultipart.ts so the agent launch route shares it.
+// Re-exported for existing importers (rfc107 test suite).
+export { attachWorkspaceCleanupToMultipartError } from '@/services/launchMultipart'
 
 async function handleMultipartTaskStart(
   req: Request,
@@ -803,39 +725,8 @@ async function handleMultipartTaskStart(
   opencodeCmd: string[] | undefined,
   actor: ReturnType<typeof actorOf>,
 ) {
-  let form: Awaited<ReturnType<typeof req.formData>>
-  try {
-    form = await req.formData()
-  } catch (err) {
-    throw new ValidationError(
-      'task-multipart-invalid',
-      `failed to parse multipart body: ${(err as Error).message}`,
-    )
-  }
-
-  // 1. Pull JSON payload out of the `payload` field.
-  const payloadField = form.get('payload')
-  if (payloadField === null) {
-    throw new ValidationError(
-      'task-multipart-payload-missing',
-      'multipart body must include a "payload" field with the StartTask JSON',
-    )
-  }
-  let payloadText: string
-  if (typeof payloadField === 'string') {
-    payloadText = payloadField
-  } else {
-    payloadText = await payloadField.text()
-  }
-  let payloadJson: unknown
-  try {
-    payloadJson = JSON.parse(payloadText)
-  } catch (err) {
-    throw new ValidationError(
-      'task-multipart-payload-invalid',
-      `payload field is not valid JSON: ${(err as Error).message}`,
-    )
-  }
+  // 1. Parse the form: JSON `payload` field + `files[<key>][]` blobs.
+  const { payloadJson, files: uploadFiles } = await parseMultipartLaunch(req)
   // RFC-099 (D6): reject payloads still carrying the removed assignments field.
   if (
     typeof payloadJson === 'object' &&
@@ -888,45 +779,8 @@ async function handleMultipartTaskStart(
   }
   const uploadDefs = collectUploadInputDefs(workflow.definition.inputs)
 
-  // 3. Walk multipart fields, bind each file blob to its inputKey.
-  const uploadFiles: UploadFile[] = []
-  // Cast: bun's undici FormData type narrows to [string, string]; the real
-  // value can be a File too — that's what we actually receive at runtime.
-  const entries = form.entries() as unknown as Iterable<[string, string | File]>
-  for (const [fieldName, value] of entries) {
-    if (fieldName === 'payload') continue
-    const m = UPLOAD_FIELD_RE.exec(fieldName)
-    if (m === null) {
-      throw new ValidationError(
-        'task-multipart-unknown-field',
-        `unexpected multipart field '${fieldName}'; expected 'payload' or 'files[<key>][]'`,
-      )
-    }
-    const inputKey = m[1]!
-    if (!uploadDefs.has(inputKey)) {
-      throw new ValidationError(
-        'task-multipart-unknown-input',
-        `multipart files target unknown upload input '${inputKey}'`,
-      )
-    }
-    if (typeof value === 'string') {
-      throw new ValidationError(
-        'task-multipart-string-not-file',
-        `field '${fieldName}' must carry a file, got string`,
-      )
-    }
-    const buf = new Uint8Array(await value.arrayBuffer())
-    // bun parses a part whose Content-Disposition carries `filename=""` (a
-    // browser Blob that was never named) as a File whose `.name` is `undefined`,
-    // NOT ''. Treat both empty and missing names as unnamed so we don't hand a
-    // non-string filename to sanitizeFilename (which would crash on `.replace`).
-    uploadFiles.push({
-      inputKey,
-      filename: value.name ? value.name : 'upload.bin',
-      declaredMime: value.type,
-      bytes: buf,
-    })
-  }
+  // 3. Every bound file must target a declared upload input.
+  assertUploadFilesMatchDefs(uploadFiles, uploadDefs)
 
   // 4. Materialize the space first so we have a real path to write into.
   const appHome = Paths.root

@@ -2520,6 +2520,9 @@ export const enUS: Resources = {
       'The platform creates an empty Git repo as the working directory; output is delivered as a diff against it and the directory is kept for manual pickup.',
     contentDescription: 'Task description',
     contentDescriptionHint: 'Passed to the agent verbatim as its prompt.',
+    agentPortsBlocked: 'This agent’s declared input ports block manual launch:',
+    agentPortBlockedSignal: 'port {{port}} has a signal kind and cannot be filled by hand',
+    agentPortBlockedName: 'port name {{port}} cannot be a template token (invalid or reserved)',
     advanced: 'Advanced settings',
     allowClarify: 'Allow follow-up questions',
     allowClarifyHint:
@@ -2642,6 +2645,7 @@ export const enUS: Resources = {
         'Refreshes remote-tracking refs only. Never `pull` / `merge` / `checkout` — your working tree and current branch are untouched.',
     },
     rawInputPlaceholder: 'raw {{kind}} value',
+    inputTooLong: 'value exceeds the {{max}}-character limit',
     filesPicker: {
       pickRepoFirst: 'Pick a repo first to load file paths.',
       loading: 'Loading files…',
@@ -2904,6 +2908,8 @@ export const enUS: Resources = {
         severity: { error: 'Error', warning: 'Warning' },
         issue: {
           inputNameSchema: 'Input port {{position}} ({{name}}) has an invalid name.',
+          inputNameLaunchBlocked:
+            'Input port {{name}} cannot be a template token (invalid or reserved) — this agent will not be manually launchable.',
           inputNameDuplicate: 'Input port {{name}} is duplicated at items {{positions}}.',
           outputNameDuplicate: 'Output port {{name}} is duplicated at items {{positions}}.',
           outputKindInvalid: 'Output kind for {{key}} is invalid: {{value}}.',

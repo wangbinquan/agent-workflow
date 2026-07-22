@@ -129,8 +129,15 @@ export function buildWorkflowStartFormData(
 
 export interface AgentWizardCommon extends WizardAdvancedFields {
   name: string
-  /** The task prompt (proposal: 描述即提示词). Caller trims. */
-  description: string
+  /**
+   * The task prompt for a ZERO-PORT agent (proposal: 描述即提示词). Caller
+   * trims. RFC-218: exactly one of `description` / `inputs` is stamped —
+   * port-declaring agents launch with `inputs` and MUST NOT carry a
+   * description (the service rejects mixed shapes).
+   */
+  description?: string
+  /** RFC-218 — port values for a port-declaring agent, keyed by port name. */
+  inputs?: Record<string, string>
   /** RFC-165 D7 — schema default is true, so only `false` goes on the wire. */
   allowClarify: boolean
 }
@@ -157,10 +164,37 @@ export function buildAgentStartBody(
   })
   delete body.workflowId
   delete body.inputs
-  body.description = common.description
+  // RFC-218: whitelist-stamp EXACTLY the shape the caller chose. This builder
+  // is a drop-what-you-don't-stamp whitelist ([launch-body helper lesson]);
+  // forgetting one of these lines silently strips the field off the wire.
+  if (common.description !== undefined) body.description = common.description
+  if (common.inputs !== undefined) body.inputs = common.inputs
   if (common.allowClarify === false) body.allowClarify = false
   stampLimits(body, common)
   return body
+}
+
+/**
+ * RFC-218 — multipart sibling of `buildAgentStartBody` for agents whose
+ * declared ports include `path<ext>` (upload) kinds. Mirrors
+ * `buildWorkflowStartFormData`: guards merge into the payload AFTER the
+ * whitelist builder (they'd be silently dropped inside it).
+ */
+export function buildAgentStartFormData(
+  space: WizardSpace,
+  common: AgentWizardCommon,
+  uploads: Record<string, File[]>,
+  extra?: Record<string, unknown>,
+): FormData {
+  const body = { ...buildAgentStartBody(space, common), ...(extra ?? {}) }
+  const fd = new FormData()
+  fd.set('payload', new Blob([JSON.stringify(body)], { type: 'application/json' }))
+  for (const [key, list] of Object.entries(uploads)) {
+    for (const f of list) {
+      fd.append(`files[${key}][]`, f, f.name)
+    }
+  }
+  return fd
 }
 
 export interface WorkgroupWizardCommon extends WizardAdvancedFields {
@@ -298,6 +332,46 @@ export function payloadToWizardSeed(
  * — `true`/`'unknown'` omit the field so `payloadToWizardSeed` defaults it true
  * (never conflate "snapshot broken" with "clarify was off").
  */
+/**
+ * RFC-218 — is this frozen agent-host snapshot the PORTED shape? Detection is
+ * the EXACT indexed input-node id form. Never a prefix test: the RFC-165
+ * legacy node id `__agent_input__` itself starts with `__agent_input_`, so a
+ * prefix match would classify every zero-port task as ported and relaunch
+ * would drop the saved description (design-gate P1-1).
+ */
+const PORTED_INPUT_NODE_RE = /^__agent_input_\d+__$/
+export function snapshotIsPortedAgentHost(snapshot: unknown): boolean {
+  if (snapshot === null || typeof snapshot !== 'object') return false
+  const nodes = (snapshot as { nodes?: unknown }).nodes
+  if (!Array.isArray(nodes)) return false
+  return nodes.some(
+    (n) =>
+      typeof n === 'object' &&
+      n !== null &&
+      typeof (n as { id?: unknown }).id === 'string' &&
+      PORTED_INPUT_NODE_RE.test((n as { id: string }).id),
+  )
+}
+
+/** Upload-kind input keys declared in a frozen snapshot's `inputs[]`. */
+export function snapshotUploadInputKeys(snapshot: unknown): Set<string> {
+  const out = new Set<string>()
+  if (snapshot === null || typeof snapshot !== 'object') return out
+  const inputs = (snapshot as { inputs?: unknown }).inputs
+  if (!Array.isArray(inputs)) return out
+  for (const def of inputs) {
+    if (
+      typeof def === 'object' &&
+      def !== null &&
+      (def as { kind?: unknown }).kind === 'upload' &&
+      typeof (def as { key?: unknown }).key === 'string'
+    ) {
+      out.add((def as { key: string }).key)
+    }
+  }
+  return out
+}
+
 export function snapshotClarifyState(snapshot: unknown): boolean | 'unknown' {
   if (snapshot === null || typeof snapshot !== 'object') return 'unknown'
   const nodes = (snapshot as { nodes?: unknown }).nodes
@@ -389,7 +463,18 @@ export function taskToLaunchPayload(task: Task): {
     payload.inputs = task.inputs
   } else if (kind === 'agent') {
     payload.agentName = task.sourceAgentName ?? ''
-    payload.description = task.inputs.description ?? ''
+    if (snapshotIsPortedAgentHost(task.workflowSnapshot)) {
+      // RFC-218: ported host — replay port values. Upload-kind keys are stale
+      // worktree paths the browser cannot rebuild into Files; drop them so the
+      // wizard's required gate forces a visible re-pick (same policy as the
+      // workflow arm's normalizeSeededInput).
+      const uploadKeys = snapshotUploadInputKeys(task.workflowSnapshot)
+      payload.inputs = Object.fromEntries(
+        Object.entries(task.inputs).filter(([key]) => !uploadKeys.has(key)),
+      )
+    } else {
+      payload.description = task.inputs.description ?? ''
+    }
     if (snapshotClarifyState(task.workflowSnapshot) === false) payload.allowClarify = false
   } else {
     payload.workgroupName = task.workgroupName ?? ''

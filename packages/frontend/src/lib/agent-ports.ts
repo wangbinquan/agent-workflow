@@ -6,6 +6,7 @@
 // and lets Dialog callers fail closed without partially changing their draft.
 
 import {
+  agentLaunchBlockers,
   AgentOutputKindSchema,
   DEFAULT_OUTPUT_KIND,
   type AgentInputPort,
@@ -417,6 +418,7 @@ export type AgentPortValidationIssueCode =
   | 'input-name-schema'
   | 'input-name-duplicate'
   | 'output-name-duplicate'
+  | 'input-name-launch-blocked'
   | 'output-kind-invalid'
   | 'wrapper-name-duplicate'
   | 'reserved-port-sidecar-key'
@@ -478,6 +480,26 @@ export function validateAgentPortState(draft: AgentPortValidationDraft): AgentPo
         code: 'input-name-schema',
         index,
         ...(typeof input.name === 'string' ? { name: input.name } : {}),
+      })
+    }
+  })
+  // RFC-218 (design P2-3): the SHARED launch-blocker predicate, surfaced at
+  // authoring time. A port whose name cannot ride a `{{token}}` (non-\w+, the
+  // reserved `__…__` dunder family, record poison keys) makes the agent
+  // impossible to launch manually — warn here (never block the save; the
+  // read path stays lenient per RFC-166).
+  inputs.forEach((input, index) => {
+    if (typeof input.name !== 'string' || input.name.length < 1) return
+    const blocked = agentLaunchBlockers([{ name: input.name, kind: 'string' }]).some(
+      (b) => b.kind === 'invalid-port-name',
+    )
+    if (blocked) {
+      issues.push({
+        severity: 'warning',
+        repairTarget: 'ports',
+        code: 'input-name-launch-blocked',
+        index,
+        name: input.name,
       })
     }
   })

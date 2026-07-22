@@ -2284,6 +2284,9 @@ export interface Resources {
     spaceScratchHint: string
     contentDescription: string
     contentDescriptionHint: string
+    agentPortsBlocked: string
+    agentPortBlockedSignal: string
+    agentPortBlockedName: string
     advanced: string
     allowClarify: string
     allowClarifyHint: string
@@ -2403,6 +2406,7 @@ export interface Resources {
       hint: string
     }
     rawInputPlaceholder: string
+    inputTooLong: string
     filesPicker: {
       pickRepoFirst: string
       loading: string
@@ -2650,6 +2654,7 @@ export interface Resources {
         }
         issue: {
           inputNameSchema: string
+          inputNameLaunchBlocked: string
           inputNameDuplicate: string
           outputNameDuplicate: string
           outputKindInvalid: string
@@ -6149,6 +6154,9 @@ export const zhCN: Resources = {
       '平台会创建一个空 Git 仓库作为工作目录；产出以对空仓的 diff 形式交付，目录保留可手动取用。',
     contentDescription: '任务描述',
     contentDescriptionHint: '将作为提示词直接交给 Agent。',
+    agentPortsBlocked: '该 Agent 的输入端口声明阻止手动启动：',
+    agentPortBlockedSignal: '端口 {{port}} 是 signal 类型，不能手动填写',
+    agentPortBlockedName: '端口名 {{port}} 不能用作模板变量（非法字符或保留名）',
     advanced: '高级设置',
     allowClarify: '允许反问',
     allowClarifyHint: 'Agent 可在需要时向你提问（也可以不问直接产出）。',
@@ -6264,6 +6272,7 @@ export const zhCN: Resources = {
         '仅刷新远端跟踪 ref；不会 `pull` / `merge` / `checkout`，工作目录与当前分支保持原样。',
     },
     rawInputPlaceholder: '原始 {{kind}} 值',
+    inputTooLong: '内容超出 {{max}} 字符上限',
     filesPicker: {
       pickRepoFirst: '请先选择仓库以加载文件路径。',
       loading: '正在加载文件…',
@@ -6506,6 +6515,8 @@ export const zhCN: Resources = {
         severity: { error: '错误', warning: '警告' },
         issue: {
           inputNameSchema: '第 {{position}} 个输入端口（{{name}}）名称无效。',
+          inputNameLaunchBlocked:
+            '输入端口 {{name}} 的名字不能用作模板变量（非法字符或保留名）——该 Agent 将无法手动启动。',
           inputNameDuplicate: '输入端口 {{name}} 在第 {{positions}} 项重复。',
           outputNameDuplicate: '输出端口 {{name}} 在第 {{positions}} 项重复。',
           outputKindInvalid: '输出 {{key}} 的类型无效：{{value}}。',

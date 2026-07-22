@@ -64,6 +64,7 @@ export * from './agentCapability' // RFC-166
 // dynamic workflow became a workgroup mode); only the generation protocol +
 // conversion survive, reused by the workgroup dynamic-mode engine.
 export * from './dynamicWorkflow' // RFC-167
+export * from './agentLaunchForm' // RFC-218
 export * from './shardingRegistry'
 export * from './signalPromptGuard'
 export * from './wrapperFanout'

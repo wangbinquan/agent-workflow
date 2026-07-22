@@ -243,6 +243,17 @@ async function assertScheduledTargetUsable(
       throw new NotFoundError('agent-not-found', `agent '${String(body['agentName'])}' not found`)
     }
     assertNotBuiltin('agent', agent)
+    // RFC-218 (design P2-2): with description/inputs both schema-optional, a
+    // payload that must fail EVERY fire (neither field / unknown keys /
+    // missing required ports / blocker agent / upload ports — scheduled fires
+    // are JSON, so path<ext> ports can never bind files) must be refused at
+    // save time, not discovered fire after fire. Same matrix as launch.
+    const { validateAgentLaunchShape } = await import('@/services/agentLaunch')
+    validateAgentLaunchShape(
+      agent.inputs,
+      body as { description?: string; inputs?: Record<string, string> },
+      { multipart: false },
+    )
     return
   }
   const { getWorkgroup } = await import('@/services/workgroups')

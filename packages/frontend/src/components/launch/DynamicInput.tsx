@@ -7,6 +7,7 @@
 
 import { useTranslation } from 'react-i18next'
 import type { WorkflowInput } from '@agent-workflow/shared'
+import { ChipsInput } from '@/components/ChipsInput'
 import { TextArea, TextInput } from '@/components/Form'
 import { EnumPicker } from '@/components/launch/EnumPicker'
 import { FilesPicker } from '@/components/launch/FilesPicker'
@@ -28,13 +29,50 @@ export function DynamicInput({
 }) {
   const { t } = useTranslation()
   if (def.kind === 'text') {
-    const multiline = (def as Record<string, unknown>).multiline === true
-    if (multiline) {
+    const rec = def as Record<string, unknown>
+    // RFC-218: carry the wire cap into the control — no "green form, 422 on
+    // submit" (design P2-4). Derived agent-port defs always set it.
+    const maxLength = typeof rec.maxLength === 'number' ? rec.maxLength : undefined
+    // RFC-218: `list<string|markdown>` agent ports — one chip per item,
+    // newline-joined wire value (matches the upload/files packing convention).
+    if (rec.presentation === 'chips') {
+      const items = value === '' ? [] : value.split('\n')
       return (
-        <TextArea rows={6} value={value} onChange={onChange} required={def.required === true} />
+        <ChipsInput
+          value={items}
+          onChange={(next) => onChange(next.join('\n'))}
+          validate={
+            maxLength !== undefined
+              ? (token) =>
+                  [...items, token].join('\n').length > maxLength
+                    ? t('launch.inputTooLong', { max: maxLength })
+                    : null
+              : undefined
+          }
+          testidPrefix={`wizard-input-${def.key}`}
+        />
       )
     }
-    return <TextInput value={value} onChange={onChange} required={def.required === true} />
+    const multiline = rec.multiline === true
+    if (multiline) {
+      return (
+        <TextArea
+          rows={6}
+          value={value}
+          onChange={onChange}
+          required={def.required === true}
+          maxLength={maxLength}
+        />
+      )
+    }
+    return (
+      <TextInput
+        value={value}
+        onChange={onChange}
+        required={def.required === true}
+        maxLength={maxLength}
+      />
+    )
   }
   if (def.kind === 'files') {
     return (

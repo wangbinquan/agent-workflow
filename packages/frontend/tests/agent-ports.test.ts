@@ -505,13 +505,27 @@ describe('RFC-194 sparse PUT tombstones', () => {
 
 describe('RFC-194 validateAgentPortState', () => {
   test('accepts unique schema-readable legacy names without forcing the UI regex', () => {
+    // RFC-218: a name that cannot ride a `{{token}}` now yields an ADVISORY
+    // warning (the agent won't be manually launchable) — but the RFC-194
+    // contract holds: legacy names never block the save (valid stays true).
     expect(
       validateAgentPortState({
         inputs: [{ name: 'Legacy Input' }],
         outputs: ['Legacy Output'],
         outputKinds: { 'Legacy Output': 'markdown' },
       }),
-    ).toEqual({ valid: true, issues: [] })
+    ).toEqual({
+      valid: true,
+      issues: [
+        {
+          severity: 'warning',
+          repairTarget: 'ports',
+          code: 'input-name-launch-blocked',
+          index: 0,
+          name: 'Legacy Input',
+        },
+      ],
+    })
   })
 
   test('reports input schema and duplicate identities as blocking Ports repairs', () => {

@@ -31,6 +31,8 @@ import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/serv
 import { assertNotBuiltin, excludeBuiltinAgents, isBuiltinRow } from '@/services/systemResources'
 import { assertNewRefsUsable, diffNewNames } from '@/services/resourceRefs'
 import { startAgentTask } from '@/services/agentLaunch'
+import { parseMultipartLaunch, resolveUploadLimits } from '@/services/launchMultipart'
+import type { UploadFile, UploadLimits } from '@/services/upload'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import { resolveOpencodeCmd } from '@/util/opencode'
 import { mountAclEndpoints } from './resourceAcl'
@@ -187,11 +189,22 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
   // modern space fields, so no raw-key gate is needed (workgroup precedent).
   app.post('/api/agents/:name/tasks', async (c) => {
     const name = c.req.param('name')
+    // RFC-218: path<ext> input ports bind files via multipart — same parser
+    // family as POST /api/tasks (services/launchMultipart). JSON stays the
+    // only shape for text-port / zero-port launches.
+    const ct = c.req.header('content-type') ?? ''
     let body: unknown
-    try {
-      body = await c.req.raw.json()
-    } catch {
-      body = {}
+    let uploads: { files: UploadFile[]; limits: UploadLimits } | undefined
+    if (ct.toLowerCase().startsWith('multipart/form-data')) {
+      const parsedForm = await parseMultipartLaunch(c.req.raw)
+      body = parsedForm.payloadJson
+      uploads = { files: parsedForm.files, limits: resolveUploadLimits(deps.configPath) }
+    } else {
+      try {
+        body = await c.req.raw.json()
+      } catch {
+        body = {}
+      }
     }
     // 实现门 P2 修复（F1 同型）：schema 非 strict，{scratch:true, repoPath}
     // 会被静默剥键降级成 scratch 启动——退役键必须在 parse 前整体拒收。
@@ -216,6 +229,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
       name,
       parsed.data,
       buildStartTaskDeps(deps.db, deps.configPath, actor.user.id, opencodeCmd, deps.secretBox),
+      uploads,
     )
     return c.json(task, 201)
   })
