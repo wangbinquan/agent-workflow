@@ -116,3 +116,9 @@
 5. **T9：cross 不复跑 self 信封 schema**——统一 create 首稿两 kind 同跑 ClarifyEnvelopeBodySchema，被 scheduler-cross-clarify-dispatch 的「§4.1 提问上限豁免」锁抓回；终态 self-only 复验。
 6. **T10：RunStatusRow 收敛范围窄于原案**——时长/名字留在布局侧（右栏两行网格契约），只收敛 live-status 优先规则 + kind chip（这才是会分叉的语义）。
 7. **T8：0029/0031 迁移史锁改 era-lock**（migration-freeze.ts 冻结在 0106）而非删除——历史断言保留，HEAD 不留死表面。
+
+**实现门（Codex，2026-07-22，base `02477319` 覆盖 T8-T12 全 diff）**：3 P2 全采纳修入 `797f8d24`——
+① 0107 reconcile 越界拷贝 answered_by（遗留恒 NULL）抹掉 RFC-099 归属 → SET 剔除+冻结库断言；
+② cross-stop 垫片覆盖判定未限定 GLOBAL 行，仅有 shard 级行的 stopped questioner 删表后复活 → `shard_key=''` 收紧+shard-only 场景断言；
+③ T9 调度器委托引入双读竞态（stop→continue 翻转窗口）——无视 'awaiting' 裁决仍报 done → 尊重裁决+回收 speculative mint（cross-clarify-stop-race）+源锁。
+两条 migration 修均变异实证（红→修→绿）；已应用 0107 的安装不重放（受损窗口窄且源数据随删表不可逆，无补救回填面）。
