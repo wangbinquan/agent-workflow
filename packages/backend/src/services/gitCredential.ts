@@ -13,7 +13,7 @@
 // runs WITHOUT these env vars and with a credential-less origin URL → the
 // platform credential is simply not reachable from agent processes anymore.
 
-import { chmodSync, mkdirSync, rmSync, writeFileSync, existsSync } from 'node:fs'
+import { chmodSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { Paths } from '@/util/paths'
@@ -21,20 +21,31 @@ import { Paths } from '@/util/paths'
 const HELPER_REL = join('libexec', 'git-askpass.sh')
 
 const HELPER_BODY = `#!/bin/sh
-# agent-workflow (RFC-205 G1) — answers git credential prompts from the
-# one-shot file in $AW_GIT_CRED_FILE (line 1 = username, line 2 = password).
+# agent-workflow (RFC-205 G1) — answers git credential prompts from the one-shot
+# file in $AW_GIT_CRED_FILE (line 1 = username, line 2 = password), but ONLY for
+# the exact remote HOST the lease was minted for ($AW_GIT_CRED_HOST). Impl-gate
+# P0-2 (Codex 2026-07-22): git calls the helper for EVERY remote it authenticates
+# — including a recurse-submodules fetch whose remote a malicious .gitmodules
+# controls. Without the host check the helper handed the parent repo's PAT to any
+# host, so a hostile submodule remote could harvest it. git's prompt is
+# "Username for 'https://host/…'" / "Password for 'https://user@host:port/…'".
 [ -n "$AW_GIT_CRED_FILE" ] || exit 1
+[ -n "$AW_GIT_CRED_HOST" ] || exit 1
+prompt_host=$(printf '%s' "$1" | sed -e "s/.*for '//" -e "s/'.*//" -e 's#^[a-zA-Z][a-zA-Z0-9+.-]*://##' -e 's#/.*##' -e 's#.*@##' -e 's#:.*##')
+[ "$prompt_host" = "$AW_GIT_CRED_HOST" ] || exit 1
 case "$1" in
   *sername*) sed -n 1p "$AW_GIT_CRED_FILE" ;;
   *) sed -n 2p "$AW_GIT_CRED_FILE" ;;
 esac
 `
 
-/** Write (idempotently) the askpass helper; returns its absolute path. */
+/** Write the askpass helper; returns its absolute path. */
 export function ensureAskpassHelper(appHome: string = Paths.root): string {
   const path = join(appHome, HELPER_REL)
   mkdirSync(join(appHome, 'libexec'), { recursive: true })
-  if (!existsSync(path)) writeFileSync(path, HELPER_BODY, { mode: 0o755 })
+  // Impl-gate P0-2: ALWAYS (re)write — the body evolves (host check), so a helper
+  // left over from an older version must be refreshed, not trusted as-is.
+  writeFileSync(path, HELPER_BODY, { mode: 0o755 })
   chmodSync(path, 0o755)
   return path
 }
@@ -71,6 +82,16 @@ export function leaseGitCredential(
 ): GitCredentialLease | null {
   const info = extractGitUserinfo(plainUrl)
   if (info === null) return null
+  // Impl-gate P0-2: bind the lease to the exact remote host. The helper only
+  // answers a prompt whose URL host matches this — so git authenticating a
+  // DIFFERENT remote (a hostile submodule / rewritten origin) gets nothing.
+  let host: string
+  try {
+    host = new URL(plainUrl).hostname
+  } catch {
+    return null
+  }
+  if (host === '') return null
   const helper = ensureAskpassHelper(appHome)
   const credFile = join(appHome, `.gitcred-${ulid()}`)
   writeFileSync(credFile, `${info.username}\n${info.password}\n`, { mode: 0o600 })
@@ -79,6 +100,7 @@ export function leaseGitCredential(
     env: {
       GIT_ASKPASS: helper,
       AW_GIT_CRED_FILE: credFile,
+      AW_GIT_CRED_HOST: host,
       // Belt & braces: never fall back to an interactive prompt.
       GIT_TERMINAL_PROMPT: '0',
     },

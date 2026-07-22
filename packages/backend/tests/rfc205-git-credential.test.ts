@@ -63,19 +63,38 @@ describe('leaseGitCredential', () => {
     expect(leaseGitCredential('file:///tmp/x', tmp())).toBeNull()
   })
 
-  test('the helper script actually answers prompts from the file', async () => {
+  // RFC-205 impl-gate P0-2 (Codex 2026-07-22): the helper must answer ONLY for the
+  // lease's remote host, so a recurse-submodules fetch whose remote a malicious
+  // .gitmodules controls cannot harvest the parent repo's PAT.
+  test('the helper answers prompts for the lease host and REFUSES other hosts (P0-2)', async () => {
     const home = tmp()
-    const lease = leaseGitCredential('https://bob:pw123@host/r.git', home)!
-    const run = async (prompt: string): Promise<string> => {
+    const lease = leaseGitCredential('https://bob:pw123@good.example/r.git', home)!
+    expect(lease.env.AW_GIT_CRED_HOST).toBe('good.example')
+    const run = async (prompt: string): Promise<{ out: string; code: number }> => {
       const proc = Bun.spawn([lease.env.GIT_ASKPASS!, prompt], {
-        env: { ...process.env, AW_GIT_CRED_FILE: lease.env.AW_GIT_CRED_FILE! },
+        env: {
+          ...process.env,
+          AW_GIT_CRED_FILE: lease.env.AW_GIT_CRED_FILE!,
+          AW_GIT_CRED_HOST: lease.env.AW_GIT_CRED_HOST!,
+        },
         stdout: 'pipe',
       })
-      await proc.exited
-      return (await new Response(proc.stdout).text()).trim()
+      const code = await proc.exited
+      return { out: (await new Response(proc.stdout).text()).trim(), code }
     }
-    expect(await run('Username for https://host')).toBe('bob')
-    expect(await run("Password for 'https://bob@host'")).toBe('pw123')
+    // Matching host → answers.
+    expect((await run("Username for 'https://good.example'")).out).toBe('bob')
+    expect((await run("Password for 'https://bob@good.example'")).out).toBe('pw123')
+    // A DIFFERENT host (hostile submodule remote) → refused, nothing leaked.
+    const evil = await run("Password for 'https://evil.example/x'")
+    expect(evil.out).toBe('')
+    expect(evil.code).not.toBe(0)
+    // The lease host smuggled into the USERINFO of another host → still refused.
+    const spoofUser = await run("Password for 'https://good.example@evil.example/x'")
+    expect(spoofUser.out).toBe('')
+    // A host that merely CONTAINS the lease host as a suffix-prefix → refused.
+    const substr = await run("Password for 'https://good.example.evil.com/x'")
+    expect(substr.out).toBe('')
     lease.cleanup()
   })
 
