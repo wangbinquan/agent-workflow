@@ -1,8 +1,8 @@
 // Root route — shared layout + auth gate.
 //
 // If no token is present in localStorage, every route except /auth redirects
-// to /auth so the user can paste the daemon token. The daemon prints it at
-// startup.
+// to /auth. A fresh daemon prints a one-time bootstrap URL; its token query is
+// consumed here, scrubbed immediately, and handed to the setup-only auth flow.
 //
 // RFC-032 PR2: the workflows group no longer surfaces /reviews + /clarify
 // as visible sub-items. Both are now reachable via the unified inbox drawer
@@ -16,17 +16,35 @@ import { TourProvider } from '@/components/tour/SpotlightTour'
 import { RouteTransitionState } from '@/components/shell/RouteTransitionState'
 import { useApplyLanguage } from '@/hooks/useLanguage'
 import { useApplyTheme } from '@/hooks/useTheme'
-import { getToken, subscribeAuth } from '@/stores/auth'
+import { parseBootstrapTokenLocation } from '@/lib/bootstrap-token'
+import { getToken, setToken, subscribeAuth } from '@/stores/auth'
 
 export const Route = createRootRoute({
   beforeLoad: ({ location }) => {
+    const bootstrapLocation = parseBootstrapTokenLocation(location.href)
+    if (bootstrapLocation !== null) {
+      if (typeof window !== 'undefined') {
+        window.history.replaceState(window.history.state, '', bootstrapLocation.sanitizedHref)
+      }
+      if (bootstrapLocation.token !== null) {
+        setToken(bootstrapLocation.token)
+        throw redirect({
+          to: '/auth',
+          search: { redirect: bootstrapLocation.redirect, bootstrap: 'token' },
+          replace: true,
+        })
+      }
+    }
     if (location.pathname === '/auth') return
     if (getToken() === null) {
       // RFC-105: store the full relative href (pathname + search), not just
       // pathname, so a shared deep link with search params — e.g. a Markdown
       // preview `/tasks/t/preview?path=docs/report.md` — survives the login
       // round-trip instead of collapsing to the invalid-link state.
-      throw redirect({ to: '/auth', search: { redirect: location.href } })
+      throw redirect({
+        to: '/auth',
+        search: { redirect: bootstrapLocation?.sanitizedHref ?? location.href },
+      })
     }
   },
   component: RootComponent,
@@ -79,6 +97,9 @@ export function RootShell({
   children: ReactNode
 }) {
   if (pathname === '/auth') {
+    return <BareShell>{children}</BareShell>
+  }
+  if (pathname === '/setup/admin') {
     return <BareShell>{children}</BareShell>
   }
   if (token === null) {

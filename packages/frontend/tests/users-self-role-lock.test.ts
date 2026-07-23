@@ -10,20 +10,26 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'vitest'
 
-const SRC = readFileSync(resolve(import.meta.dirname, '..', 'src', 'routes', 'users.tsx'), 'utf-8')
+const source = (path: string) =>
+  readFileSync(resolve(import.meta.dirname, '..', 'src', path), 'utf-8')
+const ROUTE_SRC = source('routes/users.tsx')
+const DIRECTORY_SRC = source('components/users/UserDirectory.tsx')
+const EDIT_SRC = source('components/users/EditUserDialog.tsx')
 
 describe('routes/users.tsx — current user cannot edit own role', () => {
   test('derives isSelf from the /api/auth/me actor id', () => {
-    expect(SRC).toMatch(/const \{ data: me, isLoading: isActorLoading \} = useActor\(\)/)
-    expect(SRC).toMatch(/const isSelf = u\.id === me\?\.user\.id/)
+    expect(ROUTE_SRC).toMatch(/currentUserId=\{actor\.data\?\.user\.id\}/)
+    expect(DIRECTORY_SRC).toMatch(/isSelf=\{user\.id === props\.currentUserId\}/)
+    expect(ROUTE_SRC).toMatch(/isSelf=\{target\.id === actor\.data\?\.user\.id\}/)
   })
 
-  test('self row joins the __system__ row in the static-chip branch', () => {
-    // Both immutable rows share one branch: no <Select> is rendered for them.
-    expect(SRC).toMatch(/isSystem \|\| isSelf \? \(/)
+  test('self edit dialog disables role selection while system stays outside the human list', () => {
+    expect(EDIT_SRC).toMatch(/disabled=\{props\.isSelf\}/)
+    expect(DIRECTORY_SRC).toMatch(/props\.model\.system !== null/)
+    expect(DIRECTORY_SRC).toMatch(/<SystemPrincipal user=\{props\.model\.system\}/)
   })
 
   test('self chip explains why via the users.selfRoleLocked tooltip', () => {
-    expect(SRC).toMatch(/users\.selfRoleLocked/)
+    expect(EDIT_SRC).toMatch(/users\.selfRoleLocked/)
   })
 })

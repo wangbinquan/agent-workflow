@@ -49,6 +49,7 @@ import { configureLogger, createLogger, type LogLevel } from '@/util/log'
 import { getRuntimeDriver } from '@/services/runtime'
 import { Paths } from '@/util/paths'
 import { buildWebSocketAdapter } from '@/ws/server'
+import { isBootstrapRequired } from '@/services/authLoginPolicy'
 import { existsSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -835,9 +836,9 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     ),
   )
 
-  // Browser-facing URL with token included; printed exactly once on stdout
-  // and never written to the persistent log (per design.md §10.2).
-  const browserUrl = `${baseUrl}?token=${token}`
+  // RFC-221 — the daemon token is only a first-admin bootstrap credential.
+  // Once handoff commits, never print it as a browser login URL again.
+  const browserUrl = readyBrowserUrl(baseUrl, token, isBootstrapRequired(db))
   process.stdout.write(
     `\nagent-workflow ready — open this URL in your browser:\n  ${browserUrl}\n\n`,
   )
@@ -845,4 +846,12 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   await new Promise<void>(() => {
     /* never resolves */
   })
+}
+
+export function readyBrowserUrl(
+  baseUrl: string,
+  token: string,
+  bootstrapRequired: boolean,
+): string {
+  return bootstrapRequired ? `${baseUrl}?token=${token}` : baseUrl
 }

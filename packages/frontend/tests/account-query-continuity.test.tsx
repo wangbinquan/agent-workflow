@@ -1,7 +1,5 @@
-// RFC-198 PR4 — cached empty account sections must not swallow a background
-// refetch failure. Sessions and identities keep their truthful empty content,
-// add an inline retry, and recover in place instead of looking like a clean
-// successful response.
+// RFC-221 — route-backed account security center, typed actor ownership, and
+// stale-data continuity.
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
@@ -14,17 +12,17 @@ import {
 } from '@tanstack/react-router'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import i18n from '../src/i18n'
+import { enUS } from '../src/i18n/en-US'
 import type { MeResponse } from '../src/hooks/useActor'
 import { Route as AccountRoute } from '../src/routes/account'
-import { enUS } from '../src/i18n/en-US'
-import { setBaseUrl, setToken } from '../src/stores/auth'
-import '../src/i18n'
+import { clearToken, getToken, setBaseUrl, setToken } from '../src/stores/auth'
 
 const actor: MeResponse = {
   user: {
     id: 'u1',
     username: 'alice',
-    displayName: 'Alice',
+    displayName: 'Alice Chen',
     role: 'user',
     status: 'active',
   },
@@ -34,6 +32,23 @@ const actor: MeResponse = {
   pats: [],
 }
 
+const oidcActor: MeResponse = {
+  ...actor,
+  linkedIdentities: [
+    {
+      id: 'identity-1',
+      userId: 'u1',
+      providerId: 'provider-1',
+      providerSlug: 'corp',
+      providerDisplayName: 'Corporate SSO',
+      subject: '00u-long-technical-subject',
+      email: 'alice@example.com',
+      emailVerified: true,
+      linkedAt: 1_700_000_000_000,
+    },
+  ],
+}
+
 function json(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), {
     status,
@@ -41,271 +56,194 @@ function json(payload: unknown, status = 200): Response {
   })
 }
 
-function renderAccount(qc: QueryClient) {
+function queryClient() {
+  return new QueryClient({ defaultOptions: { queries: { retry: false } } })
+}
+
+function renderAccount(qc: QueryClient, initialEntry = '/account') {
   const root = createRootRoute({ component: () => <Outlet /> })
   const account = createRoute({
     getParentRoute: () => root,
     path: '/account',
+    validateSearch: AccountRoute.options.validateSearch,
     component: AccountRoute.options.component,
   })
   const router = createRouter({
     routeTree: root.addChildren([account]),
-    history: createMemoryHistory({ initialEntries: ['/account'] }),
+    history: createMemoryHistory({ initialEntries: [initialEntry] }),
   })
-  return render(
+  const view = render(
     <QueryClientProvider client={qc}>
       {/* Test route types intentionally differ from the generated app tree. */}
       {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
       <RouterProvider router={router as any} />
     </QueryClientProvider>,
   )
+  return { ...view, router }
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  clearToken()
   setBaseUrl('http://daemon.test')
   setToken('tok')
+  await i18n.changeLanguage('en-US')
 })
 
 afterEach(() => {
   cleanup()
+  clearToken()
   vi.restoreAllMocks()
 })
 
-describe('/account cached-empty query continuity', () => {
-  test('shared password and PAT fields keep labels, constraints, and request payloads', async () => {
+describe('/account security center', () => {
+  test('overview owns linked identities through /me and exposes no unlink action', async () => {
+    const paths: string[] = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (request: RequestInfo | URL) => {
+      const path = new URL(request.toString()).pathname
+      paths.push(path)
+      if (path === '/api/auth/me') return json(oidcActor)
+      throw new Error(`unexpected account request: ${path}`)
+    })
+    renderAccount(queryClient())
+
+    expect(
+      await screen.findByRole('heading', { level: 2, name: enUS.account.sections.overview }),
+    ).toBeTruthy()
+    expect(screen.getByText('Alice Chen')).toBeTruthy()
+    expect(screen.getByText('Corporate SSO')).toBeTruthy()
+    expect(screen.getAllByText(enUS.account.oidcManaged)).toHaveLength(2)
+    expect(screen.queryByRole('button', { name: enUS.account.unlink })).toBeNull()
+    expect(paths).toEqual(['/api/auth/me'])
+
+    fireEvent.click(screen.getByText(enUS.account.technicalIdentity))
+    expect(screen.getByText('00u-long-technical-subject')).toBeTruthy()
+  })
+
+  test('local password change installs the fresh session token before invalidation', async () => {
     const calls: Array<{ path: string; method: string; body: unknown }> = []
     vi.spyOn(globalThis, 'fetch').mockImplementation(
       async (request: RequestInfo | URL, init?: RequestInit) => {
         const path = new URL(request.toString()).pathname
         const method = init?.method ?? 'GET'
-        const body = typeof init?.body === 'string' ? JSON.parse(init.body) : null
+        const body = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined
         calls.push({ path, method, body })
-        if (method === 'POST' && path === '/api/auth/change-password') return json({})
-        if (method === 'POST' && path === '/api/auth/pats') {
-          return json({ token: 'pat-secret' })
-        }
         if (path === '/api/auth/me') return json(actor)
-        if (
-          path === '/api/auth/pats' ||
-          path === '/api/auth/sessions' ||
-          path === '/api/auth/identities'
-        ) {
-          return json([])
+        if (path === '/api/auth/sessions') return json([])
+        if (path === '/api/auth/change-password') {
+          return json({ ok: true, sessionToken: 'fresh-session-token' })
         }
         throw new Error(`unexpected account request: ${method} ${path}`)
       },
     )
-    const qc = new QueryClient({
-      defaultOptions: { queries: { retry: false, staleTime: Number.POSITIVE_INFINITY } },
-    })
-    qc.setQueryData(['auth', 'me', 'tok'], actor)
-    qc.setQueryData(['pats'], [])
-    qc.setQueryData(['sessions'], [])
-    qc.setQueryData(['identities'], [])
-    renderAccount(qc)
+    renderAccount(queryClient(), '/account?section=security')
 
-    const passwordSection = (
-      await screen.findByRole('heading', {
-        name: enUS.account.password,
-      })
-    ).closest('section')!
-    const currentPassword = within(passwordSection).getByLabelText(
-      /Current password/,
-    ) as HTMLInputElement
-    const newPassword = within(passwordSection).getByLabelText(/New password/) as HTMLInputElement
-    expect(currentPassword.classList.contains('form-input')).toBe(true)
-    expect(currentPassword.autocomplete).toBe('current-password')
-    expect(currentPassword.required).toBe(true)
-    expect(newPassword.classList.contains('form-input')).toBe(true)
-    expect(newPassword.autocomplete).toBe('new-password')
-    expect(newPassword.minLength).toBe(8)
-    expect(newPassword.required).toBe(true)
+    const current = (await screen.findByLabelText(/Current password/i)) as HTMLInputElement
+    const next = screen.getByLabelText(/New password/i) as HTMLInputElement
+    expect(current.autocomplete).toBe('current-password')
+    expect(next.autocomplete).toBe('new-password')
+    expect(next.minLength).toBe(8)
 
-    fireEvent.change(currentPassword, { target: { value: 'old-password' } })
-    fireEvent.change(newPassword, { target: { value: 'new-password' } })
-    fireEvent.click(within(passwordSection).getByRole('button', { name: enUS.account.update }))
-    await waitFor(() => {
-      expect(calls.some((call) => call.path === '/api/auth/change-password')).toBe(true)
-    })
+    fireEvent.change(current, { target: { value: 'old-password' } })
+    fireEvent.change(next, { target: { value: 'new-password' } })
+    fireEvent.click(screen.getByRole('button', { name: enUS.account.update }))
+
+    expect(await screen.findByText(enUS.account.passwordChanged)).toBeTruthy()
+    expect(getToken()).toBe('fresh-session-token')
     expect(calls.find((call) => call.path === '/api/auth/change-password')?.body).toEqual({
       oldPassword: 'old-password',
       newPassword: 'new-password',
     })
-    expect(await within(passwordSection).findByText(enUS.account.passwordChanged)).toBeTruthy()
-    expect(currentPassword.value).toBe('')
-    expect(newPassword.value).toBe('')
-
-    const patSection = screen.getByRole('heading', { name: enUS.account.pats }).closest('section')!
-    const patName = within(patSection).getByRole('textbox', {
-      name: /Token name/,
-    }) as HTMLInputElement
-    const scopeCheckboxes = within(patSection).getAllByRole('checkbox') as HTMLInputElement[]
-    expect(patName.classList.contains('form-input')).toBe(true)
-    expect(patName.required).toBe(true)
-    expect(scopeCheckboxes).toHaveLength(1)
-    expect(scopeCheckboxes[0]?.checked).toBe(true)
-
-    fireEvent.change(patName, { target: { value: 'ci-launcher' } })
-    fireEvent.click(within(patSection).getByRole('button', { name: enUS.account.generate }))
-    await waitFor(() => {
-      expect(calls.some((call) => call.method === 'POST' && call.path === '/api/auth/pats')).toBe(
-        true,
-      )
-    })
-    expect(
-      calls.find((call) => call.method === 'POST' && call.path === '/api/auth/pats')?.body,
-    ).toEqual({
-      name: 'ci-launcher',
-      scopes: ['account:self'],
-    })
-    expect((await within(patSection).findByTestId('new-pat-secret')).textContent).toContain(
-      'pat-secret',
-    )
+    expect(current.value).toBe('')
+    expect(next.value).toBe('')
   })
 
-  test('top-level actor query shows initial loading and initial error with a working retry', async () => {
-    let finishFirstActorRequest: ((response: Response) => void) | undefined
-    let actorRequests = 0
+  test('OIDC-managed security omits the password form but keeps sessions available', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (request: RequestInfo | URL) => {
       const path = new URL(request.toString()).pathname
-      if (path === '/api/auth/me') {
-        actorRequests += 1
-        if (actorRequests === 1) {
-          return new Promise<Response>((resolve) => {
-            finishFirstActorRequest = resolve
+      if (path === '/api/auth/me') return json(oidcActor)
+      if (path === '/api/auth/sessions') return json([])
+      throw new Error(`unexpected account request: ${path}`)
+    })
+    renderAccount(queryClient(), '/account?section=security')
+
+    expect(await screen.findByText(enUS.account.oidcPasswordTitle)).toBeTruthy()
+    expect(screen.queryByLabelText(/Current password/i)).toBeNull()
+    expect(screen.queryByLabelText(/New password/i)).toBeNull()
+    expect(screen.getByRole('heading', { name: enUS.account.sessions })).toBeTruthy()
+  })
+
+  test('existing PATs are retirement-only and revoke through confirmation', async () => {
+    const pat = {
+      id: 'pat-1',
+      name: 'legacy-ci',
+      scopes: ['account:self'] as const,
+      createdAt: 1_700_000_000_000,
+      lastUsedAt: null,
+      expiresAt: null,
+      revokedAt: null,
+    }
+    let revoked = false
+    const calls: Array<{ path: string; method: string }> = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      async (request: RequestInfo | URL, init?: RequestInit) => {
+        const path = new URL(request.toString()).pathname
+        const method = init?.method ?? 'GET'
+        calls.push({ path, method })
+        if (path === '/api/auth/me') {
+          return json({
+            ...actor,
+            pats: [{ ...pat, scopes: [...pat.scopes], revokedAt: revoked ? Date.now() : null }],
           })
         }
-        return json(actor)
-      }
-      if (
-        path === '/api/auth/pats' ||
-        path === '/api/auth/sessions' ||
-        path === '/api/auth/identities'
-      ) {
-        return json([])
-      }
-      throw new Error(`unexpected account request: ${path}`)
-    })
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    renderAccount(qc)
+        if (path === '/api/auth/pats/pat-1' && method === 'DELETE') {
+          revoked = true
+          return new Response(null, { status: 204 })
+        }
+        throw new Error(`unexpected account request: ${method} ${path}`)
+      },
+    )
+    renderAccount(queryClient(), '/account?section=tokens')
 
-    expect(await screen.findByRole('heading', { level: 1, name: enUS.account.title })).toBeTruthy()
-    expect(screen.getByTestId('loading-state')).toBeTruthy()
+    expect(await screen.findByText('legacy-ci')).toBeTruthy()
+    expect(screen.getByText(enUS.account.tokensRetiredTitle)).toBeTruthy()
+    expect(screen.queryByRole('textbox')).toBeNull()
+    expect(screen.queryByRole('button', { name: enUS.account.generate })).toBeNull()
 
-    await waitFor(() => expect(finishFirstActorRequest).toBeTypeOf('function'))
-    await act(async () => {
-      finishFirstActorRequest!(
-        json({ code: 'actor-unavailable', message: 'Actor lookup failed' }, 503),
-      )
-    })
-    expect((await screen.findByRole('alert')).textContent).toContain('Actor lookup failed')
-    expect(screen.queryByRole('heading', { name: enUS.account.profile })).toBeNull()
-
-    fireEvent.click(screen.getByRole('button', { name: /retry|重试/i }))
-    expect(await screen.findByRole('heading', { name: enUS.account.profile })).toBeTruthy()
-    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
-    expect(actorRequests).toBe(2)
+    fireEvent.click(screen.getByRole('button', { name: enUS.account.revoke }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: enUS.account.revoke }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(calls).toContainEqual({ path: '/api/auth/pats/pat-1', method: 'DELETE' })
+    expect(await screen.findByText(enUS.account.patStatusRevoked)).toBeTruthy()
   })
 
-  test('top-level stale actor error preserves the account sections and retries in place', async () => {
-    let failActorRefresh = true
+  test('initial error retries, while a stale actor error preserves the active panel', async () => {
+    let requests = 0
+    let failRefresh = false
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (request: RequestInfo | URL) => {
       const path = new URL(request.toString()).pathname
-      if (path === '/api/auth/me') {
-        return failActorRefresh
-          ? json({ code: 'actor-refresh-failed', message: 'Actor refresh failed' }, 503)
-          : json(actor)
+      if (path !== '/api/auth/me') throw new Error(`unexpected account request: ${path}`)
+      requests += 1
+      if (requests === 1 || failRefresh) {
+        return json({ code: 'actor-unavailable', message: 'Actor lookup failed' }, 503)
       }
-      if (
-        path === '/api/auth/pats' ||
-        path === '/api/auth/sessions' ||
-        path === '/api/auth/identities'
-      ) {
-        return json([])
-      }
-      throw new Error(`unexpected account request: ${path}`)
+      return json(actor)
     })
-    const qc = new QueryClient({
-      defaultOptions: { queries: { retry: false, staleTime: Number.POSITIVE_INFINITY } },
-    })
-    qc.setQueryData(['auth', 'me', 'tok'], actor)
-    qc.setQueryData(['pats'], [])
-    qc.setQueryData(['sessions'], [])
-    qc.setQueryData(['identities'], [])
+    const qc = queryClient()
     renderAccount(qc)
 
-    expect(await screen.findByRole('heading', { name: enUS.account.profile })).toBeTruthy()
-    for (const name of [
-      enUS.account.profile,
-      enUS.account.password,
-      enUS.account.pats,
-      enUS.account.linkedIdentities,
-      enUS.account.sessions,
-    ]) {
-      const heading = screen.getByRole('heading', { level: 2, name })
-      const section = heading.closest('section.card')
-      expect(section).not.toBeNull()
-      expect(heading.id).not.toBe('')
-      expect(section?.getAttribute('aria-labelledby')).toBe(heading.id)
-    }
+    expect(await screen.findByRole('alert')).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: enUS.account.sections.overview })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /retry/i }))
+    expect(
+      await screen.findByRole('heading', { name: enUS.account.sections.overview }),
+    ).toBeTruthy()
+
+    failRefresh = true
     await act(async () => {
       await qc.refetchQueries({ queryKey: ['auth', 'me', 'tok'], exact: true })
     })
-    expect((await screen.findByRole('alert')).textContent).toContain('Actor refresh failed')
-    expect(screen.getByRole('heading', { name: enUS.account.profile })).toBeTruthy()
-    expect(screen.getByText('alice')).toBeTruthy()
-
-    failActorRefresh = false
-    fireEvent.click(screen.getByRole('button', { name: /retry|重试/i }))
-    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
-    expect(screen.getByRole('heading', { name: enUS.account.profile })).toBeTruthy()
-  })
-
-  test('sessions and identities show stale errors with retry, then recover in place', async () => {
-    let fail = true
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (request: RequestInfo | URL) => {
-      const path = new URL(request.toString()).pathname
-      if (path === '/api/auth/sessions' || path === '/api/auth/identities') {
-        return fail
-          ? json({ code: 'account-refresh-failed', message: `${path} refresh failed` }, 503)
-          : json([])
-      }
-      if (path === '/api/auth/pats') return json([])
-      throw new Error(`unexpected account request: ${path}`)
-    })
-    const qc = new QueryClient({
-      defaultOptions: { queries: { retry: false, staleTime: Number.POSITIVE_INFINITY } },
-    })
-    qc.setQueryData(['auth', 'me', 'tok'], actor)
-    qc.setQueryData(['pats'], [])
-    qc.setQueryData(['sessions'], [])
-    qc.setQueryData(['identities'], [])
-    renderAccount(qc)
-
-    const sessions = (await screen.findByRole('heading', { name: enUS.account.sessions })).closest(
-      'section',
-    )!
-    const identities = screen
-      .getByRole('heading', { name: enUS.account.linkedIdentities })
-      .closest('section')!
-    expect(within(sessions).getByText(enUS.account.noSessions)).toBeTruthy()
-    expect(within(identities).getByText(enUS.account.noIdentities)).toBeTruthy()
-
-    await qc.refetchQueries({ queryKey: ['sessions'], exact: true })
-    await qc.refetchQueries({ queryKey: ['identities'], exact: true })
-    expect(await within(sessions).findByRole('alert')).toBeTruthy()
-    expect(await within(identities).findByRole('alert')).toBeTruthy()
-    expect(within(sessions).getByText(enUS.account.noSessions)).toBeTruthy()
-    expect(within(identities).getByText(enUS.account.noIdentities)).toBeTruthy()
-
-    fail = false
-    fireEvent.click(within(sessions).getByRole('button', { name: /retry|重试/i }))
-    fireEvent.click(within(identities).getByRole('button', { name: /retry|重试/i }))
-    await waitFor(() => {
-      expect(within(sessions).queryByRole('alert')).toBeNull()
-      expect(within(identities).queryByRole('alert')).toBeNull()
-    })
-    expect(within(sessions).getByText(enUS.account.noSessions)).toBeTruthy()
-    expect(within(identities).getByText(enUS.account.noIdentities)).toBeTruthy()
+    expect((await screen.findByRole('alert')).textContent).toContain('Actor lookup failed')
+    expect(screen.getByRole('heading', { name: enUS.account.sections.overview })).toBeTruthy()
   })
 })

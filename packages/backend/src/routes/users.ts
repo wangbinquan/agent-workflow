@@ -18,6 +18,7 @@ import {
   resetPassword,
   searchUsersPublic,
 } from '@/services/users'
+import { isOidcManagedUser, listOidcManagedUserIds } from '@/services/accountAuthPolicy'
 import { NotFoundError, ValidationError } from '@/util/errors'
 
 export function mountUserRoutes(app: Hono, deps: AppDeps): void {
@@ -48,13 +49,17 @@ export function mountUserRoutes(app: Hono, deps: AppDeps): void {
   // Everything below is admin-only.
   app.get('/api/users', requirePermission('users:read'), async (c) => {
     const rows = await listAllUsers(deps.db)
-    return c.json(rows.map(materializePublicAdminView))
+    const managed = await listOidcManagedUserIds(
+      deps.db,
+      rows.map((row) => row.id),
+    )
+    return c.json(rows.map((row) => materializePublicAdminView(row, managed.has(row.id))))
   })
 
   app.get('/api/users/:id', requirePermission('users:read'), async (c) => {
     const u = await findById(deps.db, c.req.param('id'))
     if (!u) throw new NotFoundError('user-not-found', `user '${c.req.param('id')}' not found`)
-    return c.json(materializePublicAdminView(u))
+    return c.json(materializePublicAdminView(u, await isOidcManagedUser(deps.db, u.id)))
   })
 
   app.post('/api/users', requirePermission('users:write'), async (c) => {
@@ -66,7 +71,7 @@ export function mountUserRoutes(app: Hono, deps: AppDeps): void {
     }
     const actor = actorOf(c)
     const created = await createUser(deps.db, { ...parsed.data, createdBy: actor.user.id })
-    return c.json(materializePublicAdminView(created), 201)
+    return c.json(materializePublicAdminView(created, false), 201)
   })
 
   app.patch('/api/users/:id', requirePermission('users:write'), async (c) => {
@@ -83,7 +88,7 @@ export function mountUserRoutes(app: Hono, deps: AppDeps): void {
       Date.now(),
       actorOf(c).user.id,
     )
-    return c.json(materializePublicAdminView(updated))
+    return c.json(materializePublicAdminView(updated, await isOidcManagedUser(deps.db, updated.id)))
   })
 
   app.delete('/api/users/:id', requirePermission('users:write'), async (c) => {
@@ -103,19 +108,22 @@ export function mountUserRoutes(app: Hono, deps: AppDeps): void {
   })
 }
 
-function materializePublicAdminView(row: {
-  id: string
-  username: string
-  email: string | null
-  displayName: string
-  role: string
-  status: string
-  forcePasswordChange: boolean
-  createdBy: string | null
-  createdAt: number
-  updatedAt: number
-  lastLoginAt: number | null
-}) {
+function materializePublicAdminView(
+  row: {
+    id: string
+    username: string
+    email: string | null
+    displayName: string
+    role: string
+    status: string
+    forcePasswordChange: boolean
+    createdBy: string | null
+    createdAt: number
+    updatedAt: number
+    lastLoginAt: number | null
+  },
+  hasOidcIdentity: boolean,
+) {
   return {
     id: row.id,
     username: row.username,
@@ -128,6 +136,7 @@ function materializePublicAdminView(row: {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     lastLoginAt: row.lastLoginAt,
+    hasOidcIdentity,
   }
 }
 

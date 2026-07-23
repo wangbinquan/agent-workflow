@@ -20,6 +20,7 @@ export type RevocationReason =
   | 'user-disabled'
   | 'task-members-changed'
   | 'resource-acl-changed'
+  | 'bootstrap-completed'
 
 type TriggerImpl = (db: DbClient, reason: RevocationReason) => void
 

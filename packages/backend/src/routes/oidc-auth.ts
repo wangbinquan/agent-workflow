@@ -10,6 +10,11 @@ import { acquireIdentityClaims } from '@/auth/oidc/identity'
 import { consumeFlow, startFlow } from '@/auth/oidc/flow'
 import { OidcTokenError, exchangeCodeForTokens } from '@/auth/oidc/tokens'
 import { createSession } from '@/auth/sessionStore'
+import {
+  assertBootstrapComplete,
+  getAuthLoginPolicy,
+  getAuthMethodDiscovery,
+} from '@/services/authLoginPolicy'
 import { createOidcProvidersService } from '@/services/oidcProviders'
 import {
   bindInvitedUserWithIdentity,
@@ -32,12 +37,11 @@ import { BadRequestErrorOrFriendlyHtml, friendly } from '@/util/oidcResponse'
 
 export function mountOidcAuthRoutes(app: Hono, deps: AppDeps): void {
   app.get('/api/auth/oidc/providers', async (c) => {
-    if (!deps.secretBox) return c.json({ providers: [] })
-    const svc = createOidcProvidersService({ db: deps.db, secretBox: deps.secretBox })
-    return c.json({ providers: await svc.listPublic() })
+    return c.json(getAuthMethodDiscovery(deps.db, deps.secretBox !== undefined))
   })
 
   app.post('/api/auth/oidc/:slug/login/start', async (c) => {
+    assertBootstrapComplete(deps.db)
     if (!deps.secretBox) return c.json({ ok: false, code: 'oidc-not-configured' }, 503)
     const svc = createOidcProvidersService({ db: deps.db, secretBox: deps.secretBox })
     const provider = await svc.findBySlug(c.req.param('slug'))
@@ -80,6 +84,9 @@ export function mountOidcAuthRoutes(app: Hono, deps: AppDeps): void {
   })
 
   app.get('/api/auth/oidc/:slug/callback', async (c) => {
+    if (getAuthLoginPolicy(deps.db).bootstrapCompletedAt === null) {
+      return c.html(friendly('bootstrap-admin-required'), 403)
+    }
     if (!deps.secretBox) return c.html(friendly('oidc-not-configured'), 503)
     const code = c.req.query('code')
     const state = c.req.query('state')

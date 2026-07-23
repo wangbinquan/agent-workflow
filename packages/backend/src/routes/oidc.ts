@@ -1,14 +1,33 @@
 // RFC-036 — admin-only /api/oidc/providers CRUD + /test endpoint.
 
 import type { Hono } from 'hono'
-import { CreateOidcProviderBodySchema, PatchOidcProviderBodySchema } from '@agent-workflow/shared'
+import {
+  CreateOidcProviderBodySchema,
+  PatchOidcProviderBodySchema,
+  UpdateAuthLoginPolicyBodySchema,
+} from '@agent-workflow/shared'
 import { requirePermission } from '@/auth/permissions'
+import { getAuthLoginPolicy, setPasswordLoginEnabled } from '@/services/authLoginPolicy'
 import { createOidcProvidersService, redactedProvider } from '@/services/oidcProviders'
 import type { AppDeps } from '@/server'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { parseBoolQuery } from '@/util/http'
 
 export function mountOidcRoutes(app: Hono, deps: AppDeps): void {
+  app.get('/api/oidc/login-policy', requirePermission('oidc:read'), (c) => {
+    return c.json(getAuthLoginPolicy(deps.db))
+  })
+
+  app.put('/api/oidc/login-policy', requirePermission('oidc:configure'), async (c) => {
+    const parsed = UpdateAuthLoginPolicyBodySchema.safeParse(await safeJson(c.req.raw))
+    if (!parsed.success) {
+      throw new ValidationError('login-policy-invalid', 'invalid login policy payload', {
+        issues: parsed.error.issues,
+      })
+    }
+    return c.json(setPasswordLoginEnabled(deps.db, parsed.data.passwordLoginEnabled))
+  })
+
   if (!deps.secretBox) {
     // OIDC requires the secret box. Without it, mounting these routes would
     // panic on first DB write. Skip silently for non-OIDC tests.

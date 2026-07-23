@@ -1,12 +1,6 @@
-// RFC-198 PR5 — Auth is a real shared-tab surface. These rendered locks keep
-// late OIDC discovery, keep-mounted form drafts, linked tab/panel semantics,
-// and the one-time initial focus contract from regressing.
-//
-// Default-landing contract (user report 2026-07-22): an installation with ≥1
-// configured identity provider lands on the OIDC tab; the password tab stays
-// the default otherwise. Any user interaction before discovery settles (tab
-// pick or typed draft) pins the current tab — the late response never
-// displaces the user.
+// RFC-221 — the login page renders exactly the server-discovered method set.
+// Bootstrap never leaks password/OIDC login, and ready installations never
+// retain the daemon-token escape hatch.
 
 import {
   Outlet,
@@ -21,7 +15,23 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import i18n from '../src/i18n'
 import { enUS } from '../src/i18n/en-US'
 import { Route as AuthRoute } from '../src/routes/auth'
-import { clearToken, setBaseUrl } from '../src/stores/auth'
+import { clearToken, getToken, setBaseUrl, setToken } from '../src/stores/auth'
+
+const BOOTSTRAP = {
+  mode: 'bootstrap',
+  providers: [],
+  passwordLoginEnabled: false,
+  daemonTokenEnabled: true,
+} as const
+
+function ready(passwordLoginEnabled: boolean, withProvider = false) {
+  return {
+    mode: 'ready',
+    providers: withProvider ? [{ slug: 'corp', displayName: 'Corporate SSO', iconUrl: null }] : [],
+    passwordLoginEnabled,
+    daemonTokenEnabled: false,
+  } as const
+}
 
 function json(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), {
@@ -42,11 +52,12 @@ function renderAuth(initialEntry = '/auth') {
     routeTree: root.addChildren([auth]),
     history: createMemoryHistory({ initialEntries: [initialEntry] }),
   })
-  return render(
+  const view = render(
     // Test route types intentionally differ from the generated app tree.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     <RouterProvider router={router as any} />,
   )
+  return { ...view, router }
 }
 
 beforeEach(async () => {
@@ -61,236 +72,169 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('/auth shared forms and tabs', () => {
-  test('distinguishes OIDC loading, discovery error with retry, and configured-empty', async () => {
-    let firstReject: ((reason?: unknown) => void) | undefined
-    const first = new Promise<Response>((_resolve, reject) => {
-      firstReject = reject
+describe('/auth method discovery', () => {
+  test('keeps all credential controls hidden while loading and on discovery failure', async () => {
+    let rejectDiscovery: ((reason?: unknown) => void) | undefined
+    const pending = new Promise<Response>((_resolve, reject) => {
+      rejectDiscovery = reject
     })
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
-      .mockImplementationOnce(() => first)
-      .mockResolvedValueOnce(json({ providers: [] }))
+      .mockImplementationOnce(() => pending)
+      .mockResolvedValueOnce(json(BOOTSTRAP))
     renderAuth()
 
-    expect(await screen.findByTestId('oidc-discovery-loading')).toBeTruthy()
-    fireEvent.change(screen.getByRole('textbox', { name: enUS.auth.username }), {
-      target: { value: 'preserved-user' },
-    })
-    await act(async () => firstReject!(new Error('discovery offline')))
+    expect(await screen.findByTestId('auth-discovery-loading')).toBeTruthy()
+    expect(screen.queryByRole('textbox')).toBeNull()
+    expect(screen.queryByLabelText(enUS.auth.token)).toBeNull()
 
-    const error = await screen.findByRole('alert')
-    expect(error.textContent).toContain(enUS.auth.oidcDiscoveryError)
+    await act(async () => rejectDiscovery!(new Error('discovery offline')))
+    expect((await screen.findByRole('alert')).textContent).toContain(enUS.auth.oidcDiscoveryError)
+    expect(screen.queryByRole('textbox')).toBeNull()
+    expect(screen.queryByLabelText(enUS.auth.token)).toBeNull()
+
     fireEvent.click(screen.getByRole('button', { name: /retry/i }))
-    expect(await screen.findByText(enUS.auth.oidcDiscoveryEmpty)).toBeTruthy()
-    expect(
-      (screen.getByRole('textbox', { name: enUS.auth.username }) as HTMLInputElement).value,
-    ).toBe('preserved-user')
+    expect(await screen.findByTestId('auth-token-form')).toBeTruthy()
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
-  test('focuses username once, preserves both drafts, and links every tab to its panel', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json({ providers: [] }))
+  test('bootstrap exposes only the setup-token form without a method switcher', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(BOOTSTRAP))
     renderAuth()
 
-    const username = (await screen.findByRole('textbox', {
-      name: enUS.auth.username,
-    })) as HTMLInputElement
-    // selector narrows past the password TABPANEL, which shares the
-    // accessible name "Password" via aria-labelledby → the tab.
-    const password = screen.getByLabelText(enUS.auth.password, {
-      selector: 'input',
-    }) as HTMLInputElement
-    await waitFor(() => expect(document.activeElement).toBe(username))
-
-    fireEvent.change(username, { target: { value: 'alice' } })
-    fireEvent.change(password, { target: { value: 'correct horse' } })
-
-    const passwordTab = screen.getByRole('tab', { name: enUS.auth.tabPassword })
-    const tokenTab = screen.getByRole('tab', { name: enUS.auth.tabToken })
-    passwordTab.focus()
-    fireEvent.keyDown(passwordTab, { key: 'ArrowRight' })
-
-    await waitFor(() => expect(tokenTab.getAttribute('aria-selected')).toBe('true'))
-    expect(document.activeElement).toBe(tokenTab)
-    const token = screen.getByLabelText(enUS.auth.token) as HTMLInputElement
-    fireEvent.change(token, { target: { value: 'daemon-secret' } })
-
-    fireEvent.keyDown(tokenTab, { key: 'ArrowLeft' })
-    await waitFor(() => expect(document.activeElement).toBe(passwordTab))
-    expect(username.value).toBe('alice')
-    expect(password.value).toBe('correct horse')
-    expect(document.activeElement).toBe(passwordTab)
-
-    fireEvent.keyDown(passwordTab, { key: 'ArrowRight' })
-    await waitFor(() => expect(document.activeElement).toBe(tokenTab))
-    expect(token.value).toBe('daemon-secret')
-    expect(document.activeElement).toBe(tokenTab)
-
-    for (const tab of [passwordTab, tokenTab]) {
-      const panelId = tab.getAttribute('aria-controls')
-      expect(panelId).toBeTruthy()
-      const panel = document.getElementById(panelId!)
-      expect(panel?.getAttribute('role')).toBe('tabpanel')
-      expect(panel?.getAttribute('aria-labelledby')).toBe(tab.id)
-    }
+    expect(await screen.findByTestId('auth-token-form')).toBeTruthy()
+    expect(screen.queryByTestId('auth-password-form')).toBeNull()
+    expect(screen.queryByTestId('auth-oidc-method')).toBeNull()
+    expect(screen.queryByRole('tablist')).toBeNull()
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText(enUS.auth.token)))
   })
 
-  test('lands on the OIDC tab by default when a provider is configured', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      json({ providers: [{ slug: 'corp', displayName: 'Corporate SSO', iconUrl: null }] }),
-    )
-    renderAuth()
-
-    const oidcTab = await screen.findByRole('tab', { name: enUS.auth.tabOidc })
-    await waitFor(() => expect(oidcTab.getAttribute('aria-selected')).toBe('true'))
-    expect(screen.getByRole('button', { name: 'Login with Corporate SSO' })).toBeTruthy()
-    // The password panel is hidden, so the initial username autofocus must
-    // not have fired into it.
-    expect(document.activeElement).toBe(document.body)
-    expect(screen.getByTestId('auth-tabpanel-password').hidden).toBe(true)
-
-    // Password sign-in stays one click away.
-    fireEvent.click(screen.getByRole('tab', { name: enUS.auth.tabPassword }))
-    await waitFor(() => expect(screen.getByTestId('auth-tabpanel-password').hidden).toBe(false))
-  })
-
-  test('bare focus in the login card pins the password tab against late discovery', async () => {
-    // Codex re-review P2 (2026-07-22): Tab/click INTO a field without typing
-    // must count as interaction — switching to OIDC would hide the focused
-    // control mid-use.
-    let resolveProviders: ((response: Response) => void) | undefined
-    vi.spyOn(globalThis, 'fetch').mockImplementation(
-      () =>
-        new Promise<Response>((resolve) => {
-          resolveProviders = resolve
-        }),
-    )
-    renderAuth()
-
-    const username = (await screen.findByRole('textbox', {
-      name: enUS.auth.username,
-    })) as HTMLInputElement
-    username.focus()
-    await waitFor(() => expect(resolveProviders).toBeTypeOf('function'))
-    await act(async () => {
-      resolveProviders!(
-        json({ providers: [{ slug: 'corp', displayName: 'Corporate SSO', iconUrl: null }] }),
-      )
-    })
-
-    const oidcTab = await screen.findByRole('tab', { name: enUS.auth.tabOidc })
-    expect(oidcTab.getAttribute('aria-selected')).toBe('false')
-    expect(
-      screen.getByRole('tab', { name: enUS.auth.tabPassword }).getAttribute('aria-selected'),
-    ).toBe('true')
-    expect(document.activeElement).toBe(username)
-  })
-
-  test('a typed draft pins the password tab against late provider discovery', async () => {
-    let resolveProviders: ((response: Response) => void) | undefined
-    vi.spyOn(globalThis, 'fetch').mockImplementation(
-      () =>
-        new Promise<Response>((resolve) => {
-          resolveProviders = resolve
-        }),
-    )
-    renderAuth()
-
-    fireEvent.change(await screen.findByRole('textbox', { name: enUS.auth.username }), {
-      target: { value: 'alice' },
-    })
-    await waitFor(() => expect(resolveProviders).toBeTypeOf('function'))
-    await act(async () => {
-      resolveProviders!(
-        json({ providers: [{ slug: 'corp', displayName: 'Corporate SSO', iconUrl: null }] }),
-      )
-    })
-
-    const oidcTab = await screen.findByRole('tab', { name: enUS.auth.tabOidc })
-    expect(oidcTab.getAttribute('aria-selected')).toBe('false')
-    const passwordTab = screen.getByRole('tab', { name: enUS.auth.tabPassword })
-    expect(passwordTab.getAttribute('aria-selected')).toBe('true')
-    expect(
-      (screen.getByRole('textbox', { name: enUS.auth.username }) as HTMLInputElement).value,
-    ).toBe('alice')
-  })
-
-  test('adds a late OIDC method without displacing the active token tab or stealing focus', async () => {
-    let resolveProviders: ((response: Response) => void) | undefined
-    vi.spyOn(globalThis, 'fetch').mockImplementation(
-      () =>
-        new Promise<Response>((resolve) => {
-          resolveProviders = resolve
-        }),
-    )
-    renderAuth()
-
-    const passwordTab = await screen.findByRole('tab', { name: enUS.auth.tabPassword })
-    const tokenTab = screen.getByRole('tab', { name: enUS.auth.tabToken })
-    passwordTab.focus()
-    fireEvent.keyDown(passwordTab, { key: 'End' })
-    await waitFor(() => expect(document.activeElement).toBe(tokenTab))
-    expect(tokenTab.getAttribute('aria-selected')).toBe('true')
-
-    await waitFor(() => expect(resolveProviders).toBeTypeOf('function'))
-    await act(async () => {
-      resolveProviders!(
-        json({
-          providers: [{ slug: 'corp', displayName: 'Corporate SSO', iconUrl: null }],
-        }),
-      )
-    })
-
-    const oidcTab = await screen.findByRole('tab', { name: enUS.auth.tabOidc })
-    expect(tokenTab.getAttribute('aria-selected')).toBe('true')
-    expect(document.activeElement).toBe(tokenTab)
-
-    fireEvent.keyDown(tokenTab, { key: 'ArrowLeft' })
-    await waitFor(() => expect(oidcTab.getAttribute('aria-selected')).toBe('true'))
-    expect(document.activeElement).toBe(oidcTab)
-    expect(screen.getByRole('button', { name: 'Login with Corporate SSO' })).toBeTruthy()
-
-    const panelId = oidcTab.getAttribute('aria-controls')
-    expect(document.getElementById(panelId!)?.getAttribute('aria-labelledby')).toBe(oidcTab.id)
-  })
-
-  test('keeps the password payload and clears a method error when switching tabs', async () => {
-    const calls: Array<{ path: string; method: string; body: unknown }> = []
+  test('valid bootstrap token is persisted for the handoff and preserves the redirect', async () => {
+    const calls: Array<{ path: string; authorization: string | null }> = []
     vi.spyOn(globalThis, 'fetch').mockImplementation(
       async (request: RequestInfo | URL, init?: RequestInit) => {
         const path = new URL(request.toString()).pathname
-        const method = init?.method ?? 'GET'
-        const body = typeof init?.body === 'string' ? JSON.parse(init.body) : null
-        calls.push({ path, method, body })
-        if (path === '/api/auth/oidc/providers') return json({ providers: [] })
-        if (path === '/api/auth/login') {
-          return json({ code: 'invalid-credentials', message: 'invalid credentials' }, 401)
-        }
+        calls.push({
+          path,
+          authorization: new Headers(init?.headers).get('authorization'),
+        })
+        if (path === '/api/auth/oidc/providers') return json(BOOTSTRAP)
+        if (path === '/api/whoami') return json({ source: 'daemon' })
         return json({ code: 'unexpected', message: path }, 500)
       },
     )
-    renderAuth('/auth?redirect=%2Ftasks%2Ft%2Fpreview%3Fpath%3Da.md%23heading')
+    const { router } = renderAuth('/auth?redirect=%2Ftasks%2Ft-1%3Ftab%3Doutput')
 
-    fireEvent.change(await screen.findByRole('textbox', { name: enUS.auth.username }), {
-      target: { value: 'alice' },
+    fireEvent.change(await screen.findByLabelText(enUS.auth.token), {
+      target: { value: ' setup-secret ' },
     })
-    fireEvent.change(screen.getByLabelText(enUS.auth.password, { selector: 'input' }), {
-      target: { value: 'correct horse' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: enUS.auth.signIn }))
+    fireEvent.click(screen.getByRole('button', { name: /continue setup/i }))
 
-    expect((await screen.findByRole('alert')).textContent).toContain(enUS.auth.invalidCredentials)
-    expect(calls.find((call) => call.path === '/api/auth/login')?.body).toEqual({
-      username: 'alice',
-      password: 'correct horse',
-    })
+    await waitFor(() => expect(router.state.location.pathname).toBe('/setup/admin'))
+    expect(router.state.location.search.redirect).toBe('/tasks/t-1?tab=output')
+    expect(getToken()).toBe('setup-secret')
+    expect(calls.find((call) => call.path === '/api/whoami')?.authorization).toBe(
+      'Bearer setup-secret',
+    )
+  })
 
-    fireEvent.click(screen.getByRole('tab', { name: enUS.auth.tabToken }))
-    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
-    fireEvent.click(screen.getByRole('tab', { name: enUS.auth.tabPassword }))
-    expect(
-      (screen.getByRole('textbox', { name: enUS.auth.username }) as HTMLInputElement).value,
-    ).toBe('alice')
+  test('daemon bootstrap link verifies its captured token and enters setup automatically', async () => {
+    const calls: Array<{ path: string; authorization: string | null }> = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      async (request: RequestInfo | URL, init?: RequestInit) => {
+        const path = new URL(request.toString()).pathname
+        calls.push({
+          path,
+          authorization: new Headers(init?.headers).get('authorization'),
+        })
+        if (path === '/api/auth/oidc/providers') return json(BOOTSTRAP)
+        if (path === '/api/whoami') return json({ source: 'daemon' })
+        return json({ code: 'unexpected', message: path }, 500)
+      },
+    )
+    setToken('query-secret')
+    const { router } = renderAuth('/auth?bootstrap=token&redirect=%2Ftasks%2Ft-1%3Ftab%3Doutput')
+
+    expect(await screen.findByTestId('auth-bootstrap-handoff')).toBeTruthy()
+    await waitFor(() => expect(router.state.location.pathname).toBe('/setup/admin'))
+    expect(router.state.location.search.redirect).toBe('/tasks/t-1?tab=output')
+    expect(calls.find((call) => call.path === '/api/whoami')?.authorization).toBe(
+      'Bearer query-secret',
+    )
+  })
+
+  test('stale bootstrap link falls back to configured ready methods without retaining token', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(ready(true)))
+    setToken('retired-daemon-token')
+    const { router } = renderAuth('/auth?bootstrap=token&redirect=%2Fagents')
+
+    expect(await screen.findByTestId('auth-password-form')).toBeTruthy()
+    await waitFor(() => expect(router.state.location.search.bootstrap).toBeUndefined())
+    expect(getToken()).toBeNull()
+    expect(screen.queryByLabelText(enUS.auth.token)).toBeNull()
+  })
+
+  test('ready installation with no providers renders password login only', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(ready(true)))
+    renderAuth()
+
+    expect(await screen.findByTestId('auth-password-form')).toBeTruthy()
+    expect(screen.queryByRole('tablist')).toBeNull()
+    expect(screen.queryByLabelText(enUS.auth.token)).toBeNull()
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('textbox', { name: enUS.auth.username }),
+      ),
+    )
+  })
+
+  test('ready installation with password and OIDC has exactly two accessible methods', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(ready(true, true)))
+    renderAuth()
+
+    const oidcTab = await screen.findByRole('tab', { name: enUS.auth.tabOidc })
+    const passwordTab = screen.getByRole('tab', { name: enUS.auth.tabPassword })
+    expect(screen.getAllByRole('tab')).toHaveLength(2)
+    expect(screen.queryByRole('tab', { name: enUS.auth.tabToken })).toBeNull()
+    await waitFor(() => expect(oidcTab.getAttribute('aria-selected')).toBe('true'))
+    const providerButton = screen.getByRole('button', { name: 'Login with Corporate SSO' })
+    expect(providerButton).toBeTruthy()
+    expect(providerButton.querySelector('.auth-page__provider-name')?.textContent).toBe(
+      'Corporate SSO',
+    )
+    expect(providerButton.querySelector('.auth-page__provider-copy > span')?.textContent).toBe(
+      enUS.auth.providerButtonHint,
+    )
+
+    fireEvent.click(passwordTab)
+    expect(await screen.findByTestId('auth-password-form')).toBeTruthy()
+    expect(screen.queryByLabelText(enUS.auth.token)).toBeNull()
+  })
+
+  test('disabling password login removes its tab and form from the DOM', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(ready(false, true)))
+    renderAuth()
+
+    expect(await screen.findByTestId('auth-oidc-method')).toBeTruthy()
+    expect(screen.queryByRole('tablist')).toBeNull()
+    expect(screen.queryByRole('textbox', { name: enUS.auth.username })).toBeNull()
+    expect(screen.queryByLabelText(enUS.auth.password)).toBeNull()
+    expect(screen.queryByLabelText(enUS.auth.token)).toBeNull()
+  })
+
+  test('rejects an impossible mixed bootstrap payload instead of exposing fallbacks', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      json({
+        mode: 'bootstrap',
+        providers: [{ slug: 'corp', displayName: 'Corporate SSO', iconUrl: null }],
+        passwordLoginEnabled: true,
+        daemonTokenEnabled: true,
+      }),
+    )
+    renderAuth()
+
+    expect(await screen.findByRole('alert')).toBeTruthy()
+    expect(screen.queryByRole('textbox')).toBeNull()
+    expect(screen.queryByLabelText(enUS.auth.token)).toBeNull()
   })
 })

@@ -1,4 +1,4 @@
-// RFC-198 PR4/T5 — source contract for the remaining account/admin table shells.
+// RFC-198 + RFC-221 — source contract for account/admin responsive shells.
 // Render coverage in users-page-actions.test.tsx locks the live empty/error/action
 // behavior; this guard keeps the heavier account/settings routes on shared UX
 // primitives without entering PR5's form and confirmation migration scope.
@@ -10,51 +10,64 @@ import { describe, expect, test } from 'vitest'
 const SRC = resolve(import.meta.dirname, '..', 'src')
 const read = (path: string): string => readFileSync(resolve(SRC, path), 'utf8')
 
-describe('RFC-198 account and admin table shells', () => {
-  test('/users uses one shared page shell and responsive table/async primitives', () => {
+describe('account and admin responsive shells', () => {
+  test('/users uses one shared page shell, query continuity, and a semantic directory', () => {
     const source = read('routes/users.tsx')
+    const directory = read('components/users/UserDirectory.tsx')
 
     expect(source).toContain("import { PageHeader } from '@/components/PageHeader'")
     expect(source).toContain("import { EmptyState } from '@/components/EmptyState'")
     expect(source).toContain("import { ErrorBanner } from '@/components/ErrorBanner'")
-    expect(source).toContain("title={t('users.empty')}")
-    expect(source).toContain("description={t('users.emptyDescription')}")
-    expect(source).toContain('icon={USER_ICON}')
-    expect(source).toContain('action={newUserAction}')
-    expect(source).toContain("<TableViewport label={t('users.title', { defaultValue: 'Users' })}")
+    expect(source).toContain('<QueryState')
+    expect(source).toContain('keepDataOnError')
+    expect(source).toContain('<UserDirectory')
+    expect(directory).toContain("title={t('users.empty')}")
+    expect(directory).toContain("description={t('users.emptyDescription')}")
+    expect(directory).toContain('icon={USER_ICON}')
+    expect(directory).toContain('<ul className="user-directory__list"')
+    expect(directory).toContain('<li className="user-directory__item"')
+    expect(directory).toContain('<SystemPrincipal')
+    expect(source).not.toContain('TableViewport')
+    expect(directory).not.toContain('<table')
     expect(source).not.toContain('<header className="page__header')
     expect(source).not.toContain('className="auth-form__error"')
   })
 
-  test('/account uses labelled semantic Card sections while wrapping all three native tables', () => {
+  test('/account is route-backed and removes PAT creation and identity unlink surfaces', () => {
     const source = read('routes/account.tsx')
+    const overview = read('components/account/AccountOverviewPanel.tsx')
+    const security = read('components/account/AccountSecurityPanel.tsx')
+    const tokens = read('components/account/AccountTokensPanel.tsx')
 
-    expect(source).toContain("import { Card } from '@/components/Card'")
-    expect(source).toContain("import { Field, TextInput } from '@/components/Form'")
     expect(source).toContain(
       "<PageHeader title={t('account.title', { defaultValue: 'My account' })}",
     )
-    expect(source).toContain('<EmptyState title={t(\'account.pleaseSignIn\')} size="compact"')
-    expect(source.match(/<TableViewport/g)).toHaveLength(3)
-    expect(source.match(/<table className="account-table">/g)).toHaveLength(3)
-    expect(source).toContain('function SectionShell(')
-    expect(source).toContain('<Card')
-    expect(source).toContain('as="section"')
-    expect(source).toContain('aria-labelledby={props.headingId}')
-    expect(source).toContain('<h2 id={props.headingId}')
-    expect(source).not.toContain('<section className="account-card">')
-    expect(source).not.toContain('className="account-card"')
-    expect(source).not.toContain('account-card__header')
-    expect(source.match(/className="form-grid"/g)).toHaveLength(2)
-    expect(source).not.toContain('account-form__field')
-    expect(source.match(/<input\b/g)).toHaveLength(1)
-    expect(source).toContain('type="checkbox"')
+    expect(source).toContain('<PageSectionNav<AccountSection>')
+    expect(source).toContain('withAccountSection(previous, key)')
+    expect(source).toContain('<QueryState')
+    expect(source).toContain('keepDataOnError')
+    expect(overview).toContain('me.linkedIdentities.map')
+    expect(overview).not.toContain('api.delete(')
+    expect(overview).not.toContain('Unlink')
+    expect(security).toContain('setToken(result.sessionToken)')
+    expect(security).toContain('<ConfirmDialog')
+    expect(tokens).toContain('<ConfirmDialog')
+    expect(tokens).toContain('api.delete(`/api/auth/pats/${revokeId}`)')
+    expect(tokens).not.toContain('TextInput')
+    expect(tokens).not.toContain("api.post('/api/auth/pats'")
+    expect(tokens).not.toContain('PAT_SCOPE_GROUPS')
+    expect(source).not.toContain('/api/auth/identities')
+    expect(source).not.toContain('/api/auth/pats')
     expect(source).not.toContain('<header className="page__header')
   })
 
   test('Auth and Users forms cannot regrow hand-rolled text controls', () => {
     const auth = read('routes/auth.tsx')
-    const users = read('routes/users.tsx')
+    const createUser = read('components/users/CreateUserDialog.tsx')
+    const editUser = read('components/users/EditUserDialog.tsx')
+    const resetUser = read('components/users/ResetUserPasswordDialog.tsx')
+    const userDirectory = read('components/users/UserDirectory.tsx')
+    const users = [createUser, editUser, resetUser, userDirectory].join('\n')
 
     expect(auth).toContain("import { Field, TextInput } from '@/components/Form'")
     expect(auth).toContain("import { TabBar, type TabDef } from '@/components/TabBar'")
@@ -64,8 +77,10 @@ describe('RFC-198 account and admin table shells', () => {
     expect(auth).not.toContain('className="auth-form"')
     expect(auth).not.toMatch(/role="tab(list|panel)?"/)
 
-    expect(users).toContain("import { Field, TextInput } from '@/components/Form'")
-    expect(users).toContain('initialFocusRef={usernameRef}')
+    expect(createUser).toContain("import { Field, TextInput } from '@/components/Form'")
+    expect(createUser).toContain('initialFocusRef={usernameRef}')
+    expect(editUser).toContain('<ChoiceCards<Role>')
+    expect(resetUser).toContain("import { Field, Switch, TextInput } from '@/components/Form'")
     expect(users).not.toContain('className="users-create-form"')
     expect(users).not.toMatch(/<input\b/)
     expect(users).not.toContain('<label className="form-field">')
@@ -90,6 +105,8 @@ describe('RFC-198 account and admin table shells', () => {
     expect(authentication).not.toContain('className="auth-form__error"')
     expect(authentication).not.toContain('<p className="account-empty">')
     expect(authentication).toContain('<ConfirmDialog')
+    expect(authentication).toContain("api.put('/api/oidc/login-policy'")
+    expect(authentication).toContain('data-testid="password-login-switch"')
     expect(authentication).toContain('remove.mutateAsync')
     expect(authentication).toContain('force: false')
     expect(authentication).not.toContain('window.confirm(')

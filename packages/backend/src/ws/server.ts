@@ -27,7 +27,7 @@
 import type { ServerWebSocket } from 'bun'
 import type { Actor } from '@/auth/actor'
 import { buildWsCredential, reresolveActor, resolveActor } from '@/auth/session'
-import type { DbClient } from '@/db/client'
+import { allowsLegacyDaemonTestAccess, type DbClient } from '@/db/client'
 import { createLogger } from '@/util/log'
 import { checkUpgradeGate, openWsChannel, parseWsChannel, type WsConnectionData } from './registry'
 import {
@@ -132,6 +132,13 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
     }
     if (actor === null) {
       return wsError('auth-required', 'invalid or missing token', 401)
+    }
+    if (actor.source === 'daemon' && !allowsLegacyDaemonTestAccess(deps.db)) {
+      return wsError(
+        'bootstrap-admin-required',
+        'complete first-administrator setup before opening application channels',
+        403,
+      )
     }
     // RFC-152 — upgrade-time whole-connection gates come from the registry:
     //   task               → canViewTask (RFC-054 W2-4; the tasks-list channel

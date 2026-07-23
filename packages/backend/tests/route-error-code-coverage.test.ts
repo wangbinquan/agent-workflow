@@ -148,7 +148,6 @@ const UNCOVERED_BASELINE: readonly string[] = [
   'fusion-reject-invalid',
   'invalid-filter',
   'members-invalid',
-  'pat-invalid',
   'port-artifact-bad-item',
   'reset-invalid',
   'retry-request-invalid',

@@ -30,6 +30,8 @@ const REASON_TO_TEXT: Record<string, string> = {
   'email-not-verified': 'Your identity provider has not verified your email.',
   'not-invited':
     'No invitation found for this email. Please ask your administrator to invite you first.',
+  'bootstrap-admin-required':
+    'Create the first administrator before using identity-provider login.',
 }
 
 export function friendly(code: string): string {

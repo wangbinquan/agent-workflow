@@ -19,7 +19,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useRouterState } from '@tanstack/react-router'
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { Config, ConfigPatch } from '@agent-workflow/shared'
+import type { AuthLoginPolicy, Config, ConfigPatch } from '@agent-workflow/shared'
 import { api, apiPostMultipart, ApiError } from '@/api/client'
 import { Card } from '@/components/Card'
 import {
@@ -1491,6 +1491,7 @@ function AuthenticationTab() {
   const qc = useQueryClient()
   const [editing, setEditing] = useState<OidcProviderRow | null>(null)
   const [showCreate, setShowCreate] = useState(false)
+  const [confirmPasswordOff, setConfirmPasswordOff] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<{
     id: string
     name: string
@@ -1505,6 +1506,23 @@ function AuthenticationTab() {
     queryKey: ['oidc-providers'],
     queryFn: () => api.get('/api/oidc/providers'),
   })
+  const loginPolicy = useQuery<AuthLoginPolicy>({
+    queryKey: ['oidc-login-policy'],
+    queryFn: ({ signal }) => api.get('/api/oidc/login-policy', undefined, signal),
+  })
+  const updateLoginPolicy = useMutation<AuthLoginPolicy, unknown, boolean>({
+    mutationFn: (passwordLoginEnabled) =>
+      api.put('/api/oidc/login-policy', { passwordLoginEnabled }),
+    onSuccess: (next) => {
+      qc.setQueryData(['oidc-login-policy'], next)
+    },
+  })
+  const enabledProviderCount = list.data?.filter((provider) => provider.enabled).length ?? 0
+  const loginPolicyLocked = list.data === undefined || enabledProviderCount === 0
+  const lastEnabledProviderIsRequired = (provider: OidcProviderRow): boolean =>
+    loginPolicy.data?.passwordLoginEnabled === false &&
+    provider.enabled &&
+    enabledProviderCount === 1
 
   const remove = useMutation({
     mutationFn: ({ id, force }: { id: string; force: boolean }) =>
@@ -1566,6 +1584,58 @@ function AuthenticationTab() {
   }
   return (
     <div className="auth-tab">
+      <Card
+        title={t('settings.auth.loginMethodsTitle')}
+        header={<p className="auth-tab__hint">{t('settings.auth.loginMethodsHint')}</p>}
+        className="auth-login-policy"
+      >
+        {loginPolicy.isLoading && loginPolicy.data === undefined && (
+          <LoadingState size="compact" label={t('settings.loading')} />
+        )}
+        {loginPolicy.error !== null && (
+          <ErrorBanner error={loginPolicy.error} onRetry={() => void loginPolicy.refetch()} />
+        )}
+        {loginPolicy.data !== undefined && (
+          <div className="auth-login-policy__content">
+            <div className="auth-login-policy__row">
+              <div>
+                <strong>{t('settings.auth.passwordLoginLabel')}</strong>
+                <p>
+                  {loginPolicyLocked
+                    ? t('settings.auth.passwordLoginLockedHint')
+                    : t('settings.auth.passwordLoginHint')}
+                </p>
+              </div>
+              <Switch
+                checked={loginPolicy.data.passwordLoginEnabled}
+                onChange={(enabled) => {
+                  if (enabled) updateLoginPolicy.mutate(true)
+                  else if (!loginPolicyLocked) setConfirmPasswordOff(true)
+                }}
+                disabled={loginPolicyLocked || updateLoginPolicy.isPending}
+                aria-label={t('settings.auth.passwordLoginLabel')}
+                data-testid="password-login-switch"
+              />
+            </div>
+            <div className="auth-login-policy__row auth-login-policy__row--readonly">
+              <div>
+                <strong>{t('settings.auth.bootstrapTokenLabel')}</strong>
+                <p>{t('settings.auth.bootstrapTokenHint')}</p>
+              </div>
+              <StatusChip
+                kind={loginPolicy.data.bootstrapCompletedAt === null ? 'warn' : 'neutral'}
+                withDot
+              >
+                {loginPolicy.data.bootstrapCompletedAt === null
+                  ? t('settings.auth.bootstrapPending')
+                  : t('settings.auth.bootstrapRetired')}
+              </StatusChip>
+            </div>
+            {updateLoginPolicy.error !== null && <ErrorBanner error={updateLoginPolicy.error} />}
+          </div>
+        )}
+      </Card>
+
       <header className="auth-tab__header">
         <div>
           <h2 className="auth-tab__title">
@@ -1650,6 +1720,12 @@ function AuthenticationTab() {
                       className="btn btn--ghost btn--xs btn--danger"
                       onClick={(event) => openDelete(p, index, event.currentTarget)}
                       data-testid={`oidc-delete-${p.id}`}
+                      disabled={lastEnabledProviderIsRequired(p)}
+                      title={
+                        lastEnabledProviderIsRequired(p)
+                          ? t('settings.auth.lastProviderRequired')
+                          : undefined
+                      }
                     >
                       {t('settings.auth.delete', { defaultValue: 'Delete' })}
                     </button>
@@ -1675,6 +1751,7 @@ function AuthenticationTab() {
         <OidcProviderDialog
           mode="edit"
           initial={editing}
+          preventDisable={lastEnabledProviderIsRequired(editing)}
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null)
@@ -1703,6 +1780,17 @@ function AuthenticationTab() {
         onClose={closeDelete}
         triggerRef={deleteTriggerRef}
         restoreFocusFallbackRef={deleteFallbackRef}
+      />
+      <ConfirmDialog
+        open={confirmPasswordOff}
+        title={t('settings.auth.disablePasswordTitle')}
+        description={t('settings.auth.disablePasswordDescription')}
+        confirmLabel={t('settings.auth.disablePasswordConfirm')}
+        tone="danger"
+        onConfirm={async () => {
+          await updateLoginPolicy.mutateAsync(false)
+        }}
+        onClose={() => setConfirmPasswordOff(false)}
       />
     </div>
   )
@@ -1755,6 +1843,7 @@ type OidcTestView = { kind: 'probe'; result: OidcTestResult } | { kind: 'error';
 function OidcProviderDialog(props: {
   mode: 'create' | 'edit'
   initial?: OidcProviderRow
+  preventDisable?: boolean
   onClose: () => void
   onSaved: () => void
 }) {
@@ -2200,10 +2289,15 @@ function OidcProviderDialog(props: {
           <Switch
             checked={enabled}
             onChange={setEnabled}
+            disabled={props.preventDisable === true}
             label={t('settings.auth.enabledLabel', { defaultValue: 'Enabled' })}
-            hint={t('settings.auth.enabledHint', {
-              defaultValue: 'Visible on the login page when on; hidden when off.',
-            })}
+            hint={
+              props.preventDisable === true
+                ? t('settings.auth.lastProviderRequired')
+                : t('settings.auth.enabledHint', {
+                    defaultValue: 'Visible on the login page when on; hidden when off.',
+                  })
+            }
           />
         </fieldset>
 

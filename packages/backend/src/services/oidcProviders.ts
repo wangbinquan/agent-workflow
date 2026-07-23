@@ -2,7 +2,7 @@
 // secret at rest (via auth/secretBox), discovery probe for the /test endpoint,
 // and a redacted-for-output view that never leaks the secret.
 
-import { eq } from 'drizzle-orm'
+import { and, eq, ne } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type {
   CreateOidcProviderBody,
@@ -14,7 +14,7 @@ import { OidcProviderSchema } from '@agent-workflow/shared'
 import type { SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
-import { oidcProviders, userIdentities } from '@/db/schema'
+import { authLoginPolicy, oidcProviders, userIdentities } from '@/db/schema'
 import { resolveEndpoints, type EndpointSource } from '@/auth/oidc/endpoints'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 
@@ -191,9 +191,41 @@ export function createOidcProvidersService(deps: {
       // userIdentities.ts) serializes strictly before or after us — either we
       // 409 here or the callback's write-time recheck rejects with
       // provider-config-changed. Equal-value rewrites pass untouched.
-      if (body.subjectClaim !== undefined && body.subjectClaim !== cur.subjectClaim) {
-        updates.subjectClaim = body.subjectClaim
-        dbTxSync(db, (tx) => {
+      const subjectClaimChanges =
+        body.subjectClaim !== undefined && body.subjectClaim !== cur.subjectClaim
+      if (subjectClaimChanges) updates.subjectClaim = body.subjectClaim
+      // RFC-221: the last enabled provider and the password-login switch form
+      // one database invariant. Funnel the final write through dbTxSync so a
+      // concurrent policy change cannot leave both login families disabled.
+      dbTxSync(db, (tx) => {
+        const fresh = tx
+          .select({ enabled: oidcProviders.enabled })
+          .from(oidcProviders)
+          .where(eq(oidcProviders.id, id))
+          .get()
+        if (fresh === undefined) {
+          throw new NotFoundError('oidc-provider-not-found', `provider ${id} not found`)
+        }
+        if (fresh.enabled && body.enabled === false) {
+          const policy = tx
+            .select()
+            .from(authLoginPolicy)
+            .where(eq(authLoginPolicy.id, 'global'))
+            .get()
+          const otherEnabled = tx
+            .select({ id: oidcProviders.id })
+            .from(oidcProviders)
+            .where(and(eq(oidcProviders.enabled, true), ne(oidcProviders.id, id)))
+            .limit(1)
+            .get()
+          if (policy?.passwordLoginEnabled === false && otherEnabled === undefined) {
+            throw new ConflictError(
+              'last-enabled-oidc-required',
+              'cannot disable the last enabled identity provider while password login is disabled',
+            )
+          }
+        }
+        if (subjectClaimChanges) {
           const linked = tx
             .select({ id: userIdentities.id })
             .from(userIdentities)
@@ -206,33 +238,53 @@ export function createOidcProvidersService(deps: {
               'subjectClaim cannot change while identities are linked to this provider; delete and recreate the provider instead',
             )
           }
-          tx.update(oidcProviders).set(updates).where(eq(oidcProviders.id, id)).run()
-        })
-        return (await this.findById(id))!
-      }
-      await db.update(oidcProviders).set(updates).where(eq(oidcProviders.id, id))
+        }
+        tx.update(oidcProviders).set(updates).where(eq(oidcProviders.id, id)).run()
+      })
       return (await this.findById(id))!
     },
     async remove(id, force = false) {
-      const cur = await this.findById(id)
-      if (!cur) throw new NotFoundError('oidc-provider-not-found', `provider ${id} not found`)
-      const ids = await db
-        .select()
-        .from(userIdentities)
-        .where(eq(userIdentities.providerId, id))
-        .limit(1)
-      if (ids.length > 0 && !force) {
-        throw new ConflictError(
-          'provider-still-linked',
-          'one or more users still have identities linked to this provider',
-        )
-      }
-      if (force) {
-        // Caller asked for cascade. SQLite ON DELETE RESTRICT on
-        // user_identities.provider_id will block; remove identity rows first.
-        await db.delete(userIdentities).where(eq(userIdentities.providerId, id))
-      }
-      await db.delete(oidcProviders).where(eq(oidcProviders.id, id))
+      dbTxSync(db, (tx) => {
+        const cur = tx.select().from(oidcProviders).where(eq(oidcProviders.id, id)).get()
+        if (cur === undefined) {
+          throw new NotFoundError('oidc-provider-not-found', `provider ${id} not found`)
+        }
+        if (cur.enabled) {
+          const policy = tx
+            .select()
+            .from(authLoginPolicy)
+            .where(eq(authLoginPolicy.id, 'global'))
+            .get()
+          const otherEnabled = tx
+            .select({ id: oidcProviders.id })
+            .from(oidcProviders)
+            .where(and(eq(oidcProviders.enabled, true), ne(oidcProviders.id, id)))
+            .limit(1)
+            .get()
+          if (policy?.passwordLoginEnabled === false && otherEnabled === undefined) {
+            throw new ConflictError(
+              'last-enabled-oidc-required',
+              'cannot delete the last enabled identity provider while password login is disabled',
+            )
+          }
+        }
+        const linked = tx
+          .select({ id: userIdentities.id })
+          .from(userIdentities)
+          .where(eq(userIdentities.providerId, id))
+          .limit(1)
+          .get()
+        if (linked !== undefined && !force) {
+          throw new ConflictError(
+            'provider-still-linked',
+            'one or more users still have identities linked to this provider',
+          )
+        }
+        if (force) {
+          tx.delete(userIdentities).where(eq(userIdentities.providerId, id)).run()
+        }
+        tx.delete(oidcProviders).where(eq(oidcProviders.id, id)).run()
+      })
     },
     async probe(provider, fetcher = globalThis.fetch) {
       // forceFresh: an admin pressing "Test connection" wants the IdP's

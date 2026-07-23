@@ -333,6 +333,11 @@ export const ROUTE_UX_INVENTORY = {
     classification: 'specialized',
     owners: [rendered('auth-form-tabs.test.tsx')],
   },
+  '@/routes/setup.admin#Route': {
+    surface: '/setup/admin',
+    classification: 'specialized',
+    owners: [rendered('setup-admin.test.tsx')],
+  },
   '@/routes/agents.by-id#Route': {
     surface: '/agents/by-id/$id',
     classification: 'resolver',

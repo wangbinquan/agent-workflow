@@ -6,15 +6,14 @@ import { and, eq } from 'drizzle-orm'
 import type { Context, Hono } from 'hono'
 import {
   ChangePasswordBodySchema,
-  CreatePatBodySchema,
+  CreateBootstrapAdminBodySchema,
   LoginBodySchema,
   SESSION_TOKEN_PREFIX,
-  type Permission,
 } from '@agent-workflow/shared'
 import { actorOf } from '@/auth/actor'
 import { hashPassword, verifyPassword, verifyPasswordDummy } from '@/auth/passwords'
 import { requirePermission } from '@/auth/permissions'
-import { createPat, listPatsForUser, revokePat } from '@/auth/patStore'
+import { listPatsForUser, revokePat } from '@/auth/patStore'
 import {
   createSession,
   hashToken,
@@ -23,13 +22,24 @@ import {
   revokeSession,
 } from '@/auth/sessionStore'
 import { userPats, users, userSessions } from '@/db/schema'
-import { deleteIdentity, listIdentitiesForUser } from '@/services/userIdentities'
+import { listIdentitiesForUser } from '@/services/userIdentities'
+import { isOidcManagedUser, writeLocalPasswordIfUnmanaged } from '@/services/accountAuthPolicy'
+import {
+  assertBootstrapComplete,
+  completeBootstrapWithAdmin,
+  createPasswordLoginSession,
+  getAuthLoginPolicy,
+} from '@/services/authLoginPolicy'
 import type { AppDeps } from '@/server'
 import { ForbiddenError, NotFoundError, UnauthorizedError, ValidationError } from '@/util/errors'
 
 export function mountAuthRoutes(app: Hono, deps: AppDeps): void {
   // Public — uses username + password, no session required.
   app.post('/api/auth/login', async (c) => {
+    const policy = assertBootstrapComplete(deps.db)
+    if (!policy.passwordLoginEnabled) {
+      throw new ForbiddenError('password-login-disabled', 'username and password login is disabled')
+    }
     const parsed = LoginBodySchema.safeParse(await safeJson(c.req.raw))
     if (!parsed.success) {
       throw new ValidationError('login-invalid', 'invalid login payload')
@@ -46,20 +56,65 @@ export function mountAuthRoutes(app: Hono, deps: AppDeps): void {
     }
     const ok = await verifyPassword(password, row.passwordHash)
     if (!ok) throw new UnauthorizedError('invalid username or password')
-    const userAgent = c.req.header('user-agent') ?? null
-    const { token } = await createSession({ db: deps.db, userId: row.id, userAgent })
-    await deps.db.update(users).set({ lastLoginAt: Date.now() }).where(eq(users.id, row.id))
+    const { token, user } = createPasswordLoginSession(deps.db, {
+      userId: row.id,
+      verifiedPasswordHash: row.passwordHash,
+      userAgent: c.req.header('user-agent') ?? null,
+    })
     return c.json({
       sessionToken: token,
       user: {
-        id: row.id,
-        username: row.username,
-        displayName: row.displayName,
-        role: row.role,
-        status: row.status,
+        id: user.id,
+        username: user.username,
+        displayName: user.displayName,
+        role: user.role,
+        status: user.status,
       },
-      mustChangePassword: row.forcePasswordChange,
+      mustChangePassword: user.forcePasswordChange,
     })
+  })
+
+  app.get('/api/auth/bootstrap/status', async (c) => {
+    if (actorOf(c).source !== 'daemon') {
+      throw new ForbiddenError('bootstrap-daemon-required', 'daemon bootstrap token required')
+    }
+    return c.json({ required: getAuthLoginPolicy(deps.db).bootstrapCompletedAt === null })
+  })
+
+  app.post('/api/auth/bootstrap/admin', async (c) => {
+    if (actorOf(c).source !== 'daemon') {
+      throw new ForbiddenError('bootstrap-daemon-required', 'daemon bootstrap token required')
+    }
+    const parsed = CreateBootstrapAdminBodySchema.safeParse(await safeJson(c.req.raw))
+    if (!parsed.success) {
+      throw new ValidationError('bootstrap-admin-invalid', 'invalid bootstrap administrator', {
+        issues: parsed.error.issues,
+      })
+    }
+    const passwordHash = await hashPassword(parsed.data.password)
+    const created = completeBootstrapWithAdmin(deps.db, {
+      username: parsed.data.username,
+      displayName: parsed.data.displayName,
+      ...(parsed.data.email !== undefined ? { email: parsed.data.email } : {}),
+      passwordHash,
+    })
+    return c.json(
+      {
+        id: created.id,
+        username: created.username,
+        email: created.email,
+        displayName: created.displayName,
+        role: created.role,
+        status: created.status,
+        forcePasswordChange: created.forcePasswordChange,
+        createdBy: created.createdBy,
+        createdAt: created.createdAt,
+        updatedAt: created.updatedAt,
+        lastLoginAt: created.lastLoginAt,
+        hasOidcIdentity: false,
+      },
+      201,
+    )
   })
 
   // From here on, account:self required (admin + user both have it).
@@ -92,6 +147,12 @@ export function mountAuthRoutes(app: Hono, deps: AppDeps): void {
 
   app.post('/api/auth/change-password', requirePermission('account:self'), async (c) => {
     const actor = actorOf(c)
+    if (await isOidcManagedUser(deps.db, actor.user.id)) {
+      throw new ForbiddenError(
+        'oidc-password-managed',
+        'password is managed by the linked identity provider',
+      )
+    }
     const parsed = ChangePasswordBodySchema.safeParse(await safeJson(c.req.raw))
     if (!parsed.success) throw new ValidationError('change-password-invalid', 'invalid payload')
 
@@ -108,10 +169,13 @@ export function mountAuthRoutes(app: Hono, deps: AppDeps): void {
       }
     }
     const newHash = await hashPassword(parsed.data.newPassword)
-    await deps.db
-      .update(users)
-      .set({ passwordHash: newHash, forcePasswordChange: false, updatedAt: Date.now() })
-      .where(eq(users.id, actor.user.id))
+    writeLocalPasswordIfUnmanaged(deps.db, {
+      userId: actor.user.id,
+      passwordHash: newHash,
+      forcePasswordChange: false,
+      activate: false,
+      updatedAt: Date.now(),
+    })
 
     // Revoke every other session for this user; keep the current one.
     const currentToken = extractRawToken(c)
@@ -161,19 +225,8 @@ export function mountAuthRoutes(app: Hono, deps: AppDeps): void {
     return c.json(await listPatsForUser(deps.db, actor.user.id))
   })
 
-  app.post('/api/auth/pats', requirePermission('account:self'), async (c) => {
-    const actor = actorOf(c)
-    const parsed = CreatePatBodySchema.safeParse(await safeJson(c.req.raw))
-    if (!parsed.success) throw new ValidationError('pat-invalid', 'invalid PAT payload')
-    const scopes = (parsed.data.scopes ?? []).filter((s) => actor.permissions.has(s as Permission))
-    const { token, meta } = await createPat({
-      db: deps.db,
-      userId: actor.user.id,
-      name: parsed.data.name,
-      scopes,
-      expiresAt: parsed.data.expiresAt ?? null,
-    })
-    return c.json({ token, ...meta }, 201)
+  app.post('/api/auth/pats', requirePermission('account:self'), async () => {
+    throw new ForbiddenError('pat-creation-disabled', 'personal access token creation is disabled')
   })
 
   app.delete('/api/auth/pats/:id', requirePermission('account:self'), async (c) => {
@@ -196,15 +249,8 @@ export function mountAuthRoutes(app: Hono, deps: AppDeps): void {
     return c.json(await listIdentitiesForUser(deps.db, actor.user.id))
   })
 
-  app.delete('/api/auth/identities/:id', requirePermission('account:self'), async (c) => {
-    const actor = actorOf(c)
-    const id = c.req.param('id')
-    const list = await listIdentitiesForUser(deps.db, actor.user.id)
-    if (!list.some((r) => r.id === id)) {
-      throw new ForbiddenError('forbidden', 'identity does not belong to current user')
-    }
-    await deleteIdentity(deps.db, id)
-    return c.body(null, 204)
+  app.delete('/api/auth/identities/:id', requirePermission('account:self'), async () => {
+    throw new ForbiddenError('identity-unlink-disabled', 'linked identities are read-only')
   })
 }
 

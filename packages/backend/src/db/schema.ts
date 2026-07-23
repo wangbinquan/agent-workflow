@@ -1810,6 +1810,20 @@ export const userIdentities = sqliteTable(
 )
 
 // -----------------------------------------------------------------------------
+// RFC-221 auth_login_policy — singleton login-method policy. NULL
+// bootstrapCompletedAt means the daemon token is a restricted first-admin
+// credential; non-NULL permanently retires that external credential.
+// -----------------------------------------------------------------------------
+export const authLoginPolicy = sqliteTable('auth_login_policy', {
+  id: text('id').primaryKey(),
+  passwordLoginEnabled: integer('password_login_enabled', { mode: 'boolean' })
+    .notNull()
+    .default(true),
+  bootstrapCompletedAt: integer('bootstrap_completed_at'),
+  updatedAt: integer('updated_at').notNull(),
+})
+
+// -----------------------------------------------------------------------------
 // RFC-036 task_collaborators — owner + collaborators ("任务用户"). RFC-099
 // (D6) collapsed the reviewer/clarify_target role tags (migration 0046) and
 // dropped the node_assignments table that backed the never-shipped node-level

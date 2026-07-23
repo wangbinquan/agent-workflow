@@ -8,6 +8,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'vitest'
+import { parseBootstrapTokenLocation } from '../src/lib/bootstrap-token'
 import { safeInternalRedirect } from '../src/routes/auth'
 
 const ROOT = resolve(import.meta.dirname, '..')
@@ -40,16 +41,49 @@ describe('safeInternalRedirect', () => {
   })
 })
 
+describe('bootstrap URL handoff', () => {
+  test('extracts the token while preserving non-secret query and fragment state', () => {
+    expect(
+      parseBootstrapTokenLocation('/tasks/t-1?token=%20setup-secret%20&tab=output#latest'),
+    ).toEqual({
+      token: 'setup-secret',
+      sanitizedHref: '/tasks/t-1?tab=output#latest',
+      redirect: '/tasks/t-1?tab=output#latest',
+    })
+  })
+
+  test('uses the explicit auth redirect and removes every duplicate token parameter', () => {
+    expect(
+      parseBootstrapTokenLocation(
+        '/auth?token=first&redirect=%2Freviews%2Fr1%3Fversion%3Dv2&token=second',
+      ),
+    ).toEqual({
+      token: 'first',
+      sanitizedHref: '/auth?redirect=%2Freviews%2Fr1%3Fversion%3Dv2',
+      redirect: '/reviews/r1?version=v2',
+    })
+  })
+
+  test('ignores ordinary URLs and treats an empty token as non-authenticating', () => {
+    expect(parseBootstrapTokenLocation('/agents?tab=all')).toBeNull()
+    expect(parseBootstrapTokenLocation('/?token=%20%20')).toEqual({
+      token: null,
+      sanitizedHref: '/',
+      redirect: '/',
+    })
+  })
+})
+
 describe('RFC-105 source guards — login preserves deep-link search', () => {
   test('__root stores the full href (not just pathname) on the auth redirect', () => {
     const root = read('src/routes/__root.tsx')
-    expect(root).toContain('redirect: location.href')
+    expect(root).toContain('bootstrapLocation?.sanitizedHref ?? location.href')
     expect(root).not.toContain('redirect: location.pathname')
   })
 
-  test('auth restores via history.push + the open-redirect guard', () => {
+  test('auth restores via history.replace + the open-redirect guard', () => {
     const auth = read('src/routes/auth.tsx')
-    expect(auth).toContain('router.history.push(safeInternalRedirect(redirect))')
+    expect(auth).toContain('router.history.replace(safeInternalRedirect(redirect))')
     // The fragile `redirect as '/agents'` cast that dropped search is gone.
     expect(auth).not.toContain("redirect as '/agents'")
   })

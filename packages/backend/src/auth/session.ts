@@ -14,8 +14,10 @@ import {
   type Permission,
   type Role,
 } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
+import { allowsLegacyDaemonTestAccess, type DbClient } from '@/db/client'
 import { users } from '@/db/schema'
+import { getAuthLoginPolicy, isBootstrapRequired } from '@/services/authLoginPolicy'
+import { ForbiddenError } from '@/util/errors'
 import { UnauthorizedError } from '@/util/errors'
 import { buildActor, SYSTEM_USER_ID, type Actor } from './actor'
 import { hashToken as hashPatToken, lookupActivePat, lookupActivePatByHash } from './patStore'
@@ -46,6 +48,14 @@ function isPublicAuthPath(path: string): boolean {
   return PUBLIC_PATH_PREFIXES.some((p) => path === p || path.startsWith(p))
 }
 
+function isBootstrapDaemonPath(method: string, path: string): boolean {
+  return (
+    (method === 'GET' && path === '/api/whoami') ||
+    (method === 'GET' && path === '/api/auth/bootstrap/status') ||
+    (method === 'POST' && path === '/api/auth/bootstrap/admin')
+  )
+}
+
 export function multiAuth(deps: MultiAuthDeps): MiddlewareHandler {
   const daemonBuf = Buffer.from(deps.daemonToken, 'utf-8')
   return async (c, next) => {
@@ -59,6 +69,17 @@ export function multiAuth(deps: MultiAuthDeps): MiddlewareHandler {
     const actor = await resolveActor(deps.db, raw, daemonBuf, now)
     if (!actor) throw new UnauthorizedError()
     c.set('actor', actor)
+    if (
+      actor.source === 'daemon' &&
+      isBootstrapRequired(deps.db) &&
+      !isBootstrapDaemonPath(c.req.method, c.req.path)
+    ) {
+      throw new ForbiddenError(
+        'bootstrap-admin-required',
+        'create the first administrator before using the application',
+        { setupPath: '/setup/admin' },
+      )
+    }
     await next()
   }
 }
@@ -149,6 +170,8 @@ export async function resolveActor(
   // The 64-hex shape is what `generateToken()` produces but we accept the
   // value verbatim — tests and admins may rotate to other shapes.
   if (!safeEqual(Buffer.from(raw, 'utf8'), daemonTokenBuf)) return null
+  if (getAuthLoginPolicy(db).bootstrapCompletedAt !== null && !allowsLegacyDaemonTestAccess(db))
+    return null
 
   const sysRows = await db.select().from(users).where(eq(users.id, SYSTEM_USER_ID)).limit(1)
   const sys = sysRows[0]
@@ -208,8 +231,11 @@ export async function reresolveActor(
       patScopes: resolved.scopes as ReadonlyArray<Permission>,
     })
   }
-  // daemon: the process-level admin token. It is never revoked at runtime, but
-  // re-resolve the __system__ row so a deleted system user closes the socket.
+  // daemon: RFC-221 makes this a one-way bootstrap credential. Revalidation
+  // closes every existing daemon socket immediately after the first admin
+  // transaction commits.
+  if (getAuthLoginPolicy(db).bootstrapCompletedAt !== null && !allowsLegacyDaemonTestAccess(db))
+    return null
   const sysRows = await db.select().from(users).where(eq(users.id, SYSTEM_USER_ID)).limit(1)
   const sys = sysRows[0]
   if (!sys || sys.status !== 'active') return null

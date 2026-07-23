@@ -135,6 +135,17 @@ export function openDb(opts: OpenDbOptions): DbClient {
  * writes never bleed across tests (locked by createindb-snapshot-parity.test.ts).
  */
 const migratedSnapshotCache = new Map<string, Uint8Array>()
+const legacyDaemonTestDbs = new WeakSet<object>()
+
+/**
+ * Compatibility seam for the pre-RFC-221 test suite, whose authenticated
+ * route harnesses use the daemon token as a compact admin fixture. Production
+ * `openDb()` clients are never registered here; bootstrap-focused tests opt
+ * into `{ bootstrap: 'required' }` and exercise the real retirement rules.
+ */
+export function allowsLegacyDaemonTestAccess(db: DbClient): boolean {
+  return legacyDaemonTestDbs.has(db as object)
+}
 
 function migratedSnapshot(migrationsFolder: string): Uint8Array {
   const key = resolve(migrationsFolder)
@@ -162,8 +173,32 @@ function migratedSnapshot(migrationsFolder: string): Uint8Array {
  * NOT part of the serialized image, so it is re-applied here to preserve the
  * original (always-FK-on) contract.
  */
-export function createInMemoryDb(migrationsFolder: string): DbClient {
+export interface CreateInMemoryDbOptions {
+  /**
+   * RFC-221: historical tests model an already-administered installation and
+   * therefore keep daemon-token fixture access. Bootstrap-specific tests opt
+   * into the real fresh-install state explicitly.
+   */
+  bootstrap?: 'ready' | 'required'
+}
+
+export function createInMemoryDb(
+  migrationsFolder: string,
+  opts: CreateInMemoryDbOptions = {},
+): DbClient {
   const sqlite = Database.deserialize(migratedSnapshot(migrationsFolder))
   sqlite.exec('PRAGMA foreign_keys = ON;')
-  return drizzle(sqlite, { schema })
+  if (opts.bootstrap !== 'required') {
+    const hasPolicy = sqlite
+      .query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='auth_login_policy'")
+      .get()
+    if (hasPolicy !== null) {
+      sqlite.exec(
+        "UPDATE auth_login_policy SET bootstrap_completed_at = COALESCE(bootstrap_completed_at, 0) WHERE id = 'global';",
+      )
+    }
+  }
+  const db = drizzle(sqlite, { schema })
+  if (opts.bootstrap !== 'required') legacyDaemonTestDbs.add(db as object)
+  return db
 }

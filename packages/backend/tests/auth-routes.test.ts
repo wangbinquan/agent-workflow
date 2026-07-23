@@ -4,9 +4,13 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
 import { resolve } from 'node:path'
 import type { Hono } from 'hono'
+import { ulid } from 'ulid'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createPat } from '../src/auth/patStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { oidcProviders } from '../src/db/schema'
 import { createApp } from '../src/server'
+import { createIdentity } from '../src/services/userIdentities'
 import { createUser } from '../src/services/users'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
@@ -17,8 +21,8 @@ interface Harness {
   app: Hono
 }
 
-async function buildHarness(): Promise<Harness> {
-  const db = createInMemoryDb(MIGRATIONS)
+async function buildHarness(bootstrap: 'ready' | 'required' = 'ready'): Promise<Harness> {
+  const db = createInMemoryDb(MIGRATIONS, { bootstrap })
   const secretBox = createSecretBoxFromKey(randomBytes(32))
   const app = createApp({
     token: DAEMON_TOKEN,
@@ -30,6 +34,64 @@ async function buildHarness(): Promise<Harness> {
   })
   return { db, app }
 }
+
+describe('RFC-221 bootstrap and login-policy route contracts', () => {
+  test('bootstrap endpoints require the daemon actor and validate the admin payload', async () => {
+    const fresh = await buildHarness('required')
+    const invalid = await reqRaw(
+      fresh.app,
+      '/api/auth/bootstrap/admin',
+      { method: 'POST', body: JSON.stringify({}) },
+      { Authorization: `Bearer ${DAEMON_TOKEN}` },
+    )
+    expect(invalid.status).toBe(422)
+    expect(((await invalid.json()) as { code: string }).code).toBe('bootstrap-admin-invalid')
+
+    const ready = await buildHarness()
+    await createUser(ready.db, {
+      username: 'admin',
+      displayName: 'Admin',
+      role: 'admin',
+      password: 'correctPassword123',
+    })
+    const login = await reqRaw(ready.app, '/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username: 'admin', password: 'correctPassword123' }),
+    })
+    const { sessionToken } = (await login.json()) as { sessionToken: string }
+    const wrongActor = await reqRaw(
+      ready.app,
+      '/api/auth/bootstrap/status',
+      {},
+      { Authorization: `Bearer ${sessionToken}` },
+    )
+    expect(wrongActor.status).toBe(403)
+    expect(((await wrongActor.json()) as { code: string }).code).toBe('bootstrap-daemon-required')
+  })
+
+  test('login-policy rejects an invalid payload with its stable route code', async () => {
+    const h = await buildHarness()
+    await createUser(h.db, {
+      username: 'admin',
+      displayName: 'Admin',
+      role: 'admin',
+      password: 'correctPassword123',
+    })
+    const login = await reqRaw(h.app, '/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username: 'admin', password: 'correctPassword123' }),
+    })
+    const { sessionToken } = (await login.json()) as { sessionToken: string }
+    const invalid = await reqRaw(
+      h.app,
+      '/api/oidc/login-policy',
+      { method: 'PUT', body: JSON.stringify({ passwordLoginEnabled: 'no' }) },
+      { Authorization: `Bearer ${sessionToken}` },
+    )
+    expect(invalid.status).toBe(422)
+    expect(((await invalid.json()) as { code: string }).code).toBe('login-policy-invalid')
+  })
+})
 
 async function reqRaw(
   app: Hono,
@@ -177,10 +239,76 @@ describe('Change-password round-trip', () => {
   })
 })
 
-describe('PATs', () => {
-  test('create + list + revoke flow', async () => {
+describe('RFC-221 OIDC-managed account restrictions', () => {
+  test('linked identity blocks local password changes and self-unlink', async () => {
     const h = await buildHarness()
-    await createUser(h.db, {
+    const bob = await createUser(h.db, {
+      username: 'bob',
+      displayName: 'Bob',
+      role: 'user',
+      password: 'goodGoodGood',
+    })
+    const providerId = ulid()
+    const now = Date.now()
+    await h.db.insert(oidcProviders).values({
+      id: providerId,
+      slug: 'managed-idp',
+      displayName: 'Managed IdP',
+      issuerUrl: 'https://idp.example.com',
+      clientId: 'client-abc',
+      clientSecretEnc: 'enc',
+      createdAt: now,
+      updatedAt: now,
+    })
+    const identity = await createIdentity(h.db, {
+      userId: bob.id,
+      providerId,
+      subject: 'bob-at-idp',
+      email: 'bob@example.com',
+      emailVerified: true,
+    })
+    const login = await reqRaw(h.app, '/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username: 'bob', password: 'goodGoodGood' }),
+    })
+    const { sessionToken } = (await login.json()) as { sessionToken: string }
+
+    const change = await reqRaw(
+      h.app,
+      '/api/auth/change-password',
+      {
+        method: 'POST',
+        body: JSON.stringify({ oldPassword: 'goodGoodGood', newPassword: 'newNewNewNew' }),
+      },
+      { Authorization: `Bearer ${sessionToken}` },
+    )
+    expect(change.status).toBe(403)
+    expect(((await change.json()) as { code: string }).code).toBe('oidc-password-managed')
+
+    const unlink = await reqRaw(
+      h.app,
+      `/api/auth/identities/${identity.id}`,
+      { method: 'DELETE' },
+      { Authorization: `Bearer ${sessionToken}` },
+    )
+    expect(unlink.status).toBe(403)
+    expect(((await unlink.json()) as { code: string }).code).toBe('identity-unlink-disabled')
+    const identities = await reqRaw(
+      h.app,
+      '/api/auth/identities',
+      {},
+      { Authorization: `Bearer ${sessionToken}` },
+    )
+    expect(((await identities.json()) as Array<{ id: string }>).map((row) => row.id)).toEqual([
+      identity.id,
+    ])
+  })
+})
+
+describe('PATs', () => {
+  test('creation is disabled while existing tokens remain listable and revocable', async () => {
+    const h = await buildHarness()
+    const bob = await createUser(h.db, {
       username: 'bob',
       displayName: 'Bob',
       role: 'user',
@@ -198,8 +326,16 @@ describe('PATs', () => {
       { method: 'POST', body: JSON.stringify({ name: 'ci-launcher', scopes: ['tasks:launch'] }) },
       { Authorization: `Bearer ${sessionToken}` },
     )
-    expect(created.status).toBe(201)
-    const { token, id } = (await created.json()) as { token: string; id: string }
+    expect(created.status).toBe(403)
+    expect(((await created.json()) as { code: string }).code).toBe('pat-creation-disabled')
+
+    // RFC-221 deliberately keeps the retirement path for pre-existing PATs.
+    const { token, meta } = await createPat({
+      db: h.db,
+      userId: bob.id,
+      name: 'legacy-ci-launcher',
+      scopes: ['tasks:launch'],
+    })
     expect(token.startsWith('aws_pat_')).toBe(true)
 
     const list = await reqRaw(
@@ -213,7 +349,7 @@ describe('PATs', () => {
 
     const del = await reqRaw(
       h.app,
-      `/api/auth/pats/${id}`,
+      `/api/auth/pats/${meta.id}`,
       { method: 'DELETE' },
       { Authorization: `Bearer ${sessionToken}` },
     )
@@ -223,7 +359,7 @@ describe('PATs', () => {
     expect(auth.status).toBe(401)
   })
 
-  test('PAT scopes that the user does not have are silently dropped', async () => {
+  test('creation denial happens before payload scope processing', async () => {
     const h = await buildHarness()
     await createUser(h.db, {
       username: 'bob',
@@ -246,7 +382,8 @@ describe('PATs', () => {
       },
       { Authorization: `Bearer ${sessionToken}` },
     )
-    const body = (await created.json()) as { scopes: string[] }
-    expect(body.scopes).toEqual(['tasks:launch'])
+    expect(created.status).toBe(403)
+    const body = (await created.json()) as { code: string }
+    expect(body.code).toBe('pat-creation-disabled')
   })
 })

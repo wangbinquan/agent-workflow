@@ -6,6 +6,8 @@ import { join } from 'node:path'
 import { openDb } from '@/db/client'
 import { extractMigrationsTo, IS_EMBEDDED } from '@/embed'
 import { Paths } from '@/util/paths'
+import { hashPassword } from '@/auth/passwords'
+import { completeBootstrapWithAdmin, isBootstrapRequired } from '@/services/authLoginPolicy'
 import {
   createUser,
   disableUser,
@@ -117,6 +119,23 @@ export async function userCommand(
           return badUsage(`invalid --role '${flags.role}' (expected admin|user|manager)`)
         }
         role = parsed.data
+      }
+      if (isBootstrapRequired(db)) {
+        if (role !== 'admin' || !flags.password) {
+          return badUsage(
+            'bootstrap requires the first user to be an admin with --password (use --admin --password <pw>)',
+          )
+        }
+        const created = completeBootstrapWithAdmin(db, {
+          username: flags.username,
+          displayName: flags.displayName ?? flags.username,
+          ...(flags.email !== undefined ? { email: flags.email } : {}),
+          passwordHash: await hashPassword(flags.password),
+        })
+        return {
+          output: `created first administrator ${created.username} (id=${created.id}); daemon token retired\n`,
+          status: 'ok',
+        }
       }
       const created = await createUser(db, {
         username: flags.username,

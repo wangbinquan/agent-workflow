@@ -8,6 +8,7 @@ import { Route as agentDetailRoute } from '@/routes/agents.detail'
 import { Route as agentByIdRoute } from '@/routes/agents.by-id'
 import { Route as agentNewRoute } from '@/routes/agents.new'
 import { Route as authRoute } from '@/routes/auth'
+import { Route as setupAdminRoute } from '@/routes/setup.admin'
 import { Route as indexRoute } from '@/routes/index'
 import { Route as usersRoute } from '@/routes/users'
 import { Route as rootRoute } from '@/routes/__root'
@@ -76,6 +77,7 @@ const workgroupLaunchRedirect = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   authRoute,
+  setupAdminRoute,
   // RFC-211: the guided tour. Intentionally NOT in the sidebar — it is entered
   // from the homepage, so `resolveActiveNav` leaves it unhighlighted the same
   // way it does for /tasks/new.

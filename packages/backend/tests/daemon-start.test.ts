@@ -5,23 +5,53 @@ import { join, resolve } from 'node:path'
 
 const mainPath = resolve(import.meta.dir, '..', 'src', 'main.ts')
 
-// Tests 1-3 are read-only / idempotent contract checks against an IDENTICAL
-// fresh daemon, so they share ONE spawn (beforeAll) instead of paying the
-// ~400ms spawn-to-ready cost three times. The config-PUT test runs LAST because
-// it is the only one that MUTATES config — the two read-only tests above must
-// observe pristine DEFAULT_CONFIG first. Lifecycle tests (restart / lock) keep
-// their own per-test daemons below.
-describe('daemon start — read-only contract on a shared daemon (M1 P-1-01..P-1-04)', () => {
+// Tests 1-3 share one daemon and complete the RFC-221 bootstrap handoff in
+// beforeAll, avoiding the ~400ms spawn-to-ready cost three times. The config-PUT
+// test runs LAST because it mutates config; lifecycle tests keep independent
+// per-test daemons below.
+describe('daemon start — HTTP contract on a shared bootstrapped daemon (M1 P-1-01..P-1-04)', () => {
   let tmp: string
   let child: ReturnType<typeof spawnDaemon>
   let url: string
   let token: string
+  let sessionToken: string
 
   beforeAll(async () => {
     tmp = mkdtempSync(join(tmpdir(), 'aw-daemon-'))
     const env = { ...(process.env as Record<string, string>), AGENT_WORKFLOW_HOME: tmp }
     child = spawnDaemon(env)
     ;({ url, token } = await waitForReady(child.stdout, 10_000))
+
+    // RFC-221: the daemon token is bootstrap-only. Complete the one-way
+    // handoff once, then exercise the normal API contract with an admin
+    // session rather than relying on a credential that must now be retired.
+    const bootstrap = await fetch(`${url}api/auth/bootstrap/admin`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        username: 'daemon-test-admin',
+        displayName: 'Daemon test admin',
+        password: 'correctPassword123',
+      }),
+    })
+    if (bootstrap.status !== 201) {
+      throw new Error(`bootstrap admin failed: ${bootstrap.status} ${await bootstrap.text()}`)
+    }
+    const login = await fetch(`${url}api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        username: 'daemon-test-admin',
+        password: 'correctPassword123',
+      }),
+    })
+    if (login.status !== 200) {
+      throw new Error(`admin login failed: ${login.status} ${await login.text()}`)
+    }
+    ;({ sessionToken } = (await login.json()) as { sessionToken: string })
   })
 
   afterAll(async () => {
@@ -51,12 +81,19 @@ describe('daemon start — read-only contract on a shared daemon (M1 P-1-01..P-1
     const unauth = (await unauthRes.json()) as Record<string, unknown>
     expect(unauth.code).toBe('unauthorized')
 
-    const okRes = await fetch(`${url}api/whoami`, {
+    const retired = await fetch(`${url}api/whoami`, {
       headers: { Authorization: `Bearer ${token}` },
+    })
+    expect(retired.status).toBe(401)
+
+    const okRes = await fetch(`${url}api/whoami`, {
+      headers: { Authorization: `Bearer ${sessionToken}` },
     })
     expect(okRes.status).toBe(200)
 
-    const nfRes = await fetch(`${url}api/no-such-route?token=${token}`)
+    const nfRes = await fetch(`${url}api/no-such-route`, {
+      headers: { Authorization: `Bearer ${sessionToken}` },
+    })
     expect(nfRes.status).toBe(404)
     const nf = (await nfRes.json()) as Record<string, unknown>
     expect(nf.code).toBe('route-not-found')
@@ -64,7 +101,7 @@ describe('daemon start — read-only contract on a shared daemon (M1 P-1-01..P-1
 
   // LAST: mutates config (PUT). Keep after the read-only tests above.
   test('GET /api/config returns full DEFAULT_CONFIG; PUT merges patch', async () => {
-    const auth = { Authorization: `Bearer ${token}` }
+    const auth = { Authorization: `Bearer ${sessionToken}` }
 
     // Initial GET.
     const getRes = await fetch(`${url}api/config`, { headers: auth })

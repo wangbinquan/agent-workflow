@@ -23,6 +23,14 @@ export const UserSchema = z.object({
 
 export type User = z.infer<typeof UserSchema>
 
+/** Admin-facing user row. OIDC ownership is materialized server-side so the
+ *  UI can omit inapplicable password actions without an N+1 identity query. */
+export const AdminUserViewSchema = UserSchema.extend({
+  hasOidcIdentity: z.boolean(),
+})
+
+export type AdminUserView = z.infer<typeof AdminUserViewSchema>
+
 /** Subset returned by /api/users/search — public 5 fields, never includes email / lastLoginAt. */
 export const UserPublicSchema = UserSchema.pick({
   id: true,

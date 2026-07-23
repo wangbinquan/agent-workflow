@@ -35,7 +35,7 @@ describe('user CLI', () => {
       'correctPw123',
     ])
     expect(created.status).toBe('ok')
-    expect(created.output).toMatch(/created user alice/)
+    expect(created.output).toMatch(/created first administrator alice/)
 
     // Idempotency guard: same username again → error.
     const dup = await userCommand([
@@ -105,10 +105,10 @@ describe('user CLI', () => {
     expect(r.status).toBe('error')
   })
 
-  test('user create with no password lands as invited', async () => {
+  test('bootstrap rejects a non-admin/no-password first user', async () => {
     const { userCommand } = await import('../src/cli/user')
     const r = await userCommand(['create', '--username', 'bob', '--display', 'Bob'])
-    expect(r.status).toBe('ok')
-    expect(r.output).toMatch(/invited/)
+    expect(r.status).toBe('error')
+    expect(r.output).toMatch(/bootstrap requires/)
   })
 })

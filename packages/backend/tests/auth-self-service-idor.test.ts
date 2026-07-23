@@ -35,6 +35,7 @@ import { randomBytes } from 'node:crypto'
 import { resolve } from 'node:path'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
+import { createPat } from '../src/auth/patStore'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { oidcProviders } from '../src/db/schema'
@@ -164,19 +165,20 @@ describe('account self-service is scoped to the calling user', () => {
   })
 
   test("a user cannot revoke another user's personal access token", async () => {
-    const created = await as(h.app, h.alice, '/api/auth/pats', {
-      method: 'POST',
-      body: JSON.stringify({ name: 'ci' }),
+    // RFC-221 disables the public creation endpoint. Seed a legacy PAT through
+    // the store so this test continues to guard the retained revoke path.
+    const { meta: pat, token } = await createPat({
+      db: h.db,
+      userId: h.alice.id,
+      name: 'ci',
     })
-    expect(created.status).toBe(201)
-    const pat = (await created.json()) as { id: string; token: string }
 
     const res = await as(h.app, h.bob, `/api/auth/pats/${pat.id}`, { method: 'DELETE' })
     expect(res.status).toBe(403)
 
     // Alice's CI token still authenticates.
     const me = await h.app.request('/api/auth/me', {
-      headers: { authorization: `Bearer ${pat.token}` },
+      headers: { authorization: `Bearer ${token}` },
     })
     expect(me.status).toBe(200)
     const stillListed = (await (await as(h.app, h.alice, '/api/auth/pats')).json()) as Array<{
@@ -206,9 +208,10 @@ describe('account self-service is scoped to the calling user', () => {
   })
 
   test('listing endpoints only ever return the calling user’s own rows', async () => {
-    await as(h.app, h.alice, '/api/auth/pats', {
-      method: 'POST',
-      body: JSON.stringify({ name: 'alice-ci' }),
+    await createPat({
+      db: h.db,
+      userId: h.alice.id,
+      name: 'alice-ci',
     })
     await createIdentity(h.db, {
       userId: h.alice.id,
@@ -231,7 +234,7 @@ describe('account self-service is scoped to the calling user', () => {
   // Without these, a handler that rejected EVERY request would pass every case
   // above, and this file would be a guard with no teeth.
 
-  test('a user can revoke their own session, token, and identity', async () => {
+  test('a user can revoke their own session and legacy token, while identity unlink stays disabled', async () => {
     const before = (await (await as(h.app, h.alice, '/api/auth/sessions')).json()) as Array<{
       id: string
     }>
@@ -260,12 +263,7 @@ describe('account self-service is scoped to the calling user', () => {
     expect((await as(h.app, h.alice, '/api/auth/me')).status).toBe(200)
 
     const alice: Actor = h.alice
-    const pat = (await (
-      await as(h.app, alice, '/api/auth/pats', {
-        method: 'POST',
-        body: JSON.stringify({ name: 'mine' }),
-      })
-    ).json()) as { id: string }
+    const { meta: pat } = await createPat({ db: h.db, userId: alice.id, name: 'mine' })
     expect((await as(h.app, alice, `/api/auth/pats/${pat.id}`, { method: 'DELETE' })).status).toBe(
       204,
     )
@@ -277,10 +275,15 @@ describe('account self-service is scoped to the calling user', () => {
       email: 'alice@example.com',
       emailVerified: true,
     })
-    expect(
-      (await as(h.app, alice, `/api/auth/identities/${identity.id}`, { method: 'DELETE' })).status,
-    ).toBe(204)
-    expect((await (await as(h.app, alice, '/api/auth/identities')).json()) as unknown[]).toEqual([])
+    const unlink = await as(h.app, alice, `/api/auth/identities/${identity.id}`, {
+      method: 'DELETE',
+    })
+    expect(unlink.status).toBe(403)
+    expect(((await unlink.json()) as { code: string }).code).toBe('identity-unlink-disabled')
+    const identities = (await (await as(h.app, alice, '/api/auth/identities')).json()) as Array<{
+      id: string
+    }>
+    expect(identities.map((row) => row.id)).toEqual([identity.id])
   })
 
   // All three destructive self-service endpoints must be indistinguishable

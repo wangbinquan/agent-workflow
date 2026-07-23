@@ -1,13 +1,10 @@
-// RFC-036 — three-tab login screen:
-//   - Password (default when no identity provider is configured)
-//   - OIDC provider (shown when /api/auth/oidc/providers returns ≥1 entry;
-//     becomes the default landing tab when at least one provider exists)
-//   - Daemon token (admin / break-glass fallback)
-// Shown when localStorage has no token, after a 401, or on first visit. The
-// daemon URL field is no longer surfaced — the SPA always talks to its own
-// origin (vite proxy in dev, same-host bundle in prod); remote setups can
-// still override BASE_URL_KEY via localStorage for now.
+// RFC-221 — server-discovered authentication entry point.
+// Fresh installs expose daemon-token bootstrap only. After the first admin is
+// committed, daemon auth disappears permanently and this page derives exactly
+// the ready methods allowed by the persisted password/OIDC policy.
 
+import type { AuthMethodDiscovery } from '@agent-workflow/shared'
+import { AuthMethodDiscoverySchema } from '@agent-workflow/shared'
 import { createRoute, useRouter, useSearch } from '@tanstack/react-router'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -17,40 +14,41 @@ import { Field, TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { TabBar, type TabDef } from '@/components/TabBar'
-import { TabPanels, type TabPanelDef } from '@/components/split/TabPanels'
+import { AuthExperienceShell } from '@/components/auth/AuthExperienceShell'
+import { TabPanels } from '@/components/split/TabPanels'
 import { describeApiError } from '@/i18n'
-import { setToken } from '@/stores/auth'
+import { clearToken, getToken, setToken } from '@/stores/auth'
 import { Route as RootRoute } from './__root'
 
 interface AuthSearch {
   redirect?: string
+  setup?: 'complete'
+  bootstrap?: 'token'
 }
 
-/**
- * RFC-105 — post-login destination guard. The `redirect` search param is
- * user-controlled (it rides the shared URL), so only same-origin relative
- * paths are honored: it must start with a single `/` and not `//` or `/\`
- * (protocol-relative / backslash open-redirect tricks). Anything else falls
- * back to the default landing page. Preserves the query string so deep links
- * like `/tasks/t/preview?path=docs/report.md` survive login.
- */
 export function safeInternalRedirect(redirect: string | undefined): string {
   if (redirect === undefined || !/^\/(?![/\\])/.test(redirect)) return '/agents'
   return redirect
 }
 
-interface OidcProvider {
-  slug: string
-  displayName: string
-  iconUrl: string | null
+export function setupAdminHref(redirect: string | undefined): string {
+  return `/setup/admin?redirect=${encodeURIComponent(safeInternalRedirect(redirect))}`
 }
 
-type OidcDiscoveryState =
+export type AuthMethod = 'password' | 'oidc' | 'token'
+
+export function deriveAuthMethods(discovery: AuthMethodDiscovery): AuthMethod[] {
+  if (discovery.mode === 'bootstrap') return ['token']
+  const methods: AuthMethod[] = []
+  if (discovery.providers.length > 0) methods.push('oidc')
+  if (discovery.passwordLoginEnabled) methods.push('password')
+  return methods
+}
+
+type DiscoveryState =
   | { status: 'loading' }
   | { status: 'error'; error: unknown }
-  | { status: 'success'; providers: OidcProvider[] }
-
-type AuthTab = 'password' | 'oidc' | 'token'
+  | { status: 'success'; value: AuthMethodDiscovery }
 
 export const Route = createRoute({
   getParentRoute: () => RootRoute,
@@ -58,6 +56,8 @@ export const Route = createRoute({
   validateSearch: (raw: Record<string, unknown>): AuthSearch => {
     const out: AuthSearch = {}
     if (typeof raw.redirect === 'string') out.redirect = raw.redirect
+    if (raw.setup === 'complete') out.setup = 'complete'
+    if (raw.bootstrap === 'token') out.bootstrap = 'token'
     return out
   },
   component: AuthPage,
@@ -65,131 +65,166 @@ export const Route = createRoute({
 
 function AuthPage() {
   const router = useRouter()
-  const { redirect } = useSearch({ from: Route.id }) as AuthSearch
+  const {
+    redirect,
+    setup,
+    bootstrap: bootstrapHandoff,
+  } = useSearch({
+    from: Route.id,
+  }) as AuthSearch
   const { t } = useTranslation()
-  const [oidcDiscovery, setOidcDiscovery] = useState<OidcDiscoveryState>({ status: 'loading' })
-  const [tab, setTab] = useState<AuthTab>('password')
+  const [discovery, setDiscovery] = useState<DiscoveryState>({ status: 'loading' })
+  const [active, setActive] = useState<AuthMethod>('password')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [tokenInput, setTokenInput] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const usernameRef = useRef<HTMLInputElement>(null)
-  const pageRef = useRef<HTMLDivElement>(null)
-  // True once the user has picked a tab or typed into any method form; a
-  // late discovery response must never displace what the user is doing.
+  const tokenRef = useRef<HTMLInputElement>(null)
   const interactedRef = useRef(false)
-  const initialLandingDoneRef = useRef(false)
-  const discoveryRequestRef = useRef(0)
+  const requestRef = useRef(0)
+  const bootstrapHandoffRef = useRef(false)
 
-  const discoverOidcProviders = useCallback(async () => {
-    const request = ++discoveryRequestRef.current
-    setOidcDiscovery({ status: 'loading' })
+  const discover = useCallback(async () => {
+    const request = ++requestRef.current
+    setDiscovery({ status: 'loading' })
     try {
-      const response = await api.get<{ providers: OidcProvider[] }>('/api/auth/oidc/providers')
-      if (discoveryRequestRef.current !== request) return
-      setOidcDiscovery({ status: 'success', providers: response.providers ?? [] })
-    } catch (error) {
-      if (discoveryRequestRef.current !== request) return
-      setOidcDiscovery({ status: 'error', error })
+      const raw = await api.get<unknown>('/api/auth/oidc/providers')
+      const value = AuthMethodDiscoverySchema.parse(raw)
+      if (requestRef.current === request) setDiscovery({ status: 'success', value })
+    } catch (nextError) {
+      if (requestRef.current === request) setDiscovery({ status: 'error', error: nextError })
     }
   }, [])
 
-  // Discovery is a visible async state, not an empty-list fallback: otherwise
-  // a network failure falsely tells users that this installation has no SSO.
   useEffect(() => {
-    void discoverOidcProviders()
+    void discover()
     return () => {
-      discoveryRequestRef.current += 1
+      requestRef.current += 1
     }
-  }, [discoverOidcProviders])
+  }, [discover])
 
-  const providers = oidcDiscovery.status === 'success' ? oidcDiscovery.providers : []
+  const methods = discovery.status === 'success' ? deriveAuthMethods(discovery.value) : []
 
-  // Initial landing decision, one-shot on the first discovery settle: an
-  // installation with ≥1 identity provider defaults to the OIDC tab (SSO
-  // deployments sign in there, not with local passwords); otherwise stay on
-  // the password tab and focus its first field. Focus intentionally waits for
-  // settle — focusing at mount would put the caret in a panel the decision
-  // may immediately hide. Panels stay mounted below, so this never re-runs on
-  // tab activation and cannot steal focus later.
   useEffect(() => {
-    if (initialLandingDoneRef.current || oidcDiscovery.status === 'loading') return
-    initialLandingDoneRef.current = true
-    if (interactedRef.current) return
-    // Focus already inside the login card (Tab / click into a field, even
-    // without typing yet) counts as interaction too: switching tabs would
-    // hide the focused control, and refocusing username would steal focus.
-    const active = document.activeElement
-    if (active !== null && active !== document.body && pageRef.current?.contains(active) === true)
+    if (discovery.status !== 'success') return
+    const next = deriveAuthMethods(discovery.value)
+    if (next.length === 0) return
+    if (!next.includes(active) || !interactedRef.current) setActive(next[0]!)
+  }, [active, discovery])
+
+  useEffect(() => {
+    if (discovery.status !== 'success' || interactedRef.current) return
+    const next = deriveAuthMethods(discovery.value)[0]
+    queueMicrotask(() => {
+      if (next === 'password') usernameRef.current?.focus()
+      if (next === 'token') tokenRef.current?.focus()
+    })
+  }, [discovery])
+
+  useEffect(() => {
+    if (
+      bootstrapHandoff !== 'token' ||
+      discovery.status !== 'success' ||
+      bootstrapHandoffRef.current
+    ) {
       return
-    if (oidcDiscovery.status === 'success' && oidcDiscovery.providers.length > 0) {
-      setTab('oidc')
-    } else {
-      usernameRef.current?.focus()
     }
-  }, [oidcDiscovery])
+    bootstrapHandoffRef.current = true
 
-  // Note: the `#aw_session=` fragment from the OIDC callback is handled
-  // globally in __root.tsx (so any postLoginRedirect target picks it up),
-  // not here. If the token lands while we're on /auth the SPA still
-  // reflows correctly: setToken triggers the auth-store emit →
-  // RootComponent's token-aware fallback drops the bare layout →
-  // beforeLoad's redirect-to-/auth check won't refire because the token
-  // is now set; user lands on whatever route they navigate to next.
+    const authHref = `/auth?redirect=${encodeURIComponent(safeInternalRedirect(redirect))}`
+    if (discovery.value.mode !== 'bootstrap') {
+      // A bookmarked daemon URL may outlive bootstrap. Never retain that stale
+      // credential or resurrect the retired token method on a ready install.
+      clearToken()
+      router.history.replace(authHref)
+      return
+    }
 
-  // When switching tabs, drop any per-tab error so the user gets a clean
-  // form. We deliberately keep input values so accidental tab clicks don't
-  // wipe what they typed.
-  function switchTab(next: AuthTab) {
+    const token = getToken()
+    if (token === null) {
+      setError(t('auth.bootstrapTokenRequired'))
+      router.history.replace(authHref)
+      return
+    }
+
+    let activeRequest = true
+    setBusy(true)
+    void api
+      .get<{ source: string }>('/api/whoami')
+      .then((who) => {
+        if (!activeRequest) return
+        if (who.source !== 'daemon') throw new Error(t('auth.bootstrapTokenRequired'))
+        router.history.replace(setupAdminHref(redirect))
+      })
+      .catch((nextError: unknown) => {
+        if (!activeRequest) return
+        clearToken()
+        setError(describeApiError(nextError))
+        router.history.replace(authHref)
+      })
+      .finally(() => {
+        if (activeRequest) setBusy(false)
+      })
+
+    return () => {
+      activeRequest = false
+    }
+  }, [bootstrapHandoff, discovery, redirect, router, t])
+
+  const draftSetter = (setter: (value: string) => void) => (value: string) => {
     interactedRef.current = true
-    setTab(next)
+    setter(value)
+  }
+
+  const selectMethod = (method: AuthMethod) => {
+    interactedRef.current = true
+    setActive(method)
     setError(null)
   }
 
-  /** Wrap a draft setter so typing pins the current tab against late discovery. */
-  function draftSetter(setter: (value: string) => void) {
-    return (value: string) => {
-      interactedRef.current = true
-      setter(value)
-    }
-  }
-
-  async function handlePasswordSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  async function handlePasswordSubmit(event: React.FormEvent) {
+    event.preventDefault()
     setError(null)
     setBusy(true)
     try {
-      const r = await api.post<{ sessionToken: string }>('/api/auth/login', {
+      const result = await api.post<{ sessionToken: string }>('/api/auth/login', {
         username,
         password,
       })
-      setToken(r.sessionToken)
-      // history.push (not navigate({to})) so a redirect carrying a query
-      // string (shared deep link) is honored verbatim; guarded against
-      // open redirects by safeInternalRedirect.
-      router.history.push(safeInternalRedirect(redirect))
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 401) {
+      setToken(result.sessionToken)
+      router.history.replace(safeInternalRedirect(redirect))
+    } catch (nextError) {
+      if (nextError instanceof ApiError && nextError.status === 401) {
         setError(t('auth.invalidCredentials'))
       } else {
-        setError(describeApiError(e))
+        setError(describeApiError(nextError))
+      }
+      if (
+        nextError instanceof ApiError &&
+        (nextError.code === 'password-login-disabled' ||
+          nextError.code === 'bootstrap-admin-required')
+      ) {
+        void discover()
       }
     } finally {
       setBusy(false)
     }
   }
 
-  async function handleTokenSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  async function handleTokenSubmit(event: React.FormEvent) {
+    event.preventDefault()
     setError(null)
     setBusy(true)
     setToken(tokenInput)
     try {
-      await api.get('/api/whoami')
-      router.history.push(safeInternalRedirect(redirect))
-    } catch (e) {
-      setError(describeApiError(e))
+      const who = await api.get<{ source: string }>('/api/whoami')
+      if (who.source !== 'daemon') throw new Error(t('auth.bootstrapTokenRequired'))
+      router.history.replace(setupAdminHref(redirect))
+    } catch (nextError) {
+      clearToken()
+      setError(describeApiError(nextError))
     } finally {
       setBusy(false)
     }
@@ -198,155 +233,262 @@ function AuthPage() {
   async function handleOidcLogin(slug: string) {
     setError(null)
     try {
-      const r = await api.post<{ authorizeUrl: string }>(`/api/auth/oidc/${slug}/login/start`, {
-        // Strip any #fragment: the OIDC callback appends `#aw_session=…`, and a
-        // second fragment (e.g. a preview heading anchor) would break the
-        // `^#aw_session=` consumer in stores/auth.ts → login bounces.
-        postLoginRedirect: safeInternalRedirect(redirect).split('#')[0] || '/agents',
-      })
-      window.location.href = r.authorizeUrl
-    } catch (e) {
-      setError(describeApiError(e))
+      const result = await api.post<{ authorizeUrl: string }>(
+        `/api/auth/oidc/${slug}/login/start`,
+        {
+          postLoginRedirect: safeInternalRedirect(redirect).split('#')[0] || '/agents',
+        },
+      )
+      window.location.href = result.authorizeUrl
+    } catch (nextError) {
+      setError(describeApiError(nextError))
     }
   }
 
-  const tabs: Array<TabDef<AuthTab>> = [
-    { key: 'password', label: t('auth.tabPassword', { defaultValue: 'Password' }) },
-  ]
-  if (providers.length > 0) {
-    tabs.push({ key: 'oidc', label: t('auth.tabOidc', { defaultValue: 'Identity provider' }) })
+  const labels: Record<AuthMethod, string> = {
+    password: t('auth.tabPassword', { defaultValue: 'Password' }),
+    oidc: t('auth.tabOidc', { defaultValue: 'Identity provider' }),
+    token: t('auth.tabToken', { defaultValue: 'Setup token' }),
   }
-  tabs.push({ key: 'token', label: t('auth.tabToken', { defaultValue: 'Daemon token' }) })
+  const tabs: Array<TabDef<AuthMethod>> = methods.map((method) => ({
+    key: method,
+    label: <AuthMethodTabLabel method={method} label={labels[method]} />,
+  }))
 
-  const panels: Array<TabPanelDef<AuthTab>> = [
-    {
-      key: 'password',
-      testid: 'auth-tabpanel-password',
-      content: (
-        <form onSubmit={handlePasswordSubmit} className="form-grid">
-          <Field label={t('auth.username', { defaultValue: 'Username' })}>
-            <TextInput
-              inputRef={usernameRef}
-              type="text"
-              autoComplete="username"
-              value={username}
-              onChange={draftSetter(setUsername)}
-              placeholder={t('auth.usernamePlaceholder', { defaultValue: 'alice' })}
-            />
-          </Field>
-          <Field label={t('auth.password', { defaultValue: 'Password' })}>
-            <TextInput
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={draftSetter(setPassword)}
-              placeholder={t('auth.passwordPlaceholder', { defaultValue: '••••••••' })}
-            />
-          </Field>
-          {error !== null && <ErrorBanner error={error} />}
-          <button
-            type="submit"
-            className="btn btn--primary"
-            disabled={busy || !username || !password}
-            aria-busy={busy}
-          >
-            {busy ? t('auth.verifying') : t('auth.signIn', { defaultValue: t('auth.connect') })}
-          </button>
-        </form>
-      ),
-    },
-  ]
-  if (providers.length > 0) {
-    panels.push({
-      key: 'oidc',
-      testid: 'auth-tabpanel-oidc',
-      content: (
-        <div className="auth-page__providers">
-          <p className="auth-page__provider-hint">
-            {t('auth.oidcHint', { defaultValue: 'Sign in with an external identity provider.' })}
-          </p>
-          {providers.map((p) => (
-            <button
-              key={p.slug}
-              type="button"
-              className="auth-page__provider-btn"
-              onClick={() => handleOidcLogin(p.slug)}
-            >
-              {t('auth.loginWith', {
-                name: p.displayName,
-                defaultValue: `Login with ${p.displayName}`,
-              })}
-            </button>
-          ))}
-          {error !== null && <ErrorBanner error={error} />}
-        </div>
-      ),
-    })
-  }
-  panels.push({
-    key: 'token',
-    testid: 'auth-tabpanel-token',
-    content: (
-      <form onSubmit={handleTokenSubmit} className="form-grid">
-        <p className="auth-form__hint">
-          {t('auth.tokenHint', {
-            defaultValue:
-              'Use the 64-char hex token printed when the daemon started. Admin / break-glass only.',
-          })}
-        </p>
-        <Field label={t('auth.token')}>
+  const forms: Partial<Record<AuthMethod, React.ReactNode>> = {}
+  if (
+    bootstrapHandoff !== 'token' &&
+    discovery.status === 'success' &&
+    methods.includes('password')
+  ) {
+    forms.password = (
+      <form onSubmit={handlePasswordSubmit} className="form-grid" data-testid="auth-password-form">
+        <p className="auth-page__method-copy">{t('auth.passwordHint')}</p>
+        <Field label={t('auth.username', { defaultValue: 'Username' })}>
+          <TextInput
+            inputRef={usernameRef}
+            autoComplete="username"
+            value={username}
+            onChange={draftSetter(setUsername)}
+          />
+        </Field>
+        <Field label={t('auth.password', { defaultValue: 'Password' })}>
           <TextInput
             type="password"
-            value={tokenInput}
-            onChange={draftSetter(setTokenInput)}
-            placeholder={t('auth.tokenPlaceholder')}
+            autoComplete="current-password"
+            value={password}
+            onChange={draftSetter(setPassword)}
           />
         </Field>
         {error !== null && <ErrorBanner error={error} />}
         <button
+          className="btn btn--primary auth-page__submit"
           type="submit"
-          className="btn btn--primary"
-          disabled={busy || !tokenInput}
-          aria-busy={busy}
+          disabled={busy || !username || !password}
         >
-          {busy ? t('auth.verifying') : t('auth.connect')}
+          {busy ? t('auth.verifying') : t('auth.signIn', { defaultValue: 'Sign in' })}
         </button>
       </form>
-    ),
+    )
+  }
+  if (bootstrapHandoff !== 'token' && discovery.status === 'success' && methods.includes('oidc')) {
+    forms.oidc = (
+      <div className="auth-page__providers" data-testid="auth-oidc-method">
+        <p className="auth-page__provider-hint">
+          {t('auth.oidcHint', { defaultValue: 'Sign in with your identity provider.' })}
+        </p>
+        {discovery.value.mode === 'ready' &&
+          discovery.value.providers.map((provider) => (
+            <button
+              key={provider.slug}
+              type="button"
+              className="auth-page__provider-btn"
+              aria-label={t('auth.loginWith', {
+                name: provider.displayName,
+                defaultValue: `Login with ${provider.displayName}`,
+              })}
+              onClick={() => void handleOidcLogin(provider.slug)}
+            >
+              <span className="auth-page__provider-mark" aria-hidden="true">
+                <ProviderIcon />
+              </span>
+              <span className="auth-page__provider-copy">
+                <strong className="auth-page__provider-name" title={provider.displayName}>
+                  {provider.displayName}
+                </strong>
+                <span>{t('auth.providerButtonHint')}</span>
+              </span>
+              <span className="auth-page__provider-arrow" aria-hidden="true">
+                <ArrowIcon />
+              </span>
+            </button>
+          ))}
+        {error !== null && <ErrorBanner error={error} />}
+      </div>
+    )
+  }
+  if (discovery.status === 'success' && methods.includes('token') && bootstrapHandoff !== 'token') {
+    forms.token = (
+      <form onSubmit={handleTokenSubmit} className="form-grid" data-testid="auth-token-form">
+        <NoticeBanner tone="info" size="compact">
+          {t('auth.bootstrapTokenHint', {
+            defaultValue:
+              'Use the setup token printed by the daemon. It can only create the first administrator and will then expire permanently.',
+          })}
+        </NoticeBanner>
+        <Field label={t('auth.token', { defaultValue: 'Setup token' })}>
+          <TextInput
+            inputRef={tokenRef}
+            type="password"
+            value={tokenInput}
+            onChange={draftSetter(setTokenInput)}
+            autoComplete="off"
+          />
+        </Field>
+        {error !== null && <ErrorBanner error={error} />}
+        <button
+          className="btn btn--primary auth-page__submit"
+          type="submit"
+          disabled={busy || !tokenInput}
+        >
+          {busy ? t('auth.verifying') : t('auth.continueSetup', { defaultValue: 'Continue setup' })}
+        </button>
+      </form>
+    )
+  }
+
+  const form = forms[active] ?? null
+  const panels = methods.flatMap((method) => {
+    const content = forms[method]
+    // Keep every ARIA panel node present for its controlling tab, but only
+    // mount the active credential form. Hidden password inputs must not remain
+    // live in the DOM when OIDC is selected (and vice versa).
+    return content === undefined
+      ? []
+      : [{ key: method, content: method === active ? content : null }]
   })
 
+  const bootstrap = discovery.status === 'success' && discovery.value.mode === 'bootstrap'
+
   return (
-    <div className="auth-page" ref={pageRef}>
-      <h1>{t('auth.title')}</h1>
-      <p className="auth-page__hint">{t('auth.subtitle', { defaultValue: t('auth.hint') })}</p>
-      <TabBar<AuthTab>
-        tabs={tabs}
-        active={tab}
-        onSelect={switchTab}
-        variant="segment"
-        ariaLabel={t('auth.title')}
-        idPrefix="auth-method"
-      />
-      {oidcDiscovery.status === 'loading' && (
-        <LoadingState
-          size="compact"
-          label={t('auth.oidcDiscoveryLoading')}
-          data-testid="oidc-discovery-loading"
-        />
-      )}
-      {oidcDiscovery.status === 'error' && (
-        <ErrorBanner
-          error={oidcDiscovery.error}
-          message={t('auth.oidcDiscoveryError')}
-          onRetry={() => void discoverOidcProviders()}
-        />
-      )}
-      {oidcDiscovery.status === 'success' && providers.length === 0 && (
-        <NoticeBanner tone="info" size="compact">
-          {t('auth.oidcDiscoveryEmpty')}
-        </NoticeBanner>
-      )}
-      <TabPanels<AuthTab> active={tab} panels={panels} idPrefix="auth-method" />
-    </div>
+    <AuthExperienceShell>
+      <div className="auth-page">
+        <header className="auth-page__heading">
+          <span className="auth-page__eyebrow">{t('auth.secureAccess')}</span>
+          <h1>{bootstrap ? t('auth.bootstrapLoginTitle') : t('auth.title')}</h1>
+          <p className="auth-page__hint">
+            {bootstrap ? t('auth.bootstrapLoginSubtitle') : t('auth.subtitle')}
+          </p>
+        </header>
+        {setup === 'complete' && (
+          <NoticeBanner tone="success" size="compact">
+            {t('auth.setupComplete', {
+              defaultValue: 'Administrator created. Sign in with the account you just created.',
+            })}
+          </NoticeBanner>
+        )}
+        {discovery.status === 'loading' && (
+          <LoadingState
+            size="compact"
+            label={t('auth.oidcDiscoveryLoading')}
+            data-testid="auth-discovery-loading"
+          />
+        )}
+        {discovery.status === 'success' && bootstrapHandoff === 'token' && (
+          <LoadingState
+            size="compact"
+            label={t('auth.verifying')}
+            data-testid="auth-bootstrap-handoff"
+          />
+        )}
+        {discovery.status === 'error' && (
+          <ErrorBanner
+            error={discovery.error}
+            message={t('auth.oidcDiscoveryError')}
+            onRetry={() => void discover()}
+          />
+        )}
+        {discovery.status === 'success' && methods.length === 0 && (
+          <ErrorBanner
+            error={t('auth.noLoginMethod', { defaultValue: 'No login method is available.' })}
+          />
+        )}
+        {discovery.status === 'success' && bootstrapHandoff !== 'token' && methods.length > 1 && (
+          <div className="auth-page__method-picker">
+            <span className="auth-page__method-label">{t('auth.methodLabel')}</span>
+            <TabBar<AuthMethod>
+              tabs={tabs}
+              active={active}
+              onSelect={selectMethod}
+              variant="segment"
+              ariaLabel={t('auth.methodLabel')}
+              idPrefix="auth-method"
+            />
+          </div>
+        )}
+        {panels.length > 1 ? (
+          <TabPanels<AuthMethod> active={active} panels={panels} idPrefix="auth-method" />
+        ) : (
+          form
+        )}
+      </div>
+    </AuthExperienceShell>
+  )
+}
+
+function AuthMethodTabLabel({ method, label }: { method: AuthMethod; label: string }) {
+  return (
+    <span className="auth-page__method-tab-label">
+      <span className="auth-page__method-tab-icon" aria-hidden="true">
+        <AuthMethodIcon method={method} />
+      </span>
+      <span className="auth-page__method-tab-text" title={label}>
+        {label}
+      </span>
+    </span>
+  )
+}
+
+function AuthMethodIcon({ method }: { method: AuthMethod }) {
+  if (method === 'oidc') {
+    return (
+      <svg viewBox="0 0 24 24">
+        <circle cx="7" cy="12" r="3" />
+        <circle cx="17" cy="7" r="3" />
+        <circle cx="17" cy="17" r="3" />
+        <path d="m9.7 10.6 4.6-2.2M9.7 13.4l4.6 2.2" />
+      </svg>
+    )
+  }
+  if (method === 'token') {
+    return (
+      <svg viewBox="0 0 24 24">
+        <circle cx="8" cy="12" r="4" />
+        <path d="M12 12h8m-3 0v3m-3-3v2" />
+      </svg>
+    )
+  }
+  return (
+    <svg viewBox="0 0 24 24">
+      <circle cx="12" cy="8" r="3.5" />
+      <path d="M5.5 20a6.5 6.5 0 0 1 13 0" />
+    </svg>
+  )
+}
+
+function ProviderIcon() {
+  return (
+    <svg viewBox="0 0 24 24">
+      <path d="M4 20V8l8-4 8 4v12" />
+      <path d="M8 11h2m4 0h2M8 15h2m4 0h2M10 20v-2h4v2" />
+    </svg>
+  )
+}
+
+function ArrowIcon() {
+  return (
+    <svg viewBox="0 0 24 24">
+      <path d="M5 12h14m-5-5 5 5-5 5" />
+    </svg>
   )
 }

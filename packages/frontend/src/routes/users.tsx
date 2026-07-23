@@ -1,347 +1,332 @@
-// RFC-036 — admin users list. Hidden behind usePermission('users:read');
-// non-admin actors see a NoPermissionEmpty placeholder.
+// RFC-221 — responsive admin user directory. Human accounts are searchable,
+// filterable and managed through focused transactions; the daemon's immutable
+// __system__ principal is separated from people and never enters counts.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute } from '@tanstack/react-router'
-import { useRef, useState } from 'react'
+import { useRef, useState, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
-import { api, ApiError } from '@/api/client'
-import { Dialog } from '@/components/Dialog'
+import type {
+  AdminUserView,
+  AuthLoginPolicy,
+  CreateUserBody,
+  PatchUserBody,
+  ResetPasswordBody,
+} from '@agent-workflow/shared'
+import { api } from '@/api/client'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
-import { Field, TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
+import { NoticeBanner } from '@/components/NoticeBanner'
 import { PageHeader } from '@/components/PageHeader'
-import { Select } from '@/components/Select'
-import { TableViewport } from '@/components/TableViewport'
-import { USER_ICON } from '@/components/icons/resourceIcons'
+import { QueryState } from '@/components/QueryState'
+import { CreateUserDialog } from '@/components/users/CreateUserDialog'
+import { EditUserDialog } from '@/components/users/EditUserDialog'
+import { ResetUserPasswordDialog } from '@/components/users/ResetUserPasswordDialog'
+import { UserDirectory } from '@/components/users/UserDirectory'
 import { useActor, usePermission } from '@/hooks/useActor'
+import {
+  deriveUserDirectory,
+  filtersFromUsersSearch,
+  searchFromUserFilters,
+  validateUsersSearch,
+  withUsersSearch,
+  type CreateUserMode,
+  type UserDirectoryFilters,
+  type UsersSearch,
+} from '@/lib/user-directory'
 import { Route as RootRoute } from './__root'
 
-interface UserRow {
-  id: string
-  username: string
-  email: string | null
-  displayName: string
-  role: 'admin' | 'user'
-  status: 'active' | 'disabled' | 'invited'
-  lastLoginAt: number | null
-}
+export { validateUsersSearch }
 
 export const Route = createRoute({
   getParentRoute: () => RootRoute,
   path: '/users',
-  component: UsersPage,
+  validateSearch: validateUsersSearch,
+  component: UsersRoutePage,
 })
 
-export function UsersPage() {
-  const { t } = useTranslation()
-  const allowed = usePermission('users:read')
-  const { data: me, isLoading: isActorLoading } = useActor()
-  const qc = useQueryClient()
-  const [showCreate, setShowCreate] = useState(false)
+function UsersRoutePage() {
+  const search = Route.useSearch()
+  const navigate = Route.useNavigate()
+  return (
+    <UsersPage
+      search={search}
+      onSearchChange={(next, replace) => {
+        void navigate({
+          search: (previous) => withUsersSearch(previous, next),
+          replace,
+        })
+      }}
+    />
+  )
+}
 
-  const { data, isLoading, error, refetch } = useQuery<UserRow[]>({
+type DialogTarget = {
+  userId: string
+  triggerRef: RefObject<HTMLElement | null>
+}
+
+type UsersDialogState =
+  | { kind: 'create'; triggerRef: RefObject<HTMLElement | null> }
+  | ({ kind: 'edit' | 'reset' | 'disable' | 'enable' } & DialogTarget)
+  | null
+
+type SuccessNotice =
+  | 'created-password'
+  | 'created-sso'
+  | 'updated'
+  | 'reset'
+  | 'disabled'
+  | 'enabled'
+
+export function UsersPage(
+  props: {
+    search?: UsersSearch
+    onSearchChange?: (search: UsersSearch, replace: boolean) => void
+  } = {},
+) {
+  const { t, i18n } = useTranslation()
+  const allowed = usePermission('users:read')
+  const actor = useActor()
+  const qc = useQueryClient()
+  const headerCreateRef = useRef<HTMLButtonElement>(null)
+  const [localSearch, setLocalSearch] = useState<UsersSearch>({})
+  const [dialog, setDialog] = useState<UsersDialogState>(null)
+  const [notice, setNotice] = useState<SuccessNotice | null>(null)
+  const search = props.search ?? localSearch
+  const filters = filtersFromUsersSearch(search)
+
+  const list = useQuery<AdminUserView[]>({
     queryKey: ['users'],
-    queryFn: () => api.get('/api/users'),
+    queryFn: ({ signal }) => api.get('/api/users', undefined, signal),
     enabled: allowed,
   })
+  const loginPolicy = useQuery<AuthLoginPolicy>({
+    queryKey: ['oidc-login-policy'],
+    queryFn: ({ signal }) => api.get('/api/oidc/login-policy', undefined, signal),
+    enabled: allowed,
+  })
+  const model = deriveUserDirectory(list.data ?? [], filters, i18n.language)
+
+  const closeDialog = () => setDialog(null)
+  const refreshUsers = async () => {
+    await qc.invalidateQueries({ queryKey: ['users'], exact: true })
+  }
   const create = useMutation({
-    mutationFn: (body: {
-      username: string
-      displayName: string
-      role: 'admin' | 'user'
-      password?: string
-    }) => api.post('/api/users', body),
-    onSuccess: () => {
-      setShowCreate(false)
-      qc.invalidateQueries({ queryKey: ['users'] })
+    mutationFn: (variables: { body: CreateUserBody; mode: CreateUserMode }) =>
+      api.post<AdminUserView>('/api/users', variables.body),
+    onSuccess: async (_created, variables) => {
+      await refreshUsers()
+      closeDialog()
+      setNotice(variables.mode === 'sso' ? 'created-sso' : 'created-password')
+    },
+  })
+  const update = useMutation({
+    mutationFn: (variables: { id: string; patch: PatchUserBody }) =>
+      api.patch<AdminUserView>(`/api/users/${variables.id}`, variables.patch),
+    onSuccess: async () => {
+      await refreshUsers()
+      closeDialog()
+      setNotice('updated')
+    },
+  })
+  const reset = useMutation({
+    mutationFn: (variables: { id: string; body: ResetPasswordBody }) =>
+      api.post(`/api/users/${variables.id}/reset-password`, variables.body),
+    onSuccess: async () => {
+      await refreshUsers()
+      closeDialog()
+      setNotice('reset')
     },
   })
   const disable = useMutation({
     mutationFn: (id: string) => api.delete(`/api/users/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
+    onSuccess: async () => {
+      await refreshUsers()
+      closeDialog()
+      setNotice('disabled')
+    },
   })
-  // Re-enable a soft-disabled account. The backend allows status flips via
-  // PATCH (PatchUserBodySchema includes `status`); this is the inverse of the
-  // Disable button so a disabled user is never stranded with no UI path back.
   const enable = useMutation({
     mutationFn: (id: string) => api.patch(`/api/users/${id}`, { status: 'active' }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
-  })
-  // RFC-036 — inline role change. The backend's last-admin-protection
-  // already refuses to demote the only remaining admin (422
-  // last-admin-protection); we surface that error inline rather than
-  // pre-disabling the option client-side so an admin who *is* the last
-  // admin sees a real reason for the refusal.
-  const [roleError, setRoleError] = useState<{ id: string; msg: string } | null>(null)
-  const updateRole = useMutation({
-    mutationFn: (args: { id: string; role: 'admin' | 'user' }) =>
-      api.patch(`/api/users/${args.id}`, { role: args.role }),
-    onMutate: () => setRoleError(null),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
-    onError: (e: unknown, vars) => {
-      const msg =
-        e instanceof ApiError ? e.message : ((e as Error).message ?? t('common.unknownError'))
-      setRoleError({ id: vars.id, msg })
+    onSuccess: async () => {
+      await refreshUsers()
+      closeDialog()
+      setNotice('enabled')
     },
   })
 
-  const users = data ?? []
-  const hasUsers = allowed && users.length > 0
-  const isInitialEmpty = allowed && data !== undefined && users.length === 0
-  const newUserAction = (
-    <button type="button" className="btn btn--primary" onClick={() => setShowCreate(true)}>
-      {t('users.new', { defaultValue: 'New user' })}
+  const updateFilters = (next: UserDirectoryFilters, replace: boolean) => {
+    const nextSearch = searchFromUserFilters(next)
+    if (props.onSearchChange !== undefined) props.onSearchChange(nextSearch, replace)
+    else setLocalSearch(nextSearch)
+  }
+  const openCreate = (trigger: HTMLButtonElement) => {
+    create.reset()
+    setDialog({ kind: 'create', triggerRef: { current: trigger } })
+  }
+  const openEdit = (user: AdminUserView, trigger: HTMLButtonElement) => {
+    update.reset()
+    setDialog({ kind: 'edit', userId: user.id, triggerRef: { current: trigger } })
+  }
+  const target =
+    dialog !== null && dialog.kind !== 'create'
+      ? (list.data?.find((user) => user.id === dialog.userId) ?? null)
+      : null
+  const hasHumanData = list.data !== undefined && model.humans.length > 0
+
+  const createAction = (
+    <button
+      ref={headerCreateRef}
+      type="button"
+      className="btn btn--primary"
+      onClick={(event) => openCreate(event.currentTarget)}
+    >
+      {t('users.new')}
     </button>
   )
 
   return (
-    <div className="page">
+    <div className="page users-page">
       <PageHeader
-        title={t('users.title', { defaultValue: 'Users' })}
-        actions={hasUsers ? newUserAction : undefined}
+        title={t('users.title')}
+        meta={
+          hasHumanData
+            ? t('users.summary', {
+                total: model.counts.total,
+                admin: model.counts.admin,
+                invited: model.counts.invited,
+                disabled: model.counts.disabled,
+              })
+            : undefined
+        }
+        actions={hasHumanData ? createAction : undefined}
       />
 
-      {isActorLoading ? (
-        <LoadingState />
+      {actor.data === undefined ? (
+        actor.error !== null && actor.error !== undefined ? (
+          <ErrorBanner error={actor.error} onRetry={() => void actor.refetch()} />
+        ) : (
+          <LoadingState />
+        )
       ) : !allowed ? (
         <EmptyState
-          title={t('users.noPermission.title', { defaultValue: 'Admin permission required' })}
-          description={t('users.noPermission.body', {
-            defaultValue: 'This page is only available to administrators.',
-          })}
+          title={t('users.noPermission.title')}
+          description={t('users.noPermission.body')}
           size="compact"
           data-testid="no-permission"
         />
       ) : (
         <>
-          {isLoading && data === undefined && <LoadingState />}
-          {error !== null && <ErrorBanner error={error} onRetry={() => void refetch()} />}
-          {isInitialEmpty && (
-            <EmptyState
-              title={t('users.empty')}
-              description={t('users.emptyDescription')}
-              icon={USER_ICON}
-              action={newUserAction}
-              data-testid="users-empty"
-            />
+          {notice !== null && (
+            <NoticeBanner
+              tone="success"
+              size="compact"
+              dismiss={{ label: t('common.close'), onDismiss: () => setNotice(null) }}
+            >
+              {t(`users.notice.${notice}`)}
+            </NoticeBanner>
           )}
-          {hasUsers && (
-            <TableViewport label={t('users.title', { defaultValue: 'Users' })}>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>{t('users.username', { defaultValue: 'Username' })}</th>
-                    <th>{t('users.displayName', { defaultValue: 'Display name' })}</th>
-                    <th>{t('users.role', { defaultValue: 'Role' })}</th>
-                    <th>{t('users.status', { defaultValue: 'Status' })}</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((u) => {
-                    const isSystem = u.id === '__system__'
-                    // Self-role lockout guard (mirrors the backend's
-                    // self-role-change-forbidden): show a static chip instead of the
-                    // select so an admin can't demote themselves out of /users.
-                    const isSelf = u.id === me?.user.id
-                    const showRoleError = roleError?.id === u.id
-                    return (
-                      <tr key={u.id}>
-                        <td>
-                          <code>{u.username}</code>
-                        </td>
-                        <td>{u.displayName}</td>
-                        <td>
-                          {isSystem || isSelf ? (
-                            <span
-                              className={`role-chip role-chip--${u.role}`}
-                              title={
-                                isSelf
-                                  ? t('users.selfRoleLocked', {
-                                      defaultValue: 'You cannot change your own role.',
-                                    })
-                                  : undefined
-                              }
-                            >
-                              {u.role}
-                            </span>
-                          ) : (
-                            <Select<'admin' | 'user'>
-                              value={u.role}
-                              onChange={(role) => {
-                                if (role === u.role) return
-                                updateRole.mutate({ id: u.id, role })
-                              }}
-                              ariaLabel={t('users.role', { defaultValue: 'Role' })}
-                              options={[
-                                {
-                                  value: 'user',
-                                  label: t('users.roleOption.user'),
-                                  description: t('users.roleOption.userDesc'),
-                                },
-                                {
-                                  value: 'admin',
-                                  label: t('users.roleOption.admin'),
-                                  description: t('users.roleOption.adminDesc'),
-                                },
-                              ]}
-                              renderOption={(opt) => (
-                                <span className="select__option-stack">
-                                  <span className="select__option-title">{opt.label}</span>
-                                  {opt.description && (
-                                    <span className="select__option-sub">{opt.description}</span>
-                                  )}
-                                </span>
-                              )}
-                            />
-                          )}
-                          {showRoleError && <div className="users-row__error">{roleError.msg}</div>}
-                        </td>
-                        <td>{u.status}</td>
-                        <td>
-                          {/* Self-disable lockout mirrors the self-role guard above
-                              (backend enforces self-disable-forbidden too): an admin
-                              can't disable their own account from the UI. */}
-                          {!isSystem && !isSelf && u.status === 'active' && (
-                            <button
-                              className="btn btn--ghost btn--xs btn--danger"
-                              onClick={() => disable.mutate(u.id)}
-                            >
-                              {t('users.disable', { defaultValue: 'Disable' })}
-                            </button>
-                          )}
-                          {!isSystem && u.status === 'disabled' && (
-                            <button
-                              className="btn btn--ghost btn--xs"
-                              onClick={() => enable.mutate(u.id)}
-                            >
-                              {t('users.enable', { defaultValue: 'Enable' })}
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </TableViewport>
-          )}
+          <QueryState
+            query={list}
+            data={list.data ?? null}
+            isEmpty={(value) => value === null}
+            keepDataOnError
+          >
+            {(rows) => {
+              const directory = deriveUserDirectory(rows ?? [], filters, i18n.language)
+              return (
+                <UserDirectory
+                  model={directory}
+                  filters={filters}
+                  currentUserId={actor.data?.user.id}
+                  onQueryChange={(q) => updateFilters({ ...filters, q }, true)}
+                  onStatusChange={(status) => updateFilters({ ...filters, status }, false)}
+                  onRoleChange={(role) => updateFilters({ ...filters, role }, false)}
+                  onClearFilters={() => updateFilters({ q: '', status: 'all', role: 'all' }, false)}
+                  onCreate={openCreate}
+                  onManage={openEdit}
+                />
+              )
+            }}
+          </QueryState>
         </>
       )}
-      {showCreate && (
+
+      {dialog?.kind === 'create' && (
         <CreateUserDialog
-          onCancel={() => setShowCreate(false)}
-          onSubmit={(b) => create.mutate(b)}
+          triggerRef={dialog.triggerRef}
+          restoreFocusFallbackRef={headerCreateRef}
+          passwordLoginEnabled={loginPolicy.data?.passwordLoginEnabled}
           busy={create.isPending}
-          error={create.error instanceof ApiError ? create.error.message : null}
+          error={create.error}
+          onClose={closeDialog}
+          onSubmit={(body, mode) => create.mutate({ body, mode })}
         />
       )}
-    </div>
-  )
-}
-
-function CreateUserDialog(props: {
-  onCancel: () => void
-  onSubmit: (b: {
-    username: string
-    displayName: string
-    role: 'admin' | 'user'
-    password?: string
-  }) => void
-  busy: boolean
-  error: string | null
-}) {
-  const { t } = useTranslation()
-  const [username, setUsername] = useState('')
-  const [displayName, setDisplayName] = useState('')
-  const [role, setRole] = useState<'admin' | 'user'>('user')
-  const [password, setPassword] = useState('')
-  const usernameRef = useRef<HTMLInputElement>(null)
-  return (
-    <Dialog
-      open
-      onClose={props.onCancel}
-      title={t('users.create.title', { defaultValue: 'New user' })}
-      size="sm"
-      initialFocusRef={usernameRef}
-      footer={
-        <>
-          <button type="button" className="btn btn--ghost" onClick={props.onCancel}>
-            {t('users.cancel', { defaultValue: 'Cancel' })}
-          </button>
-          <button
-            type="submit"
-            form="users-create-form"
-            className="btn btn--primary"
-            disabled={props.busy}
-          >
-            {t('users.create.submit', { defaultValue: 'Create' })}
-          </button>
-        </>
-      }
-    >
-      <form
-        id="users-create-form"
-        className="form-grid"
-        onSubmit={(e) => {
-          e.preventDefault()
-          const body: Parameters<typeof props.onSubmit>[0] = { username, displayName, role }
-          if (password) body.password = password
-          props.onSubmit(body)
+      {dialog?.kind === 'edit' && target !== null && (
+        <EditUserDialog
+          user={target}
+          isSelf={target.id === actor.data?.user.id}
+          triggerRef={dialog.triggerRef}
+          restoreFocusFallbackRef={headerCreateRef}
+          busy={update.isPending}
+          error={update.error}
+          onClose={closeDialog}
+          onSubmit={(patch) => update.mutate({ id: target.id, patch })}
+          onResetPassword={() => {
+            reset.reset()
+            setDialog({ ...dialog, kind: 'reset' })
+          }}
+          onDisable={() => {
+            disable.reset()
+            setDialog({ ...dialog, kind: 'disable' })
+          }}
+          onEnable={() => {
+            enable.reset()
+            setDialog({ ...dialog, kind: 'enable' })
+          }}
+        />
+      )}
+      {dialog?.kind === 'reset' && target !== null && !target.hasOidcIdentity && (
+        <ResetUserPasswordDialog
+          user={target}
+          triggerRef={dialog.triggerRef}
+          restoreFocusFallbackRef={headerCreateRef}
+          passwordLoginEnabled={loginPolicy.data?.passwordLoginEnabled}
+          busy={reset.isPending}
+          error={reset.error}
+          onClose={closeDialog}
+          onSubmit={(body) => reset.mutate({ id: target.id, body })}
+        />
+      )}
+      <ConfirmDialog
+        open={dialog?.kind === 'disable' && target !== null}
+        title={t('users.disableTitle', { name: target?.displayName ?? '' })}
+        description={t('users.disableConfirm', { name: target?.displayName ?? '' })}
+        confirmLabel={t('users.disable')}
+        tone="danger"
+        triggerRef={dialog?.kind === 'disable' ? dialog.triggerRef : undefined}
+        restoreFocusFallbackRef={headerCreateRef}
+        onClose={closeDialog}
+        onConfirm={async () => {
+          if (target !== null) await disable.mutateAsync(target.id)
         }}
-      >
-        <Field label={t('users.username', { defaultValue: 'Username' })} required>
-          <TextInput
-            inputRef={usernameRef}
-            value={username}
-            onChange={setUsername}
-            pattern="[a-z0-9][a-z0-9_-]{0,63}"
-            required
-          />
-        </Field>
-        <Field label={t('users.displayName', { defaultValue: 'Display name' })} required>
-          <TextInput value={displayName} onChange={setDisplayName} required />
-        </Field>
-        <Field
-          label={t('users.role', { defaultValue: 'Role' })}
-          group
-          labelId="users-create-role-label"
-        >
-          <Select<'admin' | 'user'>
-            value={role}
-            onChange={setRole}
-            ariaLabel={t('users.role', { defaultValue: 'Role' })}
-            options={[
-              {
-                value: 'user',
-                label: t('users.roleOption.user'),
-                description: t('users.roleOption.userDesc'),
-              },
-              {
-                value: 'admin',
-                label: t('users.roleOption.admin'),
-                description: t('users.roleOption.adminDesc'),
-              },
-            ]}
-            renderOption={(opt) => (
-              <span className="select__option-stack">
-                <span className="select__option-title">{opt.label}</span>
-                {opt.description && <span className="select__option-sub">{opt.description}</span>}
-              </span>
-            )}
-          />
-        </Field>
-        <Field
-          label={t('users.password', {
-            defaultValue: 'Password (leave blank for invite-only)',
-          })}
-        >
-          <TextInput type="password" value={password} onChange={setPassword} minLength={8} />
-        </Field>
-        {props.error && <ErrorBanner error={props.error} />}
-      </form>
-    </Dialog>
+      />
+      <ConfirmDialog
+        open={dialog?.kind === 'enable' && target !== null}
+        title={t('users.enableTitle', { name: target?.displayName ?? '' })}
+        description={t('users.enableConfirm', { name: target?.displayName ?? '' })}
+        confirmLabel={t('users.enable')}
+        triggerRef={dialog?.kind === 'enable' ? dialog.triggerRef : undefined}
+        restoreFocusFallbackRef={headerCreateRef}
+        onClose={closeDialog}
+        onConfirm={async () => {
+          if (target !== null) await enable.mutateAsync(target.id)
+        }}
+      />
+    </div>
   )
 }

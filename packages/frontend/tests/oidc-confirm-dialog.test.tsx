@@ -22,6 +22,7 @@ vi.mock('../src/api/client', async () => {
     api: {
       ...actual.api,
       get: vi.fn(),
+      put: vi.fn(),
       post: vi.fn(),
       patch: vi.fn(),
       delete: vi.fn(),
@@ -88,6 +89,13 @@ function renderAuthentication(initialRows: Provider[]) {
   const server = { rows: initialRows.slice() }
   ;(api.get as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
     if (url === '/api/oidc/providers') return Promise.resolve(server.rows.slice())
+    if (url === '/api/oidc/login-policy') {
+      return Promise.resolve({
+        passwordLoginEnabled: true,
+        bootstrapCompletedAt: 1,
+        updatedAt: 1,
+      })
+    }
     return Promise.reject(new Error(`unexpected GET ${url}`))
   })
 
@@ -119,6 +127,7 @@ function renderAuthentication(initialRows: Provider[]) {
 beforeEach(async () => {
   await i18n.changeLanguage('en-US')
   ;(api.get as ReturnType<typeof vi.fn>).mockReset()
+  ;(api.put as ReturnType<typeof vi.fn>).mockReset()
   ;(api.post as ReturnType<typeof vi.fn>).mockReset()
   ;(api.patch as ReturnType<typeof vi.fn>).mockReset()
   ;(api.delete as ReturnType<typeof vi.fn>).mockReset()

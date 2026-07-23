@@ -20,6 +20,7 @@ import { startCommand } from './cli/start'
 import { statusCommand, formatStatus } from './cli/status'
 import { stopCommand } from './cli/stop'
 import { userCommand } from './cli/user'
+import { authCommand } from './cli/auth'
 
 function readFlag(argv: string[], name: string): string | undefined {
   const i = argv.indexOf(name)
@@ -129,6 +130,13 @@ async function main(): Promise<void> {
       break
     }
 
+    case 'auth': {
+      const result = await authCommand(Bun.argv.slice(3))
+      process.stdout.write(result.output)
+      if (result.status !== 'ok') process.exit(1)
+      break
+    }
+
     case 'sandbox': {
       // RFC-216: read-only sandbox preflight. Returns its own exit code (0
       // available/off · 1 unavailable · 2 argv error / unreadable config).
@@ -169,6 +177,8 @@ async function main(): Promise<void> {
       )
       console.log('  user list                         list all users (id, username, role, status)')
       console.log('  user disable --username <name>    disable (soft-delete) a user')
+      console.log('  auth password-login status       show login policy and bootstrap state')
+      console.log('  auth password-login enable       restore local password login only')
       console.log(
         '  sandbox [--require-available]     read-only sandbox preflight (install/fix guidance)',
       )

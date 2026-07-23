@@ -1,12 +1,9 @@
 // Locks BOTH sides of the `.tabs--segment` overflow contract:
 //
-//   1. /auth scope WRAPS — user report 2026-07-22: the English method labels
-//      were wider than the 420px auth card, so TabBar's overflow affordance
-//      kicked in: two 44px ‹ › arrow buttons crowded the login card and hid
-//      "Token sign-in" entirely behind a horizontal scroll. A login method
-//      picker is a closed 2-3 option set; its structural fallback is
-//      flex-wrap, which also means TabBar's overflow detection never mounts
-//      the arrows there.
+//   1. /auth is a full-width, single-row control. RFC-221 makes ready mode a
+//      closed two-option set (SSO/password), while bootstrap has no picker at
+//      all. Labels therefore stay on one line and ellipsize instead of forming
+//      narrow, two-line tabs at 390px.
 //   2. The BASE variant keeps scroll-with-arrows — RFC-219 contracts the
 //      workflow node picker's category strip to internal horizontal scroll +
 //      arrow affordance at the 240px editor rail (proposal §UX "窄栏分类条允许
@@ -40,17 +37,33 @@ function ruleBody(selector: string): string {
 }
 
 describe('.tabs--segment overflow contract', () => {
-  it('the auth-page scope wraps so no sign-in method can hide behind arrows', () => {
+  it('the auth-page picker fills the card and keeps method labels on one line', () => {
+    const viewportBody = ruleBody('.auth-page__method-picker .tabs-viewport--segment,')
+    expect(viewportBody).toMatch(/width:\s*100%/)
+
     const body = ruleBody('.auth-page .tabs--segment {')
-    expect(body).toMatch(/flex-wrap:\s*wrap/)
-    // Rows must not touch once wrapping engages; column gap stays 0 so the
-    // single-row rendering is pixel-identical to the base variant.
-    expect(body).toMatch(/gap:\s*2px 0/)
+    expect(body).toMatch(/flex-wrap:\s*nowrap/)
+
+    const textBody = ruleBody('.auth-page__method-tab-text {')
+    expect(textBody).toMatch(/white-space:\s*nowrap/)
+    expect(textBody).toMatch(/overflow:\s*hidden/)
+    expect(textBody).toMatch(/text-overflow:\s*ellipsis/)
   })
 
   it('the base variant does NOT wrap — RFC-219 picker keeps scroll + arrows', () => {
     const body = ruleBody('.tabs--segment {')
     expect(body).not.toMatch(/flex-wrap/)
     expect(body).toMatch(/gap:\s*0/)
+  })
+
+  it('the responsive auth shell keeps its brand row compact instead of stretching blank space', () => {
+    const authBase = css.indexOf('.auth-experience {')
+    const media = css.slice(css.indexOf('@media (max-width: 56rem)', authBase))
+    const body = media.slice(
+      media.indexOf('.auth-experience {') + '.auth-experience {'.length,
+      media.indexOf('}', media.indexOf('.auth-experience {')),
+    )
+    expect(body).toMatch(/grid-template-rows:\s*auto minmax\(0,\s*1fr\)/)
+    expect(body).toMatch(/align-content:\s*start/)
   })
 })

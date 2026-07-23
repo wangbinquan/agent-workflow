@@ -9,21 +9,16 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { useSyncExternalStore } from 'react'
+import type { PatPublic, Permission, UserIdentity, UserPublic } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { getToken, subscribeAuth } from '@/stores/auth'
 
 export interface MeResponse {
-  user: {
-    id: string
-    username: string
-    displayName: string
-    role: 'admin' | 'user'
-    status: 'active' | 'disabled' | 'invited'
-  }
+  user: UserPublic
   source: 'session' | 'pat' | 'daemon'
-  permissions: string[]
-  linkedIdentities: unknown[]
-  pats: unknown[]
+  permissions: Permission[]
+  linkedIdentities: UserIdentity[]
+  pats: PatPublic[]
 }
 
 /** Base queryKey prefix. Components that want to invalidate every actor
@@ -62,7 +57,7 @@ export function useActor() {
   })
 }
 
-export function usePermission(perm: string): boolean {
+export function usePermission(perm: Permission): boolean {
   const { data } = useActor()
   if (!data) return false
   return data.permissions.includes(perm)

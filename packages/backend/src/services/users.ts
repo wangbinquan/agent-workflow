@@ -15,7 +15,8 @@ import { hashPassword } from '@/auth/passwords'
 import { revokeAllSessionsForUser } from '@/auth/sessionStore'
 import type { DbClient } from '@/db/client'
 import { users } from '@/db/schema'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import { isOidcManagedUser, writeLocalPasswordIfUnmanaged } from '@/services/accountAuthPolicy'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 
 export type UserRow = typeof users.$inferSelect
@@ -93,17 +94,21 @@ export async function resetPassword(
   }
   const row = await findById(db, id)
   if (!row) throw new NotFoundError('user-not-found', `user ${id} not found`)
+  if (await isOidcManagedUser(db, id)) {
+    throw new ForbiddenError(
+      'oidc-password-managed',
+      'password is managed by the linked identity provider',
+    )
+  }
   const passwordHash = await hashPassword(input.newPassword)
   const now = input.now ?? Date.now()
-  await db
-    .update(users)
-    .set({
-      passwordHash,
-      forcePasswordChange: input.force ?? false,
-      status: 'active',
-      updatedAt: now,
-    })
-    .where(eq(users.id, id))
+  writeLocalPasswordIfUnmanaged(db, {
+    userId: id,
+    passwordHash,
+    forcePasswordChange: input.force ?? false,
+    activate: true,
+    updatedAt: now,
+  })
   await revokeAllSessionsForUser(db, id, now)
 }
 

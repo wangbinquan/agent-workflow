@@ -491,6 +491,7 @@ export interface Resources {
     invalidCredentials: string
     or: string
     loginWith: string
+    providerButtonHint: string
     useDaemonToken: string
     tabPassword: string
     tabOidc: string
@@ -500,6 +501,33 @@ export interface Resources {
     oidcDiscoveryError: string
     oidcDiscoveryEmpty: string
     tokenHint: string
+    brandTagline: string
+    brandDescription: string
+    localControl: string
+    identityReady: string
+    securityFooter: string
+    secureAccess: string
+    methodLabel: string
+    passwordHint: string
+    bootstrapTokenRequired: string
+    bootstrapTokenHint: string
+    continueSetup: string
+    setupComplete: string
+    noLoginMethod: string
+    bootstrapStep: string
+    bootstrapTitle: string
+    bootstrapDescription: string
+    bootstrapStepsLabel: string
+    bootstrapStepAccount: string
+    bootstrapStepRetire: string
+    bootstrapStepLogin: string
+    bootstrapOneWay: string
+    confirmPassword: string
+    passwordMismatch: string
+    creatingAdmin: string
+    completeHandoff: string
+    bootstrapLoginTitle: string
+    bootstrapLoginSubtitle: string
   }
   // RFC-036 — sidebar UserMenu dropdown.
   userMenu: {
@@ -583,6 +611,49 @@ export interface Resources {
       tasksReadAll: { label: string; desc: string }
     }
     pleaseSignIn: string
+    pleaseSignInDescription: string
+    sectionGroup: string
+    sectionNavLabel: string
+    sections: {
+      overview: string
+      security: string
+      tokens: string
+    }
+    sectionDescriptions: {
+      overview: string
+      security: string
+      tokens: string
+    }
+    oidcManaged: string
+    localAccount: string
+    sources: {
+      session: string
+      pat: string
+      daemon: string
+    }
+    localIdentityTitle: string
+    localIdentityDescription: string
+    linkedAt: string
+    technicalIdentity: string
+    oidcPasswordTitle: string
+    oidcPasswordDescription: string
+    noSessionsDescription: string
+    unknownClient: string
+    lastActive: string
+    expires: string
+    revokeSessionTitle: string
+    revokeSessionDescription: string
+    tokensRetiredTitle: string
+    tokensRetiredDescription: string
+    noPatsDescription: string
+    created: string
+    lastUsed: string
+    neverUsed: string
+    noExpiry: string
+    scopeCount: string
+    viewScopes: string
+    revokePatTitle: string
+    revokePatDescription: string
     roles: {
       admin: string
       user: string
@@ -592,19 +663,57 @@ export interface Resources {
   users: {
     title: string
     new: string
+    summary: string
     empty: string
     emptyDescription: string
+    filteredEmpty: string
+    filteredEmptyDescription: string
+    filtersLabel: string
+    searchLabel: string
+    searchPlaceholder: string
+    statusFilterLabel: string
+    roleFilterLabel: string
+    filterAll: string
+    allRoles: string
+    directoryLabel: string
     username: string
     displayName: string
+    email: string
+    noEmail: string
     role: string
     status: string
+    manage: string
+    you: string
+    neverSignedIn: string
+    signedInSuffix: string
+    ownership: {
+      oidc: string
+      awaitingOidc: string
+      local: string
+    }
+    systemTitle: string
+    systemDescription: string
+    systemTokenRetired: string
     disable: string
     enable: string
     cancel: string
     password: string
+    saving: string
     create: {
       title: string
       submit: string
+      accountType: string
+      passwordMode: string
+      passwordModeDescription: string
+      ssoMode: string
+      ssoModeDescription: string
+      ssoEmailHint: string
+      localEmailHint: string
+      passwordHint: string
+      ssoNoEmailNotice: string
+    }
+    edit: {
+      title: string
     }
     roleOption: {
       user: string
@@ -614,7 +723,46 @@ export interface Resources {
       adminDesc: string
       managerDesc: string
     }
+    statusOption: {
+      active: string
+      invited: string
+      disabled: string
+    }
     selfRoleLocked: string
+    selfDisableLocked: string
+    credentialsTitle: string
+    credentialsOidcDescription: string
+    credentialsLocalDescription: string
+    oidcResetUnavailable: string
+    resetPassword: string
+    setPasswordAndActivate: string
+    accessTitle: string
+    disableDescription: string
+    enableDescription: string
+    passwordLoginDisabledNotice: string
+    reset: {
+      title: string
+      activateTitle: string
+      submit: string
+      newPassword: string
+      confirmPassword: string
+      passwordMismatch: string
+      forceChange: string
+      forceChangeHint: string
+      sessionsWarning: string
+    }
+    disableTitle: string
+    disableConfirm: string
+    enableTitle: string
+    enableConfirm: string
+    notice: {
+      'created-password': string
+      'created-sso': string
+      updated: string
+      reset: string
+      disabled: string
+      enabled: string
+    }
     noPermission: {
       title: string
       body: string
@@ -791,6 +939,19 @@ export interface Resources {
     renderingTestTimeout: string
     // RFC-036 — Authentication tab (OIDC providers admin).
     auth: {
+      loginMethodsTitle: string
+      loginMethodsHint: string
+      passwordLoginLabel: string
+      passwordLoginHint: string
+      passwordLoginLockedHint: string
+      bootstrapTokenLabel: string
+      bootstrapTokenHint: string
+      bootstrapPending: string
+      bootstrapRetired: string
+      lastProviderRequired: string
+      disablePasswordTitle: string
+      disablePasswordDescription: string
+      disablePasswordConfirm: string
       providersTitle: string
       providersHint: string
       add: string
@@ -4098,7 +4259,7 @@ export const zhCN: Resources = {
     tokenPlaceholder: '64 位十六进制',
     verifying: '验证中…',
     connect: '连接',
-    subtitle: '使用账户密码登录，或选择一个已配置的身份提供商。',
+    subtitle: '使用账号密码，或通过单点登录继续。',
     username: '用户名',
     usernamePlaceholder: '例如 alice',
     password: '密码',
@@ -4107,15 +4268,44 @@ export const zhCN: Resources = {
     invalidCredentials: '用户名或密码错误',
     or: '或',
     loginWith: '使用 {{name}} 登录',
+    providerButtonHint: '安全跳转后继续',
     useDaemonToken: '使用守护进程 Token',
     tabPassword: '账号密码',
-    tabOidc: '身份提供商',
-    tabToken: 'Token 登录',
-    oidcHint: '通过已配置的身份提供商登录。',
-    oidcDiscoveryLoading: '正在检查可用的身份提供商…',
-    oidcDiscoveryError: '无法加载身份提供商；账号密码和 Token 登录仍可用。',
-    oidcDiscoveryEmpty: '尚未配置身份提供商，请使用账号密码或 Token 登录。',
+    tabOidc: '单点登录',
+    tabToken: '初始化令牌',
+    oidcHint: '选择已配置的单点登录入口。',
+    oidcDiscoveryLoading: '正在检查可用登录方式…',
+    oidcDiscoveryError: '无法确认当前可用的登录方式，请重试后再输入凭据。',
+    oidcDiscoveryEmpty: '尚未配置身份提供商，请使用当前可用的用户名密码登录。',
     tokenHint: '使用 daemon 启动时打印的 64 位十六进制 token。仅供管理员 / 应急使用。',
+    brandTagline: '让多个智能体协同工作，过程始终清晰可控。',
+    brandDescription: '在一个工作空间中设计流程、推进任务并审阅结果。',
+    localControl: '本地掌控',
+    identityReady: '身份可治理',
+    securityFooter: '凭据仅发送给当前 Agent Workflow 服务。',
+    secureAccess: '安全访问',
+    methodLabel: '选择登录方式',
+    passwordHint: '使用管理员为你创建的账户登录。',
+    bootstrapTokenRequired: '当前凭据不是首次初始化 Token。',
+    bootstrapTokenHint:
+      '粘贴 daemon 启动时输出的初始化 Token。它只能用于创建首位管理员，完成后会永久失效。',
+    continueSetup: '继续初始化',
+    setupComplete: '管理员已创建，请使用刚刚设置的账户登录。',
+    noLoginMethod: '当前没有可用的登录方式，请联系管理员。',
+    bootstrapStep: '安全初始化',
+    bootstrapTitle: '创建首位管理员',
+    bootstrapDescription: '这个账户将拥有系统管理权限。创建完成后，初始化 Token 会立即永久失效。',
+    bootstrapStepsLabel: '初始化进度',
+    bootstrapStepAccount: '设置账户',
+    bootstrapStepRetire: '注销 Token',
+    bootstrapStepLogin: '账户登录',
+    bootstrapOneWay: '这个交接不可逆。继续前请确认你已妥善保存管理员密码。',
+    confirmPassword: '确认密码',
+    passwordMismatch: '两次输入的密码不一致。',
+    creatingAdmin: '正在创建管理员…',
+    completeHandoff: '完成安全交接',
+    bootstrapLoginTitle: '初始化此工作空间',
+    bootstrapLoginSubtitle: '先验证 daemon 输出的一次性 Token，然后创建首位管理员。',
   },
   userMenu: {
     account: '我的账户',
@@ -4142,8 +4332,7 @@ export const zhCN: Resources = {
     update: '更新密码',
     passwordChanged: '密码已更新。',
     pats: '个人访问令牌',
-    patsDesc:
-      '供脚本和 CI 使用。每个令牌只持有你角色权限的一个子集；生成后只显示一次，请立即复制。',
+    patsDesc: '个人访问令牌已停止生成；你仍可查看和吊销此前创建的令牌。',
     patName: '令牌名称',
     patNamePlaceholder: '例如 ci-launcher',
     patNameCol: '名称',
@@ -4161,7 +4350,7 @@ export const zhCN: Resources = {
     userAgent: '客户端',
     noSessions: '当前没有活跃会话。',
     linkedIdentities: '已绑定身份',
-    identitiesDesc: '与本账号绑定的 OIDC 身份提供商。解除绑定不会删除账户，可以从登录页重新绑定。',
+    identitiesDesc: '与本账号绑定的 OIDC 身份提供商。身份绑定只读，由管理员统一治理。',
     provider: '提供商',
     subject: 'Subject',
     noIdentities: '还没有绑定任何身份。',
@@ -4210,6 +4399,49 @@ export const zhCN: Resources = {
       },
     },
     pleaseSignIn: '请先登录。',
+    pleaseSignInDescription: '登录后即可查看账户资料与安全设置。',
+    sectionGroup: '账户设置',
+    sectionNavLabel: '账户设置分区',
+    sections: {
+      overview: '账户概览',
+      security: '登录与安全',
+      tokens: '存量访问令牌',
+    },
+    sectionDescriptions: {
+      overview: '查看账户状态和已关联的登录身份。',
+      security: '管理本地密码与当前 Web 会话。',
+      tokens: '查看并逐步吊销此前创建的个人访问令牌。',
+    },
+    oidcManaged: 'OIDC 托管',
+    localAccount: '本地账户',
+    sources: {
+      session: 'Web 会话',
+      pat: '个人访问令牌',
+      daemon: '初始化 Token',
+    },
+    localIdentityTitle: '这是一个本地账户',
+    localIdentityDescription: '当前未关联任何 OIDC 身份，密码由 Agent Workflow 管理。',
+    linkedAt: '关联于',
+    technicalIdentity: '查看技术标识',
+    oidcPasswordTitle: '密码由身份提供方管理',
+    oidcPasswordDescription: '此账户已关联 OIDC 身份。请前往对应身份提供方修改登录凭据。',
+    noSessionsDescription: '登录后，活跃的 Web 会话会显示在这里。',
+    unknownClient: '未知客户端',
+    lastActive: '最近活动',
+    expires: '到期',
+    revokeSessionTitle: '吊销这个会话？',
+    revokeSessionDescription: '该浏览器的下一次请求将被要求重新登录。此操作不会影响其他会话。',
+    tokensRetiredTitle: '已关闭新令牌生成',
+    tokensRetiredDescription: '现有令牌会继续有效，直到到期或被你吊销。这里仅保留安全退出通道。',
+    noPatsDescription: '你的账户没有存量个人访问令牌，也无法再生成新的令牌。',
+    created: '创建于',
+    lastUsed: '最近使用',
+    neverUsed: '从未使用',
+    noExpiry: '永不过期',
+    scopeCount: '{{count}} 项权限',
+    viewScopes: '查看权限明细',
+    revokePatTitle: '吊销这个访问令牌？',
+    revokePatDescription: '使用它的脚本或 CI 将立即失去访问权限，且令牌无法恢复。',
     roles: {
       admin: '管理员',
       user: '用户',
@@ -4218,19 +4450,58 @@ export const zhCN: Resources = {
   users: {
     title: '用户',
     new: '新建用户',
+    summary: '{{total}} 位用户 · {{admin}} 位管理员 · {{invited}} 位待登录 · {{disabled}} 位已停用',
     empty: '还没有用户',
-    emptyDescription: '创建第一个平台账号，并按职责分配普通用户或管理员权限。',
+    emptyDescription: '创建本地密码账户，或为用户首次通过身份提供方登录预先建档。',
+    filteredEmpty: '没有符合当前筛选条件的用户',
+    filteredEmptyDescription: '换一个姓名搜索，或清除状态和角色筛选。',
+    filtersLabel: '查找和筛选用户',
+    searchLabel: '搜索用户',
+    searchPlaceholder: '搜索显示名、用户名或邮箱…',
+    statusFilterLabel: '按状态筛选用户',
+    roleFilterLabel: '按角色筛选用户',
+    filterAll: '全部',
+    allRoles: '全部角色',
+    directoryLabel: '真人用户账户',
     username: '用户名',
     displayName: '显示名',
+    email: '邮箱',
+    noEmail: '未填写邮箱',
     role: '角色',
     status: '状态',
+    manage: '管理',
+    you: '你',
+    neverSignedIn: '从未登录',
+    signedInSuffix: '登录',
+    ownership: {
+      oidc: 'OIDC 托管',
+      awaitingOidc: '等待 OIDC',
+      local: '本地账户',
+    },
+    systemTitle: '系统主体',
+    systemDescription: 'daemon 内部主体 · 不可登录或编辑',
+    systemTokenRetired: '初始化令牌已退役',
     disable: '停用',
     enable: '启用',
     cancel: '取消',
-    password: '密码（留空则状态为已邀请）',
+    password: '密码',
+    saving: '保存中…',
     create: {
       title: '新建用户',
       submit: '创建',
+      accountType: '登录方式',
+      passwordMode: '本地密码账户',
+      passwordModeDescription: '创建带独立密码、可立即使用的活跃账户。',
+      ssoMode: '等待身份提供方',
+      ssoModeDescription: '预建待邀请账户，等待首次 OIDC 登录。',
+      ssoEmailHint: '必须与身份提供方返回的已验证邮箱一致。',
+      localEmailHint: '可选，用于联系和个人资料展示。',
+      passwordHint: '至少 8 个字符；创建后账户立即激活。',
+      ssoNoEmailNotice:
+        '系统不会发送邮件。请把登录地址告知用户；其身份提供方必须返回该已验证邮箱才能完成首次登录。',
+    },
+    edit: {
+      title: '管理 {{name}}',
     },
     roleOption: {
       user: '普通用户',
@@ -4240,7 +4511,47 @@ export const zhCN: Resources = {
       adminDesc: '完整权限：用户、设置、OIDC、所有任务。',
       managerDesc: '管理所有资源、记忆、仓库与任务——不含用户/系统管理，不能删除任务。',
     },
+    statusOption: {
+      active: '活跃',
+      invited: '待首次登录',
+      disabled: '已停用',
+    },
     selfRoleLocked: '不能修改自己的角色 —— 需要另一位管理员代为操作。',
+    selfDisableLocked: '不能停用当前正在使用的账户。',
+    credentialsTitle: '登录凭据',
+    credentialsOidcDescription: '此账户已经绑定身份提供方。',
+    credentialsLocalDescription: '此账户使用由本系统管理的本地密码。',
+    oidcResetUnavailable: '密码由已绑定的身份提供方管理，不能在本系统内重置。',
+    resetPassword: '重置密码',
+    setPasswordAndActivate: '设置密码并激活',
+    accessTitle: '账户访问',
+    disableDescription: '停用会吊销 Web 会话，并阻止之后的登录。',
+    enableDescription: '启用只恢复现有登录方式；不会设置密码，也不会发送邮件。',
+    passwordLoginDisabledNotice:
+      '当前全局已关闭用户名密码登录。该密码只有在管理员重新开启此登录方式后才可使用。',
+    reset: {
+      title: '重置 {{name}} 的密码',
+      activateTitle: '为 {{name}} 设置密码',
+      submit: '保存新密码',
+      newPassword: '新密码',
+      confirmPassword: '确认新密码',
+      passwordMismatch: '两次输入的密码不一致。',
+      forceChange: '下次登录时必须再次修改密码',
+      forceChangeHint: '用户继续使用前必须设置自己的密码。',
+      sessionsWarning: '保存后会激活该账户，并吊销它的全部 Web 会话。',
+    },
+    disableTitle: '停用 {{name}}？',
+    disableConfirm: '系统会注销 {{name}}，在另一位管理员重新启用前，该用户无法再次登录。',
+    enableTitle: '启用 {{name}}？',
+    enableConfirm: '这会恢复账户原有的登录方式，不会设置密码，也不会发送邮件。',
+    notice: {
+      'created-password': '本地账户已创建，可以立即登录。',
+      'created-sso': '待邀请账户已建好，可以通过身份提供方完成首次登录。',
+      updated: '用户资料已保存。',
+      reset: '密码已重置，原有 Web 会话已吊销。',
+      disabled: '账户已停用。',
+      enabled: '账户已启用。',
+    },
     noPermission: {
       title: '需要管理员权限',
       body: '该页面仅管理员角色可访问。',
@@ -4429,6 +4740,20 @@ export const zhCN: Resources = {
     renderingTestUnknownError: '未知',
     renderingTestTimeout: '超时',
     auth: {
+      loginMethodsTitle: '登录方式',
+      loginMethodsHint: '控制登录页向用户开放哪些凭据入口。策略修改立即生效，无需重启 daemon。',
+      passwordLoginLabel: '用户名和密码登录',
+      passwordLoginHint: '关闭后，登录页和密码登录 API 都只接受已启用的身份提供方。',
+      passwordLoginLockedHint: '尚无已启用的身份提供方，用户名密码登录必须保持开启。',
+      bootstrapTokenLabel: '初始化 Token',
+      bootstrapTokenHint: '仅用于首次创建管理员；交接完成后不能再次启用。',
+      bootstrapPending: '等待交接',
+      bootstrapRetired: '已永久退役',
+      lastProviderRequired: '密码登录关闭时，必须保留至少一个已启用的身份提供方。',
+      disablePasswordTitle: '关闭用户名密码登录？',
+      disablePasswordDescription:
+        '关闭后，所有用户只能通过已启用的身份提供方登录。现有密码不会被删除，重新开启后仍可使用。',
+      disablePasswordConfirm: '关闭密码登录',
       providersTitle: 'OIDC 身份提供商',
       providersHint:
         '配置用户可用来登录的外部身份提供商。每条记录保存 OAuth 2.0 / OIDC 的 client_id + client_secret + scopes；secret 在落盘前会用 AES-256-GCM 加密。',
