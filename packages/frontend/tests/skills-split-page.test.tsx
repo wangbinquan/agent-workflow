@@ -6,7 +6,7 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { RouterProvider, createMemoryHistory, createRouter } from '@tanstack/react-router'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { Route as RootRoute } from '../src/routes/__root'
@@ -180,7 +180,12 @@ beforeEach(() => {
   bodyByName = { sk1: 'orig body' }
   installFetch()
 })
-afterEach(() => {
+afterEach(async () => {
+  // Unmount while this test's fetch double is still installed. The real detail
+  // route owns background auth/files/history queries that can otherwise start
+  // during the shared cleanup hook after vi.restoreAllMocks().
+  cleanup()
+  await new Promise((resolve) => setTimeout(resolve, 0))
   vi.restoreAllMocks()
 })
 

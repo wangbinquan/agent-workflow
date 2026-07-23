@@ -852,7 +852,7 @@ function TaskDetailPage() {
                         tk.workflowSnapshot,
                         resolveNodeIdFromRuns(nodeRuns.data.runs, selectedNodeRunId),
                       )}
-                      agentName={resolveAgentNameFromSnapshot(
+                      agentId={resolveAgentIdFromSnapshot(
                         tk.workflowSnapshot,
                         resolveNodeIdFromRuns(nodeRuns.data.runs, selectedNodeRunId),
                       )}
@@ -1811,30 +1811,21 @@ export function resolveNodeKindFromSnapshot(
   return null
 }
 
-/**
- * RFC-022: resolve the primary agent name a workflow node references, so the
- * node-detail drawer can fetch its closure for the Stats tab tree. Only
- * agent-single / agent-multi nodes have an agentName — other kinds (input /
- * output / wrappers / review / clarify) return null and the drawer hides the
- * tree section.
- *
- * Exported for unit tests.
- */
-export function resolveAgentNameFromSnapshot(
+/** Resolve the immutable agent id frozen into an agent-single snapshot.
+ * Legacy name-only snapshots fail closed: mutable display names cannot address
+ * the dependency-tree endpoint. Exported for unit tests. */
+export function resolveAgentIdFromSnapshot(
   snapshot: unknown,
   nodeId: string | null,
 ): string | null {
-  if (nodeId === null) return null
-  if (typeof snapshot !== 'object' || snapshot === null) return null
+  if (nodeId === null || typeof snapshot !== 'object' || snapshot === null) return null
   const nodes = (snapshot as { nodes?: unknown }).nodes
   if (!Array.isArray(nodes)) return null
   for (const n of nodes) {
     if (typeof n !== 'object' || n === null) continue
-    const node = n as { id?: unknown; kind?: unknown; agentName?: unknown }
-    if (node.id !== nodeId) continue
-    // RFC-060 PR-E: agent-multi removed; agent-single is the only agent kind.
-    if (node.kind !== 'agent-single') return null
-    return typeof node.agentName === 'string' ? node.agentName : null
+    const node = n as { id?: unknown; kind?: unknown; agentId?: unknown }
+    if (node.id !== nodeId || node.kind !== 'agent-single') continue
+    return typeof node.agentId === 'string' ? node.agentId : null
   }
   return null
 }

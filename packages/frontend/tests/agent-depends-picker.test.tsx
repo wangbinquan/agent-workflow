@@ -1,8 +1,8 @@
 // RFC-022 → RFC-173 T3 — AgentDependsPicker over <MultiSelect>. Contract:
 //   1. lists every existing agent in /api/agents (selected shown CHECKED, not
 //      filtered out — RFC-173 §3.2)
-//   2. still excludes `selfName` from the offer (self-ref save-time rejection)
-//   3. toggling an option appends the picked name via onChange
+//   2. still excludes `selfId` from the offer (self-ref save-time rejection)
+//   3. toggling an option appends the picked id via onChange
 //   4. load failure keeps the combobox usable (free-text)
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -19,11 +19,12 @@ function wrap(node: React.ReactElement) {
   return render(<QueryClientProvider client={qc}>{node}</QueryClientProvider>)
 }
 
-function fakeAgent(name: string, description = ''): Agent {
+function fakeAgent(name: string, id = name, ownerUserId?: string): Agent {
   return {
-    id: name,
+    id,
     name,
-    description,
+    description: '',
+    ownerUserId,
     outputs: [],
     syncOutputsOnIterate: true,
     permission: {},
@@ -82,13 +83,17 @@ describe('AgentDependsPicker', () => {
     expect(optionTexts(list)).toEqual(expect.arrayContaining(['alpha', 'beta', 'gamma']))
   })
 
-  test('selfName is excluded from the offer (self-ref save-time rejection)', async () => {
-    mockAgents([fakeAgent('orchestrator'), fakeAgent('auditor'), fakeAgent('runner')])
-    wrap(<AgentDependsPicker value={[]} onChange={() => {}} selfName="orchestrator" />)
+  test('selfId is excluded without hiding a same-name peer', async () => {
+    mockAgents([
+      fakeAgent('orchestrator', 'agent-self'),
+      fakeAgent('orchestrator', 'agent-peer'),
+      fakeAgent('runner', 'agent-runner'),
+    ])
+    wrap(<AgentDependsPicker value={[]} onChange={() => {}} selfId="agent-self" />)
     const list = await openPicker()
     const texts = optionTexts(list)
-    expect(texts).toEqual(expect.arrayContaining(['auditor', 'runner']))
-    expect(texts).not.toContain('orchestrator')
+    expect(texts).toEqual(expect.arrayContaining(['orchestrator', 'runner']))
+    expect(texts.filter((text) => text === 'orchestrator')).toHaveLength(1)
   })
 
   test('already-selected names stay in the dropdown, CHECKED', async () => {
@@ -103,12 +108,12 @@ describe('AgentDependsPicker', () => {
   })
 
   test('toggling an option appends it via onChange', async () => {
-    mockAgents([fakeAgent('a'), fakeAgent('b')])
+    mockAgents([fakeAgent('a', 'agent-a'), fakeAgent('b', 'agent-b')])
     const onChange = vi.fn()
-    wrap(<AgentDependsPicker value={['existing']} onChange={onChange} />)
+    wrap(<AgentDependsPicker value={['agent-existing']} onChange={onChange} />)
     const list = await openPicker()
     fireEvent.mouseDown(within(list).getByText('b'))
-    expect(onChange).toHaveBeenCalledWith(['existing', 'b'])
+    expect(onChange).toHaveBeenCalledWith(['agent-existing', 'agent-b'])
   })
 
   test('load failure keeps the combobox and surfaces the muted error', async () => {

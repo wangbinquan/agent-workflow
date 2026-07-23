@@ -33,13 +33,13 @@ import { UnsavedChangesGuard } from '@/components/split/UnsavedChangesGuard'
 import { AGENT_ICON, MCP_ICON, PLUGIN_ICON, SKILL_ICON } from '@/components/icons/resourceIcons'
 
 /** Detail routes the cards link to (byte-equal to the existing deep links). */
-export type ResourceDetailTo = '/agents/$name' | '/skills/$name' | '/mcps/$name' | '/plugins/$id'
+export type ResourceDetailTo = '/agents/$id' | '/skills/$id' | '/mcps/$id' | '/plugins/$id'
 /** "+ new" routes. */
 export type ResourceNewTo = '/agents/new' | '/skills/new' | '/mcps/new' | '/plugins/new'
 export type SplitResourceKind = 'agent' | 'skill' | 'mcp' | 'plugin'
 
 interface ResourceCardItemBase {
-  /** agents/skills/mcps = name; plugins = id. */
+  /** Stable resource id (all detail routes are id-canonical). */
   key: string
   title: string
   /** One-line CSS truncation; full text in the title attribute. */
@@ -59,18 +59,18 @@ interface ResourceCardItemBase {
 export type ResourceCardItem =
   | (ResourceCardItemBase & {
       kind: 'agent'
-      to: '/agents/$name'
-      params: { name: string }
+      to: '/agents/$id'
+      params: { id: string }
     })
   | (ResourceCardItemBase & {
       kind: 'skill'
-      to: '/skills/$name'
-      params: { name: string }
+      to: '/skills/$id'
+      params: { id: string }
     })
   | (ResourceCardItemBase & {
       kind: 'mcp'
-      to: '/mcps/$name'
-      params: { name: string }
+      to: '/mcps/$id'
+      params: { id: string }
     })
   | (ResourceCardItemBase & {
       kind: 'plugin'

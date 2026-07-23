@@ -13,6 +13,7 @@
 
 import type { Agent, NodeKind, WorkflowNode } from '@agent-workflow/shared'
 import { NODE_KIND } from '@agent-workflow/shared'
+import { resourceOptionLabel } from '@/lib/resource-option-label'
 import { ulid } from 'ulid'
 
 // RFC-060 PR-E: agent-multi removed from the palette — fan-out is now done
@@ -277,7 +278,11 @@ export const PALETTE_SECTIONS = [
   { key: 'human', labelKey: 'editor.paletteHuman' },
 ] as const satisfies ReadonlyArray<{ key: PaletteSectionKey; labelKey: string }>
 
-export function buildPalette(agents: Agent[], t: PaletteTranslator): PaletteSection[] {
+export function buildPalette(
+  agents: Agent[],
+  t: PaletteTranslator,
+  ownerLabel?: (ownerUserId: string | null | undefined) => string | undefined,
+): PaletteSection[] {
   return PALETTE_SECTIONS.map(({ key, labelKey }) => {
     if (key === 'agents') {
       return {
@@ -289,7 +294,10 @@ export function buildPalette(agents: Agent[], t: PaletteTranslator): PaletteSect
           // with a glyph that mirrors the canvas chip (⚙ for agent). This
           // keeps the leading-icon column consistent across Agents / Wrappers
           // / IO / Human sections — see 2026-05-24 chip-alignment fix.
-          label: `${PALETTE_DESCRIPTORS['agent-single'].glyph} ${a.name}`,
+          label: `${PALETTE_DESCRIPTORS['agent-single'].glyph} ${resourceOptionLabel(
+            a.name,
+            ownerLabel?.(a.ownerUserId) ?? a.ownerUserId ?? undefined,
+          )}`,
           description: a.description || t('editor.paletteAgentFallbackDesc'),
         })),
       }

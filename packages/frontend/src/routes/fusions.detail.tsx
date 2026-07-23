@@ -114,7 +114,9 @@ function FusionDetailPage() {
         title={t('fusion.detailTitle')}
         meta={
           <>
-            <span>{f.skillName}</span>{' '}
+            <Link to="/skills/$id" params={{ id: f.skillId }}>
+              {f.skillName}
+            </Link>{' '}
             <span className={`chip chip--tight chip--fusion-${f.status}`}>
               {t(`fusion.status.${f.status}`)}
             </span>{' '}

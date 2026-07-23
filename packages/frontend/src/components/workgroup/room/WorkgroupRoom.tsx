@@ -312,7 +312,7 @@ export function WorkgroupRoom({ taskId, taskStatus, room }: WorkgroupRoomProps) 
           // nodes (__wg_leader__ / __wg_member__, services/workgroupLaunch.ts),
           // so the Session tab renders the run's opencode conversation.
           workflowNodeKind="agent-single"
-          agentName={null}
+          agentId={null}
           runs={drawerRuns}
           outputs={nodeRuns.data.outputs}
           onClose={() => setDrawerRunId(null)}

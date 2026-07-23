@@ -16,6 +16,8 @@ import { Field, TextInput } from '@/components/Form'
 import { Select } from '@/components/Select'
 import { UserPicker } from '@/components/UserPicker'
 import { useAgentsList } from '@/hooks/useAgentsList'
+import { useUserLookup } from '@/hooks/useUserLookup'
+import { resourceOptionLabel } from '@/lib/resource-option-label'
 import {
   deriveMemberAlias,
   makeAgentMemberRow,
@@ -86,7 +88,7 @@ export function useAgentMemberDraft(others: MemberDraftOthers): AgentMemberDraft
     setRoleDesc,
     errors,
     invalid: Object.keys(errors).length > 0,
-    dirty: agentId !== '' || agentName !== '' || displayName !== '' || roleDesc !== '',
+    dirty: agentId !== '' || displayName !== '' || roleDesc !== '',
     reset,
     buildRow: () => makeAgentMemberRow({ agentId, agentName, displayName, roleDesc }),
   }
@@ -95,6 +97,7 @@ export function useAgentMemberDraft(others: MemberDraftOthers): AgentMemberDraft
 export function AgentMemberFields({ draft }: { draft: AgentMemberDraft }) {
   const { t } = useTranslation()
   const { agents } = useAgentsList()
+  const owners = useUserLookup(agents.map((agent) => agent.ownerUserId))
   return (
     <>
       {/* RFC-168 UI 一致性 — pick an existing agent through the shared Select
@@ -106,11 +109,17 @@ export function AgentMemberFields({ draft }: { draft: AgentMemberDraft }) {
       <Field label={t('workgroups.memberFieldAgent')} required>
         <Select<string>
           value={draft.agentId}
-          onChange={(agentId) => {
-            const picked = agents.find((agent) => agent.id === agentId)
-            draft.setAgent(agentId, picked?.name ?? '')
+          onChange={(id) => {
+            const picked = agents.find((agent) => agent.id === id)
+            draft.setAgent(id, picked?.name ?? '')
           }}
-          options={agents.map((a) => ({ value: a.id, label: a.name }))}
+          options={agents.map((agent) => ({
+            value: agent.id,
+            label: resourceOptionLabel(
+              agent.name,
+              owners.get(agent.ownerUserId)?.displayName ?? agent.ownerUserId ?? undefined,
+            ),
+          }))}
           searchable
           placeholder={t('workgroups.memberAgentPlaceholder')}
           ariaLabel={t('workgroups.memberFieldAgent')}

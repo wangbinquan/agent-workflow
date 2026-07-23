@@ -13,15 +13,14 @@
 // old "exclude already selected" clause is gone (selection is shown, not
 // hidden).
 //
-// RFC-223 (PR-1): value identity is the resource `id` (was `item.name`). The
-// picker stores ids; the option `label` still shows the name, and MultiSelect's
-// tag falls back to the raw value only for a stale/custom token. `allowCustom`
-// still lets you type a name (forward-reference / degraded list) — the server
-// resolves that id-or-name to an id at save (services/agentRefs.ts).
+// RFC-223: value identity is the resource `id` (was `item.name`). Name and
+// owner are display-only; unresolved free-text is deliberately not accepted.
 
 import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { api } from '@/api/client'
+import { useUserLookup } from '@/hooks/useUserLookup'
+import { resourceOptionLabel } from '@/lib/resource-option-label'
 import { MultiSelect, type MultiSelectOption } from './MultiSelect'
 
 /** Per-resource label strings (already resolved through i18n by the wrapper). */
@@ -34,7 +33,9 @@ export interface ResourcePickerLabels {
   loadFailed: string
 }
 
-export interface ResourcePickerProps<T extends { id: string; name: string }> {
+export interface ResourcePickerProps<
+  T extends { id: string; name: string; ownerUserId?: string | null },
+> {
   value: string[]
   onChange: (next: string[]) => void
   /** React Query cache key for the resource list (share it with the list page). */
@@ -58,7 +59,7 @@ export interface ResourcePickerProps<T extends { id: string; name: string }> {
   labels: ResourcePickerLabels
 }
 
-export function ResourcePicker<T extends { id: string; name: string }>(
+export function ResourcePicker<T extends { id: string; name: string; ownerUserId?: string | null }>(
   props: ResourcePickerProps<T>,
 ) {
   const { value, onChange, labels } = props
@@ -68,6 +69,7 @@ export function ResourcePicker<T extends { id: string; name: string }>(
     staleTime: 30_000,
     retry: false,
   })
+  const owners = useUserLookup((list.data ?? []).map((item) => item.ownerUserId))
 
   const eligible = props.filter
   const options = useMemo<MultiSelectOption[]>(() => {
@@ -78,13 +80,16 @@ export function ResourcePicker<T extends { id: string; name: string }>(
       .filter((item) => pass(item) || selected.has(item.id))
       .map((item) => ({
         value: item.id,
-        label: props.labelFn(item),
+        label: resourceOptionLabel(
+          props.labelFn(item),
+          owners.get(item.ownerUserId)?.displayName ?? item.ownerUserId ?? undefined,
+        ),
         description: props.descriptionFn?.(item),
       }))
-    // labelFn/descriptionFn are stable module fns in practice; keying on the
-    // data + value is enough to recompute options.
+    // labelFn/descriptionFn are stable module fns in practice. The owner lookup
+    // is included so labels refresh when its async query completes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [list.data, value, eligible])
+  }, [list.data, value, eligible, owners])
 
   const failed = list.error !== null && list.error !== undefined
 
@@ -97,9 +102,6 @@ export function ResourcePicker<T extends { id: string; name: string }>(
         ariaLabel={props.ariaLabel}
         placeholder={props.placeholder}
         searchable
-        // Keep the historical free-text ability: type a name not in the list
-        // (forward-reference) or add one when the list endpoint is down.
-        allowCustom
         loading={list.isLoading}
         loadingLabel={labels.loading}
         emptyLabel={labels.empty}

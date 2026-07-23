@@ -86,7 +86,7 @@ export function WorkgroupTaskConfigDialog({
       row.memberType === 'agent'
         ? {
             memberType: 'agent',
-            agentName: row.agentName.trim(),
+            agentId: row.agentId.trim(),
             displayName: row.displayName.trim(),
             roleDesc: row.roleDesc,
           }

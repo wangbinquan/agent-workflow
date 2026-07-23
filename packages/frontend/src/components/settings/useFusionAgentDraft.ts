@@ -15,13 +15,13 @@ import {
 import { ensureConfigReceiptGeneration, getConfigResourceIdentity } from '@/lib/config-resource'
 import { subscribeAuth } from '@/stores/auth'
 
-export const SKILL_MERGER_AGENT_NAME = 'aw-skill-merger'
+export const SKILL_MERGER_AGENT_ID = '00000000000000000000000001'
 
 /** Prefixes only; every actual cache key appends a stable daemon identity. */
-export const FUSION_AGENT_QUERY_KEY = ['agents', SKILL_MERGER_AGENT_NAME, 'resource'] as const
+export const FUSION_AGENT_QUERY_KEY = ['agents', SKILL_MERGER_AGENT_ID, 'resource'] as const
 export const FUSION_AGENT_DRAFT_QUERY_KEY = [
   'agents',
-  SKILL_MERGER_AGENT_NAME,
+  SKILL_MERGER_AGENT_ID,
   'settings-draft-receipt',
   'resource',
 ] as const
@@ -374,11 +374,7 @@ export function useFusionAgentDraft({
           ensureConfigReceiptGeneration(),
         )
       }
-      const agent = await api.get<Agent>(
-        `/api/agents/${SKILL_MERGER_AGENT_NAME}`,
-        undefined,
-        signal,
-      )
+      const agent = await api.get<Agent>('/api/agents/builtins/skill-merger', undefined, signal)
       if (
         target.generation !== capturedGeneration ||
         !transportMatches(capturedResource, capturedGeneration)
@@ -589,7 +585,7 @@ export function useFusionAgentDraft({
       attempt.phase = 'dispatched'
       // RFC-104 requires the body to remain EXACTLY this runtime-only patch.
       const runtime = attempt.runtime
-      return api.put<Agent>(`/api/agents/${SKILL_MERGER_AGENT_NAME}`, { runtime })
+      return api.put<Agent>(`/api/agents/${SKILL_MERGER_AGENT_ID}`, { runtime })
     },
     onSuccess: (agent, attempt) => {
       const target = sessionsRef.current.get(attempt.resourceIdentity)

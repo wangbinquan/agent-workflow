@@ -20,6 +20,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { StatusChip } from '@/components/StatusChip'
 import { useAgentsList } from '@/hooks/useAgentsList'
 import { useUserLookup } from '@/hooks/useUserLookup'
+import { resourceOptionLabel } from '@/lib/resource-option-label'
 import { workgroupToMembersState, type WorkgroupMembersState } from '@/lib/workgroup-form'
 
 export interface WorkgroupMemberGalleryProps {
@@ -57,10 +58,11 @@ export function WorkgroupMemberGallery(props: WorkgroupMemberGalleryProps) {
     state.members.map((m) => (m.memberType === 'human' ? m.userId : null)),
   )
   const agentsList = useAgentsList()
-  const agentByName = useMemo(
-    () => new Map(agentsList.agents.map((a) => [a.name, a])),
+  const agentById = useMemo(
+    () => new Map(agentsList.agents.map((a) => [a.id, a])),
     [agentsList.agents],
   )
+  const owners = useUserLookup(agentsList.agents.map((agent) => agent.ownerUserId))
 
   if (state.members.length === 0) {
     return (
@@ -77,9 +79,14 @@ export function WorkgroupMemberGallery(props: WorkgroupMemberGalleryProps) {
       {state.members.map((m) => {
         const isLeader = state.leaderKey === m.key
         const selected = props.selectedKey === m.key
+        const agent = m.memberType === 'agent' ? agentById.get(m.agentId) : undefined
         const reference =
-          m.memberType === 'agent' ? m.agentName : (users.get(m.userId)?.displayName ?? m.userId)
-        const agent = m.memberType === 'agent' ? agentByName.get(m.agentName) : undefined
+          m.memberType === 'agent'
+            ? resourceOptionLabel(
+                agent?.name ?? m.agentName,
+                owners.get(agent?.ownerUserId)?.displayName ?? agent?.ownerUserId ?? undefined,
+              )
+            : (users.get(m.userId)?.displayName ?? m.userId)
         return (
           <li key={m.key} data-member-key={m.key}>
             <div

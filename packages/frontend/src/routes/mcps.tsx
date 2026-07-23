@@ -43,16 +43,15 @@ function McpsSplitLayout() {
   const { data, isLoading, error, refetch, owners } = useResourceList<Mcp>({
     queryKey: ['mcps'],
     endpoint: '/api/mcps',
-    deleteBy: 'name',
   })
   const probesQ = useMcpProbes()
-  const probesByName = useMemo<Record<string, McpProbe>>(() => {
+  const probesById = useMemo<Record<string, McpProbe>>(() => {
     const out: Record<string, McpProbe> = {}
-    for (const p of probesQ.data ?? []) out[p.mcpName] = p
+    for (const p of probesQ.data ?? []) out[p.mcpId] = p
     return out
   }, [probesQ.data])
 
-  const params = useParams({ strict: false }) as { name?: string }
+  const params = useParams({ strict: false }) as { id?: string }
   const matchRoute = useMatchRoute()
   const isNew = matchRoute({ to: '/mcps/new' }) !== false
 
@@ -61,9 +60,9 @@ function McpsSplitLayout() {
       ? undefined
       : data.map((m) => {
           const typeLabel = t(m.type === 'local' ? 'mcps.typeLocal' : 'mcps.typeRemote')
-          const probeStatus = probeUiStatus(probesByName[m.name] ?? null, m.updatedAt)
+          const probeStatus = probeUiStatus(probesById[m.id] ?? null, m.updatedAt)
           return {
-            key: m.name,
+            key: m.id,
             kind: 'mcp' as const,
             title: m.name,
             subtitle: m.description || undefined,
@@ -73,10 +72,12 @@ function McpsSplitLayout() {
               t(`mcps.probe.status.${probeStatus}`),
               !m.enabled ? t('mcps.disabledChip') : '',
               m.visibility === 'private' ? t('acl.privateChip') : '',
-              m.ownerUserId != null ? (owners.get(m.ownerUserId)?.displayName ?? '') : '',
+              m.ownerUserId != null
+                ? (owners.get(m.ownerUserId)?.displayName ?? m.ownerUserId)
+                : '',
             ].join(' '),
-            to: '/mcps/$name' as const,
-            params: { name: m.name },
+            to: '/mcps/$id' as const,
+            params: { id: m.id },
             primaryStatus: <McpProbeStatusChip status={probeStatus} />,
             badges: (
               <>
@@ -98,7 +99,7 @@ function McpsSplitLayout() {
       items={items}
       isLoading={isLoading}
       error={error}
-      selectedKey={isNew ? null : (params.name ?? null)}
+      selectedKey={isNew ? null : (params.id ?? null)}
       newActive={isNew}
       newLabel={t('mcps.newButton')}
       newTo="/mcps/new"

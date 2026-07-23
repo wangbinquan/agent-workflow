@@ -32,7 +32,7 @@ export interface DetailHeaderActionsProps {
   /** Split-detail routes use h2 because their mounted rail already owns h1. */
   headingLevel?: 1 | 2
   acl: {
-    /** e.g. '/api/agents/my-agent' — AclDialogButton appends '/acl'. */
+    /** e.g. '/api/agents/01JAGENTID' — AclDialogButton appends '/acl'. */
     resourceBaseUrl: string
     invalidateKey: readonly unknown[]
     /** RFC-170 §8 — false hides the owner-transfer control (external skills). */

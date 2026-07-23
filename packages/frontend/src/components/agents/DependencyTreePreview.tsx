@@ -15,7 +15,9 @@ import { DependencyCycleHint, DependencyTree } from './DependencyTree'
 
 /** Wire shape coming back from /api/agents/closure-preview. */
 interface ClosureSummary {
+  id: string
   name: string
+  ownerUserId?: string | null
   description: string
   /** Names of skills this agent itself references (RFC-046 follow-up:
    *  rendered as a chip when non-empty). Backend backfills via
@@ -25,18 +27,21 @@ interface ClosureSummary {
   mcp?: string[]
   /** RFC-031 — plugin names this agent itself references. */
   plugins?: string[]
-  dependsOn: readonly string[]
+  dependsOnIds: readonly string[]
   missing?: boolean
 }
 
 function toTreeAgents(rows: readonly ClosureSummary[]): DependencyTreeAgent[] {
   return rows.map((r) => ({
+    id: r.id,
     name: r.name,
+    ownerUserId: r.ownerUserId,
     description: r.description,
     skills: r.skills ?? [],
     mcps: r.mcp ?? [],
     plugins: r.plugins ?? [],
-    dependsOn: r.dependsOn,
+    dependsOn: r.dependsOnIds,
+    missing: r.missing ?? false,
   }))
 }
 
@@ -54,15 +59,17 @@ interface PreviewErr {
 type PreviewResponse = PreviewOk | PreviewErr
 
 interface Props {
+  /** Existing resource identity; absent for an unsaved create form. */
+  id?: string
   /** Self name (may be empty for new-agent flow — preview still works). */
   name: string
   dependsOn: string[]
   /** Optional click handler for closure-member rows. Defaults to navigating
-   *  to `/agents/:name`; tests can pass a vi.fn() instead. */
-  onNodeClick?: (name: string) => void
+   *  to `/agents/:id`; tests can pass a vi.fn() instead. */
+  onNodeClick?: (id: string) => void
 }
 
-export function DependencyTreePreview({ name, dependsOn, onNodeClick }: Props) {
+export function DependencyTreePreview({ id, name, dependsOn, onNodeClick }: Props) {
   const { t } = useTranslation()
   const [state, setState] = useState<
     | { kind: 'idle' }
@@ -85,7 +92,7 @@ export function DependencyTreePreview({ name, dependsOn, onNodeClick }: Props) {
     const handle = setTimeout(() => {
       setState({ kind: 'loading' })
       api
-        .post<PreviewResponse>('/api/agents/closure-preview', { name, dependsOn })
+        .post<PreviewResponse>('/api/agents/closure-preview', { id, name, dependsOn })
         .then((res) => {
           if (mySeq !== seqRef.current) return
           if (res.ok) {
@@ -106,7 +113,7 @@ export function DependencyTreePreview({ name, dependsOn, onNodeClick }: Props) {
     // memoized key below — array identity changes on every render but the
     // serialized content is what should retrigger the preview fetch.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [name, dependsOnKey])
+  }, [id, name, dependsOnKey])
 
   if (state.kind === 'idle') {
     return <p className="muted dep-tree__empty">{t('dependencyTreePreview.emptyHint')}</p>
@@ -140,11 +147,11 @@ export function DependencyTreePreview({ name, dependsOn, onNodeClick }: Props) {
     )
   }
   // ok: build tree. With name='' fallback to first agent if root absent.
-  const rootName = name === '' ? (state.agents[0]?.name ?? '') : name
-  if (rootName === '') {
+  const root = state.agents[0]
+  if (root === undefined) {
     return <p className="muted dep-tree__empty">{t('dependencyTreePreview.emptyHint')}</p>
   }
-  const tree = buildDependencyTree(toTreeAgents(state.agents), rootName)
+  const tree = buildDependencyTree(toTreeAgents(state.agents), root.id)
   // tree.children empty + tree exists = no dependents declared. Show hint.
   if (tree.children.length === 0) {
     return <p className="muted dep-tree__empty">{t('dependencyTreePreview.emptyHint')}</p>

@@ -88,12 +88,12 @@ function errProbe(): McpProbe {
   } as McpProbe
 }
 
-function renderPanel(name = 'pg', mcpUpdatedAt = 0) {
+function renderPanel(id = 'm1', mcpUpdatedAt = 0) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={qc}>
       <McpInventoryPanel
-        mcpName={name}
+        mcpId={id}
         operationConfigHash={'a'.repeat(64)}
         mcpUpdatedAt={mcpUpdatedAt}
       />
@@ -103,7 +103,7 @@ function renderPanel(name = 'pg', mcpUpdatedAt = 0) {
 
 describe('McpInventoryPanel', () => {
   test('renders all four sections + tool rows for an ok probe', async () => {
-    mockProbeGet('pg', okProbe())
+    mockProbeGet('m1', okProbe())
     renderPanel()
     await waitFor(() => screen.getByTestId('mcp-inventory-tools'))
     expect(screen.getByTestId('mcp-inventory-resources')).toBeTruthy()
@@ -114,7 +114,7 @@ describe('McpInventoryPanel', () => {
   })
 
   test('tool inputSchema toggles open via summary click', async () => {
-    mockProbeGet('pg', okProbe())
+    mockProbeGet('m1', okProbe())
     renderPanel()
     await waitFor(() => screen.getByTestId('mcp-tool-row-query'))
     const toggle = screen.getByTestId('mcp-tool-schema-toggle-query')
@@ -125,7 +125,7 @@ describe('McpInventoryPanel', () => {
   })
 
   test('error probe renders error box with detail toggle', async () => {
-    mockProbeGet('pg', errProbe())
+    mockProbeGet('m1', errProbe())
     renderPanel()
     await waitFor(() => screen.getByTestId('mcp-inventory-error'))
     const toggle = screen.getByTestId('mcp-inventory-error-detail-toggle')
@@ -138,7 +138,7 @@ describe('McpInventoryPanel', () => {
   })
 
   test('never-probed mcp shows the neverProbed hint', async () => {
-    mockProbeGet('pg', null)
+    mockProbeGet('m1', null)
     renderPanel()
     await waitFor(() => {
       expect(screen.getByTestId('mcp-probe-status-unknown')).toBeTruthy()
@@ -146,15 +146,15 @@ describe('McpInventoryPanel', () => {
   })
 
   test('re-probe button has data-testid that includes mcpName', async () => {
-    mockProbeGet('pg', okProbe())
+    mockProbeGet('m1', okProbe())
     renderPanel()
-    await waitFor(() => screen.getByTestId('mcp-inventory-reprobe-pg'))
+    await waitFor(() => screen.getByTestId('mcp-inventory-reprobe-m1'))
   })
 
   test('a probe older than the current saved row is unknown and hides its inventory', async () => {
     const probe = okProbe()
-    mockProbeGet('pg', probe)
-    renderPanel('pg', probe.startedAt)
+    mockProbeGet('m1', probe)
+    renderPanel('m1', probe.startedAt)
     await waitFor(() => screen.getByTestId('mcp-probe-expired'))
     expect(screen.getByTestId('mcp-probe-status-unknown')).toBeTruthy()
     expect(screen.getAllByText('The saved probe result is out of date.')).toHaveLength(2)

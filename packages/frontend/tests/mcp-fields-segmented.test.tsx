@@ -7,7 +7,7 @@
 //   1. both pickers render the shared <Segmented> (.segmented radiogroup DOM),
 //   2. change semantics survive the swap (click fires the form onChange),
 //   3. nameLocked → the TYPE picker is disabled, the oauth picker is NOT
-//      (oauth mode stays editable on /mcps/$name; type is create-only),
+//      (oauth mode stays editable on /mcps/$id; type is create-only),
 //   4. source-level: no native radio / chip-row markup may sneak back in.
 
 import { readFileSync } from 'node:fs'

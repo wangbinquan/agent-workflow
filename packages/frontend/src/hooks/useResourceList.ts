@@ -1,5 +1,5 @@
-// RFC-151 PR-3 — shared list-page shell for the five ACL'd resource pages
-// (agents / skills / mcps / plugins / workflows).
+// RFC-151 PR-3 — shared list-page shell for the six ACL'd resource pages
+// (agents / skills / mcps / plugins / workflows / workgroups).
 //
 // Collapses the query + delete-mutation + owner-lookup trio that每页逐字重复:
 //   - useQuery<T[]> over the resource collection endpoint
@@ -9,7 +9,7 @@
 // Deliberately NOT for the other data-table routes (tasks / reviews / users /
 // repos / clarify) — they have no owner/visibility semantics (RFC-151 D1,
 // 伪抽象警戒). Page-specific columns, extra queries and row actions stay in
-// the pages themselves; this hook only owns the five-element common core.
+// the pages themselves; this hook only owns the shared common core.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/client'
@@ -19,11 +19,8 @@ export interface UseResourceListOptions {
   /** React Query cache key of the collection (also the invalidation target). */
   queryKey: readonly unknown[]
   /** Collection endpoint, e.g. '/api/agents'. Rows are `GET {endpoint}`,
-   *  deletes are `DELETE {endpoint}/{key}`. */
+   *  deletes are `DELETE {endpoint}/{row.id}`. */
   endpoint: string
-  /** Which row field keys the DELETE URL ('name' for agents/skills/mcps,
-   *  'id' for plugins/workflows). */
-  deleteBy: 'name' | 'id'
 }
 
 export function useResourceList<
@@ -36,8 +33,7 @@ export function useResourceList<
   })
 
   const del = useMutation({
-    mutationFn: (row: T) =>
-      api.delete(`${opts.endpoint}/${encodeURIComponent(row[opts.deleteBy])}`),
+    mutationFn: (row: T) => api.delete(`${opts.endpoint}/${encodeURIComponent(row.id)}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: opts.queryKey }),
   })
 

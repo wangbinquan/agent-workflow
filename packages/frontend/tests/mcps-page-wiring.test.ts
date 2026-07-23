@@ -4,7 +4,7 @@
 // react-query stack would need a full harness); instead we assert the wiring
 // from text patterns. This catches:
 //   - sidebar nav loses the /mcps entry (regression to pre-RFC-028)
-//   - list page stops linking to /mcps/new or /mcps/$name
+//   - list page stops linking to /mcps/new or /mcps/$id
 //   - any of the three routes silently grows a `cwd` input
 //   - i18n bundles drift apart for the mcps section
 //   - new + detail pages stop using the shared <McpFields> widget (would
@@ -38,18 +38,18 @@ describe('RFC-028 /mcps wiring', () => {
     expect(router).toContain("import { Route as mcpDetailRoute } from '@/routes/mcps.detail'")
     expect(router).toContain("import { Route as mcpNewRoute } from '@/routes/mcps.new'")
     // mcpNewRoute must come before mcpDetailRoute in the addChildren array,
-    // otherwise /mcps/new gets eaten by the $name catch-all.
+    // otherwise /mcps/new gets eaten by the $id catch-all.
     const newIdx = router.indexOf('mcpNewRoute,')
     const detailIdx = router.indexOf('mcpDetailRoute,')
     expect(newIdx).toBeGreaterThan(0)
     expect(detailIdx).toBeGreaterThan(newIdx)
   })
 
-  test('list page links to /mcps/new and /mcps/$name (split cards, no inline editor box)', () => {
+  test('list page links to /mcps/new and /mcps/$id (split cards, no inline editor box)', () => {
     const page = read('routes/mcps.tsx')
     // Shared split-page create destination + card destinations.
     expect(page).toContain('newTo="/mcps/new"')
-    expect(page).toContain("to: '/mcps/$name'")
+    expect(page).toContain("to: '/mcps/$id'")
     // Old inline editor box is gone — page no longer renders McpEditor /
     // mcp-editor class names.
     expect(page).not.toContain('mcp-editor')

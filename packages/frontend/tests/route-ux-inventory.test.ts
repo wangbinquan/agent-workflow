@@ -338,11 +338,6 @@ export const ROUTE_UX_INVENTORY = {
     classification: 'specialized',
     owners: [rendered('setup-admin.test.tsx')],
   },
-  '@/routes/agents.by-id#Route': {
-    surface: '/agents/by-id/$id',
-    classification: 'resolver',
-    owners: [source('task-subject-by-id-resolver.test.tsx')],
-  },
   '@/routes/agents#Route': {
     surface: '/agents split layout',
     classification: 'specialized',
@@ -359,7 +354,7 @@ export const ROUTE_UX_INVENTORY = {
     },
   },
   '@/routes/agents.detail#Route': {
-    surface: '/agents/$name',
+    surface: '/agents/$id',
     classification: 'standard',
     owners: [rendered('agents-split-page.test.tsx')],
     header: {
@@ -394,7 +389,7 @@ export const ROUTE_UX_INVENTORY = {
     },
   },
   '@/routes/skills.detail#Route': {
-    surface: '/skills/$name',
+    surface: '/skills/$id',
     classification: 'standard',
     owners: [rendered('skills-split-page.test.tsx')],
     header: {
@@ -429,7 +424,7 @@ export const ROUTE_UX_INVENTORY = {
     },
   },
   '@/routes/mcps.detail#Route': {
-    surface: '/mcps/$name',
+    surface: '/mcps/$id',
     classification: 'standard',
     owners: [rendered('mcps-split-page.test.tsx')],
     header: {
@@ -464,7 +459,7 @@ export const ROUTE_UX_INVENTORY = {
     },
   },
   '@/routes/plugins.detail#Route': {
-    surface: '/plugins/$name',
+    surface: '/plugins/$id',
     classification: 'standard',
     owners: [rendered('plugins-split-page.test.tsx')],
     header: {
@@ -513,13 +508,8 @@ export const ROUTE_UX_INVENTORY = {
     classification: 'redirect',
     owners: [source('rfc165-retired-launcher-locks.test.ts')],
   },
-  '@/routes/workgroups.by-id#Route': {
-    surface: '/workgroups/by-id/$id',
-    classification: 'resolver',
-    owners: [source('task-subject-by-id-resolver.test.tsx')],
-  },
   '@/routes/workgroups.detail#Route': {
-    surface: '/workgroups/$name',
+    surface: '/workgroups/$id',
     classification: 'specialized',
     owners: [rendered('workgroups-pages.test.tsx')],
   },

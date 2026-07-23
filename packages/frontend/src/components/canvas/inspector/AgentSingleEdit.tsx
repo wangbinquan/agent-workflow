@@ -12,6 +12,8 @@ import { buildNodeAgentLookup } from '@agent-workflow/shared'
 import { useTranslation } from 'react-i18next'
 import { Field, TextArea } from '@/components/Form'
 import { Select } from '@/components/Select'
+import { useUserLookup } from '@/hooks/useUserLookup'
+import { resourceOptionLabel } from '@/lib/resource-option-label'
 import { computePorts } from '../WorkflowCanvas'
 import { MissingRefList, PortRefList } from './promptRefs'
 import {
@@ -33,8 +35,9 @@ export function AgentSingleEdit({
 }: EditProps) {
   const { t } = useTranslation()
   const rec = node as unknown as Record<string, unknown>
-  const agentName = typeof rec.agentName === 'string' ? rec.agentName : ''
+  const agentId = typeof rec.agentId === 'string' ? rec.agentId : ''
   const promptTemplate = typeof rec.promptTemplate === 'string' ? rec.promptTemplate : ''
+  const owners = useUserLookup(agents.map((agent) => agent.ownerUserId))
   // RFC-223 (PR-3a impl-gate H3): id+name keyed so stamped nodes resolve by id.
   const ports = computePorts(
     node,
@@ -58,22 +61,29 @@ export function AgentSingleEdit({
       <InspectorFieldAnchor nodeId={node.id} field="agent">
         <Field label={t('inspector.fieldAgent')} required>
           <Select<string>
-            value={agentName}
+            value={agentId}
             placeholder={t('inspector.pickAgent')}
             ariaLabel={t('inspector.fieldAgent')}
             searchable
-            onChange={(v) =>
+            onChange={(v) => {
               // RFC-223 (PR-2): stamp the canonical agentId beside agentName so
               // the runtime dispatches by id (rename-safe). Always overwrite it
               // (undefined when cleared) so a re-pick never leaves a stale id.
+              const selected = agents.find((agent) => agent.id === v)
               update(
-                { agentName: v, agentId: agents.find((a) => a.name === v)?.id },
+                { agentName: selected?.name ?? '', agentId: selected?.id },
                 atomicNodeInspectorChange(node.id, 'agentName', t('inspector.fieldAgent')),
               )
-            }
+            }}
             options={[
               { value: '', label: t('inspector.pickAgent') },
-              ...agents.map((a) => ({ value: a.name, label: a.name })),
+              ...agents.map((agent) => ({
+                value: agent.id,
+                label: resourceOptionLabel(
+                  agent.name,
+                  owners.get(agent.ownerUserId)?.displayName ?? agent.ownerUserId ?? undefined,
+                ),
+              })),
             ]}
           />
         </Field>

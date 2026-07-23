@@ -1,4 +1,4 @@
-// Shared frontmatter + body form for /agents/new and /agents/$name.
+// Shared frontmatter + body form for /agents/new and /agents/$id.
 // Lifts the entire CreateAgent payload to local state; submission is the
 // parent's concern.
 //
@@ -49,6 +49,8 @@ import {
 export interface AgentFormProps {
   value: CreateAgent
   onChange: (next: CreateAgent) => void
+  /** Existing resource identity; absent on the create route. */
+  resourceId?: string
   /** Stable DOM id namespace for the owning route's tabs and panels. */
   idPrefix?: string
   /** When true the name input is read-only (editing an existing agent). */
@@ -165,6 +167,7 @@ export type AgentTab = 'basics' | 'prompt' | 'ports' | 'resources' | 'advanced'
 export function AgentForm({
   value,
   onChange,
+  resourceId,
   idPrefix = 'agent-form',
   nameLocked,
   activeTab,
@@ -459,7 +462,7 @@ export function AgentForm({
           <AgentDependsPicker
             value={value.dependsOn ?? []}
             onChange={(v) => patch('dependsOn', v)}
-            selfName={value.name}
+            selfId={resourceId}
             placeholder={t('agentForm.fieldDependsOnPlaceholder')}
           />
         </Field>
@@ -467,7 +470,7 @@ export function AgentForm({
         <DependencyAutodetectButton
           bodyMd={value.bodyMd ?? ''}
           value={value}
-          selfName={value.name}
+          selfId={resourceId}
           onApply={(selection) => onChange(mergeAgentDeps(value, selection))}
         />
 
@@ -481,9 +484,10 @@ export function AgentForm({
           {/* The closure preview is useful for debugging, but it is not needed
               to complete the common capability-selection task. */}
           <DependencyTreePreview
+            id={resourceId}
             name={value.name}
             dependsOn={value.dependsOn ?? []}
-            onNodeClick={(n) => navigate({ to: '/agents/$name', params: { name: n } })}
+            onNodeClick={(id) => navigate({ to: '/agents/$id', params: { id } })}
           />
         </details>
       </section>

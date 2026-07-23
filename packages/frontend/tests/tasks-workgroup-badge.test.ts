@@ -5,7 +5,7 @@
 // / `__agent_host__` workflow (WORKGROUP_HOST_WORKFLOW_ID / AGENT_HOST_WORKFLOW_ID),
 // because tasks.workflow_id / workflow_snapshot are NOT NULL. A naive cell would
 // LINK to that host workflow and PRINT its internal name. The fix surfaces the
-// OWNING resource instead — /workgroups/$name or /agents/$name with a kind badge,
+// OWNING resource instead — /workgroups/$id or /agents/$id with a kind badge,
 // never the anchor.
 //
 // That decision now lives in the shared components/TaskSubjectLink.tsx (the list

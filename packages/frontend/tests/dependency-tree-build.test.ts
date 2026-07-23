@@ -20,7 +20,7 @@ function mk(
   mcps: readonly string[] = [],
   plugins: readonly string[] = [],
 ): DependencyTreeAgent {
-  return { name, description, skills, mcps, plugins, dependsOn }
+  return { id: name, name, description, skills, mcps, plugins, dependsOn }
 }
 
 describe('buildDependencyTree', () => {
@@ -79,6 +79,7 @@ describe('buildDependencyTree', () => {
     expect(tree.children[0]!.skills).toEqual([])
     expect(tree.children[0]!.mcps).toEqual([])
     expect(tree.children[0]!.plugins).toEqual([])
+    expect(tree.children[0]!.missing).toBe(true)
     expect(tree.children[0]!.duplicateRef).toBe(false)
     expect(tree.children[0]!.children).toHaveLength(0)
   })
@@ -88,6 +89,51 @@ describe('buildDependencyTree', () => {
     const tree = buildDependencyTree(flat, 'lonely')
     expect(tree.children).toHaveLength(0)
     expect(tree.duplicateRef).toBe(false)
+  })
+
+  test('an existing agent with empty metadata is not confused with a missing placeholder', () => {
+    const tree = buildDependencyTree(
+      [
+        {
+          id: 'agent-empty',
+          name: 'empty',
+          description: '',
+          skills: [],
+          mcps: [],
+          plugins: [],
+          dependsOn: [],
+        },
+      ],
+      'agent-empty',
+    )
+    expect(tree.missing).toBe(false)
+  })
+
+  test('same-name agents remain distinct because indexing and traversal use ids', () => {
+    const flat: DependencyTreeAgent[] = [
+      {
+        id: 'agent-root',
+        name: 'reviewer',
+        description: 'root',
+        skills: [],
+        mcps: [],
+        plugins: [],
+        dependsOn: ['agent-peer'],
+      },
+      {
+        id: 'agent-peer',
+        name: 'reviewer',
+        description: 'peer',
+        skills: [],
+        mcps: [],
+        plugins: [],
+        dependsOn: [],
+      },
+    ]
+    const tree = buildDependencyTree(flat, 'agent-root')
+    expect(tree.id).toBe('agent-root')
+    expect(tree.children[0]?.id).toBe('agent-peer')
+    expect(tree.children[0]?.duplicateRef).toBe(false)
   })
 
   test('cycle (introduced by malformed flat) terminates without infinite recursion', () => {

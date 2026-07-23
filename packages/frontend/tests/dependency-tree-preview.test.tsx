@@ -46,26 +46,34 @@ describe('<DependencyTreePreview>', () => {
       ok: true,
       agents: [
         {
+          id: 'agent_orchestrator',
           name: 'orchestrator',
           description: '',
           skills: [],
           skillCount: 0,
-          dependsOn: ['auditor'],
+          dependsOnIds: ['agent_auditor'],
           mcp: [],
           plugins: [],
         },
         {
+          id: 'agent_auditor',
           name: 'auditor',
           description: '',
           skills: ['s1'],
           skillCount: 1,
-          dependsOn: [],
+          dependsOnIds: [],
           mcp: [],
           plugins: [],
         },
       ],
     })
-    wrap(<DependencyTreePreview name="orchestrator" dependsOn={['auditor']} />)
+    wrap(
+      <DependencyTreePreview
+        id="agent_orchestrator"
+        name="orchestrator"
+        dependsOn={['agent_auditor']}
+      />,
+    )
     // 200ms debounce — waitFor handles the wait.
     await waitFor(() => screen.getByRole('treeitem', { name: 'auditor' }), { timeout: 2000 })
     expect(screen.getByRole('treeitem', { name: 'orchestrator' })).toBeDefined()
@@ -77,7 +85,7 @@ describe('<DependencyTreePreview>', () => {
       code: 'agent-dependency-cycle',
       details: { cyclePath: ['c', 'a', 'b', 'c'] },
     })
-    wrap(<DependencyTreePreview name="c" dependsOn={['a']} />)
+    wrap(<DependencyTreePreview id="agent_c" name="c" dependsOn={['agent_a']} />)
     await waitFor(() => screen.getByRole('alert'), { timeout: 2000 })
     const alert = screen.getByRole('alert')
     expect(alert.textContent ?? '').toContain('c → a → b → c')

@@ -7,9 +7,9 @@
 // subject via `taskExecutionKind` and links to the owning resource — by its
 // FROZEN STABLE ID (RFC-177), so a rename (or rare name-reuse) never opens a
 // same-named replacement:
-//   - workgroup → /workgroups/by-id/$id  → current group page  (+ 「工作组」badge)
-//   - agent     → /agents/by-id/$id      → current agent page  (+ 「代理」badge)
-//                 (historical agent w/o frozen id → /agents/$name, RFC-177 D3a)
+//   - workgroup → /workgroups/$id  → current group page  (+ 「工作组」badge)
+//   - agent     → /agents/$id      → current agent page  (+ 「代理」badge)
+//                 (historical agent w/o frozen id → plain text, fail closed)
 //   - workflow  → /workflows/$id          → workflow editor     (+ 「工作流」badge)
 // All three kinds are badged: the badge previously doubled as the "this row is
 // NOT a plain workflow" signal, which made the /tasks 工作流 column read
@@ -17,8 +17,8 @@
 // was encoded in the ABSENCE of a chip). Labeling every kind makes the subject
 // self-describing. Callers that already label the kind pass `badge={false}`.
 // The link TEXT stays the frozen name (ACL-safe, same as the task's room); the
-// current name is disclosed only server-side, ACL-gated, by the by-id route after
-// the click. Used by the /tasks list cell and the /tasks/:id detail header + meta
+// current name is never needed to build the destination. Used by the /tasks list
+// cell and the /tasks/:id detail header + meta
 // row so all three surfaces stay consistent. Do NOT re-scatter workgroupId /
 // sourceAgentName checks at callsites — that is exactly what taskExecutionKind's
 // contract (schemas/task.ts) exists to prevent.
@@ -83,15 +83,13 @@ export function TaskSubjectLink({ task, taskId, badge = false }: TaskSubjectLink
       </Link>
     )
   } else {
-    // Link by the FROZEN STABLE ID, resolved on click by the /…/by-id/$id route to
-    // the resource's CURRENT canonical page (RFC-177 — fixes the Codex 2026-07-13
+    // Link by the FROZEN STABLE ID directly to the canonical page (RFC-223).
     // P2 where a renamed+reused name misidentified the subject). Rendering does no
     // lookup: the id is already frozen on the task, so the ACL-frozen-name invariant
-    // (RFC-099) is untouched — the current name is disclosed only server-side,
-    // ACL-gated, by the by-id route.
+    // (RFC-099) is untouched.
     //   - workgroupId is ALWAYS frozen for a workgroup task (taskExecutionKind).
     //   - sourceAgentId is frozen for agent tasks launched since RFC-175; NULL for
-    //     older rows → D3(a) by-name fallback (no regression vs the prior by-name link).
+    //     older rows → plain text because mutable names cannot identify a resource.
     //   - workgroupName may be null (group row deleted → frozen name gone) → em-dash.
     const name = isWorkgroup ? (task.workgroupName ?? null) : (task.sourceAgentName ?? null)
     if (name === null) {
@@ -100,7 +98,7 @@ export function TaskSubjectLink({ task, taskId, badge = false }: TaskSubjectLink
     } else if (isWorkgroup && typeof task.workgroupId === 'string' && isWorkgroupTask(task)) {
       subject = (
         <Link
-          to="/workgroups/by-id/$id"
+          to="/workgroups/$id"
           params={{ id: task.workgroupId }}
           className={linkClass}
           title={name}
@@ -111,7 +109,7 @@ export function TaskSubjectLink({ task, taskId, badge = false }: TaskSubjectLink
     } else if (!isWorkgroup && task.sourceAgentId != null) {
       subject = (
         <Link
-          to="/agents/by-id/$id"
+          to="/agents/$id"
           params={{ id: task.sourceAgentId }}
           className={linkClass}
           title={name}
@@ -120,21 +118,11 @@ export function TaskSubjectLink({ task, taskId, badge = false }: TaskSubjectLink
         </Link>
       )
     } else if (!isWorkgroup) {
-      // RFC-177 D3(a): historical agent task (no frozen id) → by-name link. Only
-      // legacy rows keep the rare reuse caveat; new tasks are id-resolved above.
-      subject = (
-        <Link to="/agents/$name" params={{ name }} className={linkClass} title={name}>
-          {name}
-        </Link>
-      )
+      subject = <span title={name}>{name}</span>
     } else {
       // Unreachable: a workgroup task always freezes workgroupId. Degrade to a
-      // by-name link rather than crash if that invariant is ever violated.
-      subject = (
-        <Link to="/workgroups/$name" params={{ name }} className={linkClass} title={name}>
-          {name}
-        </Link>
-      )
+      // plain text rather than guessing a mutable-name identity.
+      subject = <span title={name}>{name}</span>
     }
   }
 

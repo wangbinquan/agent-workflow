@@ -18,7 +18,7 @@ import { LoadingState } from './LoadingState'
 import { NoticeBanner } from './NoticeBanner'
 
 export interface SkillFileTreeProps {
-  skillName: string
+  skillId: string
   readonly?: boolean
   readonlyPaths?: readonly string[]
   selected: string | null
@@ -35,7 +35,7 @@ export interface SkillFileTreeProps {
 }
 
 export function SkillFileTree({
-  skillName,
+  skillId,
   readonly = false,
   readonlyPaths = [],
   selected,
@@ -51,7 +51,7 @@ export function SkillFileTree({
   busy = false,
 }: SkillFileTreeProps) {
   const { t } = useTranslation()
-  const treeKey = ['skill-files', skillName]
+  const treeKey = ['skill-files', skillId]
   const [newError, setNewError] = useState<string | null>(null)
   const readEpochRef = useRef(0)
   const onFileLoadedRef = useRef(onFileLoaded)
@@ -63,7 +63,7 @@ export function SkillFileTree({
   const tree = useQuery<FileNode[]>({
     queryKey: treeKey,
     queryFn: ({ signal }) =>
-      api.get(`/api/skills/${encodeURIComponent(skillName)}/files`, undefined, signal),
+      api.get(`/api/skills/${encodeURIComponent(skillId)}/files`, undefined, signal),
   })
 
   const selectedScope = selected === null ? undefined : fileScopes[selected]
@@ -71,16 +71,10 @@ export function SkillFileTree({
     selected !== null && (selectedScope === undefined || selectedScope.baseline.exists)
   const file = useQuery<{ content: string }>({
     queryKey:
-      selected === null
-        ? ['skill-file', skillName, '__none__']
-        : ['skill-file', skillName, selected],
+      selected === null ? ['skill-file', skillId, '__none__'] : ['skill-file', skillId, selected],
     enabled: shouldReadSelected,
     queryFn: ({ signal }) =>
-      api.get(
-        `/api/skills/${encodeURIComponent(skillName)}/file`,
-        { path: selected ?? '' },
-        signal,
-      ),
+      api.get(`/api/skills/${encodeURIComponent(skillId)}/file`, { path: selected ?? '' }, signal),
   })
 
   useEffect(() => {

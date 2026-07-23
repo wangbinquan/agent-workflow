@@ -146,8 +146,8 @@ function workgroupItem(
     subtitle: 'reviews changes',
     subtitleFallback: '(no description)',
     updatedAt: Date.now() - 5 * 60_000,
-    to: '/workgroups/$name',
-    params: { name: 'review-squad' },
+    to: '/workgroups/$id',
+    params: { id: 'wg1' },
     testid: 'card-squad',
     ...overrides,
   }

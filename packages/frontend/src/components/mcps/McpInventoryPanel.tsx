@@ -1,4 +1,4 @@
-// RFC-030 — Inventory panel on /mcps/$name.
+// RFC-030 / RFC-223 — Inventory panel on /mcps/$id.
 //
 // Composed of four collapsible <details> sections (Tools / Resources / Prompts /
 // Capabilities) plus a sticky header with the status chip, last-probed
@@ -24,7 +24,7 @@ import { useMcpProbe, useProbeMcpMutation } from '@/lib/mcp-probe-query'
 import { probeFreshness } from '@/lib/probe-freshness'
 
 export interface McpInventoryPanelProps {
-  mcpName: string
+  mcpId: string
   operationConfigHash?: string
   /** Current saved row timestamp; absent is deliberately treated as stale. */
   mcpUpdatedAt?: number
@@ -37,8 +37,8 @@ export interface McpInventoryPanelProps {
 
 export function McpInventoryPanel(props: McpInventoryPanelProps) {
   const { t } = useTranslation()
-  const probeQ = useMcpProbe(props.mcpName)
-  const probeMut = useProbeMcpMutation(props.mcpName)
+  const probeQ = useMcpProbe(props.mcpId)
+  const probeMut = useProbeMcpMutation(props.mcpId)
   const [preparationError, setPreparationError] = useState<unknown>(null)
 
   const persistedProbe = probeQ.data ?? null
@@ -111,7 +111,7 @@ export function McpInventoryPanel(props: McpInventoryPanelProps) {
         className="btn btn--sm btn--primary"
         disabled={isProbing || props.saving === true}
         onClick={() => void runSaved(hash).catch(() => undefined)}
-        data-testid={`mcp-inventory-reprobe-${props.mcpName}`}
+        data-testid={`mcp-inventory-reprobe-${props.mcpId}`}
       >
         {isProbing ? t('mcps.probe.btnRunning') : t('mcps.probe.btnRun')}
       </button>

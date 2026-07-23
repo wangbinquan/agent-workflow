@@ -180,7 +180,7 @@ function parseTimeoutMs(text: string): number | undefined | 'invalid' {
 
 /**
  * Inverse of buildCreatePayload: turn an existing Mcp row into form state for
- * the /mcps/$name edit page. Stable; covered by mcp-form.test.ts so the edit
+ * the /mcps/$id edit page. Stable; covered by mcp-form.test.ts so the edit
  * page never silently mis-renders a stored row.
  */
 export function mcpToForm(m: Mcp): McpFormState {

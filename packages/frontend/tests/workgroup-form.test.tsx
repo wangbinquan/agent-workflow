@@ -11,7 +11,7 @@
 //      flag, only agent rows may take it.
 //   4. validateMemberDraft — the only save-blocking rules left: displayName
 //      non-empty / unique / no @-comma-whitespace, human rows need a picked
-//      user, agent rows an agentName (dangling names are LEGAL).
+//      user, agent rows a canonical agentId.
 //   5. free_collab renders the three collaboration switches disabled+on
 //      WITHOUT mutating stored values (switch-back restores them).
 
@@ -57,6 +57,7 @@ const STORED: Workgroup = {
     {
       id: 'mem_2',
       memberType: 'human',
+      agentId: null,
       agentName: null,
       userId: 'u1',
       displayName: 'Alice',
@@ -66,6 +67,7 @@ const STORED: Workgroup = {
     {
       id: 'mem_1',
       memberType: 'agent',
+      agentId: 'agent-coder',
       agentName: 'coder',
       userId: null,
       displayName: 'Coder',
@@ -118,7 +120,12 @@ describe('buildConfigUpdatePayload', () => {
     expect(built.payload.maxRounds).toBe(33)
     expect(built.payload.name).toBe(STORED.name)
     expect(built.payload.members).toEqual([
-      { memberType: 'agent', agentName: 'coder', displayName: 'Coder', roleDesc: 'writes code' },
+      {
+        memberType: 'agent',
+        agentId: 'agent-coder',
+        displayName: 'Coder',
+        roleDesc: 'writes code',
+      },
       { memberType: 'human', userId: 'u1', displayName: 'Alice', roleDesc: 'reviews' },
     ])
   })
@@ -238,11 +245,16 @@ describe('member-card ops (add / remove / patch / setLeader)', () => {
     const state = workgroupToMembersState(STORED)
     const next = addMember(
       state,
-      makeAgentMemberRow({ agentName: 'auditor', displayName: 'Auditor' }),
+      makeAgentMemberRow({
+        agentId: 'agent-auditor',
+        agentName: 'auditor',
+        displayName: 'Auditor',
+      }),
     )
     expect(next.members).toHaveLength(3)
     expect(next.members[2]).toMatchObject({
       memberType: 'agent',
+      agentId: 'agent-auditor',
       agentName: 'auditor',
       displayName: 'Auditor',
       roleDesc: '',
@@ -285,7 +297,11 @@ describe('member-card ops (add / remove / patch / setLeader)', () => {
     const base = workgroupToMembersState(STORED)
     const state = addMember(
       base,
-      makeAgentMemberRow({ agentName: 'auditor', displayName: 'Auditor' }),
+      makeAgentMemberRow({
+        agentId: 'agent-auditor',
+        agentName: 'auditor',
+        displayName: 'Auditor',
+      }),
     )
     const auditorKey = state.members[2]!.key
     expect(setLeader(state, auditorKey).leaderKey).toBe(auditorKey)
@@ -304,7 +320,13 @@ describe('validateMemberDraft', () => {
 
   test('duplicate displayName against the rest of the group is rejected', () => {
     const errors = validateMemberDraft(
-      { memberType: 'agent', agentName: 'auditor', userId: '', displayName: 'Coder' },
+      {
+        memberType: 'agent',
+        agentId: 'agent-auditor',
+        agentName: 'auditor',
+        userId: '',
+        displayName: 'Coder',
+      },
       others,
     )
     expect(errors.displayName).toBe('workgroups.errors.displayNameDuplicate')
@@ -316,7 +338,13 @@ describe('validateMemberDraft', () => {
     ['with comma', 'Co,der'],
   ])('displayName %s is rejected', (_label, displayName) => {
     const errors = validateMemberDraft(
-      { memberType: 'agent', agentName: 'auditor', userId: '', displayName },
+      {
+        memberType: 'agent',
+        agentId: 'agent-auditor',
+        agentName: 'auditor',
+        userId: '',
+        displayName,
+      },
       others,
     )
     expect(errors.displayName).toBe('workgroups.errors.displayNameInvalid')
@@ -325,34 +353,58 @@ describe('validateMemberDraft', () => {
   test('empty displayName is required; >64 chars is too long', () => {
     expect(
       validateMemberDraft(
-        { memberType: 'agent', agentName: 'a', userId: '', displayName: '  ' },
+        {
+          memberType: 'agent',
+          agentId: 'agent-a',
+          agentName: 'a',
+          userId: '',
+          displayName: '  ',
+        },
         [],
       ).displayName,
     ).toBe('workgroups.errors.displayNameRequired')
     expect(
       validateMemberDraft(
-        { memberType: 'agent', agentName: 'a', userId: '', displayName: 'x'.repeat(65) },
+        {
+          memberType: 'agent',
+          agentId: 'agent-a',
+          agentName: 'a',
+          userId: '',
+          displayName: 'x'.repeat(65),
+        },
         [],
       ).displayName,
     ).toBe('workgroups.errors.displayNameTooLong')
   })
 
-  test('human drafts need a picked user; agent drafts need an agentName (dangling is legal)', () => {
+  test('human drafts need a picked user; agent drafts need a canonical agentId', () => {
     expect(
       validateMemberDraft(
-        { memberType: 'human', agentName: '', userId: '', displayName: 'Ann' },
+        { memberType: 'human', agentId: '', agentName: '', userId: '', displayName: 'Ann' },
         [],
       ).userId,
     ).toBe('workgroups.errors.userRequired')
     expect(
       validateMemberDraft(
-        { memberType: 'agent', agentName: ' ', userId: '', displayName: 'Bot' },
+        {
+          memberType: 'agent',
+          agentId: '',
+          agentName: 'display-only',
+          userId: '',
+          displayName: 'Bot',
+        },
         [],
-      ).agentName,
+      ).agentId,
     ).toBe('workgroups.errors.agentNameRequired')
     expect(
       validateMemberDraft(
-        { memberType: 'agent', agentName: 'does-not-exist-yet', userId: '', displayName: 'Bot' },
+        {
+          memberType: 'agent',
+          agentId: 'agent-picked',
+          agentName: 'display-only',
+          userId: '',
+          displayName: 'Bot',
+        },
         [],
       ),
     ).toEqual({})
@@ -367,7 +419,12 @@ describe('buildMembersUpdatePayload', () => {
   test('config passes through from the group; members + leader come from the state', () => {
     const state = addMember(
       workgroupToMembersState(STORED),
-      makeAgentMemberRow({ agentName: 'auditor', displayName: 'Auditor', roleDesc: 'audits' }),
+      makeAgentMemberRow({
+        agentId: 'agent-auditor',
+        agentName: 'auditor',
+        displayName: 'Auditor',
+        roleDesc: 'audits',
+      }),
     )
     const built = buildMembersUpdatePayload(STORED, state)
     expect(built.ok).toBe(true)
@@ -376,9 +433,19 @@ describe('buildMembersUpdatePayload', () => {
     expect(built.payload.maxRounds).toBe(33)
     expect(built.payload.leaderDisplayName).toBe('Coder')
     expect(built.payload.members).toEqual([
-      { memberType: 'agent', agentName: 'coder', displayName: 'Coder', roleDesc: 'writes code' },
+      {
+        memberType: 'agent',
+        agentId: 'agent-coder',
+        displayName: 'Coder',
+        roleDesc: 'writes code',
+      },
       { memberType: 'human', userId: 'u1', displayName: 'Alice', roleDesc: 'reviews' },
-      { memberType: 'agent', agentName: 'auditor', displayName: 'Auditor', roleDesc: 'audits' },
+      {
+        memberType: 'agent',
+        agentId: 'agent-auditor',
+        displayName: 'Auditor',
+        roleDesc: 'audits',
+      },
     ])
   })
 

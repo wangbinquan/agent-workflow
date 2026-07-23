@@ -1,6 +1,6 @@
 // Agent detail / edit page — the right rail of the /agents split page.
 //
-// RFC-169 (T6/T8): child route under the /agents layout (path '/$name'), with
+// RFC-169 / RFC-223: child route under the /agents layout (path '/$id'), with
 // `remountDeps: ({params}) => params` so switching agents (a card click that
 // only changes the param) remounts this component — otherwise the hydrate-once
 // draft would carry agent A's edits into agent B (a pre-existing latent bug the
@@ -40,7 +40,7 @@ import { Route as agentsRoute } from './agents'
 
 export const Route = createRoute({
   getParentRoute: () => agentsRoute,
-  path: '/$name',
+  path: '/$id',
   component: AgentDetailPage,
   // RFC-169 T-D11: param change ⇒ remount ⇒ fresh hydrate-once seed.
   remountDeps: ({ params }) => params,
@@ -48,7 +48,7 @@ export const Route = createRoute({
 
 function AgentDetailPage() {
   const { t } = useTranslation()
-  const { name } = Route.useParams()
+  const { id } = Route.useParams()
   const navigate = useNavigate()
   const qc = useQueryClient()
   const { beginBusy, report } = useSplitDirty()
@@ -62,8 +62,8 @@ function AgentDetailPage() {
   const jsonValid = jsonReady && invalidJsonFields.length === 0
 
   const query = useQuery<Agent>({
-    queryKey: ['agents', name],
-    queryFn: ({ signal }) => api.get(`/api/agents/${encodeURIComponent(name)}`, undefined, signal),
+    queryKey: ['agents', id],
+    queryFn: ({ signal }) => api.get(`/api/agents/${encodeURIComponent(id)}`, undefined, signal),
   })
 
   // RFC-169: dirty-tracked hydrate-once draft with clean-follow (rebases a clean
@@ -78,22 +78,22 @@ function AgentDetailPage() {
     if (draft === undefined) return
     setJsonDraft((current) => reconcileAgentJsonDraft(current, draft))
   }, [draft])
-  useReportSplitDirty(name, dirty || (jsonReady && !jsonValid))
+  useReportSplitDirty(id, dirty || (jsonReady && !jsonValid))
 
   const save = useMutation({
     mutationFn: ({ submitted }: { submitted: CreateAgent; release: SplitBusyRelease }) =>
-      api.put<Agent>(`/api/agents/${encodeURIComponent(name)}`, agentToPutBody(submitted)),
+      api.put<Agent>(`/api/agents/${encodeURIComponent(id)}`, agentToPutBody(submitted)),
     onSuccess: async (saved, { submitted }) => {
       // Detail fence (R3-P1-2): cancel any in-flight detail GET before writing
       // saved, else a stale GET could land after and clobber it.
-      await qc.cancelQueries({ queryKey: ['agents', name], exact: true })
-      qc.setQueryData(['agents', name], saved)
+      await qc.cancelQueries({ queryKey: ['agents', id], exact: true })
+      qc.setQueryData(['agents', id], saved)
       // Collection eager patch (null-safe) then EXACT invalidate — never the
       // non-exact invalidate that would also refetch the active detail query
       // and flip the editor to an error page on a transient failure (§4).
       await qc.cancelQueries({ queryKey: ['agents'], exact: true })
       qc.setQueryData<Agent[]>(['agents'], (rows) =>
-        rows === undefined ? rows : rows.map((r) => (r.name === name ? saved : r)),
+        rows === undefined ? rows : rows.map((r) => (r.id === id ? saved : r)),
       )
       void qc.invalidateQueries({ queryKey: ['agents'], exact: true })
       commitSaved(submitted, agentToDraft(saved))
@@ -104,14 +104,14 @@ function AgentDetailPage() {
 
   const del = useMutation({
     mutationFn: ({ confirm, release: _release }: { confirm: string; release: SplitBusyRelease }) =>
-      api.deleteJson(`/api/agents/${encodeURIComponent(name)}`, { confirm }),
+      api.deleteJson(`/api/agents/${encodeURIComponent(id)}`, { confirm }),
     onSuccess: async (_deleted, { release }) => {
       // Sync-clear the dirty ref so the guard doesn't block THIS navigation
       // (the resource no longer exists — nothing to save).
-      report(name, false)
+      report(id, false)
       await qc.cancelQueries({ queryKey: ['agents'], exact: true })
       qc.setQueryData<Agent[]>(['agents'], (rows) =>
-        rows === undefined ? rows : rows.filter((r) => r.name !== name),
+        rows === undefined ? rows : rows.filter((r) => r.id !== id),
       )
       void qc.invalidateQueries({ queryKey: ['agents'], exact: true })
       release()
@@ -133,10 +133,10 @@ function AgentDetailPage() {
   return (
     <fieldset className="detail-freeze" disabled={del.isPending}>
       <DetailHeaderActions
-        title={name}
+        title={query.data?.name ?? id}
         headingLevel={2}
         acl={{
-          resourceBaseUrl: `/api/agents/${encodeURIComponent(name)}`,
+          resourceBaseUrl: `/api/agents/${encodeURIComponent(id)}`,
           invalidateKey: ['agents'],
         }}
         save={{
@@ -149,7 +149,7 @@ function AgentDetailPage() {
               !save.isPending &&
               !del.isPending
             ) {
-              save.mutate({ submitted: draft, release: beginBusy(name) })
+              save.mutate({ submitted: draft, release: beginBusy(id) })
             }
           },
           disabled:
@@ -158,11 +158,11 @@ function AgentDetailPage() {
         }}
         del={{
           label: t('common.delete'),
-          confirmName: name,
+          confirmName: query.data?.name ?? id,
           resourceType: 'agent',
           onConfirm: (ctx) => {
             if (save.isPending || del.isPending) return Promise.resolve()
-            return del.mutateAsync({ confirm: ctx?.typedConfirm ?? '', release: beginBusy(name) })
+            return del.mutateAsync({ confirm: ctx?.typedConfirm ?? '', release: beginBusy(id) })
           },
           disabled: del.isPending || save.isPending,
         }}
@@ -176,8 +176,8 @@ function AgentDetailPage() {
               // can complete build → run → result. Normal launches are untouched.
               search={
                 tour.active?.tourId === 'first-task'
-                  ? { kind: 'agent', agent: name, tour: 'first-task' }
-                  : { kind: 'agent', agent: name }
+                  ? { kind: 'agent', agentId: id, tour: 'first-task' }
+                  : { kind: 'agent', agentId: id }
               }
               className="btn"
               data-testid="agent-launch-button"
@@ -210,6 +210,7 @@ function AgentDetailPage() {
       <AgentForm
         value={draft ?? emptyAgent()}
         onChange={setDraft}
+        resourceId={id}
         idPrefix="agents-detail"
         nameLocked
         defaultTechnicalDetailsOpen

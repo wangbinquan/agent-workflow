@@ -55,7 +55,12 @@ describe('RFC-199 T11 starter catalog', () => {
     ]
     const planned = planWorkflowStarter(
       'standard-development',
-      { coder: 'coder', auditor: 'auditor', aggregator: 'aggregator', fixer: 'fixer' },
+      {
+        coder: 'id-coder',
+        auditor: 'id-auditor',
+        aggregator: 'id-aggregator',
+        fixer: 'id-fixer',
+      },
       agents,
     )
     expect(planned.ok).toBe(true)
@@ -97,7 +102,7 @@ describe('RFC-199 T11 starter catalog', () => {
   })
 
   test('audit-only candidate binds the selected agent output once', () => {
-    const planned = planWorkflowStarter('audit-only', { auditor: 'audit' }, [
+    const planned = planWorkflowStarter('audit-only', { auditor: 'id-audit' }, [
       agent('audit', { outputs: ['report'], outputKinds: { report: 'markdown' } }),
     ])
     expect(planned.ok).toBe(true)

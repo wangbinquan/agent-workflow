@@ -1,8 +1,8 @@
-// RFC-030 follow-up — locks that /mcps/$name actually mounts
+// RFC-030 follow-up — locks that /mcps/$id actually mounts
 // <McpInventoryPanel/> AND renders it above the edit form.
 //
 // Why this exists: during the RFC-030 commit dance a concurrent editor
-// silently stripped the <McpInventoryPanel mcpName={name} /> insertion
+// silently stripped the <McpInventoryPanel mcpId={id} /> insertion
 // from routes/mcps.detail.tsx; the page shipped showing only the edit
 // form, so the "查看完整接口" link from the /mcps list landed users on a
 // page where the inventory looked completely absent. This source-grep
@@ -23,7 +23,7 @@ const SRC = resolve(
 
 const text = readFileSync(SRC, 'utf-8')
 
-describe('/mcps/$name mounts the RFC-030 inventory panel', () => {
+describe('/mcps/$id mounts the RFC-030 inventory panel', () => {
   test('imports McpInventoryPanel from components/mcps/', () => {
     expect(text).toMatch(
       /import\s*\{\s*McpInventoryPanel\s*\}\s*from\s*['"]@\/components\/mcps\/McpInventoryPanel['"]/,
@@ -31,7 +31,7 @@ describe('/mcps/$name mounts the RFC-030 inventory panel', () => {
   })
 
   test('renders the inventory with exact saved hash and save-and-probe callback', () => {
-    expect(text).toMatch(/<McpInventoryPanel\s+[\s\S]*?mcpName=\{name\}/)
+    expect(text).toMatch(/<McpInventoryPanel\s+[\s\S]*?mcpId=\{id\}/)
     expect(text).toContain('operationConfigHash={query.data?.operationConfigHash}')
     expect(text).toContain('onSaveForProbe={saveForProbe}')
   })

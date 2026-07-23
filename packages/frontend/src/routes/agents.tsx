@@ -36,7 +36,6 @@ function AgentsSplitLayout() {
   const { data, isLoading, error, refetch, owners } = useResourceList<Agent>({
     queryKey: ['agents'],
     endpoint: '/api/agents',
-    deleteBy: 'name',
   })
 
   // RFC-115: each agent's runtime; inheriting agents fall back to the global
@@ -47,7 +46,7 @@ function AgentsSplitLayout() {
   })
   const defaultRuntimeName = runtimes.data?.runtimes.find((r) => r.isDefault)?.name
 
-  const params = useParams({ strict: false }) as { name?: string }
+  const params = useParams({ strict: false }) as { id?: string }
   const matchRoute = useMatchRoute()
   const isNew = matchRoute({ to: '/agents/new' }) !== false
 
@@ -70,7 +69,7 @@ function AgentsSplitLayout() {
             outputs: outputCount,
           })
           const ownerName =
-            a.ownerUserId != null ? (owners.get(a.ownerUserId)?.displayName ?? '') : ''
+            a.ownerUserId != null ? (owners.get(a.ownerUserId)?.displayName ?? a.ownerUserId) : ''
           const hasSummary =
             runtimeSummary != null ||
             inputCount + outputCount > 0 ||
@@ -78,7 +77,7 @@ function AgentsSplitLayout() {
             ownerName !== '' ||
             a.builtin === true
           return {
-            key: a.name,
+            key: a.id,
             kind: 'agent' as const,
             title: a.name,
             subtitle: a.description || undefined,
@@ -97,8 +96,8 @@ function AgentsSplitLayout() {
               a.visibility === 'private' ? t('acl.privateChip') : '',
               ownerName,
             ].join(' '),
-            to: '/agents/$name',
-            params: { name: a.name },
+            to: '/agents/$id',
+            params: { id: a.id },
             badges: hasSummary ? (
               <span className="agent-card__facts">
                 {runtimeSummary != null && (
@@ -138,7 +137,7 @@ function AgentsSplitLayout() {
       items={items}
       isLoading={isLoading}
       error={error}
-      selectedKey={isNew ? null : (params.name ?? null)}
+      selectedKey={isNew ? null : (params.id ?? null)}
       newActive={isNew}
       newLabel={t('agents.newButton')}
       newTo="/agents/new"

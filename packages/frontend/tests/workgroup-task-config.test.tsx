@@ -39,6 +39,7 @@ function makeConfig(over: Partial<WorkgroupRuntimeConfig> = {}): WorkgroupRuntim
       {
         id: 'mem_lead',
         memberType: 'agent',
+        agentId: 'agent_coordinator',
         agentName: 'coordinator',
         userId: null,
         displayName: 'Lead',
@@ -47,6 +48,7 @@ function makeConfig(over: Partial<WorkgroupRuntimeConfig> = {}): WorkgroupRuntim
       {
         id: 'mem_work',
         memberType: 'agent',
+        agentId: 'agent_worker',
         agentName: 'worker',
         userId: null,
         displayName: 'Worker',
@@ -113,12 +115,22 @@ describe('buildWorkgroupConfigPatch — only-changed-fields matrix', () => {
 
     const add = workgroupTaskConfigDraftFrom(config)
     add.addMembers = [
-      { memberType: 'agent', agentName: 'reviewer', displayName: 'Reviewer', roleDesc: 'r' },
+      {
+        memberType: 'agent',
+        agentId: 'agent_reviewer',
+        displayName: 'Reviewer',
+        roleDesc: 'r',
+      },
       { memberType: 'human', userId: 'u9', displayName: 'Bob', roleDesc: '' },
     ]
     expect(buildWorkgroupConfigPatch(config, add)).toEqual({
       addMembers: [
-        { memberType: 'agent', agentName: 'reviewer', displayName: 'Reviewer', roleDesc: 'r' },
+        {
+          memberType: 'agent',
+          agentId: 'agent_reviewer',
+          displayName: 'Reviewer',
+          roleDesc: 'r',
+        },
         { memberType: 'human', userId: 'u9', displayName: 'Bob', roleDesc: '' },
       ],
     })
@@ -173,7 +185,8 @@ function installFetch(
       if (url.includes('/config') && method === 'PUT') {
         return overrides.put !== undefined ? overrides.put() : json({ changes: ['x'] })
       }
-      if (url.includes('/api/agents')) return json([{ name: 'reviewer' }])
+      if (url.includes('/api/agents'))
+        return json([{ id: 'agent_reviewer', name: 'reviewer', ownerUserId: null }])
       if (url.includes('/api/users/search')) return json(overrides.usersSearch ?? [])
       return json({})
     },
@@ -220,6 +233,7 @@ describe('WorkgroupTaskConfigDialog', () => {
         {
           id: 'mem_human',
           memberType: 'human' as const,
+          agentId: null,
           agentName: null,
           userId: 'u-1',
           displayName: 'owner',
@@ -357,7 +371,12 @@ describe('WorkgroupTaskConfigDialog', () => {
       const put = calls.find((c) => c.method === 'PUT')
       expect(put?.body).toEqual({
         addMembers: [
-          { memberType: 'agent', agentName: 'reviewer', displayName: 'reviewer', roleDesc: '' },
+          {
+            memberType: 'agent',
+            agentId: 'agent_reviewer',
+            displayName: 'reviewer',
+            roleDesc: '',
+          },
         ],
       })
     })

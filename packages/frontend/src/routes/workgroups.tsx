@@ -1,5 +1,5 @@
 // RFC-164 → RFC-191 — /workgroups list page as a card gallery. Cards open the
-// room at /workgroups/$name (whole card = stretched link);「启动」deep-links
+// room at /workgroups/$id (whole card = stretched link);「启动」deep-links
 // the task wizard with the group preselected — gated on the SAME shared
 // `workgroupLaunchReadiness` oracle the detail page uses (a not-ready group,
 // e.g. quick-created / leaderless, hides the launch action instead of letting
@@ -44,7 +44,6 @@ function WorkgroupsPage() {
   const { data, isLoading, error, owners } = useResourceList<Workgroup>({
     queryKey: ['workgroups'],
     endpoint: '/api/workgroups',
-    deleteBy: 'name',
   })
 
   // Quick create — name + description only; navigate to the detail page
@@ -66,10 +65,10 @@ function WorkgroupsPage() {
       api.post<Workgroup>('/api/workgroups', body),
     onSuccess: (w) => {
       void qc.invalidateQueries({ queryKey: ['workgroups'] })
-      qc.setQueryData(['workgroups', w.name], w)
+      qc.setQueryData(['workgroups', w.id], w)
       if (!createOpenRef.current) return
       setCreateOpenTracked(false)
-      navigate({ to: '/workgroups/$name', params: { name: w.name } })
+      navigate({ to: '/workgroups/$id', params: { id: w.id } })
     },
   })
   const builtCreate = buildQuickCreatePayload({
@@ -113,7 +112,9 @@ function WorkgroupsPage() {
                   leader === null ? '' : t('workgroups.cardLeader', { name: leader }),
                   workgroupHasHumanMember(w.members) ? t('workgroups.humanMemberChip') : '',
                   w.visibility === 'private' ? t('acl.privateChip') : '',
-                  w.ownerUserId != null ? (owners.get(w.ownerUserId)?.displayName ?? '') : '',
+                  w.ownerUserId != null
+                    ? (owners.get(w.ownerUserId)?.displayName ?? w.ownerUserId)
+                    : '',
                 ].join(' '),
                 subtitleFallback: t('workgroups.noDescription'),
                 badges: (
@@ -144,12 +145,12 @@ function WorkgroupsPage() {
                   </>
                 ),
                 updatedAt: w.updatedAt,
-                to: '/workgroups/$name' as const,
-                params: { name: w.name },
+                to: '/workgroups/$id' as const,
+                params: { id: w.id },
                 // Not-ready groups (no agent member / missing leader) hide
                 // launch — same oracle & behavior as the detail header.
                 launch: readiness.ready
-                  ? { kind: 'workgroup' as const, workgroup: w.name }
+                  ? { kind: 'workgroup' as const, workgroupId: w.id }
                   : undefined,
                 actionHint: !readiness.ready
                   ? readiness.reasons.includes('no-agent-member')

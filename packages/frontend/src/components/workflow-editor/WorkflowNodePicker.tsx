@@ -15,6 +15,7 @@ import { TextInput } from '@/components/Form'
 import { useManagedLiveRegion } from '@/components/ManagedLiveRegion'
 import { TabBar, type TabDef } from '@/components/TabBar'
 import { TabPanels } from '@/components/split/TabPanels'
+import { useUserLookup } from '@/hooks/useUserLookup'
 import {
   PALETTE_MIME,
   buildPalette,
@@ -91,7 +92,32 @@ function writeRecentIdentity(identity: string, previous: readonly string[]): str
   return next
 }
 
-export function WorkflowNodePickerCatalog({
+type WorkflowNodePickerCatalogBodyProps = WorkflowNodePickerCatalogProps & {
+  ownerLabel?: (ownerUserId: string | null | undefined) => string | undefined
+}
+
+export function WorkflowNodePickerCatalog(props: WorkflowNodePickerCatalogProps) {
+  const hasOwners = props.agents.some(
+    (agent) => agent.ownerUserId !== null && agent.ownerUserId !== undefined,
+  )
+  return hasOwners ? (
+    <OwnerAwareWorkflowNodePickerCatalog {...props} />
+  ) : (
+    <WorkflowNodePickerCatalogBody {...props} />
+  )
+}
+
+function OwnerAwareWorkflowNodePickerCatalog(props: WorkflowNodePickerCatalogProps) {
+  const owners = useUserLookup(props.agents.map((agent) => agent.ownerUserId))
+  return (
+    <WorkflowNodePickerCatalogBody
+      {...props}
+      ownerLabel={(ownerUserId) => owners.get(ownerUserId)?.displayName ?? ownerUserId ?? undefined}
+    />
+  )
+}
+
+function WorkflowNodePickerCatalogBody({
   agents,
   onPick,
   onCancel,
@@ -99,7 +125,8 @@ export function WorkflowNodePickerCatalog({
   showDragGrip = false,
   className,
   initialFocusRef,
-}: WorkflowNodePickerCatalogProps) {
+  ownerLabel,
+}: WorkflowNodePickerCatalogBodyProps) {
   const { t } = useTranslation()
   const managedLiveRegion = useManagedLiveRegion()
   const ownSearchRef = useRef<HTMLInputElement | null>(null)
@@ -109,7 +136,7 @@ export function WorkflowNodePickerCatalog({
   const [activeCategory, setActiveCategory] = useState<NodePickerCategory>('all')
   const [recent, setRecent] = useState<string[]>(readRecentIdentities)
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([])
-  const sections = useMemo(() => buildPalette(agents, t), [agents, t])
+  const sections = useMemo(() => buildPalette(agents, t, ownerLabel), [agents, ownerLabel, t])
   const categoryLabels = useMemo<Record<PaletteSectionKey, string>>(
     () => ({
       agents: t('editor.nodePicker.categoryAgent'),

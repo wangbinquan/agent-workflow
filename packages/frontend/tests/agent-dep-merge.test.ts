@@ -19,7 +19,7 @@ describe('mergeAgentDeps', () => {
     expect(next).toBe(value)
   })
 
-  test('appends new agent name to empty dependsOn', () => {
+  test('appends new agent id to empty dependsOn', () => {
     const value = emptyAgent()
     const next = mergeAgentDeps(value, { ...EMPTY_SELECTION, agents: ['a'] })
     expect(next.dependsOn).toEqual(['a'])
@@ -38,8 +38,7 @@ describe('mergeAgentDeps', () => {
       bodyMd: 'preserve me',
       permission: { edit: 'allow' as const },
       dependsOn: ['existing-a'],
-      // RFC-223 (PR-1): skills are typed refs; detected names merge as MANAGED
-      // refs (skillId = name, resolved server-side).
+      // RFC-223: detected managed skills already carry immutable ids.
       skills: [{ kind: 'managed' as const, skillId: 'existing-s' }],
       mcp: ['existing-m'],
       plugins: ['existing-p'],

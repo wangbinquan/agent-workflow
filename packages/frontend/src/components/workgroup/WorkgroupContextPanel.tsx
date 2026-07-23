@@ -4,7 +4,7 @@
 //   member — the selected member's editor: alias / role joins that same
 //            composite draft; set-leader / remove also submit one full replace;
 //            plus a read-only capability card + a jump to
-//            /agents/$name (D2: "编辑 agent" = editing the MEMBER; the agent
+//            /agents/$id (D2: "编辑 agent" = editing the MEMBER; the agent
 //            definition itself is edited on its own page)
 //   add    — the add-member form (same MemberFields the mid-run dialogs use)
 //
@@ -22,6 +22,7 @@ import { Field, TextInput } from '@/components/Form'
 import { StatusChip } from '@/components/StatusChip'
 import { useAgentsList } from '@/hooks/useAgentsList'
 import { useUserLookup } from '@/hooks/useUserLookup'
+import { resourceOptionLabel } from '@/lib/resource-option-label'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import {
   validateMemberDraft,
@@ -243,10 +244,15 @@ function MemberBody(props: {
   const errors = validateMemberDraft(row, props.others)
   const agentsList = useAgentsList({ enabled: row.memberType === 'agent' })
   const agent =
-    row.memberType === 'agent' ? agentsList.agents.find((a) => a.name === row.agentName) : undefined
-  const users = useUserLookup([row.memberType === 'human' ? row.userId : null])
+    row.memberType === 'agent' ? agentsList.agents.find((a) => a.id === row.agentId) : undefined
+  const users = useUserLookup([row.memberType === 'human' ? row.userId : null, agent?.ownerUserId])
   const reference =
-    row.memberType === 'agent' ? row.agentName : (users.get(row.userId)?.displayName ?? row.userId)
+    row.memberType === 'agent'
+      ? resourceOptionLabel(
+          agent?.name ?? row.agentName,
+          users.get(agent?.ownerUserId)?.displayName ?? agent?.ownerUserId ?? undefined,
+        )
+      : (users.get(row.userId)?.displayName ?? row.userId)
 
   return (
     <div className="workgroup-panel__member">
@@ -322,8 +328,8 @@ function MemberBody(props: {
           ) : null}
           {agent !== undefined && (
             <Link
-              to="/agents/$name"
-              params={{ name: row.agentName }}
+              to="/agents/$id"
+              params={{ id: row.agentId }}
               className="workgroup-panel__agent-link"
               data-testid="workgroup-edit-agent-link"
             >

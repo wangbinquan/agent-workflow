@@ -48,7 +48,7 @@ function Harness() {
   )
   return (
     <SkillFileTree
-      skillName="sk1"
+      skillId="skill-1"
       selected={selected}
       onSelectedChange={setSelected}
       newPath={state.newPath.draft}

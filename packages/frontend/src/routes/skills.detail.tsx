@@ -52,7 +52,7 @@ import { Route as skillsRoute } from './skills'
 
 export const Route = createRoute({
   getParentRoute: () => skillsRoute,
-  path: '/$name',
+  path: '/$id',
   component: SkillDetailPage,
   remountDeps: ({ params }) => params,
 })
@@ -82,7 +82,7 @@ class MissingSkillWriteReceiptError extends Error {
 
 function SkillDetailPage() {
   const { t } = useTranslation()
-  const { name } = Route.useParams()
+  const { id } = Route.useParams()
   const navigate = useNavigate()
   const qc = useQueryClient()
   const { beginBusy, report } = useSplitDirty()
@@ -91,15 +91,15 @@ function SkillDetailPage() {
   const contentReadIgnoreThroughEpochRef = useRef(0)
 
   const meta = useQuery<Skill>({
-    queryKey: ['skills', name],
-    queryFn: ({ signal }) => api.get(`/api/skills/${encodeURIComponent(name)}`, undefined, signal),
+    queryKey: ['skills', id],
+    queryFn: ({ signal }) => api.get(`/api/skills/${encodeURIComponent(id)}`, undefined, signal),
   })
   const content = useQuery<SkillContent>({
-    queryKey: ['skills', name, 'content'],
+    queryKey: ['skills', id, 'content'],
     queryFn: async ({ signal }) => {
       const issuedEpoch = ++remoteReadEpochRef.current
       const response = await api.get<SkillContent>(
-        `/api/skills/${encodeURIComponent(name)}/content`,
+        `/api/skills/${encodeURIComponent(id)}/content`,
         undefined,
         signal,
       )
@@ -142,7 +142,7 @@ function SkillDetailPage() {
       // and release only after a stable reconciliation clears it.
       const outcomeUnknown = aggregateSkillCompositeDraft(next).outcomeUnknown
       if (outcomeUnknown && outcomeBusyReleaseRef.current === undefined) {
-        outcomeBusyReleaseRef.current = beginBusy(name)
+        outcomeBusyReleaseRef.current = beginBusy(id)
       } else if (!outcomeUnknown && outcomeBusyReleaseRef.current !== undefined) {
         outcomeBusyReleaseRef.current()
         outcomeBusyReleaseRef.current = undefined
@@ -150,7 +150,7 @@ function SkillDetailPage() {
       compositeRef.current = next
       setComposite(next)
     },
-    [beginBusy, name],
+    [beginBusy, id],
   )
 
   const updateComposite = useCallback(
@@ -291,16 +291,16 @@ function SkillDetailPage() {
     },
     historyTab,
   ]
-  useReportSplitDirty(name, aggregate.dirty || operationBusy || aggregate.outcomeUnknown)
+  useReportSplitDirty(id, aggregate.dirty || operationBusy || aggregate.outcomeUnknown)
 
   const snapshotReader = useMemo(
     () => ({
-      readContent: () => api.get<SkillContent>(`/api/skills/${encodeURIComponent(name)}/content`),
-      readTree: () => api.get<FileNode[]>(`/api/skills/${encodeURIComponent(name)}/files`),
+      readContent: () => api.get<SkillContent>(`/api/skills/${encodeURIComponent(id)}/content`),
+      readTree: () => api.get<FileNode[]>(`/api/skills/${encodeURIComponent(id)}/files`),
       readFile: (path: string) =>
-        api.get<{ content: string }>(`/api/skills/${encodeURIComponent(name)}/file`, { path }),
+        api.get<{ content: string }>(`/api/skills/${encodeURIComponent(id)}/file`, { path }),
     }),
-    [name],
+    [id],
   )
 
   const publishStableSnapshot = useCallback(
@@ -317,15 +317,15 @@ function SkillDetailPage() {
         remoteReadEpochRef.current,
       )
       tokenRef.current = snapshot.token
-      const previous = qc.getQueryData<SkillContent>(['skills', name, 'content'])
+      const previous = qc.getQueryData<SkillContent>(['skills', id, 'content'])
       if (previous !== undefined) {
-        qc.setQueryData<SkillContent>(['skills', name, 'content'], {
+        qc.setQueryData<SkillContent>(['skills', id, 'content'], {
           ...previous,
           ...snapshot.metadata,
           token: snapshot.token,
         })
       }
-      qc.setQueryData(['skill-files', name], [...snapshot.tree])
+      qc.setQueryData(['skill-files', id], [...snapshot.tree])
 
       remoteReadEpochRef.current += 1
       const issuedEpoch = remoteReadEpochRef.current
@@ -339,9 +339,9 @@ function SkillDetailPage() {
       const remote = snapshot.files[step.path]
       if (remote === undefined) throw new Error(`stable snapshot omitted '${step.path}'`)
       if (remote.exists) {
-        qc.setQueryData(['skill-file', name, step.path], { content: remote.content })
+        qc.setQueryData(['skill-file', id, step.path], { content: remote.content })
       } else {
-        qc.removeQueries({ queryKey: ['skill-file', name, step.path], exact: true })
+        qc.removeQueries({ queryKey: ['skill-file', id, step.path], exact: true })
       }
       updateComposite((current) =>
         reduceSkillCompositeScope(
@@ -357,7 +357,7 @@ function SkillDetailPage() {
       )
       return skillFileEqual(remote, step.submitted)
     },
-    [name, qc, updateComposite],
+    [id, qc, updateComposite],
   )
 
   const reconcileStep = useCallback(
@@ -513,13 +513,13 @@ function SkillDetailPage() {
   const writeStep = useCallback(
     async (step: SkillSaveStep, expectedToken: string, requestId: string): Promise<string> => {
       if (step.kind === 'metadata') {
-        const receipt = await api.post<SkillContent>(
-          `/api/skills/${encodeURIComponent(name)}/save`,
-          { ...step.submitted, expectedToken },
-        )
+        const receipt = await api.post<SkillContent>(`/api/skills/${encodeURIComponent(id)}/save`, {
+          ...step.submitted,
+          expectedToken,
+        })
         if (
           typeof receipt.token !== 'string' ||
-          receipt.name !== name ||
+          receipt.name !== meta.data?.name ||
           typeof receipt.description !== 'string' ||
           typeof receipt.bodyMd !== 'string'
         ) {
@@ -531,7 +531,7 @@ function SkillDetailPage() {
           ignoreContentReadsThroughEpoch,
         )
         tokenRef.current = receipt.token
-        qc.setQueryData(['skills', name, 'content'], receipt)
+        qc.setQueryData(['skills', id, 'content'], receipt)
         settleStepSuccess(
           step,
           requestId,
@@ -547,7 +547,7 @@ function SkillDetailPage() {
       let freshToken: string
       if (step.op === 'put') {
         const receipt = await api.put<{ ok?: boolean; path?: string; token?: string }>(
-          `/api/skills/${encodeURIComponent(name)}/file?path=${encodeURIComponent(step.path)}`,
+          `/api/skills/${encodeURIComponent(id)}/file?path=${encodeURIComponent(step.path)}`,
           { content: step.submitted.content, expectedToken },
         )
         if (
@@ -560,7 +560,7 @@ function SkillDetailPage() {
         freshToken = receipt.token
       } else {
         const receipt = await api.delete<{ token?: string }>(
-          `/api/skills/${encodeURIComponent(name)}/file?path=${encodeURIComponent(step.path)}&expectedToken=${encodeURIComponent(expectedToken)}`,
+          `/api/skills/${encodeURIComponent(id)}/file?path=${encodeURIComponent(step.path)}&expectedToken=${encodeURIComponent(expectedToken)}`,
         )
         if (typeof receipt.token !== 'string') throw new MissingSkillWriteReceiptError()
         freshToken = receipt.token
@@ -573,14 +573,14 @@ function SkillDetailPage() {
       tokenRef.current = freshToken
       settleStepSuccess(step, requestId, step.submitted, ignoreContentReadsThroughEpoch)
       if (step.op === 'put') {
-        qc.setQueryData(['skill-file', name, step.path], { content: step.submitted.content })
+        qc.setQueryData(['skill-file', id, step.path], { content: step.submitted.content })
       } else {
-        qc.removeQueries({ queryKey: ['skill-file', name, step.path], exact: true })
+        qc.removeQueries({ queryKey: ['skill-file', id, step.path], exact: true })
         setSelectedFile((current) => (current === step.path ? null : current))
       }
       return freshToken
     },
-    [name, qc, settleStepSuccess],
+    [id, meta.data?.name, qc, settleStepSuccess],
   )
 
   const handleSave = useCallback(async () => {
@@ -591,7 +591,7 @@ function SkillDetailPage() {
     const plan = captureSkillSavePlan(current)
     if (plan.length === 0) return
 
-    const releaseBusy = beginBusy(name)
+    const releaseBusy = beginBusy(id)
     saveBusyReleaseRef.current = releaseBusy
     setSaving(true)
     setSaveError(null)
@@ -643,19 +643,19 @@ function SkillDetailPage() {
       const latest = compositeRef.current
       const remaining = latest === null ? 0 : dirtyPersistedScopeCount(latest)
       if (saved > 0 || remaining > 0) setSaveSummary({ saved, remaining })
-      void qc.invalidateQueries({ queryKey: ['skills', name] })
-      void qc.invalidateQueries({ queryKey: ['skills', name, 'versions'] })
-      void qc.invalidateQueries({ queryKey: ['skill-files', name] })
+      void qc.invalidateQueries({ queryKey: ['skills', id] })
+      void qc.invalidateQueries({ queryKey: ['skills', id, 'versions'] })
+      void qc.invalidateQueries({ queryKey: ['skill-files', id] })
       void qc.invalidateQueries({ queryKey: ['skills'], exact: true })
       if (saveBusyReleaseRef.current === releaseBusy) saveBusyReleaseRef.current = undefined
       releaseBusy()
     }
-  }, [beginBusy, beginStep, name, qc, reconcileStep, settleStepError, writeStep])
+  }, [beginBusy, beginStep, id, qc, reconcileStep, settleStepError, writeStep])
 
   const handleRecheck = useCallback(async () => {
     const pending = ambiguousStepRef.current
     if (pending === undefined || rechecking || recheckBusyReleaseRef.current !== undefined) return
-    const releaseBusy = beginBusy(name)
+    const releaseBusy = beginBusy(id)
     recheckBusyReleaseRef.current = releaseBusy
     setRechecking(true)
     try {
@@ -675,7 +675,7 @@ function SkillDetailPage() {
       if (recheckBusyReleaseRef.current === releaseBusy) recheckBusyReleaseRef.current = undefined
       releaseBusy()
     }
-  }, [beginBusy, name, rechecking, reconcileStep])
+  }, [beginBusy, id, rechecking, reconcileStep])
 
   const discardAll = useCallback(() => {
     const current = compositeRef.current
@@ -686,7 +686,7 @@ function SkillDetailPage() {
     setSaveSummary(null)
     return true
   }, [replaceComposite])
-  useRegisterSplitDiscard(name, discardAll)
+  useRegisterSplitDiscard(id, discardAll)
 
   const finishRestoreIfIdle = useCallback(() => {
     if (restoreMutationPendingRef.current || restoreReconcilePendingRef.current) return
@@ -700,14 +700,14 @@ function SkillDetailPage() {
       restoreMutationPendingRef.current = pending
       if (pending) {
         if (restoreBusyReleaseRef.current === undefined) {
-          restoreBusyReleaseRef.current = beginBusy(name)
+          restoreBusyReleaseRef.current = beginBusy(id)
         }
         setRestorePending(true)
       } else {
         finishRestoreIfIdle()
       }
     },
-    [beginBusy, finishRestoreIfIdle, name],
+    [beginBusy, finishRestoreIfIdle, id],
   )
   const handleRestoreStart = useCallback(
     () => handleRestorePendingChange(true),
@@ -717,7 +717,7 @@ function SkillDetailPage() {
   const handleRestored = useCallback(() => {
     restoreReconcilePendingRef.current = true
     if (restoreBusyReleaseRef.current === undefined) {
-      restoreBusyReleaseRef.current = beginBusy(name)
+      restoreBusyReleaseRef.current = beginBusy(id)
     }
     setRestorePending(true)
     contentReadIgnoreThroughEpochRef.current = Math.max(
@@ -745,16 +745,16 @@ function SkillDetailPage() {
         restoreReconcilePendingRef.current = false
         finishRestoreIfIdle()
       })
-  }, [beginBusy, content, finishRestoreIfIdle, name, replaceComposite])
+  }, [beginBusy, content, finishRestoreIfIdle, id, replaceComposite])
 
   const del = useMutation({
     mutationFn: ({ confirm, release: _release }: { confirm: string; release: SplitBusyRelease }) =>
-      api.deleteJson(`/api/skills/${encodeURIComponent(name)}`, { confirm }),
+      api.deleteJson(`/api/skills/${encodeURIComponent(id)}`, { confirm }),
     onSuccess: async (_deleted, { release }) => {
-      report(name, false)
+      report(id, false)
       await qc.cancelQueries({ queryKey: ['skills'], exact: true })
       qc.setQueryData<Skill[]>(['skills'], (rows) =>
-        rows === undefined ? rows : rows.filter((row) => row.name !== name),
+        rows === undefined ? rows : rows.filter((row) => row.id !== id),
       )
       void qc.invalidateQueries({ queryKey: ['skills'], exact: true })
       release()
@@ -829,6 +829,7 @@ function SkillDetailPage() {
   // it after onPendingChange(true) would strand the route in a permanent busy
   // state before the child's onSuccess/onSettled callbacks can report completion.
   const historyBlocked = historyBlockedForNav
+  const skillName = meta.data?.name ?? content.data?.name ?? id
   const historyPanel = historyBlocked ? (
     <EmptyState
       title={t('skills.historyBlockedTitle')}
@@ -853,7 +854,7 @@ function SkillDetailPage() {
     />
   ) : (
     <SkillVersionHistory
-      skillName={name}
+      skillId={id}
       currentVersion={meta.data?.contentVersion ?? 0}
       busy={operationBusy}
       onRestoreStart={handleRestoreStart}
@@ -865,10 +866,10 @@ function SkillDetailPage() {
   return (
     <fieldset className="detail-freeze skill-detail" disabled={del.isPending}>
       <DetailHeaderActions
-        title={name}
+        title={skillName}
         headingLevel={2}
         acl={{
-          resourceBaseUrl: `/api/skills/${encodeURIComponent(name)}`,
+          resourceBaseUrl: `/api/skills/${encodeURIComponent(id)}`,
           invalidateKey: ['skills'],
           canTransferOwner: true,
         }}
@@ -881,10 +882,10 @@ function SkillDetailPage() {
         }}
         del={{
           label: t('common.delete'),
-          confirmName: name,
+          confirmName: skillName,
           resourceType: 'skill',
           onConfirm: (ctx) =>
-            del.mutateAsync({ confirm: ctx?.typedConfirm ?? '', release: beginBusy(name) }),
+            del.mutateAsync({ confirm: ctx?.typedConfirm ?? '', release: beginBusy(id) }),
           disabled: del.isPending || aggregate.dirty || operationBusy || aggregate.outcomeUnknown,
         }}
         extra={
@@ -961,7 +962,7 @@ function SkillDetailPage() {
               testid: 'skill-panel-files',
               content: (
                 <SkillFileTree
-                  skillName={name}
+                  skillId={id}
                   readonlyPaths={['SKILL.md']}
                   selected={selectedFile}
                   onSelectedChange={setSelectedFile}

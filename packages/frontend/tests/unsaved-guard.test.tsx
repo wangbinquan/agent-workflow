@@ -38,38 +38,38 @@ import { useReportSplitDirty, useSplitDirty } from '../src/components/split/spli
 import '../src/i18n'
 
 const ITEMS: ResourceCardItem[] = [
-  { key: 'a', kind: 'agent', title: 'a', to: '/agents/$name', params: { name: 'a' } },
-  { key: 'b', kind: 'agent', title: 'b', to: '/agents/$name', params: { name: 'b' } },
+  { key: 'a', kind: 'agent', title: 'a', to: '/agents/$id', params: { id: 'a' } },
+  { key: 'b', kind: 'agent', title: 'b', to: '/agents/$id', params: { id: 'b' } },
 ]
 
 function AlwaysDirtyDetail() {
-  const { name } = useParams({ from: '/agents/$name' })
-  useReportSplitDirty(name, true)
-  return <div data-testid="detail-pane">detail:{name}</div>
+  const { id } = useParams({ from: '/agents/$id' })
+  useReportSplitDirty(id, true)
+  return <div data-testid="detail-pane">detail:{id}</div>
 }
 
 function CleanDetail() {
-  const { name } = useParams({ from: '/agents/$name' })
-  useReportSplitDirty(name, false)
-  return <div data-testid="detail-pane">detail:{name}</div>
+  const { id } = useParams({ from: '/agents/$id' })
+  useReportSplitDirty(id, false)
+  return <div data-testid="detail-pane">detail:{id}</div>
 }
 
 /** Dirty, but a button that sync-clears the dirty ref before navigating —
  *  the shape create/delete onSuccess uses to avoid a self-block (T-D5). */
 function SyncClearDetail() {
-  const { name } = useParams({ from: '/agents/$name' })
+  const { id } = useParams({ from: '/agents/$id' })
   const { report } = useSplitDirty()
   const navigate = useNavigate()
-  useReportSplitDirty(name, true)
+  useReportSplitDirty(id, true)
   return (
     <div data-testid="detail-pane">
-      detail:{name}
+      detail:{id}
       <button
         type="button"
         data-testid="save-and-go"
         onClick={() => {
-          report(name, false) // synchronous ref clear
-          void navigate({ to: '/agents/$name', params: { name: 'b' } })
+          report(id, false) // synchronous ref clear
+          void navigate({ to: '/agents/$id', params: { id: 'b' } })
         }}
       >
         save & go
@@ -87,14 +87,14 @@ function renderGuard(opts: { initial: string; Detail: () => ReactElement }) {
     getParentRoute: () => RootRoute,
     path: '/agents',
     component: function Layout() {
-      const params = useParams({ strict: false }) as { name?: string }
+      const params = useParams({ strict: false }) as { id?: string }
       return (
         <ResourceSplitPage
           title="Agents"
           items={ITEMS}
           isLoading={false}
           error={null}
-          selectedKey={params.name ?? null}
+          selectedKey={params.id ?? null}
           newActive={false}
           newLabel="+ New"
           newTo="/agents/new"
@@ -117,7 +117,7 @@ function renderGuard(opts: { initial: string; Detail: () => ReactElement }) {
   })
   const detailRoute = createRoute({
     getParentRoute: () => layoutRoute,
-    path: '/$name',
+    path: '/$id',
     component: opts.Detail,
   })
   const tree = RootRoute.addChildren([layoutRoute.addChildren([detailRoute, indexRoute])])

@@ -1,8 +1,8 @@
 // RFC-030 — TanStack hooks for the /api/mcps/.../probe endpoints.
 //
 // useMcpProbes()           — list, used on /mcps page
-// useMcpProbe(name)        — single, used on /mcps/$name page
-// useProbeMcpMutation(name) — POST trigger; invalidates both query keys
+// useMcpProbe(id)          — single, used on /mcps/$id page
+// useProbeMcpMutation(id)  — POST trigger; invalidates both query keys
 //
 // All three live in a sibling file so the page + detail + panel components
 // share the same cache keys (otherwise we'd race two probes against one
@@ -18,8 +18,8 @@ import type {
 import { api, ApiError } from '@/api/client'
 
 export const MCP_PROBES_KEY = ['mcps', 'probes'] as const
-export const mcpProbeKey = (name: string): readonly unknown[] => ['mcps', name, 'probe']
-export const mcpResourceKey = (name: string): readonly unknown[] => ['mcps', name]
+export const mcpProbeKey = (id: string): readonly unknown[] => ['mcps', id, 'probe']
+export const mcpResourceKey = (id: string): readonly unknown[] => ['mcps', id]
 
 let requestSequence = 0
 function nextRequestId(): string {
@@ -40,13 +40,13 @@ export function useMcpProbes() {
  * banner — but `mcp-not-found` still surfaces as an error (that's a real
  * data integrity problem the page should show).
  */
-export function useMcpProbe(name: string) {
+export function useMcpProbe(id: string) {
   return useQuery<McpProbe | null>({
-    queryKey: mcpProbeKey(name),
+    queryKey: mcpProbeKey(id),
     queryFn: async ({ signal }) => {
       try {
         return await api.get<McpProbe>(
-          `/api/mcps/${encodeURIComponent(name)}/probe`,
+          `/api/mcps/${encodeURIComponent(id)}/probe`,
           undefined,
           signal,
         )
@@ -58,14 +58,14 @@ export function useMcpProbe(name: string) {
   })
 }
 
-export function useProbeMcpMutation(name: string) {
+export function useProbeMcpMutation(id: string) {
   const qc = useQueryClient()
   const current = useRef<{ requestId: string; expectedHash: string } | null>(null)
   const [resultStale, setResultStale] = useState(false)
   type Variables = { requestId: string; expectedConfigHash: string }
   const mutation = useMutation<McpProbeOperationReceipt, Error, Variables>({
     mutationFn: (variables) =>
-      api.post<McpProbeOperationReceipt>(`/api/mcps/${encodeURIComponent(name)}/probe`, {
+      api.post<McpProbeOperationReceipt>(`/api/mcps/${encodeURIComponent(id)}/probe`, {
         expectedConfigHash: variables.expectedConfigHash,
       }),
     onMutate: (variables) => {
@@ -77,7 +77,7 @@ export function useProbeMcpMutation(name: string) {
     },
     onSuccess: (receipt, variables) => {
       const active = current.current
-      const resource = qc.getQueryData<McpOperationResource>(mcpResourceKey(name))
+      const resource = qc.getQueryData<McpOperationResource>(mcpResourceKey(id))
       const matchesCurrentRequest =
         active?.requestId === variables.requestId &&
         active.expectedHash === variables.expectedConfigHash
@@ -89,12 +89,12 @@ export function useProbeMcpMutation(name: string) {
       if (!matchesCurrentRequest) return
       if (!matchesCurrentResource) {
         setResultStale(true)
-        void qc.invalidateQueries({ queryKey: mcpResourceKey(name), exact: true })
-        void qc.invalidateQueries({ queryKey: mcpProbeKey(name), exact: true })
+        void qc.invalidateQueries({ queryKey: mcpResourceKey(id), exact: true })
+        void qc.invalidateQueries({ queryKey: mcpProbeKey(id), exact: true })
         void qc.invalidateQueries({ queryKey: MCP_PROBES_KEY })
         return
       }
-      qc.setQueryData<McpProbe>(mcpProbeKey(name), receipt)
+      qc.setQueryData<McpProbe>(mcpProbeKey(id), receipt)
       void qc.invalidateQueries({ queryKey: MCP_PROBES_KEY })
     },
     onError: (error, variables) => {
@@ -111,8 +111,8 @@ export function useProbeMcpMutation(name: string) {
           error.code === 'resource-operation-superseded')
       ) {
         setResultStale(true)
-        void qc.invalidateQueries({ queryKey: mcpResourceKey(name), exact: true })
-        void qc.invalidateQueries({ queryKey: mcpProbeKey(name), exact: true })
+        void qc.invalidateQueries({ queryKey: mcpResourceKey(id), exact: true })
+        void qc.invalidateQueries({ queryKey: mcpProbeKey(id), exact: true })
         void qc.invalidateQueries({ queryKey: MCP_PROBES_KEY })
       }
     },

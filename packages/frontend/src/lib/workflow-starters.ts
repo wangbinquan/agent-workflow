@@ -104,17 +104,17 @@ export function planWorkflowStarter(
   copy: WorkflowStarterCopy = DEFAULT_WORKFLOW_STARTER_COPY,
 ): WorkflowStarterPlan {
   const entry = WORKFLOW_STARTER_CATALOG.find((candidate) => candidate.id === starterId)!
-  const byName = new Map(agents.map((agent) => [agent.name, agent] as const))
+  const byId = new Map(agents.map((agent) => [agent.id, agent] as const))
   const resolved = new Map<WorkflowStarterRole, Agent>()
   const issues: WorkflowStarterPreflightIssue[] = []
 
   for (const role of entry.roles) {
-    const agentName = mapping[role]
-    if (agentName === undefined || agentName === '') {
+    const agentId = mapping[role]
+    if (agentId === undefined || agentId === '') {
       issues.push({ role, code: 'role-unmapped' })
       continue
     }
-    const agent = byName.get(agentName)
+    const agent = byId.get(agentId)
     if (agent === undefined) {
       issues.push({ role, code: 'agent-missing' })
       continue
@@ -149,6 +149,7 @@ export function planWorkflowStarter(
             id: 'starter_auditor',
             kind: 'agent-single',
             title: copy.auditorTitle,
+            agentId: auditor.id,
             agentName: auditor.name,
             promptTemplate: 'Audit {{artifact}} and report concrete findings.',
             position: { x: 420, y: 180 },
@@ -220,6 +221,7 @@ export function planWorkflowStarter(
           id: 'starter_coder',
           kind: 'agent-single',
           title: copy.coderTitle,
+          agentId: coder.id,
           agentName: coder.name,
           promptTemplate: 'Implement {{request}} in the worktree.',
           position: { x: 360, y: 180 },
@@ -236,6 +238,7 @@ export function planWorkflowStarter(
           id: 'starter_auditor',
           kind: 'agent-single',
           title: copy.auditorTitle,
+          agentId: auditor.id,
           agentName: auditor.name,
           promptTemplate: 'Audit changed file {{file}} and report concrete findings.',
           position: { x: 850, y: 150 },
@@ -244,6 +247,7 @@ export function planWorkflowStarter(
           id: 'starter_aggregator',
           kind: 'agent-single',
           title: copy.aggregatorTitle,
+          agentId: aggregator.id,
           agentName: aggregator.name,
           promptTemplate: 'Deduplicate and prioritize {{findings}}.',
           position: { x: 1110, y: 300 },
@@ -252,6 +256,7 @@ export function planWorkflowStarter(
           id: 'starter_fixer',
           kind: 'agent-single',
           title: copy.fixerTitle,
+          agentId: fixer.id,
           agentName: fixer.name,
           promptTemplate: 'Fix every actionable item in {{findings}}.',
           position: { x: 1440, y: 220 },

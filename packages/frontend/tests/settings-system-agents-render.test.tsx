@@ -2,7 +2,7 @@
 //   1. Merge runtime selector → config PUT carries mergeAgentRuntime AND
 //      mergeAgentModel:null (D6 — else "inherit" falls through to a stale legacy
 //      model instead of the global default).
-//   2. Fusion runtime selector → a RUNTIME-ONLY PUT to /api/agents/aw-skill-merger
+//   2. Fusion runtime selector → semantic builtin GET + canonical-ID runtime PUT
 //      whose body keys are EXACTLY ['runtime']; any extra key would 403
 //      builtin-readonly. Picking "inherit" sends { runtime: null }.
 //
@@ -17,6 +17,9 @@ import { DEFAULT_CONFIG, type Config } from '@agent-workflow/shared'
 import { SystemAgentsTab } from '../src/routes/settings'
 import i18n from '../src/i18n'
 import { setBaseUrl, setToken, clearToken } from '../src/stores/auth'
+
+const MERGER_ID = '00000000000000000000000001'
+const MERGER_READ = '/api/agents/builtins/skill-merger'
 
 function wrap(qc: QueryClient) {
   return function Wrapped({ children }: { children: React.ReactNode }) {
@@ -60,12 +63,17 @@ function mockFetch(): Recorded {
           ],
         })
       }
-      if (s.includes('/api/agents/aw-skill-merger') && method === 'PUT') {
+      if (s.includes(`/api/agents/${MERGER_ID}`) && method === 'PUT') {
         rec.agentPuts.push(body ?? {})
-        return json({ name: 'aw-skill-merger', runtime: body?.runtime ?? null, builtin: true })
+        return json({
+          id: MERGER_ID,
+          name: 'aw-skill-merger',
+          runtime: body?.runtime ?? null,
+          builtin: true,
+        })
       }
-      if (s.includes('/api/agents/aw-skill-merger') && method === 'GET') {
-        return json({ name: 'aw-skill-merger', runtime: 'opencode', builtin: true })
+      if (s.includes(MERGER_READ) && method === 'GET') {
+        return json({ id: MERGER_ID, name: 'aw-skill-merger', runtime: 'opencode', builtin: true })
       }
       if (s.includes('/api/config') && method === 'PUT') {
         rec.configPuts.push(body ?? {})
@@ -134,7 +142,7 @@ describe('RFC-156 SystemAgentsTab — config edit → config PUT (D6), fusion le
 })
 
 describe('RFC-156 SystemAgentsTab — fusion save is a runtime-only agent patch', () => {
-  // GET /api/agents/aw-skill-merger resolves to runtime 'opencode'; wait for the
+  // The semantic builtin GET resolves to runtime 'opencode'; wait for the
   // combobox to reflect it so a later "inherit" pick genuinely differs from the
   // loaded value (the Save only PATCHes the agent row when it actually changed).
   async function waitFusionLoaded() {
@@ -212,12 +220,12 @@ describe('RFC-156 SystemAgentsTab — fusion save is a runtime-only agent patch'
         const method = init?.method ?? 'GET'
         if (s.includes('/api/runtimes'))
           return json({ runtimes: [{ name: 'fast-oc', protocol: 'opencode', enabled: true }] })
-        if (s.includes('/api/agents/aw-skill-merger') && method === 'GET')
+        if (s.includes(MERGER_READ) && method === 'GET')
           return new Response('{"error":"forbidden"}', {
             status: 403,
             headers: { 'content-type': 'application/json' },
           })
-        if (s.includes('/api/agents/aw-skill-merger') && method === 'PUT') {
+        if (s.includes(`/api/agents/${MERGER_ID}`) && method === 'PUT') {
           rec.agentPuts.push(init?.body ? JSON.parse(String(init.body)) : {})
           return json({})
         }
@@ -261,9 +269,9 @@ describe('RFC-156 SystemAgentsTab — fusion save is a runtime-only agent patch'
               { name: 'fast-oc', protocol: 'opencode', enabled: true },
             ],
           })
-        if (s.includes('/api/agents/aw-skill-merger') && method === 'GET')
-          return json({ name: 'aw-skill-merger', runtime: 'opencode' })
-        if (s.includes('/api/agents/aw-skill-merger') && method === 'PUT') {
+        if (s.includes(MERGER_READ) && method === 'GET')
+          return json({ id: MERGER_ID, name: 'aw-skill-merger', runtime: 'opencode' })
+        if (s.includes(`/api/agents/${MERGER_ID}`) && method === 'PUT') {
           rec.agentPuts.push(init?.body ? JSON.parse(String(init.body)) : {})
           return json({})
         }
@@ -322,13 +330,23 @@ describe('RFC-156 SystemAgentsTab — fusion save is a runtime-only agent patch'
             ],
           })
         }
-        if (s.includes('/api/agents/aw-skill-merger') && method === 'GET') {
-          return json({ name: 'aw-skill-merger', runtime: 'opencode', builtin: true })
+        if (s.includes(MERGER_READ) && method === 'GET') {
+          return json({
+            id: MERGER_ID,
+            name: 'aw-skill-merger',
+            runtime: 'opencode',
+            builtin: true,
+          })
         }
-        if (s.includes('/api/agents/aw-skill-merger') && method === 'PUT') {
+        if (s.includes(`/api/agents/${MERGER_ID}`) && method === 'PUT') {
           const body = JSON.parse(String(init?.body)) as Record<string, unknown>
           rec.agentPuts.push(body)
-          return json({ name: 'aw-skill-merger', runtime: body.runtime, builtin: true })
+          return json({
+            id: MERGER_ID,
+            name: 'aw-skill-merger',
+            runtime: body.runtime,
+            builtin: true,
+          })
         }
         if (s.includes('/api/config') && method === 'PUT') {
           rec.configPuts.push(JSON.parse(String(init?.body)))

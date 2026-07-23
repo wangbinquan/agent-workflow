@@ -122,9 +122,9 @@ function AgentCreatePage() {
         rows === undefined ? rows : [...rows, created],
       )
       void qc.invalidateQueries({ queryKey: ['agents'], exact: true })
-      qc.setQueryData(['agents', created.name], created)
+      qc.setQueryData(['agents', created.id], created)
       release()
-      navigate({ to: '/agents/$name', params: { name: created.name } })
+      navigate({ to: '/agents/$id', params: { id: created.id } })
     },
     onSettled: (_created, _error, { release }) => release(),
   })

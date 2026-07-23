@@ -105,8 +105,8 @@ async function renderPage(
       stub('/tasks/new'),
       stub('/scheduled/$id'),
       stub('/workflows/$id'),
-      stub('/workgroups/by-id/$id'),
-      stub('/agents/$name'),
+      stub('/workgroups/$id'),
+      stub('/agents/$id'),
     ]),
     history: createMemoryHistory({ initialEntries: [initialEntry] }),
   })

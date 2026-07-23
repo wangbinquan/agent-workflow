@@ -1,6 +1,6 @@
 // MCP detail / edit page — the right rail of the /mcps split page.
 //
-// RFC-169 (T15): child route under the /mcps layout (path '/$name'), two tabs
+// RFC-169 / RFC-223: child route under the /mcps layout (path '/$id'), two tabs
 // (Config / Tools & probe). Save stays in place and invalidates the probe cache
 // (a config change makes the persisted probe stale). The inventory panel + its
 // re-probe move from "stacked above the form" into the Tools & probe tab.
@@ -31,7 +31,7 @@ import { Route as mcpsRoute } from './mcps'
 
 export const Route = createRoute({
   getParentRoute: () => mcpsRoute,
-  path: '/$name',
+  path: '/$id',
   component: McpDetailPage,
   remountDeps: ({ params }) => params,
 })
@@ -40,7 +40,7 @@ type McpTab = 'config' | 'probe'
 
 function McpDetailPage() {
   const { t } = useTranslation()
-  const { name } = Route.useParams()
+  const { id } = Route.useParams()
   const navigate = useNavigate()
   const qc = useQueryClient()
   const { beginBusy, report } = useSplitDirty()
@@ -48,8 +48,8 @@ function McpDetailPage() {
   const [tab, setTab] = useState<McpTab>('config')
 
   const query = useQuery<McpOperationResource>({
-    queryKey: ['mcps', name],
-    queryFn: ({ signal }) => api.get(`/api/mcps/${encodeURIComponent(name)}`, undefined, signal),
+    queryKey: ['mcps', id],
+    queryFn: ({ signal }) => api.get(`/api/mcps/${encodeURIComponent(id)}`, undefined, signal),
   })
 
   const {
@@ -61,7 +61,7 @@ function McpDetailPage() {
   } = useDraftFromQuery(query.data, mcpToForm, { followWhenClean: true })
   const formRef = useRef(form)
   formRef.current = form
-  useReportSplitDirty(name, dirty)
+  useReportSplitDirty(id, dirty)
 
   const save = useMutation({
     mutationFn: ({
@@ -73,19 +73,19 @@ function McpDetailPage() {
       const built = buildCreatePayload(snapshot)
       if (!built.ok) return Promise.reject(new Error('invalid form'))
       const { name: _drop, ...patch } = built.payload
-      return api.put<McpOperationResource>(`/api/mcps/${encodeURIComponent(name)}`, patch)
+      return api.put<McpOperationResource>(`/api/mcps/${encodeURIComponent(id)}`, patch)
     },
     onSuccess: async (m, { snapshot }) => {
-      await qc.cancelQueries({ queryKey: ['mcps', name], exact: true })
-      qc.setQueryData(['mcps', name], m)
+      await qc.cancelQueries({ queryKey: ['mcps', id], exact: true })
+      qc.setQueryData(['mcps', id], m)
       await qc.cancelQueries({ queryKey: ['mcps'], exact: true })
       qc.setQueryData<Mcp[]>(['mcps'], (rows) =>
-        rows === undefined ? rows : rows.map((r) => (r.name === name ? m : r)),
+        rows === undefined ? rows : rows.map((r) => (r.id === id ? m : r)),
       )
       void qc.invalidateQueries({ queryKey: ['mcps'], exact: true })
       // A config change makes the persisted probe stale.
       void qc.invalidateQueries({ queryKey: MCP_PROBES_KEY })
-      void qc.invalidateQueries({ queryKey: mcpProbeKey(name), exact: true })
+      void qc.invalidateQueries({ queryKey: mcpProbeKey(id), exact: true })
       commitSaved(snapshot, mcpToForm(m))
     },
     onSettled: (_mcp, _error, { release }) => release(),
@@ -113,7 +113,7 @@ function McpDetailPage() {
     }
     setErrors({})
     if (save.isPending || del.isPending) return
-    save.mutate({ snapshot: form, release: beginBusy(name) })
+    save.mutate({ snapshot: form, release: beginBusy(id) })
   }
 
   async function saveForProbe(): Promise<string | null> {
@@ -125,7 +125,7 @@ function McpDetailPage() {
       return null
     }
     setErrors({})
-    const receipt = await save.mutateAsync({ snapshot, release: beginBusy(name) })
+    const receipt = await save.mutateAsync({ snapshot, release: beginBusy(id) })
     if (stableStringify(formRef.current) !== stableStringify(snapshot)) {
       throw new Error(t('mcps.probe.draftChangedDuringSave'))
     }
@@ -134,12 +134,12 @@ function McpDetailPage() {
 
   const del = useMutation({
     mutationFn: ({ confirm, release: _release }: { confirm: string; release: SplitBusyRelease }) =>
-      api.deleteJson(`/api/mcps/${encodeURIComponent(name)}`, { confirm }),
+      api.deleteJson(`/api/mcps/${encodeURIComponent(id)}`, { confirm }),
     onSuccess: async (_deleted, { release }) => {
-      report(name, false)
+      report(id, false)
       await qc.cancelQueries({ queryKey: ['mcps'], exact: true })
       qc.setQueryData<Mcp[]>(['mcps'], (rows) =>
-        rows === undefined ? rows : rows.filter((r) => r.name !== name),
+        rows === undefined ? rows : rows.filter((r) => r.id !== id),
       )
       void qc.invalidateQueries({ queryKey: ['mcps'], exact: true })
       release()
@@ -163,10 +163,10 @@ function McpDetailPage() {
   return (
     <fieldset className="detail-freeze" disabled={del.isPending}>
       <DetailHeaderActions
-        title={name}
+        title={query.data?.name ?? id}
         headingLevel={2}
         acl={{
-          resourceBaseUrl: `/api/mcps/${encodeURIComponent(name)}`,
+          resourceBaseUrl: `/api/mcps/${encodeURIComponent(id)}`,
           invalidateKey: ['mcps'],
         }}
         save={{
@@ -177,11 +177,11 @@ function McpDetailPage() {
         }}
         del={{
           label: t('common.delete'),
-          confirmName: name,
+          confirmName: query.data?.name ?? id,
           resourceType: 'mcp',
           onConfirm: (ctx) => {
             if (save.isPending || del.isPending) return Promise.resolve()
-            return del.mutateAsync({ confirm: ctx?.typedConfirm ?? '', release: beginBusy(name) })
+            return del.mutateAsync({ confirm: ctx?.typedConfirm ?? '', release: beginBusy(id) })
           },
           disabled: del.isPending || save.isPending,
         }}
@@ -222,13 +222,13 @@ function McpDetailPage() {
               testid: 'mcp-panel-probe',
               content: (
                 <McpInventoryPanel
-                  mcpName={name}
+                  mcpId={id}
                   operationConfigHash={query.data?.operationConfigHash}
                   mcpUpdatedAt={query.data?.updatedAt}
                   dirty={dirty}
                   saving={save.isPending}
                   onSaveForProbe={saveForProbe}
-                  beginBusy={() => beginBusy(name)}
+                  beginBusy={() => beginBusy(id)}
                 />
               ),
             },

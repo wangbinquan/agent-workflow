@@ -61,11 +61,11 @@ interface Props {
    */
   workflowNodeKind: string | null
   /**
-   * RFC-022: the primary agent name for agent-single / agent-multi nodes,
+   * RFC-022 / RFC-223: the primary immutable agent id for agent-single nodes,
    * resolved from the workflow snapshot. Stats tab uses it to fetch the
    * dependsOn closure tree. Null for non-agent kinds — tree section hides.
    */
-  agentName: string | null
+  agentId: string | null
   runs: NodeRun[]
   outputs: NodeRunOutput[]
   onClose: () => void
@@ -84,7 +84,7 @@ export function NodeDetailDrawer({
   nodeRunId,
   nodeId,
   workflowNodeKind,
-  agentName,
+  agentId,
   runs,
   outputs,
   onClose,
@@ -230,12 +230,7 @@ export function NodeDetailDrawer({
               {active && key === 'events' && <EventsTab query={eventsQuery} />}
               {active && key === 'output' && <OutputTab outputs={nodeOutputs} />}
               {active && key === 'stats' && (
-                <StatsTab
-                  run={run}
-                  history={history}
-                  onPickRetry={onSelectRun}
-                  agentName={agentName}
-                />
+                <StatsTab run={run} history={history} onPickRetry={onSelectRun} agentId={agentId} />
               )}
             </div>
           )
@@ -305,7 +300,7 @@ function OutputTab({ outputs }: { outputs: NodeRunOutput[] }) {
   )
 }
 
-function StatsDependencyTreeRow({ agentName }: { agentName: string }) {
+function StatsDependencyTreeRow({ agentId }: { agentId: string }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   return (
@@ -313,8 +308,8 @@ function StatsDependencyTreeRow({ agentName }: { agentName: string }) {
       <dt>{t('nodeDrawer.statDependencyTree')}</dt>
       <dd>
         <NodeDependencyTreeSection
-          agentName={agentName}
-          onNodeClick={(n) => navigate({ to: '/agents/$name', params: { name: n } })}
+          agentId={agentId}
+          onNodeClick={(id) => navigate({ to: '/agents/$id', params: { id } })}
         />
       </dd>
     </>
@@ -325,13 +320,13 @@ function StatsTab({
   run,
   history,
   onPickRetry,
-  agentName,
+  agentId,
 }: {
   run: NodeRun
   history: NodeRun[]
   onPickRetry?: (id: string) => void
   /** RFC-022: primary agent name; null hides the dependency-tree section. */
-  agentName: string | null
+  agentId: string | null
 }) {
   const { t } = useTranslation()
   // RFC-078: review rows surface the current round's content-anchored start,
@@ -446,7 +441,7 @@ function StatsTab({
           </dd>
         </>
       )}
-      {agentName !== null && <StatsDependencyTreeRow agentName={agentName} />}
+      {agentId !== null && <StatsDependencyTreeRow agentId={agentId} />}
       {history.length > 1 && (
         <>
           <dt>{t('nodeDrawer.statHistory')}</dt>

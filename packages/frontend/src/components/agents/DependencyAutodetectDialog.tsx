@@ -11,6 +11,8 @@ import { useEffect, useMemo, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Dialog } from '../Dialog'
 import { EmptyState } from '../EmptyState'
+import { useUserLookup } from '@/hooks/useUserLookup'
+import { resourceOptionLabel } from '@/lib/resource-option-label'
 import type {
   DepSelection,
   DetectionGroup,
@@ -31,10 +33,10 @@ const GROUP_KEYS: readonly DetectionGroupKey[] = ['agents', 'skills', 'mcps', 'p
 
 function buildInitialSelected(result: DetectionResult): Record<DetectionGroupKey, Set<string>> {
   return {
-    agents: new Set(result.agents.candidates.map((c) => c.name)),
-    skills: new Set(result.skills.candidates.map((c) => c.name)),
-    mcps: new Set(result.mcps.candidates.map((c) => c.name)),
-    plugins: new Set(result.plugins.candidates.map((c) => c.name)),
+    agents: new Set(result.agents.candidates.map((c) => c.id)),
+    skills: new Set(result.skills.candidates.map((c) => c.id)),
+    mcps: new Set(result.mcps.candidates.map((c) => c.id)),
+    plugins: new Set(result.plugins.candidates.map((c) => c.id)),
   }
 }
 
@@ -46,10 +48,17 @@ interface SectionProps {
   group: DetectionGroupKey
   data: DetectionGroup
   selected: Set<string>
-  onToggle: (name: string) => void
+  onToggle: (id: string) => void
+  ownerLabel: (ownerUserId: string | null | undefined) => string | undefined
 }
 
-function Section({ group, data, selected, onToggle }: SectionProps): ReactElement | null {
+function Section({
+  group,
+  data,
+  selected,
+  onToggle,
+  ownerLabel,
+}: SectionProps): ReactElement | null {
   const { t } = useTranslation()
   if (data.candidates.length === 0) return null
   return (
@@ -59,17 +68,19 @@ function Section({ group, data, selected, onToggle }: SectionProps): ReactElemen
       </h3>
       <ul className="agent-dep-autodetect__list">
         {data.candidates.map((row) => {
-          const checked = selected.has(row.name)
+          const checked = selected.has(row.id)
           return (
-            <li key={row.name}>
+            <li key={row.id}>
               <label className="agent-dep-autodetect__row">
                 <input
                   type="checkbox"
                   checked={checked}
-                  onChange={() => onToggle(row.name)}
-                  data-testid={`autodetect-checkbox-${group}-${row.name}`}
+                  onChange={() => onToggle(row.id)}
+                  data-testid={`autodetect-checkbox-${group}-${row.id}`}
                 />
-                <span className="agent-dep-autodetect__name">{row.name}</span>
+                <span className="agent-dep-autodetect__name">
+                  {resourceOptionLabel(row.name, ownerLabel(row.ownerUserId))}
+                </span>
                 {row.description !== undefined &&
                   row.description !== null &&
                   row.description !== '' && (
@@ -88,6 +99,11 @@ export function DependencyAutodetectDialog(
   props: DependencyAutodetectDialogProps,
 ): ReactElement | null {
   const { t } = useTranslation()
+  const owners = useUserLookup(
+    GROUP_KEYS.flatMap((group) =>
+      props.result[group].candidates.map((candidate) => candidate.ownerUserId),
+    ),
+  )
   const [selected, setSelected] = useState<Record<DetectionGroupKey, Set<string>>>(() =>
     buildInitialSelected(props.result),
   )
@@ -103,13 +119,13 @@ export function DependencyAutodetectDialog(
   const hasAnyCandidate = total > 0
   const selectedCount = useMemo(() => countSelected(selected), [selected])
 
-  const toggle = (group: DetectionGroupKey, name: string) => {
+  const toggle = (group: DetectionGroupKey, id: string) => {
     setSelected((prev) => {
       const next = { ...prev, [group]: new Set(prev[group]) }
-      if (next[group].has(name)) {
-        next[group].delete(name)
+      if (next[group].has(id)) {
+        next[group].delete(id)
       } else {
-        next[group].add(name)
+        next[group].add(id)
       }
       return next
     })
@@ -173,7 +189,10 @@ export function DependencyAutodetectDialog(
               group={g}
               data={props.result[g]}
               selected={selected[g]}
-              onToggle={(name) => toggle(g, name)}
+              onToggle={(id) => toggle(g, id)}
+              ownerLabel={(ownerUserId) =>
+                owners.get(ownerUserId)?.displayName ?? ownerUserId ?? undefined
+              }
             />
           ))}
         </>

@@ -28,14 +28,14 @@ const SOURCE_KEY: Record<SkillVersionSource, string> = {
 }
 
 export function SkillVersionHistory({
-  skillName,
+  skillId,
   currentVersion,
   onRestored,
   busy = false,
   onRestoreStart,
   onPendingChange,
 }: {
-  skillName: string
+  skillId: string
   currentVersion: number
   /** RFC-169: called after a successful restore so the detail page can rebase
    *  the content editor onto the restored version (restoreEpoch remount). */
@@ -50,16 +50,16 @@ export function SkillVersionHistory({
 }) {
   const { t } = useTranslation()
   const qc = useQueryClient()
-  const enc = encodeURIComponent(skillName)
+  const enc = encodeURIComponent(skillId)
 
   const versions = useQuery<SkillVersion[]>({
-    queryKey: ['skills', skillName, 'versions'],
+    queryKey: ['skills', skillId, 'versions'],
     queryFn: ({ signal }) => api.get(`/api/skills/${enc}/versions`, undefined, signal),
   })
 
   const [diffFrom, setDiffFrom] = useState<number | null>(null)
   const diff = useQuery<SkillVersionDiff>({
-    queryKey: ['skills', skillName, 'versions', 'diff', diffFrom, currentVersion],
+    queryKey: ['skills', skillId, 'versions', 'diff', diffFrom, currentVersion],
     enabled: diffFrom !== null,
     queryFn: ({ signal }) =>
       api.get(
@@ -73,24 +73,24 @@ export function SkillVersionHistory({
     mutationFn: (v: number) => {
       // RFC-170 F3 (G2-7): echo the canonical token so a save/file-write landing
       // since the history loaded → 409 (not a silent overwrite of a newer edit).
-      const tok = qc.getQueryData<SkillContent>(['skills', skillName, 'content'])?.token
+      const tok = qc.getQueryData<SkillContent>(['skills', skillId, 'content'])?.token
       return api.post(
         `/api/skills/${enc}/versions/${v}/restore`,
         tok !== undefined ? { expectedToken: tok } : {},
       )
     },
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['skills', skillName] })
+      void qc.invalidateQueries({ queryKey: ['skills', skillId] })
       // Reloads content → the canonical token advances to the restored generation.
-      void qc.invalidateQueries({ queryKey: ['skills', skillName, 'content'] })
-      void qc.invalidateQueries({ queryKey: ['skills', skillName, 'versions'] })
-      void qc.invalidateQueries({ queryKey: ['skill-files', skillName] })
+      void qc.invalidateQueries({ queryKey: ['skills', skillId, 'content'] })
+      void qc.invalidateQueries({ queryKey: ['skills', skillId, 'versions'] })
+      void qc.invalidateQueries({ queryKey: ['skill-files', skillId] })
       void qc.invalidateQueries({ queryKey: ['skills'] })
       onRestored?.()
     },
     onError: () => {
       // A 409 (stale token) refetches the canonical token so a retry is fresh.
-      void qc.invalidateQueries({ queryKey: ['skills', skillName, 'content'] })
+      void qc.invalidateQueries({ queryKey: ['skills', skillId, 'content'] })
     },
   })
 

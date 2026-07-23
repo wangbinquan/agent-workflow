@@ -35,20 +35,22 @@ describe('<NodeDependencyTreeSection>', () => {
           ok: true,
           agents: [
             {
+              id: 'agent-orch',
               name: 'orch',
               description: '',
               skills: [],
               skillCount: 0,
-              dependsOn: ['leaf'],
+              dependsOnIds: ['agent-leaf'],
               mcp: [],
               plugins: [],
             },
             {
+              id: 'agent-leaf',
               name: 'leaf',
               description: '',
               skills: ['s1'],
               skillCount: 1,
-              dependsOn: [],
+              dependsOnIds: [],
               mcp: [],
               plugins: [],
             },
@@ -57,7 +59,7 @@ describe('<NodeDependencyTreeSection>', () => {
         { status: 200, headers: { 'content-type': 'application/json' } },
       ),
     )
-    wrap(<NodeDependencyTreeSection agentName="orch" />)
+    wrap(<NodeDependencyTreeSection agentId="agent-orch" />)
     await waitFor(() => screen.getByRole('treeitem', { name: 'leaf' }), { timeout: 2000 })
   })
 
@@ -68,11 +70,12 @@ describe('<NodeDependencyTreeSection>', () => {
           ok: true,
           agents: [
             {
+              id: 'agent-lonely',
               name: 'lonely',
               description: '',
               skills: [],
               skillCount: 0,
-              dependsOn: [],
+              dependsOnIds: [],
               mcp: [],
               plugins: [],
             },
@@ -81,7 +84,7 @@ describe('<NodeDependencyTreeSection>', () => {
         { status: 200, headers: { 'content-type': 'application/json' } },
       ),
     )
-    wrap(<NodeDependencyTreeSection agentName="lonely" />)
+    wrap(<NodeDependencyTreeSection agentId="agent-lonely" />)
     await waitFor(() => screen.getByText(/No dependent agents declared/i), { timeout: 2000 })
   })
 })

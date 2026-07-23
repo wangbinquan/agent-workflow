@@ -13,8 +13,10 @@
 import type { AgentSkillRef, CreateAgent } from '@agent-workflow/shared'
 
 export interface DetectInventoryRow {
+  id: string
   name: string
   description?: string | null
+  ownerUserId?: string | null
 }
 
 export interface DetectInventory {
@@ -48,19 +50,20 @@ function buildGroup(
   body: string,
   rows: readonly DetectInventoryRow[] | undefined,
   existing: readonly string[],
-  selfName: string,
+  selfId: string | undefined,
 ): DetectionGroup {
   if (rows === undefined || rows.length === 0) return { candidates: [] }
   const existingSet = new Set(existing)
   const seen = new Set<string>()
   const out: DetectInventoryRow[] = []
   for (const r of rows) {
+    if (typeof r.id !== 'string' || r.id.length === 0) continue
     if (typeof r.name !== 'string' || r.name.length === 0) continue
-    if (r.name === selfName) continue
-    if (existingSet.has(r.name)) continue
-    if (seen.has(r.name)) continue
+    if (r.id === selfId) continue
+    if (existingSet.has(r.id)) continue
+    if (seen.has(r.id)) continue
     if (!body.includes(r.name)) continue
-    seen.add(r.name)
+    seen.add(r.id)
     out.push(r)
   }
   return { candidates: out }
@@ -70,7 +73,7 @@ export function detectAgentDeps(
   bodyMd: string,
   inventory: DetectInventory,
   existing: DetectExisting,
-  selfName: string,
+  selfId?: string,
 ): DetectionResult {
   const body = bodyMd ?? ''
   if (body === '') {
@@ -82,10 +85,10 @@ export function detectAgentDeps(
     }
   }
   return {
-    agents: buildGroup(body, inventory.agents, existing.dependsOn, selfName),
-    skills: buildGroup(body, inventory.skills, existing.skills, selfName),
-    mcps: buildGroup(body, inventory.mcps, existing.mcp, selfName),
-    plugins: buildGroup(body, inventory.plugins, existing.plugins, selfName),
+    agents: buildGroup(body, inventory.agents, existing.dependsOn, selfId),
+    skills: buildGroup(body, inventory.skills, existing.skills, undefined),
+    mcps: buildGroup(body, inventory.mcps, existing.mcp, undefined),
+    plugins: buildGroup(body, inventory.plugins, existing.plugins, undefined),
   }
 }
 
@@ -114,10 +117,9 @@ function appendUnique(
 }
 
 export function mergeAgentDeps(value: CreateAgent, selection: DepSelection): CreateAgent {
-  // RFC-223 (PR-1): mcp / plugins / dependsOn store id-or-name refs (the server
-  // resolves a detected NAME to an id at save); skills are typed refs, so a
-  // detected skill name becomes a MANAGED ref (skillId = name, resolved / demoted
-  // to project server-side).
+  // RFC-223: detection matches display names in prose, but every selected
+  // catalog row already carries its immutable id. Persist those ids directly;
+  // name is never an identity fallback.
   const a = appendUnique(value.dependsOn, selection.agents)
   const s = appendSkillRefs(value.skills, selection.skills)
   const m = appendUnique(value.mcp, selection.mcps)
@@ -137,14 +139,14 @@ const skillRefKey = (ref: AgentSkillRef): string =>
 
 function appendSkillRefs(
   prev: readonly AgentSkillRef[] | undefined,
-  addNames: readonly string[],
+  addIds: readonly string[],
 ): { next: AgentSkillRef[]; changed: boolean } {
   const base = [...(prev ?? [])]
-  if (addNames.length === 0) return { next: base, changed: false }
+  if (addIds.length === 0) return { next: base, changed: false }
   const existing = new Set(base.map(skillRefKey))
   const additions: AgentSkillRef[] = []
-  for (const name of addNames) {
-    const ref: AgentSkillRef = { kind: 'managed', skillId: name }
+  for (const id of addIds) {
+    const ref: AgentSkillRef = { kind: 'managed', skillId: id }
     const key = skillRefKey(ref)
     if (existing.has(key)) continue
     existing.add(key)

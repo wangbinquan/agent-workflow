@@ -24,7 +24,7 @@ import { Segmented } from './Segmented'
 import { UserPicker } from './UserPicker'
 
 interface AclPanelProps {
-  /** e.g. '/api/agents/my-agent' — the panel appends '/acl'. */
+  /** e.g. '/api/agents/01JAGENTID' — the panel appends '/acl'. */
   resourceBaseUrl: string
   /** Query key segment to invalidate the parent resource on changes. */
   invalidateKey: readonly unknown[]

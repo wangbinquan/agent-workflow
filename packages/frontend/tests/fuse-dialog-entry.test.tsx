@@ -4,7 +4,7 @@
 // props (lockedSkillName? / presetMemoryIds?) whose undefined-ness implied
 // the mode — nothing stopped a caller passing both or neither. `entry` is now
 // an explicit union:
-//   {kind:'from-skill', skillId, skillName} → /skills/$name: skill locked, pick memories
+//   {kind:'from-skill', skillId, skillName} → ID-routed skill locked, pick memories
 //   {kind:'from-memories', memoryIds} → /memory: memories preset, pick the skill
 // Locks each mode's render: which picker Field shows, which is replaced by
 // the preset summary, and that every launch payload carries the canonical skill id.

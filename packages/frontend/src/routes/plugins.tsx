@@ -42,7 +42,6 @@ function PluginsSplitLayout() {
   const { data, isLoading, error, refetch, owners } = useResourceList<PluginOperationResource>({
     queryKey: ['plugins'],
     endpoint: '/api/plugins',
-    deleteBy: 'id',
   })
   // Pure cache carrier — no fetcher; the detail Updates tab writes it.
   const updates = useQuery<PluginUpdatesCache>({
@@ -74,7 +73,7 @@ function PluginsSplitLayout() {
               ? t('plugins.updateAvailableChip')
               : '',
             p.visibility === 'private' ? t('acl.privateChip') : '',
-            p.ownerUserId != null ? (owners.get(p.ownerUserId)?.displayName ?? '') : '',
+            p.ownerUserId != null ? (owners.get(p.ownerUserId)?.displayName ?? p.ownerUserId) : '',
           ].join(' '),
           to: '/plugins/$id',
           params: { id: p.id },

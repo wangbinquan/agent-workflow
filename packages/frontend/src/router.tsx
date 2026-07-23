@@ -5,7 +5,6 @@ import { createRoute, createRouter, redirect } from '@tanstack/react-router'
 import { Route as accountRoute } from '@/routes/account'
 import { IndexRoute as agentsIndexRoute, Route as agentsRoute } from '@/routes/agents'
 import { Route as agentDetailRoute } from '@/routes/agents.detail'
-import { Route as agentByIdRoute } from '@/routes/agents.by-id'
 import { Route as agentNewRoute } from '@/routes/agents.new'
 import { Route as authRoute } from '@/routes/auth'
 import { Route as setupAdminRoute } from '@/routes/setup.admin'
@@ -38,7 +37,6 @@ import {
 } from '@/routes/workflows'
 import { Route as workgroupsRoute } from '@/routes/workgroups'
 import { Route as workgroupDetailRoute } from '@/routes/workgroups.detail'
-import { Route as workgroupByIdRoute } from '@/routes/workgroups.by-id'
 import { EditRoute as workflowEditRoute } from '@/routes/workflows.edit'
 import { ReposRoute as reposRoute } from '@/routes/repos'
 import { Route as memoryRoute } from '@/routes/memory'
@@ -66,10 +64,10 @@ const workgroupLaunchRedirect = createRoute({
   getParentRoute: () => rootRoute,
   path: '/workgroups/launch',
   beforeLoad: ({ search }) => {
-    const name = (search as { name?: string }).name
+    const id = (search as { id?: string }).id
     throw redirect({
       to: '/tasks/new',
-      search: name !== undefined && name !== '' ? { kind: 'workgroup', workgroup: name } : {},
+      search: id !== undefined && id !== '' ? { kind: 'workgroup', workgroupId: id } : {},
     })
   },
 })
@@ -82,12 +80,8 @@ const routeTree = rootRoute.addChildren([
   // from the homepage, so `resolveActiveNav` leaves it unhighlighted the same
   // way it does for /tasks/new.
   onboardingRoute,
-  // RFC-177: /agents/by-id/$id — id→name resolver + redirect (root child, so it
-  // bypasses the split layout). Two-segment path is arity-distinct from
-  // /agents/$name, so a "by-id"-named agent still resolves normally.
-  agentByIdRoute,
   // RFC-169: /agents is now a split (master-detail) layout route; new / detail /
-  // index are its children. '/agents/new' literal still precedes '/agents/$name'
+  // index are its children. '/agents/new' literal still precedes '/agents/$id'
   // (belt-and-suspenders — TanStack scores the literal higher anyway).
   agentsRoute.addChildren([agentNewRoute, agentDetailRoute, agentsIndexRoute]),
   // RFC-169: /skills split (master-detail) layout route with nested children.
@@ -104,12 +98,8 @@ const routeTree = rootRoute.addChildren([
   workflowEditRoute,
   workflowsRoute,
   // RFC-164: creation is a list-page dialog — list + detail + launch routes.
-  // '/workgroups/launch' literal must precede '/workgroups/$name' so "launch"
-  // never resolves as a workgroup name.
+  // '/workgroups/launch' literal must precede '/workgroups/$id'.
   workgroupLaunchRedirect,
-  // RFC-177: /workgroups/by-id/$id — id→name resolver + redirect (arity-distinct
-  // from /workgroups/$name).
-  workgroupByIdRoute,
   workgroupDetailRoute,
   workgroupsRoute,
   // RFC-105: '/tasks/$id/preview' (longer literal) before '/tasks/$id'.

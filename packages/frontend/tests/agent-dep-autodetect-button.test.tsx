@@ -32,10 +32,10 @@ async function waitForInventoryLoaded(qc: QueryClient) {
 
 function fakeFetchAll() {
   const bodies: Record<string, unknown> = {
-    '/api/agents': [{ name: 'helper-agent', description: 'helps' }],
-    '/api/skills': [{ name: 'playwright-runner', description: '' }],
-    '/api/mcps': [{ name: 'code-review-mcp', description: '' }],
-    '/api/plugins': [{ name: 'schema-validator', description: '' }],
+    '/api/agents': [{ id: 'agent-helper', name: 'helper-agent', description: 'helps' }],
+    '/api/skills': [{ id: 'skill-playwright', name: 'playwright-runner', description: '' }],
+    '/api/mcps': [{ id: 'mcp-code-review', name: 'code-review-mcp', description: '' }],
+    '/api/plugins': [{ id: 'plugin-schema', name: 'schema-validator', description: '' }],
   }
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     const url = typeof input === 'string' ? input : (input as URL | Request).toString()
@@ -66,12 +66,7 @@ describe('DependencyAutodetectButton', () => {
   test('whitespace-only body → still clickable; opens the empty-state dialog', async () => {
     fakeFetchAll()
     const { qc } = wrap(
-      <DependencyAutodetectButton
-        bodyMd={'   \n\t'}
-        value={emptyAgent()}
-        selfName=""
-        onApply={vi.fn()}
-      />,
+      <DependencyAutodetectButton bodyMd={'   \n\t'} value={emptyAgent()} onApply={vi.fn()} />,
     )
     const btn = (await waitFor(() =>
       screen.getByTestId('agent-dep-autodetect-button'),
@@ -94,7 +89,6 @@ describe('DependencyAutodetectButton', () => {
       <DependencyAutodetectButton
         bodyMd="use playwright-runner and helper-agent here"
         value={emptyAgent()}
-        selfName=""
         onApply={onApply}
       />,
     )
@@ -112,8 +106,8 @@ describe('DependencyAutodetectButton', () => {
     fireEvent.click(screen.getByTestId('autodetect-apply'))
     expect(onApply).toHaveBeenCalledTimes(1)
     const selection = onApply.mock.calls[0]![0]
-    expect(selection.agents).toEqual(['helper-agent'])
-    expect(selection.skills).toEqual(['playwright-runner'])
+    expect(selection.agents).toEqual(['agent-helper'])
+    expect(selection.skills).toEqual(['skill-playwright'])
     expect(selection.mcps).toEqual([])
     expect(selection.plugins).toEqual([])
   })
@@ -124,7 +118,6 @@ describe('DependencyAutodetectButton', () => {
       <DependencyAutodetectButton
         bodyMd="this body matches nothing in inventory"
         value={emptyAgent()}
-        selfName=""
         onApply={vi.fn()}
       />,
     )
@@ -145,12 +138,7 @@ describe('DependencyAutodetectButton', () => {
       () => new Promise(() => {}) as Promise<Response>,
     )
     wrap(
-      <DependencyAutodetectButton
-        bodyMd="non-empty body"
-        value={emptyAgent()}
-        selfName=""
-        onApply={vi.fn()}
-      />,
+      <DependencyAutodetectButton bodyMd="non-empty body" value={emptyAgent()} onApply={vi.fn()} />,
     )
     const btn = screen.getByTestId('agent-dep-autodetect-button') as HTMLButtonElement
     expect(btn.disabled).toBe(false)

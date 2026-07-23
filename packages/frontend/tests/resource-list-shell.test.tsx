@@ -6,7 +6,7 @@
 // owner badge). Page-level render locks keep covering the pages; this file
 // locks the primitives' own behavior:
 //   1. useResourceList fetches `GET {endpoint}` under the given key.
-//   2. del.mutateAsync(row) DELETEs by the configured field ('name' | 'id')
+//   2. del.mutateAsync(row) DELETEs by immutable id
 //      and invalidates the list on success.
 //   3. owners resolves ownerUserId → displayName via POST /api/users/lookup.
 //
@@ -101,7 +101,7 @@ function renderAtAgents(Component: () => React.ReactElement | null) {
   })
   const detailStub = createRoute({
     getParentRoute: () => RootRoute,
-    path: '/agents/$name',
+    path: '/agents/$id',
     component: () => null,
   })
   const tree = RootRoute.addChildren([listRoute, detailStub])
@@ -128,11 +128,10 @@ afterEach(() => {
 })
 
 describe('useResourceList', () => {
-  function Probe(props: { deleteBy: 'name' | 'id'; endpoint: string }) {
+  function Probe(props: { endpoint: string }) {
     const { data, isLoading, error, refetch, del, owners } = useResourceList<Row>({
-      queryKey: ['rl-test', props.endpoint, props.deleteBy],
+      queryKey: ['rl-test', props.endpoint],
       endpoint: props.endpoint,
-      deleteBy: props.deleteBy,
     })
     if (isLoading) return <p>loading…</p>
     if (error !== null && error !== undefined && data === undefined) return <p>failed</p>
@@ -159,12 +158,12 @@ describe('useResourceList', () => {
     )
   }
 
-  test('fetches GET {endpoint}, deletes by name, and invalidates the list', async () => {
+  test('fetches GET {endpoint}, deletes by id, and invalidates the list', async () => {
     const calls = installFetch('/api/agents', () => [
       { id: 'a1', name: 'alpha needs/escape', ownerUserId: 'u1' },
       { id: 'a2', name: 'beta', ownerUserId: null },
     ])
-    renderAtAgents(() => <Probe deleteBy="name" endpoint="/api/agents" />)
+    renderAtAgents(() => <Probe endpoint="/api/agents" />)
     await waitFor(() => screen.getByTestId('row-a1'))
     expect(calls.some((c) => c.method === 'GET' && c.url.endsWith('/api/agents'))).toBe(true)
 
@@ -172,8 +171,7 @@ describe('useResourceList', () => {
     await waitFor(() => {
       const dels = calls.filter((c) => c.method === 'DELETE')
       expect(dels).toHaveLength(1)
-      // deleteBy:'name' → the row's name (URL-encoded), not its id.
-      expect(dels[0]!.url).toContain(`/api/agents/${encodeURIComponent('alpha needs/escape')}`)
+      expect(dels[0]!.url).toContain('/api/agents/a1')
     })
     // onSuccess invalidates the collection key → a second GET fires.
     await waitFor(() => {
@@ -182,11 +180,11 @@ describe('useResourceList', () => {
     })
   })
 
-  test('deleteBy id switches the DELETE URL key', async () => {
+  test('plugins use the same canonical id DELETE key', async () => {
     const calls = installFetch('/api/plugins', () => [
       { id: 'p1', name: 'plug', ownerUserId: null },
     ])
-    renderAtAgents(() => <Probe deleteBy="id" endpoint="/api/plugins" />)
+    renderAtAgents(() => <Probe endpoint="/api/plugins" />)
     await waitFor(() => screen.getByTestId('row-p1'))
     fireEvent.click(screen.getByText('del p1'))
     await waitFor(() => {
@@ -202,7 +200,7 @@ describe('useResourceList', () => {
       { id: 'a2', name: 'beta', ownerUserId: 'u1' },
       { id: 'a3', name: 'gamma', ownerUserId: null },
     ])
-    renderAtAgents(() => <Probe deleteBy="name" endpoint="/api/agents" />)
+    renderAtAgents(() => <Probe endpoint="/api/agents" />)
     await waitFor(() => expect(screen.getByTestId('owner-a1').textContent).toBe('Alice'))
     expect(screen.getByTestId('owner-a3').textContent).toBe('')
     const lookups = calls.filter((c) => c.method === 'POST' && c.url.endsWith('/api/users/lookup'))
@@ -241,7 +239,7 @@ describe('useResourceList', () => {
       },
     )
 
-    renderAtAgents(() => <Probe deleteBy="name" endpoint="/api/agents" />)
+    renderAtAgents(() => <Probe endpoint="/api/agents" />)
     await screen.findByTestId('row-a1')
 
     fail = true
@@ -268,7 +266,8 @@ describe('ResourceNameCell retirement (RFC-191)', () => {
 // RFC-169 (T4) — the visibility/owner fragment was extracted so the split-page
 // cards render the identical badges as the surviving table cells. Lock that it
 // renders as a bare fragment (host-agnostic — no <td> of its own) and keeps the
-// chip-only-when-private / badge-only-when-resolved semantics.
+// chip-only-when-private semantics; unresolved owners fall back to their id so
+// duplicate display names never become ambiguous while lookup is pending.
 describe('ResourceBadges (T4 extraction)', () => {
   const owners: OwnerLookup = {
     get: (id) =>
@@ -289,7 +288,7 @@ describe('ResourceBadges (T4 extraction)', () => {
     expect(host.querySelector('.data-table__owner')?.textContent).toBe('Alice')
   })
 
-  test('public + unresolved owner → renders nothing', () => {
+  test('public + unresolved owner → renders the stable owner-id fallback', () => {
     render(
       <div data-testid="host2">
         <ResourceBadges visibility="public" ownerUserId="ghost" owners={owners} />
@@ -297,6 +296,6 @@ describe('ResourceBadges (T4 extraction)', () => {
     )
     const host = screen.getByTestId('host2')
     expect(host.querySelector('.chip')).toBeNull()
-    expect(host.querySelector('.data-table__owner')).toBeNull()
+    expect(host.querySelector('.data-table__owner')?.textContent).toBe('ghost')
   })
 })

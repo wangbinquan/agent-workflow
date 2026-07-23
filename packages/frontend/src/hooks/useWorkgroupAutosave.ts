@@ -298,17 +298,14 @@ export function useWorkgroupAutosave(
 
 const DEFAULT_TRANSPORT = {
   async save(workgroupId: string, input: UpdateWorkgroup): Promise<SaveWorkgroupReceipt> {
-    const { name } = await resolveCurrentName(workgroupId)
-    return api.put<SaveWorkgroupReceipt>(`/api/workgroups/${encodeURIComponent(name)}`, input)
+    return api.put<SaveWorkgroupReceipt>(
+      `/api/workgroups/${encodeURIComponent(workgroupId)}`,
+      input,
+    )
   },
   async fetch(workgroupId: string): Promise<WorkgroupDetail> {
-    const { name } = await resolveCurrentName(workgroupId)
-    return api.get<WorkgroupDetail>(`/api/workgroups/${encodeURIComponent(name)}`)
+    return api.get<WorkgroupDetail>(`/api/workgroups/${encodeURIComponent(workgroupId)}`)
   },
-}
-
-function resolveCurrentName(workgroupId: string): Promise<{ name: string }> {
-  return api.get<{ name: string }>(`/api/workgroups/by-id/${encodeURIComponent(workgroupId)}`)
 }
 
 const EMPTY_WORKFLOW_DEFINITION = {

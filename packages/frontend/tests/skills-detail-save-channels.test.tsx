@@ -252,7 +252,7 @@ beforeEach(() => {
   setBaseUrl('http://daemon.test')
   setToken('tok')
   h.navigate.mockReset()
-  h.params = { name: 'sk1' }
+  h.params = { id: 'sk1' }
 })
 
 afterEach(() => {

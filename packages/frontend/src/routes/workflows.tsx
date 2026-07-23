@@ -79,7 +79,6 @@ function WorkflowsPage() {
   const { data, isLoading, error, owners } = useResourceList<Workflow>({
     queryKey: ['workflows'],
     endpoint: '/api/workflows',
-    deleteBy: 'id',
   })
 
   // Quick create — name + description only; navigate straight into the
@@ -178,7 +177,9 @@ function WorkflowsPage() {
                 `v${w.version}`,
                 t('workflows.cardNodes', { count: w.definition.nodes.length }),
                 w.visibility === 'private' ? t('acl.privateChip') : '',
-                w.ownerUserId != null ? (owners.get(w.ownerUserId)?.displayName ?? '') : '',
+                w.ownerUserId != null
+                  ? (owners.get(w.ownerUserId)?.displayName ?? w.ownerUserId)
+                  : '',
               ].join(' '),
               subtitleFallback: t('workflows.noDescription'),
               badges: (

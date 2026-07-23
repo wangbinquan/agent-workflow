@@ -840,13 +840,13 @@ function ResultWrittenGroup({
       <h4>{title}</h4>
       <ul>
         {items.map((skill) => (
-          <li key={skill.name}>
+          <li key={skill.id}>
             <StatusChip kind={kind} size="sm">
               {chip}
             </StatusChip>
             <Link
-              to="/skills/$name"
-              params={{ name: skill.name }}
+              to="/skills/$id"
+              params={{ id: skill.id }}
               aria-label={t('skills.zipOpenSkill', { name: skill.name })}
             >
               {skill.name}

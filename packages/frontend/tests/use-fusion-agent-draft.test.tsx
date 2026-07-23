@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { ApiError, api } from '../src/api/client'
 import {
   FusionAgentGenerationError,
-  SKILL_MERGER_AGENT_NAME,
+  SKILL_MERGER_AGENT_ID,
   type FusionAgentPreparedSave,
   getFusionAgentDraftQueryKey,
   getFusionAgentQueryKey,
@@ -21,7 +21,8 @@ import { clearToken, getBaseUrl, setBaseUrl, setToken } from '../src/stores/auth
 
 function merger(runtime: string | null): Agent {
   return {
-    name: SKILL_MERGER_AGENT_NAME,
+    id: SKILL_MERGER_AGENT_ID,
+    name: 'aw-skill-merger',
     runtime,
     builtin: true,
   } as Agent
@@ -105,7 +106,7 @@ describe('useFusionAgentDraft — route-owned section lifetime', () => {
 
     await waitFor(() => expect(result.current.save.isSuccess).toBe(true))
     expect(put).toHaveBeenCalledTimes(1)
-    expect(put).toHaveBeenCalledWith(`/api/agents/${SKILL_MERGER_AGENT_NAME}`, {
+    expect(put).toHaveBeenCalledWith(`/api/agents/${SKILL_MERGER_AGENT_ID}`, {
       runtime: 'fast-oc',
     })
     expect(put.mock.calls.every(([path]) => !String(path).includes('/api/config'))).toBe(true)
@@ -161,7 +162,7 @@ describe('useFusionAgentDraft — route-owned section lifetime', () => {
     act(() => result.current.setValue('newer-runtime'))
     act(() => prepared?.commit())
     await waitFor(() => expect(put).toHaveBeenCalledTimes(1))
-    expect(put).toHaveBeenCalledWith(`/api/agents/${SKILL_MERGER_AGENT_NAME}`, {
+    expect(put).toHaveBeenCalledWith(`/api/agents/${SKILL_MERGER_AGENT_ID}`, {
       runtime: 'captured-runtime',
     })
     act(() => pending.resolve(merger('captured-runtime')))

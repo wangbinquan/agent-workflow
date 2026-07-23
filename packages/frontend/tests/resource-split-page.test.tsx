@@ -38,16 +38,16 @@ const ITEMS: ResourceCardItem[] = [
     subtitle: 'writes code',
     searchText: 'opencode 1 in 2 out',
     updatedAt: Date.now() - 60_000,
-    to: '/agents/$name',
-    params: { name: 'code-worker' },
+    to: '/agents/$id',
+    params: { id: 'code-worker' },
   },
   {
     key: 'auditor',
     kind: 'agent',
     title: 'auditor',
     subtitle: 'audits diffs',
-    to: '/agents/$name',
-    params: { name: 'auditor' },
+    to: '/agents/$id',
+    params: { id: 'auditor' },
   },
 ]
 
@@ -59,11 +59,11 @@ function mockFetch() {
 
 /** A detail pane that reports a fixed dirty state up through the context. */
 function DirtyDetail({ dirty }: { dirty: boolean }) {
-  const { name } = useParams({ from: '/agents/$name' })
-  useReportSplitDirty(name, dirty)
+  const { id } = useParams({ from: '/agents/$id' })
+  useReportSplitDirty(id, dirty)
   return (
     <div data-testid="detail-pane" tabIndex={-1}>
-      detail:{name}
+      detail:{id}
     </div>
   )
 }
@@ -144,11 +144,11 @@ function CompositeDiscardDetail({
   first: SplitDiscardHandler
   second: SplitDiscardHandler
 }) {
-  const { name } = useParams({ from: '/agents/$name' })
-  useReportSplitDirty(name, true)
-  useRegisterSplitDiscard(name, first)
-  useRegisterSplitDiscard(name, second)
-  return <div data-testid="detail-pane">detail:{name}</div>
+  const { id } = useParams({ from: '/agents/$id' })
+  useReportSplitDirty(id, true)
+  useRegisterSplitDiscard(id, first)
+  useRegisterSplitDiscard(id, second)
+  return <div data-testid="detail-pane">detail:{id}</div>
 }
 
 function renderSplit(opts: {
@@ -169,7 +169,7 @@ function renderSplit(opts: {
     getParentRoute: () => RootRoute,
     path: '/agents',
     component: function Layout() {
-      const params = useParams({ strict: false }) as { name?: string }
+      const params = useParams({ strict: false }) as { id?: string }
       const isNew = useLocation().pathname === '/agents/new'
       return (
         <ResourceSplitPage
@@ -177,7 +177,7 @@ function renderSplit(opts: {
           items={opts.items}
           isLoading={opts.isLoading ?? false}
           error={opts.error ?? null}
-          selectedKey={isNew ? null : (params.name ?? null)}
+          selectedKey={isNew ? null : (params.id ?? null)}
           newActive={isNew}
           newLabel="+ New agent"
           newTo="/agents/new"
@@ -202,7 +202,7 @@ function renderSplit(opts: {
   })
   const detailRoute = createRoute({
     getParentRoute: () => layoutRoute,
-    path: '/$name',
+    path: '/$id',
     component: () =>
       opts.concurrentBusy ? (
         <ConcurrentBusyDetail />
@@ -288,8 +288,8 @@ describe('ResourceSplitPage — structure & three states', () => {
           key: 'blank',
           kind: 'agent',
           title: 'blank',
-          to: '/agents/$name',
-          params: { name: 'blank' },
+          to: '/agents/$id',
+          params: { id: 'blank' },
         },
       ],
     })
@@ -307,8 +307,8 @@ describe('ResourceSplitPage — structure & three states', () => {
           kind: 'agent',
           title: longName,
           subtitle: 'long identifier',
-          to: '/agents/$name',
-          params: { name: longName },
+          to: '/agents/$id',
+          params: { id: longName },
         },
       ],
     })

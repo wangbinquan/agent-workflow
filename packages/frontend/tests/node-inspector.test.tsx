@@ -317,7 +317,7 @@ describe('NodeInspector', () => {
     expect(after.outputBindings).toEqual([{ name: 'out_1', bind: { nodeId: '', portName: '' } }])
   })
 
-  test('agent-single: selecting an agent patches agentName', () => {
+  test('agent-single: selecting an agent patches canonical id and display name', () => {
     const { onChange } = setup({
       id: 'a1',
       kind: 'agent-single',
@@ -328,7 +328,8 @@ describe('NodeInspector', () => {
     // also renders, so we explicitly grab index 0.
     const trigger = screen.getAllByRole('combobox')[0]!
     pickFromCombobox(trigger, 'coder')
-    const after = lastPatchedNode(onChange) as unknown as { agentName: string }
+    const after = lastPatchedNode(onChange) as unknown as { agentId: string; agentName: string }
+    expect(after.agentId).toBe('agent-coder')
     expect(after.agentName).toBe('coder')
     expect(onChange.mock.calls[0]?.[1]).toEqual({
       source: 'inspector',
@@ -517,7 +518,12 @@ describe('NodeInspector', () => {
       $schema_version: 4,
       inputs: [],
       nodes: [
-        { id: 'inner', kind: 'agent-single', agentName: 'aggregator' },
+        {
+          id: 'inner',
+          kind: 'agent-single',
+          agentId: 'agent-aggregator',
+          agentName: 'aggregator',
+        },
         { id: 'fanout', kind: 'wrapper-fanout', nodeIds: ['inner'], inputs: [] },
         {
           id: 'output',

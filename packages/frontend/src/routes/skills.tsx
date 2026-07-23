@@ -31,10 +31,9 @@ function SkillsSplitLayout() {
   const { data, isLoading, error, refetch, owners } = useResourceList<Skill>({
     queryKey: ['skills'],
     endpoint: '/api/skills',
-    deleteBy: 'name',
   })
 
-  const params = useParams({ strict: false }) as { name?: string }
+  const params = useParams({ strict: false }) as { id?: string }
   const matchRoute = useMatchRoute()
   const isNew = matchRoute({ to: '/skills/new' }) !== false
 
@@ -42,7 +41,7 @@ function SkillsSplitLayout() {
     data === undefined
       ? undefined
       : data.map((s) => ({
-          key: s.name,
+          key: s.id,
           kind: 'skill' as const,
           title: s.name,
           subtitle: s.description || undefined,
@@ -50,10 +49,10 @@ function SkillsSplitLayout() {
           searchText: [
             t('skills.cardVersion', { version: s.contentVersion }),
             s.visibility === 'private' ? t('acl.privateChip') : '',
-            s.ownerUserId != null ? (owners.get(s.ownerUserId)?.displayName ?? '') : '',
+            s.ownerUserId != null ? (owners.get(s.ownerUserId)?.displayName ?? s.ownerUserId) : '',
           ].join(' '),
-          to: '/skills/$name',
-          params: { name: s.name },
+          to: '/skills/$id',
+          params: { id: s.id },
           badges: (
             <>
               <span className="chip chip--tight">
@@ -74,7 +73,7 @@ function SkillsSplitLayout() {
       items={items}
       isLoading={isLoading}
       error={error}
-      selectedKey={isNew ? null : (params.name ?? null)}
+      selectedKey={isNew ? null : (params.id ?? null)}
       newActive={isNew}
       newLabel={t('skills.newButton')}
       newTo="/skills/new"

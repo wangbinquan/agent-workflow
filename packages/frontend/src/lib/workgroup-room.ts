@@ -675,7 +675,8 @@ export function groupFcAssignments(
 /** Staged member addition (the wire shape of ConfigPatchSchema.addMembers[i]). */
 export interface WorkgroupConfigMemberAdd {
   memberType: 'agent' | 'human'
-  agentName?: string
+  /** Canonical write identity. */
+  agentId?: string
   userId?: string
   displayName: string
   roleDesc: string
@@ -746,7 +747,7 @@ export function buildWorkgroupConfigPatch(
       m.memberType === 'agent'
         ? {
             memberType: 'agent',
-            agentName: m.agentName ?? '',
+            agentId: m.agentId ?? '',
             displayName: m.displayName,
             roleDesc: m.roleDesc,
           }

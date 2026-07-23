@@ -84,7 +84,8 @@ function SkillCreatePage() {
       report(NEW_CARD_KEY, false) // sync-clear before navigating
       release()
       void qc.invalidateQueries({ queryKey: ['skills'] })
-      navigate({ to: '/skills/$name', params: { name: s.name } })
+      qc.setQueryData(['skills', s.id], s)
+      navigate({ to: '/skills/$id', params: { id: s.id } })
     },
     onSettled: (_skill, _error, { release }) => release(),
   })

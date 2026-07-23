@@ -13,6 +13,8 @@ import { ErrorBanner } from '@/components/ErrorBanner'
 import { Field } from '@/components/Form'
 import { useManagedLiveRegion } from '@/components/ManagedLiveRegion'
 import { Select } from '@/components/Select'
+import { useUserLookup } from '@/hooks/useUserLookup'
+import { resourceOptionLabel } from '@/lib/resource-option-label'
 import { sha256Hex } from '@/lib/sha256'
 import {
   WORKFLOW_STARTER_CATALOG,
@@ -92,11 +94,11 @@ function suggestedRoleMapping(
     const eligible = agents.filter(
       (agent) => workflowStarterAgentIneligibleReason(role, agent) === null,
     )
-    const existing = eligible.find((agent) => agent.name === previous[role])
-    const selected = existing ?? eligible.find((agent) => !used.has(agent.name)) ?? eligible[0]
+    const existing = eligible.find((agent) => agent.id === previous[role])
+    const selected = existing ?? eligible.find((agent) => !used.has(agent.id)) ?? eligible[0]
     if (selected !== undefined) {
-      next[role] = selected.name
-      used.add(selected.name)
+      next[role] = selected.id
+      used.add(selected.id)
     }
   }
   return next
@@ -119,6 +121,7 @@ export function WorkflowStarterDialog({
   validateDraft = validateWorkflowStarterDraft,
 }: WorkflowStarterDialogProps) {
   const { t } = useTranslation()
+  const owners = useUserLookup(agents.map((agent) => agent.ownerUserId))
   const managedLiveRegion = useManagedLiveRegion()
   const firstStarterRef = useRef<HTMLButtonElement | null>(null)
   const [starterId, setStarterId] =
@@ -327,8 +330,11 @@ export function WorkflowStarterDialog({
           const options = agents.map((agent) => {
             const reason = workflowStarterAgentIneligibleReason(role, agent)
             return {
-              value: agent.name,
-              label: agent.name,
+              value: agent.id,
+              label: resourceOptionLabel(
+                agent.name,
+                owners.get(agent.ownerUserId)?.displayName ?? agent.ownerUserId ?? undefined,
+              ),
               disabled: reason !== null,
               description:
                 reason === null ? agent.description : t(`editor.starter.issue.${reason}`),

@@ -1,4 +1,4 @@
-// RFC-028 — MCP form widget shared by /mcps/new and /mcps/$name. Uses the
+// RFC-028 — MCP form widget shared by /mcps/new and /mcps/$id. Uses the
 // same `<Field>` + `<TextInput>` primitives as AgentForm / SkillCreatePage
 // so the three "new" pages look visually identical.
 // RFC-151 PR-1 — the two hand-rolled chip-radio groups (type, oauthMode)

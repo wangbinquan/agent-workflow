@@ -16,6 +16,8 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AgentSkillRef, Skill } from '@agent-workflow/shared'
 import { api } from '@/api/client'
+import { useUserLookup } from '@/hooks/useUserLookup'
+import { resourceOptionLabel } from '@/lib/resource-option-label'
 import { MultiSelect, type MultiSelectOption } from './MultiSelect'
 
 export const SKILLS_QUERY_KEY = ['skills'] as const
@@ -54,6 +56,7 @@ export function SkillsPicker({ value, onChange, placeholder }: Props) {
     staleTime: 30_000,
     retry: false,
   })
+  const owners = useUserLookup((list.data ?? []).map((skill) => skill.ownerUserId))
 
   const tokens = useMemo(() => value.map(encodeSkillRef), [value])
 
@@ -64,7 +67,14 @@ export function SkillsPicker({ value, onChange, placeholder }: Props) {
       const v = MANAGED_PREFIX + s.id
       if (seen.has(v)) continue
       seen.add(v)
-      out.push({ value: v, label: s.name, description: s.description || undefined })
+      out.push({
+        value: v,
+        label: resourceOptionLabel(
+          s.name,
+          owners.get(s.ownerUserId)?.displayName ?? s.ownerUserId ?? undefined,
+        ),
+        description: s.description || undefined,
+      })
     }
     // Synthesize a checked row for any currently-selected ref not covered by the
     // list (every project ref, plus a managed ref whose skill isn't visible) so
@@ -76,7 +86,7 @@ export function SkillsPicker({ value, onChange, placeholder }: Props) {
       out.push({ value: v, label: ref.kind === 'project' ? ref.name : ref.skillId })
     }
     return out
-  }, [list.data, value])
+  }, [list.data, value, owners])
 
   const failed = list.error !== null && list.error !== undefined
 

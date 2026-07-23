@@ -22,6 +22,8 @@ import { api } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
+import { useUserLookup } from '@/hooks/useUserLookup'
+import { resourceOptionLabel } from '@/lib/resource-option-label'
 import {
   MemoryFormFields,
   validateMemoryForm,
@@ -78,6 +80,10 @@ export function MemoryDialogShell(props: MemoryDialogShellProps) {
       api.get<{ items: CachedRepoListEntry[] }>('/api/cached-repos', undefined, signal),
     enabled: props.open && props.contentState === undefined,
   })
+  const owners = useUserLookup([
+    ...(agents.data ?? []).map((agent) => agent.ownerUserId),
+    ...(workflows.data ?? []).map((workflow) => workflow.ownerUserId),
+  ])
 
   return (
     <Dialog
@@ -134,8 +140,14 @@ export function MemoryDialogShell(props: MemoryDialogShellProps) {
             onTitle={props.form.setTitle}
             onBodyMd={props.form.setBodyMd}
             onTags={props.form.setTags}
-            agents={agentsToOptions(agents.data)}
-            workflows={workflowsToOptions(workflows.data)}
+            agents={agentsToOptions(
+              agents.data,
+              (ownerUserId) => owners.get(ownerUserId)?.displayName ?? ownerUserId ?? undefined,
+            )}
+            workflows={workflowsToOptions(
+              workflows.data,
+              (ownerUserId) => owners.get(ownerUserId)?.displayName ?? ownerUserId ?? undefined,
+            )}
             repos={reposToOptions(repos.data?.items)}
             disabled={props.pending}
           />
@@ -145,14 +157,26 @@ export function MemoryDialogShell(props: MemoryDialogShellProps) {
   )
 }
 
-function agentsToOptions(agents?: Agent[]): ScopeOption[] {
+function agentsToOptions(
+  agents: Agent[] | undefined,
+  ownerLabel: (ownerUserId: string | null | undefined) => string | undefined,
+): ScopeOption[] {
   if (!agents) return []
-  return agents.map((a) => ({ id: a.id, label: a.name }))
+  return agents.map((agent) => ({
+    id: agent.id,
+    label: resourceOptionLabel(agent.name, ownerLabel(agent.ownerUserId)),
+  }))
 }
 
-function workflowsToOptions(workflows?: Workflow[]): ScopeOption[] {
+function workflowsToOptions(
+  workflows: Workflow[] | undefined,
+  ownerLabel: (ownerUserId: string | null | undefined) => string | undefined,
+): ScopeOption[] {
   if (!workflows) return []
-  return workflows.map((w) => ({ id: w.id, label: w.name }))
+  return workflows.map((workflow) => ({
+    id: workflow.id,
+    label: resourceOptionLabel(workflow.name, ownerLabel(workflow.ownerUserId)),
+  }))
 }
 
 function reposToOptions(repos?: CachedRepoListEntry[]): ScopeOption[] {

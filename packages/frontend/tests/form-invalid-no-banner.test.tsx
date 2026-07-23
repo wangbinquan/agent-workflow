@@ -172,10 +172,10 @@ describe('invalid submit → inline field error only, no form-actions banner, no
     expect(document.querySelector('.form-actions__error')).toBeNull()
   })
 
-  test('/mcps/$name: clearing the command then Save shows no banner (was: raw "form-invalid")', async () => {
-    h.params = { name: 'm1' }
+  test('/mcps/$id: clearing the command then Save shows no banner (was: raw "form-invalid")', async () => {
+    h.params = { id: 'mcp_1' }
     const calls = installFetch((c) => {
-      if (c.method === 'GET' && c.url.endsWith('/api/mcps/m1')) return json(LOCAL_MCP)
+      if (c.method === 'GET' && c.url.endsWith('/api/mcps/mcp_1')) return json(LOCAL_MCP)
       if (c.url.includes('/probes')) return json([])
       return json({})
     })

@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { I18nextProvider } from 'react-i18next'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import type {
   Agent,
@@ -66,21 +67,27 @@ function renderDialog(props: Partial<React.ComponentProps<typeof WorkflowStarter
   const onUseBlank = vi.fn()
   const onClose = vi.fn()
   const validateDraft = props.validateDraft ?? successfulValidator()
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const result = render(
-    <I18nextProvider i18n={i18n}>
-      <WorkflowStarterDialog
-        open
-        workflowId="wf-1"
-        definition={empty}
-        agents={agents}
-        inventorySignature="inventory-1"
-        onApply={onApply}
-        onUseBlank={onUseBlank}
-        onClose={onClose}
-        validateDraft={validateDraft}
-        {...props}
-      />
-    </I18nextProvider>,
+    <WorkflowStarterDialog
+      open
+      workflowId="wf-1"
+      definition={empty}
+      agents={agents}
+      inventorySignature="inventory-1"
+      onApply={onApply}
+      onUseBlank={onUseBlank}
+      onClose={onClose}
+      validateDraft={validateDraft}
+      {...props}
+    />,
+    {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={queryClient}>
+          <I18nextProvider i18n={i18n}>{children}</I18nextProvider>
+        </QueryClientProvider>
+      ),
+    },
   )
   return { ...result, onApply, onUseBlank, onClose, validateDraft }
 }
@@ -140,19 +147,17 @@ describe('WorkflowStarterDialog', () => {
     const { rerender } = renderDialog({ validateDraft })
     await waitFor(() => expect(calls).toHaveLength(1))
     rerender(
-      <I18nextProvider i18n={i18n}>
-        <WorkflowStarterDialog
-          open
-          workflowId="wf-1"
-          definition={empty}
-          agents={agents}
-          inventorySignature="inventory-2"
-          onApply={() => undefined}
-          onUseBlank={() => undefined}
-          onClose={() => undefined}
-          validateDraft={validateDraft}
-        />
-      </I18nextProvider>,
+      <WorkflowStarterDialog
+        open
+        workflowId="wf-1"
+        definition={empty}
+        agents={agents}
+        inventorySignature="inventory-2"
+        onApply={() => undefined}
+        onUseBlank={() => undefined}
+        onClose={() => undefined}
+        validateDraft={validateDraft}
+      />,
     )
     await waitFor(() => expect(calls).toHaveLength(2))
     expect(calls[0]?.aborted).toBe(true)

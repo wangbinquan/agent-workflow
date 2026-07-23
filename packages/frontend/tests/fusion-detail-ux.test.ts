@@ -33,8 +33,10 @@ describe('RFC-198 fusion detail UX', () => {
     expect(SOURCE).toContain('<Dialog')
   })
 
-  test('historical provenance never links a reused name to a current same-name skill', () => {
-    expect(SOURCE).toContain('<span>{f.skillName}</span>')
+  test('historical provenance links through the stored canonical skill id', () => {
+    expect(SOURCE).toContain('to="/skills/$id"')
+    expect(SOURCE).toContain('params={{ id: f.skillId }}')
+    expect(SOURCE).toContain('{f.skillName}')
     expect(SOURCE).not.toContain('to="/skills/$name"')
   })
 })

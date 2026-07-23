@@ -33,7 +33,12 @@ vi.mock('@tanstack/react-router', async () => {
       params?: Record<string, string>
       'aria-label'?: string
     }) => (
-      <a href={to.replace('$name', encodeURIComponent(params?.name ?? ''))} aria-label={ariaLabel}>
+      <a
+        href={to
+          .replace('$name', encodeURIComponent(params?.name ?? ''))
+          .replace('$id', encodeURIComponent(params?.id ?? ''))}
+        aria-label={ariaLabel}
+      >
         {children}
       </a>
     ),
@@ -428,7 +433,9 @@ describe('ImportZipPanel (RFC-196)', () => {
     await waitFor(() =>
       expect(document.activeElement).toBe(screen.getByRole('heading', { name: /Import complete/ })),
     )
-    expect(screen.getByRole('link', { name: /fresh/ }).getAttribute('href')).toBe('/skills/fresh')
+    expect(screen.getByRole('link', { name: /fresh/ }).getAttribute('href')).toBe(
+      '/skills/id-fresh',
+    )
 
     const commitCall = fetchMock.mock.calls.find((call) =>
       String(call[0]).endsWith('/api/skills/import-zip/commit'),

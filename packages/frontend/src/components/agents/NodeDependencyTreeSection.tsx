@@ -10,9 +10,11 @@ import { api } from '@/api/client'
 import { buildDependencyTree, type DependencyTreeAgent } from '@/lib/dependency-tree'
 import { DependencyTree } from './DependencyTree'
 
-/** Wire shape coming back from /api/agents/:name/closure. */
+/** Wire shape coming back from /api/agents/:id/closure. */
 interface ClosureSummary {
+  id: string
   name: string
+  ownerUserId?: string | null
   description: string
   /** RFC-046 follow-up — names of skills this agent itself references;
    *  rendered as a chip when non-empty. */
@@ -21,18 +23,21 @@ interface ClosureSummary {
   mcp?: string[]
   /** RFC-031 — plugin names this agent itself references. */
   plugins?: string[]
-  dependsOn: readonly string[]
+  dependsOnIds: readonly string[]
   missing?: boolean
 }
 
 function toTreeAgents(rows: readonly ClosureSummary[]): DependencyTreeAgent[] {
   return rows.map((r) => ({
+    id: r.id,
     name: r.name,
+    ownerUserId: r.ownerUserId,
     description: r.description,
     skills: r.skills ?? [],
     mcps: r.mcp ?? [],
     plugins: r.plugins ?? [],
-    dependsOn: r.dependsOn,
+    dependsOn: r.dependsOnIds,
+    missing: r.missing ?? false,
   }))
 }
 
@@ -43,17 +48,17 @@ interface ClosureResponse {
 }
 
 interface Props {
-  agentName: string
+  agentId: string
   /** Click handler for closure rows; if omitted, names render as plain text. */
-  onNodeClick?: (name: string) => void
+  onNodeClick?: (id: string) => void
 }
 
-export function NodeDependencyTreeSection({ agentName, onNodeClick }: Props) {
+export function NodeDependencyTreeSection({ agentId, onNodeClick }: Props) {
   const { t } = useTranslation()
   const q = useQuery<ClosureResponse>({
-    queryKey: ['agent-closure', agentName],
+    queryKey: ['agent-closure', agentId],
     queryFn: ({ signal }) =>
-      api.get(`/api/agents/${encodeURIComponent(agentName)}/closure`, undefined, signal),
+      api.get(`/api/agents/${encodeURIComponent(agentId)}/closure`, undefined, signal),
     staleTime: 30_000,
     retry: false,
   })
@@ -68,7 +73,7 @@ export function NodeDependencyTreeSection({ agentName, onNodeClick }: Props) {
   }
   const data = q.data
   if (data === undefined || data.agents === undefined) return null
-  const tree = buildDependencyTree(toTreeAgents(data.agents), agentName)
+  const tree = buildDependencyTree(toTreeAgents(data.agents), agentId)
   if (tree.children.length === 0) {
     return <span className="muted">{t('dependencyTreePreview.emptyHint')}</span>
   }

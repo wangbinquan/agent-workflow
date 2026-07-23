@@ -4,10 +4,10 @@
 // Guards two layers:
 //  1. (RFC-164) a workgroup/agent task links to its OWNING resource + kind badge,
 //     never the builtin `__workgroup_host__` / `__agent_host__` FK-anchor.
-//  2. (RFC-177) it links by the FROZEN STABLE ID via the /…/by-id/$id resolver
+//  2. (RFC-223) it links by the FROZEN STABLE ID via the canonical /…/$id
 //     route (workgroupId / sourceAgentId), so a rename/reuse of the name can't
 //     misidentify the subject. The link TEXT stays the frozen name. Historical
-//     agent tasks with no frozen id fall back to a by-name link (D3a).
+//     agent tasks with no frozen id render plain text (fail closed).
 // Replaces the source-text locks that used to pin the inline cell
 // (tasks-workgroup-badge.test.ts / task-detail-header-workflow-link.test.ts).
 
@@ -30,7 +30,7 @@ import '../src/i18n'
 /** Mount `node` at /tasks inside a minimal real router (a bare Outlet root, so
  *  the app's auth `beforeLoad` gate is bypassed). TaskSubjectLink renders
  *  TanStack <Link>s, which need a RouterProvider whose tree registers every
- *  subject target route (by-id resolvers + by-name detail + workflow) so the
+ *  subject target route (canonical id detail + workflow) so the
  *  links resolve their hrefs. */
 function mountSubject(node: ReactElement) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -40,13 +40,7 @@ function mountSubject(node: ReactElement) {
     path: '/tasks',
     component: () => node,
   })
-  const paths = [
-    '/workflows/$id',
-    '/workgroups/by-id/$id', // RFC-177 resolver
-    '/agents/by-id/$id', // RFC-177 resolver
-    '/workgroups/$name', // by-name detail (defensive fallback)
-    '/agents/$name', // by-name detail (D3a historical agent)
-  ] as const
+  const paths = ['/workflows/$id', '/workgroups/$id', '/agents/$id'] as const
   const stubs = paths.map((path) =>
     createRoute({ getParentRoute: () => rootRoute, path, component: () => null }),
   )
@@ -105,7 +99,7 @@ describe('TaskSubjectLink — workflow tasks', () => {
 })
 
 describe('TaskSubjectLink — workgroup tasks link by stable id (rename-safe)', () => {
-  test('links to /workgroups/by-id/<workgroupId>, text = frozen name, never the host anchor', async () => {
+  test('links to /workgroups/<workgroupId>, text = frozen name, never the host anchor', async () => {
     const task: TaskSubjectFields = {
       // A workgroup task is FK-anchored to __workgroup_host__ — these must NOT surface.
       workflowId: '00000000000000WORKGROUP00',
@@ -116,9 +110,9 @@ describe('TaskSubjectLink — workgroup tasks link by stable id (rename-safe)', 
     mountSubject(<TaskSubjectLink task={task} taskId="t3" badge />)
 
     const link = await screen.findByRole('link', { name: 'my-group' })
-    // RFC-177: link by the stable id (not the frozen name) → resolver route.
-    expect(link.getAttribute('href')).toBe('/workgroups/by-id/g1')
-    // The subject link must never be the FK-anchor workflow route nor a by-name link.
+    // RFC-223: link by the stable id (not the frozen name) → canonical route.
+    expect(link.getAttribute('href')).toBe('/workgroups/g1')
+    // The subject link must never be the FK-anchor workflow route nor a name-derived link.
     expect(link.getAttribute('href')).not.toContain('/workflows/')
     expect(link.getAttribute('href')).not.toBe('/workgroups/my-group')
 
@@ -146,7 +140,7 @@ describe('TaskSubjectLink — workgroup tasks link by stable id (rename-safe)', 
 })
 
 describe('TaskSubjectLink — single-agent tasks link by stable id (rename/reuse-safe)', () => {
-  test('with a frozen sourceAgentId → /agents/by-id/<id> + 代理 badge, never the anchor', async () => {
+  test('with a frozen sourceAgentId → /agents/<id> + 代理 badge, never the anchor', async () => {
     const task: TaskSubjectFields = {
       workflowId: 'someAgentHostId',
       workflowName: '__agent_host__',
@@ -156,7 +150,7 @@ describe('TaskSubjectLink — single-agent tasks link by stable id (rename/reuse
     mountSubject(<TaskSubjectLink task={task} taskId="t4" badge />)
 
     const link = await screen.findByRole('link', { name: 'coder' })
-    expect(link.getAttribute('href')).toBe('/agents/by-id/ag1')
+    expect(link.getAttribute('href')).toBe('/agents/ag1')
     expect(link.getAttribute('href')).not.toContain('/workflows/')
 
     const badge = screen.getByTestId('task-agent-badge-t4')
@@ -166,7 +160,7 @@ describe('TaskSubjectLink — single-agent tasks link by stable id (rename/reuse
     expect(screen.queryByRole('link', { name: '__agent_host__' })).toBeNull()
   })
 
-  test('D3(a): historical task with NO frozen sourceAgentId → by-name link', async () => {
+  test('historical task with NO frozen sourceAgentId renders plain text', async () => {
     const task: TaskSubjectFields = {
       workflowId: 'someAgentHostId',
       workflowName: '__agent_host__',
@@ -174,8 +168,8 @@ describe('TaskSubjectLink — single-agent tasks link by stable id (rename/reuse
       // sourceAgentId omitted → historical row (RFC-175 migration did not backfill).
     }
     mountSubject(<TaskSubjectLink task={task} taskId="t7" badge />)
-    const link = await screen.findByRole('link', { name: 'legacy-coder' })
-    expect(link.getAttribute('href')).toBe('/agents/legacy-coder')
+    expect(await screen.findByText('legacy-coder')).toBeTruthy()
+    expect(screen.queryByRole('link', { name: 'legacy-coder' })).toBeNull()
     expect(screen.getByTestId('task-agent-badge-t7').textContent).toBe(i18n.t('tasks.agentBadge'))
   })
 })
@@ -190,7 +184,7 @@ describe('TaskSubjectLink — badge omitted (detail meta row)', () => {
     }
     mountSubject(<TaskSubjectLink task={task} taskId="t6" />)
     const link = await screen.findByRole('link', { name: 'grp' })
-    expect(link.getAttribute('href')).toBe('/workgroups/by-id/g1')
+    expect(link.getAttribute('href')).toBe('/workgroups/g1')
     expect(screen.queryByTestId('task-workgroup-badge-t6')).toBeNull()
     expect(screen.queryByTestId('task-agent-badge-t6')).toBeNull()
   })

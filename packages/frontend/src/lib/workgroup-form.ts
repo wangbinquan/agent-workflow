@@ -158,10 +158,9 @@ export interface WorkgroupMemberRowState {
    */
   serverId: string | null
   memberType: WorkgroupMemberType
-  /** RFC-223 canonical identity. Legacy dangling rows may only have a name. */
+  /** memberType='agent' — canonical identity. */
   agentId: string
-  /** memberType='agent' — may reference a not-yet-existing agent (dangling
-   *  references are legal; launch-time validation owns existence). */
+  /** Display snapshot only; never used to resolve identity. */
   agentName: string
   /** memberType='human' — users.id of the picked platform user. */
   userId: string
@@ -182,7 +181,7 @@ export function nextMemberRowKey(): string {
 }
 
 export function makeAgentMemberRow(input: {
-  agentId?: string
+  agentId: string
   agentName: string
   displayName: string
   roleDesc?: string
@@ -191,7 +190,7 @@ export function makeAgentMemberRow(input: {
     key: nextMemberRowKey(),
     serverId: null,
     memberType: 'agent',
-    agentId: input.agentId ?? '',
+    agentId: input.agentId,
     agentName: input.agentName,
     userId: '',
     displayName: input.displayName,
@@ -362,15 +361,12 @@ export function reconcileWorkgroupSaveResponse(
     const localMatchesRequest =
       localInput.memberType === requested.memberType &&
       localInput.agentId === requested.agentId &&
-      localInput.agentName === requested.agentName &&
       localInput.userId === requested.userId &&
       localInput.displayName === requested.displayName &&
       localInput.roleDesc === requested.roleDesc
     const agentMatches =
       requested.memberType === 'agent'
-        ? (requested.agentId === undefined || server.agentId === requested.agentId) &&
-          (requested.agentName === undefined || server.agentName === requested.agentName) &&
-          server.userId === null
+        ? server.agentId === requested.agentId && server.userId === null
         : server.agentName === null && server.userId === requested.userId
     if (
       server.memberType !== requested.memberType ||
@@ -457,18 +453,19 @@ export function setLeader(state: WorkgroupMembersState, key: string | null): Wor
 /**
  * Per-member validation used by the add/edit dialogs. `others` = the group's
  * remaining members (excluding the edited one) for the uniqueness check.
- * Keys: agentName / userId / displayName.
+ * Keys: agentId / userId / displayName.
  */
 export function validateMemberDraft(
-  draft: Pick<WorkgroupMemberRowState, 'memberType' | 'agentName' | 'userId' | 'displayName'> & {
-    agentId?: string
-  },
+  draft: Pick<
+    WorkgroupMemberRowState,
+    'memberType' | 'agentId' | 'agentName' | 'userId' | 'displayName'
+  >,
   others: ReadonlyArray<Pick<WorkgroupMemberRowState, 'displayName'>>,
 ): Record<string, string> {
   const errors: Record<string, string> = {}
   if (draft.memberType === 'agent') {
-    if ((draft.agentId ?? '').length === 0 && draft.agentName.trim().length === 0) {
-      errors.agentName = 'workgroups.errors.agentNameRequired'
+    if (draft.agentId.trim().length === 0) {
+      errors.agentId = 'workgroups.errors.agentNameRequired'
     }
   } else if (draft.userId.length === 0) {
     errors.userId = 'workgroups.errors.userRequired'
@@ -572,11 +569,7 @@ function rowToInput(m: WorkgroupMemberRowState): WorkgroupDraftMember {
   return m.memberType === 'agent'
     ? {
         memberType: 'agent',
-        ...(m.agentId.length > 0
-          ? { agentId: m.agentId }
-          : m.agentName.trim().length > 0
-            ? { agentName: m.agentName.trim() }
-            : {}),
+        agentId: m.agentId.trim(),
         displayName: m.displayName.trim(),
         roleDesc: m.roleDesc,
       }
@@ -595,11 +588,7 @@ function membersToInputs(members: Workgroup['members']): WorkgroupDraftMember[] 
       m.memberType === 'agent'
         ? {
             memberType: 'agent' as const,
-            ...(m.agentId !== undefined && m.agentId !== null
-              ? { agentId: m.agentId }
-              : m.agentName !== null
-                ? { agentName: m.agentName }
-                : {}),
+            agentId: m.agentId ?? '',
             displayName: m.displayName,
             roleDesc: m.roleDesc,
           }

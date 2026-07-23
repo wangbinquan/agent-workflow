@@ -12244,7 +12244,7 @@ mark.comment-anchor[data-active='true'] {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-/* Inventory panel on /mcps/$name */
+/* Inventory panel on /mcps/$id */
 .mcp-inventory {
   margin-top: 24px;
   border: 1px solid var(--border);

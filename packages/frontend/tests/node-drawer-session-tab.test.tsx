@@ -58,7 +58,7 @@ function renderDrawer(props: {
           nodeRunId={props.nodeRunId}
           nodeId={props.nodeId}
           workflowNodeKind={props.workflowNodeKind}
-          agentName={null}
+          agentId={null}
           runs={props.runs}
           outputs={props.outputs ?? []}
           onClose={vi.fn()}

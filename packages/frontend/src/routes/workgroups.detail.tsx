@@ -53,7 +53,7 @@ import { Route as RootRoute } from './__root'
 
 export const Route = createRoute({
   getParentRoute: () => RootRoute,
-  path: '/workgroups/$name',
+  path: '/workgroups/$id',
   component: WorkgroupDetailPage,
   remountDeps: ({ params }) => params,
 })
@@ -109,25 +109,25 @@ function settleScope<T>(
 }
 
 function WorkgroupDetailPage() {
-  const { name } = Route.useParams()
+  const { id } = Route.useParams()
   const query = useQuery<WorkgroupDetail>({
-    queryKey: ['workgroups', name],
+    queryKey: ['workgroups', id],
     queryFn: ({ signal }) =>
-      api.get(`/api/workgroups/${encodeURIComponent(name)}`, undefined, signal),
+      api.get(`/api/workgroups/${encodeURIComponent(id)}`, undefined, signal),
   })
 
   if (query.data === undefined) {
     if (query.error !== null && query.error !== undefined) {
       return (
         <div className="page">
-          <PageHeader title={name} />
+          <PageHeader title={id} />
           <ErrorBanner error={query.error} onRetry={() => void query.refetch()} />
         </div>
       )
     }
     return (
       <div className="page">
-        <PageHeader title={name} />
+        <PageHeader title={id} />
         <LoadingState />
       </div>
     )
@@ -136,7 +136,7 @@ function WorkgroupDetailPage() {
   return (
     <WorkgroupEditor
       key={query.data.id}
-      routeName={name}
+      resourceId={id}
       initial={query.data}
       observed={query.data}
       queryError={query.error}
@@ -146,7 +146,7 @@ function WorkgroupDetailPage() {
 }
 
 export function WorkgroupEditor(props: {
-  routeName: string
+  resourceId: string
   initial: WorkgroupDetail
   observed: WorkgroupDetail
   queryError: unknown
@@ -193,12 +193,10 @@ export function WorkgroupEditor(props: {
 
   const publishDetail = useCallback(
     (detail: WorkgroupDetail) => {
-      queryClient.setQueryData(['workgroups', props.routeName], detail)
-      queryClient.setQueryData(['workgroups', detail.name], detail)
       queryClient.setQueryData(['workgroups', detail.id], detail)
       void queryClient.invalidateQueries({ queryKey: ['workgroups'], exact: true })
     },
-    [props.routeName, queryClient],
+    [queryClient],
   )
 
   const settleReceipt = useCallback(
@@ -366,16 +364,6 @@ export function WorkgroupEditor(props: {
     if (isAccessLoss(props.queryError)) remoteInaccessible(props.queryError)
   }, [props.queryError, remoteInaccessible])
 
-  useEffect(() => {
-    const serverName = controller.state.server.name
-    if (controller.state.phase !== 'clean' || serverName === props.routeName) return
-    void navigate({
-      to: '/workgroups/$name',
-      params: { name: serverName },
-      replace: true,
-    })
-  }, [controller.state.phase, controller.state.server.name, navigate, props.routeName])
-
   function applyValidity(
     configState: EditScopeState<WorkgroupConfigDraft>,
     memberState: EditScopeState<WorkgroupMembersState>,
@@ -506,7 +494,7 @@ export function WorkgroupEditor(props: {
     mutationFn: async (confirm: string) => {
       const saved = await controller.ensureSaved()
       if (!controller.isSavedDraftCurrent(saved)) throw new Error('workgroup changed before delete')
-      await api.deleteJson(`/api/workgroups/${encodeURIComponent(saved.snapshot.name)}`, {
+      await api.deleteJson(`/api/workgroups/${encodeURIComponent(props.resourceId)}`, {
         confirm,
         expectedVersion: saved.server.version,
         clientMutationId: ulid(),
@@ -536,7 +524,7 @@ export function WorkgroupEditor(props: {
         to: '/tasks/new',
         search: {
           kind: 'workgroup',
-          workgroup: saved.snapshot.name,
+          workgroupId: props.resourceId,
           workgroupVersion: saved.server.version,
         },
       })
@@ -560,7 +548,7 @@ export function WorkgroupEditor(props: {
       busyRef.current = false
       publishDetail(created)
       setCopyIntent(null)
-      void navigate({ to: '/workgroups/$name', params: { name: created.name } })
+      void navigate({ to: '/workgroups/$id', params: { id: created.id } })
     },
     onError: () => {
       busyRef.current = false
@@ -599,7 +587,7 @@ export function WorkgroupEditor(props: {
     del.isPending ||
     launch.isPending ||
     copy.isPending
-  dirtyRef.current = unsafe ? props.routeName : null
+  dirtyRef.current = unsafe ? props.resourceId : null
   busyRef.current = busy
   const deleteDisabled =
     blockReason !== null ||
@@ -621,7 +609,7 @@ export function WorkgroupEditor(props: {
     <div className="page page--split">
       <PageHeader
         className="editor-page-header editor-page-header--workgroup"
-        title={config.state.draft.name || props.routeName}
+        title={config.state.draft.name || props.initial.name}
         meta={
           <>
             <code>{props.initial.id}</code> · v{controller.state.serverRevision.version}
@@ -843,7 +831,7 @@ export function WorkgroupEditor(props: {
         data-testid="workgroup-acl-dialog"
       >
         <AclPanel
-          resourceBaseUrl={`/api/workgroups/${encodeURIComponent(controller.state.server.name)}`}
+          resourceBaseUrl={`/api/workgroups/${encodeURIComponent(props.resourceId)}`}
           invalidateKey={['workgroups']}
           onSaved={() => setHeaderSurface(null)}
           onCancel={() => setHeaderSurface(null)}

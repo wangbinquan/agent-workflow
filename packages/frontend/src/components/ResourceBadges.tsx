@@ -22,14 +22,15 @@ export interface ResourceBadgesProps {
 export function ResourceBadges(props: ResourceBadgesProps) {
   const { t } = useTranslation()
   const owner = props.ownerUserId != null ? props.owners.get(props.ownerUserId) : undefined
+  const ownerLabel = owner?.displayName ?? props.ownerUserId ?? undefined
   return (
     <>
       {props.visibility === 'private' && (
         <span className="chip chip--tight">{t('acl.privateChip')}</span>
       )}
-      {owner !== undefined && (
+      {ownerLabel !== undefined && (
         <span className="muted data-table__owner" title={t('acl.ownerBadge')}>
-          {owner.displayName}
+          {ownerLabel}
         </span>
       )}
     </>

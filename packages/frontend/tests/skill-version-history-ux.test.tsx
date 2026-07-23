@@ -48,7 +48,7 @@ function createClient(): QueryClient {
 function renderHistory(client = createClient()) {
   const view = render(
     <QueryClientProvider client={client}>
-      <SkillVersionHistory skillName="ux-skill" currentVersion={2} />
+      <SkillVersionHistory skillId="skill-ux" currentVersion={2} />
     </QueryClientProvider>,
   )
   return { client, ...view }
@@ -95,7 +95,7 @@ describe('<SkillVersionHistory /> RFC-198 UX contract', () => {
     await screen.findByText('Initial content')
 
     await act(async () => {
-      await client.invalidateQueries({ queryKey: ['skills', 'ux-skill', 'versions'] })
+      await client.invalidateQueries({ queryKey: ['skills', 'skill-ux', 'versions'] })
     })
 
     expect(await screen.findByRole('alert')).toBeTruthy()

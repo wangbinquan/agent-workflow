@@ -5,7 +5,7 @@
 // What survives here:
 //   1. Detail page: the "Launch task" button keeps the workflow-editor primary
 //      action position and deep-links into the wizard with the group pre-picked
-//      (?kind=workgroup&workgroup=<name>) when the shared readiness oracle passes.
+//      (?kind=workgroup&workgroupId=<id>) when the shared readiness oracle passes.
 //   2. A not-ready group keeps that stable action visible but disabled and
 //      explains the blocking condition in the readiness banner.
 
@@ -39,6 +39,7 @@ function wg(name: string, overrides: Partial<Workgroup> = {}): Workgroup {
       {
         id: 'mem_1',
         memberType: 'agent',
+        agentId: 'agent_coder',
         agentName: 'coder',
         userId: null,
         displayName: 'Coder',
@@ -75,7 +76,7 @@ function installFetch(state: { workgroups: Workgroup[] }): void {
     }
     const one = url.match(/\/api\/workgroups\/([^/]+)$/)
     if (one !== null) {
-      const row = state.workgroups.find((w) => w.name === decodeURIComponent(one[1]!))
+      const row = state.workgroups.find((w) => w.id === decodeURIComponent(one[1]!))
       return row !== undefined ? json(row) : json({ code: 'workgroup-not-found' }, 404)
     }
     if (url.endsWith('/api/workgroups')) return json(state.workgroups)
@@ -88,7 +89,7 @@ async function renderPage(initialEntry: string) {
   const rootRoute = createRootRoute({ component: () => <Outlet /> })
   const detailRoute = createRoute({
     getParentRoute: () => rootRoute,
-    path: '/workgroups/$name',
+    path: '/workgroups/$id',
     component: detail.Route.options.component,
   })
   const wizardStub = createRoute({
@@ -121,10 +122,10 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('/workgroups/$name — launch entry gating', () => {
+describe('/workgroups/$id — launch entry gating', () => {
   test('a launch-ready group uses an exact-save launch handoff and renders no Save button', async () => {
     installFetch({ workgroups: [wg('review-squad')] })
-    const router = await renderPage('/workgroups/review-squad')
+    const router = await renderPage('/workgroups/wg_review-squad')
     const btn = await screen.findByTestId('workgroup-launch-button')
     expect(btn.getAttribute('href')).toBeNull()
     expect(btn.classList.contains('btn--primary')).toBe(true)
@@ -133,7 +134,7 @@ describe('/workgroups/$name — launch entry gating', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe('/tasks/new'))
     expect(router.state.location.search).toMatchObject({
       kind: 'workgroup',
-      workgroup: 'review-squad',
+      workgroupId: 'wg_review-squad',
       workgroupVersion: 1,
     })
   })
@@ -142,7 +143,7 @@ describe('/workgroups/$name — launch entry gating', () => {
     installFetch({
       workgroups: [wg('empty-squad', { members: [], leaderMemberId: null })],
     })
-    await renderPage('/workgroups/empty-squad')
+    await renderPage('/workgroups/wg_empty-squad')
     await screen.findByTestId('workgroup-readiness-banner')
     const btn = await screen.findByTestId('workgroup-launch-button')
     expect(btn.classList.contains('btn--primary')).toBe(true)

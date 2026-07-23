@@ -23,6 +23,7 @@ interface Row {
   name: string
   description: string
   enabled: boolean
+  ownerUserId?: string | null
 }
 
 const LABELS: ResourcePickerLabels = {
@@ -104,6 +105,52 @@ describe('ResourcePicker — config surface (MultiSelect)', () => {
     expect(onChange).toHaveBeenCalledWith(['id-alpha'])
   })
 
+  test('duplicate names are disambiguated by owner while selection remains id-based', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = input.toString()
+      const payload = url.includes('/api/users/lookup')
+        ? [
+            { id: 'owner-a', username: 'alice', displayName: 'Alice' },
+            { id: 'owner-b', username: 'bob', displayName: 'Bob' },
+          ]
+        : [
+            {
+              id: 'row-a',
+              name: 'shared',
+              description: '',
+              enabled: true,
+              ownerUserId: 'owner-a',
+            },
+            {
+              id: 'row-b',
+              name: 'shared',
+              description: '',
+              enabled: true,
+              ownerUserId: 'owner-b',
+            },
+          ]
+      return new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+    const onChange = vi.fn()
+    wrap(
+      <ResourcePicker<Row>
+        {...baseProps}
+        value={[]}
+        onChange={onChange}
+        queryKey={['rp-test', 'duplicate-owner']}
+        endpoint="/api/rows"
+      />,
+    )
+    const list = await openPicker()
+    const alice = await within(list).findByRole('option', { name: /shared · Alice/ })
+    expect(within(list).getByRole('option', { name: /shared · Bob/ })).toBeTruthy()
+    fireEvent.mouseDown(alice)
+    expect(onChange).toHaveBeenCalledWith(['row-a'])
+  })
+
   test('selected rows stay in the dropdown, CHECKED (not filtered out)', async () => {
     mockRows([row('a'), row('b'), row('c')])
     wrap(
@@ -180,7 +227,7 @@ describe('ResourcePicker — config surface (MultiSelect)', () => {
     await waitFor(() => expect(screen.getByText(LABELS.empty)).toBeTruthy())
   })
 
-  test('load failure shows labels.loadFailed and still allows free-text add', async () => {
+  test('load failure shows labels.loadFailed and rejects non-canonical free text', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ ok: false }), {
         status: 502,
@@ -198,12 +245,12 @@ describe('ResourcePicker — config surface (MultiSelect)', () => {
       />,
     )
     await waitFor(() => screen.getByText(LABELS.loadFailed))
-    // The combobox still works: type a name and commit it (allowCustom).
+    // Resource references are canonical ids from visible options only.
     const input = combo()
     fireEvent.focus(input)
     fireEvent.change(input, { target: { value: 'typed' } })
     fireEvent.keyDown(input, { key: 'Enter' })
-    expect(onChange).toHaveBeenCalledWith(['typed'])
+    expect(onChange).not.toHaveBeenCalled()
   })
 
   test('testid lands on the combobox input', async () => {

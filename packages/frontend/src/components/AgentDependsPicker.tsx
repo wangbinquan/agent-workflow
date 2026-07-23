@@ -1,6 +1,6 @@
 // RFC-022: dropdown of existing agents above the chip input. Mirror of
 // SkillsPicker. Lets the form author pick the closure members from
-// /api/agents instead of typing names; self-name is filtered out because
+// /api/agents instead of typing names; the current resource id is filtered out because
 // the save-time guard refuses self-references.
 //
 // RFC-151 PR-2: thin config shell over the shared <ResourcePicker>.
@@ -14,13 +14,13 @@ export const AGENTS_QUERY_KEY = ['agents'] as const
 interface Props {
   value: string[]
   onChange: (next: string[]) => void
-  /** Name of the agent being edited — excluded from the dropdown so the form
+  /** Id of the agent being edited — excluded from the dropdown so the form
    *  cannot offer "select self" (which the save-time guard would reject). */
-  selfName?: string
+  selfId?: string
   placeholder?: string
 }
 
-export function AgentDependsPicker({ value, onChange, selfName, placeholder }: Props) {
+export function AgentDependsPicker({ value, onChange, selfId, placeholder }: Props) {
   const { t } = useTranslation()
   return (
     <ResourcePicker<Agent>
@@ -28,7 +28,7 @@ export function AgentDependsPicker({ value, onChange, selfName, placeholder }: P
       onChange={onChange}
       queryKey={AGENTS_QUERY_KEY}
       endpoint="/api/agents"
-      filter={(a) => a.name !== selfName}
+      filter={(a) => a.id !== selfId}
       labelFn={(a) => a.name}
       descriptionFn={(a) => a.description ?? undefined}
       ariaLabel={t('agentForm.fieldDependsOn')}

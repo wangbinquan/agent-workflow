@@ -8,19 +8,39 @@
 // diamond closures don't blow up vertically.
 
 import { useTranslation } from 'react-i18next'
+import { useUserLookup } from '@/hooks/useUserLookup'
 import type { DependencyTreeNode } from '@/lib/dependency-tree'
+import { resourceOptionLabel } from '@/lib/resource-option-label'
 
 interface DependencyTreeProps {
   tree: DependencyTreeNode
   /** Called when the user clicks an agent name; the parent navigates. */
-  onNodeClick?: (name: string) => void
+  onNodeClick?: (id: string) => void
 }
 
 export function DependencyTree({ tree, onNodeClick }: DependencyTreeProps) {
   const { t } = useTranslation()
+  const ownerIds: Array<string | null | undefined> = []
+  const pending = [tree]
+  while (pending.length > 0) {
+    const node = pending.pop()
+    if (node === undefined) continue
+    ownerIds.push(node.ownerUserId)
+    pending.push(...node.children)
+  }
+  const owners = useUserLookup(ownerIds)
+  const ownerLabel = (ownerUserId: string | null | undefined): string | undefined =>
+    owners.get(ownerUserId)?.displayName ?? ownerUserId ?? undefined
   return (
     <div className="dep-tree" role="tree" aria-label={t('dependencyTree.ariaTreeLabel')}>
-      <Row node={tree} prefix="" isRoot={true} isLast={true} onNodeClick={onNodeClick} />
+      <Row
+        node={tree}
+        prefix=""
+        isRoot={true}
+        isLast={true}
+        onNodeClick={onNodeClick}
+        ownerLabel={ownerLabel}
+      />
     </div>
   )
 }
@@ -33,40 +53,42 @@ interface RowProps {
   /** When true, the row sits at the bottom of its sibling group; we draw `└─`
    *  for its connector and no `│` after it. */
   isLast: boolean
-  onNodeClick?: (name: string) => void
+  onNodeClick?: (id: string) => void
+  ownerLabel: (ownerUserId: string | null | undefined) => string | undefined
 }
 
-function Row({ node, prefix, isRoot, isLast, onNodeClick }: RowProps) {
+function Row({ node, prefix, isRoot, isLast, onNodeClick, ownerLabel }: RowProps) {
   const connector = isRoot ? '' : isLast ? '└─ ' : '├─ '
-  const missing =
-    node.description === '' &&
-    node.skills.length === 0 &&
-    node.mcps.length === 0 &&
-    node.plugins.length === 0 &&
-    !node.duplicateRef
-  // A truly missing agent has no row in the flat list — buildDependencyTree
-  // returns a placeholder with empty fields. We rely on the convention that
-  // the dependsOn entries are always non-empty so this heuristic is safe.
   return (
     <>
-      <div className="dep-tree__row" role="treeitem" aria-label={node.name}>
+      <div
+        className="dep-tree__row"
+        role="treeitem"
+        aria-label={resourceOptionLabel(node.name, ownerLabel(node.ownerUserId))}
+      >
         <span className="dep-tree__guide" aria-hidden="true">
           {prefix}
           {connector}
         </span>
-        <NodeLabel node={node} missing={missing} onNodeClick={onNodeClick} />
+        <NodeLabel
+          node={node}
+          missing={node.missing}
+          onNodeClick={onNodeClick}
+          ownerLabel={ownerLabel}
+        />
       </div>
       {node.children.map((child, idx) => {
         const childIsLast = idx === node.children.length - 1
         const childPrefix = isRoot ? '' : prefix + (isLast ? '   ' : '│  ')
         return (
           <Row
-            key={`${child.name}-${idx}`}
+            key={`${child.id}-${idx}`}
             node={child}
             prefix={childPrefix}
             isRoot={false}
             isLast={childIsLast}
             onNodeClick={onNodeClick}
+            ownerLabel={ownerLabel}
           />
         )
       })}
@@ -78,16 +100,19 @@ function NodeLabel({
   node,
   missing,
   onNodeClick,
+  ownerLabel,
 }: {
   node: DependencyTreeNode
   missing: boolean
-  onNodeClick?: (name: string) => void
+  onNodeClick?: (id: string) => void
+  ownerLabel: (ownerUserId: string | null | undefined) => string | undefined
 }) {
   const { t } = useTranslation()
-  const clickable = !missing && !node.duplicateRef && onNodeClick !== undefined
+  const clickable = node.id !== '' && !missing && !node.duplicateRef && onNodeClick !== undefined
+  const displayName = resourceOptionLabel(node.name, ownerLabel(node.ownerUserId))
   const label = (
     <span className="dep-tree__name">
-      {missing ? t('dependencyTree.missingPrefix', { name: node.name }) : node.name}
+      {missing ? t('dependencyTree.missingPrefix', { name: node.name }) : displayName}
     </span>
   )
   return (
@@ -96,8 +121,8 @@ function NodeLabel({
         <button
           type="button"
           className="dep-tree__link"
-          onClick={() => onNodeClick(node.name)}
-          aria-label={t('dependencyTree.openAgentAria', { name: node.name })}
+          onClick={() => onNodeClick(node.id)}
+          aria-label={t('dependencyTree.openAgentAria', { name: displayName })}
         >
           {label}
         </button>

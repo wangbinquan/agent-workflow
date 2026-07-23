@@ -44,8 +44,9 @@ function McpCreatePage() {
     onSuccess: (m, { release }) => {
       report(NEW_CARD_KEY, false)
       void qc.invalidateQueries({ queryKey: ['mcps'] })
+      qc.setQueryData(['mcps', m.id], m)
       release()
-      navigate({ to: '/mcps/$name', params: { name: m.name } })
+      navigate({ to: '/mcps/$id', params: { id: m.id } })
     },
     onSettled: (_mcp, _error, { release }) => release(),
   })

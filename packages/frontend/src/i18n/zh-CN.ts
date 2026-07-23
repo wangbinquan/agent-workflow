@@ -1147,7 +1147,7 @@ export interface Resources {
     /** RFC-191: gallery card行内主动作（工作流/工作组「启动」）。 */
     launch: string
     launchResource: string
-    /** RFC-177: by-id subject redirect landed on a missing/invisible resource. */
+    /** A stable-id subject link landed on a missing/invisible resource. */
     resourceUnavailable: string
     copy: string
     copied: string
@@ -5875,7 +5875,7 @@ export const zhCN: Resources = {
     errors: {
       nameRequired: '名称必填。',
       nameInvalid: '名称须以小写字母 / 数字开头，只允许 [a-z0-9_-]，长度 ≤ 128。',
-      agentNameRequired: 'agent 成员必须填写代理名。',
+      agentNameRequired: 'agent 成员必须选择代理。',
       userRequired: '人类成员必须选择平台用户。',
       displayNameRequired: '显示名必填。',
       displayNameInvalid: '显示名不能包含 @、逗号或空白字符。',

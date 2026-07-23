@@ -20,7 +20,7 @@ import { RelativeTime } from '@/components/RelativeTime'
  *  (`tasks.new.tsx` validateSearch contract). */
 export type GalleryLaunchSearch =
   | { kind: 'workflow'; workflow: string }
-  | { kind: 'workgroup'; workgroup: string }
+  | { kind: 'workgroup'; workgroupId: string }
 
 interface GalleryCardItemBase {
   key: string
@@ -53,8 +53,8 @@ export interface WorkflowGalleryCardItem extends GalleryCardItemBase {
 export interface WorkgroupGalleryCardItem extends GalleryCardItemBase {
   /** Drives the resource glyph + restrained per-resource accent treatment. */
   kind: 'workgroup'
-  to: '/workgroups/$name'
-  params: { name: string }
+  to: '/workgroups/$id'
+  params: { id: string }
   launch?: Extract<GalleryLaunchSearch, { kind: 'workgroup' }>
 }
 

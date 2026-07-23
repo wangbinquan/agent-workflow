@@ -2,7 +2,7 @@
 // Locks two invariants:
 //   1. /agents/new wires AgentImportDialog + mergeAgentImport and exposes
 //      the Import button with the testid the dialog integration tests rely on.
-//   2. /agents/$name (edit route) source code does NOT reference
+//   2. /agents/$id (edit route) source code does NOT reference
 //      AgentImportDialog. The import flow is new-route only; if a future
 //      refactor pulls the dialog into the edit route this test goes red so
 //      we re-evaluate the UX (the edit form is a snapshot of an existing

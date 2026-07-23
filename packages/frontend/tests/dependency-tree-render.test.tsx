@@ -3,11 +3,13 @@
 // up here too. Asserted via accessible roles + visible text — no internal
 // DOM structure beyond that, so cosmetic CSS changes don't regress these.
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, fireEvent } from '@testing-library/react'
-import { afterEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import '@/i18n'
 import { DependencyCycleHint, DependencyTree } from '../src/components/agents/DependencyTree'
 import { buildDependencyTree, type DependencyTreeAgent } from '../src/lib/dependency-tree'
+import { setBaseUrl, setToken } from '../src/stores/auth'
 
 function mk(
   name: string,
@@ -19,17 +21,35 @@ function mk(
   mcps: readonly string[] = [],
   plugins: readonly string[] = [],
 ): DependencyTreeAgent {
-  return { name, description, skills, mcps, plugins, dependsOn }
+  return { id: name, name, description, skills, mcps, plugins, dependsOn }
 }
+
+function renderTree(
+  tree: ReturnType<typeof buildDependencyTree>,
+  onNodeClick?: (id: string) => void,
+) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <DependencyTree tree={tree} onNodeClick={onNodeClick} />
+    </QueryClientProvider>,
+  )
+}
+
+beforeEach(() => {
+  setBaseUrl('http://daemon.test')
+  setToken('tok')
+})
 
 afterEach(() => {
   document.body.innerHTML = ''
+  vi.restoreAllMocks()
 })
 
 describe('<DependencyTree>', () => {
   test('renders a single leaf for an agent with no deps', () => {
     const tree = buildDependencyTree([mk('alone')], 'alone')
-    render(<DependencyTree tree={tree} />)
+    renderTree(tree)
     const items = screen.getAllByRole('treeitem')
     expect(items).toHaveLength(1)
     expect(items[0]?.textContent ?? '').toContain('alone')
@@ -38,7 +58,7 @@ describe('<DependencyTree>', () => {
   test('renders nested rows for a linear closure', () => {
     const flat = [mk('a', ['b']), mk('b', ['c']), mk('c')]
     const tree = buildDependencyTree(flat, 'a')
-    render(<DependencyTree tree={tree} />)
+    renderTree(tree)
     const items = screen.getAllByRole('treeitem').map((r) => r.getAttribute('aria-label'))
     expect(items).toEqual(['a', 'b', 'c'])
   })
@@ -46,7 +66,7 @@ describe('<DependencyTree>', () => {
   test('diamond: the second leaf sighting renders `↑ see above` and no further rows', () => {
     const flat = [mk('top', ['m1', 'm2']), mk('m1', ['leaf']), mk('m2', ['leaf']), mk('leaf')]
     const tree = buildDependencyTree(flat, 'top')
-    render(<DependencyTree tree={tree} />)
+    renderTree(tree)
     // Tree contains: top, m1, leaf, m2, leaf-dup. Five treeitems total.
     const items = screen.getAllByRole('treeitem')
     expect(items).toHaveLength(5)
@@ -65,7 +85,7 @@ describe('<DependencyTree>', () => {
       mk('leaf'),
     ]
     const tree = buildDependencyTree(flat, 'top')
-    render(<DependencyTree tree={tree} />)
+    renderTree(tree)
     // `mid` should render an "MCPs:" chip listing the names. `top` / `leaf` should not.
     const mcpChips = screen.getAllByText(/\bMCPs?\b/i)
     expect(mcpChips).toHaveLength(1)
@@ -83,7 +103,7 @@ describe('<DependencyTree>', () => {
       mk('mid', [], 'desc:mid', /* skills */ ['skill-a', 'skill-b']),
     ]
     const tree = buildDependencyTree(flat, 'top')
-    render(<DependencyTree tree={tree} />)
+    renderTree(tree)
     const skillChips = screen.getAllByText(/Skills?/)
     expect(skillChips).toHaveLength(1)
     const text = skillChips[0]?.textContent ?? ''
@@ -97,19 +117,46 @@ describe('<DependencyTree>', () => {
       mk('mid', [], 'desc:mid', /* skills */ [], /* mcps */ [], /* plugins */ ['plug-x']),
     ]
     const tree = buildDependencyTree(flat, 'top')
-    render(<DependencyTree tree={tree} />)
+    renderTree(tree)
     const pluginChips = screen.getAllByText(/Plugins?/)
     expect(pluginChips).toHaveLength(1)
     expect(pluginChips[0]?.textContent ?? '').toContain('plug-x')
   })
 
-  test('onNodeClick fires with the clicked agent name (only for expanded sightings)', () => {
-    const flat = [mk('top', ['leaf']), mk('leaf')]
-    const tree = buildDependencyTree(flat, 'top')
+  test('duplicate names render owner cues and onNodeClick emits immutable id', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify([{ id: 'owner-leaf', displayName: 'Alice' }]), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    const flat: DependencyTreeAgent[] = [
+      {
+        id: 'agent-top',
+        name: 'reviewer',
+        description: 'top',
+        skills: [],
+        mcps: [],
+        plugins: [],
+        dependsOn: ['agent-leaf'],
+      },
+      {
+        id: 'agent-leaf',
+        name: 'reviewer',
+        ownerUserId: 'owner-leaf',
+        description: 'leaf',
+        skills: [],
+        mcps: [],
+        plugins: [],
+        dependsOn: [],
+      },
+    ]
+    const tree = buildDependencyTree(flat, 'agent-top')
     const onClick = vi.fn()
-    render(<DependencyTree tree={tree} onNodeClick={onClick} />)
-    fireEvent.click(screen.getByRole('button', { name: /Open agent leaf/i }))
-    expect(onClick).toHaveBeenCalledWith('leaf')
+    renderTree(tree, onClick)
+    const button = await screen.findByRole('button', { name: /Open agent reviewer · Alice/i })
+    fireEvent.click(button)
+    expect(onClick).toHaveBeenCalledWith('agent-leaf')
   })
 })
 

@@ -1,5 +1,5 @@
 // RFC-101 — fusion launch dialog. Shared by both entry points:
-//   - /skills/:name  → entry {kind:'from-skill', skillId, skillName}, user picks memories
+//   - /skills/:id    → entry {kind:'from-skill', skillId, skillName}, user picks memories
 //   - /memory        → entry {kind:'from-memories'}, user picks the target skill
 // RFC-151 PR-1 — the two entry points used to be encoded as a pair of
 // optional props (locked skill name / preset memory ids) whose undefined-ness
