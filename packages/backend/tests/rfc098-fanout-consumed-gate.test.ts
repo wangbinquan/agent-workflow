@@ -43,6 +43,7 @@ const ulid = monotonicFactory()
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
+const WORKER_AGENT_ID = '00000000000000000000000001'
 
 function sha256Hex(s: string): string {
   return createHash('sha256').update(s).digest('hex')
@@ -70,7 +71,7 @@ function buildHarness(): Harness {
 
 async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise<void> {
   await db.insert(agents).values({
-    id: ulid(),
+    id: WORKER_AGENT_ID,
     name,
     description: 'test',
     outputs: JSON.stringify(outputs),
@@ -146,6 +147,7 @@ function fanoutDef(): WorkflowDefinition {
       {
         id: 'inner',
         kind: 'agent-single',
+        agentId: WORKER_AGENT_ID,
         agentName: 'worker',
         promptTemplate: 'Process {{doc}}',
       },

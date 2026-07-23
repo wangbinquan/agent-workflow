@@ -49,6 +49,7 @@ function node(id: string, agentName = id): WorkflowNode {
   return {
     id,
     kind: 'agent-single',
+    agentId: `agent-${agentName}`,
     agentName,
   } as WorkflowNode
 }
