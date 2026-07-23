@@ -61,9 +61,10 @@ async function seedAgent(
   name: string,
   outputs: string[],
   extra: Record<string, unknown> = {},
-): Promise<void> {
+): Promise<string> {
+  const id = ulid()
   await db.insert(agents).values({
-    id: ulid(),
+    id,
     name,
     description: 'test',
     outputs: JSON.stringify(outputs),
@@ -74,6 +75,7 @@ async function seedAgent(
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
+  return id
 }
 async function seedWorkflowAndTask(
   h: Harness,
@@ -141,7 +143,7 @@ describe('scheduler retry rollback: writer fail-then-succeed must clear partial 
     await runGit(repo, ['commit', '-q', '-m', 'init'])
 
     // WRITER agent (readonly=false) so pre-snapshot/rollback are in play.
-    await seedAgent(h.db, 'fixer', ['summary'])
+    const fixerAgentId = await seedAgent(h.db, 'fixer', ['summary'])
 
     const def: WorkflowDefinition = {
       $schema_version: 1,
@@ -151,6 +153,7 @@ describe('scheduler retry rollback: writer fail-then-succeed must clear partial 
           id: 'a1',
           kind: 'agent-single',
           agentName: 'fixer',
+          agentId: fixerAgentId,
         } as unknown as WorkflowDefinition['nodes'][number],
       ],
       edges: [],

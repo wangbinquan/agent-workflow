@@ -100,8 +100,9 @@ async function buildHarness(slug: string): Promise<Harness> {
 async function seedTask(h: Harness): Promise<string> {
   // READONLY inner agent: no pre-snapshot stash runs against the (about to
   // be) broken tree — the wrapper finalize is the first git touchpoint.
+  const probeAgentId = ulid()
   await h.db.insert(agents).values({
-    id: ulid(),
+    id: probeAgentId,
     name: 'probe',
     description: 'test',
     outputs: JSON.stringify(['summary']),
@@ -116,7 +117,7 @@ async function seedTask(h: Harness): Promise<string> {
     $schema_version: 1,
     inputs: [],
     nodes: [
-      { id: 'probe', kind: 'agent-single', agentName: 'probe' },
+      { id: 'probe', kind: 'agent-single', agentName: 'probe', agentId: probeAgentId },
       { id: 'wg', kind: 'wrapper-git', nodeIds: ['probe'] },
     ] as unknown as WorkflowDefinition['nodes'],
     edges: [],

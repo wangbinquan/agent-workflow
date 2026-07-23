@@ -144,9 +144,10 @@ async function buildHarness(): Promise<Harness> {
   }
 }
 
-async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise<void> {
+async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise<string> {
+  const id = ulid()
   await db.insert(agents).values({
-    id: ulid(),
+    id,
     name,
     description: 'test',
     outputs: JSON.stringify(outputs),
@@ -155,6 +156,7 @@ async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise
     frontmatterExtra: '{}',
     bodyMd: '',
   })
+  return id
 }
 
 async function seedWorkflowAndTask(
@@ -226,13 +228,18 @@ function readSpawns(stateDir: string): Array<{ agent: string; callIndex: number;
 const ITERATE_COMMENT = 'midrun-iterate-feedback: tighten the intro'
 
 // in → {author → review, slow}。review 经 inputSource 读 author.draft。
-function reviewDiamondDef(): WorkflowDefinition {
+function reviewDiamondDef(authorAgentId: string, slowAgentId: string): WorkflowDefinition {
   return {
     $schema_version: 3,
     inputs: [{ kind: 'text', key: 'req', label: 'r' }],
     nodes: [
       { id: 'in1', kind: 'input', inputKey: 'req' } as WorkflowNode,
-      { id: 'author', kind: 'agent-single', agentName: 'author' } as WorkflowNode,
+      {
+        id: 'author',
+        kind: 'agent-single',
+        agentName: 'author',
+        agentId: authorAgentId,
+      } as WorkflowNode,
       {
         id: 'rev',
         kind: 'review',
@@ -240,7 +247,12 @@ function reviewDiamondDef(): WorkflowDefinition {
         rerunnableOnIterate: ['author'],
         rerunnableOnReject: ['author'],
       } as unknown as WorkflowNode,
-      { id: 'slow', kind: 'agent-single', agentName: 'slow' } as WorkflowNode,
+      {
+        id: 'slow',
+        kind: 'agent-single',
+        agentName: 'slow',
+        agentId: slowAgentId,
+      } as WorkflowNode,
     ],
     edges: [
       {
@@ -270,8 +282,8 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
   afterEach(() => h.cleanup())
 
   test('slow sibling 仍在跑时 iterate → author 重跑 done、review 铸 v2 再停泊；随后 approve 推到 done', async () => {
-    await seedAgent(h.db, 'author', ['draft'])
-    await seedAgent(h.db, 'slow', ['out'])
+    const authorAgentId = await seedAgent(h.db, 'author', ['draft'])
+    const slowAgentId = await seedAgent(h.db, 'slow', ['out'])
     // author：第 1 次出 V1、iterate 重跑出 V2；slow：gate 放行后出 envelope。
     writeFileSync(
       h.planFile,
@@ -280,7 +292,11 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
         slow: [{ output: { out: 'slow-done' } }],
       }),
     )
-    const taskId = await seedWorkflowAndTask(h, reviewDiamondDef(), { req: 'go' })
+    const taskId = await seedWorkflowAndTask(
+      h,
+      reviewDiamondDef(authorAgentId, slowAgentId),
+      { req: 'go' },
+    )
 
     const runPromise = runTask({
       taskId,
