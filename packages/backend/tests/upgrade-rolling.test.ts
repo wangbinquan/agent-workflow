@@ -161,9 +161,10 @@ function buildHarness(label: string): Harness {
   }
 }
 
-async function seedToyAgent(db: DbClient, name = 'rolling-agent'): Promise<void> {
+async function seedToyAgent(db: DbClient, name = 'rolling-agent'): Promise<string> {
+  const id = ulid()
   await db.insert(agents).values({
-    id: ulid(),
+    id,
     name,
     description: 'rolling-upgrade test stub',
     outputs: JSON.stringify(['out']),
@@ -172,15 +173,20 @@ async function seedToyAgent(db: DbClient, name = 'rolling-agent'): Promise<void>
     frontmatterExtra: '{}',
     bodyMd: '',
   })
+  return id
 }
 
-async function seedToyTask(db: DbClient, worktreePath: string): Promise<{ taskId: string }> {
+async function seedToyTask(
+  db: DbClient,
+  worktreePath: string,
+  agentId: string,
+): Promise<{ taskId: string }> {
   const workflowId = ulid()
   const taskId = ulid()
   const def = {
     $schema_version: 1,
     inputs: [],
-    nodes: [{ id: 'a1', kind: 'agent-single', agentName: 'rolling-agent' }],
+    nodes: [{ id: 'a1', kind: 'agent-single', agentId, agentName: 'rolling-agent' }],
     edges: [],
   }
   await db.insert(workflows).values({
@@ -378,8 +384,8 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
         // single-node DAG, runner integration with mock-opencode lands done).
         const worktreePath = join(h.home, 'wt')
         mkdirSync(worktreePath, { recursive: true })
-        await seedToyAgent(db)
-        const { taskId } = await seedToyTask(db, worktreePath)
+        const agentId = await seedToyAgent(db)
+        const { taskId } = await seedToyTask(db, worktreePath, agentId)
 
         await withMockEnv(
           { MOCK_OPENCODE_OUTPUTS: JSON.stringify({ out: 'rolling upgrade output' }) },

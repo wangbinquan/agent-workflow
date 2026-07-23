@@ -50,9 +50,10 @@ function buildHarness(): Harness {
   }
 }
 
-async function seedAgent(db: DbClient, name: string) {
+async function seedAgent(db: DbClient, name: string): Promise<string> {
+  const id = ulid()
   await db.insert(agents).values({
-    id: ulid(),
+    id,
     name,
     description: 'rfc-049',
     outputs: JSON.stringify(['design']),
@@ -63,6 +64,7 @@ async function seedAgent(db: DbClient, name: string) {
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
+  return id
 }
 
 async function seedTask(h: Harness, definition: WorkflowDefinition): Promise<{ taskId: string }> {
@@ -122,11 +124,11 @@ describe('RFC-049 scheduler port-validation follow-up integration', () => {
   afterEach(() => h.cleanup())
 
   test('eager port-validation failure → audit row + --session on retry', async () => {
-    await seedAgent(h.db, 'a1')
+    const agentId = await seedAgent(h.db, 'a1')
     const def: WorkflowDefinition = {
       $schema_version: 1,
       inputs: [],
-      nodes: [{ id: 'n1', kind: 'agent-single', agentName: 'a1' }],
+      nodes: [{ id: 'n1', kind: 'agent-single', agentId, agentName: 'a1' }],
       edges: [],
     }
     const { taskId } = await seedTask(h, def)

@@ -148,7 +148,7 @@ async function buildHarness(): Promise<Harness> {
   // Designer agent emitting `markdown_file` kind on `design` — the strict
   // branch in resolvePortContentDetailed will read the file and report its
   // path, which is what dispatchReviewNode snapshots.
-  await createAgent(db, {
+  const designer = await createAgent(db, {
     name: 'designer',
     description: '',
     outputs: ['design'],
@@ -174,6 +174,7 @@ async function buildHarness(): Promise<Harness> {
         {
           id: 'designer',
           kind: 'agent-single',
+          agentId: designer.id,
           agentName: 'designer',
           // No explicit {{__review_comments__}} reference — assert that the
           // framework auto-appends ## Review Comments AND the **File**:

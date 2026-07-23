@@ -21,8 +21,8 @@
 //    the SAME line-53 branch with current, authorable non-agent-single inner
 //    kinds (wrapper-git, review). See deviations in the task summary.
 //
-//  GAP 1b — unknown agent-name skip (wrapperFanout.ts:56-57):
-//    An agent-single inner referencing an agent NAME absent from the lookup
+//  GAP 1b — unknown agent-id skip (wrapperFanout.ts:56-57):
+//    An agent-single inner referencing an agent ID absent from the lookup
 //    table resolves to `undefined` and is skipped WITHOUT throwing. A mix of
 //    [missing-agent, valid-aggregator] must still return the valid aggregator.
 //
@@ -74,7 +74,7 @@ describe('wrapper-fanout aggregator detection — non-agent-single inner kinds (
       { id: 'w', kind: 'wrapper-fanout', nodeIds: ['g'] },
       { id: 'g', kind: 'wrapper-git', nodeIds: [] },
     ])
-    const lookup = new Map([[merger.name, merger]])
+    const lookup = new Map([[merger.id, merger]])
 
     expect(findFanoutAggregator(def, 'w', lookup)).toBeNull()
     expect(countFanoutAggregators(def, 'w', lookup)).toBe(0)
@@ -97,11 +97,11 @@ describe('wrapper-fanout aggregator detection — non-agent-single inner kinds (
   })
 })
 
-describe('wrapper-fanout aggregator detection — unknown agent name skip (lines 56-57)', () => {
-  test('agent-single inner referencing a name absent from the lookup → null, no throw', () => {
+describe('wrapper-fanout aggregator detection — unknown agent id skip (lines 56-57)', () => {
+  test('agent-single inner referencing an id absent from the lookup → null, no throw', () => {
     const def = defWith([
       { id: 'w', kind: 'wrapper-fanout', nodeIds: ['a'] },
-      { id: 'a', kind: 'agent-single', agentName: 'ghost' },
+      { id: 'a', kind: 'agent-single', agentId: 'agent-ghost', agentName: 'ghost' },
     ])
     // 'ghost' is absent from the (empty) lookup → lookupAgent returns undefined.
     expect(() => findFanoutAggregator(def, 'w', new Map())).not.toThrow()
@@ -116,13 +116,13 @@ describe('wrapper-fanout aggregator detection — unknown agent name skip (lines
     const agg = baseAgent('merger', { role: 'aggregator', outputs: ['final'] })
     const def = defWith([
       { id: 'w', kind: 'wrapper-fanout', nodeIds: ['ghostNode', 'aggNode'] },
-      // first inner references a missing agent name (skipped at line 57)
-      { id: 'ghostNode', kind: 'agent-single', agentName: 'ghost' },
+      // first inner references a missing agent id (skipped at line 57)
+      { id: 'ghostNode', kind: 'agent-single', agentId: 'agent-ghost', agentName: 'ghost' },
       // second inner is a valid agent-single aggregator
-      { id: 'aggNode', kind: 'agent-single', agentName: 'merger' },
+      { id: 'aggNode', kind: 'agent-single', agentId: agg.id, agentName: 'merger' },
     ])
     // lookup has ONLY the valid aggregator, not 'ghost'
-    const lookup = new Map([[agg.name, agg]])
+    const lookup = new Map([[agg.id, agg]])
 
     const found = findFanoutAggregator(def, 'w', lookup)
     expect(found?.node.id).toBe('aggNode')
@@ -137,11 +137,14 @@ describe('wrapper-fanout aggregator detection — unknown agent name skip (lines
     const agg = baseAgent('merger', { role: 'aggregator', outputs: ['final'] })
     const def = defWith([
       { id: 'w', kind: 'wrapper-fanout', nodeIds: ['ghostNode', 'aggNode'] },
-      { id: 'ghostNode', kind: 'agent-single', agentName: 'ghost' },
-      { id: 'aggNode', kind: 'agent-single', agentName: 'merger' },
+      { id: 'ghostNode', kind: 'agent-single', agentId: 'agent-ghost', agentName: 'ghost' },
+      { id: 'aggNode', kind: 'agent-single', agentId: agg.id, agentName: 'merger' },
     ])
     // plain-object form; 'ghost' explicitly undefined exercises the same skip
-    const lookup: Record<string, Agent | undefined> = { ghost: undefined, [agg.name]: agg }
+    const lookup: Record<string, Agent | undefined> = {
+      'agent-ghost': undefined,
+      [agg.id]: agg,
+    }
 
     const found = findFanoutAggregator(def, 'w', lookup)
     expect(found?.node.id).toBe('aggNode')

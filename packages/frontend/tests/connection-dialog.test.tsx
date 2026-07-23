@@ -10,7 +10,13 @@ import { applyWorkflowTransition } from '../src/lib/workflow-transition'
 import i18n from '../src/i18n'
 
 function agentNode(id: string, agentName = id): WorkflowNode {
-  return { id, kind: 'agent-single', agentName, position: { x: 0, y: 0 } } as WorkflowNode
+  return {
+    id,
+    kind: 'agent-single',
+    agentId: `a-${agentName}`,
+    agentName,
+    position: { x: 0, y: 0 },
+  } as WorkflowNode
 }
 
 const definition: WorkflowDefinition = {
@@ -203,7 +209,7 @@ describe('ConnectionDialog', () => {
       $schema_version: 4,
       inputs: [],
       nodes: [
-        agentNode('outer', 'outer'),
+        { ...agentNode('outer', 'outer'), agentId: 'outer-agent' } as WorkflowNode,
         {
           id: 'fanout',
           kind: 'wrapper-fanout',
@@ -211,7 +217,7 @@ describe('ConnectionDialog', () => {
           inputs: [],
           position: { x: 100, y: 0 },
         } as WorkflowNode,
-        agentNode('inner', 'inner'),
+        { ...agentNode('inner', 'inner'), agentId: 'inner-agent' } as WorkflowNode,
       ],
       edges: [],
     }

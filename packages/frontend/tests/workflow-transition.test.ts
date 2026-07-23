@@ -18,7 +18,7 @@ function node(value: Record<string, unknown>): WorkflowNode {
 }
 
 function agent(id: string, agentName = id): WorkflowNode {
-  return node({ id, kind: 'agent-single', agentName })
+  return node({ id, kind: 'agent-single', agentId: agentName, agentName })
 }
 
 function definition(

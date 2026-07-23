@@ -126,8 +126,8 @@ export async function validateDependsOn(
     unique.push(n)
   }
 
-  // 2. self-reference is canonical-id only. Portable names are resolved before
-  //    entering ordinary create/update.
+  // 2. self-reference is canonical-id only. Portable import selectors must be
+  //    resolved before entering this ordinary-write validator.
   if (unique.includes(selfId)) {
     throw new DomainError('agent-dependency-self', `agent cannot depend on itself`, 400, {
       id: selfId,

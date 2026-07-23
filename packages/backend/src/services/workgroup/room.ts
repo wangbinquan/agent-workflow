@@ -137,7 +137,6 @@ function classify(
   leaderMemberId: string | null,
   assignmentToMember: ReadonlyMap<string, string | null>,
   assignmentIds: ReadonlySet<string>,
-  uniqueAgentMember: ReadonlyMap<string, string | null>,
   uniqueAgentMemberById: ReadonlyMap<string, string | null>,
 ): ClassifiedRun | null {
   const kind = runKindOf(run, assignmentIds)
@@ -156,19 +155,12 @@ function classify(
     // which would relabel A's old attempts as B's). The run's mint-time agent
     // identity is immutable, so it WINS whenever it resolves to exactly one
     // member; the card's current assignee is only the fallback (shared-agent
-    // rosters / legacy runs without an override name).
-    // RFC-223 (PR-3a impl-gate M1): when the run froze an agent_override_id,
-    // resolve STRICTLY by that id — do NOT fall back to the name. The old
-    // `(byId ?? null) ?? (byName …)` chain fell through to the name whenever the
-    // id no longer mapped to a member (A removed mid-run), so a same-named B
-    // silently inherited A's historical run. The name fallback is legitimate ONLY
-    // for rows minted before agent_override_id existed (no id at all).
+    // rosters / corrupt legacy runs without a frozen override id).
+    // RFC-223: persisted attribution is ID-only. Name-only historical rows do
+    // not acquire identity; they may still be attributed through the immutable
+    // batch key or the assignment's current member relationship.
     const viaAgent =
-      run.agentOverrideId != null
-        ? (uniqueAgentMemberById.get(run.agentOverrideId) ?? null)
-        : run.agentOverrideName != null
-          ? (uniqueAgentMember.get(run.agentOverrideName) ?? null)
-          : null
+      run.agentOverrideId != null ? (uniqueAgentMemberById.get(run.agentOverrideId) ?? null) : null
     const viaCard = run.shardKey ? (assignmentToMember.get(run.shardKey) ?? null) : null
     const memberId = viaBatch ?? viaAgent ?? viaCard
     if (memberId === null) return null
@@ -238,17 +230,11 @@ export function deriveWorkgroupRunHistory(
   )
   const assignmentIds = new Set(assignments.map((a) => a.id))
   const nameOf = new Map(members.map((m) => [m.id, m.displayName ?? null]))
-  // agentName → memberId when exactly ONE agent member runs that agent;
-  // ambiguous names map to null (drop-not-mislabel, impl-gate P2). RFC-223
-  // (PR-3a): the parallel agentId map is the id-first attribution key; the name
-  // map stays for legacy rows minted before agent_override_id existed.
-  const uniqueAgentMember = new Map<string, string | null>()
+  // agentId → memberId when exactly ONE agent member runs that agent; ambiguous
+  // ids map to null (drop-not-mislabel). Mutable display names are never keys.
   const uniqueAgentMemberById = new Map<string, string | null>()
   for (const m of members) {
     if (m.memberType !== 'agent') continue
-    if (m.agentName != null) {
-      uniqueAgentMember.set(m.agentName, uniqueAgentMember.has(m.agentName) ? null : m.id)
-    }
     if (m.agentId != null) {
       uniqueAgentMemberById.set(m.agentId, uniqueAgentMemberById.has(m.agentId) ? null : m.id)
     }
@@ -261,7 +247,6 @@ export function deriveWorkgroupRunHistory(
       leaderMemberId,
       assignmentToMember,
       assignmentIds,
-      uniqueAgentMember,
       uniqueAgentMemberById,
     )
     if (cr !== null) classified.push(cr)

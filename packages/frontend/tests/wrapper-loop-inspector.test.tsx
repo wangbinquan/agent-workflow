@@ -35,14 +35,15 @@ function agentNode(id: string, agentName: string): WorkflowNode {
     id,
     kind: 'agent-single',
     position: { x: 0, y: 0 },
+    agentId: `agent-${agentName}`,
     agentName,
   } as unknown as WorkflowNode
 }
 
 function fakeAgents(...defs: Array<{ name: string; outputs: string[] }>): Agent[] {
-  // We cast to Agent to satisfy the type; only `name` + `outputs` are
+  // We cast to Agent to satisfy the type; only `id` + `name` + `outputs` are
   // consumed by loopMemberCandidates.
-  return defs as unknown as Agent[]
+  return defs.map((def) => ({ ...def, id: `agent-${def.name}` })) as unknown as Agent[]
 }
 
 function Host({ initial, agents }: { initial: WorkflowDefinition; agents: Agent[] }) {

@@ -84,11 +84,6 @@ export async function listWorkgroups(db: DbClient): Promise<Workgroup[]> {
   return rows.map((row) => rowToWorkgroup(row, byGroup.get(row.id) ?? []))
 }
 
-export async function getWorkgroup(db: DbClient, name: string): Promise<WorkgroupDetail | null> {
-  const row = await db.select().from(workgroups).where(eq(workgroups.name, name)).limit(1)
-  return row[0] === undefined ? null : getWorkgroupDetailByRow(db, row[0])
-}
-
 export async function getWorkgroupById(db: DbClient, id: string): Promise<WorkgroupDetail | null> {
   const row = await db.select().from(workgroups).where(eq(workgroups.id, id)).limit(1)
   return row[0] === undefined ? null : getWorkgroupDetailByRow(db, row[0])

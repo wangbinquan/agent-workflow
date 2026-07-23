@@ -332,17 +332,6 @@ export async function seedFusionResources(db: DbClient): Promise<void> {
       .where(eq(agents.id, SKILL_MERGER_AGENT_ID))
       .run()
   } else {
-    const legacyBuiltin = db
-      .select({ id: agents.id })
-      .from(agents)
-      .where(and(eq(agents.builtin, true), eq(agents.name, SKILL_MERGER_AGENT_NAME)))
-      .all()[0]
-    if (legacyBuiltin !== undefined) {
-      throw new ConflictError(
-        'builtin-agent-id-drift',
-        `built-in agent '${SKILL_MERGER_AGENT_NAME}' has non-canonical id '${legacyBuiltin.id}'`,
-      )
-    }
     await createAgent(
       db,
       {
@@ -388,17 +377,6 @@ export async function seedFusionResources(db: DbClient): Promise<void> {
       .where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
       .run()
   } else {
-    const legacyBuiltin = db
-      .select({ id: workflows.id })
-      .from(workflows)
-      .where(and(eq(workflows.builtin, true), eq(workflows.name, SKILL_FUSION_WORKFLOW_NAME)))
-      .all()[0]
-    if (legacyBuiltin !== undefined) {
-      throw new ConflictError(
-        'builtin-workflow-id-drift',
-        `built-in workflow '${SKILL_FUSION_WORKFLOW_NAME}' has non-canonical id '${legacyBuiltin.id}'`,
-      )
-    }
     await createWorkflow(
       db,
       {

@@ -78,8 +78,9 @@ async function buildHarness(): Promise<Harness> {
   writeFileSync(slowMock, buildSlowEnvelopeMock(ctrlDir))
 
   const db = createInMemoryDb(MIGRATIONS)
+  const workerId = ulid()
   await db.insert(agents).values({
-    id: ulid(),
+    id: workerId,
     name: 'worker',
     description: 'test',
     outputs: JSON.stringify(['out']),
@@ -92,7 +93,7 @@ async function buildHarness(): Promise<Harness> {
     $schema_version: 3,
     inputs: [],
     nodes: [
-      { id: 'work', kind: 'agent-single', agentName: 'worker' },
+      { id: 'work', kind: 'agent-single', agentId: workerId, agentName: 'worker' },
     ] as unknown as WorkflowDefinition['nodes'],
     edges: [],
   }

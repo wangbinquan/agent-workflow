@@ -26,6 +26,7 @@ import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTask } from '../src/services/scheduler'
+import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
 // Same-ms ULID ordering guard (precedent: scheduler-clarify-dispatch.test.ts):
 // pre-seeded wrapper/child rows are minted in the same millisecond — id order
@@ -80,12 +81,13 @@ async function seedWorkflowAndTask(
   definition: WorkflowDefinition,
   inputs: Record<string, string>,
 ): Promise<string> {
+  const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
   await h.db.insert(workflows).values({
     id: workflowId,
     name: 'wf',
-    definition: JSON.stringify(definition),
+    definition: JSON.stringify(canonicalDefinition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
@@ -93,7 +95,7 @@ async function seedWorkflowAndTask(
     name: 'fixture-task',
     id: taskId,
     workflowId,
-    workflowSnapshot: JSON.stringify(definition),
+    workflowSnapshot: JSON.stringify(canonicalDefinition),
     repoPath: '/tmp/repo',
     worktreePath: h.worktreePath,
     baseBranch: 'main',

@@ -42,10 +42,10 @@ import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { mountAclEndpoints } from './resourceAcl'
 
 export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
-  async function loadVisiblePlugin(actor: Actor, idOrName: string): Promise<Plugin> {
-    const plugin = await getPlugin(deps.db, idOrName)
+  async function loadVisiblePlugin(actor: Actor, id: string): Promise<Plugin> {
+    const plugin = await getPlugin(deps.db, id)
     if (plugin === null || !(await canViewResource(deps.db, actor, 'plugin', plugin))) {
-      throw new NotFoundError('plugin-not-found', `plugin '${idOrName}' not found`)
+      throw new NotFoundError('plugin-not-found', `plugin '${id}' not found`)
     }
     return plugin
   }
@@ -240,7 +240,7 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
     type: 'plugin',
     base: '/api/plugins',
     param: 'id',
-    load: (db, idOrName) => getPlugin(db, idOrName),
+    load: (db, id) => getPluginById(db, id),
     coordinator: {
       runExclusive: (resourceId: string, task: () => Promise<ResourceAcl>) =>
         pluginOperationCoordinator.runExclusive(resourceId, task),

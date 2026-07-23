@@ -77,6 +77,7 @@ describe('dispatchReviewNode + RFC-049 PR-B explicit outputKinds contract', () =
         {
           id: 'designer',
           kind: 'agent-single',
+          agentId,
           agentName: 'designer',
           promptTemplate: '',
         } as WorkflowNode,

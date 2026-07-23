@@ -17,14 +17,14 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
 import { buildActor } from '../src/auth/actor'
 import { createAgent, deleteAgent, renameAgent } from '../src/services/agent'
-import { createWorkgroup, getWorkgroup } from '../src/services/workgroups'
+import { createWorkgroup } from '../src/services/workgroups'
 import { buildWorkgroupRuntimeConfig } from '../src/services/workgroup/launch'
 import {
   deriveWorkgroupRunHistory,
   type HostRunLite,
   type MemberLite,
 } from '../src/services/workgroup/room'
-import { extractAgentRefsFromSnapshot } from '../src/services/memoryDistillScheduler'
+import { extractAgentIdsFromSnapshot } from '../src/services/memoryDistillScheduler'
 import { buildMintNodeRunValues } from '../src/services/nodeRunMint'
 import { WG_MEMBER_NODE_ID } from '../src/services/workgroup/constants'
 
@@ -51,7 +51,7 @@ const AGENT_INPUT = (name: string) => ({
 
 // ---------------------------------------------------------------------------
 // room attribution — a run maps to its member by the immutable agentOverrideId
-// (rename/ABA-safe), name only as the legacy fallback (RFC-182 impl-gate P2).
+// (rename/ABA-safe); name-only rows fail closed.
 // ---------------------------------------------------------------------------
 describe('deriveWorkgroupRunHistory — id-first agent attribution', () => {
   const members: MemberLite[] = [
@@ -74,7 +74,7 @@ describe('deriveWorkgroupRunHistory — id-first agent attribution', () => {
     expect(history.find((e) => e.nodeRunId === 'R1')?.memberId).toBe('mA1')
   })
 
-  test('legacy row (agentOverrideName only, no id) falls back to the name', () => {
+  test('legacy row (agentOverrideName only, no id) fails closed', () => {
     const assignments = [{ id: 'ASG1', assigneeMemberId: null }]
     const run: HostRunLite = {
       id: 'R2',
@@ -82,10 +82,10 @@ describe('deriveWorkgroupRunHistory — id-first agent attribution', () => {
       shardKey: 'ASG1',
       status: 'done',
       rerunCause: 'wg-assignment',
-      agentOverrideName: 'agent-x', // no agentOverrideId → name fallback
+      agentOverrideName: 'agent-x',
     }
     const history = deriveWorkgroupRunHistory(members, 'mA1', [run], assignments, [])
-    expect(history.find((e) => e.nodeRunId === 'R2')?.memberId).toBe('mA1')
+    expect(history.find((e) => e.nodeRunId === 'R2')).toBeUndefined()
   })
 
   test('M1: agentOverrideId present but off-roster → fail closed, NOT re-bound by name', () => {
@@ -114,12 +114,10 @@ describe('deriveWorkgroupRunHistory — id-first agent attribution', () => {
 })
 
 // ---------------------------------------------------------------------------
-// distill scope — take the frozen id (取单行); a genuinely name-only node falls
-// back to the name set (heuristic). A R4-1 quarantine sentinel is dropped
-// ENTIRELY — never downgraded to a name lookup (impl-gate H1 fail-open fix).
+// distill scope — only frozen ids contribute. Name-only/sentinel nodes fail closed.
 // ---------------------------------------------------------------------------
-describe('extractAgentRefsFromSnapshot', () => {
-  test('frozen agentId → ids; sentinel → DROPPED; only genuine name-only → namesWithoutId', () => {
+describe('extractAgentIdsFromSnapshot', () => {
+  test('frozen agentId → id; sentinel and name-only nodes are dropped', () => {
     const snap = JSON.stringify({
       nodes: [
         { id: 'n1', kind: 'agent-single', agentName: 'foo', agentId: 'ID_FOO' },
@@ -133,16 +131,11 @@ describe('extractAgentRefsFromSnapshot', () => {
         { id: 'n4', kind: 'output' },
       ],
     })
-    const { ids, namesWithoutId } = extractAgentRefsFromSnapshot(snap)
-    expect(ids).toEqual(['ID_FOO'])
-    // H1: the sentinel node ('zap') is FAIL-CLOSED — it must NOT leak into the
-    // name fallback (re-resolving 'zap' by name could bind a different tenant's
-    // agent). Only the genuinely id-less 'bar' remains.
-    expect(namesWithoutId.sort()).toEqual(['bar'])
+    expect(extractAgentIdsFromSnapshot(snap)).toEqual(['ID_FOO'])
   })
 
   test('malformed JSON → empty', () => {
-    expect(extractAgentRefsFromSnapshot('{not-json')).toEqual({ ids: [], namesWithoutId: [] })
+    expect(extractAgentIdsFromSnapshot('{not-json')).toEqual([])
   })
 })
 
@@ -184,7 +177,7 @@ describe('RFC-223 PR-3a — DB locks', () => {
 
   test('buildWorkgroupRuntimeConfig freezes each member agentId', async () => {
     const agent = await createAgent(db, AGENT_INPUT('planner'))
-    await createWorkgroup(db, {
+    const group = await createWorkgroup(db, {
       name: 'squad',
       description: '',
       mode: 'free_collab',
@@ -194,9 +187,7 @@ describe('RFC-223 PR-3a — DB locks', () => {
       completionGate: false,
       members: [{ memberType: 'agent', agentId: agent.id, displayName: 'planner', roleDesc: '' }],
     })
-    const group = await getWorkgroup(db, 'squad')
-    expect(group).not.toBeNull()
-    const config = buildWorkgroupRuntimeConfig(group!, 'goal')
+    const config = buildWorkgroupRuntimeConfig(group, 'goal')
     const member = config.members.find((m) => m.memberType === 'agent')!
     // Frozen by CANONICAL id (rename/ABA-safe), name kept for display.
     expect(member.agentId).toBe(agent.id)

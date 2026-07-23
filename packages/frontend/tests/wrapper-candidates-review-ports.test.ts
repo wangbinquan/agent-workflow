@@ -23,7 +23,7 @@ const defOf = (nodes: WorkflowNode[]) =>
   >[1]
 
 const agentNode = (id: string, agentName: string): WorkflowNode =>
-  ({ id, kind: 'agent-single', agentName }) as unknown as WorkflowNode
+  ({ id, kind: 'agent-single', agentId: agentName, agentName }) as unknown as WorkflowNode
 
 const reviewNode = (id: string, sourceNodeId: string, portName: string): WorkflowNode =>
   ({

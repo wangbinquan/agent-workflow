@@ -144,6 +144,7 @@ describe('RFC-148 — 存量模板兼容（实现门 high 采纳）', () => {
         {
           id: 'a',
           kind: 'agent-single',
+          agentId: 'w',
           agentName: 'w',
           promptTemplate: 'do {{__clarify_answers__}} and {{__external_feedback_sources__}}',
         },

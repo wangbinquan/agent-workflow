@@ -59,8 +59,9 @@ async function setup(
   h: Awaited<ReturnType<typeof buildHarness>>,
   sessionMode: 'isolated' | undefined,
 ) {
+  const agentId = ulid()
   await h.db.insert(agents).values({
-    id: ulid(),
+    id: agentId,
     name: 'designer',
     description: 't',
     outputs: JSON.stringify(['design']),
@@ -76,7 +77,7 @@ async function setup(
     inputs: [{ kind: 'text', key: 'req', label: 'r' }],
     nodes: [
       { id: 'in', kind: 'input', inputKey: 'req' } as WorkflowNode,
-      { id: 'd', kind: 'agent-single', agentName: 'designer' } as WorkflowNode,
+      { id: 'd', kind: 'agent-single', agentId, agentName: 'designer' } as WorkflowNode,
       clarifyNode as WorkflowNode,
     ],
     edges: [

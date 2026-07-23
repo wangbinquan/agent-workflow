@@ -226,9 +226,10 @@ async function seedAgent(
   name: string,
   outputs: string[],
   outputKinds: Record<string, string>,
-): Promise<void> {
+): Promise<string> {
+  const id = ulid()
   await db.insert(agents).values({
-    id: ulid(),
+    id,
     name,
     description: 'test',
     outputs: JSON.stringify(outputs),
@@ -237,6 +238,7 @@ async function seedAgent(
     frontmatterExtra: JSON.stringify({ outputKinds }),
     bodyMd: '',
   })
+  return id
 }
 
 async function seedTask(h: Harness, definition: WorkflowDefinition): Promise<string> {
@@ -271,7 +273,7 @@ describe('RFC-193 e2e — K1 必达三跳传播', () => {
   afterEach(() => h?.cleanup())
 
   test('case 4: gitignored port file reaches the task canonical after merge-back', async () => {
-    await seedAgent(h.db, 'writer', ['doc'], { doc: 'path<md>' })
+    const writerId = await seedAgent(h.db, 'writer', ['doc'], { doc: 'path<md>' })
     writeFileSync(
       h.planFile,
       JSON.stringify({
@@ -286,7 +288,12 @@ describe('RFC-193 e2e — K1 必达三跳传播', () => {
       inputs: [{ kind: 'text', key: 'req', label: 'r' }],
       nodes: [
         { id: 'in1', kind: 'input', inputKey: 'req' } as WorkflowNode,
-        { id: 'w', kind: 'agent-single', agentName: 'writer' } as WorkflowNode,
+        {
+          id: 'w',
+          kind: 'agent-single',
+          agentId: writerId,
+          agentName: 'writer',
+        } as WorkflowNode,
       ],
       edges: [
         {
@@ -304,8 +311,8 @@ describe('RFC-193 e2e — K1 必达三跳传播', () => {
   })
 
   test('case 4b: downstream node sees the upstream gitignored port file in ITS OWN iso', async () => {
-    await seedAgent(h.db, 'writer', ['doc'], { doc: 'path<md>' })
-    await seedAgent(h.db, 'reader', ['echo'], {})
+    const writerId = await seedAgent(h.db, 'writer', ['doc'], { doc: 'path<md>' })
+    const readerId = await seedAgent(h.db, 'reader', ['echo'], {})
     writeFileSync(
       h.planFile,
       JSON.stringify({
@@ -323,8 +330,18 @@ describe('RFC-193 e2e — K1 必达三跳传播', () => {
       inputs: [{ kind: 'text', key: 'req', label: 'r' }],
       nodes: [
         { id: 'in1', kind: 'input', inputKey: 'req' } as WorkflowNode,
-        { id: 'a', kind: 'agent-single', agentName: 'writer' } as WorkflowNode,
-        { id: 'b', kind: 'agent-single', agentName: 'reader' } as WorkflowNode,
+        {
+          id: 'a',
+          kind: 'agent-single',
+          agentId: writerId,
+          agentName: 'writer',
+        } as WorkflowNode,
+        {
+          id: 'b',
+          kind: 'agent-single',
+          agentId: readerId,
+          agentName: 'reader',
+        } as WorkflowNode,
       ],
       edges: [
         {

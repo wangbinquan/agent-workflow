@@ -13,11 +13,11 @@
 //     block.
 //
 // Locks:
-//   1. Behavior — createAgent({ outputKinds }) round-trips through getAgent so
+//   1. Behavior — createAgent({ outputKinds }) round-trips through getAgentById so
 //      Agent.outputKinds is at the top level (what runner.ts checks). This is
 //      the same shape every consumer in the codebase expects (review, frontend
 //      AgentForm, scheduler).
-//   2. Source-text — scheduler.ts is wired to the canonical `getAgent`
+//   2. Source-text — scheduler.ts is wired to the canonical `getAgentById`
 //      loader and does not reintroduce a local agent-loading function. A
 //      future duplicate would either re-skip outputKinds (re-causing this
 //      bug) or drift on the rest of the row→Agent contract.
@@ -26,15 +26,15 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 import { createInMemoryDb } from '../src/db/client'
-import { createAgent, getAgent } from '../src/services/agent'
+import { createAgent, getAgentById } from '../src/services/agent'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SCHEDULER_SRC = resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts')
 
 describe('scheduler agent-load hydrates outputKinds (regression for task 01KS045BYZ9H52K3H2D10DBV6D)', () => {
-  test('createAgent({ outputKinds }) → getAgent surfaces outputKinds at top level', async () => {
+  test('createAgent({ outputKinds }) → getAgentById surfaces outputKinds at top level', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    await createAgent(db, {
+    const created = await createAgent(db, {
       name: 'doc',
       description: '',
       outputs: ['docpath'],
@@ -49,7 +49,7 @@ describe('scheduler agent-load hydrates outputKinds (regression for task 01KS045
       bodyMd: '',
     })
 
-    const loaded = await getAgent(db, 'doc')
+    const loaded = await getAgentById(db, created.id)
     expect(loaded).not.toBeNull()
     expect(loaded?.outputKinds).toEqual({ docpath: 'markdown_file' })
     // outputKinds must NOT also leak back into frontmatterExtra — the runner /
@@ -57,14 +57,14 @@ describe('scheduler agent-load hydrates outputKinds (regression for task 01KS045
     expect((loaded?.frontmatterExtra as Record<string, unknown>).outputKinds).toBeUndefined()
   })
 
-  test('scheduler.ts uses the canonical getAgent loader (no duplicate agent loader)', () => {
+  test('scheduler.ts uses the canonical getAgentById loader (no duplicate agent loader)', () => {
     const src = readFileSync(SCHEDULER_SRC, 'utf8')
 
-    // RFC-127 借壳 imports buildBorrowedAgent alongside getAgent from the SAME
-    // canonical module — match getAgent in the agent-service import (don't pin the
+    // RFC-127 借壳 imports buildBorrowedAgent alongside getAgentById from the SAME
+    // canonical module — match getAgentById in the agent-service import (don't pin the
     // exact named list) so the "no duplicate loader" intent survives co-imports.
-    expect(src).toMatch(/import \{[^}]*\bgetAgent\b[^}]*\} from '@\/services\/agent'/)
-    expect(src).toContain('await getAgent(db, agentName)')
+    expect(src).toMatch(/import \{[^}]*\bgetAgentById\b[^}]*\} from '@\/services\/agent'/)
+    expect(src).toContain('await getAgentById(db, agentIdRef)')
 
     // No local re-declaration. A scheduler-private agent loader would either
     // bypass outputKinds (the original bug) or drift on the rest of the

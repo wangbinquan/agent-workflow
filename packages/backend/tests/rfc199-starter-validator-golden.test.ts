@@ -45,9 +45,14 @@ describe('RFC-199 T11.4 — starter catalog uses the production validator', () =
   for (const [starterId, mapping] of [
     [
       'standard-development',
-      { coder: 'coder', auditor: 'auditor', aggregator: 'aggregator', fixer: 'fixer' },
+      {
+        coder: 'id-coder',
+        auditor: 'id-auditor',
+        aggregator: 'id-aggregator',
+        fixer: 'id-fixer',
+      },
     ],
-    ['audit-only', { auditor: 'auditor' }],
+    ['audit-only', { auditor: 'id-auditor' }],
   ] as const) {
     test(`${starterId} remains validator-clean`, () => {
       const planned = planWorkflowStarter(starterId, mapping, agents)

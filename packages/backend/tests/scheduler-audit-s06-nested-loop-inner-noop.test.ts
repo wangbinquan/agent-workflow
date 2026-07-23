@@ -41,6 +41,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTask } from '../src/services/scheduler'
+import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SCENARIO_OPENCODE = resolve(import.meta.dir, 'fixtures', 'scenario-opencode.ts')
@@ -89,18 +90,19 @@ async function seedWorkflowAndTask(
   h: Harness,
   definition: WorkflowDefinition,
 ): Promise<{ taskId: string }> {
+  const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
   await h.db.insert(workflows).values({
     id: workflowId,
     name: 'wf',
-    definition: JSON.stringify(definition),
+    definition: JSON.stringify(canonicalDefinition),
   })
   await h.db.insert(tasks).values({
     name: 'audit-s06-task',
     id: taskId,
     workflowId,
-    workflowSnapshot: JSON.stringify(definition),
+    workflowSnapshot: JSON.stringify(canonicalDefinition),
     repoPath: '/tmp/repo',
     worktreePath: h.worktreePath,
     baseBranch: 'main',

@@ -21,6 +21,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTask } from '../src/services/scheduler'
 import { runGit } from '../src/util/git'
+import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -104,12 +105,13 @@ function def(): WorkflowDefinition {
 }
 
 async function seedTask(h: Harness, d: WorkflowDefinition): Promise<string> {
+  const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, d)
   const workflowId = ulid()
   const taskId = ulid()
   await h.db.insert(workflows).values({
     id: workflowId,
     name: 'wf',
-    definition: JSON.stringify(d),
+    definition: JSON.stringify(canonicalDefinition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
@@ -117,7 +119,7 @@ async function seedTask(h: Harness, d: WorkflowDefinition): Promise<string> {
     id: taskId,
     name: 'wpc',
     workflowId,
-    workflowSnapshot: JSON.stringify(d),
+    workflowSnapshot: JSON.stringify(canonicalDefinition),
     repoPath: h.worktreePath,
     worktreePath: h.worktreePath,
     baseBranch: 'main',

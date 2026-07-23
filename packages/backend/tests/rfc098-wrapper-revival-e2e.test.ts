@@ -36,6 +36,7 @@ import { submitReviewDecision } from '../src/services/review'
 import { runTask } from '../src/services/scheduler'
 import { runGit } from '../src/util/git'
 import { reenterScheduler } from './reenter-scheduler'
+import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const actor = { userId: 'u1', role: 'owner' as const }
@@ -165,18 +166,19 @@ async function seedWorkflowAndTask(
   definition: WorkflowDefinition,
   inputs: Record<string, string>,
 ): Promise<string> {
+  const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
   await h.db.insert(workflows).values({
     id: workflowId,
     name: 'wf-rfc098-revival',
-    definition: JSON.stringify(definition),
+    definition: JSON.stringify(canonicalDefinition),
   })
   await h.db.insert(tasks).values({
     name: 'rfc098-wrapper-revival',
     id: taskId,
     workflowId,
-    workflowSnapshot: JSON.stringify(definition),
+    workflowSnapshot: JSON.stringify(canonicalDefinition),
     repoPath: h.repoPath,
     worktreePath: h.worktreePath,
     baseBranch: 'main',

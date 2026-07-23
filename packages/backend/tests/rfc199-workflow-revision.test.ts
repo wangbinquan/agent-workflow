@@ -339,15 +339,23 @@ describe('RFC-199 workflow revision fencing', () => {
       { name: 'reference-preflight', description: '', definition: EMPTY_DEFINITION },
       { ownerUserId: 'alice' },
     )
+    const secretAgentId = ulid()
     await db.insert(agents).values({
-      id: ulid(),
+      id: secretAgentId,
       name: 'secret-agent',
       ownerUserId: 'carol',
       visibility: 'private',
     })
     const nextDefinition: WorkflowDefinition = {
       ...EMPTY_DEFINITION,
-      nodes: [{ id: 'worker', kind: 'agent-single', agentName: 'secret-agent' }],
+      nodes: [
+        {
+          id: 'worker',
+          kind: 'agent-single',
+          agentId: secretAgentId,
+          agentName: 'secret-agent',
+        },
+      ],
     }
 
     await expect(

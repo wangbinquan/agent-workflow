@@ -20,7 +20,7 @@ import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { clarifyRounds, nodeRunOutputs, nodeRuns, tasks } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
-import { createWorkflow } from '../src/services/workflow'
+import { createWorkflow as createWorkflowBase } from '../src/services/workflow'
 // RFC-132 ②a 缺口② 回归锁: S3 + S6 drive answers through the unified autoDispatchClarifyRound.
 // They previously deadlocked on a genuine behavior gap — review iterate/reject SUPERSEDES the
 // designer's freshest run (done clarify-answer continuation → `canceled` superseded-by-review-*,
@@ -42,6 +42,7 @@ import {
 // re-entry below (the post-decision / post-answer `await runTask(...)` calls)
 // is preceded by reenterScheduler — the test stand-in for resumeTask.
 import { reenterScheduler } from './reenter-scheduler'
+import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 import { runTestGit } from './helpers/testCommand'
 import {
   DEFAULT_PROTOCOL_RETRY_BUDGET,
@@ -61,6 +62,13 @@ const FLOW_TIMEOUT_MS = 20_000
 setDefaultTimeout(FLOW_TIMEOUT_MS + 10_000)
 
 let scenarioController = new AbortController()
+
+async function createWorkflow(db: DbClient, input: Parameters<typeof createWorkflowBase>[1]) {
+  return createWorkflowBase(db, {
+    ...input,
+    definition: await canonicalizeWorkflowAgentIds(db, input.definition),
+  })
+}
 
 function git(...args: string[]): Promise<string> {
   return runTestGit(args, GIT_TIMEOUT_MS)

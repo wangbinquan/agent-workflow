@@ -38,7 +38,7 @@ describe('WORKGROUP_MODES — RFC-167 third mode', () => {
     const parsed = CreateWorkgroupSchema.safeParse({
       name: 'squad',
       mode: 'dynamic_workflow',
-      members: [{ memberType: 'agent', agentName: 'coder', displayName: 'coder' }],
+      members: [{ memberType: 'agent', agentId: 'agent-coder', displayName: 'coder' }],
     })
     expect(parsed.success).toBe(true)
   })
@@ -57,7 +57,7 @@ describe('validateGroupShape — dynamic_workflow rejects human members', () => 
       name: 'squad',
       mode: 'dynamic_workflow',
       members: [
-        { memberType: 'agent', agentName: 'coder', displayName: 'coder' },
+        { memberType: 'agent', agentId: 'agent-coder', displayName: 'coder' },
         { memberType: 'human', userId: 'u1', displayName: 'pm' },
       ],
     })
@@ -69,7 +69,7 @@ describe('validateGroupShape — dynamic_workflow rejects human members', () => 
       name: 'squad',
       mode: 'leader_worker',
       members: [
-        { memberType: 'agent', agentName: 'coder', displayName: 'coder' },
+        { memberType: 'agent', agentId: 'agent-coder', displayName: 'coder' },
         { memberType: 'human', userId: 'u1', displayName: 'pm' },
       ],
     })

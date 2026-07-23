@@ -62,7 +62,7 @@ describe('services/plugin.ts CRUD', () => {
     db = createInMemoryDb(MIGRATIONS)
   })
 
-  test('create + list + get by id and by name', async () => {
+  test('create + list + get by stable id (name is not an identity selector)', async () => {
     process.env.FAKE_NPM_VERSION = '1.2.3'
     const p = await createPlugin(
       db,
@@ -84,7 +84,7 @@ describe('services/plugin.ts CRUD', () => {
     const byId = await getPlugin(db, p.id)
     expect(byId?.name).toBe('dd-trace')
     const byName = await getPlugin(db, 'dd-trace')
-    expect(byName?.id).toBe(p.id)
+    expect(byName).toBeNull()
   })
 
   test('create conflict: name in use → ConflictError', async () => {
@@ -249,7 +249,7 @@ describe('services/plugin.ts rename + cascade', () => {
     expect(r.name).toBe('fresh')
     expect(r.id).toBe(p.id)
     expect(await getPlugin(db, 'old')).toBeNull()
-    expect((await getPlugin(db, 'fresh'))?.id).toBe(p.id)
+    expect((await getPlugin(db, p.id))?.name).toBe('fresh')
   })
 
   test('rename to existing name → ConflictError', async () => {

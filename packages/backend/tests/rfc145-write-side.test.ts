@@ -58,8 +58,9 @@ describe('RFC-145 写侧 — runner 正向声明 failure_code', () => {
   afterEach(() => h.cleanup())
 
   test('无信封输出 → 行落 failureCode=envelope-missing，errorMessage 文案零变更', async () => {
+    const agentId = ulid()
     await h.db.insert(agents).values({
-      id: ulid(),
+      id: agentId,
       name: 'a',
       description: '',
       outputs: JSON.stringify(['summary']),
@@ -73,7 +74,7 @@ describe('RFC-145 写侧 — runner 正向声明 failure_code', () => {
     const def: WorkflowDefinition = {
       $schema_version: 1,
       inputs: [],
-      nodes: [{ id: 'A', kind: 'agent-single', agentName: 'a' }],
+      nodes: [{ id: 'A', kind: 'agent-single', agentId, agentName: 'a' }],
       edges: [],
     }
     const workflowId = ulid()

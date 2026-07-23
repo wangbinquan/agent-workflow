@@ -112,7 +112,7 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
     const db = createInMemoryDb(MIGRATIONS)
     try {
       const plannerId = await seedPlannerAgent(db)
-      await createWorkgroup(db, {
+      const group = await createWorkgroup(db, {
         name: 'dyn-e2e',
         description: '',
         instructions: '章程：小步快跑',
@@ -139,7 +139,7 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
             startWorkgroupTask(
               db,
               actor,
-              'dyn-e2e',
+              group.id,
               { name: 'e2e', goal: '把回调竞态修掉', scratch: true },
               {
                 db,
@@ -233,7 +233,7 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
     const repo = mkdtempSync(join(tmpdir(), 'aw-rfc167-e2e-repo-'))
     const db = createInMemoryDb(MIGRATIONS)
     try {
-      await seedPlannerAgent(db)
+      const plannerId = await seedPlannerAgent(db)
       await git('-C', repo, 'init', '-b', 'main', '-q')
       await git(
         '-C',
@@ -255,7 +255,13 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
         $schema_version: 4,
         inputs: [],
         nodes: [
-          { id: 'plan-step', kind: 'agent-single', agentName: 'wg-planner', promptTemplate: 'x' },
+          {
+            id: 'plan-step',
+            kind: 'agent-single',
+            agentId: plannerId,
+            agentName: 'wg-planner',
+            promptTemplate: 'x',
+          },
         ],
         edges: [],
       }
@@ -294,6 +300,7 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
             {
               id: 'm1',
               memberType: 'agent',
+              agentId: plannerId,
               agentName: 'wg-planner',
               userId: null,
               displayName: 'planner',

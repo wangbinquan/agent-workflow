@@ -7,7 +7,13 @@ import {
 import { applyWorkflowTransition } from '../src/lib/workflow-transition'
 
 function agentNode(id: string, agentName = id, x = 0): WorkflowNode {
-  return { id, kind: 'agent-single', agentName, position: { x, y: 0 } } as WorkflowNode
+  return {
+    id,
+    kind: 'agent-single',
+    agentId: `agent-${agentName}`,
+    agentName,
+    position: { x, y: 0 },
+  } as WorkflowNode
 }
 
 const agents = [

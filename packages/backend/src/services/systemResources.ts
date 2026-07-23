@@ -22,9 +22,7 @@
 //     collision RFC-101 worried about is no longer ambiguous.
 //
 // Only agents + workflows carry the column today (the sole seeded types). The
-// reserved-name sets below are NOT the runtime discriminator anymore — they
-// only let seedFusionResources LOCATE / seed its own rows. skill / mcp / plugin
-// rows have no `builtin` field, so isBuiltinRow is false for them and the
+// skill / mcp / plugin rows have no `builtin` field, so isBuiltinRow is false for them and the
 // generic guards are no-ops; adding a built-in of those types later MUST add
 // the column to that table AND guard that type's write paths (e.g. for skills:
 // ZIP/source-conflict import, reconcile, commitSkillVersion fusion approval).
@@ -38,12 +36,6 @@ export const SKILL_FUSION_WORKFLOW_NAME = 'aw-skill-fusion'
 export const SKILL_MERGER_AGENT_ID = '00000000000000000000000001'
 export const SKILL_FUSION_WORKFLOW_ID = '00000000000000000000000002'
 export { QUARANTINED_FUSION_SKILL_ID }
-
-/** Reserved framework names — used by seedFusionResources to locate/seed its
- *  own rows. NOT a runtime built-in discriminator (that is the `builtin`
- *  column); kept so the seeder and future built-ins share one registry. */
-export const BUILTIN_AGENT_NAMES: ReadonlySet<string> = new Set([SKILL_MERGER_AGENT_NAME])
-export const BUILTIN_WORKFLOW_NAMES: ReadonlySet<string> = new Set([SKILL_FUSION_WORKFLOW_NAME])
 
 /** Minimal row shape every check accepts; full rows AND mapped DTOs superset it. */
 interface BuiltinCandidate {

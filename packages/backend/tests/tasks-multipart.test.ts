@@ -116,7 +116,7 @@ async function buildHarness(): Promise<Harness> {
 
   const db = createInMemoryDb(MIGRATIONS)
 
-  await createAgent(db, {
+  const reader = await createAgent(db, {
     name: 'reader',
     description: '',
     outputs: ['out'],
@@ -153,6 +153,7 @@ async function buildHarness(): Promise<Harness> {
         {
           id: 'reader',
           kind: 'agent-single',
+          agentId: reader.id,
           agentName: 'reader',
           promptTemplate: '{{topic}} / {{refs}}',
         },

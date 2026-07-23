@@ -40,6 +40,7 @@ import { isNodeRunFresh } from '../src/services/freshness'
 import { runTask } from '../src/services/scheduler'
 import { runGit } from '../src/util/git'
 import { resetBroadcastersForTests, TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
+import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
 // 同毫秒多行 id 排序确定化（先例：scheduler-clarify-dispatch.test.ts:33-40）。
 const ulid = monotonicFactory()
@@ -158,12 +159,13 @@ async function seedWorkflowAndTask(
   definition: WorkflowDefinition,
   inputs: Record<string, string> = {},
 ): Promise<string> {
+  const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
   await h.db.insert(workflows).values({
     id: workflowId,
     name: 'wf',
-    definition: JSON.stringify(definition),
+    definition: JSON.stringify(canonicalDefinition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
@@ -171,7 +173,7 @@ async function seedWorkflowAndTask(
     name: 'fixture-task',
     id: taskId,
     workflowId,
-    workflowSnapshot: JSON.stringify(definition),
+    workflowSnapshot: JSON.stringify(canonicalDefinition),
     repoPath: h.repoPath,
     worktreePath: h.worktreePath,
     baseBranch: 'main',

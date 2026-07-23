@@ -78,8 +78,9 @@ async function seedAgentWorkflowTask(
   h: Harness,
   status: 'pending' | 'interrupted',
 ): Promise<{ taskId: string }> {
+  const agentId = ulid()
   await h.db.insert(agents).values({
-    id: ulid(),
+    id: agentId,
     name: 'a',
     description: '',
     outputs: JSON.stringify(['summary']),
@@ -93,7 +94,7 @@ async function seedAgentWorkflowTask(
   const def: WorkflowDefinition = {
     $schema_version: 1,
     inputs: [],
-    nodes: [{ id: 'A', kind: 'agent-single', agentName: 'a' }],
+    nodes: [{ id: 'A', kind: 'agent-single', agentId, agentName: 'a' }],
     edges: [],
   }
   const workflowId = ulid()
@@ -492,8 +493,9 @@ describe('RFC-144 git wrapper merged 再入的 baseline（PR-4 复核 P2）', ()
 
     // 工作流：git wrapper 包一个 agent；伪造「崩溃于 merge-back 内、入口 replay 已
     // 推成 merged、行被收割成 interrupted」后的复活现场。
+    const agentId = ulid()
     await h.db.insert(agents).values({
-      id: ulid(),
+      id: agentId,
       name: 'a',
       description: '',
       outputs: JSON.stringify(['summary']),
@@ -509,7 +511,7 @@ describe('RFC-144 git wrapper merged 再入的 baseline（PR-4 复核 P2）', ()
       inputs: [],
       nodes: [
         { id: 'gw', kind: 'wrapper-git', nodeIds: ['A'] },
-        { id: 'A', kind: 'agent-single', agentName: 'a' },
+        { id: 'A', kind: 'agent-single', agentId, agentName: 'a' },
       ],
       edges: [],
     } as unknown as WorkflowDefinition

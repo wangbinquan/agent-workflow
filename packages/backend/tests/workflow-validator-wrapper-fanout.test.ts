@@ -40,7 +40,23 @@ function agent(name: string, fields: Partial<Agent> = {}): Agent {
 const EMPTY_SKILLS: Skill[] = []
 
 function makeDef(parts: Partial<WorkflowDefinition>): WorkflowDefinition {
-  return { $schema_version: 4, inputs: [], nodes: [], edges: [], ...parts }
+  const definition: WorkflowDefinition = {
+    $schema_version: 4,
+    inputs: [],
+    nodes: [],
+    edges: [],
+    ...parts,
+  }
+  return {
+    ...definition,
+    nodes: definition.nodes.map((node) =>
+      node.kind === 'agent-single' &&
+      typeof node.agentName === 'string' &&
+      node.agentId === undefined
+        ? { ...node, agentId: `agent-${node.agentName}` }
+        : node,
+    ),
+  }
 }
 
 function codesOf(def: WorkflowDefinition, agents: Agent[] = []): string[] {

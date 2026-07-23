@@ -41,9 +41,10 @@ function makeHarness() {
   }
 }
 
-async function seedAgent(db: DbClient, name: string) {
+async function seedAgent(db: DbClient, name: string): Promise<string> {
+  const id = ulid()
   await db.insert(agents).values({
-    id: ulid(),
+    id,
     name,
     description: '',
     outputs: JSON.stringify(['design']),
@@ -54,6 +55,7 @@ async function seedAgent(db: DbClient, name: string) {
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
+  return id
 }
 
 async function seedTask(h: ReturnType<typeof makeHarness>, def: WorkflowDefinition) {
@@ -101,7 +103,7 @@ async function runScenario(
   retries: number | undefined,
   h: ReturnType<typeof makeHarness>,
 ): Promise<number> {
-  await seedAgent(h.db, 'agent1')
+  const agentId = await seedAgent(h.db, 'agent1')
   const def: WorkflowDefinition = {
     $schema_version: 1,
     inputs: [],
@@ -109,6 +111,7 @@ async function runScenario(
       {
         id: 'n1',
         kind: 'agent-single',
+        agentId,
         agentName: 'agent1',
       },
     ],

@@ -35,6 +35,7 @@ function makeDef(): WorkflowDefinition {
       {
         id: 'agent_coder',
         kind: 'agent-single',
+        agentId: 'agent-coder',
         agentName: 'coder',
       } as unknown as WorkflowNode,
     ],
@@ -43,6 +44,7 @@ function makeDef(): WorkflowDefinition {
 }
 
 const CODER: Agent = {
+  id: 'agent-coder',
   name: 'coder',
   description: 'coder',
   outputs: ['software_design', 'test_design'],

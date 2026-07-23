@@ -89,6 +89,7 @@ const fanout = (id: string, nodeIds: string[]): Record<string, unknown> => ({
 const agent = (id: string, agentName = 'worker'): Record<string, unknown> => ({
   id,
   kind: 'agent-single',
+  agentId: `agent-${agentName}`,
   agentName,
 })
 

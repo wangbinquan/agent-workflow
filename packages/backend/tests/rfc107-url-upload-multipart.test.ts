@@ -193,7 +193,7 @@ async function buildHarness(): Promise<Harness> {
   const stubOpencode = makeStubOpencode(tmp)
   const db = createInMemoryDb(MIGRATIONS)
 
-  await createAgent(db, {
+  const reader = await createAgent(db, {
     name: 'reader',
     description: '',
     outputs: ['out'],
@@ -220,6 +220,7 @@ async function buildHarness(): Promise<Harness> {
         {
           id: 'reader',
           kind: 'agent-single',
+          agentId: reader.id,
           agentName: 'reader',
           promptTemplate: '{{topic}} / {{refs}}',
         },
@@ -254,6 +255,7 @@ async function buildHarness(): Promise<Harness> {
         {
           id: 'ghost',
           kind: 'agent-single',
+          agentId: 'no-such-agent-id',
           agentName: 'no-such-agent',
           promptTemplate: '{{topic}}',
         },
@@ -562,7 +564,7 @@ describe('RFC-107 — security: a cloned repo cannot make uploads escape the wor
   async function buildUploadApp(tmp: string): Promise<{ db: DbClient; app: Hono; wfId: string }> {
     const stubOpencode = makeStubOpencode(tmp)
     const db = createInMemoryDb(MIGRATIONS)
-    await createAgent(db, {
+    const reader = await createAgent(db, {
       name: 'reader',
       description: '',
       outputs: ['out'],
@@ -588,6 +590,7 @@ describe('RFC-107 — security: a cloned repo cannot make uploads escape the wor
           {
             id: 'reader',
             kind: 'agent-single',
+            agentId: reader.id,
             agentName: 'reader',
             promptTemplate: '{{topic}} / {{refs}}',
           },
@@ -722,7 +725,7 @@ describe('RFC-107 — startTask preResolvedSource (resolve-once + redaction)', (
     git('-C', realRepo, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
 
     const stubOpencode = makeStubOpencode(tmp)
-    await createAgent(db, {
+    const echoer = await createAgent(db, {
       name: 'echoer',
       description: '',
       outputs: ['out'],
@@ -744,7 +747,13 @@ describe('RFC-107 — startTask preResolvedSource (resolve-once + redaction)', (
         inputs: [{ kind: 'text', key: 'topic', label: 'topic' }],
         nodes: [
           { id: 'in_1', kind: 'input', inputKey: 'topic' },
-          { id: 'echoer', kind: 'agent-single', agentName: 'echoer', promptTemplate: '{{topic}}' },
+          {
+            id: 'echoer',
+            kind: 'agent-single',
+            agentId: echoer.id,
+            agentName: 'echoer',
+            promptTemplate: '{{topic}}',
+          },
         ],
         edges: [
           {

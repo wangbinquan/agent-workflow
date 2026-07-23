@@ -51,9 +51,14 @@ function buildHarness(): Harness {
   }
 }
 
-async function seedAgent(db: DbClient, name: string, outputs: string[] = ['design']) {
+async function seedAgent(
+  db: DbClient,
+  name: string,
+  outputs: string[] = ['design'],
+): Promise<string> {
+  const id = ulid()
   await db.insert(agents).values({
-    id: ulid(),
+    id,
     name,
     description: 'rfc-042',
     outputs: JSON.stringify(outputs),
@@ -64,6 +69,7 @@ async function seedAgent(db: DbClient, name: string, outputs: string[] = ['desig
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
+  return id
 }
 
 async function seedTask(h: Harness, definition: WorkflowDefinition): Promise<{ taskId: string }> {
@@ -124,11 +130,11 @@ describe('RFC-042 scheduler envelope follow-up integration', () => {
 
   // §5.2 case 9
   test('clean exit + missing envelope → next attempt resumes the SAME session', async () => {
-    await seedAgent(h.db, 'a1')
+    const agentId = await seedAgent(h.db, 'a1')
     const def: WorkflowDefinition = {
       $schema_version: 1,
       inputs: [],
-      nodes: [{ id: 'n1', kind: 'agent-single', agentName: 'a1' }],
+      nodes: [{ id: 'n1', kind: 'agent-single', agentId, agentName: 'a1' }],
       edges: [],
     }
     const { taskId } = await seedTask(h, def)
@@ -173,11 +179,11 @@ describe('RFC-042 scheduler envelope follow-up integration', () => {
 
   // §5.2 case 10
   test('non-zero exit + missing envelope → retry without --session (fresh session)', async () => {
-    await seedAgent(h.db, 'a1')
+    const agentId = await seedAgent(h.db, 'a1')
     const def: WorkflowDefinition = {
       $schema_version: 1,
       inputs: [],
-      nodes: [{ id: 'n1', kind: 'agent-single', agentName: 'a1' }],
+      nodes: [{ id: 'n1', kind: 'agent-single', agentId, agentName: 'a1' }],
       edges: [],
     }
     const { taskId } = await seedTask(h, def)
@@ -210,11 +216,11 @@ describe('RFC-042 scheduler envelope follow-up integration', () => {
 
   // §5.2 case 11
   test('retries=0 prevents follow-up entirely', async () => {
-    await seedAgent(h.db, 'a1')
+    const agentId = await seedAgent(h.db, 'a1')
     const def: WorkflowDefinition = {
       $schema_version: 1,
       inputs: [],
-      nodes: [{ id: 'n1', kind: 'agent-single', agentName: 'a1' }],
+      nodes: [{ id: 'n1', kind: 'agent-single', agentId, agentName: 'a1' }],
       edges: [],
     }
     const { taskId } = await seedTask(h, def)
@@ -243,11 +249,11 @@ describe('RFC-042 scheduler envelope follow-up integration', () => {
 
   // §5.2 case 12
   test('all retries exhausted without producing an envelope → task fails, every retry uses --session', async () => {
-    await seedAgent(h.db, 'a1')
+    const agentId = await seedAgent(h.db, 'a1')
     const def: WorkflowDefinition = {
       $schema_version: 1,
       inputs: [],
-      nodes: [{ id: 'n1', kind: 'agent-single', agentName: 'a1' }],
+      nodes: [{ id: 'n1', kind: 'agent-single', agentId, agentName: 'a1' }],
       edges: [],
     }
     const { taskId } = await seedTask(h, def)

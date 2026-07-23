@@ -173,13 +173,13 @@ async function buildHarness(): Promise<Harness> {
   }
 }
 
-function makeDef(agentName: string): WorkflowDefinition {
+function makeDef(agentName: string, agentId: string): WorkflowDefinition {
   return {
     $schema_version: 3,
     inputs: [{ kind: 'text', key: 'req', label: 'r' }],
     nodes: [
       { id: 'in1', kind: 'input', inputKey: 'req' } as WorkflowNode,
-      { id: 'd', kind: 'agent-single', agentName } as WorkflowNode,
+      { id: 'd', kind: 'agent-single', agentId, agentName } as WorkflowNode,
     ],
     edges: [
       {
@@ -240,7 +240,7 @@ describe('RFC-092 集成层 — 泄漏 pending 行在真实 runTask 下有界终
   test('ghost agent（agent-not-found 早期 return 不消费 pending 行）：预铸 pending 行 → 任务有限步 failed，节点行数有上界、绝非无限铸行', async () => {
     // agents 表不 seed 'ghost' —— runOneNode 在 pendingExisting 复用点之前
     // `agent-not-found` 早期 return，预铸的 pending 行永远不被消费（泄漏行）。
-    const taskId = await seedWorkflowAndTask(h, makeDef('ghost'))
+    const taskId = await seedWorkflowAndTask(h, makeDef('ghost', 'ghost-agent-id'))
     const preMintedId = ulid()
     await h.db.insert(nodeRuns).values({
       id: preMintedId,
@@ -279,8 +279,9 @@ describe('RFC-092 集成层 — 泄漏 pending 行在真实 runTask 下有界终
   }, 20000)
 
   test('对照：agent 存在时预铸 pending 行被恰好消费一次（pendingExisting 复用）→ 任务 done、零额外铸行', async () => {
+    const designerId = ulid()
     await h.db.insert(agents).values({
-      id: ulid(),
+      id: designerId,
       name: 'designer',
       description: 'test',
       outputs: JSON.stringify(['design']),
@@ -289,7 +290,7 @@ describe('RFC-092 集成层 — 泄漏 pending 行在真实 runTask 下有界终
       frontmatterExtra: '{}',
       bodyMd: '',
     })
-    const taskId = await seedWorkflowAndTask(h, makeDef('designer'))
+    const taskId = await seedWorkflowAndTask(h, makeDef('designer', designerId))
     const preMintedId = ulid()
     await h.db.insert(nodeRuns).values({
       id: preMintedId,

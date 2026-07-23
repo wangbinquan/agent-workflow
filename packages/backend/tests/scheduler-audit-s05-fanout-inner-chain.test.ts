@@ -232,12 +232,14 @@ function chainWorkflowDef(nodeIds: string[] = ['audit', 'fix']): WorkflowDefinit
       {
         id: 'audit',
         kind: 'agent-single',
+        agentId: 'agent-auditor',
         agentName: 'auditor',
         promptTemplate: 'Audit {{doc}}',
       },
       {
         id: 'fix',
         kind: 'agent-single',
+        agentId: 'agent-fixer',
         agentName: 'fixer',
         promptTemplate: 'Fix using: [{{findings}}] end',
       },
@@ -329,7 +331,7 @@ function buildHarness(): Harness {
 
 async function seedAgentRow(db: DbClient, name: string): Promise<void> {
   await db.insert(agents).values({
-    id: ulid(),
+    id: `agent-${name}`,
     name,
     description: 'test',
     outputs: JSON.stringify(['result']),

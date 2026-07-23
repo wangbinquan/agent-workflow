@@ -56,8 +56,9 @@ describe('RFC-202 T1 — empty-list review auto-approve', () => {
     definition: WorkflowDefinition
     reviewNode: WorkflowNode
   }> {
+    const caseGenId = ulid()
     await db.insert(agentsTable).values({
-      id: ulid(),
+      id: caseGenId,
       name: 'caseGen',
       description: '',
       outputs: JSON.stringify(['cases']),
@@ -73,6 +74,7 @@ describe('RFC-202 T1 — empty-list review auto-approve', () => {
         {
           id: 'src',
           kind: 'agent-single',
+          agentId: caseGenId,
           agentName: 'caseGen',
           promptTemplate: '',
         } as WorkflowNode,

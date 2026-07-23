@@ -87,6 +87,13 @@ describe('RFC-022 validateDependsOn (save-time guard)', () => {
     })
   })
 
+  test('rejects self-reference by canonical id before the row is persisted', async () => {
+    await expect(validateDependsOn(db, 'new-id', ['new-id'])).rejects.toMatchObject({
+      code: 'agent-dependency-self',
+      details: { id: 'new-id' },
+    })
+  })
+
   test('rejects cycle and reports just the loop in cyclePath (not the full prefix)', async () => {
     // Seed leaves first so createAgent's save-time guard accepts each row:
     // c → (nothing), b → c, a → b. Now attempt to put c.dependsOn = [a],

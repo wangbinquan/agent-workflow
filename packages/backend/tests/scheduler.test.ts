@@ -73,12 +73,24 @@ async function seedWorkflowAndTask(
   definition: WorkflowDefinition,
   inputs: Record<string, string> = {},
 ): Promise<{ workflowId: string; taskId: string }> {
+  const agentRows = await h.db.select({ id: agents.id, name: agents.name }).from(agents)
+  const agentIdByName = new Map(agentRows.map((row) => [row.name, row.id]))
+  const canonicalDefinition: WorkflowDefinition = {
+    ...definition,
+    nodes: definition.nodes.map((node) => {
+      if (node.kind !== 'agent-single') return node
+      const rec = node as Record<string, unknown>
+      if (typeof rec.agentId === 'string' && rec.agentId.length > 0) return node
+      const id = typeof rec.agentName === 'string' ? agentIdByName.get(rec.agentName) : undefined
+      return id === undefined ? node : ({ ...rec, agentId: id } as typeof node)
+    }),
+  }
   const workflowId = ulid()
   const taskId = ulid()
   await h.db.insert(workflows).values({
     id: workflowId,
     name: 'wf',
-    definition: JSON.stringify(definition),
+    definition: JSON.stringify(canonicalDefinition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
@@ -87,7 +99,7 @@ async function seedWorkflowAndTask(
 
     id: taskId,
     workflowId,
-    workflowSnapshot: JSON.stringify(definition),
+    workflowSnapshot: JSON.stringify(canonicalDefinition),
     repoPath: '/tmp/repo',
     worktreePath: h.worktreePath,
     baseBranch: 'main',
@@ -185,7 +197,14 @@ describe('runTask: linear DAG (M1)', () => {
     const def: WorkflowDefinition = {
       $schema_version: 1,
       inputs: [],
-      nodes: [{ id: 'a1', kind: 'agent-single', agentName: 'no-such-agent' }],
+      nodes: [
+        {
+          id: 'a1',
+          kind: 'agent-single',
+          agentId: 'no-such-agent-id',
+          agentName: 'no-such-agent',
+        },
+      ],
       edges: [],
     }
     const { taskId } = await seedWorkflowAndTask(h, def)

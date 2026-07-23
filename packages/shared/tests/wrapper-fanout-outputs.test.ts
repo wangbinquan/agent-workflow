@@ -53,7 +53,9 @@ describe('FANOUT_DONE_PORT_NAME', () => {
 
 describe('deriveWrapperFanoutOutputs — empty / no aggregator', () => {
   test('non-wrapper-fanout id → __done__ signal outlet (defensive fallback)', () => {
-    const def = defWith([{ id: 'a', kind: 'agent-single', agentName: 'reporter' }])
+    const def = defWith([
+      { id: 'a', kind: 'agent-single', agentId: 'agent-reporter', agentName: 'reporter' },
+    ])
     expect(deriveWrapperFanoutOutputs(def, 'a', new Map())).toEqual([
       { name: '__done__', kind: 'signal' },
     ])
@@ -63,9 +65,9 @@ describe('deriveWrapperFanoutOutputs — empty / no aggregator', () => {
     const reporter = baseAgent('reporter')
     const def = defWith([
       { id: 'w', kind: 'wrapper-fanout', nodeIds: ['a'] },
-      { id: 'a', kind: 'agent-single', agentName: 'reporter' },
+      { id: 'a', kind: 'agent-single', agentId: reporter.id, agentName: 'reporter' },
     ])
-    expect(deriveWrapperFanoutOutputs(def, 'w', new Map([[reporter.name, reporter]]))).toEqual([
+    expect(deriveWrapperFanoutOutputs(def, 'w', new Map([[reporter.id, reporter]]))).toEqual([
       { name: '__done__', kind: 'signal' },
     ])
   })
@@ -83,9 +85,9 @@ describe('deriveWrapperFanoutOutputs — single aggregator', () => {
     const agg = baseAgent('merger', { role: 'aggregator', outputs: ['final', 'summary'] })
     const def = defWith([
       { id: 'w', kind: 'wrapper-fanout', nodeIds: ['agg'] },
-      { id: 'agg', kind: 'agent-single', agentName: 'merger' },
+      { id: 'agg', kind: 'agent-single', agentId: agg.id, agentName: 'merger' },
     ])
-    expect(deriveWrapperFanoutOutputs(def, 'w', new Map([[agg.name, agg]]))).toEqual([
+    expect(deriveWrapperFanoutOutputs(def, 'w', new Map([[agg.id, agg]]))).toEqual([
       { name: 'final', kind: 'string' },
       { name: 'summary', kind: 'string' },
     ])
@@ -100,9 +102,9 @@ describe('deriveWrapperFanoutOutputs — single aggregator', () => {
     })
     const def = defWith([
       { id: 'w', kind: 'wrapper-fanout', nodeIds: ['agg'] },
-      { id: 'agg', kind: 'agent-single', agentName: 'merger' },
+      { id: 'agg', kind: 'agent-single', agentId: agg.id, agentName: 'merger' },
     ])
-    expect(deriveWrapperFanoutOutputs(def, 'w', new Map([[agg.name, agg]]))).toEqual([
+    expect(deriveWrapperFanoutOutputs(def, 'w', new Map([[agg.id, agg]]))).toEqual([
       { name: 'final', kind: 'path<md>' },
       { name: 'done', kind: 'signal' },
     ])
@@ -113,16 +115,16 @@ describe('deriveWrapperFanoutOutputs — single aggregator', () => {
     const agg = baseAgent('merger', { role: 'aggregator', outputs: ['final'] })
     const def = defWith([
       { id: 'w', kind: 'wrapper-fanout', nodeIds: ['n1', 'agg'] },
-      { id: 'n1', kind: 'agent-single', agentName: 'worker' },
-      { id: 'agg', kind: 'agent-single', agentName: 'merger' },
+      { id: 'n1', kind: 'agent-single', agentId: normal.id, agentName: 'worker' },
+      { id: 'agg', kind: 'agent-single', agentId: agg.id, agentName: 'merger' },
     ])
     expect(
       deriveWrapperFanoutOutputs(
         def,
         'w',
         new Map([
-          [normal.name, normal],
-          [agg.name, agg],
+          [normal.id, normal],
+          [agg.id, agg],
         ]),
       ),
     ).toEqual([{ name: 'final', kind: 'string' }])
@@ -135,15 +137,15 @@ describe('deriveWrapperFanoutOutputs — multiple aggregators', () => {
     const a2 = baseAgent('merger_b', { role: 'aggregator', outputs: ['out_b'] })
     const def = defWith([
       { id: 'w', kind: 'wrapper-fanout', nodeIds: ['agg1', 'agg2'] },
-      { id: 'agg1', kind: 'agent-single', agentName: 'merger_a' },
-      { id: 'agg2', kind: 'agent-single', agentName: 'merger_b' },
+      { id: 'agg1', kind: 'agent-single', agentId: a1.id, agentName: 'merger_a' },
+      { id: 'agg2', kind: 'agent-single', agentId: a2.id, agentName: 'merger_b' },
     ])
     const result = deriveWrapperFanoutOutputs(
       def,
       'w',
       new Map([
-        [a1.name, a1],
-        [a2.name, a2],
+        [a1.id, a1],
+        [a2.id, a2],
       ]),
     )
     expect(result).toEqual([{ name: 'out_a', kind: 'string' }])
@@ -154,16 +156,16 @@ describe('deriveWrapperFanoutOutputs — multiple aggregators', () => {
     const a2 = baseAgent('merger_b', { role: 'aggregator', outputs: ['out_b'] })
     const def = defWith([
       { id: 'w', kind: 'wrapper-fanout', nodeIds: ['agg1', 'agg2'] },
-      { id: 'agg1', kind: 'agent-single', agentName: 'merger_a' },
-      { id: 'agg2', kind: 'agent-single', agentName: 'merger_b' },
+      { id: 'agg1', kind: 'agent-single', agentId: a1.id, agentName: 'merger_a' },
+      { id: 'agg2', kind: 'agent-single', agentId: a2.id, agentName: 'merger_b' },
     ])
     expect(
       countFanoutAggregators(
         def,
         'w',
         new Map([
-          [a1.name, a1],
-          [a2.name, a2],
+          [a1.id, a1],
+          [a2.id, a2],
         ]),
       ),
     ).toBe(2)
@@ -180,9 +182,9 @@ describe('findFanoutAggregator', () => {
     const agg = baseAgent('merger', { role: 'aggregator' })
     const def = defWith([
       { id: 'w', kind: 'wrapper-fanout', nodeIds: ['agg'] },
-      { id: 'agg', kind: 'agent-single', agentName: 'merger' },
+      { id: 'agg', kind: 'agent-single', agentId: agg.id, agentName: 'merger' },
     ])
-    const found = findFanoutAggregator(def, 'w', new Map([[agg.name, agg]]))
+    const found = findFanoutAggregator(def, 'w', new Map([[agg.id, agg]]))
     expect(found?.node.id).toBe('agg')
     expect(found?.agent.name).toBe('merger')
   })
@@ -193,9 +195,9 @@ describe('lookup table flexibility', () => {
     const agg = baseAgent('merger', { role: 'aggregator', outputs: ['final'] })
     const def = defWith([
       { id: 'w', kind: 'wrapper-fanout', nodeIds: ['agg'] },
-      { id: 'agg', kind: 'agent-single', agentName: 'merger' },
+      { id: 'agg', kind: 'agent-single', agentId: agg.id, agentName: 'merger' },
     ])
-    expect(deriveWrapperFanoutOutputs(def, 'w', { [agg.name]: agg })).toEqual([
+    expect(deriveWrapperFanoutOutputs(def, 'w', { [agg.id]: agg })).toEqual([
       { name: 'final', kind: 'string' },
     ])
   })

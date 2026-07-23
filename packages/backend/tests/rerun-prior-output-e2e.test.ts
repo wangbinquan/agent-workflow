@@ -149,7 +149,7 @@ async function buildHarness(): Promise<Harness> {
 
   const stubOpencode = makeStubOpencode(tmp)
 
-  await createAgent(db, {
+  const auditor = await createAgent(db, {
     name: 'auditor',
     description: '',
     outputs: ['report'],
@@ -175,6 +175,7 @@ async function buildHarness(): Promise<Harness> {
         {
           id: 'auditor',
           kind: 'agent-single',
+          agentId: auditor.id,
           agentName: 'auditor',
           promptTemplate: 'Audit {{topic}}',
         },

@@ -20,7 +20,7 @@ import {
 
 function baseAgent(name: string, fields: Partial<Agent> = {}): Agent {
   return {
-    id: `agent-${name}`,
+    id: name,
     name,
     description: '',
     outputs: ['out'],
@@ -43,7 +43,18 @@ function defWith(
   nodes: WorkflowDefinition['nodes'],
   edges: WorkflowDefinition['edges'] = [],
 ): WorkflowDefinition {
-  return { $schema_version: 4, inputs: [], nodes, edges }
+  return {
+    $schema_version: 4,
+    inputs: [],
+    nodes: nodes.map((node) =>
+      node.kind === 'agent-single' &&
+      typeof node.agentName === 'string' &&
+      node.agentId === undefined
+        ? { ...node, agentId: node.agentName }
+        : node,
+    ),
+    edges,
+  }
 }
 
 describe('computeShardScope — basic reachable BFS', () => {

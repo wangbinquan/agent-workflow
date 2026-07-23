@@ -122,6 +122,7 @@ export async function createWorkflow(
   // Normalize incoming v1 → v2 (RFC-005) so new rows always land at the
   // latest schema version. Older clients can still post v1 — they get upgraded.
   const normalized = migrateDefinitionToLatest(input.definition)
+  assertCanonicalWorkflowAgentIds(normalized)
   const values: typeof workflows.$inferInsert = {
     id,
     name: input.name,
@@ -185,6 +186,7 @@ export async function updateWorkflow(
     })
   }
   const normalizedSnapshot = normalizeWorkflowSnapshot(parsed.data.snapshot)
+  assertCanonicalWorkflowAgentIds(normalizedSnapshot.definition)
   const submittedBytes = serializeWorkflowEditableSnapshotV1(normalizedSnapshot)
   const definitionStorage = serializeWorkflowDefinitionStorageV1(normalizedSnapshot.definition)
 
@@ -306,6 +308,25 @@ export async function updateWorkflow(
     })
   }
   return txResult.receipt
+}
+
+/**
+ * RFC-223: portable workflow YAML is the only name-based selector boundary.
+ * Every definition crossing the persisted-workflow write boundary must already
+ * carry the canonical agent id stamped by the editor or YAML import resolver.
+ */
+export function assertCanonicalWorkflowAgentIds(definition: WorkflowDefinition): void {
+  const nodeIds = (definition.nodes ?? [])
+    .filter((node) => node.kind === 'agent-single')
+    .filter((node) => typeof node.agentId !== 'string' || node.agentId.length === 0)
+    .map((node) => node.id)
+    .sort()
+  if (nodeIds.length === 0) return
+  throw new ValidationError(
+    'workflow-agent-id-required',
+    'agent-single nodes require a canonical agentId',
+    { nodeIds },
+  )
 }
 
 export async function deleteWorkflow(

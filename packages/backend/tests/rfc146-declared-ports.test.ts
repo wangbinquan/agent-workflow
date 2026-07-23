@@ -75,8 +75,8 @@ describe('declaredPorts — 逐 kind 表值锁', () => {
       outputs: ['doc', 'sig'],
       outputKinds: { doc: 'path<md>', sig: 'signal' },
     })
-    const node = { id: 'w', kind: 'agent-single', agentName: 'writer' }
-    const d = declaredPorts(node as never, defOf([node]), new Map([[a.name, a]]))
+    const node = { id: 'w', kind: 'agent-single', agentId: a.id, agentName: 'writer' }
+    const d = declaredPorts(node as never, defOf([node]), new Map([[a.id, a]]))
     expect(d.dataOutputs).toEqual([
       { name: 'doc', kind: 'path<md>' },
       { name: 'sig', kind: 'signal' },
@@ -114,8 +114,13 @@ describe('declaredPorts — 逐 kind 表值锁', () => {
       nodeIds: ['in1'],
       inputs: [{ name: 'docs', kind: 'list<path<md>>', isShardSource: true }],
     }
-    const inner = { id: 'in1', kind: 'agent-single', agentName: 'worker' }
-    const d = declaredPorts(fan as never, defOf([fan, inner]), new Map([[worker.name, worker]]))
+    const inner = {
+      id: 'in1',
+      kind: 'agent-single',
+      agentId: worker.id,
+      agentName: 'worker',
+    }
+    const d = declaredPorts(fan as never, defOf([fan, inner]), new Map([[worker.id, worker]]))
     expect(d.dataOutputs).toEqual([{ name: '__done__', kind: 'signal' }])
     expect(d.dataInputs).toEqual([{ name: 'docs', kind: 'list<path<md>>' }])
 
@@ -126,13 +131,13 @@ describe('declaredPorts — 逐 kind 表值锁', () => {
       outputWrapperPortNames: { report: 'final_report' },
     } as Partial<Agent>)
     const fan2 = { ...fan, id: 'f2', nodeIds: ['in1', 'a1'] }
-    const aggNode = { id: 'a1', kind: 'agent-single', agentName: 'agg' }
+    const aggNode = { id: 'a1', kind: 'agent-single', agentId: agg.id, agentName: 'agg' }
     const d2 = declaredPorts(
       fan2 as never,
       defOf([fan2, inner, aggNode]),
       new Map([
-        [worker.name, worker],
-        [agg.name, agg],
+        [worker.id, worker],
+        [agg.id, agg],
       ]),
     )
     expect(d2.dataOutputs).toEqual([{ name: 'final_report', kind: 'path<md>' }])
@@ -143,11 +148,16 @@ describe('declaredPorts — 逐 kind 表值锁', () => {
       outputs: ['docs', 'doc'],
       outputKinds: { docs: 'list<path<md>>', doc: 'path<md>' },
     })
-    const up = { id: 'up', kind: 'agent-single', agentName: 'writer' }
+    const up = {
+      id: 'up',
+      kind: 'agent-single',
+      agentId: writer.id,
+      agentName: 'writer',
+    }
     const multi = { id: 'r1', kind: 'review', inputSource: { nodeId: 'up', portName: 'docs' } }
     const single = { id: 'r2', kind: 'review', inputSource: { nodeId: 'up', portName: 'doc' } }
     const defn = defOf([up, multi, single])
-    const agents = new Map([[writer.name, writer]])
+    const agents = new Map([[writer.id, writer]])
     expect(names(declaredPorts(multi as never, defn, agents).dataOutputs)).toEqual([
       'accepted',
       'approval_meta',

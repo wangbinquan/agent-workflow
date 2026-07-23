@@ -28,7 +28,7 @@ import {
   type RerunCause,
   type WorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
-import { inArray, or } from 'drizzle-orm'
+import { inArray } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { agents } from '@/db/schema'
 import type { nodeRuns } from '@/db/schema'
@@ -188,46 +188,29 @@ async function deriveReadonlyMemberIds(
   // RFC-223 (PR-3a): resolve members by the CANONICAL agentId frozen at launch
   // (rename/ABA-safe). The R4-1 quarantine sentinel resolves to no agent row →
   // treated as writable (conservative — mislabeling a readonly member would
-  // starve it of cards forever). A member with no frozen id (in-memory /
-  // pre-RFC-223 config) falls back to the display name.
+  // starve it of cards forever). Name-only legacy members fail closed.
   const agentMembers = config.members.filter((m) => m.memberType === 'agent')
   if (agentMembers.length === 0) return new Set()
   const memberHasId = (m: (typeof agentMembers)[number]) =>
     typeof m.agentId === 'string' && m.agentId.length > 0
   const ids = [...new Set(agentMembers.filter(memberHasId).map((m) => m.agentId as string))]
-  const namesNoId = [
-    ...new Set(
-      agentMembers.filter((m) => !memberHasId(m) && m.agentName).map((m) => m.agentName as string),
-    ),
-  ]
-  const conds = []
-  if (ids.length > 0) conds.push(inArray(agents.id, ids))
-  if (namesNoId.length > 0) conds.push(inArray(agents.name, namesNoId))
-  if (conds.length === 0) return new Set()
+  if (ids.length === 0) return new Set()
   const rows = await db
-    .select({ id: agents.id, name: agents.name, permission: agents.permission })
+    .select({ id: agents.id, permission: agents.permission })
     .from(agents)
-    .where(conds.length === 1 ? conds[0] : or(...conds))
+    .where(inArray(agents.id, ids))
   const roIds = new Set<string>()
-  const roNames = new Set<string>()
   for (const r of rows) {
     try {
       if (isReadonlyAgentPermission(JSON.parse(r.permission))) {
         roIds.add(r.id)
-        roNames.add(r.name)
       }
     } catch {
       // 坏 JSON ⇒ 当可写
     }
   }
   return new Set(
-    agentMembers
-      .filter((m) =>
-        memberHasId(m)
-          ? roIds.has(m.agentId as string)
-          : m.agentName !== null && roNames.has(m.agentName),
-      )
-      .map((m) => m.id),
+    agentMembers.filter((m) => memberHasId(m) && roIds.has(m.agentId as string)).map((m) => m.id),
   )
 }
 

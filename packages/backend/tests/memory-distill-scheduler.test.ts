@@ -28,7 +28,7 @@ import {
   DISTILL_MAX_ATTEMPTS,
   distillTick,
   enqueueDistillJob,
-  extractAgentNamesFromSnapshot,
+  extractAgentIdsFromSnapshot,
   listDistillJobs,
   recoverRunning,
   retryFailedJob,
@@ -51,7 +51,11 @@ const EMPTY_ENVELOPE_SPAWN: DistillerSpawnFn = async (input) => ({
 
 function seedTask(
   db: DbClient,
-  opts: { repoUrl?: string | null; cachedRepoId?: string | null; snapshotAgents?: string[] } = {},
+  opts: {
+    repoUrl?: string | null
+    cachedRepoId?: string | null
+    snapshotAgents?: Array<{ id?: string; name: string }>
+  } = {},
 ): { taskId: string; workflowId: string } {
   const wfId = ulid()
   db.insert(workflows)
@@ -65,10 +69,11 @@ function seedTask(
     })
     .run()
   const snapshot = {
-    nodes: (opts.snapshotAgents ?? []).map((name) => ({
-      id: `n-${name}`,
+    nodes: (opts.snapshotAgents ?? []).map((agent) => ({
+      id: `n-${agent.name}`,
       kind: 'agent-single',
-      agentName: name,
+      agentName: agent.name,
+      ...(agent.id !== undefined ? { agentId: agent.id } : {}),
     })),
   }
   const taskId = ulid()
@@ -109,23 +114,24 @@ describe('buildDebounceKey', () => {
   })
 })
 
-describe('extractAgentNamesFromSnapshot', () => {
-  test('returns unique agent names from agent-single nodes (RFC-060 PR-E removed agent-multi)', () => {
+describe('extractAgentIdsFromSnapshot', () => {
+  test('returns unique canonical ids and ignores name-only nodes', () => {
     const snap = JSON.stringify({
       nodes: [
-        { id: 'a', kind: 'agent-single', agentName: 'codegen' },
-        { id: 'b', kind: 'agent-single', agentName: 'auditor' },
+        { id: 'a', kind: 'agent-single', agentId: 'ag-codegen', agentName: 'codegen' },
+        { id: 'b', kind: 'agent-single', agentId: 'ag-auditor', agentName: 'auditor' },
         { id: 'c', kind: 'wrapper-git' },
-        { id: 'd', kind: 'agent-single', agentName: 'codegen' }, // dup → squashed
+        { id: 'd', kind: 'agent-single', agentId: 'ag-codegen', agentName: 'codegen' },
+        { id: 'e', kind: 'agent-single', agentName: 'legacy-name-only' },
       ],
     })
-    expect(extractAgentNamesFromSnapshot(snap).sort()).toEqual(['auditor', 'codegen'])
+    expect(extractAgentIdsFromSnapshot(snap).sort()).toEqual(['ag-auditor', 'ag-codegen'])
   })
   test('malformed JSON → []', () => {
-    expect(extractAgentNamesFromSnapshot('{not-json')).toEqual([])
+    expect(extractAgentIdsFromSnapshot('{not-json')).toEqual([])
   })
   test('empty nodes → []', () => {
-    expect(extractAgentNamesFromSnapshot(JSON.stringify({ nodes: [] }))).toEqual([])
+    expect(extractAgentIdsFromSnapshot(JSON.stringify({ nodes: [] }))).toEqual([])
   })
 })
 
@@ -139,7 +145,7 @@ describe('computeEligibleScopes', () => {
     const r = await computeEligibleScopes(db, null)
     expect(r).toEqual({ agentIds: [], workflowId: null, repoId: null, includeGlobal: true })
   })
-  test('resolves workflowId + agentIds by name lookup', async () => {
+  test('resolves workflowId + agentIds from frozen ids only', async () => {
     db.insert(agents)
       .values({
         id: 'agent-codegen',
@@ -154,7 +160,13 @@ describe('computeEligibleScopes', () => {
         frontmatterExtra: '{}',
       })
       .run()
-    const { taskId, workflowId } = seedTask(db, { snapshotAgents: ['codegen', 'no-such-agent'] })
+    const { taskId, workflowId } = seedTask(db, {
+      snapshotAgents: [
+        { id: 'agent-codegen', name: 'codegen' },
+        { name: 'codegen' },
+        { name: 'no-such-agent' },
+      ],
+    })
     const r = await computeEligibleScopes(db, taskId)
     expect(r.workflowId).toBe(workflowId)
     expect(r.agentIds).toEqual(['agent-codegen']) // unknown agent silently dropped

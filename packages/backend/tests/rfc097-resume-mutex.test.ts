@@ -116,8 +116,9 @@ async function buildHarness(): Promise<Harness> {
   writeFileSync(slowMock, buildSlowMock(ctrlDir))
 
   const db = createInMemoryDb(MIGRATIONS)
+  const workerId = ulid()
   await db.insert(agents).values({
-    id: ulid(),
+    id: workerId,
     name: 'worker',
     description: 'test',
     outputs: JSON.stringify(['out']),
@@ -133,7 +134,7 @@ async function buildHarness(): Promise<Harness> {
     // 一次即败，避免调度器默认 3 次重试拖慢失败路径。预算 0 由 deps() 透传
     // defaultNodeRetries: 0 进 resumeTask / retryNode（见下）。
     nodes: [
-      { id: 'work', kind: 'agent-single', agentName: 'worker' },
+      { id: 'work', kind: 'agent-single', agentId: workerId, agentName: 'worker' },
     ] as unknown as WorkflowDefinition['nodes'],
     edges: [],
   }

@@ -184,7 +184,14 @@ describe('RFC-199 exact workflow Validate', () => {
             ...workflowDraftSnapshotOf(workflow),
             definition: {
               ...EMPTY_DEFINITION,
-              nodes: [{ id: 'newer-node', kind: 'agent-single', agentName: 'missing-agent' }],
+              nodes: [
+                {
+                  id: 'newer-node',
+                  kind: 'agent-single',
+                  agentId: 'missing-agent-id',
+                  agentName: 'missing-agent',
+                },
+              ],
             },
           },
         },

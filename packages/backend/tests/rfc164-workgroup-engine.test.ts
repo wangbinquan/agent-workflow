@@ -127,8 +127,38 @@ async function seedEngineTask(
   db: DbClient,
   config: WorkgroupRuntimeConfig,
 ): Promise<{ taskId: string }> {
+  const agentIds = new Map<string, string>()
+  for (const [name, bodyMd] of [
+    ['wg-planner', 'plan'],
+    ['wg-coder', 'code'],
+  ] as const) {
+    const created = await createAgent(db, {
+      name,
+      description: '',
+      outputs: [],
+      syncOutputsOnIterate: true,
+      permission: {},
+      skills: [],
+      dependsOn: [],
+      mcp: [],
+      plugins: [],
+      frontmatterExtra: {},
+      bodyMd,
+    }).catch(() => null)
+    const existing =
+      created ?? (await db.select().from(agents).where(eq(agents.name, name)).limit(1))[0] ?? null
+    if (existing !== null) agentIds.set(name, existing.id)
+  }
+  const canonicalConfig: WorkgroupRuntimeConfig = {
+    ...config,
+    members: config.members.map((member) =>
+      member.memberType === 'agent' && member.agentName !== null
+        ? { ...member, agentId: member.agentId ?? agentIds.get(member.agentName) }
+        : member,
+    ),
+  }
   const taskId = ulid()
-  const snapshot = buildWorkgroupHostSnapshot(config)
+  const snapshot = buildWorkgroupHostSnapshot(canonicalConfig)
   await db.insert(workflows).values({
     id: ulid(),
     name: `host-anchor-${taskId}`,
@@ -148,35 +178,9 @@ async function seedEngineTask(
     status: 'running',
     inputs: '{}',
     startedAt: Date.now(),
-    workgroupId: config.workgroupId,
-    workgroupConfigJson: JSON.stringify(config),
+    workgroupId: canonicalConfig.workgroupId,
+    workgroupConfigJson: JSON.stringify(canonicalConfig),
   })
-  await createAgent(db, {
-    name: 'wg-planner',
-    description: '',
-    outputs: [],
-    syncOutputsOnIterate: true,
-    permission: {},
-    skills: [],
-    dependsOn: [],
-    mcp: [],
-    plugins: [],
-    frontmatterExtra: {},
-    bodyMd: 'plan',
-  }).catch(() => undefined)
-  await createAgent(db, {
-    name: 'wg-coder',
-    description: '',
-    outputs: [],
-    syncOutputsOnIterate: true,
-    permission: {},
-    skills: [],
-    dependsOn: [],
-    mcp: [],
-    plugins: [],
-    frontmatterExtra: {},
-    bodyMd: 'code',
-  }).catch(() => undefined)
   return { taskId }
 }
 

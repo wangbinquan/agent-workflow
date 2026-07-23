@@ -56,7 +56,12 @@ function sampleDefinition(): WorkflowDefinition {
     inputs: [{ kind: 'text', key: 'requirement', label: '需求', required: true, multiline: true }],
     nodes: [
       { id: 'in_1', kind: 'input', inputKey: 'requirement' },
-      { id: 'worker', kind: 'agent-single', agentName: 'code-worker' },
+      {
+        id: 'worker',
+        kind: 'agent-single',
+        agentId: 'agent-code-worker',
+        agentName: 'code-worker',
+      },
     ],
     edges: [
       {
@@ -263,6 +268,44 @@ describe('workflow HTTP routes', () => {
 
     const got = await req(app, `/api/workflows/${created.id}`)
     expect(got.status).toBe(200)
+  })
+
+  test('ordinary POST/PUT reject name-only agent selectors before persistence', async () => {
+    const nameOnly = {
+      ...sampleDefinition(),
+      nodes: sampleDefinition().nodes.map((node) =>
+        node.kind === 'agent-single'
+          ? { id: node.id, kind: node.kind, agentName: 'code-worker' }
+          : node,
+      ),
+    }
+    const rejectedCreate = await req(app, '/api/workflows', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'name-only-create', description: '', definition: nameOnly }),
+    })
+    expect(rejectedCreate.status).toBe(422)
+    expect(((await rejectedCreate.json()) as { code: string }).code).toBe(
+      'workflow-agent-id-required',
+    )
+
+    const createdResponse = await req(app, '/api/workflows', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'canonical',
+        description: '',
+        definition: sampleDefinition(),
+      }),
+    })
+    expect(createdResponse.status).toBe(201)
+    const created = (await createdResponse.json()) as WorkflowDetail
+    const rejectedUpdate = await req(app, `/api/workflows/${created.id}`, {
+      method: 'PUT',
+      body: JSON.stringify(saveInput(created, { definition: nameOnly })),
+    })
+    expect(rejectedUpdate.status).toBe(422)
+    expect(((await rejectedUpdate.json()) as { code: string }).code).toBe(
+      'workflow-agent-id-required',
+    )
   })
 
   test('invalid payload returns 422 with workflow-invalid code', async () => {

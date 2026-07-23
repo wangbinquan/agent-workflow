@@ -198,9 +198,10 @@ describe('POST /api/agents/closure-preview', () => {
   test('returns HTTP 200 with ok:false on validation errors (no 4xx flash on every keystroke)', async () => {
     // Self-reference: classic save-time refusal — preview surfaces it the
     // same way but as 200/ok:false instead of 400.
+    const fresh = await seedAgent(db, 'fresh')
     const res = await req(app, '/api/agents/closure-preview', {
       method: 'POST',
-      body: JSON.stringify({ name: 'fresh', dependsOn: ['fresh'] }),
+      body: JSON.stringify({ id: fresh.id, name: 'fresh', dependsOn: [fresh.id] }),
     })
     expect(res.status).toBe(200)
     const body = (await res.json()) as { ok: boolean; code: string }

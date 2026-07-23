@@ -407,8 +407,20 @@ describe('deriveWorkgroupRunHistory (RFC-182)', () => {
 describe('RFC-182 实现门 P2 — fc 卡回收后的历史归属', () => {
   test('现任 assignee 丢失 → 铸造期 agent 身份唯一回退；歧义则弃条目不误标', () => {
     const roster: MemberLite[] = [
-      { id: A1, memberType: 'agent', displayName: 'coder', agentName: 'wg-coder' },
-      { id: A2, memberType: 'agent', displayName: 'reviewer', agentName: 'wg-reviewer' },
+      {
+        id: A1,
+        memberType: 'agent',
+        displayName: 'coder',
+        agentId: 'ag-coder',
+        agentName: 'wg-coder',
+      },
+      {
+        id: A2,
+        memberType: 'agent',
+        displayName: 'reviewer',
+        agentId: 'ag-reviewer',
+        agentName: 'wg-reviewer',
+      },
     ]
     // fc：失败卡已回收（assignee=null），历史 run 仍应归属当时执行的成员。
     const assignments = [{ id: 'ASG1', assigneeMemberId: null }]
@@ -419,6 +431,7 @@ describe('RFC-182 实现门 P2 — fc 卡回收后的历史归属', () => {
         shardKey: 'ASG1',
         status: 'failed',
         rerunCause: 'wg-assignment',
+        agentOverrideId: 'ag-coder',
         agentOverrideName: 'wg-coder',
       },
     ]
@@ -440,6 +453,7 @@ describe('RFC-182 实现门 P2 — fc 卡回收后的历史归属', () => {
           shardKey: 'ASG1',
           status: 'running',
           rerunCause: 'wg-assignment',
+          agentOverrideId: 'ag-reviewer',
           agentOverrideName: 'wg-reviewer',
         },
       ],
@@ -454,8 +468,20 @@ describe('RFC-182 实现门 P2 — fc 卡回收后的历史归属', () => {
 
     // 歧义 agent（两成员同 agent）→ 弃条目，不误标。
     const dup: MemberLite[] = [
-      { id: A1, memberType: 'agent', displayName: 'x', agentName: 'wg-coder' },
-      { id: A2, memberType: 'agent', displayName: 'y', agentName: 'wg-coder' },
+      {
+        id: A1,
+        memberType: 'agent',
+        displayName: 'x',
+        agentId: 'ag-coder',
+        agentName: 'wg-coder',
+      },
+      {
+        id: A2,
+        memberType: 'agent',
+        displayName: 'y',
+        agentId: 'ag-coder',
+        agentName: 'wg-coder',
+      },
     ]
     expect(deriveWorkgroupRunHistory(dup, null, runs, assignments, [])).toHaveLength(0)
   })

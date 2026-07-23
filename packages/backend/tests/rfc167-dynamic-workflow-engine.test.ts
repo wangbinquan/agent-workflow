@@ -660,7 +660,15 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
     const realDef = {
       $schema_version: 4,
       inputs: [],
-      nodes: [{ id: 'g1', kind: 'agent-single', agentName: 'ghost-agent', promptTemplate: 'x' }],
+      nodes: [
+        {
+          id: 'g1',
+          kind: 'agent-single',
+          agentId: 'ghost-agent-id',
+          agentName: 'ghost-agent',
+          promptTemplate: 'x',
+        },
+      ],
       edges: [],
     }
     const { taskId } = await seedDynamicTask(db, {

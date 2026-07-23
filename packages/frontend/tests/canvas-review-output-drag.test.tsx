@@ -63,7 +63,12 @@ function makeReviewDef(inputSource = { nodeId: '', portName: '' }): WorkflowDefi
     $schema_version: 2,
     inputs: [],
     nodes: [
-      { id: 'a', kind: 'agent-single', agentName: 'stub' } as unknown as WorkflowNode,
+      {
+        id: 'a',
+        kind: 'agent-single',
+        agentId: STUB_AGENT.id,
+        agentName: 'stub',
+      } as unknown as WorkflowNode,
       { id: 'r', kind: 'review', inputSource } as unknown as WorkflowNode,
     ],
     edges: [],
@@ -75,7 +80,12 @@ function makeOutputDef(): WorkflowDefinition {
     $schema_version: 2,
     inputs: [],
     nodes: [
-      { id: 'a', kind: 'agent-single', agentName: 'stub' } as unknown as WorkflowNode,
+      {
+        id: 'a',
+        kind: 'agent-single',
+        agentId: STUB_AGENT.id,
+        agentName: 'stub',
+      } as unknown as WorkflowNode,
       {
         id: 'o',
         kind: 'output',
@@ -220,7 +230,12 @@ describe('EdgeInspector — RFC-007 delete sync', () => {
       $schema_version: 2,
       inputs: [],
       nodes: [
-        { id: 'a', kind: 'agent-single', agentName: 'stub' } as unknown as WorkflowNode,
+        {
+          id: 'a',
+          kind: 'agent-single',
+          agentId: STUB_AGENT.id,
+          agentName: 'stub',
+        } as unknown as WorkflowNode,
         {
           id: 'r',
           kind: 'review',
@@ -274,7 +289,12 @@ describe('EdgeInspector — RFC-007 delete sync', () => {
       $schema_version: 2,
       inputs: [],
       nodes: [
-        { id: 'a', kind: 'agent-single', agentName: 'stub' } as unknown as WorkflowNode,
+        {
+          id: 'a',
+          kind: 'agent-single',
+          agentId: STUB_AGENT.id,
+          agentName: 'stub',
+        } as unknown as WorkflowNode,
         {
           id: 'o',
           kind: 'output',

@@ -22,6 +22,7 @@ function agent(id: string, agentName: string): WorkflowNode {
     id,
     kind: 'agent-single',
     position: { x: 0, y: 0 },
+    agentId: agentName,
     agentName,
   } as unknown as WorkflowNode
 }

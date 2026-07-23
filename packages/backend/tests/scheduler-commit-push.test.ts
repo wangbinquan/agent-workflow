@@ -85,7 +85,7 @@ async function setup(): Promise<Harness> {
 
   const stub = makeStub(tmp)
 
-  await createAgent(db, {
+  const writer = await createAgent(db, {
     name: 'writer',
     description: '',
     outputs: ['out'],
@@ -107,7 +107,13 @@ async function setup(): Promise<Harness> {
       inputs: [{ kind: 'text', key: 'topic', label: 'topic' }],
       nodes: [
         { id: 'in_1', kind: 'input', inputKey: 'topic' },
-        { id: 'writer', kind: 'agent-single', agentName: 'writer', promptTemplate: '{{topic}}' },
+        {
+          id: 'writer',
+          kind: 'agent-single',
+          agentId: writer.id,
+          agentName: 'writer',
+          promptTemplate: '{{topic}}',
+        },
       ],
       edges: [
         {

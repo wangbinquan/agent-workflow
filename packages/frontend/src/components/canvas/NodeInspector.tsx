@@ -328,16 +328,12 @@ function PreviewPane({ node, agents, definition }: PreviewProps) {
     return <div className="muted">{t('inspector.previewOnlyAgent')}</div>
   }
   // RFC-223 (PR-3a impl-gate H3): resolve for preview id-first and FAIL CLOSED —
-  // a stamped node resolves ONLY by its agentId (no name fallback that an ABA
-  // rename+recreate could mis-bind); an unstamped node resolves by name.
+  // every persisted node resolves ONLY by its agentId (no mutable-name
+  // fallback that an ABA rename+recreate could mis-bind).
   const rec = node as Record<string, unknown>
   const agentId =
     typeof rec.agentId === 'string' && rec.agentId.length > 0 ? rec.agentId : undefined
-  const agentName = rec.agentName as string | undefined
-  const agent =
-    agentId !== undefined
-      ? agents.find((a) => a.id === agentId)
-      : agents.find((a) => a.name === agentName)
+  const agent = agentId !== undefined ? agents.find((a) => a.id === agentId) : undefined
   const template = (node as Record<string, unknown>).promptTemplate as string | undefined
   const ports = computePorts(
     node,

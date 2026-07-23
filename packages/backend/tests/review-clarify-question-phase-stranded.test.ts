@@ -176,7 +176,7 @@ async function openClarifyRunId(taskId: string): Promise<string> {
 }
 
 async function setupClarifyReviewWorkflow(name: string) {
-  await createAgent(db, {
+  const designer = await createAgent(db, {
     name: 'designer',
     description: '',
     outputs: ['design'],
@@ -195,7 +195,12 @@ async function setupClarifyReviewWorkflow(name: string) {
     inputs: [{ kind: 'text', key: 'topic', label: 't' }],
     nodes: [
       { id: 'in1', kind: 'input', inputKey: 'topic' },
-      { id: 'designer', kind: 'agent-single', agentName: 'designer' },
+      {
+        id: 'designer',
+        kind: 'agent-single',
+        agentId: designer.id,
+        agentName: 'designer',
+      },
       { id: 'clr', kind: 'clarify', title: 'c' },
       {
         id: 'rev',

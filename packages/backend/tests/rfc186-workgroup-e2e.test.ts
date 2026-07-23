@@ -130,10 +130,10 @@ async function seedAgent(db: DbClient, name: string): Promise<string> {
   return agent.id
 }
 
-async function seedLeaderWorkerGroup(db: DbClient, name: string): Promise<void> {
+async function seedLeaderWorkerGroup(db: DbClient, name: string): Promise<string> {
   const leadId = await seedAgent(db, 'wg-lead')
   const writerId = await seedAgent(db, 'wg-writer')
-  await createWorkgroup(db, {
+  const group = await createWorkgroup(db, {
     name,
     description: '',
     instructions: '章程：小步快跑',
@@ -149,6 +149,7 @@ async function seedLeaderWorkerGroup(db: DbClient, name: string): Promise<void> 
       { memberType: 'agent', agentId: writerId, displayName: 'writer', roleDesc: '产出' },
     ],
   } as Parameters<typeof createWorkgroup>[1])
+  return group.id
 }
 
 const actor = buildActor({
@@ -172,12 +173,12 @@ const WORKER_RESULT: Step = {
   output: { wg_result: JSON.stringify({ summary: 'wrote alpha.txt' }) },
 }
 
-async function launch(h: Harness, group: string) {
+async function launch(h: Harness, workgroupId: string) {
   const task = await withActiveTaskDeadline(() =>
     startWorkgroupTask(
       h.db,
       actor,
-      group,
+      workgroupId,
       { name: 'e2e', goal: '产出 alpha', scratch: true },
       {
         db: h.db,
@@ -201,9 +202,9 @@ describe('RFC-186 — leader_worker real end-to-end (scenario-opencode)', () => 
   test('leader dispatches → worker runs → leader aggregates → task done', async () => {
     const h = harness()
     try {
-      await seedLeaderWorkerGroup(h.db, 'wg-e2e-ac1')
+      const groupId = await seedLeaderWorkerGroup(h.db, 'wg-e2e-ac1')
       writePlan(h, { 'wg-lead': [DISPATCH, DONE], 'wg-writer': [WORKER_RESULT] })
-      const task = await launch(h, 'wg-e2e-ac1')
+      const task = await launch(h, groupId)
 
       const final = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)))[0]
       expect(final?.status).toBe('done')
@@ -229,12 +230,12 @@ describe('RFC-186 — leader_worker real end-to-end (scenario-opencode)', () => 
   test('leader skips the envelope once → retries → task still reaches done', async () => {
     const h = harness()
     try {
-      await seedLeaderWorkerGroup(h.db, 'wg-e2e-ac2')
+      const groupId = await seedLeaderWorkerGroup(h.db, 'wg-e2e-ac2')
       writePlan(h, {
         'wg-lead': [{ skipEnvelope: true }, DISPATCH, DONE],
         'wg-writer': [WORKER_RESULT],
       })
-      const task = await launch(h, 'wg-e2e-ac2')
+      const task = await launch(h, groupId)
 
       const final = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)))[0]
       expect(final?.status).toBe('done')
@@ -277,8 +278,8 @@ describe('RFC-186 PR-2 — interrupted leader_worker task auto-resumes to done',
         '-m',
         'init',
       )
-      await seedAgent(h.db, 'wg-lead')
-      await seedAgent(h.db, 'wg-writer')
+      const leadId = await seedAgent(h.db, 'wg-lead')
+      const writerId = await seedAgent(h.db, 'wg-writer')
       await ensureWorkgroupHostWorkflow(h.db)
 
       const config = {
@@ -296,6 +297,7 @@ describe('RFC-186 PR-2 — interrupted leader_worker task auto-resumes to done',
           {
             id: 'm-lead',
             memberType: 'agent' as const,
+            agentId: leadId,
             agentName: 'wg-lead',
             userId: null,
             displayName: 'lead',
@@ -304,6 +306,7 @@ describe('RFC-186 PR-2 — interrupted leader_worker task auto-resumes to done',
           {
             id: 'm-writer',
             memberType: 'agent' as const,
+            agentId: writerId,
             agentName: 'wg-writer',
             userId: null,
             displayName: 'writer',

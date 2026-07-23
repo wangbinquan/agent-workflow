@@ -58,7 +58,7 @@ async function seedAgent(
     outputWrapperPortNames?: Record<string, string>
     outputKinds?: Record<string, string>
   } = {},
-): Promise<void> {
+): Promise<string> {
   const extra: Record<string, unknown> = {}
   if (options.role !== undefined) extra.role = options.role
   if (options.outputWrapperPortNames !== undefined) {
@@ -67,8 +67,9 @@ async function seedAgent(
   if (options.outputKinds !== undefined) {
     extra.outputKinds = options.outputKinds
   }
+  const id = ulid()
   await db.insert(agents).values({
-    id: ulid(),
+    id,
     name,
     description: 'test',
     outputs: JSON.stringify(outputs),
@@ -79,6 +80,7 @@ async function seedAgent(
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
+  return id
 }
 
 async function seedWorkflowAndTask(
@@ -134,7 +136,7 @@ describe('wrapper-fanout end-to-end (D.T2 / D.T3 / D.T8 happy path)', () => {
   afterEach(() => h.cleanup())
 
   test('1. empty shardSource short-circuits to done with empty __done__ signal', async () => {
-    await seedAgent(h.db, 'worker', ['result'])
+    const workerId = await seedAgent(h.db, 'worker', ['result'])
     const def: WorkflowDefinition = {
       $schema_version: 4,
       inputs: [{ kind: 'text', key: 'docs', label: 'docs' }],
@@ -146,7 +148,7 @@ describe('wrapper-fanout end-to-end (D.T2 / D.T3 / D.T8 happy path)', () => {
           nodeIds: ['inner'],
           inputs: [{ name: 'docs', kind: 'list<path<md>>', isShardSource: true }],
         },
-        { id: 'inner', kind: 'agent-single', agentName: 'worker' },
+        { id: 'inner', kind: 'agent-single', agentId: workerId, agentName: 'worker' },
       ] as unknown as WorkflowDefinition['nodes'],
       edges: [
         {
@@ -226,7 +228,7 @@ describe('wrapper-fanout end-to-end (D.T2 / D.T3 / D.T8 happy path)', () => {
   })
 
   test('3. agent-single inner + 2 shards → wrapper done with __done__ signal, 2 shard children minted with shardKey', async () => {
-    await seedAgent(h.db, 'worker', ['result'])
+    const workerId = await seedAgent(h.db, 'worker', ['result'])
     const def: WorkflowDefinition = {
       $schema_version: 4,
       inputs: [{ kind: 'text', key: 'docs', label: 'docs' }],
@@ -241,6 +243,7 @@ describe('wrapper-fanout end-to-end (D.T2 / D.T3 / D.T8 happy path)', () => {
         {
           id: 'inner',
           kind: 'agent-single',
+          agentId: workerId,
           agentName: 'worker',
           promptTemplate: 'Process {{doc}}',
         },
@@ -295,8 +298,8 @@ describe('wrapper-fanout end-to-end (D.T2 / D.T3 / D.T8 happy path)', () => {
     // MOCK_OPENCODE_OUTPUTS envelope satisfies both. The aggregator's
     // outputWrapperPortNames renames its 'result' port to 'final' on the
     // wrapper outlet.
-    await seedAgent(h.db, 'worker', ['result'])
-    await seedAgent(h.db, 'agg', ['result'], {
+    const workerId = await seedAgent(h.db, 'worker', ['result'])
+    const aggId = await seedAgent(h.db, 'agg', ['result'], {
       role: 'aggregator',
       outputWrapperPortNames: { result: 'final' },
     })
@@ -314,12 +317,14 @@ describe('wrapper-fanout end-to-end (D.T2 / D.T3 / D.T8 happy path)', () => {
         {
           id: 'inner',
           kind: 'agent-single',
+          agentId: workerId,
           agentName: 'worker',
           promptTemplate: 'Process {{doc}}',
         },
         {
           id: 'aggNode',
           kind: 'agent-single',
+          agentId: aggId,
           agentName: 'agg',
           promptTemplate: 'Merge {{items}}',
         },
@@ -372,7 +377,7 @@ describe('wrapper-fanout end-to-end (D.T2 / D.T3 / D.T8 happy path)', () => {
   })
 
   test('5. cartesian guard fires when items × nested expectedShardCount > limit', async () => {
-    await seedAgent(h.db, 'worker', ['result'])
+    const workerId = await seedAgent(h.db, 'worker', ['result'])
     const def: WorkflowDefinition = {
       $schema_version: 4,
       inputs: [{ kind: 'text', key: 'docs', label: 'docs' }],
@@ -384,7 +389,7 @@ describe('wrapper-fanout end-to-end (D.T2 / D.T3 / D.T8 happy path)', () => {
           nodeIds: ['inner'],
           inputs: [{ name: 'docs', kind: 'list<path<md>>', isShardSource: true }],
         },
-        { id: 'inner', kind: 'agent-single', agentName: 'worker' },
+        { id: 'inner', kind: 'agent-single', agentId: workerId, agentName: 'worker' },
       ] as unknown as WorkflowDefinition['nodes'],
       edges: [
         {

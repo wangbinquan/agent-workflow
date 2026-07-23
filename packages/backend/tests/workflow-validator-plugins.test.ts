@@ -8,8 +8,8 @@ import type { Agent } from '@agent-workflow/shared'
 import { validateWorkflowDef } from '../src/services/workflow.validator'
 
 // RFC-223 (PR-1): agent refs are stored BY ID; this helper maps dependsOn /
-// plugin NAMES to the `id-<name>` / `plugin-<name>` id convention (node→agent
-// stays by name via agentName), matching the ctx plugin fixtures' ids below.
+// plugin NAMES to the `id-<name>` / `plugin-<name>` id convention. Workflow
+// nodes carry that same canonical agent id; agentName is display-only.
 function agent(
   name: string,
   outputs: string[] = [],
@@ -38,7 +38,14 @@ function defWith(agentName: string) {
   return {
     $schema_version: 1 as const,
     inputs: [] as never[],
-    nodes: [{ id: 'n1', kind: 'agent-single' as const, agentName }],
+    nodes: [
+      {
+        id: 'n1',
+        kind: 'agent-single' as const,
+        agentId: `id-${agentName}`,
+        agentName,
+      },
+    ],
     edges: [] as never[],
   }
 }

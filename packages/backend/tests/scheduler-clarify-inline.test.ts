@@ -76,9 +76,10 @@ async function buildHarness(): Promise<Harness> {
   }
 }
 
-async function seedAgent(db: DbClient, name: string): Promise<void> {
+async function seedAgent(db: DbClient, name: string): Promise<string> {
+  const id = ulid()
   await db.insert(agents).values({
-    id: ulid(),
+    id,
     name,
     description: 'test',
     outputs: JSON.stringify(['design']),
@@ -87,13 +88,14 @@ async function seedAgent(db: DbClient, name: string): Promise<void> {
     frontmatterExtra: '{}',
     bodyMd: '',
   })
+  return id
 }
 
 interface DefOpts {
   sessionMode?: 'isolated' | 'inline'
 }
 
-function makeDef(opts: DefOpts = {}): WorkflowDefinition {
+function makeDef(agentId: string, opts: DefOpts = {}): WorkflowDefinition {
   const clarifyNode: Record<string, unknown> = { id: 'c', kind: 'clarify', title: 'C' }
   if (opts.sessionMode !== undefined) clarifyNode.sessionMode = opts.sessionMode
   return {
@@ -101,7 +103,12 @@ function makeDef(opts: DefOpts = {}): WorkflowDefinition {
     inputs: [{ kind: 'text', key: 'req', label: 'r' }],
     nodes: [
       { id: 'in1', kind: 'input', inputKey: 'req' } as WorkflowNode,
-      { id: 'd', kind: 'agent-single', agentName: 'designer' } as WorkflowNode,
+      {
+        id: 'd',
+        kind: 'agent-single',
+        agentId,
+        agentName: 'designer',
+      } as WorkflowNode,
       clarifyNode as WorkflowNode,
     ],
     edges: [
@@ -195,8 +202,8 @@ describe('RFC-026 scheduler clarify inline-mode', () => {
   afterEach(() => h.cleanup())
 
   test('opencode session id is persisted to node_runs.opencode_session_id after a normal clarify-channel run', async () => {
-    await seedAgent(h.db, 'designer')
-    const { taskId } = await seedWorkflowAndTask(h, makeDef({ sessionMode: 'inline' }))
+    const agentId = await seedAgent(h.db, 'designer')
+    const { taskId } = await seedWorkflowAndTask(h, makeDef(agentId, { sessionMode: 'inline' }))
     await withEnv(
       {
         MOCK_OPENCODE_CLARIFY_BODY: CLARIFY_BODY,
@@ -218,8 +225,8 @@ describe('RFC-026 scheduler clarify inline-mode', () => {
   })
 
   test('inline mode + answered prior round → next spawn carries `--session <id>` and emits info event', async () => {
-    await seedAgent(h.db, 'designer')
-    const { taskId } = await seedWorkflowAndTask(h, makeDef({ sessionMode: 'inline' }))
+    const agentId = await seedAgent(h.db, 'designer')
+    const { taskId } = await seedWorkflowAndTask(h, makeDef(agentId, { sessionMode: 'inline' }))
 
     // Round 0: agent asks (clarify envelope) and reports session id.
     await withEnv(
@@ -320,9 +327,9 @@ describe('RFC-026 scheduler clarify inline-mode', () => {
   })
 
   test('isolated mode (default) never passes --session — RFC-023 byte-for-byte path preserved', async () => {
-    await seedAgent(h.db, 'designer')
+    const agentId = await seedAgent(h.db, 'designer')
     // No sessionMode → undefined → resolved to isolated.
-    const { taskId } = await seedWorkflowAndTask(h, makeDef({}))
+    const { taskId } = await seedWorkflowAndTask(h, makeDef(agentId))
 
     await withEnv(
       {
@@ -388,8 +395,8 @@ describe('RFC-026 scheduler clarify inline-mode', () => {
   })
 
   test('inline mode + prior round did NOT capture session id → fallback warning + no --session', async () => {
-    await seedAgent(h.db, 'designer')
-    const { taskId } = await seedWorkflowAndTask(h, makeDef({ sessionMode: 'inline' }))
+    const agentId = await seedAgent(h.db, 'designer')
+    const { taskId } = await seedWorkflowAndTask(h, makeDef(agentId, { sessionMode: 'inline' }))
 
     // Round 0: agent asks BUT does NOT emit a session id (mock without
     // MOCK_OPENCODE_EMIT_SESSION_ID). Simulates an early-failing opencode

@@ -45,7 +45,8 @@ import {
 } from '../src/services/workgroup/launch'
 import {
   createWorkgroup,
-  getWorkgroup,
+  getWorkgroupById,
+  listWorkgroups,
   saveWorkgroup,
   workgroupDraftSnapshotOf,
 } from '../src/services/workgroups'
@@ -60,6 +61,13 @@ import { createLogger } from '../src/util/log'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const log = createLogger('rfc185-fanout-test')
+const PLANNER_AGENT_ID = 'wg-agent-planner'
+const CODER_AGENT_ID = 'wg-agent-coder'
+
+async function getWorkgroupForTest(db: DbClient, name: string) {
+  const row = (await listWorkgroups(db)).find((candidate) => candidate.name === name)
+  return row === undefined ? null : getWorkgroupById(db, row.id)
+}
 
 // ---------------------------------------------------------------------------
 // fixtures (mirrors rfc164-workgroup-core.test.ts shapes, trimmed to what the
@@ -84,6 +92,7 @@ function cfg(overrides: Partial<WorkgroupRuntimeConfig> = {}): WorkgroupRuntimeC
       {
         id: 'm-lead',
         memberType: 'agent',
+        agentId: PLANNER_AGENT_ID,
         agentName: 'planner',
         userId: null,
         displayName: 'planner',
@@ -92,6 +101,7 @@ function cfg(overrides: Partial<WorkgroupRuntimeConfig> = {}): WorkgroupRuntimeC
       {
         id: 'm-coder',
         memberType: 'agent',
+        agentId: CODER_AGENT_ID,
         agentName: 'coder-a',
         userId: null,
         displayName: 'coder',
@@ -411,20 +421,27 @@ async function seedEngineTask(
     workgroupId: config.workgroupId,
     workgroupConfigJson: JSON.stringify(config),
   })
-  for (const name of ['planner', 'coder-a']) {
-    await createAgent(db, {
-      name,
-      description: '',
-      outputs: [],
-      syncOutputsOnIterate: true,
-      permission: {},
-      skills: [],
-      dependsOn: [],
-      mcp: [],
-      plugins: [],
-      frontmatterExtra: {},
-      bodyMd: 'work',
-    }).catch(() => undefined)
+  for (const [name, id] of [
+    ['planner', PLANNER_AGENT_ID],
+    ['coder-a', CODER_AGENT_ID],
+  ] as const) {
+    await createAgent(
+      db,
+      {
+        name,
+        description: '',
+        outputs: [],
+        syncOutputsOnIterate: true,
+        permission: {},
+        skills: [],
+        dependsOn: [],
+        mcp: [],
+        plugins: [],
+        frontmatterExtra: {},
+        bodyMd: 'work',
+      },
+      { id },
+    ).catch(() => undefined)
   }
   return { taskId }
 }
@@ -787,12 +804,12 @@ describe('RFC-185 D4 — fanOut CRUD roundtrip + launch freeze', () => {
 
   test('create defaults fanOut to FALSE (opt-in — never an implicit behavior change)', async () => {
     await createWorkgroup(db, groupInput())
-    expect((await getWorkgroup(db, 'squad'))?.fanOut).toBe(false)
+    expect((await getWorkgroupForTest(db, 'squad'))?.fanOut).toBe(false)
   })
 
   test('explicit create ON + an unrelated autosave preserves the stored value', async () => {
     await createWorkgroup(db, groupInput({ fanOut: true }))
-    const current = await getWorkgroup(db, 'squad')
+    const current = await getWorkgroupForTest(db, 'squad')
     expect(current?.fanOut).toBe(true)
     if (current === null) return
     await saveWorkgroup(
@@ -808,12 +825,12 @@ describe('RFC-185 D4 — fanOut CRUD roundtrip + launch freeze', () => {
       },
       { kind: 'system', reason: 'rfc185 test' },
     )
-    expect((await getWorkgroup(db, 'squad'))?.fanOut).toBe(true)
+    expect((await getWorkgroupForTest(db, 'squad'))?.fanOut).toBe(true)
   })
 
   test('launch freezes fanOut into the task runtime config', async () => {
     await createWorkgroup(db, groupInput({ fanOut: true }))
-    const g = await getWorkgroup(db, 'squad')
+    const g = await getWorkgroupForTest(db, 'squad')
     expect(g).not.toBeNull()
     if (g === null) return
     const rc = buildWorkgroupRuntimeConfig(g, 'goal text')

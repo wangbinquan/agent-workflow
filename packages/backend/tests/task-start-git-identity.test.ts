@@ -167,7 +167,7 @@ async function setup(): Promise<Harness> {
 
   const stubOpencode = makeEnvCapturingStub(tmp, envCaptureDir)
 
-  await createAgent(db, {
+  const echoer = await createAgent(db, {
     name: 'echoer',
     description: '',
     outputs: ['out'],
@@ -190,7 +190,13 @@ async function setup(): Promise<Harness> {
       inputs: [{ kind: 'text', key: 'topic', label: 'topic' }],
       nodes: [
         { id: 'in_1', kind: 'input', inputKey: 'topic' },
-        { id: 'echoer', kind: 'agent-single', agentName: 'echoer', promptTemplate: '{{topic}}' },
+        {
+          id: 'echoer',
+          kind: 'agent-single',
+          agentId: echoer.id,
+          agentName: 'echoer',
+          promptTemplate: '{{topic}}',
+        },
       ],
       edges: [
         {

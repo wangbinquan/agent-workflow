@@ -319,16 +319,9 @@ export function validateWorkflowDef(
   // def.outputs are validated indirectly via the per-node "output" bindings
   // walk below; kept here as a placeholder if we later add top-level rules.
 
-  const agentByName = new Map(ctx.agents.map((a) => [a.name, a]))
-  // RFC-223 (PR-1): workflow nodes still reference agents by NAME (node→agentId
-  // is PR-2), but agent→skill/plugin/agent refs are BY ID now, so the closure
-  // BFS + ref checks resolve against id sets.
   const agentById = new Map(ctx.agents.map((a) => [a.id, a]))
-  // RFC-223 (PR-3a impl-gate H3): the id+name lookup fed to the shared port /
-  // fanout resolvers (declaredPorts / countFanoutAggregators / resolveNodeAgent).
-  // Those now resolve a STAMPED node strictly by its agentId (fail closed on a
-  // miss), so the lookup MUST carry id keys — keyed by BOTH id and name, a
-  // stamped node hits its id key and a legacy name-only node still hits its name.
+  // RFC-223 T15: port/fanout resolvers and reference validation share the same
+  // immutable-id lookup. Name-only nodes fail closed.
   const agentByIdOrName = buildNodeAgentLookup(ctx.agents, (a) => a)
   const skillIds = new Set(ctx.skills.map((s) => s.id))
   // RFC-031: lookup tables for plugin reference checks. `pluginsKnown`
@@ -889,14 +882,10 @@ export function validateWorkflowDef(
   for (const node of nodes) {
     if (node.kind === 'agent-single') {
       const name = readString(node, 'agentName') ?? ''
-      // RFC-223 (PR-3a): resolve the node's agent by its CANONICAL `agentId`
-      // when stamped (rename/ABA-safe), else fall back to the display name for
-      // dynamic-generated / pre-migration definitions (name↔id 1:1 until PR-8).
+      // RFC-223 T15: resolve by canonical `agentId`; name is display-only.
       const agentIdRef = readString(node, 'agentId')
       const agent =
-        agentIdRef !== undefined && agentIdRef.length > 0
-          ? agentById.get(agentIdRef)
-          : agentByName.get(name)
+        agentIdRef !== undefined && agentIdRef.length > 0 ? agentById.get(agentIdRef) : undefined
       if (agent === undefined) {
         issues.push({
           code: 'agent-not-found',
@@ -964,8 +953,8 @@ export function validateWorkflowDef(
         }
       }
       // RFC-022: also scan the agent.dependsOn closure for missing agents /
-      // missing skills. BFS over agentByName since the validator already
-      // owns the full agent set (no DB call). `seen` set guards against
+      // missing skills. BFS over agentById since the validator already owns
+      // the full agent set (no DB call). `seen` set guards against
       // cycle-driven infinite loops — even though agent.ts save-time guard
       // refuses cycles, the validator is also called from `workflow-yaml`
       // import and from CI fixtures that may have stale DBs.
@@ -1920,7 +1909,7 @@ export function validateWorkflowDef(
   }
 
   // 4d. RFC-060 — wrapper-fanout cross-cutting validation -----------------
-  // Runs AFTER reference-resolution so agentByName is populated; also
+  // Runs AFTER reference-resolution so the id lookup is populated; also
   // depends on innerToWrapper and outputPorts from rule 1 + the loop above.
   for (const node of nodes) {
     if (node.kind !== 'wrapper-fanout') continue

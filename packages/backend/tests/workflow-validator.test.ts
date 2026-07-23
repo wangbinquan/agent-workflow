@@ -54,12 +54,25 @@ function skill(name: string): Skill {
 const EMPTY_CTX = { agents: [], skills: [] }
 
 function makeDef(parts: Partial<WorkflowDefinition>): WorkflowDefinition {
-  return {
+  const definition: WorkflowDefinition = {
     $schema_version: 1,
     inputs: [],
     nodes: [],
     edges: [],
     ...parts,
+  }
+  return {
+    ...definition,
+    nodes: definition.nodes.map((node) =>
+      node.kind === 'agent-single' &&
+      typeof (node as Record<string, unknown>).agentId !== 'string' &&
+      typeof (node as Record<string, unknown>).agentName === 'string'
+        ? ({
+            ...(node as Record<string, unknown>),
+            agentId: `agent-${String((node as Record<string, unknown>).agentName)}`,
+          } as typeof node)
+        : node,
+    ),
   }
 }
 

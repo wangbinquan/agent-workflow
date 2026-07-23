@@ -2,7 +2,7 @@
 // verbatim from runner.ts): the single-card assignment turn (lw + fc adopt
 // paths) and the single-shot message turn, plus the roster→Agent resolver.
 
-import { getAgent, getAgentById } from '@/services/agent'
+import { getAgentById } from '@/services/agent'
 import {
   buildMsgShardKey,
   parseWgMessagesPort,
@@ -61,12 +61,8 @@ export async function resolveMemberAgent(
   if (typeof member.agentId === 'string' && member.agentId.length > 0) {
     return getAgentById(args.db, member.agentId)
   }
-  // No frozen id at all: a config the boot migration has not rewritten (it
-  // stamps the sentinel on every legacy agent member) — in practice only an
-  // in-memory / pre-RFC-223 config. Fall back to the display name.
-  if (member.agentName !== null && member.agentName.length > 0) {
-    return getAgent(args.db, member.agentName)
-  }
+  // Name-only snapshots are corrupt legacy data. Fail closed instead of
+  // re-binding a mutable display selector to a different persisted identity.
   return null
 }
 

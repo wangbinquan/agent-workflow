@@ -505,37 +505,6 @@ export async function readSkillContent(
 }
 
 /**
- * RFC-170 T6 — the composite precondition token for a skill BY NAME, or null if
- * the skill is gone / not yet published. DB-only (no FS read), same codec as the
- * detail read. Used by the fusion approval flow: a fusion links to its target by
- * NAME, so a delete→recreate rebuild keeps the name but mints a new skillId — the
- * token's skillId (plus contentVersion/metaRevision) defeats that ABA and any
- * concurrent skill edit between fusion create and approve / re-run.
- */
-export async function getSkillPreconditionToken(
-  db: DbClient,
-  name: string,
-): Promise<string | null> {
-  const row = await db
-    .select({
-      id: skills.id,
-      contentVersion: skills.contentVersion,
-      metaRevision: skills.metaRevision,
-    })
-    .from(skills)
-    .where(and(eq(skills.name, name), eq(skills.reservationState, 'ready')))
-    .limit(1)
-  const r = row[0]
-  if (r === undefined) return null
-  const { encodeSkillToken } = await import('@/services/skillToken')
-  return encodeSkillToken({
-    skillId: r.id,
-    contentVersion: r.contentVersion,
-    metaRevision: r.metaRevision,
-  })
-}
-
-/**
  * RFC-170 T6 (Codex re-review F11) — the composite precondition token for a skill
  * BY IMMUTABLE ID (not name), or null if that exact skill row is gone / not ready.
  * The fusion flow authorizes a skill row, then must bind its token to THAT row's

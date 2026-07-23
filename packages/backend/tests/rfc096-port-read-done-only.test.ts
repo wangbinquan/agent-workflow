@@ -64,6 +64,7 @@ import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTask } from '../src/services/scheduler'
+import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
 const ulid = monotonicFactory()
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -113,18 +114,19 @@ async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise
 }
 
 async function seedWorkflowAndTask(h: Harness, definition: WorkflowDefinition): Promise<string> {
+  const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   await h.db.insert(workflows).values({
     id: workflowId,
     name: 'wf-rfc096-portread',
-    definition: JSON.stringify(definition),
+    definition: JSON.stringify(canonicalDefinition),
   })
   const taskId = ulid()
   await h.db.insert(tasks).values({
     name: 't-rfc096-portread',
     id: taskId,
     workflowId,
-    workflowSnapshot: JSON.stringify(definition),
+    workflowSnapshot: JSON.stringify(canonicalDefinition),
     repoPath: '/tmp/repo',
     worktreePath: h.worktreePath,
     baseBranch: 'main',

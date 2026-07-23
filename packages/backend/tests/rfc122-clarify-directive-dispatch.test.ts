@@ -208,7 +208,7 @@ function opencodeCmd(): string[] {
   return ['bun', 'run', SCENARIO_STUB]
 }
 async function designerSelfClarifyWorkflow(c: Ctx, name: string) {
-  await createAgent(c.db, {
+  const designer = await createAgent(c.db, {
     name: 'designer',
     description: '',
     outputs: ['design'],
@@ -227,7 +227,12 @@ async function designerSelfClarifyWorkflow(c: Ctx, name: string) {
     inputs: [{ kind: 'text', key: 'topic', label: 't' }],
     nodes: [
       { id: 'in1', kind: 'input', inputKey: 'topic' },
-      { id: 'designer', kind: 'agent-single', agentName: 'designer' },
+      {
+        id: 'designer',
+        kind: 'agent-single',
+        agentId: designer.id,
+        agentName: 'designer',
+      },
       { id: 'clr', kind: 'clarify' },
     ] as WorkflowDefinition['nodes'],
     edges: [

@@ -30,6 +30,7 @@ import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import type { nodeRuns as nodeRunsTable } from '../src/db/schema'
 import { retryNode } from '../src/services/task'
 import { deriveFrontier } from '../src/services/scheduler'
+import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
 // 同毫秒多行排序确定化（先例：scheduler-clarify-dispatch.test.ts:33-40）——freshest
 // 判定是纯 ULID id 序，monotonicFactory 保证后铸的行恒为 latest。
@@ -196,7 +197,7 @@ describe('S-22（DB 面）— retryNode 对 canceled 任务放行，复活后任
       frontmatterExtra: '{}',
       bodyMd: '',
     })
-    const definition = {
+    const definition: WorkflowDefinition = {
       $schema_version: 3,
       inputs: [],
       nodes: [
@@ -205,11 +206,12 @@ describe('S-22（DB 面）— retryNode 对 canceled 任务放行，复活后任
       ],
       edges: [],
     }
+    const canonicalDefinition = await canonicalizeWorkflowAgentIds(db, definition)
     const workflowId = ulid()
     await db.insert(workflows).values({
       id: workflowId,
       name: 'wf-s22',
-      definition: JSON.stringify(definition),
+      definition: JSON.stringify(canonicalDefinition),
     })
     const taskId = ulid()
     const worktreePath = join(APP_HOME, `wt-${taskId}`)
@@ -218,7 +220,7 @@ describe('S-22（DB 面）— retryNode 对 canceled 任务放行，复活后任
       name: 't-s22',
       id: taskId,
       workflowId,
-      workflowSnapshot: JSON.stringify(definition),
+      workflowSnapshot: JSON.stringify(canonicalDefinition),
       repoPath: '/nonexistent-s22-repo',
       worktreePath, // 真实目录（mock spawn cwd）；preSnapshot=null ⇒ rollback 仍全程跳过
       baseBranch: 'main',

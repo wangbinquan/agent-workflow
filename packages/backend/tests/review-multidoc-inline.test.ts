@@ -60,8 +60,9 @@ describe('RFC-081 — multi-document review over inline list<markdown>', () => {
     reviewNodeRunId: string
     docs: (typeof docVersions.$inferSelect)[]
   }> {
+    const caseGenId = ulid()
     await db.insert(agentsTable).values({
-      id: ulid(),
+      id: caseGenId,
       name: 'caseGen',
       description: '',
       outputs: JSON.stringify(['cases']),
@@ -78,6 +79,7 @@ describe('RFC-081 — multi-document review over inline list<markdown>', () => {
         {
           id: 'src',
           kind: 'agent-single',
+          agentId: caseGenId,
           agentName: 'caseGen',
           promptTemplate: '',
         } as WorkflowNode,

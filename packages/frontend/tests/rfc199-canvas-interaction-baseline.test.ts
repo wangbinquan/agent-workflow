@@ -44,7 +44,7 @@ function definition(nodes: WorkflowNode[], edges: WorkflowEdge[] = []): Workflow
 }
 
 function agent(id: string): WorkflowNode {
-  return node({ id, kind: 'agent-single', agentName: id, position: { x: 0, y: 0 } })
+  return node({ id, kind: 'agent-single', agentId: id, agentName: id, position: { x: 0, y: 0 } })
 }
 
 function edgeShape(edge: WorkflowEdge): Omit<WorkflowEdge, 'id'> {

@@ -44,6 +44,7 @@ import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, tasks, workflows } from '../src/db/schema'
 import { runTask } from '../src/services/scheduler'
+import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
 const ulid = monotonicFactory()
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -181,12 +182,13 @@ describe('S-17 — queued writers no longer hold global slots; readonly runs par
       ],
       edges: [],
     }
+    const canonicalDef = await canonicalizeWorkflowAgentIds(h.db, def)
     const workflowId = ulid()
     const taskId = ulid()
     await h.db.insert(workflows).values({
       id: workflowId,
       name: 'wf',
-      definition: JSON.stringify(def),
+      definition: JSON.stringify(canonicalDef),
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })
@@ -194,7 +196,7 @@ describe('S-17 — queued writers no longer hold global slots; readonly runs par
       name: 'fixture-task',
       id: taskId,
       workflowId,
-      workflowSnapshot: JSON.stringify(def),
+      workflowSnapshot: JSON.stringify(canonicalDef),
       repoPath: '/tmp/repo',
       worktreePath: h.worktreePath,
       baseBranch: 'main',

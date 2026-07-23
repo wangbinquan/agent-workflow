@@ -116,7 +116,7 @@ async function setup() {
 
   const stubOpencode = makeStubOpencode(tmp)
 
-  await createAgent(db, {
+  const echoer = await createAgent(db, {
     name: 'echoer',
     description: '',
     outputs: ['out'],
@@ -142,6 +142,7 @@ async function setup() {
         {
           id: 'echoer',
           kind: 'agent-single',
+          agentId: echoer.id,
           agentName: 'echoer',
           promptTemplate: '{{topic}}',
         },

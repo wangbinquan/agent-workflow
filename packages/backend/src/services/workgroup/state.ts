@@ -37,7 +37,7 @@ import {
   workgroupTaskState,
   tasks,
 } from '@/db/schema'
-import { getAgent, getAgentById } from '@/services/agent'
+import { getAgentById } from '@/services/agent'
 import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '@/services/workgroup/constants'
 
 export type WorkgroupGateStatus =
@@ -294,10 +294,9 @@ const ROSTER_CARD_INPUT_DESCRIPTION_MAX = 240
 
 /**
  * RFC-166 — preload each AGENT member's capability card once per engine pass.
- * agentName is a soft reference (launch-validated, may dangle if the agent was
- * later deleted); a missing agent simply yields no card (the roster row still
- * renders with displayName + roleDesc). human members are skipped entirely so
- * no user identity can leak into the prompt.
+ * agentId is the frozen identity. A missing/id-less agent simply yields no card
+ * (the roster row still renders with displayName + roleDesc). human members are
+ * skipped entirely so no user identity can leak into the prompt.
  */
 export async function buildRosterAgentCards(
   db: DbClient,
@@ -311,19 +310,17 @@ export async function buildRosterAgentCards(
     ROSTER_CARD_INPUT_DESCRIPTION_MAX,
   )
   // De-dupe DB reads: several members may reference the same agent. RFC-223
-  // (PR-3a): resolve by the CANONICAL agentId frozen at launch (rename/ABA-safe),
-  // cache keyed by id-or-name. The R4-1 quarantine sentinel resolves to no agent
-  // → no card (the roster row still renders with displayName + roleDesc). A member
-  // with no frozen id (in-memory / pre-RFC-223 config) falls back to the name.
+  // (PR-3a): resolve by the CANONICAL agentId frozen at launch (rename/ABA-safe).
+  // The R4-1 quarantine sentinel and name-only legacy rows resolve to no agent →
+  // no card (the roster row still renders with displayName + roleDesc).
   const agentCache = new Map<string, Agent | null>()
   for (const m of config.members) {
     if (m.memberType !== 'agent') continue
-    const byId = typeof m.agentId === 'string' && m.agentId.length > 0
-    const key = byId ? (m.agentId as string) : (m.agentName ?? null)
-    if (key === null) continue
+    if (typeof m.agentId !== 'string' || m.agentId.length === 0) continue
+    const key = m.agentId
     let agent = agentCache.get(key)
     if (agent === undefined) {
-      agent = byId ? await getAgentById(db, m.agentId as string) : await getAgent(db, key)
+      agent = await getAgentById(db, key)
       agentCache.set(key, agent)
     }
     if (agent === null) continue

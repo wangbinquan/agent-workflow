@@ -29,6 +29,7 @@ import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/sc
 import { runTask } from '../src/services/scheduler'
 import { runGit, snapshotFullState } from '../src/util/git'
 import { undoPriorShardDeltaInIso } from '../src/services/nodeIsolation'
+import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
 const ulidMono = monotonicFactory()
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -241,7 +242,7 @@ async function seedGen1(
   writeFileSync(join(canon, 'f_alpha.txt'), 'alpha\n') // gen-1 delta (value file)
   const isoNodeTree = await snapshotFullState(canon)
 
-  const def = fanoutDef()
+  const def = await canonicalizeWorkflowAgentIds(db, fanoutDef())
   const workflowId = ulidMono()
   const taskId = ulidMono()
   await db.insert(workflows).values({

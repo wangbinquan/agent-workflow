@@ -54,7 +54,7 @@ async function pluginRevision(app: Hono, path: string): Promise<string> {
   return ((await response.json()) as { operationConfigHash: string }).operationConfigHash
 }
 
-function seedPluginRow(db: DbClient, name: string, spec: string): void {
+function seedPluginRow(db: DbClient, name: string, spec: string): string {
   // CRUD route tests do not exercise installation. Seed the published row
   // directly so their beforeEach cannot inherit fake-npm process latency; the
   // dedicated install-path block below owns all subprocess coverage.
@@ -76,6 +76,7 @@ function seedPluginRow(db: DbClient, name: string, spec: string): void {
       updatedAt: now,
     })
     .run()
+  return id
 }
 
 async function waitForFile(path: string, timeoutMs = 2_000): Promise<void> {
@@ -141,10 +142,11 @@ describe('/api/plugins auth', () => {
 describe('/api/plugins CRUD (DB-seeded)', () => {
   let db: DbClient
   let app: Hono
+  let seededId: string
 
   beforeEach(() => {
     ;({ db, app } = buildHarness())
-    seedPluginRow(db, 'seeded', 'pkg@1')
+    seededId = seedPluginRow(db, 'seeded', 'pkg@1')
   })
 
   test('GET /api/plugins lists seeded rows', async () => {
@@ -154,24 +156,87 @@ describe('/api/plugins CRUD (DB-seeded)', () => {
     expect(body.map((b) => b.name)).toContain('seeded')
   })
 
-  test('GET /api/plugins/:name returns one', async () => {
-    const r = await req(app, '/api/plugins/seeded')
+  test('GET /api/plugins/:id returns one', async () => {
+    const r = await req(app, `/api/plugins/${seededId}`)
     expect(r.status).toBe(200)
     const body = (await r.json()) as { name: string; spec: string }
     expect(body.name).toBe('seeded')
     expect(body.spec).toBe('pkg@1')
   })
 
-  test('GET /api/plugins/:name 404 when missing', async () => {
+  test('GET /api/plugins/:id 404 when missing', async () => {
     const r = await req(app, '/api/plugins/no-such')
     expect(r.status).toBe(404)
     const body = (await r.json()) as { code: string }
     expect(body.code).toBe('plugin-not-found')
   })
 
-  test('PUT /api/plugins/:name updates non-spec fields without re-install', async () => {
-    const expectedConfigHash = await pluginRevision(app, '/api/plugins/seeded')
-    const r = await req(app, '/api/plugins/seeded', {
+  test('legacy mutable-name URLs cannot read, mutate, delete, rename, or address ACL', async () => {
+    const requests: Array<[string, RequestInit | undefined]> = [
+      ['/api/plugins/seeded', undefined],
+      [
+        '/api/plugins/seeded',
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            description: 'must-not-land',
+            expectedConfigHash: '0'.repeat(64),
+          }),
+        },
+      ],
+      [
+        '/api/plugins/seeded/rename',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            newName: 'must-not-land',
+            expectedConfigHash: '0'.repeat(64),
+          }),
+        },
+      ],
+      [
+        '/api/plugins/seeded',
+        {
+          method: 'DELETE',
+          body: JSON.stringify({
+            confirm: 'seeded',
+            expectedConfigHash: '0'.repeat(64),
+          }),
+        },
+      ],
+      ['/api/plugins/seeded/acl', undefined],
+      [
+        '/api/plugins/seeded/acl',
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            visibility: 'private',
+            expectedResourceId: seededId,
+            expectedAclRevision: 0,
+          }),
+        },
+      ],
+    ]
+
+    for (const [path, init] of requests) {
+      const response = await req(app, path, init)
+      expect(response.status, `${init?.method ?? 'GET'} ${path}`).toBe(404)
+      expect(((await response.json()) as { code: string }).code).toBe('plugin-not-found')
+    }
+
+    const canonical = await req(app, `/api/plugins/${seededId}`)
+    expect(canonical.status).toBe(200)
+    expect(await canonical.json()).toMatchObject({
+      id: seededId,
+      name: 'seeded',
+      description: '',
+      visibility: 'public',
+    })
+  })
+
+  test('PUT /api/plugins/:id updates non-spec fields without re-install', async () => {
+    const expectedConfigHash = await pluginRevision(app, `/api/plugins/${seededId}`)
+    const r = await req(app, `/api/plugins/${seededId}`, {
       method: 'PUT',
       body: JSON.stringify({ enabled: false, description: 'paused', expectedConfigHash }),
     })
@@ -182,27 +247,27 @@ describe('/api/plugins CRUD (DB-seeded)', () => {
   })
 
   test('ACL owner transfer invalidates a captured config-hash fence', async () => {
-    const expectedConfigHash = await pluginRevision(app, '/api/plugins/seeded')
+    const expectedConfigHash = await pluginRevision(app, `/api/plugins/${seededId}`)
     db.update(plugins)
       .set({ ownerUserId: 'other-owner', aclRevision: 1 })
-      .where(eq(plugins.name, 'seeded'))
+      .where(eq(plugins.id, seededId))
       .run()
 
-    const stale = await req(app, '/api/plugins/seeded', {
+    const stale = await req(app, `/api/plugins/${seededId}`, {
       method: 'PUT',
       body: JSON.stringify({ description: 'must not publish', expectedConfigHash }),
     })
     expect(stale.status).toBe(409)
     expect(((await stale.json()) as { code: string }).code).toBe('resource-operation-stale')
 
-    const current = (await (await req(app, '/api/plugins/seeded')).json()) as {
+    const current = (await (await req(app, `/api/plugins/${seededId}`)).json()) as {
       description: string
     }
     expect(current.description).toBe('')
   })
 
-  test('PUT /api/plugins/:name 422 on invalid body (zod strict)', async () => {
-    const r = await req(app, '/api/plugins/seeded', {
+  test('PUT /api/plugins/:id 422 on invalid body (zod strict)', async () => {
+    const r = await req(app, `/api/plugins/${seededId}`, {
       method: 'PUT',
       body: JSON.stringify({ totally_unknown_field: true }),
     })
@@ -211,11 +276,11 @@ describe('/api/plugins CRUD (DB-seeded)', () => {
     expect(body.code).toBe('plugin-invalid')
   })
 
-  test('POST /api/plugins/:name/rename succeeds + 409 on name conflict', async () => {
+  test('POST /api/plugins/:id/rename succeeds + 409 on name conflict', async () => {
     // Seed a second plugin so we can attempt to collide.
     seedPluginRow(db, 'other', 'o@1')
-    const expectedConfigHash = await pluginRevision(app, '/api/plugins/seeded')
-    const r1 = await req(app, '/api/plugins/seeded/rename', {
+    const expectedConfigHash = await pluginRevision(app, `/api/plugins/${seededId}`)
+    const r1 = await req(app, `/api/plugins/${seededId}/rename`, {
       method: 'POST',
       body: JSON.stringify({ newName: 'fresh', expectedConfigHash }),
     })
@@ -223,7 +288,7 @@ describe('/api/plugins CRUD (DB-seeded)', () => {
     const renamed = (await r1.json()) as { name: string; operationConfigHash: string }
     expect(renamed.name).toBe('fresh')
 
-    const r2 = await req(app, '/api/plugins/fresh/rename', {
+    const r2 = await req(app, `/api/plugins/${seededId}/rename`, {
       method: 'POST',
       body: JSON.stringify({
         newName: 'other',
@@ -245,13 +310,13 @@ describe('/api/plugins CRUD (DB-seeded)', () => {
       skills: [],
       dependsOn: [],
       mcp: [],
-      plugins: ['seeded'],
+      plugins: [seededId],
       frontmatterExtra: {},
       bodyMd: '',
     })
-    const expectedConfigHash = await pluginRevision(app, '/api/plugins/seeded')
+    const expectedConfigHash = await pluginRevision(app, `/api/plugins/${seededId}`)
     // RFC-222 (D5, N-5): confirm passes first, then the in-use refusal fires.
-    const r = await req(app, '/api/plugins/seeded', {
+    const r = await req(app, `/api/plugins/${seededId}`, {
       method: 'DELETE',
       body: JSON.stringify({ confirm: 'seeded', expectedConfigHash }),
     })
@@ -267,19 +332,19 @@ describe('/api/plugins CRUD (DB-seeded)', () => {
   })
 
   test('DELETE 204 when not referenced', async () => {
-    const expectedConfigHash = await pluginRevision(app, '/api/plugins/seeded')
+    const expectedConfigHash = await pluginRevision(app, `/api/plugins/${seededId}`)
     // RFC-222 (D5): DELETE requires a { confirm } body echoing the plugin name.
-    const r = await req(app, '/api/plugins/seeded', {
+    const r = await req(app, `/api/plugins/${seededId}`, {
       method: 'DELETE',
       body: JSON.stringify({ confirm: 'seeded', expectedConfigHash }),
     })
     expect(r.status).toBe(204)
-    const r2 = await req(app, '/api/plugins/seeded')
+    const r2 = await req(app, `/api/plugins/${seededId}`)
     expect(r2.status).toBe(404)
   })
 
   test('DELETE requires the mutation config-hash fence', async () => {
-    const r = await req(app, '/api/plugins/seeded', {
+    const r = await req(app, `/api/plugins/${seededId}`, {
       method: 'DELETE',
       body: JSON.stringify({ confirm: 'seeded' }),
     })
@@ -334,8 +399,8 @@ describe('/api/plugins install path (PATH-injected fake npm)', () => {
     })
     expect(create.status).toBe(201)
     process.env.FAKE_NPM_VERSION = '2.0.0' // probe will see this
-    const created = (await create.json()) as { operationConfigHash: string }
-    const r = await req(app, '/api/plugins/upcheck/check-update', {
+    const created = (await create.json()) as { id: string; operationConfigHash: string }
+    const r = await req(app, `/api/plugins/${created.id}/check-update`, {
       method: 'POST',
       body: JSON.stringify({ expectedConfigHash: created.operationConfigHash }),
     })
@@ -359,11 +424,12 @@ describe('/api/plugins install path (PATH-injected fake npm)', () => {
       body: JSON.stringify({ name: 'stale-check', spec: 'pkg@1' }),
     })
     expect(create.status).toBe(201)
+    const created = (await create.json()) as { id: string }
     const counter = join(pluginsDir, 'npm-counter.log')
     process.env.FAKE_NPM_COUNTER_FILE = counter
     for (const operation of ['check-update', 'upgrade']) {
       await writeFile(counter, '')
-      const response = await req(app, `/api/plugins/stale-check/${operation}`, {
+      const response = await req(app, `/api/plugins/${created.id}/${operation}`, {
         method: 'POST',
         body: JSON.stringify({ expectedConfigHash: '0'.repeat(64) }),
       })
@@ -380,7 +446,7 @@ describe('/api/plugins install path (PATH-injected fake npm)', () => {
       method: 'POST',
       body: JSON.stringify({ name: 'joined-check', spec: 'pkg@1' }),
     })
-    const created = (await create.json()) as { operationConfigHash: string }
+    const created = (await create.json()) as { id: string; operationConfigHash: string }
     const counter = join(pluginsDir, 'npm-counter.log')
     await writeFile(counter, '')
     process.env.FAKE_NPM_COUNTER_FILE = counter
@@ -389,8 +455,8 @@ describe('/api/plugins install path (PATH-injected fake npm)', () => {
       body: JSON.stringify({ expectedConfigHash: created.operationConfigHash }),
     }
     const [a, b] = await Promise.all([
-      req(app, '/api/plugins/joined-check/check-update', init),
-      req(app, '/api/plugins/joined-check/check-update', init),
+      req(app, `/api/plugins/${created.id}/check-update`, init),
+      req(app, `/api/plugins/${created.id}/check-update`, init),
     ])
     expect(a.status).toBe(200)
     expect(b.status).toBe(200)
@@ -428,6 +494,7 @@ describe('/api/plugins install path (PATH-injected fake npm)', () => {
       body: JSON.stringify({ name: 'upgr', spec: 'pkg@1.0.0' }),
     })
     const created = (await create.json()) as {
+      id: string
       installedAt: number
       resolvedVersion: string
       operationConfigHash: string
@@ -435,7 +502,7 @@ describe('/api/plugins install path (PATH-injected fake npm)', () => {
     process.env.FAKE_NPM_VERSION = '1.5.0'
     // Allow some clock advance so installedAt strictly increases.
     await new Promise((r) => setTimeout(r, 10))
-    const r = await req(app, '/api/plugins/upgr/upgrade', {
+    const r = await req(app, `/api/plugins/${created.id}/upgrade`, {
       method: 'POST',
       body: JSON.stringify({ expectedConfigHash: created.operationConfigHash }),
     })
@@ -458,7 +525,7 @@ describe('/api/plugins install path (PATH-injected fake npm)', () => {
       body: JSON.stringify({ name: 'serialized-upgrade', spec: 'pkg@1.0.0' }),
     })
     expect(create.status).toBe(201)
-    const created = (await create.json()) as { operationConfigHash: string }
+    const created = (await create.json()) as { id: string; operationConfigHash: string }
 
     const pauseStarted = join(pluginsDir, 'upgrade-started')
     const pauseRelease = join(pluginsDir, 'upgrade-release')
@@ -467,7 +534,7 @@ describe('/api/plugins install path (PATH-injected fake npm)', () => {
     process.env.FAKE_NPM_PAUSE_STARTED = pauseStarted
     process.env.FAKE_NPM_PAUSE_RELEASE = pauseRelease
 
-    const upgradePromise = req(app, '/api/plugins/serialized-upgrade/upgrade', {
+    const upgradePromise = req(app, `/api/plugins/${created.id}/upgrade`, {
       method: 'POST',
       body: JSON.stringify({ expectedConfigHash: created.operationConfigHash }),
     })
@@ -477,7 +544,7 @@ describe('/api/plugins install path (PATH-injected fake npm)', () => {
     let settledBeforeRelease = false
     try {
       await waitForFile(pauseStarted)
-      updatePromise = req(app, '/api/plugins/serialized-upgrade', {
+      updatePromise = req(app, `/api/plugins/${created.id}`, {
         method: 'PUT',
         body: JSON.stringify({
           description: 'edited while upgrade was running',
@@ -502,7 +569,7 @@ describe('/api/plugins install path (PATH-injected fake npm)', () => {
     const upgradeReceipt = (await upgrade.json()) as {
       resource: { operationConfigHash: string; resolvedVersion: string }
     }
-    const retry = await req(app, '/api/plugins/serialized-upgrade', {
+    const retry = await req(app, `/api/plugins/${created.id}`, {
       method: 'PUT',
       body: JSON.stringify({
         description: 'edited while upgrade was running',
@@ -520,7 +587,7 @@ describe('/api/plugins install path (PATH-injected fake npm)', () => {
     expect(updated.description).toBe('edited while upgrade was running')
     expect(updated.operationConfigHash).not.toBe(upgradeReceipt.resource.operationConfigHash)
 
-    const final = await req(app, '/api/plugins/serialized-upgrade')
+    const final = await req(app, `/api/plugins/${created.id}`)
     expect(final.status).toBe(200)
     expect(await final.json()).toMatchObject(updated)
   })
@@ -533,8 +600,8 @@ describe('/api/plugins install path (PATH-injected fake npm)', () => {
       body: JSON.stringify({ name: 'serialized-acl', spec: 'pkg@1.0.0' }),
     })
     expect(create.status).toBe(201)
-    const created = (await create.json()) as { operationConfigHash: string }
-    const aclBefore = await req(app, '/api/plugins/serialized-acl/acl')
+    const created = (await create.json()) as { id: string; operationConfigHash: string }
+    const aclBefore = await req(app, `/api/plugins/${created.id}/acl`)
     expect(aclBefore.status).toBe(200)
     const aclSnapshot = (await aclBefore.json()) as { resourceId: string; aclRevision: number }
 
@@ -545,7 +612,7 @@ describe('/api/plugins install path (PATH-injected fake npm)', () => {
     process.env.FAKE_NPM_PAUSE_STARTED = pauseStarted
     process.env.FAKE_NPM_PAUSE_RELEASE = pauseRelease
 
-    const upgradePromise = req(app, '/api/plugins/serialized-acl/upgrade', {
+    const upgradePromise = req(app, `/api/plugins/${created.id}/upgrade`, {
       method: 'POST',
       body: JSON.stringify({ expectedConfigHash: created.operationConfigHash }),
     })
@@ -555,7 +622,7 @@ describe('/api/plugins install path (PATH-injected fake npm)', () => {
     let settledBeforeRelease = false
     try {
       await waitForFile(pauseStarted)
-      aclPromise = req(app, '/api/plugins/serialized-acl/acl', {
+      aclPromise = req(app, `/api/plugins/${created.id}/acl`, {
         method: 'PUT',
         body: JSON.stringify({
           visibility: 'private',
@@ -585,7 +652,7 @@ describe('/api/plugins install path (PATH-injected fake npm)', () => {
       visibility: 'private',
       aclRevision: aclSnapshot.aclRevision + 1,
     })
-    const final = await req(app, '/api/plugins/serialized-acl')
+    const final = await req(app, `/api/plugins/${created.id}`)
     const finalResource = (await final.json()) as {
       visibility: string
       operationConfigHash: string

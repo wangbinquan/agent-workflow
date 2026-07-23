@@ -41,6 +41,7 @@ import {
 } from '../src/services/portArtifacts'
 import { runTask } from '../src/services/scheduler'
 import { runGit } from '../src/util/git'
+import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
 const ulid = monotonicFactory()
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -486,18 +487,19 @@ function singleAgentDef(agentName: string): WorkflowDefinition {
 }
 
 async function seedTask(h: Harness, definition: WorkflowDefinition): Promise<string> {
+  const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
   await h.db.insert(workflows).values({
     id: workflowId,
     name: 'wf-rfc193',
-    definition: JSON.stringify(definition),
+    definition: JSON.stringify(canonicalDefinition),
   })
   await h.db.insert(tasks).values({
     name: 'rfc193-e2e',
     id: taskId,
     workflowId,
-    workflowSnapshot: JSON.stringify(definition),
+    workflowSnapshot: JSON.stringify(canonicalDefinition),
     repoPath: h.repoPath,
     worktreePath: h.worktreePath,
     baseBranch: 'main',

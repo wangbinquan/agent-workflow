@@ -61,8 +61,9 @@ describe('RFC-129 — cross-round selection inheritance', () => {
     definition: WorkflowDefinition
     reviewNode: WorkflowNode
   }> {
+    const caseGenId = ulid()
     await db.insert(agentsTable).values({
-      id: ulid(),
+      id: caseGenId,
       name: 'caseGen',
       description: '',
       outputs: JSON.stringify(['cases']),
@@ -78,6 +79,7 @@ describe('RFC-129 — cross-round selection inheritance', () => {
         {
           id: 'src',
           kind: 'agent-single',
+          agentId: caseGenId,
           agentName: 'caseGen',
           promptTemplate: '',
         } as WorkflowNode,

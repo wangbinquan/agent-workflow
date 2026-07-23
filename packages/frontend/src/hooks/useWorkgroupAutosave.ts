@@ -20,6 +20,7 @@ import type {
   WorkflowDraftSnapshot,
 } from '@agent-workflow/shared'
 import {
+  QUARANTINED_SNAPSHOT_AGENT_ID,
   WorkgroupDraftSnapshotSchema,
   WorkgroupRevisionSchema,
   WG_CLARIFY_BUDGET_DEFAULT,

@@ -6,7 +6,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../../src/db/client'
 import { mcps } from '../../src/db/schema'
 import type { ProbeResult } from '../../src/services/mcpProbe'
-import { getProbe, listProbes, upsertProbe } from '../../src/services/mcpProbeStore'
+import { getProbeByMcpId, listProbes, upsertProbe } from '../../src/services/mcpProbeStore'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', '..', 'db', 'migrations')
 
@@ -46,19 +46,19 @@ describe('mcpProbeStore', () => {
     db = createInMemoryDb(MIGRATIONS)
   })
 
-  test('getProbe returns null when never probed', async () => {
-    seedMcp(db, 'pg')
-    expect(await getProbe(db, 'pg')).toBeNull()
+  test('getProbeByMcpId returns null when never probed', async () => {
+    const id = seedMcp(db, 'pg')
+    expect(await getProbeByMcpId(db, id)).toBeNull()
   })
 
-  test('upsert inserts first time; getProbe round-trips full shape', async () => {
+  test('upsert inserts first time; getProbeByMcpId round-trips full shape', async () => {
     const id = seedMcp(db, 'pg')
     const inserted = await upsertProbe(db, id, 'pg', okResult())
     expect(inserted.status).toBe('ok')
     expect(inserted.tools).toEqual([{ name: 't1' }])
     expect(inserted.mcpName).toBe('pg')
 
-    const fetched = await getProbe(db, 'pg')
+    const fetched = await getProbeByMcpId(db, id)
     expect(fetched).not.toBeNull()
     expect(fetched!.id).toBe(inserted.id)
   })

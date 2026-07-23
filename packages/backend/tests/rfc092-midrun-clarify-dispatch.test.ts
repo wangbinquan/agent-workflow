@@ -36,6 +36,7 @@ import { clarifyRounds, agents, nodeRuns, tasks, workflows } from '../src/db/sch
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { runTask } from '../src/services/scheduler'
 import { runGit } from '../src/util/git'
+import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
 const actor = { userId: 'u1', role: 'owner' as const }
 
@@ -174,18 +175,19 @@ async function seedWorkflowAndTask(
   definition: WorkflowDefinition,
   inputs: Record<string, string>,
 ): Promise<string> {
+  const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
   await h.db.insert(workflows).values({
     id: workflowId,
     name: 'wf-rfc092-s1',
-    definition: JSON.stringify(definition),
+    definition: JSON.stringify(canonicalDefinition),
   })
   await h.db.insert(tasks).values({
     name: 'rfc092-midrun-clarify',
     id: taskId,
     workflowId,
-    workflowSnapshot: JSON.stringify(definition),
+    workflowSnapshot: JSON.stringify(canonicalDefinition),
     repoPath: h.repoPath,
     worktreePath: h.worktreePath,
     baseBranch: 'main',

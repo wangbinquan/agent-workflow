@@ -2,7 +2,7 @@
 //
 // Three operations:
 //   - listProbes(db)               → all probes (JOIN to mcps for mcpName)
-//   - getProbe(db, name)           → one probe by parent mcp name (null if none)
+//   - getProbeByMcpId(db, mcpId)   → one probe by immutable parent id
 //   - upsertProbe(db, mcpId, result) → INSERT or REPLACE (UNIQUE(mcp_id))
 //
 // The wire shape we return matches `McpProbeSchema` (shared/mcpProbe.ts);
@@ -31,17 +31,6 @@ export async function listProbes(db: DbClient): Promise<McpProbe[]> {
   // and tests don't have to special-case ordering.
   rows.sort((a, b) => a.mcpName.localeCompare(b.mcpName))
   return rows.map((r) => rowToProbe(r.probe, r.mcpName))
-}
-
-export async function getProbe(db: DbClient, mcpName: string): Promise<McpProbe | null> {
-  const rows = await db
-    .select({ probe: mcpProbes, mcpName: mcps.name })
-    .from(mcpProbes)
-    .innerJoin(mcps, eq(mcpProbes.mcpId, mcps.id))
-    .where(eq(mcps.name, mcpName))
-    .limit(1)
-  const r = rows[0]
-  return r === undefined ? null : rowToProbe(r.probe, r.mcpName)
 }
 
 /** Stable-id variant used by the operation coordinator across renames. */

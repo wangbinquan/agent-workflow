@@ -46,7 +46,8 @@ import {
 import { mintNodeRun } from '../src/services/nodeRunMint'
 import {
   createWorkgroup,
-  getWorkgroup,
+  getWorkgroupById,
+  listWorkgroups,
   saveWorkgroup,
   workgroupDraftSnapshotOf,
 } from '../src/services/workgroups'
@@ -60,6 +61,11 @@ import { TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SRC = (p: string): string => readFileSync(resolve(import.meta.dir, '..', 'src', p), 'utf8')
 const PLANNER_AGENT_ID = '01HPLANNERAGENT000000000000'
+
+async function getWorkgroupForTest(db: DbClient, name: string) {
+  const row = (await listWorkgroups(db)).find((candidate) => candidate.name === name)
+  return row === undefined ? null : getWorkgroupById(db, row.id)
+}
 
 function groupInput(
   overrides: Record<string, unknown> = {},
@@ -129,7 +135,7 @@ describe('RFC-181 D + RFC-225 — create defaults and complete save snapshots', 
     await createWorkgroup(db, groupInput({ name: 'g-false', clarifyBudget: 0 }))
     await createWorkgroup(db, groupInput({ name: 'g-true', clarifyBudget: 9 }))
     const saveDescription = async (name: string, description: string, clarifyBudget?: number) => {
-      const current = await getWorkgroup(db, name)
+      const current = await getWorkgroupForTest(db, name)
       if (current === null) throw new Error(`missing ${name}`)
       await saveWorkgroup(
         db,
@@ -148,11 +154,11 @@ describe('RFC-181 D + RFC-225 — create defaults and complete save snapshots', 
     }
     await saveDescription('g-false', 'edited')
     await saveDescription('g-true', 'edited')
-    expect((await getWorkgroup(db, 'g-false'))?.clarifyBudget).toBe(0)
-    expect((await getWorkgroup(db, 'g-true'))?.clarifyBudget).toBe(9)
+    expect((await getWorkgroupForTest(db, 'g-false'))?.clarifyBudget).toBe(0)
+    expect((await getWorkgroupForTest(db, 'g-true'))?.clarifyBudget).toBe(9)
     // 显式值仍然生效。
     await saveDescription('g-false', 'edited again', 5)
-    expect((await getWorkgroup(db, 'g-false'))?.clarifyBudget).toBe(5)
+    expect((await getWorkgroupForTest(db, 'g-false'))?.clarifyBudget).toBe(5)
   })
 })
 

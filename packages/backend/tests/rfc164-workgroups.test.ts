@@ -34,7 +34,7 @@ import {
   createWorkgroup,
   deleteWorkgroup,
   diffNewAgentMemberIds,
-  getWorkgroup,
+  getWorkgroupById,
   listWorkgroups,
   renameWorkgroup,
   saveWorkgroup,
@@ -53,6 +53,11 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DAEMON_TOKEN = 'a'.repeat(64)
 const agentId = (name: string): string => `agent-${name}`
 const AGENT_NAMES = ['planner-agent', 'coder-a', 'a', 'b', 'auditor', 'lead-agent'] as const
+
+async function getWorkgroupForTest(db: DbClient, name: string) {
+  const row = (await listWorkgroups(db)).find((candidate) => candidate.name === name)
+  return row === undefined ? null : getWorkgroupById(db, row.id)
+}
 
 function groupInput(overrides: Partial<CreateWorkgroup> = {}): CreateWorkgroup {
   return CreateWorkgroupSchema.parse({
@@ -87,7 +92,7 @@ async function saveByName(
   name: string,
   next: (snapshot: WorkgroupDraftSnapshot) => WorkgroupDraftSnapshot,
 ) {
-  const current = await getWorkgroup(db, name)
+  const current = await getWorkgroupForTest(db, name)
   if (current === null) throw new Error(`missing fixture workgroup ${name}`)
   return (
     await saveWorkgroup(
@@ -104,7 +109,7 @@ async function saveByName(
 }
 
 async function renameByName(db: DbClient, name: string, newName: string, description?: string) {
-  const current = await getWorkgroup(db, name)
+  const current = await getWorkgroupForTest(db, name)
   if (current === null) throw new Error(`missing fixture workgroup ${name}`)
   return (
     await renameWorkgroup(
@@ -301,7 +306,7 @@ describe('RFC-164 — services/workgroups.ts CRUD', () => {
     expect(g.maxRounds).toBe(12)
     expect(g.completionGate).toBe(true)
 
-    const fetched = await getWorkgroup(db, 'payment-squad')
+    const fetched = await getWorkgroupForTest(db, 'payment-squad')
     expect(fetched?.id).toBe(g.id)
     expect((await listWorkgroups(db)).map((x) => x.name)).toEqual(['payment-squad'])
   })
@@ -391,12 +396,12 @@ describe('RFC-164 — services/workgroups.ts CRUD', () => {
     await createWorkgroup(db, groupInput())
     const renamed = await renameByName(db, 'payment-squad', 'pay-squad')
     expect(renamed.name).toBe('pay-squad')
-    expect(await getWorkgroup(db, 'payment-squad')).toBeNull()
+    expect(await getWorkgroupForTest(db, 'payment-squad')).toBeNull()
 
     await createWorkgroup(db, groupInput())
     expect(renameByName(db, 'pay-squad', 'payment-squad')).rejects.toThrow(ConflictError)
 
-    const current = await getWorkgroup(db, 'pay-squad')
+    const current = await getWorkgroupForTest(db, 'pay-squad')
     if (current === null) throw new Error('missing pay-squad')
     await deleteWorkgroup(
       db,
@@ -404,7 +409,7 @@ describe('RFC-164 — services/workgroups.ts CRUD', () => {
       { expectedVersion: current.version, clientMutationId: ulid(), confirm: current.name },
       { kind: 'actor', actor: T6_ACTOR },
     )
-    expect(await getWorkgroup(db, 'pay-squad')).toBeNull()
+    expect(await getWorkgroupForTest(db, 'pay-squad')).toBeNull()
     expect(
       deleteWorkgroup(
         db,

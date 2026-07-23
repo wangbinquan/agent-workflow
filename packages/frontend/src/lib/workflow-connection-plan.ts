@@ -68,12 +68,8 @@ export function createWorkflowSemanticContext(
         : {}),
       ...(agent.role !== undefined ? { role: agent.role } : {}),
     }
-    // RFC-223 (PR-3a impl-gate H3): key by BOTH id and name. `resolveNodeAgent`
-    // (used inside declaredPorts / resolveReviewInputKind) now resolves a STAMPED
-    // node strictly by its agentId, so the lookup must carry id keys; a legacy
-    // name-only node still resolves via its name key. Field name kept as
-    // `agentsByName` to avoid rippling the type through every consumer.
-    agentsByName[agent.name] = projected
+    // RFC-223: persisted semantic identity is ID-only. Field name stays
+    // `agentsByName` temporarily to avoid a broad consumer rename.
     agentsByName[agent.id] = projected
   }
   const derivedRevision = JSON.stringify(

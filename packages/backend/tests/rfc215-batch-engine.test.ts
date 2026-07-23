@@ -60,6 +60,25 @@ function fcCfg(): WorkgroupRuntimeConfig {
 
 async function seedTask(db: DbClient, config: WorkgroupRuntimeConfig): Promise<string> {
   const taskId = ulid()
+  const agent = await createAgent(db, {
+    name: 'wg-a',
+    description: '',
+    outputs: [],
+    syncOutputsOnIterate: true,
+    permission: {},
+    skills: [],
+    dependsOn: [],
+    mcp: [],
+    plugins: [],
+    frontmatterExtra: {},
+    bodyMd: 'work',
+  })
+  const frozenConfig: WorkgroupRuntimeConfig = {
+    ...config,
+    members: config.members.map((member) =>
+      member.memberType === 'agent' ? { ...member, agentId: agent.id } : member,
+    ),
+  }
   await db.insert(workflows).values({
     id: ulid(),
     name: `host-${taskId}`,
@@ -79,22 +98,9 @@ async function seedTask(db: DbClient, config: WorkgroupRuntimeConfig): Promise<s
     status: 'running',
     inputs: '{}',
     startedAt: Date.now(),
-    workgroupId: config.workgroupId,
-    workgroupConfigJson: JSON.stringify(config),
+    workgroupId: frozenConfig.workgroupId,
+    workgroupConfigJson: JSON.stringify(frozenConfig),
   })
-  await createAgent(db, {
-    name: 'wg-a',
-    description: '',
-    outputs: [],
-    syncOutputsOnIterate: true,
-    permission: {},
-    skills: [],
-    dependsOn: [],
-    mcp: [],
-    plugins: [],
-    frontmatterExtra: {},
-    bodyMd: 'work',
-  }).catch(() => undefined)
   return taskId
 }
 

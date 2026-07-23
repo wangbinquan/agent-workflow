@@ -155,9 +155,10 @@ async function buildHarness(slug: string): Promise<Harness> {
   }
 }
 
-async function seedAgent(db: DbClient, name: string): Promise<void> {
+async function seedAgent(db: DbClient, name: string): Promise<string> {
+  const id = ulid()
   await db.insert(agents).values({
-    id: ulid(),
+    id,
     name,
     description: 'test',
     outputs: JSON.stringify(['out']),
@@ -168,20 +169,21 @@ async function seedAgent(db: DbClient, name: string): Promise<void> {
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
+  return id
 }
 
 /** n1 (writer) → n2 (readonly): n2 becomes ready only AFTER n1 completes, so
  *  "n2 dispatched while n1's commit session runs" is a real ordering claim,
  *  not a same-frame coincidence. */
 async function seedTask(h: Harness): Promise<string> {
-  await seedAgent(h.db, 'n1')
-  await seedAgent(h.db, 'n2')
+  const n1Id = await seedAgent(h.db, 'n1')
+  const n2Id = await seedAgent(h.db, 'n2')
   const def: WorkflowDefinition = {
     $schema_version: 1,
     inputs: [],
     nodes: [
-      { id: 'n1', kind: 'agent-single', agentName: 'n1' },
-      { id: 'n2', kind: 'agent-single', agentName: 'n2' },
+      { id: 'n1', kind: 'agent-single', agentId: n1Id, agentName: 'n1' },
+      { id: 'n2', kind: 'agent-single', agentId: n2Id, agentName: 'n2' },
     ],
     edges: [
       {

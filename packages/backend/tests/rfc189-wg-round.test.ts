@@ -253,25 +253,9 @@ function cfg(overrides: Partial<WorkgroupRuntimeConfig> = {}): WorkgroupRuntimeC
 
 async function seedEngineTask(db: DbClient, config: WorkgroupRuntimeConfig): Promise<string> {
   const taskId = ulid()
-  await db.insert(workflows).values({ id: ulid(), name: `host-${taskId}`, definition: '{}' })
-  const wf = (await db.select().from(workflows).limit(1))[0]
-  await db.insert(tasks).values({
-    id: taskId,
-    name: 'wg-rfc189',
-    workflowId: wf?.id ?? ulid(),
-    workflowSnapshot: JSON.stringify(buildWorkgroupHostSnapshot(config)),
-    repoPath: '/tmp/never',
-    worktreePath: '/tmp/never-wt',
-    baseBranch: 'main',
-    branch: `agent-workflow/${taskId}`,
-    status: 'running',
-    inputs: '{}',
-    startedAt: Date.now(),
-    workgroupId: config.workgroupId,
-    workgroupConfigJson: JSON.stringify(config),
-  })
+  const agentIds = new Map<string, string>()
   for (const name of ['wg-planner', 'wg-coder']) {
-    await createAgent(db, {
+    const agent = await createAgent(db, {
       name,
       description: '',
       outputs: [],
@@ -283,8 +267,34 @@ async function seedEngineTask(db: DbClient, config: WorkgroupRuntimeConfig): Pro
       plugins: [],
       frontmatterExtra: {},
       bodyMd: 'x',
-    }).catch(() => undefined)
+    })
+    agentIds.set(name, agent.id)
   }
+  const canonicalConfig: WorkgroupRuntimeConfig = {
+    ...config,
+    members: config.members.map((member) =>
+      member.memberType === 'agent' && member.agentName !== null
+        ? { ...member, agentId: agentIds.get(member.agentName) }
+        : member,
+    ),
+  }
+  await db.insert(workflows).values({ id: ulid(), name: `host-${taskId}`, definition: '{}' })
+  const wf = (await db.select().from(workflows).limit(1))[0]
+  await db.insert(tasks).values({
+    id: taskId,
+    name: 'wg-rfc189',
+    workflowId: wf?.id ?? ulid(),
+    workflowSnapshot: JSON.stringify(buildWorkgroupHostSnapshot(canonicalConfig)),
+    repoPath: '/tmp/never',
+    worktreePath: '/tmp/never-wt',
+    baseBranch: 'main',
+    branch: `agent-workflow/${taskId}`,
+    status: 'running',
+    inputs: '{}',
+    startedAt: Date.now(),
+    workgroupId: canonicalConfig.workgroupId,
+    workgroupConfigJson: JSON.stringify(canonicalConfig),
+  })
   return taskId
 }
 

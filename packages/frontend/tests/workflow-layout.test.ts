@@ -28,6 +28,7 @@ function node(id: string, extra: Partial<WorkflowNode> = {}): WorkflowNode {
   return {
     id,
     kind: 'agent-single',
+    agentId: `id-${id}`,
     agentName: id,
     position: { x: 0, y: 0 },
     ...extra,

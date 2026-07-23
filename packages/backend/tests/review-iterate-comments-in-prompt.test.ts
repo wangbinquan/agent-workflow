@@ -144,7 +144,7 @@ async function buildHarness(): Promise<Harness> {
 
   const stubOpencode = makeStubOpencode(tmp)
 
-  await createAgent(db, {
+  const designer = await createAgent(db, {
     name: 'designer',
     description: '',
     outputs: ['design'],
@@ -170,6 +170,7 @@ async function buildHarness(): Promise<Harness> {
         {
           id: 'designer',
           kind: 'agent-single',
+          agentId: designer.id,
           agentName: 'designer',
           // Note: template intentionally does NOT reference
           // {{__review_comments__}} explicitly — we want to assert that the

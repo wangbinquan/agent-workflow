@@ -9,9 +9,9 @@
 //     entry keyed by the human's memberId (prompt-isolation double-lock §11 —
 //     a human's userId must never leak into a prompt).
 //  3. Without agentCards the roster is byte-identical to RFC-164 (backward compat).
-//  4. buildRosterAgentCards: one card per agent member (getAgent +
+//  4. buildRosterAgentCards: one card per agent member (getAgentById +
 //     renderAgentCapabilityCard), skips humans, yields no card for a dangling
-//     agentName, dedupes repeated agentNames, and never contains a user id.
+//     agentId, dedupes repeated agentIds, and never contains a user id.
 
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
@@ -26,6 +26,9 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createAgent } from '../src/services/agent'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const PLANNER_ID = 'agent-planner'
+const CODER_ID = 'agent-coder'
+const VERBOSE_ID = 'agent-verbose'
 
 function cfg(overrides: Partial<WorkgroupRuntimeConfig> = {}): WorkgroupRuntimeConfig {
   return {
@@ -42,6 +45,7 @@ function cfg(overrides: Partial<WorkgroupRuntimeConfig> = {}): WorkgroupRuntimeC
       {
         id: 'm-lead',
         memberType: 'agent',
+        agentId: PLANNER_ID,
         agentName: 'planner',
         userId: null,
         displayName: 'planner',
@@ -50,6 +54,7 @@ function cfg(overrides: Partial<WorkgroupRuntimeConfig> = {}): WorkgroupRuntimeC
       {
         id: 'm-coder',
         memberType: 'agent',
+        agentId: CODER_ID,
         agentName: 'coder-a',
         userId: null,
         displayName: 'coder',
@@ -146,8 +151,12 @@ describe('renderRosterBlock — RFC-166 capability card injection (pure)', () =>
 
 describe('buildRosterAgentCards — RFC-166 preload (DB)', () => {
   async function seed(db: DbClient) {
-    await createAgent(db, agentPayload('planner', { description: 'plans the work' }))
-    await createAgent(db, agentPayload('coder-a', { description: 'writes the patch' }))
+    await createAgent(db, agentPayload('planner', { description: 'plans the work' }), {
+      id: PLANNER_ID,
+    })
+    await createAgent(db, agentPayload('coder-a', { description: 'writes the patch' }), {
+      id: CODER_ID,
+    })
   }
 
   test('one card per agent member; human skipped; content present; no user id', async () => {
@@ -166,7 +175,7 @@ describe('buildRosterAgentCards — RFC-166 preload (DB)', () => {
     }
   })
 
-  test('dangling agentName (deleted agent) yields no card', async () => {
+  test('dangling agentId (deleted agent) yields no card', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     await seed(db)
     const c = cfg({
@@ -174,6 +183,7 @@ describe('buildRosterAgentCards — RFC-166 preload (DB)', () => {
         {
           id: 'm-x',
           memberType: 'agent',
+          agentId: 'agent-missing',
           agentName: 'ghost',
           userId: null,
           displayName: 'x',
@@ -186,7 +196,7 @@ describe('buildRosterAgentCards — RFC-166 preload (DB)', () => {
     expect(cards.has('m-x')).toBe(false)
   })
 
-  test('repeated agentName is de-duped (one DB read, both members carded)', async () => {
+  test('repeated agentId is de-duped (one DB read, both members carded)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     await seed(db)
     const c = cfg({
@@ -194,6 +204,7 @@ describe('buildRosterAgentCards — RFC-166 preload (DB)', () => {
         {
           id: 'm-a',
           memberType: 'agent',
+          agentId: CODER_ID,
           agentName: 'coder-a',
           userId: null,
           displayName: 'a',
@@ -202,6 +213,7 @@ describe('buildRosterAgentCards — RFC-166 preload (DB)', () => {
         {
           id: 'm-b',
           memberType: 'agent',
+          agentId: CODER_ID,
           agentName: 'coder-a',
           userId: null,
           displayName: 'b',
@@ -229,10 +241,12 @@ describe('buildRosterAgentCards — RFC-166 preload (DB)', () => {
           },
         ],
       }),
+      { id: VERBOSE_ID },
     )
     const members = Array.from({ length: 64 }, (_, index) => ({
       id: `m-${index}`,
       memberType: 'agent' as const,
+      agentId: VERBOSE_ID,
       agentName: 'verbose-agent',
       userId: null,
       displayName: `worker-${index}`,

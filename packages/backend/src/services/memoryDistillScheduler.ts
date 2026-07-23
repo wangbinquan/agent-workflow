@@ -22,7 +22,7 @@ import type {
 } from '@agent-workflow/shared'
 import { QUARANTINED_SNAPSHOT_AGENT_ID } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
-import { agents, cachedRepos, memoryDistillJobs, tasks } from '@/db/schema'
+import { cachedRepos, memoryDistillJobs, tasks } from '@/db/schema'
 import { runDistill, type DistillerSpawnFn, rowToDistillJob } from '@/services/memoryDistiller'
 import { resolveInternalAgentRuntime } from '@/services/runtimeRegistry'
 import { MEMORY_DISTILL_JOB_CHANNEL, memoryDistillJobBroadcaster } from '@/ws/broadcaster'
@@ -129,80 +129,30 @@ export function buildDebounceKey(input: EnqueueDistillJobInput): string {
 interface SnapshotAgentNode {
   agentId?: string
   agentName?: string
-  agent?: string
   kind?: string
 }
 
-export function extractAgentNamesFromSnapshot(workflowSnapshot: string): string[] {
+/**
+ * RFC-223 T15 — extract only frozen canonical ids. A name-only node and the
+ * quarantine sentinel both contribute no scope; neither may be resolved
+ * against today's mutable name registry.
+ */
+export function extractAgentIdsFromSnapshot(workflowSnapshot: string): string[] {
   let parsed: { nodes?: SnapshotAgentNode[] } = {}
   try {
     parsed = JSON.parse(workflowSnapshot) as typeof parsed
   } catch {
     return []
   }
-  const out = new Set<string>()
-  for (const node of parsed.nodes ?? []) {
-    if (typeof node !== 'object' || node === null) continue
-    const kind = typeof node.kind === 'string' ? node.kind : null
-    // RFC-060 PR-E: agent-multi removed; agent-single is the only agent kind.
-    if (kind !== 'agent-single') continue
-    // Workflow snapshots use either `agentName` (frontend canvas) or
-    // `agent` (older YAML imports). Accept both.
-    const name =
-      typeof node.agentName === 'string' && node.agentName.length > 0
-        ? node.agentName
-        : typeof node.agent === 'string' && node.agent.length > 0
-          ? node.agent
-          : null
-    if (name !== null) out.add(name)
-  }
-  return [...out]
-}
-
-/**
- * RFC-223 (PR-3a) — split a snapshot's agent-single references into the frozen
- * CANONICAL ids (each names exactly one agent — 取单行, so no name→multi-id spread
- * after PR-8 lifts uniqueness) and the leftover legacy nodes that carry only a
- * name. A node whose `agentId` is the R4-1 quarantine sentinel is dropped
- * ENTIRELY — it is NOT downgraded to a name lookup. The sentinel means "historical
- * identity unrecoverable" (a stale frozen name that may have been ABA-reassigned to
- * a different tenant's agent), so re-resolving it by the current name would pull an
- * arbitrary tenant's memories into this task's distill scope. Fail closed here
- * (skip it) rather than fall open — only genuinely id-less legacy nodes keep the
- * deterministic name fallback (impl-gate H1).
- */
-export function extractAgentRefsFromSnapshot(workflowSnapshot: string): {
-  ids: string[]
-  namesWithoutId: string[]
-} {
-  let parsed: { nodes?: SnapshotAgentNode[] } = {}
-  try {
-    parsed = JSON.parse(workflowSnapshot) as typeof parsed
-  } catch {
-    return { ids: [], namesWithoutId: [] }
-  }
   const ids = new Set<string>()
-  const namesWithoutId = new Set<string>()
   for (const node of parsed.nodes ?? []) {
     if (typeof node !== 'object' || node === null) continue
     if (node.kind !== 'agent-single') continue
-    // R4-1 quarantined: a PRESENT id that resolves to no agent. Skip it — never
-    // fall back to the name (that is the exact ABA fail-open H1 closes).
     if (node.agentId === QUARANTINED_SNAPSHOT_AGENT_ID) continue
     const id = typeof node.agentId === 'string' && node.agentId.length > 0 ? node.agentId : null
-    if (id !== null) {
-      ids.add(id)
-      continue
-    }
-    const name =
-      typeof node.agentName === 'string' && node.agentName.length > 0
-        ? node.agentName
-        : typeof node.agent === 'string' && node.agent.length > 0
-          ? node.agent
-          : null
-    if (name !== null) namesWithoutId.add(name)
+    if (id !== null) ids.add(id)
   }
-  return { ids: [...ids], namesWithoutId: [...namesWithoutId] }
+  return [...ids]
 }
 
 export async function computeEligibleScopes(
@@ -216,23 +166,7 @@ export async function computeEligibleScopes(
   if (taskRow === undefined) {
     return { agentIds: [], workflowId: null, repoId: null, includeGlobal: true }
   }
-  // RFC-223 (PR-3a): take the frozen CANONICAL ids directly (each names exactly
-  // ONE agent — no name→multi-id spread); resolve only the residual legacy
-  // name-only nodes by name (bounded; distill scope is a heuristic, not a
-  // security boundary).
-  const { ids: frozenAgentIds, namesWithoutId } = extractAgentRefsFromSnapshot(
-    taskRow.workflowSnapshot,
-  )
-  const nameResolvedIds =
-    namesWithoutId.length === 0
-      ? []
-      : (
-          await db
-            .select({ id: agents.id })
-            .from(agents)
-            .where(inArray(agents.name, namesWithoutId))
-        ).map((r) => r.id)
-  const agentIds = [...new Set([...frozenAgentIds, ...nameResolvedIds])]
+  const agentIds = extractAgentIdsFromSnapshot(taskRow.workflowSnapshot)
   // RFC-204: see memoryInject — join on the stored mirror id. The old URL join
   // compared a REDACTED tasks.repo_url against the plaintext cached_repos.url,
   // so it missed private repos entirely and, once the credential column is

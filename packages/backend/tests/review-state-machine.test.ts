@@ -150,7 +150,7 @@ async function buildHarness(): Promise<Harness> {
 
   // Designer agent — markdown output kind on the 'design' port so review can
   // resolve it (T9 markdown_file path / inline markdown).
-  await createAgent(db, {
+  const designer = await createAgent(db, {
     name: 'designer',
     description: '',
     outputs: ['design'],
@@ -177,6 +177,7 @@ async function buildHarness(): Promise<Harness> {
         {
           id: 'designer',
           kind: 'agent-single',
+          agentId: designer.id,
           agentName: 'designer',
           promptTemplate: 'Design for {{topic}}',
         },

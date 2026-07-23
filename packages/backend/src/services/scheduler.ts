@@ -81,7 +81,7 @@ import {
   taskRepos,
   tasks,
 } from '@/db/schema'
-import { getAgent, getAgentById } from '@/services/agent'
+import { getAgentById } from '@/services/agent'
 import { resolveDependsClosure } from '@/services/agentDeps'
 import { collectMcpIdsFromClosure, loadMcpsByIds } from '@/services/mcpClosure'
 import { collectPluginIdsFromClosure, loadPluginsByIds } from '@/services/pluginClosure'
@@ -2937,22 +2937,18 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
     }
   }
 
-  const agentName = pickString(node, 'agentName')
-  if (agentName === null) {
+  const agentIdRef = pickString(node, 'agentId')
+  if (agentIdRef === null) {
     return {
       kind: 'failed',
-      summary: `node ${node.id} missing agentName`,
-      message: 'invalid agent node',
+      summary: `node ${node.id} missing canonical agentId`,
+      message: 'agent-identity-missing',
     }
   }
-  // RFC-223 (PR-2): resolve the node's agent by its CANONICAL id when present
-  // (stamped by the editor / backfilled by migration 0112) so a rename never
-  // re-routes the node and a delete+recreate-same-name cannot bind a different
-  // agent; a node with no agentId (dynamic-generated / pre-0112) falls back to
-  // its name (name↔id stays 1:1 until PR-8, so this is deterministic).
-  const agentIdRef = pickString(node, 'agentId')
-  const nodeAgent =
-    agentIdRef !== null ? await getAgentById(db, agentIdRef) : await getAgent(db, agentName)
+  const agentName = pickString(node, 'agentName') ?? agentIdRef
+  // RFC-223 (T15): persisted workflow identity is the frozen id. A name-only
+  // node is corrupt/quarantined data and was rejected above.
+  const nodeAgent = await getAgentById(db, agentIdRef)
   if (nodeAgent === null) {
     return { kind: 'failed', summary: `agent '${agentName}' not found`, message: 'agent-not-found' }
   }
@@ -4484,20 +4480,15 @@ async function runLoopWrapperNode(
 
 /**
  * RFC-223 (PR-3a impl-gate H2): the CANONICAL dedup / lookup key for a
- * wrapper-fanout inner agent node — its stamped `agentId` when present (so two
- * same-name DIFFERENT-id inner nodes stay distinct), else its display name. Used
- * by BOTH the inner-agent-map hydration and the per-shard dispatch so the two can
- * never drift back into the name-keyed collapse the impl-gate found (same-name
- * different-id nodes folding onto one agent). Returns null only for a node with
- * neither field.
+ * wrapper-fanout inner agent node — its stamped `agentId`. Used by BOTH the
+ * inner-agent-map hydration and per-shard dispatch. A name-only node returns
+ * null and fails closed.
  */
 export function fanoutInnerAgentKey(node: {
   agentId?: unknown
   agentName?: unknown
 }): string | null {
-  const aid = typeof node.agentId === 'string' && node.agentId.length > 0 ? node.agentId : null
-  if (aid !== null) return aid
-  return typeof node.agentName === 'string' && node.agentName.length > 0 ? node.agentName : null
+  return typeof node.agentId === 'string' && node.agentId.length > 0 ? node.agentId : null
 }
 
 async function runFanoutWrapperNode(
@@ -4539,8 +4530,7 @@ async function runFanoutWrapperNode(
   // 2. Hydrate the inner-node agent map. findFanoutAggregator + scope
   // computation both consult this. Missing-agent here is fatal.
   // RFC-223 (PR-2/PR-3a impl-gate H2): resolve + dedup + key each inner agent by
-  // its CANONICAL identity — the agentId when the node carries one (rename-/ABA-
-  // safe), else the display name for dynamic-generated / pre-0112 nodes. The old
+  // its CANONICAL identity — the required agentId (rename-/ABA-safe). The old
   // dedup keyed by NAME (`agentsMap.has(an)`), which collapsed two same-name
   // DIFFERENT-id inner nodes into one — the second was skipped and both then
   // dispatched under the FIRST node's agent. Keying dedup + the map entry by the
@@ -4552,12 +4542,10 @@ async function runFanoutWrapperNode(
     const inner = definition.nodes.find((n) => n.id === id)
     if (inner === undefined) continue
     const rec = inner as Record<string, unknown>
-    const an = typeof rec.agentName === 'string' ? rec.agentName : null
     const aid = typeof rec.agentId === 'string' && rec.agentId.length > 0 ? rec.agentId : null
     const dedupKey = fanoutInnerAgentKey(rec)
     if (dedupKey === null || agentsMap.has(dedupKey)) continue
-    const a =
-      aid !== null ? await getAgentById(db, aid) : an !== null ? await getAgent(db, an) : null
+    const a = aid !== null ? await getAgentById(db, aid) : null
     if (a !== null) agentsMap.set(dedupKey, a)
   }
 
@@ -4779,20 +4767,19 @@ async function runFanoutWrapperNode(
     }
 
     const innerRec = inner as Record<string, unknown>
-    const innerAgentName = innerRec.agentName
-    if (typeof innerAgentName !== 'string') {
-      await markWrapperTerminal(db, wrapperRunId, 'failed', `inner-missing-agentName:${innerId}`)
+    const innerAgentName =
+      typeof innerRec.agentName === 'string' ? innerRec.agentName : `node:${innerId}`
+    const innerAgentId = fanoutInnerAgentKey(innerRec)
+    if (innerAgentId === null) {
+      await markWrapperTerminal(db, wrapperRunId, 'failed', `inner-missing-agentId:${innerId}`)
       broadcastNodeStatus(taskId, wrapperRunId, node.id, 'failed')
       return {
         kind: 'failed',
-        summary: `wrapper-fanout ${node.id} inner '${innerId}' missing agentName`,
-        message: 'wrapper-fanout-inner-missing-agent-name',
+        summary: `wrapper-fanout ${node.id} inner '${innerId}' missing canonical agentId`,
+        message: 'wrapper-fanout-inner-missing-agent-id',
       }
     }
-    // RFC-223 (PR-3a impl-gate H2): look up by the node's CANONICAL identity via
-    // the SAME key helper the hydration used — its agentId when stamped (so
-    // same-name different-id inner nodes never collide), else the name.
-    const innerAgent = agentsMap.get(fanoutInnerAgentKey(innerRec) ?? innerAgentName)
+    const innerAgent = agentsMap.get(innerAgentId)
     if (innerAgent === undefined) {
       await markWrapperTerminal(db, wrapperRunId, 'failed', `inner-agent-missing:${innerAgentName}`)
       broadcastNodeStatus(taskId, wrapperRunId, node.id, 'failed')

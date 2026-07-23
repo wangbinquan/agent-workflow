@@ -31,6 +31,7 @@ import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTask } from '../src/services/scheduler'
 import { retryNode } from '../src/services/task'
 import { decodeWrapperProgress } from '../src/services/wrapperProgress'
+import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -117,18 +118,19 @@ async function seedWorkflowAndTask(h: Harness, definition: WorkflowDefinition): 
     frontmatterExtra: '{}',
     bodyMd: '',
   })
+  const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
   await h.db.insert(workflows).values({
     id: workflowId,
     name: 'wf-rfc095-revival',
-    definition: JSON.stringify(definition),
+    definition: JSON.stringify(canonicalDefinition),
   })
   await h.db.insert(tasks).values({
     name: 'fixture-task',
     id: taskId,
     workflowId,
-    workflowSnapshot: JSON.stringify(definition),
+    workflowSnapshot: JSON.stringify(canonicalDefinition),
     repoPath: '/nonexistent-rfc095-repo',
     worktreePath: h.worktreePath,
     baseBranch: 'main',

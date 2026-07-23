@@ -33,6 +33,7 @@ import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/sc
 import { runTask } from '../src/services/scheduler'
 import { decodeWrapperProgress } from '../src/services/wrapperProgress'
 import { runGit } from '../src/util/git'
+import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -162,18 +163,19 @@ async function seedWorkflowAndTask(
   h: Harness,
   definition: WorkflowDefinition,
 ): Promise<{ taskId: string }> {
+  const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
   await h.db.insert(workflows).values({
     id: workflowId,
     name: 'wf',
-    definition: JSON.stringify(definition),
+    definition: JSON.stringify(canonicalDefinition),
   })
   await h.db.insert(tasks).values({
     name: 'audit-s04-task',
     id: taskId,
     workflowId,
-    workflowSnapshot: JSON.stringify(definition),
+    workflowSnapshot: JSON.stringify(canonicalDefinition),
     repoPath: h.repoPath,
     worktreePath: h.worktreePath,
     baseBranch: 'main',

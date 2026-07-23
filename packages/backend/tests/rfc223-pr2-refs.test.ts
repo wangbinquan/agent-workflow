@@ -284,21 +284,14 @@ describe('RFC-223 PR-2 — scheduler dispatches the node agent by id (source loc
   // The runtime giant (runOneNode) is exercised end-to-end by the workgroup /
   // workflow e2e suites; this pins the id-first resolution so a refactor can’t
   // silently drop back to name-only dispatch (PR-1 left node→agent by name).
-  test('agent-single + wrapper-fanout hydrate via getAgentById when the node carries an agentId', () => {
+  test('agent-single + wrapper-fanout hydrate only via canonical agentId', () => {
     const src = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
       'utf8',
     )
-    // main dispatch: id-first, name fallback.
-    expect(src).toContain(
-      'agentIdRef !== null ? await getAgentById(db, agentIdRef) : await getAgent(db, agentName)',
-    )
-    // fanout inner hydration resolves each inner agent id-first (getAgentById when
-    // the node carries an agentId), same as the main dispatch. RFC-223 PR-3a
-    // impl-gate H2 added an explicit `an !== null` guard + the fail-closed null.
-    expect(src).toContain(
-      'aid !== null ? await getAgentById(db, aid) : an !== null ? await getAgent(db, an) : null',
-    )
+    expect(src).toContain('const nodeAgent = await getAgentById(db, agentIdRef)')
+    expect(src).toContain('const a = aid !== null ? await getAgentById(db, aid) : null')
+    expect(src).not.toContain('await getAgent(db, agentName)')
     // RFC-223 (PR-3a impl-gate H2): dedup + key the inner-agent map by the
     // CANONICAL identity (agentId when stamped), NOT the mutable name — so two
     // same-name different-id inner nodes never collapse onto one agent.

@@ -30,14 +30,20 @@ const CODER: Agent = {
   updatedAt: 0,
 }
 
-const AUDITOR: Agent = { ...CODER, name: 'auditor', outputs: ['findings'] }
+const AUDITOR: Agent = { ...CODER, id: 'b', name: 'auditor', outputs: ['findings'] }
 
 const DEF: WorkflowDefinition = {
   $schema_version: 1,
   inputs: [{ kind: 'text', key: 'req', label: '需求' }],
   nodes: [
     { id: 'i1', kind: 'input', inputKey: 'req', position: { x: 10, y: 20 } },
-    { id: 'a1', kind: 'agent-single', agentName: 'coder', position: { x: 200, y: 30 } },
+    {
+      id: 'a1',
+      kind: 'agent-single',
+      agentId: CODER.id,
+      agentName: 'coder',
+      position: { x: 200, y: 30 },
+    },
     {
       id: 'o1',
       kind: 'output',
@@ -61,8 +67,8 @@ const DEF: WorkflowDefinition = {
 
 describe('computePorts', () => {
   const byName = new Map([
-    ['coder', CODER],
-    ['auditor', AUDITOR],
+    [CODER.id, CODER],
+    [AUDITOR.id, AUDITOR],
   ])
 
   test('input node: one output port from inputKey', () => {
@@ -113,11 +119,15 @@ describe('computePorts', () => {
   test('unknown agent → no outputs (port inventory is empty rather than crash)', () => {
     // Use an empty edge list too, otherwise the outbound-edge backfill
     // loop would surface those edges' port names as outputs.
-    const ports = computePorts({ id: 'a1', kind: 'agent-single', agentName: 'ghost' }, byName, {
-      ...DEF,
-      nodes: [],
-      edges: [],
-    })
+    const ports = computePorts(
+      { id: 'a1', kind: 'agent-single', agentId: 'ghost-id', agentName: 'ghost' },
+      byName,
+      {
+        ...DEF,
+        nodes: [],
+        edges: [],
+      },
+    )
     expect(ports.outputs).toEqual([])
   })
 
@@ -163,7 +173,7 @@ describe('computePorts', () => {
     // the backfill loop in computePorts, no Handle renders for `docpath`
     // and xyflow logs "Couldn't create edge for source handle id: docpath".
     const liveCoder: Agent = { ...CODER, outputs: ['code'] } // dropped `notes`
-    const liveByName = new Map([['coder', liveCoder]])
+    const liveByName = new Map([[liveCoder.id, liveCoder]])
     const snapshot: WorkflowDefinition = {
       ...DEF,
       edges: [
@@ -189,17 +199,44 @@ describe('computePorts', () => {
   const REVIEW_DEF = (inputSource: { nodeId: string; portName: string }): WorkflowDefinition => ({
     ...DEF,
     nodes: [
-      { id: 'doc', kind: 'agent-single', agentName: 'doc', position: { x: 0, y: 0 } },
-      { id: 'tester', kind: 'agent-single', agentName: 'tester', position: { x: 0, y: 0 } },
+      {
+        id: 'doc',
+        kind: 'agent-single',
+        agentId: 'agent-doc',
+        agentName: 'doc',
+        position: { x: 0, y: 0 },
+      },
+      {
+        id: 'tester',
+        kind: 'agent-single',
+        agentId: 'agent-tester',
+        agentName: 'tester',
+        position: { x: 0, y: 0 },
+      },
       { id: 'rev', kind: 'review', inputSource, position: { x: 0, y: 0 } },
     ],
     edges: [],
   })
   const reviewByName = new Map<string, Agent>([
-    ['doc', { ...CODER, name: 'doc', outputs: ['docpath'], outputKinds: { docpath: 'path<md>' } }],
     [
-      'tester',
-      { ...CODER, name: 'tester', outputs: ['cases'], outputKinds: { cases: 'list<path<md>>' } },
+      'agent-doc',
+      {
+        ...CODER,
+        id: 'agent-doc',
+        name: 'doc',
+        outputs: ['docpath'],
+        outputKinds: { docpath: 'path<md>' },
+      },
+    ],
+    [
+      'agent-tester',
+      {
+        ...CODER,
+        id: 'agent-tester',
+        name: 'tester',
+        outputs: ['cases'],
+        outputKinds: { cases: 'list<path<md>>' },
+      },
     ],
   ])
 

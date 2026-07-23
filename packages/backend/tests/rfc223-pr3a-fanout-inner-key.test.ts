@@ -19,8 +19,8 @@ describe('fanoutInnerAgentKey — id-canonical fanout inner identity (H2)', () =
     expect(fanoutInnerAgentKey({ agentId: 'ID_A', agentName: 'shared' })).toBe('ID_A')
   })
 
-  test('name-only node → its name', () => {
-    expect(fanoutInnerAgentKey({ agentName: 'legacy' })).toBe('legacy')
+  test('name-only node fails closed', () => {
+    expect(fanoutInnerAgentKey({ agentName: 'legacy' })).toBeNull()
   })
 
   test('neither → null', () => {
@@ -28,8 +28,8 @@ describe('fanoutInnerAgentKey — id-canonical fanout inner identity (H2)', () =
     expect(fanoutInnerAgentKey({ agentId: '', agentName: '' })).toBeNull()
   })
 
-  test('empty agentId falls through to the name', () => {
-    expect(fanoutInnerAgentKey({ agentId: '', agentName: 'n' })).toBe('n')
+  test('empty agentId does not fall through to the name', () => {
+    expect(fanoutInnerAgentKey({ agentId: '', agentName: 'n' })).toBeNull()
   })
 
   test('H2 no-collapse: two same-NAME different-ID inner nodes get DISTINCT keys', () => {

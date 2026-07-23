@@ -47,9 +47,9 @@ export async function listPlugins(db: DbClient): Promise<Plugin[]> {
   return (await db.select().from(plugins)).map(rowToPlugin)
 }
 
-export async function getPlugin(db: DbClient, idOrName: string): Promise<Plugin | null> {
-  const row = await getPluginRow(db, idOrName)
-  return row === null ? null : rowToPlugin(row)
+/** Public loads are stable-id-only. Names remain mutable display labels. */
+export async function getPlugin(db: DbClient, id: string): Promise<Plugin | null> {
+  return getPluginById(db, id)
 }
 
 /** Stable-id-only load used after a coordinator lock has been acquired. */
@@ -341,17 +341,10 @@ function publishPluginUpdate(
   })
 }
 
-async function getPluginRow(db: DbClient, idOrName: string): Promise<PluginRow | null> {
-  let rows = await db.select().from(plugins).where(eq(plugins.id, idOrName)).limit(1)
-  if (rows.length === 0)
-    rows = await db.select().from(plugins).where(eq(plugins.name, idOrName)).limit(1)
-  return rows[0] ?? null
-}
-
 async function requirePluginRow(db: DbClient, id: string): Promise<PluginRow> {
-  const row = await getPluginRow(db, id)
-  if (row === null) throw new NotFoundError('plugin-not-found', `plugin '${id}' not found`)
-  return row
+  const row = await db.select().from(plugins).where(eq(plugins.id, id)).limit(1)
+  if (row[0] === undefined) throw new NotFoundError('plugin-not-found', `plugin '${id}' not found`)
+  return row[0]
 }
 
 function selectPluginRowById(tx: DbTxSync, id: string): PluginRow | null {

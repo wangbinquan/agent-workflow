@@ -98,9 +98,10 @@ process.exit(0)
   return shimPath
 }
 
-async function seedWriter(db: DbClient, name: string): Promise<void> {
+async function seedWriter(db: DbClient, name: string): Promise<string> {
+  const id = ulid()
   await db.insert(agents).values({
-    id: ulid(),
+    id,
     name,
     description: 'test',
     outputs: JSON.stringify(['summary']),
@@ -111,15 +112,16 @@ async function seedWriter(db: DbClient, name: string): Promise<void> {
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
+  return id
 }
 
-function twoWriterDef(): WorkflowDefinition {
+function twoWriterDef(w1Id: string, w2Id: string): WorkflowDefinition {
   return {
     $schema_version: 1,
     inputs: [],
     nodes: [
-      { id: 'w1', kind: 'agent-single', agentName: 'w1' },
-      { id: 'w2', kind: 'agent-single', agentName: 'w2' },
+      { id: 'w1', kind: 'agent-single', agentId: w1Id, agentName: 'w1' },
+      { id: 'w2', kind: 'agent-single', agentId: w2Id, agentName: 'w2' },
     ],
     edges: [],
   } as unknown as WorkflowDefinition
@@ -174,10 +176,10 @@ describe('RFC-130 §6.2 — merge agent scheduler wiring (real conflict, real di
   afterEach(() => h.cleanup())
 
   test('sibling writer conflict → merge agent resolves → both merged, task done, resolution materialized', async () => {
-    await seedWriter(h.db, 'w1')
-    await seedWriter(h.db, 'w2')
+    const w1Id = await seedWriter(h.db, 'w1')
+    const w2Id = await seedWriter(h.db, 'w2')
     const shim = writeShim(h.appHome)
-    const taskId = await seedTask(h, twoWriterDef())
+    const taskId = await seedTask(h, twoWriterDef(w1Id, w2Id))
     await withEnv({ MOCK_OPENCODE_DELAY_MS: '0' }, () =>
       runTask({
         taskId,
@@ -204,10 +206,10 @@ describe('RFC-130 §6.2 — merge agent scheduler wiring (real conflict, real di
   }, 30_000)
 
   test('sibling writer conflict → merge agent FAILS (leaves markers) → conflict-human + awaiting_human', async () => {
-    await seedWriter(h.db, 'w1')
-    await seedWriter(h.db, 'w2')
+    const w1Id = await seedWriter(h.db, 'w1')
+    const w2Id = await seedWriter(h.db, 'w2')
     const shim = writeShim(h.appHome)
-    const taskId = await seedTask(h, twoWriterDef())
+    const taskId = await seedTask(h, twoWriterDef(w1Id, w2Id))
     await withEnv({ MOCK_OPENCODE_DELAY_MS: '0', MERGE_SHOULD_FAIL: '1' }, () =>
       runTask({
         taskId,

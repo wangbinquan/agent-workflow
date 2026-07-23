@@ -40,6 +40,7 @@ import { agents, clarifyRounds, nodeRuns, taskQuestions, tasks, workflows } from
 import { runTask } from '../src/services/scheduler'
 import { setNodeClarifyDirective } from '../src/services/taskClarifyDirective'
 import { runGit } from '../src/util/git'
+import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
 // RFC-132 (PR-C): the unified flat injector (buildClarifyQueueContext) reads DISPATCHED
 // task_questions — not clarify_rounds directly. These tests synthesize an answered round
@@ -168,19 +169,20 @@ async function seedWorkflowAndTask(
   definition: WorkflowDefinition,
   inputs: Record<string, string> = {},
 ): Promise<{ workflowId: string; taskId: string }> {
+  const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
   await h.db.insert(workflows).values({
     id: workflowId,
     name: 'wf',
-    definition: JSON.stringify(definition),
+    definition: JSON.stringify(canonicalDefinition),
   })
   await h.db.insert(tasks).values({
     name: 'fixture-task',
 
     id: taskId,
     workflowId,
-    workflowSnapshot: JSON.stringify(definition),
+    workflowSnapshot: JSON.stringify(canonicalDefinition),
     repoPath: h.repoPath,
     worktreePath: h.worktreePath,
     baseBranch: 'main',

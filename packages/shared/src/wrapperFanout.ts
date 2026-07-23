@@ -36,47 +36,31 @@ export type AgentLookup = ReadonlyMap<string, Agent> | Readonly<Record<string, A
  *  structural agent type. */
 export function lookupAgent<T>(
   table: ReadonlyMap<string, T> | Readonly<Record<string, T | undefined>>,
-  name: string,
+  id: string,
 ): T | undefined {
-  if (table instanceof Map) return table.get(name)
-  return (table as Readonly<Record<string, T | undefined>>)[name]
+  if (table instanceof Map) return table.get(id)
+  return (table as Readonly<Record<string, T | undefined>>)[id]
 }
 
 /**
- * RFC-223 (PR-3a, impl-gate H3) — resolve a workflow node's agent from a lookup,
- * id-canonical and FAIL-CLOSED: when the node carries a stable `agentId`, resolve
- * STRICTLY by that id — a miss returns undefined; it does NOT fall back to the
- * mutable `agentName`. The name fallback applies ONLY to a node with no id at all
- * (dynamic-generated / pre-migration). This closes the fail-open where a stamped
- * node whose id was handed a name-only lookup silently re-bound by name — under a
- * rename+recreate (ABA) that name could point at a DIFFERENT tenant's agent.
- * Callers MUST key the lookup by id: {@link buildNodeAgentLookup} keys by BOTH id
- * and name, so a stamped node resolves by its id key while a legacy name-only node
- * still resolves by its name key (id keys are ULIDs, name keys human strings —
- * they never collide). A name-only lookup passed a stamped node now returns
- * undefined by design (fail closed), not a lenient name hit.
+ * RFC-223 (T15) — resolve a workflow node's agent by its canonical id only.
+ * `agentName` is a display snapshot, never an identity fallback. A corrupt or
+ * pre-cutover name-only node therefore returns undefined and is quarantined by
+ * every caller instead of binding whichever tenant currently owns that name.
  */
 export function resolveNodeAgent<T>(
   node: WorkflowNode,
   agents: ReadonlyMap<string, T> | Readonly<Record<string, T | undefined>>,
 ): T | undefined {
-  const rec = node as unknown as { agentId?: unknown; agentName?: unknown }
-  if (typeof rec.agentId === 'string' && rec.agentId.length > 0) {
-    // Strict: id present → id key only. No name fallback (that was the H3 hole).
-    return lookupAgent(agents, rec.agentId)
-  }
-  if (typeof rec.agentName === 'string' && rec.agentName.length > 0) {
-    return lookupAgent(agents, rec.agentName)
-  }
-  return undefined
+  const agentId = (node as unknown as { agentId?: unknown }).agentId
+  return typeof agentId === 'string' && agentId.length > 0
+    ? lookupAgent(agents, agentId)
+    : undefined
 }
 
 /**
- * RFC-223 (PR-3a) — build a node→agent lookup keyed by BOTH `id` and `name` from
- * a list of full agents, so {@link resolveNodeAgent} resolves id-first while any
- * remaining by-name reader keeps working (id keys are ULIDs, name keys are human
- * strings — they never collide). Projecting to `V` lets a caller narrow to the
- * structural slice it needs (e.g. `PortLookupAgent`).
+ * RFC-223 (T15) — build the node→agent lookup by immutable id only. Projecting
+ * to `V` lets callers narrow to the structural slice they need.
  */
 export function buildNodeAgentLookup<A extends { id: string; name: string }, V>(
   agents: readonly A[],
@@ -84,9 +68,7 @@ export function buildNodeAgentLookup<A extends { id: string; name: string }, V>(
 ): Map<string, V> {
   const map = new Map<string, V>()
   for (const a of agents) {
-    const v = project(a)
-    map.set(a.id, v)
-    map.set(a.name, v)
+    map.set(a.id, project(a))
   }
   return map
 }

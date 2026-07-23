@@ -46,16 +46,16 @@ const SIGNALER: Agent = {
 const CONSUMER: Agent = { ...SIGNALER, id: 'b', name: 'consumer', outputs: [], outputKinds: {} }
 
 const agentByName = new Map<string, Agent>([
-  ['signaler', SIGNALER],
-  ['consumer', CONSUMER],
+  [SIGNALER.id, SIGNALER],
+  [CONSUMER.id, CONSUMER],
 ])
 
 const DEF: WorkflowDefinition = {
   $schema_version: 4,
   inputs: [],
   nodes: [
-    { id: 'a1', kind: 'agent-single', agentName: 'signaler' },
-    { id: 'a2', kind: 'agent-single', agentName: 'consumer' },
+    { id: 'a1', kind: 'agent-single', agentId: SIGNALER.id, agentName: 'signaler' },
+    { id: 'a2', kind: 'agent-single', agentId: CONSUMER.id, agentName: 'consumer' },
     // No aggregator inside ⇒ deriveWrapperFanoutOutputs yields the implicit
     // `__done__` (kind: signal) outlet.
     { id: 'wf1', kind: 'wrapper-fanout', nodeIds: [], inputs: [] },

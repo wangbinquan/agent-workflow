@@ -153,9 +153,10 @@ async function buildHarness(): Promise<Harness> {
   }
 }
 
-async function seedWriterAgent(db: DbClient, name: string): Promise<void> {
+async function seedWriterAgent(db: DbClient, name: string): Promise<string> {
+  const id = ulid()
   await db.insert(agents).values({
-    id: ulid(),
+    id,
     name,
     description: 'test',
     outputs: JSON.stringify(['summary']),
@@ -166,9 +167,10 @@ async function seedWriterAgent(db: DbClient, name: string): Promise<void> {
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
+  return id
 }
 
-async function seedSingleRepoTask(h: Harness): Promise<string> {
+async function seedSingleRepoTask(h: Harness, agentId: string): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
   const def: WorkflowDefinition = {
@@ -178,6 +180,7 @@ async function seedSingleRepoTask(h: Harness): Promise<string> {
       {
         id: 'a1',
         kind: 'agent-single',
+        agentId,
         agentName: 'fixer',
       } as unknown as WorkflowDefinition['nodes'][number],
     ],
@@ -236,8 +239,8 @@ describe('S-2b followup-chain retry rollback restores the last FRESH baseline (R
   afterEach(() => h.cleanup())
 
   test('fresh(snapshot=X) → followup(keeps worktree) → fresh retry starts on X: dirty baseline restored, both half-products gone', async () => {
-    await seedWriterAgent(h.db, 'fixer')
-    const taskId = await seedSingleRepoTask(h)
+    const agentId = await seedWriterAgent(h.db, 'fixer')
+    const taskId = await seedSingleRepoTask(h, agentId)
 
     // Baseline X: an uncommitted TRACKED modification present BEFORE the task
     // runs. attempt 0's pre-snapshot (git stash create) captures it.

@@ -31,12 +31,26 @@ function agent(name: string, outputs: string[] = []): Agent {
 }
 
 function makeDef(parts: Partial<WorkflowDefinition>): WorkflowDefinition {
-  return {
+  const definition: WorkflowDefinition = {
     $schema_version: 4,
     inputs: [],
     nodes: [],
     edges: [],
     ...parts,
+  }
+  return {
+    ...definition,
+    nodes: definition.nodes.map((node) => {
+      const rec = node as typeof node & { agentId?: string; agentName?: string }
+      if (
+        rec.kind !== 'agent-single' ||
+        typeof rec.agentId === 'string' ||
+        typeof rec.agentName !== 'string'
+      ) {
+        return node
+      }
+      return { ...node, agentId: `agent-${rec.agentName}` }
+    }),
   }
 }
 

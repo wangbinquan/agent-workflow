@@ -100,9 +100,10 @@ async function seedAgent(
   name: string,
   outputs: string[],
   outputKinds: Record<string, string>,
-): Promise<void> {
+): Promise<string> {
+  const id = ulid()
   await db.insert(agents).values({
-    id: ulid(),
+    id,
     name,
     description: 'test',
     outputs: JSON.stringify(outputs),
@@ -111,9 +112,13 @@ async function seedAgent(
     frontmatterExtra: JSON.stringify({ outputKinds }),
     bodyMd: '',
   })
+  return id
 }
 
-function loopReviewDef(docKind: 'path<md>' | 'list<path<md>>'): WorkflowDefinition {
+function loopReviewDef(
+  docKind: 'path<md>' | 'list<path<md>>',
+  writerId: string,
+): WorkflowDefinition {
   void docKind
   return {
     $schema_version: 3,
@@ -127,7 +132,12 @@ function loopReviewDef(docKind: 'path<md>' | 'list<path<md>>'): WorkflowDefiniti
         maxIterations: 1,
         exitCondition: { kind: 'port-not-empty', nodeId: 'writer', portName: 'doc' },
       } as unknown as WorkflowNode,
-      { id: 'writer', kind: 'agent-single', agentName: 'writer' } as WorkflowNode,
+      {
+        id: 'writer',
+        kind: 'agent-single',
+        agentId: writerId,
+        agentName: 'writer',
+      } as WorkflowNode,
       {
         id: 'rev',
         kind: 'review',
@@ -176,7 +186,7 @@ describe('RFC-193 e2e — wrapper 内 review 主回归（AC-1）', () => {
   afterEach(() => h?.cleanup())
 
   test('case 5 单文档：loop 内 writer(path<md>) → review body = 文件内容，非占位', async () => {
-    await seedAgent(h.db, 'writer', ['doc'], { doc: 'path<md>' })
+    const writerId = await seedAgent(h.db, 'writer', ['doc'], { doc: 'path<md>' })
     writeFileSync(
       h.planFile,
       JSON.stringify({
@@ -186,7 +196,7 @@ describe('RFC-193 e2e — wrapper 内 review 主回归（AC-1）', () => {
         },
       }),
     )
-    const taskId = await seedTask(h, loopReviewDef('path<md>'))
+    const taskId = await seedTask(h, loopReviewDef('path<md>', writerId))
     await runTask({ db: h.db, taskId, appHome: h.appHome, opencodeCmd: ['bun', 'run', h.mockPath] })
 
     const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
@@ -200,7 +210,7 @@ describe('RFC-193 e2e — wrapper 内 review 主回归（AC-1）', () => {
   })
 
   test('case 5 多文档：loop 内 writer(list<path<md>>) → 每个 doc_version body 对齐 item', async () => {
-    await seedAgent(h.db, 'writer', ['doc'], { doc: 'list<path<md>>' })
+    const writerId = await seedAgent(h.db, 'writer', ['doc'], { doc: 'list<path<md>>' })
     writeFileSync(
       h.planFile,
       JSON.stringify({
@@ -210,7 +220,7 @@ describe('RFC-193 e2e — wrapper 内 review 主回归（AC-1）', () => {
         },
       }),
     )
-    const taskId = await seedTask(h, loopReviewDef('list<path<md>>'))
+    const taskId = await seedTask(h, loopReviewDef('list<path<md>>', writerId))
     await runTask({ db: h.db, taskId, appHome: h.appHome, opencodeCmd: ['bun', 'run', h.mockPath] })
 
     const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
@@ -235,7 +245,7 @@ describe('RFC-193 e2e — 派生投影透传（D16 / case 8b）', () => {
   afterEach(() => h?.cleanup())
 
   test('loop 提升行与 output 虚拟节点行携带上游 kind + archive_json', async () => {
-    await seedAgent(h.db, 'writer', ['doc'], { doc: 'path<md>' })
+    const writerId = await seedAgent(h.db, 'writer', ['doc'], { doc: 'path<md>' })
     writeFileSync(
       h.planFile,
       JSON.stringify({
@@ -255,7 +265,12 @@ describe('RFC-193 e2e — 派生投影透传（D16 / case 8b）', () => {
           exitCondition: { kind: 'port-not-empty', nodeId: 'writer', portName: 'doc' },
           outputBindings: [{ name: 'final', bind: { nodeId: 'writer', portName: 'doc' } }],
         } as unknown as WorkflowNode,
-        { id: 'writer', kind: 'agent-single', agentName: 'writer' } as WorkflowNode,
+        {
+          id: 'writer',
+          kind: 'agent-single',
+          agentId: writerId,
+          agentName: 'writer',
+        } as WorkflowNode,
         {
           id: 'out1',
           kind: 'output',

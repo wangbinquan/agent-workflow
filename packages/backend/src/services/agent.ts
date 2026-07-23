@@ -65,20 +65,14 @@ export async function getAgentById(db: DbClient, id: string): Promise<Agent | nu
 }
 
 /**
- * RFC-223 (PR-3a) — a Drizzle `WHERE` that resolves a frozen workflow-snapshot
- * agent-single node to its `agents` row id-first: match `agents.id = node.agentId`
- * when the node carries the CANONICAL id (rename/ABA-safe), else fall back to
- * `agents.name = node.agentName` for legacy / unstamped snapshots (name↔id is 1:1
- * until PR-8, so the fallback is deterministic). Returns `null` when the node has
- * neither — the caller must NOT pass that to `.where()` (it would select all
- * rows). The R4-1 quarantine sentinel id resolves to no row (fails closed).
+ * RFC-223 (T15) — a Drizzle `WHERE` that resolves a frozen workflow-snapshot
+ * agent-single node by canonical id only. `agentName` is display-only; a
+ * name-only/corrupt snapshot returns `null` and callers fail closed. The R4-1
+ * quarantine sentinel likewise resolves to no row.
  */
 export function snapshotNodeAgentWhere(node: unknown): SQL | null {
   const rec = node as Record<string, unknown>
   if (typeof rec.agentId === 'string' && rec.agentId.length > 0) return eq(agents.id, rec.agentId)
-  if (typeof rec.agentName === 'string' && rec.agentName.length > 0) {
-    return eq(agents.name, rec.agentName)
-  }
   return null
 }
 

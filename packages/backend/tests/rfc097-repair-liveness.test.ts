@@ -36,6 +36,7 @@ import {
   readAuditRows,
   type RepairHarness,
 } from './lifecycle-repair-harness'
+import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
 const ulid = monotonicFactory()
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -132,7 +133,7 @@ async function seedInterruptedTask(h: LiveHarness): Promise<string> {
     frontmatterExtra: '{}',
     bodyMd: '',
   })
-  const def = gatedDef()
+  const def = await canonicalizeWorkflowAgentIds(h.db, gatedDef())
   const workflowId = ulid()
   const taskId = ulid()
   await h.db.insert(workflows).values({
