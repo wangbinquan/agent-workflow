@@ -101,7 +101,7 @@ async function buildHarness(): Promise<Harness> {
 
 async function seedAgent(db: DbClient, name: string, outputs: string[] = ['main']): Promise<void> {
   await db.insert(agents).values({
-    id: ulid(),
+    id: `agent-${name}`,
     name,
     description: 'test',
     outputs: JSON.stringify(outputs),
@@ -175,8 +175,18 @@ function defaultDef(): WorkflowDefinition {
     inputs: [{ kind: 'text', key: 'req', label: 'r' }],
     nodes: [
       { id: 'in1', kind: 'input', inputKey: 'req' },
-      { id: 'designer', kind: 'agent-single', agentName: 'designer' },
-      { id: 'questioner', kind: 'agent-single', agentName: 'questioner' },
+      {
+        id: 'designer',
+        kind: 'agent-single',
+        agentId: 'agent-designer',
+        agentName: 'designer',
+      },
+      {
+        id: 'questioner',
+        kind: 'agent-single',
+        agentId: 'agent-questioner',
+        agentName: 'questioner',
+      },
       { id: 'cross1', kind: 'clarify-cross-agent' },
     ],
     edges: [
@@ -254,9 +264,19 @@ describe('RFC-056 scheduler cross-clarify dispatch', () => {
       inputs: [{ kind: 'text', key: 'req', label: 'r' }],
       nodes: [
         { id: 'in1', kind: 'input', inputKey: 'req' },
-        { id: 'questioner', kind: 'agent-single', agentName: 'questioner' },
+        {
+          id: 'questioner',
+          kind: 'agent-single',
+          agentId: 'agent-questioner',
+          agentName: 'questioner',
+        },
         { id: 'cross1', kind: 'clarify-cross-agent' },
-        { id: 'designer', kind: 'agent-single', agentName: 'designer' },
+        {
+          id: 'designer',
+          kind: 'agent-single',
+          agentId: 'agent-designer',
+          agentName: 'designer',
+        },
       ],
       edges: [
         {
@@ -329,9 +349,19 @@ describe('RFC-056 scheduler cross-clarify dispatch', () => {
       inputs: [{ kind: 'text', key: 'req', label: 'r' }],
       nodes: [
         { id: 'in1', kind: 'input', inputKey: 'req' },
-        { id: 'questioner', kind: 'agent-single', agentName: 'questioner' },
+        {
+          id: 'questioner',
+          kind: 'agent-single',
+          agentId: 'agent-questioner',
+          agentName: 'questioner',
+        },
         { id: 'cross1', kind: 'clarify-cross-agent' },
-        { id: 'designer', kind: 'agent-single', agentName: 'designer' },
+        {
+          id: 'designer',
+          kind: 'agent-single',
+          agentId: 'agent-designer',
+          agentName: 'designer',
+        },
       ],
       edges: [
         {
@@ -377,9 +407,19 @@ describe('RFC-056 scheduler cross-clarify dispatch', () => {
       inputs: [{ kind: 'text', key: 'req', label: 'r' }],
       nodes: [
         { id: 'in1', kind: 'input', inputKey: 'req' },
-        { id: 'questioner', kind: 'agent-single', agentName: 'questioner' },
+        {
+          id: 'questioner',
+          kind: 'agent-single',
+          agentId: 'agent-questioner',
+          agentName: 'questioner',
+        },
         { id: 'cross1', kind: 'clarify-cross-agent' },
-        { id: 'designer', kind: 'agent-single', agentName: 'designer' },
+        {
+          id: 'designer',
+          kind: 'agent-single',
+          agentId: 'agent-designer',
+          agentName: 'designer',
+        },
       ],
       edges: [
         {
@@ -476,7 +516,12 @@ describe('RFC-056 scheduler cross-clarify dispatch', () => {
       inputs: [{ kind: 'text', key: 'req', label: 'r' }],
       nodes: [
         { id: 'in1', kind: 'input', inputKey: 'req' },
-        { id: 'designer', kind: 'agent-single', agentName: 'designer' },
+        {
+          id: 'designer',
+          kind: 'agent-single',
+          agentId: 'agent-designer',
+          agentName: 'designer',
+        },
         { id: 'cross1', kind: 'clarify-cross-agent' },
       ],
       edges: [
@@ -731,9 +776,19 @@ describe('RFC-056 A16 — cross-clarify questioner inline session resume', () =>
       inputs: [{ kind: 'text', key: 'req', label: 'r' }],
       nodes: [
         { id: 'in1', kind: 'input', inputKey: 'req' },
-        { id: 'questioner', kind: 'agent-single', agentName: 'questioner' },
+        {
+          id: 'questioner',
+          kind: 'agent-single',
+          agentId: 'agent-questioner',
+          agentName: 'questioner',
+        },
         { id: 'cross1', kind: 'clarify-cross-agent', sessionModeForQuestioner: mode },
-        { id: 'designer', kind: 'agent-single', agentName: 'designer' },
+        {
+          id: 'designer',
+          kind: 'agent-single',
+          agentId: 'agent-designer',
+          agentName: 'designer',
+        },
         ...selfNodes,
       ],
       edges: [

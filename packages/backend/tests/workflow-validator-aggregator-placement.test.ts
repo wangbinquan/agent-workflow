@@ -49,7 +49,14 @@ describe('aggregator-agent-outside-fanout — PR-B placement guard', () => {
   test('normal agent on agent-single node → no aggregator violation', () => {
     const normalAgent = agent('reporter') // role undefined → 'normal'
     const def = makeDef({
-      nodes: [{ id: 'n1', kind: 'agent-single', agentName: 'reporter' }],
+      nodes: [
+        {
+          id: 'n1',
+          kind: 'agent-single',
+          agentId: normalAgent.id,
+          agentName: normalAgent.name,
+        },
+      ],
     })
     const codes = validateWorkflowDef(def, {
       agents: [normalAgent],
@@ -61,7 +68,14 @@ describe('aggregator-agent-outside-fanout — PR-B placement guard', () => {
   test('explicit role: normal agent → no violation', () => {
     const normalAgent = agent('reporter', 'normal')
     const def = makeDef({
-      nodes: [{ id: 'n1', kind: 'agent-single', agentName: 'reporter' }],
+      nodes: [
+        {
+          id: 'n1',
+          kind: 'agent-single',
+          agentId: normalAgent.id,
+          agentName: normalAgent.name,
+        },
+      ],
     })
     const codes = validateWorkflowDef(def, {
       agents: [normalAgent],
@@ -73,7 +87,14 @@ describe('aggregator-agent-outside-fanout — PR-B placement guard', () => {
   test('aggregator agent on agent-single node → flagged', () => {
     const aggregator = agent('merger', 'aggregator')
     const def = makeDef({
-      nodes: [{ id: 'n1', kind: 'agent-single', agentName: 'merger' }],
+      nodes: [
+        {
+          id: 'n1',
+          kind: 'agent-single',
+          agentId: aggregator.id,
+          agentName: aggregator.name,
+        },
+      ],
     })
     const issues = validateWorkflowDef(def, {
       agents: [aggregator],
@@ -94,7 +115,14 @@ describe('aggregator-agent-outside-fanout — PR-B placement guard', () => {
 
   test('missing agent referenced by node → only agent-not-found, no aggregator check', () => {
     const def = makeDef({
-      nodes: [{ id: 'n1', kind: 'agent-single', agentName: 'missing' }],
+      nodes: [
+        {
+          id: 'n1',
+          kind: 'agent-single',
+          agentId: 'agent-missing',
+          agentName: 'missing',
+        },
+      ],
     })
     const codes = validateWorkflowDef(def, { agents: [], skills: EMPTY_SKILLS }).issues.map(
       (i) => i.code,

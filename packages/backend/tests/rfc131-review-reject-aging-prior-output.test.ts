@@ -141,7 +141,12 @@ async function selfEntryId(h: Harness, taskId: string, originNodeRunId: string):
 function buildDefinition(): WorkflowDefinition {
   const nodes = [
     { id: 'in1', kind: 'input', inputKey: 'req' },
-    { id: P, kind: 'agent-single', agentName: 'planner' },
+    {
+      id: P,
+      kind: 'agent-single',
+      agentId: 'agent-planner',
+      agentName: 'planner',
+    },
     { id: 'C', kind: 'clarify', title: 'Clarify' },
     {
       id: REV,
@@ -181,20 +186,24 @@ function buildDefinition(): WorkflowDefinition {
 }
 
 async function seedDeferredTask(h: Harness): Promise<string> {
-  await createAgent(h.db, {
-    name: 'planner',
-    description: '',
-    outputs: ['doc'],
-    outputKinds: { doc: 'markdown' },
-    syncOutputsOnIterate: true,
-    permission: {},
-    skills: [],
-    dependsOn: [],
-    mcp: [],
-    plugins: [],
-    frontmatterExtra: {},
-    bodyMd: '',
-  })
+  await createAgent(
+    h.db,
+    {
+      name: 'planner',
+      description: '',
+      outputs: ['doc'],
+      outputKinds: { doc: 'markdown' },
+      syncOutputsOnIterate: true,
+      permission: {},
+      skills: [],
+      dependsOn: [],
+      mcp: [],
+      plugins: [],
+      frontmatterExtra: {},
+      bodyMd: '',
+    },
+    { id: 'agent-planner' },
+  )
   const def = buildDefinition()
   const workflowId = ulid()
   const taskId = ulid()

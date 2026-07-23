@@ -60,7 +60,7 @@ async function seedAgent(
   extra: Record<string, unknown> = {},
 ): Promise<void> {
   await db.insert(agents).values({
-    id: ulid(),
+    id: `agent-${name}`,
     name,
     description: 'test',
     outputs: JSON.stringify(outputs),
@@ -129,7 +129,13 @@ function fanoutDef(): WorkflowDefinition {
         nodeIds: ['inner'],
         inputs: [{ name: 'docs', kind: 'list<path<md>>', isShardSource: true }],
       },
-      { id: 'inner', kind: 'agent-single', agentName: 'worker', promptTemplate: 'Process {{doc}}' },
+      {
+        id: 'inner',
+        kind: 'agent-single',
+        agentId: 'agent-worker',
+        agentName: 'worker',
+        promptTemplate: 'Process {{doc}}',
+      },
     ] as unknown as WorkflowDefinition['nodes'],
     edges: [
       {

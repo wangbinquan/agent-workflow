@@ -47,6 +47,7 @@ import { createUser } from '../src/services/users'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const CASE_GEN_AGENT_ID = 'agent-case-gen'
 
 // ---------------------------------------------------------------------------
 // 纯函数层 — groupDocVersionRounds
@@ -227,7 +228,7 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
     reviewNode: WorkflowNode
   }> {
     await db.insert(agentsTable).values({
-      id: ulid(),
+      id: CASE_GEN_AGENT_ID,
       name: 'caseGen',
       description: '',
       outputs: JSON.stringify(['cases']),
@@ -243,6 +244,7 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
         {
           id: 'src',
           kind: 'agent-single',
+          agentId: CASE_GEN_AGENT_ID,
           agentName: 'caseGen',
           promptTemplate: '',
         } as WorkflowNode,
@@ -574,6 +576,7 @@ describe('RFC-142 — /rounds 路由 ACL', () => {
         {
           id: 'src',
           kind: 'agent-single',
+          agentId: CASE_GEN_AGENT_ID,
           agentName: 'caseGen',
           promptTemplate: '',
         } as WorkflowNode,

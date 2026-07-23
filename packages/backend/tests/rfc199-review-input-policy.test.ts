@@ -50,8 +50,18 @@ function definition(edges: WorkflowEdge[]): WorkflowDefinition {
     $schema_version: 4,
     inputs: [],
     nodes: [
-      { id: 'source', kind: 'agent-single', agentName: 'source' },
-      { id: 'other', kind: 'agent-single', agentName: 'other' },
+      {
+        id: 'source',
+        kind: 'agent-single',
+        agentId: 'agent-source',
+        agentName: 'source',
+      },
+      {
+        id: 'other',
+        kind: 'agent-single',
+        agentId: 'agent-other',
+        agentName: 'other',
+      },
       {
         id: 'review',
         kind: 'review',

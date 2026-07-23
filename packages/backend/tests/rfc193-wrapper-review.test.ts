@@ -324,7 +324,7 @@ describe('RFC-193 e2e — 派生投影透传（D16 / case 8b）', () => {
   })
 
   test('loop 内 writer 通过 outputBinding 提升后可被 loop 外 review 读取', async () => {
-    await seedAgent(h.db, 'writer', ['doc'], { doc: 'path<md>' })
+    const writerId = await seedAgent(h.db, 'writer', ['doc'], { doc: 'path<md>' })
     writeFileSync(
       h.planFile,
       JSON.stringify({
@@ -347,7 +347,12 @@ describe('RFC-193 e2e — 派生投影透传（D16 / case 8b）', () => {
           exitCondition: { kind: 'port-not-empty', nodeId: 'writer', portName: 'doc' },
           outputBindings: [{ name: 'final', bind: { nodeId: 'writer', portName: 'doc' } }],
         } as unknown as WorkflowNode,
-        { id: 'writer', kind: 'agent-single', agentName: 'writer' } as WorkflowNode,
+        {
+          id: 'writer',
+          kind: 'agent-single',
+          agentId: writerId,
+          agentName: 'writer',
+        } as WorkflowNode,
         {
           id: 'review',
           kind: 'review',

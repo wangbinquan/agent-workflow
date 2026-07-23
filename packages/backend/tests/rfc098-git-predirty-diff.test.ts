@@ -132,7 +132,7 @@ describe('RFC-098 B3 (S-4) — pre-dirty 差集按 blob hash / deleted 哨兵判
   test('改又改回不出现；改过的保留；重建的保留；持续删除扣除；新文件保留', async () => {
     h = await buildHarness()
     await h.db.insert(agents).values({
-      id: ulid(),
+      id: 'agent-writer',
       name: 'writer',
       description: 'test',
       outputs: JSON.stringify(['summary']),
@@ -145,7 +145,12 @@ describe('RFC-098 B3 (S-4) — pre-dirty 差集按 blob hash / deleted 哨兵判
       $schema_version: 1,
       inputs: [],
       nodes: [
-        { id: 'w', kind: 'agent-single', agentName: 'writer' },
+        {
+          id: 'w',
+          kind: 'agent-single',
+          agentId: 'agent-writer',
+          agentName: 'writer',
+        },
         { id: 'wg', kind: 'wrapper-git', nodeIds: ['w'] },
       ] as unknown as WorkflowDefinition['nodes'],
       edges: [],

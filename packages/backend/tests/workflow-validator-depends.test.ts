@@ -57,7 +57,14 @@ function makeDef(): WorkflowDefinition {
   return {
     $schema_version: 1,
     inputs: [],
-    nodes: [{ id: 'n1', kind: 'agent-single', agentName: 'orchestrator' }],
+    nodes: [
+      {
+        id: 'n1',
+        kind: 'agent-single',
+        agentId: 'agent-orchestrator',
+        agentName: 'orchestrator',
+      },
+    ],
     edges: [],
   }
 }
@@ -118,7 +125,7 @@ describe('RFC-022 workflow validator: dependsOn closure scan', () => {
     const b = agent('b', ['out'], { dependsOn: ['a'] }) // cycle a↔b
     const def: WorkflowDefinition = {
       ...makeDef(),
-      nodes: [{ id: 'n1', kind: 'agent-single', agentName: 'a' }],
+      nodes: [{ id: 'n1', kind: 'agent-single', agentId: 'agent-a', agentName: 'a' }],
     }
     const res = validateWorkflowDef(def, { agents: [a, b], skills: [] })
     // No specific cycle code from the validator (save-guard owns that); the

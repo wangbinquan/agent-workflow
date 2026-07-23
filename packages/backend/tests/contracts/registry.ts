@@ -140,6 +140,7 @@ export const ENDPOINTS: EndpointSpec[] = [
   },
   { method: 'GET', path: '/api/agents/builtins/skill-merger' },
   { method: 'POST', path: '/api/agents' },
+  { method: 'POST', path: '/api/agents/import-resolve' },
   { method: 'PUT', path: '/api/agents/:id' },
   { method: 'DELETE', path: '/api/agents/:id' },
   { method: 'POST', path: '/api/agents/:id/rename' },
