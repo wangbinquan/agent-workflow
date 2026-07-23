@@ -31,6 +31,15 @@ export const WorkgroupRuntimeMemberSchema = z.object({
   id: z.string().min(1),
   memberType: WorkgroupMemberTypeSchema,
   agentName: z.string().nullable(),
+  /**
+   * RFC-223 (PR-3a) — the CANONICAL agent reference frozen at launch, resolved
+   * by the launcher's ACL scope (workgroup/launch.ts). The engine resolves the
+   * member's agent BY THIS ID (rename-safe, ABA-safe); `agentName` is kept for
+   * display only. Optional so pre-RFC-223 task config snapshots still parse;
+   * migration 0113 stamps it (real id never re-derivable → the quarantine
+   * sentinel). A member with no `agentId` is unresolvable (fails closed).
+   */
+  agentId: z.string().nullable().optional(),
   /** Human member's users.id — server-side routing/audit only, never injected. */
   userId: z.string().nullable(),
   displayName: WorkgroupMemberDisplayNameSchema,

@@ -777,7 +777,14 @@ export function validateWorkflowDef(
   for (const node of nodes) {
     if (node.kind === 'agent-single') {
       const name = readString(node, 'agentName') ?? ''
-      const agent = agentByName.get(name)
+      // RFC-223 (PR-3a): resolve the node's agent by its CANONICAL `agentId`
+      // when stamped (rename/ABA-safe), else fall back to the display name for
+      // dynamic-generated / pre-migration definitions (name↔id 1:1 until PR-8).
+      const agentIdRef = readString(node, 'agentId')
+      const agent =
+        agentIdRef !== undefined && agentIdRef.length > 0
+          ? agentById.get(agentIdRef)
+          : agentByName.get(name)
       if (agent === undefined) {
         issues.push({
           code: 'agent-not-found',

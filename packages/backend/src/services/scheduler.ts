@@ -4467,10 +4467,11 @@ async function runFanoutWrapperNode(
 
   // 2. Hydrate the inner-node agent map. findFanoutAggregator + scope
   // computation both consult this. Missing-agent here is fatal.
-  // RFC-223 (PR-2): resolve each inner agent by its CANONICAL id when the node
-  // carries one (rename-/ABA-safe), falling back to name for dynamic-generated
-  // / pre-0112 nodes. Keyed by agentName so the per-shard dispatch lookup below
-  // (`agentsMap.get(innerAgentName)`) is unchanged (name↔id is 1:1 until PR-8).
+  // RFC-223 (PR-2/PR-3a): resolve each inner agent by its CANONICAL id when the
+  // node carries one (rename-/ABA-safe), falling back to name for
+  // dynamic-generated / pre-0112 nodes. Keyed by BOTH id AND name — the per-shard
+  // dispatch lookup below still reads `agentsMap.get(innerAgentName)`, while the
+  // shared `resolveNodeAgent` (findFanoutAggregator) now hits the id key first.
   const agentsMap = new Map<string, Agent>()
   for (const id of innerIds) {
     const inner = definition.nodes.find((n) => n.id === id)
@@ -4480,7 +4481,10 @@ async function runFanoutWrapperNode(
     if (typeof an !== 'string' || agentsMap.has(an)) continue
     const aid = typeof rec.agentId === 'string' ? rec.agentId : null
     const a = aid !== null ? await getAgentById(db, aid) : await getAgent(db, an)
-    if (a !== null) agentsMap.set(an, a)
+    if (a !== null) {
+      agentsMap.set(an, a)
+      if (aid !== null) agentsMap.set(aid, a)
+    }
   }
 
   // 3. Wrapper row resume / mint (mirrors wrapper-git pattern).

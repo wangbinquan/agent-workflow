@@ -78,6 +78,21 @@ export const WorkflowInputKindSchema = z.enum(WORKFLOW_INPUT_KIND)
 export const XYSchema = z.object({ x: z.number(), y: z.number() })
 
 /**
+ * RFC-223 (PR-3a, R4-1) — the sentinel `agentId` migration 0113 stamps onto an
+ * agent-single node (or a frozen workgroup config member) whose historical
+ * identity CANNOT be safely recovered: an old task snapshot froze the agent by
+ * NAME only, and global uniqueness proves only the CURRENT single candidate, not
+ * that the name was never rename+recreate (ABA) reassigned since launch. Rather
+ * than guess by the current name (which could bind a DIFFERENT tenant's agent),
+ * the migration quarantines the reference with this value. It never resolves to
+ * a row (`getAgentById` returns null), so resume/retry fails closed with
+ * agent-not-found instead of silently re-binding. `agentName` is preserved
+ * beside it for display/audit. Underscores make it un-representable as a ULID
+ * (Crockford base32), so it can never collide with a real agent id.
+ */
+export const QUARANTINED_SNAPSHOT_AGENT_ID = '__rfc223_snapshot_quarantined__'
+
+/**
  * Node base. Each `kind` carries its own additional fields per design.md §5.
  * M1 keeps it permissive via `passthrough()`; the strict discriminated union
  * is built out in P-2-01 alongside the workflow validator.

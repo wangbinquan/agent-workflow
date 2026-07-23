@@ -167,6 +167,7 @@ export async function driveBatchTurn(
         overrides: {
           shardKey,
           agentOverrideName: agent.name,
+          agentOverrideId: agent.id,
           wgRound: null, // fc member rows stay NULL (RFC-189 count-based budget)
         },
       }),

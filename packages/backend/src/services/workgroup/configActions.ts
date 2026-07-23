@@ -18,7 +18,6 @@ import { z } from 'zod'
 import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import {
-  agents,
   taskCollaborators,
   tasks,
   users,
@@ -27,7 +26,7 @@ import {
   workgroupMessages,
 } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
-import { assertNewRefsUsable } from '@/services/resourceRefs'
+import { assertNoMissingRefs, resolveRefsUsableById } from '@/services/resourceRefs'
 import { ConflictError, ValidationError } from '@/util/errors'
 import {
   casAssignmentStatusTx,
@@ -102,20 +101,20 @@ export function buildConfigActions(
         ),
       ),
     ]
+    // RFC-223 (PR-3a): name → resolved agent id for the members added below, so
+    // the id frozen into the task config is exactly the id the ACL check bound.
+    const addedAgentIdByName = new Map<string, string>()
     if (addedAgentNames.length > 0) {
       // Mid-run membership is a new reference just like editing a workgroup
       // resource: reject private agents before the existence check so the
       // response cannot be used to distinguish a hidden row from a typo.
-      await assertNewRefsUsable(deps.db, actor, [{ type: 'agent', names: addedAgentNames }])
-      const existing = new Set(
-        (
-          await deps.db
-            .select({ name: agents.name })
-            .from(agents)
-            .where(inArray(agents.name, addedAgentNames))
-        ).map((row) => row.name),
-      )
-      const missing = addedAgentNames.filter((name) => !existing.has(name))
+      // RFC-223 (PR-3a, ACL-binding): resolve id + usability in ONE pass so a
+      // name renamed onto a private row between resolve and freeze cannot bind
+      // an id the actor was never authorized for (the resolveRefsUsableById
+      // TOCTOU close established by the PR-1 impl-gate fix).
+      const resolved = await resolveRefsUsableById(deps.db, actor, 'agent', addedAgentNames)
+      assertNoMissingRefs(resolved.missing)
+      const missing = addedAgentNames.filter((name) => !resolved.byToken.has(name))
       if (missing.length > 0) {
         throw new ValidationError(
           'workgroup-config-agent-missing',
@@ -123,6 +122,7 @@ export function buildConfigActions(
           { missingAgentNames: missing },
         )
       }
+      for (const [name, id] of resolved.byToken) addedAgentIdByName.set(name, id)
     }
     const changes: string[] = []
     let members = [...config.members]
@@ -195,6 +195,11 @@ export function buildConfigActions(
           id,
           memberType: m.memberType,
           agentName: m.memberType === 'agent' ? (m.agentName ?? null) : null,
+          // RFC-223 (PR-3a): freeze the resolved canonical id (rename/ABA-safe).
+          agentId:
+            m.memberType === 'agent' && m.agentName
+              ? (addedAgentIdByName.get(m.agentName) ?? null)
+              : null,
           userId: m.memberType === 'human' ? (m.userId ?? null) : null,
           displayName: m.displayName,
           roleDesc: m.roleDesc,

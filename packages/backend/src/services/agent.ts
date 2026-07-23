@@ -16,7 +16,7 @@ import {
   AgentInputPortsSchema,
   AgentSkillRefSchema,
 } from '@agent-workflow/shared'
-import { and, eq, inArray, like, notInArray } from 'drizzle-orm'
+import { and, eq, inArray, like, notInArray, type SQL } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { agents, mcps, plugins, scheduledTasks, tasks, workflows } from '@/db/schema'
@@ -57,6 +57,24 @@ export async function getAgentById(db: DbClient, id: string): Promise<Agent | nu
   const rows = await db.select().from(agents).where(eq(agents.id, id)).limit(1)
   const row = rows[0]
   return row ? rowToAgent(row) : null
+}
+
+/**
+ * RFC-223 (PR-3a) — a Drizzle `WHERE` that resolves a frozen workflow-snapshot
+ * agent-single node to its `agents` row id-first: match `agents.id = node.agentId`
+ * when the node carries the CANONICAL id (rename/ABA-safe), else fall back to
+ * `agents.name = node.agentName` for legacy / unstamped snapshots (name↔id is 1:1
+ * until PR-8, so the fallback is deterministic). Returns `null` when the node has
+ * neither — the caller must NOT pass that to `.where()` (it would select all
+ * rows). The R4-1 quarantine sentinel id resolves to no row (fails closed).
+ */
+export function snapshotNodeAgentWhere(node: unknown): SQL | null {
+  const rec = node as Record<string, unknown>
+  if (typeof rec.agentId === 'string' && rec.agentId.length > 0) return eq(agents.id, rec.agentId)
+  if (typeof rec.agentName === 'string' && rec.agentName.length > 0) {
+    return eq(agents.name, rec.agentName)
+  }
+  return null
 }
 
 export async function createAgent(
@@ -405,15 +423,25 @@ export async function deleteAgent(db: DbClient, name: string, actor: Actor): Pro
       )
     }
     // RFC-165 §4: a NON-terminal single-agent task still runs (or will run)
-    // against this agent by name — deleting now would strand it mid-flight.
-    // 409 until those tasks finish/cancel. Terminal tasks are the accepted
-    // limitation: their retry/resume later fails with agent-not-found (same
-    // soft-reference philosophy as RFC-164 workgroup members).
+    // against this agent — deleting now would strand it mid-flight. 409 until
+    // those tasks finish/cancel. Terminal tasks are the accepted limitation:
+    // their retry/resume later fails with agent-not-found (same soft-reference
+    // philosophy as RFC-164 workgroup members).
+    //
+    // RFC-223 (PR-3a, R3-3): match by the CANONICAL `source_agent_id` (frozen at
+    // launch), NOT by name. After PR-8 lifts global name uniqueness a by-name
+    // guard would let a DIFFERENT owner's same-named task block this delete (and
+    // leak that task's id via the error). A pre-0091 legacy task has NULL
+    // source_agent_id and is already R4-1-quarantined (un-resumable), so not
+    // blocking on it is correct.
     const live = tx
       .select({ id: tasks.id })
       .from(tasks)
       .where(
-        and(eq(tasks.sourceAgentName, name), notInArray(tasks.status, [...TERMINAL_TASK_STATUSES])),
+        and(
+          eq(tasks.sourceAgentId, existing.id),
+          notInArray(tasks.status, [...TERMINAL_TASK_STATUSES]),
+        ),
       )
       .all()
     if (live.length > 0) {
@@ -550,13 +578,18 @@ export async function renameAgent(
     }
 
     // RFC-165 §4: renaming under a live single-agent task would strand its
-    // by-name reference exactly like a delete → same 409.
+    // reference exactly like a delete → same 409. RFC-223 (PR-3a, R3-3): match by
+    // the CANONICAL `source_agent_id` (frozen at launch), NOT by name, so a
+    // different owner's same-named task never blocks this rename post-PR-8. (A
+    // rename is in fact ABA-safe for id-frozen tasks — they resolve by id — but
+    // the 409 stays to preserve the RFC-165 soft-reference UX for THIS agent's
+    // own live tasks.)
     const live = tx
       .select({ id: tasks.id })
       .from(tasks)
       .where(
         and(
-          eq(tasks.sourceAgentName, oldName),
+          eq(tasks.sourceAgentId, existing.id),
           notInArray(tasks.status, [...TERMINAL_TASK_STATUSES]),
         ),
       )

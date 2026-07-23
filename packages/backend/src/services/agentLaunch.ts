@@ -100,7 +100,10 @@ export async function ensureAgentHostWorkflow(db: DbClient): Promise<void> {
  *    layer (agentLaunchForm.ts — the frontend renders the SAME derived defs).
  */
 export function buildAgentHostSnapshot(
-  agent: { name: string; inputs?: AgentInputPort[] },
+  // RFC-223 (PR-3a): `id` freezes the CANONICAL agent reference onto the synthetic
+  // agent-single node so resume/retry dispatches by id (rename/ABA-safe), never
+  // re-resolving the mutable name. `sourceAgentId` on the task mirrors it.
+  agent: { id: string; name: string; inputs?: AgentInputPort[] },
   allowClarify: boolean,
 ): {
   $schema_version: number
@@ -127,6 +130,7 @@ export function buildAgentHostSnapshot(
           id: AGENT_HOST_AGENT_NODE_ID,
           kind: 'agent-single',
           agentName: agent.name,
+          agentId: agent.id,
           promptTemplate: `{{${AGENT_HOST_INPUT_KEY}}}`,
         },
         ...(allowClarify
@@ -169,6 +173,7 @@ export function buildAgentHostSnapshot(
         id: AGENT_HOST_AGENT_NODE_ID,
         kind: 'agent-single',
         agentName: agent.name,
+        agentId: agent.id,
         promptTemplate: form.promptTemplate,
       },
       ...(allowClarify

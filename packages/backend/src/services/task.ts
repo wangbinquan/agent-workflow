@@ -1620,27 +1620,24 @@ async function startTaskImpl(
 
       // F17: a concurrent agent delete between the service-level 404 gate and
       // this insert must fail the launch — never mint a task for a ghost.
+      //
+      // RFC-223 (PR-3a, R3-3): re-verify by the CANONICAL id (source_agent_id is
+      // written from `agentLaunch.agentId` below, and the snapshot node freezes
+      // the same id). Matching by id — not name — means a same-named replacement
+      // created in the tiny window can never satisfy this gate (it has a
+      // different id), so the frozen id always names the agent the launcher
+      // actually resolved. The launch reservation already blocks delete/rename
+      // mid-launch; this is the belt-and-suspenders behind it.
       if (deps.agentLaunch !== undefined) {
         const live = tx
           .select({ id: agents.id })
           .from(agents)
-          .where(eq(agents.name, deps.agentLaunch.agentName))
+          .where(eq(agents.id, deps.agentLaunch.agentId))
           .get()
         if (live === undefined) {
           throw new NotFoundError(
             'agent-not-found',
             `agent '${deps.agentLaunch.agentName}' was deleted during launch`,
-          )
-        }
-        // RFC-175 (§2e): belt-and-suspenders invariant behind the launch
-        // reservation (which already blocks delete/rename mid-launch) — assert
-        // the same-name agent still has the resolved id, so `source_agent_id`
-        // (written below) matches the agent the runtime resolves by name.
-        // Should never fire once the reservation holds.
-        if (live.id !== deps.agentLaunch.agentId) {
-          throw new ConflictError(
-            'agent-id-mismatch',
-            `agent '${deps.agentLaunch.agentName}' was replaced during launch`,
           )
         }
       }

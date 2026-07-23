@@ -20,6 +20,7 @@ import type {
   ResolvedDistillScope,
   SourceContextBudget,
 } from '@agent-workflow/shared'
+import { QUARANTINED_SNAPSHOT_AGENT_ID } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { agents, cachedRepos, memoryDistillJobs, tasks } from '@/db/schema'
 import { runDistill, type DistillerSpawnFn, rowToDistillJob } from '@/services/memoryDistiller'
@@ -126,6 +127,7 @@ export function buildDebounceKey(input: EnqueueDistillJobInput): string {
 // ---------------------------------------------------------------------------
 
 interface SnapshotAgentNode {
+  agentId?: string
   agentName?: string
   agent?: string
   kind?: string
@@ -157,6 +159,51 @@ export function extractAgentNamesFromSnapshot(workflowSnapshot: string): string[
   return [...out]
 }
 
+/**
+ * RFC-223 (PR-3a) — split a snapshot's agent-single references into the frozen
+ * CANONICAL ids (each names exactly one agent — 取单行, so no name→multi-id spread
+ * after PR-8 lifts uniqueness) and the leftover legacy nodes that carry only a
+ * name. The distill scope is a non-security heuristic, so the name-only remainder
+ * (including R4-1-quarantined nodes whose `agentId` is the sentinel) keeps the
+ * deterministic name fallback rather than fail closed — mislabeling here would
+ * only mis-scope which agents' memories a completed task distills into.
+ */
+export function extractAgentRefsFromSnapshot(workflowSnapshot: string): {
+  ids: string[]
+  namesWithoutId: string[]
+} {
+  let parsed: { nodes?: SnapshotAgentNode[] } = {}
+  try {
+    parsed = JSON.parse(workflowSnapshot) as typeof parsed
+  } catch {
+    return { ids: [], namesWithoutId: [] }
+  }
+  const ids = new Set<string>()
+  const namesWithoutId = new Set<string>()
+  for (const node of parsed.nodes ?? []) {
+    if (typeof node !== 'object' || node === null) continue
+    if (node.kind !== 'agent-single') continue
+    const id =
+      typeof node.agentId === 'string' &&
+      node.agentId.length > 0 &&
+      node.agentId !== QUARANTINED_SNAPSHOT_AGENT_ID
+        ? node.agentId
+        : null
+    if (id !== null) {
+      ids.add(id)
+      continue
+    }
+    const name =
+      typeof node.agentName === 'string' && node.agentName.length > 0
+        ? node.agentName
+        : typeof node.agent === 'string' && node.agent.length > 0
+          ? node.agent
+          : null
+    if (name !== null) namesWithoutId.add(name)
+  }
+  return { ids: [...ids], namesWithoutId: [...namesWithoutId] }
+}
+
 export async function computeEligibleScopes(
   db: DbClient,
   taskId: string | null,
@@ -168,13 +215,23 @@ export async function computeEligibleScopes(
   if (taskRow === undefined) {
     return { agentIds: [], workflowId: null, repoId: null, includeGlobal: true }
   }
-  const agentNames = extractAgentNamesFromSnapshot(taskRow.workflowSnapshot)
-  const agentIds =
-    agentNames.length === 0
+  // RFC-223 (PR-3a): take the frozen CANONICAL ids directly (each names exactly
+  // ONE agent — no name→multi-id spread); resolve only the residual legacy
+  // name-only nodes by name (bounded; distill scope is a heuristic, not a
+  // security boundary).
+  const { ids: frozenAgentIds, namesWithoutId } = extractAgentRefsFromSnapshot(
+    taskRow.workflowSnapshot,
+  )
+  const nameResolvedIds =
+    namesWithoutId.length === 0
       ? []
       : (
-          await db.select({ id: agents.id }).from(agents).where(inArray(agents.name, agentNames))
+          await db
+            .select({ id: agents.id })
+            .from(agents)
+            .where(inArray(agents.name, namesWithoutId))
         ).map((r) => r.id)
+  const agentIds = [...new Set([...frozenAgentIds, ...nameResolvedIds])]
   // RFC-204: see memoryInject — join on the stored mirror id. The old URL join
   // compared a REDACTED tasks.repo_url against the plaintext cached_repos.url,
   // so it missed private repos entirely and, once the credential column is

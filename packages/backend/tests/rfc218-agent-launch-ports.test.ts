@@ -111,9 +111,9 @@ describe('B1/B2 — host snapshot shapes', () => {
   })
 
   test('B1 ported snapshot: per-port input nodes/edges + envelope template; validates', async () => {
-    await createAgent(db, { ...AGENT_FIELDS, name: 'ported', inputs: [...PORTS] })
+    const ported = await createAgent(db, { ...AGENT_FIELDS, name: 'ported', inputs: [...PORTS] })
 
-    const snap = buildAgentHostSnapshot({ name: 'ported', inputs: [...PORTS] }, true)
+    const snap = buildAgentHostSnapshot({ id: ported.id, name: 'ported', inputs: [...PORTS] }, true)
     const def = WorkflowDefinitionSchema.parse(snap)
     expect(def.nodes.map((n) => n.id).sort()).toEqual(
       ['__agent_clarify__', '__agent_input_0__', '__agent_input_1__', '__agent_main__'].sort(),
@@ -156,8 +156,8 @@ describe('B1/B2 — host snapshot shapes', () => {
     expect(validateWorkflowDef(def, ctx).ok).toBe(true)
   })
 
-  test('B2 zero-port agents keep the RFC-165 legacy literal byte-for-byte', () => {
-    expect(buildAgentHostSnapshot({ name: 'solo' }, true)).toEqual({
+  test('B2 zero-port agents keep the RFC-165 legacy literal (plus RFC-223 agentId)', () => {
+    expect(buildAgentHostSnapshot({ id: 'solo-id', name: 'solo' }, true)).toEqual({
       $schema_version: 4,
       inputs: [
         {
@@ -174,6 +174,8 @@ describe('B1/B2 — host snapshot shapes', () => {
           id: '__agent_main__',
           kind: 'agent-single',
           agentName: 'solo',
+          // RFC-223 (PR-3a): the canonical id is frozen beside the display name.
+          agentId: 'solo-id',
           promptTemplate: '{{description}}',
         },
         {

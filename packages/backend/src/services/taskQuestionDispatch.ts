@@ -1296,6 +1296,16 @@ function resolveNodeAgentName(def: WorkflowDefinition, nodeId: string): string |
   )
 }
 
+/** RFC-223 (PR-3a): the borrowed node's CANONICAL agent id from the frozen snapshot —
+ *  stamped beside `agentOverrideName` so the borrow is attributed by id
+ *  (rename/ABA-safe). null = unstamped legacy node / non-agent node. */
+function resolveNodeAgentId(def: WorkflowDefinition, nodeId: string): string | null {
+  return (
+    ((def.nodes ?? []).find((n) => n.id === nodeId) as { agentId?: string } | undefined)?.agentId ??
+    null
+  )
+}
+
 /**
  * RFC-127 borrow authority for scheduler dispatch.
  *
@@ -1730,8 +1740,11 @@ export async function buildFrontierMintPlan(
   const preId = ulid()
   // RFC-127 借壳: resolve the borrowed node's agentName from the frozen snapshot (the SAME
   // source canReassign validated against). null = no borrow → the home runs its own agent.
+  // RFC-223 (PR-3a): stamp the borrowed node's CANONICAL id too (rename/ABA-safe attribution).
   const agentOverrideName =
     borrowOverrideNodeId === null ? null : resolveNodeAgentName(definition, borrowOverrideNodeId)
+  const agentOverrideId =
+    borrowOverrideNodeId === null ? null : resolveNodeAgentId(definition, borrowOverrideNodeId)
   const values = buildMintNodeRunValues({
     id: preId,
     taskId,
@@ -1745,6 +1758,7 @@ export async function buildFrontierMintPlan(
     overrides: {
       startedAt: null,
       agentOverrideName,
+      agentOverrideId,
       ...(shardKey !== undefined ? { shardKey } : {}),
     },
   })

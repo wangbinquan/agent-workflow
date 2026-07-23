@@ -42,6 +42,53 @@ export function lookupAgent<T>(
   return (table as Readonly<Record<string, T | undefined>>)[name]
 }
 
+/**
+ * RFC-223 (PR-3a) — resolve a workflow node's agent from a lookup, id-canonical:
+ * prefer the node's stable `agentId`, then fall back to `agentName`. When the
+ * lookup carries id keys ({@link buildNodeAgentLookup} keys by BOTH id and name),
+ * the id path wins and the resolution is rename/ABA-safe. The name fallback keeps
+ * a legacy name-keyed lookup (e.g. the canvas' `Map(agents.map(a => [a.name,a]))`)
+ * working for a node that already stamps `agentId` — under global uniqueness
+ * (until PR-8) the name still resolves deterministically, so port derivation /
+ * preview never breaks. Callers on the EXECUTION / security path resolve the
+ * agent strictly by id elsewhere (scheduler dispatch, workgroup member turns);
+ * this shared resolver only shapes ports, so the lenient fallback is safe.
+ */
+export function resolveNodeAgent<T>(
+  node: WorkflowNode,
+  agents: ReadonlyMap<string, T> | Readonly<Record<string, T | undefined>>,
+): T | undefined {
+  const rec = node as unknown as { agentId?: unknown; agentName?: unknown }
+  if (typeof rec.agentId === 'string' && rec.agentId.length > 0) {
+    const byId = lookupAgent(agents, rec.agentId)
+    if (byId !== undefined) return byId
+  }
+  if (typeof rec.agentName === 'string' && rec.agentName.length > 0) {
+    return lookupAgent(agents, rec.agentName)
+  }
+  return undefined
+}
+
+/**
+ * RFC-223 (PR-3a) — build a node→agent lookup keyed by BOTH `id` and `name` from
+ * a list of full agents, so {@link resolveNodeAgent} resolves id-first while any
+ * remaining by-name reader keeps working (id keys are ULIDs, name keys are human
+ * strings — they never collide). Projecting to `V` lets a caller narrow to the
+ * structural slice it needs (e.g. `PortLookupAgent`).
+ */
+export function buildNodeAgentLookup<A extends { id: string; name: string }, V>(
+  agents: readonly A[],
+  project: (a: A) => V,
+): Map<string, V> {
+  const map = new Map<string, V>()
+  for (const a of agents) {
+    const v = project(a)
+    map.set(a.id, v)
+    map.set(a.name, v)
+  }
+  return map
+}
+
 function readWrapperFanout(
   defn: WorkflowDefinition,
   wrapperId: string,
@@ -58,9 +105,8 @@ function readWrapperFanout(
 
 function isAggregatorAgentNode(node: WorkflowNode, agents: AgentLookup): Agent | null {
   if (node.kind !== 'agent-single') return null
-  const rec = node as unknown as { agentName?: unknown }
-  if (typeof rec.agentName !== 'string') return null
-  const agent = lookupAgent(agents, rec.agentName)
+  // RFC-223 (PR-3a): resolve id-first (rename/ABA-safe) via the shared resolver.
+  const agent = resolveNodeAgent(node, agents)
   if (agent === undefined) return null
   return agent.role === 'aggregator' ? agent : null
 }

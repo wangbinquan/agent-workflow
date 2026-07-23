@@ -106,9 +106,9 @@ describe('RFC-165 §4 — agent host snapshot (A1/A2)', () => {
   })
 
   test('A1 shape: clarify ON → optional channel wired; OFF → absent; both validate', async () => {
-    await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
+    const solo = await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
 
-    const on = buildAgentHostSnapshot({ name: 'solo' }, true)
+    const on = buildAgentHostSnapshot({ id: solo.id, name: 'solo' }, true)
     const onDef = WorkflowDefinitionSchema.parse(on)
     expect(onDef.nodes.map((n) => n.id).sort()).toEqual(
       ['__agent_clarify__', '__agent_input__', '__agent_main__'].sort(),
@@ -129,7 +129,7 @@ describe('RFC-165 §4 — agent host snapshot (A1/A2)', () => {
     const ctx = await buildWorkflowValidationContext(db)
     expect(validateWorkflowDef(onDef, ctx).ok).toBe(true)
 
-    const off = buildAgentHostSnapshot({ name: 'solo' }, false)
+    const off = buildAgentHostSnapshot({ id: solo.id, name: 'solo' }, false)
     const offDef = WorkflowDefinitionSchema.parse(off)
     expect(offDef.nodes.map((n) => n.id).sort()).toEqual(
       ['__agent_input__', '__agent_main__'].sort(),
@@ -141,7 +141,7 @@ describe('RFC-165 §4 — agent host snapshot (A1/A2)', () => {
   test('A2 negative matrix: missing agent / skill / plugin all fail validation', async () => {
     const ctxNoAgent = await buildWorkflowValidationContext(db)
     const ghost = WorkflowDefinitionSchema.parse(
-      buildAgentHostSnapshot({ name: 'no-such-agent' }, true),
+      buildAgentHostSnapshot({ id: 'no-such-agent-id', name: 'no-such-agent' }, true),
     )
     expect(validateWorkflowDef(ghost, ctxNoAgent).ok).toBe(false)
 
@@ -150,8 +150,9 @@ describe('RFC-165 §4 — agent host snapshot (A1/A2)', () => {
     // skill-not-found we need a MANAGED ref to a non-existent skill id;
     // createAgent would demote an unknown token to project, so insert the row
     // directly (mirrors the deleted-plugin case below).
+    const skillyId = ulid()
     await db.insert(agents).values({
-      id: ulid(),
+      id: skillyId,
       name: 'skilly',
       description: '',
       outputs: '[]',
@@ -166,14 +167,15 @@ describe('RFC-165 §4 — agent host snapshot (A1/A2)', () => {
       updatedAt: Date.now(),
     })
     const skillDef = WorkflowDefinitionSchema.parse(
-      buildAgentHostSnapshot({ name: 'skilly' }, true),
+      buildAgentHostSnapshot({ id: skillyId, name: 'skilly' }, true),
     )
     expect(validateWorkflowDef(skillDef, await buildWorkflowValidationContext(db)).ok).toBe(false)
 
     // createAgent validates plugin refs at SAVE time — simulate the historical
     // case (plugin deleted after the agent was saved) via a direct row insert.
+    const pluggyId = ulid()
     await db.insert(agents).values({
-      id: ulid(),
+      id: pluggyId,
       name: 'pluggy',
       description: '',
       outputs: '[]',
@@ -187,7 +189,9 @@ describe('RFC-165 §4 — agent host snapshot (A1/A2)', () => {
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })
-    const plugDef = WorkflowDefinitionSchema.parse(buildAgentHostSnapshot({ name: 'pluggy' }, true))
+    const plugDef = WorkflowDefinitionSchema.parse(
+      buildAgentHostSnapshot({ id: pluggyId, name: 'pluggy' }, true),
+    )
     // The load-bearing R3-3 case: with a partial {agents,skills} ctx this
     // passed silently; the full production ctx must reject it.
     expect(validateWorkflowDef(plugDef, await buildWorkflowValidationContext(db)).ok).toBe(false)
@@ -319,7 +323,7 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
   })
 
   test('A8 rename/delete: live single-agent task 409s; terminal-only proceeds', async () => {
-    await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
+    const solo = await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
     await ensureAgentHostWorkflow(db)
     const liveId = ulid()
     await db.insert(tasks).values({
@@ -335,6 +339,9 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
       inputs: '{}',
       startedAt: Date.now(),
       sourceAgentName: 'solo',
+      // RFC-223 (PR-3a): the delete/rename guard now matches by the CANONICAL
+      // source_agent_id (a real launch always stamps it), not by name.
+      sourceAgentId: solo.id,
     })
     await expect(deleteAgent(db, 'solo', T6_ACTOR)).rejects.toMatchObject({
       code: 'agent-tasks-active',

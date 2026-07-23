@@ -322,8 +322,14 @@ function PreviewPane({ node, agents, definition }: PreviewProps) {
   if (node.kind !== 'agent-single') {
     return <div className="muted">{t('inspector.previewOnlyAgent')}</div>
   }
-  const agentName = (node as Record<string, unknown>).agentName as string | undefined
-  const agent = agents.find((a) => a.name === agentName)
+  // RFC-223 (PR-3a): resolve for preview by the CANONICAL agentId first
+  // (rename-safe), falling back to the display name for unstamped nodes.
+  const rec = node as Record<string, unknown>
+  const agentId = typeof rec.agentId === 'string' ? rec.agentId : undefined
+  const agentName = rec.agentName as string | undefined
+  const agent =
+    (agentId !== undefined ? agents.find((a) => a.id === agentId) : undefined) ??
+    agents.find((a) => a.name === agentName)
   const template = (node as Record<string, unknown>).promptTemplate as string | undefined
   const ports = computePorts(node, new Map(agents.map((a) => [a.name, a])), definition)
   return (

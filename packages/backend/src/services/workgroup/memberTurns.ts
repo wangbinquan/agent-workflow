@@ -2,7 +2,7 @@
 // verbatim from runner.ts): the single-card assignment turn (lw + fc adopt
 // paths) and the single-shot message turn, plus the roster→Agent resolver.
 
-import { getAgent } from '@/services/agent'
+import { getAgent, getAgentById } from '@/services/agent'
 import {
   buildMsgShardKey,
   parseWgMessagesPort,
@@ -51,8 +51,23 @@ export async function resolveMemberAgent(
   memberId: string,
 ): Promise<Agent | null> {
   const member = memberById(state.config, memberId)
-  if (member === null || member.memberType !== 'agent' || member.agentName === null) return null
-  return getAgent(args.db, member.agentName)
+  if (member === null || member.memberType !== 'agent') return null
+  // RFC-223 (PR-3a): resolve the member's agent by the CANONICAL agentId frozen
+  // at launch (rename/ABA-safe), NOT the mutable display name. Crucially the
+  // R4-1 quarantine sentinel is a PRESENT id that resolves to NO agent — so a
+  // migrated legacy config fails closed HERE (getAgentById → null), never
+  // re-binding whatever agent currently holds the stale name (possibly a
+  // different tenant's).
+  if (typeof member.agentId === 'string' && member.agentId.length > 0) {
+    return getAgentById(args.db, member.agentId)
+  }
+  // No frozen id at all: a config the boot migration has not rewritten (it
+  // stamps the sentinel on every legacy agent member) — in practice only an
+  // in-memory / pre-RFC-223 config. Fall back to the display name.
+  if (member.agentName !== null && member.agentName.length > 0) {
+    return getAgent(args.db, member.agentName)
+  }
+  return null
 }
 
 export async function driveAssignmentTurn(
@@ -127,6 +142,7 @@ export async function driveAssignmentTurn(
         overrides: {
           shardKey: assignment.id,
           agentOverrideName: agent.name,
+          agentOverrideId: agent.id,
           wgRound: memberWgRound,
         },
       }),
@@ -286,6 +302,7 @@ export async function driveMessageTurn(
         overrides: {
           shardKey: buildMsgShardKey(memberId, maxMessageId(state.messages)),
           agentOverrideName: agent.name,
+          agentOverrideId: agent.id,
           wgRound: config.mode === 'leader_worker' ? currentRound(state) : null,
         },
       }),

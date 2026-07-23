@@ -102,6 +102,12 @@ export interface MintNodeRunOverrides {
    * no agent — borrowing is a new dimension).
    */
   agentOverrideName?: string | null
+  /**
+   * RFC-223 (PR-3a): the CANONICAL id of the borrowed / workgroup-member agent
+   * (sibling of `agentOverrideName`). Producers stamp BOTH; consumers resolve
+   * by this id first. NULL/undefined = the node's default agent.
+   */
+  agentOverrideId?: string | null
   /** RFC-189 — leader_worker workgroup round ordinal（1-based）. Workgroup
    *  turn mints stamp it; everything else leaves NULL. */
   wgRound?: number | null
@@ -227,6 +233,7 @@ export function buildMintNodeRunValues(
     startedAt: o.startedAt !== undefined ? o.startedAt : now,
     finishedAt: o.finishedAt !== undefined ? o.finishedAt : args.status === 'done' ? now : null,
     agentOverrideName: o.agentOverrideName ?? null,
+    agentOverrideId: o.agentOverrideId ?? null,
     wgRound: o.wgRound ?? null,
     // RFC-200 (T1b): generate a fresh per-run nonce by default; a caller may
     // override it (inline-followup reuses the anchor round's nonce).

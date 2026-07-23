@@ -1303,6 +1303,16 @@ export const nodeRuns = sqliteTable(
      * audit + cross-tick re-dispatch visibility only — NEVER enters a prompt.
      */
     agentOverrideName: text('agent_override_name'),
+    /**
+     * RFC-223 (PR-3a) — the CANONICAL id of the borrowed / workgroup-member
+     * agent this row runs under (sibling of `agent_override_name`, which stays
+     * for display). Every producer that stamps `agent_override_name` also
+     * stamps this (workgroup member turns, RFC-127 借壳). Consumers that map a
+     * run back to its agent (room attribution) resolve BY THIS ID first —
+     * rename/ABA-safe — and fall back to the name only for legacy rows minted
+     * before this column existed. NEVER enters a prompt.
+     */
+    agentOverrideId: text('agent_override_id'),
   },
   (t) => ({
     taskIdx: index('idx_node_runs_task').on(t.taskId, t.nodeId, t.iteration, t.retryIndex),

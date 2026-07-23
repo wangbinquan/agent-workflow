@@ -38,7 +38,7 @@ import {
   NODE_KIND,
   type NodeKind,
 } from './schemas/workflow'
-import { deriveWrapperFanoutOutputs, lookupAgent, type AgentLookup } from './wrapperFanout'
+import { deriveWrapperFanoutOutputs, resolveNodeAgent, type AgentLookup } from './wrapperFanout'
 import { REVIEW_APPROVAL_META_PORT, reviewApprovedPortName } from './reviewMultiDoc'
 
 /**
@@ -129,9 +129,8 @@ export function resolveReviewInputKind(
   if (typeof src?.nodeId !== 'string' || typeof src.portName !== 'string') return undefined
   const sourceNode = defn.nodes.find((n) => n.id === src.nodeId)
   if (sourceNode === undefined || sourceNode.kind !== 'agent-single') return undefined
-  const agentName = readString(sourceNode, 'agentName')
-  if (agentName === undefined) return undefined
-  return lookupAgent(agents, agentName)?.outputKinds?.[src.portName]
+  // RFC-223 (PR-3a): resolve the upstream agent id-first (rename/ABA-safe).
+  return resolveNodeAgent(sourceNode, agents)?.outputKinds?.[src.portName]
 }
 
 /**
@@ -152,7 +151,8 @@ const PORT_DERIVERS = {
     dataInputs: readNamedList(node, 'ports').map((p) => ({ name: p.name })),
   }),
   'agent-single': ({ node, agents }: DeriverCtx): DeclaredPorts => {
-    const agent = lookupAgent(agents, readString(node, 'agentName') ?? '')
+    // RFC-223 (PR-3a): resolve id-first (rename/ABA-safe) via the shared resolver.
+    const agent = resolveNodeAgent(node, agents)
     return {
       dataInputs: [], // agent inputs are edge-derived prompt vars, never declared
       dataOutputs: [...(agent?.outputs ?? [])].map((name) => {

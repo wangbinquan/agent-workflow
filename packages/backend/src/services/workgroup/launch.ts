@@ -113,6 +113,12 @@ export function buildWorkgroupRuntimeConfig(
       id: m.id,
       memberType: m.memberType,
       agentName: m.agentName,
+      // RFC-223 (PR-3a): freeze the CANONICAL agent id into the task config so
+      // the engine resolves each member by id (rename/ABA-safe). The resource
+      // member already carries the id (stamped at save, PR-2); the launcher's
+      // ACL scope authorized it. `null` for human members / a soft roster ref
+      // that never resolved — launch readiness (below) rejects the latter.
+      agentId: m.agentId ?? null,
       userId: m.userId,
       displayName: m.displayName,
       roleDesc: m.roleDesc,

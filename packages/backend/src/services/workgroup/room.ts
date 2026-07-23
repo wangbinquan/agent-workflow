@@ -67,6 +67,10 @@ export interface HostRunLite {
   /** Immutable per-attempt agent identity (stamped at mint) — the fc
    *  attribution fallback when the card's mutable assignee is gone. */
   agentOverrideName?: string | null
+  /** RFC-223 (PR-3a) — the CANONICAL id form of `agentOverrideName` (rename/ABA-safe
+   *  attribution). Preferred over the name; the name stays the fallback for rows
+   *  minted before this column existed. */
+  agentOverrideId?: string | null
   /** RFC-209 T9 — 权威轮序数（RFC-189 的 `node_runs.wg_round`）。可选：RFC-179 期的
    *  fixture 与 0095 回填之前 / 引擎外铸出未打戳的历史行没有它，缺失时回退到旧的
    *  「按消息 round 反推」推导。 */
@@ -95,6 +99,9 @@ export interface MemberLite {
   displayName?: string
   /** RFC-182 impl-gate P2 — feeds the fc attribution fallback (see below). */
   agentName?: string | null
+  /** RFC-223 (PR-3a) — the CANONICAL agent id frozen at launch; the id-first
+   *  attribution key (matched against a run's `agentOverrideId`). */
+  agentId?: string | null
 }
 
 // message-turn shardKey format: `msg:${memberId}:${maxMsgId}` (workgroupRunner.ts:1251).
@@ -131,6 +138,7 @@ function classify(
   assignmentToMember: ReadonlyMap<string, string | null>,
   assignmentIds: ReadonlySet<string>,
   uniqueAgentMember: ReadonlyMap<string, string | null>,
+  uniqueAgentMemberById: ReadonlyMap<string, string | null>,
 ): ClassifiedRun | null {
   const kind = runKindOf(run, assignmentIds)
   if (kind === null) return null
@@ -149,8 +157,15 @@ function classify(
     // identity is immutable, so it WINS whenever it resolves to exactly one
     // member; the card's current assignee is only the fallback (shared-agent
     // rosters / legacy runs without an override name).
+    // RFC-223 (PR-3a): prefer the immutable agent ID (rename/ABA-safe); fall back
+    // to the name only for rows minted before agent_override_id existed.
     const viaAgent =
-      run.agentOverrideName != null ? (uniqueAgentMember.get(run.agentOverrideName) ?? null) : null
+      (run.agentOverrideId != null
+        ? (uniqueAgentMemberById.get(run.agentOverrideId) ?? null)
+        : null) ??
+      (run.agentOverrideName != null
+        ? (uniqueAgentMember.get(run.agentOverrideName) ?? null)
+        : null)
     const viaCard = run.shardKey ? (assignmentToMember.get(run.shardKey) ?? null) : null
     const memberId = viaBatch ?? viaAgent ?? viaCard
     if (memberId === null) return null
@@ -221,16 +236,31 @@ export function deriveWorkgroupRunHistory(
   const assignmentIds = new Set(assignments.map((a) => a.id))
   const nameOf = new Map(members.map((m) => [m.id, m.displayName ?? null]))
   // agentName → memberId when exactly ONE agent member runs that agent;
-  // ambiguous names map to null (drop-not-mislabel, impl-gate P2).
+  // ambiguous names map to null (drop-not-mislabel, impl-gate P2). RFC-223
+  // (PR-3a): the parallel agentId map is the id-first attribution key; the name
+  // map stays for legacy rows minted before agent_override_id existed.
   const uniqueAgentMember = new Map<string, string | null>()
+  const uniqueAgentMemberById = new Map<string, string | null>()
   for (const m of members) {
-    if (m.memberType !== 'agent' || m.agentName == null) continue
-    uniqueAgentMember.set(m.agentName, uniqueAgentMember.has(m.agentName) ? null : m.id)
+    if (m.memberType !== 'agent') continue
+    if (m.agentName != null) {
+      uniqueAgentMember.set(m.agentName, uniqueAgentMember.has(m.agentName) ? null : m.id)
+    }
+    if (m.agentId != null) {
+      uniqueAgentMemberById.set(m.agentId, uniqueAgentMemberById.has(m.agentId) ? null : m.id)
+    }
   }
 
   const classified: ClassifiedRun[] = []
   for (const run of hostRuns) {
-    const cr = classify(run, leaderMemberId, assignmentToMember, assignmentIds, uniqueAgentMember)
+    const cr = classify(
+      run,
+      leaderMemberId,
+      assignmentToMember,
+      assignmentIds,
+      uniqueAgentMember,
+      uniqueAgentMemberById,
+    )
     if (cr !== null) classified.push(cr)
   }
   classified.sort((a, b) => (a.run.id < b.run.id ? -1 : a.run.id > b.run.id ? 1 : 0))
@@ -451,6 +481,7 @@ export function buildRoomReads(
           finishedAt: nodeRuns.finishedAt,
           failureCode: nodeRuns.failureCode,
           agentOverrideName: nodeRuns.agentOverrideName,
+          agentOverrideId: nodeRuns.agentOverrideId,
           // RFC-209 —— 两个用途共用这一列：① 回合账本读数（右栏预算表 budgetUsed）；
           // ② leader 回合卡的轮序数（RFC-189 之后它才是权威，取代从消息 round 反推）。
           wgRound: nodeRuns.wgRound,

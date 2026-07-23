@@ -37,7 +37,7 @@ import {
   workgroupTaskState,
   tasks,
 } from '@/db/schema'
-import { getAgent } from '@/services/agent'
+import { getAgent, getAgentById } from '@/services/agent'
 import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '@/services/workgroup/constants'
 
 export type WorkgroupGateStatus =
@@ -310,14 +310,21 @@ export async function buildRosterAgentCards(
     agentMemberCount,
     ROSTER_CARD_INPUT_DESCRIPTION_MAX,
   )
-  // De-dupe DB reads: several members may reference the same agentName.
-  const agentByName = new Map<string, Agent | null>()
+  // De-dupe DB reads: several members may reference the same agent. RFC-223
+  // (PR-3a): resolve by the CANONICAL agentId frozen at launch (rename/ABA-safe),
+  // cache keyed by id-or-name. The R4-1 quarantine sentinel resolves to no agent
+  // → no card (the roster row still renders with displayName + roleDesc). A member
+  // with no frozen id (in-memory / pre-RFC-223 config) falls back to the name.
+  const agentCache = new Map<string, Agent | null>()
   for (const m of config.members) {
-    if (m.memberType !== 'agent' || m.agentName === null) continue
-    let agent = agentByName.get(m.agentName)
+    if (m.memberType !== 'agent') continue
+    const byId = typeof m.agentId === 'string' && m.agentId.length > 0
+    const key = byId ? (m.agentId as string) : (m.agentName ?? null)
+    if (key === null) continue
+    let agent = agentCache.get(key)
     if (agent === undefined) {
-      agent = await getAgent(db, m.agentName)
-      agentByName.set(m.agentName, agent)
+      agent = byId ? await getAgentById(db, m.agentId as string) : await getAgent(db, key)
+      agentCache.set(key, agent)
     }
     if (agent === null) continue
     cards.set(

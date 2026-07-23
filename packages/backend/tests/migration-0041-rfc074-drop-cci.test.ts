@@ -161,7 +161,10 @@ describe('RFC-074 migration 0041 — DROP clarify_iteration preserves row data',
       // per-node submodule topology, single/multi split like the iso_* pairs above.
       expect(cols).toContain('iso_submodules_json')
       expect(cols).toContain('iso_submodules_repos_json')
-      expect(cols.length).toBe(cols0040.length - 1 + 7 + 6 + 3 + 1 + 1 + 2)
+      // RFC-223 PR-3a (0113): agent_override_id — the canonical id form of
+      // agent_override_name (the borrow / workgroup-member override).
+      expect(cols).toContain('agent_override_id')
+      expect(cols.length).toBe(cols0040.length - 1 + 7 + 6 + 3 + 1 + 1 + 2 + 1)
 
       // 4b. row count unchanged.
       const n = (up.query('SELECT count(*) AS n FROM node_runs').get() as { n: number }).n

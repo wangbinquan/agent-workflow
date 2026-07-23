@@ -86,6 +86,7 @@ import { isPathishKindString, readPortArtifact, subsetArchiveJson } from '@/serv
 import { pickFreshestRun } from '@/services/freshness'
 import { parseConsumedJson } from '@/services/freshness'
 import { setNodeRunStatus, transitionNodeRunStatus } from '@/services/lifecycle'
+import { snapshotNodeAgentWhere } from '@/services/agent'
 import { enqueueDistillJob } from '@/services/memoryDistillScheduler'
 import { mintNodeRun } from '@/services/nodeRunMint'
 import { loadRollbackTarget, rollbackNodeRunWorktrees } from '@/services/nodeRollback'
@@ -2688,13 +2689,11 @@ async function iterateSiblingCascadeApplies(args: {
 }): Promise<boolean> {
   const upstreamNode = args.definition.nodes.find((n) => n.id === args.upstreamNodeId)
   if (upstreamNode === undefined) return false
-  const agentName = (upstreamNode as Record<string, unknown>).agentName
-  if (typeof agentName !== 'string' || agentName.length === 0) return false
-  const agentRows = await args.db
-    .select()
-    .from(agentsTable)
-    .where(eq(agentsTable.name, agentName))
-    .limit(1)
+  // RFC-223 (PR-3a): resolve the upstream agent by the frozen CANONICAL id first
+  // (rename/ABA-safe); fall back to name only for legacy / unstamped snapshots.
+  const where = snapshotNodeAgentWhere(upstreamNode)
+  if (where === null) return false
+  const agentRows = await args.db.select().from(agentsTable).where(where).limit(1)
   const agentRow = agentRows[0]
   if (agentRow === undefined) return false
   if (!agentRow.syncOutputsOnIterate) return false
@@ -2992,14 +2991,12 @@ export async function buildSiblingOutputsBlock(
   }
   const upstreamNode = definition.nodes.find((n) => n.id === upstreamNodeId)
   if (upstreamNode === undefined) return undefined
+  // RFC-223 (PR-3a): resolve the upstream agent by the frozen CANONICAL id first
+  // (rename/ABA-safe); fall back to name only for legacy / unstamped snapshots.
   const agentName = (upstreamNode as Record<string, unknown>).agentName
-  if (typeof agentName !== 'string' || agentName.length === 0) return undefined
-
-  const agentRows = await db
-    .select()
-    .from(agentsTable)
-    .where(eq(agentsTable.name, agentName))
-    .limit(1)
+  const where = snapshotNodeAgentWhere(upstreamNode)
+  if (where === null) return undefined
+  const agentRows = await db.select().from(agentsTable).where(where).limit(1)
   const agentRow = agentRows[0]
   if (agentRow === undefined) {
     log.warn('sibling-outputs: upstream agent row not found; skipping', { agentName, taskId })
@@ -3243,9 +3240,10 @@ export async function loadUpstreamPortKind(
   const node = definition.nodes.find((n) => n.id === nodeId)
   if (node === undefined) return undefined
   if (node.kind !== 'agent-single') return undefined
-  const agentName = (node as Record<string, unknown>).agentName
-  if (typeof agentName !== 'string') return undefined
-  const rows = await db.select().from(agentsTable).where(eq(agentsTable.name, agentName)).limit(1)
+  // RFC-223 (PR-3a): resolve by the frozen CANONICAL id first (rename/ABA-safe).
+  const where = snapshotNodeAgentWhere(node)
+  if (where === null) return undefined
+  const rows = await db.select().from(agentsTable).where(where).limit(1)
   const row = rows[0]
   if (row === undefined) return undefined
   try {
