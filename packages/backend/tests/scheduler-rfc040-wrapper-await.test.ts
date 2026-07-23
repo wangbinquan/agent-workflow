@@ -41,6 +41,7 @@ import { reenterScheduler } from './reenter-scheduler'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
+const DESIGNER_AGENT_ID = '00000000000000000000000001'
 const actor = { userId: 'u1', role: 'owner' as const }
 
 interface Harness {
@@ -85,7 +86,7 @@ async function seedAgent(
   outputs: string[] = ['design'],
 ): Promise<void> {
   await db.insert(agents).values({
-    id: ulid(),
+    id: DESIGNER_AGENT_ID,
     name,
     description: 'test',
     outputs: JSON.stringify(outputs),
@@ -165,7 +166,12 @@ describe('RFC-040 wrapper-loop bubbles awaiting_human (clarify inside loop)', ()
       inputs: [{ kind: 'text', key: 'req', label: 'r' }],
       nodes: [
         { id: 'in1', kind: 'input', inputKey: 'req' } as WorkflowNode,
-        { id: 'd', kind: 'agent-single', agentName: 'designer' } as WorkflowNode,
+        {
+          id: 'd',
+          kind: 'agent-single',
+          agentId: DESIGNER_AGENT_ID,
+          agentName: 'designer',
+        } as WorkflowNode,
         { id: 'c', kind: 'clarify', title: 'Clarify' } as WorkflowNode,
         {
           id: 'loop',
@@ -246,7 +252,12 @@ describe('RFC-040 wrapper-loop bubbles awaiting_human (clarify inside loop)', ()
       inputs: [{ kind: 'text', key: 'req', label: 'r' }],
       nodes: [
         { id: 'in1', kind: 'input', inputKey: 'req' } as WorkflowNode,
-        { id: 'd', kind: 'agent-single', agentName: 'designer' } as WorkflowNode,
+        {
+          id: 'd',
+          kind: 'agent-single',
+          agentId: DESIGNER_AGENT_ID,
+          agentName: 'designer',
+        } as WorkflowNode,
         { id: 'c', kind: 'clarify', title: 'Clarify' } as WorkflowNode,
         {
           id: 'loop',
@@ -390,7 +401,12 @@ describe('RFC-040 wrapper-git bubbles awaiting_human (clarify inside git wrapper
       inputs: [{ kind: 'text', key: 'req', label: 'r' }],
       nodes: [
         { id: 'in1', kind: 'input', inputKey: 'req' } as WorkflowNode,
-        { id: 'd', kind: 'agent-single', agentName: 'designer' } as WorkflowNode,
+        {
+          id: 'd',
+          kind: 'agent-single',
+          agentId: DESIGNER_AGENT_ID,
+          agentName: 'designer',
+        } as WorkflowNode,
         { id: 'c', kind: 'clarify', title: 'Clarify' } as WorkflowNode,
         {
           id: 'gw',
@@ -462,7 +478,12 @@ describe('RFC-040 wrapper-git bubbles awaiting_human (clarify inside git wrapper
       inputs: [{ kind: 'text', key: 'req', label: 'r' }],
       nodes: [
         { id: 'in1', kind: 'input', inputKey: 'req' } as WorkflowNode,
-        { id: 'd', kind: 'agent-single', agentName: 'designer' } as WorkflowNode,
+        {
+          id: 'd',
+          kind: 'agent-single',
+          agentId: DESIGNER_AGENT_ID,
+          agentName: 'designer',
+        } as WorkflowNode,
         { id: 'c', kind: 'clarify', title: 'Clarify' } as WorkflowNode,
         {
           id: 'gw',
@@ -572,7 +593,12 @@ describe('RFC-040 nested wrapper-git ∋ wrapper-loop ∋ {agent, clarify}', () 
       inputs: [{ kind: 'text', key: 'req', label: 'r' }],
       nodes: [
         { id: 'in1', kind: 'input', inputKey: 'req' } as WorkflowNode,
-        { id: 'd', kind: 'agent-single', agentName: 'designer' } as WorkflowNode,
+        {
+          id: 'd',
+          kind: 'agent-single',
+          agentId: DESIGNER_AGENT_ID,
+          agentName: 'designer',
+        } as WorkflowNode,
         { id: 'c', kind: 'clarify', title: 'Clarify' } as WorkflowNode,
         {
           id: 'loop',
