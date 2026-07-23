@@ -8,8 +8,48 @@ import { startDaemon, type DaemonHandle } from './harness'
 
 let daemon: DaemonHandle
 
+async function createFixture(path: string, body: unknown): Promise<void> {
+  const response = await fetch(`${daemon.baseUrl}${path}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${daemon.token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) {
+    throw new Error(`fixture POST ${path} failed: ${response.status} ${await response.text()}`)
+  }
+}
+
+async function seedPortableReferences(): Promise<void> {
+  for (const name of ['planner', 'implementer']) {
+    await createFixture('/api/agents', {
+      name,
+      description: 'RFC-197 import reference fixture',
+      outputs: ['result'],
+      readonly: true,
+      bodyMd: 'Import reference fixture.',
+    })
+  }
+  await createFixture('/api/mcps', {
+    name: 'github',
+    description: 'RFC-197 import reference fixture',
+    type: 'remote',
+    config: { url: 'http://127.0.0.1:1/mcp', oauth: false },
+    enabled: true,
+  })
+  await createFixture('/api/plugins', {
+    name: 'review-tools',
+    spec: daemon.stubOpencode,
+    description: 'RFC-197 import reference fixture',
+    enabled: true,
+  })
+}
+
 test.beforeAll(async () => {
   daemon = await startDaemon()
+  await seedPortableReferences()
 })
 
 test.afterAll(async () => {
