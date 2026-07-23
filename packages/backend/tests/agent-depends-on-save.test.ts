@@ -180,9 +180,11 @@ describe('RFC-223 findAgentsDependingOn (id match + JSON exactness)', () => {
     // dependsOn stores IDS. 'caller' depends on 'foobar' (→ foobar's id); a
     // lookup by foo's id must NOT match caller, and by foobar's id must.
     const ids = await seed(db, { name: 'foo' }, { name: 'foobar' })
-    await seed(db, { name: 'caller', dependsOn: ['foobar'] })
+    const callerIds = await seed(db, { name: 'caller', dependsOn: ['foobar'] })
 
     expect(await findAgentsDependingOn(db, ids.get('foo')!)).toEqual([])
-    expect(await findAgentsDependingOn(db, ids.get('foobar')!)).toEqual(['caller'])
+    expect(await findAgentsDependingOn(db, ids.get('foobar')!)).toEqual([
+      { id: callerIds.get('caller')!, name: 'caller' },
+    ])
   })
 })

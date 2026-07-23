@@ -20,8 +20,8 @@
 //     root carries the proposed dependsOn list rather than reading the DB
 //     row.
 //
-//   findAgentsDependingOn(db, name)
-//     Reverse index used by delete / rename guards. Pre-filters with LIKE
+//   findAgentsDependingOn(db, id)
+//     Reverse index used by delete guards. Pre-filters with LIKE
 //     (rough — substring match), then JSON.parse + Array.includes to defend
 //     against false positives (e.g. agent 'foo' matching 'foobar' in some
 //     other row's dependsOn).
@@ -187,34 +187,40 @@ export async function validateDependsOn(
  * "Who depends on me?" — agent.ts uses this in the delete / rename guard so
  * the platform refuses to break references silently. RFC-223 (PR-1): dependsOn
  * stores agent IDS, so the lookup key is the target agent's `agentId`; the
- * returned list is the referencing agents' NAMES (for the refusal disclosure).
+ * returned list keeps both the referencing agents' stable ids and display
+ * names. Callers MUST continue to bind disclosure/filtering by id: names are
+ * not unique across owners after RFC-223.
  *
  * Implementation: SQL `LIKE` is fast but coarse (substring match). After the
  * pre-filter we re-parse the JSON column and exact-match with Array.includes
  * to reject false positives (an id being a JSON substring of another value).
  */
-export async function findAgentsDependingOn(db: DbClient, agentId: string): Promise<string[]> {
+export async function findAgentsDependingOn(
+  db: DbClient,
+  agentId: string,
+): Promise<Array<{ id: string; name: string }>> {
   // The escaped form ensures `["<id>"]` matches LIKE `%"<id>"%` for the
   // pre-filter only; the JSON.parse step below is the authoritative test.
   const rows = await db
-    .select({ name: agents.name, dependsOn: agents.dependsOn })
+    .select({ id: agents.id, name: agents.name, dependsOn: agents.dependsOn })
     .from(agents)
     .where(like(agents.dependsOn, `%"${agentId}"%`))
-  return agentsDependingOnIn(rows, agentId)
+  return agentsDependingOnIn(rows, agentId).map(({ id, name }) => ({ id, name }))
 }
 
 /** Pure core of findAgentsDependingOn — RFC-165 (F17-r3): the agent
  *  rename/delete guards re-run it on rows read INSIDE their dbTxSync. Matches
- *  by `agentId` (RFC-223 PR-1) against the id-valued dependsOn column. */
-export function agentsDependingOnIn(
-  rows: ReadonlyArray<{ name: string; dependsOn: string }>,
+ *  by `agentId` (RFC-223 PR-1) against the id-valued dependsOn column and
+ *  returns the exact matching ROWS, preserving stable referencing ids. */
+export function agentsDependingOnIn<T extends { id: string; dependsOn: string }>(
+  rows: readonly T[],
   agentId: string,
-): string[] {
-  const out: string[] = []
+): T[] {
+  const out: T[] = []
   for (const row of rows) {
     try {
       const parsed = JSON.parse(row.dependsOn) as unknown
-      if (Array.isArray(parsed) && parsed.includes(agentId)) out.push(row.name)
+      if (Array.isArray(parsed) && parsed.includes(agentId)) out.push(row)
     } catch {
       // malformed column — ignore, agent.ts parser already treats it as []
     }

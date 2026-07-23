@@ -489,15 +489,10 @@ export async function deleteAgent(
       .all()
     const dependents = agentsDependingOnIn(depRows, existing.id)
     if (dependents.length > 0) {
-      const depNames = new Set(dependents)
       throw new ConflictError(
         'agent-dependency-still-referenced',
         `agent '${name}' is referenced by ${dependents.length} other agent(s)' dependsOn`,
-        discloseRefsSync(
-          actor,
-          depRows.filter((r) => depNames.has(r.name)),
-          agGranted,
-        ),
+        discloseRefsSync(actor, dependents, agGranted),
       )
     }
     // RFC-165 §4: a NON-terminal single-agent task still runs (or will run)

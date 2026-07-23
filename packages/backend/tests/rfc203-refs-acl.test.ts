@@ -9,12 +9,19 @@
 //   3. 可见即列名：public / 本人 / admin 视角下引用名单完整；
 //   4. 计划（schedule）走成员私有规则（owner / tasks:read:all），非 ACL 表。
 import { beforeEach, describe, expect, test } from 'bun:test'
+import { eq } from 'drizzle-orm'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { scheduledTasks, users, workflows, workgroups } from '../src/db/schema'
+import {
+  agents as agentsTable,
+  scheduledTasks,
+  users,
+  workflows,
+  workgroups,
+} from '../src/db/schema'
 import { createAgent, deleteAgent } from '../src/services/agent'
 import { createMcp, deleteMcp } from '../src/services/mcp'
 import { deleteWorkgroup } from '../src/services/workgroups'
@@ -134,6 +141,51 @@ describe('RFC-203 T6 引用披露 ACL', () => {
     }
   })
 
+  test('reverse dependsOn disclosure 按 referencing id 过滤，不被跨 owner 同名粗筛行污染', async () => {
+    const target = await createAgent(
+      db,
+      { name: 'target', ...AGENT_BASE },
+      { ownerUserId: owner.user.id },
+    )
+    const dependent = await createAgent(
+      db,
+      { name: 'same-ref', ...AGENT_BASE, dependsOn: [target.id] },
+      { ownerUserId: owner.user.id },
+    )
+    const coarseOnly = await createAgent(
+      db,
+      { name: 'same-ref', ...AGENT_BASE },
+      { ownerUserId: 'u-other' },
+    )
+    // LIKE prefilter intentionally sees this row, while the authoritative
+    // JSON-array exact matcher rejects it. The two rows share a display name,
+    // so a name-based second filter would incorrectly re-introduce this
+    // private row and disclose its existence through hiddenCount.
+    await db
+      .update(agentsTable)
+      .set({
+        dependsOn: JSON.stringify({ coarseMatchOnly: target.id }),
+        visibility: 'private',
+      })
+      .where(eq(agentsTable.id, coarseOnly.id))
+
+    try {
+      await deleteAgent(db, target.id, owner)
+      throw new Error('expected ConflictError')
+    } catch (err) {
+      expect(err).toBeInstanceOf(ConflictError)
+      const details = (err as ConflictError).details as {
+        visible: Array<{ id: string; name: string }>
+        hiddenCount: number
+      }
+      expect(details).toEqual({
+        visible: [{ id: dependent.id, name: dependent.name }],
+        hiddenCount: 0,
+      })
+      expect(JSON.stringify(details)).not.toContain(coarseOnly.id)
+    }
+  })
+
   test('mcp-still-referenced：他人私有代理引用只计数不泄名', async () => {
     const mcp = await createMcp(db, {
       name: 'm1',
@@ -145,12 +197,10 @@ describe('RFC-203 T6 引用披露 ACL', () => {
     await createAgent(db, { name: 'pub-user', ...AGENT_BASE, mcp: [mcp.id] })
     // 他人私有代理也引用 m1
     await createAgent(db, { name: 'priv-user', ...AGENT_BASE, mcp: [mcp.id] })
-    const { agents } = await import('../src/db/schema')
-    const { eq } = await import('drizzle-orm')
     await db
-      .update(agents)
+      .update(agentsTable)
       .set({ ownerUserId: 'u-other', visibility: 'private' })
-      .where(eq(agents.name, 'priv-user'))
+      .where(eq(agentsTable.name, 'priv-user'))
 
     try {
       await deleteMcp(db, mcp.id, owner)
