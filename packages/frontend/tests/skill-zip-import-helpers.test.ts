@@ -5,7 +5,7 @@
 
 import { describe, expect, test } from 'vitest'
 import { SKILL_ZIP_LIMITS, type CommitSkillZipResponse } from '@agent-workflow/shared'
-import type { SkillZipCandidateView } from '@agent-workflow/shared'
+import type { SkillZipCandidateView, SkillZipOverwriteCandidate } from '@agent-workflow/shared'
 import {
   availableActionsFor,
   buildDecisionMap,
@@ -24,7 +24,7 @@ import {
 function candidate(
   name: string,
   conflict?: 'managed',
-  canOverwrite?: boolean,
+  overwriteCandidates: SkillZipOverwriteCandidate[] = [],
 ): SkillZipCandidateView {
   return {
     name,
@@ -32,8 +32,21 @@ function candidate(
     fileCount: 1,
     totalBytes: 10,
     warnings: [],
+    overwriteCandidates,
     ...(conflict !== undefined ? { conflict } : {}),
-    ...(canOverwrite !== undefined ? { canOverwrite } : {}),
+  }
+}
+
+function overwriteTarget(
+  skillId = 'skill-id',
+  ownerUserId: string | null = 'owner-id',
+): SkillZipOverwriteCandidate {
+  return {
+    skillId,
+    ownerUserId,
+    visibility: 'public',
+    expectedAclRevision: 3,
+    expectedToken: `token-${skillId}`,
   }
 }
 
@@ -44,24 +57,38 @@ describe('initialDecisionFor', () => {
   test('managed conflict → skip (safer than overwrite)', () => {
     expect(initialDecisionFor(candidate('a', 'managed')).action).toBe('skip')
   })
+  test('a unique exact target is retained while multiple targets require an explicit choice', () => {
+    expect(
+      initialDecisionFor(candidate('a', 'managed', [overwriteTarget('one')])).overwriteSkillId,
+    ).toBe('one')
+    expect(
+      initialDecisionFor(
+        candidate('a', 'managed', [overwriteTarget('one'), overwriteTarget('two')]),
+      ).overwriteSkillId,
+    ).toBe('')
+  })
 })
 
 describe('availableActionsFor (RFC-102)', () => {
   test('no conflict → import + skip', () => {
     expect(availableActionsFor(candidate('a'))).toEqual(['import', 'skip'])
   })
-  test('managed + canOverwrite → skip / overwrite / rename', () => {
-    expect(availableActionsFor(candidate('a', 'managed', true))).toEqual([
+  test('managed + exact target → skip / overwrite / rename', () => {
+    expect(availableActionsFor(candidate('a', 'managed', [overwriteTarget()]))).toEqual([
       'skip',
       'overwrite',
       'rename',
     ])
   })
   test('managed without write permission → skip / rename (no overwrite)', () => {
-    expect(availableActionsFor(candidate('a', 'managed', false))).toEqual(['skip', 'rename'])
-  })
-  test('managed with canOverwrite absent → skip / rename (default deny)', () => {
     expect(availableActionsFor(candidate('a', 'managed'))).toEqual(['skip', 'rename'])
+  })
+  test('resource admin with cross-owner targets may import new or choose exact overwrite', () => {
+    expect(availableActionsFor(candidate('a', undefined, [overwriteTarget()]))).toEqual([
+      'import',
+      'skip',
+      'overwrite',
+    ])
   })
 })
 
@@ -71,11 +98,14 @@ describe('validateRenameTarget', () => {
     others: Array<[name: string, action: RowState['decision']['action'], newName?: string]>,
   ): RowState[] {
     return [
-      { candidate: candidate(self), decision: { action: 'rename', newName: '' } },
+      {
+        candidate: candidate(self),
+        decision: { action: 'rename', newName: '', overwriteSkillId: '' },
+      },
       ...others.map(
         ([n, action, newName]): RowState => ({
           candidate: candidate(n),
-          decision: { action, newName: newName ?? '' },
+          decision: { action, newName: newName ?? '', overwriteSkillId: '' },
         }),
       ),
     ]
@@ -129,21 +159,21 @@ describe('effectiveTargetName', () => {
   test('import → candidate name', () => {
     const row: RowState = {
       candidate: candidate('a'),
-      decision: { action: 'import', newName: '' },
+      decision: { action: 'import', newName: '', overwriteSkillId: '' },
     }
     expect(effectiveTargetName(row)).toBe('a')
   })
   test('skip → null', () => {
     const row: RowState = {
       candidate: candidate('a'),
-      decision: { action: 'skip', newName: '' },
+      decision: { action: 'skip', newName: '', overwriteSkillId: '' },
     }
     expect(effectiveTargetName(row)).toBeNull()
   })
   test('rename → newName', () => {
     const row: RowState = {
       candidate: candidate('a'),
-      decision: { action: 'rename', newName: 'b' },
+      decision: { action: 'rename', newName: 'b', overwriteSkillId: '' },
     }
     expect(effectiveTargetName(row)).toBe('b')
   })
@@ -154,25 +184,32 @@ describe('buildDecisionMap', () => {
     const rows: RowState[] = [
       {
         candidate: candidate('a'),
-        decision: { action: 'import', newName: '' },
+        decision: { action: 'import', newName: '', overwriteSkillId: '' },
       },
       {
-        candidate: candidate('b', 'managed'),
-        decision: { action: 'overwrite', newName: '' },
+        candidate: candidate('b', 'managed', [overwriteTarget('skill-b', 'owner-b')]),
+        decision: { action: 'overwrite', newName: '', overwriteSkillId: 'skill-b' },
       },
       {
         candidate: candidate('c', 'managed'),
-        decision: { action: 'rename', newName: 'c-new' },
+        decision: { action: 'rename', newName: 'c-new', overwriteSkillId: '' },
       },
       {
         candidate: candidate('d', 'managed'),
-        decision: { action: 'skip', newName: '' },
+        decision: { action: 'skip', newName: '', overwriteSkillId: '' },
       },
     ]
     const map = buildDecisionMap(rows)
     expect(map).toEqual({
       a: { action: 'import' },
-      b: { action: 'overwrite' },
+      b: {
+        action: 'overwrite',
+        skillId: 'skill-b',
+        expectedOwnerUserId: 'owner-b',
+        expectedVisibility: 'public',
+        expectedAclRevision: 3,
+        expectedToken: 'token-skill-b',
+      },
       c: { action: 'rename', newName: 'c-new' },
       d: { action: 'skip' },
     })
@@ -182,7 +219,7 @@ describe('buildDecisionMap', () => {
     const rows: RowState[] = [
       {
         candidate: candidate('a'),
-        decision: { action: 'rename', newName: '' },
+        decision: { action: 'rename', newName: '', overwriteSkillId: '' },
       },
     ]
     expect(buildDecisionMap(rows)).toEqual({})
@@ -192,11 +229,26 @@ describe('buildDecisionMap', () => {
 describe('summarizeRows', () => {
   test('counts each action bucket', () => {
     const rows: RowState[] = [
-      { candidate: candidate('a'), decision: { action: 'import', newName: '' } },
-      { candidate: candidate('b'), decision: { action: 'import', newName: '' } },
-      { candidate: candidate('c'), decision: { action: 'overwrite', newName: '' } },
-      { candidate: candidate('d'), decision: { action: 'rename', newName: 'x' } },
-      { candidate: candidate('e'), decision: { action: 'skip', newName: '' } },
+      {
+        candidate: candidate('a'),
+        decision: { action: 'import', newName: '', overwriteSkillId: '' },
+      },
+      {
+        candidate: candidate('b'),
+        decision: { action: 'import', newName: '', overwriteSkillId: '' },
+      },
+      {
+        candidate: candidate('c', undefined, [overwriteTarget('skill-c')]),
+        decision: { action: 'overwrite', newName: '', overwriteSkillId: 'skill-c' },
+      },
+      {
+        candidate: candidate('d'),
+        decision: { action: 'rename', newName: 'x', overwriteSkillId: '' },
+      },
+      {
+        candidate: candidate('e'),
+        decision: { action: 'skip', newName: '', overwriteSkillId: '' },
+      },
     ]
     expect(summarizeRows(rows)).toEqual({
       importing: 2,
@@ -248,7 +300,7 @@ describe('deriveReviewSummary (RFC-196)', () => {
       deriveReviewSummary({
         skills: [
           candidate('ready'),
-          candidate('owner', 'managed', true),
+          candidate('owner', 'managed', [overwriteTarget()]),
           candidate('locked', 'managed'),
         ],
         errors: [{ path: 'bad', code: 'skill-md-missing', message: 'missing' }],
@@ -262,21 +314,30 @@ describe('deriveSubmitState (RFC-196)', () => {
 
   test('nothing selected is disabled', () => {
     const rows: RowState[] = [
-      { candidate: candidate('a', 'managed'), decision: { action: 'skip', newName: '' } },
+      {
+        candidate: candidate('a', 'managed'),
+        decision: { action: 'skip', newName: '', overwriteSkillId: '' },
+      },
     ]
     expect(deriveSubmitState(rows, names, false).reason).toBe('nothing-selected')
   })
 
   test('invalid rename is disabled', () => {
     const rows: RowState[] = [
-      { candidate: candidate('a', 'managed'), decision: { action: 'rename', newName: 'Bad Name' } },
+      {
+        candidate: candidate('a', 'managed'),
+        decision: { action: 'rename', newName: 'Bad Name', overwriteSkillId: '' },
+      },
     ]
     expect(deriveSubmitState(rows, names, false).reason).toBe('rename-invalid')
   })
 
   test('rename waits for an existing-names response', () => {
     const rows: RowState[] = [
-      { candidate: candidate('a', 'managed'), decision: { action: 'rename', newName: 'a-new' } },
+      {
+        candidate: candidate('a', 'managed'),
+        decision: { action: 'rename', newName: 'a-new', overwriteSkillId: '' },
+      },
     ]
     expect(
       deriveSubmitState(rows, { available: false, names: new Set<string>() }, false).reason,
@@ -285,9 +346,25 @@ describe('deriveSubmitState (RFC-196)', () => {
 
   test('busy state wins and valid import is otherwise enabled', () => {
     const rows: RowState[] = [
-      { candidate: candidate('a'), decision: { action: 'import', newName: '' } },
+      {
+        candidate: candidate('a'),
+        decision: { action: 'import', newName: '', overwriteSkillId: '' },
+      },
     ]
     expect(deriveSubmitState(rows, names, true).reason).toBe('busy')
+    expect(deriveSubmitState(rows, names, false)).toMatchObject({ enabled: true })
+  })
+
+  test('multi-target overwrite stays disabled until an exact skill id is selected', () => {
+    const targets = [overwriteTarget('one'), overwriteTarget('two')]
+    const rows: RowState[] = [
+      {
+        candidate: candidate('a', undefined, targets),
+        decision: { action: 'overwrite', newName: '', overwriteSkillId: '' },
+      },
+    ]
+    expect(deriveSubmitState(rows, names, false).reason).toBe('overwrite-target-required')
+    rows[0]!.decision.overwriteSkillId = 'two'
     expect(deriveSubmitState(rows, names, false)).toMatchObject({ enabled: true })
   })
 })

@@ -145,6 +145,20 @@ export type SkillZipError = z.infer<typeof SkillZipErrorSchema>
 export const SkillZipCandidateConflictSchema = z.enum(['managed'])
 export type SkillZipCandidateConflict = z.infer<typeof SkillZipCandidateConflictSchema>
 
+/**
+ * RFC-223 AC19 — one exact existing skill that the current actor may overwrite.
+ * `skillId` is the identity; owner/visibility and both revision fences are a
+ * preview snapshot that apply must re-check before and inside the version tx.
+ */
+export const SkillZipOverwriteCandidateSchema = z.object({
+  skillId: z.string().min(1),
+  ownerUserId: z.string().nullable(),
+  visibility: ResourceVisibilitySchema,
+  expectedAclRevision: z.number().int().nonnegative(),
+  expectedToken: z.string().min(1),
+})
+export type SkillZipOverwriteCandidate = z.infer<typeof SkillZipOverwriteCandidateSchema>
+
 /** One row in the parse response: a skill the zip could become. */
 export const SkillZipCandidateViewSchema = z.object({
   name: SkillNameSchema,
@@ -152,14 +166,17 @@ export const SkillZipCandidateViewSchema = z.object({
   fileCount: z.number().int().nonnegative(),
   totalBytes: z.number().int().nonnegative(),
   warnings: z.array(z.string()),
+  /**
+   * A conflict means the actor's own `(ownerUserId,name)` slot is occupied.
+   * Cross-owner rows never turn an ordinary import into a conflict.
+   */
   conflict: SkillZipCandidateConflictSchema.optional(),
   /**
-   * RFC-102: whether the current actor may replace this same-named managed skill.
-   * Only meaningful when `conflict` is set. `managed` ⇒ isResourceOwner(actor,
-   * existing). Never leaks owner identity: a private same-named skill the actor
-   * cannot see naturally yields false.
+   * Exact targets the actor may overwrite. Owners see their own target;
+   * resource admins may see multiple same-named cross-owner targets and must
+   * choose one by id. An empty list is fail-closed.
    */
-  canOverwrite: z.boolean().optional(),
+  overwriteCandidates: z.array(SkillZipOverwriteCandidateSchema),
 })
 export type SkillZipCandidateView = z.infer<typeof SkillZipCandidateViewSchema>
 
@@ -172,7 +189,14 @@ export type ParseSkillZipResponse = z.infer<typeof ParseSkillZipResponseSchema>
 /** Per-candidate decision applied at commit time. */
 export const SkillZipDecisionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('skip') }),
-  z.object({ action: z.literal('overwrite') }),
+  z.object({
+    action: z.literal('overwrite'),
+    skillId: z.string().min(1),
+    expectedOwnerUserId: z.string().nullable(),
+    expectedVisibility: ResourceVisibilitySchema,
+    expectedAclRevision: z.number().int().nonnegative(),
+    expectedToken: z.string().min(1),
+  }),
   z.object({ action: z.literal('rename'), newName: SkillNameSchema }),
   z.object({ action: z.literal('import') }), // explicit new (no conflict)
 ])
@@ -189,6 +213,8 @@ export const SkillZipCommitFailureCodeSchema = z.enum([
   'skill-name-invalid',
   // RFC-102: overwrite requested but the actor is not the owner/admin.
   'skill-overwrite-forbidden',
+  // RFC-223 AC19: preview target or owner/ACL/content generation drifted.
+  'skill-overwrite-stale',
 ])
 export type SkillZipCommitFailureCode = z.infer<typeof SkillZipCommitFailureCodeSchema>
 

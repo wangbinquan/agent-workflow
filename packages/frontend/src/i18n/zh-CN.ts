@@ -1364,6 +1364,11 @@ export interface Resources {
     zipActionSkip: string
     zipActionOverwrite: string
     zipActionRename: string
+    zipOverwriteTargetFor: string
+    zipOverwriteTargetPlaceholder: string
+    zipOverwriteTargetOption: string
+    zipVisibilityPublic: string
+    zipVisibilityPrivate: string
     zipRenameTo: string
     zipRenameEmpty: string
     zipRenameInvalid: string
@@ -5248,6 +5253,11 @@ export const zhCN: Resources = {
     zipActionSkip: '跳过',
     zipActionOverwrite: '覆盖',
     zipActionRename: '重命名',
+    zipOverwriteTargetFor: '为 {{name}} 选择要覆盖的 Skill',
+    zipOverwriteTargetPlaceholder: '请选择具体 Skill',
+    zipOverwriteTargetOption: '{{name}} · 所有者 {{owner}} · {{visibility}} · {{id}}',
+    zipVisibilityPublic: '公开',
+    zipVisibilityPrivate: '私有',
     zipRenameTo: '新名称',
     zipRenameEmpty: '请输入名称',
     zipRenameInvalid: '需为 kebab-case',

@@ -180,7 +180,21 @@ function candidate(
     fileCount: 2,
     totalBytes: 1536,
     warnings: [],
+    overwriteCandidates: [],
     ...opts,
+  }
+}
+
+function overwriteTarget(
+  skillId: string,
+  ownerUserId: string,
+): ParseSkillZipResponse['skills'][number]['overwriteCandidates'][number] {
+  return {
+    skillId,
+    ownerUserId,
+    visibility: 'public',
+    expectedAclRevision: 4,
+    expectedToken: `token-${skillId}`,
   }
 }
 
@@ -318,8 +332,11 @@ describe('ImportZipPanel (RFC-196)', () => {
       parse: {
         body: parseResponse([
           candidate('fresh'),
-          candidate('owner', { conflict: 'managed', canOverwrite: true }),
-          candidate('locked', { conflict: 'managed', canOverwrite: false }),
+          candidate('owner', {
+            conflict: 'managed',
+            overwriteCandidates: [overwriteTarget('owner-id', 'owner-user')],
+          }),
+          candidate('locked', { conflict: 'managed', overwriteCandidates: [] }),
         ]),
       },
     })
@@ -340,6 +357,55 @@ describe('ImportZipPanel (RFC-196)', () => {
     expect(
       screen.getByRole('combobox', { name: i18n.t('skills.zipActionFor', { name: 'locked' }) }),
     ).toBeTruthy()
+  })
+
+  test('admin multi-owner overwrite requires an exact id and posts its preview fences', async () => {
+    const alice = overwriteTarget('alice-skill', 'alice')
+    const bob = overwriteTarget('bob-skill', 'bob')
+    const fetchMock = installRouter({
+      parse: {
+        body: parseResponse([
+          candidate('same', {
+            overwriteCandidates: [alice, bob],
+          }),
+        ]),
+      },
+    })
+    renderPanel()
+    chooseFile()
+    await parseSelectedFile()
+
+    expect(actionOptionLabels('zip-action-same').sort()).toEqual(
+      [actionLabel.import(), actionLabel.skip(), actionLabel.overwrite()].sort(),
+    )
+    chooseAction('zip-action-same', actionLabel.overwrite())
+    expect((screen.getByTestId('zip-commit-button') as HTMLButtonElement).disabled).toBe(true)
+
+    const targetLabel = i18n.t('skills.zipOverwriteTargetOption', {
+      name: 'same',
+      owner: 'bob',
+      visibility: i18n.t('skills.zipVisibilityPublic'),
+      id: 'bob-skill',
+    })
+    chooseAction('zip-overwrite-target-same', targetLabel)
+    expect((screen.getByTestId('zip-commit-button') as HTMLButtonElement).disabled).toBe(false)
+
+    fireEvent.click(screen.getByTestId('zip-commit-button'))
+    await screen.findByTestId('zip-import-summary')
+    const commitCall = fetchMock.mock.calls.find((call) =>
+      String(call[0]).endsWith('/api/skills/import-zip/commit'),
+    )
+    const body = commitCall![1]!.body as FormData
+    expect(JSON.parse(String(body.get('decisions')))).toEqual({
+      same: {
+        action: 'overwrite',
+        skillId: bob.skillId,
+        expectedOwnerUserId: bob.ownerUserId,
+        expectedVisibility: bob.visibility,
+        expectedAclRevision: bob.expectedAclRevision,
+        expectedToken: bob.expectedToken,
+      },
+    })
   })
 
   test('rename validation connects the named field error and disables import', async () => {

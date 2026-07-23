@@ -4,17 +4,19 @@
 // parseSkillZip:   thin wrapper around shared parseSkillZipEntries that also
 //                  decorates candidates with DB-conflict info.
 // commitSkillZip:  applies a decision map and writes accepted candidates to
-//                  ~/.agent-workflow/skills/{name}/files/.
+//                  ~/.agent-workflow/skills/{id}/files/.
 
 import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve, sep } from 'node:path'
 import { unzipSync } from 'fflate'
+import { eq, inArray } from 'drizzle-orm'
 import {
   parseSkillZipEntries,
   SKILL_ZIP_LIMITS,
   SKILL_NAME_RE,
   type CommitSkillZipResponse,
   type ParseSkillZipResponse,
+  type ResourceVisibility,
   type Skill,
   type SkillCandidate,
   type SkillZipCandidateConflict,
@@ -23,18 +25,17 @@ import {
   type SkillZipCommitSkipped,
   type SkillZipDecisionMap,
   type SkillZipError,
+  type SkillZipOverwriteCandidate,
   type ZipEntryRef,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import {
-  createManagedSkillWithFiles,
-  getSkill,
-  isSkillNameOccupied,
-  listSkills,
-} from '@/services/skill'
+import { skills } from '@/db/schema'
+import { createManagedSkillWithFiles, getSkillById } from '@/services/skill'
+import { isSkillAvailableThisBoot } from '@/services/skillBootVerify'
+import { decodeSkillToken, encodeSkillToken, skillTokenMatches } from '@/services/skillToken'
 import { commitSkillVersion } from '@/services/skillVersion'
-import { isResourceOwner } from '@/services/resourceAcl'
+import { canViewResource, isResourceOwner } from '@/services/resourceAcl'
 import { ConflictError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { stringifyFrontmatter } from '@/util/frontmatter'
@@ -47,7 +48,7 @@ const log = createLogger('skill-zip')
 export const ZIP_LIMITS = SKILL_ZIP_LIMITS
 
 export interface SkillZipFsOptions {
-  /** App home dir; managed skills live under `${appHome}/skills/{name}/files/`. */
+  /** App home dir; managed skills live under `${appHome}/skills/{id}/files/`. */
   appHome: string
 }
 
@@ -138,20 +139,78 @@ export function decodeZip(buffer: Uint8Array): ZipEntryRef[] {
 
 // --- parse (HTTP-facing) -----------------------------------------------------
 
-/**
- * RFC-102: derive the per-candidate conflict view fields from the actor and the
- * same-named existing skill (if any). Pure — directly unit-testable.
- *   managed  ⇒ conflict='managed',  canOverwrite=isResourceOwner(actor, existing)
- *   none     ⇒ {}
- * Never leaks owner identity: a private same-named skill the actor cannot see
- * is still owned by someone else, so isResourceOwner yields false.
- */
-export function computeConflictView(
-  actor: Actor,
-  existing: Skill | undefined,
-): { conflict?: SkillZipCandidateConflict; canOverwrite?: boolean } {
-  if (existing === undefined) return {}
-  return { conflict: 'managed', canOverwrite: isResourceOwner(actor, existing) }
+type SkillZipTargetRow = {
+  id: string
+  name: string
+  ownerUserId: string | null
+  visibility: ResourceVisibility
+  aclRevision: number
+  contentVersion: number
+  metaRevision: number
+  reservationState: 'reserving' | 'ready'
+  versionState:
+    | 'legacy-unbackfilled'
+    | 'snapshot-unverified'
+    | 'snapshot-authoritative'
+    | 'quarantined'
+}
+
+async function listTargetRowsByName(
+  db: DbClient,
+  names: ReadonlyArray<string>,
+): Promise<SkillZipTargetRow[]> {
+  if (names.length === 0) return []
+  return db
+    .select({
+      id: skills.id,
+      name: skills.name,
+      ownerUserId: skills.ownerUserId,
+      visibility: skills.visibility,
+      aclRevision: skills.aclRevision,
+      contentVersion: skills.contentVersion,
+      metaRevision: skills.metaRevision,
+      reservationState: skills.reservationState,
+      versionState: skills.versionState,
+    })
+    .from(skills)
+    .where(inArray(skills.name, [...new Set(names)]))
+}
+
+async function loadTargetRowById(db: DbClient, skillId: string): Promise<SkillZipTargetRow | null> {
+  const rows = await db
+    .select({
+      id: skills.id,
+      name: skills.name,
+      ownerUserId: skills.ownerUserId,
+      visibility: skills.visibility,
+      aclRevision: skills.aclRevision,
+      contentVersion: skills.contentVersion,
+      metaRevision: skills.metaRevision,
+      reservationState: skills.reservationState,
+      versionState: skills.versionState,
+    })
+    .from(skills)
+    .where(eq(skills.id, skillId))
+    .limit(1)
+  return rows[0] ?? null
+}
+
+function targetIsAvailable(row: SkillZipTargetRow): boolean {
+  return row.reservationState === 'ready' && isSkillAvailableThisBoot(row)
+}
+
+function toOverwriteCandidate(row: SkillZipTargetRow): SkillZipOverwriteCandidate {
+  return {
+    skillId: row.id,
+    ownerUserId: row.ownerUserId,
+    visibility: row.visibility,
+    expectedAclRevision: row.aclRevision,
+    expectedToken: encodeSkillToken({
+      skillId: row.id,
+      contentVersion: row.contentVersion,
+      metaRevision: row.metaRevision,
+    }),
+  }
 }
 
 export async function parseSkillZipBuffer(
@@ -162,17 +221,37 @@ export async function parseSkillZipBuffer(
   const entries = decodeZip(buffer)
   const parsed = parseSkillZipEntries(entries)
 
-  const existing = await listSkills(db)
-  const byName = new Map(existing.map((s) => [s.name, s] as const))
+  const existing = await listTargetRowsByName(
+    db,
+    parsed.skills.map((candidate) => candidate.name),
+  )
+  const byName = new Map<string, SkillZipTargetRow[]>()
+  for (const row of existing) {
+    const rows = byName.get(row.name) ?? []
+    rows.push(row)
+    byName.set(row.name, rows)
+  }
 
   const skillsView: SkillZipCandidateView[] = parsed.skills.map((c) => {
+    const sameName = byName.get(c.name) ?? []
+    const ownSlotOccupied = sameName.some((row) => row.ownerUserId === actor.user.id)
+    const overwriteCandidates = sameName
+      .filter((row) => targetIsAvailable(row) && isResourceOwner(actor, row))
+      .sort((a, b) => {
+        const ownerOrder = (a.ownerUserId ?? '').localeCompare(b.ownerUserId ?? '')
+        return ownerOrder !== 0 ? ownerOrder : a.id.localeCompare(b.id)
+      })
+      .map(toOverwriteCandidate)
     const view: SkillZipCandidateView = {
       name: c.name,
       description: c.description,
       fileCount: c.files.length,
       totalBytes: c.totalBytes,
       warnings: c.warnings,
-      ...computeConflictView(actor, byName.get(c.name)),
+      ...(ownSlotOccupied
+        ? { conflict: 'managed' as const satisfies SkillZipCandidateConflict }
+        : {}),
+      overwriteCandidates,
     }
     return view
   })
@@ -197,9 +276,16 @@ export async function commitSkillZipBuffer(
   opts: SkillZipFsOptions,
   buffer: Uint8Array,
   decisions: SkillZipDecisionMap,
-  aclOpts: { actor: Actor },
+  aclOpts: {
+    actor: Actor
+    /** Test-only race seam after preview checks, before the version funnel tx. */
+    __beforeOverwriteVersionForTest?: (target: { skillId: string; candidateName: string }) => void
+  },
 ): Promise<CommitSkillZipResponse> {
-  const { candidates } = await parseSkillZipBuffer(db, aclOpts.actor, buffer)
+  // Re-parse only the archive at apply time. Existing DB rows are never
+  // resolved again by name: overwrite decisions must bind the exact previewed
+  // skillId and generation snapshot.
+  const candidates = parseSkillZipEntries(decodeZip(buffer)).skills
   const decisionFor = new Map(Object.entries(decisions))
 
   // Track target names already touched in this commit so a rename collision
@@ -241,56 +327,92 @@ export async function commitSkillZipBuffer(
       continue
     }
 
-    const existing = await getSkill(db, targetName)
-    const isOverwrite = decision.action === 'overwrite'
+    const overwriteDecision = decision.action === 'overwrite' ? decision : null
+    const isOverwrite = overwriteDecision !== null
+    let overwriteTarget: SkillZipTargetRow | null = null
+    let overwriteFence:
+      | { expectedSkillId: string; expectedVersion: number; expectedMetaRevision: number }
+      | undefined
 
-    // RFC-102: overwriting a managed skill requires write permission (owner or
-    // admin) — the same gate POST /api/skills/:id/save enforces. The front-end
-    // disables the option, but a direct API call must be rejected here too.
-    if (existing !== null && isOverwrite && !isResourceOwner(aclOpts.actor, existing)) {
-      outcome.failed.push({
-        name: candidate.name,
-        code: 'skill-overwrite-forbidden',
-        message: `skill '${targetName}' is owned by another user; you cannot overwrite it (rename to import a copy)`,
-      })
-      continue
-    }
+    if (isOverwrite) {
+      const target = await loadTargetRowById(db, overwriteDecision.skillId)
+      if (target === null) {
+        outcome.failed.push({
+          name: candidate.name,
+          code: 'skill-overwrite-stale',
+          message: 'the previewed overwrite target is no longer available; review the ZIP again',
+        })
+        continue
+      }
 
-    if (existing !== null && !isOverwrite) {
-      // Either action=import on top of an existing skill, or rename collided
-      // with a DB row we didn't see during parse.
-      outcome.failed.push({
-        name: candidate.name,
-        code: 'skill-rename-conflict',
-        message: `skill '${targetName}' already exists; pick a different name or choose Overwrite`,
-      })
-      continue
-    }
+      // Visibility/authorization precedes snapshot comparison. A caller that
+      // lost access after preview receives no generation oracle.
+      if (
+        !(await canViewResource(db, aclOpts.actor, 'skill', target)) ||
+        !isResourceOwner(aclOpts.actor, target)
+      ) {
+        outcome.failed.push({
+          name: candidate.name,
+          code: 'skill-overwrite-forbidden',
+          message: 'you can no longer overwrite the previewed skill; review the ZIP again',
+        })
+        continue
+      }
+      if (!targetIsAvailable(target)) {
+        outcome.failed.push({
+          name: candidate.name,
+          code: 'skill-overwrite-stale',
+          message: 'the previewed overwrite target is no longer available; review the ZIP again',
+        })
+        continue
+      }
 
-    if (existing === null && isOverwrite) {
-      outcome.failed.push({
-        name: candidate.name,
-        code: 'skill-rename-conflict',
-        message: `cannot overwrite '${targetName}': no such skill exists`,
-      })
-      continue
-    }
-
-    // Gate-hidden occupancy: the gated getSkill above says "free", but a row can
-    // still hold the name while invisible (mid-create 'reserving', 'quarantined',
-    // or boot-unverified). A create would only hit the unique(name) constraint
-    // deep inside the reserve tx — surface an accurate conflict up front instead.
-    if (existing === null && (await isSkillNameOccupied(db, targetName))) {
-      outcome.failed.push({
-        name: candidate.name,
-        code: 'skill-rename-conflict',
-        message: `target name '${targetName}' is held by an unavailable skill (mid-create or quarantined); pick a different name`,
-      })
-      continue
+      const token = decodeSkillToken(overwriteDecision.expectedToken)
+      if (
+        target.name !== candidate.name ||
+        overwriteDecision.expectedOwnerUserId !== target.ownerUserId ||
+        overwriteDecision.expectedVisibility !== target.visibility ||
+        overwriteDecision.expectedAclRevision !== target.aclRevision ||
+        token === null ||
+        !skillTokenMatches(token, {
+          skillId: target.id,
+          contentVersion: target.contentVersion,
+          metaRevision: target.metaRevision,
+        })
+      ) {
+        outcome.failed.push({
+          name: candidate.name,
+          code: 'skill-overwrite-stale',
+          message: 'the previewed overwrite target changed; review the ZIP again',
+        })
+        continue
+      }
+      overwriteTarget = target
+      overwriteFence = {
+        expectedSkillId: token.skillId,
+        expectedVersion: token.contentVersion,
+        expectedMetaRevision: token.metaRevision,
+      }
+    } else {
+      // Import/rename claims only the actor's namespace. Another owner may hold
+      // the same display name without blocking this create.
+      const ownRows = await listTargetRowsByName(db, [targetName])
+      const occupied = ownRows.filter((row) => row.ownerUserId === aclOpts.actor.user.id)
+      if (occupied.length > 0) {
+        const unavailable = occupied.every((row) => !targetIsAvailable(row))
+        outcome.failed.push({
+          name: candidate.name,
+          code: 'skill-rename-conflict',
+          message: unavailable
+            ? `target name '${targetName}' is held by an unavailable skill for this owner; pick a different name`
+            : `skill '${targetName}' already exists for this owner; pick a different name or choose Overwrite`,
+        })
+        continue
+      }
     }
 
     try {
-      if (existing === null) {
+      if (overwriteTarget === null) {
         // CREATE — route through the SAME reserve→v1-snapshot→ready pipeline as
         // POST /api/skills. The old direct live-write + bare row insert left
         // versionState='legacy-unbackfilled' with no snapshot, which the RFC-170
@@ -310,6 +432,10 @@ export async function commitSkillZipBuffer(
         )
         outcome.created.push(created)
       } else {
+        aclOpts.__beforeOverwriteVersionForTest?.({
+          skillId: overwriteTarget.id,
+          candidateName: candidate.name,
+        })
         // OVERWRITE: route through the version funnel (RFC-170 §2 "ZIP overwrite" as
         // a version writer) — op-scoped staging + atomic publish + crash rollback +
         // the in-tx composite/owner fence (expectedOwnerUserId = the owner we
@@ -320,7 +446,7 @@ export async function commitSkillZipBuffer(
         commitSkillVersion(
           db,
           opts,
-          existing.id,
+          overwriteTarget.id,
           (staging) => {
             // Full replace: drop the funnel's live-seeded staging, lay down the ZIP tree.
             for (const e of readdirSync(staging))
@@ -330,11 +456,14 @@ export async function commitSkillZipBuffer(
           {
             source: 'editor',
             authorUserId: aclOpts.actor.user.id,
-            expectedOwnerUserId: existing.ownerUserId,
+            expectedOwnerUserId: overwriteDecision!.expectedOwnerUserId,
+            expectedAclRevision: overwriteDecision!.expectedAclRevision,
+            expectedVisibility: overwriteDecision!.expectedVisibility,
+            ...overwriteFence,
             setDescription: candidate.description,
           },
         )
-        const updated = await getSkill(db, targetName)
+        const updated = await getSkillById(db, overwriteTarget.id)
         if (updated !== null) outcome.updated.push(updated)
       }
       claimedNames.add(targetName)
@@ -351,9 +480,15 @@ export async function commitSkillZipBuffer(
       // (row + files + op), and the old best-effort rm of the target files dir
       // could delete a CONCURRENT winner's just-published live files.
       const isNameConflict = err instanceof ConflictError && err.code === 'skill-name-in-use'
+      const isStaleOverwrite =
+        isOverwrite && err instanceof ConflictError && err.code === 'skill-version-conflict'
       outcome.failed.push({
         name: candidate.name,
-        code: isNameConflict ? 'skill-rename-conflict' : 'skill-write-failed',
+        code: isNameConflict
+          ? 'skill-rename-conflict'
+          : isStaleOverwrite
+            ? 'skill-overwrite-stale'
+            : 'skill-write-failed',
         message: err instanceof Error ? err.message : String(err),
       })
     }

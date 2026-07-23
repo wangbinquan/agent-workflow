@@ -8,19 +8,22 @@
 // non-admin owners.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { eq } from 'drizzle-orm'
 import { zipSync, type Zippable } from 'fflate'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { skills } from '../src/db/schema'
 import {
   commitSkillZipBuffer,
   parseSkillZipBuffer,
   type SkillZipFsOptions,
 } from '../src/services/skill-zip'
-import { getSkill, createManagedSkill } from '../src/services/skill'
+import { getSkill, getSkillById, createManagedSkill } from '../src/services/skill'
+import { commitSkillVersion } from '../src/services/skillVersion'
 import { buildActor, type Actor } from '../src/auth/actor'
-import type { SkillZipDecisionMap } from '@agent-workflow/shared'
+import type { SkillZipDecision, SkillZipDecisionMap } from '@agent-workflow/shared'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -59,6 +62,33 @@ function buildZip(files: Record<string, Uint8Array | string>): Uint8Array {
 
 const skillMd = (name: string, desc = 'd') =>
   `---\nname: ${name}\ndescription: ${desc}\n---\nbody for ${name}\n`
+
+type OverwriteDecision = Extract<SkillZipDecision, { action: 'overwrite' }>
+
+async function previewOverwrite(
+  h: H,
+  actor: Actor,
+  buffer: Uint8Array,
+  candidateName: string,
+  targetSkillId?: string,
+): Promise<OverwriteDecision> {
+  const { response } = await parseSkillZipBuffer(h.db, actor, buffer)
+  const candidate = response.skills.find((row) => row.name === candidateName)
+  const target =
+    candidate?.overwriteCandidates.find((row) => row.skillId === targetSkillId) ??
+    (targetSkillId === undefined && candidate?.overwriteCandidates.length === 1
+      ? candidate.overwriteCandidates[0]
+      : undefined)
+  if (target === undefined) throw new Error(`missing overwrite preview for ${candidateName}`)
+  return {
+    action: 'overwrite',
+    skillId: target.skillId,
+    expectedOwnerUserId: target.ownerUserId,
+    expectedVisibility: target.visibility,
+    expectedAclRevision: target.expectedAclRevision,
+    expectedToken: target.expectedToken,
+  }
+}
 
 describe('commitSkillZipBuffer', () => {
   let h: H
@@ -119,7 +149,7 @@ describe('commitSkillZipBuffer', () => {
       h.db,
       h.fsOpts,
       buf,
-      { 'skill-o': { action: 'overwrite' } },
+      { 'skill-o': await previewOverwrite(h, ADMIN, buf, 'skill-o') },
       { actor: ADMIN },
     )
     expect(r.updated.map((s) => s.id)).toEqual([before.id])
@@ -153,7 +183,7 @@ describe('commitSkillZipBuffer', () => {
       h.db,
       h.fsOpts,
       buf,
-      { 'skill-v': { action: 'overwrite' } },
+      { 'skill-v': await previewOverwrite(h, ADMIN, buf, 'skill-v') },
       { actor: ADMIN },
     )
     const after = await getSkill(h.db, 'skill-v')
@@ -181,12 +211,17 @@ describe('commitSkillZipBuffer', () => {
   })
 
   test('rename to a name already in DB fails with skill-rename-conflict', async () => {
-    await createManagedSkill(h.db, h.fsOpts, {
-      name: 'taken',
-      description: '',
-      bodyMd: '',
-      frontmatterExtra: {},
-    })
+    await createManagedSkill(
+      h.db,
+      h.fsOpts,
+      {
+        name: 'taken',
+        description: '',
+        bodyMd: '',
+        frontmatterExtra: {},
+      },
+      { ownerUserId: ADMIN.user.id },
+    )
     const buf = buildZip({ 'skill-from-zip/SKILL.md': skillMd('skill-from-zip') })
     const r = await commitSkillZipBuffer(
       h.db,
@@ -262,12 +297,17 @@ describe('commitSkillZipBuffer', () => {
   })
 
   test('parseSkillZipBuffer flags DB conflict on candidate view', async () => {
-    await createManagedSkill(h.db, h.fsOpts, {
-      name: 'dup',
-      description: '',
-      bodyMd: '',
-      frontmatterExtra: {},
-    })
+    await createManagedSkill(
+      h.db,
+      h.fsOpts,
+      {
+        name: 'dup',
+        description: '',
+        bodyMd: '',
+        frontmatterExtra: {},
+      },
+      { ownerUserId: ADMIN.user.id },
+    )
     const buf = buildZip({
       'dup/SKILL.md': skillMd('dup'),
       'fresh/SKILL.md': skillMd('fresh'),
@@ -277,7 +317,7 @@ describe('commitSkillZipBuffer', () => {
     expect(dup.conflict).toBe('managed')
     const fresh = response.skills.find((s) => s.name === 'fresh')!
     expect(fresh.conflict).toBeUndefined()
-    expect(fresh.canOverwrite).toBeUndefined()
+    expect(fresh.overwriteCandidates).toEqual([])
   })
 
   test('frontmatterExtra round-trips into rewritten SKILL.md', async () => {
@@ -325,11 +365,13 @@ describe('RFC-102 overwrite permission', () => {
   test('non-owner overwrite is rejected with skill-overwrite-forbidden', async () => {
     await seedAliceSkill('owned')
     const buf = buildZip({ 'owned/SKILL.md': skillMd('owned', 'bob tries') })
+    // Replaying another actor's preview cannot turn it into write authority.
+    const stolenPreview = await previewOverwrite(h, ALICE, buf, 'owned')
     const r = await commitSkillZipBuffer(
       h.db,
       h.fsOpts,
       buf,
-      { owned: { action: 'overwrite' } },
+      { owned: stolenPreview },
       { actor: BOB },
     )
     expect(r.updated).toEqual([])
@@ -346,7 +388,7 @@ describe('RFC-102 overwrite permission', () => {
       h.db,
       h.fsOpts,
       buf,
-      { owned: { action: 'overwrite' } },
+      { owned: await previewOverwrite(h, ALICE, buf, 'owned') },
       { actor: ALICE },
     )
     expect(r.failed).toEqual([])
@@ -361,7 +403,7 @@ describe('RFC-102 overwrite permission', () => {
       h.db,
       h.fsOpts,
       buf,
-      { owned: { action: 'overwrite' } },
+      { owned: await previewOverwrite(h, ADMIN, buf, 'owned') },
       { actor: ADMIN },
     )
     expect(r.failed).toEqual([])
@@ -384,19 +426,200 @@ describe('RFC-102 overwrite permission', () => {
     expect((await getSkill(h.db, 'owned'))!.ownerUserId).toBe(ALICE.user.id)
   })
 
-  test('parse reports canOverwrite per actor for a managed conflict', async () => {
+  test('parse exposes only exact targets the actor may overwrite', async () => {
     await seedAliceSkill('owned')
     const buf = buildZip({ 'owned/SKILL.md': skillMd('owned') })
 
     const asAlice = await parseSkillZipBuffer(h.db, ALICE, buf)
     expect(asAlice.response.skills[0]!.conflict).toBe('managed')
-    expect(asAlice.response.skills[0]!.canOverwrite).toBe(true)
+    expect(asAlice.response.skills[0]!.overwriteCandidates).toHaveLength(1)
+    expect(asAlice.response.skills[0]!.overwriteCandidates[0]!.ownerUserId).toBe(ALICE.user.id)
 
     const asBob = await parseSkillZipBuffer(h.db, BOB, buf)
-    expect(asBob.response.skills[0]!.conflict).toBe('managed')
-    expect(asBob.response.skills[0]!.canOverwrite).toBe(false)
+    expect(asBob.response.skills[0]!.conflict).toBeUndefined()
+    expect(asBob.response.skills[0]!.overwriteCandidates).toEqual([])
 
     const asAdmin = await parseSkillZipBuffer(h.db, ADMIN, buf)
-    expect(asAdmin.response.skills[0]!.canOverwrite).toBe(true)
+    expect(asAdmin.response.skills[0]!.conflict).toBeUndefined()
+    expect(asAdmin.response.skills[0]!.overwriteCandidates).toHaveLength(1)
+  })
+})
+
+// RFC-223 AC19 / R5-1: ZIP import resolves the create slot by actor owner,
+// while overwrite is a two-step exact-id operation whose owner/ACL/content
+// snapshot is rechecked at apply. These cases must be green before the global
+// name-unique index is removed.
+describe('RFC-223 AC19 owner-scoped ZIP import', () => {
+  let h: H
+  beforeEach(() => {
+    h = build()
+  })
+  afterEach(() => h.cleanup())
+
+  async function seed(owner: Actor, name: string, description: string) {
+    return createManagedSkill(
+      h.db,
+      h.fsOpts,
+      { name, description, bodyMd: description, frontmatterExtra: {} },
+      { ownerUserId: owner.user.id },
+    )
+  }
+
+  test('ordinary import claims only the actor owner/name slot', async () => {
+    const aliceSkill = await seed(ALICE, 'shared-name', 'alice original')
+    const zip = buildZip({
+      'shared-name/SKILL.md': skillMd('shared-name', 'bob imported'),
+    })
+
+    const preview = await parseSkillZipBuffer(h.db, BOB, zip)
+    expect(preview.response.skills[0]).toMatchObject({
+      name: 'shared-name',
+      overwriteCandidates: [],
+    })
+    expect(preview.response.skills[0]!.conflict).toBeUndefined()
+
+    const result = await commitSkillZipBuffer(
+      h.db,
+      h.fsOpts,
+      zip,
+      { 'shared-name': { action: 'import' } },
+      { actor: BOB },
+    )
+    expect(result.failed).toEqual([])
+    expect(result.created).toHaveLength(1)
+    expect(result.created[0]).toMatchObject({
+      name: 'shared-name',
+      ownerUserId: BOB.user.id,
+    })
+    expect(await getSkillById(h.db, aliceSkill.id)).toMatchObject({
+      description: 'alice original',
+      ownerUserId: ALICE.user.id,
+    })
+  })
+
+  test('admin preview keeps A/B same-name targets distinct and overwrites only the chosen id', async () => {
+    const aliceSkill = await seed(ALICE, 'same', 'alice original')
+    const bobSkill = await seed(BOB, 'same', 'bob original')
+    const zip = buildZip({ 'same/SKILL.md': skillMd('same', 'chosen update') })
+
+    const preview = await parseSkillZipBuffer(h.db, ADMIN, zip)
+    const row = preview.response.skills[0]!
+    expect(row.conflict).toBeUndefined()
+    expect(row.overwriteCandidates.map((candidate) => candidate.skillId).sort()).toEqual(
+      [aliceSkill.id, bobSkill.id].sort(),
+    )
+
+    const result = await commitSkillZipBuffer(
+      h.db,
+      h.fsOpts,
+      zip,
+      { same: await previewOverwrite(h, ADMIN, zip, 'same', bobSkill.id) },
+      { actor: ADMIN },
+    )
+    expect(result.failed).toEqual([])
+    expect(result.updated.map((skill) => skill.id)).toEqual([bobSkill.id])
+    expect(await getSkillById(h.db, aliceSkill.id)).toMatchObject({
+      description: 'alice original',
+    })
+    expect(await getSkillById(h.db, bobSkill.id)).toMatchObject({
+      description: 'chosen update',
+    })
+  })
+
+  test('content version drift after preview fails closed without overwriting the newer tree', async () => {
+    const target = await seed(ALICE, 'versioned', 'v1')
+    const staleZip = buildZip({ 'versioned/SKILL.md': skillMd('versioned', 'stale') })
+    const staleDecision = await previewOverwrite(h, ADMIN, staleZip, 'versioned', target.id)
+
+    const staleResult = await commitSkillZipBuffer(
+      h.db,
+      h.fsOpts,
+      staleZip,
+      { versioned: staleDecision },
+      {
+        actor: ADMIN,
+        __beforeOverwriteVersionForTest: ({ skillId }) => {
+          commitSkillVersion(
+            h.db,
+            h.fsOpts,
+            skillId,
+            (staging) => {
+              writeFileSync(join(staging, 'SKILL.md'), skillMd('versioned', 'v2'))
+            },
+            {
+              source: 'editor',
+              authorUserId: ADMIN.user.id,
+              setDescription: 'v2',
+            },
+          )
+        },
+      },
+    )
+    expect(staleResult.updated).toEqual([])
+    expect(staleResult.failed.map((failure) => failure.code)).toEqual(['skill-overwrite-stale'])
+    expect(await getSkillById(h.db, target.id)).toMatchObject({
+      description: 'v2',
+      contentVersion: 2,
+    })
+  })
+
+  test('owner drift after preview fails closed for a resource admin', async () => {
+    const target = await seed(ALICE, 'owner-drift', 'original')
+    const zip = buildZip({ 'owner-drift/SKILL.md': skillMd('owner-drift', 'stale') })
+    const decision = await previewOverwrite(h, ADMIN, zip, 'owner-drift', target.id)
+
+    const result = await commitSkillZipBuffer(
+      h.db,
+      h.fsOpts,
+      zip,
+      { 'owner-drift': decision },
+      {
+        actor: ADMIN,
+        __beforeOverwriteVersionForTest: ({ skillId }) => {
+          h.db
+            .update(skills)
+            .set({ ownerUserId: BOB.user.id, aclRevision: decision.expectedAclRevision + 1 })
+            .where(eq(skills.id, skillId))
+            .run()
+        },
+      },
+    )
+    expect(result.updated).toEqual([])
+    expect(result.failed.map((failure) => failure.code)).toEqual(['skill-overwrite-stale'])
+    expect(await getSkillById(h.db, target.id)).toMatchObject({
+      description: 'original',
+      ownerUserId: BOB.user.id,
+    })
+  })
+
+  test('visibility/ACL revision drift after preview fails closed', async () => {
+    const target = await seed(ALICE, 'visibility-drift', 'original')
+    const zip = buildZip({
+      'visibility-drift/SKILL.md': skillMd('visibility-drift', 'stale'),
+    })
+    const decision = await previewOverwrite(h, ADMIN, zip, 'visibility-drift', target.id)
+
+    const result = await commitSkillZipBuffer(
+      h.db,
+      h.fsOpts,
+      zip,
+      { 'visibility-drift': decision },
+      {
+        actor: ADMIN,
+        __beforeOverwriteVersionForTest: ({ skillId }) => {
+          h.db
+            .update(skills)
+            .set({ visibility: 'private', aclRevision: decision.expectedAclRevision + 1 })
+            .where(eq(skills.id, skillId))
+            .run()
+        },
+      },
+    )
+    expect(result.updated).toEqual([])
+    expect(result.failed.map((failure) => failure.code)).toEqual(['skill-overwrite-stale'])
+    expect(await getSkillById(h.db, target.id)).toMatchObject({
+      description: 'original',
+      visibility: 'private',
+    })
   })
 })

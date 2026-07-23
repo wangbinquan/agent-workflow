@@ -18,7 +18,7 @@ import type {
   UpdateSkillContent,
 } from '@agent-workflow/shared'
 import { isProtectedSkillMainFile } from '@agent-workflow/shared'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
 import {
   existsSync,
   lstatSync,
@@ -134,6 +134,29 @@ export async function isSkillNameOccupied(db: DbClient, name: string): Promise<b
   return rows.length > 0
 }
 
+/**
+ * RFC-223 AC19 — raw occupancy inside one owner's namespace. Hidden reserving
+ * and quarantined rows still occupy the slot; another owner's same-named row
+ * does not.
+ */
+export async function isSkillNameOccupiedForOwner(
+  db: DbClient,
+  name: string,
+  ownerUserId: string | null,
+): Promise<boolean> {
+  const rows = await db
+    .select({ id: skills.id })
+    .from(skills)
+    .where(
+      and(
+        eq(skills.name, name),
+        ownerUserId === null ? isNull(skills.ownerUserId) : eq(skills.ownerUserId, ownerUserId),
+      ),
+    )
+    .limit(1)
+  return rows.length > 0
+}
+
 // --- create ---
 
 export async function createManagedSkill(
@@ -180,12 +203,12 @@ export async function createManagedSkillWithFiles(
     __afterDbCommitForTest?: () => void
   } = {},
 ): Promise<Skill> {
-  // Fast-path occupancy check — RAW (any row, even gate-hidden), so a squatted
-  // name 409s cleanly here. The real guard against a racing same-name create is
-  // the reserve INSERT's unique(name) below — it rejects the loser BEFORE any
-  // files are written (RFC-170 §9: no more "both see name free → loser clobbers
-  // winner's live").
-  if (await isSkillNameOccupied(db, meta.name)) {
+  // Fast-path occupancy check — RAW inside the target owner's namespace (any
+  // row, even gate-hidden), so a squatted owner/name slot 409s cleanly while a
+  // different owner may use the same display name. The expression unique index
+  // remains the racing-create guard before any files are written.
+  const ownerUserId = meta.ownerUserId ?? null
+  if (await isSkillNameOccupiedForOwner(db, meta.name, ownerUserId)) {
     throw new ConflictError('skill-name-in-use', `skill '${meta.name}' already exists`)
   }
 
@@ -206,7 +229,7 @@ export async function createManagedSkillWithFiles(
           sourceKind: 'managed',
           managedPath: skillFilesRel(id),
           // RFC-099: creator becomes owner; new resources default to 'public' (D18).
-          ownerUserId: meta.ownerUserId ?? null,
+          ownerUserId,
           visibility: 'public',
           reservationState: 'reserving',
           createdAt: now,
@@ -216,12 +239,16 @@ export async function createManagedSkillWithFiles(
       return beginOperation(tx, {
         skillId: id,
         kind: 'reserve',
-        ownerUserId: meta.ownerUserId ?? undefined,
+        ownerUserId: ownerUserId ?? undefined,
         preconditionJson: JSON.stringify({ skillId: id }),
       })
     })
   } catch (err) {
-    if (/UNIQUE constraint failed:? *skills\.name/i.test(err instanceof Error ? err.message : '')) {
+    if (
+      /skills_owner_name_unique|UNIQUE constraint failed:? *skills\.(?:owner_user_id|name)/i.test(
+        err instanceof Error ? err.message : '',
+      )
+    ) {
       throw new ConflictError('skill-name-in-use', `skill '${meta.name}' already exists`)
     }
     throw err
@@ -241,7 +268,7 @@ export async function createManagedSkillWithFiles(
     // NOT open its own version-write op (it would self-conflict on the same lock).
     commitSkillVersion(db, opts, id, () => {}, {
       source: 'initial',
-      authorUserId: meta.ownerUserId ?? null,
+      authorUserId: ownerUserId,
       skipOp: true,
     })
     dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-published'))

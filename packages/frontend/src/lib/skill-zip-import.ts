@@ -6,6 +6,7 @@ import type {
   CommitSkillZipResponse,
   ParseSkillZipResponse,
   SkillZipCandidateView,
+  SkillZipDecisionMap,
 } from '@agent-workflow/shared'
 
 export type DecisionAction = 'import' | 'skip' | 'overwrite' | 'rename'
@@ -14,6 +15,8 @@ export interface DecisionState {
   action: DecisionAction
   /** Only meaningful when action === 'rename'. */
   newName: string
+  /** Immutable existing-resource identity; only meaningful for overwrite. */
+  overwriteSkillId: string
 }
 
 export interface RowState {
@@ -25,25 +28,31 @@ export interface RowState {
 /**
  * Compute the initial decision per candidate row when a parse response comes
  * in: no conflict → import; any conflict → skip (safer than overwrite). The
- * user can switch to rename always, and to overwrite only when `canOverwrite`
- * (see availableActionsFor).
+ * user can switch to rename always, and to overwrite only when the preview
+ * supplied at least one exact target (see availableActionsFor).
  */
 export function initialDecisionFor(c: SkillZipCandidateView): DecisionState {
-  if (c.conflict === undefined) return { action: 'import', newName: '' }
-  return { action: 'skip', newName: '' }
+  const overwriteSkillId =
+    c.overwriteCandidates.length === 1 ? c.overwriteCandidates[0]!.skillId : ''
+  if (c.conflict === undefined) return { action: 'import', newName: '', overwriteSkillId }
+  return { action: 'skip', newName: '', overwriteSkillId }
 }
 
 /**
  * RFC-102: actions offered for a candidate row, gated by conflict + write
- * permission.
- *   no conflict             → import / skip
- *   managed + canOverwrite  → skip / overwrite / rename
- *   managed + !canOverwrite → skip / rename   (no write permission — can't replace)
- *   external                → skip / rename   (zip can't overwrite the on-disk truth)
+ * exact preview targets.
+ *   no own conflict, no target → import / skip
+ *   no own conflict + target   → import / skip / overwrite (resource admin)
+ *   own conflict + target      → skip / overwrite / rename
+ *   own conflict, no target    → skip / rename (hidden/unavailable target)
  */
 export function availableActionsFor(c: SkillZipCandidateView): DecisionAction[] {
-  if (c.conflict === undefined) return ['import', 'skip']
-  if (c.conflict === 'managed' && c.canOverwrite === true) return ['skip', 'overwrite', 'rename']
+  if (c.conflict === undefined) {
+    return c.overwriteCandidates.length > 0 ? ['import', 'skip', 'overwrite'] : ['import', 'skip']
+  }
+  if (c.conflict === 'managed' && c.overwriteCandidates.length > 0) {
+    return ['skip', 'overwrite', 'rename']
+  }
   return ['skip', 'rename']
 }
 
@@ -89,14 +98,25 @@ export function effectiveTargetName(row: RowState): string | null {
  * with invalid rename targets are filtered out (caller's `submitDisabled`
  * should prevent that case anyway).
  */
-export function buildDecisionMap(rows: RowState[]): Record<string, unknown> {
-  const out: Record<string, unknown> = {}
+export function buildDecisionMap(rows: RowState[]): SkillZipDecisionMap {
+  const out: SkillZipDecisionMap = {}
   for (const row of rows) {
     const d = row.decision
     if (d.action === 'skip') {
       out[row.candidate.name] = { action: 'skip' }
     } else if (d.action === 'overwrite') {
-      out[row.candidate.name] = { action: 'overwrite' }
+      const target = row.candidate.overwriteCandidates.find(
+        (candidate) => candidate.skillId === d.overwriteSkillId,
+      )
+      if (target === undefined) continue
+      out[row.candidate.name] = {
+        action: 'overwrite',
+        skillId: target.skillId,
+        expectedOwnerUserId: target.ownerUserId,
+        expectedVisibility: target.visibility,
+        expectedAclRevision: target.expectedAclRevision,
+        expectedToken: target.expectedToken,
+      }
     } else if (d.action === 'rename') {
       if (d.newName.length === 0) continue
       out[row.candidate.name] = { action: 'rename', newName: d.newName }
@@ -170,7 +190,7 @@ export function deriveReviewSummary(parse: ParseSkillZipResponse): ReviewSummary
     candidates: parse.skills.length,
     conflicts: parse.skills.filter((candidate) => candidate.conflict !== undefined).length,
     readonlyConflicts: parse.skills.filter(
-      (candidate) => candidate.conflict !== undefined && candidate.canOverwrite !== true,
+      (candidate) => candidate.conflict !== undefined && candidate.overwriteCandidates.length === 0,
     ).length,
     archiveErrors: parse.errors.length,
   }
@@ -184,7 +204,12 @@ export interface ExistingNamesState {
 
 export interface SubmitState {
   enabled: boolean
-  reason?: 'nothing-selected' | 'rename-invalid' | 'names-unavailable' | 'busy'
+  reason?:
+    | 'nothing-selected'
+    | 'rename-invalid'
+    | 'names-unavailable'
+    | 'overwrite-target-required'
+    | 'busy'
   counts: RowsSummary
 }
 
@@ -198,6 +223,18 @@ export function deriveSubmitState(
 
   const selected = counts.importing + counts.overwriting + counts.renaming
   if (selected === 0) return { enabled: false, reason: 'nothing-selected', counts }
+
+  if (
+    rows.some(
+      (row) =>
+        row.decision.action === 'overwrite' &&
+        !row.candidate.overwriteCandidates.some(
+          (candidate) => candidate.skillId === row.decision.overwriteSkillId,
+        ),
+    )
+  ) {
+    return { enabled: false, reason: 'overwrite-target-required', counts }
+  }
 
   const renameRows = rows.filter((row) => row.decision.action === 'rename')
   if (renameRows.length > 0 && !existingNames.available) {

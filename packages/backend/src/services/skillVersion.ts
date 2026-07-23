@@ -14,6 +14,7 @@
 
 import type {
   FileNode,
+  ResourceVisibility,
   SkillContent,
   SkillVersion,
   SkillVersionContent,
@@ -378,6 +379,13 @@ export interface SkillVersionCommitOpts {
    * pass it is tracked in IMPLEMENTATION §7; this is the funnel-side machinery).
    */
   expectedOwnerUserId?: string | null
+  /**
+   * RFC-223 AC19 — ACL preview fence for ZIP overwrite. `aclRevision` changes
+   * on owner, visibility, or grant updates; visibility is also compared
+   * explicitly so the apply contract remains self-describing.
+   */
+  expectedAclRevision?: number
+  expectedVisibility?: ResourceVisibility
   /** Fold a description change into the same tx (keeps DB ↔ SKILL.md in sync). */
   setDescription?: string
   /**
@@ -405,10 +413,11 @@ export interface SkillVersionCommitOpts {
  * Returns the new (or, on an empty editor write, the unchanged latest) version.
  */
 /**
- * RFC-170 (Codex F4 + re-review): the composite-token OCC. Re-reads the CURRENT
- * (id, contentVersion, metaRevision) by name INSIDE the given tx and throws
+ * RFC-170 (Codex F4 + re-review): the composite-token OCC. Re-reads the
+ * requested row by immutable id INSIDE the given tx and throws
  * skill-version-conflict if any expected field drifted (delete→recreate ABA /
- * metadata edit / version bump). No-op when the caller passed no expected fields.
+ * metadata edit / version bump / owner or ACL change). No-op when the caller
+ * passed no expected fields.
  * Called from BOTH the version-bump tx (atomic with the UPDATE) AND before the
  * editor no-op short-circuit — otherwise an identical-content delete→recreate in
  * the caller's await window slips through unfenced and returns the substitute's row.
@@ -422,7 +431,9 @@ function assertCompositePrecondition(
     commit.expectedSkillId === undefined &&
     commit.expectedMetaRevision === undefined &&
     commit.expectedVersion === undefined &&
-    commit.expectedOwnerUserId === undefined
+    commit.expectedOwnerUserId === undefined &&
+    commit.expectedAclRevision === undefined &&
+    commit.expectedVisibility === undefined
   ) {
     return
   }
@@ -432,6 +443,8 @@ function assertCompositePrecondition(
       contentVersion: skills.contentVersion,
       metaRevision: skills.metaRevision,
       ownerUserId: skills.ownerUserId,
+      aclRevision: skills.aclRevision,
+      visibility: skills.visibility,
     })
     .from(skills)
     .where(eq(skills.id, skillId))
@@ -447,7 +460,9 @@ function assertCompositePrecondition(
     // during the operation's await window that authorization is stale → reject, so
     // a demoted ex-owner cannot commit a post-revocation version. Conservative for
     // admins (an owner change during their write also 409s → reload), which is safe.
-    (commit.expectedOwnerUserId !== undefined && live.ownerUserId !== commit.expectedOwnerUserId)
+    (commit.expectedOwnerUserId !== undefined && live.ownerUserId !== commit.expectedOwnerUserId) ||
+    (commit.expectedAclRevision !== undefined && live.aclRevision !== commit.expectedAclRevision) ||
+    (commit.expectedVisibility !== undefined && live.visibility !== commit.expectedVisibility)
   ) {
     throw new ConflictError(
       'skill-version-conflict',

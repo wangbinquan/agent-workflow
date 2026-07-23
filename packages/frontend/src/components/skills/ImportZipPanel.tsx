@@ -1,5 +1,6 @@
 // RFC-196: a three-stage ZIP import task — select, review, result.
-// The parse/commit wire and RFC-102 permission matrix remain unchanged.
+// RFC-223 AC19: overwrite targets are explicit previewed skill ids with
+// owner/ACL/content fences; names remain display/candidate labels only.
 
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -11,6 +12,7 @@ import {
   type CommitSkillZipResponse,
   type ParseSkillZipResponse,
   type Skill,
+  type SkillZipOverwriteCandidate,
 } from '@agent-workflow/shared'
 import { Card } from '@/components/Card'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
@@ -664,6 +666,31 @@ function CandidateCard({
               }))}
             />
           </Field>
+          {row.decision.action === 'overwrite' && (
+            <Field label={t('skills.zipOverwriteTargetFor', { name: row.candidate.name })} required>
+              <Select<string>
+                value={row.decision.overwriteSkillId}
+                onChange={(overwriteSkillId) => onUpdate(idx, { overwriteSkillId })}
+                disabled={disabled}
+                ariaLabel={t('skills.zipOverwriteTargetFor', { name: row.candidate.name })}
+                data-testid={`zip-overwrite-target-${row.candidate.name}`}
+                options={[
+                  ...(row.candidate.overwriteCandidates.length > 1
+                    ? [
+                        {
+                          value: '',
+                          label: t('skills.zipOverwriteTargetPlaceholder'),
+                        },
+                      ]
+                    : []),
+                  ...row.candidate.overwriteCandidates.map((target) => ({
+                    value: target.skillId,
+                    label: overwriteTargetLabel(row.candidate.name, target, t),
+                  })),
+                ]}
+              />
+            </Field>
+          )}
           {row.decision.action === 'rename' && (
             <Field
               label={t('skills.zipRenameFor', { name: row.candidate.name })}
@@ -862,10 +889,30 @@ function candidateStatus(row: RowState, t: TFunction): { kind: StatusChipKind; l
   if (row.candidate.conflict === undefined) {
     return { kind: 'success', label: t('skills.zipStatusReady') }
   }
-  if (row.candidate.canOverwrite === true) {
+  if (row.candidate.overwriteCandidates.length > 0) {
     return { kind: 'warn', label: t('skills.zipConflictManaged') }
   }
   return { kind: 'neutral', label: t('skills.zipConflictManagedReadonly') }
+}
+
+function overwriteTargetLabel(
+  name: string,
+  target: SkillZipOverwriteCandidate,
+  t: TFunction,
+): string {
+  return t('skills.zipOverwriteTargetOption', {
+    name,
+    owner: shortIdentity(target.ownerUserId ?? t('acl.systemOwner')),
+    visibility:
+      target.visibility === 'private'
+        ? t('skills.zipVisibilityPrivate')
+        : t('skills.zipVisibilityPublic'),
+    id: shortIdentity(target.skillId),
+  })
+}
+
+function shortIdentity(value: string): string {
+  return value.length <= 10 ? value : `${value.slice(0, 8)}…`
 }
 
 function labelForAction(t: TFunction, action: DecisionAction): string {

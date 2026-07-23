@@ -186,12 +186,17 @@ describe('zip import create under the ACTIVE boot availability gate', () => {
     // boot). The pre-fix code path saw "name free", failed on the UNIQUE
     // constraint, then rm'd the occupier's live files in its catch cleanup.
     resetSkillBootVerifyForTest() // gate off so create works
-    await createManagedSkill(h.db, h.fsOpts, {
-      name: 'occupied',
-      description: 'mine',
-      bodyMd: 'b',
-      frontmatterExtra: {},
-    })
+    await createManagedSkill(
+      h.db,
+      h.fsOpts,
+      {
+        name: 'occupied',
+        description: 'mine',
+        bodyMd: 'b',
+        frontmatterExtra: {},
+      },
+      { ownerUserId: ALICE.user.id },
+    )
     resetSkillBootVerifyForTest()
     activateBootReverifyForTest() // gate on, bootVerifiedSet empty → hidden
     expect(await getSkill(h.db, 'occupied')).toBeNull()
