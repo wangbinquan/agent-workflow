@@ -179,11 +179,26 @@ export function isFresherNodeRun<R extends { id: string }>(
 export function pickUpstreamSourceRun<
   R extends { id: string; iteration: number; parentNodeRunId: string | null; status: string },
 >(rows: readonly R[], iterationWindow: number): R | undefined {
+  return pickVisibleUpstreamRun(
+    rows.filter((row) => row.status === 'done'),
+    iterationWindow,
+  )
+}
+
+/**
+ * Pick the freshest top-level row visible to a consumer iteration, regardless
+ * of status. Highest visible iteration wins, then pure ULID order. Review
+ * dispatch uses this form so a newer pending/failed row fails loudly instead
+ * of silently falling back to an older done document; ordinary data inputs use
+ * the done-only shell above.
+ */
+export function pickVisibleUpstreamRun<
+  R extends { id: string; iteration: number; parentNodeRunId: string | null },
+>(rows: readonly R[], iterationWindow: number): R | undefined {
   let run: R | undefined
   for (const r of rows) {
     if (r.iteration > iterationWindow) continue
     if (r.parentNodeRunId !== null) continue
-    if (r.status !== 'done') continue
     if (run === undefined) {
       run = r
       continue

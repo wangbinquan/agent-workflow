@@ -9,6 +9,7 @@ export type ResolvedWorkflowIssueTarget = WorkflowValidationTarget | { kind: 'un
 
 const WORKFLOW_CODES = new Set([
   'topology-cycle',
+  'wrapper-containment-cycle',
   'input-key-duplicate',
   'clarify-multiple-clarify-on-same-agent',
 ])
@@ -28,10 +29,14 @@ const EDGE_POINTER_CODES = new Set([
   'boundary-output-target-not-wrapper',
   'boundary-output-source-not-inner',
   'boundary-output-source-must-be-aggregator',
+  'wrapper-input-boundary-missing',
 ])
 
 const NODE_POINTER_CODES = new Set([
   'wrapper-empty',
+  'wrapper-child-duplicate',
+  'wrapper-child-node-missing',
+  'wrapper-child-multiple-parents',
   'wrapper-fanout-nested',
   'wrapper-loop-nested',
   'wrapper-loop-inner-data-cycle',
@@ -57,7 +62,9 @@ const NODE_FIELD_CODES: Readonly<Record<string, WorkflowNodeFieldKey>> = {
   'wrapper-loop-max-iterations': 'loop-max-iterations',
   'wrapper-loop-exit-condition': 'loop-exit-condition',
   'wrapper-loop-exit-node-missing': 'loop-exit-condition',
+  'wrapper-loop-exit-node-out-of-scope': 'loop-exit-condition',
   'wrapper-loop-exit-port-missing': 'loop-exit-condition',
+  'wrapper-loop-output-binding-out-of-scope': 'loop-output-bindings',
   'wrapper-fanout-shard-source-missing': 'fanout-inputs',
   'wrapper-fanout-shard-source-duplicate': 'fanout-inputs',
   'wrapper-fanout-shard-source-must-be-list': 'fanout-inputs',

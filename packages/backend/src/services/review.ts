@@ -42,7 +42,9 @@ import type {
 } from '@agent-workflow/shared'
 import {
   type TaskActorRole,
+  buildWorkflowScopeParentMap,
   isMultiMarkdownUpstream,
+  resolveWorkflowSourceRef,
   selectCurrentReviewRound,
   SIBLING_OUTPUTS_INSTRUCTION,
   TERMINAL_TASK_STATUSES,
@@ -83,7 +85,7 @@ import {
   workflows,
 } from '@/db/schema'
 import { isPathishKindString, readPortArtifact, subsetArchiveJson } from '@/services/portArtifacts'
-import { pickFreshestRun } from '@/services/freshness'
+import { pickFreshestRun, pickVisibleUpstreamRun } from '@/services/freshness'
 import { parseConsumedJson } from '@/services/freshness'
 import { setNodeRunStatus, transitionNodeRunStatus } from '@/services/lifecycle'
 import { snapshotNodeAgentWhere } from '@/services/agent'
@@ -432,8 +434,21 @@ export async function dispatchReviewNode(args: DispatchReviewArgs): Promise<Disp
     }
   }
 
-  const sourcePortName = inputSource.portName
-  const sourceNodeId = inputSource.nodeId
+  const sourceResolution = resolveWorkflowSourceRef(
+    definition,
+    inputSource,
+    node.id,
+    buildWorkflowScopeParentMap(definition),
+  )
+  if (!sourceResolution.ok) {
+    return {
+      kind: 'failed',
+      summary: `review node ${node.id}: source '${inputSource.nodeId}.${inputSource.portName}' is not exposed by wrapper '${sourceResolution.wrapperId}'`,
+      message: 'wrapper-output-boundary-missing',
+    }
+  }
+  const sourcePortName = sourceResolution.source.portName
+  const sourceNodeId = sourceResolution.source.nodeId
 
   // Locate the upstream node_run at this iteration whose port we should read.
   // Picks the freshest top-level run via the same comparator the scheduler uses
@@ -446,19 +461,13 @@ export async function dispatchReviewNode(args: DispatchReviewArgs): Promise<Disp
   const sourceRuns = await db
     .select()
     .from(nodeRuns)
-    .where(
-      and(
-        eq(nodeRuns.taskId, taskId),
-        eq(nodeRuns.nodeId, sourceNodeId),
-        eq(nodeRuns.iteration, iteration),
-      ),
-    )
+    .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, sourceNodeId)))
   // RFC-096: shared picker, top-level only (fan-out child rows skipped —
   // multi-process review per-shard is RFC-005 T14). Deliberately NO statusIn
   // filter: the freshest row must be checked for done-ness below — filtering
   // would silently fall back to an OLDER done row instead of failing loudly
   // with review-upstream-not-done.
-  const sourceRun = pickFreshestRun(sourceRuns, { topLevelOnly: true })
+  const sourceRun = pickVisibleUpstreamRun(sourceRuns, iteration)
   if (sourceRun === undefined || sourceRun.status !== 'done') {
     return {
       kind: 'failed',
@@ -484,7 +493,10 @@ export async function dispatchReviewNode(args: DispatchReviewArgs): Promise<Disp
     }
   }
 
-  const upstreamKind = await loadUpstreamPortKind(db, definition, sourceNodeId, sourcePortName)
+  const upstreamKind =
+    portRow.kind ??
+    (await loadUpstreamPortKind(db, definition, sourceNodeId, sourcePortName)) ??
+    (await loadUpstreamPortKind(db, definition, inputSource.nodeId, inputSource.portName))
   // RFC-079: a list<markdownish> upstream puts this review in MULTI-DOCUMENT
   // mode — each list item is archived as its own doc_version below.
   const isMultiDoc = isMultiDocReviewInput(upstreamKind ?? '')

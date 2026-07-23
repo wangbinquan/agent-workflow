@@ -280,4 +280,37 @@ describe('RFC-074 — resolveUpstreamInputs unified picker + consumed provenance
     expect(inputs.doc).toBe('answered content')
     expect(consumed.questioner).toBe('01WITHOUTPUT')
   })
+
+  test('PB6: fanout boundary mirrors are never consumed as ordinary dataflow rows', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = await seedTask(db)
+    await seedRunWithOutput(
+      db,
+      taskId,
+      'source',
+      { id: '01SOURCE', status: 'done' },
+      { out: 'REAL-DATAFLOW' },
+    )
+    await seedRunWithOutput(
+      db,
+      taskId,
+      'fan',
+      { id: '01FAN', status: 'done' },
+      { items: 'STRUCTURAL-MIRROR' },
+    )
+    const mirror = edge('fan', 'items', 'sink', 'item')
+    mirror.boundary = 'wrapper-input'
+
+    const { inputs, consumed } = await resolveUpstreamInputs(
+      db,
+      taskId,
+      [edge('source', 'out', 'sink', 'normal'), mirror],
+      'sink',
+      0,
+      log,
+    )
+
+    expect(inputs).toEqual({ normal: 'REAL-DATAFLOW' })
+    expect(consumed).toEqual({ source: '01SOURCE' })
+  })
 })

@@ -53,15 +53,14 @@ describe('D.T2 — scheduler accepts wrapper-fanout kind', () => {
   })
 
   test('buildContainerMap walks wrapper-fanout (so inner nodeIds get containment)', () => {
-    // flag-audit W0-4: the container walk now filters via the shared
-    // isWrapperKind predicate instead of enumerating the three kinds inline —
-    // fanout membership is locked by shared WRAPPER_NODE_KINDS (see
-    // packages/shared/tests/wrapper-kind-single-source.test.ts).
+    // Scope containment is now owned by the shared workflow-scope oracle, so
+    // scheduler readiness, source promotion, and frontend layout cannot drift
+    // into three different wrapper-membership implementations.
     const containerMapFn = schedulerSrc.slice(
       schedulerSrc.indexOf('function buildContainerMap'),
       schedulerSrc.indexOf('function buildContainerMap') + 2_000,
     )
-    expect(containerMapFn).toContain('isWrapperKind(n.kind)')
+    expect(containerMapFn).toContain('buildWorkflowScopeParentMap(def)')
   })
 
   test('opts.fanoutMaxShardTotal field exists on RunTaskOptions', () => {

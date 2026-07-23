@@ -250,15 +250,16 @@ describe('RFC-074 PR-C baseline T4 — clarify generation is derived, not inheri
     expect(txt).toContain('clarifyGeneration')
   })
 
-  test('source-text grep: isClarifyChannelEdge is callable in scheduler cascade path', async () => {
+  test('source-text grep: shared channel-edge dataflow policy is callable in scheduler cascade path', async () => {
     const fs = await import('node:fs/promises')
     const txt = await fs.readFile(
       resolve(import.meta.dir, '..', '..', '..', 'packages/backend/src/services/scheduler.ts'),
       'utf8',
     )
-    // RFC-058 baseline locks: patch-25 cascade uses isClarifyChannelEdge so
-    // clarify-only done nodes are not skipped during downstream cascade.
-    expect(txt).toContain('isClarifyChannelEdge')
+    // RFC-058/RFC-147 baseline lock: the scope graph uses the nuanced shared
+    // policy, which keeps cross-clarify dependencies while skipping prompt-
+    // injected channel edges.
+    expect(txt).toContain('channelEdgeDataflowSkip')
   })
 })
 

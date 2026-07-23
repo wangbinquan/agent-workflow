@@ -191,7 +191,7 @@ describe('RFC-199 strict workflow validation targets', () => {
     // emissions; RFC-199 B5 adds the fixed review-input port, conflict and
     // mirror-mismatch emissions. Every new site must still carry a strict
     // navigation target.
-    expect(emissions).toHaveLength(89)
+    expect(emissions).toHaveLength(100)
     for (const emission of emissions) {
       const start = emission.index ?? 0
       const nextPush = source.indexOf('issues.push({', start)

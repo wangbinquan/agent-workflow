@@ -42,6 +42,8 @@ import {
   NODE_KIND_BEHAVIORS,
   WorkflowDefinitionSchema,
   agentHasClarifyChannel,
+  analyzeWorkflowScopeTree,
+  buildWorkflowScopeParentMap,
   buildPriorOutputBlock,
   deriveWrapperFanoutOutputs,
   findClarifyNodeForAgent,
@@ -49,13 +51,13 @@ import {
   findDesignerNodeForCrossClarify,
   findFanoutAggregator,
   findQuestionerNodeForCrossClarify,
-  isClarifyChannelEdge,
   isInlineMarkdownItemKind,
   isMergeStateSettled,
-  isWrapperKind,
   resolveClarifySessionMode,
   resolveCrossClarifySessionMode,
   resolveKeyOf,
+  projectWorkflowDependency,
+  resolveWorkflowSourceRef,
   splitListItems,
   splitMarkdownDocs,
   stringifyKind,
@@ -493,6 +495,30 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
     return
   }
 
+  // Wrapper containment is the coordinate system for recursive scheduling.
+  // Launch validation normally guarantees a tree, but imported/historical
+  // snapshots and direct DB callers can bypass it. Never execute against the
+  // deterministic diagnostic fallback map when membership is ambiguous:
+  // two wrappers could otherwise dispatch the same child concurrently.
+  const scopeTree = analyzeWorkflowScopeTree(definition)
+  const containmentIssue = scopeTree.issues[0]
+  if (containmentIssue !== undefined) {
+    const failedNodeId =
+      containmentIssue.code === 'wrapper-containment-cycle'
+        ? containmentIssue.cycle[0]
+        : containmentIssue.code === 'wrapper-child-multiple-parents'
+          ? containmentIssue.childId
+          : containmentIssue.wrapperId
+    await failTask(
+      db,
+      taskId,
+      'wrapper-containment-invalid',
+      `${containmentIssue.code}: ${JSON.stringify(containmentIssue)}`,
+      failedNodeId,
+    )
+    return
+  }
+
   // RFC-066 PR-B T9: scheduler-side defense-in-depth gate. T6 already
   // rejects multi-repo + wrapper-git at launch time, but a hypothetical
   // direct insert into `tasks` (skipping the route layer) or a future
@@ -512,21 +538,18 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
     }
   }
 
-  // 5. Containment map (transitive — innermost wrapper wins).
-  const containerOf = buildContainerMap(definition)
+  // 5. Direct child → wrapper map. Chained entries retain nested scope ancestry.
+  const containerOf = scopeTree.parents
   const topLevelIds = new Set<string>()
   for (const n of definition.nodes) {
     if (!containerOf.has(n.id)) topLevelIds.add(n.id)
   }
 
-  // 6. Pre-validate top-level scope for cycles (inner scopes are checked per
-  //    recursive call). Output nodes are excluded — they don't execute.
-  const topLevelOrder = topologicalOrder(
-    definition.nodes.filter((n) => topLevelIds.has(n.id)),
-    definition.edges,
-    log,
-  )
-  if (topLevelOrder === null) {
+  // 6. Pre-validate the same projected graph the runtime frontier will use.
+  //    Raw-edge filtering misses cycles that cross a wrapper boundary.
+  const topLevelNodes = definition.nodes.filter((n) => topLevelIds.has(n.id))
+  const topLevelUpstreams = buildScopeUpstreams(definition, topLevelIds, null, containerOf)
+  if (findScopeCycle(topLevelNodes, topLevelUpstreams) !== null) {
     await failTask(db, taskId, 'workflow has a cycle outside any loop wrapper', 'cycle detected')
     return
   }
@@ -630,6 +653,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
               hooks: buildWorkgroupHooks(state),
             })
         : await runScope(state, {
+            scopeId: null,
             scopeIds: topLevelIds,
             iteration: 0,
             log,
@@ -1186,6 +1210,8 @@ interface ScopeResult {
 }
 
 interface ScopeArgs {
+  /** Wrapper node that owns this scope; null for the workflow root. */
+  scopeId: string | null
   scopeIds: Set<string>
   iteration: number
   log: Logger
@@ -1293,7 +1319,7 @@ export function decideEnvelopeFollowup(prev: PreviousAttemptShape): EnvelopeFoll
 
 async function runScope(state: SchedulerState, args: ScopeArgs): Promise<ScopeResult> {
   const { db, taskId, definition, opts } = state
-  const { scopeIds, iteration, log } = args
+  const { scopeId, scopeIds, iteration, log } = args
 
   // RFC-076 PR-B — completion-driven dispatch frontier (replaces the
   // snapshot-batch + Promise.all-barrier + rescan/recompute reconcile model).
@@ -1316,7 +1342,7 @@ async function runScope(state: SchedulerState, args: ScopeArgs): Promise<ScopeRe
   // its upstream port content, so invariant T3 (task.done ⟹ every output node
   // has a done node_run) holds and the detail page reads outputs uniformly.
   const scopeNodes = definition.nodes.filter((n) => scopeIds.has(n.id))
-  const upstreamsOf = buildScopeUpstreams(scopeNodes, definition.edges)
+  const upstreamsOf = buildScopeUpstreams(definition, scopeIds, scopeId, state.containerOf)
   const scopeNodeById = new Map(scopeNodes.map((n) => [n.id, n]))
 
   // Defensive cycle check for the dispatch graph. runTask topologically validates
@@ -2664,26 +2690,44 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
     // lifecycle invariant T3 (task done ⟹ every output node has a done run)
     // is satisfied.
     const bindings = readBindings(node, 'ports')
+    const projected: Array<{
+      binding: Binding
+      row: Awaited<ReturnType<typeof readPortRowAtIteration>>
+    }> = []
+    const consumed: Record<string, string> = {}
+    for (const b of bindings) {
+      const resolved = resolveWorkflowSourceRef(definition, b.bind, node.id, state.containerOf)
+      if (!resolved.ok) {
+        return {
+          kind: 'failed',
+          summary: `output node ${node.id}: source '${b.bind.nodeId}.${b.bind.portName}' is not exposed by wrapper '${resolved.wrapperId}'`,
+          message: 'wrapper-output-boundary-missing',
+        }
+      }
+      // RFC-193 D16: copy kind + archive reference with the content — an
+      // output node is pure projection, its row must stay artifact-readable.
+      const row = await readPortRowAtIteration(
+        db,
+        taskId,
+        resolved.source.nodeId,
+        resolved.source.portName,
+        iteration,
+      )
+      if (row.runId !== null) consumed[resolved.source.nodeId] = row.runId
+      projected.push({ binding: b, row })
+    }
     const nrId = await mintNodeRun(db, {
       taskId,
       nodeId: node.id,
       status: 'done',
       cause: 'io-virtual',
       iteration,
+      overrides: { consumedUpstreamRunsJson: JSON.stringify(consumed) },
     })
-    for (const b of bindings) {
-      // RFC-193 D16: copy kind + archive reference with the content — an
-      // output node is pure projection, its row must stay artifact-readable.
-      const row = await readPortRowAtIteration(
-        db,
-        taskId,
-        b.bind.nodeId,
-        b.bind.portName,
-        iteration,
-      )
+    for (const { binding, row } of projected) {
       await db.insert(nodeRunOutputs).values({
         nodeRunId: nrId,
-        portName: b.name,
+        portName: binding.name,
         content: row.content,
         kind: row.kind,
         archiveJson: row.archiveJson,
@@ -2940,6 +2984,8 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
     node.id,
     iteration,
     log,
+    definition,
+    state.containerOf,
   )
   const consumedUpstreamJson = JSON.stringify(consumedUpstream)
   // RFC-022: expand the agent.dependsOn closure before resolving skills so
@@ -4320,6 +4366,7 @@ async function runLoopWrapperNode(
     })
 
     const subRes = await runScope(innerState, {
+      scopeId: node.id,
       scopeIds: innerSet,
       iteration: i,
       log: log.child(`loop:${node.id}`),
@@ -4567,6 +4614,8 @@ async function runFanoutWrapperNode(
     node.id,
     iteration,
     log,
+    definition,
+    state.containerOf,
   )
   const rawContent = upstreamInputs[shardPort.name] ?? ''
 
@@ -4767,6 +4816,8 @@ async function runFanoutWrapperNode(
       innerId,
       iteration,
       log,
+      definition,
+      state.containerOf,
     )
 
     if (scope.perShard.has(innerId)) {
@@ -6267,6 +6318,7 @@ async function runGitWrapperNode(state: SchedulerState, args: OneNodeArgs): Prom
   }
 
   const subRes = await runScope(innerState, {
+    scopeId: node.id,
     scopeIds: new Set(inner),
     iteration,
     log: log.child(`git:${node.id}`),
@@ -6697,19 +6749,36 @@ export async function resolveUpstreamInputs(
   nodeId: string,
   iteration: number,
   log: Logger,
+  definition?: WorkflowDefinition,
+  parents?: ReadonlyMap<string, string>,
 ): Promise<{ inputs: Record<string, string>; consumed: Record<string, string> }> {
   const grouped = new Map<string, string[]>()
-  const incoming = edges.filter((e) => e.target.nodeId === nodeId)
+  // Fanout boundary edges are structural mirrors, not ordinary row-to-row
+  // dataflow. wrapper-input values are injected by dispatchFanoutShard and
+  // wrapper-output values are materialized by runFanoutWrapperNode. Reading
+  // either here would observe the still-running wrapper/aggregator row, warn
+  // about a "missing" upstream, and rely on a later overwrite to be correct.
+  const incoming = edges.filter((e) => e.target.nodeId === nodeId && e.boundary === undefined)
   // RFC-074 provenance: which upstream node_run each source edge actually read.
   // Keyed by source nodeId — all edges from the same source resolve to the same
   // picked run, so this stays consistent across multi-port fan-in.
   const consumed: Record<string, string> = {}
 
   for (const edge of incoming) {
+    const resolved =
+      definition === undefined
+        ? { ok: true as const, source: edge.source, exitedWrapperIds: [] }
+        : resolveWorkflowSourceRef(definition, edge.source, nodeId, parents)
+    if (!resolved.ok) {
+      throw new Error(
+        `wrapper-output-boundary-missing: source '${edge.source.nodeId}.${edge.source.portName}' is not exposed by ${resolved.wrapperKind} '${resolved.wrapperId}'`,
+      )
+    }
+    const source = resolved.source
     const rows = await db
       .select()
       .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, edge.source.nodeId)))
+      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, source.nodeId)))
     // RFC-074 (decision D10 / design §5.1): unify the source-run picker with
     // the freshness picker. Previously this sorted by (iteration desc,
     // retryIndex desc) with NO cci term and NO status filter — so it could read
@@ -6724,15 +6793,15 @@ export async function resolveUpstreamInputs(
     // the exact same口径 — behavior here is unchanged.
     const run = pickUpstreamSourceRun(rows, iteration)
     if (!run) {
-      log.warn('upstream node_run not found', { taskId, sourceNodeId: edge.source.nodeId })
+      log.warn('upstream node_run not found', { taskId, sourceNodeId: source.nodeId })
       continue
     }
-    consumed[edge.source.nodeId] = run.id
+    consumed[source.nodeId] = run.id
     const outRows = await db
       .select()
       .from(nodeRunOutputs)
       .where(eq(nodeRunOutputs.nodeRunId, run.id))
-    const port = outRows.find((o) => o.portName === edge.source.portName)
+    const port = outRows.find((o) => o.portName === source.portName)
     const content = port?.content ?? ''
     const list = grouped.get(edge.target.portName) ?? []
     list.push(content)
@@ -6772,18 +6841,20 @@ async function readPortRowAtIteration(
   nodeId: string,
   portName: string,
   iteration: number,
-): Promise<{ content: string; kind: string | null; archiveJson: string | null }> {
+): Promise<{
+  runId: string | null
+  content: string
+  kind: string | null
+  archiveJson: string | null
+}> {
   const rows = await db
     .select()
     .from(nodeRuns)
-    .where(
-      and(
-        eq(nodeRuns.taskId, taskId),
-        eq(nodeRuns.nodeId, nodeId),
-        eq(nodeRuns.iteration, iteration),
-      ),
-    )
-  // Pick the freshest DONE top-level run (shared picker, pure id order).
+    .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, nodeId)))
+  // Pick the freshest DONE top-level run visible at this iteration. For a
+  // normal in-loop source, the current iteration wins. For a historical
+  // snapshot that references an outer source, iteration 0 remains visible in
+  // later loop rounds instead of turning into a synthetic empty value.
   // RFC-096 (audit 附录 C #5): the done-only filter aligns this read with
   // buildFreshestDonePerNode / the RFC-074 freshness口径 — without it, a
   // freshly minted non-done row (e.g. a concurrent designer-rerun pending
@@ -6794,13 +6865,14 @@ async function readPortRowAtIteration(
   // REAL content. (The RFC-040 shadowing fix — pure id over retryIndex — is
   // inherited from isFresherNodeRun; the old comment describing the retired
   // (clarifyIteration, retryIndex, id) triple was stale and is gone.)
-  const chosen = pickFreshestRun(rows, { topLevelOnly: true, statusIn: ['done'] })
-  if (chosen === undefined) return { content: '', kind: null, archiveJson: null }
+  const chosen = pickUpstreamSourceRun(rows, iteration)
+  if (chosen === undefined) return { runId: null, content: '', kind: null, archiveJson: null }
   const out = await db
     .select()
     .from(nodeRunOutputs)
     .where(and(eq(nodeRunOutputs.nodeRunId, chosen.id), eq(nodeRunOutputs.portName, portName)))
   return {
+    runId: chosen.id,
     content: out[0]?.content ?? '',
     kind: out[0]?.kind ?? null,
     archiveJson: out[0]?.archiveJson ?? null,
@@ -6839,50 +6911,6 @@ function findScopeCycle(
     }
   }
   return null
-}
-
-/**
- * Topological order using Kahn's algorithm over a node subset. Edges whose
- * endpoints are outside the subset are ignored. Returns null if a cycle is
- * detected.
- */
-function topologicalOrder(
-  nodes: WorkflowNode[],
-  edges: WorkflowEdge[],
-  _log: Logger,
-): WorkflowNode[] | null {
-  const nodeById = new Map(nodes.map((n) => [n.id, n]))
-  const inDegree = new Map<string, number>()
-  for (const n of nodes) inDegree.set(n.id, 0)
-  // RFC-023 + RFC-056: ignore clarify-channel edges when computing topology.
-  // They form explicit cycles (agent → clarify → agent for RFC-023,
-  // questioner → cross-clarify → designer / questioner for RFC-056) by design.
-  // The cycle is resolved out-of-band via clarify_session /
-  // cross_clarify_session prompt injection.
-  for (const e of edges) {
-    if (!nodeById.has(e.source.nodeId) || !nodeById.has(e.target.nodeId)) continue
-    if (isClarifyChannelEdge(e)) continue
-    inDegree.set(e.target.nodeId, (inDegree.get(e.target.nodeId) ?? 0) + 1)
-  }
-  const queue: string[] = []
-  for (const [id, deg] of inDegree) if (deg === 0) queue.push(id)
-  const out: WorkflowNode[] = []
-  while (queue.length > 0) {
-    const id = queue.shift()
-    if (id === undefined) break
-    const n = nodeById.get(id)
-    if (n) out.push(n)
-    for (const e of edges) {
-      if (e.source.nodeId !== id) continue
-      if (!nodeById.has(e.target.nodeId)) continue
-      if (isClarifyChannelEdge(e)) continue
-      const next = (inDegree.get(e.target.nodeId) ?? 0) - 1
-      inDegree.set(e.target.nodeId, next)
-      if (next === 0) queue.push(e.target.nodeId)
-    }
-  }
-  if (out.length !== nodes.length) return null
-  return out
 }
 
 function pickString(node: WorkflowNode, key: string): string | null {
@@ -7190,15 +7218,22 @@ async function recordClarifyInlineEvent(
 }
 
 /**
- * Build the in-scope upstream map for nodes within a single scope. Edges
- * crossing into the scope from outside are ignored (their sources are
- * treated as already-done because the parent scope ran them first).
+ * Build the structural dependency map for one recursive execution scope.
+ *
+ * Flat workflow edges are projected to the direct representatives at their
+ * endpoint LCA. Therefore `external → loop-inner` becomes
+ * `external → loop` in the parent scope, while the child scope correctly sees
+ * no local dependency for that already-settled external value. This same
+ * projection handles git wrappers, nested wrappers, and dependencies leaving a
+ * wrapper. Implicit review/output/loop references use the identical path.
  */
 function buildScopeUpstreams(
-  scopeNodes: WorkflowNode[],
-  edges: WorkflowEdge[],
+  definition: WorkflowDefinition,
+  ids: Set<string>,
+  scopeId: string | null,
+  parents: ReadonlyMap<string, string>,
 ): Map<string, string[]> {
-  const ids = new Set(scopeNodes.map((n) => n.id))
+  const scopeNodes = definition.nodes.filter((node) => ids.has(node.id))
   const m = new Map<string, string[]>()
   for (const n of scopeNodes) m.set(n.id, [])
   // Build a quick node-kind lookup so the channel-edge skip can
@@ -7207,10 +7242,22 @@ function buildScopeUpstreams(
   // targets (KEEP the edge — the cross-clarify node legitimately
   // depends on the questioner reaching a terminal state).
   const kindById = new Map<string, string>()
-  for (const n of scopeNodes) kindById.set(n.id, n.kind)
-  for (const e of edges) {
-    if (!ids.has(e.target.nodeId)) continue
-    if (!ids.has(e.source.nodeId)) continue
+  for (const n of definition.nodes) kindById.set(n.id, n.kind)
+
+  const addProjected = (sourceNodeId: string, targetNodeId: string): void => {
+    const projected = projectWorkflowDependency(sourceNodeId, targetNodeId, parents)
+    if (projected === null || projected.scopeId !== scopeId) return
+    if (projected.sourceNodeId === projected.targetNodeId) return
+    if (!ids.has(projected.sourceNodeId) || !ids.has(projected.targetNodeId)) return
+    const list = m.get(projected.targetNodeId) ?? []
+    if (!list.includes(projected.sourceNodeId)) list.push(projected.sourceNodeId)
+    m.set(projected.targetNodeId, list)
+  }
+
+  for (const e of definition.edges) {
+    // Fan-out boundary mirrors are consumed by runFanoutWrapperNode; projecting
+    // them would only collapse wrapper↔inner into a self-dependency.
+    if (e.boundary !== undefined) continue
     // RFC-147: channel-edge dataflow semantics come from the shared
     // system-channel-port registry. The nuanced rule lives there —
     // agent.__clarify__ → clarify is dispatched out-of-band (skip to
@@ -7220,23 +7267,34 @@ function buildScopeUpstreams(
     // tick); answer / back-channel ports are prompt-injected, never
     // dataflow inputs.
     if (channelEdgeDataflowSkip(e, (id) => kindById.get(id))) continue
-    const list = m.get(e.target.nodeId) ?? []
-    if (!list.includes(e.source.nodeId)) list.push(e.source.nodeId)
-    m.set(e.target.nodeId, list)
+    const resolved = resolveWorkflowSourceRef(definition, e.source, e.target.nodeId, parents)
+    addProjected(resolved.ok ? resolved.source.nodeId : e.source.nodeId, e.target.nodeId)
   }
   // RFC-060 PR-E: agent-multi removed; its sourcePort dep handling deleted
   // (wrapper-fanout uses boundary edges instead, which are real graph edges).
-  for (const n of scopeNodes) {
+  // Walk implicit dependencies from the whole flat definition, then let the
+  // LCA projection select the dependency that belongs to this scope. Limiting
+  // this walk to `scopeNodes` loses `external → nested review/output` at the
+  // parent scope for exactly the same reason raw cross-scope edges used to be
+  // lost.
+  for (const n of definition.nodes) {
     // RFC-005: review.inputSource.nodeId is an implicit upstream dep — it
     // isn't an edge in the user-authored graph, but the scheduler must wait
     // for the source node before parking the review at awaiting_review.
     if (n.kind === 'review') {
       const inp = (n as Record<string, unknown>).inputSource as { nodeId?: unknown } | undefined
       if (inp === undefined || typeof inp.nodeId !== 'string') continue
-      if (!ids.has(inp.nodeId)) continue
-      const list = m.get(n.id) ?? []
-      if (!list.includes(inp.nodeId)) list.push(inp.nodeId)
-      m.set(n.id, list)
+      const portName =
+        typeof (inp as { portName?: unknown }).portName === 'string'
+          ? ((inp as { portName: string }).portName ?? '')
+          : ''
+      const resolved = resolveWorkflowSourceRef(
+        definition,
+        { nodeId: inp.nodeId, portName },
+        n.id,
+        parents,
+      )
+      addProjected(resolved.ok ? resolved.source.nodeId : inp.nodeId, n.id)
     }
     // Output nodes carry their dependencies in `ports[].bind` (not always as
     // edges; the canvas editor emits both in practice but bindings are the
@@ -7246,62 +7304,37 @@ function buildScopeUpstreams(
     // a graph root with no incoming edges.
     if (n.kind === 'output') {
       const bindings = readBindings(n, 'ports')
-      const list = m.get(n.id) ?? []
       for (const b of bindings) {
-        if (!ids.has(b.bind.nodeId)) continue
-        if (!list.includes(b.bind.nodeId)) list.push(b.bind.nodeId)
+        const resolved = resolveWorkflowSourceRef(definition, b.bind, n.id, parents)
+        addProjected(resolved.ok ? resolved.source.nodeId : b.bind.nodeId, n.id)
       }
-      m.set(n.id, list)
+    }
+    // Defensive compatibility for historical/direct-seeded snapshots whose
+    // loop condition or output binding points outside the loop. Current
+    // validation rejects these references, but projecting them here keeps old
+    // snapshots ordered and avoids the former empty-read race.
+    if (n.kind === 'wrapper-loop') {
+      const condition = parseExitCondition((n as Record<string, unknown>).exitCondition)
+      if (condition !== null) addProjected(condition.nodeId, n.id)
+      for (const binding of readBindings(n, 'outputBindings')) {
+        addProjected(binding.bind.nodeId, n.id)
+      }
     }
   }
+  for (const list of m.values()) list.sort()
   return m
 }
 
 /**
- * Recursive containment map: every node id → innermost wrapper id containing
- * it (if any). Outer wrapper relationships are not stored because the inner
- * scope already implies them. Nodes not contained by any wrapper are absent
- * from the map (= top-level).
- *
- * Robust against:
- *   - wrappers listing the same inner under both (treats it as belonging to
- *     the wrapper appearing later in iteration order — validator catches the
- *     truly invalid configurations)
- *   - missing inner ids (skipped)
+ * Direct containment map: every child node id → its immediate wrapper. Chained
+ * entries (`inner → nested wrapper → outer wrapper`) retain the full nesting
+ * relation; nodes absent from the map are top-level. The shared implementation
+ * is also used by layout/source-boundary projection so the three surfaces
+ * cannot drift.
  */
 // RFC-193: exported for lifecycleRepair S1's scopeRoot derivation (§4.6) —
 // the repair path re-invokes dispatchReviewNode OUTSIDE the scheduler, so it
 // must recover "which wrapper contains this review" the same way runTask does.
 export function buildContainerMap(def: WorkflowDefinition): Map<string, string> {
-  const out = new Map<string, string>()
-  const nodeById = new Map(def.nodes.map((n) => [n.id, n]))
-  // Walk wrappers from innermost to outermost (innermost = wrapper whose
-  // inner ids contain no other wrappers from def). Since wrappers can nest,
-  // we sort by nesting depth: wrappers whose inner ids include other
-  // wrappers are processed AFTER those other wrappers. This is implemented
-  // by repeated passes — small N, cheap.
-  const wrappers = def.nodes.filter((n) => isWrapperKind(n.kind))
-  const processed = new Set<string>()
-  let safety = wrappers.length + 1
-  while (processed.size < wrappers.length && safety-- > 0) {
-    for (const w of wrappers) {
-      if (processed.has(w.id)) continue
-      const inner = pickStringArray(w, 'nodeIds')
-      // Defer if any inner is itself an unprocessed wrapper.
-      const blocked = inner.some(
-        (id) =>
-          nodeById.get(id) !== undefined &&
-          isWrapperKind(nodeById.get(id)!.kind) &&
-          !processed.has(id),
-      )
-      if (blocked) continue
-      for (const id of inner) {
-        if (!nodeById.has(id)) continue
-        // Innermost wins (don't overwrite once set).
-        if (!out.has(id)) out.set(id, w.id)
-      }
-      processed.add(w.id)
-    }
-  }
-  return out
+  return buildWorkflowScopeParentMap(def)
 }

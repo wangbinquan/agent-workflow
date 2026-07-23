@@ -82,7 +82,10 @@ describe('RFC-066 PR-A T6 — multi-repo gates', () => {
     const wfId = await seedWorkflow(h.db, {
       $schema_version: 1,
       inputs: [],
-      nodes: [{ id: 'wg-1', kind: 'wrapper-git', nodeIds: ['x'] }],
+      nodes: [
+        { id: 'wg-1', kind: 'wrapper-git', nodeIds: ['inner-output'] },
+        { id: 'inner-output', kind: 'output', ports: [] },
+      ],
       edges: [],
     })
     let err: unknown = null
@@ -144,7 +147,10 @@ describe('RFC-066 PR-A T6 — multi-repo gates', () => {
     const wfId = await seedWorkflow(h.db, {
       $schema_version: 1,
       inputs: [],
-      nodes: [{ id: 'wg-1', kind: 'wrapper-git', nodeIds: ['x'] }],
+      nodes: [
+        { id: 'wg-1', kind: 'wrapper-git', nodeIds: ['inner-output'] },
+        { id: 'inner-output', kind: 'output', ports: [] },
+      ],
       edges: [],
     })
     const task = await startTaskWithLocalRepo(

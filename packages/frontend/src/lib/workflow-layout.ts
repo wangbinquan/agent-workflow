@@ -1,13 +1,16 @@
 import dagre from '@dagrejs/dagre'
 import {
+  buildWorkflowScopeParentMap,
   declaredPorts,
   isSystemChannelEdge,
   isWrapperKind,
+  projectWorkflowDependency,
   tryHandlerForParsedKind,
   tryParseKind,
   type WorkflowDefinition,
   type WorkflowEdge,
   type WorkflowNode,
+  workflowScopeOf,
 } from '@agent-workflow/shared'
 import {
   AUTO_FIT_BOTTOM_CLEARANCE,
@@ -82,63 +85,8 @@ function readSize(
   return { width: size.width, height: size.height, sizeLocked: size.sizeLocked === true }
 }
 
-function buildParentMap(definition: WorkflowDefinition): Map<string, string> {
-  const parents = new Map<string, string>()
-  for (const node of definition.nodes) {
-    if (!isWrapperKind(node.kind)) continue
-    for (const childId of readNodeIds(node)) parents.set(childId, node.id)
-  }
-  return parents
-}
-
 function scopeKey(scopeId: string | null): string {
   return scopeId ?? ROOT_SCOPE
-}
-
-function scopeOf(nodeId: string, parents: ReadonlyMap<string, string>): string | null {
-  return parents.get(nodeId) ?? null
-}
-
-function commonScope(
-  sourceNodeId: string,
-  targetNodeId: string,
-  parents: ReadonlyMap<string, string>,
-): string | null {
-  const targetScopes = new Set<string | null>()
-  let targetScope: string | null = scopeOf(targetNodeId, parents)
-  const targetSeen = new Set<string>()
-  while (true) {
-    targetScopes.add(targetScope)
-    if (targetScope === null || targetSeen.has(targetScope)) break
-    targetSeen.add(targetScope)
-    targetScope = scopeOf(targetScope, parents)
-  }
-
-  let sourceScope: string | null = scopeOf(sourceNodeId, parents)
-  const sourceSeen = new Set<string>()
-  while (!targetScopes.has(sourceScope)) {
-    if (sourceScope === null || sourceSeen.has(sourceScope)) return null
-    sourceSeen.add(sourceScope)
-    sourceScope = scopeOf(sourceScope, parents)
-  }
-  return sourceScope
-}
-
-function representativeAtScope(
-  nodeId: string,
-  scopeId: string | null,
-  parents: ReadonlyMap<string, string>,
-): string | null {
-  let current = nodeId
-  const seen = new Set<string>()
-  while (true) {
-    if (seen.has(current)) return null
-    seen.add(current)
-    const parent = scopeOf(current, parents)
-    if (parent === scopeId) return current
-    if (parent === null) return scopeId === null ? current : null
-    current = parent
-  }
 }
 
 function sourceIsControl(
@@ -167,20 +115,16 @@ export function projectWorkflowLayoutDependencies(
   definition: WorkflowDefinition,
   semanticContext: WorkflowSemanticContext,
 ): WorkflowLayoutDependency[] {
-  const parents = buildParentMap(definition)
+  const parents = buildWorkflowScopeParentMap(definition)
   const nodeIds = new Set(definition.nodes.map((node) => node.id))
   const projected: WorkflowLayoutDependency[] = []
   for (const edge of [...definition.edges].sort((left, right) => left.id.localeCompare(right.id))) {
     if (edge.boundary !== undefined || isSystemChannelEdge(edge)) continue
     if (!nodeIds.has(edge.source.nodeId) || !nodeIds.has(edge.target.nodeId)) continue
-    const scopeId = commonScope(edge.source.nodeId, edge.target.nodeId, parents)
-    const sourceNodeId = representativeAtScope(edge.source.nodeId, scopeId, parents)
-    const targetNodeId = representativeAtScope(edge.target.nodeId, scopeId, parents)
-    if (sourceNodeId === null || targetNodeId === null || sourceNodeId === targetNodeId) continue
+    const dependency = projectWorkflowDependency(edge.source.nodeId, edge.target.nodeId, parents)
+    if (dependency === null || dependency.sourceNodeId === dependency.targetNodeId) continue
     projected.push({
-      scopeId,
-      sourceNodeId,
-      targetNodeId,
+      ...dependency,
       edgeId: edge.id,
       control: sourceIsControl(definition, edge, semanticContext),
     })
@@ -498,7 +442,7 @@ export function planWorkflowLayout(
   // snapshot. Internal wrapper refits may replace their own stale measurement
   // before the parent scope is laid out.
   const measuredSizes = new Map(options.measuredSizes ?? [])
-  const parents = buildParentMap(definition)
+  const parents = buildWorkflowScopeParentMap(definition)
   const states = new Map(definition.nodes.map((node, index) => [node.id, { node, index }] as const))
   const dependencies = projectWorkflowLayoutDependencies(definition, options.semanticContext)
   const dependenciesByScope = new Map<string, WorkflowLayoutDependency[]>()
@@ -509,11 +453,13 @@ export function planWorkflowLayout(
     dependenciesByScope.set(key, rows)
   }
   const directChildren = (scopeId: string | null): string[] =>
-    definition.nodes.filter((node) => scopeOf(node.id, parents) === scopeId).map((node) => node.id)
+    definition.nodes
+      .filter((node) => workflowScopeOf(node.id, parents) === scopeId)
+      .map((node) => node.id)
 
   if (selection.mode === 'selection') {
     const selected = [...new Set(selection.nodeIds)].filter((id) => states.has(id))
-    const scopes = new Set(selected.map((id) => scopeOf(id, parents)))
+    const scopes = new Set(selected.map((id) => workflowScopeOf(id, parents)))
     if (scopes.size > 1) {
       warnings.push({ code: 'cross-scope-selection', nodeIds: selected })
       return { next: definition, warnings }

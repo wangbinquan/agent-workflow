@@ -17,6 +17,7 @@ import {
   parseConsumedJson,
   pickReusableShardRun,
   pickUpstreamSourceRun,
+  pickVisibleUpstreamRun,
 } from '../src/services/freshness'
 import type { nodeRuns } from '../src/db/schema'
 
@@ -165,6 +166,25 @@ describe('RFC-098 B3 — pickUpstreamSourceRun (iteration-window two-phase picke
   test('no candidate → undefined', () => {
     expect(pickUpstreamSourceRun([], 0)).toBeUndefined()
     expect(pickUpstreamSourceRun([src({ id: '01A', iteration: 1 })], 0)).toBeUndefined()
+  })
+})
+
+describe('pickVisibleUpstreamRun (status-preserving iteration window)', () => {
+  type SrcRow = {
+    id: string
+    iteration: number
+    parentNodeRunId: string | null
+    status: string
+  }
+
+  test('a newer visible pending row wins so review dispatch can fail loudly', () => {
+    const rows: SrcRow[] = [
+      { id: '01DONE', iteration: 0, parentNodeRunId: null, status: 'done' },
+      { id: '01PENDING', iteration: 1, parentNodeRunId: null, status: 'pending' },
+      { id: '01FUTURE', iteration: 2, parentNodeRunId: null, status: 'done' },
+    ]
+    expect(pickVisibleUpstreamRun(rows, 1)?.id).toBe('01PENDING')
+    expect(pickVisibleUpstreamRun(rows, 2)?.id).toBe('01FUTURE')
   })
 })
 

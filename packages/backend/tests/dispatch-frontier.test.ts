@@ -450,6 +450,25 @@ describe('RFC-098 B3 — wrapperExternalUpstreamSources', () => {
     expect([...wrapperExternalUpstreamSources('lw', d)]).toEqual(['up'])
   })
 
+  test('a source leaving another loop is attributed to that wrapper generation', () => {
+    const d = defWithEdges(
+      [
+        {
+          id: 'producer-loop',
+          kind: 'wrapper-loop',
+          nodeIds: ['producer'],
+          outputBindings: [{ name: 'final', bind: { nodeId: 'producer', portName: 'doc' } }],
+        },
+        { id: 'producer', kind: 'agent-single' },
+        { id: 'consumer-loop', kind: 'wrapper-loop', nodeIds: ['consumer'] },
+        { id: 'consumer', kind: 'agent-single' },
+      ],
+      [{ id: 'e1', s: ['producer', 'doc'], t: ['consumer', 'doc'] }],
+    )
+
+    expect([...wrapperExternalUpstreamSources('consumer-loop', d)]).toEqual(['producer-loop'])
+  })
+
   test('channel edges are filtered exactly like buildScopeUpstreams', () => {
     const d = defWithEdges(
       [
@@ -503,6 +522,23 @@ describe('RFC-098 B3 — wrapperExternalUpstreamSources', () => {
       [],
     )
     expect(wrapperExternalUpstreamSources('lw', d2).size).toBe(0)
+  })
+
+  test('output binding: external implicit dep is wrapper provenance too', () => {
+    const d = defWithEdges(
+      [
+        { id: 'producer', kind: 'agent-single' },
+        { id: 'lw', kind: 'wrapper-loop', nodeIds: ['capture'] },
+        {
+          id: 'capture',
+          kind: 'output',
+          ports: [{ name: 'snapshot', bind: { nodeId: 'producer', portName: 'doc' } }],
+        },
+      ],
+      [],
+    )
+
+    expect([...wrapperExternalUpstreamSources('lw', d)]).toEqual(['producer'])
   })
 
   test('no external edges → empty set (consumed degrades to {})', () => {

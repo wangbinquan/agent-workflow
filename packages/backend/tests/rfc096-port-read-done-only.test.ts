@@ -1,5 +1,5 @@
-// LOCKS: RFC-096 (audit S-13 / 附录 C #5, design §3.3) — readPortAtIteration
-// reads DONE rows only.
+// LOCKS: RFC-096 (audit S-13 / 附录 C #5, design §3.3) — wrapper port reads
+// select the newest visible DONE row only.
 //
 // readPortAtIteration (scheduler.ts, not exported) is the single read point
 // for wrapper-loop exit-condition evaluation AND wrapper outputBindings.
@@ -14,9 +14,10 @@
 //      → the loop exited 'done' on iteration 0 regardless of real content;
 //   2. output bindings (scheduler.ts:2442): the wrapper persisted '' outputs,
 //      clobbering real upstream content.
-// The fix adds statusIn:['done'] (pickFreshestRun), aligning the read with
-// buildFreshestDonePerNode / the RFC-074 freshness口径. Non-done rows never
-// have outputs, so skipping them can only surface the newest REAL content.
+// The picker filters to status=done and uses last-value visibility
+// (`row.iteration <= current iteration`), aligning the read with freshness and
+// preserving outer-scope values across loop rounds. Non-done rows never have
+// outputs, so skipping them can only surface the newest REAL content.
 //
 // Test shape (behavioral — the helper is private, so we drive the real chain
 // runTask → runLoopWrapperNode → readPortAtIteration → evaluateExitCondition
@@ -46,9 +47,8 @@
 //
 // Control (no pending interference → unchanged behavior) is NOT duplicated
 // here — existing suites already cover it: exit-condition.test.ts (pure
-// evaluator), scheduler-audit-gap4-loop-exit-out-of-scope-port.test.ts
-// (loop + real readPortAtIteration reads, including the "no rows at all → ''"
-// path that test 1's own iteration-1 exit re-traverses below).
+// evaluator) and scheduler-audit-gap4-loop-exit-out-of-scope-port.test.ts
+// (loop + last-value reads across iterations).
 //
 // Orphan non-goal (design §3.3): the skipped pending row stays untouched —
 // asserted explicitly so the consumption question stays visibly parked with
@@ -213,7 +213,7 @@ describe('RFC-096 §3.3 — readPortAtIteration done-only (loop exit + output bi
   })
   afterEach(() => h.cleanup())
 
-  test('exit surface: port-empty cond source has done("keep-looping") + younger pending row → loop does NOT false-exit at iteration 0 (red before fix)', async () => {
+  test('exit surface: a done value remains visible across iterations despite a younger pending row', async () => {
     // worker emits a distinct port value per iteration so `final` pins WHICH
     // iteration the loop exited on, not just that it exited.
     writeFileSync(
@@ -243,24 +243,23 @@ describe('RFC-096 §3.3 — readPortAtIteration done-only (loop exit + output bi
     await runSeededTask(h, taskId)
 
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
-    expect(`${t?.status}:${t?.errorSummary ?? ''}`).toBe('done:')
+    expect(`${t?.status}:${t?.errorSummary ?? ''}`).toBe(
+      'failed:wrapper-loop loop exhausted after 3 iterations',
+    )
 
-    // Iteration 0's exit check must read the DONE row ('keep-looping' →
-    // non-empty → continue), NOT the younger pending row ('' → false exit).
-    // Iteration 1 then reads ghost_flag@1 — no rows → '' → port-empty fires
-    // (the gap4-locked out-of-scope/no-row semantics, doubling as the in-file
-    // control that done-only did not change the no-row path).
-    // Red before fix: iterations [0] and final 'w0'.
+    // Every exit check reads the DONE row ('keep-looping' → non-empty), NOT
+    // the younger pending row with no output and not an exact-iteration empty
+    // result. Red before the two picker fixes: iteration [0], task done.
     const workerRuns = (
       await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     ).filter((r) => r.nodeId === 'worker')
-    expect(workerRuns.map((r) => r.iteration).sort()).toEqual([0, 1])
+    expect(workerRuns.map((r) => r.iteration).sort()).toEqual([0, 1, 2])
 
     const loopRun = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).find(
       (r) => r.nodeId === 'loop',
     )
-    expect(loopRun?.status).toBe('done')
-    expect(await loopOutput(h, loopRun!.id, 'final')).toBe('w1')
+    expect(loopRun?.status).toBe('exhausted')
+    expect(await loopOutput(h, loopRun!.id, 'final')).toBeUndefined()
 
     // Orphan non-goal (design §3.3): the skipped pending row is left exactly
     // as minted — no consumption, no status flip.

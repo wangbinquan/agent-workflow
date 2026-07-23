@@ -38,7 +38,12 @@
 // → completed → ready) lives in scheduler.ts deriveFrontier (PR-B, live).
 // Pure-function locks: dispatch-frontier.test.ts + derive-frontier.test.ts.
 
-import { channelEdgeDataflowSkip, WRAPPER_NODE_KINDS } from '@agent-workflow/shared'
+import {
+  buildWorkflowScopeParentMap,
+  channelEdgeDataflowSkip,
+  resolveWorkflowSourceRef,
+  WRAPPER_NODE_KINDS,
+} from '@agent-workflow/shared'
 import type { NodeKind, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import type { nodeRuns } from '../db/schema'
 import { buildFreshestDonePerNode, isFresherNodeRun, isNodeRunFresh } from './freshness'
@@ -121,7 +126,7 @@ export function wrapperInnerDescendants(
  * Edge filtering is the SAME registry projection buildScopeUpstreams
  * (scheduler.ts) uses — `channelEdgeDataflowSkip` (RFC-147), including the
  * carve-out that `questioner.__clarify__ → clarify-cross-agent` is a REAL
- * dataflow dep (kept) — plus the review `inputSource` implicit dependency.
+ * dataflow dep (kept) — plus review/output implicit dependencies.
  *
  * Pure function — definition-only, no DB / rows.
  */
@@ -131,6 +136,7 @@ export function wrapperExternalUpstreamSources(
 ): Set<string> {
   const scope = wrapperInnerDescendants(wrapperNodeId, definition)
   scope.add(wrapperNodeId)
+  const parents = buildWorkflowScopeParentMap(definition)
   const kindById = new Map(definition.nodes.map((n) => [n.id, n.kind]))
   const sources = new Set<string>()
   for (const e of definition.edges) {
@@ -140,19 +146,50 @@ export function wrapperExternalUpstreamSources(
     // the historical hand-copied block (whose comment demanded "keep the
     // two in lockstep") is gone; lockstep is now structural.
     if (channelEdgeDataflowSkip(e, (id) => kindById.get(id))) continue
-    sources.add(e.source.nodeId)
+    const resolved = resolveWorkflowSourceRef(definition, e.source, e.target.nodeId, parents)
+    sources.add(resolved.ok ? resolved.source.nodeId : e.source.nodeId)
   }
-  // review.inputSource is an implicit upstream dep (no user-authored edge) —
-  // same rule buildScopeUpstreams applies, but here only EXTERNAL sources
-  // qualify (an in-scope inputSource is intra-wrapper dataflow, not
-  // provenance).
+  const addImplicitSource = (
+    source: { nodeId: string; portName: string },
+    targetNodeId: string,
+  ): void => {
+    if (scope.has(source.nodeId)) return
+    const resolved = resolveWorkflowSourceRef(definition, source, targetNodeId, parents)
+    sources.add(resolved.ok ? resolved.source.nodeId : source.nodeId)
+  }
+
+  // review.inputSource and output.ports[].bind are implicit upstream deps (no
+  // user-authored edge). Mirror buildScopeUpstreams here so the wrapper's
+  // consumed-generation stamp covers every value that can delay or influence
+  // its inner scope. In-scope sources remain ordinary intra-wrapper dataflow.
   for (const n of definition.nodes) {
     if (!scope.has(n.id)) continue
-    if (n.kind !== 'review') continue
-    const inp = (n as Record<string, unknown>).inputSource as { nodeId?: unknown } | undefined
-    if (inp === undefined || typeof inp.nodeId !== 'string') continue
-    if (scope.has(inp.nodeId)) continue
-    sources.add(inp.nodeId)
+    if (n.kind === 'review') {
+      const inp = (n as Record<string, unknown>).inputSource as
+        | { nodeId?: unknown; portName?: unknown }
+        | undefined
+      if (inp !== undefined && typeof inp.nodeId === 'string') {
+        addImplicitSource(
+          {
+            nodeId: inp.nodeId,
+            portName: typeof inp.portName === 'string' ? inp.portName : '',
+          },
+          n.id,
+        )
+      }
+    }
+    if (n.kind === 'output') {
+      const ports = (n as Record<string, unknown>).ports
+      if (!Array.isArray(ports)) continue
+      for (const port of ports) {
+        if (port === null || typeof port !== 'object') continue
+        const bind = (port as Record<string, unknown>).bind
+        if (bind === null || typeof bind !== 'object') continue
+        const source = bind as Record<string, unknown>
+        if (typeof source.nodeId !== 'string' || typeof source.portName !== 'string') continue
+        addImplicitSource({ nodeId: source.nodeId, portName: source.portName }, n.id)
+      }
+    }
   }
   return sources
 }

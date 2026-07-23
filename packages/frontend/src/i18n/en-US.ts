@@ -3805,18 +3805,30 @@ export const enUS: Resources = {
       'upload-input-target-dir-invalid':
         'The upload input target dir must be a repo-relative path.',
       'wrapper-children-outside-bounds': 'An inner node sits outside the wrapper visual bounds.',
+      'wrapper-child-duplicate': 'The wrapper lists the same direct child more than once.',
+      'wrapper-child-multiple-parents': 'A node cannot belong directly to more than one wrapper.',
+      'wrapper-child-node-missing': 'The wrapper references an unknown child node.',
+      'wrapper-containment-cycle': 'Wrapper containment must not contain a cycle.',
       'wrapper-empty': 'The wrapper has no inner nodes.',
       'wrapper-fanout-nested': 'Fan-out wrappers cannot nest inside each other.',
       'wrapper-fanout-shard-source-duplicate':
         'A fan-out wrapper must have exactly one shard-source port (found several).',
       'wrapper-fanout-shard-source-missing': 'The fan-out wrapper has no shard-source port.',
       'wrapper-fanout-shard-source-must-be-list': 'The shard-source port must declare a list kind.',
+      'wrapper-input-boundary-missing':
+        'Data entering a fan-out wrapper must use its declared input boundary.',
       'wrapper-loop-exit-condition': 'The loop wrapper is missing its exit condition.',
       'wrapper-loop-exit-node-missing': 'The loop exit condition references an unknown node.',
+      'wrapper-loop-exit-node-out-of-scope':
+        'The loop exit condition must reference a direct member of the loop body.',
       'wrapper-loop-exit-port-missing': 'The loop exit condition references an unknown port.',
       'wrapper-loop-inner-data-cycle': 'The loop wrapper has a data cycle between its inner nodes.',
       'wrapper-loop-max-iterations': 'The loop wrapper is missing maxIterations.',
       'wrapper-loop-nested': 'Loop wrappers cannot nest inside each other.',
+      'wrapper-loop-output-binding-out-of-scope':
+        'A loop output binding must reference a direct member of the loop body.',
+      'wrapper-output-boundary-missing':
+        'Data leaving a wrapper must be exposed through the wrapper output boundary.',
     },
     family: {
       'wrapper-loop': 'Loop wrapper misconfigured.',

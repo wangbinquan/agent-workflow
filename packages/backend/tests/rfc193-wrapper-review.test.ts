@@ -307,6 +307,57 @@ describe('RFC-193 e2e — 派生投影透传（D16 / case 8b）', () => {
       expect(readFileSync(join(h.appHome, arch!.items[0]!.file!), 'utf8')).toBe('PROJECTED BODY')
     }
   })
+
+  test('loop 内 writer 通过 outputBinding 提升后可被 loop 外 review 读取', async () => {
+    await seedAgent(h.db, 'writer', ['doc'], { doc: 'path<md>' })
+    writeFileSync(
+      h.planFile,
+      JSON.stringify({
+        writer: {
+          files: { 'review-me.md': '# promoted review\n\nreal body' },
+          output: { doc: 'review-me.md' },
+        },
+      }),
+    )
+    const def: WorkflowDefinition = {
+      $schema_version: 3,
+      inputs: [{ kind: 'text', key: 'req', label: 'r' }],
+      nodes: [
+        { id: 'in1', kind: 'input', inputKey: 'req' } as WorkflowNode,
+        {
+          id: 'loop',
+          kind: 'wrapper-loop',
+          nodeIds: ['writer'],
+          maxIterations: 1,
+          exitCondition: { kind: 'port-not-empty', nodeId: 'writer', portName: 'doc' },
+          outputBindings: [{ name: 'final', bind: { nodeId: 'writer', portName: 'doc' } }],
+        } as unknown as WorkflowNode,
+        { id: 'writer', kind: 'agent-single', agentName: 'writer' } as WorkflowNode,
+        {
+          id: 'review',
+          kind: 'review',
+          inputSource: { nodeId: 'writer', portName: 'doc' },
+        } as unknown as WorkflowNode,
+      ],
+      edges: [
+        {
+          id: 'e1',
+          source: { nodeId: 'in1', portName: 'req' },
+          target: { nodeId: 'writer', portName: 'req' },
+        },
+      ],
+    }
+    const taskId = await seedTask(h, def)
+    await runTask({ db: h.db, taskId, appHome: h.appHome, opencodeCmd: ['bun', 'run', h.mockPath] })
+
+    const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    expect(taskRow.status).toBe('awaiting_review')
+    const dvs = await h.db.select().from(docVersions).where(eq(docVersions.taskId, taskId))
+    expect(dvs).toHaveLength(1)
+    expect(readFileSync(join(h.appHome, dvs[0]!.bodyPath), 'utf8')).toBe(
+      '# promoted review\n\nreal body',
+    )
+  })
 })
 
 // RFC-193 D9/AC-7 源码锁 — scopeRoot 接线 + review.ts 禁 task.worktreePath。

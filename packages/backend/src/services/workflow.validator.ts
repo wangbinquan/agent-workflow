@@ -38,17 +38,20 @@ import {
   CLARIFY_RESPONSE_TARGET_PORT_NAME,
   CROSS_CLARIFY_EXTERNAL_FEEDBACK_PORT,
   BUILTIN_VARS,
+  analyzeWorkflowScopeTree,
   buildNodeAgentLookup,
   canonicalJson,
   CLARIFY_SOURCE_PORT_NAME,
   countFanoutAggregators,
   declaredPorts,
   isClarifyChannelEdge,
-  resolveNodeAgent,
   isMultiDocReviewInput,
+  isNodeInsideWorkflowWrapper,
   isReviewableBodyKind,
   isWrapperKind,
   REVIEW_INPUT_PORT_NAME,
+  resolveNodeAgent,
+  resolveWorkflowSourceRef,
   serializeWorkflowDefinitionCandidateV1,
   tryParseKind,
 } from '@agent-workflow/shared'
@@ -362,6 +365,49 @@ export function validateWorkflowDef(
     })
   }
 
+  // Wrapper containment is the coordinate system used by recursive scheduling,
+  // source promotion, freshness, and canvas layout. It must be a tree before
+  // any of those consumers build a child→parent map; otherwise "last wrapper
+  // wins" can silently erase a dependency in one scope and execute a child
+  // early. Validate the structural contract once for every wrapper kind.
+  const scopeTree = analyzeWorkflowScopeTree({ ...def, nodes, edges })
+  for (const scopeIssue of scopeTree.issues) {
+    switch (scopeIssue.code) {
+      case 'wrapper-child-duplicate':
+        issues.push({
+          code: 'wrapper-child-duplicate',
+          message: `wrapper '${scopeIssue.wrapperId}' lists child '${scopeIssue.childId}' more than once`,
+          pointer: scopeIssue.wrapperId,
+          target: target.node(scopeIssue.wrapperId),
+        })
+        break
+      case 'wrapper-child-node-missing':
+        issues.push({
+          code: 'wrapper-child-node-missing',
+          message: `wrapper '${scopeIssue.wrapperId}' references unknown child node '${scopeIssue.childId}'`,
+          pointer: scopeIssue.wrapperId,
+          target: target.node(scopeIssue.wrapperId),
+        })
+        break
+      case 'wrapper-child-multiple-parents':
+        issues.push({
+          code: 'wrapper-child-multiple-parents',
+          message: `node '${scopeIssue.childId}' belongs to multiple wrappers (${scopeIssue.parentIds.join(', ')}); wrapper containment must be a tree`,
+          pointer: scopeIssue.childId,
+          target: target.node(scopeIssue.childId),
+        })
+        break
+      case 'wrapper-containment-cycle':
+        issues.push({
+          code: 'wrapper-containment-cycle',
+          message: `wrapper containment contains a cycle (${scopeIssue.cycle.join(' → ')}); wrapper scopes must form a tree`,
+          pointer: scopeIssue.cycle[0],
+          target: target.workflow(),
+        })
+        break
+    }
+  }
+
   // 1. wrapper-required-fields ------------------------------------------------
   // (run early so later rules don't dereference invalid wrappers)
   for (const node of nodes) {
@@ -493,14 +539,14 @@ export function validateWorkflowDef(
   for (const node of nodes) {
     if (isWrapperKind(node.kind)) {
       for (const innerId of readStringArray(node, 'nodeIds')) {
-        // Multi-wrapper containment is an authoring error; the last write
-        // wins here, RFC-016 wrapper-children-outside-bounds catches the
-        // pathological "node listed in two wrappers" pattern. Validator
-        // surfaces it via the existing wrapper rules.
+        // Invalid multi-parent/cyclic definitions were surfaced by the
+        // structural containment rule above. Keep this deterministic for the
+        // remaining diagnostics, while launch validation fails closed.
         innerToWrapper.set(innerId, node.id)
       }
     }
   }
+  const scopeParents = scopeTree.parents
 
   // RFC-094 (audit S-6) — wrapper-loop nested (transitively) inside another
   // wrapper-loop is a BROKEN topology, not a cost concern: node_runs rows are
@@ -654,6 +700,63 @@ export function validateWorkflowDef(
           message: `edge '${edge.id}': wrapper-fanout '${tgt.id}' has no declared input port '${edge.target.portName}'`,
           pointer: edge.id,
           target: target.nodePort(tgt.id, 'input', edge.target.portName),
+        })
+      }
+    }
+
+    // A flat edge may cross one or more wrapper scopes, but data leaving a
+    // wrapper must be promoted through that wrapper's declared outlet. The
+    // runtime resolves the same projection before reading/provenance stamping;
+    // fail here when no outlet exists so an inner row can never be consumed as
+    // if the wrapper boundary did not exist.
+    if (edge.boundary === undefined && !isClarifyChannelEdge(edge)) {
+      const sourceResolution = resolveWorkflowSourceRef(
+        defnForPorts,
+        edge.source,
+        edge.target.nodeId,
+        scopeParents,
+      )
+      if (!sourceResolution.ok) {
+        issues.push({
+          code: 'wrapper-output-boundary-missing',
+          message: `edge '${edge.id}' reads '${edge.source.nodeId}.${edge.source.portName}' outside ${sourceResolution.wrapperKind} '${sourceResolution.wrapperId}', but that value is not exposed on the wrapper output boundary`,
+          pointer: edge.id,
+          target: target.edge(edge.id),
+        })
+      }
+
+      // wrapper-fanout inner dispatch receives values only through an explicit
+      // boundary='wrapper-input' mirror. A plain external→inner edge is ordered
+      // by scope projection but the shard runtime cannot inject its value.
+      let enteredWrapper = scopeParents.get(edge.target.nodeId)
+      const visited = new Set<string>()
+      while (enteredWrapper !== undefined && !visited.has(enteredWrapper)) {
+        visited.add(enteredWrapper)
+        const wrapper = nodeById.get(enteredWrapper)
+        const sourceInsideBody =
+          edge.source.nodeId !== enteredWrapper &&
+          isNodeInsideWorkflowWrapper(edge.source.nodeId, enteredWrapper, scopeParents)
+        if (wrapper?.kind === 'wrapper-fanout' && !sourceInsideBody) {
+          issues.push({
+            code: 'wrapper-input-boundary-missing',
+            message: `edge '${edge.id}' enters wrapper-fanout '${enteredWrapper}' without a boundary='wrapper-input' edge through the wrapper's declared input port`,
+            pointer: edge.id,
+            target: target.edge(edge.id),
+          })
+          break
+        }
+        enteredWrapper = scopeParents.get(enteredWrapper)
+      }
+      const sourceInsideTargetFanout =
+        tgt.kind === 'wrapper-fanout' &&
+        edge.source.nodeId !== tgt.id &&
+        isNodeInsideWorkflowWrapper(edge.source.nodeId, tgt.id, scopeParents)
+      if (sourceInsideTargetFanout) {
+        issues.push({
+          code: 'wrapper-output-boundary-missing',
+          message: `edge '${edge.id}' exits wrapper-fanout '${tgt.id}' without boundary='wrapper-output'`,
+          pointer: edge.id,
+          target: target.edge(edge.id),
         })
       }
     }
@@ -941,11 +1044,26 @@ export function validateWorkflowDef(
               target: target.outputBinding(node.id, b.name),
             })
           }
+          const sourceResolution = resolveWorkflowSourceRef(
+            defnForPorts,
+            b.bind,
+            node.id,
+            scopeParents,
+          )
+          if (!sourceResolution.ok) {
+            issues.push({
+              code: 'wrapper-output-boundary-missing',
+              message: `output node '${node.id}' port '${b.name}' reads '${b.bind.nodeId}.${b.bind.portName}' outside ${sourceResolution.wrapperKind} '${sourceResolution.wrapperId}', but that value is not exposed on the wrapper output boundary`,
+              pointer: node.id,
+              target: target.outputBinding(node.id, b.name),
+            })
+          }
         }
       }
     }
     if (node.kind === 'wrapper-loop') {
       const bindings = readBindings(node, 'outputBindings')
+      const loopMembers = new Set(readStringArray(node, 'nodeIds'))
       for (const b of bindings) {
         if (!nodeById.has(b.bind.nodeId)) {
           issues.push({
@@ -964,6 +1082,14 @@ export function validateWorkflowDef(
               target: target.nodeField(node.id, 'loop-output-bindings'),
             })
           }
+        }
+        if (nodeById.has(b.bind.nodeId) && !loopMembers.has(b.bind.nodeId)) {
+          issues.push({
+            code: 'wrapper-loop-output-binding-out-of-scope',
+            message: `wrapper-loop '${node.id}' outputBinding '${b.name}' references '${b.bind.nodeId}.${b.bind.portName}', but '${b.bind.nodeId}' is not a direct member of the loop body`,
+            pointer: node.id,
+            target: target.nodeField(node.id, 'loop-output-bindings'),
+          })
         }
       }
       // exitCondition must reference a real node + port. At runtime
@@ -988,6 +1114,14 @@ export function validateWorkflowDef(
             target: target.nodeField(node.id, 'loop-exit-condition'),
           })
         } else if (exitNodeId !== undefined && exitPortName !== undefined) {
+          if (!loopMembers.has(exitNodeId)) {
+            issues.push({
+              code: 'wrapper-loop-exit-node-out-of-scope',
+              message: `wrapper-loop '${node.id}' exitCondition references '${exitNodeId}.${exitPortName}', but '${exitNodeId}' is not a direct member of the loop body`,
+              pointer: node.id,
+              target: target.nodeField(node.id, 'loop-exit-condition'),
+            })
+          }
           const exitNode = nodeById.get(exitNodeId)
           const portsKnown =
             exitNode?.kind === 'agent-single'
@@ -1178,6 +1312,20 @@ export function validateWorkflowDef(
           target: target.nodeField(node.id, 'review-source'),
         })
         continue
+      }
+      const sourceResolution = resolveWorkflowSourceRef(
+        def,
+        { nodeId: srcNodeId, portName: srcPort },
+        node.id,
+        scopeParents,
+      )
+      if (!sourceResolution.ok) {
+        issues.push({
+          code: 'wrapper-output-boundary-missing',
+          message: `review node '${node.id}' reads '${srcNodeId}.${srcPort}' outside ${sourceResolution.wrapperKind} '${sourceResolution.wrapperId}', but that value is not exposed on the wrapper output boundary`,
+          pointer: node.id,
+          target: target.nodeField(node.id, 'review-source'),
+        })
       }
       const reviewInputEdges = edges.filter((edge) => edge.target.nodeId === node.id)
       if (reviewInputEdges.length > 1) {

@@ -4,7 +4,7 @@
 // count assertion against the helper itself).
 //
 // Guard 2: scheduler.ts ignores the visual `clarify.answers → agent.__clarify_response__`
-// edge when computing dataflow upstreams + topology — so deleting that
+// edge when computing the projected dataflow upstreams — so deleting that
 // edge in the canvas (the "second" edge in the pair) DOES NOT break answer
 // injection. The runtime path goes through clarify_sessions rows +
 // buildClarifyPromptContext, not through this edge. If the scheduler ever
@@ -28,26 +28,13 @@ describe('clarify reverse-drag two-edge invariant (RFC-023 C6)', () => {
     const src = readFileSync(SCHEDULER_PATH, 'utf8')
     // If a refactor drops the guard, the answers→agent edge becomes a hard
     // upstream dep and the cycle resolution breaks. We pin the mechanism
-    // by name: the two places to guard are `buildScopeUpstreams` and
-    // `topologicalOrder`. Both must explicitly skip clarify-channel
-    // edges — historically that meant a literal `__clarify__` string in
-    // the function body; post RFC-056 patch 2026-05-22 the shared helper
-    // `isClarifyChannelEdge` (in shared/clarify-cross.ts) owns the rule
-    // and both helpers call into it. Either shape counts as "guarded".
+    // by name: `buildScopeUpstreams` is the single projected dependency
+    // graph used by both frontier dispatch and cycle detection. It must
+    // call the shared channel-edge policy rather than duplicating it.
     const buildScopePos = src.indexOf('function buildScopeUpstreams')
     expect(buildScopePos).toBeGreaterThan(-1)
-    const toposortPos = src.indexOf('function topologicalOrder')
-    expect(toposortPos).toBeGreaterThan(-1)
     const buildScopeBody = src.slice(buildScopePos, buildScopePos + 4000)
-    const toposortBody = src.slice(toposortPos, toposortPos + 4000)
-    // Each body must contain SOME clarify-channel-edge skip signal:
-    // either the literal `__clarify__` port name (legacy inline form) or
-    // the shared `isClarifyChannelEdge` helper call (post-patch form).
-    expect(
-      buildScopeBody.includes('__clarify__') || buildScopeBody.includes('isClarifyChannelEdge'),
-    ).toBe(true)
-    expect(
-      toposortBody.includes('__clarify__') || toposortBody.includes('isClarifyChannelEdge'),
-    ).toBe(true)
+    expect(buildScopeBody).toContain('channelEdgeDataflowSkip')
+    expect(src).not.toContain('function topologicalOrder')
   })
 })
