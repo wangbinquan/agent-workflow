@@ -8,9 +8,10 @@
 // 1. NAV_GROUPS exposes a "memory" group with a single /memory sub-item.
 // 2. <MemoryPendingBadge /> hides for a non-admin with no pending fusions
 //    (the admin-only candidate query never fires for them).
-// 3. Admin with ≥1 candidate sees a numeric badge.
+// 3. Admin with ≥1 candidate sees a non-interactive numeric badge.
 // 4. RFC-121: a non-admin owner with a pending fusion sees the badge; the
 //    admin badge sums candidates + fusions.
+// 5. Regression: the badge itself is status, not a second navigation link.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -135,12 +136,14 @@ describe('NAV_GROUPS includes memory', () => {
 })
 
 describe('MemoryPendingBadge', () => {
-  test('admin with pending candidates renders the badge', async () => {
+  test('admin with pending candidates renders a non-interactive badge', async () => {
     installFetch({ permissions: ['memory:read', 'memory:approve'] }, [mkSum(), mkSum({ id: 'm2' })])
     renderBadge()
     await waitFor(() => {
       expect(screen.getByTestId('nav-memory-badge').textContent).toBe('2')
     })
+    expect(screen.getByTestId('nav-memory-badge').tagName).toBe('SPAN')
+    expect(screen.getByTestId('nav-memory-badge').getAttribute('href')).toBeNull()
   })
 
   test('server canManage=false candidates do not contribute to the badge', async () => {
@@ -179,16 +182,14 @@ describe('MemoryPendingBadge', () => {
     await waitFor(() => {
       expect(screen.getByTestId('nav-memory-badge').textContent).toBe('5')
     })
-    expect(screen.getByTestId('nav-memory-badge').getAttribute('href')).toContain(
-      'tab=approval-queue',
-    )
+    expect(screen.getByTestId('nav-memory-badge').closest('a')).toBeNull()
   })
 
-  test('fusion is the sibling destination when there are no manageable candidates', async () => {
+  test('fusion-only count remains status rather than becoming a sibling destination', async () => {
     installFetch({ permissions: ['memory:read'], role: 'user' }, [mkSum({ canManage: false })], 2)
     renderBadge()
-    const accessory = await screen.findByTestId('nav-memory-badge')
-    expect(accessory.getAttribute('href')).toContain('tab=fusion')
-    expect(accessory.closest('.nav-item__main')).toBeNull()
+    const badge = await screen.findByTestId('nav-memory-badge')
+    expect(badge.textContent).toBe('2')
+    expect(badge.getAttribute('href')).toBeNull()
   })
 })

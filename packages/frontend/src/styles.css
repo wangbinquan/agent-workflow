@@ -1615,10 +1615,6 @@ code {
 }
 
 .nav-item-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 2px;
   min-width: 0;
   border: 1px solid transparent;
   border-radius: 6px;
@@ -1656,26 +1652,6 @@ code {
 
 .nav-item-row > .nav-item__main {
   border: 0;
-}
-
-.nav-item__accessory {
-  display: inline-grid;
-  place-items: center;
-  width: 32px;
-  min-width: 32px;
-  min-height: 32px;
-  border-radius: var(--radius-md);
-  color: inherit;
-  text-decoration: none;
-}
-
-.nav-item__accessory:hover {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-}
-
-.nav-item__accessory:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus-ring-color);
-  outline-offset: var(--focus-ring-offset);
 }
 
 .nav-item__label {
@@ -1809,15 +1785,6 @@ code {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   border-color: var(--accent);
   color: var(--accent);
-}
-
-/* The badge text is capped at "99+". Keep the one-digit footprint compact,
-   but let the accessory column grow with that wider label instead of allowing
-   it to paint beyond the Memory row's selected-state frame. */
-.nav-group[data-group='memory'] .nav-item__accessory {
-  width: auto;
-  min-width: 32px;
-  padding-inline: var(--space-1);
 }
 
 .inbox-footer-button__label {
@@ -13414,8 +13381,14 @@ mark.comment-anchor[data-active='true'] {
   position: relative;
 }
 
-.nav-item__badge {
+.nav-item__pending-count {
+  display: inline-flex;
+  flex: 0 0 auto;
   margin-left: auto;
+  pointer-events: none;
+}
+
+.nav-item__badge {
   padding: 2px var(--space-2);
   font-size: var(--font-xs);
   border-radius: var(--radius-pill);
@@ -15805,6 +15778,20 @@ mark.comment-anchor[data-active='true'] {
   gap: 4px;
 }
 
+/* Keep every persistent workgroup status surface in one rhythm: the compact
+   save/transport chips, any autosave NoticeBanner, the readiness bar, then a
+   full gutter before the split configuration studio. */
+.workgroup-editor-status-stack {
+  display: grid;
+  gap: var(--space-2);
+  margin-block-end: var(--space-3);
+}
+
+.workgroup-editor-status-stack > .workflow-draft-status {
+  display: grid;
+  gap: var(--space-2);
+}
+
 /* Studio page frame — the page becomes a viewport-high flex column so the
    two-column studio below the header can give the gallery and the panel
    INDEPENDENT scrollbars (user 2026-07-11). */
@@ -18169,6 +18156,10 @@ button.status-chip {
     flex-basis: 88px;
   }
 
+  .editor-page-header--workgroup > .page__actions > .btn {
+    padding-inline: 12px;
+  }
+
   .page--editor > .page__header > .page__actions,
   .editor-page-header > .page__actions {
     width: auto;
@@ -18654,12 +18645,6 @@ button.status-chip {
 
 .mobile-nav-dialog .nav-group {
   padding: 0;
-}
-
-.mobile-nav-dialog .nav-item__accessory {
-  width: 44px;
-  min-width: 44px;
-  min-height: 44px;
 }
 
 .mobile-nav-dialog .dialog__footer {

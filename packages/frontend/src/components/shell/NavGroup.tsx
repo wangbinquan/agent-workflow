@@ -11,11 +11,11 @@ import type { ActiveNav, NavGroupEntry, SubNavItem } from '@/lib/nav'
 interface NavGroupProps {
   group: NavGroupEntry
   active: ActiveNav
-  /** Optional sibling action factory (for example Memory pending review). */
-  renderAccessory?: (item: SubNavItem) => ReactNode
+  /** Optional status badge factory rendered inside the item's one main link. */
+  renderBadge?: (item: SubNavItem) => ReactNode
 }
 
-export function NavGroup({ group, active, renderAccessory }: NavGroupProps) {
+export function NavGroup({ group, active, renderBadge }: NavGroupProps) {
   const { t } = useTranslation()
   return (
     <div className="nav-group" data-group={group.key}>
@@ -28,7 +28,7 @@ export function NavGroup({ group, active, renderAccessory }: NavGroupProps) {
             key={item.to}
             item={item}
             isActive={active.activeItemTo === item.to}
-            accessory={renderAccessory ? renderAccessory(item) : null}
+            badge={renderBadge ? renderBadge(item) : null}
           />
         ))}
       </div>
@@ -39,10 +39,10 @@ export function NavGroup({ group, active, renderAccessory }: NavGroupProps) {
 interface NavItemProps {
   item: SubNavItem
   isActive: boolean
-  accessory: ReactNode
+  badge: ReactNode
 }
 
-function NavItem({ item, isActive, accessory }: NavItemProps) {
+function NavItem({ item, isActive, badge }: NavItemProps) {
   const { t } = useTranslation()
   const className = ['nav-item', isActive ? 'nav-item--active' : null].filter(Boolean).join(' ')
   return (
@@ -59,8 +59,8 @@ function NavItem({ item, isActive, accessory }: NavItemProps) {
           <ResourceIcon name={item.icon} />
         </span>
         <span className="nav-item__label">{t(item.i18nKey)}</span>
+        {badge}
       </Link>
-      {accessory}
     </div>
   )
 }

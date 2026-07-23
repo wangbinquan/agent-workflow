@@ -59,9 +59,9 @@ export const NAV_GROUPS: NavGroupEntry[] = [
     ],
   },
   // RFC-041 PR4 follow-up: mirror the single-item Workflows-group shape so
-  // the sidebar reads as four parallel categories. The pending-candidate
-  // pending work is rendered as a sibling accessory Link by NavGroup. The
-  // main row itself always enters the stable `?tab=all` library default.
+  // the sidebar reads as four parallel categories. Pending work is rendered
+  // as a status badge inside the one Memory Link, which always enters the
+  // stable `?tab=all` library default.
   {
     key: 'memory',
     i18nKey: 'nav.group.memory',

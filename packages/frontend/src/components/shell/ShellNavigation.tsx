@@ -13,7 +13,7 @@ export interface ShellNavigationProps {
   mode: 'desktop' | 'mobile'
   onNavigate?: (destination: string) => void
   focusTargetRef?: RefObject<HTMLAnchorElement | null>
-  renderAccessory?: (item: SubNavItem) => ReactNode
+  renderBadge?: (item: SubNavItem) => ReactNode
 }
 
 export function ShellNavigation({
@@ -21,7 +21,7 @@ export function ShellNavigation({
   mode,
   onNavigate,
   focusTargetRef,
-  renderAccessory,
+  renderBadge,
 }: ShellNavigationProps) {
   const { t } = useTranslation()
   const navRef = useRef<HTMLElement | null>(null)
@@ -79,7 +79,7 @@ export function ShellNavigation({
       </Link>
 
       {NAV_GROUPS.map((group) => (
-        <NavGroup key={group.key} group={group} active={active} renderAccessory={renderAccessory} />
+        <NavGroup key={group.key} group={group} active={active} renderBadge={renderBadge} />
       ))}
     </nav>
   )

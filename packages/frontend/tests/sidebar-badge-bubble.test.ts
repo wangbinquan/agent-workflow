@@ -5,8 +5,8 @@
 // RFC-032 PR2 lifted reviews + clarify into the unified inbox footer
 // button, so the badge markup now lives in InboxFooterButton.tsx. The
 // CSS contract is unchanged — same class, same pill shape, same `99+`
-// cap on the count — and is still used by both NavGroup sub-items (for
-// any future per-row count badge) and the inbox footer button.
+// cap on the count — and is still used by both the Memory navigation row
+// and the inbox footer button.
 //
 // 2026-07-23 regression: primary navigation used a solid accent slab while the
 // adjacent selected Inbox used a calm tint + outline. The source-level
@@ -99,15 +99,12 @@ describe('sidebar pending-review badge renders as a bubble', () => {
     expect(activeRowMain![1]).toMatch(/border-color:\s*transparent/)
   })
 
-  test('Memory accessory grows to keep its capped 99+ badge inside the selected row', () => {
+  test('Memory count has no second accessory click target', () => {
     const css = readFileSync(STYLES_CSS, 'utf8')
-    const memoryAccessory = css.match(
-      /\.nav-group\[data-group='memory'\]\s+\.nav-item__accessory\s*\{([^}]*)\}/,
-    )
-    expect(memoryAccessory).not.toBeNull()
-    expect(memoryAccessory![1]).toMatch(/width:\s*auto/)
-    expect(memoryAccessory![1]).toMatch(/min-width:\s*32px/)
-    expect(memoryAccessory![1]).toMatch(/padding-inline:\s*var\(--space-1\)/)
+    expect(css).not.toContain('.nav-item__accessory')
+    const pendingCount = css.match(/\.nav-item__pending-count\s*\{([^}]*)\}/)
+    expect(pendingCount).not.toBeNull()
+    expect(pendingCount![1]).toMatch(/pointer-events:\s*none/)
   })
 
   test('InboxFooterButton emits <span class="sidebar__badge"> with the 99+ cap (RFC-032 PR2)', () => {

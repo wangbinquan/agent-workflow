@@ -157,14 +157,21 @@ vi.mock('@/components/shell/MemoryPendingBadge', async () => {
   return {
     MemoryPendingBadge: () =>
       React.createElement(
-        'a',
+        'span',
         {
-          href: '/memory?tab=fusion',
-          className: 'nav-item__accessory',
-          'data-testid': 'memory-badge',
-          onClick: (event: React.MouseEvent<HTMLAnchorElement>) => event.preventDefault(),
+          className: 'nav-item__pending-count',
+          title: '2 awaiting review',
         },
-        '2',
+        React.createElement(
+          'span',
+          {
+            className: 'sidebar__badge nav-item__badge',
+            'data-testid': 'memory-badge',
+            'aria-hidden': 'true',
+          },
+          '2',
+        ),
+        React.createElement('span', { className: 'sr-only' }, '2 awaiting review'),
       ),
   }
 })
@@ -236,7 +243,10 @@ afterEach(() => {
 })
 
 describe('RFC-198 responsive AppShell', () => {
-  test('Memory main/default and pending accessory are sibling links', () => {
+  // Regression: the Memory label and its pending count used to be separate
+  // sibling links, which exposed two click targets and two keyboard stops for
+  // one navigation row. The count is now status inside the stable Memory link.
+  test('Memory main/default and pending count share exactly one link', () => {
     vi.stubGlobal('matchMedia', undefined)
     render(
       <AppShell pathname="/memory">
@@ -245,10 +255,11 @@ describe('RFC-198 responsive AppShell', () => {
     )
 
     const main = href('/memory?tab=all')
-    const accessory = screen.getByTestId('memory-badge')
-    expect(main.contains(accessory)).toBe(false)
-    expect(main.parentElement).toBe(accessory.parentElement)
-    expect(accessory.getAttribute('href')).toBe('/memory?tab=fusion')
+    const badge = screen.getByTestId('memory-badge')
+    expect(main.contains(badge)).toBe(true)
+    expect(badge.closest('a')).toBe(main)
+    expect(document.querySelectorAll('a[href^="/memory"]')).toHaveLength(1)
+    expect(screen.getByRole('link', { name: 'Memory 2 awaiting review' })).toBe(main)
   })
 
   test('matchMedia absence falls back to one desktop shell tree', () => {
@@ -348,7 +359,7 @@ describe('RFC-198 responsive AppShell', () => {
     await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId('agents-heading')))
   })
 
-  test('mobile Memory pending accessory shares the close and committed-focus handoff', async () => {
+  test('mobile Memory count activates its one parent link and preserves the focus handoff', async () => {
     installMatchMedia(true)
     const view = render(
       <AppShell pathname="/tasks">
@@ -361,6 +372,7 @@ describe('RFC-198 responsive AppShell', () => {
 
     expect(screen.queryByTestId('mobile-nav-dialog')).toBeNull()
     expect(document.activeElement).toBe(trigger)
+    expect(harness.linkClicks.at(-1)?.to).toBe('/memory')
 
     view.rerender(
       <AppShell pathname="/memory">
