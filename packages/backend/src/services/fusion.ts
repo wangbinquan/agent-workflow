@@ -291,10 +291,7 @@ function repairFusionWorkflowAgentId(definition: string): {
   for (const candidate of record['nodes']) {
     if (typeof candidate !== 'object' || candidate === null) continue
     const node = candidate as Record<string, unknown>
-    if (
-      node['kind'] !== 'agent-single' ||
-      (node['id'] !== 'merger' && node['agentName'] !== SKILL_MERGER_AGENT_NAME)
-    ) {
+    if (node['kind'] !== 'agent-single' || node['id'] !== 'merger') {
       continue
     }
     mergerFound = true

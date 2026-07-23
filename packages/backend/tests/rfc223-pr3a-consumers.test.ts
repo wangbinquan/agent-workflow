@@ -75,7 +75,9 @@ describe('deriveWorkgroupRunHistory — id-first agent attribution', () => {
   })
 
   test('legacy row (agentOverrideName only, no id) fails closed', () => {
-    const assignments = [{ id: 'ASG1', assigneeMemberId: null }]
+    // The card has since been re-claimed by A2. A legacy run with no frozen id
+    // must not inherit that mutable current assignee.
+    const assignments = [{ id: 'ASG1', assigneeMemberId: 'mA2' }]
     const run: HostRunLite = {
       id: 'R2',
       nodeId: WG_MEMBER_NODE_ID,

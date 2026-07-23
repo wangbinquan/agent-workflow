@@ -20,7 +20,7 @@ import type {
   ResolvedDistillScope,
   SourceContextBudget,
 } from '@agent-workflow/shared'
-import { QUARANTINED_SNAPSHOT_AGENT_ID } from '@agent-workflow/shared'
+import { QUARANTINED_SNAPSHOT_AGENT_ID, WorkgroupRuntimeConfigSchema } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { cachedRepos, memoryDistillJobs, tasks } from '@/db/schema'
 import { runDistill, type DistillerSpawnFn, rowToDistillJob } from '@/services/memoryDistiller'
@@ -155,6 +155,35 @@ export function extractAgentIdsFromSnapshot(workflowSnapshot: string): string[] 
   return [...ids]
 }
 
+/**
+ * Workgroup host snapshots contain framework placeholders, not one node per
+ * roster member. The frozen runtime config is therefore the canonical source
+ * for every member agent participating in the task.
+ */
+export function extractAgentIdsFromWorkgroupConfig(workgroupConfigJson: string | null): string[] {
+  if (workgroupConfigJson === null) return []
+  let raw: unknown
+  try {
+    raw = JSON.parse(workgroupConfigJson)
+  } catch {
+    return []
+  }
+  const parsed = WorkgroupRuntimeConfigSchema.safeParse(raw)
+  if (!parsed.success) return []
+  const ids = new Set<string>()
+  for (const member of parsed.data.members) {
+    if (member.memberType !== 'agent') continue
+    if (
+      typeof member.agentId === 'string' &&
+      member.agentId.length > 0 &&
+      member.agentId !== QUARANTINED_SNAPSHOT_AGENT_ID
+    ) {
+      ids.add(member.agentId)
+    }
+  }
+  return [...ids]
+}
+
 export async function computeEligibleScopes(
   db: DbClient,
   taskId: string | null,
@@ -166,7 +195,12 @@ export async function computeEligibleScopes(
   if (taskRow === undefined) {
     return { agentIds: [], workflowId: null, repoId: null, includeGlobal: true }
   }
-  const agentIds = extractAgentIdsFromSnapshot(taskRow.workflowSnapshot)
+  const agentIds = [
+    ...new Set([
+      ...extractAgentIdsFromSnapshot(taskRow.workflowSnapshot),
+      ...extractAgentIdsFromWorkgroupConfig(taskRow.workgroupConfigJson),
+    ]),
+  ]
   // RFC-204: see memoryInject — join on the stored mirror id. The old URL join
   // compared a REDACTED tasks.repo_url against the plaintext cached_repos.url,
   // so it missed private repos entirely and, once the credential column is

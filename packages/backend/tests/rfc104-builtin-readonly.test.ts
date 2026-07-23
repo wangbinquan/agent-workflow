@@ -544,6 +544,44 @@ describe('RFC-104 — seed self-heal & the ≤1-built-in-per-name guarantee', ()
     ).toBe(repaired.version)
   })
 
+  test('workflow repair never adopts another node by the merger display name', async () => {
+    const { db } = buildApp()
+    await seedFusionResources(db)
+    const workflow = db
+      .select()
+      .from(workflows)
+      .where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
+      .get()!
+    const definition = JSON.parse(workflow.definition) as {
+      nodes: Array<Record<string, unknown>>
+    }
+    definition.nodes.push({
+      id: 'display-name-impostor',
+      kind: 'agent-single',
+      agentId: 'user-agent-id',
+      agentName: SKILL_MERGER_AGENT_NAME,
+    })
+    db.update(workflows)
+      .set({ definition: JSON.stringify(definition) })
+      .where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
+      .run()
+
+    await seedFusionResources(db)
+    const repaired = JSON.parse(
+      db
+        .select({ definition: workflows.definition })
+        .from(workflows)
+        .where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
+        .get()!.definition,
+    ) as { nodes: Array<Record<string, unknown>> }
+    expect(repaired.nodes.find((node) => node['id'] === 'merger')?.['agentId']).toBe(
+      SKILL_MERGER_AGENT_ID,
+    )
+    expect(repaired.nodes.find((node) => node['id'] === 'display-name-impostor')?.['agentId']).toBe(
+      'user-agent-id',
+    )
+  })
+
   test('a wrong-name fixed-id occupant fails closed and remains untouched', async () => {
     const { db } = buildApp()
     db.insert(agents)

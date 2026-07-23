@@ -135,7 +135,6 @@ interface ClassifiedRun {
 function classify(
   run: HostRunLite,
   leaderMemberId: string | null,
-  assignmentToMember: ReadonlyMap<string, string | null>,
   assignmentIds: ReadonlySet<string>,
   uniqueAgentMemberById: ReadonlyMap<string, string | null>,
 ): ClassifiedRun | null {
@@ -150,19 +149,13 @@ function classify(
     // mint time, survives card re-claims and the autonomous requeue nulling
     // assignees) — strongest identity, checked first.
     const viaBatch = parseBatchShardKey(run.shardKey ?? null)?.memberId ?? null
-    // Impl-gate P2（二审收紧）— the card's assignee is MUTABLE in free-collab
-    // (a failed card recycles to open and may be RE-CLAIMED by someone else,
-    // which would relabel A's old attempts as B's). The run's mint-time agent
-    // identity is immutable, so it WINS whenever it resolves to exactly one
-    // member; the card's current assignee is only the fallback (shared-agent
-    // rosters / corrupt legacy runs without a frozen override id).
-    // RFC-223: persisted attribution is ID-only. Name-only historical rows do
-    // not acquire identity; they may still be attributed through the immutable
-    // batch key or the assignment's current member relationship.
+    // The card's assignee is mutable in free-collab: a failed card can be
+    // re-claimed by another member. Non-batch history must therefore resolve
+    // only from the run's mint-time frozen agent id; legacy/id-less rows are
+    // dropped rather than relabelled to the card's current assignee.
     const viaAgent =
       run.agentOverrideId != null ? (uniqueAgentMemberById.get(run.agentOverrideId) ?? null) : null
-    const viaCard = run.shardKey ? (assignmentToMember.get(run.shardKey) ?? null) : null
-    const memberId = viaBatch ?? viaAgent ?? viaCard
+    const memberId = viaBatch ?? viaAgent
     if (memberId === null) return null
     return { run, kind, memberId, maxMsgId: null }
   }
@@ -225,9 +218,6 @@ export function deriveWorkgroupRunHistory(
     openClarifySourceRunIds?: ReadonlySet<string>
   } = {},
 ): WorkgroupRunEntry[] {
-  const assignmentToMember = new Map<string, string | null>(
-    assignments.map((a) => [a.id, a.assigneeMemberId]),
-  )
   const assignmentIds = new Set(assignments.map((a) => a.id))
   const nameOf = new Map(members.map((m) => [m.id, m.displayName ?? null]))
   // agentId → memberId when exactly ONE agent member runs that agent; ambiguous
@@ -242,13 +232,7 @@ export function deriveWorkgroupRunHistory(
 
   const classified: ClassifiedRun[] = []
   for (const run of hostRuns) {
-    const cr = classify(
-      run,
-      leaderMemberId,
-      assignmentToMember,
-      assignmentIds,
-      uniqueAgentMemberById,
-    )
+    const cr = classify(run, leaderMemberId, assignmentIds, uniqueAgentMemberById)
     if (cr !== null) classified.push(cr)
   }
   classified.sort((a, b) => (a.run.id < b.run.id ? -1 : a.run.id > b.run.id ? 1 : 0))

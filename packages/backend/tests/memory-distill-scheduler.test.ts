@@ -10,6 +10,7 @@ import { insertClarifyRoundRaw } from './clarify-fixtures'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
+import { QUARANTINED_SNAPSHOT_AGENT_ID } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   agents,
@@ -29,6 +30,7 @@ import {
   distillTick,
   enqueueDistillJob,
   extractAgentIdsFromSnapshot,
+  extractAgentIdsFromWorkgroupConfig,
   listDistillJobs,
   recoverRunning,
   retryFailedJob,
@@ -55,6 +57,7 @@ function seedTask(
     repoUrl?: string | null
     cachedRepoId?: string | null
     snapshotAgents?: Array<{ id?: string; name: string }>
+    workgroupAgentIds?: string[]
   } = {},
 ): { taskId: string; workflowId: string } {
   const wfId = ulid()
@@ -86,6 +89,33 @@ function seedTask(
       repoPath: '/tmp/wt',
       repoUrl: opts.repoUrl ?? null,
       cachedRepoId: opts.cachedRepoId ?? null,
+      workgroupConfigJson:
+        opts.workgroupAgentIds === undefined
+          ? null
+          : JSON.stringify({
+              workgroupId: 'workgroup-fixture',
+              workgroupName: 'fixture',
+              mode: 'leader_worker',
+              leaderMemberId: 'member-0',
+              switches: {
+                shareOutputs: true,
+                directMessages: false,
+                blackboard: false,
+              },
+              maxRounds: 3,
+              completionGate: false,
+              instructions: '',
+              goal: 'test',
+              members: opts.workgroupAgentIds.map((agentId, index) => ({
+                id: `member-${index}`,
+                memberType: 'agent',
+                agentId,
+                agentName: `display-${index}`,
+                userId: null,
+                displayName: `member-${index}`,
+                roleDesc: '',
+              })),
+            }),
       worktreePath: '/tmp/wt',
       baseBranch: 'main',
       branch: 'agent-workflow/' + taskId,
@@ -135,6 +165,67 @@ describe('extractAgentIdsFromSnapshot', () => {
   })
 })
 
+describe('extractAgentIdsFromWorkgroupConfig', () => {
+  test('returns unique frozen member ids and ignores malformed or quarantined entries', () => {
+    expect(
+      extractAgentIdsFromWorkgroupConfig(
+        JSON.stringify({
+          workgroupId: 'workgroup-fixture',
+          workgroupName: 'fixture',
+          mode: 'leader_worker',
+          leaderMemberId: 'member-0',
+          switches: {
+            shareOutputs: true,
+            directMessages: false,
+            blackboard: false,
+          },
+          maxRounds: 3,
+          completionGate: false,
+          instructions: '',
+          goal: 'test',
+          members: [
+            {
+              id: 'member-0',
+              memberType: 'agent',
+              agentId: 'agent-lead',
+              agentName: 'lead',
+              userId: null,
+              displayName: 'lead',
+              roleDesc: '',
+            },
+            {
+              id: 'member-1',
+              memberType: 'agent',
+              agentId: 'agent-lead',
+              agentName: 'lead-again',
+              userId: null,
+              displayName: 'lead-again',
+              roleDesc: '',
+            },
+            {
+              id: 'member-2',
+              memberType: 'agent',
+              agentId: QUARANTINED_SNAPSHOT_AGENT_ID,
+              agentName: 'quarantined',
+              userId: null,
+              displayName: 'quarantined',
+              roleDesc: '',
+            },
+          ],
+        }),
+      ),
+    ).toEqual(['agent-lead'])
+    expect(extractAgentIdsFromWorkgroupConfig('{not-json')).toEqual([])
+    expect(
+      extractAgentIdsFromWorkgroupConfig(
+        JSON.stringify({
+          members: [{ memberType: 'agent', agentName: 'legacy-name-only' }],
+        }),
+      ),
+    ).toEqual([])
+  })
+})
+
 describe('computeEligibleScopes', () => {
   let db: DbClient
   beforeEach(() => {
@@ -171,6 +262,14 @@ describe('computeEligibleScopes', () => {
     expect(r.workflowId).toBe(workflowId)
     expect(r.agentIds).toEqual(['agent-codegen']) // unknown agent silently dropped
     expect(r.includeGlobal).toBe(true)
+  })
+  test('includes frozen workgroup member ids when host snapshot nodes are display-only', async () => {
+    const { taskId } = seedTask(db, {
+      snapshotAgents: [{ name: 'workgroup-member' }],
+      workgroupAgentIds: ['agent-lead', 'agent-worker', 'agent-lead'],
+    })
+    const r = await computeEligibleScopes(db, taskId)
+    expect(r.agentIds).toEqual(['agent-lead', 'agent-worker'])
   })
   // RFC-204: resolves through tasks.cached_repo_id. The previous URL join
   // compared a redacted tasks.repo_url against the plaintext cached_repos.url,

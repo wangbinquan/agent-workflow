@@ -19,17 +19,29 @@ const A2 = 'M_agent2'
 const H1 = 'M_human1'
 
 const members: MemberLite[] = [
-  { id: LEADER, memberType: 'agent' },
-  { id: A1, memberType: 'agent' },
-  { id: A2, memberType: 'agent' },
+  { id: LEADER, memberType: 'agent', agentId: 'ag-leader' },
+  { id: A1, memberType: 'agent', agentId: 'ag-a1' },
+  { id: A2, memberType: 'agent', agentId: 'ag-a2' },
   { id: H1, memberType: 'human' },
 ]
 
 function leaderRun(id: string, status: string, cause = 'wg-leader-round'): HostRunLite {
   return { id, nodeId: WG_LEADER_NODE_ID, shardKey: null, status, rerunCause: cause }
 }
-function assignRun(id: string, shardKey: string, status: string): HostRunLite {
-  return { id, nodeId: WG_MEMBER_NODE_ID, shardKey, status, rerunCause: 'wg-assignment' }
+function assignRun(
+  id: string,
+  shardKey: string,
+  status: string,
+  agentOverrideId = 'ag-a1',
+): HostRunLite {
+  return {
+    id,
+    nodeId: WG_MEMBER_NODE_ID,
+    shardKey,
+    status,
+    rerunCause: 'wg-assignment',
+    agentOverrideId,
+  }
 }
 function msgRun(id: string, shardKey: string, status: string): HostRunLite {
   return { id, nodeId: WG_MEMBER_NODE_ID, shardKey, status, rerunCause: 'wg-message-turn' }
@@ -47,8 +59,10 @@ describe('deriveMemberCurrentRuns (RFC-179)', () => {
     expect(out[A1]).toBeNull()
   })
 
-  test('assignment run → assignment.assigneeMemberId (shardKey = assignment.id)', () => {
-    const assignments = [{ id: 'ASG1', assigneeMemberId: A1 }]
+  test('assignment run → frozen agentOverrideId (shardKey = assignment.id)', () => {
+    // The assignment's current assignee is mutable and must not relabel the
+    // already-minted run.
+    const assignments = [{ id: 'ASG1', assigneeMemberId: A2 }]
     const out = deriveMemberCurrentRuns(
       members,
       LEADER,
@@ -162,7 +176,7 @@ describe('deriveMemberCurrentRuns (RFC-179)', () => {
       { id: 'ASG1', assigneeMemberId: A1 },
       { id: 'ASG2', assigneeMemberId: A2 },
     ]
-    const runs = [assignRun('R1', 'ASG1', 'running'), assignRun('R2', 'ASG2', 'running')]
+    const runs = [assignRun('R1', 'ASG1', 'running'), assignRun('R2', 'ASG2', 'running', 'ag-a2')]
     const out = deriveMemberCurrentRuns(members, LEADER, runs, assignments, [])
     expect(out[A1]?.nodeRunId).toBe('R1')
     expect(out[A2]?.nodeRunId).toBe('R2')
@@ -239,9 +253,9 @@ describe('message-turn shardKey prefix contract (RFC-179 §8.2)', () => {
 
 describe('deriveWorkgroupRunHistory (RFC-182)', () => {
   const namedMembers: MemberLite[] = [
-    { id: LEADER, memberType: 'agent', displayName: 'planner' },
-    { id: A1, memberType: 'agent', displayName: 'coder' },
-    { id: A2, memberType: 'agent', displayName: 'reviewer' },
+    { id: LEADER, memberType: 'agent', agentId: 'ag-leader', displayName: 'planner' },
+    { id: A1, memberType: 'agent', agentId: 'ag-a1', displayName: 'coder' },
+    { id: A2, memberType: 'agent', agentId: 'ag-a2', displayName: 'reviewer' },
     { id: H1, memberType: 'human', displayName: 'pm' },
   ]
 
@@ -254,6 +268,7 @@ describe('deriveWorkgroupRunHistory (RFC-182)', () => {
         shardKey: 'ASG1',
         status: 'done',
         rerunCause: 'wg-assignment',
+        agentOverrideId: 'ag-a1',
       },
       // 答完反问后的续跑：cause 变 clarify-answer、shard 不变。
       {
@@ -262,6 +277,7 @@ describe('deriveWorkgroupRunHistory (RFC-182)', () => {
         shardKey: 'ASG1',
         status: 'running',
         rerunCause: 'clarify-answer',
+        agentOverrideId: 'ag-a1',
       },
       {
         id: 'R3',
@@ -321,7 +337,7 @@ describe('deriveWorkgroupRunHistory (RFC-182)', () => {
     expect(current[LEADER]?.status).toBe('awaiting_human')
   })
 
-  test('被移除成员的历史条目 displayName=null（墓碑），memberId 保留', () => {
+  test('被移除成员且无冻结 agent id 的历史条目 fail closed', () => {
     const assignments = [{ id: 'ASG9', assigneeMemberId: 'M_gone' }]
     const runs: HostRunLite[] = [
       {
@@ -333,9 +349,7 @@ describe('deriveWorkgroupRunHistory (RFC-182)', () => {
       },
     ]
     const history = deriveWorkgroupRunHistory(namedMembers, LEADER, runs, assignments, [])
-    expect(history).toHaveLength(1)
-    expect(history[0]?.memberId).toBe('M_gone')
-    expect(history[0]?.displayName).toBeNull()
+    expect(history).toHaveLength(0)
   })
 
   test('note 派生：仅认结构化 failureCode=clarify-forbidden（RFC-145 禁 errorMessage 机器读；RFC-181 契约互链）', () => {
@@ -359,6 +373,7 @@ describe('deriveWorkgroupRunHistory (RFC-182)', () => {
         shardKey: 'ASG1',
         status: 'done',
         rerunCause: 'wg-assignment',
+        agentOverrideId: 'ag-a1',
         startedAt: 100,
         finishedAt: 250,
       },
