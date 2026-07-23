@@ -137,7 +137,8 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
   // composite-token OCC / snapshot version funnel — both are 410 Gone. Every save
   // (managed body+description, external description) now goes through the single
   // POST /api/skills/:id/save combined-save below.
-  app.put('/api/skills/:id', () => {
+  app.put('/api/skills/:id', async (c) => {
+    await loadVisibleSkill(actorOf(c), c.req.param('id'))
     throw new GoneError(
       'skill-endpoint-gone',
       'PUT /api/skills/:id is retired; use POST /api/skills/:id/save (combined-save with precondition token)',
@@ -160,7 +161,8 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
     return c.json(await readSkillContent(deps.db, fsOpts, existing.id))
   })
 
-  app.put('/api/skills/:id/content', () => {
+  app.put('/api/skills/:id/content', async (c) => {
+    await loadVisibleSkill(actorOf(c), c.req.param('id'))
     throw new GoneError(
       'skill-endpoint-gone',
       'PUT /api/skills/:id/content is retired; use POST /api/skills/:id/save (combined-save with precondition token)',

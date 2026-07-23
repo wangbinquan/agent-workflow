@@ -106,6 +106,24 @@ describe('RFC-223 PR-7 — canonical id resource routes', () => {
 
       const retiredResolver = await req(alice.token, `/api/${resource.base}/by-id/${resource.id}`)
       expect(retiredResolver.status).toBe(404)
+
+      if (resource.base === 'skills') {
+        for (const suffix of ['', '/content']) {
+          const retiredNameWrite = await req(alice.token, `/api/skills/${resource.name}${suffix}`, {
+            method: 'PUT',
+            body: JSON.stringify({ description: 'must-not-resolve-by-name' }),
+          })
+          expect(retiredNameWrite.status).toBe(404)
+          const canonicalGone = await req(alice.token, `/api/skills/${resource.id}${suffix}`, {
+            method: 'PUT',
+            body: JSON.stringify({ description: 'retired' }),
+          })
+          expect(canonicalGone.status).toBe(410)
+          expect(((await canonicalGone.json()) as { code: string }).code).toBe(
+            'skill-endpoint-gone',
+          )
+        }
+      }
     }
   })
 
