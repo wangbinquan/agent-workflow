@@ -3883,6 +3883,14 @@ export const enUS: Resources = {
     'internal-error__hint': 'Retry later; if it persists, check the daemon logs.',
     'invalid-json': 'The request body is not valid JSON.',
     'invalid-body': 'Invalid request body.',
+    'import-ref-unresolved': 'An imported resource reference is not available.',
+    'import-ref-unresolved__hint':
+      'Check that the resource exists and that you still have access, then retry the preview.',
+    'import-ref-ambiguous': 'An imported resource reference matches multiple resources.',
+    'import-ref-ambiguous__hint': 'Choose the intended owner for every ambiguous reference.',
+    'import-ref-selection-stale': 'The selected import resource changed.',
+    'import-ref-selection-stale__hint':
+      'Review the refreshed candidates and explicitly choose the intended resource again.',
     'confirm-required': 'Hard delete requires explicit confirmation.',
     'builtin-readonly': 'Built-in framework resources are read-only.',
     'not-found': 'Not found.',
@@ -4138,6 +4146,7 @@ export const enUS: Resources = {
     // --- agent ---
     'agent-not-found': 'Agent not found.',
     'agent-invalid': 'Invalid agent payload.',
+    'agent-import-invalid': 'Invalid agent import payload.',
     'agent-name-in-use': 'An agent with this name already exists.',
     'agent-rename-invalid': 'Invalid rename payload.',
     'agent-launch-invalid': 'Invalid launch payload.',

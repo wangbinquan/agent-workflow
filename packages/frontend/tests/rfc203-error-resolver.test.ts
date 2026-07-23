@@ -78,6 +78,23 @@ describe('resolveApiError', () => {
     expect(r.hint).toContain('daemon')
   })
 
+  test('RFC-223 import reference failures have exact bilingual copy and recovery hints', () => {
+    for (const code of [
+      'import-ref-unresolved',
+      'import-ref-ambiguous',
+      'import-ref-selection-stale',
+      'agent-import-invalid',
+    ]) {
+      const r = resolveApiError(new ApiError(409, code, 'raw import error'))
+      expect(r.matched).toBe('exact')
+      expect(r.title).not.toBe('请求失败')
+      expect(i18n.exists(`errors.${code}`, { lng: 'en-US' })).toBe(true)
+    }
+    expect(resolveApiError(new ApiError(409, 'import-ref-selection-stale', 'raw')).hint).toContain(
+      '重新明确选择',
+    )
+  })
+
   // PR-2 note: exemplars must stay PERMANENTLY unmapped — repo-clone-failed /
   // internal-error got L1 entries in T3a, so the domain-tier locks moved to
   // merge-tree-failed (internal git plumbing, domain-fallback by design) and a

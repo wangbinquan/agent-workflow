@@ -99,6 +99,7 @@ function installFetch(
 
       if (method === 'GET' && path.endsWith('/api/agents'))
         return opts.failList ? json({ error: 'boom' }, 500) : json(agents)
+      if (method === 'POST' && path.endsWith('/api/agents/import-resolve')) return json({})
       if (method === 'GET' && path.includes('/api/agents/')) {
         if (opts.failDetail?.() === true)
           return json({ code: 'agent-detail-failed', message: 'detail unavailable' }, 500)
@@ -780,7 +781,7 @@ describe('/agents split page', () => {
     })
     fireEvent.click(screen.getByTestId('agent-import-parse'))
     fireEvent.click(screen.getByTestId('agent-import-apply'))
-    fireEvent.click(screen.getByTestId('agent-import-view-form'))
+    fireEvent.click(await screen.findByTestId('agent-import-view-form'))
 
     const create = screen.getByTestId('agent-create-button') as HTMLButtonElement
     expect(create.disabled).toBe(true)
@@ -821,7 +822,7 @@ describe('/agents split page', () => {
     })
     fireEvent.click(screen.getByTestId('agent-import-parse'))
     fireEvent.click(screen.getByTestId('agent-import-apply'))
-    fireEvent.click(screen.getByTestId('agent-import-view-form'))
+    fireEvent.click(await screen.findByTestId('agent-import-view-form'))
 
     fireEvent.click(screen.getByTestId('agent-import-open'))
     fireEvent.click(screen.getByRole('tab', { name: /paste/i }))
