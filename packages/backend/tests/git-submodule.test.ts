@@ -6,7 +6,11 @@ import { describe, expect, test, afterEach } from 'bun:test'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { syncSubmodules, detectSubmodules } from '../src/services/gitSubmodule'
+import {
+  syncSubmodules,
+  detectSubmodules,
+  readDeclaredSubmodulePaths,
+} from '../src/services/gitSubmodule'
 
 let tmp: string
 
@@ -190,5 +194,55 @@ describe('syncSubmodules failure paths', () => {
     expect(result.ok).toBe(false)
     expect(typeof result.error).toBe('string')
     expect(result.error!.length).toBeGreaterThan(0)
+  })
+})
+
+// RFC-210 — declaration parser ownership classification (Codex review rounds
+// 9/10/11). `git config -f .gitmodules --get-regexp` reads the file directly,
+// so a real dir with a `.gitmodules` (no repo) is enough. These lock the
+// error-vs-absent distinction and the name-validation edge cases that decide
+// whether an initialized gitlink is treated as managed or left untouched.
+describe('readDeclaredSubmodulePaths', () => {
+  function dirWith(gitmodules: string | null): string {
+    tmp = join(tmpdir(), `aw-decl-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+    mkdirSync(tmp, { recursive: true })
+    if (gitmodules !== null) writeFileSync(join(tmp, '.gitmodules'), gitmodules)
+    return tmp
+  }
+
+  test('no .gitmodules ⟹ ok with an empty set', async () => {
+    const r = await readDeclaredSubmodulePaths(dirWith(null))
+    expect(r.ok).toBe(true)
+    expect(r.paths.size).toBe(0)
+  })
+
+  test('a valid entry contributes its path', async () => {
+    const r = await readDeclaredSubmodulePaths(dirWith('[submodule "vendor"]\n\tpath = vendor\n'))
+    expect(r.ok).toBe(true)
+    expect(r.paths.has('vendor')).toBe(true)
+  })
+
+  test('an EMPTY-name subsection is ignored, matching git (round 10, P1)', async () => {
+    // git config parses this fine (exit 0) but git's submodule machinery drops
+    // the empty-name entry; trusting it would re-mark a stray repo as managed.
+    const r = await readDeclaredSubmodulePaths(dirWith('[submodule ""]\n\tpath = nestedrepo\n'))
+    expect(r.ok).toBe(true)
+    expect(r.paths.has('nestedrepo')).toBe(false)
+  })
+
+  test('a name containing a Unicode line separator is preserved (round 11, P2)', async () => {
+    // git accepts U+2029 in a subsection name and emits its key (measured);
+    // JS `.` would not match it, so a `.`-based regex would go null and drop
+    // this MANAGED submodule's path. `[\s\S]` matches it — path preserved.
+    const name = `a\u2029b`
+    const r = await readDeclaredSubmodulePaths(dirWith(`[submodule "${name}"]\n\tpath = uni\n`))
+    expect(r.ok).toBe(true)
+    expect(r.paths.has('uni')).toBe(true)
+  })
+
+  test('an unparseable .gitmodules ⟹ ok:false (round 9, P1)', async () => {
+    const r = await readDeclaredSubmodulePaths(dirWith('[submodule "x"\n\tpath = x\n'))
+    expect(r.ok).toBe(false)
+    expect(r.paths.size).toBe(0)
   })
 })

@@ -463,8 +463,11 @@ export async function readDeclaredSubmodulePaths(
     // `.gitmodules` would re-classify a stray gitlink as managed and let
     // `checkout --detach` rewind it — the very thing the round-8 guard exists
     // to prevent. `submoduleNameForPath` has always required a non-empty name.
+    // `[\s\S]` not `.` (round 11, P2): git accepts subsection names containing
+    // U+2028/U+2029, which JS `.` does not match — a `.`-based regex would go
+    // null on such a valid name and drop a MANAGED submodule's update.
     const key = line.slice(0, sp)
-    const m = /^submodule\.(.*)\.path$/.exec(key)
+    const m = /^submodule\.([\s\S]*)\.path$/.exec(key)
     if (m?.[1] === undefined || m[1] === '') continue
     const p = line.slice(sp + 1).trim()
     if (p !== '') paths.add(p)
