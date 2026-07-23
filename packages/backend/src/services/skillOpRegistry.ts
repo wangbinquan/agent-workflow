@@ -2,17 +2,19 @@
 //
 // Assembled here and passed to recoverSkillOperations at boot. Each concrete op
 // module contributes its own handler so the forward path and its crash recovery
-// live together and can't drift. Kinds with no handler yet fall through to the
-// driver's generic "release the lock + log loud" path (never silently stuck).
+// live together and can't drift. The registry is exhaustive: missing a kind is
+// a compile-time error here and a fail-closed runtime error in the driver.
 
-import type { OpRecoveryRegistry } from '@/services/skillOpRecoveryDriver'
 import { deleteRecoveryHandler } from '@/services/skillDeleteOp'
+import { migrateRecoveryHandler } from '@/services/skillMigrateOp'
 import { reserveRecoveryHandler } from '@/services/skillReserveOp'
 import { versionWriteRecoveryHandler } from '@/services/skillVersionOp'
+import type { SkillOpKind } from '@/services/skillOperations'
+import type { OpRecoveryHandler } from '@/services/skillOpRecoveryDriver'
 
-export const SKILL_OP_RECOVERY_REGISTRY: OpRecoveryRegistry = {
+export const SKILL_OP_RECOVERY_REGISTRY = {
   delete: deleteRecoveryHandler,
+  migrate: migrateRecoveryHandler,
   reserve: reserveRecoveryHandler,
   'version-write': versionWriteRecoveryHandler,
-  // migrate's handler lands here when that managed op is implemented (RFC-170).
-}
+} satisfies Record<SkillOpKind, OpRecoveryHandler>

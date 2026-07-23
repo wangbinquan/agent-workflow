@@ -1,6 +1,6 @@
 // RFC-170 §6a/§13 — op-scoped FS staging + atomic publish primitives.
 //
-// The canonical live tree is a skill's `.../skills/{name}/files` directory. POSIX
+// The canonical live tree is a skill's `.../skills/{id}/files` directory. POSIX
 // rename cannot atomically replace a NON-EMPTY directory, so "publish" is a pair
 // of same-parent renames (each individually atomic); the window between them is
 // disambiguated by the op's `phase` + these op-scoped, collision-free sibling

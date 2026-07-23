@@ -20,8 +20,8 @@
 //
 // Handlers do FS work OUTSIDE the tx (renames/copies aren't transactional) and
 // may contribute DB writes to the terminal tx via `recoverDb`. Registering no
-// handler for a kind is legal — the generic terminal still releases the lock;
-// the boot log flags it so a missing handler is visible, not silent.
+// handler for a kind is a boot-stopping invariant violation: the active row and
+// its lock are preserved so a newer binary can recover it without lost evidence.
 
 import { eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
@@ -45,13 +45,16 @@ const log = createLogger('skill-op-recovery')
  *  the driver's terminal tx (e.g. version-write rollforward re-INSERTing v1). */
 export interface OpRecoveryHandler {
   /** Undo the half-done work (phase < db-committed). FS-side, non-transactional. */
-  rollbackFs?: (fsOpts: SkillOpFsOptions, op: SkillOperationRow) => void
+  rollbackFs?: (fsOpts: SkillOpFsOptions, op: SkillOperationRow, db: DbClient) => void
   /** Complete the publish (phase ≥ db-committed). FS-side, non-transactional. */
-  rollForwardFs?: (fsOpts: SkillOpFsOptions, op: SkillOperationRow) => void
+  rollForwardFs?: (fsOpts: SkillOpFsOptions, op: SkillOperationRow, db: DbClient) => void
   /** Optional DB writes contributed to the terminal tx (both directions). */
   recoverDb?: (tx: DbTxSync, op: SkillOperationRow, dir: 'rollback' | 'rollforward') => void
 }
 
+// Tests deliberately pass partial registries to prove the fail-closed branch.
+// The production registry itself is compile-time exhaustive via `satisfies
+// Record<SkillOpKind, OpRecoveryHandler>` in skillOpRegistry.ts.
 export type OpRecoveryRegistry = Partial<Record<SkillOpKind, OpRecoveryHandler>>
 export interface SkillOpFsOptions {
   appHome: string
@@ -107,24 +110,29 @@ export function recoverSkillOperations(
       continue
     }
 
-    const fsFn = dir === 'rollback' ? handler?.rollbackFs : handler?.rollForwardFs
+    if (handler === undefined) {
+      report.noHandler++
+      throw new Error(
+        `skill-operation-handler-missing: no recovery handler for ${op.kind} ` +
+          `(op ${op.opId}, phase ${op.phase}); active row and lock preserved`,
+      )
+    }
+
+    const fsFn = dir === 'rollback' ? handler.rollbackFs : handler.rollForwardFs
     // A handler "covers" this op if it has either the direction's FS recovery OR a
     // recoverDb (a pure-DB recovery — e.g. reserve rollforward has no FS work, only
     // the 'ready' fixup). Only a genuinely absent handler is a loud gap.
-    if (fsFn === undefined && handler?.recoverDb === undefined) {
+    if (fsFn === undefined && handler.recoverDb === undefined) {
       report.noHandler++
-      log.warn('no recovery handler; releasing lock only', {
-        opId: op.opId,
-        kind: op.kind,
-        phase: op.phase,
-        dir,
-      })
-    } else if (fsFn !== undefined) {
-      fsFn(fsOpts, op)
+      throw new Error(
+        `skill-operation-handler-incomplete: ${op.kind} has no ${dir} recovery ` +
+          `(op ${op.opId}, phase ${op.phase}); active row and lock preserved`,
+      )
     }
+    fsFn?.(fsOpts, op, db)
 
     dbTxSync(db, (tx) => {
-      handler?.recoverDb?.(tx, op, dir)
+      handler.recoverDb?.(tx, op, dir)
       if (dir === 'rollback') abandonOperation(tx, op.opId)
       else finishOperation(tx, op.opId)
     })

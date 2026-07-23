@@ -31,26 +31,28 @@ describe('RFC-170 delete op', () => {
   let db: DbClient
   let appHome: string
   let fsOpts: { appHome: string }
+  let skillId: string
 
   beforeEach(async () => {
     appHome = mkdtempSync(join(tmpdir(), 'aw-del-op-'))
     fsOpts = { appHome }
     db = createInMemoryDb(MIGRATIONS)
-    await createManagedSkill(db, fsOpts, {
+    const skill = await createManagedSkill(db, fsOpts, {
       name: 'foo',
       description: '',
       bodyMd: 'body',
       frontmatterExtra: {},
     })
+    skillId = skill.id
   })
   afterEach(() => rmSync(appHome, { recursive: true, force: true }))
 
-  const root = () => join(appHome, 'skills', 'foo')
+  const root = () => join(appHome, 'skills', skillId)
 
   test('forward: deleteManagedSkillOp removes row + files, releases lock, leaves no trash', async () => {
     const skill = await getSkill(db, 'foo')
     expect(skill).not.toBeNull()
-    deleteManagedSkillOp(db, fsOpts, { id: skill!.id, name: 'foo' })
+    deleteManagedSkillOp(db, fsOpts, { id: skill!.id })
     expect(await getSkill(db, 'foo')).toBeNull()
     expect(existsSync(root())).toBe(false)
     expect(getActiveOp(db, skill!.id)).toBeNull() // op done, lock freed
@@ -63,23 +65,23 @@ describe('RFC-170 delete op', () => {
   })
 
   test('deleteSkill (managed) routes through the op and removes the skill', async () => {
-    await deleteSkill(db, fsOpts, 'foo', T6_ACTOR)
+    await deleteSkill(db, fsOpts, skillId, T6_ACTOR)
     expect(await getSkill(db, 'foo')).toBeNull()
     expect(existsSync(root())).toBe(false)
   })
 
   test('recovery ROLLBACK: crash pre-db-committed restores the root; skill survives', async () => {
     const skill = await getSkill(db, 'foo')
-    const skillId = skill!.id
+    const currentSkillId = skill!.id
     // Plant a crashed op at fs-staged: root moved to trash, row still present.
     const opId = dbTxSync(db, (tx) =>
       beginOperation(tx, {
-        skillId,
+        skillId: currentSkillId,
         kind: 'delete',
-        preconditionJson: JSON.stringify({ name: 'foo' }),
+        preconditionJson: JSON.stringify({ skillId: currentSkillId }),
       }),
     )
-    const trash = join(appHome, 'skills', '.trash', `${skillId}-${opId}`)
+    const trash = join(appHome, 'skills', '.trash', `${currentSkillId}-${opId}`)
     mkdirSync(dirname(trash), { recursive: true })
     renameSync(root(), trash)
     dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-staged', { backupPath: trash }))
@@ -91,27 +93,27 @@ describe('RFC-170 delete op', () => {
     expect(existsSync(root())).toBe(true)
     expect(readFileSync(join(root(), 'files', 'SKILL.md'), 'utf-8')).toContain('body')
     expect(await getSkill(db, 'foo')).not.toBeNull()
-    expect(getActiveOp(db, skillId)).toBeNull()
+    expect(getActiveOp(db, currentSkillId)).toBeNull()
     expect(existsSync(trash)).toBe(false)
   })
 
   test('recovery ROLLFORWARD: crash post-db-committed drops the trash; skill stays gone', async () => {
     const skill = await getSkill(db, 'foo')
-    const skillId = skill!.id
+    const currentSkillId = skill!.id
     const opId = dbTxSync(db, (tx) =>
       beginOperation(tx, {
-        skillId,
+        skillId: currentSkillId,
         kind: 'delete',
-        preconditionJson: JSON.stringify({ name: 'foo' }),
+        preconditionJson: JSON.stringify({ skillId: currentSkillId }),
       }),
     )
-    const trash = join(appHome, 'skills', '.trash', `${skillId}-${opId}`)
+    const trash = join(appHome, 'skills', '.trash', `${currentSkillId}-${opId}`)
     mkdirSync(dirname(trash), { recursive: true })
     renameSync(root(), trash)
     dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-staged', { backupPath: trash }))
     // Simulate db-committed reached (row deleted) but crash before trash cleanup.
     dbTxSync(db, (tx) => {
-      tx.delete(skills).where(eq(skills.id, skillId)).run()
+      tx.delete(skills).where(eq(skills.id, currentSkillId)).run()
       advancePhase(tx, opId, 'db-committed')
     })
     expect(existsSync(trash)).toBe(true)
@@ -121,6 +123,6 @@ describe('RFC-170 delete op', () => {
     // Trash dropped, skill stays deleted, lock freed — the delete completes.
     expect(existsSync(trash)).toBe(false)
     expect(await getSkill(db, 'foo')).toBeNull()
-    expect(getActiveOp(db, skillId)).toBeNull()
+    expect(getActiveOp(db, currentSkillId)).toBeNull()
   })
 })

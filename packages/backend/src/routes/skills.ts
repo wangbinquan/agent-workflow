@@ -34,7 +34,7 @@ import {
   deleteSkill,
   deleteSkillFile,
   getSkill,
-  getSkillPreconditionToken,
+  getSkillPreconditionTokenById,
   listSkillFiles,
   listSkills,
   readSkillContent,
@@ -150,14 +150,14 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
     await requireResourceOwner(deps.db, actor, 'skill', existing)
     // RFC-222 (D5): type-to-confirm (N-5 order).
     assertDeleteConfirm(await readDeleteBody(c), existing.name, 'skill')
-    await deleteSkill(deps.db, fsOpts, c.req.param('name'), actor)
+    await deleteSkill(deps.db, fsOpts, existing.id, actor)
     return c.body(null, 204)
   })
 
   // SKILL.md content (parsed view).
   app.get('/api/skills/:name/content', async (c) => {
-    await loadVisibleSkill(actorOf(c), c.req.param('name'))
-    return c.json(await readSkillContent(deps.db, fsOpts, c.req.param('name')))
+    const existing = await loadVisibleSkill(actorOf(c), c.req.param('name'))
+    return c.json(await readSkillContent(deps.db, fsOpts, existing.id))
   })
 
   app.put('/api/skills/:name/content', () => {
@@ -184,7 +184,7 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
       await saveSkillWithToken(
         deps.db,
         fsOpts,
-        c.req.param('name'),
+        existing.id,
         patch,
         expectedToken,
         actor.user.id,
@@ -197,14 +197,14 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
 
   // File tree + single-file CRUD.
   app.get('/api/skills/:name/files', async (c) => {
-    await loadVisibleSkill(actorOf(c), c.req.param('name'))
-    return c.json(await listSkillFiles(deps.db, fsOpts, c.req.param('name')))
+    const existing = await loadVisibleSkill(actorOf(c), c.req.param('name'))
+    return c.json(await listSkillFiles(deps.db, fsOpts, existing.id))
   })
 
   app.get('/api/skills/:name/file', async (c) => {
-    await loadVisibleSkill(actorOf(c), c.req.param('name'))
+    const existing = await loadVisibleSkill(actorOf(c), c.req.param('name'))
     const path = requirePath(c.req.query('path'))
-    const content = await readSkillFile(deps.db, fsOpts, c.req.param('name'), path)
+    const content = await readSkillFile(deps.db, fsOpts, existing.id, path)
     return c.json({ path, content })
   })
 
@@ -222,7 +222,7 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
     await writeSkillFile(
       deps.db,
       fsOpts,
-      c.req.param('name'),
+      existing.id,
       path,
       parsed.data.content,
       actor.user.id,
@@ -235,7 +235,7 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
     return c.json({
       ok: true,
       path,
-      token: await getSkillPreconditionToken(deps.db, c.req.param('name')),
+      token: await getSkillPreconditionTokenById(deps.db, existing.id),
     })
   })
 
@@ -247,7 +247,7 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
     await deleteSkillFile(
       deps.db,
       fsOpts,
-      c.req.param('name'),
+      existing.id,
       path,
       actor.user.id,
       existing.ownerUserId,
@@ -255,26 +255,26 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
       c.req.query('expectedToken'),
     )
     // RFC-170 F3: was 204; now returns the fresh token for the canonical store.
-    return c.json({ token: await getSkillPreconditionToken(deps.db, c.req.param('name')) })
+    return c.json({ token: await getSkillPreconditionTokenById(deps.db, existing.id) })
   })
 
   // RFC-101 — skill content version history.
   app.get('/api/skills/:name/versions', async (c) => {
-    await loadVisibleSkill(actorOf(c), c.req.param('name'))
-    return c.json(listSkillVersions(deps.db, fsOpts, c.req.param('name')))
+    const existing = await loadVisibleSkill(actorOf(c), c.req.param('name'))
+    return c.json(listSkillVersions(deps.db, fsOpts, existing.id))
   })
 
   app.get('/api/skills/:name/versions/diff', async (c) => {
-    await loadVisibleSkill(actorOf(c), c.req.param('name'))
+    const existing = await loadVisibleSkill(actorOf(c), c.req.param('name'))
     const from = parseVersionParam(c.req.query('from'), 'from')
     const to = parseVersionParam(c.req.query('to'), 'to')
-    return c.json(diffSkillVersions(deps.db, fsOpts, c.req.param('name'), from, to))
+    return c.json(diffSkillVersions(deps.db, fsOpts, existing.id, from, to))
   })
 
   app.get('/api/skills/:name/versions/:v/content', async (c) => {
-    await loadVisibleSkill(actorOf(c), c.req.param('name'))
+    const existing = await loadVisibleSkill(actorOf(c), c.req.param('name'))
     const v = parseVersionParam(c.req.param('v'), 'v')
-    return c.json(getSkillVersionContent(deps.db, fsOpts, c.req.param('name'), v))
+    return c.json(getSkillVersionContent(deps.db, fsOpts, existing.id, v))
   })
 
   app.post('/api/skills/:name/versions/:v/restore', async (c) => {
@@ -291,7 +291,7 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
     const result = restoreSkillVersion(
       deps.db,
       fsOpts,
-      c.req.param('name'),
+      existing.id,
       v,
       actor.user.id,
       parsed.data.reason,
@@ -303,7 +303,7 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
     // RFC-170 F3: return the fresh token alongside the restore result.
     return c.json({
       ...result,
-      token: await getSkillPreconditionToken(deps.db, c.req.param('name')),
+      token: await getSkillPreconditionTokenById(deps.db, existing.id),
     })
   })
 

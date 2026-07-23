@@ -105,8 +105,11 @@ describe('skill service', () => {
       frontmatterExtra: { author: 'me' },
     })
     expect(skill.sourceKind).toBe('managed')
-    expect(skill.managedPath).toBe('skills/foo/files')
-    const skillMd = readFileSync(join(h.appHome, 'skills', 'foo', 'files', 'SKILL.md'), 'utf-8')
+    expect(skill.managedPath).toBe(`skills/${skill.id}/files`)
+    const skillMd = readFileSync(
+      join(h.appHome, 'skills', skill.id, 'files', 'SKILL.md'),
+      'utf-8',
+    )
     expect(skillMd).toContain('name: foo')
     expect(skillMd).toContain('description: foo skill')
     expect(skillMd).toContain('author: me')
@@ -131,13 +134,13 @@ describe('skill service', () => {
   })
 
   test('readSkillContent parses SKILL.md frontmatter + body', async () => {
-    await createManagedSkill(h.db, fsOpts, {
+    const skill = await createManagedSkill(h.db, fsOpts, {
       name: 'foo',
       description: 'd',
       bodyMd: 'body\n',
       frontmatterExtra: { version: 2 },
     })
-    const c = await readSkillContent(h.db, fsOpts, 'foo')
+    const c = await readSkillContent(h.db, fsOpts, skill.id)
     expect(c.name).toBe('foo')
     expect(c.description).toBe('d')
     expect(c.bodyMd.trim()).toBe('body')
@@ -145,13 +148,13 @@ describe('skill service', () => {
   })
 
   test('writeSkillContent updates SKILL.md + DB description', async () => {
-    await createManagedSkill(h.db, fsOpts, {
+    const skill = await createManagedSkill(h.db, fsOpts, {
       name: 'foo',
       description: 'orig',
       bodyMd: 'orig body',
       frontmatterExtra: {},
     })
-    const updated = await writeSkillContent(h.db, fsOpts, 'foo', {
+    const updated = await writeSkillContent(h.db, fsOpts, skill.id, {
       description: 'new',
       bodyMd: 'new body',
     })
@@ -162,58 +165,60 @@ describe('skill service', () => {
   })
 
   test('file tree CRUD on managed skill', async () => {
-    await createManagedSkill(h.db, fsOpts, {
+    const skill = await createManagedSkill(h.db, fsOpts, {
       name: 'foo',
       description: '',
       bodyMd: '',
       frontmatterExtra: {},
     })
-    await writeSkillFile(h.db, fsOpts, 'foo', 'templates/a.txt', 'aaa')
-    await writeSkillFile(h.db, fsOpts, 'foo', 'templates/b.txt', 'bbb')
+    await writeSkillFile(h.db, fsOpts, skill.id, 'templates/a.txt', 'aaa')
+    await writeSkillFile(h.db, fsOpts, skill.id, 'templates/b.txt', 'bbb')
 
-    const tree = await listSkillFiles(h.db, fsOpts, 'foo')
+    const tree = await listSkillFiles(h.db, fsOpts, skill.id)
     const paths = tree.map((n) => n.path).sort()
     expect(paths).toEqual(['SKILL.md', 'templates', 'templates/a.txt', 'templates/b.txt'])
 
-    expect(await readSkillFile(h.db, fsOpts, 'foo', 'templates/a.txt')).toBe('aaa')
+    expect(await readSkillFile(h.db, fsOpts, skill.id, 'templates/a.txt')).toBe('aaa')
 
-    await deleteSkillFile(h.db, fsOpts, 'foo', 'templates/a.txt')
-    expect(existsSync(join(h.appHome, 'skills', 'foo', 'files', 'templates', 'a.txt'))).toBe(false)
+    await deleteSkillFile(h.db, fsOpts, skill.id, 'templates/a.txt')
+    expect(
+      existsSync(join(h.appHome, 'skills', skill.id, 'files', 'templates', 'a.txt')),
+    ).toBe(false)
 
     // deleting SKILL.md is refused
-    await expect(deleteSkillFile(h.db, fsOpts, 'foo', 'SKILL.md')).rejects.toBeInstanceOf(
+    await expect(deleteSkillFile(h.db, fsOpts, skill.id, 'SKILL.md')).rejects.toBeInstanceOf(
       ConflictError,
     )
   })
 
   test('path traversal attempts rejected', async () => {
-    await createManagedSkill(h.db, fsOpts, {
+    const skill = await createManagedSkill(h.db, fsOpts, {
       name: 'foo',
       description: '',
       bodyMd: '',
       frontmatterExtra: {},
     })
-    await expect(writeSkillFile(h.db, fsOpts, 'foo', '../escape.txt', 'x')).rejects.toBeInstanceOf(
-      ValidationError,
-    )
-    await expect(writeSkillFile(h.db, fsOpts, 'foo', '/etc/passwd', 'x')).rejects.toBeInstanceOf(
-      ValidationError,
-    )
-    await expect(readSkillFile(h.db, fsOpts, 'foo', '../../etc/hosts')).rejects.toBeInstanceOf(
-      ValidationError,
-    )
+    await expect(
+      writeSkillFile(h.db, fsOpts, skill.id, '../escape.txt', 'x'),
+    ).rejects.toBeInstanceOf(ValidationError)
+    await expect(
+      writeSkillFile(h.db, fsOpts, skill.id, '/etc/passwd', 'x'),
+    ).rejects.toBeInstanceOf(ValidationError)
+    await expect(
+      readSkillFile(h.db, fsOpts, skill.id, '../../etc/hosts'),
+    ).rejects.toBeInstanceOf(ValidationError)
   })
 
   test('delete removes fs + DB; refuses when referenced by an agent', async () => {
-    await createManagedSkill(h.db, fsOpts, {
+    const skill = await createManagedSkill(h.db, fsOpts, {
       name: 'foo',
       description: '',
       bodyMd: '',
       frontmatterExtra: {},
     })
-    const skillDir = join(h.appHome, 'skills', 'foo')
+    const skillDir = join(h.appHome, 'skills', skill.id)
     expect(existsSync(skillDir)).toBe(true)
-    const fooId = (await getSkill(h.db, 'foo'))!.id
+    const fooId = skill.id
 
     // Insert agent referencing 'foo' via a typed MANAGED skill ref (RFC-223 PR-1).
     await h.db.insert(agents).values({
@@ -228,12 +233,12 @@ describe('skill service', () => {
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })
-    await expect(deleteSkill(h.db, fsOpts, 'foo', T6_ACTOR)).rejects.toBeInstanceOf(ConflictError)
+    await expect(deleteSkill(h.db, fsOpts, fooId, T6_ACTOR)).rejects.toBeInstanceOf(ConflictError)
     expect(existsSync(skillDir)).toBe(true)
 
     // After removing reference, delete succeeds.
     await h.db.delete(agents).where(eq(agents.name, 'a1'))
-    await deleteSkill(h.db, fsOpts, 'foo', T6_ACTOR)
+    await deleteSkill(h.db, fsOpts, fooId, T6_ACTOR)
     expect(existsSync(skillDir)).toBe(false)
     expect(await getSkill(h.db, 'foo')).toBeNull()
   })

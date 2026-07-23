@@ -81,8 +81,13 @@ describe('commitSkillZipBuffer', () => {
     expect(r.created.map((s) => s.name).sort()).toEqual(['skill-a', 'skill-b'])
     expect(r.updated).toEqual([])
     expect(r.failed).toEqual([])
-    expect(existsSync(join(h.fsOpts.appHome, 'skills', 'skill-a', 'files', 'SKILL.md'))).toBe(true)
-    expect(existsSync(join(h.fsOpts.appHome, 'skills', 'skill-a', 'files', 'extra.md'))).toBe(true)
+    const skillA = r.created.find((skill) => skill.name === 'skill-a')!
+    expect(
+      existsSync(join(h.fsOpts.appHome, 'skills', skillA.id, 'files', 'SKILL.md')),
+    ).toBe(true)
+    expect(existsSync(join(h.fsOpts.appHome, 'skills', skillA.id, 'files', 'extra.md'))).toBe(
+      true,
+    )
   })
 
   test('skip decision leaves DB + FS untouched for that candidate', async () => {
@@ -107,7 +112,13 @@ describe('commitSkillZipBuffer', () => {
       frontmatterExtra: {},
     })
     // Drop a sentinel file to verify it gets removed by the overwrite step.
-    const sentinelPath = join(h.fsOpts.appHome, 'skills', 'skill-o', 'files', 'sentinel.txt')
+    const sentinelPath = join(
+      h.fsOpts.appHome,
+      'skills',
+      before.id,
+      'files',
+      'sentinel.txt',
+    )
     writeFileSync(sentinelPath, 'remove-me')
 
     const buf = buildZip({
@@ -124,7 +135,7 @@ describe('commitSkillZipBuffer', () => {
     expect(r.updated.map((s) => s.id)).toEqual([before.id])
     expect(r.updated[0]!.description).toBe('new desc')
 
-    const skillRoot = join(h.fsOpts.appHome, 'skills', 'skill-o', 'files')
+    const skillRoot = join(h.fsOpts.appHome, 'skills', before.id, 'files')
     expect(existsSync(join(skillRoot, 'sentinel.txt'))).toBe(false)
     expect(existsSync(join(skillRoot, 'fresh.md'))).toBe(true)
     const md = readFileSync(join(skillRoot, 'SKILL.md'), 'utf-8')
@@ -158,7 +169,15 @@ describe('commitSkillZipBuffer', () => {
     const after = await getSkill(h.db, 'skill-v')
     expect(after!.contentVersion).toBe(2) // versioned via commitSkillVersion, not a raw write
     // The immutable v2 snapshot exists (the funnel archived the overwritten tree).
-    const snap = join(h.fsOpts.appHome, 'skills', 'skill-v', 'versions', 'v2', 'files', 'SKILL.md')
+    const snap = join(
+      h.fsOpts.appHome,
+      'skills',
+      before.id,
+      'versions',
+      'v2',
+      'files',
+      'SKILL.md',
+    )
     expect(existsSync(snap)).toBe(true)
     expect(readFileSync(snap, 'utf-8')).toContain('description: d2')
   })
@@ -174,9 +193,9 @@ describe('commitSkillZipBuffer', () => {
     )
     expect(r.created.map((s) => s.name)).toEqual(['skill-new'])
     expect(await getSkill(h.db, 'skill-orig')).toBeNull()
-    expect(existsSync(join(h.fsOpts.appHome, 'skills', 'skill-new', 'files', 'SKILL.md'))).toBe(
-      true,
-    )
+    expect(
+      existsSync(join(h.fsOpts.appHome, 'skills', r.created[0]!.id, 'files', 'SKILL.md')),
+    ).toBe(true)
   })
 
   test('rename to a name already in DB fails with skill-rename-conflict', async () => {
@@ -284,7 +303,7 @@ describe('commitSkillZipBuffer', () => {
       'skill-fm/SKILL.md':
         '---\nname: skill-fm\ndescription: d\nauthor: alice\nversion: 1\n---\nbody\n',
     })
-    await commitSkillZipBuffer(
+    const result = await commitSkillZipBuffer(
       h.db,
       h.fsOpts,
       buf,
@@ -292,7 +311,7 @@ describe('commitSkillZipBuffer', () => {
       { actor: ADMIN },
     )
     const md = readFileSync(
-      join(h.fsOpts.appHome, 'skills', 'skill-fm', 'files', 'SKILL.md'),
+      join(h.fsOpts.appHome, 'skills', result.created[0]!.id, 'files', 'SKILL.md'),
       'utf-8',
     )
     expect(md).toContain('author: alice')

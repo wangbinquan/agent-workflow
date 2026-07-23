@@ -4,7 +4,7 @@
 // (createManagedSkill / writeSkillContent / writeSkillFile / deleteSkillFile,
 // and PR-B fusion apply / restore) routes through commitSkillVersion, which:
 //   1. archives the new files/ tree as an immutable snapshot under
-//      skills/{name}/versions/v{n}/files,
+//      skills/{id}/versions/v{n}/files,
 //   2. bumps skills.content_version + inserts a skill_versions row (one tx),
 //   3. syncs live files/ from the snapshot.
 //
@@ -33,7 +33,7 @@ import {
   statSync,
   type Dirent,
 } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, join, relative } from 'node:path'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { skills, skillVersions } from '@/db/schema'
@@ -51,30 +51,23 @@ import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { tokenToVersionFence } from '@/services/skillToken'
 import { parseFrontmatter } from '@/util/frontmatter'
+import {
+  realDirectoryChainState,
+  skillFilesAbs,
+  skillRootAbs,
+  skillVersionAbs,
+  skillVersionRelPath,
+} from '@/services/skillIdentityPaths'
 
 export interface SkillVersionFsOptions {
-  /** App home dir; managed skills live under `${appHome}/skills/{name}/...`. */
+  /** App home dir; managed skills live under `${appHome}/skills/{id}/...`. */
   appHome: string
 }
 
 type SkillRow = typeof skills.$inferSelect
 type SkillVersionRow = typeof skillVersions.$inferSelect
 
-// --- path helpers ----------------------------------------------------------
-
-function skillFilesDir(appHome: string, name: string): string {
-  return join(appHome, 'skills', name, 'files')
-}
-function skillVersionsRoot(appHome: string, name: string): string {
-  return join(appHome, 'skills', name, 'versions')
-}
-function skillVersionDirAbs(appHome: string, name: string, v: number): string {
-  return join(skillVersionsRoot(appHome, name), `v${v}`, 'files')
-}
-/** App-home-relative, forward-slash path stored in skill_versions.files_path. */
-export function skillVersionRelPath(name: string, v: number): string {
-  return `skills/${name}/versions/v${v}/files`
-}
+export { skillVersionRelPath } from '@/services/skillIdentityPaths'
 
 // --- pure helpers (unit-tested) --------------------------------------------
 
@@ -98,8 +91,15 @@ export function memoriesToUnfuseOnRestore(
 // skillBootVerify can share them without a skillVersion↔skillBootVerify cycle.
 // Re-exported here for existing importers of `hashDir` from this module.
 export { hashDir, collectFiles, NUL } from '@/services/skillHash'
-import { hashDir, collectFiles } from '@/services/skillHash'
-import { markSkillBootVerified } from '@/services/skillBootVerify'
+import {
+  assertRegularFileTree,
+  collectFiles,
+  hashRegularFileTree,
+} from '@/services/skillHash'
+import {
+  markSkillBootVerified,
+  unmarkSkillBootVerified,
+} from '@/services/skillBootVerify'
 
 /** A file in a version snapshot: utf-8 text, or a binary file keyed by hash. */
 export type TreeEntry = { kind: 'text'; content: string } | { kind: 'binary'; hash: string }
@@ -166,23 +166,23 @@ export function gitStyleDirDiff(a: Map<string, TreeEntry>, b: Map<string, TreeEn
 
 // --- db helpers ------------------------------------------------------------
 
-function loadSkillRow(db: DbClient, name: string): SkillRow | null {
-  const rows = db.select().from(skills).where(eq(skills.name, name)).all() as SkillRow[]
+function loadSkillRow(db: DbClient, skillId: string): SkillRow | null {
+  const rows = db.select().from(skills).where(eq(skills.id, skillId)).all() as SkillRow[]
   return rows[0] ?? null
 }
 
-function versionRows(db: DbClient, name: string): SkillVersionRow[] {
+function versionRows(db: DbClient, skillId: string): SkillVersionRow[] {
   return db
     .select()
     .from(skillVersions)
-    .where(eq(skillVersions.skillName, name))
+    .where(eq(skillVersions.skillId, skillId))
     .all() as SkillVersionRow[]
 }
 
-function rowToSkillVersion(row: SkillVersionRow): SkillVersion {
+function rowToSkillVersion(row: SkillVersionRow, skillName: string): SkillVersion {
   return {
     id: row.id,
-    skillName: row.skillName,
+    skillName,
     versionIndex: row.versionIndex,
     source: row.source as SkillVersionSource,
     summary: row.summary,
@@ -205,18 +205,19 @@ function rowToSkillVersion(row: SkillVersionRow): SkillVersion {
 export function ensureInitialSkillVersion(
   db: DbClient,
   opts: SkillVersionFsOptions,
-  name: string,
+  skillId: string,
 ): void {
-  const skill = loadSkillRow(db, name)
+  const skill = loadSkillRow(db, skillId)
   if (!skill || skill.sourceKind !== 'managed') return
-  if (versionRows(db, name).length > 0) return
-  const filesDir = skillFilesDir(opts.appHome, name)
+  if (versionRows(db, skillId).length > 0) return
+  const filesDir = skillFilesAbs(opts.appHome, skillId)
   if (!existsSync(join(filesDir, 'SKILL.md'))) return
-  const versionDir = skillVersionDirAbs(opts.appHome, name, 1)
+  assertRegularFileTree(filesDir)
+  const versionDir = skillVersionAbs(opts.appHome, skillId, 1)
   rmSync(versionDir, { recursive: true, force: true })
   mkdirSync(dirname(versionDir), { recursive: true })
   cpSync(filesDir, versionDir, { recursive: true })
-  const hash = hashDir(versionDir)
+  const hash = hashRegularFileTree(versionDir)
   const now = Date.now()
   dbTxSync(db, (tx) => {
     tx.update(skills)
@@ -228,14 +229,14 @@ export function ensureInitialSkillVersion(
         versionState: 'snapshot-authoritative',
         updatedAt: now,
       })
-      .where(eq(skills.name, name))
+      .where(eq(skills.id, skillId))
       .run()
     tx.insert(skillVersions)
       .values({
         id: ulid(),
-        skillName: name,
+        skillId,
         versionIndex: 1,
-        filesPath: skillVersionRelPath(name, 1),
+        filesPath: skillVersionRelPath(skillId, 1),
         source: 'initial',
         summary: null,
         fusionId: null,
@@ -315,19 +316,19 @@ export function backfillLegacySkillVersions(
   let husksRemoved = 0
   for (const row of rows) {
     try {
-      if (existsSync(join(skillFilesDir(opts.appHome, row.name), 'SKILL.md'))) {
-        ensureInitialSkillVersion(db, opts, row.name)
+      if (existsSync(join(skillFilesAbs(opts.appHome, row.id), 'SKILL.md'))) {
+        ensureInitialSkillVersion(db, opts, row.id)
         backfilled++
         continue
       }
-      if (versionRows(db, row.name).length > 0) {
+      if (versionRows(db, row.id).length > 0) {
         log.warn('legacy-state skill has versions but no live SKILL.md; leaving for reconcile', {
           name: row.name,
           id: row.id,
         })
         continue
       }
-      const skillDir = join(opts.appHome, 'skills', row.name)
+      const skillDir = skillRootAbs(opts.appHome, row.id)
       if (!dirHasNoContent(skillDir)) {
         log.warn('legacy skill has no SKILL.md but its dir is not empty; leaving for repair', {
           name: row.name,
@@ -398,6 +399,10 @@ export interface SkillVersionCommitOpts {
    * version-write op on a skill the caller already locked would self-conflict.
    */
   skipOp?: boolean
+  /** Test-only fault seam: throw before pre-commit FS rollback cleanup. */
+  __beforeRollbackCleanupForTest?: () => void
+  /** Test-only fault seam after DB authority commits, before live publish. */
+  __afterDbCommitForTest?: () => void
 }
 
 /**
@@ -417,7 +422,7 @@ export interface SkillVersionCommitOpts {
  */
 function assertCompositePrecondition(
   tx: Parameters<Parameters<DbClient['transaction']>[0]>[0],
-  name: string,
+  skillId: string,
   commit: SkillVersionCommitOpts,
 ): void {
   if (
@@ -436,7 +441,7 @@ function assertCompositePrecondition(
       ownerUserId: skills.ownerUserId,
     })
     .from(skills)
-    .where(eq(skills.name, name))
+    .where(eq(skills.id, skillId))
     .get()
   if (
     !live ||
@@ -453,7 +458,7 @@ function assertCompositePrecondition(
   ) {
     throw new ConflictError(
       'skill-version-conflict',
-      `skill '${name}' changed since this operation started; reload and retry`,
+      `skill '${skillId}' changed since this operation started; reload and retry`,
     )
   }
 }
@@ -461,34 +466,37 @@ function assertCompositePrecondition(
 export function commitSkillVersion(
   db: DbClient,
   opts: SkillVersionFsOptions,
-  name: string,
+  skillId: string,
   produce: (stagingDir: string) => void,
   commit: SkillVersionCommitOpts,
 ): SkillVersion {
-  const skill = loadSkillRow(db, name)
-  if (!skill) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
+  const skill = loadSkillRow(db, skillId)
+  if (!skill) throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
   if (skill.sourceKind !== 'managed') {
-    throw new ConflictError('skill-not-managed', `skill '${name}' is not managed; cannot version`)
+    throw new ConflictError(
+      'skill-not-managed',
+      `skill '${skill.name}' is not managed; cannot version`,
+    )
   }
 
-  if (commit.source !== 'initial') ensureInitialSkillVersion(db, opts, name)
+  if (commit.source !== 'initial') ensureInitialSkillVersion(db, opts, skillId)
 
-  const cur = loadSkillRow(db, name)
-  if (!cur) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
-  const existing = versionRows(db, name)
+  const cur = loadSkillRow(db, skillId)
+  if (!cur) throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
+  const existing = versionRows(db, skillId)
   const maxIndex = existing.reduce((m, r) => Math.max(m, r.versionIndex), 0)
   const N = cur.contentVersion
 
   if (commit.expectedVersion !== undefined && commit.expectedVersion !== N) {
     throw new ConflictError(
       'skill-version-conflict',
-      `skill '${name}' is at version ${N}, expected ${commit.expectedVersion}; reload and retry`,
+      `skill '${cur.name}' is at version ${N}, expected ${commit.expectedVersion}; reload and retry`,
     )
   }
 
   const newVersion = maxIndex === 0 ? 1 : maxIndex + 1
-  const filesDir = skillFilesDir(opts.appHome, name)
-  const versionDir = skillVersionDirAbs(opts.appHome, name, newVersion)
+  const filesDir = skillFilesAbs(opts.appHome, skillId)
+  const versionDir = skillVersionAbs(opts.appHome, skillId, newVersion)
   // RFC-170 §6a/§13: build into an op-scoped staged dir so the live publish is an
   // ATOMIC rename-swap (swapInStaged). publishId scopes the sibling names.
   const publishId = ulid()
@@ -505,9 +513,9 @@ export function commitSkillVersion(
           skillId: cur.id,
           kind: 'version-write',
           targetVersion: newVersion,
-          stagingPath: staging,
-          candidatePath: versionDir,
-          preconditionJson: JSON.stringify({ name }),
+          stagingPath: relative(opts.appHome, staging),
+          candidatePath: relative(opts.appHome, versionDir),
+          preconditionJson: JSON.stringify({ skillId }),
         }),
       )
 
@@ -518,10 +526,14 @@ export function commitSkillVersion(
     if (existsSync(filesDir)) cpSync(filesDir, staging, { recursive: true })
     produce(staging)
 
-    const newHash = hashDir(staging)
+    const newHash = hashRegularFileTree(staging)
     // Empty-write short-circuit: an editor Save with no real change must not
     // inflate the history. (Initial / fusion / restore always commit.)
-    if (commit.source === 'editor' && maxIndex > 0 && newHash === hashDir(filesDir)) {
+    if (
+      commit.source === 'editor' &&
+      maxIndex > 0 &&
+      newHash === hashRegularFileTree(filesDir)
+    ) {
       rmSync(staging, { recursive: true, force: true })
       const latest = existing.find((r) => r.versionIndex === maxIndex)
       if (latest) {
@@ -529,9 +541,9 @@ export function commitSkillVersion(
         // composite token. Without this, an identical-content delete→recreate in
         // the caller's await window returns the substitute skill's row/token to a
         // request that was authorized against (and holds the token of) the old one.
-        dbTxSync(db, (tx) => assertCompositePrecondition(tx, name, commit))
+        dbTxSync(db, (tx) => assertCompositePrecondition(tx, skillId, commit))
         if (opId) dbTxSync(db, (tx) => abandonOperation(tx, opId)) // nothing committed
-        return rowToSkillVersion(latest)
+        return rowToSkillVersion(latest, cur.name)
       }
     }
     if (opId) dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-staged'))
@@ -539,6 +551,7 @@ export function commitSkillVersion(
     rmSync(versionDir, { recursive: true, force: true })
     mkdirSync(dirname(versionDir), { recursive: true })
     cpSync(staging, versionDir, { recursive: true })
+    assertRegularFileTree(versionDir)
     if (opId) dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-versioned'))
 
     const id = ulid()
@@ -548,7 +561,7 @@ export function commitSkillVersion(
       // tx (atomic with the UPDATE), so a drift that slipped past the caller's
       // earlier pre-check cannot be applied to the wrong generation. Same check as
       // the no-op short-circuit above — one helper, two call sites.
-      assertCompositePrecondition(tx, name, commit)
+      assertCompositePrecondition(tx, skillId, commit)
       const skillSet: Partial<typeof skills.$inferInsert> = {
         contentVersion: newVersion,
         updatedAt: now,
@@ -559,13 +572,13 @@ export function commitSkillVersion(
         versionState: 'snapshot-authoritative',
       }
       if (commit.setDescription !== undefined) skillSet.description = commit.setDescription
-      tx.update(skills).set(skillSet).where(eq(skills.name, name)).run()
+      tx.update(skills).set(skillSet).where(eq(skills.id, skillId)).run()
       tx.insert(skillVersions)
         .values({
           id,
-          skillName: name,
+          skillId,
           versionIndex: newVersion,
-          filesPath: skillVersionRelPath(name, newVersion),
+          filesPath: skillVersionRelPath(skillId, newVersion),
           source: commit.source,
           summary: commit.summary ?? null,
           fusionId: commit.fusionId ?? null,
@@ -582,12 +595,28 @@ export function commitSkillVersion(
       )[0]
     })
     committed = true
+    // The DB now names a generation that live files/ has not yet published.
+    // Remove any prior-generation admission immediately; a post-commit fault
+    // must remain hidden while its active op + lock await boot recovery.
+    unmarkSkillBootVerified(cur.id)
+    commit.__afterDbCommitForTest?.()
 
     // Publish live files/ from the staged snapshot LAST, ATOMICALLY (swapInStaged
     // — two same-parent renames). A crash between them leaves a complete tree;
     // reconcileSkillLiveFiles() (startup) re-syncs live from versions/v{cur}.
     mkdirSync(dirname(filesDir), { recursive: true })
     swapInStaged(filesDir, publishId)
+    const root = skillRootAbs(opts.appHome, skillId)
+    if (realDirectoryChainState(root, filesDir) !== 'real-directory') {
+      throw new Error(
+        `skill version ${newVersion} live publish is not a real directory`,
+      )
+    }
+    if (hashRegularFileTree(filesDir) !== newHash) {
+      throw new Error(
+        `skill version ${newVersion} live publish does not match committed content hash`,
+      )
+    }
     cleanupOpDirs(filesDir, publishId)
     if (opId) {
       dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-published'))
@@ -599,27 +628,26 @@ export function commitSkillVersion(
     markSkillBootVerified(cur.id)
 
     if (!created) throw new Error('skill_versions row disappeared after insert')
-    return rowToSkillVersion(created)
+    return rowToSkillVersion(created, cur.name)
   } catch (err) {
     if (opId) {
       if (committed) {
-        // Post-db-committed: the version is durable — free the lock (finish); if the
-        // publish didn't complete, reconcileSkillLiveFiles republishes live at boot.
-        try {
-          dbTxSync(db, (tx) => finishOperation(tx, opId))
-        } catch {
-          /* boot recovery will finish it */
-        }
+        // Post-db-committed: the version is durable, but the two-rename live
+        // publish may be incomplete. Preserve the active op + lock as recovery
+        // evidence; the boot barrier must converge canonical live content before
+        // it may finish the operation.
       } else {
         // Pre-db-committed rollback: nothing is referenced — discard staged + the
-        // orphan version dir + free the lock.
+        // orphan version dir + free the lock. If cleanup itself cannot be proven,
+        // preserve the active op + lock so boot recovery retains its oracle.
         try {
+          commit.__beforeRollbackCleanupForTest?.()
           cleanupOpDirs(filesDir, publishId)
           rmSync(versionDir, { recursive: true, force: true })
+          dbTxSync(db, (tx) => abandonOperation(tx, opId))
         } catch {
-          /* boot recovery cleans up */
+          /* active op + lock intentionally preserved for boot recovery */
         }
-        dbTxSync(db, (tx) => abandonOperation(tx, opId))
       }
     }
     throw err
@@ -631,21 +659,22 @@ export function commitSkillVersion(
 export function listSkillVersions(
   db: DbClient,
   opts: SkillVersionFsOptions,
-  name: string,
+  skillId: string,
 ): SkillVersion[] {
-  if (loadSkillRow(db, name) === null) {
-    throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
+  const skill = loadSkillRow(db, skillId)
+  if (skill === null) {
+    throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
   }
-  ensureInitialSkillVersion(db, opts, name)
-  return versionRows(db, name)
+  ensureInitialSkillVersion(db, opts, skillId)
+  return versionRows(db, skillId)
     .sort((x, y) => y.versionIndex - x.versionIndex)
-    .map(rowToSkillVersion)
+    .map((row) => rowToSkillVersion(row, skill.name))
 }
 
-function requireVersionRow(db: DbClient, name: string, v: number): SkillVersionRow {
-  const row = versionRows(db, name).find((r) => r.versionIndex === v)
+function requireVersionRow(db: DbClient, skillId: string, v: number): SkillVersionRow {
+  const row = versionRows(db, skillId).find((r) => r.versionIndex === v)
   if (!row) {
-    throw new NotFoundError('skill-version-not-found', `skill '${name}' has no version ${v}`)
+    throw new NotFoundError('skill-version-not-found', `skill '${skillId}' has no version ${v}`)
   }
   return row
 }
@@ -677,15 +706,16 @@ function fileTreeOf(absRoot: string): FileNode[] {
 export function getSkillVersionContent(
   db: DbClient,
   opts: SkillVersionFsOptions,
-  name: string,
+  skillId: string,
   v: number,
 ): SkillVersionContent {
-  if (loadSkillRow(db, name) === null) {
-    throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
+  const skill = loadSkillRow(db, skillId)
+  if (skill === null) {
+    throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
   }
-  ensureInitialSkillVersion(db, opts, name)
-  requireVersionRow(db, name, v)
-  const versionDir = skillVersionDirAbs(opts.appHome, name, v)
+  ensureInitialSkillVersion(db, opts, skillId)
+  requireVersionRow(db, skillId, v)
+  const versionDir = skillVersionAbs(opts.appHome, skillId, v)
   const skillMdPath = join(versionDir, 'SKILL.md')
   let content: SkillContent
   if (existsSync(skillMdPath)) {
@@ -694,13 +724,13 @@ export function getSkillVersionContent(
     const parsed = parseFrontmatter(readFileSync(realpathInside(versionDir, skillMdPath), 'utf-8'))
     const { name: _n, description: descRaw, ...rest } = parsed.data
     content = {
-      name,
+      name: skill.name,
       description: typeof descRaw === 'string' ? descRaw : '',
       bodyMd: parsed.body,
       frontmatterExtra: rest,
     }
   } else {
-    content = { name, description: '', bodyMd: '', frontmatterExtra: {} }
+    content = { name: skill.name, description: '', bodyMd: '', frontmatterExtra: {} }
   }
   return { versionIndex: v, content, files: fileTreeOf(versionDir) }
 }
@@ -708,18 +738,18 @@ export function getSkillVersionContent(
 export function diffSkillVersions(
   db: DbClient,
   opts: SkillVersionFsOptions,
-  name: string,
+  skillId: string,
   from: number,
   to: number,
 ): SkillVersionDiff {
-  if (loadSkillRow(db, name) === null) {
-    throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
+  if (loadSkillRow(db, skillId) === null) {
+    throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
   }
-  ensureInitialSkillVersion(db, opts, name)
-  requireVersionRow(db, name, from)
-  requireVersionRow(db, name, to)
-  const a = readTree(skillVersionDirAbs(opts.appHome, name, from))
-  const b = readTree(skillVersionDirAbs(opts.appHome, name, to))
+  ensureInitialSkillVersion(db, opts, skillId)
+  requireVersionRow(db, skillId, from)
+  requireVersionRow(db, skillId, to)
+  const a = readTree(skillVersionAbs(opts.appHome, skillId, from))
+  const b = readTree(skillVersionAbs(opts.appHome, skillId, to))
   return { from, to, diff: gitStyleDirDiff(a, b) }
 }
 
@@ -740,7 +770,7 @@ export interface RestoreResult {
 export function restoreSkillVersion(
   db: DbClient,
   opts: SkillVersionFsOptions,
-  name: string,
+  skillId: string,
   target: number,
   authorUserId: string | null,
   reason?: string,
@@ -749,8 +779,10 @@ export function restoreSkillVersion(
   // RFC-170 F3: composite precondition token — OCC-fenced in the version-bump tx.
   expectedToken?: string,
 ): RestoreResult {
-  ensureInitialSkillVersion(db, opts, name)
-  requireVersionRow(db, name, target)
+  const skill = loadSkillRow(db, skillId)
+  if (skill === null) throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
+  ensureInitialSkillVersion(db, opts, skillId)
+  requireVersionRow(db, skillId, target)
   const fence = tokenToVersionFence(expectedToken)
   if (fence === null) {
     throw new ValidationError(
@@ -758,12 +790,12 @@ export function restoreSkillVersion(
       'malformed precondition token; reload and retry',
     )
   }
-  const targetDir = skillVersionDirAbs(opts.appHome, name, target)
+  const targetDir = skillVersionAbs(opts.appHome, skillId, target)
   let unfusedMemoryIds: string[] = []
   const version = commitSkillVersion(
     db,
     opts,
-    name,
+    skillId,
     (staging) => {
       // full replace: clear pre-seeded copy, then lay down the target snapshot
       for (const e of readdirSync(staging))
@@ -790,7 +822,10 @@ export function restoreSkillVersion(
         // double-injection, not data loss. The complete fix records each
         // fusion version's incorporated memory ids on skill_versions and
         // re-fuses from the target's set; deferred to a follow-up (design §10).
-        unfusedMemoryIds = unfuseMemoriesTx(tx, { skillName: name, aboveVersion: target })
+        unfusedMemoryIds = unfuseMemoriesTx(tx, {
+          skillName: skill.name,
+          aboveVersion: target,
+        })
       },
     },
   )
@@ -819,12 +854,12 @@ export function reconcileSkillLiveFiles(db: DbClient, opts: SkillVersionFsOption
   const rows = db.select().from(skills).where(eq(skills.sourceKind, 'managed')).all() as SkillRow[]
   for (const skill of rows) {
     try {
-      ensureInitialSkillVersion(db, opts, skill.name)
-      const fresh = loadSkillRow(db, skill.name)
+      ensureInitialSkillVersion(db, opts, skill.id)
+      const fresh = loadSkillRow(db, skill.id)
       if (!fresh) continue
-      const filesDir = skillFilesDir(opts.appHome, skill.name)
+      const filesDir = skillFilesAbs(opts.appHome, skill.id)
       if (existsSync(join(filesDir, 'SKILL.md'))) continue // live present — never clobber
-      const versionDir = skillVersionDirAbs(opts.appHome, skill.name, fresh.contentVersion)
+      const versionDir = skillVersionAbs(opts.appHome, skill.id, fresh.contentVersion)
       if (!existsSync(versionDir)) continue
       rmSync(filesDir, { recursive: true, force: true })
       mkdirSync(dirname(filesDir), { recursive: true })

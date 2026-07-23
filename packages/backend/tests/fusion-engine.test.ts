@@ -27,7 +27,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { fusions, memories, skillVersions, tasks } from '../src/db/schema'
+import { fusions, memories, skills, skillVersions, tasks } from '../src/db/schema'
 import {
   approveFusion,
   cancelFusion,
@@ -207,7 +207,7 @@ describe('launch → reconcile → approve', () => {
 
   test('full happy path: skill bumps + incorporated memory fused', async () => {
     const fsOpts: SkillFsOptions = { appHome: h.appHome }
-    await createManagedSkill(h.db, fsOpts, {
+    const createdSkill = await createManagedSkill(h.db, fsOpts, {
       name: 'lint',
       description: 'd',
       bodyMd: 'original body',
@@ -264,18 +264,23 @@ describe('launch → reconcile → approve', () => {
     const done = await approveFusion(h.deps, fusion.id, adminActor)
     expect(done.status).toBe('done')
     expect(done.appliedSkillVersion).toBe(2)
-    expect(getSkillVersionContent(h.db, fsOpts, 'lint', 2).content.bodyMd).toContain('fused body')
+    expect(
+      getSkillVersionContent(h.db, fsOpts, createdSkill.id, 2).content.bodyMd,
+    ).toContain('fused body')
     expect(statusOf(h.db, memA)).toBe('fused')
     expect(statusOf(h.db, memB)).toBe('approved')
     // live SKILL.md updated
     expect(
-      readFileSync(pjoin(h.appHome, 'skills', 'lint', 'files', 'SKILL.md'), 'utf-8'),
+      readFileSync(
+        pjoin(h.appHome, 'skills', createdSkill.id, 'files', 'SKILL.md'),
+        'utf-8',
+      ),
     ).toContain('fused body')
   })
 
   test('OCC: approve fails if the skill changed since the fusion started', async () => {
     const fsOpts: SkillFsOptions = { appHome: h.appHome }
-    await createManagedSkill(h.db, fsOpts, {
+    const createdSkill = await createManagedSkill(h.db, fsOpts, {
       name: 'lint',
       description: 'd',
       bodyMd: 'original',
@@ -304,7 +309,13 @@ describe('launch → reconcile → approve', () => {
 
     // A concurrent editor save bumps the skill (base was 1, now 2).
     const { writeSkillContent } = await import('../src/services/skill')
-    await writeSkillContent(h.db, fsOpts, 'lint', { bodyMd: 'edited elsewhere' }, 'someone')
+    await writeSkillContent(
+      h.db,
+      fsOpts,
+      createdSkill.id,
+      { bodyMd: 'edited elsewhere' },
+      'someone',
+    )
 
     // RFC-170 T6: the composite precondition token drifted (contentVersion 1→2),
     // so approve is rejected EARLY — before any state change (zero side effect) —
@@ -436,7 +447,7 @@ describe('RFC-170 T6 — fusion precondition token', () => {
 
   test('re-run (reject) on a drifted skill is a zero-side-effect 409 (no new task)', async () => {
     const fsOpts: SkillFsOptions = { appHome: h.appHome }
-    await createManagedSkill(h.db, fsOpts, {
+    const createdSkill = await createManagedSkill(h.db, fsOpts, {
       name: 'lint',
       description: 'd',
       bodyMd: 'orig',
@@ -448,7 +459,13 @@ describe('RFC-170 T6 — fusion precondition token', () => {
 
     // A concurrent editor bumps the skill (token drifts).
     const { writeSkillContent } = await import('../src/services/skill')
-    await writeSkillContent(h.db, fsOpts, 'lint', { bodyMd: 'edited elsewhere' }, 'someone')
+    await writeSkillContent(
+      h.db,
+      fsOpts,
+      createdSkill.id,
+      { bodyMd: 'edited elsewhere' },
+      'someone',
+    )
 
     await expect(rejectFusion(h.deps, fusion.id, 'try again', adminActor)).rejects.toThrow(
       /precondition|changed/i,
@@ -546,7 +563,8 @@ describe('RFC-170 T6 — fusion precondition token', () => {
   test('approve + reject both re-check current skill ownership (source lock)', () => {
     const src = readFileSync(pjoin(__dirname, '..', 'src', 'services', 'fusion.ts'), 'utf8')
     // Both decision entry points call the recheck helper before claiming.
-    const calls = src.match(/requireCurrentSkillWritable\(db, actor, row\.skillName\)/g) ?? []
+    const calls =
+      src.match(/requireCurrentSkillWritable\(db, actor, row\.preconditionToken\)/g) ?? []
     expect(calls.length).toBeGreaterThanOrEqual(2) // approve + reject
     expect(src).toMatch(/!isResourceOwner\(actor, skill\)/) // helper gates on current owner
   })
@@ -654,13 +672,18 @@ describe('RFC-170 T6 F9 — recoverFusionDecisions (crash recovery)', () => {
   test("'applying' whose version already committed rolls FORWARD to done", () => {
     seedFusion('fz-fwd', { status: 'applying', currentTaskId: null })
     // A committed version carries this fusionId (proof the apply landed durably).
+    const lintId = h.db
+      .select({ id: skills.id })
+      .from(skills)
+      .where(eq(skills.name, 'lint'))
+      .get()!.id
     h.db
       .insert(skillVersions)
       .values({
         id: ulid(),
-        skillName: 'lint',
+        skillId: lintId,
         versionIndex: 7,
-        filesPath: 'skills/lint/versions/v7/files',
+        filesPath: `skills/${lintId}/versions/v7/files`,
         source: 'fusion',
         fusionId: 'fz-fwd',
         authorUserId: '__system__',
@@ -705,7 +728,7 @@ describe('RFC-170 T6 F10 — fusion seeds from the version snapshot, not live', 
 
   test('createFusion seeds from versions/v1, ignoring tampered live files', async () => {
     const fsOpts: SkillFsOptions = { appHome: h.appHome }
-    await createManagedSkill(h.db, fsOpts, {
+    const createdSkill = await createManagedSkill(h.db, fsOpts, {
       name: 'lint',
       description: 'd',
       bodyMd: 'SNAPSHOT-BODY',
@@ -713,7 +736,7 @@ describe('RFC-170 T6 F10 — fusion seeds from the version snapshot, not live', 
     })
     // Tamper the LIVE files directly (no version bump → token still points at v1).
     writeFileSync(
-      pjoin(h.appHome, 'skills', 'lint', 'files', 'SKILL.md'),
+      pjoin(h.appHome, 'skills', createdSkill.id, 'files', 'SKILL.md'),
       '---\nname: lint\ndescription: d\n---\nLIVE-TAMPERED',
     )
     const mem = approvedGlobalMemory(h.db, 'm')
@@ -732,14 +755,17 @@ describe('RFC-170 T6 F10 — fusion seeds from the version snapshot, not live', 
   // (not just name+version), and fails closed with no live fallback.
   test('createFusion fails closed when the target has no version snapshot (F11)', async () => {
     const fsOpts: SkillFsOptions = { appHome: h.appHome }
-    await createManagedSkill(h.db, fsOpts, {
+    const createdSkill = await createManagedSkill(h.db, fsOpts, {
       name: 'lint',
       description: 'd',
       bodyMd: 'b',
       frontmatterExtra: {},
     })
     // Remove the snapshot dir (legacy/corrupted skill) → no safe seed source.
-    rmSync(pjoin(h.appHome, 'skills', 'lint', 'versions'), { recursive: true, force: true })
+    rmSync(pjoin(h.appHome, 'skills', createdSkill.id, 'versions'), {
+      recursive: true,
+      force: true,
+    })
     const mem = approvedGlobalMemory(h.db, 'm')
     let code: string | undefined
     try {

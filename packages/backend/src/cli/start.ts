@@ -286,20 +286,15 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // openDb() applies all pending migrations on startup). The migrations folder
   // itself (and any staged restore) was already resolved/applied at step 2.5.
 
-  // RFC-213: raw pre-migration safety backup BEFORE openDb applies migrations, so
-  // a botched upgrade can be rolled back. Best-effort — never blocks boot.
-  try {
-    await maybePreMigrationBackup({
-      appHome: Paths.root,
-      dbPath: Paths.db,
-      migrationsFolder,
-      enabled: config.backupOnMigration,
-    })
-  } catch (err) {
-    log.warn('pre-migration backup failed (continuing)', {
-      error: err instanceof Error ? err.message : String(err),
-    })
-  }
+  // RFC-213/RFC-223: raw pre-migration safety backup BEFORE openDb applies
+  // migrations. A pending migration without its rollback generation is fatal;
+  // backupOnMigration=false is the operator's explicit opt-out.
+  await maybePreMigrationBackup({
+    appHome: Paths.root,
+    dbPath: Paths.db,
+    migrationsFolder,
+    enabled: config.backupOnMigration,
+  })
 
   let db: ReturnType<typeof openDb>
   try {
@@ -324,6 +319,31 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     ? readdirSync(migrationsFolder).filter((f) => f.endsWith('.sql')).length
     : 0
   log.info('db ready', { path: Paths.db, dbVersion })
+
+  // 5a. RFC-223 PR-5: the ONE fail-closed skill identity barrier. It must be
+  // the first production DB/FS behavior after migrations: recover every
+  // legacy/current structural op while locks remain evidence, migrate
+  // skills/{name} -> skills/{id}, and prove DB/FS/FK consistency before users,
+  // orphan reaping, reconcilers, seeders, schedulers, fusion, or HTTP can run.
+  {
+    const { runSkillIdentityMigrationBarrier } =
+      await import('@/services/skillIdentityMigration')
+    const report = runSkillIdentityMigrationBarrier(db, { appHome: Paths.root })
+    if (
+      report.recoveredOperations > 0 ||
+      report.removedHusks > 0 ||
+      report.migratedSkills > 0
+    ) {
+      log.info('skill identity migration barrier complete', { ...report })
+    }
+  }
+  // Activate the boot-epoch availability gate while its verified set is still
+  // empty. Every persisted skill stays hidden from all consumers and HTTP until
+  // the per-skill background reverify explicitly admits it (or quarantines it).
+  {
+    const { activateBootReverify } = await import('@/services/skillBootVerify')
+    activateBootReverify()
+  }
 
   // RFC-036 bootstrap hint: if no real user has been created yet, log a
   // one-shot pointer to the CLI so admins know how to leave single-user mode.
@@ -386,21 +406,6 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     }
   } catch (err) {
     log.warn('scheduled payload heal on boot failed', {
-      error: err instanceof Error ? err.message : String(err),
-    })
-  }
-
-  // 5b4. RFC-170 §6a / §invariant④: recover in-flight skill_operations left by a
-  // crash BEFORE source reconcile + HTTP — roll back pre-db-committed ops, roll
-  // forward committed-but-unpublished ones, quarantine impossible states, and GC
-  // orphan locks (so a crashed op never leaves a permanently-stuck lock).
-  // Best-effort: never abort daemon start.
-  try {
-    const { recoverSkillOperations } = await import('@/services/skillOpRecoveryDriver')
-    const { SKILL_OP_RECOVERY_REGISTRY } = await import('@/services/skillOpRegistry')
-    recoverSkillOperations(db, { appHome: Paths.root }, SKILL_OP_RECOVERY_REGISTRY)
-  } catch (err) {
-    log.warn('skill operations recovery on boot failed', {
       error: err instanceof Error ? err.message : String(err),
     })
   }

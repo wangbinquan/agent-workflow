@@ -18,6 +18,7 @@ import {
   cpSync,
   existsSync,
   fsyncSync,
+  lstatSync,
   mkdirSync,
   openSync,
   closeSync,
@@ -222,6 +223,7 @@ export async function validateBackupForStage(
       const check = quickCheckDbFile(incomingDb)
       if (!check.ok) throw new RestoreIntegrityError(check.errors)
     }
+    assertBackupSkillsPayload(staging, incomingDb, 'stage refused')
     return { manifest, backupLastCreatedAt, currentMaxWhen, direction }
   } finally {
     rmSync(staging, { recursive: true, force: true })
@@ -392,6 +394,13 @@ export async function restoreBackup(
       if (!check.ok) throw new RestoreIntegrityError(check.errors)
     }
 
+    // RFC-223 PR-5: an old DB and its name-keyed skills tree are one restore
+    // generation. After 0116 has renamed live roots to immutable ids, restoring
+    // a DB-only old backup while retaining the current tree strands every
+    // managed_path/files_path. Refuse before the live DB swap. A truly empty DB
+    // remains a valid DB-only backup.
+    assertBackupSkillsPayload(staging, incomingDb, 'restore refused')
+
     // Pre-restore safety backup (raw byte copy — tolerates a corrupt current DB).
     // Fail-closed: if it throws (disk full / tar fail), abort before any swap.
     let safetyBackupPath: string | null = null
@@ -430,9 +439,12 @@ export async function restoreBackup(
         restored.config = true
       }
       const stagedSkills = join(staging, 'skills')
-      if (existsSync(stagedSkills)) {
-        const liveSkills = join(appHome, 'skills')
-        rmSync(liveSkills, { recursive: true, force: true })
+      const liveSkills = join(appHome, 'skills')
+      // The filesystem is part of the restored generation even when that
+      // generation is intentionally empty. Never retain newer live skill roots
+      // beside an incoming DB with zero skill rows.
+      rmSync(liveSkills, { recursive: true, force: true })
+      if (isRealDirectory(stagedSkills)) {
         cpSync(stagedSkills, liveSkills, { recursive: true })
         restored.skills = true
       }
@@ -451,6 +463,15 @@ export async function restoreBackup(
           skipMigrations: !willMigrate,
           skipIntegrityCheck: opts.skipIntegrityCheck,
         })
+        // RFC-223 PR-5: filesystem state was copied just before openDb and the
+        // restored DB has now been forward-migrated. Reuse the exact boot
+        // barrier before any restored task/state is exposed or the DB closes;
+        // absolute legacy op paths are rebased to this restore's appHome.
+        if (willMigrate || direction === 'same') {
+          const { runSkillIdentityMigrationBarrier } =
+            await import('@/services/skillIdentityMigration')
+          runSkillIdentityMigrationBarrier(db, { appHome })
+        }
         // RFC-213 G4a mismatch-protect: the restored rows are backup-era, but the
         // on-disk worktrees are current. Suspend auto-recovery for every non-terminal
         // task so the auto-resume loop can't silently roll a NEWER worktree back to a
@@ -482,5 +503,44 @@ export async function restoreBackup(
     }
   } finally {
     if (existsSync(staging)) rmSync(staging, { recursive: true, force: true })
+  }
+}
+
+function dbHasSkillRows(dbPath: string): boolean {
+  const db = new Database(dbPath, { readonly: true })
+  try {
+    const table = db
+      .query("SELECT 1 AS present FROM sqlite_master WHERE type='table' AND name='skills' LIMIT 1")
+      .get()
+    if (table === null) return false
+    return db.query('SELECT 1 AS present FROM skills LIMIT 1').get() !== null
+  } finally {
+    db.close()
+  }
+}
+
+function assertBackupSkillsPayload(
+  staging: string,
+  incomingDb: string,
+  prefix: 'stage refused' | 'restore refused',
+): void {
+  // Filesystem-first short circuit is load-bearing for corruption salvage:
+  // when a real payload is present, --skip-integrity-check must not query a
+  // damaged but potentially recoverable DB merely to validate this invariant.
+  if (isRealDirectory(join(staging, 'skills'))) return
+  if (dbHasSkillRows(incomingDb)) {
+    throw new Error(
+      `${prefix}: backup contains skill rows but no matching skills filesystem payload`,
+    )
+  }
+}
+
+function isRealDirectory(path: string): boolean {
+  try {
+    const stat = lstatSync(path)
+    return stat.isDirectory() && !stat.isSymbolicLink()
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return false
+    throw err
   }
 }

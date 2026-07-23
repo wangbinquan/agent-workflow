@@ -33,23 +33,32 @@ describe('RFC-170 T4 — combined save with token OCC', () => {
   let db: DbClient
   let appHome: string
   let fsOpts: { appHome: string }
+  let skillId: string
 
   beforeEach(async () => {
     appHome = mkdtempSync(join(tmpdir(), 'aw-combined-save-'))
     fsOpts = { appHome }
     db = createInMemoryDb(MIGRATIONS)
-    await createManagedSkill(db, fsOpts, {
+    const skill = await createManagedSkill(db, fsOpts, {
       name: 'foo',
       description: 'd0',
       bodyMd: 'body0',
       frontmatterExtra: {},
     })
+    skillId = skill.id
   })
   afterEach(() => rmSync(appHome, { recursive: true, force: true }))
 
   test('save with the current token succeeds and returns a fresh (advanced) token', async () => {
-    const read = await readSkillContent(db, fsOpts, 'foo')
-    const saved = await saveSkillWithToken(db, fsOpts, 'foo', { bodyMd: 'body1' }, read.token!, 'u')
+    const read = await readSkillContent(db, fsOpts, skillId)
+    const saved = await saveSkillWithToken(
+      db,
+      fsOpts,
+      skillId,
+      { bodyMd: 'body1' },
+      read.token!,
+      'u',
+    )
     expect(saved.bodyMd).toBe('body1')
     // The returned token advanced (content_version bumped) — not the same string.
     expect(saved.token).toBeDefined()
@@ -57,28 +66,35 @@ describe('RFC-170 T4 — combined save with token OCC', () => {
   })
 
   test('a STALE token → 409 ConflictError and NO write is applied', async () => {
-    const read = await readSkillContent(db, fsOpts, 'foo')
+    const read = await readSkillContent(db, fsOpts, skillId)
     // Someone else advances the version out-of-band.
-    await writeSkillContent(db, fsOpts, 'foo', { bodyMd: 'other-writer' }, 'u2')
+    await writeSkillContent(db, fsOpts, skillId, { bodyMd: 'other-writer' }, 'u2')
     // Our save still holds the pre-write token → must be rejected.
     await expect(
-      saveSkillWithToken(db, fsOpts, 'foo', { bodyMd: 'mine' }, read.token!, 'u'),
+      saveSkillWithToken(db, fsOpts, skillId, { bodyMd: 'mine' }, read.token!, 'u'),
     ).rejects.toBeInstanceOf(ConflictError)
     // The other writer's content stands; our stale write did NOT apply.
-    expect((await readSkillContent(db, fsOpts, 'foo')).bodyMd).toBe('other-writer')
+    expect((await readSkillContent(db, fsOpts, skillId)).bodyMd).toBe('other-writer')
   })
 
   test('a malformed token → 400 ValidationError', async () => {
     await expect(
-      saveSkillWithToken(db, fsOpts, 'foo', { bodyMd: 'x' }, 'not-a-valid-token!!', 'u'),
+      saveSkillWithToken(db, fsOpts, skillId, { bodyMd: 'x' }, 'not-a-valid-token!!', 'u'),
     ).rejects.toBeInstanceOf(ValidationError)
   })
 
   test('the fresh token from a save is usable for the next save (chained edits)', async () => {
-    const read = await readSkillContent(db, fsOpts, 'foo')
-    const s1 = await saveSkillWithToken(db, fsOpts, 'foo', { bodyMd: 'v1' }, read.token!, 'u')
+    const read = await readSkillContent(db, fsOpts, skillId)
+    const s1 = await saveSkillWithToken(
+      db,
+      fsOpts,
+      skillId,
+      { bodyMd: 'v1' },
+      read.token!,
+      'u',
+    )
     // Immediately reuse the returned token — no reload needed.
-    const s2 = await saveSkillWithToken(db, fsOpts, 'foo', { bodyMd: 'v2' }, s1.token!, 'u')
+    const s2 = await saveSkillWithToken(db, fsOpts, skillId, { bodyMd: 'v2' }, s1.token!, 'u')
     expect(s2.bodyMd).toBe('v2')
   })
 
@@ -91,22 +107,22 @@ describe('RFC-170 T4 — combined save with token OCC', () => {
   test('managed: writeSkillContent with a stale expected.contentVersion → 409 (in-tx concurrent-save fence)', async () => {
     const foo = (await getSkill(db, 'foo'))!
     // Another writer advances the version out-of-band (no expected → unfenced).
-    await writeSkillContent(db, fsOpts, 'foo', { bodyMd: 'other-writer' }, 'u2')
+    await writeSkillContent(db, fsOpts, skillId, { bodyMd: 'other-writer' }, 'u2')
     // Request A resumes with its pre-drift expected (the old contentVersion).
     await expect(
-      writeSkillContent(db, fsOpts, 'foo', { bodyMd: 'mine' }, 'u', {
+      writeSkillContent(db, fsOpts, skillId, { bodyMd: 'mine' }, 'u', {
         skillId: foo.id,
         contentVersion: foo.contentVersion,
         metaRevision: 0, // fresh skill; a body write does not bump meta_revision
       }),
     ).rejects.toBeInstanceOf(ConflictError)
     // B's content stands; A's stale write did NOT apply.
-    expect((await readSkillContent(db, fsOpts, 'foo')).bodyMd.trim()).toBe('other-writer')
+    expect((await readSkillContent(db, fsOpts, skillId)).bodyMd.trim()).toBe('other-writer')
   })
 
   test('managed: writeSkillContent with a stale skillId (delete→recreate ABA) → 409', async () => {
     const staleId = (await getSkill(db, 'foo'))!.id
-    await deleteSkill(db, fsOpts, 'foo', T6_ACTOR)
+    await deleteSkill(db, fsOpts, staleId, T6_ACTOR)
     await createManagedSkill(db, fsOpts, {
       name: 'foo',
       description: 'd0',
@@ -117,7 +133,7 @@ describe('RFC-170 T4 — combined save with token OCC', () => {
     // contentVersion + metaRevision are made to MATCH the recreated row so ONLY the
     // stale skillId differs — isolating the ABA leg of the fence.
     await expect(
-      writeSkillContent(db, fsOpts, 'foo', { bodyMd: 'mine' }, 'u', {
+      writeSkillContent(db, fsOpts, recreated.id, { bodyMd: 'mine' }, 'u', {
         skillId: staleId,
         contentVersion: recreated.contentVersion,
         metaRevision: 0, // recreated skill is fresh (meta_revision 0)
@@ -132,7 +148,7 @@ describe('RFC-170 T4 — combined save with token OCC', () => {
   // changed content (skips the no-op); this one writes IDENTICAL content.
   test('managed: an IDENTICAL-content write with a stale skillId → 409 (no-op path is fenced too)', async () => {
     const staleId = (await getSkill(db, 'foo'))!.id
-    await deleteSkill(db, fsOpts, 'foo', T6_ACTOR)
+    await deleteSkill(db, fsOpts, staleId, T6_ACTOR)
     await createManagedSkill(db, fsOpts, {
       name: 'foo',
       description: 'd0',
@@ -143,7 +159,7 @@ describe('RFC-170 T4 — combined save with token OCC', () => {
     // Same description + body ⇒ the write is a NO-OP (hash matches the recreated
     // skill's SKILL.md). Only the stale skillId differs — must still 409.
     await expect(
-      writeSkillContent(db, fsOpts, 'foo', { description: 'd0', bodyMd: 'body0' }, 'u', {
+      writeSkillContent(db, fsOpts, recreated.id, { description: 'd0', bodyMd: 'body0' }, 'u', {
         skillId: staleId,
         contentVersion: recreated.contentVersion,
         metaRevision: 0,

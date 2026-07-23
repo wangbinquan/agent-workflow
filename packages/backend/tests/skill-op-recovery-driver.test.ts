@@ -116,13 +116,14 @@ describe('recoverSkillOperations — boot driver', () => {
     )
   })
 
-  test('no handler for a kind → lock still freed + counted (loud gap, not stuck)', () => {
+  test('no handler for a kind → fail closed with active row + lock preserved', () => {
     const skillId = seedSkill('nohand')
     plant(skillId, 'reserve', 'fs-staged')
-    const rep = recoverSkillOperations(db, FS, {})
-    expect(rep.noHandler).toBe(1)
-    expect(locksFor(skillId)).toBe(0) // NOT stuck
-    expect(getActiveOp(db, skillId)).toBeNull()
+    expect(() => recoverSkillOperations(db, FS, {})).toThrow(
+      /handler-missing.*active row and lock preserved/,
+    )
+    expect(locksFor(skillId)).toBe(1)
+    expect(getActiveOp(db, skillId)?.phase).toBe('fs-staged')
   })
 
   test('orphan locks (op already done) are GC-cleared after active recovery', () => {

@@ -176,6 +176,7 @@ import {
 import { emitTaskStatus, getTask } from '@/services/task'
 import { ConflictError, SkillQuarantinedError } from '@/util/errors'
 import { isSkillInjectableThisBoot } from '@/services/skillBootVerify'
+import { skillFilesRel } from '@/services/skillIdentityPaths'
 import { createLogger, type Logger } from '@/util/log'
 // RFC-060 PR-E: splitDiff* imports removed — they were used only by the
 // agent-multi fan-out path (now deleted). wrapper-fanout consumes a `list<T>`
@@ -6660,9 +6661,17 @@ async function resolveSkills(
     if (!isSkillInjectableThisBoot({ id: row.id, sourceKind: 'managed' })) {
       throw new SkillQuarantinedError(row.name)
     }
-    // RFC-223 PR-1 keeps disk name-based (id-based disk is PR-5); injection uses
-    // the skill NAME as the opencode-visible key.
-    const skillPath = `${appHome}/${row.managedPath ?? `skills/${row.name}/files`}`
+    // RFC-223 PR-5: DB/FS identity is the immutable id; name survives only as
+    // the runtime-visible injection key. The boot barrier guarantees this exact
+    // path, and the scheduler refuses any bypassed/inconsistent row.
+    const expectedPath = skillFilesRel(row.id)
+    if (row.managedPath !== expectedPath) {
+      throw new ConflictError(
+        'skill-path-not-canonical',
+        `skill '${row.name}' has not completed its identity migration`,
+      )
+    }
+    const skillPath = pathJoin(appHome, expectedPath)
     out.push({ name: row.name, sourceKind: 'managed', sourcePath: skillPath })
     managedSkillIdentities.push({ id: row.id, name: row.name })
   }

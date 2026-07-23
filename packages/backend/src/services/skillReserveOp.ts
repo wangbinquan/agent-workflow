@@ -11,23 +11,26 @@
 //     and finish. The skill is a complete, published skill.
 
 import { rmSync } from 'node:fs'
-import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { skills } from '@/db/schema'
 import type { DbTxSync } from '@/db/txSync'
 import type { SkillOperationRow } from '@/services/skillOperations'
 import type { OpRecoveryHandler, SkillOpFsOptions } from '@/services/skillOpRecoveryDriver'
-
-interface ReservePrecondition {
-  name: string
-}
+import {
+  decodeSkillOperationIdentity,
+  legacySkillRootAbs,
+  skillRootAbs,
+} from '@/services/skillIdentityPaths'
 
 export const reserveRecoveryHandler: OpRecoveryHandler = {
   // phase < db-committed: discard the never-published files.
   rollbackFs: (fsOpts: SkillOpFsOptions, op: SkillOperationRow) => {
-    if (!op.preconditionJson) return
-    const { name } = JSON.parse(op.preconditionJson) as ReservePrecondition
-    rmSync(join(fsOpts.appHome, 'skills', name), { recursive: true, force: true })
+    const identity = decodeSkillOperationIdentity(op.preconditionJson, op.skillId)
+    const root =
+      identity.legacyName === undefined
+        ? skillRootAbs(fsOpts.appHome, identity.skillId)
+        : legacySkillRootAbs(fsOpts.appHome, identity.legacyName)
+    rmSync(root, { recursive: true, force: true })
   },
   recoverDb: (tx: DbTxSync, op: SkillOperationRow, dir: 'rollback' | 'rollforward') => {
     if (dir === 'rollback') {

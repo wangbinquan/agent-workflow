@@ -175,13 +175,13 @@ describe('restore un-fuses memories fused after the target version', () => {
   afterEach(() => h.cleanup())
 
   test('restore to v1 un-fuses a memory fused at v2; keeps one fused at v1', async () => {
-    await createManagedSkill(h.db, h.fsOpts, {
+    const skill = await createManagedSkill(h.db, h.fsOpts, {
       name: 'lint',
       description: 'd',
       bodyMd: 'v1',
       frontmatterExtra: {},
     })
-    await writeSkillContent(h.db, h.fsOpts, 'lint', { bodyMd: 'v2' }, 'u') // -> v2
+    await writeSkillContent(h.db, h.fsOpts, skill.id, { bodyMd: 'v2' }, 'u') // -> v2
 
     const fusedAtV1 = insertApprovedGlobalMemory(h.db, 'old')
     const fusedAtV2 = insertApprovedGlobalMemory(h.db, 'new')
@@ -205,7 +205,7 @@ describe('restore un-fuses memories fused after the target version', () => {
       return null
     })
 
-    const res = restoreSkillVersion(h.db, h.fsOpts, 'lint', 1, 'admin', 'rollback')
+    const res = restoreSkillVersion(h.db, h.fsOpts, skill.id, 1, 'admin', 'rollback')
     expect(res.unfusedMemoryIds).toEqual([fusedAtV2])
     expect(statusOf(h.db, fusedAtV2)).toBe('approved') // un-fused, re-injectable
     expect(statusOf(h.db, fusedAtV1)).toBe('fused') // still in v1 content

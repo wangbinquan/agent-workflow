@@ -36,17 +36,19 @@ describe('RFC-170 (4th-review [high]) — version-write in-tx owner-drift fence'
   let db: DbClient
   let appHome: string
   let fsOpts: { appHome: string }
+  let skillId: string
 
   beforeEach(async () => {
     appHome = mkdtempSync(join(tmpdir(), 'aw-owner-fence-'))
     fsOpts = { appHome }
     db = createInMemoryDb(MIGRATIONS)
-    await createManagedSkill(
+    const skill = await createManagedSkill(
       db,
       fsOpts,
       { name: 'foo', description: 'd', bodyMd: 'b0', frontmatterExtra: {} },
       { ownerUserId: 'A' },
     )
+    skillId = skill.id
   })
   afterEach(() => rmSync(appHome, { recursive: true, force: true }))
 
@@ -59,7 +61,7 @@ describe('RFC-170 (4th-review [high]) — version-write in-tx owner-drift fence'
     // Owner transferred A → B out-of-band (a transfer landing in the save's await gap).
     await db.update(skills).set({ ownerUserId: 'B' }).where(eq(skills.name, 'foo'))
     expect(() =>
-      commitSkillVersion(db, fsOpts, 'foo', editBody('b1'), {
+      commitSkillVersion(db, fsOpts, skillId, editBody('b1'), {
         source: 'editor',
         authorUserId: 'A',
         expectedOwnerUserId: 'A', // the owner the (now demoted) actor was authorized against
@@ -68,7 +70,7 @@ describe('RFC-170 (4th-review [high]) — version-write in-tx owner-drift fence'
   })
 
   test('owner unchanged since authorization → commit succeeds', () => {
-    const v = commitSkillVersion(db, fsOpts, 'foo', editBody('b1'), {
+    const v = commitSkillVersion(db, fsOpts, skillId, editBody('b1'), {
       source: 'editor',
       authorUserId: 'A',
       expectedOwnerUserId: 'A', // matches the current owner
@@ -81,7 +83,7 @@ describe('RFC-170 (4th-review [high]) — version-write in-tx owner-drift fence'
     // Same body as v1 ⇒ the write is a no-op; the owner-drift guard must still 409
     // (the no-op short-circuit shares the same fence helper).
     expect(() =>
-      commitSkillVersion(db, fsOpts, 'foo', editBody('b0'), {
+      commitSkillVersion(db, fsOpts, skillId, editBody('b0'), {
         source: 'editor',
         authorUserId: 'A',
         expectedOwnerUserId: 'A',
@@ -92,7 +94,7 @@ describe('RFC-170 (4th-review [high]) — version-write in-tx owner-drift fence'
   test('no expectedOwnerUserId → funnel stays unfenced (backward compatible)', async () => {
     await db.update(skills).set({ ownerUserId: 'B' }).where(eq(skills.name, 'foo'))
     // A legacy / system caller that does not opt into the owner fence still commits.
-    const v = commitSkillVersion(db, fsOpts, 'foo', editBody('b2'), {
+    const v = commitSkillVersion(db, fsOpts, skillId, editBody('b2'), {
       source: 'editor',
       authorUserId: 'A',
     })
@@ -108,38 +110,40 @@ describe('RFC-170 (4th-review [high]) — combined-save owner-fence wiring', () 
   let db: DbClient
   let appHome: string
   let fsOpts: { appHome: string }
+  let skillId: string
 
   beforeEach(async () => {
     appHome = mkdtempSync(join(tmpdir(), 'aw-owner-wire-'))
     fsOpts = { appHome }
     db = createInMemoryDb(MIGRATIONS)
-    await createManagedSkill(
+    const skill = await createManagedSkill(
       db,
       fsOpts,
       { name: 'foo', description: 'd', bodyMd: 'b0', frontmatterExtra: {} },
       { ownerUserId: 'A' },
     )
+    skillId = skill.id
   })
   afterEach(() => rmSync(appHome, { recursive: true, force: true }))
 
   test('owner transferred after authorization → combined-save 409s (demoted ex-owner cannot write)', async () => {
-    const read = await readSkillContent(db, fsOpts, 'foo')
+    const read = await readSkillContent(db, fsOpts, skillId)
     // The route authorized actor A against owner A; owner then transfers A → B in
     // the save's await window (token is unaffected — owner is orthogonal to it).
     await db.update(skills).set({ ownerUserId: 'B' }).where(eq(skills.name, 'foo'))
     await expect(
-      saveSkillWithToken(db, fsOpts, 'foo', { bodyMd: 'x' }, read.token!, 'A', 'A'),
+      saveSkillWithToken(db, fsOpts, skillId, { bodyMd: 'x' }, read.token!, 'A', 'A'),
     ).rejects.toBeInstanceOf(ConflictError)
     // The stale write did NOT apply.
-    expect((await readSkillContent(db, fsOpts, 'foo')).bodyMd.trim()).toBe('b0')
+    expect((await readSkillContent(db, fsOpts, skillId)).bodyMd.trim()).toBe('b0')
   })
 
   test('owner unchanged → combined-save succeeds under the owner fence', async () => {
-    const read = await readSkillContent(db, fsOpts, 'foo')
+    const read = await readSkillContent(db, fsOpts, skillId)
     const saved = await saveSkillWithToken(
       db,
       fsOpts,
-      'foo',
+      skillId,
       { bodyMd: 'x' },
       read.token!,
       'A',
@@ -156,46 +160,48 @@ describe('RFC-170 (4th-review [high]) — secondary-writer owner-fence wiring (f
   let db: DbClient
   let appHome: string
   let fsOpts: { appHome: string }
+  let skillId: string
 
   beforeEach(async () => {
     appHome = mkdtempSync(join(tmpdir(), 'aw-owner-sec-'))
     fsOpts = { appHome }
     db = createInMemoryDb(MIGRATIONS)
-    await createManagedSkill(
+    const skill = await createManagedSkill(
       db,
       fsOpts,
       { name: 'foo', description: 'd', bodyMd: 'b0', frontmatterExtra: {} },
       { ownerUserId: 'A' },
     )
+    skillId = skill.id
     // v2 (a support file) while the owner is still A — establishes a prior version.
-    await writeSkillFile(db, fsOpts, 'foo', 'templates/a.txt', 'aaa', 'A', 'A')
+    await writeSkillFile(db, fsOpts, skillId, 'templates/a.txt', 'aaa', 'A', 'A')
   })
   afterEach(() => rmSync(appHome, { recursive: true, force: true }))
 
   test('writeSkillFile: owner transferred after authorization → 409', async () => {
     await db.update(skills).set({ ownerUserId: 'B' }).where(eq(skills.name, 'foo'))
     await expect(
-      writeSkillFile(db, fsOpts, 'foo', 'templates/b.txt', 'bbb', 'A', 'A'),
+      writeSkillFile(db, fsOpts, skillId, 'templates/b.txt', 'bbb', 'A', 'A'),
     ).rejects.toBeInstanceOf(ConflictError)
   })
 
   test('deleteSkillFile: owner transferred after authorization → 409', async () => {
     await db.update(skills).set({ ownerUserId: 'B' }).where(eq(skills.name, 'foo'))
     await expect(
-      deleteSkillFile(db, fsOpts, 'foo', 'templates/a.txt', 'A', 'A'),
+      deleteSkillFile(db, fsOpts, skillId, 'templates/a.txt', 'A', 'A'),
     ).rejects.toBeInstanceOf(ConflictError)
   })
 
   test('restoreSkillVersion: owner transferred after authorization → 409', async () => {
     await db.update(skills).set({ ownerUserId: 'B' }).where(eq(skills.name, 'foo'))
-    expect(() => restoreSkillVersion(db, fsOpts, 'foo', 1, 'A', undefined, 'A')).toThrow(
+    expect(() => restoreSkillVersion(db, fsOpts, skillId, 1, 'A', undefined, 'A')).toThrow(
       ConflictError,
     )
   })
 
   test('owner unchanged → file write + restore succeed under the fence', async () => {
-    await writeSkillFile(db, fsOpts, 'foo', 'templates/c.txt', 'ccc', 'A', 'A')
-    const restored = restoreSkillVersion(db, fsOpts, 'foo', 1, 'A', undefined, 'A')
+    await writeSkillFile(db, fsOpts, skillId, 'templates/c.txt', 'ccc', 'A', 'A')
+    const restored = restoreSkillVersion(db, fsOpts, skillId, 1, 'A', undefined, 'A')
     expect(restored.version.versionIndex).toBeGreaterThan(1)
   })
 })

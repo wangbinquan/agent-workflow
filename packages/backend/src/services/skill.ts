@@ -1,7 +1,7 @@
 // Skill service.
 //
 // Storage model (design.md §2):
-//   ~/.agent-workflow/skills/{name}/files/SKILL.md      (+ support files)
+//   ~/.agent-workflow/skills/{id}/files/SKILL.md      (+ support files)
 //
 // DB row holds only the index. RFC-178: skills are managed-only — the external
 // (hand-imported) and parent-directory (skill_sources / RFC-017) source kinds
@@ -35,7 +35,7 @@ import { dirname, join } from 'node:path'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { agents, skills } from '@/db/schema'
-import { commitSkillVersion, skillVersionRelPath } from '@/services/skillVersion'
+import { commitSkillVersion } from '@/services/skillVersion'
 import { isSkillAvailableThisBoot } from '@/services/skillBootVerify'
 import { tokenToVersionFence } from '@/services/skillToken'
 import { dbTxSync } from '@/db/txSync'
@@ -50,11 +50,17 @@ import { realpathInside, realpathWriteInside, safeJoin } from '@/util/safePath'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { discloseRefs } from './resourceAcl'
 import type { Actor } from '@/auth/actor'
+import {
+  skillFilesAbs,
+  skillFilesRel,
+  skillVersionAbs,
+  skillRootAbs,
+} from '@/services/skillIdentityPaths'
 
 type SkillRow = typeof skills.$inferSelect
 
 export interface SkillFsOptions {
-  /** App home dir; managed skills live under `${appHome}/skills/{name}/files/`. */
+  /** App home dir; managed skills live under `${appHome}/skills/{id}/files/`. */
   appHome: string
 }
 
@@ -83,12 +89,23 @@ export async function getSkill(db: DbClient, name: string): Promise<Skill | null
   return rowToSkill(row)
 }
 
+export async function getSkillById(db: DbClient, skillId: string): Promise<Skill | null> {
+  const rows = await db
+    .select()
+    .from(skills)
+    .where(and(eq(skills.id, skillId), eq(skills.reservationState, 'ready')))
+    .limit(1)
+  const row = rows[0]
+  if (!row || !isSkillAvailableThisBoot(row)) return null
+  return rowToSkill(row)
+}
+
 /**
  * Resolve the absolute root directory holding files/ for a (managed) skill:
- * `${appHome}/skills/{name}/files`. RFC-178: skills are managed-only.
+ * `${appHome}/skills/{id}/files`. RFC-178: skills are managed-only.
  */
 export function skillRoot(skill: Skill, opts: SkillFsOptions): string {
-  return join(opts.appHome, 'skills', skill.name, 'files')
+  return skillFilesAbs(opts.appHome, skill.id)
 }
 
 /**
@@ -102,7 +119,7 @@ export function skillRoot(skill: Skill, opts: SkillFsOptions): string {
  */
 export function skillReadRoot(skill: Skill, opts: SkillFsOptions): string {
   const live = skillRoot(skill, opts)
-  const snapshot = join(opts.appHome, skillVersionRelPath(skill.name, skill.contentVersion))
+  const snapshot = skillVersionAbs(opts.appHome, skill.id, skill.contentVersion)
   return existsSync(snapshot) ? snapshot : live
 }
 
@@ -158,6 +175,10 @@ export async function createManagedSkillWithFiles(
   opts: SkillFsOptions,
   meta: { name: string; description: string; ownerUserId?: string },
   produceFiles: (filesDir: string) => void,
+  hooks: {
+    /** Test-only fault seam after ready + db-committed, before op retirement. */
+    __afterDbCommitForTest?: () => void
+  } = {},
 ): Promise<Skill> {
   // Fast-path occupancy check — RAW (any row, even gate-hidden), so a squatted
   // name 409s cleanly here. The real guard against a racing same-name create is
@@ -183,7 +204,7 @@ export async function createManagedSkillWithFiles(
           name: meta.name,
           description: meta.description,
           sourceKind: 'managed',
-          managedPath: `skills/${meta.name}/files`,
+          managedPath: skillFilesRel(id),
           // RFC-099: creator becomes owner; new resources default to 'public' (D18).
           ownerUserId: meta.ownerUserId ?? null,
           visibility: 'public',
@@ -196,7 +217,7 @@ export async function createManagedSkillWithFiles(
         skillId: id,
         kind: 'reserve',
         ownerUserId: meta.ownerUserId ?? undefined,
-        preconditionJson: JSON.stringify({ name: meta.name }),
+        preconditionJson: JSON.stringify({ skillId: id }),
       })
     })
   } catch (err) {
@@ -206,7 +227,8 @@ export async function createManagedSkillWithFiles(
     throw err
   }
 
-  const skillDir = join(opts.appHome, 'skills', meta.name)
+  const skillDir = skillRootAbs(opts.appHome, id)
+  let committed = false
   try {
     // ② fs-staged: produce the files tree into the (still-invisible) files dir.
     const filesDir = join(skillDir, 'files')
@@ -217,7 +239,7 @@ export async function createManagedSkillWithFiles(
     // ③ fs-published: archive the tree as v1 + atomically publish (RFC-101/170).
     // skipOp: reserve already holds this skill's op lock — commitSkillVersion must
     // NOT open its own version-write op (it would self-conflict on the same lock).
-    commitSkillVersion(db, opts, meta.name, () => {}, {
+    commitSkillVersion(db, opts, id, () => {}, {
       source: 'initial',
       authorUserId: meta.ownerUserId ?? null,
       skipOp: true,
@@ -229,8 +251,13 @@ export async function createManagedSkillWithFiles(
       tx.update(skills).set({ reservationState: 'ready' }).where(eq(skills.id, id)).run()
       advancePhase(tx, opId, 'db-committed')
     })
+    committed = true
+    hooks.__afterDbCommitForTest?.()
     dbTxSync(db, (tx) => finishOperation(tx, opId))
   } catch (err) {
+    // ready + db-committed is authoritative. Never reverse it in-process:
+    // preserve row/root/op/lock so the boot barrier can prove and roll forward.
+    if (committed) throw err
     // Roll back (in-process): discard the reserving row + files + retire the op.
     // (A crash — not an in-process throw — is recovered at boot by the reserve
     // recovery handler, which does the same.)
@@ -254,7 +281,7 @@ export async function createManagedSkillWithFiles(
     throw err
   }
 
-  const created = await getSkill(db, meta.name)
+  const created = await getSkillById(db, id)
   if (created === null) throw new Error('skill disappeared right after reserve')
   return created
 }
@@ -264,11 +291,12 @@ export async function createManagedSkillWithFiles(
 export async function deleteSkill(
   db: DbClient,
   opts: SkillFsOptions,
-  name: string,
+  skillId: string,
   actor: Actor,
 ): Promise<void> {
-  const existing = await getSkill(db, name)
-  if (existing === null) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
+  const existing = await getSkillById(db, skillId)
+  if (existing === null)
+    throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
 
   // RFC-223 (PR-1): agents.skills stores typed refs — match managed refs by id.
   const refs = await findAgentsUsingSkill(db, existing.id)
@@ -276,7 +304,7 @@ export async function deleteSkill(
     // RFC-203 T6: principal-aware disclosure (deleteWorkflow precedent).
     throw new ConflictError(
       'skill-in-use',
-      `skill '${name}' is referenced by ${refs.length} agent(s)`,
+      `skill '${existing.name}' is referenced by ${refs.length} agent(s)`,
       await discloseRefs(db, actor, 'agent', refs),
     )
   }
@@ -285,7 +313,7 @@ export async function deleteSkill(
   // DELETE the row in the same tx as the phase advance, then drop the trash.
   // A crash between steps is recovered by the boot driver (deleteRecoveryHandler).
   const { deleteManagedSkillOp } = await import('@/services/skillDeleteOp')
-  deleteManagedSkillOp(db, { appHome: opts.appHome }, { id: existing.id, name: existing.name })
+  deleteManagedSkillOp(db, { appHome: opts.appHome }, { id: existing.id })
 }
 
 // RFC-223 (PR-1): agents.skills stores typed refs (managed{skillId} /
@@ -343,10 +371,11 @@ async function findAgentsUsingSkill(
 export async function readSkillContent(
   db: DbClient,
   opts: SkillFsOptions,
-  name: string,
+  skillId: string,
 ): Promise<SkillContent> {
-  const skill = await getSkill(db, name)
-  if (skill === null) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
+  const skill = await getSkillById(db, skillId)
+  if (skill === null)
+    throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
   // RFC-170 (G1-1): read the SKILL.md body + sign the token from the AUTHORITATIVE
   // version snapshot, not live — so the returned content always matches the token's
   // contentVersion and a torn live dir can't corrupt the read.
@@ -377,7 +406,7 @@ export async function readSkillContent(
       .limit(1)
   )[0]
   if (gen === undefined) {
-    throw new ConflictError('skill-changed', `skill '${name}' changed; reload and retry`)
+    throw new ConflictError('skill-changed', `skill '${skill.name}' changed; reload and retry`)
   }
   const { encodeSkillToken } = await import('@/services/skillToken')
   const token = encodeSkillToken({
@@ -463,7 +492,7 @@ export async function getSkillPreconditionTokenById(
 export async function writeSkillContent(
   db: DbClient,
   opts: SkillFsOptions,
-  name: string,
+  skillId: string,
   patch: UpdateSkillContent,
   authorUserId?: string | null,
   // RFC-170 T-BSAFE③ (Codex F1-review): when the caller holds a precondition token
@@ -482,9 +511,10 @@ export async function writeSkillContent(
     ownerUserId?: string | null
   },
 ): Promise<SkillContent> {
-  const skill = await getSkill(db, name)
-  if (skill === null) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
-  const current = await readSkillContent(db, opts, name).catch(() => ({
+  const skill = await getSkillById(db, skillId)
+  if (skill === null)
+    throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
+  const current = await readSkillContent(db, opts, skillId).catch(() => ({
     name: skill.name,
     description: skill.description,
     bodyMd: '',
@@ -509,7 +539,7 @@ export async function writeSkillContent(
   commitSkillVersion(
     db,
     opts,
-    name,
+    skillId,
     (staging) => {
       // RFC-170 impl-gate (Codex 2026-07-22): commitSkillVersion cpSync-copies
       // the prior files/ into `staging` WITHOUT dereferencing links, so a live
@@ -552,7 +582,7 @@ export async function writeSkillContent(
 export async function saveSkillWithToken(
   db: DbClient,
   opts: SkillFsOptions,
-  name: string,
+  skillId: string,
   patch: UpdateSkillContent,
   expectedToken: string,
   authorUserId?: string | null,
@@ -561,8 +591,9 @@ export async function saveSkillWithToken(
   // in this call's await window 409s instead of committing a post-revocation version.
   expectedOwnerUserId?: string | null,
 ): Promise<SkillContent> {
-  const skill = await getSkill(db, name)
-  if (skill === null) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
+  const skill = await getSkillById(db, skillId)
+  if (skill === null)
+    throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
   const metaRow = await db
     .select({ metaRevision: skills.metaRevision })
     .from(skills)
@@ -584,14 +615,14 @@ export async function saveSkillWithToken(
   if (!skillTokenMatches(decoded, current)) {
     throw new ConflictError(
       'skill-version-conflict',
-      `skill '${name}' changed since you loaded it; reload and retry`,
+      `skill '${skill.name}' changed since you loaded it; reload and retry`,
     )
   }
 
   // managed: the six-writer version funnel. Feed the decoded token into
   // commitSkillVersion's IN-TX composite fence (F4) so the OCC is atomic with the
   // version bump — the outer skillTokenMatches above is only a pre-check.
-  await writeSkillContent(db, opts, name, patch, authorUserId, {
+  await writeSkillContent(db, opts, skillId, patch, authorUserId, {
     skillId: decoded.skillId,
     contentVersion: decoded.contentVersion,
     metaRevision: decoded.metaRevision,
@@ -599,7 +630,7 @@ export async function saveSkillWithToken(
   })
   // Re-read so the response carries the FRESH token (writeSkillContent's return
   // omits it) — the client reuses it for the next save without a reload.
-  return readSkillContent(db, opts, name)
+  return readSkillContent(db, opts, skillId)
 }
 
 // --- file tree ---
@@ -607,10 +638,11 @@ export async function saveSkillWithToken(
 export async function listSkillFiles(
   db: DbClient,
   opts: SkillFsOptions,
-  name: string,
+  skillId: string,
 ): Promise<FileNode[]> {
-  const skill = await getSkill(db, name)
-  if (skill === null) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
+  const skill = await getSkillById(db, skillId)
+  if (skill === null)
+    throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
   // RFC-170 (G1-1): the file tree reflects the AUTHORITATIVE snapshot, not live —
   // consistent with readSkillContent/readSkillFile.
   const root = skillReadRoot(skill, opts)
@@ -644,18 +676,19 @@ function walkDir(absRoot: string, relRoot: string): FileNode[] {
 export async function readSkillFile(
   db: DbClient,
   opts: SkillFsOptions,
-  name: string,
+  skillId: string,
   relPath: string,
 ): Promise<string> {
-  const skill = await getSkill(db, name)
-  if (skill === null) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
+  const skill = await getSkillById(db, skillId)
+  if (skill === null)
+    throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
   // RFC-170 (G1-1): read from the AUTHORITATIVE snapshot, not live.
   const root = skillReadRoot(skill, opts)
   const abs = safeJoin(root, relPath)
   if (!existsSync(abs)) {
     throw new NotFoundError(
       'skill-file-not-found',
-      `file '${relPath}' not found in skill '${name}'`,
+      `file '${relPath}' not found in skill '${skill.name}'`,
     )
   }
   // RFC-170 G3-1 (security): safeJoin does NOT resolve symlinks, but readFileSync
@@ -673,7 +706,7 @@ export async function readSkillFile(
 export async function writeSkillFile(
   db: DbClient,
   opts: SkillFsOptions,
-  name: string,
+  skillId: string,
   relPath: string,
   content: string,
   authorUserId?: string | null,
@@ -684,8 +717,9 @@ export async function writeSkillFile(
   // store) — OCC-fenced in the version-bump tx. Malformed → 400, stale → 409.
   expectedToken?: string,
 ): Promise<void> {
-  const skill = await getSkill(db, name)
-  if (skill === null) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
+  const skill = await getSkillById(db, skillId)
+  if (skill === null)
+    throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
   // RFC-169: SKILL.md is edited exclusively through POST /save — the file tree
   // must never write it via an arbitrary path (before RFC-169 there was NO
   // check, so adding a file named `SKILL.md` / `./SKILL.md` truncated it).
@@ -701,7 +735,7 @@ export async function writeSkillFile(
   commitSkillVersion(
     db,
     opts,
-    name,
+    skillId,
     (staging) => {
       const abs = safeJoin(staging, relPath)
       // RFC-170 G3-1 parity with the read path: safeJoin is lexical, but
@@ -726,7 +760,7 @@ export async function writeSkillFile(
 export async function deleteSkillFile(
   db: DbClient,
   opts: SkillFsOptions,
-  name: string,
+  skillId: string,
   relPath: string,
   authorUserId?: string | null,
   // RFC-170 (4th-review [high]): owner the route authorized against; funnel 409s on drift.
@@ -734,8 +768,9 @@ export async function deleteSkillFile(
   // RFC-170 F3: composite precondition token — OCC-fenced in the version-bump tx.
   expectedToken?: string,
 ): Promise<void> {
-  const skill = await getSkill(db, name)
-  if (skill === null) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
+  const skill = await getSkillById(db, skillId)
+  if (skill === null)
+    throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
   const root = skillRoot(skill, opts)
   // RFC-169: SKILL.md is special — refuse to delete it (users edit via /save).
   // The pre-RFC-169 raw `=== 'SKILL.md'` compare was bypassable via `./SKILL.md`,
@@ -744,7 +779,7 @@ export async function deleteSkillFile(
   if (!existsSync(safeJoin(root, relPath))) {
     throw new NotFoundError(
       'skill-file-not-found',
-      `file '${relPath}' not found in skill '${name}'`,
+      `file '${relPath}' not found in skill '${skill.name}'`,
     )
   }
   const fence = tokenToVersionFence(expectedToken)
@@ -758,7 +793,7 @@ export async function deleteSkillFile(
   commitSkillVersion(
     db,
     opts,
-    name,
+    skillId,
     (staging) => {
       const abs = safeJoin(staging, relPath)
       if (!existsSync(abs)) return

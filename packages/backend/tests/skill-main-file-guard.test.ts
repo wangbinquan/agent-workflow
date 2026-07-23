@@ -61,17 +61,19 @@ describe('writeSkillFile / deleteSkillFile SKILL.md guard', () => {
   let db: DbClient
   let appHome: string
   let fsOpts: SkillFsOptions
+  let skillId: string
 
   beforeEach(async () => {
     appHome = mkdtempSync(join(tmpdir(), 'aw-skill-guard-'))
     db = createInMemoryDb(MIGRATIONS)
     fsOpts = { appHome }
-    await createManagedSkill(db, fsOpts, {
+    const skill = await createManagedSkill(db, fsOpts, {
       name: 'foo',
       description: '',
       bodyMd: 'orig body',
       frontmatterExtra: {},
     })
+    skillId = skill.id
   })
   afterEach(() => {
     rmSync(appHome, { recursive: true, force: true })
@@ -81,7 +83,7 @@ describe('writeSkillFile / deleteSkillFile SKILL.md guard', () => {
 
   test('write is refused for every SKILL.md alias', async () => {
     for (const alias of ALIASES) {
-      await expect(writeSkillFile(db, fsOpts, 'foo', alias, 'HACKED')).rejects.toBeInstanceOf(
+      await expect(writeSkillFile(db, fsOpts, skillId, alias, 'HACKED')).rejects.toBeInstanceOf(
         ConflictError,
       )
     }
@@ -89,15 +91,17 @@ describe('writeSkillFile / deleteSkillFile SKILL.md guard', () => {
 
   test('delete is refused for every SKILL.md alias', async () => {
     for (const alias of ALIASES) {
-      await expect(deleteSkillFile(db, fsOpts, 'foo', alias)).rejects.toBeInstanceOf(ConflictError)
+      await expect(deleteSkillFile(db, fsOpts, skillId, alias)).rejects.toBeInstanceOf(
+        ConflictError,
+      )
     }
   })
 
   test('genuine support files write and delete normally', async () => {
-    await writeSkillFile(db, fsOpts, 'foo', 'skillset.md', 'not the main file')
-    await writeSkillFile(db, fsOpts, 'foo', 'docs/SKILL.md', 'nested is fine')
-    await deleteSkillFile(db, fsOpts, 'foo', 'skillset.md')
-    await deleteSkillFile(db, fsOpts, 'foo', 'docs/SKILL.md')
+    await writeSkillFile(db, fsOpts, skillId, 'skillset.md', 'not the main file')
+    await writeSkillFile(db, fsOpts, skillId, 'docs/SKILL.md', 'nested is fine')
+    await deleteSkillFile(db, fsOpts, skillId, 'skillset.md')
+    await deleteSkillFile(db, fsOpts, skillId, 'docs/SKILL.md')
   })
 
   // Filesystem-identity fallback (APFS `ſKILL.md` U+017F). OS-dependent: on a
@@ -115,13 +119,13 @@ describe('writeSkillFile / deleteSkillFile SKILL.md guard', () => {
       foldsOntoMain = false // ENOENT → case-sensitive fs
     }
     if (foldsOntoMain) {
-      await expect(writeSkillFile(db, fsOpts, 'foo', 'ſKILL.md', 'HACK')).rejects.toBeInstanceOf(
-        ConflictError,
-      )
+      await expect(
+        writeSkillFile(db, fsOpts, skillId, 'ſKILL.md', 'HACK'),
+      ).rejects.toBeInstanceOf(ConflictError)
     } else {
       // Different file — allowed. (Then it exists and can be deleted normally.)
-      await writeSkillFile(db, fsOpts, 'foo', 'ſKILL.md', 'a real other file')
-      await deleteSkillFile(db, fsOpts, 'foo', 'ſKILL.md')
+      await writeSkillFile(db, fsOpts, skillId, 'ſKILL.md', 'a real other file')
+      await deleteSkillFile(db, fsOpts, skillId, 'ſKILL.md')
     }
   })
 })

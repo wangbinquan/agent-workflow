@@ -31,7 +31,6 @@ import type {
   FusionSkipped,
   FusionStatus,
   LaunchFusion,
-  Skill,
 } from '@agent-workflow/shared'
 import { FusionResultManifestSchema, TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
@@ -42,7 +41,7 @@ import { agents, fusions, skills, skillVersions, workflows } from '@/db/schema'
 import { createAgent } from '@/services/agent'
 import { canManageMemory, fuseMemoriesTx, getMemoryById } from '@/services/memory'
 import { canViewResource, isResourceAdminActor, isResourceOwner } from '@/services/resourceAcl'
-import { getSkill, getSkillPreconditionTokenById } from '@/services/skill'
+import { getSkill, getSkillById, getSkillPreconditionTokenById } from '@/services/skill'
 import { decodeSkillToken, encodeSkillToken } from '@/services/skillToken'
 import { commitSkillVersion, type SkillVersionFsOptions } from '@/services/skillVersion'
 import { trySetTaskStatus } from '@/services/lifecycle'
@@ -497,7 +496,7 @@ export async function createFusion(
     mkdirSync(workDir, { recursive: true })
     // RFC-170 T6 (Codex F10/F11): seed from the token's immutable snapshot with a
     // generation (skillId) check; discard the worktree if it can't be seeded safely.
-    await seedFusionFromSnapshot(db, appHome, input.skillName, preconditionToken, workDir)
+    await seedFusionFromSnapshot(db, appHome, preconditionToken, workDir)
     const baseCommit = await seedWorktree(workDir, deps.seedGit)
 
     // 4. Launch the engine task (preCreatedWorktree bypasses worktree creation;
@@ -885,9 +884,22 @@ export async function listFusionSummaries(
 async function requireCurrentSkillWritable(
   db: DbClient,
   actor: Actor,
-  skillName: string,
+  token: string | null,
 ): Promise<void> {
-  const skill = await getSkill(db, skillName)
+  if (token === null) {
+    throw new ConflictError(
+      'fusion-precondition-legacy',
+      'this fusion predates snapshot protection; re-initiate it against the current skill',
+    )
+  }
+  const target = decodeSkillToken(token)
+  if (target === null) {
+    throw new ConflictError(
+      'fusion-precondition-stale',
+      'the target skill identity is invalid; re-initiate the fusion',
+    )
+  }
+  const skill = await getSkillById(db, target.skillId)
   if (skill === null) {
     throw new ConflictError(
       'fusion-precondition-stale',
@@ -914,7 +926,6 @@ function claimFusionDecision(
     const cur = tx
       .select({
         status: fusions.status,
-        skillName: fusions.skillName,
         preconditionToken: fusions.preconditionToken,
       })
       .from(fusions)
@@ -927,6 +938,13 @@ function claimFusionDecision(
         'this fusion predates snapshot protection; re-initiate it against the current skill',
       )
     }
+    const target = decodeSkillToken(cur.preconditionToken)
+    if (target === null) {
+      throw new ConflictError(
+        'fusion-precondition-stale',
+        'the target skill identity is invalid; re-initiate the fusion',
+      )
+    }
     const live = tx
       .select({
         id: skills.id,
@@ -935,7 +953,7 @@ function claimFusionDecision(
         ownerUserId: skills.ownerUserId,
       })
       .from(skills)
-      .where(and(eq(skills.name, cur.skillName), eq(skills.reservationState, 'ready')))
+      .where(and(eq(skills.id, target.skillId), eq(skills.reservationState, 'ready')))
       .get()
     const liveToken =
       live === undefined
@@ -1017,6 +1035,17 @@ function fusionTokenExpectations(token: string | null): {
   }
 }
 
+function requireFusionSkillId(token: string | null): string {
+  const decoded = token === null ? null : decodeSkillToken(token)
+  if (decoded === null) {
+    throw new ConflictError(
+      'fusion-precondition-stale',
+      'the target skill identity is invalid; re-initiate the fusion',
+    )
+  }
+  return decoded.skillId
+}
+
 /**
  * RFC-170 T6 (Codex re-review F10/F11) — seed `workDir` from the token's IMMUTABLE
  * version snapshot (`versions/v<contentVersion>/files`), then verify the skill at
@@ -1031,7 +1060,6 @@ function fusionTokenExpectations(token: string | null): {
 async function seedFusionFromSnapshot(
   db: DbClient,
   appHome: string,
-  skillName: string,
   token: string | null,
   workDir: string,
 ): Promise<void> {
@@ -1039,9 +1067,9 @@ async function seedFusionFromSnapshot(
   if (t === null) {
     throw new ConflictError('fusion-precondition-stale', 'invalid precondition token; re-initiate')
   }
-  const matches = (s: Skill | null): boolean =>
+  const matches = (s: Awaited<ReturnType<typeof getSkillById>>): boolean =>
     s !== null && s.id === t.skillId && s.contentVersion === t.contentVersion
-  const seedDir = join(appHome, 'skills', skillName, 'versions', `v${t.contentVersion}`, 'files')
+  const seedDir = join(appHome, 'skills', t.skillId, 'versions', `v${t.contentVersion}`, 'files')
   if (!existsSync(seedDir)) {
     throw new ConflictError(
       'fusion-skill-unversioned',
@@ -1049,12 +1077,12 @@ async function seedFusionFromSnapshot(
     )
   }
   // Pre-copy: catch a delete→recreate that already repointed this name+version.
-  if (!matches(await getSkill(db, skillName))) {
+  if (!matches(await getSkillById(db, t.skillId))) {
     throw new ConflictError('fusion-precondition-stale', 'the target skill changed; re-initiate')
   }
   copyWorktreeContent(seedDir, workDir)
   // Post-copy: catch a recreate that raced the copy (no task has started).
-  if (!matches(await getSkill(db, skillName))) {
+  if (!matches(await getSkillById(db, t.skillId))) {
     throw new ConflictError(
       'fusion-precondition-stale',
       'the target skill changed during setup; re-initiate',
@@ -1082,7 +1110,7 @@ export async function approveFusion(deps: FusionDeps, id: string, actor: Actor):
   // RFC-170 T6 (Codex F4): re-check write access to the CURRENT skill. A managed
   // ACL transfer does not change the token, so without this the fusion owner could
   // approve a write into a skill they no longer own after transferring it away.
-  await requireCurrentSkillWritable(db, actor, row.skillName)
+  await requireCurrentSkillWritable(db, actor, row.preconditionToken)
   // RFC-170 T6 (Codex F4): atomically CLAIM awaiting_approval → applying with the
   // skill-token check in the SAME tx. Only the winner proceeds; a lost race or a
   // drifted skill aborts here with zero side effects (replaces the old
@@ -1099,7 +1127,7 @@ export async function approveFusion(deps: FusionDeps, id: string, actor: Actor):
     const version = commitSkillVersion(
       db,
       fsOpts,
-      row.skillName,
+      requireFusionSkillId(row.preconditionToken),
       (staging) => {
         for (const e of readdirSync(staging))
           rmSync(join(staging, e), { recursive: true, force: true })
@@ -1178,7 +1206,7 @@ export async function rejectFusion(
   }
   // RFC-170 T6 (Codex F5): re-check write access to the CURRENT skill before a
   // re-run (a managed ACL transfer doesn't drift the token).
-  await requireCurrentSkillWritable(db, actor, row.skillName)
+  await requireCurrentSkillWritable(db, actor, row.preconditionToken)
   // RFC-170 T6 (Codex F5): atomically CLAIM awaiting_approval → running (with the
   // skill-token check in the SAME tx) BEFORE any side effect. `currentTaskId` is
   // nulled so a concurrent reconcile skips this fusion until the new task is set.
@@ -1219,7 +1247,7 @@ export async function rejectFusion(
       // RFC-170 T6 (Codex F10/F11): re-run baseline = the token's immutable snapshot,
       // with a generation (skillId) check (the claim above verified the token, but
       // re-verify around the copy for a same-name recreate). A throw is caught below.
-      await seedFusionFromSnapshot(db, appHome, row.skillName, row.preconditionToken, workDir)
+      await seedFusionFromSnapshot(db, appHome, row.preconditionToken, workDir)
       const baseCommit = await seedWorktree(workDir, deps.seedGit)
       // Then overlay the PRIOR proposal as uncommitted working changes, so the
       // agent refines its last attempt while the diff vs baseline stays full.

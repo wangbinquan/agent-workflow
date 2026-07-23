@@ -30,6 +30,7 @@ describe('readSkillFile symlink containment', () => {
   let appHome: string
   let outsideDir: string
   let fsOpts: SkillFsOptions
+  let skillId: string
 
   beforeEach(async () => {
     appHome = mkdtempSync(join(tmpdir(), 'aw-skill-symlink-'))
@@ -37,12 +38,13 @@ describe('readSkillFile symlink containment', () => {
     writeFileSync(join(outsideDir, 'host-secret.txt'), 'TOP SECRET HOST FILE', 'utf-8')
     db = createInMemoryDb(MIGRATIONS)
     fsOpts = { appHome }
-    await createManagedSkill(db, fsOpts, {
+    const skill = await createManagedSkill(db, fsOpts, {
       name: 'foo',
       description: '',
       bodyMd: 'body',
       frontmatterExtra: {},
     })
+    skillId = skill.id
   })
   afterEach(() => {
     rmSync(appHome, { recursive: true, force: true })
@@ -52,26 +54,28 @@ describe('readSkillFile symlink containment', () => {
   // RFC-170 G1-1: readSkillFile/listSkillFiles read the AUTHORITATIVE snapshot
   // (versions/v1/files) for managed skills, so plant test fixtures THERE.
   function snapshotRoot(): string {
-    return join(appHome, 'skills', 'foo', 'versions', 'v1', 'files')
+    return join(appHome, 'skills', skillId, 'versions', 'v1', 'files')
   }
 
   test('a symlink escaping the skill root is refused (no host-file leak)', async () => {
     // Plant an escaping symlink in the snapshot the read path actually reads.
     symlinkSync(join(outsideDir, 'host-secret.txt'), join(snapshotRoot(), 'escape'))
-    await expect(readSkillFile(db, fsOpts, 'foo', 'escape')).rejects.toBeInstanceOf(ValidationError)
+    await expect(readSkillFile(db, fsOpts, skillId, 'escape')).rejects.toBeInstanceOf(
+      ValidationError,
+    )
   })
 
   test('a genuine in-root file reads normally', async () => {
-    await writeSkillFile(db, fsOpts, 'foo', 'docs/note.txt', 'hello inside')
-    expect(await readSkillFile(db, fsOpts, 'foo', 'docs/note.txt')).toBe('hello inside')
-    expect(await readSkillFile(db, fsOpts, 'foo', 'SKILL.md')).toContain('body')
+    await writeSkillFile(db, fsOpts, skillId, 'docs/note.txt', 'hello inside')
+    expect(await readSkillFile(db, fsOpts, skillId, 'docs/note.txt')).toBe('hello inside')
+    expect(await readSkillFile(db, fsOpts, skillId, 'SKILL.md')).toContain('body')
   })
 
   test('a symlink that stays INSIDE the root still resolves and reads', async () => {
     const root = snapshotRoot()
     writeFileSync(join(root, 'real.txt'), 'inside target', 'utf-8')
     symlinkSync(join(root, 'real.txt'), join(root, 'link.txt'))
-    expect(await readSkillFile(db, fsOpts, 'foo', 'link.txt')).toBe('inside target')
+    expect(await readSkillFile(db, fsOpts, skillId, 'link.txt')).toBe('inside target')
   })
 
   test('readSkillContent refuses a SKILL.md symlinked to a host file (G3-1 content GET)', async () => {
@@ -79,10 +83,18 @@ describe('readSkillFile symlink containment', () => {
     // (versions/v1/files), so plant the escaping symlink THERE — the containment
     // (realpathInside on the read root) must still refuse it (defense-in-depth
     // against a tampered/corrupted snapshot; snapshots are normally symlink-free).
-    const v1SkillMd = join(appHome, 'skills', 'foo', 'versions', 'v1', 'files', 'SKILL.md')
+    const v1SkillMd = join(
+      appHome,
+      'skills',
+      skillId,
+      'versions',
+      'v1',
+      'files',
+      'SKILL.md',
+    )
     rmSync(v1SkillMd)
     symlinkSync(join(outsideDir, 'host-secret.txt'), v1SkillMd)
-    await expect(readSkillContent(db, fsOpts, 'foo')).rejects.toBeInstanceOf(ValidationError)
+    await expect(readSkillContent(db, fsOpts, skillId)).rejects.toBeInstanceOf(ValidationError)
   })
 
   test('readSkillContent IGNORES a tampered LIVE symlink (reads the clean snapshot, G1-1)', async () => {
@@ -94,17 +106,25 @@ describe('readSkillFile symlink containment', () => {
     // is simply not the read source anymore.
     rmSync(join(root, 'SKILL.md'))
     symlinkSync(join(outsideDir, 'host-secret.txt'), join(root, 'SKILL.md'))
-    const content = await readSkillContent(db, fsOpts, 'foo')
+    const content = await readSkillContent(db, fsOpts, skillId)
     expect(content.bodyMd).toContain('body') // clean snapshot body
     expect(content.bodyMd).not.toContain('TOP SECRET') // no host-file leak
   })
 
   test('getSkillVersionContent refuses a historical SKILL.md symlinked out (G3-1 history GET)', () => {
     // createManagedSkill committed v1; its files dir is versions/v1/files.
-    const v1SkillMd = join(appHome, 'skills', 'foo', 'versions', 'v1', 'files', 'SKILL.md')
+    const v1SkillMd = join(
+      appHome,
+      'skills',
+      skillId,
+      'versions',
+      'v1',
+      'files',
+      'SKILL.md',
+    )
     rmSync(v1SkillMd)
     symlinkSync(join(outsideDir, 'host-secret.txt'), v1SkillMd)
-    expect(() => getSkillVersionContent(db, fsOpts, 'foo', 1)).toThrow(ValidationError)
+    expect(() => getSkillVersionContent(db, fsOpts, skillId, 1)).toThrow(ValidationError)
   })
 
   // ---------------------------------------------------------------------------
@@ -120,7 +140,7 @@ describe('readSkillFile symlink containment', () => {
   // the read tests above use.
   // ---------------------------------------------------------------------------
   function liveRoot(): string {
-    return join(appHome, 'skills', 'foo', 'files')
+    return join(appHome, 'skills', skillId, 'files')
   }
 
   test('writeSkillFile refuses to follow a leaf symlink that escapes the root', async () => {
@@ -129,7 +149,7 @@ describe('readSkillFile symlink containment', () => {
     // A symlink in the live tree pointing at a host file.
     symlinkSync(secret, join(liveRoot(), 'escape'))
 
-    await expect(writeSkillFile(db, fsOpts, 'foo', 'escape', 'PWNED')).rejects.toBeInstanceOf(
+    await expect(writeSkillFile(db, fsOpts, skillId, 'escape', 'PWNED')).rejects.toBeInstanceOf(
       ValidationError,
     )
     // The host file must be untouched — the write did not follow the link.
@@ -140,7 +160,7 @@ describe('readSkillFile symlink containment', () => {
     // `sub` is a symlink to a host directory; writing sub/child would follow it.
     symlinkSync(outsideDir, join(liveRoot(), 'sub'))
     await expect(
-      writeSkillFile(db, fsOpts, 'foo', 'sub/child.txt', 'PWNED'),
+      writeSkillFile(db, fsOpts, skillId, 'sub/child.txt', 'PWNED'),
     ).rejects.toBeInstanceOf(ValidationError)
     // No file was created in the host directory through the link.
     expect(existsSync(join(outsideDir, 'child.txt'))).toBe(false)
@@ -155,7 +175,7 @@ describe('readSkillFile symlink containment', () => {
     // delete is refused outright. The host file is untouched either way — the
     // whole point. (Such a link cannot legitimately exist in a managed skill;
     // zip import does not create symlinks.)
-    await expect(deleteSkillFile(db, fsOpts, 'foo', 'escape')).rejects.toBeInstanceOf(
+    await expect(deleteSkillFile(db, fsOpts, skillId, 'escape')).rejects.toBeInstanceOf(
       ValidationError,
     )
     expect(readFileSync(secret, 'utf-8')).toBe('ORIGINAL HOST CONTENT')
@@ -173,16 +193,16 @@ describe('readSkillFile symlink containment', () => {
     rmSync(liveSkillMd)
     symlinkSync(secret, liveSkillMd)
     await expect(
-      writeSkillContent(db, fsOpts, 'foo', { bodyMd: 'PWNED body', description: '' }),
+      writeSkillContent(db, fsOpts, skillId, { bodyMd: 'PWNED body', description: '' }),
     ).rejects.toBeInstanceOf(ValidationError)
     // The host file must be untouched — the SKILL.md write did not follow the link.
     expect(readFileSync(secret, 'utf-8')).toBe('ORIGINAL HOST CONTENT')
   })
 
   test('positive control — a write/delete of an in-root path still works', async () => {
-    await writeSkillFile(db, fsOpts, 'foo', 'docs/keep.txt', 'kept')
-    expect(await readSkillFile(db, fsOpts, 'foo', 'docs/keep.txt')).toBe('kept')
-    await deleteSkillFile(db, fsOpts, 'foo', 'docs/keep.txt')
-    await expect(readSkillFile(db, fsOpts, 'foo', 'docs/keep.txt')).rejects.toBeInstanceOf(Error)
+    await writeSkillFile(db, fsOpts, skillId, 'docs/keep.txt', 'kept')
+    expect(await readSkillFile(db, fsOpts, skillId, 'docs/keep.txt')).toBe('kept')
+    await deleteSkillFile(db, fsOpts, skillId, 'docs/keep.txt')
+    await expect(readSkillFile(db, fsOpts, skillId, 'docs/keep.txt')).rejects.toBeInstanceOf(Error)
   })
 })

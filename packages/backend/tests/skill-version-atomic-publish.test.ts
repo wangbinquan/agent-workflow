@@ -21,28 +21,30 @@ describe('commitSkillVersion atomic publish', () => {
   let db: DbClient
   let appHome: string
   let fsOpts: { appHome: string }
+  let skillId: string
 
   beforeEach(async () => {
     appHome = mkdtempSync(join(tmpdir(), 'aw-atomic-pub-'))
     fsOpts = { appHome }
     db = createInMemoryDb(MIGRATIONS)
-    await createManagedSkill(db, fsOpts, {
+    const skill = await createManagedSkill(db, fsOpts, {
       name: 'foo',
       description: '',
       bodyMd: 'v1 body',
       frontmatterExtra: {},
     })
+    skillId = skill.id
   })
   afterEach(() => rmSync(appHome, { recursive: true, force: true }))
 
   test('a version commit publishes the new live tree and leaves NO op-scoped/staging siblings', () => {
-    const skillDir = join(appHome, 'skills', 'foo')
+    const skillDir = join(appHome, 'skills', skillId)
     const filesDir = join(skillDir, 'files')
 
     commitSkillVersion(
       db,
       fsOpts,
-      'foo',
+      skillId,
       (staging) => {
         writeFileSync(join(staging, 'SKILL.md'), '---\nname: foo\n---\nv2 body', 'utf-8')
       },

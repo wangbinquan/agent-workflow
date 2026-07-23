@@ -11,11 +11,21 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { dbTxSync } from '../src/db/txSync'
-import { skills } from '../src/db/schema'
-import { createManagedSkill, getSkill, listSkills } from '../src/services/skill'
-import { advancePhase, beginOperation } from '../src/services/skillOperations'
+import { skillOperationLocks, skills } from '../src/db/schema'
+import {
+  createManagedSkill,
+  createManagedSkillWithFiles,
+  getSkill,
+  listSkills,
+} from '../src/services/skill'
+import {
+  advancePhase,
+  beginOperation,
+  getActiveOp,
+} from '../src/services/skillOperations'
 import { recoverSkillOperations } from '../src/services/skillOpRecoveryDriver'
 import { SKILL_OP_RECOVERY_REGISTRY } from '../src/services/skillOpRegistry'
+import { runSkillIdentityMigrationBarrier } from '../src/services/skillIdentityMigration'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -52,7 +62,7 @@ describe('RFC-170 reserve op', () => {
     expect(await getSkill(db, 'foo')).not.toBeNull()
     expect((await listSkills(db)).map((x) => x.name)).toContain('foo')
     // v1 archived.
-    const dir = join(appHome, 'skills', 'foo', 'versions', 'v1', 'files')
+    const dir = join(appHome, 'skills', s.id, 'versions', 'v1', 'files')
     expect(existsSync(dir)).toBe(true)
   })
 
@@ -135,5 +145,40 @@ describe('RFC-170 reserve op', () => {
     // Skill stays ready + visible; the op finishes.
     expect(rowState(id)).toBe('ready')
     expect(await getSkill(db, 'done1')).not.toBeNull()
+  })
+
+  test('in-process fault after db-committed preserves ready row/root/op for rollforward', async () => {
+    await expect(
+      createManagedSkillWithFiles(
+        db,
+        fsOpts,
+        { name: 'committed-create', description: 'd' },
+        (filesDir) => {
+          writeFileSync(
+            join(filesDir, 'SKILL.md'),
+            '---\nname: committed-create\ndescription: d\n---\nbody',
+          )
+        },
+        {
+          __afterDbCommitForTest: () => {
+            throw new Error('finish-fault')
+          },
+        },
+      ),
+    ).rejects.toThrow('finish-fault')
+    const row = db
+      .select()
+      .from(skills)
+      .where(eq(skills.name, 'committed-create'))
+      .get()!
+    expect(row.reservationState).toBe('ready')
+    expect(existsSync(join(appHome, 'skills', row.id, 'files', 'SKILL.md'))).toBe(true)
+    expect(getActiveOp(db, row.id)?.phase).toBe('db-committed')
+    expect(db.select().from(skillOperationLocks).all()).toHaveLength(1)
+
+    runSkillIdentityMigrationBarrier(db, { appHome })
+    expect(getActiveOp(db, row.id)).toBeNull()
+    expect(db.select().from(skillOperationLocks).all()).toHaveLength(0)
+    expect(await getSkill(db, 'committed-create')).not.toBeNull()
   })
 })

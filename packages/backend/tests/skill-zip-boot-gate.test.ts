@@ -107,7 +107,7 @@ function insertBareRow(
       name,
       description: 'bare',
       sourceKind: 'managed',
-      managedPath: `skills/${name}/files`,
+      managedPath: `skills/${id}/files`,
       visibility: 'public',
       createdAt: now,
       updatedAt: now,
@@ -154,13 +154,13 @@ describe('zip import create under the ACTIVE boot availability gate', () => {
     const versions = h.db
       .select()
       .from(skillVersions)
-      .where(eq(skillVersions.skillName, 'pack-a'))
+      .where(eq(skillVersions.skillId, row.id))
       .all()
     expect(versions.length).toBe(1)
-    const snapDir = join(h.fsOpts.appHome, 'skills', 'pack-a', 'versions', 'v1', 'files')
+    const snapDir = join(h.fsOpts.appHome, 'skills', row.id, 'versions', 'v1', 'files')
     expect(existsSync(join(snapDir, 'SKILL.md'))).toBe(true)
     expect(existsSync(join(snapDir, 'ref.md'))).toBe(true)
-    const liveDir = join(h.fsOpts.appHome, 'skills', 'pack-a', 'files')
+    const liveDir = join(h.fsOpts.appHome, 'skills', row.id, 'files')
     expect(readFileSync(join(liveDir, 'ref.md'), 'utf-8')).toBe('# reference')
     // Importer became owner (RFC-099 D18).
     expect(row.ownerUserId).toBe('alice')
@@ -210,7 +210,17 @@ describe('zip import create under the ACTIVE boot availability gate', () => {
     expect(r.failed[0]!.message).toContain('unavailable')
     // Occupier intact: row still there, live files never deleted.
     expect(rawRow(h.db, 'occupied')).toBeDefined()
-    expect(existsSync(join(h.fsOpts.appHome, 'skills', 'occupied', 'files', 'SKILL.md'))).toBe(true)
+    expect(
+      existsSync(
+        join(
+          h.fsOpts.appHome,
+          'skills',
+          mustRow(h.db, 'occupied').id,
+          'files',
+          'SKILL.md',
+        ),
+      ),
+    ).toBe(true)
   })
 
   test('the pre-fix bare-insert path is gone from the importer source', () => {
@@ -240,8 +250,8 @@ describe('backfillLegacySkillVersions — legacy promote + husk sweep', () => {
     // ① husk: what the pre-fix zip failure path left behind — row without files.
     insertBareRow(h.db, 'husk')
     // ② healthy legacy: pre-RFC-101 skill — row + live files, no version rows.
-    insertBareRow(h.db, 'legacy-ok')
-    const legacyFiles = join(h.fsOpts.appHome, 'skills', 'legacy-ok', 'files')
+    const legacyId = insertBareRow(h.db, 'legacy-ok')
+    const legacyFiles = join(h.fsOpts.appHome, 'skills', legacyId, 'files')
     mkdirSync(legacyFiles, { recursive: true })
     writeFileSync(join(legacyFiles, 'SKILL.md'), skillMd('legacy-ok'), 'utf-8')
     // ③ reserving: an in-flight create's row — the sweep must never touch it.
@@ -257,7 +267,7 @@ describe('backfillLegacySkillVersions — legacy promote + husk sweep', () => {
     expect(isSkillBootVerified(legacy.id)).toBe(true)
     expect(
       existsSync(
-        join(h.fsOpts.appHome, 'skills', 'legacy-ok', 'versions', 'v1', 'files', 'SKILL.md'),
+        join(h.fsOpts.appHome, 'skills', legacy.id, 'versions', 'v1', 'files', 'SKILL.md'),
       ),
     ).toBe(true)
     const reserving = mustRow(h.db, 'mid-create')
@@ -269,8 +279,8 @@ describe('backfillLegacySkillVersions — legacy promote + husk sweep', () => {
     // e.g. a pre-RFC-101 skill whose main file was lost. Deleting it would
     // destroy the support files + the resource identity; the sweep must leave
     // it for a human to repair.
-    insertBareRow(h.db, 'wounded')
-    const woundedFiles = join(h.fsOpts.appHome, 'skills', 'wounded', 'files')
+    const woundedId = insertBareRow(h.db, 'wounded')
+    const woundedFiles = join(h.fsOpts.appHome, 'skills', woundedId, 'files')
     mkdirSync(woundedFiles, { recursive: true })
     writeFileSync(join(woundedFiles, 'reference.md'), '# still valuable', 'utf-8')
 
@@ -365,7 +375,7 @@ describe('quarantine recovery via boot rescan', () => {
     const id = mustRow(h.db, 'rot').id
     h.db.update(skills).set({ versionState: 'quarantined' }).where(eq(skills.id, id)).run()
     writeFileSync(
-      join(h.fsOpts.appHome, 'skills', 'rot', 'versions', 'v1', 'files', 'SKILL.md'),
+      join(h.fsOpts.appHome, 'skills', id, 'versions', 'v1', 'files', 'SKILL.md'),
       'tampered',
       'utf-8',
     )

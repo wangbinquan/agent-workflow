@@ -21,23 +21,25 @@ describe('RFC-170 T3 — read-path composite token', () => {
   let db: DbClient
   let appHome: string
   let fsOpts: { appHome: string }
+  let skillId: string
 
   beforeEach(async () => {
     appHome = mkdtempSync(join(tmpdir(), 'aw-read-token-'))
     fsOpts = { appHome }
     db = createInMemoryDb(MIGRATIONS)
-    await createManagedSkill(db, fsOpts, {
+    const skill = await createManagedSkill(db, fsOpts, {
       name: 'foo',
       description: 'd',
       bodyMd: 'body',
       frontmatterExtra: {},
     })
+    skillId = skill.id
   })
   afterEach(() => rmSync(appHome, { recursive: true, force: true }))
 
   test('readSkillContent returns a token decoding to the skill identity', async () => {
     const skill = await getSkill(db, 'foo')
-    const content = await readSkillContent(db, fsOpts, 'foo')
+    const content = await readSkillContent(db, fsOpts, skillId)
     expect(content.token).toBeDefined()
     const decoded = decodeSkillToken(content.token!)
     expect(decoded).not.toBeNull()
@@ -47,7 +49,7 @@ describe('RFC-170 T3 — read-path composite token', () => {
   })
 
   test('the token is opaque + round-trips exactly (no drift)', async () => {
-    const content = await readSkillContent(db, fsOpts, 'foo')
+    const content = await readSkillContent(db, fsOpts, skillId)
     const skill = await getSkill(db, 'foo')
     const decoded = decodeSkillToken(content.token!)!
     // Re-encoding the decoded parts reproduces the same opaque string.
@@ -61,10 +63,10 @@ describe('RFC-170 T3 — read-path composite token', () => {
   test('readSkillContent returns the snapshot body, ignoring tampered live files', async () => {
     // Tamper the LIVE SKILL.md directly (no version bump → still v1).
     writeFileSync(
-      join(appHome, 'skills', 'foo', 'files', 'SKILL.md'),
+      join(appHome, 'skills', skillId, 'files', 'SKILL.md'),
       '---\nname: foo\ndescription: d\n---\nLIVE-TAMPERED',
     )
-    const content = await readSkillContent(db, fsOpts, 'foo')
+    const content = await readSkillContent(db, fsOpts, skillId)
     expect(content.bodyMd).toContain('body') // from the immutable v1 snapshot
     expect(content.bodyMd).not.toContain('LIVE-TAMPERED') // NOT from mutated live
   })

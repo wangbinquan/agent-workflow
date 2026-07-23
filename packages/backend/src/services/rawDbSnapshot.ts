@@ -77,7 +77,7 @@ export interface RawCopyResult {
   path: string
   sizeBytes: number
   /** Which of the three sqlite files were present + copied. */
-  copied: { db: boolean; wal: boolean; shm: boolean }
+  copied: { db: boolean; wal: boolean; shm: boolean; skills: boolean }
   /** Whether the best-effort checkpoint actually ran (false = DB unreadable). */
   checkpointed: boolean
 }
@@ -124,7 +124,7 @@ export async function rawCopyDb(opts: RawCopyOptions): Promise<RawCopyResult> {
   // Read migration identity BEFORE copy (best-effort; null on corrupt).
   const identity = readDbMigrationIdentity(dbPath) ?? { lastHash: null, lastCreatedAt: null }
 
-  const copied = { db: false, wal: false, shm: false }
+  const copied = { db: false, wal: false, shm: false, skills: false }
   try {
     if (existsSync(dbPath)) {
       cpSync(dbPath, join(stagingDir, 'db.sqlite'))
@@ -156,6 +156,14 @@ export async function rawCopyDb(opts: RawCopyOptions): Promise<RawCopyResult> {
     if (existsSync(`${dbPath}-shm`)) {
       cpSync(`${dbPath}-shm`, join(stagingDir, 'db.sqlite-shm'))
       copied.shm = true
+    }
+    // RFC-223 PR-5: DB paths and skills/ are one migration generation. Once
+    // 0116 renames skills/{name} to skills/{id}, a DB-only pre-migration
+    // snapshot can no longer restore an old binary-readable state.
+    const skillsRoot = join(appHome, 'skills')
+    if (existsSync(skillsRoot)) {
+      cpSync(skillsRoot, join(stagingDir, 'skills'), { recursive: true })
+      copied.skills = true
     }
 
     const manifest: BackupManifest = {

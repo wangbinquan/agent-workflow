@@ -273,7 +273,7 @@ export const mcpProbes = sqliteTable('mcp_probes', {
 })
 
 // -----------------------------------------------------------------------------
-// skills — fs is source of truth (~/.agent-workflow/skills/{name}/files/).
+// skills — fs is source of truth (~/.agent-workflow/skills/{id}/files/).
 // DB stores only the index.
 // -----------------------------------------------------------------------------
 export const skills = sqliteTable('skills', {
@@ -284,7 +284,7 @@ export const skills = sqliteTable('skills', {
   // removed in migration 0092). external_path / source_id + the skill_sources
   // table were dropped there.
   sourceKind: text('source_kind', { enum: ['managed'] }).notNull(),
-  managedPath: text('managed_path'), // e.g. 'skills/{name}/files/' relative to app dir
+  managedPath: text('managed_path'), // e.g. 'skills/{id}/files/' relative to app dir
   // RFC-099 ACL (see agents table comment).
   ownerUserId: text('owner_user_id'),
   visibility: text('visibility', { enum: ['private', 'public'] })
@@ -323,18 +323,18 @@ export const skills = sqliteTable('skills', {
 //
 // One immutable snapshot per (skill, version_index). Every write to a managed
 // skill's files/ (editor save, fusion apply, restore) archives the new tree
-// under ~/.agent-workflow/skills/{name}/versions/v{n}/files and inserts a row.
+// under ~/.agent-workflow/skills/{id}/versions/v{n}/files and inserts a row.
 // Mirrors doc_versions (RFC-005): the DB stays small, the files stay grep-able.
 // -----------------------------------------------------------------------------
 export const skillVersions = sqliteTable(
   'skill_versions',
   {
     id: text('id').primaryKey(), // ULID
-    skillName: text('skill_name')
+    skillId: text('skill_id')
       .notNull()
-      .references(() => skills.name, { onDelete: 'cascade' }),
+      .references(() => skills.id, { onDelete: 'cascade' }),
     versionIndex: integer('version_index').notNull(), // 1-based; == skills.content_version at archive
-    filesPath: text('files_path').notNull(), // relative to app home: skills/{name}/versions/v{n}/files
+    filesPath: text('files_path').notNull(), // relative to app home: skills/{id}/versions/v{n}/files
     source: text('source', {
       enum: ['initial', 'editor', 'fusion', 'restore'],
     }).notNull(),
@@ -348,7 +348,7 @@ export const skillVersions = sqliteTable(
       .default(sql`(unixepoch() * 1000)`),
   },
   (t) => ({
-    skillVersionIdx: uniqueIndex('uq_skill_versions_skill_v').on(t.skillName, t.versionIndex),
+    skillVersionIdx: uniqueIndex('uq_skill_versions_skill_v').on(t.skillId, t.versionIndex),
     createdIdx: index('idx_skill_versions_created').on(t.createdAt),
   }),
 )

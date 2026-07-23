@@ -320,7 +320,7 @@ export async function commitSkillZipBuffer(
         commitSkillVersion(
           db,
           opts,
-          targetName,
+          existing.id,
           (staging) => {
             // Full replace: drop the funnel's live-seeded staging, lay down the ZIP tree.
             for (const e of readdirSync(staging))

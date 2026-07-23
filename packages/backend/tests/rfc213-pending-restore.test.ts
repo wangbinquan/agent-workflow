@@ -259,6 +259,10 @@ async function makeTarball(
 ): Promise<string> {
   const staging = join(home, `mk-${ulid()}`)
   mkdirSync(staging, { recursive: true })
+  // A modern backup always carries a real skills/ generation. This is also
+  // required for the explicit corrupt-DB salvage path: validation must be able
+  // to prove the filesystem payload without querying the damaged database.
+  mkdirSync(join(staging, 'skills'))
   if (pieces.db === 'valid' || pieces.db === undefined) {
     const db = openDb({ path: join(staging, 'db.sqlite'), migrationsFolder: MIGRATIONS })
     sqliteOf(db).close()
