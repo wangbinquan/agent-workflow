@@ -34,6 +34,10 @@ import {
   rebaseSkillOperationPath,
   skillRootAbs,
 } from '@/services/skillIdentityPaths'
+import {
+  findAgentsUsingManagedSkillInTx,
+  type SkillReferencingAgentRow,
+} from '@/services/skillReferenceGuard'
 import { ConflictError } from '@/util/errors'
 function trashPath(appHome: string, skillId: string, opId: string): string {
   if (!/^[0-9A-HJKMNP-TV-Z]{26}$/.test(opId)) {
@@ -52,6 +56,16 @@ export interface SkillDeleteFence {
   metaRevision: number
   ownerUserId: string | null
   aclRevision: number
+}
+
+/** Internal signal: the service boundary turns this into the ACL-safe
+ * `skill-in-use` DomainError after the op has restored the staged filesystem
+ * root and released its durable lock. */
+export class SkillDeleteReferencedError extends Error {
+  constructor(public readonly refs: SkillReferencingAgentRow[]) {
+    super(`managed skill gained ${refs.length} agent reference(s) before delete commit`)
+    this.name = 'SkillDeleteReferencedError'
+  }
 }
 
 /**
@@ -98,6 +112,8 @@ export function deleteManagedSkillOp(
     // ③ db-committed — DELETE row + advance phase, one tx.
     dbTxSync(db, (tx) => {
       if (expected !== undefined) assertDeleteFence(tx, skill.id, expected)
+      const refs = findAgentsUsingManagedSkillInTx(tx, skill.id)
+      if (refs.length > 0) throw new SkillDeleteReferencedError(refs)
       tx.delete(skills).where(eq(skills.id, skill.id)).run()
       advancePhase(tx, opId, 'db-committed')
     })

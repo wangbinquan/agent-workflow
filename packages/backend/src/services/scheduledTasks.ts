@@ -21,19 +21,19 @@ import {
   wallClockAt,
   redactGitUrl,
 } from '@agent-workflow/shared'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { existsSync, realpathSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { ulid } from 'ulid'
 
 import { buildActor, SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { scheduledTasks, users } from '@/db/schema'
+import { agents, resourceGrants, scheduledTasks, users, workflows, workgroups } from '@/db/schema'
 import { assertWorkflowLaunchable } from '@/services/taskLaunchGate'
-import { canViewResource } from '@/services/resourceAcl'
+import { canViewResource, isResourceAdminActor } from '@/services/resourceAcl'
 import { assertNotBuiltin } from '@/services/systemResources'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
-import { dbTxSync } from '@/db/txSync'
+import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { runGit } from '@/util/git'
 import { SCHEDULED_TASK_CHANNEL, scheduledTaskBroadcaster } from '@/ws/broadcaster'
 
@@ -270,10 +270,103 @@ async function assertScheduledTargetUsable(
   body['workgroupName'] = group.name
 }
 
+/**
+ * Final scheduled-target identity fence. This deliberately re-checks only the
+ * invariants that can race an already-completed async launch-shape check:
+ * exact canonical-id existence, current ACL visibility, and the immutable
+ * built-in marker. It runs in the same dbTxSync as INSERT/UPDATE so target
+ * delete guards and schedule writes have one serial order.
+ */
+function assertScheduledTargetUsableInTx(
+  tx: DbTxSync,
+  actor: Actor,
+  kind: ScheduledLaunchKind,
+  body: Record<string, unknown>,
+): void {
+  if (kind === 'workflow') {
+    const workflowId = body['workflowId'] as string
+    const row = tx
+      .select({
+        id: workflows.id,
+        ownerUserId: workflows.ownerUserId,
+        visibility: workflows.visibility,
+        builtin: workflows.builtin,
+      })
+      .from(workflows)
+      .where(eq(workflows.id, workflowId))
+      .get()
+    if (row === undefined || !canViewResourceInTx(tx, actor, 'workflow', row)) {
+      throw new NotFoundError('workflow-not-found', `workflow '${workflowId}' not found`)
+    }
+    assertNotBuiltin('workflow', row)
+    return
+  }
+
+  if (kind === 'agent') {
+    const agentId = body['agentId'] as string
+    const row = tx
+      .select({
+        id: agents.id,
+        name: agents.name,
+        ownerUserId: agents.ownerUserId,
+        visibility: agents.visibility,
+        builtin: agents.builtin,
+      })
+      .from(agents)
+      .where(eq(agents.id, agentId))
+      .get()
+    if (row === undefined || !canViewResourceInTx(tx, actor, 'agent', row)) {
+      throw new NotFoundError('agent-not-found', 'agent not found')
+    }
+    assertNotBuiltin('agent', row)
+    body['agentName'] = row.name
+    return
+  }
+
+  const workgroupId = body['workgroupId'] as string
+  const row = tx
+    .select({
+      id: workgroups.id,
+      name: workgroups.name,
+      ownerUserId: workgroups.ownerUserId,
+      visibility: workgroups.visibility,
+    })
+    .from(workgroups)
+    .where(eq(workgroups.id, workgroupId))
+    .get()
+  if (row === undefined || !canViewResourceInTx(tx, actor, 'workgroup', row)) {
+    throw new NotFoundError('workgroup-not-found', 'workgroup not found')
+  }
+  body['workgroupName'] = row.name
+}
+
+function canViewResourceInTx(
+  tx: DbTxSync,
+  actor: Actor,
+  type: 'agent' | 'workflow' | 'workgroup',
+  row: { id: string; ownerUserId: string | null; visibility: 'private' | 'public' },
+): boolean {
+  if (isResourceAdminActor(actor)) return true
+  if (row.visibility === 'public' || row.ownerUserId === actor.user.id) return true
+  return (
+    tx
+      .select({ resourceId: resourceGrants.resourceId })
+      .from(resourceGrants)
+      .where(
+        and(
+          eq(resourceGrants.resourceType, type),
+          eq(resourceGrants.resourceId, row.id),
+          eq(resourceGrants.userId, actor.user.id),
+        ),
+      )
+      .get() !== undefined
+  )
+}
+
 export async function createScheduledTask(
   db: DbClient,
   input: CreateScheduledTask,
-  opts: { actor: Actor },
+  opts: { actor: Actor; beforeWriteTx?: () => Promise<void> },
 ): Promise<ScheduledTask> {
   const kind = input.launchKind
   // RFC-165 §9b: kind-enveloped validation — the ONE selector shared by
@@ -292,18 +385,29 @@ export async function createScheduledTask(
   const spec = ScheduleSpecSchema.parse(input.scheduleSpec)
   const now = Date.now()
   const id = ulid()
-  await db.insert(scheduledTasks).values({
-    id,
-    name: input.name,
-    ownerUserId: opts.actor.user.id,
-    launchKind: kind,
-    launchPayload: JSON.stringify(body),
-    scheduleSpec: JSON.stringify(spec),
-    enabled: input.enabled,
-    nextRunAt: input.enabled ? computeNextRunAt(spec, now, now) : null,
-    consecutiveFailures: 0,
-    createdAt: now,
-    updatedAt: now,
+  await opts.beforeWriteTx?.()
+  dbTxSync(db, (tx) => {
+    assertScheduledTargetUsableInTx(
+      tx,
+      opts.actor,
+      kind,
+      body as unknown as Record<string, unknown>,
+    )
+    tx.insert(scheduledTasks)
+      .values({
+        id,
+        name: input.name,
+        ownerUserId: opts.actor.user.id,
+        launchKind: kind,
+        launchPayload: JSON.stringify(body),
+        scheduleSpec: JSON.stringify(spec),
+        enabled: input.enabled,
+        nextRunAt: input.enabled ? computeNextRunAt(spec, now, now) : null,
+        consecutiveFailures: 0,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .run()
   })
   const created = await getScheduledTask(db, id)
   if (created === null) throw new Error('scheduled task disappeared right after insert')
@@ -319,7 +423,7 @@ export async function updateScheduledTask(
   db: DbClient,
   id: string,
   patch: UpdateScheduledTask,
-  opts: { actor: Actor },
+  opts: { actor: Actor; beforeWriteTx?: () => Promise<void> },
 ): Promise<ScheduledTask> {
   const existing = await getScheduledTask(db, id)
   if (existing === null) {
@@ -410,6 +514,7 @@ export async function updateScheduledTask(
     )
   }
 
+  await opts.beforeWriteTx?.()
   const now = Date.now()
   // 实现门 P1 修复（arming TOCTOU）：权限判定若基于 stale 的 existing.enabled，
   // 与写入之间的窗口里另一请求可以先把行 enable——窄 PAT 的 spec-only 更新就
@@ -417,7 +522,11 @@ export async function updateScheduledTask(
   // FRESH 行重算 arming，越权即回滚整个更新。
   dbTxSync(db, (tx) => {
     const fresh = tx
-      .select({ enabled: scheduledTasks.enabled })
+      .select({
+        enabled: scheduledTasks.enabled,
+        launchKind: scheduledTasks.launchKind,
+        launchPayload: scheduledTasks.launchPayload,
+      })
       .from(scheduledTasks)
       .where(eq(scheduledTasks.id, id))
       .get()
@@ -430,10 +539,50 @@ export async function updateScheduledTask(
       })
     }
     const resultEnabled = patch.enabled !== undefined ? patch.enabled : fresh.enabled
+    const finalKind = ScheduledLaunchKindSchema.safeParse(fresh.launchKind ?? 'workflow')
+    if (!finalKind.success) {
+      throw new ValidationError(
+        'scheduled-task-invalid',
+        `scheduled task '${id}' has an invalid launchKind`,
+      )
+    }
+    if (patch.launchKind !== undefined && patch.launchKind !== finalKind.data) {
+      throw new ValidationError(
+        'scheduled-kind-immutable',
+        `launchKind is immutable (existing '${finalKind.data}'); delete and recreate to change the subject`,
+      )
+    }
+    let finalPayload: typeof patchedPayload = null
+    if (patch.launchPayload !== undefined) {
+      finalPayload = patchedPayload
+    } else {
+      let raw: unknown
+      try {
+        raw = JSON.parse(fresh.launchPayload)
+      } catch {
+        raw = null
+      }
+      const parsedFreshPayload = scheduledPayloadSchemaFor(finalKind.data).safeParse(raw)
+      if (parsedFreshPayload.success) finalPayload = parsedFreshPayload.data
+    }
+    if (resultEnabled || patch.launchPayload !== undefined) {
+      if (finalPayload === null) {
+        throw new ValidationError(
+          'scheduled-task-needs-repair',
+          `scheduled task '${id}' has an unreadable launchPayload — supply a full launchPayload to repair it`,
+        )
+      }
+      assertScheduledTargetUsableInTx(
+        tx,
+        opts.actor,
+        finalKind.data,
+        finalPayload as Record<string, unknown>,
+      )
+    }
     const set: Partial<typeof scheduledTasks.$inferInsert> = { updatedAt: now }
     if (patch.name !== undefined) set.name = patch.name
-    if (patch.launchPayload !== undefined && patchedPayload !== null) {
-      set.launchPayload = JSON.stringify(patchedPayload)
+    if (patch.launchPayload !== undefined && finalPayload !== null) {
+      set.launchPayload = JSON.stringify(finalPayload)
       // A successful full repair also clears the RFC-165 migration lastError
       // breadcrumb (best-effort UX; harmless when it was never set).
       if (existing.launchPayload === null || existing.migrationNeeded) set.lastError = null

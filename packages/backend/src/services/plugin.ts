@@ -35,6 +35,8 @@ export interface PluginServiceDeps {
   installTimeoutMs?: number
   /** Deterministic interleaving hook; production callers leave this absent. */
   beforePublish?: (captured: Plugin, prepared: InstallResult) => Promise<void>
+  /** Deterministic delete check→transaction interleaving hook for race tests. */
+  beforeDeleteTx?: (captured: Plugin) => Promise<void>
 }
 
 const installOpts = (deps: PluginServiceDeps) => ({
@@ -189,7 +191,7 @@ export async function deletePlugin(
   db: DbClient,
   id: string,
   actor: Actor,
-  _deps: PluginServiceDeps = {},
+  deps: PluginServiceDeps = {},
 ): Promise<void> {
   const captured = await requirePluginRow(db, id)
   const existing = rowToPlugin(captured)
@@ -203,10 +205,28 @@ export async function deletePlugin(
       await discloseRefs(db, actor, 'agent', dependents),
     )
   }
-  dbTxSync(db, (tx) => {
+  await deps.beforeDeleteTx?.(existing)
+
+  // Re-run the reverse-reference guard in the exact transaction that removes
+  // the target. A canonical-id agent reference that lands after the
+  // preliminary async check therefore blocks the DELETE instead of becoming a
+  // dangling reference.
+  const finalDependents = dbTxSync(db, (tx) => {
+    const current = selectPluginRowById(tx, captured.id)
+    if (current === null || !samePluginRow(current, captured)) throw stalePluginError(captured.id)
+    const refs = findAgentsReferencingPluginInTx(tx, existing.id)
+    if (refs.length > 0) return refs
     const result = tx.delete(plugins).where(fullPluginRowWhere(captured)).run()
     if (changesOf(result) !== 1) throw stalePluginError(existing.id)
+    return [] as ReferencingAgentRow[]
   })
+  if (finalDependents.length > 0) {
+    throw new ConflictError(
+      'plugin-still-referenced',
+      `plugin '${existing.name}' is referenced by ${finalDependents.length} agent(s)`,
+      await discloseRefs(db, actor, 'agent', finalDependents),
+    )
+  }
   // Do not collect inline. Even an aged generation may still be imported by a
   // running child whose Plugin row has just been deleted. The boot/hourly GC
   // adds the coarse "no non-terminal node run" proof before collecting.
@@ -281,6 +301,34 @@ export async function findAgentsReferencingPlugin(
     })
     .from(agents)
     .where(like(agents.plugins, `%"${pluginId}"%`))
+  return agentsReferencingPluginIn(rows, pluginId)
+}
+
+function findAgentsReferencingPluginInTx(tx: DbTxSync, pluginId: string): ReferencingAgentRow[] {
+  const rows = tx
+    .select({
+      id: agents.id,
+      name: agents.name,
+      plugins: agents.plugins,
+      ownerUserId: agents.ownerUserId,
+      visibility: agents.visibility,
+    })
+    .from(agents)
+    .where(like(agents.plugins, `%"${pluginId}"%`))
+    .all()
+  return agentsReferencingPluginIn(rows, pluginId)
+}
+
+function agentsReferencingPluginIn(
+  rows: ReadonlyArray<{
+    id: string
+    name: string
+    plugins: string
+    ownerUserId: string | null
+    visibility: 'public' | 'private'
+  }>,
+  pluginId: string,
+): ReferencingAgentRow[] {
   const out: ReferencingAgentRow[] = []
   for (const row of rows) {
     try {

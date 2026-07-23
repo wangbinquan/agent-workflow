@@ -34,7 +34,7 @@ import {
 import { dirname, join } from 'node:path'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
-import { agents, skills } from '@/db/schema'
+import { skills } from '@/db/schema'
 import { commitSkillVersion } from '@/services/skillVersion'
 import { isSkillAvailableThisBoot } from '@/services/skillBootVerify'
 import { tokenToVersionFence } from '@/services/skillToken'
@@ -56,12 +56,17 @@ import {
   skillVersionAbs,
   skillRootAbs,
 } from '@/services/skillIdentityPaths'
+import { findAgentsUsingManagedSkill } from '@/services/skillReferenceGuard'
 
 type SkillRow = typeof skills.$inferSelect
 
 export interface SkillFsOptions {
   /** App home dir; managed skills live under `${appHome}/skills/{id}/files/`. */
   appHome: string
+}
+
+export interface SkillDeleteHooks {
+  afterPhase?: (phase: 'intent' | 'fs-staged' | 'db-committed', skillId: string) => void
 }
 
 // --- query helpers ---
@@ -297,6 +302,7 @@ export async function deleteSkill(
   skillId: string,
   actor: Actor,
   expected?: { token: string; aclRevision: number; ownerUserId: string | null },
+  hooks: SkillDeleteHooks = {},
 ): Promise<void> {
   const existing = await getSkillById(db, skillId)
   if (existing === null) throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
@@ -353,7 +359,7 @@ export async function deleteSkill(
   }
 
   // RFC-223 (PR-1): agents.skills stores typed refs — match managed refs by id.
-  const refs = await findAgentsUsingSkill(db, existing.id)
+  const refs = await findAgentsUsingManagedSkill(db, existing.id)
   if (refs.length > 0) {
     // RFC-203 T6: principal-aware disclosure (deleteWorkflow precedent).
     throw new ConflictError(
@@ -366,58 +372,23 @@ export async function deleteSkill(
   // RFC-170 §6a: crash-safe op-based delete — rename the whole root to trash,
   // DELETE the row in the same tx as the phase advance, then drop the trash.
   // A crash between steps is recovered by the boot driver (deleteRecoveryHandler).
-  const { deleteManagedSkillOp } = await import('@/services/skillDeleteOp')
-  deleteManagedSkillOp(db, { appHome: opts.appHome }, { id: existing.id }, {}, deleteFence)
-}
-
-// RFC-223 (PR-1): agents.skills stores typed refs (managed{skillId} /
-// project{name}); a skill is "used" by an agent that carries a MANAGED ref to
-// this skill's id. Project refs (repo-local, no DB row) never match here.
-async function findAgentsUsingSkill(
-  db: DbClient,
-  skillId: string,
-): Promise<
-  Array<{ id: string; name: string; ownerUserId: string | null; visibility: 'public' | 'private' }>
-> {
-  const rows = await db
-    .select({
-      id: agents.id,
-      name: agents.name,
-      skills: agents.skills,
-      ownerUserId: agents.ownerUserId,
-      visibility: agents.visibility,
-    })
-    .from(agents)
-  const out: Array<{
-    id: string
-    name: string
-    ownerUserId: string | null
-    visibility: 'public' | 'private'
-  }> = []
-  for (const row of rows) {
-    try {
-      const parsed = JSON.parse(row.skills) as unknown
-      const referencesSkill =
-        Array.isArray(parsed) &&
-        parsed.some(
-          (ref) =>
-            typeof ref === 'object' &&
-            ref !== null &&
-            (ref as { kind?: unknown }).kind === 'managed' &&
-            (ref as { skillId?: unknown }).skillId === skillId,
-        )
-      if (referencesSkill)
-        out.push({
-          id: row.id,
-          name: row.name,
-          ownerUserId: row.ownerUserId,
-          visibility: row.visibility,
-        })
-    } catch {
-      // skip malformed
+  const { deleteManagedSkillOp, SkillDeleteReferencedError } =
+    await import('@/services/skillDeleteOp')
+  try {
+    deleteManagedSkillOp(db, { appHome: opts.appHome }, { id: existing.id }, hooks, deleteFence)
+  } catch (error) {
+    if (error instanceof SkillDeleteReferencedError) {
+      // deleteManagedSkillOp has already proven its pre-commit rollback:
+      // trash→root restored and the operation/lock abandoned. Only now perform
+      // the asynchronous principal-aware disclosure.
+      throw new ConflictError(
+        'skill-in-use',
+        `skill '${existing.name}' is referenced by ${error.refs.length} agent(s)`,
+        await discloseRefs(db, actor, 'agent', error.refs),
+      )
     }
+    throw error
   }
-  return out
 }
 
 // --- SKILL.md content (parsed view) ---

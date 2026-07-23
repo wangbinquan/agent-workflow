@@ -16,13 +16,14 @@ import {
   McpRemoteConfigSchema,
   McpSchema,
 } from '@agent-workflow/shared'
-import { eq } from 'drizzle-orm'
+import { eq, like } from 'drizzle-orm'
 import { discloseRefs } from './resourceAcl'
 import type { Actor } from '@/auth/actor'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
-import { dbTxSync } from '@/db/txSync'
+import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { agents, mcps } from '@/db/schema'
+import { mcpOperationConfigHashOf } from '@/services/mcpOperationRevision'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { isOwnerNameUniqueViolation, ownerScopedNameWhere } from './ownerScopedName'
 
@@ -139,7 +140,7 @@ export async function deleteMcp(
   db: DbClient,
   id: string,
   actor: Actor,
-  opts: { existing?: Mcp } = {},
+  opts: { existing?: Mcp; beforeDeleteTx?: () => Promise<void> } = {},
 ): Promise<void> {
   const existing = opts.existing ?? (await getMcpById(db, id))
   if (existing === null || existing.id !== id) {
@@ -156,7 +157,43 @@ export async function deleteMcp(
       await discloseRefs(db, actor, 'agent', dependents),
     )
   }
-  await db.delete(mcps).where(eq(mcps.id, existing.id))
+  // Deterministic interleaving seam for the RFC-223 check→delete race tests.
+  // Production callers leave it absent.
+  await opts.beforeDeleteTx?.()
+
+  // The preliminary check above gives the common refusal path its disclosure
+  // without touching the target row. The authoritative reverse-reference
+  // check and DELETE must share one synchronous SQLite transaction: if an
+  // agent save wins the old await window, it is observed here and the target
+  // survives; if this DELETE wins first, the save-side target fence fails.
+  const finalDependents = dbTxSync(db, (tx) => {
+    const target = tx.select().from(mcps).where(eq(mcps.id, existing.id)).get()
+    if (target === undefined) throw new NotFoundError('mcp-not-found', 'mcp not found')
+    const current = rowToMcp(target)
+    const expectedConfigHash = mcpOperationConfigHashOf(existing)
+    const currentConfigHash = mcpOperationConfigHashOf(current)
+    if (currentConfigHash !== expectedConfigHash) {
+      throw new ConflictError(
+        'resource-operation-stale',
+        'the MCP changed; reload before deleting',
+        {
+          expectedConfigHash,
+          currentConfigHash,
+        },
+      )
+    }
+    const refs = findAgentsReferencingMcpInTx(tx, existing.id)
+    if (refs.length > 0) return refs
+    tx.delete(mcps).where(eq(mcps.id, existing.id)).run()
+    return [] as ReferencingAgentRow[]
+  })
+  if (finalDependents.length > 0) {
+    throw new ConflictError(
+      'mcp-still-referenced',
+      `mcp '${existing.name}' is referenced by ${finalDependents.length} agent(s)`,
+      await discloseRefs(db, actor, 'agent', finalDependents),
+    )
+  }
 }
 
 export async function renameMcp(
@@ -237,7 +274,6 @@ export async function findAgentsReferencingMcp(
   db: DbClient,
   mcpId: string,
 ): Promise<ReferencingAgentRow[]> {
-  const { like } = await import('drizzle-orm')
   const rows = await db
     .select({
       id: agents.id,
@@ -249,6 +285,34 @@ export async function findAgentsReferencingMcp(
     .from(agents)
     .where(like(agents.mcp, `%"${mcpId}"%`))
 
+  return agentsReferencingMcpIn(rows, mcpId)
+}
+
+function findAgentsReferencingMcpInTx(tx: DbTxSync, mcpId: string): ReferencingAgentRow[] {
+  const rows = tx
+    .select({
+      id: agents.id,
+      name: agents.name,
+      mcp: agents.mcp,
+      ownerUserId: agents.ownerUserId,
+      visibility: agents.visibility,
+    })
+    .from(agents)
+    .where(like(agents.mcp, `%"${mcpId}"%`))
+    .all()
+  return agentsReferencingMcpIn(rows, mcpId)
+}
+
+function agentsReferencingMcpIn(
+  rows: ReadonlyArray<{
+    id: string
+    name: string
+    mcp: string
+    ownerUserId: string | null
+    visibility: 'public' | 'private'
+  }>,
+  mcpId: string,
+): ReferencingAgentRow[] {
   const out: ReferencingAgentRow[] = []
   for (const row of rows) {
     try {
