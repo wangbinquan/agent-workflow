@@ -15,7 +15,7 @@ import {
   workgroups,
 } from '../src/db/schema'
 import { updateResourceAcl, type AclRow } from '../src/services/resourceAcl'
-import { ConflictError, ForbiddenError } from '../src/util/errors'
+import { ConflictError, ForbiddenError, NotFoundError } from '../src/util/errors'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const OWNER_SCOPED_TYPES = ['agent', 'skill', 'mcp', 'plugin', 'workgroup'] as const
@@ -170,6 +170,35 @@ describe('RFC-223 owner transfer and fresh-ACL fences', () => {
         .where(eq(agents.id, source.id))
         .get(),
     ).toEqual({ ownerUserId: 'owner-b', visibility: 'public', aclRevision: 1 })
+  })
+
+  test('a caller who lost visibility gets 404 before any stale-revision oracle', async () => {
+    const source = await seedResource(db, 'agent', 'agent-hidden', 'agent-hidden', 'owner-a')
+    await updateResourceAcl(db, admin, 'agent', source, {
+      ownerUserId: 'owner-b',
+      visibility: 'private',
+      expectedResourceId: source.id,
+      expectedAclRevision: 0,
+    })
+    await updateResourceAcl(
+      db,
+      admin,
+      'agent',
+      { ...source, ownerUserId: 'owner-b', visibility: 'private' },
+      {
+        userIds: [],
+        expectedResourceId: source.id,
+        expectedAclRevision: 1,
+      },
+    )
+
+    await expect(
+      updateResourceAcl(db, ownerA, 'agent', source, {
+        visibility: 'public',
+        expectedResourceId: source.id,
+        expectedAclRevision: 0,
+      }),
+    ).rejects.toBeInstanceOf(NotFoundError)
   })
 
   test('two writes from one revision have exactly one winner', async () => {

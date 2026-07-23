@@ -372,17 +372,6 @@ export async function updateResourceAcl(
       .get()
     if (!cur) throw new NotFoundError('not-found', `${type} not found`)
 
-    // Mandatory immutable-id + revision fence (RFC-223).
-    if (body.expectedResourceId !== row.id) {
-      throw new ConflictError('acl-resource-mismatch', 'resource id changed; reload')
-    }
-    if (cur.aclRevision !== body.expectedAclRevision) {
-      throw new ConflictError(
-        'acl-revision-conflict',
-        `acl revision is ${cur.aclRevision}, expected ${body.expectedAclRevision}; reload and retry`,
-      )
-    }
-
     // Route authorization is only an early UX check. The row may have changed
     // owner/visibility/grants before this write transaction began, so the
     // transaction must authorize the actor again from its own fresh snapshot.
@@ -405,6 +394,21 @@ export async function updateResourceAcl(
       cur.ownerUserId === actor.user.id ||
       hasFreshGrant
     if (!freshVisible) throw new NotFoundError('not-found', `${type} not found`)
+
+    // Compare the mandatory immutable-id + revision fence only after the
+    // fresh visibility check. A caller who lost visibility during the race
+    // must receive the same 404 as any other invisible caller, not a revision
+    // oracle that confirms the row still exists.
+    if (body.expectedResourceId !== row.id) {
+      throw new ConflictError('acl-resource-mismatch', 'resource id changed; reload')
+    }
+    if (cur.aclRevision !== body.expectedAclRevision) {
+      throw new ConflictError(
+        'acl-revision-conflict',
+        `acl revision is ${cur.aclRevision}, expected ${body.expectedAclRevision}; reload and retry`,
+      )
+    }
+
     if (!isResourceAdminActor(actor) && cur.ownerUserId !== actor.user.id) {
       throw new ForbiddenError(
         'forbidden',
