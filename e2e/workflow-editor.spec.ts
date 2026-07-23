@@ -419,7 +419,7 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     expect(overflow.root).toBeLessThanOrEqual(1)
   })
 
-  test('390px zero-drag path adds, follows validation, connects, revalidates, and launches', async ({
+  test('390px zero-drag path adds, follows launch validation, connects, and launches', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 390, height: 844 })
@@ -453,9 +453,10 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     await expect(inspector).toBeVisible()
     await inspector.locator('.dialog__close').click()
 
-    // The first validation is intentionally red. Its issue button performs a
-    // validation→selection→Inspector handoff rather than leaving a dead list.
-    await page.getByRole('button', { name: 'Validate', exact: true }).click()
+    // The first launch-time validation is intentionally red. Its issue button
+    // performs a validation→selection→Inspector handoff rather than leaving a
+    // dead list.
+    await page.getByRole('button', { name: 'Launch task', exact: true }).click()
     const validationSummary = page.getByTestId('workflow-validation-summary')
     await expect(validationSummary).toBeVisible()
     await expect(validationSummary).not.toContainText('Validated')
@@ -476,10 +477,9 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     await page.getByRole('option', { name: 'answer', exact: true }).click()
     await inspector.locator('.dialog__close').click()
 
-    // Revalidate the exact saved revision, then Launch through the fresh gate.
-    await page.getByRole('button', { name: 'Validate', exact: true }).click()
-    await expect(validationSummary).toContainText('Validated')
-    await page.getByRole('button', { name: /Launch task/ }).click()
+    // Launch validates the exact saved revision through the same fresh gate,
+    // then forwards directly to the task wizard when no blocking issue remains.
+    await page.getByRole('button', { name: 'Launch task', exact: true }).click()
     await expect(page).toHaveURL(/\/tasks\/new\?/)
     const launchUrl = new URL(page.url())
     expect(launchUrl.searchParams.get('kind')).toBe('workflow')
@@ -593,13 +593,32 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     expect(page.url()).toContain(`/workflows/${workflowId}`)
   })
 
-  test('validation details switch at the 521/520 short-height boundary without resizing canvas', async ({
+  test('launch validation details switch at the 521/520 short-height boundary without resizing canvas', async ({
     page,
   }) => {
+    workflowId = await seedWorkflow({
+      $schema_version: 4,
+      inputs: [],
+      nodes: [
+        {
+          id: 'review_1',
+          kind: 'review',
+          inputSource: { nodeId: '', portName: '' },
+          title: '',
+          description: '',
+          rerunnableOnReject: [],
+          rerunnableOnIterate: [],
+          rollbackFilesOnReject: true,
+          rollbackFilesOnIterate: false,
+          position: { x: 0, y: 0 },
+        },
+      ],
+      edges: [],
+    })
     for (const height of [521, 520]) {
       await page.setViewportSize({ width: 1280, height })
-      await openEditor(page)
-      await page.getByRole('button', { name: 'Validate', exact: true }).click()
+      await openEditor(page, 1)
+      await page.getByRole('button', { name: 'Launch task', exact: true }).click()
       const summary = page.getByTestId('workflow-validation-summary')
       await expect(summary).toBeVisible()
       const before = await page.locator('.canvas-frame').boundingBox()

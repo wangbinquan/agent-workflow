@@ -95,7 +95,7 @@ async function renameDraft(page: Page, name: string): Promise<void> {
   await expect(page.getByRole('heading', { level: 1, name })).toBeVisible()
 }
 
-test('editor saves nodes, survives reload, and Validate completes without SubtleCrypto', async ({
+test('editor saves nodes, survives reload, and launch validation completes without SubtleCrypto', async ({
   page,
 }) => {
   const initialName = 'insecure-ctx-editor'
@@ -131,9 +131,13 @@ test('editor saves nodes, survives reload, and Validate completes without Subtle
   await expect(page.getByTestId('workflow-draft-phase')).toHaveText('Saved')
   await expect(page.locator('.react-flow__node')).toHaveCount(1)
 
-  // Symptom 2 — "Validate hangs forever": the ensureSaved barrier must settle
-  // and produce a receipt (the empty-ish workflow yields issues, not a hang).
-  await page.getByRole('button', { name: 'Validate', exact: true }).click()
-  await expect(page.getByTestId('workflow-validation-summary')).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Validate', exact: true })).toBeEnabled()
+  // Symptom 2 — launch-time validation must not hang: the ensureSaved barrier
+  // settles, validates the saved revision, and hands the valid workflow to the
+  // task wizard without relying on SubtleCrypto.
+  await page.getByRole('button', { name: 'Launch task', exact: true }).click()
+  await expect(page).toHaveURL(/\/tasks\/new\?/, { timeout: 15_000 })
+  const launchUrl = new URL(page.url())
+  expect(launchUrl.searchParams.get('kind')).toBe('workflow')
+  expect(launchUrl.searchParams.get('workflow')).toBe(workflowId)
+  expect(launchUrl.searchParams.get('workflowVersion')).toMatch(/^\d+$/)
 })

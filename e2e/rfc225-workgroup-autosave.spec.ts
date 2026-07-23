@@ -194,12 +194,19 @@ test('autosaves a real edit and keeps workflow-parity header/actions usable at d
     const root = document.documentElement
     const headerElement = document.querySelector<HTMLElement>('.editor-page-header')
     const actions = headerElement?.querySelector<HTMLElement>('.page__actions')
+    const launch = headerElement?.querySelector<HTMLElement>(
+      '[data-testid="workgroup-launch-button"]',
+    )
+    const more = headerElement?.querySelector<HTMLElement>('[data-testid="workgroup-more-actions"]')
     return {
       rootClientWidth: root.clientWidth,
       rootScrollWidth: root.scrollWidth,
       headerWidth: headerElement?.getBoundingClientRect().width ?? 0,
       actionsClientWidth: actions?.clientWidth ?? 0,
       actionsScrollWidth: actions?.scrollWidth ?? 0,
+      launchFontSize:
+        launch === null || launch === undefined ? '' : getComputedStyle(launch).fontSize,
+      moreFontSize: more === null || more === undefined ? '' : getComputedStyle(more).fontSize,
     }
   })
   expect(geometry.rootScrollWidth).toBeLessThanOrEqual(geometry.rootClientWidth + 1)
@@ -207,6 +214,8 @@ test('autosaves a real edit and keeps workflow-parity header/actions usable at d
   expect(geometry.actionsClientWidth).toBeGreaterThan(0)
   expect(geometry.actionsScrollWidth).toBeGreaterThan(0)
   expect(geometry.actionsScrollWidth).toBeLessThanOrEqual(geometry.actionsClientWidth + 1)
+  expect(geometry.launchFontSize).toBe('16px')
+  expect(geometry.moreFontSize).toBe(geometry.launchFontSize)
 
   await page.getByTestId('workgroup-more-actions').click()
   await expect(actionsDialog).toBeVisible()
