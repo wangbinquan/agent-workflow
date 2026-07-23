@@ -248,8 +248,8 @@ export function buildScheduledEnvelope(
   delete scheduledBody.expectedWorkgroupId
   delete scheduledBody.expectedWorkgroupVersion
 
-  if (kind === 'agent') return { agentId: ref.agentId ?? '', ...scheduledBody }
-  if (kind === 'workgroup') return { workgroupId: ref.workgroupId ?? '', ...scheduledBody }
+  if (kind === 'agent') return { ...scheduledBody, agentId: ref.agentId ?? '' }
+  if (kind === 'workgroup') return { ...scheduledBody, workgroupId: ref.workgroupId ?? '' }
   return scheduledBody
 }
 

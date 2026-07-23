@@ -323,7 +323,7 @@ describe('RFC-165 §9b — create/update by kind (K1/K2/K3/K7)', () => {
       },
       { kind: 'actor', actor: T6_ACTOR },
     )
-    expect(renamed).toMatchObject({
+    expect(renamed.workgroup).toMatchObject({
       id: squad.id,
       name: 'squad2',
     })
@@ -332,9 +332,9 @@ describe('RFC-165 §9b — create/update by kind (K1/K2/K3/K7)', () => {
         db,
         squad.id,
         {
-          expectedVersion: renamed.version,
+          expectedVersion: renamed.workgroup.version,
           clientMutationId: ulid(),
-          confirmName: renamed.name,
+          confirm: renamed.workgroup.name,
         },
         { kind: 'actor', actor: T6_ACTOR },
       ),
@@ -418,6 +418,47 @@ describe('RFC-165 §9b — fire dispatch by kind (K4/K5)', () => {
     expect(task.scheduledTaskId).toBe(created.id)
     expect(task.spaceKind).toBe('scratch')
     expect(task.name).toContain('nightly') // decorateTaskName keeps the base
+  })
+
+  test('a corrupted legacy name-only row fails closed before launch', async () => {
+    const solo = await createAgent(db, { ...AGENT_FIELDS, name: 'solo-corrupt' })
+    const created = await createScheduledTask(
+      db,
+      {
+        name: 'agent sched corrupt',
+        launchKind: 'agent',
+        launchPayload: {
+          agentId: solo.id,
+          name: 'nightly',
+          description: 'd',
+          scratch: true,
+        },
+        scheduleSpec: SPEC,
+        enabled: true,
+      },
+      { actor: actorFor(ownerId) },
+    )
+    await db
+      .update(scheduledTasks)
+      .set({
+        launchPayload: JSON.stringify({
+          agentName: solo.name,
+          name: 'nightly',
+          description: 'd',
+          scratch: true,
+        }),
+      })
+      .where(eq(scheduledTasks.id, created.id))
+
+    await expect(
+      fireSchedule(
+        db,
+        (await getScheduledTaskRow(db, created.id))!,
+        buildScheduleLaunch(db, join(appHome, 'config.json')),
+        Date.now(),
+      ),
+    ).rejects.toMatchObject({ code: 'schedule-payload-invalid' })
+    expect(await db.select().from(tasks).where(eq(tasks.scheduledTaskId, created.id))).toEqual([])
   })
 
   test('K5 workgroup row fires through startWorkgroupTask (workgroupId stamped)', async () => {
@@ -646,5 +687,71 @@ describe('RFC-165 §9b — N1-r3 permission matrix over HTTP (K6)', () => {
       })
       expect(res.status).toBe(422)
     }
+  })
+
+  test('scheduled POST and PUT reject immediate-submit OCC guards', async () => {
+    for (const [launchKind, launchPayload] of [
+      [
+        'workflow',
+        {
+          workflowId: wfId,
+          name: 't',
+          repoUrl: 'https://example.com/a.git',
+          expectedWorkflowVersion: 2,
+        },
+      ],
+      [
+        'agent',
+        {
+          agentId: 'agent-id',
+          name: 't',
+          description: 'd',
+          scratch: true,
+          expectedAgentId: 'agent-id',
+        },
+      ],
+      [
+        'workgroup',
+        {
+          workgroupId: 'workgroup-id',
+          name: 't',
+          goal: 'g',
+          scratch: true,
+          expectedWorkgroupId: 'workgroup-id',
+          expectedWorkgroupVersion: 2,
+        },
+      ],
+    ] as const) {
+      const res = await req('/api/scheduled-tasks', adminToken, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: `${launchKind} guarded`,
+          launchKind,
+          launchPayload,
+          scheduleSpec: SPEC,
+          enabled: false,
+        }),
+      })
+      expect(res.status).toBe(422)
+    }
+
+    const createdResponse = await req('/api/scheduled-tasks', adminToken, {
+      method: 'POST',
+      body: createBody(),
+    })
+    expect(createdResponse.status).toBe(201)
+    const created = (await createdResponse.json()) as { id: string }
+    const update = await req(`/api/scheduled-tasks/${created.id}`, adminToken, {
+      method: 'PUT',
+      body: JSON.stringify({
+        launchPayload: {
+          workflowId: wfId,
+          name: 't',
+          repoUrl: 'https://example.com/a.git',
+          expectedWorkflowVersion: 2,
+        },
+      }),
+    })
+    expect(update.status).toBe(422)
   })
 })

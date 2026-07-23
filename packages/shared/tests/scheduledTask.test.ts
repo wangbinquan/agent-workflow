@@ -6,6 +6,7 @@ import {
   ScheduleSpecSchema,
   ScheduledAgentPayloadSchema,
   ScheduledTaskNameSchema,
+  ScheduledWorkflowPayloadSchema,
   ScheduledWorkgroupPayloadSchema,
   UpdateScheduledTaskSchema,
 } from '../src/index'
@@ -180,6 +181,68 @@ describe('RFC-223 PR-7 scheduled target identity', () => {
         scheduleSpec,
       }).success,
     ).toBe(false)
+  })
+
+  test('scheduled payloads reject every immediate-submit OCC field', () => {
+    expect(
+      ScheduledWorkflowPayloadSchema.safeParse({
+        ...VALID_LAUNCH,
+        expectedWorkflowVersion: 3,
+      }).success,
+    ).toBe(false)
+    expect(
+      ScheduledAgentPayloadSchema.safeParse({
+        name: 'nightly',
+        description: 'audit',
+        scratch: true,
+        agentId: 'agent-01',
+        expectedAgentId: 'agent-01',
+      }).success,
+    ).toBe(false)
+    expect(
+      ScheduledWorkgroupPayloadSchema.safeParse({
+        name: 'nightly',
+        goal: 'audit',
+        scratch: true,
+        workgroupId: 'workgroup-01',
+        expectedWorkgroupId: 'workgroup-01',
+        expectedWorkgroupVersion: 2,
+      }).success,
+    ).toBe(false)
+
+    for (const [launchKind, launchPayload] of [
+      ['workflow', { ...VALID_LAUNCH, expectedWorkflowVersion: 3 }],
+      [
+        'agent',
+        {
+          name: 'nightly',
+          description: 'audit',
+          scratch: true,
+          agentId: 'agent-01',
+          expectedAgentId: 'agent-01',
+        },
+      ],
+      [
+        'workgroup',
+        {
+          name: 'nightly',
+          goal: 'audit',
+          scratch: true,
+          workgroupId: 'workgroup-01',
+          expectedWorkgroupId: 'workgroup-01',
+          expectedWorkgroupVersion: 2,
+        },
+      ],
+    ] as const) {
+      expect(
+        CreateScheduledTaskSchema.safeParse({
+          name: `${launchKind} schedule`,
+          launchKind,
+          launchPayload,
+          scheduleSpec,
+        }).success,
+      ).toBe(false)
+    }
   })
 })
 

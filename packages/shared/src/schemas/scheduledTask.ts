@@ -67,6 +67,17 @@ export const ScheduledLaunchKindSchema = z.enum(SCHEDULED_LAUNCH_KINDS)
 export type ScheduledLaunchKind = z.infer<typeof ScheduledLaunchKindSchema>
 
 /**
+ * A scheduled workflow stores the launch inputs but never an immediate-submit
+ * workflow revision fence. Keeping that one-shot OCC value would make every
+ * future fire fail after the workflow is edited.
+ */
+export const ScheduledWorkflowPayloadSchema = z
+  .object({ expectedWorkflowVersion: z.never().optional() })
+  .strip()
+  .and(StartTaskSchema)
+export type ScheduledWorkflowPayload = z.infer<typeof ScheduledWorkflowPayloadSchema>
+
+/**
  * kind='agent' 的定时 payload 封套：单 Agent 启动 body + canonical agent id
  * （即时启动时目标在 URL 路径上；定时行必须把目标冻结进 payload）。
  *
@@ -74,6 +85,7 @@ export type ScheduledLaunchKind = z.infer<typeof ScheduledLaunchKindSchema>
  * server-refreshed display snapshot only and is never accepted as identity.
  */
 export const ScheduledAgentPayloadSchema = StartAgentTaskSchema.extend({
+  expectedAgentId: z.never().optional(),
   agentId: z.string().min(1),
   agentName: AgentNameSchema.optional(),
 })
@@ -84,6 +96,8 @@ export type ScheduledAgentPayload = z.infer<typeof ScheduledAgentPayloadSchema>
  * id。`workgroupName` 与 agentName 一样只作服务端刷新后的展示快照。
  */
 export const ScheduledWorkgroupPayloadSchema = StartWorkgroupTaskSchema.extend({
+  expectedWorkgroupId: z.never().optional(),
+  expectedWorkgroupVersion: z.never().optional(),
   workgroupId: z.string().min(1),
   workgroupName: WorkgroupNameSchema.optional(),
 })
@@ -91,7 +105,7 @@ export type ScheduledWorkgroupPayload = z.infer<typeof ScheduledWorkgroupPayload
 
 /** 三封套的判别联合（DTO 读取面；写入面走 scheduledPayloadSchemaFor）。 */
 export const ScheduledLaunchPayloadSchema = z.union([
-  StartTaskSchema,
+  ScheduledWorkflowPayloadSchema,
   ScheduledAgentPayloadSchema,
   ScheduledWorkgroupPayloadSchema,
 ])
@@ -106,7 +120,7 @@ export function scheduledPayloadSchemaFor(
 ): z.ZodType<ScheduledLaunchPayload, z.ZodTypeDef, unknown> {
   const schema =
     kind === 'workflow'
-      ? StartTaskSchema
+      ? ScheduledWorkflowPayloadSchema
       : kind === 'agent'
         ? ScheduledAgentPayloadSchema
         : ScheduledWorkgroupPayloadSchema

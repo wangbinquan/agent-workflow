@@ -248,6 +248,23 @@ describe('buildScheduledEnvelope (RFC-165 §9b)', () => {
     })
   })
 
+  test('the explicit subject ref wins over body keys, including an empty fail-closed ref', () => {
+    expect(
+      buildScheduledEnvelope(
+        'agent',
+        { name: 'T', agentId: 'body-must-not-win' },
+        { agentId: 'agent-live' },
+      ),
+    ).toEqual({ agentId: 'agent-live', name: 'T' })
+    expect(
+      buildScheduledEnvelope(
+        'workgroup',
+        { name: 'T', workgroupId: 'body-must-not-win' },
+        { workgroupId: undefined },
+      ),
+    ).toEqual({ workgroupId: '', name: 'T' })
+  })
+
   test('RFC-199 T6.6: workflow schedules strip the point-in-time version guard', () => {
     expect(
       buildScheduledEnvelope(
