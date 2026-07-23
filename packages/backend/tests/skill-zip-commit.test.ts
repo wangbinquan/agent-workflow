@@ -5,8 +5,7 @@
 // pre-existing call passes an ADMIN actor so the legacy decision-matrix
 // behaviour is unchanged (admin bypasses the permission gate); the dedicated
 // "RFC-102 overwrite permission" block below locks in the new gate with
-// non-admin owners while keeping inaccessible and missing targets
-// indistinguishable.
+// non-admin owners.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -344,8 +343,8 @@ describe('commitSkillZipBuffer', () => {
 })
 
 // RFC-102: the write-permission gate on ZIP overwrite. Owners (and admins) may
-// replace a same-named managed skill; everyone else receives the same stale
-// response as a missing target but may still rename-import a private copy.
+// replace a same-named managed skill; visible non-owners are rejected with
+// `skill-overwrite-forbidden` but may still rename-import a private copy.
 describe('RFC-102 overwrite permission', () => {
   let h: H
   beforeEach(() => {
@@ -363,11 +362,34 @@ describe('RFC-102 overwrite permission', () => {
     )
   }
 
-  test('non-owner and missing targets are indistinguishable', async () => {
-    const target = await seedAliceSkill('owned')
+  test('visible non-owner overwrite is rejected with skill-overwrite-forbidden', async () => {
+    await seedAliceSkill('owned')
     const buf = buildZip({ 'owned/SKILL.md': skillMd('owned', 'bob tries') })
     // Replaying another actor's preview cannot turn it into write authority.
     const stolenPreview = await previewOverwrite(h, ALICE, buf, 'owned')
+    const result = await commitSkillZipBuffer(
+      h.db,
+      h.fsOpts,
+      buf,
+      { owned: stolenPreview },
+      { actor: BOB },
+    )
+    expect(result.updated).toEqual([])
+    expect(result.created).toEqual([])
+    expect(result.failed.map((failure) => failure.code)).toEqual(['skill-overwrite-forbidden'])
+    expect((await getSkill(h.db, 'owned'))!.description).toBe('alice owns')
+  })
+
+  test('invisible and missing targets are indistinguishable', async () => {
+    const target = await seedAliceSkill('owned')
+    const buf = buildZip({ 'owned/SKILL.md': skillMd('owned', 'bob tries') })
+    const stolenPreview = await previewOverwrite(h, ALICE, buf, 'owned')
+
+    h.db
+      .update(skills)
+      .set({ visibility: 'private', aclRevision: 1 })
+      .where(eq(skills.id, target.id))
+      .run()
     const hidden = await commitSkillZipBuffer(
       h.db,
       h.fsOpts,
@@ -375,10 +397,6 @@ describe('RFC-102 overwrite permission', () => {
       { owned: stolenPreview },
       { actor: BOB },
     )
-    expect(hidden.updated).toEqual([])
-    expect(hidden.created).toEqual([])
-    expect(hidden.failed).toHaveLength(1)
-
     h.db.delete(skills).where(eq(skills.id, target.id)).run()
     const missing = await commitSkillZipBuffer(
       h.db,
@@ -398,7 +416,6 @@ describe('RFC-102 overwrite permission', () => {
       message: missing.failed[0]!.message,
     })
     expect(hidden.failed[0]!.code).toBe('skill-overwrite-stale')
-    // Alice's content is untouched.
     expect(
       readFileSync(join(h.fsOpts.appHome, 'skills', target.id, 'files', 'SKILL.md'), 'utf8'),
     ).toContain('alice owns')

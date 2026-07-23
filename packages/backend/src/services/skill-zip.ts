@@ -345,17 +345,22 @@ export async function commitSkillZipBuffer(
         continue
       }
 
-      // Missing, invisible, and no-longer-owned targets deliberately share
-      // one response. A stolen or stale preview must not become an existence
-      // or generation oracle for a resource the caller can no longer inspect.
-      if (
-        !(await canViewResource(db, aclOpts.actor, 'skill', target)) ||
-        !isResourceOwner(aclOpts.actor, target)
-      ) {
+      // Missing and invisible targets deliberately share one response. A
+      // stolen or stale preview must not become an existence or generation
+      // oracle for a resource the caller can no longer inspect.
+      if (!(await canViewResource(db, aclOpts.actor, 'skill', target))) {
         outcome.failed.push({
           name: candidate.name,
           code: 'skill-overwrite-stale',
           message: 'the previewed overwrite target is no longer available; review the ZIP again',
+        })
+        continue
+      }
+      if (!isResourceOwner(aclOpts.actor, target)) {
+        outcome.failed.push({
+          name: candidate.name,
+          code: 'skill-overwrite-forbidden',
+          message: 'you can no longer overwrite the previewed skill; review the ZIP again',
         })
         continue
       }
