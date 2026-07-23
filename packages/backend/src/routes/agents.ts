@@ -28,7 +28,7 @@ import {
   updateAgent,
 } from '@/services/agent'
 import { resolveDependsClosure, validateDependsOn } from '@/services/agentDeps'
-import { resolveAgentRefs } from '@/services/agentRefs'
+import { resolveRefsUsableById } from '@/services/resourceRefs'
 import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
 import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
 import {
@@ -262,11 +262,12 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
     // longer discloses its NAME: its display identity collapses to its opaque id
     // (and other agents' dependsOn projections keep that id opaque too), so a
     // private dependency's name never leaks (D1 — mirrors the "无权限占位" rule).
-    const names = await loadClosureRefNames(deps.db, closure.agents)
     const visible = await filterVisibleRows(deps.db, actor, 'agent', closure.agents)
+    const visibleAgentIds = new Set(visible.map((a) => a.id))
+    const names = await loadClosureRefNames(deps.db, actor, closure.agents, visibleAgentIds)
     const masked = toAgentClosureSummaries(closure.agents, {
       names,
-      visibleAgentIds: new Set(visible.map((a) => a.id)),
+      visibleAgentIds,
     })
     return c.json({ ok: true, agents: masked })
   })
@@ -284,6 +285,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
     dependsOn: z.array(ResourceRefSchema).max(64).default([]),
   })
   app.post('/api/agents/closure-preview', async (c) => {
+    const actor = actorOf(c)
     const body = await safeJson(c.req.raw)
     const parsed = ClosurePreviewBodySchema.safeParse(body)
     if (!parsed.success) {
@@ -295,9 +297,17 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
     }
     // The closure guard is keyed by the existing agent's immutable id. A new
     // draft has no id and stays synthetic; mutable name is display-only.
-    const dependsOn = await resolveAgentRefs(deps.db, parsed.data.dependsOn)
+    const resolved = await resolveRefsUsableById(deps.db, actor, 'agent', parsed.data.dependsOn)
+    if (resolved.missing.length > 0) {
+      return c.json({
+        ok: false,
+        code: 'acl-missing-refs',
+        details: { missing: resolved.missing },
+      })
+    }
+    const dependsOn = resolved.ids
     const existing =
-      parsed.data.id === undefined ? null : await getAgentById(deps.db, parsed.data.id)
+      parsed.data.id === undefined ? null : await loadVisibleAgent(actor, parsed.data.id)
     const selfId = existing?.id ?? ''
     try {
       await validateDependsOn(deps.db, selfId, dependsOn, parsed.data.name)
@@ -340,10 +350,13 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
         details: { cyclePath: closure.cyclePath },
       })
     }
+    const visible = await filterVisibleRows(deps.db, actor, 'agent', closure.agents)
+    const visibleAgentIds = new Set(visible.map((a) => a.id))
     return c.json({
       ok: true,
       agents: toAgentClosureSummaries(closure.agents, {
-        names: await loadClosureRefNames(deps.db, closure.agents),
+        names: await loadClosureRefNames(deps.db, actor, closure.agents, visibleAgentIds),
+        visibleAgentIds,
       }),
     })
   })
@@ -371,12 +384,15 @@ interface ClosureRefNameMaps {
  */
 async function loadClosureRefNames(
   db: AppDeps['db'],
+  actor: Actor,
   closure: Agent[],
+  visibleAgentIds: ReadonlySet<string>,
 ): Promise<ClosureRefNameMaps> {
   const skillIds = new Set<string>()
   const mcpIds = new Set<string>()
   const pluginIds = new Set<string>()
   for (const a of closure) {
+    if (!visibleAgentIds.has(a.id)) continue
     for (const ref of a.skills) if (ref.kind === 'managed') skillIds.add(ref.skillId)
     for (const id of a.mcp ?? []) mcpIds.add(id)
     for (const id of a.plugins ?? []) pluginIds.add(id)
@@ -384,27 +400,47 @@ async function loadClosureRefNames(
   const [skillRows, mcpRows, pluginRows] = await Promise.all([
     skillIds.size > 0
       ? db
-          .select({ id: skills.id, name: skills.name })
+          .select({
+            id: skills.id,
+            name: skills.name,
+            ownerUserId: skills.ownerUserId,
+            visibility: skills.visibility,
+          })
           .from(skills)
           .where(inArray(skills.id, [...skillIds]))
       : Promise.resolve([]),
     mcpIds.size > 0
       ? db
-          .select({ id: mcps.id, name: mcps.name })
+          .select({
+            id: mcps.id,
+            name: mcps.name,
+            ownerUserId: mcps.ownerUserId,
+            visibility: mcps.visibility,
+          })
           .from(mcps)
           .where(inArray(mcps.id, [...mcpIds]))
       : Promise.resolve([]),
     pluginIds.size > 0
       ? db
-          .select({ id: plugins.id, name: plugins.name })
+          .select({
+            id: plugins.id,
+            name: plugins.name,
+            ownerUserId: plugins.ownerUserId,
+            visibility: plugins.visibility,
+          })
           .from(plugins)
           .where(inArray(plugins.id, [...pluginIds]))
       : Promise.resolve([]),
   ])
+  const [visibleSkills, visibleMcps, visiblePlugins] = await Promise.all([
+    filterVisibleRows(db, actor, 'skill', skillRows),
+    filterVisibleRows(db, actor, 'mcp', mcpRows),
+    filterVisibleRows(db, actor, 'plugin', pluginRows),
+  ])
   return {
-    skill: new Map(skillRows.map((r) => [r.id, r.name])),
-    mcp: new Map(mcpRows.map((r) => [r.id, r.name])),
-    plugin: new Map(pluginRows.map((r) => [r.id, r.name])),
+    skill: new Map(visibleSkills.map((r) => [r.id, r.name])),
+    mcp: new Map(visibleMcps.map((r) => [r.id, r.name])),
+    plugin: new Map(visiblePlugins.map((r) => [r.id, r.name])),
   }
 }
 
@@ -468,6 +504,7 @@ function toAgentClosureSummaries(
   // name is unknown, so its id stands in as the placeholder identity.
   const missing = new Set<string>()
   for (const a of closure) {
+    if (!isVisible(a.id)) continue
     for (const depId of a.dependsOn) {
       if (!closureIds.has(depId)) missing.add(depId)
     }

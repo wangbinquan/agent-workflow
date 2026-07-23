@@ -349,6 +349,56 @@ describe('RFC-223 PR-1 P2-1 — closure endpoint projects id refs to display NAM
     expect(leaf.mcp).not.toContain(m.id)
     expect(leaf.plugins).not.toContain('PLID')
   })
+
+  test('resource refs that become private stay opaque instead of leaking display names', async () => {
+    await seedSkill(h.db, 'PRIVATE_SKILL_ID', 'private-skill-name', 'public', h.alice.id)
+    const mcp = await createMcp(
+      h.db,
+      {
+        name: 'private-mcp-name',
+        description: '',
+        type: 'local',
+        config: { command: ['x'] },
+        enabled: true,
+      },
+      { ownerUserId: h.alice.id },
+    )
+    await seedPlugin(h.db, 'PRIVATE_PLUGIN_ID', 'private-plugin-name', h.alice.id)
+    const created = await createAgentHttp(h, h.bob.token, {
+      name: 'visible-consumer',
+      skills: [{ kind: 'managed', skillId: 'PRIVATE_SKILL_ID' }],
+      mcp: [mcp.id],
+      plugins: ['PRIVATE_PLUGIN_ID'],
+    })
+    expect(created.status).toBe(201)
+    const consumer = (await created.json()) as AgentDto
+
+    await h.db
+      .update(skills)
+      .set({ visibility: 'private' })
+      .where(eq(skills.id, 'PRIVATE_SKILL_ID'))
+    await h.db.update(mcps).set({ visibility: 'private' }).where(eq(mcps.id, mcp.id))
+    await h.db
+      .update(plugins)
+      .set({ visibility: 'private' })
+      .where(eq(plugins.id, 'PRIVATE_PLUGIN_ID'))
+
+    const closure = await req(h.app, h.bob.token, `/api/agents/${consumer.id}/closure`)
+    expect(closure.status).toBe(200)
+    const raw = await closure.text()
+    expect(raw).not.toContain('private-skill-name')
+    expect(raw).not.toContain('private-mcp-name')
+    expect(raw).not.toContain('private-plugin-name')
+    const body = JSON.parse(raw) as {
+      agents: Array<{ id: string; skills: string[]; mcp: string[]; plugins: string[] }>
+    }
+    expect(body.agents[0]).toMatchObject({
+      id: consumer.id,
+      skills: ['PRIVATE_SKILL_ID'],
+      mcp: [mcp.id],
+      plugins: ['PRIVATE_PLUGIN_ID'],
+    })
+  })
 })
 
 describe('RFC-223 PR-1 P2-2 — closure never discloses an invisible dependency name', () => {
@@ -396,6 +446,91 @@ describe('RFC-223 PR-1 P2-2 — closure never discloses an invisible dependency 
     // The parent's dependsOn projection references the opaque id, not a name.
     const parent = body.agents.find((a) => a.name === 'parent')!
     expect(parent.dependsOnIds).toEqual([dep.id])
+  })
+
+  test('dangling refs behind a masked dependency are not re-exposed as missing rows', async () => {
+    const depRes = await createAgentHttp(h, h.alice.token, { name: 'hidden-corrupt-dep' })
+    const dep = (await depRes.json()) as AgentDto
+    const parentRes = await createAgentHttp(h, h.bob.token, {
+      name: 'parent-with-masked-child',
+      dependsOn: [dep.id],
+    })
+    const parent = (await parentRes.json()) as AgentDto
+    await h.db
+      .update(agents)
+      .set({
+        dependsOn: JSON.stringify(['secret-dangling-ref']),
+        visibility: 'private',
+      })
+      .where(eq(agents.id, dep.id))
+
+    const closure = await req(h.app, h.bob.token, `/api/agents/${parent.id}/closure`)
+    expect(closure.status).toBe(200)
+    const raw = await closure.text()
+    expect(raw).not.toContain('hidden-corrupt-dep')
+    expect(raw).not.toContain('secret-dangling-ref')
+    const body = JSON.parse(raw) as {
+      agents: Array<{ id: string; masked: boolean; missing: boolean }>
+    }
+    expect(body.agents).toContainEqual(
+      expect.objectContaining({ id: dep.id, masked: true, missing: false }),
+    )
+    expect(body.agents.some((agent) => agent.missing)).toBe(false)
+  })
+})
+
+describe('RFC-223 PR-7 — closure preview enforces row and reference ACL', () => {
+  let h: Harness
+  beforeEach(async () => {
+    h = await buildHarness()
+  })
+
+  test('a private dependency id returns an opaque preview error and no closure metadata', async () => {
+    const depRes = await createAgentHttp(h, h.alice.token, {
+      name: 'preview-secret-dependency',
+      description: 'preview secret description',
+    })
+    const dep = (await depRes.json()) as AgentDto
+    await h.db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, dep.id))
+
+    const preview = await req(h.app, h.bob.token, '/api/agents/closure-preview', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'draft', dependsOn: [dep.id] }),
+    })
+    expect(preview.status).toBe(200)
+    const raw = await preview.text()
+    expect(raw).not.toContain('preview-secret-dependency')
+    expect(raw).not.toContain('preview secret description')
+    const body = JSON.parse(raw) as {
+      ok: boolean
+      code: string
+      details: { missing: Array<{ type: string; name: string }> }
+      agents?: unknown
+    }
+    expect(body).toMatchObject({
+      ok: false,
+      code: 'acl-missing-refs',
+      details: { missing: [{ type: 'agent', name: dep.id }] },
+    })
+    expect(body.agents).toBeUndefined()
+  })
+
+  test('a private existing draft id is indistinguishable from a missing one', async () => {
+    const depRes = await createAgentHttp(h, h.alice.token, { name: 'preview-private-root' })
+    const dep = (await depRes.json()) as AgentDto
+    await h.db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, dep.id))
+
+    const hidden = await req(h.app, h.bob.token, '/api/agents/closure-preview', {
+      method: 'POST',
+      body: JSON.stringify({ id: dep.id, name: 'draft', dependsOn: [] }),
+    })
+    const missing = await req(h.app, h.bob.token, '/api/agents/closure-preview', {
+      method: 'POST',
+      body: JSON.stringify({ id: 'missing-agent-id', name: 'draft', dependsOn: [] }),
+    })
+    expect(hidden.status).toBe(404)
+    expect(missing.status).toBe(404)
+    expect(await hidden.text()).toBe(await missing.text())
   })
 })
 
