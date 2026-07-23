@@ -1,7 +1,8 @@
 // RFC-201 PR-A — the Settings route owns the fusion-agent edit scope above
 // active-only section rendering.  These tests lock the causal draft contract:
-// section switches cannot drop edits, writes stay runtime-only, and late or
-// outcome-unknown receipts never replace newer local intent.
+// section switches cannot drop edits, mutable content stays runtime-only while
+// RFC-223's revision fence accompanies each write, and late or outcome-unknown
+// receipts never replace newer local intent.
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
@@ -96,7 +97,7 @@ describe('useFusionAgentDraft — route-owned section lifetime', () => {
     expect(result.current.dirty).toBe(true)
   })
 
-  test('saves an exact runtime-only agent patch and never touches config', async () => {
+  test('saves runtime with the exact revision fence and never touches config', async () => {
     vi.spyOn(api, 'get').mockResolvedValue(merger('opencode') as never)
     const put = vi.spyOn(api, 'put').mockResolvedValue(merger('fast-oc') as never)
     const { client, wrapper } = harness()

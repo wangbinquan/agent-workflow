@@ -2,9 +2,9 @@
 //   1. Merge runtime selector → config PUT carries mergeAgentRuntime AND
 //      mergeAgentModel:null (D6 — else "inherit" falls through to a stale legacy
 //      model instead of the global default).
-//   2. Fusion runtime selector → semantic builtin GET + canonical-ID runtime PUT
-//      whose body keys are EXACTLY ['runtime']; any extra key would 403
-//      builtin-readonly. Picking "inherit" sends { runtime: null }.
+//   2. Fusion runtime selector → semantic builtin GET + canonical-ID runtime PUT.
+//      `runtime` is the only editable content field; RFC-223's exact ordinary-
+//      mutation revision tuple accompanies it. Picking "inherit" sends null.
 //
 // RuntimeSelect is the shared RFC-036 <Select>: a role=combobox trigger carrying
 // the field's aria-label + a portaled role=listbox. Options come from
@@ -163,7 +163,7 @@ describe('RFC-156 SystemAgentsTab — fusion save is a runtime-only agent patch'
     })
   }
 
-  test('fusion-only edit PATCHes body === { runtime } and skips the config PUT (P2c)', async () => {
+  test('fusion-only edit sends runtime plus its exact revision fence and skips config PUT (P2c)', async () => {
     const rec = mockFetch()
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(<SystemAgentsTab config={mkConfig()} />, { wrapper: wrap(qc) })
@@ -186,7 +186,7 @@ describe('RFC-156 SystemAgentsTab — fusion save is a runtime-only agent patch'
     expect(rec.configPuts).toHaveLength(0)
   })
 
-  test('picking "inherit" + Save sends { runtime: null } and skips the config PUT', async () => {
+  test('picking "inherit" + Save sends null runtime plus its revision fence and skips config PUT', async () => {
     const rec = mockFetch()
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(<SystemAgentsTab config={mkConfig()} />, { wrapper: wrap(qc) })

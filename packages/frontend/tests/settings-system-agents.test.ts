@@ -128,13 +128,15 @@ describe('RFC-156 — SystemAgentsTab slice + D6 model clearing', () => {
   })
 })
 
-describe('RFC-156 — fusion card writes a runtime-only patch to the builtin agent', () => {
-  test('resolves the builtin semantically, then patches its canonical id with a runtime-only body', () => {
+describe('RFC-156/223 — fusion card writes runtime content with the exact revision fence', () => {
+  test('resolves the builtin semantically, then patches its canonical id without widening editable content', () => {
     expect(FUSION_DRAFT).toContain("'/api/agents/builtins/skill-merger'")
     expect(FUSION_DRAFT).toContain('/api/agents/${SKILL_MERGER_AGENT_ID}')
-    // Body MUST be exactly `{ runtime }` — any extra key re-trips the RFC-104
-    // builtin read-only lock (403 builtin-readonly).
-    expect(FUSION_DRAFT).toContain('{ runtime })')
+    // RFC-104 still permits only `runtime` as mutable content. RFC-223 requires
+    // the two revision-fence fields on that same ordinary mutation.
+    expect(FUSION_DRAFT).toMatch(
+      /return api\.put<Agent>\(`\/api\/agents\/\$\{SKILL_MERGER_AGENT_ID\}`, \{\s*runtime,\s*expectedUpdatedAt: attempt\.expectedUpdatedAt,\s*expectedAclRevision: attempt\.expectedAclRevision,\s*\}\)/,
+    )
   })
 })
 
