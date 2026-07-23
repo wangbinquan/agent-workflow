@@ -29,6 +29,15 @@ export interface CapabilityCardOptions {
    * pre-RFC-194 markdown shape. Default 600.
    */
   inputDescriptionBudget?: number
+  /**
+   * RFC-223 (PR-3b) — override the card's `### heading` (the machine-readable
+   * IDENTITY slot) with an opaque reference — e.g. a dynamic-workflow member
+   * token (`member#1`) — so the orchestrator LLM never sees the real agent name
+   * in a framework identity field. The card BODY (description / prompt summary /
+   * port names) is unaffected free text. Default: the agent's real name
+   * (unchanged for every existing caller — leader roster, frontend preview).
+   */
+  machineRef?: string
 }
 
 const DEFAULT_PROMPT_BUDGET = 600
@@ -181,7 +190,10 @@ export function renderAgentCapabilityCard(
 ): string {
   const m = capabilityCardModel(agent, opts)
   const inputDescriptionBudget = opts?.inputDescriptionBudget ?? DEFAULT_INPUT_DESCRIPTION_BUDGET
-  const lines: string[] = [`### ${m.name}`]
+  // RFC-223 (PR-3b): the heading is the machine-readable identity slot — an
+  // opaque `machineRef` (member token) replaces the real name here for the
+  // dynamic orchestrator; the body below stays free text.
+  const lines: string[] = [`### ${opts?.machineRef ?? m.name}`]
   if (m.description.length > 0) lines.push(m.description)
   lines.push(`- role: ${m.role}`)
   lines.push(

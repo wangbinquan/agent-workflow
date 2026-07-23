@@ -9,9 +9,18 @@
 // consumes. v1 is deliberately narrow — ONLY agent-single nodes (no wrapper /
 // review / clarify / io), every pool agent usable any number of times.
 //
+// RFC-223 (PR-3b) — the orchestrator LLM NEVER sees a real agent name or id.
+// Each candidate pool member is shown behind an opaque task-internal token
+// (`member#1`, `dwMemberToken`); the LLM references members by that token
+// (`DwGeneratedNode.agentToken`). `dwGeneratedToWorkflowDef` is the SINGLE
+// server-side token→canonical-agentId conversion point: it stamps each node's
+// `agentId` (+ `agentName` for display) from the frozen pool's token map, so the
+// stored / approved / executed / saved-as definition is always id-canonical and
+// the token never survives as an identity (design §4.2 R4-2 identity narrowing).
+//
 // Conversion decisions (v1, locked by tests):
-//  - Each generated node → an `agent-single` WorkflowNode {id, kind, agentName,
-//    promptTemplate}. NO synthetic input/output IO nodes: the orchestrator
+//  - Each generated node → an `agent-single` WorkflowNode {id, kind, agentId,
+//    agentName, promptTemplate}. NO synthetic input/output IO nodes: the orchestrator
 //    bakes the goal into the source nodes' promptTemplates (it SAW the goal at
 //    generation), and downstream nodes read upstream outputs via `{{portName}}`
 //    templating over edges — so a self-contained agent-single chain validates
@@ -144,11 +153,38 @@ export type DwGeneratedNodeInput = z.infer<typeof DwGeneratedNodeInputSchema>
 /** One generated node — always an agent-single in v1. */
 export const DwGeneratedNodeSchema = z.object({
   id: z.string().min(1),
-  agentName: z.string().min(1),
+  /**
+   * RFC-223 (PR-3b) — the opaque task-internal member token the orchestrator was
+   * shown (`member#N`, {@link dwMemberToken}) and emits back. NEVER a real agent
+   * name or id (R4-2): the single conversion point ({@link dwGeneratedToWorkflowDef})
+   * resolves it to the frozen canonical `agentId`.
+   */
+  agentToken: z.string().min(1),
   promptTemplate: z.string(),
   inputs: z.array(DwGeneratedNodeInputSchema).default([]),
 })
 export type DwGeneratedNode = z.infer<typeof DwGeneratedNodeSchema>
+
+/**
+ * RFC-223 (PR-3b) — the opaque task-internal token for the k-th (0-based) distinct
+ * agent in a dynamic-workflow task's frozen pool order. This is the ONLY member
+ * identity the orchestrator LLM ever sees or emits (never the real agent name/id
+ * — R4-2). Stable within a pass because the pool order is deterministic from the
+ * frozen `config.members`, so a crash/resume re-derives the same token↔agent map.
+ */
+export function dwMemberToken(index: number): string {
+  return `member#${index + 1}`
+}
+
+/** RFC-223 (PR-3b) — one token→canonical-agent binding of a dynamic-workflow pool. */
+export interface DwTokenBinding {
+  /** The frozen canonical agent id (ULID) the token resolves to. */
+  agentId: string
+  /** The agent's display name — baked into the node for DISPLAY only. */
+  agentName: string
+}
+/** token (`member#N`) → its frozen agent binding, for the single conversion point. */
+export type DwTokenMap = ReadonlyMap<string, DwTokenBinding>
 
 /** The orchestrator's `workflow` output-port payload (parsed from JSON). */
 export const DwGeneratedWorkflowSchema = z.object({
@@ -166,7 +202,9 @@ export type DwGeneratedWorkflow = z.infer<typeof DwGeneratedWorkflowSchema>
 export const DW_VALIDATION_CODES = {
   /** A node's kind is not 'agent-single' (wrapper/review/clarify/io forbidden in v1). */
   nodeKindForbidden: 'dw-node-kind-forbidden',
-  /** A node's agentName is not in the space's agent pool. */
+  /** A node references an unknown member token / an agent id outside the pool
+   *  (RFC-223 PR-3b: the LLM emits `member#N` tokens; an unresolvable token or a
+   *  node whose resolved `agentId` is not a current pool member trips this). */
   agentOutsidePool: 'dw-agent-outside-pool',
   /** Zero agent-single nodes. */
   empty: 'dw-empty',
@@ -183,18 +221,33 @@ function edgeId(e: WorkflowEdge): string {
 }
 
 /**
- * Convert a generated DAG into a standard `WorkflowDefinition` (schema v4).
- * Pure — no IO, deterministic edge ids, stable ordering. The result still has
- * to pass `validateWorkflowDef` + `validateDynamicWorkflowDef` before it is
- * ever executed; this function only reshapes, it does not validate.
+ * RFC-223 (PR-3b) — THE single token→agentId conversion point. Convert a
+ * generated (token-form) DAG into a standard, id-canonical `WorkflowDefinition`
+ * (schema v4): each node's opaque `agentToken` is resolved via `tokenMap` and
+ * stamped as the canonical `agentId` (+ `agentName` for display). A token with
+ * no binding yields an id-less node AND is collected in `unknownTokens` — the
+ * caller surfaces that as a `dw-agent-outside-pool` error (referencing the
+ * TOKEN, never leaking a name/id); the token itself is never written into the
+ * node as an identity. Pure — no IO, deterministic edge ids, stable ordering.
+ * The result still has to pass `validateWorkflowDef` + `validateDynamicWorkflowDef`
+ * before it is ever executed; this function only reshapes + resolves.
  */
-export function dwGeneratedToWorkflowDef(gen: DwGeneratedWorkflow): WorkflowDefinition {
-  const nodes = gen.nodes.map((n) => ({
-    id: n.id,
-    kind: 'agent-single' as const,
-    agentName: n.agentName,
-    promptTemplate: n.promptTemplate,
-  }))
+export function dwGeneratedToWorkflowDef(
+  gen: DwGeneratedWorkflow,
+  tokenMap: DwTokenMap,
+): { def: WorkflowDefinition; unknownTokens: string[] } {
+  const unknown = new Set<string>()
+  const nodes = gen.nodes.map((n) => {
+    const bound = tokenMap.get(n.agentToken)
+    if (bound === undefined) unknown.add(n.agentToken)
+    const base = { id: n.id, kind: 'agent-single' as const, promptTemplate: n.promptTemplate }
+    // Single conversion: token → canonical agentId (+ display name). An unknown
+    // token leaves the node id-less (validation catches it) — the token is never
+    // stored as an identity field.
+    return bound !== undefined
+      ? { ...base, agentId: bound.agentId, agentName: bound.agentName }
+      : base
+  })
 
   // Collect edges from node.inputs (ergonomic form) + top-level edges (explicit
   // form), de-duped by the (source, target) tuple so the two forms can overlap
@@ -217,5 +270,8 @@ export function dwGeneratedToWorkflowDef(gen: DwGeneratedWorkflow): WorkflowDefi
     push(e.source, e.target)
   }
 
-  return { $schema_version: 4, inputs: [], nodes, edges }
+  return {
+    def: { $schema_version: 4, inputs: [], nodes, edges },
+    unknownTokens: [...unknown],
+  }
 }

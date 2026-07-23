@@ -112,11 +112,17 @@ export function buildDwActions(
           'the stored generated workflow is unreadable — reject with feedback to regenerate',
         )
       }
-      const poolNames = fresh.config.members.flatMap((m) =>
-        m.memberType === 'agent' && m.agentName !== null ? [m.agentName] : [],
+      // RFC-223 (PR-3b): the generated def is id-canonical (single conversion
+      // point). Re-validate its nodes' `agentId`s against the FRESH pool's frozen
+      // canonical ids — a member removed / renamed / recreated mid-run no longer
+      // matches, so a stale proposal is refused by id (never by mutable name).
+      const poolAgentIds = fresh.config.members.flatMap((m) =>
+        m.memberType === 'agent' && typeof m.agentId === 'string' && m.agentId.length > 0
+          ? [m.agentId]
+          : [],
       )
       const layer1 = validateWorkflowDef(generated.data, layer1Ctx)
-      const layer2 = validateDynamicWorkflowDef(generated.data, poolNames)
+      const layer2 = validateDynamicWorkflowDef(generated.data, poolAgentIds)
       const staleIssues = [...layer1.issues, ...layer2.issues].filter(
         (i) => (i.severity ?? 'error') === 'error',
       )

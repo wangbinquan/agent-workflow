@@ -43,7 +43,8 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, runtimes, tasks, workflows, workgroupTaskState } from '../src/db/schema'
 import { loadWorkgroupTaskState } from '../src/services/workgroup/state'
 import { createApp } from '../src/server'
-import { createAgent } from '../src/services/agent'
+import { createAgent, getAgent } from '../src/services/agent'
+import { resolveWorkflowNodeAgentIds } from '../src/services/resourceRefs'
 import {
   DW_GATE_CAUSE,
   DW_GENERATE_CAUSE,
@@ -154,6 +155,26 @@ async function seedPoolAgents(db: DbClient): Promise<void> {
   }).catch(() => undefined)
 }
 
+/**
+ * RFC-223 (PR-3b): mirror launch's freeze — stamp each agent member's canonical
+ * `agentId` (resolved from its name) into the runtime config, so the engine's
+ * id-based `resolvePool` finds it. A name with no agent row (e.g. `ghost-agent`)
+ * stays id-less → unresolvable pool, matching the pre-RFC-223 dangling behavior.
+ */
+async function stampConfigMemberAgentIds(
+  db: DbClient,
+  config: WorkgroupRuntimeConfig,
+): Promise<WorkgroupRuntimeConfig> {
+  const members = await Promise.all(
+    config.members.map(async (m) => {
+      if (m.memberType !== 'agent' || m.agentName === null || m.agentName.length === 0) return m
+      const agent = await getAgent(db, m.agentName)
+      return agent !== null ? { ...m, agentId: agent.id } : m
+    }),
+  )
+  return { ...config, members }
+}
+
 async function seedDynamicTask(
   db: DbClient,
   opts: {
@@ -166,7 +187,7 @@ async function seedDynamicTask(
   },
 ): Promise<{ taskId: string }> {
   const taskId = ulid()
-  const config = opts.config ?? dynamicConfig()
+  const config = await stampConfigMemberAgentIds(db, opts.config ?? dynamicConfig())
   await db.insert(workflows).values({
     id: `wf-anchor-${taskId}`,
     name: `dw-anchor-${taskId}`,
@@ -220,12 +241,14 @@ function scriptedHooks(queue: WorkgroupHostRunResult[]): {
   }
 }
 
+// RFC-223 (PR-3b): the orchestrator references pool members by opaque tokens.
+// dynamicConfig's pool order is [wg-planner, wg-coder] → member#1 / member#2.
 const GOOD_GEN = {
   nodes: [
-    { id: 'plan', agentName: 'wg-planner', promptTemplate: '规划目标怎么拆', inputs: [] },
+    { id: 'plan', agentToken: 'member#1', promptTemplate: '规划目标怎么拆', inputs: [] },
     {
       id: 'code',
-      agentName: 'wg-coder',
+      agentToken: 'member#2',
       promptTemplate: '按 {{plan}} 实现',
       inputs: [{ port: 'plan', from: { nodeId: 'plan', portName: 'plan' } }],
     },
@@ -270,11 +293,14 @@ describe('RFC-167 engine — generation pass', () => {
     // Codex impl-gate P1: the generation run's worktree writes are discarded
     // (never merged back) — validation + human confirm happen after the run
     expect(req.discardWrites).toBe(true)
-    // prompt carries charter + goal + the pool's capability cards
+    // prompt carries charter + goal; the pool's cards are TOKEN-headed (RFC-223
+    // PR-3b) — the LLM sees `member#N`, never the real agent name or member/user id.
     expect(req.promptTemplate).toContain('章程：先审计后修复')
     expect(req.promptTemplate).toContain('修掉支付回调里的竞态')
-    expect(req.promptTemplate).toContain('wg-planner')
-    expect(req.promptTemplate).toContain('wg-coder')
+    expect(req.promptTemplate).toContain('member#1')
+    expect(req.promptTemplate).toContain('member#2')
+    expect(req.promptTemplate).not.toContain('wg-planner')
+    expect(req.promptTemplate).not.toContain('wg-coder')
     // prompt isolation: no member/user ids ever ride the prompt
     expect(req.promptTemplate).not.toContain('m-planner')
 
@@ -284,6 +310,14 @@ describe('RFC-167 engine — generation pass', () => {
     const def = WorkflowDefinitionSchema.parse(dw?.generatedDef)
     expect(def.nodes.map((n) => n.id).sort()).toEqual(['code', 'plan'])
     expect(def.edges).toHaveLength(1)
+    // single conversion point: the stored def is id-canonical — every node
+    // carries the frozen agentId (the token is gone), never a leaked token.
+    const plannerId = (await getAgent(db, 'wg-planner'))?.id
+    const coderId = (await getAgent(db, 'wg-coder'))?.id
+    const idByNode = new Map(def.nodes.map((n) => [n.id, (n as Record<string, unknown>).agentId]))
+    expect(idByNode.get('plan')).toBe(plannerId)
+    expect(idByNode.get('code')).toBe(coderId)
+    expect(JSON.stringify(def)).not.toContain('member#')
 
     const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     const holder = runs.filter((r) => r.rerunCause === DW_GATE_CAUSE)
@@ -324,23 +358,13 @@ describe('RFC-167 engine — generation pass', () => {
     expect(result.kind).toBe('awaiting_review')
   })
 
-  test('v1-violating output (agent outside the pool) exhausts the bounded retries → failed', async () => {
-    await createAgent(db, {
-      name: 'outsider',
-      description: '',
-      outputs: [],
-      syncOutputsOnIterate: true,
-      permission: {},
-      skills: [],
-      dependsOn: [],
-      mcp: [],
-      plugins: [],
-      frontmatterExtra: {},
-      bodyMd: 'x',
-    })
+  test('v1-violating output (unknown member token) exhausts the bounded retries → failed', async () => {
     const { taskId } = await seedDynamicTask(db, { dw: initialDwState() })
+    // RFC-223 PR-3b: an agent "outside the pool" now manifests as an UNKNOWN
+    // member token (the pool is member#1/member#2) — the conversion can't bind
+    // it and reports dw-agent-outside-pool referencing the token, not a name.
     const badGen = {
-      nodes: [{ id: 'n1', agentName: 'outsider', promptTemplate: 'do it', inputs: [] }],
+      nodes: [{ id: 'n1', agentToken: 'member#99', promptTemplate: 'do it', inputs: [] }],
       edges: [],
     }
     const { hooks, requests } = scriptedHooks([
@@ -589,7 +613,8 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
           nodes: [
             {
               id: 'generated-step',
-              agentName: 'launch-agent',
+              // RFC-223 PR-3b: the sole pool member is member#1 (launch-agent)
+              agentToken: 'member#1',
               promptTemplate: 'execute',
               inputs: [],
             },
@@ -737,11 +762,19 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
     withHolder?: boolean
     generatedDef?: unknown
   }): Promise<{ taskId: string }> {
+    // RFC-223 (PR-3b): a real generation stores an id-canonical def (single
+    // conversion point). Mirror that — stamp each node's agentId from its name
+    // (resolveWorkflowNodeAgentIds); a name with no agent row (ghost-agent) stays
+    // id-less, so the approve-time id validation refuses it as stale.
+    const genDef = await resolveWorkflowNodeAgentIds(
+      db,
+      WorkflowDefinitionSchema.parse(opts.generatedDef ?? GHOST_DEF),
+    )
     const { taskId } = await seedDynamicTask(db, {
       dw: {
         ...initialDwState(),
         phase: 'awaiting_confirm',
-        generatedDef: opts.generatedDef ?? GHOST_DEF,
+        generatedDef: genDef,
         ...opts.dwOverrides,
       },
       status: 'awaiting_review',
@@ -789,7 +822,13 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
       expect(res.status).toBe(200)
 
       const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
-      expect(JSON.parse(row?.workflowSnapshot ?? '{}')).toEqual(POOL_DEF)
+      // RFC-223 (PR-3b): the swapped-in snapshot is the id-canonical generated
+      // def — node p1 carries wg-planner's frozen agentId (stamped at seed time).
+      const swapped = JSON.parse(row?.workflowSnapshot ?? '{}') as {
+        nodes: Array<Record<string, unknown>>
+      }
+      expect(swapped.nodes.map((n) => n.id)).toEqual(['p1'])
+      expect(swapped.nodes[0]?.agentId).toBe((await getAgent(db, 'wg-planner'))?.id)
       expect((await loadWorkgroupTaskState(db, taskId)).dwState?.phase).toBe('executing')
       const holders = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
         (r) => r.rerunCause === DW_GATE_CAUSE,

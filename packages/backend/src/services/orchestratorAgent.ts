@@ -16,16 +16,18 @@
 import type {
   Agent,
   CapabilitySource,
+  DwTokenBinding,
   WorkflowDefinition,
   WorkflowValidationIssue,
   WorkflowValidationResult,
 } from '@agent-workflow/shared'
 import {
   DW_VALIDATION_CODES,
+  dwMemberToken,
   envelopeOpenTag,
   fenceUntrusted,
   perCardInputDescriptionBudget,
-  renderRosterCapabilityCards,
+  renderAgentCapabilityCard,
 } from '@agent-workflow/shared'
 
 /** Name of the framework-internal orchestrator agent (never a user `agents` row). */
@@ -95,8 +97,10 @@ export function buildOrchestratorAgent(): Agent {
       'workflow that achieves the goal by composing agents from the pool.',
       '',
       'Hard rules (v1):',
-      '- Use ONLY agents from the pool. Each agent may be used any number of times',
-      '  (as separate nodes with different prompts).',
+      '- Use ONLY agents from the pool, and refer to each one by its exact token',
+      '  (the `member#N` heading of its capability card) — that token is the ONLY',
+      '  way to name a pool agent. Each agent may be used any number of times (as',
+      '  separate nodes with different prompts).',
       '- Every node runs exactly one pool agent. NO loops, fan-outs, git wrappers or',
       '  review nodes — a plain directed acyclic chain/branch of agent nodes only.',
       '- For each node, write a `promptTemplate`: the instruction that node’s agent',
@@ -110,9 +114,11 @@ export function buildOrchestratorAgent(): Agent {
       'tag (including its required nonce) supplied by the user prompt protocol,',
       'and containing a single',
       `<port name="${ORCHESTRATOR_WORKFLOW_PORT}"> whose text is the workflow JSON:`,
-      '{ "nodes": [ { "id", "agentName", "promptTemplate", "inputs": [ { "port",',
+      '{ "nodes": [ { "id", "agentToken", "promptTemplate", "inputs": [ { "port",',
       '"from": { "nodeId", "portName" } } ] } ], "edges": [ { "source": { "nodeId",',
       '"portName" }, "target": { "nodeId", "portName" } } ] }.',
+      'The `agentToken` of each node MUST be one of the `member#N` tokens from the',
+      'pool above — never invent a name.',
     ].join('\n'),
     schemaVersion: 1,
     createdAt: now,
@@ -121,18 +127,56 @@ export function buildOrchestratorAgent(): Agent {
 }
 
 /**
+ * RFC-223 (PR-3b) — one candidate pool member as the orchestrator sees it: an
+ * opaque `token` (the ONLY member identity the LLM ever sees/emits) bound to the
+ * frozen canonical `agentId` + display `agentName`, plus the `card` source for
+ * rendering the (free-text) capability description. `agentName` NEVER reaches
+ * the LLM as a machine-readable identity — only inside the free-text card body.
+ */
+export interface DwPoolMember {
+  token: string
+  agentId: string
+  agentName: string
+  card: CapabilitySource
+}
+
+/**
+ * Assign each distinct pool agent its opaque `member#N` token in the frozen pool
+ * order (deterministic from `config.members` → rename/ABA-safe, crash-recoverable
+ * without persisting the map). The resolved pool the caller passes is already
+ * distinct + id-resolved (see `resolvePool`).
+ */
+export function buildDwPoolMembers(pool: readonly Agent[]): DwPoolMember[] {
+  return pool.map((a, i) => ({
+    token: dwMemberToken(i),
+    agentId: a.id,
+    agentName: a.name,
+    card: a,
+  }))
+}
+
+/** token → frozen agent binding, for the single token→agentId conversion point. */
+export function dwPoolTokenMap(members: readonly DwPoolMember[]): Map<string, DwTokenBinding> {
+  return new Map(members.map((m) => [m.token, { agentId: m.agentId, agentName: m.agentName }]))
+}
+
+/**
  * Build the orchestrator's user prompt: the goal (workgroup charter + the
  * launch-time goal, both fed as fixed context) + the pool's capability cards
  * (RFC-166) + optional rejection feedback for a regeneration round. Pure string
  * builder. Prompt-isolation: capability cards never carry a user id (RFC-099).
+ * RFC-223 (PR-3b): each card's heading (the machine-readable identity slot) is
+ * the member's opaque `token`, so the LLM never sees a real agent name as a
+ * framework identity field; the card BODY (description / prompt summary) is
+ * free text that may still mention names (R4-2 — not scrubbed).
  */
 export function buildOrchestratorPrompt(opts: {
   /** Fixed group charter (workgroup.instructions); '' when unset. */
   charter: string
   /** The per-launch goal the human supplied. */
   goal: string
-  /** Pool agents (agent members) — rendered as capability cards. */
-  pool: readonly CapabilitySource[]
+  /** Pool members (token + card) — rendered as token-headed capability cards. */
+  pool: readonly DwPoolMember[]
   /** On a rejected regeneration round, the human's feedback (high priority). */
   rejectionComment?: string | undefined
   /** Per-run envelope nonce; empty keeps legacy prompt bytes. */
@@ -152,13 +196,14 @@ export function buildOrchestratorPrompt(opts: {
     fenceUntrusted('dynamic-workflow-goal', opts.goal.trim(), nonce),
     '',
   )
-  const poolCards = renderRosterCapabilityCards(opts.pool, {
-    inputDescriptionBudget: perCardInputDescriptionBudget(
-      ORCHESTRATOR_INPUT_DESCRIPTION_TOTAL_BUDGET,
-      opts.pool.length,
-      ORCHESTRATOR_CARD_INPUT_DESCRIPTION_MAX,
-    ),
-  })
+  const inputDescriptionBudget = perCardInputDescriptionBudget(
+    ORCHESTRATOR_INPUT_DESCRIPTION_TOTAL_BUDGET,
+    opts.pool.length,
+    ORCHESTRATOR_CARD_INPUT_DESCRIPTION_MAX,
+  )
+  const poolCards = opts.pool
+    .map((m) => renderAgentCapabilityCard(m.card, { inputDescriptionBudget, machineRef: m.token }))
+    .join('\n\n')
   lines.push(
     '## Agent pool',
     '',
@@ -192,14 +237,21 @@ function readNodeString(node: Record<string, unknown>, key: string): string | un
  * `validateWorkflowDef` (which owns agent-not-found / cycles / port wiring).
  * Returns the same {ok, issues} shape; error-severity issues are merged into the
  * orchestrator's regeneration prompt (like the workgroup malformed-envelope retry).
+ *
+ * RFC-223 (PR-3b): pool membership is decided BY the frozen canonical `agentId`
+ * (`poolAgentIds`), not the display name — the generated def is already
+ * id-canonical (single conversion point), so this same check re-validates a
+ * stored proposal against the CURRENT pool at approve time (a member removed
+ * mid-run → `dw-agent-outside-pool`). A node with no `agentId` (an unknown
+ * token that slipped past the conversion) also trips it — never a name compare.
  */
 export function validateDynamicWorkflowDef(
   def: WorkflowDefinition,
-  pool: readonly string[],
+  poolAgentIds: readonly string[],
 ): WorkflowValidationResult {
   const issues: WorkflowValidationIssue[] = []
   const nodes = def.nodes ?? []
-  const poolSet = new Set(pool)
+  const poolSet = new Set(poolAgentIds)
 
   const agentSingleCount = nodes.filter((n) => n.kind === 'agent-single').length
   if (agentSingleCount === 0) {
@@ -220,11 +272,11 @@ export function validateDynamicWorkflowDef(
       })
       continue
     }
-    const agentName = readNodeString(n as unknown as Record<string, unknown>, 'agentName')
-    if (agentName !== undefined && !poolSet.has(agentName)) {
+    const agentId = readNodeString(n as unknown as Record<string, unknown>, 'agentId')
+    if (agentId === undefined || !poolSet.has(agentId)) {
       issues.push({
         code: DW_VALIDATION_CODES.agentOutsidePool,
-        message: `agent '${agentName}' (node '${n.id}') is not in the workgroup's agent pool`,
+        message: `node '${n.id}' does not resolve to an agent in the workgroup's pool`,
         pointer: n.id,
         severity: 'error',
       })

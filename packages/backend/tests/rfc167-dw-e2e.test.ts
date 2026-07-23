@@ -97,8 +97,11 @@ async function seedPlannerAgent(db: DbClient): Promise<void> {
   })
 }
 
+// RFC-223 (PR-3b): the orchestrator emits opaque member tokens; the sole pool
+// member (wg-planner) is member#1. The single conversion point stamps its frozen
+// agentId into the generated def.
 const GENERATED = {
-  nodes: [{ id: 'plan-step', agentName: 'wg-planner', promptTemplate: '拆解目标', inputs: [] }],
+  nodes: [{ id: 'plan-step', agentToken: 'member#1', promptTemplate: '拆解目标', inputs: [] }],
   edges: [],
 }
 

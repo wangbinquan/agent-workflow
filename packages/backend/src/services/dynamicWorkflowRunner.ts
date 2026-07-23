@@ -23,25 +23,29 @@
 
 import {
   DEFAULT_PROTOCOL_RETRY_BUDGET,
+  DW_VALIDATION_CODES,
   DwGeneratedWorkflowSchema,
   dwGeneratedToWorkflowDef,
   fenceUntrusted,
   WorkgroupRuntimeConfigSchema,
   type Agent,
   type DwState,
+  type DwTokenMap,
   type WorkflowDefinition,
   type WorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
 import { and, eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { nodeRuns, tasks } from '@/db/schema'
-import { getAgent } from '@/services/agent'
+import { getAgentById } from '@/services/agent'
 import { setNodeRunStatus } from '@/services/lifecycle'
 import { loadRunEnvelopeNonce, mintNodeRun } from '@/services/nodeRunMint'
 import {
+  buildDwPoolMembers,
   buildOrchestratorAgent,
   buildOrchestratorPrompt,
   DW_ORCHESTRATOR_NODE_ID,
+  dwPoolTokenMap,
   ORCHESTRATOR_WORKFLOW_PORT,
   validateDynamicWorkflowDef,
 } from '@/services/orchestratorAgent'
@@ -106,12 +110,17 @@ export function extractJsonPayload(text: string): string {
 
 /**
  * Parse + convert + two-layer-validate one orchestrator `workflow` port
- * payload. Returns the validated definition or the error lines to inject into
- * the retry prompt. Pure except for the layer-1 context (caller supplies it).
+ * payload. RFC-223 (PR-3b): the payload references pool members by opaque
+ * `member#N` TOKENS; `dwGeneratedToWorkflowDef` is the single conversion point
+ * that resolves each token to its frozen canonical `agentId` (via `tokenMap`).
+ * An unknown token is surfaced as a `dw-agent-outside-pool` error referencing
+ * the TOKEN (never a name/id). Returns the id-canonical validated definition or
+ * the error lines to inject into the retry prompt. Pure except for the layer-1
+ * context (caller supplies it).
  */
 export function evaluateGeneratedWorkflow(
   rawPort: string | undefined,
-  poolNames: readonly string[],
+  tokenMap: DwTokenMap,
   layer1Ctx: Parameters<typeof validateWorkflowDef>[1],
 ): { ok: true; def: WorkflowDefinition } | { ok: false; errors: string[] } {
   if (rawPort === undefined || rawPort.trim().length === 0) {
@@ -130,9 +139,23 @@ export function evaluateGeneratedWorkflow(
       errors: gen.error.issues.map((i) => `schema: ${i.path.join('.')} — ${i.message}`),
     }
   }
-  const def = dwGeneratedToWorkflowDef(gen.data)
+  const { def, unknownTokens } = dwGeneratedToWorkflowDef(gen.data, tokenMap)
+  // Unknown token = the LLM referenced a member outside the pool. Report the
+  // TOKEN (opaque) so the retry prompt speaks the same language the LLM does,
+  // and never leak a real name/id (R4-2). Short-circuit: an id-less node would
+  // otherwise also raise a confusing layer-1 agent-not-found.
+  if (unknownTokens.length > 0) {
+    return {
+      ok: false,
+      errors: unknownTokens.map(
+        (t) =>
+          `${DW_VALIDATION_CODES.agentOutsidePool}: unknown member '${t}' — reference only the member#N tokens listed in the pool`,
+      ),
+    }
+  }
+  const poolAgentIds = [...new Set([...tokenMap.values()].map((b) => b.agentId))]
   const layer1 = validateWorkflowDef(def, layer1Ctx)
-  const layer2 = validateDynamicWorkflowDef(def, poolNames)
+  const layer2 = validateDynamicWorkflowDef(def, poolAgentIds)
   const errors = [...layer1.issues, ...layer2.issues]
     .filter((i) => (i.severity ?? 'error') === 'error')
     .map((i) => `${i.code}: ${i.message}`)
@@ -140,15 +163,23 @@ export function evaluateGeneratedWorkflow(
   return { ok: true, def }
 }
 
-/** Resolve the orchestratable pool: the group's agent members, deduped by
- *  agentName; dangling references (agent deleted after launch) are skipped. */
+/**
+ * Resolve the orchestratable pool: the group's agent members, resolved BY the
+ * frozen canonical `agentId` (RFC-223 PR-3b — rename/ABA-safe; NO name lookup),
+ * deduped by id. A member with no frozen id (pre-RFC-223 / the R4-1 quarantine
+ * sentinel) or a dangling id (agent deleted after launch) resolves to nothing
+ * and is skipped — a fully unresolvable pool fails closed upstream. The pool
+ * order here defines the deterministic `member#N` token assignment.
+ */
 async function resolvePool(db: DbClient, config: WorkgroupRuntimeConfig): Promise<Agent[]> {
   const seen = new Set<string>()
   const pool: Agent[] = []
   for (const m of config.members) {
-    if (m.memberType !== 'agent' || m.agentName === null || seen.has(m.agentName)) continue
-    seen.add(m.agentName)
-    const agent = await getAgent(db, m.agentName)
+    if (m.memberType !== 'agent') continue
+    const agentId = typeof m.agentId === 'string' && m.agentId.length > 0 ? m.agentId : null
+    if (agentId === null || seen.has(agentId)) continue
+    seen.add(agentId)
+    const agent = await getAgentById(db, agentId)
     if (agent !== null) pool.push(agent)
   }
   return pool
@@ -236,7 +267,11 @@ export async function runDynamicWorkflowGenerate(
       },
     }
   }
-  const poolNames = pool.map((a) => a.name)
+  // RFC-223 (PR-3b): assign each pool agent its opaque `member#N` token; the
+  // LLM only ever sees / emits tokens. The map is the single point where a
+  // returned token is converted back to a canonical agentId.
+  const members = buildDwPoolMembers(pool)
+  const tokenMap = dwPoolTokenMap(members)
   const layer1Ctx = await buildWorkflowValidationContext(db)
   const orchestrator = buildOrchestratorAgent()
 
@@ -278,7 +313,7 @@ export async function runDynamicWorkflowGenerate(
       buildOrchestratorPrompt({
         charter: config.instructions,
         goal: config.goal,
-        pool,
+        pool: members,
         ...(dw.rejectionComment !== undefined ? { rejectionComment: dw.rejectionComment } : {}),
         envelopeNonce,
       }) +
@@ -314,7 +349,7 @@ export async function runDynamicWorkflowGenerate(
         : null
     const evaluated = failure
       ? null
-      : evaluateGeneratedWorkflow(result.outputs[ORCHESTRATOR_WORKFLOW_PORT], poolNames, layer1Ctx)
+      : evaluateGeneratedWorkflow(result.outputs[ORCHESTRATOR_WORKFLOW_PORT], tokenMap, layer1Ctx)
 
     if (evaluated !== null && evaluated.ok) {
       const { rejectionComment: _consumed, ...rest } = dw
