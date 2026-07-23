@@ -153,8 +153,17 @@ export function agentSkillRefName(ref: AgentSkillRef): string {
 /**
  * RFC-223 (PR-1) — ref ← selector. Resolve a portable selector into a stored
  * ref. `resolveManagedId(name)` returns the managed skill id visible for that
- * name, or undefined; a managed selector that does not resolve is demoted to a
- * `project` ref (RFC-178: a name with no managed row is a repo-local skill).
+ * name, or undefined.
+ *
+ * Codex impl-gate P1-1: a MANAGED selector that resolves to no managed skill is
+ * NOT silently demoted to a `project` (repo-local) ref. Demoting a missing
+ * managed skill into a self-discovered repo skill changes execution semantics
+ * (the framework would inject whatever repo-local skill happens to carry that
+ * name). Instead the selector is kept as an UNRESOLVED managed ref — `skillId`
+ * holds the unresolved name — so downstream resolution / runtime injection
+ * surfaces it as a missing managed skill rather than a working project skill.
+ * A repo-local skill must be authored explicitly as a `project` selector; that
+ * (and picker free-text) is the ONLY user-explicit path to a `project` ref.
  */
 export function skillSelectorToRef(
   selector: AgentSkillSelector,
@@ -163,7 +172,7 @@ export function skillSelectorToRef(
   if (selector.kind === 'project') return { kind: 'project', name: selector.name }
   const id = resolveManagedId(selector.name)
   return id === undefined
-    ? { kind: 'project', name: selector.name }
+    ? { kind: 'managed', skillId: selector.name }
     : { kind: 'managed', skillId: id }
 }
 

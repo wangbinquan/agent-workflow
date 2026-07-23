@@ -8,14 +8,31 @@
 //  - RFC-194 routes inputs / outputs / outputKinds / role /
 //    outputWrapperPortNames as first-class fields; omitted fields (e.g.
 //    syncOutputsOnIterate) preserve the current value as-is
-//  - RFC-223 (PR-1): `skills` is now a first-class parsed field (typed refs);
-//    when the parser produced it, it overwrites like the other list fields
+//  - RFC-223 (PR-1, Codex impl-gate P1-1): `skills` is parsed as PORTABLE
+//    name-based selectors (`result.skillSelectors`), NOT persisted refs. The
+//    merge converts them to `AgentSkillRef`s here: a `project` selector → a
+//    `project` ref; a `managed` selector → a `managed` ref carrying the raw NAME
+//    in `skillId` (never demoted to `project`), which the server then resolves to
+//    a canonical id against the actor's ACL-visible set (or keeps as an unresolved
+//    managed ref — a missing managed skill is never silently turned into a
+//    repo-local skill). The picker's own refs already carry ids, unaffected.
 
-import type { AgentMarkdownParseResult, CreateAgent } from '@agent-workflow/shared'
+import type { AgentMarkdownParseResult, AgentSkillRef, CreateAgent } from '@agent-workflow/shared'
+import { skillSelectorToRef } from '@agent-workflow/shared'
 import type { OrphanSidecarRef } from './agent-ports'
 
 const hasOwn = (record: object | undefined, key: string): boolean =>
   record !== undefined && Object.prototype.hasOwnProperty.call(record, key)
+
+/**
+ * RFC-223 (PR-1): the skill refs an import would apply, or undefined when the
+ * source declared no `skills:`. Managed selectors keep their NAME in `skillId`
+ * (server resolves + ACL-checks); the offline merge has no DB to mint an id.
+ */
+function importedSkillRefs(result: AgentMarkdownParseResult): AgentSkillRef[] | undefined {
+  if (result.skillSelectors === undefined) return undefined
+  return result.skillSelectors.map((sel) => skillSelectorToRef(sel, () => undefined))
+}
 
 /**
  * Importing only `outputs` must not turn a previously orphaned, omitted
@@ -62,6 +79,10 @@ export function mergeAgentImport(
     }
     ;(next as unknown as Record<string, unknown>)[key] = value
   }
+  // RFC-223 (PR-1): skills come from the selector list, not partial — convert +
+  // apply like the other list fields (overwrite when the source declared them).
+  const skills = importedSkillRefs(result)
+  if (skills !== undefined) next.skills = skills
   return next
 }
 
@@ -80,6 +101,12 @@ export function fieldsOverwrittenByImport(
     const currentVal = (current as unknown as Record<string, unknown>)[key]
     const emptyVal = (emptyDraft as unknown as Record<string, unknown>)[key]
     if (!isSameValue(currentVal, emptyVal)) out.push(key)
+  }
+  // RFC-223 (PR-1): skills live on the selector list, not partial — check it too
+  // so an import that only replaces skills still flags the overwrite.
+  const skills = importedSkillRefs(result)
+  if (skills !== undefined && !isSameValue(current.skills ?? [], emptyDraft.skills ?? [])) {
+    out.push('skills')
   }
   return out
 }

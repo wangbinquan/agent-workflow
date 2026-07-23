@@ -134,10 +134,47 @@ export interface RefCheckGroup {
   names: readonly string[]
 }
 
+/** id + name maps for the tokens that matched a row of `type`. */
+async function loadAclRefRows(
+  db: DbClient,
+  type: AclResourceType,
+  tokens: readonly string[],
+): Promise<{
+  byId: Map<string, AclRow & { name: string }>
+  byName: Map<string, AclRow & { name: string }>
+}> {
+  const byId = new Map<string, AclRow & { name: string }>()
+  const byName = new Map<string, AclRow & { name: string }>()
+  if (tokens.length === 0) return { byId, byName }
+  const table = ACL_TABLES[type]
+  const rows = (await db
+    .select({
+      id: table.id,
+      name: table.name,
+      ownerUserId: table.ownerUserId,
+      visibility: table.visibility,
+    })
+    .from(table)
+    .where(or(inArray(table.id, [...tokens]), inArray(table.name, [...tokens])))) as Array<
+    AclRow & { name: string }
+  >
+  for (const row of rows) {
+    byId.set(row.id, row)
+    byName.set(row.name, row)
+  }
+  return { byId, byName }
+}
+
 /**
  * Throws 422 `acl-missing-refs` when any reference resolves to a row the actor
  * cannot view. Unresolvable references pass through (existence validators own
  * them). Admins short-circuit.
+ *
+ * Codex impl-gate P2-2 / D1: the refusal echoes the caller's INPUT token (the id
+ * or name they actually supplied), NEVER the resolved `row.name`. Echoing
+ * `row.name` for an input that was a private resource's ID would leak that
+ * resource's name — an existence/metadata oracle for a resource the caller
+ * cannot view.
  */
 export async function assertNewRefsUsable(
   db: DbClient,
@@ -149,33 +186,109 @@ export async function assertNewRefsUsable(
   for (const group of groups) {
     const refs = [...new Set(group.names)].filter((n) => n.length > 0)
     if (refs.length === 0) continue
-    const table = ACL_TABLES[group.type]
     // RFC-223 (PR-1): a ref may be an id (picker) or a name (agent.md import);
     // match either column so the ACL check binds to the actual row.
-    const rows = (await db
-      .select({
-        id: table.id,
-        name: table.name,
-        ownerUserId: table.ownerUserId,
-        visibility: table.visibility,
-      })
-      .from(table)
-      .where(or(inArray(table.id, refs), inArray(table.name, refs)))) as Array<
-      AclRow & { name: string }
-    >
-    if (rows.length === 0) continue
+    const { byId, byName } = await loadAclRefRows(db, group.type, refs)
+    if (byId.size === 0) continue
     const granted = await listGrantedResourceIds(db, actor, group.type)
-    for (const row of rows) {
+    for (const ref of refs) {
+      const row = byId.get(ref) ?? byName.get(ref)
+      if (row === undefined) continue // unresolvable → existence validator owns it
       if (!isVisibleRow(actor, row, granted)) {
-        missing.push({ type: group.type, name: row.name })
+        // Echo the INPUT token (P2-2 / D1), not row.name.
+        missing.push({ type: group.type, name: ref })
       }
     }
   }
   if (missing.length > 0) {
-    throw new ValidationError(
-      'acl-missing-refs',
-      `you do not have access to: ${missing.map((m) => `${m.type} '${m.name}'`).join(', ')}`,
-      { missing },
-    )
+    throw missingRefsError(missing)
   }
+}
+
+function missingRefsError(
+  missing: Array<{ type: AclResourceType; name: string }>,
+): ValidationError {
+  return new ValidationError(
+    'acl-missing-refs',
+    `you do not have access to: ${missing.map((m) => `${m.type} '${m.name}'`).join(', ')}`,
+    { missing },
+  )
+}
+
+/** Per-type resolution result: ids for persistence + ACL violations (new refs
+ *  the actor cannot view), echoing the caller's INPUT token (D1/P2-2). */
+export interface ResolvedRefsById {
+  /** Resolved ids, deduped, first-seen order — for flat id[] columns. An
+   *  unresolvable token is kept verbatim (existence validators own it). */
+  ids: string[]
+  /** MATCHED input token → its row id (only tokens that resolved to a row). A
+   *  caller that must preserve per-entry identity (skills / workgroup members)
+   *  reads `byToken.get(token) ?? <token-or-null>` so an unresolvable token keeps
+   *  its own semantics (skill: unresolved managed; member: dangling → null). */
+  byToken: Map<string, string>
+  missing: Array<{ type: AclResourceType; name: string }>
+}
+
+/**
+ * RFC-223 (PR-1, Codex impl-gate P1-2) — resolve id-or-name tokens to canonical
+ * ids AND decide ACL usability in a SINGLE query pass, so the id used for the
+ * ACL decision is the exact id returned for persistence. This closes the
+ * check-then-resolve TOCTOU: the old shape ACL-checked the raw token in the
+ * route and then RE-RESOLVED it (with no actor) in the service, so a private
+ * resource renamed into that token between the two steps could bind an id the
+ * caller was never authorized for.
+ *
+ * - A token equal to a row id (or a name) resolves to that row's id; an
+ *   unresolvable token is returned verbatim (existence validators own
+ *   `*-not-found`).
+ * - A NEW reference (resolved id NOT in `grandfatheredIds`, D15) whose row the
+ *   actor cannot view is collected in `missing`, echoing the INPUT token.
+ * - `actor === null` (framework/system callers) skips the ACL gate; a resource
+ *   admin actor likewise resolves without ACL filtering.
+ *
+ * Never throws — the caller aggregates `missing` across ref groups and raises a
+ * single `acl-missing-refs`.
+ */
+export async function resolveRefsUsableById(
+  db: DbClient,
+  actor: Actor | null,
+  type: AclResourceType,
+  tokens: readonly string[],
+  opts: { grandfatheredIds?: ReadonlySet<string> } = {},
+): Promise<ResolvedRefsById> {
+  if (tokens.length === 0) return { ids: [], byToken: new Map(), missing: [] }
+  const { byId, byName } = await loadAclRefRows(db, type, [...new Set(tokens)])
+  const enforce = actor !== null && !isResourceAdminActor(actor)
+  const granted = enforce ? await listGrantedResourceIds(db, actor, type) : new Set<string>()
+  const grandfathered = opts.grandfatheredIds ?? new Set<string>()
+  const missing: Array<{ type: AclResourceType; name: string }> = []
+  const byToken = new Map<string, string>()
+  const seen = new Set<string>()
+  const ids: string[] = []
+  for (const token of tokens) {
+    const row = byId.get(token) ?? byName.get(token)
+    const id = row?.id ?? token
+    if (row !== undefined) byToken.set(token, row.id) // only MATCHED tokens
+    if (
+      enforce &&
+      row !== undefined &&
+      !grandfathered.has(id) &&
+      !isVisibleRow(actor, row, granted)
+    ) {
+      missing.push({ type, name: token }) // echo INPUT token (D1/P2-2)
+    }
+    if (!seen.has(id)) {
+      seen.add(id)
+      ids.push(id)
+    }
+  }
+  return { ids, byToken, missing }
+}
+
+/** Raise the aggregated `acl-missing-refs` (or return if none). Callers collect
+ *  `missing` from several `resolveRefsUsableById` groups and pass them here. */
+export function assertNoMissingRefs(
+  missing: ReadonlyArray<{ type: AclResourceType; name: string }>,
+): void {
+  if (missing.length > 0) throw missingRefsError([...missing])
 }

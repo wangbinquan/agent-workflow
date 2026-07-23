@@ -9,54 +9,38 @@
 // (Crockford base32, uppercase) and a resource name (`[a-z0-9][a-z0-9_-]*`,
 // lowercase) are disjoint character sets, so an entry is never ambiguously both.
 //
-// Unresolved entries (neither an existing id nor an existing name) are returned
-// verbatim so the downstream existence validators (validateMcpReferences /
-// validatePluginReferences / validateDependsOn — all now by id) surface the
-// proper `*-not-found` error rather than this module swallowing it.
+// Codex impl-gate P1-2 — resolution is ACL-aware and BOUND to storage: the
+// single pass in `resolveRefsUsableById` both resolves the token to an id AND
+// checks that id's visibility, so the id the ACL gate approves is the exact id
+// persisted. This closes the check-then-resolve TOCTOU (route ACL-checked the
+// raw token, service re-resolved it independently → a rename between the two
+// could bind an unauthorized id).
 //
-// This whole module is transitional scaffolding for PR-8, which replaces the
-// name→id convenience with an explicit import preview + ref→id mapping once a
-// name can match multiple owners' resources.
+// Codex impl-gate P1-1 — a managed skill ref that resolves to no visible skill
+// is NEVER silently demoted to a repo-local `project` ref (that would change
+// execution semantics). It is kept as an UNRESOLVED managed ref instead.
 
 import type { AgentSkillRef } from '@agent-workflow/shared'
 import { inArray, or } from 'drizzle-orm'
+import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { agents, mcps, plugins, skills } from '@/db/schema'
-
-/** A table with the id + name columns every tenant resource shares. */
-type NamedRefTable = typeof agents | typeof mcps | typeof plugins | typeof skills
-
-async function loadRefRows(
-  db: DbClient,
-  table: NamedRefTable,
-  tokens: readonly string[],
-): Promise<{ idSet: Set<string>; byName: Map<string, string> }> {
-  const rows = await db
-    .select({ id: table.id, name: table.name })
-    .from(table)
-    .where(or(inArray(table.id, [...tokens]), inArray(table.name, [...tokens])))
-  const idSet = new Set<string>()
-  const byName = new Map<string, string>()
-  for (const row of rows) {
-    idSet.add(row.id)
-    byName.set(row.name, row.id)
-  }
-  return { idSet, byName }
-}
+import { agents } from '@/db/schema'
+import { resolveRefsUsableById, assertNoMissingRefs } from './resourceRefs'
 
 /**
- * Resolve a list of id-or-name references against one table to canonical ids,
- * de-duplicating while preserving first-seen order. An entry already equal to a
- * row id is kept; a name is mapped to its row id; an unresolved token is kept
- * verbatim (the existence validator downstream rejects it by id).
+ * Resolve a list of id-or-name references against the agents table to canonical
+ * ids (non-ACL — used only by the closure PREVIEW cycle check, where usability
+ * is enforced at save time). De-dupes while preserving first-seen order; an
+ * unresolved token is kept verbatim so the downstream validator rejects it by id.
  */
-async function resolveNamedRefs(
-  db: DbClient,
-  table: NamedRefTable,
-  refs: readonly string[],
-): Promise<string[]> {
+export async function resolveAgentRefs(db: DbClient, refs: readonly string[]): Promise<string[]> {
   if (refs.length === 0) return []
-  const { idSet, byName } = await loadRefRows(db, table, refs)
+  const rows = await db
+    .select({ id: agents.id, name: agents.name })
+    .from(agents)
+    .where(or(inArray(agents.id, [...refs]), inArray(agents.name, [...refs])))
+  const idSet = new Set(rows.map((r) => r.id))
+  const byName = new Map(rows.map((r) => [r.name, r.id]))
   const seen = new Set<string>()
   const out: string[] = []
   for (const ref of refs) {
@@ -68,64 +52,92 @@ async function resolveNamedRefs(
   return out
 }
 
-export function resolveMcpRefs(db: DbClient, refs: readonly string[]): Promise<string[]> {
-  return resolveNamedRefs(db, mcps, refs)
-}
-
-export function resolvePluginRefs(db: DbClient, refs: readonly string[]): Promise<string[]> {
-  return resolveNamedRefs(db, plugins, refs)
-}
-
-export function resolveAgentRefs(db: DbClient, refs: readonly string[]): Promise<string[]> {
-  return resolveNamedRefs(db, agents, refs)
-}
-
 /** Ref-identity key for skill-ref de-dup. */
 function skillRefKey(ref: AgentSkillRef): string {
   return ref.kind === 'managed' ? `m:${ref.skillId}` : `p:${ref.name}`
 }
 
-/**
- * Normalize typed skill refs for persistence: a `managed` ref whose `skillId`
- * carries a NAME (agent.md import) is resolved to the skill's id; one that
- * resolves to no managed skill row is DEMOTED to a `project` ref (RFC-178: a
- * name with no DB row is a repo-local self-discovered skill). `project` refs are
- * passed through untouched. De-dupes by ref identity, first-seen order.
- */
-export async function normalizeSkillRefs(
-  db: DbClient,
-  refs: readonly AgentSkillRef[],
-): Promise<AgentSkillRef[]> {
-  const managedTokens = refs.filter((r) => r.kind === 'managed').map((r) => r.skillId)
-  const lookup =
-    managedTokens.length === 0
-      ? { idSet: new Set<string>(), byName: new Map<string, string>() }
-      : await loadRefRows(db, skills, managedTokens)
-  const seen = new Set<string>()
-  const out: AgentSkillRef[] = []
-  for (const ref of refs) {
-    let normalized: AgentSkillRef
-    if (ref.kind === 'project') {
-      normalized = { kind: 'project', name: ref.name }
-    } else if (lookup.idSet.has(ref.skillId)) {
-      normalized = { kind: 'managed', skillId: ref.skillId }
-    } else {
-      const id = lookup.byName.get(ref.skillId)
-      // RFC-178: a managed token that resolves to no managed skill is a
-      // repo-local (project) skill referenced by name.
-      normalized =
-        id === undefined ? { kind: 'project', name: ref.skillId } : { kind: 'managed', skillId: id }
-    }
-    const key = skillRefKey(normalized)
-    if (seen.has(key)) continue
-    seen.add(key)
-    out.push(normalized)
-  }
-  return out
+/** The cross-resource references an agent create/update carries. Ids OR names on
+ *  the wire (pickers hand ids; agent.md hands names); skills are typed refs. */
+export interface AgentRefInput {
+  mcp: readonly string[]
+  plugins: readonly string[]
+  dependsOn: readonly string[]
+  skills: readonly AgentSkillRef[]
 }
 
-/** Managed skill ids referenced by a ref list (project refs excluded) — used by
- *  the route-level ACL usability check (assertNewRefsUsable). */
-export function managedSkillTokens(refs: readonly AgentSkillRef[]): string[] {
-  return refs.filter((r) => r.kind === 'managed').map((r) => r.skillId)
+/** Resolved, canonical (id) references ready for persistence. */
+export interface ResolvedAgentRefs {
+  mcp: string[]
+  plugins: string[]
+  dependsOn: string[]
+  skills: AgentSkillRef[]
+}
+
+/** Managed skill ids referenced by a stored ref list (project refs excluded) —
+ *  the grandfathering set for an update (D15). */
+function managedSkillIdSet(refs: readonly AgentSkillRef[] | undefined): Set<string> {
+  return new Set((refs ?? []).filter((r) => r.kind === 'managed').map((r) => r.skillId))
+}
+
+/**
+ * RFC-223 (PR-1) — resolve an agent's mcp / plugins / dependsOn / skills refs to
+ * canonical ids and, when `actor` is a real user, enforce per-reference ACL in
+ * the SAME resolution pass (Codex impl-gate P1-2). On an UPDATE, `existing`
+ * carries the already-stored (resolved) refs so only NEWLY-added references are
+ * ACL-checked (D15 grandfathering) — the diff compares RESOLVED IDS, never the
+ * raw name/id token, so a grandfathered ref re-submitted by name is not
+ * mis-flagged as new.
+ *
+ * Skills (Codex impl-gate P1-1): a `managed` ref's `skillId` (an id at rest, a
+ * name on the agent.md wire) is resolved to the skill id; a ref that resolves to
+ * no visible skill is kept as an UNRESOLVED managed ref (skillId holds the raw
+ * token) and is NEVER demoted to a `project` ref. `project` refs pass through.
+ *
+ * `actor === null` (framework/system seeders) resolves without an ACL gate.
+ * Aggregates every group's ACL violations and raises a single `acl-missing-refs`.
+ */
+export async function resolveAgentRefsUsable(
+  db: DbClient,
+  actor: Actor | null,
+  input: AgentRefInput,
+  existing?: AgentRefInput,
+): Promise<ResolvedAgentRefs> {
+  const mcp = await resolveRefsUsableById(db, actor, 'mcp', input.mcp, {
+    grandfatheredIds: existing ? new Set(existing.mcp) : undefined,
+  })
+  const plugins = await resolveRefsUsableById(db, actor, 'plugin', input.plugins, {
+    grandfatheredIds: existing ? new Set(existing.plugins) : undefined,
+  })
+  const dependsOn = await resolveRefsUsableById(db, actor, 'agent', input.dependsOn, {
+    grandfatheredIds: existing ? new Set(existing.dependsOn) : undefined,
+  })
+
+  // Skills: resolve only the MANAGED tokens (project refs have no DB row / ACL).
+  const managedTokens = input.skills.filter((r) => r.kind === 'managed').map((r) => r.skillId)
+  const skillRes = await resolveRefsUsableById(db, actor, 'skill', managedTokens, {
+    grandfatheredIds: existing ? managedSkillIdSet(existing.skills) : undefined,
+  })
+  const seenSkill = new Set<string>()
+  const skills: AgentSkillRef[] = []
+  for (const ref of input.skills) {
+    // NO project demotion (P1-1): an unresolved managed skillId keeps its token.
+    const normalized: AgentSkillRef =
+      ref.kind === 'project'
+        ? { kind: 'project', name: ref.name }
+        : { kind: 'managed', skillId: skillRes.byToken.get(ref.skillId) ?? ref.skillId }
+    const key = skillRefKey(normalized)
+    if (seenSkill.has(key)) continue
+    seenSkill.add(key)
+    skills.push(normalized)
+  }
+
+  assertNoMissingRefs([
+    ...mcp.missing,
+    ...plugins.missing,
+    ...dependsOn.missing,
+    ...skillRes.missing,
+  ])
+
+  return { mcp: mcp.ids, plugins: plugins.ids, dependsOn: dependsOn.ids, skills }
 }

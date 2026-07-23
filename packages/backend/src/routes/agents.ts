@@ -7,7 +7,6 @@
 
 import {
   AgentNameSchema,
-  agentSkillRefName,
   CreateAgentSchema,
   rejectRetiredStartTaskKeys,
   RenameAgentSchema,
@@ -29,11 +28,12 @@ import {
   updateAgent,
 } from '@/services/agent'
 import { resolveDependsClosure, validateDependsOn } from '@/services/agentDeps'
-import { managedSkillTokens, resolveAgentRefs } from '@/services/agentRefs'
+import { resolveAgentRefs } from '@/services/agentRefs'
 import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
 import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
 import { assertNotBuiltin, excludeBuiltinAgents, isBuiltinRow } from '@/services/systemResources'
-import { assertNewRefsUsable, diffNewNames } from '@/services/resourceRefs'
+import { mcps, plugins, skills } from '@/db/schema'
+import { inArray } from 'drizzle-orm'
 import { startAgentTask } from '@/services/agentLaunch'
 import {
   parseMultipartLaunch,
@@ -108,17 +108,14 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
       })
     }
     const actor = actorOf(c)
-    // RFC-099 (D15): on create, every reference is new — reject names that
-    // resolve to resources the editor cannot view.
-    await assertNewRefsUsable(deps.db, actor, [
-      // RFC-223 (PR-1): only MANAGED skill refs point at a DB row (project refs
-      // are repo-local, no ACL); mcp/plugin/agent refs are id-or-name tokens.
-      { type: 'skill', names: managedSkillTokens(parsed.data.skills) },
-      { type: 'mcp', names: parsed.data.mcp },
-      { type: 'plugin', names: parsed.data.plugins ?? [] },
-      { type: 'agent', names: parsed.data.dependsOn },
-    ])
-    const created = await createAgent(deps.db, parsed.data, { ownerUserId: actor.user.id })
+    // RFC-099 (D15) / RFC-223 (PR-1, Codex impl-gate P1-2): reference ACL is
+    // enforced INSIDE createAgent, bound to the same single resolution that
+    // produces the persisted ids (no check-then-resolve TOCTOU). On create every
+    // reference is new.
+    const created = await createAgent(deps.db, parsed.data, {
+      ownerUserId: actor.user.id,
+      actor,
+    })
     return c.json(created, 201)
   })
 
@@ -142,47 +139,12 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
       assertNotBuiltin('agent', existing) // RFC-104: built-ins are read-only
     }
     await requireResourceOwner(deps.db, actor, 'agent', existing)
-    // RFC-099 (D15): only NEWLY-added references are usability-checked.
-    await assertNewRefsUsable(deps.db, actor, [
-      ...(parsed.data.skills !== undefined
-        ? [
-            {
-              type: 'skill' as const,
-              // RFC-223 (PR-1): diff by managed skill token (project refs have
-              // no DB row / ACL).
-              names: diffNewNames(
-                new Set(managedSkillTokens(existing.skills)),
-                new Set(managedSkillTokens(parsed.data.skills)),
-              ),
-            },
-          ]
-        : []),
-      ...(parsed.data.mcp !== undefined
-        ? [
-            {
-              type: 'mcp' as const,
-              names: diffNewNames(new Set(existing.mcp), new Set(parsed.data.mcp)),
-            },
-          ]
-        : []),
-      ...(parsed.data.plugins !== undefined
-        ? [
-            {
-              type: 'plugin' as const,
-              names: diffNewNames(new Set(existing.plugins), new Set(parsed.data.plugins)),
-            },
-          ]
-        : []),
-      ...(parsed.data.dependsOn !== undefined
-        ? [
-            {
-              type: 'agent' as const,
-              names: diffNewNames(new Set(existing.dependsOn), new Set(parsed.data.dependsOn)),
-            },
-          ]
-        : []),
-    ])
-    const updated = await updateAgent(deps.db, name, parsed.data)
+    // RFC-099 (D15) / RFC-223 (PR-1, Codex impl-gate P1-2): reference ACL is
+    // enforced INSIDE updateAgent, bound to the same single resolution that
+    // produces the persisted ids. Only NEWLY-added references (diffed by RESOLVED
+    // ID, not raw token) are checked — a grandfathered ref re-submitted by name is
+    // not mis-flagged as new.
+    const updated = await updateAgent(deps.db, name, parsed.data, actor)
     return c.json(updated)
   })
 
@@ -287,24 +249,17 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
         cyclePath: closure.cyclePath,
       })
     }
-    // RFC-099: closure members the viewer cannot see keep their NAME (it
-    // already appears in a visible agent's dependsOn) but mask everything
-    // else, mirroring the "无权限占位" reference-site rule.
-    const summaries = toAgentClosureSummaries(closure.agents, root)
-    const memberRows = new Map(closure.agents.map((a) => [a.name, a]))
+    // RFC-099 / RFC-223 (PR-1, Codex impl-gate P2-1 + P2-2): project stored id
+    // refs to display NAMES (skills/mcp/plugins/dependsOn — never raw ULIDs in the
+    // UI), and mask closure members the viewer cannot see. A masked member no
+    // longer discloses its NAME: its display identity collapses to its opaque id
+    // (and other agents' dependsOn projections keep that id opaque too), so a
+    // private dependency's name never leaks (D1 — mirrors the "无权限占位" rule).
+    const names = await loadClosureRefNames(deps.db, closure.agents)
     const visible = await filterVisibleRows(deps.db, actor, 'agent', closure.agents)
-    const visibleNames = new Set(visible.map((a) => a.name))
-    const masked = summaries.map((s) => {
-      if (s.missing || visibleNames.has(s.name) || !memberRows.has(s.name)) return s
-      return {
-        ...s,
-        description: '',
-        skills: [],
-        skillCount: 0,
-        dependsOn: [],
-        mcp: [],
-        plugins: [],
-      }
+    const masked = toAgentClosureSummaries(closure.agents, {
+      names,
+      visibleAgentIds: new Set(visible.map((a) => a.id)),
     })
     return c.json({ ok: true, agents: masked })
   })
@@ -379,7 +334,9 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
     }
     return c.json({
       ok: true,
-      agents: toAgentClosureSummaries(closure.agents, syntheticRoot),
+      agents: toAgentClosureSummaries(closure.agents, {
+        names: await loadClosureRefNames(deps.db, closure.agents),
+      }),
     })
   })
 
@@ -392,16 +349,58 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
   })
 }
 
+interface ClosureRefNameMaps {
+  skill: Map<string, string>
+  mcp: Map<string, string>
+  plugin: Map<string, string>
+}
+
 /**
- * RFC-022 closure response shape — minimal projection over `Agent` that the
- * `<DependencyTree>` renderer needs. `skillCount` is computed from
- * `agent.skills.length`; dependency-missing names appear as placeholder
- * rows so the UI can still render them under their parent.
+ * RFC-223 (PR-1, Codex impl-gate P2-1): load display NAMES for the managed
+ * skill / mcp / plugin IDS referenced anywhere in the closure, so the wire
+ * projection shows names, not raw ULIDs. Unresolvable ids (deleted out-of-band)
+ * fall back to the id (best-effort, never silently dropped).
  */
-function toAgentClosureSummaries(
+async function loadClosureRefNames(
+  db: AppDeps['db'],
   closure: Agent[],
-  root: Agent,
-): Array<{
+): Promise<ClosureRefNameMaps> {
+  const skillIds = new Set<string>()
+  const mcpIds = new Set<string>()
+  const pluginIds = new Set<string>()
+  for (const a of closure) {
+    for (const ref of a.skills) if (ref.kind === 'managed') skillIds.add(ref.skillId)
+    for (const id of a.mcp ?? []) mcpIds.add(id)
+    for (const id of a.plugins ?? []) pluginIds.add(id)
+  }
+  const [skillRows, mcpRows, pluginRows] = await Promise.all([
+    skillIds.size > 0
+      ? db
+          .select({ id: skills.id, name: skills.name })
+          .from(skills)
+          .where(inArray(skills.id, [...skillIds]))
+      : Promise.resolve([]),
+    mcpIds.size > 0
+      ? db
+          .select({ id: mcps.id, name: mcps.name })
+          .from(mcps)
+          .where(inArray(mcps.id, [...mcpIds]))
+      : Promise.resolve([]),
+    pluginIds.size > 0
+      ? db
+          .select({ id: plugins.id, name: plugins.name })
+          .from(plugins)
+          .where(inArray(plugins.id, [...pluginIds]))
+      : Promise.resolve([]),
+  ])
+  return {
+    skill: new Map(skillRows.map((r) => [r.id, r.name])),
+    mcp: new Map(mcpRows.map((r) => [r.id, r.name])),
+    plugin: new Map(pluginRows.map((r) => [r.id, r.name])),
+  }
+}
+
+interface AgentClosureSummary {
   name: string
   description: string
   /**
@@ -413,63 +412,76 @@ function toAgentClosureSummaries(
   skills: string[]
   skillCount: number
   dependsOn: string[]
-  /**
-   * RFC-028: include this agent's mcp[] in the closure summary so the
-   * NodeDetailDrawer Stats tab can render the inline-injected MCP union
-   * without an extra round-trip. Empty array for pre-RFC-028 agents.
-   */
+  /** RFC-028: this agent's mcp[] names for the NodeDetailDrawer Stats tab. */
   mcp: string[]
-  /**
-   * RFC-031: include this agent's plugins[] in the closure summary so the
-   * Stats tab can render the inline-injected plugin union without an extra
-   * round-trip. Empty array for pre-RFC-031 agents.
-   */
+  /** RFC-031: this agent's plugin[] names for the Stats tab. */
   plugins: string[]
   missing: boolean
-}> {
-  const out: Array<{
-    name: string
-    description: string
-    skills: string[]
-    skillCount: number
-    dependsOn: string[]
-    mcp: string[]
-    plugins: string[]
-    missing: boolean
-  }> = []
-  // RFC-223 (PR-1): the wire projection stays NAME-based for the DependencyTree
-  // UI (it links + navigates by name). dependsOn is stored by id, so resolve
-  // each id → name within the closure; skills are typed refs projected to their
-  // display token (managed = skill id, project = name — id→name display is a
-  // later PR once the endpoint carries the skill rows).
-  const idToName = new Map(closure.map((a) => [a.id, a.name]))
+}
+
+/**
+ * RFC-022 closure response shape — minimal projection over `Agent` that the
+ * `<DependencyTree>` renderer needs. `skillCount` is computed from
+ * `agent.skills.length`; dependency-missing names appear as placeholder rows.
+ *
+ * RFC-223 (PR-1, Codex impl-gate P2-1/P2-2): stored id refs are projected to
+ * display NAMES via `opts.names`; when `opts.visibleAgentIds` is supplied
+ * (the GET closure endpoint), members the viewer cannot see are masked — their
+ * display identity collapses to their OPAQUE ID (no human name), their fields
+ * are blanked, and other members' dependsOn projections keep that id opaque, so
+ * a private dependency's name never leaks (D1).
+ */
+function toAgentClosureSummaries(
+  closure: Agent[],
+  opts: { names: ClosureRefNameMaps; visibleAgentIds?: ReadonlySet<string> },
+): AgentClosureSummary[] {
+  const { names, visibleAgentIds } = opts
+  const isVisible = (id: string): boolean =>
+    visibleAgentIds === undefined || visibleAgentIds.has(id)
+  // Display identity: real name when visible, else the opaque id (P2-2).
+  const idToDisplay = new Map(closure.map((a) => [a.id, isVisible(a.id) ? a.name : a.id]))
+  const skillName = (ref: Agent['skills'][number]): string =>
+    ref.kind === 'managed' ? (names.skill.get(ref.skillId) ?? ref.skillId) : ref.name
+
+  const out: AgentClosureSummary[] = []
   for (const a of closure) {
+    if (!isVisible(a.id)) {
+      // Masked: opaque id as identity, everything else blanked.
+      out.push({
+        name: a.id,
+        description: '',
+        skills: [],
+        skillCount: 0,
+        dependsOn: [],
+        mcp: [],
+        plugins: [],
+        missing: false,
+      })
+      continue
+    }
     out.push({
       name: a.name,
       description: a.description,
-      skills: a.skills.map(agentSkillRefName),
+      skills: a.skills.map(skillName),
       skillCount: a.skills.length,
-      dependsOn: a.dependsOn.map((depId) => idToName.get(depId) ?? depId),
-      mcp: a.mcp ?? [],
-      plugins: a.plugins ?? [],
+      dependsOn: a.dependsOn.map((depId) => idToDisplay.get(depId) ?? depId),
+      mcp: (a.mcp ?? []).map((id) => names.mcp.get(id) ?? id),
+      plugins: (a.plugins ?? []).map((id) => names.plugin.get(id) ?? id),
       missing: false,
     })
   }
   // Append placeholder rows for dependency IDS referenced by any closure member
-  // but not present in the resolved list. Without this the UI can't show
-  // `<missing>` rows under their parents — buildDependencyTree on the
-  // frontend treats absent names as missing leaves anyway, but appending
-  // them here keeps the wire shape symmetric. A missing member's name is
-  // unknown (it was not loaded), so its id stands in as the placeholder name.
+  // but not present in the resolved list (dangling / removed). A missing member's
+  // name is unknown, so its id stands in as the placeholder identity.
   const missing = new Set<string>()
   for (const a of closure) {
     for (const depId of a.dependsOn) {
-      if (!idToName.has(depId)) missing.add(depId)
+      if (!idToDisplay.has(depId)) missing.add(depId)
     }
   }
-  for (const name of missing) {
+  for (const id of missing) {
     out.push({
-      name,
+      name: id,
       description: '',
       skills: [],
       skillCount: 0,
@@ -479,8 +491,6 @@ function toAgentClosureSummaries(
       missing: true,
     })
   }
-  // root reference kept for future use (rendering hint); silence unused lint.
-  void root
   return out
 }
 

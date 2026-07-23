@@ -7,9 +7,11 @@
 // POST   /api/workgroups/:name/rename   — rename + edit description atomically
 // GET/PUT /api/workgroups/:name/acl     — RFC-099 ACL management
 //
-// RFC-099 D15: creating/updating checks that NEW agent-member references are
-// usable by the editor (assertNewRefsUsable) — dangling names still pass
-// (existence is launch-validated, same as workflow agentName).
+// RFC-099 D15 / RFC-223 (PR-1, Codex impl-gate P1-2): creating/updating checks
+// that NEW agent-member references are usable by the editor — enforced INSIDE
+// create/updateWorkgroup, bound to the same single name→id resolution that
+// persists the member agentIds (no check-then-resolve TOCTOU). Dangling names
+// still pass (existence is launch-validated, same as workflow agentName).
 
 import {
   CreateWorkgroupSchema,
@@ -23,11 +25,9 @@ import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
 import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
 import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
-import { assertNewRefsUsable } from '@/services/resourceRefs'
 import {
   createWorkgroup,
   deleteWorkgroup,
-  diffNewAgentMemberNames,
   getWorkgroup,
   getWorkgroupById,
   listWorkgroups,
@@ -81,10 +81,13 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
       })
     }
     const actor = actorOf(c)
-    await assertNewRefsUsable(deps.db, actor, [
-      { type: 'agent', names: diffNewAgentMemberNames(null, parsed.data) },
-    ])
-    const created = await createWorkgroup(deps.db, parsed.data, { ownerUserId: actor.user.id })
+    // RFC-223 (PR-1, Codex impl-gate P1-2): member reference ACL is enforced
+    // INSIDE createWorkgroup, bound to the same single resolution that produces
+    // the persisted member agentIds (no check-then-resolve TOCTOU).
+    const created = await createWorkgroup(deps.db, parsed.data, {
+      ownerUserId: actor.user.id,
+      actor,
+    })
     return c.json(created, 201)
   })
 
@@ -100,11 +103,10 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
     const actor = actorOf(c)
     const existing = await loadVisibleWorkgroup(actor, name)
     await requireResourceOwner(deps.db, actor, 'workgroup', existing)
-    // D15: only NEW agent references need to be usable by the editor.
-    await assertNewRefsUsable(deps.db, actor, [
-      { type: 'agent', names: diffNewAgentMemberNames(existing, parsed.data) },
-    ])
-    const updated = await updateWorkgroup(deps.db, name, parsed.data)
+    // RFC-223 (PR-1, Codex impl-gate P1-2 / D15): only NEWLY-added members are
+    // ACL-checked, enforced INSIDE updateWorkgroup bound to the same resolution
+    // (diff by RESOLVED ID, not raw name).
+    const updated = await updateWorkgroup(deps.db, name, parsed.data, actor)
     return c.json(updated)
   })
 

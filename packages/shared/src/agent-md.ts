@@ -14,7 +14,7 @@ import {
   AgentOutputWrapperPortNamesSchema,
   AgentRoleSchema,
   type AgentPermission,
-  type AgentSkillRef,
+  type AgentSkillSelector,
   type CreateAgent,
 } from './schemas/agent'
 
@@ -25,6 +25,14 @@ export interface AgentMarkdownParseOptions {
 
 export interface AgentMarkdownParseResult {
   partial: Partial<CreateAgent>
+  /** RFC-223 (PR-1, Codex impl-gate P1-1): the parsed `skills:` list as PORTABLE,
+   *  name-based selectors — NOT persisted `AgentSkillRef`s. An offline parser has
+   *  no DB and cannot mint a skillId, so it must not stuff a name into
+   *  `managed.skillId`; the import boundary resolves these selectors to id refs
+   *  against the actor's ACL-visible set (services/agentRefs.ts) and never
+   *  silently demotes a managed selector to a repo-local `project` ref. Absent
+   *  when the source declared no (valid) `skills:` field. */
+  skillSelectors?: AgentSkillSelector[]
   warnings: string[]
   /** Frontmatter keys not mapped to a first-class CreateAgent field; they end
    *  up in `partial.frontmatterExtra` and are listed here for UI display. */
@@ -107,6 +115,7 @@ export function parseAgentMarkdown(
 ): AgentMarkdownParseResult {
   const warnings: string[] = []
   const partial: Partial<CreateAgent> = {}
+  let skillSelectors: AgentSkillSelector[] | undefined
 
   const match = raw.match(FRONTMATTER_RE)
   const hadFrontmatter = match !== null
@@ -378,19 +387,23 @@ export function parseAgentMarkdown(
     }
   }
 
-  // RFC-223 (PR-1): skills — array of skill references. A bare name string is
-  // treated as a MANAGED selector (skillId carries the name; services/agentRefs.ts
-  // resolves it to an id at save, or demotes to a repo-local `project` ref when
-  // no managed skill matches — RFC-178). Object entries may spell the kind
-  // explicitly ({kind:'project',name} / {kind:'managed',name}). Bad shapes demote
-  // the whole field to frontmatterExtra with a warning (mirror mcp / plugins).
+  // RFC-223 (PR-1, Codex impl-gate P1-1): skills — parsed into PORTABLE,
+  // name-based `AgentSkillSelector`s (NOT persisted `AgentSkillRef`s). A bare name
+  // string, and an explicit `{kind:'managed',name}` object, become MANAGED
+  // selectors carrying the raw NAME (never stuffed into a `skillId`); an explicit
+  // `{kind:'project',name}` becomes a PROJECT selector. The import boundary
+  // resolves managed selectors to id refs against the actor's ACL-visible set and
+  // never silently demotes a missing managed skill to a repo-local `project` ref —
+  // a repo-local skill must be authored explicitly as `{kind:'project'}`. Bad
+  // shapes demote the whole field to frontmatterExtra with a warning (mirror mcp /
+  // plugins).
   if (data.skills !== undefined) {
     if (Array.isArray(data.skills)) {
-      const cleaned: AgentSkillRef[] = []
+      const cleaned: AgentSkillSelector[] = []
       let bad = false
       for (const entry of data.skills) {
         if (typeof entry === 'string' && AGENT_NAME_RE_LOCAL.test(entry)) {
-          cleaned.push({ kind: 'managed', skillId: entry })
+          cleaned.push({ kind: 'managed', name: entry })
         } else if (
           isPlainObject(entry) &&
           entry.kind === 'project' &&
@@ -402,7 +415,7 @@ export function parseAgentMarkdown(
           entry.kind === 'managed' &&
           isNonEmptyString(entry.name)
         ) {
-          cleaned.push({ kind: 'managed', skillId: entry.name })
+          cleaned.push({ kind: 'managed', name: entry.name })
         } else {
           bad = true
           break
@@ -414,16 +427,16 @@ export function parseAgentMarkdown(
           'skills entries must be skill names or {kind,name} refs; kept in frontmatterExtra',
         )
       } else {
-        // De-dup preserving order (by ref identity).
+        // De-dup preserving order (by selector identity: kind + name).
         const seen = new Set<string>()
-        const ordered: AgentSkillRef[] = []
-        for (const ref of cleaned) {
-          const key = ref.kind === 'managed' ? `m:${ref.skillId}` : `p:${ref.name}`
+        const ordered: AgentSkillSelector[] = []
+        for (const sel of cleaned) {
+          const key = `${sel.kind}:${sel.name}`
           if (seen.has(key)) continue
           seen.add(key)
-          ordered.push(ref)
+          ordered.push(sel)
         }
-        partial.skills = ordered
+        skillSelectors = ordered
       }
     } else {
       extras.skills = data.skills
@@ -462,5 +475,5 @@ export function parseAgentMarkdown(
     partial.frontmatterExtra = extras
   }
 
-  return { partial, warnings, unrecognizedKeys, hadFrontmatter }
+  return { partial, skillSelectors, warnings, unrecognizedKeys, hadFrontmatter }
 }

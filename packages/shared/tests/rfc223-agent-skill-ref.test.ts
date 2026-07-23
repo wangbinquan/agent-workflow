@@ -4,7 +4,12 @@
 //
 // Why separate: an offline parser has no DB and cannot mint a skillId, so the
 // portable form is name-based; the import boundary resolves it to an id ref
-// against the actor's ACL-visible set (or DEMOTES to a project ref — RFC-178).
+// against the actor's ACL-visible set.
+//
+// Codex impl-gate P1-1: a managed selector that resolves to no managed skill is
+// NOT silently demoted to a `project` ref — that would turn a missing managed
+// skill into a self-discovered repo-local skill and change execution semantics.
+// It is kept as an UNRESOLVED managed ref instead (skillId holds the name).
 
 import { describe, expect, test } from 'bun:test'
 import {
@@ -62,9 +67,18 @@ describe('selector ⇄ ref conversion (resolver-driven)', () => {
     expect(ref).toEqual({ kind: 'managed', skillId: 'sid-lint' })
   })
 
-  test('selector → ref: an unresolved managed name DEMOTES to a project ref (RFC-178)', () => {
+  test('selector → ref: an unresolved managed name stays UNRESOLVED managed (no silent project demotion — P1-1)', () => {
     const ref = skillSelectorToRef({ kind: 'managed', name: 'ghost' }, () => undefined)
-    expect(ref).toEqual({ kind: 'project', name: 'ghost' })
+    // NOT { kind: 'project', name: 'ghost' } — demoting a missing managed skill to
+    // a repo-local project skill would change execution semantics.
+    expect(ref).toEqual({ kind: 'managed', skillId: 'ghost' })
+  })
+
+  test('selector → ref: a resolvable managed name is preferred over the unresolved fallback', () => {
+    const ref = skillSelectorToRef({ kind: 'managed', name: 'ghost' }, (name) =>
+      name === 'ghost' ? 'sid-ghost' : undefined,
+    )
+    expect(ref).toEqual({ kind: 'managed', skillId: 'sid-ghost' })
   })
 
   test('selector → ref: a project selector stays a project ref', () => {

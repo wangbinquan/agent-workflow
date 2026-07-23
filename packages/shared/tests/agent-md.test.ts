@@ -395,32 +395,39 @@ describe('parseAgentMarkdown', () => {
     expect(r.warnings.some((w) => w.startsWith('plugins must be an array'))).toBe(true)
   })
 
-  // RFC-223 (PR-1): skills — bare names become MANAGED selectors (skillId = name,
-  // resolved / demoted server-side); explicit {kind,name} objects are honored.
-  test('skills (array of names) → managed refs, deduped, order preserved', () => {
+  // RFC-223 (PR-1, Codex impl-gate P1-1): skills parse into PORTABLE name-based
+  // `AgentSkillSelector`s (result.skillSelectors), NOT persisted refs. A bare name
+  // and an explicit {kind:'managed',name} become MANAGED selectors carrying the
+  // NAME (never stuffed into a skillId); {kind:'project',name} is a PROJECT
+  // selector. partial.skills is never set by the parser (it is resolved to refs at
+  // the import boundary against the ACL-visible set).
+  test('skills (array of names) → managed selectors, deduped, order preserved', () => {
     const src = '---\nskills:\n  - lint\n  - review\n  - lint\n---\nbody'
     const r = parseAgentMarkdown(src)
-    expect(r.partial.skills).toEqual([
-      { kind: 'managed', skillId: 'lint' },
-      { kind: 'managed', skillId: 'review' },
+    expect(r.skillSelectors).toEqual([
+      { kind: 'managed', name: 'lint' },
+      { kind: 'managed', name: 'review' },
     ])
+    expect(r.partial.skills).toBeUndefined()
     expect(r.warnings).toEqual([])
     expect(r.unrecognizedKeys).toEqual([])
   })
 
-  test('skills honor an explicit project ref', () => {
+  test('skills honor an explicit project selector; a name is never stuffed into a skillId', () => {
     const src = '---\nskills:\n  - managed-one\n  - {kind: project, name: repo-local}\n---\n'
     const r = parseAgentMarkdown(src)
-    expect(r.partial.skills).toEqual([
-      { kind: 'managed', skillId: 'managed-one' },
+    expect(r.skillSelectors).toEqual([
+      { kind: 'managed', name: 'managed-one' },
       { kind: 'project', name: 'repo-local' },
     ])
+    // The selector carries a NAME, never a skillId (offline parser has no DB).
+    expect(r.skillSelectors?.every((s) => !('skillId' in s))).toBe(true)
   })
 
   test('skills with a bad entry demotes the whole field to frontmatterExtra', () => {
     const src = '---\nskills:\n  - lint\n  - 42\n---\n'
     const r = parseAgentMarkdown(src)
-    expect(r.partial.skills).toBeUndefined()
+    expect(r.skillSelectors).toBeUndefined()
     expect(r.partial.frontmatterExtra?.skills).toEqual(['lint', 42])
     expect(r.warnings.some((w) => w.includes('skills entries must be'))).toBe(true)
   })
@@ -428,7 +435,7 @@ describe('parseAgentMarkdown', () => {
   test('skills with non-array value demotes to frontmatterExtra', () => {
     const src = '---\nskills: lint\n---\n'
     const r = parseAgentMarkdown(src)
-    expect(r.partial.skills).toBeUndefined()
+    expect(r.skillSelectors).toBeUndefined()
     expect(r.partial.frontmatterExtra?.skills).toBe('lint')
     expect(r.warnings.some((w) => w.startsWith('skills must be an array'))).toBe(true)
   })

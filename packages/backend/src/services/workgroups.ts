@@ -19,8 +19,11 @@
 //     resolve to real active users at save time (users are stable, and a
 //     dangling human member has no launch-time validator to catch it).
 //
-// Reference-usability (RFC-099 D15) is the ROUTE's job via
-// assertNewRefsUsable — this service only owns existence/shape.
+// Reference-usability (RFC-099 D15) is enforced HERE (RFC-223 PR-1, Codex
+// impl-gate P1-2): member agent name→id resolution and the ACL check are a
+// SINGLE pass bound to the same id, so a private agent renamed into a member
+// name between a separate route-level check and this resolution can no longer
+// bind an unauthorized id (the same TOCTOU class fixed for agent saves).
 
 import type {
   CreateWorkgroup,
@@ -32,11 +35,12 @@ import type {
 import { WG_CLARIFY_BUDGET_DEFAULT } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
 import { discloseScheduleRefs } from './resourceAcl'
+import { assertNoMissingRefs, resolveRefsUsableById } from './resourceRefs'
 import type { Actor } from '@/auth/actor'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
-import { agents, scheduledTasks, users, workgroupMembers, workgroups } from '@/db/schema'
+import { scheduledTasks, users, workgroupMembers, workgroups } from '@/db/schema'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 
 type WorkgroupRow = typeof workgroups.$inferSelect
@@ -93,7 +97,7 @@ export async function getWorkgroupById(db: DbClient, id: string): Promise<Workgr
 export async function createWorkgroup(
   db: DbClient,
   input: CreateWorkgroup,
-  aclOpts?: { ownerUserId?: string },
+  aclOpts?: { ownerUserId?: string; actor?: Actor | null },
 ): Promise<Workgroup> {
   if ((await getWorkgroup(db, input.name)) !== null) {
     throw new ConflictError('workgroup-name-in-use', `workgroup '${input.name}' already exists`)
@@ -102,7 +106,9 @@ export async function createWorkgroup(
 
   const groupId = ulid()
   const now = Date.now()
-  const agentIdByName = await resolveMemberAgentIds(db, input.members)
+  // RFC-223 (PR-1, P1-2): every member is new on create → ACL-check all, bound
+  // to the same resolution that produces the persisted agentIds.
+  const agentIdByName = await resolveMemberAgentIds(db, aclOpts?.actor ?? null, input.members)
   const memberValues = buildMemberValues(groupId, input.members, now, agentIdByName)
   const leaderMemberId = resolveLeaderMemberId(input, memberValues)
 
@@ -147,6 +153,7 @@ export async function updateWorkgroup(
   db: DbClient,
   name: string,
   input: UpdateWorkgroup,
+  actor?: Actor | null,
 ): Promise<Workgroup> {
   const existingRows = await db.select().from(workgroups).where(eq(workgroups.name, name)).limit(1)
   const existing = existingRows[0]
@@ -156,7 +163,22 @@ export async function updateWorkgroup(
   await assertHumanMembersActive(db, input.members)
 
   const now = Date.now()
-  const agentIdByName = await resolveMemberAgentIds(db, input.members)
+  // RFC-223 (PR-1, P1-2 / D15): only NEWLY-added members are ACL-checked —
+  // grandfather the workgroup's already-stored member agentIds so the diff is by
+  // RESOLVED ID (a grandfathered member re-submitted by name is not re-checked).
+  const existingMemberRows = await db
+    .select({ agentId: workgroupMembers.agentId })
+    .from(workgroupMembers)
+    .where(eq(workgroupMembers.workgroupId, existing.id))
+  const grandfatheredIds = new Set(
+    existingMemberRows.map((r) => r.agentId).filter((id): id is string => id !== null),
+  )
+  const agentIdByName = await resolveMemberAgentIds(
+    db,
+    actor ?? null,
+    input.members,
+    grandfatheredIds,
+  )
   const memberValues = buildMemberValues(existing.id, input.members, now, agentIdByName)
   const leaderMemberId = resolveLeaderMemberId(input, memberValues)
 
@@ -346,7 +368,9 @@ type MemberInput = CreateWorkgroup['members'][number]
  */
 async function resolveMemberAgentIds(
   db: DbClient,
+  actor: Actor | null,
   members: readonly MemberInput[],
+  grandfatheredIds?: ReadonlySet<string>,
 ): Promise<Map<string, string>> {
   const names = [
     ...new Set(
@@ -354,11 +378,13 @@ async function resolveMemberAgentIds(
     ),
   ]
   if (names.length === 0) return new Map()
-  const rows = await db
-    .select({ id: agents.id, name: agents.name })
-    .from(agents)
-    .where(inArray(agents.name, names))
-  return new Map(rows.map((r) => [r.name, r.id]))
+  // RFC-223 (PR-1, Codex impl-gate P1-2): resolve name→id AND ACL-check NEW
+  // members in ONE pass, so the id the ACL gate approves is the id persisted.
+  // A dangling name (no agent row) stays absent from the map → member stored
+  // name-only (soft reference), unchanged behavior.
+  const res = await resolveRefsUsableById(db, actor, 'agent', names, { grandfatheredIds })
+  assertNoMissingRefs(res.missing)
+  return res.byToken
 }
 
 function buildMemberValues(

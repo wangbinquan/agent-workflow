@@ -24,12 +24,7 @@ import { dbTxSync } from '@/db/txSync'
 import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { agentsDependingOnIn, validateDependsOn } from './agentDeps'
-import {
-  normalizeSkillRefs,
-  resolveAgentRefs,
-  resolveMcpRefs,
-  resolvePluginRefs,
-} from './agentRefs'
+import { resolveAgentRefsUsable } from './agentRefs'
 import {
   discloseRefsSync,
   discloseScheduleRefs,
@@ -67,7 +62,7 @@ export async function getAgentById(db: DbClient, id: string): Promise<Agent | nu
 export async function createAgent(
   db: DbClient,
   input: CreateAgent,
-  opts?: { ownerUserId?: string; builtin?: boolean },
+  opts?: { ownerUserId?: string; builtin?: boolean; actor?: Actor | null },
 ): Promise<Agent> {
   const existing = await getAgent(db, input.name)
   if (existing !== null) {
@@ -79,13 +74,22 @@ export async function createAgent(
   // id that does not exist yet, but update() re-uses the same by-id guard).
   const id = ulid()
 
-  // RFC-223 (PR-1): resolve id-or-name references to canonical ids (pickers
-  // hand ids; agent.md hands names) BEFORE existence validation + storage, so
-  // every ref column persists ids and `name` never leaks into the DB.
-  const mcpIds = await resolveMcpRefs(db, input.mcp)
-  const pluginIds = await resolvePluginRefs(db, input.plugins ?? [])
-  const dependsOnIds = await resolveAgentRefs(db, input.dependsOn)
-  const skillRefs = await normalizeSkillRefs(db, input.skills)
+  // RFC-223 (PR-1, Codex impl-gate P1-2): resolve id-or-name references to
+  // canonical ids AND enforce per-ref ACL in ONE pass, so the id the ACL gate
+  // approves is the exact id persisted (no check-then-resolve TOCTOU). On create
+  // every reference is new. A null actor (framework seeder) resolves without the
+  // ACL gate. P1-1: a missing managed skill is kept as an unresolved managed ref,
+  // never demoted to a repo-local project ref.
+  const resolved = await resolveAgentRefsUsable(db, opts?.actor ?? null, {
+    mcp: input.mcp,
+    plugins: input.plugins ?? [],
+    dependsOn: input.dependsOn,
+    skills: input.skills,
+  })
+  const mcpIds = resolved.mcp
+  const pluginIds = resolved.plugins
+  const dependsOnIds = resolved.dependsOn
+  const skillRefs = resolved.skills
 
   // RFC-022 save-time guard: not-found / self-ref / cycle all throw a 400
   // DomainError with the corresponding code. Runs *before* the insert so
@@ -164,22 +168,38 @@ export async function createAgent(
   return created
 }
 
-export async function updateAgent(db: DbClient, name: string, patch: UpdateAgent): Promise<Agent> {
+export async function updateAgent(
+  db: DbClient,
+  name: string,
+  patch: UpdateAgent,
+  actor?: Actor | null,
+): Promise<Agent> {
   const existing = await getAgent(db, name)
   if (existing === null) {
     throw new NotFoundError('agent-not-found', `agent '${name}' not found`)
   }
 
-  // RFC-223 (PR-1): resolve patched id-or-name refs → canonical ids once, then
-  // validate + store the SAME resolved arrays (agent.md hands names; pickers
-  // hand ids). undefined patch fields are left untouched.
-  const dependsOnIds =
-    patch.dependsOn !== undefined ? await resolveAgentRefs(db, patch.dependsOn) : undefined
-  const mcpIds = patch.mcp !== undefined ? await resolveMcpRefs(db, patch.mcp) : undefined
-  const pluginIds =
-    patch.plugins !== undefined ? await resolvePluginRefs(db, patch.plugins) : undefined
-  const skillRefs =
-    patch.skills !== undefined ? await normalizeSkillRefs(db, patch.skills) : undefined
+  // RFC-223 (PR-1, Codex impl-gate P1-2): resolve patched id-or-name refs →
+  // canonical ids AND enforce ACL in ONE pass, then store the SAME resolved
+  // arrays. Only NEWLY-added references are ACL-checked (D15) — the diff compares
+  // RESOLVED IDS against the already-stored ids, so a grandfathered ref
+  // re-submitted by name is not mis-flagged as new. undefined patch fields are
+  // left untouched. Skills keep unresolved managed refs (no project demotion, P1-1).
+  const resolvedRefs = await resolveAgentRefsUsable(
+    db,
+    actor ?? null,
+    {
+      mcp: patch.mcp ?? existing.mcp,
+      plugins: patch.plugins ?? existing.plugins,
+      dependsOn: patch.dependsOn ?? existing.dependsOn,
+      skills: patch.skills ?? existing.skills,
+    },
+    existing,
+  )
+  const dependsOnIds = patch.dependsOn !== undefined ? resolvedRefs.dependsOn : undefined
+  const mcpIds = patch.mcp !== undefined ? resolvedRefs.mcp : undefined
+  const pluginIds = patch.plugins !== undefined ? resolvedRefs.plugins : undefined
+  const skillRefs = patch.skills !== undefined ? resolvedRefs.skills : undefined
 
   // RFC-022 save-time guard — only when the caller actually patched dependsOn.
   // PATCH that doesn't touch the field keeps the existing closure validity.
