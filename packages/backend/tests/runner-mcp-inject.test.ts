@@ -149,6 +149,15 @@ describe('RFC-028 buildInlineConfig MCP injection', () => {
     expect(Object.keys(out.mcp ?? {})).toEqual(['shared'])
   })
 
+  test('a valid prototype-shaped MCP name is emitted as an own registry key', () => {
+    const out = buildInlineConfig(agent('a'), new Map(), [], [localMcp('constructor')])
+    expect(Object.hasOwn(out.mcp ?? {}, 'constructor')).toBe(true)
+    const entry = Object.getOwnPropertyDescriptor(out.mcp ?? {}, 'constructor')?.value as
+      | Record<string, unknown>
+      | undefined
+    expect(entry?.command).toEqual(['uvx', 'constructor-mcp'])
+  })
+
   test('field-name regression guard: serialized JSON contains "environment" / "timeout", not "env"/"timeoutMs"', () => {
     const m = localMcp('m', {
       command: ['x'],

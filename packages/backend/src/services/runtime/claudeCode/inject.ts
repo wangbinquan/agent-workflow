@@ -19,7 +19,9 @@ export function toClaudeMcpConfig(
   const servers: Record<string, Record<string, unknown>> = {}
   for (const m of mcps) {
     if (m.enabled === false) continue
-    if (servers[m.name] !== undefined) continue // closure dedupe
+    // `constructor` is a valid resource name. Own-property checks prevent the
+    // Object prototype from masquerading as an already-injected registry key.
+    if (Object.hasOwn(servers, m.name)) continue // closure dedupe
     if (m.type === 'local') {
       const command = Array.isArray(m.config.command) ? m.config.command : []
       const entry: Record<string, unknown> = { command: command[0] ?? '', args: command.slice(1) }
@@ -46,7 +48,7 @@ export function toClaudeAgents(
 ): Record<string, { description: string; prompt: string }> | null {
   const agents: Record<string, { description: string; prompt: string }> = {}
   for (const dep of dependents) {
-    if (agents[dep.name] !== undefined) continue
+    if (Object.hasOwn(agents, dep.name)) continue
     agents[dep.name] = { description: dep.description, prompt: dep.bodyMd }
   }
   return Object.keys(agents).length > 0 ? agents : null

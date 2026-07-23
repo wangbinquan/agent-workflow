@@ -48,6 +48,15 @@ describe('toClaudeMcpConfig (RFC-111 PR-C)', () => {
     expect(Object.keys(cfg!.mcpServers)).toEqual(['a'])
     expect((cfg!.mcpServers.a as { command: string }).command).toBe('x') // first wins
   })
+
+  it('keeps a valid prototype-shaped MCP name as an own registry key', () => {
+    const cfg = toClaudeMcpConfig([localMcp('constructor', ['mcp-bin'])])
+    expect(Object.hasOwn(cfg?.mcpServers ?? {}, 'constructor')).toBe(true)
+    const entry = Object.getOwnPropertyDescriptor(cfg?.mcpServers ?? {}, 'constructor')?.value as
+      | Record<string, unknown>
+      | undefined
+    expect(entry?.command).toBe('mcp-bin')
+  })
 })
 
 function depAgent(name: string, bodyMd: string, description = 'd'): Agent {
@@ -81,5 +90,14 @@ describe('toClaudeAgents (RFC-111 PR-C)', () => {
     const agents = toClaudeAgents([depAgent('a', 'first'), depAgent('a', 'second')])
     expect(Object.keys(agents!)).toEqual(['a'])
     expect(agents!.a?.prompt).toBe('first')
+  })
+
+  it('keeps a valid prototype-shaped dependent name as an own registry key', () => {
+    const agents = toClaudeAgents([depAgent('constructor', 'constructor prompt')])
+    expect(Object.hasOwn(agents ?? {}, 'constructor')).toBe(true)
+    const entry = Object.getOwnPropertyDescriptor(agents ?? {}, 'constructor')?.value as
+      | { prompt: string }
+      | undefined
+    expect(entry?.prompt).toBe('constructor prompt')
   })
 })

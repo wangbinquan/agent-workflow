@@ -136,7 +136,10 @@ export function buildInlineConfig(
   }
   for (const dep of dependents) {
     if (dep.name === agent.name) continue // root would shadow itself; defensive
-    if (map[dep.name] !== undefined) continue // closure already deduped, but guard anyway
+    // Resource names are external registry keys. `constructor` is a valid
+    // platform name, so prototype lookup on `{}` would mistake it for an
+    // existing entry and silently drop the managed dependent.
+    if (Object.hasOwn(map, dep.name)) continue // closure already deduped, but guard anyway
     map[dep.name] = buildInlineAgentEntry(dep, paramsByAgent.get(dep.name))
   }
   const out: {
@@ -158,20 +161,21 @@ export function buildInlineConfig(
   const mcpMap: Record<string, Record<string, unknown>> = {}
   for (const m of mcps) {
     if (m.enabled === false) continue
-    if (mcpMap[m.name] !== undefined) continue // closure dedupe
+    if (Object.hasOwn(mcpMap, m.name)) continue // closure dedupe; prototype names are valid keys
     mcpMap[m.name] = buildInlineMcpEntry(m)
   }
   if (Object.keys(mcpMap).length > 0) out.mcp = mcpMap
   // RFC-031: emit the plugin array only when at least one ENABLED entry
-  // resolves. Dedupe by plugin.name (closure may visit the same plugin via
-  // multiple agents). Each element is `file://<cachedPath>` so opencode's
+  // resolves. RFC-223 PR-6: dedupe by canonical plugin id (closure may visit
+  // the same row via multiple agents); distinct same-name rows remain distinct.
+  // Each element is `file://<cachedPath>` so opencode's
   // `resolvePathPluginTarget` handles it without npm.
   const pluginArr: Array<string | [string, Record<string, unknown>]> = []
   const pluginSeen = new Set<string>()
   for (const p of plugins) {
     if (p.enabled === false) continue
-    if (pluginSeen.has(p.name)) continue
-    pluginSeen.add(p.name)
+    if (pluginSeen.has(p.id)) continue
+    pluginSeen.add(p.id)
     const pathSpec = p.cachedPath.startsWith('file://') ? p.cachedPath : `file://${p.cachedPath}`
     const opts = p.options && Object.keys(p.options).length > 0 ? p.options : undefined
     pluginArr.push(opts === undefined ? pathSpec : [pathSpec, opts])

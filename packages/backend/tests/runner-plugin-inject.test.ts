@@ -9,7 +9,7 @@
 // We also lock:
 //   - plugin key absent when no plugins passed (don't pollute inline JSON)
 //   - enabled=false entries skipped
-//   - dedupe by name across the closure
+//   - dedupe by canonical id across the closure
 //   - source code anchor on the runner builder so a future refactor cannot
 //     silently emit `spec` instead of the `file://...` form.
 
@@ -115,10 +115,27 @@ describe('buildInlineConfig — RFC-031 plugin injection', () => {
     expect((cfg as { plugin?: unknown }).plugin).toBeUndefined()
   })
 
-  test('dedupe by name across closure', () => {
+  test('dedupe repeated references to the same plugin id across closure', () => {
     const same = plugin('same')
     const cfg = buildInlineConfig(agent('w'), new Map(), [], [], [same, same])
     expect((cfg.plugin as unknown[]).length).toBe(1)
+  })
+
+  test('distinct plugin ids with the same display name are both injected', () => {
+    const cfg = buildInlineConfig(
+      agent('w'),
+      new Map(),
+      [],
+      [],
+      [
+        plugin('same', { id: 'plugin-a', cachedPath: '/tmp/aw-plugins/a/plugin.ts' }),
+        plugin('same', { id: 'plugin-b', cachedPath: '/tmp/aw-plugins/b/plugin.ts' }),
+      ],
+    )
+    expect(cfg.plugin).toEqual([
+      'file:///tmp/aw-plugins/a/plugin.ts',
+      'file:///tmp/aw-plugins/b/plugin.ts',
+    ])
   })
 
   test('mcp + plugin can coexist on the same inline config', () => {

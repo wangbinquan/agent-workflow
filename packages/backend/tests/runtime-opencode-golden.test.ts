@@ -130,6 +130,24 @@ describe('buildOpencodeSpawn — env golden (RFC-111 A2)', () => {
     expect(env.OPENCODE_AW_INVENTORY_OUT).toBe('/runs/t/n/inventory.json')
   })
 
+  it('scrubs inherited OPENCODE_PERMISSION before spawning the child (RFC-223 PR-6)', () => {
+    const previous = process.env.OPENCODE_PERMISSION
+    process.env.OPENCODE_PERMISSION = '{"edit":"allow"}'
+    try {
+      const { env } = buildOpencodeSpawn({ ...BASE })
+      expect(env.OPENCODE_PERMISSION).toBeUndefined()
+    } finally {
+      if (previous === undefined) delete process.env.OPENCODE_PERMISSION
+      else process.env.OPENCODE_PERMISSION = previous
+    }
+  })
+
+  it('fails closed on a legacy runtime that used OPENCODE_PERMISSION as its config-dir key', () => {
+    expect(() => buildOpencodeSpawn({ ...BASE, configDirEnv: 'OPENCODE_PERMISSION' })).toThrow(
+      'runtime-config-dir-env-reserved',
+    )
+  })
+
   it('injects all four GIT_* only when BOTH name and email are non-empty (RFC-067)', () => {
     const both = buildOpencodeSpawn({ ...BASE, gitUserName: 'Ada', gitUserEmail: 'ada@x.io' }).env
     expect(both.GIT_AUTHOR_NAME).toBe('Ada')

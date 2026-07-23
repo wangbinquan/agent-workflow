@@ -167,6 +167,15 @@ export interface OpencodeEnvContext {
  */
 export function buildOpencodeEnv(ctx: OpencodeEnvContext): Record<string, string> {
   const configDirEnv = ctx.configDirEnv ?? DEFAULT_CONFIG_DIR_PROFILE.opencode.env
+  // RFC-223 PR-6 compatibility guard: older runtime rows could legitimately
+  // persist this key before it became reserved. Do not write the run dir and
+  // then silently delete it below; fail closed with the same stable code the
+  // save-time validator now uses.
+  if (configDirEnv === 'OPENCODE_PERMISSION') {
+    throw new Error(
+      "runtime-config-dir-env-reserved: config_dir_env must not be 'OPENCODE_PERMISSION'",
+    )
+  }
   const env: Record<string, string> = {
     ...(process.env as Record<string, string>),
     // opencode 1.14.51+ resolves its root via `process.env.PWD ?? process.cwd()`;
@@ -178,6 +187,10 @@ export function buildOpencodeEnv(ctx: OpencodeEnvContext): Record<string, string
     [configDirEnv]: ctx.runDir,
     OPENCODE_CONFIG_CONTENT: ctx.inlineConfigSerialized,
   }
+  // RFC-223 PR-6: opencode merges OPENCODE_PERMISSION after
+  // OPENCODE_CONFIG_CONTENT. Never let a daemon-level value silently alter a
+  // managed child run. Full effective-config attestation remains RFC-224.
+  delete env.OPENCODE_PERMISSION
   // RFC-154 (Codex impl-gate P2): with a CUSTOM key, scrub the protocol default
   // inherited from the daemon's own environment — otherwise the child carries
   // BOTH keys and a fork that still consults the default one lands in a stale

@@ -89,6 +89,8 @@ describe('RFC-154 validateConfigDirEnv', () => {
     }
     // The agent-definition channel is the load-bearing one — assert it by name.
     expect(() => validateConfigDirEnv('OPENCODE_CONFIG_CONTENT')).toThrow()
+    // RFC-223 PR-6 scrubs this post-inline override from managed children.
+    expect(() => validateConfigDirEnv('OPENCODE_PERMISSION')).toThrow()
   })
 
   test("the OTHER protocol's default config-dir env is deliberately NOT reserved", () => {

@@ -43,6 +43,7 @@ export const DEFAULT_CONFIG_DIR_PROFILE = {
 export const RESERVED_SPAWN_ENV: ReadonlySet<string> = new Set([
   'PWD',
   'OPENCODE_CONFIG_CONTENT', // agent-definition channel (RFC-154 non-goal)
+  'OPENCODE_PERMISSION', // post-inline permission override; scrubbed from managed children (RFC-223)
   'OPENCODE_AW_INVENTORY_OUT', // inventory plugin ↔ runner contract (RFC-029)
   'IS_SANDBOX', // claude root guard
   'GIT_AUTHOR_NAME',

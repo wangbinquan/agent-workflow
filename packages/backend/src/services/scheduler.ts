@@ -122,6 +122,11 @@ import {
   schedulerMintCause,
 } from '@/services/nodeRunMint'
 import { resolveInternalAgentRuntime } from '@/services/runtimeRegistry'
+import {
+  findManagedInjectionNameConflict,
+  formatManagedInjectionNameConflict,
+  type ManagedInjectionIdentity,
+} from '@/services/runtime/injectionIdentity'
 import { getTaskWriteSem, gcTaskWriteSem } from '@/services/taskWriteLocks'
 import { getProcessNodeSemaphore } from '@/services/processNodeConcurrency'
 import { buildReviewPromptContext, dispatchReviewNode } from '@/services/review'
@@ -6584,7 +6589,7 @@ export async function prepareNodeRunInjection(
     seenSkills.add(key)
     skillsUnion.push(ref)
   }
-  const resolvedSkills = await resolveSkills(db, appHome, skillsUnion)
+  const { resolvedSkills, managedSkillIdentities } = await resolveSkills(db, appHome, skillsUnion)
   // RFC-028: union mcp ids across the full closure (root first, then BFS
   // dependents) and hydrate the rows. Errors that can't surface as a
   // 'failed' here — missing MCP ids are silently skipped at hydrate time
@@ -6592,6 +6597,30 @@ export async function prepareNodeRunInjection(
   // "fail the whole node because a previously-saved id no longer exists").
   const mcpIds = collectMcpIdsFromClosure(closure.agents)
   const mcps = await loadMcpsByIds(db, mcpIds)
+  // RFC-223 PR-6: the external runtimes still key these three managed
+  // namespaces by display name. Detect two canonical ids sharing one key at
+  // the common hydration boundary, before either runtime stages a skill or
+  // assembles a spawn. Disabled MCPs are intentionally outside the injected
+  // set; repo-local project skills are self-discovered and outside this guard.
+  const nameConflict = findManagedInjectionNameConflict({
+    agents: closure.agents,
+    managedSkills: managedSkillIdentities,
+    mcps,
+  })
+  if (nameConflict !== null) {
+    const message = formatManagedInjectionNameConflict(nameConflict)
+    log.warn('managed injection name conflict', {
+      agent: agent.name,
+      kind: nameConflict.kind,
+      name: nameConflict.name,
+      ids: [nameConflict.firstId, nameConflict.secondId],
+    })
+    return {
+      kind: 'failed',
+      summary: `managed injection name '${nameConflict.name}' is ambiguous`,
+      message,
+    }
+  }
   // RFC-031: same closure + hydrate dance for opencode plugins. Ids that no
   // longer resolve (deleted out from under the running task) are silently
   // dropped at the loader; we'd rather start the node without a plugin than
@@ -6611,8 +6640,12 @@ async function resolveSkills(
   db: DbClient,
   appHome: string,
   refs: AgentSkillRef[],
-): Promise<ResolvedSkill[]> {
+): Promise<{
+  resolvedSkills: ResolvedSkill[]
+  managedSkillIdentities: ManagedInjectionIdentity[]
+}> {
   const out: ResolvedSkill[] = []
+  const managedSkillIdentities: ManagedInjectionIdentity[] = []
   for (const ref of refs) {
     if (ref.kind === 'project') {
       out.push({ name: ref.name, sourceKind: 'project' })
@@ -6631,8 +6664,9 @@ async function resolveSkills(
     // the skill NAME as the opencode-visible key.
     const skillPath = `${appHome}/${row.managedPath ?? `skills/${row.name}/files`}`
     out.push({ name: row.name, sourceKind: 'managed', sourcePath: skillPath })
+    managedSkillIdentities.push({ id: row.id, name: row.name })
   }
-  return out
+  return { resolvedSkills: out, managedSkillIdentities }
 }
 
 /**

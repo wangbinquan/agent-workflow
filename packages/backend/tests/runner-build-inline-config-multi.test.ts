@@ -94,6 +94,17 @@ describe('RFC-022 buildInlineConfig (primary + dependents)', () => {
     expect(cfg.agent.a?.prompt).toBe('primary body')
   })
 
+  test('a valid prototype-shaped dependent name is injected instead of silently dropped', () => {
+    const primary = mkAgent({ name: 'orchestrator' })
+    const dep = mkAgent({ name: 'constructor', bodyMd: 'constructor body' })
+    const cfg = buildInlineConfig(primary, new Map(), [dep])
+    expect(Object.hasOwn(cfg.agent, 'constructor')).toBe(true)
+    const entry = Object.getOwnPropertyDescriptor(cfg.agent, 'constructor')?.value as
+      | Record<string, unknown>
+      | undefined
+    expect(entry?.prompt).toBe('constructor body')
+  })
+
   test('buildInlineAgentEntry omits undefined optional fields', () => {
     // The runner has historically inferred field presence with `?? agent.model`
     // / `if (steps !== undefined)` — keep those gates intact so opencode
