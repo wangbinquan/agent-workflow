@@ -42,7 +42,12 @@ describe('RFC-023 clarify validator rules', () => {
   test('happy path: agent-single → clarify produces only the no-loop-cap + answers-disconnected warnings', () => {
     const def = makeDef({
       nodes: [
-        { id: 'a1', kind: 'agent-single', agentName: 'designer' },
+        {
+          id: 'a1',
+          kind: 'agent-single',
+          agentId: designer.id,
+          agentName: 'designer',
+        },
         { id: 'c1', kind: 'clarify' },
       ],
       edges: buildClarifyEdges('a1', 'c1'),
@@ -94,7 +99,12 @@ describe('RFC-023 clarify validator rules', () => {
   test('clarify.answers self-loop is rejected', () => {
     const def = makeDef({
       nodes: [
-        { id: 'a1', kind: 'agent-single', agentName: 'designer' },
+        {
+          id: 'a1',
+          kind: 'agent-single',
+          agentId: designer.id,
+          agentName: 'designer',
+        },
         { id: 'c1', kind: 'clarify' },
       ],
       edges: [
@@ -115,7 +125,12 @@ describe('RFC-023 clarify validator rules', () => {
   test('two clarify nodes attached to the same agent is rejected', () => {
     const def = makeDef({
       nodes: [
-        { id: 'a1', kind: 'agent-single', agentName: 'designer' },
+        {
+          id: 'a1',
+          kind: 'agent-single',
+          agentId: designer.id,
+          agentName: 'designer',
+        },
         { id: 'c1', kind: 'clarify' },
         { id: 'c2', kind: 'clarify' },
       ],
@@ -135,7 +150,12 @@ describe('RFC-023 clarify validator rules', () => {
   test('clarify inside a wrapper-loop suppresses the no-cap warning', () => {
     const def = makeDef({
       nodes: [
-        { id: 'a1', kind: 'agent-single', agentName: 'designer' },
+        {
+          id: 'a1',
+          kind: 'agent-single',
+          agentId: designer.id,
+          agentName: 'designer',
+        },
         { id: 'c1', kind: 'clarify' },
         {
           id: 'loop1',
@@ -163,7 +183,12 @@ describe('RFC-023 clarify validator rules', () => {
     const questionsEdge = edges[0]!
     const def = makeDef({
       nodes: [
-        { id: 'a1', kind: 'agent-single', agentName: 'designer' },
+        {
+          id: 'a1',
+          kind: 'agent-single',
+          agentId: designer.id,
+          agentName: 'designer',
+        },
         { id: 'c1', kind: 'clarify' },
       ],
       edges: [questionsEdge], // only the agent→clarify direction
@@ -178,7 +203,12 @@ describe('RFC-023 clarify validator rules', () => {
   test('one clarify with duplicate __clarify__ edges from same agent is allowed (G1 dedup)', () => {
     const def = makeDef({
       nodes: [
-        { id: 'a1', kind: 'agent-single', agentName: 'designer' },
+        {
+          id: 'a1',
+          kind: 'agent-single',
+          agentId: designer.id,
+          agentName: 'designer',
+        },
         { id: 'c1', kind: 'clarify' },
       ],
       edges: [
@@ -213,8 +243,18 @@ describe('RFC-023 clarify validator rules', () => {
     const second = agent('reviewer', ['review'])
     const def = makeDef({
       nodes: [
-        { id: 'a1', kind: 'agent-single', agentName: 'designer' },
-        { id: 'a2', kind: 'agent-single', agentName: 'reviewer' },
+        {
+          id: 'a1',
+          kind: 'agent-single',
+          agentId: designer.id,
+          agentName: 'designer',
+        },
+        {
+          id: 'a2',
+          kind: 'agent-single',
+          agentId: second.id,
+          agentName: 'reviewer',
+        },
         { id: 'c1', kind: 'clarify' },
       ],
       edges: [

@@ -37,6 +37,10 @@ interface Harness {
   cleanup: () => void
 }
 
+function agentId(name: string): string {
+  return `agent-${name}`
+}
+
 async function buildHarness(slug: string): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), `aw-wrapper-scope-${slug}-`))
   const repoPath = join(appHome, 'repo')
@@ -73,7 +77,7 @@ async function seedAgent(
   } = {},
 ): Promise<void> {
   await db.insert(agents).values({
-    id: ulid(),
+    id: agentId(name),
     name,
     description: 'wrapper scope regression agent',
     outputs: JSON.stringify(outputs),
@@ -176,8 +180,19 @@ function orderingDefinition(kind: 'wrapper-loop' | 'wrapper-git'): WorkflowDefin
     $schema_version: 4,
     inputs: [],
     nodes: [
-      { id: 'upstream', kind: 'agent-single', agentName: 'upstream' },
-      { id: 'inner', kind: 'agent-single', agentName: 'inner', promptTemplate: '{{doc}}' },
+      {
+        id: 'upstream',
+        kind: 'agent-single',
+        agentId: agentId('upstream'),
+        agentName: 'upstream',
+      },
+      {
+        id: 'inner',
+        kind: 'agent-single',
+        agentId: agentId('inner'),
+        agentName: 'inner',
+        promptTemplate: '{{doc}}',
+      },
       wrapper,
     ] as unknown as WorkflowDefinition['nodes'],
     edges: [
@@ -260,7 +275,12 @@ describe('scheduler wrapper scope dependencies', () => {
       $schema_version: 4,
       inputs: [],
       nodes: [
-        { id: 'inner', kind: 'agent-single', agentName: 'inner' },
+        {
+          id: 'inner',
+          kind: 'agent-single',
+          agentId: agentId('inner'),
+          agentName: 'inner',
+        },
         { id: 'git-a', kind: 'wrapper-git', nodeIds: ['inner'] },
         { id: 'git-b', kind: 'wrapper-git', nodeIds: ['inner'] },
       ],
@@ -299,7 +319,12 @@ describe('scheduler wrapper scope dependencies', () => {
       $schema_version: 4,
       inputs: [],
       nodes: [
-        { id: 'upstream', kind: 'agent-single', agentName: 'upstream' },
+        {
+          id: 'upstream',
+          kind: 'agent-single',
+          agentId: agentId('upstream'),
+          agentName: 'upstream',
+        },
         {
           id: 'fan',
           kind: 'wrapper-fanout',
@@ -309,6 +334,7 @@ describe('scheduler wrapper scope dependencies', () => {
         {
           id: 'inner',
           kind: 'agent-single',
+          agentId: agentId('inner'),
           agentName: 'inner',
           promptTemplate: 'SHARD={{item}}',
         },
@@ -378,7 +404,12 @@ describe('scheduler wrapper scope dependencies', () => {
       $schema_version: 4,
       inputs: [],
       nodes: [
-        { id: 'upstream', kind: 'agent-single', agentName: 'upstream' },
+        {
+          id: 'upstream',
+          kind: 'agent-single',
+          agentId: agentId('upstream'),
+          agentName: 'upstream',
+        },
         {
           id: 'capture',
           kind: 'output',
@@ -451,7 +482,12 @@ describe('scheduler wrapper scope dependencies', () => {
       $schema_version: 4,
       inputs: [],
       nodes: [
-        { id: 'worker', kind: 'agent-single', agentName: 'worker' },
+        {
+          id: 'worker',
+          kind: 'agent-single',
+          agentId: agentId('worker'),
+          agentName: 'worker',
+        },
         {
           id: 'loop',
           kind: 'wrapper-loop',
@@ -463,6 +499,7 @@ describe('scheduler wrapper scope dependencies', () => {
         {
           id: 'sink',
           kind: 'agent-single',
+          agentId: agentId('sink'),
           agentName: 'sink',
           promptTemplate: '{{input}}',
         },
@@ -547,9 +584,20 @@ describe('scheduler wrapper scope dependencies', () => {
       $schema_version: 4,
       inputs: [],
       nodes: [
-        { id: 'editor', kind: 'agent-single', agentName: 'editor' },
+        {
+          id: 'editor',
+          kind: 'agent-single',
+          agentId: agentId('editor'),
+          agentName: 'editor',
+        },
         { id: 'git', kind: 'wrapper-git', nodeIds: ['editor'] },
-        { id: 'sink', kind: 'agent-single', agentName: 'sink', promptTemplate: '{{diff}}' },
+        {
+          id: 'sink',
+          kind: 'agent-single',
+          agentId: agentId('sink'),
+          agentName: 'sink',
+          promptTemplate: '{{diff}}',
+        },
       ],
       edges: [
         {
@@ -603,7 +651,12 @@ describe('scheduler wrapper scope dependencies', () => {
       $schema_version: 4,
       inputs: [],
       nodes: [
-        { id: 'source', kind: 'agent-single', agentName: 'source' },
+        {
+          id: 'source',
+          kind: 'agent-single',
+          agentId: agentId('source'),
+          agentName: 'source',
+        },
         {
           id: 'fan',
           kind: 'wrapper-fanout',
@@ -613,16 +666,24 @@ describe('scheduler wrapper scope dependencies', () => {
         {
           id: 'worker',
           kind: 'agent-single',
+          agentId: agentId('worker'),
           agentName: 'worker',
           promptTemplate: '{{item}}',
         },
         {
           id: 'aggregator',
           kind: 'agent-single',
+          agentId: agentId('aggregator'),
           agentName: 'aggregator',
           promptTemplate: '{{parts}}',
         },
-        { id: 'sink', kind: 'agent-single', agentName: 'sink', promptTemplate: '{{input}}' },
+        {
+          id: 'sink',
+          kind: 'agent-single',
+          agentId: agentId('sink'),
+          agentName: 'sink',
+          promptTemplate: '{{input}}',
+        },
       ],
       edges: [
         {
@@ -703,8 +764,19 @@ describe('scheduler wrapper scope dependencies', () => {
       $schema_version: 4,
       inputs: [],
       nodes: [
-        { id: 'upstream', kind: 'agent-single', agentName: 'upstream' },
-        { id: 'editor', kind: 'agent-single', agentName: 'editor', promptTemplate: '{{doc}}' },
+        {
+          id: 'upstream',
+          kind: 'agent-single',
+          agentId: agentId('upstream'),
+          agentName: 'upstream',
+        },
+        {
+          id: 'editor',
+          kind: 'agent-single',
+          agentId: agentId('editor'),
+          agentName: 'editor',
+          promptTemplate: '{{doc}}',
+        },
         { id: 'git', kind: 'wrapper-git', nodeIds: ['editor'] },
         {
           id: 'loop',
@@ -714,7 +786,13 @@ describe('scheduler wrapper scope dependencies', () => {
           exitCondition: { kind: 'port-not-empty', nodeId: 'git', portName: 'git_diff' },
           outputBindings: [{ name: 'final', bind: { nodeId: 'git', portName: 'git_diff' } }],
         },
-        { id: 'sink', kind: 'agent-single', agentName: 'sink', promptTemplate: '{{diff}}' },
+        {
+          id: 'sink',
+          kind: 'agent-single',
+          agentId: agentId('sink'),
+          agentName: 'sink',
+          promptTemplate: '{{diff}}',
+        },
       ],
       edges: [
         {

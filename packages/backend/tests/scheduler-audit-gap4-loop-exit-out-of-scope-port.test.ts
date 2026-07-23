@@ -36,6 +36,10 @@ interface Harness {
   cleanup: () => void
 }
 
+function agentId(name: string): string {
+  return `agent-${name}`
+}
+
 function buildHarness(): Harness {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-gap4-loop-exit-'))
   const worktreePath = join(appHome, 'wt')
@@ -63,7 +67,7 @@ function buildHarness(): Harness {
 
 async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise<void> {
   await db.insert(agents).values({
-    id: ulid(),
+    id: agentId(name),
     name,
     description: 'test',
     outputs: JSON.stringify(outputs),
@@ -84,8 +88,18 @@ function buildDefinition(): WorkflowDefinition {
     $schema_version: 1,
     inputs: [],
     nodes: [
-      { id: 'lister', kind: 'agent-single', agentName: 'lister' },
-      { id: 'worker', kind: 'agent-single', agentName: 'worker' },
+      {
+        id: 'lister',
+        kind: 'agent-single',
+        agentId: agentId('lister'),
+        agentName: 'lister',
+      },
+      {
+        id: 'worker',
+        kind: 'agent-single',
+        agentId: agentId('worker'),
+        agentName: 'worker',
+      },
       {
         id: 'loop',
         kind: 'wrapper-loop',

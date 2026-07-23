@@ -56,7 +56,12 @@ describe('wrapper-loop exitCondition node-reference existence (locks dangling-re
       $schema_version: 2,
       inputs: [],
       nodes: [
-        { id: 'audit', kind: 'agent-single', agentName: 'auditor' },
+        {
+          id: 'audit',
+          kind: 'agent-single',
+          agentId: 'agent-auditor',
+          agentName: 'auditor',
+        },
         {
           id: 'loop',
           kind: 'wrapper-loop',
@@ -85,7 +90,12 @@ describe('wrapper-loop exitCondition node-reference existence (locks dangling-re
       $schema_version: 2,
       inputs: [],
       nodes: [
-        { id: 'audit', kind: 'agent-single', agentName: 'auditor' },
+        {
+          id: 'audit',
+          kind: 'agent-single',
+          agentId: 'agent-auditor',
+          agentName: 'auditor',
+        },
         {
           id: 'loop',
           kind: 'wrapper-loop',
@@ -110,7 +120,12 @@ describe('wrapper-loop exitCondition node-reference existence (locks dangling-re
       $schema_version: 2,
       inputs: [],
       nodes: [
-        { id: 'audit', kind: 'agent-single', agentName: 'auditor' },
+        {
+          id: 'audit',
+          kind: 'agent-single',
+          agentId: 'agent-auditor',
+          agentName: 'auditor',
+        },
         {
           id: 'loop',
           kind: 'wrapper-loop',

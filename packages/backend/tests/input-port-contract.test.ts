@@ -44,7 +44,7 @@ function buildHarness(): Harness {
 }
 
 async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise<string> {
-  const id = ulid()
+  const id = `agent-${name}`
   await db.insert(agents).values({
     id,
     name,
@@ -120,7 +120,12 @@ describe('RFC-004 input-port contract', () => {
       inputs: [{ kind: 'text', key: 'requirement', label: 'Need', required: true }],
       nodes: [
         { id: 'in', kind: 'input', inputKey: 'requirement' },
-        { id: 'a1', kind: 'agent-single', agentName: 'coder' },
+        {
+          id: 'a1',
+          kind: 'agent-single',
+          agentId: 'agent-coder',
+          agentName: 'coder',
+        },
       ],
       // Edge mirrors what the canvas produces today: source port name === inputKey.
       edges: [
