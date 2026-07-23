@@ -270,4 +270,56 @@ describe('RFC-210 — gitlink with no initialized working tree', () => {
     expect((await runGit(canonNested, ['rev-parse', 'HEAD'])).stdout.trim()).toBe(userSha)
     expect(readFileSync(join(canonNested, 'inner.txt'), 'utf8')).toBe('user-precious-work\n')
   }, 120_000)
+
+  test('an UNPARSEABLE .gitmodules fails loud instead of silently skipping a managed submodule', async () => {
+    // Codex review round 9, P1: `submoduleNameForPath` returned null both for a
+    // genuinely-absent entry AND for a `.gitmodules` git cannot parse. Round
+    // 8's stray-skip therefore misclassified a MANAGED submodule (whose config
+    // is merely corrupt) as stray and silently dropped its update — merge-back
+    // would report clean while the child stayed at the wrong base. The
+    // classification must fail loud on a parse error, not skip.
+    const sub = tmp('aw-rfc210-np-badcfg-sub-')
+    await initRepo(sub, 'a.txt', 'v1\n')
+    const host = tmp('aw-rfc210-np-badcfg-host-')
+    await initRepo(host, 'README.md', 'root\n')
+    await runGit(host, [
+      '-c',
+      'protocol.file.allow=always',
+      'submodule',
+      'add',
+      '-q',
+      sub,
+      'vendor',
+    ])
+    await runGit(host, ['commit', '-q', '-m', 'add managed submodule'])
+    const canon = join(tmp('aw-rfc210-np-badcfg-wt-'), 'canon')
+    await runGit(host, ['worktree', 'add', '-q', '--detach', canon, 'HEAD'])
+    await runGit(canon, ['-c', 'protocol.file.allow=always', 'submodule', 'update', '--init', '-q'])
+    expect(existsSync(join(canon, 'vendor', '.git'))).toBe(true)
+
+    // The COMMITTED `.gitmodules` is corrupt (bad section header) — this is what
+    // materialize's step ③ restores into the worktree, so by step ⑥ the config
+    // git reads is unparseable (`git config --get-regexp` exits 128). Committing
+    // it here puts the corrupt blob in the tree materialize replays.
+    writeFileSync(join(canon, '.gitmodules'), '[submodule "vendor"\n\tpath = vendor\n')
+    await runGit(canon, ['add', '.gitmodules'])
+    await runGit(canon, [
+      '-c',
+      'user.email=t@e.com',
+      '-c',
+      'user.name=T',
+      'commit',
+      '-q',
+      '-m',
+      'corrupt .gitmodules',
+    ])
+    const headTree = (await runGit(canon, ['rev-parse', 'HEAD^{tree}'])).stdout.trim()
+    const taskBaseHead = (await runGit(canon, ['rev-parse', 'HEAD'])).stdout.trim()
+
+    // The submodule is MANAGED and initialized; classification must refuse
+    // rather than silently treat the corrupt-config path as stray and skip it.
+    await expect(
+      materializeTree(canon, { mergedTree: headTree, canonCurrentTree: headTree, taskBaseHead }),
+    ).rejects.toThrow(/could not be parsed to classify ownership/)
+  }, 120_000)
 })

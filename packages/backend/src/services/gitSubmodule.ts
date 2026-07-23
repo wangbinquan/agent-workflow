@@ -426,6 +426,43 @@ export async function ensureSubmodulePool(
 }
 
 /**
+ * RFC-210 — the paths DECLARED in a level's `.gitmodules`, distinguishing a
+ * clean "no declarations" from a read/parse failure (Codex review round 9, P1).
+ *
+ * `ok: false` ⟹ `.gitmodules` EXISTS but git could not parse it (measured:
+ * `git config --get-regexp` exits 128 on a malformed file, vs 1 for a valid
+ * empty one). A caller must NOT then treat an absent path as "stray" — that
+ * would misclassify a managed submodule and silently skip its update; it is an
+ * error condition to surface. No `.gitmodules` at all ⟹ `ok: true`, empty set
+ * (a gitlink here is genuinely undeclared / stray).
+ *
+ * Load this ONCE per level and reuse the set, rather than one `git config` scan
+ * per gitlink (round 9, P2: the per-gitlink lookup was O(N²) + N processes).
+ */
+export async function readDeclaredSubmodulePaths(
+  levelPath: string,
+): Promise<{ ok: boolean; paths: Set<string> }> {
+  if (!existsSync(join(levelPath, '.gitmodules'))) return { ok: true, paths: new Set() }
+  const r = await runGit(levelPath, [
+    'config',
+    '-f',
+    '.gitmodules',
+    '--get-regexp',
+    String.raw`^submodule\..*\.path$`,
+  ])
+  // 0 = matches · 1 = no matching keys (valid, possibly empty) · >1 = parse error.
+  if (r.exitCode > 1) return { ok: false, paths: new Set() }
+  const paths = new Set<string>()
+  for (const line of r.stdout.split('\n')) {
+    const sp = line.indexOf(' ')
+    if (sp < 0) continue
+    const p = line.slice(sp + 1).trim()
+    if (p !== '') paths.add(p)
+  }
+  return { ok: true, paths }
+}
+
+/**
  * RFC-210 — the `.gitmodules` NAME for a submodule path at ONE level (path
  * relative to `levelPath`, no slashes across gitlink boundaries). Needed to
  * address `submodule.<name>.url` config; name and path differ whenever the

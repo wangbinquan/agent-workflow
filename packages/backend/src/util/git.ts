@@ -2264,6 +2264,13 @@ async function checkoutMergedGitlinks(
   if (effective.mode === 'never') return false
   let changed = false
   const rootPath = ctx?.rootPath ?? worktreePath
+  // Load this LEVEL's `.gitmodules` declarations ONCE (Codex review round 9,
+  // P2 — a per-gitlink `git config` scan was O(N²) + N processes). `ok:false`
+  // ⟹ the file exists but is unparseable: an absent path then cannot be
+  // trusted to mean "stray" (round 9, P1), so ownership classification below
+  // fails loud instead of silently skipping a managed submodule's update.
+  const { readDeclaredSubmodulePaths } = await import('@/services/gitSubmodule')
+  const declared = await readDeclaredSubmodulePaths(worktreePath)
   // `-r` is load-bearing, not an optimization. Without it this lists only the
   // root level, and a submodule at `libs/vendor` shows up as `040000 tree libs`
   // — skipped by the `!== 'commit'` guard below, so its merged gitlink was
@@ -2302,8 +2309,17 @@ async function checkoutMergedGitlinks(
     // round 8, P1 — round 7's HEAD-based fast path introduced this; the old
     // `currentSha === sha` shortcut happened to skip it whole). Leave it alone.
     if (initialized) {
-      const { submoduleNameForPath } = await import('@/services/gitSubmodule')
-      if ((await submoduleNameForPath(worktreePath, name)) === null) {
+      if (!declared.ok) {
+        // `.gitmodules` is present but unparseable — we cannot tell a managed
+        // submodule from a stray one. Skipping might drop a real update;
+        // checking out might rewind user work. Fail loud (round 9, P1).
+        throw new DomainError(
+          'materialize-failed',
+          `submodule '${relPath}': .gitmodules exists but could not be parsed to classify ownership`,
+          500,
+        )
+      }
+      if (!declared.paths.has(name)) {
         log?.warn('initialized gitlink not declared in .gitmodules — leaving untouched', {
           subPath: relPath,
         })
@@ -2362,9 +2378,19 @@ async function checkoutMergedGitlinks(
       // silently skipping would drop the node's submodule from the accumulated
       // task state (and the next node's snapshot would then read the vanished
       // path as a DELETION and delete it from canonical too).
-      const { attachSubmoduleFromPool, resolveSubmodulePool, submoduleNameForPath } =
+      const { attachSubmoduleFromPool, resolveSubmodulePool } =
         await import('@/services/gitSubmodule')
-      if ((await submoduleNameForPath(worktreePath, name)) === null) {
+      if (!declared.ok) {
+        // Same parse-failure classification hazard as the initialized branch —
+        // an unparseable `.gitmodules` must not be read as "no declaration"
+        // (round 9, P1). Fail loud rather than silently skip a real attach.
+        throw new DomainError(
+          'materialize-failed',
+          `submodule '${relPath}': .gitmodules exists but could not be parsed to classify ownership`,
+          500,
+        )
+      }
+      if (!declared.paths.has(name)) {
         // Not declared in .gitmodules — a stray committed nested repo. The
         // platform never claimed ownership (publish skips it too, so nothing
         // of it was ever pooled); leave it unmaterialized, as before.
