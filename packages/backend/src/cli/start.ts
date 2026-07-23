@@ -332,6 +332,17 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       log.info('skill identity migration barrier complete', { ...report })
     }
   }
+  // RFC-223 PR-4: finish provenance recovery before any fusion recovery,
+  // seeder, scheduler, or HTTP path can observe a historical name-only row.
+  // Fail CLOSED: an unexpected repair error aborts boot rather than serving a
+  // database whose fusion identity is ambiguous.
+  {
+    const { repairFusionProvenance } = await import('@/services/fusion')
+    const report = repairFusionProvenance(db)
+    if (Object.values(report).some((count) => count > 0)) {
+      log.info('fusion provenance repair complete', report)
+    }
+  }
   // Activate the boot-epoch availability gate while its verified set is still
   // empty. Every persisted skill stays hidden from all consumers and HTTP until
   // the per-skill background reverify explicitly admits it (or quarantines it).

@@ -36,6 +36,7 @@ function mkCandidate(overrides: Partial<Memory> = {}): Memory {
     approvedAt: null,
     createdAt: 1000,
     version: 1,
+    fusedIntoSkillId: null,
     canManage: true,
     ...overrides,
   }

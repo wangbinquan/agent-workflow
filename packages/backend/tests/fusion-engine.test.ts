@@ -126,6 +126,10 @@ function statusOf(db: DbClient, id: string): string {
   )[0]!.status
 }
 
+function skillIdOf(db: DbClient, name: string): string {
+  return db.select({ id: skills.id }).from(skills).where(eq(skills.name, name)).get()!.id
+}
+
 function fusionWorkRoots(appHome: string): string[] {
   const root = pjoin(appHome, 'fusions')
   if (!existsSync(root)) return []
@@ -171,7 +175,11 @@ describe('createFusion preconditions', () => {
     h.db.update(memories).set({ status: 'archived' }).where(eq(memories.id, mem)).run()
     let code: string | undefined
     try {
-      await createFusion({ skillName: 'lint', memoryIds: [mem], intent: '' }, h.deps, adminActor)
+      await createFusion(
+        { skillId: skillIdOf(h.db, 'lint'), memoryIds: [mem], intent: '' },
+        h.deps,
+        adminActor,
+      )
     } catch (err) {
       code = (err as { code?: string }).code
     }
@@ -191,7 +199,11 @@ describe('createFusion preconditions', () => {
       seedGit: async () => ({ stdout: '', stderr: 'injected seed failure', exitCode: 73 }),
     }
     await expect(
-      createFusion({ skillName: 'lint', memoryIds: [mem], intent: '' }, deps, adminActor),
+      createFusion(
+        { skillId: skillIdOf(h.db, 'lint'), memoryIds: [mem], intent: '' },
+        deps,
+        adminActor,
+      ),
     ).rejects.toThrow(/injected seed failure/)
 
     expect(h.db.select().from(tasks).all()).toHaveLength(0)
@@ -220,7 +232,7 @@ describe('launch → reconcile → approve', () => {
     // The stub clarifies, so the engine task parks and createFusion returns
     // with the fusion 'running'.
     const fusion = await createFusion(
-      { skillName: 'lint', memoryIds: [memA, memB], intent: 'tidy up' },
+      { skillId: createdSkill.id, memoryIds: [memA, memB], intent: 'tidy up' },
       h.deps,
       adminActor,
     )
@@ -285,7 +297,7 @@ describe('launch → reconcile → approve', () => {
     })
     const mem = approvedGlobalMemory(h.db, 'm')
     const fusion = await createFusion(
-      { skillName: 'lint', memoryIds: [mem], intent: '' },
+      { skillId: createdSkill.id, memoryIds: [mem], intent: '' },
       h.deps,
       adminActor,
     )
@@ -338,7 +350,7 @@ describe('launch → reconcile → approve', () => {
     const memA = approvedGlobalMemory(h.db, 'a')
     const memB = approvedGlobalMemory(h.db, 'b')
     const fusion = await createFusion(
-      { skillName: 'lint', memoryIds: [memA, memB], intent: '' },
+      { skillId: skillIdOf(h.db, 'lint'), memoryIds: [memA, memB], intent: '' },
       h.deps,
       adminActor,
     )
@@ -376,7 +388,7 @@ describe('RFC-170 T6 — fusion precondition token', () => {
   /** Drive a fresh fusion to awaiting_approval (agent worktree edit simulated). */
   async function toAwaitingApproval(skillName: string, memId: string) {
     const fusion = await createFusion(
-      { skillName, memoryIds: [memId], intent: '' },
+      { skillId: skillIdOf(h.db, skillName), memoryIds: [memId], intent: '' },
       h.deps,
       adminActor,
     )
@@ -415,7 +427,7 @@ describe('RFC-170 T6 — fusion precondition token', () => {
     })
     const mem = approvedGlobalMemory(h.db, 'm')
     const fusion = await createFusion(
-      { skillName: 'lint', memoryIds: [mem], intent: '' },
+      { skillId: skillIdOf(h.db, 'lint'), memoryIds: [mem], intent: '' },
       h.deps,
       adminActor,
     )
@@ -561,7 +573,9 @@ describe('RFC-170 T6 — fusion precondition token', () => {
     const src = readFileSync(pjoin(__dirname, '..', 'src', 'services', 'fusion.ts'), 'utf8')
     // Both decision entry points call the recheck helper before claiming.
     const calls =
-      src.match(/requireCurrentSkillWritable\(db, actor, row\.preconditionToken\)/g) ?? []
+      src.match(
+        /requireCurrentSkillWritable\(db, actor, row\.skillId, row\.preconditionToken\)/g,
+      ) ?? []
     expect(calls.length).toBeGreaterThanOrEqual(2) // approve + reject
     expect(src).toMatch(/!isResourceOwner\(actor, skill\)/) // helper gates on current owner
   })
@@ -638,6 +652,7 @@ describe('RFC-170 T6 F9 — recoverFusionDecisions (crash recovery)', () => {
       .insert(fusions)
       .values({
         id,
+        skillId: skillIdOf(h.db, 'lint'),
         skillName: 'lint',
         baseSkillVersion: 1,
         memoryIdsJson: '[]',
@@ -689,6 +704,56 @@ describe('RFC-170 T6 F9 — recoverFusionDecisions (crash recovery)', () => {
     expect(rawStatus('fz-fwd')).toBe('done')
   })
 
+  test("'applying' with duplicate same-skill fusion ledgers fails closed", () => {
+    seedFusion('fz-duplicate', { status: 'applying', currentTaskId: null })
+    const lintId = skillIdOf(h.db, 'lint')
+    for (const versionIndex of [7, 8]) {
+      h.db
+        .insert(skillVersions)
+        .values({
+          id: ulid(),
+          skillId: lintId,
+          versionIndex,
+          filesPath: `skills/${lintId}/versions/v${versionIndex}/files`,
+          source: 'fusion',
+          fusionId: 'fz-duplicate',
+          authorUserId: '__system__',
+          createdAt: Date.now(),
+        })
+        .run()
+    }
+    const r = recoverFusionDecisions(h.db)
+    expect(r.rolledForward).toBe(0)
+    expect(r.rolledBack).toBe(1)
+    expect(rawStatus('fz-duplicate')).toBe('failed')
+  })
+
+  test("'applying' with a conflicting stored applied version fails closed", () => {
+    seedFusion('fz-applied-mismatch', {
+      status: 'applying',
+      currentTaskId: null,
+      appliedSkillVersion: 6,
+    })
+    const lintId = skillIdOf(h.db, 'lint')
+    h.db
+      .insert(skillVersions)
+      .values({
+        id: ulid(),
+        skillId: lintId,
+        versionIndex: 7,
+        filesPath: `skills/${lintId}/versions/v7/files`,
+        source: 'fusion',
+        fusionId: 'fz-applied-mismatch',
+        authorUserId: '__system__',
+        createdAt: Date.now(),
+      })
+      .run()
+    const r = recoverFusionDecisions(h.db)
+    expect(r.rolledForward).toBe(0)
+    expect(r.rolledBack).toBe(1)
+    expect(rawStatus('fz-applied-mismatch')).toBe('failed')
+  })
+
   test("'applying' with NO committed version rolls BACK to failed", () => {
     seedFusion('fz-back', { status: 'applying', currentTaskId: null })
     const r = recoverFusionDecisions(h.db)
@@ -735,7 +800,7 @@ describe('RFC-170 T6 F10 — fusion seeds from the version snapshot, not live', 
     )
     const mem = approvedGlobalMemory(h.db, 'm')
     const fusion = await createFusion(
-      { skillName: 'lint', memoryIds: [mem], intent: '' },
+      { skillId: createdSkill.id, memoryIds: [mem], intent: '' },
       h.deps,
       adminActor,
     )
@@ -763,7 +828,11 @@ describe('RFC-170 T6 F10 — fusion seeds from the version snapshot, not live', 
     const mem = approvedGlobalMemory(h.db, 'm')
     let code: string | undefined
     try {
-      await createFusion({ skillName: 'lint', memoryIds: [mem], intent: '' }, h.deps, adminActor)
+      await createFusion(
+        { skillId: createdSkill.id, memoryIds: [mem], intent: '' },
+        h.deps,
+        adminActor,
+      )
     } catch (err) {
       code = (err as { code?: string }).code
     }
@@ -805,7 +874,7 @@ describe('RFC-170 T6 F12 — cancel is generation-safe + covers parked tasks', (
     })
     const mem = approvedGlobalMemory(h.db, 'm')
     const fusion = await createFusion(
-      { skillName: 'lint', memoryIds: [mem], intent: '' },
+      { skillId: skillIdOf(h.db, 'lint'), memoryIds: [mem], intent: '' },
       h.deps,
       adminActor,
     )

@@ -32,4 +32,9 @@ describe('RFC-198 fusion detail UX', () => {
     expect(SOURCE).toContain('<DiffViewer')
     expect(SOURCE).toContain('<Dialog')
   })
+
+  test('historical provenance never links a reused name to a current same-name skill', () => {
+    expect(SOURCE).toContain('<span>{f.skillName}</span>')
+    expect(SOURCE).not.toContain('to="/skills/$name"')
+  })
 })

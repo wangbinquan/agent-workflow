@@ -4,10 +4,10 @@
 // props (lockedSkillName? / presetMemoryIds?) whose undefined-ness implied
 // the mode — nothing stopped a caller passing both or neither. `entry` is now
 // an explicit union:
-//   {kind:'from-skill', skillName}    → /skills/$name: skill locked, pick memories
+//   {kind:'from-skill', skillId, skillName} → /skills/$name: skill locked, pick memories
 //   {kind:'from-memories', memoryIds} → /memory: memories preset, pick the skill
 // Locks each mode's render: which picker Field shows, which is replaced by
-// the preset summary, and that the preset memory ids seed the launch payload.
+// the preset summary, and that every launch payload carries the canonical skill id.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -87,7 +87,7 @@ describe('FuseDialog entry union — two-state render', () => {
       }
       return json([])
     })
-    mount({ kind: 'from-skill', skillName: 'my-skill' })
+    mount({ kind: 'from-skill', skillId: 'skill_1', skillName: 'my-skill' })
     await waitFor(() => expect(screen.getByTestId('fusion-memory-picker')).toBeTruthy())
     // The target skill is locked → no skill Field, and no /api/skills query.
     expect(screen.queryByText('Target skill')).toBeNull()
@@ -113,13 +113,13 @@ describe('FuseDialog entry union — two-state render', () => {
       }
       return json([])
     })
-    mount({ kind: 'from-skill', skillName: 'my-skill' })
+    mount({ kind: 'from-skill', skillId: 'skill_1', skillName: 'my-skill' })
     expect(await screen.findByText('Allowed')).toBeTruthy()
     expect(screen.queryByText('Denied')).toBeNull()
     expect(screen.queryByText('Legacy missing bit')).toBeNull()
   })
 
-  test('from-skill: locked skill name is what gets submitted', async () => {
+  test('from-skill: locked canonical skill id is what gets submitted', async () => {
     const calls = installFetch((c) => {
       if (c.url.includes('/api/memories')) {
         return json({
@@ -133,24 +133,47 @@ describe('FuseDialog entry union — two-state render', () => {
       }
       return json([])
     })
-    mount({ kind: 'from-skill', skillName: 'my-skill' })
+    mount({ kind: 'from-skill', skillId: 'skill_1', skillName: 'my-skill' })
     await waitFor(() => expect(screen.getByTestId('fusion-memory-picker')).toBeTruthy())
     fireEvent.click(screen.getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: 'Start fusion' }))
     await waitFor(() => {
       const post = calls.find((c) => c.method === 'POST')
       expect(post).toBeDefined()
-      expect(post!.body).toMatchObject({ skillName: 'my-skill', memoryIds: ['mem_1'] })
+      expect(post!.body).toMatchObject({ skillId: 'skill_1', memoryIds: ['mem_1'] })
+      expect(post!.body).not.toHaveProperty('skillName')
     })
   })
 
-  test('from-memories: skill Select shown, memory picker replaced by preset count', async () => {
-    installFetch((c) => {
+  test('from-memories: same-name skills are owner-labelled, remain unselected, and submit by id', async () => {
+    const calls = installFetch((c) => {
       if (c.url.includes('/api/skills')) {
         return json([
-          { id: 's1', name: 'skill-a', description: '', sourceKind: 'managed' },
+          {
+            id: 'skill_a_1',
+            name: 'shared',
+            description: '',
+            sourceKind: 'managed',
+            ownerUserId: 'u1',
+          },
+          {
+            id: 'skill_a_2',
+            name: 'shared',
+            description: '',
+            sourceKind: 'managed',
+            ownerUserId: 'u2',
+          },
           { id: 's2', name: 'ext-b', description: '', sourceKind: 'external' },
         ])
+      }
+      if (c.url.includes('/api/users/lookup')) {
+        return json([
+          { id: 'u1', username: 'alice', displayName: 'Alice' },
+          { id: 'u2', username: 'bob', displayName: 'Bob' },
+        ])
+      }
+      if (c.method === 'POST' && c.url.includes('/api/fusions')) {
+        return json({ id: 'fus_2' }, 201)
       }
       return json({ items: [] })
     })
@@ -159,6 +182,20 @@ describe('FuseDialog entry union — two-state render', () => {
     // The two preset ids surface as the count summary, not as a picker.
     expect(screen.getByText('2 selected')).toBeTruthy()
     expect(screen.queryByTestId('fusion-memory-picker')).toBeNull()
+
+    const select = await screen.findByRole('combobox')
+    expect(select.textContent).toContain('Pick a managed skill')
+    fireEvent.click(select)
+    const alice = await screen.findByRole('option', { name: /shared · Alice · skill_a_/ })
+    const bob = screen.getByRole('option', { name: /shared · Bob · skill_a_/ })
+    expect(alice.textContent).not.toBe(bob.textContent)
+    fireEvent.mouseDown(bob)
+    fireEvent.click(screen.getByRole('button', { name: 'Start fusion' }))
+    await waitFor(() => {
+      const post = calls.find((c) => c.method === 'POST' && c.url.includes('/api/fusions'))
+      expect(post?.body).toMatchObject({ skillId: 'skill_a_2', memoryIds: ['mem_1', 'mem_2'] })
+      expect(post?.body).not.toHaveProperty('skillName')
+    })
   })
 })
 

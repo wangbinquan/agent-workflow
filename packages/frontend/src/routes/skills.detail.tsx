@@ -774,6 +774,7 @@ function SkillDetailPage() {
       return <LoadingState data-testid="skill-detail-loading" />
     return null
   }
+  if (meta.data === undefined) return <LoadingState data-testid="skill-detail-loading" />
 
   const description = composite.metadata.draft.description
   const bodyMd = composite.metadata.draft.bodyMd
@@ -1000,7 +1001,7 @@ function SkillDetailPage() {
       <FuseDialog
         open={fuseOpen}
         onClose={() => setFuseOpen(false)}
-        entry={{ kind: 'from-skill', skillName: name }}
+        entry={{ kind: 'from-skill', skillId: meta.data.id, skillName: meta.data.name }}
       />
     </fieldset>
   )

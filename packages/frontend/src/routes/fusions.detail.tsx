@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { Fusion, Memory } from '@agent-workflow/shared'
+import { type Fusion, type Memory } from '@agent-workflow/shared'
 import { api, type ApiError } from '@/api/client'
 import { ConfirmButton } from '@/components/ConfirmButton'
 import { Dialog } from '@/components/Dialog'
@@ -114,9 +114,7 @@ function FusionDetailPage() {
         title={t('fusion.detailTitle')}
         meta={
           <>
-            <Link to="/skills/$name" params={{ name: f.skillName }}>
-              {f.skillName}
-            </Link>{' '}
+            <span>{f.skillName}</span>{' '}
             <span className={`chip chip--tight chip--fusion-${f.status}`}>
               {t(`fusion.status.${f.status}`)}
             </span>{' '}

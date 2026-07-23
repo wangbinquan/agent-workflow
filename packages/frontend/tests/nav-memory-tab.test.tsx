@@ -39,6 +39,7 @@ function mkSum(overrides: Partial<MemorySummary> = {}): MemorySummary {
     approvedAt: null,
     version: 1,
     distillAction: 'new',
+    fusedIntoSkillId: null,
     canManage: true,
     ...overrides,
   }

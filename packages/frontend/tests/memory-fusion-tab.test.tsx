@@ -31,6 +31,7 @@ import '../src/i18n'
 function mkFusion(overrides: Partial<Fusion> = {}): Fusion {
   return {
     id: 'fus_1',
+    skillId: 'skill_1',
     skillName: 'my-skill',
     baseSkillVersion: 1,
     memoryIds: ['m1', 'm2'],

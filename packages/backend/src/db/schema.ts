@@ -1912,6 +1912,10 @@ export const memories = sqliteTable(
     version: integer('version').notNull().default(1),
     // RFC-101 fusion provenance — set iff status='fused' (DB CHECK enforces).
     fusedIntoSkill: text('fused_into_skill'),
+    // RFC-223 PR-4: immutable provenance identity. Historical rows that cannot
+    // be proven from a committed fusion/version relation carry the quarantine
+    // sentinel instead of being rebound from the mutable display name.
+    fusedIntoSkillId: text('fused_into_skill_id'),
     fusedIntoSkillVersion: integer('fused_into_skill_version'),
     fusedAt: integer('fused_at'),
     fusedByUserId: text('fused_by_user_id'),
@@ -1922,6 +1926,10 @@ export const memories = sqliteTable(
     statusCreatedIdx: index('idx_memories_status_created').on(t.status, t.createdAt),
     supersedesIdx: index('idx_memories_supersedes').on(t.supersedesId),
     sourceIdx: index('idx_memories_source').on(t.sourceKind, t.sourceEventId),
+    fusedSkillIdx: index('idx_memories_fused_skill_id').on(
+      t.fusedIntoSkillId,
+      t.fusedIntoSkillVersion,
+    ),
   }),
 )
 
@@ -1935,6 +1943,10 @@ export const fusions = sqliteTable(
   'fusions',
   {
     id: text('id').primaryKey(), // ULID
+    // RFC-223 PR-4: canonical target identity. `skill_name` remains display-only.
+    // The migration quarantines unprovable historical rows with a non-resolving
+    // sentinel; every new launch persists the authorized immutable skills.id.
+    skillId: text('skill_id').notNull(),
     skillName: text('skill_name').notNull(),
     baseSkillVersion: integer('base_skill_version').notNull(), // OCC baseline
     // RFC-170 §2 (migration 0090): full composite precondition token captured at
@@ -1964,7 +1976,7 @@ export const fusions = sqliteTable(
     error: text('error'),
   },
   (t) => ({
-    skillIdx: index('idx_fusions_skill').on(t.skillName),
+    skillIdx: index('idx_fusions_skill').on(t.skillId),
     statusIdx: index('idx_fusions_status').on(t.status),
   }),
 )

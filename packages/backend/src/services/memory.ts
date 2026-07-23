@@ -64,6 +64,7 @@ interface MemoryRow {
   createdAt: number
   version: number
   fusedIntoSkill: string | null
+  fusedIntoSkillId: string | null
   fusedIntoSkillVersion: number | null
   fusedAt: number | null
   fusedByUserId: string | null
@@ -101,6 +102,7 @@ function rowToMemory(row: MemoryRow): Memory {
     createdAt: row.createdAt,
     version: row.version,
     fusedIntoSkill: row.fusedIntoSkill,
+    fusedIntoSkillId: row.fusedIntoSkillId,
     fusedIntoSkillVersion: row.fusedIntoSkillVersion,
     fusedAt: row.fusedAt,
     fusedByUserId: row.fusedByUserId,
@@ -122,6 +124,7 @@ export function toSummary(
     version: m.version,
     distillAction: m.distillAction,
     fusedIntoSkill: m.fusedIntoSkill ?? null,
+    fusedIntoSkillId: m.fusedIntoSkillId ?? null,
     fusedIntoSkillVersion: m.fusedIntoSkillVersion ?? null,
     // RFC-050: only candidate rows carry the lang chip — approved /
     // archived / superseded / rejected are "facts" whose generation
@@ -164,6 +167,7 @@ export async function createManualCandidate(
     approvedAt: null,
     createdAt: Date.now(),
     version: 1,
+    fusedIntoSkillId: null,
   })
   await db.insert(memories).values({
     id: draft.id,
@@ -474,6 +478,7 @@ export async function patchMemory(
       approvedAt: row.approvedAt,
       createdAt: row.createdAt,
       version: row.version,
+      fusedIntoSkillId: row.fusedIntoSkillId,
     })
     if (!synthParsed.success) {
       throw new ValidationError(
@@ -597,6 +602,7 @@ export function fuseMemoriesTx(
   tx: DbTxSync,
   args: {
     memoryIds: readonly string[]
+    skillId: string
     skillName: string
     skillVersion: number
     fusionId: string
@@ -612,6 +618,7 @@ export function fuseMemoriesTx(
     tx.update(memories)
       .set({
         status: 'fused',
+        fusedIntoSkillId: args.skillId,
         fusedIntoSkill: args.skillName,
         fusedIntoSkillVersion: args.skillVersion,
         fusedAt: args.now,
@@ -632,7 +639,7 @@ export function fuseMemoriesTx(
  */
 export function unfuseMemoriesTx(
   tx: DbTxSync,
-  args: { skillName: string; aboveVersion: number },
+  args: { skillId: string; aboveVersion: number },
 ): string[] {
   const rows = tx
     .select()
@@ -640,7 +647,7 @@ export function unfuseMemoriesTx(
     .where(
       and(
         eq(memories.status, 'fused'),
-        eq(memories.fusedIntoSkill, args.skillName),
+        eq(memories.fusedIntoSkillId, args.skillId),
         gt(memories.fusedIntoSkillVersion, args.aboveVersion),
       ),
     )
@@ -649,6 +656,7 @@ export function unfuseMemoriesTx(
     tx.update(memories)
       .set({
         status: 'approved',
+        fusedIntoSkillId: null,
         fusedIntoSkill: null,
         fusedIntoSkillVersion: null,
         fusedAt: null,

@@ -53,6 +53,8 @@ export const MemorySchema = z
     version: z.number().int().min(1),
     // RFC-101 fusion provenance — non-null iff status='fused'.
     fusedIntoSkill: z.string().nullable().optional(),
+    /** RFC-223: immutable skill identity; fusedIntoSkill is display-only. */
+    fusedIntoSkillId: z.string().nullable(),
     fusedIntoSkillVersion: z.number().int().nullable().optional(),
     fusedAt: z.number().int().nullable().optional(),
     fusedByUserId: z.string().nullable().optional(),
@@ -92,6 +94,7 @@ export const MemorySummarySchema = z.object({
   // RFC-101: fusion provenance for the "fused → {skill} v{n}" chip (non-null
   // only on status='fused' rows).
   fusedIntoSkill: z.string().nullable().optional(),
+  fusedIntoSkillId: z.string().nullable(),
   fusedIntoSkillVersion: z.number().int().nullable().optional(),
   // RFC-050: distiller output language for this row's distill job.
   // Only present on rows produced by the distiller (NULL for manual /

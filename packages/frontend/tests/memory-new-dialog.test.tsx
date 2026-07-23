@@ -61,6 +61,7 @@ function mkMemory(overrides: Partial<Memory> = {}): Memory {
     approvedAt: null,
     createdAt: 1,
     version: 1,
+    fusedIntoSkillId: null,
     ...overrides,
   }
 }

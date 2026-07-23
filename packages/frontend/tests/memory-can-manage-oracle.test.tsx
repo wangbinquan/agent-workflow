@@ -35,6 +35,7 @@ function memory(overrides: Partial<MemorySummary> = {}): MemorySummary {
     approvedAt: 1,
     version: 1,
     distillAction: null,
+    fusedIntoSkillId: null,
     ...overrides,
   }
 }

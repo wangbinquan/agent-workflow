@@ -100,9 +100,9 @@ export async function getWorkflowAclRow(
 export async function createWorkflow(
   db: DbClient,
   input: CreateWorkflow,
-  opts?: { ownerUserId?: string; builtin?: boolean },
+  opts?: { ownerUserId?: string; builtin?: boolean; id?: string },
 ): Promise<WorkflowDetail> {
-  const id = ulid()
+  const id = opts?.id ?? ulid()
   const now = Date.now()
   // Normalize incoming v1 → v2 (RFC-005) so new rows always land at the
   // latest schema version. Older clients can still post v1 — they get upgraded.

@@ -23,13 +23,21 @@ import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 import { SYSTEM_USER_ID } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, tasks, workflows } from '../src/db/schema'
+import { agents, skills, tasks, workflows } from '../src/db/schema'
+import { AGENT_HOST_WORKFLOW_ID } from '../src/services/agentLaunch'
 import {
   SKILL_FUSION_WORKFLOW_NAME,
   SKILL_MERGER_AGENT_NAME,
   seedFusionResources,
 } from '../src/services/fusion'
-import { assertNotBuiltin, isBuiltinRow } from '../src/services/systemResources'
+import {
+  QUARANTINED_FUSION_SKILL_ID,
+  SKILL_FUSION_WORKFLOW_ID,
+  SKILL_MERGER_AGENT_ID,
+  assertNotBuiltin,
+  isBuiltinRow,
+} from '../src/services/systemResources'
+import { WORKGROUP_HOST_WORKFLOW_ID } from '../src/services/workgroup/constants'
 import { createRuntime } from '../src/services/runtimeRegistry'
 import { listWorkflows } from '../src/services/workflow'
 import { createApp } from '../src/server'
@@ -332,6 +340,18 @@ describe('RFC-104 — route guards refuse mutating a built-in (even as admin)', 
 })
 
 describe('RFC-104 — assertNotBuiltin / isBuiltinRow are the actor-blind single source', () => {
+  test('framework identity registry has no collisions and skills stay outside builtin semantics', () => {
+    const reservedIds = [
+      SKILL_MERGER_AGENT_ID,
+      SKILL_FUSION_WORKFLOW_ID,
+      AGENT_HOST_WORKFLOW_ID,
+      WORKGROUP_HOST_WORKFLOW_ID,
+      QUARANTINED_FUSION_SKILL_ID,
+    ]
+    expect(new Set(reservedIds).size).toBe(reservedIds.length)
+    expect(Object.hasOwn(skills, 'builtin')).toBe(false)
+  })
+
   test('throws builtin-readonly for builtin=true, no-op otherwise (incl. column-less rows)', () => {
     expect(isBuiltinRow({ builtin: true })).toBe(true)
     expect(isBuiltinRow({ builtin: false })).toBe(false)
@@ -385,10 +405,8 @@ describe('RFC-104 — seed self-heal & the ≤1-built-in-per-name guarantee', ()
   test('agent drift with __system__ owner intact (builtin/visibility) is repaired on re-seed', async () => {
     const { db } = buildApp()
     await seedFusionResources(db)
-    // builtin flag cleared + visibility flipped, but owner stays __system__ → the
-    // row is recognizably the framework's → reclaimed. (A FULL owner-drift to a
-    // user is intentionally left untouched — see the no-hijack test below, Codex
-    // impl-gate P2: never convert a possibly-user row into a locked built-in.)
+    // The fixed ID is the authority, so identity-field drift is repaired.
+    // A random-ID same-name squatter is still never adopted (covered below).
     db.update(agents)
       .set({ visibility: 'private', builtin: false })
       .where(eq(agents.name, SKILL_MERGER_AGENT_NAME))
@@ -399,6 +417,80 @@ describe('RFC-104 — seed self-heal & the ≤1-built-in-per-name guarantee', ()
     expect(row?.builtin).toBe(true)
     expect(row?.ownerUserId).toBe(SYSTEM_USER_ID)
     expect(row?.visibility).toBe('public')
+  })
+
+  test('re-seed preserves merger customization and repairs only workflow agentId once', async () => {
+    const { db } = buildApp()
+    await seedFusionResources(db)
+    const workflow = db
+      .select()
+      .from(workflows)
+      .where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
+      .get()!
+    const definition = JSON.parse(workflow.definition) as {
+      nodes: Array<Record<string, unknown>>
+      custom?: string
+    }
+    const mergerNode = definition.nodes.find((node) => node['id'] === 'merger')!
+    mergerNode['agentId'] = 'drifted-agent-id'
+    definition.custom = 'preserve-me'
+
+    db.update(agents)
+      .set({
+        runtime: 'custom-runtime',
+        bodyMd: 'custom merger instructions',
+        dependsOn: JSON.stringify(['custom-dependency']),
+        plugins: JSON.stringify(['custom-plugin']),
+      })
+      .where(eq(agents.id, SKILL_MERGER_AGENT_ID))
+      .run()
+    db.update(workflows)
+      .set({ definition: JSON.stringify(definition) })
+      .where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
+      .run()
+
+    await seedFusionResources(db)
+    const agent = db.select().from(agents).where(eq(agents.id, SKILL_MERGER_AGENT_ID)).get()!
+    expect(agent.runtime).toBe('custom-runtime')
+    expect(agent.bodyMd).toBe('custom merger instructions')
+    expect(JSON.parse(agent.dependsOn)).toEqual(['custom-dependency'])
+    expect(JSON.parse(agent.plugins)).toEqual(['custom-plugin'])
+
+    const repaired = db
+      .select()
+      .from(workflows)
+      .where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
+      .get()!
+    const repairedDefinition = JSON.parse(repaired.definition) as {
+      nodes: Array<Record<string, unknown>>
+      custom?: string
+    }
+    expect(repairedDefinition.custom).toBe('preserve-me')
+    expect(repairedDefinition.nodes.find((node) => node['id'] === 'merger')?.['agentId']).toBe(
+      SKILL_MERGER_AGENT_ID,
+    )
+    expect(repaired.version).toBe(workflow.version + 1)
+
+    await seedFusionResources(db)
+    expect(
+      db
+        .select({ version: workflows.version })
+        .from(workflows)
+        .where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
+        .get()?.version,
+    ).toBe(repaired.version)
+  })
+
+  test('a wrong-name fixed-id occupant fails closed and remains untouched', async () => {
+    const { db } = buildApp()
+    db.insert(agents)
+      .values({ id: SKILL_MERGER_AGENT_ID, name: 'ordinary-agent', builtin: false })
+      .run()
+
+    await expect(seedFusionResources(db)).rejects.toThrow(/stable built-in agent id/)
+    expect(
+      db.select().from(agents).where(eq(agents.id, SKILL_MERGER_AGENT_ID)).get(),
+    ).toMatchObject({ name: 'ordinary-agent', builtin: false })
   })
 
   test('a user same-named workflow (builtin=false) coexists; exactly one built-in remains', async () => {
@@ -449,7 +541,7 @@ describe('RFC-104 — seed self-heal & the ≤1-built-in-per-name guarantee', ()
     ).toThrow()
   })
 
-  test('seed does NOT hijack a user agent squatting the reserved name (Codex impl-gate P2)', async () => {
+  test('reserved-name user squatter fails seed closed and remains untouched', async () => {
     const { db } = buildApp()
     // A user grabbed `aw-skill-merger` (builtin=false, user-owned) before the
     // framework's first seed. agents.name is unique, so the seed must leave it
@@ -459,7 +551,7 @@ describe('RFC-104 — seed self-heal & the ≤1-built-in-per-name guarantee', ()
       .values({ id: ulid(), name: SKILL_MERGER_AGENT_NAME, ownerUserId: uid, builtin: false })
       .run()
 
-    await seedFusionResources(db)
+    await expect(seedFusionResources(db)).rejects.toThrow(/agent-name-in-use|already exists/i)
     const row = db.select().from(agents).where(eq(agents.name, SKILL_MERGER_AGENT_NAME)).all()[0]
     expect(row?.builtin).toBe(false)
     expect(row?.ownerUserId).toBe(uid)

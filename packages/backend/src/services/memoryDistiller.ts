@@ -884,6 +884,7 @@ export async function validateAndPersistCandidate(
       approvedAt: null,
       createdAt: Date.now(),
       version: 1,
+      fusedIntoSkillId: null,
     })
   } catch (err) {
     log.warn('candidate failed validation; skipping', {
@@ -925,6 +926,7 @@ export async function validateAndPersistCandidate(
       approvedAt: null,
       version: 1,
       distillAction: memory.distillAction,
+      fusedIntoSkillId: null,
     },
   })
   return { memory, raw }

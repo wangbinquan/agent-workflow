@@ -76,6 +76,7 @@ describe('fuseMemoriesTx', () => {
     const fused = dbTxSync(h.db, (tx) =>
       fuseMemoriesTx(tx, {
         memoryIds: [a, b],
+        skillId: 'skill-lint',
         skillName: 'lint',
         skillVersion: 4,
         fusionId: 'fus_1',
@@ -88,9 +89,11 @@ describe('fuseMemoriesTx', () => {
     expect(statusOf(h.db, b)).toBe('archived') // untouched
     const rowA = h.db.select().from(memories).where(eqId(a)).all() as Array<{
       fusedIntoSkill: string | null
+      fusedIntoSkillId: string | null
       fusedIntoSkillVersion: number | null
     }>
     expect(rowA[0]!.fusedIntoSkill).toBe('lint')
+    expect(rowA[0]!.fusedIntoSkillId).toBe('skill-lint')
     expect(rowA[0]!.fusedIntoSkillVersion).toBe(4)
   })
 })
@@ -152,6 +155,7 @@ describe('fused is terminal', () => {
     dbTxSync(h.db, (tx) =>
       fuseMemoriesTx(tx, {
         memoryIds: [a],
+        skillId: 'skill-lint',
         skillName: 'lint',
         skillVersion: 2,
         fusionId: 'f',
@@ -188,6 +192,7 @@ describe('restore un-fuses memories fused after the target version', () => {
     dbTxSync(h.db, (tx) => {
       fuseMemoriesTx(tx, {
         memoryIds: [fusedAtV1],
+        skillId: skill.id,
         skillName: 'lint',
         skillVersion: 1,
         fusionId: 'f1',
@@ -196,6 +201,7 @@ describe('restore un-fuses memories fused after the target version', () => {
       })
       fuseMemoriesTx(tx, {
         memoryIds: [fusedAtV2],
+        skillId: skill.id,
         skillName: 'lint',
         skillVersion: 2,
         fusionId: 'f2',
@@ -216,6 +222,7 @@ describe('restore un-fuses memories fused after the target version', () => {
     dbTxSync(h.db, (tx) =>
       fuseMemoriesTx(tx, {
         memoryIds: [m],
+        skillId: 'skill-lint',
         skillName: 'lint',
         skillVersion: 9,
         fusionId: 'f',
@@ -224,14 +231,16 @@ describe('restore un-fuses memories fused after the target version', () => {
       }),
     )
     const unfused = dbTxSync(h.db, (tx) =>
-      unfuseMemoriesTx(tx, { skillName: 'lint', aboveVersion: 0 }),
+      unfuseMemoriesTx(tx, { skillId: 'skill-lint', aboveVersion: 0 }),
     )
     expect(unfused).toEqual([m])
     const row = h.db.select().from(memories).where(eqId(m)).all() as Array<{
       status: string
       fusedIntoSkill: string | null
+      fusedIntoSkillId: string | null
     }>
     expect(row[0]!.status).toBe('approved')
     expect(row[0]!.fusedIntoSkill).toBeNull()
+    expect(row[0]!.fusedIntoSkillId).toBeNull()
   })
 })

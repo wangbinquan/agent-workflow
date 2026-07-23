@@ -1,5 +1,5 @@
 // RFC-101 — fusion launch dialog. Shared by both entry points:
-//   - /skills/:name  → entry {kind:'from-skill'}, user picks memories
+//   - /skills/:name  → entry {kind:'from-skill', skillId, skillName}, user picks memories
 //   - /memory        → entry {kind:'from-memories'}, user picks the target skill
 // RFC-151 PR-1 — the two entry points used to be encoded as a pair of
 // optional props (locked skill name / preset memory ids) whose undefined-ness
@@ -16,14 +16,19 @@ import { Dialog } from '@/components/Dialog'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { Field, TextArea } from '@/components/Form'
 import { Select } from '@/components/Select'
+import { useUserLookup } from '@/hooks/useUserLookup'
 
 interface ListResponse {
   items: MemorySummary[]
 }
 
 export type FuseDialogEntry =
-  | { kind: 'from-skill'; skillName: string }
+  | { kind: 'from-skill'; skillId: string; skillName: string }
   | { kind: 'from-memories'; memoryIds: string[] }
+
+function shortId(id: string): string {
+  return id.length <= 10 ? id : `${id.slice(0, 8)}…`
+}
 
 export function FuseDialog({
   open,
@@ -37,26 +42,26 @@ export function FuseDialog({
   const { t } = useTranslation()
   const navigate = useNavigate()
 
-  const [skillName, setSkillName] = useState(entry.kind === 'from-skill' ? entry.skillName : '')
+  const [skillId, setSkillId] = useState(entry.kind === 'from-skill' ? entry.skillId : '')
   const [picked, setPicked] = useState<Set<string>>(
     new Set(entry.kind === 'from-memories' ? entry.memoryIds : []),
   )
   const [intent, setIntent] = useState('')
   const [localError, setLocalError] = useState<string | null>(null)
+  const seededSkillId = entry.kind === 'from-skill' ? entry.skillId : ''
+  const seededMemoryIds = entry.kind === 'from-memories' ? entry.memoryIds.join('\u0000') : ''
 
   // The dialog stays mounted while closed (parents toggle `open`), so re-seed
   // from the current entry each time it opens — otherwise a /memory bulk
   // selection made after first mount never reaches `picked` (Codex P2).
   useEffect(() => {
     if (open) {
-      setSkillName(entry.kind === 'from-skill' ? entry.skillName : '')
-      setPicked(new Set(entry.kind === 'from-memories' ? entry.memoryIds : []))
+      setSkillId(seededSkillId)
+      setPicked(new Set(seededMemoryIds === '' ? [] : seededMemoryIds.split('\u0000')))
       setIntent('')
       setLocalError(null)
     }
-    // entry is a fresh object each render; key off open + its contents.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, entry.kind, entry.kind === 'from-skill' ? entry.skillName : entry.memoryIds.join(',')])
+  }, [open, seededMemoryIds, seededSkillId])
 
   // Managed skills the user can write (the list endpoint already filters by
   // visibility; ownership is re-checked server-side at launch).
@@ -69,6 +74,16 @@ export function FuseDialog({
     () => (skills.data ?? []).filter((s) => s.sourceKind === 'managed'),
     [skills.data],
   )
+  const owners = useUserLookup(managed.map((s) => s.ownerUserId))
+  const duplicateSkillNames = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const skill of managed) counts.set(skill.name, (counts.get(skill.name) ?? 0) + 1)
+    return new Set(
+      Array.from(counts.entries())
+        .filter(([, count]) => count > 1)
+        .map(([name]) => name),
+    )
+  }, [managed])
 
   // Approved, manageable memories (for the picker when entering from a skill).
   const memories = useQuery<ListResponse>({
@@ -84,7 +99,7 @@ export function FuseDialog({
   const launch = useMutation<Fusion, ApiError>({
     mutationFn: () =>
       api.post('/api/fusions', {
-        skillName,
+        skillId,
         memoryIds: Array.from(picked),
         intent,
       }),
@@ -96,7 +111,7 @@ export function FuseDialog({
 
   function submit() {
     setLocalError(null)
-    if (skillName === '') {
+    if (skillId === '') {
       setLocalError(t('fusion.needSkill'))
       return
     }
@@ -148,11 +163,23 @@ export function FuseDialog({
             <p className="muted">{t('fusion.noManagedSkills')}</p>
           ) : (
             <Select
-              value={skillName}
-              onChange={setSkillName}
+              value={skillId}
+              onChange={setSkillId}
               options={[
                 { value: '', label: t('fusion.pickSkillPlaceholder') },
-                ...managed.map((s) => ({ value: s.name, label: s.name })),
+                ...managed.map((s) => {
+                  const owner =
+                    owners.get(s.ownerUserId)?.displayName ??
+                    (s.ownerUserId == null || s.ownerUserId === '__system__'
+                      ? t('acl.systemOwner')
+                      : shortId(s.ownerUserId))
+                  return {
+                    value: s.id,
+                    label: `${s.name} · ${owner}${
+                      duplicateSkillNames.has(s.name) ? ` · ${shortId(s.id)}` : ''
+                    }`,
+                  }
+                }),
               ]}
             />
           )}

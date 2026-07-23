@@ -4,6 +4,9 @@
 
 import { z } from 'zod'
 
+/** Historical target identity could not be proven; never resolve/link by name. */
+export const QUARANTINED_FUSION_SKILL_ID = '__rfc223_fusion_skill_quarantined__'
+
 export const FusionStatusSchema = z.enum([
   'running', // engine task executing (agent working / clarifying)
   'awaiting_approval', // proposed change ready; merger reviews the diff
@@ -25,6 +28,8 @@ export type FusionSkipped = z.infer<typeof FusionSkippedSchema>
 /** A fusion record (projected for the API). */
 export const FusionSchema = z.object({
   id: z.string(),
+  /** RFC-223: immutable target identity; skillName is display-only. */
+  skillId: z.string(),
   skillName: z.string(),
   baseSkillVersion: z.number().int(),
   memoryIds: z.array(z.string()),
@@ -49,7 +54,7 @@ export type Fusion = z.infer<typeof FusionSchema>
 
 /** POST /api/fusions — launch a fusion. */
 export const LaunchFusionSchema = z.object({
-  skillName: z.string().min(1),
+  skillId: z.string().min(1),
   memoryIds: z.array(z.string().min(1)).min(1).max(32),
   intent: z.string().max(4000).default(''),
   /** Optional per-run model override for the skill-merger agent. */

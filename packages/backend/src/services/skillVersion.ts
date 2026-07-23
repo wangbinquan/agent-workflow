@@ -810,7 +810,7 @@ export function restoreSkillVersion(
         // fusion version's incorporated memory ids on skill_versions and
         // re-fuses from the target's set; deferred to a follow-up (design §10).
         unfusedMemoryIds = unfuseMemoriesTx(tx, {
-          skillName: skill.name,
+          skillId,
           aboveVersion: target,
         })
       },

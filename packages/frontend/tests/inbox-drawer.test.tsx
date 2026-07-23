@@ -318,6 +318,7 @@ describe('RFC-195 InboxDrawer', () => {
         return json([
           {
             id: 'fus_1',
+            skillId: 'skill_1',
             skillName: 'sk',
             status: 'awaiting_approval',
             memoryIds: ['m1'],

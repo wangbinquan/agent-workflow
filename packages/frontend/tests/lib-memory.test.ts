@@ -26,6 +26,7 @@ function summary(overrides: Partial<MemorySummary> = {}): MemorySummary {
     approvedAt: 1000,
     version: 1,
     distillAction: null,
+    fusedIntoSkillId: null,
     ...overrides,
   }
 }
@@ -159,5 +160,6 @@ function mem(overrides: Partial<Memory>): Memory {
     approvedAt: 1000,
     createdAt: 500,
     version: 1,
+    fusedIntoSkillId: null,
   }
 }

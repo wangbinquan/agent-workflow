@@ -14,7 +14,7 @@
 // runtime imports imports fusion.ts back (only routes + the boot tick do), so
 // importing task/skill/skillVersion/memory here is acyclic.
 
-import { and, asc, desc, eq, isNull } from 'drizzle-orm'
+import { and, desc, eq, isNull } from 'drizzle-orm'
 import {
   cpSync,
   existsSync,
@@ -26,17 +26,23 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import type { Fusion, FusionSkipped, FusionStatus, LaunchFusion } from '@agent-workflow/shared'
+import type {
+  Fusion,
+  FusionSkipped,
+  FusionStatus,
+  LaunchFusion,
+  WorkflowDefinition,
+} from '@agent-workflow/shared'
 import { FusionResultManifestSchema, TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import { SYSTEM_USER_ID } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
-import { agents, fusions, skills, skillVersions, workflows } from '@/db/schema'
+import { agents, fusions, memories, skills, skillVersions, workflows } from '@/db/schema'
 import { createAgent } from '@/services/agent'
 import { canManageMemory, fuseMemoriesTx, getMemoryById } from '@/services/memory'
 import { canViewResource, isResourceAdminActor, isResourceOwner } from '@/services/resourceAcl'
-import { getSkill, getSkillById, getSkillPreconditionTokenById } from '@/services/skill'
+import { getSkillById, getSkillPreconditionTokenById } from '@/services/skill'
 import { decodeSkillToken, encodeSkillToken } from '@/services/skillToken'
 import { commitSkillVersion, type SkillVersionFsOptions } from '@/services/skillVersion'
 import { trySetTaskStatus } from '@/services/lifecycle'
@@ -49,7 +55,13 @@ import { gitDiffSnapshot, runGit } from '@/util/git'
 // source of truth shared with the list-hiding filter); re-exported here so
 // existing `@/services/fusion` importers are unaffected.
 export { SKILL_FUSION_WORKFLOW_NAME, SKILL_MERGER_AGENT_NAME } from '@/services/systemResources'
-import { SKILL_FUSION_WORKFLOW_NAME, SKILL_MERGER_AGENT_NAME } from '@/services/systemResources'
+import {
+  QUARANTINED_FUSION_SKILL_ID,
+  SKILL_FUSION_WORKFLOW_ID,
+  SKILL_FUSION_WORKFLOW_NAME,
+  SKILL_MERGER_AGENT_ID,
+  SKILL_MERGER_AGENT_NAME,
+} from '@/services/systemResources'
 /** Reserved scaffolding dir inside the fusion worktree; never written to the skill. */
 const SCAFFOLD = '__fusion__'
 const MANIFEST_REL = `${SCAFFOLD}/result.json`
@@ -127,6 +139,7 @@ function rowToFusion(row: FusionRow): Fusion {
   }
   return {
     id: row.id,
+    skillId: row.skillId,
     skillName: row.skillName,
     baseSkillVersion: row.baseSkillVersion,
     memoryIds: jsonArray(row.memoryIdsJson),
@@ -198,20 +211,143 @@ const MERGER_PROMPT_TEMPLATE = `Fuse the following approved memories into this s
 
 The skill's files are in your working directory. Clarify with the merger first (mandatory), then edit the files in place and write the result manifest.`
 
+const MERGER_DESCRIPTION =
+  'Built-in skill-fusion worker: merges approved memories into a managed skill (RFC-101).'
+const FUSION_WORKFLOW_DESCRIPTION = 'Built-in memory→skill fusion workflow (RFC-101).'
+
+function canonicalFusionWorkflowDefinition(): WorkflowDefinition {
+  return {
+    $schema_version: 4,
+    inputs: [
+      { kind: 'text', key: 'intent', label: 'Merge intent', required: false },
+      { kind: 'text', key: 'memories', label: 'Memories', required: true },
+    ],
+    nodes: [
+      { id: 'in_intent', kind: 'input', inputKey: 'intent' },
+      { id: 'in_memories', kind: 'input', inputKey: 'memories' },
+      {
+        id: 'merger',
+        kind: 'agent-single',
+        agentId: SKILL_MERGER_AGENT_ID,
+        agentName: SKILL_MERGER_AGENT_NAME,
+        promptTemplate: MERGER_PROMPT_TEMPLATE,
+      },
+      { id: 'clarify', kind: 'clarify', title: 'Confirm fusion' },
+    ],
+    edges: [
+      {
+        id: 'e_intent',
+        source: { nodeId: 'in_intent', portName: 'intent' },
+        target: { nodeId: 'merger', portName: 'intent' },
+      },
+      {
+        id: 'e_memories',
+        source: { nodeId: 'in_memories', portName: 'memories' },
+        target: { nodeId: 'merger', portName: 'memories' },
+      },
+      {
+        id: 'e_ask',
+        source: { nodeId: 'merger', portName: '__clarify__' },
+        target: { nodeId: 'clarify', portName: 'questions' },
+      },
+      {
+        id: 'e_ans',
+        source: { nodeId: 'clarify', portName: 'answers' },
+        target: { nodeId: 'merger', portName: '__clarify_response__' },
+      },
+    ],
+    outputs: [],
+  }
+}
+
+function repairFusionWorkflowAgentId(definition: string): {
+  definition: string
+  changed: boolean
+} {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(definition)
+  } catch {
+    throw new ConflictError(
+      'builtin-workflow-definition-invalid',
+      'the built-in fusion workflow definition is not valid JSON',
+    )
+  }
+  if (typeof parsed !== 'object' || parsed === null) {
+    throw new ConflictError(
+      'builtin-workflow-definition-invalid',
+      'the built-in fusion workflow definition is not an object',
+    )
+  }
+  const record = parsed as Record<string, unknown>
+  if (!Array.isArray(record['nodes'])) {
+    throw new ConflictError(
+      'builtin-workflow-definition-invalid',
+      'the built-in fusion workflow has no nodes array',
+    )
+  }
+  let mergerFound = false
+  let changed = false
+  for (const candidate of record['nodes']) {
+    if (typeof candidate !== 'object' || candidate === null) continue
+    const node = candidate as Record<string, unknown>
+    if (
+      node['kind'] !== 'agent-single' ||
+      (node['id'] !== 'merger' && node['agentName'] !== SKILL_MERGER_AGENT_NAME)
+    ) {
+      continue
+    }
+    mergerFound = true
+    if (node['agentId'] !== SKILL_MERGER_AGENT_ID) {
+      node['agentId'] = SKILL_MERGER_AGENT_ID
+      changed = true
+    }
+  }
+  if (!mergerFound) {
+    throw new ConflictError(
+      'builtin-workflow-definition-invalid',
+      'the built-in fusion workflow has no merger agent node',
+    )
+  }
+  return { definition: changed ? JSON.stringify(parsed) : definition, changed }
+}
+
 export async function seedFusionResources(db: DbClient): Promise<void> {
-  // Agent — agents.name is UNIQUE, so at most one row; repair-or-create.
-  const mergerRow = db
-    .select()
-    .from(agents)
-    .where(eq(agents.name, SKILL_MERGER_AGENT_NAME))
-    .all()[0]
-  if (!mergerRow) {
+  // Stable id + builtin flag are the authority. A same-name user row is never
+  // adopted, and an occupied stable id with the wrong identity fails closed.
+  const mergerById = db.select().from(agents).where(eq(agents.id, SKILL_MERGER_AGENT_ID)).all()[0]
+  if (mergerById !== undefined) {
+    if (mergerById.name !== SKILL_MERGER_AGENT_NAME) {
+      throw new ConflictError(
+        'builtin-agent-id-collision',
+        `stable built-in agent id '${SKILL_MERGER_AGENT_ID}' is occupied`,
+      )
+    }
+    db.update(agents)
+      .set({
+        ownerUserId: SYSTEM_USER_ID,
+        visibility: 'public',
+        builtin: true,
+      })
+      .where(eq(agents.id, SKILL_MERGER_AGENT_ID))
+      .run()
+  } else {
+    const legacyBuiltin = db
+      .select({ id: agents.id })
+      .from(agents)
+      .where(and(eq(agents.builtin, true), eq(agents.name, SKILL_MERGER_AGENT_NAME)))
+      .all()[0]
+    if (legacyBuiltin !== undefined) {
+      throw new ConflictError(
+        'builtin-agent-id-drift',
+        `built-in agent '${SKILL_MERGER_AGENT_NAME}' has non-canonical id '${legacyBuiltin.id}'`,
+      )
+    }
     await createAgent(
       db,
       {
         name: SKILL_MERGER_AGENT_NAME,
-        description:
-          'Built-in skill-fusion worker: merges approved memories into a managed skill (RFC-101).',
+        description: MERGER_DESCRIPTION,
         outputs: ['summary'],
         inputs: [], // RFC-166
         syncOutputsOnIterate: true,
@@ -223,127 +359,77 @@ export async function seedFusionResources(db: DbClient): Promise<void> {
         frontmatterExtra: {},
         bodyMd: MERGER_BODY,
       },
-      { ownerUserId: SYSTEM_USER_ID, builtin: true },
+      { id: SKILL_MERGER_AGENT_ID, ownerUserId: SYSTEM_USER_ID, builtin: true },
     )
-  } else if (mergerRow.builtin === true || mergerRow.ownerUserId === SYSTEM_USER_ID) {
-    // The row IS the framework's (built-in flag set, or __system__-owned). Repair
-    // any owner/visibility/builtin drift via raw drizzle (the framework-internal
-    // path that bypasses the RFC-104 read-only lock). A reserved-name row that is
-    // NEITHER built-in NOR __system__-owned is left UNTOUCHED — never hijack a
-    // user agent that squats the name (Codex impl-gate P2). In practice
-    // agents.name is unique and the framework seeds at first boot, so this row is
-    // the framework's; the user-squatter case is contrived but must not be
-    // clobbered. (Full owner-drift off __system__ is likewise left for ops.)
-    if (
-      mergerRow.builtin !== true ||
-      mergerRow.ownerUserId !== SYSTEM_USER_ID ||
-      mergerRow.visibility !== 'public'
-    ) {
-      db.update(agents)
-        .set({ builtin: true, ownerUserId: SYSTEM_USER_ID, visibility: 'public' })
-        .where(eq(agents.name, SKILL_MERGER_AGENT_NAME))
-        .run()
-    }
   }
-  // Workflow — name is NON-unique. The canonical built-in is the builtin=true
-  // row (≤1 by the partial unique index). Repair-or-adopt-or-create:
-  const builtinWf = db
+
+  const workflowDefinition = canonicalFusionWorkflowDefinition()
+  const workflowById = db
     .select()
     .from(workflows)
-    .where(and(eq(workflows.builtin, true), eq(workflows.name, SKILL_FUSION_WORKFLOW_NAME)))
+    .where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
     .all()[0]
-  const adoptWf = builtinWf
-    ? undefined
-    : db
-        .select()
-        .from(workflows)
-        .where(
-          and(
-            eq(workflows.name, SKILL_FUSION_WORKFLOW_NAME),
-            eq(workflows.ownerUserId, SYSTEM_USER_ID),
-          ),
-        )
-        .orderBy(asc(workflows.id))
-        .all()[0]
-  if (builtinWf) {
-    // Repair owner/visibility drift on the canonical row (raw drizzle, as above).
-    if (builtinWf.ownerUserId !== SYSTEM_USER_ID || builtinWf.visibility !== 'public') {
-      db.update(workflows)
-        .set({ ownerUserId: SYSTEM_USER_ID, visibility: 'public' })
-        .where(eq(workflows.id, builtinWf.id))
-        .run()
+  if (workflowById !== undefined) {
+    if (workflowById.name !== SKILL_FUSION_WORKFLOW_NAME) {
+      throw new ConflictError(
+        'builtin-workflow-id-collision',
+        `stable built-in workflow id '${SKILL_FUSION_WORKFLOW_ID}' is occupied`,
+      )
     }
-  } else if (adoptWf) {
-    // Adopt the oldest __system__-owned same-name row (matches the migration's
-    // deterministic pick) — heals owner-drift the backfill couldn't mark.
+    const repaired = repairFusionWorkflowAgentId(workflowById.definition)
     db.update(workflows)
-      .set({ builtin: true, visibility: 'public' })
-      .where(eq(workflows.id, adoptWf.id))
+      .set({
+        definition: repaired.definition,
+        ...(repaired.changed ? { version: workflowById.version + 1 } : {}),
+        ownerUserId: SYSTEM_USER_ID,
+        visibility: 'public',
+        builtin: true,
+      })
+      .where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
       .run()
   } else {
+    const legacyBuiltin = db
+      .select({ id: workflows.id })
+      .from(workflows)
+      .where(and(eq(workflows.builtin, true), eq(workflows.name, SKILL_FUSION_WORKFLOW_NAME)))
+      .all()[0]
+    if (legacyBuiltin !== undefined) {
+      throw new ConflictError(
+        'builtin-workflow-id-drift',
+        `built-in workflow '${SKILL_FUSION_WORKFLOW_NAME}' has non-canonical id '${legacyBuiltin.id}'`,
+      )
+    }
     await createWorkflow(
       db,
       {
         name: SKILL_FUSION_WORKFLOW_NAME,
-        description: 'Built-in memory→skill fusion workflow (RFC-101).',
-        definition: {
-          $schema_version: 4,
-          inputs: [
-            { kind: 'text', key: 'intent', label: 'Merge intent', required: false },
-            { kind: 'text', key: 'memories', label: 'Memories', required: true },
-          ],
-          nodes: [
-            { id: 'in_intent', kind: 'input', inputKey: 'intent' },
-            { id: 'in_memories', kind: 'input', inputKey: 'memories' },
-            {
-              id: 'merger',
-              kind: 'agent-single',
-              agentName: SKILL_MERGER_AGENT_NAME,
-              promptTemplate: MERGER_PROMPT_TEMPLATE,
-            },
-            { id: 'clarify', kind: 'clarify', title: 'Confirm fusion' },
-          ],
-          edges: [
-            {
-              id: 'e_intent',
-              source: { nodeId: 'in_intent', portName: 'intent' },
-              target: { nodeId: 'merger', portName: 'intent' },
-            },
-            {
-              id: 'e_memories',
-              source: { nodeId: 'in_memories', portName: 'memories' },
-              target: { nodeId: 'merger', portName: 'memories' },
-            },
-            {
-              id: 'e_ask',
-              source: { nodeId: 'merger', portName: '__clarify__' },
-              target: { nodeId: 'clarify', portName: 'questions' },
-            },
-            {
-              id: 'e_ans',
-              source: { nodeId: 'clarify', portName: 'answers' },
-              target: { nodeId: 'merger', portName: '__clarify_response__' },
-            },
-          ],
-          outputs: [],
-        },
+        description: FUSION_WORKFLOW_DESCRIPTION,
+        definition: workflowDefinition,
       },
-      { ownerUserId: SYSTEM_USER_ID, builtin: true },
+      { id: SKILL_FUSION_WORKFLOW_ID, ownerUserId: SYSTEM_USER_ID, builtin: true },
     )
   }
 }
 
 async function fusionWorkflowId(db: DbClient): Promise<string> {
-  // RFC-104: resolve by the immutable `builtin` flag, not by name — a user may
-  // own a same-named workflow (builtin=false); the framework drives only its
-  // own canonical row. seedFusionResources runs before every call, so exactly
-  // one builtin=true row exists here.
   const row = db
-    .select({ id: workflows.id })
+    .select({
+      id: workflows.id,
+      name: workflows.name,
+      ownerUserId: workflows.ownerUserId,
+      builtin: workflows.builtin,
+    })
     .from(workflows)
-    .where(and(eq(workflows.builtin, true), eq(workflows.name, SKILL_FUSION_WORKFLOW_NAME)))
+    .where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
     .all()[0]
-  if (!row) throw new Error('aw-skill-fusion built-in workflow missing after seed')
+  if (
+    row === undefined ||
+    row.name !== SKILL_FUSION_WORKFLOW_NAME ||
+    row.ownerUserId !== SYSTEM_USER_ID ||
+    row.builtin !== true
+  ) {
+    throw new Error('aw-skill-fusion canonical built-in workflow missing after seed')
+  }
   return row.id
 }
 
@@ -426,11 +512,11 @@ export async function createFusion(
 
   // 1. Target skill must exist, be visible (RFC-099 D1 existence isolation:
   //    invisible ⇒ identical 404 as missing, before any source-kind/owner
-  //    error, so a guessed skillName can't probe a private skill's existence),
+  //    error, so a guessed skillId can't probe a private skill's existence),
   //    be managed, and be writable by the actor.
-  const skill = await getSkill(db, input.skillName)
+  const skill = await getSkillById(db, input.skillId)
   if (skill === null || !(await canViewResource(db, actor, 'skill', skill))) {
-    throw new NotFoundError('skill-not-found', `skill '${input.skillName}' not found`)
+    throw new NotFoundError('skill-not-found', `skill '${input.skillId}' not found`)
   }
   if (skill.sourceKind !== 'managed') {
     throw new ConflictError('fusion-skill-not-managed', 'can only fuse into a managed skill')
@@ -451,7 +537,7 @@ export async function createFusion(
   // fusion (and any worktree/task) that could never be decided (legacy-null is
   // fail-closed at decision time anyway; reject it up front, before side effects).
   if (preconditionToken === null) {
-    throw new NotFoundError('skill-not-found', `skill '${input.skillName}' not found`)
+    throw new NotFoundError('skill-not-found', `skill '${input.skillId}' not found`)
   }
 
   // 2. Every selected memory must be approved AND manageable by the actor (D14).
@@ -491,7 +577,7 @@ export async function createFusion(
     mkdirSync(workDir, { recursive: true })
     // RFC-170 T6 (Codex F10/F11): seed from the token's immutable snapshot with a
     // generation (skillId) check; discard the worktree if it can't be seeded safely.
-    await seedFusionFromSnapshot(db, appHome, preconditionToken, workDir)
+    await seedFusionFromSnapshot(db, appHome, skill.id, preconditionToken, workDir)
     const baseCommit = await seedWorktree(workDir, deps.seedGit)
 
     // 4. Launch the engine task (preCreatedWorktree bypasses worktree creation;
@@ -529,7 +615,7 @@ export async function createFusion(
     const taskLaunch = startTask(
       {
         workflowId,
-        name: `fuse → ${input.skillName}`,
+        name: `fuse → ${skill.name}`,
         inputs: { intent: input.intent, memories: serializeMemoriesForPrompt(loaded) },
         ...(input.collaboratorUserIds ? { collaboratorUserIds: input.collaboratorUserIds } : {}),
       },
@@ -550,7 +636,8 @@ export async function createFusion(
     db.insert(fusions)
       .values({
         id: fusionId,
-        skillName: input.skillName,
+        skillId: skill.id,
+        skillName: skill.name,
         baseSkillVersion: skill.contentVersion,
         preconditionToken,
         memoryIdsJson: JSON.stringify(input.memoryIds),
@@ -696,6 +783,159 @@ export async function reconcileRunningFusions(deps: FusionDeps): Promise<void> {
 }
 
 /**
+ * RFC-223 PR-4 upgrade repair. The SQL migration can prove completed applies
+ * from skill_versions, but SQLite has no base64url decoder for the precondition
+ * token carried by an in-flight historical fusion. At boot, decode that
+ * launch-time token and reconcile it with any committed version oracle:
+ *
+ * - valid token + no version: token skillId is trustworthy;
+ * - one version identity + no valid token: the atomic apply record is
+ *   independently trustworthy (including when the token is malformed);
+ * - token/version disagreement, semantically-invalid token, or multi-row
+ *   history: quarantine; non-terminal work is terminalized failed so no worker
+ *   resumes.
+ *
+ * Names are never consulted. Memory provenance additionally requires the exact
+ * (fusion_id, fused_into_skill_version, source='fusion') version row.
+ */
+export function repairFusionProvenance(db: DbClient): {
+  repairedFusions: number
+  quarantinedFusions: number
+  terminalizedFusions: number
+  repairedMemories: number
+  quarantinedMemories: number
+} {
+  let repairedFusions = 0
+  let quarantinedFusions = 0
+  let terminalizedFusions = 0
+  let repairedMemories = 0
+  let quarantinedMemories = 0
+  const nonterminal = new Set<FusionStatus>(['running', 'awaiting_approval', 'applying'])
+
+  const fusionRows = db.select().from(fusions).all() as FusionRow[]
+  for (const row of fusionRows) {
+    const fusionVersions = (
+      db
+        .select({
+          skillId: skillVersions.skillId,
+          versionIndex: skillVersions.versionIndex,
+          source: skillVersions.source,
+        })
+        .from(skillVersions)
+        .where(eq(skillVersions.fusionId, row.id))
+        .all() as Array<{ skillId: string; versionIndex: number; source: string }>
+    ).filter((version) => version.source === 'fusion')
+    const token = row.preconditionToken === null ? null : decodeSkillToken(row.preconditionToken)
+    const tokenValid =
+      token !== null &&
+      token.skillId !== QUARANTINED_FUSION_SKILL_ID &&
+      token.contentVersion === row.baseSkillVersion
+    const soleVersion = fusionVersions.length === 1 ? fusionVersions[0] : undefined
+    const ledgerValid =
+      soleVersion !== undefined &&
+      soleVersion.skillId !== QUARANTINED_FUSION_SKILL_ID &&
+      (row.appliedSkillVersion === null || row.appliedSkillVersion === soleVersion.versionIndex)
+    let resolved = QUARANTINED_FUSION_SKILL_ID
+    if (row.preconditionToken === null || token === null) {
+      if (ledgerValid) resolved = soleVersion!.skillId
+    } else if (tokenValid) {
+      if (fusionVersions.length === 0 && row.appliedSkillVersion === null) {
+        resolved = token.skillId
+      } else if (ledgerValid && soleVersion!.skillId === token.skillId) {
+        resolved = token.skillId
+      }
+    }
+
+    const shouldTerminalize =
+      resolved === QUARANTINED_FUSION_SKILL_ID && nonterminal.has(row.status as FusionStatus)
+    if (row.skillId !== resolved || shouldTerminalize) {
+      db.update(fusions)
+        .set({
+          skillId: resolved,
+          ...(shouldTerminalize
+            ? {
+                status: 'failed' as const,
+                error:
+                  'fusion provenance could not be proven during upgrade; re-initiate the fusion',
+                decidedAt: Date.now(),
+              }
+            : {}),
+        })
+        .where(eq(fusions.id, row.id))
+        .run()
+      if (resolved === QUARANTINED_FUSION_SKILL_ID) quarantinedFusions++
+      else repairedFusions++
+      if (shouldTerminalize) terminalizedFusions++
+    }
+  }
+
+  const resolvedFusions = new Map(
+    (
+      db.select({ id: fusions.id, skillId: fusions.skillId }).from(fusions).all() as Array<{
+        id: string
+        skillId: string
+      }>
+    ).map((row) => [row.id, row.skillId] as const),
+  )
+  const fusedRows = db
+    .select({
+      id: memories.id,
+      fusionId: memories.fusedFusionId,
+      skillId: memories.fusedIntoSkillId,
+      version: memories.fusedIntoSkillVersion,
+    })
+    .from(memories)
+    .where(eq(memories.status, 'fused'))
+    .all() as Array<{
+    id: string
+    fusionId: string | null
+    skillId: string | null
+    version: number | null
+  }>
+  for (const memory of fusedRows) {
+    const fusionSkillId =
+      memory.fusionId === null ? undefined : resolvedFusions.get(memory.fusionId)
+    const exactVersions =
+      memory.fusionId === null || memory.version === null
+        ? []
+        : (
+            db
+              .select({
+                skillId: skillVersions.skillId,
+                source: skillVersions.source,
+                version: skillVersions.versionIndex,
+              })
+              .from(skillVersions)
+              .where(eq(skillVersions.fusionId, memory.fusionId))
+              .all() as Array<{ skillId: string; source: string; version: number }>
+          ).filter((version) => version.source === 'fusion' && version.version === memory.version)
+    const exactId = exactVersions.length === 1 ? exactVersions[0]!.skillId : undefined
+    const resolved =
+      fusionSkillId !== undefined &&
+      fusionSkillId !== QUARANTINED_FUSION_SKILL_ID &&
+      exactId === fusionSkillId
+        ? fusionSkillId
+        : QUARANTINED_FUSION_SKILL_ID
+    if (memory.skillId !== resolved) {
+      db.update(memories)
+        .set({ fusedIntoSkillId: resolved })
+        .where(eq(memories.id, memory.id))
+        .run()
+      if (resolved === QUARANTINED_FUSION_SKILL_ID) quarantinedMemories++
+      else repairedMemories++
+    }
+  }
+
+  return {
+    repairedFusions,
+    quarantinedFusions,
+    terminalizedFusions,
+    repairedMemories,
+    quarantinedMemories,
+  }
+}
+
+/**
  * RFC-170 T6 (Codex re-review F9) — recover fusion DECISION half-states left by a
  * daemon crash mid-approve / mid-reject (a decision spans several txs). Run ONCE
  * at boot, before HTTP. DB-only + all writes are CAS (casFusionStatus), so a
@@ -720,22 +960,35 @@ export function recoverFusionDecisions(db: DbClient): {
   let rejectFailed = 0
 
   const applying = db
-    .select({ id: fusions.id })
+    .select({
+      id: fusions.id,
+      skillId: fusions.skillId,
+      appliedSkillVersion: fusions.appliedSkillVersion,
+    })
     .from(fusions)
     .where(eq(fusions.status, 'applying'))
-    .all() as Array<{ id: string }>
+    .all() as Array<{ id: string; skillId: string; appliedSkillVersion: number | null }>
   for (const f of applying) {
-    const v = db
-      .select({ versionIndex: skillVersions.versionIndex })
+    const versions = db
+      .select({
+        skillId: skillVersions.skillId,
+        versionIndex: skillVersions.versionIndex,
+        source: skillVersions.source,
+      })
       .from(skillVersions)
       .where(eq(skillVersions.fusionId, f.id))
       .orderBy(desc(skillVersions.versionIndex))
-      .limit(1)
-      .all() as Array<{ versionIndex: number }>
-    if (v.length > 0) {
+      .all() as Array<{ skillId: string; versionIndex: number; source: string }>
+    const fusionVersions = versions.filter((version) => version.source === 'fusion')
+    const trustworthy =
+      f.skillId !== QUARANTINED_FUSION_SKILL_ID &&
+      fusionVersions.length === 1 &&
+      fusionVersions[0]!.skillId === f.skillId &&
+      (f.appliedSkillVersion === null || f.appliedSkillVersion === fusionVersions[0]!.versionIndex)
+    if (trustworthy && fusionVersions[0] !== undefined) {
       if (
         casFusionStatus(db, f.id, ['applying'], 'done', {
-          extra: { appliedSkillVersion: v[0]!.versionIndex, decidedAt: now },
+          extra: { appliedSkillVersion: fusionVersions[0].versionIndex, decidedAt: now },
         })
       )
         rolledForward++
@@ -807,20 +1060,21 @@ export async function getFusion(deps: FusionDeps, id: string): Promise<Fusion | 
  * List fusions for the overview / inbox. METADATA ONLY — the (potentially
  * large) proposedDiff is never read from the DB (projected away) so an open
  * inbox polling every 15s doesn't materialize every historical diff. The full
- * diff is served by getFusion (GET /api/fusions/:id). The status + skillName
+ * diff is served by getFusion (GET /api/fusions/:id). The status + skillId
  * filters are pushed into SQL.
  */
 export async function listFusionSummaries(
   deps: FusionDeps,
-  filter: { skillName?: string; status?: FusionStatus } = {},
+  filter: { skillId?: string; status?: FusionStatus } = {},
 ): Promise<Fusion[]> {
   await reconcileRunningFusions(deps)
   const conds = []
-  if (filter.skillName !== undefined) conds.push(eq(fusions.skillName, filter.skillName))
+  if (filter.skillId !== undefined) conds.push(eq(fusions.skillId, filter.skillId))
   if (filter.status !== undefined) conds.push(eq(fusions.status, filter.status))
   const base = deps.db
     .select({
       id: fusions.id,
+      skillId: fusions.skillId,
       skillName: fusions.skillName,
       baseSkillVersion: fusions.baseSkillVersion,
       memoryIdsJson: fusions.memoryIdsJson,
@@ -879,8 +1133,15 @@ export async function listFusionSummaries(
 async function requireCurrentSkillWritable(
   db: DbClient,
   actor: Actor,
+  skillId: string,
   token: string | null,
 ): Promise<void> {
+  if (skillId === QUARANTINED_FUSION_SKILL_ID) {
+    throw new ConflictError(
+      'fusion-provenance-quarantined',
+      'the target skill identity could not be proven during upgrade; re-initiate the fusion',
+    )
+  }
   if (token === null) {
     throw new ConflictError(
       'fusion-precondition-legacy',
@@ -888,7 +1149,7 @@ async function requireCurrentSkillWritable(
     )
   }
   const target = decodeSkillToken(token)
-  if (target === null) {
+  if (target === null || target.skillId !== skillId) {
     throw new ConflictError(
       'fusion-precondition-stale',
       'the target skill identity is invalid; re-initiate the fusion',
@@ -921,6 +1182,8 @@ function claimFusionDecision(
     const cur = tx
       .select({
         status: fusions.status,
+        skillId: fusions.skillId,
+        baseSkillVersion: fusions.baseSkillVersion,
         preconditionToken: fusions.preconditionToken,
       })
       .from(fusions)
@@ -934,7 +1197,12 @@ function claimFusionDecision(
       )
     }
     const target = decodeSkillToken(cur.preconditionToken)
-    if (target === null) {
+    if (
+      target === null ||
+      cur.skillId === QUARANTINED_FUSION_SKILL_ID ||
+      target.skillId !== cur.skillId ||
+      target.contentVersion !== cur.baseSkillVersion
+    ) {
       throw new ConflictError(
         'fusion-precondition-stale',
         'the target skill identity is invalid; re-initiate the fusion',
@@ -1030,9 +1298,9 @@ function fusionTokenExpectations(token: string | null): {
   }
 }
 
-function requireFusionSkillId(token: string | null): string {
+function requireFusionSkillId(skillId: string, token: string | null): string {
   const decoded = token === null ? null : decodeSkillToken(token)
-  if (decoded === null) {
+  if (decoded === null || skillId === QUARANTINED_FUSION_SKILL_ID || decoded.skillId !== skillId) {
     throw new ConflictError(
       'fusion-precondition-stale',
       'the target skill identity is invalid; re-initiate the fusion',
@@ -1055,11 +1323,12 @@ function requireFusionSkillId(token: string | null): string {
 async function seedFusionFromSnapshot(
   db: DbClient,
   appHome: string,
+  skillId: string,
   token: string | null,
   workDir: string,
 ): Promise<void> {
   const t = token === null ? null : decodeSkillToken(token)
-  if (t === null) {
+  if (t === null || skillId === QUARANTINED_FUSION_SKILL_ID || t.skillId !== skillId) {
     throw new ConflictError('fusion-precondition-stale', 'invalid precondition token; re-initiate')
   }
   const matches = (s: Awaited<ReturnType<typeof getSkillById>>): boolean =>
@@ -1105,7 +1374,7 @@ export async function approveFusion(deps: FusionDeps, id: string, actor: Actor):
   // RFC-170 T6 (Codex F4): re-check write access to the CURRENT skill. A managed
   // ACL transfer does not change the token, so without this the fusion owner could
   // approve a write into a skill they no longer own after transferring it away.
-  await requireCurrentSkillWritable(db, actor, row.preconditionToken)
+  await requireCurrentSkillWritable(db, actor, row.skillId, row.preconditionToken)
   // RFC-170 T6 (Codex F4): atomically CLAIM awaiting_approval → applying with the
   // skill-token check in the SAME tx. Only the winner proceeds; a lost race or a
   // drifted skill aborts here with zero side effects (replaces the old
@@ -1122,7 +1391,7 @@ export async function approveFusion(deps: FusionDeps, id: string, actor: Actor):
     const version = commitSkillVersion(
       db,
       fsOpts,
-      requireFusionSkillId(row.preconditionToken),
+      requireFusionSkillId(row.skillId, row.preconditionToken),
       (staging) => {
         for (const e of readdirSync(staging))
           rmSync(join(staging, e), { recursive: true, force: true })
@@ -1140,6 +1409,7 @@ export async function approveFusion(deps: FusionDeps, id: string, actor: Actor):
         txExtra: (tx, newVersion) => {
           fuseMemoriesTx(tx, {
             memoryIds: incorporated,
+            skillId: row.skillId,
             skillName: row.skillName,
             skillVersion: newVersion,
             fusionId: row.id,
@@ -1201,7 +1471,7 @@ export async function rejectFusion(
   }
   // RFC-170 T6 (Codex F5): re-check write access to the CURRENT skill before a
   // re-run (a managed ACL transfer doesn't drift the token).
-  await requireCurrentSkillWritable(db, actor, row.preconditionToken)
+  await requireCurrentSkillWritable(db, actor, row.skillId, row.preconditionToken)
   // RFC-170 T6 (Codex F5): atomically CLAIM awaiting_approval → running (with the
   // skill-token check in the SAME tx) BEFORE any side effect. `currentTaskId` is
   // nulled so a concurrent reconcile skips this fusion until the new task is set.
@@ -1242,7 +1512,7 @@ export async function rejectFusion(
       // RFC-170 T6 (Codex F10/F11): re-run baseline = the token's immutable snapshot,
       // with a generation (skillId) check (the claim above verified the token, but
       // re-verify around the copy for a same-name recreate). A throw is caught below.
-      await seedFusionFromSnapshot(db, appHome, row.preconditionToken, workDir)
+      await seedFusionFromSnapshot(db, appHome, row.skillId, row.preconditionToken, workDir)
       const baseCommit = await seedWorktree(workDir, deps.seedGit)
       // Then overlay the PRIOR proposal as uncommitted working changes, so the
       // agent refines its last attempt while the diff vs baseline stays full.

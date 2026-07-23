@@ -1,7 +1,7 @@
 // RFC-101 — memory→skill fusion HTTP routes.
 //
 //   POST   /api/fusions                 launch a fusion (skill + memories + intent)
-//   GET    /api/fusions?skillName=       list (own + admin-all)
+//   GET    /api/fusions?skillId=         list (own + admin-all)
 //   GET    /api/fusions/:id              detail (owner / admin)
 //   POST   /api/fusions/:id/approve      apply the proposed change
 //   POST   /api/fusions/:id/reject       request changes + re-run
@@ -62,17 +62,17 @@ export function mountFusionRoutes(app: Hono, deps: AppDeps): void {
 
   app.get('/api/fusions', async (c) => {
     const actor = actorOf(c)
-    const skillName = c.req.query('skillName')
+    const skillId = c.req.query('skillId')
     // Validate ?status against the enum (no `as` cast — RFC-054 W1-7); an
     // unknown value is treated as "no status filter".
     const statusRaw = c.req.query('status')
     const statusParsed =
       statusRaw !== undefined ? FusionStatusSchema.safeParse(statusRaw) : undefined
     const status = statusParsed?.success === true ? statusParsed.data : undefined
-    // listFusionSummaries pushes status/skillName into SQL and never reads the
+    // listFusionSummaries pushes status/skillId into SQL and never reads the
     // proposedDiff, so the inbox's 15s poll stays cheap. Full diff: /:id.
     const all = await listFusionSummaries(fusionDeps(), {
-      ...(skillName ? { skillName } : {}),
+      ...(skillId ? { skillId } : {}),
       ...(status ? { status } : {}),
     })
     const visible = isResourceAdminActor(actor)

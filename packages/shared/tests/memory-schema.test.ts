@@ -35,6 +35,7 @@ const VALID_MEMORY = {
   approvedAt: 1_700_000_000_000,
   createdAt: 1_699_000_000_000,
   version: 1,
+  fusedIntoSkillId: null,
 }
 
 describe('MemoryScopeSchema', () => {

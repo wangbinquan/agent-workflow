@@ -23,6 +23,7 @@ function mk(overrides: Partial<MemorySummary>): MemorySummary {
     approvedAt: null,
     version: 1,
     distillAction: 'new',
+    fusedIntoSkillId: null,
     outputLang: null,
     ...overrides,
   }

@@ -80,7 +80,7 @@ export function snapshotNodeAgentWhere(node: unknown): SQL | null {
 export async function createAgent(
   db: DbClient,
   input: CreateAgent,
-  opts?: { ownerUserId?: string; builtin?: boolean; actor?: Actor | null },
+  opts?: { ownerUserId?: string; builtin?: boolean; actor?: Actor | null; id?: string },
 ): Promise<Agent> {
   const existing = await getAgent(db, input.name)
   if (existing !== null) {
@@ -90,7 +90,7 @@ export async function createAgent(
   // RFC-223 (PR-1): the agent's own id, minted up front so the dependsOn cycle
   // guard can self-check by id (a name authored in agent.md can't reference an
   // id that does not exist yet, but update() re-uses the same by-id guard).
-  const id = ulid()
+  const id = opts?.id ?? ulid()
 
   // RFC-223 (PR-1, Codex impl-gate P1-2): resolve id-or-name references to
   // canonical ids AND enforce per-ref ACL in ONE pass, so the id the ACL gate

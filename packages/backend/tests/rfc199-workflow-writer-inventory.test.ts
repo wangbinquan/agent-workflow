@@ -1,10 +1,11 @@
 // RFC-199 production-writer ratchet.
 //
-// Editable workflow bytes (name/description/definition/version) have one write
-// authority: services/workflow.ts. The only raw UPDATE exceptions are the two
-// fusion identity/ACL repairs, which must remain metadata-only. Fixed-id host
-// seeds may INSERT, but they share the canonical definition serializer. Tests
-// and migrations are intentionally outside this production-source inventory.
+// Editable workflow bytes (name/description/definition/version) normally have
+// one write authority: services/workflow.ts. The fixed-id fusion seeder is the
+// sole exception: it minimally repairs the merger node's legacy agentId and
+// bumps the workflow version only when that byte changes. Fixed-id host seeds
+// may INSERT, but they share the canonical definition serializer. Tests and
+// migrations are intentionally outside this production-source inventory.
 
 import { describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync } from 'node:fs'
@@ -18,8 +19,8 @@ const EXPECTED_WRITERS = {
     'services/workflow.ts': 1,
     'services/workgroup/launch.ts': 1,
   },
-  updateEditable: { 'services/workflow.ts': 1 },
-  updateMetadata: { 'services/fusion.ts': 2 },
+  updateEditable: { 'services/fusion.ts': 1, 'services/workflow.ts': 1 },
+  updateMetadata: {},
   delete: { 'services/workflow.ts': 1 },
 } as const
 
@@ -131,14 +132,9 @@ describe('RFC-199 workflow writer inventory', () => {
     expect(inventory.delete).toEqual(EXPECTED_WRITERS.delete)
   })
 
-  test('the only raw updates are the two fusion metadata repairs', () => {
+  test('there are no standalone raw metadata-only workflow updates', () => {
     expect(inventory.updateMetadata).toEqual(EXPECTED_WRITERS.updateMetadata)
-    for (const { file, setArg } of inventory.metadataSetArgs) {
-      expect(file).toBe('services/fusion.ts')
-      expect(setArg).not.toBeNull()
-      expect(setArg).not.toMatch(/\b(?:name|description|definition|version|updatedAt)\s*:/)
-      expect(setArg).toMatch(/\b(?:ownerUserId|visibility|builtin)\s*:/)
-    }
+    expect(inventory.metadataSetArgs).toEqual([])
   })
 
   test('every production insert stores a canonically serialized definition', () => {

@@ -46,6 +46,22 @@ const log = createLogger('restore')
 
 export type RestoreDirection = 'same' | 'forward' | 'downgrade'
 
+/** `--no-migrate` may deliberately expose a pre-0117 schema to an older binary. */
+function hasFusionProvenanceSchema(db: DbClient): boolean {
+  const raw = (db as unknown as { $client: Database }).$client
+  const fusionColumns = new Set(
+    (
+      raw.query("SELECT name FROM pragma_table_info('fusions')").all() as Array<{ name: string }>
+    ).map((column) => column.name),
+  )
+  const memoryColumns = new Set(
+    (
+      raw.query("SELECT name FROM pragma_table_info('memories')").all() as Array<{ name: string }>
+    ).map((column) => column.name),
+  )
+  return fusionColumns.has('skill_id') && memoryColumns.has('fused_into_skill_id')
+}
+
 export class RestoreDowngradeError extends Error {
   constructor(backupCreatedAt: number, currentMaxWhen: number) {
     super(
@@ -471,6 +487,14 @@ export async function restoreBackup(
           const { runSkillIdentityMigrationBarrier } =
             await import('@/services/skillIdentityMigration')
           runSkillIdentityMigrationBarrier(db, { appHome })
+        }
+        // RFC-223 PR-4: SQL can recover committed fusion versions, while
+        // in-flight legacy rows require decoding their launch-time token in
+        // application code. Run the same fail-closed repair as normal boot
+        // before this forward-restored DB can be exposed.
+        if (hasFusionProvenanceSchema(db)) {
+          const { repairFusionProvenance } = await import('@/services/fusion')
+          repairFusionProvenance(db)
         }
         // RFC-213 G4a mismatch-protect: the restored rows are backup-era, but the
         // on-disk worktrees are current. Suspend auto-recovery for every non-terminal

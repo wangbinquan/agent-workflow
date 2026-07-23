@@ -18,6 +18,7 @@ function mk(overrides: Partial<MemorySummary>): MemorySummary {
     approvedAt: null,
     version: 1,
     distillAction: null,
+    fusedIntoSkillId: null,
     outputLang: null,
     ...overrides,
   }
@@ -28,7 +29,12 @@ describe('RFC-101 MemoryRow — fused chip', () => {
     await i18n.changeLanguage('en-US')
     render(
       <MemoryRow
-        memory={mk({ status: 'fused', fusedIntoSkill: 'lint', fusedIntoSkillVersion: 7 })}
+        memory={mk({
+          status: 'fused',
+          fusedIntoSkill: 'lint',
+          fusedIntoSkillId: 'skill_lint',
+          fusedIntoSkillVersion: 7,
+        })}
       />,
     )
     const chip = screen.getByTestId('memory-row-m-1-fused')

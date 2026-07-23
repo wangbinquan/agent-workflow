@@ -29,11 +29,15 @@
 // the column to that table AND guard that type's write paths (e.g. for skills:
 // ZIP/source-conflict import, reconcile, commitSkillVersion fusion approval).
 
-import type { AclResourceType } from '@agent-workflow/shared'
+import { QUARANTINED_FUSION_SKILL_ID, type AclResourceType } from '@agent-workflow/shared'
 import { ForbiddenError } from '@/util/errors'
 
 export const SKILL_MERGER_AGENT_NAME = 'aw-skill-merger'
 export const SKILL_FUSION_WORKFLOW_NAME = 'aw-skill-fusion'
+/** RFC-223 PR-4: deterministic framework identities, outside generated ULID time space. */
+export const SKILL_MERGER_AGENT_ID = '00000000000000000000000001'
+export const SKILL_FUSION_WORKFLOW_ID = '00000000000000000000000002'
+export { QUARANTINED_FUSION_SKILL_ID }
 
 /** Reserved framework names — used by seedFusionResources to locate/seed its
  *  own rows. NOT a runtime built-in discriminator (that is the `builtin`
