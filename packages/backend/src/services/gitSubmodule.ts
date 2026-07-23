@@ -498,7 +498,11 @@ export async function submoduleNameForPath(
     if (sp < 0) continue
     if (line.slice(sp + 1).trim() !== relPath) continue
     const key = line.slice(0, sp)
-    const m = /^submodule\.(.*)\.path$/.exec(key)
+    // `[\s\S]` not `.` (Codex review round 12, P2): must match the SAME name
+    // set `readDeclaredSubmodulePaths` accepts — a U+2028/U+2029 name it marks
+    // declared would otherwise return null here, and `attachSubmoduleFromPool`
+    // would throw `no .gitmodules entry` on a submodule the classifier owns.
+    const m = /^submodule\.([\s\S]*)\.path$/.exec(key)
     if (m?.[1] !== undefined && m[1] !== '') return m[1]
   }
   return null

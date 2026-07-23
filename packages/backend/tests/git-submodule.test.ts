@@ -10,6 +10,7 @@ import {
   syncSubmodules,
   detectSubmodules,
   readDeclaredSubmodulePaths,
+  submoduleNameForPath,
 } from '../src/services/gitSubmodule'
 
 let tmp: string
@@ -244,5 +245,14 @@ describe('readDeclaredSubmodulePaths', () => {
     const r = await readDeclaredSubmodulePaths(dirWith('[submodule "x"\n\tpath = x\n'))
     expect(r.ok).toBe(false)
     expect(r.paths.size).toBe(0)
+  })
+
+  test('submoduleNameForPath agrees with the classifier on a U+2029 name (round 12, P2)', async () => {
+    // The classifier (readDeclaredSubmodulePaths) and the attach lookup
+    // (submoduleNameForPath) MUST accept the same name set — else a submodule
+    // the classifier owns throws `no .gitmodules entry` at attach time.
+    const dir = dirWith(`[submodule "a\u2029b"]\n\tpath = uni\n`)
+    expect((await readDeclaredSubmodulePaths(dir)).paths.has('uni')).toBe(true)
+    expect(await submoduleNameForPath(dir, 'uni')).toBe(`a\u2029b`)
   })
 })
