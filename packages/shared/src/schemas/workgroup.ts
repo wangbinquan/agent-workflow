@@ -59,7 +59,7 @@ export function parseBatchShardKey(
   return { memberId, assignmentIds: ids }
 }
 
-/** Permitted characters in workgroup name (URL-safe; matches `/api/workgroups/:name`). */
+/** Permitted characters in a workgroup's display name. */
 export const WORKGROUP_NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 
 export const WorkgroupNameSchema = z
@@ -97,13 +97,12 @@ export const WorkgroupMemberDisplayNameSchema = z
 export const WorkgroupMemberSchema = z.object({
   id: z.string(),
   memberType: WorkgroupMemberTypeSchema,
-  /** memberType='agent': agents.name (soft reference, launch-validated). Kept
-   *  for display / back-compat; `agentId` is the canonical launch reference. */
+  /** memberType='agent': current display-name snapshot; never a lookup key. */
   agentName: z.string().nullable(),
   /**
    * RFC-223 (PR-2) — memberType='agent': the CANONICAL agent `id` (ULID),
-   * resolved from `agentName` at save time (server-side, name↔id 1:1). Launch
-   * readiness validates the roster by id so a rename never re-routes a member
+   * supplied by clients as the canonical selector. Launch readiness validates
+   * the roster by id so a rename never re-routes a member
    * and a delete+recreate-same-name cannot silently bind a replacement agent.
    * Nullable: a member authored for an agent that does not (yet) exist, or a
    * legacy row before migration 0112, carries null and is caught by the launch
@@ -122,19 +121,20 @@ export const WorkgroupMemberSchema = z.object({
 })
 export type WorkgroupMember = z.infer<typeof WorkgroupMemberSchema>
 
-/** Member input for create / full-replace update (ids are server-generated). */
+/** Member input for create (member-row ids are server-generated). */
 export const WorkgroupMemberInputSchema = z
   .object({
     memberType: WorkgroupMemberTypeSchema,
-    agentName: z.string().min(1).optional(),
+    agentId: z.string().min(1).optional(),
     userId: z.string().min(1).optional(),
     displayName: WorkgroupMemberDisplayNameSchema,
     roleDesc: z.string().max(2048).default(''),
   })
+  .strict()
   .superRefine((m, ctx) => {
     if (m.memberType === 'agent') {
-      if (!m.agentName) {
-        ctx.addIssue({ code: 'custom', message: 'agent member requires agentName' })
+      if (!m.agentId) {
+        ctx.addIssue({ code: 'custom', message: 'agent member requires agentId' })
       }
       if (m.userId) {
         ctx.addIssue({ code: 'custom', message: 'agent member must not carry userId' })
@@ -143,8 +143,8 @@ export const WorkgroupMemberInputSchema = z
       if (!m.userId) {
         ctx.addIssue({ code: 'custom', message: 'human member requires userId' })
       }
-      if (m.agentName) {
-        ctx.addIssue({ code: 'custom', message: 'human member must not carry agentName' })
+      if (m.agentId) {
+        ctx.addIssue({ code: 'custom', message: 'human member must not carry agentId' })
       }
     }
   })
@@ -153,16 +153,13 @@ export type WorkgroupMemberInput = z.infer<typeof WorkgroupMemberInputSchema>
 /**
  * RFC-225 — one member inside the versioned editable snapshot.
  *
- * `agentId` is the canonical identity introduced by RFC-223. `agentName`
- * remains only as a display/legacy selector so a pre-0112 dangling member can
- * still be removed or repaired instead of making the whole workgroup
- * unreadable. Whenever both are present, writers resolve and authorize by id.
+ * `agentId` is the only accepted identity. Names remain server-produced display
+ * snapshots on `WorkgroupMember`; editable payloads never resolve by name.
  */
 export const WorkgroupDraftMemberSchema = z
   .object({
     memberType: WorkgroupMemberTypeSchema,
     agentId: z.string().min(1).optional(),
-    agentName: z.string().min(1).optional(),
     userId: z.string().min(1).optional(),
     displayName: WorkgroupMemberDisplayNameSchema,
     roleDesc: z.string().max(2048).default(''),
@@ -170,10 +167,10 @@ export const WorkgroupDraftMemberSchema = z
   .strict()
   .superRefine((member, ctx) => {
     if (member.memberType === 'agent') {
-      if (!member.agentId && !member.agentName) {
+      if (!member.agentId) {
         ctx.addIssue({
           code: 'custom',
-          message: 'agent member requires agentId or a legacy agentName',
+          message: 'agent member requires agentId',
         })
       }
       if (member.userId) {
@@ -184,7 +181,7 @@ export const WorkgroupDraftMemberSchema = z
     if (!member.userId) {
       ctx.addIssue({ code: 'custom', message: 'human member requires userId' })
     }
-    if (member.agentId || member.agentName) {
+    if (member.agentId) {
       ctx.addIssue({ code: 'custom', message: 'human member must not carry agent identity' })
     }
   })
@@ -380,7 +377,7 @@ export const WorkgroupDetailSchema = WorkgroupSchema.extend({
 })
 export type WorkgroupDetail = z.infer<typeof WorkgroupDetailSchema>
 
-/** PUT /api/workgroups/:key — version-fenced full editable document. */
+/** PUT /api/workgroups/:id — version-fenced full editable document. */
 export const UpdateWorkgroupSchema = z
   .object({
     expectedVersion: z.number().int().positive(),
@@ -412,7 +409,7 @@ export const DeleteWorkgroupSchema = z
 export type DeleteWorkgroup = z.infer<typeof DeleteWorkgroupSchema>
 
 /**
- * POST /api/workgroups/:name/rename body. Name + description are the group's
+ * POST /api/workgroups/:id/rename body. Name + description are the group's
  * "metadata" fields; the detail-page rename dialog edits both and saves them
  * ATOMICALLY here (2026-07-13, 用户拍板「后端原子端点」). `description` is
  * optional — a pure rename omits it and the stored description is untouched;
@@ -569,7 +566,7 @@ export function wgClarifyAskerKey(
 export const WG_LEADER_IDLE_NUDGE_LIMIT = 3
 
 // ---------------------------------------------------------------------------
-// Launch body (POST /api/workgroups/:name/tasks, design §3)
+// Launch body (POST /api/workgroups/:id/tasks, design §3)
 // ---------------------------------------------------------------------------
 
 /**

@@ -18,6 +18,7 @@ import { z } from 'zod'
 import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import {
+  agents,
   taskCollaborators,
   tasks,
   users,
@@ -62,13 +63,32 @@ const ConfigPatchSchema = z.object({
   fanOut: z.boolean().optional(),
   addMembers: z
     .array(
-      z.object({
-        memberType: z.enum(['agent', 'human']),
-        agentName: z.string().min(1).optional(),
-        userId: z.string().min(1).optional(),
-        displayName: z.string().trim().min(1).max(64),
-        roleDesc: z.string().max(2048).default(''),
-      }),
+      z
+        .object({
+          memberType: z.enum(['agent', 'human']),
+          agentId: z.string().min(1).optional(),
+          userId: z.string().min(1).optional(),
+          displayName: z.string().trim().min(1).max(64),
+          roleDesc: z.string().max(2048).default(''),
+        })
+        .strict()
+        .superRefine((member, ctx) => {
+          if (member.memberType === 'agent') {
+            if (member.agentId === undefined) {
+              ctx.addIssue({ code: 'custom', message: 'agent member requires agentId' })
+            }
+            if (member.userId !== undefined) {
+              ctx.addIssue({ code: 'custom', message: 'agent member must not carry userId' })
+            }
+          } else {
+            if (member.userId === undefined) {
+              ctx.addIssue({ code: 'custom', message: 'human member requires userId' })
+            }
+            if (member.agentId !== undefined) {
+              ctx.addIssue({ code: 'custom', message: 'human member must not carry agentId' })
+            }
+          }
+        }),
     )
     .max(16)
     .optional(),
@@ -94,35 +114,45 @@ export function buildConfigActions(
       })
     }
     const patch = parsed.data
-    const addedAgentNames = [
+    const addedAgentIds = [
       ...new Set(
         (patch.addMembers ?? []).flatMap((member) =>
-          member.memberType === 'agent' && member.agentName ? [member.agentName] : [],
+          member.memberType === 'agent' && member.agentId ? [member.agentId] : [],
         ),
       ),
     ]
-    // RFC-223 (PR-3a): name → resolved agent id for the members added below, so
-    // the id frozen into the task config is exactly the id the ACL check bound.
-    const addedAgentIdByName = new Map<string, string>()
-    if (addedAgentNames.length > 0) {
+    // RFC-223 PR-7: member writes accept only canonical ids. Names are loaded
+    // after the ACL decision solely as display snapshots.
+    const addedAgentsById = new Map<string, { id: string; name: string }>()
+    if (addedAgentIds.length > 0) {
       // Mid-run membership is a new reference just like editing a workgroup
       // resource: reject private agents before the existence check so the
       // response cannot be used to distinguish a hidden row from a typo.
-      // RFC-223 (PR-3a, ACL-binding): resolve id + usability in ONE pass so a
-      // name renamed onto a private row between resolve and freeze cannot bind
-      // an id the actor was never authorized for (the resolveRefsUsableById
-      // TOCTOU close established by the PR-1 impl-gate fix).
-      const resolved = await resolveRefsUsableById(deps.db, actor, 'agent', addedAgentNames)
+      // Bind authorization to the exact submitted ids. A token that only
+      // matches an agent name fails the identity equality check below.
+      const resolved = await resolveRefsUsableById(deps.db, actor, 'agent', addedAgentIds)
       assertNoMissingRefs(resolved.missing)
-      const missing = addedAgentNames.filter((name) => !resolved.byToken.has(name))
+      const missing = addedAgentIds.filter((id) => resolved.byToken.get(id) !== id)
       if (missing.length > 0) {
         throw new ValidationError(
           'workgroup-config-agent-missing',
           `agent member(s) do not exist: ${missing.join(', ')}`,
-          { missingAgentNames: missing },
+          { missingAgentIds: missing },
         )
       }
-      for (const [name, id] of resolved.byToken) addedAgentIdByName.set(name, id)
+      const rows = await deps.db
+        .select({ id: agents.id, name: agents.name })
+        .from(agents)
+        .where(inArray(agents.id, addedAgentIds))
+      for (const row of rows) addedAgentsById.set(row.id, row)
+      const disappeared = addedAgentIds.filter((id) => !addedAgentsById.has(id))
+      if (disappeared.length > 0) {
+        throw new ValidationError(
+          'workgroup-config-agent-missing',
+          `agent member(s) do not exist: ${disappeared.join(', ')}`,
+          { missingAgentIds: disappeared },
+        )
+      }
     }
     const changes: string[] = []
     let members = [...config.members]
@@ -171,8 +201,8 @@ export function buildConfigActions(
             `displayName '${m.displayName}' already exists in the group`,
           )
         }
-        if (m.memberType === 'agent' && !m.agentName) {
-          throw new ValidationError('workgroup-config-invalid', 'agent member requires agentName')
+        if (m.memberType === 'agent' && !m.agentId) {
+          throw new ValidationError('workgroup-config-invalid', 'agent member requires agentId')
         }
         if (m.memberType === 'human') {
           if (!m.userId) {
@@ -191,15 +221,13 @@ export function buildConfigActions(
           }
         }
         const id = ulid()
+        const addedAgent =
+          m.memberType === 'agent' && m.agentId ? (addedAgentsById.get(m.agentId) ?? null) : null
         members.push({
           id,
           memberType: m.memberType,
-          agentName: m.memberType === 'agent' ? (m.agentName ?? null) : null,
-          // RFC-223 (PR-3a): freeze the resolved canonical id (rename/ABA-safe).
-          agentId:
-            m.memberType === 'agent' && m.agentName
-              ? (addedAgentIdByName.get(m.agentName) ?? null)
-              : null,
+          agentName: addedAgent?.name ?? null,
+          agentId: addedAgent?.id ?? null,
           userId: m.memberType === 'human' ? (m.userId ?? null) : null,
           displayName: m.displayName,
           roleDesc: m.roleDesc,

@@ -140,7 +140,8 @@ describe('RFC-199 T11.4 — POST /api/workflows/:id/validate-draft', () => {
       bodyMd: '',
     })
     expect(createAgent.status).toBe(201)
-    const privateAcl = await h.app.request('/api/agents/private-starter-agent/acl', {
+    const privateAgent = (await createAgent.json()) as { id: string; name: string }
+    const privateAcl = await h.app.request(`/api/agents/${privateAgent.id}/acl`, {
       method: 'PUT',
       headers: {
         authorization: `Bearer ${h.alice.token}`,
@@ -160,7 +161,8 @@ describe('RFC-199 T11.4 — POST /api/workflows/:id/validate-draft', () => {
         {
           id: 'private',
           kind: 'agent-single',
-          agentName: 'private-starter-agent',
+          agentId: privateAgent.id,
+          agentName: privateAgent.name,
         },
       ],
     }
@@ -177,6 +179,6 @@ describe('RFC-199 T11.4 — POST /api/workflows/:id/validate-draft', () => {
       details?: { missing?: Array<{ type: string; name: string }> }
     }
     expect(payload.code).toBe('acl-missing-refs')
-    expect(payload.details?.missing).toEqual([{ type: 'agent', name: 'private-starter-agent' }])
+    expect(payload.details?.missing).toEqual([{ type: 'agent', name: privateAgent.id }])
   })
 })

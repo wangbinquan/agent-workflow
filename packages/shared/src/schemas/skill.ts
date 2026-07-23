@@ -66,7 +66,7 @@ export const SkillContentSchema = z.object({
 })
 export type SkillContent = z.infer<typeof SkillContentSchema>
 
-/** PUT /api/skills/:name/content — overwrite SKILL.md frontmatter + body. */
+/** PUT /api/skills/:id/content — overwrite SKILL.md frontmatter + body. */
 export const UpdateSkillContentSchema = z.object({
   description: z.string().optional(),
   bodyMd: z.string().optional(),
@@ -75,7 +75,7 @@ export const UpdateSkillContentSchema = z.object({
 export type UpdateSkillContent = z.infer<typeof UpdateSkillContentSchema>
 
 /**
- * RFC-170 §2/T4 — POST /api/skills/:name/save. Combined description+body save
+ * RFC-170 §2/T4 — POST /api/skills/:id/save. Combined description+body save
  * gated by the composite precondition token from the detail read (T3). A stale
  * token → 409 (skill-version-conflict); malformed → 400 (skill-token-invalid).
  */
@@ -94,7 +94,7 @@ export const FileNodeSchema = z.object({
 })
 export type FileNode = z.infer<typeof FileNodeSchema>
 
-/** PUT /api/skills/:name/file?path=... body. Text-only in v1. */
+/** PUT /api/skills/:id/file?path=... body. Text-only in v1. */
 export const WriteSkillFileSchema = z.object({
   content: z.string(),
   // RFC-170 F3: the composite precondition token from the detail read. When

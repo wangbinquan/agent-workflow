@@ -27,12 +27,13 @@ import {
 } from '@agent-workflow/shared'
 import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { agents } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { createUser } from '../src/services/users'
 import {
   createWorkgroup,
   deleteWorkgroup,
-  diffNewAgentMemberNames,
+  diffNewAgentMemberIds,
   getWorkgroup,
   listWorkgroups,
   renameWorkgroup,
@@ -50,6 +51,8 @@ const T6_ACTOR = buildActor({
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DAEMON_TOKEN = 'a'.repeat(64)
+const agentId = (name: string): string => `agent-${name}`
+const AGENT_NAMES = ['planner-agent', 'coder-a', 'a', 'b', 'auditor', 'lead-agent'] as const
 
 function groupInput(overrides: Partial<CreateWorkgroup> = {}): CreateWorkgroup {
   return CreateWorkgroupSchema.parse({
@@ -62,8 +65,18 @@ function groupInput(overrides: Partial<CreateWorkgroup> = {}): CreateWorkgroup {
     maxRounds: 12,
     completionGate: true,
     members: [
-      { memberType: 'agent', agentName: 'planner-agent', displayName: 'planner', roleDesc: '协调' },
-      { memberType: 'agent', agentName: 'coder-a', displayName: 'coder', roleDesc: '后端实现' },
+      {
+        memberType: 'agent',
+        agentId: agentId('planner-agent'),
+        displayName: 'planner',
+        roleDesc: '协调',
+      },
+      {
+        memberType: 'agent',
+        agentId: agentId('coder-a'),
+        displayName: 'coder',
+        roleDesc: '后端实现',
+      },
     ],
     ...overrides,
   })
@@ -137,7 +150,7 @@ describe('RFC-164 — CreateWorkgroupSchema shape', () => {
   test('leader_worker WITHOUT leader is save-valid (readiness is launch-time)', () => {
     const r = CreateWorkgroupSchema.safeParse({
       name: 'g1',
-      members: [{ memberType: 'agent', agentName: 'a', displayName: 'a' }],
+      members: [{ memberType: 'agent', agentId: agentId('a'), displayName: 'a' }],
     })
     expect(r.success).toBe(true)
   })
@@ -148,7 +161,7 @@ describe('RFC-164 — CreateWorkgroupSchema shape', () => {
       leaderDisplayName: 'human-lead',
       members: [
         { memberType: 'human', userId: 'u1', displayName: 'human-lead' },
-        { memberType: 'agent', agentName: 'a', displayName: 'a' },
+        { memberType: 'agent', agentId: agentId('a'), displayName: 'a' },
       ],
     })
     expect(r.success).toBe(false)
@@ -159,8 +172,8 @@ describe('RFC-164 — CreateWorkgroupSchema shape', () => {
       name: 'g1',
       leaderDisplayName: 'dev',
       members: [
-        { memberType: 'agent', agentName: 'a', displayName: 'dev' },
-        { memberType: 'agent', agentName: 'b', displayName: 'dev' },
+        { memberType: 'agent', agentId: agentId('a'), displayName: 'dev' },
+        { memberType: 'agent', agentId: agentId('b'), displayName: 'dev' },
       ],
     })
     expect(r.success).toBe(false)
@@ -171,14 +184,14 @@ describe('RFC-164 — CreateWorkgroupSchema shape', () => {
       const r = CreateWorkgroupSchema.safeParse({
         name: 'g1',
         mode: 'free_collab',
-        members: [{ memberType: 'agent', agentName: 'a', displayName: bad }],
+        members: [{ memberType: 'agent', agentId: agentId('a'), displayName: bad }],
       })
       expect(r.success).toBe(false)
     }
   })
 
   test('member type/ref cross-field rules', () => {
-    // agent member without agentName
+    // agent member without agentId
     expect(
       CreateWorkgroupSchema.safeParse({
         name: 'g1',
@@ -194,12 +207,12 @@ describe('RFC-164 — CreateWorkgroupSchema shape', () => {
         members: [{ memberType: 'human', displayName: 'h' }],
       }).success,
     ).toBe(false)
-    // human member carrying agentName
+    // human member carrying agentId
     expect(
       CreateWorkgroupSchema.safeParse({
         name: 'g1',
         mode: 'free_collab',
-        members: [{ memberType: 'human', userId: 'u', agentName: 'x', displayName: 'h' }],
+        members: [{ memberType: 'human', userId: 'u', agentId: 'agent-x', displayName: 'h' }],
       }).success,
     ).toBe(false)
   })
@@ -241,7 +254,7 @@ describe('RFC-164 — CreateWorkgroupSchema shape', () => {
       name: 'g1',
       mode: 'free_collab',
       switches: { shareOutputs: false, directMessages: false, blackboard: false },
-      members: [{ memberType: 'agent', agentName: 'a', displayName: 'a' }],
+      members: [{ memberType: 'agent', agentId: agentId('a'), displayName: 'a' }],
     })
     expect(r.success).toBe(true)
     if (r.success) {
@@ -264,8 +277,14 @@ describe('RFC-164 — CreateWorkgroupSchema shape', () => {
 
 describe('RFC-164 — services/workgroups.ts CRUD', () => {
   let db: DbClient
-  beforeEach(() => {
+  beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
+    await db.insert(agents).values(
+      AGENT_NAMES.map((name) => ({
+        id: agentId(name),
+        name,
+      })),
+    )
   })
 
   test('create + get round-trip: leader resolved, members ordered, switches persisted', async () => {
@@ -312,8 +331,18 @@ describe('RFC-164 — services/workgroups.ts CRUD', () => {
       maxRounds: 30,
       completionGate: false,
       members: [
-        { memberType: 'agent', agentName: 'coder-a', displayName: 'coder', roleDesc: '实现' },
-        { memberType: 'agent', agentName: 'auditor', displayName: 'auditor', roleDesc: '审计' },
+        {
+          memberType: 'agent',
+          agentId: agentId('coder-a'),
+          displayName: 'coder',
+          roleDesc: '实现',
+        },
+        {
+          memberType: 'agent',
+          agentId: agentId('auditor'),
+          displayName: 'auditor',
+          roleDesc: '审计',
+        },
       ],
     }))
     expect(g2.mode).toBe('free_collab')
@@ -334,7 +363,7 @@ describe('RFC-164 — services/workgroups.ts CRUD', () => {
   test('human member must be an existing active user', async () => {
     const withGhostHuman = groupInput({
       members: [
-        { memberType: 'agent', agentName: 'a', displayName: 'planner', roleDesc: '' },
+        { memberType: 'agent', agentId: agentId('a'), displayName: 'planner', roleDesc: '' },
         { memberType: 'human', userId: 'no-such-user', displayName: 'pm', roleDesc: '' },
       ],
     })
@@ -349,7 +378,7 @@ describe('RFC-164 — services/workgroups.ts CRUD', () => {
     const ok = await createWorkgroup(db, {
       ...groupInput({ name: 'with-human' }),
       members: [
-        { memberType: 'agent', agentName: 'a', displayName: 'planner', roleDesc: '' },
+        { memberType: 'agent', agentId: agentId('a'), displayName: 'planner', roleDesc: '' },
         { memberType: 'human', userId: u.id, displayName: 'pm', roleDesc: '把关' },
       ],
     })
@@ -422,12 +451,13 @@ describe('RFC-164 — services/workgroups.ts CRUD', () => {
     expect(noop.description).toBe('blurb v2')
   })
 
-  test('diffNewAgentMemberNames — only new agent refs, humans ignored, dedup', () => {
+  test('diffNewAgentMemberIds — only new agent refs, humans ignored, dedup', () => {
     const prev = {
       members: [
         {
           id: '1',
           memberType: 'agent' as const,
+          agentId: 'agent-a',
           agentName: 'a',
           userId: null,
           displayName: 'a',
@@ -438,14 +468,14 @@ describe('RFC-164 — services/workgroups.ts CRUD', () => {
     }
     const next = {
       members: [
-        { memberType: 'agent', agentName: 'a' },
-        { memberType: 'agent', agentName: 'b' },
-        { memberType: 'agent', agentName: 'b' },
-        { memberType: 'human', agentName: undefined },
+        { memberType: 'agent', agentId: 'agent-a' },
+        { memberType: 'agent', agentId: 'agent-b' },
+        { memberType: 'agent', agentId: 'agent-b' },
+        { memberType: 'human', agentId: undefined },
       ],
     }
-    expect(diffNewAgentMemberNames(prev, next)).toEqual(['b'])
-    expect(diffNewAgentMemberNames(null, next)).toEqual(['a', 'b'])
+    expect(diffNewAgentMemberIds(prev, next)).toEqual(['agent-b'])
+    expect(diffNewAgentMemberIds(null, next)).toEqual(['agent-a', 'agent-b'])
   })
 })
 
@@ -473,8 +503,8 @@ describe('RFC-164 — workgroups route ACL (RFC-099 D1/D4/D15/D18)', () => {
     return app.request(path, { ...init, headers })
   }
 
-  async function detail(token: string, name: string): Promise<WorkgroupDetail> {
-    const response = await req(token, `/api/workgroups/${name}`)
+  async function detail(token: string, id: string): Promise<WorkgroupDetail> {
+    const response = await req(token, `/api/workgroups/${id}`)
     expect(response.status).toBe(200)
     return (await response.json()) as WorkgroupDetail
   }
@@ -507,6 +537,13 @@ describe('RFC-164 — workgroups route ACL (RFC-099 D1/D4/D15/D18)', () => {
     })
     alice = await mkUser('alice', 'user')
     bob = await mkUser('bob', 'user')
+    await db.insert(agents).values(
+      AGENT_NAMES.map((name) => ({
+        id: agentId(name),
+        name,
+        ownerUserId: alice.id,
+      })),
+    )
   })
 
   test('create → 201, creator becomes owner, default public; invalid body → 422', async () => {
@@ -528,11 +565,12 @@ describe('RFC-164 — workgroups route ACL (RFC-099 D1/D4/D15/D18)', () => {
   })
 
   test('private group: stranger list-excluded + detail 404 identical to missing (D1)', async () => {
-    await req(alice.token, '/api/workgroups', {
+    const createdResponse = await req(alice.token, '/api/workgroups', {
       method: 'POST',
       body: JSON.stringify(groupInput()),
     })
-    await req(alice.token, '/api/workgroups/payment-squad/acl', {
+    const created = (await createdResponse.json()) as WorkgroupDetail
+    await req(alice.token, `/api/workgroups/${created.id}/acl`, {
       method: 'PUT',
       body: JSON.stringify({ visibility: 'private' }),
     })
@@ -540,8 +578,8 @@ describe('RFC-164 — workgroups route ACL (RFC-099 D1/D4/D15/D18)', () => {
       name: string
     }>
     expect(list.some((g) => g.name === 'payment-squad')).toBe(false)
-    const invisible = await req(bob.token, '/api/workgroups/payment-squad')
-    const missing = await req(bob.token, '/api/workgroups/never-existed')
+    const invisible = await req(bob.token, `/api/workgroups/${created.id}`)
+    const missing = await req(bob.token, '/api/workgroups/never-existed-id')
     expect(invisible.status).toBe(404)
     expect(missing.status).toBe(404)
     expect(((await invisible.json()) as { code: string }).code).toBe(
@@ -550,19 +588,20 @@ describe('RFC-164 — workgroups route ACL (RFC-099 D1/D4/D15/D18)', () => {
   })
 
   test('non-owner PUT/DELETE → 403; owner PUT ok', async () => {
-    await req(alice.token, '/api/workgroups', {
+    const createdResponse = await req(alice.token, '/api/workgroups', {
       method: 'POST',
       body: JSON.stringify(groupInput()),
     })
-    const group = await detail(alice.token, 'payment-squad')
-    const forbidden = await req(bob.token, '/api/workgroups/payment-squad', {
+    const created = (await createdResponse.json()) as WorkgroupDetail
+    const group = await detail(alice.token, created.id)
+    const forbidden = await req(bob.token, `/api/workgroups/${created.id}`, {
       method: 'PUT',
       body: saveBody(group),
     })
     expect(forbidden.status).toBe(403)
-    const del = await req(bob.token, '/api/workgroups/payment-squad', { method: 'DELETE' })
+    const del = await req(bob.token, `/api/workgroups/${created.id}`, { method: 'DELETE' })
     expect(del.status).toBe(403)
-    const ok = await req(alice.token, '/api/workgroups/payment-squad', {
+    const ok = await req(alice.token, `/api/workgroups/${created.id}`, {
       method: 'PUT',
       body: saveBody(group, { description: 'v2' }),
     })
@@ -589,7 +628,8 @@ describe('RFC-164 — workgroups route ACL (RFC-099 D1/D4/D15/D18)', () => {
       }),
     })
     expect(agentRes.status).toBe(201)
-    await req(alice.token, '/api/agents/alice-private-agent/acl', {
+    const privateAgent = (await agentRes.json()) as { id: string }
+    await req(alice.token, `/api/agents/${privateAgent.id}/acl`, {
       method: 'PUT',
       body: JSON.stringify({ visibility: 'private' }),
     })
@@ -602,10 +642,15 @@ describe('RFC-164 — workgroups route ACL (RFC-099 D1/D4/D15/D18)', () => {
           name: 'bobs-squad',
           leaderDisplayName: 'lead',
           members: [
-            { memberType: 'agent', agentName: 'lead-agent', displayName: 'lead', roleDesc: '' },
             {
               memberType: 'agent',
-              agentName: 'alice-private-agent',
+              agentId: agentId('lead-agent'),
+              displayName: 'lead',
+              roleDesc: '',
+            },
+            {
+              memberType: 'agent',
+              agentId: privateAgent.id,
               displayName: 'stolen',
               roleDesc: '',
             },
@@ -616,16 +661,22 @@ describe('RFC-164 — workgroups route ACL (RFC-099 D1/D4/D15/D18)', () => {
     expect(blocked.status).toBe(422)
     expect(((await blocked.json()) as { code: string }).code).toBe('acl-missing-refs')
 
-    // dangling (nonexistent) agent names still pass — launch validates existence
-    const dangling = await req(bob.token, '/api/workgroups', {
+    // A visible canonical id can be frozen in a new group.
+    const createdResponse = await req(bob.token, '/api/workgroups', {
       method: 'POST',
       body: JSON.stringify(groupInput({ name: 'bobs-squad' })),
     })
-    expect(dangling.status).toBe(201)
+    expect(createdResponse.status).toBe(201)
+    const created = (await createdResponse.json()) as WorkgroupDetail
 
-    // grandfathered: keeping the same members on update never re-checks them
-    const group = await detail(bob.token, 'bobs-squad')
-    const keep = await req(bob.token, '/api/workgroups/bobs-squad', {
+    // Grandfathered: visibility loss after save does not invalidate an
+    // unchanged member id on the existing group.
+    await req(alice.token, `/api/agents/${agentId('planner-agent')}/acl`, {
+      method: 'PUT',
+      body: JSON.stringify({ visibility: 'private' }),
+    })
+    const group = await detail(bob.token, created.id)
+    const keep = await req(bob.token, `/api/workgroups/${created.id}`, {
       method: 'PUT',
       body: saveBody(group),
     })
@@ -633,17 +684,18 @@ describe('RFC-164 — workgroups route ACL (RFC-099 D1/D4/D15/D18)', () => {
   })
 
   test('rename via route + acl endpoint round-trip', async () => {
-    await req(alice.token, '/api/workgroups', {
+    const createdResponse = await req(alice.token, '/api/workgroups', {
       method: 'POST',
       body: JSON.stringify(groupInput()),
     })
-    const group = await detail(alice.token, 'payment-squad')
-    const renamed = await req(alice.token, '/api/workgroups/payment-squad/rename', {
+    const created = (await createdResponse.json()) as WorkgroupDetail
+    const group = await detail(alice.token, created.id)
+    const renamed = await req(alice.token, `/api/workgroups/${created.id}/rename`, {
       method: 'POST',
       body: renameBody(group, 'pay-squad'),
     })
     expect(renamed.status).toBe(200)
-    const acl = await req(alice.token, '/api/workgroups/pay-squad/acl')
+    const acl = await req(alice.token, `/api/workgroups/${created.id}/acl`)
     expect(acl.status).toBe(200)
     const aclBody = (await acl.json()) as { resourceType: string; canManage: boolean }
     expect(aclBody.resourceType).toBe('workgroup')
@@ -651,12 +703,13 @@ describe('RFC-164 — workgroups route ACL (RFC-099 D1/D4/D15/D18)', () => {
   })
 
   test('rename route saves name + description atomically; description-only keeps the name', async () => {
-    await req(alice.token, '/api/workgroups', {
+    const createdResponse = await req(alice.token, '/api/workgroups', {
       method: 'POST',
       body: JSON.stringify(groupInput()),
     })
-    const group = await detail(alice.token, 'payment-squad')
-    const both = await req(alice.token, '/api/workgroups/payment-squad/rename', {
+    const created = (await createdResponse.json()) as WorkgroupDetail
+    const group = await detail(alice.token, created.id)
+    const both = await req(alice.token, `/api/workgroups/${created.id}/rename`, {
       method: 'POST',
       body: renameBody(group, 'pay-squad', 'atomic blurb'),
     })
@@ -667,7 +720,7 @@ describe('RFC-164 — workgroups route ACL (RFC-099 D1/D4/D15/D18)', () => {
       description: 'atomic blurb',
     })
     // description-only edit — newName echoes the current name, no rename occurs.
-    const descOnly = await req(alice.token, '/api/workgroups/pay-squad/rename', {
+    const descOnly = await req(alice.token, `/api/workgroups/${created.id}/rename`, {
       method: 'POST',
       body: renameBody(bothReceipt.workgroup, 'pay-squad', 'blurb only'),
     })

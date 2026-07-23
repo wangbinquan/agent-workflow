@@ -1,8 +1,8 @@
 // RFC-028 T3 — services/mcp.ts CRUD + reference cascade.
 //
-// Locks: create → list → get → update → rename → delete happy path; type
-// immutability; still-referenced delete guard; name-conflict; rename cascade
-// updates agents.mcp JSON column atomically.
+// Locks: create → list → get → update → rename → delete happy path; canonical
+// id addressing; type immutability; still-referenced delete guard; name
+// conflict; rename leaves id-based references untouched.
 
 import { buildActor } from '../src/auth/actor'
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -110,27 +110,27 @@ describe('services/mcp.ts CRUD', () => {
   })
 
   test('update: description + enabled patch', async () => {
-    await createMcp(db, {
+    const created = await createMcp(db, {
       name: 'm',
       description: 'old',
       type: 'local',
       config: { command: ['x'] },
       enabled: true,
     })
-    const updated = await updateMcp(db, 'm', { description: 'new', enabled: false })
+    const updated = await updateMcp(db, created.id, { description: 'new', enabled: false })
     expect(updated.description).toBe('new')
     expect(updated.enabled).toBe(false)
   })
 
   test('update: config replacement (local)', async () => {
-    await createMcp(db, {
+    const created = await createMcp(db, {
       name: 'm',
       description: '',
       type: 'local',
       config: { command: ['x'] },
       enabled: true,
     })
-    const updated = await updateMcp(db, 'm', {
+    const updated = await updateMcp(db, created.id, {
       type: 'local',
       config: { command: ['y', '-v'], env: { K: 'v' }, timeoutMs: 7000 },
     })
@@ -140,7 +140,7 @@ describe('services/mcp.ts CRUD', () => {
   })
 
   test('update: type change rejected', async () => {
-    await createMcp(db, {
+    const created = await createMcp(db, {
       name: 'm',
       description: '',
       type: 'local',
@@ -148,12 +148,12 @@ describe('services/mcp.ts CRUD', () => {
       enabled: true,
     })
     await expect(
-      updateMcp(db, 'm', { type: 'remote', config: { url: 'https://x.io' } }),
+      updateMcp(db, created.id, { type: 'remote', config: { url: 'https://x.io' } }),
     ).rejects.toBeInstanceOf(ValidationError)
   })
 
   test('update: invalid config payload rejected', async () => {
-    await createMcp(db, {
+    const created = await createMcp(db, {
       name: 'm',
       description: '',
       type: 'local',
@@ -161,7 +161,7 @@ describe('services/mcp.ts CRUD', () => {
       enabled: true,
     })
     await expect(
-      updateMcp(db, 'm', { type: 'local', config: { command: [] } }),
+      updateMcp(db, created.id, { type: 'local', config: { command: [] } }),
     ).rejects.toBeInstanceOf(ValidationError)
   })
 
@@ -170,14 +170,14 @@ describe('services/mcp.ts CRUD', () => {
   })
 
   test('delete: happy path when no agents reference it', async () => {
-    await createMcp(db, {
+    const created = await createMcp(db, {
       name: 'lonely',
       description: '',
       type: 'local',
       config: { command: ['x'] },
       enabled: true,
     })
-    await deleteMcp(db, 'lonely', T6_ACTOR)
+    await deleteMcp(db, created.id, T6_ACTOR)
     expect(await getMcp(db, 'lonely')).toBeNull()
   })
 
@@ -247,7 +247,7 @@ describe('services/mcp.ts reference cascade', () => {
   })
 
   test('delete with references → ConflictError + principal-aware visible list', async () => {
-    await createMcp(db, {
+    const mcp = await createMcp(db, {
       name: 'm',
       description: '',
       type: 'local',
@@ -269,7 +269,7 @@ describe('services/mcp.ts reference cascade', () => {
     })
     let err: unknown
     try {
-      await deleteMcp(db, 'm', T6_ACTOR)
+      await deleteMcp(db, mcp.id, T6_ACTOR)
     } catch (e) {
       err = e
     }
@@ -348,7 +348,7 @@ describe('services/mcp.ts reference cascade', () => {
       bodyMd: '',
     })
 
-    const renamed = await renameMcp(db, 'old-name', { newName: 'new-name' })
+    const renamed = await renameMcp(db, oldMcp.id, { newName: 'new-name' })
     expect(renamed.name).toBe('new-name')
 
     const a1 = await getAgent(db, 'consumer-1')
@@ -372,12 +372,12 @@ describe('services/mcp.ts reference cascade', () => {
       config: { command: ['x'] },
       enabled: true,
     })
-    const renamed = await renameMcp(db, 'same', { newName: 'same' })
+    const renamed = await renameMcp(db, m.id, { newName: 'same' })
     expect(renamed.id).toBe(m.id)
   })
 
   test('rename: target name conflict → ConflictError', async () => {
-    await createMcp(db, {
+    const a = await createMcp(db, {
       name: 'a',
       description: '',
       type: 'local',
@@ -391,7 +391,7 @@ describe('services/mcp.ts reference cascade', () => {
       config: { command: ['y'] },
       enabled: true,
     })
-    await expect(renameMcp(db, 'a', { newName: 'b' })).rejects.toBeInstanceOf(ConflictError)
+    await expect(renameMcp(db, a.id, { newName: 'b' })).rejects.toBeInstanceOf(ConflictError)
   })
 
   test('rename: missing source → NotFoundError', async () => {

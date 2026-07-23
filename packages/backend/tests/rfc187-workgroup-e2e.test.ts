@@ -65,8 +65,8 @@ function writePlan(h: Harness, plan: Record<string, unknown[]>): void {
 
 const opencodeCmd = (): string[] => ['bun', 'run', SCENARIO_STUB]
 
-async function seedAgent(db: DbClient, name: string): Promise<void> {
-  await createAgent(db, {
+async function seedAgent(db: DbClient, name: string): Promise<string> {
+  const created = await createAgent(db, {
     name,
     description: name,
     outputs: [],
@@ -79,6 +79,7 @@ async function seedAgent(db: DbClient, name: string): Promise<void> {
     frontmatterExtra: {},
     bodyMd: `you are ${name}`,
   })
+  return created.id
 }
 
 async function seedGroup(
@@ -88,8 +89,8 @@ async function seedGroup(
   // the old `autonomous` flag (which meant the same thing, inverted).
   opts: { withHuman: boolean; maxRounds?: number },
 ): Promise<void> {
-  await seedAgent(db, 'wg-lead')
-  await seedAgent(db, 'wg-writer')
+  const leadAgentId = await seedAgent(db, 'wg-lead')
+  const writerAgentId = await seedAgent(db, 'wg-writer')
   if (opts.withHuman) {
     // The human member must resolve to an ACTIVE user — createWorkgroup rejects a
     // roster pointing at a missing/inactive one (workgroups.ts assertHumanMembersActive).
@@ -116,8 +117,8 @@ async function seedGroup(
     maxRounds: opts.maxRounds ?? 8,
     completionGate: false,
     members: [
-      { memberType: 'agent', agentName: 'wg-lead', displayName: 'lead', roleDesc: '协调' },
-      { memberType: 'agent', agentName: 'wg-writer', displayName: 'writer', roleDesc: '产出' },
+      { memberType: 'agent', agentId: leadAgentId, displayName: 'lead', roleDesc: '协调' },
+      { memberType: 'agent', agentId: writerAgentId, displayName: 'writer', roleDesc: '产出' },
       ...(opts.withHuman
         ? [{ memberType: 'human', userId: 'u-e2e', displayName: 'owner', roleDesc: '拍板' }]
         : []),

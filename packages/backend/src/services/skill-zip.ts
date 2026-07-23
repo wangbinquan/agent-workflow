@@ -245,7 +245,7 @@ export async function commitSkillZipBuffer(
     const isOverwrite = decision.action === 'overwrite'
 
     // RFC-102: overwriting a managed skill requires write permission (owner or
-    // admin) — the same gate PUT /api/skills/:name enforces. The front-end
+    // admin) — the same gate POST /api/skills/:id/save enforces. The front-end
     // disables the option, but a direct API call must be rejected here too.
     if (existing !== null && isOverwrite && !isResourceOwner(aclOpts.actor, existing)) {
       outcome.failed.push({

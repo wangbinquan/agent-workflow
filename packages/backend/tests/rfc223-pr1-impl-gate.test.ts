@@ -208,15 +208,16 @@ describe('RFC-223 PR-1 P1-2 — ACL bound to resolved id, grandfathering by id',
     const dep = (await depRes.json()) as AgentDto
     const aRes = await createAgentHttp(h, h.bob.token, { name: 'consumer', dependsOn: ['dep'] })
     expect(aRes.status).toBe(201)
-    expect(((await aRes.json()) as AgentDto).dependsOn).toEqual([dep.id])
+    const consumer = (await aRes.json()) as AgentDto
+    expect(consumer.dependsOn).toEqual([dep.id])
 
     // alice makes `dep` private — bob can no longer view it, but it is grandfathered.
     await h.db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, dep.id))
-    expect((await req(h.app, h.bob.token, '/api/agents/dep')).status).toBe(404)
+    expect((await req(h.app, h.bob.token, `/api/agents/${dep.id}`)).status).toBe(404)
 
     // bob re-saves consumer submitting the dep BY NAME (agent.md style). The diff
     // compares resolved id (dep.id ∈ existing) → grandfathered → save succeeds.
-    const put = await req(h.app, h.bob.token, '/api/agents/consumer', {
+    const put = await req(h.app, h.bob.token, `/api/agents/${consumer.id}`, {
       method: 'PUT',
       body: JSON.stringify({ dependsOn: ['dep'] }),
     })
@@ -239,7 +240,8 @@ describe('RFC-223 PR-1 P1-2 — ACL bound to resolved id, grandfathering by id',
     await h.db.update(mcps).set({ visibility: 'private' }).where(eq(mcps.id, m.id))
     const aRes = await createAgentHttp(h, h.bob.token, { name: 'c2' })
     expect(aRes.status).toBe(201)
-    const put = await req(h.app, h.bob.token, '/api/agents/c2', {
+    const agent = (await aRes.json()) as AgentDto
+    const put = await req(h.app, h.bob.token, `/api/agents/${agent.id}`, {
       method: 'PUT',
       body: JSON.stringify({ mcp: [m.id] }),
     })
@@ -330,8 +332,9 @@ describe('RFC-223 PR-1 P2-1 — closure endpoint projects id refs to display NAM
       plugins: ['PLID'],
     })
     expect(res.status).toBe(201)
+    const agent = (await res.json()) as AgentDto
 
-    const closure = await req(h.app, h.alice.token, '/api/agents/leaf/closure')
+    const closure = await req(h.app, h.alice.token, `/api/agents/${agent.id}/closure`)
     expect(closure.status).toBe(200)
     const body = (await closure.json()) as {
       ok: boolean
@@ -363,23 +366,36 @@ describe('RFC-223 PR-1 P2-2 — closure never discloses an invisible dependency 
       dependsOn: ['hidden-dep'],
     })
     expect(parentRes.status).toBe(201)
+    const parentAgent = (await parentRes.json()) as AgentDto
     await h.db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, dep.id))
 
-    const closure = await req(h.app, h.bob.token, '/api/agents/parent/closure')
+    const closure = await req(h.app, h.bob.token, `/api/agents/${parentAgent.id}/closure`)
     expect(closure.status).toBe(200)
     const raw = await closure.text()
     // The private dependency's human name must not appear anywhere in the payload.
     expect(raw).not.toContain('hidden-dep')
     const body = JSON.parse(raw) as {
-      agents: Array<{ name: string; dependsOn: string[]; description: string }>
+      agents: Array<{
+        id: string
+        name: string
+        ownerUserId: string | null
+        dependsOnIds: string[]
+        description: string
+        masked: boolean
+        missing: boolean
+      }>
     }
     // The masked member is identified by its opaque id (no human name, blanked fields).
     const masked = body.agents.find((a) => a.name === dep.id)
     expect(masked).toBeDefined()
+    expect(masked?.id).toBe(dep.id)
+    expect(masked?.ownerUserId).toBeNull()
     expect(masked?.description).toBe('')
+    expect(masked?.masked).toBe(true)
+    expect(masked?.missing).toBe(false)
     // The parent's dependsOn projection references the opaque id, not a name.
     const parent = body.agents.find((a) => a.name === 'parent')!
-    expect(parent.dependsOn).toEqual([dep.id])
+    expect(parent.dependsOnIds).toEqual([dep.id])
   })
 })
 
@@ -398,7 +414,7 @@ describe('RFC-223 PR-1 P1-2 — workgroup members share the same single-pass bin
       body: JSON.stringify({
         name: 'wg1',
         mode: 'free_collab',
-        members: [{ memberType: 'agent', agentName: 'wg-secret', displayName: 'x' }],
+        members: [{ memberType: 'agent', agentId: dep.id, displayName: 'x' }],
       }),
     })
     expect(res.status).toBe(422)
@@ -414,7 +430,7 @@ describe('RFC-223 PR-1 P1-2 — workgroup members share the same single-pass bin
       body: JSON.stringify({
         name: 'wg2',
         mode: 'free_collab',
-        members: [{ memberType: 'agent', agentName: 'wg-public', displayName: 'x' }],
+        members: [{ memberType: 'agent', agentId: dep.id, displayName: 'x' }],
       }),
     })
     expect(res.status).toBe(201)

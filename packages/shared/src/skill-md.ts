@@ -13,7 +13,7 @@ import { parse as parseYaml } from 'yaml'
  *
  * The file-tree endpoints (`writeSkillFile` / `deleteSkillFile`) must never
  * write or delete the main file through an arbitrary relative path — users edit
- * it exclusively through `PUT /api/skills/:name/content`. Before RFC-169 the
+ * it exclusively through `PUT /api/skills/:id/content`. Before RFC-169 the
  * write path had NO check at all (adding a file literally named `SKILL.md`
  * truncated it) and the delete path only did a raw `=== 'SKILL.md'` compare,
  * bypassable via `./SKILL.md`, a trailing separator (`SKILL.md/`, which

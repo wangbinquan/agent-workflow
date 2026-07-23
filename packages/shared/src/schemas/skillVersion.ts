@@ -25,7 +25,7 @@ export const SkillVersionSchema = z.object({
 })
 export type SkillVersion = z.infer<typeof SkillVersionSchema>
 
-/** GET /api/skills/:name/versions/:v/content — parsed SKILL.md + file tree of a past version. */
+/** GET /api/skills/:id/versions/:v/content — parsed SKILL.md + file tree of a past version. */
 export const SkillVersionContentSchema = z.object({
   versionIndex: z.number().int().positive(),
   content: SkillContentSchema,
@@ -33,7 +33,7 @@ export const SkillVersionContentSchema = z.object({
 })
 export type SkillVersionContent = z.infer<typeof SkillVersionContentSchema>
 
-/** GET /api/skills/:name/versions/diff?from=&to= — git-style unified diff. */
+/** GET /api/skills/:id/versions/diff?from=&to= — git-style unified diff. */
 export const SkillVersionDiffSchema = z.object({
   from: z.number().int().positive(),
   to: z.number().int().positive(),
@@ -41,7 +41,7 @@ export const SkillVersionDiffSchema = z.object({
 })
 export type SkillVersionDiff = z.infer<typeof SkillVersionDiffSchema>
 
-/** POST /api/skills/:name/versions/:v/restore body. */
+/** POST /api/skills/:id/versions/:v/restore body. */
 export const RestoreSkillVersionSchema = z.object({
   /** Optional human note recorded on the new (restore) version row. */
   reason: z.string().max(2000).optional(),

@@ -97,7 +97,6 @@ async function req(
 }
 
 const KEY = 'acl-matrix-subject'
-const MISSING_KEY = 'acl-matrix-does-not-exist'
 
 interface ResourceCase {
   type: string
@@ -114,8 +113,8 @@ const CASES: ResourceCase[] = [
   {
     type: 'agent',
     base: '/api/agents',
-    keyOf: (s) => s.name,
-    missingKey: MISSING_KEY,
+    keyOf: (s) => s.id,
+    missingKey: ulid(),
     seed: async (db, ownerUserId) => {
       const row = { id: ulid(), name: KEY }
       await db.insert(agents).values({
@@ -131,8 +130,8 @@ const CASES: ResourceCase[] = [
   {
     type: 'skill',
     base: '/api/skills',
-    keyOf: (s) => s.name,
-    missingKey: MISSING_KEY,
+    keyOf: (s) => s.id,
+    missingKey: ulid(),
     seed: async (db, ownerUserId) => {
       const row = { id: ulid(), name: KEY }
       await db.insert(skills).values({
@@ -149,8 +148,8 @@ const CASES: ResourceCase[] = [
   {
     type: 'mcp',
     base: '/api/mcps',
-    keyOf: (s) => s.name,
-    missingKey: MISSING_KEY,
+    keyOf: (s) => s.id,
+    missingKey: ulid(),
     seed: async (db, ownerUserId) => {
       const row = { id: ulid(), name: KEY }
       await db.insert(mcps).values({
@@ -208,8 +207,8 @@ const CASES: ResourceCase[] = [
   {
     type: 'workgroup',
     base: '/api/workgroups',
-    keyOf: (s) => s.name,
-    missingKey: MISSING_KEY,
+    keyOf: (s) => s.id,
+    missingKey: ulid(),
     seed: async (db, ownerUserId) => {
       const row = { id: ulid(), name: KEY }
       await db.insert(workgroups).values({

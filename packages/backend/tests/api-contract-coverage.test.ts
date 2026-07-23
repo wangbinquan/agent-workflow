@@ -159,10 +159,10 @@ describe('API contract registry coverage', () => {
       .sort()
     expect(acl).toEqual(
       [
-        '/api/agents/:name',
-        '/api/skills/:name',
-        '/api/mcps/:name',
-        '/api/workgroups/:name',
+        '/api/agents/:id',
+        '/api/skills/:id',
+        '/api/mcps/:id',
+        '/api/workgroups/:id',
         '/api/plugins/:id',
         '/api/workflows/:id',
       ]

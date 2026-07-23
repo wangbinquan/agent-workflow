@@ -43,6 +43,15 @@ function localPayload(name: string): Record<string, unknown> {
   }
 }
 
+async function createMcpHttp(app: Hono, name: string): Promise<{ id: string; name: string }> {
+  const res = await req(app, '/api/mcps', {
+    method: 'POST',
+    body: JSON.stringify(localPayload(name)),
+  })
+  expect(res.status).toBe(201)
+  return (await res.json()) as { id: string; name: string }
+}
+
 describe('POST /api/mcps', () => {
   let app: Hono
   beforeEach(() => {
@@ -97,7 +106,7 @@ describe('POST /api/mcps', () => {
   })
 })
 
-describe('GET /api/mcps and /api/mcps/:name', () => {
+describe('GET /api/mcps and /api/mcps/:id', () => {
   let app: Hono
   beforeEach(() => {
     ;({ app } = buildHarness())
@@ -117,23 +126,29 @@ describe('GET /api/mcps and /api/mcps/:name', () => {
     expect(body.map((r) => r.name).sort()).toEqual(['a', 'b'])
   })
 
+  test('detail resolves only by id; the legacy name URL is 404', async () => {
+    const mcp = await createMcpHttp(app, 'named-mcp')
+    expect((await req(app, `/api/mcps/${mcp.id}`)).status).toBe(200)
+    expect((await req(app, '/api/mcps/named-mcp')).status).toBe(404)
+  })
+
   test('GET unknown → 404', async () => {
-    const res = await req(app, '/api/mcps/nope')
+    const res = await req(app, '/api/mcps/00000000000000000000000000')
     expect(res.status).toBe(404)
     const body = (await res.json()) as Record<string, unknown>
     expect(body.code).toBe('mcp-not-found')
   })
 })
 
-describe('PUT /api/mcps/:name', () => {
+describe('PUT /api/mcps/:id', () => {
   let app: Hono
   beforeEach(() => {
     ;({ app } = buildHarness())
   })
 
   test('happy path patch description', async () => {
-    await req(app, '/api/mcps', { method: 'POST', body: JSON.stringify(localPayload('m')) })
-    const res = await req(app, '/api/mcps/m', {
+    const mcp = await createMcpHttp(app, 'm')
+    const res = await req(app, `/api/mcps/${mcp.id}`, {
       method: 'PUT',
       body: JSON.stringify({ description: 'updated' }),
     })
@@ -142,8 +157,8 @@ describe('PUT /api/mcps/:name', () => {
   })
 
   test('PUT type change → 422', async () => {
-    await req(app, '/api/mcps', { method: 'POST', body: JSON.stringify(localPayload('m')) })
-    const res = await req(app, '/api/mcps/m', {
+    const mcp = await createMcpHttp(app, 'm')
+    const res = await req(app, `/api/mcps/${mcp.id}`, {
       method: 'PUT',
       body: JSON.stringify({ type: 'remote', config: { url: 'https://x.io' } }),
     })
@@ -153,7 +168,7 @@ describe('PUT /api/mcps/:name', () => {
   })
 
   test('PUT unknown → 404', async () => {
-    const res = await req(app, '/api/mcps/nope', {
+    const res = await req(app, '/api/mcps/00000000000000000000000000', {
       method: 'PUT',
       body: JSON.stringify({ description: 'x' }),
     })
@@ -161,7 +176,7 @@ describe('PUT /api/mcps/:name', () => {
   })
 })
 
-describe('DELETE /api/mcps/:name', () => {
+describe('DELETE /api/mcps/:id', () => {
   let app: Hono
   let db: DbClient
   beforeEach(() => {
@@ -169,9 +184,9 @@ describe('DELETE /api/mcps/:name', () => {
   })
 
   test('happy path → 204', async () => {
-    await req(app, '/api/mcps', { method: 'POST', body: JSON.stringify(localPayload('m')) })
+    const mcp = await createMcpHttp(app, 'm')
     // RFC-222 (D5): DELETE requires a { confirm } body echoing the mcp name.
-    const res = await req(app, '/api/mcps/m', {
+    const res = await req(app, `/api/mcps/${mcp.id}`, {
       method: 'DELETE',
       body: JSON.stringify({ confirm: 'm' }),
     })
@@ -179,7 +194,7 @@ describe('DELETE /api/mcps/:name', () => {
   })
 
   test('with references → 409 + principal-aware visible list', async () => {
-    await req(app, '/api/mcps', { method: 'POST', body: JSON.stringify(localPayload('m')) })
+    const mcp = await createMcpHttp(app, 'm')
     await createAgent(db, {
       name: 'consumer',
       description: '',
@@ -188,13 +203,13 @@ describe('DELETE /api/mcps/:name', () => {
       permission: {},
       skills: [],
       dependsOn: [],
-      mcp: ['m'],
+      mcp: [mcp.id],
       plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
     })
     // RFC-222 (D5, N-5): confirm passes first, then the in-use refusal fires.
-    const res = await req(app, '/api/mcps/m', {
+    const res = await req(app, `/api/mcps/${mcp.id}`, {
       method: 'DELETE',
       body: JSON.stringify({ confirm: 'm' }),
     })
@@ -208,20 +223,22 @@ describe('DELETE /api/mcps/:name', () => {
   })
 
   test('DELETE unknown → 404', async () => {
-    const res = await req(app, '/api/mcps/nope', { method: 'DELETE' })
+    const res = await req(app, '/api/mcps/00000000000000000000000000', {
+      method: 'DELETE',
+    })
     expect(res.status).toBe(404)
   })
 })
 
-describe('POST /api/mcps/:name/rename', () => {
+describe('POST /api/mcps/:id/rename', () => {
   let app: Hono
   beforeEach(() => {
     ;({ app } = buildHarness())
   })
 
   test('happy path → 200 + new name', async () => {
-    await req(app, '/api/mcps', { method: 'POST', body: JSON.stringify(localPayload('old')) })
-    const res = await req(app, '/api/mcps/old/rename', {
+    const mcp = await createMcpHttp(app, 'old')
+    const res = await req(app, `/api/mcps/${mcp.id}/rename`, {
       method: 'POST',
       body: JSON.stringify({ newName: 'new' }),
     })
@@ -230,9 +247,9 @@ describe('POST /api/mcps/:name/rename', () => {
   })
 
   test('rename to existing name → 409', async () => {
-    await req(app, '/api/mcps', { method: 'POST', body: JSON.stringify(localPayload('a')) })
+    const a = await createMcpHttp(app, 'a')
     await req(app, '/api/mcps', { method: 'POST', body: JSON.stringify(localPayload('b')) })
-    const res = await req(app, '/api/mcps/a/rename', {
+    const res = await req(app, `/api/mcps/${a.id}/rename`, {
       method: 'POST',
       body: JSON.stringify({ newName: 'b' }),
     })
@@ -240,8 +257,8 @@ describe('POST /api/mcps/:name/rename', () => {
   })
 
   test('rename with invalid newName → 422', async () => {
-    await req(app, '/api/mcps', { method: 'POST', body: JSON.stringify(localPayload('a')) })
-    const res = await req(app, '/api/mcps/a/rename', {
+    const a = await createMcpHttp(app, 'a')
+    const res = await req(app, `/api/mcps/${a.id}/rename`, {
       method: 'POST',
       body: JSON.stringify({ newName: 'Bad' }),
     })

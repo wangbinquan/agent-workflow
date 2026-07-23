@@ -92,9 +92,9 @@ describe('agent.plugins save-time guard', () => {
 
   test('update fails 422 plugin-not-found when patched name unknown', async () => {
     await createPlugin(db, { name: 'p1', spec: 'p@1' }, opts())
-    await createAgent(db, agentInput('a', ['p1']))
+    const agent = await createAgent(db, agentInput('a', ['p1']))
     try {
-      await updateAgent(db, 'a', { plugins: ['nope'] })
+      await updateAgent(db, agent.id, { plugins: ['nope'] })
       throw new Error('expected ValidationError')
     } catch (err) {
       expect(err).toBeInstanceOf(ValidationError)
@@ -104,14 +104,14 @@ describe('agent.plugins save-time guard', () => {
 
   test('update without `plugins` field skips the check (preserves existing)', async () => {
     const p1 = await createPlugin(db, { name: 'p1', spec: 'p@1' }, opts())
-    await createAgent(db, agentInput('a', ['p1']))
+    const agent = await createAgent(db, agentInput('a', ['p1']))
     // Now disable the plugin from under the agent — patching unrelated field
     // must still succeed; guard only runs when caller touches `plugins`.
     const { updatePlugin } = await import('../src/services/plugin')
     await updatePlugin(db, p1.id, { enabled: false }, opts())
     // PATCH something unrelated; should NOT trigger plugin validation, so it
     // passes even though the stale `plugins: [<id>]` is now disabled.
-    const updated = await updateAgent(db, 'a', { description: 'unrelated' })
+    const updated = await updateAgent(db, agent.id, { description: 'unrelated' })
     expect(updated.plugins).toEqual([p1.id])
   })
 })

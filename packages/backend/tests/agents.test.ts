@@ -137,7 +137,7 @@ describe('agent service', () => {
   })
 
   test('update partial patch preserves other fields', async () => {
-    await createAgent(db, {
+    const created = await createAgent(db, {
       name: 'a',
       description: 'orig',
       outputs: ['x'],
@@ -150,7 +150,7 @@ describe('agent service', () => {
       frontmatterExtra: {},
       bodyMd: 'body',
     })
-    const updated = await updateAgent(db, 'a', { description: 'new desc' })
+    const updated = await updateAgent(db, created.id, { description: 'new desc' })
     expect(updated.description).toBe('new desc')
     expect(updated.outputs).toEqual(['x']) // preserved
     expect(updated.permission).toEqual({ edit: 'allow' }) // preserved
@@ -166,7 +166,7 @@ describe('agent service', () => {
     // RFC-111/F6: a pinned runtime must resolve to a runtimes row
     // (validateRuntimeReference) — seed the registry row this test pins to.
     await createRuntime(db, { name: 'opencode-1', protocol: 'opencode', binaryPath: null })
-    await createAgent(db, {
+    const created = await createAgent(db, {
       name: 'rt',
       description: 'orig',
       outputs: [],
@@ -182,11 +182,13 @@ describe('agent service', () => {
     // starts unpinned (inherits config.defaultRuntime → absent on the view)
     expect((await getAgent(db, 'rt'))?.runtime).toBeUndefined()
     // pin to a registry name
-    expect((await updateAgent(db, 'rt', { runtime: 'opencode-1' })).runtime).toBe('opencode-1')
+    expect((await updateAgent(db, created.id, { runtime: 'opencode-1' })).runtime).toBe(
+      'opencode-1',
+    )
     // an unrelated patch leaves the pin untouched (sparse-patch semantics)
-    expect((await updateAgent(db, 'rt', { description: 'x' })).runtime).toBe('opencode-1')
+    expect((await updateAgent(db, created.id, { description: 'x' })).runtime).toBe('opencode-1')
     // explicit null clears back to inherit (absent on the Agent view again)
-    expect((await updateAgent(db, 'rt', { runtime: null })).runtime).toBeUndefined()
+    expect((await updateAgent(db, created.id, { runtime: null })).runtime).toBeUndefined()
   })
 
   test('update on missing agent throws NotFoundError', async () => {
@@ -196,7 +198,7 @@ describe('agent service', () => {
   })
 
   test('delete removes; missing throws NotFoundError', async () => {
-    await createAgent(db, {
+    const created = await createAgent(db, {
       name: 'a',
       description: '',
       outputs: [],
@@ -209,13 +211,13 @@ describe('agent service', () => {
       frontmatterExtra: {},
       bodyMd: '',
     })
-    await deleteAgent(db, 'a', T6_ACTOR)
+    await deleteAgent(db, created.id, T6_ACTOR)
     expect(await getAgent(db, 'a')).toBeNull()
-    await expect(deleteAgent(db, 'a', T6_ACTOR)).rejects.toBeInstanceOf(NotFoundError)
+    await expect(deleteAgent(db, created.id, T6_ACTOR)).rejects.toBeInstanceOf(NotFoundError)
   })
 
   test('delete refuses when a workflow references the agent', async () => {
-    await createAgent(db, {
+    const created = await createAgent(db, {
       name: 'a',
       description: '',
       outputs: [],
@@ -228,22 +230,22 @@ describe('agent service', () => {
       frontmatterExtra: {},
       bodyMd: '',
     })
-    // Insert a workflow whose nodes reference agent 'a'.
+    // Insert a workflow whose node references the canonical agent id.
     await db.insert(workflows).values({
       id: ulid(),
       name: 'wf1',
       definition: JSON.stringify({
         $schema_version: 1,
-        nodes: [{ id: 'n1', kind: 'agent-single', agentName: 'a' }],
+        nodes: [{ id: 'n1', kind: 'agent-single', agentId: created.id, agentName: 'a' }],
       }),
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })
-    await expect(deleteAgent(db, 'a', T6_ACTOR)).rejects.toBeInstanceOf(ConflictError)
+    await expect(deleteAgent(db, created.id, T6_ACTOR)).rejects.toBeInstanceOf(ConflictError)
   })
 
   test('rename succeeds; renaming to existing name rejected', async () => {
-    await createAgent(db, {
+    const agentA = await createAgent(db, {
       name: 'a',
       description: '',
       outputs: [],
@@ -269,17 +271,15 @@ describe('agent service', () => {
       frontmatterExtra: {},
       bodyMd: '',
     })
-    const renamed = await renameAgent(db, 'a', { newName: 'c' }, T6_ACTOR)
+    const renamed = await renameAgent(db, agentA.id, { newName: 'c' })
     expect(renamed.name).toBe('c')
     expect(await getAgent(db, 'a')).toBeNull()
     expect(await getAgent(db, 'c')).not.toBeNull()
-    await expect(renameAgent(db, 'c', { newName: 'b' }, T6_ACTOR)).rejects.toBeInstanceOf(
-      ConflictError,
-    )
+    await expect(renameAgent(db, agentA.id, { newName: 'b' })).rejects.toBeInstanceOf(ConflictError)
   })
 
-  test('rename refuses when referenced by workflow', async () => {
-    await createAgent(db, {
+  test('rename preserves id-based workflow references', async () => {
+    const created = await createAgent(db, {
       name: 'a',
       description: '',
       outputs: [],
@@ -295,13 +295,14 @@ describe('agent service', () => {
     await db.insert(workflows).values({
       id: ulid(),
       name: 'wf',
-      definition: JSON.stringify({ nodes: [{ agentName: 'a' }] }),
+      definition: JSON.stringify({ nodes: [{ agentId: created.id, agentName: 'a' }] }),
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })
-    await expect(renameAgent(db, 'a', { newName: 'b' }, T6_ACTOR)).rejects.toBeInstanceOf(
-      ConflictError,
-    )
+    await expect(renameAgent(db, created.id, { newName: 'b' })).resolves.toMatchObject({
+      id: created.id,
+      name: 'b',
+    })
   })
 
   // RFC-022 T1: `dependsOn` is a JSON string[] column with default `[]`; CRUD
@@ -379,7 +380,7 @@ describe('agent service', () => {
     expect(c.dependsOn).toEqual([agA.id, agB.id, agC.id])
 
     // Patch via updateAgent.
-    const updated = await updateAgent(db, 'orchestrator', { dependsOn: ['code-auditor'] })
+    const updated = await updateAgent(db, a.id, { dependsOn: ['code-auditor'] })
     expect(updated.dependsOn).toEqual([codeAuditor.id])
 
     // Legacy row whose depends_on JSON is malformed → exposed as [] (defensive
@@ -421,26 +422,34 @@ describe('agent HTTP routes', () => {
     expect(body.code).toBe('agent-invalid')
   })
 
-  test('GET /api/agents lists; GET /:name 200 / 404', async () => {
-    await req(app, '/api/agents', { method: 'POST', body: JSON.stringify(samplePayload('a1')) })
+  test('GET /api/agents lists; GET /:id 200; legacy name URL 404', async () => {
+    const createdRes = await req(app, '/api/agents', {
+      method: 'POST',
+      body: JSON.stringify(samplePayload('a1')),
+    })
+    const created = (await createdRes.json()) as { id: string; name: string }
     await req(app, '/api/agents', { method: 'POST', body: JSON.stringify(samplePayload('a2')) })
 
     const list = (await (await req(app, '/api/agents')).json()) as Array<{ name: string }>
     expect(list.map((a) => a.name).sort()).toEqual(['a1', 'a2'])
 
-    const got = await req(app, '/api/agents/a1')
+    const got = await req(app, `/api/agents/${created.id}`)
     expect(got.status).toBe(200)
     expect(((await got.json()) as { name: string }).name).toBe('a1')
 
-    const miss = await req(app, '/api/agents/nope')
+    const legacy = await req(app, '/api/agents/a1')
+    expect(legacy.status).toBe(404)
+    const miss = await req(app, '/api/agents/not-an-id')
     expect(miss.status).toBe(404)
     const missBody = (await miss.json()) as Record<string, unknown>
     expect(missBody.code).toBe('agent-not-found')
   })
 
   test('PUT partial update preserves other fields; 404 on missing', async () => {
-    await req(app, '/api/agents', { method: 'POST', body: JSON.stringify(samplePayload('a1')) })
-    const res = await req(app, '/api/agents/a1', {
+    const created = (await (
+      await req(app, '/api/agents', { method: 'POST', body: JSON.stringify(samplePayload('a1')) })
+    ).json()) as { id: string }
+    const res = await req(app, `/api/agents/${created.id}`, {
       method: 'PUT',
       body: JSON.stringify({ description: 'updated' }),
     })
@@ -457,28 +466,32 @@ describe('agent HTTP routes', () => {
   })
 
   test('DELETE returns 204 and the agent is gone', async () => {
-    await req(app, '/api/agents', { method: 'POST', body: JSON.stringify(samplePayload('a1')) })
+    const created = (await (
+      await req(app, '/api/agents', { method: 'POST', body: JSON.stringify(samplePayload('a1')) })
+    ).json()) as { id: string }
     // RFC-222 (D5): DELETE now requires a { confirm } body echoing the name.
-    const delRes = await req(app, '/api/agents/a1', {
+    const delRes = await req(app, `/api/agents/${created.id}`, {
       method: 'DELETE',
       body: JSON.stringify({ confirm: 'a1' }),
     })
     expect(delRes.status).toBe(204)
-    const after = await req(app, '/api/agents/a1')
+    const after = await req(app, `/api/agents/${created.id}`)
     expect(after.status).toBe(404)
   })
 
-  test('POST /:name/rename round-trips', async () => {
-    await req(app, '/api/agents', { method: 'POST', body: JSON.stringify(samplePayload('a1')) })
-    const res = await req(app, '/api/agents/a1/rename', {
+  test('POST /:id/rename keeps the same detail URL', async () => {
+    const created = (await (
+      await req(app, '/api/agents', { method: 'POST', body: JSON.stringify(samplePayload('a1')) })
+    ).json()) as { id: string }
+    const res = await req(app, `/api/agents/${created.id}/rename`, {
       method: 'POST',
       body: JSON.stringify({ newName: 'a2' }),
     })
     expect(res.status).toBe(200)
     expect(((await res.json()) as { name: string }).name).toBe('a2')
-    const old = await req(app, '/api/agents/a1')
-    expect(old.status).toBe(404)
-    const renamed = await req(app, '/api/agents/a2')
+    const oldNameUrl = await req(app, '/api/agents/a1')
+    expect(oldNameUrl.status).toBe(404)
+    const renamed = await req(app, `/api/agents/${created.id}`)
     expect(renamed.status).toBe(200)
   })
 

@@ -2,8 +2,8 @@
 //
 //   C-1  assertDeleteConfirm / readDeleteBody unit semantics
 //   C-2  endpoint matrix: missing confirm → 422, wrong → 422 (row survives),
-//        correct → deleted. Covers a :name route (agents), a :id-with-schema
-//        route (workflows), and the exclusive-section route (mcps).
+//        correct → deleted. Covers stable-id routes for agents and workflows,
+//        plus the exclusive-section route (mcps).
 //   C-3  rename TOCTOU: delete with the OLD name after a rename → mismatch.
 //   G-2  coverage guard: every resource/task DELETE handler calls the gate.
 
@@ -118,65 +118,76 @@ async function req(h: H, path: string, init: RequestInit = {}): Promise<Response
 
 describe('RFC-222 C-2 — agents DELETE confirm matrix', () => {
   let h: H
+  let agentId: string
   beforeEach(async () => {
     h = await harness()
-    await req(h, '/api/agents', {
+    const created = await req(h, '/api/agents', {
       method: 'POST',
       body: JSON.stringify({ name: 'secret', instructions: 'x' }),
     })
+    expect(created.status).toBe(201)
+    agentId = ((await created.json()) as { id: string }).id
   })
 
   test('missing confirm → 422 delete-confirm-required, agent survives', async () => {
-    const res = await req(h, '/api/agents/secret', { method: 'DELETE' })
+    const res = await req(h, `/api/agents/${agentId}`, { method: 'DELETE' })
     expect(res.status).toBe(422)
     expect(((await res.json()) as { code: string }).code).toBe('delete-confirm-required')
-    expect((await req(h, '/api/agents/secret')).status).toBe(200)
+    expect((await req(h, `/api/agents/${agentId}`)).status).toBe(200)
   })
 
   test('wrong confirm → 422 delete-confirm-mismatch, agent survives', async () => {
-    const res = await req(h, '/api/agents/secret', {
+    const res = await req(h, `/api/agents/${agentId}`, {
       method: 'DELETE',
       body: JSON.stringify({ confirm: 'Secret' }),
     })
     expect(res.status).toBe(422)
     expect(((await res.json()) as { code: string }).code).toBe('delete-confirm-mismatch')
-    expect((await req(h, '/api/agents/secret')).status).toBe(200)
+    expect((await req(h, `/api/agents/${agentId}`)).status).toBe(200)
   })
 
   test('correct confirm → 204, agent gone', async () => {
-    const res = await req(h, '/api/agents/secret', {
+    const res = await req(h, `/api/agents/${agentId}`, {
       method: 'DELETE',
       body: JSON.stringify({ confirm: 'secret' }),
     })
     expect(res.status).toBe(204)
-    expect((await req(h, '/api/agents/secret')).status).toBe(404)
+    expect((await req(h, `/api/agents/${agentId}`)).status).toBe(404)
   })
 
   test('missing resource → 404 before confirm (N-5 order)', async () => {
-    const res = await req(h, '/api/agents/nope', { method: 'DELETE' })
+    const res = await req(h, '/api/agents/00000000000000000000000000', {
+      method: 'DELETE',
+    })
     expect(res.status).toBe(404)
+  })
+
+  test('legacy name-addressed path is not resolved implicitly', async () => {
+    expect((await req(h, '/api/agents/secret')).status).toBe(404)
   })
 })
 
 describe('RFC-222 C-3 — rename TOCTOU caught by name mismatch', () => {
   test('deleting with the pre-rename name → mismatch (agent survives)', async () => {
     const h = await harness()
-    await req(h, '/api/agents', {
+    const created = await req(h, '/api/agents', {
       method: 'POST',
       body: JSON.stringify({ name: 'old', instructions: 'x' }),
     })
-    await req(h, '/api/agents/old/rename', {
+    expect(created.status).toBe(201)
+    const { id } = (await created.json()) as { id: string }
+    await req(h, `/api/agents/${id}/rename`, {
       method: 'POST',
       body: JSON.stringify({ newName: 'newname' }),
     })
     // The dialog opened as "old"; the resource is now "newname".
-    const res = await req(h, '/api/agents/newname', {
+    const res = await req(h, `/api/agents/${id}`, {
       method: 'DELETE',
       body: JSON.stringify({ confirm: 'old' }),
     })
     expect(res.status).toBe(422)
     expect(((await res.json()) as { code: string }).code).toBe('delete-confirm-mismatch')
-    expect((await req(h, '/api/agents/newname')).status).toBe(200)
+    expect((await req(h, `/api/agents/${id}`)).status).toBe(200)
   })
 })
 
@@ -223,11 +234,11 @@ describe('RFC-222 G-2 — every destructive DELETE handler calls the confirm gat
   const ROUTES_DIR = resolve(import.meta.dir, '..', 'src', 'routes')
   // (file, the DELETE path that must be confirm-gated)
   const GATED: Array<[string, RegExp]> = [
-    ['agents.ts', /app\.delete\('\/api\/agents\/:name'/],
-    ['skills.ts', /app\.delete\('\/api\/skills\/:name'/],
-    ['mcps.ts', /app\.delete\('\/api\/mcps\/:name'/],
+    ['agents.ts', /app\.delete\('\/api\/agents\/:id'/],
+    ['skills.ts', /app\.delete\('\/api\/skills\/:id'/],
+    ['mcps.ts', /app\.delete\('\/api\/mcps\/:id'/],
     ['plugins.ts', /app\.delete\('\/api\/plugins\/:id'/],
-    ['workgroups.ts', /app\.delete\('\/api\/workgroups\/:name'/],
+    ['workgroups.ts', /app\.delete\('\/api\/workgroups\/:id'/],
     ['workflows.ts', /app\.delete\('\/api\/workflows\/:id'/],
     ['tasks.ts', /app\.delete\('\/api\/tasks\/:id'/], // PR-3 lights this up
   ]

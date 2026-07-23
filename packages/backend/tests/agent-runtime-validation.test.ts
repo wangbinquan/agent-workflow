@@ -53,13 +53,13 @@ describe('RFC-111/F6: agent runtime reference validation', () => {
   })
 
   test('updateAgent rejects repointing to an unknown runtime', async () => {
-    await createAgent(db, { ...base, name: 'a', runtime: 'opencode' })
-    await expect(updateAgent(db, 'a', { runtime: 'nope' })).rejects.toThrow(/unknown runtime/)
+    const agent = await createAgent(db, { ...base, name: 'a', runtime: 'opencode' })
+    await expect(updateAgent(db, agent.id, { runtime: 'nope' })).rejects.toThrow(/unknown runtime/)
   })
 
   test('updateAgent allows clearing the pin to null (inherit)', async () => {
-    await createAgent(db, { ...base, name: 'a', runtime: 'opencode' })
-    const cleared = await updateAgent(db, 'a', { runtime: null })
+    const agent = await createAgent(db, { ...base, name: 'a', runtime: 'opencode' })
+    const cleared = await updateAgent(db, agent.id, { runtime: null })
     expect(cleared.runtime).toBeUndefined()
   })
 
@@ -76,9 +76,9 @@ describe('RFC-111/F6: agent runtime reference validation', () => {
   // agent's OTHER fields stay editable (mirrors RFC-099 "only validate NEW refs").
   test('RFC-118: updateAgent allows re-saving an already-pinned now-disabled runtime', async () => {
     await createRuntime(db, { name: 'oc-y', protocol: 'opencode' })
-    await createAgent(db, { ...base, name: 'a', runtime: 'oc-y' })
+    const agent = await createAgent(db, { ...base, name: 'a', runtime: 'oc-y' })
     await setRuntimeEnabled(db, 'oc-y', false, 'opencode') // disabled AFTER the agent pinned it
-    const updated = await updateAgent(db, 'a', { runtime: 'oc-y', description: 'edited' })
+    const updated = await updateAgent(db, agent.id, { runtime: 'oc-y', description: 'edited' })
     expect(updated.runtime).toBe('oc-y')
     expect(updated.description).toBe('edited')
   })
@@ -86,7 +86,7 @@ describe('RFC-111/F6: agent runtime reference validation', () => {
   test('RFC-118: updateAgent rejects CHANGING the pin to a disabled runtime', async () => {
     await createRuntime(db, { name: 'oc-z', protocol: 'opencode' })
     await setRuntimeEnabled(db, 'oc-z', false, 'opencode')
-    await createAgent(db, { ...base, name: 'a', runtime: 'opencode' })
-    await expect(updateAgent(db, 'a', { runtime: 'oc-z' })).rejects.toThrow(/disabled runtime/)
+    const agent = await createAgent(db, { ...base, name: 'a', runtime: 'opencode' })
+    await expect(updateAgent(db, agent.id, { runtime: 'oc-z' })).rejects.toThrow(/disabled runtime/)
   })
 })

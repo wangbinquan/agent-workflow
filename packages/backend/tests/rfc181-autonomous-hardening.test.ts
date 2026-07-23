@@ -35,7 +35,14 @@ import {
   WorkgroupDraftSnapshotSchema,
 } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { clarifyRounds, nodeRuns, tasks, workflows, workgroupAssignments } from '../src/db/schema'
+import {
+  agents,
+  clarifyRounds,
+  nodeRuns,
+  tasks,
+  workflows,
+  workgroupAssignments,
+} from '../src/db/schema'
 import { mintNodeRun } from '../src/services/nodeRunMint'
 import {
   createWorkgroup,
@@ -52,6 +59,7 @@ import { TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SRC = (p: string): string => readFileSync(resolve(import.meta.dir, '..', 'src', p), 'utf8')
+const PLANNER_AGENT_ID = '01HPLANNERAGENT000000000000'
 
 function groupInput(
   overrides: Record<string, unknown> = {},
@@ -66,7 +74,12 @@ function groupInput(
     maxRounds: 12,
     completionGate: true,
     members: [
-      { memberType: 'agent', agentName: 'planner-agent', displayName: 'planner', roleDesc: '' },
+      {
+        memberType: 'agent',
+        agentId: PLANNER_AGENT_ID,
+        displayName: 'planner',
+        roleDesc: '',
+      },
     ],
     ...overrides,
   })
@@ -74,8 +87,14 @@ function groupInput(
 
 describe('RFC-181 D + RFC-225 — create defaults and complete save snapshots', () => {
   let db: DbClient
-  beforeEach(() => {
+  beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
+    await db.insert(agents).values({
+      id: PLANNER_AGENT_ID,
+      name: 'planner-agent',
+      description: '',
+      outputs: '[]',
+    })
   })
 
   test('create may omit the budget, while a versioned editable snapshot is complete', () => {

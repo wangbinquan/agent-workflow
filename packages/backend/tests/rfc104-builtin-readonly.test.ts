@@ -90,6 +90,17 @@ async function builtinWorkflowId(db: DbClient): Promise<string> {
   return wf.id
 }
 
+function builtinAgentId(db: DbClient): string {
+  const agent = db
+    .select()
+    .from(agents)
+    .where(eq(agents.name, SKILL_MERGER_AGENT_NAME))
+    .all()
+    .find((row) => row.builtin)
+  if (!agent) throw new Error('built-in agent not seeded')
+  return agent.id
+}
+
 async function expect403Builtin(res: Response): Promise<void> {
   expect(res.status).toBe(403)
   expect(JSON.stringify(await res.json())).toContain('builtin-readonly')
@@ -138,10 +149,23 @@ describe('RFC-104 — route guards refuse mutating a built-in (even as admin)', 
   beforeEach(() => resetBroadcastersForTests())
   afterEach(() => resetBroadcastersForTests())
 
+  test('Settings resolves the merger through its stable semantic route', async () => {
+    const { db, app } = buildApp()
+    await seedFusionResources(db)
+
+    const response = await api(app, '/api/agents/builtins/skill-merger')
+    expect(response.status).toBe(200)
+    expect((await response.json()) as { id: string; builtin: boolean }).toMatchObject({
+      id: SKILL_MERGER_AGENT_ID,
+      builtin: true,
+    })
+    expect((await api(app, `/api/agents/${SKILL_MERGER_AGENT_NAME}`)).status).toBe(404)
+  })
+
   test('agent PUT / DELETE / rename on the built-in → 403 builtin-readonly', async () => {
     const { db, app } = buildApp()
     await seedFusionResources(db)
-    const base = `/api/agents/${SKILL_MERGER_AGENT_NAME}`
+    const base = `/api/agents/${builtinAgentId(db)}`
 
     await expect403Builtin(
       await api(app, base, { method: 'PUT', body: JSON.stringify({ description: 'hijack' }) }),
@@ -165,7 +189,7 @@ describe('RFC-104 — route guards refuse mutating a built-in (even as admin)', 
     const { db, app } = buildApp()
     await seedFusionResources(db)
     await createRuntime(db, { name: 'oc-haiku', protocol: 'opencode', model: 'haiku' })
-    const base = `/api/agents/${SKILL_MERGER_AGENT_NAME}`
+    const base = `/api/agents/${builtinAgentId(db)}`
 
     // runtime-only patch lands.
     const ok = await api(app, base, {
@@ -226,7 +250,7 @@ describe('RFC-104 — route guards refuse mutating a built-in (even as admin)', 
     const id = await builtinWorkflowId(db)
 
     await expect403Builtin(
-      await api(app, `/api/agents/${SKILL_MERGER_AGENT_NAME}/acl`, {
+      await api(app, `/api/agents/${builtinAgentId(db)}/acl`, {
         method: 'PUT',
         body: JSON.stringify({ visibility: 'private' }),
       }),
@@ -291,16 +315,14 @@ describe('RFC-104 — route guards refuse mutating a built-in (even as admin)', 
   test('the guard does NOT over-block normal (non-built-in) resources', async () => {
     const { db, app } = buildApp()
     await seedFusionResources(db)
-    expect(
-      (
-        await api(app, '/api/agents', {
-          method: 'POST',
-          body: JSON.stringify(agentPayload('my-coder')),
-        })
-      ).status,
-    ).toBe(201)
+    const created = await api(app, '/api/agents', {
+      method: 'POST',
+      body: JSON.stringify(agentPayload('my-coder')),
+    })
+    expect(created.status).toBe(201)
+    const { id } = (await created.json()) as { id: string }
     // A normal agent (builtin=false) edits fine — the lock is built-in-only.
-    const put = await api(app, '/api/agents/my-coder', {
+    const put = await api(app, `/api/agents/${id}`, {
       method: 'PUT',
       body: JSON.stringify({ description: 'edited' }),
     })

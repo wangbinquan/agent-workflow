@@ -81,8 +81,8 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
   })
 }
 
-async function seedPlannerAgent(db: DbClient): Promise<void> {
-  await createAgent(db, {
+async function seedPlannerAgent(db: DbClient): Promise<string> {
+  const agent = await createAgent(db, {
     name: 'wg-planner',
     description: 'plans things',
     outputs: ['plan'],
@@ -95,6 +95,7 @@ async function seedPlannerAgent(db: DbClient): Promise<void> {
     frontmatterExtra: {},
     bodyMd: 'plan the work',
   })
+  return agent.id
 }
 
 // RFC-223 (PR-3b): the orchestrator emits opaque member tokens; the sole pool
@@ -110,7 +111,7 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
     const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc167-e2e-'))
     const db = createInMemoryDb(MIGRATIONS)
     try {
-      await seedPlannerAgent(db)
+      const plannerId = await seedPlannerAgent(db)
       await createWorkgroup(db, {
         name: 'dyn-e2e',
         description: '',
@@ -120,7 +121,7 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
         maxRounds: 5,
         completionGate: false,
         members: [
-          { memberType: 'agent', agentName: 'wg-planner', displayName: 'planner', roleDesc: '' },
+          { memberType: 'agent', agentId: plannerId, displayName: 'planner', roleDesc: '' },
         ],
       })
       const actor = buildActor({

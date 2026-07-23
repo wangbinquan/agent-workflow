@@ -192,9 +192,7 @@ describe('RFC-223 PR-3a — DB locks', () => {
       switches: { shareOutputs: true, directMessages: false, blackboard: false },
       maxRounds: 5,
       completionGate: false,
-      members: [
-        { memberType: 'agent', agentName: 'planner', displayName: 'planner', roleDesc: '' },
-      ],
+      members: [{ memberType: 'agent', agentId: agent.id, displayName: 'planner', roleDesc: '' }],
     })
     const group = await getWorkgroup(db, 'squad')
     expect(group).not.toBeNull()
@@ -229,9 +227,9 @@ describe('RFC-223 PR-3a — DB locks', () => {
     // The guard matches source_agent_id, so agent A's delete/rename is NOT
     // blocked by the other agent's task — and the error (which would carry that
     // task's id) never fires.
-    const renamed = await renameAgent(db, 'writer', { newName: 'writer2' }, ACTOR)
+    const renamed = await renameAgent(db, a.id, { newName: 'writer2' })
     expect(renamed.name).toBe('writer2')
-    await deleteAgent(db, 'writer2', ACTOR)
+    await deleteAgent(db, a.id, ACTOR)
     // sanity: A really is gone; the unrelated task row is untouched.
     expect(a.name).toBe('writer')
     const row = (await db.select().from(tasks).where(eq(tasks.id, otherTaskId)))[0]

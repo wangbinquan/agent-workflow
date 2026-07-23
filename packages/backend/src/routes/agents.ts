@@ -1,11 +1,12 @@
 // GET    /api/agents             — list
-// GET    /api/agents/:name       — one
+// GET    /api/agents/:id         — one
 // POST   /api/agents             — create
-// PUT    /api/agents/:name       — update (any subset of fields)
-// DELETE /api/agents/:name       — delete (refuses if referenced)
-// POST   /api/agents/:name/rename — rename (refuses if referenced or name taken)
+// PUT    /api/agents/:id         — update (any subset of fields)
+// DELETE /api/agents/:id         — delete (refuses if referenced)
+// POST   /api/agents/:id/rename  — display-name change (refuses name collision)
 
 import {
+  type AgentClosureSummary,
   AgentNameSchema,
   CreateAgentSchema,
   rejectRetiredStartTaskKeys,
@@ -16,12 +17,11 @@ import {
 } from '@agent-workflow/shared'
 import { z } from 'zod'
 import type { Hono } from 'hono'
-import { actorOf, type Actor } from '@/auth/actor'
+import { actorOf, SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
 import {
   createAgent,
   deleteAgent,
-  getAgent,
   getAgentById,
   listAgents,
   renameAgent,
@@ -31,7 +31,12 @@ import { resolveDependsClosure, validateDependsOn } from '@/services/agentDeps'
 import { resolveAgentRefs } from '@/services/agentRefs'
 import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
 import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
-import { assertNotBuiltin, excludeBuiltinAgents, isBuiltinRow } from '@/services/systemResources'
+import {
+  assertNotBuiltin,
+  excludeBuiltinAgents,
+  isBuiltinRow,
+  SKILL_MERGER_AGENT_ID,
+} from '@/services/systemResources'
 import { mcps, plugins, skills } from '@/db/schema'
 import { inArray } from 'drizzle-orm'
 import { startAgentTask } from '@/services/agentLaunch'
@@ -65,10 +70,10 @@ function isRuntimeOnlyAgentPatch(body: unknown): boolean {
 export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
   // RFC-099: load-or-404 that treats "missing" and "not visible" identically
   // (same code + message) so existence never leaks to non-granted users.
-  async function loadVisibleAgent(actor: Actor, name: string) {
-    const agent = await getAgent(deps.db, name)
+  async function loadVisibleAgent(actor: Actor, id: string) {
+    const agent = await getAgentById(deps.db, id)
     if (agent === null || !(await canViewResource(deps.db, actor, 'agent', agent))) {
-      throw new NotFoundError('agent-not-found', `agent '${name}' not found`)
+      throw new NotFoundError('agent-not-found', 'agent not found')
     }
     return agent
   }
@@ -81,22 +86,25 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
     return c.json(await filterVisibleRows(deps.db, actorOf(c), 'agent', list))
   })
 
-  app.get('/api/agents/:name', async (c) => {
-    const agent = await loadVisibleAgent(actorOf(c), c.req.param('name'))
+  // Stable semantic seam for the hidden Settings resource. PR4 seeds and
+  // repairs this exact id; never fall back to its mutable display name.
+  app.get('/api/agents/builtins/skill-merger', async (c) => {
+    const agent = await getAgentById(deps.db, SKILL_MERGER_AGENT_ID)
+    if (
+      agent === null ||
+      agent.id !== SKILL_MERGER_AGENT_ID ||
+      agent.builtin !== true ||
+      agent.ownerUserId !== SYSTEM_USER_ID ||
+      !(await canViewResource(deps.db, actorOf(c), 'agent', agent))
+    ) {
+      throw new NotFoundError('agent-not-found', 'agent not found')
+    }
     return c.json(agent)
   })
 
-  // RFC-177: resolve an agent by its stable id → current name, so a task's frozen
-  // `sourceAgentId` subject link survives a rename/reuse of the name (never opens a
-  // same-named replacement). Two-segment path never collides with :name
-  // (arity-distinct). Invisible/missing → identical 404; returns ONLY {name}.
-  app.get('/api/agents/by-id/:id', async (c) => {
-    const actor = actorOf(c)
-    const agent = await getAgentById(deps.db, c.req.param('id'))
-    if (agent === null || !(await canViewResource(deps.db, actor, 'agent', agent))) {
-      throw new NotFoundError('agent-not-found', 'agent not found')
-    }
-    return c.json({ name: agent.name })
+  app.get('/api/agents/:id', async (c) => {
+    const agent = await loadVisibleAgent(actorOf(c), c.req.param('id'))
+    return c.json(agent)
   })
 
   app.post('/api/agents', async (c) => {
@@ -119,8 +127,8 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
     return c.json(created, 201)
   })
 
-  app.put('/api/agents/:name', async (c) => {
-    const name = c.req.param('name')
+  app.put('/api/agents/:id', async (c) => {
+    const id = c.req.param('id')
     const body = await safeJson(c.req.raw)
     const parsed = UpdateAgentSchema.safeParse(body)
     if (!parsed.success) {
@@ -129,7 +137,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
       })
     }
     const actor = actorOf(c)
-    const existing = await loadVisibleAgent(actor, name)
+    const existing = await loadVisibleAgent(actor, id)
     // RFC-117: built-in framework agents (aw-skill-merger) stay read-only EXCEPT a
     // runtime-ONLY patch — an admin may point fusion's merger at a runtime profile
     // (the "select a runtime" parity user agents have). Any other field, or a mixed
@@ -144,30 +152,31 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
     // produces the persisted ids. Only NEWLY-added references (diffed by RESOLVED
     // ID, not raw token) are checked — a grandfathered ref re-submitted by name is
     // not mis-flagged as new.
-    const updated = await updateAgent(deps.db, name, parsed.data, actor)
+    const updated = await updateAgent(deps.db, id, parsed.data, actor)
     return c.json(updated)
   })
 
-  app.delete('/api/agents/:name', async (c) => {
-    const name = c.req.param('name')
+  app.delete('/api/agents/:id', async (c) => {
+    const id = c.req.param('id')
     const actor = actorOf(c)
-    const existing = await loadVisibleAgent(actor, name)
+    const existing = await loadVisibleAgent(actor, id)
     assertNotBuiltin('agent', existing) // RFC-104: built-ins are read-only
     await requireResourceOwner(deps.db, actor, 'agent', existing)
     // RFC-222 (D5): type-to-confirm — echo the current name (N-5 order).
     assertDeleteConfirm(await readDeleteBody(c), existing.name, 'agent')
-    await deleteAgent(deps.db, name, actor)
+    await deleteAgent(deps.db, id, actor)
     return c.body(null, 204)
   })
 
-  // RFC-165 §4 — launch a SINGLE-AGENT task (POST /api/agents/:name/tasks).
+  // RFC-165 §4 — launch a SINGLE-AGENT task (POST /api/agents/:id/tasks).
   // Service-layer entry (the builtin __agent_host__ workflow would 403
   // assertWorkflowLaunchable via /api/tasks by design); permission-wise this
   // is a LAUNCH, gated by tasks:launch in server.ts (F15) — deliberately
   // exempt from the agents:write method gate. The schema only ever declared
   // modern space fields, so no raw-key gate is needed (workgroup precedent).
-  app.post('/api/agents/:name/tasks', async (c) => {
-    const name = c.req.param('name')
+  app.post('/api/agents/:id/tasks', async (c) => {
+    const actor = actorOf(c)
+    const existing = await loadVisibleAgent(actor, c.req.param('id'))
     // RFC-218: path<ext> input ports bind files via multipart — same parser
     // family as POST /api/tasks (services/launchMultipart). JSON stays the
     // only shape for text-port / zero-port launches.
@@ -200,12 +209,11 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
         issues: parsed.error.issues,
       })
     }
-    const actor = actorOf(c)
     const opencodeCmd = resolveOpencodeCmd(deps.configPath)
     const task = await startAgentTask(
       deps.db,
       actor,
-      name,
+      existing.name,
       parsed.data,
       buildStartTaskDeps(deps.db, deps.configPath, actor.user.id, opencodeCmd, deps.secretBox),
       uploads,
@@ -213,8 +221,8 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
     return c.json(task, 201)
   })
 
-  app.post('/api/agents/:name/rename', async (c) => {
-    const name = c.req.param('name')
+  app.post('/api/agents/:id/rename', async (c) => {
+    const id = c.req.param('id')
     const body = await safeJson(c.req.raw)
     const parsed = RenameAgentSchema.safeParse(body)
     if (!parsed.success) {
@@ -223,21 +231,20 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
       })
     }
     const actor = actorOf(c)
-    const existing = await loadVisibleAgent(actor, name)
+    const existing = await loadVisibleAgent(actor, id)
     assertNotBuiltin('agent', existing) // RFC-104: built-ins are read-only
     await requireResourceOwner(deps.db, actor, 'agent', existing)
-    const renamed = await renameAgent(deps.db, name, parsed.data, actor)
+    const renamed = await renameAgent(deps.db, id, parsed.data)
     return c.json(renamed)
   })
 
   // RFC-022: closure read-only endpoint. Returns the BFS-ordered agent list
   // for the named agent's dependsOn closure (root first). Missing closure
-  // members surface as `{ name, missing: true }` placeholders so the UI can
-  // render `<missing> name` rather than silently shrinking the tree.
-  app.get('/api/agents/:name/closure', async (c) => {
-    const name = c.req.param('name')
+  // members surface as `{ name, masked, missing }` placeholders so the UI can
+  // distinguish ACL-hidden rows from deleted references.
+  app.get('/api/agents/:id/closure', async (c) => {
     const actor = actorOf(c)
-    const root = await loadVisibleAgent(actor, name)
+    const root = await loadVisibleAgent(actor, c.req.param('id'))
     const closure = await resolveDependsClosure(deps.db, root, { allowMissing: true })
     // `allowMissing: true` never produces ok:false (cycles only arise when a
     // name appears on the active path — which agent.ts save guard prevents),
@@ -269,6 +276,8 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
   // because every keystroke would otherwise flash red in the browser's
   // network panel. Save-time POST/PUT keep their 400 path.
   const ClosurePreviewBodySchema = z.object({
+    /** Existing resource identity; absent for an unsaved create form. */
+    id: z.string().min(1).optional(),
     name: AgentNameSchema,
     // RFC-223 (PR-1): the edit form's dependsOn holds ids (the picker stores
     // ids). Accept id-or-name refs, not the name grammar.
@@ -284,12 +293,11 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
         details: { issues: parsed.error.issues },
       })
     }
-    // RFC-223 (PR-1): the edit form hands ids, but tolerate names too (id-or-name
-    // resolution, same as create/update). The closure guard is keyed by the
-    // agent's own id — a saved agent supplies it; a brand-new draft has none yet
-    // ('' matches no dep id).
+    // The closure guard is keyed by the existing agent's immutable id. A new
+    // draft has no id and stays synthetic; mutable name is display-only.
     const dependsOn = await resolveAgentRefs(deps.db, parsed.data.dependsOn)
-    const existing = await getAgent(deps.db, parsed.data.name)
+    const existing =
+      parsed.data.id === undefined ? null : await getAgentById(deps.db, parsed.data.id)
     const selfId = existing?.id ?? ''
     try {
       await validateDependsOn(deps.db, selfId, dependsOn, parsed.data.name)
@@ -340,12 +348,12 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
     })
   })
 
-  // RFC-099 — GET/PUT /api/agents/:name/acl
+  // RFC-099 / RFC-223 — GET/PUT /api/agents/:id/acl
   mountAclEndpoints(app, deps, {
     type: 'agent',
     base: '/api/agents',
-    param: 'name',
-    load: (db, name) => getAgent(db, name),
+    param: 'id',
+    load: (db, id) => getAgentById(db, id),
   })
 }
 
@@ -400,36 +408,16 @@ async function loadClosureRefNames(
   }
 }
 
-interface AgentClosureSummary {
-  name: string
-  description: string
-  /**
-   * Skill names this agent itself references. The DependencyTree UI shows
-   * them as a chip (only when non-empty) so users can audit which closure
-   * members contribute which skills. `skillCount` is preserved for
-   * backwards compatibility but `skills` is the source of truth.
-   */
-  skills: string[]
-  skillCount: number
-  dependsOn: string[]
-  /** RFC-028: this agent's mcp[] names for the NodeDetailDrawer Stats tab. */
-  mcp: string[]
-  /** RFC-031: this agent's plugin[] names for the Stats tab. */
-  plugins: string[]
-  missing: boolean
-}
-
 /**
  * RFC-022 closure response shape — minimal projection over `Agent` that the
  * `<DependencyTree>` renderer needs. `skillCount` is computed from
  * `agent.skills.length`; dependency-missing names appear as placeholder rows.
  *
- * RFC-223 (PR-1, Codex impl-gate P2-1/P2-2): stored id refs are projected to
- * display NAMES via `opts.names`; when `opts.visibleAgentIds` is supplied
- * (the GET closure endpoint), members the viewer cannot see are masked — their
- * display identity collapses to their OPAQUE ID (no human name), their fields
- * are blanked, and other members' dependsOn projections keep that id opaque, so
- * a private dependency's name never leaks (D1).
+ * RFC-223: skill/MCP/plugin ids are projected to display names via
+ * `opts.names`; dependency edges stay in `dependsOnIds`. When
+ * `opts.visibleAgentIds` is supplied (the GET closure endpoint), members the
+ * viewer cannot see are masked — their display identity collapses to their
+ * opaque id, owner is hidden, and their other fields are blanked (D1).
  */
 function toAgentClosureSummaries(
   closure: Agent[],
@@ -438,8 +426,7 @@ function toAgentClosureSummaries(
   const { names, visibleAgentIds } = opts
   const isVisible = (id: string): boolean =>
     visibleAgentIds === undefined || visibleAgentIds.has(id)
-  // Display identity: real name when visible, else the opaque id (P2-2).
-  const idToDisplay = new Map(closure.map((a) => [a.id, isVisible(a.id) ? a.name : a.id]))
+  const closureIds = new Set(closure.map((a) => a.id))
   const skillName = (ref: Agent['skills'][number]): string =>
     ref.kind === 'managed' ? (names.skill.get(ref.skillId) ?? ref.skillId) : ref.name
 
@@ -448,25 +435,31 @@ function toAgentClosureSummaries(
     if (!isVisible(a.id)) {
       // Masked: opaque id as identity, everything else blanked.
       out.push({
+        id: a.id,
         name: a.id,
+        ownerUserId: null,
         description: '',
         skills: [],
         skillCount: 0,
-        dependsOn: [],
+        dependsOnIds: [],
         mcp: [],
         plugins: [],
+        masked: true,
         missing: false,
       })
       continue
     }
     out.push({
+      id: a.id,
       name: a.name,
+      ownerUserId: a.ownerUserId ?? null,
       description: a.description,
       skills: a.skills.map(skillName),
       skillCount: a.skills.length,
-      dependsOn: a.dependsOn.map((depId) => idToDisplay.get(depId) ?? depId),
+      dependsOnIds: a.dependsOn,
       mcp: (a.mcp ?? []).map((id) => names.mcp.get(id) ?? id),
       plugins: (a.plugins ?? []).map((id) => names.plugin.get(id) ?? id),
+      masked: false,
       missing: false,
     })
   }
@@ -476,18 +469,21 @@ function toAgentClosureSummaries(
   const missing = new Set<string>()
   for (const a of closure) {
     for (const depId of a.dependsOn) {
-      if (!idToDisplay.has(depId)) missing.add(depId)
+      if (!closureIds.has(depId)) missing.add(depId)
     }
   }
   for (const id of missing) {
     out.push({
+      id,
       name: id,
+      ownerUserId: null,
       description: '',
       skills: [],
       skillCount: 0,
-      dependsOn: [],
+      dependsOnIds: [],
       mcp: [],
       plugins: [],
+      masked: false,
       missing: true,
     })
   }

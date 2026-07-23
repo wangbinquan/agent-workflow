@@ -54,21 +54,17 @@ const AGENT_BASE = {
   bodyMd: '',
 }
 
-// PR-3 实现门 P1 —— identity fence 源级锁。grant 预取（async）把 `existing`
-// 捕获与 dbTxSync 守卫事务之间拉开了 yield 窗口；并发同名替换可让事务按
-// name 动到替身、绕过 isAgentLaunching(existing.id) 的 ABA 防护。修复 =
-// 事务首步重读该 name 的行并断言 id === existing.id（agent-id-mismatch）。
+// RFC-223 PR7 —— canonical-id fence 源级锁。delete/rename never resolve
+// identity through a mutable name; each transaction re-reads by the URL id.
 // bun:sqlite 驱动同步完成一切 await，进程内交错无法在单测里确定性构造——
 // 按仓规以源级断言锁住 fence 不被 refactor 拆掉；happy path 无误伤由本文件
 // 与 agents/rfc165 系列的全部删除/改名行为测试保证。
 describe('RFC-203 T6 实现门 P1：agent identity fence（源级锁）', () => {
   test('deleteAgent 与 renameAgent 的事务体都以 id fence 开场', () => {
     const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'agent.ts'), 'utf8')
-    const fences = src.match(/fenceRow\.id !== existing\.id/g) ?? []
-    expect(fences.length).toBe(2)
-    const mismatches = src.match(/'agent-id-mismatch'/g) ?? []
-    expect(mismatches.length).toBeGreaterThanOrEqual(2)
-    // fence 必须在 grant 预取之后的事务内（关的是预取拉开的窗口）
+    const fences = src.match(/where\(eq\(agents\.id, id\)\)\.get\(\)/g) ?? []
+    expect(fences.length).toBeGreaterThanOrEqual(2)
+    // delete fence stays after the async disclosure-grant prefetch.
     expect(src.indexOf('fenceRow')).toBeGreaterThan(src.indexOf('listGrantedResourceIds'))
   })
 })
@@ -85,13 +81,13 @@ describe('RFC-203 T6 引用披露 ACL', () => {
     await seedUser(db, 'u-admin', 'admin')
   })
 
-  async function seedWorkflowUsing(agentName: string, visibility: 'public' | 'private') {
+  async function seedWorkflowUsing(agentId: string, visibility: 'public' | 'private') {
     await db.insert(workflows).values({
       id: ulid(),
       name: `wf-${visibility}`,
       definition: JSON.stringify({
         $schema_version: 1,
-        nodes: [{ id: 'n1', kind: 'agent-single', agentName }],
+        nodes: [{ id: 'n1', kind: 'agent-single', agentId }],
         edges: [],
       }),
       version: 1,
@@ -103,13 +99,13 @@ describe('RFC-203 T6 引用披露 ACL', () => {
   }
 
   test('agent-in-use：他人私有工作流只计数不泄名；admin 全可见', async () => {
-    await createAgent(db, { name: 'ax', ...AGENT_BASE })
-    await seedWorkflowUsing('ax', 'private')
-    await seedWorkflowUsing('ax', 'public')
+    const agent = await createAgent(db, { name: 'ax', ...AGENT_BASE })
+    await seedWorkflowUsing(agent.id, 'private')
+    await seedWorkflowUsing(agent.id, 'public')
 
     // 非 admin 的资源 owner：public 名单可见，私有只进 hiddenCount。
     try {
-      await deleteAgent(db, 'ax', owner)
+      await deleteAgent(db, agent.id, owner)
       throw new Error('expected ConflictError')
     } catch (err) {
       expect(err).toBeInstanceOf(ConflictError)
@@ -126,7 +122,7 @@ describe('RFC-203 T6 引用披露 ACL', () => {
 
     // admin：两条全列名。
     try {
-      await deleteAgent(db, 'ax', admin)
+      await deleteAgent(db, agent.id, admin)
       throw new Error('expected ConflictError')
     } catch (err) {
       const d = (err as ConflictError).details as {
@@ -139,7 +135,7 @@ describe('RFC-203 T6 引用披露 ACL', () => {
   })
 
   test('mcp-still-referenced：他人私有代理引用只计数不泄名', async () => {
-    await createMcp(db, {
+    const mcp = await createMcp(db, {
       name: 'm1',
       description: '',
       type: 'local',
@@ -157,7 +153,7 @@ describe('RFC-203 T6 引用披露 ACL', () => {
       .where(eq(agents.name, 'priv-user'))
 
     try {
-      await deleteMcp(db, 'm1', owner)
+      await deleteMcp(db, mcp.id, owner)
       throw new Error('expected ConflictError')
     } catch (err) {
       expect(err).toBeInstanceOf(ConflictError)
@@ -188,7 +184,7 @@ describe('RFC-203 T6 引用披露 ACL', () => {
       name: 'their-nightly',
       ownerUserId: 'u-other',
       launchKind: 'workgroup',
-      launchPayload: JSON.stringify({ workgroupName: 'wg1' }),
+      launchPayload: JSON.stringify({ workgroupId }),
       scheduleSpec: JSON.stringify({ kind: 'daily', at: '09:00', timezone: 'UTC' }),
       enabled: true,
       createdAt: 1,

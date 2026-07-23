@@ -137,8 +137,8 @@ export function createApp(deps: AppDeps): Hono {
   // all three launch endpoints gate on tasks:launch uniformly, and the agent
   // launch path is exempt from the agents:write method gate below.
   app.on('POST', '/api/tasks', requirePermission('tasks:launch'))
-  app.on('POST', '/api/workgroups/:name/tasks', requirePermission('tasks:launch'))
-  app.on('POST', '/api/agents/:name/tasks', requirePermission('tasks:launch'))
+  app.on('POST', '/api/workgroups/:id/tasks', requirePermission('tasks:launch'))
+  app.on('POST', '/api/agents/:id/tasks', requirePermission('tasks:launch'))
   // RFC-222 — task deletion is admin-only (tasks:delete ∉ manager/user).
   app.on('DELETE', '/api/tasks/:id', requirePermission('tasks:delete'))
   app.use(

@@ -117,15 +117,17 @@ async function getOverview(h: Harness, token: string): Promise<OverviewResponse>
  * PRIVATE agent / approved on the PRIVATE workflow).
  */
 async function seedResources(h: Harness): Promise<void> {
+  const agentIds = new Map<string, string>()
   for (const name of ['pub-agent', 'priv-agent', 'granted-agent', 'planner-agent', 'coder-a']) {
     const res = await req(h.app, h.alice.token, '/api/agents', {
       method: 'POST',
       body: JSON.stringify(agentBody(name)),
     })
     expect(res.status).toBe(201)
+    agentIds.set(name, ((await res.json()) as { id: string }).id)
   }
   for (const name of ['priv-agent', 'granted-agent']) {
-    const res = await req(h.app, h.alice.token, `/api/agents/${name}/acl`, {
+    const res = await req(h.app, h.alice.token, `/api/agents/${agentIds.get(name)!}/acl`, {
       method: 'PUT',
       body: JSON.stringify({ visibility: 'private' }),
     })
@@ -133,7 +135,7 @@ async function seedResources(h: Harness): Promise<void> {
   }
   expect(
     (
-      await req(h.app, h.alice.token, '/api/agents/granted-agent/acl', {
+      await req(h.app, h.alice.token, `/api/agents/${agentIds.get('granted-agent')!}/acl`, {
         method: 'PUT',
         body: JSON.stringify({ userIds: [h.bob.id] }),
       })
@@ -173,20 +175,33 @@ async function seedResources(h: Harness): Promise<void> {
     maxRounds: 12,
     completionGate: true,
     members: [
-      { memberType: 'agent', agentName: 'planner-agent', displayName: 'planner', roleDesc: '协调' },
-      { memberType: 'agent', agentName: 'coder-a', displayName: 'coder', roleDesc: '实现' },
+      {
+        memberType: 'agent',
+        agentId: agentIds.get('planner-agent')!,
+        displayName: 'planner',
+        roleDesc: '协调',
+      },
+      {
+        memberType: 'agent',
+        agentId: agentIds.get('coder-a')!,
+        displayName: 'coder',
+        roleDesc: '实现',
+      },
     ],
   })
+  let secretSquadId = ''
   for (const name of ['pub-squad', 'secret-squad']) {
     const res = await req(h.app, h.alice.token, '/api/workgroups', {
       method: 'POST',
       body: JSON.stringify(wgBody(name)),
     })
     expect(res.status).toBe(201)
+    const id = ((await res.json()) as { id: string }).id
+    if (name === 'secret-squad') secretSquadId = id
   }
   expect(
     (
-      await req(h.app, h.alice.token, '/api/workgroups/secret-squad/acl', {
+      await req(h.app, h.alice.token, `/api/workgroups/${secretSquadId}/acl`, {
         method: 'PUT',
         body: JSON.stringify({ visibility: 'private' }),
       })
@@ -238,11 +253,7 @@ async function seedResources(h: Harness): Promise<void> {
     },
   ])
 
-  const privAgentId = (
-    (await (await req(h.app, h.alice.token, '/api/agents/priv-agent')).json()) as {
-      id: string
-    }
-  ).id
+  const privAgentId = agentIds.get('priv-agent')!
   await h.db.insert(memories).values([
     {
       id: 'mem-global-approved',

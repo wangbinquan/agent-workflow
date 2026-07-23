@@ -52,14 +52,14 @@ async function createMcp(app: Hono, description = 'v1'): Promise<Resource> {
   return response.json() as Promise<Resource>
 }
 
-async function getMcp(app: Hono, name = 'pg'): Promise<Resource> {
-  const response = await req(app, `/api/mcps/${name}`)
+async function getMcp(app: Hono, id: string): Promise<Resource> {
+  const response = await req(app, `/api/mcps/${id}`)
   expect(response.status).toBe(200)
   return response.json() as Promise<Resource>
 }
 
-function postProbe(app: Hono, hash: string, name = 'pg'): Promise<Response> {
-  return req(app, `/api/mcps/${name}/probe`, {
+function postProbe(app: Hono, id: string, hash: string): Promise<Response> {
+  return req(app, `/api/mcps/${id}/probe`, {
     method: 'POST',
     body: JSON.stringify({ expectedConfigHash: hash }),
   })
@@ -95,7 +95,7 @@ describe('RFC-201 MCP exact operation wire', () => {
     const created = await createMcp(app)
     expect(created.operationConfigHash).toMatch(/^[a-f0-9]{64}$/)
 
-    const noOp = await req(app, '/api/mcps/pg', {
+    const noOp = await req(app, `/api/mcps/${created.id}`, {
       method: 'PUT',
       body: JSON.stringify({ description: 'v1', config: { command: ['fake'] }, enabled: true }),
     })
@@ -104,7 +104,7 @@ describe('RFC-201 MCP exact operation wire', () => {
     expect(unchanged.updatedAt).toBe(created.updatedAt)
     expect(unchanged.operationConfigHash).toBe(created.operationConfigHash)
 
-    const changedResponse = await req(app, '/api/mcps/pg', {
+    const changedResponse = await req(app, `/api/mcps/${created.id}`, {
       method: 'PUT',
       body: JSON.stringify({ description: 'v2' }),
     })
@@ -116,7 +116,7 @@ describe('RFC-201 MCP exact operation wire', () => {
   test('stale expected hash returns stable 409 before opening transport', async () => {
     const app = harness()
     const created = await createMcp(app)
-    await req(app, '/api/mcps/pg', {
+    await req(app, `/api/mcps/${created.id}`, {
       method: 'PUT',
       body: JSON.stringify({ description: 'foreign' }),
     })
@@ -127,7 +127,7 @@ describe('RFC-201 MCP exact operation wire', () => {
         return { client: client('never'), handshakeMs: 0 }
       },
     })
-    const response = await postProbe(app, created.operationConfigHash)
+    const response = await postProbe(app, created.id, created.operationConfigHash)
     expect(response.status).toBe(409)
     expect(((await response.json()) as { code: string }).code).toBe('resource-operation-stale')
     expect(opens).toBe(0)
@@ -145,8 +145,8 @@ describe('RFC-201 MCP exact operation wire', () => {
         return { client: client('joined'), handshakeMs: 1 }
       },
     })
-    const a = postProbe(app, created.operationConfigHash)
-    const b = postProbe(app, created.operationConfigHash)
+    const a = postProbe(app, created.id, created.operationConfigHash)
+    const b = postProbe(app, created.id, created.operationConfigHash)
     while (opens === 0) await Promise.resolve()
     expect(opens).toBe(1)
     gate.resolve()
@@ -178,21 +178,21 @@ describe('RFC-201 MCP exact operation wire', () => {
     }
     __setProbeOptionsForTesting({ openClient: opener })
 
-    const oldResponseP = postProbe(app, h1.operationConfigHash)
+    const oldResponseP = postProbe(app, h1.id, h1.operationConfigHash)
     while (!oldOpened) await Promise.resolve()
-    const put = await req(app, '/api/mcps/pg', {
+    const put = await req(app, `/api/mcps/${h1.id}`, {
       method: 'PUT',
       body: JSON.stringify({ description: 'v2' }),
     })
     const h2 = (await put.json()) as Resource
-    const newResponse = await postProbe(app, h2.operationConfigHash)
+    const newResponse = await postProbe(app, h2.id, h2.operationConfigHash)
     expect(newResponse.status).toBe(200)
     oldGate.resolve()
     const oldResponse = await oldResponseP
     expect(oldResponse.status).toBe(409)
     expect(((await oldResponse.json()) as { code: string }).code).toBe('resource-operation-stale')
 
-    const persisted = await req(app, '/api/mcps/pg/probe')
+    const persisted = await req(app, `/api/mcps/${h2.id}/probe`)
     const persistedJson = (await persisted.json()) as { tools: Array<{ name: string }> }
     expect(persistedJson.tools.map((tool) => tool.name)).toEqual(['new'])
   })
@@ -210,29 +210,28 @@ describe('RFC-201 MCP exact operation wire', () => {
           return { client: client('stale'), handshakeMs: 1 }
         },
       })
-      const responseP = postProbe(app, created.operationConfigHash)
+      const responseP = postProbe(app, created.id, created.operationConfigHash)
       while (!opened) await Promise.resolve()
       const changed =
         mutation === 'rename'
-          ? await req(app, '/api/mcps/pg/rename', {
+          ? await req(app, `/api/mcps/${created.id}/rename`, {
               method: 'POST',
               body: JSON.stringify({ newName: 'pg-renamed' }),
             })
-          : await req(app, '/api/mcps/pg/acl', {
+          : await req(app, `/api/mcps/${created.id}/acl`, {
               method: 'PUT',
               body: JSON.stringify({ visibility: 'private' }),
             })
       expect(changed.status).toBe(200)
       const changedResource =
-        mutation === 'rename' ? ((await changed.clone().json()) as Resource) : await getMcp(app)
+        mutation === 'rename'
+          ? ((await changed.clone().json()) as Resource)
+          : await getMcp(app, created.id)
       expect(changedResource.operationConfigHash).not.toBe(created.operationConfigHash)
       gate.resolve()
       const response = await responseP
       expect(response.status).toBe(409)
-      const probeGet = await req(
-        app,
-        `/api/mcps/${mutation === 'rename' ? 'pg-renamed' : 'pg'}/probe`,
-      )
+      const probeGet = await req(app, `/api/mcps/${created.id}/probe`)
       expect(probeGet.status).toBe(404)
       expect(((await probeGet.json()) as { code: string }).code).toBe('probe-not-found')
     }
@@ -244,15 +243,15 @@ describe('RFC-201 MCP exact operation wire', () => {
     __setProbeOptionsForTesting({
       openClient: async () => ({ client: client('renamed-tool'), handshakeMs: 0 }),
     })
-    expect((await postProbe(app, created.operationConfigHash)).status).toBe(200)
+    expect((await postProbe(app, created.id, created.operationConfigHash)).status).toBe(200)
 
-    const renamed = await req(app, '/api/mcps/pg/rename', {
+    const renamed = await req(app, `/api/mcps/${created.id}/rename`, {
       method: 'POST',
       body: JSON.stringify({ newName: 'pg-renamed' }),
     })
     expect(renamed.status).toBe(200)
 
-    const probe = await req(app, '/api/mcps/pg-renamed/probe')
+    const probe = await req(app, `/api/mcps/${created.id}/probe`)
     expect(probe.status).toBe(200)
     expect(
       (await probe.json()) as { mcpName: string; tools: Array<{ name: string }> },
@@ -264,22 +263,22 @@ describe('RFC-201 MCP exact operation wire', () => {
 
   test('frozen clock preserves Save→Probe freshness and Probe→Save staleness', async () => {
     const app = harness()
-    await createMcp(app)
+    const created = await createMcp(app)
     __setProbeOptionsForTesting({
       now: () => 1_000,
       openClient: async () => ({ client: client('clock'), handshakeMs: 0 }),
     })
-    const saveResponse = await req(app, '/api/mcps/pg', {
+    const saveResponse = await req(app, `/api/mcps/${created.id}`, {
       method: 'PUT',
       body: JSON.stringify({ description: 'saved' }),
     })
     const saved = (await saveResponse.json()) as Resource
-    const probeResponse = await postProbe(app, saved.operationConfigHash)
+    const probeResponse = await postProbe(app, saved.id, saved.operationConfigHash)
     const probe = (await probeResponse.json()) as { startedAt: number; configHashUsed: string }
     expect(probe.startedAt).toBeGreaterThan(saved.updatedAt)
     expect(probe.configHashUsed).toBe(saved.operationConfigHash)
 
-    const afterProbeResponse = await req(app, '/api/mcps/pg', {
+    const afterProbeResponse = await req(app, `/api/mcps/${saved.id}`, {
       method: 'PUT',
       body: JSON.stringify({ description: 'after-probe' }),
     })

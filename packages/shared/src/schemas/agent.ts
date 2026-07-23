@@ -295,6 +295,29 @@ export const AgentSchema = z.object({
 })
 export type Agent = z.infer<typeof AgentSchema>
 
+/**
+ * RFC-223 PR7 — dependency-closure wire row. Identity and graph edges are
+ * explicitly id-canonical; `name` and `ownerUserId` are display metadata only.
+ * The preview root of an unsaved draft has no durable id yet and therefore uses
+ * the empty string. ACL-masked and missing rows keep the opaque id as `name` and
+ * expose no owner. `masked` and `missing` are distinct terminal states so
+ * clients never turn an ACL placeholder into a clickable resource link.
+ */
+export const AgentClosureSummarySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  ownerUserId: z.string().nullable().optional(),
+  description: z.string(),
+  skills: z.array(z.string()),
+  skillCount: z.number().int().nonnegative(),
+  dependsOnIds: z.array(z.string()),
+  mcp: z.array(z.string()),
+  plugins: z.array(z.string()),
+  masked: z.boolean(),
+  missing: z.boolean(),
+})
+export type AgentClosureSummary = z.infer<typeof AgentClosureSummarySchema>
+
 /** POST /api/agents body. */
 export const CreateAgentSchema = z.object({
   name: AgentNameSchema,
@@ -328,7 +351,7 @@ export const CreateAgentSchema = z.object({
 })
 export type CreateAgent = z.infer<typeof CreateAgentSchema>
 
-/** PUT /api/agents/:name body. Name changes happen via /rename. */
+/** PUT /api/agents/:id body. Name changes happen via /rename. */
 export const UpdateAgentSchema = CreateAgentSchema.omit({ name: true })
   .partial()
   .extend({
@@ -339,7 +362,7 @@ export const UpdateAgentSchema = CreateAgentSchema.omit({ name: true })
   })
 export type UpdateAgent = z.infer<typeof UpdateAgentSchema>
 
-/** POST /api/agents/:name/rename body. */
+/** POST /api/agents/:id/rename body. */
 export const RenameAgentSchema = z.object({
   newName: AgentNameSchema,
 })

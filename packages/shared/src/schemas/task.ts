@@ -1165,7 +1165,7 @@ export const SyncWorkflowBodySchema = z.object({
 export type SyncWorkflowBody = z.infer<typeof SyncWorkflowBodySchema>
 
 // ---------------------------------------------------------------------------
-// RFC-165 §4 — single-agent launch (POST /api/agents/:name/tasks)
+// RFC-165 §4 — single-agent launch (POST /api/agents/:id/tasks)
 // ---------------------------------------------------------------------------
 
 /**

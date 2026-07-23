@@ -48,11 +48,7 @@ export async function getAgent(db: DbClient, name: string): Promise<Agent | null
   return row ? rowToAgent(row) : null
 }
 
-/**
- * RFC-177: fetch an agent by its stable id (ULID). Powers the by-id subject
- * resolver (`GET /api/agents/by-id/:id`) so a task's frozen `sourceAgentId`
- * link survives a rename/reuse of the agent name. Same shape as `getAgent`.
- */
+/** Fetch an agent by its canonical resource id. */
 export async function getAgentById(db: DbClient, id: string): Promise<Agent | null> {
   const rows = await db.select().from(agents).where(eq(agents.id, id)).limit(1)
   const row = rows[0]
@@ -181,20 +177,20 @@ export async function createAgent(
     updatedAt: now,
   })
 
-  const created = await getAgent(db, input.name)
+  const created = await getAgentById(db, id)
   if (created === null) throw new Error('agent disappeared right after insert')
   return created
 }
 
 export async function updateAgent(
   db: DbClient,
-  name: string,
+  id: string,
   patch: UpdateAgent,
   actor?: Actor | null,
 ): Promise<Agent> {
-  const existing = await getAgent(db, name)
+  const existing = await getAgentById(db, id)
   if (existing === null) {
-    throw new NotFoundError('agent-not-found', `agent '${name}' not found`)
+    throw new NotFoundError('agent-not-found', 'agent not found')
   }
 
   // RFC-223 (PR-1, Codex impl-gate P1-2): resolve patched id-or-name refs →
@@ -287,7 +283,7 @@ export async function updateAgent(
           >) ?? {})
     if (patch.frontmatterExtra === undefined) {
       // Caller patched only a sidecar — start from current row state.
-      const fresh = await getAgent(db, name)
+      const fresh = await getAgentById(db, id)
       if (fresh !== null) {
         Object.assign(baseFm, fresh.frontmatterExtra)
         if (fresh.outputKinds !== undefined && patch.outputKinds === undefined) {
@@ -321,17 +317,18 @@ export async function updateAgent(
   }
   if (patch.bodyMd !== undefined) set.bodyMd = patch.bodyMd
 
-  await db.update(agents).set(set).where(eq(agents.name, name))
-  const updated = await getAgent(db, name)
+  await db.update(agents).set(set).where(eq(agents.id, id))
+  const updated = await getAgentById(db, id)
   if (updated === null) throw new Error('agent disappeared after update')
   return updated
 }
 
-export async function deleteAgent(db: DbClient, name: string, actor: Actor): Promise<void> {
-  const existing = await getAgent(db, name)
+export async function deleteAgent(db: DbClient, id: string, actor: Actor): Promise<void> {
+  const existing = await getAgentById(db, id)
   if (existing === null) {
-    throw new NotFoundError('agent-not-found', `agent '${name}' not found`)
+    throw new NotFoundError('agent-not-found', 'agent not found')
   }
+  const name = existing.name
   // RFC-203 T6: reference-disclosure grant sets, pre-fetched OUTSIDE the
   // guard transaction (dbTxSync is sync) — used only to decide which
   // referencing resource NAMES the refusal details may show.
@@ -345,17 +342,11 @@ export async function deleteAgent(db: DbClient, name: string, actor: Actor): Pro
   // check-then-await-then-write shape let a reference land between the check
   // and the delete. All reads below use the synchronous tx surface.
   dbTxSync(db, (tx) => {
-    // RFC-203 T6 实现门 P1 —— identity fence：上面的 grant 预取是 async，
-    // `existing` 捕获与本事务之间存在 yield 窗口；并发「删除后同名重建 /
-    // 改名腾挪」可把这个 NAME 换绑到另一行，事务按 name 操作就会动到替身、
-    // 绕过它的 launch/ownership 守卫。进事务先重读并断言 id 未变（既有
-    // agent-id-mismatch 语义，RFC-175 先例），把窗口关死。
-    const fenceRow = tx.select({ id: agents.id }).from(agents).where(eq(agents.name, name)).get()
-    if (fenceRow === undefined || fenceRow.id !== existing.id) {
-      throw new ConflictError(
-        'agent-id-mismatch',
-        `agent '${name}' was concurrently replaced; reload and retry`,
-      )
+    // Canonical-id fence: a rename cannot retarget this operation. A concurrent
+    // delete is reported as the same non-enumerating 404 as an absent id.
+    const fenceRow = tx.select({ id: agents.id }).from(agents).where(eq(agents.id, id)).get()
+    if (fenceRow === undefined) {
+      throw new NotFoundError('agent-not-found', 'agent not found')
     }
 
     // RFC-175 (§2e): refuse while a single-agent launch holds this agent's id.
@@ -380,7 +371,7 @@ export async function deleteAgent(db: DbClient, name: string, actor: Actor): Pro
       })
       .from(workflows)
       .all()
-    const refs = workflowsUsingAgentIn(wfRows, name)
+    const refs = workflowsUsingAgentIn(wfRows, existing.id)
     if (refs.length > 0) {
       const refIds = new Set(refs.map((r) => r.id))
       throw new ConflictError(
@@ -461,7 +452,7 @@ export async function deleteAgent(db: DbClient, name: string, actor: Actor): Pro
       })
       .from(scheduledTasks)
       .all()
-    const schedRefs = scheduledRowsReferencingAgent(schedRows, { id: existing.id, name })
+    const schedRefs = scheduledRowsReferencingAgent(schedRows, { id: existing.id })
     if (schedRefs.length > 0) {
       const schedIds = new Set(schedRefs)
       throw new ConflictError(
@@ -473,157 +464,25 @@ export async function deleteAgent(db: DbClient, name: string, actor: Actor): Pro
         ),
       )
     }
-    tx.delete(agents).where(eq(agents.name, name)).run()
+    tx.delete(agents).where(eq(agents.id, id)).run()
   })
 }
 
-export async function renameAgent(
-  db: DbClient,
-  oldName: string,
-  input: RenameAgent,
-  actor: Actor,
-): Promise<Agent> {
-  const existing = await getAgent(db, oldName)
+export async function renameAgent(db: DbClient, id: string, input: RenameAgent): Promise<Agent> {
+  const existing = await getAgentById(db, id)
   if (existing === null) {
-    throw new NotFoundError('agent-not-found', `agent '${oldName}' not found`)
+    throw new NotFoundError('agent-not-found', 'agent not found')
   }
-  if (input.newName === oldName) return existing
+  if (input.newName === existing.name) return existing
 
-  // RFC-165 (F17-r3): guards + the rename run in ONE dbTxSync (mirror of
-  // deleteAgent; the old await gaps let references land mid-flight).
-  // RFC-203 T6: disclosure grant sets (see deleteAgent) — pre-fetched
-  // outside the sync guard transaction.
-  const wfGranted = isResourceAdminActor(actor)
-    ? new Set<string>()
-    : await listGrantedResourceIds(db, actor, 'workflow')
-  const agGranted = isResourceAdminActor(actor)
-    ? new Set<string>()
-    : await listGrantedResourceIds(db, actor, 'agent')
+  // Every live/frozen reference is id-canonical, so rename changes display
+  // metadata only. It must not be blocked by references that continue to point
+  // at this exact row.
   dbTxSync(db, (tx) => {
-    // RFC-203 T6 实现门 P1 —— identity fence：上面的 grant 预取是 async，
-    // `existing` 捕获与本事务之间存在 yield 窗口；并发「删除后同名重建 /
-    // 改名腾挪」可把这个 NAME 换绑到另一行，事务按 name 操作就会动到替身、
-    // 绕过它的 launch/ownership 守卫。进事务先重读并断言 id 未变（既有
-    // agent-id-mismatch 语义，RFC-175 先例），把窗口关死。
-    const fenceRow = tx.select({ id: agents.id }).from(agents).where(eq(agents.name, oldName)).get()
-    if (fenceRow === undefined || fenceRow.id !== existing.id) {
-      throw new ConflictError(
-        'agent-id-mismatch',
-        `agent '${oldName}' was concurrently replaced; reload and retry`,
-      )
-    }
-
-    // RFC-175 (§2e): refuse while a single-agent launch holds this agent's id.
-    // A rename changes the name the launch's frozen snapshot resolves by, so the
-    // runtime could resolve a different agent than the task recorded. Same
-    // in-process reservation as deleteAgent (id survives rename, so the launch's
-    // id stays reserved throughout).
-    if (isAgentLaunching(existing.id)) {
-      throw new ConflictError(
-        'agent-launching',
-        `agent '${oldName}' has a task launch in progress; retry after it completes`,
-      )
-    }
-    const wfRows = tx
-      .select({
-        id: workflows.id,
-        name: workflows.name,
-        definition: workflows.definition,
-        ownerUserId: workflows.ownerUserId,
-        visibility: workflows.visibility,
-      })
-      .from(workflows)
-      .all()
-    const refs = workflowsUsingAgentIn(wfRows, oldName)
-    if (refs.length > 0) {
-      const refIds = new Set(refs.map((r) => r.id))
-      throw new ConflictError(
-        'agent-in-use',
-        `agent '${oldName}' is referenced by ${refs.length} workflow(s); cannot rename`,
-        discloseRefsSync(
-          actor,
-          wfRows.filter((r) => refIds.has(r.id)),
-          wfGranted,
-        ),
-      )
-    }
-
-    // RFC-022 reverse-dep guard (mirror of deleteAgent). Don't silently rename
-    // out from under other agents' dependsOn — the caller must deref first.
-    const depRows = tx
-      .select({
-        id: agents.id,
-        name: agents.name,
-        dependsOn: agents.dependsOn,
-        ownerUserId: agents.ownerUserId,
-        visibility: agents.visibility,
-      })
-      .from(agents)
-      // RFC-223 (PR-1): dependsOn stores agent IDS now — match this agent's id.
-      // The id survives the rename, so references stay valid without cascade.
-      .where(like(agents.dependsOn, `%"${existing.id}"%`))
-      .all()
-    const dependents = agentsDependingOnIn(depRows, existing.id)
-    if (dependents.length > 0) {
-      const depNames = new Set(dependents)
-      throw new ConflictError(
-        'agent-dependency-still-referenced',
-        `agent '${oldName}' is referenced by ${dependents.length} other agent(s)' dependsOn; cannot rename`,
-        discloseRefsSync(
-          actor,
-          depRows.filter((r) => depNames.has(r.name)),
-          agGranted,
-        ),
-      )
-    }
-
-    // RFC-165 §4: renaming under a live single-agent task would strand its
-    // reference exactly like a delete → same 409. RFC-223 (PR-3a, R3-3): match by
-    // the CANONICAL `source_agent_id` (frozen at launch), NOT by name, so a
-    // different owner's same-named task never blocks this rename post-PR-8. (A
-    // rename is in fact ABA-safe for id-frozen tasks — they resolve by id — but
-    // the 409 stays to preserve the RFC-165 soft-reference UX for THIS agent's
-    // own live tasks.)
-    const live = tx
-      .select({ id: tasks.id })
-      .from(tasks)
-      .where(
-        and(
-          eq(tasks.sourceAgentId, existing.id),
-          notInArray(tasks.status, [...TERMINAL_TASK_STATUSES]),
-        ),
-      )
-      .all()
-    if (live.length > 0) {
-      throw new ConflictError(
-        'agent-tasks-active',
-        `agent '${oldName}' has ${live.length} non-terminal single-agent task(s); cancel or wait before renaming`,
-        { taskIds: live.map((t) => t.id) },
-      )
-    }
-
-    const schedRows = tx
-      .select({
-        id: scheduledTasks.id,
-        name: scheduledTasks.name,
-        launchKind: scheduledTasks.launchKind,
-        launchPayload: scheduledTasks.launchPayload,
-        ownerUserId: scheduledTasks.ownerUserId,
-      })
-      .from(scheduledTasks)
-      .all()
-    const schedRefs = scheduledRowsReferencingAgent(schedRows, { id: existing.id, name: oldName })
-    if (schedRefs.length > 0) {
-      const schedIds = new Set(schedRefs)
-      throw new ConflictError(
-        'agent-scheduled-referenced',
-        `agent '${oldName}' is the target of ${schedRefs.length} scheduled task(s); repoint them before renaming`,
-        discloseScheduleRefs(
-          actor,
-          schedRows.filter((r) => schedIds.has(r.id)),
-        ),
-      )
-    }
+    // Canonical-id fence: the row selected by the URL cannot be retargeted by
+    // a concurrent rename.
+    const fenceRow = tx.select({ id: agents.id }).from(agents).where(eq(agents.id, id)).get()
+    if (fenceRow === undefined) throw new NotFoundError('agent-not-found', 'agent not found')
 
     const collision = tx
       .select({ name: agents.name })
@@ -636,39 +495,33 @@ export async function renameAgent(
 
     tx.update(agents)
       .set({ name: input.newName, updatedAt: Date.now() })
-      .where(eq(agents.name, oldName))
+      .where(eq(agents.id, id))
       .run()
   })
 
-  const renamed = await getAgent(db, input.newName)
+  const renamed = await getAgentById(db, id)
   if (renamed === null) throw new Error('agent disappeared after rename')
   return renamed
 }
 
 /**
- * Find every workflow whose definition.nodes[].agentName matches.
- * Stable identity for the "referenced by" check in delete/rename.
+ * Find every workflow whose definition.nodes[].agentId matches.
+ * Stable identity for the "referenced by" delete guard.
  */
 /**
- * RFC-165 §9b（实现门 P1 修复）：agent 定时任务把目标冻结为可变的 NAME。
- * rename/delete 时若还有引用行，先失败会静默累计（阈值禁用），而公共名被
- * 复用后旧定时行会悄悄打到「另一个同名 agent」。与 workflows 引用守卫同
- * 哲学：存在引用即 409，逼调用方先处理定时行。事务同步面运行。
+ * RFC-223: scheduled agent targets are canonical ids. Delete refuses while an
+ * id-targeted row remains; rename is safe because the id does not change.
  */
 function scheduledRowsReferencingAgent(
   rows: ReadonlyArray<{ id: string; launchKind: string; launchPayload: string }>,
-  target: { id: string; name: string },
+  target: { id: string },
 ): string[] {
   const out: string[] = []
   for (const row of rows) {
     if (row.launchKind !== 'agent') continue
     try {
-      const p = JSON.parse(row.launchPayload) as { agentId?: unknown; agentName?: unknown }
-      // RFC-223 (PR-2): the payload now carries the canonical agentId (stamped
-      // at save, backfilled by migration 0112). Match it primarily; fall back
-      // to the display agentName for any not-yet-backfilled row (name↔id is
-      // 1:1 until PR-8, so neither over-matches).
-      if (p.agentId === target.id || p.agentName === target.name) out.push(row.id)
+      const p = JSON.parse(row.launchPayload) as { agentId?: unknown }
+      if (p.agentId === target.id) out.push(row.id)
     } catch {
       /* degraded rows are repaired/deleted via their own flow */
     }
@@ -681,15 +534,15 @@ function scheduledRowsReferencingAgent(
  *  transaction (the old async shell around it died with them). */
 function workflowsUsingAgentIn(
   rows: ReadonlyArray<{ id: string; name: string; definition: string }>,
-  agentName: string,
+  agentId: string,
 ): Array<{ id: string; name: string }> {
   const out: Array<{ id: string; name: string }> = []
   for (const row of rows) {
     try {
       const def = JSON.parse(row.definition) as {
-        nodes?: Array<{ agentName?: string }>
+        nodes?: Array<{ agentId?: string }>
       }
-      const used = def.nodes?.some((n) => n.agentName === agentName) ?? false
+      const used = def.nodes?.some((n) => n.agentId === agentId) ?? false
       if (used) out.push({ id: row.id, name: row.name })
     } catch {
       // Skip malformed JSON; workflow validator catches it on save in P-2-01.

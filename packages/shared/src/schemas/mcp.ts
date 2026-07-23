@@ -15,7 +15,7 @@ import { z } from 'zod'
 import { OperationConfigHashSchema } from './operationRevision'
 import { ResourceVisibilitySchema } from './resourceAcl'
 
-/** Permitted characters in mcp name (URL-safe; matches `/api/mcps/:name`). */
+/** Permitted characters in an MCP's display name. */
 export const MCP_NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 
 export const McpNameSchema = z
@@ -139,7 +139,7 @@ export const CreateMcpSchema = z.discriminatedUnion('type', [
 export type CreateMcp = z.infer<typeof CreateMcpSchema>
 
 /**
- * PUT /api/mcps/:name body. Name changes go through /rename. `type` may not
+ * PUT /api/mcps/:id body. Name changes go through /rename. `type` may not
  * change (changing transport in-place is meaningless; create a new one).
  */
 export const UpdateMcpLocalSchema = z
@@ -163,7 +163,7 @@ export const UpdateMcpRemoteSchema = z
 export const UpdateMcpSchema = z.union([UpdateMcpLocalSchema, UpdateMcpRemoteSchema])
 export type UpdateMcp = z.infer<typeof UpdateMcpSchema>
 
-/** POST /api/mcps/:name/rename body. */
+/** POST /api/mcps/:id/rename body. */
 export const RenameMcpSchema = z.object({
   newName: McpNameSchema,
 })

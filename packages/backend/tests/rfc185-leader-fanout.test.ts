@@ -753,8 +753,24 @@ describe('RFC-185 T6 — engine hard guarantees (Codex P1/P2)', () => {
 
 describe('RFC-185 D4 — fanOut CRUD roundtrip + launch freeze', () => {
   let db: DbClient
-  beforeEach(() => {
+  let agentId: string
+  beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
+    agentId = (
+      await createAgent(db, {
+        name: 'a1',
+        description: '',
+        outputs: [],
+        syncOutputsOnIterate: true,
+        permission: {},
+        skills: [],
+        dependsOn: [],
+        mcp: [],
+        plugins: [],
+        frontmatterExtra: {},
+        bodyMd: '',
+      })
+    ).id
   })
 
   const groupInput = (over: Record<string, unknown> = {}) => ({
@@ -765,7 +781,7 @@ describe('RFC-185 D4 — fanOut CRUD roundtrip + launch freeze', () => {
     switches: { shareOutputs: true, directMessages: false, blackboard: false },
     maxRounds: 5,
     completionGate: false,
-    members: [{ memberType: 'agent' as const, agentName: 'a1', displayName: 'a1', roleDesc: '' }],
+    members: [{ memberType: 'agent' as const, agentId, displayName: 'a1', roleDesc: '' }],
     ...over,
   })
 

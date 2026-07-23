@@ -78,8 +78,8 @@ describe('RFC-060 PR-B — role round-trip', () => {
   })
 
   test('updateAgent: normal → aggregator promotes role into fmExtra', async () => {
-    await createAgent(db, basePayload('a'))
-    const updated = await updateAgent(db, 'a', { role: 'aggregator' })
+    const agent = await createAgent(db, basePayload('a'))
+    const updated = await updateAgent(db, agent.id, { role: 'aggregator' })
     expect(updated.role).toBe('aggregator')
     const fm = await readFmExtraRaw(db, 'a')
     expect(fm.role).toBe('aggregator')
@@ -88,8 +88,8 @@ describe('RFC-060 PR-B — role round-trip', () => {
   })
 
   test('updateAgent: aggregator → normal removes role from fmExtra', async () => {
-    await createAgent(db, { ...basePayload('a'), role: 'aggregator' })
-    const updated = await updateAgent(db, 'a', { role: 'normal' })
+    const agent = await createAgent(db, { ...basePayload('a'), role: 'aggregator' })
+    const updated = await updateAgent(db, agent.id, { role: 'normal' })
     expect(updated.role).toBeUndefined()
     const fm = await readFmExtraRaw(db, 'a')
     expect(fm).not.toHaveProperty('role')
@@ -115,8 +115,8 @@ describe('RFC-060 PR-B — outputWrapperPortNames round-trip', () => {
   })
 
   test('updateAgent: add outputWrapperPortNames after create', async () => {
-    await createAgent(db, basePayload('a'))
-    const updated = await updateAgent(db, 'a', {
+    const agent = await createAgent(db, basePayload('a'))
+    const updated = await updateAgent(db, agent.id, {
       outputWrapperPortNames: { report: 'r2' },
     })
     expect(updated.outputWrapperPortNames).toEqual({ report: 'r2' })
@@ -166,12 +166,12 @@ describe('RFC-060 PR-B — coexistence with RFC-005 outputKinds', () => {
   })
 
   test('patching role: aggregator does NOT clobber existing outputKinds', async () => {
-    await createAgent(db, {
+    const agent = await createAgent(db, {
       ...basePayload('a'),
       outputs: ['report'],
       outputKinds: { report: 'path<md>' },
     })
-    const updated = await updateAgent(db, 'a', { role: 'aggregator' })
+    const updated = await updateAgent(db, agent.id, { role: 'aggregator' })
     expect(updated.outputKinds).toEqual({ report: 'path<md>' })
     expect(updated.role).toBe('aggregator')
 
@@ -181,7 +181,7 @@ describe('RFC-060 PR-B — coexistence with RFC-005 outputKinds', () => {
   })
 
   test('RFC-194: clearing both sidecar maps preserves empty tombstones and unrelated frontmatter', async () => {
-    await createAgent(db, {
+    const agent = await createAgent(db, {
       ...basePayload('a'),
       outputs: ['report'],
       outputKinds: { report: 'path<md>' },
@@ -189,7 +189,7 @@ describe('RFC-060 PR-B — coexistence with RFC-005 outputKinds', () => {
       outputWrapperPortNames: { report: 'final' },
     })
 
-    const updated = await updateAgent(db, 'a', {
+    const updated = await updateAgent(db, agent.id, {
       outputKinds: {},
       outputWrapperPortNames: {},
     })

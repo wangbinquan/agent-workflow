@@ -258,21 +258,27 @@ describe('skill HTTP routes', () => {
 
   afterEach(() => h.cleanup())
 
-  test('POST creates managed skill (201); GET roundtrips', async () => {
+  async function createHttpSkill(
+    body: Record<string, unknown>,
+  ): Promise<{ id: string; name: string; sourceKind: string }> {
     const res = await req(h.app, '/api/skills', {
       method: 'POST',
-      body: JSON.stringify({
-        name: 'foo',
-        description: 'desc',
-        bodyMd: 'hello',
-        frontmatterExtra: { author: 'me' },
-      }),
+      body: JSON.stringify(body),
     })
     expect(res.status).toBe(201)
-    const skill = (await res.json()) as { name: string; sourceKind: string }
+    return (await res.json()) as { id: string; name: string; sourceKind: string }
+  }
+
+  test('POST creates managed skill (201); GET roundtrips', async () => {
+    const skill = await createHttpSkill({
+      name: 'foo',
+      description: 'desc',
+      bodyMd: 'hello',
+      frontmatterExtra: { author: 'me' },
+    })
     expect(skill.sourceKind).toBe('managed')
 
-    const got = await req(h.app, '/api/skills/foo')
+    const got = await req(h.app, `/api/skills/${skill.id}`)
     expect(got.status).toBe(200)
     expect(((await got.json()) as { name: string }).name).toBe('foo')
   })
@@ -291,17 +297,14 @@ describe('skill HTTP routes', () => {
   // the old content PUT is retired (410 Gone) — writes go through the single
   // combined-save (POST /save) funnel under token OCC.
   test('GET /content parses; combined-save writes back under token OCC; PUT /content is 410', async () => {
-    await req(h.app, '/api/skills', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: 'foo',
-        description: 'd1',
-        bodyMd: 'b1',
-        frontmatterExtra: { v: 1 },
-      }),
+    const skill = await createHttpSkill({
+      name: 'foo',
+      description: 'd1',
+      bodyMd: 'b1',
+      frontmatterExtra: { v: 1 },
     })
 
-    const get = await req(h.app, '/api/skills/foo/content')
+    const get = await req(h.app, `/api/skills/${skill.id}/content`)
     expect(get.status).toBe(200)
     const content = (await get.json()) as {
       name: string
@@ -316,7 +319,7 @@ describe('skill HTTP routes', () => {
     expect(content.token).toBeTruthy()
 
     // The old content PUT bypassed the token OCC / version funnel → 410 Gone.
-    const putGone = await req(h.app, '/api/skills/foo/content', {
+    const putGone = await req(h.app, `/api/skills/${skill.id}/content`, {
       method: 'PUT',
       body: JSON.stringify({ description: 'd2', bodyMd: 'b2' }),
     })
@@ -324,12 +327,12 @@ describe('skill HTTP routes', () => {
     expect(((await putGone.json()) as { code: string }).code).toBe('skill-endpoint-gone')
 
     // Writes go through the single combined-save funnel (token OCC).
-    const save = await req(h.app, '/api/skills/foo/save', {
+    const save = await req(h.app, `/api/skills/${skill.id}/save`, {
       method: 'POST',
       body: JSON.stringify({ description: 'd2', bodyMd: 'b2', expectedToken: content.token }),
     })
     expect(save.status).toBe(200)
-    const reread = (await (await req(h.app, '/api/skills/foo/content')).json()) as {
+    const reread = (await (await req(h.app, `/api/skills/${skill.id}/content`)).json()) as {
       description: string
       bodyMd: string
     }
@@ -339,12 +342,9 @@ describe('skill HTTP routes', () => {
 
   // RFC-170 T-BSAFE③: the old metadata PUT is retired (410 Gone) — it bumped no
   // meta_revision and bypassed the composite-token OCC.
-  test('PUT /api/skills/:name (metadata) is 410 Gone', async () => {
-    await req(h.app, '/api/skills', {
-      method: 'POST',
-      body: JSON.stringify({ name: 'foo', description: 'd1' }),
-    })
-    const put = await req(h.app, '/api/skills/foo', {
+  test('PUT /api/skills/:id (metadata) is 410 Gone', async () => {
+    const skill = await createHttpSkill({ name: 'foo', description: 'd1' })
+    const put = await req(h.app, `/api/skills/${skill.id}`, {
       method: 'PUT',
       body: JSON.stringify({ description: 'd2' }),
     })
@@ -353,55 +353,53 @@ describe('skill HTTP routes', () => {
   })
 
   test('file CRUD via query path', async () => {
-    await req(h.app, '/api/skills', {
-      method: 'POST',
-      body: JSON.stringify({ name: 'foo' }),
-    })
+    const skill = await createHttpSkill({ name: 'foo' })
 
-    const put = await req(h.app, '/api/skills/foo/file?path=templates/a.txt', {
+    const put = await req(h.app, `/api/skills/${skill.id}/file?path=templates/a.txt`, {
       method: 'PUT',
       body: JSON.stringify({ content: 'aaa' }),
     })
     expect(put.status).toBe(200)
 
-    const tree = (await (await req(h.app, '/api/skills/foo/files')).json()) as Array<{
+    const tree = (await (await req(h.app, `/api/skills/${skill.id}/files`)).json()) as Array<{
       path: string
     }>
     expect(tree.map((n) => n.path)).toContain('templates/a.txt')
 
-    const get = await req(h.app, '/api/skills/foo/file?path=templates/a.txt')
+    const get = await req(h.app, `/api/skills/${skill.id}/file?path=templates/a.txt`)
     expect(get.status).toBe(200)
     expect(((await get.json()) as { content: string }).content).toBe('aaa')
 
     // RFC-170 F3: DELETE /file now returns 200 + the fresh canonical token (was 204).
-    const del = await req(h.app, '/api/skills/foo/file?path=templates/a.txt', { method: 'DELETE' })
+    const del = await req(h.app, `/api/skills/${skill.id}/file?path=templates/a.txt`, {
+      method: 'DELETE',
+    })
     expect(del.status).toBe(200)
     expect(((await del.json()) as { token?: string }).token).toBeTruthy()
 
-    const miss = await req(h.app, '/api/skills/foo/file?path=templates/a.txt')
+    const miss = await req(h.app, `/api/skills/${skill.id}/file?path=templates/a.txt`)
     expect(miss.status).toBe(404)
   })
 
   test('file endpoint requires ?path=', async () => {
-    await req(h.app, '/api/skills', {
-      method: 'POST',
-      body: JSON.stringify({ name: 'foo' }),
-    })
-    const res = await req(h.app, '/api/skills/foo/file')
+    const skill = await createHttpSkill({ name: 'foo' })
+    const res = await req(h.app, `/api/skills/${skill.id}/file`)
     expect(res.status).toBe(422)
     expect(((await res.json()) as { code: string }).code).toBe('path-required')
   })
 
   test('DELETE refuses when an agent references the skill', async () => {
-    await req(h.app, '/api/skills', { method: 'POST', body: JSON.stringify({ name: 'foo' }) })
-    // RFC-223 (PR-1): typed managed skill ref; the name in `skillId` is resolved
-    // to the created skill's id server-side.
+    const skill = await createHttpSkill({ name: 'foo' })
+    // RFC-223 (PR-1): typed managed skill ref carries the canonical id.
     await req(h.app, '/api/agents', {
       method: 'POST',
-      body: JSON.stringify({ name: 'a1', skills: [{ kind: 'managed', skillId: 'foo' }] }),
+      body: JSON.stringify({
+        name: 'a1',
+        skills: [{ kind: 'managed', skillId: skill.id }],
+      }),
     })
     // RFC-222 (D5, N-5): confirm passes first, then the in-use refusal fires.
-    const res = await req(h.app, '/api/skills/foo', {
+    const res = await req(h.app, `/api/skills/${skill.id}`, {
       method: 'DELETE',
       body: JSON.stringify({ confirm: 'foo' }),
     })

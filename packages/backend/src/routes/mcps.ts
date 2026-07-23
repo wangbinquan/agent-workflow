@@ -1,16 +1,16 @@
 // MCP HTTP routes (RFC-028 + RFC-030).
 // GET    /api/mcps                  — list
 // GET    /api/mcps/probes           — RFC-030: list all probe rows (joined w/ mcp name)
-// GET    /api/mcps/:name            — one
+// GET    /api/mcps/:id              — one
 // POST   /api/mcps                  — create
-// PUT    /api/mcps/:name            — update (subset of fields; type immutable)
-// DELETE /api/mcps/:name            — delete (refuses if referenced)
-// POST   /api/mcps/:name/rename     — rename (cascades into agents.mcp arrays)
-// GET    /api/mcps/:name/probe      — RFC-030: last probe row, 404 if never probed
-// POST   /api/mcps/:name/probe      — RFC-030: trigger probe + upsert; returns row
+// PUT    /api/mcps/:id              — update (subset of fields; type immutable)
+// DELETE /api/mcps/:id              — delete (refuses if referenced)
+// POST   /api/mcps/:id/rename       — rename (references remain id-stable)
+// GET    /api/mcps/:id/probe        — RFC-030: last probe row, 404 if never probed
+// POST   /api/mcps/:id/probe        — RFC-030: trigger probe + upsert; returns row
 //
-// IMPORTANT: /api/mcps/probes is registered BEFORE /api/mcps/:name so it
-// doesn't get swallowed by the parametric route (`:name = "probes"`).
+// IMPORTANT: /api/mcps/probes is registered BEFORE /api/mcps/:id so it
+// doesn't get swallowed by the parametric route (`:id = "probes"`).
 
 import {
   CreateMcpSchema,
@@ -22,15 +22,7 @@ import {
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
-import {
-  createMcp,
-  deleteMcp,
-  getMcp,
-  getMcpById,
-  listMcps,
-  renameMcp,
-  updateMcp,
-} from '@/services/mcp'
+import { createMcp, deleteMcp, getMcpById, listMcps, renameMcp, updateMcp } from '@/services/mcp'
 import {
   mcpOperationConfigHashOf,
   withMcpOperationConfigHash,
@@ -55,15 +47,7 @@ export function __setProbeOptionsForTesting(opts: ProbeOptions | undefined): voi
 
 export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
   // RFC-099: missing and not-visible produce the identical 404 (D1).
-  async function loadVisibleMcp(actor: Actor, name: string) {
-    const mcp = await getMcp(deps.db, name)
-    if (mcp === null || !(await canViewResource(deps.db, actor, 'mcp', mcp))) {
-      throw new NotFoundError('mcp-not-found', `mcp '${name}' not found`)
-    }
-    return mcp
-  }
-
-  async function loadVisibleMcpById(actor: Actor, id: string): Promise<Mcp> {
+  async function loadVisibleMcp(actor: Actor, id: string): Promise<Mcp> {
     const mcp = await getMcpById(deps.db, id)
     if (mcp === null || !(await canViewResource(deps.db, actor, 'mcp', mcp))) {
       throw new NotFoundError('mcp-not-found', 'mcp not found')
@@ -90,7 +74,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
     return c.json(visible.map(withMcpOperationConfigHash))
   })
 
-  // RFC-030 — must come BEFORE /api/mcps/:name to avoid being swallowed.
+  // RFC-030 — must come BEFORE /api/mcps/:id to avoid being swallowed.
   // RFC-099: probe rows are keyed by mcpId — only visible MCPs' probes leak.
   app.get('/api/mcps/probes', async (c) => {
     const list = await listProbes(deps.db)
@@ -99,8 +83,8 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
     return c.json(list.filter((p) => allowed.has(p.mcpId)))
   })
 
-  app.get('/api/mcps/:name', async (c) => {
-    return c.json(withMcpOperationConfigHash(await loadVisibleMcp(actorOf(c), c.req.param('name'))))
+  app.get('/api/mcps/:id', async (c) => {
+    return c.json(withMcpOperationConfigHash(await loadVisibleMcp(actorOf(c), c.req.param('id'))))
   })
 
   app.post('/api/mcps', async (c) => {
@@ -115,8 +99,8 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
     return c.json(withMcpOperationConfigHash(created), 201)
   })
 
-  app.put('/api/mcps/:name', async (c) => {
-    const name = c.req.param('name')
+  app.put('/api/mcps/:id', async (c) => {
+    const id = c.req.param('id')
     const body = await safeJson(c.req.raw)
     const parsed = UpdateMcpSchema.safeParse(body)
     if (!parsed.success) {
@@ -125,11 +109,11 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
       })
     }
     const actor = actorOf(c)
-    const resolved = await loadVisibleMcp(actor, name)
+    const resolved = await loadVisibleMcp(actor, id)
     const updated = await mcpOperationCoordinator.runExclusive(resolved.id, async () => {
-      const fresh = await loadVisibleMcpById(actor, resolved.id)
+      const fresh = await loadVisibleMcp(actor, resolved.id)
       await requireResourceOwner(deps.db, actor, 'mcp', fresh)
-      return updateMcp(deps.db, fresh.name, parsed.data, {
+      return updateMcp(deps.db, fresh.id, parsed.data, {
         existing: fresh,
         updatedAt: await nextMutationTimestamp(fresh),
       })
@@ -137,23 +121,23 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
     return c.json(withMcpOperationConfigHash(updated))
   })
 
-  app.delete('/api/mcps/:name', async (c) => {
-    const name = c.req.param('name')
+  app.delete('/api/mcps/:id', async (c) => {
+    const id = c.req.param('id')
     const actor = actorOf(c)
-    const resolved = await loadVisibleMcp(actor, name)
+    const resolved = await loadVisibleMcp(actor, id)
     await mcpOperationCoordinator.runExclusive(resolved.id, async () => {
-      const fresh = await loadVisibleMcpById(actor, resolved.id)
+      const fresh = await loadVisibleMcp(actor, resolved.id)
       await requireResourceOwner(deps.db, actor, 'mcp', fresh)
       // RFC-222 (D5, N-6): confirm against the FRESH name inside the exclusive
       // section, so a concurrent rename is caught as a mismatch.
       assertDeleteConfirm(await readDeleteBody(c), fresh.name, 'mcp')
-      await deleteMcp(deps.db, fresh.name, actor, { existing: fresh })
+      await deleteMcp(deps.db, fresh.id, actor, { existing: fresh })
     })
     return c.body(null, 204)
   })
 
-  app.post('/api/mcps/:name/rename', async (c) => {
-    const name = c.req.param('name')
+  app.post('/api/mcps/:id/rename', async (c) => {
+    const id = c.req.param('id')
     const body = await safeJson(c.req.raw)
     const parsed = RenameMcpSchema.safeParse(body)
     if (!parsed.success) {
@@ -162,11 +146,11 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
       })
     }
     const actor = actorOf(c)
-    const resolved = await loadVisibleMcp(actor, name)
+    const resolved = await loadVisibleMcp(actor, id)
     const renamed = await mcpOperationCoordinator.runExclusive(resolved.id, async () => {
-      const fresh = await loadVisibleMcpById(actor, resolved.id)
+      const fresh = await loadVisibleMcp(actor, resolved.id)
       await requireResourceOwner(deps.db, actor, 'mcp', fresh)
-      return renameMcp(deps.db, fresh.name, parsed.data, {
+      return renameMcp(deps.db, fresh.id, parsed.data, {
         existing: fresh,
         updatedAt: await nextMutationTimestamp(fresh),
       })
@@ -175,20 +159,20 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
   })
 
   // RFC-030 — per-mcp probe endpoints.
-  app.get('/api/mcps/:name/probe', async (c) => {
-    const name = c.req.param('name')
+  app.get('/api/mcps/:id/probe', async (c) => {
+    const id = c.req.param('id')
     // Existence check on the parent mcp keeps the 404 distinction:
     //   - mcp doesn't exist            → 404 mcp-not-found
     //   - mcp exists but never probed  → 404 probe-not-found
     const actor = actorOf(c)
-    const resolved = await loadVisibleMcp(actor, name)
+    const resolved = await loadVisibleMcp(actor, id)
     const { currentName, probe } = await mcpOperationCoordinator.runExclusive(
       resolved.id,
       async () => {
         // Bind the read to the already-resolved stable id. Reload visibility
         // under the same fence used by rename/ACL so name reuse cannot expose a
         // different MCP's inventory or make the original probe disappear.
-        const fresh = await loadVisibleMcpById(actor, resolved.id)
+        const fresh = await loadVisibleMcp(actor, resolved.id)
         return {
           currentName: fresh.name,
           probe: await getProbeByMcpId(deps.db, fresh.id),
@@ -198,14 +182,14 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
     if (probe === null) {
       throw new NotFoundError(
         'probe-not-found',
-        `mcp '${currentName}' has not been probed yet — POST /api/mcps/${currentName}/probe first`,
+        `mcp '${currentName}' has not been probed yet — POST /api/mcps/${resolved.id}/probe first`,
       )
     }
     return c.json(probe)
   })
 
-  app.post('/api/mcps/:name/probe', async (c) => {
-    const name = c.req.param('name')
+  app.post('/api/mcps/:id/probe', async (c) => {
+    const id = c.req.param('id')
     const body = await safeJson(c.req.raw)
     const parsed = McpOperationRequestSchema.safeParse(body)
     if (!parsed.success) {
@@ -214,7 +198,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
       })
     }
     const actor = actorOf(c)
-    const resolved = await loadVisibleMcp(actor, name)
+    const resolved = await loadVisibleMcp(actor, id)
     const expectedHash = parsed.data.expectedConfigHash
 
     const receipt = await mcpOperationCoordinator.runDeduplicatedOperation(
@@ -222,7 +206,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
       expectedHash,
       async () => {
         const start = await mcpOperationCoordinator.runExclusive(resolved.id, async () => {
-          const captured = await loadVisibleMcpById(actor, resolved.id)
+          const captured = await loadVisibleMcp(actor, resolved.id)
           const actualHash = mcpOperationConfigHashOf(captured)
           if (actualHash !== expectedHash) {
             throw new ConflictError(
@@ -293,12 +277,12 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
     return c.json(receipt)
   })
 
-  // RFC-099 — GET/PUT /api/mcps/:name/acl
+  // RFC-099 / RFC-223 — GET/PUT /api/mcps/:id/acl
   mountAclEndpoints(app, deps, {
     type: 'mcp',
     base: '/api/mcps',
-    param: 'name',
-    load: (db, name) => getMcp(db, name),
+    param: 'id',
+    load: (db, id) => getMcpById(db, id),
     coordinator: {
       runExclusive: (resourceId, task) => mcpOperationCoordinator.runExclusive(resourceId, task),
       loadById: (db, resourceId) => getMcpById(db, resourceId),

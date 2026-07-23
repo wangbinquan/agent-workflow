@@ -114,16 +114,17 @@ describe('RFC-099 — agents route ACL', () => {
     h = await buildHarness()
   })
 
-  async function createAgentAsAlice(): Promise<void> {
+  async function createAgentAsAlice(): Promise<string> {
     const res = await req(h.app, h.alice.token, '/api/agents', {
       method: 'POST',
       body: JSON.stringify(AGENT_BODY),
     })
     expect(res.status).toBe(201)
+    return ((await res.json()) as { id: string }).id
   }
 
-  async function setPrivate(): Promise<void> {
-    const res = await req(h.app, h.alice.token, '/api/agents/secret-agent/acl', {
+  async function setPrivate(agentId: string): Promise<void> {
+    const res = await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
       method: 'PUT',
       body: JSON.stringify({ visibility: 'private' }),
     })
@@ -134,8 +135,8 @@ describe('RFC-099 — agents route ACL', () => {
   // PUBLIC (this test); tasks default PRIVATE with no visibility switch
   // (locked in tasks-visibility.test.ts). 2026-06-12 user adjustment.
   test('user creates agent → becomes owner, default public, everyone sees it', async () => {
-    await createAgentAsAlice()
-    const detail = await req(h.app, h.bob.token, '/api/agents/secret-agent')
+    const agentId = await createAgentAsAlice()
+    const detail = await req(h.app, h.bob.token, `/api/agents/${agentId}`)
     expect(detail.status).toBe(200)
     const body = (await detail.json()) as { ownerUserId: string; visibility: string }
     expect(body.ownerUserId).toBe(h.alice.id)
@@ -143,51 +144,51 @@ describe('RFC-099 — agents route ACL', () => {
   })
 
   test('private agent: stranger list-excluded + detail 404 byte-identical to missing', async () => {
-    await createAgentAsAlice()
-    await setPrivate()
+    const agentId = await createAgentAsAlice()
+    await setPrivate(agentId)
     const list = (await (await req(h.app, h.carol.token, '/api/agents')).json()) as Array<{
       name: string
     }>
     expect(list.some((a) => a.name === 'secret-agent')).toBe(false)
-    const invisible = await req(h.app, h.carol.token, '/api/agents/secret-agent')
-    const missing = await req(h.app, h.carol.token, '/api/agents/does-not-exist-at-all')
+    const invisible = await req(h.app, h.carol.token, `/api/agents/${agentId}`)
+    const missing = await req(h.app, h.carol.token, '/api/agents/00000000000000000000000000')
     expect(invisible.status).toBe(404)
     expect(missing.status).toBe(404)
     const a = (await invisible.json()) as { code: string }
     const b = (await missing.json()) as { code: string }
     expect(a.code).toBe(b.code) // D1: existence does not leak via the error code
     // owner + admin still see it
-    expect((await req(h.app, h.alice.token, '/api/agents/secret-agent')).status).toBe(200)
-    expect((await req(h.app, h.admin.token, '/api/agents/secret-agent')).status).toBe(200)
+    expect((await req(h.app, h.alice.token, `/api/agents/${agentId}`)).status).toBe(200)
+    expect((await req(h.app, h.admin.token, `/api/agents/${agentId}`)).status).toBe(200)
   })
 
   test('grant via ACL PUT → grantee can view but not modify; owner + admin can modify', async () => {
-    await createAgentAsAlice()
-    await setPrivate()
-    const put = await req(h.app, h.alice.token, '/api/agents/secret-agent/acl', {
+    const agentId = await createAgentAsAlice()
+    await setPrivate(agentId)
+    const put = await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
       method: 'PUT',
       body: JSON.stringify({ userIds: [h.bob.id] }),
     })
     expect(put.status).toBe(200)
-    expect((await req(h.app, h.bob.token, '/api/agents/secret-agent')).status).toBe(200)
+    expect((await req(h.app, h.bob.token, `/api/agents/${agentId}`)).status).toBe(200)
     // grantee modify → 403 (visible, so a 403 leaks nothing new)
-    const bobPatch = await req(h.app, h.bob.token, '/api/agents/secret-agent', {
+    const bobPatch = await req(h.app, h.bob.token, `/api/agents/${agentId}`, {
       method: 'PUT',
       body: JSON.stringify({ description: 'bob was here' }),
     })
     expect(bobPatch.status).toBe(403)
     // stranger modify → 404 (must look like it doesn't exist)
-    const carolPatch = await req(h.app, h.carol.token, '/api/agents/secret-agent', {
+    const carolPatch = await req(h.app, h.carol.token, `/api/agents/${agentId}`, {
       method: 'PUT',
       body: JSON.stringify({ description: 'carol was here' }),
     })
     expect(carolPatch.status).toBe(404)
-    const ownerPatch = await req(h.app, h.alice.token, '/api/agents/secret-agent', {
+    const ownerPatch = await req(h.app, h.alice.token, `/api/agents/${agentId}`, {
       method: 'PUT',
       body: JSON.stringify({ description: 'owner edit' }),
     })
     expect(ownerPatch.status).toBe(200)
-    const adminPatch = await req(h.app, h.admin.token, '/api/agents/secret-agent', {
+    const adminPatch = await req(h.app, h.admin.token, `/api/agents/${agentId}`, {
       method: 'PUT',
       body: JSON.stringify({ description: 'admin edit' }),
     })
@@ -195,15 +196,13 @@ describe('RFC-099 — agents route ACL', () => {
   })
 
   test('GET acl: member list visible read-only to grantee; canManage only for owner/admin', async () => {
-    await createAgentAsAlice()
-    await setPrivate()
-    await req(h.app, h.alice.token, '/api/agents/secret-agent/acl', {
+    const agentId = await createAgentAsAlice()
+    await setPrivate(agentId)
+    await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
       method: 'PUT',
       body: JSON.stringify({ userIds: [h.bob.id] }),
     })
-    const asBob = (await (
-      await req(h.app, h.bob.token, '/api/agents/secret-agent/acl')
-    ).json()) as {
+    const asBob = (await (await req(h.app, h.bob.token, `/api/agents/${agentId}/acl`)).json()) as {
       ownerUserId: string
       users: Array<{ id: string }>
       canManage: boolean
@@ -212,19 +211,19 @@ describe('RFC-099 — agents route ACL', () => {
     expect(asBob.users.map((u) => u.id)).toEqual([h.bob.id])
     expect(asBob.canManage).toBe(false)
     // grantee cannot PUT the acl
-    const bobPut = await req(h.app, h.bob.token, '/api/agents/secret-agent/acl', {
+    const bobPut = await req(h.app, h.bob.token, `/api/agents/${agentId}/acl`, {
       method: 'PUT',
       body: JSON.stringify({ visibility: 'public' }),
     })
     expect(bobPut.status).toBe(403)
     // stranger gets the same 404 as a missing resource
-    expect((await req(h.app, h.carol.token, '/api/agents/secret-agent/acl')).status).toBe(404)
+    expect((await req(h.app, h.carol.token, `/api/agents/${agentId}/acl`)).status).toBe(404)
   })
 
   test('owner transfer keeps the previous owner in the grant list', async () => {
-    await createAgentAsAlice()
-    await setPrivate()
-    const put = await req(h.app, h.alice.token, '/api/agents/secret-agent/acl', {
+    const agentId = await createAgentAsAlice()
+    await setPrivate(agentId)
+    const put = await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
       method: 'PUT',
       body: JSON.stringify({ ownerUserId: h.bob.id }),
     })
@@ -236,14 +235,14 @@ describe('RFC-099 — agents route ACL', () => {
     expect(acl.ownerUserId).toBe(h.bob.id)
     expect(acl.users.map((u) => u.id)).toContain(h.alice.id)
     // alice (now a grantee) still sees it but can no longer manage
-    expect((await req(h.app, h.alice.token, '/api/agents/secret-agent')).status).toBe(200)
-    const alicePut = await req(h.app, h.alice.token, '/api/agents/secret-agent/acl', {
+    expect((await req(h.app, h.alice.token, `/api/agents/${agentId}`)).status).toBe(200)
+    const alicePut = await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
       method: 'PUT',
       body: JSON.stringify({ visibility: 'public' }),
     })
     expect(alicePut.status).toBe(403)
     // bob (new owner) can modify the agent itself
-    const bobPatch = await req(h.app, h.bob.token, '/api/agents/secret-agent', {
+    const bobPatch = await req(h.app, h.bob.token, `/api/agents/${agentId}`, {
       method: 'PUT',
       body: JSON.stringify({ description: 'new owner edit' }),
     })
@@ -251,15 +250,15 @@ describe('RFC-099 — agents route ACL', () => {
   })
 
   test('granting an unknown or system user → 422 acl-user-invalid', async () => {
-    await createAgentAsAlice()
-    const res = await req(h.app, h.alice.token, '/api/agents/secret-agent/acl', {
+    const agentId = await createAgentAsAlice()
+    const res = await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
       method: 'PUT',
       body: JSON.stringify({ userIds: ['01HFAKEUSERID0000000000000'] }),
     })
     expect(res.status).toBe(422)
     const body = (await res.json()) as { code: string }
     expect(body.code).toBe('acl-user-invalid')
-    const sys = await req(h.app, h.alice.token, '/api/agents/secret-agent/acl', {
+    const sys = await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
       method: 'PUT',
       body: JSON.stringify({ userIds: ['__system__'] }),
     })
@@ -269,27 +268,29 @@ describe('RFC-099 — agents route ACL', () => {
 
 describe('RFC-099 — D15 new-reference usability gate', () => {
   let h: Harness
+  let secretAgentId: string
   beforeEach(async () => {
     h = await buildHarness()
     // alice owns a PRIVATE agent.
-    await req(h.app, h.alice.token, '/api/agents', {
+    const created = await req(h.app, h.alice.token, '/api/agents', {
       method: 'POST',
       body: JSON.stringify(AGENT_BODY),
     })
-    await req(h.app, h.alice.token, '/api/agents/secret-agent/acl', {
+    secretAgentId = ((await created.json()) as { id: string }).id
+    await req(h.app, h.alice.token, `/api/agents/${secretAgentId}/acl`, {
       method: 'PUT',
       body: JSON.stringify({ visibility: 'private' }),
     })
   })
 
-  function wfBody(agentName: string | null): Record<string, unknown> {
+  function wfBody(agentId: string | null, agentName = 'secret-agent'): Record<string, unknown> {
     return {
       name: 'flow',
       description: '',
       definition: {
         $schema_version: 4,
         inputs: [],
-        nodes: agentName === null ? [] : [{ id: 'n1', kind: 'agent-single', agentName }],
+        nodes: agentId === null ? [] : [{ id: 'n1', kind: 'agent-single', agentId, agentName }],
         edges: [],
       },
     }
@@ -298,7 +299,7 @@ describe('RFC-099 — D15 new-reference usability gate', () => {
   test('creating a workflow that references an invisible agent → 422 acl-missing-refs', async () => {
     const res = await req(h.app, h.bob.token, '/api/workflows', {
       method: 'POST',
-      body: JSON.stringify(wfBody('secret-agent')),
+      body: JSON.stringify(wfBody(secretAgentId)),
     })
     expect(res.status).toBe(422)
     const body = (await res.json()) as {
@@ -306,7 +307,7 @@ describe('RFC-099 — D15 new-reference usability gate', () => {
       details?: { missing?: Array<{ type: string; name: string }> }
     }
     expect(body.code).toBe('acl-missing-refs')
-    expect(body.details?.missing).toEqual([{ type: 'agent', name: 'secret-agent' }])
+    expect(body.details?.missing).toEqual([{ type: 'agent', name: secretAgentId }])
   })
 
   test('owner can reference their own private agent; admin can reference anything', async () => {
@@ -314,7 +315,7 @@ describe('RFC-099 — D15 new-reference usability gate', () => {
       (
         await req(h.app, h.alice.token, '/api/workflows', {
           method: 'POST',
-          body: JSON.stringify(wfBody('secret-agent')),
+          body: JSON.stringify(wfBody(secretAgentId)),
         })
       ).status,
     ).toBe(201)
@@ -322,7 +323,7 @@ describe('RFC-099 — D15 new-reference usability gate', () => {
       (
         await req(h.app, h.admin.token, '/api/workflows', {
           method: 'POST',
-          body: JSON.stringify(wfBody('secret-agent')),
+          body: JSON.stringify(wfBody(secretAgentId)),
         })
       ).status,
     ).toBe(201)
@@ -331,7 +332,7 @@ describe('RFC-099 — D15 new-reference usability gate', () => {
   test('unresolvable agent names still save (existence stays the validator’s job)', async () => {
     const res = await req(h.app, h.bob.token, '/api/workflows', {
       method: 'POST',
-      body: JSON.stringify(wfBody('never-heard-of-it')),
+      body: JSON.stringify(wfBody('never-heard-of-it', 'never-heard-of-it')),
     })
     expect(res.status).toBe(201)
   })
@@ -342,7 +343,7 @@ describe('RFC-099 — D15 new-reference usability gate', () => {
     // reference he could not add himself.
     const created = await req(h.app, h.alice.token, '/api/workflows', {
       method: 'POST',
-      body: JSON.stringify(wfBody('secret-agent')),
+      body: JSON.stringify(wfBody(secretAgentId)),
     })
     const wf = (await created.json()) as WorkflowDetail
     await req(h.app, h.alice.token, `/api/workflows/${wf.id}/acl`, {
@@ -358,18 +359,24 @@ describe('RFC-099 — D15 new-reference usability gate', () => {
       ...wf.definition,
       nodes: [
         ...(wf.definition.nodes as unknown[]),
-        { id: 'n2', kind: 'agent-single', agentName: 'secret-agent' },
+        {
+          id: 'n2',
+          kind: 'agent-single',
+          agentId: secretAgentId,
+          agentName: 'secret-agent',
+        },
       ],
     }
     expect(
       (await saveWorkflowDefinition(h.app, h.bob.token, wf.id, def2 as WorkflowDefinition)).status,
     ).toBe(200)
     // …but referencing a DIFFERENT private agent he cannot see is rejected.
-    await req(h.app, h.alice.token, '/api/agents', {
+    const secondAgent = await req(h.app, h.alice.token, '/api/agents', {
       method: 'POST',
       body: JSON.stringify({ ...AGENT_BODY, name: 'second-secret' }),
     })
-    await req(h.app, h.alice.token, '/api/agents/second-secret/acl', {
+    const secondAgentId = ((await secondAgent.json()) as { id: string }).id
+    await req(h.app, h.alice.token, `/api/agents/${secondAgentId}/acl`, {
       method: 'PUT',
       body: JSON.stringify({ visibility: 'private' }),
     })
@@ -377,7 +384,12 @@ describe('RFC-099 — D15 new-reference usability gate', () => {
       ...wf.definition,
       nodes: [
         ...(wf.definition.nodes as unknown[]),
-        { id: 'n3', kind: 'agent-single', agentName: 'second-secret' },
+        {
+          id: 'n3',
+          kind: 'agent-single',
+          agentId: secondAgentId,
+          agentName: 'second-secret',
+        },
       ],
     }
     const rejected = await saveWorkflowDefinition(
@@ -393,7 +405,7 @@ describe('RFC-099 — D15 new-reference usability gate', () => {
   test('agent create referencing an invisible dependsOn agent → 422', async () => {
     const res = await req(h.app, h.bob.token, '/api/agents', {
       method: 'POST',
-      body: JSON.stringify({ ...AGENT_BODY, name: 'wrapper', dependsOn: ['secret-agent'] }),
+      body: JSON.stringify({ ...AGENT_BODY, name: 'wrapper', dependsOn: [secretAgentId] }),
     })
     expect(res.status).toBe(422)
     expect(((await res.json()) as { code: string }).code).toBe('acl-missing-refs')

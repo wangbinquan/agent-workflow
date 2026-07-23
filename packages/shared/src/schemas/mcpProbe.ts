@@ -100,7 +100,7 @@ export const McpProbeErrorCode = z.enum([
 ])
 export type McpProbeErrorCodeT = z.infer<typeof McpProbeErrorCode>
 
-/** Public shape returned by GET/POST /api/mcps/:name/probe and the list endpoint. */
+/** Public shape returned by GET/POST /api/mcps/:id/probe and the list endpoint. */
 export const McpProbeSchema = z
   .object({
     id: z.string().min(1),

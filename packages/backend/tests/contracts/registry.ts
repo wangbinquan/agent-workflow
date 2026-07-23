@@ -22,9 +22,13 @@
 
 import { z } from 'zod'
 import {
+  AgentSchema,
   ErrorResponseSchema,
   ImportWorkflowResultSchema,
+  McpSchema,
   OverviewResponseSchema,
+  SkillSchema,
+  WorkgroupSchema,
   WorkflowDetailSchema,
   WorkflowDraftValidationReceiptSchema,
   WorkflowValidationReceiptSchema,
@@ -36,7 +40,7 @@ import type { ContractHarness } from './harness'
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
 
 export interface HappyFixture {
-  /** Static path-param overrides, e.g. `{ name: 'foo' }` for `/api/x/:name`. */
+  /** Static path-param overrides, e.g. `{ id: '01...' }` for `/api/x/:id`. */
   pathParams?: Record<string, string> | ((h: ContractHarness) => Record<string, string>)
   /** Static query string. */
   query?: Record<string, string>
@@ -128,25 +132,24 @@ export const ENDPOINTS: EndpointSpec[] = [
   },
   {
     method: 'GET',
-    path: '/api/agents/:name',
+    path: '/api/agents/:id',
     happy: {
-      pathParams: (h) => ({ name: h.fixtures.agentName }),
-      schema: z.object({ agent: z.any() }).passthrough(),
+      pathParams: (h) => ({ id: h.fixtures.agentId }),
+      schema: AgentSchema,
     },
   },
+  { method: 'GET', path: '/api/agents/builtins/skill-merger' },
   { method: 'POST', path: '/api/agents' },
-  { method: 'PUT', path: '/api/agents/:name' },
-  { method: 'DELETE', path: '/api/agents/:name' },
-  { method: 'POST', path: '/api/agents/:name/rename' },
-  // RFC-177: id→name resolver for the /tasks subject link (rename-safe). Auth-required.
-  { method: 'GET', path: '/api/agents/by-id/:id' },
+  { method: 'PUT', path: '/api/agents/:id' },
+  { method: 'DELETE', path: '/api/agents/:id' },
+  { method: 'POST', path: '/api/agents/:id/rename' },
   // RFC-165 §4: single-agent launch (service-level entry; tasks:launch gate).
-  { method: 'POST', path: '/api/agents/:name/tasks' },
+  { method: 'POST', path: '/api/agents/:id/tasks' },
   {
     method: 'GET',
-    path: '/api/agents/:name/closure',
+    path: '/api/agents/:id/closure',
     happy: {
-      pathParams: (h) => ({ name: h.fixtures.agentName }),
+      pathParams: (h) => ({ id: h.fixtures.agentId }),
       schema: z.object({ ok: z.literal(true) }).passthrough(),
     },
   },
@@ -158,14 +161,21 @@ export const ENDPOINTS: EndpointSpec[] = [
     path: '/api/mcps',
     happy: { schema: z.array(z.any()) },
   },
-  { method: 'GET', path: '/api/mcps/:name' },
+  {
+    method: 'GET',
+    path: '/api/mcps/:id',
+    happy: {
+      pathParams: (h) => ({ id: h.fixtures.mcpId }),
+      schema: McpSchema,
+    },
+  },
   { method: 'POST', path: '/api/mcps' },
-  { method: 'PUT', path: '/api/mcps/:name' },
-  { method: 'DELETE', path: '/api/mcps/:name' },
-  { method: 'POST', path: '/api/mcps/:name/rename' },
+  { method: 'PUT', path: '/api/mcps/:id' },
+  { method: 'DELETE', path: '/api/mcps/:id' },
+  { method: 'POST', path: '/api/mcps/:id/rename' },
   { method: 'GET', path: '/api/mcps/probes' },
-  { method: 'GET', path: '/api/mcps/:name/probe' },
-  { method: 'POST', path: '/api/mcps/:name/probe' },
+  { method: 'GET', path: '/api/mcps/:id/probe' },
+  { method: 'POST', path: '/api/mcps/:id/probe' },
 
   // ---- plugins (RFC-031) ----
   {
@@ -187,24 +197,31 @@ export const ENDPOINTS: EndpointSpec[] = [
     path: '/api/skills',
     happy: { schema: z.array(z.any()) },
   },
-  { method: 'GET', path: '/api/skills/:name' },
+  {
+    method: 'GET',
+    path: '/api/skills/:id',
+    happy: {
+      pathParams: (h) => ({ id: h.fixtures.skillId }),
+      schema: SkillSchema,
+    },
+  },
   { method: 'POST', path: '/api/skills' },
-  { method: 'PUT', path: '/api/skills/:name' },
-  { method: 'DELETE', path: '/api/skills/:name' },
-  { method: 'GET', path: '/api/skills/:name/content' },
-  { method: 'PUT', path: '/api/skills/:name/content' },
-  { method: 'POST', path: '/api/skills/:name/save' }, // RFC-170 T4 combined-save (token OCC)
-  { method: 'GET', path: '/api/skills/:name/files' },
-  { method: 'GET', path: '/api/skills/:name/file' },
-  { method: 'PUT', path: '/api/skills/:name/file' },
-  { method: 'DELETE', path: '/api/skills/:name/file' },
+  { method: 'PUT', path: '/api/skills/:id' },
+  { method: 'DELETE', path: '/api/skills/:id' },
+  { method: 'GET', path: '/api/skills/:id/content' },
+  { method: 'PUT', path: '/api/skills/:id/content' },
+  { method: 'POST', path: '/api/skills/:id/save' }, // RFC-170 T4 combined-save (token OCC)
+  { method: 'GET', path: '/api/skills/:id/files' },
+  { method: 'GET', path: '/api/skills/:id/file' },
+  { method: 'PUT', path: '/api/skills/:id/file' },
+  { method: 'DELETE', path: '/api/skills/:id/file' },
   { method: 'POST', path: '/api/skills/import-zip/parse' },
   { method: 'POST', path: '/api/skills/import-zip/commit' },
   // RFC-101: skill content version history.
-  { method: 'GET', path: '/api/skills/:name/versions' },
-  { method: 'GET', path: '/api/skills/:name/versions/diff' },
-  { method: 'GET', path: '/api/skills/:name/versions/:v/content' },
-  { method: 'POST', path: '/api/skills/:name/versions/:v/restore' },
+  { method: 'GET', path: '/api/skills/:id/versions' },
+  { method: 'GET', path: '/api/skills/:id/versions/diff' },
+  { method: 'GET', path: '/api/skills/:id/versions/:v/content' },
+  { method: 'POST', path: '/api/skills/:id/versions/:v/restore' },
 
   // ---- fusions (RFC-101 memory→skill fusion) ----
   { method: 'POST', path: '/api/fusions' },
@@ -294,14 +311,19 @@ export const ENDPOINTS: EndpointSpec[] = [
     path: '/api/workgroups',
     happy: { schema: z.array(z.any()) },
   },
-  { method: 'GET', path: '/api/workgroups/:name' },
-  // RFC-177: id→name resolver for the /tasks subject link (rename-safe). Auth-required.
-  { method: 'GET', path: '/api/workgroups/by-id/:id' },
+  {
+    method: 'GET',
+    path: '/api/workgroups/:id',
+    happy: {
+      pathParams: (h) => ({ id: h.fixtures.workgroupId }),
+      schema: WorkgroupSchema,
+    },
+  },
   { method: 'POST', path: '/api/workgroups' },
-  { method: 'PUT', path: '/api/workgroups/:name' },
-  { method: 'DELETE', path: '/api/workgroups/:name' },
-  { method: 'POST', path: '/api/workgroups/:name/rename' },
-  { method: 'POST', path: '/api/workgroups/:name/tasks' },
+  { method: 'PUT', path: '/api/workgroups/:id' },
+  { method: 'DELETE', path: '/api/workgroups/:id' },
+  { method: 'POST', path: '/api/workgroups/:id/rename' },
+  { method: 'POST', path: '/api/workgroups/:id/tasks' },
   { method: 'GET', path: '/api/workgroup-tasks/pending-count' },
   { method: 'GET', path: '/api/workgroup-tasks/:taskId/room' },
   { method: 'POST', path: '/api/workgroup-tasks/:taskId/messages' },
@@ -522,18 +544,18 @@ export const ENDPOINTS: EndpointSpec[] = [
   // 401 gate, no shape check, nothing). The scanner now reconstructs them from
   // the call sites; see api-contract-coverage.test.ts and
   // design/test-guard-audit-2026-07-21 gap B1-routes-3.
-  { method: 'GET', path: '/api/agents/:name/acl' },
-  { method: 'PUT', path: '/api/agents/:name/acl' },
-  { method: 'GET', path: '/api/skills/:name/acl' },
-  { method: 'PUT', path: '/api/skills/:name/acl' },
-  { method: 'GET', path: '/api/mcps/:name/acl' },
-  { method: 'PUT', path: '/api/mcps/:name/acl' },
+  { method: 'GET', path: '/api/agents/:id/acl' },
+  { method: 'PUT', path: '/api/agents/:id/acl' },
+  { method: 'GET', path: '/api/skills/:id/acl' },
+  { method: 'PUT', path: '/api/skills/:id/acl' },
+  { method: 'GET', path: '/api/mcps/:id/acl' },
+  { method: 'PUT', path: '/api/mcps/:id/acl' },
   { method: 'GET', path: '/api/plugins/:id/acl' },
   { method: 'PUT', path: '/api/plugins/:id/acl' },
   { method: 'GET', path: '/api/workflows/:id/acl' },
   { method: 'PUT', path: '/api/workflows/:id/acl' },
-  { method: 'GET', path: '/api/workgroups/:name/acl' },
-  { method: 'PUT', path: '/api/workgroups/:name/acl' },
+  { method: 'GET', path: '/api/workgroups/:id/acl' },
+  { method: 'PUT', path: '/api/workgroups/:id/acl' },
 ]
 
 // ----------------------------------------------------------------------------

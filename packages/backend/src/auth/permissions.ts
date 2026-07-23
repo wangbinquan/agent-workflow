@@ -92,7 +92,7 @@ export function resourcePermissionGate(
   opts?: {
     /**
      * RFC-165 (F15): carve-outs for sub-paths whose semantics are NOT a
-     * resource read/write — e.g. POST /api/agents/:name/tasks is a task
+     * resource read/write — e.g. POST /api/agents/:id/tasks is a task
      * LAUNCH gated by tasks:launch (registered separately), not agents:write.
      * Return true to skip this gate for the request.
      */

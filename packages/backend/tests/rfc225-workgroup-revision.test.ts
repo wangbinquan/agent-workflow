@@ -10,6 +10,7 @@ import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { createAgent } from '../src/services/agent'
 import {
   createWorkgroup,
   getWorkgroupById,
@@ -24,6 +25,19 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SYSTEM: WorkgroupWritePrincipal = { kind: 'system', reason: 'rfc225-test' }
 
 async function createFixture(db: DbClient, name = 'revision-team'): Promise<WorkgroupDetail> {
+  const agent = await createAgent(db, {
+    name: 'revision-agent',
+    description: '',
+    outputs: [],
+    syncOutputsOnIterate: true,
+    permission: {},
+    skills: [],
+    dependsOn: [],
+    mcp: [],
+    plugins: [],
+    frontmatterExtra: {},
+    bodyMd: '',
+  })
   return createWorkgroup(
     db,
     CreateWorkgroupSchema.parse({
@@ -40,7 +54,7 @@ async function createFixture(db: DbClient, name = 'revision-team'): Promise<Work
       members: [
         {
           memberType: 'agent',
-          agentName: 'legacy-dangling-agent',
+          agentId: agent.id,
           displayName: 'lead',
           roleDesc: 'lead',
         },
@@ -111,7 +125,7 @@ describe('RFC-225 workgroup revision fencing', () => {
       members: [
         {
           memberType: 'agent',
-          agentName: 'legacy-dangling-agent',
+          agentId: group.members[0]!.agentId!,
           displayName: 'lead',
           roleDesc: 'updated role',
         },

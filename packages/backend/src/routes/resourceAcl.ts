@@ -33,8 +33,8 @@ export interface AclEndpointConfig {
   type: AclResourceType
   /** e.g. '/api/agents' */
   base: string
-  /** route param name: 'name' (agents/skills/mcps) or 'id' (plugins/workflows) */
-  param: 'name' | 'id'
+  /** RFC-223: every ACL route is addressed by canonical resource id. */
+  param: 'id'
   /** Load the row by the route key; null when absent. */
   load: (db: AppDeps['db'], key: string) => Promise<AclRow | null>
   /** RFC-201: optional stable-id linearization adapter for operation resources. */
@@ -53,7 +53,7 @@ export function mountAclEndpoints(app: Hono, deps: AppDeps, cfg: AclEndpointConf
     const actor = actorOf(c)
     const row = await cfg.load(deps.db, key)
     if (row === null || !(await canViewResource(deps.db, actor, cfg.type, row))) {
-      throw new NotFoundError(`${cfg.type}-not-found`, `${cfg.type} '${key}' not found`)
+      throw new NotFoundError(`${cfg.type}-not-found`, `${cfg.type} not found`)
     }
     return c.json(await getResourceAcl(deps.db, actor, cfg.type, row))
   })
@@ -63,7 +63,7 @@ export function mountAclEndpoints(app: Hono, deps: AppDeps, cfg: AclEndpointConf
     const actor = actorOf(c)
     const row = await cfg.load(deps.db, key)
     if (row === null || !(await canViewResource(deps.db, actor, cfg.type, row))) {
-      throw new NotFoundError(`${cfg.type}-not-found`, `${cfg.type} '${key}' not found`)
+      throw new NotFoundError(`${cfg.type}-not-found`, `${cfg.type} not found`)
     }
     const body: unknown = await c.req.json().catch(() => ({}))
     const parsed = UpdateResourceAclBodySchema.safeParse(body)
@@ -74,7 +74,7 @@ export function mountAclEndpoints(app: Hono, deps: AppDeps, cfg: AclEndpointConf
     }
     const updateFresh = async (fresh: AclRow): Promise<ResourceAcl> => {
       if (!(await canViewResource(deps.db, actor, cfg.type, fresh))) {
-        throw new NotFoundError(`${cfg.type}-not-found`, `${cfg.type} '${key}' not found`)
+        throw new NotFoundError(`${cfg.type}-not-found`, `${cfg.type} not found`)
       }
       // RFC-104: built-ins are read-only. This runs on the in-lock fresh row.
       assertNotBuiltin(cfg.type, fresh)
@@ -87,7 +87,7 @@ export function mountAclEndpoints(app: Hono, deps: AppDeps, cfg: AclEndpointConf
         : await cfg.coordinator.runExclusive(row.id, async () => {
             const fresh = await cfg.coordinator!.loadById(deps.db, row.id)
             if (fresh === null) {
-              throw new NotFoundError(`${cfg.type}-not-found`, `${cfg.type} '${key}' not found`)
+              throw new NotFoundError(`${cfg.type}-not-found`, `${cfg.type} not found`)
             }
             return updateFresh(fresh)
           })

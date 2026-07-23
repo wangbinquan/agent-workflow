@@ -68,7 +68,7 @@ describe('agent.syncOutputsOnIterate (RFC-014 T0)', () => {
   })
 
   test('updateAgent flips syncOutputsOnIterate; other fields preserved', async () => {
-    await createAgent(db, {
+    const agent = await createAgent(db, {
       name: 'designer',
       description: 'orig',
       outputs: ['x'],
@@ -81,7 +81,7 @@ describe('agent.syncOutputsOnIterate (RFC-014 T0)', () => {
       frontmatterExtra: {},
       bodyMd: 'body',
     })
-    const updated = await updateAgent(db, 'designer', { syncOutputsOnIterate: false })
+    const updated = await updateAgent(db, agent.id, { syncOutputsOnIterate: false })
     expect(updated.syncOutputsOnIterate).toBe(false)
     expect(updated.description).toBe('orig')
     expect(updated.outputs).toEqual(['x'])

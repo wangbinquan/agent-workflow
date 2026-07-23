@@ -537,6 +537,19 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
   test('expectedWorkgroupId mismatch → 409 (after the ACL-404 gate)', async () => {
     const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc175-wg-'))
     try {
+      const ghost = await createAgent(db, {
+        name: 'ghost-agent',
+        description: '',
+        outputs: [],
+        syncOutputsOnIterate: true,
+        permission: {},
+        skills: [],
+        dependsOn: [],
+        mcp: [],
+        plugins: [],
+        frontmatterExtra: {},
+        bodyMd: '',
+      })
       await createWorkgroup(db, {
         name: 'wg',
         description: '',
@@ -545,9 +558,7 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
         switches: { shareOutputs: true, directMessages: false, blackboard: false },
         maxRounds: 5,
         completionGate: false,
-        members: [
-          { memberType: 'agent', agentName: 'ghost-agent', displayName: 'g', roleDesc: '' },
-        ],
+        members: [{ memberType: 'agent', agentId: ghost.id, displayName: 'g', roleDesc: '' }],
       })
       const actor = buildActor({
         user: { id: 'u', username: 'u', displayName: 'u', role: 'admin', status: 'active' },
@@ -574,7 +585,7 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
     const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc167-launch-'))
     const previousOutputs = process.env.MOCK_OPENCODE_OUTPUTS
     try {
-      await createAgent(db, {
+      const launchAgent = await createAgent(db, {
         name: 'launch-agent',
         description: '',
         outputs: ['result'],
@@ -598,7 +609,7 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
         members: [
           {
             memberType: 'agent',
-            agentName: 'launch-agent',
+            agentId: launchAgent.id,
             displayName: 'launcher',
             roleDesc: '',
           },

@@ -46,8 +46,8 @@ function harness() {
   }
 }
 
-async function seedAgent(db: DbClient, name: string): Promise<void> {
-  await createAgent(db, {
+async function seedAgent(db: DbClient, name: string): Promise<string> {
+  const agent = await createAgent(db, {
     name,
     description: name,
     outputs: [],
@@ -60,6 +60,7 @@ async function seedAgent(db: DbClient, name: string): Promise<void> {
     frontmatterExtra: {},
     bodyMd: `you are ${name}`,
   })
+  return agent.id
 }
 
 const actor = buildActor({
@@ -71,9 +72,9 @@ describe('RFC-187 §4-2 — fan-out 同文件冲突：逐路径救回（真子�
   test('输家 repo 的干净文件照样落地；冲突文件保持赢家内容；房间 note 带救回统计', async () => {
     const h = harness()
     try {
-      await seedAgent(h.db, 'wg-lead')
-      await seedAgent(h.db, 'wg-w1')
-      await seedAgent(h.db, 'wg-w2')
+      const leadId = await seedAgent(h.db, 'wg-lead')
+      const worker1Id = await seedAgent(h.db, 'wg-w1')
+      const worker2Id = await seedAgent(h.db, 'wg-w2')
       await createWorkgroup(h.db, {
         name: 'wg187-salvage',
         description: '',
@@ -85,9 +86,9 @@ describe('RFC-187 §4-2 — fan-out 同文件冲突：逐路径救回（真子�
         maxRounds: 8,
         completionGate: false,
         members: [
-          { memberType: 'agent', agentName: 'wg-lead', displayName: 'lead', roleDesc: '协调' },
-          { memberType: 'agent', agentName: 'wg-w1', displayName: 'w1', roleDesc: '产出' },
-          { memberType: 'agent', agentName: 'wg-w2', displayName: 'w2', roleDesc: '产出' },
+          { memberType: 'agent', agentId: leadId, displayName: 'lead', roleDesc: '协调' },
+          { memberType: 'agent', agentId: worker1Id, displayName: 'w1', roleDesc: '产出' },
+          { memberType: 'agent', agentId: worker2Id, displayName: 'w2', roleDesc: '产出' },
         ],
       } as Parameters<typeof createWorkgroup>[1])
 

@@ -848,7 +848,7 @@ function assertNotSkillMainFile(root: string, relPath: string): void {
   if (isProtectedSkillMainFile(relPath) || resolvesToSkillMainFile(root, relPath)) {
     throw new ConflictError(
       'skill-md-protected',
-      'cannot write or delete SKILL.md; edit content via POST /api/skills/:name/save',
+      'cannot write or delete SKILL.md; edit content via POST /api/skills/:id/save',
     )
   }
 }

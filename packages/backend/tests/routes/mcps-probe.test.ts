@@ -1,11 +1,11 @@
-// RFC-030 T6 — /api/mcps/probes + /api/mcps/:name/probe HTTP contract.
+// RFC-030 T6 — /api/mcps/probes + /api/mcps/:id/probe HTTP contract.
 //
 // Pins:
 //   - GET /api/mcps/probes: returns [] when no probes exist (and crucially is
-//     NOT swallowed by the parametric /api/mcps/:name route).
-//   - GET /api/mcps/:name/probe: 404 mcp-not-found vs 404 probe-not-found
+//     NOT swallowed by the parametric /api/mcps/:id route).
+//   - GET /api/mcps/:id/probe: 404 mcp-not-found vs 404 probe-not-found
 //     are distinguished by the `code` field in the error body.
-//   - POST /api/mcps/:name/probe: 422 mcp-disabled (before transport open),
+//   - POST /api/mcps/:id/probe: 422 mcp-disabled (before transport open),
 //     200 + status='error' on probe failure (NEVER 5xx — failure is expected
 //     and persisted so the UI can render it).
 //   - Auth: requests without bearer return 401 (same as RFC-028 routes).
@@ -73,8 +73,8 @@ async function createMcp(
   return j
 }
 
-async function postProbe(app: Hono, name: string, expectedConfigHash: string): Promise<Response> {
-  return req(app, `/api/mcps/${name}/probe`, {
+async function postProbe(app: Hono, id: string, expectedConfigHash: string): Promise<Response> {
+  return req(app, `/api/mcps/${id}/probe`, {
     method: 'POST',
     body: JSON.stringify({ expectedConfigHash }),
   })
@@ -90,7 +90,7 @@ describe('GET /api/mcps/probes (static route precedence)', () => {
     ;({ app } = buildHarness())
   })
 
-  test('returns [] when no probes exist (not swallowed by /:name)', async () => {
+  test('returns [] when no probes exist (not swallowed by /:id)', async () => {
     const r = await req(app, '/api/mcps/probes')
     expect(r.status).toBe(200)
     expect(await r.json()).toEqual([])
@@ -103,7 +103,7 @@ describe('GET /api/mcps/probes (static route precedence)', () => {
       config: { command: ['uvx', 'pg-mcp'] },
     })
     __setProbeOptionsForTesting({ openClient: fakeOpener(makeFakeClient()) })
-    const probed = await postProbe(app, 'pg-prod', mcp.operationConfigHash)
+    const probed = await postProbe(app, mcp.id, mcp.operationConfigHash)
     expect(probed.status).toBe(200)
 
     const list = await req(app, '/api/mcps/probes')
@@ -115,26 +115,26 @@ describe('GET /api/mcps/probes (static route precedence)', () => {
   })
 })
 
-describe('GET /api/mcps/:name/probe', () => {
+describe('GET /api/mcps/:id/probe', () => {
   let app: Hono
   beforeEach(() => {
     ;({ app } = buildHarness())
   })
 
   test('404 mcp-not-found when mcp absent', async () => {
-    const r = await req(app, '/api/mcps/nope/probe')
+    const r = await req(app, '/api/mcps/00000000000000000000000000/probe')
     expect(r.status).toBe(404)
     const j = (await r.json()) as { code: string }
     expect(j.code).toBe('mcp-not-found')
   })
 
   test('404 probe-not-found when mcp exists but never probed', async () => {
-    await createMcp(app, {
+    const mcp = await createMcp(app, {
       name: 'pg-prod',
       type: 'local',
       config: { command: ['uvx', 'pg-mcp'] },
     })
-    const r = await req(app, '/api/mcps/pg-prod/probe')
+    const r = await req(app, `/api/mcps/${mcp.id}/probe`)
     expect(r.status).toBe(404)
     const j = (await r.json()) as { code: string }
     expect(j.code).toBe('probe-not-found')
@@ -147,8 +147,8 @@ describe('GET /api/mcps/:name/probe', () => {
       config: { command: ['uvx', 'pg-mcp'] },
     })
     __setProbeOptionsForTesting({ openClient: fakeOpener(makeFakeClient()) })
-    await postProbe(app, 'pg-prod', mcp.operationConfigHash)
-    const r = await req(app, '/api/mcps/pg-prod/probe')
+    await postProbe(app, mcp.id, mcp.operationConfigHash)
+    const r = await req(app, `/api/mcps/${mcp.id}/probe`)
     expect(r.status).toBe(200)
     const j = (await r.json()) as { status: string; tools: unknown[] }
     expect(j.status).toBe('ok')
@@ -156,7 +156,7 @@ describe('GET /api/mcps/:name/probe', () => {
   })
 })
 
-describe('POST /api/mcps/:name/probe', () => {
+describe('POST /api/mcps/:id/probe', () => {
   let app: Hono
   beforeEach(() => {
     ;({ app } = buildHarness())
@@ -169,7 +169,7 @@ describe('POST /api/mcps/:name/probe', () => {
       config: { command: ['uvx', 'pg-mcp'] },
     })
     __setProbeOptionsForTesting({ openClient: fakeOpener(makeFakeClient()) })
-    const r = await postProbe(app, 'pg-prod', mcp.operationConfigHash)
+    const r = await postProbe(app, mcp.id, mcp.operationConfigHash)
     expect(r.status).toBe(200)
     const j = (await r.json()) as { status: string; mcpName: string }
     expect(j.status).toBe('ok')
@@ -188,7 +188,7 @@ describe('POST /api/mcps/:name/probe', () => {
       throw e
     }
     __setProbeOptionsForTesting({ openClient: opener })
-    const r = await postProbe(app, 'pg-prod', mcp.operationConfigHash)
+    const r = await postProbe(app, mcp.id, mcp.operationConfigHash)
     expect(r.status).toBe(200)
     const j = (await r.json()) as { status: string; errorCode: string }
     expect(j.status).toBe('error')
@@ -204,7 +204,7 @@ describe('POST /api/mcps/:name/probe', () => {
     __setProbeOptionsForTesting({
       openClient: fakeOpener(makeFakeClient({ failTools: true })),
     })
-    const r = await postProbe(app, 'pg-prod', mcp.operationConfigHash)
+    const r = await postProbe(app, mcp.id, mcp.operationConfigHash)
     expect(r.status).toBe(200)
     const j = (await r.json()) as { status: string; errorCode: string; tools: unknown }
     expect(j.status).toBe('ok')
@@ -219,14 +219,14 @@ describe('POST /api/mcps/:name/probe', () => {
       config: { command: ['uvx', 'pg-mcp'] },
       enabled: false,
     })
-    const r = await postProbe(app, 'pg-prod', mcp.operationConfigHash)
+    const r = await postProbe(app, mcp.id, mcp.operationConfigHash)
     expect(r.status).toBe(422)
     const j = (await r.json()) as { code: string }
     expect(j.code).toBe('mcp-disabled')
   })
 
   test('404 mcp-not-found before any probe attempt', async () => {
-    const r = await postProbe(app, 'ghost', '0'.repeat(64))
+    const r = await postProbe(app, '00000000000000000000000000', '0'.repeat(64))
     expect(r.status).toBe(404)
     const j = (await r.json()) as { code: string }
     expect(j.code).toBe('mcp-not-found')
@@ -240,9 +240,11 @@ describe('auth', () => {
     expect(r.status).toBe(401)
   })
 
-  test('POST /api/mcps/:name/probe returns 401 without token', async () => {
+  test('POST /api/mcps/:id/probe returns 401 without token', async () => {
     const { app } = buildHarness()
-    const r = await app.request('/api/mcps/x/probe', { method: 'POST' })
+    const r = await app.request('/api/mcps/00000000000000000000000000/probe', {
+      method: 'POST',
+    })
     expect(r.status).toBe(401)
   })
 })

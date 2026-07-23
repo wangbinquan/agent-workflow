@@ -1,4 +1,4 @@
-// Locks RFC-022 §design 5.6 — `GET /api/agents/:name/closure` and
+// Locks RFC-022 §design 5.6 — `GET /api/agents/:id/closure` and
 // `POST /api/agents/closure-preview`.
 //
 // Red here means one of:
@@ -16,6 +16,7 @@ import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createApp } from '../src/server'
 import { createAgent } from '../src/services/agent'
+import type { Agent } from '@agent-workflow/shared'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -48,8 +49,8 @@ async function seedAgent(
     mcp?: string[]
     description?: string
   } = {},
-): Promise<void> {
-  await createAgent(db, {
+): Promise<Agent> {
+  return createAgent(db, {
     name,
     description: opts.description ?? '',
     outputs: [],
@@ -66,7 +67,7 @@ async function seedAgent(
   })
 }
 
-describe('GET /api/agents/:name/closure', () => {
+describe('GET /api/agents/:id/closure', () => {
   let db: DbClient
   let app: Hono
   beforeEach(() => {
@@ -74,27 +75,43 @@ describe('GET /api/agents/:name/closure', () => {
   })
 
   test('returns BFS-ordered agents with root first; closure summary fields populated', async () => {
-    await seedAgent(db, 'leaf', { skills: ['s1'], description: 'leaf-desc' })
-    await seedAgent(db, 'mid', { dependsOn: ['leaf'], skills: ['s1', 's2'] })
-    await seedAgent(db, 'top', { dependsOn: ['mid'], description: 'top-desc' })
+    const leafAgent = await seedAgent(db, 'leaf', {
+      skills: ['s1'],
+      description: 'leaf-desc',
+    })
+    const midAgent = await seedAgent(db, 'mid', {
+      dependsOn: [leafAgent.id],
+      skills: ['s1', 's2'],
+    })
+    const topAgent = await seedAgent(db, 'top', {
+      dependsOn: [midAgent.id],
+      description: 'top-desc',
+    })
 
-    const res = await req(app, '/api/agents/top/closure')
+    const res = await req(app, `/api/agents/${topAgent.id}/closure`)
     expect(res.status).toBe(200)
     const body = (await res.json()) as {
       ok: boolean
       agents: Array<{
+        id: string
         name: string
+        ownerUserId: string | null
         description: string
         skills: string[]
         skillCount: number
         mcp: string[]
         plugins: string[]
-        dependsOn: string[]
+        dependsOnIds: string[]
+        masked: boolean
         missing: boolean
       }>
     }
     expect(body.ok).toBe(true)
     expect(body.agents.map((a) => a.name)).toEqual(['top', 'mid', 'leaf'])
+    expect(body.agents.map((a) => a.id)).toEqual([topAgent.id, midAgent.id, leafAgent.id])
+    expect(body.agents[0]?.dependsOnIds).toEqual([midAgent.id])
+    expect(body.agents[1]?.dependsOnIds).toEqual([leafAgent.id])
+    expect(body.agents.every((a) => a.ownerUserId === null)).toBe(true)
     const leaf = body.agents.find((a) => a.name === 'leaf')!
     // RFC-046 follow-up: `skills` (names) must accompany `skillCount` so the
     // DependencyTree UI can render the names instead of only a count. Same
@@ -105,6 +122,7 @@ describe('GET /api/agents/:name/closure', () => {
     expect(leaf.mcp).toEqual([])
     expect(leaf.plugins).toEqual([])
     expect(leaf.description).toBe('leaf-desc')
+    expect(leaf.masked).toBe(false)
     expect(leaf.missing).toBe(false)
   })
 
@@ -119,17 +137,26 @@ describe('GET /api/agents/:name/closure', () => {
     // Inject a dangling reference via raw UPDATE (createAgent guard would
     // refuse). Matches the runtime scenario where another writer modifies
     // depends_on directly.
-    await seedAgent(db, 'top')
+    const top = await seedAgent(db, 'top')
     const { sql } = await import('drizzle-orm')
     await db.run(sql`UPDATE agents SET depends_on = '["ghost"]' WHERE name = 'top'`)
 
-    const res = await req(app, '/api/agents/top/closure')
+    const res = await req(app, `/api/agents/${top.id}/closure`)
     expect(res.status).toBe(200)
     const body = (await res.json()) as {
-      agents: Array<{ name: string; missing: boolean }>
+      agents: Array<{
+        id: string
+        name: string
+        ownerUserId: string | null
+        masked: boolean
+        missing: boolean
+      }>
     }
     const ghost = body.agents.find((a) => a.name === 'ghost')
     expect(ghost).toBeDefined()
+    expect(ghost?.id).toBe('ghost')
+    expect(ghost?.ownerUserId).toBeNull()
+    expect(ghost?.masked).toBe(false)
     expect(ghost?.missing).toBe(true)
   })
 })
@@ -142,18 +169,30 @@ describe('POST /api/agents/closure-preview', () => {
   })
 
   test('ok:true for a valid draft (selfName need not exist yet — new-agent flow)', async () => {
-    await seedAgent(db, 'leaf')
+    const leaf = await seedAgent(db, 'leaf')
     const res = await req(app, '/api/agents/closure-preview', {
       method: 'POST',
-      body: JSON.stringify({ name: 'brand-new', dependsOn: ['leaf'] }),
+      body: JSON.stringify({ name: 'brand-new', dependsOn: [leaf.id] }),
     })
     expect(res.status).toBe(200)
     const body = (await res.json()) as {
       ok: boolean
-      agents: Array<{ name: string }>
+      agents: Array<{
+        id: string
+        name: string
+        dependsOnIds: string[]
+        masked: boolean
+        missing: boolean
+      }>
     }
     expect(body.ok).toBe(true)
     expect(body.agents.map((a) => a.name)).toEqual(['brand-new', 'leaf'])
+    expect(body.agents[0]).toMatchObject({
+      id: '',
+      dependsOnIds: [leaf.id],
+      masked: false,
+      missing: false,
+    })
   })
 
   test('returns HTTP 200 with ok:false on validation errors (no 4xx flash on every keystroke)', async () => {
@@ -170,13 +209,13 @@ describe('POST /api/agents/closure-preview', () => {
   })
 
   test('returns HTTP 200 with ok:false + cyclePath when proposed dependsOn would form a cycle', async () => {
-    await seedAgent(db, 'c')
-    await seedAgent(db, 'b', { dependsOn: ['c'] })
-    await seedAgent(db, 'a', { dependsOn: ['b'] })
+    const cAgent = await seedAgent(db, 'c')
+    const bAgent = await seedAgent(db, 'b', { dependsOn: [cAgent.id] })
+    const aAgent = await seedAgent(db, 'a', { dependsOn: [bAgent.id] })
     // Proposed: c.dependsOn = ['a'] which closes a → b → c → a.
     const res = await req(app, '/api/agents/closure-preview', {
       method: 'POST',
-      body: JSON.stringify({ name: 'c', dependsOn: ['a'] }),
+      body: JSON.stringify({ id: cAgent.id, name: 'c', dependsOn: [aAgent.id] }),
     })
     expect(res.status).toBe(200)
     const body = (await res.json()) as {

@@ -31,6 +31,7 @@ import {
 import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
+  agents,
   lifecycleAlerts,
   nodeRuns,
   tasks,
@@ -62,6 +63,24 @@ import { createLogger } from '../src/util/log'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const log = createLogger('rfc164-engine-test')
+
+async function seedNamedAgent(db: DbClient, name: string): Promise<string> {
+  return (
+    await createAgent(db, {
+      name,
+      description: '',
+      outputs: [],
+      syncOutputsOnIterate: true,
+      permission: {},
+      skills: [],
+      dependsOn: [],
+      mcp: [],
+      plugins: [],
+      frontmatterExtra: {},
+      bodyMd: name,
+    })
+  ).id
+}
 
 function cfg(overrides: Partial<WorkgroupRuntimeConfig> = {}): WorkgroupRuntimeConfig {
   return {
@@ -236,6 +255,7 @@ describe('RFC-164 engine — launch path', () => {
   let db: DbClient
   let app: ReturnType<typeof createApp>
   let token: string
+  let a1Id: string
 
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
@@ -253,6 +273,7 @@ describe('RFC-164 engine — launch path', () => {
       password: 'longEnoughPassword',
     })
     token = (await createSession({ db, userId: u.id })).token
+    a1Id = await seedNamedAgent(db, 'a1')
   })
 
   async function req(path: string, init: RequestInit = {}): Promise<Response> {
@@ -278,7 +299,7 @@ describe('RFC-164 engine — launch path', () => {
   })
 
   test('not launch-ready (leaderless lw) → 422 workgroup-not-ready with reasons', async () => {
-    await createWorkgroup(db, {
+    const group = await createWorkgroup(db, {
       name: 'no-leader',
       description: '',
       instructions: '',
@@ -286,9 +307,9 @@ describe('RFC-164 engine — launch path', () => {
       switches: { shareOutputs: true, directMessages: false, blackboard: false },
       maxRounds: 5,
       completionGate: false,
-      members: [{ memberType: 'agent', agentName: 'a1', displayName: 'a1', roleDesc: '' }],
+      members: [{ memberType: 'agent', agentId: a1Id, displayName: 'a1', roleDesc: '' }],
     })
-    const res = await req('/api/workgroups/no-leader/tasks', {
+    const res = await req(`/api/workgroups/${group.id}/tasks`, {
       method: 'POST',
       body: JSON.stringify({ name: 't', goal: 'g' }),
     })
@@ -308,9 +329,9 @@ describe('RFC-164 engine — launch path', () => {
       switches: { shareOutputs: true, directMessages: false, blackboard: false },
       maxRounds: 5,
       completionGate: false,
-      members: [{ memberType: 'agent', agentName: 'a1', displayName: 'lead', roleDesc: '' }],
+      members: [{ memberType: 'agent', agentId: a1Id, displayName: 'lead', roleDesc: '' }],
     })
-    const res = await req('/api/workgroups/version-fenced/tasks', {
+    const res = await req(`/api/workgroups/${group.id}/tasks`, {
       method: 'POST',
       body: JSON.stringify({
         name: 't',
@@ -335,7 +356,8 @@ describe('RFC-164 engine — launch path', () => {
   })
 
   test('上线前加固：deleted roster agent blocks launch before task/host materialization', async () => {
-    await createWorkgroup(db, {
+    const deletedAgentId = await seedNamedAgent(db, 'deleted-agent')
+    const group = await createWorkgroup(db, {
       name: 'dangling-agent',
       description: '',
       instructions: '',
@@ -345,10 +367,11 @@ describe('RFC-164 engine — launch path', () => {
       maxRounds: 5,
       completionGate: false,
       members: [
-        { memberType: 'agent', agentName: 'deleted-agent', displayName: 'ghost', roleDesc: '' },
+        { memberType: 'agent', agentId: deletedAgentId, displayName: 'ghost', roleDesc: '' },
       ],
     })
-    const res = await req('/api/workgroups/dangling-agent/tasks', {
+    await db.delete(agents).where(eq(agents.id, deletedAgentId))
+    const res = await req(`/api/workgroups/${group.id}/tasks`, {
       method: 'POST',
       body: JSON.stringify({ name: 't', goal: 'g', scratch: true }),
     })
@@ -371,7 +394,7 @@ describe('RFC-164 engine — launch path', () => {
   // (snapshot/dw stamp/engine entry) lives in rfc167-dynamic-workflow-engine
   // .test.ts; here we lock only that the old guard never fires again.
   test('dynamic_workflow launch passes the old PR-1 guard (RFC-167 撤守卫回归锁)', async () => {
-    await createWorkgroup(db, {
+    const group = await createWorkgroup(db, {
       name: 'dyn',
       description: '',
       instructions: '',
@@ -379,9 +402,9 @@ describe('RFC-164 engine — launch path', () => {
       switches: { shareOutputs: true, directMessages: false, blackboard: false },
       maxRounds: 5,
       completionGate: false,
-      members: [{ memberType: 'agent', agentName: 'a1', displayName: 'a1', roleDesc: '' }],
+      members: [{ memberType: 'agent', agentId: a1Id, displayName: 'a1', roleDesc: '' }],
     })
-    const res = await req('/api/workgroups/dyn/tasks', {
+    const res = await req(`/api/workgroups/${group.id}/tasks`, {
       method: 'POST',
       body: JSON.stringify({ name: 't', goal: 'g' }),
     })
@@ -399,7 +422,7 @@ describe('RFC-164 engine — launch path', () => {
       role: 'user',
       password: 'longEnoughPassword',
     })
-    await createWorkgroup(db, {
+    const group = await createWorkgroup(db, {
       name: 'with-human',
       description: '',
       instructions: '',
@@ -409,11 +432,11 @@ describe('RFC-164 engine — launch path', () => {
       maxRounds: 5,
       completionGate: false,
       members: [
-        { memberType: 'agent', agentName: 'a1', displayName: 'lead', roleDesc: '' },
+        { memberType: 'agent', agentId: a1Id, displayName: 'lead', roleDesc: '' },
         { memberType: 'human', userId: u.id, displayName: 'pm', roleDesc: '' },
       ],
     })
-    const res = await req('/api/workgroups/with-human/tasks', {
+    const res = await req(`/api/workgroups/${group.id}/tasks`, {
       method: 'POST',
       body: JSON.stringify({ name: 't', goal: 'g' }),
     })
@@ -450,7 +473,7 @@ describe('RFC-164 engine — launch path', () => {
   })
 
   test('invalid launch payload (no repo source) → 422 via StartTaskSchema single-sourcing', async () => {
-    await createWorkgroup(db, {
+    const group = await createWorkgroup(db, {
       name: 'ready-group',
       description: '',
       instructions: '',
@@ -459,9 +482,9 @@ describe('RFC-164 engine — launch path', () => {
       switches: { shareOutputs: true, directMessages: false, blackboard: false },
       maxRounds: 5,
       completionGate: false,
-      members: [{ memberType: 'agent', agentName: 'a1', displayName: 'lead', roleDesc: '' }],
+      members: [{ memberType: 'agent', agentId: a1Id, displayName: 'lead', roleDesc: '' }],
     })
-    const res = await req('/api/workgroups/ready-group/tasks', {
+    const res = await req(`/api/workgroups/${group.id}/tasks`, {
       method: 'POST',
       body: JSON.stringify({ name: 't', goal: 'g' }),
     })
@@ -897,6 +920,8 @@ describe('RFC-164 engine — source locks', () => {
 describe('RFC-164 engine — buildWorkgroupRuntimeConfig', () => {
   test('freezes resource group + goal into the runtime copy', async () => {
     const db = createInMemoryDb(MIGRATIONS)
+    const a1Id = await seedNamedAgent(db, 'a1')
+    const a2Id = await seedNamedAgent(db, 'a2')
     const group = await createWorkgroup(db, {
       name: 'freeze-me',
       description: '',
@@ -907,8 +932,8 @@ describe('RFC-164 engine — buildWorkgroupRuntimeConfig', () => {
       maxRounds: 7,
       completionGate: true,
       members: [
-        { memberType: 'agent', agentName: 'a1', displayName: 'lead', roleDesc: 'r1' },
-        { memberType: 'agent', agentName: 'a2', displayName: 'dev', roleDesc: 'r2' },
+        { memberType: 'agent', agentId: a1Id, displayName: 'lead', roleDesc: 'r1' },
+        { memberType: 'agent', agentId: a2Id, displayName: 'dev', roleDesc: 'r2' },
       ],
     })
     const config = buildWorkgroupRuntimeConfig(group, 'the goal')

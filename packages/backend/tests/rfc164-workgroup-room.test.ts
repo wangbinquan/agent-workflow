@@ -77,20 +77,22 @@ function cfg(): WorkgroupRuntimeConfig {
   }
 }
 
-async function seedAgent(db: DbClient, name: string): Promise<void> {
-  await createAgent(db, {
-    name,
-    description: '',
-    outputs: ['result'],
-    syncOutputsOnIterate: true,
-    permission: {},
-    skills: [],
-    dependsOn: [],
-    mcp: [],
-    plugins: [],
-    frontmatterExtra: {},
-    bodyMd: 'test agent',
-  })
+async function seedAgent(db: DbClient, name: string): Promise<string> {
+  return (
+    await createAgent(db, {
+      name,
+      description: '',
+      outputs: ['result'],
+      syncOutputsOnIterate: true,
+      permission: {},
+      skills: [],
+      dependsOn: [],
+      mcp: [],
+      plugins: [],
+      frontmatterExtra: {},
+      bodyMd: 'test agent',
+    })
+  ).id
 }
 
 describe('RFC-164 room — resolveMentions', () => {
@@ -665,7 +667,7 @@ describe('RFC-164 room — PR-5 surfaces', () => {
   })
 
   test('config patch：加成员游标=当前尾（不补历史）、减成员卡转置、leader 不可删、重名拒', async () => {
-    await seedAgent(db, 'late-joiner')
+    const lateAgentId = await seedAgent(db, 'late-joiner')
     // 先落一条消息作为「历史」
     await db.insert(workgroupMessages).values({
       id: ulid(),
@@ -681,7 +683,7 @@ describe('RFC-164 room — PR-5 surfaces', () => {
       method: 'PUT',
       body: JSON.stringify({
         addMembers: [
-          { memberType: 'agent', agentName: 'late-joiner', displayName: 'late', roleDesc: '' },
+          { memberType: 'agent', agentId: lateAgentId, displayName: 'late', roleDesc: '' },
         ],
         maxRounds: 30,
       }),
@@ -714,7 +716,9 @@ describe('RFC-164 room — PR-5 surfaces', () => {
     const dup = await req(owner.token, `/api/workgroup-tasks/${taskId}/config`, {
       method: 'PUT',
       body: JSON.stringify({
-        addMembers: [{ memberType: 'agent', agentName: 'x', displayName: 'late', roleDesc: '' }],
+        addMembers: [
+          { memberType: 'agent', agentId: lateAgentId, displayName: 'late', roleDesc: '' },
+        ],
       }),
     })
     expect(dup.status).toBe(422)

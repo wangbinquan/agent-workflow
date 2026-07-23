@@ -113,8 +113,8 @@ function writePlan(h: Harness, plan: Record<string, Step[]>): void {
 
 const opencodeCmd = (): string[] => ['bun', 'run', SCENARIO_STUB]
 
-async function seedAgent(db: DbClient, name: string): Promise<void> {
-  await createAgent(db, {
+async function seedAgent(db: DbClient, name: string): Promise<string> {
+  const agent = await createAgent(db, {
     name,
     description: name,
     outputs: [],
@@ -127,11 +127,12 @@ async function seedAgent(db: DbClient, name: string): Promise<void> {
     frontmatterExtra: {},
     bodyMd: `you are ${name}`,
   })
+  return agent.id
 }
 
 async function seedLeaderWorkerGroup(db: DbClient, name: string): Promise<void> {
-  await seedAgent(db, 'wg-lead')
-  await seedAgent(db, 'wg-writer')
+  const leadId = await seedAgent(db, 'wg-lead')
+  const writerId = await seedAgent(db, 'wg-writer')
   await createWorkgroup(db, {
     name,
     description: '',
@@ -144,8 +145,8 @@ async function seedLeaderWorkerGroup(db: DbClient, name: string): Promise<void> 
     maxRounds: 8,
     completionGate: false,
     members: [
-      { memberType: 'agent', agentName: 'wg-lead', displayName: 'lead', roleDesc: '协调' },
-      { memberType: 'agent', agentName: 'wg-writer', displayName: 'writer', roleDesc: '产出' },
+      { memberType: 'agent', agentId: leadId, displayName: 'lead', roleDesc: '协调' },
+      { memberType: 'agent', agentId: writerId, displayName: 'writer', roleDesc: '产出' },
     ],
   } as Parameters<typeof createWorkgroup>[1])
 }

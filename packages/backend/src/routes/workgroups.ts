@@ -1,17 +1,15 @@
 // Workgroup HTTP routes (RFC-164 PR-1).
 // GET    /api/workgroups                — list (ACL-filtered)
-// GET    /api/workgroups/:name          — one (invisible → 404, D1)
+// GET    /api/workgroups/:id            — one (invisible → 404, D1)
 // POST   /api/workgroups                — create (creator becomes owner)
-// PUT    /api/workgroups/:name          — RFC-225 version-fenced full document save
-// DELETE /api/workgroups/:name          — RFC-225 version-fenced delete
-// POST   /api/workgroups/:name/rename   — fenced compatibility adapter
-// GET/PUT /api/workgroups/:name/acl     — RFC-099 ACL management
+// PUT    /api/workgroups/:id            — RFC-225 version-fenced full document save
+// DELETE /api/workgroups/:id            — RFC-225 version-fenced delete
+// POST   /api/workgroups/:id/rename     — fenced compatibility adapter
+// GET/PUT /api/workgroups/:id/acl       — RFC-099 ACL management
 //
-// RFC-099 D15 / RFC-223 (PR-1, Codex impl-gate P1-2): creating/updating checks
-// that NEW agent-member references are usable by the editor — enforced INSIDE
-// create/updateWorkgroup, bound to the same single name→id resolution that
-// persists the member agentIds (no check-then-resolve TOCTOU). Dangling names
-// still pass (existence is launch-validated, same as workflow agentName).
+// RFC-099 D15 / RFC-223: creating/updating checks that NEW agent-member ids are
+// usable by the editor, enforced inside create/saveWorkgroup against the exact
+// ids persisted.
 
 import {
   CreateWorkgroupSchema,
@@ -29,7 +27,6 @@ import { assertDeleteConfirm } from '@/services/deleteConfirm'
 import {
   createWorkgroup,
   deleteWorkgroup,
-  getWorkgroup,
   getWorkgroupById,
   listWorkgroups,
   renameWorkgroup,
@@ -43,10 +40,10 @@ import { mountAclEndpoints } from './resourceAcl'
 
 export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
   // RFC-099: missing and not-visible produce the identical 404 (D1).
-  async function loadVisibleWorkgroup(actor: Actor, name: string) {
-    const group = await getWorkgroup(deps.db, name)
+  async function loadVisibleWorkgroup(actor: Actor, id: string) {
+    const group = await getWorkgroupById(deps.db, id)
     if (group === null || !(await canViewResource(deps.db, actor, 'workgroup', group))) {
-      throw new NotFoundError('workgroup-not-found', `workgroup '${name}' not found`)
+      throw new NotFoundError('workgroup-not-found', 'workgroup not found')
     }
     return group
   }
@@ -56,21 +53,8 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
     return c.json(await filterVisibleRows(deps.db, actorOf(c), 'workgroup', list))
   })
 
-  app.get('/api/workgroups/:name', async (c) => {
-    return c.json(await loadVisibleWorkgroup(actorOf(c), c.req.param('name')))
-  })
-
-  // RFC-177: resolve a workgroup by its stable id → current name, so a task's
-  // frozen `workgroupId` subject link survives a rename (never opens a same-named
-  // replacement). Two-segment path never collides with :name (arity-distinct).
-  // Invisible/missing → identical 404 (D1); returns ONLY {name} (no live state).
-  app.get('/api/workgroups/by-id/:id', async (c) => {
-    const actor = actorOf(c)
-    const group = await getWorkgroupById(deps.db, c.req.param('id'))
-    if (group === null || !(await canViewResource(deps.db, actor, 'workgroup', group))) {
-      throw new NotFoundError('workgroup-not-found', 'workgroup not found')
-    }
-    return c.json({ name: group.name })
+  app.get('/api/workgroups/:id', async (c) => {
+    return c.json(await loadVisibleWorkgroup(actorOf(c), c.req.param('id')))
   })
 
   app.post('/api/workgroups', async (c) => {
@@ -92,8 +76,8 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
     return c.json(created, 201)
   })
 
-  app.put('/api/workgroups/:name', async (c) => {
-    const name = c.req.param('name')
+  app.put('/api/workgroups/:id', async (c) => {
+    const id = c.req.param('id')
     const body = await safeJson(c.req.raw)
     const parsed = UpdateWorkgroupSchema.safeParse(body)
     if (!parsed.success) {
@@ -102,15 +86,15 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
       })
     }
     const actor = actorOf(c)
-    const existing = await loadVisibleWorkgroup(actor, name)
+    const existing = await loadVisibleWorkgroup(actor, id)
     await requireResourceOwner(deps.db, actor, 'workgroup', existing)
     return c.json(await saveWorkgroup(deps.db, existing.id, parsed.data, { kind: 'actor', actor }))
   })
 
-  app.delete('/api/workgroups/:name', async (c) => {
-    const name = c.req.param('name')
+  app.delete('/api/workgroups/:id', async (c) => {
+    const id = c.req.param('id')
     const actor = actorOf(c)
-    const existing = await loadVisibleWorkgroup(actor, name)
+    const existing = await loadVisibleWorkgroup(actor, id)
     await requireResourceOwner(deps.db, actor, 'workgroup', existing)
     const parsed = DeleteWorkgroupSchema.safeParse(await safeJson(c.req.raw))
     if (!parsed.success) {
@@ -124,8 +108,8 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
     return c.body(null, 204)
   })
 
-  app.post('/api/workgroups/:name/rename', async (c) => {
-    const name = c.req.param('name')
+  app.post('/api/workgroups/:id/rename', async (c) => {
+    const id = c.req.param('id')
     const body = await safeJson(c.req.raw)
     const parsed = RenameWorkgroupSchema.safeParse(body)
     if (!parsed.success) {
@@ -134,7 +118,7 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
       })
     }
     const actor = actorOf(c)
-    const existing = await loadVisibleWorkgroup(actor, name)
+    const existing = await loadVisibleWorkgroup(actor, id)
     await requireResourceOwner(deps.db, actor, 'workgroup', existing)
     return c.json(
       await renameWorkgroup(deps.db, existing.id, parsed.data, {
@@ -147,8 +131,9 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
   // RFC-164 PR-3 — launch a workgroup task. Service-layer entry (the builtin
   // host workflow would 403 assertWorkflowLaunchable by design); the group
   // itself is the launch permission surface (view ⇒ launch, RFC-099 D3).
-  app.post('/api/workgroups/:name/tasks', async (c) => {
-    const name = c.req.param('name')
+  app.post('/api/workgroups/:id/tasks', async (c) => {
+    const actor = actorOf(c)
+    const existing = await loadVisibleWorkgroup(actor, c.req.param('id'))
     const body = await safeJson(c.req.raw)
     // RFC-165 实现门 P2 修复：即便本 schema 从未声明退役键，非 strict parse
     // 仍会把 {scratch:true, repoPath} 静默剥键降级成 scratch 启动（F1
@@ -166,24 +151,23 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
         issues: parsed.error.issues,
       })
     }
-    const actor = actorOf(c)
     const opencodeCmd = resolveOpencodeCmd(deps.configPath)
     const task = await startWorkgroupTask(
       deps.db,
       actor,
-      name,
+      existing.name,
       parsed.data,
       buildStartTaskDeps(deps.db, deps.configPath, actor.user.id, opencodeCmd),
     )
     return c.json(task, 201)
   })
 
-  // RFC-099 — GET/PUT /api/workgroups/:name/acl
+  // RFC-099 / RFC-223 — GET/PUT /api/workgroups/:id/acl
   mountAclEndpoints(app, deps, {
     type: 'workgroup',
     base: '/api/workgroups',
-    param: 'name',
-    load: (db, name) => getWorkgroup(db, name),
+    param: 'id',
+    load: (db, id) => getWorkgroupById(db, id),
   })
 }
 

@@ -20,6 +20,7 @@ import type {
 } from '@agent-workflow/shared'
 import {
   DeleteWorkgroupSchema,
+  QUARANTINED_SNAPSHOT_AGENT_ID,
   serializeWorkgroupEditableSnapshotV1,
   UpdateWorkgroupSchema,
   WG_CLARIFY_BUDGET_DEFAULT,
@@ -98,10 +99,10 @@ export async function createWorkgroup(
   aclOpts?: { ownerUserId?: string; actor?: Actor | null },
 ): Promise<WorkgroupDetail> {
   await assertHumanMembersActive(db, input.members)
-  const agentIdByName = await resolveCreateMemberAgentIds(db, aclOpts?.actor ?? null, input.members)
+  const preparedAgents = await prepareAgentMembers(db, aclOpts?.actor ?? null, input.members, [])
   const groupId = ulid()
   const now = Date.now()
-  const memberValues = buildCreateMemberValues(groupId, input.members, now, agentIdByName)
+  const memberValues = buildCreateMemberValues(groupId, input.members, now, preparedAgents)
   const leaderMemberId = resolveLeaderMemberId(input, memberValues)
 
   const created = dbTxSync(db, (tx) => {
@@ -153,8 +154,8 @@ export async function createWorkgroup(
 }
 
 /**
- * The only workgroup content writer. Route adapters resolve the current
- * name-based endpoint to this stable id until RFC-223 PR-7 switches the URL.
+ * The only workgroup content writer. Every caller supplies the canonical
+ * workgroup id; mutable names are document fields only.
  */
 export async function saveWorkgroup(
   db: DbClient,
@@ -238,7 +239,7 @@ export async function saveWorkgroup(
       }
     }
 
-    assertNameChangeAllowedInTx(tx, principal, current, snapshot.name)
+    assertNameChangeAllowedInTx(tx, current, snapshot.name)
     const rosterChanged = rosterBytes(currentSnapshot) !== rosterBytes(snapshot)
     const now = Date.now()
     const replacementMembers = rosterChanged
@@ -380,8 +381,8 @@ export async function deleteWorkgroup(
 }
 
 /**
- * Compatibility adapter for the historical rename endpoint. It is fenced and
- * delegates to saveWorkgroup, so it cannot race the autosave writer.
+ * Fenced rename endpoint adapter. It delegates to saveWorkgroup, so it cannot
+ * race the autosave writer and never resolves identity through the old name.
  */
 export async function renameWorkgroup(
   db: DbClient,
@@ -437,9 +438,7 @@ export function workgroupDraftSnapshotOf(group: Workgroup): WorkgroupDraftSnapsh
       member.memberType === 'agent'
         ? {
             memberType: 'agent' as const,
-            ...(member.agentId
-              ? { agentId: member.agentId }
-              : { agentName: member.agentName ?? '__unresolved__' }),
+            agentId: member.agentId ?? QUARANTINED_SNAPSHOT_AGENT_ID,
             displayName: member.displayName,
             roleDesc: member.roleDesc,
           }
@@ -473,26 +472,21 @@ export function workgroupToDetail(group: Workgroup): WorkgroupDetail {
   return { ...group, snapshotHash: workgroupSnapshotHashOf(workgroupDraftSnapshotOf(group)) }
 }
 
-/** New agent selectors referenced by `next` that `prev` did not reference. */
-export function diffNewAgentMemberNames(
+/** New canonical agent ids referenced by `next` that `prev` did not reference. */
+export function diffNewAgentMemberIds(
   prev: Pick<Workgroup, 'members'> | null,
-  next: {
-    members: ReadonlyArray<{ memberType: string; agentId?: string; agentName?: string }>
-  },
+  next: { members: ReadonlyArray<{ memberType: string; agentId?: string }> },
 ): string[] {
   const previous = new Set(
     (prev?.members ?? []).flatMap((member) =>
-      member.memberType !== 'agent'
-        ? []
-        : [member.agentId ?? member.agentName].filter((value): value is string => Boolean(value)),
+      member.memberType === 'agent' && member.agentId ? [member.agentId] : [],
     ),
   )
   return [
     ...new Set(
       next.members.flatMap((member) => {
         if (member.memberType !== 'agent') return []
-        const token = member.agentId ?? member.agentName
-        return token && !previous.has(token) ? [token] : []
+        return member.agentId && !previous.has(member.agentId) ? [member.agentId] : []
       }),
     ),
   ]
@@ -516,7 +510,7 @@ function normalizeWorkgroupSnapshot(snapshot: WorkgroupDraftSnapshot): Workgroup
       member.memberType === 'agent'
         ? {
             memberType: 'agent' as const,
-            ...(member.agentId ? { agentId: member.agentId } : { agentName: member.agentName }),
+            agentId: member.agentId,
             displayName: member.displayName,
             roleDesc: member.roleDesc,
           }
@@ -600,12 +594,7 @@ function assertPrincipalCanWriteInTx(
   }
 }
 
-function assertNameChangeAllowedInTx(
-  tx: DbTxSync,
-  principal: WorkgroupWritePrincipal,
-  current: Workgroup,
-  nextName: string,
-): void {
+function assertNameChangeAllowedInTx(tx: DbTxSync, current: Workgroup, nextName: string): void {
   if (nextName === current.name) return
   const collision = tx
     .select({ id: workgroups.id })
@@ -618,10 +607,6 @@ function assertNameChangeAllowedInTx(
       `workgroup '${nextName}' already exists; pick a different name`,
     )
   }
-  assertNoScheduledReferencesInTx(tx, principal, {
-    id: current.id,
-    name: current.name,
-  })
 }
 
 function assertNoScheduledReferencesInTx(
@@ -644,9 +629,8 @@ function assertNoScheduledReferencesInTx(
     try {
       const payload = JSON.parse(row.launchPayload) as {
         workgroupId?: unknown
-        workgroupName?: unknown
       }
-      return payload.workgroupId === target.id || payload.workgroupName === target.name
+      return payload.workgroupId === target.id
     } catch {
       return false
     }
@@ -700,64 +684,24 @@ async function prepareAgentMembers(
     })
   }
 
-  const existingLegacyNames = new Set(
-    existingMembers.flatMap((member) =>
-      member.memberType === 'agent' && member.agentId === null && member.agentName
-        ? [member.agentName]
-        : [],
-    ),
-  )
-  const newLegacyNames = [
-    ...new Set(
-      members.flatMap((member) =>
-        member.memberType === 'agent' &&
-        !member.agentId &&
-        member.agentName &&
-        !existingLegacyNames.has(member.agentName)
-          ? [member.agentName]
-          : [],
-      ),
-    ),
-  ]
-  if (newLegacyNames.length > 0) {
-    const checked = await resolveRefsUsableById(db, actor, 'agent', newLegacyNames)
-    assertNoMissingRefs(checked.missing)
-  }
   return { nameById }
-}
-
-async function resolveCreateMemberAgentIds(
-  db: DbClient,
-  actor: Actor | null,
-  members: Readonly<CreateWorkgroup['members']>,
-): Promise<Map<string, string>> {
-  const names = [
-    ...new Set(
-      members.flatMap((member) =>
-        member.memberType === 'agent' && member.agentName ? [member.agentName] : [],
-      ),
-    ),
-  ]
-  const result = await resolveRefsUsableById(db, actor, 'agent', names)
-  assertNoMissingRefs(result.missing)
-  return result.byToken
 }
 
 function buildCreateMemberValues(
   groupId: string,
   members: Readonly<CreateWorkgroup['members']>,
   now: number,
-  agentIdByName: ReadonlyMap<string, string>,
+  agentsPrepared: PreparedAgentMembers,
 ): Array<typeof workgroupMembers.$inferInsert> {
   return members.map((member, index) => ({
     id: ulid(),
     workgroupId: groupId,
     memberType: member.memberType,
-    agentName: member.memberType === 'agent' ? (member.agentName ?? null) : null,
-    agentId:
-      member.memberType === 'agent' && member.agentName
-        ? (agentIdByName.get(member.agentName) ?? null)
+    agentName:
+      member.memberType === 'agent' && member.agentId
+        ? (agentsPrepared.nameById.get(member.agentId) ?? null)
         : null,
+    agentId: member.memberType === 'agent' ? (member.agentId ?? null) : null,
     userId: member.memberType === 'human' ? (member.userId ?? null) : null,
     displayName: member.displayName,
     roleDesc: member.roleDesc,
@@ -780,7 +724,7 @@ function buildDraftMemberValues(
       member.memberType === 'agent'
         ? member.agentId
           ? (agentsPrepared.nameById.get(member.agentId) ?? null)
-          : (member.agentName ?? null)
+          : null
         : null,
     agentId: member.memberType === 'agent' ? (member.agentId ?? null) : null,
     userId: member.memberType === 'human' ? (member.userId ?? null) : null,

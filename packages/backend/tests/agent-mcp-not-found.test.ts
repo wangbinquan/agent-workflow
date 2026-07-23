@@ -90,16 +90,16 @@ describe('agent.mcp save-time guard', () => {
       config: { command: ['x'] },
       enabled: true,
     })
-    await createAgent(db, agentInput('a'))
-    const updated = await updateAgent(db, 'a', { mcp: ['m1'] })
+    const agent = await createAgent(db, agentInput('a'))
+    const updated = await updateAgent(db, agent.id, { mcp: ['m1'] })
     expect(updated.mcp).toEqual([m1.id])
   })
 
   test('update fails 422 mcp-not-found when patched name unknown', async () => {
-    await createAgent(db, agentInput('a'))
+    const agent = await createAgent(db, agentInput('a'))
     let err: unknown
     try {
-      await updateAgent(db, 'a', { mcp: ['nope'] })
+      await updateAgent(db, agent.id, { mcp: ['nope'] })
     } catch (e) {
       err = e
     }
@@ -117,7 +117,7 @@ describe('agent.mcp save-time guard', () => {
       config: { command: ['x'] },
       enabled: true,
     })
-    await createAgent(db, agentInput('a', ['m1']))
+    const agent = await createAgent(db, agentInput('a', ['m1']))
     // Now delete the mcp from the table by force (bypass the cascade guard so
     // we can construct the "stale ref" scenario without ref to other agents).
     // We simulate by manually clearing the row through the service: the guard
@@ -128,7 +128,7 @@ describe('agent.mcp save-time guard', () => {
 
     // PATCH something unrelated; should NOT trigger mcp validation, so it
     // passes even though the stale `mcp: [<id>]` is now unresolvable.
-    const updated = await updateAgent(db, 'a', { description: 'unrelated change' })
+    const updated = await updateAgent(db, agent.id, { description: 'unrelated change' })
     expect(updated.description).toBe('unrelated change')
     expect(updated.mcp).toEqual([m1.id])
   })

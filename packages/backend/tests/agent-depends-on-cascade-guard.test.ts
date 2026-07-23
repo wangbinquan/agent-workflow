@@ -1,8 +1,6 @@
-// Locks RFC-022 §2.1 #5 (delete / rename reverse-dep guard) — design.md
-// §4.1 #3 and #4. Red here means deleteAgent / renameAgent let a referenced
-// row vanish out from under another agent's dependsOn, leaving a runtime
-// dangling reference that surfaces as `agent-dependency-not-found` only when
-// the consuming task actually spawns. We refuse upfront.
+// Locks RFC-022 §2.1 #5 delete reverse-dep guard and RFC-223 rename stability.
+// Delete still refuses while an id is referenced; rename succeeds because the
+// reference remains bound to the same canonical row.
 //
 // Also locks updateAgent → validateDependsOn integration: patching dependsOn
 // to point at an unknown name MUST return 400 from the service layer, not
@@ -14,6 +12,7 @@ import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createAgent, deleteAgent, renameAgent, updateAgent } from '../src/services/agent'
 import { ConflictError } from '../src/util/errors'
+import type { Agent } from '@agent-workflow/shared'
 
 // RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps
 // these service-level tests' original full-visibility expectations.
@@ -24,8 +23,8 @@ const T6_ACTOR = buildActor({
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
-async function seed(db: DbClient, name: string, dependsOn: string[] = []): Promise<void> {
-  await createAgent(db, {
+async function seed(db: DbClient, name: string, dependsOn: string[] = []): Promise<Agent> {
+  return createAgent(db, {
     name,
     description: '',
     outputs: [],
@@ -47,12 +46,12 @@ describe('RFC-022 reverse-dep guard on delete / rename', () => {
   })
 
   test('deleteAgent refuses when another agent.dependsOn references it', async () => {
-    await seed(db, 'auditor')
-    await seed(db, 'orchestrator', ['auditor'])
+    const auditor = await seed(db, 'auditor')
+    const orchestrator = await seed(db, 'orchestrator', [auditor.id])
 
-    await expect(deleteAgent(db, 'auditor', T6_ACTOR)).rejects.toBeInstanceOf(ConflictError)
+    await expect(deleteAgent(db, auditor.id, T6_ACTOR)).rejects.toBeInstanceOf(ConflictError)
     try {
-      await deleteAgent(db, 'auditor', T6_ACTOR)
+      await deleteAgent(db, auditor.id, T6_ACTOR)
     } catch (e) {
       const err = e as ConflictError
       expect(err.code).toBe('agent-dependency-still-referenced')
@@ -63,33 +62,25 @@ describe('RFC-022 reverse-dep guard on delete / rename', () => {
     }
 
     // Sanity: once orchestrator is unbound, the delete proceeds.
-    await updateAgent(db, 'orchestrator', { dependsOn: [] })
-    await expect(deleteAgent(db, 'auditor', T6_ACTOR)).resolves.toBeUndefined()
+    await updateAgent(db, orchestrator.id, { dependsOn: [] })
+    await expect(deleteAgent(db, auditor.id, T6_ACTOR)).resolves.toBeUndefined()
   })
 
-  test('renameAgent refuses when another agent.dependsOn references it', async () => {
-    await seed(db, 'auditor')
-    await seed(db, 'orchestrator', ['auditor'])
+  test('renameAgent preserves another agent.dependsOn id', async () => {
+    const auditor = await seed(db, 'auditor')
+    const orchestrator = await seed(db, 'orchestrator', [auditor.id])
 
-    await expect(
-      renameAgent(db, 'auditor', { newName: 'reviewer' }, T6_ACTOR),
-    ).rejects.toBeInstanceOf(ConflictError)
-    try {
-      await renameAgent(db, 'auditor', { newName: 'reviewer' }, T6_ACTOR)
-    } catch (e) {
-      const err = e as ConflictError
-      expect(err.code).toBe('agent-dependency-still-referenced')
-      expect(err.details).toEqual({
-        visible: [{ id: expect.any(String), name: 'orchestrator' }],
-        hiddenCount: 0,
-      })
-    }
+    await expect(renameAgent(db, auditor.id, { newName: 'reviewer' })).resolves.toMatchObject({
+      id: auditor.id,
+      name: 'reviewer',
+    })
+    expect(orchestrator.dependsOn).toEqual([auditor.id])
   })
 
   test('updateAgent surfaces validateDependsOn errors (unknown name → 400)', async () => {
-    await seed(db, 'orchestrator')
+    const orchestrator = await seed(db, 'orchestrator')
     await expect(
-      updateAgent(db, 'orchestrator', { dependsOn: ['no-such-agent'] }),
+      updateAgent(db, orchestrator.id, { dependsOn: ['no-such-agent'] }),
     ).rejects.toMatchObject({
       code: 'agent-dependency-not-found',
     })

@@ -1,54 +1,46 @@
-// RFC-177 — GET /api/workgroups/by-id/:id + GET /api/agents/by-id/:id.
+// RFC-223 PR-7 — the canonical resource surface is id-only.
 //
-// These resolvers turn a task's FROZEN stable id (workgroupId / sourceAgentId)
-// into the resource's CURRENT name so the /tasks subject link redirects to the
-// right resource even after a rename (and never opens a same-named replacement).
-// Locks:
-//   - owner resolves id → { name } (payload is ONLY the name — no live state);
-//   - after a rename, by-id resolves to the NEW name (the whole point);
-//   - a private resource is 404 to a stranger, identical to a missing id (D1);
-//   - the two-segment path never shadows /:name (a resource named "by-id" is fine).
+// Locks all four migrated resource types:
+//   - GET /api/{type}/:id returns the exact row;
+//   - the old mutable-name URL and retired /by-id resolver both return 404;
+//   - visibility is checked on that exact id before ACL/mutation behavior;
+//   - rename keeps the canonical id URL stable.
 
 import { beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { resolve } from 'node:path'
+import { ulid } from 'ulid'
 import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { agents, mcps, skills, workgroups } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { createUser } from '../src/services/users'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DAEMON_TOKEN = 'a'.repeat(64)
 
-function agentBody(name: string): Record<string, unknown> {
-  return {
-    name,
-    description: 'sample',
-    outputs: [],
-    skills: [],
-    dependsOn: [],
-    mcp: [],
-    plugins: [],
-    permission: {},
-    bodyMd: '',
-  }
+type ResourceCase = {
+  base: 'agents' | 'skills' | 'mcps' | 'workgroups'
+  id: string
+  name: string
 }
 
-describe('RFC-177 — by-id resource resolvers', () => {
+describe('RFC-223 PR-7 — canonical id resource routes', () => {
   let db: DbClient
   let app: Hono
   let alice: { id: string; token: string }
   let bob: { id: string; token: string }
+  let resources: ResourceCase[]
 
   async function mkUser(username: string) {
-    const u = await createUser(db, {
+    const user = await createUser(db, {
       username,
       displayName: username,
       role: 'user',
       password: 'longEnoughPassword',
     })
-    const { token } = await createSession({ db, userId: u.id })
-    return { id: u.id, token }
+    const { token } = await createSession({ db, userId: user.id })
+    return { id: user.id, token }
   }
 
   async function req(token: string, path: string, init: RequestInit = {}): Promise<Response> {
@@ -62,90 +54,117 @@ describe('RFC-177 — by-id resource resolvers', () => {
     db = createInMemoryDb(MIGRATIONS)
     app = createApp({
       token: DAEMON_TOKEN,
-      configPath: '/tmp/aw-rfc177-config-never-used.json',
+      configPath: '/tmp/aw-rfc223-pr7-config-never-used.json',
       opencodeVersion: '1.14.25',
       dbVersion: 1,
       db,
     })
     alice = await mkUser('alice')
     bob = await mkUser('bob')
+
+    resources = [
+      { base: 'agents', id: ulid(), name: 'route-agent' },
+      { base: 'skills', id: ulid(), name: 'route-skill' },
+      { base: 'mcps', id: ulid(), name: 'route-mcp' },
+      { base: 'workgroups', id: ulid(), name: 'route-workgroup' },
+    ]
+    const [agent, skill, mcp, group] = resources
+    await db.insert(agents).values({
+      id: agent!.id,
+      name: agent!.name,
+      ownerUserId: alice.id,
+    })
+    await db.insert(skills).values({
+      id: skill!.id,
+      name: skill!.name,
+      sourceKind: 'managed',
+      managedPath: `skills/${skill!.id}/files/`,
+      ownerUserId: alice.id,
+    })
+    await db.insert(mcps).values({
+      id: mcp!.id,
+      name: mcp!.name,
+      type: 'local',
+      config: JSON.stringify({ command: ['echo'] }),
+      ownerUserId: alice.id,
+    })
+    await db.insert(workgroups).values({
+      id: group!.id,
+      name: group!.name,
+      ownerUserId: alice.id,
+    })
   })
 
-  test('workgroup: by-id resolves current name, survives rename, private→404 (D1)', async () => {
-    const created = (await (
-      await req(alice.token, '/api/workgroups', {
-        method: 'POST',
-        body: JSON.stringify({ name: 'design-crew' }),
+  test('all four detail endpoints accept only the immutable id', async () => {
+    for (const resource of resources) {
+      const canonical = await req(alice.token, `/api/${resource.base}/${resource.id}`)
+      expect(canonical.status).toBe(200)
+      expect(((await canonical.json()) as { id: string }).id).toBe(resource.id)
+
+      const oldName = await req(alice.token, `/api/${resource.base}/${resource.name}`)
+      expect(oldName.status).toBe(404)
+
+      const retiredResolver = await req(alice.token, `/api/${resource.base}/by-id/${resource.id}`)
+      expect(retiredResolver.status).toBe(404)
+    }
+  })
+
+  test('ACL lookup is bound to the exact id and preserves D1 not-found parity', async () => {
+    for (const resource of resources) {
+      const privateResult = await req(alice.token, `/api/${resource.base}/${resource.id}/acl`, {
+        method: 'PUT',
+        body: JSON.stringify({ visibility: 'private' }),
       })
-    ).json()) as { id: string; name: string; version: number }
-    expect(created.name).toBe('design-crew')
+      expect(privateResult.status).toBe(200)
 
-    const r1 = await req(alice.token, `/api/workgroups/by-id/${created.id}`)
-    expect(r1.status).toBe(200)
-    expect(await r1.json()).toEqual({ name: 'design-crew' })
+      const invisible = await req(bob.token, `/api/${resource.base}/${resource.id}`)
+      const missing = await req(bob.token, `/api/${resource.base}/${ulid()}`)
+      expect(invisible.status).toBe(404)
+      expect(missing.status).toBe(404)
+      expect(((await invisible.json()) as { code: string }).code).toBe(
+        ((await missing.json()) as { code: string }).code,
+      )
 
-    // The whole point: after a rename, by-id still resolves — to the NEW name.
-    const renamed = await req(alice.token, '/api/workgroups/design-crew/rename', {
-      method: 'POST',
-      body: JSON.stringify({
-        newName: 'design-crew-v2',
-        expectedVersion: created.version,
-        clientMutationId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
-      }),
-    })
-    expect(renamed.status).toBe(200)
-    const r2 = await req(alice.token, `/api/workgroups/by-id/${created.id}`)
-    expect(await r2.json()).toEqual({ name: 'design-crew-v2' })
-
-    // Private → stranger 404, identical to a missing id (D1: existence never leaks).
-    await req(alice.token, '/api/workgroups/design-crew-v2/acl', {
-      method: 'PUT',
-      body: JSON.stringify({ visibility: 'private' }),
-    })
-    const invisible = await req(bob.token, `/api/workgroups/by-id/${created.id}`)
-    const missing = await req(bob.token, '/api/workgroups/by-id/01MISSINGIDDOESNOTEXIST00')
-    expect(invisible.status).toBe(404)
-    expect(missing.status).toBe(404)
-    expect(((await invisible.json()) as { code: string }).code).toBe(
-      ((await missing.json()) as { code: string }).code,
-    )
-  })
-
-  test('a group literally named "by-id" still resolves at /:name (arity-distinct)', async () => {
-    await req(alice.token, '/api/workgroups', {
-      method: 'POST',
-      body: JSON.stringify({ name: 'by-id' }),
-    })
-    const res = await req(alice.token, '/api/workgroups/by-id')
-    expect(res.status).toBe(200)
-    expect(((await res.json()) as { name: string }).name).toBe('by-id')
-  })
-
-  test('agent: by-id resolves current name, survives rename, private→404', async () => {
-    const created = (await (
-      await req(alice.token, '/api/agents', {
-        method: 'POST',
-        body: JSON.stringify(agentBody('coder')),
+      // Visibility is checked before ownership/mutation on the same row.
+      const hiddenAclWrite = await req(bob.token, `/api/${resource.base}/${resource.id}/acl`, {
+        method: 'PUT',
+        body: JSON.stringify({ visibility: 'public' }),
       })
-    ).json()) as { id: string; name: string }
-    expect(created.name).toBe('coder')
+      expect(hiddenAclWrite.status).toBe(404)
+    }
+  })
 
-    const r1 = await req(alice.token, `/api/agents/by-id/${created.id}`)
-    expect(r1.status).toBe(200)
-    expect(await r1.json()).toEqual({ name: 'coder' })
-
-    await req(alice.token, '/api/agents/coder/rename', {
-      method: 'POST',
-      body: JSON.stringify({ newName: 'coder-v2' }),
-    })
-    const r2 = await req(alice.token, `/api/agents/by-id/${created.id}`)
-    expect(await r2.json()).toEqual({ name: 'coder-v2' })
-
-    await req(alice.token, '/api/agents/coder-v2/acl', {
-      method: 'PUT',
-      body: JSON.stringify({ visibility: 'private' }),
-    })
-    expect((await req(bob.token, `/api/agents/by-id/${created.id}`)).status).toBe(404)
-    expect((await req(bob.token, '/api/agents/by-id/01MISSINGIDDOESNOTEXIST00')).status).toBe(404)
+  test('rename changes display name without changing the canonical URL', async () => {
+    for (const resource of resources.filter((row) => row.base !== 'skills')) {
+      const current = (await (
+        await req(alice.token, `/api/${resource.base}/${resource.id}`)
+      ).json()) as { version?: number }
+      const renameBody =
+        resource.base === 'workgroups'
+          ? {
+              newName: `${resource.name}-renamed`,
+              expectedVersion: current.version,
+              clientMutationId: ulid(),
+            }
+          : { newName: `${resource.name}-renamed` }
+      const renamed = await req(alice.token, `/api/${resource.base}/${resource.id}/rename`, {
+        method: 'POST',
+        body: JSON.stringify(renameBody),
+      })
+      expect(renamed.status).toBe(200)
+      const payload = (await renamed.json()) as {
+        id?: string
+        name?: string
+        workgroup?: { id: string; name: string }
+      }
+      expect(resource.base === 'workgroups' ? payload.workgroup : payload).toMatchObject({
+        id: resource.id,
+        name: `${resource.name}-renamed`,
+      })
+      expect((await req(alice.token, `/api/${resource.base}/${resource.id}`)).status).toBe(200)
+      expect(
+        (await req(alice.token, `/api/${resource.base}/${resource.name}-renamed`)).status,
+      ).toBe(404)
+    }
   })
 })

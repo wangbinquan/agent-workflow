@@ -32,6 +32,7 @@ import {
   tasks,
   users,
   workflows,
+  workgroups,
 } from '../../src/db/schema'
 
 export const DAEMON_TOKEN = 'a'.repeat(64)
@@ -49,11 +50,15 @@ export interface ContractHarness {
 export interface SeededFixtures {
   testUsername: string
   testUserId: string
+  agentId: string
   agentName: string
+  skillId: string
   skillName: string
+  mcpId: string
   mcpName: string
   pluginName: string
   pluginId: string
+  workgroupId: string
   workflowId: string
   workflowVersion: number
   workflowSnapshotHash: string
@@ -97,7 +102,11 @@ export async function buildContractHarness(): Promise<ContractHarness> {
   const skillName = 'contract-skill'
   const mcpName = 'contract-mcp'
   const pluginName = 'contract-plugin'
+  const agentId = ulid()
+  const skillId = ulid()
+  const mcpId = ulid()
   const pluginId = ulid()
+  const workgroupId = ulid()
   const workflowId = ulid()
   const taskId = ulid()
   const nodeRunId = ulid()
@@ -105,20 +114,20 @@ export async function buildContractHarness(): Promise<ContractHarness> {
 
   const now = Date.now()
   await db.insert(agents).values({
-    id: ulid(),
+    id: agentId,
     name: agentName,
     description: 'contract-suite seed',
     outputs: JSON.stringify(['answer']),
   })
   await db.insert(skills).values({
-    id: ulid(),
+    id: skillId,
     name: skillName,
     description: 'contract-suite seed',
     sourceKind: 'managed',
     managedPath: 'skills/contract-skill/files/',
   })
   await db.insert(mcps).values({
-    id: ulid(),
+    id: mcpId,
     name: mcpName,
     description: 'contract-suite seed',
     type: 'local',
@@ -137,6 +146,16 @@ export async function buildContractHarness(): Promise<ContractHarness> {
     installedAt: now,
     enabled: true,
   })
+  await db.insert(workgroups).values({
+    id: workgroupId,
+    name: 'contract-workgroup',
+    description: 'contract-suite seed',
+    instructions: '',
+    mode: 'free_collab',
+    ownerUserId: alice.id,
+    createdAt: now,
+    updatedAt: now,
+  })
   await db.insert(workflows).values({
     id: workflowId,
     name: 'contract-workflow',
@@ -149,6 +168,7 @@ export async function buildContractHarness(): Promise<ContractHarness> {
         {
           id: 'agent_1',
           kind: 'agent-single',
+          agentId,
           agentName,
           promptTemplate: '{{topic}}',
           position: { x: 320, y: 0 },
@@ -205,11 +225,15 @@ export async function buildContractHarness(): Promise<ContractHarness> {
     fixtures: {
       testUsername: 'alice',
       testUserId: alice.id,
+      agentId,
       agentName,
+      skillId,
       skillName,
+      mcpId,
       mcpName,
       pluginName,
       pluginId,
+      workgroupId,
       workflowId,
       workflowVersion: workflow.version,
       workflowSnapshotHash: workflow.snapshotHash,
@@ -223,8 +247,8 @@ export async function buildContractHarness(): Promise<ContractHarness> {
 /** Substitute `:name` placeholders in a path template against params.
  *
  *  Examples:
- *    fillPath('/api/agents/:name', { name: 'foo' })
- *      → '/api/agents/foo'
+ *    fillPath('/api/agents/:id', { id: '01HAGENTID000000000000000' })
+ *      → '/api/agents/01HAGENTID000000000000000'
  *    fillPath('/api/tasks/:id/node-runs/:nodeRunId', { id: 't', nodeRunId: 'n' })
  *      → '/api/tasks/t/node-runs/n'
  */

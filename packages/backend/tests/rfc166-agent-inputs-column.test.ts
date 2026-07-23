@@ -104,11 +104,11 @@ describe('RFC-166 — agents.inputs column round-trip', () => {
   })
 
   test('updateAgent replaces inputs wholesale', async () => {
-    await createAgent(db, {
+    const agent = await createAgent(db, {
       ...basePayload('a'),
       inputs: [{ name: 'diff', kind: 'string' }],
     })
-    const updated = await updateAgent(db, 'a', {
+    const updated = await updateAgent(db, agent.id, {
       inputs: [{ name: 'spec', kind: 'markdown' }],
     })
     expect(updated.inputs).toEqual([{ name: 'spec', kind: 'markdown' }])
@@ -117,20 +117,20 @@ describe('RFC-166 — agents.inputs column round-trip', () => {
   })
 
   test('updateAgent without inputs leaves the column untouched', async () => {
-    await createAgent(db, {
+    const agent = await createAgent(db, {
       ...basePayload('a'),
       inputs: [{ name: 'diff', kind: 'string' }],
     })
-    const updated = await updateAgent(db, 'a', { description: 'changed' })
+    const updated = await updateAgent(db, agent.id, { description: 'changed' })
     expect(updated.inputs).toEqual([{ name: 'diff', kind: 'string' }])
   })
 
   test('updateAgent can clear inputs to []', async () => {
-    await createAgent(db, {
+    const agent = await createAgent(db, {
       ...basePayload('a'),
       inputs: [{ name: 'diff', kind: 'string' }],
     })
-    const updated = await updateAgent(db, 'a', { inputs: [] })
+    const updated = await updateAgent(db, agent.id, { inputs: [] })
     expect(updated.inputs).toEqual([])
     const row = await readRawRow(db, 'a')
     expect(row.inputs).toBe('[]')

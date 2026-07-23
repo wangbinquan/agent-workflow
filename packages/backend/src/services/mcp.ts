@@ -6,8 +6,8 @@
 // we can return a friendly ConflictError instead of a SQL exception.
 //
 // Reference check: `findAgentsReferencingMcp` powers the still-referenced
-// guard on delete / rename so the platform never silently breaks an agent's
-// `mcp: [...]` list. Same pattern as RFC-022 dependsOn cascade.
+// guard on delete so the platform never silently breaks an agent's `mcp: [...]`
+// list. Rename is display-only because references store the canonical id.
 
 import type { CreateMcp, Mcp, RenameMcp, UpdateMcp } from '@agent-workflow/shared'
 import {
@@ -74,27 +74,27 @@ export async function createMcp(
     createdAt: now,
     updatedAt: now,
   })
-  const created = await getMcp(db, input.name)
+  const created = await getMcpById(db, id)
   if (created === null) throw new Error('mcp disappeared right after insert')
   return created
 }
 
 export async function updateMcp(
   db: DbClient,
-  name: string,
+  id: string,
   patch: UpdateMcp,
   opts: { existing?: Mcp; updatedAt?: number } = {},
 ): Promise<Mcp> {
-  const existing = opts.existing ?? (await getMcp(db, name))
-  if (existing === null) {
-    throw new NotFoundError('mcp-not-found', `mcp '${name}' not found`)
+  const existing = opts.existing ?? (await getMcpById(db, id))
+  if (existing === null || existing.id !== id) {
+    throw new NotFoundError('mcp-not-found', 'mcp not found')
   }
 
   // `type` cannot change in-place — it's the discriminator, and changing it
   // would invalidate stored config. Callers that want to swap transport must
   // delete + recreate.
   if (patch.type !== undefined && patch.type !== existing.type) {
-    throw new ValidationError('mcp-type-immutable', `mcp '${name}' type cannot change`, {
+    throw new ValidationError('mcp-type-immutable', `mcp '${existing.name}' type cannot change`, {
       currentType: existing.type,
       requestedType: patch.type,
     })
@@ -129,13 +129,13 @@ export async function updateMcp(
 
 export async function deleteMcp(
   db: DbClient,
-  name: string,
+  id: string,
   actor: Actor,
   opts: { existing?: Mcp } = {},
 ): Promise<void> {
-  const existing = opts.existing ?? (await getMcp(db, name))
-  if (existing === null) {
-    throw new NotFoundError('mcp-not-found', `mcp '${name}' not found`)
+  const existing = opts.existing ?? (await getMcpById(db, id))
+  if (existing === null || existing.id !== id) {
+    throw new NotFoundError('mcp-not-found', 'mcp not found')
   }
   // RFC-223 (PR-1): agents.mcp stores ids — match by this mcp's id.
   const dependents = await findAgentsReferencingMcp(db, existing.id)
@@ -144,7 +144,7 @@ export async function deleteMcp(
     // names only for agents the actor may see, the rest an aggregate count.
     throw new ConflictError(
       'mcp-still-referenced',
-      `mcp '${name}' is referenced by ${dependents.length} agent(s)`,
+      `mcp '${existing.name}' is referenced by ${dependents.length} agent(s)`,
       await discloseRefs(db, actor, 'agent', dependents),
     )
   }
@@ -153,13 +153,13 @@ export async function deleteMcp(
 
 export async function renameMcp(
   db: DbClient,
-  oldName: string,
+  id: string,
   input: RenameMcp,
   opts: { existing?: Mcp; updatedAt?: number } = {},
 ): Promise<Mcp> {
-  const existing = opts.existing ?? (await getMcp(db, oldName))
-  if (existing === null) {
-    throw new NotFoundError('mcp-not-found', `mcp '${oldName}' not found`)
+  const existing = opts.existing ?? (await getMcpById(db, id))
+  if (existing === null || existing.id !== id) {
+    throw new NotFoundError('mcp-not-found', 'mcp not found')
   }
   if (input.newName === existing.name) return existing
 
@@ -183,7 +183,7 @@ export async function renameMcp(
       .run()
   })
 
-  const renamed = await getMcp(db, input.newName)
+  const renamed = await getMcpById(db, id)
   if (renamed === null) throw new Error('mcp disappeared after rename')
   return renamed
 }
