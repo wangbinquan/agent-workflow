@@ -820,6 +820,13 @@
       "when": 1787500800000,
       "tag": "0117_rfc223_fusion_provenance",
       "breakpoints": true
+    },
+    {
+      "idx": 117,
+      "version": "6",
+      "when": 1787587200000,
+      "tag": "0118_rfc223_owner_scoped_names",
+      "breakpoints": true
     }
   ]
 }

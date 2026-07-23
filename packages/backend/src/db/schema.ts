@@ -19,75 +19,84 @@ import {
 // -----------------------------------------------------------------------------
 // agents — DB is source of truth. Frontmatter fields are split into columns.
 // -----------------------------------------------------------------------------
-export const agents = sqliteTable('agents', {
-  id: text('id').primaryKey(), // ULID
-  name: text('name').notNull().unique(), // URL identifier (/agents/{name})
-  description: text('description').notNull().default(''),
-  outputs: text('outputs').notNull().default('[]'), // JSON string[] of port names
-  // RFC-166: declarative input ports (JSON AgentInputPort[]; default []).
-  // Optional/additive — existing agents keep implicit {{token}} input binding;
-  // consumed only by the capability card, not the spawn path.
-  inputs: text('inputs').notNull().default('[]'),
-  // RFC-014: agent-level switch. When true (default), an iterate review decision
-  // on a node whose upstream agent declares ≥ 2 markdown[_file] outputs will
-  // re-generate every markdown[_file] sibling port and cascade their sibling
-  // reviews back into awaiting_review. Author opt-out by setting false.
-  syncOutputsOnIterate: integer('sync_outputs_on_iterate', { mode: 'boolean' })
-    .notNull()
-    .default(true),
-  // RFC-111: per-agent runtime ('opencode' | 'claude-code'); NULL = inherit
-  // config.defaultRuntime (→ 'opencode'). Model namespace follows the runtime.
-  // RFC-115: the agent's own model/variant/temperature/steps/maxSteps columns
-  // were dropped (DROP via migration 0057) — generation params now live solely
-  // on the runtime profile (RFC-113); the agent only SELECTS a runtime by name.
-  runtime: text('runtime'),
-  permission: text('permission').notNull().default('{}'), // JSON: opencode permission schema
-  skills: text('skills').notNull().default('[]'), // JSON string[]
-  // RFC-022: agent name list (JSON string[]) of agents this one transitively
-  // requires. Closure (BFS) gets injected into the same opencode subprocess
-  // via OPENCODE_CONFIG_CONTENT; every closure member's skills are unioned
-  // and staged under OPENCODE_CONFIG_DIR/skills/. Default [] keeps legacy
-  // agents at single-agent injection behavior.
-  dependsOn: text('depends_on').notNull().default('[]'),
-  // RFC-028: agent name list (JSON string[]) of MCP server names this agent
-  // needs at runtime. Runner unions every dependsOn closure member's mcp[] and
-  // injects each as an entry under `mcp` in OPENCODE_CONFIG_CONTENT. Default
-  // [] keeps legacy agents on the inherited-only baseline (repo
-  // .opencode/opencode.json + ~/.config/opencode/ still loads naturally).
-  mcp: text('mcp').notNull().default('[]'),
-  // RFC-031: opencode plugin name list (JSON string[]) referenced by this
-  // agent. Runner unions every dependsOn closure member's plugins[] and
-  // injects each as `file://<cachedPath>` (or `[file://..., options]` tuple)
-  // under `plugin` in OPENCODE_CONFIG_CONTENT. Default [] keeps legacy agents
-  // on the inherited-only baseline (repo .opencode/opencode.json plugins
-  // continue to load naturally).
-  plugins: text('plugins').notNull().default('[]'),
-  frontmatterExtra: text('frontmatter_extra').notNull().default('{}'), // JSON for advanced fields
-  bodyMd: text('body_md').notNull().default(''), // system prompt; may be empty
-  // RFC-099: resource-level ACL. owner_user_id = single owner (users.id or the
-  // '__system__' sentinel — app-layer FK so daemon-only DBs stay valid).
-  // visibility 'public' = every active user can view/use; 'private' = owner +
-  // resource_grants rows only. Admins bypass both. Same pair on skills / mcps /
-  // plugins / workflows below.
-  ownerUserId: text('owner_user_id'),
-  visibility: text('visibility', { enum: ['private', 'public'] })
-    .notNull()
-    .default('public'),
-  aclRevision: integer('acl_revision').notNull().default(0), // RFC-170 §8 aclRevision CAS
-  // RFC-104: framework-seeded built-in marker. Set ONLY by seedFusionResources
-  // (the RFC-101 rows); never writable via any HTTP path (absent from
-  // Create*/Update* schemas). isBuiltinRow reads it for the read-only lock
-  // (assertNotBuiltin) + list-hide (excludeBuiltin*). Immutable identity anchor:
-  // survives owner/visibility drift, unlike the old owner+name heuristic.
-  builtin: integer('builtin', { mode: 'boolean' }).notNull().default(false),
-  schemaVersion: integer('schema_version').notNull().default(1),
-  createdAt: integer('created_at')
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
-  updatedAt: integer('updated_at')
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
-})
+export const agents = sqliteTable(
+  'agents',
+  {
+    id: text('id').primaryKey(), // ULID
+    name: text('name').notNull(), // display label; canonical URL identity is id
+    description: text('description').notNull().default(''),
+    outputs: text('outputs').notNull().default('[]'), // JSON string[] of port names
+    // RFC-166: declarative input ports (JSON AgentInputPort[]; default []).
+    // Optional/additive — existing agents keep implicit {{token}} input binding;
+    // consumed only by the capability card, not the spawn path.
+    inputs: text('inputs').notNull().default('[]'),
+    // RFC-014: agent-level switch. When true (default), an iterate review decision
+    // on a node whose upstream agent declares ≥ 2 markdown[_file] outputs will
+    // re-generate every markdown[_file] sibling port and cascade their sibling
+    // reviews back into awaiting_review. Author opt-out by setting false.
+    syncOutputsOnIterate: integer('sync_outputs_on_iterate', { mode: 'boolean' })
+      .notNull()
+      .default(true),
+    // RFC-111: per-agent runtime ('opencode' | 'claude-code'); NULL = inherit
+    // config.defaultRuntime (→ 'opencode'). Model namespace follows the runtime.
+    // RFC-115: the agent's own model/variant/temperature/steps/maxSteps columns
+    // were dropped (DROP via migration 0057) — generation params now live solely
+    // on the runtime profile (RFC-113); the agent only SELECTS a runtime by name.
+    runtime: text('runtime'),
+    permission: text('permission').notNull().default('{}'), // JSON: opencode permission schema
+    skills: text('skills').notNull().default('[]'), // JSON string[]
+    // RFC-022: agent name list (JSON string[]) of agents this one transitively
+    // requires. Closure (BFS) gets injected into the same opencode subprocess
+    // via OPENCODE_CONFIG_CONTENT; every closure member's skills are unioned
+    // and staged under OPENCODE_CONFIG_DIR/skills/. Default [] keeps legacy
+    // agents at single-agent injection behavior.
+    dependsOn: text('depends_on').notNull().default('[]'),
+    // RFC-028: agent name list (JSON string[]) of MCP server names this agent
+    // needs at runtime. Runner unions every dependsOn closure member's mcp[] and
+    // injects each as an entry under `mcp` in OPENCODE_CONFIG_CONTENT. Default
+    // [] keeps legacy agents on the inherited-only baseline (repo
+    // .opencode/opencode.json + ~/.config/opencode/ still loads naturally).
+    mcp: text('mcp').notNull().default('[]'),
+    // RFC-031: opencode plugin name list (JSON string[]) referenced by this
+    // agent. Runner unions every dependsOn closure member's plugins[] and
+    // injects each as `file://<cachedPath>` (or `[file://..., options]` tuple)
+    // under `plugin` in OPENCODE_CONFIG_CONTENT. Default [] keeps legacy agents
+    // on the inherited-only baseline (repo .opencode/opencode.json plugins
+    // continue to load naturally).
+    plugins: text('plugins').notNull().default('[]'),
+    frontmatterExtra: text('frontmatter_extra').notNull().default('{}'), // JSON for advanced fields
+    bodyMd: text('body_md').notNull().default(''), // system prompt; may be empty
+    // RFC-099: resource-level ACL. owner_user_id = single owner (users.id or the
+    // '__system__' sentinel — app-layer FK so daemon-only DBs stay valid).
+    // visibility 'public' = every active user can view/use; 'private' = owner +
+    // resource_grants rows only. Admins bypass both. Same pair on skills / mcps /
+    // plugins / workflows below.
+    ownerUserId: text('owner_user_id'),
+    visibility: text('visibility', { enum: ['private', 'public'] })
+      .notNull()
+      .default('public'),
+    aclRevision: integer('acl_revision').notNull().default(0), // RFC-170 §8 aclRevision CAS
+    // RFC-104: framework-seeded built-in marker. Set ONLY by seedFusionResources
+    // (the RFC-101 rows); never writable via any HTTP path (absent from
+    // Create*/Update* schemas). isBuiltinRow reads it for the read-only lock
+    // (assertNotBuiltin) + list-hide (excludeBuiltin*). Immutable identity anchor:
+    // survives owner/visibility drift, unlike the old owner+name heuristic.
+    builtin: integer('builtin', { mode: 'boolean' }).notNull().default(false),
+    schemaVersion: integer('schema_version').notNull().default(1),
+    createdAt: integer('created_at')
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: integer('updated_at')
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => ({
+    ownerNameUq: uniqueIndex('agents_owner_name_unique').on(
+      sql`COALESCE(${t.ownerUserId}, '')`,
+      t.name,
+    ),
+  }),
+)
 
 // -----------------------------------------------------------------------------
 // runtimes — RFC-112. Named runtime INSTANCES: each row is a registered binary
@@ -154,34 +163,43 @@ export const runtimes = sqliteTable('runtimes', {
 // why `config.command[0]` is the executable (no `cwd` field — opencode uses
 // the process directory = worktree).
 // -----------------------------------------------------------------------------
-export const mcps = sqliteTable('mcps', {
-  id: text('id').primaryKey(), // ULID
-  name: text('name').notNull().unique(),
-  description: text('description').notNull().default(''),
-  /** 'local' (stdio) | 'remote' (http/sse). Matches opencode McpLocalConfig/McpRemoteConfig. */
-  type: text('type', { enum: ['local', 'remote'] }).notNull(),
-  /**
-   * Type-specific config serialised as JSON.
-   *   local : { command: string[], env?, timeoutMs? }
-   *   remote: { url: string, headers?, oauth?, timeoutMs? }
-   */
-  config: text('config').notNull().default('{}'),
-  /** Per-server toggle (matches opencode `mcp.<name>.enabled`). */
-  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
-  // RFC-099 ACL (see agents table comment).
-  ownerUserId: text('owner_user_id'),
-  visibility: text('visibility', { enum: ['private', 'public'] })
-    .notNull()
-    .default('public'),
-  aclRevision: integer('acl_revision').notNull().default(0), // RFC-170 §8 aclRevision CAS
-  schemaVersion: integer('schema_version').notNull().default(1),
-  createdAt: integer('created_at')
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
-  updatedAt: integer('updated_at')
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
-})
+export const mcps = sqliteTable(
+  'mcps',
+  {
+    id: text('id').primaryKey(), // ULID
+    name: text('name').notNull(),
+    description: text('description').notNull().default(''),
+    /** 'local' (stdio) | 'remote' (http/sse). Matches opencode McpLocalConfig/McpRemoteConfig. */
+    type: text('type', { enum: ['local', 'remote'] }).notNull(),
+    /**
+     * Type-specific config serialised as JSON.
+     *   local : { command: string[], env?, timeoutMs? }
+     *   remote: { url: string, headers?, oauth?, timeoutMs? }
+     */
+    config: text('config').notNull().default('{}'),
+    /** Per-server toggle (matches opencode `mcp.<name>.enabled`). */
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+    // RFC-099 ACL (see agents table comment).
+    ownerUserId: text('owner_user_id'),
+    visibility: text('visibility', { enum: ['private', 'public'] })
+      .notNull()
+      .default('public'),
+    aclRevision: integer('acl_revision').notNull().default(0), // RFC-170 §8 aclRevision CAS
+    schemaVersion: integer('schema_version').notNull().default(1),
+    createdAt: integer('created_at')
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: integer('updated_at')
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => ({
+    ownerNameUq: uniqueIndex('mcps_owner_name_unique').on(
+      sql`COALESCE(${t.ownerUserId}, '')`,
+      t.name,
+    ),
+  }),
+)
 
 // -----------------------------------------------------------------------------
 // plugins — RFC-031. DB is source of truth for opencode plugin records. The
@@ -192,36 +210,45 @@ export const mcps = sqliteTable('mcps', {
 // resolvePathPluginTarget without hitting the network. Agents reference these
 // by name via agents.plugins (JSON string[]).
 // -----------------------------------------------------------------------------
-export const plugins = sqliteTable('plugins', {
-  id: text('id').primaryKey(), // ULID
-  name: text('name').notNull().unique(), // /api/plugins/:id identifier; also frontmatter ref
-  /** User-supplied spec (npm specifier / file URL / path / git URL / github shorthand). */
-  spec: text('spec').notNull(),
-  /** opencode plugin options bag, JSON record; emitted as the tuple second element when non-empty. */
-  optionsJson: text('options_json').notNull().default('{}'),
-  description: text('description').notNull().default(''),
-  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
-  /** Derived from spec by the installer: 'npm' | 'file' | 'git'. */
-  sourceKind: text('source_kind', { enum: ['npm', 'file', 'git'] }).notNull(),
-  /** Absolute filesystem path to the resolved plugin entry. Injected as file://<this> at run time. */
-  cachedPath: text('cached_path').notNull(),
-  /** npm: package.json.version; git: commit short sha; file: mtime hash. Nullable on partial install. */
-  resolvedVersion: text('resolved_version'),
-  installedAt: integer('installed_at').notNull(),
-  // RFC-099 ACL (see agents table comment).
-  ownerUserId: text('owner_user_id'),
-  visibility: text('visibility', { enum: ['private', 'public'] })
-    .notNull()
-    .default('public'),
-  aclRevision: integer('acl_revision').notNull().default(0), // RFC-170 §8 aclRevision CAS
-  schemaVersion: integer('schema_version').notNull().default(1),
-  createdAt: integer('created_at')
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
-  updatedAt: integer('updated_at')
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
-})
+export const plugins = sqliteTable(
+  'plugins',
+  {
+    id: text('id').primaryKey(), // ULID
+    name: text('name').notNull(), // display label; /api/plugins/:id is canonical
+    /** User-supplied spec (npm specifier / file URL / path / git URL / github shorthand). */
+    spec: text('spec').notNull(),
+    /** opencode plugin options bag, JSON record; emitted as the tuple second element when non-empty. */
+    optionsJson: text('options_json').notNull().default('{}'),
+    description: text('description').notNull().default(''),
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+    /** Derived from spec by the installer: 'npm' | 'file' | 'git'. */
+    sourceKind: text('source_kind', { enum: ['npm', 'file', 'git'] }).notNull(),
+    /** Absolute filesystem path to the resolved plugin entry. Injected as file://<this> at run time. */
+    cachedPath: text('cached_path').notNull(),
+    /** npm: package.json.version; git: commit short sha; file: mtime hash. Nullable on partial install. */
+    resolvedVersion: text('resolved_version'),
+    installedAt: integer('installed_at').notNull(),
+    // RFC-099 ACL (see agents table comment).
+    ownerUserId: text('owner_user_id'),
+    visibility: text('visibility', { enum: ['private', 'public'] })
+      .notNull()
+      .default('public'),
+    aclRevision: integer('acl_revision').notNull().default(0), // RFC-170 §8 aclRevision CAS
+    schemaVersion: integer('schema_version').notNull().default(1),
+    createdAt: integer('created_at')
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: integer('updated_at')
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => ({
+    ownerNameUq: uniqueIndex('plugins_owner_name_unique').on(
+      sql`COALESCE(${t.ownerUserId}, '')`,
+      t.name,
+    ),
+  }),
+)
 
 // -----------------------------------------------------------------------------
 // mcp_probes — RFC-030. One row per MCP, holding the most-recent probe result.
@@ -276,47 +303,56 @@ export const mcpProbes = sqliteTable('mcp_probes', {
 // skills — fs is source of truth (~/.agent-workflow/skills/{id}/files/).
 // DB stores only the index.
 // -----------------------------------------------------------------------------
-export const skills = sqliteTable('skills', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull().unique(),
-  description: text('description').notNull().default(''),
-  // RFC-178: skills are managed-only (external / parent-directory sources
-  // removed in migration 0092). external_path / source_id + the skill_sources
-  // table were dropped there.
-  sourceKind: text('source_kind', { enum: ['managed'] }).notNull(),
-  managedPath: text('managed_path'), // e.g. 'skills/{id}/files/' relative to app dir
-  // RFC-099 ACL (see agents table comment).
-  ownerUserId: text('owner_user_id'),
-  visibility: text('visibility', { enum: ['private', 'public'] })
-    .notNull()
-    .default('public'),
-  schemaVersion: integer('schema_version').notNull().default(1),
-  // RFC-101: monotonic CONTENT version (distinct from schema_version, the
-  // DB-migration version). Bumps on every write through commitSkillVersion;
-  // always equals the latest skill_versions.version_index for this skill.
-  contentVersion: integer('content_version').notNull().default(1),
-  // RFC-170 — skills storage/ACL hardening (migration 0090). All additive;
-  // dormant until batch-B code wires them. See design.md §1/§3/§4/§7a/§8/§10.
-  aclRevision: integer('acl_revision').notNull().default(0), // §8 aclRevision CAS
-  metaRevision: integer('meta_revision').notNull().default(0), // §1 metaRevision monotonic
-  migrationMarker: text('migration_marker'), // §4: NULL|'migrated'|'pending-decision'
-  reservationState: text('reservation_state', { enum: ['reserving', 'ready'] })
-    .notNull()
-    .default('ready'), // §9 creation reservation; non-ready is invisible
-  versionState: text('version_state', {
-    enum: ['legacy-unbackfilled', 'snapshot-unverified', 'snapshot-authoritative', 'quarantined'],
-  })
-    .notNull()
-    .default('legacy-unbackfilled'), // §3 snapshot authority lifecycle
-  // RFC-178: authority_kind / source_state / origin_source_id /
-  // authority_owner_user_id were dropped in migration 0092 (external/source-only).
-  createdAt: integer('created_at')
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
-  updatedAt: integer('updated_at')
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
-})
+export const skills = sqliteTable(
+  'skills',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    description: text('description').notNull().default(''),
+    // RFC-178: skills are managed-only (external / parent-directory sources
+    // removed in migration 0092). external_path / source_id + the skill_sources
+    // table were dropped there.
+    sourceKind: text('source_kind', { enum: ['managed'] }).notNull(),
+    managedPath: text('managed_path'), // e.g. 'skills/{id}/files/' relative to app dir
+    // RFC-099 ACL (see agents table comment).
+    ownerUserId: text('owner_user_id'),
+    visibility: text('visibility', { enum: ['private', 'public'] })
+      .notNull()
+      .default('public'),
+    schemaVersion: integer('schema_version').notNull().default(1),
+    // RFC-101: monotonic CONTENT version (distinct from schema_version, the
+    // DB-migration version). Bumps on every write through commitSkillVersion;
+    // always equals the latest skill_versions.version_index for this skill.
+    contentVersion: integer('content_version').notNull().default(1),
+    // RFC-170 — skills storage/ACL hardening (migration 0090). All additive;
+    // dormant until batch-B code wires them. See design.md §1/§3/§4/§7a/§8/§10.
+    aclRevision: integer('acl_revision').notNull().default(0), // §8 aclRevision CAS
+    metaRevision: integer('meta_revision').notNull().default(0), // §1 metaRevision monotonic
+    migrationMarker: text('migration_marker'), // §4: NULL|'migrated'|'pending-decision'
+    reservationState: text('reservation_state', { enum: ['reserving', 'ready'] })
+      .notNull()
+      .default('ready'), // §9 creation reservation; non-ready is invisible
+    versionState: text('version_state', {
+      enum: ['legacy-unbackfilled', 'snapshot-unverified', 'snapshot-authoritative', 'quarantined'],
+    })
+      .notNull()
+      .default('legacy-unbackfilled'), // §3 snapshot authority lifecycle
+    // RFC-178: authority_kind / source_state / origin_source_id /
+    // authority_owner_user_id were dropped in migration 0092 (external/source-only).
+    createdAt: integer('created_at')
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: integer('updated_at')
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => ({
+    ownerNameUq: uniqueIndex('skills_owner_name_unique').on(
+      sql`COALESCE(${t.ownerUserId}, '')`,
+      t.name,
+    ),
+  }),
+)
 
 // -----------------------------------------------------------------------------
 // skill_versions — RFC-101 skill content history.
@@ -473,47 +509,56 @@ export const resourceGrants = sqliteTable(
 // (tasks.workgroup_config_json, PR-3), so later edits here only affect NEW
 // tasks.
 // -----------------------------------------------------------------------------
-export const workgroups = sqliteTable('workgroups', {
-  id: text('id').primaryKey(), // ULID
-  name: text('name').notNull().unique(),
-  description: text('description').notNull().default(''),
-  /** Group charter — injected for EVERY member each turn (RFC-164 决策 #18). */
-  instructions: text('instructions').notNull().default(''),
-  mode: text('mode', { enum: ['leader_worker', 'free_collab', 'dynamic_workflow'] })
-    .notNull()
-    .default('leader_worker'),
-  /** FK workgroup_members.id (soft — full-replace regenerates member rows).
-   *  Required (app-enforced) when mode='leader_worker'; must be an agent member. */
-  leaderMemberId: text('leader_member_id'),
-  shareOutputs: integer('share_outputs', { mode: 'boolean' }).notNull().default(true),
-  directMessages: integer('direct_messages', { mode: 'boolean' }).notNull().default(false),
-  blackboard: integer('blackboard', { mode: 'boolean' }).notNull().default(false),
-  /** Hard round cap (leader turns in lw / total member runs in fc, design §4.4). */
-  maxRounds: integer('max_rounds').notNull().default(20),
-  /** Completion gate: leader-done parks the task awaiting human confirmation. */
-  completionGate: integer('completion_gate', { mode: 'boolean' }).notNull().default(false),
-  /** RFC-180「全自动」: no clarify invite + gate treated off + leader-idle auto-nudge. */
-  // RFC-207 — per-asker ask-back cap; see resolveClarifyBudget (shared).
-  clarifyBudget: integer('clarify_budget').notNull().default(3),
-  /** RFC-185 D4: opt-in leader fan-out (same-member concurrent instances).
-   *  OFF (default) keeps the original one-entity-per-agent protocol untouched. */
-  fanOut: integer('fan_out', { mode: 'boolean' }).notNull().default(false),
-  /** RFC-225 optimistic content revision; ACL revisions remain independent. */
-  version: integer('version').notNull().default(1),
-  // RFC-099 ACL (see agents table comment).
-  ownerUserId: text('owner_user_id'),
-  visibility: text('visibility', { enum: ['private', 'public'] })
-    .notNull()
-    .default('public'),
-  aclRevision: integer('acl_revision').notNull().default(0), // RFC-170 §8 aclRevision CAS
-  schemaVersion: integer('schema_version').notNull().default(1),
-  createdAt: integer('created_at')
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
-  updatedAt: integer('updated_at')
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
-})
+export const workgroups = sqliteTable(
+  'workgroups',
+  {
+    id: text('id').primaryKey(), // ULID
+    name: text('name').notNull(),
+    description: text('description').notNull().default(''),
+    /** Group charter — injected for EVERY member each turn (RFC-164 决策 #18). */
+    instructions: text('instructions').notNull().default(''),
+    mode: text('mode', { enum: ['leader_worker', 'free_collab', 'dynamic_workflow'] })
+      .notNull()
+      .default('leader_worker'),
+    /** FK workgroup_members.id (soft — full-replace regenerates member rows).
+     *  Required (app-enforced) when mode='leader_worker'; must be an agent member. */
+    leaderMemberId: text('leader_member_id'),
+    shareOutputs: integer('share_outputs', { mode: 'boolean' }).notNull().default(true),
+    directMessages: integer('direct_messages', { mode: 'boolean' }).notNull().default(false),
+    blackboard: integer('blackboard', { mode: 'boolean' }).notNull().default(false),
+    /** Hard round cap (leader turns in lw / total member runs in fc, design §4.4). */
+    maxRounds: integer('max_rounds').notNull().default(20),
+    /** Completion gate: leader-done parks the task awaiting human confirmation. */
+    completionGate: integer('completion_gate', { mode: 'boolean' }).notNull().default(false),
+    /** RFC-180「全自动」: no clarify invite + gate treated off + leader-idle auto-nudge. */
+    // RFC-207 — per-asker ask-back cap; see resolveClarifyBudget (shared).
+    clarifyBudget: integer('clarify_budget').notNull().default(3),
+    /** RFC-185 D4: opt-in leader fan-out (same-member concurrent instances).
+     *  OFF (default) keeps the original one-entity-per-agent protocol untouched. */
+    fanOut: integer('fan_out', { mode: 'boolean' }).notNull().default(false),
+    /** RFC-225 optimistic content revision; ACL revisions remain independent. */
+    version: integer('version').notNull().default(1),
+    // RFC-099 ACL (see agents table comment).
+    ownerUserId: text('owner_user_id'),
+    visibility: text('visibility', { enum: ['private', 'public'] })
+      .notNull()
+      .default('public'),
+    aclRevision: integer('acl_revision').notNull().default(0), // RFC-170 §8 aclRevision CAS
+    schemaVersion: integer('schema_version').notNull().default(1),
+    createdAt: integer('created_at')
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: integer('updated_at')
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => ({
+    ownerNameUq: uniqueIndex('workgroups_owner_name_unique').on(
+      sql`COALESCE(${t.ownerUserId}, '')`,
+      t.name,
+    ),
+  }),
+)
 
 // RFC-167 pivot (2026-07-11): the `dynamic_workflow_spaces` table (0088) was
 // dropped (0089) — dynamic workflow became a workgroup mode, not a separate
