@@ -40,6 +40,7 @@ import {
 import { buildActor } from '../src/auth/actor'
 import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { nodeRuns, runtimes, tasks, workflows, workgroupTaskState } from '../src/db/schema'
 import { loadWorkgroupTaskState } from '../src/services/workgroup/state'
 import { createApp } from '../src/server'
@@ -531,8 +532,9 @@ describe('RFC-167 engine — generation pass', () => {
 
 describe('RFC-167 — dynamic launch + runTask dispatch', () => {
   let db: DbClient
-  beforeEach(() => {
+  beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
+    await seedTestDefaultOpencodeRuntime(db)
   })
 
   // RFC-175 §2b: the immediate-submit workgroup-identity OCC guard for relaunch.
@@ -735,6 +737,7 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
 
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
+    await seedTestDefaultOpencodeRuntime(db)
     await seedPoolAgents(db)
     app = createApp({
       token: 'a'.repeat(64),

@@ -4,12 +4,14 @@
 //
 //   1. `runner.ts` carries the success log tag exactly once.
 //   2. `runner.ts` carries the failure log tag exactly once.
-//   3. The eager UPDATE statement physically precedes the final run-end
-//      UPDATE — so a future refactor that re-orders the steps can't silently
+//   3. The eager UPDATE statement physically precedes runner-exit finalization
+//      — so a future refactor that re-orders the steps can't silently
 //      revert RFC-047 back to RFC-046 behavior (column populated only at
 //      run end).
-//   4. The final UPDATE still writes `injectedMemoriesJson` — the eager
-//      write is layered on top of RFC-046, NOT a replacement.
+//   4. The successful runner-exit finalization region still writes
+//      `injectedMemoriesJson` after the status CAS. RFC-224 split status fields
+//      from runner-specific JSON fields, but the eager write remains layered
+//      on top of RFC-046, NOT a replacement.
 
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -40,27 +42,28 @@ describe('RFC-047 source-level grep guard', () => {
     expect(countOccurrences(src, "'inject-snapshot-eager-write-failed'")).toBe(1)
   })
 
-  test('eager UPDATE precedes the final UPDATE', () => {
+  test('eager UPDATE precedes runner-exit finalization', () => {
     const eagerIdx = src.indexOf("'inject-snapshot-eager-write'")
     expect(eagerIdx).toBeGreaterThan(-1)
-    // The final run-end UPDATE writes status + finishedAt + injectedMemoriesJson
-    // together. We pin both pieces to be sure we're matching the run-end UPDATE
-    // (the eager block only sets injectedMemoriesJson, so it does NOT contain
-    // `finishedAt:`). lastIndexOf is used so unrelated `finishedAt:` lines
-    // earlier in the file (e.g. RFC-060 PR-D signal-port-in-prompt failure
-    // path) don't shadow the actual final run-end UPDATE block we want to lock.
-    const finalIdx = src.lastIndexOf('finishedAt: Date.now()')
+    // `reason: 'runner-exit'` identifies the successful normal-finalization CAS
+    // without confusing RFC-224's additional fail-closed finishedAt branches.
+    const finalIdx = src.indexOf("reason: 'runner-exit'")
     expect(finalIdx).toBeGreaterThan(-1)
     expect(eagerIdx).toBeLessThan(finalIdx)
   })
 
-  test('final UPDATE still carries injectedMemoriesJson (fail-safe vs RFC-046)', () => {
-    const finalBlockStart = src.lastIndexOf('finishedAt: Date.now()')
+  test('runner-exit finalization still persists injectedMemoriesJson (fail-safe vs RFC-046)', () => {
+    const finalBlockStart = src.indexOf("reason: 'runner-exit'")
     expect(finalBlockStart).toBeGreaterThan(-1)
-    // Walk a generous window after the finishedAt line and assert
-    // `injectedMemoriesJson:` is present — the final UPDATE's `.set({...})`
-    // payload lives within the same drizzle call expression.
-    const window = src.slice(finalBlockStart, finalBlockStart + 2000)
-    expect(window).toContain('injectedMemoriesJson:')
+    const finalBlockEnd = src.indexOf('const result: RunResult', finalBlockStart)
+    expect(finalBlockEnd).toBeGreaterThan(finalBlockStart)
+    const finalization = src.slice(finalBlockStart, finalBlockEnd)
+    // RFC-224 moved non-status JSON out of setNodeRunStatus. Keep the follow-up
+    // write in the same successful finalization region and after the status CAS.
+    expect(finalization).toContain('.update(nodeRuns)')
+    expect(finalization).toContain('injectedMemoriesJson:')
+    expect(finalization.indexOf('.update(nodeRuns)')).toBeLessThan(
+      finalization.indexOf('injectedMemoriesJson:'),
+    )
   })
 })

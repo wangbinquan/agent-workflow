@@ -10,6 +10,7 @@
 // endpoints in RFC-135.
 
 import { z } from 'zod'
+import { EXECUTION_IDENTITY_FAILURE_CODES } from '../executionIdentity'
 
 /**
  * RFC-135: GET /api/runtimes/status — one entry per ENABLED registry runtime,
@@ -28,6 +29,11 @@ export const RuntimeStatusEntrySchema = z.object({
   ok: z.boolean(),
   version: z.string().nullable(),
   isDefault: z.boolean(),
+  /**
+   * RFC-224: stable, non-secret diagnosis for an execution-identity admission
+   * failure. Optional so responses from pre-RFC-224 daemons remain parseable.
+   */
+  failureCode: z.enum(EXECUTION_IDENTITY_FAILURE_CODES).optional(),
 })
 export type RuntimeStatusEntry = z.infer<typeof RuntimeStatusEntrySchema>
 

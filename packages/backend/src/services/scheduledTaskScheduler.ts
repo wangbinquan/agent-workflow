@@ -162,10 +162,11 @@ async function fireClaimed(
   buildLaunch: BuildScheduleLaunch,
   maxFailures: number,
   onAutoDisable?: (id: string) => void,
+  defaultRuntime?: string | null,
 ): Promise<void> {
   const firedAt = row.nextRunAt ?? Date.now() // the claimed slot (pre-advance)
   try {
-    const { taskId } = await fireSchedule(db, row, buildLaunch, Date.now())
+    const { taskId } = await fireSchedule(db, row, buildLaunch, Date.now(), defaultRuntime)
     await recordSuccess(db, row.id, taskId, firedAt)
     scheduledTaskBroadcaster.broadcast(SCHEDULED_TASK_CHANNEL, {
       type: 'scheduled.fired',
@@ -192,6 +193,7 @@ export async function runDueSchedulesOnce(
     maxFailures?: number
     limit?: number
     onAutoDisable?: (id: string) => void
+    defaultRuntime?: string | null
   },
 ): Promise<Row[]> {
   const claimed = await pollAndClaim(
@@ -206,6 +208,7 @@ export async function runDueSchedulesOnce(
       opts.buildLaunch,
       opts.maxFailures ?? DEFAULT_MAX_CONSECUTIVE_FAILURES,
       opts.onAutoDisable,
+      opts.defaultRuntime,
     )
   }
   return claimed
@@ -236,7 +239,16 @@ export function startScheduledTaskLoop(opts: {
         for (const row of claimed) {
           inFlight++
           void sem
-            .run(() => fireClaimed(opts.db, row, opts.buildLaunch, maxFailures, opts.onAutoDisable))
+            .run(() =>
+              fireClaimed(
+                opts.db,
+                row,
+                opts.buildLaunch,
+                maxFailures,
+                opts.onAutoDisable,
+                cfg.defaultRuntime,
+              ),
+            )
             .finally(() => {
               inFlight--
             })

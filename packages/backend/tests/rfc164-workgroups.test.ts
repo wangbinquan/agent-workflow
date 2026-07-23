@@ -27,6 +27,7 @@ import {
 } from '@agent-workflow/shared'
 import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { agents } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { createUser } from '../src/services/users'
@@ -533,6 +534,7 @@ describe('RFC-164 — workgroups route ACL (RFC-099 D1/D4/D15/D18)', () => {
 
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
+    await seedTestDefaultOpencodeRuntime(db)
     app = createApp({
       token: DAEMON_TOKEN,
       configPath: '/tmp/aw-rfc164-config-never-used.json',

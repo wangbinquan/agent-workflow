@@ -21,6 +21,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { clarifyRounds, nodeRuns, tasks, workgroupMessages, users } from '../src/db/schema'
 import { buildActor } from '../src/auth/actor'
 import { createAgent } from '../src/services/agent'
+import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { resumeTask } from '../src/services/task'
 import { createWorkgroup } from '../src/services/workgroups'
@@ -66,6 +67,7 @@ function writePlan(h: Harness, plan: Record<string, unknown[]>): void {
 const opencodeCmd = (): string[] => ['bun', 'run', SCENARIO_STUB]
 
 async function seedAgent(db: DbClient, name: string): Promise<string> {
+  await seedTestDefaultOpencodeRuntime(db)
   const created = await createAgent(db, {
     name,
     description: name,

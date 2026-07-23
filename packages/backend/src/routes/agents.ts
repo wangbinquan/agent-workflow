@@ -54,6 +54,7 @@ import { resolveOpencodeCmd } from '@/util/opencode'
 import { mountAclEndpoints } from './resourceAcl'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import type { Agent } from '@agent-workflow/shared'
+import { loadConfig } from '@/config'
 
 /**
  * RFC-117: true iff the raw PUT body sets ONLY `runtime` (no other key). Lets the
@@ -131,6 +132,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
       })
     }
     const actor = actorOf(c)
+    const defaultRuntime = loadConfig(deps.configPath).defaultRuntime
     // RFC-099 (D15) / RFC-223 (PR-1, Codex impl-gate P1-2): reference ACL is
     // enforced INSIDE createAgent, bound to the same single resolution that
     // produces the persisted ids (no check-then-resolve TOCTOU). On create every
@@ -138,6 +140,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
     const created = await createAgent(deps.db, parsed.data, {
       ownerUserId: actor.user.id,
       actor,
+      executionPolicy: { defaultRuntime },
     })
     return c.json(created, 201)
   })
@@ -168,10 +171,21 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
     // ID, not raw token) are checked — a grandfathered ref re-submitted by name is
     // not mis-flagged as new.
     const { expectedUpdatedAt, expectedAclRevision, ...patch } = parsed.data
-    const updated = await updateAgent(deps.db, id, patch, actor, {
-      expectedUpdatedAt,
-      expectedAclRevision,
-    })
+    const updated = await updateAgent(
+      deps.db,
+      id,
+      patch,
+      actor,
+      {
+        expectedUpdatedAt,
+        expectedAclRevision,
+      },
+      {
+        executionPolicy: {
+          defaultRuntime: loadConfig(deps.configPath).defaultRuntime,
+        },
+      },
+    )
     return c.json(updated)
   })
 

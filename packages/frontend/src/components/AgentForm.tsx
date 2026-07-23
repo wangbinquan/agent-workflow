@@ -225,7 +225,13 @@ export function AgentForm({
   // 可用性由注册表派生（存在 enabled 的 claude-protocol 行）——RFC-111 D17 的
   // `claudeCodeEnabled` 配置门已删除，per-runtime `enabled` 是唯一开关。
   const runtimesQuery = useQuery<{
-    runtimes: Array<{ name: string; protocol: string; enabled: boolean }>
+    runtimes: Array<{
+      name: string
+      protocol: string
+      enabled: boolean
+      isDefault: boolean
+      model: string | null
+    }>
   }>({
     queryKey: ['runtimes'],
     queryFn: ({ signal }) => api.get('/api/runtimes', undefined, signal),
@@ -239,6 +245,24 @@ export function AgentForm({
   // A disabled claude-protocol runtime is excluded by its own `enabled` flag —
   // the former blanket claude gate is gone.
   const selectableRuntimes = registeredRuntimes.filter((r) => r.enabled || r.name === value.runtime)
+  const effectiveRuntime =
+    (value.runtime !== undefined
+      ? registeredRuntimes.find((runtime) => runtime.name === value.runtime)
+      : registeredRuntimes.find((runtime) => runtime.isDefault)) ?? null
+  const effectiveOpencode = effectiveRuntime?.protocol === 'opencode'
+  const runtimePolicyBlockers = effectiveOpencode
+    ? [
+        ...(typeof effectiveRuntime.model !== 'string' || effectiveRuntime.model.trim() === ''
+          ? [t('tasks.failure.execution-identity-model-unresolved')]
+          : []),
+        ...((value.plugins?.length ?? 0) > 0
+          ? [t('tasks.failure.execution-identity-plugin-unsupported')]
+          : []),
+        ...((value.dependsOn?.length ?? 0) > 0
+          ? [t('tasks.failure.execution-identity-dependent-unsupported')]
+          : []),
+      ]
+    : []
   // RFC-113: the runtime selector is the ONLY per-agent profile control, so show it
   // whenever there's a real choice — claude available, the agent already pins a
   // runtime, or custom (non-built-in) opencode profiles exist (e.g. opencode-opus /
@@ -341,6 +365,11 @@ export function AgentForm({
             ]}
           />
         </Field>
+      )}
+      {runtimePolicyBlockers.length > 0 && (
+        <div className="error-banner" role="alert" data-testid="agent-opencode-execution-policy">
+          {runtimePolicyBlockers.join(' ')}
+        </div>
       )}
     </>
   )

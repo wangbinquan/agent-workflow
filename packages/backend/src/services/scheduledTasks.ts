@@ -36,6 +36,10 @@ import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { runGit } from '@/util/git'
 import { SCHEDULED_TASK_CHANNEL, scheduledTaskBroadcaster } from '@/ws/broadcaster'
+import {
+  assertAgentExecutionPolicy,
+  assertAgentIdsExecutionPolicy,
+} from '@/services/executionPolicy'
 
 /** Injected launch — `(body) => startTask(body, deps)`, closed over owner + scheduledTaskId. */
 /**
@@ -230,9 +234,15 @@ async function assertScheduledTargetUsable(
   actor: Actor,
   kind: ScheduledLaunchKind,
   body: Record<string, unknown>,
+  defaultRuntime?: string | null,
 ): Promise<void> {
   if (kind === 'workflow') {
-    const wf = await assertWorkflowLaunchable(db, actor, body['workflowId'] as string)
+    const wf = await assertWorkflowLaunchable(
+      db,
+      actor,
+      body['workflowId'] as string,
+      defaultRuntime,
+    )
     assertNoRequiredUploadInput(wf)
     return
   }
@@ -244,6 +254,7 @@ async function assertScheduledTargetUsable(
       throw new NotFoundError('agent-not-found', 'agent not found')
     }
     assertNotBuiltin('agent', agent)
+    await assertAgentExecutionPolicy(db, agent, defaultRuntime)
     // RFC-223 PR-7: identity arrived as the required canonical id. Refresh the
     // optional name snapshot from that exact row; never resolve or trust a
     // client-provided display name.
@@ -267,6 +278,17 @@ async function assertScheduledTargetUsable(
   if (group === null || !(await canViewResource(db, actor, 'workgroup', group))) {
     throw new NotFoundError('workgroup-not-found', 'workgroup not found')
   }
+  await assertAgentIdsExecutionPolicy(
+    db,
+    group.members.flatMap((member) =>
+      member.memberType === 'agent' &&
+      typeof member.agentId === 'string' &&
+      member.agentId.length > 0
+        ? [member.agentId]
+        : [],
+    ),
+    defaultRuntime,
+  )
   body['workgroupName'] = group.name
 }
 
@@ -366,7 +388,11 @@ function canViewResourceInTx(
 export async function createScheduledTask(
   db: DbClient,
   input: CreateScheduledTask,
-  opts: { actor: Actor; beforeWriteTx?: () => Promise<void> },
+  opts: {
+    actor: Actor
+    beforeWriteTx?: () => Promise<void>
+    defaultRuntime?: string | null
+  },
 ): Promise<ScheduledTask> {
   const kind = input.launchKind
   // RFC-165 §9b: kind-enveloped validation — the ONE selector shared by
@@ -381,6 +407,7 @@ export async function createScheduledTask(
     opts.actor,
     kind,
     body as unknown as Record<string, unknown>,
+    opts.defaultRuntime,
   )
   const spec = ScheduleSpecSchema.parse(input.scheduleSpec)
   const now = Date.now()
@@ -423,7 +450,11 @@ export async function updateScheduledTask(
   db: DbClient,
   id: string,
   patch: UpdateScheduledTask,
-  opts: { actor: Actor; beforeWriteTx?: () => Promise<void> },
+  opts: {
+    actor: Actor
+    beforeWriteTx?: () => Promise<void>
+    defaultRuntime?: string | null
+  },
 ): Promise<ScheduledTask> {
   const existing = await getScheduledTask(db, id)
   if (existing === null) {
@@ -511,6 +542,7 @@ export async function updateScheduledTask(
       opts.actor,
       existing.launchKind,
       patchedPayload as unknown as Record<string, unknown>,
+      opts.defaultRuntime,
     )
   }
 
@@ -645,6 +677,7 @@ export async function fireSchedule(
   row: Row,
   buildLaunch: BuildScheduleLaunch,
   now: number,
+  defaultRuntime?: string | null,
 ): Promise<{ taskId: string }> {
   const parsedKind = ScheduledLaunchKindSchema.safeParse(row.launchKind ?? 'workflow')
   if (!parsedKind.success) {
@@ -712,16 +745,13 @@ export async function fireSchedule(
     },
     source: 'daemon',
   })
-  // RFC-165 §9b: workflow rows keep the explicit fire-time gate; agent /
-  // workgroup rows are fully re-validated inside their launch services
-  // (ACL 404 / builtin 403 / readiness 422) — the dispatcher below.
-  if (kind === 'workflow') {
-    await assertWorkflowLaunchable(
-      db,
-      actor,
-      (bodyWithName as unknown as { workflowId: string }).workflowId,
-    )
-  }
+  // RFC-224: save-time acceptance is not a launch capability. Re-evaluate the
+  // canonical target and its effective runtime on every fire, using the daemon
+  // default that is current for this tick/run-now request. The launch services
+  // retain their own final gates, but this shared preflight also protects
+  // injected ScheduleLaunch implementations and rejects before any launch
+  // side effect.
+  await assertScheduledTargetUsable(db, actor, kind, bodyWithName, defaultRuntime)
 
   const launch = buildLaunch(row.ownerUserId, row.id)
   const task = await launch(kind, bodyWithName, actor)
@@ -938,12 +968,13 @@ export async function runScheduleNow(
   db: DbClient,
   id: string,
   buildLaunch: BuildScheduleLaunch,
+  defaultRuntime?: string | null,
 ): Promise<{ taskId: string }> {
   const row = await getScheduledTaskRow(db, id)
   if (row === null) {
     throw new NotFoundError('scheduled-task-not-found', `scheduled task '${id}' not found`)
   }
-  const result = await fireSchedule(db, row, buildLaunch, Date.now())
+  const result = await fireSchedule(db, row, buildLaunch, Date.now(), defaultRuntime)
   scheduledTaskBroadcaster.broadcast(SCHEDULED_TASK_CHANNEL, {
     type: 'scheduled.fired',
     id: row.id,

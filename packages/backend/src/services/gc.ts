@@ -33,6 +33,7 @@ import type { DbClient } from '@/db/client'
 import { taskRepos, tasks } from '@/db/schema'
 import { deleteSnapshotRefs, removeWorktree, runGit } from '@/util/git'
 import { invalidateCallGraphIndex } from '@/services/structuralDiff/callGraph/expandService'
+import { runOpencodeStoreOrphanGc } from '@/services/opencodeStoreRecovery'
 import { createLogger } from '@/util/log'
 
 const log = createLogger('gc')
@@ -483,6 +484,9 @@ export function startWorktreeGc(
       .then(() => (appHome !== undefined ? runScratchOrphanGc(db, appHome) : undefined))
       // RFC-222 — sweep orphan task worktrees (deleted-task backstop, §6.4).
       .then(() => (appHome !== undefined ? runWorktreeOrphanGc(db, appHome) : undefined))
+      // RFC-224 — owner-less persistent stores and normally-cleaned system
+      // stores are retained for a 24h safety window, then reaped only unlocked.
+      .then(() => (appHome !== undefined ? runOpencodeStoreOrphanGc(db, appHome) : undefined))
       .catch((err: unknown) => {
         log.error('runWorktreeGc failed', {
           error: err instanceof Error ? err.message : String(err),

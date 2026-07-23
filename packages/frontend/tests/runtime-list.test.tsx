@@ -12,6 +12,7 @@ import { DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { RuntimeList } from '../src/components/RuntimeList'
+import i18n from '../src/i18n'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 
 // RFC-113: rows carry the execution profile + an isDefault flag (the server sets
@@ -80,7 +81,8 @@ function wrap(node: React.ReactNode) {
 let fetchUrls: string[] = []
 let configPutBodies: unknown[] = []
 
-beforeEach(() => {
+beforeEach(async () => {
+  await i18n.changeLanguage('en-US')
   setBaseUrl(`http://runtime-list-${crypto.randomUUID()}.test`)
   setToken('tok')
   fetchUrls = []
@@ -192,6 +194,90 @@ describe('RuntimeList (RFC-112 PR-D)', () => {
     expect(screen.getByText('/usr/local/bin/my-oc')).toBeTruthy()
   })
 
+  test('legacy OpenCode without a model is danger-marked and cannot Test or become default', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = typeof input === 'string' ? input : (input as URL | Request).toString()
+      if (url.includes('/api/runtime/models'))
+        return jsonResponse({ binary: 'opencode', cached: true, models: [] })
+      if (url.includes('/api/runtimes'))
+        return jsonResponse({
+          runtimes: RUNTIMES_BODY.runtimes.map((runtime) =>
+            runtime.name === 'opencode'
+              ? { ...runtime, isDefault: false, binaryPath: '/usr/local/bin/opencode' }
+              : runtime.name === 'claude-code'
+                ? { ...runtime, isDefault: true }
+                : runtime,
+          ),
+        })
+      return jsonResponse({})
+    })
+
+    wrap(<RuntimeList />)
+    const chip = await screen.findByTestId('runtime-model-missing-opencode')
+    expect(chip.textContent).toBe('model required')
+    expect(chip.closest('.status-chip')?.className).toContain('status-chip--danger')
+    const runtimeRow = chip.closest('.runtime-list__row')
+    if (!(runtimeRow instanceof HTMLElement)) throw new Error('expected runtime row')
+    expect(
+      (within(runtimeRow).getByRole('button', { name: /^Test$/ }) as HTMLButtonElement).disabled,
+    ).toBe(true)
+    expect(
+      (within(runtimeRow).getByRole('button', { name: /^Set default$/ }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true)
+  })
+
+  test('editing a model-less OpenCode row enables Save and Test only after selecting a model', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = typeof input === 'string' ? input : (input as URL | Request).toString()
+      if (url.includes('/api/runtime/models'))
+        return jsonResponse({
+          binary: '/usr/local/bin/opencode',
+          cached: true,
+          models: [
+            {
+              id: 'anthropic/opus',
+              provider: 'anthropic',
+              modelID: 'opus',
+              name: 'Opus',
+            },
+          ],
+        })
+      if (url.includes('/api/runtimes'))
+        return jsonResponse({
+          runtimes: RUNTIMES_BODY.runtimes.map((runtime) =>
+            runtime.name === 'opencode'
+              ? { ...runtime, binaryPath: '/usr/local/bin/opencode' }
+              : runtime,
+          ),
+        })
+      return jsonResponse({})
+    })
+
+    wrap(<RuntimeList />)
+    await screen.findByTestId('runtime-model-missing-opencode')
+    fireEvent.click(screen.getAllByRole('button', { name: /^Edit$/ })[0]!)
+    const dialog = await screen.findByRole('dialog', { name: 'Edit runtime' })
+    const save = within(dialog).getByRole('button', { name: /^Save$/ }) as HTMLButtonElement
+    const testBinary = within(dialog).getByRole('button', {
+      name: /^Test binary$/,
+    }) as HTMLButtonElement
+    expect(save.disabled).toBe(true)
+    expect(testBinary.disabled).toBe(true)
+    expect(
+      within(dialog).getByText(
+        'Select an explicit model before saving or testing this OpenCode runtime.',
+      ),
+    ).toBeTruthy()
+
+    const modelSelect = within(dialog).getAllByRole('combobox')[1] as HTMLButtonElement
+    await waitFor(() => expect(modelSelect.disabled).toBe(false))
+    fireEvent.click(modelSelect)
+    fireEvent.mouseDown(within(screen.getByRole('listbox')).getByText('Opus'))
+    expect(save.disabled).toBe(false)
+    expect(testBinary.disabled).toBe(false)
+  })
+
   // RFC-116: a network-blocked smoke result renders the "endpoint unreachable"
   // label (NOT "auth missing") as a warn/amber chip — signalling the operator to
   // fix the daemon's network/proxy, not the credentials.
@@ -231,6 +317,100 @@ describe('RuntimeList (RFC-112 PR-D)', () => {
     expect(chip).toBeTruthy()
     expect(screen.queryByText('auth missing')).toBeNull()
     expect(chip.closest('.status-chip')?.className).toContain('status-chip--warn')
+  })
+
+  test('persisted execution-identity failure renders actionable English copy without raw tokens', async () => {
+    await i18n.changeLanguage('en-US')
+    const raw = 'execution-identity-sandbox-required RAW_BACKEND_SECRET'
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = typeof input === 'string' ? input : (input as URL | Request).toString()
+      if (url.includes('/api/runtime/models'))
+        return jsonResponse({ binary: 'opencode', cached: false, models: [] })
+      if (url.includes('/api/runtimes'))
+        return jsonResponse({
+          runtimes: [
+            {
+              name: 'opencode',
+              protocol: 'opencode',
+              binaryPath: null,
+              isDefault: true,
+              ...NULL_PROFILE,
+              model: 'openai/gpt-5.6',
+              enabled: true,
+              lastProbe: {
+                outcome: 'execution-identity-failed',
+                conforms: false,
+                detail: raw,
+                failureCode: 'execution-identity-sandbox-required',
+                sawNonce: false,
+                sawEnvelope: false,
+                exitCode: 1,
+              },
+              createdAt: 0,
+              updatedAt: 0,
+            },
+          ],
+        })
+      return jsonResponse({})
+    })
+
+    wrap(<RuntimeList />)
+    await waitFor(() => expect(document.querySelector('.runtime-list__name')).toBeTruthy())
+    const chip = screen.getByText('execution identity failed')
+    expect(chip.closest('.status-chip')?.className).toContain('status-chip--danger')
+    expect(screen.queryByText('runtimes.smoke.execution-identity-failed')).toBeNull()
+    expect(
+      screen.getByText(
+        'This OpenCode run requires the secure Linux sandbox, but it is unavailable.',
+      ),
+    ).toBeTruthy()
+    expect(
+      screen.getByText(
+        'Run the daemon on a supported Linux host with the required sandbox enabled.',
+      ),
+    ).toBeTruthy()
+    expect(document.body.textContent).not.toContain(raw)
+    expect(document.body.textContent).not.toContain('execution-identity-sandbox-required')
+  })
+
+  test('Test binary result renders actionable Chinese copy without raw tokens', async () => {
+    await i18n.changeLanguage('zh-CN')
+    const raw = 'execution-identity-sandbox-required RAW_BACKEND_SECRET'
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : (input as URL | Request).toString()
+      if ((init?.method ?? 'GET') === 'POST' && url.endsWith('/api/runtimes/probe')) {
+        return jsonResponse({
+          smoke: {
+            outcome: 'execution-identity-failed',
+            conforms: false,
+            detail: raw,
+            failureCode: 'execution-identity-sandbox-required',
+            sawNonce: false,
+            sawEnvelope: false,
+            exitCode: 1,
+          },
+        })
+      }
+      if (url.includes('/api/runtime/models'))
+        return jsonResponse({ binary: 'opencode', cached: false, models: [] })
+      if (url.includes('/api/runtimes')) return jsonResponse(RUNTIMES_BODY)
+      return jsonResponse({})
+    })
+
+    wrap(<RuntimeList />)
+    await waitFor(() => expect(screen.getByText('my-oc')).toBeTruthy())
+    fireEvent.click(screen.getAllByRole('button', { name: /^编辑$/ })[2]!)
+    const dialog = await screen.findByRole('dialog', { name: '编辑运行时' })
+    fireEvent.click(within(dialog).getByRole('button', { name: '测试二进制' }))
+
+    expect(
+      await within(dialog).findByText('本次 OpenCode 运行要求安全 Linux 沙箱，但当前不可用。'),
+    ).toBeTruthy()
+    expect(
+      within(dialog).getByText('请在支持的 Linux 主机上运行 daemon，并启用所需沙箱。'),
+    ).toBeTruthy()
+    expect(dialog.textContent).not.toContain(raw)
+    expect(dialog.textContent).not.toContain('execution-identity-sandbox-required')
   })
 
   test('RFC-153: every row is editable AND deletable (Test / Edit / Delete on all three)', async () => {
@@ -483,6 +663,9 @@ describe('RuntimeList (RFC-112 PR-D)', () => {
     await waitFor(() => expect(screen.getByText('my-oc')).toBeTruthy())
     fireEvent.click(screen.getByRole('button', { name: /add runtime/i }))
     fireEvent.change(screen.getByTestId('runtime-name'), { target: { value: 'myfork' } })
+    fireEvent.change(screen.getByRole('textbox', { name: /^Model/ }), {
+      target: { value: 'openai/gpt-5.6' },
+    })
     fireEvent.change(screen.getByTestId('runtime-config-dir-env'), {
       target: { value: '  MYFORK_CONFIG_DIR  ' },
     })
@@ -505,6 +688,9 @@ describe('RuntimeList (RFC-112 PR-D)', () => {
     await waitFor(() => expect(screen.getByText('my-oc')).toBeTruthy())
     fireEvent.click(screen.getByRole('button', { name: /add runtime/i }))
     fireEvent.change(screen.getByTestId('runtime-name'), { target: { value: 'myfork' } })
+    fireEvent.change(screen.getByRole('textbox', { name: /^Model/ }), {
+      target: { value: 'openai/gpt-5.6' },
+    })
     const saveBtn = screen.getByRole('button', { name: /^Save$/ }) as HTMLButtonElement
     expect(saveBtn.disabled).toBe(false)
     // Reserved env name → reserved error + Save disabled.

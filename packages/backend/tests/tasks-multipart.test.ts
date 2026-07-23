@@ -13,6 +13,7 @@ import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createApp } from '../src/server'
 import { createAgent } from '../src/services/agent'
 import { abortAllActiveTasks, isTaskActive } from '../src/services/task'
@@ -115,6 +116,7 @@ async function buildHarness(): Promise<Harness> {
   const stubOpencode = makeStubOpencode(tmp)
 
   const db = createInMemoryDb(MIGRATIONS)
+  await seedTestDefaultOpencodeRuntime(db)
 
   const reader = await createAgent(db, {
     name: 'reader',

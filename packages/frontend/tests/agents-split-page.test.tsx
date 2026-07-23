@@ -139,7 +139,15 @@ function installFetch(
       }
       if (method === 'GET' && path.endsWith('/api/runtimes'))
         return json({
-          runtimes: [{ name: 'opencode', protocol: 'opencode', enabled: true, isDefault: true }],
+          runtimes: [
+            {
+              name: 'opencode',
+              protocol: 'opencode',
+              enabled: true,
+              isDefault: true,
+              model: 'openai/gpt-5.6',
+            },
+          ],
         })
       if (method === 'GET' && path.endsWith('/api/config'))
         return json({ defaultRuntime: 'opencode' })

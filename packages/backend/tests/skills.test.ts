@@ -25,6 +25,7 @@ import {
   type SkillFsOptions,
 } from '../src/services/skill'
 import { getSkill } from './helpers/resourceLookup'
+import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { ConflictError, NotFoundError, ValidationError } from '../src/util/errors'
 
 // RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps
@@ -395,17 +396,19 @@ describe('skill HTTP routes', () => {
 
   test('DELETE refuses when an agent references the skill', async () => {
     const skill = await createHttpSkill({ name: 'foo' })
+    await seedTestDefaultOpencodeRuntime(h.db)
     const content = (await (await req(h.app, `/api/skills/${skill.id}/content`)).json()) as {
       token: string
     }
     // RFC-223 (PR-1): typed managed skill ref carries the canonical id.
-    await req(h.app, '/api/agents', {
+    const created = await req(h.app, '/api/agents', {
       method: 'POST',
       body: JSON.stringify({
         name: 'a1',
         skills: [{ kind: 'managed', skillId: skill.id }],
       }),
     })
+    expect(created.status).toBe(201)
     // RFC-222 (D5, N-5): confirm passes first, then the in-use refusal fires.
     const res = await req(h.app, `/api/skills/${skill.id}`, {
       method: 'DELETE',

@@ -11,6 +11,7 @@ import type { SecretBox } from '@/auth/secretBox'
 import { multiAuth } from '@/auth/session'
 import type { DbClient } from '@/db/client'
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
+import type { SmokeOptions, SmokeResult } from '@/services/runtimeSmoke'
 import { ForbiddenError } from '@/util/errors'
 import { getEmbeddedAsset, IS_EMBEDDED } from '@/embed'
 import { mountAgentRoutes } from '@/routes/agents'
@@ -49,6 +50,24 @@ import { mountWorktreeFilesRoutes } from '@/routes/worktree-files'
 import { mountPortArtifactRoutes } from '@/routes/port-artifacts'
 import { errorHandler } from '@/util/errors'
 import { createLogger } from '@/util/log'
+
+/**
+ * Narrow in-process dependency seams for route tests that exercise diagnostics
+ * with deterministic fixture executables. Production startup never supplies
+ * these; there is no config, environment, or HTTP switch that can select them.
+ */
+export interface RuntimeDiagnosticTestDependencies {
+  withOfficialOpencodeSnapshot<T>(
+    command: readonly string[],
+    callback: (snapshotPath: string) => Promise<T>,
+  ): Promise<T>
+  smokeRuntime(options: SmokeOptions): Promise<SmokeResult>
+  /**
+   * Deterministic finalization seam for the runtime-probe/config fence race.
+   * Production never supplies it.
+   */
+  beforeRuntimeProbeCache?(): void | Promise<void>
+}
 
 export interface AppDeps {
   /** Token required for /api/*. */
@@ -89,6 +108,11 @@ export interface AppDeps {
     operation: 'validate' | 'export'
     revision: WorkflowRevision
   }) => void | Promise<void>
+  /**
+   * Test-only route dependency injection. Production callers must omit this;
+   * the default path always enforces the RFC-224 official-build boundary.
+   */
+  runtimeDiagnosticTestDependencies?: Partial<RuntimeDiagnosticTestDependencies>
 }
 
 export function createApp(deps: AppDeps): Hono {

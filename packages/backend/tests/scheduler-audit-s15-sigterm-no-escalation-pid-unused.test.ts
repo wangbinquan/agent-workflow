@@ -72,16 +72,25 @@ describe('S-15 guard: SIGTERM→SIGKILL escalation + group kill (runner.ts)', ()
   })
 
   test('escalation chain exists: SIGTERM now, SIGKILL after the grace timer', () => {
-    // armKillEscalation fires the TERM and arms the KILL — exactly one each.
-    expect(countNonCommentMatches(runnerSrc, /killTree\(child, 'SIGTERM'\)/g)).toBe(1)
-    expect(countNonCommentMatches(runnerSrc, /killTree\(child, 'SIGKILL'\)/g)).toBe(1)
+    // Scope exact counts to armKillEscalation. RFC-224 adds a separate
+    // outer-finally reap helper with its own TERM→KILL pair; counting the whole
+    // file would make that additional safety net look like a regression.
+    const armStart = runnerSrc.indexOf('function armKillEscalation(')
+    const armEnd = runnerSrc.indexOf('\ninterface LinePump', armStart)
+    expect(armStart).toBeGreaterThan(-1)
+    expect(armEnd).toBeGreaterThan(armStart)
+    const armSrc = runnerSrc.slice(armStart, armEnd)
+    expect(countNonCommentMatches(armSrc, /killTree\(child, 'SIGTERM'\)/g)).toBe(1)
+    expect(countNonCommentMatches(armSrc, /killTree\(child, 'SIGKILL'\)/g)).toBe(1)
 
-    // Both kill initiators (abort + timeout) route through startKill().
-    expect(countNonCommentMatches(runnerSrc, /\bstartKill\(\)/g)).toBe(2)
+    // Every ordinary kill initiator routes through the same idempotent
+    // escalation arm: abort, timeout, RFC-224 control-barrier failure,
+    // launcher stable-code failure, and stream-pump failure.
+    expect(countNonCommentMatches(runnerSrc, /\bstartKill\(\)/g)).toBe(5)
     expect(countNonCommentMatches(runnerSrc, /armKillEscalation\(/g)).toBeGreaterThanOrEqual(1)
 
     // The grace timer must be unref'd (a wedged child can't pin bun test).
-    expect(runnerSrc).toContain('timer.unref()')
+    expect(armSrc).toContain('timer.unref()')
   })
 
   test('`child.exited` and the pumps are bounded by the reap deadline race', () => {
@@ -94,7 +103,14 @@ describe('S-15 guard: SIGTERM→SIGKILL escalation + group kill (runner.ts)', ()
 
     // Overrun ⟹ child-unkillable failure (with pid) + reader cancel + unref.
     expect(countNonCommentMatches(runnerSrc, /child-unkillable/g)).toBeGreaterThanOrEqual(1)
-    expect(countNonCommentMatches(runnerSrc, /child\.unref\(\)/g)).toBe(1)
+    const unkillableStart = runnerSrc.indexOf('if (childUnkillable) {')
+    const unkillableEnd = runnerSrc.indexOf('} else {', unkillableStart)
+    expect(unkillableStart).toBeGreaterThan(-1)
+    expect(unkillableEnd).toBeGreaterThan(unkillableStart)
+    const unkillableBlock = runnerSrc.slice(unkillableStart, unkillableEnd)
+    expect(countNonCommentMatches(unkillableBlock, /child\.unref\(\)/g)).toBe(1)
+    expect(unkillableBlock).toContain('stdoutPump.cancel()')
+    expect(unkillableBlock).toContain('stderrPump.cancel()')
     expect(countNonCommentMatches(runnerSrc, /reader\.cancel\(\)/g)).toBeGreaterThanOrEqual(1)
     expect(countNonCommentMatches(runnerSrc, /stdoutPump\.cancel\(\)/g)).toBeGreaterThanOrEqual(1)
     expect(countNonCommentMatches(runnerSrc, /stderrPump\.cancel\(\)/g)).toBeGreaterThanOrEqual(1)
@@ -119,9 +135,17 @@ describe('S-15 guard: nodeRuns.pid is consumed by process governance', () => {
 
   test('orphan reaper kills live children before flipping rows', () => {
     const orphansSrc = readFileSync(ORPHANS, 'utf8')
-    expect(countNonCommentMatches(orphansSrc, /killStaleRunProcessTree\(/g)).toBeGreaterThanOrEqual(
-      1,
-    )
+    // RFC-224 introduced an injectable kill dependency so boot-recovery tests
+    // can prove fail-closed capability issuance. Production still falls back to
+    // the same helper, and the awaited kill remains before the status flip.
+    const killCall = '(dependencies.killStaleRunProcessTree ?? killStaleRunProcessTree)(r, {'
+    const killIdx = orphansSrc.indexOf(killCall)
+    const flipIdx = orphansSrc.indexOf('await transitionNodeRunStatus({', killIdx)
+    expect(killIdx).toBeGreaterThan(-1)
+    expect(flipIdx).toBeGreaterThan(killIdx)
+    expect(
+      countNonCommentMatches(orphansSrc, /killStaleRunProcessTree \?\? killStaleRunProcessTree/g),
+    ).toBe(1)
     expect(countNonCommentMatches(orphansSrc, /\bpid\b/g)).toBeGreaterThan(0)
   })
 

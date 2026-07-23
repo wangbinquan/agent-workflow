@@ -16,6 +16,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { nodeRuns } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import { createAgent } from '../src/services/agent'
@@ -72,6 +73,7 @@ async function setup(): Promise<Harness> {
   mkdirSync(appHome, { recursive: true })
   mkdirSync(repoPath, { recursive: true })
   const db = createInMemoryDb(MIGRATIONS)
+  await seedTestDefaultOpencodeRuntime(db)
 
   await runGit(remote, ['init', '-q', '--bare', '-b', 'main'])
   await runGit(repoPath, ['init', '-q', '-b', 'main'])

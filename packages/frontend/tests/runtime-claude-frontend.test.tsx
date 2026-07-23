@@ -26,6 +26,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type { CreateAgent } from '@agent-workflow/shared'
 import { AgentForm, emptyAgent } from '../src/components/AgentForm'
 import { ModelSelect } from '../src/components/ModelSelect'
+import i18n from '../src/i18n'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 
 let fetchUrls: string[] = []
@@ -129,9 +130,11 @@ describe('ModelSelect — runtime namespace (RFC-111)', () => {
     })
   })
 
-  // ...and on failure surfaces the backend's (already-sanitized) reason, never a
-  // fallback to some other binary's list.
-  test('a failed model fetch shows the backend reason, not a generic line (P2-4)', async () => {
+  // ...and on failure stays on that runtime while routing wire text through the
+  // shared localized ErrorBanner.
+  test('a failed model fetch shows localized runtime copy and hides the backend reason', async () => {
+    await i18n.changeLanguage('en-US')
+    const raw = 'opencode models exited 4: provider config missing'
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = typeof input === 'string' ? input : (input as URL | Request).toString()
       if (url.includes('/api/runtime/models')) {
@@ -139,7 +142,7 @@ describe('ModelSelect — runtime namespace (RFC-111)', () => {
           JSON.stringify({
             ok: false,
             code: 'opencode-models-failed',
-            message: 'opencode models exited 4: provider config missing',
+            message: raw,
           }),
           { status: 502, headers: { 'content-type': 'application/json' } },
         )
@@ -147,7 +150,13 @@ describe('ModelSelect — runtime namespace (RFC-111)', () => {
       return jsonResponse({})
     })
     wrap(<ModelSelect runtimeName="oc-fork" value={undefined} onChange={() => {}} />)
-    expect(await screen.findByText(/provider config missing/i)).toBeTruthy()
+    expect(await screen.findByText('Failed to fetch the model list.')).toBeTruthy()
+    expect(
+      screen.getByText(
+        'Check that the runtime works and the network / proxy is reachable, then retry.',
+      ),
+    ).toBeTruthy()
+    expect(document.body.textContent).not.toContain(raw)
   })
 })
 

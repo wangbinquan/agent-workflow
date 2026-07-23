@@ -14,6 +14,7 @@ import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import { startAgentTask } from '@/services/agentLaunch'
 import { startTask } from '@/services/task'
 import { startWorkgroupTask } from '@/services/workgroup/launch'
+import { resolveOpencodeCmd } from '@/util/opencode'
 import type {
   ScheduledAgentPayload,
   ScheduledWorkgroupPayload,
@@ -28,7 +29,7 @@ import type {
 export function buildScheduleLaunch(db: DbClient, configPath: string): BuildScheduleLaunch {
   return (ownerUserId, scheduledTaskId) => async (kind, payload, actor: Actor) => {
     const deps = {
-      ...buildStartTaskDeps(db, configPath, ownerUserId),
+      ...buildStartTaskDeps(db, configPath, ownerUserId, resolveOpencodeCmd(configPath)),
       scheduledTaskId,
     }
     if (kind === 'agent') {

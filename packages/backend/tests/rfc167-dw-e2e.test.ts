@@ -28,6 +28,7 @@ import {
 } from '@agent-workflow/shared'
 import { buildActor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { nodeRuns, tasks, workflows, workgroupTaskState } from '../src/db/schema'
 import { loadWorkgroupTaskState } from '../src/services/workgroup/state'
 import { createAgent } from '../src/services/agent'
@@ -110,6 +111,7 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
   test('generate → confirm → execute: one task crosses all three phases to done', async () => {
     const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc167-e2e-'))
     const db = createInMemoryDb(MIGRATIONS)
+    await seedTestDefaultOpencodeRuntime(db)
     try {
       const plannerId = await seedPlannerAgent(db)
       const group = await createWorkgroup(db, {
@@ -232,6 +234,7 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
     const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc167-e2e-rec-'))
     const repo = mkdtempSync(join(tmpdir(), 'aw-rfc167-e2e-repo-'))
     const db = createInMemoryDb(MIGRATIONS)
+    await seedTestDefaultOpencodeRuntime(db)
     try {
       const plannerId = await seedPlannerAgent(db)
       await git('-C', repo, 'init', '-b', 'main', '-q')

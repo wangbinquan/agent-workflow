@@ -22,6 +22,7 @@ import {
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import {
   cachedRepos,
   memories,
@@ -48,6 +49,7 @@ interface Harness {
 
 async function buildHarness(): Promise<Harness> {
   const db = createInMemoryDb(MIGRATIONS)
+  await seedTestDefaultOpencodeRuntime(db)
   const app = createApp({
     token: DAEMON_TOKEN,
     configPath: '/tmp/aw-rfc190-config-never-used.json',

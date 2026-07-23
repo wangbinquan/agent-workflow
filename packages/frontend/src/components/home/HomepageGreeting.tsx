@@ -22,10 +22,12 @@ import type {
   RuntimeStatusEntry,
   RuntimesStatusResponse,
 } from '@agent-workflow/shared'
+import { isExecutionIdentityFailureCode } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { hasSeenTour } from '@/components/tour/SpotlightTour'
 import { pickGreetingKey } from '@/lib/homepage'
+import { describeTaskFailure } from '@/lib/task-failure'
 import { PipelineHero } from './PipelineHero'
 import { useOverview } from './useOverview'
 
@@ -72,10 +74,16 @@ interface RuntimeItemView {
   severity: Severity
   muted: boolean
   text: string
+  failure?: RuntimeFailureView
+}
+
+interface RuntimeFailureView {
+  title: string
+  hint?: string
 }
 
 type RuntimesView =
-  | { kind: 'single'; severity: Severity; text: string }
+  | { kind: 'single'; severity: Severity; text: string; failure?: RuntimeFailureView }
   | { kind: 'items'; items: RuntimeItemView[] }
 
 /**
@@ -118,6 +126,7 @@ export function HomepageGreeting() {
             {view.kind === 'single' ? (
               <>
                 <Dot severity={view.severity} /> {view.text}
+                <RuntimeFailure failure={view.failure} />
               </>
             ) : (
               view.items.map((item, i) => (
@@ -129,6 +138,7 @@ export function HomepageGreeting() {
                   )}
                   <Dot severity={item.severity} />
                   <span className={item.muted ? 'muted' : undefined}>{item.text}</span>
+                  <RuntimeFailure failure={item.failure} />
                 </span>
               ))
             )}
@@ -205,10 +215,30 @@ function Dot({ severity }: { severity: Severity }) {
   )
 }
 
+function RuntimeFailure({ failure }: { failure?: RuntimeFailureView }) {
+  if (failure === undefined) return null
+  return (
+    <span className="homepage__runtime-failure">
+      {' — '}
+      {failure.title}
+      {failure.hint !== undefined && ` ${failure.hint}`}
+    </span>
+  )
+}
+
 /** ok → green; missing default → fault; missing non-default → soft (D3). */
 function itemSeverity(row: Pick<RuntimeStatusEntry, 'ok' | 'isDefault'>): Severity {
   if (row.ok) return 'ok'
   return row.isDefault ? 'fault' : 'soft'
+}
+
+function runtimeFailure(row: RuntimeStatusEntry): RuntimeFailureView | undefined {
+  if (row.ok || !isExecutionIdentityFailureCode(row.failureCode)) return undefined
+  const copy = describeTaskFailure({ failureCode: row.failureCode })
+  return {
+    title: copy.title,
+    ...(copy.hint !== undefined ? { hint: copy.hint } : {}),
+  }
 }
 
 function describeRuntimes(
@@ -239,6 +269,7 @@ function describeRuntimes(
     // shadow a red default-runtime fault (design D1 / Codex gate F5).
     const fault = rows.find((r) => !r.ok && r.isDefault)
     const worst = fault ?? rows.find((r) => !r.ok)
+    const failure = worst === undefined ? undefined : runtimeFailure(worst)
     return {
       kind: 'single',
       severity: fault !== undefined ? 'fault' : 'soft',
@@ -247,20 +278,25 @@ function describeRuntimes(
         total: rows.length,
         name: worst?.name ?? '',
       }),
+      ...(failure !== undefined ? { failure } : {}),
     }
   }
   return {
     kind: 'items',
-    items: rows.map((row) => ({
-      key: row.name,
-      severity: itemSeverity(row),
-      muted: !row.ok && !row.isDefault,
-      text: row.ok
-        ? row.version !== null
-          ? t('home.runtime.item.ready', { name: row.name, version: row.version })
-          : t('home.runtime.item.readyNoVersion', { name: row.name })
-        : t('home.runtime.item.missing', { name: row.name }),
-    })),
+    items: rows.map((row) => {
+      const failure = runtimeFailure(row)
+      return {
+        key: row.name,
+        severity: itemSeverity(row),
+        muted: !row.ok && !row.isDefault,
+        ...(failure !== undefined ? { failure } : {}),
+        text: row.ok
+          ? row.version !== null
+            ? t('home.runtime.item.ready', { name: row.name, version: row.version })
+            : t('home.runtime.item.readyNoVersion', { name: row.name })
+          : t('home.runtime.item.missing', { name: row.name }),
+      }
+    }),
   }
 }
 

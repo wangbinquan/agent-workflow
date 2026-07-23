@@ -66,7 +66,7 @@ concurrency:
 env:
   # Match the main CI runtime probe instead of letting an unrelated `latest`
   # release change screenshot startup behavior between otherwise identical runs.
-  OPENCODE_VERSION: '1.15.5'
+  OPENCODE_VERSION: '1.18.3'
 
 jobs:
   visual-regression:

@@ -41,6 +41,7 @@ import {
   assertNoPromptSignalRefs,
 } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
+import { createHash, randomBytes } from 'node:crypto'
 import { rmSync } from 'node:fs'
 import { join } from 'node:path'
 import type { DbClient } from '@/db/client'
@@ -98,6 +99,24 @@ import {
 import type { FailureCode, InjectedMemorySnapshot } from '@agent-workflow/shared'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 import { loadRunEnvelopeNonce } from '@/services/nodeRunMint'
+import {
+  claimNewOpencodeSession,
+  confirmOpencodeSessionResume,
+  getOpencodeSessionOwner,
+  preclaimOpencodeSessionResume,
+  releaseOpencodeSessionLease,
+  type OpencodeSessionLeaseToken,
+} from '@/services/opencodeSessionOwner'
+import { ControlMarkerTracker, writeControlAckExclusive } from './runtime/opencode/controlProtocol'
+import {
+  ExecutionIdentityFailure,
+  parseExecutionIdentityFailureLine,
+} from './runtime/opencode/failure'
+import {
+  isExecutionIdentityFailureCode,
+  type ExecutionIdentityFailureCode,
+} from '@agent-workflow/shared'
+import { isProductionOpencodeCommand } from '@/util/opencode'
 
 // RFC-143 PR-4: SkillSource / ResolvedSkill moved to runtime/types.ts (drivers
 // type their skill inputs there); re-exported so scheduler/tests keep resolving.
@@ -313,6 +332,12 @@ export interface RunNodeOptions {
    */
   opencodeCmd?: string[]
   /**
+   * RFC-224 explicit dependency-injection seam. Production callers never set
+   * it; tests that need the historical unverified OpenCode plan can opt out
+   * without relying on command-name/path conventions.
+   */
+  testOnlyUnverifiedRuntime?: boolean
+  /**
    * RFC-111: generic runtime-binary head override for TESTS only (mock-claude /
    * a future mock). Production never sets it → claude resolves to `['claude']`
    * (PATH) and the subscription credential bridge runs. Its presence is the
@@ -469,6 +494,179 @@ export interface RunResult {
   clarify?: {
     questions: ClarifyQuestion[]
     truncationWarnings: ClarifyTruncationWarning[]
+  }
+}
+
+type OpencodeSessionControl = Extract<
+  NonNullable<SpawnPlan['control']>,
+  { kind: 'opencode-session' }
+>
+type OpencodeResumeOwner = NonNullable<ReturnType<typeof getOpencodeSessionOwner>>
+
+/**
+ * Mutable state for the launcher/runner ownership barrier. It deliberately
+ * survives an acknowledgement-write failure: a new-session claim may already
+ * have committed by then, and the runner must retain the exact lease token so
+ * its post-reap finalization path can release it.
+ */
+export interface RunnerOpencodeControlState {
+  tracker: ControlMarkerTracker
+  leaseToken?: OpencodeSessionLeaseToken
+  sessionId?: string
+  ready: boolean
+}
+
+export function createRunnerOpencodeControlState(
+  leaseToken?: OpencodeSessionLeaseToken,
+): RunnerOpencodeControlState {
+  return {
+    tracker: new ControlMarkerTracker(),
+    ...(leaseToken === undefined ? {} : { leaseToken }),
+    ready: false,
+  }
+}
+
+/**
+ * The verified path is the production default. An explicitly injected,
+ * unbranded `opencodeCmd` and the named test seam retain the historical mock
+ * runner so existing dependency-injected tests never acquire production
+ * session leases or touch the persistent store.
+ */
+export function requiresVerifiedOpencodeBarrier(input: {
+  runtime: RuntimeKind
+  opencodeCmd?: readonly string[]
+  testOnlyUnverifiedRuntime?: boolean
+}): boolean {
+  return (
+    input.runtime === 'opencode' &&
+    input.testOnlyUnverifiedRuntime !== true &&
+    !(input.opencodeCmd !== undefined && !isProductionOpencodeCommand(input.opencodeCmd))
+  )
+}
+
+/** Return only the closed, non-secret RFC-224 failure vocabulary. */
+export function executionIdentityFailureCodeOf(
+  error: unknown,
+): ExecutionIdentityFailureCode | undefined {
+  if (error instanceof ExecutionIdentityFailure) return error.code
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    isExecutionIdentityFailureCode(error.code)
+  ) {
+    return error.code
+  }
+  return undefined
+}
+
+/**
+ * Consume one stderr line at the ownership barrier. Ordinary stderr is handed
+ * back to the caller for persistence. Control frames are consumed here and
+ * never become node_run_events.
+ */
+export function processRunnerOpencodeControlLine(input: {
+  db: DbClient
+  taskId: string
+  nodeId: string
+  nodeRunId: string
+  control: OpencodeSessionControl
+  resumeOwner?: OpencodeResumeOwner
+  state: RunnerOpencodeControlState
+  line: string
+}): { kind: 'stderr'; line: string } | { kind: 'session-ready'; sessionId: string } {
+  const nack = (): void => {
+    try {
+      writeControlAckExclusive(input.control.ackPath, {
+        decision: 'nack',
+        nonce: input.control.nonce,
+      })
+    } catch {
+      // The first writer wins. A duplicate marker arrives after the ok ack
+      // exists, while an attacker-created/symlink ack must remain untouched.
+    }
+  }
+
+  try {
+    const parsed = input.state.tracker.accept(input.line)
+    if (parsed.kind === 'stderr') return parsed
+    const marker = parsed.marker
+    if (
+      marker.kind !== input.control.mode ||
+      marker.nodeRunId !== input.nodeRunId ||
+      marker.leaseNonceDigest !== input.control.leaseNonceDigest
+    ) {
+      throw new ExecutionIdentityFailure('execution-identity-control-failed')
+    }
+
+    let token: OpencodeSessionLeaseToken
+    if (input.control.mode === 'new') {
+      if (
+        input.control.expectedSessionId !== undefined ||
+        input.control.createdNodeRunId !== input.nodeRunId ||
+        input.state.leaseToken !== undefined
+      ) {
+        throw new ExecutionIdentityFailure('execution-identity-control-failed')
+      }
+      claimNewOpencodeSession(input.db, {
+        sessionId: marker.sessionId,
+        taskId: input.taskId,
+        nodeId: input.nodeId,
+        currentNodeRunId: input.nodeRunId,
+        identityDigest: input.control.identityDigest,
+        officialBuildDigest: input.control.officialBuildDigest,
+        sessionContractDigest: input.control.sessionContractDigest,
+        sessionStoreKey: input.control.sessionStoreKey,
+        projectId: marker.projectId,
+        opencodeVersion: marker.version,
+        leaseNonceDigest: input.control.leaseNonceDigest,
+      })
+      token = {
+        sessionId: marker.sessionId,
+        nodeRunId: input.nodeRunId,
+        leaseNonceDigest: input.control.leaseNonceDigest,
+      }
+      // Stamp before the ack write. If O_EXCL fails, finally still owns the
+      // committed lease and can release it after the launcher is fully reaped.
+      input.state.leaseToken = token
+    } else {
+      const expectedSessionId = input.control.expectedSessionId
+      const owner = input.resumeOwner
+      token = input.state.leaseToken as OpencodeSessionLeaseToken
+      if (
+        expectedSessionId === undefined ||
+        owner === undefined ||
+        marker.sessionId !== expectedSessionId ||
+        marker.projectId !== owner.projectId ||
+        marker.version !== owner.opencodeVersion ||
+        owner.sessionId !== expectedSessionId ||
+        owner.taskId !== input.taskId ||
+        owner.nodeId !== input.nodeId ||
+        input.control.createdNodeRunId !== owner.createdNodeRunId ||
+        input.control.identityDigest !== owner.identityDigest ||
+        input.control.officialBuildDigest !== owner.officialBuildDigest ||
+        input.control.sessionContractDigest !== owner.sessionContractDigest ||
+        input.control.sessionStoreKey !== owner.sessionStoreKey ||
+        token === undefined ||
+        token.sessionId !== expectedSessionId ||
+        token.nodeRunId !== input.nodeRunId ||
+        token.leaseNonceDigest !== input.control.leaseNonceDigest
+      ) {
+        throw new ExecutionIdentityFailure('execution-identity-control-failed')
+      }
+      confirmOpencodeSessionResume(input.db, token)
+    }
+
+    input.state.sessionId = marker.sessionId
+    writeControlAckExclusive(input.control.ackPath, {
+      decision: 'ok',
+      nonce: input.control.nonce,
+    })
+    input.state.ready = true
+    return { kind: 'session-ready', sessionId: marker.sessionId }
+  } catch {
+    nack()
+    throw new ExecutionIdentityFailure('execution-identity-control-failed')
   }
 }
 
@@ -807,6 +1005,104 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     status: 'running',
   })
 
+  const effectiveResumeSessionId =
+    opts.promptMode?.kind === 'followup' ? opts.promptMode.resumeSessionId : opts.resumeSessionId
+  const verifiedOpencode = requiresVerifiedOpencodeBarrier({
+    runtime,
+    ...(opts.opencodeCmd === undefined ? {} : { opencodeCmd: opts.opencodeCmd }),
+    ...(opts.testOnlyUnverifiedRuntime === undefined
+      ? {}
+      : { testOnlyUnverifiedRuntime: opts.testOnlyUnverifiedRuntime }),
+  })
+  const opencodeControlNonce = verifiedOpencode ? randomBytes(32).toString('base64url') : undefined
+  const opencodeLeaseNonceDigest =
+    opencodeControlNonce === undefined
+      ? undefined
+      : createHash('sha256').update(opencodeControlNonce).digest('hex')
+  let opencodeResumeOwner: ReturnType<typeof getOpencodeSessionOwner>
+  let controlState = createRunnerOpencodeControlState()
+
+  const releaseHeldLease = (): void => {
+    const token = controlState.leaseToken
+    if (token === undefined) return
+    try {
+      const released = releaseOpencodeSessionLease(opts.db, token)
+      if (!released) {
+        log.warn('opencode-session-lease-release-cas-missed', {
+          nodeRunId: opts.nodeRunId,
+          sessionId: token.sessionId,
+        })
+      }
+      // Success OR a triple-CAS miss proves this exact token is no longer the
+      // holder. On a thrown DB error retain it so the awaited plan finalizer
+      // can make one last compare-and-clear attempt.
+      controlState.leaseToken = undefined
+    } catch {
+      // Never include the thrown DB error: the stable event and exact ids are
+      // enough to diagnose this path without risking credential/path leakage.
+      log.warn('opencode-session-lease-release-failed', {
+        nodeRunId: opts.nodeRunId,
+        sessionId: token.sessionId,
+      })
+    }
+  }
+
+  // RFC-224: a resume lease is acquired before the verified builder may touch
+  // the persistent store, auth artifacts, SQLite, or server process.
+  if (verifiedOpencode && effectiveResumeSessionId !== undefined) {
+    try {
+      const owner = getOpencodeSessionOwner(opts.db, effectiveResumeSessionId)
+      if (owner === undefined) {
+        throw new ExecutionIdentityFailure('execution-identity-session-mismatch')
+      }
+      preclaimOpencodeSessionResume(opts.db, {
+        sessionId: owner.sessionId,
+        taskId: owner.taskId,
+        nodeId: owner.nodeId,
+        createdNodeRunId: owner.createdNodeRunId,
+        identityDigest: owner.identityDigest,
+        officialBuildDigest: owner.officialBuildDigest,
+        sessionContractDigest: owner.sessionContractDigest,
+        sessionStoreKey: owner.sessionStoreKey,
+        projectId: owner.projectId,
+        opencodeVersion: owner.opencodeVersion,
+        currentNodeRunId: opts.nodeRunId,
+        leaseNonceDigest: opencodeLeaseNonceDigest!,
+      })
+      opencodeResumeOwner = owner
+      controlState = createRunnerOpencodeControlState({
+        sessionId: owner.sessionId,
+        nodeRunId: opts.nodeRunId,
+        leaseNonceDigest: opencodeLeaseNonceDigest!,
+      })
+    } catch (error) {
+      const failureCode =
+        executionIdentityFailureCodeOf(error) ?? 'execution-identity-session-mismatch'
+      releaseHeldLease()
+      await setNodeRunStatus({
+        db: opts.db,
+        nodeRunId: opts.nodeRunId,
+        to: 'failed',
+        allowedFrom: ['running'],
+        reason: failureCode,
+        extra: {
+          finishedAt: Date.now(),
+          errorMessage: failureCode,
+          failureCode,
+        },
+      })
+      return {
+        status: 'failed',
+        exitCode: null,
+        outputs: {},
+        tokenUsage: { input: 0, output: 0, cacheCreate: 0, cacheRead: 0, total: 0 },
+        prompt,
+        errorMessage: failureCode,
+        failureCode,
+      }
+    }
+  }
+
   // 4. Spawn the agent runtime — one kind-blind call (RFC-143 PR-4). The driver
   // owns its runtime's ENTIRE assembly: opencode builds + mutates + serializes
   // the inline config (incl. RFC-029 inventory plugin + RFC-041 memory append)
@@ -827,10 +1123,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       // RFC-148: a followup dispatch carries its session INSIDE the arm
       // (unrepresentable without one); inline clarify resume keeps the
       // top-level field. Exactly one is set per dispatch by the scheduler.
-      resumeSessionId:
-        opts.promptMode?.kind === 'followup'
-          ? opts.promptMode.resumeSessionId
-          : opts.resumeSessionId,
+      resumeSessionId: effectiveResumeSessionId,
       worktreePath: opts.worktreePath,
       runRoot,
       configDir,
@@ -842,21 +1135,49 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       wantsInventory,
       nodeRunId: opts.nodeRunId,
       log,
+      appHome: opts.appHome,
+      taskId: opts.taskId,
+      nodeId: opts.nodeId,
+      ...(opencodeControlNonce === undefined
+        ? {}
+        : { opencodeControlNonce, opencodeLeaseNonceDigest: opencodeLeaseNonceDigest! }),
+      ...(opencodeResumeOwner === undefined ? {} : { opencodeResumeOwner }),
+      ...(opts.testOnlyUnverifiedRuntime === undefined
+        ? {}
+        : { testOnlyUnverifiedRuntime: opts.testOnlyUnverifiedRuntime }),
     })
   } catch (err) {
     // RFC-143 §6: a driver that fails to ASSEMBLE the spawn (system-prompt-file
     // write EACCES, config-dir prep failure) lands on the same failure mode as
     // an unspawnable binary below — mark failed cleanly instead of throwing out
     // of runNode and stranding the row at 'running'.
-    const errorMessage = `spawn ${runtime} failed: ${err instanceof Error ? err.message : String(err)}`
-    log.warn('runtime-spawn-failed', { nodeRunId: opts.nodeRunId, runtime, errorMessage })
+    const identityFailure =
+      executionIdentityFailureCodeOf(err) ??
+      (verifiedOpencode ? ('execution-identity-bootstrap-failed' as const) : undefined)
+    const errorMessage =
+      identityFailure ??
+      `spawn ${runtime} failed: ${err instanceof Error ? err.message : String(err)}`
+    if (identityFailure === undefined) {
+      log.warn('runtime-spawn-failed', { nodeRunId: opts.nodeRunId, runtime, errorMessage })
+    } else {
+      log.warn('runtime-identity-failed', {
+        nodeRunId: opts.nodeRunId,
+        runtime,
+        failureCode: identityFailure,
+      })
+    }
+    releaseHeldLease()
     await setNodeRunStatus({
       db: opts.db,
       nodeRunId: opts.nodeRunId,
       to: 'failed',
       allowedFrom: ['running', 'pending'],
       reason: 'runtime-spawn-failed',
-      extra: { finishedAt: Date.now(), errorMessage },
+      extra: {
+        finishedAt: Date.now(),
+        errorMessage,
+        ...(identityFailure === undefined ? {} : { failureCode: identityFailure }),
+      },
     })
     return {
       status: 'failed',
@@ -865,9 +1186,71 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       tokenUsage: { input: 0, output: 0, cacheCreate: 0, cacheRead: 0, total: 0 },
       prompt,
       errorMessage,
+      ...(identityFailure === undefined ? {} : { failureCode: identityFailure }),
     }
   }
   const { cmd, env } = plan
+  let planArtifactsCleaned = false
+  const finalizePlan = async (releaseLease: boolean): Promise<void> => {
+    if (!planArtifactsCleaned) {
+      planArtifactsCleaned = true
+      let cleanupSucceeded = true
+      try {
+        await plan.cleanup?.()
+      } catch {
+        cleanupSucceeded = false
+        log.warn('runtime-plan-cleanup-failed', { nodeRunId: opts.nodeRunId, runtime })
+      }
+      // A verified plan refuses cleanup while its lifecycle lock remains.
+      // Preserve the whole run root (binary/wrapper/manifest evidence) in that
+      // case; boot recovery owns the exact stale lock/store transition.
+      if (cleanupSucceeded) {
+        try {
+          rmSync(runRoot, { recursive: true, force: true })
+        } catch {
+          // Best-effort cleanup preserves the historical runner contract.
+        }
+      }
+    }
+    if (releaseLease) releaseHeldLease()
+  }
+  const opencodeControl = plan.control?.kind === 'opencode-session' ? plan.control : undefined
+  if (
+    verifiedOpencode &&
+    (opencodeControl === undefined ||
+      plan.sessionStore === undefined ||
+      opencodeControl.mode !== (effectiveResumeSessionId === undefined ? 'new' : 'resume') ||
+      opencodeControl.nonce !== opencodeControlNonce ||
+      opencodeControl.leaseNonceDigest !== opencodeLeaseNonceDigest ||
+      (effectiveResumeSessionId !== undefined &&
+        opencodeControl.expectedSessionId !== effectiveResumeSessionId) ||
+      (opencodeResumeOwner !== undefined &&
+        (opencodeControl.createdNodeRunId !== opencodeResumeOwner.createdNodeRunId ||
+          opencodeControl.identityDigest !== opencodeResumeOwner.identityDigest ||
+          opencodeControl.officialBuildDigest !== opencodeResumeOwner.officialBuildDigest ||
+          opencodeControl.sessionContractDigest !== opencodeResumeOwner.sessionContractDigest ||
+          opencodeControl.sessionStoreKey !== opencodeResumeOwner.sessionStoreKey)))
+  ) {
+    const failureCode = 'execution-identity-control-failed' as const
+    await finalizePlan(true)
+    await setNodeRunStatus({
+      db: opts.db,
+      nodeRunId: opts.nodeRunId,
+      to: 'failed',
+      allowedFrom: ['running'],
+      reason: failureCode,
+      extra: { finishedAt: Date.now(), errorMessage: failureCode, failureCode },
+    })
+    return {
+      status: 'failed',
+      exitCode: null,
+      outputs: {},
+      tokenUsage: { input: 0, output: 0, cacheCreate: 0, cacheRead: 0, total: 0 },
+      prompt,
+      errorMessage: failureCode,
+      failureCode,
+    }
+  }
   // Diagnostic: surface the model/variant/temperature/mcp/plugin facts that
   // actually landed in the driver's spawn assembly (plan.diagnostics, RFC-143
   // §4.4 — same fields the runner used to derive from the inline config). Lets
@@ -879,9 +1262,27 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // spawnBinaryPath / version-registry / logs; only the argv handed to the OS
   // gets the sandbox head. No ctx AND no daemon provider (tests, sandboxMode
   // off) → identical to the pre-RFC-205 spawn.
-  const sandboxCtx =
+  const baseSandboxCtx =
     opts.sandbox ??
     buildRunSandboxCtx(getSandboxProvider(), opts.taskId, opts.worktreePath, runRoot)
+  const sandboxCtx =
+    baseSandboxCtx === undefined
+      ? undefined
+      : {
+          ...baseSandboxCtx,
+          taskWorktrees: [
+            ...new Set([
+              ...baseSandboxCtx.taskWorktrees,
+              ...(plan.sessionStore === undefined ? [] : [plan.sessionStore.root]),
+            ]),
+          ],
+          readOnlySubtrees: [
+            ...new Set([
+              ...(baseSandboxCtx.readOnlySubtrees ?? []),
+              ...(plan.readOnlySubtrees ?? []),
+            ]),
+          ],
+        }
   if (sandboxCtx !== undefined && sandboxCtx.mode === 'warn' && !sandboxCtx.status.available) {
     // Degraded: mechanism missing under warn — run unsandboxed but LOUDLY.
     // One open alert per task (rule-deduped), so a 50-node task doesn't spam.
@@ -909,18 +1310,28 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // auto-resume. Mark the node failed cleanly (same shape as an unspawnable binary).
   if (sandboxEnforceBlocked(sandboxCtx)) {
     const detail = sandboxCtx?.status.detail
+    const identityFailure =
+      opencodeControl === undefined ? undefined : ('execution-identity-sandbox-required' as const)
     const errorMessage =
+      identityFailure ??
       `sandbox mode is 'enforce' but the platform sandbox is unavailable` +
-      `${detail != null ? ` (${detail})` : ''}; refusing to run the agent unsandboxed`
-    log.warn('sandbox-enforce-unavailable', { nodeRunId: opts.nodeRunId, errorMessage })
-    plan.cleanup?.()
+        `${detail != null ? ` (${detail})` : ''}; refusing to run the agent unsandboxed`
+    log.warn('sandbox-enforce-unavailable', {
+      nodeRunId: opts.nodeRunId,
+      ...(identityFailure === undefined ? { errorMessage } : { failureCode: identityFailure }),
+    })
+    await finalizePlan(true)
     await setNodeRunStatus({
       db: opts.db,
       nodeRunId: opts.nodeRunId,
       to: 'failed',
       allowedFrom: ['running', 'pending'],
       reason: 'sandbox-unavailable',
-      extra: { finishedAt: Date.now(), errorMessage },
+      extra: {
+        finishedAt: Date.now(),
+        errorMessage,
+        ...(identityFailure === undefined ? {} : { failureCode: identityFailure }),
+      },
     })
     return {
       status: 'failed',
@@ -929,6 +1340,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       tokenUsage: { input: 0, output: 0, cacheCreate: 0, cacheRead: 0, total: 0 },
       prompt,
       errorMessage,
+      ...(identityFailure === undefined ? {} : { failureCode: identityFailure }),
     }
   }
   const spawnCmd = wrapSandbox(cmd, sandboxCtx)
@@ -957,16 +1369,28 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     // the node failed cleanly instead of throwing out of runNode and stranding
     // the row at 'running' (opencode is hard-required at startup, so in practice
     // this only fires for claude). The spawn driver's temp dir is cleaned up.
-    const errorMessage = `spawn ${runtime} failed: ${err instanceof Error ? err.message : String(err)}`
-    log.warn('runtime-spawn-failed', { nodeRunId: opts.nodeRunId, runtime, errorMessage })
-    plan.cleanup?.()
+    const identityFailure =
+      opencodeControl === undefined ? undefined : ('execution-identity-bootstrap-failed' as const)
+    const errorMessage =
+      identityFailure ??
+      `spawn ${runtime} failed: ${err instanceof Error ? err.message : String(err)}`
+    log.warn('runtime-spawn-failed', {
+      nodeRunId: opts.nodeRunId,
+      runtime,
+      ...(identityFailure === undefined ? { errorMessage } : { failureCode: identityFailure }),
+    })
+    await finalizePlan(true)
     await setNodeRunStatus({
       db: opts.db,
       nodeRunId: opts.nodeRunId,
       to: 'failed',
       allowedFrom: ['running', 'pending'],
       reason: 'runtime-spawn-failed',
-      extra: { finishedAt: Date.now(), errorMessage },
+      extra: {
+        finishedAt: Date.now(),
+        errorMessage,
+        ...(identityFailure === undefined ? {} : { failureCode: identityFailure }),
+      },
     })
     return {
       status: 'failed',
@@ -975,797 +1399,1008 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       tokenUsage: { input: 0, output: 0, cacheCreate: 0, cacheRead: 0, total: 0 },
       prompt,
       errorMessage,
+      ...(identityFailure === undefined ? {} : { failureCode: identityFailure }),
     }
   }
 
-  // RFC-111 D12: stream the prompt into the child's stdin then close it (claude).
-  if (plan.stdin?.mode === 'pipe') {
-    const sink = child.stdin as { write: (s: string) => void; end: () => void } | undefined
-    if (sink !== undefined) {
-      sink.write(plan.stdin.data)
-      sink.end()
+  let childFullyReaped = false
+  let preserveLiveRuntimeState = false
+  let normalSpawnPathCompleted = false
+  let postSpawnFailed = false
+  let postSpawnError: unknown
+  const spawnedCleanupHooks: Array<() => void> = []
+  const spawnedPumps: LinePump[] = []
+  try {
+    // RFC-111 D12: stream the prompt into the child's stdin then close it (claude).
+    if (plan.stdin?.mode === 'pipe') {
+      const sink = child.stdin as { write: (s: string) => void; end: () => void } | undefined
+      if (sink !== undefined) {
+        sink.write(plan.stdin.data)
+        sink.end()
+      }
     }
-  }
 
-  if (typeof child.pid === 'number') {
-    // RFC-108 T9 (AR-14): persist the spawned binary path (cmd[0]) alongside pid
-    // so the stale-process reaper can match a live pid against THIS specific
-    // binary, not a fuzzy regex — telling "our child still alive" from a recycled pid.
-    await opts.db
-      .update(nodeRuns)
-      .set({ pid: child.pid, spawnBinaryPath: cmd[0] })
-      .where(eq(nodeRuns.id, opts.nodeRunId))
-  }
+    if (typeof child.pid === 'number') {
+      // RFC-108 T9 (AR-14): persist the spawned binary path (cmd[0]) alongside pid
+      // so the stale-process reaper can match a live pid against THIS specific
+      // binary, not a fuzzy regex — telling "our child still alive" from a recycled pid.
+      await opts.db
+        .update(nodeRuns)
+        .set({ pid: child.pid, spawnBinaryPath: cmd[0] })
+        .where(eq(nodeRuns.id, opts.nodeRunId))
+    }
 
-  // 5. Wire up cancellation + timeout.
-  //
-  // RFC-098 WP-8 (audit S-15): both paths now go through the SIGTERM →
-  // grace → SIGKILL escalation (group-kill first, see killTree) instead of
-  // a single fire-and-forget SIGTERM, and arm a final reap deadline
-  // (grace + margin) so a child that ignores even SIGKILL cannot wedge the
-  // runner forever (see §7 below).
-  let aborted = false
-  let timedOut = false
-  const graceMs = opts.killEscalationGraceMs ?? KILL_ESCALATION_GRACE_MS
+    // 5. Wire up cancellation + timeout.
+    //
+    // RFC-098 WP-8 (audit S-15): both paths now go through the SIGTERM →
+    // grace → SIGKILL escalation (group-kill first, see killTree) instead of
+    // a single fire-and-forget SIGTERM, and arm a final reap deadline
+    // (grace + margin) so a child that ignores even SIGKILL cannot wedge the
+    // runner forever (see §7 below).
+    let aborted = false
+    let timedOut = false
+    const graceMs = opts.killEscalationGraceMs ?? KILL_ESCALATION_GRACE_MS
 
-  let reapDeadlineTimer: ReturnType<typeof setTimeout> | null = null
-  let reapDeadlineFire: (() => void) | undefined
-  const reapDeadline = new Promise<'deadline'>((res) => {
-    reapDeadlineFire = () => res('deadline')
-  })
-  const armReapDeadline = (): void => {
-    if (reapDeadlineTimer !== null) return
-    reapDeadlineTimer = setTimeout(() => reapDeadlineFire?.(), graceMs + FINAL_REAP_MARGIN_MS)
-    reapDeadlineTimer.unref()
-  }
-
-  // Initializer cast keeps TS from flow-narrowing to `null` at the §7 read —
-  // the assignment only ever happens inside the abort/timeout closures.
-  let escalation = null as { cancel: () => void } | null
-  const startKill = (): void => {
-    if (escalation === null) escalation = armKillEscalation(child, log, graceMs)
-    armReapDeadline()
-  }
-
-  const onAbort = (): void => {
-    aborted = true
-    startKill()
-  }
-  if (opts.signal) {
-    if (opts.signal.aborted) onAbort()
-    else opts.signal.addEventListener('abort', onAbort)
-  }
-
-  const timeoutHandle =
-    opts.timeoutMs !== undefined
-      ? setTimeout(() => {
-          timedOut = true
-          startKill()
-        }, opts.timeoutMs)
-      : null
-
-  // 6. Stream stdout + stderr into node_run_events.
-  //    `--format json` makes opencode emit one JSON event per line; the
-  //    agent's text reply (which carries the <workflow-output> envelope)
-  //    is inside the `part.text` field of `text` events. We accumulate
-  //    text-event payloads here and parse the envelope from that buffer.
-  // RFC — bounded accumulator for the agent's text (the envelope is parsed from
-  // this at the end). A runaway/hostile child emitting millions of lines would
-  // grow an unbounded `string[]` and OOM the shared daemon. Keep a ROLLING TAIL:
-  // the winning <workflow-output> envelope is always the LAST one in the output,
-  // so the tail preserves it. Slicing only when the buffer reaches 2× the cap
-  // amortizes the copy cost. See design/test-guard-audit-2026-07-21 gap
-  // B4-runtime-6 / Top-14.
-  let agentTextBuf = ''
-  const appendAgentText = (s: string): void => {
-    agentTextBuf = appendBoundedTail(agentTextBuf, s, MAX_AGENT_TEXT_CHARS)
-  }
-  const tokenUsage: RunResult['tokenUsage'] = {
-    input: 0,
-    output: 0,
-    cacheCreate: 0,
-    cacheRead: 0,
-    total: 0,
-  }
-  let sessionId: string | undefined
-
-  // Throttled `node.status: running` re-ping so the SessionTab's `/session`
-  // query refreshes live while the parent opencode child is streaming events.
-  // Without this, the only mid-run broadcast came from RFC-048's subagent
-  // live poller (runner.ts §livePoller below) — but workflows whose worker
-  // never spawns a subagent produced ZERO mid-run broadcasts, so the
-  // conversation list in the Session tab sat stale until the user switched
-  // tabs and forced a remount-refetch. Cadence is intentionally coarser
-  // than per-line: opencode emits many events per agent message and React-
-  // Query would coalesce anyway, but cutting WS volume to ~2/s keeps the
-  // browser tab cheap. The terminal `node.status: done|failed|...` ping
-  // from the scheduler handles the trailing-edge flush.
-  const PARENT_BROADCAST_THROTTLE_MS = 500
-  let lastParentBroadcastTs = 0
-  const broadcastParentRunning = (): void => {
-    const now = Date.now()
-    if (now - lastParentBroadcastTs < PARENT_BROADCAST_THROTTLE_MS) return
-    lastParentBroadcastTs = now
-    taskBroadcaster.broadcast(TASK_CHANNEL(opts.taskId), {
-      id: -1,
-      type: 'node.status',
-      nodeRunId: opts.nodeRunId,
-      nodeId: opts.nodeId,
-      status: 'running',
+    let reapDeadlineTimer: ReturnType<typeof setTimeout> | null = null
+    spawnedCleanupHooks.push(() => {
+      if (reapDeadlineTimer !== null) clearTimeout(reapDeadlineTimer)
     })
-  }
+    let reapDeadlineFire: (() => void) | undefined
+    const reapDeadline = new Promise<'deadline'>((res) => {
+      reapDeadlineFire = () => res('deadline')
+    })
+    const armReapDeadline = (): void => {
+      if (reapDeadlineTimer !== null) return
+      reapDeadlineTimer = setTimeout(() => reapDeadlineFire?.(), graceMs + FINAL_REAP_MARGIN_MS)
+      reapDeadlineTimer.unref()
+    }
 
-  const stdoutPump = pumpLines(child.stdout, async (line) => {
-    // RFC-111 PR-A/B: normalize one stdout line through the frozen runtime's
-    // driver. `parseEvent` returns null for non-JSON / falsy-JSON lines, which
-    // routes them through the raw-text fallback exactly as the old inline
-    // opencode `if (evt) {...} else {...}` selection did.
-    const ev = driver.parseEvent(line)
-    if (ev) {
-      if (ev.sessionId !== undefined && sessionId === undefined) {
-        sessionId = ev.sessionId
-      }
-      if (ev.tokens) {
-        tokenUsage.input += ev.tokens.input
-        tokenUsage.output += ev.tokens.output
-        tokenUsage.cacheCreate += ev.tokens.cacheCreate
-        tokenUsage.cacheRead += ev.tokens.cacheRead
-        tokenUsage.total =
-          tokenUsage.input + tokenUsage.output + tokenUsage.cacheCreate + tokenUsage.cacheRead
-      }
-      if (typeof ev.text === 'string') appendAgentText(ev.text)
-      const ts = ev.timestamp ?? Date.now()
-      // RFC-027: tag every stdout-derived row with the (root) sessionID +
-      // parent_session_id=null so the SessionTab parser can bucket parent
-      // events against post-run captured child events without ambiguity.
-      const evtSessionId = ev.sessionId ?? sessionId ?? null
-      await opts.db.insert(nodeRunEvents).values({
+    // Initializer cast keeps TS from flow-narrowing to `null` at the §7 read —
+    // the assignment only ever happens inside the abort/timeout closures.
+    let escalation = null as { cancel: () => void } | null
+    spawnedCleanupHooks.push(() => escalation?.cancel())
+    const startKill = (): void => {
+      if (escalation === null) escalation = armKillEscalation(child, log, graceMs)
+      armReapDeadline()
+    }
+
+    const onAbort = (): void => {
+      aborted = true
+      startKill()
+    }
+    if (opts.signal) {
+      if (opts.signal.aborted) onAbort()
+      else opts.signal.addEventListener('abort', onAbort)
+      spawnedCleanupHooks.push(() => opts.signal?.removeEventListener('abort', onAbort))
+    }
+
+    const timeoutHandle =
+      opts.timeoutMs !== undefined
+        ? setTimeout(() => {
+            timedOut = true
+            startKill()
+          }, opts.timeoutMs)
+        : null
+    spawnedCleanupHooks.push(() => {
+      if (timeoutHandle !== null) clearTimeout(timeoutHandle)
+    })
+
+    // 6. Stream stdout + stderr into node_run_events.
+    //    `--format json` makes opencode emit one JSON event per line; the
+    //    agent's text reply (which carries the <workflow-output> envelope)
+    //    is inside the `part.text` field of `text` events. We accumulate
+    //    text-event payloads here and parse the envelope from that buffer.
+    // RFC — bounded accumulator for the agent's text (the envelope is parsed from
+    // this at the end). A runaway/hostile child emitting millions of lines would
+    // grow an unbounded `string[]` and OOM the shared daemon. Keep a ROLLING TAIL:
+    // the winning <workflow-output> envelope is always the LAST one in the output,
+    // so the tail preserves it. Slicing only when the buffer reaches 2× the cap
+    // amortizes the copy cost. See design/test-guard-audit-2026-07-21 gap
+    // B4-runtime-6 / Top-14.
+    let agentTextBuf = ''
+    const appendAgentText = (s: string): void => {
+      agentTextBuf = appendBoundedTail(agentTextBuf, s, MAX_AGENT_TEXT_CHARS)
+    }
+    const tokenUsage: RunResult['tokenUsage'] = {
+      input: 0,
+      output: 0,
+      cacheCreate: 0,
+      cacheRead: 0,
+      total: 0,
+    }
+    let sessionId: string | undefined
+    let launcherFailureCode: ExecutionIdentityFailureCode | undefined
+    let controlFailureCode: ExecutionIdentityFailureCode | undefined
+    const failControlBarrier = (): void => {
+      controlFailureCode ??= 'execution-identity-control-failed'
+      startKill()
+    }
+
+    // Throttled `node.status: running` re-ping so the SessionTab's `/session`
+    // query refreshes live while the parent opencode child is streaming events.
+    // Without this, the only mid-run broadcast came from RFC-048's subagent
+    // live poller (runner.ts §livePoller below) — but workflows whose worker
+    // never spawns a subagent produced ZERO mid-run broadcasts, so the
+    // conversation list in the Session tab sat stale until the user switched
+    // tabs and forced a remount-refetch. Cadence is intentionally coarser
+    // than per-line: opencode emits many events per agent message and React-
+    // Query would coalesce anyway, but cutting WS volume to ~2/s keeps the
+    // browser tab cheap. The terminal `node.status: done|failed|...` ping
+    // from the scheduler handles the trailing-edge flush.
+    const PARENT_BROADCAST_THROTTLE_MS = 500
+    let lastParentBroadcastTs = 0
+    const broadcastParentRunning = (): void => {
+      const now = Date.now()
+      if (now - lastParentBroadcastTs < PARENT_BROADCAST_THROTTLE_MS) return
+      lastParentBroadcastTs = now
+      taskBroadcaster.broadcast(TASK_CHANNEL(opts.taskId), {
+        id: -1,
+        type: 'node.status',
         nodeRunId: opts.nodeRunId,
-        ts,
-        kind: ev.kind,
-        payload: ev.rawLine,
-        sessionId: evtSessionId,
-        parentSessionId: null,
+        nodeId: opts.nodeId,
+        status: 'running',
       })
-      broadcastParentRunning()
-    } else {
-      // Non-JSON stdout lines shouldn't happen with --format json, but record
-      // them as kind=text for debugging.
+    }
+
+    const stdoutPump = pumpLines(child.stdout, async (line) => {
+      if (opencodeControl !== undefined && !controlState.ready) {
+        // The verified launcher blocks on the runner's ack before it may POST a
+        // prompt or emit model JSONL. Any stdout before readiness is therefore a
+        // bypass attempt, not user-visible output.
+        failControlBarrier()
+        return
+      }
+      // RFC-111 PR-A/B: normalize one stdout line through the frozen runtime's
+      // driver. `parseEvent` returns null for non-JSON / falsy-JSON lines, which
+      // routes them through the raw-text fallback exactly as the old inline
+      // opencode `if (evt) {...} else {...}` selection did.
+      const ev = driver.parseEvent(line)
+      if (ev) {
+        if (ev.sessionId !== undefined) {
+          if (
+            opencodeControl !== undefined &&
+            sessionId !== undefined &&
+            ev.sessionId !== sessionId
+          ) {
+            failControlBarrier()
+            return
+          }
+          if (sessionId === undefined) sessionId = ev.sessionId
+        }
+        if (ev.tokens) {
+          tokenUsage.input += ev.tokens.input
+          tokenUsage.output += ev.tokens.output
+          tokenUsage.cacheCreate += ev.tokens.cacheCreate
+          tokenUsage.cacheRead += ev.tokens.cacheRead
+          tokenUsage.total =
+            tokenUsage.input + tokenUsage.output + tokenUsage.cacheCreate + tokenUsage.cacheRead
+        }
+        if (typeof ev.text === 'string') appendAgentText(ev.text)
+        const ts = ev.timestamp ?? Date.now()
+        // RFC-027: tag every stdout-derived row with the (root) sessionID +
+        // parent_session_id=null so the SessionTab parser can bucket parent
+        // events against post-run captured child events without ambiguity.
+        const evtSessionId = ev.sessionId ?? sessionId ?? null
+        await opts.db.insert(nodeRunEvents).values({
+          nodeRunId: opts.nodeRunId,
+          ts,
+          kind: ev.kind,
+          payload: ev.rawLine,
+          sessionId: evtSessionId,
+          parentSessionId: null,
+        })
+        broadcastParentRunning()
+      } else {
+        // Non-JSON stdout lines shouldn't happen with --format json, but record
+        // them as kind=text for debugging.
+        await opts.db.insert(nodeRunEvents).values({
+          nodeRunId: opts.nodeRunId,
+          ts: Date.now(),
+          kind: 'text',
+          payload: line,
+        })
+        appendAgentText(line)
+        broadcastParentRunning()
+      }
+    })
+    spawnedPumps.push(stdoutPump)
+
+    // RFC-048: spin up the subagent live capture poller alongside the child.
+    // It mirrors opencode's child-session SQLite into `node_run_events` on a
+    // fixed cadence (default 1500ms) so the SessionTab sees subagent output
+    // accumulate during the run instead of waiting for post-run BFS. The
+    // handle is stopped on child exit; the post-run captureChildSessions call
+    // below still runs and uses `insertedPartIdsBySession` to skip rows the
+    // poller already wrote.
+    const livePollMs = opts.subagentLiveCapture?.pollMs ?? 1500
+    const liveFailureLimit = opts.subagentLiveCapture?.consecutiveFailureLimit ?? 5
+    const liveCtrl = new AbortController()
+    spawnedCleanupHooks.push(() => liveCtrl.abort())
+    // RFC-143: live subagent capture is an opencode-only capability. claude's
+    // driver omits `startLiveCapture` → NOOP_HANDLE (was an UNCONDITIONAL start
+    // that spun uselessly against opencode's SQLite on every claude run).
+    const livePoller =
+      driver.startLiveCapture?.({
+        nodeRunId: opts.nodeRunId,
+        taskId: opts.taskId,
+        nodeId: opts.nodeId,
+        getRootSessionId: () => sessionId ?? null,
+        db: opts.db,
+        log: log.child('subagent-live-poll'),
+        pollMs: livePollMs,
+        consecutiveFailureLimit: liveFailureLimit,
+        signal: liveCtrl.signal,
+        ...(plan.sessionStore === undefined ? {} : { opencodeDbPath: plan.sessionStore.dbPath }),
+        onInsert: (info) => {
+          // Reuse the existing `node.status: running` broadcast lane so the
+          // frontend `useTaskSync` invalidates `['tasks', taskId, 'node-runs']`
+          // without an additional WS schema entry. The status hasn't actually
+          // changed — we're piggybacking the cheap idempotent ping that already
+          // triggers the right invalidation. Empty ticks don't reach this
+          // callback so we never spam empty broadcasts.
+          void info
+          taskBroadcaster.broadcast(TASK_CHANNEL(opts.taskId), {
+            id: -1,
+            type: 'node.status',
+            nodeRunId: opts.nodeRunId,
+            nodeId: opts.nodeId,
+            status: 'running',
+          })
+        },
+      }) ?? NOOP_HANDLE
+    spawnedCleanupHooks.push(() => livePoller.stop())
+
+    const persistStderrLine = async (line: string): Promise<void> => {
       await opts.db.insert(nodeRunEvents).values({
         nodeRunId: opts.nodeRunId,
         ts: Date.now(),
-        kind: 'text',
+        kind: 'stderr',
         payload: line,
       })
-      appendAgentText(line)
-      broadcastParentRunning()
-    }
-  })
-
-  // RFC-048: spin up the subagent live capture poller alongside the child.
-  // It mirrors opencode's child-session SQLite into `node_run_events` on a
-  // fixed cadence (default 1500ms) so the SessionTab sees subagent output
-  // accumulate during the run instead of waiting for post-run BFS. The
-  // handle is stopped on child exit; the post-run captureChildSessions call
-  // below still runs and uses `insertedPartIdsBySession` to skip rows the
-  // poller already wrote.
-  const livePollMs = opts.subagentLiveCapture?.pollMs ?? 1500
-  const liveFailureLimit = opts.subagentLiveCapture?.consecutiveFailureLimit ?? 5
-  const liveCtrl = new AbortController()
-  // RFC-143: live subagent capture is an opencode-only capability. claude's
-  // driver omits `startLiveCapture` → NOOP_HANDLE (was an UNCONDITIONAL start
-  // that spun uselessly against opencode's SQLite on every claude run).
-  const livePoller =
-    driver.startLiveCapture?.({
-      nodeRunId: opts.nodeRunId,
-      taskId: opts.taskId,
-      nodeId: opts.nodeId,
-      getRootSessionId: () => sessionId ?? null,
-      db: opts.db,
-      log: log.child('subagent-live-poll'),
-      pollMs: livePollMs,
-      consecutiveFailureLimit: liveFailureLimit,
-      signal: liveCtrl.signal,
-      onInsert: (info) => {
-        // Reuse the existing `node.status: running` broadcast lane so the
-        // frontend `useTaskSync` invalidates `['tasks', taskId, 'node-runs']`
-        // without an additional WS schema entry. The status hasn't actually
-        // changed — we're piggybacking the cheap idempotent ping that already
-        // triggers the right invalidation. Empty ticks don't reach this
-        // callback so we never spam empty broadcasts.
-        void info
-        taskBroadcaster.broadcast(TASK_CHANNEL(opts.taskId), {
-          id: -1,
-          type: 'node.status',
+      // RFC-031: detect opencode's plugin-load error log lines and surface a
+      // synthetic `text` event tagged `[rfc031/plugin-load-failed]`. opencode
+      // only logs + publishes these (does NOT kill the parent process — see
+      // opencode/packages/opencode/src/plugin/index.ts:170-209), so without
+      // this tap the operator never sees that an injected plugin failed.
+      const decoded = detectPluginLoadFailure(line, opts.plugins ?? [])
+      if (decoded !== null) {
+        await opts.db.insert(nodeRunEvents).values({
           nodeRunId: opts.nodeRunId,
-          nodeId: opts.nodeId,
-          status: 'running',
+          ts: Date.now(),
+          kind: 'text',
+          payload: `[rfc031/plugin-load-failed] ${JSON.stringify({
+            rfc: 'RFC-031',
+            code: 'plugin-load-failed',
+            pluginName: decoded.pluginName,
+            message: decoded.message,
+          })}`,
         })
-      },
-    }) ?? NOOP_HANDLE
-
-  const stderrPump = pumpLines(child.stderr, async (line) => {
-    await opts.db.insert(nodeRunEvents).values({
-      nodeRunId: opts.nodeRunId,
-      ts: Date.now(),
-      kind: 'stderr',
-      payload: line,
-    })
-    // RFC-031: detect opencode's plugin-load error log lines and surface a
-    // synthetic `text` event tagged `[rfc031/plugin-load-failed]`. opencode
-    // only logs + publishes these (does NOT kill the parent process — see
-    // opencode/packages/opencode/src/plugin/index.ts:170-209), so without
-    // this tap the operator never sees that an injected plugin failed.
-    const decoded = detectPluginLoadFailure(line, opts.plugins ?? [])
-    if (decoded !== null) {
-      await opts.db.insert(nodeRunEvents).values({
-        nodeRunId: opts.nodeRunId,
-        ts: Date.now(),
-        kind: 'text',
-        payload: `[rfc031/plugin-load-failed] ${JSON.stringify({
-          rfc: 'RFC-031',
-          code: 'plugin-load-failed',
-          pluginName: decoded.pluginName,
-          message: decoded.message,
-        })}`,
-      })
+      }
     }
-  })
 
-  // 7. Wait for exit + drain streams — bounded (RFC-098 WP-8, audit S-15).
-  //    The reap deadline (grace + margin) is armed at the first kill signal:
-  //    a child that survives the SIGTERM→SIGKILL escalation past it is
-  //    abandoned — status='failed' / errorMessage='child-unkillable', stream
-  //    readers canceled, child unref'd — so neither the daemon nor bun test
-  //    can hang on an unkillable subprocess. The deadline is re-armed at
-  //    normal exit too, bounding the pump drain below: a detached descendant
-  //    that inherited our pipe FDs would otherwise keep the pumps from ever
-  //    seeing EOF (the second wedge point S-15 called out).
-  const exitedOutcome = await Promise.race([
-    child.exited.then((code) => ({ kind: 'exited' as const, code })),
-    reapDeadline.then(() => ({ kind: 'unkillable' as const })),
-  ])
-  const childUnkillable = exitedOutcome.kind === 'unkillable'
-  const exitCode = exitedOutcome.kind === 'exited' ? exitedOutcome.code : null
-  escalation?.cancel()
-  // RFC-048: stop the live poller before the post-run BFS so no concurrent
-  // SELECT races against the final captureChildSessions read. `abort()` is
-  // idempotent + signal-based; `livePoller.stop()` clears the interval and
-  // closes the readonly handle.
-  liveCtrl.abort()
-  livePoller.stop()
-  if (childUnkillable) {
-    log.error('child survived SIGKILL escalation past reap deadline; abandoning', {
-      nodeRunId: opts.nodeRunId,
-      pid: child.pid,
-      deadlineMs: graceMs + FINAL_REAP_MARGIN_MS,
+    const stderrPump = pumpLines(child.stderr, async (line) => {
+      const launcherCode =
+        opencodeControl === undefined ? null : parseExecutionIdentityFailureLine(line)
+      if (launcherCode !== null) {
+        launcherFailureCode ??= launcherCode
+        // Persist only the closed stable code, never the launcher's surrounding
+        // diagnostics (which may contain host paths or credential-derived text).
+        await persistStderrLine(launcherCode)
+        startKill()
+        return
+      }
+      if (opencodeControl !== undefined && line.startsWith('AW_OPENCODE_FAILURE ')) {
+        failControlBarrier()
+        return
+      }
+      if (opencodeControl !== undefined) {
+        try {
+          const parsed = processRunnerOpencodeControlLine({
+            db: opts.db,
+            taskId: opts.taskId,
+            nodeId: opts.nodeId,
+            nodeRunId: opts.nodeRunId,
+            control: opencodeControl,
+            ...(opencodeResumeOwner === undefined ? {} : { resumeOwner: opencodeResumeOwner }),
+            state: controlState,
+            line,
+          })
+          if (parsed.kind === 'session-ready') {
+            sessionId = parsed.sessionId
+            return
+          }
+          await persistStderrLine(parsed.line)
+        } catch {
+          failControlBarrier()
+        }
+        return
+      }
+      await persistStderrLine(line)
     })
-    stdoutPump.cancel()
-    stderrPump.cancel()
-    child.unref()
-  } else {
-    armReapDeadline()
-    const drained = await Promise.race([
-      Promise.all([stdoutPump.done, stderrPump.done]).then(() => true),
-      reapDeadline.then(() => false),
+    spawnedPumps.push(stderrPump)
+    let streamPumpFailed = false
+    const settlePump = async (done: Promise<void>): Promise<void> => {
+      try {
+        await done
+      } catch {
+        streamPumpFailed = true
+        startKill()
+      }
+    }
+    const pumpsSettled = Promise.all([
+      settlePump(stdoutPump.done),
+      settlePump(stderrPump.done),
+    ]).then(() => {})
+
+    // 7. Wait for exit + drain streams — bounded (RFC-098 WP-8, audit S-15).
+    //    The reap deadline (grace + margin) is armed at the first kill signal:
+    //    a child that survives the SIGTERM→SIGKILL escalation past it is
+    //    abandoned — status='failed' / errorMessage='child-unkillable', stream
+    //    readers canceled, child unref'd — so neither the daemon nor bun test
+    //    can hang on an unkillable subprocess. The deadline is re-armed at
+    //    normal exit too, bounding the pump drain below: a detached descendant
+    //    that inherited our pipe FDs would otherwise keep the pumps from ever
+    //    seeing EOF (the second wedge point S-15 called out).
+    const exitedOutcome = await Promise.race([
+      child.exited.then((code) => ({ kind: 'exited' as const, code })),
+      reapDeadline.then(() => ({ kind: 'unkillable' as const })),
     ])
-    if (!drained) {
-      log.warn('stdout/stderr never hit EOF after exit (descendant holding pipe?); canceling', {
+    const childUnkillable = exitedOutcome.kind === 'unkillable'
+    const exitCode = exitedOutcome.kind === 'exited' ? exitedOutcome.code : null
+    childFullyReaped = !childUnkillable
+    preserveLiveRuntimeState = childUnkillable
+    escalation?.cancel()
+    // RFC-048: stop the live poller before the post-run BFS so no concurrent
+    // SELECT races against the final captureChildSessions read. `abort()` is
+    // idempotent + signal-based; `livePoller.stop()` clears the interval and
+    // closes the readonly handle.
+    liveCtrl.abort()
+    livePoller.stop()
+    if (childUnkillable) {
+      log.error('child survived SIGKILL escalation past reap deadline; abandoning', {
         nodeRunId: opts.nodeRunId,
         pid: child.pid,
+        deadlineMs: graceMs + FINAL_REAP_MARGIN_MS,
       })
       stdoutPump.cancel()
       stderrPump.cancel()
+      child.unref()
+    } else {
+      armReapDeadline()
+      const drained = await Promise.race([
+        pumpsSettled.then(() => true),
+        reapDeadline.then(() => false),
+      ])
+      if (!drained) {
+        log.warn('stdout/stderr never hit EOF after exit (descendant holding pipe?); canceling', {
+          nodeRunId: opts.nodeRunId,
+          pid: child.pid,
+        })
+        stdoutPump.cancel()
+        stderrPump.cancel()
+      }
     }
-  }
-  await Promise.all([stdoutPump.done, stderrPump.done])
-  if (opts.signal) opts.signal.removeEventListener('abort', onAbort)
-  if (timeoutHandle !== null) clearTimeout(timeoutHandle)
-  if (reapDeadlineTimer !== null) clearTimeout(reapDeadlineTimer)
+    await pumpsSettled
+    if (streamPumpFailed && opencodeControl !== undefined) {
+      controlFailureCode ??= 'execution-identity-stream-failed'
+    }
+    if (opencodeControl !== undefined && !controlState.ready && launcherFailureCode === undefined) {
+      controlFailureCode = 'execution-identity-control-failed'
+    }
+    if (opts.signal) opts.signal.removeEventListener('abort', onAbort)
+    if (timeoutHandle !== null) clearTimeout(timeoutHandle)
+    if (reapDeadlineTimer !== null) clearTimeout(reapDeadlineTimer)
 
-  // 8. Resolve final status.
-  let status: RunFinalStatus
-  let errorMessage: string | undefined
-  // RFC-145: set in lock-step with every machine-relevant errorMessage stamp
-  // below; persisted alongside it in the runner-exit extra.
-  let failureCode: FailureCode | undefined
-  // RFC-049: structured port-validation failures captured eagerly after
-  // parseEnvelope (see section below). Persisted to
-  // node_runs.port_validation_failures_json so the scheduler can route the
-  // followup attempt to the right OutputKindHandler's repair block without
-  // re-parsing errorMessage.
-  const portValidationFailures: PortValidationFailure[] = []
-  // RFC-193: repo0-relative source paths of every validated path-shaped port
-  // file — the force-include roster the scheduler feeds into merge-back
-  // snapshots (K1 必达).
-  const portFilePaths: string[] = []
-  if (childUnkillable) {
-    // RFC-098 WP-8: overrides aborted/timedOut — the operator needs the pid
-    // to clean up by hand, and a 'canceled' status would read as a clean stop.
-    status = 'failed'
-    errorMessage = `child-unkillable: pid ${child.pid} survived SIGTERM→SIGKILL escalation past ${graceMs + FINAL_REAP_MARGIN_MS}ms; abandoned (detached process group left running)`
-  } else if (aborted) {
-    // RFC-202 T4: a daemon-shutdown abort must NOT read as a user cancel.
-    // RunResult keeps status='canceled' (control flow: loop break / runScope
-    // canceled propagation stay untouched); the PERSISTED row branches below
-    // to 'interrupted' so resume's rollback-target selection (failed /
-    // interrupted only) rolls this node back before re-running it.
-    status = 'canceled'
-    errorMessage =
-      opts.signal?.reason === DAEMON_SHUTDOWN_ABORT_REASON
-        ? 'daemon-shutdown: node interrupted mid-run; resume re-runs it from its pre-run snapshot'
-        : 'aborted by signal'
-  } else if (timedOut) {
-    status = 'failed'
-    errorMessage = `node-timeout: exceeded ${opts.timeoutMs ?? 0}ms`
-  } else if (exitCode !== 0) {
-    status = 'failed'
-    errorMessage = `${runtime} exited with code ${exitCode}` // RFC-111 P3: name the actual runtime
-  } else {
-    status = 'done'
-  }
-
-  // 9. Parse envelope on clean exit. RFC-023 splits this into a kind probe
-  //    first so we can branch between the legacy <workflow-output> path,
-  //    the new <workflow-clarify> path, and the exclusive-or hard rejects
-  //    (both / neither). detectEnvelopeKind is the single source of truth
-  //    for which form the reply took.
-  let outputs: Record<string, string> = {}
-  let clarifyResult:
-    | { questions: ClarifyQuestion[]; truncationWarnings: ClarifyTruncationWarning[] }
-    | undefined
-  if (status === 'done') {
-    const accumulatedText = agentTextBuf
-    const kind = detectEnvelopeKind(accumulatedText, envelopeNonce)
-    // RFC-100: while mandatory ask-back is ACTIVE (channel wired AND the user
-    // has not clicked "Stop clarifying" — RFC-148: directive === 'mandatory'
-    // on the clarify-channel ADT), the ONLY valid reply is a
-    // `<workflow-clarify>` envelope. Any `<workflow-output>` / both / neither
-    // is a violation: fail with a `clarify-required-*` errorMessage so
-    // `decideEnvelopeFollowup` drives a same-session follow-up that re-demands
-    // the clarify envelope (and the node hard-fails after retries — there is no
-    // output escape hatch). On the stop / suppressed rounds this guard is
-    // skipped and the agent finalizes through the normal `<workflow-output>`
-    // path below (RFC-183: on those rounds a disobedient <workflow-clarify>
-    // is rejected further down — output is the only accepted reply).
-    const clarifyActive = clarifyMandatory
-    if (clarifyActive && kind !== 'clarify') {
-      status = 'failed'
-      failureCode = 'clarify-required'
-      errorMessage =
-        kind === 'output'
-          ? `${CLARIFY_REQUIRED_PREFIX}-output-emitted: node is in mandatory ask-back mode; emit <workflow-clarify>, not <workflow-output>`
-          : kind === 'both'
-            ? `${CLARIFY_REQUIRED_PREFIX}-both-present: node is in mandatory ask-back mode; emit only <workflow-clarify>, no <workflow-output>`
-            : `${CLARIFY_REQUIRED_PREFIX}-missing: node is in mandatory ask-back mode; reply must be a <workflow-clarify> envelope`
-    } else if (kind === 'clarify' && !clarifyWired) {
-      // RFC-183 (Codex design-gate P2#3): a voluntary <workflow-clarify> on a
-      // run with NO clarify channel used to parse into a clarifyResult with
-      // status='done' and EMPTY outputs. The main dispatch path caught that
-      // afterwards in the scheduler (clarify-no-channel), but direct callers
-      // that only check result.status — fanout shard children
-      // (scheduler.ts dispatchFanoutShard) and aggregators — treated the
-      // empty envelope as success and merged worktrees. Front-stop it here.
-      // No failureCode on purpose: parity with the scheduler-level rejection
-      // (not a followup-able failure); the attempt loop retries, then the
-      // node hard-fails.
-      status = 'failed'
-      errorMessage =
-        'clarify-no-channel: agent emitted <workflow-clarify> but this run has no clarify channel; emit <workflow-output>'
-    } else if (kind === 'clarify' && channel.kind !== 'none' && clarifyRejectDirective) {
-      // RFC-123 (directive 'stopped' — user「强制停止」: canvas toggle='stop' OR a
-      // latest answered 'stop' directive) + RFC-183 (directive 'suppressed' —
-      // a review reject / iterate re-production round that never invited
-      // ask-back): the disposition classifier says this dispatch injected
-      // ZERO clarify bytes into the prompt, so a <workflow-clarify> reply is
-      // REJECTED — symmetric to the clarify-required output rejection above,
-      // and the invite⟺accept symmetry the classifier exists to enforce. No
-      // clarifyResult is set (no session), so a stopped/suppressed node can
-      // NEVER (re-)open a clarify round through agent disobedience.
-      // decideEnvelopeFollowup matches this prefix → same-session follow-up
-      // re-demands <workflow-output> (the renderer coerces the reason to
-      // 'envelope-missing' while hasClarify=false). Hard fails after retries.
-      status = 'failed'
-      failureCode = 'clarify-forbidden'
-      errorMessage =
-        channel.directive === 'stopped'
-          ? `${CLARIFY_FORBIDDEN_PREFIX}: node is in STOP CLARIFYING mode; emit <workflow-output>, not <workflow-clarify>`
-          : `${CLARIFY_FORBIDDEN_PREFIX}: this re-production round does not accept ask-back; apply the review feedback and emit <workflow-output>, not <workflow-clarify>`
-    } else if (kind === 'clarify' && (await opts.clarifySuppressed?.()) === true) {
-      // RFC-181 C — workgroup autonomous hard suppression, resolved at
-      // ENVELOPE time against the LATEST task config (the per-task PATCH can
-      // flip `autonomous` mid-run in EITHER direction, so a dispatch-frozen
-      // directive would race the toggle both ways — impl-gate P1/P2).
-      // Classified HERE, before terminal persistence, so the row closes as
-      // failed + failure_code='clarify-forbidden' (the RFC-182 note source)
-      // without any illegal done→failed correction. No clarifyResult ⇒ no
-      // session ⇒ no park; the workgroup runner re-prompts and then
-      // drop-and-continues on this prefix.
-      status = 'failed'
-      failureCode = 'clarify-forbidden'
-      errorMessage = `${CLARIFY_FORBIDDEN_PREFIX}: ask-back is OFF in this autonomous group; proceed with your best judgment and emit <workflow-output>`
-    } else if (kind === 'both') {
-      status = 'failed'
-      failureCode = 'clarify-and-output-both'
-      errorMessage =
-        'clarify-and-output-both-present: agent reply contained BOTH <workflow-output> and <workflow-clarify>; the framework requires exactly one'
-    } else if (kind === 'clarify') {
-      const body = extractClarifyEnvelopeBody(accumulatedText, envelopeNonce)
-      // RFC-056: cross-clarify path disables the RFC-023 5-question cap.
-      // RFC-148: the cap follows the WIRING family alone. RFC-183 narrows the
-      // rounds that reach this parse to the invited dispositions (mandatory /
-      // optional) — a suppressed cross rerun is now rejected above before
-      // parsing — but the anchor stays the kind: an optional cross round
-      // still parses with the lifted cap.
-      const parseOpts = channel.kind === 'cross' ? { maxQuestions: Number.POSITIVE_INFINITY } : {}
-      const parsed = body !== null ? parseClarifyEnvelopeBody(body, parseOpts) : null
-      if (parsed === null || parsed.body === null) {
-        const firstErr = parsed?.errors[0]
-        status = 'failed'
-        // RFC-145 D8: only the clarify-questions-* validator-code family is a
-        // follow-up-able failure (matches the old router's startsWith); other
-        // codes (clarify-options-* …) stay unstructured — no follow-up.
-        if (firstErr === undefined || firstErr.code.startsWith('clarify-questions-')) {
-          failureCode = 'clarify-questions-malformed'
-        }
-        errorMessage =
-          firstErr !== undefined
-            ? `${firstErr.code}: ${firstErr.detail}`
-            : 'clarify-questions-malformed: empty body'
-      } else {
-        // Agent successfully expressed a clarify ask. Keep status=done — the
-        // agent's subprocess exited cleanly with a valid envelope; the next
-        // round will be a fresh node_run minted post-answer.
-        clarifyResult = {
-          questions: parsed.body.questions,
-          truncationWarnings: parsed.warnings,
-        }
-        if (parsed.warnings.length > 0) {
-          log.warn('clarify envelope truncated to limits', {
+    // RFC-224: the private OpenCode DB is read only while the exact owner lease
+    // is still held. Once the launcher and both pipes are fully reaped, perform
+    // the final capture and release before envelope/output persistence can throw;
+    // a later application-level DB error must never strand the store lease.
+    if (!childUnkillable && sessionId !== undefined) {
+      try {
+        await driver.captureSessions({
+          rootSessionId: sessionId,
+          nodeRunId: opts.nodeRunId,
+          taskId: opts.taskId,
+          db: opts.db,
+          log,
+          worktreePath: opts.worktreePath,
+          runRoot,
+          configDirName: configDir.name,
+          alreadyInsertedPartIds: livePoller.stats().insertedPartIdsBySession,
+          ...(plan.sessionStore === undefined ? {} : { opencodeDbPath: plan.sessionStore.dbPath }),
+        })
+      } catch (err) {
+        if (opencodeControl === undefined) {
+          log.warn('subagent-capture-unhandled', {
             nodeRunId: opts.nodeRunId,
-            warnings: parsed.warnings.map((w) => w.code),
+            err: err instanceof Error ? err.message : String(err),
+          })
+        } else {
+          log.warn('verified-opencode-session-capture-failed', {
+            nodeRunId: opts.nodeRunId,
+            failureCode: 'execution-identity-stream-failed',
           })
         }
       }
-    } else if (kind === 'none') {
+    }
+    if (!childUnkillable) releaseHeldLease()
+
+    // 8. Resolve final status.
+    let status: RunFinalStatus
+    let errorMessage: string | undefined
+    // RFC-145: set in lock-step with every machine-relevant errorMessage stamp
+    // below; persisted alongside it in the runner-exit extra.
+    let failureCode: FailureCode | undefined
+    // RFC-049: structured port-validation failures captured eagerly after
+    // parseEnvelope (see section below). Persisted to
+    // node_runs.port_validation_failures_json so the scheduler can route the
+    // followup attempt to the right OutputKindHandler's repair block without
+    // re-parsing errorMessage.
+    const portValidationFailures: PortValidationFailure[] = []
+    // RFC-193: repo0-relative source paths of every validated path-shaped port
+    // file — the force-include roster the scheduler feeds into merge-back
+    // snapshots (K1 必达).
+    const portFilePaths: string[] = []
+    if (childUnkillable) {
+      // RFC-098 WP-8: overrides aborted/timedOut — the operator needs the pid
+      // to clean up by hand, and a 'canceled' status would read as a clean stop.
       status = 'failed'
-      failureCode = 'envelope-missing'
-      errorMessage = 'no <workflow-output> envelope found in stdout'
+      if (opencodeControl === undefined) {
+        errorMessage = `child-unkillable: pid ${child.pid} survived SIGTERM→SIGKILL escalation past ${graceMs + FINAL_REAP_MARGIN_MS}ms; abandoned (detached process group left running)`
+      } else {
+        // The launcher/store may still be live, so retrying unchanged input is
+        // unsafe until boot recovery proves the group dead and repairs the
+        // exact lock/lease.
+        failureCode = 'execution-identity-store-unsafe'
+        errorMessage = failureCode
+      }
+    } else if (launcherFailureCode !== undefined) {
+      status = 'failed'
+      failureCode = launcherFailureCode
+      errorMessage = launcherFailureCode
+    } else if (controlFailureCode !== undefined) {
+      status = 'failed'
+      failureCode = controlFailureCode
+      errorMessage = controlFailureCode
+    } else if (streamPumpFailed) {
+      status = 'failed'
+      errorMessage = `${runtime} stream persistence failed`
+    } else if (aborted) {
+      // RFC-202 T4: a daemon-shutdown abort must NOT read as a user cancel.
+      // RunResult keeps status='canceled' (control flow: loop break / runScope
+      // canceled propagation stay untouched); the PERSISTED row branches below
+      // to 'interrupted' so resume's rollback-target selection (failed /
+      // interrupted only) rolls this node back before re-running it.
+      status = 'canceled'
+      errorMessage =
+        opts.signal?.reason === DAEMON_SHUTDOWN_ABORT_REASON
+          ? 'daemon-shutdown: node interrupted mid-run; resume re-runs it from its pre-run snapshot'
+          : 'aborted by signal'
+    } else if (timedOut) {
+      status = 'failed'
+      // This deadline belongs to the workflow/node policy, not to the pinned
+      // launcher protocol. It is attempt-scoped and may be retried under the
+      // scheduler's normal policy. Only a timeout emitted by the verified
+      // launcher itself is `execution-identity-timeout` (permanent).
+      errorMessage = `node-timeout: exceeded ${opts.timeoutMs ?? 0}ms`
+    } else if (exitCode !== 0 && opencodeControl !== undefined) {
+      status = 'failed'
+      failureCode = 'execution-identity-stream-failed'
+      errorMessage = failureCode
+    } else if (exitCode !== 0) {
+      status = 'failed'
+      errorMessage = `${runtime} exited with code ${exitCode}` // RFC-111 P3: name the actual runtime
     } else {
-      // kind === 'output' — legacy happy path.
-      const envelope = extractLastEnvelope(accumulatedText, envelopeNonce)
-      // envelope is non-null here because detectEnvelopeKind matched, but
-      // guard defensively for type narrowing.
-      if (envelope === null) {
+      status = 'done'
+    }
+
+    // 9. Parse envelope on clean exit. RFC-023 splits this into a kind probe
+    //    first so we can branch between the legacy <workflow-output> path,
+    //    the new <workflow-clarify> path, and the exclusive-or hard rejects
+    //    (both / neither). detectEnvelopeKind is the single source of truth
+    //    for which form the reply took.
+    let outputs: Record<string, string> = {}
+    let clarifyResult:
+      | { questions: ClarifyQuestion[]; truncationWarnings: ClarifyTruncationWarning[] }
+      | undefined
+    if (status === 'done') {
+      const accumulatedText = agentTextBuf
+      const kind = detectEnvelopeKind(accumulatedText, envelopeNonce)
+      // RFC-100: while mandatory ask-back is ACTIVE (channel wired AND the user
+      // has not clicked "Stop clarifying" — RFC-148: directive === 'mandatory'
+      // on the clarify-channel ADT), the ONLY valid reply is a
+      // `<workflow-clarify>` envelope. Any `<workflow-output>` / both / neither
+      // is a violation: fail with a `clarify-required-*` errorMessage so
+      // `decideEnvelopeFollowup` drives a same-session follow-up that re-demands
+      // the clarify envelope (and the node hard-fails after retries — there is no
+      // output escape hatch). On the stop / suppressed rounds this guard is
+      // skipped and the agent finalizes through the normal `<workflow-output>`
+      // path below (RFC-183: on those rounds a disobedient <workflow-clarify>
+      // is rejected further down — output is the only accepted reply).
+      const clarifyActive = clarifyMandatory
+      if (clarifyActive && kind !== 'clarify') {
+        status = 'failed'
+        failureCode = 'clarify-required'
+        errorMessage =
+          kind === 'output'
+            ? `${CLARIFY_REQUIRED_PREFIX}-output-emitted: node is in mandatory ask-back mode; emit <workflow-clarify>, not <workflow-output>`
+            : kind === 'both'
+              ? `${CLARIFY_REQUIRED_PREFIX}-both-present: node is in mandatory ask-back mode; emit only <workflow-clarify>, no <workflow-output>`
+              : `${CLARIFY_REQUIRED_PREFIX}-missing: node is in mandatory ask-back mode; reply must be a <workflow-clarify> envelope`
+      } else if (kind === 'clarify' && !clarifyWired) {
+        // RFC-183 (Codex design-gate P2#3): a voluntary <workflow-clarify> on a
+        // run with NO clarify channel used to parse into a clarifyResult with
+        // status='done' and EMPTY outputs. The main dispatch path caught that
+        // afterwards in the scheduler (clarify-no-channel), but direct callers
+        // that only check result.status — fanout shard children
+        // (scheduler.ts dispatchFanoutShard) and aggregators — treated the
+        // empty envelope as success and merged worktrees. Front-stop it here.
+        // No failureCode on purpose: parity with the scheduler-level rejection
+        // (not a followup-able failure); the attempt loop retries, then the
+        // node hard-fails.
+        status = 'failed'
+        errorMessage =
+          'clarify-no-channel: agent emitted <workflow-clarify> but this run has no clarify channel; emit <workflow-output>'
+      } else if (kind === 'clarify' && channel.kind !== 'none' && clarifyRejectDirective) {
+        // RFC-123 (directive 'stopped' — user「强制停止」: canvas toggle='stop' OR a
+        // latest answered 'stop' directive) + RFC-183 (directive 'suppressed' —
+        // a review reject / iterate re-production round that never invited
+        // ask-back): the disposition classifier says this dispatch injected
+        // ZERO clarify bytes into the prompt, so a <workflow-clarify> reply is
+        // REJECTED — symmetric to the clarify-required output rejection above,
+        // and the invite⟺accept symmetry the classifier exists to enforce. No
+        // clarifyResult is set (no session), so a stopped/suppressed node can
+        // NEVER (re-)open a clarify round through agent disobedience.
+        // decideEnvelopeFollowup matches this prefix → same-session follow-up
+        // re-demands <workflow-output> (the renderer coerces the reason to
+        // 'envelope-missing' while hasClarify=false). Hard fails after retries.
+        status = 'failed'
+        failureCode = 'clarify-forbidden'
+        errorMessage =
+          channel.directive === 'stopped'
+            ? `${CLARIFY_FORBIDDEN_PREFIX}: node is in STOP CLARIFYING mode; emit <workflow-output>, not <workflow-clarify>`
+            : `${CLARIFY_FORBIDDEN_PREFIX}: this re-production round does not accept ask-back; apply the review feedback and emit <workflow-output>, not <workflow-clarify>`
+      } else if (kind === 'clarify' && (await opts.clarifySuppressed?.()) === true) {
+        // RFC-181 C — workgroup autonomous hard suppression, resolved at
+        // ENVELOPE time against the LATEST task config (the per-task PATCH can
+        // flip `autonomous` mid-run in EITHER direction, so a dispatch-frozen
+        // directive would race the toggle both ways — impl-gate P1/P2).
+        // Classified HERE, before terminal persistence, so the row closes as
+        // failed + failure_code='clarify-forbidden' (the RFC-182 note source)
+        // without any illegal done→failed correction. No clarifyResult ⇒ no
+        // session ⇒ no park; the workgroup runner re-prompts and then
+        // drop-and-continues on this prefix.
+        status = 'failed'
+        failureCode = 'clarify-forbidden'
+        errorMessage = `${CLARIFY_FORBIDDEN_PREFIX}: ask-back is OFF in this autonomous group; proceed with your best judgment and emit <workflow-output>`
+      } else if (kind === 'both') {
+        status = 'failed'
+        failureCode = 'clarify-and-output-both'
+        errorMessage =
+          'clarify-and-output-both-present: agent reply contained BOTH <workflow-output> and <workflow-clarify>; the framework requires exactly one'
+      } else if (kind === 'clarify') {
+        const body = extractClarifyEnvelopeBody(accumulatedText, envelopeNonce)
+        // RFC-056: cross-clarify path disables the RFC-023 5-question cap.
+        // RFC-148: the cap follows the WIRING family alone. RFC-183 narrows the
+        // rounds that reach this parse to the invited dispositions (mandatory /
+        // optional) — a suppressed cross rerun is now rejected above before
+        // parsing — but the anchor stays the kind: an optional cross round
+        // still parses with the lifted cap.
+        const parseOpts = channel.kind === 'cross' ? { maxQuestions: Number.POSITIVE_INFINITY } : {}
+        const parsed = body !== null ? parseClarifyEnvelopeBody(body, parseOpts) : null
+        if (parsed === null || parsed.body === null) {
+          const firstErr = parsed?.errors[0]
+          status = 'failed'
+          // RFC-145 D8: only the clarify-questions-* validator-code family is a
+          // follow-up-able failure (matches the old router's startsWith); other
+          // codes (clarify-options-* …) stay unstructured — no follow-up.
+          if (firstErr === undefined || firstErr.code.startsWith('clarify-questions-')) {
+            failureCode = 'clarify-questions-malformed'
+          }
+          errorMessage =
+            firstErr !== undefined
+              ? `${firstErr.code}: ${firstErr.detail}`
+              : 'clarify-questions-malformed: empty body'
+        } else {
+          // Agent successfully expressed a clarify ask. Keep status=done — the
+          // agent's subprocess exited cleanly with a valid envelope; the next
+          // round will be a fresh node_run minted post-answer.
+          clarifyResult = {
+            questions: parsed.body.questions,
+            truncationWarnings: parsed.warnings,
+          }
+          if (parsed.warnings.length > 0) {
+            log.warn('clarify envelope truncated to limits', {
+              nodeRunId: opts.nodeRunId,
+              warnings: parsed.warnings.map((w) => w.code),
+            })
+          }
+        }
+      } else if (kind === 'none') {
         status = 'failed'
         failureCode = 'envelope-missing'
         errorMessage = 'no <workflow-output> envelope found in stdout'
       } else {
-        const parsed = parseEnvelope(envelope, opts.agent.outputs, envelopeNonce)
-        outputs = Object.fromEntries(parsed.ports)
-        if (parsed.missingDeclared.length > 0) {
-          log.warn('agent omitted declared ports', {
-            missing: parsed.missingDeclared,
-            nodeRunId: opts.nodeRunId,
-          })
-        }
-        if (parsed.undeclared.length > 0) {
-          log.warn('agent emitted undeclared ports', {
-            undeclared: parsed.undeclared.map((u) => u.name),
-            nodeRunId: opts.nodeRunId,
-          })
-        }
-
-        // A `<port name="...">` was opened but never closed with a parseable
-        // `</port>` (corrupted / truncated close tag — e.g. a leaked special
-        // token produced `</|DSML|port>`). The tolerant scanner can't extract
-        // such a port, so without this guard it would degrade to an empty
-        // string and the node would complete `done` with a blank port — a
-        // downstream doc-review node then silently produces nothing, and the
-        // failure-only retry path (decideEnvelopeFollowup) never fires. Fail
-        // BEFORE RFC-049 validation + the node_run_outputs INSERT so the
-        // scheduler drives a same-session retry (and a hard fail after retries)
-        // instead of swallowing the corruption. Runs for ALL ports regardless
-        // of outputKind — this is more fundamental than per-kind validation and
-        // also catches string / markdown / undeclared-kind ports that RFC-049
-        // skips.
-        if (parsed.malformedPorts.length > 0) {
-          log.warn('agent emitted malformed (unclosed) ports', {
-            malformed: parsed.malformedPorts,
-            nodeRunId: opts.nodeRunId,
-          })
+        // kind === 'output' — legacy happy path.
+        const envelope = extractLastEnvelope(accumulatedText, envelopeNonce)
+        // envelope is non-null here because detectEnvelopeKind matched, but
+        // guard defensively for type narrowing.
+        if (envelope === null) {
           status = 'failed'
-          failureCode = 'envelope-port-malformed'
-          errorMessage = `${ENVELOPE_PORT_MALFORMED_PREFIX}: agent opened <port name="..."> tag(s) without a parseable </port> close (corrupted or truncated close tag): ${parsed.malformedPorts.join(', ')}`
-        }
+          failureCode = 'envelope-missing'
+          errorMessage = 'no <workflow-output> envelope found in stdout'
+        } else {
+          const parsed = parseEnvelope(envelope, opts.agent.outputs, envelopeNonce)
+          outputs = Object.fromEntries(parsed.ports)
+          if (parsed.missingDeclared.length > 0) {
+            log.warn('agent omitted declared ports', {
+              missing: parsed.missingDeclared,
+              nodeRunId: opts.nodeRunId,
+            })
+          }
+          if (parsed.undeclared.length > 0) {
+            log.warn('agent emitted undeclared ports', {
+              undeclared: parsed.undeclared.map((u) => u.name),
+              nodeRunId: opts.nodeRunId,
+            })
+          }
 
-        // RFC-049: eagerly validate port content against the declared
-        // OutputKindHandler BEFORE persisting to node_run_outputs. Failures
-        // here surface the producer's session immediately so the scheduler
-        // can drive a same-session followup (consumer-side validation would
-        // only see the failure after the producer's session is already
-        // gone). Fail-fast — first failure wins, see RFC-049 design.md §7.
-        //
-        // Validation runs BEFORE the node_run_outputs INSERT below so that
-        // the table only ever contains rows that passed validation. This
-        // makes "node_run_outputs has rows for this node_run" a clean
-        // ground-truth signal for "agent successfully produced output"
-        // (consumed by the clarify-history cutoff in scheduler.ts), and
-        // prevents a markdown_file port with a missing on-disk file from
-        // leaving a ghost row that downstream readers might misuse.
-        const outputKinds = opts.agent.outputKinds
-        // status may already be 'failed' from the malformed-port guard above —
-        // skip per-kind validation in that case (the node is failing regardless
-        // and we must not overwrite the malformed errorMessage).
-        //
-        // RFC-193 D15 两阶段：阶段一纯校验（fail-fast，零磁盘写入——首端口过、
-        // 次端口挂时不得留下孤儿归档），顺带收集 path 形端口的 items（handler
-        // 校验已读过文件，sourcePath 即 worktree 相对规范路径）；全部通过后
-        // 阶段二统一归档 + content 规范化 + INSERT。
-        const pathishArchives = new Map<
-          string,
-          { items: Array<{ sourceAbs: string; sourcePath: string }> }
-        >()
-        if (status === 'done' && outputKinds !== undefined) {
-          for (const [name, content] of parsed.ports) {
-            const kind = outputKinds[name]
-            if (kind === undefined) continue
-            try {
-              const resolved = resolvePortContentDetailed({
-                rawContent: content,
-                kind,
-                worktreePath: opts.worktreePath,
-                port: name,
-              })
-              if (isPathishKindString(kind)) {
-                // 单值 path：detailed 给 sourcePath；list<path<*>>：items 给逐项。
-                const its =
-                  resolved.items !== undefined
-                    ? resolved.items
-                    : resolved.sourcePath !== undefined
-                      ? [{ body: resolved.body, sourcePath: resolved.sourcePath }]
-                      : []
-                pathishArchives.set(name, {
-                  items: its
-                    .filter((it) => it.sourcePath !== undefined)
-                    .map((it) => ({
-                      sourceAbs: join(opts.worktreePath, it.sourcePath!),
-                      sourcePath: it.sourcePath!,
-                    })),
+          // A `<port name="...">` was opened but never closed with a parseable
+          // `</port>` (corrupted / truncated close tag — e.g. a leaked special
+          // token produced `</|DSML|port>`). The tolerant scanner can't extract
+          // such a port, so without this guard it would degrade to an empty
+          // string and the node would complete `done` with a blank port — a
+          // downstream doc-review node then silently produces nothing, and the
+          // failure-only retry path (decideEnvelopeFollowup) never fires. Fail
+          // BEFORE RFC-049 validation + the node_run_outputs INSERT so the
+          // scheduler drives a same-session retry (and a hard fail after retries)
+          // instead of swallowing the corruption. Runs for ALL ports regardless
+          // of outputKind — this is more fundamental than per-kind validation and
+          // also catches string / markdown / undeclared-kind ports that RFC-049
+          // skips.
+          if (parsed.malformedPorts.length > 0) {
+            log.warn('agent emitted malformed (unclosed) ports', {
+              malformed: parsed.malformedPorts,
+              nodeRunId: opts.nodeRunId,
+            })
+            status = 'failed'
+            failureCode = 'envelope-port-malformed'
+            errorMessage = `${ENVELOPE_PORT_MALFORMED_PREFIX}: agent opened <port name="..."> tag(s) without a parseable </port> close (corrupted or truncated close tag): ${parsed.malformedPorts.join(', ')}`
+          }
+
+          // RFC-049: eagerly validate port content against the declared
+          // OutputKindHandler BEFORE persisting to node_run_outputs. Failures
+          // here surface the producer's session immediately so the scheduler
+          // can drive a same-session followup (consumer-side validation would
+          // only see the failure after the producer's session is already
+          // gone). Fail-fast — first failure wins, see RFC-049 design.md §7.
+          //
+          // Validation runs BEFORE the node_run_outputs INSERT below so that
+          // the table only ever contains rows that passed validation. This
+          // makes "node_run_outputs has rows for this node_run" a clean
+          // ground-truth signal for "agent successfully produced output"
+          // (consumed by the clarify-history cutoff in scheduler.ts), and
+          // prevents a markdown_file port with a missing on-disk file from
+          // leaving a ghost row that downstream readers might misuse.
+          const outputKinds = opts.agent.outputKinds
+          // status may already be 'failed' from the malformed-port guard above —
+          // skip per-kind validation in that case (the node is failing regardless
+          // and we must not overwrite the malformed errorMessage).
+          //
+          // RFC-193 D15 两阶段：阶段一纯校验（fail-fast，零磁盘写入——首端口过、
+          // 次端口挂时不得留下孤儿归档），顺带收集 path 形端口的 items（handler
+          // 校验已读过文件，sourcePath 即 worktree 相对规范路径）；全部通过后
+          // 阶段二统一归档 + content 规范化 + INSERT。
+          const pathishArchives = new Map<
+            string,
+            { items: Array<{ sourceAbs: string; sourcePath: string }> }
+          >()
+          if (status === 'done' && outputKinds !== undefined) {
+            for (const [name, content] of parsed.ports) {
+              const kind = outputKinds[name]
+              if (kind === undefined) continue
+              try {
+                const resolved = resolvePortContentDetailed({
+                  rawContent: content,
+                  kind,
+                  worktreePath: opts.worktreePath,
+                  port: name,
                 })
+                if (isPathishKindString(kind)) {
+                  // 单值 path：detailed 给 sourcePath；list<path<*>>：items 给逐项。
+                  const its =
+                    resolved.items !== undefined
+                      ? resolved.items
+                      : resolved.sourcePath !== undefined
+                        ? [{ body: resolved.body, sourcePath: resolved.sourcePath }]
+                        : []
+                  pathishArchives.set(name, {
+                    items: its
+                      .filter((it) => it.sourcePath !== undefined)
+                      .map((it) => ({
+                        sourceAbs: join(opts.worktreePath, it.sourcePath!),
+                        sourcePath: it.sourcePath!,
+                      })),
+                  })
+                }
+              } catch (err) {
+                if (err instanceof PortValidationError) {
+                  portValidationFailures.push(err.failure)
+                  status = 'failed'
+                  failureCode = 'port-validation-failed'
+                  errorMessage = err.message
+                  break
+                }
+                // Unknown errors fall through to the standard catch path.
+                throw err
+              }
+            }
+          }
+
+          // 阶段二（RFC-193 D1）：全部端口校验通过后归档 path 形端口（字节级
+          // copy，节点 iso 仍存活——全生命周期唯一可靠读取窗口），并把 content
+          // 规范化为 repo0 相对路径（D6：绝对路径 / './' 前缀不再泄漏下游；容器
+          // 相对形态只进 archive_json）。归档写失败 = 环境级故障，fail loud。
+          const worktreeDirName = opts.templateMeta.repos?.[0]?.worktreeDirName ?? ''
+          const normalizedContent = new Map<string, string>()
+          const archiveJsonByPort = new Map<string, string>()
+          if (
+            status === 'done' &&
+            pathishArchives.size > 0 &&
+            // D14: workgroup host runs persist no node_run_outputs rows, so an
+            // archive would have no reference mount point (orphan). Their wg_*
+            // protocol ports are text-kinded anyway — this is defensive.
+            opts.persistDeclaredOutputs !== false
+          ) {
+            try {
+              for (const [name, arch] of pathishArchives) {
+                const res = archivePortArtifacts({
+                  appHome: opts.appHome,
+                  taskId: opts.taskId,
+                  nodeRunId: opts.nodeRunId,
+                  portName: name,
+                  items: arch.items,
+                  worktreeDirName,
+                  worktreeRootAbs: opts.worktreePath,
+                })
+                archiveJsonByPort.set(name, res.archiveJson)
+                normalizedContent.set(name, arch.items.map((it) => it.sourcePath).join('\n'))
+                portFilePaths.push(...res.portFilePaths)
               }
             } catch (err) {
-              if (err instanceof PortValidationError) {
-                portValidationFailures.push(err.failure)
-                status = 'failed'
-                failureCode = 'port-validation-failed'
-                errorMessage = err.message
-                break
-              }
-              // Unknown errors fall through to the standard catch path.
-              throw err
+              const msg = err instanceof Error ? err.message : String(err)
+              log.warn('port artifact archival failed', { nodeRunId: opts.nodeRunId, error: msg })
+              // Environment-level failure (appHome full / permissions), NOT an
+              // agent output defect — deliberately no failureCode, so
+              // decideEnvelopeFollowup stays out (a same-session "re-emit your
+              // envelope" would mislead the agent); the ordinary node retry
+              // re-runs validation + archival wholesale (RFC-145 "not
+              // follow-up-able" default).
+              status = 'failed'
+              errorMessage = `port-artifact-archive-failed: ${msg}`
             }
           }
-        }
-
-        // 阶段二（RFC-193 D1）：全部端口校验通过后归档 path 形端口（字节级
-        // copy，节点 iso 仍存活——全生命周期唯一可靠读取窗口），并把 content
-        // 规范化为 repo0 相对路径（D6：绝对路径 / './' 前缀不再泄漏下游；容器
-        // 相对形态只进 archive_json）。归档写失败 = 环境级故障，fail loud。
-        const worktreeDirName = opts.templateMeta.repos?.[0]?.worktreeDirName ?? ''
-        const normalizedContent = new Map<string, string>()
-        const archiveJsonByPort = new Map<string, string>()
-        if (
-          status === 'done' &&
-          pathishArchives.size > 0 &&
-          // D14: workgroup host runs persist no node_run_outputs rows, so an
-          // archive would have no reference mount point (orphan). Their wg_*
-          // protocol ports are text-kinded anyway — this is defensive.
-          opts.persistDeclaredOutputs !== false
-        ) {
-          try {
-            for (const [name, arch] of pathishArchives) {
-              const res = archivePortArtifacts({
-                appHome: opts.appHome,
-                taskId: opts.taskId,
-                nodeRunId: opts.nodeRunId,
-                portName: name,
-                items: arch.items,
-                worktreeDirName,
-                worktreeRootAbs: opts.worktreePath,
-              })
-              archiveJsonByPort.set(name, res.archiveJson)
-              normalizedContent.set(name, arch.items.map((it) => it.sourcePath).join('\n'))
-              portFilePaths.push(...res.portFilePaths)
-            }
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err)
-            log.warn('port artifact archival failed', { nodeRunId: opts.nodeRunId, error: msg })
-            // Environment-level failure (appHome full / permissions), NOT an
-            // agent output defect — deliberately no failureCode, so
-            // decideEnvelopeFollowup stays out (a same-session "re-emit your
-            // envelope" would mislead the agent); the ordinary node retry
-            // re-runs validation + archival wholesale (RFC-145 "not
-            // follow-up-able" default).
-            status = 'failed'
-            errorMessage = `port-artifact-archive-failed: ${msg}`
+          // D17：RunResult.outputs 与入库 content 同步规范化——fanout/wrapper 直接
+          // 消费该 map（不读 DB），不同步会让 wrapper 继续提升原始（可能绝对）路径。
+          if (status === 'done') {
+            for (const [name, norm] of normalizedContent) outputs[name] = norm
           }
-        }
-        // D17：RunResult.outputs 与入库 content 同步规范化——fanout/wrapper 直接
-        // 消费该 map（不读 DB），不同步会让 wrapper 继续提升原始（可能绝对）路径。
-        if (status === 'done') {
-          for (const [name, norm] of normalizedContent) outputs[name] = norm
-        }
 
-        // Persist ports only on successful validation. The fail-fast loop
-        // above bails on the first invalid port without setting status back
-        // to 'done', so this branch runs iff every declared port passed
-        // (status still 'done').
-        // RFC-184: workgroup host runs pass persistDeclaredOutputs=false so their
-        // projected wg_* protocol ports never land in node_run_outputs (design.md
-        // §2.4) — result.outputs below still carries them for live consumption.
-        // RFC-193 D14：host run 不归档（无 node_run_outputs 行 = 归档引用无挂载
-        // 点）——上面的归档段不看 persistDeclaredOutputs 是因为 workgroup hook
-        // 的 agent 没有 path 形声明端口（wg_* 协议端口皆文本）；防御性地，此处
-        // persist=false 时归档引用同样不落库。
-        if (status === 'done' && opts.persistDeclaredOutputs !== false) {
-          for (const [name, content] of parsed.ports) {
-            // RFC-072: persist the resolved output kind so the Outputs tab can
-            // tell file-path ports from text. NULL when the agent declared no
-            // kind for this port. flag-audit §8 决策：入库前 canonical 化——
-            // agent frontmatter 仍可声明 legacy 别名 'markdown_file'，但持久列
-            // 统一存 'path<md>'（migration 0075 清洗了存量，别再倒灌）。
-            const rawKind = outputKinds?.[name]
-            const kind = rawKind !== undefined ? normalizeKindString(rawKind) : null
-            const persisted = normalizedContent.get(name) ?? content
-            const archiveJson = archiveJsonByPort.get(name) ?? null
-            await opts.db
-              .insert(nodeRunOutputs)
-              .values({
-                nodeRunId: opts.nodeRunId,
-                portName: name,
-                content: persisted,
-                kind,
-                archiveJson,
-              })
-              .onConflictDoUpdate({
-                target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-                set: { content: persisted, kind, archiveJson },
-              })
+          // Persist ports only on successful validation. The fail-fast loop
+          // above bails on the first invalid port without setting status back
+          // to 'done', so this branch runs iff every declared port passed
+          // (status still 'done').
+          // RFC-184: workgroup host runs pass persistDeclaredOutputs=false so their
+          // projected wg_* protocol ports never land in node_run_outputs (design.md
+          // §2.4) — result.outputs below still carries them for live consumption.
+          // RFC-193 D14：host run 不归档（无 node_run_outputs 行 = 归档引用无挂载
+          // 点）——上面的归档段不看 persistDeclaredOutputs 是因为 workgroup hook
+          // 的 agent 没有 path 形声明端口（wg_* 协议端口皆文本）；防御性地，此处
+          // persist=false 时归档引用同样不落库。
+          if (status === 'done' && opts.persistDeclaredOutputs !== false) {
+            for (const [name, content] of parsed.ports) {
+              // RFC-072: persist the resolved output kind so the Outputs tab can
+              // tell file-path ports from text. NULL when the agent declared no
+              // kind for this port. flag-audit §8 决策：入库前 canonical 化——
+              // agent frontmatter 仍可声明 legacy 别名 'markdown_file'，但持久列
+              // 统一存 'path<md>'（migration 0075 清洗了存量，别再倒灌）。
+              const rawKind = outputKinds?.[name]
+              const kind = rawKind !== undefined ? normalizeKindString(rawKind) : null
+              const persisted = normalizedContent.get(name) ?? content
+              const archiveJson = archiveJsonByPort.get(name) ?? null
+              await opts.db
+                .insert(nodeRunOutputs)
+                .values({
+                  nodeRunId: opts.nodeRunId,
+                  portName: name,
+                  content: persisted,
+                  kind,
+                  archiveJson,
+                })
+                .onConflictDoUpdate({
+                  target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
+                  set: { content: persisted, kind, archiveJson },
+                })
+            }
           }
         }
       }
     }
-  }
 
-  // 10. RFC-027: post-run capture of child (subagent) session events
-  //     from opencode's persisted SQLite. Non-fatal; any failure writes
-  //     a `subagent_capture_failed` marker and lets the SessionTab tab
-  //     fall back to AC-10 rendering.
-  //
-  // RFC-048: forward the live poller's partId dedupe state so post-run BFS
-  // only inserts the tail rows opencode flushed after the last tick. With
-  // pollMs=0 the poller returned a no-op handle whose Map is empty, so the
-  // call falls back to RFC-027 byte-for-byte behavior.
-  if (sessionId !== undefined) {
-    try {
-      // RFC-143: each driver captures its own subagent transcripts (opencode:
-      // SQLite BFS + the live poller's partId dedupe; claude: JSONL files under
-      // <runRoot>/.claude/projects). The union ctx carries both runtimes' inputs.
-      await driver.captureSessions({
-        rootSessionId: sessionId,
-        nodeRunId: opts.nodeRunId,
-        taskId: opts.taskId,
-        db: opts.db,
-        log,
-        worktreePath: opts.worktreePath,
-        runRoot,
-        configDirName: configDir.name, // RFC-154: claude's transcript lives under it
-        alreadyInsertedPartIds: livePoller.stats().insertedPartIdsBySession,
-      })
-    } catch (err) {
-      log.warn('subagent-capture-unhandled', {
-        nodeRunId: opts.nodeRunId,
-        err: err instanceof Error ? err.message : String(err),
-      })
-    }
-  }
-
-  // 10b. RFC-029: read the runtime inventory snapshot the dump plugin wrote
-  //      into runRoot. Total: any failure path resolves to a `captured:false`
-  //      stub with a precise reason code rather than leaving the column
-  //      NULL, so the UI's reason-pinpointed messaging works on the first
-  //      load. Skipped (column stays NULL) for non-agent kinds.
-  //
-  // RFC-042: same-session envelope follow-up runs skipped plugin
-  // materialization above; reading the (intentionally absent) snapshot file
-  // would just record a `file-missing` stub on top of the previous attempt's
-  // legitimate snapshot. Leave the column at its prior value by skipping the
-  // read entirely.
-  let inventoryJson: string | null = null
-  // RFC-143: inventory read is an opencode-only capability. The agent-kind +
-  // non-followup gates are business conditions (`wantsInventory`, same value the
-  // spawn-side injection used); the runtime gate is expressed by `readInventory`
-  // being present — claude's driver omits it → `?.` short-circuits and the
-  // column stays null.
-  if (wantsInventory) {
-    try {
-      const snapshot = await driver.readInventory?.({
-        runRoot,
-        nodeKind: inventoryNodeKind,
-      })
-      if (snapshot !== undefined && snapshot !== null) {
-        inventoryJson = JSON.stringify(snapshot)
+    // 10. RFC-029: read the runtime inventory snapshot the dump plugin wrote
+    //      into runRoot. Total: any failure path resolves to a `captured:false`
+    //      stub with a precise reason code rather than leaving the column
+    //      NULL, so the UI's reason-pinpointed messaging works on the first
+    //      load. Skipped (column stays NULL) for non-agent kinds.
+    //
+    // RFC-042: same-session envelope follow-up runs skipped plugin
+    // materialization above; reading the (intentionally absent) snapshot file
+    // would just record a `file-missing` stub on top of the previous attempt's
+    // legitimate snapshot. Leave the column at its prior value by skipping the
+    // read entirely.
+    let inventoryJson: string | null = null
+    // RFC-143: inventory read is an opencode-only capability. The agent-kind +
+    // non-followup gates are business conditions (`wantsInventory`, same value the
+    // spawn-side injection used); the runtime gate is expressed by `readInventory`
+    // being present — claude's driver omits it → `?.` short-circuits and the
+    // column stays null.
+    if (wantsInventory) {
+      try {
+        const snapshot = await driver.readInventory?.({
+          runRoot,
+          nodeKind: inventoryNodeKind,
+          verifiedIdentity: plan.diagnostics?.verifiedIdentity === true,
+        })
+        if (snapshot !== undefined && snapshot !== null) {
+          inventoryJson = JSON.stringify(snapshot)
+        }
+      } catch (err) {
+        log.warn('inventory-read-unhandled', {
+          nodeRunId: opts.nodeRunId,
+          err: err instanceof Error ? err.message : String(err),
+        })
       }
-    } catch (err) {
-      log.warn('inventory-read-unhandled', {
-        nodeRunId: opts.nodeRunId,
-        err: err instanceof Error ? err.message : String(err),
-      })
     }
-  }
 
-  // 11. Update node_runs final state.
-  // RFC-053: setNodeRunStatus enforces the runtime-determined transition
-  // running → {done, failed, canceled}. Non-status fields are batched in
-  // `extra`. Two writes: status via CAS helper, then the columns lifecycle
-  // doesn't know about (inventory / token usage / portValidation / etc.).
-  const persistedStatus =
-    status === 'canceled' && opts.signal?.reason === DAEMON_SHUTDOWN_ABORT_REASON
-      ? 'interrupted'
-      : status
-  await setNodeRunStatus({
-    db: opts.db,
-    nodeRunId: opts.nodeRunId,
-    to: persistedStatus,
-    allowedFrom: ['running'],
-    reason: 'runner-exit',
-    extra: {
-      finishedAt: Date.now(),
-      exitCode: exitCode ?? null,
-      errorMessage: errorMessage ?? null,
-      failureCode: failureCode ?? null,
-      tokInput: tokenUsage.input,
-      tokOutput: tokenUsage.output,
-      tokCacheCreate: tokenUsage.cacheCreate,
-      tokCacheRead: tokenUsage.cacheRead,
-      tokTotal: tokenUsage.total,
-    },
-  })
-  // RFC-132 PR-D 步骤2 (T4): RFC-070 消费戳废弃——派生老化 isTargetNodeConsumed
-  // (clarifyRerunLedger) 已是唯一老化判据（读 run 状态，零持久戳）。此处不再落戳。
-  // Runner-specific JSON fields not in NodeRunStatusUpdateExtra — write
-  // them as a follow-up non-status update.
-  // rfc053-allow-direct-status-write -- writing non-status fields
-  await opts.db
-    .update(nodeRuns)
-    .set({
-      inventorySnapshotJson: inventoryJson,
-      // RFC-046: persist the post-budget-clip snapshot captured at inject
-      // time (or copied from attempt 0 on the envelope-followup path).
-      injectedMemoriesJson: injectedSnapshot === null ? null : JSON.stringify(injectedSnapshot),
-      // RFC-049: structured port-validation failure payload.
-      portValidationFailuresJson:
-        portValidationFailures.length > 0
-          ? serializePortValidationFailures(portValidationFailures)
-          : null,
+    // 11. Update node_runs final state.
+    // RFC-053: setNodeRunStatus enforces the runtime-determined transition
+    // running → {done, failed, canceled}. Non-status fields are batched in
+    // `extra`. Two writes: status via CAS helper, then the columns lifecycle
+    // doesn't know about (inventory / token usage / portValidation / etc.).
+    const persistedStatus =
+      status === 'canceled' && opts.signal?.reason === DAEMON_SHUTDOWN_ABORT_REASON
+        ? 'interrupted'
+        : status
+    await setNodeRunStatus({
+      db: opts.db,
+      nodeRunId: opts.nodeRunId,
+      to: persistedStatus,
+      allowedFrom: ['running'],
+      reason: 'runner-exit',
+      extra: {
+        finishedAt: Date.now(),
+        exitCode: exitCode ?? null,
+        errorMessage: errorMessage ?? null,
+        failureCode: failureCode ?? null,
+        tokInput: tokenUsage.input,
+        tokOutput: tokenUsage.output,
+        tokCacheCreate: tokenUsage.cacheCreate,
+        tokCacheRead: tokenUsage.cacheRead,
+        tokTotal: tokenUsage.total,
+      },
     })
-    .where(eq(nodeRuns.id, opts.nodeRunId))
+    // RFC-132 PR-D 步骤2 (T4): RFC-070 消费戳废弃——派生老化 isTargetNodeConsumed
+    // (clarifyRerunLedger) 已是唯一老化判据（读 run 状态，零持久戳）。此处不再落戳。
+    // Runner-specific JSON fields not in NodeRunStatusUpdateExtra — write
+    // them as a follow-up non-status update.
+    // rfc053-allow-direct-status-write -- writing non-status fields
+    await opts.db
+      .update(nodeRuns)
+      .set({
+        inventorySnapshotJson: inventoryJson,
+        // RFC-046: persist the post-budget-clip snapshot captured at inject
+        // time (or copied from attempt 0 on the envelope-followup path).
+        injectedMemoriesJson: injectedSnapshot === null ? null : JSON.stringify(injectedSnapshot),
+        // RFC-049: structured port-validation failure payload.
+        portValidationFailuresJson:
+          portValidationFailures.length > 0
+            ? serializePortValidationFailures(portValidationFailures)
+            : null,
+      })
+      .where(eq(nodeRuns.id, opts.nodeRunId))
 
-  // 12. Clean up run dir (best-effort).
-  try {
-    rmSync(runRoot, { recursive: true, force: true })
-  } catch {
-    // Logged but non-fatal.
+    const result: RunResult = { status, exitCode, outputs, tokenUsage, prompt }
+    if (portFilePaths.length > 0) result.portFilePaths = portFilePaths
+    if (errorMessage !== undefined) result.errorMessage = errorMessage
+    if (failureCode !== undefined) result.failureCode = failureCode
+    if (sessionId !== undefined) result.sessionId = sessionId
+    if (clarifyResult !== undefined) result.clarify = clarifyResult
+    normalSpawnPathCompleted = true
+    return result
+  } catch (error) {
+    // Defer the durable failure stamp until after `finally` has observably
+    // reaped the launcher and released its exact session lease. Keeping the
+    // raw error only in memory also prevents production identity failures from
+    // leaking host paths or credential-derived diagnostics into node_runs.
+    postSpawnFailed = true
+    postSpawnError = error
+  } finally {
+    for (const cleanup of spawnedCleanupHooks.reverse()) {
+      try {
+        cleanup()
+      } catch {
+        // Every hook is best-effort and idempotent.
+      }
+    }
+    if (!normalSpawnPathCompleted) {
+      for (const pump of spawnedPumps) pump.cancel()
+    }
+    if (!childFullyReaped && !preserveLiveRuntimeState) {
+      childFullyReaped = await terminateAndReapUnexpectedChild(
+        child,
+        log,
+        opts.killEscalationGraceMs ?? KILL_ESCALATION_GRACE_MS,
+      )
+    }
+    if (!normalSpawnPathCompleted) {
+      await Promise.allSettled(spawnedPumps.map((pump) => pump.done))
+    }
+    if (childFullyReaped) {
+      await finalizePlan(true)
+    } else {
+      child.unref()
+      log.warn('opencode-session-lease-retained-for-live-process', {
+        nodeRunId: opts.nodeRunId,
+        sessionId: controlState.leaseToken?.sessionId,
+      })
+    }
   }
 
-  const result: RunResult = { status, exitCode, outputs, tokenUsage, prompt }
-  if (portFilePaths.length > 0) result.portFilePaths = portFilePaths
-  if (errorMessage !== undefined) result.errorMessage = errorMessage
-  if (failureCode !== undefined) result.failureCode = failureCode
-  if (sessionId !== undefined) result.sessionId = sessionId
-  if (clarifyResult !== undefined) result.clarify = clarifyResult
-  return result
+  // The only fallthrough from the try/catch/finally above is an unexpected
+  // post-spawn exception. Convert it into a normal failed RunResult after the
+  // process/resource finalizer has completed; otherwise the scheduler's catch
+  // path can leave this durable row stuck at `running`.
+  if (!postSpawnFailed) {
+    throw new Error('unreachable runner post-spawn state')
+  }
+  const postSpawnFailureCode =
+    opencodeControl === undefined
+      ? undefined
+      : (executionIdentityFailureCodeOf(postSpawnError) ??
+        (controlState.ready
+          ? 'execution-identity-stream-failed'
+          : 'execution-identity-control-failed'))
+  const postSpawnErrorMessage = postSpawnFailureCode ?? 'runtime-spawn-failed'
+  try {
+    await setNodeRunStatus({
+      db: opts.db,
+      nodeRunId: opts.nodeRunId,
+      to: 'failed',
+      allowedFrom: ['running'],
+      reason: 'runner-post-spawn-exception',
+      extra: {
+        finishedAt: Date.now(),
+        exitCode: null,
+        errorMessage: postSpawnErrorMessage,
+        failureCode: postSpawnFailureCode ?? null,
+      },
+    })
+  } catch {
+    // A concurrent terminal transition wins. In particular, never overwrite a
+    // cancellation/review result merely because the runner was also unwinding.
+    log.warn('runner-post-spawn-failure-status-cas-rejected', {
+      nodeRunId: opts.nodeRunId,
+    })
+  }
+  return {
+    status: 'failed',
+    exitCode: null,
+    outputs: {},
+    tokenUsage: { input: 0, output: 0, cacheCreate: 0, cacheRead: 0, total: 0 },
+    prompt,
+    errorMessage: postSpawnErrorMessage,
+    ...(postSpawnFailureCode === undefined ? {} : { failureCode: postSpawnFailureCode }),
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -1868,6 +2503,43 @@ function killTree(child: Bun.Subprocess, signal: 'SIGTERM' | 'SIGKILL'): void {
     }
   }
   safeKill(child, signal)
+}
+
+async function waitForChildExit(child: Bun.Subprocess, timeoutMs: number): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      child.exited.then(
+        () => true,
+        () => true,
+      ),
+      new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(false), timeoutMs)
+      }),
+    ])
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
+  }
+}
+
+/**
+ * Outer-finally safety net for exceptions after Bun.spawn but before the
+ * ordinary reap path. It never clears a lease unless the direct launcher was
+ * observably reaped.
+ */
+async function terminateAndReapUnexpectedChild(
+  child: Bun.Subprocess,
+  log: Logger,
+  graceMs: number,
+): Promise<boolean> {
+  killTree(child, 'SIGTERM')
+  if (await waitForChildExit(child, graceMs)) return true
+  log.warn('unexpected runner exception; launcher ignored SIGTERM', {
+    pid: child.pid,
+    graceMs,
+  })
+  killTree(child, 'SIGKILL')
+  return waitForChildExit(child, FINAL_REAP_MARGIN_MS)
 }
 
 /**

@@ -40,10 +40,12 @@ import {
   type FusionDeps,
 } from '../src/services/fusion'
 import { getTask } from '../src/services/task'
+import { createRuntime } from '../src/services/runtimeRegistry'
 import { createManagedSkill, type SkillFsOptions } from '../src/services/skill'
 import { getSkillVersionContent } from '../src/services/skillVersion'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const VALID_OPENCODE_RUNTIME = 'rfc224-test-opencode'
 
 // Use the migration-seeded '__system__' admin user so task-membership inserts
 // (which FK to users.id) succeed.
@@ -88,15 +90,21 @@ interface H {
   deps: FusionDeps
   cleanup: () => void
 }
-function build(): H {
+async function build(): Promise<H> {
   const tmp = mkdtempSync(pjoin(tmpdir(), 'aw-fusion-'))
   const appHome = pjoin(tmp, 'home')
   const db = createInMemoryDb(MIGRATIONS)
+  await createRuntime(db, {
+    name: VALID_OPENCODE_RUNTIME,
+    protocol: 'opencode',
+    model: 'openai/gpt-5.6',
+  })
   const deps: FusionDeps = {
     db,
     appHome,
     opencodeCmd: [makeClarifyStub(tmp)],
     awaitScheduler: true,
+    defaultRuntime: VALID_OPENCODE_RUNTIME,
   }
   return { db, appHome, deps, cleanup: () => rmSync(tmp, { recursive: true, force: true }) }
 }
@@ -161,7 +169,7 @@ describe('isValidFusionTransition', () => {
 
 describe('createFusion preconditions', () => {
   let h: H
-  beforeEach(() => (h = build()))
+  beforeEach(async () => (h = await build()))
   afterEach(() => h.cleanup())
 
   test('rejects a non-approved memory', async () => {
@@ -214,7 +222,7 @@ describe('createFusion preconditions', () => {
 
 describe('launch → reconcile → approve', () => {
   let h: H
-  beforeEach(() => (h = build()))
+  beforeEach(async () => (h = await build()))
   afterEach(() => h.cleanup())
 
   test('full happy path: skill bumps + incorporated memory fused', async () => {
@@ -382,7 +390,7 @@ describe('launch → reconcile → approve', () => {
 // are all rejected with ZERO side effects, forcing the user to re-initiate.
 describe('RFC-170 T6 — fusion precondition token', () => {
   let h: H
-  beforeEach(() => (h = build()))
+  beforeEach(async () => (h = await build()))
   afterEach(() => h.cleanup())
 
   /** Drive a fresh fusion to awaiting_approval (agent worktree edit simulated). */
@@ -634,7 +642,7 @@ describe('RFC-170 T6 — fusion precondition token', () => {
 // left by a daemon crash mid-approve / mid-reject.
 describe('RFC-170 T6 F9 — recoverFusionDecisions (crash recovery)', () => {
   let h: H
-  beforeEach(() => (h = build()))
+  beforeEach(async () => (h = await build()))
   afterEach(() => h.cleanup())
 
   beforeEach(async () => {
@@ -782,7 +790,7 @@ describe('RFC-170 T6 F9 — recoverFusionDecisions (crash recovery)', () => {
 // different generation's content.
 describe('RFC-170 T6 F10 — fusion seeds from the version snapshot, not live', () => {
   let h: H
-  beforeEach(() => (h = build()))
+  beforeEach(async () => (h = await build()))
   afterEach(() => h.cleanup())
 
   test('createFusion seeds from versions/v1, ignoring tampered live files', async () => {
@@ -861,7 +869,7 @@ describe('RFC-170 T6 F10 — fusion seeds from the version snapshot, not live', 
 // and terminalizes parked (awaiting_human) engine tasks so nothing is orphaned.
 describe('RFC-170 T6 F12 — cancel is generation-safe + covers parked tasks', () => {
   let h: H
-  beforeEach(() => (h = build()))
+  beforeEach(async () => (h = await build()))
   afterEach(() => h.cleanup())
 
   test('cancelFusion terminalizes the parked engine task (F12 parked handling)', async () => {

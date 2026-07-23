@@ -41,6 +41,7 @@ import { canViewResource } from '@/services/resourceAcl'
 import { getWorkgroupById } from '@/services/workgroups'
 import { startTask, type StartTaskDeps } from '@/services/task'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { assertAgentIdsExecutionPolicy } from '@/services/executionPolicy'
 
 // RFC-217 T1 — sentinel constants moved to ./constants (zero-dep leaf; cycle
 // fix). Re-exported here for existing test-side importers only; PRODUCTION
@@ -204,6 +205,22 @@ export async function startWorkgroupTask(
       { expectedVersion: input.expectedWorkgroupVersion, currentVersion: group.version },
     )
   }
+
+  // RFC-224: resolve every canonical roster member through the same
+  // effective-runtime policy used by single-agent/workflow launches. This is
+  // before host seeding, task/worktree materialization, or any model-visible
+  // side effect; scheduled fires reuse this exact path.
+  await assertAgentIdsExecutionPolicy(
+    db,
+    group.members.flatMap((member) =>
+      member.memberType === 'agent' &&
+      typeof member.agentId === 'string' &&
+      member.agentId.length > 0
+        ? [member.agentId]
+        : [],
+    ),
+    deps.defaultRuntime,
+  )
 
   const readiness = workgroupLaunchReadiness(group)
   if (!readiness.ready) {

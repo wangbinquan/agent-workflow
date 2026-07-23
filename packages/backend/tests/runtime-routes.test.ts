@@ -10,6 +10,7 @@ import { createApp } from '../src/server'
 import { applyConfigPatch, loadConfig } from '../src/config'
 import { clearOpencodeModelsCache } from '../src/util/opencode-models'
 import { createRuntime, seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
+import { FIXTURE_RUNTIME_DIAGNOSTICS } from './helpers/officialOpencodeFixture'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -34,6 +35,7 @@ function makeHarness(opts: { binary: string }): Harness {
     opencodeVersion: null,
     dbVersion: 1,
     db,
+    runtimeDiagnosticTestDependencies: FIXTURE_RUNTIME_DIAGNOSTICS,
   })
   return { app, db, tmp, configPath, binaryPath: opts.binary }
 }
@@ -132,6 +134,53 @@ describe('GET /api/runtime/models', () => {
       },
       { id: 'openai/gpt-5', provider: 'openai', modelID: 'gpt-5' },
     ])
+  })
+
+  test('production defaults never admit the deterministic fixture executable', async () => {
+    const productionApp = createApp({
+      token: TOKEN,
+      configPath: h.configPath,
+      opencodeVersion: null,
+      dbVersion: 1,
+      db: h.db,
+    })
+    const res = await req(productionApp, '/api/runtime/models')
+    expect(res.status).toBe(502)
+    expect((await res.json()) as Record<string, unknown>).toMatchObject({
+      code: 'execution-identity-untrusted-binary',
+      message: 'execution-identity-untrusted-binary',
+    })
+  })
+
+  test('stable identity code never reflects an arbitrary backend error message', async () => {
+    const raw = 'RAW_BACKEND_SECRET /private/sealed/opencode'
+    const guardedApp = createApp({
+      token: TOKEN,
+      configPath: h.configPath,
+      opencodeVersion: null,
+      dbVersion: 1,
+      db: h.db,
+      runtimeDiagnosticTestDependencies: {
+        ...FIXTURE_RUNTIME_DIAGNOSTICS,
+        withOfficialOpencodeSnapshot: async <T>(
+          _command: readonly string[],
+          _callback: (snapshotPath: string) => Promise<T>,
+        ): Promise<T> => {
+          throw Object.assign(new Error(raw), {
+            code: 'execution-identity-untrusted-binary' as const,
+          })
+        },
+      },
+    })
+
+    const res = await req(guardedApp, '/api/runtime/models')
+    expect(res.status).toBe(502)
+    const json = (await res.json()) as Record<string, unknown>
+    expect(json).toMatchObject({
+      code: 'execution-identity-untrusted-binary',
+      message: 'execution-identity-untrusted-binary',
+    })
+    expect(JSON.stringify(json)).not.toContain(raw)
   })
 
   test('second call hits cache', async () => {

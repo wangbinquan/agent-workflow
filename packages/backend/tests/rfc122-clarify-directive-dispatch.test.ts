@@ -20,6 +20,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
@@ -135,7 +136,7 @@ interface Ctx {
   stateDir: string
 }
 let idx = 0
-function freshCtx(): Ctx {
+async function freshCtx(): Promise<Ctx> {
   idx++
   const tmp = mkdtempSync(join(tmpdir(), `aw-rfc122-${idx}-`))
   const previousPlanFile = process.env.SCENARIO_PLAN_FILE
@@ -166,8 +167,10 @@ function freshCtx(): Ctx {
   git('-C', repoPath, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
   process.env.SCENARIO_STATE_DIR = stateDir
   process.env.AGENT_WORKFLOW_HOME = appHome
+  const db = createInMemoryDb(MIGRATIONS)
+  await seedTestDefaultOpencodeRuntime(db)
   return {
-    db: createInMemoryDb(MIGRATIONS),
+    db,
     appHome,
     repoPath,
     stateDir,
@@ -278,8 +281,8 @@ async function taskStatus(db: DbClient, taskId: string): Promise<string> {
 
 describe('RFC-122 dispatch — stop override suppresses the ask-back protocol', () => {
   let c: Ctx
-  beforeEach(() => {
-    c = freshCtx()
+  beforeEach(async () => {
+    c = await freshCtx()
   })
 
   test('golden-lock: no override ⇒ first dispatch carries MANDATORY ASK-BACK', async () => {
@@ -350,8 +353,8 @@ describe('RFC-122 dispatch — stop override suppresses the ask-back protocol', 
 // while the failed attempt was running — not a value cached once before the loop.
 describe('RFC-122 H1 — process retry reads the LATEST directive per attempt', () => {
   let c: Ctx
-  beforeEach(() => {
-    c = freshCtx()
+  beforeEach(async () => {
+    c = await freshCtx()
   })
 
   test('a flip between a failed attempt and its process-retry is honored by the retry prompt', async () => {
@@ -413,8 +416,8 @@ describe('RFC-122 H1 — process retry reads the LATEST directive per attempt', 
 // complete output protocol it never saw in the clarify-only session.
 describe('RFC-122 — STOP flip on a same-session FOLLOW-UP renders the full output protocol', () => {
   let c: Ctx
-  beforeEach(() => {
-    c = freshCtx()
+  beforeEach(async () => {
+    c = await freshCtx()
   })
 
   test('clarify-required follow-up + mid-loop stop flip → attempt 1 has STOP CLARIFYING + output protocol', async () => {

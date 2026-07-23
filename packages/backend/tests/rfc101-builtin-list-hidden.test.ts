@@ -31,6 +31,7 @@ import type { Hono } from 'hono'
 import { resolve } from 'node:path'
 import { SYSTEM_USER_ID } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { listAgents } from '../src/services/agent'
 import {
   SKILL_FUSION_WORKFLOW_NAME,
@@ -46,11 +47,12 @@ import type { Agent, Workflow } from '@agent-workflow/shared'
 const TOKEN = 'a'.repeat(64) // 64-char hex → resolves to the __system__ admin actor
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
-function buildApp(): { db: DbClient; app: Hono } {
+async function buildApp(): Promise<{ db: DbClient; app: Hono }> {
   const db = createInMemoryDb(MIGRATIONS)
+  await seedTestDefaultOpencodeRuntime(db)
   const app = createApp({
     token: TOKEN,
-    configPath: '',
+    configPath: '/tmp/aw-rfc101-config-never-used.json',
     opencodeVersion: '1.15.0',
     dbVersion: 1,
     db,
@@ -88,7 +90,7 @@ describe('RFC-101 built-in fusion resources are hidden from user-facing lists', 
   afterEach(() => resetBroadcastersForTests())
 
   test('GET /api/agents (as daemon/admin) excludes the system-owned aw-skill-merger', async () => {
-    const { db, app } = buildApp()
+    const { db, app } = await buildApp()
     await seedFusionResources(db)
 
     // Sanity: the row really is seeded, system-owned, and still resolvable at
@@ -104,7 +106,7 @@ describe('RFC-101 built-in fusion resources are hidden from user-facing lists', 
   })
 
   test('GET /api/workflows (as daemon/admin) excludes the system-owned aw-skill-fusion', async () => {
-    const { db, app } = buildApp()
+    const { db, app } = await buildApp()
     await seedFusionResources(db)
 
     const fusion = (await listWorkflows(db)).find((w) => w.name === SKILL_FUSION_WORKFLOW_NAME)
@@ -122,7 +124,7 @@ describe('RFC-101 built-in fusion resources are hidden from user-facing lists', 
     // __system__ (the daemon token's identity), yet its name is not reserved, so
     // it is NOT a built-in and must remain in the list. The name+owner
     // conjunction keeps it; the owner-only filter wrongly dropped it.
-    const { db, app } = buildApp()
+    const { db, app } = await buildApp()
     await seedFusionResources(db)
     const created = await api(app, '/api/agents', {
       method: 'POST',

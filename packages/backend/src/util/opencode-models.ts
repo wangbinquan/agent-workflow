@@ -48,6 +48,40 @@ export function evictOpencodeModelsCache(binary: string): void {
 // daemon, and a flooding one must not OOM it.
 const DEFAULT_MODELS_TIMEOUT_MS = 30_000
 const MAX_MODELS_OUTPUT_BYTES = 4 * 1024 * 1024 // 4 MiB per stream
+const MODELS_GROUP_REAP_WAIT_MS = 250
+
+function processGroupAlive(groupLeaderPid: number): boolean {
+  try {
+    process.kill(-groupLeaderPid, 0)
+    return true
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === 'EPERM'
+  }
+}
+
+/**
+ * A detached wrapper can fork a helper with closed stdio and then exit before
+ * the timeout. The direct child and both drains are finished in that case, but
+ * its process group can still contain the helper. Always kill the group and
+ * give the kernel a short bounded window to reap it before returning.
+ */
+async function reapModelsProcessGroup(groupLeaderPid: number | undefined): Promise<void> {
+  if (typeof groupLeaderPid !== 'number' || groupLeaderPid <= 0) return
+  try {
+    // The direct child has already been waited/reaped. Never use
+    // killProcessTree's positive-PID fallback here: if the now-free leader PID
+    // were reused, that fallback could kill an unrelated process. `detached`
+    // guarantees our surviving descendants (if any) remain addressable only
+    // through the original negative PGID.
+    process.kill(-groupLeaderPid, 'SIGKILL')
+  } catch {
+    return
+  }
+  const deadline = Date.now() + MODELS_GROUP_REAP_WAIT_MS
+  while (Date.now() < deadline && processGroupAlive(groupLeaderPid)) {
+    await Bun.sleep(10)
+  }
+}
 
 /** Drain a stream to EOF but stop ACCUMULATING past `cap` bytes (keep reading so
  *  the child's pipe never wedges). Returns the captured (possibly truncated) text. */
@@ -76,10 +110,18 @@ async function readCapped(
 
 export async function listOpencodeModels(
   binary: string,
-  opts?: { refresh?: boolean; timeoutMs?: number },
+  opts?: {
+    refresh?: boolean
+    timeoutMs?: number
+    cacheKey?: string
+    env?: Record<string, string>
+    cwd?: string
+    beforeCacheWrite?: () => void | Promise<void>
+  },
 ): Promise<ListOpencodeModelsResult> {
+  const cacheKey = opts?.cacheKey ?? binary
   if (!opts?.refresh) {
-    const hit = cache.get(binary)
+    const hit = cache.get(cacheKey)
     if (hit !== undefined) return { binary, models: hit, cached: true }
   }
 
@@ -91,7 +133,15 @@ export async function listOpencodeModels(
   // opencode can spawn helpers) would otherwise keep the inherited stdout pipe
   // open and block the drain past the timeout (CI caught this — a plain
   // `proc.kill` left the grandchild alive). Mirrors runtimeSmoke.
-  const proc = Bun.spawn({ cmd, stdout: 'pipe', stderr: 'pipe', stdin: 'ignore', detached: true })
+  const proc = Bun.spawn({
+    cmd,
+    ...(opts?.env !== undefined ? { env: opts.env } : {}),
+    ...(opts?.cwd !== undefined ? { cwd: opts.cwd } : {}),
+    stdout: 'pipe',
+    stderr: 'pipe',
+    stdin: 'ignore',
+    detached: true,
+  })
   let timedOut = false
   const timer = setTimeout(() => {
     timedOut = true
@@ -115,6 +165,7 @@ export async function listOpencodeModels(
     ])
   } finally {
     clearTimeout(timer)
+    await reapModelsProcessGroup(proc.pid)
   }
 
   if (timedOut) {
@@ -129,7 +180,8 @@ export async function listOpencodeModels(
   }
 
   const models = parseModelsOutput(stdout)
-  cache.set(binary, models)
+  await opts?.beforeCacheWrite?.()
+  cache.set(cacheKey, models)
   return { binary, models, cached: false }
 }
 

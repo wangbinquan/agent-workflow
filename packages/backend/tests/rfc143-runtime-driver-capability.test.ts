@@ -103,7 +103,7 @@ describe('RFC-143 (B) 能力接口', () => {
       kind: 'opencode', // 借用已有 kind 满足 RuntimeKind union（真第三 kind 需 widen union）
       minVersion: '0.0.0',
       parseEvent: () => null,
-      buildSpawn: () => ({ cmd: ['mock'], env: {} }),
+      buildSpawn: async () => ({ cmd: ['mock'], env: {} }),
       buildBusinessSpawn: async (ctx) => {
         spawnCalls.push(ctx.agent.name)
         return {
@@ -187,6 +187,13 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
     // 允许 kind 分支——那是能力本体；其余任何地方出现 kind 字面量判别都意味着
     // 「注册即扩展」被打破（第 23 处旁路诞生）。
     const offenders: string[] = []
+    const rfc224SecurityBoundaries = new Set([
+      // RFC-224 deliberately gives OpenCode a stricter official-snapshot
+      // diagnostic path and a runner ownership barrier. These are security
+      // capabilities, not spawn assembly bypasses.
+      'routes/runtimes.ts',
+      'services/runner.ts',
+    ])
     const kindDiscrimination =
       /(?:runtime|protocol)\s*===\s*['"](?:opencode|claude-code)['"]|\bisClaude\b/
     const walk = (dir: string): void => {
@@ -198,6 +205,7 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
           continue
         }
         if (!name.endsWith('.ts')) continue
+        if (rfc224SecurityBoundaries.has(relative(SRC_ROOT, p))) continue
         const src = readFileSync(p, 'utf8')
         if (kindDiscrimination.test(src)) offenders.push(relative(SRC_ROOT, p))
       }
@@ -253,18 +261,21 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
       prompt: 'P',
       worktreePath: '/wt',
       runDir: '/rd',
+      testOnlyUnverifiedRuntime: true,
     }
 
-    it('无显式 binary 时回退 env 覆盖；显式 runtimeBinary 优先', () => {
+    it('无显式 binary 时回退 env 覆盖；显式 runtimeBinary 优先', async () => {
       process.env.AGENT_WORKFLOW_OPENCODE_BIN = '/opt/env-oc'
       const oc = getRuntimeDriver('opencode')
-      expect(oc.buildSpawn({ ...CTX }).cmd[0]).toBe('/opt/env-oc')
-      expect(oc.buildSpawn({ ...CTX, runtimeBinary: '/opt/fork-oc' }).cmd[0]).toBe('/opt/fork-oc')
+      expect((await oc.buildSpawn({ ...CTX })).cmd[0]).toBe('/opt/env-oc')
+      expect((await oc.buildSpawn({ ...CTX, runtimeBinary: '/opt/fork-oc' })).cmd[0]).toBe(
+        '/opt/fork-oc',
+      )
     })
 
-    it('env 未设时保持内建名 opencode（历史行为）', () => {
+    it('env 未设时保持内建名 opencode（历史行为）', async () => {
       delete process.env.AGENT_WORKFLOW_OPENCODE_BIN
-      expect(getRuntimeDriver('opencode').buildSpawn({ ...CTX }).cmd[0]).toBe('opencode')
+      expect((await getRuntimeDriver('opencode').buildSpawn({ ...CTX })).cmd[0]).toBe('opencode')
     })
   })
 })

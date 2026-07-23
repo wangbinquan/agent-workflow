@@ -11,12 +11,19 @@ import { join, resolve } from 'node:path'
 import type { Hono } from 'hono'
 import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { loadConfig } from '../src/config'
-import { createApp } from '../src/server'
+import { applyConfigPatch, loadConfig } from '../src/config'
+import { createApp, type RuntimeDiagnosticTestDependencies } from '../src/server'
 import { createUser } from '../src/services/users'
-import { createRuntime, seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
+import {
+  createRuntime,
+  deleteRuntime,
+  getRuntime,
+  seedBuiltinRuntimes,
+} from '../src/services/runtimeRegistry'
+import type { SmokeOptions, SmokeResult } from '../src/services/runtimeSmoke'
 import { agents } from '../src/db/schema'
 import { ulid } from 'ulid'
+import { FIXTURE_RUNTIME_DIAGNOSTICS } from './helpers/officialOpencodeFixture'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -28,6 +35,7 @@ interface Harness {
   db: DbClient
   app: Hono
   tmp: string
+  configPath: string
   userToken: string
 }
 
@@ -43,6 +51,7 @@ async function buildHarness(): Promise<Harness> {
     opencodeVersion: '1.14.25',
     dbVersion: 1,
     db,
+    runtimeDiagnosticTestDependencies: FIXTURE_RUNTIME_DIAGNOSTICS,
   })
   const bob = await createUser(db, {
     username: 'bob',
@@ -51,7 +60,7 @@ async function buildHarness(): Promise<Harness> {
     password: 'longEnoughPassword',
   })
   const { token } = await createSession({ db, userId: bob.id })
-  return { db, app, tmp, userToken: token }
+  return { db, app, tmp, configPath, userToken: token }
 }
 
 async function reqAs(
@@ -72,6 +81,46 @@ function wrapperFor(mockFile: string): string {
   writeFileSync(wrapper, `#!/bin/sh\nexec bun run ${mockFile} "$@"\n`)
   chmodSync(wrapper, 0o755)
   return wrapper
+}
+
+function deferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T | PromiseLike<T>) => void
+} {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  const promise = new Promise<T>((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
+const CONFORMING_SMOKE: SmokeResult = {
+  outcome: 'conforms',
+  conforms: true,
+  detail: 'deterministic delayed probe',
+  sawNonce: true,
+  sawEnvelope: false,
+  exitCode: 0,
+}
+
+function appWithSmoke(
+  h: Harness,
+  smokeRuntime: (options: SmokeOptions) => Promise<SmokeResult>,
+  beforeRuntimeProbeCache?: () => void | Promise<void>,
+): Hono {
+  const runtimeDiagnosticTestDependencies: RuntimeDiagnosticTestDependencies = {
+    ...FIXTURE_RUNTIME_DIAGNOSTICS,
+    smokeRuntime,
+    ...(beforeRuntimeProbeCache !== undefined ? { beforeRuntimeProbeCache } : {}),
+  }
+  return createApp({
+    token: DAEMON_TOKEN,
+    configPath: h.configPath,
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    db: h.db,
+    runtimeDiagnosticTestDependencies,
+  })
 }
 
 describe('runtime registry routes (RFC-112 PR-B)', () => {
@@ -98,6 +147,7 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
         name: 'my-oc',
         protocol: 'opencode',
         binaryPath: '/a/my-oc',
+        model: 'openai/gpt-5.6',
         probe: false,
       }),
     })
@@ -105,6 +155,39 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
     const json = (await res.json()) as { runtime: { name: string; protocol: string } }
     expect(json.runtime.name).toBe('my-oc')
     expect(json.runtime.protocol).toBe('opencode')
+  })
+
+  test('POST /api/runtimes with probe stores and displays a target-bound receipt', async () => {
+    const app = appWithSmoke(h, async () => CONFORMING_SMOKE)
+    const res = await reqAs(app, DAEMON_TOKEN, '/api/runtimes', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'create-probed',
+        protocol: 'claude-code',
+        binaryPath: '/fixture-claude',
+        probe: true,
+      }),
+    })
+
+    expect(res.status).toBe(201)
+    const json = (await res.json()) as {
+      runtime: { name: string; lastProbe: SmokeResult | null }
+    }
+    expect(json.runtime).toMatchObject({
+      name: 'create-probed',
+      lastProbe: CONFORMING_SMOKE,
+    })
+    const stored = await getRuntime(h.db, 'create-probed')
+    expect(JSON.parse(stored!.lastProbeJson!)).toMatchObject({
+      codec: 1,
+      target: {
+        id: stored!.id,
+        name: 'create-probed',
+        probeFence: 0,
+        resolvedBinaryPath: '/fixture-claude',
+      },
+      smoke: CONFORMING_SMOKE,
+    })
   })
 
   test('POST /api/runtimes is admin-only → 403 for a regular user', async () => {
@@ -120,7 +203,12 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
     // preseeded row already exists (name uniqueness), which reads as runtime-exists.
     const res = await reqAs(h.app, DAEMON_TOKEN, '/api/runtimes', {
       method: 'POST',
-      body: JSON.stringify({ name: 'opencode', protocol: 'opencode', probe: false }),
+      body: JSON.stringify({
+        name: 'opencode',
+        protocol: 'opencode',
+        model: 'openai/gpt-5.6',
+        probe: false,
+      }),
     })
     expect(res.status).toBe(409)
     const json = (await res.json()) as { code: string }
@@ -146,6 +234,34 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
     expect(builtin.status).toBe(200)
     expect(((await builtin.json()) as { runtime: { model: string } }).runtime.model).toBe('sonnet')
   })
+
+  test.each([null, '   '])(
+    'PUT rejects clearing an OpenCode model with %p and preserves the valid profile',
+    async (model) => {
+      await createRuntime(h.db, {
+        name: 'policy-oc',
+        protocol: 'opencode',
+        model: 'openai/gpt-5.6',
+      })
+
+      const res = await reqAs(h.app, DAEMON_TOKEN, '/api/runtimes/policy-oc', {
+        method: 'PUT',
+        body: JSON.stringify({ model }),
+      })
+
+      expect(res.status).toBe(422)
+      expect((await res.json()) as Record<string, unknown>).toMatchObject({
+        code: 'execution-identity-model-unresolved',
+      })
+      const list = await reqAs(h.app, h.userToken, '/api/runtimes')
+      const rows = (await list.json()) as {
+        runtimes: Array<{ name: string; model: string | null }>
+      }
+      expect(rows.runtimes.find((runtime) => runtime.name === 'policy-oc')?.model).toBe(
+        'openai/gpt-5.6',
+      )
+    },
+  )
 
   test('DELETE custom ok; preseeded claude-code ok (RFC-153); in-use → 409', async () => {
     await createRuntime(h.db, { name: 'my-oc', protocol: 'opencode' })
@@ -198,7 +314,11 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
     try {
       const res = await reqAs(h.app, DAEMON_TOKEN, '/api/runtimes/probe', {
         method: 'POST',
-        body: JSON.stringify({ protocol: 'opencode', binaryPath: wrapperFor(MOCK_OPENCODE) }),
+        body: JSON.stringify({
+          protocol: 'opencode',
+          binaryPath: wrapperFor(MOCK_OPENCODE),
+          model: 'openai/gpt-5.6',
+        }),
       })
       expect(res.status).toBe(200)
       const json = (await res.json()) as { smoke: { outcome: string; conforms: boolean } }
@@ -209,4 +329,321 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
       delete process.env.MOCK_OPENCODE_EMIT_SESSION_ID
     }
   }, 30_000)
+
+  test('saved-runtime probe rejects a receipt after a concurrent execution-profile PUT', async () => {
+    await createRuntime(h.db, {
+      name: 'probe-profile-race',
+      protocol: 'opencode',
+      binaryPath: '/old-opencode',
+      model: 'openai/gpt-5.6',
+    })
+    const entered = deferred<void>()
+    const finish = deferred<SmokeResult>()
+    let probed: SmokeOptions | null = null
+    let reachedProbeCacheBoundary = false
+    const app = appWithSmoke(
+      h,
+      async (options) => {
+        probed = options
+        entered.resolve()
+        return finish.promise
+      },
+      () => {
+        reachedProbeCacheBoundary = true
+      },
+    )
+
+    const pending = reqAs(app, DAEMON_TOKEN, '/api/runtimes/probe-profile-race/probe', {
+      method: 'POST',
+    })
+    await entered.promise
+    expect(probed).toMatchObject({
+      binaryPath: '/old-opencode',
+      model: 'openai/gpt-5.6',
+    })
+
+    const changed = await reqAs(app, DAEMON_TOKEN, '/api/runtimes/probe-profile-race', {
+      method: 'PUT',
+      body: JSON.stringify({
+        model: 'openai/gpt-5.7',
+      }),
+    })
+    expect(changed.status).toBe(200)
+    const changedRow = (await getRuntime(h.db, 'probe-profile-race'))!
+    expect(changedRow.binaryPath).toBe('/old-opencode')
+    expect(changedRow.probeFence).toBe(1)
+    finish.resolve(CONFORMING_SMOKE)
+
+    const stale = await pending
+    expect(stale.status).toBe(409)
+    expect((await stale.json()) as Record<string, unknown>).toMatchObject({
+      code: 'runtime-probe-stale',
+    })
+    expect(reachedProbeCacheBoundary).toBe(true)
+    expect((await getRuntime(h.db, 'probe-profile-race'))?.lastProbeJson).toBeNull()
+  })
+
+  test('saved-runtime probe cannot attach to a delete + same-name recreation', async () => {
+    const original = await createRuntime(h.db, {
+      name: 'probe-recreate-race',
+      protocol: 'claude-code',
+      binaryPath: '/same-binary',
+    })
+    const entered = deferred<void>()
+    const finish = deferred<SmokeResult>()
+    const app = appWithSmoke(h, async () => {
+      entered.resolve()
+      return finish.promise
+    })
+
+    const pending = reqAs(app, DAEMON_TOKEN, '/api/runtimes/probe-recreate-race/probe', {
+      method: 'POST',
+    })
+    await entered.promise
+    await deleteRuntime(h.db, 'probe-recreate-race', {})
+    const replacement = await createRuntime(h.db, {
+      name: 'probe-recreate-race',
+      protocol: 'claude-code',
+      binaryPath: '/same-binary',
+    })
+    expect(replacement.id).not.toBe(original.id)
+    finish.resolve(CONFORMING_SMOKE)
+
+    const stale = await pending
+    expect(stale.status).toBe(409)
+    expect((await stale.json()) as Record<string, unknown>).toMatchObject({
+      code: 'runtime-probe-stale',
+    })
+    expect((await getRuntime(h.db, 'probe-recreate-race'))?.lastProbeJson).toBeNull()
+  })
+
+  test('saved-runtime probe rejects a receipt after its inherited config binary changes', async () => {
+    await createRuntime(h.db, {
+      name: 'probe-config-race',
+      protocol: 'opencode',
+      model: 'openai/gpt-5.6',
+    })
+    // Config PUT validates every inherited system-agent runtime under RFC-224.
+    // Make the effective default model explicit, then establish the old head.
+    await reqAs(h.app, DAEMON_TOKEN, '/api/runtimes/opencode', {
+      method: 'PUT',
+      body: JSON.stringify({ model: 'openai/gpt-5.6' }),
+    })
+    applyConfigPatch(h.configPath, { opencodePath: '/old-config-opencode' })
+
+    const entered = deferred<void>()
+    const finish = deferred<SmokeResult>()
+    let probed: SmokeOptions | null = null
+    const app = appWithSmoke(h, async (options) => {
+      probed = options
+      entered.resolve()
+      return finish.promise
+    })
+    const pending = reqAs(app, DAEMON_TOKEN, '/api/runtimes/probe-config-race/probe', {
+      method: 'POST',
+    })
+    await entered.promise
+    expect(probed).toMatchObject({ binaryPath: '/old-config-opencode' })
+
+    const changed = await reqAs(app, DAEMON_TOKEN, '/api/config', {
+      method: 'PUT',
+      body: JSON.stringify({ opencodePath: '/new-config-opencode' }),
+    })
+    expect(changed.status).toBe(200)
+    finish.resolve(CONFORMING_SMOKE)
+
+    const stale = await pending
+    expect(stale.status).toBe(409)
+    expect((await stale.json()) as Record<string, unknown>).toMatchObject({
+      code: 'runtime-probe-stale',
+    })
+    expect((await getRuntime(h.db, 'probe-config-race'))?.lastProbeJson).toBeNull()
+  })
+
+  test('config path change persistently invalidates completed inherited receipts', async () => {
+    await createRuntime(h.db, {
+      name: 'probe-config-sequential',
+      protocol: 'opencode',
+      model: 'openai/gpt-5.6',
+    })
+    await reqAs(h.app, DAEMON_TOKEN, '/api/runtimes/opencode', {
+      method: 'PUT',
+      body: JSON.stringify({ model: 'openai/gpt-5.6' }),
+    })
+    applyConfigPatch(h.configPath, { opencodePath: '/old-sequential-opencode' })
+    const app = appWithSmoke(h, async () => CONFORMING_SMOKE)
+
+    const probed = await reqAs(app, DAEMON_TOKEN, '/api/runtimes/probe-config-sequential/probe', {
+      method: 'POST',
+    })
+    expect(probed.status).toBe(200)
+    const before = (await getRuntime(h.db, 'probe-config-sequential'))!
+    expect(before.lastProbeJson).not.toBeNull()
+
+    const changed = await reqAs(app, DAEMON_TOKEN, '/api/config', {
+      method: 'PUT',
+      body: JSON.stringify({ opencodePath: '/new-sequential-opencode' }),
+    })
+    expect(changed.status).toBe(200)
+    const after = (await getRuntime(h.db, 'probe-config-sequential'))!
+    expect(after.probeFence).toBe(before.probeFence + 1)
+    expect(after.lastProbeJson).toBeNull()
+  })
+
+  test('external config drift hides a persisted receipt whose effective binary no longer matches', async () => {
+    await createRuntime(h.db, {
+      name: 'probe-config-external',
+      protocol: 'opencode',
+      model: 'openai/gpt-5.6',
+    })
+    applyConfigPatch(h.configPath, { opencodePath: '/old-external-opencode' })
+    const app = appWithSmoke(h, async () => CONFORMING_SMOKE)
+    const probed = await reqAs(app, DAEMON_TOKEN, '/api/runtimes/probe-config-external/probe', {
+      method: 'POST',
+    })
+    expect(probed.status).toBe(200)
+    const before = (await getRuntime(h.db, 'probe-config-external'))!
+    expect(before.lastProbeJson).not.toBeNull()
+
+    // Bypass the HTTP coordinator to model an editor/other process replacing
+    // config.json. The self-bound receipt must still fail closed on materialize.
+    applyConfigPatch(h.configPath, { opencodePath: '/new-external-opencode' })
+    const stored = (await getRuntime(h.db, 'probe-config-external'))!
+    expect(stored.probeFence).toBe(before.probeFence)
+    expect(stored.lastProbeJson).toBe(before.lastProbeJson)
+
+    const listed = await reqAs(app, h.userToken, '/api/runtimes')
+    const json = (await listed.json()) as {
+      runtimes: Array<{ name: string; lastProbe: SmokeResult | null }>
+    }
+    expect(
+      json.runtimes.find((runtime) => runtime.name === 'probe-config-external')?.lastProbe,
+    ).toBeNull()
+  })
+
+  test('no-op config path PUT preserves a completed inherited receipt and fence', async () => {
+    await createRuntime(h.db, {
+      name: 'probe-config-noop',
+      protocol: 'opencode',
+      model: 'openai/gpt-5.6',
+    })
+    await reqAs(h.app, DAEMON_TOKEN, '/api/runtimes/opencode', {
+      method: 'PUT',
+      body: JSON.stringify({ model: 'openai/gpt-5.6' }),
+    })
+    applyConfigPatch(h.configPath, { opencodePath: '/same-config-opencode' })
+    const app = appWithSmoke(h, async () => CONFORMING_SMOKE)
+    expect(
+      (
+        await reqAs(app, DAEMON_TOKEN, '/api/runtimes/probe-config-noop/probe', {
+          method: 'POST',
+        })
+      ).status,
+    ).toBe(200)
+    const before = (await getRuntime(h.db, 'probe-config-noop'))!
+
+    const unchanged = await reqAs(app, DAEMON_TOKEN, '/api/config', {
+      method: 'PUT',
+      body: JSON.stringify({ opencodePath: '/same-config-opencode' }),
+    })
+    expect(unchanged.status).toBe(200)
+    const after = (await getRuntime(h.db, 'probe-config-noop'))!
+    expect(after.probeFence).toBe(before.probeFence)
+    expect(after.lastProbeJson).toBe(before.lastProbeJson)
+
+    const listed = await reqAs(app, h.userToken, '/api/runtimes')
+    const json = (await listed.json()) as {
+      runtimes: Array<{ name: string; lastProbe: SmokeResult | null }>
+    }
+    expect(
+      json.runtimes.find((runtime) => runtime.name === 'probe-config-noop')?.lastProbe,
+    ).toEqual(CONFORMING_SMOKE)
+  })
+
+  test('config PUT cannot enter the final config-check to probe-cache CAS boundary', async () => {
+    await createRuntime(h.db, {
+      name: 'probe-final-boundary',
+      protocol: 'opencode',
+      model: 'openai/gpt-5.6',
+    })
+    await reqAs(h.app, DAEMON_TOKEN, '/api/runtimes/opencode', {
+      method: 'PUT',
+      body: JSON.stringify({ model: 'openai/gpt-5.6' }),
+    })
+    applyConfigPatch(h.configPath, { opencodePath: '/old-boundary-opencode' })
+    const finalCheckReached = deferred<void>()
+    const releaseCache = deferred<void>()
+    const app = appWithSmoke(
+      h,
+      async () => CONFORMING_SMOKE,
+      async () => {
+        finalCheckReached.resolve()
+        await releaseCache.promise
+      },
+    )
+
+    const probePending = reqAs(app, DAEMON_TOKEN, '/api/runtimes/probe-final-boundary/probe', {
+      method: 'POST',
+    })
+    await finalCheckReached.promise
+    let configSettled = false
+    const configPending = reqAs(app, DAEMON_TOKEN, '/api/config', {
+      method: 'PUT',
+      body: JSON.stringify({ opencodePath: '/new-boundary-opencode' }),
+    }).then((response) => {
+      configSettled = true
+      return response
+    })
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(configSettled).toBe(false)
+
+    releaseCache.resolve()
+    expect((await probePending).status).toBe(200)
+    expect((await configPending).status).toBe(200)
+    const stored = (await getRuntime(h.db, 'probe-final-boundary'))!
+    expect(stored.probeFence).toBe(1)
+    expect(stored.lastProbeJson).toBeNull()
+  })
+
+  test('saved-runtime probe may cache across a concurrent no-op profile PUT', async () => {
+    await createRuntime(h.db, {
+      name: 'probe-noop-race',
+      protocol: 'claude-code',
+      binaryPath: '/same-binary',
+    })
+    const entered = deferred<void>()
+    const finish = deferred<SmokeResult>()
+    const app = appWithSmoke(h, async () => {
+      entered.resolve()
+      return finish.promise
+    })
+
+    const pending = reqAs(app, DAEMON_TOKEN, '/api/runtimes/probe-noop-race/probe', {
+      method: 'POST',
+    })
+    await entered.promise
+    const unchanged = await reqAs(app, DAEMON_TOKEN, '/api/runtimes/probe-noop-race', {
+      method: 'PUT',
+      body: JSON.stringify({ binaryPath: '/same-binary' }),
+    })
+    expect(unchanged.status).toBe(200)
+    finish.resolve(CONFORMING_SMOKE)
+
+    const fresh = await pending
+    expect(fresh.status).toBe(200)
+    expect((await fresh.json()) as Record<string, unknown>).toMatchObject({
+      smoke: CONFORMING_SMOKE,
+    })
+    const stored = await getRuntime(h.db, 'probe-noop-race')
+    expect(JSON.parse(stored!.lastProbeJson!)).toMatchObject({
+      codec: 1,
+      target: {
+        id: stored!.id,
+        name: 'probe-noop-race',
+        probeFence: stored!.probeFence,
+        resolvedBinaryPath: '/same-binary',
+      },
+      smoke: CONFORMING_SMOKE,
+    })
+  })
 })

@@ -30,6 +30,7 @@ import {
 } from '@agent-workflow/shared'
 import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import {
   agents,
   lifecycleAlerts,
@@ -263,6 +264,7 @@ describe('RFC-164 engine — launch path', () => {
 
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
+    await seedTestDefaultOpencodeRuntime(db)
     app = createApp({
       token: 'a'.repeat(64),
       configPath: '/tmp/aw-rfc164-engine-config.json',

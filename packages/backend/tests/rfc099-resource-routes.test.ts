@@ -12,10 +12,12 @@ import { ulid } from 'ulid'
 import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createApp } from '../src/server'
+import { createRuntime } from '../src/services/runtimeRegistry'
 import { createUser } from '../src/services/users'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const VALID_OPENCODE_RUNTIME = 'rfc224-test-opencode'
 
 interface Harness {
   db: DbClient
@@ -28,6 +30,11 @@ interface Harness {
 
 async function buildHarness(): Promise<Harness> {
   const db = createInMemoryDb(MIGRATIONS)
+  await createRuntime(db, {
+    name: VALID_OPENCODE_RUNTIME,
+    protocol: 'opencode',
+    model: 'openai/gpt-5.6',
+  })
   const app = createApp({
     token: DAEMON_TOKEN,
     configPath: '/tmp/aw-rfc099-config-never-used.json',
@@ -128,6 +135,7 @@ const AGENT_BODY = {
   plugins: [],
   frontmatterExtra: {},
   bodyMd: 'do secret things',
+  runtime: VALID_OPENCODE_RUNTIME,
 }
 
 describe('RFC-099 — agents route ACL', () => {

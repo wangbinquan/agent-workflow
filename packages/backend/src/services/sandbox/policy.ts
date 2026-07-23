@@ -21,7 +21,7 @@
 // Everything outside appHome ($HOME auth baselines, /tmp, toolchains) stays
 // untouched — this is a targeted boundary, not a jail.
 
-import { join } from 'node:path'
+import { isAbsolute, join, normalize, relative, sep } from 'node:path'
 
 export interface SandboxPolicyInput {
   /** ~/.agent-workflow (or the test appHome). */
@@ -30,6 +30,11 @@ export interface SandboxPolicyInput {
   taskWorktrees: readonly string[]
   /** THIS run's private dir: runs/{taskId}/{nodeRunId}. */
   runDir: string
+  /**
+   * Immutable artifacts nested below an allowed subtree. These paths remain
+   * readable but must not be replaceable by the sandboxed process.
+   */
+  readOnlySubtrees?: readonly string[]
 }
 
 export interface SandboxPolicy {
@@ -39,11 +44,33 @@ export interface SandboxPolicy {
   denyFiles: string[]
   /** Allowed back INSIDE denied subtrees (must win over the denies). */
   allowSubtrees: string[]
+  /** Read-only overlays applied after every read-write allow-back. */
+  readOnlySubtrees: string[]
+}
+
+function isStrictDescendant(parent: string, child: string): boolean {
+  const rel = relative(parent, child)
+  return rel !== '' && rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel)
+}
+
+function validatePolicyPath(path: string, label: string): void {
+  if (
+    path.length === 0 ||
+    path.includes('\0') ||
+    !isAbsolute(path) ||
+    normalize(path) !== path ||
+    path === '/'
+  ) {
+    throw new TypeError(`invalid sandbox ${label} path`)
+  }
 }
 
 /** The one place the deny/allow sets are computed. Pure — no fs access. */
 export function computeSandboxPolicy(input: SandboxPolicyInput): SandboxPolicy {
   const h = input.appHome
+  validatePolicyPath(h, 'appHome')
+  validatePolicyPath(input.runDir, 'runDir')
+  for (const path of input.taskWorktrees) validatePolicyPath(path, 'taskWorktree')
   // RFC-205 impl-gate P0-3 (Codex 2026-07-22): deny the WHOLE appHome, not an
   // enumerated list. The old list missed `iso/` (RFC-130's REAL agent cwd →
   // cross-task read/write of every OTHER task's isolation tree), the `.gitcred-*`
@@ -64,7 +91,17 @@ export function computeSandboxPolicy(input: SandboxPolicyInput): SandboxPolicy {
   // Allow back: this run's worktree(s) + run dir, and the shared git mirror (the
   // object store git commit reads/writes — credential-free after RFC-204 sealing).
   const allowSubtrees = [...input.taskWorktrees, input.runDir, join(h, 'repos')]
-  return { denySubtrees, denyFiles, allowSubtrees }
+  const readOnlySubtrees = [...(input.readOnlySubtrees ?? [])]
+  const unique = new Set<string>()
+  for (const path of readOnlySubtrees) {
+    validatePolicyPath(path, 'readOnlySubtree')
+    if (unique.has(path)) throw new TypeError('duplicate sandbox readOnlySubtree path')
+    unique.add(path)
+    if (!allowSubtrees.some((allowed) => isStrictDescendant(allowed, path))) {
+      throw new TypeError('sandbox readOnlySubtree must be nested below an allowed subtree')
+    }
+  }
+  return { denySubtrees, denyFiles, allowSubtrees, readOnlySubtrees }
 }
 
 /** SBPL string literal escaping: backslash and double-quote. */
@@ -88,6 +125,13 @@ export function renderSeatbeltProfile(policy: SandboxPolicy): string {
   }
   for (const p of policy.allowSubtrees) {
     lines.push(`(allow file-read* file-write* (subpath ${sbplString(p)}))`)
+  }
+  // A read-only subtree is nested below an allow-back. Seatbelt is
+  // last-match-wins per operation, so revoke write after every RW allow, then
+  // restore read after the appHome-wide deny.
+  for (const p of policy.readOnlySubtrees) {
+    lines.push(`(deny file-write* (subpath ${sbplString(p)}))`)
+    lines.push(`(allow file-read* (subpath ${sbplString(p)}))`)
   }
   return lines.join('\n')
 }
@@ -129,6 +173,11 @@ export function renderBwrapArgs(policy: SandboxPolicy, opts: { appHome: string }
   args.push('--bind', join(opts.appHome, 'repos'), join(opts.appHome, 'repos'))
   for (const p of policy.allowSubtrees) {
     args.push('--bind', p, p)
+  }
+  // Mount ordering is the security boundary: a RO overlay must be stacked
+  // after every enclosing RW bind or a later RW mount would silently undo it.
+  for (const p of policy.readOnlySubtrees) {
+    args.push('--ro-bind', p, p)
   }
   return args
 }

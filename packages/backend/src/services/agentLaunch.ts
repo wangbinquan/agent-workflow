@@ -48,6 +48,7 @@ import { workflows } from '@/db/schema'
 import { Paths } from '@/util/paths'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { acquireAgentLaunch, releaseAgentLaunch } from '@/services/agentLaunchReservation'
+import { assertAgentExecutionPolicy } from '@/services/executionPolicy'
 
 export const AGENT_HOST_WORKFLOW_ID = '00000000000000AGENTHOST00'
 export const AGENT_HOST_WORKFLOW_NAME = '__agent_host__'
@@ -351,6 +352,10 @@ export async function startAgentTask(
         `agent '${agent.name}' was deleted during launch`,
       )
     }
+
+    // RFC-224: launch uses the same effective-runtime policy as save and the
+    // final runner. This runs before workspace materialization or upload I/O.
+    await assertAgentExecutionPolicy(db, recheck, deps.defaultRuntime)
 
     await ensureAgentHostWorkflow(db)
 

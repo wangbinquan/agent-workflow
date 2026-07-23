@@ -16,7 +16,7 @@ env:
   # behavior between runs. Must stay >= MIN_OPENCODE_VERSION
   # (packages/backend/src/util/opencode.ts); matches integration-opencode.yml's
   # pinned leg. Bump together when MIN_OPENCODE_VERSION moves.
-  OPENCODE_VERSION: '1.15.5'
+  OPENCODE_VERSION: '1.18.3'
 
 jobs:
   lint:
@@ -471,7 +471,7 @@ jobs:
       - name: Show artifact size
         run: ls -lh dist/
 
-      - name: Smoke-run binary (version + doctor)
+      - name: Smoke-run binary (version + doctor + hidden RFC-224 entrypoints)
         # `ls -lh` only checks the artifact exists; a build can succeed yet
         # produce a binary that crashes at startup (broken bundle, missing
         # native bindings, stripped permissions). Exec the binary to catch
@@ -494,6 +494,22 @@ jobs:
           chmod +x "$bin"
           "$bin" version
           "$bin" doctor
+          help_output="$("$bin" --help)"
+          case "$help_output" in
+            *'__opencode-'*)
+              echo 'RFC-224 internal commands leaked into public help' >&2
+              exit 1
+              ;;
+          esac
+          for hidden in __opencode-verified-run __opencode-netless-subprocess; do
+            hidden_stderr="$(mktemp)"
+            if "$bin" "$hidden" 2>"$hidden_stderr"; then
+              echo "$hidden unexpectedly accepted invalid argv" >&2
+              exit 1
+            fi
+            test "$(cat "$hidden_stderr")" = \
+              'AW_OPENCODE_FAILURE execution-identity-store-unsafe'
+          done
 
       - name: Upload artifact
         uses: actions/upload-artifact@v6

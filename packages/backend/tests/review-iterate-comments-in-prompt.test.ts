@@ -28,6 +28,7 @@ import { and, eq } from 'drizzle-orm'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
+import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { nodeRuns } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
@@ -131,6 +132,7 @@ async function buildHarness(): Promise<Harness> {
   const appHome = join(tmp, 'appHome')
   const repoPath = join(tmp, 'repo')
   const db = createInMemoryDb(MIGRATIONS)
+  await seedTestDefaultOpencodeRuntime(db)
   const previousAppHome = process.env.AGENT_WORKFLOW_HOME
 
   await git('-C', tmp, 'init', '-b', 'main')

@@ -40,6 +40,10 @@ import { dbTxSync } from '@/db/txSync'
 import { taskFeedback, taskRepos, tasks } from '@/db/schema'
 import { isTaskActive } from '@/services/task'
 import { getTaskWriteSem } from '@/services/taskWriteLocks'
+import {
+  inspectTaskOpencodeStores,
+  removeTaskOpencodeStores,
+} from '@/services/opencodeStoreRecovery'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { deleteSnapshotRefs, removeWorktree } from '@/util/git'
@@ -113,7 +117,16 @@ export async function deleteTask(db: DbClient, taskId: string): Promise<DeleteTa
   // Serialize against in-flight writers, then re-check terminality and delete in
   // one transaction (closes the resume/retry TOCTOU — §6.2).
   const release = await getTaskWriteSem(taskId).acquire()
+  let opencodeStoreKeys: string[] = []
   try {
+    const opencodeStores = await inspectTaskOpencodeStores(db, Paths.root, taskId)
+    if (opencodeStores.hasLease || opencodeStores.hasLock) {
+      throw new ConflictError(
+        'task-active',
+        `task '${taskId}' still owns an active OpenCode session lease or store lock; recover or cancel it first`,
+      )
+    }
+    opencodeStoreKeys = opencodeStores.keys
     dbTxSync(db, (tx) => {
       const fresh = tx
         .select({ status: tasks.status })
@@ -177,6 +190,14 @@ export async function deleteTask(db: DbClient, taskId: string): Promise<DeleteTa
     } catch (err) {
       fail('rmSync-dir', err)
     }
+  }
+  try {
+    await removeTaskOpencodeStores(Paths.root, opencodeStoreKeys)
+  } catch (err) {
+    // The hourly owner-less store GC is the crash/failure backstop. In
+    // particular a surviving lifecycle lock must make this cleanup pending,
+    // never delete a possibly-live SQLite writer's store.
+    fail('removeOpencodeStores', err)
   }
 
   tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL, { type: 'task.deleted', taskId })

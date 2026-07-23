@@ -1235,6 +1235,8 @@ export interface Resources {
     configDirNameInvalid: string
     fieldModel: string
     fieldModelHint: string
+    modelRequired: string
+    modelRequiredChip: string
     fieldVariant: string
     fieldTemperature: string
     fieldSteps: string
@@ -1255,6 +1257,7 @@ export interface Resources {
       'network-blocked': string
       'model-call-failed': string
       'stream-nonconforming': string
+      'execution-identity-failed': string
     }
   }
   agents: {
@@ -5123,7 +5126,9 @@ export const zhCN: Resources = {
     configDirEnvReserved: '该变量名被平台保留（会与注入机制冲突），请换一个。',
     configDirNameInvalid: '必须是单层目录名：不能含路径分隔符，也不能是 "." 或 ".."。',
     fieldModel: '模型',
-    fieldModelHint: '该运行时上的 agent 启动时所用模型。留空则用二进制自身默认。',
+    fieldModelHint: '该运行时上的 agent 启动时所用模型。OpenCode 必须显式选择模型。',
+    modelRequired: '请先选择显式模型，再保存或测试此 OpenCode 运行时。',
+    modelRequiredChip: '需要模型',
     fieldVariant: '变体',
     fieldTemperature: '温度',
     fieldSteps: '步数',
@@ -5144,6 +5149,7 @@ export const zhCN: Resources = {
       'network-blocked': '网络不可达',
       'model-call-failed': '模型调用失败',
       'stream-nonconforming': '不符合',
+      'execution-identity-failed': '执行身份校验失败',
     },
   },
   agents: {
@@ -6066,6 +6072,53 @@ export const zhCN: Resources = {
       'envelope-port-malformed': '代理输出的端口标签不完整（可能被截断）。',
       'port-validation-failed': '代理输出的端口内容未通过校验。',
       'port-validation-failed__hint': '查看节点详情里的端口校验信息，点「继续任务」重试。',
+      'execution-identity-untrusted-binary': '所选 OpenCode 可执行文件不是受信任的官方构建。',
+      'execution-identity-untrusted-binary__hint':
+        '请安装受支持的 OpenCode 官方构建，或选择其已验证的可执行文件。',
+      'execution-identity-sandbox-required':
+        '本次 OpenCode 运行要求安全 Linux 沙箱，但当前不可用。',
+      'execution-identity-sandbox-required__hint':
+        '请在支持的 Linux 主机上运行 daemon，并启用所需沙箱。',
+      'execution-identity-project-config-unsupported':
+        '工作区含有无法安全隔离的 OpenCode 项目配置。',
+      'execution-identity-project-config-unsupported__hint':
+        '请移除错误详情指出的项目配置或符号链接，再发起新运行。',
+      'execution-identity-plugin-unsupported': '已验证的 OpenCode 执行路径不支持插件。',
+      'execution-identity-plugin-unsupported__hint': '请先从代理配置中移除插件，再保存或运行。',
+      'execution-identity-dependent-unsupported': '已验证的 OpenCode 执行路径不支持依赖代理。',
+      'execution-identity-dependent-unsupported__hint': '请先移除依赖代理，再保存或运行。',
+      'execution-identity-model-unresolved': '本次运行没有显式选择 OpenCode 模型。',
+      'execution-identity-model-unresolved__hint':
+        '请为生效运行时选择 provider/model，再重新发起。',
+      'execution-identity-auth-invalid': '所选 provider 凭据不符合已验证的认证契约。',
+      'execution-identity-auth-invalid__hint': '请更新 provider API 凭据后重新发起新运行。',
+      'execution-identity-provider-untrusted': '所选模型 provider 不属于受信任的 OpenCode 构建。',
+      'execution-identity-provider-untrusted__hint':
+        '请选择受支持的 OpenCode 官方构建内置的 provider/model。',
+      'execution-identity-bootstrap-failed': 'OpenCode 在模型执行前未通过启动完整性检查。',
+      'execution-identity-bootstrap-failed__hint': '请查看运行时诊断，修复主机环境后重新发起。',
+      'execution-identity-mismatch': 'OpenCode 最终解析的执行配置与密封配置不一致。',
+      'execution-identity-mismatch__hint': '请移除外部覆盖、修正运行时配置后重新发起新运行。',
+      'execution-identity-instance-changed': '身份校验期间 OpenCode server 实例发生了变化。',
+      'execution-identity-instance-changed__hint': '请检查运行时是否被替换或干扰，再重新发起。',
+      'execution-identity-source-changed': '启动期间工作区的执行身份来源发生了变化。',
+      'execution-identity-source-changed__hint': '请停止并发配置修改，再重新发起新运行。',
+      'execution-identity-skill-mismatch': '生成不可变快照期间，所选托管技能发生了变化。',
+      'execution-identity-skill-mismatch__hint': '请完成技能更新、重新加载代理配置后再发起。',
+      'execution-identity-session-mismatch': 'OpenCode 会话与本任务运行的密封身份不一致。',
+      'execution-identity-session-mismatch__hint': '请创建新会话，不要复用本任务链之外创建的会话。',
+      'execution-identity-session-owned': 'OpenCode 会话已被另一个活动运行租用。',
+      'execution-identity-session-owned__hint': '请等待活动运行结束，或先修复其生命周期再继续。',
+      'execution-identity-control-failed': '已验证 launcher 与调度器未能完成控制握手。',
+      'execution-identity-control-failed__hint': '请查看 daemon 诊断，解决控制故障后重新发起。',
+      'execution-identity-stream-failed': '已验证 OpenCode 事件流不符合预期协议。',
+      'execution-identity-stream-failed__hint':
+        '请查看运行时诊断后重新发起；系统不会自动重试此故障。',
+      'execution-identity-timeout': 'OpenCode 身份校验或直接执行超时。',
+      'execution-identity-timeout__hint': '请检查 provider 与主机健康状态后重新发起。',
+      'execution-identity-store-unsafe': 'OpenCode 私有会话存储未通过安全检查。',
+      'execution-identity-store-unsafe__hint':
+        '确认没有活动运行后，修复或移除错误详情指出的私有存储。',
       summary: {
         snapshotLost: '任务的工作区快照丢失，无法从原位置继续。',
         snapshotInvalid: '任务的工作区快照已失效。',
@@ -7637,6 +7690,66 @@ export const zhCN: Resources = {
     'ws-unknown-channel': '实时通道不存在。',
     'internal-error': '服务内部错误。',
     'internal-error__hint': '稍后重试；若持续出现，请查看 daemon 日志。',
+    // RFC-224：API/save/probe 与任务失败复用同一组稳定文案。
+    'execution-identity-untrusted-binary': '$t(tasks.failure.execution-identity-untrusted-binary)',
+    'execution-identity-untrusted-binary__hint':
+      '$t(tasks.failure.execution-identity-untrusted-binary__hint)',
+    'execution-identity-sandbox-required': '$t(tasks.failure.execution-identity-sandbox-required)',
+    'execution-identity-sandbox-required__hint':
+      '$t(tasks.failure.execution-identity-sandbox-required__hint)',
+    'execution-identity-project-config-unsupported':
+      '$t(tasks.failure.execution-identity-project-config-unsupported)',
+    'execution-identity-project-config-unsupported__hint':
+      '$t(tasks.failure.execution-identity-project-config-unsupported__hint)',
+    'execution-identity-plugin-unsupported':
+      '$t(tasks.failure.execution-identity-plugin-unsupported)',
+    'execution-identity-plugin-unsupported__hint':
+      '$t(tasks.failure.execution-identity-plugin-unsupported__hint)',
+    'execution-identity-dependent-unsupported':
+      '$t(tasks.failure.execution-identity-dependent-unsupported)',
+    'execution-identity-dependent-unsupported__hint':
+      '$t(tasks.failure.execution-identity-dependent-unsupported__hint)',
+    'execution-identity-model-unresolved': '$t(tasks.failure.execution-identity-model-unresolved)',
+    'execution-identity-model-unresolved__hint':
+      '$t(tasks.failure.execution-identity-model-unresolved__hint)',
+    'execution-identity-auth-invalid': '$t(tasks.failure.execution-identity-auth-invalid)',
+    'execution-identity-auth-invalid__hint':
+      '$t(tasks.failure.execution-identity-auth-invalid__hint)',
+    'execution-identity-provider-untrusted':
+      '$t(tasks.failure.execution-identity-provider-untrusted)',
+    'execution-identity-provider-untrusted__hint':
+      '$t(tasks.failure.execution-identity-provider-untrusted__hint)',
+    'execution-identity-bootstrap-failed': '$t(tasks.failure.execution-identity-bootstrap-failed)',
+    'execution-identity-bootstrap-failed__hint':
+      '$t(tasks.failure.execution-identity-bootstrap-failed__hint)',
+    'execution-identity-mismatch': '$t(tasks.failure.execution-identity-mismatch)',
+    'execution-identity-mismatch__hint': '$t(tasks.failure.execution-identity-mismatch__hint)',
+    'execution-identity-instance-changed': '$t(tasks.failure.execution-identity-instance-changed)',
+    'execution-identity-instance-changed__hint':
+      '$t(tasks.failure.execution-identity-instance-changed__hint)',
+    'execution-identity-source-changed': '$t(tasks.failure.execution-identity-source-changed)',
+    'execution-identity-source-changed__hint':
+      '$t(tasks.failure.execution-identity-source-changed__hint)',
+    'execution-identity-skill-mismatch': '$t(tasks.failure.execution-identity-skill-mismatch)',
+    'execution-identity-skill-mismatch__hint':
+      '$t(tasks.failure.execution-identity-skill-mismatch__hint)',
+    'execution-identity-session-mismatch': '$t(tasks.failure.execution-identity-session-mismatch)',
+    'execution-identity-session-mismatch__hint':
+      '$t(tasks.failure.execution-identity-session-mismatch__hint)',
+    'execution-identity-session-owned': '$t(tasks.failure.execution-identity-session-owned)',
+    'execution-identity-session-owned__hint':
+      '$t(tasks.failure.execution-identity-session-owned__hint)',
+    'execution-identity-control-failed': '$t(tasks.failure.execution-identity-control-failed)',
+    'execution-identity-control-failed__hint':
+      '$t(tasks.failure.execution-identity-control-failed__hint)',
+    'execution-identity-stream-failed': '$t(tasks.failure.execution-identity-stream-failed)',
+    'execution-identity-stream-failed__hint':
+      '$t(tasks.failure.execution-identity-stream-failed__hint)',
+    'execution-identity-timeout': '$t(tasks.failure.execution-identity-timeout)',
+    'execution-identity-timeout__hint': '$t(tasks.failure.execution-identity-timeout__hint)',
+    'execution-identity-store-unsafe': '$t(tasks.failure.execution-identity-store-unsafe)',
+    'execution-identity-store-unsafe__hint':
+      '$t(tasks.failure.execution-identity-store-unsafe__hint)',
     'invalid-json': '请求内容不是有效 JSON。',
     'invalid-body': '请求内容不合法。',
     'import-ref-unresolved': '导入内容引用了当前不可用的资源。',

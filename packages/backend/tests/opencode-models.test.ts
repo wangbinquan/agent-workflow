@@ -1,7 +1,7 @@
 // RFC-001 unit tests for the opencode-models parser + cache.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -115,6 +115,25 @@ describe('listOpencodeModels cache', () => {
     expect(args).toContain('--refresh')
   })
 
+  test('a failed pre-cache fence never leaves a reusable result', async () => {
+    writeStub(stub, 'anthropic/rejected')
+    await expect(
+      listOpencodeModels(stub, {
+        cacheKey: 'stable-official-binary',
+        beforeCacheWrite: () => {
+          throw new Error('source changed')
+        },
+      }),
+    ).rejects.toThrow('source changed')
+
+    writeStub(stub, 'openai/accepted')
+    const retry = await listOpencodeModels(stub, { cacheKey: 'stable-official-binary' })
+    expect(retry.cached).toBe(false)
+    expect(retry.models).toEqual([
+      { id: 'openai/accepted', provider: 'openai', modelID: 'accepted' },
+    ])
+  })
+
   test('non-zero exit code throws', async () => {
     writeStub(stub, '', { exitCode: 7, stderr: 'boom' })
     let threw: Error | null = null
@@ -167,6 +186,31 @@ describe('listOpencodeModels cache', () => {
     }
     expect(threw?.message).toMatch(/timed out/i)
     expect(Date.now() - t0).toBeLessThan(3_000) // killed well before the 5s sleep
+  })
+
+  test('a wrapper that exits after forking a closed-stdio helper still has its group reaped', async () => {
+    const forking = join(tmp, 'stub-forking.sh')
+    const leakMarker = join(tmp, 'descendant-survived')
+    writeFileSync(
+      forking,
+      `#!/bin/sh
+(
+  trap '' HUP
+  sleep 1
+  printf leaked > "$(dirname "$0")/descendant-survived"
+) </dev/null >/dev/null 2>&1 &
+printf 'openai/reaped-helper\n'
+exit 0
+`,
+    )
+    chmodSync(forking, 0o755)
+
+    expect(await listOpencodeModels(forking)).toMatchObject({
+      cached: false,
+      models: [{ id: 'openai/reaped-helper' }],
+    })
+    await Bun.sleep(1_200)
+    expect(existsSync(leakMarker)).toBe(false)
   })
 })
 

@@ -427,6 +427,33 @@ describe('distillTick', () => {
     expect(row.lastError).toContain('boom')
   })
 
+  test('RFC-224 identity failure is permanent on attempt 1 and persists only the stable code', async () => {
+    const { taskId } = seedTask(db)
+    await enqueueDistillJob(db, {
+      sourceKind: 'clarify',
+      sourceEventId: 'identity-failure',
+      taskId,
+      debounceMs: 0,
+    })
+    const failure = Object.assign(new Error('secret path must not persist'), {
+      code: 'execution-identity-untrusted-binary',
+    })
+
+    const result = await distillTick({
+      db,
+      spawnFn: async () => {
+        throw failure
+      },
+      now: () => Date.now() + 1,
+    })
+    const row = db.select().from(memoryDistillJobs).all()[0]!
+    expect(result.failed).toBe(1)
+    expect(row.status).toBe('failed')
+    expect(row.attempts).toBe(1)
+    expect(row.lastError).toBe('execution-identity-untrusted-binary')
+    expect(row.finishedAt).not.toBeNull()
+  })
+
   test('honors DISTILL_BATCH_LIMIT (≤ 5 distinct debounce keys per tick)', async () => {
     // 6 distinct tasks → 6 distinct keys; only 5 should execute.
     for (let i = 0; i < 6; i++) {

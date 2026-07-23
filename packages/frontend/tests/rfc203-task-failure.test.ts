@@ -9,7 +9,9 @@
 import { beforeAll, describe, expect, test } from 'vitest'
 import i18n, { setLanguage } from '../src/i18n'
 import { describeTaskFailure } from '../src/lib/task-failure'
-import { FAILURE_CODES } from '@agent-workflow/shared'
+import { ApiError } from '../src/api/client'
+import { resolveApiError } from '../src/i18n/errors'
+import { EXECUTION_IDENTITY_FAILURE_CODES, FAILURE_CODES } from '@agent-workflow/shared'
 
 beforeAll(async () => {
   await new Promise<void>((resolve) => {
@@ -20,13 +22,35 @@ beforeAll(async () => {
 })
 
 describe('describeTaskFailure', () => {
-  test('every RFC-145 failure code has localized copy (no machine tokens)', () => {
+  test('every shared failure code has localized copy (no machine tokens)', () => {
     for (const code of FAILURE_CODES) {
       const r = describeTaskFailure({ failureCode: code, errorSummary: 'raw-token' })
       expect(r.matched).toBe('failure-code')
       expect(r.title).not.toContain(code)
       expect(r.title.length).toBeGreaterThan(4)
     }
+  })
+
+  test('every RFC-224 identity code has stable actionable copy in both locales', async () => {
+    for (const locale of ['zh-CN', 'en-US'] as const) {
+      setLanguage(locale)
+      await i18n.changeLanguage(locale)
+      for (const code of EXECUTION_IDENTITY_FAILURE_CODES) {
+        const raw = `${code}: path=/private/sealed`
+        const r = describeTaskFailure({ failureCode: code, errorSummary: raw })
+        const api = resolveApiError(new ApiError(422, code, raw))
+        expect(r.matched).toBe('failure-code')
+        expect(r.title).not.toContain(code)
+        expect(r.hint?.length).toBeGreaterThan(8)
+        expect(r.raw).toBe(raw)
+        expect(api.matched).toBe('exact')
+        expect(api.title).toBe(r.title)
+        expect(api.hint).toBe(r.hint)
+        expect(api.raw).toBe(raw)
+      }
+    }
+    setLanguage('zh-CN')
+    await i18n.changeLanguage('zh-CN')
   })
 
   test('failureCode outranks a known summary token', () => {

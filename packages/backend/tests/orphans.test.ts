@@ -87,4 +87,15 @@ describe('reapOrphanRuns', () => {
     const nr = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]
     expect(nr?.status).toBe('interrupted')
   })
+
+  test('a child which survives SIGKILL aborts the barrier and leaves its run live', async () => {
+    const { runId } = await seedRunning(h.db)
+    await expect(
+      reapOrphanRuns(h.db, {
+        killStaleRunProcessTree: async () => 'kill-failed',
+      }),
+    ).rejects.toThrow('boot recovery refused')
+    const nr = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]
+    expect(nr?.status).toBe('running')
+  })
 })

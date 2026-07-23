@@ -25,6 +25,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, mcps, plugins, skills } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { createMcp } from '../src/services/mcp'
+import { createRuntime } from '../src/services/runtimeRegistry'
 import { createUser } from '../src/services/users'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
@@ -39,6 +40,14 @@ interface Harness {
 
 async function buildHarness(): Promise<Harness> {
   const db = createInMemoryDb(MIGRATIONS)
+  // RFC-224 intentionally rejects OpenCode plugin/dependent-agent saves. This
+  // suite predates that product boundary and isolates RFC-223 identity/ACL
+  // behavior, so use an explicit non-OpenCode runtime rather than weakening
+  // the production save gate or silently skipping the affected assertions.
+  await createRuntime(db, {
+    name: 'rfc223-identity-fixture',
+    protocol: 'claude-code',
+  })
   const app = createApp({
     token: DAEMON_TOKEN,
     configPath: '/tmp/aw-rfc223-pr1-config-never-used.json',
@@ -73,6 +82,7 @@ async function req(
 
 const AGENT_BODY = {
   description: '',
+  runtime: 'rfc223-identity-fixture',
   outputs: [],
   syncOutputsOnIterate: true,
   permission: {},

@@ -140,9 +140,10 @@ This pattern — record-state → run-agents → diff/aggregate → fan-out — 
 
 (Below is a summary; for full detail read `design/proposal.md` and `design/design.md`.)
 
-- **Agent management** — virtual agent names. **DB is source of truth** (frontmatter fields + body markdown stored in DB columns). Per-run injection via `OPENCODE_CONFIG_CONTENT` inline JSON (highest precedence in opencode merge order).
-- **Skill management** — file system is source of truth (whole skill dir under `~/.agent-workflow/skills/{name}/files/`). DB only indexes name → path. Per-run injection: `managed` skill copyDir into `OPENCODE_CONFIG_DIR/skills/{name}/`, `external` skill symlink, repo-local `.opencode/skills/` left for opencode self-discovery.
-- **Runtime management** — local opencode binary discovered via PATH (settings can override absolute path). Daemon probes version on startup; refuses to start below documented minimum.
+- **Agent management** — virtual agent names. **DB is source of truth** (frontmatter fields + body markdown stored in DB columns). RFC-224 production execution builds a complete controlled config, passes it through private `OPENCODE_CONFIG_CONTENT`, then verifies the same v1.18.3 server's final `/config` + ordered `/agent` inventory; inline merge priority is not a trust boundary.
+- **Skill management** — file system is source of truth (whole skill dir under `~/.agent-workflow/skills/{name}/files/`). In the RFC-224 production path only selected `managed` skills are accepted: the complete tree is no-symlink snapshotted, `SKILL.md` is injected as a digest-tagged frozen prompt block, auxiliary files are read-only sealed, and repo/global/external skills are rejected rather than naturally inherited.
+- **MCP management** — only the node's selected MCP closure enters the controlled config. Remote MCP config is closed-schema; local MCP runs through a sealed no-network bwrap wrapper with sanitized env. Repo/global MCP, enabled plugins and OpenCode `dependsOn` subagents are not inherited by the verified v1 path.
+- **Runtime management** — OpenCode production execution is pinned to the OS/arch-specific official v1.18.3 executable digest. The source binary is copied into a private seal and re-hashed before execution; status/model diagnostics also run an official snapshot. Secure model execution currently requires Linux `sandboxMode=enforce` with bwrap.
 - **Workflow management** — DB-stored definition (with `$schema_version`, version auto-increment on PUT). YAML import/export with conflict resolution dialog.
 - **Workflow editor** — xyflow v12 Dify-style canvas with nodes / edges / wrappers (git, loop). Side bar lists agents (drag to create), wrappers, IO nodes. Right drawer with Edit/Preview tabs. Auto-save (debounce 1s). Multi-tab sync via `/ws/workflows`.
 - **Node model** — each node references one agent, plus per-node prompt template (supports `{{port_name}}` + `{{__repo_path__}}` etc.), per-node overrides (model/variant/temperature/retries/timeout). single ↔ multi-process togglable. `readonly` always inherited from agent (not overridable).
@@ -150,7 +151,7 @@ This pattern — record-state → run-agents → diff/aggregate → fan-out — 
 - **Multi-process node** — declares `sourcePort` (typically a git wrapper's `git_diff`). Built-in shardings: per-file / per-N-files / per-directory. Renames = 1 shard; binary files skipped (note appended); empty diff = direct done. Aggregation by shard_key dictionary order. **Failure semantics are fail-all-after-join** — any failed shard fails the whole wrapper, with no partial aggregation and **no auto `errors` port** (the `errors` port and partial tolerance described in `design/proposal.md` are DEFERRED, not implemented in v1; see `design/design.md` §6.3 and the lock in `packages/backend/tests/scheduler-audit-s18-s19-fanout-failure-semantics.test.ts`).
 - **Git wrapper** — no inputs, single output `git_diff` (snapshots commit + worktree before first inner node, after last; composes diff incl. untracked).
 - **Loop wrapper** — `max_iterations` + `exit_condition` (port-empty / port-equals / port-count-lt). v1 has **no cross-iteration feedback ports**; cross-iter state is via worktree files only. Wrappers nest arbitrarily; `git in loop` = per-iter diff (last-iter wins as output); `loop in git` = full-loop total diff.
-- **Process isolation** — see "Resolved open questions" below.
+- **Process isolation** — RFC-205 outer bwrap protects the launcher/server, store and read-only identity subtrees; RFC-224 adds nested no-network bwrap for shell/local MCP plus a pre-server FFF capability proof. See "Resolved open questions" below.
 - **Resource ACL（RFC-099）** — 代理/技能/MCP/插件/工作流五类资源各带单一 `owner_user_id` + `visibility('public'|'private')` + 通用 `resource_grants` 授权表；未授权用户完全不可见（列表过滤、详情 404 与不存在同形）；所有用户可创建（创建者即 owner、默认 public）；启动任务只校验工作流本身可用（引用闭包隐式授权），保存工作流/代理时只校验**新增**引用（`services/resourceRefs.ts`）。任务成员（owner+collaborator）即评审/反问的回答权边界（节点级指派机制已删除）；任务恒为成员制**私有**、无 visibility 开关（D20——与五资源的默认 public 是有意不对称）；归属记录（user id + 任务关系角色快照 {owner,user,admin}）只落审计列与 UI，**绝不进入 agent prompt**（rfc099-prompt-isolation 测试双层锁定，approval_meta 端口已剔除 decidedBy）。反问支持服务端逐题协作草稿（last-write-wins + 逐题归属 + 提交冻结）。记忆读/管理随 scope 资源权限（repo/global 仍 admin）。单一事实源：`services/resourceAcl.ts`。
 - **Task lifecycle** — worktree per task at `~/.agent-workflow/worktrees/{repo-slug}/{task-id}`. Base branch chosen at launch time (default repo HEAD). Task status states: `pending / running / done / failed / canceled / interrupted (daemon restart) / awaiting_review / awaiting_human`（RFC-097 勘误：任务级从无 `exhausted`——它只是 node_run 状态〔loop 触顶〕，loop 耗尽时任务以 `failed` 收场）. Writes go through `setTaskStatus`/`trySetTaskStatus` (services/lifecycle.ts, RFC-097 CAS + 转移表；直写被 s14 守卫禁止). Cancel keeps worktree; resume rolls each retried node back to its `pre_snapshot` (git stash hash); single-node retry cascades downstream by default. Retries produce independent `node_runs` keyed by `retry_index`.
 - **Daemon** — single Bun process, flock single-instance lock, graceful shutdown 30s, hourly background tasks (events archival, optional worktree GC, resource-limit check at 1Hz).
@@ -160,16 +161,20 @@ This pattern — record-state → run-agents → diff/aggregate → fan-out — 
 
 The original proposal flagged several open questions; the supplemented design docs resolve them:
 
-> ⚠️ **勘误（RFC-223/224）**：下面第一条「inline `OPENCODE_CONFIG_CONTENT` 合并优先级最高、平台 agent 恒胜」经本机 opencode v1.18.4 源码核实**不成立**——inline 合并（`config.ts:468-475`）之后仍有 active-org / managed / MDM / legacy `mode.<name>` / `OPENCODE_PERMISSION` 多层覆盖同名 agent，注册表按 **name** 应用（`agent/agent.ts:267-294`）。执行身份完整性关切见 `design/RFC-224-opencode-execution-identity/`。此段全文勘误是 RFC-224 的 AC5，待其实现时改写。
-
-- **Concurrent injection conflict** (`.opencode/agents/`, `.opencode/skills/` collisions across opencode processes) — solved with **two** opencode env vars and **no** `OPENCODE_DISABLE_*` flags:
-  - `OPENCODE_CONFIG_CONTENT` — inline JSON of the agent definition. opencode merges this AFTER all directory scans (config.ts:641), so the platform's agent always wins, even against same-name agents in repo `.opencode/` or `~/.opencode/`. ⚠️ **见上方勘误：此断言已被 RFC-223/224 证伪。**
-  - `OPENCODE_CONFIG_DIR=~/.agent-workflow/runs/{task}/{node}/.opencode/` — per-process private dir for platform-managed skills.
-  - Crucially, repo-local `.opencode/skills/` (business skills the user wants the agent to use) and `~/.opencode/` (auth baseline) and `~/.claude/skills` etc. all continue to load normally. cwd remains the user's worktree so git diff works naturally.
+- **Concurrent config/resource collision** — RFC-224 resolves this by exclusion plus same-instance attestation, not by assuming inline precedence:
+  - `OPENCODE_CONFIG_CONTENT` carries one complete controlled config, but the platform does not trust its merge position. The hidden launcher reads the final `/config`, `/config/providers`, `/agent` twice and `/skill` from the same `opencode serve` instance and compares their exact identity.
+  - `HOME`, all XDG paths, `OPENCODE_CONFIG_DIR`, test home and managed config roots are per-store private paths; project config, external skills, default plugins, model fetch and related implicit surfaces are disabled.
+  - `scanOpencodeProjectSurface` rejects repo/ancestor `opencode.json[c]`, `.opencode`, `reference(s)`, `.agents/skills` and `.claude/skills`; selected managed skills are whole-tree sealed and prompt-injected instead of entering OpenCode's disk skill registry.
+  - Only selected MCP config is admitted. Local MCP and the optional shell enter nested no-network bwrap; enabled plugins and `dependsOn` are unsupported in verified v1.
+  - Verified inventory is derived only after same-instance attestation from the second sealed `/agent` response plus frozen skill/MCP manifest metadata; it does not re-enable the legacy inventory plugin or query `/mcp/status`.
+  - Production uses one official v1.18.3 sealed binary, a pre-server FFF proof and one loopback server. It creates/resumes the exact session through the direct API after attestation; it does not execute a separate `opencode run`.
+- **Session identity and resume ownership** — each business chain has a private persistent OpenCode store and owner row that freezes session/project/task/node, build/config/session digests and store key. launcher ↔ runner nonce/lease acknowledgement must succeed before SSE/POST. System agents use fresh ephemeral stores and cannot resume.
 - **Same-task concurrent writers** — `agent.md` carries `readonly: true/false`; framework serializes writes within a task and parallelizes only readonly nodes.
 - **Same-repo cross-task collisions** — every task gets its own `git worktree add` under `~/.agent-workflow/worktrees/{repo-slug}/{task-id}` and runs all its opencode children with that as cwd.
 
-Re-validate against the local opencode source before changing any of these mechanisms.
+The full current contract and repository code anchors are in `docs/OPENCODE_CONFIG.md` and
+`design/RFC-224-opencode-execution-identity/`. Re-validate the pinned upstream version before
+changing any of these mechanisms.
 
 ## Reference repositories
 

@@ -4,7 +4,7 @@
 
 import type { AgentOutputKindsMap } from './schemas/agent'
 import { PROMPT_INJECTED_PORT_NAMES } from './systemChannelPorts'
-import type { FailureCode } from './schemas/task'
+import type { FollowupFailureCode } from './schemas/task'
 import {
   ASKBACK_PRIOR_OUTPUT_BLOCK_TITLE,
   ASKBACK_PRIOR_OUTPUT_DIRECTIVE_BLOCK_TITLE,
@@ -1040,8 +1040,8 @@ export type EnvelopeFollowupReason =
   | 'envelope-port-malformed'
 
 /**
- * RFC-145 — projection from the 7-value PRODUCER domain (`FAILURE_CODES`,
- * declared by the runner at each stamp point and persisted on
+ * RFC-145 — projection from the 7-value envelope producer domain
+ * (`FOLLOWUP_FAILURE_CODES`, declared by the runner at each stamp point and persisted on
  * `node_runs.failure_code`) onto the 6-value render reason above.
  * `decideEnvelopeFollowup` (scheduler) looks this up instead of parsing
  * errorMessage prefixes with an order-sensitive startsWith chain.
@@ -1052,10 +1052,12 @@ export type EnvelopeFollowupReason =
  * envelope now", which IS the envelope-missing wording. This downgrade was
  * previously an implicit branch buried at the tail of the startsWith chain.
  *
- * `Record<FailureCode, …>` makes adding a code without a policy row a compile
- * error (same exhaustiveness idiom as GATE2_EXPECTED in the rerun-cause gates).
+ * `Record<FollowupFailureCode, …>` makes adding an envelope-protocol code
+ * without a policy row a compile error. RFC-224 execution-identity failures
+ * deliberately live in the wider `FailureCode` domain but are absent here:
+ * unchanged-input retries cannot repair them.
  */
-export const FOLLOWUP_POLICY: Record<FailureCode, { reason: EnvelopeFollowupReason }> = {
+export const FOLLOWUP_POLICY: Record<FollowupFailureCode, { reason: EnvelopeFollowupReason }> = {
   'envelope-missing': { reason: 'envelope-missing' },
   'clarify-and-output-both': { reason: 'both-present' },
   'clarify-questions-malformed': { reason: 'clarify-malformed' },
@@ -1063,6 +1065,26 @@ export const FOLLOWUP_POLICY: Record<FailureCode, { reason: EnvelopeFollowupReas
   'clarify-forbidden': { reason: 'envelope-missing' },
   'envelope-port-malformed': { reason: 'envelope-port-malformed' },
   'port-validation-failed': { reason: 'port-validation' },
+}
+
+/**
+ * Single routing oracle for envelope follow-up eligibility.
+ *
+ * The input intentionally accepts the complete persisted failure union (and
+ * defensive unknown values). Execution-identity failures and unrecognized
+ * legacy strings return `undefined`; callers must not infer retryability from
+ * the mere presence of a machine-readable code.
+ */
+export function followupPolicyForFailure(
+  failureCode: unknown,
+): { reason: EnvelopeFollowupReason } | undefined {
+  if (
+    typeof failureCode !== 'string' ||
+    !Object.prototype.hasOwnProperty.call(FOLLOWUP_POLICY, failureCode)
+  ) {
+    return undefined
+  }
+  return FOLLOWUP_POLICY[failureCode as FollowupFailureCode]
 }
 
 /**

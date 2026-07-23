@@ -10,6 +10,7 @@ import { resolve } from 'node:path'
 import type { Hono } from 'hono'
 import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createApp } from '../src/server'
 import { createWorkflow, getWorkflow } from '../src/services/workflow'
 import { createUser } from '../src/services/users'
@@ -32,6 +33,7 @@ interface Harness {
 
 async function buildHarness(): Promise<Harness> {
   const db = createInMemoryDb(MIGRATIONS)
+  await seedTestDefaultOpencodeRuntime(db)
   const app = createApp({
     token: DAEMON_TOKEN,
     configPath: '/tmp/aw-rfc199-draft-validation-never-used.json',

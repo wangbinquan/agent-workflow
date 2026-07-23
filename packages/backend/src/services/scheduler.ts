@@ -36,7 +36,6 @@ import {
   DAEMON_SHUTDOWN_ABORT_REASON,
   FANOUT_DONE_PORT_NAME,
   DEFAULT_PROTOCOL_RETRY_BUDGET,
-  FOLLOWUP_POLICY,
   channelEdgeDataflowSkip,
   NODE_KIND,
   NODE_KIND_BEHAVIORS,
@@ -46,6 +45,7 @@ import {
   buildWorkflowScopeParentMap,
   buildPriorOutputBlock,
   deriveWrapperFanoutOutputs,
+  followupPolicyForFailure,
   findClarifyNodeForAgent,
   findCrossClarifyNodeForQuestioner,
   findDesignerNodeForCrossClarify,
@@ -53,6 +53,7 @@ import {
   findQuestionerNodeForCrossClarify,
   isInlineMarkdownItemKind,
   isMergeStateSettled,
+  isPermanentRuntimeFailure,
   resolveClarifySessionMode,
   resolveCrossClarifySessionMode,
   resolveKeyOf,
@@ -1308,13 +1309,23 @@ export function decideEnvelopeFollowup(prev: PreviousAttemptShape): EnvelopeFoll
   if (prev.sessionId === null || prev.sessionId === '') return { followup: false }
   if (prev.agentTextCount <= 0) return { followup: false }
   if (prev.failureCode === null) return { followup: false }
-  const policy = FOLLOWUP_POLICY[prev.failureCode]
+  const policy = followupPolicyForFailure(prev.failureCode)
+  if (policy === undefined) return { followup: false }
   return {
     followup: true,
     reason: policy.reason,
     failures:
       prev.failureCode === 'port-validation-failed' ? (prev.portValidationFailures ?? []) : [],
   }
+}
+
+/**
+ * RFC-224: a permanent execution-identity failure cannot be repaired by
+ * replaying the same frozen inputs. Keep this predicate exported and pure so
+ * the scheduler loop's retry-consumption contract has a direct unit oracle.
+ */
+export function shouldRetryNodeFailure(failureCode: FailureCode | null | undefined): boolean {
+  return !isPermanentRuntimeFailure(failureCode)
 }
 
 async function runScope(state: SchedulerState, args: ScopeArgs): Promise<ScopeResult> {
@@ -3851,6 +3862,7 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
 
       broadcastNodeStatus(taskId, nodeRunId, node.id, lastResult.status)
       if (lastResult.status === 'done' || lastResult.status === 'canceled') break
+      if (!shouldRetryNodeFailure(lastResult.failureCode)) break
     }
 
     // RFC-130 §段③: on success, merge the iso delta back into the canonical
@@ -6711,7 +6723,21 @@ async function resolveSkills(
       )
     }
     const skillPath = pathJoin(appHome, expectedPath)
-    out.push({ name: row.name, sourceKind: 'managed', sourcePath: skillPath })
+    out.push({
+      name: row.name,
+      sourceKind: 'managed',
+      sourcePath: skillPath,
+      skillId: row.id,
+      contentVersion: row.contentVersion,
+      readContentVersion: async () => {
+        const current = await db
+          .select({ contentVersion: skills.contentVersion })
+          .from(skills)
+          .where(eq(skills.id, row.id))
+          .limit(1)
+        return current[0]?.contentVersion ?? -1
+      },
+    })
     managedSkillIdentities.push({ id: row.id, name: row.name })
   }
   return { resolvedSkills: out, managedSkillIdentities }

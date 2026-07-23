@@ -6,12 +6,13 @@
 
 import type { Hono } from 'hono'
 import { z } from 'zod'
+import { isExecutionIdentityFailureCode } from '@agent-workflow/shared'
 import { loadConfig } from '@/config'
 import { getSandboxProvider } from '@/services/sandbox'
 import type { AppDeps } from '@/server'
 import { actorOf } from '@/auth/actor'
 import { requireAdmin, requirePermission } from '@/auth/permissions'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import {
   cacheRuntimeProbe,
   createRuntime,
@@ -19,13 +20,16 @@ import {
   getRuntime,
   listRuntimes,
   RUNTIME_PROTOCOLS,
+  runtimeProbeTargetOf,
   runtimeRowToView,
   setRuntimeEnabled,
   updateRuntime,
+  withRuntimeProbeConfigFence,
 } from '@/services/runtimeRegistry'
 import type { RuntimeKind } from '@/services/runtime'
 import { getRuntimeDriver } from '@/services/runtime'
-import { smokeRuntime, type SmokeResult } from '@/services/runtimeSmoke'
+import { smokeRuntime as productionSmokeRuntime, type SmokeResult } from '@/services/runtimeSmoke'
+import { withOfficialOpencodeSnapshot as productionOfficialOpencodeSnapshot } from '@/services/runtime/opencode/officialBuilds'
 
 // RFC-143: derived from the DRIVERS registry (via RUNTIME_PROTOCOLS) rather than
 // a re-hardcoded literal enum — a new runtime kind is accepted automatically.
@@ -34,6 +38,7 @@ const ProtocolSchema = z.enum(RUNTIME_PROTOCOLS as [RuntimeKind, ...RuntimeKind[
 const ProbeBody = z.object({
   protocol: ProtocolSchema,
   binaryPath: z.string().min(1),
+  model: z.string().min(1).optional(),
 })
 
 // RFC-113: per-runtime execution profile params.
@@ -105,20 +110,30 @@ function statusProbeTimeoutMs(): number {
 }
 
 export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
+  const withOfficialOpencodeSnapshot =
+    deps.runtimeDiagnosticTestDependencies?.withOfficialOpencodeSnapshot ??
+    productionOfficialOpencodeSnapshot
+  const smokeRuntime =
+    deps.runtimeDiagnosticTestDependencies?.smokeRuntime ?? productionSmokeRuntime
+
   // List — any authed user (the agent/settings runtime pickers read this).
   app.get('/api/runtimes', async (c) => {
     const rows = await listRuntimes(deps.db)
-    const defaultRuntime = loadConfig(deps.configPath).defaultRuntime
-    return c.json({ runtimes: rows.map((r) => runtimeRowToView(r, defaultRuntime)) })
+    const cfg = loadConfig(deps.configPath)
+    return c.json({
+      runtimes: rows.map((row) =>
+        runtimeRowToView(row, cfg.defaultRuntime, resolveRuntimeBinary(row, cfg)),
+      ),
+    })
   })
 
   // RFC-135 — live light status for the homepage hero: every ENABLED runtime,
   // probed `--version` in parallel against the binary a dispatch would use.
   // `runtime:read` mirrors the legacy /api/runtime/* gate (server.ts) — this
   // spawns registered binaries, so a narrowed PAT without the permission must
-  // not reach it. Availability = exit 0; NO version gate (RFC-135 D3 — custom
-  // binaries own their version scheme, and an unparseable version string still
-  // counts as runnable: ok true, version null).
+  // not reach it. RFC-224 first admits OpenCode through the exact official-build
+  // gate; among admitted bytes, availability remains exit-0 with no additional
+  // version-string gate (an unparseable display string is still runnable).
   app.get('/api/runtimes/status', requirePermission('runtime:read'), async (c) => {
     const cfg = loadConfig(deps.configPath)
     const rows = (await listRuntimes(deps.db)).filter((r) => r.enabled)
@@ -137,10 +152,34 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
         // here (opencode-only installs keep the claude-code builtin enabled)
         // and the homepage polls every 60s — the response already carries the
         // failure, so per-probe warns would just flood the log (D5/§6).
-        const probe = await getRuntimeDriver(row.protocol).probe(binary, {
-          timeoutMs,
-          quiet: true,
-        })
+        const probe =
+          row.protocol === 'opencode'
+            ? await withOfficialOpencodeSnapshot([binary], async (snapshot) => {
+                const verified = await getRuntimeDriver(row.protocol).probe(snapshot, {
+                  timeoutMs,
+                  quiet: true,
+                })
+                return { ...verified, binary }
+              }).catch((error: unknown) => {
+                const code =
+                  typeof error === 'object' &&
+                  error !== null &&
+                  'code' in error &&
+                  isExecutionIdentityFailureCode(error.code)
+                    ? error.code
+                    : 'execution-identity-untrusted-binary'
+                return {
+                  binary,
+                  version: null,
+                  compatible: false,
+                  incompatibleReason: code,
+                  ran: false,
+                }
+              })
+            : await getRuntimeDriver(row.protocol).probe(binary, {
+                timeoutMs,
+                quiet: true,
+              })
         return {
           name: row.name,
           protocol: row.protocol,
@@ -148,6 +187,9 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
           ok: probe.ran === true,
           version: probe.version,
           isDefault: row.name === defaultName,
+          ...(isExecutionIdentityFailureCode(probe.incompatibleReason)
+            ? { failureCode: probe.incompatibleReason }
+            : {}),
         }
       }),
     )
@@ -175,6 +217,7 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
       protocol: body.protocol,
       binaryPath: body.binaryPath,
       config: { opencodePath: cfg.opencodePath, claudeCodePath: cfg.claudeCodePath },
+      ...(body.model !== undefined ? { model: body.model } : {}),
       bridgeCredentials: true,
     })
     return c.json({ smoke: result })
@@ -194,26 +237,39 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
         protocol: body.protocol,
         binaryPath: body.binaryPath,
         config: { opencodePath: cfg.opencodePath, claudeCodePath: cfg.claudeCodePath },
+        ...(typeof body.model === 'string' ? { model: body.model } : {}),
         bridgeCredentials: true,
       })
     }
-    const row = await createRuntime(deps.db, {
-      name: body.name,
-      protocol: body.protocol,
-      binaryPath: body.binaryPath ?? null,
-      configDirEnv: body.configDirEnv,
-      configDirName: body.configDirName,
-      lastProbeJson: smoke !== undefined ? JSON.stringify(smoke) : null,
-      createdBy: actor.user.id,
-      model: body.model,
-      variant: body.variant,
-      temperature: body.temperature,
-      steps: body.steps,
-      maxSteps: body.maxSteps,
-    })
-    const def = loadConfig(deps.configPath).defaultRuntime
+    let row = await createRuntime(
+      deps.db,
+      {
+        name: body.name,
+        protocol: body.protocol,
+        binaryPath: body.binaryPath ?? null,
+        configDirEnv: body.configDirEnv,
+        configDirName: body.configDirName,
+        createdBy: actor.user.id,
+        model: body.model,
+        variant: body.variant,
+        temperature: body.temperature,
+        steps: body.steps,
+        maxSteps: body.maxSteps,
+      },
+      { enforceExecutionPolicy: true },
+    )
+    const cfg = loadConfig(deps.configPath)
+    if (smoke !== undefined) {
+      const target = runtimeProbeTargetOf(row, resolveRuntimeBinary(row, cfg))
+      await cacheRuntimeProbe(deps.db, target, smoke)
+      const refreshed = await getRuntime(deps.db, row.name)
+      if (refreshed?.id === row.id) row = refreshed
+    }
     return c.json(
-      { runtime: runtimeRowToView(row, def), ...(smoke !== undefined ? { smoke } : {}) },
+      {
+        runtime: runtimeRowToView(row, cfg.defaultRuntime, resolveRuntimeBinary(row, cfg)),
+        ...(smoke !== undefined ? { smoke } : {}),
+      },
       201,
     )
   })
@@ -223,17 +279,25 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
   app.put('/api/runtimes/:name', requireAdmin(), async (c) => {
     const name = c.req.param('name')
     const body = parseBody(UpdateBody, await c.req.json().catch(() => ({})))
-    const row = await updateRuntime(deps.db, name, {
-      ...(body.binaryPath !== undefined ? { binaryPath: body.binaryPath } : {}),
-      ...(body.configDirEnv !== undefined ? { configDirEnv: body.configDirEnv } : {}),
-      ...(body.configDirName !== undefined ? { configDirName: body.configDirName } : {}),
-      model: body.model,
-      variant: body.variant,
-      temperature: body.temperature,
-      steps: body.steps,
-      maxSteps: body.maxSteps,
+    const row = await updateRuntime(
+      deps.db,
+      name,
+      {
+        ...(body.binaryPath !== undefined ? { binaryPath: body.binaryPath } : {}),
+        ...(body.configDirEnv !== undefined ? { configDirEnv: body.configDirEnv } : {}),
+        ...(body.configDirName !== undefined ? { configDirName: body.configDirName } : {}),
+        model: body.model,
+        variant: body.variant,
+        temperature: body.temperature,
+        steps: body.steps,
+        maxSteps: body.maxSteps,
+      },
+      { enforceExecutionPolicy: true },
+    )
+    const cfg = loadConfig(deps.configPath)
+    return c.json({
+      runtime: runtimeRowToView(row, cfg.defaultRuntime, resolveRuntimeBinary(row, cfg)),
     })
-    return c.json({ runtime: runtimeRowToView(row, loadConfig(deps.configPath).defaultRuntime) })
   })
 
   // RFC-118: enable/disable a runtime (incl. built-ins) — admin only. A disabled
@@ -245,7 +309,9 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
     const body = parseBody(EnabledBody, await c.req.json().catch(() => ({})))
     const cfg = loadConfig(deps.configPath)
     const row = await setRuntimeEnabled(deps.db, name, body.enabled, cfg.defaultRuntime)
-    return c.json({ runtime: runtimeRowToView(row, cfg.defaultRuntime) })
+    return c.json({
+      runtime: runtimeRowToView(row, cfg.defaultRuntime, resolveRuntimeBinary(row, cfg)),
+    })
   })
 
   // Delete a runtime — blocked while referenced by an agent, the effective default,
@@ -274,13 +340,38 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
     }
     const cfg = loadConfig(deps.configPath)
     const binaryPath = resolveRuntimeBinary(row, cfg)
+    const probeTarget = runtimeProbeTargetOf(row, binaryPath)
     const smoke = await smokeRuntime({
       protocol: row.protocol,
       binaryPath,
       config: { opencodePath: cfg.opencodePath, claudeCodePath: cfg.claudeCodePath },
+      ...(row.model !== null ? { model: row.model } : {}),
       bridgeCredentials: true,
     })
-    await cacheRuntimeProbe(deps.db, name, JSON.stringify(smoke))
-    return c.json({ smoke })
+    return withRuntimeProbeConfigFence(deps.configPath, async () => {
+      // A row with binaryPath=NULL inherits the protocol path from config.json.
+      // Config PUT holds this same fence while it first bumps the persisted DB
+      // generation and then replaces the file, closing the final check→CAS gap.
+      const currentRow = await getRuntime(deps.db, name)
+      const currentConfig = loadConfig(deps.configPath)
+      if (
+        currentRow === null ||
+        resolveRuntimeBinary(currentRow, currentConfig) !== probeTarget.resolvedBinaryPath
+      ) {
+        throw new ConflictError(
+          'runtime-probe-stale',
+          `runtime '${name}' changed while its probe was running; retry the probe`,
+        )
+      }
+      await deps.runtimeDiagnosticTestDependencies?.beforeRuntimeProbeCache?.()
+      const cached = await cacheRuntimeProbe(deps.db, probeTarget, smoke)
+      if (!cached) {
+        throw new ConflictError(
+          'runtime-probe-stale',
+          `runtime '${name}' changed while its probe was running; retry the probe`,
+        )
+      }
+      return c.json({ smoke })
+    })
   })
 }

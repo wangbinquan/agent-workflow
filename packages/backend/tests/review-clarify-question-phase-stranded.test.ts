@@ -23,6 +23,7 @@ import { join, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
+import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { clarifyRounds, nodeRuns, tasks } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
@@ -101,6 +102,7 @@ beforeEach(async () => {
   await git('-C', repoPath, 'add', '.')
   await git('-C', repoPath, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
   db = createInMemoryDb(MIGRATIONS)
+  await seedTestDefaultOpencodeRuntime(db)
   process.env.SCENARIO_PLAN_FILE = join(tmp, 'plan.json')
   process.env.SCENARIO_STATE_DIR = join(tmp, 'state')
   process.env.AGENT_WORKFLOW_HOME = appHome

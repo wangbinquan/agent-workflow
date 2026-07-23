@@ -1,195 +1,423 @@
-# OPENCODE_CONFIG.md — opencode 配置注入路径与优先级（项目权威参考）
+# OpenCode v1.18.3 verified execution contract
 
-> **用途**：固化 `agent-workflow` 框架向 opencode 子进程注入 agent / skill / MCP 三类资源时的**通道选择**与**与现有磁盘配置的优先级关系**。
-> **校验依据**：opencode 1.x 源码（本机 `/Users/wangbinquan/Documents/code/opencode/`，所有行号锚点都指向该路径下的源文件）。
-> **维护规则**：任何"换通道 / 改优先级 / 加新资源类型"的 RFC 必须先对照本表更新一次，再进入实现。改表的同时跑一遍 `grep` 验证锚点行号没漂。
+> **用途**：说明生产环境如何把 agent、skill、MCP、模型与 session 绑定到同一个
+> OpenCode v1.18.3 实例，并列出维护这条边界时必须同步检查的仓内代码。
+>
+> **权威范围**：本文描述 RFC-224 的 production verified path。显式
+> `testOnlyUnverifiedRuntime` 或未品牌化 mock command 仍可进入历史 CLI builder，
+> 但那只是依赖注入测试缝，不是产品契约。
 
----
+## 1. 结论先行
 
-## 1. 注入方式 × 资源类型 总表
+生产执行不再依赖“`OPENCODE_CONFIG_CONTENT` 最后合并，所以平台配置一定获胜”。
+这个断言在 v1.18.3 不成立：inline 之后仍可能存在 account、managed、MDM、
+legacy mode 与 permission 覆盖。
 
-列 = 我们能选的注入通道，行 = 资源类型。
-单元格内容：**是否使用**｜**载体形态**｜**写入时机**｜**vs 已有同名的胜负**。
+当前边界是“排除继承面，再验证同一个实例的最终状态”：
 
-| 资源 ＼ 注入方式 | **A. `OPENCODE_CONFIG_CONTENT`**<br/>（env 内联 JSON，整条 config） | **B. `OPENCODE_CONFIG_DIR`**<br/>（env 指向 per-run 目录，opencode 自扫描） | **C. 现成磁盘扫描**<br/>（`~/.config/opencode` + repo `.opencode/` + `~/.opencode/` + `~/.claude/skills/` 等，opencode 自动加载，**不受框架控制**） |
-|---|---|---|---|
-| **Agent** | ✅ **主通道**<br/>载体：inline JSON 顶层 `agent.<name>: {...}` 字段<br/>时机：spawn opencode 子进程前，runner.ts 写入 env<br/>胜负：**胜**（merge 顺序第 6 步，覆盖所有目录扫描结果，字段级 deep merge） | ⚠️ **可用但不主用**<br/>opencode 也会扫 `<runDir>/opencode.json` 的 `agent:` 字段（`config.ts:583-590`），但同 inline 路径会重复管理，徒增复杂度。**我们目前不用** | ✅ **自然继承**<br/>路径：`~/.config/opencode/{config,opencode}.json`、repo `.opencode/agent/*.md`、`~/.opencode/agent/*.md`<br/>胜负：**我们的 inline 永远后写、字段级胜出**；非同名 agent 共存 |
-| **Skill** | ⚠️ **不可用**（opencode 配置文件无 skill 内联字段，只能在 `skills.paths` / `skills.urls` 列路径或 URL） | ✅ **主通道**<br/>载体：物理 cp/symlink SKILL.md 到 `<runDir>/skills/<name>/SKILL.md`（runner.ts:481-497）<br/>时机：spawn 前<br/>胜负：**胜**（runDir 是 `config.directories()` 数组末尾元素 `paths.ts:39`，skill 扫描后写入覆盖同名 `skill/index.ts:116-122`） | ✅ **自然继承**<br/>路径：`{Global,~/.opencode,repo .opencode}/skill(s)/**/SKILL.md` + `~/.claude/skills/**` + `~/.agents/skills/**` + `cfg.skills.{paths,urls}`<br/>胜负：**我们的 runDir 后扫胜出**；非同名 skill 共存（repo 内业务 skill 仍被 agent 看到，故意保留） |
-| **MCP** | ✅ **唯一通道**<br/>载体：inline JSON 顶层 `mcp.<name>: {...}` 字段<br/>时机：spawn 前（RFC-028 待实现）<br/>胜负：**胜**（同 agent 路径，第 6 步 deep merge） | ❌ **不可用**<br/>opencode **没有** `.opencode/mcp/` 目录扫描机制（mcp 只能来自配置文件顶层 `mcp:` 字段，没有 markdown / 目录形态） | ✅ **自然继承**<br/>路径：`~/.config/opencode/config.json` + repo `.opencode/opencode.json` 的 `mcp:` 段<br/>胜负：**我们的 inline 后写胜出**；非同名 MCP 共存（user repo 里其它 MCP 仍会启动，process-global 暴露给所有 agent） |
+1. 只接受 `officialBuilds.ts` 中 OS/arch 对应的 OpenCode **1.18.3 精确二进制
+   SHA-256**，复制到 per-run seal 后执行该副本；
+2. 只在 Linux `sandboxMode=enforce` 且 root-owned bwrap 可用时允许模型执行；
+3. 用 private HOME/XDG/config/store、disable flags 与 source guard 排除用户全局、
+   repo、managed、MDM、plugin、external skill 等隐式输入；
+4. `buildControlledOpencodeConfig` 构造完整候选配置，inline 只是传输载体；
+5. hidden launcher 启动同一个 `opencode serve` 实例，通过 `/config`、
+   `/config/providers`、`/agent`、`/skill` 校验最终有效状态；
+6. 校验通过后才创建/定位 session，先订阅 SSE，再经 direct API 发 prompt；
+7. business session 还必须完成 launcher ↔ runner owner/lease ack，才允许进入模型边界。
 
-### 1.1 表格速记
+所以正确心智模型不是“我们的层优先级最高”，而是：
 
-- **只有一种 / 主用通道**：Agent → A、Skill → B、MCP → A。
-- **A 与 B 都是我们注入的"最后一层"**：写入时机均晚于所有磁盘扫描，遇同名永远胜出。
-- **C 列是我们不控的"基线层"**：故意保留，让用户的全局 / repo 资源仍能被 agent 自然看到（除非同名被我们 shadow）。
-
----
-
-## 2. opencode 完整加载顺序（决定优先级的根因）
-
-`config.ts:472-707` `loadInstanceState` 的实际代码顺序，**后写胜出**（`mergeConfigConcatArrays` / `mergeDeep` 语义，`config.ts:48,52`）：
-
-```
-1. 远端 well-known 配置（仅当 auth.json 有 wellknown 条目；通常无）             config.ts:513-553
-2. 全局 ~/.config/opencode/{config,opencode}.json/jsonc                       config.ts:417-419
-3. OPENCODE_CONFIG（单文件指针 env；我们不用）                                  config.ts:558-561
-4. 项目链（!OPENCODE_DISABLE_PROJECT_CONFIG 时）：
-   afs.up({ targets: ["opencode.json","opencode.jsonc"], start: cwd,
-            stop: worktree }).toReversed()
-   — 越靠近 cwd 越晚写、越胜出                                                config.ts:563-567 + paths.ts:10-21
-5. 目录扫描 config.directories():                                              config.ts:573-625 + paths.ts:23-41
-     a. Global.Path.config (~/.config/opencode)
-     b. !OPENCODE_DISABLE_PROJECT_CONFIG 时：afs.up(.opencode) cwd→worktree
-     c. afs.up(.opencode) home→home（用户 home 链）
-     d. OPENCODE_CONFIG_DIR (我们的 runDir，append 在最末)
-   每个 dir 都会跑：
-     - 加载 opencode.{json,jsonc}（agent / mcp 字段也在这）
-     - ConfigAgent.load(dir)（扫 {agent,agents}/**/*.md）
-     - ConfigCommand.load(dir) / ConfigPlugin.load(dir)
-6. OPENCODE_CONFIG_CONTENT（我们的 inline JSON）                                config.ts:627-635
-7. 账号 org config（仅当 auth 里有 active_org_id；通常无）                       config.ts:637-674
-8. macOS MDM managed preferences（仅企业部署；通常无）                          config.ts:676-696
-9. OPENCODE_PERMISSION（permission map 末次覆盖）                              config.ts:706
+```text
+DB/resource selection
+  -> parent-side freeze + identity manifest
+  -> official sealed binary + hermetic filesystem/env
+  -> FFF capability proof
+  -> one loopback server
+  -> same-instance config/provider/agent/skill attestation
+  -> exact session ownership
+  -> SSE first, POST second
+  -> strict JSONL codec
 ```
 
-**核心结论**：`agent-workflow` 注入的两路写入点在第 5(d) 与第 6 步，永远后于 1–5(c) 的任何磁盘扫描；只有第 7、8 两个企业部署场景能压过我们，普通开发者环境可忽略。
+## 2. 生产启动路径
 
----
+### 2.1 入口与平台门
 
-## 3. 三类资源的策略与设计取舍
+`opencodeDriver.buildBusinessSpawn` 与 `opencodeDriver.buildSpawn` 分别调用：
 
-### 3.1 Agent —— inline JSON（A 通道）
+- `buildVerifiedOpencodeBusinessPlan`；
+- `buildVerifiedOpencodeSystemPlan`。
 
-- **为什么不走 B（OPENCODE_CONFIG_DIR）**：A 通道在第 6 步深合并，比目录扫描第 5(d) 更晚写、字段级胜出；inline 也方便闭包合并多个 dependsOn agent（RFC-022 已落地，`runner.ts:531-545 buildInlineConfig`）。
-- **合并语义**：`mergeDeep` —— inline 同字段胜出，未覆盖字段保留磁盘扫描值。要完全 shadow 同名 agent，inline 必须把所有相关字段都写明。
-- **进程级作用域**：inline 注入的 dependsOn 闭包内每个 agent 都被 opencode 视为可用 subagent（`agent.ts` 的 task 工具会查询 `cfg.agent` map）。
+两条路径都要求：
 
-### 3.2 Skill —— per-run 目录（B 通道）
+- `platform === "linux"`；
+- sandbox provider 为 `enforce + available + bwrap`；
+- 模型已解析为显式 `providerID/modelID`；
+- binary 命中 `OFFICIAL_OPENCODE_BUILDS` 的 v1.18.3 唯一记录。
 
-- **为什么不走 A**：opencode 配置 schema 里没有 `skills.<name>: {bodyMd, files...}` 这种内联形态；skill 必须以"文件系统目录 + SKILL.md"形态存在。
-- **runDir 末尾扫描**：`paths.ts:39` 把 `Flag.OPENCODE_CONFIG_DIR` 追加在 `config.directories()` 数组末尾；`skill/index.ts:195-198` 按数组顺序扫描，`skill/index.ts:116-122` 同名后扫到的覆盖前者（只 log warn 不报错）。
-- **managed vs external**：
-  - managed → `cpSync` 复制（避免用户改动 ~/.agent-workflow/skills/<name>/ 时影响正在跑的 task）
-  - external → `symlinkSync(externalPath, runDir/skills/<name>, 'dir')`（不复制，IO 经济）
-- **不屏蔽 inherited skill**：repo `.opencode/skills/` 与 `~/.claude/skills/` / `~/.agents/skills/` 里**非同名**的 skill 仍被 agent 看到，**故意保留**（让用户能在 repo 里自带业务 skill；与 RFC-017 source-dir 模式自洽）。
+macOS 的 official build 仍可用于 version/status/model 等诊断，但 secure v1 不在
+macOS 上执行模型。未知版本、未知平台、wrapper command、非官方 digest 或 sandbox
+不可用都 fail closed。
 
-### 3.3 MCP —— inline JSON（A 通道，RFC-028 提议）
+### 2.2 父进程物化的对象
 
-- **为什么不走 B**：opencode 没有 `.opencode/mcp/` 目录扫描机制（`mcp/index.ts:513-549` 只从 `cfg.mcp` 顶层 record 读取）；MCP 必须以"配置文件 `mcp:` 顶层字段"形态存在。可选的间接路径是把 `mcp:` 写进 `<runDir>/opencode.json` 让目录扫描捡到 —— 但效果与 inline 等价、还多一个文件 IO 步骤，**不选**。
-- **opencode 进程内 MCP 是全局的**（`mcp/index.ts:524-549` 启动时全量 spawn，工具池暴露给该进程内**所有** agent）。框架层"agent X 依赖 MCP Y"语义由**每节点一个独立 opencode 子进程**承担（runner 的 spawn 隔离），不是靠 opencode 内部 scope。
-- **字段名翻译**（必须按 opencode 端命名写 inline）：
-  - Local：`type:"local"`, `command: string[]`, `environment?: Record<string,string>`（注意不是 `env`）, `enabled?: boolean`, `timeout?: number`（毫秒，不是 `timeoutMs`）。**无 `cwd` 字段**（mcp/index.ts:417 取 `InstanceState.directory` 作 stdio 子进程 cwd）。
-  - Remote：`type:"remote"`, `url: string`, `headers?: Record<string,string>`, `oauth?: object | false`, `enabled?: boolean`, `timeout?: number`。
-- **工具命名**：`mcp/index.ts:684` `${sanitize(mcpName)}_${sanitize(toolName)}`，`sanitize = s => s.replace(/[^a-zA-Z0-9_-]/g, "_")`。我们的 MCP name regex `^[a-z0-9][a-z0-9_-]*$` 全部命中白名单 → 名字在 opencode 工具池里保持不变。用户在 `agent.permission` 里点名某工具写法：`permission: { "postgres-prod_query": "ask" }`。
-- **shadow inherited MCP**：opencode schema 接受 `mcp.<name> = { enabled: false }` 半结构（`config.ts:211-215`），可用来逐条关闭 repo 已有的同名 MCP。RFC-028 v1 不实现这个屏蔽语义，但 schema 与代码都预留好了。
+business plan 在任何模型执行前完成：
 
----
+- canonical worktree/source fingerprint；
+- official binary snapshot；
+- private OpenCode store 与全部 private config roots；
+- managed skill 全树 seal；
+- netless shell 与 local MCP wrapper；
+- FFF probe artifacts；
+- one-shot `VerifiedLaunchManifest`。
 
-## 4. 优先级速查 —— "已有 X 的情况下，我们注入 Y 会怎样"
+manifest 以 `0600 + O_EXCL + O_NOFOLLOW` 写入普通 run root。hidden launcher
+`readAndUnlinkVerifiedLaunchManifest` 读入、closed-schema 校验后立即 unlink；
+manifest path 不传给 OpenCode server。
 
-| 已有位置 | 同名时 | 不同名时 |
-|---|---|---|
-| `~/.config/opencode/config.json` 的 `agent.<X>` / `mcp.<X>` | **我们 inline 胜出**（字段级 deep merge，未覆盖字段保留） | 都生效，opencode 看合集 |
-| `~/.opencode/agent/*.md` / `~/.opencode/skills/<X>` | **我们 inline / runDir 胜出** | 都生效 |
-| `<repo>/.opencode/opencode.json` 的 `agent.<X>` / `mcp.<X>` | **我们 inline 胜出** | 都生效 |
-| `<repo>/.opencode/agent/*.md` | **我们 inline 胜出** | 都生效 |
-| `<repo>/.opencode/skills/<X>/SKILL.md` | **我们 runDir 胜出**（runDir 在 directories 末尾，scan 顺序最后） | 都生效（repo 业务 skill 仍被 agent 看到 —— 设计保留） |
-| `~/.claude/skills/**/SKILL.md`（claude code 互通） | 我们 runDir 胜出 | 都生效 |
-| `~/.agents/skills/**/SKILL.md` | 我们 runDir 胜出 | 都生效 |
-| Anthropic 远端 org-managed config（auth.json `wellknown` + active_org_id） | ⚠️ **它胜过我们**（`config.ts:637-674` 在 inline 之后写入） | — |
-| macOS MDM `.mobileconfig` managed preferences | ⚠️ **它胜过我们**（`config.ts:687-696` 也在 inline 之后） | — |
+`SpawnPlan.readOnlySubtrees` 把 binary/skill/wrapper seal、三个 config root 与 FFF
+只读目录交给 RFC-205 外层 bwrap 做 read-only overlay。session store 单独列在
+`SpawnPlan.sessionStore`，作为唯一允许 capture 的 OpenCode DB locator。
 
-最后两行属企业部署场景，绝大多数用户环境为空。RFC 文档里出现"我们 100% 胜出"的简写时，默认排除这两个边角。
+### 2.3 不是 `opencode run`
 
----
+生产路径不会执行：
 
-## 5. spawn 时的 env 写入清单（runner.ts 实际形态）
+```text
+opencode run ...
+opencode --session ...
+debug config -> 再启动另一个 run process
+```
 
-```ts
-// packages/backend/src/services/runner.ts:249-262
-const env: Record<string, string> = {
-  ...process.env,
-  OPENCODE_CONFIG_DIR: runDir,                       // → 第 5(d) 步目录扫描捡 skills + opencode.json
-  OPENCODE_CONFIG_CONTENT: JSON.stringify(inline),   // → 第 6 步 inline JSON 覆盖性合并
-  // 不设：OPENCODE_DISABLE_PROJECT_CONFIG / OPENCODE_DISABLE_EXTERNAL_SKILLS / OPENCODE_PERMISSION
-  // —— 故意保留 repo .opencode/ 与 ~/.opencode/ 的自然继承
-}
+launcher 对 sealed binary 的实际启动是：
 
-// runDir 物理布局
-// ~/.agent-workflow/runs/<taskId>/<nodeRunId>/.opencode/
-//   skills/
-//     <skill-name-1>/SKILL.md  (cp or symlink)
-//     <skill-name-2>/SKILL.md
-//     ...
+```text
+opencode serve --hostname 127.0.0.1 --port 0 --no-mdns
+```
 
-// inline JSON 形态（RFC-022 现状 + RFC-028 落地后）
+server 位于 launcher 独占的 process group。launcher 严格解析唯一 listen line，
+使用 manifest 内随机 Basic Auth 凭据连接 loopback API；退出、超时或失败时执行
+TERM → KILL、有界 pipe drain 与 store-lock cleanup。
+
+## 3. 资源如何进入 verified instance
+
+### 3.1 Agent 与 final raw config
+
+Agent 的 DB row 仍是业务事实源，但 production 不把散装 frontmatter 直接交给
+OpenCode 合并。`buildControlledOpencodeConfig` 生成完整配置：
+
+```json
 {
-  "agent": {
-    "<primary-agent>": { ...frontmatter, prompt: bodyMd, ...overrides },
-    "<dependsOn-1>":    { ...frontmatter, prompt: bodyMd },
-    "<dependsOn-2>":    { ...frontmatter, prompt: bodyMd },
-    ...
+  "share": "disabled",
+  "autoupdate": false,
+  "snapshot": false,
+  "formatter": false,
+  "lsp": false,
+  "instructions": [],
+  "skills": { "paths": [], "urls": [] },
+  "compaction": { "auto": false, "prune": false },
+  "shell": "<sealed netless shell>",
+  "plugin": [],
+  "mcp": {},
+  "permission": {
+    "question": "deny",
+    "plan_enter": "deny",
+    "plan_exit": "deny"
   },
-  "mcp": {                       // RFC-028 待落地
-    "<mcp-name-1>": { type: "local",  command: [...], environment: {...}, timeout: 5000 },
-    "<mcp-name-2>": { type: "remote", url: "...", headers: {...} },
-    ...
+  "agent": {
+    "<selected-name>": {
+      "prompt": "<frozen persona>",
+      "model": "<provider>/<model>",
+      "mode": "primary",
+      "hidden": false,
+      "permission": "<ordered denied tail>",
+      "options": {}
+    }
   }
 }
 ```
 
-cwd 为 `<worktree>`（保留 git diff 自然行为，opencode 端 `InstanceState.directory` 也由此而来）。
+`OPENCODE_CONFIG_CONTENT` 仍承载这份 JSON，但 `buildHermeticServerEnv` 先做 canonical
+JSON 合法性检查，再用 `JSON.stringify` 保留 permission object 的 insertion
+order。v1.18.3 会把这个顺序转成 `Agent.Info` rule 顺序，因此不能为了稳定序列化
+而排序 key。
 
----
+平台强制覆盖 permission 尾：
 
-## 6. 边角与坑
+- `read/edit/write/apply_patch/grep/glob/skill/task/webfetch/websearch/lsp` deny；
+- `bash` 只按 agent 的 shell policy 决定 allow/deny；
+- `external_directory` 先对 private tool-output pattern deny，再 wildcard deny；
+- root session 的 `question/plan_enter/plan_exit` deny。
 
-1. **`mergeDeep` 对数组的行为**：`remeda.mergeDeep` 把数组视作"叶值"整体替换，不做元素级 merge。所以 `command: [...]` / `headers.X: ["a","b"]` 这种数组**不会与 repo 同字段拼接**，inline 完全胜出。`tools` / `permission` 是 record 不是 array，正常深合并。
-2. **plugins / commands 不在本表范围**：`commands` / `plugins` 也是按目录扫描的，但我们框架目前不主动注入；它们仍按 §2 的 1–5 步从用户环境加载。
-3. **`opencode --session` resume**：RFC-026 inline-session 重跑时**仍会重新跑 §2 全套加载**（opencode 不缓存上次 config）；inline 不变 → 行为不变。
-4. **dependsOn 闭包之外的 agent**：如果 opencode 进程通过 `task` 工具想 spawn 一个 inline 没注入、磁盘上也没有的 agent，会直接 fail；这就是 RFC-022 闭包验证存在的原因（避免运行期才发现）。
-5. **MCP 失败不阻塞 agent**：`mcp/index.ts:412-444` 的 `connectLocal` 失败只把该 MCP status=failed，agent 继续无 MCP 运行 —— **不会让 node 失败**。要"MCP 失败即 node 失败"的策略要在框架层加二次校验。
-6. **OAuth token 持久化路径不在 runDir**：Remote MCP 的 OAuth token 落 `~/.opencode/auth/`（`McpAuth.Service`），跨子进程共享、跨 task 共享。我们的 per-run 隔离**不隔 OAuth**，这是有意的（让用户 `opencode mcp auth <name>` 一次后所有 task 都能用）。
+system agent 使用同一 config builder，但 `shell=/bin/false`、无 MCP、所有工具 deny。
+business verified v1 不支持 enabled plugin 或 `dependsOn` subagent；命中时分别返回
+`execution-identity-plugin-unsupported` /
+`execution-identity-dependent-unsupported`。
 
----
+### 3.2 Skill 与 instruction
 
-## 7. 参考文件锚点（opencode 1.x 源码）
+生产路径**不自然继承** repo/global skill，也不把选中的 managed skill 注册进
+OpenCode 官方 skill registry：
 
-| 主题 | 文件 | 关键行 |
-|---|---|---|
-| config 加载主入口 | `packages/opencode/src/config/config.ts` | `loadInstanceState` 472-707 |
-| mergeConfig / mergeDeep 实现 | `packages/opencode/src/config/config.ts` | 48-56 |
-| OPENCODE_CONFIG_CONTENT 注入点 | `packages/opencode/src/config/config.ts` | 627-635 |
-| `config.directories()` 顺序 | `packages/opencode/src/config/paths.ts` | 23-41 |
-| `config.files()` 顺序 | `packages/opencode/src/config/paths.ts` | 10-21 |
-| Agent schema | `packages/opencode/src/config/agent.ts` | 22-51 |
-| Agent 目录扫描 | `packages/opencode/src/config/agent.ts` | `load()` 107-137 |
-| Skill 发现 | `packages/opencode/src/skill/index.ts` | `discoverSkills` 163-223 |
-| Skill 同名覆盖 | `packages/opencode/src/skill/index.ts` | `add()` 94-131 |
-| MCP schema | `packages/opencode/src/config/mcp.ts` | 全文 |
-| MCP 启动 / 工具暴露 | `packages/opencode/src/mcp/index.ts` | 412-549 / 657-690 |
-| MCP 工具命名 | `packages/opencode/src/mcp/index.ts` | 684（`sanitize_` + `_sanitize`） |
+- `scanOpencodeProjectSurface` 从 canonical worktree 一直检查到 filesystem root；
+  任一级出现 `opencode.json[c]`、`.opencode`、`reference(s)`、
+  `.agents/skills` 或 `.claude/skills` 都拒绝；
+- external/project skill 不支持；selected skill 必须为 managed；
+- `inspectManagedSkillTree` 与 `snapshotManagedSkillTree` 对完整 skill tree 做
+  no-symlink capture，比较 `contentVersion`、canonical relative path、entry
+  type/mode、普通文件 bytes 与 tree digest；
+- sealed `SKILL.md` 以带 name/digest 的 frozen block 拼进 selected agent persona；
+- skill 辅助文件只通过精确 read-only bind 提供给 netless shell/local MCP；
+- raw config 固定 `skills.paths=[]`、`skills.urls=[]`，官方 `skill` tool deny；
+- launcher 的 `/skill` inventory 必须精确等于 `PINNED_BUILTIN_SKILL`，额外 disk、
+  project 或 platform skill 都是 `execution-identity-skill-mismatch`。
 
-我方关键代码：
+worktree 根的 `AGENTS.md` 是唯一显式 instruction 入口。
+`readFrozenInstruction` 以 no-follow fd 读取并校验 metadata/size/UTF-8，随后将 sealed
+bytes 拼进 persona；不会在模型取得控制后重新打开 live 文件。
 
-| 主题 | 文件 | 关键函数 / 行 |
-|---|---|---|
-| spawn 主流程 | `packages/backend/src/services/runner.ts` | `runNode` 184-260 |
-| inline JSON 构造 | `packages/backend/src/services/runner.ts` | `buildInlineConfig` 531-545 |
-| skill cp/symlink | `packages/backend/src/services/runner.ts` | `prepareSkills` 481-497 |
-| dependsOn 闭包 | `packages/backend/src/services/agentDeps.ts` | `computeClosure` |
-| MCP 闭包（RFC-028 待加） | `packages/backend/src/services/mcpClosure.ts` | TBD |
+### 3.3 MCP、plugin 与 subagent
 
----
+production MCP 集合只来自当前节点已解析的 `ctx.mcps`，不存在全局/repo MCP
+自然继承：
 
-## 8. 何时需要更新本文档
+- disabled MCP 被忽略；
+- remote MCP 以 closed config 写入 `mcp.<name>`；
+- local MCP command 必须以 absolute regular executable 开头；
+- local command/args/env 被放入 private wrapper manifest，OpenCode 看到的 command
+  只有 sealed wrapper path；
+- wrapper 通过 `runNetlessSubprocess` 进入嵌套 bwrap：无 network、受控 env、
+  worktree/scratch 可写、selected frozen skill paths 只读；
+- `sanitizeNetlessEnvironment` 拒绝 `OPENCODE_*`、loader、dynamic linker、Git exec/
+  SSH、shell startup 等危险环境注入。
 
-只要满足下列任一条件，**就必须先改本文档再改实现**：
+MCP 工具名仍由 OpenCode 按 `{mcp-name}_{tool-name}` 暴露，因此 agent permission
+中点名某个 selected MCP tool 继续使用这一形式。有效 config/agent identity 会
+校验“声明的 MCP 集合没有被增删改”，但具体远端服务健康度仍是 MCP 自身运行期语义。
 
-- 新增一个不在 §1 表格里的资源类型（如 commands / plugins / formatter）需要被框架注入。
-- 改了 `runner.ts` 的 spawn env 集合（增删任一 `OPENCODE_*` 环境变量）。
-- opencode 升级到一个改动 `loadInstanceState` 顺序、或新增 `mergeXxx` 函数行为的版本 —— 必须重新跑一遍 §7 锚点 verify。
-- 决定开启 / 关闭 `OPENCODE_DISABLE_PROJECT_CONFIG` 或类似 disable flag（会改 §2 第 4-5 步行为）。
-- RFC 引入"屏蔽 inherited X"语义（如 inline 写 `{enabled:false}` 关闭 repo MCP），需要在 §3 / §4 加新条目。
+enabled plugin 在 verified v1 一律拒绝；`plugin=[]`。`task` tool deny 且
+`dependsOn` 非空直接拒绝，因此 OpenCode 内部 subagent 不是框架的协作通道。
 
-每次 verify 完成后，把 §7 锚点行号刷新一遍并在 commit message 注明 "verified against opencode <version> at <sha>"。
+### 3.4 Verified inventory
+
+verified path 不再加载 RFC-029 legacy inventory plugin，因为 production
+`plugin=[]`，inventory 也不得为了采集而执行 tool 或访问 `/mcp/status`。
+
+当 `ctx.wantsInventory` 为 true 时，`buildVerifiedInventoryPlan` 把下列非执行元数据
+冻结进 business manifest：
+
+- selected managed skill 的 name、skill id、已验证 tree digest；
+- enabled selected MCP 的 name 与 local/remote type。
+
+launcher 只有在 `/config`、`/config/providers`、两次 `/agent`、`/skill` 与 source
+fingerprint 全部验证后，才调用 `buildVerifiedInventorySnapshot`：
+
+- agent 来自第二次、已证明与第一次同 seal 的 `/agent`；
+- OpenCode 内置 skill 标为 `runtime-baseline`；
+- selected managed skill 标为 `prompt-injected-frozen`，不伪装成 runtime skill；
+- selected MCP 只标为 `configured`，不声称已连接；
+- plugins 固定为空。
+
+`writeVerifiedInventorySnapshot` 以有界 `0600 + O_EXCL + O_NOFOLLOW` 写
+`runRoot/inventory.json`，随后仍由 driver 的 `readSnapshotFromRunDir` 进入既有消费链。
+任何预占文件、schema/size/mode 漂移都 fail closed。
+
+## 4. Hermetic env：明确关闭继承
+
+`buildHermeticServerEnv` 从空对象开始，只转发批准的 locale/proxy/git identity 与
+selected provider credential。它不会展开完整 `process.env`。
+
+关键环境约束：
+
+- `HOME`、`TMPDIR`、`XDG_{CONFIG,DATA,CACHE,STATE}_HOME` 全部指向 private store；
+- `OPENCODE_CONFIG_DIR`、`OPENCODE_TEST_HOME`、
+  `OPENCODE_TEST_MANAGED_CONFIG_DIR` 指向互不 alias 的 private roots；
+- 每个 config root no-symlink 创建、预建只读 `.gitignore`，然后 outer ro-bind；
+- `OPENCODE_PURE=1`；
+- `OPENCODE_DISABLE_PROJECT_CONFIG=1`；
+- `OPENCODE_DISABLE_EXTERNAL_SKILLS=1`；
+- models fetch/default plugins/Claude compatibility/LSP download/autoupdate/autocompact/
+  prune/embedded UI/file watcher 全关闭；
+- `GIT_CONFIG_NOSYSTEM=1`、`GIT_CONFIG_GLOBAL=/dev/null`；
+- `OPENCODE_WORKSPACE_ID`、`OPENCODE_CONFIG`、`OPENCODE_PERMISSION` 不设置。
+
+认证也不是继承整个用户 auth store。`buildStrictProviderAuth` 只接受 selected
+provider 的单个 `{type:"api",key}`，生成唯一 `OPENCODE_AUTH_CONTENT`；
+OAuth/wellknown/额外 provider/额外 key 都拒绝。launcher 随后读取
+`/config/providers`，确认 selected model 存在且 implementation npm 命中
+`PINNED_BUNDLED_PROVIDER_NPM`。
+
+这套隔离意味着以下旧行为都不是 production feature：
+
+- repo `.opencode/` 自动配置；
+- `~/.config/opencode` / `~/.opencode` 配置或 agent；
+- `~/.claude/skills` / `~/.agents/skills` skill；
+- repo/global MCP；
+- remote org/active account/MDM 后置覆盖；
+- default/community plugin。
+
+如果这些面被检测到、重新出现于 same-instance inventory，或在 source fence
+期间变化，执行会 fail closed，而不是按 merge priority 猜测谁胜出。
+
+## 5. Official build、sandbox 与 FFF proof
+
+### 5.1 Official build manifest
+
+`OFFICIAL_OPENCODE_BUILDS` 是唯一 production binary trust root：
+
+| platform | arch  | version | executable SHA-256                                                 |
+| -------- | ----- | ------- | ------------------------------------------------------------------ |
+| darwin   | arm64 | 1.18.3  | `43f7083d450567706a80b6441331a25b5ed6d6c9f742826790545b068229cbb2` |
+| darwin   | x64   | 1.18.3  | `ba11415d6af7efc9dc0073520d546b869711da5f39076d12e08eeb266ba1279b` |
+| linux    | arm64 | 1.18.3  | `915ca1cd9eb5a7b3e15bd89dc71c38cf0caa9a02d13c5371422675b4b370bffb` |
+| linux    | x64   | 1.18.3  | `fdf58364c969a144fff0ae3a30f2fb6e705ada06864842613de1f9ecc70feb20` |
+
+每条记录同时 pin `codec=1` 与 `fffCapabilityCodec=1`。source executable 只允许单个
+PATH token 或 absolute path；resolve 后验证 executable、streaming hash，再以
+exclusive copy 写入 private path `0500`，copy 后和每次 exec 前重新 hash。
+
+`withOfficialOpencodeSnapshot` 也让 status/version/model diagnostics 只执行临时
+official snapshot，不直接执行 registry/source binary。
+
+### 5.2 两层 bwrap
+
+外层 RFC-205 bwrap 负责整个 launcher/server：
+
+- task worktree 与 session store 是批准的 writable roots；
+- identity/config/FFF seal 重新 overlay 为 read-only；
+- secure model execution 只接受 Linux enforce mode。
+
+business shell 与 local MCP 再通过 `materializeNetlessWrapper` /
+`runNetlessSubprocess` 进入内层 bwrap，获得独立 no-network 与 allowlisted env。
+root-owned、非 group/world-writable 的 bwrap 路径由 `requireRootOwnedBwrap` 验证。
+
+### 5.3 FFF capability proof
+
+不能只凭“没设置 `OPENCODE_DISABLE_FFF`”认定 v1.18.3 使用 bundled FFF，因为
+`Fff.available()` false 时 upstream 会切到 ripgrep layer。
+
+`materializeFffCapabilityProbe` 为每次 launch 创建：
+
+- no-symlink private cwd；
+- cwd 内唯一一个随机 basename 的已知普通文件；
+- empty read-only `cache/opencode/bin`；
+- empty read-only PATH；
+- private HOME/config/data/state/tmp。
+
+launcher 在 real server 前，对**同一个 sealed binary**执行：
+
+```text
+opencode debug file search <exact-random-basename>
+```
+
+`runFffCapabilityProbe` 用 no-network bwrap、closed env 与有界 stdout/stderr；只有
+exit 0、stderr 空、stdout 精确为一次 `<basename>\n` 且 cache/PATH 仍为空才通过。
+fallback ripgrep 在这个环境没有 PATH/cache binary，也不能联网下载，因此无法产生
+假阳性。任何偏差统一为 `execution-identity-bootstrap-failed`，real server 不启动。
+
+## 6. Same-instance attestation、session 与失败通道
+
+### 6.1 Bootstrap attestation
+
+`launchVerifiedOpencodeManifest` 的顺序是：
+
+1. closed manifest digest/source/binary/FFF proof；
+2. acquire store lifecycle lock，scrub fresh/existing store 的 account/auth 状态；
+3. binary 紧邻 exec 再验证；
+4. 启动一个 loopback server；
+5. 从该 server 读取 `/config`、`/config/providers`、`/agent`、`/skill`；
+6. `verifyExecutionIdentity` 比较完整 raw config、两次包含 native agent 的完整
+   registry canonical seal、selected agent ordered permission 与 identity digest；
+7. `verifySelectedProviderInventory` 与 `verifyPinnedSkillInventory` 收口 provider/
+   model/skill；
+8. source fingerprint 再验证；
+9. business inventory 启用时，从已验证数据写 exclusive snapshot；
+10. 创建新 session，或分页定位唯一、精确匹配的 resume root session。
+
+在实际模型边界，launcher 再扫一次 source fence，然后先订阅 SSE，验证首帧与消息
+history，生成严格晚于历史的 caller message id，最后才 POST prompt。
+`DirectSessionCodec` 只把 pinned wire schema 转成 runner 已有 JSONL；未知/越界事件、
+permission/question 请求、session/model/agent/path 漂移都失败。
+
+### 6.2 Business session ownership
+
+business new/resume 使用 persistent private store，绝不重新打开用户全局 OpenCode DB。
+
+owner row 冻结：
+
+- `sessionId`、`projectId`、`taskId`、`nodeId`、`createdNodeRunId`；
+- `identityDigest`、`officialBuildDigest`、`sessionContractDigest`；
+- `sessionStoreKey`、OpenCode version；
+- 当前 `nodeRunId + leaseNonceDigest`。
+
+resume 在 store materialize/scrub 前先比较可重建 owner 字段，并由 runner preclaim
+lease。launcher 验证 session 后向 stderr 写唯一 `session-ready` control frame；
+runner 原子 claim/confirm owner 后以 `O_EXCL` ack `ok`，launcher 收到 ack 才继续
+SSE/POST。任一 mismatch/nack/重复 marker 都终止。
+
+runner 只有在 launcher 与 stdout/stderr 完全 reaped、lease 仍持有时，才从
+`SpawnPlan.sessionStore.dbPath` 做最终 session capture，随后释放 lease。
+
+system/smoke/distiller invocation 使用 `storeKind=system-ephemeral`：只允许 new、
+无 business ack，capture 后删除整个 store。
+
+### 6.3 稳定失败与秘密边界
+
+RFC-224 失败只通过 `execution-identity-*` closed vocabulary 和
+`AW_OPENCODE_FAILURE <code>` control line 上报。host path、HTTP body、config value、
+credential、MCP header/env 与 upstream stderr 都不得进入错误消息或普通事件。
+
+日志/diagnostics 只记录 model/variant、MCP/plugin 数量等非秘密事实。若新增日志，
+不要打印 manifest、`serverEnv`、raw config、provider auth 或 wrapper manifest。
+
+## 7. Test-only legacy seam
+
+以下条件之一会进入旧 `buildOpencodeSpawn` / `buildInlineConfig` / `stageSkills` 路径：
+
+- 显式 `testOnlyUnverifiedRuntime=true`；
+- 注入未品牌化 mock `opencodeCmd`。
+
+该路径保留历史 `opencode run`、inline deep merge、config-dir skill staging、
+repo/global inheritance 等行为，以维持 mock/recording tests。它不能作为产品语义、
+不能由普通 runtime configuration 触发，也不能据此修改本文件的 production 结论。
+
+## 8. 仓内代码锚点
+
+| 主题                              | 文件                                                                                                      | 当前入口                                                                                                              |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| official build allowlist/snapshot | `packages/backend/src/services/runtime/opencode/officialBuilds.ts`                                        | `requireOfficialOpencodeBuild`, `snapshotOfficialOpencodeBinary`, `withOfficialOpencodeSnapshot`                      |
+| private paths/env/raw config/auth | `packages/backend/src/services/runtime/opencode/hermetic.ts`                                              | `prepareHermeticOpencodeLayout`, `buildHermeticServerEnv`, `buildControlledOpencodeConfig`, `buildStrictProviderAuth` |
+| repo/global source exclusion      | `packages/backend/src/services/runtime/opencode/sourceGuard.ts`                                           | `scanOpencodeProjectSurface`, `readFrozenInstruction`                                                                 |
+| managed skill tree seal           | `packages/backend/src/services/runtime/opencode/sealedInputs.ts`                                          | `inspectManagedSkillTree`, `snapshotManagedSkillTree`                                                                 |
+| shell/local MCP containment       | `packages/backend/src/services/runtime/opencode/sealedSubprocess.ts`                                      | `materializeNetlessWrapper`, `runNetlessSubprocess`                                                                   |
+| FFF proof                         | `packages/backend/src/services/runtime/opencode/fffCapability.ts`                                         | `materializeFffCapabilityProbe`, `runFffCapabilityProbe`                                                              |
+| verified inventory                | `packages/backend/src/services/runtime/opencode/verifiedInventory.ts`                                     | `buildVerifiedInventoryPlan`, `buildVerifiedInventorySnapshot`, `writeVerifiedInventorySnapshot`                      |
+| business/system plan              | `packages/backend/src/services/runtime/opencode/verifiedPlan.ts`, `verifiedSystemPlan.ts`                 | `buildVerifiedOpencodeBusinessPlan`, `buildVerifiedOpencodeSystemPlan`                                                |
+| one-shot manifest                 | `packages/backend/src/services/runtime/opencode/verifiedManifest.ts`                                      | `VerifiedLaunchManifestSchema`, `readAndUnlinkVerifiedLaunchManifest`                                                 |
+| same-instance launcher            | `packages/backend/src/services/runtime/opencode/verifiedLauncher.ts`                                      | `launchVerifiedOpencodeManifest`, `runVerifiedOpencodeLauncher`                                                       |
+| direct schemas/client/codec       | `packages/backend/src/services/runtime/opencode/directApiSchemas.ts`, `directClient.ts`, `directCodec.ts` | strict HTTP/SSE/session/message boundary                                                                              |
+| store hygiene                     | `packages/backend/src/services/runtime/opencode/storeHygiene.ts`                                          | `acquireOpencodeStoreLifecycleLock`, `scrubOpencodeStoreAccountState`                                                 |
+| runner owner barrier/capture      | `packages/backend/src/services/runner.ts`                                                                 | `requiresVerifiedOpencodeBarrier`, `processRunnerOpencodeControlLine`, `runNode`                                      |
+
+对应设计与回归锁：
+
+- `design/RFC-224-opencode-execution-identity/`；
+- `packages/backend/tests/rfc224-*.test.ts`；
+- `packages/backend/tests/integration-opencode/`。
+
+## 9. 维护规则
+
+以下变化必须先重新核对 pinned upstream v1.18.3 行为，并同步本文与测试：
+
+- OpenCode version/build hash、FFF capability codec；
+- config/agent/permission merge 或 inventory wire shape；
+- provider implementation、session/message/SSE schema；
+- source discovery、skill registry、MCP/plugin loading surface；
+- env/disable flag、private path、store schema；
+- `serve` stdout、direct endpoint 或 JSONL codec；
+- sandbox/bwrap mount 或 process-group lifecycle。
+
+不要在本文引用个人机器上的 upstream checkout 绝对路径或易漂移行号；引用仓内 wrapper
+函数、RFC evidence 与固定版本/tag。升级 OpenCode 必须作为新的 identity audit，
+不能只调整最低版本字符串。

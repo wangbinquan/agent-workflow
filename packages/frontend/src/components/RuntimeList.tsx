@@ -20,6 +20,8 @@ import {
   configDirEnvProblem,
   configDirNameProblem,
   DEFAULT_CONFIG_DIR_PROFILE,
+  isExecutionIdentityFailureCode,
+  type ExecutionIdentityFailureCode,
 } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
@@ -36,6 +38,7 @@ import {
   writeConfigPatch,
 } from '@/lib/config-resource'
 import { ConfigAmbiguousWriteError } from '@/lib/config-receipts'
+import { describeTaskFailure } from '@/lib/task-failure'
 
 export const RUNTIMES_QUERY_KEY = ['runtimes'] as const
 
@@ -49,8 +52,10 @@ interface SmokeResult {
     | 'network-blocked'
     | 'model-call-failed'
     | 'stream-nonconforming'
+    | 'execution-identity-failed'
   conforms: boolean
   detail: string
+  failureCode?: ExecutionIdentityFailureCode | null
   sawNonce?: boolean
   sawEnvelope?: boolean
   exitCode?: number | null
@@ -88,6 +93,42 @@ function smokeChipKind(probe: SmokeResult | null): 'success' | 'warn' | 'danger'
   )
     return 'warn'
   return 'danger'
+}
+
+function executionIdentitySmokeCopy(probe: SmokeResult | null) {
+  if (
+    probe?.outcome !== 'execution-identity-failed' ||
+    !isExecutionIdentityFailureCode(probe.failureCode)
+  ) {
+    return null
+  }
+  return describeTaskFailure({ failureCode: probe.failureCode })
+}
+
+function RuntimeSmokeDetail({
+  smoke,
+  identityOnly = false,
+  testid,
+}: {
+  smoke: SmokeResult | null
+  identityOnly?: boolean
+  testid: string
+}) {
+  if (smoke === null) return null
+  const copy = executionIdentitySmokeCopy(smoke)
+  if (copy === null && identityOnly) return null
+  return (
+    <div data-testid={testid}>
+      <p className="muted" style={{ margin: '4px 0 0 0', fontSize: 12 }}>
+        {copy?.title ?? smoke.detail}
+      </p>
+      {copy?.hint !== undefined && (
+        <p className="muted" style={{ margin: '2px 0 0 0', fontSize: 12 }}>
+          {copy.hint}
+        </p>
+      )}
+    </div>
+  )
 }
 
 export function RuntimeList({
@@ -231,11 +272,25 @@ export function RuntimeList({
                     ? t('runtimes.smokeUntested')
                     : t(`runtimes.smoke.${rt.lastProbe.outcome}`)}
                 </StatusChip>
+                {rt.protocol === 'opencode' && (rt.model === null || rt.model.trim() === '') && (
+                  <StatusChip
+                    kind="danger"
+                    size="sm"
+                    data-testid={`runtime-model-missing-${rt.name}`}
+                  >
+                    {t('runtimes.modelRequiredChip')}
+                  </StatusChip>
+                )}
               </div>
               <div className="runtime-list__meta">
                 <code className="runtime-list__binary">
                   {rt.binaryPath ?? t('runtimes.defaultBinary')}
                 </code>
+                <RuntimeSmokeDetail
+                  smoke={rt.lastProbe}
+                  identityOnly
+                  testid={`runtime-smoke-detail-${rt.name}`}
+                />
               </div>
               <div className="runtime-list__actions">
                 {/* RFC-118: a disabled runtime can't be made the default (server
@@ -244,7 +299,10 @@ export function RuntimeList({
                   <button
                     type="button"
                     className="btn btn--xs"
-                    disabled={setDefault.isPending}
+                    disabled={
+                      setDefault.isPending ||
+                      (rt.protocol === 'opencode' && (rt.model === null || rt.model.trim() === ''))
+                    }
                     onClick={() => setDefault.mutate(rt.name)}
                   >
                     {t('runtimes.setDefault')}
@@ -253,7 +311,15 @@ export function RuntimeList({
                 <button
                   type="button"
                   className="btn btn--xs"
-                  disabled={probe.isPending}
+                  disabled={
+                    probe.isPending ||
+                    (rt.protocol === 'opencode' && (rt.model === null || rt.model.trim() === ''))
+                  }
+                  title={
+                    rt.protocol === 'opencode' && (rt.model === null || rt.model.trim() === '')
+                      ? t('runtimes.modelRequired')
+                      : undefined
+                  }
                   onClick={() => probe.mutate(rt.name)}
                 >
                   {t('runtimes.test')}
@@ -367,6 +433,7 @@ function RuntimeFormDialog(props: {
   const configDirNameError =
     nameProblem === 'invalid-leaf' ? t('runtimes.configDirNameInvalid') : undefined
   const isOpencode = protocol === 'opencode'
+  const modelRequired = isOpencode && (model === undefined || model.trim() === '')
   // Codex P3: the claude spawn path consumes ONLY `model` — variant / temperature
   // / steps / maxSteps are all opencode-only, so null them out for claude (else a
   // user could save a Claude runtime param that never affects execution).
@@ -386,6 +453,7 @@ function RuntimeFormDialog(props: {
       api.post<{ smoke: SmokeResult }>('/api/runtimes/probe', {
         protocol,
         binaryPath: binaryPath.trim(),
+        ...(model !== undefined && model.trim() !== '' ? { model: model.trim() } : {}),
       }),
     onSuccess: (r) => setSmoke(r.smoke),
   })
@@ -426,7 +494,7 @@ function RuntimeFormDialog(props: {
           <button
             type="button"
             className="btn"
-            disabled={test.isPending || binaryPath.trim() === ''}
+            disabled={test.isPending || binaryPath.trim() === '' || modelRequired}
             onClick={() => test.mutate()}
           >
             {test.isPending ? t('runtimes.testing') : t('runtimes.testBinary')}
@@ -443,7 +511,8 @@ function RuntimeFormDialog(props: {
               // RFC-154: invalid config-dir overrides block Save (inline errors
               // explain why); the backend validators are the second line.
               configDirEnvError !== undefined ||
-              configDirNameError !== undefined
+              configDirNameError !== undefined ||
+              modelRequired
             }
             onClick={() => save.mutate()}
           >
@@ -511,7 +580,12 @@ function RuntimeFormDialog(props: {
           (O1(a)) so the model is free-text + a "save first" hint — showing the
           DEFAULT opencode list there would invite saving a model the fork doesn't
           have. claude (incl. forks) is a static list → a "not probed" note. */}
-      <Field label={t('runtimes.fieldModel')} hint={t('runtimes.fieldModelHint')}>
+      <Field
+        label={t('runtimes.fieldModel')}
+        hint={t('runtimes.fieldModelHint')}
+        required={isOpencode}
+        error={modelRequired ? t('runtimes.modelRequired') : undefined}
+      >
         {isEdit ? (
           <ModelSelect value={model} onChange={setModel} runtimeName={name} />
         ) : (
@@ -562,9 +636,7 @@ function RuntimeFormDialog(props: {
           <StatusChip kind={smokeChipKind(smoke)} size="sm" withDot>
             {t(`runtimes.smoke.${smoke.outcome}`)}
           </StatusChip>
-          <p className="muted" style={{ margin: '4px 0 0 0', fontSize: 12 }}>
-            {smoke.detail}
-          </p>
+          <RuntimeSmokeDetail smoke={smoke} testid="runtime-probe-detail" />
         </div>
       )}
       {test.error !== null && test.error !== undefined && <ErrorBanner error={test.error} />}

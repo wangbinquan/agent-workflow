@@ -19,8 +19,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { OpencodeModel, RuntimeModelsResponse } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import { TextInput } from '@/components/Form'
 import { Select, type SelectOption } from '@/components/Select'
+import { resolveApiError } from '@/i18n/errors'
 
 export const RUNTIME_MODELS_QUERY_KEY = ['runtime', 'models'] as const
 /**
@@ -31,6 +33,15 @@ export const RUNTIME_MODELS_QUERY_KEY = ['runtime', 'models'] as const
 export const RUNTIME_CLAUDE_MODELS_QUERY_KEY = ['runtime', 'models', 'claude'] as const
 
 const CUSTOM_OPTION = '__custom__'
+
+function modelLoadDisplayError(error: unknown): unknown {
+  if (!(error instanceof ApiError)) return error
+  const resolved = resolveApiError(error)
+  // ErrorBanner resolves the stable code again so its existing hint support is
+  // retained. Replace the wire message and omit wire details first: model
+  // inventory errors are a product boundary, not a raw backend-text console.
+  return new ApiError(error.status, error.code, resolved.title)
+}
 
 interface Props {
   value: string | undefined
@@ -96,11 +107,6 @@ export function ModelSelect({ value, onChange, runtime = 'opencode', runtimeName
   }, [value, isCustom])
 
   if (failed) {
-    // RFC-114 P2-4: surface the actual (backend-sanitized) reason — e.g. a custom
-    // fork's `models` failing — not just a generic line, and never fall back to
-    // some OTHER binary's list. Falls back to the generic copy when the error
-    // carries no message.
-    const reason = list.error instanceof ApiError ? list.error.message : ''
     return (
       <div>
         <TextInput
@@ -108,9 +114,7 @@ export function ModelSelect({ value, onChange, runtime = 'opencode', runtimeName
           onChange={(v) => onChange(v === '' ? undefined : v)}
           placeholder="anthropic/claude-sonnet-4-6"
         />
-        <p style={{ marginTop: 4, marginBottom: 0, fontSize: 12 }} className="muted" role="alert">
-          {reason.length > 0 ? reason : t('settingsForm.modelLoadFailed')}
-        </p>
+        <ErrorBanner error={modelLoadDisplayError(list.error)} testid="model-select-load-error" />
       </div>
     )
   }
@@ -174,10 +178,11 @@ export function ModelSelect({ value, onChange, runtime = 'opencode', runtimeName
           />
         </div>
       )}
-      {refresh.error instanceof ApiError && (
-        <p style={{ marginTop: 4, marginBottom: 0, fontSize: 12 }} className="muted">
-          {refresh.error.message}
-        </p>
+      {refresh.error !== null && refresh.error !== undefined && (
+        <ErrorBanner
+          error={modelLoadDisplayError(refresh.error)}
+          testid="model-select-refresh-error"
+        />
       )}
     </div>
   )

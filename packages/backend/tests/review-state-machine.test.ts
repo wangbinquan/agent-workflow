@@ -24,6 +24,7 @@ import { and, eq } from 'drizzle-orm'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
+import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { docVersions, nodeRunOutputs, nodeRuns, reviewComments, tasks } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { createAgent } from '../src/services/agent'
@@ -134,6 +135,7 @@ async function buildHarness(): Promise<Harness> {
   const appHome = join(tmp, 'appHome')
   const repoPath = join(tmp, 'repo')
   const db = createInMemoryDb(MIGRATIONS)
+  await seedTestDefaultOpencodeRuntime(db)
   const previousAppHome = process.env.AGENT_WORKFLOW_HOME
 
   // Set up a real git repo so worktree creation actually works.

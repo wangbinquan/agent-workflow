@@ -14,7 +14,7 @@ import { extractMigrationsTo, IS_EMBEDDED } from '@/embed'
 import { createApp } from '@/server'
 import { startFusionReconcileLoop } from '@/services/fusion'
 import { startLimitsTicker } from '@/services/limits'
-import { reapOrphanRuns } from '@/services/orphans'
+import { reapOrphanRunsForStoreRecovery } from '@/services/orphans'
 import { autoResumeInterruptedTasks } from '@/services/autoResume'
 import { startAutoRepairLoop } from '@/services/autoRepair'
 import { startHeartbeatKillLoop } from '@/services/autoKill'
@@ -47,6 +47,7 @@ import { acquireLock, DaemonLockHeldError, type Lock } from '@/util/lock'
 import { tasksListBroadcaster, TASKS_LIST_CHANNEL } from '@/ws/broadcaster'
 import { configureLogger, createLogger, type LogLevel } from '@/util/log'
 import { getRuntimeDriver } from '@/services/runtime'
+import { markProductionOpencodeCommand } from '@/util/opencode'
 import { Paths } from '@/util/paths'
 import { buildWebSocketAdapter } from '@/ws/server'
 import { isBootstrapRequired } from '@/services/authLoginPolicy'
@@ -368,16 +369,29 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // process. Any task/node_run left in 'running' is flipped to 'interrupted'
   // with task.error_message = 'daemon-restart' so the UI surfaces what
   // happened.
-  try {
-    const reap = await reapOrphanRuns(db)
-    if (reap.tasks > 0 || reap.runs > 0) {
-      log.warn('reaped orphan runs from previous daemon', {
-        tasks: reap.tasks,
-        runs: reap.runs,
-      })
+  const { reap, priorDaemonSandboxDead } = await reapOrphanRunsForStoreRecovery(db, lock)
+  if (reap.tasks > 0 || reap.runs > 0) {
+    log.warn('reaped orphan runs from previous daemon', {
+      tasks: reap.tasks,
+      runs: reap.runs,
+    })
+  }
+
+  // RFC-224: only after the prior daemon's outer bwrap groups have been
+  // reaped may we recover their private PID-namespace stores. This is a
+  // fail-closed boot barrier: it removes exact fsynced stale locks, scrubs
+  // account state, repairs session/run/nonce leases, and deletes ephemeral
+  // crash stores before auto-resume, schedulers, workers, or HTTP can run.
+  {
+    const { recoverOpencodeStoresOnBoot } = await import('@/services/opencodeStoreRecovery')
+    const report = await recoverOpencodeStoresOnBoot({
+      db,
+      appHome: Paths.root,
+      priorDaemonSandboxDead,
+    })
+    if (report.leasesRepaired > 0 || report.storesScrubbed > 0 || report.storesRemoved > 0) {
+      log.warn('recovered prior-daemon OpenCode stores', { ...report })
     }
-  } catch (err) {
-    log.warn('orphan reap failed', { error: err instanceof Error ? err.message : String(err) })
   }
 
   // 5b2/5b3（已退役）—— RFC-132 的两个 boot 垫片（legacy immediate rounds /
@@ -734,7 +748,9 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   if (config.autoResumeOnBoot) {
     const resumeDeps = {
       db,
-      ...(config.opencodePath ? { opencodeCmd: [config.opencodePath] } : {}),
+      ...(config.opencodePath
+        ? { opencodeCmd: markProductionOpencodeCommand([config.opencodePath]) }
+        : {}),
       ...(config.subagentLiveCapture !== undefined
         ? { subagentLiveCapture: config.subagentLiveCapture }
         : {}),

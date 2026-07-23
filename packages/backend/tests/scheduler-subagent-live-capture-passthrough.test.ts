@@ -61,7 +61,7 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
     // tasks.ts carries it on every launch path: JSON via buildStartTaskDeps; multipart
     // (fallback + success) + resume + retry via the imported resolveSubagentLiveCapture.
     const src = read('packages/backend/src/routes/tasks.ts')
-    expect(src).toContain('buildStartTaskDeps(deps.db, deps.configPath')
+    expect(src).toMatch(/buildStartTaskDeps\(\s*deps\.db,\s*deps\.configPath,/)
     const callCount = (src.match(/resolveSubagentLiveCapture\(deps\.configPath\)/g) ?? []).length
     expect(callCount).toBeGreaterThanOrEqual(3)
   })

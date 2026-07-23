@@ -75,7 +75,7 @@ export const claudeCodeDriver: RuntimeDriver = {
   // RFC-117 — system-agent spawn. Persona → --append-system-prompt-file, model →
   // --model, prompt → stdin (buildClaudeSpawn already returns stdin:pipe). No
   // skills/mcp/subagents for a framework system agent.
-  buildSpawn(ctx: SystemAgentSpawnContext): SpawnPlan {
+  async buildSpawn(ctx: SystemAgentSpawnContext): Promise<SpawnPlan> {
     return buildClaudeSpawn({
       ...(ctx.runtimeBinary != null && ctx.runtimeBinary !== ''
         ? { claudeCmd: [ctx.runtimeBinary] }

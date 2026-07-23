@@ -23,10 +23,9 @@
 #     entirely.
 #
 # Matrix: ubuntu-only (macOS LLM parity covered by the daemon's PR e2e),
-# two opencode versions — the pinned MIN_OPENCODE_VERSION (1.15.5) and
-# `latest`. The pinned leg catches "our framework regressed for the
-# version we ship"; the latest leg catches "a new opencode release
-# broke compat".
+# one exact opencode version — RFC-224's official v1.18.3 execution identity.
+# Newer releases are diagnosed separately and require a new pinned codec/build
+# review before they are executable.
 
 name: integration-opencode
 
@@ -80,15 +79,12 @@ jobs:
     name: opencode ${{ matrix.opencode }} (ubuntu)
     runs-on: ubuntu-latest
     strategy:
-      # Don't cancel the pinned leg when latest goes red — we want to see
-      # both signals.
+      # Keep the matrix form explicit for future reviewed official-build bumps.
       fail-fast: false
       matrix:
         opencode:
-          # Bump this when MIN_OPENCODE_VERSION moves. See
-          # packages/backend/src/util/opencodeVersion.ts.
-          - '1.15.5'
-          - 'latest'
+          # RFC-224 admits only this exact reviewed build/version tuple.
+          - '1.18.3'
     steps:
       - uses: actions/checkout@v5
 
@@ -105,6 +101,15 @@ jobs:
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
+      - name: Install RFC-224 Linux sandbox TCB
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap
+          bwrap_path="$(command -v bwrap)"
+          bwrap_mode="$(stat -c '%a' "$bwrap_path")"
+          test "$(stat -c '%u' "$bwrap_path")" = 0
+          test "$((8#$bwrap_mode & 8#22))" -eq 0
 
       - name: Run integration suite
         env:

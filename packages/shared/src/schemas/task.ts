@@ -1,6 +1,7 @@
 // Task schemas. Mirrors design.md §3 (tasks table) + plan.md P-1-14.
 
 import { z } from 'zod'
+import { EXECUTION_IDENTITY_FAILURE_CODES } from '../executionIdentity'
 import { hasQueryCredential } from '../git-url'
 import { InjectedMemorySnapshotSchema } from './memory'
 
@@ -193,10 +194,12 @@ export type TaskRepo = z.infer<typeof TaskRepoSchema>
  * RFC-145 — `node_runs.failure_code` (migration 0077): the machine-readable
  * failure taxonomy that used to live as errorMessage PREFIXES parsed by
  * `decideEnvelopeFollowup`'s order-sensitive startsWith chain. The runner now
- * declares the code at each stamp point (producer-side, 7 values);
- * `FOLLOWUP_POLICY` (shared/prompt.ts) projects it onto the 6-value render
- * reason (clarify-forbidden deliberately renders as envelope-missing — the
- * previously implicit downgrade, now explicit in the table).
+ * declares the code at each stamp point. The historical envelope-protocol
+ * producer domain remains the narrow `FOLLOWUP_FAILURE_CODES` 7-value union;
+ * `FOLLOWUP_POLICY` (shared/prompt.ts) projects only that union onto the
+ * 6-value render reason. RFC-224 widens the persisted/API `FAILURE_CODES`
+ * domain with permanent execution-identity failures without making them
+ * follow-up eligible.
  *
  * NULL = this row carries no machine-readable failure shape (the common case:
  * most failures are not follow-up-able). errorMessage remains human-readable
@@ -205,7 +208,7 @@ export type TaskRepo = z.infer<typeof TaskRepoSchema>
  * Like RERUN_CAUSES this is a plain nullable TEXT column — the enum is
  * enforced at the TypeScript boundary, not by SQLite.
  */
-export const FAILURE_CODES = [
+export const FOLLOWUP_FAILURE_CODES = [
   /** No <workflow-output> envelope in stdout (incl. the output-null defensive branch). */
   'envelope-missing',
   /** Both <workflow-clarify> and <workflow-output> present outside ask-back mode. */
@@ -223,6 +226,22 @@ export const FAILURE_CODES = [
   /** RFC-049 port content validation failed (payload rides in
    *  port_validation_failures_json, NOT in this code). */
   'port-validation-failed',
+] as const
+export type FollowupFailureCode = (typeof FOLLOWUP_FAILURE_CODES)[number]
+
+/**
+ * Complete persisted/API failure domain.
+ *
+ * RFC-224 keeps execution-identity codes in the dependency-free
+ * `executionIdentity.ts` leaf. This composition is intentionally the only
+ * place where task DTOs widen the historical envelope-followup domain; callers
+ * that decide whether to re-prompt must use `FOLLOWUP_FAILURE_CODES` (or
+ * `followupPolicyForFailure`) rather than treating every persisted code as
+ * retryable.
+ */
+export const FAILURE_CODES = [
+  ...FOLLOWUP_FAILURE_CODES,
+  ...EXECUTION_IDENTITY_FAILURE_CODES,
 ] as const
 export const FailureCodeSchema = z.enum(FAILURE_CODES)
 export type FailureCode = z.infer<typeof FailureCodeSchema>

@@ -26,11 +26,12 @@ const BASE: SystemAgentSpawnContext = {
   prompt: 'USER PROMPT',
   worktreePath: '/tmp/wt',
   runDir: '/tmp/run',
+  testOnlyUnverifiedRuntime: true,
 }
 
 describe('opencodeDriver.buildSpawn (RFC-117 system agent)', () => {
-  test('argv = opencode run/--agent/--format json/--thinking/--dangerously/-- <prompt>; stdin ignored', () => {
-    const plan = opencodeDriver.buildSpawn(BASE)
+  test('argv = opencode run/--agent/--format json/--thinking/--dangerously/-- <prompt>; stdin ignored', async () => {
+    const plan = await opencodeDriver.buildSpawn(BASE)
     // Prompt is the trailing positional after `--` (opencode strict-parser safety
     // for `-`-leading prompts) — see runtime/opencode/spawn.ts buildCommand.
     expect(plan.cmd).toEqual([
@@ -48,8 +49,8 @@ describe('opencodeDriver.buildSpawn (RFC-117 system agent)', () => {
     expect(plan.stdin).toEqual({ mode: 'ignore' })
   })
 
-  test('inline config carries persona prompt + model only (no skills/mcp/plugins)', () => {
-    const plan = opencodeDriver.buildSpawn(BASE)
+  test('inline config carries persona prompt + model only (no skills/mcp/plugins)', async () => {
+    const plan = await opencodeDriver.buildSpawn(BASE)
     const inline = JSON.parse(plan.env.OPENCODE_CONFIG_CONTENT!)
     expect(inline).toEqual({
       agent: {
@@ -60,19 +61,19 @@ describe('opencodeDriver.buildSpawn (RFC-117 system agent)', () => {
     expect(plan.env.PWD).toBe('/tmp/wt')
   })
 
-  test('model null/empty → inline config omits model (runtime default)', () => {
+  test('model null/empty → inline config omits model (runtime default)', async () => {
     const inlineNull = JSON.parse(
-      opencodeDriver.buildSpawn({ ...BASE, model: null }).env.OPENCODE_CONFIG_CONTENT!,
+      (await opencodeDriver.buildSpawn({ ...BASE, model: null })).env.OPENCODE_CONFIG_CONTENT!,
     )
     expect(inlineNull.agent['aw-memory-distiller']).toEqual({ prompt: 'PERSONA TEXT' })
     const inlineEmpty = JSON.parse(
-      opencodeDriver.buildSpawn({ ...BASE, model: '' }).env.OPENCODE_CONFIG_CONTENT!,
+      (await opencodeDriver.buildSpawn({ ...BASE, model: '' })).env.OPENCODE_CONFIG_CONTENT!,
     )
     expect(inlineEmpty.agent['aw-memory-distiller']).toEqual({ prompt: 'PERSONA TEXT' })
   })
 
-  test('runtimeBinary overrides the opencode head (RFC-112 custom fork)', () => {
-    const plan = opencodeDriver.buildSpawn({ ...BASE, runtimeBinary: '/opt/my-oc' })
+  test('runtimeBinary overrides the opencode head (RFC-112 custom fork)', async () => {
+    const plan = await opencodeDriver.buildSpawn({ ...BASE, runtimeBinary: '/opt/my-oc' })
     expect(plan.cmd[0]).toBe('/opt/my-oc')
     expect(plan.cmd[1]).toBe('run')
     // prompt stays the trailing positional after `--`
@@ -81,11 +82,11 @@ describe('opencodeDriver.buildSpawn (RFC-117 system agent)', () => {
 
   // IS_SANDBOX is a claude-code-only root-gate escape hatch; opencode has no
   // root guard (verified in its source), so its env must stay uninjected.
-  test('does NOT inject IS_SANDBOX (root gate is claude-code-specific)', () => {
+  test('does NOT inject IS_SANDBOX (root gate is claude-code-specific)', async () => {
     const prev = process.env.IS_SANDBOX
     delete process.env.IS_SANDBOX
     try {
-      expect(opencodeDriver.buildSpawn(BASE).env.IS_SANDBOX).toBeUndefined()
+      expect((await opencodeDriver.buildSpawn(BASE)).env.IS_SANDBOX).toBeUndefined()
     } finally {
       if (prev !== undefined) process.env.IS_SANDBOX = prev
     }
@@ -94,18 +95,18 @@ describe('opencodeDriver.buildSpawn (RFC-117 system agent)', () => {
 
 describe('claudeCodeDriver.buildSpawn (RFC-117 system agent)', () => {
   // claude buildSpawn writes a system-prompt file + config dir under runDir.
-  function withTmp(fn: (dir: string) => void): void {
+  async function withTmp(fn: (dir: string) => Promise<void>): Promise<void> {
     const dir = mkdtempSync(join(tmpdir(), 'rfc117-claude-'))
     try {
-      fn(dir)
+      await fn(dir)
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
   }
 
-  test('argv = claude -p stream-json + --model + --append-system-prompt-file; stdin pipes prompt', () => {
-    withTmp((dir) => {
-      const plan = claudeCodeDriver.buildSpawn({ ...BASE, runDir: dir })
+  test('argv = claude -p stream-json + --model + --append-system-prompt-file; stdin pipes prompt', async () => {
+    await withTmp(async (dir) => {
+      const plan = await claudeCodeDriver.buildSpawn({ ...BASE, runDir: dir })
       expect(plan.cmd.slice(0, 6)).toEqual([
         'claude',
         '-p',
@@ -122,18 +123,18 @@ describe('claudeCodeDriver.buildSpawn (RFC-117 system agent)', () => {
     })
   })
 
-  test('persona written to the --append-system-prompt-file target', () => {
-    withTmp((dir) => {
-      const plan = claudeCodeDriver.buildSpawn({ ...BASE, runDir: dir })
+  test('persona written to the --append-system-prompt-file target', async () => {
+    await withTmp(async (dir) => {
+      const plan = await claudeCodeDriver.buildSpawn({ ...BASE, runDir: dir })
       const idx = plan.cmd.indexOf('--append-system-prompt-file')
       const file = plan.cmd[idx + 1]!
       expect(readFileSync(file, 'utf-8')).toBe('PERSONA TEXT')
     })
   })
 
-  test('runtimeBinary overrides the claude head', () => {
-    withTmp((dir) => {
-      const plan = claudeCodeDriver.buildSpawn({
+  test('runtimeBinary overrides the claude head', async () => {
+    await withTmp(async (dir) => {
+      const plan = await claudeCodeDriver.buildSpawn({
         ...BASE,
         runDir: dir,
         runtimeBinary: '/opt/my-cc',
@@ -142,9 +143,9 @@ describe('claudeCodeDriver.buildSpawn (RFC-117 system agent)', () => {
     })
   })
 
-  test('model null → no --model flag (claude default)', () => {
-    withTmp((dir) => {
-      const plan = claudeCodeDriver.buildSpawn({ ...BASE, runDir: dir, model: null })
+  test('model null → no --model flag (claude default)', async () => {
+    await withTmp(async (dir) => {
+      const plan = await claudeCodeDriver.buildSpawn({ ...BASE, runDir: dir, model: null })
       expect(plan.cmd).not.toContain('--model')
     })
   })
@@ -162,12 +163,12 @@ describe('claudeCodeDriver.buildSpawn (RFC-117 system agent)', () => {
     expect(claudeSandboxEnv(undefined)).toEqual({})
   })
 
-  test('env: IS_SANDBOX follows the uid gate, no unconditional spoof', () => {
-    withTmp((dir) => {
+  test('env: IS_SANDBOX follows the uid gate, no unconditional spoof', async () => {
+    await withTmp(async (dir) => {
       const prev = process.env.IS_SANDBOX
       delete process.env.IS_SANDBOX
       try {
-        const got = claudeCodeDriver.buildSpawn({ ...BASE, runDir: dir }).env.IS_SANDBOX
+        const got = (await claudeCodeDriver.buildSpawn({ ...BASE, runDir: dir })).env.IS_SANDBOX
         if (process.getuid?.() === 0) expect(got).toBe('1')
         else expect(got).toBeUndefined()
       } finally {

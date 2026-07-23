@@ -1,12 +1,11 @@
 // RFC-041 — memory distiller (PR2 scope).
 //
 // The distiller is a *system* opencode agent — not stored in the `agents`
-// table, not user-editable. We hand opencode an inline agent JSON via
-// OPENCODE_CONFIG_CONTENT (the merge order documented in
-// packages/opencode/src/config/config.ts:641 puts inline JSON ahead of any
-// directory-scanned agent of the same name), spawn the subprocess in a
-// throwaway temp dir (so the distill never produces a git diff side-effect
-// on a real worktree), and parse the `candidates` port out of the last
+// table, not user-editable. RFC-224 routes OpenCode through the verified system
+// plan/launcher with a complete controlled config and a private ephemeral
+// store; inline merge priority is not a trust boundary. The subprocess still
+// runs in a throwaway worktree (so distillation never creates a git diff in a
+// real worktree), and we parse the `candidates` port out of the last
 // <workflow-output> envelope on stdout.
 //
 // Failures (timeout / non-zero exit / unparseable envelope / zod-invalid
@@ -18,7 +17,7 @@
 // Tests inject `spawnFn` to skip the real Bun.spawn — production passes
 // `defaultDistillerSpawn` which actually runs opencode.
 
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { and, asc, desc, eq, inArray } from 'drizzle-orm'
@@ -41,7 +40,7 @@ import {
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { getRuntimeDriver } from '@/services/runtime'
-import type { RuntimeKind } from '@/services/runtime/types'
+import type { RuntimeKind, SpawnPlan } from '@/services/runtime/types'
 import { getSandboxProvider, wrapSandbox, type SandboxCtx } from '@/services/sandbox'
 import {
   clarifyRounds,
@@ -60,6 +59,11 @@ import { clipHeadTail, renderSessionTreeToDistillerMd } from '@/services/distill
 import { appHome } from '@/util/paths'
 import { MEMORY_CHANNEL, memoryBroadcaster } from '@/ws/broadcaster'
 import { createLogger } from '@/util/log'
+import {
+  ExecutionIdentityFailure,
+  executionIdentityFailure,
+  parseExecutionIdentityFailureOutput,
+} from '@/services/runtime/opencode/failure'
 
 const log = createLogger('memory-distiller')
 
@@ -256,6 +260,10 @@ export interface DistillerSpawnResult {
   stdout: string
   /** Full stderr — caller may persist on failure for debugging. */
   stderr: string
+  /** RFC-224 explicit private capture locator; never reopen the user's global DB. */
+  opencodeDbPath?: string
+  /** Awaited after capture/parse; owns ephemeral runtime-store cleanup. */
+  cleanup?: () => Promise<void>
 }
 
 export type DistillerSpawnFn = (input: DistillerSpawnInput) => Promise<DistillerSpawnResult>
@@ -941,13 +949,153 @@ export async function validateAndPersistCandidate(
  * feeds UNTRUSTED content (source-agent transcripts + reviewed document bodies)
  * into the prompt, so a prompt injection could otherwise run a same-uid shell
  * that reads secret.key / db.sqlite / backups. Sandbox it like a task node —
- * tmpfs-shadow appHome, allow ONLY the distiller's own working dir. No provider
- * (tests / off) → undefined → wrapSandbox is a no-op (byte-identical spawn).
+ * tmpfs-shadow appHome, allow only the distiller's working dir plus its exact
+ * private system store. No provider (tests / off) → undefined → wrapSandbox is
+ * a no-op (byte-identical spawn).
  */
-export function distillerSandboxCtx(cwd: string): SandboxCtx | undefined {
+export function distillerSandboxCtx(
+  cwd: string,
+  runDir = cwd,
+  plan?: Partial<Pick<SpawnPlan, 'readOnlySubtrees' | 'sessionStore'>>,
+): SandboxCtx | undefined {
   const p = getSandboxProvider()
   if (p === null) return undefined
-  return { mode: p.mode, status: p.status, appHome: p.appHome, taskWorktrees: [cwd], runDir: cwd }
+  return {
+    mode: p.mode,
+    status: p.status,
+    appHome: p.appHome,
+    taskWorktrees: [cwd, ...(plan?.sessionStore === undefined ? [] : [plan.sessionStore.root])],
+    runDir,
+    ...(plan?.readOnlySubtrees === undefined ? {} : { readOnlySubtrees: plan.readOnlySubtrees }),
+  }
+}
+
+const DISTILLER_OUTPUT_CAP_BYTES = 256 * 1024
+const DISTILLER_DRAIN_GRACE_MS = 2_000
+const DISTILLER_REAP_DEADLINE_MS = 2_000
+
+function killDistillerGroup(child: Bun.Subprocess, signal: 'SIGTERM' | 'SIGKILL'): void {
+  try {
+    if (typeof child.pid === 'number') process.kill(-child.pid, signal)
+    else child.kill(signal)
+  } catch {
+    // Process group already exited.
+  }
+}
+
+function startCappedDistillerStream(stream: ReadableStream<Uint8Array>): {
+  done: Promise<string>
+  cancel: () => Promise<void>
+} {
+  const reader = stream.getReader()
+  const done = (async () => {
+    const decoder = new TextDecoder()
+    let retained = ''
+    let retainedBytes = 0
+    try {
+      for (;;) {
+        const next = await reader.read()
+        if (next.done) break
+        if (next.value === undefined || retainedBytes >= DISTILLER_OUTPUT_CAP_BYTES) {
+          continue
+        }
+        const remaining = DISTILLER_OUTPUT_CAP_BYTES - retainedBytes
+        const accepted = next.value.subarray(0, remaining)
+        retained += decoder.decode(accepted, { stream: true })
+        retainedBytes += accepted.byteLength
+      }
+      retained += decoder.decode()
+      return retained
+    } catch {
+      // SIGKILL/cancel can close the pipe while a read is pending. Output is
+      // diagnostic only; keep the bounded prefix already captured.
+      return retained
+    } finally {
+      reader.releaseLock()
+    }
+  })()
+  return {
+    done,
+    cancel: async () => {
+      try {
+        await reader.cancel()
+      } catch {
+        // The stream may already be closing under SIGKILL.
+      }
+    },
+  }
+}
+
+type DistillerReapTarget = {
+  exited: Promise<number>
+  unref?: () => void
+}
+
+async function settlesDistillerWithin(
+  promise: Promise<unknown>,
+  timeoutMs: number,
+): Promise<boolean> {
+  let timeoutHandle: ReturnType<typeof setTimeout> | null = null
+  try {
+    return await Promise.race([
+      promise.then(
+        () => true,
+        () => false,
+      ),
+      new Promise<false>((resolve) => {
+        timeoutHandle = setTimeout(() => resolve(false), timeoutMs)
+        timeoutHandle.unref?.()
+      }),
+    ])
+  } finally {
+    if (timeoutHandle !== null) clearTimeout(timeoutHandle)
+  }
+}
+
+/**
+ * RFC-224 distiller-store destruction barrier. A system plan and its run
+ * directory are intentionally stranded when the launcher cannot be confirmed
+ * reaped; plan cleanup is allowed only after reap, and outer cwd deletion is
+ * owned by runDistill only after that cleanup succeeds.
+ */
+export async function finalizeDistillerSpawnAttempt(input: {
+  child: DistillerReapTarget
+  childReaped: boolean
+  killChild: (signal: 'SIGTERM' | 'SIGKILL') => void
+  cleanup?: () => void | Promise<void>
+  termGraceMs?: number
+  reapDeadlineMs?: number
+  terminationAlreadyExhausted?: boolean
+}): Promise<boolean> {
+  let reaped = input.childReaped
+  if (!reaped && input.terminationAlreadyExhausted !== true) {
+    input.killChild('SIGTERM')
+    reaped = await settlesDistillerWithin(
+      input.child.exited,
+      input.termGraceMs ?? DISTILLER_DRAIN_GRACE_MS,
+    )
+  }
+  if (!reaped) {
+    input.killChild('SIGKILL')
+    reaped = await settlesDistillerWithin(
+      input.child.exited,
+      input.reapDeadlineMs ?? DISTILLER_REAP_DEADLINE_MS,
+    )
+  } else {
+    // The direct launcher may have exited while a same-group descendant kept
+    // inherited pipes or a store lock alive.
+    input.killChild('SIGKILL')
+  }
+  if (!reaped) {
+    input.child.unref?.()
+    return false
+  }
+  try {
+    await input.cleanup?.()
+    return true
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -968,57 +1116,154 @@ export async function defaultDistillerSpawn(
   // passed unconditionally (the distiller is a real non-mock run; opencode's
   // driver ignores the field, claude's bridges the subscription credential).
   const driver = getRuntimeDriver(input.protocol)
-  const plan = driver.buildSpawn({
+  const worktreeDir = join(input.cwd, 'worktree')
+  const runDir = join(input.cwd, 'run')
+  await Promise.all([
+    mkdir(worktreeDir, { recursive: true, mode: 0o700 }),
+    mkdir(runDir, { recursive: true, mode: 0o700 }),
+  ])
+  const sandboxProvider = getSandboxProvider()
+  const plan = await driver.buildSpawn({
     agentName: DISTILLER_AGENT_NAME,
     systemPrompt: DISTILLER_SYSTEM_PROMPT,
     model: input.model,
     prompt: input.userPrompt,
-    worktreePath: input.cwd,
-    runDir: input.cwd,
+    worktreePath: worktreeDir,
+    runDir,
+    ...(sandboxProvider === null ? {} : { appHome: sandboxProvider.appHome }),
     ...(input.runtimeBinary != null && input.runtimeBinary !== ''
       ? { runtimeBinary: input.runtimeBinary }
       : {}),
     bridgeCredentials: true,
   })
   const wantStdin = plan.stdin?.mode === 'pipe'
-  // P0-4: wrap the spawn in the platform sandbox (no-op when no provider is set).
-  const cmd = wrapSandbox(plan.cmd, distillerSandboxCtx(input.cwd))
-  const child = Bun.spawn({
-    cmd,
-    cwd: input.cwd,
-    env: plan.env,
-    stdout: 'pipe',
-    stderr: 'pipe',
-    stdin: wantStdin ? 'pipe' : 'ignore',
-  })
-  if (plan.stdin?.mode === 'pipe') {
-    // stdin:'pipe' above (wantStdin) makes child.stdin a FileSink; ?. satisfies the
-    // FileSink|undefined static type from the dynamic stdin option.
-    child.stdin?.write(plan.stdin.data)
-    child.stdin?.end()
+  let child: Bun.Subprocess<'ignore' | 'pipe', 'pipe', 'pipe'>
+  try {
+    // P0-4: wrap the spawn in the platform sandbox (no-op when no provider is set).
+    const cmd = wrapSandbox(plan.cmd, distillerSandboxCtx(worktreeDir, runDir, plan))
+    child = Bun.spawn({
+      cmd,
+      cwd: worktreeDir,
+      env: plan.env,
+      stdout: 'pipe',
+      stderr: 'pipe',
+      stdin: wantStdin ? 'pipe' : 'ignore',
+      detached: true,
+    })
+  } catch (error) {
+    // buildSpawn already transferred ownership of its private store to this
+    // caller. With no child created it is safe—and mandatory—to clean it now.
+    try {
+      await plan.cleanup?.()
+    } catch {
+      executionIdentityFailure('execution-identity-store-unsafe')
+    }
+    throw error
   }
   let timedOut = false
-  const timeoutHandle = setTimeout(() => {
-    timedOut = true
-    try {
-      child.kill('SIGTERM')
-    } catch {
-      // already exited
-    }
-  }, input.timeoutMs)
+  let childReaped = false
+  let terminationAlreadyExhausted = false
+  let sigkillHandle: ReturnType<typeof setTimeout> | null = null
+  let reapDeadlineHandle: ReturnType<typeof setTimeout> | null = null
+  let timeoutHandle: ReturnType<typeof setTimeout> | null = null
+  let stdoutPump: ReturnType<typeof startCappedDistillerStream> | null = null
+  let stderrPump: ReturnType<typeof startCappedDistillerStream> | null = null
   let exitCode: number | null
+  let stdout = ''
+  let stderr = ''
+  let cleanupHandedOff = false
   try {
-    exitCode = await child.exited
+    const reapDeadline = new Promise<{ kind: 'unreaped' }>((resolve) => {
+      timeoutHandle = setTimeout(() => {
+        timedOut = true
+        killDistillerGroup(child, 'SIGTERM')
+        sigkillHandle = setTimeout(() => {
+          killDistillerGroup(child, 'SIGKILL')
+          reapDeadlineHandle = setTimeout(() => {
+            terminationAlreadyExhausted = true
+            resolve({ kind: 'unreaped' })
+          }, DISTILLER_REAP_DEADLINE_MS)
+          reapDeadlineHandle.unref?.()
+        }, DISTILLER_DRAIN_GRACE_MS)
+        sigkillHandle.unref?.()
+      }, input.timeoutMs)
+      timeoutHandle.unref?.()
+    })
+    stdoutPump = startCappedDistillerStream(child.stdout as ReadableStream<Uint8Array>)
+    stderrPump = startCappedDistillerStream(child.stderr as ReadableStream<Uint8Array>)
+    if (plan.stdin?.mode === 'pipe') {
+      // stdin:'pipe' above (wantStdin) makes child.stdin a FileSink; ?. satisfies the
+      // FileSink|undefined static type from the dynamic stdin option.
+      child.stdin?.write(plan.stdin.data)
+      child.stdin?.end()
+    }
+    const exitOutcome = await Promise.race([
+      child.exited.then(
+        (code) => ({ kind: 'exited' as const, code }),
+        () => ({ kind: 'unreaped' as const }),
+      ),
+      reapDeadline,
+    ])
+    if (exitOutcome.kind === 'unreaped') {
+      executionIdentityFailure('execution-identity-store-unsafe')
+    }
+    childReaped = true
+    exitCode = exitOutcome.code
+    ;[stdout, stderr] = await Promise.race([
+      Promise.all([stdoutPump.done, stderrPump.done]),
+      new Promise<[string, string]>((resolve) => {
+        const timer = setTimeout(() => resolve(['', '']), DISTILLER_DRAIN_GRACE_MS)
+        timer.unref?.()
+      }),
+    ])
+    if (timedOut) {
+      throw new Error(`distiller timeout after ${input.timeoutMs}ms`)
+    }
+    const launcherFailure =
+      plan.diagnostics?.verifiedIdentity === true
+        ? parseExecutionIdentityFailureOutput(stderr)
+        : null
+    if (launcherFailure !== null) {
+      throw new ExecutionIdentityFailure(launcherFailure)
+    }
+    cleanupHandedOff = true
+    return {
+      exitCode,
+      stdout,
+      stderr,
+      ...(plan.sessionStore === undefined ? {} : { opencodeDbPath: plan.sessionStore.dbPath }),
+      cleanup: async () => {
+        await plan.cleanup?.()
+      },
+    }
   } finally {
-    clearTimeout(timeoutHandle)
-    plan.cleanup?.()
+    if (timeoutHandle !== null) clearTimeout(timeoutHandle)
+    if (sigkillHandle !== null) clearTimeout(sigkillHandle)
+    if (reapDeadlineHandle !== null) clearTimeout(reapDeadlineHandle)
+    const pendingPumpCancels = [stdoutPump, stderrPump]
+      .filter(
+        (
+          pump,
+        ): pump is {
+          done: Promise<string>
+          cancel: () => Promise<void>
+        } => pump !== null,
+      )
+      .map((pump) => pump.cancel())
+    if (pendingPumpCancels.length > 0) {
+      await settlesDistillerWithin(Promise.allSettled(pendingPumpCancels), DISTILLER_DRAIN_GRACE_MS)
+    }
+    const safe = await finalizeDistillerSpawnAttempt({
+      child,
+      childReaped,
+      killChild: (signal) => killDistillerGroup(child, signal),
+      ...(!cleanupHandedOff && plan.cleanup !== undefined ? { cleanup: plan.cleanup } : {}),
+      terminationAlreadyExhausted,
+    })
+    if (!safe) {
+      executionIdentityFailure('execution-identity-store-unsafe')
+    }
   }
-  const stdout = await new Response(child.stdout).text()
-  const stderr = await new Response(child.stderr).text()
-  if (timedOut) {
-    throw new Error(`distiller timeout after ${input.timeoutMs}ms`)
-  }
-  return { exitCode, stdout, stderr }
 }
 
 // -----------------------------------------------------------------------------
@@ -1078,79 +1323,107 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
   // runDistill only forwards the resolved (protocol, binary, model).
   const protocol: RuntimeKind = options.protocol ?? 'opencode'
   const cwd = await mkdtemp(join(tmpdir(), 'aw-distiller-'))
-  let result: DistillerSpawnResult
+  let cleanup: (() => Promise<void>) | undefined
+  let preserveCwd = false
   try {
-    result = await spawnFn({
-      protocol,
-      runtimeBinary: options.runtimeBinary ?? null,
-      model: options.model ?? null,
-      userPrompt,
-      envelopeNonce,
-      cwd,
-      timeoutMs,
-    })
-  } finally {
-    await rm(cwd, { recursive: true, force: true }).catch(() => {
-      // best-effort cleanup
-    })
-  }
-
-  // RFC-043: stamp the post-spawn artefacts onto the job row before any
-  // throw / capture. Failures here are non-fatal (logged); the original
-  // success/failure semantics of runDistill are preserved.
-  const sessionId = extractFirstSessionIdFromStdout(result.stdout)
-  const stderrExcerpt = clipAndRedactStderr(result.stderr, 2048)
-  try {
-    await options.db
-      .update(memoryDistillJobs)
-      .set({
-        opencodeSessionId: sessionId,
-        exitCode: result.exitCode,
-        stderrExcerpt,
-      })
-      .where(eq(memoryDistillJobs.id, options.job.id))
-  } catch (err) {
-    log.warn('rfc043/persist-spawn-result-failed', {
-      jobId: options.job.id,
-      err: err instanceof Error ? err.message : String(err),
-    })
-  }
-
-  // RFC-043: capture conversation BEFORE the exit-code throw so failed
-  // jobs still get whatever events opencode managed to write before
-  // crashing. captureDistillJobSession never throws.
-  if (sessionId !== null) {
+    let result: DistillerSpawnResult
     try {
-      await captureDistillJobSession({
-        db: options.db,
-        distillJobId: options.job.id,
-        attemptIndex: options.job.attempts,
-        rootSessionId: sessionId,
+      result = await spawnFn({
+        protocol,
+        runtimeBinary: options.runtimeBinary ?? null,
+        model: options.model ?? null,
+        userPrompt,
+        envelopeNonce,
+        cwd,
+        timeoutMs,
       })
+    } catch (error) {
+      preserveCwd =
+        error instanceof ExecutionIdentityFailure &&
+        error.code === 'execution-identity-store-unsafe'
+      throw error
+    }
+    cleanup = result.cleanup
+
+    // RFC-043: stamp the post-spawn artefacts onto the job row before any
+    // throw / capture. Failures here are non-fatal (logged); the original
+    // success/failure semantics of runDistill are preserved.
+    const sessionId = extractFirstSessionIdFromStdout(result.stdout)
+    const stderrExcerpt = clipAndRedactStderr(result.stderr, 2048)
+    try {
+      await options.db
+        .update(memoryDistillJobs)
+        .set({
+          opencodeSessionId: sessionId,
+          exitCode: result.exitCode,
+          stderrExcerpt,
+        })
+        .where(eq(memoryDistillJobs.id, options.job.id))
     } catch (err) {
-      log.warn('rfc043/distill-capture-failed', {
+      log.warn('rfc043/persist-spawn-result-failed', {
         jobId: options.job.id,
         err: err instanceof Error ? err.message : String(err),
       })
     }
-  }
 
-  if (result.exitCode !== 0 && result.exitCode !== null) {
-    throw new Error(
-      `distiller subprocess exited with code ${result.exitCode}: ${result.stderr.slice(0, 400)}`,
+    // RFC-224: capture from the exact private store before ephemeral cleanup.
+    // A real OpenCode spawn must always supply this locator; no fallback to the
+    // user's global OpenCode database is allowed.
+    if (sessionId !== null && result.opencodeDbPath !== undefined) {
+      try {
+        await captureDistillJobSession({
+          db: options.db,
+          distillJobId: options.job.id,
+          attemptIndex: options.job.attempts,
+          rootSessionId: sessionId,
+          opencodeDbPath: result.opencodeDbPath,
+        })
+      } catch (err) {
+        log.warn('rfc043/distill-capture-failed', {
+          jobId: options.job.id,
+          err: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
+
+    if (result.exitCode !== 0 && result.exitCode !== null) {
+      throw new Error(
+        `distiller subprocess exited with code ${result.exitCode}: ${result.stderr.slice(0, 400)}`,
+      )
+    }
+    const rawCandidates = parseDistillerOutput(
+      result.stdout,
+      options.protocol ?? 'opencode',
+      envelopeNonce,
     )
+    const persisted: string[] = []
+    for (const raw of rawCandidates) {
+      const ok = await validateAndPersistCandidate(options.db, raw, options.job)
+      if (ok !== null) persisted.push(ok.memory.id)
+    }
+    return { candidatesCreated: persisted.length, createdMemoryIds: persisted }
+  } finally {
+    if (!preserveCwd) {
+      try {
+        await cleanup?.()
+      } catch {
+        // A live store lock is evidence that the launcher/server lifecycle has
+        // not safely ended. Keep the outer cwd too; deleting it could remove
+        // still-live config/run inputs.
+        preserveCwd = true
+      }
+    }
+    if (!preserveCwd) {
+      try {
+        await rm(cwd, { recursive: true, force: true })
+      } catch {
+        preserveCwd = true
+      }
+    }
+    if (preserveCwd) {
+      executionIdentityFailure('execution-identity-store-unsafe')
+    }
   }
-  const rawCandidates = parseDistillerOutput(
-    result.stdout,
-    options.protocol ?? 'opencode',
-    envelopeNonce,
-  )
-  const persisted: string[] = []
-  for (const raw of rawCandidates) {
-    const ok = await validateAndPersistCandidate(options.db, raw, options.job)
-    if (ok !== null) persisted.push(ok.memory.id)
-  }
-  return { candidatesCreated: persisted.length, createdMemoryIds: persisted }
 }
 
 // -----------------------------------------------------------------------------

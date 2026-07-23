@@ -7,6 +7,7 @@
 
 import { sql } from 'drizzle-orm'
 import {
+  check,
   index,
   integer,
   primaryKey,
@@ -141,10 +142,15 @@ export const runtimes = sqliteTable('runtimes', {
   // mutable columns.
   configDirEnv: text('config_dir_env'),
   configDirName: text('config_dir_name'),
-  // RFC-112: cached deep-smoke SmokeResult (JSON) from the last probe; NULL =
-  // never probed. Display-only — conformance is advisory (an admin may save an
-  // auth-unverified custom runtime).
+  // RFC-112/RFC-224: target-bound deep-smoke receipt (JSON); NULL = never
+  // probed/invalidated. Display-only — conformance is advisory (an admin may
+  // save an auth-unverified custom runtime).
   lastProbeJson: text('last_probe_json'),
+  // RFC-224: persisted generation for the exact execution target described by
+  // last_probe_json. Profile edits and inherited daemon-config binary changes
+  // bump it, so an in-flight probe can CAS only against the target it actually
+  // exercised (including mutations that live outside SQLite).
+  probeFence: integer('probe_fence').notNull().default(0),
   createdBy: text('created_by'), // admin users.id who registered it (audit; NULL for built-ins)
   createdAt: integer('created_at')
     .notNull()
@@ -2320,6 +2326,58 @@ export const taskQuestions = sqliteTable(
       t.originNodeRunId,
       t.questionId,
       t.roleKind,
+    ),
+  }),
+)
+
+// -----------------------------------------------------------------------------
+// RFC-224 — immutable OpenCode session provenance + single-writer lease.
+//
+// Multiple node_runs may link to one session during inline resume; this table
+// is the sole owner. Only task_id is a physical FK: created/lease run ids are
+// logical pointers so pruning run history cannot cascade-delete session state.
+// -----------------------------------------------------------------------------
+export const opencodeSessionOwners = sqliteTable(
+  'opencode_session_owners',
+  {
+    sessionId: text('session_id').primaryKey(),
+    taskId: text('task_id')
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    nodeId: text('node_id').notNull(),
+    createdNodeRunId: text('created_node_run_id').notNull(),
+    identityDigest: text('identity_digest').notNull(),
+    officialBuildDigest: text('official_build_digest').notNull(),
+    sessionContractDigest: text('session_contract_digest').notNull(),
+    sessionStoreKey: text('session_store_key').notNull(),
+    projectId: text('project_id').notNull(),
+    opencodeVersion: text('opencode_version').notNull(),
+    leaseNodeRunId: text('lease_node_run_id'),
+    leaseNonceDigest: text('lease_nonce_digest'),
+    leasedAt: integer('leased_at'),
+  },
+  (t) => ({
+    sessionStoreKeyUnique: uniqueIndex('uniq_opencode_session_owners_store_key').on(
+      t.sessionStoreKey,
+    ),
+    taskIdx: index('idx_opencode_session_owners_task').on(t.taskId),
+    createdRunIdx: index('idx_opencode_session_owners_created_run').on(t.createdNodeRunId),
+    leaseRunIdx: index('idx_opencode_session_owners_lease_run').on(t.leaseNodeRunId),
+    leaseAllOrNone: check(
+      'opencode_session_owners_lease_all_or_none',
+      sql`(
+        (
+          ${t.leaseNodeRunId} IS NULL
+          AND ${t.leaseNonceDigest} IS NULL
+          AND ${t.leasedAt} IS NULL
+        )
+        OR
+        (
+          ${t.leaseNodeRunId} IS NOT NULL
+          AND ${t.leaseNonceDigest} IS NOT NULL
+          AND ${t.leasedAt} IS NOT NULL
+        )
+      )`,
     ),
   }),
 )

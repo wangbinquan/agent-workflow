@@ -44,6 +44,11 @@ export interface ResolvedSkill {
   sourceKind: SkillSource
   /** Absolute path for managed. Unused for project (self-discovered). */
   sourcePath?: string
+  /** Frozen managed identity used by RFC-224's whole-tree seal. */
+  skillId?: string
+  contentVersion?: number
+  /** Re-read the owning row at both sides of the filesystem snapshot. */
+  readContentVersion?: () => Promise<number>
 }
 
 /** The config subset `defaultBinary` reads — the per-runtime binary path keys.
@@ -123,7 +128,31 @@ export interface SpawnPlan {
   cmd: string[]
   env: Record<string, string>
   stdin?: { mode: 'ignore' } | { mode: 'pipe'; data: string }
-  cleanup?: () => void
+  cleanup?: () => void | Promise<void>
+  /** RFC-224 immutable runtime artifacts overlaid read-only by RFC-205. */
+  readOnlySubtrees?: readonly string[]
+  /** Explicit capture locator; consumers must not reopen the user's global DB. */
+  sessionStore?: {
+    root: string
+    dbPath: string
+    persistent: boolean
+  }
+  /** Strict launcher↔runner ownership barrier. */
+  control?:
+    | { kind: 'none' }
+    | {
+        kind: 'opencode-session'
+        mode: 'new' | 'resume'
+        nonce: string
+        leaseNonceDigest: string
+        ackPath: string
+        expectedSessionId?: string
+        identityDigest: string
+        officialBuildDigest: string
+        sessionContractDigest: string
+        sessionStoreKey: string
+        createdNodeRunId: string
+      }
   /**
    * RFC-143 §4.4 — spawn-assembly facts the runner's `spawning agent runtime`
    * diagnostic log flat-spreads (inlineModel / mcpKeys / pluginNames …). The
@@ -176,6 +205,17 @@ export interface RuntimeModelList {
 export interface ListModelsOpts {
   refresh?: boolean
   timeoutMs?: number
+  /**
+   * Stable identity used for cache lookup when `binary` is an ephemeral
+   * verified snapshot. Execution still always uses `binary`.
+   */
+  cacheKey?: string
+  /** RFC-224 diagnostic subprocess environment (OpenCode only). */
+  env?: Record<string, string>
+  /** RFC-224 private, source-guarded diagnostic working directory. */
+  cwd?: string
+  /** Final async fence that must pass before a fresh result enters the cache. */
+  beforeCacheWrite?: () => void | Promise<void>
 }
 
 /** run-after subagent session capture inputs (union; each driver takes what it
@@ -220,6 +260,12 @@ export interface SystemAgentSpawnContext {
   worktreePath: string
   /** Config dir (opencode: OPENCODE_CONFIG_DIR; claude: attempt dir holding .claude/). */
   runDir: string
+  /**
+   * RFC-224 instance-owned root. Verified OpenCode system stores live under
+   * this root so daemon boot can recover crash remnants without scanning
+   * shared /tmp; other runtime drivers ignore it.
+   */
+  appHome?: string
   /** Override the default binary head (`[runtimeBinary]` vs `['opencode']`/`['claude']`) — RFC-112 custom fork. */
   runtimeBinary?: string
   /** RFC-026 clarify-rerun: resume a prior session. */
@@ -232,6 +278,8 @@ export interface SystemAgentSpawnContext {
   /** Caller's logger for driver-internal warnings (claude config-dir prep);
    *  omitted → the driver's own default logger. RFC-143 PR-4 (smoke parity). */
   log?: Logger
+  /** Explicit dependency-injection seam; production callers never set it. */
+  testOnlyUnverifiedRuntime?: boolean
 }
 
 /**
@@ -314,6 +362,26 @@ export interface BusinessNodeSpawnContext {
   /** For driver-internal log lines (inventory materialize failure etc.). */
   nodeRunId: string
   log: Logger
+  /** Runner-owned fields required by the verified OpenCode path. */
+  appHome?: string
+  taskId?: string
+  nodeId?: string
+  opencodeControlNonce?: string
+  opencodeLeaseNonceDigest?: string
+  opencodeResumeOwner?: {
+    sessionId: string
+    taskId: string
+    nodeId: string
+    createdNodeRunId: string
+    identityDigest: string
+    officialBuildDigest: string
+    sessionContractDigest: string
+    sessionStoreKey: string
+    projectId: string
+    opencodeVersion: string
+  }
+  /** Explicit dependency-injection seam; production callers never set it. */
+  testOnlyUnverifiedRuntime?: boolean
 }
 
 /**
@@ -337,7 +405,7 @@ export interface RuntimeDriver {
    * commit / fusion / the runtimeSmoke conformance probe). Minimal surface: one
    * persona + model, no skills/mcp/plugins/inventory.
    */
-  buildSpawn(ctx: SystemAgentSpawnContext): SpawnPlan
+  buildSpawn(ctx: SystemAgentSpawnContext): Promise<SpawnPlan>
   /**
    * RFC-143 PR-4 — assemble the spawn plan for a BUSINESS node run (was the
    * `runtime === 'claude-code'` if/else in runner.ts). async because opencode's
@@ -379,4 +447,7 @@ export interface RuntimeDriver {
 export interface InventoryReadContext {
   runRoot: string
   nodeKind: string
+  /** RFC-224: the verified launcher writes inventory without a plugin even
+   * though its child intentionally runs with OPENCODE_PURE=1. */
+  verifiedIdentity?: boolean
 }

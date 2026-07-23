@@ -21,6 +21,8 @@ const ALLOWANCE_REASONS = {
   'display-diagnostic':
     'Canonical ids decide the result; names only render a missing-item diagnostic.',
   'display-fallback': 'Canonical ids drive navigation; names are optional display labels only.',
+  'environment-variable':
+    'The key is a sanitized subprocess environment-variable name, not a persisted resource.',
   'filesystem-name':
     'The key identifies a browser File or worktree entry, not a persisted resource.',
   'import-name-boundary':
@@ -31,6 +33,8 @@ const ALLOWANCE_REASONS = {
     'The name appears only in fail-closed recovery of a legacy pre-id filesystem path.',
   'occ-fence':
     'The stable id is authoritative; name is one field in a full-row optimistic concurrency fence.',
+  'opencode-protocol':
+    'OpenCode config, agent, and MCP inventory keys are runtime protocol names after the stable-id closure is fixed.',
   'owner-uniqueness':
     'This is an explicit owner-scoped name-slot collision check, not resource resolution.',
   'port-or-protocol-name':
@@ -71,8 +75,12 @@ const EXACT_ALLOWANCE_ROWS = [
   'collection-name-identity\u001fpackages/backend/src/services/runtime/claudeCode/driver.ts\u001fbuildBusinessSpawn\u001fCallExpression:d6aa73917b11a05318bb\u001f1\u001fruntime-protocol\u001fctx.resolvedParamsByAgent.get(ctx.agent.name)',
   'collection-name-identity\u001fpackages/backend/src/services/runtime/injectionIdentity.ts\u001ffirstConflict\u001fCallExpression:0e951b1e1d97a1b0dc0c\u001f1\u001fruntime-protocol\u001ffirstIdByName.set(row.name, row.id)',
   'collection-name-identity\u001fpackages/backend/src/services/runtime/injectionIdentity.ts\u001ffirstConflict\u001fCallExpression:70a6aca824745ed4770c\u001f1\u001fruntime-protocol\u001ffirstIdByName.get(row.name)',
+  'collection-name-identity\u001fpackages/backend/src/services/runtime/opencode/executionIdentity.ts\u001fparseAgentRegistry\u001fCallExpression:eab39a265e40820fafc0\u001f1\u001fopencode-protocol\u001fNATIVE_AGENT_NAMES.has(name)',
+  'collection-name-identity\u001fpackages/backend/src/services/runtime/opencode/executionIdentity.ts\u001fverifyExecutionIdentity\u001fCallExpression:eab39a265e40820fafc0\u001f2\u001fopencode-protocol\u001fNATIVE_AGENT_NAMES.has(name)',
   'collection-name-identity\u001fpackages/backend/src/services/runtime/opencode/inlineConfig.ts\u001fbuildInlineConfig\u001fCallExpression:2298356755d45d318dac\u001f1\u001fruntime-protocol\u001fparamsByAgent.get(dep.name)',
   'collection-name-identity\u001fpackages/backend/src/services/runtime/opencode/inlineConfig.ts\u001fbuildInlineConfig\u001fCallExpression:d17bc30fe13a7ef152fc\u001f1\u001fruntime-protocol\u001fparamsByAgent.get(agent.name)',
+  'collection-name-identity\u001fpackages/backend/src/services/runtime/opencode/verifiedInventory.ts\u001fbuildVerifiedInventorySnapshot\u001fCallExpression:3ce3c61b32b67a48fc00\u001f1\u001fopencode-protocol\u001fagentNames.has(agent.name)',
+  'collection-name-identity\u001fpackages/backend/src/services/runtime/opencode/verifiedPlan.ts\u001fbuildVerifiedOpencodeBusinessPlan\u001fCallExpression:d6aa73917b11a05318bb\u001f1\u001fopencode-protocol\u001fctx.resolvedParamsByAgent.get(ctx.agent.name)',
   'collection-name-identity\u001fpackages/backend/src/services/runtimeRegistry.ts\u001f<root>\u001fNewExpression:9428766592cce6b364b9\u001f1\u001fruntime-global\u001fnew Set(BUILTIN_RUNTIMES.map((b) => b.name))',
   'collection-name-identity\u001fpackages/backend/src/services/skill-zip.ts\u001fcommitSkillZipBuffer\u001fCallExpression:96b8ace641a82608112d\u001f1\u001fimport-name-boundary\u001fclaimedNames.has(targetName)',
   'collection-name-identity\u001fpackages/backend/src/services/skill-zip.ts\u001fcommitSkillZipBuffer\u001fCallExpression:f9cd15030afeebbda1b2\u001f1\u001fimport-name-boundary\u001fcandidateNames.has(name)',
@@ -102,9 +110,16 @@ const EXACT_ALLOWANCE_ROWS = [
   'frontend-name-key\u001fpackages/backend/src/services/runtime/claudeCode/inject.ts\u001ftoClaudeAgents\u001fBinaryExpression:7556d98e1f0ee2471bef\u001f1\u001fruntime-protocol\u001fagents[dep.name] = { description: dep.description, prompt: dep.bodyMd }',
   'frontend-name-key\u001fpackages/backend/src/services/runtime/claudeCode/inject.ts\u001ftoClaudeMcpConfig\u001fBinaryExpression:f8ebc86bd322dfcdc9a9\u001f2\u001fruntime-protocol\u001fservers[m.name] = entry',
   'frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/driver.ts\u001fbuildSpawn\u001fComputedPropertyName:efd90113b17bce420ca3\u001f1\u001fruntime-protocol\u001f[ctx.agentName]',
+  'frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/executionIdentity.ts\u001fbuildAgentRegistrySeal\u001fBinaryExpression:8ef5532133c5ce2aca8d\u001f1\u001fopencode-protocol\u001fseal[name] = registry.byName[name] as { [key: string]: IdentityJson }',
+  'frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/executionIdentity.ts\u001fparseAgentRegistry\u001fBinaryExpression:7c0ac997b9d2636bc2f3\u001f1\u001fopencode-protocol\u001fbyName[name] = info',
+  'frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/executionIdentity.ts\u001fverifyExecutionIdentity\u001fBinaryExpression:c19a3650c063b97ef729\u001f1\u001fopencode-protocol\u001fcontrolledEntries[name] = normalizedExpected',
+  'frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/hermetic.ts\u001fbuildControlledOpencodeConfig\u001fComputedPropertyName:cb3554142d91da05955c\u001f1\u001fopencode-protocol\u001f[input.name]',
   'frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/inlineConfig.ts\u001fbuildInlineConfig\u001fBinaryExpression:1b704a7eef75f83fad16\u001f1\u001fruntime-protocol\u001fmcpMap[m.name] = buildInlineMcpEntry(m)',
   'frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/inlineConfig.ts\u001fbuildInlineConfig\u001fBinaryExpression:a27576c85b1ba417ea2d\u001f1\u001fruntime-protocol\u001fmap[dep.name] = buildInlineAgentEntry(dep, paramsByAgent.get(dep.name))',
   'frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/inlineConfig.ts\u001fbuildInlineConfig\u001fComputedPropertyName:a2e3850c47204f0d2b3c\u001f1\u001fruntime-protocol\u001f[agent.name]',
+  'frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/sealedSubprocess.ts\u001fsanitizeNetlessEnvironment\u001fBinaryExpression:d0b6cf3d8e4f97cf166b\u001f1\u001fenvironment-variable\u001foutput[name] = value',
+  "frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/verifiedPlan.ts\u001fplanMcpConfig\u001fBinaryExpression:a00eae65c26271a9d7bf\u001f1\u001fopencode-protocol\u001fresult[mcp.name] = { type: 'remote', enabled: true, url: mcp.config.url, ...(mcp.config.headers === undefined ? {} : { headers: mcp.config.headers }), ...(mcp.config.oauth === undefined ? {} : { oauth: mcp.config.oauth }), ...(mcp.config.ti",
+  "frontend-name-key\u001fpackages/backend/src/services/runtime/opencode/verifiedPlan.ts\u001fplanMcpConfig\u001fBinaryExpression:dbcbde9861f2f01a98e2\u001f1\u001fopencode-protocol\u001fresult[mcp.name] = { type: 'local', enabled: true, command: [wrapperPath], ...(mcp.config.timeoutMs === undefined ? {} : { timeout: mcp.config.timeoutMs }), }",
   "frontend-name-key\u001fpackages/backend/src/services/scheduler.ts\u001fresolveUpstreamInputs\u001fBinaryExpression:4adcb682bade24ff4c1c\u001f1\u001fport-or-protocol-name\u001finputs[name] = values.length === 1 ? (values[0] ?? '') : values.join('\\n\\n---\\n\\n')",
   "frontend-name-key\u001fpackages/frontend/src/components/agent-ports/AgentPortValidationSummary.tsx\u001fAgentPortValidationSummary\u001fJsxAttribute:9e83221af9cc15d1292e\u001f1\u001fport-or-protocol-name\u001fkey={`${issue.code}-${issue.key ?? issue.name ?? ''}-${issue.index ?? index}`}",
   'frontend-name-key\u001fpackages/frontend/src/components/agent/AgentCapabilityCard.tsx\u001fPortRow\u001fJsxAttribute:e964b9930f12f17e125a\u001f1\u001fport-or-protocol-name\u001fkey={`${p.name}-${index}`}',
@@ -253,7 +268,7 @@ describe('RFC-223 T15 structural identity guard', () => {
   test('production source matches the exact reviewed fingerprint multiset', () => {
     const findings = scanProductionSources()
     expect(allowanceDiagnostics(findings, EXACT_ALLOWANCES)).toEqual([])
-    expect(findings.length).toBe(83)
+    expect(findings.length).toBe(95)
   })
 
   test('detects bracket SQL, neutral table aliases and query-result rows', () => {

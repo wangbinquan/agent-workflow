@@ -18,6 +18,7 @@ import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
+import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { clarifyRounds, nodeRunOutputs, nodeRuns, tasks } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow as createWorkflowBase } from '../src/services/workflow'
@@ -150,6 +151,7 @@ async function freshCtx(): Promise<Ctx> {
   await git('-C', repoPath, 'add', '.')
   await git('-C', repoPath, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
   const db = createInMemoryDb(MIGRATIONS)
+  await seedTestDefaultOpencodeRuntime(db)
   return {
     db,
     appHome,

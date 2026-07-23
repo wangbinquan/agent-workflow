@@ -14,6 +14,7 @@ import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createApp } from '../src/server'
 import { assertDeleteConfirm, readDeleteBody } from '../src/services/deleteConfirm'
 import { createUser } from '../src/services/users'
@@ -93,6 +94,7 @@ interface H {
 }
 async function harness(): Promise<H> {
   const db = createInMemoryDb(MIGRATIONS)
+  await seedTestDefaultOpencodeRuntime(db)
   const app = createApp({
     token: DAEMON_TOKEN,
     configPath: '/tmp/aw-test-config-never-used.json',

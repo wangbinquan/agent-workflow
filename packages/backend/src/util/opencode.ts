@@ -14,6 +14,22 @@ import { recordOpencodeBinaryVersion } from './opencode-version-registry'
 export { compareSemver, extractVersion } from './semver'
 
 const log = createLogger('opencode')
+const PRODUCTION_OPENCODE_COMMANDS = new WeakSet<string[]>()
+
+/**
+ * Production launch-head provenance. Tests historically inject thousands of
+ * untrusted mock arrays through the same option; an in-memory brand lets the
+ * driver keep that explicit dependency seam without mistaking config-derived
+ * commands for test fixtures (or trusting a path/name convention).
+ */
+export function markProductionOpencodeCommand(command: string[]): string[] {
+  PRODUCTION_OPENCODE_COMMANDS.add(command)
+  return command
+}
+
+export function isProductionOpencodeCommand(command: readonly string[]): boolean {
+  return PRODUCTION_OPENCODE_COMMANDS.has(command as string[])
+}
 
 /**
  * Minimum supported opencode version.
@@ -27,7 +43,7 @@ const log = createLogger('opencode')
  * releases no longer need a gate to admit them. See the test file for the full
  * historical rationale.
  */
-export const MIN_OPENCODE_VERSION = '1.14.0'
+export const MIN_OPENCODE_VERSION = '1.18.3'
 
 /**
  * RFC-135: optional knobs for the `--version` probes (opencode + claude-code).
@@ -186,7 +202,7 @@ export function resolveOpencodeCmd(configPath: string): string[] | undefined {
   try {
     const cfg = loadConfig(configPath)
     if (typeof cfg.opencodePath === 'string' && cfg.opencodePath.length > 0) {
-      return [cfg.opencodePath]
+      return markProductionOpencodeCommand([cfg.opencodePath])
     }
   } catch {
     // config unreadable — fall back to default PATH lookup

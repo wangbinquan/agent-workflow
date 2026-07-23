@@ -20,6 +20,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workgroupAssignments } from '../src/db/schema'
 import { buildActor } from '../src/auth/actor'
 import { createAgent } from '../src/services/agent'
+import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { autoResumeInterruptedTasks } from '../src/services/autoResume'
 import { abortAllActiveTasks, resumeTask } from '../src/services/task'
 import { createWorkgroup } from '../src/services/workgroups'
@@ -114,6 +115,7 @@ function writePlan(h: Harness, plan: Record<string, Step[]>): void {
 const opencodeCmd = (): string[] => ['bun', 'run', SCENARIO_STUB]
 
 async function seedAgent(db: DbClient, name: string): Promise<string> {
+  await seedTestDefaultOpencodeRuntime(db)
   const agent = await createAgent(db, {
     name,
     description: name,

@@ -31,6 +31,26 @@ describe('RFC-205 P0-4 — distiller spawn is sandboxed', () => {
     expect(ctx?.mode).toBe('enforce')
   })
 
+  test('verified system store is an explicit RW sandbox subtree under shadowed appHome', () => {
+    setSandboxProvider({
+      mode: 'enforce',
+      status: { mechanism: 'seatbelt', available: true, detail: null },
+      appHome: '/home/aw',
+    })
+    const ctx = distillerSandboxCtx('/work/attempt', '/work/run', {
+      sessionStore: {
+        root: '/home/aw/opencode-stores/system-ephemeral/invocation',
+        dbPath: '/home/aw/opencode-stores/system-ephemeral/invocation/opencode.db',
+        persistent: false,
+      },
+    })
+    expect(ctx?.taskWorktrees).toEqual([
+      '/work/attempt',
+      '/home/aw/opencode-stores/system-ephemeral/invocation',
+    ])
+    expect(ctx?.runDir).toBe('/work/run')
+  })
+
   test('wrapSandbox on the distiller ctx actually wraps the argv (enforce+seatbelt)', () => {
     setSandboxProvider({
       mode: 'enforce',
@@ -61,8 +81,8 @@ describe('RFC-205 P0-4 — distiller spawn is sandboxed', () => {
       resolve(import.meta.dir, '..', 'src', 'services', 'memoryDistiller.ts'),
       'utf-8',
     )
-    const wrapIdx = src.indexOf('wrapSandbox(plan.cmd, distillerSandboxCtx(input.cwd))')
-    const spawnIdx = src.indexOf('const child = Bun.spawn(')
+    const wrapIdx = src.indexOf('const cmd = wrapSandbox(')
+    const spawnIdx = src.indexOf('child = Bun.spawn(')
     expect(wrapIdx).toBeGreaterThan(0)
     expect(spawnIdx).toBeGreaterThan(wrapIdx)
   })

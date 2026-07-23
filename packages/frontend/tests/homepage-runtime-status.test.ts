@@ -19,6 +19,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { __test__ } from '../src/components/home/HomepageGreeting'
 import type { RuntimesStatusResponse } from '@agent-workflow/shared'
+import i18n from '../src/i18n'
 
 const { describeRuntimes, itemSeverity, AGGREGATE_THRESHOLD } = __test__
 
@@ -87,6 +88,29 @@ describe('RFC-135 describeRuntimes', () => {
     expect(nonDef!.severity).toBe('soft')
     expect(nonDef!.muted).toBe(true)
     expect(def!.text).toContain('home.runtime.item.missing')
+    expect(def!.failure).toBeUndefined()
+    expect(nonDef!.failure).toBeUndefined()
+  })
+
+  test('three-or-fewer rows render localized English identity title + hint without the code', async () => {
+    await i18n.changeLanguage('en-US')
+    const view = describeRuntimes(
+      t,
+      loaded([
+        row('opencode', {
+          isDefault: true,
+          ok: false,
+          version: null,
+          failureCode: 'execution-identity-untrusted-binary',
+        }),
+      ]),
+    )
+    if (view.kind !== 'items') throw new Error('expected items')
+    expect(view.items[0]!.failure).toEqual({
+      title: 'The selected OpenCode executable is not a trusted official build.',
+      hint: 'Install the supported official OpenCode build or select its verified executable.',
+    })
+    expect(JSON.stringify(view)).not.toContain('execution-identity-untrusted-binary')
   })
 
   test('empty (all disabled) → noneEnabled soft view', () => {
@@ -123,6 +147,33 @@ describe('RFC-135 describeRuntimes', () => {
     expect(view.severity).toBe('fault')
     expect(view.text).toContain('home.runtime.aggregateWorst')
     expect(view.text).toContain('"name":"the-default"')
+  })
+
+  test('above threshold renders the worst failure in localized Chinese without the code', async () => {
+    await i18n.changeLanguage('zh-CN')
+    const rows = [
+      row('soft-fork', {
+        ok: false,
+        version: null,
+        failureCode: 'execution-identity-untrusted-binary',
+      }),
+      row('b'),
+      row('c'),
+      row('the-default', {
+        isDefault: true,
+        ok: false,
+        version: null,
+        failureCode: 'execution-identity-source-changed',
+      }),
+    ]
+    const view = describeRuntimes(t, loaded(rows))
+    if (view.kind !== 'single') throw new Error('expected aggregate')
+    expect(view.failure).toEqual({
+      title: '启动期间工作区的执行身份来源发生了变化。',
+      hint: '请停止并发配置修改，再重新发起新运行。',
+    })
+    expect(JSON.stringify(view)).not.toContain('execution-identity-source-changed')
+    expect(JSON.stringify(view)).not.toContain('execution-identity-untrusted-binary')
   })
 
   test('above threshold with only soft failures → soft aggregate naming the soft row', () => {

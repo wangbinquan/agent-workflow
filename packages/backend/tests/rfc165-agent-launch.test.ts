@@ -45,6 +45,7 @@ import { buildActor } from '../src/auth/actor'
 import { createPat } from '../src/auth/patStore'
 import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { agents, tasks, workflows } from '../src/db/schema'
 import {
   acquireAgentLaunch,
@@ -202,8 +203,9 @@ describe('RFC-165 §4 — agent host snapshot (A1/A2)', () => {
 describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
   let db: DbClient
   let appHome: string
-  beforeEach(() => {
+  beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
+    await seedTestDefaultOpencodeRuntime(db)
     appHome = mkdtempSync(join(tmpdir(), 'aw-rfc165-agent-'))
   })
   afterEach(() => rmSync(appHome, { recursive: true, force: true }))
@@ -386,6 +388,7 @@ describe('RFC-165 — HTTP surface: launch + lifecycle guards (A6/A9)', () => {
 
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
+    await seedTestDefaultOpencodeRuntime(db)
     appHome = mkdtempSync(join(tmpdir(), 'aw-rfc165-agent-http-'))
     process.env.AGENT_WORKFLOW_HOME = appHome
     app = createApp({
@@ -726,8 +729,9 @@ describe('RFC-165 — workgroup exclusions (A7)', () => {
 describe('RFC-175 §2e — agent relaunch identity guard + launch reservation', () => {
   let db: DbClient
   let appHome: string
-  beforeEach(() => {
+  beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
+    await seedTestDefaultOpencodeRuntime(db)
     appHome = mkdtempSync(join(tmpdir(), 'aw-rfc175-agent-'))
   })
   afterEach(() => rmSync(appHome, { recursive: true, force: true }))

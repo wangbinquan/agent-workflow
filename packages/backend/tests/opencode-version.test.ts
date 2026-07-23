@@ -48,7 +48,7 @@ describe('probeOpencode', () => {
   })
 })
 
-describe('no version ceiling', () => {
+describe('RFC-224 pinned minimum', () => {
   // History: an exclusive upper bound (MAX_OPENCODE_VERSION_EXCLUSIVE) used to
   // exist as a "you bumped past a minor — re-verify" tripwire. It was born from
   // opencode 1.14.51 (upstream commit 7f2b5ee8c, the Effect-TS rewrite of
@@ -69,18 +69,14 @@ describe('no version ceiling', () => {
   // These assertions lock in "anything at/above MIN is accepted" — if a ceiling
   // is reintroduced, the high-version cases go red and force a re-justification.
 
-  for (const v of [
-    '1.14.25',
-    '1.14.29',
-    '1.14.51',
-    '1.15.5',
-    '1.16.0',
-    '1.17.0',
-    '2.0.0',
-    '10.5.3',
-  ]) {
+  for (const v of ['1.18.3', '2.0.0', '10.5.3']) {
     test(`${v} is >= MIN_OPENCODE_VERSION (accepted, no upper bound)`, () => {
       expect(compareSemver(v, MIN_OPENCODE_VERSION)).toBeGreaterThanOrEqual(0)
+    })
+  }
+  for (const v of ['1.14.25', '1.15.5', '1.17.0', '1.18.2']) {
+    test(`${v} is below RFC-224's pinned minimum`, () => {
+      expect(compareSemver(v, MIN_OPENCODE_VERSION)).toBeLessThan(0)
     })
   }
 })

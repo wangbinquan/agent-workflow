@@ -14,6 +14,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { agents, scheduledTasks, workflows, workgroups } from '../src/db/schema'
 import { createAgent, deleteAgent } from '../src/services/agent'
 import { createScheduledTask, updateScheduledTask } from '../src/services/scheduledTasks'
@@ -62,6 +63,7 @@ async function seedWorkflow(db: DbClient, ownerId: string) {
 }
 
 async function seedAgent(db: DbClient, actor: Actor) {
+  await seedTestDefaultOpencodeRuntime(db)
   return createAgent(
     db,
     { ...AGENT_FIELDS, name: `agent-${ulid().toLowerCase()}` },

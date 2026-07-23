@@ -1,10 +1,10 @@
-// RFC-145 T1 — FAILURE_CODES 枚举 + FOLLOWUP_POLICY 投影表 oracle。
+// RFC-145 T1 — FOLLOWUP_FAILURE_CODES 枚举 + FOLLOWUP_POLICY 投影表 oracle。
 //
 // 为什么这条测试存在：信封失败的 follow-up 路由此前是 scheduler 里 7 连顺序敏感
 // 的 errorMessage startsWith 链（flag-audit §4.3），生产侧 7 值与渲染侧 6 值的
 // 多对一投影（clarify-forbidden→envelope-missing 降级）藏在链尾隐式分支里。本
 // 测试把新单源锁死：
-//   ① FAILURE_CODES 全集 7 值（生产域，与 node_runs.failure_code 列一致）；
+//   ① FOLLOWUP_FAILURE_CODES 全集 7 值（可修复的信封协议生产域）；
 //   ② FOLLOWUP_POLICY 覆盖全部 code（Record 编译期穷举 + 运行时 key 集自洽）；
 //   ③ 投影语义逐格锁定——尤其 clarify-forbidden 的显式降级格（设计 D4）；
 //   ④ reason 值域封闭在 EnvelopeFollowupReason 6 值内。
@@ -12,7 +12,7 @@
 
 import { describe, expect, test } from 'bun:test'
 
-import { FAILURE_CODES } from '../src/schemas/task'
+import { FOLLOWUP_FAILURE_CODES } from '../src/schemas/task'
 import { SUPERSEDE_DECISIONS } from '../src/schemas/review'
 import { FOLLOWUP_POLICY, type EnvelopeFollowupReason } from '../src/prompt'
 
@@ -25,9 +25,9 @@ const RENDER_REASONS: readonly EnvelopeFollowupReason[] = [
   'envelope-port-malformed',
 ]
 
-describe('RFC-145 FAILURE_CODES — 生产域全集', () => {
+describe('RFC-145 FOLLOWUP_FAILURE_CODES — 可修复协议失败窄域全集', () => {
   test('7 值全集（顺序即文档顺序）', () => {
-    expect([...FAILURE_CODES]).toEqual([
+    expect([...FOLLOWUP_FAILURE_CODES]).toEqual([
       'envelope-missing',
       'clarify-and-output-both',
       'clarify-questions-malformed',
@@ -40,8 +40,8 @@ describe('RFC-145 FAILURE_CODES — 生产域全集', () => {
 })
 
 describe('RFC-145 FOLLOWUP_POLICY — 7→6 投影表', () => {
-  test('key 集与 FAILURE_CODES 完全自洽（防 Record 被 as-cast 绕过）', () => {
-    expect(Object.keys(FOLLOWUP_POLICY).sort()).toEqual([...FAILURE_CODES].sort())
+  test('key 集与 FOLLOWUP_FAILURE_CODES 完全自洽（identity 失败不得混入）', () => {
+    expect(Object.keys(FOLLOWUP_POLICY).sort()).toEqual([...FOLLOWUP_FAILURE_CODES].sort())
   })
 
   test('投影逐格锁定意图', () => {

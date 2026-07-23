@@ -6,7 +6,7 @@
 // the grep-able protocol invariants (OPENCODE_CONFIG_CONTENT, tmp cwd,
 // hardcoded agent name + system prompt anchors).
 
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { insertClarifyRoundRaw } from './clarify-fixtures'
 import { resolve } from 'node:path'
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -23,6 +23,7 @@ import {
 import {
   DISTILLER_SYSTEM_PROMPT,
   buildDistillerUserPrompt,
+  finalizeDistillerSpawnAttempt,
   loadScopeContexts,
   loadSourceEvents,
   parseDistillerOutput,
@@ -31,6 +32,7 @@ import {
   type DistillerSpawnFn,
 } from '../src/services/memoryDistiller'
 import { rowToDistillJob } from '../src/services/memoryDistiller'
+import { ExecutionIdentityFailure } from '../src/services/runtime/opencode/failure'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -657,6 +659,84 @@ describe('runDistill orchestration (mocked spawnFn)', () => {
     )
   })
 
+  test('cleanup lock failure preserves the outer cwd and throws the stable store-unsafe code', async () => {
+    const { taskId } = seedTask(db)
+    const job = rowToDistillJob({
+      id: ulid(),
+      debounceKey: `${taskId}:clarify`,
+      sourceKind: 'clarify',
+      sourceEventId: 'c1',
+      taskId,
+      scopeResolvedJson: '{}',
+      status: 'running',
+      attempts: 0,
+      nextRunAt: Date.now(),
+      lastError: null,
+      createdAt: Date.now(),
+      startedAt: Date.now(),
+      finishedAt: null,
+    })
+    let cwd = ''
+    let cleanupCalled = false
+    const spawnFn: DistillerSpawnFn = async (input) => {
+      cwd = input.cwd
+      return {
+        exitCode: 0,
+        stderr: '',
+        stdout: distillerStdout(input),
+        cleanup: async () => {
+          cleanupCalled = true
+          throw new Error('private store lock still held')
+        },
+      }
+    }
+
+    try {
+      await expect(runDistill({ db, job, siblings: [job], spawnFn })).rejects.toMatchObject({
+        code: 'execution-identity-store-unsafe',
+      })
+      expect(cleanupCalled).toBe(true)
+      expect(cwd).not.toBe('')
+      expect(existsSync(cwd)).toBe(true)
+    } finally {
+      if (cwd !== '') rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
+  test('unreaped spawn failure preserves its outer cwd instead of erasing live run inputs', async () => {
+    const { taskId } = seedTask(db)
+    const job = rowToDistillJob({
+      id: ulid(),
+      debounceKey: `${taskId}:clarify`,
+      sourceKind: 'clarify',
+      sourceEventId: 'c1',
+      taskId,
+      scopeResolvedJson: '{}',
+      status: 'running',
+      attempts: 0,
+      nextRunAt: Date.now(),
+      lastError: null,
+      createdAt: Date.now(),
+      startedAt: Date.now(),
+      finishedAt: null,
+    })
+    let cwd = ''
+    const spawnFn: DistillerSpawnFn = async (input) => {
+      cwd = input.cwd
+      throw new ExecutionIdentityFailure('execution-identity-store-unsafe')
+    }
+
+    try {
+      await expect(runDistill({ db, job, siblings: [job], spawnFn })).rejects.toMatchObject({
+        code: 'execution-identity-store-unsafe',
+      })
+      expect(cwd).not.toBe('')
+      expect(existsSync(cwd)).toBe(true)
+    } finally {
+      if (cwd !== '') rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
   test('grep guards: source file pins RFC-117 runtime-driver seam + invariants', () => {
     const src = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'services', 'memoryDistiller.ts'),
@@ -723,6 +803,53 @@ describe('runDistill orchestration (mocked spawnFn)', () => {
       expect(DISTILLER_SYSTEM_PROMPT).toContain('personally-identifying information')
       expect(DISTILLER_SYSTEM_PROMPT).toContain('personal momentary preference')
     })
+  })
+})
+
+describe('RFC-224 distiller store-destruction barrier', () => {
+  test('never-settling child is bounded, escalates TERM → KILL, and never cleans the plan', async () => {
+    const signals: string[] = []
+    let cleanupCalled = false
+    let unrefCalled = false
+    const startedAt = Date.now()
+
+    const safe = await finalizeDistillerSpawnAttempt({
+      child: {
+        exited: new Promise<number>(() => {}),
+        unref: () => {
+          unrefCalled = true
+        },
+      },
+      childReaped: false,
+      killChild: (signal) => signals.push(signal),
+      cleanup: async () => {
+        cleanupCalled = true
+      },
+      termGraceMs: 5,
+      reapDeadlineMs: 5,
+    })
+
+    expect(Date.now() - startedAt).toBeLessThan(500)
+    expect(safe).toBe(false)
+    expect(signals).toEqual(['SIGTERM', 'SIGKILL'])
+    expect(unrefCalled).toBe(true)
+    expect(cleanupCalled).toBe(false)
+  })
+
+  test('confirmed reap permits cleanup, but a live-lock cleanup failure remains unsafe', async () => {
+    const order: string[] = []
+    const safe = await finalizeDistillerSpawnAttempt({
+      child: { exited: Promise.resolve(0) },
+      childReaped: true,
+      killChild: (signal) => order.push(signal),
+      cleanup: async () => {
+        order.push('cleanup')
+        throw new Error('store lock')
+      },
+    })
+
+    expect(safe).toBe(false)
+    expect(order).toEqual(['SIGKILL', 'cleanup'])
   })
 })
 

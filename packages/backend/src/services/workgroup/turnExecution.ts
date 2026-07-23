@@ -19,8 +19,8 @@
 
 import type { Agent, WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 import {
-  FOLLOWUP_POLICY,
   fenceUntrusted,
+  followupPolicyForFailure,
   type EnvelopeFollowupReason,
   type FailureCode,
 } from '@agent-workflow/shared'
@@ -51,8 +51,7 @@ import type { WorkgroupEngineHooks, WorkgroupHostRunResult } from '@/services/wo
 export function followupForFailure(
   failureCode: FailureCode | undefined,
 ): { retry: true; reason: EnvelopeFollowupReason } | { retry: false } {
-  if (failureCode === undefined) return { retry: false }
-  const policy = FOLLOWUP_POLICY[failureCode] as { reason: EnvelopeFollowupReason } | undefined
+  const policy = followupPolicyForFailure(failureCode)
   return policy ? { retry: true, reason: policy.reason } : { retry: false }
 }
 

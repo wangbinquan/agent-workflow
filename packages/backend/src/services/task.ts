@@ -64,6 +64,7 @@ import { unsealRepoUrl } from '@/services/repoCredentials'
 import { getSandboxProvider } from '@/services/sandbox'
 import { buildLaunchCollabRows } from '@/services/taskCollab'
 import { getWorkflow } from '@/services/workflow'
+import { assertWorkflowExecutionPolicy } from '@/services/taskLaunchGate'
 import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
 import { materializingSpaces } from '@/services/gc'
 import { rollbackNodeRunWorktrees } from '@/services/nodeRollback'
@@ -1377,6 +1378,11 @@ async function startTaskImpl(
   if (workflow === null) {
     throw new NotFoundError('workflow-not-found', `workflow '${input.workflowId}' not found`)
   }
+  // RFC-224 final service funnel. Route/multipart/schedule faces reject even
+  // earlier, but internal startTask callers must not be able to bypass the
+  // effective OpenCode model/plugin/dependent policy. This remains before
+  // source resolution, cloning, worktree creation, or task-row writes.
+  await assertWorkflowExecutionPolicy(deps.db, workflow.definition, deps.defaultRuntime)
 
   // RFC-175 (§2c): immediate-submit OCC guard for relaunch. When present, reject
   // if the workflow we're about to snapshot has a different `version` than the

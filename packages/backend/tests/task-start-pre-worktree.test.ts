@@ -14,6 +14,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb } from '../src/db/client'
 import { createAgent } from '../src/services/agent'
+import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createWorkflow } from '../src/services/workflow'
 import {
   abortAllActiveTasks,
@@ -109,6 +110,7 @@ async function setup() {
   const appHome = join(tmp, 'appHome')
   const repoPath = join(tmp, 'repo')
   const db = createInMemoryDb(MIGRATIONS)
+  await seedTestDefaultOpencodeRuntime(db)
 
   git('init', '-b', 'main', repoPath)
   git('-C', repoPath, 'config', 'user.email', 't@t.test')

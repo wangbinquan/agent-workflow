@@ -90,3 +90,4 @@ export * from './structuralDiffGraph'
 // RFC-154 — per-runtime config-dir injection profile (protocol defaults +
 // reserved spawn env keys). Dependency-free leaf.
 export * from './runtimeConfigDir'
+export * from './executionIdentity' // RFC-224

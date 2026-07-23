@@ -35,6 +35,8 @@ import { captureChildSessions } from '@/services/sessionCapture'
 import { readSnapshotFromRunDir } from '@/services/inventory'
 import { startLiveSubagentCapture } from '@/services/subagentLiveCapture'
 import { materializeInventoryPlugin } from '@/opencode-plugin'
+import { buildVerifiedOpencodeBusinessPlan, usesLegacyTestOpencodePath } from './verifiedPlan'
+import { buildVerifiedOpencodeSystemPlan } from './verifiedSystemPlan'
 
 export const opencodeDriver: RuntimeDriver = {
   kind: 'opencode',
@@ -69,7 +71,17 @@ export const opencodeDriver: RuntimeDriver = {
   // RFC-117 — system-agent spawn. Minimal inline config (prompt + model only; no
   // skills/mcp/plugins/inventory, no RFC-029/041 in-place mutation), then the
   // shared buildOpencodeSpawn. opencode takes the prompt positionally → no stdin.
-  buildSpawn(ctx: SystemAgentSpawnContext): SpawnPlan {
+  async buildSpawn(ctx: SystemAgentSpawnContext): Promise<SpawnPlan> {
+    const envBin = process.env.AGENT_WORKFLOW_OPENCODE_BIN
+    const head =
+      ctx.runtimeBinary != null && ctx.runtimeBinary !== ''
+        ? [ctx.runtimeBinary]
+        : envBin != null && envBin !== ''
+          ? [envBin]
+          : ['opencode']
+    if (ctx.testOnlyUnverifiedRuntime !== true) {
+      return buildVerifiedOpencodeSystemPlan(ctx, head)
+    }
     const inlineConfig = {
       agent: {
         [ctx.agentName]: {
@@ -83,18 +95,11 @@ export const opencodeDriver: RuntimeDriver = {
     // a system-agent run with NO explicit binary falls back to it before the
     // built-in `opencode` head. Callers that pass a binary (smoke probes, custom
     // forks) are unaffected. claude has no analogous override.
-    const envBin = process.env.AGENT_WORKFLOW_OPENCODE_BIN
-    const head =
-      ctx.runtimeBinary != null && ctx.runtimeBinary !== ''
-        ? [ctx.runtimeBinary]
-        : envBin != null && envBin !== ''
-          ? [envBin]
-          : undefined
     const { cmd, env } = buildOpencodeSpawn({
-      ...(head !== undefined ? { opencodeCmd: head } : {}),
+      opencodeCmd: head,
       // 2026-07-21: flag-spelling version gate — the registry is seeded by
       // probeOpencode (daemon boot probes the default binary before any spawn).
-      binaryVersion: getOpencodeBinaryVersion(head?.[0] ?? 'opencode'),
+      binaryVersion: getOpencodeBinaryVersion(head[0] ?? 'opencode'),
       agentName: ctx.agentName,
       prompt: ctx.prompt,
       worktreePath: ctx.worktreePath,
@@ -114,6 +119,10 @@ export const opencodeDriver: RuntimeDriver = {
   // inline-config build → RFC-029 inventory plugin append → RFC-041 memory
   // block append → serialize → spawn. async for materializeInventoryPlugin.
   async buildBusinessSpawn(ctx: BusinessNodeSpawnContext): Promise<SpawnPlan> {
+    const businessHead = pickRuntimeHead(ctx.runtimeBinary, ctx.opencodeCmd)
+    if (!usesLegacyTestOpencodePath(ctx)) {
+      return buildVerifiedOpencodeBusinessPlan(ctx, businessHead ?? ['opencode'])
+    }
     // RFC-154: stage framework skills into THIS runtime's config dir (leaf name
     // from the frozen profile; was the runner's runtime-blind `.opencode`
     // preamble). Strict mode: a staging failure fails the spawn (runner §6 maps
@@ -179,7 +188,6 @@ export const opencodeDriver: RuntimeDriver = {
     // RFC-112: a custom opencode fork's binary wins; else the RFC-111 head
     // (production config.opencodePath via resolveOpencodeCmd, or a test mock)
     // — byte-for-byte unchanged for built-ins.
-    const businessHead = pickRuntimeHead(ctx.runtimeBinary, ctx.opencodeCmd)
     const { cmd, env } = buildOpencodeSpawn({
       opencodeCmd: businessHead,
       // 2026-07-21: flag-spelling version gate (see buildSpawn above). Key =
@@ -219,7 +227,10 @@ export const opencodeDriver: RuntimeDriver = {
     return readSnapshotFromRunDir({
       runDir: ctx.runRoot,
       nodeKind: ctx.nodeKind,
-      pureMode: process.env.OPENCODE_PURE === '1' || process.env.OPENCODE_PURE === 'true',
+      pureMode:
+        ctx.verifiedIdentity === true
+          ? false
+          : process.env.OPENCODE_PURE === '1' || process.env.OPENCODE_PURE === 'true',
     })
   },
   startLiveCapture(ctx: LivePollOptions): LivePollerHandle {

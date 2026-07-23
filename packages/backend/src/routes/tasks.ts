@@ -238,11 +238,15 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     // referenced agent/skill/mcp/plugin closure is implicitly authorized. Invisible
     // and missing produce the identical 404; built-in → 403. Shared gate — the
     // multipart path and scheduled-task fires enforce the exact same policy.
-    await assertWorkflowLaunchable(deps.db, actor, parsed.data.workflowId)
-    const task = await startTask(
-      parsed.data,
-      buildStartTaskDeps(deps.db, deps.configPath, actor.user.id, opencodeCmd, deps.secretBox),
+    const startDeps = buildStartTaskDeps(
+      deps.db,
+      deps.configPath,
+      actor.user.id,
+      opencodeCmd,
+      deps.secretBox,
     )
+    await assertWorkflowLaunchable(deps.db, actor, parsed.data.workflowId, startDeps.defaultRuntime)
+    const task = await startTask(parsed.data, startDeps)
     return c.json(task, 201)
   })
 
@@ -781,7 +785,13 @@ async function handleMultipartTaskStart(
 
   // 2. Resolve workflow → extract upload input declarations. RFC-099 (D3):
   // the launcher must be able to use the workflow; invisible == missing.
-  const workflow = await assertWorkflowLaunchable(deps.db, actor, startInput.workflowId)
+  const launchRuntime = resolveLaunchRuntimeConfig(deps.configPath)
+  const workflow = await assertWorkflowLaunchable(
+    deps.db,
+    actor,
+    startInput.workflowId,
+    launchRuntime.defaultRuntime,
+  )
   // RFC-199 G1: reject a stale launch guard against the SAME visible row we
   // just captured, before URL resolution can mint a cache row/worktree/branch.
   // startTask intentionally retains its own pre-materialize and final-tx
@@ -872,7 +882,7 @@ async function handleMultipartTaskStart(
       ...(opencodeCmd ? { opencodeCmd } : {}),
       ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
       // RFC-103 T2: multipart (upload) start must thread runtime config too.
-      ...resolveLaunchRuntimeConfig(deps.configPath),
+      ...launchRuntime,
       materializedSpace: space,
     })
     return task
@@ -911,7 +921,7 @@ async function handleMultipartTaskStart(
       ...(opencodeCmd ? { opencodeCmd } : {}),
       ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
       // RFC-103 T2: multipart (upload) start must thread runtime config too.
-      ...resolveLaunchRuntimeConfig(deps.configPath),
+      ...launchRuntime,
       materializedSpace: space,
     },
   )

@@ -72,6 +72,15 @@ export function loadConfig(path: string): Config {
  * Returns the new full config. Throws ValidationError on schema mismatch.
  */
 export function applyConfigPatch(path: string, patch: unknown): Config {
+  const next = previewConfigPatch(path, patch)
+  saveConfigRaw(path, next)
+  return next
+}
+
+/** Validate and merge a patch without writing it. Route-level semantic gates
+ * use this to inspect the exact value that would be persisted before the
+ * atomic save occurs. */
+export function previewConfigPatch(path: string, patch: unknown): Config {
   const parsed = ConfigPatchSchema.safeParse(patch)
   if (!parsed.success) {
     throw new ValidationError('config-invalid', 'config patch failed validation', {
@@ -86,7 +95,6 @@ export function applyConfigPatch(path: string, patch: unknown): Config {
       issues: revalidated.error.issues,
     })
   }
-  saveConfigRaw(path, revalidated.data)
   return revalidated.data
 }
 

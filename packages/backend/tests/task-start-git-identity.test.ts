@@ -26,6 +26,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import { createInMemoryDb } from '../src/db/client'
+import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import type { DbClient } from '../src/db/client'
 import { tasks } from '../src/db/schema'
 import { eq } from 'drizzle-orm'
@@ -157,6 +158,7 @@ async function setup(): Promise<Harness> {
   const envCaptureDir = join(tmp, 'env-capture')
   mkdirSync(envCaptureDir, { recursive: true })
   const db = createInMemoryDb(MIGRATIONS)
+  await seedTestDefaultOpencodeRuntime(db)
 
   git('init', '-b', 'main', repoPath)
   git('-C', repoPath, 'config', 'user.email', 't@t.test')

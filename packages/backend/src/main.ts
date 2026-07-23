@@ -21,6 +21,8 @@ import { statusCommand, formatStatus } from './cli/status'
 import { stopCommand } from './cli/stop'
 import { userCommand } from './cli/user'
 import { authCommand } from './cli/auth'
+import { runNetlessSubprocess } from './services/runtime/opencode/sealedSubprocess'
+import { runVerifiedOpencodeLauncher } from './services/runtime/opencode/verifiedLauncher'
 
 function readFlag(argv: string[], name: string): string | undefined {
   const i = argv.indexOf(name)
@@ -48,6 +50,26 @@ async function main(): Promise<void> {
   const sub = Bun.argv[2] ?? 'help'
 
   switch (sub) {
+    case '__opencode-verified-run': {
+      const args = Bun.argv.slice(3)
+      if (args.length !== 2 || args[0] !== '--manifest' || args[1] === undefined) {
+        process.stderr.write('AW_OPENCODE_FAILURE execution-identity-store-unsafe\n')
+        process.exit(1)
+      }
+      process.exit(await runVerifiedOpencodeLauncher(args[1]))
+      break
+    }
+
+    case '__opencode-netless-subprocess': {
+      const args = Bun.argv.slice(3)
+      if (args.length < 2 || args[0] !== '--manifest' || args[1] === undefined) {
+        process.stderr.write('AW_OPENCODE_FAILURE execution-identity-store-unsafe\n')
+        process.exit(1)
+      }
+      process.exit(await runNetlessSubprocess(args[1], args.slice(2)))
+      break
+    }
+
     case 'start': {
       const opts: { port?: number; host?: string } = {}
       const port = readPortFlag(Bun.argv)

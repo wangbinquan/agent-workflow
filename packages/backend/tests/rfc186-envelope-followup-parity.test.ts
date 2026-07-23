@@ -10,7 +10,7 @@
 // SAME FOLLOWUP_POLICY table normal nodes use. These locks pin the unified
 // decision + the removal of the string-prefix chain.
 
-import { FOLLOWUP_POLICY, type FailureCode } from '@agent-workflow/shared'
+import { FOLLOWUP_POLICY, type FailureCode, type FollowupFailureCode } from '@agent-workflow/shared'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -18,21 +18,21 @@ import { followupForFailure, wgFollowupNotice } from '../src/services/workgroup/
 import { renderWgProtocolBlock } from '../src/services/workgroup/context'
 import type { WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 
-// Every FailureCode in the shared policy table is retryable in the workgroup
-// turn; anything WITHOUT a structured code (iso-setup / injection / crash /
-// merge-conflict → undefined) is fatal.
+// Every narrow envelope failure in the shared policy table is retryable in the
+// workgroup turn; permanent identity codes and anything WITHOUT a structured
+// code (iso-setup / injection / crash / merge-conflict → undefined) are fatal.
 describe('RFC-186 — followupForFailure unifies on FOLLOWUP_POLICY', () => {
-  const ALL_CODES = Object.keys(FOLLOWUP_POLICY) as FailureCode[]
+  const ALL_CODES = Object.keys(FOLLOWUP_POLICY) as FollowupFailureCode[]
 
-  test('every FailureCode routes to retry with its table reason (no code left fatal)', () => {
+  test('every envelope follow-up code routes to retry with its table reason', () => {
     for (const code of ALL_CODES) {
       const fu = followupForFailure(code)
       expect(fu.retry).toBe(true)
       if (fu.retry) expect(fu.reason).toBe(FOLLOWUP_POLICY[code].reason)
     }
     // sanity: the table must at least cover the two production killers.
-    expect(ALL_CODES).toContain('envelope-missing' as FailureCode)
-    expect(ALL_CODES).toContain('clarify-questions-malformed' as FailureCode)
+    expect(ALL_CODES).toContain('envelope-missing')
+    expect(ALL_CODES).toContain('clarify-questions-malformed')
   })
 
   test('undefined failureCode (unstructured/fatal) is NOT retried', () => {

@@ -18,6 +18,7 @@ import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { taskRepos, tasks } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
+import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createWorkflow } from '../src/services/workflow'
 import {
   abortAllActiveTasks,
@@ -115,6 +116,7 @@ async function setup(): Promise<Harness> {
   const repoPath = join(tmp, 'repo')
   mkdirSync(appHome, { recursive: true })
   const db = createInMemoryDb(MIGRATIONS)
+  await seedTestDefaultOpencodeRuntime(db)
 
   git('init', '-b', 'main', repoPath)
   git('-C', repoPath, 'config', 'user.email', 't@t.test')

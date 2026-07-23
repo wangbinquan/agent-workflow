@@ -9,12 +9,13 @@
 // path (RFC-112 D3).
 
 import { readFileSync } from 'node:fs'
-import { eq, inArray } from 'drizzle-orm'
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import {
   configDirEnvProblem,
   configDirNameProblem,
   DEFAULT_CONFIG_DIR_PROFILE,
+  executionPolicyViolations,
   type RuntimeConfigDirProfile,
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
@@ -25,6 +26,7 @@ import type { RuntimeKind } from '@/services/runtime'
 import { RUNTIME_KINDS } from '@/services/runtime'
 import { createLogger } from '@/util/log'
 import { evictOpencodeModelsCache } from '@/util/opencode-models'
+import { KeyedSerialQueue } from '@/util/keyedSerialQueue'
 
 const log = createLogger('runtimeRegistry')
 
@@ -69,9 +71,54 @@ export interface RuntimeRow extends RuntimeProfile {
   configDirEnv: string | null
   configDirName: string | null
   lastProbeJson: string | null
+  /** Persisted execution-target generation for long-running probe CAS. */
+  probeFence: number
   createdBy: string | null
   createdAt: number
   updatedAt: number
+}
+
+/**
+ * Exact registry columns whose values define the runtime execution profile and
+ * therefore the meaning of a deep-smoke receipt. Keep this in lockstep with
+ * `updateRuntime`'s `executionProfileChanged` invalidation set.
+ */
+export interface RuntimeExecutionProfileFingerprint extends Readonly<RuntimeProfile> {
+  readonly protocol: RuntimeProtocol
+  readonly binaryPath: string | null
+  readonly configDirEnv: string | null
+  readonly configDirName: string | null
+}
+
+export interface RuntimeProbeTarget {
+  /** Immutable row identity; protects delete + same-name recreation. */
+  readonly id: string
+  readonly name: string
+  /** Persisted generation; protects profile + inherited config-binary changes. */
+  readonly probeFence: number
+  /** Exact effective executable selected after row + daemon-config resolution. */
+  readonly resolvedBinaryPath: string
+  readonly fingerprint: RuntimeExecutionProfileFingerprint
+}
+
+interface RuntimeProbeReceipt {
+  readonly codec: 1
+  readonly target: RuntimeProbeTarget
+  readonly smoke: unknown
+}
+
+/**
+ * Config mutation and probe finalization share this process-global queue. The
+ * long-running smoke stays outside it; only the config check + SQLite CAS is
+ * serialized against config PUT's invalidate-before-write section.
+ */
+const runtimeProbeConfigFenceQueue = new KeyedSerialQueue<string>()
+
+export function withRuntimeProbeConfigFence<T>(
+  configPath: string,
+  task: () => Promise<T> | T,
+): Promise<T> {
+  return runtimeProbeConfigFenceQueue.run(configPath, task)
 }
 
 export interface ResolvedRuntime extends RuntimeProfile {
@@ -141,21 +188,72 @@ export function runtimeProfileOf(row: RuntimeProfile): RuntimeProfile {
   }
 }
 
+/** Freeze the exact row identity/profile a long-running probe is about to use. */
+export function runtimeProbeTargetOf(
+  row: RuntimeRow,
+  resolvedBinaryPath: string,
+): RuntimeProbeTarget {
+  return Object.freeze({
+    id: row.id,
+    name: row.name,
+    probeFence: row.probeFence,
+    resolvedBinaryPath,
+    fingerprint: Object.freeze({
+      protocol: row.protocol,
+      binaryPath: row.binaryPath,
+      configDirEnv: row.configDirEnv,
+      configDirName: row.configDirName,
+      ...runtimeProfileOf(row),
+    }),
+  })
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function receiptMatchesTarget(receipt: unknown, target: RuntimeProbeTarget): unknown | null {
+  if (!isRecord(receipt) || receipt.codec !== 1 || !isRecord(receipt.target)) return null
+  const stored = receipt.target
+  if (!isRecord(stored.fingerprint) || !Object.hasOwn(receipt, 'smoke')) return null
+  const f = target.fingerprint
+  const storedFingerprint = stored.fingerprint
+  if (
+    stored.id !== target.id ||
+    stored.name !== target.name ||
+    stored.probeFence !== target.probeFence ||
+    stored.resolvedBinaryPath !== target.resolvedBinaryPath ||
+    storedFingerprint.protocol !== f.protocol ||
+    storedFingerprint.binaryPath !== f.binaryPath ||
+    storedFingerprint.model !== f.model ||
+    storedFingerprint.variant !== f.variant ||
+    storedFingerprint.temperature !== f.temperature ||
+    storedFingerprint.steps !== f.steps ||
+    storedFingerprint.maxSteps !== f.maxSteps ||
+    storedFingerprint.configDirEnv !== f.configDirEnv ||
+    storedFingerprint.configDirName !== f.configDirName
+  ) {
+    return null
+  }
+  return receipt.smoke
+}
+
 /**
- * Public view of a row for the HTTP layer — parses the cached probe JSON back to
- * an object. Lives here (not in the route) so the route file stays free of the
- * `as` cast the RFC-054 W1-7 guard bans; this is our own serialized data, not
- * unvalidated user input. `defaultRuntimeName` (config.defaultRuntime) drives the
- * in-table default marker (RFC-113 D3/D7).
+ * Public view of a row for the HTTP layer. A receipt is shown only when its
+ * self-contained row/profile/fence/effective-binary target matches live state;
+ * legacy/malformed JSON and externally drifted config fail closed to null.
+ * `defaultRuntimeName` drives the in-table default marker (RFC-113 D3/D7).
  */
 export function runtimeRowToView(
   row: RuntimeRow,
   defaultRuntimeName: string | null | undefined,
+  resolvedBinaryPath: string,
 ): RuntimeView {
   let lastProbe: unknown = null
   if (row.lastProbeJson !== null) {
     try {
-      lastProbe = JSON.parse(row.lastProbeJson)
+      const receipt: unknown = JSON.parse(row.lastProbeJson)
+      lastProbe = receiptMatchesTarget(receipt, runtimeProbeTargetOf(row, resolvedBinaryPath))
     } catch {
       lastProbe = null
     }
@@ -429,6 +527,16 @@ function profilePatch(input: RuntimeProfileInput): Partial<RuntimeProfile> {
   return out
 }
 
+function assertRuntimeProfilePolicy(protocol: RuntimeProtocol, model: string | null): void {
+  const violation = executionPolicyViolations({ protocol, model })[0]
+  if (violation !== undefined) {
+    throw new ValidationError(violation.code, violation.code, {
+      field: violation.field,
+      permanent: true,
+    })
+  }
+}
+
 export interface CreateRuntimeInput extends RuntimeProfileInput {
   name: string
   protocol: string
@@ -440,9 +548,17 @@ export interface CreateRuntimeInput extends RuntimeProfileInput {
   createdBy?: string | null
 }
 
-export async function createRuntime(db: DbClient, input: CreateRuntimeInput): Promise<RuntimeRow> {
+export async function createRuntime(
+  db: DbClient,
+  input: CreateRuntimeInput,
+  opts?: { enforceExecutionPolicy?: boolean },
+): Promise<RuntimeRow> {
   validateName(input.name)
   validateProtocol(input.protocol)
+  const profile = profilePatch(input)
+  if (opts?.enforceExecutionPolicy === true) {
+    assertRuntimeProfilePolicy(input.protocol, profile.model ?? null)
+  }
   const binaryPath = validateBinaryPath(input.binaryPath)
   const configDirEnv = validateConfigDirEnv(input.configDirEnv)
   const configDirName = validateConfigDirName(input.configDirName)
@@ -458,7 +574,7 @@ export async function createRuntime(db: DbClient, input: CreateRuntimeInput): Pr
     configDirName,
     lastProbeJson: input.lastProbeJson ?? null,
     createdBy: input.createdBy ?? null,
-    ...profilePatch(input),
+    ...profile,
   })
   const row = await getRuntime(db, input.name)
   if (row === null) throw new Error('runtime insert vanished')
@@ -483,15 +599,47 @@ export async function updateRuntime(
   db: DbClient,
   name: string,
   input: UpdateRuntimeInput,
+  opts?: { enforceExecutionPolicy?: boolean },
 ): Promise<RuntimeRow> {
   const row = await getRuntime(db, name)
   if (row === null) throw new NotFoundError('runtime-not-found', `runtime '${name}' not found`)
-  const patch: Record<string, unknown> = { updatedAt: Date.now(), ...profilePatch(input) }
-  if (input.binaryPath !== undefined) patch.binaryPath = validateBinaryPath(input.binaryPath)
-  if (input.configDirEnv !== undefined)
-    patch.configDirEnv = validateConfigDirEnv(input.configDirEnv)
-  if (input.configDirName !== undefined)
-    patch.configDirName = validateConfigDirName(input.configDirName)
+  const profile = profilePatch(input)
+  if (opts?.enforceExecutionPolicy === true) {
+    // `null` is an explicit patch value, not a missing field. Using `??` here
+    // would fall back to the old model, pass policy, and then persist NULL.
+    const nextModel = input.model !== undefined ? (profile.model ?? null) : row.model
+    assertRuntimeProfilePolicy(row.protocol, nextModel)
+  }
+  const patch: Record<string, unknown> = { updatedAt: Date.now(), ...profile }
+  let executionProfileChanged =
+    (profile.model !== undefined && profile.model !== row.model) ||
+    (profile.variant !== undefined && profile.variant !== row.variant) ||
+    (profile.temperature !== undefined && profile.temperature !== row.temperature) ||
+    (profile.steps !== undefined && profile.steps !== row.steps) ||
+    (profile.maxSteps !== undefined && profile.maxSteps !== row.maxSteps)
+  if (input.binaryPath !== undefined) {
+    const binaryPath = validateBinaryPath(input.binaryPath)
+    patch.binaryPath = binaryPath
+    executionProfileChanged ||= binaryPath !== row.binaryPath
+  }
+  if (input.configDirEnv !== undefined) {
+    const configDirEnv = validateConfigDirEnv(input.configDirEnv)
+    patch.configDirEnv = configDirEnv
+    executionProfileChanged ||= configDirEnv !== row.configDirEnv
+  }
+  if (input.configDirName !== undefined) {
+    const configDirName = validateConfigDirName(input.configDirName)
+    patch.configDirName = configDirName
+    executionProfileChanged ||= configDirName !== row.configDirName
+  }
+  // A smoke receipt describes one exact execution profile. Never keep a green
+  // receipt attached to changed binary/model/config semantics.
+  if (executionProfileChanged) {
+    patch.lastProbeJson = null
+    patch.probeFence = sql`${runtimes.probeFence} + 1`
+  }
+  // Internal callers may deliberately persist a fresh receipt in the same
+  // update; an explicit value wins over invalidation.
   if (input.lastProbeJson !== undefined) patch.lastProbeJson = input.lastProbeJson
   await db.update(runtimes).set(patch).where(eq(runtimes.name, name))
   const updated = await getRuntime(db, name)
@@ -506,19 +654,73 @@ export async function updateRuntime(
 }
 
 /**
- * Cache a deep-smoke result onto a row's `last_probe_json` for display. Allowed
- * on BUILT-INS (unlike updateRuntime) — a probe result is advisory display, not
- * an identity edit, so it doesn't trip the read-only lock. No-op if the row is gone.
+ * Cache a deep-smoke result onto the exact row/profile that was probed.
+ *
+ * The smoke call is intentionally outside SQLite and can take a minute. This
+ * final single-statement CAS prevents an old result from attaching after an
+ * execution-profile PUT, inherited-config invalidation, or delete + same-name
+ * recreation. A no-op PUT keeps the same fingerprint/fence and therefore does
+ * not spuriously discard a valid result. The boolean tells the route whether it
+ * may truthfully return success.
  */
 export async function cacheRuntimeProbe(
   db: DbClient,
-  name: string,
-  lastProbeJson: string,
-): Promise<void> {
-  await db
+  target: RuntimeProbeTarget,
+  smoke: unknown,
+): Promise<boolean> {
+  const f = target.fingerprint
+  const receipt: RuntimeProbeReceipt = { codec: 1, target, smoke }
+  const lastProbeJson = JSON.stringify(receipt)
+  const updated = await db
     .update(runtimes)
     .set({ lastProbeJson, updatedAt: Date.now() })
-    .where(eq(runtimes.name, name))
+    .where(
+      and(
+        eq(runtimes.id, target.id),
+        eq(runtimes.name, target.name),
+        eq(runtimes.probeFence, target.probeFence),
+        eq(runtimes.protocol, f.protocol),
+        f.binaryPath === null ? isNull(runtimes.binaryPath) : eq(runtimes.binaryPath, f.binaryPath),
+        f.model === null ? isNull(runtimes.model) : eq(runtimes.model, f.model),
+        f.variant === null ? isNull(runtimes.variant) : eq(runtimes.variant, f.variant),
+        f.temperature === null
+          ? isNull(runtimes.temperature)
+          : eq(runtimes.temperature, f.temperature),
+        f.steps === null ? isNull(runtimes.steps) : eq(runtimes.steps, f.steps),
+        f.maxSteps === null ? isNull(runtimes.maxSteps) : eq(runtimes.maxSteps, f.maxSteps),
+        f.configDirEnv === null
+          ? isNull(runtimes.configDirEnv)
+          : eq(runtimes.configDirEnv, f.configDirEnv),
+        f.configDirName === null
+          ? isNull(runtimes.configDirName)
+          : eq(runtimes.configDirName, f.configDirName),
+      ),
+    )
+    .returning({ id: runtimes.id })
+  return updated.length === 1
+}
+
+/**
+ * Persistently invalidate every runtime that inherits a protocol binary from
+ * config.json. Bumping even rows with no cached receipt fences probes already
+ * in flight. Config PUT calls this before its atomic file write; if that write
+ * fails, the conservative false-negative is safe and a future probe repairs it.
+ */
+export async function invalidateInheritedRuntimeProbeReceipts(
+  db: DbClient,
+  protocols: readonly RuntimeProtocol[],
+): Promise<number> {
+  if (protocols.length === 0) return 0
+  const updated = await db
+    .update(runtimes)
+    .set({
+      probeFence: sql`${runtimes.probeFence} + 1`,
+      lastProbeJson: null,
+      updatedAt: Date.now(),
+    })
+    .where(and(inArray(runtimes.protocol, [...protocols]), isNull(runtimes.binaryPath)))
+    .returning({ id: runtimes.id })
+  return updated.length
 }
 
 /**

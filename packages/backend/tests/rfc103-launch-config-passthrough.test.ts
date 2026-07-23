@@ -93,16 +93,18 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
   const routesSrc = readFileSync(join(import.meta.dir, '../src/routes/tasks.ts'), 'utf8')
   const taskSrc = readFileSync(join(import.meta.dir, '../src/services/task.ts'), 'utf8')
 
-  test('routes/tasks.ts + startTaskDeps 的 8 个入口都线程 resolveLaunchRuntimeConfig', () => {
+  test('routes/tasks.ts + startTaskDeps 的 8 个逻辑入口都线程 resolveLaunchRuntimeConfig', () => {
     const calls = routesSrc.match(/resolveLaunchRuntimeConfig\(deps\.configPath\)/g) ?? []
     // RFC-159 T2: JSON 启动改走 buildStartTaskDeps（工厂内 thread resolveLaunchRuntimeConfig），
-    // tasks.ts 直调点 8 → 7；第 8 个入口（JSON）经工厂覆盖。剩 7：multipart-start(fail)/
-    // multipart-start(success) / resume / retry / repair-options / repair / sync-workflow。
-    expect(calls.length).toBe(7)
-    // 第 8 个入口的运行时配置由 buildStartTaskDeps 携带（数据路径不变）。
+    // 第 8 个逻辑入口（JSON）经工厂覆盖。tasks.ts 剩 6 个解析点：multipart
+    // 在任何副作用前解析一次并由 fail/success 两个 startTask 分支复用同一
+    // launchRuntime，另有 resume / retry / repair-options / repair / sync-workflow。
+    expect(calls.length).toBe(6)
+    expect(routesSrc.match(/\.\.\.launchRuntime,/g)).toHaveLength(2)
+    // JSON 入口的运行时配置由 buildStartTaskDeps 携带（数据路径不变）。
     const depsSrc = readFileSync(join(import.meta.dir, '../src/services/startTaskDeps.ts'), 'utf8')
     expect(depsSrc).toContain('resolveLaunchRuntimeConfig(configPath)')
-    expect(routesSrc).toContain('buildStartTaskDeps(deps.db, deps.configPath')
+    expect(routesSrc).toMatch(/buildStartTaskDeps\(\s*deps\.db,\s*deps\.configPath,/)
   })
 
   test('routes 不再保留旧的「只 start 传 commitPush」单点写法', () => {

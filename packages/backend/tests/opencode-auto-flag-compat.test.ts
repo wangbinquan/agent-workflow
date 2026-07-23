@@ -116,15 +116,19 @@ describe('driver 两条 spawn 路径都吃版本门', () => {
     prompt: 'USER PROMPT',
     worktreePath: '/tmp/wt',
     runDir: '/tmp/run',
+    testOnlyUnverifiedRuntime: true,
   } as const
 
-  test('buildSpawn（system agent）：registry 有 ≥1.18 → --auto；无记录 → 旧拼写', () => {
+  test('buildSpawn（system agent）：registry 有 ≥1.18 → --auto；无记录 → 旧拼写', async () => {
     recordOpencodeBinaryVersion('/fork/oc118', '1.18.3')
-    const modern = opencodeDriver.buildSpawn({ ...SYSTEM_BASE, runtimeBinary: '/fork/oc118' })
+    const modern = await opencodeDriver.buildSpawn({
+      ...SYSTEM_BASE,
+      runtimeBinary: '/fork/oc118',
+    })
     expect(modern.cmd).toContain('--auto')
     expect(modern.cmd).not.toContain(LEGACY)
 
-    const unknown = opencodeDriver.buildSpawn({
+    const unknown = await opencodeDriver.buildSpawn({
       ...SYSTEM_BASE,
       runtimeBinary: '/fork/never-probed',
     })
@@ -132,9 +136,9 @@ describe('driver 两条 spawn 路径都吃版本门', () => {
     expect(unknown.cmd).not.toContain('--auto')
   })
 
-  test('buildSpawn 默认头（PATH 上的 opencode）以 "opencode" 为 key 查表 —— boot 探测种子生效的形状', () => {
+  test('buildSpawn 默认头（PATH 上的 opencode）以 "opencode" 为 key 查表 —— boot 探测种子生效的形状', async () => {
     recordOpencodeBinaryVersion('opencode', '1.18.3')
-    const plan = opencodeDriver.buildSpawn({ ...SYSTEM_BASE })
+    const plan = await opencodeDriver.buildSpawn({ ...SYSTEM_BASE })
     expect(plan.cmd[0]).toBe('opencode')
     expect(plan.cmd).toContain('--auto')
   })
@@ -174,6 +178,7 @@ describe('driver 两条 spawn 路径都吃版本门', () => {
       wantsInventory: false,
       nodeRunId: 'nr-flag',
       log: createLogger('oc-flag-test'),
+      testOnlyUnverifiedRuntime: true,
     }
     recordOpencodeBinaryVersion('/fork/oc118-biz', '1.18.3')
     const modern = await opencodeDriver.buildBusinessSpawn(ctx)

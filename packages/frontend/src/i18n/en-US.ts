@@ -1192,7 +1192,9 @@ export const enUS: Resources = {
       'Must be a single directory name: no path separators, and not "." or "..".',
     fieldModel: 'Model',
     fieldModelHint:
-      'The model agents on this runtime spawn with. Empty = the binary’s own default.',
+      'The model agents on this runtime spawn with. OpenCode requires an explicit model.',
+    modelRequired: 'Select an explicit model before saving or testing this OpenCode runtime.',
+    modelRequiredChip: 'model required',
     fieldVariant: 'Variant',
     fieldTemperature: 'Temperature',
     fieldSteps: 'Steps',
@@ -1216,6 +1218,7 @@ export const enUS: Resources = {
       'network-blocked': 'endpoint unreachable',
       'model-call-failed': 'model call failed',
       'stream-nonconforming': 'not conforming',
+      'execution-identity-failed': 'execution identity failed',
     },
   },
   agents: {
@@ -2204,6 +2207,79 @@ export const enUS: Resources = {
       'port-validation-failed': "The agent's port output failed validation.",
       'port-validation-failed__hint':
         'Check the port validation info in the node drawer, then Resume to retry.',
+      'execution-identity-untrusted-binary':
+        'The selected OpenCode executable is not a trusted official build.',
+      'execution-identity-untrusted-binary__hint':
+        'Install the supported official OpenCode build or select its verified executable.',
+      'execution-identity-sandbox-required':
+        'This OpenCode run requires the secure Linux sandbox, but it is unavailable.',
+      'execution-identity-sandbox-required__hint':
+        'Run the daemon on a supported Linux host with the required sandbox enabled.',
+      'execution-identity-project-config-unsupported':
+        'The workspace contains OpenCode project configuration that cannot be safely isolated.',
+      'execution-identity-project-config-unsupported__hint':
+        'Remove the reported project configuration or symlink, then launch a new run.',
+      'execution-identity-plugin-unsupported':
+        'Plugins are not supported by the verified OpenCode execution path.',
+      'execution-identity-plugin-unsupported__hint':
+        'Remove the plugin selection from the agent before saving or launching.',
+      'execution-identity-dependent-unsupported':
+        'Dependent agents are not supported by the verified OpenCode execution path.',
+      'execution-identity-dependent-unsupported__hint':
+        'Remove the dependent-agent selection before saving or launching.',
+      'execution-identity-model-unresolved': 'No explicit OpenCode model is selected for this run.',
+      'execution-identity-model-unresolved__hint':
+        'Choose a provider/model on the effective runtime, then launch again.',
+      'execution-identity-auth-invalid':
+        'The selected provider credentials do not match the verified authentication contract.',
+      'execution-identity-auth-invalid__hint':
+        'Update the provider API credentials and retry with a new run.',
+      'execution-identity-provider-untrusted':
+        'The selected model provider is not part of the trusted OpenCode build.',
+      'execution-identity-provider-untrusted__hint':
+        'Choose a provider/model bundled by the supported official OpenCode build.',
+      'execution-identity-bootstrap-failed':
+        'OpenCode failed its verified startup check before model execution.',
+      'execution-identity-bootstrap-failed__hint':
+        'Review runtime diagnostics, correct the host setup, then launch a new run.',
+      'execution-identity-mismatch':
+        'The resolved OpenCode execution settings differ from the sealed settings.',
+      'execution-identity-mismatch__hint':
+        'Remove external overrides and launch a new run after correcting the runtime configuration.',
+      'execution-identity-instance-changed':
+        'The OpenCode server instance changed during identity verification.',
+      'execution-identity-instance-changed__hint':
+        'Check for runtime replacement or interference, then launch a new run.',
+      'execution-identity-source-changed': 'The workspace identity surface changed during startup.',
+      'execution-identity-source-changed__hint':
+        'Stop concurrent configuration changes and launch a new run.',
+      'execution-identity-skill-mismatch':
+        'A selected managed skill changed while its immutable snapshot was being prepared.',
+      'execution-identity-skill-mismatch__hint':
+        'Finish the skill update, reload the agent configuration, and launch a new run.',
+      'execution-identity-session-mismatch':
+        'The OpenCode session does not match this task run’s sealed identity.',
+      'execution-identity-session-mismatch__hint':
+        'Launch a fresh session; do not reuse a session created outside this task chain.',
+      'execution-identity-session-owned':
+        'The OpenCode session is already leased by another active run.',
+      'execution-identity-session-owned__hint':
+        'Wait for the active run to finish or repair its lifecycle before resuming.',
+      'execution-identity-control-failed':
+        'The verified launcher and scheduler could not complete their control handshake.',
+      'execution-identity-control-failed__hint':
+        'Inspect daemon diagnostics and launch a new run after the control failure is resolved.',
+      'execution-identity-stream-failed':
+        'The verified OpenCode event stream violated the expected protocol.',
+      'execution-identity-stream-failed__hint':
+        'Inspect runtime diagnostics and launch a new run; automatic retry is disabled.',
+      'execution-identity-timeout': 'OpenCode identity verification or direct execution timed out.',
+      'execution-identity-timeout__hint':
+        'Check the provider and host health, then launch a new run.',
+      'execution-identity-store-unsafe':
+        'The private OpenCode session store failed its safety check.',
+      'execution-identity-store-unsafe__hint':
+        'Repair or remove the reported private store after confirming no run is active.',
       summary: {
         snapshotLost: "The task's workspace snapshot is gone; it cannot continue in place.",
         snapshotInvalid: "The task's workspace snapshot is no longer valid.",
@@ -3881,6 +3957,66 @@ export const enUS: Resources = {
     'ws-unknown-channel': 'Unknown live channel.',
     'internal-error': 'Internal server error.',
     'internal-error__hint': 'Retry later; if it persists, check the daemon logs.',
+    // RFC-224: API/save/probe surfaces reuse the same stable copy as task failures.
+    'execution-identity-untrusted-binary': '$t(tasks.failure.execution-identity-untrusted-binary)',
+    'execution-identity-untrusted-binary__hint':
+      '$t(tasks.failure.execution-identity-untrusted-binary__hint)',
+    'execution-identity-sandbox-required': '$t(tasks.failure.execution-identity-sandbox-required)',
+    'execution-identity-sandbox-required__hint':
+      '$t(tasks.failure.execution-identity-sandbox-required__hint)',
+    'execution-identity-project-config-unsupported':
+      '$t(tasks.failure.execution-identity-project-config-unsupported)',
+    'execution-identity-project-config-unsupported__hint':
+      '$t(tasks.failure.execution-identity-project-config-unsupported__hint)',
+    'execution-identity-plugin-unsupported':
+      '$t(tasks.failure.execution-identity-plugin-unsupported)',
+    'execution-identity-plugin-unsupported__hint':
+      '$t(tasks.failure.execution-identity-plugin-unsupported__hint)',
+    'execution-identity-dependent-unsupported':
+      '$t(tasks.failure.execution-identity-dependent-unsupported)',
+    'execution-identity-dependent-unsupported__hint':
+      '$t(tasks.failure.execution-identity-dependent-unsupported__hint)',
+    'execution-identity-model-unresolved': '$t(tasks.failure.execution-identity-model-unresolved)',
+    'execution-identity-model-unresolved__hint':
+      '$t(tasks.failure.execution-identity-model-unresolved__hint)',
+    'execution-identity-auth-invalid': '$t(tasks.failure.execution-identity-auth-invalid)',
+    'execution-identity-auth-invalid__hint':
+      '$t(tasks.failure.execution-identity-auth-invalid__hint)',
+    'execution-identity-provider-untrusted':
+      '$t(tasks.failure.execution-identity-provider-untrusted)',
+    'execution-identity-provider-untrusted__hint':
+      '$t(tasks.failure.execution-identity-provider-untrusted__hint)',
+    'execution-identity-bootstrap-failed': '$t(tasks.failure.execution-identity-bootstrap-failed)',
+    'execution-identity-bootstrap-failed__hint':
+      '$t(tasks.failure.execution-identity-bootstrap-failed__hint)',
+    'execution-identity-mismatch': '$t(tasks.failure.execution-identity-mismatch)',
+    'execution-identity-mismatch__hint': '$t(tasks.failure.execution-identity-mismatch__hint)',
+    'execution-identity-instance-changed': '$t(tasks.failure.execution-identity-instance-changed)',
+    'execution-identity-instance-changed__hint':
+      '$t(tasks.failure.execution-identity-instance-changed__hint)',
+    'execution-identity-source-changed': '$t(tasks.failure.execution-identity-source-changed)',
+    'execution-identity-source-changed__hint':
+      '$t(tasks.failure.execution-identity-source-changed__hint)',
+    'execution-identity-skill-mismatch': '$t(tasks.failure.execution-identity-skill-mismatch)',
+    'execution-identity-skill-mismatch__hint':
+      '$t(tasks.failure.execution-identity-skill-mismatch__hint)',
+    'execution-identity-session-mismatch': '$t(tasks.failure.execution-identity-session-mismatch)',
+    'execution-identity-session-mismatch__hint':
+      '$t(tasks.failure.execution-identity-session-mismatch__hint)',
+    'execution-identity-session-owned': '$t(tasks.failure.execution-identity-session-owned)',
+    'execution-identity-session-owned__hint':
+      '$t(tasks.failure.execution-identity-session-owned__hint)',
+    'execution-identity-control-failed': '$t(tasks.failure.execution-identity-control-failed)',
+    'execution-identity-control-failed__hint':
+      '$t(tasks.failure.execution-identity-control-failed__hint)',
+    'execution-identity-stream-failed': '$t(tasks.failure.execution-identity-stream-failed)',
+    'execution-identity-stream-failed__hint':
+      '$t(tasks.failure.execution-identity-stream-failed__hint)',
+    'execution-identity-timeout': '$t(tasks.failure.execution-identity-timeout)',
+    'execution-identity-timeout__hint': '$t(tasks.failure.execution-identity-timeout__hint)',
+    'execution-identity-store-unsafe': '$t(tasks.failure.execution-identity-store-unsafe)',
+    'execution-identity-store-unsafe__hint':
+      '$t(tasks.failure.execution-identity-store-unsafe__hint)',
     'invalid-json': 'The request body is not valid JSON.',
     'invalid-body': 'Invalid request body.',
     'import-ref-unresolved': 'An imported resource reference is not available.',

@@ -113,11 +113,20 @@ describe('daemon start — HTTP contract on a shared bootstrapped daemon (M1 P-1
     expect(cfg.theme).toBe('system')
     expect(cfg.language).toBe('zh-CN')
 
-    // PUT a patch — change theme + maxConcurrentNodes.
+    // PUT a patch — change theme + maxConcurrentNodes. RFC-224 validates the
+    // complete merged system-agent execution policy on every config write, so
+    // make the three inherited OpenCode system profiles explicit in this fresh
+    // daemon fixture instead of relying on OpenCode's implicit model.
     const putRes = await fetch(`${url}api/config`, {
       method: 'PUT',
       headers: { ...auth, 'content-type': 'application/json' },
-      body: JSON.stringify({ theme: 'dark', maxConcurrentNodes: 8 }),
+      body: JSON.stringify({
+        theme: 'dark',
+        maxConcurrentNodes: 8,
+        memoryDistillModel: 'test/model',
+        commitPushModel: 'test/model',
+        mergeAgentModel: 'test/model',
+      }),
     })
     expect(putRes.status).toBe(200)
     const updated = (await putRes.json()) as Record<string, unknown>

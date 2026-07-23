@@ -41,6 +41,7 @@ import { cachedRepos, tasks as tasksTable } from '../src/db/schema'
 import { attachWorkspaceCleanupToMultipartError } from '../src/routes/tasks'
 import { createApp } from '../src/server'
 import { createAgent } from '../src/services/agent'
+import { createRuntime } from '../src/services/runtimeRegistry'
 import {
   createWorkflow,
   getWorkflow,
@@ -59,6 +60,7 @@ import { nonInteractiveGitEnv } from '../src/util/git'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const VALID_OPENCODE_RUNTIME = 'rfc224-test-opencode'
 const SYSTEM: WorkflowWritePrincipal = { kind: 'system', reason: 'rfc199-multipart-cleanup-test' }
 const GIT_TIMEOUT_MS = 10_000
 const NODE_TIMEOUT_MS = 10_000
@@ -192,6 +194,12 @@ async function buildHarness(): Promise<Harness> {
 
   const stubOpencode = makeStubOpencode(tmp)
   const db = createInMemoryDb(MIGRATIONS)
+  await createRuntime(db, {
+    name: VALID_OPENCODE_RUNTIME,
+    protocol: 'opencode',
+    model: 'openai/gpt-5.6',
+    binaryPath: stubOpencode,
+  })
 
   const reader = await createAgent(db, {
     name: 'reader',
@@ -206,6 +214,7 @@ async function buildHarness(): Promise<Harness> {
     plugins: [],
     frontmatterExtra: {},
     bodyMd: '',
+    runtime: VALID_OPENCODE_RUNTIME,
   })
 
   const valid = await createWorkflow(db, {
@@ -564,6 +573,12 @@ describe('RFC-107 — security: a cloned repo cannot make uploads escape the wor
   async function buildUploadApp(tmp: string): Promise<{ db: DbClient; app: Hono; wfId: string }> {
     const stubOpencode = makeStubOpencode(tmp)
     const db = createInMemoryDb(MIGRATIONS)
+    await createRuntime(db, {
+      name: VALID_OPENCODE_RUNTIME,
+      protocol: 'opencode',
+      model: 'openai/gpt-5.6',
+      binaryPath: stubOpencode,
+    })
     const reader = await createAgent(db, {
       name: 'reader',
       description: '',
@@ -577,6 +592,7 @@ describe('RFC-107 — security: a cloned repo cannot make uploads escape the wor
       plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
+      runtime: VALID_OPENCODE_RUNTIME,
     })
     const wf = await createWorkflow(db, {
       name: 'with-upload',
@@ -725,6 +741,12 @@ describe('RFC-107 — startTask preResolvedSource (resolve-once + redaction)', (
     git('-C', realRepo, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
 
     const stubOpencode = makeStubOpencode(tmp)
+    await createRuntime(db, {
+      name: VALID_OPENCODE_RUNTIME,
+      protocol: 'opencode',
+      model: 'openai/gpt-5.6',
+      binaryPath: stubOpencode,
+    })
     const echoer = await createAgent(db, {
       name: 'echoer',
       description: '',
@@ -738,6 +760,7 @@ describe('RFC-107 — startTask preResolvedSource (resolve-once + redaction)', (
       plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
+      runtime: VALID_OPENCODE_RUNTIME,
     })
     const wf = await createWorkflow(db, {
       name: 'trivial',

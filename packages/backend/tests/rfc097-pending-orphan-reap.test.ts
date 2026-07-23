@@ -22,6 +22,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { reapOrphanRuns } from '../src/services/orphans'
 import { resumeTask, startTaskWithLocalRepo } from '../src/services/task'
@@ -69,6 +70,7 @@ async function buildHarness(): Promise<Harness> {
   writeFileSync(doneMock, buildDoneMock())
 
   const db = createInMemoryDb(MIGRATIONS)
+  await seedTestDefaultOpencodeRuntime(db)
   const workerId = ulid()
   await db.insert(agents).values({
     id: workerId,

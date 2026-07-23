@@ -29,17 +29,18 @@ import { resolve } from 'node:path'
 // `Bun.spawn({ cwd, env })` call.
 // RFC-117: memoryDistiller.ts no longer assembles its own env block — it routes
 // through the runtime driver's buildSpawn, so PWD is set by buildOpencodeEnv
-// (locked by the driver site below). The distiller's PWD=cwd contract now holds
-// via (a) buildSpawn({ worktreePath: input.cwd }) and (b) Bun.spawn({ cwd:
-// input.cwd, env: plan.env }) — asserted separately below.
+// (locked by the driver site below). RFC-224 gives the system invocation its
+// own worktree subdirectory. The distiller's PWD=cwd contract now holds via
+// (a) buildSpawn({ worktreePath: worktreeDir }) and (b) Bun.spawn({
+// cwd: worktreeDir, env: plan.env }) — asserted separately below.
 const ENV_PWD_SITES = [
   // (file, identifier PWD is set from in the env block)
   ['src/services/runtime/opencode/spawn.ts', 'ctx.worktreePath'],
 ] as const
 const SPAWN_CWD_SITES = [
-  // (file, identifier the Bun.spawn cwd is read from)
-  ['src/services/runner.ts', 'opts.worktreePath'],
-  ['src/services/memoryDistiller.ts', 'input.cwd'],
+  // (file, identifier the Bun.spawn cwd is read from, env expression)
+  ['src/services/runner.ts', 'opts.worktreePath', 'env'],
+  ['src/services/memoryDistiller.ts', 'worktreeDir', 'plan.env'],
 ] as const
 
 describe('opencode spawn sites set PWD = cwd in env', () => {
@@ -64,20 +65,21 @@ describe('opencode spawn sites set PWD = cwd in env', () => {
     })
   }
 
-  // RFC-117: the distiller routes through the runtime driver's buildSpawn instead
-  // of an inline env block, so its PWD=cwd holds by passing worktreePath =
-  // input.cwd (→ buildOpencodeEnv sets PWD = ctx.worktreePath). Lock that wiring.
-  test('memoryDistiller.ts passes worktreePath: input.cwd into buildSpawn', () => {
+  // RFC-117/RFC-224: the distiller routes through the runtime plan instead of an
+  // inline env block. Its isolated worktreeDir is the single cwd handed to both
+  // plan construction and Bun.spawn, so buildOpencodeEnv sets the same PWD.
+  test('memoryDistiller.ts passes its isolated worktreeDir into buildSpawn', () => {
     const src = readFileSync(
       resolve(import.meta.dir, '..', 'src/services/memoryDistiller.ts'),
       'utf-8',
     )
     expect(src).toContain('buildSpawn(')
-    expect(src).toContain('worktreePath: input.cwd')
+    expect(src).toContain("const worktreeDir = join(input.cwd, 'worktree')")
+    expect(src).toContain('worktreePath: worktreeDir')
   })
 
-  for (const [rel, cwdExpr] of SPAWN_CWD_SITES) {
-    test(`${rel} passes cwd: ${cwdExpr} + env into Bun.spawn`, () => {
+  for (const [rel, cwdExpr, envExpr] of SPAWN_CWD_SITES) {
+    test(`${rel} passes cwd: ${cwdExpr} + ${envExpr} into Bun.spawn`, () => {
       // Why: a future refactor that changes the spawn cwd (say to
       // `runDir` or `repoPath`) but forgets to update PWD would silently
       // reintroduce the 1.14.51 stdout break. This grep keeps the Bun.spawn
@@ -90,7 +92,7 @@ describe('opencode spawn sites set PWD = cwd in env', () => {
         const block = m[1]!
         // Only enforce on the opencode spawn (skips git / tar / etc. blocks).
         if (!block.includes(`cwd: ${cwdExpr}`)) continue
-        expect(block).toContain('env,')
+        expect(block).toContain(envExpr === 'env' ? 'env,' : `env: ${envExpr}`)
         asserted = true
       }
       expect(asserted).toBe(true)

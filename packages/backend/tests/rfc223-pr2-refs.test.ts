@@ -27,6 +27,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { scheduledTasks } from '../src/db/schema'
 import { eq } from 'drizzle-orm'
 import { createAgent, deleteAgent, getAgentById, renameAgent } from '../src/services/agent'
+import { createRuntime } from '../src/services/runtimeRegistry'
 import { createScheduledTask } from '../src/services/scheduledTasks'
 import { createWorkgroup, getWorkgroupById } from '../src/services/workgroups'
 import { startWorkgroupTask } from '../src/services/workgroup/launch'
@@ -35,6 +36,7 @@ import { createUser } from '../src/services/users'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SPEC = { kind: 'daily', at: '09:00', timezone: 'UTC' } as const
+const VALID_OPENCODE_RUNTIME = 'rfc224-test-opencode'
 
 const AGENT_FIELDS = {
   description: '',
@@ -47,6 +49,15 @@ const AGENT_FIELDS = {
   plugins: [] as string[],
   frontmatterExtra: {},
   bodyMd: 'do it',
+  runtime: VALID_OPENCODE_RUNTIME,
+}
+
+async function seedValidOpencodeRuntime(db: DbClient): Promise<void> {
+  await createRuntime(db, {
+    name: VALID_OPENCODE_RUNTIME,
+    protocol: 'opencode',
+    model: 'openai/gpt-5.6',
+  })
 }
 
 function actor(id: string): Actor {
@@ -96,6 +107,7 @@ describe('RFC-223 PR-7 — scheduled payload writes + guards by id', () => {
   let ownerId: string
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
+    await seedValidOpencodeRuntime(db)
     ownerId = await seedOwner(db)
   })
 
@@ -185,6 +197,7 @@ describe('RFC-223 PR-7 — workgroup member writes and launch target use canonic
   let appHome: string
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
+    await seedValidOpencodeRuntime(db)
     appHome = mkdtempSync(join(tmpdir(), 'aw-rfc223pr2-'))
     process.env.AGENT_WORKFLOW_HOME = appHome
     writeFileSync(join(appHome, 'config.json'), JSON.stringify({ $schema_version: 1 }))

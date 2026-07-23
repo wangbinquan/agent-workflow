@@ -51,6 +51,11 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   'e2e/workflow-editor.spec.ts#skip': 1,
   'packages/backend/tests/git-repo-cache-submodule.test.ts#skipIf': 1,
   'packages/backend/tests/integration-chaos/chaos-scenarios.integration.test.ts#skipIf': 1,
+  // RFC-224: official-binary execution-identity preflight. It is opt-in only
+  // because the repository unit suite must not download/use an external
+  // OpenCode executable; integration-opencode.yml activates the gate on every
+  // relevant push/PR and performs no LLM/provider call.
+  'packages/backend/tests/integration-opencode/opencode-identity-preflight.integration.test.ts#skipIf': 1,
   'packages/backend/tests/integration-opencode/opencode-live.integration.test.ts#skipIf': 1,
   'packages/backend/tests/mcp-probe-http-integration.test.ts#skipIf': 1,
   'packages/backend/tests/mcp-probe-stdio-integration.test.ts#skipIf': 1,

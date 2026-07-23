@@ -20,6 +20,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workgroupAssignments, workgroupMessages } from '../src/db/schema'
 import { buildActor } from '../src/auth/actor'
 import { createAgent } from '../src/services/agent'
+import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createWorkgroup } from '../src/services/workgroups'
 import { startWorkgroupTask } from '../src/services/workgroup/launch'
 
@@ -47,6 +48,7 @@ function harness() {
 }
 
 async function seedAgent(db: DbClient, name: string): Promise<string> {
+  await seedTestDefaultOpencodeRuntime(db)
   const agent = await createAgent(db, {
     name,
     description: name,

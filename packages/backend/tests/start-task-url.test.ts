@@ -16,6 +16,7 @@ import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import { createInMemoryDb } from '../src/db/client'
 import { cachedRepos } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
+import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createWorkflow } from '../src/services/workflow'
 import { abortAllActiveTasks, isTaskActive, startTask as startTaskBase } from '../src/services/task'
 import { nonInteractiveGitEnv } from '../src/util/git'
@@ -100,6 +101,7 @@ async function setup() {
   const appHome = join(tmp, 'home')
   mkdirSync(appHome, { recursive: true })
   const db = createInMemoryDb(MIGRATIONS)
+  await seedTestDefaultOpencodeRuntime(db)
 
   // Build a fixture bare repo we can clone via file://.
   const working = join(tmp, 'src')

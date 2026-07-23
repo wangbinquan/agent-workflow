@@ -4,11 +4,11 @@
 // (GET /api/runtime/opencode) the homepage hero used to hardcode:
 //   1. every ENABLED registry runtime is probed live against the binary a real
 //      dispatch would use (row binaryPath > protocol default from config);
-//   2. availability is VERSION-GATE FREE (user decision 2026-07-02: a custom
-//      binary's version scheme is not comparable to the official minimum —
-//      `--version` exiting 0 is the whole test, and an unparseable version
-//      string still reads ok). The response deliberately has NO
-//      compatible/minVersion keys;
+//   2. after RFC-224 official-build admission, availability is VERSION-GATE
+//      FREE (`--version` exiting 0 is the whole status test, and an unparseable
+//      display string still reads ok). Deterministic fixture executables enter
+//      through the explicit test dependency below; production never does. The
+//      response deliberately has NO compatible/minVersion keys;
 //   3. the endpoint sits behind `runtime:read` like the legacy /api/runtime/*
 //      gate (it spawns registered binaries — a narrowed PAT must not reach it);
 //   4. a hung binary is SIGKILLed after the per-row timeout and reads as a
@@ -31,6 +31,7 @@ import {
 import { createSession } from '../src/auth/sessionStore'
 import { createPat } from '../src/auth/patStore'
 import { createUser } from '../src/services/users'
+import { FIXTURE_RUNTIME_DIAGNOSTICS } from './helpers/officialOpencodeFixture'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -85,7 +86,14 @@ async function makeHarness(): Promise<Harness> {
   applyConfigPatch(configPath, { opencodePath: opencodeBin, claudeCodePath: claudeBin })
   const db = createInMemoryDb(MIGRATIONS)
   await seedBuiltinRuntimes(db)
-  const app = createApp({ token: TOKEN, configPath, opencodeVersion: null, dbVersion: 1, db })
+  const app = createApp({
+    token: TOKEN,
+    configPath,
+    opencodeVersion: null,
+    dbVersion: 1,
+    db,
+    runtimeDiagnosticTestDependencies: FIXTURE_RUNTIME_DIAGNOSTICS,
+  })
   return { app, db, tmp, configPath, opencodeBin, claudeBin }
 }
 
@@ -102,6 +110,7 @@ interface StatusEntry {
   ok: boolean
   version: string | null
   isDefault: boolean
+  failureCode?: string
 }
 
 async function bodyOf(res: Response): Promise<{ runtimes: StatusEntry[] }> {
@@ -148,13 +157,45 @@ describe('RFC-135 GET /api/runtimes/status', () => {
     }
   })
 
+  test('official admission failure preserves the stable code and redacts arbitrary wire text', async () => {
+    const raw = 'RAW_BACKEND_SECRET /private/sealed/opencode'
+    const guardedApp = createApp({
+      token: TOKEN,
+      configPath: h.configPath,
+      opencodeVersion: null,
+      dbVersion: 1,
+      db: h.db,
+      runtimeDiagnosticTestDependencies: {
+        ...FIXTURE_RUNTIME_DIAGNOSTICS,
+        withOfficialOpencodeSnapshot: async <T>(
+          _command: readonly string[],
+          _callback: (snapshotPath: string) => Promise<T>,
+        ): Promise<T> => {
+          throw Object.assign(new Error(raw), {
+            code: 'execution-identity-source-changed' as const,
+          })
+        },
+      },
+    })
+
+    const res = await req(guardedApp)
+    expect(res.status).toBe(200)
+    const json = await bodyOf(res)
+    expect(RuntimesStatusResponseSchema.safeParse(json).success).toBe(true)
+    expect(json.runtimes.find((runtime) => runtime.name === 'opencode')).toMatchObject({
+      ok: false,
+      failureCode: 'execution-identity-source-changed',
+    })
+    expect(JSON.stringify(json)).not.toContain(raw)
+  })
+
   test('disabled runtime is excluded (enabled filter)', async () => {
     await setRuntimeEnabled(h.db, 'claude-code', false, 'opencode')
     const json = await bodyOf(await req(h.app))
     expect(json.runtimes.map((r) => r.name)).toEqual(['opencode'])
   })
 
-  test('custom fork row probes ITS binaryPath, not the protocol default', async () => {
+  test('fixture-admitted row probes ITS binaryPath, not the protocol default', async () => {
     const forkBin = join(h.tmp, 'my-fork')
     writeVersionBinary(forkBin, 'myfork 9.9.9')
     await createRuntime(h.db, { name: 'my-fork', protocol: 'opencode', binaryPath: forkBin })
@@ -168,8 +209,8 @@ describe('RFC-135 GET /api/runtimes/status', () => {
   })
 
   test('unparseable version string still reads ok (version-gate-free core)', async () => {
-    // The user-reported case: a custom binary whose --version output has no
-    // X.Y.Z shape. It RUNS, so it must read available — version is display-only.
+    // The fixture analogue of a binary whose --version output has no X.Y.Z
+    // shape. Once admitted, it RUNS, so version remains display-only.
     const weirdBin = join(h.tmp, 'weird-fork')
     writeVersionBinary(weirdBin, 'fork build fortytwo')
     await createRuntime(h.db, { name: 'weird-fork', protocol: 'opencode', binaryPath: weirdBin })

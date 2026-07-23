@@ -23,6 +23,7 @@ import { ulid } from 'ulid'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { docVersions, mcps, memories, nodeRuns, tasks, users, workflows } from '../src/db/schema'
 import { __setProbeOptionsForTesting } from '../src/routes/mcps'
 import { createApp } from '../src/server'
@@ -300,6 +301,7 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
     const root = mkdtempSync(join(tmpdir(), 'aw-rfc223-pr9-fusion-'))
     const appHome = join(root, 'home')
     const db = createInMemoryDb(MIGRATIONS)
+    await seedTestDefaultOpencodeRuntime(db)
     const deps: FusionDeps = {
       db,
       appHome,

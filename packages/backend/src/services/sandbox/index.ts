@@ -21,6 +21,8 @@ export interface SandboxCtx {
   taskWorktrees: readonly string[]
   /** THIS run's private dir. */
   runDir: string
+  /** Immutable artifacts below an allowed subtree, overlaid read-only. */
+  readOnlySubtrees?: readonly string[]
 }
 
 /** Should this spawn be wrapped at all? (off / unavailable → no) */
@@ -62,6 +64,7 @@ export function wrapSandbox(cmd: readonly string[], ctx: SandboxCtx | undefined)
     appHome: real(ctx.appHome),
     taskWorktrees: ctx.taskWorktrees.map(real),
     runDir: real(ctx.runDir),
+    readOnlySubtrees: ctx.readOnlySubtrees?.map(real),
   })
   if (ctx.status.mechanism === 'seatbelt') {
     return ['/usr/bin/sandbox-exec', '-p', renderSeatbeltProfile(policy), ...cmd]

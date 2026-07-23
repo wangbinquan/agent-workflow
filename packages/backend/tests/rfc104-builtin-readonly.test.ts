@@ -52,7 +52,7 @@ function buildApp(): { db: DbClient; app: Hono } {
   const db = createInMemoryDb(MIGRATIONS)
   const app = createApp({
     token: TOKEN,
-    configPath: '',
+    configPath: '/tmp/aw-rfc104-config-never-used.json',
     opencodeVersion: '1.15.0',
     dbVersion: 1,
     db,
@@ -352,6 +352,11 @@ describe('RFC-104 — route guards refuse mutating a built-in (even as admin)', 
   test('the guard does NOT over-block normal (non-built-in) resources', async () => {
     const { db, app } = buildApp()
     await seedFusionResources(db)
+    await createRuntime(db, {
+      name: 'opencode',
+      protocol: 'opencode',
+      model: 'openai/gpt-5.6',
+    })
     const created = await api(app, '/api/agents', {
       method: 'POST',
       body: JSON.stringify(agentPayload('my-coder')),

@@ -40,6 +40,7 @@ import {
   startAgentTask,
   validateAgentLaunchShape,
 } from '../src/services/agentLaunch'
+import { createRuntime } from '../src/services/runtimeRegistry'
 import { createScheduledTask } from '../src/services/scheduledTasks'
 import { abortAllActiveTasks, isTaskActive } from '../src/services/task'
 import { createUser } from '../src/services/users'
@@ -51,6 +52,7 @@ import {
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SPEC = { kind: 'daily', at: '09:00', timezone: 'UTC' } as const
+const VALID_OPENCODE_RUNTIME = 'rfc224-test-opencode'
 
 setDefaultTimeout(30_000)
 
@@ -65,6 +67,7 @@ const AGENT_FIELDS = {
   plugins: [] as string[],
   frontmatterExtra: {},
   bodyMd: 'do the thing',
+  runtime: VALID_OPENCODE_RUNTIME,
 }
 
 const PORTS = [
@@ -104,10 +107,19 @@ function makeTempDir(prefix: string): string {
   return dir
 }
 
+async function seedValidOpencodeRuntime(db: DbClient): Promise<void> {
+  await createRuntime(db, {
+    name: VALID_OPENCODE_RUNTIME,
+    protocol: 'opencode',
+    model: 'openai/gpt-5.6',
+  })
+}
+
 describe('B1/B2 — host snapshot shapes', () => {
   let db: DbClient
-  beforeEach(() => {
+  beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
+    await seedValidOpencodeRuntime(db)
   })
 
   test('B1 ported snapshot: per-port input nodes/edges + envelope template; validates', async () => {
@@ -292,6 +304,7 @@ describe('B3 — validateAgentLaunchShape matrix', () => {
 describe('B4 — startAgentTask ported happy path (scratch)', () => {
   test('port values land verbatim in task.inputs; snapshot frozen ported', async () => {
     const db = createInMemoryDb(MIGRATIONS)
+    await seedValidOpencodeRuntime(db)
     const appHome = makeTempDir('aw-rfc218-b4-')
     const ported = await createAgent(db, {
       ...AGENT_FIELDS,
@@ -317,6 +330,7 @@ describe('B4 — startAgentTask ported happy path (scratch)', () => {
 
   test('zero-port agents still launch exactly as RFC-165 (description port)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
+    await seedValidOpencodeRuntime(db)
     const appHome = makeTempDir('aw-rfc218-b4z-')
     const solo = await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
     const task = await startAgentTask(
@@ -344,6 +358,7 @@ async function buildHarness(): Promise<Harness> {
   const home = join(tmp, 'home')
   process.env.AGENT_WORKFLOW_HOME = home
   const db = createInMemoryDb(MIGRATIONS)
+  await seedValidOpencodeRuntime(db)
   const agent = await createAgent(db, {
     ...AGENT_FIELDS,
     name: 'uploader',
@@ -459,6 +474,7 @@ describe('B7 — scheduled save gate (design P2-2)', () => {
   let ownerId: string
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
+    await seedValidOpencodeRuntime(db)
     const owner = await createUser(db, {
       username: 'owner',
       displayName: 'O',

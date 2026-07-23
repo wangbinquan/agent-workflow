@@ -32,6 +32,7 @@ import { agents, scheduledTasks, tasks } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { createAgent } from '../src/services/agent'
 import { buildScheduleLaunch } from '../src/services/scheduleLaunch'
+import { createRuntime } from '../src/services/runtimeRegistry'
 import {
   createScheduledTask,
   fireSchedule,
@@ -52,6 +53,7 @@ const T6_ACTOR = buildActor({
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const SPEC = { kind: 'daily', at: '09:00', timezone: 'UTC' } as const
+const VALID_OPENCODE_RUNTIME = 'rfc224-test-opencode'
 
 const AGENT_FIELDS = {
   description: '',
@@ -64,6 +66,15 @@ const AGENT_FIELDS = {
   plugins: [] as string[],
   frontmatterExtra: {},
   bodyMd: 'do it',
+  runtime: VALID_OPENCODE_RUNTIME,
+}
+
+async function seedValidOpencodeRuntime(db: DbClient): Promise<void> {
+  await createRuntime(db, {
+    name: VALID_OPENCODE_RUNTIME,
+    protocol: 'opencode',
+    model: 'openai/gpt-5.6',
+  })
 }
 
 function actorFor(id: string, role: 'admin' | 'user' = 'admin'): Actor {
@@ -88,6 +99,7 @@ describe('RFC-165 §9b — create/update by kind (K1/K2/K3/K7)', () => {
   let ownerId: string
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
+    await seedValidOpencodeRuntime(db)
     ownerId = await seedOwner(db)
   })
 
@@ -375,6 +387,7 @@ describe('RFC-165 §9b — fire dispatch by kind (K4/K5)', () => {
   let ownerId: string
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
+    await seedValidOpencodeRuntime(db)
     appHome = mkdtempSync(join(tmpdir(), 'aw-rfc165-kinds-'))
     process.env.AGENT_WORKFLOW_HOME = appHome
     writeFileSync(join(appHome, 'config.json'), JSON.stringify({ $schema_version: 1 }))

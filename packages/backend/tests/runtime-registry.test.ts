@@ -168,6 +168,27 @@ describe('updateRuntime / deleteRuntime guards (RFC-112 PR-A)', () => {
     expect(updated.protocol).toBe('opencode') // immutable
   })
 
+  test('execution-profile changes clear a stale smoke receipt, while a no-op preserves it', async () => {
+    const receipt = JSON.stringify({ outcome: 'conforms', conforms: true })
+    await updateRuntime(db, 'my-oc', { lastProbeJson: receipt })
+
+    const unchanged = await updateRuntime(db, 'my-oc', { binaryPath: '/a' })
+    expect(unchanged.lastProbeJson).toBe(receipt)
+    expect(unchanged.probeFence).toBe(0)
+
+    const changed = await updateRuntime(db, 'my-oc', { model: 'openai/gpt-5.6' })
+    expect(changed.lastProbeJson).toBeNull()
+    expect(changed.probeFence).toBe(1)
+
+    const freshReceipt = JSON.stringify({ outcome: 'auth-missing', conforms: false })
+    const changedWithFreshReceipt = await updateRuntime(db, 'my-oc', {
+      model: 'openai/gpt-5.7',
+      lastProbeJson: freshReceipt,
+    })
+    expect(changedWithFreshReceipt.lastProbeJson).toBe(freshReceipt)
+    expect(changedWithFreshReceipt.probeFence).toBe(2)
+  })
+
   test('delete blocked while an agent references it', async () => {
     await insertAgent(db, 'auditor', 'my-oc')
     await expect(deleteRuntime(db, 'my-oc', {})).rejects.toMatchObject({ code: 'runtime-in-use' })

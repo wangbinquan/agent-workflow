@@ -44,6 +44,7 @@ import { getRuntime } from './runtimeRegistry'
 import { isAgentLaunching } from './agentLaunchReservation'
 import { isOwnerNameUniqueViolation, ownerScopedNameWhere } from './ownerScopedName'
 import { assertRefsUsableInTx } from './resourceRefs'
+import { assertAgentExecutionPolicy } from './executionPolicy'
 
 type AgentRow = typeof agents.$inferSelect
 
@@ -81,6 +82,8 @@ export async function createAgent(
     id?: string
     /** Deterministic race-test seam after preflight, before the final dbTxSync. */
     beforeWriteTransaction?: () => void | Promise<void>
+    /** RFC-224 production save gate; framework seeders/tests may omit it. */
+    executionPolicy?: { defaultRuntime?: string | null }
   },
 ): Promise<Agent> {
   const ownerUserId = opts?.ownerUserId ?? null
@@ -137,6 +140,17 @@ export async function createAgent(
   // or typo'd runtime (e.g. `claude_code`) that saves fine but silently falls back
   // to built-in opencode at dispatch — a hard-to-detect runtime/profile drift.
   await validateRuntimeReference(db, input.runtime)
+  if (opts?.executionPolicy !== undefined) {
+    await assertAgentExecutionPolicy(
+      db,
+      {
+        ...(input.runtime !== undefined ? { runtime: input.runtime } : {}),
+        plugins: pluginIds,
+        dependsOn: dependsOnIds,
+      },
+      opts.executionPolicy.defaultRuntime,
+    )
+  }
 
   const now = Date.now()
   // RFC-005: outputKinds is a sidecar map ported through `frontmatter_extra`
@@ -229,6 +243,8 @@ export async function updateAgent(
   hooks?: {
     /** Deterministic race-test seam after preflight, before the final dbTxSync. */
     beforeWriteTransaction?: () => void | Promise<void>
+    /** RFC-224 production save gate; service-only maintenance callers may omit it. */
+    executionPolicy?: { defaultRuntime?: string | null }
   },
 ): Promise<Agent> {
   const existing = await getAgentById(db, id)
@@ -281,6 +297,18 @@ export async function updateAgent(
   // runtime is allowed (D6); only a CHANGED pin must target an enabled runtime.
   if (patch.runtime !== undefined) {
     await validateRuntimeReference(db, patch.runtime, existing.runtime)
+  }
+  if (hooks?.executionPolicy !== undefined) {
+    const nextRuntime = patch.runtime !== undefined ? patch.runtime : existing.runtime
+    await assertAgentExecutionPolicy(
+      db,
+      {
+        ...(nextRuntime !== undefined ? { runtime: nextRuntime } : {}),
+        plugins: pluginIds ?? existing.plugins,
+        dependsOn: dependsOnIds ?? existing.dependsOn,
+      },
+      hooks.executionPolicy.defaultRuntime,
+    )
   }
 
   const set: Partial<typeof agents.$inferInsert> = {}

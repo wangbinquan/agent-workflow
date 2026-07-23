@@ -10,7 +10,8 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { smokeRuntime } from '../src/services/runtimeSmoke'
+import { finalizeSmokeAttempt, smokeRuntime, smokeSandboxCtx } from '../src/services/runtimeSmoke'
+import { setSandboxProvider } from '../src/services/sandbox'
 
 const MOCK_CLAUDE = resolve(import.meta.dir, 'fixtures', 'mock-claude.ts')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
@@ -39,9 +40,120 @@ const SET_ENV_KEYS = [
 ]
 afterEach(() => {
   for (const k of SET_ENV_KEYS) delete process.env[k]
+  setSandboxProvider(null)
+})
+
+describe('RFC-224 smoke store-destruction barrier', () => {
+  test('verified system store is an explicit RW sandbox subtree under shadowed appHome', () => {
+    setSandboxProvider({
+      mode: 'enforce',
+      status: { mechanism: 'seatbelt', available: true, detail: null },
+      appHome: '/home/aw',
+    })
+    const ctx = smokeSandboxCtx('/work/attempt', '/work/run', {
+      cmd: ['/bin/echo'],
+      env: {},
+      sessionStore: {
+        root: '/home/aw/opencode-stores/system-ephemeral/invocation',
+        dbPath: '/home/aw/opencode-stores/system-ephemeral/invocation/opencode.db',
+        persistent: false,
+      },
+    })
+    expect(ctx?.taskWorktrees).toEqual([
+      '/work/attempt',
+      '/home/aw/opencode-stores/system-ephemeral/invocation',
+    ])
+  })
+
+  test('never-settling child is bounded and strands cleanup/attemptDir after TERM → KILL', async () => {
+    const signals: string[] = []
+    let cleanupCalled = false
+    let removeCalled = false
+    let unrefCalled = false
+    const startedAt = Date.now()
+
+    const safe = await finalizeSmokeAttempt({
+      child: {
+        exited: new Promise<number>(() => {}),
+        unref: () => {
+          unrefCalled = true
+        },
+      },
+      childReaped: false,
+      killChild: (signal) => signals.push(signal),
+      cleanup: async () => {
+        cleanupCalled = true
+      },
+      removeAttemptDir: () => {
+        removeCalled = true
+      },
+      termGraceMs: 5,
+      reapDeadlineMs: 5,
+    })
+
+    expect(Date.now() - startedAt).toBeLessThan(500)
+    expect(safe).toBe(false)
+    expect(signals).toEqual(['SIGTERM', 'SIGKILL'])
+    expect(unrefCalled).toBe(true)
+    expect(cleanupCalled).toBe(false)
+    expect(removeCalled).toBe(false)
+  })
+
+  test('plan cleanup failure is a hard barrier before outer attemptDir removal', async () => {
+    const order: string[] = []
+    const safe = await finalizeSmokeAttempt({
+      child: { exited: Promise.resolve(0) },
+      childReaped: true,
+      killChild: (signal) => order.push(signal),
+      cleanup: async () => {
+        order.push('cleanup')
+        throw new Error('store lock still live')
+      },
+      removeAttemptDir: () => {
+        order.push('remove')
+      },
+    })
+
+    expect(safe).toBe(false)
+    expect(order).toEqual(['SIGKILL', 'cleanup'])
+  })
+
+  test('reaped child crosses cleanup then outer removal in that exact order', async () => {
+    const order: string[] = []
+    const safe = await finalizeSmokeAttempt({
+      child: { exited: Promise.resolve(0) },
+      childReaped: true,
+      killChild: (signal) => order.push(signal),
+      cleanup: async () => {
+        order.push('cleanup')
+      },
+      removeAttemptDir: () => {
+        order.push('remove')
+      },
+    })
+
+    expect(safe).toBe(true)
+    expect(order).toEqual(['SIGKILL', 'cleanup', 'remove'])
+  })
 })
 
 describe('smokeRuntime (RFC-112 PR-B)', () => {
+  test('production OpenCode smoke fails closed when the verified sandbox is unavailable', async () => {
+    const r = await smokeRuntime({
+      protocol: 'opencode',
+      binaryPath: '/bin/echo',
+      model: 'openai/gpt-5',
+      timeoutMs: SMOKE_TIMEOUT,
+    })
+    expect(r).toMatchObject({
+      outcome: 'execution-identity-failed',
+      conforms: false,
+      detail: 'execution-identity-sandbox-required',
+      failureCode: 'execution-identity-sandbox-required',
+      exitCode: null,
+    })
+  })
+
   test(
     'claude binary that echoes the prompt + emits a session → conforms',
     async () => {
@@ -69,6 +181,7 @@ describe('smokeRuntime (RFC-112 PR-B)', () => {
       process.env.MOCK_OPENCODE_EMIT_SESSION_ID = '1'
       const r = await smokeRuntime({
         protocol: 'opencode',
+        testOnlyUnverifiedRuntime: true,
         binaryPath: wrapperFor(MOCK_OPENCODE),
         timeoutMs: SMOKE_TIMEOUT,
       })
@@ -94,6 +207,7 @@ describe('smokeRuntime (RFC-112 PR-B)', () => {
       process.env.MOCK_OPENCODE_REQUIRE_CONFIG_DIR_EXISTS = '1'
       const r = await smokeRuntime({
         protocol: 'opencode',
+        testOnlyUnverifiedRuntime: true,
         binaryPath: wrapperFor(MOCK_OPENCODE),
         timeoutMs: SMOKE_TIMEOUT,
       })
@@ -235,6 +349,7 @@ describe('smokeRuntime (RFC-112 PR-B)', () => {
     async () => {
       const r = await smokeRuntime({
         protocol: 'opencode',
+        testOnlyUnverifiedRuntime: true,
         binaryPath: '/definitely/not/a/real/binary/aw-xyz',
         timeoutMs: SMOKE_TIMEOUT,
       })

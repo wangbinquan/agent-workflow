@@ -7,6 +7,7 @@ import type { Hono } from 'hono'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { workflows } from '../src/db/schema'
 import { createApp } from '../src/server'
 import {
@@ -30,8 +31,9 @@ const T6_ACTOR = buildActor({
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
-function buildHarness(): { db: DbClient; app: Hono } {
+async function buildHarness(): Promise<{ db: DbClient; app: Hono }> {
   const db = createInMemoryDb(MIGRATIONS)
+  await seedTestDefaultOpencodeRuntime(db)
   const app = createApp({
     token: TOKEN,
     configPath: '/tmp/aw-test-config-never-used.json',
@@ -448,8 +450,8 @@ describe('agent service', () => {
 describe('agent HTTP routes', () => {
   let app: Hono
 
-  beforeEach(() => {
-    ;({ app } = buildHarness())
+  beforeEach(async () => {
+    ;({ app } = await buildHarness())
   })
 
   test('POST /api/agents creates and returns 201', async () => {

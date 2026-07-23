@@ -30,6 +30,7 @@ import {
   updateScheduledTask,
 } from '@/services/scheduledTasks'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import { loadConfig } from '@/config'
 
 /** Write authority: owner or a resource admin (admin OR manager — RFC-222 D2). */
 function requireWriteAccess(actor: Actor, row: ScheduledTask): void {
@@ -100,7 +101,10 @@ export function mountScheduledTaskRoutes(app: Hono, deps: AppDeps): void {
         issues: parsed.error.issues,
       })
     }
-    const created = await createScheduledTask(deps.db, parsed.data, { actor: actorOf(c) })
+    const created = await createScheduledTask(deps.db, parsed.data, {
+      actor: actorOf(c),
+      defaultRuntime: loadConfig(deps.configPath).defaultRuntime,
+    })
     return c.json(created, 201)
   })
 
@@ -126,7 +130,10 @@ export function mountScheduledTaskRoutes(app: Hono, deps: AppDeps): void {
         issues: parsed.error.issues,
       })
     }
-    const updated = await updateScheduledTask(deps.db, existing.id, parsed.data, { actor })
+    const updated = await updateScheduledTask(deps.db, existing.id, parsed.data, {
+      actor,
+      defaultRuntime: loadConfig(deps.configPath).defaultRuntime,
+    })
     return c.json(updated)
   })
 
@@ -148,7 +155,12 @@ export function mountScheduledTaskRoutes(app: Hono, deps: AppDeps): void {
     const existing = await loadVisible(deps, actor, c.req.param('id'))
     requireWriteAccess(actor, existing)
     const launch = deps.buildScheduleLaunch ?? buildScheduleLaunch(deps.db, deps.configPath)
-    const result = await runScheduleNow(deps.db, existing.id, launch)
+    const result = await runScheduleNow(
+      deps.db,
+      existing.id,
+      launch,
+      loadConfig(deps.configPath).defaultRuntime,
+    )
     return c.json(result, 201)
   })
 }
