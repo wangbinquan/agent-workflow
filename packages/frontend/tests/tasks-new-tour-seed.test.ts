@@ -21,8 +21,8 @@ describe('RFC-211 task wizard tour param', () => {
   ) => Record<string, unknown>
 
   test('the exact tour literal is accepted and carried through', () => {
-    const out = validate({ kind: 'agent', agent: 'my-coder', tour: 'first-task' })
-    expect(out).toMatchObject({ kind: 'agent', agent: 'my-coder', tour: 'first-task' })
+    const out = validate({ kind: 'agent', agentId: 'agent-1', tour: 'first-task' })
+    expect(out).toMatchObject({ kind: 'agent', agentId: 'agent-1', tour: 'first-task' })
   })
 
   test('any other tour value is dropped (only first-task is a real mode)', () => {

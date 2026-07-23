@@ -8,7 +8,7 @@
 //                        launch + secondary save-as-scheduled — swapped when
 //                        `?schedule=1`)
 //
-// Deep links (`?kind=agent&agent=auditor`) pre-fill Step 1 and land on Step 2
+// Deep links (`?kind=agent&agentId=<id>`) pre-fill Step 1 and land on Step 2
 // (D9). `?editScheduled=<id>` turns the wizard into the schedule's config
 // editor: kind + object lock, every field seeds from the stored payload
 // (kind-aware, RFC-159 absorbed), and Step 4's single button PUTs the rebuilt
@@ -52,6 +52,7 @@ import { UploadPicker } from '@/components/launch/UploadPicker'
 import { useActor } from '@/hooks/useActor'
 import { useUserLookup } from '@/hooks/useUserLookup'
 import { resolveUrlRepoPath, validateRepoUrl } from '@/lib/launch-repo-source'
+import { resourceOptionLabel } from '@/lib/resource-option-label'
 import {
   buildAgentStartBody,
   buildAgentStartFormData,
@@ -75,12 +76,12 @@ import { Route as RootRoute } from './__root'
 
 interface TaskWizardSearch {
   kind?: WizardKind
-  /** Deep-link object refs — one per kind (workflow id / agent name / group name). */
+  /** Deep-link object refs — canonical ids for all three resource kinds. */
   workflow?: string
   /** RFC-199: exact editor revision handed to the launch wizard. */
   workflowVersion?: number
-  agent?: string
-  workgroup?: string
+  agentId?: string
+  workgroupId?: string
   /** RFC-225: exact autosaved workgroup revision handed off by the editor. */
   workgroupVersion?: number
   /** `?schedule=1` — scheduled mode: save-as-scheduled becomes the primary action. */
@@ -106,7 +107,13 @@ export const TaskWizardRoute = createRoute({
     const out: TaskWizardSearch = {}
     if (raw.kind === 'workflow' || raw.kind === 'agent' || raw.kind === 'workgroup')
       out.kind = raw.kind
-    for (const k of ['workflow', 'agent', 'workgroup', 'editScheduled', 'relaunchFrom'] as const) {
+    for (const k of [
+      'workflow',
+      'agentId',
+      'workgroupId',
+      'editScheduled',
+      'relaunchFrom',
+    ] as const) {
       const v = raw[k]
       if (typeof v === 'string' && v.length > 0) out[k] = v
     }
@@ -164,28 +171,21 @@ function TaskWizardPage() {
     search.kind === 'workflow'
       ? search.workflow
       : search.kind === 'agent'
-        ? search.agent
+        ? search.agentId
         : search.kind === 'workgroup'
-          ? search.workgroup
+          ? search.workgroupId
           : undefined
   const [kind, setKind] = useState<WizardKind>(search.kind ?? 'agent')
   const [workflowId, setWorkflowId] = useState(
     search.kind === 'workflow' ? (search.workflow ?? '') : '',
   )
-  const [agentName, setAgentName] = useState(search.kind === 'agent' ? (search.agent ?? '') : '')
-  const [workgroupName, setWorkgroupName] = useState(
-    search.kind === 'workgroup' ? (search.workgroup ?? '') : '',
+  const [agentId, setAgentId] = useState(search.kind === 'agent' ? (search.agentId ?? '') : '')
+  const [workgroupId, setWorkgroupId] = useState(
+    search.kind === 'workgroup' ? (search.workgroupId ?? '') : '',
   )
-  // RFC-175 (§2b/§2e, R4-F2/R8-F3): the CAPTURED subject id for the relaunch OCC
-  // guard — set at seed-after-verify or explicit re-pick, NOT re-derived from the
-  // live inventory each render (a background refresh must not silently adopt a
-  // same-name replacement's id). undefined ⇒ no guard sent (fresh pick, or a
-  // historical task with no stored id → best-effort by name).
-  const [selectedWorkgroupId, setSelectedWorkgroupId] = useState<string | undefined>(undefined)
   const [selectedWorkgroupVersion, setSelectedWorkgroupVersion] = useState<number | undefined>(
     search.kind === 'workgroup' ? search.workgroupVersion : undefined,
   )
-  const [selectedAgentId, setSelectedAgentId] = useState<string | undefined>(undefined)
   // RFC-175 + RFC-199: every immediate WORKFLOW launch captures the exact
   // `workflows.version` its inputs were normalized against. Editor deep links
   // additionally require their validated version to match the first detail
@@ -339,8 +339,8 @@ function TaskWizardPage() {
   // id capture / collaborators / step — those stay path-specific).
   const applyWizardSeed = (seed: WizardSeed): void => {
     setWorkflowId(seed.workflowId ?? '')
-    setAgentName(seed.agentName ?? '')
-    setWorkgroupName(seed.workgroupName ?? '')
+    setAgentId(seed.agentId ?? '')
+    setWorkgroupId(seed.workgroupId ?? '')
     setSpace(seed.space)
     setTaskName(seed.taskName)
     setInputs(seed.inputs)
@@ -462,6 +462,11 @@ function TaskWizardPage() {
     // below, so no render sees relaunchApplied=true before the seed is applied).
     setRelaunchApplied(true)
 
+    // Preserve the source execution kind even when an old row has no canonical
+    // subject id. The seed then fails closed with a blank picker in the RIGHT
+    // kind, so the user can explicitly choose a current resource; it must not
+    // silently fall back to the wizard's default agent kind.
+    setKind(kind)
     const { payload, spaceResolvable } = taskToLaunchPayload(task)
     const seed = payloadToWizardSeed(kind, payload)
     if (seed === null) {
@@ -470,7 +475,6 @@ function TaskWizardPage() {
       setMaxVisited(STEP_CONFIRM)
       return
     }
-    setKind(kind)
     // Impl-gate F2: an unresolvable space (internal/fusion, legacy path-mode with
     // no URL, or a task that failed during materialize and may hold only a repo
     // PREFIX) must NOT seed a partial/wrong space. Blank it to a single empty
@@ -479,29 +483,22 @@ function TaskWizardPage() {
     applyWizardSeed(spaceResolvable ? seed : { ...seed, space: defaultWizardSpace('remote') })
     setSpaceUnresolved(!spaceResolvable)
 
-    // Subject-identity guard + CAPTURED id (§4.7). Pre-select ONLY when the
-    // current same-named resource is the SAME one the task ran (id match); else
-    // clear + force an explicit re-pick — never target a same-name replacement.
+    // Subject identity is frozen as an id. Pre-select only when that exact row
+    // is still present in the visible inventory. Historical rows without an id
+    // fail closed and require an explicit current-resource pick; there is no
+    // name lookup or same-name replacement adoption.
     if (kind === 'workgroup') {
-      const cur = (workgroupsQ.data ?? []).find((g) => g.name === seed.workgroupName)
-      if (cur !== undefined && cur.id === task.workgroupId) {
-        setSelectedWorkgroupId(cur.id)
+      const cur = (workgroupsQ.data ?? []).find((g) => g.id === seed.workgroupId)
+      if (cur !== undefined) {
+        setWorkgroupId(cur.id)
         setSelectedWorkgroupVersion(cur.version)
       } else {
-        setWorkgroupName('')
-        setSelectedWorkgroupId(undefined)
+        setWorkgroupId('')
         setSelectedWorkgroupVersion(undefined)
       }
     } else if (kind === 'agent') {
-      const cur = (agentsQ.data ?? []).find((a) => a.name === seed.agentName)
-      if (task.sourceAgentId == null) {
-        setSelectedAgentId(undefined) // historical task: no id to verify → by name
-      } else if (cur !== undefined && cur.id === task.sourceAgentId) {
-        setSelectedAgentId(cur.id)
-      } else {
-        setAgentName('')
-        setSelectedAgentId(undefined)
-      }
+      const cur = (agentsQ.data ?? []).find((a) => a.id === seed.agentId)
+      setAgentId(cur?.id ?? '')
     }
 
     // Collaborators (§4.5, R3-F4): agent/workflow pre-fill the task's CURRENT
@@ -539,21 +536,27 @@ function TaskWizardPage() {
 
   // --- RFC-218: port-driven single-agent launch form -------------------------
   const selectedAgent =
-    kind === 'agent' && agentName !== ''
-      ? (agentsQ.data ?? []).find((a) => a.name === agentName)
+    kind === 'agent' && agentId !== ''
+      ? (agentsQ.data ?? []).find((a) => a.id === agentId)
       : undefined
+  const selectedWorkgroup =
+    kind === 'workgroup' && workgroupId !== ''
+      ? (workgroupsQ.data ?? []).find((group) => group.id === workgroupId)
+      : undefined
+  const agentName = selectedAgent?.name ?? agentId
+  const workgroupName = selectedWorkgroup?.name ?? workgroupId
   const agentLaunchForm = useMemo(
     () => (selectedAgent !== undefined ? deriveAgentLaunchForm(selectedAgent.inputs) : null),
     [selectedAgent],
   )
   const agentPorted = agentLaunchForm !== null
   const agentBlockers = agentLaunchForm?.blockers ?? []
-  // Design P1-5 barrier: with a deep-linked agent name, "row not loaded yet"
+  // Design P1-5 barrier: with a deep-linked agent id, "row not loaded yet"
   // is indistinguishable from "zero-port agent" — never guess the form shape
   // (a ported agent would reject the description body). Require a successful
   // list load AND a matching row before rendering step 3's content.
   const agentDataReady =
-    kind !== 'agent' || agentName === '' || (agentsQ.isSuccess && selectedAgent !== undefined)
+    kind !== 'agent' || agentId === '' || (agentsQ.isSuccess && selectedAgent !== undefined)
 
   // Seed the inputs map from the selected workflow's declared keys (merge:
   // stale keys drop, new keys start blank, user-typed values survive). The
@@ -645,12 +648,29 @@ function TaskWizardPage() {
   }, [kind, agentDataReady, agentLaunchForm])
 
   // --- Step 1 filtering (launchability projection) ---------------------------
+  const resourceOwners = useUserLookup([
+    ...(workflowsQ.data ?? []).map((workflow) => workflow.ownerUserId),
+    ...(agentsQ.data ?? []).map((agent) => agent.ownerUserId),
+    ...(workgroupsQ.data ?? []).map((group) => group.ownerUserId),
+  ])
   const workflowOptions = (workflowsQ.data ?? [])
-    .filter((w) => w.builtin !== true)
-    .map((w) => ({ value: w.id, label: w.name }))
+    .filter((workflow) => workflow.builtin !== true)
+    .map((workflow) => ({
+      value: workflow.id,
+      label: resourceOptionLabel(
+        workflow.name,
+        resourceOwners.get(workflow.ownerUserId)?.displayName ?? workflow.ownerUserId ?? undefined,
+      ),
+    }))
   const agentOptions = (agentsQ.data ?? [])
     .filter((a) => a.builtin !== true)
-    .map((a) => ({ value: a.name, label: a.name }))
+    .map((a) => ({
+      value: a.id,
+      label: resourceOptionLabel(
+        a.name,
+        resourceOwners.get(a.ownerUserId)?.displayName ?? a.ownerUserId ?? undefined,
+      ),
+    }))
   const workgroupOptions = (workgroupsQ.data ?? []).map((g) => {
     const readiness = workgroupLaunchReadiness(g)
     // RFC-187 TRAP-1 (Codex impl-gate P2): the ADVISORY tier must reach the
@@ -658,8 +678,11 @@ function TaskWizardPage() {
     // never blocks) but says so, instead of silently launching a group that
     // can only idle. Blocking reasons keep the disabled treatment.
     return {
-      value: g.name,
-      label: g.name,
+      value: g.id,
+      label: resourceOptionLabel(
+        g.name,
+        resourceOwners.get(g.ownerUserId)?.displayName ?? g.ownerUserId ?? undefined,
+      ),
       ...(readiness.ready
         ? readiness.warnings.length > 0
           ? { description: t('taskWizard.workgroupLeaderOnlyWarning') }
@@ -701,14 +724,8 @@ function TaskWizardPage() {
       />
     ) : kind === 'agent' ? (
       <Select
-        value={agentName}
-        onChange={(name) => {
-          setAgentName(name)
-          // RFC-175 (R8-F3): capture the picked agent's CURRENT id so an
-          // explicit re-pick sends the guard for the chosen agent (not a
-          // stale seeded id → no false 409).
-          setSelectedAgentId((agentsQ.data ?? []).find((a) => a.name === name)?.id)
-        }}
+        value={agentId}
+        onChange={setAgentId}
         options={agentOptions}
         searchable
         ariaLabel={objectFieldLabel}
@@ -717,11 +734,10 @@ function TaskWizardPage() {
       />
     ) : (
       <Select
-        value={workgroupName}
-        onChange={(name) => {
-          setWorkgroupName(name)
-          const selected = (workgroupsQ.data ?? []).find((group) => group.name === name)
-          setSelectedWorkgroupId(selected?.id)
+        value={workgroupId}
+        onChange={(nextWorkgroupId) => {
+          setWorkgroupId(nextWorkgroupId)
+          const selected = (workgroupsQ.data ?? []).find((group) => group.id === nextWorkgroupId)
           setSelectedWorkgroupVersion(selected?.version)
         }}
         options={workgroupOptions}
@@ -732,14 +748,15 @@ function TaskWizardPage() {
       />
     )
 
-  const selectedObject =
-    kind === 'workflow' ? workflowId : kind === 'agent' ? agentName : workgroupName
+  const selectedObject = kind === 'workflow' ? workflowId : kind === 'agent' ? agentId : workgroupId
   const selectedObjectLabel =
     kind === 'workflow'
       ? (workflowOptions.find((o) => o.value === workflowId)?.label ??
         workflowQ.data?.name ??
         workflowId)
-      : selectedObject
+      : kind === 'agent'
+        ? (agentOptions.find((option) => option.value === agentId)?.label ?? agentName)
+        : (workgroupOptions.find((option) => option.value === workgroupId)?.label ?? workgroupName)
 
   // --- Gating ---------------------------------------------------------------
   // Launch-form field defs: authored (workflow) or derived from the agent's
@@ -932,11 +949,10 @@ function TaskWizardPage() {
   // body ONLY, never into buildImmediateBody (scheduledEnvelope reuses that; a
   // persisted schedule must not carry a point-in-time guard — R6/R7-F1).
   const immediateGuards = (): Record<string, unknown> => {
-    if (kind === 'agent')
-      return selectedAgentId !== undefined ? { expectedAgentId: selectedAgentId } : {}
+    if (kind === 'agent') return agentId !== '' ? { expectedAgentId: agentId } : {}
     if (kind === 'workgroup')
       return {
-        ...(selectedWorkgroupId !== undefined ? { expectedWorkgroupId: selectedWorkgroupId } : {}),
+        ...(workgroupId !== '' ? { expectedWorkgroupId: workgroupId } : {}),
         ...(selectedWorkgroupVersion !== undefined
           ? { expectedWorkgroupVersion: selectedWorkgroupVersion }
           : {}),
@@ -954,7 +970,7 @@ function TaskWizardPage() {
         // Same "any upload def → multipart" rule as the workflow arm.
         if (agentPorted && (hasUploadInput || hasUploads)) {
           return api.postMultipart<Task>(
-            `/api/agents/${encodeURIComponent(agentName)}/tasks`,
+            `/api/agents/${encodeURIComponent(agentId)}/tasks`,
             buildAgentStartFormData(
               space,
               {
@@ -968,13 +984,13 @@ function TaskWizardPage() {
             ),
           )
         }
-        return api.post<Task>(`/api/agents/${encodeURIComponent(agentName)}/tasks`, {
+        return api.post<Task>(`/api/agents/${encodeURIComponent(agentId)}/tasks`, {
           ...buildImmediateBody(),
           ...immediateGuards(),
         })
       }
       if (kind === 'workgroup') {
-        return api.post<Task>(`/api/workgroups/${encodeURIComponent(workgroupName)}/tasks`, {
+        return api.post<Task>(`/api/workgroups/${encodeURIComponent(workgroupId)}/tasks`, {
           ...buildImmediateBody(),
           ...immediateGuards(),
         })
@@ -1044,7 +1060,7 @@ function TaskWizardPage() {
   }
 
   const scheduledEnvelope = () =>
-    buildScheduledEnvelope(kind, buildImmediateBody(), { agentName, workgroupName })
+    buildScheduledEnvelope(kind, buildImmediateBody(), { agentId, workgroupId })
 
   const saveConfig = useMutation({
     mutationFn: () =>
@@ -1315,16 +1331,15 @@ function TaskWizardPage() {
                   // content the user may have typed stays — it only goes on the
                   // wire for the active kind).
                   setWorkflowId('')
-                  setAgentName('')
-                  setWorkgroupName('')
+                  setAgentId('')
+                  setWorkgroupId('')
                   // RFC-175 (§4.5, R2-F2): clear seeded collaborators + captured
                   // subject ids on a kind switch — else a relaunch-seeded agent/
                   // workflow collaborator set would ride into a workgroup launch
                   // (which must NOT pre-fill collaborators), and a stale captured
                   // id would target the wrong subject.
                   setCollaborators([])
-                  setSelectedWorkgroupId(undefined)
-                  setSelectedAgentId(undefined)
+                  setSelectedWorkgroupVersion(undefined)
                   setNormalizedWorkflowRevision(null)
                   setWorkflowVersionMismatch(null)
                 }}

@@ -28,7 +28,7 @@ import { buildActor, type Actor } from '../src/auth/actor'
 import { createPat } from '../src/auth/patStore'
 import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, tasks } from '../src/db/schema'
+import { agents, scheduledTasks, tasks } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { createAgent } from '../src/services/agent'
 import { buildScheduleLaunch } from '../src/services/scheduleLaunch'
@@ -98,7 +98,7 @@ describe('RFC-165 §9b — create/update by kind (K1/K2/K3/K7)', () => {
         {
           name: 's',
           launchKind: 'agent',
-          launchPayload: { agentName: 'ghost', name: 't', description: 'd', scratch: true },
+          launchPayload: { agentId: 'ghost-id', name: 't', description: 'd', scratch: true },
           scheduleSpec: SPEC,
           enabled: true,
         },
@@ -106,8 +106,9 @@ describe('RFC-165 §9b — create/update by kind (K1/K2/K3/K7)', () => {
       ),
     ).rejects.toMatchObject({ code: 'agent-not-found' })
 
+    const builtinId = ulid()
     await db.insert(agents).values({
-      id: ulid(),
+      id: builtinId,
       name: 'sys',
       description: '',
       outputs: '[]',
@@ -128,7 +129,7 @@ describe('RFC-165 §9b — create/update by kind (K1/K2/K3/K7)', () => {
         {
           name: 's',
           launchKind: 'agent',
-          launchPayload: { agentName: 'sys', name: 't', description: 'd', scratch: true },
+          launchPayload: { agentId: builtinId, name: 't', description: 'd', scratch: true },
           scheduleSpec: SPEC,
           enabled: true,
         },
@@ -136,20 +137,29 @@ describe('RFC-165 §9b — create/update by kind (K1/K2/K3/K7)', () => {
       ),
     ).rejects.toMatchObject({ code: 'builtin-readonly' })
 
-    await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
+    const solo = await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
     const created = await createScheduledTask(
       db,
       {
         name: 'agent sched',
         launchKind: 'agent',
-        launchPayload: { agentName: 'solo', name: 't', description: 'd', scratch: true },
+        launchPayload: {
+          agentId: solo.id,
+          agentName: 'client-supplied-stale-name',
+          name: 't',
+          description: 'd',
+          scratch: true,
+        },
         scheduleSpec: SPEC,
         enabled: true,
       },
       { actor: actorFor(ownerId) },
     )
     expect(created.launchKind).toBe('agent')
-    expect((created.launchPayload as { agentName: string }).agentName).toBe('solo')
+    expect(created.launchPayload as { agentId: string; agentName: string }).toMatchObject({
+      agentId: solo.id,
+      agentName: 'solo',
+    })
     const row = await getScheduledTaskRow(db, created.id)
     expect(row!.launchKind).toBe('agent')
   })
@@ -161,7 +171,7 @@ describe('RFC-165 §9b — create/update by kind (K1/K2/K3/K7)', () => {
         {
           name: 's',
           launchKind: 'workgroup',
-          launchPayload: { workgroupName: 'nope', name: 't', goal: 'g', scratch: true },
+          launchPayload: { workgroupId: 'missing-id', name: 't', goal: 'g', scratch: true },
           scheduleSpec: SPEC,
           enabled: true,
         },
@@ -169,7 +179,8 @@ describe('RFC-165 §9b — create/update by kind (K1/K2/K3/K7)', () => {
       ),
     ).rejects.toMatchObject({ code: 'workgroup-not-found' })
 
-    await createWorkgroup(db, {
+    const a1 = await createAgent(db, { ...AGENT_FIELDS, name: 'a1' })
+    const squad = await createWorkgroup(db, {
       name: 'squad',
       description: '',
       instructions: '',
@@ -178,30 +189,40 @@ describe('RFC-165 §9b — create/update by kind (K1/K2/K3/K7)', () => {
       switches: { shareOutputs: true, directMessages: false, blackboard: false },
       maxRounds: 5,
       completionGate: false,
-      members: [{ memberType: 'agent', agentName: 'a1', displayName: 'lead', roleDesc: '' }],
+      members: [{ memberType: 'agent', agentId: a1.id, displayName: 'lead', roleDesc: '' }],
     })
     const created = await createScheduledTask(
       db,
       {
         name: 'wg sched',
         launchKind: 'workgroup',
-        launchPayload: { workgroupName: 'squad', name: 't', goal: 'g', scratch: true },
+        launchPayload: {
+          workgroupId: squad.id,
+          workgroupName: 'client-supplied-stale-name',
+          name: 't',
+          goal: 'g',
+          scratch: true,
+        },
         scheduleSpec: SPEC,
         enabled: true,
       },
       { actor: actorFor(ownerId) },
     )
     expect(created.launchKind).toBe('workgroup')
+    expect(created.launchPayload as { workgroupId: string; workgroupName: string }).toMatchObject({
+      workgroupId: squad.id,
+      workgroupName: 'squad',
+    })
   })
 
   test('K3 kind immutable on PUT; restating the same kind passes', async () => {
-    await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
+    const solo = await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
     const created = await createScheduledTask(
       db,
       {
         name: 'agent sched',
         launchKind: 'agent',
-        launchPayload: { agentName: 'solo', name: 't', description: 'd', scratch: true },
+        launchPayload: { agentId: solo.id, name: 't', description: 'd', scratch: true },
         scheduleSpec: SPEC,
         enabled: false,
       },
@@ -222,13 +243,13 @@ describe('RFC-165 §9b — create/update by kind (K1/K2/K3/K7)', () => {
   test('K8 update with a kind-mismatched payload → 422 scheduled-task-invalid (no 500)', async () => {
     // Implementation-gate P1: the service used to .parse() and let the raw
     // ZodError escape to the errorHandler as HTTP 500.
-    await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
+    const solo = await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
     const created = await createScheduledTask(
       db,
       {
         name: 'agent sched',
         launchKind: 'agent',
-        launchPayload: { agentName: 'solo', name: 't', description: 'd', scratch: true },
+        launchPayload: { agentId: solo.id, name: 't', description: 'd', scratch: true },
         scheduleSpec: SPEC,
         enabled: false,
       },
@@ -244,30 +265,32 @@ describe('RFC-165 §9b — create/update by kind (K1/K2/K3/K7)', () => {
     ).rejects.toMatchObject({ code: 'scheduled-task-invalid' })
   })
 
-  test('K9 agent rename/delete refuse while a schedule targets the name (P1 identity fix)', async () => {
-    await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
+  test('K9 agent rename stays id-stable; delete refuses while a schedule targets the id', async () => {
+    const solo = await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
     await createScheduledTask(
       db,
       {
         name: 'agent sched',
         launchKind: 'agent',
-        launchPayload: { agentName: 'solo', name: 't', description: 'd', scratch: true },
+        launchPayload: { agentId: solo.id, name: 't', description: 'd', scratch: true },
         scheduleSpec: SPEC,
         enabled: false,
       },
       { actor: actorFor(ownerId) },
     )
     const { deleteAgent, renameAgent } = await import('../src/services/agent')
-    await expect(renameAgent(db, 'solo', { newName: 'solo2' }, T6_ACTOR)).rejects.toMatchObject({
-      code: 'agent-scheduled-referenced',
+    expect(await renameAgent(db, solo.id, { newName: 'solo2' })).toMatchObject({
+      id: solo.id,
+      name: 'solo2',
     })
-    await expect(deleteAgent(db, 'solo', T6_ACTOR)).rejects.toMatchObject({
+    await expect(deleteAgent(db, solo.id, T6_ACTOR)).rejects.toMatchObject({
       code: 'agent-scheduled-referenced',
     })
   })
 
-  test('K10 workgroup rename/delete refuse while a schedule targets the name', async () => {
-    await createWorkgroup(db, {
+  test('K10 workgroup rename stays id-stable; delete refuses while a schedule targets the id', async () => {
+    const a1 = await createAgent(db, { ...AGENT_FIELDS, name: 'a1' })
+    const squad = await createWorkgroup(db, {
       name: 'squad',
       description: '',
       instructions: '',
@@ -276,42 +299,43 @@ describe('RFC-165 §9b — create/update by kind (K1/K2/K3/K7)', () => {
       switches: { shareOutputs: true, directMessages: false, blackboard: false },
       maxRounds: 5,
       completionGate: false,
-      members: [{ memberType: 'agent', agentName: 'a1', displayName: 'lead', roleDesc: '' }],
+      members: [{ memberType: 'agent', agentId: a1.id, displayName: 'lead', roleDesc: '' }],
     })
     await createScheduledTask(
       db,
       {
         name: 'wg sched',
         launchKind: 'workgroup',
-        launchPayload: { workgroupName: 'squad', name: 't', goal: 'g', scratch: true },
+        launchPayload: { workgroupId: squad.id, name: 't', goal: 'g', scratch: true },
         scheduleSpec: SPEC,
         enabled: false,
       },
       { actor: actorFor(ownerId) },
     )
-    const { deleteWorkgroup, getWorkgroup, renameWorkgroup } =
-      await import('../src/services/workgroups')
-    const group = await getWorkgroup(db, 'squad')
-    if (group === null) throw new Error('missing squad')
-    await expect(
-      renameWorkgroup(
-        db,
-        group.id,
-        {
-          newName: 'squad2',
-          expectedVersion: group.version,
-          clientMutationId: ulid(),
-        },
-        { kind: 'actor', actor: T6_ACTOR },
-      ),
-    ).rejects.toMatchObject({
-      code: 'workgroup-scheduled-referenced',
+    const { deleteWorkgroup, renameWorkgroup } = await import('../src/services/workgroups')
+    const renamed = await renameWorkgroup(
+      db,
+      squad.id,
+      {
+        newName: 'squad2',
+        expectedVersion: squad.version,
+        clientMutationId: ulid(),
+      },
+      { kind: 'actor', actor: T6_ACTOR },
+    )
+    expect(renamed).toMatchObject({
+      id: squad.id,
+      name: 'squad2',
     })
     await expect(
       deleteWorkgroup(
         db,
-        group.id,
-        { expectedVersion: group.version, clientMutationId: ulid(), confirm: group.name },
+        squad.id,
+        {
+          expectedVersion: renamed.version,
+          clientMutationId: ulid(),
+          confirmName: renamed.name,
+        },
         { kind: 'actor', actor: T6_ACTOR },
       ),
     ).rejects.toMatchObject({
@@ -359,18 +383,29 @@ describe('RFC-165 §9b — fire dispatch by kind (K4/K5)', () => {
   afterEach(() => rmSync(appHome, { recursive: true, force: true }))
 
   test('K4 agent row fires through startAgentTask (sourceAgentName + scheduled_task_id)', async () => {
-    await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
+    const solo = await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
     const created = await createScheduledTask(
       db,
       {
         name: 'agent sched',
         launchKind: 'agent',
-        launchPayload: { agentName: 'solo', name: 'nightly', description: 'd', scratch: true },
+        launchPayload: { agentId: solo.id, name: 'nightly', description: 'd', scratch: true },
         scheduleSpec: SPEC,
         enabled: true,
       },
       { actor: actorFor(ownerId) },
     )
+    // Display metadata can be stale/corrupt without changing identity. Fire
+    // must resolve solely by agentId and never fall back to this name.
+    await db
+      .update(scheduledTasks)
+      .set({
+        launchPayload: JSON.stringify({
+          ...(created.launchPayload as object),
+          agentName: 'definitely-not-solo',
+        }),
+      })
+      .where(eq(scheduledTasks.id, created.id))
     const row = (await getScheduledTaskRow(db, created.id))!
     const { taskId } = await fireSchedule(
       db,
@@ -386,8 +421,8 @@ describe('RFC-165 §9b — fire dispatch by kind (K4/K5)', () => {
   })
 
   test('K5 workgroup row fires through startWorkgroupTask (workgroupId stamped)', async () => {
-    await createAgent(db, { ...AGENT_FIELDS, name: 'a1' })
-    await createWorkgroup(db, {
+    const a1 = await createAgent(db, { ...AGENT_FIELDS, name: 'a1' })
+    const squad = await createWorkgroup(db, {
       name: 'squad',
       description: '',
       instructions: '',
@@ -396,19 +431,33 @@ describe('RFC-165 §9b — fire dispatch by kind (K4/K5)', () => {
       switches: { shareOutputs: true, directMessages: false, blackboard: false },
       maxRounds: 5,
       completionGate: false,
-      members: [{ memberType: 'agent', agentName: 'a1', displayName: 'lead', roleDesc: '' }],
+      members: [{ memberType: 'agent', agentId: a1.id, displayName: 'lead', roleDesc: '' }],
     })
     const created = await createScheduledTask(
       db,
       {
         name: 'wg sched',
         launchKind: 'workgroup',
-        launchPayload: { workgroupName: 'squad', name: 'nightly', goal: 'g', scratch: true },
+        launchPayload: {
+          workgroupId: squad.id,
+          name: 'nightly',
+          goal: 'g',
+          scratch: true,
+        },
         scheduleSpec: SPEC,
         enabled: true,
       },
       { actor: actorFor(ownerId) },
     )
+    await db
+      .update(scheduledTasks)
+      .set({
+        launchPayload: JSON.stringify({
+          ...(created.launchPayload as object),
+          workgroupName: 'definitely-not-squad',
+        }),
+      })
+      .where(eq(scheduledTasks.id, created.id))
     const row = (await getScheduledTaskRow(db, created.id))!
     const { taskId } = await fireSchedule(
       db,
@@ -578,5 +627,24 @@ describe('RFC-165 §9b — N1-r3 permission matrix over HTTP (K6)', () => {
       body: createBody(),
     })
     expect(adminCreate.status).toBe(201)
+  })
+
+  test('RFC-223 PR-7: name-only scheduled targets are rejected at the HTTP boundary', async () => {
+    for (const [launchKind, launchPayload] of [
+      ['agent', { agentName: 'legacy-agent-name', name: 't', description: 'd', scratch: true }],
+      ['workgroup', { workgroupName: 'legacy-group-name', name: 't', goal: 'g', scratch: true }],
+    ] as const) {
+      const res = await req('/api/scheduled-tasks', adminToken, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: `${launchKind} name-only`,
+          launchKind,
+          launchPayload,
+          scheduleSpec: SPEC,
+          enabled: false,
+        }),
+      })
+      expect(res.status).toBe(422)
+    }
   })
 })

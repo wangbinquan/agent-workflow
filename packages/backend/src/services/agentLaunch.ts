@@ -27,7 +27,7 @@ import {
 } from '@agent-workflow/shared'
 import { canViewResource } from '@/services/resourceAcl'
 import { assertNotBuiltin } from '@/services/systemResources'
-import { getAgent } from '@/services/agent'
+import { getAgentById } from '@/services/agent'
 import {
   cleanupMaterializedSpace,
   materializeSpace,
@@ -310,48 +310,45 @@ export function validateAgentLaunchShape(
  * whole preflight chain — ACL → OCC → reservation → recheck → blockers +
  * shape matrix → F14 → upload-plan validation — runs BEFORE any filesystem
  * side effect; only then is the space materialized and files landed, all
- * inside the launch reservation, so delete/rename 409s for the entire
- * upload+start window and a failing validation never touches disk.
+ * inside the launch reservation, so delete 409s for the entire upload+start
+ * window and a failing validation never touches disk. An id-addressed rename
+ * is display-only and may proceed without changing the launch target.
  */
 export async function startAgentTask(
   db: DbClient,
   actor: Actor,
-  agentName: string,
+  agentId: string,
   input: StartAgentTask,
   deps: StartTaskDeps,
   uploads?: { parts: MultipartFilePart[]; limits: UploadLimits },
 ): Promise<Task> {
-  const agent = await getAgent(db, agentName)
+  const agent = await getAgentById(db, agentId)
   if (agent === null || !(await canViewResource(db, actor, 'agent', agent))) {
-    throw new NotFoundError('agent-not-found', `agent '${agentName}' not found`)
+    throw new NotFoundError('agent-not-found', 'agent not found')
   }
   assertNotBuiltin('agent', agent)
 
-  // RFC-175 (§2e): early identity check — reject BEFORE any side effect if the
-  // relaunch's expected agent id doesn't match the current same-named agent (a
-  // delete+recreate-same-name replacement that completed before launch begins).
-  // After the ACL-404 gate; immediate-launch only (never persisted — §2d).
+  // RFC-175 (§2e) / RFC-223 PR-7: the route target is already the canonical
+  // id. Keep the body fence for relaunch OCC, but compare id-to-id only.
   if (input.expectedAgentId !== undefined && agent.id !== input.expectedAgentId) {
-    throw new ConflictError(
-      'agent-id-mismatch',
-      `agent '${agentName}' is not the expected agent (it may have been replaced)`,
-    )
+    throw new ConflictError('agent-id-mismatch', `agent '${agent.name}' is not the expected agent`)
   }
 
   // RFC-175 (§2e): hold an in-process launch reservation on the agent id for the
-  // WHOLE launch (materialize + INSERT) so deleteAgent/renameAgent refuse
-  // (agent-launching 409) and the agent cannot be replaced mid-launch. Released
-  // in finally on every path (validation / materialize / INSERT throw included).
+  // WHOLE launch (materialize + INSERT) so deleteAgent refuses
+  // (agent-launching 409) and the resource id cannot disappear mid-launch.
+  // A rename is display-only and does not need this guard. Released in finally
+  // on every path (validation / materialize / INSERT throw included).
   acquireAgentLaunch(agent.id)
   try {
-    // Post-acquire re-verify: catch a replacement that completed in the tiny
-    // resolve→acquire window (before the reservation was held), in the
-    // zero-filesystem-side-effect phase.
-    const recheck = await getAgent(db, agentName)
-    if (recheck === null || recheck.id !== agent.id) {
+    // Post-acquire re-verify by the SAME canonical id. No name fallback: a
+    // delete + same-name recreate is a different resource and must never be
+    // adopted by this launch.
+    const recheck = await getAgentById(db, agent.id)
+    if (recheck === null) {
       throw new ConflictError(
         'agent-id-mismatch',
-        `agent '${agentName}' was replaced during launch`,
+        `agent '${agent.name}' was deleted during launch`,
       )
     }
 
@@ -382,7 +379,7 @@ export async function startAgentTask(
       if (errors.length > 0) {
         throw new ValidationError(
           'workflow-invalid',
-          `agent '${agentName}' cannot launch (${errors.length} error${errors.length === 1 ? '' : 's'} in its host snapshot)`,
+          `agent '${recheck.name}' cannot launch (${errors.length} error${errors.length === 1 ? '' : 's'} in its host snapshot)`,
           { issues: validation.issues },
         )
       }
@@ -433,7 +430,7 @@ export async function startAgentTask(
     }
 
     const agentLaunch = {
-      agentName,
+      agentName: recheck.name,
       agentId: agent.id,
       snapshotJson: JSON.stringify(def),
     }

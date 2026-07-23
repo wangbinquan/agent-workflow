@@ -4,7 +4,9 @@ import { describe, expect, test } from 'bun:test'
 import {
   CreateScheduledTaskSchema,
   ScheduleSpecSchema,
+  ScheduledAgentPayloadSchema,
   ScheduledTaskNameSchema,
+  ScheduledWorkgroupPayloadSchema,
   UpdateScheduledTaskSchema,
 } from '../src/index'
 
@@ -130,6 +132,54 @@ describe('CreateScheduledTaskSchema', () => {
       scheduleSpec: { kind: 'interval', every: 6, unit: 'hours' },
     })
     expect(res.success).toBe(false)
+  })
+})
+
+describe('RFC-223 PR-7 scheduled target identity', () => {
+  const scheduleSpec = { kind: 'interval' as const, every: 6, unit: 'hours' as const }
+
+  test('agent schedules require agentId; agentName is display-only', () => {
+    const launch = { name: 'nightly', description: 'audit', scratch: true }
+    expect(ScheduledAgentPayloadSchema.safeParse({ ...launch, agentName: 'auditor' }).success).toBe(
+      false,
+    )
+    expect(
+      ScheduledAgentPayloadSchema.safeParse({
+        ...launch,
+        agentId: 'agent-01',
+        agentName: 'stale-display-only',
+      }).success,
+    ).toBe(true)
+    expect(
+      CreateScheduledTaskSchema.safeParse({
+        name: 'agent schedule',
+        launchKind: 'agent',
+        launchPayload: { ...launch, agentName: 'auditor' },
+        scheduleSpec,
+      }).success,
+    ).toBe(false)
+  })
+
+  test('workgroup schedules require workgroupId; workgroupName is display-only', () => {
+    const launch = { name: 'nightly', goal: 'audit', scratch: true }
+    expect(
+      ScheduledWorkgroupPayloadSchema.safeParse({ ...launch, workgroupName: 'reviewers' }).success,
+    ).toBe(false)
+    expect(
+      ScheduledWorkgroupPayloadSchema.safeParse({
+        ...launch,
+        workgroupId: 'workgroup-01',
+        workgroupName: 'stale-display-only',
+      }).success,
+    ).toBe(true)
+    expect(
+      CreateScheduledTaskSchema.safeParse({
+        name: 'workgroup schedule',
+        launchKind: 'workgroup',
+        launchPayload: { ...launch, workgroupName: 'reviewers' },
+        scheduleSpec,
+      }).success,
+    ).toBe(false)
   })
 })
 

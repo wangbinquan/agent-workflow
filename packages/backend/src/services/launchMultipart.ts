@@ -1,6 +1,6 @@
 // RFC-218 T7 — shared multipart-launch skeleton. Extracted from
 // routes/tasks.ts `handleMultipartTaskStart` (RFC-020/107/165 lineage) so the
-// single-agent launch route (`POST /api/agents/:name/tasks`) binds upload
+// single-agent launch route (`POST /api/agents/:id/tasks`) binds upload
 // files through the SAME parsing / field-grammar / validation / packing code
 // as the workflow route instead of a second copy (dedup principle).
 //

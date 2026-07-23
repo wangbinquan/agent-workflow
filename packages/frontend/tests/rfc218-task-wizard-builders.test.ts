@@ -52,6 +52,7 @@ function agentTask(overrides: Partial<Task>): Task {
     repoCount: 1,
     inputs: {},
     sourceAgentName: 'a',
+    sourceAgentId: 'agent-a',
     workflowId: null,
     workflowSnapshot: LEGACY_SNAPSHOT,
     goal: null,
@@ -126,6 +127,7 @@ describe('B4 taskToLaunchPayload agent arm', () => {
     const { payload } = taskToLaunchPayload(
       agentTask({ inputs: { description: 'audit the auth module' } }),
     )
+    expect(payload.agentId).toBe('agent-a')
     expect(payload.description).toBe('audit the auth module')
     expect('inputs' in payload).toBe(false)
   })
@@ -137,6 +139,7 @@ describe('B4 taskToLaunchPayload agent arm', () => {
         inputs: { report: 'old body', docs: '.agent-inputs/docs/a.md' },
       }),
     )
+    expect(payload.agentId).toBe('agent-a')
     expect(payload.inputs).toEqual({ report: 'old body' })
     expect('description' in payload).toBe(false)
   })

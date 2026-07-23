@@ -24,8 +24,9 @@
 //   A7  F13-r4/r5: autoResumeInterruptedTasks skips workgroup tasks; repair
 //       list marks revive options unavailable for workgroup tasks and apply
 //       refuses them with workgroup-repair-unsupported.
-//   A8  agent rename/delete: non-terminal single-agent task → 409
-//       agent-tasks-active; terminal-only → operation proceeds.
+//   A8  agent delete: non-terminal single-agent task → 409
+//       agent-tasks-active; id-addressed rename remains safe and terminal-only
+//       history permits deletion.
 //   A9  F15 permission carve-out: tasks:launch WITHOUT agents:write may
 //       launch; agents:write WITHOUT tasks:launch may NOT.
 
@@ -50,7 +51,7 @@ import {
   isAgentLaunching,
   releaseAgentLaunch,
 } from '../src/services/agentLaunchReservation'
-import { getAgent } from '../src/services/agent'
+import { getAgentById } from '../src/services/agent'
 import { createApp } from '../src/server'
 import { createAgent, deleteAgent, renameAgent } from '../src/services/agent'
 import {
@@ -215,8 +216,8 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
     })
 
   test('A3 happy path (scratch): anchor row + sourceAgentName + frozen synthesized snapshot', async () => {
-    await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
-    const task = await startAgentTask(db, daemonActor(), 'solo', BODY(), { db, appHome })
+    const solo = await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
+    const task = await startAgentTask(db, daemonActor(), solo.id, BODY(), { db, appHome })
 
     expect(task.status).toBe('pending')
     expect(task.workflowId).toBe(AGENT_HOST_WORKFLOW_ID)
@@ -233,6 +234,14 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
     expect(anchor.builtin).toBe(true)
   })
 
+  test('RFC-223 PR-7: service input is canonical id; an existing name is not resolved', async () => {
+    await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
+    await expect(
+      startAgentTask(db, daemonActor(), 'solo', BODY(), { db, appHome }),
+    ).rejects.toMatchObject({ code: 'agent-not-found' })
+    expect((await db.select().from(tasks)).length).toBe(0)
+  })
+
   test('A4 unknown and invisible agents 404 identically; builtin 403; no source 422', async () => {
     const owner = await createUser(db, {
       username: 'owner',
@@ -246,7 +255,11 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
       role: 'user',
       password: 'longEnoughPassword',
     })
-    await createAgent(db, { ...AGENT_FIELDS, name: 'private-agent' }, { ownerUserId: owner.id })
+    const privateAgent = await createAgent(
+      db,
+      { ...AGENT_FIELDS, name: 'private-agent' },
+      { ownerUserId: owner.id },
+    )
     await db.update(agents).set({ visibility: 'private' }).where(eq(agents.name, 'private-agent'))
     const strangerActor = buildActor({
       user: {
@@ -260,14 +273,15 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
     })
 
     await expect(
-      startAgentTask(db, strangerActor, 'no-such', BODY(), { db, appHome }),
+      startAgentTask(db, strangerActor, 'no-such-id', BODY(), { db, appHome }),
     ).rejects.toMatchObject({ code: 'agent-not-found' })
     await expect(
-      startAgentTask(db, strangerActor, 'private-agent', BODY(), { db, appHome }),
+      startAgentTask(db, strangerActor, privateAgent.id, BODY(), { db, appHome }),
     ).rejects.toMatchObject({ code: 'agent-not-found' })
 
+    const builtinId = ulid()
     await db.insert(agents).values({
-      id: ulid(),
+      id: builtinId,
       name: 'sys-agent',
       description: '',
       outputs: '[]',
@@ -283,15 +297,15 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
       updatedAt: Date.now(),
     })
     await expect(
-      startAgentTask(db, daemonActor(), 'sys-agent', BODY(), { db, appHome }),
+      startAgentTask(db, daemonActor(), builtinId, BODY(), { db, appHome }),
     ).rejects.toMatchObject({ code: 'builtin-readonly' })
 
-    await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
+    const solo = await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
     await expect(
       startAgentTask(
         db,
         daemonActor(),
-        'solo',
+        solo.id,
         StartAgentTaskSchema.parse({ name: 't', description: 'd' }),
         { db, appHome },
       ),
@@ -322,7 +336,7 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
     expect((await db.select().from(tasks)).length).toBe(0)
   })
 
-  test('A8 rename/delete: live single-agent task 409s; terminal-only proceeds', async () => {
+  test('A8 delete: live task 409s; display rename is id-stable; terminal delete proceeds', async () => {
     const solo = await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
     await ensureAgentHostWorkflow(db)
     const liveId = ulid()
@@ -339,14 +353,17 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
       inputs: '{}',
       startedAt: Date.now(),
       sourceAgentName: 'solo',
-      // RFC-223 (PR-3a): the delete/rename guard now matches by the CANONICAL
+      // RFC-223: the delete guard now matches by the CANONICAL
       // source_agent_id (a real launch always stamps it), not by name.
       sourceAgentId: solo.id,
     })
-    await expect(deleteAgent(db, 'solo', T6_ACTOR)).rejects.toMatchObject({
+    await expect(deleteAgent(db, solo.id, T6_ACTOR)).rejects.toMatchObject({
       code: 'agent-tasks-active',
     })
-    await expect(renameAgent(db, 'solo', { newName: 'solo2' }, T6_ACTOR)).rejects.toMatchObject({
+    const renamed = await renameAgent(db, solo.id, { newName: 'solo2' })
+    expect(renamed).toMatchObject({ id: solo.id, name: 'solo2' })
+    // The active-task guard follows the immutable id, not the old display name.
+    await expect(deleteAgent(db, solo.id, T6_ACTOR)).rejects.toMatchObject({
       code: 'agent-tasks-active',
     })
 
@@ -354,11 +371,8 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
       .update(tasks)
       .set({ status: 'done', finishedAt: Date.now() })
       .where(eq(tasks.id, liveId))
-    // Terminal-only history no longer blocks (accepted limitation: later
-    // retry/resume of that task fails agent-not-found — soft reference).
-    const renamed = await renameAgent(db, 'solo', { newName: 'solo2' }, T6_ACTOR)
-    expect(renamed.name).toBe('solo2')
-    await deleteAgent(db, 'solo2', T6_ACTOR)
+    // Terminal-only history no longer blocks deletion.
+    await deleteAgent(db, solo.id, T6_ACTOR)
     expect((await db.select().from(agents)).length).toBe(0)
   })
 })
@@ -368,6 +382,7 @@ describe('RFC-165 — HTTP surface: launch + lifecycle guards (A6/A9)', () => {
   let app: ReturnType<typeof createApp>
   let appHome: string
   let adminToken: string
+  let soloId: string
 
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
@@ -387,7 +402,7 @@ describe('RFC-165 — HTTP surface: launch + lifecycle guards (A6/A9)', () => {
       password: 'longEnoughPassword',
     })
     adminToken = (await createSession({ db, userId: admin.id })).token
-    await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
+    soloId = (await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })).id
   })
   afterEach(() => rmSync(appHome, { recursive: true, force: true }))
 
@@ -473,7 +488,7 @@ describe('RFC-165 — HTTP surface: launch + lifecycle guards (A6/A9)', () => {
   test('A10 raw-key gate: {scratch, repoPath} agent launch → 422 start-task-path-retired', async () => {
     // Implementation-gate P2: without the gate the retired key silently
     // strips and the body degrades to a scratch launch (F1 shape).
-    const res = await req('/api/agents/solo/tasks', adminToken, {
+    const res = await req(`/api/agents/${soloId}/tasks`, adminToken, {
       method: 'POST',
       body: JSON.stringify({
         name: 't',
@@ -488,7 +503,8 @@ describe('RFC-165 — HTTP surface: launch + lifecycle guards (A6/A9)', () => {
     const { ensureWorkgroupHostWorkflow } = await import('../src/services/workgroup/launch')
     await ensureWorkgroupHostWorkflow(db)
     const { createWorkgroup } = await import('../src/services/workgroups')
-    await createWorkgroup(db, {
+    const a1 = await createAgent(db, { ...AGENT_FIELDS, name: 'a1' })
+    const squad = await createWorkgroup(db, {
       name: 'squad',
       description: '',
       instructions: '',
@@ -497,9 +513,9 @@ describe('RFC-165 — HTTP surface: launch + lifecycle guards (A6/A9)', () => {
       switches: { shareOutputs: true, directMessages: false, blackboard: false },
       maxRounds: 5,
       completionGate: false,
-      members: [{ memberType: 'agent', agentName: 'a1', displayName: 'lead', roleDesc: '' }],
+      members: [{ memberType: 'agent', agentId: a1.id, displayName: 'lead', roleDesc: '' }],
     })
-    const wg = await req('/api/workgroups/squad/tasks', adminToken, {
+    const wg = await req(`/api/workgroups/${squad.id}/tasks`, adminToken, {
       method: 'POST',
       body: JSON.stringify({ name: 't', goal: 'g', scratch: true, repoPath: '/tmp/x' }),
     })
@@ -528,7 +544,10 @@ describe('RFC-165 — HTTP surface: launch + lifecycle guards (A6/A9)', () => {
       name: 'launch-only',
       scopes: ['agents:read', 'tasks:launch'],
     })
-    const ok = await req('/api/agents/solo/tasks', launchPat, { method: 'POST', body: launchBody })
+    const ok = await req(`/api/agents/${soloId}/tasks`, launchPat, {
+      method: 'POST',
+      body: launchBody,
+    })
     expect(ok.status).toBe(201)
     const created = (await ok.json()) as { sourceAgentName: string | null; workflowId: string }
     expect(created.sourceAgentName).toBe('solo')
@@ -540,7 +559,7 @@ describe('RFC-165 — HTTP surface: launch + lifecycle guards (A6/A9)', () => {
       name: 'write-only',
       scopes: ['agents:read', 'agents:write'],
     })
-    const refused = await req('/api/agents/solo/tasks', writePat, {
+    const refused = await req(`/api/agents/${soloId}/tasks`, writePat, {
       method: 'POST',
       body: launchBody,
     })
@@ -712,24 +731,30 @@ describe('RFC-175 §2e — agent relaunch identity guard + launch reservation', 
     StartAgentTaskSchema.parse({ name: 'solo run', description: 'do it', scratch: true, ...extra })
 
   test('sourceAgentId persisted; expectedAgentId match launches, stale id → 409', async () => {
-    await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
-    const agentId = (await getAgent(db, 'solo'))!.id
+    const solo = await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
+    const agentId = solo.id
 
     // Baseline launch stamps the stable id onto the task.
-    const t1 = await startAgentTask(db, daemonActor(), 'solo', BODY(), { db, appHome })
+    const t1 = await startAgentTask(db, daemonActor(), agentId, BODY(), { db, appHome })
     expect(t1.sourceAgentId).toBe(agentId)
 
     // Relaunch carrying the CORRECT expected id succeeds.
-    const t2 = await startAgentTask(db, daemonActor(), 'solo', BODY({ expectedAgentId: agentId }), {
+    const t2 = await startAgentTask(
       db,
-      appHome,
-    })
+      daemonActor(),
+      agentId,
+      BODY({ expectedAgentId: agentId }),
+      {
+        db,
+        appHome,
+      },
+    )
     expect(t2.sourceAgentId).toBe(agentId)
 
     // Relaunch carrying a STALE id (the delete+recreate-same-name ABA the guard
     // exists to close) → 409, and no ghost task row is minted.
     await expect(
-      startAgentTask(db, daemonActor(), 'solo', BODY({ expectedAgentId: 'stale-other-id' }), {
+      startAgentTask(db, daemonActor(), agentId, BODY({ expectedAgentId: 'stale-other-id' }), {
         db,
         appHome,
       }),
@@ -737,9 +762,8 @@ describe('RFC-175 §2e — agent relaunch identity guard + launch reservation', 
     expect((await db.select().from(tasks)).length).toBe(2)
   })
 
-  test('reservation (ref-counted) blocks delete/rename until ALL holders release', async () => {
-    await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
-    const agentId = (await getAgent(db, 'solo'))!.id
+  test('reservation blocks delete until all holders release; display rename remains safe', async () => {
+    const agentId = (await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })).id
 
     expect(isAgentLaunching(agentId)).toBe(false)
     // Two concurrent same-agent launches hold the shared id.
@@ -747,26 +771,28 @@ describe('RFC-175 §2e — agent relaunch identity guard + launch reservation', 
     acquireAgentLaunch(agentId)
     expect(isAgentLaunching(agentId)).toBe(true)
 
-    // deleteAgent + renameAgent refuse while a launch is in flight.
-    await expect(deleteAgent(db, 'solo', T6_ACTOR)).rejects.toMatchObject({
+    // Delete refuses while a launch is in flight. Rename is display-only now:
+    // it keeps the exact id targeted by both launch holders.
+    await expect(deleteAgent(db, agentId, T6_ACTOR)).rejects.toMatchObject({
       code: 'agent-launching',
     })
-    await expect(renameAgent(db, 'solo', { newName: 'solo2' }, T6_ACTOR)).rejects.toMatchObject({
-      code: 'agent-launching',
+    expect(await renameAgent(db, agentId, { newName: 'solo2' })).toMatchObject({
+      id: agentId,
+      name: 'solo2',
     })
 
     // R11-F1: the FIRST holder releasing must NOT free the shared key while the
     // OTHER launch is still materializing — delete stays blocked.
     releaseAgentLaunch(agentId)
     expect(isAgentLaunching(agentId)).toBe(true)
-    await expect(deleteAgent(db, 'solo', T6_ACTOR)).rejects.toMatchObject({
+    await expect(deleteAgent(db, agentId, T6_ACTOR)).rejects.toMatchObject({
       code: 'agent-launching',
     })
 
     // Only after the LAST holder releases does delete proceed.
     releaseAgentLaunch(agentId)
     expect(isAgentLaunching(agentId)).toBe(false)
-    await deleteAgent(db, 'solo', T6_ACTOR)
-    expect(await getAgent(db, 'solo')).toBeNull()
+    await deleteAgent(db, agentId, T6_ACTOR)
+    expect(await getAgentById(db, agentId)).toBeNull()
   })
 })

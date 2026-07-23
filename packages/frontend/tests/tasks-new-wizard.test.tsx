@@ -2,14 +2,14 @@
 //
 //   W1 workflow arm end-to-end: pick → remote URL → name+inputs → confirm →
 //      POST /api/tasks with the composed body, then navigate to the task.
-//   W2 agent deep link (?kind=agent&agent=…) lands on Step 2; scratch space;
-//      POSTs /api/agents/:name/tasks with scratch:true + description.
-//   W3 workgroup arm POSTs /api/workgroups/:name/tasks with goal; a not-ready
+//   W2 agent deep link (?kind=agent&agentId=…) lands on Step 2; scratch space;
+//      POSTs /api/agents/:id/tasks with scratch:true + description.
+//   W3 workgroup arm POSTs /api/workgroups/:id/tasks with goal; a not-ready
 //      group renders as a disabled option (Step-1 filtering).
 //   W4 gating: object/URL/name gates hold Next disabled per step.
 //   W5 confirm-page backlinks jump to the owning step.
 //   W6 ?schedule=1 swaps the primary/secondary actions and saving creates the
-//      schedule with the agent kind envelope (launchKind + agentName).
+//      schedule with the agent kind envelope (launchKind + agentId).
 //   W7 ?editScheduled seeds a kind-locked, fully pre-filled wizard and PUTs
 //      the rebuilt payload back.
 //   W8 Step-1 filtering: builtin workflows/agents never appear as options.
@@ -55,6 +55,7 @@ interface FetchCall {
 const WF_DETAIL = {
   id: 'wf-1',
   name: 'My WF',
+  ownerUserId: 'owner-workflow',
   version: 1,
   definition: {
     inputs: [{ key: 'topic', label: 'Topic', kind: 'text', required: true }],
@@ -62,25 +63,47 @@ const WF_DETAIL = {
   },
 }
 const WORKFLOWS = [
-  { id: 'wf-1', name: 'My WF' },
-  { id: 'wf-host', name: '__agent_host__', builtin: true },
+  { id: 'wf-1', name: 'My WF', ownerUserId: 'owner-workflow' },
+  { id: 'wf-host', name: '__agent_host__', ownerUserId: '__system__', builtin: true },
 ]
-const AGENTS = [{ name: 'auditor' }, { name: '__sys_reviewer__', builtin: true }]
+const AGENTS = [
+  { id: 'agent-auditor', name: 'auditor', ownerUserId: 'owner-agent' },
+  {
+    id: 'agent-system',
+    name: '__sys_reviewer__',
+    ownerUserId: '__system__',
+    builtin: true,
+  },
+]
 const WORKGROUPS = [
   {
+    id: 'workgroup-core',
     name: 'core',
+    ownerUserId: 'owner-workgroup',
+    version: 4,
     mode: 'free_collab',
     leaderMemberId: null,
-    members: [{ id: 'm1', memberType: 'agent' }],
+    members: [{ id: 'm1', memberType: 'agent', agentId: 'agent-auditor' }],
   },
-  { name: 'hollow', mode: 'free_collab', leaderMemberId: null, members: [] },
+  {
+    id: 'workgroup-hollow',
+    name: 'hollow',
+    ownerUserId: 'owner-workgroup',
+    version: 1,
+    mode: 'free_collab',
+    leaderMemberId: null,
+    members: [],
+  },
   // RFC-187 TRAP-1 advisory tier — launchable but leader-only (Codex P2:
   // the wizard must surface the warning, not just the detail-page banner).
   {
+    id: 'workgroup-solo',
     name: 'solo',
+    ownerUserId: 'owner-workgroup',
+    version: 2,
     mode: 'leader_worker',
     leaderMemberId: 'm1',
-    members: [{ id: 'm1', memberType: 'agent' }],
+    members: [{ id: 'm1', memberType: 'agent', agentId: 'agent-auditor' }],
   },
 ]
 
@@ -90,6 +113,7 @@ const SCHEDULE_AGENT = {
   ownerUserId: 'me',
   launchKind: 'agent',
   launchPayload: {
+    agentId: 'agent-auditor',
     agentName: 'auditor',
     name: 'nightly',
     description: 'audit the repo',
@@ -138,7 +162,7 @@ const RELAUNCH_TASK = {
   repoCount: 1,
   inputs: { description: 'audit the auth module' },
   sourceAgentName: 'auditor',
-  sourceAgentId: null,
+  sourceAgentId: 'agent-auditor',
   workgroupId: null,
   workgroupName: null,
   goal: null,
@@ -199,10 +223,10 @@ function installFetch(): FetchCall[] {
       if (url.includes('/api/cached-repos')) return json({ items: [] })
       if (url.includes('/api/workflows/wf-1')) return json(WF_DETAIL)
       if (url.includes('/api/workflows')) return json(WORKFLOWS)
-      if (url.includes('/api/agents/auditor/tasks') && method === 'POST')
+      if (url.includes('/api/agents/agent-auditor/tasks') && method === 'POST')
         return json({ id: 'task-a' }, 201)
       if (url.includes('/api/agents')) return json(AGENTS)
-      if (url.includes('/api/workgroups/core/tasks') && method === 'POST')
+      if (url.includes('/api/workgroups/workgroup-core/tasks') && method === 'POST')
         return json({ id: 'task-g' }, 201)
       if (url.includes('/api/workgroups')) return json(WORKGROUPS)
       if (url.endsWith('/api/tasks') && method === 'POST') return json({ id: 'task-w' }, 201)
@@ -533,7 +557,7 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
 
   test('W2: agent deep link lands on Step 2; scratch launch hits the agent endpoint', async () => {
     const calls = installFetch()
-    await renderWizard('/tasks/new?kind=agent&agent=auditor')
+    await renderWizard('/tasks/new?kind=agent&agentId=agent-auditor')
 
     // Deep link (D9): starts on the space step with the object pre-picked.
     const spaceStep = await screen.findByTestId('stepper-step-space')
@@ -557,7 +581,7 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
     fireEvent.click(await screen.findByTestId('wizard-launch'))
     await waitFor(() => expect(screen.queryByTestId('task-page')).toBeTruthy())
     const post = calls.find(
-      (c) => c.method === 'POST' && c.url.includes('/api/agents/auditor/tasks'),
+      (c) => c.method === 'POST' && c.url.includes('/api/agents/agent-auditor/tasks'),
     )!
     // 单 agent 全新启动默认「不允许反问」（用户 2026-07-14, tasks.new.tsx allowClarify=false）：
     // the fresh clarify switch is OFF, so buildAgentStartBody stamps allowClarify:false on the
@@ -567,6 +591,7 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
       description: 'fix the flaky test',
       scratch: true,
       allowClarify: false,
+      expectedAgentId: 'agent-auditor',
     })
   })
 
@@ -591,17 +616,47 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
     await waitFor(() => expect(screen.queryByTestId('task-page')).toBeTruthy())
 
     const post = calls.find(
-      (c) => c.method === 'POST' && c.url.includes('/api/agents/auditor/tasks'),
+      (c) => c.method === 'POST' && c.url.includes('/api/agents/agent-auditor/tasks'),
     )!
     // Reconstructed from the task: name + description + scratch, and allowClarify
-    // false (the agent-single snapshot proves clarify was off). No expectedAgentId
-    // — a historical task (sourceAgentId null) launches by name.
+    // false (the agent-single snapshot proves clarify was off). The frozen
+    // sourceAgentId selects the exact resource; no name lookup participates.
     expect(post.body).toEqual({
       name: 'prior audit',
       description: 'audit the auth module',
       scratch: true,
       allowClarify: false,
+      expectedAgentId: 'agent-auditor',
     })
+  })
+
+  test('RFC-223 PR-7: a historical name-only agent relaunch fails closed until an id is picked', async () => {
+    installFetch()
+    const base = vi.mocked(globalThis.fetch).getMockImplementation()!
+    vi.mocked(globalThis.fetch).mockImplementation(async (input, init) => {
+      const url = input.toString()
+      if (url.includes('/api/tasks/legacy-relaunch/members')) return jsonResponse(RELAUNCH_MEMBERS)
+      if (url.includes('/api/tasks/legacy-relaunch')) {
+        return jsonResponse({
+          ...RELAUNCH_TASK,
+          id: 'legacy-relaunch',
+          sourceAgentId: null,
+          sourceAgentName: 'auditor',
+        })
+      }
+      return base(input, init)
+    })
+
+    await renderWizard('/tasks/new?relaunchFrom=legacy-relaunch')
+    expect(await screen.findByTestId('wizard-seed-degraded')).toBeTruthy()
+    // The current same-named row is NOT adopted. An explicit canonical-id pick
+    // is required before the wizard can leave Step 1.
+    expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(await screen.findByTestId('wizard-object-agent'))
+    fireEvent.mouseDown(await screen.findByRole('option', { name: /auditor/ }))
+    await waitFor(() =>
+      expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(false),
+    )
   })
 
   test('W3: workgroup arm — not-ready group disabled; goal launch hits the group endpoint', async () => {
@@ -635,19 +690,21 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
     fireEvent.click(await screen.findByTestId('wizard-launch'))
     await waitFor(() => expect(screen.queryByTestId('task-page')).toBeTruthy())
     const post = calls.find(
-      (c) => c.method === 'POST' && c.url.includes('/api/workgroups/core/tasks'),
+      (c) => c.method === 'POST' && c.url.includes('/api/workgroups/workgroup-core/tasks'),
     )!
     expect(post.body).toEqual({
       name: 'TG',
       goal: 'ship the feature',
       repoUrl: 'https://github.com/o/r.git',
       autoCommitPush: true,
+      expectedWorkgroupId: 'workgroup-core',
+      expectedWorkgroupVersion: 4,
     })
   })
 
   test('W6: ?schedule=1 makes save-as-scheduled primary and stamps the agent envelope', async () => {
     const calls = installFetch()
-    await renderWizard('/tasks/new?schedule=1&kind=agent&agent=auditor')
+    await renderWizard('/tasks/new?schedule=1&kind=agent&agentId=agent-auditor')
 
     // Deep link lands on Step 2 — pick scratch and move on.
     fireEvent.click(await screen.findByTestId('wizard-space-scratch'))
@@ -671,7 +728,12 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
       expect(post!.body).toMatchObject({
         name: 'poller',
         launchKind: 'agent',
-        launchPayload: { agentName: 'auditor', name: 'TS', description: 'poll it', scratch: true },
+        launchPayload: {
+          agentId: 'agent-auditor',
+          name: 'TS',
+          description: 'poll it',
+          scratch: true,
+        },
         enabled: true,
       })
     })
@@ -747,7 +809,7 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
       )
       expect(put).toBeTruthy()
       expect((put!.body as { launchPayload: unknown }).launchPayload).toEqual({
-        agentName: 'auditor',
+        agentId: 'agent-auditor',
         name: 'nightly',
         description: 'audit the repo',
         allowClarify: false,
@@ -798,12 +860,13 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
     fireEvent.click(await screen.findByTestId('wizard-object-agent'))
     const listbox = await screen.findByRole('listbox')
     expect(within(listbox).queryByText('__sys_reviewer__')).toBeNull()
-    expect(within(listbox).getByRole('option', { name: /auditor/ })).toBeTruthy()
+    const auditor = within(listbox).getByRole('option', { name: /auditor/ })
+    expect(auditor.textContent).toContain('owner-agent')
   })
 
   test('W11: invalid numeric limits gate the content step (Codex P2)', async () => {
     installFetch()
-    await renderWizard('/tasks/new?kind=agent&agent=auditor')
+    await renderWizard('/tasks/new?kind=agent&agentId=agent-auditor')
     fireEvent.click(await screen.findByTestId('wizard-space-scratch'))
     next()
     fireEvent.change(await screen.findByTestId('wizard-task-name'), { target: { value: 'T' } })
@@ -849,7 +912,7 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
   // 后端 default(true) 承接），与 W2 的 OFF ⇒ 显式 false 互为镜像。
   test('W14: opting INTO clarify surfaces in the confirm summary + omits allowClarify on the wire', async () => {
     const calls = installFetch()
-    await renderWizard('/tasks/new?kind=agent&agent=auditor')
+    await renderWizard('/tasks/new?kind=agent&agentId=agent-auditor')
 
     fireEvent.click(await screen.findByTestId('wizard-space-scratch'))
     next()
@@ -871,10 +934,15 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
     fireEvent.click(await screen.findByTestId('wizard-launch'))
     await waitFor(() => expect(screen.queryByTestId('task-page')).toBeTruthy())
     const post = calls.find(
-      (c) => c.method === 'POST' && c.url.includes('/api/agents/auditor/tasks'),
+      (c) => c.method === 'POST' && c.url.includes('/api/agents/agent-auditor/tasks'),
     )!
     // ON ⇒ omitted (RFC-175 wire anchor: absent ⟺ true; backend default(true) applies).
-    expect(post.body).toEqual({ name: 'TC', description: 'ask me', scratch: true })
+    expect(post.body).toEqual({
+      name: 'TC',
+      description: 'ask me',
+      scratch: true,
+      expectedAgentId: 'agent-auditor',
+    })
     expect('allowClarify' in (post.body as object)).toBe(false)
   })
 
@@ -885,7 +953,10 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
     const base = vi.mocked(globalThis.fetch).getMockImplementation()!
     vi.mocked(globalThis.fetch).mockImplementation(async (input, init) => {
       const url = input.toString()
-      if (url.includes('/api/workgroups/core/tasks') && (init?.method ?? 'GET') === 'POST') {
+      if (
+        url.includes('/api/workgroups/workgroup-core/tasks') &&
+        (init?.method ?? 'GET') === 'POST'
+      ) {
         calls.push({ url, method: 'POST', body: JSON.parse(String(init?.body)) })
         return new Response(
           JSON.stringify({
@@ -899,7 +970,7 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
       }
       return base(input, init)
     })
-    await renderWizard('/tasks/new?kind=workgroup&workgroup=core')
+    await renderWizard('/tasks/new?kind=workgroup&workgroupId=workgroup-core')
 
     fireEvent.click(await screen.findByTestId('wizard-space-scratch'))
     next()

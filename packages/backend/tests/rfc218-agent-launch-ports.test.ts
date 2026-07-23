@@ -12,7 +12,7 @@
 //   B4  startAgentTask ported happy path: task.inputs = port values verbatim
 //       (incl. literal `{{...}}` — injected via ports, never re-expanded);
 //       frozen snapshot is the ported shape.
-//   B5  multipart route (/api/agents/:name/tasks): files land in
+//   B5  multipart route (/api/agents/:id/tasks): files land in
 //       `.agent-inputs/{port}` and the port value packs newline-joined
 //       relative paths — same machinery as POST /api/tasks (shared
 //       launchMultipart skeleton). Client-sent text for the upload key is
@@ -293,14 +293,18 @@ describe('B4 — startAgentTask ported happy path (scratch)', () => {
   test('port values land verbatim in task.inputs; snapshot frozen ported', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const appHome = makeTempDir('aw-rfc218-b4-')
-    await createAgent(db, { ...AGENT_FIELDS, name: 'ported', inputs: [...PORTS] })
+    const ported = await createAgent(db, {
+      ...AGENT_FIELDS,
+      name: 'ported',
+      inputs: [...PORTS],
+    })
 
     const body = StartAgentTaskSchema.parse({
       name: 'port run',
       inputs: { report: 'weekly {{report}} literal', style_guide: 'terse' },
       scratch: true,
     })
-    const task = await startAgentTask(db, daemonActor(), 'ported', body, { db, appHome })
+    const task = await startAgentTask(db, daemonActor(), ported.id, body, { db, appHome })
     expect(task.workflowId).toBe(AGENT_HOST_WORKFLOW_ID)
     expect(task.sourceAgentName).toBe('ported')
     // Values ride ports verbatim — a literal {{...}} is data, not a template.
@@ -314,11 +318,11 @@ describe('B4 — startAgentTask ported happy path (scratch)', () => {
   test('zero-port agents still launch exactly as RFC-165 (description port)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const appHome = makeTempDir('aw-rfc218-b4z-')
-    await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
+    const solo = await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
     const task = await startAgentTask(
       db,
       daemonActor(),
-      'solo',
+      solo.id,
       StartAgentTaskSchema.parse({ name: 't', description: 'fix it', scratch: true }),
       { db, appHome },
     )
@@ -332,6 +336,7 @@ interface Harness {
   db: DbClient
   app: Hono
   home: string
+  agentId: string
 }
 
 async function buildHarness(): Promise<Harness> {
@@ -339,7 +344,7 @@ async function buildHarness(): Promise<Harness> {
   const home = join(tmp, 'home')
   process.env.AGENT_WORKFLOW_HOME = home
   const db = createInMemoryDb(MIGRATIONS)
-  await createAgent(db, {
+  const agent = await createAgent(db, {
     ...AGENT_FIELDS,
     name: 'uploader',
     inputs: [
@@ -356,7 +361,7 @@ async function buildHarness(): Promise<Harness> {
     dbVersion: 1,
     db,
   })
-  return { db, app, home }
+  return { db, app, home, agentId: agent.id }
 }
 
 function agentFormData(payload: object, files: Array<[string, string, string]>): FormData {
@@ -382,7 +387,7 @@ describe('B5/B6 — multipart agent launch route', () => {
         ['docs', 'b.md', '# beta'],
       ],
     )
-    const res = await h.app.request('/api/agents/uploader/tasks', {
+    const res = await h.app.request(`/api/agents/${h.agentId}/tasks`, {
       method: 'POST',
       body: fd,
       headers: { Authorization: `Bearer ${TOKEN}` },
@@ -397,7 +402,7 @@ describe('B5/B6 — multipart agent launch route', () => {
 
   test('JSON launch for an upload-port agent → 422 (multipart-only)', async () => {
     const h = await buildHarness()
-    const res = await h.app.request('/api/agents/uploader/tasks', {
+    const res = await h.app.request(`/api/agents/${h.agentId}/tasks`, {
       method: 'POST',
       body: JSON.stringify({
         name: 'forge',
@@ -416,7 +421,7 @@ describe('B5/B6 — multipart agent launch route', () => {
     const fd = agentFormData({ name: 't', scratch: true, inputs: { brief: 'x' } }, [
       ['ghost', 'a.md', 'x'],
     ])
-    const res = await h.app.request('/api/agents/uploader/tasks', {
+    const res = await h.app.request(`/api/agents/${h.agentId}/tasks`, {
       method: 'POST',
       body: fd,
       headers: { Authorization: `Bearer ${TOKEN}` },
@@ -438,7 +443,7 @@ describe('B5/B6 — multipart agent launch route', () => {
       },
       [['docs', 'a.md', '# alpha']],
     )
-    const res = await h.app.request('/api/agents/uploader/tasks', {
+    const res = await h.app.request(`/api/agents/${h.agentId}/tasks`, {
       method: 'POST',
       body: fd,
       headers: { Authorization: `Bearer ${TOKEN}` },
@@ -471,14 +476,18 @@ describe('B7 — scheduled save gate (design P2-2)', () => {
   }
 
   test('ported agent + description payload → 422 at save', async () => {
-    await createAgent(db, { ...AGENT_FIELDS, name: 'ported', inputs: [...PORTS] })
+    const ported = await createAgent(db, {
+      ...AGENT_FIELDS,
+      name: 'ported',
+      inputs: [...PORTS],
+    })
     await expect(
       createScheduledTask(
         db,
         {
           name: 's',
           launchKind: 'agent',
-          launchPayload: { agentName: 'ported', name: 't', description: 'd', scratch: true },
+          launchPayload: { agentId: ported.id, name: 't', description: 'd', scratch: true },
           scheduleSpec: SPEC,
           enabled: false,
         },
@@ -488,7 +497,7 @@ describe('B7 — scheduled save gate (design P2-2)', () => {
   })
 
   test('upload-port agent cannot be scheduled (fires are JSON-only)', async () => {
-    await createAgent(db, {
+    const pathy = await createAgent(db, {
       ...AGENT_FIELDS,
       name: 'pathy',
       inputs: [{ name: 'doc', kind: 'path<md>' }],
@@ -499,7 +508,7 @@ describe('B7 — scheduled save gate (design P2-2)', () => {
         {
           name: 's',
           launchKind: 'agent',
-          launchPayload: { agentName: 'pathy', name: 't', inputs: { doc: 'x' }, scratch: true },
+          launchPayload: { agentId: pathy.id, name: 't', inputs: { doc: 'x' }, scratch: true },
           scheduleSpec: SPEC,
           enabled: false,
         },
@@ -509,14 +518,18 @@ describe('B7 — scheduled save gate (design P2-2)', () => {
   })
 
   test('disabled PUT that replaces the payload still validates (impl-gate P2-5)', async () => {
-    await createAgent(db, { ...AGENT_FIELDS, name: 'ported', inputs: [...PORTS] })
+    const ported = await createAgent(db, {
+      ...AGENT_FIELDS,
+      name: 'ported',
+      inputs: [...PORTS],
+    })
     const created = await createScheduledTask(
       db,
       {
         name: 's',
         launchKind: 'agent',
         launchPayload: {
-          agentName: 'ported',
+          agentId: ported.id,
           name: 't',
           inputs: { report: 'weekly' },
           scratch: true,
@@ -534,7 +547,7 @@ describe('B7 — scheduled save gate (design P2-2)', () => {
         db,
         created.id,
         {
-          launchPayload: { agentName: 'ported', name: 't', description: 'd', scratch: true },
+          launchPayload: { agentId: ported.id, name: 't', description: 'd', scratch: true },
         },
         { actor: actor() },
       ),
@@ -542,14 +555,18 @@ describe('B7 — scheduled save gate (design P2-2)', () => {
   })
 
   test('text-port payload saves and stamps inputs into the envelope', async () => {
-    await createAgent(db, { ...AGENT_FIELDS, name: 'ported', inputs: [...PORTS] })
+    const ported = await createAgent(db, {
+      ...AGENT_FIELDS,
+      name: 'ported',
+      inputs: [...PORTS],
+    })
     const created = await createScheduledTask(
       db,
       {
         name: 's',
         launchKind: 'agent',
         launchPayload: {
-          agentName: 'ported',
+          agentId: ported.id,
           name: 't',
           inputs: { report: 'weekly' },
           scratch: true,

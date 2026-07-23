@@ -43,17 +43,18 @@ vi.mock('../src/hooks/useActor', () => ({
 }))
 
 const AGENTS = [
-  { name: 'auditor' },
+  { id: 'agent-auditor', name: 'auditor' },
   {
+    id: 'agent-ported',
     name: 'ported',
     inputs: [
       { name: 'report', kind: 'markdown', description: '周报正文' },
       { name: 'style_guide', kind: 'string', required: false },
     ],
   },
-  { name: 'chipper', inputs: [{ name: 'tags', kind: 'list<string>' }] },
-  { name: 'blocked', inputs: [{ name: 'go', kind: 'signal' }] },
-  { name: 'other', inputs: [{ name: 'brief', kind: 'string' }] },
+  { id: 'agent-chipper', name: 'chipper', inputs: [{ name: 'tags', kind: 'list<string>' }] },
+  { id: 'agent-blocked', name: 'blocked', inputs: [{ name: 'go', kind: 'signal' }] },
+  { id: 'agent-other', name: 'other', inputs: [{ name: 'brief', kind: 'string' }] },
 ]
 
 const RELAUNCH_PORTED_TASK = {
@@ -65,7 +66,7 @@ const RELAUNCH_PORTED_TASK = {
   repoCount: 1,
   inputs: { report: 'old report body', style_guide: 'terse' },
   sourceAgentName: 'ported',
-  sourceAgentId: null,
+  sourceAgentId: 'agent-ported',
   workgroupId: null,
   workgroupName: null,
   goal: null,
@@ -176,16 +177,16 @@ async function renderWizard(initialUrl: string) {
 const next = () => fireEvent.click(screen.getByTestId('stepper-next'))
 const nextButton = () => screen.getByTestId('stepper-next') as HTMLButtonElement
 
-async function toContentStep(agent: string) {
-  await renderWizard(`/tasks/new?kind=agent&agent=${agent}`)
+async function toContentStep(agentId: string) {
+  await renderWizard(`/tasks/new?kind=agent&agentId=${agentId}`)
   // Deep link lands on the space step (scratch default) → next is content.
   next()
   await screen.findByTestId('wizard-task-name')
 }
 
-function launchBody(calls: FetchCall[], agent: string): Record<string, unknown> {
+function launchBody(calls: FetchCall[], agentId: string): Record<string, unknown> {
   const call = calls.find(
-    (c) => c.url.includes(`/api/agents/${agent}/tasks`) && c.method === 'POST',
+    (c) => c.url.includes(`/api/agents/${agentId}/tasks`) && c.method === 'POST',
   )
   expect(call).toBeDefined()
   return call!.body as Record<string, unknown>
@@ -194,7 +195,7 @@ function launchBody(calls: FetchCall[], agent: string): Record<string, unknown> 
 describe('RFC-218 — port-driven agent launch form', () => {
   test('P1 ported agent: port fields, no description; wire carries inputs only', async () => {
     const calls = installFetch()
-    await toContentStep('ported')
+    await toContentStep('agent-ported')
 
     expect(screen.queryByTestId('wizard-description')).toBeNull()
     fireEvent.change(screen.getByTestId('wizard-task-name'), { target: { value: 'T1' } })
@@ -206,7 +207,8 @@ describe('RFC-218 — port-driven agent launch form', () => {
     fireEvent.click(await screen.findByTestId('wizard-launch'))
     await screen.findByTestId('task-page')
 
-    const body = launchBody(calls, 'ported')
+    const body = launchBody(calls, 'agent-ported')
+    expect(body.expectedAgentId).toBe('agent-ported')
     expect(body.inputs).toEqual({ report: 'weekly {{report}} literal', style_guide: '' })
     expect(body.description).toBeUndefined()
     expect(body.scratch).toBe(true)
@@ -214,7 +216,7 @@ describe('RFC-218 — port-driven agent launch form', () => {
 
   test('P2 zero-port agent keeps the description form and wire', async () => {
     const calls = installFetch()
-    await toContentStep('auditor')
+    await toContentStep('agent-auditor')
 
     fireEvent.change(screen.getByTestId('wizard-task-name'), { target: { value: 'T2' } })
     fireEvent.change(await screen.findByTestId('wizard-description'), {
@@ -224,14 +226,15 @@ describe('RFC-218 — port-driven agent launch form', () => {
     fireEvent.click(await screen.findByTestId('wizard-launch'))
     await screen.findByTestId('task-page')
 
-    const body = launchBody(calls, 'auditor')
+    const body = launchBody(calls, 'agent-auditor')
+    expect(body.expectedAgentId).toBe('agent-auditor')
     expect(body.description).toBe('audit it')
     expect(body.inputs).toBeUndefined()
   })
 
   test('P3 required port gates Next on the content step', async () => {
     installFetch()
-    await toContentStep('ported')
+    await toContentStep('agent-ported')
     fireEvent.change(screen.getByTestId('wizard-task-name'), { target: { value: 'T3' } })
     await screen.findByLabelText(/^report/)
     expect(nextButton().disabled).toBe(true)
@@ -241,7 +244,7 @@ describe('RFC-218 — port-driven agent launch form', () => {
 
   test('P4 blocker agent shows the reason banner and stays unlaunchable', async () => {
     installFetch()
-    await toContentStep('blocked')
+    await toContentStep('agent-blocked')
     fireEvent.change(screen.getByTestId('wizard-task-name'), { target: { value: 'T4' } })
     await screen.findByTestId('wizard-agent-blockers')
     expect(screen.queryByTestId('wizard-description')).toBeNull()
@@ -250,7 +253,7 @@ describe('RFC-218 — port-driven agent launch form', () => {
 
   test('P5 list<string> port renders chips; items join with newline on the wire', async () => {
     const calls = installFetch()
-    await toContentStep('chipper')
+    await toContentStep('agent-chipper')
     fireEvent.change(screen.getByTestId('wizard-task-name'), { target: { value: 'T5' } })
     const chips = await screen.findByTestId('wizard-input-tags-input')
     fireEvent.change(chips, { target: { value: 'alpha' } })
@@ -260,13 +263,13 @@ describe('RFC-218 — port-driven agent launch form', () => {
     next()
     fireEvent.click(await screen.findByTestId('wizard-launch'))
     await screen.findByTestId('task-page')
-    const body = launchBody(calls, 'chipper')
+    const body = launchBody(calls, 'agent-chipper')
     expect((body.inputs as Record<string, string>).tags).toBe('alpha\nbeta')
   })
 
   test('P6 switching agent A→B prunes A’s keys from the wire', async () => {
     const calls = installFetch()
-    await toContentStep('ported')
+    await toContentStep('agent-ported')
     fireEvent.change(await screen.findByLabelText(/^report/), { target: { value: 'A value' } })
 
     // Back to step 1 and pick the other agent.
@@ -283,7 +286,8 @@ describe('RFC-218 — port-driven agent launch form', () => {
     fireEvent.click(await screen.findByTestId('wizard-launch'))
     await screen.findByTestId('task-page')
 
-    const body = launchBody(calls, 'other')
+    const body = launchBody(calls, 'agent-other')
+    expect(body.expectedAgentId).toBe('agent-other')
     expect(body.inputs).toEqual({ brief: 'B value' })
   })
 
@@ -301,14 +305,15 @@ describe('RFC-218 — port-driven agent launch form', () => {
     next() // content → confirm
     fireEvent.click(await screen.findByTestId('wizard-launch'))
     await screen.findByTestId('task-page')
-    const body = launchBody(calls, 'ported')
+    const body = launchBody(calls, 'agent-ported')
+    expect(body.expectedAgentId).toBe('agent-ported')
     expect(body.inputs).toEqual({ report: 'old report body', style_guide: 'terse' })
     expect(body.description).toBeUndefined()
   })
 
   test('P9 deep link to a missing agent: not-found notice, not an eternal spinner', async () => {
     installFetch()
-    await renderWizard('/tasks/new?kind=agent&agent=ghost-agent')
+    await renderWizard('/tasks/new?kind=agent&agentId=ghost-agent-id')
     next() // space → content
     await screen.findByTestId('wizard-task-name')
     // Impl-gate P2-8: list loaded successfully but no row matches — this must
@@ -325,7 +330,7 @@ describe('RFC-218 — port-driven agent launch form', () => {
       resolveAgents = res
     })
     installFetch({ agentsPromise })
-    await renderWizard('/tasks/new?kind=agent&agent=ported')
+    await renderWizard('/tasks/new?kind=agent&agentId=agent-ported')
     next() // space → content while the list is still pending
     await screen.findByTestId('wizard-task-name')
     expect(screen.queryByTestId('wizard-description')).toBeNull()

@@ -142,7 +142,7 @@ export interface AgentWizardCommon extends WizardAdvancedFields {
   allowClarify: boolean
 }
 
-/** Compose the JSON body for `POST /api/agents/:name/tasks` (agent in URL, not body). */
+/** Compose the JSON body for `POST /api/agents/:id/tasks` (agent in URL, not body). */
 export function buildAgentStartBody(
   space: WizardSpace,
   common: AgentWizardCommon,
@@ -203,7 +203,7 @@ export interface WorkgroupWizardCommon extends WizardAdvancedFields {
   goal: string
 }
 
-/** Compose the JSON body for `POST /api/workgroups/:name/tasks` (group in URL, not body). */
+/** Compose the JSON body for `POST /api/workgroups/:id/tasks` (group in URL, not body). */
 export function buildWorkgroupStartBody(
   space: WizardSpace,
   common: WorkgroupWizardCommon,
@@ -236,7 +236,7 @@ export function buildWorkgroupStartBody(
 export function buildScheduledEnvelope(
   kind: WizardKind,
   body: Record<string, unknown>,
-  ref: { agentName?: string; workgroupName?: string },
+  ref: { agentId?: string; workgroupId?: string },
 ): Record<string, unknown> {
   // RFC-199 T6.6: scheduled workflows deliberately resolve the latest
   // workflow revision when each occurrence fires. Keep the immediate-launch
@@ -244,10 +244,12 @@ export function buildScheduledEnvelope(
   // hands this helper an already-guarded body.
   const scheduledBody = { ...body }
   delete scheduledBody.expectedWorkflowVersion
+  delete scheduledBody.expectedAgentId
+  delete scheduledBody.expectedWorkgroupId
   delete scheduledBody.expectedWorkgroupVersion
 
-  if (kind === 'agent') return { agentName: ref.agentName ?? '', ...scheduledBody }
-  if (kind === 'workgroup') return { workgroupName: ref.workgroupName ?? '', ...scheduledBody }
+  if (kind === 'agent') return { agentId: ref.agentId ?? '', ...scheduledBody }
+  if (kind === 'workgroup') return { workgroupId: ref.workgroupId ?? '', ...scheduledBody }
   return scheduledBody
 }
 
@@ -259,8 +261,8 @@ export function buildScheduledEnvelope(
  */
 export interface WizardSeed {
   workflowId?: string
-  agentName?: string
-  workgroupName?: string
+  agentId?: string
+  workgroupId?: string
   taskName: string
   space: WizardSpace
   inputs: Record<string, string>
@@ -284,8 +286,8 @@ export function payloadToWizardSeed(
     kind === 'workflow'
       ? payload.workflowId
       : kind === 'agent'
-        ? payload.agentName
-        : payload.workgroupName
+        ? payload.agentId
+        : payload.workgroupId
   if (typeof discriminant !== 'string' || discriminant.length === 0) return null
   const str = (v: unknown): string => (typeof v === 'string' ? v : '')
   const seed: WizardSeed = {
@@ -314,8 +316,8 @@ export function payloadToWizardSeed(
     autoCommitPush: payload.autoCommitPush === true,
   }
   if (kind === 'workflow') seed.workflowId = discriminant
-  if (kind === 'agent') seed.agentName = discriminant
-  if (kind === 'workgroup') seed.workgroupName = discriminant
+  if (kind === 'agent') seed.agentId = discriminant
+  if (kind === 'workgroup') seed.workgroupId = discriminant
   if (typeof payload.maxDurationMs === 'number') seed.maxDurationMs = payload.maxDurationMs
   if (typeof payload.maxTotalTokens === 'number') seed.maxTotalTokens = payload.maxTotalTokens
   return seed
@@ -389,9 +391,9 @@ export function snapshotClarifyState(snapshot: unknown): boolean | 'unknown' {
  * NOT be faithfully rebuilt (internal/fusion space, or a legacy path-mode local
  * task with no URL to replay) — the wizard then leaves the space at its default
  * rather than a wrong value. Collaborators are NOT included here (fetched
- * separately from the members endpoint — §4). Subject validity (does the current
- * same-named agent/workgroup match) is a wizard concern (needs the inventory
- * queries), NOT decidable from the Task alone (§4.7).
+ * separately from the members endpoint — §4). Subject validity (does the frozen
+ * id still resolve in the current inventory) is a wizard concern, NOT decidable
+ * from the Task alone (§4.7). There is deliberately no name fallback.
  */
 export function taskToLaunchPayload(task: Task): {
   payload: Record<string, unknown>
@@ -463,7 +465,7 @@ export function taskToLaunchPayload(task: Task): {
     // against the current inputDefs (§4.8); carried verbatim here.
     payload.inputs = task.inputs
   } else if (kind === 'agent') {
-    payload.agentName = task.sourceAgentName ?? ''
+    payload.agentId = task.sourceAgentId ?? ''
     if (snapshotIsPortedAgentHost(task.workflowSnapshot)) {
       // RFC-218: ported host — replay port values. Upload-kind keys are stale
       // worktree paths the browser cannot rebuild into Files; drop them so the
@@ -478,7 +480,7 @@ export function taskToLaunchPayload(task: Task): {
     }
     if (snapshotClarifyState(task.workflowSnapshot) === false) payload.allowClarify = false
   } else {
-    payload.workgroupName = task.workgroupName ?? ''
+    payload.workgroupId = task.workgroupId ?? ''
     payload.goal = task.goal ?? ''
   }
 

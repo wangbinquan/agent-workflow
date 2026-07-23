@@ -233,15 +233,17 @@ describe('buildScheduledEnvelope (RFC-165 §9b)', () => {
     const body = { workflowId: 'wf1', name: 'T' }
     expect(buildScheduledEnvelope('workflow', body, {})).toEqual(body)
   })
-  test('agent: agentName is injected', () => {
-    expect(buildScheduledEnvelope('agent', { name: 'T' }, { agentName: 'auditor' })).toEqual({
-      agentName: 'auditor',
+  test('agent: canonical agentId is injected', () => {
+    expect(buildScheduledEnvelope('agent', { name: 'T' }, { agentId: 'agent-auditor' })).toEqual({
+      agentId: 'agent-auditor',
       name: 'T',
     })
   })
-  test('workgroup: workgroupName is injected', () => {
-    expect(buildScheduledEnvelope('workgroup', { name: 'T' }, { workgroupName: 'core' })).toEqual({
-      workgroupName: 'core',
+  test('workgroup: canonical workgroupId is injected', () => {
+    expect(
+      buildScheduledEnvelope('workgroup', { name: 'T' }, { workgroupId: 'workgroup-core' }),
+    ).toEqual({
+      workgroupId: 'workgroup-core',
       name: 'T',
     })
   })
@@ -254,6 +256,27 @@ describe('buildScheduledEnvelope (RFC-165 §9b)', () => {
         {},
       ),
     ).toEqual({ workflowId: 'wf1', name: 'T' })
+  })
+
+  test('all immediate-only subject/version guards are stripped from durable envelopes', () => {
+    expect(
+      buildScheduledEnvelope(
+        'agent',
+        { name: 'T', expectedAgentId: 'stale' },
+        { agentId: 'agent-live' },
+      ),
+    ).toEqual({ agentId: 'agent-live', name: 'T' })
+    expect(
+      buildScheduledEnvelope(
+        'workgroup',
+        {
+          name: 'T',
+          expectedWorkgroupId: 'stale',
+          expectedWorkgroupVersion: 9,
+        },
+        { workgroupId: 'workgroup-live' },
+      ),
+    ).toEqual({ workgroupId: 'workgroup-live', name: 'T' })
   })
 })
 
@@ -282,9 +305,9 @@ describe('payloadToWizardSeed (editScheduled backfill)', () => {
     const body = buildAgentStartBody(SCRATCH, { name: 'T', description: 'd', allowClarify: false })
     const seed = payloadToWizardSeed(
       'agent',
-      buildScheduledEnvelope('agent', body, { agentName: 'a1' }),
+      buildScheduledEnvelope('agent', body, { agentId: 'agent-a1' }),
     )
-    expect(seed?.agentName).toBe('a1')
+    expect(seed?.agentId).toBe('agent-a1')
     expect(seed?.description).toBe('d')
     expect(seed?.allowClarify).toBe(false)
     expect(seed?.space).toEqual({ kind: 'scratch' })
@@ -294,9 +317,9 @@ describe('payloadToWizardSeed (editScheduled backfill)', () => {
     const body = buildWorkgroupStartBody(REMOTE, { name: 'T', goal: 'g', maxTotalTokens: 7 })
     const seed = payloadToWizardSeed(
       'workgroup',
-      buildScheduledEnvelope('workgroup', body, { workgroupName: 'core' }),
+      buildScheduledEnvelope('workgroup', body, { workgroupId: 'workgroup-core' }),
     )
-    expect(seed?.workgroupName).toBe('core')
+    expect(seed?.workgroupId).toBe('workgroup-core')
     expect(seed?.goal).toBe('g')
     expect(seed?.maxTotalTokens).toBe(7)
     expect(seed?.space).toEqual(REMOTE)
@@ -306,6 +329,20 @@ describe('payloadToWizardSeed (editScheduled backfill)', () => {
     expect(payloadToWizardSeed('workflow', { name: 'T' })).toBeNull()
     expect(payloadToWizardSeed('agent', { name: 'T', description: 'd' })).toBeNull()
     expect(payloadToWizardSeed('workgroup', { name: 'T', goal: 'g' })).toBeNull()
+    expect(
+      payloadToWizardSeed('agent', {
+        agentName: 'legacy-name-only',
+        name: 'T',
+        description: 'd',
+      }),
+    ).toBeNull()
+    expect(
+      payloadToWizardSeed('workgroup', {
+        workgroupName: 'legacy-name-only',
+        name: 'T',
+        goal: 'g',
+      }),
+    ).toBeNull()
   })
 
   test('legacy path-only payload degrades to one blank URL row', () => {
@@ -380,18 +417,21 @@ describe('RFC-175 §3 — snapshotClarifyState + taskToLaunchPayload', () => {
     expect(payload.repos).toEqual([{ repoUrl: 'https://x/r.git', ref: 'dev' }])
     expect(payload.agentName).toBeUndefined()
     expect(payload.workgroupName).toBeUndefined()
+    expect(payload.agentId).toBeUndefined()
+    expect(payload.workgroupId).toBeUndefined()
   })
 
-  test('agent task → agentName + description(inputs.description) + 3-state allowClarify', () => {
+  test('agent task → agentId + description(inputs.description) + 3-state allowClarify', () => {
     const withClarify = taskToLaunchPayload(
       task({
         sourceAgentName: 'auditor',
+        sourceAgentId: 'agent-auditor',
         inputs: { description: 'fix it' },
         spaceKind: 'scratch',
         workflowSnapshot: { nodes: [{ kind: 'clarify' }] },
       }),
     ).payload
-    expect(withClarify.agentName).toBe('auditor')
+    expect(withClarify.agentId).toBe('agent-auditor')
     expect(withClarify.description).toBe('fix it')
     expect(withClarify.scratch).toBe(true)
     expect(withClarify.allowClarify).toBeUndefined() // present ⇒ omit (defaults true)
@@ -399,6 +439,7 @@ describe('RFC-175 §3 — snapshotClarifyState + taskToLaunchPayload', () => {
     const noClarify = taskToLaunchPayload(
       task({
         sourceAgentName: 'auditor',
+        sourceAgentId: 'agent-auditor',
         inputs: { description: 'x' },
         workflowSnapshot: { nodes: [{ kind: 'agent-single' }] },
       }),
@@ -406,18 +447,38 @@ describe('RFC-175 §3 — snapshotClarifyState + taskToLaunchPayload', () => {
     expect(noClarify.allowClarify).toBe(false) // provably absent ⇒ false
 
     const unknownClarify = taskToLaunchPayload(
-      task({ sourceAgentName: 'a', inputs: { description: 'x' }, workflowSnapshot: null }),
+      task({
+        sourceAgentName: 'a',
+        sourceAgentId: 'agent-a',
+        inputs: { description: 'x' },
+        workflowSnapshot: null,
+      }),
     ).payload
     expect(unknownClarify.allowClarify).toBeUndefined() // broken ⇒ omit, not false
   })
 
-  test('workgroup task → workgroupName + goal', () => {
+  test('workgroup task → workgroupId + goal', () => {
     const { payload } = taskToLaunchPayload(
       task({ workgroupId: 'g-1', workgroupName: 'squad', goal: 'ship it' }),
     )
-    expect(payload.workgroupName).toBe('squad')
+    expect(payload.workgroupId).toBe('g-1')
     expect(payload.goal).toBe('ship it')
     expect(payload.workflowId).toBeUndefined()
+  })
+
+  test('historical name-only task subjects fail closed instead of resolving by name', () => {
+    const agentPayload = taskToLaunchPayload(
+      task({ sourceAgentName: 'reused-name', sourceAgentId: null, inputs: { description: 'x' } }),
+    ).payload
+    expect(agentPayload.agentId).toBe('')
+    expect(payloadToWizardSeed('agent', agentPayload)).toBeNull()
+
+    const groupPayload = taskToLaunchPayload(
+      task({ workgroupId: null, workgroupName: 'reused-name', goal: 'g' }),
+    ).payload
+    // With no frozen workgroup id this row is not classified as a workgroup
+    // task, so it cannot be retargeted through the display name.
+    expect(groupPayload.workgroupId).toBeUndefined()
   })
 
   test('advanced fields: git identity pair-gated, workingBranch, autoCommitPush, limits', () => {
@@ -467,6 +528,7 @@ describe('RFC-175 §3 — snapshotClarifyState + taskToLaunchPayload', () => {
     const { payload } = taskToLaunchPayload(
       task({
         sourceAgentName: 'auditor',
+        sourceAgentId: 'agent-auditor',
         inputs: { description: 'do the thing' },
         spaceKind: 'remote',
         repos: [repo('https://x/r.git', 'dev')],
@@ -476,7 +538,7 @@ describe('RFC-175 §3 — snapshotClarifyState + taskToLaunchPayload', () => {
     )
     const seed = payloadToWizardSeed('agent', payload)
     expect(seed).not.toBeNull()
-    expect(seed!.agentName).toBe('auditor')
+    expect(seed!.agentId).toBe('agent-auditor')
     expect(seed!.description).toBe('do the thing')
     expect(seed!.allowClarify).toBe(false)
     expect(seed!.space).toEqual({

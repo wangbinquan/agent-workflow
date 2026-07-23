@@ -3,11 +3,11 @@
 // is locked by migration-0112-rfc223-pr2.test.ts):
 //
 //   - extractWorkflowAgentRefs returns a node's canonical id (name fallback);
-//   - createScheduledTask STAMPS $.agentId / $.workgroupId into the stored
-//     payload, and the delete/rename guards find that reference BY ID;
-//   - createWorkgroup resolves each agent member's agent_id (dangling → null),
-//     the id survives a rename (rename-safe), and launch readiness refuses a
-//     roster whose member agent was deleted (validated by id);
+//   - PR-7 scheduled writes REQUIRE $.agentId / $.workgroupId, refresh display
+//     names from that row, and delete guards find references BY ID;
+//   - PR-7 workgroup writes REQUIRE each member's agent_id; the id survives a
+//     rename (rename-safe), and launch readiness refuses a roster whose member
+//     agent was deleted (validated by id);
 //   - the portable YAML selector helpers (strip on export / resolve on import);
 //   - a source-level lock on the scheduler dispatching by getAgentById.
 //
@@ -28,7 +28,7 @@ import { scheduledTasks } from '../src/db/schema'
 import { eq } from 'drizzle-orm'
 import { createAgent, deleteAgent, getAgentById, renameAgent } from '../src/services/agent'
 import { createScheduledTask } from '../src/services/scheduledTasks'
-import { createWorkgroup, getWorkgroup } from '../src/services/workgroups'
+import { createWorkgroup, getWorkgroupById } from '../src/services/workgroups'
 import { startWorkgroupTask } from '../src/services/workgroup/launch'
 import {
   extractWorkflowAgentRefs,
@@ -68,13 +68,13 @@ async function seedOwner(db: DbClient): Promise<string> {
   })
   return u.id
 }
-function groupInput(overrides: Partial<CreateWorkgroup> = {}): CreateWorkgroup {
+function groupInput(agentId: string, overrides: Partial<CreateWorkgroup> = {}): CreateWorkgroup {
   return CreateWorkgroupSchema.parse({
     name: 'squad',
     description: '',
     instructions: '',
     mode: 'free_collab',
-    members: [{ memberType: 'agent', agentName: 'a1', displayName: 'a1', roleDesc: '' }],
+    members: [{ memberType: 'agent', agentId, displayName: 'a1', roleDesc: '' }],
     ...overrides,
   })
 }
@@ -95,7 +95,7 @@ describe('RFC-223 PR-2 — extractWorkflowAgentRefs prefers the canonical id', (
 })
 
 // --------------------------------------------------------------------------
-describe('RFC-223 PR-2 — scheduled payload stamps + guards by id', () => {
+describe('RFC-223 PR-7 — scheduled payload writes + guards by id', () => {
   let db: DbClient
   let ownerId: string
   beforeEach(async () => {
@@ -108,14 +108,20 @@ describe('RFC-223 PR-2 — scheduled payload stamps + guards by id', () => {
       (await db.select().from(scheduledTasks).where(eq(scheduledTasks.id, id)))[0]!.launchPayload,
     )
 
-  test('agent schedule stamps $.agentId (server-derived; client sends only the name)', async () => {
+  test('agent schedule requires $.agentId and refreshes the display name from that row', async () => {
     const agent = await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
     const created = await createScheduledTask(
       db,
       {
         name: 'nightly',
         launchKind: 'agent',
-        launchPayload: { agentName: 'solo', name: 't', description: 'd', scratch: true },
+        launchPayload: {
+          agentId: agent.id,
+          agentName: 'untrusted-stale-name',
+          name: 't',
+          description: 'd',
+          scratch: true,
+        },
         scheduleSpec: SPEC,
         enabled: true,
       },
@@ -127,14 +133,20 @@ describe('RFC-223 PR-2 — scheduled payload stamps + guards by id', () => {
   })
 
   test('workgroup schedule stamps $.workgroupId', async () => {
-    await createAgent(db, { ...AGENT_FIELDS, name: 'a1' })
-    const group = await createWorkgroup(db, groupInput())
+    const a1 = await createAgent(db, { ...AGENT_FIELDS, name: 'a1' })
+    const group = await createWorkgroup(db, groupInput(a1.id))
     const created = await createScheduledTask(
       db,
       {
         name: 'nightly',
         launchKind: 'workgroup',
-        launchPayload: { workgroupName: 'squad', name: 't', goal: 'g', scratch: true },
+        launchPayload: {
+          workgroupId: group.id,
+          workgroupName: 'untrusted-stale-name',
+          name: 't',
+          goal: 'g',
+          scratch: true,
+        },
         scheduleSpec: SPEC,
         enabled: true,
       },
@@ -142,16 +154,17 @@ describe('RFC-223 PR-2 — scheduled payload stamps + guards by id', () => {
     )
     const p = await storedPayload(created.id)
     expect(p.workgroupId).toBe(group.id)
+    expect(p.workgroupName).toBe('squad')
   })
 
-  test('deleteAgent / renameAgent refuse while a scheduled task references the agent (found BY ID)', async () => {
+  test('rename is id-stable while delete refuses a scheduled reference found BY ID', async () => {
     const agent = await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
     await createScheduledTask(
       db,
       {
         name: 'nightly',
         launchKind: 'agent',
-        launchPayload: { agentName: 'solo', name: 't', description: 'd', scratch: true },
+        launchPayload: { agentId: agent.id, name: 't', description: 'd', scratch: true },
         scheduleSpec: SPEC,
         enabled: true,
       },
@@ -160,17 +173,18 @@ describe('RFC-223 PR-2 — scheduled payload stamps + guards by id', () => {
     // The stored payload carries agentId — the guard matches it even though the
     // guard is handed the agent's id, not its name.
     expect(agent.id).toBeTruthy()
-    await expect(deleteAgent(db, 'solo', actor(ownerId))).rejects.toMatchObject({
+    await expect(deleteAgent(db, agent.id, actor(ownerId))).rejects.toMatchObject({
       code: 'agent-scheduled-referenced',
     })
-    await expect(
-      renameAgent(db, 'solo', { newName: 'solo2' }, actor(ownerId)),
-    ).rejects.toMatchObject({ code: 'agent-scheduled-referenced' })
+    expect(await renameAgent(db, agent.id, { newName: 'solo2' })).toMatchObject({
+      id: agent.id,
+      name: 'solo2',
+    })
   })
 })
 
 // --------------------------------------------------------------------------
-describe('RFC-223 PR-2 — workgroup member agent_id', () => {
+describe('RFC-223 PR-7 — workgroup member writes and launch target use canonical ids', () => {
   let db: DbClient
   let appHome: string
   beforeEach(async () => {
@@ -182,49 +196,60 @@ describe('RFC-223 PR-2 — workgroup member agent_id', () => {
   })
   afterEach(() => rmSync(appHome, { recursive: true, force: true }))
 
-  const memberOf = async (groupName: string, displayName: string) => {
-    const g = (await getWorkgroup(db, groupName))!
+  const memberOf = async (groupId: string, displayName: string) => {
+    const g = (await getWorkgroupById(db, groupId))!
     return g.members.find((m) => m.displayName === displayName)!
   }
 
-  test('createWorkgroup resolves each agent member’s agent_id; a dangling member stays null', async () => {
+  test('createWorkgroup requires and stores each agent member’s canonical agent_id', async () => {
     const a1 = await createAgent(db, { ...AGENT_FIELDS, name: 'a1' })
-    await createWorkgroup(
-      db,
-      groupInput({
-        members: [
-          { memberType: 'agent', agentName: 'a1', displayName: 'a1', roleDesc: '' },
-          { memberType: 'agent', agentName: 'ghost', displayName: 'ghost', roleDesc: '' },
-        ],
-      }),
-    )
-    expect((await memberOf('squad', 'a1')).agentId).toBe(a1.id)
-    expect((await memberOf('squad', 'ghost')).agentId).toBeNull()
+    expect(
+      CreateWorkgroupSchema.safeParse({
+        ...groupInput(a1.id),
+        members: [{ memberType: 'agent', agentName: 'a1', displayName: 'a1', roleDesc: '' }],
+      }).success,
+    ).toBe(false)
+    const group = await createWorkgroup(db, groupInput(a1.id))
+    expect((await memberOf(group.id, 'a1')).agentId).toBe(a1.id)
   })
 
   test('a member’s frozen agent_id survives a rename of its agent (rename-safe)', async () => {
     const a1 = await createAgent(db, { ...AGENT_FIELDS, name: 'a1' })
-    await createWorkgroup(db, groupInput())
+    const group = await createWorkgroup(db, groupInput(a1.id))
     // Renaming an agent that is only a workgroup member is allowed (no guard).
-    await renameAgent(db, 'a1', { newName: 'a1-renamed' }, actor('u1'))
-    const m = await memberOf('squad', 'a1')
+    await renameAgent(db, a1.id, { newName: 'a1-renamed' })
+    const m = await memberOf(group.id, 'a1')
     // The member still points at the SAME id, and that id still exists — so
     // launch readiness (which validates the roster by id) still passes.
     expect(m.agentId).toBe(a1.id)
     expect(await getAgentById(db, a1.id)).not.toBeNull()
   })
 
+  test('workgroup launch accepts only the canonical id, never an existing name', async () => {
+    const a1 = await createAgent(db, { ...AGENT_FIELDS, name: 'a1' })
+    const group = await createWorkgroup(db, groupInput(a1.id))
+    await expect(
+      startWorkgroupTask(
+        db,
+        actor('u1'),
+        group.name,
+        { name: 'e2e', goal: 'g', scratch: true },
+        { db, appHome, opencodeCmd: ['bun', '-e', 'process.exit(0)'], awaitScheduler: true },
+      ),
+    ).rejects.toMatchObject({ code: 'workgroup-not-found' })
+  })
+
   test('launch refuses (workgroup-not-ready / agent-missing) when a member agent was deleted', async () => {
-    await createAgent(db, { ...AGENT_FIELDS, name: 'a1' })
-    await createWorkgroup(db, groupInput())
+    const a1 = await createAgent(db, { ...AGENT_FIELDS, name: 'a1' })
+    const group = await createWorkgroup(db, groupInput(a1.id))
     // Deleting an agent that is only a workgroup member is allowed (soft ref).
-    await deleteAgent(db, 'a1', actor('u1'))
+    await deleteAgent(db, a1.id, actor('u1'))
     // Its frozen id no longer resolves → readiness fails BEFORE any spawn.
     await expect(
       startWorkgroupTask(
         db,
         actor('u1'),
-        'squad',
+        group.id,
         { name: 'e2e', goal: 'g', scratch: true },
         { db, appHome, opencodeCmd: ['bun', '-e', 'process.exit(0)'], awaitScheduler: true },
       ),

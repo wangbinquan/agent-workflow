@@ -237,17 +237,17 @@ async function assertScheduledTargetUsable(
     return
   }
   if (kind === 'agent') {
-    const { getAgent } = await import('@/services/agent')
-    const agent = await getAgent(db, body['agentName'] as string)
+    const { getAgentById } = await import('@/services/agent')
+    const agentId = body['agentId'] as string
+    const agent = await getAgentById(db, agentId)
     if (agent === null || !(await canViewResource(db, actor, 'agent', agent))) {
-      throw new NotFoundError('agent-not-found', `agent '${String(body['agentName'])}' not found`)
+      throw new NotFoundError('agent-not-found', 'agent not found')
     }
     assertNotBuiltin('agent', agent)
-    // RFC-223 (PR-2): STAMP the canonical agent id into the (mutated) payload so
-    // the stored row freezes the id, not just the mutable name. Fire resolves by
-    // this id (rename-safe, ABA-safe); the delete/rename guard matches it. The
-    // client need not send it — the server derives it from the resolved target.
-    body['agentId'] = agent.id
+    // RFC-223 PR-7: identity arrived as the required canonical id. Refresh the
+    // optional name snapshot from that exact row; never resolve or trust a
+    // client-provided display name.
+    body['agentName'] = agent.name
     // RFC-218 (design P2-2): with description/inputs both schema-optional, a
     // payload that must fail EVERY fire (neither field / unknown keys /
     // missing required ports / blocker agent / upload ports — scheduled fires
@@ -261,16 +261,13 @@ async function assertScheduledTargetUsable(
     )
     return
   }
-  const { getWorkgroup } = await import('@/services/workgroups')
-  const group = await getWorkgroup(db, body['workgroupName'] as string)
+  const { getWorkgroupById } = await import('@/services/workgroups')
+  const workgroupId = body['workgroupId'] as string
+  const group = await getWorkgroupById(db, workgroupId)
   if (group === null || !(await canViewResource(db, actor, 'workgroup', group))) {
-    throw new NotFoundError(
-      'workgroup-not-found',
-      `workgroup '${String(body['workgroupName'])}' not found`,
-    )
+    throw new NotFoundError('workgroup-not-found', 'workgroup not found')
   }
-  // RFC-223 (PR-2): stamp the canonical workgroup id (see agent branch above).
-  body['workgroupId'] = group.id
+  body['workgroupName'] = group.name
 }
 
 export async function createScheduledTask(

@@ -38,7 +38,7 @@ import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { agents, workflows } from '@/db/schema'
 import { canViewResource } from '@/services/resourceAcl'
-import { getWorkgroup } from '@/services/workgroups'
+import { getWorkgroupById } from '@/services/workgroups'
 import { startTask, type StartTaskDeps } from '@/services/task'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 
@@ -176,25 +176,22 @@ export function resolveWorkgroupCollaborators(
 export async function startWorkgroupTask(
   db: DbClient,
   actor: Actor,
-  workgroupName: string,
+  workgroupId: string,
   input: StartWorkgroupTask,
   deps: StartTaskDeps,
 ): Promise<Task> {
-  const group = await getWorkgroup(db, workgroupName)
+  const group = await getWorkgroupById(db, workgroupId)
   if (group === null || !(await canViewResource(db, actor, 'workgroup', group))) {
-    throw new NotFoundError('workgroup-not-found', `workgroup '${workgroupName}' not found`)
+    throw new NotFoundError('workgroup-not-found', 'workgroup not found')
   }
 
-  // RFC-175 (§2b/§2d-1): immediate-submit OCC guard for relaunch. When the
-  // relaunch carries `expectedWorkgroupId`, reject if the current same-named
-  // group is a DIFFERENT resource (a delete+recreate-same-name replacement).
-  // Compared AFTER the ACL-404 gate above so a mismatch never leaks a private
-  // group name's existence as a 409-vs-404 probe (R3-F5). Immediate-launch only
-  // (never persisted into a scheduled payload — §2d).
+  // RFC-175 (§2b/§2d-1) / RFC-223 PR-7: the route target is already the
+  // canonical id. Keep the body fence for relaunch OCC, comparing id-to-id
+  // after the ACL-404 gate so private existence still cannot leak.
   if (input.expectedWorkgroupId !== undefined && group.id !== input.expectedWorkgroupId) {
     throw new ConflictError(
       'workgroup-id-mismatch',
-      `workgroup '${workgroupName}' is not the expected resource (it may have been replaced)`,
+      `workgroup '${group.name}' is not the expected resource`,
     )
   }
   if (
@@ -203,7 +200,7 @@ export async function startWorkgroupTask(
   ) {
     throw new ConflictError(
       'workgroup-version-conflict',
-      `workgroup '${workgroupName}' changed during launch (expected v${input.expectedWorkgroupVersion}, now v${group.version})`,
+      `workgroup '${group.name}' changed during launch (expected v${input.expectedWorkgroupVersion}, now v${group.version})`,
       { expectedVersion: input.expectedWorkgroupVersion, currentVersion: group.version },
     )
   }
