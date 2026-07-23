@@ -304,6 +304,9 @@ export function AgentImportDialog({
 
   function backToSource(): void {
     if (phase.kind !== 'review') return
+    // Resolving portable references is read-only and cancelable. Advancing the
+    // generation makes a late response inert before the review is discarded.
+    invalidateRead()
     setPhase({ kind: 'select', source: phase.sourceDraft, busy: null })
   }
 

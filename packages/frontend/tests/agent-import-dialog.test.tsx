@@ -148,6 +148,30 @@ describe('AgentImportDialog', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
+  test('Back cancels an in-flight reference resolution without applying its late result', async () => {
+    let releaseResolve!: (value: ResolveAgentImportRefsResult) => void
+    const onResolve = vi.fn(
+      () =>
+        new Promise<ResolveAgentImportRefsResult>((resolve) => {
+          releaseResolve = resolve
+        }),
+    )
+    const { onApply } = setup({ onResolve })
+    pasteAndCheck(['---', 'description: canceled import', '---'].join('\n'))
+
+    fireEvent.click(screen.getByTestId('agent-import-apply'))
+    await waitFor(() =>
+      expect(screen.getByTestId('agent-import-apply').getAttribute('aria-busy')).toBe('true'),
+    )
+    fireEvent.click(screen.getByTestId('agent-import-back'))
+
+    expect(screen.getByTestId('agent-import-textarea')).toBeTruthy()
+    expect(screen.queryByTestId('agent-import-result')).toBeNull()
+    await act(async () => releaseResolve({}))
+    expect(onApply).not.toHaveBeenCalled()
+    expect(screen.getByTestId('agent-import-textarea')).toBeTruthy()
+  })
+
   test('Import another clears the result and both source drafts', async () => {
     setup()
     pasteAndCheck(['---', 'description: first', '---'].join('\n'))
