@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import { ReactFlowProvider } from '@xyflow/react'
 import { render } from '@testing-library/react'
 import { describe, expect, test } from 'vitest'
+import { __testToFlowEdges as toFlowEdges } from '../src/components/canvas/WorkflowCanvas'
 import { AgentNode } from '../src/components/canvas/nodes/AgentNode'
 import type { CanvasNodeData } from '../src/components/canvas/nodes/types'
 
@@ -67,5 +68,34 @@ describe('WorkflowCanvas surface isolation', () => {
     expect(css).toMatch(
       /\.canvas-node\[data-surface='editor'\]\s+\.canvas-node__handle:not\(\.canvas-node__handle--catchall\)::after\s*\{[^}]*inset: -8px/s,
     )
+  })
+
+  // Regression: task execution reused the editor edge projection and therefore
+  // exposed a midpoint "+" even though the runtime canvas cannot persist edits.
+  test('edge insertion affordance is editor-only', () => {
+    const edge = {
+      id: 'source-target',
+      source: { nodeId: 'source', portName: 'result' },
+      target: { nodeId: 'target', portName: 'input' },
+    }
+    const onInsertNode = () => undefined
+    const project = (
+      surface: CanvasNodeData['surface'],
+      readOnly: boolean | undefined,
+      hasChangeHandler: boolean,
+    ) =>
+      toFlowEdges([edge], undefined, new Set([edge.id]), {
+        surface,
+        readOnly,
+        hasChangeHandler,
+        onInsertNode,
+      })[0]
+
+    expect(project('task', undefined, false)?.data).toBeUndefined()
+    expect(project('task', undefined, true)?.data).toBeUndefined()
+    expect(project('workgroup-preview', undefined, true)?.data).toBeUndefined()
+    expect(project('editor', true, true)?.data).toBeUndefined()
+    expect(project('editor', false, false)?.data).toBeUndefined()
+    expect(project('editor', false, true)?.data).toMatchObject({ onInsertNode })
   })
 })

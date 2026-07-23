@@ -243,6 +243,14 @@ export interface WorkflowCanvasProps {
   clarifyNavs?: Record<string, 'awaiting' | 'answered'>
 }
 
+export function canShowEdgeInsertAffordance(
+  surface: WorkflowCanvasSurface,
+  readOnly: boolean | undefined,
+  hasChangeHandler: boolean,
+): boolean {
+  return surface === 'editor' && readOnly !== true && hasChangeHandler
+}
+
 export interface WorkflowCanvasChangeMeta {
   label: string
   selectionBefore?: CanvasSelection | null
@@ -460,6 +468,7 @@ function CanvasInner({
   const handleInsertNodeOnEdge = useCallback((edgeId: string, trigger: HTMLElement) => {
     openNodePickerRef.current({ kind: 'insert-edge', edgeId }, trigger)
   }, [])
+  const edgeInsertEnabled = canShowEdgeInsertAffordance(surface, readOnly, onChange !== undefined)
   // Cached signature of the last selection emitted to the parent. Without
   // this guard we'd hand the parent a fresh `{kind, id}` object on every
   // xyflow tick, the parent re-renders, xyflow's StoreUpdater notices new
@@ -492,7 +501,12 @@ function CanvasInner({
       definition.edges,
       buildControlFlowEdgeIds(definition, agentByName),
       workflowInsertableEdgeIds(definition, semanticContext),
-      handleInsertNodeOnEdge,
+      {
+        surface,
+        readOnly,
+        hasChangeHandler: onChange !== undefined,
+        onInsertNode: handleInsertNodeOnEdge,
+      },
       validationProjection.edges,
     ),
   )
@@ -513,6 +527,7 @@ function CanvasInner({
   // query resolves / a clarify advances, definition unchanged) repaints hints.
   const externalClarifyNavsRef = useRef(clarifyNavs)
   const externalValidationIssuesRef = useRef(validationIssues)
+  const externalEdgeInsertEnabledRef = useRef(edgeInsertEnabled)
   // Track the last agentByName ref we rebuilt against. The canvas is often
   // mounted on the task-detail page before the `useQuery(['agents'])` call
   // resolves; on first render `agents` is `[]`, so agent-node `outputPorts`
@@ -693,6 +708,7 @@ function CanvasInner({
     // RFC-161: clarifyNavs map change repaints clarify-node hints (same shape).
     const clarifyNavsChanged = clarifyNavs !== externalClarifyNavsRef.current
     const validationChanged = validationIssues !== externalValidationIssuesRef.current
+    const edgeInsertEnabledChanged = edgeInsertEnabled !== externalEdgeInsertEnabledRef.current
     if (
       defChanged ||
       surfaceChanged ||
@@ -702,7 +718,8 @@ function CanvasInner({
       directivesChanged ||
       reviewNavsChanged ||
       clarifyNavsChanged ||
-      validationChanged
+      validationChanged ||
+      edgeInsertEnabledChanged
     ) {
       externalDefRef.current = definition
       externalSurfaceRef.current = surface
@@ -713,6 +730,7 @@ function CanvasInner({
       externalReviewNavsRef.current = reviewNavs
       externalClarifyNavsRef.current = clarifyNavs
       externalValidationIssuesRef.current = validationIssues
+      externalEdgeInsertEnabledRef.current = edgeInsertEnabled
       // Preserve `selected: true` across the rebuild. Without this, an
       // inspector edit (which mints a new `definition` reference) wipes
       // the selected flag, xyflow sees a phantom deselect and fires
@@ -748,14 +766,19 @@ function CanvasInner({
       // asynchronously once the agents query resolves (see externalAgentsRef
       // above) — without the agentsChanged arm a signal edge stays drawn as a
       // data edge until the next definition edit.
-      if (defChanged || agentsChanged || validationChanged)
+      if (defChanged || agentsChanged || validationChanged || edgeInsertEnabledChanged)
         setEdges(
           applySelection(
             toFlowEdges(
               definition.edges,
               buildControlFlowEdgeIds(definition, agentByName),
               workflowInsertableEdgeIds(definition, semanticContext),
-              handleInsertNodeOnEdge,
+              {
+                surface,
+                readOnly,
+                hasChangeHandler: onChange !== undefined,
+                onInsertNode: handleInsertNodeOnEdge,
+              },
               validationProjection.edges,
             ),
             sel.edges,
@@ -773,6 +796,7 @@ function CanvasInner({
     handleAddInsideWrapper,
     reviewNavs,
     clarifyNavs,
+    edgeInsertEnabled,
     handleInsertNodeOnEdge,
     onChange,
     readOnly,
@@ -1360,7 +1384,12 @@ function CanvasInner({
           definition.edges,
           buildControlFlowEdgeIds(definition, agentByName),
           workflowInsertableEdgeIds(definition, semanticContext),
-          handleInsertNodeOnEdge,
+          {
+            surface,
+            readOnly,
+            hasChangeHandler: onChange !== undefined,
+            onInsertNode: handleInsertNodeOnEdge,
+          },
         ),
         restoredSelection.edges,
       )
@@ -2888,9 +2917,23 @@ function toFlowEdges(
   defEdges: WorkflowDefinition['edges'],
   controlFlowEdgeIds?: ReadonlySet<string>,
   insertableEdgeIds?: ReadonlySet<string>,
-  onInsertNode?: WorkflowCanvasEdgeData['onInsertNode'],
+  edgeInsertion?: {
+    surface: WorkflowCanvasSurface
+    readOnly: boolean | undefined
+    hasChangeHandler: boolean
+    onInsertNode: NonNullable<WorkflowCanvasEdgeData['onInsertNode']>
+  },
   validationCounts?: Readonly<Record<string, WorkflowValidationCounts | undefined>>,
 ): Edge[] {
+  const onInsertNode =
+    edgeInsertion !== undefined &&
+    canShowEdgeInsertAffordance(
+      edgeInsertion.surface,
+      edgeInsertion.readOnly,
+      edgeInsertion.hasChangeHandler,
+    )
+      ? edgeInsertion.onInsertNode
+      : undefined
   return defEdges.map((e) => {
     const insertable = insertableEdgeIds?.has(e.id) === true && onInsertNode !== undefined
     const validation = validationCounts?.[e.id]
