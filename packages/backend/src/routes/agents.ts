@@ -213,7 +213,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
     const task = await startAgentTask(
       deps.db,
       actor,
-      existing.name,
+      existing.id,
       parsed.data,
       buildStartTaskDeps(deps.db, deps.configPath, actor.user.id, opencodeCmd, deps.secretBox),
       uploads,

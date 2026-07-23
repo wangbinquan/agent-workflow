@@ -317,6 +317,11 @@ describe('RFC-164 engine — launch path', () => {
     const body = (await res.json()) as { code: string; details?: { reasons?: string[] } }
     expect(body.code).toBe('workgroup-not-ready')
     expect(body.details?.reasons).toEqual(['leader-missing'])
+    const retiredNameRoute = await req(`/api/workgroups/${group.name}/tasks`, {
+      method: 'POST',
+      body: JSON.stringify({ name: 't', goal: 'g' }),
+    })
+    expect(retiredNameRoute.status).toBe(404)
   })
 
   test('RFC-225 exact handoff rejects a stale workgroup version before task materialization', async () => {

@@ -552,6 +552,11 @@ describe('RFC-165 — HTTP surface: launch + lifecycle guards (A6/A9)', () => {
     const created = (await ok.json()) as { sourceAgentName: string | null; workflowId: string }
     expect(created.sourceAgentName).toBe('solo')
     expect(created.workflowId).toBe(AGENT_HOST_WORKFLOW_ID)
+    const retiredNameRoute = await req('/api/agents/solo/tasks', launchPat, {
+      method: 'POST',
+      body: launchBody,
+    })
+    expect(retiredNameRoute.status).toBe(404)
 
     const { token: writePat } = await createPat({
       db,
