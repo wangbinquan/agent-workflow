@@ -66,12 +66,13 @@ export function AgentSingleEdit({
             ariaLabel={t('inspector.fieldAgent')}
             searchable
             onChange={(v) => {
-              // RFC-223 (PR-2): stamp the canonical agentId beside agentName so
-              // the runtime dispatches by id (rename-safe). Always overwrite it
-              // (undefined when cleared) so a re-pick never leaves a stale id.
+              // RFC-223 PR7: the inspector is another agent-selection writer.
+              // Unknown/cleared values must not turn a canonical node back into
+              // a persisted name-only draft.
               const selected = agents.find((agent) => agent.id === v)
+              if (selected === undefined) return
               update(
-                { agentName: selected?.name ?? '', agentId: selected?.id },
+                { agentName: selected.name, agentId: selected.id },
                 atomicNodeInspectorChange(node.id, 'agentName', t('inspector.fieldAgent')),
               )
             }}

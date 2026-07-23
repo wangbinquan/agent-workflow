@@ -19,10 +19,10 @@ import { ulid } from 'ulid'
 // RFC-060 PR-E: agent-multi removed from the palette — fan-out is now done
 // via wrapper-fanout (which lives in the Wrappers section).
 export type PaletteItem =
-  // RFC-223 (PR-2): agentId is the canonical reference stamped onto the fresh
-  // node (agentName is retained for display). Optional so a legacy drag payload
-  // without it still deserializes; buildPalette always supplies it.
-  | { kind: 'agent-single'; agentName: string; agentId?: string }
+  // RFC-223 PR7: agentId is the canonical reference stamped onto the fresh
+  // node; agentName is display metadata only. A palette item without an id is
+  // not a persistable agent selection.
+  | { kind: 'agent-single'; agentName: string; agentId: string }
   | { kind: 'input' }
   | { kind: 'output' }
   | { kind: 'wrapper-git' }
@@ -176,6 +176,16 @@ export function serialize(item: PaletteItem): string {
   return JSON.stringify(item)
 }
 
+/** Runtime guard shared by every canvas insertion path. PaletteItem's static
+ * type rejects name-only agent rows; this also closes untrusted drag payloads
+ * and imperative callers that bypass TypeScript. */
+export function hasCanonicalPaletteIdentity(item: PaletteItem): boolean {
+  return (
+    item.kind !== 'agent-single' ||
+    (typeof item.agentId === 'string' && item.agentId.trim().length > 0)
+  )
+}
+
 export function deserialize(raw: string): PaletteItem | null {
   try {
     const v = JSON.parse(raw) as unknown
@@ -187,15 +197,10 @@ export function deserialize(raw: string): PaletteItem | null {
     // non-descriptor value (editor crash). RFC-146 impl-gate fix.
     if (typeof rec.kind !== 'string' || !Object.hasOwn(PALETTE_DESCRIPTORS, rec.kind)) return null
     if (rec.kind === 'agent-single') {
-      return typeof rec.agentName === 'string'
-        ? ({
-            kind: rec.kind,
-            agentName: rec.agentName,
-            // RFC-223 (PR-2): carry the canonical id when the drag payload has it.
-            ...(typeof rec.agentId === 'string' && rec.agentId.length > 0
-              ? { agentId: rec.agentId }
-              : {}),
-          } as PaletteItem)
+      return typeof rec.agentName === 'string' &&
+        typeof rec.agentId === 'string' &&
+        rec.agentId.trim().length > 0
+        ? { kind: rec.kind, agentName: rec.agentName, agentId: rec.agentId }
         : null
     }
     return { kind: rec.kind } as PaletteItem
@@ -210,6 +215,9 @@ export function makeNode(
   position: { x: number; y: number },
   ctx: { agents?: Agent[]; existingIds: Set<string> } = { existingIds: new Set() },
 ): WorkflowNode {
+  if (!hasCanonicalPaletteIdentity(item)) {
+    throw new Error('agent palette item requires canonical agentId')
+  }
   const id = nextId(item.kind, ctx.existingIds)
   const pos = { x: Math.round(position.x), y: Math.round(position.y) }
   const node: Record<string, unknown> = {
@@ -220,9 +228,9 @@ export function makeNode(
   }
   if (item.kind === 'agent-single') {
     node.agentName = item.agentName
-    // RFC-223 (PR-2): stamp the canonical agent id onto the fresh node so the
-    // runtime dispatches by id (rename-safe). agentName stays for display.
-    if (item.agentId !== undefined) node.agentId = item.agentId
+    // RFC-223 PR7: every fresh agent node carries its immutable id. The name
+    // remains a display snapshot and is never sufficient to persist a node.
+    node.agentId = item.agentId
   }
   return node as unknown as WorkflowNode
 }

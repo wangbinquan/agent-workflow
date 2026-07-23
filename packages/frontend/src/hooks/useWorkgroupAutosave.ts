@@ -168,7 +168,8 @@ export function useWorkgroupAutosave(
           receipt.clientMutationId !== input.clientMutationId ||
           receipt.requestedBaseVersion !== input.expectedVersion ||
           snapshotKey(receipt.snapshot) !== snapshotKey(snapshot) ||
-          snapshotKey(detailSnapshot(receipt.workgroup)) !== snapshotKey(receipt.snapshot) ||
+          snapshotKey(projectWorkgroupDetailSnapshot(receipt.workgroup)) !==
+            snapshotKey(receipt.snapshot) ||
           receipt.workgroup.id !== workgroupId ||
           receipt.workgroup.version !== receipt.revision.version ||
           receipt.workgroup.snapshotHash !== receipt.revision.snapshotHash ||
@@ -339,7 +340,7 @@ function remoteAsWorkflow(detail: WorkgroupDetail): WorkflowRemoteSnapshot {
       snapshotHash: detail.snapshotHash ?? '0'.repeat(64),
       updatedAt: detail.updatedAt,
     },
-    snapshot: encodeSnapshot(detailSnapshot(detail)),
+    snapshot: encodeSnapshot(projectWorkgroupDetailSnapshot(detail)),
   }
 }
 
@@ -347,7 +348,7 @@ function detailAsWorkflowDetail(detail: WorkgroupDetail): WorkflowDetail {
   return {
     id: detail.id,
     name: detail.name,
-    description: JSON.stringify(detailSnapshot(detail)),
+    description: JSON.stringify(projectWorkgroupDetailSnapshot(detail)),
     definition: EMPTY_WORKFLOW_DEFINITION,
     version: detail.version,
     schemaVersion: 1,
@@ -357,9 +358,32 @@ function detailAsWorkflowDetail(detail: WorkgroupDetail): WorkflowDetail {
   }
 }
 
-function detailSnapshot(detail: WorkgroupDetail): WorkgroupDraftSnapshot {
+export function projectWorkgroupDetailSnapshot(detail: WorkgroupDetail): WorkgroupDraftSnapshot {
   const ordered = [...detail.members].sort((left, right) => left.sortOrder - right.sortOrder)
   const leader = ordered.find((member) => member.id === detail.leaderMemberId)
+  const members = ordered.map((member) => {
+    if (member.memberType === 'agent') {
+      const agentId = member.agentId
+      if (typeof agentId !== 'string' || agentId.trim().length === 0) {
+        // RFC-223 PR7: agentName is a display snapshot, never a recoverable
+        // identity. Refuse the remote document before it can enter autosave,
+        // overwrite, or save-copy state.
+        throw new Error(`workgroup agent member ${member.id} is missing canonical agentId`)
+      }
+      return {
+        memberType: 'agent' as const,
+        agentId,
+        displayName: member.displayName,
+        roleDesc: member.roleDesc,
+      }
+    }
+    return {
+      memberType: 'human' as const,
+      userId: member.userId ?? '',
+      displayName: member.displayName,
+      roleDesc: member.roleDesc,
+    }
+  })
   return WorkgroupDraftSnapshotSchema.parse({
     name: detail.name,
     description: detail.description,
@@ -373,25 +397,7 @@ function detailSnapshot(detail: WorkgroupDetail): WorkgroupDraftSnapshot {
     completionGate: detail.completionGate,
     clarifyBudget: detail.clarifyBudget ?? WG_CLARIFY_BUDGET_DEFAULT,
     fanOut: detail.fanOut ?? false,
-    members: ordered.map((member) =>
-      member.memberType === 'agent'
-        ? {
-            memberType: 'agent' as const,
-            ...(member.agentId
-              ? { agentId: member.agentId }
-              : member.agentName
-                ? { agentName: member.agentName }
-                : {}),
-            displayName: member.displayName,
-            roleDesc: member.roleDesc,
-          }
-        : {
-            memberType: 'human' as const,
-            userId: member.userId ?? '',
-            displayName: member.displayName,
-            roleDesc: member.roleDesc,
-          },
-    ),
+    members,
   })
 }
 

@@ -338,6 +338,19 @@ describe('NodeInspector', () => {
     })
   })
 
+  test('agent-single: clearing the picker cannot persist a name-only identity', () => {
+    const { onChange } = setup({
+      id: 'a1',
+      kind: 'agent-single',
+      agentId: 'agent-coder',
+      agentName: 'coder',
+      promptTemplate: '',
+    })
+    const trigger = screen.getAllByRole('combobox')[0]!
+    pickFromCombobox(trigger, /pick an agent|选一个代理/i)
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
   // When no override is set, the model dropdown shows the agent's own
   // default model — so the displayed value matches what'll actually run.
   // RFC-113 removed per-node model/variant/temperature OVERRIDES; RFC-115 then

@@ -54,6 +54,8 @@ describe('<DependencyTreePreview>', () => {
           dependsOnIds: ['agent_auditor'],
           mcp: [],
           plugins: [],
+          masked: false,
+          missing: false,
         },
         {
           id: 'agent_auditor',
@@ -64,6 +66,8 @@ describe('<DependencyTreePreview>', () => {
           dependsOnIds: [],
           mcp: [],
           plugins: [],
+          masked: false,
+          missing: false,
         },
       ],
     })

@@ -9,45 +9,29 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { AgentClosureSummary } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { buildDependencyTree, type DependencyTreeAgent } from '@/lib/dependency-tree'
 import { DependencyCycleHint, DependencyTree } from './DependencyTree'
 
-/** Wire shape coming back from /api/agents/closure-preview. */
-interface ClosureSummary {
-  id: string
-  name: string
-  ownerUserId?: string | null
-  description: string
-  /** Names of skills this agent itself references (RFC-046 follow-up:
-   *  rendered as a chip when non-empty). Backend backfills via
-   *  `toAgentClosureSummaries`. */
-  skills?: string[]
-  /** RFC-028 — MCP server names this agent itself references. */
-  mcp?: string[]
-  /** RFC-031 — plugin names this agent itself references. */
-  plugins?: string[]
-  dependsOnIds: readonly string[]
-  missing?: boolean
-}
-
-function toTreeAgents(rows: readonly ClosureSummary[]): DependencyTreeAgent[] {
+function toTreeAgents(rows: readonly AgentClosureSummary[]): DependencyTreeAgent[] {
   return rows.map((r) => ({
     id: r.id,
     name: r.name,
     ownerUserId: r.ownerUserId,
     description: r.description,
-    skills: r.skills ?? [],
-    mcps: r.mcp ?? [],
-    plugins: r.plugins ?? [],
+    skills: r.skills,
+    mcps: r.mcp,
+    plugins: r.plugins,
     dependsOn: r.dependsOnIds,
-    missing: r.missing ?? false,
+    masked: r.masked,
+    missing: r.missing,
   }))
 }
 
 interface PreviewOk {
   ok: true
-  agents: ClosureSummary[]
+  agents: AgentClosureSummary[]
 }
 
 interface PreviewErr {
@@ -74,7 +58,7 @@ export function DependencyTreePreview({ id, name, dependsOn, onNodeClick }: Prop
   const [state, setState] = useState<
     | { kind: 'idle' }
     | { kind: 'loading' }
-    | { kind: 'ok'; agents: ClosureSummary[] }
+    | { kind: 'ok'; agents: AgentClosureSummary[] }
     | { kind: 'err'; code: string; details: PreviewErr['details'] }
   >({ kind: 'idle' })
   // Track each in-flight request so a slow response can't clobber a newer one.

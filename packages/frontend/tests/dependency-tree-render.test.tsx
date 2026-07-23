@@ -21,7 +21,17 @@ function mk(
   mcps: readonly string[] = [],
   plugins: readonly string[] = [],
 ): DependencyTreeAgent {
-  return { id: name, name, description, skills, mcps, plugins, dependsOn }
+  return {
+    id: name,
+    name,
+    description,
+    skills,
+    mcps,
+    plugins,
+    dependsOn,
+    masked: false,
+    missing: false,
+  }
 }
 
 function renderTree(
@@ -139,6 +149,8 @@ describe('<DependencyTree>', () => {
         mcps: [],
         plugins: [],
         dependsOn: ['agent-leaf'],
+        masked: false,
+        missing: false,
       },
       {
         id: 'agent-leaf',
@@ -149,6 +161,8 @@ describe('<DependencyTree>', () => {
         mcps: [],
         plugins: [],
         dependsOn: [],
+        masked: false,
+        missing: false,
       },
     ]
     const tree = buildDependencyTree(flat, 'agent-top')
@@ -157,6 +171,34 @@ describe('<DependencyTree>', () => {
     const button = await screen.findByRole('button', { name: /Open agent reviewer · Alice/i })
     fireEvent.click(button)
     expect(onClick).toHaveBeenCalledWith('agent-leaf')
+  })
+
+  test('masked rows are visibly restricted, non-clickable, and hide metadata chips', () => {
+    const tree = buildDependencyTree(
+      [
+        mk('root', ['opaque-agent-id']),
+        {
+          id: 'opaque-agent-id',
+          name: 'opaque-agent-id',
+          ownerUserId: null,
+          description: 'must not render',
+          skills: ['secret-skill'],
+          mcps: ['secret-mcp'],
+          plugins: ['secret-plugin'],
+          dependsOn: [],
+          masked: true,
+          missing: false,
+        },
+      ],
+      'root',
+    )
+    const onClick = vi.fn()
+    renderTree(tree, onClick)
+
+    expect(screen.getByText(/<restricted>|<无权访问>/i).textContent).toContain('opaque-agent-id')
+    expect(screen.queryByRole('button', { name: /opaque-agent-id/i })).toBeNull()
+    expect(screen.queryByText(/secret-(skill|mcp|plugin)/i)).toBeNull()
+    expect(onClick).not.toHaveBeenCalled()
   })
 })
 

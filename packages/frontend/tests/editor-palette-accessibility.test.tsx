@@ -12,7 +12,7 @@ import {
   viewportCenter,
 } from '../src/components/canvas/WorkflowCanvas'
 import i18n from '../src/i18n'
-import { PALETTE_MIME, deserialize } from '../src/components/canvas/nodePalette'
+import { PALETTE_MIME, deserialize, type PaletteItem } from '../src/components/canvas/nodePalette'
 
 const EMPTY_DEFINITION: WorkflowDefinition = {
   $schema_version: 3,
@@ -164,6 +164,18 @@ describe('accessible workflow palette activation', () => {
     expect(next.nodes[0]?.kind).toBe('input')
     expect(onSelect).toHaveBeenCalledTimes(1)
     expect(onSelect).toHaveBeenCalledWith({ kind: 'node', id: next.nodes[0]?.id })
+
+    // Runtime callers and stale drag data can bypass the static PaletteItem
+    // type. The canvas persistence seam must still reject a name-only agent.
+    act(() =>
+      handle.current?.addPaletteItemAtViewportCenter({
+        kind: 'agent-single',
+        agentName: 'legacy-name-only',
+      } as unknown as PaletteItem),
+    )
+    expect(onChange).toHaveBeenCalledTimes(1)
+    expect(onSelect).toHaveBeenCalledTimes(1)
+
     await waitFor(() => expect(container.querySelectorAll('.react-flow__node')).toHaveLength(1))
     await waitFor(() =>
       expect(container.querySelector('.react-flow__node')?.classList.contains('selected')).toBe(

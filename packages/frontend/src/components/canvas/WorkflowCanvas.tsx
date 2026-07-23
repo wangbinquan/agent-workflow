@@ -80,7 +80,13 @@ import {
 } from '../workflow-editor/WorkflowNodePicker'
 import { ConnectionDialog } from '../workflow-editor/ConnectionDialog'
 import { InputNode } from './nodes/InputNode'
-import { deserialize, makeNode, PALETTE_MIME, type PaletteItem } from './nodePalette'
+import {
+  deserialize,
+  hasCanonicalPaletteIdentity,
+  makeNode,
+  PALETTE_MIME,
+  type PaletteItem,
+} from './nodePalette'
 import { OutputNode } from './nodes/OutputNode'
 import { ReviewNode } from './nodes/ReviewNode'
 import {
@@ -1614,6 +1620,10 @@ function CanvasInner({
       },
     ) => {
       if (onChange === undefined || readOnly === true) return
+      // RFC-223 PR7: all palette entry points converge here. Refuse an
+      // untrusted or imperative name-only agent item before it can mint a
+      // persisted workflow node.
+      if (!hasCanonicalPaletteIdentity(item)) return
       const existingIds = new Set(definition.nodes.map((n) => n.id))
       const measured = buildMeasuredSizesFromXyflowNodes(nodesRef.current)
       const wrappers = resolveWrappers(definition, measured)
@@ -1722,6 +1732,7 @@ function CanvasInner({
 
   const makeEdgeInsertionCandidate = useCallback(
     (item: PaletteItem, edgeId: string, avoidCollisions: boolean): WorkflowNode | null => {
+      if (!hasCanonicalPaletteIdentity(item)) return null
       const edge = definition.edges.find((candidate) => candidate.id === edgeId)
       if (edge === undefined) return null
       const sourceIndex = definition.nodes.findIndex((node) => node.id === edge.source.nodeId)

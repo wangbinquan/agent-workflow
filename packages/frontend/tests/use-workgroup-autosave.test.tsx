@@ -13,6 +13,7 @@ import {
 } from '@agent-workflow/shared'
 import { ApiError } from '@/api/client'
 import {
+  projectWorkgroupDetailSnapshot,
   useWorkgroupAutosave,
   type UseWorkgroupAutosaveOptions,
   type WorkgroupSaveContext,
@@ -77,7 +78,7 @@ function detail(value = snapshot(), version = 1): WorkgroupDetail {
             id: `member-${index}`,
             memberType: 'agent' as const,
             agentId: member.agentId ?? null,
-            agentName: member.agentId === 'agent-1' ? 'coder' : (member.agentName ?? null),
+            agentName: member.agentId === 'agent-1' ? 'coder' : null,
             userId: null,
             displayName: member.displayName,
             roleDesc: member.roleDesc,
@@ -177,6 +178,25 @@ afterEach(() => {
 })
 
 describe('useWorkgroupAutosave', () => {
+  test('fails closed before autosave state when an agent member has only a name snapshot', () => {
+    const legacy = detail()
+    legacy.members[0] = {
+      ...legacy.members[0]!,
+      agentId: null,
+      agentName: 'legacy-coder',
+    }
+
+    expect(() => projectWorkgroupDetailSnapshot(legacy)).toThrow(
+      /member-0 is missing canonical agentId/,
+    )
+    expect(projectWorkgroupDetailSnapshot(detail()).members[0]).toEqual({
+      memberType: 'agent',
+      agentId: 'agent-1',
+      displayName: 'Lead',
+      roleDesc: 'coordinate',
+    })
+  })
+
   test('debounces text, keeps one save in flight and immediately flushes queued latest', async () => {
     const io = makeTransport()
     const first = deferred<SaveWorkgroupReceipt>()

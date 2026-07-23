@@ -3097,6 +3097,7 @@ export interface Resources {
     cycleHeading: string
     ariaTreeLabel: string
     missingPrefix: string
+    maskedPrefix: string
     openAgentAria: string
   }
   dependencyTreePreview: {
@@ -7184,6 +7185,7 @@ export const zhCN: Resources = {
     cycleHeading: '依赖闭包检测到环：',
     ariaTreeLabel: '依赖树',
     missingPrefix: '<缺失> {{name}}',
+    maskedPrefix: '<无权访问> {{name}}',
     openAgentAria: '打开代理 {{name}}',
   },
   dependencyTreePreview: {

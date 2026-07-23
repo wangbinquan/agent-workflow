@@ -38,7 +38,7 @@ export interface NodePickerCatalogLabels {
 }
 
 export function workflowNodePickerIdentity(item: PaletteItem): string {
-  return item.kind === 'agent-single' ? `agent:${item.agentName}` : `kind:${item.kind}`
+  return item.kind === 'agent-single' ? `agent:${item.agentId}` : `kind:${item.kind}`
 }
 
 function buildEntries(sections: readonly PaletteSection[]): NodePickerEntry[] {

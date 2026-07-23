@@ -3397,6 +3397,7 @@ export const enUS: Resources = {
     cycleHeading: 'Dependency cycle detected:',
     ariaTreeLabel: 'Dependency tree',
     missingPrefix: '<missing> {{name}}',
+    maskedPrefix: '<restricted> {{name}}',
     openAgentAria: 'Open agent {{name}}',
   },
   dependencyTreePreview: {

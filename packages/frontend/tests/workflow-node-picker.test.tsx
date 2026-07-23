@@ -47,7 +47,7 @@ function renderPicker(props: Partial<React.ComponentProps<typeof WorkflowNodePic
 
 describe('WorkflowNodePicker', () => {
   test('uses shared search/category primitives and exposes stable counts plus discovery groups', () => {
-    localStorage.setItem(NODE_PICKER_RECENT_STORAGE_KEY, JSON.stringify(['agent:builder']))
+    localStorage.setItem(NODE_PICKER_RECENT_STORAGE_KEY, JSON.stringify(['agent:agent-a']))
     const { getByRole, getByTestId, getAllByText } = renderPicker()
     const search = getByTestId('workflow-node-picker-search')
     expect(search.getAttribute('type')).toBe('search')
@@ -113,7 +113,7 @@ describe('WorkflowNodePicker', () => {
 
   test('every mixed discovery row carries a visible non-color category label', () => {
     const { getAllByTestId } = renderPicker()
-    const agentRow = getAllByTestId('workflow-node-picker-item-agent-builder')[0]!
+    const agentRow = getAllByTestId('workflow-node-picker-item-agent-agent-a')[0]!
     const reviewRow = getAllByTestId('workflow-node-picker-item-kind-review')[0]!
     expect(agentRow.dataset.category).toBe('agents')
     expect(agentRow.querySelector('.workflow-node-picker__type-chip')?.textContent).toMatch(/Agent/)
@@ -162,6 +162,30 @@ describe('WorkflowNodePicker', () => {
     expect(stored).toHaveLength(1)
     expect(typeof stored[0]).toBe('string')
     expect(stored[0]).not.toContain('workflow')
+  })
+
+  test('same-name agents expose id-keyed rows and recent selection', () => {
+    const onPick = vi.fn()
+    const duplicateNameAgents = [
+      { ...agents[0]!, id: 'agent-owner-a', ownerUserId: null },
+      { ...agents[0]!, id: 'agent-owner-b', ownerUserId: null },
+    ] as Agent[]
+    const { getAllByTestId } = renderPicker({ agents: duplicateNameAgents, onPick })
+
+    expect(getAllByTestId('workflow-node-picker-item-agent-agent-owner-a').length).toBeGreaterThan(
+      0,
+    )
+    const right = getAllByTestId('workflow-node-picker-item-agent-agent-owner-b')[0]!
+    fireEvent.click(right)
+
+    expect(onPick).toHaveBeenCalledWith({
+      kind: 'agent-single',
+      agentName: 'builder',
+      agentId: 'agent-owner-b',
+    })
+    expect(JSON.parse(localStorage.getItem(NODE_PICKER_RECENT_STORAGE_KEY) ?? '[]')).toEqual([
+      'agent:agent-owner-b',
+    ])
   })
 
   test('search ArrowDown only enters the active category panel', async () => {

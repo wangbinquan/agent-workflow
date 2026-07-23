@@ -20,7 +20,17 @@ function mk(
   mcps: readonly string[] = [],
   plugins: readonly string[] = [],
 ): DependencyTreeAgent {
-  return { id: name, name, description, skills, mcps, plugins, dependsOn }
+  return {
+    id: name,
+    name,
+    description,
+    skills,
+    mcps,
+    plugins,
+    dependsOn,
+    masked: false,
+    missing: false,
+  }
 }
 
 describe('buildDependencyTree', () => {
@@ -102,6 +112,8 @@ describe('buildDependencyTree', () => {
           mcps: [],
           plugins: [],
           dependsOn: [],
+          masked: false,
+          missing: false,
         },
       ],
       'agent-empty',
@@ -119,6 +131,8 @@ describe('buildDependencyTree', () => {
         mcps: [],
         plugins: [],
         dependsOn: ['agent-peer'],
+        masked: false,
+        missing: false,
       },
       {
         id: 'agent-peer',
@@ -128,12 +142,35 @@ describe('buildDependencyTree', () => {
         mcps: [],
         plugins: [],
         dependsOn: [],
+        masked: false,
+        missing: false,
       },
     ]
     const tree = buildDependencyTree(flat, 'agent-root')
     expect(tree.id).toBe('agent-root')
     expect(tree.children[0]?.id).toBe('agent-peer')
     expect(tree.children[0]?.duplicateRef).toBe(false)
+  })
+
+  test('masked rows stay distinct from missing rows and never expand hidden edges', () => {
+    const tree = buildDependencyTree(
+      [
+        mk('root', ['opaque-agent-id']),
+        {
+          ...mk('opaque-agent-id', ['must-not-render']),
+          masked: true,
+          missing: false,
+        },
+      ],
+      'root',
+    )
+    const masked = tree.children[0]!
+    expect(masked).toMatchObject({
+      id: 'opaque-agent-id',
+      masked: true,
+      missing: false,
+      children: [],
+    })
   })
 
   test('cycle (introduced by malformed flat) terminates without infinite recursion', () => {

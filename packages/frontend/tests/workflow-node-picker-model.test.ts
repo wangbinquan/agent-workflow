@@ -126,18 +126,52 @@ describe('deriveNodePickerCatalog — RFC-219 categories', () => {
       recentIdentities: [
         'agent:missing',
         workflowNodePickerIdentity({ kind: 'review' }),
-        'agent:agent-01',
+        'agent:agent-1',
       ],
       labels,
     })
 
     expect(
       model.groups.find((group) => group.key === 'recent')?.entries.map((entry) => entry.identity),
-    ).toEqual(['kind:review', 'agent:agent-01'])
+    ).toEqual(['kind:review', 'agent:agent-1'])
     expect(model.visibleEntryCount).toBe(model.categoryCounts.all)
     expect(model.groups.flatMap((group) => group.entries).length).toBeGreaterThan(
       model.visibleEntryCount,
     )
+  })
+
+  test('same-name agents keep separate id identities and both restore from recent', () => {
+    const left = {
+      ...agent(1),
+      id: 'agent-owner-a',
+      name: 'reviewer',
+      ownerUserId: 'owner-a',
+    }
+    const right = {
+      ...agent(2),
+      id: 'agent-owner-b',
+      name: 'reviewer',
+      ownerUserId: 'owner-b',
+    }
+    const model = deriveNodePickerCatalog({
+      sections: buildPalette([left, right], t),
+      activeCategory: 'all',
+      query: '',
+      recentIdentities: ['agent:agent-owner-b', 'agent:agent-owner-a'],
+      labels,
+    })
+
+    const agentEntries = model.groups.find((group) => group.key === 'agents')?.entries ?? []
+    expect(agentEntries.map((entry) => entry.identity)).toEqual([
+      'agent:agent-owner-a',
+      'agent:agent-owner-b',
+    ])
+    expect(
+      model.groups.find((group) => group.key === 'recent')?.entries.map((entry) => entry.item),
+    ).toEqual([
+      { kind: 'agent-single', agentName: 'reviewer', agentId: 'agent-owner-b' },
+      { kind: 'agent-single', agentName: 'reviewer', agentId: 'agent-owner-a' },
+    ])
   })
 
   test('keeps the zero-Agent category selectable as an empty result', () => {

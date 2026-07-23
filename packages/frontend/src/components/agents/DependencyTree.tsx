@@ -73,6 +73,7 @@ function Row({ node, prefix, isRoot, isLast, onNodeClick, ownerLabel }: RowProps
         <NodeLabel
           node={node}
           missing={node.missing}
+          masked={node.masked}
           onNodeClick={onNodeClick}
           ownerLabel={ownerLabel}
         />
@@ -99,20 +100,27 @@ function Row({ node, prefix, isRoot, isLast, onNodeClick, ownerLabel }: RowProps
 function NodeLabel({
   node,
   missing,
+  masked,
   onNodeClick,
   ownerLabel,
 }: {
   node: DependencyTreeNode
   missing: boolean
+  masked: boolean
   onNodeClick?: (id: string) => void
   ownerLabel: (ownerUserId: string | null | undefined) => string | undefined
 }) {
   const { t } = useTranslation()
-  const clickable = node.id !== '' && !missing && !node.duplicateRef && onNodeClick !== undefined
+  const clickable =
+    node.id !== '' && !missing && !masked && !node.duplicateRef && onNodeClick !== undefined
   const displayName = resourceOptionLabel(node.name, ownerLabel(node.ownerUserId))
   const label = (
     <span className="dep-tree__name">
-      {missing ? t('dependencyTree.missingPrefix', { name: node.name }) : displayName}
+      {missing
+        ? t('dependencyTree.missingPrefix', { name: node.name })
+        : masked
+          ? t('dependencyTree.maskedPrefix', { name: node.name })
+          : displayName}
     </span>
   )
   return (
@@ -129,7 +137,7 @@ function NodeLabel({
       ) : (
         label
       )}
-      {!missing && (
+      {!missing && !masked && (
         <span className="dep-tree__chips">
           {node.skills.length > 0 && (
             <span className="dep-tree__chip">

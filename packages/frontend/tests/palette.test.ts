@@ -12,6 +12,7 @@ import {
   PALETTE_SECTIONS,
   buildPalette,
   deserialize,
+  hasCanonicalPaletteIdentity,
   makeNode,
   serialize,
   type PaletteItem,
@@ -36,22 +37,19 @@ const AGENT_A: Agent = {
 }
 
 describe('serialize/deserialize', () => {
-  test('agent-single round-trips with name', () => {
-    const raw = serialize({ kind: 'agent-single', agentName: 'coder' })
-    expect(deserialize(raw)).toEqual({ kind: 'agent-single', agentName: 'coder' })
-  })
-
-  // RFC-223 (PR-2): the canonical agentId rides the dataTransfer payload so a
-  // drag stamps it onto the fresh node; a legacy payload without it still works.
-  test('agent-single round-trips WITH agentId when present', () => {
+  test('agent-single round-trips with canonical id and display name', () => {
     const raw = serialize({ kind: 'agent-single', agentName: 'coder', agentId: 'AG_1' })
     expect(deserialize(raw)).toEqual({ kind: 'agent-single', agentName: 'coder', agentId: 'AG_1' })
   })
-  test('agent-single without agentId deserializes to name-only (back-compat)', () => {
-    expect(deserialize(JSON.stringify({ kind: 'agent-single', agentName: 'coder' }))).toEqual({
-      kind: 'agent-single',
-      agentName: 'coder',
-    })
+
+  test('agent-single without a non-empty agentId fails closed', () => {
+    expect(deserialize(JSON.stringify({ kind: 'agent-single', agentName: 'coder' }))).toBeNull()
+    expect(
+      deserialize(JSON.stringify({ kind: 'agent-single', agentName: 'coder', agentId: '' })),
+    ).toBeNull()
+    expect(
+      deserialize(JSON.stringify({ kind: 'agent-single', agentName: 'coder', agentId: '   ' })),
+    ).toBeNull()
   })
 
   // RFC-060 PR-E: agent-multi removed from the palette. deserialize now
@@ -83,36 +81,25 @@ describe('serialize/deserialize', () => {
 })
 
 describe('makeNode', () => {
-  test('agent-single carries agentName + integer position', () => {
+  test('agent-single carries canonical id, display name, and integer position', () => {
     const n = makeNode(
-      { kind: 'agent-single', agentName: 'coder' },
+      { kind: 'agent-single', agentName: 'coder', agentId: 'AG_1' },
       { x: 12.4, y: 5.6 },
       { existingIds: new Set() },
     )
     expect(n.kind).toBe('agent-single')
     expect((n as Record<string, unknown>).agentName).toBe('coder')
+    expect((n as Record<string, unknown>).agentId).toBe('AG_1')
     expect(n.position).toEqual({ x: 12, y: 6 })
     expect(n.id.startsWith('agent_')).toBe(true)
   })
 
-  // RFC-223 (PR-2): a fresh agent-single node carries the canonical agentId
-  // (from the palette item) alongside agentName so the runtime dispatches by id.
-  test('agent-single stamps agentId when the palette item carries one', () => {
-    const n = makeNode(
-      { kind: 'agent-single', agentName: 'coder', agentId: 'AG_1' },
-      { x: 0, y: 0 },
-      { existingIds: new Set() },
+  test('runtime-bypassed name-only agent item is rejected instead of persisted', () => {
+    const invalid = { kind: 'agent-single', agentName: 'coder' } as unknown as PaletteItem
+    expect(hasCanonicalPaletteIdentity(invalid)).toBe(false)
+    expect(() => makeNode(invalid, { x: 0, y: 0 }, { existingIds: new Set() })).toThrow(
+      /canonical agentId/,
     )
-    expect((n as Record<string, unknown>).agentId).toBe('AG_1')
-    expect((n as Record<string, unknown>).agentName).toBe('coder')
-  })
-  test('agent-single without an id (legacy drag) stamps only the name', () => {
-    const n = makeNode(
-      { kind: 'agent-single', agentName: 'coder' },
-      { x: 0, y: 0 },
-      { existingIds: new Set() },
-    )
-    expect((n as Record<string, unknown>).agentId).toBeUndefined()
   })
 
   // RFC-060 PR-E: agent-multi removed from the palette; the prior fan_ id
@@ -158,7 +145,7 @@ describe('makeNode', () => {
       },
     } as Set<string>
     const n = makeNode(
-      { kind: 'agent-single', agentName: 'coder' },
+      { kind: 'agent-single', agentName: 'coder', agentId: 'AG_1' },
       { x: 0, y: 0 },
       { existingIds: existing },
     )

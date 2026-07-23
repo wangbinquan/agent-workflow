@@ -31,8 +31,10 @@ export interface DependencyTreeAgent {
    *  plugin chip. */
   plugins: readonly string[]
   dependsOn: readonly string[]
-  /** True only for an explicit backend placeholder; empty metadata is valid. */
-  missing?: boolean
+  /** ACL placeholder: identity stays opaque and must never become navigable. */
+  masked: boolean
+  /** Deleted/dangling placeholder; distinct from an ACL-masked resource. */
+  missing: boolean
 }
 
 export interface DependencyTreeNode {
@@ -43,6 +45,7 @@ export interface DependencyTreeNode {
   skills: readonly string[]
   mcps: readonly string[]
   plugins: readonly string[]
+  masked: boolean
   missing: boolean
   /** True when an earlier sighting of this id already expanded its
    *  children; the rendering layer shows `↑ see above` and stops. */
@@ -75,6 +78,7 @@ export function buildDependencyTree(
         skills: [],
         mcps: [],
         plugins: [],
+        masked: false,
         missing: true,
         duplicateRef: false,
         children: [],
@@ -90,7 +94,8 @@ export function buildDependencyTree(
         skills: agent.skills,
         mcps: agent.mcps,
         plugins: agent.plugins,
-        missing: agent.missing ?? false,
+        masked: agent.masked,
+        missing: agent.missing,
         duplicateRef: true,
         children: [],
       }
@@ -105,9 +110,12 @@ export function buildDependencyTree(
       skills: agent.skills,
       mcps: agent.mcps,
       plugins: agent.plugins,
-      missing: agent.missing ?? false,
+      masked: agent.masked,
+      missing: agent.missing,
       duplicateRef: false,
-      children: agent.dependsOn.map((child) => walk(child, nextPath)),
+      // Masked rows are terminal even if a malformed response accidentally
+      // includes graph metadata. Do not reveal or traverse hidden references.
+      children: agent.masked ? [] : agent.dependsOn.map((child) => walk(child, nextPath)),
     }
   }
 

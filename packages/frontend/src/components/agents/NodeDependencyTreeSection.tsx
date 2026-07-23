@@ -6,44 +6,29 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import type { AgentClosureSummary } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { buildDependencyTree, type DependencyTreeAgent } from '@/lib/dependency-tree'
 import { DependencyTree } from './DependencyTree'
 
-/** Wire shape coming back from /api/agents/:id/closure. */
-interface ClosureSummary {
-  id: string
-  name: string
-  ownerUserId?: string | null
-  description: string
-  /** RFC-046 follow-up — names of skills this agent itself references;
-   *  rendered as a chip when non-empty. */
-  skills?: string[]
-  /** RFC-028 — MCP server names this agent itself references. */
-  mcp?: string[]
-  /** RFC-031 — plugin names this agent itself references. */
-  plugins?: string[]
-  dependsOnIds: readonly string[]
-  missing?: boolean
-}
-
-function toTreeAgents(rows: readonly ClosureSummary[]): DependencyTreeAgent[] {
+function toTreeAgents(rows: readonly AgentClosureSummary[]): DependencyTreeAgent[] {
   return rows.map((r) => ({
     id: r.id,
     name: r.name,
     ownerUserId: r.ownerUserId,
     description: r.description,
-    skills: r.skills ?? [],
-    mcps: r.mcp ?? [],
-    plugins: r.plugins ?? [],
+    skills: r.skills,
+    mcps: r.mcp,
+    plugins: r.plugins,
     dependsOn: r.dependsOnIds,
-    missing: r.missing ?? false,
+    masked: r.masked,
+    missing: r.missing,
   }))
 }
 
 interface ClosureResponse {
   ok: boolean
-  agents?: ClosureSummary[]
+  agents?: AgentClosureSummary[]
   code?: string
 }
 
