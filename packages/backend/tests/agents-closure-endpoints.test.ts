@@ -55,7 +55,9 @@ async function seedAgent(
     outputs: [],
     syncOutputsOnIterate: true,
     permission: {},
-    skills: opts.skills ?? [],
+    // RFC-223 (PR-1): bare skill names → repo-local project refs (RFC-178). The
+    // closure summary projects them back to their display name.
+    skills: (opts.skills ?? []).map((name) => ({ kind: 'project' as const, name })),
     dependsOn: opts.dependsOn ?? [],
     mcp: opts.mcp ?? [],
     plugins: [],

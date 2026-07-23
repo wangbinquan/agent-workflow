@@ -7,6 +7,9 @@ import { describe, expect, test } from 'bun:test'
 import type { Agent } from '@agent-workflow/shared'
 import { validateWorkflowDef } from '../src/services/workflow.validator'
 
+// RFC-223 (PR-1): agent refs are stored BY ID; this helper maps dependsOn /
+// plugin NAMES to the `id-<name>` / `plugin-<name>` id convention (node→agent
+// stays by name via agentName), matching the ctx plugin fixtures' ids below.
 function agent(
   name: string,
   outputs: string[] = [],
@@ -20,9 +23,9 @@ function agent(
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],
-    dependsOn: opts.dependsOn ?? [],
+    dependsOn: (opts.dependsOn ?? []).map((d) => `id-${d}`),
     mcp: [],
-    plugins: opts.plugins ?? [],
+    plugins: (opts.plugins ?? []).map((p) => `plugin-${p}`),
     frontmatterExtra: {},
     bodyMd: '',
     schemaVersion: 1,
@@ -61,7 +64,7 @@ describe('workflow validator — RFC-031 plugin reference checks', () => {
     const res = validateWorkflowDef(defWith('orchestrator'), {
       agents: [a],
       skills: [],
-      plugins: [{ name: 'off', enabled: false }],
+      plugins: [{ id: 'plugin-off', name: 'off', enabled: false }],
     })
     expect(res.issues.map((i) => i.code)).toContain('plugin-disabled')
   })
@@ -94,7 +97,7 @@ describe('workflow validator — RFC-031 plugin reference checks', () => {
     const res = validateWorkflowDef(defWith('o'), {
       agents: [a],
       skills: [],
-      plugins: [{ name: 'ok', enabled: true }],
+      plugins: [{ id: 'plugin-ok', name: 'ok', enabled: true }],
     })
     const codes = res.issues.map((i) => i.code)
     expect(codes).not.toContain('plugin-not-found')

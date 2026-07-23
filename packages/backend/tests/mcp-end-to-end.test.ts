@@ -15,7 +15,7 @@ import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createAgent, getAgent } from '../src/services/agent'
 import { createMcp } from '../src/services/mcp'
-import { collectMcpNamesFromClosure, loadMcpsByNames } from '../src/services/mcpClosure'
+import { collectMcpIdsFromClosure, loadMcpsByIds } from '../src/services/mcpClosure'
 import { resolveDependsClosure } from '../src/services/agentDeps'
 import { buildInlineConfig } from '../src/services/runner'
 
@@ -56,8 +56,8 @@ describe('RFC-028 end-to-end inline injection', () => {
     const agent = (await getAgent(db, 'auditor'))!
     const closure = await resolveDependsClosure(db, agent)
     if (closure.ok === false) throw new Error('cycle: ' + closure.cyclePath.join(' → '))
-    const mcpNames = collectMcpNamesFromClosure(closure.agents)
-    const mcps = await loadMcpsByNames(db, mcpNames)
+    const mcpIds = collectMcpIdsFromClosure(closure.agents)
+    const mcps = await loadMcpsByIds(db, mcpIds)
     const inline = buildInlineConfig(agent, new Map(), closure.agents.slice(1), mcps)
 
     // The env-var contents (what opencode actually sees on its stdin):
@@ -146,8 +146,8 @@ describe('RFC-028 end-to-end inline injection', () => {
     const agent = (await getAgent(db, 'root'))!
     const closure = await resolveDependsClosure(db, agent)
     if (closure.ok === false) throw new Error('cycle')
-    const mcpNames = collectMcpNamesFromClosure(closure.agents)
-    const mcps = await loadMcpsByNames(db, mcpNames)
+    const mcpIds = collectMcpIdsFromClosure(closure.agents)
+    const mcps = await loadMcpsByIds(db, mcpIds)
     const inline = buildInlineConfig(agent, new Map(), closure.agents.slice(1), mcps)
 
     // All three agents present in the inline agent map.
@@ -190,7 +190,7 @@ describe('RFC-028 end-to-end inline injection', () => {
     const agent = (await getAgent(db, 'a'))!
     const closure = await resolveDependsClosure(db, agent)
     if (closure.ok === false) throw new Error('cycle')
-    const mcps = await loadMcpsByNames(db, collectMcpNamesFromClosure(closure.agents))
+    const mcps = await loadMcpsByIds(db, collectMcpIdsFromClosure(closure.agents))
     const inline = buildInlineConfig(agent, new Map(), closure.agents.slice(1), mcps)
     expect(Object.keys(inline.mcp ?? {})).toEqual(['on'])
   })
@@ -212,7 +212,7 @@ describe('RFC-028 end-to-end inline injection', () => {
     const agent = (await getAgent(db, 'minimal'))!
     const closure = await resolveDependsClosure(db, agent)
     if (closure.ok === false) throw new Error('cycle')
-    const mcps = await loadMcpsByNames(db, collectMcpNamesFromClosure(closure.agents))
+    const mcps = await loadMcpsByIds(db, collectMcpIdsFromClosure(closure.agents))
     const inline = buildInlineConfig(agent, new Map(), closure.agents.slice(1), mcps)
     expect('mcp' in inline).toBe(false)
     expect(JSON.stringify(inline)).not.toContain('"mcp"')

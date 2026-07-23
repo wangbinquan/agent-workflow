@@ -10,6 +10,11 @@ import { describe, expect, test } from 'bun:test'
 import type { Agent, Skill, WorkflowDefinition } from '@agent-workflow/shared'
 import { validateWorkflowDef } from '../src/services/workflow.validator'
 
+// RFC-223 (PR-1): agent refs are stored BY ID. The `agent()` / `skill()`
+// fixtures use the stable `agent-<name>` / `skill-<name>` id convention, and
+// this helper maps the human-friendly opts (names) into the id-shaped columns:
+//   dependsOn <name> → 'agent-<name>' ; skills <name> → {managed, 'skill-<name>'} ;
+//   plugins <name> → 'plugin-<name>'. Node→agent is still by name (agentName).
 function agent(
   name: string,
   outputs: string[] = [],
@@ -22,10 +27,10 @@ function agent(
     outputs,
     syncOutputsOnIterate: true,
     permission: {},
-    skills: opts.skills ?? [],
-    dependsOn: opts.dependsOn ?? [],
-    mcp: opts.mcp ?? [],
-    plugins: opts.plugins ?? [],
+    skills: (opts.skills ?? []).map((s) => ({ kind: 'managed' as const, skillId: `skill-${s}` })),
+    dependsOn: (opts.dependsOn ?? []).map((d) => `agent-${d}`),
+    mcp: (opts.mcp ?? []).map((m) => `mcp-${m}`),
+    plugins: (opts.plugins ?? []).map((p) => `plugin-${p}`),
     frontmatterExtra: {},
     bodyMd: '',
     schemaVersion: 1,

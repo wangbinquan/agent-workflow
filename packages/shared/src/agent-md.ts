@@ -14,6 +14,7 @@ import {
   AgentOutputWrapperPortNamesSchema,
   AgentRoleSchema,
   type AgentPermission,
+  type AgentSkillRef,
   type CreateAgent,
 } from './schemas/agent'
 
@@ -41,6 +42,12 @@ const KNOWN_KEYS = new Set<string>([
   'description',
   'permission',
   'tools',
+  // RFC-223 (PR-1): list of skill references (managed skill names or
+  // {kind,name} objects). Parsed into typed AgentSkillRef[]; a bare name is a
+  // managed selector resolved server-side (services/agentRefs.ts), demoting to
+  // a repo-local `project` ref when no managed skill matches (RFC-178). Before
+  // this key existed, an authored `skills:` fell through to frontmatterExtra.
+  'skills',
   // RFC-022: list of agent names the imported agent depends on at runtime.
   // Must be a string[] of valid agent names; bad shapes demote to
   // frontmatterExtra with a warning (same pattern as `permission` / `tools`).
@@ -368,6 +375,59 @@ export function parseAgentMarkdown(
     } else {
       extras.plugins = data.plugins
       warnings.push('plugins must be an array of plugin names; kept in frontmatterExtra')
+    }
+  }
+
+  // RFC-223 (PR-1): skills — array of skill references. A bare name string is
+  // treated as a MANAGED selector (skillId carries the name; services/agentRefs.ts
+  // resolves it to an id at save, or demotes to a repo-local `project` ref when
+  // no managed skill matches — RFC-178). Object entries may spell the kind
+  // explicitly ({kind:'project',name} / {kind:'managed',name}). Bad shapes demote
+  // the whole field to frontmatterExtra with a warning (mirror mcp / plugins).
+  if (data.skills !== undefined) {
+    if (Array.isArray(data.skills)) {
+      const cleaned: AgentSkillRef[] = []
+      let bad = false
+      for (const entry of data.skills) {
+        if (typeof entry === 'string' && AGENT_NAME_RE_LOCAL.test(entry)) {
+          cleaned.push({ kind: 'managed', skillId: entry })
+        } else if (
+          isPlainObject(entry) &&
+          entry.kind === 'project' &&
+          isNonEmptyString(entry.name)
+        ) {
+          cleaned.push({ kind: 'project', name: entry.name })
+        } else if (
+          isPlainObject(entry) &&
+          entry.kind === 'managed' &&
+          isNonEmptyString(entry.name)
+        ) {
+          cleaned.push({ kind: 'managed', skillId: entry.name })
+        } else {
+          bad = true
+          break
+        }
+      }
+      if (bad) {
+        extras.skills = data.skills
+        warnings.push(
+          'skills entries must be skill names or {kind,name} refs; kept in frontmatterExtra',
+        )
+      } else {
+        // De-dup preserving order (by ref identity).
+        const seen = new Set<string>()
+        const ordered: AgentSkillRef[] = []
+        for (const ref of cleaned) {
+          const key = ref.kind === 'managed' ? `m:${ref.skillId}` : `p:${ref.name}`
+          if (seen.has(key)) continue
+          seen.add(key)
+          ordered.push(ref)
+        }
+        partial.skills = ordered
+      }
+    } else {
+      extras.skills = data.skills
+      warnings.push('skills must be an array of skill names; kept in frontmatterExtra')
     }
   }
 

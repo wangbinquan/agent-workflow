@@ -59,14 +59,15 @@ describe('mergeAgentImport', () => {
     const current: CreateAgent = {
       ...emptyAgent(),
       outputs: ['p1'],
-      skills: ['s1'],
+      skills: [{ kind: 'project', name: 's1' }],
     }
     const merged = mergeAgentImport(
       current,
       makeResult({ description: 'd', frontmatterExtra: { mode: 'subagent' } }),
     )
     expect(merged.outputs).toEqual(['p1'])
-    expect(merged.skills).toEqual(['s1'])
+    // Import result carries no skills → current preserved.
+    expect(merged.skills).toEqual([{ kind: 'project', name: 's1' }])
   })
 
   test('RFC-194: overwrites all imported first-class port fields', () => {

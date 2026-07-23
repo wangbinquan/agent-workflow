@@ -59,7 +59,9 @@ function samplePayload(name: string): Record<string, unknown> {
     syncOutputsOnIterate: true,
     model: 'anthropic/claude-opus-4-7',
     permission: { edit: 'deny' },
-    skills: ['s1'],
+    // RFC-223 (PR-1): typed skill refs. No managed skill row named s1 exists →
+    // a repo-local (project) skill.
+    skills: [{ kind: 'project', name: 's1' }],
     dependsOn: [],
     mcp: [],
     plugins: [],
@@ -85,7 +87,7 @@ describe('agent service', () => {
       outputs: ['findings', 'summary'],
       syncOutputsOnIterate: true,
       permission: { edit: 'deny', bash: 'deny' },
-      skills: ['go-conventions'],
+      skills: [{ kind: 'project', name: 'go-conventions' }],
       dependsOn: [],
       mcp: [],
       plugins: [],
@@ -95,7 +97,7 @@ describe('agent service', () => {
     expect(created.id).toBeTruthy()
     expect(created.outputs).toEqual(['findings', 'summary'])
     expect(created.permission).toEqual({ edit: 'deny', bash: 'deny' })
-    expect(created.skills).toEqual(['go-conventions'])
+    expect(created.skills).toEqual([{ kind: 'project', name: 'go-conventions' }])
     expect(created.frontmatterExtra).toEqual({ custom: 'value' })
     expect(created.bodyMd).toContain('System prompt')
 
@@ -141,7 +143,7 @@ describe('agent service', () => {
       outputs: ['x'],
       syncOutputsOnIterate: true,
       permission: { edit: 'allow' },
-      skills: ['s1'],
+      skills: [{ kind: 'project', name: 's1' }],
       dependsOn: [],
       mcp: [],
       plugins: [],
@@ -152,7 +154,7 @@ describe('agent service', () => {
     expect(updated.description).toBe('new desc')
     expect(updated.outputs).toEqual(['x']) // preserved
     expect(updated.permission).toEqual({ edit: 'allow' }) // preserved
-    expect(updated.skills).toEqual(['s1']) // preserved
+    expect(updated.skills).toEqual([{ kind: 'project', name: 's1' }]) // preserved
     expect(updated.bodyMd).toBe('body') // preserved
   })
 
@@ -315,15 +317,17 @@ describe('agent service', () => {
       outputs: [] as string[],
       syncOutputsOnIterate: true,
       permission: {},
-      skills: [] as string[],
+      skills: [],
       dependsOn: [] as string[],
       mcp: [] as string[],
       plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
     }
-    await createAgent(db, { name: 'code-auditor', ...leafSeed })
-    await createAgent(db, { name: 'unit-test-runner', ...leafSeed })
+    // RFC-223 (PR-1): dependsOn stores agent IDS — capture the seeded ids so the
+    // assertions compare against the resolved (name → id) references.
+    const codeAuditor = await createAgent(db, { name: 'code-auditor', ...leafSeed })
+    const unitTestRunner = await createAgent(db, { name: 'unit-test-runner', ...leafSeed })
 
     const a = await createAgent(db, {
       name: 'orchestrator',
@@ -338,7 +342,7 @@ describe('agent service', () => {
       frontmatterExtra: {},
       bodyMd: '',
     })
-    expect(a.dependsOn).toEqual(['code-auditor', 'unit-test-runner'])
+    expect(a.dependsOn).toEqual([codeAuditor.id, unitTestRunner.id])
 
     const b = await createAgent(db, {
       name: 'lonely',
@@ -356,9 +360,9 @@ describe('agent service', () => {
     expect(b.dependsOn).toEqual([])
 
     // Dupes deduped while preserving order. Seed referenced leaves first.
-    await createAgent(db, { name: 'a', ...leafSeed })
-    await createAgent(db, { name: 'b', ...leafSeed })
-    await createAgent(db, { name: 'c', ...leafSeed })
+    const agA = await createAgent(db, { name: 'a', ...leafSeed })
+    const agB = await createAgent(db, { name: 'b', ...leafSeed })
+    const agC = await createAgent(db, { name: 'c', ...leafSeed })
     const c = await createAgent(db, {
       name: 'dupes',
       description: '',
@@ -372,11 +376,11 @@ describe('agent service', () => {
       frontmatterExtra: {},
       bodyMd: '',
     })
-    expect(c.dependsOn).toEqual(['a', 'b', 'c'])
+    expect(c.dependsOn).toEqual([agA.id, agB.id, agC.id])
 
     // Patch via updateAgent.
     const updated = await updateAgent(db, 'orchestrator', { dependsOn: ['code-auditor'] })
-    expect(updated.dependsOn).toEqual(['code-auditor'])
+    expect(updated.dependsOn).toEqual([codeAuditor.id])
 
     // Legacy row whose depends_on JSON is malformed → exposed as [] (defensive
     // parser). Simulate by raw UPDATE.

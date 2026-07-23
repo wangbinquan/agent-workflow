@@ -169,7 +169,9 @@ describe('RFC-170 T-BOOT — skillBootVerify', () => {
     // The pre-spawn resolver gates managed skills on the injection predicate and
     // throws the non-swallowable SkillQuarantinedError (fail-closed).
     expect(src).toMatch(/isSkillInjectableThisBoot\(\{ id: row\.id, sourceKind: 'managed' \}\)/)
-    expect(src).toMatch(/throw new SkillQuarantinedError\(name\)/)
+    // RFC-223 (PR-1): resolveSkills looks the managed skill up BY ID, so the
+    // quarantine error carries the row's name.
+    expect(src).toMatch(/throw new SkillQuarantinedError\(row\.name\)/)
   })
 
   // RFC-170 T4a — a legacy managed skill (pre-version-tracking, no snapshot,

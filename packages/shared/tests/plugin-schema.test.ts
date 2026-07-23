@@ -247,8 +247,15 @@ describe('AgentSchema.plugins', () => {
     expect(AgentSchema.safeParse({ ...minimal, plugins: [] }).success).toBe(true)
   })
 
-  test('rejects invalid plugin name in array', () => {
-    const r = CreateAgentSchema.safeParse({ name: 'a', plugins: ['-bad'] })
+  test('accepts id-or-name refs (RFC-223 PR-1: no name-format check on the ref)', () => {
+    // The plugins field now stores id-or-name references — a value that is not a
+    // legal plugin NAME (e.g. leading dash / an id) is accepted at the schema.
+    const r = CreateAgentSchema.safeParse({ name: 'a', plugins: ['01HZY8QK9AXAMPLEID000000AB'] })
+    expect(r.success).toBe(true)
+  })
+
+  test('rejects an empty-string ref', () => {
+    const r = CreateAgentSchema.safeParse({ name: 'a', plugins: [''] })
     expect(r.success).toBe(false)
   })
 

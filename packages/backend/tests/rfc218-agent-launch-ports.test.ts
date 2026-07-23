@@ -59,7 +59,7 @@ const AGENT_FIELDS = {
   outputs: [] as string[],
   syncOutputsOnIterate: true,
   permission: {},
-  skills: [] as string[],
+  skills: [],
   dependsOn: [] as string[],
   mcp: [] as string[],
   plugins: [] as string[],

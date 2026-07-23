@@ -25,10 +25,11 @@ function agent(name = 'coder'): Agent {
     syncOutputsOnIterate: true,
     runtime: 'opencode',
     permission: { bash: 'allow-secret-shape' },
-    skills: ['reviewing'],
+    // RFC-223 (PR-1): refs are stored by id; skills are typed refs.
+    skills: [{ kind: 'managed', skillId: 'skill-reviewing' }],
     dependsOn: [],
-    mcp: ['filesystem'],
-    plugins: ['formatter'],
+    mcp: ['mcp-filesystem'],
+    plugins: ['plugin-formatter'],
     frontmatterExtra: { apiKey: 'frontmatter-secret' },
     bodyMd: 'SYSTEM PROMPT SECRET',
     schemaVersion: 4,
@@ -116,9 +117,9 @@ describe('RFC-199 validation context projection', () => {
       (ctx) => {
         ctx.agents[0]!.role = 'aggregator'
       },
-      (ctx) => ctx.agents[0]!.dependsOn.push('auditor'),
-      (ctx) => ctx.agents[0]!.skills.push('extra-skill'),
-      (ctx) => ctx.agents[0]!.mcp.push('browser'),
+      (ctx) => ctx.agents[0]!.dependsOn.push('agent-auditor'),
+      (ctx) => ctx.agents[0]!.skills.push({ kind: 'managed', skillId: 'skill-extra' }),
+      (ctx) => ctx.agents[0]!.mcp.push('mcp-browser'),
       (ctx) => ctx.agents[0]!.plugins.push('extra-plugin'),
       (ctx) => {
         ctx.agents[0]!.runtime = 'claude-code'

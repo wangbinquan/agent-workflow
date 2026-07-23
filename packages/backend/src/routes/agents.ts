@@ -7,9 +7,11 @@
 
 import {
   AgentNameSchema,
+  agentSkillRefName,
   CreateAgentSchema,
   rejectRetiredStartTaskKeys,
   RenameAgentSchema,
+  ResourceRefSchema,
   StartAgentTaskSchema,
   UpdateAgentSchema,
 } from '@agent-workflow/shared'
@@ -27,6 +29,7 @@ import {
   updateAgent,
 } from '@/services/agent'
 import { resolveDependsClosure, validateDependsOn } from '@/services/agentDeps'
+import { managedSkillTokens, resolveAgentRefs } from '@/services/agentRefs'
 import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
 import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
 import { assertNotBuiltin, excludeBuiltinAgents, isBuiltinRow } from '@/services/systemResources'
@@ -108,7 +111,9 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
     // RFC-099 (D15): on create, every reference is new — reject names that
     // resolve to resources the editor cannot view.
     await assertNewRefsUsable(deps.db, actor, [
-      { type: 'skill', names: parsed.data.skills },
+      // RFC-223 (PR-1): only MANAGED skill refs point at a DB row (project refs
+      // are repo-local, no ACL); mcp/plugin/agent refs are id-or-name tokens.
+      { type: 'skill', names: managedSkillTokens(parsed.data.skills) },
       { type: 'mcp', names: parsed.data.mcp },
       { type: 'plugin', names: parsed.data.plugins ?? [] },
       { type: 'agent', names: parsed.data.dependsOn },
@@ -143,7 +148,12 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
         ? [
             {
               type: 'skill' as const,
-              names: diffNewNames(new Set(existing.skills), new Set(parsed.data.skills)),
+              // RFC-223 (PR-1): diff by managed skill token (project refs have
+              // no DB row / ACL).
+              names: diffNewNames(
+                new Set(managedSkillTokens(existing.skills)),
+                new Set(managedSkillTokens(parsed.data.skills)),
+              ),
             },
           ]
         : []),
@@ -305,7 +315,9 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
   // network panel. Save-time POST/PUT keep their 400 path.
   const ClosurePreviewBodySchema = z.object({
     name: AgentNameSchema,
-    dependsOn: z.array(AgentNameSchema).max(64).default([]),
+    // RFC-223 (PR-1): the edit form's dependsOn holds ids (the picker stores
+    // ids). Accept id-or-name refs, not the name grammar.
+    dependsOn: z.array(ResourceRefSchema).max(64).default([]),
   })
   app.post('/api/agents/closure-preview', async (c) => {
     const body = await safeJson(c.req.raw)
@@ -317,22 +329,28 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
         details: { issues: parsed.error.issues },
       })
     }
+    // RFC-223 (PR-1): the edit form hands ids, but tolerate names too (id-or-name
+    // resolution, same as create/update). The closure guard is keyed by the
+    // agent's own id — a saved agent supplies it; a brand-new draft has none yet
+    // ('' matches no dep id).
+    const dependsOn = await resolveAgentRefs(deps.db, parsed.data.dependsOn)
+    const existing = await getAgent(deps.db, parsed.data.name)
+    const selfId = existing?.id ?? ''
     try {
-      await validateDependsOn(deps.db, parsed.data.name, parsed.data.dependsOn)
+      await validateDependsOn(deps.db, selfId, dependsOn, parsed.data.name)
     } catch (err) {
       if (err instanceof DomainError) {
         return c.json({ ok: false, code: err.code, details: err.details })
       }
       throw err
     }
-    // Build a synthetic root agent for closure expansion (selfName may not
-    // exist in DB yet — new-agent flow). validateDependsOn already vetted
-    // names exist + no cycle, so allowMissing:false is safe here.
-    const existing = await getAgent(deps.db, parsed.data.name)
+    // Build a synthetic root agent for closure expansion (self may not exist in
+    // DB yet — new-agent flow). validateDependsOn already vetted ids exist + no
+    // cycle, so allowMissing:false is safe here.
     const syntheticRoot: Agent = existing
-      ? { ...existing, dependsOn: parsed.data.dependsOn }
+      ? { ...existing, dependsOn }
       : ({
-          id: '',
+          id: selfId,
           name: parsed.data.name,
           description: '',
           outputs: [],
@@ -340,7 +358,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
           syncOutputsOnIterate: true,
           permission: {},
           skills: [],
-          dependsOn: parsed.data.dependsOn,
+          dependsOn,
           mcp: [],
           plugins: [],
           frontmatterExtra: {},
@@ -418,26 +436,35 @@ function toAgentClosureSummaries(
     mcp: string[]
     plugins: string[]
     missing: boolean
-  }> = closure.map((a) => ({
-    name: a.name,
-    description: a.description,
-    skills: a.skills,
-    skillCount: a.skills.length,
-    dependsOn: a.dependsOn,
-    mcp: a.mcp ?? [],
-    plugins: a.plugins ?? [],
-    missing: false,
-  }))
-  // Append placeholder rows for names referenced by any closure member but
-  // not present in the resolved list. Without this the UI can't show
+  }> = []
+  // RFC-223 (PR-1): the wire projection stays NAME-based for the DependencyTree
+  // UI (it links + navigates by name). dependsOn is stored by id, so resolve
+  // each id → name within the closure; skills are typed refs projected to their
+  // display token (managed = skill id, project = name — id→name display is a
+  // later PR once the endpoint carries the skill rows).
+  const idToName = new Map(closure.map((a) => [a.id, a.name]))
+  for (const a of closure) {
+    out.push({
+      name: a.name,
+      description: a.description,
+      skills: a.skills.map(agentSkillRefName),
+      skillCount: a.skills.length,
+      dependsOn: a.dependsOn.map((depId) => idToName.get(depId) ?? depId),
+      mcp: a.mcp ?? [],
+      plugins: a.plugins ?? [],
+      missing: false,
+    })
+  }
+  // Append placeholder rows for dependency IDS referenced by any closure member
+  // but not present in the resolved list. Without this the UI can't show
   // `<missing>` rows under their parents — buildDependencyTree on the
   // frontend treats absent names as missing leaves anyway, but appending
-  // them here keeps the wire shape symmetric.
-  const present = new Set(closure.map((a) => a.name))
+  // them here keeps the wire shape symmetric. A missing member's name is
+  // unknown (it was not loaded), so its id stands in as the placeholder name.
   const missing = new Set<string>()
   for (const a of closure) {
-    for (const dep of a.dependsOn) {
-      if (!present.has(dep)) missing.add(dep)
+    for (const depId of a.dependsOn) {
+      if (!idToName.has(depId)) missing.add(depId)
     }
   }
   for (const name of missing) {

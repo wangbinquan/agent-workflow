@@ -11,9 +11,13 @@
 // dropdown (checked, uncheckable) so an item that later loses eligibility
 // (a disabled plugin, a self-referencing agent) can still be un-checked. The
 // old "exclude already selected" clause is gone (selection is shown, not
-// hidden). Value identity is always `item.name` (the former `nameOf`
-// generalization is removed — no caller used it, and it risked showing a
-// machine id as a tag when value ≠ label).
+// hidden).
+//
+// RFC-223 (PR-1): value identity is the resource `id` (was `item.name`). The
+// picker stores ids; the option `label` still shows the name, and MultiSelect's
+// tag falls back to the raw value only for a stale/custom token. `allowCustom`
+// still lets you type a name (forward-reference / degraded list) — the server
+// resolves that id-or-name to an id at save (services/agentRefs.ts).
 
 import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
@@ -30,7 +34,7 @@ export interface ResourcePickerLabels {
   loadFailed: string
 }
 
-export interface ResourcePickerProps<T extends { name: string }> {
+export interface ResourcePickerProps<T extends { id: string; name: string }> {
   value: string[]
   onChange: (next: string[]) => void
   /** React Query cache key for the resource list (share it with the list page). */
@@ -54,7 +58,9 @@ export interface ResourcePickerProps<T extends { name: string }> {
   labels: ResourcePickerLabels
 }
 
-export function ResourcePicker<T extends { name: string }>(props: ResourcePickerProps<T>) {
+export function ResourcePicker<T extends { id: string; name: string }>(
+  props: ResourcePickerProps<T>,
+) {
   const { value, onChange, labels } = props
   const list = useQuery<T[]>({
     queryKey: props.queryKey,
@@ -65,12 +71,13 @@ export function ResourcePicker<T extends { name: string }>(props: ResourcePicker
 
   const eligible = props.filter
   const options = useMemo<MultiSelectOption[]>(() => {
+    // RFC-223 (PR-1): selection identity is the resource id.
     const selected = new Set(value)
     const pass = eligible ?? (() => true)
     return (list.data ?? [])
-      .filter((item) => pass(item) || selected.has(item.name))
+      .filter((item) => pass(item) || selected.has(item.id))
       .map((item) => ({
-        value: item.name,
+        value: item.id,
         label: props.labelFn(item),
         description: props.descriptionFn?.(item),
       }))

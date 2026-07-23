@@ -183,7 +183,8 @@ export async function deletePlugin(
 ): Promise<void> {
   const captured = await requirePluginRow(db, id)
   const existing = rowToPlugin(captured)
-  const dependents = await findAgentsReferencingPlugin(db, existing.name)
+  // RFC-223 (PR-1): agents.plugins stores ids — match by this plugin's id.
+  const dependents = await findAgentsReferencingPlugin(db, existing.id)
   if (dependents.length > 0) {
     // RFC-203 T6: principal-aware disclosure (deleteWorkflow precedent).
     throw new ConflictError(
@@ -211,8 +212,10 @@ export async function renamePlugin(db: DbClient, id: string, input: RenamePlugin
       `plugin '${input.newName}' already exists; pick a different name`,
     )
   }
-  const dependents = await findAgentsReferencingPlugin(db, existing.name)
   const updatedAt = monotonicNow(existing.updatedAt)
+  // RFC-223 (PR-1 / D7): agents.plugins stores the plugin ID, stable across a
+  // rename — no cascade. Just rename the row (the old agents.plugins name-rewrite
+  // loop is removed).
   dbTxSync(db, (tx) => {
     const result = tx
       .update(plugins)
@@ -220,32 +223,6 @@ export async function renamePlugin(db: DbClient, id: string, input: RenamePlugin
       .where(fullPluginRowWhere(captured))
       .run()
     if (changesOf(result) !== 1) throw stalePluginError(existing.id)
-
-    for (const dep of dependents) {
-      const current = tx
-        .select({ plugins: agents.plugins })
-        .from(agents)
-        .where(eq(agents.id, dep.id))
-        .get()
-      if (current === undefined) continue
-      let refs: string[] = []
-      try {
-        const parsed = JSON.parse(current.plugins) as unknown
-        if (Array.isArray(parsed))
-          refs = parsed.filter((value): value is string => typeof value === 'string')
-      } catch {
-        // A corrupt legacy value is treated as [] by the Agent mapper too.
-      }
-      tx.update(agents)
-        .set({
-          plugins: JSON.stringify(
-            refs.map((name) => (name === existing.name ? input.newName : name)),
-          ),
-          updatedAt: Date.now(),
-        })
-        .where(eq(agents.id, dep.id))
-        .run()
-    }
   })
   const renamed = await getPluginById(db, existing.id)
   if (renamed === null) throw new Error('plugin disappeared after rename')
@@ -259,9 +236,10 @@ export interface ReferencingAgentRow {
   visibility: 'public' | 'private'
 }
 
+// RFC-223 (PR-1): agents.plugins stores ids, so the lookup key is the plugin id.
 export async function findAgentsReferencingPlugin(
   db: DbClient,
-  name: string,
+  pluginId: string,
 ): Promise<ReferencingAgentRow[]> {
   const rows = await db
     .select({
@@ -272,12 +250,12 @@ export async function findAgentsReferencingPlugin(
       visibility: agents.visibility,
     })
     .from(agents)
-    .where(like(agents.plugins, `%"${name}"%`))
+    .where(like(agents.plugins, `%"${pluginId}"%`))
   const out: ReferencingAgentRow[] = []
   for (const row of rows) {
     try {
       const parsed = JSON.parse(row.plugins) as unknown
-      if (Array.isArray(parsed) && parsed.includes(name))
+      if (Array.isArray(parsed) && parsed.includes(pluginId))
         out.push({
           id: row.id,
           name: row.name,

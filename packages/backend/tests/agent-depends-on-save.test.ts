@@ -32,9 +32,14 @@ interface AgentSeed {
   mcp?: string[]
 }
 
-async function seed(db: DbClient, ...rows: AgentSeed[]): Promise<void> {
+// RFC-223 (PR-1): dependsOn is stored + validated BY ID. createAgent resolves
+// the seed's dependsOn NAMES → ids, and this returns a name→id map so the
+// tests can pass the resolved ids to validateDependsOn / resolveDependsClosure
+// exactly as the production callers do.
+async function seed(db: DbClient, ...rows: AgentSeed[]): Promise<Map<string, string>> {
+  const ids = new Map<string, string>()
   for (const r of rows) {
-    await createAgent(db, {
+    const created = await createAgent(db, {
       name: r.name,
       description: '',
       outputs: [],
@@ -47,7 +52,9 @@ async function seed(db: DbClient, ...rows: AgentSeed[]): Promise<void> {
       frontmatterExtra: {},
       bodyMd: '',
     })
+    ids.set(r.name, created.id)
   }
+  return ids
 }
 
 describe('RFC-022 validateDependsOn (save-time guard)', () => {
@@ -57,17 +64,22 @@ describe('RFC-022 validateDependsOn (save-time guard)', () => {
     db = createInMemoryDb(MIGRATIONS)
   })
 
-  test('rejects unknown dependsOn name', async () => {
-    await seed(db, { name: 'orchestrator' })
-    await expect(validateDependsOn(db, 'orchestrator', ['no-such-agent'])).rejects.toMatchObject({
+  test('rejects unknown dependsOn id', async () => {
+    const ids = await seed(db, { name: 'orchestrator' })
+    // A bogus id that resolves to no row → not-found (validateDependsOn is fed
+    // already-resolved ids; a survivor that is really a name lands here too).
+    await expect(
+      validateDependsOn(db, ids.get('orchestrator')!, ['no-such-agent-id']),
+    ).rejects.toMatchObject({
       code: 'agent-dependency-not-found',
-      details: { notFound: ['no-such-agent'] },
+      details: { notFound: ['no-such-agent-id'] },
     })
   })
 
-  test('rejects self-reference (even for not-yet-persisted new agent)', async () => {
-    // New-agent flow: 'fresh' does not exist in DB yet. Self-ref still caught.
-    await expect(validateDependsOn(db, 'fresh', ['fresh'])).rejects.toMatchObject({
+  test('rejects self-reference (even for not-yet-persisted new agent, by name)', async () => {
+    // New-agent flow: 'fresh' does not exist in DB yet (id unknown), so the
+    // self-ref is caught by the proposed NAME (RFC-223 PR-1 selfName guard).
+    await expect(validateDependsOn(db, 'new-id', ['fresh'], 'fresh')).rejects.toMatchObject({
       code: 'agent-dependency-self',
       details: { name: 'fresh' },
     })
@@ -75,50 +87,61 @@ describe('RFC-022 validateDependsOn (save-time guard)', () => {
 
   test('rejects cycle and reports just the loop in cyclePath (not the full prefix)', async () => {
     // Seed leaves first so createAgent's save-time guard accepts each row:
-    // c → (nothing), b → c, a → b. Now attempt to put c.dependsOn = ['a'],
+    // c → (nothing), b → c, a → b. Now attempt to put c.dependsOn = [a],
     // which would close the loop A → B → C → A. validateDependsOn runs on
-    // the *proposed* row (c), so we ask for selfName='c'.
-    await seed(db, { name: 'c' })
-    await seed(db, { name: 'b', dependsOn: ['c'] })
-    await seed(db, { name: 'a', dependsOn: ['b'] })
-    await expect(validateDependsOn(db, 'c', ['a'])).rejects.toMatchObject({
+    // the *proposed* row (c). RFC-223 PR-1: the cycle path is expressed in IDS.
+    const ids = await seed(
+      db,
+      { name: 'c' },
+      { name: 'b', dependsOn: ['c'] },
+      { name: 'a', dependsOn: ['b'] },
+    )
+    const [idA, idB, idC] = [ids.get('a')!, ids.get('b')!, ids.get('c')!]
+    await expect(validateDependsOn(db, idC, [idA])).rejects.toMatchObject({
       code: 'agent-dependency-cycle',
     })
     try {
-      await validateDependsOn(db, 'c', ['a'])
+      await validateDependsOn(db, idC, [idA])
     } catch (e) {
       const err = e as DomainError
       // The loop is "c → a → b → c"; the BFS root is the synthetic 'c' so
-      // the path starts with 'c'. Anything that does NOT include the full
-      // round-trip is a regression.
+      // the path starts with c's id and closes back on it.
       const path = (err.details as { cyclePath: string[] }).cyclePath
-      expect(path[0]).toBe('c')
-      expect(path[path.length - 1]).toBe('c')
-      expect(path).toContain('a')
-      expect(path).toContain('b')
+      expect(path[0]).toBe(idC)
+      expect(path[path.length - 1]).toBe(idC)
+      expect(path).toContain(idA)
+      expect(path).toContain(idB)
     }
   })
 
   test('accepts a valid diamond (A → B,C ; B → D ; C → D) and dedupes input', async () => {
     // Diamond convergence on D is legal — not a cycle. validateDependsOn
-    // should accept and silently dedupe duplicate names in the input.
-    // Seed leaf D first so createAgent's save-time guard accepts B and C.
-    await seed(db, { name: 'd' })
-    await seed(db, { name: 'b', dependsOn: ['d'] })
-    await seed(db, { name: 'c', dependsOn: ['d'] })
-    await expect(validateDependsOn(db, 'a', ['b', 'c', 'b', 'd', 'c'])).resolves.toBeUndefined()
+    // should accept and silently dedupe duplicate ids in the input.
+    const ids = await seed(
+      db,
+      { name: 'd' },
+      { name: 'b', dependsOn: ['d'] },
+      { name: 'c', dependsOn: ['d'] },
+    )
+    const [b, c, d] = [ids.get('b')!, ids.get('c')!, ids.get('d')!]
+    await expect(validateDependsOn(db, 'new-a-id', [b, c, b, d, c], 'a')).resolves.toBeUndefined()
   })
 
   test('resolveDependsClosure: happy path returns BFS order with root first; allowMissing skips dangling', async () => {
-    // Leaves first, then parents — createAgent's RFC-022 save-time guard
-    // requires that every dependsOn name resolves at insertion time. The
-    // "ghost" reference is injected post-hoc via a raw UPDATE so the guard
-    // doesn't trip on the missing name during seeding.
-    await seed(db, { name: 'leaf' })
-    await seed(db, { name: 'mid', dependsOn: ['leaf'] })
-    await seed(db, { name: 'top', dependsOn: ['mid'] })
+    // Leaves first, then parents. The "ghost" reference is injected post-hoc via
+    // a raw UPDATE (with a bogus id) so createAgent's guard doesn't trip during
+    // seeding. RFC-223 PR-1: dependsOn stores IDS, so the raw JSON uses mid's id.
+    const ids = await seed(
+      db,
+      { name: 'leaf' },
+      { name: 'mid', dependsOn: ['leaf'] },
+      { name: 'top', dependsOn: ['mid'] },
+    )
+    const midId = ids.get('mid')!
     const { sql } = await import('drizzle-orm')
-    await db.run(sql`UPDATE agents SET depends_on = '["mid","ghost"]' WHERE name = 'top'`)
+    await db.run(
+      sql`UPDATE agents SET depends_on = ${JSON.stringify([midId, 'ghost-id'])} WHERE name = 'top'`,
+    )
     const top = await (await import('../src/services/agent')).getAgent(db, 'top')
     expect(top).not.toBeNull()
     if (top === null) throw new Error('unreachable')
@@ -128,7 +151,7 @@ describe('RFC-022 validateDependsOn (save-time guard)', () => {
       code: 'agent-dependency-not-found',
     })
 
-    // allowMissing: missing 'ghost' silently skipped, traversal continues
+    // allowMissing: missing 'ghost-id' silently skipped, traversal continues
     const closure = await resolveDependsClosure(db, top, { allowMissing: true })
     expect(closure.ok).toBe(true)
     if (closure.ok === false) throw new Error('unreachable')
@@ -136,21 +159,20 @@ describe('RFC-022 validateDependsOn (save-time guard)', () => {
   })
 })
 
-describe('RFC-022 findAgentsDependingOn (LIKE substring guard)', () => {
+describe('RFC-223 findAgentsDependingOn (id match + JSON exactness)', () => {
   let db: DbClient
 
   beforeEach(() => {
     db = createInMemoryDb(MIGRATIONS)
   })
 
-  test('rejects LIKE substring false positive ("foo" in "foobar")', async () => {
-    // Seed an agent whose dependsOn contains 'foobar', not 'foo'. A naive
-    // LIKE %foo% pre-filter would match this row; the JSON.parse + includes
-    // second pass MUST reject it.
-    await seed(db, { name: 'foo' }, { name: 'foobar' })
+  test('matches by agent id (JSON.parse + includes exactness, not a coincidental substring)', async () => {
+    // dependsOn stores IDS. 'caller' depends on 'foobar' (→ foobar's id); a
+    // lookup by foo's id must NOT match caller, and by foobar's id must.
+    const ids = await seed(db, { name: 'foo' }, { name: 'foobar' })
     await seed(db, { name: 'caller', dependsOn: ['foobar'] })
 
-    expect(await findAgentsDependingOn(db, 'foo')).toEqual([])
-    expect(await findAgentsDependingOn(db, 'foobar')).toEqual(['caller'])
+    expect(await findAgentsDependingOn(db, ids.get('foo')!)).toEqual([])
+    expect(await findAgentsDependingOn(db, ids.get('foobar')!)).toEqual(['caller'])
   })
 })

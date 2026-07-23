@@ -192,15 +192,17 @@ describe('services/mcp.ts reference cascade', () => {
     db = createInMemoryDb(MIGRATIONS)
   })
 
-  test('findAgentsReferencingMcp: exact match, no substring false-positives', async () => {
-    await createMcp(db, {
+  // RFC-223 (PR-1): agents.mcp stores mcp IDS, so the reverse lookup keys on the
+  // mcp id — only the agent that references THIS id is returned.
+  test('findAgentsReferencingMcp: matches by id, not another mcp', async () => {
+    const sentry = await createMcp(db, {
       name: 'sentry',
       description: '',
       type: 'remote',
       config: { url: 'https://s.io' },
       enabled: true,
     })
-    await createMcp(db, {
+    const staging = await createMcp(db, {
       name: 'sentry-staging',
       description: '',
       type: 'remote',
@@ -234,9 +236,13 @@ describe('services/mcp.ts reference cascade', () => {
       bodyMd: '',
     })
 
-    const refs = await findAgentsReferencingMcp(db, 'sentry')
+    const refs = await findAgentsReferencingMcp(db, sentry.id)
     expect(refs).toEqual([
       { id: expect.any(String), name: 'a-prod', ownerUserId: null, visibility: 'public' },
+    ])
+    // The other mcp's id resolves to its own consumer only.
+    expect((await findAgentsReferencingMcp(db, staging.id)).map((r) => r.name)).toEqual([
+      'a-staging',
     ])
   })
 
@@ -275,8 +281,11 @@ describe('services/mcp.ts reference cascade', () => {
     }
   })
 
-  test('rename: cascades into agents.mcp array atomically', async () => {
-    await createMcp(db, {
+  // RFC-223 (PR-1 / D7): a rename NO LONGER cascades — agents.mcp stores the mcp
+  // ID, which is stable across the rename, so referencing rows are untouched and
+  // still resolve the (now-renamed) mcp by id.
+  test('rename: does NOT rewrite agents.mcp (ids are stable)', async () => {
+    const oldMcp = await createMcp(db, {
       name: 'old-name',
       description: '',
       type: 'local',
@@ -285,14 +294,14 @@ describe('services/mcp.ts reference cascade', () => {
     })
     // T5 save-time guard: also seed the unrelated MCPs that the consumer
     // agents reference, otherwise createAgent rejects with mcp-not-found.
-    await createMcp(db, {
+    const other = await createMcp(db, {
       name: 'other',
       description: '',
       type: 'local',
       config: { command: ['x'] },
       enabled: true,
     })
-    await createMcp(db, {
+    const otherMcp = await createMcp(db, {
       name: 'other-mcp',
       description: '',
       type: 'local',
@@ -345,13 +354,14 @@ describe('services/mcp.ts reference cascade', () => {
     const a1 = await getAgent(db, 'consumer-1')
     const a2 = await getAgent(db, 'consumer-2')
     const a3 = await getAgent(db, 'unrelated')
-    expect(a1?.mcp).toEqual(['new-name', 'other'])
-    expect(a2?.mcp).toEqual(['new-name'])
-    expect(a3?.mcp).toEqual(['other-mcp'])
+    // Ids unchanged by the rename — no cascade.
+    expect(a1?.mcp).toEqual([oldMcp.id, other.id])
+    expect(a2?.mcp).toEqual([oldMcp.id])
+    expect(a3?.mcp).toEqual([otherMcp.id])
 
-    // old name should be gone, new name resolvable
+    // old name should be gone, new name resolvable → same id.
     expect(await getMcp(db, 'old-name')).toBeNull()
-    expect(await getMcp(db, 'new-name')).not.toBeNull()
+    expect((await getMcp(db, 'new-name'))?.id).toBe(oldMcp.id)
   })
 
   test('rename: identical name is a no-op', async () => {

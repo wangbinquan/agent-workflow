@@ -38,7 +38,10 @@ async function seedAgent(
     outputs: [],
     syncOutputsOnIterate: true,
     permission: {},
-    skills: opts.skills ?? [],
+    // RFC-223 (PR-1): skill NAMES with no managed row are repo-local `project`
+    // refs (RFC-178). These closure tests exercise the injection union, which
+    // preserves project names verbatim.
+    skills: (opts.skills ?? []).map((name) => ({ kind: 'project' as const, name })),
     dependsOn: opts.dependsOn ?? [],
     mcp: opts.mcp ?? [],
     plugins: [],
@@ -115,21 +118,26 @@ describe('RFC-022 scheduler.prepareNodeRunInjection', () => {
   })
 
   test('cycle maps to NodeStepResult.failed with the cycle path embedded in message', async () => {
-    // Seed leaves first, then close the loop with a raw UPDATE.
+    // Seed leaves first, then close the loop with a raw UPDATE. RFC-223 (PR-1):
+    // dependsOn stores IDS, so inject a's id (not its name) to form the cycle.
     await seedAgent(db, 'c')
     await seedAgent(db, 'b', { dependsOn: ['c'] })
     await seedAgent(db, 'a', { dependsOn: ['b'] })
+    const idA = (await getAgent(db, 'a'))!.id
+    const idB = (await getAgent(db, 'b'))!.id
+    const idC = (await getAgent(db, 'c'))!.id
     const { sql } = await import('drizzle-orm')
-    await db.run(sql`UPDATE agents SET depends_on = '["a"]' WHERE name = 'c'`)
+    await db.run(sql`UPDATE agents SET depends_on = ${JSON.stringify([idA])} WHERE name = 'c'`)
     const root = await getAgent(db, 'a')
     if (root === null) throw new Error('seed missing')
 
     const out = await prepareNodeRunInjection(db, '/tmp/app-home', root, NOOP_LOG)
     expect(out.kind).toBe('failed')
     if (out.kind !== 'failed') throw new Error('unreachable')
+    // RFC-223 (PR-1): the cycle path is expressed in agent IDS.
     expect(out.message.startsWith('agent-dependency-cycle')).toBe(true)
-    expect(out.message).toContain('a')
-    expect(out.message).toContain('b')
-    expect(out.message).toContain('c')
+    expect(out.message).toContain(idA)
+    expect(out.message).toContain(idB)
+    expect(out.message).toContain(idC)
   })
 })

@@ -8,6 +8,10 @@ import type { Agent, Skill, WorkflowDefinition } from '@agent-workflow/shared'
 import { describe, expect, test } from 'bun:test'
 import { extractTemplateVars, validateWorkflowDef } from '../src/services/workflow.validator'
 
+// RFC-223 (PR-1): agent refs are stored BY ID. This helper takes skill /
+// dependsOn NAMES and maps them to the `skill-<name>` / `agent-<name>` id
+// convention the sibling `skill()` fixture + closure use (node→agent stays by
+// name via agentName).
 function agent(
   name: string,
   outputs: string[] = [],
@@ -21,8 +25,8 @@ function agent(
     outputs,
     syncOutputsOnIterate: true,
     permission: {},
-    skills,
-    dependsOn,
+    skills: skills.map((s) => ({ kind: 'managed' as const, skillId: `skill-${s}` })),
+    dependsOn: dependsOn.map((d) => `agent-${d}`),
     mcp: [],
     plugins: [],
     frontmatterExtra: {},

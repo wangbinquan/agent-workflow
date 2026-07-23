@@ -55,10 +55,11 @@ describe('agent.plugins save-time guard', () => {
     db = createInMemoryDb(MIGRATIONS)
   })
 
-  test('create succeeds when every plugin resolves + enabled', async () => {
-    await createPlugin(db, { name: 'p1', spec: 'p1@1' }, opts())
+  test('create succeeds when every plugin resolves + enabled (stored by id)', async () => {
+    const p1 = await createPlugin(db, { name: 'p1', spec: 'p1@1' }, opts())
     const a = await createAgent(db, agentInput('consumer', ['p1']))
-    expect(a.plugins).toEqual(['p1'])
+    // RFC-223 (PR-1): the name reference is resolved to the plugin id at save.
+    expect(a.plugins).toEqual([p1.id])
   })
 
   test('create fails 422 plugin-not-found when a plugin is missing', async () => {
@@ -102,18 +103,15 @@ describe('agent.plugins save-time guard', () => {
   })
 
   test('update without `plugins` field skips the check (preserves existing)', async () => {
-    await createPlugin(db, { name: 'p1', spec: 'p@1' }, opts())
+    const p1 = await createPlugin(db, { name: 'p1', spec: 'p@1' }, opts())
     await createAgent(db, agentInput('a', ['p1']))
     // Now disable the plugin from under the agent — patching unrelated field
     // must still succeed; guard only runs when caller touches `plugins`.
     const { updatePlugin } = await import('../src/services/plugin')
-    const { eq } = await import('drizzle-orm')
-    const { plugins: pluginsTable } = await import('../src/db/schema')
-    const row = (await db.select().from(pluginsTable).where(eq(pluginsTable.name, 'p1')))[0]!
-    await updatePlugin(db, row.id, { enabled: false }, opts())
+    await updatePlugin(db, p1.id, { enabled: false }, opts())
     // PATCH something unrelated; should NOT trigger plugin validation, so it
-    // passes even though the stale `plugins: ['p1']` is now disabled.
+    // passes even though the stale `plugins: [<id>]` is now disabled.
     const updated = await updateAgent(db, 'a', { description: 'unrelated' })
-    expect(updated.plugins).toEqual(['p1'])
+    expect(updated.plugins).toEqual([p1.id])
   })
 })

@@ -315,16 +315,27 @@ export function validateWorkflowDef(
   // walk below; kept here as a placeholder if we later add top-level rules.
 
   const agentByName = new Map(ctx.agents.map((a) => [a.name, a]))
-  const skillNames = new Set(ctx.skills.map((s) => s.name))
+  // RFC-223 (PR-1): workflow nodes still reference agents by NAME (node→agentId
+  // is PR-2), but agent→skill/plugin/agent refs are BY ID now, so the closure
+  // BFS + ref checks resolve against id sets.
+  const agentById = new Map(ctx.agents.map((a) => [a.id, a]))
+  const skillIds = new Set(ctx.skills.map((s) => s.id))
   // RFC-031: lookup tables for plugin reference checks. `pluginsKnown`
-  // tells us name exists; `pluginsEnabled` tells us its enabled flag. When
-  // ctx.plugins is undefined we leave both as undefined → checks no-op.
+  // tells us the plugin id exists; `pluginsEnabled` tells us its enabled flag.
+  // When ctx.plugins is undefined we leave both as undefined → checks no-op.
   const pluginsKnown =
-    ctx.plugins === undefined ? undefined : new Set(ctx.plugins.map((p) => p.name))
+    ctx.plugins === undefined
+      ? undefined
+      : new Set(ctx.plugins.map((p) => p.id).filter((id): id is string => id != null))
   const pluginsEnabled =
     ctx.plugins === undefined
       ? undefined
-      : new Set(ctx.plugins.filter((p) => p.enabled).map((p) => p.name))
+      : new Set(
+          ctx.plugins
+            .filter((p) => p.enabled)
+            .map((p) => p.id)
+            .filter((id): id is string => id != null),
+        )
 
   // Stable node identity is a scheduler invariant, not a canvas nicety. A
   // duplicate id used to survive validation, then `new Map(nodes.map(...))`
@@ -801,11 +812,13 @@ export function validateWorkflowDef(
           })
         }
       }
-      for (const s of agent.skills) {
-        if (!skillNames.has(s)) {
+      for (const ref of agent.skills) {
+        // RFC-223 (PR-1): only MANAGED refs resolve against DB skill ids;
+        // `project` refs are repo-local self-discovered skills (no DB row).
+        if (ref.kind === 'managed' && !skillIds.has(ref.skillId)) {
           issues.push({
             code: 'skill-not-found',
-            message: `agent '${agent.name}' (used by node '${node.id}') references unknown skill '${s}'`,
+            message: `agent '${agent.name}' (used by node '${node.id}') references unknown skill '${ref.skillId}'`,
             pointer: node.id,
             target: target.nodeField(node.id, 'agent'),
           })
@@ -837,28 +850,30 @@ export function validateWorkflowDef(
       // cycle-driven infinite loops — even though agent.ts save-time guard
       // refuses cycles, the validator is also called from `workflow-yaml`
       // import and from CI fixtures that may have stale DBs.
-      const seenInClosure = new Set<string>([agent.name])
+      // RFC-223 (PR-1): the dependsOn closure is keyed BY ID (dependsOn stores
+      // agent ids; a rename can't re-route it).
+      const seenInClosure = new Set<string>([agent.id])
       const closureQueue = [...agent.dependsOn]
       while (closureQueue.length > 0) {
-        const depName = closureQueue.shift()
-        if (depName === undefined) break
-        if (seenInClosure.has(depName)) continue
-        seenInClosure.add(depName)
-        const dep = agentByName.get(depName)
+        const depId = closureQueue.shift()
+        if (depId === undefined) break
+        if (seenInClosure.has(depId)) continue
+        seenInClosure.add(depId)
+        const dep = agentById.get(depId)
         if (dep === undefined) {
           issues.push({
             code: 'agent-dependency-not-found',
-            message: `agent '${agent.name}' (used by node '${node.id}') depends on unknown agent '${depName}'`,
+            message: `agent '${agent.name}' (used by node '${node.id}') depends on unknown agent '${depId}'`,
             pointer: node.id,
             target: target.nodeField(node.id, 'agent'),
           })
           continue
         }
-        for (const s of dep.skills) {
-          if (!skillNames.has(s)) {
+        for (const ref of dep.skills) {
+          if (ref.kind === 'managed' && !skillIds.has(ref.skillId)) {
             issues.push({
               code: 'skill-not-found',
-              message: `dependent agent '${dep.name}' (closure of '${agent.name}', used by node '${node.id}') references unknown skill '${s}'`,
+              message: `dependent agent '${dep.name}' (closure of '${agent.name}', used by node '${node.id}') references unknown skill '${ref.skillId}'`,
               pointer: node.id,
               target: target.nodeField(node.id, 'agent'),
             })

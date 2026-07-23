@@ -15,6 +15,7 @@
 
 import type {
   Agent,
+  AgentSkillRef,
   ClarifyCrossAgentNode,
   ClarifyNode,
   EnvelopeFollowupReason,
@@ -80,8 +81,8 @@ import {
 } from '@/db/schema'
 import { getAgent } from '@/services/agent'
 import { resolveDependsClosure } from '@/services/agentDeps'
-import { collectMcpNamesFromClosure, loadMcpsByNames } from '@/services/mcpClosure'
-import { collectPluginNamesFromClosure, loadPluginsByNames } from '@/services/pluginClosure'
+import { collectMcpIdsFromClosure, loadMcpsByIds } from '@/services/mcpClosure'
+import { collectPluginIdsFromClosure, loadPluginsByIds } from '@/services/pluginClosure'
 import {
   createClarifyRound,
   dispatchCrossClarifyNode,
@@ -6470,8 +6471,9 @@ async function cancelTaskRow(
  * the same `NodeStepResult` 'failed' shape every other scheduler step uses
  * so the caller's normal failure path handles cycles / missing-dep names.
  *
- * Skills union de-dup is by name — same skill referenced from multiple
- * closure agents only stages once under OPENCODE_CONFIG_DIR/skills/.
+ * Skills union de-dup is by ref identity (managed skillId / project name) —
+ * the same skill referenced from multiple closure agents only stages once
+ * under OPENCODE_CONFIG_DIR/skills/. (RFC-223 PR-1: was by name.)
  */
 export async function prepareNodeRunInjection(
   db: DbClient,
@@ -6485,17 +6487,17 @@ export async function prepareNodeRunInjection(
       resolvedSkills: ResolvedSkill[]
       /**
        * RFC-028: MCP rows hydrated from the dependsOn closure's union of
-       * agent.mcp[] names. Empty when nothing in the closure declares an
-       * mcp (most workflows pre-RFC-028). Names that no longer resolve
+       * agent.mcp[] ids. Empty when nothing in the closure declares an
+       * mcp (most workflows pre-RFC-028). Ids that no longer resolve
        * in the DB (deleted out from under the running task) are silently
-       * dropped — see loadMcpsByNames + docs/OPENCODE_CONFIG.md §6.
+       * dropped — see loadMcpsByIds + docs/OPENCODE_CONFIG.md §6.
        */
       mcps: Mcp[]
       /**
        * RFC-031: opencode plugin rows hydrated from the dependsOn closure's
-       * union of agent.plugins[] names. Empty when no closure member declares
-       * a plugin. Same "silently skip names that no longer resolve" stance as
-       * mcps — see loadPluginsByNames docstring.
+       * union of agent.plugins[] ids. Empty when no closure member declares
+       * a plugin. Same "silently skip ids that no longer resolve" stance as
+       * mcps — see loadPluginsByIds docstring.
        */
       plugins: Plugin[]
     }
@@ -6533,55 +6535,63 @@ export async function prepareNodeRunInjection(
     }
   }
   const dependents = closure.agents.slice(1) // [0] is the root
-  const skillsUnion: string[] = []
+  // RFC-223 (PR-1): skills are typed refs (managed{skillId} / project{name}).
+  // Union across the closure de-duped by ref identity (first-seen order).
+  const skillsUnion: AgentSkillRef[] = []
   const seenSkills = new Set<string>()
-  for (const skillName of [...agent.skills, ...dependents.flatMap((a) => a.skills)]) {
-    if (seenSkills.has(skillName)) continue
-    seenSkills.add(skillName)
-    skillsUnion.push(skillName)
+  for (const ref of [...agent.skills, ...dependents.flatMap((a) => a.skills)]) {
+    const key = ref.kind === 'managed' ? `m:${ref.skillId}` : `p:${ref.name}`
+    if (seenSkills.has(key)) continue
+    seenSkills.add(key)
+    skillsUnion.push(ref)
   }
   const resolvedSkills = await resolveSkills(db, appHome, skillsUnion)
-  // RFC-028: union mcp names across the full closure (root first, then BFS
+  // RFC-028: union mcp ids across the full closure (root first, then BFS
   // dependents) and hydrate the rows. Errors that can't surface as a
-  // 'failed' here — missing MCP names are silently skipped at hydrate time
-  // (see loadMcpsByNames docstring; we prefer "spawn without that MCP" over
-  // "fail the whole node because a previously-saved name no longer exists").
-  const mcpNames = collectMcpNamesFromClosure(closure.agents)
-  const mcps = await loadMcpsByNames(db, mcpNames)
-  // RFC-031: same closure + hydrate dance for opencode plugins. Names that no
+  // 'failed' here — missing MCP ids are silently skipped at hydrate time
+  // (see loadMcpsByIds docstring; we prefer "spawn without that MCP" over
+  // "fail the whole node because a previously-saved id no longer exists").
+  const mcpIds = collectMcpIdsFromClosure(closure.agents)
+  const mcps = await loadMcpsByIds(db, mcpIds)
+  // RFC-031: same closure + hydrate dance for opencode plugins. Ids that no
   // longer resolve (deleted out from under the running task) are silently
   // dropped at the loader; we'd rather start the node without a plugin than
   // crash on a previously-saved-but-deleted reference.
-  const pluginNames = collectPluginNamesFromClosure(closure.agents)
-  const plugins = await loadPluginsByNames(db, pluginNames)
+  const pluginIds = collectPluginIdsFromClosure(closure.agents)
+  const plugins = await loadPluginsByIds(db, pluginIds)
   return { kind: 'ok', dependents, resolvedSkills, mcps, plugins }
 }
 
+// RFC-223 (PR-1): resolve typed skill refs to injectable skills. A `managed`
+// ref is looked up BY ID; the injection NAME (opencode's registry key — AC7)
+// and disk path come from the row. A `project` ref names a repo-local skill
+// (RFC-178, no DB row) that opencode self-discovers — passed through by name.
+// A managed ref whose id no longer resolves is skipped (deletion is guarded by
+// findAgentsUsingSkill, so this only happens on out-of-band removal).
 async function resolveSkills(
   db: DbClient,
   appHome: string,
-  names: string[],
+  refs: AgentSkillRef[],
 ): Promise<ResolvedSkill[]> {
   const out: ResolvedSkill[] = []
-  for (const name of names) {
-    const rows = await db.select().from(skills).where(eq(skills.name, name)).limit(1)
-    const row = rows[0]
-    if (!row) {
-      out.push({ name, sourceKind: 'project' })
+  for (const ref of refs) {
+    if (ref.kind === 'project') {
+      out.push({ name: ref.name, sourceKind: 'project' })
       continue
     }
-    if (row.sourceKind === 'managed') {
-      // RFC-170 T9 (§invariant④): fail-closed if this managed skill did not verify
-      // this boot (snapshot unverified/quarantined) — never stage corrupt/missing
-      // content into a spawn. Inactive before the boot reverify (tests/pre-HTTP).
-      if (!isSkillInjectableThisBoot({ id: row.id, sourceKind: 'managed' })) {
-        throw new SkillQuarantinedError(name)
-      }
-      const skillPath = `${appHome}/${row.managedPath ?? `skills/${name}/files`}`
-      out.push({ name, sourceKind: 'managed', sourcePath: skillPath })
+    const rows = await db.select().from(skills).where(eq(skills.id, ref.skillId)).limit(1)
+    const row = rows[0]
+    if (!row) continue // dangling managed ref (skill removed out-of-band) — skip
+    // RFC-170 T9 (§invariant④): fail-closed if this managed skill did not verify
+    // this boot (snapshot unverified/quarantined) — never stage corrupt/missing
+    // content into a spawn. Inactive before the boot reverify (tests/pre-HTTP).
+    if (!isSkillInjectableThisBoot({ id: row.id, sourceKind: 'managed' })) {
+      throw new SkillQuarantinedError(row.name)
     }
-    // RFC-178: skills are managed-only; a DB row is always managed here. A name
-    // with no DB row was already emitted as `project` above (repo-local skill).
+    // RFC-223 PR-1 keeps disk name-based (id-based disk is PR-5); injection uses
+    // the skill NAME as the opencode-visible key.
+    const skillPath = `${appHome}/${row.managedPath ?? `skills/${row.name}/files`}`
+    out.push({ name: row.name, sourceKind: 'managed', sourcePath: skillPath })
   }
   return out
 }

@@ -137,7 +137,8 @@ export async function deleteMcp(
   if (existing === null) {
     throw new NotFoundError('mcp-not-found', `mcp '${name}' not found`)
   }
-  const dependents = await findAgentsReferencingMcp(db, name)
+  // RFC-223 (PR-1): agents.mcp stores ids — match by this mcp's id.
+  const dependents = await findAgentsReferencingMcp(db, existing.id)
   if (dependents.length > 0) {
     // RFC-203 T6: principal-aware disclosure (deleteWorkflow precedent) —
     // names only for agents the actor may see, the rest an aggregate count.
@@ -169,13 +170,9 @@ export async function renameMcp(
     )
   }
 
-  // Rename + cascade update of agents.mcp arrays in a single transaction so
-  // we never end up with a renamed mcp row plus stale agent references (the
-  // missing-reference would surface as a validator error on next save).
-  const dependents = await findAgentsReferencingMcp(db, existing.name)
-  // RFC-093: synchronous transaction (dbTxSync) — the previous async form
-  // COMMITted at its first await; a mid-cascade failure left a renamed row
-  // with stale agent references (audit S-10).
+  // RFC-223 (PR-1 / D7): agents.mcp stores the mcp ID, which is stable across a
+  // rename — so there is NO cascade to perform. Just rename the row. (This
+  // removes the old `agents.mcp` name-rewrite loop that RFC-093 hardened.)
   dbTxSync(db, (tx) => {
     tx.update(mcps)
       .set({
@@ -184,29 +181,6 @@ export async function renameMcp(
       })
       .where(eq(mcps.id, existing.id))
       .run()
-
-    for (const dep of dependents) {
-      const row = tx
-        .select({ mcp: agents.mcp })
-        .from(agents)
-        .where(eq(agents.id, dep.id))
-        .limit(1)
-        .all()
-      const current = row[0]
-      if (current === undefined) continue
-      let arr: string[]
-      try {
-        const parsed = JSON.parse(current.mcp) as unknown
-        arr = Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : []
-      } catch {
-        arr = []
-      }
-      const next = arr.map((n) => (n === existing.name ? input.newName : n))
-      tx.update(agents)
-        .set({ mcp: JSON.stringify(next), updatedAt: Date.now() })
-        .where(eq(agents.id, dep.id))
-        .run()
-    }
   })
 
   const renamed = await getMcp(db, input.newName)
@@ -215,11 +189,12 @@ export async function renameMcp(
 }
 
 /**
- * Returns the agents (id + name) whose `mcp` JSON column contains `name`.
+ * Returns the agents (id + name) whose `mcp` JSON column references `mcpId`.
+ * RFC-223 (PR-1): agents.mcp stores ids, so the lookup key is the mcp id.
  *
  * Two-stage matching: SQL `LIKE` pre-filter is coarse (substring match) so we
- * re-parse and exact-match with Array.includes. Without the exact match, name
- * 'sentry' would falsely flag a row whose mcp is `["sentry-staging"]`.
+ * re-parse and exact-match with Array.includes to reject any coincidental JSON
+ * substring hit.
  */
 export interface ReferencingAgentRow {
   id: string
@@ -230,7 +205,7 @@ export interface ReferencingAgentRow {
 
 export async function findAgentsReferencingMcp(
   db: DbClient,
-  name: string,
+  mcpId: string,
 ): Promise<ReferencingAgentRow[]> {
   const { like } = await import('drizzle-orm')
   const rows = await db
@@ -242,13 +217,13 @@ export async function findAgentsReferencingMcp(
       visibility: agents.visibility,
     })
     .from(agents)
-    .where(like(agents.mcp, `%"${name}"%`))
+    .where(like(agents.mcp, `%"${mcpId}"%`))
 
   const out: ReferencingAgentRow[] = []
   for (const row of rows) {
     try {
       const parsed = JSON.parse(row.mcp) as unknown
-      if (Array.isArray(parsed) && parsed.includes(name)) {
+      if (Array.isArray(parsed) && parsed.includes(mcpId)) {
         out.push({
           id: row.id,
           name: row.name,

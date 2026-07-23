@@ -6,11 +6,16 @@
 import type {
   Agent,
   AgentInputPort,
+  AgentSkillRef,
   CreateAgent,
   RenameAgent,
   UpdateAgent,
 } from '@agent-workflow/shared'
-import { AgentInputPortSchema, AgentInputPortsSchema } from '@agent-workflow/shared'
+import {
+  AgentInputPortSchema,
+  AgentInputPortsSchema,
+  AgentSkillRefSchema,
+} from '@agent-workflow/shared'
 import { and, eq, inArray, like, notInArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
@@ -19,6 +24,12 @@ import { dbTxSync } from '@/db/txSync'
 import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { agentsDependingOnIn, validateDependsOn } from './agentDeps'
+import {
+  normalizeSkillRefs,
+  resolveAgentRefs,
+  resolveMcpRefs,
+  resolvePluginRefs,
+} from './agentRefs'
 import {
   discloseRefsSync,
   discloseScheduleRefs,
@@ -63,20 +74,35 @@ export async function createAgent(
     throw new ConflictError('agent-name-in-use', `agent '${input.name}' already exists`)
   }
 
+  // RFC-223 (PR-1): the agent's own id, minted up front so the dependsOn cycle
+  // guard can self-check by id (a name authored in agent.md can't reference an
+  // id that does not exist yet, but update() re-uses the same by-id guard).
+  const id = ulid()
+
+  // RFC-223 (PR-1): resolve id-or-name references to canonical ids (pickers
+  // hand ids; agent.md hands names) BEFORE existence validation + storage, so
+  // every ref column persists ids and `name` never leaks into the DB.
+  const mcpIds = await resolveMcpRefs(db, input.mcp)
+  const pluginIds = await resolvePluginRefs(db, input.plugins ?? [])
+  const dependsOnIds = await resolveAgentRefs(db, input.dependsOn)
+  const skillRefs = await normalizeSkillRefs(db, input.skills)
+
   // RFC-022 save-time guard: not-found / self-ref / cycle all throw a 400
   // DomainError with the corresponding code. Runs *before* the insert so
-  // partially-validated rows never land in the DB.
-  await validateDependsOn(db, input.name, input.dependsOn)
+  // partially-validated rows never land in the DB. Keyed by id (RFC-223 PR-1);
+  // pass the proposed name so a self-name dep (whose id doesn't exist yet) is
+  // still caught as agent-dependency-self.
+  await validateDependsOn(db, id, dependsOnIds, input.name)
 
   // RFC-028 save-time guard: every `mcp[]` entry must resolve to an existing
   // mcps row. Without this, agents save successfully but fail at runtime when
   // the scheduler tries to load the row (or worse, succeeds with a partial
   // closure that silently drops the missing reference).
-  await validateMcpReferences(db, input.mcp)
+  await validateMcpReferences(db, mcpIds)
 
   // RFC-031: every entry in input.plugins must point at an existing + enabled
   // plugins row. Failure here surfaces as 422 plugin-not-found / -disabled.
-  await validatePluginReferences(db, input.plugins ?? [])
+  await validatePluginReferences(db, pluginIds)
 
   // RFC-111 (Codex audit F6): a pinned runtime NAME must resolve to an existing
   // runtimes row. Without this, an agent.md import / API call can pin an unknown
@@ -84,7 +110,6 @@ export async function createAgent(
   // to built-in opencode at dispatch — a hard-to-detect runtime/profile drift.
   await validateRuntimeReference(db, input.runtime)
 
-  const id = ulid()
   const now = Date.now()
   // RFC-005: outputKinds is a sidecar map ported through `frontmatter_extra`
   // (under reserved key `outputKinds`) until a dedicated column is needed.
@@ -115,12 +140,13 @@ export async function createAgent(
     syncOutputsOnIterate: input.syncOutputsOnIterate,
     runtime: input.runtime ?? null, // RFC-111
     permission: JSON.stringify(input.permission),
-    skills: JSON.stringify(input.skills),
-    dependsOn: JSON.stringify(dedupePreservingOrder(input.dependsOn)),
-    mcp: JSON.stringify(dedupePreservingOrder(input.mcp)),
-    // RFC-031: plugin name array; T6 enforces existence + enabled at save
+    // RFC-223 (PR-1): resolved id refs / typed skill refs (already deduped).
+    skills: serializeSkillRefs(skillRefs),
+    dependsOn: JSON.stringify(dependsOnIds),
+    mcp: JSON.stringify(mcpIds),
+    // RFC-031: plugin id array; T6 enforces existence + enabled at save
     // time, T7 unions across the dependsOn closure at runner injection time.
-    plugins: JSON.stringify(dedupePreservingOrder(input.plugins ?? [])),
+    plugins: JSON.stringify(pluginIds),
     frontmatterExtra: JSON.stringify(fmExtra),
     bodyMd: input.bodyMd,
     // RFC-099: creator becomes owner; new resources default to 'public' (D18).
@@ -144,20 +170,32 @@ export async function updateAgent(db: DbClient, name: string, patch: UpdateAgent
     throw new NotFoundError('agent-not-found', `agent '${name}' not found`)
   }
 
+  // RFC-223 (PR-1): resolve patched id-or-name refs → canonical ids once, then
+  // validate + store the SAME resolved arrays (agent.md hands names; pickers
+  // hand ids). undefined patch fields are left untouched.
+  const dependsOnIds =
+    patch.dependsOn !== undefined ? await resolveAgentRefs(db, patch.dependsOn) : undefined
+  const mcpIds = patch.mcp !== undefined ? await resolveMcpRefs(db, patch.mcp) : undefined
+  const pluginIds =
+    patch.plugins !== undefined ? await resolvePluginRefs(db, patch.plugins) : undefined
+  const skillRefs =
+    patch.skills !== undefined ? await normalizeSkillRefs(db, patch.skills) : undefined
+
   // RFC-022 save-time guard — only when the caller actually patched dependsOn.
   // PATCH that doesn't touch the field keeps the existing closure validity.
-  if (patch.dependsOn !== undefined) {
-    await validateDependsOn(db, name, patch.dependsOn)
+  // Keyed by the agent's own id (RFC-223 PR-1) so a self-dep is caught by id.
+  if (dependsOnIds !== undefined) {
+    await validateDependsOn(db, existing.id, dependsOnIds, existing.name)
   }
 
   // RFC-028 save-time guard — only when caller patched mcp.
-  if (patch.mcp !== undefined) {
-    await validateMcpReferences(db, patch.mcp)
+  if (mcpIds !== undefined) {
+    await validateMcpReferences(db, mcpIds)
   }
 
   // RFC-031 save-time guard — only when caller patched plugins.
-  if (patch.plugins !== undefined) {
-    await validatePluginReferences(db, patch.plugins)
+  if (pluginIds !== undefined) {
+    await validatePluginReferences(db, pluginIds)
   }
 
   // RFC-111 (Codex audit F6): same guard for a patched runtime pin — a NAME must
@@ -180,12 +218,12 @@ export async function updateAgent(db: DbClient, name: string, patch: UpdateAgent
   // untouched (sparse-patch). Before this branch the set-builder skipped runtime
   // entirely, so the edit form could neither repoint nor un-pin an agent.
   if (patch.runtime !== undefined) set.runtime = patch.runtime
-  if (patch.skills !== undefined) set.skills = JSON.stringify(patch.skills)
-  if (patch.dependsOn !== undefined)
-    set.dependsOn = JSON.stringify(dedupePreservingOrder(patch.dependsOn))
-  if (patch.mcp !== undefined) set.mcp = JSON.stringify(dedupePreservingOrder(patch.mcp))
-  if (patch.plugins !== undefined)
-    set.plugins = JSON.stringify(dedupePreservingOrder(patch.plugins))
+  // RFC-223 (PR-1): persist the resolved id refs / typed skill refs (deduped by
+  // the resolver), never the raw name-or-id wire values.
+  if (skillRefs !== undefined) set.skills = serializeSkillRefs(skillRefs)
+  if (dependsOnIds !== undefined) set.dependsOn = JSON.stringify(dependsOnIds)
+  if (mcpIds !== undefined) set.mcp = JSON.stringify(mcpIds)
+  if (pluginIds !== undefined) set.plugins = JSON.stringify(pluginIds)
   // RFC-005: merge outputKinds into frontmatter_extra alongside the explicit
   // patch (if any). Tests that PATCH only outputKinds preserve the rest of
   // frontmatter_extra; tests that PATCH only frontmatterExtra drop outputKinds
@@ -330,9 +368,10 @@ export async function deleteAgent(db: DbClient, name: string, actor: Actor): Pro
         visibility: agents.visibility,
       })
       .from(agents)
-      .where(like(agents.dependsOn, `%"${name}"%`))
+      // RFC-223 (PR-1): dependsOn stores agent IDS now — match this agent's id.
+      .where(like(agents.dependsOn, `%"${existing.id}"%`))
       .all()
-    const dependents = agentsDependingOnIn(depRows, name)
+    const dependents = agentsDependingOnIn(depRows, existing.id)
     if (dependents.length > 0) {
       const depNames = new Set(dependents)
       throw new ConflictError(
@@ -472,9 +511,11 @@ export async function renameAgent(
         visibility: agents.visibility,
       })
       .from(agents)
-      .where(like(agents.dependsOn, `%"${oldName}"%`))
+      // RFC-223 (PR-1): dependsOn stores agent IDS now — match this agent's id.
+      // The id survives the rename, so references stay valid without cascade.
+      .where(like(agents.dependsOn, `%"${existing.id}"%`))
       .all()
-    const dependents = agentsDependingOnIn(depRows, oldName)
+    const dependents = agentsDependingOnIn(depRows, existing.id)
     if (dependents.length > 0) {
       const depNames = new Set(dependents)
       throw new ConflictError(
@@ -601,22 +642,6 @@ function workflowsUsingAgentIn(
 }
 
 /**
- * RFC-022: de-dup the dependsOn list while preserving the author's listed
- * order. Callers should still rely on zod's max(64) for hard caps; this just
- * stops accidental duplicates from bloating the JSON column.
- */
-function dedupePreservingOrder(names: readonly string[]): string[] {
-  const seen = new Set<string>()
-  const out: string[] = []
-  for (const n of names) {
-    if (seen.has(n)) continue
-    seen.add(n)
-    out.push(n)
-  }
-  return out
-}
-
-/**
  * RFC-022: tolerate legacy rows whose depends_on column is missing or holds a
  * non-array JSON value (e.g. from manual SQL edits). Parse failure or
  * non-array → []. Filter to strings so downstream code never panics on `null`
@@ -664,11 +689,14 @@ async function validateRuntimeReference(
   }
 }
 
-async function validateMcpReferences(db: DbClient, names: readonly string[]): Promise<void> {
-  if (names.length === 0) return
-  const unique = Array.from(new Set(names))
-  const rows = await db.select({ name: mcps.name }).from(mcps).where(inArray(mcps.name, unique))
-  const known = new Set(rows.map((r) => r.name))
+// RFC-223 (PR-1): references are stored + validated BY ID. Callers resolve
+// id-or-name → id (services/agentRefs.ts) before this guard; an entry that is
+// still a name here never matched a row and is reported as missing.
+async function validateMcpReferences(db: DbClient, ids: readonly string[]): Promise<void> {
+  if (ids.length === 0) return
+  const unique = Array.from(new Set(ids))
+  const rows = await db.select({ id: mcps.id }).from(mcps).where(inArray(mcps.id, unique))
+  const known = new Set(rows.map((r) => r.id))
   const missing = unique.filter((n) => !known.has(n))
   if (missing.length > 0) {
     throw new ValidationError(
@@ -685,18 +713,18 @@ async function validateMcpReferences(db: DbClient, names: readonly string[]): Pr
  * `plugin-not-found` (422) with the missing names, or `plugin-disabled` (422)
  * when a referenced plugin exists but has `enabled=false`.
  */
-async function validatePluginReferences(db: DbClient, names: readonly string[]): Promise<void> {
-  if (names.length === 0) return
-  const unique = Array.from(new Set(names))
+async function validatePluginReferences(db: DbClient, ids: readonly string[]): Promise<void> {
+  if (ids.length === 0) return
+  const unique = Array.from(new Set(ids))
   const rows = await db
-    .select({ name: plugins.name, enabled: plugins.enabled })
+    .select({ id: plugins.id, enabled: plugins.enabled })
     .from(plugins)
-    .where(inArray(plugins.name, unique))
+    .where(inArray(plugins.id, unique))
   const enabledSet = new Set<string>()
   const disabledSet = new Set<string>()
   for (const r of rows) {
-    if (r.enabled) enabledSet.add(r.name)
-    else disabledSet.add(r.name)
+    if (r.enabled) enabledSet.add(r.id)
+    else disabledSet.add(r.id)
   }
   const missing = unique.filter((n) => !enabledSet.has(n) && !disabledSet.has(n))
   if (missing.length > 0) {
@@ -714,6 +742,34 @@ async function validatePluginReferences(db: DbClient, names: readonly string[]):
       { disabled },
     )
   }
+}
+
+/**
+ * RFC-223 (PR-1): parse the `agents.skills` typed-ref column into
+ * `AgentSkillRef[]`, dropping any entry that does not match the discriminated
+ * union (same lenient stance as the other columns — a hand-edited / legacy row
+ * never crashes downstream). Post-migration every entry is a managed{skillId} or
+ * project{name} object; pre-migration rows are migrated by 0111.
+ */
+function parseSkillRefsColumn(value: string | null | undefined): AgentSkillRef[] {
+  if (value === null || value === undefined || value === '') return []
+  try {
+    const parsed = JSON.parse(value) as unknown
+    if (!Array.isArray(parsed)) return []
+    const out: AgentSkillRef[] = []
+    for (const entry of parsed) {
+      const ref = AgentSkillRefSchema.safeParse(entry)
+      if (ref.success) out.push(ref.data)
+    }
+    return out
+  } catch {
+    return []
+  }
+}
+
+/** RFC-223 (PR-1): canonical JSON for the `agents.skills` typed-ref column. */
+function serializeSkillRefs(refs: readonly AgentSkillRef[]): string {
+  return JSON.stringify(refs)
 }
 
 /**
@@ -818,7 +874,7 @@ function rowToAgent(row: AgentRow): Agent {
     inputs: parseInputsColumn(row.inputs), // RFC-166
     syncOutputsOnIterate: row.syncOutputsOnIterate,
     permission: JSON.parse(row.permission) as Record<string, unknown>,
-    skills: JSON.parse(row.skills) as string[],
+    skills: parseSkillRefsColumn(row.skills), // RFC-223 (PR-1): typed refs
     dependsOn: parseDependsOnColumn(row.dependsOn),
     mcp: parseStringArrayColumn(row.mcp),
     plugins: parseStringArrayColumn(row.plugins),

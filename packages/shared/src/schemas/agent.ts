@@ -4,8 +4,6 @@
 // these schemas describe the response/request shape after marshaling.
 
 import { z } from 'zod'
-import { McpNameSchema } from './mcp'
-import { PluginNameSchema } from './plugin'
 import { ResourceVisibilitySchema } from './resourceAcl'
 import { AgentOutputKindSchema } from './review'
 
@@ -98,6 +96,93 @@ export const AgentNameSchema = z
   .max(128, 'name too long')
   .regex(AGENT_NAME_RE, 'name must start with [a-z0-9] and contain only [a-z0-9_-]')
 
+/**
+ * RFC-223 (PR-1) — a stored cross-resource reference. At rest this is always a
+ * resource `id` (ULID) so a rename never mutates the referencing row (D4/D7).
+ * The create / import wire ALSO accepts a `name` here: while name↔id stays 1:1
+ * (uniqueness not yet relaxed — that is PR-8) the server resolves a name to its
+ * single id deterministically (services/agentRefs.ts), so agent.md authored by
+ * name and the id-based pickers flow through the same field. The old per-kind
+ * `McpNameSchema` / `PluginNameSchema` / `AgentNameSchema` element validation is
+ * dropped (an id is not a name-shaped string); only length is bounded.
+ */
+export const ResourceRefSchema = z
+  .string()
+  .min(1, 'reference is required')
+  .max(128, 'reference too long')
+
+/**
+ * RFC-223 (PR-1) — `agents.skills` element. Persistent, DB/wire/runtime shape.
+ * A `managed` ref points at a DB-backed skill row by its stable id; a `project`
+ * ref names a repo-local (self-discovered) skill that has NO DB row (RFC-178) —
+ * it is passed to the CLI verbatim by name. Discriminated on `kind` so the two
+ * cannot be confused. On the create / import wire a managed ref's `skillId` may
+ * carry a NAME (resolved to id server-side, or demoted to `project` when no
+ * managed skill matches — RFC-178); at rest it is always an id.
+ */
+export const AgentSkillRefSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('managed'), skillId: z.string().min(1).max(128) }),
+  z.object({ kind: z.literal('project'), name: z.string().min(1).max(128) }),
+])
+export type AgentSkillRef = z.infer<typeof AgentSkillRefSchema>
+
+/**
+ * RFC-223 (PR-1) — the PORTABLE, name-based selector form of a skill reference
+ * (agent.md export / cross-environment YAML). It carries NO DB id so an offline
+ * parser can produce it without a database; the import boundary resolves it to
+ * an `AgentSkillRef` against the actor's ACL-visible set. `ownerUsername`
+ * disambiguates once uniqueness is relaxed (PR-8); ignored while name↔id is 1:1.
+ */
+export const AgentSkillSelectorSchema = z.union([
+  z.object({
+    kind: z.literal('managed'),
+    name: z.string().min(1).max(128),
+    ownerUsername: z.string().optional(),
+  }),
+  z.object({ kind: z.literal('project'), name: z.string().min(1).max(128) }),
+])
+export type AgentSkillSelector = z.infer<typeof AgentSkillSelectorSchema>
+
+/** The display / selector name carried by a skill ref, ignoring its kind. For a
+ *  managed ref this is the raw `skillId` (an id at rest, a name on the import
+ *  wire); for a project ref it is the skill name. Used for preview + agent.md. */
+export function agentSkillRefName(ref: AgentSkillRef): string {
+  return ref.kind === 'managed' ? ref.skillId : ref.name
+}
+
+/**
+ * RFC-223 (PR-1) — ref ← selector. Resolve a portable selector into a stored
+ * ref. `resolveManagedId(name)` returns the managed skill id visible for that
+ * name, or undefined; a managed selector that does not resolve is demoted to a
+ * `project` ref (RFC-178: a name with no managed row is a repo-local skill).
+ */
+export function skillSelectorToRef(
+  selector: AgentSkillSelector,
+  resolveManagedId: (name: string) => string | undefined,
+): AgentSkillRef {
+  if (selector.kind === 'project') return { kind: 'project', name: selector.name }
+  const id = resolveManagedId(selector.name)
+  return id === undefined
+    ? { kind: 'project', name: selector.name }
+    : { kind: 'managed', skillId: id }
+}
+
+/**
+ * RFC-223 (PR-1) — selector ← ref. Produce the portable selector for a stored
+ * ref. `resolveManagedName(skillId)` maps a managed id back to its name (+ owner
+ * for PR-8); a managed ref whose id no longer resolves is emitted as a `project`
+ * selector carrying the raw id (best-effort — the row is gone).
+ */
+export function skillRefToSelector(
+  ref: AgentSkillRef,
+  resolveManagedName: (skillId: string) => { name: string; ownerUsername?: string } | undefined,
+): AgentSkillSelector {
+  if (ref.kind === 'project') return { kind: 'project', name: ref.name }
+  const resolved = resolveManagedName(ref.skillId)
+  if (resolved === undefined) return { kind: 'project', name: ref.skillId }
+  return { kind: 'managed', name: resolved.name, ownerUsername: resolved.ownerUsername }
+}
+
 /** opencode permission map; passed through verbatim. */
 export const AgentPermissionSchema = z.record(z.string(), z.unknown())
 export type AgentPermission = z.infer<typeof AgentPermissionSchema>
@@ -153,38 +238,46 @@ export const AgentSchema = z.object({
    */
   runtime: z.string().min(1).optional(),
   permission: AgentPermissionSchema,
-  skills: z.array(z.string()),
   /**
-   * RFC-022: agent names this agent transitively requires at runtime. The
-   * framework runs BFS over depends_on to compute a closure, then injects
-   * every member as an entry under `agent` in OPENCODE_CONFIG_CONTENT and
-   * unions every member's skills into OPENCODE_CONFIG_DIR/skills/. Default
-   * `[]` keeps legacy single-agent injection behavior.
+   * RFC-223 (PR-1): typed skill references. `managed` refs point at a DB skill
+   * by id; `project` refs name a repo-local self-discovered skill (RFC-178, no
+   * DB row). Replaces the former `string[]` of skill names. See
+   * AgentSkillRefSchema.
+   */
+  skills: z.array(AgentSkillRefSchema),
+  /**
+   * RFC-022: agents this agent transitively requires at runtime, stored BY ID
+   * (RFC-223 PR-1 — was names). The framework runs BFS over depends_on to
+   * compute a closure, then injects every member as an entry under `agent` in
+   * OPENCODE_CONFIG_CONTENT and unions every member's skills into
+   * OPENCODE_CONFIG_DIR/skills/. Default `[]` keeps legacy single-agent
+   * injection behavior.
    *
-   * Save-time validation (services/agentDeps.ts): names must exist, no
+   * Save-time validation (services/agentDeps.ts): ids must exist, no
    * self-reference, no cycle. Workflow validator extends the existing
    * `agent-not-found` / `skill-not-found` checks to the closure.
    */
-  dependsOn: z.array(AgentNameSchema),
+  dependsOn: z.array(ResourceRefSchema),
   /**
-   * RFC-028: MCP server names this agent needs at runtime. Runner unions the
-   * mcp[] of every agent in the dependsOn closure (RFC-022) and injects each
-   * member as an entry under `mcp` in OPENCODE_CONFIG_CONTENT. opencode then
-   * spawns the listed servers and exposes their tools to the spawned process.
-   * Default `[]` leaves the agent free of framework-managed MCPs (the user's
-   * repo `.opencode/config.json` and `~/.config/opencode/` MCPs still load
-   * naturally — see docs/OPENCODE_CONFIG.md §4).
+   * RFC-028: MCP servers this agent needs at runtime, stored BY ID (RFC-223
+   * PR-1 — was names). Runner unions the mcp[] of every agent in the dependsOn
+   * closure (RFC-022) and injects each member as an entry under `mcp` in
+   * OPENCODE_CONFIG_CONTENT. opencode then spawns the listed servers and
+   * exposes their tools to the spawned process. Default `[]` leaves the agent
+   * free of framework-managed MCPs (the user's repo `.opencode/config.json` and
+   * `~/.config/opencode/` MCPs still load naturally — see docs/OPENCODE_CONFIG.md §4).
    */
-  mcp: z.array(McpNameSchema),
+  mcp: z.array(ResourceRefSchema),
   /**
-   * RFC-031: opencode plugin names this agent needs at runtime. Runner unions
-   * the plugins[] of every agent in the dependsOn closure (RFC-022) and
-   * injects each member's `file://<cachedPath>` (with options when present)
-   * under `plugin` in OPENCODE_CONFIG_CONTENT. Spawn paths never hit the
-   * network because cachedPath is populated at save time, not run time.
-   * Default `[]` leaves the agent free of framework-managed plugins.
+   * RFC-031: opencode plugins this agent needs at runtime, stored BY ID
+   * (RFC-223 PR-1 — was names). Runner unions the plugins[] of every agent in
+   * the dependsOn closure (RFC-022) and injects each member's
+   * `file://<cachedPath>` (with options when present) under `plugin` in
+   * OPENCODE_CONFIG_CONTENT. Spawn paths never hit the network because
+   * cachedPath is populated at save time, not run time. Default `[]` leaves the
+   * agent free of framework-managed plugins.
    */
-  plugins: z.array(PluginNameSchema),
+  plugins: z.array(ResourceRefSchema),
   frontmatterExtra: z.record(z.string(), z.unknown()),
   bodyMd: z.string(),
   schemaVersion: z.number().int(),
@@ -213,13 +306,14 @@ export const CreateAgentSchema = z.object({
    *  'opencode' / 'claude-code'; custom forks add more). Absent → inherit. */
   runtime: z.string().min(1).optional(),
   permission: AgentPermissionSchema.default({}),
-  skills: z.array(z.string()).default([]),
-  /** RFC-022 — see AgentSchema.dependsOn. */
-  dependsOn: z.array(AgentNameSchema).max(64).default([]),
-  /** RFC-028 — see AgentSchema.mcp. */
-  mcp: z.array(McpNameSchema).max(64).default([]),
-  /** RFC-031 — see AgentSchema.plugins. */
-  plugins: z.array(PluginNameSchema).max(64).default([]),
+  /** RFC-223 (PR-1) — typed skill refs (managed=skillId / project=name). */
+  skills: z.array(AgentSkillRefSchema).default([]),
+  /** RFC-022 — see AgentSchema.dependsOn (id refs; name accepted on import). */
+  dependsOn: z.array(ResourceRefSchema).max(64).default([]),
+  /** RFC-028 — see AgentSchema.mcp (id refs; name accepted on import). */
+  mcp: z.array(ResourceRefSchema).max(64).default([]),
+  /** RFC-031 — see AgentSchema.plugins (id refs; name accepted on import). */
+  plugins: z.array(ResourceRefSchema).max(64).default([]),
   frontmatterExtra: z.record(z.string(), z.unknown()).default({}),
   bodyMd: z.string().default(''),
 })

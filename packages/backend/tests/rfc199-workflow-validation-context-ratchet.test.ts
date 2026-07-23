@@ -62,10 +62,11 @@ function fixtureAgent(name = 'coder'): Agent {
     syncOutputsOnIterate: true,
     runtime: 'opencode',
     permission: { bash: 'deny' },
-    skills: ['reviewing'],
+    // RFC-223 (PR-1): refs are stored by id; skills are typed refs.
+    skills: [{ kind: 'managed', skillId: 'skill-reviewing' }],
     dependsOn: [],
-    mcp: ['filesystem'],
-    plugins: ['formatter'],
+    mcp: ['mcp-filesystem'],
+    plugins: ['plugin-formatter'],
     frontmatterExtra: { token: 'secret' },
     bodyMd: 'SECRET PROMPT',
     schemaVersion: 4,
@@ -274,8 +275,11 @@ describe('RFC-199 validation-context semantic source ratchet', () => {
     expect(
       Object.fromEntries([...reads].map(([family, fields]) => [family, [...fields].sort()])),
     ).toEqual({
+      // RFC-223 (PR-1): closure/ref checks resolve BY ID, so the validator now
+      // reads agent.id + skill.id + plugin.id (was skill.name / plugin.name).
       agent: [
         'dependsOn',
+        'id',
         'name',
         'outputKinds',
         'outputWrapperPortNames',
@@ -284,8 +288,8 @@ describe('RFC-199 validation-context semantic source ratchet', () => {
         'role',
         'skills',
       ],
-      skill: ['name'],
-      plugin: ['enabled', 'name'],
+      skill: ['id'],
+      plugin: ['enabled', 'id'],
     })
 
     const projected = projectWorkflowValidationContext(fixtureContext())

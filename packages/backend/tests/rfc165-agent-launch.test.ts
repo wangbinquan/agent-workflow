@@ -84,7 +84,7 @@ const AGENT_FIELDS = {
   outputs: [] as string[],
   syncOutputsOnIterate: true,
   permission: {},
-  skills: [] as string[],
+  skills: [],
   dependsOn: [] as string[],
   mcp: [] as string[],
   plugins: [] as string[],
@@ -145,7 +145,26 @@ describe('RFC-165 §4 — agent host snapshot (A1/A2)', () => {
     )
     expect(validateWorkflowDef(ghost, ctxNoAgent).ok).toBe(false)
 
-    await createAgent(db, { ...AGENT_FIELDS, name: 'skilly', skills: ['no-such-skill'] })
+    // RFC-223 (PR-1): a bare skill NAME with no managed row is a repo-local
+    // `project` ref (RFC-178, self-discovered → not validated). To exercise
+    // skill-not-found we need a MANAGED ref to a non-existent skill id;
+    // createAgent would demote an unknown token to project, so insert the row
+    // directly (mirrors the deleted-plugin case below).
+    await db.insert(agents).values({
+      id: ulid(),
+      name: 'skilly',
+      description: '',
+      outputs: '[]',
+      permission: '{}',
+      skills: JSON.stringify([{ kind: 'managed', skillId: 'no-such-skill-id' }]),
+      dependsOn: '[]',
+      mcp: '[]',
+      plugins: '[]',
+      frontmatterExtra: '{}',
+      bodyMd: '',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    })
     const skillDef = WorkflowDefinitionSchema.parse(
       buildAgentHostSnapshot({ name: 'skilly' }, true),
     )

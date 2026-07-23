@@ -3,6 +3,7 @@
 // silently apply fields that the review screen forgot to disclose.
 
 import type { AgentMarkdownParseResult, CreateAgent } from '@agent-workflow/shared'
+import { agentSkillRefName } from '@agent-workflow/shared'
 import type { AgentTab } from '@/components/AgentForm'
 
 type AgentInputPort = NonNullable<CreateAgent['inputs']>[number]
@@ -81,6 +82,8 @@ export function describeAgentImport(result: AgentMarkdownParseResult): AgentImpo
   addMap(byTab.ports, 'outputKinds', partial.outputKinds)
   addMap(byTab.ports, 'outputWrapperPortNames', partial.outputWrapperPortNames)
 
+  // RFC-223 (PR-1): skills are typed refs; show them by display name.
+  addList(byTab.resources, 'skills', partial.skills?.map(agentSkillRefName))
   addList(byTab.resources, 'dependsOn', partial.dependsOn)
   addList(byTab.resources, 'mcp', partial.mcp)
   addList(byTab.resources, 'plugins', partial.plugins)

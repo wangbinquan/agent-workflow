@@ -2,19 +2,22 @@
 // each runNode spawn. Kept tiny + pure so the same code is exercised by
 // isolated unit tests, scheduler integration tests, and live spawn paths.
 //
+// RFC-223 (PR-1): `agent.plugins` stores plugin IDS now (was names), so these
+// helpers collect + hydrate by id.
+//
 // Two functions:
-//   collectPluginNamesFromClosure(closure)  — pure; unions every closure
-//                                              member's plugins[] into a
-//                                              deduped string[] in first-seen
-//                                              order.
-//   loadPluginsByNames(db, names)           — single DB query (`inArray`)
-//                                              returning the matching plugins
-//                                              rows.
+//   collectPluginIdsFromClosure(closure)  — pure; unions every closure
+//                                            member's plugins[] ids into a
+//                                            deduped string[] in first-seen
+//                                            order.
+//   loadPluginsByIds(db, ids)             — single DB query (`inArray`)
+//                                            returning the matching plugins
+//                                            rows.
 //
 // Composed in scheduler.ts as:
 //   const closure = await agentDeps.computeClosure(db, agent)
-//   const names   = collectPluginNamesFromClosure(closure)
-//   const plugins = await loadPluginsByNames(db, names)
+//   const ids     = collectPluginIdsFromClosure(closure)
+//   const plugins = await loadPluginsByIds(db, ids)
 //   await runNode({ ..., dependents: closure, plugins })
 
 import type { Agent, Plugin } from '@agent-workflow/shared'
@@ -24,7 +27,7 @@ import type { DbClient } from '@/db/client'
 import { plugins as pluginsTable } from '@/db/schema'
 
 /**
- * Union the `plugins[]` names declared on every closure agent, preserving the
+ * Union the `plugins[]` ids declared on every closure agent, preserving the
  * first-seen order across BFS visit order.
  *
  * The closure is whatever shape RFC-022 `resolveDependsClosure` returns:
@@ -32,22 +35,22 @@ import { plugins as pluginsTable } from '@/db/schema'
  * to make the inline-injection output deterministic across runs (and easy to
  * read in spawn logs).
  */
-export function collectPluginNamesFromClosure(closure: readonly Agent[]): string[] {
+export function collectPluginIdsFromClosure(closure: readonly Agent[]): string[] {
   const seen = new Set<string>()
   const out: string[] = []
   for (const agent of closure) {
-    for (const name of agent.plugins ?? []) {
-      if (seen.has(name)) continue
-      seen.add(name)
-      out.push(name)
+    for (const id of agent.plugins ?? []) {
+      if (seen.has(id)) continue
+      seen.add(id)
+      out.push(id)
     }
   }
   return out
 }
 
 /**
- * Hydrate a list of plugin names into full `Plugin` rows. Unknown names are
- * silently skipped: the caller is expected to have already validated names
+ * Hydrate a list of plugin ids into full `Plugin` rows. Unknown ids are
+ * silently skipped: the caller is expected to have already validated ids
  * at save time (RFC-031 T6 `plugin-not-found` guard) but at spawn time a row
  * could have been deleted out from under us, and crashing the node spawn
  * over a missing plugin is worse than starting the opencode process without
@@ -56,18 +59,15 @@ export function collectPluginNamesFromClosure(closure: readonly Agent[]): string
  *
  * Empty input returns `[]` without hitting the DB.
  */
-export async function loadPluginsByNames(
-  db: DbClient,
-  names: readonly string[],
-): Promise<Plugin[]> {
-  if (names.length === 0) return []
+export async function loadPluginsByIds(db: DbClient, ids: readonly string[]): Promise<Plugin[]> {
+  if (ids.length === 0) return []
   const rows = await db
     .select()
     .from(pluginsTable)
-    .where(inArray(pluginsTable.name, [...names]))
+    .where(inArray(pluginsTable.id, [...ids]))
   // Re-parse via the public schema so we never hand the runner a malformed
   // row (the same `plugin-row-corrupt` validation that services/plugin.ts uses).
-  const byName = new Map<string, Plugin>()
+  const byId = new Map<string, Plugin>()
   for (const row of rows) {
     let options: unknown
     try {
@@ -90,13 +90,13 @@ export async function loadPluginsByNames(
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     })
-    if (parsed.success) byName.set(row.name, parsed.data)
+    if (parsed.success) byId.set(row.id, parsed.data)
   }
-  // Preserve caller's name order (matches closure traversal order) so the
+  // Preserve caller's id order (matches closure traversal order) so the
   // resulting inline JSON keys list is deterministic.
   const out: Plugin[] = []
-  for (const n of names) {
-    const p = byName.get(n)
+  for (const id of ids) {
+    const p = byId.get(id)
     if (p !== undefined) out.push(p)
   }
   return out

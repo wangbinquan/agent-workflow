@@ -35,8 +35,8 @@ describe('agent.mcp save-time guard', () => {
     db = createInMemoryDb(MIGRATIONS)
   })
 
-  test('create succeeds when every mcp resolves', async () => {
-    await createMcp(db, {
+  test('create succeeds when every mcp resolves (stored by id)', async () => {
+    const m1 = await createMcp(db, {
       name: 'm1',
       description: '',
       type: 'local',
@@ -44,7 +44,8 @@ describe('agent.mcp save-time guard', () => {
       enabled: true,
     })
     const a = await createAgent(db, agentInput('a', ['m1']))
-    expect(a.mcp).toEqual(['m1'])
+    // RFC-223 (PR-1): the name reference is resolved to the mcp id at save.
+    expect(a.mcp).toEqual([m1.id])
   })
 
   test('create fails 422 mcp-not-found when an mcp is missing', async () => {
@@ -81,8 +82,8 @@ describe('agent.mcp save-time guard', () => {
     }
   })
 
-  test('update succeeds when patched mcp resolves', async () => {
-    await createMcp(db, {
+  test('update succeeds when patched mcp resolves (stored by id)', async () => {
+    const m1 = await createMcp(db, {
       name: 'm1',
       description: '',
       type: 'local',
@@ -91,7 +92,7 @@ describe('agent.mcp save-time guard', () => {
     })
     await createAgent(db, agentInput('a'))
     const updated = await updateAgent(db, 'a', { mcp: ['m1'] })
-    expect(updated.mcp).toEqual(['m1'])
+    expect(updated.mcp).toEqual([m1.id])
   })
 
   test('update fails 422 mcp-not-found when patched name unknown', async () => {
@@ -109,7 +110,7 @@ describe('agent.mcp save-time guard', () => {
   })
 
   test('update without `mcp` field skips the check (preserves existing)', async () => {
-    await createMcp(db, {
+    const m1 = await createMcp(db, {
       name: 'm1',
       description: '',
       type: 'local',
@@ -126,9 +127,9 @@ describe('agent.mcp save-time guard', () => {
     await db.delete(mcpsTable).where(eq(mcpsTable.name, 'm1'))
 
     // PATCH something unrelated; should NOT trigger mcp validation, so it
-    // passes even though the stale `mcp: ['m1']` is now unresolvable.
+    // passes even though the stale `mcp: [<id>]` is now unresolvable.
     const updated = await updateAgent(db, 'a', { description: 'unrelated change' })
     expect(updated.description).toBe('unrelated change')
-    expect(updated.mcp).toEqual(['m1'])
+    expect(updated.mcp).toEqual([m1.id])
   })
 })

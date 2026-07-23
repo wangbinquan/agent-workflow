@@ -19,7 +19,7 @@ describe('agentToDraft mcp + plugins round-trip', () => {
       outputs: [],
       syncOutputsOnIterate: true,
       permission: {},
-      skills: ['skill-a'],
+      skills: [{ kind: 'managed', skillId: 'skill-a' }],
       dependsOn: ['dep-b'],
       mcp: ['mcp-x', 'mcp-y'],
       plugins: ['plug-1'],
@@ -36,7 +36,7 @@ describe('agentToDraft mcp + plugins round-trip', () => {
     expect(draft.plugins).toEqual(['plug-1'])
     // Sanity: the previously-fixed neighbours still round-trip too, so any
     // refactor that drops them red-lines this test.
-    expect(draft.skills).toEqual(['skill-a'])
+    expect(draft.skills).toEqual([{ kind: 'managed', skillId: 'skill-a' }])
     expect(draft.dependsOn).toEqual(['dep-b'])
   })
 })

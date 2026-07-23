@@ -215,10 +215,12 @@ describe('services/plugin.ts rename + cascade', () => {
     await expect(renamePlugin(db, p.id, { newName: 'taken' })).rejects.toBeInstanceOf(ConflictError)
   })
 
-  test('rename cascades into agents.plugins JSON column', async () => {
+  // RFC-223 (PR-1 / D7): agents.plugins stores the plugin ID (stable across a
+  // rename) — so a rename does NOT rewrite the referencing agent's plugins.
+  test('rename does NOT rewrite agents.plugins (ids are stable)', async () => {
     const p = await createPlugin(db, { name: 'old-name', spec: 's@1' }, opts())
-    // seed an unrelated plugin to assert non-matching names survive untouched
-    await createPlugin(db, { name: 'other', spec: 'o@1' }, opts())
+    // seed an unrelated plugin to assert non-matching ids survive untouched
+    const other = await createPlugin(db, { name: 'other', spec: 'o@1' }, opts())
 
     await createAgent(db, {
       name: 'consumer',
@@ -236,12 +238,15 @@ describe('services/plugin.ts rename + cascade', () => {
 
     await renamePlugin(db, p.id, { newName: 'new-name' })
     const a = await getAgent(db, 'consumer')
-    expect(a?.plugins).toEqual(['new-name', 'other'])
+    // Ids unchanged; the renamed plugin still resolves by its stable id.
+    expect(a?.plugins).toEqual([p.id, other.id])
   })
 
-  test('findAgentsReferencingPlugin: LIKE prefilter + exact dedupe (prefix collision)', async () => {
-    await createPlugin(db, { name: 'dd', spec: 's@1' }, opts())
-    await createPlugin(db, { name: 'dd-trace', spec: 's@2' }, opts())
+  // RFC-223 (PR-1): agents.plugins stores plugin IDS — the reverse lookup keys
+  // on the plugin id, so another plugin's id never matches this agent.
+  test('findAgentsReferencingPlugin: matches by id, not another plugin', async () => {
+    const dd = await createPlugin(db, { name: 'dd', spec: 's@1' }, opts())
+    const trace = await createPlugin(db, { name: 'dd-trace', spec: 's@2' }, opts())
     await createAgent(db, {
       name: 'a-dd',
       description: '',
@@ -255,8 +260,8 @@ describe('services/plugin.ts rename + cascade', () => {
       frontmatterExtra: {},
       bodyMd: '',
     })
-    // Looking up 'dd' must NOT return the agent that only has 'dd-trace'.
-    const refs = await findAgentsReferencingPlugin(db, 'dd')
-    expect(refs).toEqual([])
+    // Looking up 'dd' by id must NOT return the agent that only has 'dd-trace'.
+    expect(await findAgentsReferencingPlugin(db, dd.id)).toEqual([])
+    expect((await findAgentsReferencingPlugin(db, trace.id)).map((r) => r.name)).toEqual(['a-dd'])
   })
 })

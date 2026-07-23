@@ -16,7 +16,10 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { ResourcePicker, type ResourcePickerLabels } from '../src/components/ResourcePicker'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 
+// RFC-223 (PR-1): rows carry an id distinct from the name so the tests prove
+// the picker stores the ID (value identity) while the label shows the name.
 interface Row {
+  id: string
   name: string
   description: string
   enabled: boolean
@@ -29,7 +32,7 @@ const LABELS: ResourcePickerLabels = {
 }
 
 function row(name: string, description = '', enabled = true): Row {
-  return { name, description, enabled }
+  return { id: `id-${name}`, name, description, enabled }
 }
 
 function wrap(node: React.ReactElement) {
@@ -79,7 +82,7 @@ const baseProps = {
 } as const
 
 describe('ResourcePicker — config surface (MultiSelect)', () => {
-  test('labelFn drives row titles; toggling commits item.name', async () => {
+  test('labelFn drives row titles; toggling commits item.id', async () => {
     mockRows([row('alpha', 'first'), row('beta')])
     const onChange = vi.fn()
     wrap(
@@ -97,7 +100,8 @@ describe('ResourcePicker — config surface (MultiSelect)', () => {
       expect.arrayContaining([expect.stringContaining('alpha'), expect.stringContaining('beta')]),
     )
     fireEvent.mouseDown(optionRows(list).find((o) => o.textContent?.includes('alpha'))!)
-    expect(onChange).toHaveBeenCalledWith(['alpha'])
+    // RFC-223 (PR-1): commits the resource ID, not the name.
+    expect(onChange).toHaveBeenCalledWith(['id-alpha'])
   })
 
   test('selected rows stay in the dropdown, CHECKED (not filtered out)', async () => {
@@ -105,7 +109,7 @@ describe('ResourcePicker — config surface (MultiSelect)', () => {
     wrap(
       <ResourcePicker<Row>
         {...baseProps}
-        value={['b']}
+        value={['id-b']}
         onChange={() => {}}
         queryKey={['rp-test', 'selected-checked']}
         endpoint="/api/rows"
@@ -129,7 +133,7 @@ describe('ResourcePicker — config surface (MultiSelect)', () => {
     wrap(
       <ResourcePicker<Row>
         {...baseProps}
-        value={['picked-off']}
+        value={['id-picked-off']}
         onChange={() => {}}
         queryKey={['rp-test', 'eligibility']}
         endpoint="/api/rows"

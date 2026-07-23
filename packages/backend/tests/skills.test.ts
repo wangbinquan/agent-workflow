@@ -213,15 +213,16 @@ describe('skill service', () => {
     })
     const skillDir = join(h.appHome, 'skills', 'foo')
     expect(existsSync(skillDir)).toBe(true)
+    const fooId = (await getSkill(h.db, 'foo'))!.id
 
-    // Insert agent referencing 'foo'
+    // Insert agent referencing 'foo' via a typed MANAGED skill ref (RFC-223 PR-1).
     await h.db.insert(agents).values({
       id: ulid(),
       name: 'a1',
       description: '',
       outputs: '[]',
       permission: '{}',
-      skills: JSON.stringify(['foo']),
+      skills: JSON.stringify([{ kind: 'managed', skillId: fooId }]),
       frontmatterExtra: '{}',
       bodyMd: '',
       createdAt: Date.now(),
@@ -391,9 +392,11 @@ describe('skill HTTP routes', () => {
 
   test('DELETE refuses when an agent references the skill', async () => {
     await req(h.app, '/api/skills', { method: 'POST', body: JSON.stringify({ name: 'foo' }) })
+    // RFC-223 (PR-1): typed managed skill ref; the name in `skillId` is resolved
+    // to the created skill's id server-side.
     await req(h.app, '/api/agents', {
       method: 'POST',
-      body: JSON.stringify({ name: 'a1', skills: ['foo'] }),
+      body: JSON.stringify({ name: 'a1', skills: [{ kind: 'managed', skillId: 'foo' }] }),
     })
     // RFC-222 (D5, N-5): confirm passes first, then the in-use refusal fires.
     const res = await req(h.app, '/api/skills/foo', {

@@ -38,7 +38,9 @@ describe('mergeAgentDeps', () => {
       bodyMd: 'preserve me',
       permission: { edit: 'allow' as const },
       dependsOn: ['existing-a'],
-      skills: ['existing-s'],
+      // RFC-223 (PR-1): skills are typed refs; detected names merge as MANAGED
+      // refs (skillId = name, resolved server-side).
+      skills: [{ kind: 'managed' as const, skillId: 'existing-s' }],
       mcp: ['existing-m'],
       plugins: ['existing-p'],
     }
@@ -49,7 +51,10 @@ describe('mergeAgentDeps', () => {
       plugins: ['new-p'],
     })
     expect(next.dependsOn).toEqual(['existing-a', 'new-a'])
-    expect(next.skills).toEqual(['existing-s', 'new-s'])
+    expect(next.skills).toEqual([
+      { kind: 'managed', skillId: 'existing-s' },
+      { kind: 'managed', skillId: 'new-s' },
+    ])
     expect(next.mcp).toEqual(['existing-m', 'new-m'])
     expect(next.plugins).toEqual(['existing-p', 'new-p'])
     expect(next.bodyMd).toBe('preserve me')
@@ -57,7 +62,11 @@ describe('mergeAgentDeps', () => {
   })
 
   test('selection that is fully duplicate → same reference returned', () => {
-    const value = { ...emptyAgent(), dependsOn: ['a'], skills: ['s'] }
+    const value = {
+      ...emptyAgent(),
+      dependsOn: ['a'],
+      skills: [{ kind: 'managed' as const, skillId: 's' }],
+    }
     const next = mergeAgentDeps(value, {
       ...EMPTY_SELECTION,
       agents: ['a'],

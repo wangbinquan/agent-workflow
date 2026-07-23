@@ -241,8 +241,15 @@ describe('Agent.mcp field (RFC-028 wiring into AgentSchema)', () => {
     expect(r.data.mcp).toEqual(['postgres-prod', 'sentry'])
   })
 
-  test('rejects invalid mcp name in array', () => {
-    const r = CreateAgentSchema.safeParse({ name: 'foo', mcp: ['ValidName'] })
+  test('accepts id-or-name refs (RFC-223 PR-1: no name-format check on the ref)', () => {
+    // The mcp field now stores id-or-name references, so an id-shaped value
+    // (ULID, uppercase) is accepted — the old name-grammar check is gone.
+    const r = CreateAgentSchema.safeParse({ name: 'foo', mcp: ['01HZY8QK9AXAMPLEID000000AB'] })
+    expect(r.success).toBe(true)
+  })
+
+  test('rejects an empty-string ref', () => {
+    const r = CreateAgentSchema.safeParse({ name: 'foo', mcp: [''] })
     expect(r.success).toBe(false)
   })
 

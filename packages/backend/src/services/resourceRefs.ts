@@ -15,7 +15,7 @@
 // name the editor typed (no id / description / owner — D1).
 
 import type { AclResourceType } from '@agent-workflow/shared'
-import { inArray } from 'drizzle-orm'
+import { inArray, or } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { ValidationError } from '@/util/errors'
@@ -53,12 +53,17 @@ export function diffNewNames(prev: ReadonlySet<string>, next: ReadonlySet<string
 
 export interface RefCheckGroup {
   type: AclResourceType
+  /**
+   * The references to check. RFC-223 (PR-1): these are id-or-name tokens (the
+   * id-based pickers hand ids; agent.md import hands names) — the query below
+   * matches either column, so both resolve to the same row + visibility check.
+   */
   names: readonly string[]
 }
 
 /**
- * Throws 422 `acl-missing-refs` when any name resolves to a row the actor
- * cannot view. Unresolvable names pass through (existence validators own
+ * Throws 422 `acl-missing-refs` when any reference resolves to a row the actor
+ * cannot view. Unresolvable references pass through (existence validators own
  * them). Admins short-circuit.
  */
 export async function assertNewRefsUsable(
@@ -69,9 +74,11 @@ export async function assertNewRefsUsable(
   if (isResourceAdminActor(actor)) return
   const missing: Array<{ type: AclResourceType; name: string }> = []
   for (const group of groups) {
-    const names = [...new Set(group.names)].filter((n) => n.length > 0)
-    if (names.length === 0) continue
+    const refs = [...new Set(group.names)].filter((n) => n.length > 0)
+    if (refs.length === 0) continue
     const table = ACL_TABLES[group.type]
+    // RFC-223 (PR-1): a ref may be an id (picker) or a name (agent.md import);
+    // match either column so the ACL check binds to the actual row.
     const rows = (await db
       .select({
         id: table.id,
@@ -80,7 +87,9 @@ export async function assertNewRefsUsable(
         visibility: table.visibility,
       })
       .from(table)
-      .where(inArray(table.name, names))) as Array<AclRow & { name: string }>
+      .where(or(inArray(table.id, refs), inArray(table.name, refs)))) as Array<
+      AclRow & { name: string }
+    >
     if (rows.length === 0) continue
     const granted = await listGrantedResourceIds(db, actor, group.type)
     for (const row of rows) {

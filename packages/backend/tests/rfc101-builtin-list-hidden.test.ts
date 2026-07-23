@@ -74,7 +74,8 @@ function samplePayload(name: string): Record<string, unknown> {
     syncOutputsOnIterate: true,
     model: 'anthropic/claude-opus-4-7',
     permission: { edit: 'deny' },
-    skills: ['s1'],
+    // RFC-223 (PR-1): typed skill ref (no managed row named s1 → project skill).
+    skills: [{ kind: 'project', name: 's1' }],
     dependsOn: [],
     mcp: [],
     plugins: [],

@@ -10,7 +10,7 @@
 // and produce an empty candidates list for that group, letting the caller
 // surface "skipped" UI separately.
 
-import type { CreateAgent } from '@agent-workflow/shared'
+import type { AgentSkillRef, CreateAgent } from '@agent-workflow/shared'
 
 export interface DetectInventoryRow {
   name: string
@@ -114,18 +114,44 @@ function appendUnique(
 }
 
 export function mergeAgentDeps(value: CreateAgent, selection: DepSelection): CreateAgent {
+  // RFC-223 (PR-1): mcp / plugins / dependsOn store id-or-name refs (the server
+  // resolves a detected NAME to an id at save); skills are typed refs, so a
+  // detected skill name becomes a MANAGED ref (skillId = name, resolved / demoted
+  // to project server-side).
   const a = appendUnique(value.dependsOn, selection.agents)
-  const s = appendUnique(value.skills, selection.skills)
+  const s = appendSkillRefs(value.skills, selection.skills)
   const m = appendUnique(value.mcp, selection.mcps)
   const p = appendUnique(value.plugins, selection.plugins)
   if (!a.changed && !s.changed && !m.changed && !p.changed) return value
   return {
     ...value,
     dependsOn: a.next as string[],
-    skills: s.next as string[],
+    skills: s.next,
     mcp: m.next as string[],
     plugins: p.next as string[],
   }
+}
+
+const skillRefKey = (ref: AgentSkillRef): string =>
+  ref.kind === 'managed' ? `m:${ref.skillId}` : `p:${ref.name}`
+
+function appendSkillRefs(
+  prev: readonly AgentSkillRef[] | undefined,
+  addNames: readonly string[],
+): { next: AgentSkillRef[]; changed: boolean } {
+  const base = [...(prev ?? [])]
+  if (addNames.length === 0) return { next: base, changed: false }
+  const existing = new Set(base.map(skillRefKey))
+  const additions: AgentSkillRef[] = []
+  for (const name of addNames) {
+    const ref: AgentSkillRef = { kind: 'managed', skillId: name }
+    const key = skillRefKey(ref)
+    if (existing.has(key)) continue
+    existing.add(key)
+    additions.push(ref)
+  }
+  if (additions.length === 0) return { next: base, changed: false }
+  return { next: [...base, ...additions], changed: true }
 }
 
 export function totalCandidates(result: DetectionResult): number {

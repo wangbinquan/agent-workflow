@@ -6,8 +6,10 @@
 //  - `frontmatterExtra` is shallow-merged (imported keys overwrite same-name
 //    current keys; current-only keys are preserved)
 //  - RFC-194 routes inputs / outputs / outputKinds / role /
-//    outputWrapperPortNames as first-class fields; omitted fields (including
-//    syncOutputsOnIterate / skills) preserve the current value as-is
+//    outputWrapperPortNames as first-class fields; omitted fields (e.g.
+//    syncOutputsOnIterate) preserve the current value as-is
+//  - RFC-223 (PR-1): `skills` is now a first-class parsed field (typed refs);
+//    when the parser produced it, it overwrites like the other list fields
 
 import type { AgentMarkdownParseResult, CreateAgent } from '@agent-workflow/shared'
 import type { OrphanSidecarRef } from './agent-ports'

@@ -31,7 +31,7 @@ import { like } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { agents } from '@/db/schema'
 import { DomainError } from '@/util/errors'
-import { getAgent } from './agent'
+import { getAgentById } from './agent'
 
 export type DependsClosureResult =
   | { ok: true; agents: Agent[] }
@@ -61,36 +61,39 @@ export async function resolveDependsClosure(
   root: Agent,
   opts: ResolveClosureOpts = {},
 ): Promise<DependsClosureResult> {
+  // RFC-223 (PR-1): dependsOn stores agent IDS; the closure BFS resolves by id
+  // (getAgentById) and the cycle path is expressed in ids. A rename never
+  // re-routes a closure because ids are stable.
   const allowMissing = opts.allowMissing ?? false
-  const visited = new Map<string, Agent>([[root.name, root]])
+  const visited = new Map<string, Agent>([[root.id, root]])
   const order: Agent[] = [root]
-  const queue: Array<{ name: string; path: string[] }> = []
+  const queue: Array<{ id: string; path: string[] }> = []
   for (const dep of root.dependsOn) {
-    queue.push({ name: dep, path: [root.name] })
+    queue.push({ id: dep, path: [root.id] })
   }
   while (queue.length > 0) {
     const entry = queue.shift()
     if (entry === undefined) break
-    const { name, path } = entry
-    // Cycle: this name reappears on the active ancestor path. Slice from the
+    const { id, path } = entry
+    // Cycle: this id reappears on the active ancestor path. Slice from the
     // first sighting so the reported path is "B → C → B" (the loop itself)
     // rather than including unrelated prefix.
-    const cycleIdx = path.indexOf(name)
+    const cycleIdx = path.indexOf(id)
     if (cycleIdx >= 0) {
-      return { ok: false, cyclePath: [...path.slice(cycleIdx), name] }
+      return { ok: false, cyclePath: [...path.slice(cycleIdx), id] }
     }
-    if (visited.has(name)) continue
-    const agent = await getAgent(db, name)
+    if (visited.has(id)) continue
+    const agent = await getAgentById(db, id)
     if (agent === null) {
       if (allowMissing) continue
-      throw new DomainError('agent-dependency-not-found', `agent '${name}' not found`, 400, {
-        notFound: [name],
+      throw new DomainError('agent-dependency-not-found', `agent '${id}' not found`, 400, {
+        notFound: [id],
       })
     }
-    visited.set(name, agent)
+    visited.set(id, agent)
     order.push(agent)
     for (const next of agent.dependsOn) {
-      queue.push({ name: next, path: [...path, name] })
+      queue.push({ id: next, path: [...path, id] })
     }
   }
   return { ok: true, agents: order }
@@ -101,14 +104,17 @@ export async function resolveDependsClosure(
  * exception bubble up to the HTTP layer where errorHandler renders the
  * standard `{ ok:false, code, message, details? }` envelope.
  *
- * selfName may not yet exist in the DB (new-agent flow); the closure is
- * built from a synthetic root carrying the proposed dependsOn list, so the
- * BFS still detects cycles like A → B → A even before A is persisted.
+ * selfId may not yet exist in the DB (new-agent flow — createAgent mints the id
+ * up front); the closure is built from a synthetic root carrying the proposed
+ * dependsOn list, so the BFS still detects cycles like A → B → A even before A
+ * is persisted. RFC-223 (PR-1): keyed by id, so a self-dependency and cycles are
+ * detected against stable ids rather than names.
  */
 export async function validateDependsOn(
   db: DbClient,
-  selfName: string,
+  selfId: string,
   dependsOn: readonly string[],
+  selfName?: string,
 ): Promise<void> {
   if (dependsOn.length === 0) return
 
@@ -121,10 +127,12 @@ export async function validateDependsOn(
     unique.push(n)
   }
 
-  // 2. self-reference
-  if (unique.includes(selfName)) {
+  // 2. self-reference. By id for the normal path; ALSO by name for a brand-new
+  //    agent whose own id does not exist yet (a self-name in agent.md can't
+  //    resolve to an id via resolveAgentRefs, so it survives as the raw name).
+  if (unique.includes(selfId) || (selfName !== undefined && unique.includes(selfName))) {
     throw new DomainError('agent-dependency-self', `agent cannot depend on itself`, 400, {
-      name: selfName,
+      name: selfName ?? selfId,
     })
   }
 
@@ -132,7 +140,7 @@ export async function validateDependsOn(
   //    which only reports the first missing dep on its traversal path.
   const missing: string[] = []
   for (const n of unique) {
-    const a = await getAgent(db, n)
+    const a = await getAgentById(db, n)
     if (a === null) missing.push(n)
   }
   if (missing.length > 0) {
@@ -145,12 +153,12 @@ export async function validateDependsOn(
   }
 
   // 4. closure cycle check via BFS over the synthetic root.
-  const existing = await getAgent(db, selfName)
+  const existing = await getAgentById(db, selfId)
   const syntheticRoot: Agent = existing
     ? { ...existing, dependsOn: unique }
     : ({
-        id: '',
-        name: selfName,
+        id: selfId,
+        name: '',
         description: '',
         outputs: [],
         inputs: [], // RFC-166
@@ -179,34 +187,36 @@ export async function validateDependsOn(
 
 /**
  * "Who depends on me?" — agent.ts uses this in the delete / rename guard so
- * the platform refuses to break references silently.
+ * the platform refuses to break references silently. RFC-223 (PR-1): dependsOn
+ * stores agent IDS, so the lookup key is the target agent's `agentId`; the
+ * returned list is the referencing agents' NAMES (for the refusal disclosure).
  *
  * Implementation: SQL `LIKE` is fast but coarse (substring match). After the
  * pre-filter we re-parse the JSON column and exact-match with Array.includes
- * to reject false positives like `'foo'` matching another row's
- * `["foobar"]` dependsOn.
+ * to reject false positives (an id being a JSON substring of another value).
  */
-export async function findAgentsDependingOn(db: DbClient, name: string): Promise<string[]> {
-  // The escaped form ensures `["foobar"]` matches LIKE `%"foo"%` for the
+export async function findAgentsDependingOn(db: DbClient, agentId: string): Promise<string[]> {
+  // The escaped form ensures `["<id>"]` matches LIKE `%"<id>"%` for the
   // pre-filter only; the JSON.parse step below is the authoritative test.
   const rows = await db
     .select({ name: agents.name, dependsOn: agents.dependsOn })
     .from(agents)
-    .where(like(agents.dependsOn, `%"${name}"%`))
-  return agentsDependingOnIn(rows, name)
+    .where(like(agents.dependsOn, `%"${agentId}"%`))
+  return agentsDependingOnIn(rows, agentId)
 }
 
 /** Pure core of findAgentsDependingOn — RFC-165 (F17-r3): the agent
- *  rename/delete guards re-run it on rows read INSIDE their dbTxSync. */
+ *  rename/delete guards re-run it on rows read INSIDE their dbTxSync. Matches
+ *  by `agentId` (RFC-223 PR-1) against the id-valued dependsOn column. */
 export function agentsDependingOnIn(
   rows: ReadonlyArray<{ name: string; dependsOn: string }>,
-  name: string,
+  agentId: string,
 ): string[] {
   const out: string[] = []
   for (const row of rows) {
     try {
       const parsed = JSON.parse(row.dependsOn) as unknown
-      if (Array.isArray(parsed) && parsed.includes(name)) out.push(row.name)
+      if (Array.isArray(parsed) && parsed.includes(agentId)) out.push(row.name)
     } catch {
       // malformed column — ignore, agent.ts parser already treats it as []
     }

@@ -270,7 +270,8 @@ export async function deleteSkill(
   const existing = await getSkill(db, name)
   if (existing === null) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
 
-  const refs = await findAgentsUsingSkill(db, name)
+  // RFC-223 (PR-1): agents.skills stores typed refs — match managed refs by id.
+  const refs = await findAgentsUsingSkill(db, existing.id)
   if (refs.length > 0) {
     // RFC-203 T6: principal-aware disclosure (deleteWorkflow precedent).
     throw new ConflictError(
@@ -287,9 +288,12 @@ export async function deleteSkill(
   deleteManagedSkillOp(db, { appHome: opts.appHome }, { id: existing.id, name: existing.name })
 }
 
+// RFC-223 (PR-1): agents.skills stores typed refs (managed{skillId} /
+// project{name}); a skill is "used" by an agent that carries a MANAGED ref to
+// this skill's id. Project refs (repo-local, no DB row) never match here.
 async function findAgentsUsingSkill(
   db: DbClient,
-  skillName: string,
+  skillId: string,
 ): Promise<
   Array<{ id: string; name: string; ownerUserId: string | null; visibility: 'public' | 'private' }>
 > {
@@ -310,8 +314,17 @@ async function findAgentsUsingSkill(
   }> = []
   for (const row of rows) {
     try {
-      const skillsArr = JSON.parse(row.skills) as string[]
-      if (skillsArr.includes(skillName))
+      const parsed = JSON.parse(row.skills) as unknown
+      const referencesSkill =
+        Array.isArray(parsed) &&
+        parsed.some(
+          (ref) =>
+            typeof ref === 'object' &&
+            ref !== null &&
+            (ref as { kind?: unknown }).kind === 'managed' &&
+            (ref as { skillId?: unknown }).skillId === skillId,
+        )
+      if (referencesSkill)
         out.push({
           id: row.id,
           name: row.name,

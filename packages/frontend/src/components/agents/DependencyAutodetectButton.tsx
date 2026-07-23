@@ -85,6 +85,17 @@ export function DependencyAutodetectButton(props: DependencyAutodetectButtonProp
   }, [agentsQ.isError, skillsQ.isError, mcpsQ.isError, pluginsQ.isError])
 
   const handleOpen = () => {
+    // RFC-223 (PR-1): detection matches catalog NAMES in the body, but the
+    // agent's own refs are stored by id (mcp/plugins/dependsOn) / as typed refs
+    // (skills). Map them back to names via the catalogs so the already-selected
+    // exclusion works (an unresolved id stays verbatim → harmlessly matches no
+    // catalog name).
+    const nameOf = (rows: readonly { id: string; name: string }[] | undefined) =>
+      new Map((rows ?? []).map((r) => [r.id, r.name]))
+    const agentNames = nameOf(agentsQ.data)
+    const skillNames = nameOf(skillsQ.data)
+    const mcpNames = nameOf(mcpsQ.data)
+    const pluginNames = nameOf(pluginsQ.data)
     const result = detectAgentDeps(
       props.bodyMd ?? '',
       {
@@ -94,10 +105,12 @@ export function DependencyAutodetectButton(props: DependencyAutodetectButtonProp
         plugins: pluginsQ.isError ? undefined : (pluginsQ.data ?? []).map(toRow),
       },
       {
-        dependsOn: props.value.dependsOn ?? [],
-        skills: props.value.skills ?? [],
-        mcp: props.value.mcp ?? [],
-        plugins: props.value.plugins ?? [],
+        dependsOn: (props.value.dependsOn ?? []).map((id) => agentNames.get(id) ?? id),
+        skills: (props.value.skills ?? []).map((ref) =>
+          ref.kind === 'project' ? ref.name : (skillNames.get(ref.skillId) ?? ref.skillId),
+        ),
+        mcp: (props.value.mcp ?? []).map((id) => mcpNames.get(id) ?? id),
+        plugins: (props.value.plugins ?? []).map((id) => pluginNames.get(id) ?? id),
       },
       props.selfName,
     )

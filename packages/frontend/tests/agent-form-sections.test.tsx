@@ -109,7 +109,12 @@ describe('RFC-169 — tab count badges', () => {
     const { unmount } = mount(emptyAgent())
     expect(screen.queryByTestId('agent-tab-resources-badge')).toBeNull()
     unmount()
-    mount({ ...emptyAgent(), skills: ['s'], mcp: ['m'], dependsOn: ['d'] })
+    mount({
+      ...emptyAgent(),
+      skills: [{ kind: 'project', name: 's' }],
+      mcp: ['m'],
+      dependsOn: ['d'],
+    })
     const badge = screen.getByTestId('agent-tab-resources-badge')
     expect(badge.textContent).toBe('3')
     expect(badge.getAttribute('data-tone')).toBe('neutral')

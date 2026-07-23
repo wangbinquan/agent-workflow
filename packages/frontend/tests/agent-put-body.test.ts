@@ -13,7 +13,10 @@ const base: CreateAgent = {
   outputs: [],
   syncOutputsOnIterate: true,
   permission: {},
-  skills: ['skill-a', 'skill-b'],
+  skills: [
+    { kind: 'managed', skillId: 'skill-a' },
+    { kind: 'managed', skillId: 'skill-b' },
+  ],
   dependsOn: ['dep-1'],
   mcp: ['mcp-x', 'mcp-y'],
   plugins: ['plug-1'],
@@ -24,7 +27,10 @@ const base: CreateAgent = {
 describe('agentToPutBody — wire shape', () => {
   test('preserves the four resource arrays; drops name; inherits → runtime null', () => {
     const body = agentToPutBody(base)
-    expect(body.skills).toEqual(['skill-a', 'skill-b'])
+    expect(body.skills).toEqual([
+      { kind: 'managed', skillId: 'skill-a' },
+      { kind: 'managed', skillId: 'skill-b' },
+    ])
     expect(body.mcp).toEqual(['mcp-x', 'mcp-y'])
     expect(body.plugins).toEqual(['plug-1'])
     expect(body.dependsOn).toEqual(['dep-1'])

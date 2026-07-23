@@ -395,6 +395,44 @@ describe('parseAgentMarkdown', () => {
     expect(r.warnings.some((w) => w.startsWith('plugins must be an array'))).toBe(true)
   })
 
+  // RFC-223 (PR-1): skills — bare names become MANAGED selectors (skillId = name,
+  // resolved / demoted server-side); explicit {kind,name} objects are honored.
+  test('skills (array of names) → managed refs, deduped, order preserved', () => {
+    const src = '---\nskills:\n  - lint\n  - review\n  - lint\n---\nbody'
+    const r = parseAgentMarkdown(src)
+    expect(r.partial.skills).toEqual([
+      { kind: 'managed', skillId: 'lint' },
+      { kind: 'managed', skillId: 'review' },
+    ])
+    expect(r.warnings).toEqual([])
+    expect(r.unrecognizedKeys).toEqual([])
+  })
+
+  test('skills honor an explicit project ref', () => {
+    const src = '---\nskills:\n  - managed-one\n  - {kind: project, name: repo-local}\n---\n'
+    const r = parseAgentMarkdown(src)
+    expect(r.partial.skills).toEqual([
+      { kind: 'managed', skillId: 'managed-one' },
+      { kind: 'project', name: 'repo-local' },
+    ])
+  })
+
+  test('skills with a bad entry demotes the whole field to frontmatterExtra', () => {
+    const src = '---\nskills:\n  - lint\n  - 42\n---\n'
+    const r = parseAgentMarkdown(src)
+    expect(r.partial.skills).toBeUndefined()
+    expect(r.partial.frontmatterExtra?.skills).toEqual(['lint', 42])
+    expect(r.warnings.some((w) => w.includes('skills entries must be'))).toBe(true)
+  })
+
+  test('skills with non-array value demotes to frontmatterExtra', () => {
+    const src = '---\nskills: lint\n---\n'
+    const r = parseAgentMarkdown(src)
+    expect(r.partial.skills).toBeUndefined()
+    expect(r.partial.frontmatterExtra?.skills).toBe('lint')
+    expect(r.warnings.some((w) => w.startsWith('skills must be an array'))).toBe(true)
+  })
+
   // RFC-111 (Codex audit F6): `runtime` must parse into partial.runtime, not get
   // silently dropped into frontmatterExtra — it was missing from KNOWN_KEYS, so an
   // authored `runtime:` never applied on import.

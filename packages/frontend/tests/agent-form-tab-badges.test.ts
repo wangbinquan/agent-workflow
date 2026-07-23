@@ -37,7 +37,10 @@ describe('resourceRefCount', () => {
     expect(
       resourceRefCount({
         ...emptyAgent(),
-        skills: ['s1', 's2'],
+        skills: [
+          { kind: 'project', name: 's1' },
+          { kind: 'project', name: 's2' },
+        ],
         mcp: ['m'],
         plugins: ['p'],
         dependsOn: ['d1', 'd2'],
