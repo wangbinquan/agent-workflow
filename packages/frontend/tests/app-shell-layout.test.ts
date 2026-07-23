@@ -60,10 +60,14 @@ describe('app-shell viewport locking (RFC-168 clipping regression)', () => {
 
   test('mobile nav and tablet Inbox are viewport/safe-area bounded', () => {
     const navPanel = block('.dialog__panel.mobile-nav-dialog')
+    const navigation = block('.mobile-nav-dialog .sidebar__nav')
+    const navGroup = block('.mobile-nav-dialog .nav-group')
     expect(navPanel).toContain('width: min(88vw, 320px)')
     expect(navPanel).toContain('height: 100dvh')
     expect(navPanel).toContain('max-height: 100dvh')
     expect(navPanel).toContain('env(safe-area-inset-bottom)')
+    expect(navigation).toContain('gap: 0')
+    expect(navGroup).toContain('padding: 0')
     expect(CSS).toMatch(
       /@media \(min-width: 721px\) and \(max-width: 900px\)[\s\S]*?\.dialog--md \.dialog__panel\.inbox-dialog[\s\S]*?right\)/,
     )

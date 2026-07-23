@@ -653,6 +653,20 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     const mobileNav = page.getByTestId('mobile-nav-dialog').getByRole('dialog')
     await expect(mobileNav).toBeVisible()
     await waitForStableAuthenticatedShell(page)
+    const memoryLink = mobileNav.locator('a[href="/memory?tab=all"]')
+    await expect(memoryLink).toBeVisible()
+    await expect
+      .poll(() =>
+        memoryLink.evaluate((element) => {
+          const scrollRegion = element.closest<HTMLElement>('.dialog__body')
+          if (scrollRegion === null) return false
+          return (
+            element.getBoundingClientRect().bottom <=
+            scrollRegion.getBoundingClientRect().bottom + 0.5
+          )
+        }),
+      )
+      .toBe(true)
     await expect(mobileNav).toHaveScreenshot('mobile-nav-open.png', COMPONENT_SNAPSHOT_OPTS)
     await expect(page).toHaveScreenshot('mobile-home-nav.png', SNAPSHOT_OPTS)
   })

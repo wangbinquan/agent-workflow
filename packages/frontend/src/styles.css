@@ -18644,6 +18644,18 @@ button.status-chip {
   min-height: 44px;
 }
 
+/* Keep every primary destination visible at the common 390x844 phone size.
+   The rows retain their 44px tap target; only the oversized desktop group
+   gutters are tightened so the final Memory row is not hidden behind the
+   pinned account/footer controls. */
+.mobile-nav-dialog .sidebar__nav {
+  gap: 0;
+}
+
+.mobile-nav-dialog .nav-group {
+  padding: 0;
+}
+
 .mobile-nav-dialog .nav-item__accessory {
   width: 44px;
   min-width: 44px;
