@@ -78,7 +78,7 @@ describe('RFC-225 workgroup canonical serialization', () => {
     ).not.toBe(serializeWorkgroupEditableSnapshotV1(withSecond))
   })
 
-  test('canonical agentId makes the mutable display name non-semantic', () => {
+  test('legacy agentName is rejected instead of entering canonical bytes', () => {
     const base = snapshot()
     const withDisplayName = {
       ...base,
@@ -88,8 +88,6 @@ describe('RFC-225 workgroup canonical serialization', () => {
           : member,
       ),
     }
-    expect(serializeWorkgroupEditableSnapshotV1(withDisplayName)).toBe(
-      serializeWorkgroupEditableSnapshotV1(base),
-    )
+    expect(() => serializeWorkgroupEditableSnapshotV1(withDisplayName)).toThrow()
   })
 })
