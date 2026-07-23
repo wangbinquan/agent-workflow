@@ -131,11 +131,13 @@ export function AclPanel({
       // RFC-170 §8: echo the composite OCC precondition the panel currently holds
       // so the server CAS-rejects (409) a write racing another writer's change.
       const current = qc.getQueryData<ResourceAcl>(['acl', aclUrl])
+      if (current === undefined) {
+        throw new Error('ACL snapshot unavailable; reload before saving')
+      }
       return api.put<ResourceAcl>(aclUrl, {
         ...body,
-        ...(current !== undefined
-          ? { expectedResourceId: current.resourceId, expectedAclRevision: current.aclRevision }
-          : {}),
+        expectedResourceId: current.resourceId,
+        expectedAclRevision: current.aclRevision,
       })
     },
     onSuccess: (next, body) => {
