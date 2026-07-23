@@ -21,7 +21,7 @@ import { validateDynamicWorkflowDef } from '@/services/orchestratorAgent'
 import { setNodeRunStatus, setTaskStatus } from '@/services/lifecycle'
 import { emitTaskStatus, getTask, resumeDynamicWorkflowExecution } from '@/services/task'
 import { createWorkflow } from '@/services/workflow'
-import { assertNewRefsUsable, extractWorkflowAgentNames } from '@/services/resourceRefs'
+import { assertNewRefsUsable, extractWorkflowAgentRefs } from '@/services/resourceRefs'
 import { setDwState } from '@/services/workgroup/state'
 import { ConflictError, ValidationError } from '@/util/errors'
 import {} from '@/services/workgroup/lifecycle'
@@ -236,7 +236,7 @@ export function buildDwActions(
       )
     }
     await assertNewRefsUsable(deps.db, actor, [
-      { type: 'agent', names: [...extractWorkflowAgentNames(generated.data)] },
+      { type: 'agent', names: [...extractWorkflowAgentRefs(generated.data)] },
     ])
     const created = await createWorkflow(
       deps.db,

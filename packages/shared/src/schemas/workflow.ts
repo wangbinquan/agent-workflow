@@ -96,6 +96,18 @@ export const WorkflowNodeSchema = z
      * key, so old definitions roundtrip unchanged.
      */
     title: z.string().optional(),
+    /**
+     * RFC-223 (PR-2) — the CANONICAL agent reference for an `agent-single`
+     * node: a stable agent `id` (ULID) that survives a rename (D4/D7). The
+     * legacy `agentName` field (carried via `.passthrough()`) is retained for
+     * DISPLAY and back-compat; runtime dispatch resolves by `agentId` first,
+     * falling back to `agentName` only for definitions not yet migrated /
+     * dynamically generated (name↔id stays 1:1 until PR-8, so the fallback is
+     * deterministic). Absent for non-agent kinds. The frontend stamps this
+     * alongside `agentName` when an agent is picked; migration 0112 backfills
+     * it into stored definitions; YAML export strips it (portable name form).
+     */
+    agentId: z.string().min(1).optional(),
   })
   .passthrough()
 export type WorkflowNode = z.infer<typeof WorkflowNodeSchema>

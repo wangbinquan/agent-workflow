@@ -532,8 +532,17 @@ export const workgroupMembers = sqliteTable(
       .notNull()
       .references(() => workgroups.id, { onDelete: 'cascade' }),
     memberType: text('member_type', { enum: ['agent', 'human'] }).notNull(),
-    /** memberType='agent': agents.name (soft reference, launch-validated). */
+    /** memberType='agent': agents.name (soft reference, launch-validated).
+     *  Kept for display; `agent_id` is the canonical launch reference. */
     agentName: text('agent_name'),
+    /**
+     * RFC-223 (PR-2): memberType='agent' canonical agents.id (ULID). Resolved
+     * from agent_name at save (name↔id 1:1); launch readiness validates the
+     * roster by id (rename-safe, ABA-safe). Nullable — a soft reference whose
+     * agent does not exist yet, or a pre-0112 row, stays null and fails launch
+     * readiness. Migration 0112 backfills it from agent_name JOIN agents.
+     */
+    agentId: text('agent_id'),
     /** memberType='human': users.id — audit/UI only, never injected into prompts. */
     userId: text('user_id'),
     displayName: text('display_name').notNull(),

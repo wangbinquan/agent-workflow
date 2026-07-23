@@ -97,8 +97,22 @@ export const WorkgroupMemberDisplayNameSchema = z
 export const WorkgroupMemberSchema = z.object({
   id: z.string(),
   memberType: WorkgroupMemberTypeSchema,
-  /** memberType='agent': agents.name (soft reference, launch-validated). */
+  /** memberType='agent': agents.name (soft reference, launch-validated). Kept
+   *  for display / back-compat; `agentId` is the canonical launch reference. */
   agentName: z.string().nullable(),
+  /**
+   * RFC-223 (PR-2) — memberType='agent': the CANONICAL agent `id` (ULID),
+   * resolved from `agentName` at save time (server-side, name↔id 1:1). Launch
+   * readiness validates the roster by id so a rename never re-routes a member
+   * and a delete+recreate-same-name cannot silently bind a replacement agent.
+   * Nullable: a member authored for an agent that does not (yet) exist, or a
+   * legacy row before migration 0112, carries null and is caught by the launch
+   * readiness check. `display_name` (group addressing) is unaffected. OPTIONAL
+   * on the DTO (like the other RFC-223 id fields) so pre-existing fixtures that
+   * omit it still compile; `rowToWorkgroup` always populates it (string|null),
+   * and launch readiness treats a missing/null id as an unresolved member.
+   */
+  agentId: z.string().nullable().optional(),
   /** memberType='human': users.id — audit/UI only, never injected into prompts. */
   userId: z.string().nullable(),
   displayName: WorkgroupMemberDisplayNameSchema,

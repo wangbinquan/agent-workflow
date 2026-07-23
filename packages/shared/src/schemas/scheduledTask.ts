@@ -69,15 +69,26 @@ export type ScheduledLaunchKind = z.infer<typeof ScheduledLaunchKindSchema>
 /**
  * kind='agent' 的定时 payload 封套：单 Agent 启动 body + 目标 agent 名
  * （即时启动时目标在 URL 路径上；定时行必须把目标冻结进 payload）。
+ *
+ * RFC-223 (PR-2)：`agentId` 是 CANONICAL 目标——服务层在 create/update 时按
+ * `agentName` 解析后 STAMP（客户端不必发送），触发时按 id 解析目标（rename
+ * 不改绑、名字复用不打错 agent，取代原「按可变 NAME 冻结」的 ABA 隐患）。
+ * `agentName` 保留作展示 + 向后兼容；schema 层 `agentId` optional（旧行/迁移
+ * 前 payload 无此字段仍可读，migration 0112 回填），服务层触发按 id-优先解析。
  */
 export const ScheduledAgentPayloadSchema = StartAgentTaskSchema.extend({
   agentName: AgentNameSchema,
+  agentId: z.string().min(1).optional(),
 })
 export type ScheduledAgentPayload = z.infer<typeof ScheduledAgentPayloadSchema>
 
-/** kind='workgroup' 的定时 payload 封套：工作组启动 body + 目标组名。 */
+/**
+ * kind='workgroup' 的定时 payload 封套：工作组启动 body + 目标组名。
+ * RFC-223 (PR-2)：`workgroupId` 同 `agentId`——服务层 stamp、触发按 id 解析。
+ */
 export const ScheduledWorkgroupPayloadSchema = StartWorkgroupTaskSchema.extend({
   workgroupName: WorkgroupNameSchema,
+  workgroupId: z.string().min(1).optional(),
 })
 export type ScheduledWorkgroupPayload = z.infer<typeof ScheduledWorkgroupPayloadSchema>
 

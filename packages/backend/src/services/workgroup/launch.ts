@@ -252,25 +252,35 @@ export async function startWorkgroupTask(
   // fail before task/worktree materialization. Without this gate leader_worker
   // fails only after spending setup work, while free_collab can repeatedly wake
   // an unresolvable member without a run, cursor advance, or visible error.
-  const rosterAgentNames = [
-    ...new Set(
-      group.members.flatMap((member) =>
-        member.memberType === 'agent' && member.agentName !== null ? [member.agentName] : [],
-      ),
-    ),
+  //
+  // RFC-223 (PR-2): validate the roster by CANONICAL agent id (frozen at save,
+  // beside the display name). This makes a member survive a rename (the id is
+  // stable, no rename guard shields a workgroup member) and refuses to silently
+  // bind a delete+recreate-same-name replacement (ABA). A member with no frozen
+  // id (a soft reference to an agent that did not exist at save) or whose id no
+  // longer resolves is reported missing — re-save the roster to (re-)bind it.
+  const agentMembers = group.members.filter((m) => m.memberType === 'agent')
+  const rosterAgentIds = [
+    ...new Set(agentMembers.flatMap((m) => (typeof m.agentId === 'string' ? [m.agentId] : []))),
   ]
-  const existingAgentNames =
-    rosterAgentNames.length === 0
+  const existingAgentIds =
+    rosterAgentIds.length === 0
       ? new Set<string>()
       : new Set(
           (
             await db
-              .select({ name: agents.name })
+              .select({ id: agents.id })
               .from(agents)
-              .where(inArray(agents.name, rosterAgentNames))
-          ).map((row) => row.name),
+              .where(inArray(agents.id, rosterAgentIds))
+          ).map((row) => row.id),
         )
-  const missingAgentNames = rosterAgentNames.filter((name) => !existingAgentNames.has(name))
+  const missingAgentNames = [
+    ...new Set(
+      agentMembers
+        .filter((m) => typeof m.agentId !== 'string' || !existingAgentIds.has(m.agentId))
+        .map((m) => m.agentName ?? '(unnamed)'),
+    ),
+  ]
   if (missingAgentNames.length > 0) {
     throw new ValidationError('workgroup-not-ready', 'workgroup is not launch-ready', {
       reasons: ['agent-missing'],

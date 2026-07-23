@@ -308,7 +308,8 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // RFC-220 D8 bumped to 109 with 0109_rfc220_userinfo_request_style.
     // RFC-221 T1 bumped to 110 with 0110_rfc221_auth_login_policy.
     // RFC-223 PR-1 bumped to 111 with 0111_rfc223_agent_refs_to_id.
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(111)
+    // RFC-223 PR-2 bumped to 112 with 0112_rfc223_pr2_refs_to_id.
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(112)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

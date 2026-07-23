@@ -9,10 +9,12 @@
 // owner actor rebuilt by fireSchedule).
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
+import { getAgentById } from '@/services/agent'
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import { startAgentTask } from '@/services/agentLaunch'
 import { startTask } from '@/services/task'
+import { getWorkgroupById } from '@/services/workgroups'
 import { startWorkgroupTask } from '@/services/workgroup/launch'
 import type {
   ScheduledAgentPayload,
@@ -33,12 +35,28 @@ export function buildScheduleLaunch(db: DbClient, configPath: string): BuildSche
     }
     if (kind === 'agent') {
       const p = payload as unknown as ScheduledAgentPayload
-      const task = await startAgentTask(db, actor, p.agentName, p, deps)
+      // RFC-223 (PR-2): resolve the target by its canonical id — a rename never
+      // re-routes it and a delete+recreate-same-name cannot bind a replacement.
+      // Use the id-resolved CURRENT name (the payload's agentName is a display
+      // cache that a rename leaves stale) and pass expectedAgentId so
+      // startAgentTask's RFC-175 fence rejects a mismatch. A payload without an
+      // id (pre-migration-0112) falls back to its name (name↔id 1:1 until PR-8).
+      const resolved = p.agentId ? await getAgentById(db, p.agentId) : null
+      const name = resolved?.name ?? p.agentName
+      const task = await startAgentTask(db, actor, name, { ...p, expectedAgentId: p.agentId }, deps)
       return { id: task.id }
     }
     if (kind === 'workgroup') {
       const p = payload as unknown as ScheduledWorkgroupPayload
-      const task = await startWorkgroupTask(db, actor, p.workgroupName, p, deps)
+      const resolved = p.workgroupId ? await getWorkgroupById(db, p.workgroupId) : null
+      const name = resolved?.name ?? p.workgroupName
+      const task = await startWorkgroupTask(
+        db,
+        actor,
+        name,
+        { ...p, expectedWorkgroupId: p.workgroupId },
+        deps,
+      )
       return { id: task.id }
     }
     const task = await startTask(payload as unknown as StartTask, deps)

@@ -30,7 +30,8 @@ import { assertNotBuiltin, excludeBuiltinWorkflows } from '@/services/systemReso
 import {
   assertNewRefsUsable,
   diffNewNames,
-  extractWorkflowAgentNames,
+  extractWorkflowAgentRefs,
+  stripWorkflowNodeAgentIds,
 } from '@/services/resourceRefs'
 import {
   createWorkflow,
@@ -90,7 +91,7 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
     const actor = actorOf(c)
     // RFC-099 (D15): on create every agent reference is new.
     await assertNewRefsUsable(deps.db, actor, [
-      { type: 'agent', names: [...extractWorkflowAgentNames(parsed.data.definition)] },
+      { type: 'agent', names: [...extractWorkflowAgentRefs(parsed.data.definition)] },
     ])
     const created = await createWorkflow(deps.db, parsed.data, { ownerUserId: actor.user.id })
     return c.json(created, 201)
@@ -184,8 +185,8 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
     }
 
     const addedAgentNames = diffNewNames(
-      extractWorkflowAgentNames(workflow.definition),
-      extractWorkflowAgentNames(parsed.data.definition),
+      extractWorkflowAgentRefs(workflow.definition),
+      extractWorkflowAgentRefs(parsed.data.definition),
     )
     await assertNewRefsUsable(deps.db, actor, [{ type: 'agent', names: addedAgentNames }])
 
@@ -223,7 +224,14 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
     }
     const revision = assertExactWorkflowRevision(workflow, parsed.data, 'workflow-version-mismatch')
     await deps.workflowExactOperationHook?.({ operation: 'export', revision })
-    const yaml = stringifyWorkflowYaml(workflow)
+    // RFC-223 (PR-2): strip internal agentId so the user-facing export is a
+    // portable name-based selector (an id is meaningless in another install;
+    // import re-resolves by name). Backup export keeps full fidelity — it does
+    // NOT go through this route.
+    const yaml = stringifyWorkflowYaml({
+      ...workflow,
+      definition: stripWorkflowNodeAgentIds(workflow.definition),
+    })
     return c.body(yaml, 200, {
       'content-type': 'application/yaml; charset=utf-8',
       'content-disposition': `attachment; filename="${c.req.param('id')}.yaml"`,

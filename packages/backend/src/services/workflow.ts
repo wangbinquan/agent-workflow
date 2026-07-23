@@ -41,7 +41,7 @@ import {
   workflowsBroadcaster,
   type WorkflowDeletedAudienceContext,
 } from '@/ws/broadcaster'
-import { assertNewRefsUsable, diffNewNames, extractWorkflowAgentNames } from './resourceRefs'
+import { assertNewRefsUsable, diffNewNames, extractWorkflowAgentRefs } from './resourceRefs'
 import { canViewResource, isResourceAdminActor, isResourceOwner } from './resourceAcl'
 import { assertNotBuiltin } from './systemResources'
 import { validateWorkflowById } from './workflow.validator'
@@ -174,8 +174,8 @@ export async function updateWorkflow(
     assertChangedWorkflowName(preflightWorkflow.name, normalizedSnapshot.name)
     if (principal.kind === 'actor') {
       const newNames = diffNewNames(
-        extractWorkflowAgentNames(preflightWorkflow.definition),
-        extractWorkflowAgentNames(normalizedSnapshot.definition),
+        extractWorkflowAgentRefs(preflightWorkflow.definition),
+        extractWorkflowAgentRefs(normalizedSnapshot.definition),
       )
       await assertNewRefsUsable(db, principal.actor, [{ type: 'agent', names: newNames }])
     }

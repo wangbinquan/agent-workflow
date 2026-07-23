@@ -243,6 +243,11 @@ async function assertScheduledTargetUsable(
       throw new NotFoundError('agent-not-found', `agent '${String(body['agentName'])}' not found`)
     }
     assertNotBuiltin('agent', agent)
+    // RFC-223 (PR-2): STAMP the canonical agent id into the (mutated) payload so
+    // the stored row freezes the id, not just the mutable name. Fire resolves by
+    // this id (rename-safe, ABA-safe); the delete/rename guard matches it. The
+    // client need not send it — the server derives it from the resolved target.
+    body['agentId'] = agent.id
     // RFC-218 (design P2-2): with description/inputs both schema-optional, a
     // payload that must fail EVERY fire (neither field / unknown keys /
     // missing required ports / blocker agent / upload ports — scheduled fires
@@ -264,6 +269,8 @@ async function assertScheduledTargetUsable(
       `workgroup '${String(body['workgroupName'])}' not found`,
     )
   }
+  // RFC-223 (PR-2): stamp the canonical workgroup id (see agent branch above).
+  body['workgroupId'] = group.id
 }
 
 export async function createScheduledTask(

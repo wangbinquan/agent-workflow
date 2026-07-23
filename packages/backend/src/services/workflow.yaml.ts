@@ -25,7 +25,11 @@ import { parse as parseYaml } from 'yaml'
 import type { DbClient } from '@/db/client'
 import { canViewResource } from '@/services/resourceAcl'
 import { assertNotBuiltin } from '@/services/systemResources'
-import { assertNewRefsUsable, extractWorkflowAgentNames } from '@/services/resourceRefs'
+import {
+  assertNewRefsUsable,
+  extractWorkflowAgentRefs,
+  resolveWorkflowNodeAgentIds,
+} from '@/services/resourceRefs'
 import {
   createWorkflow,
   getWorkflow,
@@ -106,6 +110,12 @@ export async function importWorkflowYaml(
     throw new ValidationError('workflow-yaml-empty', 'empty YAML body')
   }
   const preview = previewWorkflowYaml(request.yamlText)
+  // RFC-223 (PR-2): resolve each agent-single node's canonical agentId from its
+  // (portable) agentName against THIS install's agents, discarding any foreign
+  // id carried in the YAML. Safe to normalize server-side here — the import
+  // path computes the snapshot hash itself (no client-provided hash to fence),
+  // unlike the editor autosave which relies on the frontend having stamped it.
+  const definition = await resolveWorkflowNodeAgentIds(db, preview.definition)
 
   if (request.mode === 'overwrite') {
     if (preview.id === null || preview.id !== request.overwrite.workflowId) {
@@ -124,7 +134,7 @@ export async function importWorkflowYaml(
         snapshot: {
           name: preview.name,
           description: preview.description,
-          definition: preview.definition,
+          definition,
         },
       },
       principal,
@@ -165,7 +175,7 @@ export async function importWorkflowYaml(
   // framework callers must opt into the explicit audited system branch.
   if (principal.kind === 'actor') {
     await assertNewRefsUsable(db, principal.actor, [
-      { type: 'agent', names: [...extractWorkflowAgentNames(preview.definition)] },
+      { type: 'agent', names: [...extractWorkflowAgentRefs(definition)] },
     ])
   }
   const workflow = await createWorkflow(
@@ -173,7 +183,7 @@ export async function importWorkflowYaml(
     {
       name: preview.name,
       description: preview.description,
-      definition: preview.definition,
+      definition,
     },
     principal.kind === 'actor' ? { ownerUserId: principal.actor.user.id } : undefined,
   )

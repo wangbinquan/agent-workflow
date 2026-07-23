@@ -18,7 +18,10 @@ import { ulid } from 'ulid'
 // RFC-060 PR-E: agent-multi removed from the palette — fan-out is now done
 // via wrapper-fanout (which lives in the Wrappers section).
 export type PaletteItem =
-  | { kind: 'agent-single'; agentName: string }
+  // RFC-223 (PR-2): agentId is the canonical reference stamped onto the fresh
+  // node (agentName is retained for display). Optional so a legacy drag payload
+  // without it still deserializes; buildPalette always supplies it.
+  | { kind: 'agent-single'; agentName: string; agentId?: string }
   | { kind: 'input' }
   | { kind: 'output' }
   | { kind: 'wrapper-git' }
@@ -184,7 +187,14 @@ export function deserialize(raw: string): PaletteItem | null {
     if (typeof rec.kind !== 'string' || !Object.hasOwn(PALETTE_DESCRIPTORS, rec.kind)) return null
     if (rec.kind === 'agent-single') {
       return typeof rec.agentName === 'string'
-        ? ({ kind: rec.kind, agentName: rec.agentName } as PaletteItem)
+        ? ({
+            kind: rec.kind,
+            agentName: rec.agentName,
+            // RFC-223 (PR-2): carry the canonical id when the drag payload has it.
+            ...(typeof rec.agentId === 'string' && rec.agentId.length > 0
+              ? { agentId: rec.agentId }
+              : {}),
+          } as PaletteItem)
         : null
     }
     return { kind: rec.kind } as PaletteItem
@@ -207,7 +217,12 @@ export function makeNode(
     position: pos,
     ...PALETTE_DESCRIPTORS[item.kind].makeDefaults({ existingIds: ctx.existingIds }),
   }
-  if (item.kind === 'agent-single') node.agentName = item.agentName
+  if (item.kind === 'agent-single') {
+    node.agentName = item.agentName
+    // RFC-223 (PR-2): stamp the canonical agent id onto the fresh node so the
+    // runtime dispatches by id (rename-safe). agentName stays for display.
+    if (item.agentId !== undefined) node.agentId = item.agentId
+  }
   return node as unknown as WorkflowNode
 }
 
@@ -269,7 +284,7 @@ export function buildPalette(agents: Agent[], t: PaletteTranslator): PaletteSect
         key,
         label: t(labelKey),
         items: agents.map((a) => ({
-          item: { kind: 'agent-single', agentName: a.name } as PaletteItem,
+          item: { kind: 'agent-single', agentName: a.name, agentId: a.id } as PaletteItem,
           // Prefix with the agent kind icon so each row in the palette starts
           // with a glyph that mirrors the canvas chip (⚙ for agent). This
           // keeps the leading-icon column consistent across Agents / Wrappers

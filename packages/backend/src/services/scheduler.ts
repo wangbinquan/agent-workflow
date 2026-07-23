@@ -79,7 +79,7 @@ import {
   taskRepos,
   tasks,
 } from '@/db/schema'
-import { getAgent } from '@/services/agent'
+import { getAgent, getAgentById } from '@/services/agent'
 import { resolveDependsClosure } from '@/services/agentDeps'
 import { collectMcpIdsFromClosure, loadMcpsByIds } from '@/services/mcpClosure'
 import { collectPluginIdsFromClosure, loadPluginsByIds } from '@/services/pluginClosure'
@@ -2895,7 +2895,14 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
       message: 'invalid agent node',
     }
   }
-  const nodeAgent = await getAgent(db, agentName)
+  // RFC-223 (PR-2): resolve the node's agent by its CANONICAL id when present
+  // (stamped by the editor / backfilled by migration 0112) so a rename never
+  // re-routes the node and a delete+recreate-same-name cannot bind a different
+  // agent; a node with no agentId (dynamic-generated / pre-0112) falls back to
+  // its name (name↔id stays 1:1 until PR-8, so this is deterministic).
+  const agentIdRef = pickString(node, 'agentId')
+  const nodeAgent =
+    agentIdRef !== null ? await getAgentById(db, agentIdRef) : await getAgent(db, agentName)
   if (nodeAgent === null) {
     return { kind: 'failed', summary: `agent '${agentName}' not found`, message: 'agent-not-found' }
   }
@@ -4460,17 +4467,20 @@ async function runFanoutWrapperNode(
 
   // 2. Hydrate the inner-node agent map. findFanoutAggregator + scope
   // computation both consult this. Missing-agent here is fatal.
-  const agentNames = new Set<string>()
+  // RFC-223 (PR-2): resolve each inner agent by its CANONICAL id when the node
+  // carries one (rename-/ABA-safe), falling back to name for dynamic-generated
+  // / pre-0112 nodes. Keyed by agentName so the per-shard dispatch lookup below
+  // (`agentsMap.get(innerAgentName)`) is unchanged (name↔id is 1:1 until PR-8).
+  const agentsMap = new Map<string, Agent>()
   for (const id of innerIds) {
     const inner = definition.nodes.find((n) => n.id === id)
     if (inner === undefined) continue
-    const an = (inner as Record<string, unknown>).agentName
-    if (typeof an === 'string') agentNames.add(an)
-  }
-  const agentsMap = new Map<string, Agent>()
-  for (const name of agentNames) {
-    const a = await getAgent(db, name)
-    if (a !== null) agentsMap.set(name, a)
+    const rec = inner as Record<string, unknown>
+    const an = rec.agentName
+    if (typeof an !== 'string' || agentsMap.has(an)) continue
+    const aid = typeof rec.agentId === 'string' ? rec.agentId : null
+    const a = aid !== null ? await getAgentById(db, aid) : await getAgent(db, an)
+    if (a !== null) agentsMap.set(an, a)
   }
 
   // 3. Wrapper row resume / mint (mirrors wrapper-git pattern).

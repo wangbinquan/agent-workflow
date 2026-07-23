@@ -105,7 +105,8 @@ describe('deriveNodePickerCatalog — RFC-219 categories', () => {
     expect(agents.groups).toHaveLength(1)
     expect(agents.groups[0]?.key).toBe('agents')
     expect(agents.groups[0]?.entries.map((entry) => entry.item)).toEqual([
-      { kind: 'agent-single', agentName: 'agent-02' },
+      // RFC-223 (PR-2): buildPalette now carries the canonical agentId.
+      { kind: 'agent-single', agentName: 'agent-02', agentId: 'agent-2' },
     ])
     expect(wrappers.groups).toEqual([])
     expect(wrappers.visibleEntryCount).toBe(0)

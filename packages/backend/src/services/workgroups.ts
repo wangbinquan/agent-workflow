@@ -36,7 +36,7 @@ import type { Actor } from '@/auth/actor'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
-import { scheduledTasks, users, workgroupMembers, workgroups } from '@/db/schema'
+import { agents, scheduledTasks, users, workgroupMembers, workgroups } from '@/db/schema'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 
 type WorkgroupRow = typeof workgroups.$inferSelect
@@ -102,7 +102,8 @@ export async function createWorkgroup(
 
   const groupId = ulid()
   const now = Date.now()
-  const memberValues = buildMemberValues(groupId, input.members, now)
+  const agentIdByName = await resolveMemberAgentIds(db, input.members)
+  const memberValues = buildMemberValues(groupId, input.members, now, agentIdByName)
   const leaderMemberId = resolveLeaderMemberId(input, memberValues)
 
   dbTxSync(db, (tx) => {
@@ -155,7 +156,8 @@ export async function updateWorkgroup(
   await assertHumanMembersActive(db, input.members)
 
   const now = Date.now()
-  const memberValues = buildMemberValues(existing.id, input.members, now)
+  const agentIdByName = await resolveMemberAgentIds(db, input.members)
+  const memberValues = buildMemberValues(existing.id, input.members, now, agentIdByName)
   const leaderMemberId = resolveLeaderMemberId(input, memberValues)
 
   // Full-replace members + config in one transaction (design §1.2: member ids
@@ -201,7 +203,7 @@ export async function updateWorkgroup(
  */
 async function scheduledRowsReferencingWorkgroup(
   db: DbClient,
-  name: string,
+  target: { id: string; name: string },
 ): Promise<Array<{ id: string; name: string; ownerUserId: string }>> {
   const rows = await db
     .select({
@@ -216,8 +218,11 @@ async function scheduledRowsReferencingWorkgroup(
   for (const row of rows) {
     if (row.launchKind !== 'workgroup') continue
     try {
-      const p = JSON.parse(row.launchPayload) as { workgroupName?: unknown }
-      if (p.workgroupName === name)
+      const p = JSON.parse(row.launchPayload) as { workgroupId?: unknown; workgroupName?: unknown }
+      // RFC-223 (PR-2): payload now carries canonical workgroupId (stamped at
+      // save, backfilled by migration 0112); match it primarily, falling back
+      // to the display workgroupName for not-yet-backfilled rows (1:1 until PR-8).
+      if (p.workgroupId === target.id || p.workgroupName === target.name)
         out.push({ id: row.id, name: row.name, ownerUserId: row.ownerUserId })
     } catch {
       /* degraded rows are repaired/deleted via their own flow */
@@ -235,7 +240,7 @@ export async function deleteWorkgroup(db: DbClient, name: string, actor: Actor):
   // historical/running tasks keep functioning after the resource is deleted
   // (same durable-soft-link philosophy as tasks.scheduled_task_id).
   // Scheduled rows are the exception — they reference the mutable NAME.
-  const schedRefs = await scheduledRowsReferencingWorkgroup(db, name)
+  const schedRefs = await scheduledRowsReferencingWorkgroup(db, { id: existing.id, name })
   if (schedRefs.length > 0) {
     // RFC-203 T6: principal-aware disclosure (deleteWorkflow precedent) —
     // schedules are member-private, so names show only for the actor's own
@@ -284,7 +289,10 @@ export async function renameWorkgroup(
     // Tasks link by id; scheduled rows reference the mutable NAME (RFC-165 §9b)
     // — refuse the rename while any point at this group. (A description-only
     // edit keeps the name, so this guard is skipped for it.)
-    const schedRefs = await scheduledRowsReferencingWorkgroup(db, oldName)
+    const schedRefs = await scheduledRowsReferencingWorkgroup(db, {
+      id: existing.id,
+      name: oldName,
+    })
     if (schedRefs.length > 0) {
       throw new ConflictError(
         'workgroup-scheduled-referenced',
@@ -329,16 +337,44 @@ export function diffNewAgentMemberNames(
 
 type MemberInput = CreateWorkgroup['members'][number]
 
+/**
+ * RFC-223 (PR-2) — resolve each agent member's `agentName` to its canonical
+ * agents.id (name↔id 1:1 until PR-8, so deterministic). A name with no matching
+ * agent row (a soft reference to an agent that does not exist yet) maps to null:
+ * the member is stored name-only and launch readiness reports it missing until
+ * the agent exists AND the roster is re-saved. One query over the roster.
+ */
+async function resolveMemberAgentIds(
+  db: DbClient,
+  members: readonly MemberInput[],
+): Promise<Map<string, string>> {
+  const names = [
+    ...new Set(
+      members.flatMap((m) => (m.memberType === 'agent' && m.agentName ? [m.agentName] : [])),
+    ),
+  ]
+  if (names.length === 0) return new Map()
+  const rows = await db
+    .select({ id: agents.id, name: agents.name })
+    .from(agents)
+    .where(inArray(agents.name, names))
+  return new Map(rows.map((r) => [r.name, r.id]))
+}
+
 function buildMemberValues(
   groupId: string,
   members: readonly MemberInput[],
   now: number,
+  agentIdByName: ReadonlyMap<string, string>,
 ): Array<typeof workgroupMembers.$inferInsert> {
   return members.map((m, i) => ({
     id: ulid(),
     workgroupId: groupId,
     memberType: m.memberType,
     agentName: m.memberType === 'agent' ? (m.agentName ?? null) : null,
+    // RFC-223 (PR-2): freeze the resolved canonical agent id beside the name.
+    agentId:
+      m.memberType === 'agent' && m.agentName ? (agentIdByName.get(m.agentName) ?? null) : null,
     userId: m.memberType === 'human' ? (m.userId ?? null) : null,
     displayName: m.displayName,
     roleDesc: m.roleDesc,
@@ -401,6 +437,7 @@ function rowToWorkgroup(row: WorkgroupRow, memberRows: MemberRow[]): Workgroup {
       id: m.id,
       memberType: m.memberType,
       agentName: m.agentName,
+      agentId: m.agentId,
       userId: m.userId,
       displayName: m.displayName,
       roleDesc: m.roleDesc,

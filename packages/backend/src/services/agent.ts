@@ -413,7 +413,7 @@ export async function deleteAgent(db: DbClient, name: string, actor: Actor): Pro
       })
       .from(scheduledTasks)
       .all()
-    const schedRefs = scheduledRowsReferencingAgent(schedRows, name)
+    const schedRefs = scheduledRowsReferencingAgent(schedRows, { id: existing.id, name })
     if (schedRefs.length > 0) {
       const schedIds = new Set(schedRefs)
       throw new ConflictError(
@@ -559,7 +559,7 @@ export async function renameAgent(
       })
       .from(scheduledTasks)
       .all()
-    const schedRefs = scheduledRowsReferencingAgent(schedRows, oldName)
+    const schedRefs = scheduledRowsReferencingAgent(schedRows, { id: existing.id, name: oldName })
     if (schedRefs.length > 0) {
       const schedIds = new Set(schedRefs)
       throw new ConflictError(
@@ -604,14 +604,18 @@ export async function renameAgent(
  */
 function scheduledRowsReferencingAgent(
   rows: ReadonlyArray<{ id: string; launchKind: string; launchPayload: string }>,
-  agentName: string,
+  target: { id: string; name: string },
 ): string[] {
   const out: string[] = []
   for (const row of rows) {
     if (row.launchKind !== 'agent') continue
     try {
-      const p = JSON.parse(row.launchPayload) as { agentName?: unknown }
-      if (p.agentName === agentName) out.push(row.id)
+      const p = JSON.parse(row.launchPayload) as { agentId?: unknown; agentName?: unknown }
+      // RFC-223 (PR-2): the payload now carries the canonical agentId (stamped
+      // at save, backfilled by migration 0112). Match it primarily; fall back
+      // to the display agentName for any not-yet-backfilled row (name↔id is
+      // 1:1 until PR-8, so neither over-matches).
+      if (p.agentId === target.id || p.agentName === target.name) out.push(row.id)
     } catch {
       /* degraded rows are repaired/deleted via their own flow */
     }

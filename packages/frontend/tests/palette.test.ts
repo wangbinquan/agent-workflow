@@ -41,6 +41,19 @@ describe('serialize/deserialize', () => {
     expect(deserialize(raw)).toEqual({ kind: 'agent-single', agentName: 'coder' })
   })
 
+  // RFC-223 (PR-2): the canonical agentId rides the dataTransfer payload so a
+  // drag stamps it onto the fresh node; a legacy payload without it still works.
+  test('agent-single round-trips WITH agentId when present', () => {
+    const raw = serialize({ kind: 'agent-single', agentName: 'coder', agentId: 'AG_1' })
+    expect(deserialize(raw)).toEqual({ kind: 'agent-single', agentName: 'coder', agentId: 'AG_1' })
+  })
+  test('agent-single without agentId deserializes to name-only (back-compat)', () => {
+    expect(deserialize(JSON.stringify({ kind: 'agent-single', agentName: 'coder' }))).toEqual({
+      kind: 'agent-single',
+      agentName: 'coder',
+    })
+  })
+
   // RFC-060 PR-E: agent-multi removed from the palette. deserialize now
   // returns null for the legacy serialized form so old workflow.yaml imports
   // surface as "unknown kind" instead of silently re-introducing it.
@@ -80,6 +93,26 @@ describe('makeNode', () => {
     expect((n as Record<string, unknown>).agentName).toBe('coder')
     expect(n.position).toEqual({ x: 12, y: 6 })
     expect(n.id.startsWith('agent_')).toBe(true)
+  })
+
+  // RFC-223 (PR-2): a fresh agent-single node carries the canonical agentId
+  // (from the palette item) alongside agentName so the runtime dispatches by id.
+  test('agent-single stamps agentId when the palette item carries one', () => {
+    const n = makeNode(
+      { kind: 'agent-single', agentName: 'coder', agentId: 'AG_1' },
+      { x: 0, y: 0 },
+      { existingIds: new Set() },
+    )
+    expect((n as Record<string, unknown>).agentId).toBe('AG_1')
+    expect((n as Record<string, unknown>).agentName).toBe('coder')
+  })
+  test('agent-single without an id (legacy drag) stamps only the name', () => {
+    const n = makeNode(
+      { kind: 'agent-single', agentName: 'coder' },
+      { x: 0, y: 0 },
+      { existingIds: new Set() },
+    )
+    expect((n as Record<string, unknown>).agentId).toBeUndefined()
   })
 
   // RFC-060 PR-E: agent-multi removed from the palette; the prior fan_ id
@@ -148,7 +181,13 @@ describe('buildPalette', () => {
       'editor.paletteIo',
       'editor.paletteHuman',
     ])
-    expect(sections[0]?.items[0]?.item).toEqual({ kind: 'agent-single', agentName: 'coder' })
+    // RFC-223 (PR-2): the palette entry carries the canonical agentId beside
+    // the name so makeNode can stamp it onto the fresh node.
+    expect(sections[0]?.items[0]?.item).toEqual({
+      kind: 'agent-single',
+      agentName: 'coder',
+      agentId: 'a',
+    })
   })
 
   test('every NodeKind belongs to exactly one declared RFC-219 category', () => {
