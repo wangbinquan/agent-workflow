@@ -33,12 +33,6 @@ export async function listMcps(db: DbClient): Promise<Mcp[]> {
   return rows.map(rowToMcp)
 }
 
-export async function getMcp(db: DbClient, name: string): Promise<Mcp | null> {
-  const rows = await db.select().from(mcps).where(eq(mcps.name, name)).limit(1)
-  const row = rows[0]
-  return row ? rowToMcp(row) : null
-}
-
 /** Stable-id load used after entering the RFC-201 keyed coordinator. */
 export async function getMcpById(db: DbClient, id: string): Promise<Mcp | null> {
   const rows = await db.select().from(mcps).where(eq(mcps.id, id)).limit(1)

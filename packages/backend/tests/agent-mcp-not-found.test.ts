@@ -43,8 +43,7 @@ describe('agent.mcp save-time guard', () => {
       config: { command: ['x'] },
       enabled: true,
     })
-    const a = await createAgent(db, agentInput('a', ['m1']))
-    // RFC-223 (PR-1): the name reference is resolved to the mcp id at save.
+    const a = await createAgent(db, agentInput('a', [m1.id]))
     expect(a.mcp).toEqual([m1.id])
   })
 
@@ -62,8 +61,8 @@ describe('agent.mcp save-time guard', () => {
     }
   })
 
-  test('create reports ALL missing names, not just the first', async () => {
-    await createMcp(db, {
+  test('create reports ALL missing ids, not just the first', async () => {
+    const present = await createMcp(db, {
       name: 'present',
       description: '',
       type: 'local',
@@ -72,7 +71,7 @@ describe('agent.mcp save-time guard', () => {
     })
     let err: unknown
     try {
-      await createAgent(db, agentInput('a', ['present', 'gone-1', 'gone-2']))
+      await createAgent(db, agentInput('a', [present.id, 'gone-1', 'gone-2']))
     } catch (e) {
       err = e
     }
@@ -91,11 +90,11 @@ describe('agent.mcp save-time guard', () => {
       enabled: true,
     })
     const agent = await createAgent(db, agentInput('a'))
-    const updated = await updateAgent(db, agent.id, { mcp: ['m1'] })
+    const updated = await updateAgent(db, agent.id, { mcp: [m1.id] })
     expect(updated.mcp).toEqual([m1.id])
   })
 
-  test('update fails 422 mcp-not-found when patched name unknown', async () => {
+  test('update fails 422 mcp-not-found when a patched id is unknown', async () => {
     const agent = await createAgent(db, agentInput('a'))
     let err: unknown
     try {
@@ -117,14 +116,14 @@ describe('agent.mcp save-time guard', () => {
       config: { command: ['x'] },
       enabled: true,
     })
-    const agent = await createAgent(db, agentInput('a', ['m1']))
+    const agent = await createAgent(db, agentInput('a', [m1.id]))
     // Now delete the mcp from the table by force (bypass the cascade guard so
     // we can construct the "stale ref" scenario without ref to other agents).
     // We simulate by manually clearing the row through the service: the guard
     // refuses, so use raw DB.
     const { mcps: mcpsTable } = await import('../src/db/schema')
     const { eq } = await import('drizzle-orm')
-    await db.delete(mcpsTable).where(eq(mcpsTable.name, 'm1'))
+    await db.delete(mcpsTable).where(eq(mcpsTable.id, m1.id))
 
     // PATCH something unrelated; should NOT trigger mcp validation, so it
     // passes even though the stale `mcp: [<id>]` is now unresolvable.

@@ -15,7 +15,8 @@ import { mkdtemp, rm, utimes } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createAgent, getAgent } from '../src/services/agent'
+import { createAgent } from '../src/services/agent'
+import { getAgent } from './helpers/resourceLookup'
 import {
   createPlugin,
   collectPluginGenerationGarbage,
@@ -216,7 +217,7 @@ describe('services/plugin.ts delete + cleanup', () => {
       skills: [],
       dependsOn: [],
       mcp: [],
-      plugins: ['live'],
+      plugins: [p.id],
       frontmatterExtra: {},
       bodyMd: '',
     })
@@ -274,7 +275,7 @@ describe('services/plugin.ts rename + cascade', () => {
       skills: [],
       dependsOn: [],
       mcp: [],
-      plugins: ['old-name', 'other'],
+      plugins: [p.id, other.id],
       frontmatterExtra: {},
       bodyMd: '',
     })
@@ -299,7 +300,7 @@ describe('services/plugin.ts rename + cascade', () => {
       skills: [],
       dependsOn: [],
       mcp: [],
-      plugins: ['dd-trace'],
+      plugins: [trace.id],
       frontmatterExtra: {},
       bodyMd: '',
     })

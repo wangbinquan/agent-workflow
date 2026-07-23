@@ -12,12 +12,8 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { skills, skillVersions } from '../src/db/schema'
 import { commitSkillVersion, ensureInitialSkillVersion } from '../src/services/skillVersion'
-import {
-  createManagedSkill,
-  getSkill,
-  listSkills,
-  type SkillFsOptions,
-} from '../src/services/skill'
+import { createManagedSkill, listSkills, type SkillFsOptions } from '../src/services/skill'
+import { getSkill } from './helpers/resourceLookup'
 import {
   activateBootReverifyForTest,
   activateBootReverify,

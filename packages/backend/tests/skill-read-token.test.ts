@@ -9,10 +9,10 @@ import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   createManagedSkill,
-  getSkill,
   getSkillPreconditionTokenById,
   readSkillContent,
 } from '../src/services/skill'
+import { getSkill } from './helpers/resourceLookup'
 import { decodeSkillToken, encodeSkillToken } from '../src/services/skillToken'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

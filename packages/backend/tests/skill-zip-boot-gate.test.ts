@@ -27,12 +27,8 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { skills, skillVersions } from '../src/db/schema'
 import { commitSkillZipBuffer, type SkillZipFsOptions } from '../src/services/skill-zip'
-import {
-  createManagedSkill,
-  createManagedSkillWithFiles,
-  getSkill,
-  listSkills,
-} from '../src/services/skill'
+import { createManagedSkill, createManagedSkillWithFiles, listSkills } from '../src/services/skill'
+import { getSkill } from './helpers/resourceLookup'
 import { backfillLegacySkillVersions } from '../src/services/skillVersion'
 import {
   activateBootReverifyForTest,

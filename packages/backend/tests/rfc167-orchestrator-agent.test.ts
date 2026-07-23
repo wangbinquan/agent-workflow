@@ -22,6 +22,7 @@ import {
   DW_ORCHESTRATOR_NODE_ID,
   DW_PHASES,
   dwPoolTokenMap,
+  ORCHESTRATOR_AGENT_ID,
   ORCHESTRATOR_AGENT_NAME,
   ORCHESTRATOR_WORKFLOW_PORT,
   validateDynamicWorkflowDef,
@@ -56,6 +57,7 @@ function mkAgent(
 describe('buildOrchestratorAgent', () => {
   test('internal shape: single workflow output, no skills/deps, v1 protocol asks for agentToken', () => {
     const a = buildOrchestratorAgent()
+    expect(a.id).toBe(ORCHESTRATOR_AGENT_ID)
     expect(a.name).toBe(ORCHESTRATOR_AGENT_NAME)
     expect(a.outputs).toEqual([ORCHESTRATOR_WORKFLOW_PORT])
     expect(a.inputs).toEqual([])
@@ -77,7 +79,12 @@ describe('buildDynamicWorkflowGenerateSnapshot + phases', () => {
     const snap = buildDynamicWorkflowGenerateSnapshot()
     expect(snap.$schema_version).toBe(4)
     expect(snap.nodes).toEqual([
-      { id: DW_ORCHESTRATOR_NODE_ID, kind: 'agent-single', agentName: ORCHESTRATOR_AGENT_NAME },
+      {
+        id: DW_ORCHESTRATOR_NODE_ID,
+        kind: 'agent-single',
+        agentId: ORCHESTRATOR_AGENT_ID,
+        agentName: ORCHESTRATOR_AGENT_NAME,
+      },
     ])
     expect(snap.edges).toEqual([])
   })

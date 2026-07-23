@@ -13,11 +13,11 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   createManagedSkill,
   deleteSkill,
-  getSkill,
   readSkillContent,
   saveSkillWithToken,
   writeSkillContent,
 } from '../src/services/skill'
+import { getSkill } from './helpers/resourceLookup'
 import { ConflictError, ValidationError } from '../src/util/errors'
 
 // RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps

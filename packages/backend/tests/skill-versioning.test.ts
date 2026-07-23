@@ -17,12 +17,12 @@ import { skills } from '../src/db/schema'
 import {
   createManagedSkill,
   deleteSkillFile,
-  getSkill,
   readSkillContent,
   writeSkillContent,
   writeSkillFile,
   type SkillFsOptions,
 } from '../src/services/skill'
+import { getSkill } from './helpers/resourceLookup'
 import {
   commitSkillVersion,
   diffSkillVersions,

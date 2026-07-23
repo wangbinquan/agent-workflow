@@ -18,7 +18,8 @@ import { eq } from 'drizzle-orm'
 import type { CreateAgent } from '@agent-workflow/shared'
 import { agents as agentsTable } from '../src/db/schema'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createAgent, getAgent, updateAgent } from '../src/services/agent'
+import { createAgent, updateAgent } from '../src/services/agent'
+import { getAgent } from './helpers/resourceLookup'
 
 type CreateAgentInputs = CreateAgent['inputs']
 

@@ -51,12 +51,6 @@ export async function listAgents(db: DbClient): Promise<Agent[]> {
   return rows.map(rowToAgent)
 }
 
-export async function getAgent(db: DbClient, name: string): Promise<Agent | null> {
-  const rows = await db.select().from(agents).where(eq(agents.name, name)).limit(1)
-  const row = rows[0]
-  return row ? rowToAgent(row) : null
-}
-
 /** Fetch an agent by its canonical resource id. */
 export async function getAgentById(db: DbClient, id: string): Promise<Agent | null> {
   const rows = await db.select().from(agents).where(eq(agents.id, id)).limit(1)

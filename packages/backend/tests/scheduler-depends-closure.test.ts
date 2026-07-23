@@ -14,7 +14,8 @@ import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { skills } from '../src/db/schema'
-import { createAgent, getAgent } from '../src/services/agent'
+import { createAgent } from '../src/services/agent'
+import { getAgent } from './helpers/resourceLookup'
 import { prepareNodeRunInjection } from '../src/services/scheduler'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -31,8 +32,8 @@ async function seedAgent(
   db: DbClient,
   name: string,
   opts: { dependsOn?: string[]; skills?: string[]; mcp?: string[] } = {},
-): Promise<void> {
-  await createAgent(db, {
+) {
+  return createAgent(db, {
     name,
     description: '',
     outputs: [],
@@ -71,9 +72,9 @@ describe('RFC-022 scheduler.prepareNodeRunInjection', () => {
   })
 
   test('happy path: BFS expands A → B → C, root excluded from dependents', async () => {
-    await seedAgent(db, 'c')
-    await seedAgent(db, 'b', { dependsOn: ['c'] })
-    await seedAgent(db, 'a', { dependsOn: ['b'] })
+    const c = await seedAgent(db, 'c')
+    const b = await seedAgent(db, 'b', { dependsOn: [c.id] })
+    await seedAgent(db, 'a', { dependsOn: [b.id] })
     const root = await getAgent(db, 'a')
     if (root === null) throw new Error('seed missing')
 
@@ -88,8 +89,8 @@ describe('RFC-022 scheduler.prepareNodeRunInjection', () => {
     await seedManagedSkill(db, 's1')
     await seedManagedSkill(db, 's2')
     await seedManagedSkill(db, 's3')
-    await seedAgent(db, 'leaf', { skills: ['s2', 's3'] })
-    await seedAgent(db, 'top', { dependsOn: ['leaf'], skills: ['s1', 's2'] })
+    const leaf = await seedAgent(db, 'leaf', { skills: ['s2', 's3'] })
+    await seedAgent(db, 'top', { dependsOn: [leaf.id], skills: ['s1', 's2'] })
     const root = await getAgent(db, 'top')
     if (root === null) throw new Error('seed missing')
 
@@ -120,9 +121,9 @@ describe('RFC-022 scheduler.prepareNodeRunInjection', () => {
   test('cycle maps to NodeStepResult.failed with the cycle path embedded in message', async () => {
     // Seed leaves first, then close the loop with a raw UPDATE. RFC-223 (PR-1):
     // dependsOn stores IDS, so inject a's id (not its name) to form the cycle.
-    await seedAgent(db, 'c')
-    await seedAgent(db, 'b', { dependsOn: ['c'] })
-    await seedAgent(db, 'a', { dependsOn: ['b'] })
+    const c = await seedAgent(db, 'c')
+    const b = await seedAgent(db, 'b', { dependsOn: [c.id] })
+    await seedAgent(db, 'a', { dependsOn: [b.id] })
     const idA = (await getAgent(db, 'a'))!.id
     const idB = (await getAgent(db, 'b'))!.id
     const idC = (await getAgent(db, 'c'))!.id

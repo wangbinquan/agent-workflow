@@ -12,7 +12,6 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   createManagedSkill,
   deleteSkillFile,
-  getSkill,
   readSkillContent,
   readSkillFile,
   skillRoot,
@@ -20,6 +19,7 @@ import {
   writeSkillFile,
   type SkillFsOptions,
 } from '../src/services/skill'
+import { getSkill } from './helpers/resourceLookup'
 import { getSkillVersionContent } from '../src/services/skillVersion'
 import { ValidationError } from '../src/util/errors'
 

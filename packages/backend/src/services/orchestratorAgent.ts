@@ -32,6 +32,8 @@ import {
 
 /** Name of the framework-internal orchestrator agent (never a user `agents` row). */
 export const ORCHESTRATOR_AGENT_NAME = 'aw-workflow-orchestrator'
+/** Stable canonical id for the framework-internal orchestrator agent. */
+export const ORCHESTRATOR_AGENT_ID = '__orchestrator_agent__'
 /** The single output port the orchestrator declares — carries the workflow JSON. */
 export const ORCHESTRATOR_WORKFLOW_PORT = 'workflow'
 /** Node id of the orchestrator node in the synthesized generation-phase snapshot. */
@@ -62,7 +64,12 @@ export function buildDynamicWorkflowGenerateSnapshot(): {
     $schema_version: 4,
     inputs: [],
     nodes: [
-      { id: DW_ORCHESTRATOR_NODE_ID, kind: 'agent-single', agentName: ORCHESTRATOR_AGENT_NAME },
+      {
+        id: DW_ORCHESTRATOR_NODE_ID,
+        kind: 'agent-single',
+        agentId: ORCHESTRATOR_AGENT_ID,
+        agentName: ORCHESTRATOR_AGENT_NAME,
+      },
     ],
     edges: [],
   }
@@ -79,7 +86,7 @@ export function buildDynamicWorkflowGenerateSnapshot(): {
 export function buildOrchestratorAgent(): Agent {
   const now = Date.now()
   return {
-    id: '__orchestrator_agent__',
+    id: ORCHESTRATOR_AGENT_ID,
     name: ORCHESTRATOR_AGENT_NAME,
     description: 'Framework built-in: orchestrate an agent pool into a workflow (RFC-167).',
     outputs: [ORCHESTRATOR_WORKFLOW_PORT],

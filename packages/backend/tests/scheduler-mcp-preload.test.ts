@@ -6,7 +6,8 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createAgent, getAgent } from '../src/services/agent'
+import { createAgent } from '../src/services/agent'
+import { getAgent } from './helpers/resourceLookup'
 import { createMcp } from '../src/services/mcp'
 import { prepareNodeRunInjection } from '../src/services/scheduler'
 import { createLogger } from '../src/util/log'
@@ -17,8 +18,8 @@ async function seedAgent(
   db: DbClient,
   name: string,
   opts: { dependsOn?: string[]; mcp?: string[] } = {},
-): Promise<void> {
-  await createAgent(db, {
+) {
+  return createAgent(db, {
     name,
     description: '',
     outputs: [],
@@ -35,30 +36,36 @@ async function seedAgent(
 
 describe('prepareNodeRunInjection — RFC-028 mcp union', () => {
   let db: DbClient
+  let mcpIdByName: Map<string, string>
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
-    // Seed a small fleet of MCPs so the agents can reference them.
-    await createMcp(db, {
-      name: 'm-root',
-      description: '',
-      type: 'local',
-      config: { command: ['x'] },
-      enabled: true,
-    })
-    await createMcp(db, {
-      name: 'm-leaf',
-      description: '',
-      type: 'remote',
-      config: { url: 'https://leaf.io/mcp' },
-      enabled: true,
-    })
-    await createMcp(db, {
-      name: 'm-extra',
-      description: '',
-      type: 'local',
-      config: { command: ['y'] },
-      enabled: true,
-    })
+    mcpIdByName = new Map()
+    // Seed a small fleet of MCPs so agents can reference their canonical ids.
+    for (const mcp of [
+      await createMcp(db, {
+        name: 'm-root',
+        description: '',
+        type: 'local',
+        config: { command: ['x'] },
+        enabled: true,
+      }),
+      await createMcp(db, {
+        name: 'm-leaf',
+        description: '',
+        type: 'remote',
+        config: { url: 'https://leaf.io/mcp' },
+        enabled: true,
+      }),
+      await createMcp(db, {
+        name: 'm-extra',
+        description: '',
+        type: 'local',
+        config: { command: ['y'] },
+        enabled: true,
+      }),
+    ]) {
+      mcpIdByName.set(mcp.name, mcp.id)
+    }
   })
 
   test('agent without mcp[] → mcps array is empty', async () => {
@@ -70,7 +77,7 @@ describe('prepareNodeRunInjection — RFC-028 mcp union', () => {
   })
 
   test('root agent declares mcp → loaded into mcps array', async () => {
-    await seedAgent(db, 'root', { mcp: ['m-root'] })
+    await seedAgent(db, 'root', { mcp: [mcpIdByName.get('m-root')!] })
     const agent = (await getAgent(db, 'root'))!
     const result = await prepareNodeRunInjection(db, '/tmp/aw', agent, createLogger('test'))
     if (result.kind !== 'ok') throw new Error('expected ok')
@@ -79,9 +86,15 @@ describe('prepareNodeRunInjection — RFC-028 mcp union', () => {
 
   test('dependsOn closure unions mcp[] across every member (root first)', async () => {
     // leaf -> m-leaf; mid -> m-root; root -> m-extra
-    await seedAgent(db, 'leaf', { mcp: ['m-leaf'] })
-    await seedAgent(db, 'mid', { dependsOn: ['leaf'], mcp: ['m-root'] })
-    await seedAgent(db, 'root', { dependsOn: ['mid'], mcp: ['m-extra'] })
+    const leaf = await seedAgent(db, 'leaf', { mcp: [mcpIdByName.get('m-leaf')!] })
+    const mid = await seedAgent(db, 'mid', {
+      dependsOn: [leaf.id],
+      mcp: [mcpIdByName.get('m-root')!],
+    })
+    await seedAgent(db, 'root', {
+      dependsOn: [mid.id],
+      mcp: [mcpIdByName.get('m-extra')!],
+    })
     const root = (await getAgent(db, 'root'))!
     const result = await prepareNodeRunInjection(db, '/tmp/aw', root, createLogger('test'))
     if (result.kind !== 'ok') throw new Error('expected ok')
@@ -89,8 +102,11 @@ describe('prepareNodeRunInjection — RFC-028 mcp union', () => {
   })
 
   test('closure with same mcp referenced twice → deduped (one row)', async () => {
-    await seedAgent(db, 'leaf', { mcp: ['m-root'] })
-    await seedAgent(db, 'root', { dependsOn: ['leaf'], mcp: ['m-root'] })
+    const leaf = await seedAgent(db, 'leaf', { mcp: [mcpIdByName.get('m-root')!] })
+    await seedAgent(db, 'root', {
+      dependsOn: [leaf.id],
+      mcp: [mcpIdByName.get('m-root')!],
+    })
     const root = (await getAgent(db, 'root'))!
     const result = await prepareNodeRunInjection(db, '/tmp/aw', root, createLogger('test'))
     if (result.kind !== 'ok') throw new Error('expected ok')
@@ -103,10 +119,10 @@ describe('prepareNodeRunInjection — RFC-028 mcp union', () => {
     // the agent was created. The save guard blocks deletes via the cascade,
     // so we go to raw DB to bypass it (matches the proposal §6 stance:
     // we never crash a node over a missing MCP).
-    await seedAgent(db, 'a', { mcp: ['m-root'] })
+    await seedAgent(db, 'a', { mcp: [mcpIdByName.get('m-root')!] })
     const { mcps: mcpsTable } = await import('../src/db/schema')
     const { eq } = await import('drizzle-orm')
-    await db.delete(mcpsTable).where(eq(mcpsTable.name, 'm-root'))
+    await db.delete(mcpsTable).where(eq(mcpsTable.id, mcpIdByName.get('m-root')!))
 
     const agent = (await getAgent(db, 'a'))!
     const result = await prepareNodeRunInjection(db, '/tmp/aw', agent, createLogger('test'))

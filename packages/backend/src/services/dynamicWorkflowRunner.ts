@@ -305,7 +305,10 @@ export async function runDynamicWorkflowGenerate(
       status: 'pending',
       cause: DW_GENERATE_CAUSE,
       retryIndex: priorRuns.length,
-      overrides: { agentOverrideName: orchestrator.name },
+      overrides: {
+        agentOverrideName: orchestrator.name,
+        agentOverrideId: orchestrator.id,
+      },
     })
     const envelopeNonce = await loadRunEnvelopeNonce(db, runId)
 

@@ -76,19 +76,6 @@ export async function listSkills(db: DbClient): Promise<Skill[]> {
   return rows.filter((r) => isSkillAvailableThisBoot(r)).map(rowToSkill)
 }
 
-export async function getSkill(db: DbClient, name: string): Promise<Skill | null> {
-  // RFC-170 §9: only surface a fully-reserved (published) skill.
-  const rows = await db
-    .select()
-    .from(skills)
-    .where(and(eq(skills.name, name), eq(skills.reservationState, 'ready')))
-    .limit(1)
-  const row = rows[0]
-  // RFC-170 §invariant④: gate on the unified availability predicate (see listSkills).
-  if (!row || !isSkillAvailableThisBoot(row)) return null
-  return rowToSkill(row)
-}
-
 export async function getSkillById(db: DbClient, skillId: string): Promise<Skill | null> {
   const rows = await db
     .select()
@@ -121,17 +108,6 @@ export function skillReadRoot(skill: Skill, opts: SkillFsOptions): string {
   const live = skillRoot(skill, opts)
   const snapshot = skillVersionAbs(opts.appHome, skill.id, skill.contentVersion)
   return existsSync(snapshot) ? snapshot : live
-}
-
-/**
- * Raw name-occupancy check: ANY skills row counts, including rows the gated
- * getSkill hides (mid-create 'reserving', 'quarantined', boot-unverified).
- * Callers use it to report "name taken by an unavailable skill" accurately
- * instead of falling through to a UNIQUE-constraint error at insert time.
- */
-export async function isSkillNameOccupied(db: DbClient, name: string): Promise<boolean> {
-  const rows = await db.select({ id: skills.id }).from(skills).where(eq(skills.name, name)).limit(1)
-  return rows.length > 0
 }
 
 /**
@@ -216,7 +192,7 @@ export async function createManagedSkillWithFiles(
   const now = Date.now()
 
   // ① reserve intent: insert the row at reservation_state='reserving' (invisible
-  //    to getSkill/list) + open the reserve op + lock, one tx. A unique(name)
+  //    to list/read paths) + open the reserve op + lock, one tx. A unique(name)
   //    violation here means a concurrent create won the slot → 409, nothing written.
   let opId: string
   try {

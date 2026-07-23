@@ -3,11 +3,11 @@
 // Locks the four findings fixed after the PR-1 impl gate:
 //   P1-1  a MISSING managed skill is never silently demoted to a repo-local
 //         `project` ref (that would change execution semantics); it stays an
-//         UNRESOLVED managed ref, and only a resolvable name / real id becomes a
-//         canonical managed id. `project` refs pass through untouched.
+//         UNRESOLVED managed ref, while a real id remains canonical. `project`
+//         refs pass through untouched.
 //   P1-2  reference ACL is bound to the FINAL resolved id in a SINGLE pass (no
 //         check-then-resolve TOCTOU); the update "new refs" diff compares
-//         RESOLVED IDS, so a grandfathered ref re-submitted by name is not
+//         RESOLVED IDS, so a grandfathered id re-submitted on update is not
 //         mis-flagged as new and rejected.
 //   P2-1  the closure endpoint projects stored id refs (managed skill / mcp /
 //         plugin) to display NAMES — never raw ULIDs in the UI.
@@ -154,11 +154,11 @@ describe('RFC-223 PR-1 P1-1 — missing managed skill is never demoted to projec
     expect(a.skills).toEqual([{ kind: 'managed', skillId: 'ghost-skill' }])
   })
 
-  test('a managed skill referenced by NAME resolves to its canonical id', async () => {
+  test('a managed skill referenced by canonical id stays canonical', async () => {
     await seedSkill(h.db, 'SKILL_REAL_ID', 'lint', 'public', h.alice.id)
     const res = await createAgentHttp(h, h.alice.token, {
       name: 'a2',
-      skills: [{ kind: 'managed', skillId: 'lint' }],
+      skills: [{ kind: 'managed', skillId: 'SKILL_REAL_ID' }],
     })
     expect(res.status).toBe(201)
     const a = (await res.json()) as AgentDto
@@ -195,7 +195,7 @@ describe('RFC-223 PR-1 P1-2 — ACL bound to resolved id, grandfathering by id',
       { ownerUserId: h.alice.id },
     )
     await h.db.update(mcps).set({ visibility: 'private' }).where(eq(mcps.id, m.id))
-    const res = await createAgentHttp(h, h.bob.token, { name: 'wrapper', mcp: [m.name] })
+    const res = await createAgentHttp(h, h.bob.token, { name: 'wrapper', mcp: [m.id] })
     expect(res.status).toBe(422)
     expect(((await res.json()) as { code: string }).code).toBe('acl-missing-refs')
     // and nothing was persisted
@@ -203,12 +203,15 @@ describe('RFC-223 PR-1 P1-2 — ACL bound to resolved id, grandfathering by id',
     expect(fetched.status).toBe(404)
   })
 
-  test('a grandfathered ref re-submitted BY NAME after it turns private is NOT mis-flagged as new (diff by resolved id)', async () => {
+  test('a grandfathered id re-submitted after it turns private is not mis-flagged as new', async () => {
     // alice owns a PUBLIC agent `dep`; bob depends on it (stored by id).
     const depRes = await createAgentHttp(h, h.alice.token, { name: 'dep' })
     expect(depRes.status).toBe(201)
     const dep = (await depRes.json()) as AgentDto
-    const aRes = await createAgentHttp(h, h.bob.token, { name: 'consumer', dependsOn: ['dep'] })
+    const aRes = await createAgentHttp(h, h.bob.token, {
+      name: 'consumer',
+      dependsOn: [dep.id],
+    })
     expect(aRes.status).toBe(201)
     const consumer = (await aRes.json()) as AgentDto
     expect(consumer.dependsOn).toEqual([dep.id])
@@ -217,12 +220,12 @@ describe('RFC-223 PR-1 P1-2 — ACL bound to resolved id, grandfathering by id',
     await h.db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, dep.id))
     expect((await req(h.app, h.bob.token, `/api/agents/${dep.id}`)).status).toBe(404)
 
-    // bob re-saves consumer submitting the dep BY NAME (agent.md style). The diff
-    // compares resolved id (dep.id ∈ existing) → grandfathered → save succeeds.
+    // Bob re-saves the same canonical id. The diff recognizes it as an
+    // existing grandfathered reference and does not re-run ACL admission.
     const put = await req(h.app, h.bob.token, `/api/agents/${consumer.id}`, {
       method: 'PUT',
       body: JSON.stringify({
-        dependsOn: ['dep'],
+        dependsOn: [dep.id],
         expectedUpdatedAt: consumer.updatedAt,
         expectedAclRevision: consumer.aclRevision ?? 0,
       }),
@@ -292,7 +295,7 @@ describe('RFC-223 PR-1 P2-2 — ACL refusal echoes the INPUT token, never a priv
     expect(body.message).not.toContain('top-secret-name')
   })
 
-  test('referencing a private mcp BY NAME echoes the name the caller typed', async () => {
+  test('referencing a private mcp echoes the canonical id the caller supplied', async () => {
     const m = await createMcp(
       h.db,
       {
@@ -305,12 +308,12 @@ describe('RFC-223 PR-1 P2-2 — ACL refusal echoes the INPUT token, never a priv
       { ownerUserId: h.alice.id },
     )
     await h.db.update(mcps).set({ visibility: 'private' }).where(eq(mcps.id, m.id))
-    const res = await createAgentHttp(h, h.bob.token, { name: 'leaker2', mcp: ['typed-secret'] })
+    const res = await createAgentHttp(h, h.bob.token, { name: 'leaker2', mcp: [m.id] })
     expect(res.status).toBe(422)
     const body = (await res.json()) as {
       details?: { missing?: Array<{ type: string; name: string }> }
     }
-    expect(body.details?.missing).toEqual([{ type: 'mcp', name: 'typed-secret' }])
+    expect(body.details?.missing).toEqual([{ type: 'mcp', name: m.id }])
   })
 })
 
@@ -423,7 +426,7 @@ describe('RFC-223 PR-1 P2-2 — closure never discloses an invisible dependency 
     const dep = (await depRes.json()) as AgentDto
     const parentRes = await createAgentHttp(h, h.bob.token, {
       name: 'parent',
-      dependsOn: ['hidden-dep'],
+      dependsOn: [dep.id],
     })
     expect(parentRes.status).toBe(201)
     const parentAgent = (await parentRes.json()) as AgentDto

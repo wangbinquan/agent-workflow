@@ -7,13 +7,14 @@
 //   serialise inline JSON
 // and asserts the exact wire shape opencode would see.
 //
-// If this is red, the contract that an agent declaring `mcp: ['x']` results
-// in `mcp.x: {...}` inside the env var is broken — RFC-028 §1 fails.
+// If this is red, the contract that an agent declaring an MCP id results in
+// the display-keyed `mcp.x: {...}` runtime config is broken — RFC-028 §1 fails.
 
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createAgent, getAgent } from '../src/services/agent'
+import { createAgent } from '../src/services/agent'
+import { getAgent } from './helpers/resourceLookup'
 import { createMcp } from '../src/services/mcp'
 import { collectMcpIdsFromClosure, loadMcpsByIds } from '../src/services/mcpClosure'
 import { resolveDependsClosure } from '../src/services/agentDeps'
@@ -28,7 +29,7 @@ describe('RFC-028 end-to-end inline injection', () => {
   })
 
   test('single agent + single MCP → inline JSON has mcp.{name} with opencode wire fields', async () => {
-    await createMcp(db, {
+    const postgres = await createMcp(db, {
       name: 'postgres-prod',
       description: 'prod DB',
       type: 'local',
@@ -47,7 +48,7 @@ describe('RFC-028 end-to-end inline injection', () => {
       permission: {},
       skills: [],
       dependsOn: [],
-      mcp: ['postgres-prod'],
+      mcp: [postgres.id],
       plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
@@ -82,28 +83,28 @@ describe('RFC-028 end-to-end inline injection', () => {
   })
 
   test('dependsOn closure merges MCPs across agents; order = root first, BFS for deps', async () => {
-    await createMcp(db, {
+    const leafMcp = await createMcp(db, {
       name: 'm-leaf',
       description: '',
       type: 'remote',
       config: { url: 'https://leaf.io/mcp' },
       enabled: true,
     })
-    await createMcp(db, {
+    const midMcp = await createMcp(db, {
       name: 'm-mid',
       description: '',
       type: 'local',
       config: { command: ['mid-tool'] },
       enabled: true,
     })
-    await createMcp(db, {
+    const rootMcp = await createMcp(db, {
       name: 'm-root',
       description: '',
       type: 'local',
       config: { command: ['root-tool'] },
       enabled: true,
     })
-    await createAgent(db, {
+    const leaf = await createAgent(db, {
       name: 'leaf',
       description: '',
       outputs: [],
@@ -111,20 +112,20 @@ describe('RFC-028 end-to-end inline injection', () => {
       permission: {},
       skills: [],
       dependsOn: [],
-      mcp: ['m-leaf'],
+      mcp: [leafMcp.id],
       plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
     })
-    await createAgent(db, {
+    const mid = await createAgent(db, {
       name: 'mid',
       description: '',
       outputs: [],
       syncOutputsOnIterate: true,
       permission: {},
       skills: [],
-      dependsOn: ['leaf'],
-      mcp: ['m-mid'],
+      dependsOn: [leaf.id],
+      mcp: [midMcp.id],
       plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
@@ -136,8 +137,8 @@ describe('RFC-028 end-to-end inline injection', () => {
       syncOutputsOnIterate: true,
       permission: {},
       skills: [],
-      dependsOn: ['mid'],
-      mcp: ['m-root'],
+      dependsOn: [mid.id],
+      mcp: [rootMcp.id],
       plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
@@ -159,14 +160,14 @@ describe('RFC-028 end-to-end inline injection', () => {
   })
 
   test('enabled=false MCP is skipped (never appears in inline)', async () => {
-    await createMcp(db, {
+    const enabledMcp = await createMcp(db, {
       name: 'on',
       description: '',
       type: 'local',
       config: { command: ['x'] },
       enabled: true,
     })
-    await createMcp(db, {
+    const disabledMcp = await createMcp(db, {
       name: 'off',
       description: '',
       type: 'local',
@@ -181,7 +182,7 @@ describe('RFC-028 end-to-end inline injection', () => {
       permission: {},
       skills: [],
       dependsOn: [],
-      mcp: ['on', 'off'],
+      mcp: [enabledMcp.id, disabledMcp.id],
       plugins: [],
       frontmatterExtra: {},
       bodyMd: '',

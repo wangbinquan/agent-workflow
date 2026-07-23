@@ -43,7 +43,8 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, runtimes, tasks, workflows, workgroupTaskState } from '../src/db/schema'
 import { loadWorkgroupTaskState } from '../src/services/workgroup/state'
 import { createApp } from '../src/server'
-import { createAgent, getAgent } from '../src/services/agent'
+import { createAgent } from '../src/services/agent'
+import { getAgent } from './helpers/resourceLookup'
 import {
   DW_GATE_CAUSE,
   DW_GENERATE_CAUSE,
@@ -54,6 +55,7 @@ import {
 } from '../src/services/dynamicWorkflowRunner'
 import {
   DW_ORCHESTRATOR_NODE_ID,
+  ORCHESTRATOR_AGENT_ID,
   ORCHESTRATOR_AGENT_NAME,
   ORCHESTRATOR_WORKFLOW_PORT,
 } from '../src/services/orchestratorAgent'
@@ -324,6 +326,7 @@ describe('RFC-167 engine — generation pass', () => {
     expect(holder[0]?.status).toBe('awaiting_review')
     const genRuns = runs.filter((r) => r.rerunCause === DW_GENERATE_CAUSE)
     expect(genRuns).toHaveLength(1)
+    expect(genRuns[0]?.agentOverrideId).toBe(ORCHESTRATOR_AGENT_ID)
     expect(genRuns[0]?.agentOverrideName).toBe(ORCHESTRATOR_AGENT_NAME)
   })
 

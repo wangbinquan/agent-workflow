@@ -142,9 +142,9 @@ describe('RFC-203 T6 引用披露 ACL', () => {
       config: { command: ['echo'] },
       enabled: true,
     })
-    await createAgent(db, { name: 'pub-user', ...AGENT_BASE, mcp: ['m1'] })
+    await createAgent(db, { name: 'pub-user', ...AGENT_BASE, mcp: [mcp.id] })
     // 他人私有代理也引用 m1
-    await createAgent(db, { name: 'priv-user', ...AGENT_BASE, mcp: ['m1'] })
+    await createAgent(db, { name: 'priv-user', ...AGENT_BASE, mcp: [mcp.id] })
     const { agents } = await import('../src/db/schema')
     const { eq } = await import('drizzle-orm')
     await db

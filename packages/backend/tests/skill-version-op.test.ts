@@ -23,7 +23,8 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { dbTxSync } from '../src/db/txSync'
 import { skillOperationLocks, skills, skillVersions } from '../src/db/schema'
-import { createManagedSkill, getSkill } from '../src/services/skill'
+import { createManagedSkill } from '../src/services/skill'
+import { getSkill } from './helpers/resourceLookup'
 import { commitSkillVersion } from '../src/services/skillVersion'
 import {
   skillFilesAbs,

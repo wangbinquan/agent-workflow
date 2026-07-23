@@ -16,7 +16,8 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createAgent, getAgent } from '../src/services/agent'
+import { createAgent } from '../src/services/agent'
+import { getAgent } from './helpers/resourceLookup'
 import {
   findAgentsDependingOn,
   resolveDependsClosure,
@@ -151,7 +152,7 @@ describe('RFC-022 validateDependsOn (save-time guard)', () => {
     await db.run(
       sql`UPDATE agents SET depends_on = ${JSON.stringify([midId, 'ghost-id'])} WHERE name = 'top'`,
     )
-    const top = await (await import('../src/services/agent')).getAgent(db, 'top')
+    const top = await getAgent(db, 'top')
     expect(top).not.toBeNull()
     if (top === null) throw new Error('unreachable')
 

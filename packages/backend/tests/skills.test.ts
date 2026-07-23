@@ -16,7 +16,6 @@ import {
   createManagedSkill,
   deleteSkill,
   deleteSkillFile,
-  getSkill,
   listSkillFiles,
   listSkills,
   readSkillContent,
@@ -25,6 +24,7 @@ import {
   writeSkillFile,
   type SkillFsOptions,
 } from '../src/services/skill'
+import { getSkill } from './helpers/resourceLookup'
 import { ConflictError, NotFoundError, ValidationError } from '../src/util/errors'
 
 // RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps

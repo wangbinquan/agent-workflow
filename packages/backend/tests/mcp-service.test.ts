@@ -8,16 +8,16 @@ import { buildActor } from '../src/auth/actor'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createAgent, getAgent } from '../src/services/agent'
+import { createAgent } from '../src/services/agent'
 import {
   createMcp,
   deleteMcp,
   findAgentsReferencingMcp,
-  getMcp,
   listMcps,
   renameMcp,
   updateMcp,
 } from '../src/services/mcp'
+import { getAgent, getMcp } from './helpers/resourceLookup'
 import { ConflictError, NotFoundError, ValidationError } from '../src/util/errors'
 
 // RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps
@@ -268,7 +268,7 @@ describe('services/mcp.ts reference cascade', () => {
       permission: {},
       skills: [],
       dependsOn: [],
-      mcp: ['sentry'],
+      mcp: [sentry.id],
       plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
@@ -281,7 +281,7 @@ describe('services/mcp.ts reference cascade', () => {
       permission: {},
       skills: [],
       dependsOn: [],
-      mcp: ['sentry-staging'],
+      mcp: [staging.id],
       plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
@@ -313,7 +313,7 @@ describe('services/mcp.ts reference cascade', () => {
       permission: {},
       skills: [],
       dependsOn: [],
-      mcp: ['m'],
+      mcp: [mcp.id],
       plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
@@ -367,7 +367,7 @@ describe('services/mcp.ts reference cascade', () => {
       permission: {},
       skills: [],
       dependsOn: [],
-      mcp: ['old-name', 'other'],
+      mcp: [oldMcp.id, other.id],
       plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
@@ -380,7 +380,7 @@ describe('services/mcp.ts reference cascade', () => {
       permission: {},
       skills: [],
       dependsOn: [],
-      mcp: ['old-name'],
+      mcp: [oldMcp.id],
       plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
@@ -393,7 +393,7 @@ describe('services/mcp.ts reference cascade', () => {
       permission: {},
       skills: [],
       dependsOn: [],
-      mcp: ['other-mcp'],
+      mcp: [otherMcp.id],
       plugins: [],
       frontmatterExtra: {},
       bodyMd: '',

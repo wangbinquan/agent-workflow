@@ -12,11 +12,11 @@ import { createApp } from '../src/server'
 import {
   createAgent,
   deleteAgent,
-  getAgent,
   listAgents,
   renameAgent,
   updateAgent,
 } from '../src/services/agent'
+import { getAgent } from './helpers/resourceLookup'
 import { ConflictError, NotFoundError } from '../src/util/errors'
 import { createRuntime } from '../src/services/runtimeRegistry'
 
@@ -390,7 +390,7 @@ describe('agent service', () => {
       syncOutputsOnIterate: true,
       permission: {},
       skills: [],
-      dependsOn: ['code-auditor', 'unit-test-runner'],
+      dependsOn: [codeAuditor.id, unitTestRunner.id],
       mcp: [],
       plugins: [],
       frontmatterExtra: {},
@@ -424,7 +424,7 @@ describe('agent service', () => {
       syncOutputsOnIterate: true,
       permission: {},
       skills: [],
-      dependsOn: ['a', 'b', 'a', 'c', 'b'],
+      dependsOn: [agA.id, agB.id, agA.id, agC.id, agB.id],
       mcp: [],
       plugins: [],
       frontmatterExtra: {},
@@ -433,7 +433,7 @@ describe('agent service', () => {
     expect(c.dependsOn).toEqual([agA.id, agB.id, agC.id])
 
     // Patch via updateAgent.
-    const updated = await updateAgent(db, a.id, { dependsOn: ['code-auditor'] })
+    const updated = await updateAgent(db, a.id, { dependsOn: [codeAuditor.id] })
     expect(updated.dependsOn).toEqual([codeAuditor.id])
 
     // Legacy row whose depends_on JSON is malformed → exposed as [] (defensive

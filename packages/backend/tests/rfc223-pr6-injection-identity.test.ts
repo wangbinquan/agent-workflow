@@ -199,15 +199,15 @@ describe('RFC-223 PR-6 scheduler wiring is shared by both runtimes', () => {
   })
 
   test('opencode and Claude Code roots both fail before spawn on duplicate closure names', async () => {
-    await seedAgent(db, 'dep-one', { ownerUserId: 'owner-a' })
+    const depOne = await seedAgent(db, 'dep-one', { ownerUserId: 'owner-a' })
     const depTwo = await seedAgent(db, 'dep-two', { ownerUserId: 'owner-b' })
     const roots = [
       await seedAgent(db, 'root-opencode', {
-        dependsOn: ['dep-one', 'dep-two'],
+        dependsOn: [depOne.id, depTwo.id],
         runtime: 'opencode',
       }),
       await seedAgent(db, 'root-claude', {
-        dependsOn: ['dep-one', 'dep-two'],
+        dependsOn: [depOne.id, depTwo.id],
         runtime: 'claude-code',
       }),
     ]

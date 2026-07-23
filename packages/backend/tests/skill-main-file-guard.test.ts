@@ -17,11 +17,11 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   createManagedSkill,
   deleteSkillFile,
-  getSkill,
   skillRoot,
   writeSkillFile,
   type SkillFsOptions,
 } from '../src/services/skill'
+import { getSkill } from './helpers/resourceLookup'
 import { ConflictError } from '../src/util/errors'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

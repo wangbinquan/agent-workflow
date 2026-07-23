@@ -20,7 +20,8 @@ import {
   parseSkillZipBuffer,
   type SkillZipFsOptions,
 } from '../src/services/skill-zip'
-import { getSkill, getSkillById, createManagedSkill } from '../src/services/skill'
+import { getSkillById, createManagedSkill } from '../src/services/skill'
+import { getSkill } from './helpers/resourceLookup'
 import { commitSkillVersion } from '../src/services/skillVersion'
 import { buildActor, type Actor } from '../src/auth/actor'
 import type { SkillZipDecision, SkillZipDecisionMap } from '@agent-workflow/shared'
