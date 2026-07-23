@@ -25,8 +25,14 @@ const repoRoot = resolve(here, '..')
 export interface DaemonHandle {
   /** Base URL printed by the daemon, e.g. http://127.0.0.1:53212 — no trailing token / slash. */
   baseUrl: string
-  /** Token the daemon generated on first run, parsed from its ready line. */
+  /** Credential selected by authMode; a real administrator session by default. */
   token: string
+  /**
+   * One-time token printed by a fresh daemon. The default admin-session mode
+   * retires it before returning; bootstrap mode deliberately leaves it active.
+   * Ready-home restarts expose null because the daemon no longer prints it.
+   */
+  bootstrapToken: string | null
   /** Temp $AGENT_WORKFLOW_HOME for this session — wipes on teardown unless `keepHome=true`. */
   home: string
   /** Resolved path to the stub-opencode shim. */
@@ -72,6 +78,12 @@ export interface SpawnOptions {
    * preserved. When set, `stop()` does NOT remove the directory.
    */
   home?: string
+  /**
+   * Ordinary browser tests auto-complete first-admin bootstrap and receive a
+   * real administrator session. Bootstrap-specific tests can opt out and use
+   * the fresh daemon credential directly.
+   */
+  authMode?: 'admin-session' | 'bootstrap'
 }
 
 function platformSuffix(): string {
@@ -168,7 +180,12 @@ function removeOwnedHome(home: string, keepHome: boolean): void {
   }
 }
 
-async function waitForDaemonReady(child: DaemonChild): Promise<{ baseUrl: string; token: string }> {
+interface ReadyDaemon {
+  baseUrl: string
+  bootstrapToken: string | null
+}
+
+async function waitForDaemonReady(child: DaemonChild): Promise<ReadyDaemon> {
   child.stderr.setEncoding('utf-8')
   child.stdout.setEncoding('utf-8')
 
@@ -183,7 +200,7 @@ async function waitForDaemonReady(child: DaemonChild): Promise<{ baseUrl: string
     /* ignore */
   })
 
-  return new Promise<{ baseUrl: string; token: string }>((resolveReady, rejectReady) => {
+  return new Promise<ReadyDaemon>((resolveReady, rejectReady) => {
     const timeout = setTimeout(() => {
       cleanup()
       rejectReady(
@@ -197,13 +214,17 @@ async function waitForDaemonReady(child: DaemonChild): Promise<{ baseUrl: string
     const onData = (chunk: string): void => {
       if (process.env.E2E_VERBOSE) process.stdout.write(`[daemon stdout] ${chunk}`)
       stdoutTail = appendOutputTail(stdoutTail, chunk)
-      const match = stdoutTail.match(/(https?:\/\/[^\s?]+)\?token=([A-Za-z0-9]+)/)
+      const match = stdoutTail.match(
+        /agent-workflow ready[^\n]*\n\s+(https?:\/\/[^\s?]+)(?:\?token=([A-Za-z0-9]+))?\r?\n/,
+      )
       if (match === null) return
       const baseUrl = match[1]
-      const token = match[2]
-      if (baseUrl === undefined || token === undefined) return
+      if (baseUrl === undefined) return
       cleanup()
-      resolveReady({ baseUrl: baseUrl.replace(/\/$/, ''), token })
+      resolveReady({
+        baseUrl: baseUrl.replace(/\/$/, ''),
+        bootstrapToken: match[2] ?? null,
+      })
     }
     const onClose = (code: number | null, signal: NodeJS.Signals | null): void => {
       cleanup()
@@ -231,6 +252,46 @@ async function waitForDaemonReady(child: DaemonChild): Promise<{ baseUrl: string
     child.once('close', onClose)
     child.once('error', onError)
   })
+}
+
+const E2E_ADMIN = {
+  username: 'e2e_admin',
+  displayName: 'E2E Administrator',
+  password: 'E2EAdministrator123!',
+} as const
+
+async function authenticatedAdminToken(ready: ReadyDaemon): Promise<string> {
+  if (ready.bootstrapToken !== null) {
+    const bootstrap = await fetch(`${ready.baseUrl}/api/auth/bootstrap/admin`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${ready.bootstrapToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(E2E_ADMIN),
+    })
+    if (!bootstrap.ok) {
+      throw new Error(
+        `e2e/harness: failed to create bootstrap administrator (${bootstrap.status}): ${await bootstrap.text()}`,
+      )
+    }
+  }
+
+  const login = await fetch(`${ready.baseUrl}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: E2E_ADMIN.username, password: E2E_ADMIN.password }),
+  })
+  if (!login.ok) {
+    throw new Error(
+      `e2e/harness: failed to login administrator (${login.status}): ${await login.text()}`,
+    )
+  }
+  const body = (await login.json()) as { sessionToken?: unknown }
+  if (typeof body.sessionToken !== 'string') {
+    throw new Error('e2e/harness: administrator login returned no session token')
+  }
+  return body.sessionToken
 }
 
 /**
@@ -340,6 +401,14 @@ async function startDaemonWithPortAllocator(
       try {
         const ready = await waitForDaemonReady(attemptChild)
 
+        const token =
+          opts.authMode === 'bootstrap'
+            ? ready.bootstrapToken
+            : await authenticatedAdminToken(ready)
+        if (token === null) {
+          throw new Error('e2e/harness: bootstrap auth requested for an already-initialized home')
+        }
+
         // Keep draining stdout so the child never blocks on a full pipe.
         attemptChild.stdout.on('data', (chunk: string) => {
           if (process.env.E2E_VERBOSE) process.stdout.write(`[daemon stdout] ${chunk}`)
@@ -361,7 +430,8 @@ async function startDaemonWithPortAllocator(
 
         return {
           baseUrl: ready.baseUrl,
-          token: ready.token,
+          token,
+          bootstrapToken: ready.bootstrapToken,
           home,
           stubOpencode,
           stop,

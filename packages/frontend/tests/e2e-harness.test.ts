@@ -52,7 +52,10 @@ async function withHarnessTmp<T>(homes: string, run: () => Promise<T>): Promise<
 
 function startDaemonForTest(opts: SpawnOptions): Promise<DaemonHandle> {
   let nextPort = 45_000
-  return harnessTestApi.startDaemonWithPortAllocator(opts, async () => nextPort++)
+  return harnessTestApi.startDaemonWithPortAllocator(
+    { ...opts, authMode: opts.authMode ?? 'bootstrap' },
+    async () => nextPort++,
+  )
 }
 
 afterEach(() => {
@@ -92,6 +95,8 @@ setInterval(() => {}, 1_000)
 
       expect(readFileSync(attemptFile, 'utf8')).toBe('3')
       expect(existsSync(handle.home)).toBe(true)
+      expect(handle.token).toBe('ABC123')
+      expect(handle.bootstrapToken).toBe('ABC123')
       await handle.stop()
       expect(existsSync(handle.home)).toBe(false)
       handle = undefined

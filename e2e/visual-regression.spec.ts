@@ -469,21 +469,26 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     'visual regression gated by RUN_VISUAL_REGRESSION=1 (see e2e/visual-regression.README.md)',
   )
 
-  test('/auth (unauthenticated landing)', async ({ page }) => {
+  test('/auth (ready password + SSO landing)', async ({ page }) => {
     await prepareScene(page, { theme: 'light', fixture: 'clean' })
     await page.route('**/api/auth/oidc/providers', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ providers: [] }),
+        body: JSON.stringify({
+          mode: 'ready',
+          providers: [{ slug: 'company-sso', displayName: 'Company SSO', iconUrl: null }],
+          passwordLoginEnabled: true,
+          daemonTokenEnabled: false,
+        }),
       }),
     )
     await page.goto(`${requireDaemon().baseUrl}/auth`)
     await expect(page.getByRole('heading', { name: /sign in|connect/i }).first()).toBeVisible()
     await expect(page.getByTestId('oidc-discovery-loading')).toBeHidden()
-    await expect(
-      page.getByText('No identity providers are configured. Use password or token sign-in.'),
-    ).toBeVisible()
+    await expect(page.getByRole('tab', { name: 'Single sign-on' })).toBeVisible()
+    await expect(page.getByRole('tab', { name: 'Password' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Login with Company SSO' })).toBeVisible()
     await expect(page).toHaveScreenshot('auth.png', SNAPSHOT_OPTS)
   })
 

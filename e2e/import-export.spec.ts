@@ -96,16 +96,22 @@ async function deleteWorkflow(id: string): Promise<void> {
     headers: { Authorization: `Bearer ${daemon.token}` },
   })
   if (!detail.ok) throw new Error(`delete preflight: ${detail.status}`)
-  const { version } = (await detail.json()) as { version: number }
+  const { version, name } = (await detail.json()) as { version: number; name: string }
   const deleted = await fetch(`${daemon.baseUrl}/api/workflows/${id}`, {
     method: 'DELETE',
     headers: {
       Authorization: `Bearer ${daemon.token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ expectedVersion: version, clientMutationId: nextClientMutationId() }),
+    body: JSON.stringify({
+      expectedVersion: version,
+      clientMutationId: nextClientMutationId(),
+      confirm: name,
+    }),
   })
-  if (deleted.status !== 204) throw new Error(`delete: ${deleted.status}`)
+  if (deleted.status !== 204) {
+    throw new Error(`delete: ${deleted.status} ${await deleted.text()}`)
+  }
 }
 
 interface WorkflowRow {

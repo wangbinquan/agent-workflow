@@ -2,12 +2,13 @@
 //
 // LOCKS: Tasks owned by user A must not be visible to unrelated user B
 // (canViewTask gate in /api/tasks/:id); admin-only endpoints must reject
-// regular users (resourcePermissionGate / requirePermission); revoked PATs
-// must no longer authenticate. A regression in any of these means user A's
+// regular users (resourcePermissionGate / requirePermission); RFC-221 must
+// keep PAT creation disabled. A regression in any of these means user A's
 // data leaks to user B without the user reporting it — the kind of silent
 // breakage W1-5 exists to catch.
 //
-// Role model (RFC-036): two roles in the DB enum — `admin` and `user`.
+// This suite covers the `admin` × `user` authorization matrix. RFC-222's
+// `manager` role has its own focused coverage.
 // - admin: all PERMISSIONS (incl. `tasks:read:all`, `settings:write`,
 //          `users:write`).
 // - user:  USER_BASELINE (account:self, tasks:read:own, agents/workflows
@@ -24,7 +25,7 @@
 //   4. regular bob CAN see own task (control / sanity)        → 200
 //   5. regular bob can NOT GET /api/config                    → 403 forbidden
 //   6. regular bob can NOT POST /api/users                    → 403 forbidden
-//   7. revoked PAT no longer authenticates                    → 401 unauthorized
+//   7. PAT creation remains disabled                          → 403 pat-creation-disabled
 
 import { test, expect } from '@playwright/test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -424,9 +425,10 @@ test('regular bob can NOT POST /api/users → 403 forbidden', async () => {
   }
 })
 
-// LOCKS: revoked PAT must immediately fail (no in-process token cache that
-// keeps returning the old actor after revocation).
-test('revoked PAT no longer authenticates → 401 unauthorized', async () => {
+// RFC-221: existing PATs remain revocable, but no browser/session actor may
+// mint a new credential. Store-level revocation remains covered by backend
+// route and persistence tests.
+test('PAT creation remains disabled → 403 pat-creation-disabled', async () => {
   const daemon = await startDaemon({ stubOpencode: FAST_STUB })
   try {
     const alice = await createUserAndLogin(daemon, {
@@ -435,7 +437,6 @@ test('revoked PAT no longer authenticates → 401 unauthorized', async () => {
       role: 'admin',
     })
 
-    // 1. Mint a PAT via alice's session token.
     const mintRes = await fetch(`${daemon.baseUrl}/api/auth/pats`, {
       method: 'POST',
       headers: {
@@ -444,34 +445,9 @@ test('revoked PAT no longer authenticates → 401 unauthorized', async () => {
       },
       body: JSON.stringify({ name: 'auth-isolation-pat' }),
     })
-    expect(mintRes.status).toBe(201)
-    const mintBody = (await mintRes.json()) as { token: string; id: string }
-    expect(typeof mintBody.token).toBe('string')
-    expect(typeof mintBody.id).toBe('string')
-
-    // 2. The PAT authenticates — GET /api/whoami returns alice.
-    const okRes = await fetch(`${daemon.baseUrl}/api/whoami`, {
-      headers: { Authorization: `Bearer ${mintBody.token}` },
-    })
-    expect(okRes.status).toBe(200)
-    const okBody = (await okRes.json()) as { user: { username: string }; source: string }
-    expect(okBody.user.username).toBe('alice')
-    expect(okBody.source).toBe('pat')
-
-    // 3. Revoke the PAT via alice's session token.
-    const revokeRes = await fetch(`${daemon.baseUrl}/api/auth/pats/${mintBody.id}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${alice.sessionToken}` },
-    })
-    expect(revokeRes.ok).toBe(true)
-
-    // 4. The same token now returns 401.
-    const denyRes = await fetch(`${daemon.baseUrl}/api/whoami`, {
-      headers: { Authorization: `Bearer ${mintBody.token}` },
-    })
-    expect(denyRes.status).toBe(401)
-    const denyBody = (await denyRes.json()) as { code: string }
-    expect(denyBody.code).toBe('unauthorized')
+    expect(mintRes.status).toBe(403)
+    const body = (await mintRes.json()) as { code: string }
+    expect(body.code).toBe('pat-creation-disabled')
   } finally {
     await daemon.stop()
   }
