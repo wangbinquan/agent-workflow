@@ -148,11 +148,7 @@ export const deleteRecoveryHandler: OpRecoveryHandler = {
   },
 }
 
-function assertDeleteBackupPath(
-  appHome: string,
-  op: SkillOperationRow,
-  expected: string,
-): void {
+function assertDeleteBackupPath(appHome: string, op: SkillOperationRow, expected: string): void {
   // intent can legitimately predate the rename/backupPath phase patch.
   if (op.backupPath === null) return
   const rebased = rebaseSkillOperationPath(appHome, op.backupPath, '.trash')

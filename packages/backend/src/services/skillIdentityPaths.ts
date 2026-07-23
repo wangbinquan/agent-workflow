@@ -115,18 +115,11 @@ export type RealDirectoryChainState = 'missing' | 'real-directory'
  * directory at the leaf is insufficient: an intermediate `versions -> /host`
  * symlink would otherwise pass and redirect hash/copy/remove outside appHome.
  */
-export function realDirectoryChainState(
-  root: string,
-  target: string,
-): RealDirectoryChainState {
+export function realDirectoryChainState(root: string, target: string): RealDirectoryChainState {
   const resolvedRoot = resolve(root)
   const resolvedTarget = resolve(target)
   const inside = relative(resolvedRoot, resolvedTarget)
-  if (
-    inside === '..' ||
-    inside.startsWith(`..${sep}`) ||
-    isAbsolute(inside)
-  ) {
+  if (inside === '..' || inside.startsWith(`..${sep}`) || isAbsolute(inside)) {
     throw new ValidationError(
       'skill-identity-path-invalid',
       'skill path is outside its declared root',

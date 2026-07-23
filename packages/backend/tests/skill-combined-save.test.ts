@@ -85,14 +85,7 @@ describe('RFC-170 T4 — combined save with token OCC', () => {
 
   test('the fresh token from a save is usable for the next save (chained edits)', async () => {
     const read = await readSkillContent(db, fsOpts, skillId)
-    const s1 = await saveSkillWithToken(
-      db,
-      fsOpts,
-      skillId,
-      { bodyMd: 'v1' },
-      read.token!,
-      'u',
-    )
+    const s1 = await saveSkillWithToken(db, fsOpts, skillId, { bodyMd: 'v1' }, read.token!, 'u')
     // Immediately reuse the returned token — no reload needed.
     const s2 = await saveSkillWithToken(db, fsOpts, skillId, { bodyMd: 'v2' }, s1.token!, 'u')
     expect(s2.bodyMd).toBe('v2')

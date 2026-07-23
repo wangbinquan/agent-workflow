@@ -121,20 +121,14 @@ function writeCanonicalPaths(tx: DbTxSync, skillId: string): void {
     tx.update(skillVersions)
       .set({ filesPath: skillVersionRelPath(skillId, row.versionIndex) })
       .where(
-        and(
-          eq(skillVersions.skillId, skillId),
-          eq(skillVersions.versionIndex, row.versionIndex),
-        ),
+        and(eq(skillVersions.skillId, skillId), eq(skillVersions.versionIndex, row.versionIndex)),
       )
       .run()
   }
 }
 
 export function decodeMigratePrecondition(op: SkillOperationRow): MigratePrecondition {
-  if (
-    op.candidateFingerprint === null ||
-    !/^[0-9a-f]{64}$/.test(op.candidateFingerprint)
-  ) {
+  if (op.candidateFingerprint === null || !/^[0-9a-f]{64}$/.test(op.candidateFingerprint)) {
     throw new ValidationError(
       'skill-migration-fingerprint-invalid',
       `migrate operation ${op.opId} has no valid source fingerprint`,

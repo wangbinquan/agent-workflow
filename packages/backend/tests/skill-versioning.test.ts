@@ -151,9 +151,9 @@ describe('skill versioning funnel', () => {
     expect(versions[0]?.versionIndex).toBe(1)
     expect(versions[0]?.source).toBe('initial')
     // disk snapshot exists
-    expect(
-      existsSync(join(h.fsOpts.appHome, skillVersionRelPath(created.id, 1), 'SKILL.md')),
-    ).toBe(true)
+    expect(existsSync(join(h.fsOpts.appHome, skillVersionRelPath(created.id, 1), 'SKILL.md'))).toBe(
+      true,
+    )
   })
 
   test('writeSkillContent bumps to v2; old version preserved', async () => {
@@ -188,13 +188,7 @@ describe('skill versioning funnel', () => {
       frontmatterExtra: {},
     })
     // re-save identical content
-    await writeSkillContent(
-      h.db,
-      h.fsOpts,
-      created.id,
-      { bodyMd: 'stable', description: 'd' },
-      'u',
-    )
+    await writeSkillContent(h.db, h.fsOpts, created.id, { bodyMd: 'stable', description: 'd' }, 'u')
     expect(listSkillVersions(h.db, h.fsOpts, created.id)).toHaveLength(1)
     expect((await getSkill(h.db, 'lint'))?.contentVersion).toBe(1)
   })
@@ -206,14 +200,7 @@ describe('skill versioning funnel', () => {
       bodyMd: 'b',
       frontmatterExtra: {},
     })
-    await writeSkillFile(
-      h.db,
-      h.fsOpts,
-      created.id,
-      'references/x.md',
-      'ref content',
-      'u',
-    )
+    await writeSkillFile(h.db, h.fsOpts, created.id, 'references/x.md', 'ref content', 'u')
     expect((await getSkill(h.db, 'lint'))?.contentVersion).toBe(2)
     const v2 = getSkillVersionContent(h.db, h.fsOpts, created.id, 2)
     expect(v2.files.some((f) => f.path === 'references/x.md')).toBe(true)
@@ -221,20 +208,11 @@ describe('skill versioning funnel', () => {
     await deleteSkillFile(h.db, h.fsOpts, created.id, 'references/x.md', 'u')
     expect((await getSkill(h.db, 'lint'))?.contentVersion).toBe(3)
     expect(
-      existsSync(
-        join(h.fsOpts.appHome, 'skills', created.id, 'files', 'references', 'x.md'),
-      ),
+      existsSync(join(h.fsOpts.appHome, 'skills', created.id, 'files', 'references', 'x.md')),
     ).toBe(false)
     // but v2 snapshot still has it
     expect(
-      existsSync(
-        join(
-          h.fsOpts.appHome,
-          skillVersionRelPath(created.id, 2),
-          'references',
-          'x.md',
-        ),
-      ),
+      existsSync(join(h.fsOpts.appHome, skillVersionRelPath(created.id, 2), 'references', 'x.md')),
     ).toBe(true)
   })
 
@@ -260,22 +238,15 @@ describe('skill versioning funnel', () => {
     })
     await writeSkillContent(h.db, h.fsOpts, created.id, { bodyMd: 'changed' }, 'u')
     expect(liveSkillMd(h, created.id)).toContain('changed')
-    const { version } = restoreSkillVersion(
-      h.db,
-      h.fsOpts,
-      created.id,
-      1,
-      'admin',
-      'rollback',
-    )
+    const { version } = restoreSkillVersion(h.db, h.fsOpts, created.id, 1, 'admin', 'rollback')
     expect(version.versionIndex).toBe(3) // new version, never destructive
     expect(version.source).toBe('restore')
     expect(version.restoredFromVersion).toBe(1)
     expect((await getSkill(h.db, 'lint'))?.contentVersion).toBe(3)
     expect(liveSkillMd(h, created.id)).toContain('original') // content reverted
-    expect(
-      readSkillContent(h.db, h.fsOpts, created.id).then((c) => c.bodyMd),
-    ).resolves.toContain('original')
+    expect(readSkillContent(h.db, h.fsOpts, created.id).then((c) => c.bodyMd)).resolves.toContain(
+      'original',
+    )
   })
 
   test('OCC: commitSkillVersion rejects a stale expectedVersion', async () => {
@@ -334,20 +305,14 @@ describe('lazy backfill + reconcile', () => {
   test('ensureInitialSkillVersion backfills v1 from current files on first access', () => {
     const id = seedLegacySkill('legacy', 'legacy body')
     expect(listSkillVersions(h.db, h.fsOpts, id)).toHaveLength(1)
-    expect(getSkillVersionContent(h.db, h.fsOpts, id, 1).content.bodyMd).toContain(
-      'legacy body',
-    )
+    expect(getSkillVersionContent(h.db, h.fsOpts, id, 1).content.bodyMd).toContain('legacy body')
   })
 
   test('a legacy skill then edited keeps legacy content as v1, edit as v2', async () => {
     const id = seedLegacySkill('legacy', 'legacy body')
     await writeSkillContent(h.db, h.fsOpts, id, { bodyMd: 'edited body' }, 'u')
-    expect(getSkillVersionContent(h.db, h.fsOpts, id, 1).content.bodyMd).toContain(
-      'legacy body',
-    )
-    expect(getSkillVersionContent(h.db, h.fsOpts, id, 2).content.bodyMd).toContain(
-      'edited body',
-    )
+    expect(getSkillVersionContent(h.db, h.fsOpts, id, 1).content.bodyMd).toContain('legacy body')
+    expect(getSkillVersionContent(h.db, h.fsOpts, id, 2).content.bodyMd).toContain('edited body')
   })
 
   test('reconcileSkillLiveFiles restores live files/ ONLY when it is lost entirely', async () => {

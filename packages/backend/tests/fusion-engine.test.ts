@@ -264,17 +264,14 @@ describe('launch → reconcile → approve', () => {
     const done = await approveFusion(h.deps, fusion.id, adminActor)
     expect(done.status).toBe('done')
     expect(done.appliedSkillVersion).toBe(2)
-    expect(
-      getSkillVersionContent(h.db, fsOpts, createdSkill.id, 2).content.bodyMd,
-    ).toContain('fused body')
+    expect(getSkillVersionContent(h.db, fsOpts, createdSkill.id, 2).content.bodyMd).toContain(
+      'fused body',
+    )
     expect(statusOf(h.db, memA)).toBe('fused')
     expect(statusOf(h.db, memB)).toBe('approved')
     // live SKILL.md updated
     expect(
-      readFileSync(
-        pjoin(h.appHome, 'skills', createdSkill.id, 'files', 'SKILL.md'),
-        'utf-8',
-      ),
+      readFileSync(pjoin(h.appHome, 'skills', createdSkill.id, 'files', 'SKILL.md'), 'utf-8'),
     ).toContain('fused body')
   })
 
@@ -672,11 +669,8 @@ describe('RFC-170 T6 F9 — recoverFusionDecisions (crash recovery)', () => {
   test("'applying' whose version already committed rolls FORWARD to done", () => {
     seedFusion('fz-fwd', { status: 'applying', currentTaskId: null })
     // A committed version carries this fusionId (proof the apply landed durably).
-    const lintId = h.db
-      .select({ id: skills.id })
-      .from(skills)
-      .where(eq(skills.name, 'lint'))
-      .get()!.id
+    const lintId = h.db.select({ id: skills.id }).from(skills).where(eq(skills.name, 'lint')).get()!
+      .id
     h.db
       .insert(skillVersions)
       .values({

@@ -67,11 +67,7 @@ export function runSkillIdentityMigrationBarrier(
   )
   assertNoActiveOperations(db)
   preflightPhysicalOwnershipGraph(db, loadIdentityRows(db), [], opts.appHome)
-  const removedHusks = sweepMissingLegacyHusks(
-    db,
-    opts.appHome,
-    opts.__beforeHuskFsCleanupForTest,
-  )
+  const removedHusks = sweepMissingLegacyHusks(db, opts.appHome, opts.__beforeHuskFsCleanupForTest)
 
   const rows = loadIdentityRows(db)
   preflightPhysicalOwnershipGraph(db, rows, [], opts.appHome)
@@ -87,11 +83,9 @@ export function runSkillIdentityMigrationBarrier(
     const newIdentity = pathEntryIdentity(newRoot)
     const oldExists = oldIdentity !== null
     const newExists = newIdentity !== null
-    const sameEntry =
-      oldIdentity !== null && newIdentity !== null && oldIdentity === newIdentity
+    const sameEntry = oldIdentity !== null && newIdentity !== null && oldIdentity === newIdentity
     const dbCanonical =
-      row.managedPath === skillFilesRel(row.id) &&
-      versionPathsCanonical(db, row.id)
+      row.managedPath === skillFilesRel(row.id) && versionPathsCanonical(db, row.id)
 
     if (dbCanonical && newExists) {
       // The display name is no longer an ownership path. The graph preflight
@@ -241,8 +235,7 @@ function sweepMissingLegacyHusks(
     const canonicalRoot = skillRootAbs(appHome, row.id)
     const canonicalExists = pathEntryIdentity(canonicalRoot) !== null
     const dbCanonical =
-      row.managedPath === skillFilesRel(row.id) &&
-      versionPathsCanonical(db, row.id)
+      row.managedPath === skillFilesRel(row.id) && versionPathsCanonical(db, row.id)
     const paths = new Set<string>([canonicalRoot])
     if (!dbCanonical || !canonicalExists) {
       paths.add(legacySkillRootAbs(appHome, row.name))
@@ -262,10 +255,7 @@ function sweepMissingLegacyHusks(
     })
     .from(skills)
     .where(
-      and(
-        eq(skills.reservationState, 'ready'),
-        eq(skills.versionState, 'legacy-unbackfilled'),
-      ),
+      and(eq(skills.reservationState, 'ready'), eq(skills.versionState, 'legacy-unbackfilled')),
     )
     .all()
     .sort((a, b) => a.id.localeCompare(b.id))
@@ -283,8 +273,7 @@ function sweepMissingLegacyHusks(
     const canonicalExists = pathEntryIdentity(canonicalRoot) !== null
     const rowState = allRows.find((candidate) => candidate.id === row.id)
     const dbCanonical =
-      rowState?.managedPath === skillFilesRel(row.id) &&
-      versionPathsCanonical(db, row.id)
+      rowState?.managedPath === skillFilesRel(row.id) && versionPathsCanonical(db, row.id)
     // Once the row is canonical and owns its ID root, `name` is display-only.
     // Never sweep a display alias: it may resolve to another skill's canonical
     // inode on a case-insensitive filesystem.
@@ -299,19 +288,14 @@ function sweepMissingLegacyHusks(
     // roots are disposable, but a symlink, any byte, unreadable subtree, or a
     // path also claimed by another row is evidence and remains fail-closed.
     if (
-      [...roots].some(
-        (root) => {
-          const identity = pathEntryIdentity(root)
-          if (identity === null) return false
-          const owners = physicalOwners.get(identity)
-          return (
-            owners === undefined ||
-            owners.size !== 1 ||
-            !owners.has(row.id) ||
-            !dirHasNoContent(root)
-          )
-        },
-      )
+      [...roots].some((root) => {
+        const identity = pathEntryIdentity(root)
+        if (identity === null) return false
+        const owners = physicalOwners.get(identity)
+        return (
+          owners === undefined || owners.size !== 1 || !owners.has(row.id) || !dirHasNoContent(root)
+        )
+      })
     ) {
       continue
     }
@@ -528,8 +512,7 @@ function assertRecoveryPreconditions(
       actual.length !== expected.size ||
       actual.some((lock) => !expected.has(lock.lockedSkillId)) ||
       [...expected].some(
-        (skillId) =>
-          !locks.some((lock) => lock.lockedSkillId === skillId && lock.opId === op.opId),
+        (skillId) => !locks.some((lock) => lock.lockedSkillId === skillId && lock.opId === op.opId),
       )
     ) {
       throw new ValidationError(
@@ -561,12 +544,7 @@ function assertOperationFilesystemAuthority(
         contentHash: skillVersions.contentHash,
       })
       .from(skillVersions)
-      .where(
-        and(
-          eq(skillVersions.skillId, op.skillId),
-          eq(skillVersions.versionIndex, 1),
-        ),
-      )
+      .where(and(eq(skillVersions.skillId, op.skillId), eq(skillVersions.versionIndex, 1)))
       .get()
     const expectedPath =
       identity.legacyName === undefined
@@ -689,12 +667,10 @@ function assertOperationDbAuthority(
         ? row.managedPath === skillFilesRel(op.skillId) &&
           versionRows.every(
             (version) =>
-              version.filesPath ===
-              skillVersionRelPath(op.skillId, version.versionIndex),
+              version.filesPath === skillVersionRelPath(op.skillId, version.versionIndex),
           )
         : row.name === identity.legacyName &&
-          row.managedPath?.replace(/\/+$/, '') ===
-            `skills/${identity.legacyName}/files` &&
+          row.managedPath?.replace(/\/+$/, '') === `skills/${identity.legacyName}/files` &&
           versionRows.every(
             (version) =>
               version.filesPath.replace(/\/+$/, '') ===
@@ -807,8 +783,7 @@ function assertOperationDbAuthority(
   if (op.kind === 'migrate') {
     const identity = decodeMigratePrecondition(op)
     const canonical =
-      row.managedPath === skillFilesRel(op.skillId) &&
-      versionPathsCanonical(db, op.skillId)
+      row.managedPath === skillFilesRel(op.skillId) && versionPathsCanonical(db, op.skillId)
     const legacyManagedPath = `skills/${identity.legacyName}/files`
     const legacyVersions = db
       .select({
@@ -823,12 +798,8 @@ function assertOperationDbAuthority(
           version.filesPath.replace(/\/+$/, '') ===
           `skills/${identity.legacyName}/versions/v${version.versionIndex}/files`,
       )
-    const legacy =
-      row.managedPath?.replace(/\/+$/, '') === legacyManagedPath && legacyVersions
-    if (
-      row.name !== identity.legacyName ||
-      (direction === 'rollback' ? !legacy : !canonical)
-    ) {
+    const legacy = row.managedPath?.replace(/\/+$/, '') === legacyManagedPath && legacyVersions
+    if (row.name !== identity.legacyName || (direction === 'rollback' ? !legacy : !canonical)) {
       throw new ValidationError(
         'skill-migration-operation-authority-invalid',
         `migrate operation ${op.opId} disagrees with DB path authority`,
@@ -912,8 +883,7 @@ function preflightPhysicalOwnershipGraph(
     const legacyIdentity = pathEntryIdentity(legacyRoot)
     const canonicalIdentity = pathEntryIdentity(canonicalRoot)
     const dbCanonical =
-      row.managedPath === skillFilesRel(row.id) &&
-      versionPathsCanonical(db, row.id)
+      row.managedPath === skillFilesRel(row.id) && versionPathsCanonical(db, row.id)
     const needsLegacyOwnership = !dbCanonical || canonicalIdentity === null
 
     if (needsLegacyOwnership) {
@@ -975,14 +945,8 @@ function preflightPhysicalOwnershipGraph(
     ] as const) {
       if (storedPath === null) continue
       const isDeleteTrash = op.kind === 'delete' && column === 'backup_path'
-      const chainRoot = isDeleteTrash
-        ? join(appHome, 'skills', '.trash')
-        : operationRoot
-      const rebased = rebaseSkillOperationPath(
-        appHome,
-        storedPath,
-        isDeleteTrash ? '.trash' : key,
-      )
+      const chainRoot = isDeleteTrash ? join(appHome, 'skills', '.trash') : operationRoot
+      const rebased = rebaseSkillOperationPath(appHome, storedPath, isDeleteTrash ? '.trash' : key)
       const state = realDirectoryChainState(chainRoot, rebased)
       if (state === 'real-directory') {
         addPhysicalClaim(op.skillId, rebased, `active ${op.kind} ${column}`)

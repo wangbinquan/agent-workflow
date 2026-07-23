@@ -26,12 +26,7 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import type {
-  Fusion,
-  FusionSkipped,
-  FusionStatus,
-  LaunchFusion,
-} from '@agent-workflow/shared'
+import type { Fusion, FusionSkipped, FusionStatus, LaunchFusion } from '@agent-workflow/shared'
 import { FusionResultManifestSchema, TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import { SYSTEM_USER_ID } from '@/auth/actor'

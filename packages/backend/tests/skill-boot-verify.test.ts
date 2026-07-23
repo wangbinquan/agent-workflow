@@ -103,11 +103,7 @@ describe('RFC-170 T-BOOT — skillBootVerify', () => {
   test('verifyManagedSnapshot QUARANTINES a tampered snapshot (hash mismatch)', async () => {
     const skill = await getSkill(db, 'foo')
     // Tamper the snapshot SKILL.md → hash no longer matches content_hash.
-    writeFileSync(
-      snapshotSkillMd(appHome, skill!.id, 1),
-      '---\nname: foo\n---\nTAMPERED',
-      'utf-8',
-    )
+    writeFileSync(snapshotSkillMd(appHome, skill!.id, 1), '---\nname: foo\n---\nTAMPERED', 'utf-8')
     expect(
       verifyManagedSnapshot(db, fsOpts, { id: skill!.id, name: 'foo', contentVersion: 1 }),
     ).toBe('quarantined')
@@ -125,11 +121,7 @@ describe('RFC-170 T-BOOT — skillBootVerify', () => {
     const bar = await getSkill(db, 'bar')
     resetSkillBootVerifyForTest()
     // Corrupt bar's snapshot; foo stays intact.
-    writeFileSync(
-      snapshotSkillMd(appHome, bar!.id, 1),
-      '---\nname: bar\n---\nCORRUPT',
-      'utf-8',
-    )
+    writeFileSync(snapshotSkillMd(appHome, bar!.id, 1), '---\nname: bar\n---\nCORRUPT', 'utf-8')
     const r = runBootSnapshotReverify(db, fsOpts)
     expect(r.verified).toBe(1)
     expect(r.quarantined).toBe(1)
@@ -154,11 +146,7 @@ describe('RFC-170 T-BOOT — skillBootVerify', () => {
     })
     const bar = await getSkill(db, 'bar')
     resetSkillBootVerifyForTest()
-    writeFileSync(
-      snapshotSkillMd(appHome, bar!.id, 1),
-      '---\nname: bar\n---\nCORRUPT',
-      'utf-8',
-    )
+    writeFileSync(snapshotSkillMd(appHome, bar!.id, 1), '---\nname: bar\n---\nCORRUPT', 'utf-8')
     runBootSnapshotReverify(db, fsOpts) // foo → verified, bar → quarantined, gate ON
     // foo (verified) is visible; bar (quarantined) is hidden by the gate.
     expect(await getSkill(db, 'foo')).not.toBeNull()

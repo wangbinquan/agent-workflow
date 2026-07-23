@@ -295,8 +295,7 @@ export async function deleteSkill(
   actor: Actor,
 ): Promise<void> {
   const existing = await getSkillById(db, skillId)
-  if (existing === null)
-    throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
+  if (existing === null) throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
 
   // RFC-223 (PR-1): agents.skills stores typed refs — match managed refs by id.
   const refs = await findAgentsUsingSkill(db, existing.id)
@@ -374,8 +373,7 @@ export async function readSkillContent(
   skillId: string,
 ): Promise<SkillContent> {
   const skill = await getSkillById(db, skillId)
-  if (skill === null)
-    throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
+  if (skill === null) throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
   // RFC-170 (G1-1): read the SKILL.md body + sign the token from the AUTHORITATIVE
   // version snapshot, not live — so the returned content always matches the token's
   // contentVersion and a torn live dir can't corrupt the read.
@@ -512,8 +510,7 @@ export async function writeSkillContent(
   },
 ): Promise<SkillContent> {
   const skill = await getSkillById(db, skillId)
-  if (skill === null)
-    throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
+  if (skill === null) throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
   const current = await readSkillContent(db, opts, skillId).catch(() => ({
     name: skill.name,
     description: skill.description,
@@ -592,8 +589,7 @@ export async function saveSkillWithToken(
   expectedOwnerUserId?: string | null,
 ): Promise<SkillContent> {
   const skill = await getSkillById(db, skillId)
-  if (skill === null)
-    throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
+  if (skill === null) throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
   const metaRow = await db
     .select({ metaRevision: skills.metaRevision })
     .from(skills)
@@ -641,8 +637,7 @@ export async function listSkillFiles(
   skillId: string,
 ): Promise<FileNode[]> {
   const skill = await getSkillById(db, skillId)
-  if (skill === null)
-    throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
+  if (skill === null) throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
   // RFC-170 (G1-1): the file tree reflects the AUTHORITATIVE snapshot, not live —
   // consistent with readSkillContent/readSkillFile.
   const root = skillReadRoot(skill, opts)
@@ -680,8 +675,7 @@ export async function readSkillFile(
   relPath: string,
 ): Promise<string> {
   const skill = await getSkillById(db, skillId)
-  if (skill === null)
-    throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
+  if (skill === null) throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
   // RFC-170 (G1-1): read from the AUTHORITATIVE snapshot, not live.
   const root = skillReadRoot(skill, opts)
   const abs = safeJoin(root, relPath)
@@ -718,8 +712,7 @@ export async function writeSkillFile(
   expectedToken?: string,
 ): Promise<void> {
   const skill = await getSkillById(db, skillId)
-  if (skill === null)
-    throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
+  if (skill === null) throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
   // RFC-169: SKILL.md is edited exclusively through POST /save — the file tree
   // must never write it via an arbitrary path (before RFC-169 there was NO
   // check, so adding a file named `SKILL.md` / `./SKILL.md` truncated it).
@@ -769,8 +762,7 @@ export async function deleteSkillFile(
   expectedToken?: string,
 ): Promise<void> {
   const skill = await getSkillById(db, skillId)
-  if (skill === null)
-    throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
+  if (skill === null) throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
   const root = skillRoot(skill, opts)
   // RFC-169: SKILL.md is special — refuse to delete it (users edit via /save).
   // The pre-RFC-169 raw `=== 'SKILL.md'` compare was bypassable via `./SKILL.md`,

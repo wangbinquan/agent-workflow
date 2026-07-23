@@ -34,9 +34,7 @@ describe('migration 0116 (RFC-223 PR-5) — fresh replay', () => {
   test('fresh install exposes skill_id with the final FK and indexes', () => {
     const db = createInMemoryDb(MIGRATIONS)
     assertFinalShape(db.$client)
-    expect(
-      db.$client.query("PRAGMA foreign_key_check('skill_versions')").all(),
-    ).toEqual([])
+    expect(db.$client.query("PRAGMA foreign_key_check('skill_versions')").all()).toEqual([])
   })
 })
 
@@ -187,9 +185,9 @@ describe('migration 0116 (RFC-223 PR-5) — frozen 0115 upgrade', () => {
     ).toThrow(/FOREIGN KEY/)
 
     raw.query("DELETE FROM skills WHERE id = 'skill-id-b'").run()
-    expect(
-      raw.query("SELECT id FROM skill_versions WHERE skill_id = 'skill-id-b'").all(),
-    ).toEqual([])
+    expect(raw.query("SELECT id FROM skill_versions WHERE skill_id = 'skill-id-b'").all()).toEqual(
+      [],
+    )
   })
 
   test('orphan guard refuses before rebuild and leaves the legacy row/table intact', () => {
@@ -216,9 +214,9 @@ describe('migration 0116 (RFC-223 PR-5) — frozen 0115 upgrade', () => {
     const columns = columnNames(raw)
     expect(columns).toContain('skill_name')
     expect(columns).not.toContain('skill_id')
-    expect(
-      raw.query("SELECT id, skill_name AS skillName FROM skill_versions").all(),
-    ).toEqual([{ id: 'orphan-version', skillName: 'missing-name' }])
+    expect(raw.query('SELECT id, skill_name AS skillName FROM skill_versions').all()).toEqual([
+      { id: 'orphan-version', skillName: 'missing-name' },
+    ])
 
     raw.query("DELETE FROM skill_versions WHERE id = 'orphan-version'").run()
     apply0116WithMigrator(raw, tmp)
@@ -270,9 +268,7 @@ function insertLegacyVersion(raw: Database, row: VersionFixture): void {
 }
 
 function countVersions(raw: Database): number {
-  return (
-    raw.query('SELECT COUNT(*) AS n FROM skill_versions').get() as { n: number }
-  ).n
+  return (raw.query('SELECT COUNT(*) AS n FROM skill_versions').get() as { n: number }).n
 }
 
 function migrationCount(raw: Database): number {
@@ -294,9 +290,7 @@ function columnNames(raw: Database): string[] {
 function assertFinalShape(raw: Database): void {
   expect(columnNames(raw)).toContain('skill_id')
   expect(columnNames(raw)).not.toContain('skill_name')
-  expect(
-    raw.query("PRAGMA foreign_key_list('skill_versions')").all(),
-  ).toEqual([
+  expect(raw.query("PRAGMA foreign_key_list('skill_versions')").all()).toEqual([
     expect.objectContaining({
       table: 'skills',
       from: 'skill_id',
@@ -304,22 +298,21 @@ function assertFinalShape(raw: Database): void {
       on_delete: 'CASCADE',
     }),
   ])
-  const indexes = raw
-    .query("PRAGMA index_list('skill_versions')")
-    .all() as Array<{ name: string; unique: number }>
+  const indexes = raw.query("PRAGMA index_list('skill_versions')").all() as Array<{
+    name: string
+    unique: number
+  }>
   expect(indexes).toEqual(
     expect.arrayContaining([
       expect.objectContaining({ name: 'uq_skill_versions_skill_v', unique: 1 }),
       expect.objectContaining({ name: 'idx_skill_versions_created', unique: 0 }),
     ]),
   )
-  expect(
-    raw.query("PRAGMA index_info('uq_skill_versions_skill_v')").all(),
-  ).toEqual([
+  expect(raw.query("PRAGMA index_info('uq_skill_versions_skill_v')").all()).toEqual([
     expect.objectContaining({ seqno: 0, name: 'skill_id' }),
     expect.objectContaining({ seqno: 1, name: 'version_index' }),
   ])
-  expect(
-    raw.query("PRAGMA index_info('idx_skill_versions_created')").all(),
-  ).toEqual([expect.objectContaining({ seqno: 0, name: 'created_at' })])
+  expect(raw.query("PRAGMA index_info('idx_skill_versions_created')").all()).toEqual([
+    expect.objectContaining({ seqno: 0, name: 'created_at' }),
+  ])
 }

@@ -326,14 +326,9 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // skills/{name} -> skills/{id}, and prove DB/FS/FK consistency before users,
   // orphan reaping, reconcilers, seeders, schedulers, fusion, or HTTP can run.
   {
-    const { runSkillIdentityMigrationBarrier } =
-      await import('@/services/skillIdentityMigration')
+    const { runSkillIdentityMigrationBarrier } = await import('@/services/skillIdentityMigration')
     const report = runSkillIdentityMigrationBarrier(db, { appHome: Paths.root })
-    if (
-      report.recoveredOperations > 0 ||
-      report.removedHusks > 0 ||
-      report.migratedSkills > 0
-    ) {
+    if (report.recoveredOperations > 0 || report.removedHusks > 0 || report.migratedSkills > 0) {
       log.info('skill identity migration barrier complete', { ...report })
     }
   }

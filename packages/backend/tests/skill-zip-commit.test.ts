@@ -82,12 +82,8 @@ describe('commitSkillZipBuffer', () => {
     expect(r.updated).toEqual([])
     expect(r.failed).toEqual([])
     const skillA = r.created.find((skill) => skill.name === 'skill-a')!
-    expect(
-      existsSync(join(h.fsOpts.appHome, 'skills', skillA.id, 'files', 'SKILL.md')),
-    ).toBe(true)
-    expect(existsSync(join(h.fsOpts.appHome, 'skills', skillA.id, 'files', 'extra.md'))).toBe(
-      true,
-    )
+    expect(existsSync(join(h.fsOpts.appHome, 'skills', skillA.id, 'files', 'SKILL.md'))).toBe(true)
+    expect(existsSync(join(h.fsOpts.appHome, 'skills', skillA.id, 'files', 'extra.md'))).toBe(true)
   })
 
   test('skip decision leaves DB + FS untouched for that candidate', async () => {
@@ -112,13 +108,7 @@ describe('commitSkillZipBuffer', () => {
       frontmatterExtra: {},
     })
     // Drop a sentinel file to verify it gets removed by the overwrite step.
-    const sentinelPath = join(
-      h.fsOpts.appHome,
-      'skills',
-      before.id,
-      'files',
-      'sentinel.txt',
-    )
+    const sentinelPath = join(h.fsOpts.appHome, 'skills', before.id, 'files', 'sentinel.txt')
     writeFileSync(sentinelPath, 'remove-me')
 
     const buf = buildZip({
@@ -169,15 +159,7 @@ describe('commitSkillZipBuffer', () => {
     const after = await getSkill(h.db, 'skill-v')
     expect(after!.contentVersion).toBe(2) // versioned via commitSkillVersion, not a raw write
     // The immutable v2 snapshot exists (the funnel archived the overwritten tree).
-    const snap = join(
-      h.fsOpts.appHome,
-      'skills',
-      before.id,
-      'versions',
-      'v2',
-      'files',
-      'SKILL.md',
-    )
+    const snap = join(h.fsOpts.appHome, 'skills', before.id, 'versions', 'v2', 'files', 'SKILL.md')
     expect(existsSync(snap)).toBe(true)
     expect(readFileSync(snap, 'utf-8')).toContain('description: d2')
   })

@@ -173,10 +173,7 @@ export function verifyManagedSnapshot(
         tx.update(skills)
           .set({ versionState: 'snapshot-authoritative' })
           .where(
-            and(
-              eq(skills.id, inspected.id),
-              eq(skills.contentVersion, inspected.contentVersion),
-            ),
+            and(eq(skills.id, inspected.id), eq(skills.contentVersion, inspected.contentVersion)),
           )
           .run()
         return true
@@ -205,10 +202,7 @@ export function verifyManagedSnapshot(
         tx.update(skills)
           .set({ versionState: 'quarantined' })
           .where(
-            and(
-              eq(skills.id, inspected.id),
-              eq(skills.contentVersion, inspected.contentVersion),
-            ),
+            and(eq(skills.id, inspected.id), eq(skills.contentVersion, inspected.contentVersion)),
           )
           .run()
         return true

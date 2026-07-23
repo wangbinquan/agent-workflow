@@ -119,9 +119,9 @@ describe('writeSkillFile / deleteSkillFile SKILL.md guard', () => {
       foldsOntoMain = false // ENOENT → case-sensitive fs
     }
     if (foldsOntoMain) {
-      await expect(
-        writeSkillFile(db, fsOpts, skillId, 'ſKILL.md', 'HACK'),
-      ).rejects.toBeInstanceOf(ConflictError)
+      await expect(writeSkillFile(db, fsOpts, skillId, 'ſKILL.md', 'HACK')).rejects.toBeInstanceOf(
+        ConflictError,
+      )
     } else {
       // Different file — allowed. (Then it exists and can be deleted normally.)
       await writeSkillFile(db, fsOpts, skillId, 'ſKILL.md', 'a real other file')

@@ -24,10 +24,7 @@ import { openDb, type DbClient } from '../src/db/client'
 import { createBackup } from '../src/services/backup'
 import { maybePreMigrationBackup } from '../src/services/backupScheduler'
 import { rawCopyDb } from '../src/services/rawDbSnapshot'
-import {
-  restoreBackup,
-  validateBackupForStage,
-} from '../src/services/restore'
+import { restoreBackup, validateBackupForStage } from '../src/services/restore'
 import { extractTarGz, tarGz } from '../src/util/archive'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -35,10 +32,7 @@ const tmps: string[] = []
 
 describe('RFC-223 PR-5 boot/restore source ordering', () => {
   test('boot barrier is fail-closed immediately after db-ready and before every consumer', () => {
-    const source = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'cli', 'start.ts'),
-      'utf-8',
-    )
+    const source = readFileSync(resolve(import.meta.dir, '..', 'src', 'cli', 'start.ts'), 'utf-8')
     const dbReady = source.indexOf("log.info('db ready'")
     const barrier = source.indexOf('runSkillIdentityMigrationBarrier', dbReady)
     const gate = source.indexOf('activateBootReverify()', barrier)
@@ -116,13 +110,7 @@ describe('RFC-223 PR-5 real backup restore modes', () => {
 
   test('same-schema restore still runs the barrier for non-canonical DB/FS paths', async () => {
     const sourceHome = temp('aw-pr5-same-source-')
-    const backup = await makeSkillBackup(
-      sourceHome,
-      MIGRATIONS,
-      'legacy-same',
-      'id-same',
-      false,
-    )
+    const backup = await makeSkillBackup(sourceHome, MIGRATIONS, 'legacy-same', 'id-same', false)
     const targetHome = temp('aw-pr5-same-target-')
     createEmptyLiveDb(targetHome)
 
@@ -198,10 +186,7 @@ describe('RFC-223 PR-5 real backup restore modes', () => {
       )
       .run('raw-version', 'raw-legacy', 'skills/raw-legacy/versions/v1/files')
     writeTree(join(sourceHome, 'skills', 'raw-legacy', 'files'), 'raw-live-bytes')
-    writeTree(
-      join(sourceHome, 'skills', 'raw-legacy', 'versions', 'v1', 'files'),
-      'raw-v1-bytes',
-    )
+    writeTree(join(sourceHome, 'skills', 'raw-legacy', 'versions', 'v1', 'files'), 'raw-v1-bytes')
     raw.exec('PRAGMA wal_checkpoint(TRUNCATE)')
     raw.close()
 
@@ -216,10 +201,7 @@ describe('RFC-223 PR-5 real backup restore modes', () => {
     const extracted = temp('aw-pr5-raw-extracted-')
     await extractTarGz(backup!, extracted)
     expect(
-      readFileSync(
-        join(extracted, 'skills', 'raw-legacy', 'files', 'SKILL.md'),
-        'utf-8',
-      ),
+      readFileSync(join(extracted, 'skills', 'raw-legacy', 'files', 'SKILL.md'), 'utf-8'),
     ).toContain('raw-live-bytes')
 
     const targetHome = temp('aw-pr5-raw-target-')
@@ -244,10 +226,7 @@ describe('RFC-223 PR-5 real backup restore modes', () => {
       restored.close()
     }
     expect(
-      readFileSync(
-        join(targetHome, 'skills', 'raw-legacy', 'files', 'SKILL.md'),
-        'utf-8',
-      ),
+      readFileSync(join(targetHome, 'skills', 'raw-legacy', 'files', 'SKILL.md'), 'utf-8'),
     ).toContain('raw-live-bytes')
     expect(existsSync(join(targetHome, 'skills', 'new-generation'))).toBe(false)
   })
@@ -354,10 +333,7 @@ async function makeSkillBackup(
       .run(`version-${id}`, id, `skills/${name}/versions/v1/files`)
   }
   writeTree(join(appHome, 'skills', name, 'files'), `${name}-live`)
-  writeTree(
-    join(appHome, 'skills', name, 'versions', 'v1', 'files'),
-    `${name}-v1`,
-  )
+  writeTree(join(appHome, 'skills', name, 'versions', 'v1', 'files'), `${name}-v1`)
   const backup = await createBackup({ db, appHome, now: Date.now() })
   raw.exec('PRAGMA wal_checkpoint(TRUNCATE)')
   raw.close()
@@ -367,15 +343,11 @@ async function makeSkillBackup(
 function assertRestoredCanonical(appHome: string, name: string, id: string): void {
   const raw = new Database(join(appHome, 'db.sqlite'), { readonly: true })
   try {
+    expect(raw.query('SELECT managed_path AS path FROM skills WHERE id = ?').get(id)).toEqual({
+      path: `skills/${id}/files`,
+    })
     expect(
-      raw.query('SELECT managed_path AS path FROM skills WHERE id = ?').get(id),
-    ).toEqual({ path: `skills/${id}/files` })
-    expect(
-      raw
-        .query(
-          'SELECT skill_id AS skillId, files_path AS filesPath FROM skill_versions',
-        )
-        .get(),
+      raw.query('SELECT skill_id AS skillId, files_path AS filesPath FROM skill_versions').get(),
     ).toEqual({
       skillId: id,
       filesPath: `skills/${id}/versions/v1/files`,

@@ -56,9 +56,7 @@ export const versionWriteRecoveryHandler: OpRecoveryHandler = {
       restoreFromBackup(filesDir, staging.publishId)
     }
     if (!assertRealDirectoryIfPresent(root, filesDir, op, 'canonical live tree')) {
-      throw new Error(
-        `version-write ${op.opId} rollback cannot prove a canonical live tree`,
-      )
+      throw new Error(`version-write ${op.opId} rollback cannot prove a canonical live tree`)
     }
     cleanupOpDirs(filesDir, staging.publishId)
     if (candidateExists) rmSync(candidate, { recursive: true, force: true })
@@ -68,26 +66,14 @@ export const versionWriteRecoveryHandler: OpRecoveryHandler = {
     const key = identity.legacyName ?? identity.skillId
     const staging = requireStagingOpPath(fsOpts.appHome, op.stagingPath, key, op)
     const candidate = requireCandidateOpPath(fsOpts.appHome, op.candidatePath, key, op)
-    const committed = assertVersionRow(
-      db,
-      fsOpts.appHome,
-      key,
-      candidate,
-      op,
-      true,
-    )
+    const committed = assertVersionRow(db, fsOpts.appHome, key, candidate, op, true)
     const root = skillRootAbs(fsOpts.appHome, key)
     assertRealDirectory(root, root, op, 'skill root')
     assertRealDirectory(root, candidate, op, 'version candidate')
     const stagingExists = assertRealDirectoryIfPresent(root, staging.path, op, 'staged tree')
     const filesDir = joinFilesRoot(fsOpts.appHome, key)
     const liveExists = assertRealDirectoryIfPresent(root, filesDir, op, 'canonical live tree')
-    assertRealDirectoryIfPresent(
-      root,
-      opBackupDir(filesDir, staging.publishId),
-      op,
-      'backup tree',
-    )
+    assertRealDirectoryIfPresent(root, opBackupDir(filesDir, staging.publishId), op, 'backup tree')
     assertTreeFingerprint(root, candidate, committed.contentHash, op, 'version snapshot')
 
     if (stagingExists) {
@@ -170,16 +156,11 @@ function assertVersionRow(
     })
     .from(skillVersions)
     .where(
-      and(
-        eq(skillVersions.skillId, op.skillId),
-        eq(skillVersions.versionIndex, op.targetVersion),
-      ),
+      and(eq(skillVersions.skillId, op.skillId), eq(skillVersions.versionIndex, op.targetVersion)),
     )
     .get()
   if ((row !== undefined) !== expected) {
-    throw new Error(
-      `version-write ${op.opId} phase disagrees with target version authority`,
-    )
+    throw new Error(`version-write ${op.opId} phase disagrees with target version authority`)
   }
   if (row === undefined) return { contentHash: '' }
   const skill = db
@@ -188,14 +169,10 @@ function assertVersionRow(
     .where(eq(skills.id, op.skillId))
     .get()
   if (skill?.contentVersion !== op.targetVersion) {
-    throw new Error(
-      `version-write ${op.opId} target is not the skill's current committed version`,
-    )
+    throw new Error(`version-write ${op.opId} target is not the skill's current committed version`)
   }
   if (rebaseSkillOperationPath(appHome, row.filesPath, key) !== candidate) {
-    throw new Error(
-      `version-write ${op.opId} target row files_path does not match its candidate`,
-    )
+    throw new Error(`version-write ${op.opId} target row files_path does not match its candidate`)
   }
   if (row.contentHash === null) {
     throw new Error(`version-write ${op.opId} target version has no content fingerprint`)
@@ -214,9 +191,7 @@ function assertTreeFingerprint(
     !assertRealDirectoryIfPresent(root, path, op, label) ||
     hashRegularFileTree(path) !== expected
   ) {
-    throw new Error(
-      `version-write ${op.opId} ${label} does not match committed content hash`,
-    )
+    throw new Error(`version-write ${op.opId} ${label} does not match committed content hash`)
   }
 }
 
@@ -240,9 +215,6 @@ function assertRealDirectoryIfPresent(
   try {
     return realDirectoryChainState(root, path) === 'real-directory'
   } catch (err) {
-    throw new Error(
-      `version-write ${op.opId} ${label} is not a real directory`,
-      { cause: err },
-    )
+    throw new Error(`version-write ${op.opId} ${label} is not a real directory`, { cause: err })
   }
 }

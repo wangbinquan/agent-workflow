@@ -212,13 +212,7 @@ describe('zip import create under the ACTIVE boot availability gate', () => {
     expect(rawRow(h.db, 'occupied')).toBeDefined()
     expect(
       existsSync(
-        join(
-          h.fsOpts.appHome,
-          'skills',
-          mustRow(h.db, 'occupied').id,
-          'files',
-          'SKILL.md',
-        ),
+        join(h.fsOpts.appHome, 'skills', mustRow(h.db, 'occupied').id, 'files', 'SKILL.md'),
       ),
     ).toBe(true)
   })

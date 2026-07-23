@@ -34,11 +34,7 @@ import {
   skillVersionRelPath,
 } from '../src/services/skillIdentityPaths'
 import { hashDir } from '../src/services/skillHash'
-import {
-  advancePhase,
-  beginOperation,
-  getActiveOp,
-} from '../src/services/skillOperations'
+import { advancePhase, beginOperation, getActiveOp } from '../src/services/skillOperations'
 import { opBackupDir, opStagedDir } from '../src/services/skillFsPublish'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -58,12 +54,7 @@ describe('RFC-223 legacy reserve op upgrade matrix', () => {
     rmSync(appHome, { recursive: true, force: true })
   })
 
-  for (const phase of [
-    'intent',
-    'fs-staged',
-    'fs-published',
-    'db-committed',
-  ] as const) {
+  for (const phase of ['intent', 'fs-staged', 'fs-published', 'db-committed'] as const) {
     test(`${phase}: legacy payload recovers under restored appHome only`, () => {
       const id = `reserve-${phase}`
       const name = `legacy-reserve-${phase}`
@@ -142,9 +133,7 @@ describe('RFC-223 legacy delete op upgrade matrix', () => {
       if (phase !== 'intent') {
         mkdirSync(dirname(currentTrash), { recursive: true })
         renameSync(currentRoot, currentTrash)
-        dbTxSync(db, (tx) =>
-          advancePhase(tx, opId, 'fs-staged', { backupPath: storedOldTrash }),
-        )
+        dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-staged', { backupPath: storedOldTrash }))
       }
       if (phase === 'db-committed') {
         dbTxSync(db, (tx) => {
@@ -157,9 +146,7 @@ describe('RFC-223 legacy delete op upgrade matrix', () => {
       writeFileSync(join(storedOldTrash, 'sentinel.txt'), 'old-home-trash')
       const report = runSkillIdentityMigrationBarrier(db, { appHome })
       expect(report.recoveredOperations).toBe(1)
-      expect(readFileSync(join(storedOldTrash, 'sentinel.txt'), 'utf-8')).toBe(
-        'old-home-trash',
-      )
+      expect(readFileSync(join(storedOldTrash, 'sentinel.txt'), 'utf-8')).toBe('old-home-trash')
       expect(getActiveOp(db, id)).toBeNull()
       expect(lockCount(db)).toBe(0)
       if (phase === 'db-committed') {
@@ -281,11 +268,7 @@ describe('RFC-223 legacy version-write op upgrade matrix', () => {
         writeTree(currentStaging, `new-${phase}`)
         dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-staged'))
       }
-      if (
-        phase === 'fs-versioned' ||
-        phase === 'db-committed' ||
-        phase === 'fs-published'
-      ) {
+      if (phase === 'fs-versioned' || phase === 'db-committed' || phase === 'fs-published') {
         cpSync(currentStaging, currentVersion, { recursive: true })
         dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-versioned'))
       }
@@ -335,23 +318,14 @@ describe('RFC-223 legacy version-write op upgrade matrix', () => {
           db
             .select({ path: skillVersions.filesPath })
             .from(skillVersions)
-            .where(
-              eq(skillVersions.skillId, id),
-            )
+            .where(eq(skillVersions.skillId, id))
             .all()
             .map((row) => row.path)
             .sort(),
-        ).toEqual([
-          skillVersionRelPath(id, 1),
-          skillVersionRelPath(id, 2),
-        ])
+        ).toEqual([skillVersionRelPath(id, 1), skillVersionRelPath(id, 2)])
       } else {
         expect(
-          db
-            .select()
-            .from(skillVersions)
-            .where(eq(skillVersions.skillId, id))
-            .all(),
+          db.select().from(skillVersions).where(eq(skillVersions.skillId, id)).all(),
         ).toHaveLength(1)
       }
     })
@@ -398,12 +372,7 @@ function seedLegacyRow(
   }
 }
 
-function seedCanonicalRow(
-  db: DbClient,
-  appHome: string,
-  id: string,
-  name: string,
-): void {
+function seedCanonicalRow(db: DbClient, appHome: string, id: string, name: string): void {
   const filesDir = skillFilesAbs(appHome, id)
   const versionDir = skillVersionAbs(appHome, id, 1)
   writeTree(filesDir, 'canonical-live')

@@ -18,11 +18,7 @@ import {
   getSkill,
   listSkills,
 } from '../src/services/skill'
-import {
-  advancePhase,
-  beginOperation,
-  getActiveOp,
-} from '../src/services/skillOperations'
+import { advancePhase, beginOperation, getActiveOp } from '../src/services/skillOperations'
 import { recoverSkillOperations } from '../src/services/skillOpRecoveryDriver'
 import { SKILL_OP_RECOVERY_REGISTRY } from '../src/services/skillOpRegistry'
 import { runSkillIdentityMigrationBarrier } from '../src/services/skillIdentityMigration'
@@ -166,11 +162,7 @@ describe('RFC-170 reserve op', () => {
         },
       ),
     ).rejects.toThrow('finish-fault')
-    const row = db
-      .select()
-      .from(skills)
-      .where(eq(skills.name, 'committed-create'))
-      .get()!
+    const row = db.select().from(skills).where(eq(skills.name, 'committed-create')).get()!
     expect(row.reservationState).toBe('ready')
     expect(existsSync(join(appHome, 'skills', row.id, 'files', 'SKILL.md'))).toBe(true)
     expect(getActiveOp(db, row.id)?.phase).toBe('db-committed')

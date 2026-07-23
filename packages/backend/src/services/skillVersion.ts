@@ -91,15 +91,8 @@ export function memoriesToUnfuseOnRestore(
 // skillBootVerify can share them without a skillVersion↔skillBootVerify cycle.
 // Re-exported here for existing importers of `hashDir` from this module.
 export { hashDir, collectFiles, NUL } from '@/services/skillHash'
-import {
-  assertRegularFileTree,
-  collectFiles,
-  hashRegularFileTree,
-} from '@/services/skillHash'
-import {
-  markSkillBootVerified,
-  unmarkSkillBootVerified,
-} from '@/services/skillBootVerify'
+import { assertRegularFileTree, collectFiles, hashRegularFileTree } from '@/services/skillHash'
+import { markSkillBootVerified, unmarkSkillBootVerified } from '@/services/skillBootVerify'
 
 /** A file in a version snapshot: utf-8 text, or a binary file keyed by hash. */
 export type TreeEntry = { kind: 'text'; content: string } | { kind: 'binary'; hash: string }
@@ -529,11 +522,7 @@ export function commitSkillVersion(
     const newHash = hashRegularFileTree(staging)
     // Empty-write short-circuit: an editor Save with no real change must not
     // inflate the history. (Initial / fusion / restore always commit.)
-    if (
-      commit.source === 'editor' &&
-      maxIndex > 0 &&
-      newHash === hashRegularFileTree(filesDir)
-    ) {
+    if (commit.source === 'editor' && maxIndex > 0 && newHash === hashRegularFileTree(filesDir)) {
       rmSync(staging, { recursive: true, force: true })
       const latest = existing.find((r) => r.versionIndex === maxIndex)
       if (latest) {
@@ -608,9 +597,7 @@ export function commitSkillVersion(
     swapInStaged(filesDir, publishId)
     const root = skillRootAbs(opts.appHome, skillId)
     if (realDirectoryChainState(root, filesDir) !== 'real-directory') {
-      throw new Error(
-        `skill version ${newVersion} live publish is not a real directory`,
-      )
+      throw new Error(`skill version ${newVersion} live publish is not a real directory`)
     }
     if (hashRegularFileTree(filesDir) !== newHash) {
       throw new Error(

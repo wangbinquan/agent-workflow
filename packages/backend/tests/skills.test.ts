@@ -106,10 +106,7 @@ describe('skill service', () => {
     })
     expect(skill.sourceKind).toBe('managed')
     expect(skill.managedPath).toBe(`skills/${skill.id}/files`)
-    const skillMd = readFileSync(
-      join(h.appHome, 'skills', skill.id, 'files', 'SKILL.md'),
-      'utf-8',
-    )
+    const skillMd = readFileSync(join(h.appHome, 'skills', skill.id, 'files', 'SKILL.md'), 'utf-8')
     expect(skillMd).toContain('name: foo')
     expect(skillMd).toContain('description: foo skill')
     expect(skillMd).toContain('author: me')
@@ -181,9 +178,9 @@ describe('skill service', () => {
     expect(await readSkillFile(h.db, fsOpts, skill.id, 'templates/a.txt')).toBe('aaa')
 
     await deleteSkillFile(h.db, fsOpts, skill.id, 'templates/a.txt')
-    expect(
-      existsSync(join(h.appHome, 'skills', skill.id, 'files', 'templates', 'a.txt')),
-    ).toBe(false)
+    expect(existsSync(join(h.appHome, 'skills', skill.id, 'files', 'templates', 'a.txt'))).toBe(
+      false,
+    )
 
     // deleting SKILL.md is refused
     await expect(deleteSkillFile(h.db, fsOpts, skill.id, 'SKILL.md')).rejects.toBeInstanceOf(
@@ -201,12 +198,12 @@ describe('skill service', () => {
     await expect(
       writeSkillFile(h.db, fsOpts, skill.id, '../escape.txt', 'x'),
     ).rejects.toBeInstanceOf(ValidationError)
-    await expect(
-      writeSkillFile(h.db, fsOpts, skill.id, '/etc/passwd', 'x'),
-    ).rejects.toBeInstanceOf(ValidationError)
-    await expect(
-      readSkillFile(h.db, fsOpts, skill.id, '../../etc/hosts'),
-    ).rejects.toBeInstanceOf(ValidationError)
+    await expect(writeSkillFile(h.db, fsOpts, skill.id, '/etc/passwd', 'x')).rejects.toBeInstanceOf(
+      ValidationError,
+    )
+    await expect(readSkillFile(h.db, fsOpts, skill.id, '../../etc/hosts')).rejects.toBeInstanceOf(
+      ValidationError,
+    )
   })
 
   test('delete removes fs + DB; refuses when referenced by an agent', async () => {

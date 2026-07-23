@@ -24,12 +24,7 @@ import { dirname, join, relative, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import {
-  skillOperationLocks,
-  skillOperations,
-  skills,
-  skillVersions,
-} from '../src/db/schema'
+import { skillOperationLocks, skillOperations, skills, skillVersions } from '../src/db/schema'
 import { dbTxSync } from '../src/db/txSync'
 import { runSkillIdentityMigrationBarrier } from '../src/services/skillIdentityMigration'
 import {
@@ -40,11 +35,7 @@ import {
   skillVersionRelPath,
 } from '../src/services/skillIdentityPaths'
 import { hashDir } from '../src/services/skillHash'
-import {
-  advancePhase,
-  beginOperation,
-  getActiveOp,
-} from '../src/services/skillOperations'
+import { advancePhase, beginOperation, getActiveOp } from '../src/services/skillOperations'
 import { opBackupDir, opStagedDir } from '../src/services/skillFsPublish'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -93,7 +84,11 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
       'happy live',
     )
     expect(
-      db.select({ managedPath: skills.managedPath }).from(skills).where(eq(skills.id, row.id)).get(),
+      db
+        .select({ managedPath: skills.managedPath })
+        .from(skills)
+        .where(eq(skills.id, row.id))
+        .get(),
     ).toEqual({ managedPath: skillFilesRel(row.id) })
     expect(
       db
@@ -120,13 +115,7 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
     })
   })
 
-  for (const crashPhase of [
-    'intent',
-    'fs-moved',
-    'fs-staged',
-    'db-committed',
-    'done',
-  ] as const) {
+  for (const crashPhase of ['intent', 'fs-moved', 'fs-staged', 'db-committed', 'done'] as const) {
     test(`crash after ${crashPhase} is recoverable and re-entrant`, () => {
       const row = seedLegacySkill(db, appHome, {
         id: `skill-id-${crashPhase}`,
@@ -209,9 +198,7 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
     })
     writeTree(skillRootAbs(appHome, blocked.id), 'untracked-target')
 
-    expect(() => runSkillIdentityMigrationBarrier(db, { appHome })).toThrow(
-      /claim different roots/,
-    )
+    expect(() => runSkillIdentityMigrationBarrier(db, { appHome })).toThrow(/claim different roots/)
     expect(existsSync(join(appHome, 'skills', first.name))).toBe(true)
     expect(existsSync(skillRootAbs(appHome, first.id))).toBe(false)
     expect(activeOperationCount(db)).toBe(0)
@@ -361,9 +348,7 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
       }),
     )
 
-    expect(() => runSkillIdentityMigrationBarrier(db, { appHome })).toThrow(
-      /claim different roots/,
-    )
+    expect(() => runSkillIdentityMigrationBarrier(db, { appHome })).toThrow(/claim different roots/)
     expect(hashDir(legacyRoot)).toBe(legacyHash)
     expect(hashDir(canonicalRoot)).toBe(canonicalHash)
     expect(getActiveOp(db, row.id)?.opId).toBe(opId)
@@ -374,10 +359,7 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
     test(`${kind} recovery rejects a payload from another path generation`, () => {
       const row = seedCanonicalSkill(db, appHome, `wrong-generation-${kind}`)
       if (kind === 'reserve') {
-        db.update(skills)
-          .set({ reservationState: 'reserving' })
-          .where(eq(skills.id, row.id))
-          .run()
+        db.update(skills).set({ reservationState: 'reserving' }).where(eq(skills.id, row.id)).run()
       }
       const opId = dbTxSync(db, (tx) =>
         beginOperation(tx, {
@@ -541,9 +523,7 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
     mkdirSync(dirname(legacyRoot), { recursive: true })
     symlinkSync(target, legacyRoot, 'dir')
 
-    expect(() => runSkillIdentityMigrationBarrier(db, { appHome })).toThrow(
-      /not a real directory/,
-    )
+    expect(() => runSkillIdentityMigrationBarrier(db, { appHome })).toThrow(/not a real directory/)
     expect(db.select().from(skills).where(eq(skills.id, row.id)).get()).toBeDefined()
     expect(existsSync(legacyRoot)).toBe(true)
     expect(existsSync(skillRootAbs(appHome, row.id))).toBe(false)
@@ -658,9 +638,7 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
     expect(() => runSkillIdentityMigrationBarrier(db, { appHome })).not.toThrow()
 
     mkdirSync(join(skillRootAbs(appHome, row.id), `files.op-${ulid()}.backup`))
-    expect(() => runSkillIdentityMigrationBarrier(db, { appHome })).toThrow(
-      /operation residue/,
-    )
+    expect(() => runSkillIdentityMigrationBarrier(db, { appHome })).toThrow(/operation residue/)
   })
 })
 
@@ -690,9 +668,7 @@ describe('RFC-223 PR-5 committed version-write recovery', () => {
       expect(getActiveOp(db, row.id)).toBeNull()
       expect(lockCount(db)).toBe(0)
       expect(
-        readdirSync(skillRootAbs(appHome, row.id)).filter((name) =>
-          name.startsWith('files.op-'),
-        ),
+        readdirSync(skillRootAbs(appHome, row.id)).filter((name) => name.startsWith('files.op-')),
       ).toEqual([])
     })
   }
@@ -718,21 +694,12 @@ describe('RFC-223 PR-5 committed version-write recovery', () => {
         const row = seedCanonicalSkill(isolatedDb, isolatedHome, defect)
         plantCommittedVersionWrite(isolatedDb, isolatedHome, row.id)
         if (defect === 'non-current') {
-          isolatedDb
-            .update(skills)
-            .set({ contentVersion: 1 })
-            .where(eq(skills.id, row.id))
-            .run()
+          isolatedDb.update(skills).set({ contentVersion: 1 }).where(eq(skills.id, row.id)).run()
         } else {
           isolatedDb
             .update(skillVersions)
             .set({ filesPath: skillVersionRelPath(row.id, 999) })
-            .where(
-              and(
-                eq(skillVersions.skillId, row.id),
-                eq(skillVersions.versionIndex, 2),
-              ),
-            )
+            .where(and(eq(skillVersions.skillId, row.id), eq(skillVersions.versionIndex, 2)))
             .run()
         }
 
@@ -759,9 +726,7 @@ describe('RFC-223 PR-5 committed version-write recovery', () => {
     rmSync(planted.versionDir, { recursive: true, force: true })
     symlinkSync(externalCandidate, planted.versionDir, 'dir')
 
-    expect(() => runSkillIdentityMigrationBarrier(db, { appHome })).toThrow(
-      /not a real directory/,
-    )
+    expect(() => runSkillIdentityMigrationBarrier(db, { appHome })).toThrow(/not a real directory/)
     expect(readFileSync(join(planted.filesDir, 'SKILL.md'), 'utf-8')).toContain('old-v1')
     expect(getActiveOp(db, row.id)?.phase).toBe('db-committed')
     expect(lockCount(db)).toBe(1)
@@ -938,9 +903,5 @@ function lockCount(db: DbClient): number {
 }
 
 function activeOperationCount(db: DbClient): number {
-  return db
-    .select()
-    .from(skillOperations)
-    .where(eq(skillOperations.active, 1))
-    .all().length
+  return db.select().from(skillOperations).where(eq(skillOperations.active, 1)).all().length
 }

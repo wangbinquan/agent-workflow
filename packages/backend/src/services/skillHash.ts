@@ -4,13 +4,7 @@
 // not import skillVersion, which imports skillBootVerify for markSkillBootVerified).
 
 import { createHash } from 'node:crypto'
-import {
-  existsSync,
-  lstatSync,
-  readFileSync,
-  readlinkSync,
-  readdirSync,
-} from 'node:fs'
+import { existsSync, lstatSync, readFileSync, readlinkSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { ValidationError } from '@/util/errors'
 
