@@ -30,7 +30,7 @@ import type {
   UserPublic,
 } from '@agent-workflow/shared'
 import { isResourceAdminRole } from '@agent-workflow/shared'
-import { and, eq, inArray } from 'drizzle-orm'
+import { and, eq, inArray, ne } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import { SYSTEM_USER_ID } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
@@ -73,6 +73,16 @@ export const ACL_TABLES = {
   workflow: workflows,
   workgroup: workgroups, // RFC-164
 } as const
+
+/** RFC-223: these five resource types have owner-scoped display-name uniqueness.
+ * Workflows deliberately remain non-unique; runtimes are not ACL resources. */
+export const OWNER_NAME_UNIQUE_TYPES: ReadonlySet<AclResourceType> = new Set([
+  'agent',
+  'skill',
+  'mcp',
+  'plugin',
+  'workgroup',
+])
 
 /** Global system-admin identity (system domain: users / settings / oidc /
  *  backup / runtimes / task deletion). Kept distinct from the resource-admin
@@ -353,6 +363,7 @@ export async function updateResourceAcl(
     const cur = tx
       .select({
         aclRevision: table.aclRevision,
+        name: table.name,
         ownerUserId: table.ownerUserId,
         visibility: table.visibility,
       })
@@ -369,6 +380,35 @@ export async function updateResourceAcl(
       throw new ConflictError(
         'acl-revision-conflict',
         `acl revision is ${cur.aclRevision}, expected ${body.expectedAclRevision}; reload and retry`,
+      )
+    }
+
+    // Route authorization is only an early UX check. The row may have changed
+    // owner/visibility/grants before this write transaction began, so the
+    // transaction must authorize the actor again from its own fresh snapshot.
+    const hasFreshGrant =
+      !isResourceAdminActor(actor) &&
+      tx
+        .select({ resourceId: resourceGrants.resourceId })
+        .from(resourceGrants)
+        .where(
+          and(
+            eq(resourceGrants.resourceType, type),
+            eq(resourceGrants.resourceId, row.id),
+            eq(resourceGrants.userId, actor.user.id),
+          ),
+        )
+        .get() !== undefined
+    const freshVisible =
+      isResourceAdminActor(actor) ||
+      (cur.visibility ?? 'public') === 'public' ||
+      cur.ownerUserId === actor.user.id ||
+      hasFreshGrant
+    if (!freshVisible) throw new NotFoundError('not-found', `${type} not found`)
+    if (!isResourceAdminActor(actor) && cur.ownerUserId !== actor.user.id) {
+      throw new ForbiddenError(
+        'forbidden',
+        `only the ${type} owner or a resource admin can modify it`,
       )
     }
 
@@ -393,6 +433,23 @@ export async function updateResourceAcl(
     const nextVisibility: ResourceVisibility =
       body.visibility !== undefined ? body.visibility : (cur.visibility ?? 'public')
 
+    if (nextOwner !== prevOwner && nextOwner !== null && OWNER_NAME_UNIQUE_TYPES.has(type)) {
+      const collision = tx
+        .select({ id: table.id })
+        .from(table)
+        .where(
+          and(eq(table.ownerUserId, nextOwner), eq(table.name, cur.name), ne(table.id, row.id)),
+        )
+        .get()
+      if (collision !== undefined) {
+        throw new ConflictError(
+          'resource-name-conflict',
+          `${type} '${cur.name}' already exists for the target owner`,
+          { resourceType: type, name: cur.name, ownerUserId: nextOwner },
+        )
+      }
+    }
+
     let nextGrantIds: string[]
     if (body.userIds !== undefined) {
       nextGrantIds = [...new Set(body.userIds)]
@@ -416,15 +473,31 @@ export async function updateResourceAcl(
     // The owner is never a grant row.
     nextGrantIds = nextGrantIds.filter((id) => id !== nextOwner)
 
-    tx.update(table)
-      .set({
-        ownerUserId: nextOwner,
-        visibility: nextVisibility,
-        aclRevision: cur.aclRevision + 1, // monotonic bump on every successful PUT
-        updatedAt: now,
-      })
-      .where(eq(table.id, row.id))
-      .run()
+    try {
+      tx.update(table)
+        .set({
+          ownerUserId: nextOwner,
+          visibility: nextVisibility,
+          aclRevision: cur.aclRevision + 1, // monotonic bump on every successful PUT
+          updatedAt: now,
+        })
+        .where(eq(table.id, row.id))
+        .run()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (
+        nextOwner !== prevOwner &&
+        OWNER_NAME_UNIQUE_TYPES.has(type) &&
+        /UNIQUE constraint failed|SQLITE_CONSTRAINT_UNIQUE|constraint failed/i.test(message)
+      ) {
+        throw new ConflictError(
+          'resource-name-conflict',
+          `${type} '${cur.name}' already exists for the target owner`,
+          { resourceType: type, name: cur.name, ownerUserId: nextOwner },
+        )
+      }
+      throw error
+    }
     tx.delete(resourceGrants)
       .where(and(eq(resourceGrants.resourceType, type), eq(resourceGrants.resourceId, row.id)))
       .run()
