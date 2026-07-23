@@ -1,7 +1,7 @@
 # RFC-223 多租户资源标识：id 规范化与 name 唯一性放开
 
-- 状态：Draft（2026-07-23）
-- 关联：RFC-099（资源 ACL：owner + visibility + grants）、RFC-177（by-id 解析器）、RFC-175（`source_agent_id` 冻结先例）、RFC-221 / RFC-222（并发在途的 users/role 面，存在 `plan.md` / `STATE.md` / `users.tsx` 合并面）
+- 状态：Done（2026-07-23）
+- 关联：RFC-099（资源 ACL）、RFC-177（by-id 解析器）、RFC-175（`source_agent_id` 冻结先例）、RFC-221 / RFC-222（历史共享文件合并面）、RFC-224（opencode 最终 resolved-config 执行身份完整性；独立后续，不阻塞 RFC-223 完成）
 
 > 本 RFC 由「工作组 URL 为什么用 name 不用 id」这一问题延伸而来，最终定位为**多租户改造中 `name` 全局唯一这条隐含契约的全面拆除**。
 
