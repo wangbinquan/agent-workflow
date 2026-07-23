@@ -8,10 +8,10 @@ import { buildPalette } from '@/components/canvas/nodePalette'
 describe('Phase B bundles', () => {
   test('editor core keys are reachable in both locales', () => {
     setLanguage('zh-CN')
-    expect(i18n.t('editor.launch')).toBe('启动任务 →')
+    expect(i18n.t('editor.launch')).toBe('启动任务')
     expect(i18n.t('editor.exportYaml')).toBe('导出 YAML')
     setLanguage('en-US')
-    expect(i18n.t('editor.launch')).toBe('Launch task →')
+    expect(i18n.t('editor.launch')).toBe('Launch task')
     expect(i18n.t('editor.exportYaml')).toBe('Export YAML')
     setLanguage('zh-CN')
   })

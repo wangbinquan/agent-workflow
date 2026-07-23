@@ -871,17 +871,9 @@ export function WorkflowEditorLoaded({
         </button>
       )}
       <button
-        type="button"
-        className="btn btn--sm"
-        onClick={() => void handleValidate()}
-        disabled={exactActionRef.current !== null}
-      >
-        {validatePending ? t('editor.validating') : t('editor.validate')}
-      </button>
-      <button
         ref={moreTriggerRef}
         type="button"
-        className="btn btn--sm"
+        className="btn"
         onClick={() => setModalSurface('actions')}
         data-testid="workflow-more-actions"
       >

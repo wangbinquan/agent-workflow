@@ -467,13 +467,17 @@ describe('WorkflowEditorLoaded RFC-199 draft integration', () => {
     expect(screen.getAllByRole('dialog')).toHaveLength(1)
   })
 
-  test('header keeps Launch as its only primary action and More hands off to one Rename dialog', async () => {
+  test('header keeps plain-text Launch as its only primary action, omits Validate, and More opens Rename', async () => {
     const { container } = renderEditor(detail())
     await flushEffects()
     const header = container.querySelector('.page__header')
+    const launchButton = header?.querySelector('.btn--primary')
 
     expect(header?.querySelectorAll('.btn--primary')).toHaveLength(1)
-    expect(header?.querySelector('.btn--primary')?.textContent).toMatch(/启动任务|Launch task/)
+    expect(launchButton?.textContent).toMatch(/^(启动任务|Launch task)$/)
+    expect(launchButton?.textContent).not.toContain('→')
+    expect(screen.queryByRole('button', { name: /^校验$|^Validate$/ })).toBeNull()
+    expect(screen.getByTestId('workflow-more-actions').classList.contains('btn--sm')).toBe(false)
     expect(screen.queryByRole('button', { name: /导出 YAML|Export YAML/ })).toBeNull()
     expect(screen.queryByTestId('workflow-rename-button')).toBeNull()
 
@@ -638,13 +642,19 @@ describe('WorkflowEditorLoaded RFC-199 draft integration', () => {
     expect(screen.queryByTestId('unsaved-guard-dialog')).toBeNull()
   })
 
-  test('Validate and every Launch run exact save-bound validation; double click navigates once with version', async () => {
+  test('Launch keeps exact save-bound validation without exposing a standalone Validate action', async () => {
     const post = vi.spyOn(api, 'post').mockResolvedValue(validationReceipt() as never)
     const rendered = renderEditor(detail())
     await flushEffects()
 
-    fireEvent.click(screen.getByRole('button', { name: /^校验$|^Validate$/ }))
+    expect(screen.queryByRole('button', { name: /^校验$|^Validate$/ })).toBeNull()
+    const launch = screen.getByRole('button', { name: /启动任务|Launch task/ })
+    fireEvent.click(launch)
+    fireEvent.click(launch)
     await flushEffects()
+
+    // The validation safety fence stays inside Launch while the synchronous
+    // ref collapses two clicks into one preparing-launch operation.
     expect(post).toHaveBeenCalledTimes(1)
     expect(post).toHaveBeenLastCalledWith(
       '/api/workflows/wf-1/validate',
@@ -654,24 +664,11 @@ describe('WorkflowEditorLoaded RFC-199 draft integration', () => {
       },
       expect.any(AbortSignal),
     )
-    expect(screen.getByTestId('workflow-validation-summary').textContent).toMatch(
-      /校验通过|validated/i,
-    )
-
-    const launch = screen.getByRole('button', { name: /启动任务|Launch task/ })
-    fireEvent.click(launch)
-    fireEvent.click(launch)
-    await flushEffects()
-
-    // The page's old green result never authorizes Launch: it performs a
-    // second fresh exact validation, while the synchronous ref collapses the
-    // two clicks into one preparing-launch operation.
-    expect(post).toHaveBeenCalledTimes(2)
     expect(rendered.router.state.location.pathname).toBe('/workflows/wf-1/launch')
     expect(rendered.router.state.location.search).toMatchObject({ version: 1 })
   })
 
-  test('dirty Validate flushes the composite snapshot before posting the saved exact revision', async () => {
+  test('dirty Launch flushes the composite snapshot before validating the saved exact revision', async () => {
     const put = vi.spyOn(api, 'put').mockImplementation((_path, body) => {
       const input = body as UpdateWorkflow
       return Promise.resolve({
@@ -690,9 +687,9 @@ describe('WorkflowEditorLoaded RFC-199 draft integration', () => {
     const post = vi.spyOn(api, 'post').mockResolvedValue(validationReceipt(2, hash('b')) as never)
     renderEditor(detail())
     await flushEffects()
-    renameLocal('saved-before-validate', 'exact sequence')
+    renameLocal('saved-before-launch', 'exact sequence')
 
-    fireEvent.click(screen.getByRole('button', { name: /^校验$|^Validate$/ }))
+    fireEvent.click(screen.getByRole('button', { name: /启动任务|Launch task/ }))
     await act(async () => {
       await vi.advanceTimersByTimeAsync(299)
     })
@@ -743,13 +740,19 @@ describe('WorkflowEditorLoaded RFC-199 draft integration', () => {
     expect(document.activeElement).toBe(screen.getByTestId('workflow-action-error-focus'))
   })
 
-  test('a validation response is rendered stale when inventory changes while the request is deferred', async () => {
+  test('the failure-details Revalidate path stays available after removing the header action', async () => {
     const pending = deferred<WorkflowValidationReceipt>()
-    vi.spyOn(api, 'post').mockReturnValue(pending.promise as never)
+    vi.spyOn(api, 'post')
+      .mockResolvedValueOnce(
+        validationReceipt(1, hash('a'), [
+          { code: 'agent-not-found', message: 'missing agent', pointer: 'node-a' },
+        ]) as never,
+      )
+      .mockReturnValueOnce(pending.promise as never)
     const rendered = renderEditor(detail())
     await flushEffects()
 
-    fireEvent.click(screen.getByRole('button', { name: /^校验$|^Validate$/ }))
+    fireEvent.click(screen.getByRole('button', { name: /启动任务|Launch task/ }))
     await flushEffects()
     act(() => {
       rendered.qc.setQueryData<Agent[]>(
@@ -763,13 +766,27 @@ describe('WorkflowEditorLoaded RFC-199 draft integration', () => {
         ],
       )
     })
+    fireEvent.click(screen.getByTestId('workflow-validation-summary'))
+    fireEvent.click(screen.getByRole('button', { name: /重新校验|Revalidate/ }))
+    await flushEffects()
+    act(() => {
+      rendered.qc.setQueryData<Agent[]>(
+        ['agents'],
+        [
+          {
+            id: 'agent-newer',
+            name: 'newer-validator-input',
+            updatedAt: 30_000,
+          } as Agent,
+        ],
+      )
+    })
     pending.resolve(validationReceipt())
     await flushEffects()
 
     expect(screen.getByTestId('workflow-validation-summary').textContent).toMatch(
       /需要重新校验|revalidation required/i,
     )
-    fireEvent.click(screen.getByTestId('workflow-validation-summary'))
     expect(screen.getByTestId('workflow-validation-overlay').textContent).toMatch(
       /校验所依赖的资源可能已变化|validation resources may have changed/i,
     )

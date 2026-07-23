@@ -6322,7 +6322,7 @@ export const zhCN: Resources = {
     statusSaving: '保存中…',
     statusUnsaved: '未保存',
     statusSaved: '已保存',
-    launch: '启动任务 →',
+    launch: '启动任务',
     preparingLaunch: '正在保存并校验…',
     validate: '校验',
     validating: '校验中…',

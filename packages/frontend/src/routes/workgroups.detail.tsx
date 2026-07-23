@@ -644,7 +644,7 @@ export function WorkgroupEditor(props: {
             <button
               ref={moreTriggerRef}
               type="button"
-              className="btn btn--sm"
+              className="btn"
               onClick={() => setHeaderSurface('actions')}
               data-testid="workgroup-more-actions"
             >
@@ -666,38 +666,40 @@ export function WorkgroupEditor(props: {
           <ErrorBanner error={props.queryError} onRetry={() => void props.refetch()} />
         )}
 
-      <WorkgroupDraftStatus
-        state={controller.state}
-        onRetryNow={controller.retry}
-        onSaveCopy={controller.requestCopy}
-        onLoadRemote={async () => {
-          transientRef.current.discard()
-          transientRef.current = cleanTransient
-          setTransient(cleanTransient)
-          await controller.confirmLoadRemote()
-        }}
-        onOverwriteRemote={controller.confirmOverwrite}
-        onReturnToList={() => void navigate({ to: '/workgroups' })}
-      />
+      <div className="workgroup-editor-status-stack" data-testid="workgroup-status-stack">
+        <WorkgroupDraftStatus
+          state={controller.state}
+          onRetryNow={controller.retry}
+          onSaveCopy={controller.requestCopy}
+          onLoadRemote={async () => {
+            transientRef.current.discard()
+            transientRef.current = cleanTransient
+            setTransient(cleanTransient)
+            await controller.confirmLoadRemote()
+          }}
+          onOverwriteRemote={controller.confirmOverwrite}
+          onReturnToList={() => void navigate({ to: '/workgroups' })}
+        />
 
-      {(!readiness.ready || readiness.warnings.length > 0) && (
-        <div
-          className="info-box info-box--muted workgroup-readiness"
-          role="status"
-          data-testid="workgroup-readiness-banner"
-        >
-          {readiness.reasons.map((reason) => (
-            <span key={reason}>
-              {reason === 'no-agent-member'
-                ? t('workgroups.readiness.noAgentMember')
-                : t('workgroups.readiness.leaderMissing')}
-            </span>
-          ))}
-          {readiness.warnings.map((warning) => (
-            <span key={warning}>{t('workgroups.readiness.noNonLeaderWorker')}</span>
-          ))}
-        </div>
-      )}
+        {(!readiness.ready || readiness.warnings.length > 0) && (
+          <div
+            className="info-box info-box--muted workgroup-readiness"
+            role="status"
+            data-testid="workgroup-readiness-banner"
+          >
+            {readiness.reasons.map((reason) => (
+              <span key={reason}>
+                {reason === 'no-agent-member'
+                  ? t('workgroups.readiness.noAgentMember')
+                  : t('workgroups.readiness.leaderMissing')}
+              </span>
+            ))}
+            {readiness.warnings.map((warning) => (
+              <span key={warning}>{t('workgroups.readiness.noNonLeaderWorker')}</span>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="split">
         <aside className="split__list">

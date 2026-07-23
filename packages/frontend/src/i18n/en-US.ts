@@ -2484,7 +2484,7 @@ export const enUS: Resources = {
     statusSaving: 'saving…',
     statusUnsaved: 'unsaved',
     statusSaved: 'saved',
-    launch: 'Launch task →',
+    launch: 'Launch task',
     preparingLaunch: 'Saving and validating…',
     validate: 'Validate',
     validating: 'Validating…',

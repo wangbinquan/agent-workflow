@@ -261,12 +261,12 @@ describe('AclPanel', () => {
 })
 
 // --- Header-button sizing. RFC-198 promotes the editor's sole primary action
-// (Launch) to the default page-primary target size. RFC-199 moves
-// Export/Rename/ACL/Delete behind one compact More action, so this source-level
-// assertion locks both the one-primary rule and that information hierarchy. ---
+// (Launch) to the default page-primary target size. The visible More trigger
+// shares that readable font/target size while its outline keeps the secondary
+// hierarchy; lower-frequency actions remain inside the dialog. ---
 
-describe('workflows editor header — one full-size primary plus compact secondary actions', () => {
-  test('Launch is full-size; every other header action is compact and management lives in More', async () => {
+describe('workflows editor header — one primary plus a same-size secondary More action', () => {
+  test('Launch and More are full-size; utility actions stay compact and management lives in More', async () => {
     const fs = await import('node:fs/promises')
     const path = await import('node:path')
     const here = path.dirname(new URL(import.meta.url).pathname)
@@ -277,17 +277,21 @@ describe('workflows editor header — one full-size primary plus compact seconda
     expect(end).toBeGreaterThan(start)
     const block = src.slice(start, end)
     let primaryCount = 0
+    let fullSizeSecondaryCount = 0
     for (const m of block.matchAll(/className="([^"]*)"/g)) {
       const cls = m[1] ?? ''
       if (!cls.split(/\s+/).includes('btn')) continue
       if (cls.split(/\s+/).includes('btn--primary')) {
         primaryCount += 1
         expect(cls).not.toContain('btn--sm')
+      } else if (cls === 'btn') {
+        fullSizeSecondaryCount += 1
       } else {
         expect(cls).toContain('btn--sm')
       }
     }
     expect(primaryCount).toBe(1)
+    expect(fullSizeSecondaryCount).toBe(1)
     expect(block).toContain('data-testid="workflow-more-actions"')
     expect(src).toContain('data-testid="workflow-actions-dialog"')
     expect(src).toContain('data-testid="workflow-acl-button"')

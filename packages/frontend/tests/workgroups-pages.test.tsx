@@ -656,6 +656,7 @@ describe('/workgroups/$name — config editing', () => {
     expect(header?.querySelector('.page__meta')?.textContent).toContain('v1')
     expect(header?.querySelectorAll('.btn--primary')).toHaveLength(1)
     expect(header?.querySelector('.btn--primary')?.textContent).toContain('Launch task')
+    expect(screen.getByTestId('workgroup-more-actions').classList.contains('btn--sm')).toBe(false)
     expect(screen.queryByTestId('workgroup-rename-button')).toBeNull()
     expect(screen.queryByTestId('workgroup-delete-button')).toBeNull()
 
