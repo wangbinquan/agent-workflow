@@ -322,4 +322,45 @@ describe('RFC-210 — gitlink with no initialized working tree', () => {
       materializeTree(canon, { mergedTree: headTree, canonCurrentTree: headTree, taskBaseHead }),
     ).rejects.toThrow(/could not be parsed to classify ownership/)
   }, 120_000)
+
+  test('an empty-NAME .gitmodules subsection does not re-classify a stray repo as managed', async () => {
+    // Codex review round 10, P1: `[submodule ""]` with `path = nestedrepo` is
+    // parseable (git config exits 0) but git's submodule machinery IGNORES the
+    // empty-name entry. If the declared-paths parser trusted it, an initialized
+    // stray repo the user advanced would be re-marked managed and rewound by
+    // `checkout --detach` — defeating the round-8 guard via a crafted config.
+    const nestedSrc = tmp('aw-rfc210-np-emptyname-src-')
+    await initRepo(nestedSrc, 'inner.txt', 'v1\n')
+    const c0 = (await runGit(nestedSrc, ['rev-parse', 'HEAD'])).stdout.trim()
+
+    const host = tmp('aw-rfc210-np-emptyname-host-')
+    await initRepo(host, 'README.md', 'root\n')
+    await runGit(host, ['update-index', '--add', '--cacheinfo', `160000,${c0},nestedrepo`])
+    // A crafted `.gitmodules` whose only entry has an EMPTY name.
+    writeFileSync(join(host, '.gitmodules'), '[submodule ""]\n\tpath = nestedrepo\n')
+    await runGit(host, ['add', '.gitmodules'])
+    await runGit(host, ['commit', '-q', '-m', 'gitlink + empty-name .gitmodules'])
+    const headTree = (await runGit(host, ['rev-parse', 'HEAD^{tree}'])).stdout.trim()
+    const taskBaseHead = (await runGit(host, ['rev-parse', 'HEAD'])).stdout.trim()
+
+    const canonRoot = tmp('aw-rfc210-np-emptyname-wt-')
+    const canon = join(canonRoot, 'canon')
+    await runGit(host, ['worktree', 'add', '-q', '--detach', canon, 'HEAD'])
+    rmSync(join(canon, 'nestedrepo'), { recursive: true, force: true })
+    await runGit(canonRoot, ['clone', '-q', nestedSrc, join(canon, 'nestedrepo')])
+    const canonNested = join(canon, 'nestedrepo')
+    writeFileSync(join(canonNested, 'inner.txt'), 'user-precious-work\n')
+    const userSha = await commitIn(canonNested, 'user work in stray repo')
+    expect((await runGit(canonNested, ['cat-file', '-e', c0])).exitCode).toBe(0)
+
+    await materializeTree(canon, {
+      mergedTree: headTree,
+      canonCurrentTree: headTree,
+      taskBaseHead,
+    })
+
+    // The empty-name entry is ignored → the gitlink stays stray → untouched.
+    expect((await runGit(canonNested, ['rev-parse', 'HEAD'])).stdout.trim()).toBe(userSha)
+    expect(readFileSync(join(canonNested, 'inner.txt'), 'utf8')).toBe('user-precious-work\n')
+  }, 120_000)
 })

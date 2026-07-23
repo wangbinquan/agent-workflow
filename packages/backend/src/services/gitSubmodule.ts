@@ -456,6 +456,16 @@ export async function readDeclaredSubmodulePaths(
   for (const line of r.stdout.split('\n')) {
     const sp = line.indexOf(' ')
     if (sp < 0) continue
+    // Validate the submodule NAME, not just extract the path (Codex review
+    // round 10, P1): `git config --get-regexp` matches `submodule..path` for an
+    // `[submodule ""]` subsection (exit 0, parseable), but git's own submodule
+    // machinery IGNORES an empty-name entry. Without this check a crafted
+    // `.gitmodules` would re-classify a stray gitlink as managed and let
+    // `checkout --detach` rewind it — the very thing the round-8 guard exists
+    // to prevent. `submoduleNameForPath` has always required a non-empty name.
+    const key = line.slice(0, sp)
+    const m = /^submodule\.(.*)\.path$/.exec(key)
+    if (m?.[1] === undefined || m[1] === '') continue
     const p = line.slice(sp + 1).trim()
     if (p !== '') paths.add(p)
   }
