@@ -4,7 +4,7 @@
 // than driving the whole React tree.
 
 import { describe, expect, test } from 'vitest'
-import { SKILL_ZIP_LIMITS, type CommitSkillZipResponse } from '@agent-workflow/shared'
+import { SKILL_ZIP_LIMITS, type CommitSkillZipResponse, type Skill } from '@agent-workflow/shared'
 import type { SkillZipCandidateView, SkillZipOverwriteCandidate } from '@agent-workflow/shared'
 import {
   availableActionsFor,
@@ -15,11 +15,16 @@ import {
   initialDecisionFor,
   resultKind,
   rowsFromParseResponse,
+  skillNamesForOwnerBucket,
   summarizeRows,
   validateSkillZipFile,
   validateRenameTarget,
   type RowState,
 } from '../src/lib/skill-zip-import'
+
+function skill(name: string, ownerUserId: string | null): Pick<Skill, 'name' | 'ownerUserId'> {
+  return { name, ownerUserId }
+}
 
 function candidate(
   name: string,
@@ -152,6 +157,27 @@ describe('validateRenameTarget', () => {
   test('valid kebab-case + no clash → ok', () => {
     const r = validateRenameTarget('valid-name', 'self', rows('self', []), new Set())
     expect(r.ok).toBe(true)
+  })
+})
+
+describe('skillNamesForOwnerBucket (RFC-223 AC19)', () => {
+  const visible = [skill('owned', 'actor-id'), skill('shared', 'foreign-id'), skill('legacy', null)]
+
+  test('foreign-owner public names do not occupy the actor import bucket', () => {
+    expect(skillNamesForOwnerBucket(visible, 'actor-id')).toEqual(new Set(['owned']))
+  })
+
+  test('an admin still validates against the admin account bucket, not every manageable owner', () => {
+    expect(
+      skillNamesForOwnerBucket(
+        [...visible, skill('admin-owned', 'admin-id'), skill('shared', 'other-id')],
+        'admin-id',
+      ),
+    ).toEqual(new Set(['admin-owned']))
+  })
+
+  test('unknown target owner stays advisory instead of inventing a global-name conflict', () => {
+    expect(skillNamesForOwnerBucket(visible, undefined)).toEqual(new Set())
   })
 })
 

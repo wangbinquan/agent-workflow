@@ -101,11 +101,13 @@ function fakeZipFile(name = 'pack.zip'): File {
   })
 }
 
-function makeSkill(name: string): Skill {
+function makeSkill(name: string, ownerUserId = 'owner-user'): Skill {
   return {
     id: `id-${name}`,
     name,
     description: `${name} description`,
+    ownerUserId,
+    visibility: 'public',
     sourceKind: 'managed',
     schemaVersion: 1,
     contentVersion: 1,
@@ -124,9 +126,26 @@ interface EndpointSpec {
 type Endpoint = EndpointSpec | (() => Promise<Response>)
 
 interface FetchRouter {
+  actor?: Endpoint
   list?: Endpoint
   parse?: Endpoint
   commit?: Endpoint
+}
+
+function actorResponse(userId = 'owner-user', role: 'user' | 'admin' = 'user') {
+  return {
+    user: {
+      id: userId,
+      username: userId,
+      displayName: userId,
+      role,
+      status: 'active',
+    },
+    source: 'session',
+    permissions: [],
+    linkedIdentities: [],
+    pats: [],
+  }
 }
 
 async function responseFor(endpoint: Endpoint | undefined, fallback: unknown): Promise<Response> {
@@ -138,6 +157,9 @@ async function responseFor(endpoint: Endpoint | undefined, fallback: unknown): P
 function mockFetch(router: FetchRouter): ReturnType<typeof vi.fn> {
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
+    if (url.endsWith('/api/auth/me') && (init?.method ?? 'GET') === 'GET') {
+      return responseFor(router.actor, actorResponse())
+    }
     if (url.endsWith('/api/skills') && (init?.method ?? 'GET') === 'GET') {
       return responseFor(router.list, [])
     }
@@ -428,6 +450,81 @@ describe('ImportZipPanel (RFC-196)', () => {
     expect(input.getAttribute('aria-describedby')).toBe(error.id)
     expect(input.getAttribute('aria-invalid')).toBe('true')
     expect((screen.getByTestId('zip-commit-button') as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  test('RFC-223 rename checks only the actor owner bucket', async () => {
+    installRouter({
+      list: {
+        body: [makeSkill('foreign-name', 'foreign-user'), makeSkill('owned-name', 'owner-user')],
+      },
+      parse: { body: parseResponse([candidate('source', { conflict: 'managed' })]) },
+    })
+    renderPanel()
+    chooseFile()
+    await parseSelectedFile()
+    chooseAction('zip-action-source', actionLabel.rename())
+
+    const input = screen.getByTestId('zip-rename-source')
+    fireEvent.change(input, { target: { value: 'foreign-name' } })
+    await waitFor(() =>
+      expect((screen.getByTestId('zip-commit-button') as HTMLButtonElement).disabled).toBe(false),
+    )
+
+    fireEvent.change(input, { target: { value: 'owned-name' } })
+    await waitFor(() =>
+      expect((screen.getByTestId('zip-commit-button') as HTMLButtonElement).disabled).toBe(true),
+    )
+    expect(document.getElementById('zip-rename-error-source')?.textContent).toContain(
+      i18n.t('skills.zipRenameConflict'),
+    )
+  })
+
+  test('RFC-223 admin rename targets the admin account bucket, not every manageable owner', async () => {
+    installRouter({
+      actor: { body: actorResponse('admin-user', 'admin') },
+      list: {
+        body: [
+          makeSkill('shared-name', 'owner-a'),
+          makeSkill('shared-name', 'owner-b'),
+          makeSkill('admin-owned', 'admin-user'),
+        ],
+      },
+      parse: { body: parseResponse([candidate('source', { conflict: 'managed' })]) },
+    })
+    renderPanel()
+    chooseFile()
+    await parseSelectedFile()
+    chooseAction('zip-action-source', actionLabel.rename())
+
+    const input = screen.getByTestId('zip-rename-source')
+    fireEvent.change(input, { target: { value: 'shared-name' } })
+    await waitFor(() =>
+      expect((screen.getByTestId('zip-commit-button') as HTMLButtonElement).disabled).toBe(false),
+    )
+
+    fireEvent.change(input, { target: { value: 'admin-owned' } })
+    await waitFor(() =>
+      expect((screen.getByTestId('zip-commit-button') as HTMLButtonElement).disabled).toBe(true),
+    )
+  })
+
+  test('RFC-223 unresolved actor owner does not invent a global rename conflict', async () => {
+    installRouter({
+      actor: { status: 503 },
+      list: { body: [makeSkill('visible-name', 'some-owner')] },
+      parse: { body: parseResponse([candidate('source', { conflict: 'managed' })]) },
+    })
+    renderPanel()
+    chooseFile()
+    await parseSelectedFile()
+    chooseAction('zip-action-source', actionLabel.rename())
+    fireEvent.change(screen.getByTestId('zip-rename-source'), {
+      target: { value: 'visible-name' },
+    })
+
+    await waitFor(() =>
+      expect((screen.getByTestId('zip-commit-button') as HTMLButtonElement).disabled).toBe(false),
+    )
   })
 
   test('rename fails closed when existing names cannot be loaded and offers retry', async () => {

@@ -5,6 +5,7 @@ import { SKILL_NAME_RE, SKILL_ZIP_LIMITS } from '@agent-workflow/shared'
 import type {
   CommitSkillZipResponse,
   ParseSkillZipResponse,
+  Skill,
   SkillZipCandidateView,
   SkillZipDecisionMap,
 } from '@agent-workflow/shared'
@@ -62,10 +63,31 @@ export interface RenameValidation {
 }
 
 /**
+ * RFC-223 AC19: import/rename creates in the current actor's owner bucket,
+ * including when that actor is an admin. `/api/skills` is a visibility list,
+ * so foreign public/granted rows must not become false client-side conflicts.
+ *
+ * When the target owner is not known yet, return no advisory conflicts. The
+ * backend remains authoritative and returns the stable owner-scoped conflict;
+ * inventing a global bucket here would reject legal cross-owner names.
+ */
+export function skillNamesForOwnerBucket(
+  visibleSkills: ReadonlyArray<Pick<Skill, 'name' | 'ownerUserId'>>,
+  targetOwnerUserId: string | undefined,
+): ReadonlySet<string> {
+  if (targetOwnerUserId === undefined) return new Set()
+  return new Set(
+    visibleSkills
+      .filter((skill) => skill.ownerUserId === targetOwnerUserId)
+      .map((skill) => skill.name),
+  )
+}
+
+/**
  * Validate a proposed rename target against:
  *   - kebab-case regex
  *   - other rename targets in the same batch (no two renames to the same name)
- *   - existing skills (the DB conflict info known from /api/skills)
+ *   - existing skills in the import target owner bucket
  */
 export function validateRenameTarget(
   newName: string,

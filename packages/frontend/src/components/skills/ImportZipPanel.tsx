@@ -23,6 +23,7 @@ import { Field, TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
 import { Select } from '@/components/Select'
 import { StatusChip, type StatusChipKind } from '@/components/StatusChip'
+import { useActor } from '@/hooks/useActor'
 import { getBaseUrl, getToken } from '@/stores/auth'
 import {
   availableActionsFor,
@@ -31,6 +32,7 @@ import {
   deriveSubmitState,
   resultKind,
   rowsFromParseResponse,
+  skillNamesForOwnerBucket,
   validateRenameTarget,
   validateSkillZipFile,
   type DecisionAction,
@@ -89,6 +91,7 @@ export const ImportZipPanel = forwardRef<ImportZipPanelHandle, ImportZipPanelPro
     const { t } = useTranslation()
     const navigate = useNavigate()
     const qc = useQueryClient()
+    const actor = useActor()
     const chooseButtonRef = useRef<HTMLButtonElement | null>(null)
     const resetTriggerRef = useRef<HTMLElement | null>(null)
     const resultHeadingRef = useRef<HTMLHeadingElement | null>(null)
@@ -107,8 +110,8 @@ export const ImportZipPanel = forwardRef<ImportZipPanelHandle, ImportZipPanelPro
       },
     })
     const existingNames = useMemo(
-      () => new Set((skillsList.data ?? []).map((skill) => skill.name)),
-      [skillsList.data],
+      () => skillNamesForOwnerBucket(skillsList.data ?? [], actor.data?.user.id),
+      [actor.data?.user.id, skillsList.data],
     )
 
     useEffect(() => {
