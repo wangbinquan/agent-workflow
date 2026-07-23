@@ -132,7 +132,7 @@ async function seedWorkflow(daemon: DaemonHandle): Promise<WorkflowFixture> {
     'Content-Type': 'application/json',
   }
   const agentName = 'auth-isolation-agent'
-  await fetch(`${daemon.baseUrl}/api/agents`, {
+  const agentRes = await fetch(`${daemon.baseUrl}/api/agents`, {
     method: 'POST',
     headers,
     body: JSON.stringify({
@@ -143,6 +143,8 @@ async function seedWorkflow(daemon: DaemonHandle): Promise<WorkflowFixture> {
       bodyMd: '',
     }),
   })
+  if (!agentRes.ok) throw new Error(`seed agent: ${agentRes.status}`)
+  const agent = (await agentRes.json()) as { id: string }
   const wfRes = await fetch(`${daemon.baseUrl}/api/workflows`, {
     method: 'POST',
     headers,
@@ -157,6 +159,7 @@ async function seedWorkflow(daemon: DaemonHandle): Promise<WorkflowFixture> {
           {
             id: 'agent_1',
             kind: 'agent-single',
+            agentId: agent.id,
             agentName,
             promptTemplate: '{{topic}}',
             position: { x: 320, y: 0 },

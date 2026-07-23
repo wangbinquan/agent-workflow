@@ -88,6 +88,7 @@ async function seedAgentAndWorkflow(daemon: DaemonHandle): Promise<SeededFixture
     }),
   })
   if (!aRes.ok) throw new Error(`seed agent: ${aRes.status}`)
+  const agent = (await aRes.json()) as { id: string }
 
   const wfRes = await fetch(`${daemon.baseUrl}/api/workflows`, {
     method: 'POST',
@@ -103,6 +104,7 @@ async function seedAgentAndWorkflow(daemon: DaemonHandle): Promise<SeededFixture
           {
             id: 'agent_1',
             kind: 'agent-single',
+            agentId: agent.id,
             agentName,
             promptTemplate: '{{topic}}',
             position: { x: 320, y: 0 },

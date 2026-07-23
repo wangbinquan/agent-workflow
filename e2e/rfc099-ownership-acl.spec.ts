@@ -128,6 +128,7 @@ test('RFC-099: private agent disappears for strangers; granting via AclPanel res
     }),
   })
   expect(createAgent.ok).toBe(true)
+  const { id: agentId } = (await createAgent.json()) as { id: string }
 
   const aliceCtx = await browser.newContext()
   await primeAuth(aliceCtx, alice.sessionToken)
@@ -145,7 +146,7 @@ test('RFC-099: private agent disappears for strangers; granting via AclPanel res
   // the AclPanel dialog shows her as owner and she flips visibility to
   // private. (RFC-099 follow-up unified ALL permission surfaces behind this
   // header button.)
-  await alicePage.goto(`${daemon.baseUrl}/agents/${AGENT_NAME}`)
+  await alicePage.goto(`${daemon.baseUrl}/agents/${agentId}`)
   await alicePage.getByTestId('acl-dialog-button').click()
   await expect(alicePage.getByTestId('acl-panel')).toBeVisible()
   await expect(alicePage.getByTestId('acl-panel')).toContainText('alice99')
@@ -157,7 +158,7 @@ test('RFC-099: private agent disappears for strangers; granting via AclPanel res
   // (2) carol: list no longer contains the agent; direct URL dead-ends.
   await carolPage.goto(`${daemon.baseUrl}/agents`)
   await expect(carolPage.getByRole('link', { name: AGENT_NAME })).toHaveCount(0)
-  await carolPage.goto(`${daemon.baseUrl}/agents/${AGENT_NAME}`)
+  await carolPage.goto(`${daemon.baseUrl}/agents/${agentId}`)
   await expect(carolPage.getByTestId('acl-panel')).toHaveCount(0)
 
   // (3) alice grants carol through the UserPicker and saves. The results
@@ -188,7 +189,7 @@ test('RFC-099: private agent disappears for strangers; granting via AclPanel res
 
   // (4) carol sees it again; her panel (behind the same header button) is
   // read-only (no save / transfer).
-  await carolPage.goto(`${daemon.baseUrl}/agents/${AGENT_NAME}`)
+  await carolPage.goto(`${daemon.baseUrl}/agents/${agentId}`)
   await carolPage.getByTestId('acl-dialog-button').click()
   await expect(carolPage.getByTestId('acl-panel')).toBeVisible()
   await expect(carolPage.getByTestId('acl-panel')).toContainText('alice99')

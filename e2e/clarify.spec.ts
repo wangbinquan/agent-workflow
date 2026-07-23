@@ -164,21 +164,20 @@ test.describe('RFC-023 clarify e2e — agent-single happy path', () => {
       'Content-Type': 'application/json',
     }
     const agentName = 'e2e-clarify-designer'
-    expectOk(
-      await fetch(`${daemon.baseUrl}/api/agents`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          name: agentName,
-          description: 'e2e clarify designer',
-          outputs: ['design'],
-          outputKinds: { design: 'markdown' },
-          readonly: true,
-          bodyMd: 'Stub designer for clarify e2e.',
-        }),
+    const agentRes = await fetch(`${daemon.baseUrl}/api/agents`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        name: agentName,
+        description: 'e2e clarify designer',
+        outputs: ['design'],
+        outputKinds: { design: 'markdown' },
+        readonly: true,
+        bodyMd: 'Stub designer for clarify e2e.',
       }),
-      'create agent',
-    )
+    })
+    expectOk(agentRes, 'create agent')
+    const agent = (await agentRes.json()) as { id: string }
 
     const wfRes = await fetch(`${daemon.baseUrl}/api/workflows`, {
       method: 'POST',
@@ -194,6 +193,7 @@ test.describe('RFC-023 clarify e2e — agent-single happy path', () => {
             {
               id: 'designer',
               kind: 'agent-single',
+              agentId: agent.id,
               agentName,
               promptTemplate: 'Design for {{topic}}.',
               position: { x: 320, y: 0 },
@@ -478,21 +478,20 @@ test.describe
       'Content-Type': 'application/json',
     }
     const agentName = 'e2e-clarify-multi-designer'
-    expectOk(
-      await fetch(`${daemon.baseUrl}/api/agents`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          name: agentName,
-          description: 'e2e clarify designer (multi)',
-          outputs: ['design'],
-          outputKinds: { design: 'markdown' },
-          readonly: true,
-          bodyMd: 'Stub designer for clarify multi e2e.',
-        }),
+    const agentRes = await fetch(`${daemon.baseUrl}/api/agents`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        name: agentName,
+        description: 'e2e clarify designer (multi)',
+        outputs: ['design'],
+        outputKinds: { design: 'markdown' },
+        readonly: true,
+        bodyMd: 'Stub designer for clarify multi e2e.',
       }),
-      'create agent',
-    )
+    })
+    expectOk(agentRes, 'create agent')
+    const agent = (await agentRes.json()) as { id: string }
 
     // The agent-multi node needs a `sourcePort` carrying a synthetic diff.
     // We use an input node carrying a hand-crafted 3-file unified-diff string;
@@ -517,6 +516,7 @@ test.describe
             {
               id: 'fanout',
               kind: 'agent-multi',
+              agentId: agent.id,
               agentName,
               promptTemplate: 'Audit {{__shard_key__}}.',
               sourcePort: { nodeId: 'in_diff', portName: 'diff' },
@@ -706,21 +706,20 @@ test.describe('RFC-026 clarify e2e — inline session resume', () => {
       'Content-Type': 'application/json',
     }
     const agentName = 'e2e-rfc026-designer'
-    expectOk(
-      await fetch(`${daemon.baseUrl}/api/agents`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          name: agentName,
-          description: 'e2e rfc026 designer',
-          outputs: ['design'],
-          outputKinds: { design: 'markdown' },
-          readonly: true,
-          bodyMd: 'Stub designer for RFC-026 e2e.',
-        }),
+    const agentRes = await fetch(`${daemon.baseUrl}/api/agents`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        name: agentName,
+        description: 'e2e rfc026 designer',
+        outputs: ['design'],
+        outputKinds: { design: 'markdown' },
+        readonly: true,
+        bodyMd: 'Stub designer for RFC-026 e2e.',
       }),
-      'create agent',
-    )
+    })
+    expectOk(agentRes, 'create agent')
+    const agent = (await agentRes.json()) as { id: string }
     const wfRes = await fetch(`${daemon.baseUrl}/api/workflows`, {
       method: 'POST',
       headers,
@@ -735,6 +734,7 @@ test.describe('RFC-026 clarify e2e — inline session resume', () => {
             {
               id: 'designer',
               kind: 'agent-single',
+              agentId: agent.id,
               agentName,
               promptTemplate: 'Design for {{topic}}.',
               position: { x: 320, y: 0 },

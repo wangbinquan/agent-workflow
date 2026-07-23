@@ -45,6 +45,7 @@ let daemon: DaemonHandle
 let repoDir: string
 let workflowId: string
 let workflowSequence = 0
+let seededAgentAId = ''
 
 test.setTimeout(60_000)
 
@@ -63,7 +64,7 @@ async function primeAuth(page: Page, d: DaemonHandle): Promise<void> {
   )
 }
 
-async function seedAgent(name: string): Promise<void> {
+async function seedAgent(name: string): Promise<string> {
   const res = await fetch(`${daemon.baseUrl}/api/agents`, {
     method: 'POST',
     headers: {
@@ -82,6 +83,8 @@ async function seedAgent(name: string): Promise<void> {
   if (!res.ok && res.status !== 409) {
     throw new Error(`seedAgent ${name}: ${res.status}`)
   }
+  if (!res.ok) throw new Error(`seedAgent ${name}: duplicate fixture`)
+  return ((await res.json()) as { id: string }).id
 }
 
 async function useLargeAgentCatalog(page: Page, total = 50): Promise<void> {
@@ -107,8 +110,8 @@ async function useLargeAgentCatalog(page: Page, total = 50): Promise<void> {
   })
 }
 
-async function seedWorkflow(
-  definition: Record<string, unknown> = {
+async function seedWorkflow(definition?: Record<string, unknown>): Promise<string> {
+  const persistedDefinition = definition ?? {
     $schema_version: 3,
     inputs: [{ kind: 'text', key: 'topic', label: 'Topic', required: true }],
     nodes: [
@@ -116,6 +119,7 @@ async function seedWorkflow(
       {
         id: 'agent_1',
         kind: 'agent-single',
+        agentId: seededAgentAId,
         agentName: 'w2-3-agent-a',
         promptTemplate: 'Describe {{topic}}.',
         position: { x: 320, y: 0 },
@@ -139,8 +143,7 @@ async function seedWorkflow(
         target: { nodeId: 'out_1', portName: 'answer' },
       },
     ],
-  },
-): Promise<string> {
+  }
   const res = await fetch(`${daemon.baseUrl}/api/workflows`, {
     method: 'POST',
     headers: {
@@ -150,7 +153,7 @@ async function seedWorkflow(
     body: JSON.stringify({
       name: `w2-3-editor-workflow-${++workflowSequence}`,
       description: 'W2-3 fixture',
-      definition,
+      definition: persistedDefinition,
     }),
   })
   if (!res.ok) throw new Error(`seedWorkflow: ${res.status}`)
@@ -163,7 +166,7 @@ test.beforeAll(async () => {
   repoDir = mkdtempSync(join(tmpdir(), 'aw-e2e-editor-'))
   writeFileSync(join(repoDir, 'README.md'), '# w2-3 fixture\n', 'utf-8')
   initGitRepo(repoDir)
-  await seedAgent('w2-3-agent-a')
+  seededAgentAId = await seedAgent('w2-3-agent-a')
   await seedAgent('w2-3-agent-b')
 })
 
@@ -436,7 +439,10 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     await page.getByTestId('workflow-empty-add-first').click()
     const firstPicker = page.getByTestId('workflow-node-picker-dialog')
     await expect(firstPicker).toBeVisible()
-    await firstPicker.getByTestId('workflow-node-picker-item-agent-w2-3-agent-a').first().click()
+    await firstPicker
+      .getByTestId(`workflow-node-picker-item-agent-${seededAgentAId}`)
+      .first()
+      .click()
     await expect(page.locator('.react-flow__node')).toHaveCount(1)
     let inspector = page.getByTestId('workflow-editor-inspector-surface')
     await expect(inspector).toBeVisible()
@@ -455,7 +461,7 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
 
     // The first validation is intentionally red. Its issue button performs a
     // validation→selection→Inspector handoff rather than leaving a dead list.
-    await page.getByRole('button', { name: 'Validate', exact: true }).click()
+    await page.getByRole('button', { name: /Launch task/ }).click()
     const validationSummary = page.getByTestId('workflow-validation-summary')
     await expect(validationSummary).toBeVisible()
     await expect(validationSummary).not.toContainText('Validated')
@@ -476,9 +482,7 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     await page.getByRole('option', { name: 'answer', exact: true }).click()
     await inspector.locator('.dialog__close').click()
 
-    // Revalidate the exact saved revision, then Launch through the fresh gate.
-    await page.getByRole('button', { name: 'Validate', exact: true }).click()
-    await expect(validationSummary).toContainText('Validated')
+    // Launch revalidates the exact saved revision before it enters the wizard.
     await page.getByRole('button', { name: /Launch task/ }).click()
     await expect(page).toHaveURL(/\/tasks\/new\?/)
     const launchUrl = new URL(page.url())
@@ -596,10 +600,28 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
   test('validation details switch at the 521/520 short-height boundary without resizing canvas', async ({
     page,
   }) => {
+    workflowId = await seedWorkflow({
+      $schema_version: 4,
+      inputs: [],
+      nodes: [
+        {
+          id: 'review_1',
+          kind: 'review',
+          title: 'Needs source',
+          description: '',
+          rerunnableOnReject: [],
+          rerunnableOnIterate: [],
+          rollbackFilesOnReject: false,
+          rollbackFilesOnIterate: false,
+          position: { x: 0, y: 0 },
+        },
+      ],
+      edges: [],
+    })
     for (const height of [521, 520]) {
       await page.setViewportSize({ width: 1280, height })
-      await openEditor(page)
-      await page.getByRole('button', { name: 'Validate', exact: true }).click()
+      await openEditor(page, 1)
+      await page.getByRole('button', { name: /Launch task/ }).click()
       const summary = page.getByTestId('workflow-validation-summary')
       await expect(summary).toBeVisible()
       const before = await page.locator('.canvas-frame').boundingBox()

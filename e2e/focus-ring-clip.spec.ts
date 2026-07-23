@@ -29,6 +29,7 @@ let daemon: DaemonHandle
  *  an empty install shows only the "nothing selected" placeholder, which would
  *  leave `.tabs` (used by EVERY tabbed page) entirely unaudited. */
 const SEEDED_AGENT = 'focus-ring-audit-agent'
+let seededAgentId = ''
 
 /** RFC-206 T5' — fixture-backed surfaces. The list/new routes render from an
  *  empty install, but the heaviest chrome in the app (workflow editor
@@ -40,6 +41,7 @@ let seededTaskId = ''
 let seededReviewId = ''
 /** A workgroup task, so the chatroom pane (member cards, run log) renders. */
 let seededWorkgroupTaskId = ''
+let seededWorkgroupId = ''
 
 async function api(path: string, body: unknown): Promise<Response> {
   return fetch(`${daemon.baseUrl}${path}`, {
@@ -65,6 +67,7 @@ test.beforeAll(async () => {
     bodyMd: '',
   })
   expect(res.ok, `failed to seed agent (${res.status})`).toBe(true)
+  seededAgentId = ((await res.json()) as { id: string }).id
 
   const wfRes = await api('/api/workflows', {
     name: 'focus-ring-audit-workflow',
@@ -77,6 +80,7 @@ test.beforeAll(async () => {
         {
           id: 'agent_1',
           kind: 'agent-single',
+          agentId: seededAgentId,
           agentName: SEEDED_AGENT,
           promptTemplate: 'Explain {{topic}} briefly.',
           position: { x: 320, y: 0 },
@@ -143,6 +147,7 @@ test.beforeAll(async () => {
         {
           id: 'agent_1',
           kind: 'agent-single',
+          agentId: seededAgentId,
           agentName: SEEDED_AGENT,
           promptTemplate: 'Write a design for {{topic}}.',
           position: { x: 320, y: 0 },
@@ -232,12 +237,13 @@ test.beforeAll(async () => {
     maxRounds: 2,
     completionGate: false,
     members: [
-      { memberType: 'agent', agentName: SEEDED_AGENT, displayName: 'Lead' },
-      { memberType: 'agent', agentName: SEEDED_AGENT, displayName: 'Member' },
+      { memberType: 'agent', agentId: seededAgentId, displayName: 'Lead' },
+      { memberType: 'agent', agentId: seededAgentId, displayName: 'Member' },
     ],
   })
   expect(wg.ok, `failed to seed workgroup (${wg.status})`).toBe(true)
-  const wgTask = await api('/api/workgroups/focus-ring-audit-wg/tasks', {
+  seededWorkgroupId = ((await wg.json()) as { id: string }).id
+  const wgTask = await api(`/api/workgroups/${seededWorkgroupId}/tasks`, {
     name: 'Focus ring audit workgroup task',
     goal: 'audit the focus rings',
     scratch: true,
@@ -972,7 +978,7 @@ test('focus rings are not clipped anywhere', async ({ page }) => {
   // The canonical tabbed surface: mounts `.tabs` (TabBar, used by every tabbed
   // page) and five keep-mounted panels of which only the active one is laid
   // out — hidden panels are display:none and skipped, so visit each tab.
-  await page.goto(`${daemon.baseUrl}/agents/${SEEDED_AGENT}`)
+  await page.goto(`${daemon.baseUrl}/agents/${seededAgentId}`)
   await expect(page.locator('.agent-form')).toBeVisible()
   const tabs = page.locator('[role="tab"]')
   const tabCount = await tabs.count()
@@ -980,7 +986,7 @@ test('focus rings are not clipped anywhere', async ({ page }) => {
   for (let i = 0; i < tabCount; i++) {
     await tabs.nth(i).click()
     await page.waitForTimeout(200)
-    record('/agents/{name}(tabs)', await sweep())
+    record('/agents/{id}(tabs)', await sweep())
   }
 
   // ── RFC-206 T5': fixture-backed surfaces ──────────────────────────────
@@ -1033,10 +1039,10 @@ test('focus rings are not clipped anywhere', async ({ page }) => {
   }
 
   // Workgroup detail (the room's own page, distinct from the task chatroom pane).
-  await page.goto(`${daemon.baseUrl}/workgroups/focus-ring-audit-wg`)
+  await page.goto(`${daemon.baseUrl}/workgroups/${seededWorkgroupId}`)
   await expect(page.locator('.app-shell, .page, main').first()).toBeVisible()
   await page.waitForTimeout(500)
-  record('/workgroups/{name}', await sweep())
+  record('/workgroups/{id}', await sweep())
 
   // Review detail: .review-detail__layout carries `padding-right: 14px` only
   // (added for a different clip report), so left/top/bottom had zero room.
@@ -1111,7 +1117,7 @@ test('focus rings are not clipped anywhere', async ({ page }) => {
   // the run would still say "0 clipped" — green for the wrong reason. Require
   // each one to have actually measured controls.
   const REQUIRED_SURFACES = [
-    '/agents/{name}(tabs)',
+    '/agents/{id}(tabs)',
     '/workflows/{id}(editor)',
     '/workflows/{id}(editor+inspector)',
     '/tasks/{id}',

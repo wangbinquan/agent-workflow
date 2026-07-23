@@ -145,36 +145,34 @@ test.describe('RFC-056 cross-clarify e2e — A1 happy path', () => {
       Authorization: `Bearer ${daemon.token}`,
       'Content-Type': 'application/json',
     }
-    expectOk(
-      await fetch(`${daemon.baseUrl}/api/agents`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          name: 'designer',
-          description: 'e2e cross-clarify designer',
-          outputs: ['design'],
-          outputKinds: { design: 'markdown' },
-          readonly: true,
-          bodyMd: 'Stub designer for cross-clarify e2e.',
-        }),
+    const designerRes = await fetch(`${daemon.baseUrl}/api/agents`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        name: 'designer',
+        description: 'e2e cross-clarify designer',
+        outputs: ['design'],
+        outputKinds: { design: 'markdown' },
+        readonly: true,
+        bodyMd: 'Stub designer for cross-clarify e2e.',
       }),
-      'create designer agent',
-    )
-    expectOk(
-      await fetch(`${daemon.baseUrl}/api/agents`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          name: 'questioner',
-          description: 'e2e cross-clarify questioner',
-          outputs: ['main'],
-          outputKinds: { main: 'markdown' },
-          readonly: true,
-          bodyMd: 'Stub questioner for cross-clarify e2e.',
-        }),
+    })
+    expectOk(designerRes, 'create designer agent')
+    const designer = (await designerRes.json()) as { id: string }
+    const questionerRes = await fetch(`${daemon.baseUrl}/api/agents`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        name: 'questioner',
+        description: 'e2e cross-clarify questioner',
+        outputs: ['main'],
+        outputKinds: { main: 'markdown' },
+        readonly: true,
+        bodyMd: 'Stub questioner for cross-clarify e2e.',
       }),
-      'create questioner agent',
-    )
+    })
+    expectOk(questionerRes, 'create questioner agent')
+    const questioner = (await questionerRes.json()) as { id: string }
 
     const wfRes = await fetch(`${daemon.baseUrl}/api/workflows`, {
       method: 'POST',
@@ -190,6 +188,7 @@ test.describe('RFC-056 cross-clarify e2e — A1 happy path', () => {
             {
               id: 'designer',
               kind: 'agent-single',
+              agentId: designer.id,
               agentName: 'designer',
               promptTemplate: 'Design for {{topic}}.',
               position: { x: 220, y: 0 },
@@ -197,6 +196,7 @@ test.describe('RFC-056 cross-clarify e2e — A1 happy path', () => {
             {
               id: 'questioner',
               kind: 'agent-single',
+              agentId: questioner.id,
               agentName: 'questioner',
               promptTemplate: 'Review {{designer.design}}.',
               position: { x: 440, y: 0 },

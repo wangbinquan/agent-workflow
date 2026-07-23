@@ -74,6 +74,7 @@ test.describe('RFC-054 W3-4 — git protocols against real Gitea', () => {
       }),
     })
     expect(seedRes.ok).toBe(true)
+    const agent = (await seedRes.json()) as { id: string }
 
     const wfRes = await fetch(`${daemon.baseUrl}/api/workflows`, {
       method: 'POST',
@@ -92,6 +93,7 @@ test.describe('RFC-054 W3-4 — git protocols against real Gitea', () => {
             {
               id: 'a',
               kind: 'agent-single',
+              agentId: agent.id,
               agentName: 'gitea-https-agent',
               promptTemplate: '{{t}}',
               position: { x: 300, y: 0 },

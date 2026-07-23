@@ -77,6 +77,7 @@ async function setupViaApi(d: DaemonHandle, repoPath: string): Promise<CreatedFi
     }),
   })
   expectOk(agentRes, 'create agent')
+  const agent = (await agentRes.json()) as { id: string }
 
   const workflowName = 'e2e-review-cycle'
   const workflowRes = await fetch(`${d.baseUrl}/api/workflows`, {
@@ -93,6 +94,7 @@ async function setupViaApi(d: DaemonHandle, repoPath: string): Promise<CreatedFi
           {
             id: 'agent_1',
             kind: 'agent-single',
+            agentId: agent.id,
             agentName,
             promptTemplate: 'Write design for {{topic}}.',
             position: { x: 320, y: 0 },

@@ -123,6 +123,7 @@ async function setStableNetworkPort(): Promise<void> {
 type SceneFixture = 'clean' | 'seeded-resources'
 
 interface SeededResources {
+  agentId: string
   workflowId: string
 }
 
@@ -181,31 +182,31 @@ async function routeTasksTableFixture(page: Page): Promise<void> {
 }
 
 async function seedResources(): Promise<SeededResources> {
-  await postJson('/api/agents', {
+  const agent = (await postJson('/api/agents', {
     name: 'visual-stub-agent',
     description: 'e2e seed',
     outputs: ['answer'],
     readonly: true,
     bodyMd: '',
-  })
+  })) as { id: string }
   const workflow = (await postJson('/api/workflows', {
     name: 'visual-stub-workflow',
     description: 'e2e seed',
     definition: { $schema_version: 1, inputs: [], nodes: [], edges: [] },
   })) as { id: string }
-  return { workflowId: workflow.id }
+  return { agentId: agent.id, workflowId: workflow.id }
 }
 
 async function seedEditorWorkflow(): Promise<string> {
   const agentName = 'visual-editor-agent'
-  await postJson('/api/agents', {
+  const agent = (await postJson('/api/agents', {
     name: agentName,
     description: 'Deterministic workflow-editor visual fixture',
     outputs: ['answer'],
     outputKinds: { answer: 'markdown' },
     readonly: true,
     bodyMd: '',
-  })
+  })) as { id: string }
   const workflow = (await postJson('/api/workflows', {
     name: 'visual-editor-workflow',
     description: 'A stable three-step authoring canvas',
@@ -217,6 +218,7 @@ async function seedEditorWorkflow(): Promise<string> {
         {
           id: 'visual_agent',
           kind: 'agent-single',
+          agentId: agent.id,
           agentName,
           promptTemplate: 'Explain {{topic}} clearly.',
           position: { x: 320, y: 0 },
@@ -281,17 +283,17 @@ async function routeLargeAgentCatalog(page: Page, total = 50): Promise<void> {
   })
 }
 
-async function seedTerminalTask(): Promise<string> {
+async function seedTerminalTask(): Promise<{ taskId: string; agentId: string }> {
   const d = requireDaemon()
   const agentName = 'visual-task-agent'
-  await postJson('/api/agents', {
+  const agent = (await postJson('/api/agents', {
     name: agentName,
     description: 'Deterministic mobile task-detail visual fixture',
     outputs: ['answer'],
     outputKinds: { answer: 'markdown' },
     readonly: true,
     bodyMd: '',
-  })
+  })) as { id: string }
   const workflow = (await postJson('/api/workflows', {
     name: 'visual-task-workflow',
     description: 'Deterministic mobile task-detail visual fixture',
@@ -303,6 +305,7 @@ async function seedTerminalTask(): Promise<string> {
         {
           id: 'agent_1',
           kind: 'agent-single',
+          agentId: agent.id,
           agentName,
           promptTemplate: 'Explain {{topic}} briefly.',
           position: { x: 320, y: 0 },
@@ -342,7 +345,7 @@ async function seedTerminalTask(): Promise<string> {
     })
     if (response.ok) {
       const current = (await response.json()) as { status: string }
-      if (current.status === 'done') return task.id
+      if (current.status === 'done') return { taskId: task.id, agentId: agent.id }
       if (['failed', 'canceled', 'interrupted'].includes(current.status)) {
         throw new Error(`visual-regression: task fixture reached ${current.status}`)
       }
@@ -352,7 +355,11 @@ async function seedTerminalTask(): Promise<string> {
   throw new Error('visual-regression: task fixture did not finish in 30s')
 }
 
-async function routeDynamicWorkflowPreview(page: Page, taskId: string): Promise<void> {
+async function routeDynamicWorkflowPreview(
+  page: Page,
+  taskId: string,
+  agentId: string,
+): Promise<void> {
   await page.route(`**/api/tasks/${taskId}`, async (route) => {
     if (route.request().method() !== 'GET') return route.continue()
     const response = await route.fetch()
@@ -389,6 +396,7 @@ async function routeDynamicWorkflowPreview(page: Page, taskId: string): Promise<
             {
               id: 'visual-planner-member',
               memberType: 'agent',
+              agentId,
               agentName: 'visual-task-agent',
               userId: null,
               displayName: 'Planner',
@@ -419,6 +427,7 @@ async function routeDynamicWorkflowPreview(page: Page, taskId: string): Promise<
               {
                 id: 'visual_dw_plan',
                 kind: 'agent-single',
+                agentId,
                 agentName: 'visual-task-agent',
                 promptTemplate: 'Create a plan for {{brief}}.',
                 position: { x: 320, y: 0 },
@@ -684,9 +693,10 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
 
   test('390 mobile agent split detail (seeded, light)', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
-    await prepareScene(page, { theme: 'light', fixture: 'seeded-resources' })
+    const fixture = await prepareScene(page, { theme: 'light', fixture: 'seeded-resources' })
     await primeAuth(page)
-    await page.goto(`${requireDaemon().baseUrl}/agents/visual-stub-agent`)
+    if (fixture === null) throw new Error('mobile agent scene requires seeded resources')
+    await page.goto(`${requireDaemon().baseUrl}/agents/${fixture.agentId}`)
     await expect(
       page.getByRole('heading', { name: 'visual-stub-agent', exact: true }),
     ).toBeVisible()
@@ -711,7 +721,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
   test('390 mobile terminal task detail (seeded, light)', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
     await prepareScene(page, { theme: 'light', fixture: 'clean' })
-    const taskId = await seedTerminalTask()
+    const { taskId } = await seedTerminalTask()
     await primeAuth(page)
     await page.goto(`${requireDaemon().baseUrl}/tasks/${taskId}`)
     await expect(page.getByRole('heading', { name: /Mobile visual task/ })).toBeVisible()
@@ -844,8 +854,8 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
   test('RFC-199 deterministic dynamic-workflow preview (light)', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 })
     await prepareScene(page, { theme: 'light', fixture: 'clean' })
-    const taskId = await seedTerminalTask()
-    await routeDynamicWorkflowPreview(page, taskId)
+    const { taskId, agentId } = await seedTerminalTask()
+    await routeDynamicWorkflowPreview(page, taskId, agentId)
     await primeAuth(page)
     await page.goto(`${requireDaemon().baseUrl}/tasks/${taskId}?tab=dw-orchestration`)
     await expect(page.getByTestId('dw-confirm-card')).toBeVisible()

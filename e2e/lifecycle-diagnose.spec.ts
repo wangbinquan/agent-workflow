@@ -80,6 +80,7 @@ async function setupViaApi(d: DaemonHandle, repoPath: string): Promise<Fixtures>
     }),
   })
   expectOk(a, 'create agent')
+  const agent = (await a.json()) as { id: string }
   const workflowName = 'e2e-lifecycle'
   const w = await fetch(`${d.baseUrl}/api/workflows`, {
     method: 'POST',
@@ -95,6 +96,7 @@ async function setupViaApi(d: DaemonHandle, repoPath: string): Promise<Fixtures>
           {
             id: 'agent_1',
             kind: 'agent-single',
+            agentId: agent.id,
             agentName,
             promptTemplate: 'Explain {{topic}}.',
             position: { x: 320, y: 0 },

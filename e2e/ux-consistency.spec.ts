@@ -15,6 +15,7 @@ const FIXTURE_AGENT = 'ux-fixture-agent'
 const FIXTURE_WORKFLOW = 'ux-fixture-workflow'
 
 let daemon: DaemonHandle
+let fixtureAgentId = ''
 let fixtureWorkflowId = ''
 
 type AppTheme = 'system' | 'light' | 'dark'
@@ -68,13 +69,14 @@ async function postFixture(path: string, body: unknown): Promise<unknown> {
 }
 
 async function seedRepresentativeResources(): Promise<void> {
-  await postFixture('/api/agents', {
+  const agent = (await postFixture('/api/agents', {
     name: FIXTURE_AGENT,
     description: 'RFC-198 responsive split fixture',
     outputs: ['answer'],
     readonly: true,
     bodyMd: '',
-  })
+  })) as { id: string }
+  fixtureAgentId = agent.id
   const workflow = (await postFixture('/api/workflows', {
     name: FIXTURE_WORKFLOW,
     description: 'RFC-198 gallery fixture',
@@ -383,11 +385,11 @@ test.describe('RFC-198 global UX browser matrix', () => {
     await page.setViewportSize({ width: 1081, height: 800 })
     await setDaemonTheme('light')
     await primeAuth(page)
-    await page.goto(`${daemon.baseUrl}/agents/${FIXTURE_AGENT}`)
+    await page.goto(`${daemon.baseUrl}/agents/${fixtureAgentId}`)
 
     const list = page.locator('.split__list')
     const detail = page.getByTestId('split-detail')
-    const card = page.getByTestId(`split-card-${FIXTURE_AGENT}`)
+    const card = page.getByTestId(`split-card-${fixtureAgentId}`)
     const back = page.getByTestId('agents-mobile-back')
     await expect(list).toBeVisible()
     await expect(detail).toBeVisible()
@@ -410,16 +412,16 @@ test.describe('RFC-198 global UX browser matrix', () => {
     await expect(description).toHaveValue('RFC-201 resize keeps this unsaved draft')
 
     await page.setViewportSize({ width: 1081, height: 800 })
-    await expect(page.getByTestId(`split-card-dot-${FIXTURE_AGENT}`)).toBeVisible()
+    await expect(page.getByTestId(`split-card-dot-${fixtureAgentId}`)).toBeVisible()
     await page.setViewportSize({ width: 1080, height: 800 })
 
     await back.click()
     const guard = page.getByTestId('unsaved-guard-dialog')
     await expect(guard).toBeVisible()
-    await expect(page).toHaveURL(new RegExp(`/agents/${FIXTURE_AGENT}$`))
+    await expect(page).toHaveURL(new RegExp(`/agents/${fixtureAgentId}$`))
     await page.getByTestId('unsaved-stay').click()
     await expect(guard).toHaveCount(0)
-    await expect(page).toHaveURL(new RegExp(`/agents/${FIXTURE_AGENT}$`))
+    await expect(page).toHaveURL(new RegExp(`/agents/${fixtureAgentId}$`))
     await expect(description).toHaveValue('RFC-201 resize keeps this unsaved draft')
     await expect(back).toBeFocused()
 
@@ -428,10 +430,10 @@ test.describe('RFC-198 global UX browser matrix', () => {
     await page.getByTestId('unsaved-discard').click()
     await expect(page).toHaveURL(new RegExp('/agents$'))
     await expect(card).toBeFocused()
-    await expect(page.getByTestId(`split-card-dot-${FIXTURE_AGENT}`)).toHaveCount(0)
+    await expect(page.getByTestId(`split-card-dot-${fixtureAgentId}`)).toHaveCount(0)
 
     await card.press('Enter')
-    await expect(page).toHaveURL(new RegExp(`/agents/${FIXTURE_AGENT}$`))
+    await expect(page).toHaveURL(new RegExp(`/agents/${fixtureAgentId}$`))
     await expect(description).toHaveValue('RFC-198 responsive split fixture')
     await expectNoPageOverflow(page)
   })
@@ -442,7 +444,7 @@ test.describe('RFC-198 global UX browser matrix', () => {
     await page.setViewportSize({ width: 640, height: 400 })
     await setDaemonTheme('light')
     await primeAuth(page)
-    await page.goto(`${daemon.baseUrl}/agents/${FIXTURE_AGENT}`)
+    await page.goto(`${daemon.baseUrl}/agents/${fixtureAgentId}`)
 
     const main = page.getByTestId('app-shell-main')
     const back = page.getByTestId('agents-mobile-back')
@@ -499,7 +501,7 @@ test.describe('RFC-198 global UX browser matrix', () => {
     await expect(page.getByTestId('split-detail')).toBeHidden()
 
     await page.setViewportSize({ width: 1024, height: 480 })
-    await page.goto(`${daemon.baseUrl}/agents/${FIXTURE_AGENT}`)
+    await page.goto(`${daemon.baseUrl}/agents/${fixtureAgentId}`)
     await expect(page.locator('.split__list')).toBeHidden()
     await expect(page.getByTestId('split-detail')).toBeVisible()
     await expect(page.getByTestId('agents-mobile-back')).toBeVisible()
@@ -769,7 +771,7 @@ test.describe('RFC-198 global UX browser matrix', () => {
     await openAgents(page)
     await expect(page.locator('.split__list')).toBeVisible()
     await expect(page.getByTestId('split-detail')).toBeHidden()
-    await page.goto(`${daemon.baseUrl}/agents/${FIXTURE_AGENT}`)
+    await page.goto(`${daemon.baseUrl}/agents/${fixtureAgentId}`)
     await expect(page.locator('.split__list')).toBeHidden()
     await expect(page.getByTestId('split-detail')).toBeVisible()
     await expect(page.getByTestId('agents-mobile-back')).toBeVisible()
@@ -811,10 +813,10 @@ test.describe('RFC-198 global UX browser matrix', () => {
     await page.keyboard.press('Escape')
     await expect(menu).toBeFocused()
 
-    const card = page.getByTestId(`split-card-${FIXTURE_AGENT}`)
+    const card = page.getByTestId(`split-card-${fixtureAgentId}`)
     await card.focus()
     await page.keyboard.press('Enter')
-    await page.waitForURL(new RegExp(`/agents/${FIXTURE_AGENT}$`))
+    await page.waitForURL(new RegExp(`/agents/${fixtureAgentId}$`))
     await expect(page.locator('.split__list')).toBeHidden()
     const back = page.getByTestId('agents-mobile-back')
     await expect(back).toBeVisible()

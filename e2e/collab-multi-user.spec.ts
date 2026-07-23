@@ -28,6 +28,7 @@ import { initGitRepo } from './command'
 
 let daemon: DaemonHandle
 let repoDir: string
+let seededCollabAgentId = ''
 
 interface SeededUser {
   username: string
@@ -75,17 +76,21 @@ async function seedWorkflow(): Promise<{ workflowId: string; agentName: string }
     'Content-Type': 'application/json',
   }
   const agentName = 'collab-agent'
-  await fetch(`${daemon.baseUrl}/api/agents`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      name: agentName,
-      description: 'collab e2e agent',
-      outputs: ['answer'],
-      readonly: true,
-      bodyMd: '',
-    }),
-  })
+  if (seededCollabAgentId === '') {
+    const agentRes = await fetch(`${daemon.baseUrl}/api/agents`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        name: agentName,
+        description: 'collab e2e agent',
+        outputs: ['answer'],
+        readonly: true,
+        bodyMd: '',
+      }),
+    })
+    if (!agentRes.ok) throw new Error(`seed agent: ${agentRes.status}`)
+    seededCollabAgentId = ((await agentRes.json()) as { id: string }).id
+  }
   const wfRes = await fetch(`${daemon.baseUrl}/api/workflows`, {
     method: 'POST',
     headers,
@@ -100,6 +105,7 @@ async function seedWorkflow(): Promise<{ workflowId: string; agentName: string }
           {
             id: 'agent_1',
             kind: 'agent-single',
+            agentId: seededCollabAgentId,
             agentName,
             promptTemplate: 'Echo {{topic}}.',
             position: { x: 320, y: 0 },
@@ -176,6 +182,7 @@ test.describe.configure({ mode: 'serial' })
 test.setTimeout(120_000)
 
 test.beforeAll(async () => {
+  seededCollabAgentId = ''
   daemon = await startDaemon()
   repoDir = mkdtempSync(join(tmpdir(), 'aw-e2e-collab-'))
   writeFileSync(join(repoDir, 'README.md'), '# collab fixture\n', 'utf-8')

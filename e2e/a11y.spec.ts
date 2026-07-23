@@ -47,13 +47,13 @@ async function postJson(path: string, body: unknown): Promise<unknown> {
 
 async function seedTerminalTask(): Promise<string> {
   const agentName = 'a11y-task-agent'
-  await postJson('/api/agents', {
+  const agent = (await postJson('/api/agents', {
     name: agentName,
     description: 'RFC-201 task detail accessibility fixture',
     outputs: ['answer'],
     readonly: true,
     bodyMd: '',
-  })
+  })) as { id: string }
   const workflow = (await postJson('/api/workflows', {
     name: 'a11y-task-workflow',
     description: 'RFC-201 task detail accessibility fixture',
@@ -65,6 +65,7 @@ async function seedTerminalTask(): Promise<string> {
         {
           id: 'agent_1',
           kind: 'agent-single',
+          agentId: agent.id,
           agentName,
           promptTemplate: 'Explain {{topic}} briefly.',
           position: { x: 320, y: 0 },
@@ -320,15 +321,15 @@ test.describe('RFC-054 W2-6 — accessibility (axe-core) on key pages', () => {
   })
 
   test('/mcps detail tabs pass a11y', async ({ page }) => {
-    await postJson('/api/mcps', {
+    const mcp = (await postJson('/api/mcps', {
       name: 'a11y-mcp',
       description: 'RFC-201 MCP accessibility fixture',
       type: 'local',
       config: { command: ['bun', '--version'] },
       enabled: true,
-    })
+    })) as { id: string }
     await primeAuth(page, daemon)
-    await page.goto(`${daemon.baseUrl}/mcps/a11y-mcp`)
+    await page.goto(`${daemon.baseUrl}/mcps/${mcp.id}`)
     await expect(page.getByRole('heading', { name: 'a11y-mcp', exact: true })).toBeVisible()
     await expectNoCriticalOrSeriousAxeViolations(page, '/mcps/a11y-mcp')
   })

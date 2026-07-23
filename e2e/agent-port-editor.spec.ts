@@ -281,10 +281,11 @@ test.describe('RFC-194 Agent port editor', () => {
     if (!seed.ok) {
       throw new Error(`seed agent failed: ${seed.status} ${await seed.text()}`)
     }
+    const agent = (await seed.json()) as { id: string }
 
     await page.setViewportSize({ width: 390, height: 844 })
     await primeAuth(page)
-    await page.goto(`${daemon.baseUrl}/agents/${agentName}`)
+    await page.goto(`${daemon.baseUrl}/agents/${agent.id}`)
     await expect(page.getByRole('heading', { name: agentName, exact: true })).toBeVisible()
     await page.getByTestId('agent-tab-ports').click()
     const panel = page.getByTestId('agent-panel-ports')

@@ -74,7 +74,7 @@ async function seedLinearWorkflow(daemon: DaemonHandle): Promise<string> {
     Authorization: `Bearer ${daemon.token}`,
     'Content-Type': 'application/json',
   }
-  await fetch(`${daemon.baseUrl}/api/agents`, {
+  const agentRes = await fetch(`${daemon.baseUrl}/api/agents`, {
     method: 'POST',
     headers,
     body: JSON.stringify({
@@ -85,6 +85,8 @@ async function seedLinearWorkflow(daemon: DaemonHandle): Promise<string> {
       bodyMd: '',
     }),
   })
+  if (!agentRes.ok) throw new Error(`seed agent: ${agentRes.status}`)
+  const agent = (await agentRes.json()) as { id: string }
   const wfRes = await fetch(`${daemon.baseUrl}/api/workflows`, {
     method: 'POST',
     headers,
@@ -99,6 +101,7 @@ async function seedLinearWorkflow(daemon: DaemonHandle): Promise<string> {
           {
             id: 'agent_1',
             kind: 'agent-single',
+            agentId: agent.id,
             agentName: 'rfc066-agent',
             promptTemplate: '{{topic}}',
             position: { x: 320, y: 0 },
@@ -134,7 +137,7 @@ async function seedWrapperGitWorkflow(daemon: DaemonHandle): Promise<string> {
     Authorization: `Bearer ${daemon.token}`,
     'Content-Type': 'application/json',
   }
-  await fetch(`${daemon.baseUrl}/api/agents`, {
+  const agentRes = await fetch(`${daemon.baseUrl}/api/agents`, {
     method: 'POST',
     headers,
     body: JSON.stringify({
@@ -145,6 +148,8 @@ async function seedWrapperGitWorkflow(daemon: DaemonHandle): Promise<string> {
       bodyMd: '',
     }),
   })
+  if (!agentRes.ok) throw new Error(`seed wrapper agent: ${agentRes.status}`)
+  const agent = (await agentRes.json()) as { id: string }
   const wfRes = await fetch(`${daemon.baseUrl}/api/workflows`, {
     method: 'POST',
     headers,
@@ -166,6 +171,7 @@ async function seedWrapperGitWorkflow(daemon: DaemonHandle): Promise<string> {
           {
             id: 'agent_1',
             kind: 'agent-single',
+            agentId: agent.id,
             agentName: 'rfc066-agent-wg',
             promptTemplate: '{{topic}}',
             position: { x: 320, y: 0 },

@@ -76,6 +76,7 @@ test.describe('RFC-075 — auto commit&push (real daemon + bare remote)', () => 
       }),
     })
     expect(agentRes.ok).toBe(true)
+    const agent = (await agentRes.json()) as { id: string }
 
     const wfRes = await api('/api/workflows', {
       method: 'POST',
@@ -90,6 +91,7 @@ test.describe('RFC-075 — auto commit&push (real daemon + bare remote)', () => 
             {
               id: 'w',
               kind: 'agent-single',
+              agentId: agent.id,
               agentName: 'cp-writer',
               promptTemplate: '{{t}}',
               position: { x: 300, y: 0 },

@@ -18,6 +18,7 @@ import { cloneBareGitRepo, initGitRepo } from './command'
 interface CreatedFixtures {
   workflowId: string
   workflowName: string
+  agentId: string
   agentName: string
   repoPath: string
 }
@@ -66,6 +67,7 @@ async function setupViaApi(d: DaemonHandle, repoPath: string): Promise<CreatedFi
     }),
   })
   expectOk(agentRes, 'create agent')
+  const agent = (await agentRes.json()) as { id: string }
 
   const workflowName = 'e2e-happy-path'
   const workflowRes = await fetch(`${d.baseUrl}/api/workflows`, {
@@ -82,6 +84,7 @@ async function setupViaApi(d: DaemonHandle, repoPath: string): Promise<CreatedFi
           {
             id: 'agent_1',
             kind: 'agent-single',
+            agentId: agent.id,
             agentName,
             promptTemplate: 'Explain {{topic}} briefly.',
             position: { x: 320, y: 0 },
@@ -111,7 +114,7 @@ async function setupViaApi(d: DaemonHandle, repoPath: string): Promise<CreatedFi
   expectOk(workflowRes, 'create workflow')
   const workflow = (await workflowRes.json()) as { id: string }
 
-  return { workflowId: workflow.id, workflowName, agentName, repoPath }
+  return { workflowId: workflow.id, workflowName, agentId: agent.id, agentName, repoPath }
 }
 
 function expectOk(res: Response, what: string): void {
@@ -329,6 +332,7 @@ test('RFC-016: wrapper-git renders as a group container with inner node inside i
           {
             id: 'agent_inside',
             kind: 'agent-single',
+            agentId: fixtures.agentId,
             agentName: fixtures.agentName,
             promptTemplate: 'Explain {{topic}} briefly.',
             position: { x: 260, y: 160 }, // inside the wrapper rect
@@ -417,7 +421,7 @@ test('RFC-024: launch task from git URL clones into cache and renders redacted U
     'Content-Type': 'application/json',
   }
   const agentName = 'rfc024-stub'
-  await fetch(`${daemon.baseUrl}/api/agents`, {
+  const agentRes = await fetch(`${daemon.baseUrl}/api/agents`, {
     method: 'POST',
     headers,
     body: JSON.stringify({
@@ -428,6 +432,8 @@ test('RFC-024: launch task from git URL clones into cache and renders redacted U
       bodyMd: '',
     }),
   })
+  expectOk(agentRes, 'create RFC-024 agent')
+  const agent = (await agentRes.json()) as { id: string }
   const workflowRes = await fetch(`${daemon.baseUrl}/api/workflows`, {
     method: 'POST',
     headers,
@@ -442,6 +448,7 @@ test('RFC-024: launch task from git URL clones into cache and renders redacted U
           {
             id: 'agent_1',
             kind: 'agent-single',
+            agentId: agent.id,
             agentName,
             promptTemplate: '{{topic}}',
             position: { x: 320, y: 0 },
@@ -628,7 +635,7 @@ test('RFC-022: agent form Dependency tree (preview) renders the full closure', a
     'Content-Type': 'application/json',
   }
   // Seed leaves first so the save-time guard accepts each row.
-  const seed = async (name: string, dependsOn: string[]) => {
+  const seed = async (name: string, dependsOn: string[]): Promise<string> => {
     const res = await fetch(`${daemon.baseUrl}/api/agents`, {
       method: 'POST',
       headers,
@@ -641,10 +648,11 @@ test('RFC-022: agent form Dependency tree (preview) renders the full closure', a
       }),
     })
     expectOk(res, `seed agent ${name}`)
+    return ((await res.json()) as { id: string }).id
   }
-  await seed('rfc022-c', [])
-  await seed('rfc022-b', ['rfc022-c'])
-  await seed('rfc022-a', ['rfc022-b'])
+  const agentCId = await seed('rfc022-c', [])
+  const agentBId = await seed('rfc022-b', [agentCId])
+  const agentAId = await seed('rfc022-a', [agentBId])
 
   await page.addInitScript(
     ({ baseUrl, token }) => {
@@ -654,7 +662,7 @@ test('RFC-022: agent form Dependency tree (preview) renders the full closure', a
     },
     { baseUrl: daemon.baseUrl, token: daemon.token },
   )
-  await page.goto(`${daemon.baseUrl}/agents/rfc022-a`)
+  await page.goto(`${daemon.baseUrl}/agents/${agentAId}`)
 
   // The dependency-tree preview lives in the renamed capability tab. Existing
   // agent details default the technical disclosure open so the closure is
@@ -670,7 +678,7 @@ test('RFC-022: agent form Dependency tree (preview) renders the full closure', a
   await expect(page.getByRole('treeitem', { name: 'rfc022-a' })).toBeVisible()
 
   // Direct API check — the closure GET endpoint returns BFS-ordered agents.
-  const closureRes = await fetch(`${daemon.baseUrl}/api/agents/rfc022-a/closure`, {
+  const closureRes = await fetch(`${daemon.baseUrl}/api/agents/${agentAId}/closure`, {
     headers: { Authorization: `Bearer ${daemon.token}` },
   })
   expectOk(closureRes, 'closure GET')

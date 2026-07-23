@@ -20,6 +20,7 @@ import { expect, test, type Page } from '@playwright/test'
 import { startDaemon, type DaemonHandle } from './harness'
 
 let daemon: DaemonHandle
+let seededAgentId = ''
 
 test.beforeAll(async () => {
   daemon = await startDaemon()
@@ -36,6 +37,7 @@ test.beforeAll(async () => {
     }),
   })
   expect(res.ok, `failed to seed agent (${res.status})`).toBe(true)
+  seededAgentId = ((await res.json()) as { id: string }).id
 })
 
 test.afterAll(async () => {
@@ -108,7 +110,7 @@ test('launch step opens a ready-to-submit wizard and does not skip the submit st
 }) => {
   // Seed at the launch step (index 6 / "Step 7 of 9") on the agent detail page.
   await primeTour(page, 6)
-  await page.goto(`${daemon.baseUrl}/agents/my-coder`)
+  await page.goto(`${daemon.baseUrl}/agents/${seededAgentId}`)
 
   const bubble = page.getByTestId('spotlight-tour-bubble')
   await expect(bubble).toBeVisible()
@@ -141,7 +143,7 @@ test('clicking Launch submits the task and advances the tour to the result step'
   page,
 }) => {
   await primeTour(page, 6)
-  await page.goto(`${daemon.baseUrl}/agents/my-coder`)
+  await page.goto(`${daemon.baseUrl}/agents/${seededAgentId}`)
   await page.getByTestId('agent-launch-button').click()
   await expect(page).toHaveURL(/\/tasks\/new\?.*tour=first-task/)
 

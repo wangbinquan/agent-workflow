@@ -75,7 +75,7 @@ async function expectAxeClean(page: Page, label: string): Promise<void> {
 
 test.beforeAll(async () => {
   daemon = await startDaemon()
-  await postJson('/api/agents', {
+  const agent = await postJson<{ id: string }>('/api/agents', {
     name: AGENT_NAME,
     description: 'RFC-225 browser fixture',
     outputs: ['answer'],
@@ -97,13 +97,13 @@ test.beforeAll(async () => {
     members: [
       {
         memberType: 'agent',
-        agentName: AGENT_NAME,
+        agentId: agent.id,
         displayName: 'Lead',
         roleDesc: 'Coordinates the work.',
       },
       {
         memberType: 'agent',
-        agentName: AGENT_NAME,
+        agentId: agent.id,
         displayName: 'Builder',
         roleDesc: 'Implements the plan.',
       },
@@ -120,7 +120,7 @@ test('autosaves a real edit and keeps workflow-parity header/actions usable at d
 }) => {
   await primeAuth(page)
   await page.setViewportSize({ width: 1536, height: 900 })
-  await page.goto(`${daemon.baseUrl}/workgroups/${encodeURIComponent(workgroup.name)}`)
+  await page.goto(`${daemon.baseUrl}/workgroups/${workgroup.id}`)
 
   const header = page.locator('.editor-page-header')
   await expect(header).toBeVisible()
@@ -153,7 +153,7 @@ test('autosaves a real edit and keeps workflow-parity header/actions usable at d
   const saveResponse = page.waitForResponse(
     (response) =>
       response.request().method() === 'PUT' &&
-      new URL(response.url()).pathname === `/api/workgroups/${WORKGROUP_NAME}`,
+      new URL(response.url()).pathname === `/api/workgroups/${workgroup.id}`,
   )
   await page.getByTestId('workgroup-field-instructions').fill('Saved automatically by RFC-225')
   const receiptResponse = await saveResponse

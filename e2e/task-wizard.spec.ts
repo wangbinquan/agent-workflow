@@ -71,7 +71,7 @@ async function primeAuthLocalStorage(page: Page, d: DaemonHandle): Promise<void>
   )
 }
 
-async function createStubAgent(d: DaemonHandle, name: string): Promise<void> {
+async function createStubAgent(d: DaemonHandle, name: string): Promise<string> {
   const res = await fetch(`${d.baseUrl}/api/agents`, {
     method: 'POST',
     headers: authHeaders(d),
@@ -84,16 +84,17 @@ async function createStubAgent(d: DaemonHandle, name: string): Promise<void> {
     }),
   })
   expectOk(res, `create agent ${name}`)
+  return ((await res.json()) as { id: string }).id
 }
 
 test.describe('RFC-165 — /tasks/new wizard', () => {
   test('agent + scratch: wizard chain reaches done and the diff tab opens', async ({ page }) => {
     const d = daemon!
-    await createStubAgent(d, 'wizard-scratch-agent')
+    const agentId = await createStubAgent(d, 'wizard-scratch-agent')
     await primeAuthLocalStorage(page, d)
 
     // Deep link with the agent pre-picked lands on Step 2 (workspace).
-    await page.goto(`${d.baseUrl}/tasks/new?kind=agent&agent=wizard-scratch-agent`)
+    await page.goto(`${d.baseUrl}/tasks/new?kind=agent&agentId=${agentId}`)
     await expect(page.getByTestId('task-wizard')).toBeVisible({ timeout: 10_000 })
     await page.getByTestId('wizard-space-scratch').click()
     await page.getByTestId('stepper-next').click()
@@ -164,9 +165,10 @@ test.describe('RFC-165 — /tasks/new wizard', () => {
       }),
     })
     expectOk(res, 'create ported agent')
+    const portedAgentId = ((await res.json()) as { id: string }).id
     await primeAuthLocalStorage(page, d)
 
-    await page.goto(`${d.baseUrl}/tasks/new?kind=agent&agent=wizard-ported-agent`)
+    await page.goto(`${d.baseUrl}/tasks/new?kind=agent&agentId=${portedAgentId}`)
     await expect(page.getByTestId('task-wizard')).toBeVisible({ timeout: 10_000 })
     await page.getByTestId('wizard-space-scratch').click()
     await page.getByTestId('stepper-next').click()
@@ -194,8 +196,8 @@ test.describe('RFC-165 — /tasks/new wizard', () => {
 
   test('workgroup + scratch: wizard chain reaches done (real wg envelope)', async ({ page }) => {
     const d = daemon!
-    await createStubAgent(d, 'wizard-wg-lead')
-    await createStubAgent(d, 'wizard-wg-member')
+    const leadAgentId = await createStubAgent(d, 'wizard-wg-lead')
+    const memberAgentId = await createStubAgent(d, 'wizard-wg-member')
     // RFC-187 T11 (audit TRAP-3) — this was a free_collab group, which made the whole
     // test VACUOUS: fc convergence only looks at CARDS, and a member turn that fails
     // creates none, so "no open cards ⇒ done" fired even when the agent never produced a
@@ -218,15 +220,16 @@ test.describe('RFC-165 — /tasks/new wizard', () => {
         // group ungated — otherwise the task parks and never reaches terminal.
         completionGate: false,
         members: [
-          { memberType: 'agent', agentName: 'wizard-wg-lead', displayName: 'Lead' },
-          { memberType: 'agent', agentName: 'wizard-wg-member', displayName: 'Member' },
+          { memberType: 'agent', agentId: leadAgentId, displayName: 'Lead' },
+          { memberType: 'agent', agentId: memberAgentId, displayName: 'Member' },
         ],
       }),
     })
     expectOk(wgRes, 'create workgroup')
+    const workgroup = (await wgRes.json()) as { id: string }
 
     await primeAuthLocalStorage(page, d)
-    await page.goto(`${d.baseUrl}/tasks/new?kind=workgroup&workgroup=wizard-squad`)
+    await page.goto(`${d.baseUrl}/tasks/new?kind=workgroup&workgroupId=${workgroup.id}`)
     await expect(page.getByTestId('task-wizard')).toBeVisible({ timeout: 10_000 })
     await page.getByTestId('wizard-space-scratch').click()
     await page.getByTestId('stepper-next').click()
@@ -252,10 +255,10 @@ test.describe('RFC-165 — /tasks/new wizard', () => {
     page,
   }) => {
     const d = daemon!
-    await createStubAgent(d, 'wizard-sched-agent')
+    const agentId = await createStubAgent(d, 'wizard-sched-agent')
     await primeAuthLocalStorage(page, d)
 
-    await page.goto(`${d.baseUrl}/tasks/new?schedule=1&kind=agent&agent=wizard-sched-agent`)
+    await page.goto(`${d.baseUrl}/tasks/new?schedule=1&kind=agent&agentId=${agentId}`)
     await expect(page.getByTestId('task-wizard')).toBeVisible({ timeout: 10_000 })
     await page.getByTestId('wizard-space-scratch').click()
     await page.getByTestId('stepper-next').click()

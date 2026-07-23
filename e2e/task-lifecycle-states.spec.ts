@@ -87,6 +87,7 @@ async function seedLinearWorkflow(
     }),
   })
   if (!aRes.ok) throw new Error(`seed agent: ${aRes.status}`)
+  const agent = (await aRes.json()) as { id: string }
 
   const agentNodeOverrides: Record<string, unknown> = {}
   if (opts.nodeRetries !== undefined) agentNodeOverrides.retries = opts.nodeRetries
@@ -105,6 +106,7 @@ async function seedLinearWorkflow(
           {
             id: 'agent_1',
             kind: 'agent-single',
+            agentId: agent.id,
             agentName: opts.agentName,
             promptTemplate: '{{topic}}',
             position: { x: 320, y: 0 },
@@ -150,7 +152,7 @@ async function seedReviewWorkflow(
   // markdown (or markdown_file). Add outputKinds so static validation
   // passes; the stub envelope content is plain text that still parses as
   // trivial markdown.
-  await fetch(`${daemon.baseUrl}/api/agents`, {
+  const agentRes = await fetch(`${daemon.baseUrl}/api/agents`, {
     method: 'POST',
     headers,
     body: JSON.stringify({
@@ -162,6 +164,8 @@ async function seedReviewWorkflow(
       bodyMd: '',
     }),
   })
+  if (!agentRes.ok) throw new Error(`seed review agent: ${agentRes.status}`)
+  const agent = (await agentRes.json()) as { id: string }
   const wfRes = await fetch(`${daemon.baseUrl}/api/workflows`, {
     method: 'POST',
     headers,
@@ -176,6 +180,7 @@ async function seedReviewWorkflow(
           {
             id: 'agent_1',
             kind: 'agent-single',
+            agentId: agent.id,
             agentName,
             promptTemplate: '{{topic}}',
             position: { x: 320, y: 0 },
@@ -231,7 +236,7 @@ async function seedClarifyWorkflow(daemon: DaemonHandle): Promise<BasicFixtures>
     'Content-Type': 'application/json',
   }
   const agentName = 'lifecycle-agent-clarify'
-  await fetch(`${daemon.baseUrl}/api/agents`, {
+  const agentRes = await fetch(`${daemon.baseUrl}/api/agents`, {
     method: 'POST',
     headers,
     body: JSON.stringify({
@@ -242,6 +247,8 @@ async function seedClarifyWorkflow(daemon: DaemonHandle): Promise<BasicFixtures>
       bodyMd: '',
     }),
   })
+  if (!agentRes.ok) throw new Error(`seed clarify agent: ${agentRes.status}`)
+  const agent = (await agentRes.json()) as { id: string }
   const wfRes = await fetch(`${daemon.baseUrl}/api/workflows`, {
     method: 'POST',
     headers,
@@ -256,6 +263,7 @@ async function seedClarifyWorkflow(daemon: DaemonHandle): Promise<BasicFixtures>
           {
             id: 'designer',
             kind: 'agent-single',
+            agentId: agent.id,
             agentName,
             promptTemplate: '{{topic}}',
             position: { x: 320, y: 0 },
