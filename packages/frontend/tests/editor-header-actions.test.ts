@@ -35,6 +35,12 @@ describe('editor header action strip alignment', () => {
     expect(body).toContain('justify-content: flex-start')
     expect(body).toContain('overflow-x: auto')
   })
+
+  test('the 390px workgroup title leaves Linux font-metric headroom for both actions', () => {
+    const block = css.split('.editor-page-header--workgroup > .page__heading {')[1]!
+    const body = block.slice(0, block.indexOf('}'))
+    expect(body).toContain('flex-basis: 88px')
+  })
 })
 
 describe('editor header starter entry removal', () => {

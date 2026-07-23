@@ -18,8 +18,12 @@ describe('RFC-198 visual infrastructure source gates', () => {
   test('visual spec declares exactly 26 counted scenes', () => {
     const source = repoFile('e2e/visual-regression.spec.ts')
     expect(source).toContain('const EXPECTED_VISUAL_SCENE_COUNT = 26')
+    expect(source).toContain('const HOMEPAGE_VISUAL_TIME = new Date(2026, 6, 23, 14, 0, 0)')
     expect(source.match(/^\s{2}test\(/gm)).toHaveLength(26)
     expect(source).toContain('declaredVisualSceneCount !== EXPECTED_VISUAL_SCENE_COUNT')
+    expect(source).toContain('async function waitForStableAuthenticatedShell(page: Page)')
+    expect(source).toContain("await expect(userMenu).toContainText('e2e_admin')")
+    expect(source).toContain('await page.clock.setFixedTime(HOMEPAGE_VISUAL_TIME)')
     expect(source).toContain("'workflow-node-picker-1179-large-human-dark.png'")
     // One declaration plus six locator screenshot callsites.
     expect(source.match(/COMPONENT_SNAPSHOT_OPTS/g)).toHaveLength(7)

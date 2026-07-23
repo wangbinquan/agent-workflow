@@ -35,6 +35,7 @@ import { routePopulatedInbox } from './inbox-fixtures'
 
 const RUN_VISUAL_REGRESSION = process.env.RUN_VISUAL_REGRESSION === '1'
 const EXPECTED_VISUAL_SCENE_COUNT = 26
+const HOMEPAGE_VISUAL_TIME = new Date(2026, 6, 23, 14, 0, 0)
 
 let daemon: DaemonHandle | undefined
 
@@ -71,6 +72,20 @@ async function primeAuth(page: Page): Promise<void> {
     },
     { baseUrl: d.baseUrl, token: d.token },
   )
+}
+
+/**
+ * The shell first renders without `/api/auth/me`, then hydrates the real
+ * session user. A screenshot that happens to match the old pixels can finish
+ * before that request settles, while an intentional visual diff keeps polling
+ * long enough to capture the final user instead. Always lock the hydrated
+ * state so baseline acceptance never depends on assertion timing.
+ */
+async function waitForStableAuthenticatedShell(page: Page): Promise<void> {
+  const userMenu = page.locator('.user-menu__trigger')
+  await expect(userMenu).toContainText('e2e_admin')
+  await expect(userMenu).toContainText('E2E Administrator')
+  await page.waitForLoadState('networkidle')
 }
 
 async function setDaemonTheme(theme: 'light' | 'dark'): Promise<void> {
@@ -239,6 +254,9 @@ async function openEditorScene(
   await page.goto(`${requireDaemon().baseUrl}/workflows/${workflowId}`)
   await expect(page.locator('.workflow-canvas')).toBeVisible()
   await expect(page.locator('.react-flow__node')).toHaveCount(expectedNodes)
+  if ((page.viewportSize()?.width ?? 1280) > 720) {
+    await waitForStableAuthenticatedShell(page)
+  }
 }
 
 async function routeLargeAgentCatalog(page: Page, total = 50): Promise<void> {
@@ -497,6 +515,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await primeAuth(page)
     await page.goto(`${requireDaemon().baseUrl}/agents`)
     await expect(page.getByRole('heading', { name: 'Agents', exact: true })).toBeVisible()
+    await waitForStableAuthenticatedShell(page)
     await expect(page).toHaveScreenshot('agents.png', SNAPSHOT_OPTS)
   })
 
@@ -505,6 +524,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await primeAuth(page)
     await page.goto(`${requireDaemon().baseUrl}/workflows`)
     await expect(page.getByRole('heading', { name: 'Workflows', exact: true })).toBeVisible()
+    await waitForStableAuthenticatedShell(page)
     await expect(page.locator('.page__actions')).toHaveScreenshot(
       'page-header-actions.png',
       COMPONENT_SNAPSHOT_OPTS,
@@ -521,6 +541,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await primeAuth(page)
     await page.goto(`${requireDaemon().baseUrl}/repos`)
     await expect(page.getByRole('heading', { name: /repos/i }).first()).toBeVisible()
+    await waitForStableAuthenticatedShell(page)
     await expect(page).toHaveScreenshot('repos.png', SNAPSHOT_OPTS)
   })
 
@@ -529,6 +550,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await primeAuth(page)
     await page.goto(`${requireDaemon().baseUrl}/memory`)
     await expect(page.getByRole('heading', { name: /memor/i }).first()).toBeVisible()
+    await waitForStableAuthenticatedShell(page)
     await expect(page).toHaveScreenshot('memory.png', SNAPSHOT_OPTS)
   })
 
@@ -537,6 +559,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await primeAuth(page)
     await page.goto(`${requireDaemon().baseUrl}/settings`)
     await expect(page.getByRole('heading', { name: /settings/i }).first()).toBeVisible()
+    await waitForStableAuthenticatedShell(page)
     await expect(page).toHaveScreenshot('settings.png', SNAPSHOT_OPTS)
   })
 
@@ -546,16 +569,17 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await prepareScene(page, { theme: 'light', fixture: 'clean' })
     await primeAuth(page)
     await page.goto(`${requireDaemon().baseUrl}/`)
-    await page.waitForLoadState('networkidle')
+    await waitForStableAuthenticatedShell(page)
     await expect(page).toHaveScreenshot('onboarding.png', SNAPSHOT_OPTS)
   })
 
   test('/ (homepage / dashboard, seeded non-first-run)', async ({ page }) => {
     await prepareScene(page, { theme: 'light', fixture: 'seeded-resources' })
+    await page.clock.setFixedTime(HOMEPAGE_VISUAL_TIME)
     await primeAuth(page)
     await page.goto(`${requireDaemon().baseUrl}/`)
     await expect(page.locator('[data-testid="homepage"]')).toBeVisible()
-    await page.waitForLoadState('networkidle')
+    await waitForStableAuthenticatedShell(page)
     await expect(page).toHaveScreenshot('homepage.png', SNAPSHOT_OPTS)
   })
 
@@ -568,6 +592,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await expect(page.getByTestId('task-row-visual-task-row')).toBeVisible()
     const tableViewport = page.locator('.table-viewport').first()
     await expect(tableViewport).toHaveAttribute('data-overflow-end', 'true')
+    await waitForStableAuthenticatedShell(page)
     await expect(tableViewport).toHaveScreenshot('table-edge.png', COMPONENT_SNAPSHOT_OPTS)
     await expect(page).toHaveScreenshot('tasks.png', SNAPSHOT_OPTS)
   })
@@ -577,6 +602,8 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await primeAuth(page)
     await page.goto(`${requireDaemon().baseUrl}/agents`)
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+    await waitForStableAuthenticatedShell(page)
+    await expect(page.getByText('visual-stub-agent', { exact: true })).toBeVisible()
     await page.getByTestId('inbox-footer-button').click()
     const dialog = page.getByRole('dialog', { name: 'Inbox' })
     await expect(dialog).toContainText('Nothing waiting')
@@ -593,6 +620,8 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await primeAuth(page)
     await page.goto(`${requireDaemon().baseUrl}/agents`)
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+    await waitForStableAuthenticatedShell(page)
+    await expect(page.getByText('visual-stub-agent', { exact: true })).toBeVisible()
     await page.getByTestId('inbox-footer-button').click()
     await expect(page.getByTestId('inbox-row-review-visual-review-0')).toBeVisible()
     await expect(page).toHaveScreenshot('inbox-populated-light.png', SNAPSHOT_OPTS)
@@ -604,6 +633,8 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await primeAuth(page)
     await page.goto(`${requireDaemon().baseUrl}/agents`)
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    await waitForStableAuthenticatedShell(page)
+    await expect(page.getByText('visual-stub-agent', { exact: true })).toBeVisible()
     await page.getByTestId('inbox-footer-button').click()
     await expect(page.getByTestId('inbox-row-review-visual-review-0')).toBeVisible()
     await expect(page).toHaveScreenshot('inbox-populated-dark.png', SNAPSHOT_OPTS)
@@ -621,6 +652,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await page.getByTestId('mobile-menu-trigger').click()
     const mobileNav = page.getByTestId('mobile-nav-dialog').getByRole('dialog')
     await expect(mobileNav).toBeVisible()
+    await waitForStableAuthenticatedShell(page)
     await expect(mobileNav).toHaveScreenshot('mobile-nav-open.png', COMPONENT_SNAPSHOT_OPTS)
     await expect(page).toHaveScreenshot('mobile-home-nav.png', SNAPSHOT_OPTS)
   })
@@ -806,6 +838,8 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     const preview = page.getByTestId('dw-preview-canvas')
     await expect(preview).toBeVisible()
     await expect(preview.locator('.react-flow__node')).toHaveCount(3)
+    await waitForStableAuthenticatedShell(page)
+    await expect(page.getByTestId('task-members-dialog-button')).toBeVisible()
     await expect(preview).toHaveScreenshot(
       'dynamic-workflow-preview-canvas.png',
       COMPONENT_SNAPSHOT_OPTS,

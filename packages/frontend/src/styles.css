@@ -18162,9 +18162,11 @@ button.status-chip {
 
   /* A workgroup has exactly two top-level actions. Give that short rail enough
    * room to keep both visible at 390px instead of making users discover a
-   * 24px horizontal scroll; the full title/id remain in the accessible DOM. */
+   * horizontal scroll. Ubuntu's button font metrics need 248px for the pair,
+   * so leave explicit headroom beyond the macOS fit; the full title/id remain
+   * in the accessible DOM. */
   .editor-page-header--workgroup > .page__heading {
-    flex-basis: 104px;
+    flex-basis: 88px;
   }
 
   .page--editor > .page__header > .page__actions,
