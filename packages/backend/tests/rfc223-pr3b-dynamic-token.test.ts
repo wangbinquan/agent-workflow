@@ -14,12 +14,15 @@
 //   3. An unknown token can never bind a member — it fails closed as
 //      dw-agent-outside-pool, referencing the token (never a name/id).
 //
-// Uniqueness is not yet relaxed (PR-8), so the two members carry DISTINCT names;
-// this proves the token indirection + single-point id conversion. The full
-// two-owner same-name matrix rides PR-8.
+// The baseline fixtures use distinct names to keep the prompt assertions easy
+// to read. The AC16 regression at the bottom adds the post-PR-8 adversarial
+// case: two owners, one shared name, and two distinct frozen ids/runtime
+// profiles crossing generate → execute without a name-based mis-selection.
 
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import {
@@ -37,6 +40,7 @@ import { runtimes, tasks, workflows, workgroupTaskState } from '../src/db/schema
 import { createApp } from '../src/server'
 import { createAgent } from '../src/services/agent'
 import { DW_GATE_CAUSE, runDynamicWorkflowGenerate } from '../src/services/dynamicWorkflowRunner'
+import { setNodeRunStatus } from '../src/services/lifecycle'
 import {
   buildDwPoolMembers,
   buildOrchestratorPrompt,
@@ -45,6 +49,7 @@ import {
   ORCHESTRATOR_WORKFLOW_PORT,
   validateDynamicWorkflowDef,
 } from '../src/services/orchestratorAgent'
+import { abortAllActiveTasks, resumeDynamicWorkflowExecution } from '../src/services/task'
 import { loadWorkgroupTaskState } from '../src/services/workgroup/state'
 import { createUser } from '../src/services/users'
 import { nodeRuns } from '../src/db/schema'
@@ -54,8 +59,10 @@ import type {
   WorkgroupHostRunResult,
 } from '../src/services/workgroup/engine'
 import { createLogger } from '../src/util/log'
+import { runTestGit } from './helpers/testCommand'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const log = createLogger('rfc223-pr3b-test')
 
 // Distinctive names that ALSO appear inside each agent's own free-text
@@ -249,6 +256,21 @@ function scriptedHooks(queue: WorkgroupHostRunResult[]): {
   }
 }
 
+function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promise<T> {
+  const previous: Record<string, string | undefined> = {}
+  for (const [key, value] of Object.entries(env)) {
+    previous[key] = process.env[key]
+    process.env[key] = value
+  }
+  return body().finally(() => {
+    for (const key of Object.keys(env)) {
+      const value = previous[key]
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
+  })
+}
+
 async function seedTask(
   db: DbClient,
   config: WorkgroupRuntimeConfig,
@@ -405,4 +427,226 @@ describe('RFC-223 PR-3b — live generate + save-as consume id form', () => {
     expect(reviewNode?.agentId).toBe(auditorId)
     expect(JSON.stringify(savedDef)).not.toContain('member#')
   })
+})
+
+describe('RFC-223 AC16 — two-owner same-name dynamic members stay id-canonical', () => {
+  test('generate maps tokens to both frozen ids and execute selects each exact runtime profile', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'aw-rfc223-ac16-'))
+    const appHome = join(root, 'home')
+    const repoPath = join(root, 'repo')
+    const configCapturePath = join(root, 'runtime-config.jsonl')
+    const argvCapturePath = join(root, 'runtime-argv.jsonl')
+    mkdirSync(appHome, { recursive: true })
+    mkdirSync(repoPath, { recursive: true })
+
+    const db = createInMemoryDb(MIGRATIONS)
+    try {
+      await runTestGit(['-C', repoPath, 'init', '-q', '-b', 'main'], 10_000)
+      await runTestGit(['-C', repoPath, 'config', 'user.email', 'rfc223@test.invalid'], 10_000)
+      await runTestGit(['-C', repoPath, 'config', 'user.name', 'RFC 223'], 10_000)
+      await runTestGit(['-C', repoPath, 'commit', '-q', '--allow-empty', '-m', 'fixture'], 10_000)
+
+      const ownerA = await createUser(db, {
+        username: 'ac16-owner-a',
+        displayName: 'AC16 owner A',
+        role: 'user',
+        password: 'longEnoughPasswordA',
+      })
+      const ownerB = await createUser(db, {
+        username: 'ac16-owner-b',
+        displayName: 'AC16 owner B',
+        role: 'user',
+        password: 'longEnoughPasswordB',
+      })
+      await db.insert(runtimes).values([
+        {
+          id: ulid(),
+          name: 'ac16-owner-a-runtime',
+          protocol: 'opencode',
+          model: 'model/ac16-owner-a',
+        },
+        {
+          id: ulid(),
+          name: 'ac16-owner-b-runtime',
+          protocol: 'opencode',
+          model: 'model/ac16-owner-b',
+        },
+      ])
+
+      const sharedName = 'shared-dynamic-member'
+      const agentBase = {
+        name: sharedName,
+        description: 'same display identity, different canonical owner/id',
+        outputs: ['out'],
+        syncOutputsOnIterate: true,
+        permission: {},
+        skills: [],
+        dependsOn: [],
+        mcp: [],
+        plugins: [],
+        frontmatterExtra: {},
+      }
+      // Insert B first so an accidental name + first-row lookup deterministically
+      // sends the owner-A node to the wrong tenant.
+      const agentB = await createAgent(
+        db,
+        {
+          ...agentBase,
+          runtime: 'ac16-owner-b-runtime',
+          bodyMd: 'AC16_OWNER_B_SYSTEM_PROMPT',
+        },
+        { ownerUserId: ownerB.id },
+      )
+      const agentA = await createAgent(
+        db,
+        {
+          ...agentBase,
+          runtime: 'ac16-owner-a-runtime',
+          bodyMd: 'AC16_OWNER_A_SYSTEM_PROMPT',
+        },
+        { ownerUserId: ownerA.id },
+      )
+
+      const config: WorkgroupRuntimeConfig = {
+        workgroupId: 'wg-ac16-same-name',
+        workgroupName: 'ac16-same-name',
+        mode: 'dynamic_workflow',
+        leaderMemberId: null,
+        switches: { shareOutputs: true, directMessages: false, blackboard: false },
+        maxRounds: 5,
+        completionGate: false,
+        instructions: '按冻结成员身份执行',
+        goal: '验证同名成员不会串租户',
+        members: [
+          {
+            id: 'member-owner-a',
+            memberType: 'agent',
+            agentName: sharedName,
+            agentId: agentA.id,
+            userId: null,
+            displayName: 'owner-a-member',
+            roleDesc: 'first',
+          },
+          {
+            id: 'member-owner-b',
+            memberType: 'agent',
+            agentName: sharedName,
+            agentId: agentB.id,
+            userId: null,
+            displayName: 'owner-b-member',
+            roleDesc: 'second',
+          },
+        ],
+      }
+      const generated = {
+        nodes: [
+          {
+            id: 'owner-a-step',
+            agentToken: 'member#1',
+            promptTemplate: 'AC16_OWNER_A_NODE',
+            inputs: [],
+          },
+          {
+            id: 'owner-b-step',
+            agentToken: 'member#2',
+            promptTemplate: 'AC16_OWNER_B_NODE {{source}}',
+            inputs: [{ port: 'source', from: { nodeId: 'owner-a-step', portName: 'out' } }],
+          },
+        ],
+        edges: [],
+      }
+
+      const taskId = await seedTask(db, config, initialDwState(), ownerA.id)
+      await db.update(tasks).set({ repoPath, worktreePath: repoPath }).where(eq(tasks.id, taskId))
+
+      const { hooks } = scriptedHooks([
+        {
+          status: 'done',
+          outputs: { [ORCHESTRATOR_WORKFLOW_PORT]: JSON.stringify(generated) },
+        },
+      ])
+      const generateResult = await runDynamicWorkflowGenerate({ db, taskId, log, hooks })
+      expect(generateResult).toMatchObject({ kind: 'awaiting_review' })
+
+      const generatedDw = (await loadWorkgroupTaskState(db, taskId)).dwState
+      const generatedDef = WorkflowDefinitionSchema.parse(generatedDw?.generatedDef)
+      const idByNode = new Map(
+        generatedDef.nodes.map((node) => [node.id, (node as Record<string, unknown>).agentId]),
+      )
+      expect(idByNode.get('owner-a-step')).toBe(agentA.id)
+      expect(idByNode.get('owner-b-step')).toBe(agentB.id)
+      expect(JSON.stringify(generatedDef)).not.toContain('member#')
+
+      const holder = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).find(
+        (run) => run.rerunCause === DW_GATE_CAUSE,
+      )
+      expect(holder?.status).toBe('awaiting_review')
+      await setNodeRunStatus({
+        db,
+        nodeRunId: holder!.id,
+        to: 'done',
+        allowedFrom: ['awaiting_review'],
+        reason: 'ac16-test-approved',
+      })
+      const { rejectionComment: _comment, ...dwRest } = generatedDw as DwState
+
+      await withEnv(
+        {
+          MOCK_OPENCODE_OUTPUTS: JSON.stringify({ out: 'done' }),
+          MOCK_OPENCODE_CAPTURE_CONFIG_TO: configCapturePath,
+          MOCK_OPENCODE_CAPTURE_ARGV_TO: argvCapturePath,
+        },
+        () =>
+          resumeDynamicWorkflowExecution(
+            db,
+            taskId,
+            {
+              db,
+              appHome,
+              opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+              awaitScheduler: true,
+              defaultPerNodeTimeoutMs: 10_000,
+              defaultNodeRetries: 0,
+            },
+            {
+              workflowSnapshot: JSON.stringify(generatedDef),
+              dw: { ...dwRest, phase: 'executing' },
+            },
+          ),
+      )
+
+      const finalTask = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+      expect(finalTask?.status).toBe('done')
+
+      const configRows = readFileSync(configCapturePath, 'utf-8')
+        .trim()
+        .split('\n')
+        .map(
+          (line) =>
+            JSON.parse(line) as {
+              agent: string
+              model: string | null
+              variant: string | null
+              temperature: number | null
+            },
+        )
+      const argvRows = readFileSync(argvCapturePath, 'utf-8')
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line) as { agent: string; prompt: string })
+      expect(configRows).toEqual([
+        { agent: sharedName, model: 'model/ac16-owner-a', variant: null, temperature: null },
+        { agent: sharedName, model: 'model/ac16-owner-b', variant: null, temperature: null },
+      ])
+      expect(argvRows).toHaveLength(2)
+      expect(argvRows[0]).toMatchObject({ agent: sharedName })
+      expect(argvRows[0]?.prompt).toContain('AC16_OWNER_A_NODE')
+      expect(argvRows[1]).toMatchObject({ agent: sharedName })
+      expect(argvRows[1]?.prompt).toContain('AC16_OWNER_B_NODE')
+    } finally {
+      abortAllActiveTasks('rfc223-ac16-test-cleanup')
+      db.$client.close()
+      rmSync(root, { recursive: true, force: true })
+    }
+  }, 30_000)
 })
