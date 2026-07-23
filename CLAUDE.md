@@ -13,6 +13,7 @@ This repo is **mid-implementation** (M1 in progress; ~9/18 of M1 done as of last
 3. `design/proposal.md` — product spec (authoritative).
 4. `design/design.md` — technical design (authoritative).
 5. `proposal/init.md` — original Chinese proposal, preserved for history. When it disagrees with `design/*.md`, `design/*.md` wins.
+6. `docs/dev-gotchas.md` — 跨 RFC 沉淀的**通用踩坑**（提交纪律 / 迁移 / CI / opencode / impl-gate 经验规律 / 前端 / dev-env）。动手前扫一遍，避免重复踩坑；踩到新的通用坑也补进去（RFC-专属细节仍进各 `design/RFC-XXX/`）。
 
 When a batch of issues completes, commit + push and update `STATE.md` so the next session can pick up seamlessly.
 
