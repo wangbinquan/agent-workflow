@@ -372,11 +372,11 @@ export async function updateResourceAcl(
       .get()
     if (!cur) throw new NotFoundError('not-found', `${type} not found`)
 
-    // Optional OCC preconditions (absent → legacy last-write-wins).
-    if (body.expectedResourceId !== undefined && body.expectedResourceId !== row.id) {
+    // Mandatory immutable-id + revision fence (RFC-223).
+    if (body.expectedResourceId !== row.id) {
       throw new ConflictError('acl-resource-mismatch', 'resource id changed; reload')
     }
-    if (body.expectedAclRevision !== undefined && cur.aclRevision !== body.expectedAclRevision) {
+    if (cur.aclRevision !== body.expectedAclRevision) {
       throw new ConflictError(
         'acl-revision-conflict',
         `acl revision is ${cur.aclRevision}, expected ${body.expectedAclRevision}; reload and retry`,

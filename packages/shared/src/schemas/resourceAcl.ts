@@ -69,12 +69,13 @@ export const UpdateResourceAclBodySchema = z
     visibility: ResourceVisibilitySchema.optional(),
     userIds: z.array(z.string().min(1)).max(256).optional(),
     /**
-     * RFC-170 §8 — optional OCC preconditions (backward-compatible: absent →
-     * legacy last-write-wins). When present, the PUT CAS-checks the target id +
-     * monotonic revision inside the write tx and 409s on mismatch.
+     * RFC-223 — mandatory OCC fence. Every mutation must bind the immutable
+     * resource id and the exact ACL revision observed by the client. Optional
+     * legacy last-write-wins would let a paused former owner mutate ACL state
+     * after a concurrent transfer.
      */
-    expectedResourceId: z.string().min(1).optional(),
-    expectedAclRevision: z.number().int().nonnegative().optional(),
+    expectedResourceId: z.string().min(1),
+    expectedAclRevision: z.number().int().nonnegative(),
   })
   .refine(
     (b) => b.ownerUserId !== undefined || b.visibility !== undefined || b.userIds !== undefined,

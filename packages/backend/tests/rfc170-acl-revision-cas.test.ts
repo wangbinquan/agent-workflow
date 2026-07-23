@@ -2,11 +2,13 @@
 //
 // The security property: a stale PUT (client read revision N, then paused while
 // another writer advanced the resource to N+1) is 409-rejected, so it cannot
-// silently reinstate a revoked grant or re-take ownership. Backward-compatible:
-// a PUT with no expectedAclRevision keeps legacy last-write-wins. Also locks the
-// in-tx referenced-user active check (G5-P5).
+// silently reinstate a revoked grant or re-take ownership. RFC-223 makes the
+// immutable id + revision pair mandatory and repeats actor authorization from
+// the in-transaction row snapshot. Also locks the referenced-user active check
+// (G5-P5).
 
 import { describe, expect, test, beforeEach } from 'bun:test'
+import { UpdateResourceAclBodySchema } from '@agent-workflow/shared'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
@@ -75,9 +77,17 @@ describe('RFC-170 §8 — ACL aclRevision CAS', () => {
 
   test('GET starts at aclRevision 0; each successful PUT bumps it monotonically', async () => {
     expect((await getResourceAcl(db, owner, 'agent', agentRow)).aclRevision).toBe(0)
-    const a = await updateResourceAcl(db, owner, 'agent', agentRow, { visibility: 'private' })
+    const a = await updateResourceAcl(db, owner, 'agent', agentRow, {
+      visibility: 'private',
+      expectedResourceId: agentRow.id,
+      expectedAclRevision: 0,
+    })
     expect(a.aclRevision).toBe(1)
-    const b = await updateResourceAcl(db, owner, 'agent', agentRow, { visibility: 'public' })
+    const b = await updateResourceAcl(db, owner, 'agent', agentRow, {
+      visibility: 'public',
+      expectedResourceId: agentRow.id,
+      expectedAclRevision: 1,
+    })
     expect(b.aclRevision).toBe(2)
   })
 
@@ -92,11 +102,16 @@ describe('RFC-170 §8 — ACL aclRevision CAS', () => {
 
   test('PUT with a STALE expectedAclRevision → 409 ConflictError (no write applied)', async () => {
     // Advance to revision 1.
-    await updateResourceAcl(db, owner, 'agent', agentRow, { visibility: 'private' })
+    await updateResourceAcl(db, owner, 'agent', agentRow, {
+      visibility: 'private',
+      expectedResourceId: agentRow.id,
+      expectedAclRevision: 0,
+    })
     // A request that still believes it is at revision 0 must be rejected.
     await expect(
       updateResourceAcl(db, owner, 'agent', agentRow, {
         userIds: [OTHER],
+        expectedResourceId: agentRow.id,
         expectedAclRevision: 0,
       }),
     ).rejects.toBeInstanceOf(ConflictError)
@@ -111,12 +126,17 @@ describe('RFC-170 §8 — ACL aclRevision CAS', () => {
     const seen = await getResourceAcl(db, owner, 'agent', agentRow)
     expect(seen.aclRevision).toBe(0)
     // Admin transfers ownership to OTHER (revision → 1).
-    await updateResourceAcl(db, admin, 'agent', agentRow, { ownerUserId: OTHER })
+    await updateResourceAcl(db, admin, 'agent', agentRow, {
+      ownerUserId: OTHER,
+      expectedResourceId: agentRow.id,
+      expectedAclRevision: 0,
+    })
     // The paused original request tries to keep OWNER as owner using its stale
     // revision — must 409, NOT silently re-take ownership.
     await expect(
       updateResourceAcl(db, owner, 'agent', agentRow, {
         ownerUserId: OWNER,
+        expectedResourceId: agentRow.id,
         expectedAclRevision: seen.aclRevision,
       }),
     ).rejects.toBeInstanceOf(ConflictError)
@@ -133,21 +153,24 @@ describe('RFC-170 §8 — ACL aclRevision CAS', () => {
       updateResourceAcl(db, owner, 'agent', agentRow, {
         visibility: 'private',
         expectedResourceId: 'some-other-id',
+        expectedAclRevision: 0,
       }),
     ).rejects.toBeInstanceOf(ConflictError)
   })
 
-  test('backward-compatible: a PUT with no expected fields still applies (legacy LWW)', async () => {
-    const res = await updateResourceAcl(db, owner, 'agent', agentRow, { visibility: 'private' })
-    expect(res.visibility).toBe('private')
-    expect(res.aclRevision).toBe(1)
+  test('a payload without the immutable id + revision pair is rejected by the wire schema', () => {
+    expect(UpdateResourceAclBodySchema.safeParse({ visibility: 'private' }).success).toBe(false)
   })
 
   test('G5-P5: a referenced user disabled before the CAS is rejected in-tx (422)', async () => {
     // Disable OTHER, then try to grant to them.
     await db.update(users).set({ status: 'disabled' }).where(eq(users.id, OTHER)).run()
     await expect(
-      updateResourceAcl(db, owner, 'agent', agentRow, { userIds: [OTHER] }),
+      updateResourceAcl(db, owner, 'agent', agentRow, {
+        userIds: [OTHER],
+        expectedResourceId: agentRow.id,
+        expectedAclRevision: 0,
+      }),
     ).rejects.toBeInstanceOf(ValidationError)
   })
 })
