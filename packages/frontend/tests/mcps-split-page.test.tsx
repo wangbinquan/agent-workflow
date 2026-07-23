@@ -5,7 +5,7 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { RouterProvider, createMemoryHistory, createRouter } from '@tanstack/react-router'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { Route as RootRoute } from '../src/routes/__root'
@@ -42,11 +42,11 @@ let failNextPut: boolean
 let putWait: Promise<void> | null
 let releasePut: (() => void) | null
 
-function probeReceipt(hash: string) {
+function probeReceipt(mcp: McpRow, hash: string) {
   return {
     id: 'p1',
-    mcpId: 'db',
-    mcpName: 'db',
+    mcpId: mcp.id,
+    mcpName: mcp.name,
     status: 'ok',
     latencyMs: 1,
     handshakeMs: 1,
@@ -67,9 +67,9 @@ function probeReceipt(hash: string) {
   }
 }
 
-function makeMcp(name: string, description = ''): McpRow {
+function makeMcp(id: string, name: string, ownerUserId: string | null, description = ''): McpRow {
   return {
-    id: name,
+    id,
     name,
     description,
     type: 'local',
@@ -79,7 +79,7 @@ function makeMcp(name: string, description = ''): McpRow {
     createdAt: 0,
     updatedAt: 1,
     visibility: 'public',
-    ownerUserId: null,
+    ownerUserId,
     operationConfigHash: 'a'.repeat(64),
   }
 }
@@ -98,8 +98,8 @@ function installFetch() {
       if (method === 'POST' && path === '/api/users/lookup') return json([])
       const detail = path.match(/^\/api\/mcps\/([^/]+)$/)
       if (detail) {
-        const name = decodeURIComponent(detail[1]!)
-        const m = mcps.find((x) => x.name === name)
+        const id = decodeURIComponent(detail[1]!)
+        const m = mcps.find((x) => x.id === id)
         if (method === 'GET') return m ? json(m) : json({ error: 'nf' }, 404)
         if (method === 'PUT') {
           if (failNextPut) {
@@ -107,7 +107,7 @@ function installFetch() {
             return json({ ok: false, code: 'save-failed', message: 'save failed' }, 500)
           }
           if (putWait !== null) await putWait
-          const i = mcps.findIndex((x) => x.name === name)
+          const i = mcps.findIndex((x) => x.id === id)
           mcps[i] = {
             ...mcps[i]!,
             ...(body as object),
@@ -116,12 +116,19 @@ function installFetch() {
           }
           return json(mcps[i])
         }
+        if (method === 'DELETE') {
+          mcps = mcps.filter((x) => x.id !== id)
+          return new Response(null, { status: 204 })
+        }
       }
-      if (/\/api\/mcps\/[^/]+\/probe$/.test(path) && method === 'GET') {
+      const probe = path.match(/^\/api\/mcps\/([^/]+)\/probe$/)
+      if (probe && method === 'GET') {
         return json({ ok: false, code: 'probe-not-found', message: 'never' }, 404)
       }
-      if (/\/api\/mcps\/[^/]+\/probe$/.test(path) && method === 'POST') {
-        return json(probeReceipt((body as { expectedConfigHash: string }).expectedConfigHash))
+      if (probe && method === 'POST') {
+        const mcp = mcps.find((x) => x.id === decodeURIComponent(probe[1]!))
+        if (mcp === undefined) return json({ error: 'nf' }, 404)
+        return json(probeReceipt(mcp, (body as { expectedConfigHash: string }).expectedConfigHash))
       }
       return json({ error: 'unhandled' }, 404)
     },
@@ -149,7 +156,7 @@ function renderMcps(initial: string) {
 beforeEach(() => {
   setBaseUrl('http://daemon.test')
   setToken('tok')
-  mcps = [makeMcp('db', 'postgres')]
+  mcps = [makeMcp('db', 'db', null, 'postgres')]
   requests = []
   failNextPut = false
   putWait = null
@@ -224,6 +231,73 @@ describe('/mcps split page', () => {
       requests.find((request) => request.method === 'PUT' && request.path === '/api/mcps/db')?.body,
     ).toMatchObject({ expectedConfigHash: 'a'.repeat(64) })
     expect(router.state.location.pathname).toBe('/mcps/db')
+  })
+
+  test('RFC-223 PR-9: admin dual same-name navigation/edit/probe/delete stays on the selected id', async () => {
+    mcps = [
+      makeMcp('mcp-owner-a', 'shared-mcp', 'owner-a', 'tenant A'),
+      makeMcp('mcp-owner-b', 'shared-mcp', 'owner-b', 'tenant B'),
+    ]
+    const router = renderMcps('/mcps')
+
+    const cardA = await waitFor(() => screen.getByTestId('split-card-mcp-owner-a'))
+    const cardB = screen.getByTestId('split-card-mcp-owner-b')
+    expect(cardA.textContent).toContain('shared-mcp')
+    expect(cardB.textContent).toContain('shared-mcp')
+    expect(cardA.textContent).toContain('tenant A')
+    expect(cardB.textContent).toContain('tenant B')
+
+    fireEvent.click(cardB)
+    await waitFor(() => expect(router.state.location.pathname).toBe('/mcps/mcp-owner-b'))
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'shared-mcp' }))
+    expect(
+      requests.some(
+        (request) => request.method === 'GET' && request.path === '/api/mcps/mcp-owner-b',
+      ),
+    ).toBe(true)
+
+    fireEvent.change(screen.getByRole('textbox', { name: /Description/ }), {
+      target: { value: 'tenant B edited' },
+    })
+    fireEvent.click(screen.getByTestId('mcp-save-button'))
+    await waitFor(() =>
+      expect(
+        requests.some(
+          (request) => request.method === 'PUT' && request.path === '/api/mcps/mcp-owner-b',
+        ),
+      ).toBe(true),
+    )
+    expect(mcps.find((mcp) => mcp.id === 'mcp-owner-a')?.description).toBe('tenant A')
+    expect(mcps.find((mcp) => mcp.id === 'mcp-owner-b')?.description).toBe('tenant B edited')
+
+    fireEvent.click(screen.getByTestId('mcp-tab-probe'))
+    fireEvent.click(await waitFor(() => screen.getByTestId('mcp-inventory-reprobe-mcp-owner-b')))
+    await waitFor(() =>
+      expect(
+        requests.some(
+          (request) => request.method === 'POST' && request.path === '/api/mcps/mcp-owner-b/probe',
+        ),
+      ).toBe(true),
+    )
+
+    fireEvent.click(screen.getByTestId('detail-delete-button'))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByTestId('confirm-input'), {
+      target: { value: 'shared-mcp' },
+    })
+    fireEvent.click(within(dialog).getByRole('button', { name: /^Delete$/ }))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/mcps'))
+    expect(
+      requests.find(
+        (request) => request.method === 'DELETE' && request.path === '/api/mcps/mcp-owner-b',
+      )?.body,
+    ).toEqual({
+      confirm: 'shared-mcp',
+      expectedConfigHash: 'b'.repeat(64),
+    })
+    expect(screen.queryByTestId('split-card-mcp-owner-b')).toBeNull()
+    expect(screen.getByTestId('split-card-mcp-owner-a')).toBeTruthy()
+    expect(mcps.map((mcp) => mcp.id)).toEqual(['mcp-owner-a'])
   })
 
   test('dirty probe offers save-and-probe and forwards only the exact PUT receipt hash', async () => {
