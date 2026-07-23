@@ -224,12 +224,14 @@ describe('WorkflowImportDialog', () => {
         ownerUserId: 'owner-a',
         ownerUsername: 'alice',
         visibility: 'public' as const,
+        aclRevision: 3,
       },
       {
         id: 'agent-owner-b',
         ownerUserId: 'owner-b',
         ownerUsername: 'bob',
         visibility: 'public' as const,
+        aclRevision: 7,
       },
     ]
     const onImport = vi
@@ -279,7 +281,9 @@ describe('WorkflowImportDialog', () => {
     const refreshedFence = onImport.mock.calls[3]?.[2]
     expect(refreshedFence).toMatchObject({ workflowId: 'same', expectedVersion: 8 })
     expect(refreshedFence?.clientMutationId).not.toBe(staleFence?.clientMutationId)
-    expect(onImport.mock.calls[3]?.[3]).toEqual([{ selector, resourceId: 'agent-owner-b' }])
+    expect(onImport.mock.calls[3]?.[3]).toEqual([
+      { selector, resourceId: 'agent-owner-b', expectedAclRevision: 7 },
+    ])
   })
 
   test('the safe conflict default submits new without requiring a magic string', async () => {
@@ -313,12 +317,14 @@ describe('WorkflowImportDialog', () => {
                   ownerUserId: 'owner-a',
                   ownerUsername: 'alice',
                   visibility: 'public',
+                  aclRevision: 3,
                 },
                 {
                   id: 'agent-owner-b',
                   ownerUserId: 'owner-b',
                   ownerUsername: 'bob',
                   visibility: 'public',
+                  aclRevision: 7,
                 },
               ],
             },
@@ -342,6 +348,7 @@ describe('WorkflowImportDialog', () => {
       {
         selector: { type: 'agent', name: 'planner' },
         resourceId: 'agent-owner-b',
+        expectedAclRevision: 7,
       },
     ])
   })
@@ -353,12 +360,14 @@ describe('WorkflowImportDialog', () => {
       ownerUserId: 'owner-a',
       ownerUsername: 'alice',
       visibility: 'public' as const,
+      aclRevision: 3,
     }
     const bob = {
       id: 'agent-owner-b',
       ownerUserId: 'owner-b',
       ownerUsername: 'bob',
       visibility: 'public' as const,
+      aclRevision: 7,
     }
     const onImport = vi
       .fn<WorkflowImportDialogProps['onImport']>()

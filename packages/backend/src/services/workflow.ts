@@ -48,6 +48,21 @@ import { validateWorkflowById } from './workflow.validator'
 
 type WorkflowRow = typeof workflows.$inferSelect
 
+export interface WorkflowWriteInTxGuard {
+  /**
+   * Synchronous check executed in the exact transaction immediately before
+   * the workflow INSERT/UPDATE. It must only use drizzle's sync surface.
+   */
+  assert(tx: DbTxSync): void
+}
+
+export interface CreateWorkflowOptions {
+  ownerUserId?: string
+  builtin?: boolean
+  id?: string
+  inTxGuard?: WorkflowWriteInTxGuard
+}
+
 export async function listWorkflows(db: DbClient): Promise<Workflow[]> {
   const rows = await db.select().from(workflows)
   return rows.map(rowToWorkflow)
@@ -100,32 +115,36 @@ export async function getWorkflowAclRow(
 export async function createWorkflow(
   db: DbClient,
   input: CreateWorkflow,
-  opts?: { ownerUserId?: string; builtin?: boolean; id?: string },
+  opts?: CreateWorkflowOptions,
 ): Promise<WorkflowDetail> {
   const id = opts?.id ?? ulid()
   const now = Date.now()
   // Normalize incoming v1 → v2 (RFC-005) so new rows always land at the
   // latest schema version. Older clients can still post v1 — they get upgraded.
   const normalized = migrateDefinitionToLatest(input.definition)
-  const inserted = await db
-    .insert(workflows)
-    .values({
-      id,
-      name: input.name,
-      description: input.description,
-      definition: serializeWorkflowDefinitionStorageV1(normalized),
-      version: 1,
-      // RFC-099: creator becomes owner; new resources default to 'public' (D18).
-      ownerUserId: opts?.ownerUserId ?? null,
-      visibility: 'public',
-      // RFC-104: built-in marker — only seedFusionResources passes builtin:true;
-      // never set via any HTTP path (CreateWorkflowSchema omits it).
-      builtin: opts?.builtin ?? false,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .returning()
-  const insertedRow = inserted[0]
+  const values: typeof workflows.$inferInsert = {
+    id,
+    name: input.name,
+    description: input.description,
+    definition: serializeWorkflowDefinitionStorageV1(normalized),
+    version: 1,
+    // RFC-099: creator becomes owner; new resources default to 'public' (D18).
+    ownerUserId: opts?.ownerUserId ?? null,
+    visibility: 'public',
+    // RFC-104: built-in marker — only seedFusionResources passes builtin:true;
+    // never set via any HTTP path (CreateWorkflowSchema omits it).
+    builtin: opts?.builtin ?? false,
+    createdAt: now,
+    updatedAt: now,
+  }
+  const inTxGuard = opts?.inTxGuard
+  const insertedRow =
+    inTxGuard === undefined
+      ? (await db.insert(workflows).values(values).returning())[0]
+      : dbTxSync(db, (tx) => {
+          inTxGuard.assert(tx)
+          return tx.insert(workflows).values(values).returning().get()
+        })
   if (insertedRow === undefined) throw new Error('workflow insert returned no row')
   // RFC-199: the create response is derived from INSERT RETURNING. A post-insert
   // GET could race a later writer and falsely return somebody else's revision.
@@ -153,6 +172,11 @@ export async function updateWorkflow(
   id: string,
   input: UpdateWorkflow,
   principal: WorkflowWritePrincipal,
+  opts?: {
+    inTxGuard?: WorkflowWriteInTxGuard
+    /** Deterministic race-test seam after ordinary preflight, before dbTxSync. */
+    beforeWriteTransaction?: () => void | Promise<void>
+  },
 ): Promise<SaveWorkflowReceipt> {
   const parsed = UpdateWorkflowSchema.safeParse(input)
   if (!parsed.success) {
@@ -180,6 +204,7 @@ export async function updateWorkflow(
       await assertNewRefsUsable(db, principal.actor, [{ type: 'agent', names: newNames }])
     }
   }
+  await opts?.beforeWriteTransaction?.()
 
   const txResult = dbTxSync<{ receipt: SaveWorkflowReceipt; committed: boolean }>(db, (tx) => {
     const currentRow = tx.select().from(workflows).where(eq(workflows.id, id)).get()
@@ -188,6 +213,12 @@ export async function updateWorkflow(
     assertPrincipalCanWriteInTx(tx, principal, currentRow)
     const current = rowToWorkflow(currentRow)
     assertChangedWorkflowName(current.name, normalizedSnapshot.name)
+
+    // Import reference selectors are initially resolved for preview/mapping,
+    // then re-read here from the transaction's fresh ACL snapshot. This must
+    // precede version/logical-no-op reconciliation: a response-loss retry may
+    // not report success after its selected reference became stale/invisible.
+    opts?.inTxGuard?.assert(tx)
 
     const currentSnapshot = workflowDraftSnapshotOf(current)
     const currentBytes = serializeWorkflowEditableSnapshotV1(currentSnapshot)

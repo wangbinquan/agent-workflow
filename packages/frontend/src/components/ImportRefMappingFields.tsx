@@ -36,16 +36,13 @@ export function ImportRefMappingFields(props: {
 }) {
   const { t } = useTranslation()
   const selectedByKey = new Map(
-    props.selections.map((selection) => [
-      importRefSelectorKey(selection.selector),
-      selection.resourceId,
-    ]),
+    props.selections.map((selection) => [importRefSelectorKey(selection.selector), selection]),
   )
   return (
     <div className="stack--sm" data-testid={`${props.testidPrefix}-mapping`}>
       {props.ambiguities.map((ambiguity) => {
         const key = importRefSelectorKey(ambiguity.selector)
-        const value = selectedByKey.get(key) ?? ''
+        const value = selectedByKey.get(key)?.resourceId ?? ''
         const typeLabel = t(`importRefs.resourceType.${ambiguity.selector.type}`)
         const label = t('importRefs.selectorLabel', {
           type: typeLabel,
@@ -71,10 +68,18 @@ export function ImportRefMappingFields(props: {
                 const retained = props.selections.filter(
                   (selection) => importRefSelectorKey(selection.selector) !== key,
                 )
+                const candidate = ambiguity.candidates.find((item) => item.id === resourceId)
                 props.onChange(
-                  resourceId === ''
+                  candidate === undefined
                     ? retained
-                    : [...retained, { selector: ambiguity.selector, resourceId }],
+                    : [
+                        ...retained,
+                        {
+                          selector: ambiguity.selector,
+                          resourceId,
+                          expectedAclRevision: candidate.aclRevision,
+                        },
+                      ],
                 )
               }}
             />
@@ -90,13 +95,17 @@ export function hasEveryImportRefSelection(
   selections: readonly ImportRefSelection[],
 ): boolean {
   const selected = new Map(
-    selections.map((selection) => [importRefSelectorKey(selection.selector), selection.resourceId]),
+    selections.map((selection) => [importRefSelectorKey(selection.selector), selection]),
   )
   return ambiguities.every((ambiguity) => {
-    const resourceId = selected.get(importRefSelectorKey(ambiguity.selector))
+    const selection = selected.get(importRefSelectorKey(ambiguity.selector))
     return (
-      resourceId !== undefined &&
-      ambiguity.candidates.some((candidate) => candidate.id === resourceId)
+      selection !== undefined &&
+      ambiguity.candidates.some(
+        (candidate) =>
+          candidate.id === selection.resourceId &&
+          candidate.aclRevision === selection.expectedAclRevision,
+      )
     )
   })
 }

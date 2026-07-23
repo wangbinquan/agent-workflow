@@ -32,6 +32,12 @@ export const ImportRefSelectionSchema = z
   .object({
     selector: ImportRefSelectorSchema,
     resourceId: z.string().min(1),
+    /**
+     * ACL snapshot shown alongside the candidate. The server rejects a second
+     * submission when this revision changed, even if the same id is still
+     * visible under the same name.
+     */
+    expectedAclRevision: z.number().int().nonnegative(),
   })
   .strict()
 export type ImportRefSelection = z.infer<typeof ImportRefSelectionSchema>
@@ -42,6 +48,7 @@ export const ImportRefCandidateSchema = z
     ownerUserId: z.string().nullable(),
     ownerUsername: z.string().nullable(),
     visibility: ResourceVisibilitySchema,
+    aclRevision: z.number().int().nonnegative(),
   })
   .strict()
 export type ImportRefCandidate = z.infer<typeof ImportRefCandidateSchema>
@@ -50,9 +57,9 @@ export const ImportRefAmbiguitySchema = z
   .object({
     selector: ImportRefSelectorSchema,
     // A normal ambiguity carries 2+ candidates. A stale explicit selection
-    // may return the now-current single candidate so the UI can require a
-    // fresh user confirmation instead of silently rebinding.
-    candidates: z.array(ImportRefCandidateSchema).min(1),
+    // returns the complete current visible candidate set (possibly empty after
+    // a rename) so the UI never silently rebinds.
+    candidates: z.array(ImportRefCandidateSchema),
   })
   .strict()
 export type ImportRefAmbiguity = z.infer<typeof ImportRefAmbiguitySchema>

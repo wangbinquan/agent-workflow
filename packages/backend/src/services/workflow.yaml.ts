@@ -31,14 +31,15 @@ import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { agents, users } from '@/db/schema'
 import { canViewResource, filterVisibleRows } from '@/services/resourceAcl'
-import { assertNotBuiltin } from '@/services/systemResources'
 import { assertNewRefsUsable, extractWorkflowAgentRefs } from '@/services/resourceRefs'
-import { resolveImportRefs } from '@/services/importRefs'
+import { assertNotBuiltin } from '@/services/systemResources'
+import { assertImportRefsStableInTx, resolveImportRefs } from '@/services/importRefs'
 import {
   createWorkflow,
   getWorkflow,
   updateWorkflow,
   workflowRevisionOf,
+  type WorkflowWriteInTxGuard,
   type WorkflowWritePrincipal,
 } from '@/services/workflow'
 import { ConflictError, ValidationError } from '@/util/errors'
@@ -75,6 +76,14 @@ export interface YamlImportPreview {
   definition: WorkflowDefinitionSelector
   /** True when a workflow with `id` already exists in DB. */
   conflicts: boolean
+}
+
+export interface WorkflowImportHooks {
+  /**
+   * Deterministic race-test seam after ordinary reference preflight and before
+   * the final write transaction. Production callers omit it.
+   */
+  afterResolve?: () => void | Promise<void>
 }
 
 /**
@@ -230,6 +239,7 @@ export async function importWorkflowYaml(
   db: DbClient,
   request: ImportWorkflowRequest,
   principal: WorkflowWritePrincipal,
+  hooks: WorkflowImportHooks = {},
 ): Promise<ImportWorkflowResult> {
   if (request.yamlText.length === 0) {
     throw new ValidationError('workflow-yaml-empty', 'empty YAML body')
@@ -240,7 +250,7 @@ export async function importWorkflowYaml(
   // normalize server-side here — the import
   // path computes the snapshot hash itself (no client-provided hash to fence),
   // unlike the editor autosave which relies on the frontend having stamped it.
-  const definition =
+  const resolvedImport =
     principal.kind === 'actor'
       ? await resolveImportedWorkflowNodeAgentIds(
           db,
@@ -248,7 +258,11 @@ export async function importWorkflowYaml(
           preview.definition,
           request.selections ?? [],
         )
-      : rejectPortableRefsForSystemImport(preview.definition)
+      : {
+          definition: rejectPortableRefsForSystemImport(preview.definition),
+          inTxGuard: undefined,
+        }
+  const definition = resolvedImport.definition
 
   if (request.mode === 'overwrite') {
     if (preview.id === null || preview.id !== request.overwrite.workflowId) {
@@ -271,6 +285,12 @@ export async function importWorkflowYaml(
         },
       },
       principal,
+      resolvedImport.inTxGuard === undefined
+        ? { beforeWriteTransaction: hooks.afterResolve }
+        : {
+            inTxGuard: resolvedImport.inTxGuard,
+            beforeWriteTransaction: hooks.afterResolve,
+          },
     )
     return { outcome: 'overwritten', receipt }
   }
@@ -311,6 +331,7 @@ export async function importWorkflowYaml(
       { type: 'agent', names: [...extractWorkflowAgentRefs(definition)] },
     ])
   }
+  await hooks.afterResolve?.()
   const workflow = await createWorkflow(
     db,
     {
@@ -318,7 +339,14 @@ export async function importWorkflowYaml(
       description: preview.description,
       definition,
     },
-    principal.kind === 'actor' ? { ownerUserId: principal.actor.user.id } : undefined,
+    principal.kind === 'actor'
+      ? {
+          ownerUserId: principal.actor.user.id,
+          ...(resolvedImport.inTxGuard === undefined
+            ? {}
+            : { inTxGuard: resolvedImport.inTxGuard }),
+        }
+      : undefined,
   )
   return { outcome: 'created', workflow }
 }
@@ -328,7 +356,7 @@ async function resolveImportedWorkflowNodeAgentIds(
   actor: Extract<WorkflowWritePrincipal, { kind: 'actor' }>['actor'],
   def: WorkflowDefinitionSelector,
   selections: readonly ImportRefSelection[],
-): Promise<WorkflowDefinition> {
+): Promise<{ definition: WorkflowDefinition; inTxGuard: WorkflowWriteInTxGuard }> {
   const selectors = (def.nodes ?? [])
     .filter((node) => node.kind === 'agent-single')
     .map((node) => {
@@ -348,7 +376,7 @@ async function resolveImportedWorkflowNodeAgentIds(
       }
     })
   const resolved = await resolveImportRefs(db, actor, selectors, selections)
-  return WorkflowDefinitionSchema.parse({
+  const definition = WorkflowDefinitionSchema.parse({
     ...def,
     nodes: (def.nodes ?? []).map((node) => {
       if (node.kind !== 'agent-single') return node
@@ -372,6 +400,12 @@ async function resolveImportedWorkflowNodeAgentIds(
       return { ...portable, agentId: id }
     }),
   })
+  return {
+    definition,
+    inTxGuard: {
+      assert: (tx) => assertImportRefsStableInTx(tx, actor, resolved.fence),
+    },
+  }
 }
 
 function rejectPortableRefsForSystemImport(def: WorkflowDefinitionSelector): WorkflowDefinition {

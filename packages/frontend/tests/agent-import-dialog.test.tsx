@@ -197,12 +197,14 @@ describe('AgentImportDialog', () => {
                   ownerUserId: 'owner-a',
                   ownerUsername: 'alice',
                   visibility: 'public',
+                  aclRevision: 3,
                 },
                 {
                   id: 'agent-owner-b',
                   ownerUserId: 'owner-b',
                   ownerUsername: 'bob',
                   visibility: 'public',
+                  aclRevision: 7,
                 },
               ],
             },
@@ -226,6 +228,7 @@ describe('AgentImportDialog', () => {
       {
         selector: { type: 'agent', name: 'planner' },
         resourceId: 'agent-owner-b',
+        expectedAclRevision: 7,
       },
     ])
     expect(onApply.mock.calls[0]?.[1].dependsOn).toEqual(['agent-owner-b'])
@@ -238,12 +241,14 @@ describe('AgentImportDialog', () => {
       ownerUserId: 'owner-a',
       ownerUsername: 'alice',
       visibility: 'public' as const,
+      aclRevision: 3,
     }
     const bob = {
       id: 'agent-owner-b',
       ownerUserId: 'owner-b',
       ownerUsername: 'bob',
       visibility: 'public' as const,
+      aclRevision: 7,
     }
     const onResolve = vi
       .fn<(request: ResolveAgentImportRefsRequest) => Promise<ResolveAgentImportRefsResult>>()

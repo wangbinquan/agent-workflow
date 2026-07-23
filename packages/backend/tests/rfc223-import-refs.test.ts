@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { stringify } from 'yaml'
 import type { ImportRefSelection, WorkflowDefinition } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
+import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, resourceGrants, skills, users, workflows } from '../src/db/schema'
@@ -38,6 +40,26 @@ async function seedAgent(
   visibility: 'public' | 'private' = 'public',
 ) {
   await db.insert(agents).values({ id, name, ownerUserId, visibility })
+}
+
+function portableWorkflowYaml(input?: { id?: string; name?: string; agentName?: string }): string {
+  return stringify({
+    ...(input?.id === undefined ? {} : { id: input.id }),
+    name: input?.name ?? 'import-race',
+    description: '',
+    definition: {
+      $schema_version: 4,
+      inputs: [],
+      nodes: [
+        {
+          id: 'n1',
+          kind: 'agent-single',
+          agentName: input?.agentName ?? 'shared',
+        },
+      ],
+      edges: [],
+    },
+  })
 }
 
 describe('RFC-223 AC10 portable import reference resolution', () => {
@@ -96,12 +118,27 @@ describe('RFC-223 AC10 portable import reference resolution', () => {
     })
   })
 
-  test('second submit binds the selected id and rechecks visibility/owner/name drift', async () => {
+  test('candidate, grant, and owner reads stay on the synchronous transaction surface', () => {
+    const source = readFileSync(resolve(import.meta.dir, '../src/services/importRefs.ts'), 'utf8')
+    expect(source).toContain(
+      'return dbTxSync(db, (tx) => resolveImportRefsInTx(tx, actor, selectors, requestedSelections))',
+    )
+    const syncCore = source.slice(
+      source.indexOf('function resolveImportRefsInTx('),
+      source.indexOf('function ownerUsernameFor('),
+    )
+    expect(syncCore).not.toMatch(/\bawait\b/)
+    expect(syncCore).not.toContain('filterVisibleRows')
+    expect(syncCore).toContain('.all()')
+  })
+
+  test('second submit binds the selected id but hides a now-invisible selection as unresolved', async () => {
     await seedAgent(db, 'agent-a', 'owner-a')
     await seedAgent(db, 'agent-b', 'owner-b')
     const selection: ImportRefSelection = {
       selector: { type: 'agent', name: 'shared' },
       resourceId: 'agent-b',
+      expectedAclRevision: 0,
     }
     const resolved = await resolveImportRefs(db, viewer, [selection.selector], [selection])
     expect(resolved.bySelector.get(JSON.stringify(['agent', 'shared', null]))).toBe('agent-b')
@@ -110,14 +147,33 @@ describe('RFC-223 AC10 portable import reference resolution', () => {
     await expect(
       resolveImportRefs(db, viewer, [selection.selector], [selection]),
     ).rejects.toMatchObject({
+      code: 'import-ref-unresolved',
+      status: 422,
+      details: {
+        unresolved: [{ type: 'agent', name: 'shared' }],
+      },
+    })
+  })
+
+  test('second submit rejects same-id ACL revision drift and returns the fresh candidates', async () => {
+    await seedAgent(db, 'agent-a', 'owner-a')
+    const selection: ImportRefSelection = {
+      selector: { type: 'agent', name: 'shared' },
+      resourceId: 'agent-a',
+      expectedAclRevision: 0,
+    }
+    await db.update(agents).set({ aclRevision: 1 }).where(eq(agents.id, 'agent-a'))
+
+    await expect(
+      resolveImportRefs(db, viewer, [selection.selector], [selection]),
+    ).rejects.toMatchObject({
       code: 'import-ref-selection-stale',
       status: 409,
       details: {
-        selector: { type: 'agent', name: 'shared' },
         ambiguities: [
           {
-            selector: { type: 'agent', name: 'shared' },
-            candidates: [{ id: 'agent-a', ownerUsername: 'owner-a' }],
+            selector: selection.selector,
+            candidates: [{ id: 'agent-a', aclRevision: 1 }],
           },
         ],
       },
@@ -145,6 +201,7 @@ describe('RFC-223 AC10 portable import reference resolution', () => {
       {
         selector: { type: 'agent', name: 'private-only' },
         resourceId: 'private-a',
+        expectedAclRevision: 0,
       },
     ])
   })
@@ -210,6 +267,7 @@ describe('RFC-223 AC10 portable import reference resolution', () => {
           {
             selector: { type: 'agent', name: 'shared' },
             resourceId: 'agent-b',
+            expectedAclRevision: 0,
           },
         ],
       },
@@ -273,6 +331,293 @@ describe('RFC-223 AC10 portable import reference resolution', () => {
     ).rejects.toMatchObject({
       code: 'import-ref-ambiguous',
       details: { ambiguities: [{ candidates: [{ id: 'agent-a' }, { id: 'agent-b' }] }] },
+    })
+  })
+
+  test('create import rejects public-to-private drift in the final write transaction with zero writes', async () => {
+    await seedAgent(db, 'agent-a', 'owner-a')
+
+    await expect(
+      importWorkflowYaml(
+        db,
+        { yamlText: portableWorkflowYaml(), mode: 'new' },
+        { kind: 'actor', actor: viewer },
+        {
+          afterResolve: async () => {
+            await db
+              .update(agents)
+              .set({ visibility: 'private', aclRevision: 1 })
+              .where(eq(agents.id, 'agent-a'))
+          },
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'import-ref-unresolved',
+      status: 422,
+      details: { unresolved: [{ type: 'agent', name: 'shared' }] },
+    })
+    expect(await db.select().from(workflows)).toHaveLength(0)
+  })
+
+  test('create import rejects same-id owner transfer and exposes only the fresh visible candidate', async () => {
+    await seedAgent(db, 'agent-a', 'owner-a')
+
+    await expect(
+      importWorkflowYaml(
+        db,
+        { yamlText: portableWorkflowYaml(), mode: 'new' },
+        { kind: 'actor', actor: viewer },
+        {
+          afterResolve: async () => {
+            await db
+              .update(agents)
+              .set({ ownerUserId: 'owner-b', aclRevision: 1 })
+              .where(eq(agents.id, 'agent-a'))
+          },
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'import-ref-selection-stale',
+      status: 409,
+      details: {
+        ambiguities: [
+          {
+            selector: { type: 'agent', name: 'shared' },
+            candidates: [
+              {
+                id: 'agent-a',
+                ownerUserId: 'owner-b',
+                ownerUsername: 'owner-b',
+                visibility: 'public',
+                aclRevision: 1,
+              },
+            ],
+          },
+        ],
+      },
+    })
+    expect(await db.select().from(workflows)).toHaveLength(0)
+  })
+
+  test('create import rejects a selected-id rename with an empty fresh candidate set and zero writes', async () => {
+    await seedAgent(db, 'agent-a', 'owner-a')
+
+    await expect(
+      importWorkflowYaml(
+        db,
+        { yamlText: portableWorkflowYaml(), mode: 'new' },
+        { kind: 'actor', actor: viewer },
+        {
+          afterResolve: async () => {
+            await db.update(agents).set({ name: 'renamed' }).where(eq(agents.id, 'agent-a'))
+          },
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'import-ref-selection-stale',
+      status: 409,
+      details: {
+        ambiguities: [
+          {
+            selector: { type: 'agent', name: 'shared' },
+            candidates: [],
+          },
+        ],
+      },
+    })
+    expect(await db.select().from(workflows)).toHaveLength(0)
+  })
+
+  test('create import rejects private-grant revocation as unresolved and writes nothing', async () => {
+    await seedAgent(db, 'agent-a', 'owner-a', 'shared', 'private')
+    await db.insert(resourceGrants).values({
+      resourceType: 'agent',
+      resourceId: 'agent-a',
+      userId: 'viewer',
+      addedBy: 'owner-a',
+      addedAt: 1,
+    })
+
+    await expect(
+      importWorkflowYaml(
+        db,
+        { yamlText: portableWorkflowYaml(), mode: 'new' },
+        { kind: 'actor', actor: viewer },
+        {
+          afterResolve: async () => {
+            await db.delete(resourceGrants).where(eq(resourceGrants.resourceId, 'agent-a'))
+            await db.update(agents).set({ aclRevision: 1 }).where(eq(agents.id, 'agent-a'))
+          },
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'import-ref-unresolved',
+      status: 422,
+      details: { unresolved: [{ type: 'agent', name: 'shared' }] },
+    })
+    expect(await db.select().from(workflows)).toHaveLength(0)
+  })
+
+  test('auto-resolved 1-to-N drift becomes ambiguous inside the create transaction', async () => {
+    await seedAgent(db, 'agent-a', 'owner-a')
+
+    await expect(
+      importWorkflowYaml(
+        db,
+        { yamlText: portableWorkflowYaml(), mode: 'new' },
+        { kind: 'actor', actor: viewer },
+        {
+          afterResolve: async () => {
+            await seedAgent(db, 'agent-b', 'owner-b')
+          },
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'import-ref-ambiguous',
+      status: 409,
+      details: {
+        ambiguities: [
+          {
+            selector: { type: 'agent', name: 'shared' },
+            candidates: [{ id: 'agent-a' }, { id: 'agent-b' }],
+          },
+        ],
+      },
+    })
+    expect(await db.select().from(workflows)).toHaveLength(0)
+  })
+
+  test('overwrite import rechecks grant visibility in its CAS transaction and preserves the target', async () => {
+    await seedAgent(db, 'agent-a', 'owner-a', 'shared', 'private')
+    await db.insert(resourceGrants).values({
+      resourceType: 'agent',
+      resourceId: 'agent-a',
+      userId: 'viewer',
+      addedBy: 'owner-a',
+      addedAt: 1,
+    })
+    const originalDefinition = JSON.stringify({
+      $schema_version: 4,
+      inputs: [],
+      nodes: [],
+      edges: [],
+    })
+    await db.insert(workflows).values({
+      id: 'workflow-target',
+      name: 'before-import',
+      description: 'untouched',
+      definition: originalDefinition,
+      version: 1,
+      ownerUserId: 'viewer',
+      visibility: 'public',
+      createdAt: 1,
+      updatedAt: 1,
+    })
+
+    await expect(
+      importWorkflowYaml(
+        db,
+        {
+          yamlText: portableWorkflowYaml({
+            id: 'workflow-target',
+            name: 'after-import',
+          }),
+          mode: 'overwrite',
+          overwrite: {
+            workflowId: 'workflow-target',
+            expectedVersion: 1,
+            clientMutationId: ulid(),
+          },
+        },
+        { kind: 'actor', actor: viewer },
+        {
+          afterResolve: async () => {
+            await db.delete(resourceGrants).where(eq(resourceGrants.resourceId, 'agent-a'))
+            await db.update(agents).set({ aclRevision: 1 }).where(eq(agents.id, 'agent-a'))
+          },
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'import-ref-unresolved', status: 422 })
+
+    const target = (await db.select().from(workflows).where(eq(workflows.id, 'workflow-target')))[0]
+    expect(target).toMatchObject({
+      name: 'before-import',
+      description: 'untouched',
+      definition: originalDefinition,
+      version: 1,
+    })
+  })
+
+  test('stale-version logical-same overwrite cannot bypass the final reference guard', async () => {
+    await seedAgent(db, 'agent-a', 'owner-a', 'shared', 'private')
+    await db.insert(resourceGrants).values({
+      resourceType: 'agent',
+      resourceId: 'agent-a',
+      userId: 'viewer',
+      addedBy: 'owner-a',
+      addedAt: 1,
+    })
+    const currentDefinition = JSON.stringify({
+      $schema_version: 4,
+      inputs: [],
+      nodes: [
+        {
+          id: 'n1',
+          kind: 'agent-single',
+          agentId: 'agent-a',
+          agentName: 'shared',
+        },
+      ],
+      edges: [],
+    })
+    await db.insert(workflows).values({
+      id: 'logical-same-target',
+      name: 'logical-same',
+      description: '',
+      definition: currentDefinition,
+      version: 2,
+      ownerUserId: 'viewer',
+      visibility: 'public',
+      createdAt: 1,
+      updatedAt: 2,
+    })
+
+    await expect(
+      importWorkflowYaml(
+        db,
+        {
+          yamlText: portableWorkflowYaml({
+            id: 'logical-same-target',
+            name: 'logical-same',
+          }),
+          mode: 'overwrite',
+          overwrite: {
+            workflowId: 'logical-same-target',
+            expectedVersion: 1,
+            clientMutationId: ulid(),
+          },
+        },
+        { kind: 'actor', actor: viewer },
+        {
+          afterResolve: async () => {
+            await db.delete(resourceGrants).where(eq(resourceGrants.resourceId, 'agent-a'))
+            await db.update(agents).set({ aclRevision: 1 }).where(eq(agents.id, 'agent-a'))
+          },
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'import-ref-unresolved',
+      status: 422,
+      details: { unresolved: [{ type: 'agent', name: 'shared' }] },
+    })
+
+    const target = (
+      await db.select().from(workflows).where(eq(workflows.id, 'logical-same-target'))
+    )[0]
+    expect(target).toMatchObject({
+      name: 'logical-same',
+      definition: currentDefinition,
+      version: 2,
     })
   })
 })
