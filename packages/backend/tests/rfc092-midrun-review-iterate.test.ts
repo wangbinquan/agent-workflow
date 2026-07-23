@@ -292,11 +292,9 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
         slow: [{ output: { out: 'slow-done' } }],
       }),
     )
-    const taskId = await seedWorkflowAndTask(
-      h,
-      reviewDiamondDef(authorAgentId, slowAgentId),
-      { req: 'go' },
-    )
+    const taskId = await seedWorkflowAndTask(h, reviewDiamondDef(authorAgentId, slowAgentId), {
+      req: 'go',
+    })
 
     const runPromise = runTask({
       taskId,
