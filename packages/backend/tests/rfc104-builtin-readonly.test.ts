@@ -112,6 +112,19 @@ async function workflowDetail(app: Hono, id: string): Promise<WorkflowDetail> {
   return (await res.json()) as WorkflowDetail
 }
 
+async function agentRevision(
+  app: Hono,
+  id: string,
+): Promise<{ expectedUpdatedAt: number; expectedAclRevision: number }> {
+  const res = await api(app, `/api/agents/${id}`)
+  expect(res.status).toBe(200)
+  const agent = (await res.json()) as { updatedAt: number; aclRevision?: number }
+  return {
+    expectedUpdatedAt: agent.updatedAt,
+    expectedAclRevision: agent.aclRevision ?? 0,
+  }
+}
+
 /** Insert a task row whose workflow is the built-in (mirrors task-collab-launch). */
 function seedTaskOnWorkflow(db: DbClient, wfId: string): string {
   const id = ulid()
@@ -166,13 +179,20 @@ describe('RFC-104 — route guards refuse mutating a built-in (even as admin)', 
     const { db, app } = buildApp()
     await seedFusionResources(db)
     const base = `/api/agents/${builtinAgentId(db)}`
+    const revision = await agentRevision(app, builtinAgentId(db))
 
     await expect403Builtin(
-      await api(app, base, { method: 'PUT', body: JSON.stringify({ description: 'hijack' }) }),
+      await api(app, base, {
+        method: 'PUT',
+        body: JSON.stringify({ description: 'hijack', ...revision }),
+      }),
     )
     await expect403Builtin(await api(app, base, { method: 'DELETE' }))
     await expect403Builtin(
-      await api(app, `${base}/rename`, { method: 'POST', body: JSON.stringify({ newName: 'x' }) }),
+      await api(app, `${base}/rename`, {
+        method: 'POST',
+        body: JSON.stringify({ newName: 'x', ...revision }),
+      }),
     )
 
     // The row survived all three attempts, unmodified.
@@ -190,13 +210,15 @@ describe('RFC-104 — route guards refuse mutating a built-in (even as admin)', 
     await seedFusionResources(db)
     await createRuntime(db, { name: 'oc-haiku', protocol: 'opencode', model: 'haiku' })
     const base = `/api/agents/${builtinAgentId(db)}`
+    const revision = await agentRevision(app, builtinAgentId(db))
 
     // runtime-only patch lands.
     const ok = await api(app, base, {
       method: 'PUT',
-      body: JSON.stringify({ runtime: 'oc-haiku' }),
+      body: JSON.stringify({ runtime: 'oc-haiku', ...revision }),
     })
     expect(ok.status).toBe(200)
+    const updated = (await ok.clone().json()) as { updatedAt: number; aclRevision?: number }
     expect(
       db.select().from(agents).where(eq(agents.name, SKILL_MERGER_AGENT_NAME)).all()[0]?.runtime,
     ).toBe('oc-haiku')
@@ -205,7 +227,12 @@ describe('RFC-104 — route guards refuse mutating a built-in (even as admin)', 
     await expect403Builtin(
       await api(app, base, {
         method: 'PUT',
-        body: JSON.stringify({ runtime: 'oc-haiku', description: 'hijack' }),
+        body: JSON.stringify({
+          runtime: 'oc-haiku',
+          description: 'hijack',
+          expectedUpdatedAt: updated.updatedAt,
+          expectedAclRevision: updated.aclRevision ?? 0,
+        }),
       }),
     )
     // built-in description untouched (the mixed patch didn't land).
@@ -330,11 +357,15 @@ describe('RFC-104 — route guards refuse mutating a built-in (even as admin)', 
       body: JSON.stringify(agentPayload('my-coder')),
     })
     expect(created.status).toBe(201)
-    const { id } = (await created.json()) as { id: string }
+    const agent = (await created.json()) as { id: string; updatedAt: number; aclRevision?: number }
     // A normal agent (builtin=false) edits fine — the lock is built-in-only.
-    const put = await api(app, `/api/agents/${id}`, {
+    const put = await api(app, `/api/agents/${agent.id}`, {
       method: 'PUT',
-      body: JSON.stringify({ description: 'edited' }),
+      body: JSON.stringify({
+        description: 'edited',
+        expectedUpdatedAt: agent.updatedAt,
+        expectedAclRevision: agent.aclRevision ?? 0,
+      }),
     })
     expect(put.status).toBe(200)
   })
@@ -573,20 +604,28 @@ describe('RFC-104 — seed self-heal & the ≤1-built-in-per-name guarantee', ()
     ).toThrow()
   })
 
-  test('reserved-name user squatter fails seed closed and remains untouched', async () => {
+  test('reserved-name user row coexists with the system-owned built-in bucket', async () => {
     const { db } = buildApp()
     // A user grabbed `aw-skill-merger` (builtin=false, user-owned) before the
-    // framework's first seed. agents.name is unique, so the seed must leave it
-    // alone — never silently convert user data into a locked built-in.
+    // framework's first seed. RFC-223 scopes names by owner, so the user row
+    // remains untouched while the framework publishes its own system row.
     const uid = ulid()
+    const userAgentId = ulid()
     db.insert(agents)
-      .values({ id: ulid(), name: SKILL_MERGER_AGENT_NAME, ownerUserId: uid, builtin: false })
+      .values({ id: userAgentId, name: SKILL_MERGER_AGENT_NAME, ownerUserId: uid, builtin: false })
       .run()
 
-    await expect(seedFusionResources(db)).rejects.toThrow(/agent-name-in-use|already exists/i)
-    const row = db.select().from(agents).where(eq(agents.name, SKILL_MERGER_AGENT_NAME)).all()[0]
-    expect(row?.builtin).toBe(false)
-    expect(row?.ownerUserId).toBe(uid)
+    await expect(seedFusionResources(db)).resolves.toBeUndefined()
+    const rows = db.select().from(agents).where(eq(agents.name, SKILL_MERGER_AGENT_NAME)).all()
+    expect(rows).toHaveLength(2)
+    expect(rows.find((row) => row.id === userAgentId)).toMatchObject({
+      builtin: false,
+      ownerUserId: uid,
+    })
+    expect(rows.find((row) => row.id === SKILL_MERGER_AGENT_ID)).toMatchObject({
+      builtin: true,
+      ownerUserId: SYSTEM_USER_ID,
+    })
   })
 })
 

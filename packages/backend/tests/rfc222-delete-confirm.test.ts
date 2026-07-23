@@ -119,6 +119,7 @@ async function req(h: H, path: string, init: RequestInit = {}): Promise<Response
 describe('RFC-222 C-2 — agents DELETE confirm matrix', () => {
   let h: H
   let agentId: string
+  let agentRevision: { expectedUpdatedAt: number; expectedAclRevision: number }
   beforeEach(async () => {
     h = await harness()
     const created = await req(h, '/api/agents', {
@@ -126,7 +127,12 @@ describe('RFC-222 C-2 — agents DELETE confirm matrix', () => {
       body: JSON.stringify({ name: 'secret', instructions: 'x' }),
     })
     expect(created.status).toBe(201)
-    agentId = ((await created.json()) as { id: string }).id
+    const agent = (await created.json()) as { id: string; updatedAt: number; aclRevision?: number }
+    agentId = agent.id
+    agentRevision = {
+      expectedUpdatedAt: agent.updatedAt,
+      expectedAclRevision: agent.aclRevision ?? 0,
+    }
   })
 
   test('missing confirm → 422 delete-confirm-required, agent survives', async () => {
@@ -149,7 +155,7 @@ describe('RFC-222 C-2 — agents DELETE confirm matrix', () => {
   test('correct confirm → 204, agent gone', async () => {
     const res = await req(h, `/api/agents/${agentId}`, {
       method: 'DELETE',
-      body: JSON.stringify({ confirm: 'secret' }),
+      body: JSON.stringify({ confirm: 'secret', ...agentRevision }),
     })
     expect(res.status).toBe(204)
     expect((await req(h, `/api/agents/${agentId}`)).status).toBe(404)
@@ -175,10 +181,19 @@ describe('RFC-222 C-3 — rename TOCTOU caught by name mismatch', () => {
       body: JSON.stringify({ name: 'old', instructions: 'x' }),
     })
     expect(created.status).toBe(201)
-    const { id } = (await created.json()) as { id: string }
+    const agent = (await created.json()) as {
+      id: string
+      updatedAt: number
+      aclRevision?: number
+    }
+    const id = agent.id
     await req(h, `/api/agents/${id}/rename`, {
       method: 'POST',
-      body: JSON.stringify({ newName: 'newname' }),
+      body: JSON.stringify({
+        newName: 'newname',
+        expectedUpdatedAt: agent.updatedAt,
+        expectedAclRevision: agent.aclRevision ?? 0,
+      }),
     })
     // The dialog opened as "old"; the resource is now "newname".
     const res = await req(h, `/api/agents/${id}`, {

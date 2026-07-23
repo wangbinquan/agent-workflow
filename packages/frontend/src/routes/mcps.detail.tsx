@@ -73,7 +73,12 @@ function McpDetailPage() {
       const built = buildCreatePayload(snapshot)
       if (!built.ok) return Promise.reject(new Error('invalid form'))
       const { name: _drop, ...patch } = built.payload
-      return api.put<McpOperationResource>(`/api/mcps/${encodeURIComponent(id)}`, patch)
+      const revision = query.data
+      if (revision === undefined) return Promise.reject(new Error('MCP revision is unavailable'))
+      return api.put<McpOperationResource>(`/api/mcps/${encodeURIComponent(id)}`, {
+        ...patch,
+        expectedConfigHash: revision.operationConfigHash,
+      })
     },
     onSuccess: async (m, { snapshot }) => {
       await qc.cancelQueries({ queryKey: ['mcps', id], exact: true })
@@ -134,7 +139,12 @@ function McpDetailPage() {
 
   const del = useMutation({
     mutationFn: ({ confirm, release: _release }: { confirm: string; release: SplitBusyRelease }) =>
-      api.deleteJson(`/api/mcps/${encodeURIComponent(id)}`, { confirm }),
+      query.data === undefined
+        ? Promise.reject(new Error('MCP revision is unavailable'))
+        : api.deleteJson(`/api/mcps/${encodeURIComponent(id)}`, {
+            confirm,
+            expectedConfigHash: query.data.operationConfigHash,
+          }),
     onSuccess: async (_deleted, { release }) => {
       report(id, false)
       await qc.cancelQueries({ queryKey: ['mcps'], exact: true })

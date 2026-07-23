@@ -96,7 +96,11 @@ describe('regular-user session token — admin-only endpoints all return 403', (
   test('PUT /api/agents/:name → 404 for user (gate open, agent missing)', async () => {
     const res = await reqAs(h.app, h.userToken, '/api/agents/something', {
       method: 'PUT',
-      body: JSON.stringify({}),
+      body: JSON.stringify({
+        description: 'x',
+        expectedUpdatedAt: 0,
+        expectedAclRevision: 0,
+      }),
     })
     expect(res.status).toBe(404)
   })

@@ -220,6 +220,9 @@ describe('/mcps split page', () => {
     await waitFor(() => expect(screen.queryByTestId('split-card-dot-db')).not.toBeNull())
     fireEvent.click(screen.getByTestId('mcp-save-button'))
     await waitFor(() => expect(screen.queryByTestId('split-card-dot-db')).toBeNull())
+    expect(
+      requests.find((request) => request.method === 'PUT' && request.path === '/api/mcps/db')?.body,
+    ).toMatchObject({ expectedConfigHash: 'a'.repeat(64) })
     expect(router.state.location.pathname).toBe('/mcps/db')
   })
 

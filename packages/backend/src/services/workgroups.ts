@@ -49,6 +49,7 @@ import {
 import { discloseScheduleRefs } from './resourceAcl'
 import { canViewResource, isResourceAdminActor, isResourceOwner } from './resourceAcl'
 import { assertNoMissingRefs, resolveRefsUsableById } from './resourceRefs'
+import { isOwnerNameUniqueViolation, ownerScopedNameWhere } from './ownerScopedName'
 
 type WorkgroupRow = typeof workgroups.$inferSelect
 type MemberRow = typeof workgroupMembers.$inferSelect
@@ -104,46 +105,61 @@ export async function createWorkgroup(
   const now = Date.now()
   const memberValues = buildCreateMemberValues(groupId, input.members, now, preparedAgents)
   const leaderMemberId = resolveLeaderMemberId(input, memberValues)
+  const ownerUserId = aclOpts?.ownerUserId ?? null
 
-  const created = dbTxSync(db, (tx) => {
-    if (
-      tx.select({ id: workgroups.id }).from(workgroups).where(eq(workgroups.name, input.name)).get()
-    ) {
+  let created: WorkgroupDetail
+  try {
+    created = dbTxSync(db, (tx) => {
+      if (
+        tx
+          .select({ id: workgroups.id })
+          .from(workgroups)
+          .where(
+            ownerScopedNameWhere(workgroups.ownerUserId, workgroups.name, ownerUserId, input.name),
+          )
+          .get()
+      ) {
+        throw new ConflictError('workgroup-name-in-use', `workgroup '${input.name}' already exists`)
+      }
+      const inserted = tx
+        .insert(workgroups)
+        .values({
+          id: groupId,
+          name: input.name,
+          description: input.description,
+          instructions: input.instructions,
+          mode: input.mode,
+          leaderMemberId,
+          shareOutputs: input.switches.shareOutputs,
+          directMessages: input.switches.directMessages,
+          blackboard: input.switches.blackboard,
+          maxRounds: input.maxRounds,
+          completionGate: input.completionGate,
+          clarifyBudget: input.clarifyBudget ?? WG_CLARIFY_BUDGET_DEFAULT,
+          fanOut: input.fanOut ?? false,
+          version: 1,
+          ownerUserId,
+          visibility: 'public',
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning()
+        .get()
+      if (inserted === undefined) throw new Error('workgroup insert returned no row')
+      for (const member of memberValues) tx.insert(workgroupMembers).values(member).run()
+      const persistedMembers = tx
+        .select()
+        .from(workgroupMembers)
+        .where(eq(workgroupMembers.workgroupId, groupId))
+        .all()
+      return workgroupToDetail(rowToWorkgroup(inserted, persistedMembers))
+    })
+  } catch (error) {
+    if (isOwnerNameUniqueViolation(error, 'workgroups', 'workgroups_owner_name_unique')) {
       throw new ConflictError('workgroup-name-in-use', `workgroup '${input.name}' already exists`)
     }
-    const inserted = tx
-      .insert(workgroups)
-      .values({
-        id: groupId,
-        name: input.name,
-        description: input.description,
-        instructions: input.instructions,
-        mode: input.mode,
-        leaderMemberId,
-        shareOutputs: input.switches.shareOutputs,
-        directMessages: input.switches.directMessages,
-        blackboard: input.switches.blackboard,
-        maxRounds: input.maxRounds,
-        completionGate: input.completionGate,
-        clarifyBudget: input.clarifyBudget ?? WG_CLARIFY_BUDGET_DEFAULT,
-        fanOut: input.fanOut ?? false,
-        version: 1,
-        ownerUserId: aclOpts?.ownerUserId ?? null,
-        visibility: 'public',
-        createdAt: now,
-        updatedAt: now,
-      })
-      .returning()
-      .get()
-    if (inserted === undefined) throw new Error('workgroup insert returned no row')
-    for (const member of memberValues) tx.insert(workgroupMembers).values(member).run()
-    const persistedMembers = tx
-      .select()
-      .from(workgroupMembers)
-      .where(eq(workgroupMembers.workgroupId, groupId))
-      .all()
-    return workgroupToDetail(rowToWorkgroup(inserted, persistedMembers))
-  })
+    throw error
+  }
   workgroupsBroadcaster.broadcast(WORKGROUPS_CHANNEL, {
     type: 'workgroup.created',
     workgroupId: created.id,
@@ -599,9 +615,17 @@ function assertNameChangeAllowedInTx(tx: DbTxSync, current: Workgroup, nextName:
   const collision = tx
     .select({ id: workgroups.id })
     .from(workgroups)
-    .where(eq(workgroups.name, nextName))
+    .where(
+      ownerScopedNameWhere(
+        workgroups.ownerUserId,
+        workgroups.name,
+        current.ownerUserId ?? null,
+        nextName,
+        { column: workgroups.id, id: current.id },
+      ),
+    )
     .get()
-  if (collision !== undefined && collision.id !== current.id) {
+  if (collision !== undefined) {
     throw new ConflictError(
       'workgroup-name-in-use',
       `workgroup '${nextName}' already exists; pick a different name`,

@@ -69,6 +69,22 @@ function samplePayload(name: string): Record<string, unknown> {
   }
 }
 
+function servicePayload(name: string): Parameters<typeof createAgent>[1] {
+  return {
+    name,
+    description: '',
+    outputs: [],
+    syncOutputsOnIterate: true,
+    permission: {},
+    skills: [],
+    dependsOn: [],
+    mcp: [],
+    plugins: [],
+    frontmatterExtra: {},
+    bodyMd: '',
+  }
+}
+
 describe('agent service', () => {
   let db: DbClient
 
@@ -134,6 +150,43 @@ describe('agent service', () => {
         bodyMd: '',
       }),
     ).rejects.toBeInstanceOf(ConflictError)
+  })
+
+  test('RFC-223 scopes create and rename conflicts to the owner bucket', async () => {
+    const source = await createAgent(db, servicePayload('source'), { ownerUserId: 'owner-a' })
+    await createAgent(db, servicePayload('shared'), { ownerUserId: 'owner-b' })
+
+    const crossOwnerRename = await renameAgent(db, source.id, { newName: 'shared' })
+    expect(crossOwnerRename.name).toBe('shared')
+
+    await createAgent(db, servicePayload('taken'), { ownerUserId: 'owner-a' })
+    await expect(renameAgent(db, source.id, { newName: 'taken' })).rejects.toMatchObject({
+      code: 'agent-name-in-use',
+    })
+    await expect(
+      createAgent(db, servicePayload('taken'), { ownerUserId: 'owner-a' }),
+    ).rejects.toMatchObject({ code: 'agent-name-in-use' })
+
+    await expect(
+      createAgent(db, servicePayload('shared'), { ownerUserId: 'owner-c' }),
+    ).resolves.toMatchObject({ name: 'shared', ownerUserId: 'owner-c' })
+    await expect(renameAgent(db, source.id, { newName: 'shared' })).resolves.toMatchObject({
+      id: source.id,
+      name: 'shared',
+    })
+  })
+
+  test('RFC-223 maps a same-owner create race to one stable 409 conflict', async () => {
+    const results = await Promise.allSettled([
+      createAgent(db, servicePayload('raced'), { ownerUserId: 'owner-a' }),
+      createAgent(db, servicePayload('raced'), { ownerUserId: 'owner-a' }),
+    ])
+
+    expect(results.map((result) => result.status).sort()).toEqual(['fulfilled', 'rejected'])
+    const rejected = results.find(
+      (result): result is PromiseRejectedResult => result.status === 'rejected',
+    )
+    expect(rejected?.reason).toMatchObject({ code: 'agent-name-in-use', status: 409 })
   })
 
   test('update partial patch preserves other fields', async () => {
@@ -448,10 +501,14 @@ describe('agent HTTP routes', () => {
   test('PUT partial update preserves other fields; 404 on missing', async () => {
     const created = (await (
       await req(app, '/api/agents', { method: 'POST', body: JSON.stringify(samplePayload('a1')) })
-    ).json()) as { id: string }
+    ).json()) as { id: string; updatedAt: number; aclRevision?: number }
     const res = await req(app, `/api/agents/${created.id}`, {
       method: 'PUT',
-      body: JSON.stringify({ description: 'updated' }),
+      body: JSON.stringify({
+        description: 'updated',
+        expectedUpdatedAt: created.updatedAt,
+        expectedAclRevision: created.aclRevision ?? 0,
+      }),
     })
     expect(res.status).toBe(200)
     const updated = (await res.json()) as Record<string, unknown>
@@ -460,7 +517,11 @@ describe('agent HTTP routes', () => {
 
     const miss = await req(app, '/api/agents/nope', {
       method: 'PUT',
-      body: JSON.stringify({ description: 'x' }),
+      body: JSON.stringify({
+        description: 'x',
+        expectedUpdatedAt: 0,
+        expectedAclRevision: 0,
+      }),
     })
     expect(miss.status).toBe(404)
   })
@@ -468,24 +529,47 @@ describe('agent HTTP routes', () => {
   test('DELETE returns 204 and the agent is gone', async () => {
     const created = (await (
       await req(app, '/api/agents', { method: 'POST', body: JSON.stringify(samplePayload('a1')) })
-    ).json()) as { id: string }
+    ).json()) as { id: string; updatedAt: number; aclRevision?: number }
     // RFC-222 (D5): DELETE now requires a { confirm } body echoing the name.
     const delRes = await req(app, `/api/agents/${created.id}`, {
       method: 'DELETE',
-      body: JSON.stringify({ confirm: 'a1' }),
+      body: JSON.stringify({
+        confirm: 'a1',
+        expectedUpdatedAt: created.updatedAt,
+        expectedAclRevision: created.aclRevision ?? 0,
+      }),
     })
     expect(delRes.status).toBe(204)
     const after = await req(app, `/api/agents/${created.id}`)
     expect(after.status).toBe(404)
   })
 
+  test('DELETE requires the mutation revision fence', async () => {
+    const created = (await (
+      await req(app, '/api/agents', {
+        method: 'POST',
+        body: JSON.stringify(samplePayload('delete-without-fence')),
+      })
+    ).json()) as { id: string }
+    const res = await req(app, `/api/agents/${created.id}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ confirm: 'delete-without-fence' }),
+    })
+    expect(res.status).toBe(422)
+    expect(((await res.json()) as { code: string }).code).toBe('agent-delete-invalid')
+  })
+
   test('POST /:id/rename keeps the same detail URL', async () => {
     const created = (await (
       await req(app, '/api/agents', { method: 'POST', body: JSON.stringify(samplePayload('a1')) })
-    ).json()) as { id: string }
+    ).json()) as { id: string; updatedAt: number; aclRevision?: number }
     const res = await req(app, `/api/agents/${created.id}/rename`, {
       method: 'POST',
-      body: JSON.stringify({ newName: 'a2' }),
+      body: JSON.stringify({
+        newName: 'a2',
+        expectedUpdatedAt: created.updatedAt,
+        expectedAclRevision: created.aclRevision ?? 0,
+      }),
     })
     expect(res.status).toBe(200)
     expect(((await res.json()) as { name: string }).name).toBe('a2')
@@ -493,6 +577,35 @@ describe('agent HTTP routes', () => {
     expect(oldNameUrl.status).toBe(404)
     const renamed = await req(app, `/api/agents/${created.id}`)
     expect(renamed.status).toBe(200)
+  })
+
+  test('same-name rename still enforces the exact mutation revision', async () => {
+    const created = (await (
+      await req(app, '/api/agents', {
+        method: 'POST',
+        body: JSON.stringify(samplePayload('same-name-fence')),
+      })
+    ).json()) as { id: string; updatedAt: number; aclRevision?: number }
+    const changed = await req(app, `/api/agents/${created.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        description: 'new revision',
+        expectedUpdatedAt: created.updatedAt,
+        expectedAclRevision: created.aclRevision ?? 0,
+      }),
+    })
+    expect(changed.status).toBe(200)
+
+    const staleNoOp = await req(app, `/api/agents/${created.id}/rename`, {
+      method: 'POST',
+      body: JSON.stringify({
+        newName: 'same-name-fence',
+        expectedUpdatedAt: created.updatedAt,
+        expectedAclRevision: created.aclRevision ?? 0,
+      }),
+    })
+    expect(staleNoOp.status).toBe(409)
+    expect(((await staleNoOp.json()) as { code: string }).code).toBe('resource-operation-stale')
   })
 
   test('all /api/agents/* require token', async () => {

@@ -81,8 +81,15 @@ function AgentDetailPage() {
   useReportSplitDirty(id, dirty || (jsonReady && !jsonValid))
 
   const save = useMutation({
-    mutationFn: ({ submitted }: { submitted: CreateAgent; release: SplitBusyRelease }) =>
-      api.put<Agent>(`/api/agents/${encodeURIComponent(id)}`, agentToPutBody(submitted)),
+    mutationFn: ({ submitted }: { submitted: CreateAgent; release: SplitBusyRelease }) => {
+      const revision = query.data
+      if (revision === undefined) return Promise.reject(new Error('agent revision is unavailable'))
+      return api.put<Agent>(`/api/agents/${encodeURIComponent(id)}`, {
+        ...agentToPutBody(submitted),
+        expectedUpdatedAt: revision.updatedAt,
+        expectedAclRevision: revision.aclRevision ?? 0,
+      })
+    },
     onSuccess: async (saved, { submitted }) => {
       // Detail fence (R3-P1-2): cancel any in-flight detail GET before writing
       // saved, else a stale GET could land after and clobber it.
@@ -104,7 +111,13 @@ function AgentDetailPage() {
 
   const del = useMutation({
     mutationFn: ({ confirm, release: _release }: { confirm: string; release: SplitBusyRelease }) =>
-      api.deleteJson(`/api/agents/${encodeURIComponent(id)}`, { confirm }),
+      query.data === undefined
+        ? Promise.reject(new Error('agent revision is unavailable'))
+        : api.deleteJson(`/api/agents/${encodeURIComponent(id)}`, {
+            confirm,
+            expectedUpdatedAt: query.data.updatedAt,
+            expectedAclRevision: query.data.aclRevision ?? 0,
+          }),
     onSuccess: async (_deleted, { release }) => {
       // Sync-clear the dirty ref so the guard doesn't block THIS navigation
       // (the resource no longer exists — nothing to save).

@@ -206,6 +206,8 @@ export const AgentSchema = z.object({
   ownerUserId: z.string().nullable().optional(),
   /** RFC-099 ACL — 'public' = every user; 'private' = owner + grants. Absent ⇒ 'public'. */
   visibility: ResourceVisibilitySchema.optional(),
+  /** Monotonic ACL generation; participates in ordinary-mutation OCC fences. */
+  aclRevision: z.number().int().nonnegative().optional(),
   /** RFC-104 — read-only built-in marker. Response-only: Create/Update bodies
    *  are separate schemas that never accept it, and zod strips it if sent. */
   builtin: z.boolean().optional(),
@@ -388,8 +390,36 @@ export const UpdateAgentSchema = CreateAgentSchema.omit({ name: true })
   })
 export type UpdateAgent = z.infer<typeof UpdateAgentSchema>
 
+/** Exact ordinary-mutation revision returned by every Agent response. */
+export const AgentMutationRevisionSchema = z
+  .object({
+    expectedUpdatedAt: z.number().int().nonnegative(),
+    expectedAclRevision: z.number().int().nonnegative(),
+  })
+  .strict()
+export type AgentMutationRevision = z.infer<typeof AgentMutationRevisionSchema>
+
+/** PUT /api/agents/:id body — sparse content patch plus exact revision fence. */
+export const UpdateAgentRequestSchema = UpdateAgentSchema.extend({
+  expectedUpdatedAt: AgentMutationRevisionSchema.shape.expectedUpdatedAt,
+  expectedAclRevision: AgentMutationRevisionSchema.shape.expectedAclRevision,
+}).strict()
+export type UpdateAgentRequest = z.infer<typeof UpdateAgentRequestSchema>
+
 /** POST /api/agents/:id/rename body. */
 export const RenameAgentSchema = z.object({
   newName: AgentNameSchema,
 })
 export type RenameAgent = z.infer<typeof RenameAgentSchema>
+
+export const RenameAgentRequestSchema = RenameAgentSchema.extend({
+  expectedUpdatedAt: AgentMutationRevisionSchema.shape.expectedUpdatedAt,
+  expectedAclRevision: AgentMutationRevisionSchema.shape.expectedAclRevision,
+}).strict()
+export type RenameAgentRequest = z.infer<typeof RenameAgentRequestSchema>
+
+/** DELETE /api/agents/:id body. */
+export const DeleteAgentSchema = AgentMutationRevisionSchema.extend({
+  confirm: z.string().optional(),
+}).strict()
+export type DeleteAgent = z.infer<typeof DeleteAgentSchema>

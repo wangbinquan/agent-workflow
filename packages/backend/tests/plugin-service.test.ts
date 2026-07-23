@@ -94,6 +94,49 @@ describe('services/plugin.ts CRUD', () => {
     )
   })
 
+  test('RFC-223 scopes create and rename conflicts to the owner bucket', async () => {
+    const source = await createPlugin(db, { name: 'source', spec: 'source@1' }, opts(), {
+      ownerUserId: 'owner-a',
+    })
+    await createPlugin(db, { name: 'shared', spec: 'shared-b@1' }, opts(), {
+      ownerUserId: 'owner-b',
+    })
+
+    await expect(renamePlugin(db, source.id, { newName: 'shared' })).resolves.toMatchObject({
+      id: source.id,
+      name: 'shared',
+    })
+
+    await createPlugin(db, { name: 'taken', spec: 'taken@1' }, opts(), { ownerUserId: 'owner-a' })
+    await expect(renamePlugin(db, source.id, { newName: 'taken' })).rejects.toMatchObject({
+      code: 'plugin-name-in-use',
+    })
+    await expect(
+      createPlugin(db, { name: 'taken', spec: 'duplicate@1' }, opts(), { ownerUserId: 'owner-a' }),
+    ).rejects.toMatchObject({ code: 'plugin-name-in-use' })
+
+    await expect(
+      createPlugin(db, { name: 'shared', spec: 'shared-c@1' }, opts(), { ownerUserId: 'owner-c' }),
+    ).resolves.toMatchObject({ name: 'shared', ownerUserId: 'owner-c' })
+    await expect(renamePlugin(db, source.id, { newName: 'shared' })).resolves.toMatchObject({
+      id: source.id,
+      name: 'shared',
+    })
+  })
+
+  test('RFC-223 maps a same-owner create race to one stable 409 conflict', async () => {
+    const results = await Promise.allSettled([
+      createPlugin(db, { name: 'raced', spec: 'race-a@1' }, opts(), { ownerUserId: 'owner-a' }),
+      createPlugin(db, { name: 'raced', spec: 'race-b@1' }, opts(), { ownerUserId: 'owner-a' }),
+    ])
+
+    expect(results.map((result) => result.status).sort()).toEqual(['fulfilled', 'rejected'])
+    const rejected = results.find(
+      (result): result is PromiseRejectedResult => result.status === 'rejected',
+    )
+    expect(rejected?.reason).toMatchObject({ code: 'plugin-name-in-use', status: 409 })
+  })
+
   test('install failure leaves no DB row', async () => {
     process.env.FAKE_NPM_MODE = 'fail'
     await expect(createPlugin(db, { name: 'broken', spec: 'nope@99' }, opts())).rejects.toThrow()

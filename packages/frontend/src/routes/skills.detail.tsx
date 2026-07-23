@@ -749,7 +749,13 @@ function SkillDetailPage() {
 
   const del = useMutation({
     mutationFn: ({ confirm, release: _release }: { confirm: string; release: SplitBusyRelease }) =>
-      api.deleteJson(`/api/skills/${encodeURIComponent(id)}`, { confirm }),
+      tokenRef.current === undefined
+        ? Promise.reject(new Error('skill revision token is unavailable'))
+        : api.deleteJson(`/api/skills/${encodeURIComponent(id)}`, {
+            confirm,
+            expectedToken: tokenRef.current,
+            expectedAclRevision: meta.data?.aclRevision ?? 0,
+          }),
     onSuccess: async (_deleted, { release }) => {
       report(id, false)
       await qc.cancelQueries({ queryKey: ['skills'], exact: true })

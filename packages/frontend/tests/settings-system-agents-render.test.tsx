@@ -70,10 +70,19 @@ function mockFetch(): Recorded {
           name: 'aw-skill-merger',
           runtime: body?.runtime ?? null,
           builtin: true,
+          updatedAt: 101,
+          aclRevision: 3,
         })
       }
       if (s.includes(MERGER_READ) && method === 'GET') {
-        return json({ id: MERGER_ID, name: 'aw-skill-merger', runtime: 'opencode', builtin: true })
+        return json({
+          id: MERGER_ID,
+          name: 'aw-skill-merger',
+          runtime: 'opencode',
+          builtin: true,
+          updatedAt: 100,
+          aclRevision: 3,
+        })
       }
       if (s.includes('/api/config') && method === 'PUT') {
         rec.configPuts.push(body ?? {})
@@ -165,9 +174,13 @@ describe('RFC-156 SystemAgentsTab — fusion save is a runtime-only agent patch'
 
     await waitFor(() => expect(rec.agentPuts).toHaveLength(1))
     const body = rec.agentPuts[0]!
-    // Runtime-ONLY: exactly one key, or the builtin read-only lock 403s.
-    expect(Object.keys(body)).toEqual(['runtime'])
-    expect(body.runtime).toBe('fast-oc')
+    // Runtime is the only editable field; the remaining keys are the exact
+    // ordinary-mutation fence and are ignored by the builtin content guard.
+    expect(body).toEqual({
+      runtime: 'fast-oc',
+      expectedUpdatedAt: 100,
+      expectedAclRevision: 3,
+    })
     // P2c: a fusion-only save must NOT re-PUT the config slice (would clobber a
     // concurrent commit/memory/merge edit made after this tab loaded).
     expect(rec.configPuts).toHaveLength(0)
@@ -187,8 +200,11 @@ describe('RFC-156 SystemAgentsTab — fusion save is a runtime-only agent patch'
 
     await waitFor(() => expect(rec.agentPuts).toHaveLength(1))
     const body = rec.agentPuts[0]!
-    expect(Object.keys(body)).toEqual(['runtime'])
-    expect(body.runtime).toBeNull()
+    expect(body).toEqual({
+      runtime: null,
+      expectedUpdatedAt: 100,
+      expectedAclRevision: 3,
+    })
     expect(rec.configPuts).toHaveLength(0)
   })
 
@@ -336,6 +352,8 @@ describe('RFC-156 SystemAgentsTab — fusion save is a runtime-only agent patch'
             name: 'aw-skill-merger',
             runtime: 'opencode',
             builtin: true,
+            updatedAt: 100,
+            aclRevision: 3,
           })
         }
         if (s.includes(`/api/agents/${MERGER_ID}`) && method === 'PUT') {
@@ -346,6 +364,8 @@ describe('RFC-156 SystemAgentsTab — fusion save is a runtime-only agent patch'
             name: 'aw-skill-merger',
             runtime: body.runtime,
             builtin: true,
+            updatedAt: 101,
+            aclRevision: 3,
           })
         }
         if (s.includes('/api/config') && method === 'PUT') {
@@ -385,7 +405,11 @@ describe('RFC-156 SystemAgentsTab — fusion save is a runtime-only agent patch'
     })
 
     await waitFor(() => expect(rec.agentPuts).toHaveLength(1))
-    expect(rec.agentPuts[0]).toEqual({ runtime: 'fast-oc' })
+    expect(rec.agentPuts[0]).toEqual({
+      runtime: 'fast-oc',
+      expectedUpdatedAt: 100,
+      expectedAclRevision: 3,
+    })
     expect(
       screen.getByRole('combobox', {
         name: i18n.t('settings.systemAgents.fusionRuntime'),

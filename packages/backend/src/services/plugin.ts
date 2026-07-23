@@ -24,6 +24,7 @@ import {
 import { pluginOperationCoordinator } from './resourceOperationCoordinator'
 import { discloseRefs } from './resourceAcl'
 import type { Actor } from '@/auth/actor'
+import { isOwnerNameUniqueViolation, ownerScopedNameWhere } from './ownerScopedName'
 
 type PluginRow = typeof plugins.$inferSelect
 type CreatePluginInput = z.input<typeof CreatePluginSchema>
@@ -66,8 +67,14 @@ export async function createPlugin(
   const parsed = CreatePluginSchema.parse(input)
   PluginOptionsSchema.parse(parsed.options)
   const id = ulid()
+  const ownerUserId = aclOpts?.ownerUserId ?? null
   return pluginOperationCoordinator.runExclusive(id, async () => {
-    if ((await getPlugin(db, parsed.name)) !== null) {
+    const occupied = await db
+      .select({ id: plugins.id })
+      .from(plugins)
+      .where(ownerScopedNameWhere(plugins.ownerUserId, plugins.name, ownerUserId, parsed.name))
+      .limit(1)
+    if (occupied.length > 0) {
       throw new ConflictError('plugin-name-in-use', `plugin '${parsed.name}' already exists`)
     }
     const prepared = await installPlugin(id, parsed.spec, installOpts(deps))
@@ -86,7 +93,7 @@ export async function createPlugin(
             cachedPath: prepared.cachedPath,
             resolvedVersion: prepared.resolvedVersion,
             installedAt: now,
-            ownerUserId: aclOpts?.ownerUserId ?? null,
+            ownerUserId,
             visibility: 'public',
             createdAt: now,
             updatedAt: now,
@@ -98,6 +105,9 @@ export async function createPlugin(
       })
     } catch (error) {
       await cleanupInstallGeneration(prepared)
+      if (isOwnerNameUniqueViolation(error, 'plugins', 'plugins_owner_name_unique')) {
+        throw new ConflictError('plugin-name-in-use', `plugin '${parsed.name}' already exists`)
+      }
       throw error
     }
   })
@@ -206,7 +216,17 @@ export async function renamePlugin(db: DbClient, id: string, input: RenamePlugin
   const captured = await requirePluginRow(db, id)
   const existing = rowToPlugin(captured)
   if (input.newName === existing.name) return existing
-  if ((await getPlugin(db, input.newName)) !== null) {
+  const occupied = await db
+    .select({ id: plugins.id })
+    .from(plugins)
+    .where(
+      ownerScopedNameWhere(plugins.ownerUserId, plugins.name, captured.ownerUserId, input.newName, {
+        column: plugins.id,
+        id: captured.id,
+      }),
+    )
+    .limit(1)
+  if (occupied.length > 0) {
     throw new ConflictError(
       'plugin-name-in-use',
       `plugin '${input.newName}' already exists; pick a different name`,
@@ -216,14 +236,24 @@ export async function renamePlugin(db: DbClient, id: string, input: RenamePlugin
   // RFC-223 (PR-1 / D7): agents.plugins stores the plugin ID, stable across a
   // rename — no cascade. Just rename the row (the old agents.plugins name-rewrite
   // loop is removed).
-  dbTxSync(db, (tx) => {
-    const result = tx
-      .update(plugins)
-      .set({ name: input.newName, updatedAt })
-      .where(fullPluginRowWhere(captured))
-      .run()
-    if (changesOf(result) !== 1) throw stalePluginError(existing.id)
-  })
+  try {
+    dbTxSync(db, (tx) => {
+      const result = tx
+        .update(plugins)
+        .set({ name: input.newName, updatedAt })
+        .where(fullPluginRowWhere(captured))
+        .run()
+      if (changesOf(result) !== 1) throw stalePluginError(existing.id)
+    })
+  } catch (error) {
+    if (isOwnerNameUniqueViolation(error, 'plugins', 'plugins_owner_name_unique')) {
+      throw new ConflictError(
+        'plugin-name-in-use',
+        `plugin '${input.newName}' already exists; pick a different name`,
+      )
+    }
+    throw error
+  }
   const renamed = await getPluginById(db, existing.id)
   if (renamed === null) throw new Error('plugin disappeared after rename')
   return renamed

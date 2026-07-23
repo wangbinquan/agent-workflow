@@ -293,9 +293,61 @@ export async function deleteSkill(
   opts: SkillFsOptions,
   skillId: string,
   actor: Actor,
+  expected?: { token: string; aclRevision: number; ownerUserId: string | null },
 ): Promise<void> {
   const existing = await getSkillById(db, skillId)
   if (existing === null) throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
+  let deleteFence:
+    | {
+        skillId: string
+        contentVersion: number
+        metaRevision: number
+        ownerUserId: string | null
+        aclRevision: number
+      }
+    | undefined
+  if (expected !== undefined) {
+    const { decodeSkillToken } = await import('@/services/skillToken')
+    const decoded = decodeSkillToken(expected.token)
+    if (decoded === null) {
+      throw new ValidationError(
+        'skill-token-invalid',
+        'malformed precondition token; reload and retry',
+      )
+    }
+    const live = await db
+      .select({
+        id: skills.id,
+        contentVersion: skills.contentVersion,
+        metaRevision: skills.metaRevision,
+        ownerUserId: skills.ownerUserId,
+        aclRevision: skills.aclRevision,
+      })
+      .from(skills)
+      .where(eq(skills.id, skillId))
+      .limit(1)
+    const current = live[0]
+    if (
+      current === undefined ||
+      current.id !== decoded.skillId ||
+      current.contentVersion !== decoded.contentVersion ||
+      current.metaRevision !== decoded.metaRevision ||
+      current.ownerUserId !== expected.ownerUserId ||
+      current.aclRevision !== expected.aclRevision
+    ) {
+      throw new ConflictError(
+        'skill-version-conflict',
+        `skill '${skillId}' changed since this operation started; reload and retry`,
+      )
+    }
+    deleteFence = {
+      skillId: decoded.skillId,
+      contentVersion: decoded.contentVersion,
+      metaRevision: decoded.metaRevision,
+      ownerUserId: expected.ownerUserId,
+      aclRevision: expected.aclRevision,
+    }
+  }
 
   // RFC-223 (PR-1): agents.skills stores typed refs — match managed refs by id.
   const refs = await findAgentsUsingSkill(db, existing.id)
@@ -312,7 +364,7 @@ export async function deleteSkill(
   // DELETE the row in the same tx as the phase advance, then drop the trash.
   // A crash between steps is recovered by the boot driver (deleteRecoveryHandler).
   const { deleteManagedSkillOp } = await import('@/services/skillDeleteOp')
-  deleteManagedSkillOp(db, { appHome: opts.appHome }, { id: existing.id })
+  deleteManagedSkillOp(db, { appHome: opts.appHome }, { id: existing.id }, {}, deleteFence)
 }
 
 // RFC-223 (PR-1): agents.skills stores typed refs (managed{skillId} /
@@ -821,6 +873,7 @@ function rowToSkill(row: SkillRow): Skill {
     // RFC-099 ACL projection — routes filter on these.
     ownerUserId: row.ownerUserId,
     visibility: row.visibility,
+    aclRevision: row.aclRevision,
     // RFC-178: skills are managed-only.
     sourceKind: 'managed',
     schemaVersion: row.schemaVersion,

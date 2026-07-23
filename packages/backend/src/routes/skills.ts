@@ -18,6 +18,7 @@
 
 import {
   CreateManagedSkillSchema,
+  DeleteSkillSchema,
   RestoreSkillVersionSchema,
   SkillZipDecisionMapSchema,
   CombinedSaveSkillSchema,
@@ -149,9 +150,19 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
     const actor = actorOf(c)
     const existing = await loadVisibleSkill(actor, c.req.param('id'))
     await requireResourceOwner(deps.db, actor, 'skill', existing)
-    // RFC-222 (D5): type-to-confirm (N-5 order).
-    assertDeleteConfirm(await readDeleteBody(c), existing.name, 'skill')
-    await deleteSkill(deps.db, fsOpts, existing.id, actor)
+    const deleteBody = await readDeleteBody(c)
+    assertDeleteConfirm(deleteBody, existing.name, 'skill')
+    const parsed = DeleteSkillSchema.safeParse(deleteBody)
+    if (!parsed.success) {
+      throw new ValidationError('skill-delete-invalid', 'invalid skill delete payload', {
+        issues: parsed.error.issues,
+      })
+    }
+    await deleteSkill(deps.db, fsOpts, existing.id, actor, {
+      token: parsed.data.expectedToken,
+      aclRevision: parsed.data.expectedAclRevision,
+      ownerUserId: existing.ownerUserId ?? null,
+    })
     return c.body(null, 204)
   })
 

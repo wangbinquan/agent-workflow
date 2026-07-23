@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents } from '../src/db/schema'
+import { agents, skills } from '../src/db/schema'
 import { createApp } from '../src/server'
 import {
   createManagedSkill,
@@ -260,13 +260,18 @@ describe('skill HTTP routes', () => {
 
   async function createHttpSkill(
     body: Record<string, unknown>,
-  ): Promise<{ id: string; name: string; sourceKind: string }> {
+  ): Promise<{ id: string; name: string; sourceKind: string; aclRevision?: number }> {
     const res = await req(h.app, '/api/skills', {
       method: 'POST',
       body: JSON.stringify(body),
     })
     expect(res.status).toBe(201)
-    return (await res.json()) as { id: string; name: string; sourceKind: string }
+    return (await res.json()) as {
+      id: string
+      name: string
+      sourceKind: string
+      aclRevision?: number
+    }
   }
 
   test('POST creates managed skill (201); GET roundtrips', async () => {
@@ -390,6 +395,9 @@ describe('skill HTTP routes', () => {
 
   test('DELETE refuses when an agent references the skill', async () => {
     const skill = await createHttpSkill({ name: 'foo' })
+    const content = (await (await req(h.app, `/api/skills/${skill.id}/content`)).json()) as {
+      token: string
+    }
     // RFC-223 (PR-1): typed managed skill ref carries the canonical id.
     await req(h.app, '/api/agents', {
       method: 'POST',
@@ -401,10 +409,49 @@ describe('skill HTTP routes', () => {
     // RFC-222 (D5, N-5): confirm passes first, then the in-use refusal fires.
     const res = await req(h.app, `/api/skills/${skill.id}`, {
       method: 'DELETE',
-      body: JSON.stringify({ confirm: 'foo' }),
+      body: JSON.stringify({
+        confirm: 'foo',
+        expectedToken: content.token,
+        expectedAclRevision: skill.aclRevision ?? 0,
+      }),
     })
     expect(res.status).toBe(409)
     expect(((await res.json()) as { code: string }).code).toBe('skill-in-use')
+  })
+
+  test('DELETE requires the composite token and ACL revision fence', async () => {
+    const skill = await createHttpSkill({ name: 'foo' })
+    const res = await req(h.app, `/api/skills/${skill.id}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ confirm: 'foo' }),
+    })
+    expect(res.status).toBe(422)
+    expect(((await res.json()) as { code: string }).code).toBe('skill-delete-invalid')
+  })
+
+  test('ACL owner transfer invalidates a captured delete fence before filesystem staging', async () => {
+    const skill = await createHttpSkill({ name: 'owner-transfer', bodyMd: 'keep me' })
+    const content = (await (await req(h.app, `/api/skills/${skill.id}/content`)).json()) as {
+      token: string
+    }
+    h.db
+      .update(skills)
+      .set({ ownerUserId: 'other-owner', aclRevision: 1 })
+      .where(eq(skills.id, skill.id))
+      .run()
+
+    const stale = await req(h.app, `/api/skills/${skill.id}`, {
+      method: 'DELETE',
+      body: JSON.stringify({
+        confirm: 'owner-transfer',
+        expectedToken: content.token,
+        expectedAclRevision: skill.aclRevision ?? 0,
+      }),
+    })
+    expect(stale.status).toBe(409)
+    expect(((await stale.json()) as { code: string }).code).toBe('skill-version-conflict')
+    expect((await req(h.app, `/api/skills/${skill.id}`)).status).toBe(200)
+    expect(existsSync(join(h.appHome, 'skills', skill.id, 'files', 'SKILL.md'))).toBe(true)
   })
 
   test('all /api/skills/* require token', async () => {

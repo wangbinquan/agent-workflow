@@ -164,7 +164,12 @@ describe('RFC-223 PR-7 — canonical id resource routes', () => {
     for (const resource of resources.filter((row) => row.base !== 'skills')) {
       const current = (await (
         await req(alice.token, `/api/${resource.base}/${resource.id}`)
-      ).json()) as { version?: number }
+      ).json()) as {
+        version?: number
+        updatedAt?: number
+        aclRevision?: number
+        operationConfigHash?: string
+      }
       const renameBody =
         resource.base === 'workgroups'
           ? {
@@ -172,7 +177,16 @@ describe('RFC-223 PR-7 — canonical id resource routes', () => {
               expectedVersion: current.version,
               clientMutationId: ulid(),
             }
-          : { newName: `${resource.name}-renamed` }
+          : resource.base === 'agents'
+            ? {
+                newName: `${resource.name}-renamed`,
+                expectedUpdatedAt: current.updatedAt,
+                expectedAclRevision: current.aclRevision ?? 0,
+              }
+            : {
+                newName: `${resource.name}-renamed`,
+                expectedConfigHash: current.operationConfigHash,
+              }
       const renamed = await req(alice.token, `/api/${resource.base}/${resource.id}/rename`, {
         method: 'POST',
         body: JSON.stringify(renameBody),

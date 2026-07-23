@@ -9,12 +9,13 @@ import {
   type AgentClosureSummary,
   AgentNameSchema,
   CreateAgentSchema,
+  DeleteAgentSchema,
   rejectRetiredStartTaskKeys,
-  RenameAgentSchema,
   ResolveAgentImportRefsRequestSchema,
+  RenameAgentRequestSchema,
   ResourceRefSchema,
   StartAgentTaskSchema,
-  UpdateAgentSchema,
+  UpdateAgentRequestSchema,
 } from '@agent-workflow/shared'
 import { z } from 'zod'
 import type { Hono } from 'hono'
@@ -65,7 +66,9 @@ import type { Agent } from '@agent-workflow/shared'
  */
 function isRuntimeOnlyAgentPatch(body: unknown): boolean {
   if (typeof body !== 'object' || body === null) return false
-  const keys = Object.keys(body)
+  const keys = Object.keys(body).filter(
+    (key) => key !== 'expectedUpdatedAt' && key !== 'expectedAclRevision',
+  )
   return keys.length === 1 && keys[0] === 'runtime'
 }
 
@@ -142,7 +145,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
   app.put('/api/agents/:id', async (c) => {
     const id = c.req.param('id')
     const body = await safeJson(c.req.raw)
-    const parsed = UpdateAgentSchema.safeParse(body)
+    const parsed = UpdateAgentRequestSchema.safeParse(body)
     if (!parsed.success) {
       throw new ValidationError('agent-invalid', 'invalid agent patch', {
         issues: parsed.error.issues,
@@ -164,7 +167,11 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
     // produces the persisted ids. Only NEWLY-added references (diffed by RESOLVED
     // ID, not raw token) are checked — a grandfathered ref re-submitted by name is
     // not mis-flagged as new.
-    const updated = await updateAgent(deps.db, id, parsed.data, actor)
+    const { expectedUpdatedAt, expectedAclRevision, ...patch } = parsed.data
+    const updated = await updateAgent(deps.db, id, patch, actor, {
+      expectedUpdatedAt,
+      expectedAclRevision,
+    })
     return c.json(updated)
   })
 
@@ -174,9 +181,17 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
     const existing = await loadVisibleAgent(actor, id)
     assertNotBuiltin('agent', existing) // RFC-104: built-ins are read-only
     await requireResourceOwner(deps.db, actor, 'agent', existing)
-    // RFC-222 (D5): type-to-confirm — echo the current name (N-5 order).
-    assertDeleteConfirm(await readDeleteBody(c), existing.name, 'agent')
-    await deleteAgent(deps.db, id, actor)
+    const deleteBody = await readDeleteBody(c)
+    // Preserve RFC-222's confirmation precedence: a missing/wrong confirm is
+    // reported before the independent revision-fence validation.
+    assertDeleteConfirm(deleteBody, existing.name, 'agent')
+    const parsed = DeleteAgentSchema.safeParse(deleteBody)
+    if (!parsed.success) {
+      throw new ValidationError('agent-delete-invalid', 'invalid agent delete payload', {
+        issues: parsed.error.issues,
+      })
+    }
+    await deleteAgent(deps.db, id, actor, parsed.data)
     return c.body(null, 204)
   })
 
@@ -236,7 +251,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
   app.post('/api/agents/:id/rename', async (c) => {
     const id = c.req.param('id')
     const body = await safeJson(c.req.raw)
-    const parsed = RenameAgentSchema.safeParse(body)
+    const parsed = RenameAgentRequestSchema.safeParse(body)
     if (!parsed.success) {
       throw new ValidationError('agent-rename-invalid', 'invalid rename payload', {
         issues: parsed.error.issues,
@@ -246,7 +261,12 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
     const existing = await loadVisibleAgent(actor, id)
     assertNotBuiltin('agent', existing) // RFC-104: built-ins are read-only
     await requireResourceOwner(deps.db, actor, 'agent', existing)
-    const renamed = await renameAgent(deps.db, id, parsed.data)
+    const { expectedUpdatedAt, expectedAclRevision, ...rename } = parsed.data
+    const renamed = await renameAgent(deps.db, id, rename, {
+      actor,
+      expectedUpdatedAt,
+      expectedAclRevision,
+    })
     return c.json(renamed)
   })
 

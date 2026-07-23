@@ -39,6 +39,8 @@ interface AgentRow {
   runtime?: string | null
   role?: 'worker' | 'aggregator'
   builtin?: boolean
+  updatedAt: number
+  aclRevision: number
 }
 
 function makeAgent(name: string, description = ''): AgentRow {
@@ -58,10 +60,13 @@ function makeAgent(name: string, description = ''): AgentRow {
     visibility: 'public',
     ownerUserId: null,
     inputs: [],
+    updatedAt: 100,
+    aclRevision: 3,
   }
 }
 
 let agents: AgentRow[]
+let mutationRequests: Array<{ method: string; body: Record<string, unknown> | null }>
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -102,11 +107,17 @@ function installFetch(
         return a ? json(a) : json({ error: 'not found' }, 404)
       }
       if (method === 'PUT' && path.includes('/api/agents/')) {
+        mutationRequests.push({ method, body })
         await opts.saveGate
         const name = decodeURIComponent(path.split('/api/agents/')[1]!.split('?')[0]!)
         const i = agents.findIndex((x) => x.name === name)
         if (i < 0) return json({ error: 'not found' }, 404)
-        agents[i] = { ...agents[i]!, ...(body as object) }
+        const {
+          expectedUpdatedAt: _expectedUpdatedAt,
+          expectedAclRevision: _expectedAclRevision,
+          ...patch
+        } = body ?? {}
+        agents[i] = { ...agents[i]!, ...patch, updatedAt: agents[i]!.updatedAt + 1 }
         return json(agents[i])
       }
       if (method === 'POST' && path.endsWith('/api/agents')) {
@@ -119,6 +130,7 @@ function installFetch(
         return json(created)
       }
       if (method === 'DELETE' && path.includes('/api/agents/')) {
+        mutationRequests.push({ method, body })
         await opts.deleteGate
         const name = decodeURIComponent(path.split('/api/agents/')[1]!.split('?')[0]!)
         agents = agents.filter((x) => x.name !== name)
@@ -174,6 +186,7 @@ beforeEach(() => {
   setBaseUrl('http://daemon.test')
   setToken('tok')
   agents = [makeAgent('alpha', 'first'), makeAgent('beta', 'second')]
+  mutationRequests = []
   installFetch()
 })
 afterEach(() => {
@@ -292,6 +305,10 @@ describe('/agents split page', () => {
 
     fireEvent.click(screen.getByTestId('agent-save-button'))
     await waitFor(() => expect(screen.queryByTestId('split-card-dot-alpha')).toBeNull())
+    expect(mutationRequests).toContainEqual({
+      method: 'PUT',
+      body: expect.objectContaining({ expectedUpdatedAt: 100, expectedAclRevision: 3 }),
+    })
     // stayed in place (no navigate to /agents)
     expect(router.state.location.pathname).toBe('/agents/alpha')
     // card subtitle refreshed from the eager patch
@@ -348,6 +365,16 @@ describe('/agents split page', () => {
     const delDialog = await screen.findByRole('dialog')
     fireEvent.change(within(delDialog).getByTestId('confirm-input'), { target: { value: 'alpha' } })
     fireEvent.click(within(delDialog).getByRole('button', { name: /^Delete$/ }))
+    await waitFor(() =>
+      expect(mutationRequests).toContainEqual({
+        method: 'DELETE',
+        body: {
+          confirm: 'alpha',
+          expectedUpdatedAt: 100,
+          expectedAclRevision: 3,
+        },
+      }),
+    )
     fireEvent.click(screen.getByTestId('split-card-beta'))
 
     const dialog = await screen.findByTestId('unsaved-guard-dialog')

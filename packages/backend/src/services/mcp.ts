@@ -24,6 +24,7 @@ import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
 import { agents, mcps } from '@/db/schema'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { isOwnerNameUniqueViolation, ownerScopedNameWhere } from './ownerScopedName'
 
 type McpRow = typeof mcps.$inferSelect
 
@@ -50,7 +51,13 @@ export async function createMcp(
   input: CreateMcp,
   aclOpts?: { ownerUserId?: string },
 ): Promise<Mcp> {
-  if ((await getMcp(db, input.name)) !== null) {
+  const ownerUserId = aclOpts?.ownerUserId ?? null
+  const occupied = await db
+    .select({ id: mcps.id })
+    .from(mcps)
+    .where(ownerScopedNameWhere(mcps.ownerUserId, mcps.name, ownerUserId, input.name))
+    .limit(1)
+  if (occupied.length > 0) {
     throw new ConflictError('mcp-name-in-use', `mcp '${input.name}' already exists`)
   }
 
@@ -61,19 +68,26 @@ export async function createMcp(
 
   const id = ulid()
   const now = Date.now()
-  await db.insert(mcps).values({
-    id,
-    name: input.name,
-    description: input.description,
-    type: input.type,
-    config: JSON.stringify(input.config),
-    enabled: input.enabled,
-    // RFC-099: creator becomes owner; new resources default to 'public' (D18).
-    ownerUserId: aclOpts?.ownerUserId ?? null,
-    visibility: 'public',
-    createdAt: now,
-    updatedAt: now,
-  })
+  try {
+    await db.insert(mcps).values({
+      id,
+      name: input.name,
+      description: input.description,
+      type: input.type,
+      config: JSON.stringify(input.config),
+      enabled: input.enabled,
+      // RFC-099: creator becomes owner; new resources default to 'public' (D18).
+      ownerUserId,
+      visibility: 'public',
+      createdAt: now,
+      updatedAt: now,
+    })
+  } catch (error) {
+    if (isOwnerNameUniqueViolation(error, 'mcps', 'mcps_owner_name_unique')) {
+      throw new ConflictError('mcp-name-in-use', `mcp '${input.name}' already exists`)
+    }
+    throw error
+  }
   const created = await getMcpById(db, id)
   if (created === null) throw new Error('mcp disappeared right after insert')
   return created
@@ -163,25 +177,47 @@ export async function renameMcp(
   }
   if (input.newName === existing.name) return existing
 
-  if ((await getMcp(db, input.newName)) !== null) {
-    throw new ConflictError(
-      'mcp-name-in-use',
-      `mcp '${input.newName}' already exists; pick a different name`,
-    )
-  }
-
   // RFC-223 (PR-1 / D7): agents.mcp stores the mcp ID, which is stable across a
   // rename — so there is NO cascade to perform. Just rename the row. (This
   // removes the old `agents.mcp` name-rewrite loop that RFC-093 hardened.)
-  dbTxSync(db, (tx) => {
-    tx.update(mcps)
-      .set({
-        name: input.newName,
-        updatedAt: opts.updatedAt ?? Math.max(Date.now(), existing.updatedAt + 1),
-      })
-      .where(eq(mcps.id, existing.id))
-      .run()
-  })
+  try {
+    dbTxSync(db, (tx) => {
+      const collision = tx
+        .select({ id: mcps.id })
+        .from(mcps)
+        .where(
+          ownerScopedNameWhere(
+            mcps.ownerUserId,
+            mcps.name,
+            existing.ownerUserId ?? null,
+            input.newName,
+            { column: mcps.id, id: existing.id },
+          ),
+        )
+        .get()
+      if (collision !== undefined) {
+        throw new ConflictError(
+          'mcp-name-in-use',
+          `mcp '${input.newName}' already exists; pick a different name`,
+        )
+      }
+      tx.update(mcps)
+        .set({
+          name: input.newName,
+          updatedAt: opts.updatedAt ?? Math.max(Date.now(), existing.updatedAt + 1),
+        })
+        .where(eq(mcps.id, existing.id))
+        .run()
+    })
+  } catch (error) {
+    if (isOwnerNameUniqueViolation(error, 'mcps', 'mcps_owner_name_unique')) {
+      throw new ConflictError(
+        'mcp-name-in-use',
+        `mcp '${input.newName}' already exists; pick a different name`,
+      )
+    }
+    throw error
+  }
 
   const renamed = await getMcpById(db, id)
   if (renamed === null) throw new Error('mcp disappeared after rename')

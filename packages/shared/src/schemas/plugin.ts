@@ -115,11 +115,29 @@ export const UpdatePluginSchema = z
   .strict()
 export type UpdatePlugin = z.infer<typeof UpdatePluginSchema>
 
+export const UpdatePluginRequestSchema = UpdatePluginSchema.extend({
+  expectedConfigHash: OperationConfigHashSchema,
+}).strict()
+export type UpdatePluginRequest = z.infer<typeof UpdatePluginRequestSchema>
+
 /** POST /api/plugins/:id/rename body. */
 export const RenamePluginSchema = z.object({
   newName: PluginNameSchema,
 })
 export type RenamePlugin = z.infer<typeof RenamePluginSchema>
+
+export const RenamePluginRequestSchema = RenamePluginSchema.extend({
+  expectedConfigHash: OperationConfigHashSchema,
+}).strict()
+export type RenamePluginRequest = z.infer<typeof RenamePluginRequestSchema>
+
+export const DeletePluginSchema = z
+  .object({
+    confirm: z.string().optional(),
+    expectedConfigHash: OperationConfigHashSchema,
+  })
+  .strict()
+export type DeletePlugin = z.infer<typeof DeletePluginSchema>
 
 /** Response shape for POST /api/plugins/:id/check-update. */
 export const PluginUpdateCheckSchema = z.object({

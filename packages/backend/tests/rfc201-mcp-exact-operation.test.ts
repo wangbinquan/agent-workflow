@@ -97,7 +97,12 @@ describe('RFC-201 MCP exact operation wire', () => {
 
     const noOp = await req(app, `/api/mcps/${created.id}`, {
       method: 'PUT',
-      body: JSON.stringify({ description: 'v1', config: { command: ['fake'] }, enabled: true }),
+      body: JSON.stringify({
+        description: 'v1',
+        config: { command: ['fake'] },
+        enabled: true,
+        expectedConfigHash: created.operationConfigHash,
+      }),
     })
     expect(noOp.status).toBe(200)
     const unchanged = (await noOp.json()) as Resource
@@ -106,7 +111,10 @@ describe('RFC-201 MCP exact operation wire', () => {
 
     const changedResponse = await req(app, `/api/mcps/${created.id}`, {
       method: 'PUT',
-      body: JSON.stringify({ description: 'v2' }),
+      body: JSON.stringify({
+        description: 'v2',
+        expectedConfigHash: unchanged.operationConfigHash,
+      }),
     })
     const changed = (await changedResponse.json()) as Resource
     expect(changed.updatedAt).toBeGreaterThan(created.updatedAt)
@@ -118,7 +126,10 @@ describe('RFC-201 MCP exact operation wire', () => {
     const created = await createMcp(app)
     await req(app, `/api/mcps/${created.id}`, {
       method: 'PUT',
-      body: JSON.stringify({ description: 'foreign' }),
+      body: JSON.stringify({
+        description: 'foreign',
+        expectedConfigHash: created.operationConfigHash,
+      }),
     })
     let opens = 0
     __setProbeOptionsForTesting({
@@ -182,7 +193,7 @@ describe('RFC-201 MCP exact operation wire', () => {
     while (!oldOpened) await Promise.resolve()
     const put = await req(app, `/api/mcps/${h1.id}`, {
       method: 'PUT',
-      body: JSON.stringify({ description: 'v2' }),
+      body: JSON.stringify({ description: 'v2', expectedConfigHash: h1.operationConfigHash }),
     })
     const h2 = (await put.json()) as Resource
     const newResponse = await postProbe(app, h2.id, h2.operationConfigHash)
@@ -216,7 +227,10 @@ describe('RFC-201 MCP exact operation wire', () => {
         mutation === 'rename'
           ? await req(app, `/api/mcps/${created.id}/rename`, {
               method: 'POST',
-              body: JSON.stringify({ newName: 'pg-renamed' }),
+              body: JSON.stringify({
+                newName: 'pg-renamed',
+                expectedConfigHash: created.operationConfigHash,
+              }),
             })
           : await req(app, `/api/mcps/${created.id}/acl`, {
               method: 'PUT',
@@ -251,7 +265,10 @@ describe('RFC-201 MCP exact operation wire', () => {
 
     const renamed = await req(app, `/api/mcps/${created.id}/rename`, {
       method: 'POST',
-      body: JSON.stringify({ newName: 'pg-renamed' }),
+      body: JSON.stringify({
+        newName: 'pg-renamed',
+        expectedConfigHash: created.operationConfigHash,
+      }),
     })
     expect(renamed.status).toBe(200)
 
@@ -274,7 +291,10 @@ describe('RFC-201 MCP exact operation wire', () => {
     })
     const saveResponse = await req(app, `/api/mcps/${created.id}`, {
       method: 'PUT',
-      body: JSON.stringify({ description: 'saved' }),
+      body: JSON.stringify({
+        description: 'saved',
+        expectedConfigHash: created.operationConfigHash,
+      }),
     })
     const saved = (await saveResponse.json()) as Resource
     const probeResponse = await postProbe(app, saved.id, saved.operationConfigHash)
@@ -284,7 +304,10 @@ describe('RFC-201 MCP exact operation wire', () => {
 
     const afterProbeResponse = await req(app, `/api/mcps/${saved.id}`, {
       method: 'PUT',
-      body: JSON.stringify({ description: 'after-probe' }),
+      body: JSON.stringify({
+        description: 'after-probe',
+        expectedConfigHash: saved.operationConfigHash,
+      }),
     })
     const afterProbe = (await afterProbeResponse.json()) as Resource
     expect(afterProbe.updatedAt).toBeGreaterThan(probe.startedAt)

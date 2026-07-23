@@ -29,6 +29,16 @@ const T6_ACTOR = buildActor({
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
+function localMcp(name: string): Parameters<typeof createMcp>[1] {
+  return {
+    name,
+    description: '',
+    type: 'local',
+    config: { command: ['x'] },
+    enabled: true,
+  }
+}
+
 describe('services/mcp.ts CRUD', () => {
   let db: DbClient
   beforeEach(() => {
@@ -107,6 +117,47 @@ describe('services/mcp.ts CRUD', () => {
         enabled: true,
       }),
     ).rejects.toBeInstanceOf(ConflictError)
+  })
+
+  test('RFC-223 scopes create and rename conflicts to the owner bucket', async () => {
+    const source = await createMcp(db, localMcp('source'), { ownerUserId: 'owner-a' })
+    await createMcp(db, localMcp('shared'), { ownerUserId: 'owner-b' })
+
+    await expect(renameMcp(db, source.id, { newName: 'shared' })).resolves.toMatchObject({
+      id: source.id,
+      name: 'shared',
+    })
+
+    await createMcp(db, localMcp('taken'), { ownerUserId: 'owner-a' })
+    await expect(renameMcp(db, source.id, { newName: 'taken' })).rejects.toMatchObject({
+      code: 'mcp-name-in-use',
+    })
+    await expect(
+      createMcp(db, localMcp('taken'), { ownerUserId: 'owner-a' }),
+    ).rejects.toMatchObject({
+      code: 'mcp-name-in-use',
+    })
+
+    await expect(
+      createMcp(db, localMcp('shared'), { ownerUserId: 'owner-c' }),
+    ).resolves.toMatchObject({ name: 'shared', ownerUserId: 'owner-c' })
+    await expect(renameMcp(db, source.id, { newName: 'shared' })).resolves.toMatchObject({
+      id: source.id,
+      name: 'shared',
+    })
+  })
+
+  test('RFC-223 maps a same-owner create race to one stable 409 conflict', async () => {
+    const results = await Promise.allSettled([
+      createMcp(db, localMcp('raced'), { ownerUserId: 'owner-a' }),
+      createMcp(db, localMcp('raced'), { ownerUserId: 'owner-a' }),
+    ])
+
+    expect(results.map((result) => result.status).sort()).toEqual(['fulfilled', 'rejected'])
+    const rejected = results.find(
+      (result): result is PromiseRejectedResult => result.status === 'rejected',
+    )
+    expect(rejected?.reason).toMatchObject({ code: 'mcp-name-in-use', status: 409 })
   })
 
   test('update: description + enabled patch', async () => {

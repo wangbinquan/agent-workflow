@@ -163,8 +163,31 @@ export const UpdateMcpRemoteSchema = z
 export const UpdateMcpSchema = z.union([UpdateMcpLocalSchema, UpdateMcpRemoteSchema])
 export type UpdateMcp = z.infer<typeof UpdateMcpSchema>
 
+export const UpdateMcpRequestSchema = z.union([
+  UpdateMcpLocalSchema.extend({
+    expectedConfigHash: OperationConfigHashSchema,
+  }),
+  UpdateMcpRemoteSchema.extend({
+    expectedConfigHash: OperationConfigHashSchema,
+  }),
+])
+export type UpdateMcpRequest = z.infer<typeof UpdateMcpRequestSchema>
+
 /** POST /api/mcps/:id/rename body. */
 export const RenameMcpSchema = z.object({
   newName: McpNameSchema,
 })
 export type RenameMcp = z.infer<typeof RenameMcpSchema>
+
+export const RenameMcpRequestSchema = RenameMcpSchema.extend({
+  expectedConfigHash: OperationConfigHashSchema,
+}).strict()
+export type RenameMcpRequest = z.infer<typeof RenameMcpRequestSchema>
+
+export const DeleteMcpSchema = z
+  .object({
+    confirm: z.string().optional(),
+    expectedConfigHash: OperationConfigHashSchema,
+  })
+  .strict()
+export type DeleteMcp = z.infer<typeof DeleteMcpSchema>

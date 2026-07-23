@@ -2,9 +2,10 @@
 
 import {
   CreatePluginSchema,
+  DeletePluginSchema,
   PluginOperationRequestSchema,
-  RenamePluginSchema,
-  UpdatePluginSchema,
+  RenamePluginRequestSchema,
+  UpdatePluginRequestSchema,
   type Plugin,
   type PluginUpdateCheck,
   type PluginUpgradeResult,
@@ -95,7 +96,7 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
   })
 
   app.put('/api/plugins/:id', async (c) => {
-    const parsed = UpdatePluginSchema.safeParse(await safeJson(c.req.raw))
+    const parsed = UpdatePluginRequestSchema.safeParse(await safeJson(c.req.raw))
     if (!parsed.success) {
       throw new ValidationError('plugin-invalid', 'invalid plugin patch', {
         issues: parsed.error.issues,
@@ -105,8 +106,10 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
     const initial = await loadVisiblePlugin(actor, c.req.param('id'))
     try {
       const updated = await pluginOperationCoordinator.runExclusive(initial.id, async () => {
-        await loadFreshOwned(actor, initial.id)
-        return updatePlugin(deps.db, initial.id, parsed.data)
+        const fresh = await loadFreshOwned(actor, initial.id)
+        assertExpectedHash(fresh, parsed.data.expectedConfigHash)
+        const { expectedConfigHash: _expectedConfigHash, ...patch } = parsed.data
+        return updatePlugin(deps.db, initial.id, patch)
       })
       return c.json(withPluginOperationConfigHash(updated))
     } catch (error) {
@@ -117,17 +120,26 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
   app.delete('/api/plugins/:id', async (c) => {
     const actor = actorOf(c)
     const initial = await loadVisiblePlugin(actor, c.req.param('id'))
+    const deleteBody = await readDeleteBody(c)
+    assertDeleteConfirm(deleteBody, initial.name, 'plugin')
+    const parsed = DeletePluginSchema.safeParse(deleteBody)
+    if (!parsed.success) {
+      throw new ValidationError('plugin-delete-invalid', 'invalid plugin delete payload', {
+        issues: parsed.error.issues,
+      })
+    }
     await pluginOperationCoordinator.runExclusive(initial.id, async () => {
       const fresh = await loadFreshOwned(actor, initial.id)
+      assertExpectedHash(fresh, parsed.data.expectedConfigHash)
       // RFC-222 (D5, N-6): confirm against the fresh name in the exclusive section.
-      assertDeleteConfirm(await readDeleteBody(c), fresh.name, 'plugin')
+      assertDeleteConfirm(parsed.data, fresh.name, 'plugin')
       await deletePlugin(deps.db, initial.id, actor)
     })
     return c.body(null, 204)
   })
 
   app.post('/api/plugins/:id/rename', async (c) => {
-    const parsed = RenamePluginSchema.safeParse(await safeJson(c.req.raw))
+    const parsed = RenamePluginRequestSchema.safeParse(await safeJson(c.req.raw))
     if (!parsed.success) {
       throw new ValidationError('plugin-rename-invalid', 'invalid rename payload', {
         issues: parsed.error.issues,
@@ -136,8 +148,10 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
     const actor = actorOf(c)
     const initial = await loadVisiblePlugin(actor, c.req.param('id'))
     const renamed = await pluginOperationCoordinator.runExclusive(initial.id, async () => {
-      await loadFreshOwned(actor, initial.id)
-      return renamePlugin(deps.db, initial.id, parsed.data)
+      const fresh = await loadFreshOwned(actor, initial.id)
+      assertExpectedHash(fresh, parsed.data.expectedConfigHash)
+      const { expectedConfigHash: _expectedConfigHash, ...rename } = parsed.data
+      return renamePlugin(deps.db, initial.id, rename)
     })
     return c.json(withPluginOperationConfigHash(renamed))
   })

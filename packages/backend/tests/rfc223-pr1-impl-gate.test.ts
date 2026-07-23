@@ -118,6 +118,8 @@ async function seedPlugin(
 interface AgentDto {
   id: string
   name: string
+  updatedAt: number
+  aclRevision?: number
   skills: Array<{ kind: 'managed'; skillId: string } | { kind: 'project'; name: string }>
   mcp: string[]
   plugins: string[]
@@ -219,7 +221,11 @@ describe('RFC-223 PR-1 P1-2 — ACL bound to resolved id, grandfathering by id',
     // compares resolved id (dep.id ∈ existing) → grandfathered → save succeeds.
     const put = await req(h.app, h.bob.token, `/api/agents/${consumer.id}`, {
       method: 'PUT',
-      body: JSON.stringify({ dependsOn: ['dep'] }),
+      body: JSON.stringify({
+        dependsOn: ['dep'],
+        expectedUpdatedAt: consumer.updatedAt,
+        expectedAclRevision: consumer.aclRevision ?? 0,
+      }),
     })
     expect(put.status).toBe(200)
     expect(((await put.json()) as AgentDto).dependsOn).toEqual([dep.id])
@@ -243,7 +249,11 @@ describe('RFC-223 PR-1 P1-2 — ACL bound to resolved id, grandfathering by id',
     const agent = (await aRes.json()) as AgentDto
     const put = await req(h.app, h.bob.token, `/api/agents/${agent.id}`, {
       method: 'PUT',
-      body: JSON.stringify({ mcp: [m.id] }),
+      body: JSON.stringify({
+        mcp: [m.id],
+        expectedUpdatedAt: agent.updatedAt,
+        expectedAclRevision: agent.aclRevision ?? 0,
+      }),
     })
     expect(put.status).toBe(422)
     expect(((await put.json()) as { code: string }).code).toBe('acl-missing-refs')

@@ -6,6 +6,7 @@
 // hermetic; the live `npm` binary is never invoked from these tests.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { eq } from 'drizzle-orm'
 import { access, chmod, copyFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -45,6 +46,12 @@ async function req(app: Hono, path: string, init: RequestInit = {}): Promise<Res
     headers.set('content-type', 'application/json')
   }
   return app.request(path, { ...init, headers })
+}
+
+async function pluginRevision(app: Hono, path: string): Promise<string> {
+  const response = await req(app, path)
+  expect(response.status).toBe(200)
+  return ((await response.json()) as { operationConfigHash: string }).operationConfigHash
 }
 
 function seedPluginRow(db: DbClient, name: string, spec: string): void {
@@ -163,14 +170,35 @@ describe('/api/plugins CRUD (DB-seeded)', () => {
   })
 
   test('PUT /api/plugins/:name updates non-spec fields without re-install', async () => {
+    const expectedConfigHash = await pluginRevision(app, '/api/plugins/seeded')
     const r = await req(app, '/api/plugins/seeded', {
       method: 'PUT',
-      body: JSON.stringify({ enabled: false, description: 'paused' }),
+      body: JSON.stringify({ enabled: false, description: 'paused', expectedConfigHash }),
     })
     expect(r.status).toBe(200)
     const body = (await r.json()) as { enabled: boolean; description: string }
     expect(body.enabled).toBe(false)
     expect(body.description).toBe('paused')
+  })
+
+  test('ACL owner transfer invalidates a captured config-hash fence', async () => {
+    const expectedConfigHash = await pluginRevision(app, '/api/plugins/seeded')
+    db.update(plugins)
+      .set({ ownerUserId: 'other-owner', aclRevision: 1 })
+      .where(eq(plugins.name, 'seeded'))
+      .run()
+
+    const stale = await req(app, '/api/plugins/seeded', {
+      method: 'PUT',
+      body: JSON.stringify({ description: 'must not publish', expectedConfigHash }),
+    })
+    expect(stale.status).toBe(409)
+    expect(((await stale.json()) as { code: string }).code).toBe('resource-operation-stale')
+
+    const current = (await (await req(app, '/api/plugins/seeded')).json()) as {
+      description: string
+    }
+    expect(current.description).toBe('')
   })
 
   test('PUT /api/plugins/:name 422 on invalid body (zod strict)', async () => {
@@ -186,17 +214,21 @@ describe('/api/plugins CRUD (DB-seeded)', () => {
   test('POST /api/plugins/:name/rename succeeds + 409 on name conflict', async () => {
     // Seed a second plugin so we can attempt to collide.
     seedPluginRow(db, 'other', 'o@1')
+    const expectedConfigHash = await pluginRevision(app, '/api/plugins/seeded')
     const r1 = await req(app, '/api/plugins/seeded/rename', {
       method: 'POST',
-      body: JSON.stringify({ newName: 'fresh' }),
+      body: JSON.stringify({ newName: 'fresh', expectedConfigHash }),
     })
     expect(r1.status).toBe(200)
-    const renamed = (await r1.json()) as { name: string }
+    const renamed = (await r1.json()) as { name: string; operationConfigHash: string }
     expect(renamed.name).toBe('fresh')
 
     const r2 = await req(app, '/api/plugins/fresh/rename', {
       method: 'POST',
-      body: JSON.stringify({ newName: 'other' }),
+      body: JSON.stringify({
+        newName: 'other',
+        expectedConfigHash: renamed.operationConfigHash,
+      }),
     })
     expect(r2.status).toBe(409)
     const body = (await r2.json()) as { code: string }
@@ -217,10 +249,11 @@ describe('/api/plugins CRUD (DB-seeded)', () => {
       frontmatterExtra: {},
       bodyMd: '',
     })
+    const expectedConfigHash = await pluginRevision(app, '/api/plugins/seeded')
     // RFC-222 (D5, N-5): confirm passes first, then the in-use refusal fires.
     const r = await req(app, '/api/plugins/seeded', {
       method: 'DELETE',
-      body: JSON.stringify({ confirm: 'seeded' }),
+      body: JSON.stringify({ confirm: 'seeded', expectedConfigHash }),
     })
     expect(r.status).toBe(409)
     // RFC-203 T6: principal-aware shape (visible[] + hiddenCount).
@@ -234,14 +267,24 @@ describe('/api/plugins CRUD (DB-seeded)', () => {
   })
 
   test('DELETE 204 when not referenced', async () => {
+    const expectedConfigHash = await pluginRevision(app, '/api/plugins/seeded')
     // RFC-222 (D5): DELETE requires a { confirm } body echoing the plugin name.
     const r = await req(app, '/api/plugins/seeded', {
       method: 'DELETE',
-      body: JSON.stringify({ confirm: 'seeded' }),
+      body: JSON.stringify({ confirm: 'seeded', expectedConfigHash }),
     })
     expect(r.status).toBe(204)
     const r2 = await req(app, '/api/plugins/seeded')
     expect(r2.status).toBe(404)
+  })
+
+  test('DELETE requires the mutation config-hash fence', async () => {
+    const r = await req(app, '/api/plugins/seeded', {
+      method: 'DELETE',
+      body: JSON.stringify({ confirm: 'seeded' }),
+    })
+    expect(r.status).toBe(422)
+    expect(((await r.json()) as { code: string }).code).toBe('plugin-delete-invalid')
   })
 })
 
@@ -436,7 +479,10 @@ describe('/api/plugins install path (PATH-injected fake npm)', () => {
       await waitForFile(pauseStarted)
       updatePromise = req(app, '/api/plugins/serialized-upgrade', {
         method: 'PUT',
-        body: JSON.stringify({ description: 'edited while upgrade was running' }),
+        body: JSON.stringify({
+          description: 'edited while upgrade was running',
+          expectedConfigHash: created.operationConfigHash,
+        }),
       }).finally(() => {
         updateSettled = true
       })
@@ -450,12 +496,21 @@ describe('/api/plugins install path (PATH-injected fake npm)', () => {
     const [upgrade, update] = await Promise.all([upgradePromise, updatePromise!])
     expect(settledBeforeRelease).toBe(false)
     expect(upgrade.status).toBe(200)
-    expect(update.status).toBe(200)
+    expect(update.status).toBe(409)
+    expect(((await update.json()) as { code: string }).code).toBe('resource-operation-stale')
 
     const upgradeReceipt = (await upgrade.json()) as {
       resource: { operationConfigHash: string; resolvedVersion: string }
     }
-    const updated = (await update.json()) as {
+    const retry = await req(app, '/api/plugins/serialized-upgrade', {
+      method: 'PUT',
+      body: JSON.stringify({
+        description: 'edited while upgrade was running',
+        expectedConfigHash: upgradeReceipt.resource.operationConfigHash,
+      }),
+    })
+    expect(retry.status).toBe(200)
+    const updated = (await retry.json()) as {
       description: string
       operationConfigHash: string
       resolvedVersion: string

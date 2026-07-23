@@ -81,6 +81,20 @@ async function loadWorkflow(app: Hono, token: string, id: string): Promise<Workf
   return (await res.json()) as WorkflowDetail
 }
 
+async function loadAgentRevision(
+  app: Hono,
+  token: string,
+  id: string,
+): Promise<{ expectedUpdatedAt: number; expectedAclRevision: number }> {
+  const res = await req(app, token, `/api/agents/${id}`)
+  expect(res.status).toBe(200)
+  const agent = (await res.json()) as { updatedAt: number; aclRevision?: number }
+  return {
+    expectedUpdatedAt: agent.updatedAt,
+    expectedAclRevision: agent.aclRevision ?? 0,
+  }
+}
+
 async function saveWorkflowDefinition(
   app: Hono,
   token: string,
@@ -179,26 +193,32 @@ describe('RFC-099 — agents route ACL', () => {
     })
     expect(put.status).toBe(200)
     expect((await req(h.app, h.bob.token, `/api/agents/${agentId}`)).status).toBe(200)
+    const revision = await loadAgentRevision(h.app, h.alice.token, agentId)
     // grantee modify → 403 (visible, so a 403 leaks nothing new)
     const bobPatch = await req(h.app, h.bob.token, `/api/agents/${agentId}`, {
       method: 'PUT',
-      body: JSON.stringify({ description: 'bob was here' }),
+      body: JSON.stringify({ description: 'bob was here', ...revision }),
     })
     expect(bobPatch.status).toBe(403)
     // stranger modify → 404 (must look like it doesn't exist)
     const carolPatch = await req(h.app, h.carol.token, `/api/agents/${agentId}`, {
       method: 'PUT',
-      body: JSON.stringify({ description: 'carol was here' }),
+      body: JSON.stringify({ description: 'carol was here', ...revision }),
     })
     expect(carolPatch.status).toBe(404)
     const ownerPatch = await req(h.app, h.alice.token, `/api/agents/${agentId}`, {
       method: 'PUT',
-      body: JSON.stringify({ description: 'owner edit' }),
+      body: JSON.stringify({ description: 'owner edit', ...revision }),
     })
     expect(ownerPatch.status).toBe(200)
+    const ownerSaved = (await ownerPatch.json()) as { updatedAt: number; aclRevision?: number }
     const adminPatch = await req(h.app, h.admin.token, `/api/agents/${agentId}`, {
       method: 'PUT',
-      body: JSON.stringify({ description: 'admin edit' }),
+      body: JSON.stringify({
+        description: 'admin edit',
+        expectedUpdatedAt: ownerSaved.updatedAt,
+        expectedAclRevision: ownerSaved.aclRevision ?? 0,
+      }),
     })
     expect(adminPatch.status).toBe(200)
   })
@@ -250,11 +270,49 @@ describe('RFC-099 — agents route ACL', () => {
     })
     expect(alicePut.status).toBe(403)
     // bob (new owner) can modify the agent itself
+    const revision = await loadAgentRevision(h.app, h.bob.token, agentId)
     const bobPatch = await req(h.app, h.bob.token, `/api/agents/${agentId}`, {
       method: 'PUT',
-      body: JSON.stringify({ description: 'new owner edit' }),
+      body: JSON.stringify({ description: 'new owner edit', ...revision }),
     })
     expect(bobPatch.status).toBe(200)
+  })
+
+  test('owner transfer invalidates an ordinary mutation fence for admin and former owner', async () => {
+    const agentId = await createAgentAsAlice()
+    const staleRevision = await loadAgentRevision(h.app, h.alice.token, agentId)
+    const transfer = await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
+      method: 'PUT',
+      body: JSON.stringify(aclMutation(agentId, { ownerUserId: h.bob.id })),
+    })
+    expect(transfer.status).toBe(200)
+
+    const staleAdminPatch = await req(h.app, h.admin.token, `/api/agents/${agentId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ description: 'stale admin write', ...staleRevision }),
+    })
+    expect(staleAdminPatch.status).toBe(409)
+    expect(((await staleAdminPatch.json()) as { code: string }).code).toBe(
+      'resource-operation-stale',
+    )
+
+    const formerOwnerPatch = await req(h.app, h.alice.token, `/api/agents/${agentId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ description: 'former owner write', ...staleRevision }),
+    })
+    expect(formerOwnerPatch.status).toBe(403)
+
+    const unchanged = (await (
+      await req(h.app, h.admin.token, `/api/agents/${agentId}`)
+    ).json()) as { description: string }
+    expect(unchanged.description).toBe(AGENT_BODY.description)
+
+    const freshRevision = await loadAgentRevision(h.app, h.admin.token, agentId)
+    const freshAdminPatch = await req(h.app, h.admin.token, `/api/agents/${agentId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ description: 'fresh admin write', ...freshRevision }),
+    })
+    expect(freshAdminPatch.status).toBe(200)
   })
 
   test('granting an unknown or system user → 422 acl-user-invalid', async () => {

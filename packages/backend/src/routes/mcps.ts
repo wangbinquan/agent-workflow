@@ -14,9 +14,10 @@
 
 import {
   CreateMcpSchema,
+  DeleteMcpSchema,
   McpOperationRequestSchema,
-  RenameMcpSchema,
-  UpdateMcpSchema,
+  RenameMcpRequestSchema,
+  UpdateMcpRequestSchema,
   type Mcp,
 } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
@@ -102,7 +103,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
   app.put('/api/mcps/:id', async (c) => {
     const id = c.req.param('id')
     const body = await safeJson(c.req.raw)
-    const parsed = UpdateMcpSchema.safeParse(body)
+    const parsed = UpdateMcpRequestSchema.safeParse(body)
     if (!parsed.success) {
       throw new ValidationError('mcp-invalid', 'invalid mcp patch', {
         issues: parsed.error.issues,
@@ -113,7 +114,9 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
     const updated = await mcpOperationCoordinator.runExclusive(resolved.id, async () => {
       const fresh = await loadVisibleMcp(actor, resolved.id)
       await requireResourceOwner(deps.db, actor, 'mcp', fresh)
-      return updateMcp(deps.db, fresh.id, parsed.data, {
+      assertExpectedHash(fresh, parsed.data.expectedConfigHash)
+      const { expectedConfigHash: _expectedConfigHash, ...patch } = parsed.data
+      return updateMcp(deps.db, fresh.id, patch, {
         existing: fresh,
         updatedAt: await nextMutationTimestamp(fresh),
       })
@@ -125,12 +128,21 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
     const id = c.req.param('id')
     const actor = actorOf(c)
     const resolved = await loadVisibleMcp(actor, id)
+    const deleteBody = await readDeleteBody(c)
+    assertDeleteConfirm(deleteBody, resolved.name, 'mcp')
+    const parsed = DeleteMcpSchema.safeParse(deleteBody)
+    if (!parsed.success) {
+      throw new ValidationError('mcp-delete-invalid', 'invalid mcp delete payload', {
+        issues: parsed.error.issues,
+      })
+    }
     await mcpOperationCoordinator.runExclusive(resolved.id, async () => {
       const fresh = await loadVisibleMcp(actor, resolved.id)
       await requireResourceOwner(deps.db, actor, 'mcp', fresh)
+      assertExpectedHash(fresh, parsed.data.expectedConfigHash)
       // RFC-222 (D5, N-6): confirm against the FRESH name inside the exclusive
       // section, so a concurrent rename is caught as a mismatch.
-      assertDeleteConfirm(await readDeleteBody(c), fresh.name, 'mcp')
+      assertDeleteConfirm(parsed.data, fresh.name, 'mcp')
       await deleteMcp(deps.db, fresh.id, actor, { existing: fresh })
     })
     return c.body(null, 204)
@@ -139,7 +151,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
   app.post('/api/mcps/:id/rename', async (c) => {
     const id = c.req.param('id')
     const body = await safeJson(c.req.raw)
-    const parsed = RenameMcpSchema.safeParse(body)
+    const parsed = RenameMcpRequestSchema.safeParse(body)
     if (!parsed.success) {
       throw new ValidationError('mcp-rename-invalid', 'invalid rename payload', {
         issues: parsed.error.issues,
@@ -150,7 +162,9 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
     const renamed = await mcpOperationCoordinator.runExclusive(resolved.id, async () => {
       const fresh = await loadVisibleMcp(actor, resolved.id)
       await requireResourceOwner(deps.db, actor, 'mcp', fresh)
-      return renameMcp(deps.db, fresh.id, parsed.data, {
+      assertExpectedHash(fresh, parsed.data.expectedConfigHash)
+      const { expectedConfigHash: _expectedConfigHash, ...rename } = parsed.data
+      return renameMcp(deps.db, fresh.id, rename, {
         existing: fresh,
         updatedAt: await nextMutationTimestamp(fresh),
       })
@@ -293,6 +307,16 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
       },
     },
   })
+}
+
+function assertExpectedHash(mcp: Mcp, expected: string): void {
+  if (mcpOperationConfigHashOf(mcp) !== expected) {
+    throw new ConflictError(
+      'resource-operation-stale',
+      'the MCP changed; reload before modifying it',
+      { expectedConfigHash: expected, currentConfigHash: mcpOperationConfigHashOf(mcp) },
+    )
+  }
 }
 
 async function safeJson(req: Request): Promise<unknown> {

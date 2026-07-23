@@ -130,10 +130,10 @@ function PluginDetailPage() {
       if (query.data === undefined) return Promise.reject(new Error('not loaded'))
       const built = buildUpdatePayload(snapshot, query.data)
       if (!built.ok) return Promise.reject(new Error('invalid form'))
-      return api.put<PluginOperationResource>(
-        `/api/plugins/${encodeURIComponent(id)}`,
-        built.payload,
-      )
+      return api.put<PluginOperationResource>(`/api/plugins/${encodeURIComponent(id)}`, {
+        ...built.payload,
+        expectedConfigHash: query.data.operationConfigHash,
+      })
     },
     onSuccess: async (resource, { snapshot }) => {
       await qc.cancelQueries({ queryKey: ['plugins', id], exact: true })
@@ -148,7 +148,12 @@ function PluginDetailPage() {
 
   const del = useMutation({
     mutationFn: ({ confirm, release: _release }: { confirm: string; release: SplitBusyRelease }) =>
-      api.deleteJson(`/api/plugins/${encodeURIComponent(id)}`, { confirm }),
+      query.data === undefined
+        ? Promise.reject(new Error('plugin revision is unavailable'))
+        : api.deleteJson(`/api/plugins/${encodeURIComponent(id)}`, {
+            confirm,
+            expectedConfigHash: query.data.operationConfigHash,
+          }),
     onSuccess: async (_deleted, { release }) => {
       report(id, false)
       await qc.cancelQueries({ queryKey: ['plugins'], exact: true })

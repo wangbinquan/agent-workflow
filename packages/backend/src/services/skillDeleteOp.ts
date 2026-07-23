@@ -19,7 +19,7 @@ import { dirname, join, relative } from 'node:path'
 import { eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { skills } from '@/db/schema'
-import { dbTxSync } from '@/db/txSync'
+import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import {
   abandonOperation,
   advancePhase,
@@ -34,6 +34,7 @@ import {
   rebaseSkillOperationPath,
   skillRootAbs,
 } from '@/services/skillIdentityPaths'
+import { ConflictError } from '@/util/errors'
 function trashPath(appHome: string, skillId: string, opId: string): string {
   if (!/^[0-9A-HJKMNP-TV-Z]{26}$/.test(opId)) {
     throw new Error(`delete operation has invalid op_id: ${opId}`)
@@ -43,6 +44,14 @@ function trashPath(appHome: string, skillId: string, opId: string): string {
 
 export interface SkillDeleteOpHooks {
   afterPhase?: (phase: 'intent' | 'fs-staged' | 'db-committed', skillId: string) => void
+}
+
+export interface SkillDeleteFence {
+  skillId: string
+  contentVersion: number
+  metaRevision: number
+  ownerUserId: string | null
+  aclRevision: number
 }
 
 /**
@@ -55,17 +64,19 @@ export function deleteManagedSkillOp(
   fsOpts: SkillOpFsOptions,
   skill: { id: string },
   hooks: SkillDeleteOpHooks = {},
+  expected?: SkillDeleteFence,
 ): void {
   const root = skillRootAbs(fsOpts.appHome, skill.id)
 
   // ① intent (+lock) — durably record before any FS side effect.
-  const opId = dbTxSync(db, (tx) =>
-    beginOperation(tx, {
+  const opId = dbTxSync(db, (tx) => {
+    if (expected !== undefined) assertDeleteFence(tx, skill.id, expected)
+    return beginOperation(tx, {
       skillId: skill.id,
       kind: 'delete',
       preconditionJson: JSON.stringify({ skillId: skill.id }),
-    }),
-  )
+    })
+  })
   const trash = trashPath(fsOpts.appHome, skill.id, opId)
   hooks.afterPhase?.('intent', skill.id)
 
@@ -86,6 +97,7 @@ export function deleteManagedSkillOp(
 
     // ③ db-committed — DELETE row + advance phase, one tx.
     dbTxSync(db, (tx) => {
+      if (expected !== undefined) assertDeleteFence(tx, skill.id, expected)
       tx.delete(skills).where(eq(skills.id, skill.id)).run()
       advancePhase(tx, opId, 'db-committed')
     })
@@ -116,6 +128,33 @@ export function deleteManagedSkillOp(
       }
     }
     throw err
+  }
+}
+
+function assertDeleteFence(tx: DbTxSync, skillId: string, expected: SkillDeleteFence): void {
+  const live = tx
+    .select({
+      id: skills.id,
+      contentVersion: skills.contentVersion,
+      metaRevision: skills.metaRevision,
+      ownerUserId: skills.ownerUserId,
+      aclRevision: skills.aclRevision,
+    })
+    .from(skills)
+    .where(eq(skills.id, skillId))
+    .get()
+  if (
+    live === undefined ||
+    live.id !== expected.skillId ||
+    live.contentVersion !== expected.contentVersion ||
+    live.metaRevision !== expected.metaRevision ||
+    live.ownerUserId !== expected.ownerUserId ||
+    live.aclRevision !== expected.aclRevision
+  ) {
+    throw new ConflictError(
+      'skill-version-conflict',
+      `skill '${skillId}' changed since this operation started; reload and retry`,
+    )
   }
 }
 

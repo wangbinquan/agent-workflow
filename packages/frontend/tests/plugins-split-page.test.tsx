@@ -267,6 +267,7 @@ describe('/plugins split page', () => {
       (request) => request.method === 'PUT' || request.path.endsWith('/check-update'),
     )
     expect(writes.map((request) => request.method)).toEqual(['PUT', 'POST'])
+    expect(writes[0]?.body).toMatchObject({ expectedConfigHash: 'a'.repeat(64) })
     expect(writes[1]?.body).toEqual({ expectedConfigHash: 'b'.repeat(64) })
   })
 

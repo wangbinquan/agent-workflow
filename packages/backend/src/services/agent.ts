@@ -19,10 +19,18 @@ import {
 import { and, eq, inArray, like, notInArray, type SQL } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
-import { agents, mcps, plugins, scheduledTasks, tasks, workflows } from '@/db/schema'
-import { dbTxSync } from '@/db/txSync'
+import {
+  agents,
+  mcps,
+  plugins,
+  resourceGrants,
+  scheduledTasks,
+  tasks,
+  workflows,
+} from '@/db/schema'
+import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { agentsDependingOnIn, validateDependsOn } from './agentDeps'
 import { resolveAgentRefsUsable } from './agentRefs'
 import {
@@ -34,6 +42,7 @@ import {
 import type { Actor } from '@/auth/actor'
 import { getRuntime } from './runtimeRegistry'
 import { isAgentLaunching } from './agentLaunchReservation'
+import { isOwnerNameUniqueViolation, ownerScopedNameWhere } from './ownerScopedName'
 
 type AgentRow = typeof agents.$inferSelect
 
@@ -78,8 +87,13 @@ export async function createAgent(
   input: CreateAgent,
   opts?: { ownerUserId?: string; builtin?: boolean; actor?: Actor | null; id?: string },
 ): Promise<Agent> {
-  const existing = await getAgent(db, input.name)
-  if (existing !== null) {
+  const ownerUserId = opts?.ownerUserId ?? null
+  const existing = await db
+    .select({ id: agents.id })
+    .from(agents)
+    .where(ownerScopedNameWhere(agents.ownerUserId, agents.name, ownerUserId, input.name))
+    .limit(1)
+  if (existing.length > 0) {
     throw new ConflictError('agent-name-in-use', `agent '${input.name}' already exists`)
   }
 
@@ -145,37 +159,44 @@ export async function createAgent(
   if (input.outputWrapperPortNames !== undefined) {
     fmExtra.outputWrapperPortNames = input.outputWrapperPortNames
   }
-  await db.insert(agents).values({
-    id,
-    name: input.name,
-    description: input.description,
-    outputs: JSON.stringify(input.outputs),
-    // RFC-166: declarative input ports (own column, symmetrical to outputs).
-    // Normalize through the schema on write so the column is canonical (kind
-    // default applied, unknown keys stripped) even if a service-layer caller
-    // bypassed CreateAgentSchema's zod parse.
-    inputs: serializeInputs(input.inputs),
-    syncOutputsOnIterate: input.syncOutputsOnIterate,
-    runtime: input.runtime ?? null, // RFC-111
-    permission: JSON.stringify(input.permission),
-    // RFC-223 (PR-1): resolved id refs / typed skill refs (already deduped).
-    skills: serializeSkillRefs(skillRefs),
-    dependsOn: JSON.stringify(dependsOnIds),
-    mcp: JSON.stringify(mcpIds),
-    // RFC-031: plugin id array; T6 enforces existence + enabled at save
-    // time, T7 unions across the dependsOn closure at runner injection time.
-    plugins: JSON.stringify(pluginIds),
-    frontmatterExtra: JSON.stringify(fmExtra),
-    bodyMd: input.bodyMd,
-    // RFC-099: creator becomes owner; new resources default to 'public' (D18).
-    ownerUserId: opts?.ownerUserId ?? null,
-    visibility: 'public',
-    // RFC-104: built-in marker — only seedFusionResources passes builtin:true;
-    // never set via any HTTP path (CreateAgentSchema omits it).
-    builtin: opts?.builtin ?? false,
-    createdAt: now,
-    updatedAt: now,
-  })
+  try {
+    await db.insert(agents).values({
+      id,
+      name: input.name,
+      description: input.description,
+      outputs: JSON.stringify(input.outputs),
+      // RFC-166: declarative input ports (own column, symmetrical to outputs).
+      // Normalize through the schema on write so the column is canonical (kind
+      // default applied, unknown keys stripped) even if a service-layer caller
+      // bypassed CreateAgentSchema's zod parse.
+      inputs: serializeInputs(input.inputs),
+      syncOutputsOnIterate: input.syncOutputsOnIterate,
+      runtime: input.runtime ?? null, // RFC-111
+      permission: JSON.stringify(input.permission),
+      // RFC-223 (PR-1): resolved id refs / typed skill refs (already deduped).
+      skills: serializeSkillRefs(skillRefs),
+      dependsOn: JSON.stringify(dependsOnIds),
+      mcp: JSON.stringify(mcpIds),
+      // RFC-031: plugin id array; T6 enforces existence + enabled at save
+      // time, T7 unions across the dependsOn closure at runner injection time.
+      plugins: JSON.stringify(pluginIds),
+      frontmatterExtra: JSON.stringify(fmExtra),
+      bodyMd: input.bodyMd,
+      // RFC-099: creator becomes owner; new resources default to 'public' (D18).
+      ownerUserId,
+      visibility: 'public',
+      // RFC-104: built-in marker — only seedFusionResources passes builtin:true;
+      // never set via any HTTP path (CreateAgentSchema omits it).
+      builtin: opts?.builtin ?? false,
+      createdAt: now,
+      updatedAt: now,
+    })
+  } catch (error) {
+    if (isOwnerNameUniqueViolation(error, 'agents', 'agents_owner_name_unique')) {
+      throw new ConflictError('agent-name-in-use', `agent '${input.name}' already exists`)
+    }
+    throw error
+  }
 
   const created = await getAgentById(db, id)
   if (created === null) throw new Error('agent disappeared right after insert')
@@ -187,6 +208,7 @@ export async function updateAgent(
   id: string,
   patch: UpdateAgent,
   actor?: Actor | null,
+  fence?: { expectedUpdatedAt: number; expectedAclRevision: number },
 ): Promise<Agent> {
   const existing = await getAgentById(db, id)
   if (existing === null) {
@@ -240,7 +262,7 @@ export async function updateAgent(
     await validateRuntimeReference(db, patch.runtime, existing.runtime)
   }
 
-  const set: Partial<typeof agents.$inferInsert> = { updatedAt: Date.now() }
+  const set: Partial<typeof agents.$inferInsert> = {}
   if (patch.description !== undefined) set.description = patch.description
   if (patch.outputs !== undefined) set.outputs = JSON.stringify(patch.outputs)
   if (patch.inputs !== undefined) set.inputs = serializeInputs(patch.inputs) // RFC-166
@@ -317,13 +339,38 @@ export async function updateAgent(
   }
   if (patch.bodyMd !== undefined) set.bodyMd = patch.bodyMd
 
-  await db.update(agents).set(set).where(eq(agents.id, id))
+  if (fence === undefined || actor === undefined || actor === null) {
+    set.updatedAt = Math.max(Date.now(), existing.updatedAt + 1)
+    await db.update(agents).set(set).where(eq(agents.id, id))
+  } else {
+    dbTxSync(db, (tx) => {
+      const current = requireAgentMutationRevision(tx, id, actor, fence)
+      set.updatedAt = Math.max(Date.now(), current.updatedAt + 1)
+      const result = tx
+        .update(agents)
+        .set(set)
+        .where(
+          and(
+            eq(agents.id, id),
+            eq(agents.updatedAt, fence.expectedUpdatedAt),
+            eq(agents.aclRevision, fence.expectedAclRevision),
+          ),
+        )
+        .run()
+      if (changesOf(result) !== 1) throw staleAgentError(id)
+    })
+  }
   const updated = await getAgentById(db, id)
   if (updated === null) throw new Error('agent disappeared after update')
   return updated
 }
 
-export async function deleteAgent(db: DbClient, id: string, actor: Actor): Promise<void> {
+export async function deleteAgent(
+  db: DbClient,
+  id: string,
+  actor: Actor,
+  fence?: { expectedUpdatedAt: number; expectedAclRevision: number },
+): Promise<void> {
   const existing = await getAgentById(db, id)
   if (existing === null) {
     throw new NotFoundError('agent-not-found', 'agent not found')
@@ -344,9 +391,13 @@ export async function deleteAgent(db: DbClient, id: string, actor: Actor): Promi
   dbTxSync(db, (tx) => {
     // Canonical-id fence: a rename cannot retarget this operation. A concurrent
     // delete is reported as the same non-enumerating 404 as an absent id.
-    const fenceRow = tx.select({ id: agents.id }).from(agents).where(eq(agents.id, id)).get()
-    if (fenceRow === undefined) {
-      throw new NotFoundError('agent-not-found', 'agent not found')
+    if (fence === undefined) {
+      const fenceRow = tx.select({ id: agents.id }).from(agents).where(eq(agents.id, id)).get()
+      if (fenceRow === undefined) {
+        throw new NotFoundError('agent-not-found', 'agent not found')
+      }
+    } else {
+      requireAgentMutationRevision(tx, id, actor, fence)
     }
 
     // RFC-175 (§2e): refuse while a single-agent launch holds this agent's id.
@@ -468,36 +519,80 @@ export async function deleteAgent(db: DbClient, id: string, actor: Actor): Promi
   })
 }
 
-export async function renameAgent(db: DbClient, id: string, input: RenameAgent): Promise<Agent> {
+export async function renameAgent(
+  db: DbClient,
+  id: string,
+  input: RenameAgent,
+  opts?: {
+    actor: Actor
+    expectedUpdatedAt: number
+    expectedAclRevision: number
+  },
+): Promise<Agent> {
   const existing = await getAgentById(db, id)
   if (existing === null) {
     throw new NotFoundError('agent-not-found', 'agent not found')
   }
-  if (input.newName === existing.name) return existing
+  if (input.newName === existing.name) {
+    if (opts !== undefined) {
+      dbTxSync(db, (tx) => {
+        requireAgentMutationRevision(tx, id, opts.actor, opts)
+      })
+    }
+    return existing
+  }
 
   // Every live/frozen reference is id-canonical, so rename changes display
   // metadata only. It must not be blocked by references that continue to point
   // at this exact row.
-  dbTxSync(db, (tx) => {
-    // Canonical-id fence: the row selected by the URL cannot be retargeted by
-    // a concurrent rename.
-    const fenceRow = tx.select({ id: agents.id }).from(agents).where(eq(agents.id, id)).get()
-    if (fenceRow === undefined) throw new NotFoundError('agent-not-found', 'agent not found')
+  try {
+    dbTxSync(db, (tx) => {
+      // Canonical-id fence: the row selected by the URL cannot be retargeted by
+      // a concurrent rename.
+      const current =
+        opts === undefined
+          ? tx.select().from(agents).where(eq(agents.id, id)).get()
+          : requireAgentMutationRevision(tx, id, opts.actor, opts)
+      if (current === undefined) throw new NotFoundError('agent-not-found', 'agent not found')
 
-    const collision = tx
-      .select({ name: agents.name })
-      .from(agents)
-      .where(eq(agents.name, input.newName))
-      .get()
-    if (collision !== undefined) {
+      const collision = tx
+        .select({ id: agents.id })
+        .from(agents)
+        .where(
+          ownerScopedNameWhere(
+            agents.ownerUserId,
+            agents.name,
+            current.ownerUserId,
+            input.newName,
+            { column: agents.id, id },
+          ),
+        )
+        .get()
+      if (collision !== undefined) {
+        throw new ConflictError('agent-name-in-use', `agent '${input.newName}' already exists`)
+      }
+
+      const result = tx
+        .update(agents)
+        .set({ name: input.newName, updatedAt: Math.max(Date.now(), current.updatedAt + 1) })
+        .where(
+          opts === undefined
+            ? eq(agents.id, id)
+            : and(
+                eq(agents.id, id),
+                eq(agents.updatedAt, opts.expectedUpdatedAt),
+                eq(agents.aclRevision, opts.expectedAclRevision),
+              ),
+        )
+        .run()
+      if (changesOf(result) !== 1) throw staleAgentError(id)
+    })
+  } catch (error) {
+    if (isOwnerNameUniqueViolation(error, 'agents', 'agents_owner_name_unique')) {
       throw new ConflictError('agent-name-in-use', `agent '${input.newName}' already exists`)
     }
-
-    tx.update(agents)
-      .set({ name: input.newName, updatedAt: Date.now() })
-      .where(eq(agents.id, id))
-      .run()
-  })
+    throw error
+  }
 
   const renamed = await getAgentById(db, id)
   if (renamed === null) throw new Error('agent disappeared after rename')
@@ -527,6 +622,55 @@ function scheduledRowsReferencingAgent(
     }
   }
   return out
+}
+
+function requireAgentMutationRevision(
+  tx: DbTxSync,
+  id: string,
+  actor: Actor,
+  expected: { expectedUpdatedAt: number; expectedAclRevision: number },
+): AgentRow {
+  const current = tx.select().from(agents).where(eq(agents.id, id)).get()
+  if (current === undefined) {
+    throw new NotFoundError('agent-not-found', 'agent not found')
+  }
+
+  const isAdmin = isResourceAdminActor(actor)
+  const isOwner = current.ownerUserId !== null && current.ownerUserId === actor.user.id
+  let visible = isAdmin || isOwner || current.visibility === 'public'
+  if (!visible) {
+    visible =
+      tx
+        .select({ resourceId: resourceGrants.resourceId })
+        .from(resourceGrants)
+        .where(
+          and(
+            eq(resourceGrants.resourceType, 'agent'),
+            eq(resourceGrants.resourceId, current.id),
+            eq(resourceGrants.userId, actor.user.id),
+          ),
+        )
+        .get() !== undefined
+  }
+  if (!visible) throw new NotFoundError('agent-not-found', 'agent not found')
+  if (!isAdmin && !isOwner) {
+    throw new ForbiddenError('forbidden', 'only the agent owner or a resource admin can modify it')
+  }
+  if (
+    current.updatedAt !== expected.expectedUpdatedAt ||
+    current.aclRevision !== expected.expectedAclRevision
+  ) {
+    throw staleAgentError(id)
+  }
+  return current
+}
+
+function changesOf(result: unknown): number {
+  return (result as { changes?: number }).changes ?? 0
+}
+
+function staleAgentError(id: string): ConflictError {
+  return new ConflictError('resource-operation-stale', `agent '${id}' changed; reload and retry`)
 }
 
 /** Pure core of the workflow-reference check — RFC-165 (F17-r3): the
@@ -793,6 +937,7 @@ function rowToAgent(row: AgentRow): Agent {
     // RFC-099 ACL projection — routes filter on these.
     ownerUserId: row.ownerUserId,
     visibility: row.visibility,
+    aclRevision: row.aclRevision,
     // RFC-104 built-in marker (read-only response field).
     builtin: row.builtin,
     schemaVersion: row.schemaVersion,

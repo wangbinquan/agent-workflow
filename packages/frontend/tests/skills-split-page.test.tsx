@@ -6,7 +6,7 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { RouterProvider, createMemoryHistory, createRouter } from '@tanstack/react-router'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { Route as RootRoute } from '../src/routes/__root'
@@ -34,10 +34,12 @@ interface SkillRow {
   updatedAt: number
   visibility: 'public' | 'private'
   ownerUserId: string | null
+  aclRevision: number
 }
 
 let skills: SkillRow[]
 let bodyByName: Record<string, string>
+let deleteBodies: Array<Record<string, unknown>>
 
 function makeSkill(name: string, description = ''): SkillRow {
   return {
@@ -52,6 +54,7 @@ function makeSkill(name: string, description = ''): SkillRow {
     updatedAt: 0,
     visibility: 'public',
     ownerUserId: null,
+    aclRevision: 3,
   }
 }
 
@@ -79,6 +82,11 @@ function installFetch(
         const name = decodeURIComponent(detailMatch[1]!)
         const s = skills.find((x) => x.name === name)
         if (method === 'GET') return s ? json(s) : json({ error: 'nf' }, 404)
+        if (method === 'DELETE') {
+          deleteBodies.push((body ?? {}) as Record<string, unknown>)
+          skills = skills.filter((skill) => skill.name !== name)
+          return new Response(null, { status: 204 })
+        }
         if (method === 'PUT') {
           const i = skills.findIndex((x) => x.name === name)
           skills[i] = { ...skills[i]!, ...(body as object) }
@@ -178,6 +186,7 @@ beforeEach(() => {
   setToken('tok')
   skills = [makeSkill('sk1', 'first skill')]
   bodyByName = { sk1: 'orig body' }
+  deleteBodies = []
   installFetch()
 })
 afterEach(async () => {
@@ -331,6 +340,26 @@ describe('/skills split page', () => {
     await waitFor(() =>
       expect(screen.getByText(/SKILL\.md is edited in the Edit tab/)).toBeTruthy(),
     )
+  })
+
+  test('delete submits the captured composite token and ACL revision', async () => {
+    const router = renderSkills('/skills/sk1')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'sk1' }))
+    fireEvent.click(screen.getByTestId('detail-delete-button'))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByTestId('confirm-input'), { target: { value: 'sk1' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: /^Delete$/ }))
+
+    await waitFor(() =>
+      expect(deleteBodies).toEqual([
+        {
+          confirm: 'sk1',
+          expectedToken: 't-sk1',
+          expectedAclRevision: 3,
+        },
+      ]),
+    )
+    await waitFor(() => expect(router.state.location.pathname).toBe('/skills'))
   })
 
   test('the new view offers the managed + ZIP creation modes', async () => {

@@ -27,6 +27,8 @@ export const SkillSchema = z.object({
   ownerUserId: z.string().nullable().optional(),
   /** RFC-099 ACL — 'public' = every user; 'private' = owner + grants. Absent ⇒ 'public'. */
   visibility: ResourceVisibilitySchema.optional(),
+  /** Monotonic ACL generation; participates in ordinary-mutation OCC fences. */
+  aclRevision: z.number().int().nonnegative().optional(),
   sourceKind: SkillSourceKindSchema,
   managedPath: z.string().optional(),
   schemaVersion: z.number().int(),
@@ -83,6 +85,16 @@ export const CombinedSaveSkillSchema = UpdateSkillContentSchema.extend({
   expectedToken: z.string().min(1),
 })
 export type CombinedSaveSkill = z.infer<typeof CombinedSaveSkillSchema>
+
+/** DELETE /api/skills/:id — type-to-confirm plus exact composite revision. */
+export const DeleteSkillSchema = z
+  .object({
+    confirm: z.string().optional(),
+    expectedToken: z.string().min(1),
+    expectedAclRevision: z.number().int().nonnegative(),
+  })
+  .strict()
+export type DeleteSkill = z.infer<typeof DeleteSkillSchema>
 
 /** One node in the file-tree response. */
 export const FileNodeSchema = z.object({

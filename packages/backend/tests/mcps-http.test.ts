@@ -3,9 +3,11 @@
 // bodies (referencedBy on still-referenced delete) and auth (401 without token).
 
 import { beforeEach, describe, expect, test } from 'bun:test'
+import { eq } from 'drizzle-orm'
 import { resolve } from 'node:path'
 import type { Hono } from 'hono'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { mcps } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createApp } from '../src/server'
 
@@ -43,13 +45,16 @@ function localPayload(name: string): Record<string, unknown> {
   }
 }
 
-async function createMcpHttp(app: Hono, name: string): Promise<{ id: string; name: string }> {
+async function createMcpHttp(
+  app: Hono,
+  name: string,
+): Promise<{ id: string; name: string; operationConfigHash: string }> {
   const res = await req(app, '/api/mcps', {
     method: 'POST',
     body: JSON.stringify(localPayload(name)),
   })
   expect(res.status).toBe(201)
-  return (await res.json()) as { id: string; name: string }
+  return (await res.json()) as { id: string; name: string; operationConfigHash: string }
 }
 
 describe('POST /api/mcps', () => {
@@ -142,15 +147,19 @@ describe('GET /api/mcps and /api/mcps/:id', () => {
 
 describe('PUT /api/mcps/:id', () => {
   let app: Hono
+  let db: DbClient
   beforeEach(() => {
-    ;({ app } = buildHarness())
+    ;({ app, db } = buildHarness())
   })
 
   test('happy path patch description', async () => {
     const mcp = await createMcpHttp(app, 'm')
     const res = await req(app, `/api/mcps/${mcp.id}`, {
       method: 'PUT',
-      body: JSON.stringify({ description: 'updated' }),
+      body: JSON.stringify({
+        description: 'updated',
+        expectedConfigHash: mcp.operationConfigHash,
+      }),
     })
     expect(res.status).toBe(200)
     expect(((await res.json()) as Record<string, unknown>).description).toBe('updated')
@@ -160,7 +169,11 @@ describe('PUT /api/mcps/:id', () => {
     const mcp = await createMcpHttp(app, 'm')
     const res = await req(app, `/api/mcps/${mcp.id}`, {
       method: 'PUT',
-      body: JSON.stringify({ type: 'remote', config: { url: 'https://x.io' } }),
+      body: JSON.stringify({
+        type: 'remote',
+        config: { url: 'https://x.io' },
+        expectedConfigHash: mcp.operationConfigHash,
+      }),
     })
     expect(res.status).toBe(422)
     const body = (await res.json()) as Record<string, unknown>
@@ -170,9 +183,32 @@ describe('PUT /api/mcps/:id', () => {
   test('PUT unknown → 404', async () => {
     const res = await req(app, '/api/mcps/00000000000000000000000000', {
       method: 'PUT',
-      body: JSON.stringify({ description: 'x' }),
+      body: JSON.stringify({ description: 'x', expectedConfigHash: '0'.repeat(64) }),
     })
     expect(res.status).toBe(404)
+  })
+
+  test('ACL owner transfer invalidates a captured config-hash fence', async () => {
+    const mcp = await createMcpHttp(app, 'owner-transfer')
+    await db
+      .update(mcps)
+      .set({ ownerUserId: 'other-owner', aclRevision: 1 })
+      .where(eq(mcps.id, mcp.id))
+
+    const stale = await req(app, `/api/mcps/${mcp.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        description: 'must not publish',
+        expectedConfigHash: mcp.operationConfigHash,
+      }),
+    })
+    expect(stale.status).toBe(409)
+    expect(((await stale.json()) as { code: string }).code).toBe('resource-operation-stale')
+
+    const current = (await (await req(app, `/api/mcps/${mcp.id}`)).json()) as {
+      description: string
+    }
+    expect(current.description).toBe('')
   })
 })
 
@@ -188,9 +224,19 @@ describe('DELETE /api/mcps/:id', () => {
     // RFC-222 (D5): DELETE requires a { confirm } body echoing the mcp name.
     const res = await req(app, `/api/mcps/${mcp.id}`, {
       method: 'DELETE',
-      body: JSON.stringify({ confirm: 'm' }),
+      body: JSON.stringify({ confirm: 'm', expectedConfigHash: mcp.operationConfigHash }),
     })
     expect(res.status).toBe(204)
+  })
+
+  test('requires the mutation config-hash fence', async () => {
+    const mcp = await createMcpHttp(app, 'delete-without-fence')
+    const res = await req(app, `/api/mcps/${mcp.id}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ confirm: 'delete-without-fence' }),
+    })
+    expect(res.status).toBe(422)
+    expect(((await res.json()) as { code: string }).code).toBe('mcp-delete-invalid')
   })
 
   test('with references → 409 + principal-aware visible list', async () => {
@@ -211,7 +257,7 @@ describe('DELETE /api/mcps/:id', () => {
     // RFC-222 (D5, N-5): confirm passes first, then the in-use refusal fires.
     const res = await req(app, `/api/mcps/${mcp.id}`, {
       method: 'DELETE',
-      body: JSON.stringify({ confirm: 'm' }),
+      body: JSON.stringify({ confirm: 'm', expectedConfigHash: mcp.operationConfigHash }),
     })
     expect(res.status).toBe(409)
     const body = (await res.json()) as Record<string, unknown>
@@ -240,7 +286,10 @@ describe('POST /api/mcps/:id/rename', () => {
     const mcp = await createMcpHttp(app, 'old')
     const res = await req(app, `/api/mcps/${mcp.id}/rename`, {
       method: 'POST',
-      body: JSON.stringify({ newName: 'new' }),
+      body: JSON.stringify({
+        newName: 'new',
+        expectedConfigHash: mcp.operationConfigHash,
+      }),
     })
     expect(res.status).toBe(200)
     expect(((await res.json()) as Record<string, unknown>).name).toBe('new')
@@ -251,7 +300,10 @@ describe('POST /api/mcps/:id/rename', () => {
     await req(app, '/api/mcps', { method: 'POST', body: JSON.stringify(localPayload('b')) })
     const res = await req(app, `/api/mcps/${a.id}/rename`, {
       method: 'POST',
-      body: JSON.stringify({ newName: 'b' }),
+      body: JSON.stringify({
+        newName: 'b',
+        expectedConfigHash: a.operationConfigHash,
+      }),
     })
     expect(res.status).toBe(409)
   })

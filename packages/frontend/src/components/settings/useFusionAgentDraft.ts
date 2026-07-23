@@ -74,6 +74,8 @@ interface FusionAgentSaveAttempt {
   readonly runtime: string | null
   readonly resourceIdentity: string
   readonly generation: number
+  readonly expectedUpdatedAt: number
+  readonly expectedAclRevision: number
   phase: SaveAttemptPhase
   options?: FusionAgentSaveOptions
   notified: boolean
@@ -583,9 +585,14 @@ export function useFusionAgentDraft({
         )
       }
       attempt.phase = 'dispatched'
-      // RFC-104 requires the body to remain EXACTLY this runtime-only patch.
+      // RFC-104 allows only the runtime content field; RFC-223 adds the exact
+      // ordinary-mutation revision tuple without widening editable content.
       const runtime = attempt.runtime
-      return api.put<Agent>(`/api/agents/${SKILL_MERGER_AGENT_ID}`, { runtime })
+      return api.put<Agent>(`/api/agents/${SKILL_MERGER_AGENT_ID}`, {
+        runtime,
+        expectedUpdatedAt: attempt.expectedUpdatedAt,
+        expectedAclRevision: attempt.expectedAclRevision,
+      })
     },
     onSuccess: (agent, attempt) => {
       const target = sessionsRef.current.get(attempt.resourceIdentity)
@@ -675,6 +682,8 @@ export function useFusionAgentDraft({
     ) {
       return null
     }
+    const revision = session.acceptedReceipt?.agent
+    if (revision === undefined) return null
 
     const attempt: FusionAgentSaveAttempt = {
       requestId: `settings-fusion-${Date.now()}-${current.usedRequestIds.length + 1}`,
@@ -682,6 +691,8 @@ export function useFusionAgentDraft({
       runtime: current.draft,
       resourceIdentity,
       generation,
+      expectedUpdatedAt: revision.updatedAt,
+      expectedAclRevision: revision.aclRevision ?? 0,
       phase: 'prepared',
       notified: false,
     }

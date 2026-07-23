@@ -7,13 +7,17 @@ import {
   type WorkgroupDraftSnapshot,
 } from '@agent-workflow/shared'
 import { describe, expect, test } from 'bun:test'
+import { eq } from 'drizzle-orm'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
+import { buildActor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { workgroups } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import {
   createWorkgroup,
   getWorkgroupById,
+  renameWorkgroup,
   saveWorkgroup,
   workgroupDraftSnapshotOf,
   workgroupSnapshotHashOf,
@@ -23,6 +27,16 @@ import { DomainError } from '../src/util/errors'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SYSTEM: WorkgroupWritePrincipal = { kind: 'system', reason: 'rfc225-test' }
+
+function actorPrincipal(id: string): WorkgroupWritePrincipal {
+  return {
+    kind: 'actor',
+    actor: buildActor({
+      user: { id, username: id, displayName: id, role: 'user', status: 'active' },
+      source: 'session',
+    }),
+  }
+}
 
 async function createFixture(db: DbClient, name = 'revision-team'): Promise<WorkgroupDetail> {
   const agent = await createAgent(db, {
@@ -60,6 +74,24 @@ async function createFixture(db: DbClient, name = 'revision-team'): Promise<Work
         },
       ],
     }),
+  )
+}
+
+async function createEmptyFixture(
+  db: DbClient,
+  name: string,
+  ownerUserId: string,
+): Promise<WorkgroupDetail> {
+  return createWorkgroup(
+    db,
+    CreateWorkgroupSchema.parse({
+      name,
+      description: '',
+      instructions: '',
+      mode: 'free_collab',
+      members: [],
+    }),
+    { ownerUserId },
   )
 }
 
@@ -160,5 +192,97 @@ describe('RFC-225 workgroup revision fencing', () => {
     expect(receipt.outcome).toBe('already-current')
     expect(receipt.revision.version).toBe(1)
     expect((await getWorkgroupById(db, group.id))?.version).toBe(1)
+  })
+
+  test('RFC-223 scopes create and rename conflicts to the owner bucket', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const source = await createEmptyFixture(db, 'source', 'owner-a')
+    await createEmptyFixture(db, 'shared', 'owner-b')
+
+    const renamed = await renameWorkgroup(
+      db,
+      source.id,
+      {
+        newName: 'shared',
+        expectedVersion: source.version,
+        clientMutationId: ulid(),
+      },
+      SYSTEM,
+    )
+    expect(renamed.workgroup.name).toBe('shared')
+
+    await createEmptyFixture(db, 'taken', 'owner-a')
+    await expect(
+      renameWorkgroup(
+        db,
+        source.id,
+        {
+          newName: 'taken',
+          expectedVersion: renamed.revision.version,
+          clientMutationId: ulid(),
+        },
+        SYSTEM,
+      ),
+    ).rejects.toMatchObject({ code: 'workgroup-name-in-use' })
+    await expect(createEmptyFixture(db, 'taken', 'owner-a')).rejects.toMatchObject({
+      code: 'workgroup-name-in-use',
+    })
+
+    await expect(createEmptyFixture(db, 'shared', 'owner-c')).resolves.toMatchObject({
+      name: 'shared',
+      ownerUserId: 'owner-c',
+    })
+    await expect(
+      renameWorkgroup(
+        db,
+        source.id,
+        {
+          newName: 'shared',
+          expectedVersion: renamed.revision.version,
+          clientMutationId: ulid(),
+        },
+        SYSTEM,
+      ),
+    ).resolves.toMatchObject({
+      outcome: 'already-current',
+      workgroup: { id: source.id, name: 'shared' },
+    })
+  })
+
+  test('RFC-223 maps a same-owner create race to one stable 409 conflict', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const results = await Promise.allSettled([
+      createEmptyFixture(db, 'raced', 'owner-a'),
+      createEmptyFixture(db, 'raced', 'owner-a'),
+    ])
+
+    expect(results.map((result) => result.status).sort()).toEqual(['fulfilled', 'rejected'])
+    const rejected = results.find(
+      (result): result is PromiseRejectedResult => result.status === 'rejected',
+    )
+    expect(rejected?.reason).toMatchObject({ code: 'workgroup-name-in-use', status: 409 })
+  })
+
+  test('RFC-223 revalidates the current owner before an ordinary save', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const group = await createEmptyFixture(db, 'owner-fence', 'owner-a')
+    await db.update(workgroups).set({ ownerUserId: 'owner-b' }).where(eq(workgroups.id, group.id))
+
+    await expect(
+      saveWorkgroup(
+        db,
+        group.id,
+        {
+          expectedVersion: group.version,
+          clientMutationId: ulid(),
+          snapshot: {
+            ...workgroupDraftSnapshotOf(group),
+            description: 'former owner write',
+          },
+        },
+        actorPrincipal('owner-a'),
+      ),
+    ).rejects.toMatchObject({ code: 'forbidden', status: 403 })
+    expect((await getWorkgroupById(db, group.id))?.description).toBe('')
   })
 })

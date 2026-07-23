@@ -25,6 +25,8 @@ function merger(runtime: string | null): Agent {
     name: 'aw-skill-merger',
     runtime,
     builtin: true,
+    updatedAt: 100,
+    aclRevision: 3,
   } as Agent
 }
 
@@ -108,6 +110,8 @@ describe('useFusionAgentDraft — route-owned section lifetime', () => {
     expect(put).toHaveBeenCalledTimes(1)
     expect(put).toHaveBeenCalledWith(`/api/agents/${SKILL_MERGER_AGENT_ID}`, {
       runtime: 'fast-oc',
+      expectedUpdatedAt: 100,
+      expectedAclRevision: 3,
     })
     expect(put.mock.calls.every(([path]) => !String(path).includes('/api/config'))).toBe(true)
     expect(client.getQueryData(getFusionAgentQueryKey())).toMatchObject({
@@ -164,6 +168,8 @@ describe('useFusionAgentDraft — route-owned section lifetime', () => {
     await waitFor(() => expect(put).toHaveBeenCalledTimes(1))
     expect(put).toHaveBeenCalledWith(`/api/agents/${SKILL_MERGER_AGENT_ID}`, {
       runtime: 'captured-runtime',
+      expectedUpdatedAt: 100,
+      expectedAclRevision: 3,
     })
     act(() => pending.resolve(merger('captured-runtime')))
 
