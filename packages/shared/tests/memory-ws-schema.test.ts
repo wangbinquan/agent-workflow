@@ -17,6 +17,7 @@ describe('MemoryWsMessageSchema', () => {
         approvedAt: null,
         version: 1,
         distillAction: 'new',
+        fusedIntoSkillId: null,
       },
     })
     expect(ok.type).toBe('memory.candidate.created')

@@ -38,7 +38,7 @@ function sqliteOf(db: DbClient): Database {
 }
 
 /** A healthy, consolidated (no -wal) DB file with several content pages. */
-async function seedManyPages(dbPath: string): Promise<void> {
+async function seedManyPages(dbPath: string): Promise<number> {
   const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
   for (let i = 0; i < 120; i++) {
     await db.insert(workflows).values({
@@ -54,11 +54,32 @@ async function seedManyPages(dbPath: string): Promise<void> {
     })
   }
   const s = sqliteOf(db)
+  const { rootPage } = s
+    .query("SELECT rootpage AS rootPage FROM sqlite_schema WHERE name = 'workflows'")
+    .get() as { rootPage: number }
   s.exec('PRAGMA wal_checkpoint(TRUNCATE);')
   s.close()
   // Keep the (now-empty) -wal/-shm sidecars: a checkpoint folds all frames into
   // db.sqlite, so corrupting db.sqlite is the sole source of truth, and openDb
   // reopens the WAL DB exactly as the daemon does on boot.
+  return rootPage
+}
+
+/** Make a live table b-tree structurally invalid without touching the DB header. */
+function corruptBtreeRootPage(dbPath: string, rootPage: number) {
+  const bytes = readFileSync(dbPath)
+  const encodedPageSize = bytes.readUInt16BE(16)
+  const pageSize = encodedPageSize === 1 ? 65_536 : encodedPageSize
+  const pageOffset = (rootPage - 1) * pageSize
+  if (rootPage <= 1 || pageOffset >= bytes.length) {
+    throw new Error(`invalid workflows root page ${rootPage}`)
+  }
+  // Valid b-tree page types are 0x02, 0x05, 0x0a, and 0x0d. Invalidating the
+  // live workflows root is deterministic; flipping an arbitrary midpoint may
+  // only alter payload/free space, which quick_check is not required to flag.
+  bytes[pageOffset] = 0xff
+  writeFileSync(dbPath, bytes)
+  return bytes
 }
 
 describe('RFC-213 boot integrity gate (fail-closed)', () => {
@@ -73,13 +94,8 @@ describe('RFC-213 boot integrity gate (fail-closed)', () => {
 
   test('a header-intact, page-corrupt DB throws DbCorruptionError at the gate', async () => {
     const dbPath = join(tmp(), 'db.sqlite')
-    await seedManyPages(dbPath)
-    // Corrupt a deep b-tree region (well past the 100-byte header), keeping the
-    // header valid so the open + journal_mode PRAGMA succeed and quick_check runs.
-    const bytes = readFileSync(dbPath)
-    const start = Math.max(4096, Math.floor(bytes.length / 2))
-    for (let i = start; i < Math.min(start + 512, bytes.length); i++) bytes[i] = bytes[i]! ^ 0xff
-    writeFileSync(dbPath, bytes)
+    const rootPage = await seedManyPages(dbPath)
+    corruptBtreeRootPage(dbPath, rootPage)
 
     // Sanity: the fixture really is page-corrupt (reaches quick_check, not open).
     expect(quickCheckDbFile(dbPath).ok).toBe(false)
@@ -95,11 +111,8 @@ describe('RFC-213 boot integrity gate (fail-closed)', () => {
 
   test('skipIntegrityCheck bypasses the gate (last-resort escape hatch)', async () => {
     const dbPath = join(tmp(), 'db.sqlite')
-    await seedManyPages(dbPath)
-    const bytes = readFileSync(dbPath)
-    const start = Math.max(4096, Math.floor(bytes.length / 2))
-    for (let i = start; i < Math.min(start + 512, bytes.length); i++) bytes[i] = bytes[i]! ^ 0xff
-    writeFileSync(dbPath, bytes)
+    const rootPage = await seedManyPages(dbPath)
+    corruptBtreeRootPage(dbPath, rootPage)
 
     // With the check skipped AND migrations skipped (which would read corrupt
     // pages), openDb returns without the gate throwing.
@@ -124,16 +137,13 @@ describe('RFC-213 doctor DB-integrity check (AC-10, read-only)', () => {
     const home = tmp()
     process.env.AGENT_WORKFLOW_HOME = home
     const dbPath = join(home, 'db.sqlite')
-    await seedManyPages(dbPath)
+    const rootPage = await seedManyPages(dbPath)
 
     const { checkDbIntegrity } = await import('../src/cli/doctor')
     const healthy = checkDbIntegrity()
     expect(healthy.ok).toBe(true)
 
-    const bytes = readFileSync(dbPath)
-    const start = Math.max(4096, Math.floor(bytes.length / 2))
-    for (let i = start; i < Math.min(start + 512, bytes.length); i++) bytes[i] = bytes[i]! ^ 0xff
-    writeFileSync(dbPath, bytes)
+    const bytes = corruptBtreeRootPage(dbPath, rootPage)
     const corrupt = checkDbIntegrity()
     expect(corrupt.ok).toBe(false)
     expect(corrupt.message).toContain('restore')

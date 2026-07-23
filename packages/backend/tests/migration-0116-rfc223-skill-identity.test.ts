@@ -226,10 +226,9 @@ describe('migration 0116 (RFC-223 PR-5) — frozen 0115 upgrade', () => {
 })
 
 function apply0116WithMigrator(raw: Database, folder: string): void {
-  writeFileSync(
-    join(folder, 'meta', '_journal.json'),
-    readFileSync(join(MIGRATIONS, 'meta', '_journal.json')),
-  )
+  const journal = JSON.parse(readFileSync(join(MIGRATIONS, 'meta', '_journal.json'), 'utf-8'))
+  journal.entries = journal.entries.filter((entry: { idx: number }) => entry.idx <= 115)
+  writeFileSync(join(folder, 'meta', '_journal.json'), JSON.stringify(journal))
   raw.exec('PRAGMA foreign_keys = OFF')
   migrate(drizzle(raw), { migrationsFolder: folder })
   raw.exec('PRAGMA foreign_keys = ON')
