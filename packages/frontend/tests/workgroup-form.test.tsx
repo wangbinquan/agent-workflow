@@ -76,6 +76,7 @@ const STORED: Workgroup = {
   ownerUserId: 'u1',
   visibility: 'public',
   schemaVersion: 1,
+  version: 1,
   createdAt: 1,
   updatedAt: 2,
 }
@@ -108,18 +109,14 @@ describe('buildQuickCreatePayload', () => {
 // ---------------------------------------------------------------------------
 
 describe('buildConfigUpdatePayload', () => {
-  test('carries the draft config, passes stored members + server description through', () => {
-    // 2026-07-13: description left the config draft (it's edited in the rename
-    // dialog). buildConfigUpdatePayload passes the SERVER's description through
-    // unchanged, so a config save can never revert a dialog description edit.
+  test('carries metadata + config and passes stored members through', () => {
     const built = buildConfigUpdatePayload(workgroupToConfigDraft(STORED), STORED)
     expect(built.ok).toBe(true)
     if (!built.ok) return
     expect(built.payload.description).toBe(STORED.description)
     expect(built.payload.leaderDisplayName).toBe('Coder')
     expect(built.payload.maxRounds).toBe(33)
-    // Members pass through sorted by sortOrder — no name key on updates.
-    expect('name' in built.payload).toBe(false)
+    expect(built.payload.name).toBe(STORED.name)
     expect(built.payload.members).toEqual([
       { memberType: 'agent', agentName: 'coder', displayName: 'Coder', roleDesc: 'writes code' },
       { memberType: 'human', userId: 'u1', displayName: 'Alice', roleDesc: 'reviews' },
@@ -147,16 +144,17 @@ describe('buildConfigUpdatePayload', () => {
     expect(off.ok && off.payload.fanOut).toBe(false)
   })
 
-  test('description is sourced from the server row, never the draft (2026-07-13 decouple)', () => {
-    // Editing an unrelated config field still carries the server description
-    // through verbatim — the rename dialog is its only editor now, so the
-    // config PUT can never clobber it.
+  test('description is owned by the same composite draft', () => {
     const group: Workgroup = { ...STORED, description: 'server-owned copy' }
-    const draft = { ...workgroupToConfigDraft(group), instructions: 'edited charter' }
+    const draft = {
+      ...workgroupToConfigDraft(group),
+      description: 'draft description',
+      instructions: 'edited charter',
+    }
     const built = buildConfigUpdatePayload(draft, group)
     expect(built.ok).toBe(true)
     if (!built.ok) return
-    expect(built.payload.description).toBe('server-owned copy')
+    expect(built.payload.description).toBe('draft description')
     expect(built.payload.instructions).toBe('edited charter')
   })
 
@@ -522,6 +520,8 @@ afterEach(() => {
 
 function baseDraft(): WorkgroupConfigDraft {
   return {
+    name: 'review-squad',
+    description: 'audits PRs',
     instructions: '',
     mode: 'leader_worker',
     switches: { shareOutputs: true, directMessages: false, blackboard: false },

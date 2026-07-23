@@ -150,6 +150,46 @@ export const WorkgroupMemberInputSchema = z
   })
 export type WorkgroupMemberInput = z.infer<typeof WorkgroupMemberInputSchema>
 
+/**
+ * RFC-225 — one member inside the versioned editable snapshot.
+ *
+ * `agentId` is the canonical identity introduced by RFC-223. `agentName`
+ * remains only as a display/legacy selector so a pre-0112 dangling member can
+ * still be removed or repaired instead of making the whole workgroup
+ * unreadable. Whenever both are present, writers resolve and authorize by id.
+ */
+export const WorkgroupDraftMemberSchema = z
+  .object({
+    memberType: WorkgroupMemberTypeSchema,
+    agentId: z.string().min(1).optional(),
+    agentName: z.string().min(1).optional(),
+    userId: z.string().min(1).optional(),
+    displayName: WorkgroupMemberDisplayNameSchema,
+    roleDesc: z.string().max(2048).default(''),
+  })
+  .strict()
+  .superRefine((member, ctx) => {
+    if (member.memberType === 'agent') {
+      if (!member.agentId && !member.agentName) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'agent member requires agentId or a legacy agentName',
+        })
+      }
+      if (member.userId) {
+        ctx.addIssue({ code: 'custom', message: 'agent member must not carry userId' })
+      }
+      return
+    }
+    if (!member.userId) {
+      ctx.addIssue({ code: 'custom', message: 'human member requires userId' })
+    }
+    if (member.agentId || member.agentName) {
+      ctx.addIssue({ code: 'custom', message: 'human member must not carry agent identity' })
+    }
+  })
+export type WorkgroupDraftMember = z.infer<typeof WorkgroupDraftMemberSchema>
+
 /** The three visibility switches (design §6.2). free_collab reads as all-on. */
 export const WorkgroupSwitchesSchema = z.object({
   /** Inject peers' finished-assignment result summaries. */
@@ -195,6 +235,8 @@ export const WorkgroupSchema = z.object({
    */
   fanOut: z.boolean().optional(),
   members: z.array(WorkgroupMemberSchema),
+  /** RFC-225 optimistic content revision. */
+  version: z.number().int().positive(),
   /** RFC-099 ACL — owner (users.id or '__system__'); null until first owner write. */
   ownerUserId: z.string().nullable().optional(),
   /** RFC-099 ACL — 'public' = every user; 'private' = owner + grants. Absent ⇒ 'public'. */
@@ -204,6 +246,17 @@ export const WorkgroupSchema = z.object({
   updatedAt: z.number().int(),
 })
 export type Workgroup = z.infer<typeof WorkgroupSchema>
+
+/** RFC-225 canonical 128-bit ULID used to correlate one submitted intent. */
+export const WorkgroupMutationIdSchema = z
+  .string()
+  .length(26)
+  .regex(/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/)
+export type WorkgroupMutationId = z.infer<typeof WorkgroupMutationIdSchema>
+
+/** Lowercase SHA-256 of the domain-separated editable snapshot serialization. */
+export const WorkgroupSnapshotHashSchema = z.string().regex(/^[0-9a-f]{64}$/)
+export type WorkgroupSnapshotHash = z.infer<typeof WorkgroupSnapshotHashSchema>
 
 const workgroupConfigFields = {
   description: z.string().max(4096).default(''),
@@ -250,7 +303,7 @@ function validateGroupShape(
   g: {
     mode: WorkgroupMode
     leaderDisplayName?: string | undefined
-    members: WorkgroupMemberInput[]
+    members: ReadonlyArray<{ memberType: WorkgroupMemberType; displayName: string }>
   },
   ctx: z.RefinementCtx,
 ): void {
@@ -289,12 +342,74 @@ export const CreateWorkgroupSchema = z
 export type CreateWorkgroup = z.infer<typeof CreateWorkgroupSchema>
 
 /**
- * PUT /api/workgroups/:name body — full document replace (members full-replace,
- * ids regenerated; launched tasks are unaffected — they snapshot the config at
- * launch time). Name changes go through /rename.
+ * RFC-225 — the complete user-editable unit. Saves never accept partial
+ * patches. Member database ids and every ACL/server-owned field are excluded.
  */
-export const UpdateWorkgroupSchema = z.object(workgroupConfigFields).superRefine(validateGroupShape)
+export const WorkgroupDraftSnapshotSchema = z
+  .object({
+    name: WorkgroupNameSchema,
+    description: z.string().max(4096).default(''),
+    instructions: z.string().max(65536).default(''),
+    mode: WorkgroupModeSchema,
+    leaderDisplayName: WorkgroupMemberDisplayNameSchema.optional(),
+    switches: WorkgroupSwitchesSchema,
+    maxRounds: z.number().int().positive().max(WORKGROUP_MAX_ROUNDS_LIMIT),
+    completionGate: z.boolean(),
+    clarifyBudget: z.number().int().min(0).max(50),
+    fanOut: z.boolean(),
+    members: z.array(WorkgroupDraftMemberSchema).max(64),
+  })
+  .strict()
+  .superRefine(validateGroupShape)
+export type WorkgroupDraftSnapshot = z.infer<typeof WorkgroupDraftSnapshotSchema>
+
+/** Server-owned identity of one exact persisted workgroup revision. */
+export const WorkgroupRevisionSchema = z
+  .object({
+    workgroupId: z.string().min(1),
+    version: z.number().int().positive(),
+    snapshotHash: WorkgroupSnapshotHashSchema,
+    updatedAt: z.number().int(),
+  })
+  .strict()
+export type WorkgroupRevision = z.infer<typeof WorkgroupRevisionSchema>
+
+/** Detail/create response. List rows deliberately need no eager hash. */
+export const WorkgroupDetailSchema = WorkgroupSchema.extend({
+  snapshotHash: WorkgroupSnapshotHashSchema,
+})
+export type WorkgroupDetail = z.infer<typeof WorkgroupDetailSchema>
+
+/** PUT /api/workgroups/:key — version-fenced full editable document. */
+export const UpdateWorkgroupSchema = z
+  .object({
+    expectedVersion: z.number().int().positive(),
+    clientMutationId: WorkgroupMutationIdSchema,
+    snapshot: WorkgroupDraftSnapshotSchema,
+  })
+  .strict()
 export type UpdateWorkgroup = z.infer<typeof UpdateWorkgroupSchema>
+
+export const SaveWorkgroupReceiptSchema = z
+  .object({
+    clientMutationId: WorkgroupMutationIdSchema,
+    requestedBaseVersion: z.number().int().positive(),
+    revision: WorkgroupRevisionSchema,
+    snapshot: WorkgroupDraftSnapshotSchema,
+    workgroup: WorkgroupDetailSchema,
+    outcome: z.enum(['committed', 'already-current']),
+  })
+  .strict()
+export type SaveWorkgroupReceipt = z.infer<typeof SaveWorkgroupReceiptSchema>
+
+export const DeleteWorkgroupSchema = z
+  .object({
+    expectedVersion: z.number().int().positive(),
+    clientMutationId: WorkgroupMutationIdSchema,
+    confirm: z.string().optional(),
+  })
+  .strict()
+export type DeleteWorkgroup = z.infer<typeof DeleteWorkgroupSchema>
 
 /**
  * POST /api/workgroups/:name/rename body. Name + description are the group's
@@ -308,6 +423,8 @@ export type UpdateWorkgroup = z.infer<typeof UpdateWorkgroupSchema>
 export const RenameWorkgroupSchema = z.object({
   newName: WorkgroupNameSchema,
   description: z.string().max(4096).optional(),
+  expectedVersion: z.number().int().positive(),
+  clientMutationId: WorkgroupMutationIdSchema,
 })
 export type RenameWorkgroup = z.infer<typeof RenameWorkgroupSchema>
 
@@ -487,5 +604,10 @@ export const StartWorkgroupTaskSchema = z.object({
    * (§2d overlay-only; scheduled payload schema rejects it).
    */
   expectedWorkgroupId: z.string().optional(),
+  /**
+   * RFC-225: immediate editor handoff fence. The launch service rejects when
+   * the live editable document advanced after ensureSaved() completed.
+   */
+  expectedWorkgroupVersion: z.number().int().positive().optional(),
 })
 export type StartWorkgroupTask = z.infer<typeof StartWorkgroupTaskSchema>

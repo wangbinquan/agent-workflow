@@ -1,5 +1,5 @@
-// RFC-164 PR-1 → RFC-168 — /workgroups {list, detail} route pages + wiring
-// locks.
+// RFC-164 PR-1 → RFC-168 → RFC-225 — /workgroups {list, detail} route
+// pages + autosave wiring locks.
 //
 // Locks:
 //   1. List page: empty state, row rendering (name link / mode chip / leader
@@ -9,15 +9,14 @@
 //      EXACTLY {name, description} (backend defaults the rest), then
 //      navigates to the detail page.
 //   3. Detail page: launch-readiness banner renders per reason
-//      ('no-agent-member' / 'leader-missing') and hides when ready; the config
-//      save PUTs the draft with the CURRENT members AND server description
-//      passed through (description left the config form 2026-07-13);
-//      leaderless lw groups still save (决策 #21); the rename dialog edits
-//      name + description together and POSTs {newName, description} to /rename.
+//      ('no-agent-member' / 'leader-missing') and hides when ready; edits
+//      autosave one version-fenced composite snapshot; leaderless lw groups
+//      remain save-valid (决策 #21); rename + description share that same
+//      autosave path and the route follows a committed rename.
 //   4. Member gallery + context panel (RFC-168): one card per member, leader
 //      badge; selecting a card opens the member editor in the PANEL (no
-//      dialogs) — set-leader / remove / member-save / add-agent flows each
-//      fire a full-document PUT identical to the RFC-164 dialog-era bodies.
+//      dialogs) — set-leader / remove / member edit / add-agent flows each
+//      feed the same full-document autosave controller.
 //      (Panel-specific behaviors — focus, Esc, saved-flash, failure paths —
 //      live in workgroup-studio-panel.test.tsx.)
 //   5. Wiring: router registers list + detail only (no /new route), nav
@@ -26,6 +25,7 @@
 //      editMemberTitle keys).
 
 import { readFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import path, { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -38,7 +38,15 @@ import {
   createRouter,
   Outlet,
 } from '@tanstack/react-router'
-import type { Workgroup } from '@agent-workflow/shared'
+import {
+  serializeWorkgroupEditableSnapshotV1,
+  type SaveWorkgroupReceipt,
+  type UpdateWorkgroup,
+  type Workgroup,
+  type WorkgroupDetail,
+  type WorkgroupDraftSnapshot,
+  type WorkgroupSnapshotHash,
+} from '@agent-workflow/shared'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { zhCN } from '../src/i18n/zh-CN'
 import { enUS } from '../src/i18n/en-US'
@@ -65,8 +73,52 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function wg(name: string, overrides: Partial<Workgroup> = {}): Workgroup {
+function draftOf(group: Workgroup): WorkgroupDraftSnapshot {
+  const ordered = [...group.members].sort((left, right) => left.sortOrder - right.sortOrder)
+  const leader = ordered.find((member) => member.id === group.leaderMemberId)
   return {
+    name: group.name,
+    description: group.description,
+    instructions: group.instructions,
+    mode: group.mode,
+    ...(group.mode === 'leader_worker' && leader !== undefined
+      ? { leaderDisplayName: leader.displayName }
+      : {}),
+    switches: { ...group.switches },
+    maxRounds: group.maxRounds,
+    completionGate: group.completionGate,
+    clarifyBudget: group.clarifyBudget ?? 3,
+    fanOut: group.fanOut ?? false,
+    members: ordered.map((member) =>
+      member.memberType === 'agent'
+        ? {
+            memberType: 'agent' as const,
+            ...(member.agentId
+              ? { agentId: member.agentId }
+              : member.agentName
+                ? { agentName: member.agentName }
+                : {}),
+            displayName: member.displayName,
+            roleDesc: member.roleDesc,
+          }
+        : {
+            memberType: 'human' as const,
+            userId: member.userId ?? '',
+            displayName: member.displayName,
+            roleDesc: member.roleDesc,
+          },
+    ),
+  }
+}
+
+function snapshotHashOf(snapshot: WorkgroupDraftSnapshot): WorkgroupSnapshotHash {
+  return createHash('sha256')
+    .update(serializeWorkgroupEditableSnapshotV1(snapshot), 'utf8')
+    .digest('hex') as WorkgroupSnapshotHash
+}
+
+function wg(name: string, overrides: Partial<Workgroup> = {}): WorkgroupDetail {
+  const group: Workgroup = {
     id: `wg_${name}`,
     name,
     description: 'audits PRs',
@@ -80,6 +132,7 @@ function wg(name: string, overrides: Partial<Workgroup> = {}): Workgroup {
       {
         id: 'mem_1',
         memberType: 'agent',
+        agentId: 'agent-coder',
         agentName: 'coder',
         userId: null,
         displayName: 'Coder',
@@ -98,6 +151,7 @@ function wg(name: string, overrides: Partial<Workgroup> = {}): Workgroup {
       {
         id: 'mem_3',
         memberType: 'agent',
+        agentId: 'agent-auditor',
         agentName: 'auditor',
         userId: null,
         displayName: 'Auditor',
@@ -108,10 +162,12 @@ function wg(name: string, overrides: Partial<Workgroup> = {}): Workgroup {
     ownerUserId: null,
     visibility: 'public',
     schemaVersion: 1,
+    version: 1,
     createdAt: 1,
     updatedAt: 1_720_000_000_000,
     ...overrides,
   }
+  return { ...group, snapshotHash: snapshotHashOf(draftOf(group)) }
 }
 
 interface Recorded {
@@ -121,39 +177,80 @@ interface Recorded {
 let memberIdSeq = 500
 
 /** Mirrors the real full-replace endpoint, including regenerated member ids. */
-function synthesizePutRow(base: Workgroup, body: Record<string, unknown>): Workgroup {
-  const members = (body.members as Array<Record<string, unknown>>).map((member, index) => ({
+function synthesizePutRow(base: WorkgroupDetail, body: WorkgroupDraftSnapshot): WorkgroupDetail {
+  const prior = draftOf(base)
+  const rosterChanged =
+    JSON.stringify({
+      leaderDisplayName: prior.leaderDisplayName,
+      members: prior.members,
+    }) !==
+    JSON.stringify({
+      leaderDisplayName: body.leaderDisplayName,
+      members: body.members,
+    })
+  const members = body.members.map((member, index) => ({
     id: `mem_p${memberIdSeq++}`,
-    memberType: member.memberType as 'agent' | 'human',
-    agentName: (member.agentName as string | undefined) ?? null,
-    userId: (member.userId as string | undefined) ?? null,
-    displayName: member.displayName as string,
-    roleDesc: (member.roleDesc as string | undefined) ?? '',
+    memberType: member.memberType,
+    agentId: member.memberType === 'agent' ? (member.agentId ?? null) : null,
+    agentName:
+      member.memberType === 'agent'
+        ? (member.agentName ??
+          (member.agentId === 'agent-coder'
+            ? 'coder'
+            : member.agentId === 'agent-auditor'
+              ? 'auditor'
+              : member.agentId === 'agent-reviewer'
+                ? 'reviewer'
+                : null))
+        : null,
+    userId: member.memberType === 'human' ? (member.userId ?? null) : null,
+    displayName: member.displayName,
+    roleDesc: member.roleDesc,
     sortOrder: index,
   }))
-  const leaderName = body.leaderDisplayName as string | undefined
+  const persistedMembers = rosterChanged ? members : base.members
+  const leaderName = body.leaderDisplayName
   return {
     ...base,
-    description: body.description as string,
-    instructions: body.instructions as string,
-    mode: body.mode as Workgroup['mode'],
-    switches: body.switches as Workgroup['switches'],
-    maxRounds: body.maxRounds as number,
-    completionGate: body.completionGate as boolean,
-    clarifyBudget: body.clarifyBudget as number,
-    fanOut: body.fanOut as boolean,
-    members,
+    name: body.name,
+    description: body.description,
+    instructions: body.instructions,
+    mode: body.mode,
+    switches: body.switches,
+    maxRounds: body.maxRounds,
+    completionGate: body.completionGate,
+    clarifyBudget: body.clarifyBudget,
+    fanOut: body.fanOut,
+    members: persistedMembers,
     leaderMemberId:
       leaderName === undefined
         ? null
-        : (members.find((member) => member.displayName === leaderName)?.id ?? null),
+        : (persistedMembers.find((member) => member.displayName === leaderName)?.id ?? null),
+    version: base.version + 1,
     updatedAt: base.updatedAt + 1,
+    snapshotHash: snapshotHashOf(body),
+  }
+}
+
+function saveReceipt(input: UpdateWorkgroup, workgroup: WorkgroupDetail): SaveWorkgroupReceipt {
+  return {
+    clientMutationId: input.clientMutationId,
+    requestedBaseVersion: input.expectedVersion,
+    revision: {
+      workgroupId: workgroup.id,
+      version: workgroup.version,
+      snapshotHash: workgroup.snapshotHash,
+      updatedAt: workgroup.updatedAt,
+    },
+    snapshot: input.snapshot,
+    workgroup,
+    outcome: 'committed',
   }
 }
 
 function installFetch(
   state: {
-    workgroups: Workgroup[]
+    workgroups: WorkgroupDetail[]
     failDetail?: boolean
     putStatus?: number
     renameGate?: Promise<void>
@@ -173,7 +270,11 @@ function installFetch(
         })
 
       if (url.includes('/api/agents'))
-        return json([{ name: 'coder' }, { name: 'auditor' }, { name: 'reviewer' }])
+        return json([
+          { id: 'agent-coder', name: 'coder' },
+          { id: 'agent-auditor', name: 'auditor' },
+          { id: 'agent-reviewer', name: 'reviewer' },
+        ])
       if (url.includes('/api/users/search')) return json([])
       if (url.includes('/api/users/lookup')) {
         return json([
@@ -185,6 +286,14 @@ function installFetch(
             status: 'active',
           },
         ])
+      }
+      const byId = url.match(/\/api\/workgroups\/by-id\/([^/]+)$/)
+      if (byId !== null && method === 'GET') {
+        const id = decodeURIComponent(byId[1]!)
+        const row = state.workgroups.find((workgroup) => workgroup.id === id)
+        return row === undefined
+          ? json({ code: 'workgroup-not-found' }, 404)
+          : json({ name: row.name })
       }
       const rename = url.match(/\/api\/workgroups\/([^/]+)\/rename$/)
       if (rename !== null && method === 'POST') {
@@ -223,10 +332,12 @@ function installFetch(
             )
           }
           const row = state.workgroups.find((w) => w.name === name)
-          const fresh = synthesizePutRow(row ?? wg(name), body as Record<string, unknown>)
+          const input = body as UpdateWorkgroup
+          if (row !== undefined && input.snapshot.name !== row.name) await state.renameGate
+          const fresh = synthesizePutRow(row ?? wg(name), input.snapshot)
           const index = state.workgroups.findIndex((workgroup) => workgroup.name === name)
           if (index >= 0) state.workgroups[index] = fresh
-          return json(fresh)
+          return json(saveReceipt(input, fresh))
         }
         if (method === 'DELETE') {
           await state.deleteGate
@@ -249,6 +360,31 @@ async function pickAgent(name: string): Promise<void> {
   fireEvent.click(screen.getByTestId('workgroup-agent-name-input'))
   const listbox = await screen.findByRole('listbox')
   fireEvent.mouseDown(within(listbox).getByRole('option', { name }))
+}
+
+function savedSnapshot(call: Recorded['calls'][number] | undefined): WorkgroupDraftSnapshot {
+  return (call?.body as UpdateWorkgroup).snapshot
+}
+
+async function waitForPut(
+  state: Recorded,
+  predicate: (call: Recorded['calls'][number]) => boolean = () => true,
+): Promise<Recorded['calls'][number]> {
+  let match: Recorded['calls'][number] | undefined
+  await waitFor(
+    () => {
+      match = state.calls.find((call) => call.method === 'PUT' && predicate(call))
+      expect(match).toBeTruthy()
+    },
+    { timeout: 3_000 },
+  )
+  return match!
+}
+
+async function openWorkgroupAction(testid: string): Promise<void> {
+  fireEvent.click(await screen.findByTestId('workgroup-more-actions'))
+  await screen.findByTestId('workgroup-actions-dialog')
+  fireEvent.click(screen.getByTestId(testid))
 }
 
 async function renderPage(
@@ -509,6 +645,26 @@ describe('/workgroups/$name — readiness banner', () => {
 })
 
 describe('/workgroups/$name — config editing', () => {
+  test('header matches the workflow editor title/id/version and primary-action hierarchy', async () => {
+    installFetch({ workgroups: [wg('review-squad')], calls: [] })
+    await renderPage('/workgroups/review-squad')
+
+    await screen.findByTestId('workgroup-draft-status')
+    const header = screen.getByRole('heading', { name: 'review-squad' }).closest('.page__header')
+    expect(header?.classList.contains('editor-page-header')).toBe(true)
+    expect(header?.querySelector('.page__meta')?.textContent).toContain('wg_review-squad')
+    expect(header?.querySelector('.page__meta')?.textContent).toContain('v1')
+    expect(header?.querySelectorAll('.btn--primary')).toHaveLength(1)
+    expect(header?.querySelector('.btn--primary')?.textContent).toContain('Launch task')
+    expect(screen.queryByTestId('workgroup-rename-button')).toBeNull()
+    expect(screen.queryByTestId('workgroup-delete-button')).toBeNull()
+
+    fireEvent.click(screen.getByTestId('workgroup-more-actions'))
+    expect(await screen.findByTestId('workgroup-actions-dialog')).toBeTruthy()
+    expect(screen.getByTestId('workgroup-rename-button')).toBeTruthy()
+    expect(screen.getByTestId('workgroup-delete-button')).toBeTruthy()
+  })
+
   test('initial retry recovers; stale refetch preserves the draft; param switch reseeds', async () => {
     const state = {
       workgroups: [wg('review-squad'), wg('second-squad', { instructions: 'second instructions' })],
@@ -558,39 +714,58 @@ describe('/workgroups/$name — config editing', () => {
     )
   })
 
-  test('config save PUTs the draft with members + server description passed through (no name)', async () => {
+  test('text edits autosave one fenced composite snapshot after the debounce', async () => {
     const state = { workgroups: [wg('review-squad')], calls: [] as Recorded['calls'] }
     installFetch(state)
     await renderPage('/workgroups/review-squad')
 
-    // Description moved to the rename dialog (2026-07-13); edit the config
-    // instructions. The PUT carries the SERVER description through unchanged.
     const instr = (await screen.findByTestId('workgroup-field-instructions')) as HTMLTextAreaElement
     fireEvent.change(instr, { target: { value: 'be thorough' } })
-    fireEvent.click(screen.getByTestId('workgroup-save-button'))
-    await waitFor(() => {
-      const put = state.calls.find(
-        (c) => c.method === 'PUT' && c.url.endsWith('/api/workgroups/review-squad'),
-      )
-      expect(put).toBeTruthy()
-      const body = put?.body as Record<string, unknown>
-      expect(body.description).toBe('audits PRs') // server value passed through, not edited here
-      expect(body.instructions).toBe('be thorough')
-      expect(body.name).toBeUndefined()
-      expect(body.leaderDisplayName).toBe('Coder')
-      expect(body.members).toEqual([
-        { memberType: 'agent', agentName: 'coder', displayName: 'Coder', roleDesc: 'writes code' },
+    expect(screen.queryByTestId('workgroup-save-button')).toBeNull()
+    expect(screen.getByTestId('workgroup-draft-phase').textContent).toContain('Unsaved')
+
+    const put = await waitForPut(state, (call) => call.url.endsWith('/api/workgroups/review-squad'))
+    const input = put.body as UpdateWorkgroup
+    expect(input.expectedVersion).toBe(1)
+    expect(input.clientMutationId).toMatch(/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/)
+    expect(input.snapshot).toEqual({
+      name: 'review-squad',
+      description: 'audits PRs',
+      instructions: 'be thorough',
+      mode: 'leader_worker',
+      leaderDisplayName: 'Coder',
+      switches: { shareOutputs: true, directMessages: false, blackboard: false },
+      maxRounds: 20,
+      completionGate: false,
+      clarifyBudget: 3,
+      fanOut: false,
+      members: [
+        {
+          memberType: 'agent',
+          agentId: 'agent-coder',
+          displayName: 'Coder',
+          roleDesc: 'writes code',
+        },
         { memberType: 'human', userId: 'u1', displayName: 'Alice', roleDesc: 'reviews' },
-        { memberType: 'agent', agentName: 'auditor', displayName: 'Auditor', roleDesc: '' },
-      ])
+        {
+          memberType: 'agent',
+          agentId: 'agent-auditor',
+          displayName: 'Auditor',
+          roleDesc: '',
+        },
+      ],
     })
+    await waitFor(() =>
+      expect(screen.getByTestId('workgroup-draft-phase').textContent).toContain('Saved'),
+    )
+    expect(document.querySelector('.editor-page-header .page__meta')?.textContent).toContain('v2')
   })
 
-  test('an authoritative refetch unlocks an ambiguous save even when remote differs', async () => {
+  test('a definitive save error preserves the draft and Retry now resumes autosave', async () => {
     const state = {
       workgroups: [wg('review-squad')],
       calls: [] as Recorded['calls'],
-      putStatus: 503 as number | undefined,
+      putStatus: 422 as number | undefined,
     }
     installFetch(state)
     await renderPage('/workgroups/review-squad')
@@ -598,50 +773,51 @@ describe('/workgroups/$name — config editing', () => {
     fireEvent.change(await screen.findByTestId('workgroup-field-instructions'), {
       target: { value: 'local draft after uncertain save' },
     })
-    const save = screen.getByTestId('workgroup-save-button') as HTMLButtonElement
-    fireEvent.click(save)
-
-    await waitFor(() => {
-      expect(
-        state.calls.filter(
-          (call) => call.method === 'GET' && call.url.endsWith('/api/workgroups/review-squad'),
-        ),
-      ).toHaveLength(2)
-      expect(save.disabled).toBe(false)
-    })
+    await waitForPut(state)
+    await waitFor(() =>
+      expect(screen.getByTestId('workgroup-draft-phase').textContent).toContain('Save failed'),
+    )
     expect((screen.getByTestId('workgroup-field-instructions') as HTMLTextAreaElement).value).toBe(
       'local draft after uncertain save',
     )
 
     state.putStatus = undefined
-    fireEvent.click(save)
-    await waitFor(() => {
-      expect(state.workgroups[0]?.instructions).toBe('local draft after uncertain save')
-      expect(save.disabled).toBe(true)
-    })
+    fireEvent.click(screen.getByRole('button', { name: 'Retry now' }))
+    await waitFor(
+      () => expect(state.workgroups[0]?.instructions).toBe('local draft after uncertain save'),
+      { timeout: 3_000 },
+    )
+    await waitFor(() =>
+      expect(screen.getByTestId('workgroup-draft-phase').textContent).toContain('Saved'),
+    )
   })
 
-  test('a clean leaderless group is save-valid but Save All stays disabled until an edit', async () => {
-    installFetch({
+  test('a clean leaderless group is save-valid and autosaves after an edit', async () => {
+    const state = {
       workgroups: [wg('review-squad', { leaderMemberId: null })],
-      calls: [],
-    })
+      calls: [] as Recorded['calls'],
+    }
+    installFetch(state)
     await renderPage('/workgroups/review-squad')
     await screen.findByTestId('workgroup-field-instructions')
-    const save = screen.getByTestId('workgroup-save-button') as HTMLButtonElement
-    expect(save.disabled).toBe(true)
+    expect(screen.queryByTestId('workgroup-save-button')).toBeNull()
+    expect(screen.getByTestId('workgroup-draft-phase').textContent).toContain('Saved')
     fireEvent.change(screen.getByTestId('workgroup-field-instructions'), {
       target: { value: 'leaderless remains save-valid' },
     })
-    expect(save.disabled).toBe(false)
+    expect(screen.getByTestId('workgroup-draft-phase').textContent).toContain('Unsaved')
+    await waitForPut(state)
+    await waitFor(() =>
+      expect(screen.getByTestId('workgroup-draft-phase').textContent).toContain('Saved'),
+    )
   })
 
-  test('rename dialog seeds name + description and POSTs /rename with both', async () => {
+  test('rename dialog commits name + description through autosave and follows the new route', async () => {
     const state = { workgroups: [wg('review-squad')], calls: [] as Recorded['calls'] }
     installFetch(state)
-    await renderPage('/workgroups/review-squad')
+    const router = await renderPage('/workgroups/review-squad')
 
-    fireEvent.click(await screen.findByTestId('workgroup-rename-button'))
+    await openWorkgroupAction('workgroup-rename-button')
     const nameInput = (await screen.findByTestId('workgroup-rename-name')) as HTMLInputElement
     const descInput = screen.getByTestId('workgroup-rename-description') as HTMLInputElement
     expect(nameInput.value).toBe('review-squad')
@@ -655,21 +831,21 @@ describe('/workgroups/$name — config editing', () => {
     fireEvent.change(descInput, { target: { value: 'audits merged PRs' } })
     fireEvent.click(screen.getByTestId('workgroup-rename-confirm'))
 
-    await waitFor(() => {
-      const post = state.calls.find(
-        (c) => c.method === 'POST' && c.url.endsWith('/api/workgroups/review-squad/rename'),
-      )
-      expect(post).toBeTruthy()
-      expect(post?.body).toEqual({ newName: 'audit-squad', description: 'audits merged PRs' })
+    const put = await waitForPut(state)
+    expect(savedSnapshot(put)).toMatchObject({
+      name: 'audit-squad',
+      description: 'audits merged PRs',
     })
+    expect(state.calls.some((call) => call.url.endsWith('/rename'))).toBe(false)
+    await waitFor(() => expect(router.state.location.pathname).toBe('/workgroups/audit-squad'))
   })
 
-  test('a description-only edit still saves (newName echoes the current name)', async () => {
+  test('a description-only rename-dialog edit uses the same composite autosave', async () => {
     const state = { workgroups: [wg('review-squad')], calls: [] as Recorded['calls'] }
     installFetch(state)
     await renderPage('/workgroups/review-squad')
 
-    fireEvent.click(await screen.findByTestId('workgroup-rename-button'))
+    await openWorkgroupAction('workgroup-rename-button')
     const descInput = (await screen.findByTestId(
       'workgroup-rename-description',
     )) as HTMLInputElement
@@ -679,11 +855,10 @@ describe('/workgroups/$name — config editing', () => {
       false,
     )
     fireEvent.click(screen.getByTestId('workgroup-rename-confirm'))
-    await waitFor(() => {
-      const post = state.calls.find(
-        (c) => c.method === 'POST' && c.url.endsWith('/api/workgroups/review-squad/rename'),
-      )
-      expect(post?.body).toEqual({ newName: 'review-squad', description: 'new blurb' })
+    const put = await waitForPut(state)
+    expect(savedSnapshot(put)).toMatchObject({
+      name: 'review-squad',
+      description: 'new blurb',
     })
   })
 
@@ -700,7 +875,7 @@ describe('/workgroups/$name — config editing', () => {
     installFetch(state)
     const router = await renderPage('/workgroups/review-squad')
 
-    fireEvent.click(await screen.findByTestId('workgroup-rename-button'))
+    await openWorkgroupAction('workgroup-rename-button')
     fireEvent.change(screen.getByTestId('workgroup-rename-name'), {
       target: { value: 'audit-squad' },
     })
@@ -730,7 +905,7 @@ describe('/workgroups/$name — config editing', () => {
     const router = await renderPage('/workgroups/review-squad')
 
     // RFC-222 (D5): delete now opens a type-to-confirm dialog — type the name.
-    fireEvent.click(await screen.findByTestId('detail-delete-button'))
+    await openWorkgroupAction('workgroup-delete-button')
     const dialog = await screen.findByRole('dialog')
     fireEvent.change(within(dialog).getByTestId('confirm-input'), {
       target: { value: 'review-squad' },
@@ -775,13 +950,9 @@ describe('/workgroups/$name — member gallery + context panel (RFC-168)', () =>
     await renderPage('/workgroups/review-squad')
     fireEvent.click(await screen.findByTestId('workgroup-card-open-Auditor'))
     fireEvent.click(await screen.findByTestId('workgroup-set-leader-Auditor'))
-    await waitFor(() => {
-      const put = state.calls.find((c) => c.method === 'PUT')
-      expect(put).toBeTruthy()
-      const body = put?.body as Record<string, unknown>
-      expect(body.leaderDisplayName).toBe('Auditor')
-      expect((body.members as unknown[]).length).toBe(3)
-    })
+    const put = await waitForPut(state)
+    expect(savedSnapshot(put).leaderDisplayName).toBe('Auditor')
+    expect(savedSnapshot(put).members).toHaveLength(3)
   })
 
   test('selecting the leader card shows the badge but no set-leader; human cards never offer it', async () => {
@@ -807,19 +978,21 @@ describe('/workgroups/$name — member gallery + context panel (RFC-168)', () =>
     const remove = await within(panel).findByRole('button', { name: 'Remove' })
     fireEvent.click(remove) // arm
     fireEvent.click(within(panel).getByRole('button', { name: 'Confirm?' }))
-    await waitFor(() => {
-      const put = state.calls.find((c) => c.method === 'PUT')
-      expect(put).toBeTruthy()
-      const body = put?.body as Record<string, unknown>
-      expect(body.leaderDisplayName).toBeUndefined() // leader removed → flag cleared
-      expect(body.members).toEqual([
-        { memberType: 'human', userId: 'u1', displayName: 'Alice', roleDesc: 'reviews' },
-        { memberType: 'agent', agentName: 'auditor', displayName: 'Auditor', roleDesc: '' },
-      ])
-    })
+    const put = await waitForPut(state)
+    const snapshot = savedSnapshot(put)
+    expect(snapshot.leaderDisplayName).toBeUndefined() // leader removed → flag cleared
+    expect(snapshot.members).toEqual([
+      { memberType: 'human', userId: 'u1', displayName: 'Alice', roleDesc: 'reviews' },
+      {
+        memberType: 'agent',
+        agentId: 'agent-auditor',
+        displayName: 'Auditor',
+        roleDesc: '',
+      },
+    ])
   })
 
-  test('panel edit patches displayName/roleDesc via the member-save button and PUTs', async () => {
+  test('panel text edits autosave without a member-save button', async () => {
     const state = { workgroups: [wg('review-squad')], calls: [] as Recorded['calls'] }
     installFetch(state)
     await renderPage('/workgroups/review-squad')
@@ -829,13 +1002,13 @@ describe('/workgroups/$name — member gallery + context panel (RFC-168)', () =>
     )) as HTMLInputElement
     expect(input.value).toBe('Alice')
     fireEvent.change(input, { target: { value: 'Alicia' } })
-    fireEvent.click(screen.getByTestId('workgroup-member-save'))
-    await waitFor(() => {
-      const put = state.calls.find((c) => c.method === 'PUT')
-      expect(put).toBeTruthy()
-      const members = (put?.body as { members: Array<{ displayName: string }> }).members
-      expect(members.map((m) => m.displayName)).toEqual(['Coder', 'Alicia', 'Auditor'])
-    })
+    expect(screen.queryByTestId('workgroup-member-save')).toBeNull()
+    const put = await waitForPut(state)
+    expect(savedSnapshot(put).members.map((member) => member.displayName)).toEqual([
+      'Coder',
+      'Alicia',
+      'Auditor',
+    ])
   })
 
   test('add-agent panel defaults the alias to the agent name and PUTs the appended member', async () => {
@@ -860,18 +1033,30 @@ describe('/workgroups/$name — member gallery + context panel (RFC-168)', () =>
     )
     fireEvent.click(screen.getByTestId('workgroup-add-agent-confirm'))
 
-    await waitFor(() => {
-      const put = state.calls.find((c) => c.method === 'PUT')
-      expect(put).toBeTruthy()
-      const body = put?.body as Record<string, unknown>
-      expect(body.leaderDisplayName).toBe('Coder') // preserved
-      expect(body.members).toEqual([
-        { memberType: 'agent', agentName: 'coder', displayName: 'Coder', roleDesc: 'writes code' },
-        { memberType: 'human', userId: 'u1', displayName: 'Alice', roleDesc: 'reviews' },
-        { memberType: 'agent', agentName: 'auditor', displayName: 'Auditor', roleDesc: '' },
-        { memberType: 'agent', agentName: 'reviewer', displayName: 'reviewer', roleDesc: '' },
-      ])
-    })
+    const put = await waitForPut(state)
+    const snapshot = savedSnapshot(put)
+    expect(snapshot.leaderDisplayName).toBe('Coder') // preserved
+    expect(snapshot.members).toEqual([
+      {
+        memberType: 'agent',
+        agentId: 'agent-coder',
+        displayName: 'Coder',
+        roleDesc: 'writes code',
+      },
+      { memberType: 'human', userId: 'u1', displayName: 'Alice', roleDesc: 'reviews' },
+      {
+        memberType: 'agent',
+        agentId: 'agent-auditor',
+        displayName: 'Auditor',
+        roleDesc: '',
+      },
+      {
+        memberType: 'agent',
+        agentId: 'agent-reviewer',
+        displayName: 'reviewer',
+        roleDesc: '',
+      },
+    ])
   })
 
   test('duplicate alias in the add panel blocks the confirm with an inline error', async () => {
@@ -936,13 +1121,18 @@ describe('RFC-164 /workgroups wiring', () => {
     expect(listIdx).toBeGreaterThan(detailIdx)
   })
 
-  test('detail page composes the gallery + context panel + header actions (RFC-168)', () => {
+  test('detail page composes the gallery + context panel + workflow-aligned header', () => {
     const edit = readSrc('routes/workgroups.detail.tsx')
     expect(edit).toContain(
       "import { WorkgroupMemberGallery } from '@/components/workgroup/WorkgroupMemberGallery'",
     )
     expect(edit).toContain('WorkgroupContextPanel')
-    expect(edit).toContain('DetailHeaderActions')
+    expect(edit).toContain('className="editor-page-header editor-page-header--workgroup"')
+    expect(edit).toContain('<code>{props.initial.id}</code>')
+    expect(edit).toContain('controller.state.serverRevision.version')
+    expect(edit).toContain('data-testid="workgroup-more-actions"')
+    expect(edit).toContain('data-testid="workgroup-actions-dialog"')
+    expect(edit).not.toContain('DetailHeaderActions')
     expect(edit).toContain('workgroupLaunchReadiness')
     expect(edit).toContain('<PageHeader title={name} />')
     expect(edit).toContain('error={query.error}')
@@ -989,6 +1179,10 @@ describe('RFC-164 /workgroups wiring', () => {
       'panelConfigTitle',
       'panelAria',
       'panelClose',
+      'actionsTitle',
+      'renameActionHint',
+      'aclActionHint',
+      'deleteActionHint',
       'memberSave',
       'editAgentDefinition',
       'agentMissing',

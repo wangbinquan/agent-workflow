@@ -5,7 +5,7 @@
 // two are written in different packages, so this suite is the drift lock:
 // every WS_PATHS entry must parse back to exactly its channel kind (with
 // %-encoding round-tripping for the parametrized ones), and the WS_PATHS
-// key set must stay a bijection onto the registry's six kinds.
+// key set must stay a bijection onto the registry's kinds.
 
 import { describe, expect, test } from 'bun:test'
 import { WS_PATHS } from '@agent-workflow/shared'
@@ -14,13 +14,14 @@ import { parseWsChannel, WS_CHANNELS, type WsChannelKind } from '../src/ws/regis
 const parse = (path: string) => parseWsChannel(new URL(path, 'http://daemon.test'))
 
 describe('RFC-152 — WS_PATHS ↔ registry pathRe interlock', () => {
-  test('WS_PATHS key set is exactly the seven channels (bijection lock)', () => {
+  test('WS_PATHS key set is exactly the eight channels (bijection lock)', () => {
     expect(Object.keys(WS_PATHS).sort()).toEqual(
       // RFC-159 added `scheduledTasks`.
       [
         'task',
         'tasksList',
         'workflows',
+        'workgroups',
         'repoImport',
         'memories',
         'memoryDistillJobs',
@@ -40,11 +41,13 @@ describe('RFC-152 — WS_PATHS ↔ registry pathRe interlock', () => {
     })
   })
 
-  test('tasksList / workflows / memories / memoryDistillJobs — static paths parse', () => {
+  test('static paths parse', () => {
     expect(parse(WS_PATHS.tasksList)).toEqual({ kind: 'tasks-list' })
     expect(parse(WS_PATHS.workflows)).toEqual({ kind: 'workflows' })
+    expect(parse(WS_PATHS.workgroups)).toEqual({ kind: 'workgroups' })
     expect(parse(WS_PATHS.memories)).toEqual({ kind: 'memories' })
     expect(parse(WS_PATHS.memoryDistillJobs)).toEqual({ kind: 'memory-distill-jobs' })
+    expect(parse(WS_PATHS.scheduledTasks)).toEqual({ kind: 'scheduled-tasks' })
   })
 
   test('repoImport(batchId) — parses back with %-decoding', () => {
@@ -57,9 +60,11 @@ describe('RFC-152 — WS_PATHS ↔ registry pathRe interlock', () => {
       [WS_PATHS.task('01ABC'), 'task'],
       [WS_PATHS.tasksList, 'tasks-list'],
       [WS_PATHS.workflows, 'workflows'],
+      [WS_PATHS.workgroups, 'workgroups'],
       [WS_PATHS.repoImport('b1'), 'repo-import'],
       [WS_PATHS.memories, 'memories'],
       [WS_PATHS.memoryDistillJobs, 'memory-distill-jobs'],
+      [WS_PATHS.scheduledTasks, 'scheduled-tasks'],
     ]
     const kinds = Object.keys(WS_CHANNELS) as WsChannelKind[]
     for (const [path, expected] of samples) {

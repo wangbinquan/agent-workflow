@@ -38,7 +38,8 @@ export interface DetailHeaderActionsProps {
     /** RFC-170 §8 — false hides the owner-transfer control (external skills). */
     canTransferOwner?: boolean
   }
-  save: {
+  /** Omit on autosave-owned detail pages. */
+  save?: {
     /** Button text — caller switches pending/idle labels itself.
      *  Defaults to the plain common.save copy. */
     label?: string
@@ -89,16 +90,18 @@ export function DetailHeaderActions(props: DetailHeaderActionsProps) {
               invalidateKey={props.acl.invalidateKey}
               canTransferOwner={props.acl.canTransferOwner}
             />
-            <button
-              type="button"
-              className="btn btn--primary"
-              disabled={props.save.disabled}
-              onClick={props.save.onClick}
-              title={props.save.title}
-              data-testid={props.save.testid}
-            >
-              {props.save.label ?? t('common.save')}
-            </button>
+            {props.save !== undefined && (
+              <button
+                type="button"
+                className="btn btn--primary"
+                disabled={props.save.disabled}
+                onClick={props.save.onClick}
+                title={props.save.title}
+                data-testid={props.save.testid}
+              >
+                {props.save.label ?? t('common.save')}
+              </button>
+            )}
             <button
               type="button"
               className="btn btn--danger"

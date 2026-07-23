@@ -1,50 +1,65 @@
-// Workgroup service — CRUD on workgroups + workgroup_members (RFC-164 PR-1).
+// RFC-225 — versioned workgroup persistence.
 //
-// Mirrors services/mcp.ts shape: DB is source of truth, the two tables are
-// materialised into one Workgroup DTO (members eager-loaded, roster order =
-// sortOrder then displayName), name unique constraint enforced both by the
-// column index and by an explicit pre-insert lookup for a friendly
-// ConflictError.
-//
-// Member semantics (design §1.2):
-//   - full-replace on update: member rows are regenerated (ids are NOT
-//     stable across saves). Launched tasks are unaffected — launch snapshots
-//     the whole config onto the task (PR-3), so resource-level ids are only
-//     meaningful until the next save.
-//   - leader is referenced by displayName in Create/Update bodies and
-//     resolved to the freshly-inserted member id here (schema-level shape
-//     validation — lw requires an agent-member leader — already ran in zod).
-//   - agent member names are soft references (dangling tolerated until
-//     launch, matching workflow agentName behavior); human userIds must
-//     resolve to real active users at save time (users are stable, and a
-//     dangling human member has no launch-time validator to catch it).
-//
-// Reference-usability (RFC-099 D15) is enforced HERE (RFC-223 PR-1, Codex
-// impl-gate P1-2): member agent name→id resolution and the ACL check are a
-// SINGLE pass bound to the same id, so a private agent renamed into a member
-// name between a separate route-level check and this resolution can no longer
-// bind an unauthorized id (the same TOCTOU class fixed for agent saves).
+// A workgroup is one editable document: metadata, runtime config, ordered
+// roster and leader relation. Every production content write is fenced by the
+// stable workgroup id + expected version and returns an exact in-transaction
+// receipt. Launched tasks remain isolated by their frozen config snapshot.
 
 import type {
   CreateWorkgroup,
+  DeleteWorkgroup,
+  SaveWorkgroupReceipt,
   UpdateWorkgroup,
   Workgroup,
+  WorkgroupDetail,
+  WorkgroupDraftMember,
+  WorkgroupDraftSnapshot,
   WorkgroupMember,
-  WorkgroupMode,
+  WorkgroupRevision,
+  WorkgroupSnapshotHash,
 } from '@agent-workflow/shared'
-import { WG_CLARIFY_BUDGET_DEFAULT } from '@agent-workflow/shared'
+import {
+  DeleteWorkgroupSchema,
+  serializeWorkgroupEditableSnapshotV1,
+  UpdateWorkgroupSchema,
+  WG_CLARIFY_BUDGET_DEFAULT,
+  WorkgroupDraftSnapshotSchema,
+} from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
-import { discloseScheduleRefs } from './resourceAcl'
-import { assertNoMissingRefs, resolveRefsUsableById } from './resourceRefs'
-import type { Actor } from '@/auth/actor'
+import { createHash } from 'node:crypto'
 import { ulid } from 'ulid'
+import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { dbTxSync } from '@/db/txSync'
-import { scheduledTasks, users, workgroupMembers, workgroups } from '@/db/schema'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { type DbTxSync, dbTxSync } from '@/db/txSync'
+import {
+  agents,
+  resourceGrants,
+  scheduledTasks,
+  users,
+  workgroupMembers,
+  workgroups,
+} from '@/db/schema'
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import {
+  WORKGROUPS_CHANNEL,
+  workgroupsBroadcaster,
+  type WorkgroupDeletedAudienceContext,
+} from '@/ws/broadcaster'
+import { discloseScheduleRefs } from './resourceAcl'
+import { canViewResource, isResourceAdminActor, isResourceOwner } from './resourceAcl'
+import { assertNoMissingRefs, resolveRefsUsableById } from './resourceRefs'
 
 type WorkgroupRow = typeof workgroups.$inferSelect
 type MemberRow = typeof workgroupMembers.$inferSelect
+
+export type WorkgroupWritePrincipal =
+  | { kind: 'actor'; actor: Actor }
+  | { kind: 'system'; reason: string }
+
+interface PreparedAgentMembers {
+  /** Canonical agent id → current display name. */
+  nameById: ReadonlyMap<string, string>
+}
 
 export async function listWorkgroups(db: DbClient): Promise<Workgroup[]> {
   const rows = await db.select().from(workgroups)
@@ -55,65 +70,48 @@ export async function listWorkgroups(db: DbClient): Promise<Workgroup[]> {
     .where(
       inArray(
         workgroupMembers.workgroupId,
-        rows.map((r) => r.id),
+        rows.map((row) => row.id),
       ),
     )
   const byGroup = new Map<string, MemberRow[]>()
-  for (const m of memberRows) {
-    const list = byGroup.get(m.workgroupId)
-    if (list === undefined) byGroup.set(m.workgroupId, [m])
-    else list.push(m)
+  for (const member of memberRows) {
+    const list = byGroup.get(member.workgroupId)
+    if (list === undefined) byGroup.set(member.workgroupId, [member])
+    else list.push(member)
   }
-  return rows.map((r) => rowToWorkgroup(r, byGroup.get(r.id) ?? []))
+  return rows.map((row) => rowToWorkgroup(row, byGroup.get(row.id) ?? []))
 }
 
-export async function getWorkgroup(db: DbClient, name: string): Promise<Workgroup | null> {
-  const rows = await db.select().from(workgroups).where(eq(workgroups.name, name)).limit(1)
-  const row = rows[0]
-  if (row === undefined) return null
-  const memberRows = await db
-    .select()
-    .from(workgroupMembers)
-    .where(eq(workgroupMembers.workgroupId, row.id))
-  return rowToWorkgroup(row, memberRows)
+export async function getWorkgroup(db: DbClient, name: string): Promise<WorkgroupDetail | null> {
+  const row = await db.select().from(workgroups).where(eq(workgroups.name, name)).limit(1)
+  return row[0] === undefined ? null : getWorkgroupDetailByRow(db, row[0])
 }
 
-/**
- * RFC-177: fetch a workgroup by its stable id (ULID). Powers the by-id subject
- * resolver (`GET /api/workgroups/by-id/:id`) so a task's frozen `workgroupId`
- * link survives a rename of the group. Same shape as `getWorkgroup`.
- */
-export async function getWorkgroupById(db: DbClient, id: string): Promise<Workgroup | null> {
-  const rows = await db.select().from(workgroups).where(eq(workgroups.id, id)).limit(1)
-  const row = rows[0]
-  if (row === undefined) return null
-  const memberRows = await db
-    .select()
-    .from(workgroupMembers)
-    .where(eq(workgroupMembers.workgroupId, row.id))
-  return rowToWorkgroup(row, memberRows)
+export async function getWorkgroupById(db: DbClient, id: string): Promise<WorkgroupDetail | null> {
+  const row = await db.select().from(workgroups).where(eq(workgroups.id, id)).limit(1)
+  return row[0] === undefined ? null : getWorkgroupDetailByRow(db, row[0])
 }
 
 export async function createWorkgroup(
   db: DbClient,
   input: CreateWorkgroup,
   aclOpts?: { ownerUserId?: string; actor?: Actor | null },
-): Promise<Workgroup> {
-  if ((await getWorkgroup(db, input.name)) !== null) {
-    throw new ConflictError('workgroup-name-in-use', `workgroup '${input.name}' already exists`)
-  }
+): Promise<WorkgroupDetail> {
   await assertHumanMembersActive(db, input.members)
-
+  const agentIdByName = await resolveCreateMemberAgentIds(db, aclOpts?.actor ?? null, input.members)
   const groupId = ulid()
   const now = Date.now()
-  // RFC-223 (PR-1, P1-2): every member is new on create → ACL-check all, bound
-  // to the same resolution that produces the persisted agentIds.
-  const agentIdByName = await resolveMemberAgentIds(db, aclOpts?.actor ?? null, input.members)
-  const memberValues = buildMemberValues(groupId, input.members, now, agentIdByName)
+  const memberValues = buildCreateMemberValues(groupId, input.members, now, agentIdByName)
   const leaderMemberId = resolveLeaderMemberId(input, memberValues)
 
-  dbTxSync(db, (tx) => {
-    tx.insert(workgroups)
+  const created = dbTxSync(db, (tx) => {
+    if (
+      tx.select({ id: workgroups.id }).from(workgroups).where(eq(workgroups.name, input.name)).get()
+    ) {
+      throw new ConflictError('workgroup-name-in-use', `workgroup '${input.name}' already exists`)
+    }
+    const inserted = tx
+      .insert(workgroups)
       .values({
         id: groupId,
         name: input.name,
@@ -126,108 +124,512 @@ export async function createWorkgroup(
         blackboard: input.switches.blackboard,
         maxRounds: input.maxRounds,
         completionGate: input.completionGate,
-        // RFC-207: new groups get the default ask-back budget —
-        // create-scoped only; update below preserves the stored value instead.
         clarifyBudget: input.clarifyBudget ?? WG_CLARIFY_BUDGET_DEFAULT,
-        // RFC-185 D4: fan-out is opt-in — default OFF so the original fixed
-        // one-entity-per-agent mode is never changed implicitly.
         fanOut: input.fanOut ?? false,
-        // RFC-099: creator becomes owner; new resources default to 'public' (D18).
+        version: 1,
         ownerUserId: aclOpts?.ownerUserId ?? null,
         visibility: 'public',
         createdAt: now,
         updatedAt: now,
       })
-      .run()
-    for (const m of memberValues) {
-      tx.insert(workgroupMembers).values(m).run()
-    }
+      .returning()
+      .get()
+    if (inserted === undefined) throw new Error('workgroup insert returned no row')
+    for (const member of memberValues) tx.insert(workgroupMembers).values(member).run()
+    const persistedMembers = tx
+      .select()
+      .from(workgroupMembers)
+      .where(eq(workgroupMembers.workgroupId, groupId))
+      .all()
+    return workgroupToDetail(rowToWorkgroup(inserted, persistedMembers))
   })
-
-  const created = await getWorkgroup(db, input.name)
-  if (created === null) throw new Error('workgroup disappeared right after insert')
+  workgroupsBroadcaster.broadcast(WORKGROUPS_CHANNEL, {
+    type: 'workgroup.created',
+    workgroupId: created.id,
+    name: created.name,
+    version: created.version,
+  })
   return created
 }
 
-export async function updateWorkgroup(
+/**
+ * The only workgroup content writer. Route adapters resolve the current
+ * name-based endpoint to this stable id until RFC-223 PR-7 switches the URL.
+ */
+export async function saveWorkgroup(
   db: DbClient,
-  name: string,
+  id: string,
   input: UpdateWorkgroup,
-  actor?: Actor | null,
-): Promise<Workgroup> {
-  const existingRows = await db.select().from(workgroups).where(eq(workgroups.name, name)).limit(1)
-  const existing = existingRows[0]
-  if (existing === undefined) {
-    throw new NotFoundError('workgroup-not-found', `workgroup '${name}' not found`)
+  principal: WorkgroupWritePrincipal,
+): Promise<SaveWorkgroupReceipt> {
+  const parsed = UpdateWorkgroupSchema.safeParse(input)
+  if (!parsed.success) {
+    throw new ValidationError('workgroup-invalid', 'invalid workgroup save payload', {
+      issues: parsed.error.issues,
+    })
   }
-  await assertHumanMembersActive(db, input.members)
+  const snapshot = normalizeWorkgroupSnapshot(parsed.data.snapshot)
+  const submittedBytes = serializeWorkgroupEditableSnapshotV1(snapshot)
 
-  const now = Date.now()
-  // RFC-223 (PR-1, P1-2 / D15): only NEWLY-added members are ACL-checked —
-  // grandfather the workgroup's already-stored member agentIds so the diff is by
-  // RESOLVED ID (a grandfathered member re-submitted by name is not re-checked).
-  const existingMemberRows = await db
-    .select({ agentId: workgroupMembers.agentId })
+  const preflight = await loadRawWorkgroup(db, id)
+  if (preflight === null) throwWorkgroupNotFound(id)
+  await assertPrincipalCanWritePreflight(db, principal, preflight)
+  const currentMembers = await db
+    .select()
     .from(workgroupMembers)
-    .where(eq(workgroupMembers.workgroupId, existing.id))
-  const grandfatheredIds = new Set(
-    existingMemberRows.map((r) => r.agentId).filter((id): id is string => id !== null),
-  )
-  const agentIdByName = await resolveMemberAgentIds(
+    .where(eq(workgroupMembers.workgroupId, preflight.id))
+  await assertHumanMembersActive(db, snapshot.members)
+  const preparedAgents = await prepareAgentMembers(
     db,
-    actor ?? null,
-    input.members,
-    grandfatheredIds,
+    principal.kind === 'actor' ? principal.actor : null,
+    snapshot.members,
+    currentMembers,
   )
-  const memberValues = buildMemberValues(existing.id, input.members, now, agentIdByName)
-  const leaderMemberId = resolveLeaderMemberId(input, memberValues)
 
-  // Full-replace members + config in one transaction (design §1.2: member ids
-  // regenerate; launched tasks read their own config snapshot).
-  dbTxSync(db, (tx) => {
-    tx.update(workgroups)
+  const result = dbTxSync<{ receipt: SaveWorkgroupReceipt; committed: boolean }>(db, (tx) => {
+    const currentRow = tx.select().from(workgroups).where(eq(workgroups.id, id)).get()
+    if (currentRow === undefined) throwWorkgroupNotFound(id)
+    assertPrincipalCanWriteInTx(tx, principal, currentRow)
+    const memberRows = tx
+      .select()
+      .from(workgroupMembers)
+      .where(eq(workgroupMembers.workgroupId, id))
+      .all()
+    const current = rowToWorkgroup(currentRow, memberRows)
+    const currentSnapshot = workgroupDraftSnapshotOf(current)
+    const currentBytes = serializeWorkgroupEditableSnapshotV1(currentSnapshot)
+    const currentRevision = workgroupRevisionOf(current)
+    const logicalSame = currentBytes === submittedBytes
+
+    if (currentRow.version !== parsed.data.expectedVersion) {
+      if (logicalSame) {
+        const detail = workgroupToDetail(current)
+        return {
+          receipt: {
+            clientMutationId: parsed.data.clientMutationId,
+            requestedBaseVersion: parsed.data.expectedVersion,
+            revision: currentRevision,
+            snapshot: currentSnapshot,
+            workgroup: detail,
+            outcome: 'already-current',
+          },
+          committed: false,
+        }
+      }
+      throw new ConflictError(
+        'workgroup-version-conflict',
+        `workgroup '${id}' is at version ${currentRow.version}, expected ${parsed.data.expectedVersion}`,
+        { current: currentRevision },
+      )
+    }
+
+    if (logicalSame) {
+      const detail = workgroupToDetail(current)
+      return {
+        receipt: {
+          clientMutationId: parsed.data.clientMutationId,
+          requestedBaseVersion: parsed.data.expectedVersion,
+          revision: currentRevision,
+          snapshot: currentSnapshot,
+          workgroup: detail,
+          outcome: 'already-current',
+        },
+        committed: false,
+      }
+    }
+
+    assertNameChangeAllowedInTx(tx, principal, current, snapshot.name)
+    const rosterChanged = rosterBytes(currentSnapshot) !== rosterBytes(snapshot)
+    const now = Date.now()
+    const replacementMembers = rosterChanged
+      ? buildDraftMemberValues(id, snapshot.members, now, preparedAgents)
+      : null
+    const leaderMemberId =
+      replacementMembers === null
+        ? currentRow.leaderMemberId
+        : resolveLeaderMemberId(snapshot, replacementMembers)
+
+    const returned = tx
+      .update(workgroups)
       .set({
-        description: input.description,
-        instructions: input.instructions,
-        mode: input.mode,
+        name: snapshot.name,
+        description: snapshot.description,
+        instructions: snapshot.instructions,
+        mode: snapshot.mode,
         leaderMemberId,
-        shareOutputs: input.switches.shareOutputs,
-        directMessages: input.switches.directMessages,
-        blackboard: input.switches.blackboard,
-        maxRounds: input.maxRounds,
-        completionGate: input.completionGate,
-        // RFC-207 (inherits RFC-181 design-gate P1): a PUT that omits it must NOT
-        // silently flip the stored value in either direction — the field is
-        // shared between Create/Update schemas, so the create default must not
-        // leak into full-replace updates. Omitted ⇒ keep the existing row.
-        clarifyBudget: input.clarifyBudget ?? existing.clarifyBudget,
-        // RFC-185 D4: same omitted-⇒-preserve contract as clarifyBudget above.
-        fanOut: input.fanOut ?? existing.fanOut,
+        shareOutputs: snapshot.switches.shareOutputs,
+        directMessages: snapshot.switches.directMessages,
+        blackboard: snapshot.switches.blackboard,
+        maxRounds: snapshot.maxRounds,
+        completionGate: snapshot.completionGate,
+        clarifyBudget: snapshot.clarifyBudget,
+        fanOut: snapshot.fanOut,
+        version: currentRow.version + 1,
         updatedAt: now,
       })
-      .where(eq(workgroups.id, existing.id))
-      .run()
-    tx.delete(workgroupMembers).where(eq(workgroupMembers.workgroupId, existing.id)).run()
-    for (const m of memberValues) {
-      tx.insert(workgroupMembers).values(m).run()
+      .where(and(eq(workgroups.id, id), eq(workgroups.version, parsed.data.expectedVersion)))
+      .returning()
+      .get()
+    if (returned === undefined) {
+      throw new ConflictError('workgroup-version-conflict', `workgroup '${id}' changed; reload`, {
+        current: currentRevision,
+      })
+    }
+
+    if (replacementMembers !== null) {
+      tx.delete(workgroupMembers).where(eq(workgroupMembers.workgroupId, id)).run()
+      for (const member of replacementMembers) tx.insert(workgroupMembers).values(member).run()
+    }
+    const returnedMembers = tx
+      .select()
+      .from(workgroupMembers)
+      .where(eq(workgroupMembers.workgroupId, id))
+      .all()
+    const detail = workgroupToDetail(rowToWorkgroup(returned, returnedMembers))
+    const committedSnapshot = workgroupDraftSnapshotOf(detail)
+    return {
+      receipt: {
+        clientMutationId: parsed.data.clientMutationId,
+        requestedBaseVersion: parsed.data.expectedVersion,
+        revision: workgroupRevisionOf(detail),
+        snapshot: committedSnapshot,
+        workgroup: detail,
+        outcome: 'committed',
+      },
+      committed: true,
     }
   })
 
-  const updated = await getWorkgroup(db, name)
-  if (updated === null) throw new Error('workgroup disappeared after update')
-  return updated
+  if (result.committed) {
+    workgroupsBroadcaster.broadcast(WORKGROUPS_CHANNEL, {
+      type: 'workgroup.updated',
+      workgroupId: result.receipt.revision.workgroupId,
+      clientMutationId: result.receipt.clientMutationId,
+      version: result.receipt.revision.version,
+      snapshotHash: result.receipt.revision.snapshotHash,
+      updatedAt: result.receipt.revision.updatedAt,
+    })
+  }
+  return result.receipt
+}
+
+export async function deleteWorkgroup(
+  db: DbClient,
+  id: string,
+  input: DeleteWorkgroup,
+  principal: WorkgroupWritePrincipal,
+): Promise<void> {
+  const parsed = DeleteWorkgroupSchema.safeParse(input)
+  if (!parsed.success) {
+    throw new ValidationError('workgroup-invalid', 'invalid workgroup delete payload', {
+      issues: parsed.error.issues,
+    })
+  }
+  const deleted = dbTxSync<{
+    deletedVersion: number
+    audience: WorkgroupDeletedAudienceContext
+  }>(db, (tx) => {
+    const currentRow = tx.select().from(workgroups).where(eq(workgroups.id, id)).get()
+    if (currentRow === undefined) throwWorkgroupNotFound(id)
+    assertPrincipalCanWriteInTx(tx, principal, currentRow)
+    if (currentRow.version !== parsed.data.expectedVersion) {
+      const members = tx
+        .select()
+        .from(workgroupMembers)
+        .where(eq(workgroupMembers.workgroupId, id))
+        .all()
+      throw new ConflictError(
+        'workgroup-version-conflict',
+        `workgroup '${id}' is at version ${currentRow.version}, expected ${parsed.data.expectedVersion}`,
+        { current: workgroupRevisionOf(rowToWorkgroup(currentRow, members)) },
+      )
+    }
+    assertNoScheduledReferencesInTx(tx, principal, currentRow)
+    const grants = tx
+      .select({ userId: resourceGrants.userId })
+      .from(resourceGrants)
+      .where(and(eq(resourceGrants.resourceType, 'workgroup'), eq(resourceGrants.resourceId, id)))
+      .all()
+    const audience: WorkgroupDeletedAudienceContext = {
+      kind: 'workgroup.deleted-audience',
+      workgroupId: id,
+      visibility: currentRow.visibility,
+      ownerUserId: currentRow.ownerUserId,
+      grantedUserIds: new Set(grants.map((grant) => grant.userId)),
+    }
+    const deleted = tx
+      .delete(workgroups)
+      .where(and(eq(workgroups.id, id), eq(workgroups.version, parsed.data.expectedVersion)))
+      .returning({ id: workgroups.id })
+      .get()
+    if (deleted === undefined) {
+      throw new ConflictError('workgroup-version-conflict', `workgroup '${id}' changed; reload`)
+    }
+    return { deletedVersion: currentRow.version, audience }
+  })
+  workgroupsBroadcaster.broadcast(
+    WORKGROUPS_CHANNEL,
+    {
+      type: 'workgroup.deleted',
+      workgroupId: id,
+      clientMutationId: parsed.data.clientMutationId,
+      deletedVersion: deleted.deletedVersion,
+    },
+    deleted.audience,
+  )
 }
 
 /**
- * RFC-165 §9b（实现门 P1 修复）：workgroup 定时任务把目标冻结为可变的 NAME
- * （tasks 走 id + 快照，定时行不是）。rename/delete 遇引用行 → 409，防
- * 「先静默失败、名字复用后打错组」。
+ * Compatibility adapter for the historical rename endpoint. It is fenced and
+ * delegates to saveWorkgroup, so it cannot race the autosave writer.
  */
-async function scheduledRowsReferencingWorkgroup(
+export async function renameWorkgroup(
   db: DbClient,
+  id: string,
+  input: {
+    newName: string
+    description?: string
+    expectedVersion: number
+    clientMutationId: string
+  },
+  principal: WorkgroupWritePrincipal,
+): Promise<SaveWorkgroupReceipt> {
+  const current = await getWorkgroupById(db, id)
+  if (current === null) throwWorkgroupNotFound(id)
+  const snapshot = workgroupDraftSnapshotOf(current)
+  return saveWorkgroup(
+    db,
+    id,
+    {
+      expectedVersion: input.expectedVersion,
+      clientMutationId: input.clientMutationId,
+      snapshot: {
+        ...snapshot,
+        name: input.newName,
+        description: input.description ?? snapshot.description,
+      },
+    },
+    principal,
+  )
+}
+
+/** Complete editable snapshot; member DB ids and ACL fields never enter it. */
+export function workgroupDraftSnapshotOf(group: Workgroup): WorkgroupDraftSnapshot {
+  const ordered = [...group.members].sort(
+    (left, right) =>
+      left.sortOrder - right.sortOrder || left.displayName.localeCompare(right.displayName),
+  )
+  const leader = ordered.find((member) => member.id === group.leaderMemberId)
+  return normalizeWorkgroupSnapshot({
+    name: group.name,
+    description: group.description,
+    instructions: group.instructions,
+    mode: group.mode,
+    ...(group.mode === 'leader_worker' && leader !== undefined
+      ? { leaderDisplayName: leader.displayName }
+      : {}),
+    switches: { ...group.switches },
+    maxRounds: group.maxRounds,
+    completionGate: group.completionGate,
+    clarifyBudget: group.clarifyBudget ?? WG_CLARIFY_BUDGET_DEFAULT,
+    fanOut: group.fanOut ?? false,
+    members: ordered.map((member) =>
+      member.memberType === 'agent'
+        ? {
+            memberType: 'agent' as const,
+            ...(member.agentId
+              ? { agentId: member.agentId }
+              : { agentName: member.agentName ?? '__unresolved__' }),
+            displayName: member.displayName,
+            roleDesc: member.roleDesc,
+          }
+        : {
+            memberType: 'human' as const,
+            userId: member.userId ?? '',
+            displayName: member.displayName,
+            roleDesc: member.roleDesc,
+          },
+    ),
+  })
+}
+
+export function workgroupSnapshotHashOf(snapshot: WorkgroupDraftSnapshot): WorkgroupSnapshotHash {
+  return createHash('sha256')
+    .update(serializeWorkgroupEditableSnapshotV1(normalizeWorkgroupSnapshot(snapshot)), 'utf8')
+    .digest('hex') as WorkgroupSnapshotHash
+}
+
+export function workgroupRevisionOf(group: Workgroup): WorkgroupRevision {
+  const snapshot = workgroupDraftSnapshotOf(group)
+  return {
+    workgroupId: group.id,
+    version: group.version,
+    snapshotHash: workgroupSnapshotHashOf(snapshot),
+    updatedAt: group.updatedAt,
+  }
+}
+
+export function workgroupToDetail(group: Workgroup): WorkgroupDetail {
+  return { ...group, snapshotHash: workgroupSnapshotHashOf(workgroupDraftSnapshotOf(group)) }
+}
+
+/** New agent selectors referenced by `next` that `prev` did not reference. */
+export function diffNewAgentMemberNames(
+  prev: Pick<Workgroup, 'members'> | null,
+  next: {
+    members: ReadonlyArray<{ memberType: string; agentId?: string; agentName?: string }>
+  },
+): string[] {
+  const previous = new Set(
+    (prev?.members ?? []).flatMap((member) =>
+      member.memberType !== 'agent'
+        ? []
+        : [member.agentId ?? member.agentName].filter((value): value is string => Boolean(value)),
+    ),
+  )
+  return [
+    ...new Set(
+      next.members.flatMap((member) => {
+        if (member.memberType !== 'agent') return []
+        const token = member.agentId ?? member.agentName
+        return token && !previous.has(token) ? [token] : []
+      }),
+    ),
+  ]
+}
+
+function normalizeWorkgroupSnapshot(snapshot: WorkgroupDraftSnapshot): WorkgroupDraftSnapshot {
+  return WorkgroupDraftSnapshotSchema.parse({
+    name: snapshot.name,
+    description: snapshot.description,
+    instructions: snapshot.instructions,
+    mode: snapshot.mode,
+    ...(snapshot.mode === 'leader_worker' && snapshot.leaderDisplayName
+      ? { leaderDisplayName: snapshot.leaderDisplayName }
+      : {}),
+    switches: { ...snapshot.switches },
+    maxRounds: snapshot.maxRounds,
+    completionGate: snapshot.completionGate,
+    clarifyBudget: snapshot.clarifyBudget,
+    fanOut: snapshot.fanOut,
+    members: snapshot.members.map((member) =>
+      member.memberType === 'agent'
+        ? {
+            memberType: 'agent' as const,
+            ...(member.agentId ? { agentId: member.agentId } : { agentName: member.agentName }),
+            displayName: member.displayName,
+            roleDesc: member.roleDesc,
+          }
+        : {
+            memberType: 'human' as const,
+            userId: member.userId,
+            displayName: member.displayName,
+            roleDesc: member.roleDesc,
+          },
+    ),
+  })
+}
+
+function rosterBytes(snapshot: WorkgroupDraftSnapshot): string {
+  return JSON.stringify({
+    leaderDisplayName: snapshot.leaderDisplayName ?? null,
+    members: snapshot.members,
+  })
+}
+
+async function loadRawWorkgroup(db: DbClient, id: string): Promise<WorkgroupRow | null> {
+  const rows = await db.select().from(workgroups).where(eq(workgroups.id, id)).limit(1)
+  return rows[0] ?? null
+}
+
+async function getWorkgroupDetailByRow(db: DbClient, row: WorkgroupRow): Promise<WorkgroupDetail> {
+  const members = await db
+    .select()
+    .from(workgroupMembers)
+    .where(eq(workgroupMembers.workgroupId, row.id))
+  return workgroupToDetail(rowToWorkgroup(row, members))
+}
+
+async function assertPrincipalCanWritePreflight(
+  db: DbClient,
+  principal: WorkgroupWritePrincipal,
+  row: WorkgroupRow,
+): Promise<void> {
+  if (principal.kind === 'system') return
+  if (!(await canViewResource(db, principal.actor, 'workgroup', row))) {
+    throwWorkgroupNotFound(row.id)
+  }
+  if (!isResourceOwner(principal.actor, row)) {
+    throw new ForbiddenError(
+      'forbidden',
+      'only the workgroup owner or a resource admin can modify it',
+    )
+  }
+}
+
+function assertPrincipalCanWriteInTx(
+  tx: DbTxSync,
+  principal: WorkgroupWritePrincipal,
+  row: WorkgroupRow,
+): void {
+  if (principal.kind === 'system') return
+  const actor = principal.actor
+  const isAdmin = isResourceAdminActor(actor)
+  const isOwner = row.ownerUserId !== null && row.ownerUserId === actor.user.id
+  let visible = isAdmin || isOwner || row.visibility === 'public'
+  if (!visible) {
+    visible =
+      tx
+        .select({ resourceId: resourceGrants.resourceId })
+        .from(resourceGrants)
+        .where(
+          and(
+            eq(resourceGrants.resourceType, 'workgroup'),
+            eq(resourceGrants.resourceId, row.id),
+            eq(resourceGrants.userId, actor.user.id),
+          ),
+        )
+        .get() !== undefined
+  }
+  if (!visible) throwWorkgroupNotFound(row.id)
+  if (!isAdmin && !isOwner) {
+    throw new ForbiddenError(
+      'forbidden',
+      'only the workgroup owner or a resource admin can modify it',
+    )
+  }
+}
+
+function assertNameChangeAllowedInTx(
+  tx: DbTxSync,
+  principal: WorkgroupWritePrincipal,
+  current: Workgroup,
+  nextName: string,
+): void {
+  if (nextName === current.name) return
+  const collision = tx
+    .select({ id: workgroups.id })
+    .from(workgroups)
+    .where(eq(workgroups.name, nextName))
+    .get()
+  if (collision !== undefined && collision.id !== current.id) {
+    throw new ConflictError(
+      'workgroup-name-in-use',
+      `workgroup '${nextName}' already exists; pick a different name`,
+    )
+  }
+  assertNoScheduledReferencesInTx(tx, principal, {
+    id: current.id,
+    name: current.name,
+  })
+}
+
+function assertNoScheduledReferencesInTx(
+  tx: DbTxSync,
+  principal: WorkgroupWritePrincipal,
   target: { id: string; name: string },
-): Promise<Array<{ id: string; name: string; ownerUserId: string }>> {
-  const rows = await db
+): void {
+  const rows = tx
     .select({
       id: scheduledTasks.id,
       name: scheduledTasks.name,
@@ -236,191 +638,165 @@ async function scheduledRowsReferencingWorkgroup(
       ownerUserId: scheduledTasks.ownerUserId,
     })
     .from(scheduledTasks)
-  const out: Array<{ id: string; name: string; ownerUserId: string }> = []
-  for (const row of rows) {
-    if (row.launchKind !== 'workgroup') continue
+    .all()
+  const refs = rows.filter((row) => {
+    if (row.launchKind !== 'workgroup') return false
     try {
-      const p = JSON.parse(row.launchPayload) as { workgroupId?: unknown; workgroupName?: unknown }
-      // RFC-223 (PR-2): payload now carries canonical workgroupId (stamped at
-      // save, backfilled by migration 0112); match it primarily, falling back
-      // to the display workgroupName for not-yet-backfilled rows (1:1 until PR-8).
-      if (p.workgroupId === target.id || p.workgroupName === target.name)
-        out.push({ id: row.id, name: row.name, ownerUserId: row.ownerUserId })
+      const payload = JSON.parse(row.launchPayload) as {
+        workgroupId?: unknown
+        workgroupName?: unknown
+      }
+      return payload.workgroupId === target.id || payload.workgroupName === target.name
     } catch {
-      /* degraded rows are repaired/deleted via their own flow */
+      return false
     }
-  }
-  return out
-}
-
-export async function deleteWorkgroup(db: DbClient, name: string, actor: Actor): Promise<void> {
-  const existing = await getWorkgroup(db, name)
-  if (existing === null) {
-    throw new NotFoundError('workgroup-not-found', `workgroup '${name}' not found`)
-  }
-  // No task-side guard: tasks link by id + own a config snapshot, so
-  // historical/running tasks keep functioning after the resource is deleted
-  // (same durable-soft-link philosophy as tasks.scheduled_task_id).
-  // Scheduled rows are the exception — they reference the mutable NAME.
-  const schedRefs = await scheduledRowsReferencingWorkgroup(db, { id: existing.id, name })
-  if (schedRefs.length > 0) {
-    // RFC-203 T6: principal-aware disclosure (deleteWorkflow precedent) —
-    // schedules are member-private, so names show only for the actor's own
-    // schedules (or tasks:read:all admins); the rest is a count.
-    throw new ConflictError(
-      'workgroup-scheduled-referenced',
-      `workgroup '${name}' is the target of ${schedRefs.length} scheduled task(s); delete or repoint them first`,
-      discloseScheduleRefs(actor, schedRefs),
-    )
-  }
-  await db.delete(workgroups).where(eq(workgroups.name, name))
-}
-
-/**
- * Rename a group and/or edit its description atomically (2026-07-13, 用户拍板
- * 「后端原子端点」). Both are the group's metadata fields, edited together in
- * the detail-page rename dialog:
- *   - `newName === oldName` ⇒ description-only edit: the name-collision and
- *     scheduled-reference guards DON'T apply (nothing about the name changes),
- *     so a description edit is never blocked by a scheduled task.
- *   - `description === undefined` ⇒ pure rename: the stored description is left
- *     untouched (the config PUT no longer carries it).
- * A no-op (name unchanged AND description unchanged/omitted) returns early.
- */
-export async function renameWorkgroup(
-  db: DbClient,
-  oldName: string,
-  newName: string,
-  actor: Actor,
-  description?: string,
-): Promise<Workgroup> {
-  const existing = await getWorkgroup(db, oldName)
-  if (existing === null) {
-    throw new NotFoundError('workgroup-not-found', `workgroup '${oldName}' not found`)
-  }
-  const nameChanged = newName !== oldName
-  const descChanged = description !== undefined && description !== existing.description
-  if (!nameChanged && !descChanged) return existing
-  if (nameChanged) {
-    if ((await getWorkgroup(db, newName)) !== null) {
-      throw new ConflictError(
-        'workgroup-name-in-use',
-        `workgroup '${newName}' already exists; pick a different name`,
-      )
-    }
-    // Tasks link by id; scheduled rows reference the mutable NAME (RFC-165 §9b)
-    // — refuse the rename while any point at this group. (A description-only
-    // edit keeps the name, so this guard is skipped for it.)
-    const schedRefs = await scheduledRowsReferencingWorkgroup(db, {
-      id: existing.id,
-      name: oldName,
-    })
-    if (schedRefs.length > 0) {
-      throw new ConflictError(
-        'workgroup-scheduled-referenced',
-        `workgroup '${oldName}' is the target of ${schedRefs.length} scheduled task(s); repoint them before renaming`,
-        discloseScheduleRefs(actor, schedRefs),
-      )
-    }
-  }
-  await db
-    .update(workgroups)
-    .set({
-      ...(nameChanged ? { name: newName } : {}),
-      ...(descChanged ? { description } : {}),
-      updatedAt: Date.now(),
-    })
-    .where(eq(workgroups.name, oldName))
-  const renamed = await getWorkgroup(db, nameChanged ? newName : oldName)
-  if (renamed === null) throw new Error('workgroup disappeared after rename')
-  return renamed
-}
-
-/** New agent names referenced by `next` that `prev` didn't reference (D15 input). */
-export function diffNewAgentMemberNames(
-  prev: Pick<Workgroup, 'members'> | null,
-  next: { members: ReadonlyArray<{ memberType: string; agentName?: string | undefined }> },
-): string[] {
-  const prevNames = new Set(
-    (prev?.members ?? [])
-      .filter((m) => m.memberType === 'agent' && m.agentName !== null)
-      .map((m) => m.agentName as string),
+  })
+  if (refs.length === 0) return
+  const details =
+    principal.kind === 'actor'
+      ? discloseScheduleRefs(principal.actor, refs)
+      : {
+          scheduledCount: refs.length,
+          visibleScheduled: refs.map((row) => ({ id: row.id, name: row.name })),
+          hiddenCount: 0,
+        }
+  throw new ConflictError(
+    'workgroup-scheduled-referenced',
+    `workgroup '${target.name}' is the target of ${refs.length} scheduled task(s); delete or repoint them first`,
+    details,
   )
-  const out = new Set<string>()
-  for (const m of next.members) {
-    if (m.memberType !== 'agent') continue
-    if (m.agentName === undefined || m.agentName.length === 0) continue
-    if (!prevNames.has(m.agentName)) out.add(m.agentName)
-  }
-  return [...out]
 }
 
-// --- internals ---
-
-type MemberInput = CreateWorkgroup['members'][number]
-
-/**
- * RFC-223 (PR-2) — resolve each agent member's `agentName` to its canonical
- * agents.id (name↔id 1:1 until PR-8, so deterministic). A name with no matching
- * agent row (a soft reference to an agent that does not exist yet) maps to null:
- * the member is stored name-only and launch readiness reports it missing until
- * the agent exists AND the roster is re-saved. One query over the roster.
- */
-async function resolveMemberAgentIds(
+async function prepareAgentMembers(
   db: DbClient,
   actor: Actor | null,
-  members: readonly MemberInput[],
-  grandfatheredIds?: ReadonlySet<string>,
+  members: readonly WorkgroupDraftMember[],
+  existingMembers: readonly MemberRow[],
+): Promise<PreparedAgentMembers> {
+  const ids = [
+    ...new Set(
+      members.flatMap((member) =>
+        member.memberType === 'agent' && member.agentId ? [member.agentId] : [],
+      ),
+    ),
+  ]
+  const grandfatheredIds = new Set(
+    existingMembers.flatMap((member) => (member.agentId ? [member.agentId] : [])),
+  )
+  const resolved = await resolveRefsUsableById(db, actor, 'agent', ids, { grandfatheredIds })
+  assertNoMissingRefs(resolved.missing)
+  const rows =
+    ids.length === 0
+      ? []
+      : await db
+          .select({ id: agents.id, name: agents.name })
+          .from(agents)
+          .where(inArray(agents.id, ids))
+  const nameById = new Map(rows.map((row) => [row.id, row.name]))
+  const missingIds = ids.filter((id) => !nameById.has(id))
+  if (missingIds.length > 0) {
+    throw new ValidationError('workgroup-member-agent-invalid', 'agent member id(s) do not exist', {
+      agentIds: missingIds,
+    })
+  }
+
+  const existingLegacyNames = new Set(
+    existingMembers.flatMap((member) =>
+      member.memberType === 'agent' && member.agentId === null && member.agentName
+        ? [member.agentName]
+        : [],
+    ),
+  )
+  const newLegacyNames = [
+    ...new Set(
+      members.flatMap((member) =>
+        member.memberType === 'agent' &&
+        !member.agentId &&
+        member.agentName &&
+        !existingLegacyNames.has(member.agentName)
+          ? [member.agentName]
+          : [],
+      ),
+    ),
+  ]
+  if (newLegacyNames.length > 0) {
+    const checked = await resolveRefsUsableById(db, actor, 'agent', newLegacyNames)
+    assertNoMissingRefs(checked.missing)
+  }
+  return { nameById }
+}
+
+async function resolveCreateMemberAgentIds(
+  db: DbClient,
+  actor: Actor | null,
+  members: Readonly<CreateWorkgroup['members']>,
 ): Promise<Map<string, string>> {
   const names = [
     ...new Set(
-      members.flatMap((m) => (m.memberType === 'agent' && m.agentName ? [m.agentName] : [])),
+      members.flatMap((member) =>
+        member.memberType === 'agent' && member.agentName ? [member.agentName] : [],
+      ),
     ),
   ]
-  if (names.length === 0) return new Map()
-  // RFC-223 (PR-1, Codex impl-gate P1-2): resolve name→id AND ACL-check NEW
-  // members in ONE pass, so the id the ACL gate approves is the id persisted.
-  // A dangling name (no agent row) stays absent from the map → member stored
-  // name-only (soft reference), unchanged behavior.
-  const res = await resolveRefsUsableById(db, actor, 'agent', names, { grandfatheredIds })
-  assertNoMissingRefs(res.missing)
-  return res.byToken
+  const result = await resolveRefsUsableById(db, actor, 'agent', names)
+  assertNoMissingRefs(result.missing)
+  return result.byToken
 }
 
-function buildMemberValues(
+function buildCreateMemberValues(
   groupId: string,
-  members: readonly MemberInput[],
+  members: Readonly<CreateWorkgroup['members']>,
   now: number,
   agentIdByName: ReadonlyMap<string, string>,
 ): Array<typeof workgroupMembers.$inferInsert> {
-  return members.map((m, i) => ({
+  return members.map((member, index) => ({
     id: ulid(),
     workgroupId: groupId,
-    memberType: m.memberType,
-    agentName: m.memberType === 'agent' ? (m.agentName ?? null) : null,
-    // RFC-223 (PR-2): freeze the resolved canonical agent id beside the name.
+    memberType: member.memberType,
+    agentName: member.memberType === 'agent' ? (member.agentName ?? null) : null,
     agentId:
-      m.memberType === 'agent' && m.agentName ? (agentIdByName.get(m.agentName) ?? null) : null,
-    userId: m.memberType === 'human' ? (m.userId ?? null) : null,
-    displayName: m.displayName,
-    roleDesc: m.roleDesc,
-    sortOrder: i,
+      member.memberType === 'agent' && member.agentName
+        ? (agentIdByName.get(member.agentName) ?? null)
+        : null,
+    userId: member.memberType === 'human' ? (member.userId ?? null) : null,
+    displayName: member.displayName,
+    roleDesc: member.roleDesc,
+    sortOrder: index,
+    createdAt: now,
+  }))
+}
+
+function buildDraftMemberValues(
+  groupId: string,
+  members: readonly WorkgroupDraftMember[],
+  now: number,
+  agentsPrepared: PreparedAgentMembers,
+): Array<typeof workgroupMembers.$inferInsert> {
+  return members.map((member, index) => ({
+    id: ulid(),
+    workgroupId: groupId,
+    memberType: member.memberType,
+    agentName:
+      member.memberType === 'agent'
+        ? member.agentId
+          ? (agentsPrepared.nameById.get(member.agentId) ?? null)
+          : (member.agentName ?? null)
+        : null,
+    agentId: member.memberType === 'agent' ? (member.agentId ?? null) : null,
+    userId: member.memberType === 'human' ? (member.userId ?? null) : null,
+    displayName: member.displayName,
+    roleDesc: member.roleDesc,
+    sortOrder: index,
     createdAt: now,
   }))
 }
 
 function resolveLeaderMemberId(
-  input: { mode: WorkgroupMode; leaderDisplayName?: string | undefined },
-  memberValues: ReadonlyArray<typeof workgroupMembers.$inferInsert>,
+  input: { mode: string; leaderDisplayName?: string },
+  members: ReadonlyArray<typeof workgroupMembers.$inferInsert>,
 ): string | null {
-  // Only leader_worker has a leader; free_collab AND dynamic_workflow return null.
-  if (input.mode !== 'leader_worker') return null
-  // 决策 #21 quick create: a leaderless leader_worker group is SAVE-valid;
-  // launch enforces readiness via workgroupLaunchReadiness.
-  if (input.leaderDisplayName === undefined) return null
-  // Zod superRefine already guaranteed agent-member when provided; re-check
-  // defensively for service-layer callers that bypass the route schema.
-  const leader = memberValues.find((m) => m.displayName === input.leaderDisplayName)
+  if (input.mode !== 'leader_worker' || input.leaderDisplayName === undefined) return null
+  const leader = members.find((member) => member.displayName === input.leaderDisplayName)
   if (leader === undefined || leader.memberType !== 'agent') {
     throw new ValidationError(
       'workgroup-leader-invalid',
@@ -432,25 +808,25 @@ function resolveLeaderMemberId(
 
 async function assertHumanMembersActive(
   db: DbClient,
-  members: readonly MemberInput[],
+  members: ReadonlyArray<{ memberType: string; userId?: string }>,
 ): Promise<void> {
   const ids = [
     ...new Set(
-      members
-        .filter((m) => m.memberType === 'human' && m.userId !== undefined)
-        .map((m) => m.userId as string),
+      members.flatMap((member) =>
+        member.memberType === 'human' && member.userId ? [member.userId] : [],
+      ),
     ),
   ]
   if (ids.length === 0) return
   const rows = await db
     .select({ id: users.id, status: users.status })
     .from(users)
-    .where(and(inArray(users.id, ids)))
-  const active = new Set(rows.filter((r) => r.status === 'active').map((r) => r.id))
-  const bad = ids.filter((id) => !active.has(id))
-  if (bad.length > 0) {
+    .where(inArray(users.id, ids))
+  const active = new Set(rows.filter((row) => row.status === 'active').map((row) => row.id))
+  const invalid = ids.filter((id) => !active.has(id))
+  if (invalid.length > 0) {
     throw new ValidationError('workgroup-member-user-invalid', 'human member user(s) not active', {
-      userIds: bad,
+      userIds: invalid,
     })
   }
 }
@@ -458,16 +834,19 @@ async function assertHumanMembersActive(
 function rowToWorkgroup(row: WorkgroupRow, memberRows: MemberRow[]): Workgroup {
   const members: WorkgroupMember[] = memberRows
     .slice()
-    .sort((a, b) => a.sortOrder - b.sortOrder || a.displayName.localeCompare(b.displayName))
-    .map((m) => ({
-      id: m.id,
-      memberType: m.memberType,
-      agentName: m.agentName,
-      agentId: m.agentId,
-      userId: m.userId,
-      displayName: m.displayName,
-      roleDesc: m.roleDesc,
-      sortOrder: m.sortOrder,
+    .sort(
+      (left, right) =>
+        left.sortOrder - right.sortOrder || left.displayName.localeCompare(right.displayName),
+    )
+    .map((member) => ({
+      id: member.id,
+      memberType: member.memberType,
+      agentName: member.agentName,
+      agentId: member.agentId,
+      userId: member.userId,
+      displayName: member.displayName,
+      roleDesc: member.roleDesc,
+      sortOrder: member.sortOrder,
     }))
   return {
     id: row.id,
@@ -486,10 +865,15 @@ function rowToWorkgroup(row: WorkgroupRow, memberRows: MemberRow[]): Workgroup {
     clarifyBudget: row.clarifyBudget,
     fanOut: row.fanOut,
     members,
+    version: row.version,
     ownerUserId: row.ownerUserId,
     visibility: row.visibility,
     schemaVersion: row.schemaVersion,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   }
+}
+
+function throwWorkgroupNotFound(id: string): never {
+  throw new NotFoundError('workgroup-not-found', `workgroup '${id}' not found`)
 }

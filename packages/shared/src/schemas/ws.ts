@@ -11,6 +11,7 @@ import { ClarifySessionSchema, ClarifySessionSummarySchema } from './clarify'
 import { BatchImportRowSchema } from './repoBatchImport'
 import { MemorySummarySchema } from './memory'
 import { WorkflowMutationIdSchema, WorkflowSnapshotHashSchema } from './workflow'
+import { WorkgroupMutationIdSchema, WorkgroupSnapshotHashSchema } from './workgroup'
 
 // -----------------------------------------------------------------------------
 // /ws/tasks/{taskId}
@@ -281,6 +282,35 @@ export const WorkflowsWsMessageSchema = z.discriminatedUnion('type', [
 export type WorkflowsWsMessage = z.infer<typeof WorkflowsWsMessageSchema>
 
 // -----------------------------------------------------------------------------
+// /ws/workgroups (list + editor multi-tab sync)
+// -----------------------------------------------------------------------------
+
+export const WorkgroupsWsMessageSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('workgroup.created'),
+    workgroupId: z.string(),
+    name: z.string(),
+    version: z.number().int().positive(),
+  }),
+  z.object({
+    type: z.literal('workgroup.updated'),
+    workgroupId: z.string(),
+    clientMutationId: WorkgroupMutationIdSchema,
+    version: z.number().int().positive(),
+    snapshotHash: WorkgroupSnapshotHashSchema,
+    updatedAt: z.number().int(),
+  }),
+  z.object({
+    type: z.literal('workgroup.deleted'),
+    workgroupId: z.string(),
+    clientMutationId: WorkgroupMutationIdSchema,
+    deletedVersion: z.number().int().positive(),
+  }),
+  z.object({ type: z.literal('workgroup.acl.updated'), workgroupId: z.string() }),
+])
+export type WorkgroupsWsMessage = z.infer<typeof WorkgroupsWsMessageSchema>
+
+// -----------------------------------------------------------------------------
 // /ws/repo-imports/{batchId} — RFC-033 batch import progress.
 // -----------------------------------------------------------------------------
 
@@ -408,6 +438,8 @@ export const WS_PATHS = {
   tasksList: '/ws/tasks',
   /** Workflow list + editor multi-tab sync (per-frame ACL-filtered). */
   workflows: '/ws/workflows',
+  /** Workgroup list + editor multi-tab sync (per-frame ACL-filtered). */
+  workgroups: '/ws/workgroups',
   /** RFC-033 — per-batch repo import progress. */
   repoImport: (batchId: string): string => `/ws/repo-imports/${encodeURIComponent(batchId)}`,
   /** RFC-041 — platform memory candidate / promotion stream (per-frame scope-filtered). */

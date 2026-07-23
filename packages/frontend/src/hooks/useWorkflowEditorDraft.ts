@@ -71,6 +71,9 @@ export interface UseWorkflowEditorDraftOptions {
   initial: WorkflowDetail | WorkflowRemoteSnapshot
   transport?: WorkflowEditorDraftControllerTransport
   debounceMs?: number
+  /** Keeps a valid local draft dirty without emitting saves (for composite
+   *  editors that currently own an invalid/transient sub-draft). */
+  autosaveSuspended?: boolean
   scheduler?: WorkflowEditorDraftScheduler
   mutationIdFactory?: () => WorkflowMutationId
   hashSnapshot?: (snapshot: WorkflowDraftSnapshot) => Promise<WorkflowSnapshotHash>
@@ -253,6 +256,7 @@ export function useWorkflowEditorDraft(
       capturedSnapshot?: WorkflowDraftSnapshot,
       ensureIdleFence = false,
     ): Promise<void> => {
+      if (mode === 'autosave' && optionsRef.current.autosaveSuspended === true) return
       const beforeHash = stateRef.current
       // ensureSaved's 300ms quiet period belongs to one exact revision. If a
       // stale timer fires after another keystroke, do not silently retarget it
@@ -511,6 +515,7 @@ export function useWorkflowEditorDraft(
   const scheduleAutosave = useCallback(
     (revision: number): void => {
       clearDebounceTimer()
+      if (optionsRef.current.autosaveSuspended === true) return
       const activeScheduler = optionsRef.current.scheduler ?? DEFAULT_SCHEDULER
       debounceTimerRef.current = activeScheduler.setTimeout(
         () => {
@@ -681,6 +686,7 @@ export function useWorkflowEditorDraft(
   )
 
   const retry = useCallback((): void => {
+    if (optionsRef.current.autosaveSuspended === true) return
     const current = stateRef.current
     if (current.phase === 'reconciling') {
       wake(false)
@@ -880,6 +886,17 @@ export function useWorkflowEditorDraft(
     lastConnectionEpochRef.current = epoch
     wake(true)
   }, [options.connectionEpoch, wake])
+
+  useEffect(() => {
+    if (options.autosaveSuspended === true) {
+      clearDebounceTimer()
+      return
+    }
+    const current = stateRef.current
+    if (current.phase === 'dirty' && current.inFlight === null && current.transport !== 'offline') {
+      scheduleAutosave(current.revision)
+    }
+  }, [clearDebounceTimer, options.autosaveSuspended, scheduleAutosave])
 
   const hasOpenedSocketRef = useRef((options.connectionEpoch ?? 0) > 0)
   useEffect(() => {

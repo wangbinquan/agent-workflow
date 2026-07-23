@@ -217,7 +217,7 @@ describe('RFC-212 T4 — every channel declares its revalidation strategy (AC-5)
   const kinds = Object.keys(WS_CHANNELS) as WsChannelKind[]
 
   test('the registry is non-empty and every kind is present', () => {
-    expect(kinds.length).toBe(7)
+    expect(kinds.length).toBe(8)
     for (const kind of kinds) expect(WS_CHANNELS[kind].kind).toBe(kind)
   })
 
@@ -265,7 +265,7 @@ describe('RFC-212 T4 — every channel declares its revalidation strategy (AC-5)
     const cachingChannels = kinds.filter(
       (k) => WS_CHANNELS[k].revalidation.cache.kind === 'prefixes',
     )
-    expect(cachingChannels.sort()).toEqual(['tasks-list', 'workflows'])
+    expect(cachingChannels.sort()).toEqual(['tasks-list', 'workflows', 'workgroups'])
     // `wf:` is the workflows prefix; the tasks-list cache is keyed by raw taskId.
     expect(src.includes('`wf:${')).toBe(true)
   })

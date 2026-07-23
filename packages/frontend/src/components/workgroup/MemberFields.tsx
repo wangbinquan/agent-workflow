@@ -36,10 +36,11 @@ function fieldError(t: (k: string) => string, key: string | undefined): string |
 // ---------------------------------------------------------------------------
 
 export interface AgentMemberDraft {
+  agentId: string
   agentName: string
   displayName: string
   roleDesc: string
-  setAgentName: (v: string) => void
+  setAgent: (id: string, name: string) => void
   setDisplayName: (v: string) => void
   setRoleDesc: (v: string) => void
   errors: Record<string, string>
@@ -50,11 +51,13 @@ export interface AgentMemberDraft {
 }
 
 export function useAgentMemberDraft(others: MemberDraftOthers): AgentMemberDraft {
+  const [agentId, setAgentId] = useState('')
   const [agentName, setAgentName] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [aliasTouched, setAliasTouched] = useState(false)
   const [roleDesc, setRoleDesc] = useState('')
   const reset = useCallback(() => {
+    setAgentId('')
     setAgentName('')
     setDisplayName('')
     setAliasTouched(false)
@@ -62,17 +65,19 @@ export function useAgentMemberDraft(others: MemberDraftOthers): AgentMemberDraft
   }, [])
 
   const errors = validateMemberDraft(
-    { memberType: 'agent', agentName, userId: '', displayName },
+    { memberType: 'agent', agentId, agentName, userId: '', displayName },
     others,
   )
   return {
+    agentId,
     agentName,
     displayName,
     roleDesc,
-    setAgentName: (v) => {
-      setAgentName(v)
+    setAgent: (id, name) => {
+      setAgentId(id)
+      setAgentName(name)
       // The alias defaults to the agent name until hand-edited.
-      if (!aliasTouched) setDisplayName(sanitizeMemberAlias(v))
+      if (!aliasTouched) setDisplayName(sanitizeMemberAlias(name))
     },
     setDisplayName: (v) => {
       setAliasTouched(true)
@@ -81,9 +86,9 @@ export function useAgentMemberDraft(others: MemberDraftOthers): AgentMemberDraft
     setRoleDesc,
     errors,
     invalid: Object.keys(errors).length > 0,
-    dirty: agentName !== '' || displayName !== '' || roleDesc !== '',
+    dirty: agentId !== '' || agentName !== '' || displayName !== '' || roleDesc !== '',
     reset,
-    buildRow: () => makeAgentMemberRow({ agentName, displayName, roleDesc }),
+    buildRow: () => makeAgentMemberRow({ agentId, agentName, displayName, roleDesc }),
   }
 }
 
@@ -100,9 +105,12 @@ export function AgentMemberFields({ draft }: { draft: AgentMemberDraft }) {
           validated, so restricting the picker to real agents loses nothing. */}
       <Field label={t('workgroups.memberFieldAgent')} required>
         <Select<string>
-          value={draft.agentName}
-          onChange={draft.setAgentName}
-          options={agents.map((a) => ({ value: a.name, label: a.name }))}
+          value={draft.agentId}
+          onChange={(agentId) => {
+            const picked = agents.find((agent) => agent.id === agentId)
+            draft.setAgent(agentId, picked?.name ?? '')
+          }}
+          options={agents.map((a) => ({ value: a.id, label: a.name }))}
           searchable
           placeholder={t('workgroups.memberAgentPlaceholder')}
           ariaLabel={t('workgroups.memberFieldAgent')}
@@ -112,7 +120,7 @@ export function AgentMemberFields({ draft }: { draft: AgentMemberDraft }) {
       {/* RFC-166 §4.2 — preview the picked agent's real capability (what the
           leader will see in the roster) as the name is selected. */}
       {(() => {
-        const picked = agents.find((a) => a.name === draft.agentName)
+        const picked = agents.find((a) => a.id === draft.agentId)
         return picked !== undefined ? (
           <div className="workgroup-agent-preview">
             <AgentCapabilityCard agent={picked} compact />
@@ -177,7 +185,7 @@ export function useHumanMemberDraft(others: MemberDraftOthers): HumanMemberDraft
   const user = picked[0]
 
   const errors = validateMemberDraft(
-    { memberType: 'human', agentName: '', userId: user?.id ?? '', displayName },
+    { memberType: 'human', agentId: '', agentName: '', userId: user?.id ?? '', displayName },
     others,
   )
   return {

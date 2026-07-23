@@ -24,8 +24,10 @@ import {
   MEMORY_CHANNEL,
   MEMORY_DISTILL_JOB_CHANNEL,
   REPO_IMPORT_CHANNEL,
+  SCHEDULED_TASK_CHANNEL,
   TASK_CHANNEL,
   TASKS_LIST_CHANNEL,
+  WORKGROUPS_CHANNEL,
   WORKFLOWS_CHANNEL,
 } from '../src/ws/broadcaster'
 import {
@@ -83,6 +85,7 @@ const ALL_KINDS: WsChannelKind[] = [
   'task',
   'tasks-list',
   'workflows',
+  'workgroups',
   'repo-import',
   'memories',
   'memory-distill-jobs',
@@ -90,7 +93,7 @@ const ALL_KINDS: WsChannelKind[] = [
 ]
 
 describe('RFC-152 — WS_CHANNELS exhaustion lock', () => {
-  test('registry keys are exactly the seven channels (and WS_CHANNEL_KINDS mirrors them)', () => {
+  test('registry keys are exactly the eight channels (and WS_CHANNEL_KINDS mirrors them)', () => {
     expect(Object.keys(WS_CHANNELS).sort()).toEqual([...ALL_KINDS].sort())
     expect([...WS_CHANNEL_KINDS].sort()).toEqual([...ALL_KINDS].sort())
     for (const kind of ALL_KINDS) {
@@ -111,6 +114,10 @@ describe('RFC-152 — WS_CHANNELS exhaustion lock', () => {
     expect(WS_CHANNELS.workflows.helloName({ kind: 'workflows' })).toBe('workflows')
     expect(WS_CHANNELS.workflows.channelKeyOf({ kind: 'workflows' })).toBe(WORKFLOWS_CHANNEL)
     expect(WORKFLOWS_CHANNEL).toBe('workflows')
+    // workgroups
+    expect(WS_CHANNELS.workgroups.helloName({ kind: 'workgroups' })).toBe('workgroups')
+    expect(WS_CHANNELS.workgroups.channelKeyOf({ kind: 'workgroups' })).toBe(WORKGROUPS_CHANNEL)
+    expect(WORKGROUPS_CHANNEL).toBe('workgroups')
     // repo-import
     expect(WS_CHANNELS['repo-import'].helloName({ kind: 'repo-import', batchId: 'B1' })).toBe(
       'repo-imports/B1',
@@ -131,6 +138,14 @@ describe('RFC-152 — WS_CHANNELS exhaustion lock', () => {
       MEMORY_DISTILL_JOB_CHANNEL,
     )
     expect(MEMORY_DISTILL_JOB_CHANNEL).toBe('memory-distill-jobs')
+    // scheduled-tasks
+    expect(WS_CHANNELS['scheduled-tasks'].helloName({ kind: 'scheduled-tasks' })).toBe(
+      'scheduled-tasks',
+    )
+    expect(WS_CHANNELS['scheduled-tasks'].channelKeyOf({ kind: 'scheduled-tasks' })).toBe(
+      SCHEDULED_TASK_CHANNEL,
+    )
+    expect(SCHEDULED_TASK_CHANNEL).toBe('scheduled-tasks')
   })
 
   test('the three auth forms are NOT flattened (D1): gates sit exactly where they did', () => {
@@ -140,7 +155,9 @@ describe('RFC-152 — WS_CHANNELS exhaustion lock', () => {
     // (b) per-frame gates.
     expect(WS_CHANNELS['tasks-list'].frameGate).toBeDefined()
     expect(WS_CHANNELS.workflows.frameGate).toBeDefined()
+    expect(WS_CHANNELS.workgroups.frameGate).toBeDefined()
     expect(WS_CHANNELS.memories.frameGate).toBeDefined()
+    expect(WS_CHANNELS['scheduled-tasks'].frameGate).toBeDefined()
     // (c) token-only.
     expect(WS_CHANNELS['repo-import'].upgradeGate).toBeUndefined()
     expect(WS_CHANNELS['repo-import'].frameGate).toBeUndefined()
@@ -149,16 +166,19 @@ describe('RFC-152 — WS_CHANNELS exhaustion lock', () => {
     expect(WS_CHANNELS['memory-distill-jobs'].frameGate).toBeUndefined()
     expect(WS_CHANNELS['tasks-list'].upgradeGate).toBeUndefined()
     expect(WS_CHANNELS.workflows.upgradeGate).toBeUndefined()
+    expect(WS_CHANNELS.workgroups.upgradeGate).toBeUndefined()
     expect(WS_CHANNELS.memories.upgradeGate).toBeUndefined()
     // Admin short-circuit exactly where the old handlers had a sync
-    // role==='admin' fast path: workflows + memories. tasks-list stays on
+    // role==='admin' fast path: workflows + workgroups + memories. tasks-list stays on
     // the async path (canViewTask short-circuits internally).
     expect(WS_CHANNELS.workflows.adminShortCircuit).toBe(true)
+    expect(WS_CHANNELS.workgroups.adminShortCircuit).toBe(true)
     expect(WS_CHANNELS.memories.adminShortCircuit).toBe(true)
     expect(WS_CHANNELS['tasks-list'].adminShortCircuit).not.toBe(true)
     expect(WS_CHANNELS.task.adminShortCircuit).not.toBe(true)
     expect(WS_CHANNELS['repo-import'].adminShortCircuit).not.toBe(true)
     expect(WS_CHANNELS['memory-distill-jobs'].adminShortCircuit).not.toBe(true)
+    expect(WS_CHANNELS['scheduled-tasks'].adminShortCircuit).not.toBe(true)
     // onOpenExtra (replay) only on task.
     expect(WS_CHANNELS.task.onOpenExtra).toBeDefined()
     for (const kind of ALL_KINDS.filter((k) => k !== 'task')) {
@@ -176,9 +196,11 @@ describe('RFC-152 — WS_CHANNELS exhaustion lock', () => {
     expect(parse('/ws/tasks/T1?since=')).toEqual({ kind: 'task', taskId: 'T1' })
     expect(parse('/ws/tasks')).toEqual({ kind: 'tasks-list' })
     expect(parse('/ws/workflows')).toEqual({ kind: 'workflows' })
+    expect(parse('/ws/workgroups')).toEqual({ kind: 'workgroups' })
     expect(parse('/ws/repo-imports/B%2F1')).toEqual({ kind: 'repo-import', batchId: 'B/1' })
     expect(parse('/ws/memories')).toEqual({ kind: 'memories' })
     expect(parse('/ws/memory-distill-jobs')).toEqual({ kind: 'memory-distill-jobs' })
+    expect(parse('/ws/scheduled-tasks')).toEqual({ kind: 'scheduled-tasks' })
     // Unknown channels stay null (server maps to 404 ws-unknown-channel).
     expect(parse('/ws/bogus')).toBeNull()
     expect(parse('/ws/tasks/')).toBeNull()
@@ -190,9 +212,11 @@ describe('RFC-152 — WS_CHANNELS exhaustion lock', () => {
       ['/ws/tasks/T1', 'task'],
       ['/ws/tasks', 'tasks-list'],
       ['/ws/workflows', 'workflows'],
+      ['/ws/workgroups', 'workgroups'],
       ['/ws/repo-imports/B1', 'repo-import'],
       ['/ws/memories', 'memories'],
       ['/ws/memory-distill-jobs', 'memory-distill-jobs'],
+      ['/ws/scheduled-tasks', 'scheduled-tasks'],
     ]
     for (const [path, expected] of samples) {
       const matching = ALL_KINDS.filter((k) => WS_CHANNELS[k].pathRe.test(path))
@@ -228,13 +252,15 @@ describe('RFC-152 — upgrade gates (registry semantics == pre-registry branches
     })
   })
 
-  test('gate-less channels (repo-import / tasks-list / workflows / memories) pass through', async () => {
+  test('channels without upgrade gates pass through upgrade checks', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const actor = makeActor('user')
     expect(await checkUpgradeGate(db, actor, { kind: 'repo-import', batchId: 'b' })).toBe(true)
     expect(await checkUpgradeGate(db, actor, { kind: 'tasks-list' })).toBe(true)
     expect(await checkUpgradeGate(db, actor, { kind: 'workflows' })).toBe(true)
+    expect(await checkUpgradeGate(db, actor, { kind: 'workgroups' })).toBe(true)
     expect(await checkUpgradeGate(db, actor, { kind: 'memories' })).toBe(true)
+    expect(await checkUpgradeGate(db, actor, { kind: 'scheduled-tasks' })).toBe(true)
   })
 })
 

@@ -1,22 +1,22 @@
-// RFC-164/RFC-168 studio, hardened by RFC-201 T3.3.
-//
-// The workgroup endpoint is a full-document replace and regenerates every
-// member id. Config and the complete member collection therefore live in two
-// route-owned edit scopes but share one composite save transaction. Member
-// panels are controlled views over that route draft: switching cards, Close,
-// Escape and blank-area deselection never unmount the owned edit.
+// RFC-225 — workgroup detail studio with one versioned autosave writer.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, createRoute, useNavigate } from '@tanstack/react-router'
-import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
+import { createRoute, useNavigate } from '@tanstack/react-router'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { UpdateWorkgroup, Workgroup } from '@agent-workflow/shared'
+import { ulid } from 'ulid'
+import type {
+  SaveWorkgroupReceipt,
+  WorkgroupDetail,
+  WorkgroupDraftSnapshot,
+} from '@agent-workflow/shared'
 import { WORKGROUP_NAME_RE, workgroupLaunchReadiness } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
-import { DetailHeaderActions } from '@/components/DetailHeaderActions'
+import { AclPanel } from '@/components/AclPanel'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { Dialog } from '@/components/Dialog'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
-import { NoticeBanner } from '@/components/NoticeBanner'
 import { PageHeader } from '@/components/PageHeader'
 import { RenameDialog } from '@/components/RenameDialog'
 import { UnsavedChangesGuard } from '@/components/split/UnsavedChangesGuard'
@@ -25,11 +25,13 @@ import {
   type WorkgroupPanelState,
   type WorkgroupTransientDraftState,
 } from '@/components/workgroup/WorkgroupContextPanel'
+import { WorkgroupDraftStatus } from '@/components/workgroup/WorkgroupDraftStatus'
 import { WorkgroupMemberGallery } from '@/components/workgroup/WorkgroupMemberGallery'
-import { describeApiError } from '@/i18n'
-import { useOwnedEditScope, type ScopeController } from '@/hooks/useOwnedEditScope'
+import { useOwnedEditScope } from '@/hooks/useOwnedEditScope'
+import { useActor } from '@/hooks/useActor'
+import { useWorkgroupAutosave, type WorkgroupSaveContext } from '@/hooks/useWorkgroupAutosave'
+import { useWorkgroupSync } from '@/hooks/useWorkgroupSync'
 import {
-  aggregateEditScopeStates,
   editScopeReducer,
   type EditScopeSemanticEqual,
   type EditScopeState,
@@ -46,7 +48,6 @@ import {
   type WorkgroupConfigDraft,
   type WorkgroupMemberRowState,
   type WorkgroupMembersState,
-  type WorkgroupSaveReconcileResult,
 } from '@/lib/workgroup-form'
 import { Route as RootRoute } from './__root'
 
@@ -54,16 +55,8 @@ export const Route = createRoute({
   getParentRoute: () => RootRoute,
   path: '/workgroups/$name',
   component: WorkgroupDetailPage,
-  // A different resource is the only automatic draft reset boundary.
   remountDeps: ({ params }) => params,
 })
-
-let saveRequestSequence = 0
-
-function nextSaveRequestId(name: string): string {
-  saveRequestSequence += 1
-  return `workgroup:${name}:${Date.now()}:${saveRequestSequence}`
-}
 
 function focusCardButton(key: string): void {
   document
@@ -83,6 +76,7 @@ const workgroupMembersSemanticEqual: EditScopeSemanticEqual<WorkgroupMembersStat
       other !== undefined &&
       member.key === other.key &&
       member.memberType === other.memberType &&
+      member.agentId === other.agentId &&
       member.agentName === other.agentName &&
       member.userId === other.userId &&
       member.displayName === other.displayName &&
@@ -90,67 +84,33 @@ const workgroupMembersSemanticEqual: EditScopeSemanticEqual<WorkgroupMembersStat
     )
   })
 
-interface SaveAttempt {
-  requestId: string
-  configRevision: number
-  membersRevision: number
-  configSubmitted: WorkgroupConfigDraft
-  membersSubmitted: WorkgroupMembersState
-  configWasDirty: boolean
-  membersWereDirty: boolean
+const cleanTransient: WorkgroupTransientDraftState = {
+  dirty: false,
+  valid: true,
+  discard: () => undefined,
 }
 
-interface SaveVariables {
-  attempt: SaveAttempt
-  payload: UpdateWorkgroup
-}
-
-interface SaveReceipt {
-  response: Workgroup
-  reconciled: Extract<WorkgroupSaveReconcileResult, { ok: true }>
-}
-
-class WorkgroupReceiptMismatchError extends Error {
-  constructor(
-    readonly response: Workgroup,
-    readonly reason: string,
-  ) {
-    super(`workgroup save response did not match the submitted document (${reason})`)
-    this.name = 'WorkgroupReceiptMismatchError'
-  }
-}
-
-function settlePassiveParticipant<T>(
+function settleScope<T>(
   state: EditScopeState<T>,
   submittedRevision: number,
   persisted: T,
   semanticEqual: EditScopeSemanticEqual<T>,
 ): EditScopeState<T> {
-  const caughtUp = state.revision === submittedRevision
-  const draft = caughtUp ? persisted : state.draft
+  const draft = state.revision === submittedRevision ? persisted : state.draft
   return {
     ...state,
     baseline: persisted,
     draft,
     dirty: !semanticEqual(draft, persisted),
+    validity: 'valid',
     staleRemote: undefined,
     submitError: undefined,
   }
 }
 
-function remapMatchingRemoteMembers(
-  local: WorkgroupMembersState,
-  remote: Workgroup,
-): WorkgroupMembersState {
-  const built = buildCompositeUpdatePayload(workgroupToConfigDraft(remote), local, remote)
-  if (!built.ok) return workgroupToMembersState(remote)
-  const reconciled = reconcileWorkgroupSaveResponse(built.payload, local, remote)
-  return reconciled.ok ? reconciled.members : workgroupToMembersState(remote)
-}
-
 function WorkgroupDetailPage() {
   const { name } = Route.useParams()
-  const query = useQuery<Workgroup>({
+  const query = useQuery<WorkgroupDetail>({
     queryKey: ['workgroups', name],
     queryFn: ({ signal }) =>
       api.get(`/api/workgroups/${encodeURIComponent(name)}`, undefined, signal),
@@ -176,425 +136,319 @@ function WorkgroupDetailPage() {
   return (
     <WorkgroupEditor
       key={query.data.id}
-      name={name}
-      group={query.data}
+      routeName={name}
+      initial={query.data}
+      observed={query.data}
       queryError={query.error}
       refetch={() => query.refetch().then((result) => result.data)}
     />
   )
 }
 
-function WorkgroupEditor(props: {
-  name: string
-  group: Workgroup
+export function WorkgroupEditor(props: {
+  routeName: string
+  initial: WorkgroupDetail
+  observed: WorkgroupDetail
   queryError: unknown
-  refetch: () => Promise<Workgroup | undefined>
+  refetch: () => Promise<WorkgroupDetail | undefined>
 }) {
   const { t } = useTranslation()
-  const { name } = props
   const navigate = useNavigate()
-  const qc = useQueryClient()
-  const config = useOwnedEditScope(workgroupToConfigDraft(props.group))
+  const queryClient = useQueryClient()
+  const actor = useActor()
+  const config = useOwnedEditScope(workgroupToConfigDraft(props.initial))
   const members = useOwnedEditScope(
-    workgroupToMembersState(props.group),
+    workgroupToMembersState(props.initial),
     workgroupMembersSemanticEqual,
   )
   const [panel, setPanel] = useState<WorkgroupPanelState>({ kind: 'config' })
   const [focusOn, setFocusOn] = useState<'field' | 'title' | 'none'>('field')
   const panelRef = useRef(panel)
   panelRef.current = panel
-  const lastDirectReceiptRef = useRef<Workgroup | null>(null)
-  const initialGroupRef = useRef(props.group)
-  const remoteEpochRef = useRef(0)
-  const ambiguousAttemptRef = useRef<SaveVariables | null>(null)
-  // TanStack's isPending is render-lagged; this ref closes the same-tick
-  // double-click window before a second full-replace can be prepared.
-  const saveInFlightRef = useRef(false)
-
-  const cleanTransient = useRef<WorkgroupTransientDraftState>({
-    dirty: false,
-    valid: true,
-    discard: () => undefined,
+  const transientRef = useRef(cleanTransient)
+  const [transient, setTransient] = useState(cleanTransient)
+  const resumeAutosaveRef = useRef<() => void>(() => undefined)
+  const dirtyRef = useRef<string | null>(null)
+  const busyRef = useRef(false)
+  const lastSettledScopeRevisionRef = useRef({
+    version: props.initial.version,
+    snapshotHash: props.initial.snapshotHash,
   })
-  const transientRef = useRef(cleanTransient.current)
-  const [transient, setTransient] = useState(cleanTransient.current)
+
+  const built = buildCompositeUpdatePayload(config.state.draft, members.state.draft, props.initial)
+  const blockReason = transient.dirty
+    ? ('transient-member' as const)
+    : !built.ok
+      ? ('invalid' as const)
+      : null
+
   const reportTransient = useCallback((next: WorkgroupTransientDraftState) => {
+    const wasDirty = transientRef.current.dirty
     transientRef.current = next
     setTransient((current) =>
       current.dirty === next.dirty && current.valid === next.valid ? current : next,
     )
+    if (wasDirty && !next.dirty) queueMicrotask(() => resumeAutosaveRef.current())
   }, [])
 
-  const [savedFlash, setSavedFlash] = useState(false)
-  const [authoritativeConflict, setAuthoritativeConflict] = useState<Workgroup | null>(null)
-  const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(
-    () => () => {
-      if (savedTimer.current !== null) clearTimeout(savedTimer.current)
+  const publishDetail = useCallback(
+    (detail: WorkgroupDetail) => {
+      queryClient.setQueryData(['workgroups', props.routeName], detail)
+      queryClient.setQueryData(['workgroups', detail.name], detail)
+      queryClient.setQueryData(['workgroups', detail.id], detail)
+      void queryClient.invalidateQueries({ queryKey: ['workgroups'], exact: true })
     },
-    [],
+    [props.routeName, queryClient],
   )
-  function clearSavedFlash(): void {
-    if (savedTimer.current !== null) clearTimeout(savedTimer.current)
-    savedTimer.current = null
-    setSavedFlash(false)
-  }
+
+  const settleReceipt = useCallback(
+    (receipt: SaveWorkgroupReceipt, context: WorkgroupSaveContext | undefined) => {
+      const submitted = context?.membersSubmitted as WorkgroupMembersState | undefined
+      const reconciled =
+        submitted === undefined
+          ? null
+          : reconcileWorkgroupSaveResponse(receipt.snapshot, submitted, receipt.workgroup)
+      const persistedConfig =
+        reconciled?.ok === true ? reconciled.config : workgroupToConfigDraft(receipt.workgroup)
+      const persistedMembers =
+        reconciled?.ok === true ? reconciled.members : workgroupToMembersState(receipt.workgroup)
+
+      if (context === undefined) {
+        config.replace(
+          settleScope(
+            config.ref.current,
+            config.ref.current.revision,
+            persistedConfig,
+            config.semanticEqual,
+          ),
+        )
+        members.replace(
+          settleScope(
+            members.ref.current,
+            members.ref.current.revision,
+            persistedMembers,
+            members.semanticEqual,
+          ),
+        )
+      } else {
+        config.replace(
+          settleScope(
+            config.ref.current,
+            context.configRevision,
+            persistedConfig,
+            config.semanticEqual,
+          ),
+        )
+        members.replace(
+          settleScope(
+            members.ref.current,
+            context.membersRevision,
+            persistedMembers,
+            members.semanticEqual,
+          ),
+        )
+      }
+      lastSettledScopeRevisionRef.current = receipt.revision
+      publishDetail(receipt.workgroup)
+    },
+    [config, members, publishDetail],
+  )
+
+  const [connection, setConnection] = useState({ connected: false, connectionEpoch: 0 })
+  const [copyIntent, setCopyIntent] = useState<WorkgroupDraftSnapshot | null>(null)
+  const [copyName, setCopyName] = useState('')
+  const [copyDescription, setCopyDescription] = useState('')
+  const copyTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const controller = useWorkgroupAutosave({
+    initial: props.initial,
+    blockReason,
+    connected: connection.connected,
+    connectionEpoch: connection.connectionEpoch,
+    onReceipt: settleReceipt,
+    onRemoteDetail: publishDetail,
+    onIntent: (intent) => {
+      if (intent.type !== 'save-copy') return
+      setCopyIntent(intent.snapshot)
+      setCopyName(intent.suggestedName.slice(0, 128))
+      setCopyDescription(intent.snapshot.description)
+    },
+  })
+  const { remoteInaccessible } = controller
+  const sync = useWorkgroupSync({
+    workgroupId: props.initial.id,
+    currentVersion: controller.state.serverRevision.version,
+    inFlightMutationId: controller.inFlightMutationId,
+    onFrame: controller.remoteFrame,
+  })
+
+  useEffect(() => {
+    setConnection((current) =>
+      current.connected === sync.connected && current.connectionEpoch === sync.connectionEpoch
+        ? current
+        : { connected: sync.connected, connectionEpoch: sync.connectionEpoch },
+    )
+  }, [sync.connected, sync.connectionEpoch])
+
+  useEffect(() => {
+    controller.remoteDetail(props.observed)
+    if (
+      props.observed.version === lastSettledScopeRevisionRef.current.version &&
+      props.observed.snapshotHash === lastSettledScopeRevisionRef.current.snapshotHash
+    ) {
+      return
+    }
+    if (config.ref.current.dirty || members.ref.current.dirty || transientRef.current.dirty) {
+      return
+    }
+    config.replace(
+      editScopeReducer(config.ref.current, {
+        type: 'discard',
+        baseline: workgroupToConfigDraft(props.observed),
+      }),
+    )
+    members.replace(
+      editScopeReducer(
+        members.ref.current,
+        { type: 'discard', baseline: workgroupToMembersState(props.observed) },
+        members.semanticEqual,
+      ),
+    )
+    lastSettledScopeRevisionRef.current = {
+      version: props.observed.version,
+      snapshotHash: props.observed.snapshotHash,
+    }
+    // Controller callbacks and ref-backed scope owners are stable; the query
+    // receipt is the only observation trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.observed])
+
+  useEffect(() => {
+    if (
+      controller.state.phase !== 'clean' ||
+      props.observed.version !== controller.state.serverRevision.version ||
+      props.observed.snapshotHash !== controller.state.serverRevision.snapshotHash ||
+      (lastSettledScopeRevisionRef.current.version === props.observed.version &&
+        lastSettledScopeRevisionRef.current.snapshotHash === props.observed.snapshotHash) ||
+      (!config.ref.current.dirty && !members.ref.current.dirty)
+    ) {
+      return
+    }
+    transientRef.current.discard()
+    transientRef.current = cleanTransient
+    setTransient(cleanTransient)
+    config.replace(
+      editScopeReducer(config.ref.current, {
+        type: 'discard',
+        baseline: workgroupToConfigDraft(props.observed),
+      }),
+    )
+    members.replace(
+      editScopeReducer(
+        members.ref.current,
+        { type: 'discard', baseline: workgroupToMembersState(props.observed) },
+        members.semanticEqual,
+      ),
+    )
+    lastSettledScopeRevisionRef.current = {
+      version: props.observed.version,
+      snapshotHash: props.observed.snapshotHash,
+    }
+  }, [
+    config,
+    controller.state.phase,
+    controller.state.serverRevision.snapshotHash,
+    controller.state.serverRevision.version,
+    members,
+    props.observed,
+  ])
+
+  useEffect(() => {
+    if (isAccessLoss(props.queryError)) remoteInaccessible(props.queryError)
+  }, [props.queryError, remoteInaccessible])
+
+  useEffect(() => {
+    const serverName = controller.state.server.name
+    if (controller.state.phase !== 'clean' || serverName === props.routeName) return
+    void navigate({
+      to: '/workgroups/$name',
+      params: { name: serverName },
+      replace: true,
+    })
+  }, [controller.state.phase, controller.state.server.name, navigate, props.routeName])
 
   function applyValidity(
     configState: EditScopeState<WorkgroupConfigDraft>,
-    membersState: EditScopeState<WorkgroupMembersState>,
-  ): {
-    configState: EditScopeState<WorkgroupConfigDraft>
-    membersState: EditScopeState<WorkgroupMembersState>
-    built: ReturnType<typeof buildCompositeUpdatePayload>
-  } {
-    const built = buildCompositeUpdatePayload(configState.draft, membersState.draft, props.group)
-    const errorKeys = built.ok ? [] : Object.keys(built.errors)
-    const unknownError = errorKeys.some(
-      (key) =>
-        key !== 'mode' && key !== 'maxRounds' && key !== 'leader' && !key.startsWith('member-'),
+    memberState: EditScopeState<WorkgroupMembersState>,
+  ) {
+    const candidate = buildCompositeUpdatePayload(
+      configState.draft,
+      memberState.draft,
+      props.initial,
     )
+    const errorKeys = candidate.ok ? [] : Object.keys(candidate.errors)
     const configInvalid =
-      unknownError || errorKeys.includes('mode') || errorKeys.includes('maxRounds')
+      errorKeys.includes('mode') ||
+      errorKeys.includes('maxRounds') ||
+      errorKeys.some((key) => !key.startsWith('member-') && key !== 'leader')
     const membersInvalid =
-      unknownError ||
-      errorKeys.includes('leader') ||
-      errorKeys.some((key) => key.startsWith('member-'))
+      errorKeys.includes('leader') || errorKeys.some((key) => key.startsWith('member-'))
     return {
       configState: editScopeReducer(configState, {
         type: 'validity',
         validity: configInvalid ? 'invalid' : 'valid',
         ...(configInvalid ? { firstInvalidTarget: 'workgroup-config' } : {}),
       }),
-      membersState: editScopeReducer(membersState, {
+      membersState: editScopeReducer(memberState, {
         type: 'validity',
         validity: membersInvalid ? 'invalid' : 'valid',
         ...(membersInvalid ? { firstInvalidTarget: 'workgroup-members' } : {}),
       }),
-      built,
+      candidate,
     }
   }
 
-  function editDrafts(options: {
-    config?: WorkgroupConfigDraft
-    members?: WorkgroupMembersState
-  }): {
-    configState: EditScopeState<WorkgroupConfigDraft>
-    membersState: EditScopeState<WorkgroupMembersState>
-    built: ReturnType<typeof buildCompositeUpdatePayload>
-  } {
-    let configState = config.ref.current
-    let membersState = members.ref.current
-    if (options.config !== undefined) {
-      configState = editScopeReducer(configState, { type: 'edit', draft: options.config })
-    }
-    if (options.members !== undefined) {
-      membersState = editScopeReducer(
-        membersState,
-        { type: 'edit', draft: options.members },
-        workgroupMembersSemanticEqual,
-      )
-    }
-    const validated = applyValidity(configState, membersState)
-    config.replace(validated.configState)
-    members.replace(validated.membersState)
-    clearSavedFlash()
-    return validated
-  }
-
-  function settleSuccess<T>(
-    controller: ScopeController<T>,
-    wasDirty: boolean,
-    requestId: string,
-    submittedRevision: number,
-    persisted: T,
-  ): EditScopeState<T> {
-    const next = wasDirty
-      ? editScopeReducer(
-          controller.ref.current,
-          {
-            type: 'submit-success',
-            requestId,
-            submittedRevision,
-            persisted,
-          },
-          controller.semanticEqual,
-        )
-      : settlePassiveParticipant(
-          controller.ref.current,
-          submittedRevision,
-          persisted,
-          controller.semanticEqual,
-        )
-    return controller.replace(next)
-  }
-
-  function settleError<T>(
-    controller: ScopeController<T>,
-    wasDirty: boolean,
-    requestId: string,
-    submittedRevision: number,
-    error: unknown,
-    ambiguous: boolean,
-  ): void {
-    if (!wasDirty) return
-    controller.dispatch({
-      type: 'submit-error',
-      requestId,
-      submittedRevision,
-      error,
-      outcome: ambiguous ? 'ambiguous' : 'definitive',
-    })
-  }
-
-  /**
-   * Settle an outcome-unknown full-replace from a read issued specifically for
-   * that attempt.  A fresh read is authoritative even when it differs from the
-   * submitted document: that mismatch means the attempt did not become the
-   * current server value and must unlock as a normal dirty-vs-remote state.
-   */
-  function reconcileAmbiguousAttempt(variables: SaveVariables, remote: Workgroup): boolean {
-    if (ambiguousAttemptRef.current !== variables) return false
-
-    const issuedEpoch = ++remoteEpochRef.current
-    const reconciled = reconcileWorkgroupSaveResponse(
-      variables.payload,
-      variables.attempt.membersSubmitted,
-      remote,
+  function commitPrepared(prepared: ReturnType<typeof applyValidity>, immediate: boolean): void {
+    if (!prepared.candidate.ok || transientRef.current.dirty) return
+    controller.commit(
+      prepared.candidate.payload,
+      {
+        configRevision: prepared.configState.revision,
+        membersRevision: prepared.membersState.revision,
+        configWasDirty: prepared.configState.dirty,
+        membersWasDirty: prepared.membersState.dirty,
+        membersSubmitted: prepared.membersState.draft,
+      },
+      { immediate },
     )
-    const remoteConfig = reconciled.ok ? reconciled.config : workgroupToConfigDraft(remote)
-    const remoteMembers = reconciled.ok
-      ? reconciled.members
-      : remapMatchingRemoteMembers(members.ref.current.baseline, remote)
-    const { attempt } = variables
-    setAuthoritativeConflict(reconciled.ok ? null : remote)
-
-    config.dispatch({
-      type: 'remote-read',
-      remote: remoteConfig,
-      issuedEpoch,
-      reconciliation: {
-        requestId: attempt.requestId,
-        submittedRevision: attempt.configRevision,
-      },
-    })
-    members.dispatch({
-      type: 'remote-read',
-      remote: remoteMembers,
-      issuedEpoch,
-      reconciliation: {
-        requestId: attempt.requestId,
-        submittedRevision: attempt.membersRevision,
-      },
-    })
-    ambiguousAttemptRef.current = null
-    lastDirectReceiptRef.current = remote
-    save.reset()
-    return true
   }
 
-  const save = useMutation<SaveReceipt, unknown, SaveVariables>({
-    mutationFn: async (variables) => {
-      const response = await api.put<Workgroup>(
-        `/api/workgroups/${encodeURIComponent(name)}`,
-        variables.payload,
-      )
-      const reconciled = reconcileWorkgroupSaveResponse(
-        variables.payload,
-        variables.attempt.membersSubmitted,
-        response,
-      )
-      if (!reconciled.ok) {
-        throw new WorkgroupReceiptMismatchError(response, reconciled.reason)
-      }
-      return { response, reconciled }
-    },
-    onSuccess: ({ response, reconciled }, { attempt }) => {
-      const configCaughtUp = config.ref.current.revision === attempt.configRevision
-      const membersCaughtUp = members.ref.current.revision === attempt.membersRevision
-      settleSuccess(
-        config,
-        attempt.configWasDirty,
-        attempt.requestId,
-        attempt.configRevision,
-        reconciled.config,
-      )
-      settleSuccess(
-        members,
-        attempt.membersWereDirty,
-        attempt.requestId,
-        attempt.membersRevision,
-        reconciled.members,
-      )
-      ambiguousAttemptRef.current = null
-      setAuthoritativeConflict(null)
-      lastDirectReceiptRef.current = response
-      qc.setQueryData(['workgroups', name], response)
-      void qc.invalidateQueries({ queryKey: ['workgroups'], exact: true })
-
-      if (configCaughtUp && membersCaughtUp) {
-        clearSavedFlash()
-        setSavedFlash(true)
-        savedTimer.current = setTimeout(() => setSavedFlash(false), 2000)
-      }
-    },
-    onError: (error, variables) => {
-      // 4xx proves the full-replace did not commit. Transport loss, 5xx and a
-      // semantically mismatched 200 cannot prove that, so both scopes fail
-      // closed and only a matching authoritative refetch may reconcile them.
-      const definitive = error instanceof ApiError && error.status >= 400 && error.status < 500
-      const ambiguous = !definitive
-      const { attempt } = variables
-      settleError(
-        config,
-        attempt.configWasDirty,
-        attempt.requestId,
-        attempt.configRevision,
-        error,
-        ambiguous,
-      )
-      settleError(
-        members,
-        attempt.membersWereDirty,
-        attempt.requestId,
-        attempt.membersRevision,
-        error,
-        ambiguous,
-      )
-      ambiguousAttemptRef.current = ambiguous ? variables : null
-      if (ambiguous) {
-        void props.refetch().then((remote) => {
-          if (remote !== undefined) reconcileAmbiguousAttempt(variables, remote)
-        })
-      }
-    },
-  })
-
-  function startSave(
-    options: {
-      membersDraft?: WorkgroupMembersState
-      allowTransient?: boolean
-    } = {},
-  ): Promise<boolean> {
-    if (saveInFlightRef.current || ambiguousAttemptRef.current !== null) {
-      return Promise.resolve(false)
+  function editDrafts(
+    next: { config?: WorkgroupConfigDraft; members?: WorkgroupMembersState },
+    immediate = false,
+  ): void {
+    let configState = config.ref.current
+    let memberState = members.ref.current
+    if (next.config !== undefined) {
+      configState = editScopeReducer(configState, { type: 'edit', draft: next.config })
     }
-    const prepared =
-      options.membersDraft === undefined
-        ? applyValidity(config.ref.current, members.ref.current)
-        : editDrafts({ members: options.membersDraft })
-    if (options.membersDraft === undefined) {
-      config.replace(prepared.configState)
-      members.replace(prepared.membersState)
-    }
-    if (!prepared.built.ok) return Promise.resolve(false)
-    if (transientRef.current.dirty && options.allowTransient !== true) return Promise.resolve(false)
-    if (!prepared.configState.dirty && !prepared.membersState.dirty) return Promise.resolve(false)
-
-    const requestId = nextSaveRequestId(name)
-    const attempt: SaveAttempt = {
-      requestId,
-      configRevision: prepared.configState.revision,
-      membersRevision: prepared.membersState.revision,
-      configSubmitted: prepared.configState.draft,
-      membersSubmitted: prepared.membersState.draft,
-      configWasDirty: prepared.configState.dirty,
-      membersWereDirty: prepared.membersState.dirty,
-    }
-    if (attempt.configWasDirty) {
-      config.replace(
-        editScopeReducer(prepared.configState, {
-          type: 'begin-submit',
-          requestId,
-          submittedRevision: attempt.configRevision,
-        }),
+    if (next.members !== undefined) {
+      memberState = editScopeReducer(
+        memberState,
+        { type: 'edit', draft: next.members },
+        members.semanticEqual,
       )
     }
-    if (attempt.membersWereDirty) {
-      members.replace(
-        editScopeReducer(prepared.membersState, {
-          type: 'begin-submit',
-          requestId,
-          submittedRevision: attempt.membersRevision,
-        }),
-      )
-    }
-    saveInFlightRef.current = true
-    return save
-      .mutateAsync({ attempt, payload: prepared.built.payload })
-      .then(() => true)
-      .catch(() => false)
-      .finally(() => {
-        saveInFlightRef.current = false
-      })
+    const prepared = applyValidity(configState, memberState)
+    config.replace(prepared.configState)
+    members.replace(prepared.membersState)
+    commitPrepared(prepared, immediate)
   }
 
-  // Clean remote rows follow. Dirty rows keep their local draft and expose the
-  // remote as stale. A matching ambiguous attempt is the only read allowed to
-  // conclude an outcome-unknown save.
-  useEffect(() => {
-    const remote = props.group
-    if (remote === initialGroupRef.current) return
-    if (remote === lastDirectReceiptRef.current) {
-      lastDirectReceiptRef.current = null
-      return
-    }
-
-    const ambiguous = ambiguousAttemptRef.current
-    if (ambiguous !== null && reconcileAmbiguousAttempt(ambiguous, remote)) return
-
-    const issuedEpoch = ++remoteEpochRef.current
-    const remoteConfig = workgroupToConfigDraft(remote)
-    const remoteMembers = remapMatchingRemoteMembers(members.ref.current.baseline, remote)
-
-    const configHasConflict =
-      config.ref.current.dirty &&
-      !config.semanticEqual(remoteConfig, config.ref.current.baseline) &&
-      !config.semanticEqual(remoteConfig, config.ref.current.draft)
-    const membersHaveConflict =
-      members.ref.current.dirty &&
-      !members.semanticEqual(remoteMembers, members.ref.current.baseline) &&
-      !members.semanticEqual(remoteMembers, members.ref.current.draft)
-    if (configHasConflict || membersHaveConflict) setAuthoritativeConflict(remote)
-
-    config.dispatch({ type: 'remote-read', remote: remoteConfig, issuedEpoch })
-    members.dispatch({ type: 'remote-read', remote: remoteMembers, issuedEpoch })
-    // Scope controllers are ref-backed and stable. The resource receipt is the
-    // sole trigger; including reducer snapshots would replay one read.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.group])
-
-  const built = buildCompositeUpdatePayload(config.state.draft, members.state.draft, props.group)
-  const registry = aggregateEditScopeStates([
-    config.state,
-    members.state,
-    {
-      dirty: transient.dirty,
-      validity: transient.valid ? 'valid' : 'invalid',
-      ...(transient.valid ? {} : { firstInvalidTarget: 'workgroup-add-member' }),
-    },
-  ])
-  const outcomeUnknown = registry.outcomeUnknown || ambiguousAttemptRef.current !== null
-  const dirtyRef = useRef<string | null>(null)
-  const busyRef = useRef(false)
-  const deleteInFlightRef = useRef(false)
-  const renameInFlightRef = useRef(false)
-  dirtyRef.current = registry.dirty ? name : null
-  busyRef.current =
-    save.isPending ||
-    saveInFlightRef.current ||
-    deleteInFlightRef.current ||
-    renameInFlightRef.current ||
-    outcomeUnknown
-
-  function releaseAuxiliaryBusy(ref: RefObject<boolean>): void {
-    ref.current = false
-    busyRef.current =
-      save.isPending ||
-      saveInFlightRef.current ||
-      deleteInFlightRef.current ||
-      renameInFlightRef.current ||
-      outcomeUnknown
+  resumeAutosaveRef.current = () => {
+    const prepared = applyValidity(config.ref.current, members.ref.current)
+    config.replace(prepared.configState)
+    members.replace(prepared.membersState)
+    commitPrepared(prepared, true)
   }
 
   const effectivePanel: WorkgroupPanelState =
@@ -611,18 +465,9 @@ function WorkgroupEditor(props: {
     setPanel(next)
   }
 
-  function changePanel(
-    next: WorkgroupPanelState,
-    focus: 'field' | 'title' | 'none' = 'field',
-  ): void {
-    if (saveInFlightRef.current) return
-    applyPanel(next, focus)
-  }
-
   function closePanel(): void {
     const previous = panelRef.current
-    changePanel({ kind: 'config' })
-    if (saveInFlightRef.current) return
+    applyPanel({ kind: 'config' })
     if (previous.kind === 'member') focusCardButton(previous.key)
     else if (previous.kind === 'add') {
       document
@@ -635,16 +480,11 @@ function WorkgroupEditor(props: {
 
   function onSelectCard(key: string): void {
     if (panel.kind === 'member' && panel.key === key) closePanel()
-    else changePanel({ kind: 'member', key })
-  }
-
-  function onPatchMember(key: string, patch: { displayName?: string; roleDesc?: string }): void {
-    editDrafts({ members: patchMember(members.ref.current.draft, key, patch) })
+    else applyPanel({ kind: 'member', key })
   }
 
   function onSetLeader(key: string): void {
-    const next = setLeader(members.ref.current.draft, key)
-    void startSave({ membersDraft: next })
+    editDrafts({ members: setLeader(members.ref.current.draft, key) }, true)
   }
 
   async function onRemoveMember(key: string): Promise<void> {
@@ -652,186 +492,193 @@ function WorkgroupEditor(props: {
     const index = current.members.findIndex((member) => member.key === key)
     const next = removeMember(current, key)
     applyPanel({ kind: 'config' })
-    const saved = await startSave({ membersDraft: next })
-    if (!saved) return
+    editDrafts({ members: next }, true)
     const neighbor = next.members[Math.min(Math.max(index, 0), next.members.length - 1)]
     if (neighbor !== undefined) setTimeout(() => focusCardButton(neighbor.key), 0)
   }
 
   async function onAddMember(row: WorkgroupMemberRowState): Promise<void> {
-    const next = addMember(members.ref.current.draft, row)
+    editDrafts({ members: addMember(members.ref.current.draft, row) }, true)
     applyPanel({ kind: 'member', key: row.key }, 'title')
-    await startSave({ membersDraft: next, allowTransient: true })
   }
 
   const del = useMutation({
-    mutationFn: (confirm: string) =>
-      api.deleteJson(`/api/workgroups/${encodeURIComponent(name)}`, { confirm }),
-    onSuccess: () => {
-      // Self-navigation must observe a released synchronous guard token.
-      releaseAuxiliaryBusy(deleteInFlightRef)
-      void qc.invalidateQueries({ queryKey: ['workgroups'] })
-      navigate({ to: '/workgroups' })
+    mutationFn: async (confirm: string) => {
+      const saved = await controller.ensureSaved()
+      if (!controller.isSavedDraftCurrent(saved)) throw new Error('workgroup changed before delete')
+      await api.deleteJson(`/api/workgroups/${encodeURIComponent(saved.snapshot.name)}`, {
+        confirm,
+        expectedVersion: saved.server.version,
+        clientMutationId: ulid(),
+      })
     },
-    onSettled: () => releaseAuxiliaryBusy(deleteInFlightRef),
+    onSuccess: () => {
+      dirtyRef.current = null
+      busyRef.current = false
+      void queryClient.invalidateQueries({ queryKey: ['workgroups'] })
+      void navigate({ to: '/workgroups' })
+    },
+    onError: () => {
+      busyRef.current = false
+    },
   })
 
-  function startDelete(confirm: string): Promise<unknown> {
-    deleteInFlightRef.current = true
-    busyRef.current = true
-    return del.mutateAsync(confirm)
-  }
+  const launch = useMutation({
+    mutationFn: async () => {
+      const saved = await controller.ensureSaved()
+      if (!controller.isSavedDraftCurrent(saved)) throw new Error('workgroup changed before launch')
+      return saved
+    },
+    onSuccess: (saved) => {
+      dirtyRef.current = null
+      busyRef.current = false
+      void navigate({
+        to: '/tasks/new',
+        search: {
+          kind: 'workgroup',
+          workgroup: saved.snapshot.name,
+          workgroupVersion: saved.server.version,
+        },
+      })
+    },
+    onError: () => {
+      busyRef.current = false
+    },
+  })
 
-  const [renameOpen, setRenameOpen] = useState(false)
+  const copy = useMutation({
+    mutationFn: async () => {
+      if (copyIntent === null) throw new Error('missing workgroup copy draft')
+      return api.post<WorkgroupDetail>('/api/workgroups', {
+        ...copyIntent,
+        name: copyName,
+        description: copyDescription,
+      })
+    },
+    onSuccess: (created) => {
+      dirtyRef.current = null
+      busyRef.current = false
+      publishDetail(created)
+      setCopyIntent(null)
+      void navigate({ to: '/workgroups/$name', params: { name: created.name } })
+    },
+    onError: () => {
+      busyRef.current = false
+    },
+  })
+
+  const [headerSurface, setHeaderSurface] = useState<
+    'actions' | 'rename' | 'acl' | 'delete' | null
+  >(null)
   const [newName, setNewName] = useState('')
   const [newDescription, setNewDescription] = useState('')
-  const renameTriggerRef = useRef<HTMLButtonElement | null>(null)
-  const rename = useMutation({
-    mutationFn: (variables: { newName: string; description: string }): Promise<Workgroup> =>
-      api.post<Workgroup>(`/api/workgroups/${encodeURIComponent(name)}/rename`, variables),
-    onSuccess: (workgroup) => {
-      releaseAuxiliaryBusy(renameInFlightRef)
-      void qc.invalidateQueries({ queryKey: ['workgroups'], exact: true })
-      qc.setQueryData(['workgroups', workgroup.name], workgroup)
-      setRenameOpen(false)
-      if (workgroup.name !== name) {
-        navigate({ to: '/workgroups/$name', params: { name: workgroup.name } })
-      }
-    },
-    onSettled: () => releaseAuxiliaryBusy(renameInFlightRef),
-  })
-
-  function startRename(): void {
-    renameInFlightRef.current = true
-    busyRef.current = true
-    rename.mutate({ newName, description: newDescription })
-  }
+  const moreTriggerRef = useRef<HTMLButtonElement | null>(null)
   const renameNameValid =
     newName.length > 0 && newName.length <= 128 && WORKGROUP_NAME_RE.test(newName)
   const renameCanSave =
-    renameNameValid && (newName !== name || newDescription !== props.group.description)
+    renameNameValid &&
+    (newName !== config.state.draft.name || newDescription !== config.state.draft.description)
 
-  const readiness = workgroupLaunchReadiness(props.group)
+  const readiness = workgroupLaunchReadiness({
+    mode: config.state.draft.mode,
+    leaderMemberId: members.state.draft.leaderKey,
+    members: members.state.draft.members.map((member) => ({
+      id: member.key,
+      memberType: member.memberType,
+    })),
+  })
   const configErrors = built.ok ? {} : built.errors
-  const mutationPending = save.isPending || del.isPending || rename.isPending || outcomeUnknown
-  const destructiveDisabled = registry.dirty || mutationPending
-  const saveDisabled =
-    mutationPending ||
-    outcomeUnknown ||
-    !built.ok ||
+  const unsafe =
+    config.state.dirty ||
+    members.state.dirty ||
     transient.dirty ||
-    (!config.state.dirty && !members.state.dirty)
-
-  function adoptAuthoritativeConflict(): void {
-    if (
-      authoritativeConflict === null ||
-      saveInFlightRef.current ||
-      save.isPending ||
-      outcomeUnknown
-    ) {
-      return
-    }
-    transientRef.current.discard()
-    const remoteConfig = workgroupToConfigDraft(authoritativeConflict)
-    const remoteMembers = remapMatchingRemoteMembers(
-      members.ref.current.baseline,
-      authoritativeConflict,
-    )
-    config.replace(
-      editScopeReducer(config.ref.current, { type: 'discard', baseline: remoteConfig }),
-    )
-    members.replace(
-      editScopeReducer(
-        members.ref.current,
-        { type: 'discard', baseline: remoteMembers },
-        members.semanticEqual,
-      ),
-    )
-    transientRef.current = cleanTransient.current
-    setTransient(cleanTransient.current)
-    setAuthoritativeConflict(null)
-    save.reset()
-  }
+    controller.state.phase !== 'clean'
+  const busy =
+    controller.state.phase === 'saving' ||
+    controller.state.phase === 'reconciling' ||
+    del.isPending ||
+    launch.isPending ||
+    copy.isPending
+  dirtyRef.current = unsafe ? props.routeName : null
+  busyRef.current = busy
+  const deleteDisabled =
+    blockReason !== null ||
+    controller.state.phase !== 'clean' ||
+    controller.state.transport === 'offline' ||
+    del.isPending ||
+    launch.isPending
+  const launchDisabled =
+    blockReason !== null ||
+    controller.state.transport === 'offline' ||
+    controller.state.phase === 'error' ||
+    controller.state.phase === 'conflict' ||
+    controller.state.phase === 'inaccessible' ||
+    controller.state.phase === 'deleted' ||
+    del.isPending ||
+    launch.isPending
 
   return (
     <div className="page page--split">
-      <DetailHeaderActions
-        title={name}
-        acl={{
-          resourceBaseUrl: `/api/workgroups/${encodeURIComponent(name)}`,
-          invalidateKey: ['workgroups'],
-        }}
-        save={{
-          label: savedFlash
-            ? t('workgroups.configSaved')
-            : save.isPending
-              ? t('common.saving')
-              : t('workgroups.saveAll'),
-          onClick: () => void startSave(),
-          disabled: saveDisabled,
-          title: transient.dirty
-            ? t('workgroups.finishAddingBeforeSave')
-            : configErrors.mode !== undefined
-              ? t(configErrors.mode)
-              : undefined,
-          testid: 'workgroup-save-button',
-        }}
-        del={{
-          label: t('common.delete'),
-          confirmName: name,
-          resourceType: 'workgroup',
-          onConfirm: (ctx) => startDelete(ctx?.typedConfirm ?? ''),
-          disabled: del.isPending || destructiveDisabled,
-        }}
-        extra={
+      <PageHeader
+        className="editor-page-header editor-page-header--workgroup"
+        title={config.state.draft.name || props.routeName}
+        meta={
           <>
-            {readiness.ready && (
-              <Link
-                to="/tasks/new"
-                search={{ kind: 'workgroup', workgroup: name }}
-                className="btn"
-                data-testid="workgroup-launch-button"
-              >
-                {t('workgroups.launchButton')}
-              </Link>
-            )}
+            <code>{props.initial.id}</code> · v{controller.state.serverRevision.version}
+          </>
+        }
+        actions={
+          <>
             <button
               type="button"
-              className="btn"
-              ref={renameTriggerRef}
-              disabled={destructiveDisabled}
+              className="btn btn--primary"
+              disabled={!readiness.ready || launchDisabled}
               onClick={() => {
-                setNewName(name)
-                setNewDescription(props.group.description)
-                setRenameOpen(true)
+                busyRef.current = true
+                launch.mutate()
               }}
-              data-testid="workgroup-rename-button"
+              data-testid="workgroup-launch-button"
             >
-              {t('workgroups.renameButton')}
+              {launch.isPending ? t('common.saving') : t('workgroups.launchButton')}
+            </button>
+            <button
+              ref={moreTriggerRef}
+              type="button"
+              className="btn btn--sm"
+              onClick={() => setHeaderSurface('actions')}
+              data-testid="workgroup-more-actions"
+            >
+              {t('editor.nodeActions.more')}
             </button>
           </>
         }
-        errors={[save.error, del.error]}
       />
 
-      {props.queryError !== null && props.queryError !== undefined && (
-        <ErrorBanner error={props.queryError} onRetry={() => void props.refetch()} />
-      )}
+      {[del.error, launch.error, copy.error]
+        .filter((error) => error !== null && error !== undefined)
+        .map((error, index) => (
+          <ErrorBanner error={error} key={index} />
+        ))}
 
-      {authoritativeConflict !== null && (
-        <NoticeBanner
-          tone="warning"
-          size="compact"
-          title={t('settings.staleTitle')}
-          action={
-            <button type="button" className="btn btn--sm" onClick={adoptAuthoritativeConflict}>
-              {t('settings.staleDiscard')}
-            </button>
-          }
-        >
-          {t('settings.staleBody')}
-        </NoticeBanner>
-      )}
+      {props.queryError !== null &&
+        props.queryError !== undefined &&
+        !isAccessLoss(props.queryError) && (
+          <ErrorBanner error={props.queryError} onRetry={() => void props.refetch()} />
+        )}
+
+      <WorkgroupDraftStatus
+        state={controller.state}
+        onRetryNow={controller.retry}
+        onSaveCopy={controller.requestCopy}
+        onLoadRemote={async () => {
+          transientRef.current.discard()
+          transientRef.current = cleanTransient
+          setTransient(cleanTransient)
+          await controller.confirmLoadRemote()
+        }}
+        onOverwriteRemote={controller.confirmOverwrite}
+        onReturnToList={() => void navigate({ to: '/workgroups' })}
+      />
 
       {(!readiness.ready || readiness.warnings.length > 0) && (
         <div
@@ -866,7 +713,7 @@ function WorkgroupEditor(props: {
             }
             aria-expanded={effectivePanel.kind === 'config'}
             aria-controls="workgroup-context-panel"
-            onClick={() => changePanel({ kind: 'config' })}
+            onClick={() => applyPanel({ kind: 'config' })}
             data-testid="workgroup-config-entry"
           >
             <span className="split-card__name">
@@ -885,7 +732,7 @@ function WorkgroupEditor(props: {
             }}
           >
             <WorkgroupMemberGallery
-              group={props.group}
+              group={props.observed}
               membersState={members.state.draft}
               selectedKey={effectivePanel.kind === 'member' ? effectivePanel.key : null}
               onSelectCard={onSelectCard}
@@ -895,8 +742,7 @@ function WorkgroupEditor(props: {
             <button
               type="button"
               className="btn btn--sm"
-              disabled={save.isPending}
-              onClick={() => changePanel({ kind: 'add', memberType: 'agent' })}
+              onClick={() => applyPanel({ kind: 'add', memberType: 'agent' })}
               data-testid="workgroup-add-agent-member"
             >
               {t('workgroups.addAgentMember')}
@@ -905,8 +751,7 @@ function WorkgroupEditor(props: {
               <button
                 type="button"
                 className="btn btn--sm"
-                disabled={save.isPending}
-                onClick={() => changePanel({ kind: 'add', memberType: 'human' })}
+                onClick={() => applyPanel({ kind: 'add', memberType: 'human' })}
                 data-testid="workgroup-add-human-member"
               >
                 {t('workgroups.addHumanMember')}
@@ -916,19 +761,19 @@ function WorkgroupEditor(props: {
         </aside>
         <section className="split__detail" data-testid="split-detail">
           <WorkgroupContextPanel
-            group={{ ...props.group, mode: config.state.draft.mode }}
+            group={{ ...props.observed, mode: config.state.draft.mode }}
             panel={effectivePanel}
             focusOn={focusOn}
-            applying={save.isPending}
-            applyError={save.error}
+            applying={controller.state.phase === 'saving'}
+            applyError={controller.state.phase === 'error' ? controller.state.error : null}
             onClose={closePanel}
             configDraft={config.state.draft}
             configErrors={configErrors}
-            onConfigChange={(next) => editDrafts({ config: next })}
+            onConfigChange={(next, meta) => editDrafts({ config: next }, meta?.immediate ?? false)}
             membersState={members.state.draft}
-            membersBaseline={members.state.baseline}
-            onPatchMember={onPatchMember}
-            onSaveMember={() => startSave()}
+            onPatchMember={(key, patch) =>
+              editDrafts({ members: patchMember(members.ref.current.draft, key, patch) })
+            }
             onSetLeader={onSetLeader}
             onRemoveMember={onRemoveMember}
             onAddMember={onAddMember}
@@ -937,9 +782,96 @@ function WorkgroupEditor(props: {
         </section>
       </div>
 
+      <Dialog
+        open={headerSurface === 'actions'}
+        onClose={() => setHeaderSurface(null)}
+        title={t('workgroups.actionsTitle')}
+        triggerRef={moreTriggerRef}
+        data-testid="workgroup-actions-dialog"
+      >
+        <div className="workflow-editor-action-list">
+          <button
+            type="button"
+            className="workflow-editor-action-list__item"
+            disabled={
+              controller.state.phase === 'inaccessible' || controller.state.phase === 'deleted'
+            }
+            onClick={() => {
+              setNewName(config.ref.current.draft.name)
+              setNewDescription(config.ref.current.draft.description)
+              setHeaderSurface('rename')
+            }}
+            data-testid="workgroup-rename-button"
+          >
+            <strong>{t('workgroups.renameButton')}</strong>
+            <span>{t('workgroups.renameActionHint')}</span>
+          </button>
+          {actor.data !== null && actor.data !== undefined && actor.data.source !== 'daemon' && (
+            <button
+              type="button"
+              className="workflow-editor-action-list__item"
+              disabled={
+                controller.state.phase === 'inaccessible' || controller.state.phase === 'deleted'
+              }
+              onClick={() => setHeaderSurface('acl')}
+              data-testid="workgroup-acl-button"
+            >
+              <strong>{t('acl.title')}</strong>
+              <span>{t('workgroups.aclActionHint')}</span>
+            </button>
+          )}
+          <button
+            type="button"
+            className="workflow-editor-action-list__item workflow-editor-action-list__item--danger"
+            disabled={deleteDisabled}
+            onClick={() => setHeaderSurface('delete')}
+            data-testid="workgroup-delete-button"
+          >
+            <strong>{t('common.delete')}</strong>
+            <span>{t('workgroups.deleteActionHint')}</span>
+          </button>
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={headerSurface === 'acl'}
+        onClose={() => setHeaderSurface(null)}
+        title={t('acl.title')}
+        triggerRef={moreTriggerRef}
+        data-testid="workgroup-acl-dialog"
+      >
+        <AclPanel
+          resourceBaseUrl={`/api/workgroups/${encodeURIComponent(controller.state.server.name)}`}
+          invalidateKey={['workgroups']}
+          onSaved={() => setHeaderSurface(null)}
+          onCancel={() => setHeaderSurface(null)}
+        />
+      </Dialog>
+
+      <ConfirmDialog
+        open={headerSurface === 'delete'}
+        onClose={() => setHeaderSurface(null)}
+        title={t('common.deleteConfirm.title', { name: controller.state.server.name })}
+        description={t('common.deleteConfirm.body')}
+        confirmLabel={t('common.delete')}
+        tone="danger"
+        triggerRef={moreTriggerRef}
+        confirmInput={{
+          expected: controller.state.server.name,
+          label: t('common.deleteConfirm.inputLabel', {
+            name: controller.state.server.name,
+          }),
+          placeholder: controller.state.server.name,
+        }}
+        onConfirm={(context) => {
+          busyRef.current = true
+          return del.mutateAsync(context?.typedConfirm ?? '')
+        }}
+      />
+
       <RenameDialog
-        open={renameOpen}
-        onClose={() => setRenameOpen(false)}
+        open={headerSurface === 'rename'}
+        onClose={() => setHeaderSurface(null)}
         title={t('workgroups.renameTitle')}
         testidPrefix="workgroup"
         nameLabel={t('workgroups.renameField')}
@@ -952,30 +884,72 @@ function WorkgroupEditor(props: {
         onDescriptionChange={setNewDescription}
         descriptionMaxLength={4096}
         canSave={renameCanSave}
-        pending={rename.isPending}
-        submitError={
-          rename.error !== null && rename.error !== undefined
-            ? describeApiError(rename.error)
-            : undefined
+        pending={false}
+        onSave={() => {
+          if (!renameCanSave) return
+          editDrafts(
+            {
+              config: {
+                ...config.ref.current.draft,
+                name: newName,
+                description: newDescription,
+              },
+            },
+            true,
+          )
+          setHeaderSurface(null)
+        }}
+        triggerRef={moreTriggerRef}
+      />
+
+      <RenameDialog
+        open={copyIntent !== null}
+        onClose={() => setCopyIntent(null)}
+        title={t('editor.draftStatus.saveCopy')}
+        testidPrefix="workgroup-copy"
+        nameLabel={t('workgroups.fieldName')}
+        nameHint={t('workgroups.fieldNameHint')}
+        namePattern={WORKGROUP_NAME_RE.source}
+        name={copyName}
+        onNameChange={setCopyName}
+        descriptionLabel={t('workgroups.fieldDescription')}
+        description={copyDescription}
+        onDescriptionChange={setCopyDescription}
+        descriptionMaxLength={4096}
+        canSave={
+          copyIntent !== null &&
+          copyName.length > 0 &&
+          copyName.length <= 128 &&
+          WORKGROUP_NAME_RE.test(copyName)
         }
-        onSave={startRename}
-        triggerRef={renameTriggerRef}
+        pending={copy.isPending}
+        submitError={copy.error === null ? undefined : String(copy.error)}
+        onSave={() => {
+          busyRef.current = true
+          copy.mutate()
+        }}
+        triggerRef={copyTriggerRef}
       />
 
       <UnsavedChangesGuard
         dirtyRef={dirtyRef}
         busyRef={busyRef}
         onDiscard={() => {
-          if (saveInFlightRef.current || outcomeUnknown) return false
+          if (busyRef.current) return false
           transientRef.current.discard()
           config.replace(editScopeReducer(config.ref.current, { type: 'discard' }))
-          members.replace(editScopeReducer(members.ref.current, { type: 'discard' }))
-          transientRef.current = cleanTransient.current
+          members.replace(
+            editScopeReducer(members.ref.current, { type: 'discard' }, members.semanticEqual),
+          )
+          transientRef.current = cleanTransient
           dirtyRef.current = null
-          applyPanel({ kind: 'config' })
           return true
         }}
       />
     </div>
   )
+}
+
+function isAccessLoss(error: unknown): boolean {
+  return error instanceof ApiError && (error.status === 403 || error.status === 404)
 }

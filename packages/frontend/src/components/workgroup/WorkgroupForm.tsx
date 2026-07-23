@@ -27,15 +27,19 @@ export interface WorkgroupFormProps {
    */
   hasHumanMember: boolean
   value: WorkgroupConfigDraft
-  onChange: (next: WorkgroupConfigDraft) => void
+  onChange: (next: WorkgroupConfigDraft, meta?: { immediate?: boolean }) => void
   /** Raw i18n error keys from the payload builder. */
   errors: Record<string, string>
 }
 
 export function WorkgroupForm({ value, onChange, errors, hasHumanMember }: WorkgroupFormProps) {
   const { t } = useTranslation()
-  const set = <K extends keyof WorkgroupConfigDraft>(k: K, v: WorkgroupConfigDraft[K]): void => {
-    onChange({ ...value, [k]: v })
+  const set = <K extends keyof WorkgroupConfigDraft>(
+    k: K,
+    v: WorkgroupConfigDraft[K],
+    immediate = false,
+  ): void => {
+    onChange({ ...value, [k]: v }, { immediate })
   }
 
   const fc = value.mode === 'free_collab'
@@ -83,7 +87,7 @@ export function WorkgroupForm({ value, onChange, errors, hasHumanMember }: Workg
         >
           <Segmented<WorkgroupMode>
             value={value.mode}
-            onChange={(v) => set('mode', v)}
+            onChange={(v) => set('mode', v, true)}
             ariaLabel={t('workgroups.fieldMode')}
             testidPrefix="workgroup-mode"
             options={[
@@ -108,21 +112,21 @@ export function WorkgroupForm({ value, onChange, errors, hasHumanMember }: Workg
           <Switch
             checked={fc ? true : value.switches.shareOutputs}
             disabled={fc}
-            onChange={(v) => set('switches', { ...value.switches, shareOutputs: v })}
+            onChange={(v) => set('switches', { ...value.switches, shareOutputs: v }, true)}
             label={t('workgroups.fieldShareOutputs')}
             hint={t('workgroups.fieldShareOutputsHint')}
           />
           <Switch
             checked={fc ? true : value.switches.directMessages}
             disabled={fc}
-            onChange={(v) => set('switches', { ...value.switches, directMessages: v })}
+            onChange={(v) => set('switches', { ...value.switches, directMessages: v }, true)}
             label={t('workgroups.fieldDirectMessages')}
             hint={t('workgroups.fieldDirectMessagesHint')}
           />
           <Switch
             checked={fc ? true : value.switches.blackboard}
             disabled={fc}
-            onChange={(v) => set('switches', { ...value.switches, blackboard: v })}
+            onChange={(v) => set('switches', { ...value.switches, blackboard: v }, true)}
             label={t('workgroups.fieldBlackboard')}
             hint={t('workgroups.fieldBlackboardHint')}
           />
@@ -145,7 +149,7 @@ export function WorkgroupForm({ value, onChange, errors, hasHumanMember }: Workg
 
           <Switch
             checked={value.completionGate}
-            onChange={(v) => set('completionGate', v)}
+            onChange={(v) => set('completionGate', v, true)}
             label={t('workgroups.fieldCompletionGate')}
             hint={
               hasHumanMember
@@ -179,7 +183,7 @@ export function WorkgroupForm({ value, onChange, errors, hasHumanMember }: Workg
           {value.mode === 'leader_worker' && (
             <Switch
               checked={value.fanOut}
-              onChange={(v) => set('fanOut', v)}
+              onChange={(v) => set('fanOut', v, true)}
               label={t('workgroups.fieldFanOut')}
               hint={t('workgroups.fieldFanOutHint')}
               data-testid="workgroup-field-fanout"

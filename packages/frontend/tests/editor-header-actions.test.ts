@@ -24,13 +24,13 @@ const tourScript = readFileSync(path.resolve(here, '../src/components/tour/tourS
 
 describe('editor header action strip alignment', () => {
   test('first action carries the auto start margin that right-aligns the strip', () => {
-    expect(css.includes('.page--editor > .page__header > .page__actions > :first-child')).toBe(true)
-    const rule = css.split('.page--editor > .page__header > .page__actions > :first-child')[1]!
+    expect(css.includes('.editor-page-header > .page__actions > :first-child')).toBe(true)
+    const rule = css.split('.editor-page-header > .page__actions > :first-child')[1]!
     expect(rule.slice(0, rule.indexOf('}'))).toContain('margin-inline-start: auto')
   })
 
   test('the strip itself stays a flex-start scroll container (overflow reachability)', () => {
-    const block = css.split('.page--editor > .page__header > .page__actions {')[1]!
+    const block = css.split('.editor-page-header > .page__actions {')[1]!
     const body = block.slice(0, block.indexOf('}'))
     expect(body).toContain('justify-content: flex-start')
     expect(body).toContain('overflow-x: auto')

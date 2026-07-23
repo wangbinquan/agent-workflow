@@ -197,6 +197,16 @@ export async function startWorkgroupTask(
       `workgroup '${workgroupName}' is not the expected resource (it may have been replaced)`,
     )
   }
+  if (
+    input.expectedWorkgroupVersion !== undefined &&
+    group.version !== input.expectedWorkgroupVersion
+  ) {
+    throw new ConflictError(
+      'workgroup-version-conflict',
+      `workgroup '${workgroupName}' changed during launch (expected v${input.expectedWorkgroupVersion}, now v${group.version})`,
+      { expectedVersion: input.expectedWorkgroupVersion, currentVersion: group.version },
+    )
+  }
 
   const readiness = workgroupLaunchReadiness(group)
   if (!readiness.ready) {

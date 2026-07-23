@@ -2,9 +2,9 @@
 // GET    /api/workgroups                — list (ACL-filtered)
 // GET    /api/workgroups/:name          — one (invisible → 404, D1)
 // POST   /api/workgroups                — create (creator becomes owner)
-// PUT    /api/workgroups/:name          — full-document update (members full-replace)
-// DELETE /api/workgroups/:name          — delete (tasks keep their config snapshot)
-// POST   /api/workgroups/:name/rename   — rename + edit description atomically
+// PUT    /api/workgroups/:name          — RFC-225 version-fenced full document save
+// DELETE /api/workgroups/:name          — RFC-225 version-fenced delete
+// POST   /api/workgroups/:name/rename   — fenced compatibility adapter
 // GET/PUT /api/workgroups/:name/acl     — RFC-099 ACL management
 //
 // RFC-099 D15 / RFC-223 (PR-1, Codex impl-gate P1-2): creating/updating checks
@@ -15,6 +15,7 @@
 
 import {
   CreateWorkgroupSchema,
+  DeleteWorkgroupSchema,
   rejectRetiredStartTaskKeys,
   RenameWorkgroupSchema,
   StartWorkgroupTaskSchema,
@@ -24,7 +25,7 @@ import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
 import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
-import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
+import { assertDeleteConfirm } from '@/services/deleteConfirm'
 import {
   createWorkgroup,
   deleteWorkgroup,
@@ -32,7 +33,7 @@ import {
   getWorkgroupById,
   listWorkgroups,
   renameWorkgroup,
-  updateWorkgroup,
+  saveWorkgroup,
 } from '@/services/workgroups'
 import { startWorkgroupTask } from '@/services/workgroup/launch'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
@@ -103,11 +104,7 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
     const actor = actorOf(c)
     const existing = await loadVisibleWorkgroup(actor, name)
     await requireResourceOwner(deps.db, actor, 'workgroup', existing)
-    // RFC-223 (PR-1, Codex impl-gate P1-2 / D15): only NEWLY-added members are
-    // ACL-checked, enforced INSIDE updateWorkgroup bound to the same resolution
-    // (diff by RESOLVED ID, not raw name).
-    const updated = await updateWorkgroup(deps.db, name, parsed.data, actor)
-    return c.json(updated)
+    return c.json(await saveWorkgroup(deps.db, existing.id, parsed.data, { kind: 'actor', actor }))
   })
 
   app.delete('/api/workgroups/:name', async (c) => {
@@ -115,9 +112,15 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
     const actor = actorOf(c)
     const existing = await loadVisibleWorkgroup(actor, name)
     await requireResourceOwner(deps.db, actor, 'workgroup', existing)
+    const parsed = DeleteWorkgroupSchema.safeParse(await safeJson(c.req.raw))
+    if (!parsed.success) {
+      throw new ValidationError('workgroup-invalid', 'invalid workgroup delete payload', {
+        issues: parsed.error.issues,
+      })
+    }
     // RFC-222 (D5): type-to-confirm (N-5 order).
-    assertDeleteConfirm(await readDeleteBody(c), existing.name, 'workgroup')
-    await deleteWorkgroup(deps.db, name, actor)
+    assertDeleteConfirm(parsed.data, existing.name, 'workgroup')
+    await deleteWorkgroup(deps.db, existing.id, parsed.data, { kind: 'actor', actor })
     return c.body(null, 204)
   })
 
@@ -133,14 +136,12 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
     const actor = actorOf(c)
     const existing = await loadVisibleWorkgroup(actor, name)
     await requireResourceOwner(deps.db, actor, 'workgroup', existing)
-    const renamed = await renameWorkgroup(
-      deps.db,
-      name,
-      parsed.data.newName,
-      actor,
-      parsed.data.description,
+    return c.json(
+      await renameWorkgroup(deps.db, existing.id, parsed.data, {
+        kind: 'actor',
+        actor,
+      }),
     )
-    return c.json(renamed)
   })
 
   // RFC-164 PR-3 — launch a workgroup task. Service-layer entry (the builtin

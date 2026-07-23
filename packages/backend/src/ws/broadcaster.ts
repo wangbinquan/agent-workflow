@@ -76,6 +76,7 @@ class TypedBroadcaster<M, C = never> {
 export const TASK_CHANNEL = (taskId: string): ChannelKey => `task:${taskId}`
 export const TASKS_LIST_CHANNEL: ChannelKey = 'tasks-list'
 export const WORKFLOWS_CHANNEL: ChannelKey = 'workflows'
+export const WORKGROUPS_CHANNEL: ChannelKey = 'workgroups'
 /** RFC-033: per-batch progress channel for `/repos` batch import. */
 export const REPO_IMPORT_CHANNEL = (batchId: string): ChannelKey => `repo-import:${batchId}`
 /** RFC-041: platform-wide memory candidate / promotion stream. */
@@ -91,6 +92,7 @@ import type {
   RepoImportWsMessage,
   TaskWsMessage,
   TasksListWsMessage,
+  WorkgroupsWsMessage,
   WorkflowsWsMessage,
 } from '@agent-workflow/shared'
 
@@ -110,11 +112,25 @@ export interface WorkflowDeletedAudienceContext {
 
 export type WorkflowsBroadcastContext = WorkflowDeletedAudienceContext
 
+export interface WorkgroupDeletedAudienceContext {
+  kind: 'workgroup.deleted-audience'
+  workgroupId: string
+  visibility: 'public' | 'private'
+  ownerUserId: string | null
+  grantedUserIds: ReadonlySet<string>
+}
+
+export type WorkgroupsBroadcastContext = WorkgroupDeletedAudienceContext
+
 export const taskBroadcaster = new TypedBroadcaster<TaskWsMessage>()
 export const tasksListBroadcaster = new TypedBroadcaster<TasksListWsMessage>()
 export const workflowsBroadcaster = new TypedBroadcaster<
   WorkflowsWsMessage,
   WorkflowsBroadcastContext
+>()
+export const workgroupsBroadcaster = new TypedBroadcaster<
+  WorkgroupsWsMessage,
+  WorkgroupsBroadcastContext
 >()
 export const repoImportsBroadcaster = new TypedBroadcaster<RepoImportWsMessage>()
 export const memoryBroadcaster = new TypedBroadcaster<MemoryWsMessage>()

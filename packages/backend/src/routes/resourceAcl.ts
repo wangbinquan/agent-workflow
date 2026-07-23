@@ -22,7 +22,12 @@ import {
 } from '@/services/resourceAcl'
 import { assertNotBuiltin } from '@/services/systemResources'
 import { NotFoundError, ValidationError } from '@/util/errors'
-import { WORKFLOWS_CHANNEL, workflowsBroadcaster } from '@/ws/broadcaster'
+import {
+  WORKFLOWS_CHANNEL,
+  WORKGROUPS_CHANNEL,
+  workflowsBroadcaster,
+  workgroupsBroadcaster,
+} from '@/ws/broadcaster'
 
 export interface AclEndpointConfig {
   type: AclResourceType
@@ -92,6 +97,12 @@ export function mountAclEndpoints(app: Hono, deps: AppDeps, cfg: AclEndpointConf
       workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
         type: 'workflow.acl.updated',
         workflowId: row.id,
+      })
+    }
+    if (cfg.type === 'workgroup') {
+      workgroupsBroadcaster.broadcast(WORKGROUPS_CHANNEL, {
+        type: 'workgroup.acl.updated',
+        workgroupId: row.id,
       })
     }
     return c.json(result)

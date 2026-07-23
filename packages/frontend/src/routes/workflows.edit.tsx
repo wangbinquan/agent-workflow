@@ -937,6 +937,7 @@ export function WorkflowEditorLoaded({
     <ManagedLiveRegionProvider>
       <div className="page page--editor">
         <PageHeader
+          className="editor-page-header"
           title={controller.state.local.name || workflowId}
           meta={
             <>

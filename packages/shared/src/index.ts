@@ -51,6 +51,7 @@ export * from './diagnose-repair'
 export * from './node-kind-behavior'
 export * from './workflow-sync-diff' // RFC-109
 export * from './workflow-canonical' // RFC-199
+export * from './workgroup-canonical' // RFC-225
 export * from './mcp-operation' // RFC-201
 export * from './plugin-operation' // RFC-201
 export * from './workflow-yaml' // RFC-199

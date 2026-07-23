@@ -31,13 +31,18 @@ import type { TaskWsMessage } from '@agent-workflow/shared'
 import { buildBatchShardKey } from '@agent-workflow/shared'
 import {
   CreateWorkgroupSchema,
-  UpdateWorkgroupSchema,
   WG_CLARIFY_BUDGET_DEFAULT,
+  WorkgroupDraftSnapshotSchema,
 } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { clarifyRounds, nodeRuns, tasks, workflows, workgroupAssignments } from '../src/db/schema'
 import { mintNodeRun } from '../src/services/nodeRunMint'
-import { createWorkgroup, getWorkgroup, updateWorkgroup } from '../src/services/workgroups'
+import {
+  createWorkgroup,
+  getWorkgroup,
+  saveWorkgroup,
+  workgroupDraftSnapshotOf,
+} from '../src/services/workgroups'
 import {
   canTransitionAssignment,
   dismissOpenClarifyParksForAutonomous,
@@ -67,15 +72,16 @@ function groupInput(
   })
 }
 
-describe('RFC-181 D — create 缺省全自动，update 省略保留现值', () => {
+describe('RFC-181 D + RFC-225 — create defaults and complete save snapshots', () => {
   let db: DbClient
   beforeEach(() => {
     db = createInMemoryDb(MIGRATIONS)
   })
 
-  test('schema 层：Create/Update 共享字段均无默认（默认只住在 handler，设计门 P1）', () => {
+  test('create may omit the budget, while a versioned editable snapshot is complete', () => {
     expect(groupInput().clarifyBudget).toBeUndefined()
-    const upd = UpdateWorkgroupSchema.parse({
+    const incomplete = WorkgroupDraftSnapshotSchema.safeParse({
+      name: 'g',
       description: '',
       instructions: '',
       mode: 'leader_worker',
@@ -84,7 +90,7 @@ describe('RFC-181 D — create 缺省全自动，update 省略保留现值', () 
       completionGate: true,
       members: [],
     })
-    expect(upd.clarifyBudget).toBeUndefined()
+    expect(incomplete.success).toBe(false)
   })
 
   // RFC-207 — `autonomous` is gone; `clarifyBudget` inherits its optional-not-default
@@ -100,28 +106,33 @@ describe('RFC-181 D — create 缺省全自动，update 省略保留现值', () 
     expect(explicit.clarifyBudget).toBe(0)
   })
 
-  test('update 省略 clarifyBudget → 保留现值（不被默认值覆写）', async () => {
+  test('autosave derives the complete snapshot from the current row, so unrelated edits preserve budget', async () => {
     await createWorkgroup(db, groupInput({ name: 'g-false', clarifyBudget: 0 }))
     await createWorkgroup(db, groupInput({ name: 'g-true', clarifyBudget: 9 }))
-    const updBody = () =>
-      UpdateWorkgroupSchema.parse({
-        description: 'edited',
-        instructions: '',
-        mode: 'leader_worker',
-        leaderDisplayName: 'planner',
-        switches: { shareOutputs: true, directMessages: false, blackboard: false },
-        maxRounds: 12,
-        completionGate: true,
-        members: [
-          { memberType: 'agent', agentName: 'planner-agent', displayName: 'planner', roleDesc: '' },
-        ],
-      })
-    await updateWorkgroup(db, 'g-false', updBody())
-    await updateWorkgroup(db, 'g-true', updBody())
+    const saveDescription = async (name: string, description: string, clarifyBudget?: number) => {
+      const current = await getWorkgroup(db, name)
+      if (current === null) throw new Error(`missing ${name}`)
+      await saveWorkgroup(
+        db,
+        current.id,
+        {
+          expectedVersion: current.version,
+          clientMutationId: ulid(),
+          snapshot: {
+            ...workgroupDraftSnapshotOf(current),
+            description,
+            ...(clarifyBudget === undefined ? {} : { clarifyBudget }),
+          },
+        },
+        { kind: 'system', reason: 'rfc181 test' },
+      )
+    }
+    await saveDescription('g-false', 'edited')
+    await saveDescription('g-true', 'edited')
     expect((await getWorkgroup(db, 'g-false'))?.clarifyBudget).toBe(0)
     expect((await getWorkgroup(db, 'g-true'))?.clarifyBudget).toBe(9)
     // 显式值仍然生效。
-    await updateWorkgroup(db, 'g-false', { ...updBody(), clarifyBudget: 5 })
+    await saveDescription('g-false', 'edited again', 5)
     expect((await getWorkgroup(db, 'g-false'))?.clarifyBudget).toBe(5)
   })
 })

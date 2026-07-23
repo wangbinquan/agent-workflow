@@ -498,6 +498,8 @@ export const workgroups = sqliteTable('workgroups', {
   /** RFC-185 D4: opt-in leader fan-out (same-member concurrent instances).
    *  OFF (default) keeps the original one-entity-per-agent protocol untouched. */
   fanOut: integer('fan_out', { mode: 'boolean' }).notNull().default(false),
+  /** RFC-225 optimistic content revision; ACL revisions remain independent. */
+  version: integer('version').notNull().default(1),
   // RFC-099 ACL (see agents table comment).
   ownerUserId: text('owner_user_id'),
   visibility: text('visibility', { enum: ['private', 'public'] })

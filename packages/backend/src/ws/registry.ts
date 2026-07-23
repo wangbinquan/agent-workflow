@@ -43,13 +43,21 @@ import type {
   RepoImportWsMessage,
   TaskWsMessage,
   TasksListWsMessage,
+  WorkgroupsWsMessage,
   WorkflowsWsMessage,
   WsControlMessage,
 } from '@agent-workflow/shared'
 import { isResourceAdminRole } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { memories as memoriesTable, nodeRunEvents, nodeRuns, tasks, workflows } from '@/db/schema'
+import {
+  memories as memoriesTable,
+  nodeRunEvents,
+  nodeRuns,
+  tasks,
+  workflows,
+  workgroups,
+} from '@/db/schema'
 import { canViewMemory } from '@/services/memory'
 import { canViewResource } from '@/services/resourceAcl'
 import { canViewTask } from '@/services/taskCollab'
@@ -62,13 +70,16 @@ import {
   REPO_IMPORT_CHANNEL,
   TASK_CHANNEL,
   TASKS_LIST_CHANNEL,
+  WORKGROUPS_CHANNEL,
   WORKFLOWS_CHANNEL,
   memoryBroadcaster,
   memoryDistillJobBroadcaster,
   repoImportsBroadcaster,
   taskBroadcaster,
   tasksListBroadcaster,
+  workgroupsBroadcaster,
   workflowsBroadcaster,
+  type WorkgroupsBroadcastContext,
   type WorkflowsBroadcastContext,
 } from './broadcaster'
 
@@ -84,6 +95,7 @@ export interface ChannelParamsByKind {
   task: { kind: 'task'; taskId: string; since?: number }
   'tasks-list': { kind: 'tasks-list' }
   workflows: { kind: 'workflows' }
+  workgroups: { kind: 'workgroups' }
   'repo-import': { kind: 'repo-import'; batchId: string }
   memories: { kind: 'memories' }
   'memory-distill-jobs': { kind: 'memory-distill-jobs' }
@@ -94,6 +106,7 @@ export interface ChannelMessageByKind {
   task: TaskWsMessage
   'tasks-list': TasksListWsMessage
   workflows: WorkflowsWsMessage
+  workgroups: WorkgroupsWsMessage
   'repo-import': RepoImportWsMessage
   memories: MemoryWsMessage
   'memory-distill-jobs': MemoryDistillJobWsMessage
@@ -105,6 +118,7 @@ export interface ChannelBroadcastContextByKind {
   task: never
   'tasks-list': never
   workflows: WorkflowsBroadcastContext
+  workgroups: WorkgroupsBroadcastContext
   'repo-import': never
   memories: never
   'memory-distill-jobs': never
@@ -327,6 +341,25 @@ async function cachedWorkflowVisible(ctx: FrameGateCtx, workflowId: string): Pro
   return visible
 }
 
+async function cachedWorkgroupVisible(ctx: FrameGateCtx, workgroupId: string): Promise<boolean> {
+  const key = `wg:${workgroupId}`
+  const cached = ctx.cache.get(key)
+  if (cached !== undefined) return cached
+  const rows = await ctx.db
+    .select({
+      id: workgroups.id,
+      ownerUserId: workgroups.ownerUserId,
+      visibility: workgroups.visibility,
+    })
+    .from(workgroups)
+    .where(eq(workgroups.id, workgroupId))
+    .limit(1)
+  const visible =
+    rows.length === 0 ? false : await canViewResource(ctx.db, ctx.actor, 'workgroup', rows[0]!)
+  ctx.cache.set(key, visible)
+  return visible
+}
+
 /**
  * Resolve a deleted workflow against the audience captured before DELETE.
  * `null` means no matching out-of-band context was supplied, so legacy direct
@@ -341,6 +374,23 @@ function deletedWorkflowAudienceVisible(
     context === undefined ||
     context.kind !== 'workflow.deleted-audience' ||
     context.workflowId !== workflowId
+  ) {
+    return null
+  }
+  if (context.visibility === 'public') return true
+  if (context.ownerUserId === actor.user.id) return true
+  return context.grantedUserIds.has(actor.user.id)
+}
+
+function deletedWorkgroupAudienceVisible(
+  actor: Actor,
+  workgroupId: string,
+  context: WorkgroupsBroadcastContext | undefined,
+): boolean | null {
+  if (
+    context === undefined ||
+    context.kind !== 'workgroup.deleted-audience' ||
+    context.workgroupId !== workgroupId
   ) {
     return null
   }
@@ -523,6 +573,43 @@ export const WS_CHANNELS: WsChannelRegistry = {
         return cached === true
       }
       return cachedWorkflowVisible(ctx, msg.workflowId)
+    },
+  },
+  workgroups: {
+    kind: 'workgroups',
+    revalidation: {
+      refreshActor: true,
+      cache: { kind: 'prefixes', prefixes: ['wg:'] },
+      rerunUpgradeGate: { na: 'no upgradeGate — this channel filters per frame' },
+    },
+    helloName: () => 'workgroups',
+    pathRe: /^\/ws\/workgroups$/,
+    parse: () => ({ kind: 'workgroups' }),
+    broadcaster: workgroupsBroadcaster,
+    channelKeyOf: () => WORKGROUPS_CHANNEL,
+    adminShortCircuit: true,
+    frameGate: async (ctx, msg, deliveryContext) => {
+      if (msg.type === 'workgroup.acl.updated') {
+        ctx.cache.delete(`wg:${msg.workgroupId}`)
+        return cachedWorkgroupVisible(ctx, msg.workgroupId)
+      }
+      if (msg.type === 'workgroup.deleted') {
+        const cached = ctx.cache.get(`wg:${msg.workgroupId}`)
+        ctx.cache.delete(`wg:${msg.workgroupId}`)
+        const visibleFromAudience = deletedWorkgroupAudienceVisible(
+          ctx.actor,
+          msg.workgroupId,
+          deliveryContext,
+        )
+        if (visibleFromAudience !== null) return visibleFromAudience
+        return cached === true
+      }
+      if (msg.type === 'workgroup.created' || msg.type === 'workgroup.updated') {
+        return cachedWorkgroupVisible(ctx, msg.workgroupId)
+      }
+      // Runtime defence in addition to the discriminated-union compile net:
+      // an unrecognised future frame must never inherit an allow path.
+      return false
     },
   },
   'repo-import': {

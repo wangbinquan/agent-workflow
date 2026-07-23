@@ -1792,6 +1792,10 @@ export const enUS: Resources = {
     panelConfigTitle: 'Group settings',
     panelAria: 'Context panel',
     panelClose: 'Close',
+    actionsTitle: 'Workgroup actions',
+    renameActionHint: 'Change the workgroup name and description.',
+    aclActionHint: 'Review visibility, members, and ownership.',
+    deleteActionHint: 'Permanently remove this workgroup.',
     memberSave: 'Save member',
     saveAll: 'Save all changes',
     finishAddingBeforeSave: 'Finish or clear the pending member draft before saving.',
@@ -1802,6 +1806,26 @@ export const enUS: Resources = {
     portsCountBadge_one: '{{count}} port',
     portsCountBadge_other: '{{count}} ports',
     configSaved: 'Saved',
+    autosave: {
+      groupLabel: 'Workgroup draft status',
+      phaseBlocked: 'Waiting for corrections',
+      invalidTitle: 'Autosave will resume after you fix this',
+      invalidBody:
+        'The current draft contains invalid fields. It remains on this page and will save automatically once valid.',
+      transientTitle: 'Finish adding the member to resume autosave',
+      transientBody:
+        'The add-member form is incomplete. Add the member or clear the form, then autosave will continue.',
+      errorTitle: 'Workgroup save failed',
+      errorBody:
+        'Your local draft is preserved. Retry saving; launch and delete stay unavailable until it succeeds.',
+      inaccessibleTitle: 'This workgroup is no longer accessible',
+      inaccessibleBody:
+        'The workgroup may have been deleted or your permissions may have changed. Your local draft is preserved.',
+      deletedTitle: 'Workgroup deleted',
+      deletedBody:
+        'The server explicitly deleted this workgroup. You can still save the local draft as a copy.',
+      returnToList: 'Return to workgroups',
+    },
     memberFieldAgent: 'Agent name',
     memberFieldUser: 'Platform user',
     memberFieldDisplayName: 'Display name',

@@ -1607,6 +1607,10 @@ export interface Resources {
     panelConfigTitle: string
     panelAria: string
     panelClose: string
+    actionsTitle: string
+    renameActionHint: string
+    aclActionHint: string
+    deleteActionHint: string
     memberSave: string
     saveAll: string
     finishAddingBeforeSave: string
@@ -1617,6 +1621,21 @@ export interface Resources {
     portsCountBadge_one: string
     portsCountBadge_other: string
     configSaved: string
+    autosave: {
+      groupLabel: string
+      phaseBlocked: string
+      invalidTitle: string
+      invalidBody: string
+      transientTitle: string
+      transientBody: string
+      errorTitle: string
+      errorBody: string
+      inaccessibleTitle: string
+      inaccessibleBody: string
+      deletedTitle: string
+      deletedBody: string
+      returnToList: string
+    }
     memberFieldAgent: string
     memberFieldUser: string
     memberFieldDisplayName: string
@@ -5653,6 +5672,10 @@ export const zhCN: Resources = {
     panelConfigTitle: '工作组配置',
     panelAria: '上下文面板',
     panelClose: '关闭',
+    actionsTitle: '工作组操作',
+    renameActionHint: '修改工作组名称与描述。',
+    aclActionHint: '查看可见性、成员与所有者。',
+    deleteActionHint: '永久删除这个工作组。',
     memberSave: '保存成员',
     saveAll: '保存全部更改',
     finishAddingBeforeSave: '请先完成或清空当前新增成员草稿。',
@@ -5663,6 +5686,21 @@ export const zhCN: Resources = {
     portsCountBadge_one: '{{count}} 端口',
     portsCountBadge_other: '{{count}} 端口',
     configSaved: '已保存',
+    autosave: {
+      groupLabel: '工作组草稿状态',
+      phaseBlocked: '等待修正',
+      invalidTitle: '修正后会自动保存',
+      invalidBody: '当前草稿包含无效字段；修改会保留在本页，恢复合法后自动继续保存。',
+      transientTitle: '完成新增成员后会自动保存',
+      transientBody: '新增成员表单尚未完成。确认添加或清空表单后，工作组会继续自动保存。',
+      errorTitle: '工作组保存失败',
+      errorBody: '本地草稿仍然保留。请重试；保存成功前不会启动或删除工作组。',
+      inaccessibleTitle: '无法继续访问此工作组',
+      inaccessibleBody: '工作组可能已删除或权限已变化，本地草稿仍然保留。',
+      deletedTitle: '工作组已删除',
+      deletedBody: '服务端已明确删除此工作组；本地草稿仍可另存为副本。',
+      returnToList: '返回工作组列表',
+    },
     memberFieldAgent: '代理名',
     memberFieldUser: '平台用户',
     memberFieldDisplayName: '显示名',

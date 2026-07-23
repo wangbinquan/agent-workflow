@@ -289,11 +289,32 @@ describe('RFC-165 §9b — create/update by kind (K1/K2/K3/K7)', () => {
       },
       { actor: actorFor(ownerId) },
     )
-    const { deleteWorkgroup, renameWorkgroup } = await import('../src/services/workgroups')
-    await expect(renameWorkgroup(db, 'squad', 'squad2', T6_ACTOR)).rejects.toMatchObject({
+    const { deleteWorkgroup, getWorkgroup, renameWorkgroup } =
+      await import('../src/services/workgroups')
+    const group = await getWorkgroup(db, 'squad')
+    if (group === null) throw new Error('missing squad')
+    await expect(
+      renameWorkgroup(
+        db,
+        group.id,
+        {
+          newName: 'squad2',
+          expectedVersion: group.version,
+          clientMutationId: ulid(),
+        },
+        { kind: 'actor', actor: T6_ACTOR },
+      ),
+    ).rejects.toMatchObject({
       code: 'workgroup-scheduled-referenced',
     })
-    await expect(deleteWorkgroup(db, 'squad', T6_ACTOR)).rejects.toMatchObject({
+    await expect(
+      deleteWorkgroup(
+        db,
+        group.id,
+        { expectedVersion: group.version, clientMutationId: ulid(), confirm: group.name },
+        { kind: 'actor', actor: T6_ACTOR },
+      ),
+    ).rejects.toMatchObject({
       code: 'workgroup-scheduled-referenced',
     })
   })

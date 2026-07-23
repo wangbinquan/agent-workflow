@@ -65,11 +65,9 @@ export interface WorkgroupContextPanelProps {
   onClose: () => void
   configDraft: WorkgroupConfigDraft | undefined
   configErrors: Record<string, string>
-  onConfigChange: (d: WorkgroupConfigDraft) => void
+  onConfigChange: (d: WorkgroupConfigDraft, meta?: { immediate?: boolean }) => void
   membersState: WorkgroupMembersState
-  membersBaseline: WorkgroupMembersState
   onPatchMember: (key: string, patch: { displayName?: string; roleDesc?: string }) => void
-  onSaveMember: (key: string) => Promise<boolean>
   onSetLeader: (key: string) => void
   onRemoveMember: (key: string) => Promise<void>
   onAddMember: (row: WorkgroupMemberRowState) => Promise<void>
@@ -82,8 +80,6 @@ export function WorkgroupContextPanel(props: WorkgroupContextPanelProps) {
   const state = props.membersState
   const row =
     panel.kind === 'member' ? (state.members.find((m) => m.key === panel.key) ?? null) : null
-  const baselineRow =
-    row === null ? null : (props.membersBaseline.members.find((m) => m.key === row.key) ?? null)
 
   // Add-command drafts remain mounted in the context-panel owner even when
   // the user switches/ closes/ Escapes away. They report into the route's
@@ -192,17 +188,11 @@ export function WorkgroupContextPanel(props: WorkgroupContextPanelProps) {
             key={row.key}
             row={row}
             others={state.members.filter((m) => m.key !== row.key)}
-            dirty={
-              baselineRow === null ||
-              baselineRow.displayName !== row.displayName ||
-              baselineRow.roleDesc !== row.roleDesc
-            }
             isLeader={state.leaderKey === row.key}
             showLeaderControls={props.group.mode === 'leader_worker'}
             applying={props.applying}
             applyError={props.applyError}
             onChange={(patch) => props.onPatchMember(row.key, patch)}
-            onSave={() => props.onSaveMember(row.key)}
             onSetLeader={() => props.onSetLeader(row.key)}
             onRemove={() => props.onRemoveMember(row.key)}
           />
@@ -240,21 +230,17 @@ export function WorkgroupContextPanel(props: WorkgroupContextPanelProps) {
 function MemberBody(props: {
   row: WorkgroupMemberRowState
   others: ReadonlyArray<Pick<WorkgroupMemberRowState, 'displayName'>>
-  dirty: boolean
   isLeader: boolean
   showLeaderControls: boolean
   applying: boolean
   applyError: unknown
   onChange: (patch: { displayName?: string; roleDesc?: string }) => void
-  onSave: () => Promise<boolean>
   onSetLeader: () => void
   onRemove: () => Promise<void>
 }) {
   const { t } = useTranslation()
   const { row } = props
   const errors = validateMemberDraft(row, props.others)
-  const invalid = Object.keys(errors).length > 0
-
   const agentsList = useAgentsList({ enabled: row.memberType === 'agent' })
   const agent =
     row.memberType === 'agent' ? agentsList.agents.find((a) => a.name === row.agentName) : undefined
@@ -303,20 +289,10 @@ function MemberBody(props: {
       </Field>
 
       <div className="workgroup-panel__actions">
-        <button
-          type="button"
-          className="btn btn--sm btn--primary"
-          disabled={invalid || !props.dirty || props.applying}
-          onClick={() => void props.onSave()}
-          data-testid="workgroup-member-save"
-        >
-          {props.applying ? t('common.saving') : t('workgroups.saveAll')}
-        </button>
         {props.showLeaderControls && row.memberType === 'agent' && !props.isLeader && (
           <button
             type="button"
             className="btn btn--sm"
-            disabled={props.applying}
             onClick={props.onSetLeader}
             data-testid={`workgroup-set-leader-${row.displayName}`}
           >
@@ -328,7 +304,6 @@ function MemberBody(props: {
           onConfirm={props.onRemove}
           variant="danger"
           size="sm"
-          disabled={props.applying}
         />
       </div>
 
@@ -387,7 +362,7 @@ function AddActions(props: {
         <button
           type="button"
           className="btn btn--sm btn--primary"
-          disabled={props.invalid || props.applying}
+          disabled={props.invalid}
           onClick={props.onConfirm}
           data-testid={props.confirmTestid}
         >

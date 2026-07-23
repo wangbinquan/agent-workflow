@@ -5439,7 +5439,8 @@ details.form-section[open] > summary {
   padding-bottom: 12px;
 }
 
-.page--editor .page__header {
+.page--editor .page__header,
+.editor-page-header {
   margin-bottom: 0;
 }
 
@@ -5447,20 +5448,24 @@ details.form-section[open] > summary {
  * example Undo -> Undo: Add step) must not wrap the row and move the canvas
  * while a screen-space insertion is being projected into flow space. Keep a
  * stable, compact heading column and let the real button row scroll inline. */
-.page--editor > .page__header > .page__heading {
+.page--editor > .page__header > .page__heading,
+.editor-page-header > .page__heading {
   flex: 0 0 clamp(160px, 18vw, 240px);
   overflow: hidden;
 }
 
 .page--editor > .page__header .page__title,
-.page--editor > .page__header .page__meta {
+.page--editor > .page__header .page__meta,
+.editor-page-header .page__title,
+.editor-page-header .page__meta {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.page--editor > .page__header > .page__actions {
+.page--editor > .page__header > .page__actions,
+.editor-page-header > .page__actions {
   flex: 1 1 0;
   flex-wrap: nowrap;
   justify-content: flex-start;
@@ -5472,7 +5477,8 @@ details.form-section[open] > summary {
   scrollbar-width: thin;
 }
 
-.page--editor > .page__header > .page__actions > .btn {
+.page--editor > .page__header > .page__actions > .btn,
+.editor-page-header > .page__actions > .btn {
   flex: 0 0 auto;
 }
 
@@ -5481,11 +5487,13 @@ details.form-section[open] > summary {
  * first action collapses to 0 once the row overflows, which `justify-content:
  * flex-end` on a scroll container cannot do — it would clip the start side
  * unreachably. */
-.page--editor > .page__header > .page__actions > :first-child {
+.page--editor > .page__header > .page__actions > :first-child,
+.editor-page-header > .page__actions > :first-child {
   margin-inline-start: auto;
 }
 
-.page--editor h1 {
+.page--editor h1,
+.editor-page-header h1 {
   font-size: 18px;
   line-height: 1.3;
   margin: 0;
@@ -18109,7 +18117,8 @@ button.status-chip {
    * viewport still leave the canvas as the dominant surface. The rail scrolls
    * horizontally with real buttons; no action is hidden or moved out of DOM
    * order, and ordinary pages retain the shared stacked mobile header. */
-  .page--editor .page__header--row {
+  .page--editor .page__header--row,
+  .editor-page-header {
     align-items: flex-start;
     flex-direction: row;
   }
@@ -18122,17 +18131,27 @@ button.status-chip {
     gap: 6px;
   }
 
-  .page--editor > .page__header > .page__heading {
+  .page--editor > .page__header > .page__heading,
+  .editor-page-header > .page__heading {
     flex-basis: 132px;
   }
 
-  .page--editor > .page__header > .page__actions {
+  /* A workgroup has exactly two top-level actions. Give that short rail enough
+   * room to keep both visible at 390px instead of making users discover a
+   * 24px horizontal scroll; the full title/id remain in the accessible DOM. */
+  .editor-page-header--workgroup > .page__heading {
+    flex-basis: 104px;
+  }
+
+  .page--editor > .page__header > .page__actions,
+  .editor-page-header > .page__actions {
     width: auto;
     flex: 1 1 auto;
     justify-content: flex-start;
   }
 
-  .page--editor > .page__header > .page__actions > .btn {
+  .page--editor > .page__header > .page__actions > .btn,
+  .editor-page-header > .page__actions > .btn {
     flex: 0 0 auto;
   }
 

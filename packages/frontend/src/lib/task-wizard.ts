@@ -244,6 +244,7 @@ export function buildScheduledEnvelope(
   // hands this helper an already-guarded body.
   const scheduledBody = { ...body }
   delete scheduledBody.expectedWorkflowVersion
+  delete scheduledBody.expectedWorkgroupVersion
 
   if (kind === 'agent') return { agentName: ref.agentName ?? '', ...scheduledBody }
   if (kind === 'workgroup') return { workgroupName: ref.workgroupName ?? '', ...scheduledBody }

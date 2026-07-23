@@ -3,14 +3,15 @@
 // The standalone /workgroups/launch page is retired (the /tasks/new wizard is
 // the launch surface — its flows are locked by tasks-new-wizard.test.tsx).
 // What survives here:
-//   1. Detail page: the "Launch task" button renders ONLY when the shared
-//      workgroupLaunchReadiness oracle says ready, and deep-links into the
-//      wizard with the group pre-picked (?kind=workgroup&workgroup=<name>).
-//   2. A not-ready group hides the button and shows the readiness banner.
+//   1. Detail page: the "Launch task" button keeps the workflow-editor primary
+//      action position and deep-links into the wizard with the group pre-picked
+//      (?kind=workgroup&workgroup=<name>) when the shared readiness oracle passes.
+//   2. A not-ready group keeps that stable action visible but disabled and
+//      explains the blocking condition in the readiness banner.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import {
   RouterProvider,
   createMemoryHistory,
@@ -48,6 +49,7 @@ function wg(name: string, overrides: Partial<Workgroup> = {}): Workgroup {
     ownerUserId: null,
     visibility: 'public',
     schemaVersion: 1,
+    version: 1,
     createdAt: 1,
     updatedAt: 1,
     ...overrides,
@@ -120,23 +122,30 @@ afterEach(() => {
 })
 
 describe('/workgroups/$name — launch entry gating', () => {
-  test('a launch-ready group shows the button deep-linking into the wizard', async () => {
+  test('a launch-ready group uses an exact-save launch handoff and renders no Save button', async () => {
     installFetch({ workgroups: [wg('review-squad')] })
-    await renderPage('/workgroups/review-squad')
+    const router = await renderPage('/workgroups/review-squad')
     const btn = await screen.findByTestId('workgroup-launch-button')
-    expect(btn.getAttribute('href')).toBe('/tasks/new?kind=workgroup&workgroup=review-squad')
-    expect(btn.classList.contains('btn--primary')).toBe(false)
-    expect(screen.getByTestId('workgroup-save-button').classList.contains('btn--primary')).toBe(
-      true,
-    )
+    expect(btn.getAttribute('href')).toBeNull()
+    expect(btn.classList.contains('btn--primary')).toBe(true)
+    expect(screen.queryByTestId('workgroup-save-button')).toBeNull()
+    fireEvent.click(btn)
+    await waitFor(() => expect(router.state.location.pathname).toBe('/tasks/new'))
+    expect(router.state.location.search).toMatchObject({
+      kind: 'workgroup',
+      workgroup: 'review-squad',
+      workgroupVersion: 1,
+    })
   })
 
-  test('a not-ready group (no members) hides the launch button', async () => {
+  test('a not-ready group (no members) keeps the aligned launch action disabled', async () => {
     installFetch({
       workgroups: [wg('empty-squad', { members: [], leaderMemberId: null })],
     })
     await renderPage('/workgroups/empty-squad')
     await screen.findByTestId('workgroup-readiness-banner')
-    expect(screen.queryByTestId('workgroup-launch-button')).toBeNull()
+    const btn = await screen.findByTestId('workgroup-launch-button')
+    expect(btn.classList.contains('btn--primary')).toBe(true)
+    expect((btn as HTMLButtonElement).disabled).toBe(true)
   })
 })

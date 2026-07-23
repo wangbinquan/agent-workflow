@@ -13,17 +13,17 @@
 // at render time (same contract as PluginFields).
 
 import type {
-  UpdateWorkgroup,
   UserPublic,
   Workgroup,
-  WorkgroupMemberInput,
+  WorkgroupDraftMember,
+  WorkgroupDraftSnapshot,
   WorkgroupMemberType,
   WorkgroupMode,
   WorkgroupSwitches,
 } from '@agent-workflow/shared'
 import {
   CreateWorkgroupSchema,
-  UpdateWorkgroupSchema,
+  WorkgroupDraftSnapshotSchema,
   WORKGROUP_MAX_ROUNDS_DEFAULT,
   WORKGROUP_MAX_ROUNDS_LIMIT,
   WORKGROUP_NAME_RE,
@@ -72,11 +72,9 @@ export function buildQuickCreatePayload(
 // ---------------------------------------------------------------------------
 
 export interface WorkgroupConfigDraft {
-  // NOTE: `description` is NOT part of the config draft. Since 2026-07-13 it is
-  // metadata edited in the rename dialog (POST /rename, atomic with the name),
-  // so the config PUT passes the SERVER's current description through unchanged
-  // (buildConfigUpdatePayload) — exactly like it passes members through. This
-  // is what keeps a config save from reverting a dialog description edit.
+  /** RFC-225: metadata is part of the same composite autosave document. */
+  name: string
+  description: string
   instructions: string
   mode: WorkgroupMode
   /** Stored switch values. free_collab renders them as forced-on but never
@@ -95,6 +93,8 @@ export interface WorkgroupConfigDraft {
 
 export function workgroupToConfigDraft(w: Workgroup): WorkgroupConfigDraft {
   return {
+    name: w.name,
+    description: w.description,
     instructions: w.instructions,
     mode: w.mode,
     switches: { ...w.switches },
@@ -108,7 +108,7 @@ export function workgroupToConfigDraft(w: Workgroup): WorkgroupConfigDraft {
 export function buildConfigUpdatePayload(
   draft: WorkgroupConfigDraft,
   group: Workgroup,
-): BuiltWorkgroup<UpdateWorkgroup> {
+): BuiltWorkgroup<WorkgroupDraftSnapshot> {
   const errors: Record<string, string> = {}
   if (draft.maxRounds !== undefined && !isValidMaxRounds(draft.maxRounds)) {
     errors.maxRounds = 'workgroups.errors.maxRoundsInvalid'
@@ -123,9 +123,8 @@ export function buildConfigUpdatePayload(
   if (Object.keys(errors).length > 0) return { ok: false, errors }
   const leader = storedLeaderDisplayName(group)
   const payload = {
-    // Pass the server's current description through unchanged — it is owned by
-    // the rename dialog now (POST /rename), never edited on this config form.
-    description: group.description,
+    name: draft.name,
+    description: draft.description,
     instructions: draft.instructions,
     mode: draft.mode,
     // Backend nulls the leader outside leader_worker regardless; only carry
@@ -138,7 +137,7 @@ export function buildConfigUpdatePayload(
     fanOut: draft.fanOut,
     members: membersToInputs(group.members),
   }
-  const parsed = UpdateWorkgroupSchema.safeParse(payload)
+  const parsed = WorkgroupDraftSnapshotSchema.safeParse(payload)
   if (!parsed.success) return { ok: false, errors: schemaIssues(parsed.error.issues) }
   return { ok: true, payload: parsed.data }
 }
@@ -159,6 +158,8 @@ export interface WorkgroupMemberRowState {
    */
   serverId: string | null
   memberType: WorkgroupMemberType
+  /** RFC-223 canonical identity. Legacy dangling rows may only have a name. */
+  agentId: string
   /** memberType='agent' — may reference a not-yet-existing agent (dangling
    *  references are legal; launch-time validation owns existence). */
   agentName: string
@@ -181,6 +182,7 @@ export function nextMemberRowKey(): string {
 }
 
 export function makeAgentMemberRow(input: {
+  agentId?: string
   agentName: string
   displayName: string
   roleDesc?: string
@@ -189,6 +191,7 @@ export function makeAgentMemberRow(input: {
     key: nextMemberRowKey(),
     serverId: null,
     memberType: 'agent',
+    agentId: input.agentId ?? '',
     agentName: input.agentName,
     userId: '',
     displayName: input.displayName,
@@ -205,6 +208,7 @@ export function makeHumanMemberRow(input: {
     key: nextMemberRowKey(),
     serverId: null,
     memberType: 'human',
+    agentId: '',
     agentName: '',
     userId: input.userId,
     displayName: input.displayName,
@@ -220,6 +224,7 @@ export function workgroupToMembersState(w: Workgroup): WorkgroupMembersState {
       key: m.id,
       serverId: m.id,
       memberType: m.memberType,
+      agentId: m.agentId ?? '',
       agentName: m.agentName ?? '',
       userId: m.userId ?? '',
       displayName: m.displayName,
@@ -243,8 +248,8 @@ export function workgroupToMembersState(w: Workgroup): WorkgroupMembersState {
 export function buildCompositeUpdatePayload(
   config: WorkgroupConfigDraft,
   members: WorkgroupMembersState,
-  group: Workgroup,
-): BuiltWorkgroup<UpdateWorkgroup> {
+  _group: Workgroup,
+): BuiltWorkgroup<WorkgroupDraftSnapshot> {
   const errors: Record<string, string> = {}
   if (config.maxRounds !== undefined && !isValidMaxRounds(config.maxRounds)) {
     errors.maxRounds = 'workgroups.errors.maxRoundsInvalid'
@@ -276,7 +281,8 @@ export function buildCompositeUpdatePayload(
   if (Object.keys(errors).length > 0) return { ok: false, errors }
 
   const payload = {
-    description: group.description,
+    name: config.name,
+    description: config.description,
     instructions: config.instructions,
     mode: config.mode,
     ...(config.mode === 'leader_worker' && leader !== undefined
@@ -289,7 +295,7 @@ export function buildCompositeUpdatePayload(
     fanOut: config.fanOut,
     members: members.members.map(rowToInput),
   }
-  const parsed = UpdateWorkgroupSchema.safeParse(payload)
+  const parsed = WorkgroupDraftSnapshotSchema.safeParse(payload)
   if (!parsed.success) return { ok: false, errors: schemaIssues(parsed.error.issues) }
   return { ok: true, payload: parsed.data }
 }
@@ -309,11 +315,12 @@ export type WorkgroupSaveReconcileResult =
  * member field and the leader relation must match first.
  */
 export function reconcileWorkgroupSaveResponse(
-  payload: UpdateWorkgroup,
+  payload: WorkgroupDraftSnapshot,
   submitted: WorkgroupMembersState,
   response: Workgroup,
 ): WorkgroupSaveReconcileResult {
   if (
+    response.name !== payload.name ||
     response.description !== payload.description ||
     response.instructions !== payload.instructions ||
     response.mode !== payload.mode ||
@@ -354,13 +361,16 @@ export function reconcileWorkgroupSaveResponse(
     const localInput = rowToInput(local)
     const localMatchesRequest =
       localInput.memberType === requested.memberType &&
+      localInput.agentId === requested.agentId &&
       localInput.agentName === requested.agentName &&
       localInput.userId === requested.userId &&
       localInput.displayName === requested.displayName &&
       localInput.roleDesc === requested.roleDesc
     const agentMatches =
       requested.memberType === 'agent'
-        ? server.agentName === requested.agentName && server.userId === null
+        ? (requested.agentId === undefined || server.agentId === requested.agentId) &&
+          (requested.agentName === undefined || server.agentName === requested.agentName) &&
+          server.userId === null
         : server.agentName === null && server.userId === requested.userId
     if (
       server.memberType !== requested.memberType ||
@@ -375,6 +385,7 @@ export function reconcileWorkgroupSaveResponse(
       ...local,
       serverId: server.id,
       memberType: server.memberType,
+      agentId: server.agentId ?? '',
       agentName: server.agentName ?? '',
       userId: server.userId ?? '',
       displayName: server.displayName,
@@ -449,12 +460,14 @@ export function setLeader(state: WorkgroupMembersState, key: string | null): Wor
  * Keys: agentName / userId / displayName.
  */
 export function validateMemberDraft(
-  draft: Pick<WorkgroupMemberRowState, 'memberType' | 'agentName' | 'userId' | 'displayName'>,
+  draft: Pick<WorkgroupMemberRowState, 'memberType' | 'agentName' | 'userId' | 'displayName'> & {
+    agentId?: string
+  },
   others: ReadonlyArray<Pick<WorkgroupMemberRowState, 'displayName'>>,
 ): Record<string, string> {
   const errors: Record<string, string> = {}
   if (draft.memberType === 'agent') {
-    if (draft.agentName.trim().length === 0) {
+    if ((draft.agentId ?? '').length === 0 && draft.agentName.trim().length === 0) {
       errors.agentName = 'workgroups.errors.agentNameRequired'
     }
   } else if (draft.userId.length === 0) {
@@ -479,7 +492,7 @@ export function validateMemberDraft(
 export function buildMembersUpdatePayload(
   group: Workgroup,
   state: WorkgroupMembersState,
-): BuiltWorkgroup<UpdateWorkgroup> {
+): BuiltWorkgroup<WorkgroupDraftSnapshot> {
   const errors: Record<string, string> = {}
   state.members.forEach((m, i) => {
     const rowErrors = validateMemberDraft(
@@ -498,6 +511,7 @@ export function buildMembersUpdatePayload(
   if (Object.keys(errors).length > 0) return { ok: false, errors }
 
   const payload = {
+    name: group.name,
     description: group.description,
     instructions: group.instructions,
     mode: group.mode,
@@ -511,7 +525,7 @@ export function buildMembersUpdatePayload(
     fanOut: group.fanOut ?? false,
     members: state.members.map(rowToInput),
   }
-  const parsed = UpdateWorkgroupSchema.safeParse(payload)
+  const parsed = WorkgroupDraftSnapshotSchema.safeParse(payload)
   if (!parsed.success) return { ok: false, errors: schemaIssues(parsed.error.issues) }
   return { ok: true, payload: parsed.data }
 }
@@ -554,11 +568,15 @@ function isValidMaxRounds(n: number): boolean {
   return Number.isInteger(n) && n >= 1 && n <= WORKGROUP_MAX_ROUNDS_LIMIT
 }
 
-function rowToInput(m: WorkgroupMemberRowState): WorkgroupMemberInput {
+function rowToInput(m: WorkgroupMemberRowState): WorkgroupDraftMember {
   return m.memberType === 'agent'
     ? {
         memberType: 'agent',
-        agentName: m.agentName.trim(),
+        ...(m.agentId.length > 0
+          ? { agentId: m.agentId }
+          : m.agentName.trim().length > 0
+            ? { agentName: m.agentName.trim() }
+            : {}),
         displayName: m.displayName.trim(),
         roleDesc: m.roleDesc,
       }
@@ -570,14 +588,18 @@ function rowToInput(m: WorkgroupMemberRowState): WorkgroupMemberInput {
       }
 }
 
-function membersToInputs(members: Workgroup['members']): WorkgroupMemberInput[] {
+function membersToInputs(members: Workgroup['members']): WorkgroupDraftMember[] {
   return [...members]
     .sort((a, b) => a.sortOrder - b.sortOrder)
     .map((m) =>
       m.memberType === 'agent'
         ? {
             memberType: 'agent' as const,
-            agentName: m.agentName ?? '',
+            ...(m.agentId !== undefined && m.agentId !== null
+              ? { agentId: m.agentId }
+              : m.agentName !== null
+                ? { agentName: m.agentName }
+                : {}),
             displayName: m.displayName,
             roleDesc: m.roleDesc,
           }

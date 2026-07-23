@@ -172,8 +172,9 @@ describe('RFC-203 T6 引用披露 ACL', () => {
   })
 
   test('workgroup-scheduled-referenced：他人计划只计数；tasks:read:all 全可见', async () => {
+    const workgroupId = ulid()
     await db.insert(workgroups).values({
-      id: ulid(),
+      id: workgroupId,
       name: 'wg1',
       description: '',
       mode: 'free_collab',
@@ -195,7 +196,12 @@ describe('RFC-203 T6 引用披露 ACL', () => {
     })
 
     try {
-      await deleteWorkgroup(db, 'wg1', owner)
+      await deleteWorkgroup(
+        db,
+        workgroupId,
+        { expectedVersion: 1, clientMutationId: ulid(), confirm: 'wg1' },
+        { kind: 'actor', actor: owner },
+      )
       throw new Error('expected ConflictError')
     } catch (err) {
       expect(err).toBeInstanceOf(ConflictError)
@@ -210,7 +216,12 @@ describe('RFC-203 T6 引用披露 ACL', () => {
     }
 
     try {
-      await deleteWorkgroup(db, 'wg1', admin)
+      await deleteWorkgroup(
+        db,
+        workgroupId,
+        { expectedVersion: 1, clientMutationId: ulid(), confirm: 'wg1' },
+        { kind: 'actor', actor: admin },
+      )
       throw new Error('expected ConflictError')
     } catch (err) {
       const d = (err as ConflictError).details as {

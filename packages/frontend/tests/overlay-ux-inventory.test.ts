@@ -168,10 +168,12 @@ const OVERLAY_CALLSITES = {
 
   'components/workgroup/DynamicWorkflowPanel.tsx': { family: 'workgroup', count: 2 },
   'components/workgroup/WorkgroupMemberCards.tsx': { family: 'workgroup', count: 2 },
+  'components/workgroup/WorkgroupDraftStatus.tsx': { family: 'workgroup', count: 2 },
   // RFC-217 T10 房间拆分：gate-reject 对话框留壳，交付表单对话框出文件。
   'components/workgroup/room/WorkgroupRoom.tsx': { family: 'workgroup', count: 1 },
   'components/workgroup/room/DeliverFormDialog.tsx': { family: 'workgroup', count: 1 },
   'components/workgroup/WorkgroupTaskConfigDialog.tsx': { family: 'workgroup', count: 1 },
+  'routes/workgroups.detail.tsx': { family: 'workgroup', count: 3 },
 
   'components/shell/InboxDrawer.tsx': { family: 'shell-navigation', count: 1 },
   'components/shell/MobileNavDialog.tsx': { family: 'shell-navigation', count: 1 },

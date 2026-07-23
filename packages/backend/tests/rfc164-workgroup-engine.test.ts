@@ -298,6 +298,42 @@ describe('RFC-164 engine — launch path', () => {
     expect(body.details?.reasons).toEqual(['leader-missing'])
   })
 
+  test('RFC-225 exact handoff rejects a stale workgroup version before task materialization', async () => {
+    const group = await createWorkgroup(db, {
+      name: 'version-fenced',
+      description: '',
+      instructions: '',
+      mode: 'leader_worker',
+      leaderDisplayName: 'lead',
+      switches: { shareOutputs: true, directMessages: false, blackboard: false },
+      maxRounds: 5,
+      completionGate: false,
+      members: [{ memberType: 'agent', agentName: 'a1', displayName: 'lead', roleDesc: '' }],
+    })
+    const res = await req('/api/workgroups/version-fenced/tasks', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 't',
+        goal: 'g',
+        scratch: true,
+        expectedWorkgroupVersion: group.version + 1,
+      }),
+    })
+    expect(res.status).toBe(409)
+    const body = (await res.json()) as {
+      code: string
+      details?: { expectedVersion: number; currentVersion: number }
+    }
+    expect(body).toMatchObject({
+      code: 'workgroup-version-conflict',
+      details: { expectedVersion: 2, currentVersion: 1 },
+    })
+    expect(await db.select().from(tasks)).toHaveLength(0)
+    expect(
+      (await db.select().from(workflows)).some((row) => row.id === WORKGROUP_HOST_WORKFLOW_ID),
+    ).toBe(false)
+  })
+
   test('上线前加固：deleted roster agent blocks launch before task/host materialization', async () => {
     await createWorkgroup(db, {
       name: 'dangling-agent',

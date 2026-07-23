@@ -16,11 +16,14 @@ import { buildActor } from '../src/auth/actor'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { resolve } from 'node:path'
+import { ulid } from 'ulid'
 import {
   CreateWorkgroupSchema,
   resolveWorkgroupSwitches,
   workgroupLaunchReadiness,
   type CreateWorkgroup,
+  type WorkgroupDetail,
+  type WorkgroupDraftSnapshot,
 } from '@agent-workflow/shared'
 import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -33,7 +36,8 @@ import {
   getWorkgroup,
   listWorkgroups,
   renameWorkgroup,
-  updateWorkgroup,
+  saveWorkgroup,
+  workgroupDraftSnapshotOf,
 } from '../src/services/workgroups'
 import { ConflictError, NotFoundError, ValidationError } from '../src/util/errors'
 
@@ -63,6 +67,45 @@ function groupInput(overrides: Partial<CreateWorkgroup> = {}): CreateWorkgroup {
     ],
     ...overrides,
   })
+}
+
+async function saveByName(
+  db: DbClient,
+  name: string,
+  next: (snapshot: WorkgroupDraftSnapshot) => WorkgroupDraftSnapshot,
+) {
+  const current = await getWorkgroup(db, name)
+  if (current === null) throw new Error(`missing fixture workgroup ${name}`)
+  return (
+    await saveWorkgroup(
+      db,
+      current.id,
+      {
+        expectedVersion: current.version,
+        clientMutationId: ulid(),
+        snapshot: next(workgroupDraftSnapshotOf(current)),
+      },
+      { kind: 'actor', actor: T6_ACTOR },
+    )
+  ).workgroup
+}
+
+async function renameByName(db: DbClient, name: string, newName: string, description?: string) {
+  const current = await getWorkgroup(db, name)
+  if (current === null) throw new Error(`missing fixture workgroup ${name}`)
+  return (
+    await renameWorkgroup(
+      db,
+      current.id,
+      {
+        newName,
+        ...(description === undefined ? {} : { description }),
+        expectedVersion: current.version,
+        clientMutationId: ulid(),
+      },
+      { kind: 'actor', actor: T6_ACTOR },
+    )
+  ).workgroup
 }
 
 describe('RFC-164 — CreateWorkgroupSchema shape', () => {
@@ -255,14 +298,16 @@ describe('RFC-164 — services/workgroups.ts CRUD', () => {
     expect(g2.members.map((m) => m.displayName)).toContain('planner')
   })
 
-  test('update = full replace: member ids regenerate, leader re-resolves, fc clears leader', async () => {
+  test('versioned save replaces changed roster, re-resolves leader, and clears it in fc', async () => {
     const g1 = await createWorkgroup(db, groupInput())
     const oldIds = new Set(g1.members.map((m) => m.id))
 
-    const g2 = await updateWorkgroup(db, 'payment-squad', {
+    const g2 = await saveByName(db, 'payment-squad', (snapshot) => ({
+      ...snapshot,
       description: 'v2',
       instructions: '',
       mode: 'free_collab',
+      leaderDisplayName: undefined,
       switches: { shareOutputs: false, directMessages: false, blackboard: false },
       maxRounds: 30,
       completionGate: false,
@@ -270,7 +315,7 @@ describe('RFC-164 — services/workgroups.ts CRUD', () => {
         { memberType: 'agent', agentName: 'coder-a', displayName: 'coder', roleDesc: '实现' },
         { memberType: 'agent', agentName: 'auditor', displayName: 'auditor', roleDesc: '审计' },
       ],
-    })
+    }))
     expect(g2.mode).toBe('free_collab')
     expect(g2.leaderMemberId).toBeNull()
     expect(g2.members).toHaveLength(2)
@@ -315,41 +360,64 @@ describe('RFC-164 — services/workgroups.ts CRUD', () => {
 
   test('rename happy path + conflict + delete + not-found', async () => {
     await createWorkgroup(db, groupInput())
-    const renamed = await renameWorkgroup(db, 'payment-squad', 'pay-squad', T6_ACTOR)
+    const renamed = await renameByName(db, 'payment-squad', 'pay-squad')
     expect(renamed.name).toBe('pay-squad')
     expect(await getWorkgroup(db, 'payment-squad')).toBeNull()
 
     await createWorkgroup(db, groupInput())
-    expect(renameWorkgroup(db, 'pay-squad', 'payment-squad', T6_ACTOR)).rejects.toThrow(
-      ConflictError,
-    )
+    expect(renameByName(db, 'pay-squad', 'payment-squad')).rejects.toThrow(ConflictError)
 
-    await deleteWorkgroup(db, 'pay-squad', T6_ACTOR)
+    const current = await getWorkgroup(db, 'pay-squad')
+    if (current === null) throw new Error('missing pay-squad')
+    await deleteWorkgroup(
+      db,
+      current.id,
+      { expectedVersion: current.version, clientMutationId: ulid(), confirm: current.name },
+      { kind: 'actor', actor: T6_ACTOR },
+    )
     expect(await getWorkgroup(db, 'pay-squad')).toBeNull()
-    expect(deleteWorkgroup(db, 'pay-squad', T6_ACTOR)).rejects.toThrow(NotFoundError)
-    expect(updateWorkgroup(db, 'pay-squad', groupInput())).rejects.toThrow(NotFoundError)
+    expect(
+      deleteWorkgroup(
+        db,
+        current.id,
+        { expectedVersion: current.version, clientMutationId: ulid(), confirm: current.name },
+        { kind: 'actor', actor: T6_ACTOR },
+      ),
+    ).rejects.toThrow(NotFoundError)
+    expect(
+      saveWorkgroup(
+        db,
+        current.id,
+        {
+          expectedVersion: current.version,
+          clientMutationId: ulid(),
+          snapshot: workgroupDraftSnapshotOf(current),
+        },
+        { kind: 'actor', actor: T6_ACTOR },
+      ),
+    ).rejects.toThrow(NotFoundError)
   })
 
   test('rename + description edit atomically (2026-07-13 后端原子端点)', async () => {
     await createWorkgroup(db, groupInput())
     // name + description together
-    const both = await renameWorkgroup(db, 'payment-squad', 'pay-squad', T6_ACTOR, 'new blurb')
+    const both = await renameByName(db, 'payment-squad', 'pay-squad', 'new blurb')
     expect(both.name).toBe('pay-squad')
     expect(both.description).toBe('new blurb')
 
     // description-only: name unchanged, the conflict/scheduled guards don't run,
     // the description is updated in place.
-    const descOnly = await renameWorkgroup(db, 'pay-squad', 'pay-squad', T6_ACTOR, 'blurb v2')
+    const descOnly = await renameByName(db, 'pay-squad', 'pay-squad', 'blurb v2')
     expect(descOnly.name).toBe('pay-squad')
     expect(descOnly.description).toBe('blurb v2')
 
     // pure rename (description omitted) leaves the stored description untouched.
-    const pure = await renameWorkgroup(db, 'pay-squad', 'pay-team', T6_ACTOR)
+    const pure = await renameByName(db, 'pay-squad', 'pay-team')
     expect(pure.name).toBe('pay-team')
     expect(pure.description).toBe('blurb v2')
 
     // no-op (same name, description omitted) returns the row unchanged.
-    const noop = await renameWorkgroup(db, 'pay-team', 'pay-team', T6_ACTOR)
+    const noop = await renameByName(db, 'pay-team', 'pay-team')
     expect(noop.name).toBe('pay-team')
     expect(noop.description).toBe('blurb v2')
   })
@@ -403,6 +471,29 @@ describe('RFC-164 — workgroups route ACL (RFC-099 D1/D4/D15/D18)', () => {
     headers.set('Authorization', `Bearer ${token}`)
     if (init.body && !headers.has('content-type')) headers.set('content-type', 'application/json')
     return app.request(path, { ...init, headers })
+  }
+
+  async function detail(token: string, name: string): Promise<WorkgroupDetail> {
+    const response = await req(token, `/api/workgroups/${name}`)
+    expect(response.status).toBe(200)
+    return (await response.json()) as WorkgroupDetail
+  }
+
+  function saveBody(group: WorkgroupDetail, patch: Partial<WorkgroupDraftSnapshot> = {}): string {
+    return JSON.stringify({
+      expectedVersion: group.version,
+      clientMutationId: ulid(),
+      snapshot: { ...workgroupDraftSnapshotOf(group), ...patch },
+    })
+  }
+
+  function renameBody(group: WorkgroupDetail, newName: string, description?: string): string {
+    return JSON.stringify({
+      newName,
+      ...(description === undefined ? {} : { description }),
+      expectedVersion: group.version,
+      clientMutationId: ulid(),
+    })
   }
 
   beforeEach(async () => {
@@ -463,20 +554,20 @@ describe('RFC-164 — workgroups route ACL (RFC-099 D1/D4/D15/D18)', () => {
       method: 'POST',
       body: JSON.stringify(groupInput()),
     })
-    const { name: _n, ...updateBody } = groupInput()
+    const group = await detail(alice.token, 'payment-squad')
     const forbidden = await req(bob.token, '/api/workgroups/payment-squad', {
       method: 'PUT',
-      body: JSON.stringify(updateBody),
+      body: saveBody(group),
     })
     expect(forbidden.status).toBe(403)
     const del = await req(bob.token, '/api/workgroups/payment-squad', { method: 'DELETE' })
     expect(del.status).toBe(403)
     const ok = await req(alice.token, '/api/workgroups/payment-squad', {
       method: 'PUT',
-      body: JSON.stringify({ ...updateBody, description: 'v2' }),
+      body: saveBody(group, { description: 'v2' }),
     })
     expect(ok.status).toBe(200)
-    expect(((await ok.json()) as { description: string }).description).toBe('v2')
+    expect(((await ok.json()) as { workgroup: WorkgroupDetail }).workgroup.description).toBe('v2')
   })
 
   test('D15: referencing an invisible private agent as a NEW member → 422 acl-missing-refs; grandfathered ref passes', async () => {
@@ -533,10 +624,10 @@ describe('RFC-164 — workgroups route ACL (RFC-099 D1/D4/D15/D18)', () => {
     expect(dangling.status).toBe(201)
 
     // grandfathered: keeping the same members on update never re-checks them
-    const { name: _n2, ...same } = groupInput({ name: 'bobs-squad' })
+    const group = await detail(bob.token, 'bobs-squad')
     const keep = await req(bob.token, '/api/workgroups/bobs-squad', {
       method: 'PUT',
-      body: JSON.stringify(same),
+      body: saveBody(group),
     })
     expect(keep.status).toBe(200)
   })
@@ -546,9 +637,10 @@ describe('RFC-164 — workgroups route ACL (RFC-099 D1/D4/D15/D18)', () => {
       method: 'POST',
       body: JSON.stringify(groupInput()),
     })
+    const group = await detail(alice.token, 'payment-squad')
     const renamed = await req(alice.token, '/api/workgroups/payment-squad/rename', {
       method: 'POST',
-      body: JSON.stringify({ newName: 'pay-squad' }),
+      body: renameBody(group, 'pay-squad'),
     })
     expect(renamed.status).toBe(200)
     const acl = await req(alice.token, '/api/workgroups/pay-squad/acl')
@@ -563,22 +655,24 @@ describe('RFC-164 — workgroups route ACL (RFC-099 D1/D4/D15/D18)', () => {
       method: 'POST',
       body: JSON.stringify(groupInput()),
     })
+    const group = await detail(alice.token, 'payment-squad')
     const both = await req(alice.token, '/api/workgroups/payment-squad/rename', {
       method: 'POST',
-      body: JSON.stringify({ newName: 'pay-squad', description: 'atomic blurb' }),
+      body: renameBody(group, 'pay-squad', 'atomic blurb'),
     })
     expect(both.status).toBe(200)
-    expect((await both.json()) as { name: string; description: string }).toMatchObject({
+    const bothReceipt = (await both.json()) as { workgroup: WorkgroupDetail }
+    expect(bothReceipt.workgroup).toMatchObject({
       name: 'pay-squad',
       description: 'atomic blurb',
     })
     // description-only edit — newName echoes the current name, no rename occurs.
     const descOnly = await req(alice.token, '/api/workgroups/pay-squad/rename', {
       method: 'POST',
-      body: JSON.stringify({ newName: 'pay-squad', description: 'blurb only' }),
+      body: renameBody(bothReceipt.workgroup, 'pay-squad', 'blurb only'),
     })
     expect(descOnly.status).toBe(200)
-    expect((await descOnly.json()) as { name: string; description: string }).toMatchObject({
+    expect(((await descOnly.json()) as { workgroup: WorkgroupDetail }).workgroup).toMatchObject({
       name: 'pay-squad',
       description: 'blurb only',
     })

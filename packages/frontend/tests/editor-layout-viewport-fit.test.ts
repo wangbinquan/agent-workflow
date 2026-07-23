@@ -83,12 +83,12 @@ describe('editor header is trimmed so the canvas owns the viewport', () => {
   })
 
   test('page header drops its 24px bottom margin inside the editor', () => {
-    const body = ruleBody('.page--editor .page__header')
+    const body = ruleBody('.editor-page-header')
     expect(body).toMatch(/margin-bottom:\s*0/)
   })
 
   test('editor h1 strips browser default ~21px margins and shrinks to 18px', () => {
-    const body = ruleBody('.page--editor h1')
+    const body = ruleBody('.editor-page-header h1')
     expect(body).toMatch(/font-size:\s*18px/)
     expect(body).toMatch(/margin:\s*0/)
   })

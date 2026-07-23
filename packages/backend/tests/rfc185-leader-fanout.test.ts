@@ -43,7 +43,12 @@ import {
   WG_LEADER_NODE_ID,
   WG_MEMBER_NODE_ID,
 } from '../src/services/workgroup/launch'
-import { createWorkgroup, getWorkgroup, updateWorkgroup } from '../src/services/workgroups'
+import {
+  createWorkgroup,
+  getWorkgroup,
+  saveWorkgroup,
+  workgroupDraftSnapshotOf,
+} from '../src/services/workgroups'
 import {
   runWorkgroupEngine,
   type WorkgroupEngineHooks,
@@ -769,12 +774,24 @@ describe('RFC-185 D4 — fanOut CRUD roundtrip + launch freeze', () => {
     expect((await getWorkgroup(db, 'squad'))?.fanOut).toBe(false)
   })
 
-  test('explicit create ON + an update omitting fanOut preserves the stored value', async () => {
+  test('explicit create ON + an unrelated autosave preserves the stored value', async () => {
     await createWorkgroup(db, groupInput({ fanOut: true }))
-    expect((await getWorkgroup(db, 'squad'))?.fanOut).toBe(true)
-    // full-replace PUT that omits fanOut must NOT flip it (same omitted-⇒-
-    // preserve contract as autonomous, RFC-181 design-gate P1).
-    await updateWorkgroup(db, 'squad', groupInput())
+    const current = await getWorkgroup(db, 'squad')
+    expect(current?.fanOut).toBe(true)
+    if (current === null) return
+    await saveWorkgroup(
+      db,
+      current.id,
+      {
+        expectedVersion: current.version,
+        clientMutationId: ulid(),
+        snapshot: {
+          ...workgroupDraftSnapshotOf(current),
+          description: 'unrelated metadata edit',
+        },
+      },
+      { kind: 'system', reason: 'rfc185 test' },
+    )
     expect((await getWorkgroup(db, 'squad'))?.fanOut).toBe(true)
   })
 

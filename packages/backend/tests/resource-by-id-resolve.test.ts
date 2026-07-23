@@ -77,7 +77,7 @@ describe('RFC-177 — by-id resource resolvers', () => {
         method: 'POST',
         body: JSON.stringify({ name: 'design-crew' }),
       })
-    ).json()) as { id: string; name: string }
+    ).json()) as { id: string; name: string; version: number }
     expect(created.name).toBe('design-crew')
 
     const r1 = await req(alice.token, `/api/workgroups/by-id/${created.id}`)
@@ -85,10 +85,15 @@ describe('RFC-177 — by-id resource resolvers', () => {
     expect(await r1.json()).toEqual({ name: 'design-crew' })
 
     // The whole point: after a rename, by-id still resolves — to the NEW name.
-    await req(alice.token, '/api/workgroups/design-crew/rename', {
+    const renamed = await req(alice.token, '/api/workgroups/design-crew/rename', {
       method: 'POST',
-      body: JSON.stringify({ newName: 'design-crew-v2' }),
+      body: JSON.stringify({
+        newName: 'design-crew-v2',
+        expectedVersion: created.version,
+        clientMutationId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      }),
     })
+    expect(renamed.status).toBe(200)
     const r2 = await req(alice.token, `/api/workgroups/by-id/${created.id}`)
     expect(await r2.json()).toEqual({ name: 'design-crew-v2' })
 

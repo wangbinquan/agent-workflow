@@ -81,6 +81,8 @@ interface TaskWizardSearch {
   workflowVersion?: number
   agent?: string
   workgroup?: string
+  /** RFC-225: exact autosaved workgroup revision handed off by the editor. */
+  workgroupVersion?: number
   /** `?schedule=1` — scheduled mode: save-as-scheduled becomes the primary action. */
   schedule?: boolean
   /** RFC-159 absorbed — edit an existing schedule's launch config. */
@@ -121,6 +123,20 @@ export const TaskWizardRoute = createRoute({
       numericWorkflowVersion > 0
     ) {
       out.workflowVersion = numericWorkflowVersion
+    }
+    const rawWorkgroupVersion = raw.workgroupVersion
+    const numericWorkgroupVersion =
+      typeof rawWorkgroupVersion === 'number'
+        ? rawWorkgroupVersion
+        : typeof rawWorkgroupVersion === 'string' && rawWorkgroupVersion.trim() !== ''
+          ? Number(rawWorkgroupVersion)
+          : undefined
+    if (
+      numericWorkgroupVersion !== undefined &&
+      Number.isInteger(numericWorkgroupVersion) &&
+      numericWorkgroupVersion > 0
+    ) {
+      out.workgroupVersion = numericWorkgroupVersion
     }
     if (raw.schedule === true || raw.schedule === 1 || raw.schedule === '1') out.schedule = true
     if (raw.tour === 'first-task') out.tour = 'first-task'
@@ -166,6 +182,9 @@ function TaskWizardPage() {
   // same-name replacement's id). undefined ⇒ no guard sent (fresh pick, or a
   // historical task with no stored id → best-effort by name).
   const [selectedWorkgroupId, setSelectedWorkgroupId] = useState<string | undefined>(undefined)
+  const [selectedWorkgroupVersion, setSelectedWorkgroupVersion] = useState<number | undefined>(
+    search.kind === 'workgroup' ? search.workgroupVersion : undefined,
+  )
   const [selectedAgentId, setSelectedAgentId] = useState<string | undefined>(undefined)
   // RFC-175 + RFC-199: every immediate WORKFLOW launch captures the exact
   // `workflows.version` its inputs were normalized against. Editor deep links
@@ -467,9 +486,11 @@ function TaskWizardPage() {
       const cur = (workgroupsQ.data ?? []).find((g) => g.name === seed.workgroupName)
       if (cur !== undefined && cur.id === task.workgroupId) {
         setSelectedWorkgroupId(cur.id)
+        setSelectedWorkgroupVersion(cur.version)
       } else {
         setWorkgroupName('')
         setSelectedWorkgroupId(undefined)
+        setSelectedWorkgroupVersion(undefined)
       }
     } else if (kind === 'agent') {
       const cur = (agentsQ.data ?? []).find((a) => a.name === seed.agentName)
@@ -699,7 +720,9 @@ function TaskWizardPage() {
         value={workgroupName}
         onChange={(name) => {
           setWorkgroupName(name)
-          setSelectedWorkgroupId((workgroupsQ.data ?? []).find((g) => g.name === name)?.id)
+          const selected = (workgroupsQ.data ?? []).find((group) => group.name === name)
+          setSelectedWorkgroupId(selected?.id)
+          setSelectedWorkgroupVersion(selected?.version)
         }}
         options={workgroupOptions}
         searchable
@@ -912,7 +935,12 @@ function TaskWizardPage() {
     if (kind === 'agent')
       return selectedAgentId !== undefined ? { expectedAgentId: selectedAgentId } : {}
     if (kind === 'workgroup')
-      return selectedWorkgroupId !== undefined ? { expectedWorkgroupId: selectedWorkgroupId } : {}
+      return {
+        ...(selectedWorkgroupId !== undefined ? { expectedWorkgroupId: selectedWorkgroupId } : {}),
+        ...(selectedWorkgroupVersion !== undefined
+          ? { expectedWorkgroupVersion: selectedWorkgroupVersion }
+          : {}),
+      }
     return normalizedWorkflowVersion !== undefined
       ? { expectedWorkflowVersion: normalizedWorkflowVersion }
       : {}

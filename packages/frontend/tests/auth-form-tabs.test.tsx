@@ -48,8 +48,13 @@ function renderAuth(initialEntry = '/auth') {
     validateSearch: AuthRoute.options.validateSearch,
     component: AuthRoute.options.component,
   })
+  const setupAdmin = createRoute({
+    getParentRoute: () => root,
+    path: '/setup/admin',
+    component: () => <div data-testid="setup-admin-stub" />,
+  })
   const router = createRouter({
-    routeTree: root.addChildren([auth]),
+    routeTree: root.addChildren([auth, setupAdmin]),
     history: createMemoryHistory({ initialEntries: [initialEntry] }),
   })
   const view = render(
@@ -140,6 +145,10 @@ describe('/auth method discovery', () => {
 
   test('daemon bootstrap link verifies its captured token and enters setup automatically', async () => {
     const calls: Array<{ path: string; authorization: string | null }> = []
+    let resolveWhoami: ((response: Response) => void) | undefined
+    const whoami = new Promise<Response>((resolve) => {
+      resolveWhoami = resolve
+    })
     vi.spyOn(globalThis, 'fetch').mockImplementation(
       async (request: RequestInfo | URL, init?: RequestInit) => {
         const path = new URL(request.toString()).pathname
@@ -148,7 +157,7 @@ describe('/auth method discovery', () => {
           authorization: new Headers(init?.headers).get('authorization'),
         })
         if (path === '/api/auth/oidc/providers') return json(BOOTSTRAP)
-        if (path === '/api/whoami') return json({ source: 'daemon' })
+        if (path === '/api/whoami') return whoami
         return json({ code: 'unexpected', message: path }, 500)
       },
     )
@@ -156,6 +165,7 @@ describe('/auth method discovery', () => {
     const { router } = renderAuth('/auth?bootstrap=token&redirect=%2Ftasks%2Ft-1%3Ftab%3Doutput')
 
     expect(await screen.findByTestId('auth-bootstrap-handoff')).toBeTruthy()
+    await act(async () => resolveWhoami!(json({ source: 'daemon' })))
     await waitFor(() => expect(router.state.location.pathname).toBe('/setup/admin'))
     expect(router.state.location.search.redirect).toBe('/tasks/t-1?tab=output')
     expect(calls.find((call) => call.path === '/api/whoami')?.authorization).toBe(
