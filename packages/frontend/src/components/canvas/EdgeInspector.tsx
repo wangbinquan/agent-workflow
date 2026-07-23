@@ -7,6 +7,7 @@
 // `in_1.out → worker_1.requirement` without falling back to YAML import.
 
 import type { Agent, WorkflowDefinition, WorkflowEdge } from '@agent-workflow/shared'
+import { buildNodeAgentLookup } from '@agent-workflow/shared'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Field } from '@/components/Form'
@@ -59,7 +60,8 @@ export function EdgeInspector({
           new Set([
             ...computePorts(
               targetNode,
-              new Map((agents ?? []).map((agent) => [agent.name, agent])),
+              // RFC-223 (PR-3a impl-gate H3): id+name keyed so stamped nodes resolve by id.
+              buildNodeAgentLookup(agents ?? [], (a) => a),
               definition,
             ).inputs,
             // Keep a legacy or temporarily-invalid persisted value visible.

@@ -14,6 +14,7 @@
 // owns the dirty/save bookkeeping.
 
 import type { Agent, NodeKind, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import { buildNodeAgentLookup } from '@agent-workflow/shared'
 import { useEffect, useMemo, useState } from 'react'
 import type { FC } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -123,7 +124,11 @@ export function NodeInspector({
   const node = definition.nodes.find((n) => n.id === selectedNodeId)
   if (node === undefined) return null
   const headingId = workflowInspectorHeadingId(node.id)
-  const ports = computePorts(node, new Map(agents.map((agent) => [agent.name, agent])), definition)
+  const ports = computePorts(
+    node,
+    buildNodeAgentLookup(agents, (a) => a),
+    definition,
+  )
   const displayTitle = nodeTitle(node)
 
   // PreviewPane only renders prompt-template assembly for agent kinds; other
@@ -322,16 +327,23 @@ function PreviewPane({ node, agents, definition }: PreviewProps) {
   if (node.kind !== 'agent-single') {
     return <div className="muted">{t('inspector.previewOnlyAgent')}</div>
   }
-  // RFC-223 (PR-3a): resolve for preview by the CANONICAL agentId first
-  // (rename-safe), falling back to the display name for unstamped nodes.
+  // RFC-223 (PR-3a impl-gate H3): resolve for preview id-first and FAIL CLOSED —
+  // a stamped node resolves ONLY by its agentId (no name fallback that an ABA
+  // rename+recreate could mis-bind); an unstamped node resolves by name.
   const rec = node as Record<string, unknown>
-  const agentId = typeof rec.agentId === 'string' ? rec.agentId : undefined
+  const agentId =
+    typeof rec.agentId === 'string' && rec.agentId.length > 0 ? rec.agentId : undefined
   const agentName = rec.agentName as string | undefined
   const agent =
-    (agentId !== undefined ? agents.find((a) => a.id === agentId) : undefined) ??
-    agents.find((a) => a.name === agentName)
+    agentId !== undefined
+      ? agents.find((a) => a.id === agentId)
+      : agents.find((a) => a.name === agentName)
   const template = (node as Record<string, unknown>).promptTemplate as string | undefined
-  const ports = computePorts(node, new Map(agents.map((a) => [a.name, a])), definition)
+  const ports = computePorts(
+    node,
+    buildNodeAgentLookup(agents, (a) => a),
+    definition,
+  )
   return (
     <PromptPreview
       template={template ?? ''}

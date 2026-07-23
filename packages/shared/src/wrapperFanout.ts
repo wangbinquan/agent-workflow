@@ -43,16 +43,18 @@ export function lookupAgent<T>(
 }
 
 /**
- * RFC-223 (PR-3a) — resolve a workflow node's agent from a lookup, id-canonical:
- * prefer the node's stable `agentId`, then fall back to `agentName`. When the
- * lookup carries id keys ({@link buildNodeAgentLookup} keys by BOTH id and name),
- * the id path wins and the resolution is rename/ABA-safe. The name fallback keeps
- * a legacy name-keyed lookup (e.g. the canvas' `Map(agents.map(a => [a.name,a]))`)
- * working for a node that already stamps `agentId` — under global uniqueness
- * (until PR-8) the name still resolves deterministically, so port derivation /
- * preview never breaks. Callers on the EXECUTION / security path resolve the
- * agent strictly by id elsewhere (scheduler dispatch, workgroup member turns);
- * this shared resolver only shapes ports, so the lenient fallback is safe.
+ * RFC-223 (PR-3a, impl-gate H3) — resolve a workflow node's agent from a lookup,
+ * id-canonical and FAIL-CLOSED: when the node carries a stable `agentId`, resolve
+ * STRICTLY by that id — a miss returns undefined; it does NOT fall back to the
+ * mutable `agentName`. The name fallback applies ONLY to a node with no id at all
+ * (dynamic-generated / pre-migration). This closes the fail-open where a stamped
+ * node whose id was handed a name-only lookup silently re-bound by name — under a
+ * rename+recreate (ABA) that name could point at a DIFFERENT tenant's agent.
+ * Callers MUST key the lookup by id: {@link buildNodeAgentLookup} keys by BOTH id
+ * and name, so a stamped node resolves by its id key while a legacy name-only node
+ * still resolves by its name key (id keys are ULIDs, name keys human strings —
+ * they never collide). A name-only lookup passed a stamped node now returns
+ * undefined by design (fail closed), not a lenient name hit.
  */
 export function resolveNodeAgent<T>(
   node: WorkflowNode,
@@ -60,8 +62,8 @@ export function resolveNodeAgent<T>(
 ): T | undefined {
   const rec = node as unknown as { agentId?: unknown; agentName?: unknown }
   if (typeof rec.agentId === 'string' && rec.agentId.length > 0) {
-    const byId = lookupAgent(agents, rec.agentId)
-    if (byId !== undefined) return byId
+    // Strict: id present → id key only. No name fallback (that was the H3 hole).
+    return lookupAgent(agents, rec.agentId)
   }
   if (typeof rec.agentName === 'string' && rec.agentName.length > 0) {
     return lookupAgent(agents, rec.agentName)

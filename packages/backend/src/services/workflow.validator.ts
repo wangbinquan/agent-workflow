@@ -38,11 +38,13 @@ import {
   CLARIFY_RESPONSE_TARGET_PORT_NAME,
   CROSS_CLARIFY_EXTERNAL_FEEDBACK_PORT,
   BUILTIN_VARS,
+  buildNodeAgentLookup,
   canonicalJson,
   CLARIFY_SOURCE_PORT_NAME,
   countFanoutAggregators,
   declaredPorts,
   isClarifyChannelEdge,
+  resolveNodeAgent,
   isMultiDocReviewInput,
   isReviewableBodyKind,
   isWrapperKind,
@@ -319,6 +321,12 @@ export function validateWorkflowDef(
   // is PR-2), but agent→skill/plugin/agent refs are BY ID now, so the closure
   // BFS + ref checks resolve against id sets.
   const agentById = new Map(ctx.agents.map((a) => [a.id, a]))
+  // RFC-223 (PR-3a impl-gate H3): the id+name lookup fed to the shared port /
+  // fanout resolvers (declaredPorts / countFanoutAggregators / resolveNodeAgent).
+  // Those now resolve a STAMPED node strictly by its agentId (fail closed on a
+  // miss), so the lookup MUST carry id keys — keyed by BOTH id and name, a
+  // stamped node hits its id key and a legacy name-only node still hits its name.
+  const agentByIdOrName = buildNodeAgentLookup(ctx.agents, (a) => a)
   const skillIds = new Set(ctx.skills.map((s) => s.id))
   // RFC-031: lookup tables for plugin reference checks. `pluginsKnown`
   // tells us the plugin id exists; `pluginsEnabled` tells us its enabled flag.
@@ -542,7 +550,7 @@ export function validateWorkflowDef(
   // — the same oracle the canvas renders with — so those wirings validate.
   const defnForPorts: WorkflowDefinition = { ...def, nodes, edges }
   for (const node of nodes) {
-    const declared = declaredPorts(node, defnForPorts, agentByName)
+    const declared = declaredPorts(node, defnForPorts, agentByIdOrName)
     outputPorts.set(
       node.id,
       new Set([...declared.dataOutputs, ...declared.systemOutputs].map((p) => p.name)),
@@ -672,7 +680,8 @@ export function validateWorkflowDef(
         tgt.kind !== 'clarify' &&
         tgt.kind !== 'clarify-cross-agent'
       ) {
-        const tgtAgent = agentByName.get(readString(tgt, 'agentName') ?? '')
+        // RFC-223 (PR-3a impl-gate H3): resolve the inner target's agent id-first.
+        const tgtAgent = resolveNodeAgent(tgt, agentByIdOrName)
         const targetIsAggregator = tgt.kind === 'agent-single' && tgtAgent?.role === 'aggregator'
         if (!targetIsAggregator) {
           issues.push({
@@ -982,7 +991,8 @@ export function validateWorkflowDef(
           const exitNode = nodeById.get(exitNodeId)
           const portsKnown =
             exitNode?.kind === 'agent-single'
-              ? agentByName.has(readString(exitNode, 'agentName') ?? '')
+              ? // RFC-223 (PR-3a impl-gate H3): id-first existence check.
+                resolveNodeAgent(exitNode, agentByIdOrName) !== undefined
               : true
           if (portsKnown && !(outputPorts.get(exitNodeId) ?? new Set<string>()).has(exitPortName)) {
             issues.push({
@@ -1197,8 +1207,8 @@ export function validateWorkflowDef(
       // separate `review-input-list-kind-not-supported` code — per-item
       // review must live INSIDE a wrapper-fanout.
       if (src.kind === 'agent-single') {
-        const agentName = readString(src, 'agentName') ?? ''
-        const agent = agentByName.get(agentName)
+        // RFC-223 (PR-3a impl-gate H3): resolve the review upstream id-first.
+        const agent = resolveNodeAgent(src, agentByIdOrName)
         const kind = agent?.outputKinds?.[srcPort]
         const parsed: ParsedKind | null = kind !== undefined ? tryParseKind(kind) : null
         // RFC-081: delegate the "markdownish" decision to the single predicate.
@@ -1220,7 +1230,7 @@ export function validateWorkflowDef(
         } else if (!isMarkdownish) {
           issues.push({
             code: 'review-input-source-not-markdown',
-            message: `review node '${node.id}' inputSource '${srcNodeId}.${srcPort}' must be declared kind: markdown | path<md> | markdown_file on agent '${agentName}'`,
+            message: `review node '${node.id}' inputSource '${srcNodeId}.${srcPort}' must be declared kind: markdown | path<md> | markdown_file on agent '${readString(src, 'agentName') ?? ''}'`,
             pointer: node.id,
             target: target.nodeField(node.id, 'review-source'),
           })
@@ -1771,7 +1781,7 @@ export function validateWorkflowDef(
     const aggCount = countFanoutAggregators(
       { $schema_version: 4, inputs: [], nodes, edges },
       node.id,
-      agentByName,
+      agentByIdOrName,
     )
     if (aggCount > 1) {
       issues.push({
@@ -1840,8 +1850,8 @@ export function validateWorkflowDef(
       // (agent-single) and check role === 'aggregator'.
       const srcNode = nodeById.get(edge.source.nodeId)
       if (srcNode === undefined) continue
-      const srcAgentName = readString(srcNode, 'agentName') ?? ''
-      const srcAgent = agentByName.get(srcAgentName)
+      // RFC-223 (PR-3a impl-gate H3): resolve the boundary source's agent id-first.
+      const srcAgent = resolveNodeAgent(srcNode, agentByIdOrName)
       if (srcNode.kind !== 'agent-single' || srcAgent?.role !== 'aggregator') {
         issues.push({
           code: 'boundary-output-source-must-be-aggregator',

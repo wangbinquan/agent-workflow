@@ -44,7 +44,7 @@ describe('loopMemberCandidates', () => {
     const l = loop('loop1', ['a1'])
     const a = agent('a1', 'fixer')
     const out = loopMemberCandidates(l, defOf([l, a]), [
-      { name: 'fixer', outputs: ['passed', 'issues'] },
+      { id: 'fixer', name: 'fixer', outputs: ['passed', 'issues'] },
     ])
     expect(out).toEqual([{ nodeId: 'a1', title: 'fixer', outputPorts: ['passed', 'issues'] }])
   })
@@ -67,8 +67,8 @@ describe('loopMemberCandidates', () => {
     const inner = gitWrap('inner_git', ['a2'])
     const a2 = agent('a2', 'helper')
     const out = loopMemberCandidates(l, defOf([l, a, inner, a2]), [
-      { name: 'fixer', outputs: ['passed'] },
-      { name: 'helper', outputs: ['done'] },
+      { id: 'fixer', name: 'fixer', outputs: ['passed'] },
+      { id: 'helper', name: 'helper', outputs: ['done'] },
     ])
     expect(out.map((c) => c.nodeId)).toEqual(['a1'])
   })

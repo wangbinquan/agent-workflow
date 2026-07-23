@@ -87,14 +87,39 @@ describe('deriveWorkgroupRunHistory — id-first agent attribution', () => {
     const history = deriveWorkgroupRunHistory(members, 'mA1', [run], assignments, [])
     expect(history.find((e) => e.nodeRunId === 'R2')?.memberId).toBe('mA1')
   })
+
+  test('M1: agentOverrideId present but off-roster → fail closed, NOT re-bound by name', () => {
+    // Agent A (ag-a, name "shared") was on the roster when run R3 was minted; A
+    // was then removed mid-run and a DIFFERENT agent B (ag-b) took the name
+    // "shared". The run froze A's id. Strict-by-id resolution must DROP the run
+    // (fail closed) — the old `(byId ?? null) ?? (byName …)` chain fell through to
+    // the name and mis-attributed A's history to B.
+    const roster: MemberLite[] = [
+      { id: 'mB', memberType: 'agent', agentId: 'ag-b', agentName: 'shared', displayName: 'B' },
+    ]
+    const assignments = [{ id: 'ASG9', assigneeMemberId: null }]
+    const run: HostRunLite = {
+      id: 'R3',
+      nodeId: WG_MEMBER_NODE_ID,
+      shardKey: 'ASG9',
+      status: 'done',
+      rerunCause: 'wg-assignment',
+      agentOverrideId: 'ag-a', // A's id — no longer on the roster
+      agentOverrideName: 'shared', // the name B now holds (the ABA trap)
+    }
+    const history = deriveWorkgroupRunHistory(roster, 'mB', [run], assignments, [])
+    // The run must NOT be attributed to B — with strict-by-id it is dropped.
+    expect(history.find((e) => e.nodeRunId === 'R3')).toBeUndefined()
+  })
 })
 
 // ---------------------------------------------------------------------------
-// distill scope — take the frozen id (取单行); a sentinel/name-only node falls
-// back to the name set (heuristic, never fails closed).
+// distill scope — take the frozen id (取单行); a genuinely name-only node falls
+// back to the name set (heuristic). A R4-1 quarantine sentinel is dropped
+// ENTIRELY — never downgraded to a name lookup (impl-gate H1 fail-open fix).
 // ---------------------------------------------------------------------------
 describe('extractAgentRefsFromSnapshot', () => {
-  test('frozen agentId → ids; sentinel/name-only → namesWithoutId', () => {
+  test('frozen agentId → ids; sentinel → DROPPED; only genuine name-only → namesWithoutId', () => {
     const snap = JSON.stringify({
       nodes: [
         { id: 'n1', kind: 'agent-single', agentName: 'foo', agentId: 'ID_FOO' },
@@ -110,7 +135,10 @@ describe('extractAgentRefsFromSnapshot', () => {
     })
     const { ids, namesWithoutId } = extractAgentRefsFromSnapshot(snap)
     expect(ids).toEqual(['ID_FOO'])
-    expect(namesWithoutId.sort()).toEqual(['bar', 'zap']) // sentinel node uses its name
+    // H1: the sentinel node ('zap') is FAIL-CLOSED — it must NOT leak into the
+    // name fallback (re-resolving 'zap' by name could bind a different tenant's
+    // agent). Only the genuinely id-less 'bar' remains.
+    expect(namesWithoutId.sort()).toEqual(['bar'])
   })
 
   test('malformed JSON → empty', () => {

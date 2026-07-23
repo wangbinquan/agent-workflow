@@ -4,6 +4,7 @@
 import { useTranslation } from 'react-i18next'
 import { Field } from '@/components/Form'
 import { Select } from '@/components/Select'
+import { buildNodeAgentLookup } from '@agent-workflow/shared'
 import { computePorts } from '../WorkflowCanvas'
 import { nodeTitle } from '../nodeTitle'
 import {
@@ -29,7 +30,8 @@ export function OutputEdit({
   const ports = Array.isArray(rec.ports)
     ? (rec.ports as Array<{ name: string; bind: { nodeId: string; portName: string } }>)
     : []
-  const agentByName = new Map(agents.map((agent) => [agent.name, agent]))
+  // RFC-223 (PR-3a impl-gate H3): id+name keyed so stamped nodes resolve by id.
+  const agentByName = buildNodeAgentLookup(agents, (a) => a)
   const upstreamCandidates = definition.nodes
     .filter((candidate) => candidate.id !== node.id && candidate.kind !== 'output')
     .map((candidate) => ({

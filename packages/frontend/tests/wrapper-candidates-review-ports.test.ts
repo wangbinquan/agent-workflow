@@ -42,7 +42,9 @@ describe('loopMemberCandidates × review 节点（flag-audit W0 假端口修复�
       reviewNode('R', 'A', 'doc'),
       loopWrapper('L', ['A', 'R']),
     ]
-    const agents = [{ name: 'writer', outputs: ['doc'], outputKinds: { doc: 'markdown' } }]
+    const agents = [
+      { id: 'writer', name: 'writer', outputs: ['doc'], outputKinds: { doc: 'markdown' } },
+    ]
     const cands = loopMemberCandidates(nodes[2]!, defOf(nodes), agents)
     const review = cands.find((c) => c.nodeId === 'R')
     expect(review).toBeDefined()
@@ -56,7 +58,9 @@ describe('loopMemberCandidates × review 节点（flag-audit W0 假端口修复�
       reviewNode('R', 'A', 'docs'),
       loopWrapper('L', ['A', 'R']),
     ]
-    const agents = [{ name: 'writer', outputs: ['docs'], outputKinds: { docs: 'list<path<md>>' } }]
+    const agents = [
+      { id: 'writer', name: 'writer', outputs: ['docs'], outputKinds: { docs: 'list<path<md>>' } },
+    ]
     const cands = loopMemberCandidates(nodes[2]!, defOf(nodes), agents)
     const review = cands.find((c) => c.nodeId === 'R')
     expect(review!.outputPorts).toEqual(['accepted', 'approval_meta'])
@@ -78,7 +82,9 @@ describe('loopMemberCandidates × review 节点（flag-audit W0 假端口修复�
       reviewNode('R', 'A', 'doc'),
       loopWrapper('L', ['A', 'R']),
     ]
-    const agents = [{ name: 'writer', outputs: ['doc'], outputKinds: { doc: 'markdown' } }]
+    const agents = [
+      { id: 'writer', name: 'writer', outputs: ['doc'], outputKinds: { doc: 'markdown' } },
+    ]
     const cands = loopMemberCandidates(nodes[2]!, defOf(nodes), agents)
     expect(cands.find((c) => c.nodeId === 'R')!.title).toBe('review:doc')
   })

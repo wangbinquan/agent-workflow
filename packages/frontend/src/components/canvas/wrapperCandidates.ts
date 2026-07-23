@@ -8,7 +8,7 @@
 // wrappers (their outputs flow through their own outputBindings rather than
 // surfacing a port directly).
 
-import { declaredPorts, isWrapperKind } from '@agent-workflow/shared'
+import { buildNodeAgentLookup, declaredPorts, isWrapperKind } from '@agent-workflow/shared'
 import { nodeDisplayTitle } from './nodeTitle'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
@@ -21,6 +21,10 @@ export interface LoopMemberCandidate {
 }
 
 interface AgentSummary {
+  /** RFC-223 (PR-3a impl-gate H3): the canonical id — callers pass full Agent
+   *  objects, so the node→agent lookup can key by id (a stamped node resolves
+   *  strictly by agentId now). */
+  id: string
   name: string
   /** Declared agent outputs. When missing or empty, treat as ['out']. */
   outputs?: string[]
@@ -44,7 +48,12 @@ function deriveOutputPorts(
   // five — it knew agent/review only; review had already drifted once,
   // flag-audit W0 §3-3 假端口 bug). Wrapper members are filtered out by the
   // caller, so only leaf kinds reach here.
-  const declared = declaredPorts(node, definition, new Map(agents.map((a) => [a.name, a])))
+  // RFC-223 (PR-3a impl-gate H3): id+name keyed so stamped nodes resolve by id.
+  const declared = declaredPorts(
+    node,
+    definition,
+    buildNodeAgentLookup(agents, (a) => a),
+  )
   const names = declared.dataOutputs.map((p) => p.name).filter((n) => n.length > 0)
   // Agent fallback preserved at the call site: an agent with no declared
   // outputs is still referenceable via the conventional 'out' port.

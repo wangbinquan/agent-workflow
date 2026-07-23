@@ -284,7 +284,15 @@ describe('RFC-223 PR-2 — scheduler dispatches the node agent by id (source loc
     expect(src).toContain(
       'agentIdRef !== null ? await getAgentById(db, agentIdRef) : await getAgent(db, agentName)',
     )
-    // fanout inner hydration resolves each inner agent the same way.
-    expect(src).toContain('aid !== null ? await getAgentById(db, aid) : await getAgent(db, an)')
+    // fanout inner hydration resolves each inner agent id-first (getAgentById when
+    // the node carries an agentId), same as the main dispatch. RFC-223 PR-3a
+    // impl-gate H2 added an explicit `an !== null` guard + the fail-closed null.
+    expect(src).toContain(
+      'aid !== null ? await getAgentById(db, aid) : an !== null ? await getAgent(db, an) : null',
+    )
+    // RFC-223 (PR-3a impl-gate H2): dedup + key the inner-agent map by the
+    // CANONICAL identity (agentId when stamped), NOT the mutable name — so two
+    // same-name different-id inner nodes never collapse onto one agent.
+    expect(src).toContain('const dedupKey = fanoutInnerAgentKey(rec)')
   })
 })

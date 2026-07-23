@@ -8,6 +8,7 @@
 // through wrapper-fanout, which has its own inspector component.)
 
 import type { WorkflowNode } from '@agent-workflow/shared'
+import { buildNodeAgentLookup } from '@agent-workflow/shared'
 import { useTranslation } from 'react-i18next'
 import { Field, TextArea } from '@/components/Form'
 import { Select } from '@/components/Select'
@@ -34,7 +35,12 @@ export function AgentSingleEdit({
   const rec = node as unknown as Record<string, unknown>
   const agentName = typeof rec.agentName === 'string' ? rec.agentName : ''
   const promptTemplate = typeof rec.promptTemplate === 'string' ? rec.promptTemplate : ''
-  const ports = computePorts(node, new Map(agents.map((a) => [a.name, a])), definition)
+  // RFC-223 (PR-3a impl-gate H3): id+name keyed so stamped nodes resolve by id.
+  const ports = computePorts(
+    node,
+    buildNodeAgentLookup(agents, (a) => a),
+    definition,
+  )
 
   function update(p: Record<string, unknown>, meta: InspectorChangeMeta) {
     onPatch({ ...(node as Record<string, unknown>), ...p } as unknown as WorkflowNode, meta)

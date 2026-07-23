@@ -5,7 +5,11 @@
 // EditForm switch by RFC-146 T3.
 
 import type { WorkflowNode } from '@agent-workflow/shared'
-import { deriveWrapperFanoutOutputs, tryParseKind } from '@agent-workflow/shared'
+import {
+  buildNodeAgentLookup,
+  deriveWrapperFanoutOutputs,
+  tryParseKind,
+} from '@agent-workflow/shared'
 import { useTranslation } from 'react-i18next'
 import { Field, Switch, TextInput } from '@/components/Form'
 import { KindSelect } from '@/components/KindSelect'
@@ -42,7 +46,8 @@ export function WrapperFanoutEdit({
   const derivedOutputs = deriveWrapperFanoutOutputs(
     definition,
     node.id,
-    new Map(agents.map((a) => [a.name, a])),
+    // RFC-223 (PR-3a impl-gate H3): id+name keyed so stamped inner nodes resolve by id.
+    buildNodeAgentLookup(agents, (a) => a),
   )
   function update(patch: Record<string, unknown>, meta: InspectorChangeMeta) {
     onPatch(

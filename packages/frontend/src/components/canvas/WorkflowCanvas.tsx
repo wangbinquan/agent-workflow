@@ -50,7 +50,12 @@ import type {
   WorkflowNode,
   WorkflowValidationIssue,
 } from '@agent-workflow/shared'
-import { declaredPorts, isClarifyAskingNode, isWrapperKind } from '@agent-workflow/shared'
+import {
+  buildNodeAgentLookup,
+  declaredPorts,
+  isClarifyAskingNode,
+  isWrapperKind,
+} from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 import { AgentNode } from './nodes/AgentNode'
 import { applyPaste, buildSlice, getClipboard, setClipboard } from './canvasClipboard'
@@ -340,11 +345,12 @@ function CanvasInner({
   const canvasDescriptionId = useId()
   const [canvasNotice, setCanvasNotice] = useState<string | null>(null)
   const [connectionReplaceEdgeId, setConnectionReplaceEdgeId] = useState<string | null>(null)
-  const agentByName = useMemo(() => {
-    const m = new Map<string, Agent>()
-    for (const a of agents ?? []) m.set(a.name, a)
-    return m
-  }, [agents])
+  // RFC-223 (PR-3a impl-gate H3): key by BOTH id and name so the shared port /
+  // fanout resolvers (which resolve a stamped node strictly by its agentId) hit
+  // the id key; a legacy name-only node still hits its name key. (Var kept named
+  // `agentByName` — its many downstream consumers only read, and the id keys are
+  // ULIDs that never collide with human names.)
+  const agentByName = useMemo(() => buildNodeAgentLookup(agents ?? [], (a) => a), [agents])
   const semanticContext = useMemo(() => createWorkflowSemanticContext(agents ?? []), [agents])
   const validationProjection = useMemo(
     () => projectWorkflowValidationIssues(definition, validationIssues),
@@ -3238,8 +3244,8 @@ export const __testToFlowNodes = (
     nodes: defNodes,
     edges,
   }
-  const map = new Map<string, Agent>()
-  for (const a of agents) map.set(a.name, a)
+  // RFC-223 (PR-3a impl-gate H3): id+name keyed so stamped nodes resolve by id.
+  const map = buildNodeAgentLookup(agents, (a) => a)
   return toFlowNodes(
     def,
     map,

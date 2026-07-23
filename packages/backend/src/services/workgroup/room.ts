@@ -157,15 +157,18 @@ function classify(
     // identity is immutable, so it WINS whenever it resolves to exactly one
     // member; the card's current assignee is only the fallback (shared-agent
     // rosters / legacy runs without an override name).
-    // RFC-223 (PR-3a): prefer the immutable agent ID (rename/ABA-safe); fall back
-    // to the name only for rows minted before agent_override_id existed.
+    // RFC-223 (PR-3a impl-gate M1): when the run froze an agent_override_id,
+    // resolve STRICTLY by that id — do NOT fall back to the name. The old
+    // `(byId ?? null) ?? (byName …)` chain fell through to the name whenever the
+    // id no longer mapped to a member (A removed mid-run), so a same-named B
+    // silently inherited A's historical run. The name fallback is legitimate ONLY
+    // for rows minted before agent_override_id existed (no id at all).
     const viaAgent =
-      (run.agentOverrideId != null
+      run.agentOverrideId != null
         ? (uniqueAgentMemberById.get(run.agentOverrideId) ?? null)
-        : null) ??
-      (run.agentOverrideName != null
-        ? (uniqueAgentMember.get(run.agentOverrideName) ?? null)
-        : null)
+        : run.agentOverrideName != null
+          ? (uniqueAgentMember.get(run.agentOverrideName) ?? null)
+          : null
     const viaCard = run.shardKey ? (assignmentToMember.get(run.shardKey) ?? null) : null
     const memberId = viaBatch ?? viaAgent ?? viaCard
     if (memberId === null) return null

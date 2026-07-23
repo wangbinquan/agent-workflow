@@ -289,6 +289,7 @@ describe('RFC-199 T0.5 legacy drag-connect golden', () => {
 describe('RFC-199 B5 planner adapter equivalence', () => {
   const semantic = createWorkflowSemanticContext([
     {
+      id: 'source',
       name: 'source',
       outputs: ['result', 'document', 'report'],
       outputKinds: { result: 'string', document: 'markdown', report: 'markdown' },

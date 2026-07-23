@@ -4429,6 +4429,24 @@ async function runLoopWrapperNode(
 // don't bubble into latestPerNode of the wrapper's parent scope.
 // -----------------------------------------------------------------------------
 
+/**
+ * RFC-223 (PR-3a impl-gate H2): the CANONICAL dedup / lookup key for a
+ * wrapper-fanout inner agent node — its stamped `agentId` when present (so two
+ * same-name DIFFERENT-id inner nodes stay distinct), else its display name. Used
+ * by BOTH the inner-agent-map hydration and the per-shard dispatch so the two can
+ * never drift back into the name-keyed collapse the impl-gate found (same-name
+ * different-id nodes folding onto one agent). Returns null only for a node with
+ * neither field.
+ */
+export function fanoutInnerAgentKey(node: {
+  agentId?: unknown
+  agentName?: unknown
+}): string | null {
+  const aid = typeof node.agentId === 'string' && node.agentId.length > 0 ? node.agentId : null
+  if (aid !== null) return aid
+  return typeof node.agentName === 'string' && node.agentName.length > 0 ? node.agentName : null
+}
+
 async function runFanoutWrapperNode(
   state: SchedulerState,
   args: OneNodeArgs,
@@ -4467,24 +4485,27 @@ async function runFanoutWrapperNode(
 
   // 2. Hydrate the inner-node agent map. findFanoutAggregator + scope
   // computation both consult this. Missing-agent here is fatal.
-  // RFC-223 (PR-2/PR-3a): resolve each inner agent by its CANONICAL id when the
-  // node carries one (rename-/ABA-safe), falling back to name for
-  // dynamic-generated / pre-0112 nodes. Keyed by BOTH id AND name — the per-shard
-  // dispatch lookup below still reads `agentsMap.get(innerAgentName)`, while the
-  // shared `resolveNodeAgent` (findFanoutAggregator) now hits the id key first.
+  // RFC-223 (PR-2/PR-3a impl-gate H2): resolve + dedup + key each inner agent by
+  // its CANONICAL identity — the agentId when the node carries one (rename-/ABA-
+  // safe), else the display name for dynamic-generated / pre-0112 nodes. The old
+  // dedup keyed by NAME (`agentsMap.has(an)`), which collapsed two same-name
+  // DIFFERENT-id inner nodes into one — the second was skipped and both then
+  // dispatched under the FIRST node's agent. Keying dedup + the map entry by the
+  // canonical key keeps distinct-id inner nodes distinct; the shared
+  // `resolveNodeAgent` (findFanoutAggregator / scope) and the per-shard dispatch
+  // below both look up by that same key.
   const agentsMap = new Map<string, Agent>()
   for (const id of innerIds) {
     const inner = definition.nodes.find((n) => n.id === id)
     if (inner === undefined) continue
     const rec = inner as Record<string, unknown>
-    const an = rec.agentName
-    if (typeof an !== 'string' || agentsMap.has(an)) continue
-    const aid = typeof rec.agentId === 'string' ? rec.agentId : null
-    const a = aid !== null ? await getAgentById(db, aid) : await getAgent(db, an)
-    if (a !== null) {
-      agentsMap.set(an, a)
-      if (aid !== null) agentsMap.set(aid, a)
-    }
+    const an = typeof rec.agentName === 'string' ? rec.agentName : null
+    const aid = typeof rec.agentId === 'string' && rec.agentId.length > 0 ? rec.agentId : null
+    const dedupKey = fanoutInnerAgentKey(rec)
+    if (dedupKey === null || agentsMap.has(dedupKey)) continue
+    const a =
+      aid !== null ? await getAgentById(db, aid) : an !== null ? await getAgent(db, an) : null
+    if (a !== null) agentsMap.set(dedupKey, a)
   }
 
   // 3. Wrapper row resume / mint (mirrors wrapper-git pattern).
@@ -4702,7 +4723,8 @@ async function runFanoutWrapperNode(
       }
     }
 
-    const innerAgentName = (inner as Record<string, unknown>).agentName
+    const innerRec = inner as Record<string, unknown>
+    const innerAgentName = innerRec.agentName
     if (typeof innerAgentName !== 'string') {
       await markWrapperTerminal(db, wrapperRunId, 'failed', `inner-missing-agentName:${innerId}`)
       broadcastNodeStatus(taskId, wrapperRunId, node.id, 'failed')
@@ -4712,7 +4734,10 @@ async function runFanoutWrapperNode(
         message: 'wrapper-fanout-inner-missing-agent-name',
       }
     }
-    const innerAgent = agentsMap.get(innerAgentName)
+    // RFC-223 (PR-3a impl-gate H2): look up by the node's CANONICAL identity via
+    // the SAME key helper the hydration used — its agentId when stamped (so
+    // same-name different-id inner nodes never collide), else the name.
+    const innerAgent = agentsMap.get(fanoutInnerAgentKey(innerRec) ?? innerAgentName)
     if (innerAgent === undefined) {
       await markWrapperTerminal(db, wrapperRunId, 'failed', `inner-agent-missing:${innerAgentName}`)
       broadcastNodeStatus(taskId, wrapperRunId, node.id, 'failed')

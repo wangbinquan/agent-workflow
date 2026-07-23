@@ -163,10 +163,13 @@ export function extractAgentNamesFromSnapshot(workflowSnapshot: string): string[
  * RFC-223 (PR-3a) — split a snapshot's agent-single references into the frozen
  * CANONICAL ids (each names exactly one agent — 取单行, so no name→multi-id spread
  * after PR-8 lifts uniqueness) and the leftover legacy nodes that carry only a
- * name. The distill scope is a non-security heuristic, so the name-only remainder
- * (including R4-1-quarantined nodes whose `agentId` is the sentinel) keeps the
- * deterministic name fallback rather than fail closed — mislabeling here would
- * only mis-scope which agents' memories a completed task distills into.
+ * name. A node whose `agentId` is the R4-1 quarantine sentinel is dropped
+ * ENTIRELY — it is NOT downgraded to a name lookup. The sentinel means "historical
+ * identity unrecoverable" (a stale frozen name that may have been ABA-reassigned to
+ * a different tenant's agent), so re-resolving it by the current name would pull an
+ * arbitrary tenant's memories into this task's distill scope. Fail closed here
+ * (skip it) rather than fall open — only genuinely id-less legacy nodes keep the
+ * deterministic name fallback (impl-gate H1).
  */
 export function extractAgentRefsFromSnapshot(workflowSnapshot: string): {
   ids: string[]
@@ -183,12 +186,10 @@ export function extractAgentRefsFromSnapshot(workflowSnapshot: string): {
   for (const node of parsed.nodes ?? []) {
     if (typeof node !== 'object' || node === null) continue
     if (node.kind !== 'agent-single') continue
-    const id =
-      typeof node.agentId === 'string' &&
-      node.agentId.length > 0 &&
-      node.agentId !== QUARANTINED_SNAPSHOT_AGENT_ID
-        ? node.agentId
-        : null
+    // R4-1 quarantined: a PRESENT id that resolves to no agent. Skip it — never
+    // fall back to the name (that is the exact ABA fail-open H1 closes).
+    if (node.agentId === QUARANTINED_SNAPSHOT_AGENT_ID) continue
+    const id = typeof node.agentId === 'string' && node.agentId.length > 0 ? node.agentId : null
     if (id !== null) {
       ids.add(id)
       continue

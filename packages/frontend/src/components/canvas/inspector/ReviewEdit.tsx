@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next'
 import { Field, Switch, TextArea } from '@/components/Form'
 import { MultiSelect } from '@/components/MultiSelect'
 import { Select } from '@/components/Select'
+import { buildNodeAgentLookup } from '@agent-workflow/shared'
 import { computePorts } from '../WorkflowCanvas'
 import { nodeTitle } from '../nodeTitle'
 import {
@@ -54,7 +55,8 @@ export function ReviewEdit({
   // Candidate upstream node ids = every node in the workflow except this
   // one and any output sink. Validator enforces "subset of reachable
   // upstreams" — this dropdown is the friendly version.
-  const agentByName = new Map(agents.map((agent) => [agent.name, agent]))
+  // RFC-223 (PR-3a impl-gate H3): id+name keyed so stamped nodes resolve by id.
+  const agentByName = buildNodeAgentLookup(agents, (a) => a)
   const upstreamCandidates = definition.nodes
     .filter((n) => n.id !== node.id && n.kind !== 'output')
     .map((candidate) => ({

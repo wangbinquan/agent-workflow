@@ -18,6 +18,7 @@ import {
   isReviewableBodyKind,
   kindsEqual,
   reviewApprovedPortName,
+  resolveNodeAgent,
   resolveReviewInputKind,
   tryHandlerForParsedKind,
   tryParseKind,
@@ -53,13 +54,13 @@ export interface WorkflowSemanticContext {
 
 /** Build the immutable capability snapshot consumed by all semantic planners. */
 export function createWorkflowSemanticContext(
-  agents: readonly (PortLookupAgent & { name: string })[],
+  agents: readonly (PortLookupAgent & { name: string; id: string })[],
   inventoryRevision?: string,
 ): WorkflowSemanticContext {
   const sorted = [...agents].sort((left, right) => left.name.localeCompare(right.name))
   const agentsByName: Record<string, PortLookupAgent> = {}
   for (const agent of sorted) {
-    agentsByName[agent.name] = {
+    const projected: PortLookupAgent = {
       ...(agent.outputs !== undefined ? { outputs: [...agent.outputs] } : {}),
       ...(agent.outputKinds !== undefined ? { outputKinds: { ...agent.outputKinds } } : {}),
       ...(agent.outputWrapperPortNames !== undefined
@@ -67,6 +68,13 @@ export function createWorkflowSemanticContext(
         : {}),
       ...(agent.role !== undefined ? { role: agent.role } : {}),
     }
+    // RFC-223 (PR-3a impl-gate H3): key by BOTH id and name. `resolveNodeAgent`
+    // (used inside declaredPorts / resolveReviewInputKind) now resolves a STAMPED
+    // node strictly by its agentId, so the lookup must carry id keys; a legacy
+    // name-only node still resolves via its name key. Field name kept as
+    // `agentsByName` to avoid rippling the type through every consumer.
+    agentsByName[agent.name] = projected
+    agentsByName[agent.id] = projected
   }
   const derivedRevision = JSON.stringify(
     sorted.map((agent) => [
@@ -348,7 +356,8 @@ function reviewSourceCompatibility(
       },
     }
   }
-  const agent = context.agentsByName[agentName]
+  // RFC-223 (PR-3a impl-gate H3): resolve id-first (fail closed on a stamped miss).
+  const agent = resolveNodeAgent(sourceNode, context.agentsByName)
   if (agent === undefined) {
     return {
       compatibility: 'unknown',
@@ -510,7 +519,8 @@ function sourceKindCompatibility(
   if (sourceNode.kind === 'agent-single') {
     const agentName = (sourceNode as Record<string, unknown>).agentName
     if (typeof agentName !== 'string') return 'unknown'
-    const agent = context.agentsByName[agentName]
+    // RFC-223 (PR-3a impl-gate H3): resolve id-first (fail closed on a stamped miss).
+    const agent = resolveNodeAgent(sourceNode, context.agentsByName)
     if (agent === undefined) return 'unknown'
     if (!(agent.outputs ?? []).includes(source.portName)) return 'incompatible'
   }
@@ -1037,8 +1047,8 @@ function planFanoutBoundaryOutput(
   if (innerNode?.kind !== 'agent-single') {
     innerCompatibility = 'incompatible'
   } else {
-    const agentName = (innerNode as Record<string, unknown>).agentName
-    const agent = typeof agentName === 'string' ? context.agentsByName[agentName] : undefined
+    // RFC-223 (PR-3a impl-gate H3): resolve id-first (fail closed on a stamped miss).
+    const agent = resolveNodeAgent(innerNode, context.agentsByName)
     if (agent !== undefined) {
       const promoted = declaredPorts(
         checked.wrapper,
