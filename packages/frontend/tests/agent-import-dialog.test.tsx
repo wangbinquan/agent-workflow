@@ -4,17 +4,24 @@
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, test, vi } from 'vitest'
-import type { AgentMarkdownParseResult } from '@agent-workflow/shared'
+import type {
+  AgentMarkdownParseResult,
+  ResolveAgentImportRefsRequest,
+  ResolveAgentImportRefsResult,
+} from '@agent-workflow/shared'
+import { ApiError } from '../src/api/client'
 import { AgentImportDialog } from '../src/components/AgentImportDialog'
 import { emptyAgent } from '../src/components/AgentForm'
 
 function setup(overrides: Partial<Parameters<typeof AgentImportDialog>[0]> = {}) {
-  const onApply = vi.fn<(result: AgentMarkdownParseResult) => void>()
+  const onApply =
+    vi.fn<(result: AgentMarkdownParseResult, resolved: ResolveAgentImportRefsResult) => void>()
   const onClose = vi.fn()
   const onViewForm = vi.fn()
   const props: Parameters<typeof AgentImportDialog>[0] = {
     open: true,
     onApply,
+    onResolve: resolveForTest,
     onClose,
     onViewForm,
     currentValue: emptyAgent(),
@@ -22,6 +29,21 @@ function setup(overrides: Partial<Parameters<typeof AgentImportDialog>[0]> = {})
   }
   const utils = render(<AgentImportDialog {...props} />)
   return { ...utils, props, onApply, onClose, onViewForm }
+}
+
+async function resolveForTest(
+  request: ResolveAgentImportRefsRequest,
+): Promise<ResolveAgentImportRefsResult> {
+  return {
+    dependsOn: request.dependsOn,
+    mcp: request.mcp,
+    plugins: request.plugins,
+    skills: request.skills?.map((selector) =>
+      selector.kind === 'project'
+        ? { kind: 'project', name: selector.name }
+        : { kind: 'managed', skillId: selector.name },
+    ),
+  }
 }
 
 function pasteAndCheck(raw: string): void {
@@ -109,7 +131,7 @@ describe('AgentImportDialog', () => {
     pasteAndCheck(['---', 'description: A reviewer', '---', 'body line'].join('\n'))
 
     fireEvent.click(screen.getByTestId('agent-import-apply'))
-    expect(onApply).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(onApply).toHaveBeenCalledTimes(1))
     expect(onApply.mock.calls[0]![0].partial).toMatchObject({
       description: 'A reviewer',
       bodyMd: 'body line',
@@ -126,15 +148,108 @@ describe('AgentImportDialog', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
-  test('Import another clears the result and both source drafts', () => {
+  test('Import another clears the result and both source drafts', async () => {
     setup()
     pasteAndCheck(['---', 'description: first', '---'].join('\n'))
     fireEvent.click(screen.getByTestId('agent-import-apply'))
-    fireEvent.click(screen.getByTestId('agent-import-another'))
+    fireEvent.click(await screen.findByTestId('agent-import-another'))
 
     expect(screen.getByTestId('agent-import-file-dropzone')).toBeTruthy()
     fireEvent.click(screen.getByRole('tab', { name: /paste/i }))
     expect((screen.getByTestId('agent-import-textarea') as HTMLTextAreaElement).value).toBe('')
+  })
+
+  test('ambiguous references require an explicit stable id mapping before apply', async () => {
+    const onResolve = vi
+      .fn<(request: ResolveAgentImportRefsRequest) => Promise<ResolveAgentImportRefsResult>>()
+      .mockRejectedValueOnce(
+        new ApiError(409, 'import-ref-ambiguous', 'ambiguous reference', {
+          ambiguities: [
+            {
+              selector: { type: 'agent', name: 'planner' },
+              candidates: [
+                {
+                  id: 'agent-owner-a',
+                  ownerUserId: 'owner-a',
+                  ownerUsername: 'alice',
+                  visibility: 'public',
+                },
+                {
+                  id: 'agent-owner-b',
+                  ownerUserId: 'owner-b',
+                  ownerUsername: 'bob',
+                  visibility: 'public',
+                },
+              ],
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce({ dependsOn: ['agent-owner-b'] })
+    const { onApply } = setup({ onResolve })
+    pasteAndCheck(['---', 'dependsOn: [planner]', '---'].join('\n'))
+
+    fireEvent.click(screen.getByTestId('agent-import-apply'))
+    const mapping = await screen.findByTestId('agent-import-mapping-agent-planner')
+    expect((screen.getByTestId('agent-import-apply') as HTMLButtonElement).disabled).toBe(true)
+
+    fireEvent.click(mapping)
+    fireEvent.mouseDown(screen.getByRole('option', { name: /bob/i }))
+    fireEvent.click(screen.getByTestId('agent-import-apply'))
+
+    await waitFor(() => expect(onApply).toHaveBeenCalledTimes(1))
+    expect(onResolve.mock.calls[1]?.[0].selections).toEqual([
+      {
+        selector: { type: 'agent', name: 'planner' },
+        resourceId: 'agent-owner-b',
+      },
+    ])
+    expect(onApply.mock.calls[0]?.[1].dependsOn).toEqual(['agent-owner-b'])
+  })
+
+  test('a stale explicit mapping never silently rebinds to the sole remaining candidate', async () => {
+    const selector = { type: 'agent' as const, name: 'planner' }
+    const alice = {
+      id: 'agent-owner-a',
+      ownerUserId: 'owner-a',
+      ownerUsername: 'alice',
+      visibility: 'public' as const,
+    }
+    const bob = {
+      id: 'agent-owner-b',
+      ownerUserId: 'owner-b',
+      ownerUsername: 'bob',
+      visibility: 'public' as const,
+    }
+    const onResolve = vi
+      .fn<(request: ResolveAgentImportRefsRequest) => Promise<ResolveAgentImportRefsResult>>()
+      .mockRejectedValueOnce(
+        new ApiError(409, 'import-ref-ambiguous', 'ambiguous reference', {
+          ambiguities: [{ selector, candidates: [alice, bob] }],
+        }),
+      )
+      .mockRejectedValueOnce(
+        new ApiError(409, 'import-ref-selection-stale', 'stale selection', {
+          selector,
+          ambiguities: [{ selector, candidates: [alice] }],
+        }),
+      )
+    const { onApply } = setup({ onResolve })
+    pasteAndCheck(['---', 'dependsOn: [planner]', '---'].join('\n'))
+
+    fireEvent.click(screen.getByTestId('agent-import-apply'))
+    const mapping = await screen.findByTestId('agent-import-mapping-agent-planner')
+    fireEvent.click(mapping)
+    fireEvent.mouseDown(screen.getByRole('option', { name: /bob/i }))
+    fireEvent.click(screen.getByTestId('agent-import-apply'))
+
+    await waitFor(() => expect(mapping.textContent).toContain('Select resource owner'))
+    expect(onResolve).toHaveBeenCalledTimes(2)
+    expect(onApply).not.toHaveBeenCalled()
+    expect((screen.getByTestId('agent-import-apply') as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(mapping)
+    expect(screen.getAllByRole('option')).toHaveLength(1)
+    expect(screen.getByRole('option', { name: /alice/i })).toBeTruthy()
   })
 
   test('source tabs preserve independent upload and paste drafts', () => {
@@ -187,7 +302,13 @@ describe('AgentImportDialog', () => {
     const onClose = vi.fn()
     const currentValue = emptyAgent()
     const { rerender } = render(
-      <AgentImportDialog open onApply={onApply} onClose={onClose} currentValue={currentValue} />,
+      <AgentImportDialog
+        open
+        onApply={onApply}
+        onResolve={resolveForTest}
+        onClose={onClose}
+        currentValue={currentValue}
+      />,
     )
     const file = new File(['ignored'], 'late.md')
     Object.defineProperty(file, 'text', { value: vi.fn(() => pendingText) })
@@ -198,13 +319,20 @@ describe('AgentImportDialog', () => {
       <AgentImportDialog
         open={false}
         onApply={onApply}
+        onResolve={resolveForTest}
         onClose={onClose}
         currentValue={currentValue}
       />,
     )
     await act(async () => resolveText('stale body'))
     rerender(
-      <AgentImportDialog open onApply={onApply} onClose={onClose} currentValue={currentValue} />,
+      <AgentImportDialog
+        open
+        onApply={onApply}
+        onResolve={resolveForTest}
+        onClose={onClose}
+        currentValue={currentValue}
+      />,
     )
 
     expect(screen.getByTestId('agent-import-file-dropzone')).toBeTruthy()

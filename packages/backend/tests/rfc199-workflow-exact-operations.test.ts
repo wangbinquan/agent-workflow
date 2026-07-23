@@ -363,11 +363,12 @@ describe('RFC-199 route source lock', () => {
     expect(validateBlock).toContain('validateWorkflowDefinition(workflow.definition, context)')
     expect(validateBlock).not.toMatch(/\bvalidateWorkflowById\s*\(/)
     expect(exportBlock.match(/loadVisibleWorkflow\(/g)).toHaveLength(1)
-    // RFC-223 (PR-2): export now strips the node agentId to a portable name
-    // selector, but STILL consumes the single captured `workflow` object (its
-    // definition), never a re-read — that is the RFC-199 B1/B3 guarantee here.
+    // RFC-223: export derives a portable name+owner selector from the single
+    // captured workflow definition, never a second workflow read.
     expect(exportBlock).toContain('stringifyWorkflowYaml({')
-    expect(exportBlock).toContain('stripWorkflowNodeAgentIds(workflow.definition)')
+    expect(exportBlock).toContain(
+      'workflowDefinitionToSelectors(deps.db, actorOf(c), workflow.definition)',
+    )
     expect(exportBlock).not.toContain('getWorkflow(')
   })
 })

@@ -13,7 +13,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useNavigate } from '@tanstack/react-router'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { Agent, Config, CreateAgent } from '@agent-workflow/shared'
+import type {
+  Agent,
+  Config,
+  CreateAgent,
+  ResolveAgentImportRefsRequest,
+  ResolveAgentImportRefsResult,
+} from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import {
   AgentForm,
@@ -208,8 +214,11 @@ function AgentCreatePage() {
         currentValue={draft}
         triggerRef={importTriggerRef}
         onViewForm={setActiveTab}
-        onApply={(res) => {
-          const merged = mergeAgentImport(draft, res)
+        onResolve={(request: ResolveAgentImportRefsRequest) =>
+          api.post<ResolveAgentImportRefsResult>('/api/agents/import-resolve', request)
+        }
+        onApply={(res, resolved) => {
+          const merged = mergeAgentImport(draft, res, resolved)
           setDraft(merged)
           // Import is an explicit replacement, so it resets raw JSON (including
           // any invalid text) to the imported semantic values atomically.

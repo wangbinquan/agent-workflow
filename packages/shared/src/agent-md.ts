@@ -13,6 +13,7 @@ import {
   AgentOutputKindsMapSchema,
   AgentOutputWrapperPortNamesSchema,
   AgentRoleSchema,
+  AgentSkillSelectorSchema,
   type AgentPermission,
   type AgentSkillSelector,
   type CreateAgent,
@@ -51,9 +52,9 @@ const KNOWN_KEYS = new Set<string>([
   'permission',
   'tools',
   // RFC-223 (PR-1): list of skill references (managed skill names or
-  // {kind,name} objects). Parsed into typed AgentSkillRef[]; a bare name is a
-  // managed selector resolved server-side (services/agentRefs.ts), demoting to
-  // a repo-local `project` ref when no managed skill matches (RFC-178). Before
+  // {kind,name,ownerUsername?} objects). Parsed into portable selectors; a bare
+  // name is resolved server-side and never silently demoted to a project ref.
+  // Before
   // this key existed, an authored `skills:` fell through to frontmatterExtra.
   'skills',
   // RFC-022: list of agent names the imported agent depends on at runtime.
@@ -404,34 +405,31 @@ export function parseAgentMarkdown(
       for (const entry of data.skills) {
         if (typeof entry === 'string' && AGENT_NAME_RE_LOCAL.test(entry)) {
           cleaned.push({ kind: 'managed', name: entry })
-        } else if (
-          isPlainObject(entry) &&
-          entry.kind === 'project' &&
-          isNonEmptyString(entry.name)
-        ) {
-          cleaned.push({ kind: 'project', name: entry.name })
-        } else if (
-          isPlainObject(entry) &&
-          entry.kind === 'managed' &&
-          isNonEmptyString(entry.name)
-        ) {
-          cleaned.push({ kind: 'managed', name: entry.name })
         } else {
-          bad = true
-          break
+          const parsed = AgentSkillSelectorSchema.safeParse(entry)
+          if (!parsed.success) {
+            bad = true
+            break
+          }
+          cleaned.push(parsed.data)
         }
       }
       if (bad) {
         extras.skills = data.skills
         warnings.push(
-          'skills entries must be skill names or {kind,name} refs; kept in frontmatterExtra',
+          'skills entries must be skill names or portable {kind,name,ownerUsername?} refs; kept in frontmatterExtra',
         )
       } else {
-        // De-dup preserving order (by selector identity: kind + name).
+        // De-dup preserving order by complete portable selector identity.
+        // Same-name managed skills from different owners are distinct.
         const seen = new Set<string>()
         const ordered: AgentSkillSelector[] = []
         for (const sel of cleaned) {
-          const key = `${sel.kind}:${sel.name}`
+          const key = JSON.stringify([
+            sel.kind,
+            sel.name,
+            sel.kind === 'managed' ? (sel.ownerUsername ?? null) : null,
+          ])
           if (seen.has(key)) continue
           seen.add(key)
           ordered.push(sel)

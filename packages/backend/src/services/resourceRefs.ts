@@ -7,7 +7,7 @@
 // references only — references already present in the stored row are
 // grandfathered, so losing a grant never bricks saving your own resource.
 //
-// Names that do not resolve to any row are NOT this module's business — the
+// Ids that do not resolve to any row are NOT this module's business — the
 // existing existence validators (validateDependsOn / validateMcpReferences /
 // validatePluginReferences; workflows tolerate dangling agent names until
 // launch validation) keep their behavior. We only reject names that resolve
@@ -15,10 +15,9 @@
 // name the editor typed (no id / description / owner — D1).
 
 import type { AclResourceType, WorkflowDefinition } from '@agent-workflow/shared'
-import { inArray, or } from 'drizzle-orm'
+import { inArray } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { agents } from '@/db/schema'
 import { ValidationError } from '@/util/errors'
 import {
   ACL_TABLES,
@@ -30,13 +29,9 @@ import {
 
 /**
  * Agent references of a workflow definition (agent-single nodes). RFC-223
- * (PR-2): returns each node's CANONICAL reference — its `agentId` when present
- * (the editor stamps it / migration 0112 backfills it), else the legacy
- * `agentName` (dynamic-generated defs, pre-migration nodes; accepts the even
- * older `agent` key). `assertNewRefsUsable` matches id-or-name against the same
- * row, so either form binds to the correct agent for the ACL usability check
- * (name↔id is 1:1 until PR-8). Diffs (`diffNewNames`) compare like-for-like
- * because a stored definition and its edited successor both prefer id.
+ * (PR-8): returns only canonical `agentId` values. A name-only persisted node
+ * is corrupt/legacy data and fails closed; portable YAML names are resolved by
+ * the dedicated importRefs service before this function is reached.
  */
 export function extractWorkflowAgentRefs(def: {
   nodes?: ReadonlyArray<Record<string, unknown>>
@@ -45,14 +40,7 @@ export function extractWorkflowAgentRefs(def: {
   for (const node of def.nodes ?? []) {
     if (typeof node !== 'object' || node === null) continue
     if (node.kind !== 'agent-single') continue
-    const ref =
-      typeof node.agentId === 'string' && node.agentId.length > 0
-        ? node.agentId
-        : typeof node.agentName === 'string' && node.agentName.length > 0
-          ? node.agentName
-          : typeof node.agent === 'string' && node.agent.length > 0
-            ? node.agent
-            : null
+    const ref = typeof node.agentId === 'string' && node.agentId.length > 0 ? node.agentId : null
     if (ref !== null) out.add(ref)
   }
   return out
@@ -83,53 +71,11 @@ export function stripWorkflowNodeAgentIds(def: WorkflowDefinition): WorkflowDefi
   }
 }
 
-/**
- * RFC-223 (PR-2) — IMPORT resolution: stamp each agent-single node's canonical
- * `agentId` by resolving its `agentName` against the LOCAL agents table (name↔id
- * 1:1 until PR-8, so deterministic). Any incoming `agentId` is discarded and
- * re-derived from the name — a foreign id from another install must never
- * survive. A node whose name resolves to no local agent is left id-less (the
- * name-based validator / scheduler fallback surfaces it as agent-not-found).
- * This is the pragmatic realization of the R4-3 portable-selector contract;
- * used by YAML import before persisting (no client snapshot hash there, so
- * server-side normalization is safe — unlike the hash-fenced editor save, which
- * relies on the frontend stamping agentId into the hashed snapshot).
- */
-export async function resolveWorkflowNodeAgentIds(
-  db: DbClient,
-  def: WorkflowDefinition,
-): Promise<WorkflowDefinition> {
-  const names = new Set<string>()
-  for (const node of def.nodes ?? []) {
-    if (node.kind !== 'agent-single') continue
-    const name = (node as Record<string, unknown>).agentName
-    if (typeof name === 'string' && name.length > 0) names.add(name)
-  }
-  if (names.size === 0) return def
-  const rows = await db
-    .select({ id: agents.id, name: agents.name })
-    .from(agents)
-    .where(inArray(agents.name, [...names]))
-  const idByName = new Map(rows.map((r) => [r.name, r.id]))
-  return {
-    ...def,
-    nodes: (def.nodes ?? []).map((node) => {
-      if (node.kind !== 'agent-single') return node
-      const rec = node as Record<string, unknown>
-      const name = typeof rec.agentName === 'string' ? rec.agentName : undefined
-      const id = name !== undefined ? idByName.get(name) : undefined
-      const { agentId: _drop, ...rest } = rec
-      return (id !== undefined ? { ...rest, agentId: id } : rest) as typeof node
-    }),
-  }
-}
-
 export interface RefCheckGroup {
   type: AclResourceType
   /**
-   * The references to check. RFC-223 (PR-1): these are id-or-name tokens (the
-   * id-based pickers hand ids; agent.md import hands names) — the query below
-   * matches either column, so both resolve to the same row + visibility check.
+   * Canonical resource ids. Portable selectors are resolved only by the
+   * explicit importRefs boundary.
    */
   names: readonly string[]
 }
@@ -141,11 +87,9 @@ async function loadAclRefRows(
   tokens: readonly string[],
 ): Promise<{
   byId: Map<string, AclRow & { name: string }>
-  byName: Map<string, AclRow & { name: string }>
 }> {
   const byId = new Map<string, AclRow & { name: string }>()
-  const byName = new Map<string, AclRow & { name: string }>()
-  if (tokens.length === 0) return { byId, byName }
+  if (tokens.length === 0) return { byId }
   const table = ACL_TABLES[type]
   const rows = (await db
     .select({
@@ -155,14 +99,11 @@ async function loadAclRefRows(
       visibility: table.visibility,
     })
     .from(table)
-    .where(or(inArray(table.id, [...tokens]), inArray(table.name, [...tokens])))) as Array<
-    AclRow & { name: string }
-  >
+    .where(inArray(table.id, [...tokens]))) as Array<AclRow & { name: string }>
   for (const row of rows) {
     byId.set(row.id, row)
-    byName.set(row.name, row)
   }
-  return { byId, byName }
+  return { byId }
 }
 
 /**
@@ -186,13 +127,11 @@ export async function assertNewRefsUsable(
   for (const group of groups) {
     const refs = [...new Set(group.names)].filter((n) => n.length > 0)
     if (refs.length === 0) continue
-    // RFC-223 (PR-1): a ref may be an id (picker) or a name (agent.md import);
-    // match either column so the ACL check binds to the actual row.
-    const { byId, byName } = await loadAclRefRows(db, group.type, refs)
+    const { byId } = await loadAclRefRows(db, group.type, refs)
     if (byId.size === 0) continue
     const granted = await listGrantedResourceIds(db, actor, group.type)
     for (const ref of refs) {
-      const row = byId.get(ref) ?? byName.get(ref)
+      const row = byId.get(ref)
       if (row === undefined) continue // unresolvable → existence validator owns it
       if (!isVisibleRow(actor, row, granted)) {
         // Echo the INPUT token (P2-2 / D1), not row.name.
@@ -238,9 +177,9 @@ export interface ResolvedRefsById {
  * resource renamed into that token between the two steps could bind an id the
  * caller was never authorized for.
  *
- * - A token equal to a row id (or a name) resolves to that row's id; an
- *   unresolvable token is returned verbatim (existence validators own
- *   `*-not-found`).
+ * - A token equal to a row id resolves; an unresolvable token is returned
+ *   verbatim (existence validators own `*-not-found`). Names are deliberately
+ *   not queried here after the PR-8 uniqueness flip.
  * - A NEW reference (resolved id NOT in `grandfatheredIds`, D15) whose row the
  *   actor cannot view is collected in `missing`, echoing the INPUT token.
  * - `actor === null` (framework/system callers) skips the ACL gate; a resource
@@ -257,7 +196,7 @@ export async function resolveRefsUsableById(
   opts: { grandfatheredIds?: ReadonlySet<string> } = {},
 ): Promise<ResolvedRefsById> {
   if (tokens.length === 0) return { ids: [], byToken: new Map(), missing: [] }
-  const { byId, byName } = await loadAclRefRows(db, type, [...new Set(tokens)])
+  const { byId } = await loadAclRefRows(db, type, [...new Set(tokens)])
   const enforce = actor !== null && !isResourceAdminActor(actor)
   const granted = enforce ? await listGrantedResourceIds(db, actor, type) : new Set<string>()
   const grandfathered = opts.grandfatheredIds ?? new Set<string>()
@@ -266,7 +205,7 @@ export async function resolveRefsUsableById(
   const seen = new Set<string>()
   const ids: string[] = []
   for (const token of tokens) {
-    const row = byId.get(token) ?? byName.get(token)
+    const row = byId.get(token)
     const id = row?.id ?? token
     if (row !== undefined) byToken.set(token, row.id) // only MATCHED tokens
     if (

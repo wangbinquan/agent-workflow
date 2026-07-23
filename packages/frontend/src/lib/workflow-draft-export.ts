@@ -4,7 +4,11 @@
 // artifact from the in-memory composite snapshot and mark the filename so it
 // can never be mistaken for a confirmed persisted revision.
 
-import { stringifyWorkflowYamlDocument, type WorkflowDraftSnapshot } from '@agent-workflow/shared'
+import {
+  stringifyWorkflowYamlDocument,
+  workflowDefinitionToNameSelectors,
+  type WorkflowDraftSnapshot,
+} from '@agent-workflow/shared'
 
 export interface WorkflowLocalDraftExport {
   filename: string
@@ -17,7 +21,10 @@ export function buildWorkflowLocalDraftExport(
   const safeName = snapshot.name.replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '')
   return {
     filename: `${safeName === '' ? 'workflow' : safeName}-unsaved.yaml`,
-    yaml: stringifyWorkflowYamlDocument(snapshot),
+    yaml: stringifyWorkflowYamlDocument({
+      ...snapshot,
+      definition: workflowDefinitionToNameSelectors(snapshot.definition),
+    }),
   }
 }
 

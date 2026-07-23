@@ -114,7 +114,6 @@ export async function validateDependsOn(
   db: DbClient,
   selfId: string,
   dependsOn: readonly string[],
-  selfName?: string,
 ): Promise<void> {
   if (dependsOn.length === 0) return
 
@@ -127,12 +126,11 @@ export async function validateDependsOn(
     unique.push(n)
   }
 
-  // 2. self-reference. By id for the normal path; ALSO by name for a brand-new
-  //    agent whose own id does not exist yet (a self-name in agent.md can't
-  //    resolve to an id via resolveAgentRefs, so it survives as the raw name).
-  if (unique.includes(selfId) || (selfName !== undefined && unique.includes(selfName))) {
+  // 2. self-reference is canonical-id only. Portable names are resolved before
+  //    entering ordinary create/update.
+  if (unique.includes(selfId)) {
     throw new DomainError('agent-dependency-self', `agent cannot depend on itself`, 400, {
-      name: selfName ?? selfId,
+      id: selfId,
     })
   }
 

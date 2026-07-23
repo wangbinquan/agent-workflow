@@ -11,25 +11,29 @@
 //   - new: discards an incoming id and inserts a fresh workflow
 
 import type {
+  ImportRefSelection,
   ImportWorkflowRequest,
   ImportWorkflowResult,
   Workflow,
   WorkflowDefinition,
+  WorkflowDefinitionSelector,
 } from '@agent-workflow/shared'
 import {
+  importRefSelectorKey,
   stringifyWorkflowYamlDocument,
+  WorkflowDefinitionSelectorSchema,
   WorkflowDefinitionSchema,
   WorkflowNameSchema,
 } from '@agent-workflow/shared'
+import { inArray } from 'drizzle-orm'
 import { parse as parseYaml } from 'yaml'
+import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { canViewResource } from '@/services/resourceAcl'
+import { agents, users } from '@/db/schema'
+import { canViewResource, filterVisibleRows } from '@/services/resourceAcl'
 import { assertNotBuiltin } from '@/services/systemResources'
-import {
-  assertNewRefsUsable,
-  extractWorkflowAgentRefs,
-  resolveWorkflowNodeAgentIds,
-} from '@/services/resourceRefs'
+import { assertNewRefsUsable, extractWorkflowAgentRefs } from '@/services/resourceRefs'
+import { resolveImportRefs } from '@/services/importRefs'
 import {
   createWorkflow,
   getWorkflow,
@@ -45,10 +49,20 @@ import { ConflictError, ValidationError } from '@/util/errors'
  * re-reading by id after the guard (RFC-199 B1/B3).
  */
 export function stringifyWorkflowYaml(
-  wf: Pick<Workflow, 'id' | 'name' | 'description' | 'definition'>,
+  wf: Pick<Workflow, 'id' | 'name' | 'description'> & {
+    definition: WorkflowDefinition | WorkflowDefinitionSelector
+  },
 ): string {
   return stringifyWorkflowYamlDocument(
-    { name: wf.name, description: wf.description, definition: wf.definition },
+    {
+      name: wf.name,
+      description: wf.description,
+      // The shared serializer deliberately accepts the canonical definition
+      // schema for full-fidelity backups. Portable selectors are a strict
+      // no-agentId subset with passthrough selector metadata, so they normalize
+      // through that same serializer without widening the import schema.
+      definition: wf.definition as WorkflowDefinition,
+    },
     { id: wf.id },
   )
 }
@@ -58,7 +72,7 @@ export interface YamlImportPreview {
   id: string | null
   name: string
   description: string
-  definition: WorkflowDefinition
+  definition: WorkflowDefinitionSelector
   /** True when a workflow with `id` already exists in DB. */
   conflicts: boolean
 }
@@ -92,13 +106,124 @@ export function previewWorkflowYaml(yamlText: string): Omit<YamlImportPreview, '
   const id = typeof obj.id === 'string' && obj.id.length > 0 ? obj.id : null
   const description = typeof obj.description === 'string' ? obj.description : ''
   const definitionRaw = obj.definition
-  const parsed = WorkflowDefinitionSchema.safeParse(definitionRaw)
+  const parsed = WorkflowDefinitionSelectorSchema.safeParse(definitionRaw)
   if (!parsed.success) {
     throw new ValidationError('workflow-yaml-invalid', 'YAML definition failed schema validation', {
       issues: parsed.error.issues,
     })
   }
   return { id, name, description, definition: parsed.data }
+}
+
+/**
+ * Convert one immutable persisted workflow snapshot into its portable YAML
+ * selector shape. The current canonical agent row supplies both the display
+ * name and owner hint; installation-local ids never leave this boundary.
+ */
+export async function workflowDefinitionToSelectors(
+  db: DbClient,
+  actor: Actor,
+  definition: WorkflowDefinition,
+): Promise<WorkflowDefinitionSelector> {
+  const agentIds = [
+    ...new Set(
+      definition.nodes
+        .filter((node) => node.kind === 'agent-single')
+        .map((node) => node.agentId)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0),
+    ),
+  ]
+  if (
+    definition.nodes.some(
+      (node) =>
+        node.kind === 'agent-single' &&
+        (typeof node.agentId !== 'string' || node.agentId.length === 0),
+    )
+  ) {
+    throw new ValidationError(
+      'workflow-export-ref-unavailable',
+      'workflow contains an agent node without a canonical agent id',
+    )
+  }
+  if (agentIds.length === 0) {
+    return WorkflowDefinitionSelectorSchema.parse(definition)
+  }
+
+  const rows = await db
+    .select({
+      id: agents.id,
+      name: agents.name,
+      ownerUserId: agents.ownerUserId,
+      visibility: agents.visibility,
+    })
+    .from(agents)
+    .where(inArray(agents.id, agentIds))
+  const visible = await filterVisibleRows(db, actor, 'agent', rows)
+  const byId = new Map(visible.map((row) => [row.id, row]))
+  if (byId.size !== agentIds.length) {
+    throw new ValidationError(
+      'workflow-export-ref-unavailable',
+      'workflow references an agent that is missing or no longer visible',
+    )
+  }
+
+  const ownerIds = [
+    ...new Set(
+      visible
+        .map((row) => row.ownerUserId)
+        .filter(
+          (ownerUserId): ownerUserId is string =>
+            ownerUserId !== null && ownerUserId !== SYSTEM_USER_ID,
+        ),
+    ),
+  ]
+  const ownerRows =
+    ownerIds.length === 0
+      ? []
+      : await db
+          .select({ id: users.id, username: users.username })
+          .from(users)
+          .where(inArray(users.id, ownerIds))
+  const usernameById = new Map(ownerRows.map((row) => [row.id, row.username]))
+
+  return WorkflowDefinitionSelectorSchema.parse({
+    ...definition,
+    nodes: definition.nodes.map((node) => {
+      if (node.kind !== 'agent-single') return node
+      const agentId = node.agentId
+      const row = agentId === undefined ? undefined : byId.get(agentId)
+      if (row === undefined) {
+        throw new ValidationError(
+          'workflow-export-ref-unavailable',
+          'workflow references an agent that is missing or no longer visible',
+        )
+      }
+      const ownerUsername =
+        row.ownerUserId === SYSTEM_USER_ID
+          ? SYSTEM_USER_ID
+          : row.ownerUserId === null
+            ? undefined
+            : usernameById.get(row.ownerUserId)
+      if (row.ownerUserId !== null && ownerUsername === undefined) {
+        throw new ValidationError(
+          'workflow-export-owner-unavailable',
+          'workflow agent owner no longer has a portable username',
+        )
+      }
+      const record = node as Record<string, unknown>
+      const {
+        agentId: _agentId,
+        agentName: _agentName,
+        agentOwnerUsername: _agentOwnerUsername,
+        ...portable
+      } = record
+      return {
+        ...portable,
+        agentName: row.name,
+        ...(ownerUsername === undefined ? {} : { agentOwnerUsername: ownerUsername }),
+      }
+    }),
+  })
 }
 
 export async function importWorkflowYaml(
@@ -111,11 +236,19 @@ export async function importWorkflowYaml(
   }
   const preview = previewWorkflowYaml(request.yamlText)
   // RFC-223 (PR-2): resolve each agent-single node's canonical agentId from its
-  // (portable) agentName against THIS install's agents, discarding any foreign
-  // id carried in the YAML. Safe to normalize server-side here — the import
+  // portable name+owner selector against THIS install's agents. Safe to
+  // normalize server-side here — the import
   // path computes the snapshot hash itself (no client-provided hash to fence),
   // unlike the editor autosave which relies on the frontend having stamped it.
-  const definition = await resolveWorkflowNodeAgentIds(db, preview.definition)
+  const definition =
+    principal.kind === 'actor'
+      ? await resolveImportedWorkflowNodeAgentIds(
+          db,
+          principal.actor,
+          preview.definition,
+          request.selections ?? [],
+        )
+      : rejectPortableRefsForSystemImport(preview.definition)
 
   if (request.mode === 'overwrite') {
     if (preview.id === null || preview.id !== request.overwrite.workflowId) {
@@ -188,6 +321,68 @@ export async function importWorkflowYaml(
     principal.kind === 'actor' ? { ownerUserId: principal.actor.user.id } : undefined,
   )
   return { outcome: 'created', workflow }
+}
+
+async function resolveImportedWorkflowNodeAgentIds(
+  db: DbClient,
+  actor: Extract<WorkflowWritePrincipal, { kind: 'actor' }>['actor'],
+  def: WorkflowDefinitionSelector,
+  selections: readonly ImportRefSelection[],
+): Promise<WorkflowDefinition> {
+  const selectors = (def.nodes ?? [])
+    .filter((node) => node.kind === 'agent-single')
+    .map((node) => {
+      const record = node as Record<string, unknown>
+      const name = record.agentName
+      if (typeof name !== 'string' || name.length === 0) {
+        throw new ValidationError(
+          'import-ref-unresolved',
+          'an imported agent node is missing its portable agentName selector',
+        )
+      }
+      const ownerUsername = record.agentOwnerUsername
+      return {
+        type: 'agent' as const,
+        name,
+        ...(typeof ownerUsername === 'string' ? { ownerUsername } : {}),
+      }
+    })
+  const resolved = await resolveImportRefs(db, actor, selectors, selections)
+  return WorkflowDefinitionSchema.parse({
+    ...def,
+    nodes: (def.nodes ?? []).map((node) => {
+      if (node.kind !== 'agent-single') return node
+      const rec = node as Record<string, unknown>
+      const name = rec.agentName
+      if (typeof name !== 'string' || name.length === 0) return node
+      const ownerUsername = rec.agentOwnerUsername
+      const selector = {
+        type: 'agent' as const,
+        name,
+        ...(typeof ownerUsername === 'string' ? { ownerUsername } : {}),
+      }
+      const id = resolved.bySelector.get(importRefSelectorKey(selector))
+      if (id === undefined) {
+        throw new ValidationError(
+          'import-ref-unresolved',
+          'imported agent reference did not resolve',
+        )
+      }
+      const { agentId: _foreignId, agentOwnerUsername: _portableOwner, ...portable } = rec
+      return { ...portable, agentId: id }
+    }),
+  })
+}
+
+function rejectPortableRefsForSystemImport(def: WorkflowDefinitionSelector): WorkflowDefinition {
+  const hasPortableRef = (def.nodes ?? []).some((node) => node.kind === 'agent-single')
+  if (hasPortableRef) {
+    throw new ValidationError(
+      'workflow-import-system-ref-unsupported',
+      'system workflow import cannot resolve portable resource selectors',
+    )
+  }
+  return WorkflowDefinitionSchema.parse(def)
 }
 
 function safeParse(yamlText: string): unknown {

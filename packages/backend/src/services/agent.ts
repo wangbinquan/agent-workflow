@@ -110,7 +110,7 @@ export async function createAgent(
   // partially-validated rows never land in the DB. Keyed by id (RFC-223 PR-1);
   // pass the proposed name so a self-name dep (whose id doesn't exist yet) is
   // still caught as agent-dependency-self.
-  await validateDependsOn(db, id, dependsOnIds, input.name)
+  await validateDependsOn(db, id, dependsOnIds)
 
   // RFC-028 save-time guard: every `mcp[]` entry must resolve to an existing
   // mcps row. Without this, agents save successfully but fail at runtime when
@@ -219,7 +219,7 @@ export async function updateAgent(
   // PATCH that doesn't touch the field keeps the existing closure validity.
   // Keyed by the agent's own id (RFC-223 PR-1) so a self-dep is caught by id.
   if (dependsOnIds !== undefined) {
-    await validateDependsOn(db, existing.id, dependsOnIds, existing.name)
+    await validateDependsOn(db, existing.id, dependsOnIds)
   }
 
   // RFC-028 save-time guard — only when caller patched mcp.

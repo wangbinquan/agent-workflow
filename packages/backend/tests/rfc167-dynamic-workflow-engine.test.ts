@@ -44,7 +44,6 @@ import { nodeRuns, runtimes, tasks, workflows, workgroupTaskState } from '../src
 import { loadWorkgroupTaskState } from '../src/services/workgroup/state'
 import { createApp } from '../src/server'
 import { createAgent, getAgent } from '../src/services/agent'
-import { resolveWorkflowNodeAgentIds } from '../src/services/resourceRefs'
 import {
   DW_GATE_CAUSE,
   DW_GENERATE_CAUSE,
@@ -550,7 +549,7 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
         frontmatterExtra: {},
         bodyMd: '',
       })
-      await createWorkgroup(db, {
+      const workgroup = await createWorkgroup(db, {
         name: 'wg',
         description: '',
         instructions: '章程',
@@ -571,7 +570,7 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
         startWorkgroupTask(
           db,
           actor,
-          'wg',
+          workgroup.id,
           { name: 't', goal: 'g', scratch: true, expectedWorkgroupId: 'stale-other-id' },
           { db, appHome },
         ),
@@ -598,7 +597,7 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
         frontmatterExtra: {},
         bodyMd: 'execute the generated step',
       })
-      await createWorkgroup(db, {
+      const workgroup = await createWorkgroup(db, {
         name: 'dyn',
         description: '',
         instructions: '章程',
@@ -636,7 +635,7 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
       const task = await startWorkgroupTask(
         db,
         actor,
-        'dyn',
+        workgroup.id,
         { name: 't', goal: '目标', scratch: true },
         { db, appHome, opencodeCmd: OPENCODE_CMD, awaitScheduler: true },
       )
@@ -773,14 +772,19 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
     withHolder?: boolean
     generatedDef?: unknown
   }): Promise<{ taskId: string }> {
-    // RFC-223 (PR-3b): a real generation stores an id-canonical def (single
-    // conversion point). Mirror that — stamp each node's agentId from its name
-    // (resolveWorkflowNodeAgentIds); a name with no agent row (ghost-agent) stays
-    // id-less, so the approve-time id validation refuses it as stale.
-    const genDef = await resolveWorkflowNodeAgentIds(
-      db,
-      WorkflowDefinitionSchema.parse(opts.generatedDef ?? GHOST_DEF),
+    // A real generation stores an id-canonical def. Mirror the conversion in
+    // this fixture without invoking the portable import resolver.
+    const parsedDef = WorkflowDefinitionSchema.parse(opts.generatedDef ?? GHOST_DEF)
+    const nodes = await Promise.all(
+      parsedDef.nodes.map(async (node) => {
+        if (node.kind !== 'agent-single') return node
+        const name = (node as Record<string, unknown>).agentName
+        if (typeof name !== 'string') return node
+        const row = await getAgent(db, name)
+        return row === null ? node : { ...node, agentId: row.id }
+      }),
     )
+    const genDef = { ...parsedDef, nodes }
     const { taskId } = await seedDynamicTask(db, {
       dw: {
         ...initialDwState(),

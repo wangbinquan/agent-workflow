@@ -1536,6 +1536,8 @@ export interface Resources {
       conflictChoiceLabel: string
       choiceNew: string
       choiceOverwrite: string
+      resolveReferences: string
+      resolveReferencesHint: string
       resultTitle: string
     }
     /** RFC-191 gallery card meta —「{{count}} 节点」chip. */
@@ -3071,6 +3073,7 @@ export interface Resources {
       overwriteTitle: string
       overwriteDescription: string
       warningTitle: string
+      resolveReferences: string
       previewEmptyTitle: string
       previewEmptyDescription: string
       resultTitle: string
@@ -3903,6 +3906,12 @@ export interface Resources {
     transferConfirm: string
     ownerBadge: string
     privateChip: string
+  }
+  importRefs: {
+    selectorLabel: string
+    selectOwner: string
+    candidateDescription: string
+    resourceType: { agent: string; skill: string; mcp: string; plugin: string }
   }
   members: {
     title: string
@@ -5605,6 +5614,8 @@ export const zhCN: Resources = {
       conflictChoiceLabel: '冲突处理方式',
       choiceNew: '作为新工作流导入',
       choiceOverwrite: '覆盖现有工作流',
+      resolveReferences: '选择重名引用的目标所有者',
+      resolveReferencesHint: '导入只会保存所选资源的稳定 id；候选会在提交时重新校验权限。',
       resultTitle: '导入完成',
     },
     cardNodes_one: '{{count}} 节点',
@@ -7166,6 +7177,7 @@ export const zhCN: Resources = {
       overwriteTitle: '将覆盖已编辑内容',
       overwriteDescription: '以下 {{count}} 个字段已有草稿内容，应用后会被导入值替换。',
       warningTitle: '解析提醒',
+      resolveReferences: '为重名引用选择目标所有者',
       previewEmptyTitle: '没有可应用的内容',
       previewEmptyDescription: '返回并补充 agent.md 字段或正文后再检查。',
       resultTitle: '已应用到草稿',
@@ -8585,6 +8597,12 @@ export const zhCN: Resources = {
     transferConfirm: '确认转让',
     ownerBadge: '所有者',
     privateChip: '私有',
+  },
+  importRefs: {
+    selectorLabel: '{{type}}：{{name}}',
+    selectOwner: '选择资源所有者',
+    candidateDescription: '{{visibility}} · {{id}}',
+    resourceType: { agent: '代理', skill: '技能', mcp: 'MCP', plugin: '插件' },
   },
   members: {
     title: '任务成员',

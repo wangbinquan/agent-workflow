@@ -17,7 +17,12 @@
 //    managed ref — a missing managed skill is never silently turned into a
 //    repo-local skill). The picker's own refs already carry ids, unaffected.
 
-import type { AgentMarkdownParseResult, AgentSkillRef, CreateAgent } from '@agent-workflow/shared'
+import type {
+  AgentMarkdownParseResult,
+  AgentSkillRef,
+  CreateAgent,
+  ResolveAgentImportRefsResult,
+} from '@agent-workflow/shared'
 import { skillSelectorToRef } from '@agent-workflow/shared'
 import type { OrphanSidecarRef } from './agent-ports'
 
@@ -66,6 +71,7 @@ export function importOrphanSidecarConflicts(
 export function mergeAgentImport(
   current: CreateAgent,
   result: AgentMarkdownParseResult,
+  resolved: ResolveAgentImportRefsResult,
 ): CreateAgent {
   const next: CreateAgent = { ...current }
   for (const [key, value] of Object.entries(result.partial)) {
@@ -82,7 +88,24 @@ export function mergeAgentImport(
   // RFC-223 (PR-1): skills come from the selector list, not partial — convert +
   // apply like the other list fields (overwrite when the source declared them).
   const skills = importedSkillRefs(result)
-  if (skills !== undefined) next.skills = skills
+  if (skills !== undefined) {
+    if (resolved.skills === undefined) throw new Error('agent import skill refs were not resolved')
+    next.skills = resolved.skills
+  }
+  if (result.partial.dependsOn !== undefined) {
+    if (resolved.dependsOn === undefined)
+      throw new Error('agent import dependencies were not resolved')
+    next.dependsOn = resolved.dependsOn
+  }
+  if (result.partial.mcp !== undefined) {
+    if (resolved.mcp === undefined) throw new Error('agent import MCP refs were not resolved')
+    next.mcp = resolved.mcp
+  }
+  if (result.partial.plugins !== undefined) {
+    if (resolved.plugins === undefined)
+      throw new Error('agent import plugin refs were not resolved')
+    next.plugins = resolved.plugins
+  }
   return next
 }
 

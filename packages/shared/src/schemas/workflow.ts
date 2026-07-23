@@ -19,6 +19,7 @@
 // never carry the new node kind, so the upgrade is a metadata bump.
 
 import { z } from 'zod'
+import { ImportRefSelectionSchema } from './importRef'
 import { ResourceVisibilitySchema } from './resourceAcl'
 import { WORKGROUP_NAME_RE } from './workgroup'
 
@@ -224,6 +225,43 @@ export const WorkflowDefinitionSchema = z.object({
 })
 export type WorkflowDefinition = z.infer<typeof WorkflowDefinitionSchema>
 
+/**
+ * RFC-223 portable workflow-YAML shape.
+ *
+ * Persisted workflow nodes reference agents by canonical `agentId`. YAML must
+ * not serialize that installation-local id, so agent nodes instead carry a
+ * name selector plus an optional portable owner username. The owner hint keeps
+ * an export deterministic when two visible tenants use the same agent name;
+ * older name-only YAML remains an intentionally ambiguous selector and is
+ * resolved by the import preview/mapping flow.
+ */
+export const WorkflowSelectorNodeSchema = WorkflowNodeSchema.extend({
+  agentId: z.never().optional(),
+  agentName: z.string().min(1).max(128).optional(),
+  agentOwnerUsername: z.string().min(1).max(64).optional(),
+}).superRefine((node, ctx) => {
+  if (node.kind === 'agent-single' && node.agentName === undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['agentName'],
+      message: 'portable agent nodes require an agentName selector',
+    })
+  }
+  if (node.kind !== 'agent-single' && node.agentOwnerUsername !== undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['agentOwnerUsername'],
+      message: 'agentOwnerUsername is only valid on agent-single nodes',
+    })
+  }
+})
+export type WorkflowSelectorNode = z.infer<typeof WorkflowSelectorNodeSchema>
+
+export const WorkflowDefinitionSelectorSchema = WorkflowDefinitionSchema.extend({
+  nodes: z.array(WorkflowSelectorNodeSchema).default([]),
+})
+export type WorkflowDefinitionSelector = z.infer<typeof WorkflowDefinitionSelectorSchema>
+
 // --- top-level resource (response shape) ---
 
 export const WorkflowSchema = z.object({
@@ -354,15 +392,30 @@ const ImportWorkflowOverwriteSchema = z
   })
   .strict()
 
+const ImportWorkflowMappingsSchema = z.array(ImportRefSelectionSchema).max(256).optional()
+
 /** RFC-199 structured YAML import request; overwrite is always revision-fenced. */
 export const ImportWorkflowRequestSchema = z.discriminatedUnion('mode', [
-  z.object({ yamlText: z.string(), mode: z.literal('fail') }).strict(),
-  z.object({ yamlText: z.string(), mode: z.literal('new') }).strict(),
+  z
+    .object({
+      yamlText: z.string(),
+      mode: z.literal('fail'),
+      selections: ImportWorkflowMappingsSchema,
+    })
+    .strict(),
+  z
+    .object({
+      yamlText: z.string(),
+      mode: z.literal('new'),
+      selections: ImportWorkflowMappingsSchema,
+    })
+    .strict(),
   z
     .object({
       yamlText: z.string(),
       mode: z.literal('overwrite'),
       overwrite: ImportWorkflowOverwriteSchema,
+      selections: ImportWorkflowMappingsSchema,
     })
     .strict(),
 ])

@@ -5,6 +5,7 @@
 
 import { z } from 'zod'
 import { ResourceVisibilitySchema } from './resourceAcl'
+import { ImportRefSelectionSchema } from './importRef'
 import { AgentOutputKindSchema } from './review'
 
 /**
@@ -350,6 +351,31 @@ export const CreateAgentSchema = z.object({
   bodyMd: z.string().default(''),
 })
 export type CreateAgent = z.infer<typeof CreateAgentSchema>
+
+/**
+ * POST /api/agents/import-resolve. Optional fields preserve agent.md omission
+ * semantics: a source that did not declare a field must not clear the draft.
+ */
+export const ResolveAgentImportRefsRequestSchema = z
+  .object({
+    dependsOn: z.array(ResourceRefSchema).max(64).optional(),
+    mcp: z.array(ResourceRefSchema).max(64).optional(),
+    plugins: z.array(ResourceRefSchema).max(64).optional(),
+    skills: z.array(AgentSkillSelectorSchema).max(64).optional(),
+    selections: z.array(ImportRefSelectionSchema).max(256).default([]),
+  })
+  .strict()
+export type ResolveAgentImportRefsRequest = z.infer<typeof ResolveAgentImportRefsRequestSchema>
+
+export const ResolveAgentImportRefsResultSchema = z
+  .object({
+    dependsOn: z.array(z.string()).optional(),
+    mcp: z.array(z.string()).optional(),
+    plugins: z.array(z.string()).optional(),
+    skills: z.array(AgentSkillRefSchema).optional(),
+  })
+  .strict()
+export type ResolveAgentImportRefsResult = z.infer<typeof ResolveAgentImportRefsResultSchema>
 
 /** PUT /api/agents/:id body. Name changes happen via /rename. */
 export const UpdateAgentSchema = CreateAgentSchema.omit({ name: true })

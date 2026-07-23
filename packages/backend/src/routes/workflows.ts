@@ -31,7 +31,6 @@ import {
   assertNewRefsUsable,
   diffNewNames,
   extractWorkflowAgentRefs,
-  stripWorkflowNodeAgentIds,
 } from '@/services/resourceRefs'
 import {
   createWorkflow,
@@ -48,7 +47,11 @@ import {
   workflowDefinitionCandidateHashOf,
   workflowValidationContextHashOf,
 } from '@/services/workflow.validator'
-import { importWorkflowYaml, stringifyWorkflowYaml } from '@/services/workflow.yaml'
+import {
+  importWorkflowYaml,
+  stringifyWorkflowYaml,
+  workflowDefinitionToSelectors,
+} from '@/services/workflow.yaml'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { mountAclEndpoints } from './resourceAcl'
 
@@ -224,13 +227,11 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
     }
     const revision = assertExactWorkflowRevision(workflow, parsed.data, 'workflow-version-mismatch')
     await deps.workflowExactOperationHook?.({ operation: 'export', revision })
-    // RFC-223 (PR-2): strip internal agentId so the user-facing export is a
-    // portable name-based selector (an id is meaningless in another install;
-    // import re-resolves by name). Backup export keeps full fidelity — it does
-    // NOT go through this route.
+    // RFC-223: emit portable name+owner selectors. Backup export keeps full
+    // fidelity and does not go through this route.
     const yaml = stringifyWorkflowYaml({
       ...workflow,
-      definition: stripWorkflowNodeAgentIds(workflow.definition),
+      definition: await workflowDefinitionToSelectors(deps.db, actorOf(c), workflow.definition),
     })
     return c.body(yaml, 200, {
       'content-type': 'application/yaml; charset=utf-8',

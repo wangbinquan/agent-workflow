@@ -1721,6 +1721,9 @@ export const enUS: Resources = {
       conflictChoiceLabel: 'Conflict handling',
       choiceNew: 'Import as new',
       choiceOverwrite: 'Overwrite existing',
+      resolveReferences: 'Choose owners for ambiguous references',
+      resolveReferencesHint:
+        'The import stores only the selected stable ids and rechecks access when submitted.',
       resultTitle: 'Import complete',
     },
     cardNodes_one: '{{count}} node',
@@ -3377,6 +3380,7 @@ export const enUS: Resources = {
       overwriteTitle: 'Edited content will be replaced',
       overwriteDescription: '{{count}} draft fields already contain content and will be replaced.',
       warningTitle: 'Parse warnings',
+      resolveReferences: 'Choose the intended owner for ambiguous references',
       previewEmptyTitle: 'Nothing to apply',
       previewEmptyDescription: 'Go back and add agent.md fields or body content, then check again.',
       resultTitle: 'Applied to draft',
@@ -4924,6 +4928,12 @@ export const enUS: Resources = {
     transferConfirm: 'Confirm transfer',
     ownerBadge: 'Owner',
     privateChip: 'Private',
+  },
+  importRefs: {
+    selectorLabel: '{{type}}: {{name}}',
+    selectOwner: 'Select resource owner',
+    candidateDescription: '{{visibility}} · {{id}}',
+    resourceType: { agent: 'Agent', skill: 'Skill', mcp: 'MCP', plugin: 'Plugin' },
   },
   members: {
     title: 'Task members',

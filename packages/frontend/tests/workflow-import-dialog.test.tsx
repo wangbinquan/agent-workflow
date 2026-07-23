@@ -216,6 +216,72 @@ describe('WorkflowImportDialog', () => {
     expect(refreshedFence?.clientMutationId).not.toBe(staleFence?.clientMutationId)
   })
 
+  test('mapping state also refreshes a stale overwrite fence without dropping selections', async () => {
+    const selector = { type: 'agent' as const, name: 'planner' }
+    const candidates = [
+      {
+        id: 'agent-owner-a',
+        ownerUserId: 'owner-a',
+        ownerUsername: 'alice',
+        visibility: 'public' as const,
+      },
+      {
+        id: 'agent-owner-b',
+        ownerUserId: 'owner-b',
+        ownerUsername: 'bob',
+        visibility: 'public' as const,
+      },
+    ]
+    const onImport = vi
+      .fn<WorkflowImportDialogProps['onImport']>()
+      .mockRejectedValueOnce(conflictError('same'))
+      .mockRejectedValueOnce(
+        new ApiError(409, 'import-ref-ambiguous', 'ambiguous reference', {
+          ambiguities: [{ selector, candidates }],
+        }),
+      )
+      .mockRejectedValueOnce(
+        new ApiError(409, 'workflow-version-conflict', 'workflow changed', {
+          current: revision('same', 8, 'b'),
+        }),
+      )
+      .mockResolvedValueOnce(undefined)
+    const onRefreshConflict = vi
+      .fn<WorkflowImportDialogProps['onRefreshConflict']>()
+      .mockResolvedValue(revision('same', 8, 'b'))
+    setup(onImport, onRefreshConflict)
+    selectFile(yamlFile('id: same\n', 'same.yaml'))
+
+    fireEvent.click(screen.getByTestId('workflow-import-submit'))
+    expect(await screen.findByTestId('workflow-import-conflict')).toBeTruthy()
+    fireEvent.click(screen.getByTestId('workflow-import-choice-overwrite'))
+    fireEvent.click(screen.getByTestId('workflow-import-submit'))
+
+    const mapping = await screen.findByTestId('workflow-import-mapping-agent-planner')
+    fireEvent.click(mapping)
+    fireEvent.mouseDown(screen.getByRole('option', { name: /bob/i }))
+    fireEvent.click(screen.getByTestId('workflow-import-submit'))
+
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      enUS.errors['workflow-version-conflict'],
+    )
+    const staleFence = onImport.mock.calls[2]?.[2]
+    expect(screen.getByTestId('workflow-import-submit').textContent).toBe(
+      enUS.workflows.importDialog.refreshConflict,
+    )
+
+    fireEvent.click(screen.getByTestId('workflow-import-submit'))
+    await waitFor(() => expect(onRefreshConflict).toHaveBeenCalledWith('same'))
+    expect(onImport).toHaveBeenCalledTimes(3)
+
+    fireEvent.click(screen.getByTestId('workflow-import-submit'))
+    expect(await screen.findByTestId('workflow-import-result')).toBeTruthy()
+    const refreshedFence = onImport.mock.calls[3]?.[2]
+    expect(refreshedFence).toMatchObject({ workflowId: 'same', expectedVersion: 8 })
+    expect(refreshedFence?.clientMutationId).not.toBe(staleFence?.clientMutationId)
+    expect(onImport.mock.calls[3]?.[3]).toEqual([{ selector, resourceId: 'agent-owner-b' }])
+  })
+
   test('the safe conflict default submits new without requiring a magic string', async () => {
     const onImport = vi
       .fn<WorkflowImportDialogProps['onImport']>()
@@ -231,6 +297,98 @@ describe('WorkflowImportDialog', () => {
     expect(await screen.findByTestId('workflow-import-result')).toBeTruthy()
     expect(onImport).toHaveBeenNthCalledWith(2, 'id: existing\n', 'new')
     expect(screen.getByText(enUS.workflows.importedAsNew)).toBeTruthy()
+  })
+
+  test('ambiguous workflow references require a stable candidate selection on retry', async () => {
+    const onImport = vi
+      .fn<WorkflowImportDialogProps['onImport']>()
+      .mockRejectedValueOnce(
+        new ApiError(409, 'import-ref-ambiguous', 'ambiguous reference', {
+          ambiguities: [
+            {
+              selector: { type: 'agent', name: 'planner' },
+              candidates: [
+                {
+                  id: 'agent-owner-a',
+                  ownerUserId: 'owner-a',
+                  ownerUsername: 'alice',
+                  visibility: 'public',
+                },
+                {
+                  id: 'agent-owner-b',
+                  ownerUserId: 'owner-b',
+                  ownerUsername: 'bob',
+                  visibility: 'public',
+                },
+              ],
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(undefined)
+    setup(onImport)
+    selectFile(yamlFile('name: imported\n'))
+
+    fireEvent.click(screen.getByTestId('workflow-import-submit'))
+    const mapping = await screen.findByTestId('workflow-import-mapping-agent-planner')
+    expect((screen.getByTestId('workflow-import-submit') as HTMLButtonElement).disabled).toBe(true)
+
+    fireEvent.click(mapping)
+    fireEvent.mouseDown(screen.getByRole('option', { name: /bob/i }))
+    fireEvent.click(screen.getByTestId('workflow-import-submit'))
+
+    expect(await screen.findByTestId('workflow-import-result')).toBeTruthy()
+    expect(onImport).toHaveBeenNthCalledWith(2, 'name: imported\n', 'fail', undefined, [
+      {
+        selector: { type: 'agent', name: 'planner' },
+        resourceId: 'agent-owner-b',
+      },
+    ])
+  })
+
+  test('a stale workflow mapping requires fresh confirmation even with one candidate left', async () => {
+    const selector = { type: 'agent' as const, name: 'planner' }
+    const alice = {
+      id: 'agent-owner-a',
+      ownerUserId: 'owner-a',
+      ownerUsername: 'alice',
+      visibility: 'public' as const,
+    }
+    const bob = {
+      id: 'agent-owner-b',
+      ownerUserId: 'owner-b',
+      ownerUsername: 'bob',
+      visibility: 'public' as const,
+    }
+    const onImport = vi
+      .fn<WorkflowImportDialogProps['onImport']>()
+      .mockRejectedValueOnce(
+        new ApiError(409, 'import-ref-ambiguous', 'ambiguous reference', {
+          ambiguities: [{ selector, candidates: [alice, bob] }],
+        }),
+      )
+      .mockRejectedValueOnce(
+        new ApiError(409, 'import-ref-selection-stale', 'stale selection', {
+          selector,
+          ambiguities: [{ selector, candidates: [alice] }],
+        }),
+      )
+    setup(onImport)
+    selectFile(yamlFile('name: imported\n'))
+
+    fireEvent.click(screen.getByTestId('workflow-import-submit'))
+    const mapping = await screen.findByTestId('workflow-import-mapping-agent-planner')
+    fireEvent.click(mapping)
+    fireEvent.mouseDown(screen.getByRole('option', { name: /bob/i }))
+    fireEvent.click(screen.getByTestId('workflow-import-submit'))
+
+    await waitFor(() => expect(mapping.textContent).toContain('Select resource owner'))
+    expect(onImport).toHaveBeenCalledTimes(2)
+    expect(screen.queryByTestId('workflow-import-result')).toBeNull()
+    expect((screen.getByTestId('workflow-import-submit') as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(mapping)
+    expect(screen.getAllByRole('option')).toHaveLength(1)
+    expect(screen.getByRole('option', { name: /alice/i })).toBeTruthy()
   })
 
   test('canceling a conflict performs no second import and restores trigger focus', async () => {

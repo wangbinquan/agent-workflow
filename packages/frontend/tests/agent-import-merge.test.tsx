@@ -15,10 +15,18 @@ function makeResult(partial: Partial<CreateAgent>): AgentMarkdownParseResult {
   return { partial, warnings: [], unrecognizedKeys: [], hadFrontmatter: true }
 }
 
+function merge(current: CreateAgent, result: AgentMarkdownParseResult): CreateAgent {
+  return mergeAgentImport(current, result, {
+    dependsOn: result.partial.dependsOn,
+    mcp: result.partial.mcp,
+    plugins: result.partial.plugins,
+  })
+}
+
 describe('mergeAgentImport', () => {
   test('overwrites first-class fields onto empty draft', () => {
     const current = emptyAgent()
-    const merged = mergeAgentImport(
+    const merged = merge(
       current,
       makeResult({
         name: 'r',
@@ -38,19 +46,19 @@ describe('mergeAgentImport', () => {
 
   test('shallow-merges frontmatterExtra: distinct keys preserved', () => {
     const current: CreateAgent = { ...emptyAgent(), frontmatterExtra: { mode: 'subagent' } }
-    const merged = mergeAgentImport(current, makeResult({ frontmatterExtra: { color: '#fff' } }))
+    const merged = merge(current, makeResult({ frontmatterExtra: { color: '#fff' } }))
     expect(merged.frontmatterExtra).toEqual({ mode: 'subagent', color: '#fff' })
   })
 
   test('shallow-merges frontmatterExtra: same key, import wins', () => {
     const current: CreateAgent = { ...emptyAgent(), frontmatterExtra: { mode: 'subagent' } }
-    const merged = mergeAgentImport(current, makeResult({ frontmatterExtra: { mode: 'primary' } }))
+    const merged = merge(current, makeResult({ frontmatterExtra: { mode: 'primary' } }))
     expect(merged.frontmatterExtra).toEqual({ mode: 'primary' })
   })
 
   test('partial field undefined preserves current value', () => {
     const current: CreateAgent = { ...emptyAgent(), description: 'kept' }
-    const merged = mergeAgentImport(current, makeResult({ bodyMd: 'new body' }))
+    const merged = merge(current, makeResult({ bodyMd: 'new body' }))
     expect(merged.description).toBe('kept')
     expect(merged.bodyMd).toBe('new body')
   })
@@ -61,7 +69,7 @@ describe('mergeAgentImport', () => {
       outputs: ['p1'],
       skills: [{ kind: 'project', name: 's1' }],
     }
-    const merged = mergeAgentImport(
+    const merged = merge(
       current,
       makeResult({ description: 'd', frontmatterExtra: { mode: 'subagent' } }),
     )
@@ -79,7 +87,7 @@ describe('mergeAgentImport', () => {
       role: 'normal',
       outputWrapperPortNames: { old_out: 'old_wrapper' },
     }
-    const merged = mergeAgentImport(
+    const merged = merge(
       current,
       makeResult({
         inputs: [{ name: 'new_in', kind: 'markdown' }],

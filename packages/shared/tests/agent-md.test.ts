@@ -424,6 +424,23 @@ describe('parseAgentMarkdown', () => {
     expect(r.skillSelectors?.every((s) => !('skillId' in s))).toBe(true)
   })
 
+  test('skills preserve owner-qualified same-name managed selectors', () => {
+    const src = [
+      '---',
+      'skills:',
+      '  - {kind: managed, name: lint, ownerUsername: alice}',
+      '  - {kind: managed, name: lint, ownerUsername: bob}',
+      '  - {kind: managed, name: lint, ownerUsername: alice}',
+      '---',
+    ].join('\n')
+    const r = parseAgentMarkdown(src)
+    expect(r.skillSelectors).toEqual([
+      { kind: 'managed', name: 'lint', ownerUsername: 'alice' },
+      { kind: 'managed', name: 'lint', ownerUsername: 'bob' },
+    ])
+    expect(r.warnings).toEqual([])
+  })
+
   test('skills with a bad entry demotes the whole field to frontmatterExtra', () => {
     const src = '---\nskills:\n  - lint\n  - 42\n---\n'
     const r = parseAgentMarkdown(src)

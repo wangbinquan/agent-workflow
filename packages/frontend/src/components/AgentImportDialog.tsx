@@ -5,8 +5,17 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { AgentMarkdownParseResult, CreateAgent } from '@agent-workflow/shared'
-import { parseAgentMarkdown } from '@agent-workflow/shared'
+import {
+  importRefSelectorKey,
+  parseAgentMarkdown,
+  type AgentMarkdownParseResult,
+  type CreateAgent,
+  type ImportRefAmbiguity,
+  type ImportRefSelection,
+  type ResolveAgentImportRefsRequest,
+  type ResolveAgentImportRefsResult,
+} from '@agent-workflow/shared'
+import { describeApiError } from '@/i18n'
 import {
   describeAgentImport,
   agentMarkdownFilenameStem,
@@ -25,11 +34,18 @@ import { Field, TextArea } from './Form'
 import { StatusChip } from './StatusChip'
 import { TabBar, tabDomIds } from './TabBar'
 import { emptyAgent, type AgentTab } from './AgentForm'
+import {
+  hasEveryImportRefSelection,
+  ImportRefMappingFields,
+  importRefAmbiguitiesFromError,
+  importRefStaleChoicesFromError,
+} from './ImportRefMappingFields'
 
 export interface AgentImportDialogProps {
   open: boolean
   onClose: () => void
-  onApply: (result: AgentMarkdownParseResult) => void
+  onResolve: (request: ResolveAgentImportRefsRequest) => Promise<ResolveAgentImportRefsResult>
+  onApply: (result: AgentMarkdownParseResult, resolved: ResolveAgentImportRefsResult) => void
   currentValue: CreateAgent
   triggerRef?: RefObject<HTMLButtonElement | null>
   onViewForm?: (tab: AgentTab) => void
@@ -66,6 +82,10 @@ type ImportPhase =
       sourceDraft: SourceDraft
       parse: AgentMarkdownParseResult
       preview: AgentImportPreview
+      ambiguities: ImportRefAmbiguity[]
+      selections: ImportRefSelection[]
+      resolving: boolean
+      resolveError: string | null
     }
   | {
       kind: 'result'
@@ -93,6 +113,7 @@ function freshSelectPhase(): ImportPhase {
 export function AgentImportDialog({
   open,
   onClose,
+  onResolve,
   onApply,
   currentValue,
   triggerRef,
@@ -145,7 +166,9 @@ export function AgentImportDialog({
       canApply:
         phase.preview.itemCount > 0 &&
         blockingWarning === undefined &&
-        orphanConflicts.length === 0,
+        orphanConflicts.length === 0 &&
+        !phase.resolving &&
+        hasEveryImportRefSelection(phase.ambiguities, phase.selections),
     }
   }, [currentValue, phase])
 
@@ -221,6 +244,10 @@ export function AgentImportDialog({
       sourceDraft,
       parse,
       preview: describeAgentImport(parse),
+      ambiguities: [],
+      selections: [],
+      resolving: false,
+      resolveError: null,
     })
   }
 
@@ -280,22 +307,65 @@ export function AgentImportDialog({
     setPhase({ kind: 'select', source: phase.sourceDraft, busy: null })
   }
 
-  function applyToDraft(): void {
+  async function applyToDraft(): Promise<void> {
     if (phase.kind !== 'review' || reviewState?.canApply !== true) return
+    const snapshot = phase
     const firstAffectedTab = phase.preview.firstTab
     if (firstAffectedTab === null) return
-    const next: ImportPhase = {
-      kind: 'result',
-      sourceLabel: reviewSourceLabel(phase.source),
-      appliedItemCount: phase.preview.itemCount,
-      affectedSections: phase.preview.sections.map((section) => ({
-        tab: section.tab,
-        count: section.items.length,
-      })),
-      firstAffectedTab,
+    const generation = ++readGenerationRef.current
+    setPhase({ ...snapshot, resolving: true, resolveError: null })
+    const resolveWith = (selections: ImportRefSelection[]) =>
+      onResolve({
+        dependsOn: snapshot.parse.partial.dependsOn,
+        mcp: snapshot.parse.partial.mcp,
+        plugins: snapshot.parse.partial.plugins,
+        skills: snapshot.parse.skillSelectors,
+        selections,
+      })
+    const parkResolutionError = (error: unknown, selections: ImportRefSelection[]) => {
+      const ambiguities = importRefAmbiguitiesFromError(error)
+      setPhase({
+        ...snapshot,
+        ambiguities: ambiguities ?? snapshot.ambiguities,
+        selections,
+        resolving: false,
+        resolveError: ambiguities === null ? describeApiError(error) : null,
+      })
     }
-    onApply(phase.parse)
-    setPhase(next)
+    try {
+      const resolved = await resolveWith(snapshot.selections)
+      if (generation !== readGenerationRef.current || !openRef.current) return
+      onApply(snapshot.parse, resolved)
+      setPhase({
+        kind: 'result',
+        sourceLabel: reviewSourceLabel(snapshot.source),
+        appliedItemCount: snapshot.preview.itemCount,
+        affectedSections: snapshot.preview.sections.map((section) => ({
+          tab: section.tab,
+          count: section.items.length,
+        })),
+        firstAffectedTab,
+      })
+    } catch (error) {
+      if (generation !== readGenerationRef.current || !openRef.current) return
+      const staleChoices = importRefStaleChoicesFromError(error)
+      if (staleChoices !== null) {
+        const staleKeys = new Set(
+          staleChoices.map((choice) => importRefSelectorKey(choice.selector)),
+        )
+        setPhase({
+          ...snapshot,
+          ambiguities: staleChoices,
+          selections: snapshot.selections.filter(
+            (selection) => !staleKeys.has(importRefSelectorKey(selection.selector)),
+          ),
+          resolving: false,
+          resolveError: null,
+        })
+        return
+      }
+      parkResolutionError(error, snapshot.selections)
+    }
   }
 
   function viewForm(tab: AgentTab): void {
@@ -461,8 +531,9 @@ export function AgentImportDialog({
           type="button"
           className="btn btn--primary"
           disabled={reviewState?.canApply !== true}
+          aria-busy={phase.resolving || undefined}
           data-testid="agent-import-apply"
-          onClick={applyToDraft}
+          onClick={() => void applyToDraft()}
         >
           {t('agentForm.importDialog.applyDraftButton', { count: phase.preview.itemCount })}
         </button>
@@ -623,6 +694,30 @@ export function AgentImportDialog({
               <div data-testid="agent-import-warning">
                 <ErrorBanner error={null} message={reviewState.blockingWarning.message} />
               </div>
+            )}
+            {phase.resolveError !== null && (
+              <ErrorBanner error={null} message={phase.resolveError} />
+            )}
+            {phase.ambiguities.length > 0 && (
+              <Card
+                className="agent-import__notice"
+                data-testid="agent-import-reference-mapping"
+                header={<strong>{t('agentForm.importDialog.resolveReferences')}</strong>}
+              >
+                <ImportRefMappingFields
+                  ambiguities={phase.ambiguities}
+                  selections={phase.selections}
+                  disabled={phase.resolving}
+                  testidPrefix="agent-import"
+                  onChange={(selections) =>
+                    setPhase((current) =>
+                      current.kind === 'review'
+                        ? { ...current, selections, resolveError: null }
+                        : current,
+                    )
+                  }
+                />
+              </Card>
             )}
             {reviewState.blockingWarning === undefined &&
               reviewState.orphanConflicts.length > 0 && (

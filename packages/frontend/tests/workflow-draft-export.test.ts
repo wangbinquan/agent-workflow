@@ -19,4 +19,27 @@ describe('workflow local draft export', () => {
     expect(artifact.yaml).toContain('$schema_version: 4')
     expect(artifact.yaml).not.toMatch(/^id:/m)
   })
+
+  test('converts canonical agent ids to name-only selectors for import recovery', () => {
+    const artifact = buildWorkflowLocalDraftExport({
+      name: 'recoverable',
+      description: '',
+      definition: {
+        $schema_version: 4,
+        inputs: [],
+        nodes: [
+          {
+            id: 'worker',
+            kind: 'agent-single',
+            agentId: 'installation-local-agent-id',
+            agentName: 'shared-worker',
+          },
+        ],
+        edges: [],
+      },
+    })
+
+    expect(artifact.yaml).toContain('agentName: shared-worker')
+    expect(artifact.yaml).not.toContain('agentId:')
+  })
 })

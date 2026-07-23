@@ -16,7 +16,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createAgent } from '../src/services/agent'
+import { createAgent, getAgent } from '../src/services/agent'
 import {
   findAgentsDependingOn,
   resolveDependsClosure,
@@ -39,6 +39,10 @@ interface AgentSeed {
 async function seed(db: DbClient, ...rows: AgentSeed[]): Promise<Map<string, string>> {
   const ids = new Map<string, string>()
   for (const r of rows) {
+    const dependsOn: string[] = []
+    for (const name of r.dependsOn ?? []) {
+      dependsOn.push((await getAgent(db, name))?.id ?? name)
+    }
     const created = await createAgent(db, {
       name: r.name,
       description: '',
@@ -46,7 +50,7 @@ async function seed(db: DbClient, ...rows: AgentSeed[]): Promise<Map<string, str
       syncOutputsOnIterate: true,
       permission: {},
       skills: [],
-      dependsOn: r.dependsOn ?? [],
+      dependsOn,
       mcp: r.mcp ?? [],
       plugins: [],
       frontmatterExtra: {},
@@ -76,12 +80,10 @@ describe('RFC-022 validateDependsOn (save-time guard)', () => {
     })
   })
 
-  test('rejects self-reference (even for not-yet-persisted new agent, by name)', async () => {
-    // New-agent flow: 'fresh' does not exist in DB yet (id unknown), so the
-    // self-ref is caught by the proposed NAME (RFC-223 PR-1 selfName guard).
-    await expect(validateDependsOn(db, 'new-id', ['fresh'], 'fresh')).rejects.toMatchObject({
-      code: 'agent-dependency-self',
-      details: { name: 'fresh' },
+  test('rejects a name token instead of treating it as identity after the PR-8 flip', async () => {
+    await expect(validateDependsOn(db, 'new-id', ['fresh'])).rejects.toMatchObject({
+      code: 'agent-dependency-not-found',
+      details: { notFound: ['fresh'] },
     })
   })
 
@@ -124,7 +126,7 @@ describe('RFC-022 validateDependsOn (save-time guard)', () => {
       { name: 'c', dependsOn: ['d'] },
     )
     const [b, c, d] = [ids.get('b')!, ids.get('c')!, ids.get('d')!]
-    await expect(validateDependsOn(db, 'new-a-id', [b, c, b, d, c], 'a')).resolves.toBeUndefined()
+    await expect(validateDependsOn(db, 'new-a-id', [b, c, b, d, c])).resolves.toBeUndefined()
   })
 
   test('resolveDependsClosure: happy path returns BFS order with root first; allowMissing skips dangling', async () => {

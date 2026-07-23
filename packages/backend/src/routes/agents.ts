@@ -11,6 +11,7 @@ import {
   CreateAgentSchema,
   rejectRetiredStartTaskKeys,
   RenameAgentSchema,
+  ResolveAgentImportRefsRequestSchema,
   ResourceRefSchema,
   StartAgentTaskSchema,
   UpdateAgentSchema,
@@ -29,6 +30,7 @@ import {
 } from '@/services/agent'
 import { resolveDependsClosure, validateDependsOn } from '@/services/agentDeps'
 import { resolveRefsUsableById } from '@/services/resourceRefs'
+import { resolveAgentImportRefs } from '@/services/importRefs'
 import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
 import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
 import {
@@ -84,6 +86,16 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
     // owner (see systemResources.ts) — neither half alone is safe.
     const list = excludeBuiltinAgents(await listAgents(deps.db))
     return c.json(await filterVisibleRows(deps.db, actorOf(c), 'agent', list))
+  })
+
+  app.post('/api/agents/import-resolve', async (c) => {
+    const parsed = ResolveAgentImportRefsRequestSchema.safeParse(await safeJson(c.req.raw))
+    if (!parsed.success) {
+      throw new ValidationError('agent-import-invalid', 'invalid agent import references', {
+        issues: parsed.error.issues,
+      })
+    }
+    return c.json(await resolveAgentImportRefs(deps.db, actorOf(c), parsed.data))
   })
 
   // Stable semantic seam for the hidden Settings resource. PR4 seeds and
@@ -280,8 +292,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
     /** Existing resource identity; absent for an unsaved create form. */
     id: z.string().min(1).optional(),
     name: AgentNameSchema,
-    // RFC-223 (PR-1): the edit form's dependsOn holds ids (the picker stores
-    // ids). Accept id-or-name refs, not the name grammar.
+    // RFC-223: the edit form's dependsOn is canonical-id only.
     dependsOn: z.array(ResourceRefSchema).max(64).default([]),
   })
   app.post('/api/agents/closure-preview', async (c) => {
@@ -310,7 +321,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
       parsed.data.id === undefined ? null : await loadVisibleAgent(actor, parsed.data.id)
     const selfId = existing?.id ?? ''
     try {
-      await validateDependsOn(deps.db, selfId, dependsOn, parsed.data.name)
+      await validateDependsOn(deps.db, selfId, dependsOn)
     } catch (err) {
       if (err instanceof DomainError) {
         return c.json({ ok: false, code: err.code, details: err.details })

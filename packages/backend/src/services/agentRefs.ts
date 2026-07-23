@@ -1,13 +1,6 @@
 // RFC-223 (PR-1) — resolve create / import-time cross-resource references to
-// stable ids before they are persisted on an agent row.
-//
-// Why this exists: the id-based pickers already hand the server ids, but an
-// agent.md authored by NAME (the portable form) flows through the SAME
-// create/update body. While `name` stays globally unique (uniqueness is relaxed
-// in PR-8) a name maps to exactly one row, so we can deterministically resolve
-// name → id here and store ids everywhere. Ids pass through unchanged: a ULID
-// (Crockford base32, uppercase) and a resource name (`[a-z0-9][a-z0-9_-]*`,
-// lowercase) are disjoint character sets, so an entry is never ambiguously both.
+// stable ids before they are persisted on an agent row. After PR-8 this ordinary
+// write path is strictly id-only; agent.md names pass through importRefs first.
 //
 // Codex impl-gate P1-2 — resolution is ACL-aware and BOUND to storage: the
 // single pass in `resolveRefsUsableById` both resolves the token to an id AND
@@ -21,44 +14,17 @@
 // execution semantics). It is kept as an UNRESOLVED managed ref instead.
 
 import type { AgentSkillRef } from '@agent-workflow/shared'
-import { inArray, or } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { agents } from '@/db/schema'
 import { resolveRefsUsableById, assertNoMissingRefs } from './resourceRefs'
-
-/**
- * Resolve a list of id-or-name references against the agents table to canonical
- * ids (non-ACL — used only by the closure PREVIEW cycle check, where usability
- * is enforced at save time). De-dupes while preserving first-seen order; an
- * unresolved token is kept verbatim so the downstream validator rejects it by id.
- */
-export async function resolveAgentRefs(db: DbClient, refs: readonly string[]): Promise<string[]> {
-  if (refs.length === 0) return []
-  const rows = await db
-    .select({ id: agents.id, name: agents.name })
-    .from(agents)
-    .where(or(inArray(agents.id, [...refs]), inArray(agents.name, [...refs])))
-  const idSet = new Set(rows.map((r) => r.id))
-  const byName = new Map(rows.map((r) => [r.name, r.id]))
-  const seen = new Set<string>()
-  const out: string[] = []
-  for (const ref of refs) {
-    const id = idSet.has(ref) ? ref : (byName.get(ref) ?? ref)
-    if (seen.has(id)) continue
-    seen.add(id)
-    out.push(id)
-  }
-  return out
-}
 
 /** Ref-identity key for skill-ref de-dup. */
 function skillRefKey(ref: AgentSkillRef): string {
   return ref.kind === 'managed' ? `m:${ref.skillId}` : `p:${ref.name}`
 }
 
-/** The cross-resource references an agent create/update carries. Ids OR names on
- *  the wire (pickers hand ids; agent.md hands names); skills are typed refs. */
+/** The cross-resource references an agent create/update carries. Ordinary
+ * writes are canonical ids; skills remain a typed managed-id/project-name union. */
 export interface AgentRefInput {
   mcp: readonly string[]
   plugins: readonly string[]
@@ -82,17 +48,16 @@ function managedSkillIdSet(refs: readonly AgentSkillRef[] | undefined): Set<stri
 
 /**
  * RFC-223 (PR-1) — resolve an agent's mcp / plugins / dependsOn / skills refs to
- * canonical ids and, when `actor` is a real user, enforce per-reference ACL in
+ * validate canonical ids and, when `actor` is a real user, enforce per-reference ACL in
  * the SAME resolution pass (Codex impl-gate P1-2). On an UPDATE, `existing`
  * carries the already-stored (resolved) refs so only NEWLY-added references are
  * ACL-checked (D15 grandfathering) — the diff compares RESOLVED IDS, never the
  * raw name/id token, so a grandfathered ref re-submitted by name is not
  * mis-flagged as new.
  *
- * Skills (Codex impl-gate P1-1): a `managed` ref's `skillId` (an id at rest, a
- * name on the agent.md wire) is resolved to the skill id; a ref that resolves to
- * no visible skill is kept as an UNRESOLVED managed ref (skillId holds the raw
- * token) and is NEVER demoted to a `project` ref. `project` refs pass through.
+ * Skills: a managed ref carries an id. A missing id is retained only long
+ * enough for the existence validator to raise `skill-not-found`; it is never
+ * demoted to a project ref. Project refs pass through.
  *
  * `actor === null` (framework/system seeders) resolves without an ACL gate.
  * Aggregates every group's ACL violations and raises a single `acl-missing-refs`.

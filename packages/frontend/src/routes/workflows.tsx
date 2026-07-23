@@ -13,6 +13,7 @@ import type {
   CreateWorkflow,
   ImportWorkflowRequest,
   ImportWorkflowResult,
+  ImportRefSelection,
   Workflow,
   WorkflowDetail,
   WorkflowRevision,
@@ -142,8 +143,9 @@ function WorkflowsPage() {
     yaml: string,
     mode: WorkflowImportMode,
     overwrite?: WorkflowImportOverwrite,
+    selections: ImportRefSelection[] = [],
   ): Promise<void> {
-    await postYaml(yaml, mode, overwrite)
+    await postYaml(yaml, mode, overwrite, selections)
     await qc.invalidateQueries({ queryKey: ['workflows'] })
   }
 
@@ -303,15 +305,19 @@ export async function postYaml(
   yamlText: string,
   mode: WorkflowImportMode,
   overwrite?: WorkflowImportOverwrite,
+  selections: ImportRefSelection[] = [],
 ): Promise<ImportWorkflowResult> {
   let body: ImportWorkflowRequest
   if (mode === 'overwrite') {
     if (overwrite === undefined) {
       throw new Error('workflow overwrite requires the conflict revision fence')
     }
-    body = { yamlText, mode, overwrite }
+    body =
+      selections.length > 0
+        ? { yamlText, mode, overwrite, selections }
+        : { yamlText, mode, overwrite }
   } else {
-    body = { yamlText, mode }
+    body = selections.length > 0 ? { yamlText, mode, selections } : { yamlText, mode }
   }
   return api.post<ImportWorkflowResult>('/api/workflows/import', body)
 }

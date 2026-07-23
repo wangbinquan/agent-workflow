@@ -30,11 +30,7 @@ import { createAgent, deleteAgent, getAgentById, renameAgent } from '../src/serv
 import { createScheduledTask } from '../src/services/scheduledTasks'
 import { createWorkgroup, getWorkgroupById } from '../src/services/workgroups'
 import { startWorkgroupTask } from '../src/services/workgroup/launch'
-import {
-  extractWorkflowAgentRefs,
-  resolveWorkflowNodeAgentIds,
-  stripWorkflowNodeAgentIds,
-} from '../src/services/resourceRefs'
+import { extractWorkflowAgentRefs, stripWorkflowNodeAgentIds } from '../src/services/resourceRefs'
 import { createUser } from '../src/services/users'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -80,17 +76,17 @@ function groupInput(agentId: string, overrides: Partial<CreateWorkgroup> = {}): 
 }
 
 // --------------------------------------------------------------------------
-describe('RFC-223 PR-2 — extractWorkflowAgentRefs prefers the canonical id', () => {
-  test('id preferred; agentName fallback; legacy `agent` key; non-agent skipped', () => {
+describe('RFC-223 PR-8 — extractWorkflowAgentRefs is canonical-id only', () => {
+  test('id is retained; name-only and legacy keys fail closed; non-agent skipped', () => {
     const refs = extractWorkflowAgentRefs({
       nodes: [
         { kind: 'agent-single', agentId: 'ID_A', agentName: 'a' },
-        { kind: 'agent-single', agentName: 'b' }, // no id → name fallback
-        { kind: 'agent-single', agent: 'c' }, // even-older key
+        { kind: 'agent-single', agentName: 'b' },
+        { kind: 'agent-single', agent: 'c' },
         { kind: 'input', inputKey: 'req' }, // skipped
       ],
     })
-    expect([...refs].sort()).toEqual(['ID_A', 'b', 'c'])
+    expect([...refs]).toEqual(['ID_A'])
   })
 })
 
@@ -278,20 +274,8 @@ describe('RFC-223 PR-2 — portable YAML selector helpers', () => {
     expect(in1.inputKey).toBe('req') // non-agent node untouched
   })
 
-  test('resolveWorkflowNodeAgentIds stamps the LOCAL id from the name, discarding a foreign id', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const a1 = await createAgent(db, { ...AGENT_FIELDS, name: 'a1' })
-    // Incoming node carries a foreign id — it must be replaced by the local one.
-    const resolved = await resolveWorkflowNodeAgentIds(db, def({ agentId: 'FOREIGN_ID' }))
-    const n1 = resolved.nodes.find((n) => n.id === 'n1') as Record<string, unknown>
-    expect(n1.agentId).toBe(a1.id)
-  })
-
-  test('resolveWorkflowNodeAgentIds leaves a node id-less when its name resolves to no local agent', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const resolved = await resolveWorkflowNodeAgentIds(db, def())
-    const n1 = resolved.nodes.find((n) => n.id === 'n1') as Record<string, unknown>
-    expect(n1.agentId).toBeUndefined()
+  test('ordinary persisted ref extraction rejects a portable name-only node', () => {
+    expect([...extractWorkflowAgentRefs(def())]).toEqual([])
   })
 })
 

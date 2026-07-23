@@ -7,6 +7,9 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
+  importRefSelectorKey,
+  type ImportRefAmbiguity,
+  type ImportRefSelection,
   WorkflowRevisionSchema,
   type ImportWorkflowRequest,
   type WorkflowRevision,
@@ -19,6 +22,12 @@ import { ErrorBanner } from './ErrorBanner'
 import { FileDropzone } from './FileDropzone'
 import { NoticeBanner } from './NoticeBanner'
 import { Segmented } from './Segmented'
+import {
+  hasEveryImportRefSelection,
+  ImportRefMappingFields,
+  importRefAmbiguitiesFromError,
+  importRefStaleChoicesFromError,
+} from './ImportRefMappingFields'
 
 export type WorkflowImportConflictChoice = 'new' | 'overwrite'
 export type WorkflowImportMode = 'fail' | WorkflowImportConflictChoice
@@ -36,6 +45,18 @@ export type WorkflowImportState =
       choice: WorkflowImportConflictChoice
       overwrite: WorkflowImportOverwrite | null
       workflowId: string
+      selections: ImportRefSelection[]
+      error: string | null
+    }
+  | {
+      kind: 'mapping'
+      file: File
+      yaml: string
+      mode: WorkflowImportMode
+      overwrite?: WorkflowImportOverwrite
+      workflowId?: string
+      ambiguities: ImportRefAmbiguity[]
+      selections: ImportRefSelection[]
       error: string | null
     }
   | { kind: 'result'; message: string }
@@ -47,10 +68,19 @@ export interface WorkflowImportDialogProps {
     yaml: string,
     mode: WorkflowImportMode,
     overwrite?: WorkflowImportOverwrite,
+    selections?: ImportRefSelection[],
   ) => Promise<void>
   /** Pure refetch: refreshing a stale overwrite fence must never create/import. */
   onRefreshConflict: (workflowId: string) => Promise<WorkflowRevision>
   triggerRef?: RefObject<HTMLButtonElement | null>
+}
+
+interface WorkflowImportSnapshot {
+  file: File
+  yaml: string
+  mode: WorkflowImportMode
+  overwrite?: WorkflowImportOverwrite
+  selections: ImportRefSelection[]
 }
 
 function freshState(): WorkflowImportState {
@@ -82,39 +112,79 @@ export function WorkflowImportDialog(props: WorkflowImportDialogProps) {
     if (!props.open || pending) return
     const timer = window.setTimeout(() => {
       if (state.kind === 'select') chooseButtonRef.current?.focus()
-      else if (state.kind === 'conflict') conflictHeadingRef.current?.focus()
+      else if (state.kind === 'conflict' || state.kind === 'mapping')
+        conflictHeadingRef.current?.focus()
       else resultHeadingRef.current?.focus()
     }, 0)
     return () => window.clearTimeout(timer)
   }, [pending, props.open, state.kind])
 
+  async function importSnapshot(snapshot: WorkflowImportSnapshot): Promise<void> {
+    if (snapshot.selections.length > 0) {
+      await props.onImport(
+        snapshot.yaml,
+        snapshot.mode,
+        snapshot.mode === 'overwrite' ? snapshot.overwrite : undefined,
+        snapshot.selections,
+      )
+    } else if (snapshot.mode === 'overwrite') {
+      await props.onImport(snapshot.yaml, snapshot.mode, snapshot.overwrite)
+    } else {
+      await props.onImport(snapshot.yaml, snapshot.mode)
+    }
+  }
+
+  function showImportResult(mode: WorkflowImportMode): void {
+    setState({
+      kind: 'result',
+      message:
+        mode === 'overwrite' ? t('workflows.workflowOverwritten') : t('workflows.importedAsNew'),
+    })
+  }
+
   async function submit(): Promise<void> {
     if (pendingRef.current || state.kind === 'result') return
     if (state.kind === 'select' && state.file === null) return
+    if (
+      state.kind === 'mapping' &&
+      !hasEveryImportRefSelection(state.ambiguities, state.selections)
+    )
+      return
 
     pendingRef.current = true
     setPending(true)
     const generation = ++requestGenerationRef.current
-    let snapshot: { file: File; yaml: string; mode: WorkflowImportMode } | null = null
+    let snapshot: WorkflowImportSnapshot | null = null
     try {
-      if (state.kind === 'conflict' && state.choice === 'overwrite' && state.overwrite === null) {
-        const current = await props.onRefreshConflict(state.workflowId)
+      const refreshWorkflowId =
+        state.kind === 'conflict' && state.choice === 'overwrite' && state.overwrite === null
+          ? state.workflowId
+          : state.kind === 'mapping' && state.mode === 'overwrite' && state.overwrite === undefined
+            ? state.workflowId
+            : undefined
+      if (refreshWorkflowId !== undefined) {
+        const current = await props.onRefreshConflict(refreshWorkflowId)
         if (!isCurrentRequest(generation)) return
-        const overwrite = importOverwriteFromRevision(state.workflowId, current)
+        const overwrite = importOverwriteFromRevision(refreshWorkflowId, current)
         if (overwrite === null)
           throw new Error('workflow conflict refresh returned another resource')
-        setState({ ...state, overwrite, error: null })
+        if (state.kind === 'conflict' || state.kind === 'mapping') {
+          setState({ ...state, overwrite, error: null })
+        }
         return
       }
 
       let yaml: string
       let file: File
       let mode: WorkflowImportMode
+      let overwrite: WorkflowImportOverwrite | undefined
+      let selections: ImportRefSelection[]
       if (state.kind === 'select') {
         const selectedFile = state.file
         if (selectedFile === null) return
         file = selectedFile
         mode = 'fail'
+        selections = []
         try {
           yaml = await file.text()
         } catch (error) {
@@ -122,30 +192,62 @@ export function WorkflowImportDialog(props: WorkflowImportDialogProps) {
           setState({ kind: 'select', file, error: describeApiError(error) })
           return
         }
-      } else {
+      } else if (state.kind === 'conflict') {
         file = state.file
         yaml = state.yaml
         mode = state.choice
+        overwrite = state.overwrite ?? undefined
+        selections = state.selections
+      } else {
+        file = state.file
+        yaml = state.yaml
+        mode = state.mode
+        overwrite = state.overwrite
+        selections = state.selections
       }
 
       if (!isCurrentRequest(generation)) return
-      snapshot = { file, yaml, mode }
-      if (mode === 'overwrite' && state.kind === 'conflict') {
-        if (state.overwrite === null) throw new Error('workflow overwrite revision is stale')
-        await props.onImport(yaml, mode, state.overwrite)
-      } else {
-        await props.onImport(yaml, mode)
-      }
+      snapshot = { file, yaml, mode, overwrite, selections }
+      if (mode === 'overwrite' && overwrite === undefined)
+        throw new Error('workflow overwrite revision is stale')
+      await importSnapshot(snapshot)
       if (!isCurrentRequest(generation)) return
-      setState({
-        kind: 'result',
-        message:
-          mode === 'overwrite' ? t('workflows.workflowOverwritten') : t('workflows.importedAsNew'),
-      })
+      showImportResult(mode)
     } catch (error) {
       if (!isCurrentRequest(generation)) return
-      if (
-        state.kind === 'select' &&
+      const staleChoices = importRefStaleChoicesFromError(error)
+      const ambiguities = importRefAmbiguitiesFromError(error)
+      if (snapshot !== null && staleChoices !== null) {
+        const staleKeys = new Set(
+          staleChoices.map((choice) => importRefSelectorKey(choice.selector)),
+        )
+        const retained = snapshot.selections.filter(
+          (selection) => !staleKeys.has(importRefSelectorKey(selection.selector)),
+        )
+        setState({
+          kind: 'mapping',
+          file: snapshot.file,
+          yaml: snapshot.yaml,
+          mode: snapshot.mode,
+          overwrite: snapshot.overwrite,
+          workflowId: snapshot.overwrite?.workflowId,
+          ambiguities: staleChoices,
+          selections: retained,
+          error: null,
+        })
+      } else if (snapshot !== null && ambiguities !== null) {
+        setState({
+          kind: 'mapping',
+          file: snapshot.file,
+          yaml: snapshot.yaml,
+          mode: snapshot.mode,
+          overwrite: snapshot.overwrite,
+          workflowId: snapshot.overwrite?.workflowId,
+          ambiguities,
+          selections: snapshot.selections,
+          error: null,
+        })
+      } else if (
         snapshot !== null &&
         error instanceof ApiError &&
         error.code === 'workflow-import-conflict'
@@ -155,7 +257,8 @@ export function WorkflowImportDialog(props: WorkflowImportDialogProps) {
           // RFC-199's collision contract always carries the exact current
           // revision. Fail closed if an older/malformed daemon omits it: an
           // unfenced overwrite must never be offered.
-          setState({ ...state, error: describeApiError(error) })
+          if (state.kind === 'select') setState({ ...state, error: describeApiError(error) })
+          else setState({ ...state, error: describeApiError(error) })
         } else {
           setState({
             kind: 'conflict',
@@ -164,19 +267,29 @@ export function WorkflowImportDialog(props: WorkflowImportDialogProps) {
             choice: 'new',
             overwrite,
             workflowId: overwrite.workflowId,
+            selections: snapshot.selections,
             error: null,
           })
         }
       } else if (
-        state.kind === 'conflict' &&
-        state.choice === 'overwrite' &&
+        snapshot !== null &&
+        snapshot.mode === 'overwrite' &&
         error instanceof ApiError &&
         error.code === 'workflow-version-conflict'
       ) {
         // A 409 is definitive fence drift, not a transport retry. Invalidate
         // the old version + mutation id and require a read-only refetch before
         // the user can confirm overwrite again.
-        setState({ ...state, overwrite: null, error: describeApiError(error) })
+        if (state.kind === 'conflict') {
+          setState({ ...state, overwrite: null, error: describeApiError(error) })
+        } else if (state.kind === 'mapping' && snapshot.overwrite !== undefined) {
+          setState({
+            ...state,
+            overwrite: undefined,
+            workflowId: snapshot.overwrite.workflowId,
+            error: describeApiError(error),
+          })
+        }
       } else if (state.kind === 'select') {
         setState({ ...state, error: describeApiError(error) })
       } else {
@@ -199,7 +312,8 @@ export function WorkflowImportDialog(props: WorkflowImportDialogProps) {
   }
 
   const needsConflictRefresh =
-    state.kind === 'conflict' && state.choice === 'overwrite' && state.overwrite === null
+    (state.kind === 'conflict' && state.choice === 'overwrite' && state.overwrite === null) ||
+    (state.kind === 'mapping' && state.mode === 'overwrite' && state.overwrite === undefined)
   const submitLabel = pending
     ? t('workflows.importDialog.importing')
     : needsConflictRefresh
@@ -240,7 +354,7 @@ export function WorkflowImportDialog(props: WorkflowImportDialogProps) {
           </>
         ) : (
           <>
-            {state.kind === 'conflict' && (
+            {(state.kind === 'conflict' || state.kind === 'mapping') && (
               <button
                 type="button"
                 className="btn"
@@ -257,7 +371,12 @@ export function WorkflowImportDialog(props: WorkflowImportDialogProps) {
             <button
               type="button"
               className="btn btn--primary"
-              disabled={pending || (state.kind === 'select' && state.file === null)}
+              disabled={
+                pending ||
+                (state.kind === 'select' && state.file === null) ||
+                (state.kind === 'mapping' &&
+                  !hasEveryImportRefSelection(state.ambiguities, state.selections))
+              }
               aria-busy={pending}
               onClick={() => void submit()}
               data-testid="workflow-import-submit"
@@ -306,6 +425,25 @@ export function WorkflowImportDialog(props: WorkflowImportDialogProps) {
             ariaLabel={t('workflows.importDialog.conflictChoiceLabel')}
             disabled={pending}
             testidPrefix="workflow-import-choice"
+          />
+          {state.error !== null && <ErrorBanner error={state.error} />}
+        </div>
+      )}
+
+      {state.kind === 'mapping' && (
+        <div className="stack--md" data-testid="workflow-import-reference-mapping">
+          <h3 ref={conflictHeadingRef} tabIndex={-1}>
+            {t('workflows.importDialog.resolveReferences')}
+          </h3>
+          <NoticeBanner tone="warning" size="compact">
+            {t('workflows.importDialog.resolveReferencesHint')}
+          </NoticeBanner>
+          <ImportRefMappingFields
+            ambiguities={state.ambiguities}
+            selections={state.selections}
+            disabled={pending}
+            testidPrefix="workflow-import"
+            onChange={(selections) => setState({ ...state, selections, error: null })}
           />
           {state.error !== null && <ErrorBanner error={state.error} />}
         </div>
