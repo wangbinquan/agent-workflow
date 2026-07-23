@@ -330,9 +330,9 @@ export const TaskSchema = z.object({
    * RFC-164 follow-up: the owning workgroup's display name, read from the task's
    * OWN frozen `workgroup_config_json` (same task-scoped source the list uses —
    * see `TaskSummary.workgroupName`), NOT a live join on the workgroups resource.
-   * NULL for non-workgroup tasks / corrupt config. The detail page shows this +
-   * links to `/workgroups/$name` instead of leaking the internal `__workgroup_host__`
-   * anchor workflow (whose name is `workflowName`), mirroring the list view.
+   * NULL for non-workgroup tasks / corrupt config. The detail page shows this
+   * display snapshot but links by `workgroupId`, avoiding both mutable-name
+   * identity and the internal `__workgroup_host__` anchor workflow.
    */
   workgroupName: z.string().nullable().optional(),
   /**
@@ -355,9 +355,8 @@ export const TaskSchema = z.object({
    */
   spaceKind: SpaceKindSchema.default('remote'),
   /**
-   * RFC-165: source agent name for single-agent tasks (durable soft link to
-   * `agents.name`, same philosophy as `workgroupId`). NULL for workflow /
-   * workgroup tasks.
+   * RFC-165/RFC-223: launch-time source agent name for display only. Identity
+   * and links use `sourceAgentId`; NULL for workflow / workgroup tasks.
    */
   sourceAgentName: z.string().nullable().optional(),
 })
@@ -404,9 +403,8 @@ export const TaskSummarySchema = z.object({
    * OWN frozen `workgroup_config_json` (the same task-scoped source the room
    * serves), NOT a live join on the workgroups resource — so it stays inside the
    * task's membership ACL and never leaks live resource state (RFC-099). NULL for
-   * non-workgroup tasks / corrupt config. The list shows this + links to
-   * `/workgroups/$name` instead of leaking the internal `__workgroup_host__`
-   * anchor workflow (whose name is `workflowName`).
+   * non-workgroup tasks / corrupt config. The list shows this frozen label and
+   * links by `workgroupId`, never by name or the internal host workflow.
    */
   workgroupName: z.string().nullable().optional(),
   /** RFC-165: execution-space kind (see TaskSchema.spaceKind). */
@@ -416,8 +414,8 @@ export const TaskSummarySchema = z.object({
   /**
    * RFC-177: frozen stable agent id (`tasks.source_agent_id`, RFC-175) so the
    * list subject link can resolve the agent by id — surviving a rename/reuse of
-   * the name. NULL for non-agent tasks and for agent tasks launched before the
-   * RFC-175 migration (not backfilled → those fall back to a by-name link).
+   * the name. NULL for non-agent tasks and quarantined pre-migration rows; the
+   * latter render as plain text rather than linking by name.
    */
   sourceAgentId: z.string().nullable().optional(),
 })

@@ -579,15 +579,14 @@ export const workgroupMembers = sqliteTable(
       .notNull()
       .references(() => workgroups.id, { onDelete: 'cascade' }),
     memberType: text('member_type', { enum: ['agent', 'human'] }).notNull(),
-    /** memberType='agent': agents.name (soft reference, launch-validated).
-     *  Kept for display; `agent_id` is the canonical launch reference. */
+    /** memberType='agent': launch-time agents.name display snapshot.
+     *  Never an identity selector; `agent_id` is the canonical reference. */
     agentName: text('agent_name'),
     /**
-     * RFC-223 (PR-2): memberType='agent' canonical agents.id (ULID). Resolved
-     * from agent_name at save (name↔id 1:1); launch readiness validates the
-     * roster by id (rename-safe, ABA-safe). Nullable — a soft reference whose
-     * agent does not exist yet, or a pre-0112 row, stays null and fails launch
-     * readiness. Migration 0112 backfills it from agent_name JOIN agents.
+     * RFC-223 (PR-2): memberType='agent' canonical agents.id (ULID). Current
+     * writes require the id and refresh `agent_name` only for display; launch
+     * readiness validates the roster by id (rename-safe, ABA-safe). Nullable
+     * only for quarantined/pre-0112 rows, which fail launch readiness.
      */
     agentId: text('agent_id'),
     /** memberType='human': users.id — audit/UI only, never injected into prompts. */
@@ -916,15 +915,15 @@ export const tasks = sqliteTable(
     spaceKind: text('space_kind', { enum: ['local', 'remote', 'scratch', 'internal'] })
       .notNull()
       .default('remote'),
-    /** RFC-165: source agent for single-agent tasks (soft link to agents.name; NULL otherwise). */
+    /** RFC-165/RFC-223: launch-time agent name for display only; NULL otherwise. */
     sourceAgentName: text('source_agent_name'),
     /**
      * RFC-175 (§2e): the launching agent's STABLE `agents.id` at launch time
      * (alongside the name soft-link). Lets "relaunch" faithfully verify the
      * subject on a post-migration task (an `expectedAgentId` OCC guard rejects
-     * a delete+recreate-same-name replacement). NULL for non-agent tasks AND for
-     * agent tasks launched before this migration (NOT backfilled — a name→id
-     * lookup would itself hit the ABA; those relaunch best-effort by name).
+     * a delete+recreate-same-name replacement). NULL for non-agent tasks and
+     * quarantined pre-migration rows; those rows fail closed rather than
+     * resolving the display name against today's registry.
      */
     sourceAgentId: text('source_agent_id'),
     /**
@@ -1355,9 +1354,9 @@ export const nodeRuns = sqliteTable(
      * agent this row runs under (sibling of `agent_override_name`, which stays
      * for display). Every producer that stamps `agent_override_name` also
      * stamps this (workgroup member turns, RFC-127 借壳). Consumers that map a
-     * run back to its agent (room attribution) resolve BY THIS ID first —
-     * rename/ABA-safe — and fall back to the name only for legacy rows minted
-     * before this column existed. NEVER enters a prompt.
+     * run back to its agent resolve only by this id; id-less legacy rows fail
+     * closed instead of binding a current same-name resource. NEVER enters a
+     * prompt.
      */
     agentOverrideId: text('agent_override_id'),
   },

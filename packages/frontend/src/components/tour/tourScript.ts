@@ -93,7 +93,7 @@ const FIRST_TASK: Tour = {
     {
       anchor: '[data-tour="agent-save"]',
       route: '/agents/new',
-      // Saving a new agent lands on /agents/$name.
+      // Saving a new agent lands on the canonical /agents/$id route.
       advanceOnRoute: '/agents/',
       titleKey: 'tour.firstTask.saveAgent.title',
       bodyKey: 'tour.firstTask.saveAgent.body',

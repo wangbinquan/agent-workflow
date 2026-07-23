@@ -3675,9 +3675,10 @@ function rowToTask(
     // RFC-159: link back to the scheduled_tasks row that launched this (NULL = manual).
     scheduledTaskId: row.scheduledTaskId ?? null,
     workgroupId: row.workgroupId ?? null,
-    // RFC-164 follow-up: frozen group name from the task's own config (same
-    // source as rowToSummary), so the detail page can link to /workgroups/$name
-    // instead of leaking the `__workgroup_host__` anchor. NULL for non-groups.
+    // RFC-164/RFC-223: frozen group name from the task's own config (same
+    // source as rowToSummary) is display-only; the detail page links by the
+    // frozen workgroupId instead of leaking the `__workgroup_host__` anchor.
+    // NULL for non-groups.
     workgroupName: frozenWorkgroupName(row.workgroupConfigJson),
     // RFC-175 (§2): frozen goal from the task's own config (same task-scoped,
     // RFC-099-safe source as workgroupName). NULL for non-groups. Powers relaunch.
@@ -3699,10 +3700,9 @@ function rowToTask(
  * task's membership ACL (RFC-099): a task member already sees it in the room,
  * and we never surface live resource state (e.g. a post-launch rename) to a
  * collaborator without workgroup visibility. NULL for non-workgroup tasks and
- * for a corrupt/absent config (the list cell degrades to badge-only). Frozen
- * ⇒ after a group rename the /workgroups/$name link can 404 — acceptable: the
- * task's primary view is its room, and for an unauthorized viewer 404 is the
- * intended not-found shape anyway.
+ * for a corrupt/absent config (the list cell degrades to badge-only). The
+ * label remains the launch-time name after a rename, while the destination is
+ * the immutable `workgroup_id`; authorization still decides whether it opens.
  */
 function frozenWorkgroupName(configJson: string | null): string | null {
   if (configJson === null || configJson === '') return null

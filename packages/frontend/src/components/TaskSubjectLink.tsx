@@ -37,7 +37,7 @@ export interface TaskSubjectFields {
   workgroupId?: string | null
   workgroupName?: string | null
   sourceAgentName?: string | null
-  /** RFC-177: frozen stable agent id for id-resolved links (NULL → by-name D3a). */
+  /** RFC-177/RFC-223: frozen stable agent id (NULL → plain text, fail closed). */
   sourceAgentId?: string | null
 }
 

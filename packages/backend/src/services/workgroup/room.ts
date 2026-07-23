@@ -64,12 +64,11 @@ export interface HostRunLite {
    *  suppression paths (runNode envelope-time rejection + the hook's
    *  late-toggle correction) stamp failure_code='clarify-forbidden'. */
   failureCode?: string | null
-  /** Immutable per-attempt agent identity (stamped at mint) — the fc
-   *  attribution fallback when the card's mutable assignee is gone. */
+  /** Per-attempt agent display snapshot. Identity comes only from
+   *  `agentOverrideId`; this field never drives attribution. */
   agentOverrideName?: string | null
-  /** RFC-223 (PR-3a) — the CANONICAL id form of `agentOverrideName` (rename/ABA-safe
-   *  attribution). Preferred over the name; the name stays the fallback for rows
-   *  minted before this column existed. */
+  /** RFC-223 (PR-3a) — the CANONICAL id form of `agentOverrideName`
+   *  (rename/ABA-safe attribution). Id-less rows fail closed. */
   agentOverrideId?: string | null
   /** RFC-209 T9 — 权威轮序数（RFC-189 的 `node_runs.wg_round`）。可选：RFC-179 期的
    *  fixture 与 0095 回填之前 / 引擎外铸出未打戳的历史行没有它，缺失时回退到旧的
@@ -79,8 +78,7 @@ export interface HostRunLite {
 export interface AssignmentLite {
   id: string
   /** CURRENT assignee — mutable in free-collab (failed→open recycling nulls
-   *  it and a re-claim rewrites it), so historical attribution must not lean
-   *  on it alone (impl-gate P2; see the agentOverrideName fallback). */
+   *  it and a re-claim rewrites it), so historical attribution never uses it. */
   assigneeMemberId: string | null
 }
 export interface MessageLite {
