@@ -1,5 +1,6 @@
-// RFC-031 T6 — agent save-time guard: every `plugins[]` entry must exist
-// (plugin-not-found) and be enabled (plugin-disabled) at create / update time.
+// RFC-031 T6 / RFC-223 — agent save-time guard: every canonical plugin id in
+// `plugins[]` must exist (plugin-not-found) and be enabled (plugin-disabled)
+// at create / update time.
 //
 // Without this guard, agents save fine but the scheduler fails to load the
 // missing plugin at runtime (or worse, silently drops it), turning "agent X
@@ -57,8 +58,8 @@ describe('agent.plugins save-time guard', () => {
 
   test('create succeeds when every plugin resolves + enabled (stored by id)', async () => {
     const p1 = await createPlugin(db, { name: 'p1', spec: 'p1@1' }, opts())
-    const a = await createAgent(db, agentInput('consumer', ['p1']))
-    // RFC-223 (PR-1): the name reference is resolved to the plugin id at save.
+    const a = await createAgent(db, agentInput('consumer', [p1.id]))
+    // RFC-223: the service boundary accepts and persists canonical plugin ids.
     expect(a.plugins).toEqual([p1.id])
   })
 
@@ -81,7 +82,7 @@ describe('agent.plugins save-time guard', () => {
       await import('../src/services/plugin')
     ).updatePlugin(db, p.id, { enabled: false }, opts())
     try {
-      await createAgent(db, agentInput('a', ['off']))
+      await createAgent(db, agentInput('a', [p.id]))
       throw new Error('expected ValidationError')
     } catch (err) {
       expect(err).toBeInstanceOf(ValidationError)
@@ -90,9 +91,9 @@ describe('agent.plugins save-time guard', () => {
     }
   })
 
-  test('update fails 422 plugin-not-found when patched name unknown', async () => {
-    await createPlugin(db, { name: 'p1', spec: 'p@1' }, opts())
-    const agent = await createAgent(db, agentInput('a', ['p1']))
+  test('update fails 422 plugin-not-found when patched id is unknown', async () => {
+    const p1 = await createPlugin(db, { name: 'p1', spec: 'p@1' }, opts())
+    const agent = await createAgent(db, agentInput('a', [p1.id]))
     try {
       await updateAgent(db, agent.id, { plugins: ['nope'] })
       throw new Error('expected ValidationError')
@@ -104,7 +105,7 @@ describe('agent.plugins save-time guard', () => {
 
   test('update without `plugins` field skips the check (preserves existing)', async () => {
     const p1 = await createPlugin(db, { name: 'p1', spec: 'p@1' }, opts())
-    const agent = await createAgent(db, agentInput('a', ['p1']))
+    const agent = await createAgent(db, agentInput('a', [p1.id]))
     // Now disable the plugin from under the agent — patching unrelated field
     // must still succeed; guard only runs when caller touches `plugins`.
     const { updatePlugin } = await import('../src/services/plugin')

@@ -189,6 +189,18 @@ describe('RFC-164 room — endpoints', () => {
   })
 
   test('RFC-179: room memberRuns maps a running assignment run to its member', async () => {
+    // RFC-223: room attribution is canonical-id only. Freeze the member's
+    // agentId in the task snapshot and the same id on the minted host run.
+    const coderAgentId = await seedAgent(db, 'coder-a')
+    const frozenConfig = cfg()
+    frozenConfig.members = frozenConfig.members.map((member) =>
+      member.id === 'm-coder' ? { ...member, agentId: coderAgentId } : member,
+    )
+    await db
+      .update(tasks)
+      .set({ workgroupConfigJson: JSON.stringify(frozenConfig) })
+      .where(eq(tasks.id, taskId))
+
     // Seed a dispatched→running assignment for @coder + the host run keyed by it.
     const assignmentId = ulid()
     await db.insert(workgroupAssignments).values({
@@ -207,6 +219,7 @@ describe('RFC-164 room — endpoints', () => {
       shardKey: assignmentId,
       status: 'running',
       rerunCause: 'wg-assignment',
+      agentOverrideId: coderAgentId,
       retryIndex: 0,
       iteration: 0,
       reviewIteration: 0,
