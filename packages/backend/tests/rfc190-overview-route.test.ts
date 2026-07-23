@@ -129,7 +129,11 @@ async function seedResources(h: Harness): Promise<void> {
   for (const name of ['priv-agent', 'granted-agent']) {
     const res = await req(h.app, h.alice.token, `/api/agents/${agentIds.get(name)!}/acl`, {
       method: 'PUT',
-      body: JSON.stringify({ visibility: 'private' }),
+      body: JSON.stringify({
+        visibility: 'private',
+        expectedResourceId: agentIds.get(name)!,
+        expectedAclRevision: 0,
+      }),
     })
     expect(res.status).toBe(200)
   }
@@ -137,7 +141,11 @@ async function seedResources(h: Harness): Promise<void> {
     (
       await req(h.app, h.alice.token, `/api/agents/${agentIds.get('granted-agent')!}/acl`, {
         method: 'PUT',
-        body: JSON.stringify({ userIds: [h.bob.id] }),
+        body: JSON.stringify({
+          userIds: [h.bob.id],
+          expectedResourceId: agentIds.get('granted-agent')!,
+          expectedAclRevision: 1,
+        }),
       })
     ).status,
   ).toBe(200)
@@ -160,7 +168,11 @@ async function seedResources(h: Harness): Promise<void> {
     (
       await req(h.app, h.alice.token, `/api/workflows/${privFlowId}/acl`, {
         method: 'PUT',
-        body: JSON.stringify({ visibility: 'private' }),
+        body: JSON.stringify({
+          visibility: 'private',
+          expectedResourceId: privFlowId,
+          expectedAclRevision: 0,
+        }),
       })
     ).status,
   ).toBe(200)
@@ -203,7 +215,11 @@ async function seedResources(h: Harness): Promise<void> {
     (
       await req(h.app, h.alice.token, `/api/workgroups/${secretSquadId}/acl`, {
         method: 'PUT',
-        body: JSON.stringify({ visibility: 'private' }),
+        body: JSON.stringify({
+          visibility: 'private',
+          expectedResourceId: secretSquadId,
+          expectedAclRevision: 0,
+        }),
       })
     ).status,
   ).toBe(200)

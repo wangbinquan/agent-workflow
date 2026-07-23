@@ -134,7 +134,11 @@ describe('RFC-099 — POST /api/tasks gates', () => {
     const wf = (await created.json()) as { id: string }
     await req(h.app, h.alice.token, `/api/workflows/${wf.id}/acl`, {
       method: 'PUT',
-      body: JSON.stringify({ visibility: 'private' }),
+      body: JSON.stringify({
+        visibility: 'private',
+        expectedResourceId: wf.id,
+        expectedAclRevision: 0,
+      }),
     })
     const launchBody = (workflowId: string) =>
       JSON.stringify({ name: 't', workflowId, repoUrl: 'file:///tmp/x', ref: 'main', inputs: {} })

@@ -131,7 +131,11 @@ describe('RFC-223 PR-7 — canonical id resource routes', () => {
     for (const resource of resources) {
       const privateResult = await req(alice.token, `/api/${resource.base}/${resource.id}/acl`, {
         method: 'PUT',
-        body: JSON.stringify({ visibility: 'private' }),
+        body: JSON.stringify({
+          visibility: 'private',
+          expectedResourceId: resource.id,
+          expectedAclRevision: 0,
+        }),
       })
       expect(privateResult.status).toBe(200)
 
@@ -146,7 +150,11 @@ describe('RFC-223 PR-7 — canonical id resource routes', () => {
       // Visibility is checked before ownership/mutation on the same row.
       const hiddenAclWrite = await req(bob.token, `/api/${resource.base}/${resource.id}/acl`, {
         method: 'PUT',
-        body: JSON.stringify({ visibility: 'public' }),
+        body: JSON.stringify({
+          visibility: 'public',
+          expectedResourceId: resource.id,
+          expectedAclRevision: 1,
+        }),
       })
       expect(hiddenAclWrite.status).toBe(404)
     }

@@ -252,6 +252,14 @@ for (const rc of CASES) {
     })
 
     const aclPath = (k: string): string => `${rc.base}/${k}/acl`
+    const mutation = (
+      body: Record<string, unknown>,
+      expectedAclRevision = 0,
+    ): Record<string, unknown> => ({
+      ...body,
+      expectedResourceId: key,
+      expectedAclRevision,
+    })
 
     test('a stranger gets a 404 byte-identical to a non-existent resource (no existence oracle)', async () => {
       const invisible = await req(h.app, h.carol.token, aclPath(key))
@@ -273,7 +281,7 @@ for (const rc of CASES) {
     test('a stranger cannot grant themselves access, and the ACL is unchanged', async () => {
       const attack = await req(h.app, h.carol.token, aclPath(key), {
         method: 'PUT',
-        body: JSON.stringify({ userIds: [h.carol.id], visibility: 'public' }),
+        body: JSON.stringify(mutation({ userIds: [h.carol.id], visibility: 'public' })),
       })
       expect(attack.status).toBe(404)
 
@@ -299,7 +307,7 @@ for (const rc of CASES) {
 
       const grant = await req(h.app, h.alice.token, aclPath(key), {
         method: 'PUT',
-        body: JSON.stringify({ userIds: [h.bob.id] }),
+        body: JSON.stringify(mutation({ userIds: [h.bob.id] })),
       })
       expect(grant.status).toBe(200)
 
@@ -314,7 +322,7 @@ for (const rc of CASES) {
 
       const bobEscalates = await req(h.app, h.bob.token, aclPath(key), {
         method: 'PUT',
-        body: JSON.stringify({ visibility: 'public' }),
+        body: JSON.stringify(mutation({ visibility: 'public' }, 1)),
       })
       expect(bobEscalates.status).toBe(403)
 
@@ -325,14 +333,14 @@ for (const rc of CASES) {
     test('granting an unknown or system user is refused with a typed 422', async () => {
       const unknown = await req(h.app, h.alice.token, aclPath(key), {
         method: 'PUT',
-        body: JSON.stringify({ userIds: ['01HFAKEUSERID0000000000000'] }),
+        body: JSON.stringify(mutation({ userIds: ['01HFAKEUSERID0000000000000'] })),
       })
       expect(unknown.status).toBe(422)
       expect(((await unknown.json()) as { code: string }).code).toBe('acl-user-invalid')
 
       const system = await req(h.app, h.alice.token, aclPath(key), {
         method: 'PUT',
-        body: JSON.stringify({ userIds: ['__system__'] }),
+        body: JSON.stringify(mutation({ userIds: ['__system__'] })),
       })
       expect(system.status).toBe(422)
     })

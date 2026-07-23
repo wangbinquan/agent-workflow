@@ -220,7 +220,11 @@ describe('RFC-201 MCP exact operation wire', () => {
             })
           : await req(app, `/api/mcps/${created.id}/acl`, {
               method: 'PUT',
-              body: JSON.stringify({ visibility: 'private' }),
+              body: JSON.stringify({
+                visibility: 'private',
+                expectedResourceId: created.id,
+                expectedAclRevision: 0,
+              }),
             })
       expect(changed.status).toBe(200)
       const changedResource =

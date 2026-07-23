@@ -67,6 +67,14 @@ async function req(
   return app.request(path, { ...init, headers })
 }
 
+function aclMutation(
+  resourceId: string,
+  body: Record<string, unknown>,
+  expectedAclRevision = 0,
+): Record<string, unknown> {
+  return { ...body, expectedResourceId: resourceId, expectedAclRevision }
+}
+
 async function loadWorkflow(app: Hono, token: string, id: string): Promise<WorkflowDetail> {
   const res = await req(app, token, `/api/workflows/${id}`)
   expect(res.status).toBe(200)
@@ -126,7 +134,7 @@ describe('RFC-099 — agents route ACL', () => {
   async function setPrivate(agentId: string): Promise<void> {
     const res = await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
       method: 'PUT',
-      body: JSON.stringify({ visibility: 'private' }),
+      body: JSON.stringify(aclMutation(agentId, { visibility: 'private' })),
     })
     expect(res.status).toBe(200)
   }
@@ -167,7 +175,7 @@ describe('RFC-099 — agents route ACL', () => {
     await setPrivate(agentId)
     const put = await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
       method: 'PUT',
-      body: JSON.stringify({ userIds: [h.bob.id] }),
+      body: JSON.stringify(aclMutation(agentId, { userIds: [h.bob.id] }, 1)),
     })
     expect(put.status).toBe(200)
     expect((await req(h.app, h.bob.token, `/api/agents/${agentId}`)).status).toBe(200)
@@ -200,7 +208,7 @@ describe('RFC-099 — agents route ACL', () => {
     await setPrivate(agentId)
     await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
       method: 'PUT',
-      body: JSON.stringify({ userIds: [h.bob.id] }),
+      body: JSON.stringify(aclMutation(agentId, { userIds: [h.bob.id] }, 1)),
     })
     const asBob = (await (await req(h.app, h.bob.token, `/api/agents/${agentId}/acl`)).json()) as {
       ownerUserId: string
@@ -213,7 +221,7 @@ describe('RFC-099 — agents route ACL', () => {
     // grantee cannot PUT the acl
     const bobPut = await req(h.app, h.bob.token, `/api/agents/${agentId}/acl`, {
       method: 'PUT',
-      body: JSON.stringify({ visibility: 'public' }),
+      body: JSON.stringify(aclMutation(agentId, { visibility: 'public' }, 2)),
     })
     expect(bobPut.status).toBe(403)
     // stranger gets the same 404 as a missing resource
@@ -225,7 +233,7 @@ describe('RFC-099 — agents route ACL', () => {
     await setPrivate(agentId)
     const put = await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
       method: 'PUT',
-      body: JSON.stringify({ ownerUserId: h.bob.id }),
+      body: JSON.stringify(aclMutation(agentId, { ownerUserId: h.bob.id }, 1)),
     })
     expect(put.status).toBe(200)
     const acl = (await put.json()) as {
@@ -238,7 +246,7 @@ describe('RFC-099 — agents route ACL', () => {
     expect((await req(h.app, h.alice.token, `/api/agents/${agentId}`)).status).toBe(200)
     const alicePut = await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
       method: 'PUT',
-      body: JSON.stringify({ visibility: 'public' }),
+      body: JSON.stringify(aclMutation(agentId, { visibility: 'public' }, 2)),
     })
     expect(alicePut.status).toBe(403)
     // bob (new owner) can modify the agent itself
@@ -253,14 +261,14 @@ describe('RFC-099 — agents route ACL', () => {
     const agentId = await createAgentAsAlice()
     const res = await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
       method: 'PUT',
-      body: JSON.stringify({ userIds: ['01HFAKEUSERID0000000000000'] }),
+      body: JSON.stringify(aclMutation(agentId, { userIds: ['01HFAKEUSERID0000000000000'] })),
     })
     expect(res.status).toBe(422)
     const body = (await res.json()) as { code: string }
     expect(body.code).toBe('acl-user-invalid')
     const sys = await req(h.app, h.alice.token, `/api/agents/${agentId}/acl`, {
       method: 'PUT',
-      body: JSON.stringify({ userIds: ['__system__'] }),
+      body: JSON.stringify(aclMutation(agentId, { userIds: ['__system__'] })),
     })
     expect(sys.status).toBe(422)
   })
@@ -279,7 +287,7 @@ describe('RFC-099 — D15 new-reference usability gate', () => {
     secretAgentId = ((await created.json()) as { id: string }).id
     await req(h.app, h.alice.token, `/api/agents/${secretAgentId}/acl`, {
       method: 'PUT',
-      body: JSON.stringify({ visibility: 'private' }),
+      body: JSON.stringify(aclMutation(secretAgentId, { visibility: 'private' })),
     })
   })
 
@@ -348,7 +356,7 @@ describe('RFC-099 — D15 new-reference usability gate', () => {
     const wf = (await created.json()) as WorkflowDetail
     await req(h.app, h.alice.token, `/api/workflows/${wf.id}/acl`, {
       method: 'PUT',
-      body: JSON.stringify({ ownerUserId: h.bob.id }),
+      body: JSON.stringify(aclMutation(wf.id, { ownerUserId: h.bob.id })),
     })
     // bob saves with the existing reference untouched → allowed (D15).
     const keep = await saveWorkflowDefinition(h.app, h.bob.token, wf.id, wf.definition)
@@ -378,7 +386,7 @@ describe('RFC-099 — D15 new-reference usability gate', () => {
     const secondAgentId = ((await secondAgent.json()) as { id: string }).id
     await req(h.app, h.alice.token, `/api/agents/${secondAgentId}/acl`, {
       method: 'PUT',
-      body: JSON.stringify({ visibility: 'private' }),
+      body: JSON.stringify(aclMutation(secondAgentId, { visibility: 'private' })),
     })
     const def3 = {
       ...wf.definition,
@@ -430,7 +438,7 @@ describe('RFC-099 — workflows list filter + private workflow lifecycle', () =>
     const wf = (await created.json()) as WorkflowDetail
     await req(h.app, h.alice.token, `/api/workflows/${wf.id}/acl`, {
       method: 'PUT',
-      body: JSON.stringify({ visibility: 'private' }),
+      body: JSON.stringify(aclMutation(wf.id, { visibility: 'private' })),
     })
     const list = (await (await req(h.app, h.carol.token, '/api/workflows')).json()) as Array<{
       id: string

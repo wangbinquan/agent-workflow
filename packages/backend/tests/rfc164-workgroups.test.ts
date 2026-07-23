@@ -572,7 +572,11 @@ describe('RFC-164 — workgroups route ACL (RFC-099 D1/D4/D15/D18)', () => {
     const created = (await createdResponse.json()) as WorkgroupDetail
     await req(alice.token, `/api/workgroups/${created.id}/acl`, {
       method: 'PUT',
-      body: JSON.stringify({ visibility: 'private' }),
+      body: JSON.stringify({
+        visibility: 'private',
+        expectedResourceId: created.id,
+        expectedAclRevision: 0,
+      }),
     })
     const list = (await (await req(bob.token, '/api/workgroups')).json()) as Array<{
       name: string
@@ -631,7 +635,11 @@ describe('RFC-164 — workgroups route ACL (RFC-099 D1/D4/D15/D18)', () => {
     const privateAgent = (await agentRes.json()) as { id: string }
     await req(alice.token, `/api/agents/${privateAgent.id}/acl`, {
       method: 'PUT',
-      body: JSON.stringify({ visibility: 'private' }),
+      body: JSON.stringify({
+        visibility: 'private',
+        expectedResourceId: privateAgent.id,
+        expectedAclRevision: 0,
+      }),
     })
 
     // bob cannot reference it in a new group
@@ -673,7 +681,11 @@ describe('RFC-164 — workgroups route ACL (RFC-099 D1/D4/D15/D18)', () => {
     // unchanged member id on the existing group.
     await req(alice.token, `/api/agents/${agentId('planner-agent')}/acl`, {
       method: 'PUT',
-      body: JSON.stringify({ visibility: 'private' }),
+      body: JSON.stringify({
+        visibility: 'private',
+        expectedResourceId: agentId('planner-agent'),
+        expectedAclRevision: 0,
+      }),
     })
     const group = await detail(bob.token, created.id)
     const keep = await req(bob.token, `/api/workgroups/${created.id}`, {

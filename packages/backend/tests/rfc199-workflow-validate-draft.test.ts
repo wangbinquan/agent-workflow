@@ -147,7 +147,11 @@ describe('RFC-199 T11.4 — POST /api/workflows/:id/validate-draft', () => {
         authorization: `Bearer ${h.alice.token}`,
         'content-type': 'application/json',
       },
-      body: JSON.stringify({ visibility: 'private' }),
+      body: JSON.stringify({
+        visibility: 'private',
+        expectedResourceId: privateAgent.id,
+        expectedAclRevision: 0,
+      }),
     })
     expect(privateAcl.status).toBe(200)
     const workflow = await createWorkflow(

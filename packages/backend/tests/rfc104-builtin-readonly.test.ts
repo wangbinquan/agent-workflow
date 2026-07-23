@@ -249,16 +249,26 @@ describe('RFC-104 — route guards refuse mutating a built-in (even as admin)', 
     await seedFusionResources(db)
     const id = await builtinWorkflowId(db)
 
+    const agentId = builtinAgentId(db)
     await expect403Builtin(
-      await api(app, `/api/agents/${builtinAgentId(db)}/acl`, {
+      await api(app, `/api/agents/${agentId}/acl`, {
         method: 'PUT',
-        body: JSON.stringify({ visibility: 'private' }),
+        body: JSON.stringify({
+          visibility: 'private',
+          expectedResourceId: agentId,
+          expectedAclRevision: 0,
+        }),
       }),
     )
     await expect403Builtin(
       await api(app, `/api/workflows/${id}/acl`, {
         method: 'PUT',
-        body: JSON.stringify({ ownerUserId: 'someone', visibility: 'private' }),
+        body: JSON.stringify({
+          ownerUserId: 'someone',
+          visibility: 'private',
+          expectedResourceId: id,
+          expectedAclRevision: 0,
+        }),
       }),
     )
     // Owner + visibility unchanged → still hidden + still resolvable as built-in.
