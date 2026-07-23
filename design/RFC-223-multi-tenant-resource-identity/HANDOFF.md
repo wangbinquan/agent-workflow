@@ -25,7 +25,7 @@
 
 ## 验证
 
-- `bun run test`：backend `6938 pass / 23 skip / 0 fail`、shared `1435/1435`、frontend `5249/5249`。
+- `bun run test`：backend `6946 pass / 23 skip / 0 fail`、shared `1435/1435`、frontend `5249/5249`。
 - `bun run e2e`：142 passed / 31 environment-gated skipped / 0 failed。
 - RFC-223 critical suite：84/84。
 - T15 structural guard：还原态 8/8；真实非法 production sink 注入时按预期变红。
