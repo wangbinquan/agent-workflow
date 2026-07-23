@@ -32,7 +32,7 @@ import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { agentsDependingOnIn, validateDependsOn } from './agentDeps'
-import { resolveAgentRefsUsable } from './agentRefs'
+import { agentRefFenceGroups, resolveAgentRefsUsable } from './agentRefs'
 import {
   discloseRefsSync,
   discloseScheduleRefs,
@@ -43,6 +43,7 @@ import type { Actor } from '@/auth/actor'
 import { getRuntime } from './runtimeRegistry'
 import { isAgentLaunching } from './agentLaunchReservation'
 import { isOwnerNameUniqueViolation, ownerScopedNameWhere } from './ownerScopedName'
+import { assertRefsUsableInTx } from './resourceRefs'
 
 type AgentRow = typeof agents.$inferSelect
 
@@ -73,7 +74,14 @@ export function snapshotNodeAgentWhere(node: unknown): SQL | null {
 export async function createAgent(
   db: DbClient,
   input: CreateAgent,
-  opts?: { ownerUserId?: string; builtin?: boolean; actor?: Actor | null; id?: string },
+  opts?: {
+    ownerUserId?: string
+    builtin?: boolean
+    actor?: Actor | null
+    id?: string
+    /** Deterministic race-test seam after preflight, before the final dbTxSync. */
+    beforeWriteTransaction?: () => void | Promise<void>
+  },
 ): Promise<Agent> {
   const ownerUserId = opts?.ownerUserId ?? null
   const existing = await db
@@ -147,37 +155,58 @@ export async function createAgent(
   if (input.outputWrapperPortNames !== undefined) {
     fmExtra.outputWrapperPortNames = input.outputWrapperPortNames
   }
+  await opts?.beforeWriteTransaction?.()
   try {
-    await db.insert(agents).values({
-      id,
-      name: input.name,
-      description: input.description,
-      outputs: JSON.stringify(input.outputs),
-      // RFC-166: declarative input ports (own column, symmetrical to outputs).
-      // Normalize through the schema on write so the column is canonical (kind
-      // default applied, unknown keys stripped) even if a service-layer caller
-      // bypassed CreateAgentSchema's zod parse.
-      inputs: serializeInputs(input.inputs),
-      syncOutputsOnIterate: input.syncOutputsOnIterate,
-      runtime: input.runtime ?? null, // RFC-111
-      permission: JSON.stringify(input.permission),
-      // RFC-223 (PR-1): resolved id refs / typed skill refs (already deduped).
-      skills: serializeSkillRefs(skillRefs),
-      dependsOn: JSON.stringify(dependsOnIds),
-      mcp: JSON.stringify(mcpIds),
-      // RFC-031: plugin id array; T6 enforces existence + enabled at save
-      // time, T7 unions across the dependsOn closure at runner injection time.
-      plugins: JSON.stringify(pluginIds),
-      frontmatterExtra: JSON.stringify(fmExtra),
-      bodyMd: input.bodyMd,
-      // RFC-099: creator becomes owner; new resources default to 'public' (D18).
-      ownerUserId,
-      visibility: 'public',
-      // RFC-104: built-in marker — only seedFusionResources passes builtin:true;
-      // never set via any HTTP path (CreateAgentSchema omits it).
-      builtin: opts?.builtin ?? false,
-      createdAt: now,
-      updatedAt: now,
+    dbTxSync(db, (tx) => {
+      // Every create ref is new. This is the authorization/existence
+      // linearization point; async validators above remain preflight only.
+      assertRefsUsableInTx(
+        tx,
+        opts?.actor ?? null,
+        agentRefFenceGroups(
+          {
+            mcp: mcpIds,
+            plugins: pluginIds,
+            dependsOn: dependsOnIds,
+            skills: skillRefs,
+          },
+          undefined,
+          resolved.matchedManagedSkillIds,
+        ),
+      )
+      tx.insert(agents)
+        .values({
+          id,
+          name: input.name,
+          description: input.description,
+          outputs: JSON.stringify(input.outputs),
+          // RFC-166: declarative input ports (own column, symmetrical to outputs).
+          // Normalize through the schema on write so the column is canonical (kind
+          // default applied, unknown keys stripped) even if a service-layer caller
+          // bypassed CreateAgentSchema's zod parse.
+          inputs: serializeInputs(input.inputs),
+          syncOutputsOnIterate: input.syncOutputsOnIterate,
+          runtime: input.runtime ?? null, // RFC-111
+          permission: JSON.stringify(input.permission),
+          // RFC-223 (PR-1): resolved id refs / typed skill refs (already deduped).
+          skills: serializeSkillRefs(skillRefs),
+          dependsOn: JSON.stringify(dependsOnIds),
+          mcp: JSON.stringify(mcpIds),
+          // RFC-031: plugin id array; T6 enforces existence + enabled at save
+          // time, T7 unions across the dependsOn closure at runner injection time.
+          plugins: JSON.stringify(pluginIds),
+          frontmatterExtra: JSON.stringify(fmExtra),
+          bodyMd: input.bodyMd,
+          // RFC-099: creator becomes owner; new resources default to 'public' (D18).
+          ownerUserId,
+          visibility: 'public',
+          // RFC-104: built-in marker — only seedFusionResources passes builtin:true;
+          // never set via any HTTP path (CreateAgentSchema omits it).
+          builtin: opts?.builtin ?? false,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .run()
     })
   } catch (error) {
     if (isOwnerNameUniqueViolation(error, 'agents', 'agents_owner_name_unique')) {
@@ -197,6 +226,10 @@ export async function updateAgent(
   patch: UpdateAgent,
   actor?: Actor | null,
   fence?: { expectedUpdatedAt: number; expectedAclRevision: number },
+  hooks?: {
+    /** Deterministic race-test seam after preflight, before the final dbTxSync. */
+    beforeWriteTransaction?: () => void | Promise<void>
+  },
 ): Promise<Agent> {
   const existing = await getAgentById(db, id)
   if (existing === null) {
@@ -327,27 +360,42 @@ export async function updateAgent(
   }
   if (patch.bodyMd !== undefined) set.bodyMd = patch.bodyMd
 
-  if (fence === undefined || actor === undefined || actor === null) {
-    set.updatedAt = Math.max(Date.now(), existing.updatedAt + 1)
-    await db.update(agents).set(set).where(eq(agents.id, id))
-  } else {
-    dbTxSync(db, (tx) => {
-      const current = requireAgentMutationRevision(tx, id, actor, fence)
-      set.updatedAt = Math.max(Date.now(), current.updatedAt + 1)
-      const result = tx
-        .update(agents)
-        .set(set)
-        .where(
-          and(
-            eq(agents.id, id),
-            eq(agents.updatedAt, fence.expectedUpdatedAt),
-            eq(agents.aclRevision, fence.expectedAclRevision),
-          ),
+  await hooks?.beforeWriteTransaction?.()
+  dbTxSync(db, (tx) => {
+    const revisionFenced = fence !== undefined && actor !== undefined && actor !== null
+    const currentRow = revisionFenced
+      ? requireAgentMutationRevision(tx, id, actor, fence)
+      : tx.select().from(agents).where(eq(agents.id, id)).get()
+    if (currentRow === undefined) {
+      throw new NotFoundError('agent-not-found', 'agent not found')
+    }
+    const current = rowToAgent(currentRow)
+    const nextRefs = {
+      mcp: mcpIds ?? current.mcp,
+      plugins: pluginIds ?? current.plugins,
+      dependsOn: dependsOnIds ?? current.dependsOn,
+      skills: skillRefs ?? current.skills,
+    }
+    // Diff against the row snapshot from THIS transaction. A lost grant on an
+    // unchanged ref remains grandfathered; only ids this write introduces are
+    // re-authorized and existence-fenced.
+    assertRefsUsableInTx(
+      tx,
+      actor ?? null,
+      agentRefFenceGroups(nextRefs, current, resolvedRefs.matchedManagedSkillIds),
+    )
+
+    set.updatedAt = Math.max(Date.now(), currentRow.updatedAt + 1)
+    const where = revisionFenced
+      ? and(
+          eq(agents.id, id),
+          eq(agents.updatedAt, fence.expectedUpdatedAt),
+          eq(agents.aclRevision, fence.expectedAclRevision),
         )
-        .run()
-      if (changesOf(result) !== 1) throw staleAgentError(id)
-    })
-  }
+      : eq(agents.id, id)
+    const result = tx.update(agents).set(set).where(where).run()
+    if (revisionFenced && changesOf(result) !== 1) throw staleAgentError(id)
+  })
   const updated = await getAgentById(db, id)
   if (updated === null) throw new Error('agent disappeared after update')
   return updated

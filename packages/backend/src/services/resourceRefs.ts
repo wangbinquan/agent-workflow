@@ -15,9 +15,11 @@
 // name the editor typed (no id / description / owner — D1).
 
 import type { AclResourceType, WorkflowDefinition } from '@agent-workflow/shared'
-import { inArray } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
+import { resourceGrants } from '@/db/schema'
+import type { DbTxSync } from '@/db/txSync'
 import { ValidationError } from '@/util/errors'
 import {
   ACL_TABLES,
@@ -142,6 +144,78 @@ export async function assertNewRefsUsable(
   if (missing.length > 0) {
     throw missingRefsError(missing)
   }
+}
+
+/**
+ * Final, synchronous D15 reference fence.
+ *
+ * Async preflight keeps validation errors early and friendly, but it cannot be
+ * the authorization linearization point: a referenced row can be deleted,
+ * transferred or made private after preflight and before the writer commits.
+ * Every ordinary writer calls this from the SAME `dbTxSync` body as its
+ * INSERT/UPDATE, passing only ids that are new relative to the row snapshot
+ * read in that transaction.
+ *
+ * This deliberately does not compare `aclRevision`. The commit invariant is
+ * exactly "the canonical id still exists and is usable by this actor now";
+ * unrelated ACL edits that preserve usability must not reject a save.
+ *
+ * Callers pass only ids that preflight matched (or whose dedicated existence
+ * validator accepted). This preserves the historical contract for reference
+ * kinds that deliberately allow an unresolved token to remain dormant.
+ * Missing-at-preflight tokens never enter this fence; matched-then-deleted is
+ * the race it closes.
+ *
+ * Missing and invisible fenced rows share `acl-missing-refs`, echoing only the
+ * caller-supplied canonical id. That preserves D1's non-enumerating shape.
+ * Framework callers (`actor === null`) and resource admins bypass visibility,
+ * but never existence — they cannot commit a new dangling reference either.
+ */
+export function assertRefsUsableInTx(
+  tx: DbTxSync,
+  actor: Actor | null,
+  groups: readonly RefCheckGroup[],
+): void {
+  const missing: Array<{ type: AclResourceType; name: string }> = []
+  for (const group of groups) {
+    const refs = [...new Set(group.names)].filter((ref) => ref.length > 0)
+    if (refs.length === 0) continue
+    const table = ACL_TABLES[group.type]
+    const rows = tx
+      .select({
+        id: table.id,
+        ownerUserId: table.ownerUserId,
+        visibility: table.visibility,
+      })
+      .from(table)
+      .where(inArray(table.id, refs))
+      .all() as AclRow[]
+    const byId = new Map(rows.map((row) => [row.id, row]))
+    const enforceVisibility = actor !== null && !isResourceAdminActor(actor)
+    const granted = enforceVisibility
+      ? new Set(
+          tx
+            .select({ resourceId: resourceGrants.resourceId })
+            .from(resourceGrants)
+            .where(
+              and(
+                eq(resourceGrants.resourceType, group.type),
+                eq(resourceGrants.userId, actor.user.id),
+              ),
+            )
+            .all()
+            .map((row) => row.resourceId),
+        )
+      : new Set<string>()
+
+    for (const ref of refs) {
+      const row = byId.get(ref)
+      if (row === undefined || (enforceVisibility && !isVisibleRow(actor, row, granted))) {
+        missing.push({ type: group.type, name: ref })
+      }
+    }
+  }
+  if (missing.length > 0) throw missingRefsError(missing)
 }
 
 function missingRefsError(

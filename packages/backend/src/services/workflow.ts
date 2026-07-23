@@ -41,7 +41,13 @@ import {
   workflowsBroadcaster,
   type WorkflowDeletedAudienceContext,
 } from '@/ws/broadcaster'
-import { assertNewRefsUsable, diffNewNames, extractWorkflowAgentRefs } from './resourceRefs'
+import {
+  assertNoMissingRefs,
+  assertRefsUsableInTx,
+  diffNewNames,
+  extractWorkflowAgentRefs,
+  resolveRefsUsableById,
+} from './resourceRefs'
 import { canViewResource, isResourceAdminActor, isResourceOwner } from './resourceAcl'
 import { assertNotBuiltin } from './systemResources'
 import { validateWorkflowById } from './workflow.validator'
@@ -61,6 +67,10 @@ export interface CreateWorkflowOptions {
   builtin?: boolean
   id?: string
   inTxGuard?: WorkflowWriteInTxGuard
+  /** User whose new canonical refs must remain usable at commit time. */
+  actor?: Actor | null
+  /** Deterministic race-test seam after preflight, before the final dbTxSync. */
+  beforeWriteTransaction?: () => void | Promise<void>
 }
 
 export async function listWorkflows(db: DbClient): Promise<Workflow[]> {
@@ -123,29 +133,42 @@ export async function createWorkflow(
   // latest schema version. Older clients can still post v1 — they get upgraded.
   const normalized = migrateDefinitionToLatest(input.definition)
   assertCanonicalWorkflowAgentIds(normalized)
-  const values: typeof workflows.$inferInsert = {
-    id,
-    name: input.name,
-    description: input.description,
-    definition: serializeWorkflowDefinitionStorageV1(normalized),
-    version: 1,
-    // RFC-099: creator becomes owner; new resources default to 'public' (D18).
-    ownerUserId: opts?.ownerUserId ?? null,
-    visibility: 'public',
-    // RFC-104: built-in marker — only seedFusionResources passes builtin:true;
-    // never set via any HTTP path (CreateWorkflowSchema omits it).
-    builtin: opts?.builtin ?? false,
-    createdAt: now,
-    updatedAt: now,
-  }
-  const inTxGuard = opts?.inTxGuard
-  const insertedRow =
-    inTxGuard === undefined
-      ? (await db.insert(workflows).values(values).returning())[0]
-      : dbTxSync(db, (tx) => {
-          inTxGuard.assert(tx)
-          return tx.insert(workflows).values(values).returning().get()
-        })
+  const newAgentIds = [...extractWorkflowAgentRefs(normalized)]
+  const actor = opts?.actor ?? null
+  const resolvedNewAgents = await resolveRefsUsableById(db, actor, 'agent', newAgentIds)
+  assertNoMissingRefs(resolvedNewAgents.missing)
+  // Workflow definitions historically tolerate a never-resolved agent id until
+  // validator/launch time. Fence only ids that preflight actually matched.
+  const fenceableAgentIds = new Set(resolvedNewAgents.byToken.values())
+  await opts?.beforeWriteTransaction?.()
+  const insertedRow = dbTxSync(db, (tx) => {
+    // Preserve the import selector fence's richer stale/ambiguity errors, then
+    // apply the ordinary exact-id existence/usability invariant. Both checks
+    // run before the sole production workflow INSERT.
+    opts?.inTxGuard?.assert(tx)
+    assertRefsUsableInTx(tx, actor, [
+      { type: 'agent', names: newAgentIds.filter((id) => fenceableAgentIds.has(id)) },
+    ])
+    return tx
+      .insert(workflows)
+      .values({
+        id,
+        name: input.name,
+        description: input.description,
+        definition: serializeWorkflowDefinitionStorageV1(normalized),
+        version: 1,
+        // RFC-099: creator becomes owner; new resources default to 'public' (D18).
+        ownerUserId: opts?.ownerUserId ?? null,
+        visibility: 'public',
+        // RFC-104: built-in marker — only seedFusionResources passes builtin:true;
+        // never set via any HTTP path (CreateWorkflowSchema omits it).
+        builtin: opts?.builtin ?? false,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning()
+      .get()
+  })
   if (insertedRow === undefined) throw new Error('workflow insert returned no row')
   // RFC-199: the create response is derived from INSERT RETURNING. A post-insert
   // GET could race a later writer and falsely return somebody else's revision.
@@ -194,17 +217,23 @@ export async function updateWorkflow(
   // The current row gates below are repeated in dbTxSync, so an ACL transfer or
   // built-in flip between preflight and CAS cannot authorize a stale writer.
   const preflightRow = await loadRawWorkflow(db, id)
+  let fenceableAgentIds = new Set<string>()
   if (preflightRow !== null) {
     await assertPrincipalCanWritePreflight(db, principal, preflightRow)
     const preflightWorkflow = rowToWorkflow(preflightRow)
     assertChangedWorkflowName(preflightWorkflow.name, normalizedSnapshot.name)
-    if (principal.kind === 'actor') {
-      const newNames = diffNewNames(
-        extractWorkflowAgentRefs(preflightWorkflow.definition),
-        extractWorkflowAgentRefs(normalizedSnapshot.definition),
-      )
-      await assertNewRefsUsable(db, principal.actor, [{ type: 'agent', names: newNames }])
-    }
+    const newIds = diffNewNames(
+      extractWorkflowAgentRefs(preflightWorkflow.definition),
+      extractWorkflowAgentRefs(normalizedSnapshot.definition),
+    )
+    const resolved = await resolveRefsUsableById(
+      db,
+      principal.kind === 'actor' ? principal.actor : null,
+      'agent',
+      newIds,
+    )
+    assertNoMissingRefs(resolved.missing)
+    fenceableAgentIds = new Set(resolved.byToken.values())
   }
   await opts?.beforeWriteTransaction?.()
 
@@ -221,6 +250,13 @@ export async function updateWorkflow(
     // precede version/logical-no-op reconciliation: a response-loss retry may
     // not report success after its selected reference became stale/invisible.
     opts?.inTxGuard?.assert(tx)
+    const newAgentIds = diffNewNames(
+      extractWorkflowAgentRefs(current.definition),
+      extractWorkflowAgentRefs(normalizedSnapshot.definition),
+    ).filter((id) => fenceableAgentIds.has(id))
+    assertRefsUsableInTx(tx, principal.kind === 'actor' ? principal.actor : null, [
+      { type: 'agent', names: newAgentIds },
+    ])
 
     const currentSnapshot = workflowDraftSnapshotOf(current)
     const currentBytes = serializeWorkflowEditableSnapshotV1(currentSnapshot)

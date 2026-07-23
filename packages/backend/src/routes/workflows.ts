@@ -92,11 +92,11 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
       })
     }
     const actor = actorOf(c)
-    // RFC-099 (D15): on create every agent reference is new.
-    await assertNewRefsUsable(deps.db, actor, [
-      { type: 'agent', names: [...extractWorkflowAgentRefs(parsed.data.definition)] },
-    ])
-    const created = await createWorkflow(deps.db, parsed.data, { ownerUserId: actor.user.id })
+    // Service preflight + final dbTxSync bind every canonical id to this actor.
+    const created = await createWorkflow(deps.db, parsed.data, {
+      ownerUserId: actor.user.id,
+      actor,
+    })
     return c.json(created, 201)
   })
 

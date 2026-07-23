@@ -16,7 +16,7 @@
 import type { AgentSkillRef } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { resolveRefsUsableById, assertNoMissingRefs } from './resourceRefs'
+import { resolveRefsUsableById, assertNoMissingRefs, type RefCheckGroup } from './resourceRefs'
 
 /** Ref-identity key for skill-ref de-dup. */
 function skillRefKey(ref: AgentSkillRef): string {
@@ -38,12 +38,59 @@ export interface ResolvedAgentRefs {
   plugins: string[]
   dependsOn: string[]
   skills: AgentSkillRef[]
+  /** Managed skill ids that matched a DB row during preflight. Unresolved
+   * managed tokens remain saveable by contract and must not enter the final
+   * existence fence. */
+  matchedManagedSkillIds: ReadonlySet<string>
 }
 
 /** Managed skill ids referenced by a stored ref list (project refs excluded) —
  *  the grandfathering set for an update (D15). */
 function managedSkillIdSet(refs: readonly AgentSkillRef[] | undefined): Set<string> {
   return new Set((refs ?? []).filter((r) => r.kind === 'managed').map((r) => r.skillId))
+}
+
+/**
+ * Canonical ids newly introduced by `next` relative to `existing`.
+ *
+ * This helper is intentionally pure so update writers can run it against the
+ * row they just re-read inside their final transaction. Project skills are
+ * repository-local names, not ACL resources, and therefore never enter the
+ * resource fence.
+ */
+export function diffNewAgentRefGroups(
+  next: AgentRefInput,
+  existing?: AgentRefInput,
+): RefCheckGroup[] {
+  const diff = (values: readonly string[], previous: readonly string[] | undefined): string[] => {
+    const old = new Set(previous ?? [])
+    return [...new Set(values)].filter((id) => !old.has(id))
+  }
+  return [
+    { type: 'mcp', names: diff(next.mcp, existing?.mcp) },
+    { type: 'plugin', names: diff(next.plugins, existing?.plugins) },
+    { type: 'agent', names: diff(next.dependsOn, existing?.dependsOn) },
+    {
+      type: 'skill',
+      names: diff([...managedSkillIdSet(next.skills)], [...managedSkillIdSet(existing?.skills)]),
+    },
+  ]
+}
+
+/** D15 groups for the final transaction. MCP/plugin/dependsOn have dedicated
+ * existence validators, so every newly-added id is fenceable. Managed skills
+ * deliberately allow unresolved refs; only ids matched during preflight are
+ * fenced against delete/ACL drift. */
+export function agentRefFenceGroups(
+  next: AgentRefInput,
+  existing: AgentRefInput | undefined,
+  matchedManagedSkillIds: ReadonlySet<string>,
+): RefCheckGroup[] {
+  return diffNewAgentRefGroups(next, existing).map((group) =>
+    group.type === 'skill'
+      ? { ...group, names: group.names.filter((id) => matchedManagedSkillIds.has(id)) }
+      : group,
+  )
 }
 
 /**
@@ -104,5 +151,11 @@ export async function resolveAgentRefsUsable(
     ...skillRes.missing,
   ])
 
-  return { mcp: mcp.ids, plugins: plugins.ids, dependsOn: dependsOn.ids, skills }
+  return {
+    mcp: mcp.ids,
+    plugins: plugins.ids,
+    dependsOn: dependsOn.ids,
+    skills,
+    matchedManagedSkillIds: new Set(skillRes.byToken.values()),
+  }
 }

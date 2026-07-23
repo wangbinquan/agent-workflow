@@ -48,7 +48,7 @@ import {
 } from '@/ws/broadcaster'
 import { discloseScheduleRefs } from './resourceAcl'
 import { canViewResource, isResourceAdminActor, isResourceOwner } from './resourceAcl'
-import { assertNoMissingRefs, resolveRefsUsableById } from './resourceRefs'
+import { assertNoMissingRefs, assertRefsUsableInTx, resolveRefsUsableById } from './resourceRefs'
 import { isOwnerNameUniqueViolation, ownerScopedNameWhere } from './ownerScopedName'
 
 type WorkgroupRow = typeof workgroups.$inferSelect
@@ -92,7 +92,12 @@ export async function getWorkgroupById(db: DbClient, id: string): Promise<Workgr
 export async function createWorkgroup(
   db: DbClient,
   input: CreateWorkgroup,
-  aclOpts?: { ownerUserId?: string; actor?: Actor | null },
+  aclOpts?: {
+    ownerUserId?: string
+    actor?: Actor | null
+    /** Deterministic race-test seam after preflight, before the final dbTxSync. */
+    beforeWriteTransaction?: () => void | Promise<void>
+  },
 ): Promise<WorkgroupDetail> {
   await assertHumanMembersActive(db, input.members)
   const preparedAgents = await prepareAgentMembers(db, aclOpts?.actor ?? null, input.members, [])
@@ -102,9 +107,13 @@ export async function createWorkgroup(
   const leaderMemberId = resolveLeaderMemberId(input, memberValues)
   const ownerUserId = aclOpts?.ownerUserId ?? null
 
+  await aclOpts?.beforeWriteTransaction?.()
   let created: WorkgroupDetail
   try {
     created = dbTxSync(db, (tx) => {
+      assertRefsUsableInTx(tx, aclOpts?.actor ?? null, [
+        { type: 'agent', names: diffNewAgentMemberIds(null, input) },
+      ])
       if (
         tx
           .select({ id: workgroups.id })
@@ -173,6 +182,10 @@ export async function saveWorkgroup(
   id: string,
   input: UpdateWorkgroup,
   principal: WorkgroupWritePrincipal,
+  opts?: {
+    /** Deterministic race-test seam after preflight, before the final dbTxSync. */
+    beforeWriteTransaction?: () => void | Promise<void>
+  },
 ): Promise<SaveWorkgroupReceipt> {
   const parsed = UpdateWorkgroupSchema.safeParse(input)
   if (!parsed.success) {
@@ -198,6 +211,7 @@ export async function saveWorkgroup(
     currentMembers,
   )
 
+  await opts?.beforeWriteTransaction?.()
   const result = dbTxSync<{ receipt: SaveWorkgroupReceipt; committed: boolean }>(db, (tx) => {
     const currentRow = tx.select().from(workgroups).where(eq(workgroups.id, id)).get()
     if (currentRow === undefined) throwWorkgroupNotFound(id)
@@ -208,6 +222,9 @@ export async function saveWorkgroup(
       .where(eq(workgroupMembers.workgroupId, id))
       .all()
     const current = rowToWorkgroup(currentRow, memberRows)
+    assertRefsUsableInTx(tx, principal.kind === 'actor' ? principal.actor : null, [
+      { type: 'agent', names: diffNewAgentMemberIds(current, snapshot) },
+    ])
     const currentSnapshot = workgroupDraftSnapshotOf(current)
     const currentBytes = serializeWorkgroupEditableSnapshotV1(currentSnapshot)
     const currentRevision = workgroupRevisionOf(current)

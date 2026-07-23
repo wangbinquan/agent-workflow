@@ -27,7 +27,11 @@ import {
   workgroupMessages,
 } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
-import { assertNoMissingRefs, resolveRefsUsableById } from '@/services/resourceRefs'
+import {
+  assertNoMissingRefs,
+  assertRefsUsableInTx,
+  resolveRefsUsableById,
+} from '@/services/resourceRefs'
 import { ConflictError, ValidationError } from '@/util/errors'
 import {
   casAssignmentStatusTx,
@@ -98,7 +102,12 @@ const ConfigPatchSchema = z.object({
 const JsonObjectSchema = z.record(z.string(), z.unknown())
 
 export function buildConfigActions(
-  deps: { db: DbClient; configPath: string },
+  deps: {
+    db: DbClient
+    configPath: string
+    /** Deterministic race-test seam after preflight, before the final dbTxSync. */
+    beforeWriteTransaction?: () => void | Promise<void>
+  },
   core: Pick<Core, 'loadVisibleWorkgroupTask' | 'kickResumeIfResumable' | 'buildResumeDeps'>,
 ) {
   const { loadVisibleWorkgroupTask, kickResumeIfResumable } = core
@@ -272,7 +281,9 @@ export function buildConfigActions(
     // whole-JSON write from it could clobber a concurrent writer (the engine's
     // persistGate — now also reload-and-merge — or another PATCH). Only this
     // handler's own keys ride on top of the fresh base.
+    await deps.beforeWriteTransaction?.()
     dbTxSync(deps.db, (tx) => {
+      assertRefsUsableInTx(tx, actor, [{ type: 'agent', names: addedAgentIds }])
       const fresh = tx
         .select({ workgroupConfigJson: tasks.workgroupConfigJson })
         .from(tasks)

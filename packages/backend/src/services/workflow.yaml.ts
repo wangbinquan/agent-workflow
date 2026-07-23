@@ -31,7 +31,6 @@ import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { agents, users } from '@/db/schema'
 import { canViewResource, filterVisibleRows } from '@/services/resourceAcl'
-import { assertNewRefsUsable, extractWorkflowAgentRefs } from '@/services/resourceRefs'
 import { assertNotBuiltin } from '@/services/systemResources'
 import { assertImportRefsStableInTx, resolveImportRefs } from '@/services/importRefs'
 import {
@@ -326,12 +325,6 @@ export async function importWorkflowYaml(
   // mode=new always discards the incoming id. mode=fail creates only when the
   // id is absent/non-colliding. HTTP callers always provide an actor principal;
   // framework callers must opt into the explicit audited system branch.
-  if (principal.kind === 'actor') {
-    await assertNewRefsUsable(db, principal.actor, [
-      { type: 'agent', names: [...extractWorkflowAgentRefs(definition)] },
-    ])
-  }
-  await hooks.afterResolve?.()
   const workflow = await createWorkflow(
     db,
     {
@@ -342,11 +335,13 @@ export async function importWorkflowYaml(
     principal.kind === 'actor'
       ? {
           ownerUserId: principal.actor.user.id,
+          actor: principal.actor,
+          beforeWriteTransaction: hooks.afterResolve,
           ...(resolvedImport.inTxGuard === undefined
             ? {}
             : { inTxGuard: resolvedImport.inTxGuard }),
         }
-      : undefined,
+      : { beforeWriteTransaction: hooks.afterResolve },
   )
   return { outcome: 'created', workflow }
 }
