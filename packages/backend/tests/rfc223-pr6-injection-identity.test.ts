@@ -21,6 +21,7 @@ import {
 } from '../src/services/runtime/injectionIdentity'
 import { seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
 import { prepareNodeRunInjection } from '../src/services/scheduler'
+import { skillFilesRel } from '../src/services/skillIdentityPaths'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -74,7 +75,7 @@ async function seedManagedSkill(
     name,
     description: '',
     sourceKind: 'managed',
-    managedPath: `skills/${name}/files/`,
+    managedPath: skillFilesRel(id),
     ownerUserId,
   })
 }
