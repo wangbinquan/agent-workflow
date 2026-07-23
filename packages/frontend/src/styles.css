@@ -1620,6 +1620,8 @@ code {
   align-items: center;
   gap: 2px;
   min-width: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
 }
 
 .nav-item {
@@ -1633,7 +1635,7 @@ code {
   font-size: 14px;
   text-decoration: none;
   background: transparent;
-  border: 0;
+  border: 1px solid transparent;
   cursor: pointer;
   text-align: left;
   min-height: 32px;
@@ -1650,6 +1652,10 @@ code {
 .nav-item__main {
   width: 100%;
   min-width: 0;
+}
+
+.nav-item-row > .nav-item__main {
+  border: 0;
 }
 
 .nav-item__accessory {
@@ -1699,15 +1705,24 @@ code {
 }
 
 .nav-item--active,
-.nav-item--active:hover {
-  background: var(--accent-fill);
-  color: var(--on-accent);
+.nav-item--active:hover,
+.nav-item-row--active {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.nav-item-row--active .nav-item--active,
+.nav-item-row--active .nav-item--active:hover {
+  background: transparent;
+  border-color: transparent;
+  color: var(--accent);
 }
 
 .nav-item--active .sidebar__badge,
 .nav-item-row--active .sidebar__badge {
-  background: #fff;
-  color: var(--accent);
+  background: var(--danger-fill);
+  color: var(--on-danger);
 }
 
 .nav-item--home {
@@ -1794,6 +1809,15 @@ code {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   border-color: var(--accent);
   color: var(--accent);
+}
+
+/* The badge text is capped at "99+". Keep the one-digit footprint compact,
+   but let the accessory column grow with that wider label instead of allowing
+   it to paint beyond the Memory row's selected-state frame. */
+.nav-group[data-group='memory'] .nav-item__accessory {
+  width: auto;
+  min-width: 32px;
+  padding-inline: var(--space-1);
 }
 
 .inbox-footer-button__label {
