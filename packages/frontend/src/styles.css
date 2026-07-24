@@ -12990,6 +12990,7 @@ mark.comment-anchor[data-active='true'] {
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--accent);
+  white-space: nowrap;
 }
 
 .memory-candidate-card__meta {
@@ -13012,6 +13013,7 @@ mark.comment-anchor[data-active='true'] {
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--warn) 18%, transparent);
   color: var(--warn);
+  white-space: nowrap;
 }
 
 .memory-candidate-card__action-tag--conflict_with {
@@ -13034,6 +13036,7 @@ mark.comment-anchor[data-active='true'] {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  flex-wrap: wrap;
 }
 
 .memory-row__title {
@@ -13049,6 +13052,7 @@ mark.comment-anchor[data-active='true'] {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--accent);
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .memory-row__scope--global {
@@ -13062,6 +13066,7 @@ mark.comment-anchor[data-active='true'] {
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--success) 18%, transparent);
   color: var(--success);
+  white-space: nowrap;
 }
 
 .memory-row__status--candidate {
@@ -13087,6 +13092,7 @@ mark.comment-anchor[data-active='true'] {
   border-radius: 6px;
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--accent);
+  white-space: nowrap;
 }
 .memory-row__select {
   margin-right: 6px;
@@ -13196,6 +13202,7 @@ mark.comment-anchor[data-active='true'] {
   color: var(--info);
   border: 1px solid color-mix(in srgb, var(--info) 35%, transparent);
   cursor: help;
+  white-space: nowrap;
 }
 
 .memory-row__meta {
