@@ -7,6 +7,10 @@
 // platform-defined shape), the provider's manual endpoints point at it, and
 // issuerUrl points at a closed port so discovery fails fast and the manual
 // fallback carries the whole login.
+//
+// Regression: every successful OIDC callback that issues a session must also
+// stamp users.last_login_at, otherwise the user directory reports "Never
+// signed in" for accounts that have authenticated through SSO.
 
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
@@ -20,7 +24,7 @@ import { createApp } from '../src/server'
 import { createOidcProvidersService } from '../src/services/oidcProviders'
 import { clearEndpointCaches } from '../src/auth/oidc/endpoints'
 import { clearPendingFlows } from '../src/auth/oidc/flow'
-import { userIdentities, users } from '../src/db/schema'
+import { userIdentities, userSessions, users } from '../src/db/schema'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 // Nothing listens here — discovery probes fail with an instant connection
@@ -188,6 +192,12 @@ describe('RFC-220 S8 — route-level OAuth-only chain', () => {
     const userRows = await h.db.select().from(users).where(eq(users.id, identities[0]!.userId))
     expect(userRows[0]!.displayName).toBe('zhang 我爱写代码')
     expect(userRows[0]!.status).toBe('active')
+    const firstSessions = await h.db
+      .select()
+      .from(userSessions)
+      .where(eq(userSessions.userId, identities[0]!.userId))
+    expect(firstSessions).toHaveLength(1)
+    expect(userRows[0]!.lastLoginAt).toBe(firstSessions[0]!.createdAt)
 
     // second login with a changed IdP-side signature refreshes the name (D7)
     idpState.userinfoBody = { ...idpState.userinfoBody, sig: '换个签名' }
@@ -196,6 +206,14 @@ describe('RFC-220 S8 — route-level OAuth-only chain', () => {
     expect(res2.status).toBe(302)
     const refreshed = await h.db.select().from(users).where(eq(users.id, identities[0]!.userId))
     expect(refreshed[0]!.displayName).toBe('zhang 换个签名')
+    const allSessions = await h.db
+      .select()
+      .from(userSessions)
+      .where(eq(userSessions.userId, identities[0]!.userId))
+    expect(allSessions).toHaveLength(2)
+    expect(refreshed[0]!.lastLoginAt).toBe(
+      Math.max(...allSessions.map((session) => session.createdAt)),
+    )
     // same account, no dup (createApp seeds a __system__ row — exclude it)
     const humans = await h.db.select().from(users).where(ne(users.id, SYSTEM_USER_ID))
     expect(humans.length).toBe(1)

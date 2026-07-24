@@ -9,7 +9,7 @@ import { resolveEndpoints } from '@/auth/oidc/endpoints'
 import { acquireIdentityClaims } from '@/auth/oidc/identity'
 import { consumeFlow, startFlow } from '@/auth/oidc/flow'
 import { OidcTokenError, exchangeCodeForTokens } from '@/auth/oidc/tokens'
-import { createSession } from '@/auth/sessionStore'
+import { createLoginSession } from '@/auth/sessionStore'
 import {
   assertBootstrapComplete,
   getAuthLoginPolicy,
@@ -239,7 +239,7 @@ export function mountOidcAuthRoutes(app: Hono, deps: AppDeps): void {
       throw err
     }
 
-    const { token } = await createSession({ db: deps.db, userId })
+    const { token } = createLoginSession({ db: deps.db, userId })
     // For SPA login: redirect with token in fragment so localStorage hook can
     // pick it up without leaking to server logs.
     return c.redirect(`${flow.postLoginRedirect ?? '/'}#aw_session=${encodeURIComponent(token)}`)

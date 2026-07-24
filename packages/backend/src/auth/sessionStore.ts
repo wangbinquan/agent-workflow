@@ -8,6 +8,7 @@ import { ulid } from 'ulid'
 import { SESSION_TOKEN_PREFIX } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { userSessions, users } from '@/db/schema'
+import { dbTxSync } from '@/db/txSync'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 
 /** 7 days by default — matches design.md §R4. */
@@ -45,7 +46,11 @@ export interface CreateSessionResult {
   session: SessionRecord
 }
 
-export async function createSession(input: CreateSessionInput): Promise<CreateSessionResult> {
+function prepareSession(input: CreateSessionInput): {
+  token: string
+  row: typeof userSessions.$inferInsert
+  session: SessionRecord
+} {
   const now = input.now ?? Date.now()
   const ttl = input.ttlMs ?? SESSION_DEFAULT_TTL_MS
   const token = generateSessionToken()
@@ -60,7 +65,6 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
     expiresAt: now + ttl,
     revokedAt: null,
   }
-  await input.db.insert(userSessions).values(row)
   return {
     token,
     session: {
@@ -72,7 +76,31 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
       expiresAt: row.expiresAt,
       revokedAt: null,
     },
+    row,
   }
+}
+
+export async function createSession(input: CreateSessionInput): Promise<CreateSessionResult> {
+  const { token, row, session } = prepareSession(input)
+  await input.db.insert(userSessions).values(row)
+  return { token, session }
+}
+
+/**
+ * Issue a session after a real authentication ceremony. Session creation and
+ * users.last_login_at are one commit so the admin directory can never report
+ * "Never signed in" for a successfully authenticated account.
+ *
+ * Keep this separate from createSession: callers such as password-change token
+ * rotation mint credentials without representing a new login.
+ */
+export function createLoginSession(input: CreateSessionInput): CreateSessionResult {
+  const { token, row, session } = prepareSession(input)
+  return dbTxSync(input.db, (tx) => {
+    tx.insert(userSessions).values(row).run()
+    tx.update(users).set({ lastLoginAt: session.createdAt }).where(eq(users.id, input.userId)).run()
+    return { token, session }
+  })
 }
 
 export interface ResolvedSession {

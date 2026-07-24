@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm'
 import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
+  createLoginSession,
   createSession,
   hashToken,
   listActiveSessionsForUser,
@@ -53,6 +54,26 @@ describe('sessionStore', () => {
     // confirm only the hash is in the row, not the raw token
     const stored = await lookupRawHash(db, token)
     expect(stored).toBe(true)
+    expect(db.select().from(users).where(idEq(userId)).get()?.lastLoginAt).toBeNull()
+  })
+
+  test('createLoginSession atomically stamps the authenticated user', async () => {
+    const userId = await seedActiveUser(db)
+    const { token, session } = createLoginSession({
+      db,
+      userId,
+      userAgent: 'oidc-test',
+      now: 12_345,
+    })
+
+    expect(await lookupRawHash(db, token)).toBe(true)
+    expect(session).toMatchObject({
+      userId,
+      userAgent: 'oidc-test',
+      createdAt: 12_345,
+      lastUsedAt: 12_345,
+    })
+    expect(db.select().from(users).where(idEq(userId)).get()?.lastLoginAt).toBe(12_345)
   })
 
   test('lookupActiveSession returns null for unknown token', async () => {
