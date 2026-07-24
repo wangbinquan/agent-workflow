@@ -446,6 +446,15 @@ jobs:
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-
 
+      - name: Install current opencode (binary doctor smoke)
+        # RFC-227 intentionally treats a truly missing executable as unhealthy
+        # while accepting any reported version. Give the compiled `doctor`
+        # smoke a real current binary on both supported CI hosts.
+        run: |
+          bun install -g opencode-ai@latest
+          export PATH="$HOME/.bun/bin:$PATH"
+          opencode --version
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
