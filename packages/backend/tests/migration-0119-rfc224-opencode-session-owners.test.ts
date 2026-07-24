@@ -58,10 +58,11 @@ function insertOwner(
     .query(
       `INSERT INTO opencode_session_owners (
          session_id, task_id, node_id, created_node_run_id,
-         identity_digest, official_build_digest, session_contract_digest,
-         session_store_key, project_id, opencode_version,
+         identity_digest, runtime_binary_digest, session_contract_digest,
+         session_store_key, project_id, protocol_codec, reported_version,
          lease_node_run_id, lease_nonce_digest, leased_at
-       ) VALUES (?, ?, 'node-a', ?, 'identity', 'build', 'contract', ?, 'project', '1.18.3',
+       ) VALUES (?, ?, 'node-a', ?, 'identity', '${'a'.repeat(64)}', 'contract', ?,
+                 'project', 'opencode-direct-v1', '1.18.3',
                  ?, ?, ?)`,
     )
     .run(
@@ -107,11 +108,12 @@ describe('migration 0119 RFC-224 OpenCode session owners', () => {
       'node_id',
       'created_node_run_id',
       'identity_digest',
-      'official_build_digest',
+      'runtime_binary_digest',
       'session_contract_digest',
       'session_store_key',
       'project_id',
-      'opencode_version',
+      'protocol_codec',
+      'reported_version',
       'lease_node_run_id',
       'lease_nonce_digest',
       'leased_at',
@@ -122,11 +124,11 @@ describe('migration 0119 RFC-224 OpenCode session owners', () => {
       'node_id',
       'created_node_run_id',
       'identity_digest',
-      'official_build_digest',
+      'runtime_binary_digest',
       'session_contract_digest',
       'session_store_key',
       'project_id',
-      'opencode_version',
+      'protocol_codec',
     ]) {
       expect(columns.find((column) => column.name === name)?.notnull).toBe(1)
     }

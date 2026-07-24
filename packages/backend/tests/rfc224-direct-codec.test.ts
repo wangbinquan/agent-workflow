@@ -216,7 +216,7 @@ describe('RFC-224 direct session codec happy paths', () => {
     },
   )
 
-  test('maps terminal parts to the v1.18.3 run --format json record shape', () => {
+  test('maps terminal parts to the direct-codec JSON record shape', () => {
     const instance = codec({ thinking: true })
     ready(instance)
     instance.consume(wire('message.updated', { sessionID, info: assistant(assistant1ID) }))

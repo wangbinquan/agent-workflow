@@ -13,7 +13,8 @@ import { Database } from 'bun:sqlite'
 import { ExecutionIdentityFailure, executionIdentityFailure } from './failure'
 
 export const OPENCODE_STORE_LOCK_BASENAME = '.agent-workflow-store.lock'
-const STORE_LOCK_CODEC = 1 as const
+const LEGACY_STORE_LOCK_CODEC = 1 as const
+const STORE_LOCK_CODEC = 2 as const
 const ACCOUNT_TABLES = ['account_state', 'account', 'control_account'] as const
 
 type AccountTable = (typeof ACCOUNT_TABLES)[number]
@@ -79,7 +80,7 @@ export interface OpencodeStoreServerBinding {
   /** PID as observed inside the RFC-205 bwrap PID namespace. */
   pidNamespace: number
   binaryPath: string
-  officialBuildDigest: string
+  runtimeBinaryDigest: string
   startedAt: number
   sessionStoreKey: string
   scope:
@@ -110,8 +111,8 @@ interface StoreLockPayload {
 export interface ScrubOpencodeStoreInput {
   dbPath: string
   /**
-   * `existing` is a persistent business resume store and must already have the
-   * pinned v1.18.3 DB. `fresh` may legitimately have no DB before first serve.
+   * `existing` is a persistent business resume store. `fresh` may legitimately
+   * have no DB before first serve.
    */
   kind: 'fresh' | 'existing'
   lock: OpencodeStoreLifecycleLock
@@ -201,7 +202,7 @@ function parseLockPayload(raw: string): StoreLockPayload {
     const record = value as Record<string, unknown>
     if (
       Object.keys(record).sort().join(',') !== 'codec,nonce,server' ||
-      record.codec !== STORE_LOCK_CODEC ||
+      (record.codec !== STORE_LOCK_CODEC && record.codec !== LEGACY_STORE_LOCK_CODEC) ||
       typeof record.nonce !== 'string'
     ) {
       unsafe()
@@ -218,14 +219,19 @@ function parseLockPayload(raw: string): StoreLockPayload {
       unsafe()
     }
     const server = record.server as Record<string, unknown>
+    const legacy = record.codec === LEGACY_STORE_LOCK_CODEC
+    const digestKey = legacy ? 'officialBuildDigest' : 'runtimeBinaryDigest'
+    const runtimeBinaryDigest = server[digestKey]
     if (
       Object.keys(server).sort().join(',') !==
-        'binaryPath,officialBuildDigest,pidNamespace,scope,sessionStoreKey,startedAt' ||
+        (legacy
+          ? 'binaryPath,officialBuildDigest,pidNamespace,scope,sessionStoreKey,startedAt'
+          : 'binaryPath,pidNamespace,runtimeBinaryDigest,scope,sessionStoreKey,startedAt') ||
       !Number.isSafeInteger(server.pidNamespace) ||
       (server.pidNamespace as number) <= 0 ||
       typeof server.binaryPath !== 'string' ||
-      typeof server.officialBuildDigest !== 'string' ||
-      !/^[0-9a-f]{64}$/.test(server.officialBuildDigest) ||
+      typeof runtimeBinaryDigest !== 'string' ||
+      !/^[0-9a-f]{64}$/.test(runtimeBinaryDigest) ||
       !Number.isSafeInteger(server.startedAt) ||
       (server.startedAt as number) < 0 ||
       typeof server.sessionStoreKey !== 'string' ||
@@ -280,7 +286,7 @@ function parseLockPayload(raw: string): StoreLockPayload {
       server: {
         pidNamespace: server.pidNamespace as number,
         binaryPath: server.binaryPath,
-        officialBuildDigest: server.officialBuildDigest,
+        runtimeBinaryDigest,
         startedAt: server.startedAt as number,
         sessionStoreKey: server.sessionStoreKey,
         scope: parsedScope,

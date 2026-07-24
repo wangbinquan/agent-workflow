@@ -15,6 +15,12 @@
   均为 terminal success，T32 / AC10 已满足）
 - 关联：RFC-223（多租户资源标识——本 RFC 承接其 §6 拆出的执行完整性关切）
 
+> **RFC-227 supersession（2026-07-24）**：本文的 official `1.18.3` exact-hash allowlist
+> 与 Linux-only admission 已被 RFC-227 取代。binary snapshot/re-hash、hermetic config、
+> same-instance attestation、session owner/lease 与 fail-closed identity 仍保留；当前准入使用
+> administrator-selected binary digest、`opencode-direct-v1` 行为 codec 与开放 containment
+> provider capability。以下原文保留为历史设计证据。
+
 ## 1. 背景
 
 RFC-223 设计门核实官方 opencode v1.18.3 后确认：平台过去认为

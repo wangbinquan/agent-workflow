@@ -2,8 +2,8 @@
 //
 // This process is the only production caller of `opencode serve`. It consumes
 // one private manifest, re-attests every frozen identity input, owns the
-// loopback server and SSE stream, and writes only the pinned `run --format
-// json` records to stdout. All diagnostic failures use the closed stable-code
+// loopback server and SSE stream, and writes only behavior-qualified direct
+// protocol records to stdout. All diagnostic failures use the closed stable-code
 // channel; host paths, HTTP bodies, config values and credentials are never
 // interpolated into stderr.
 
@@ -13,7 +13,7 @@ import { dirname, isAbsolute, join, resolve } from 'node:path'
 import type { ExecutionIdentityFailureCode } from '@agent-workflow/shared'
 import {
   AscendingMessageIdGenerator,
-  PINNED_OPENCODE_VERSION,
+  OPENCODE_DIRECT_PROTOCOL_CODEC,
   SessionInventoryAccumulator,
   assertMessageIdAfterHistory,
   buildCreateSessionRequest,
@@ -43,7 +43,7 @@ import {
   assertBundledProviderImplementation,
   removeHermeticOpencodeLayout,
 } from './hermetic'
-import { OfficialOpencodeBinaryError, verifyOfficialSnapshot } from './officialBuilds'
+import { RuntimeOpencodeBinaryError, verifyRuntimeOpencodeSnapshot } from './runtimeBinary'
 import {
   assertSourceFingerprintUnchanged,
   scanOpencodeProjectSurface,
@@ -296,10 +296,10 @@ function safeMismatch(code: ExecutionIdentityFailureCode = 'execution-identity-m
 }
 
 /**
- * Validate the exact v1.18.3 `/config/providers` shape needed to prove that
- * the selected model resolves to a bundled implementation. The endpoint is
- * already bounded to finite plain JSON by DirectClient; this closes its
- * identity-bearing outer/provider/model fields without logging any value.
+ * Validate the exact `opencode-direct-v1` `/config/providers` shape needed to
+ * prove that the selected model resolves to a bundled implementation. The
+ * endpoint is already bounded to finite plain JSON by DirectClient; this
+ * closes identity-bearing outer/provider/model fields without logging values.
  */
 export function verifySelectedProviderInventory(value: unknown, selected: SelectedModel): void {
   if (
@@ -421,7 +421,6 @@ function expectedSessionContract(manifest: VerifiedLaunchManifest): unknown {
     share: null,
     revert: null,
     metadata: null,
-    version: PINNED_OPENCODE_VERSION,
   }
 }
 
@@ -432,7 +431,7 @@ function verifyManifestDigests(manifest: VerifiedLaunchManifest): void {
           config: manifest.expectedConfig,
           agent: manifest.selectedAgent,
           model: manifest.selectedModel,
-          officialBuildDigest: manifest.officialBuildDigest,
+          binaryDigest: manifest.binaryDigest,
           sealRoot: join(manifest.runRoot, 'opencode-identity-seal'),
         })
       : identityDigest({
@@ -440,7 +439,7 @@ function verifyManifestDigests(manifest: VerifiedLaunchManifest): void {
           config: manifest.expectedConfig,
           agent: manifest.selectedAgent,
           model: manifest.selectedModel,
-          officialBuildDigest: manifest.officialBuildDigest,
+          binaryDigest: manifest.binaryDigest,
         })
   if (
     expectedIdentity !== manifest.identityDigest ||
@@ -671,7 +670,6 @@ function sessionExpectation(
     title: manifest.sessionTitle,
     agent: manifest.selectedAgent,
     model: manifest.selectedModel,
-    version: PINNED_OPENCODE_VERSION,
   }
 }
 
@@ -946,7 +944,7 @@ async function settleWithin(
 function stableFailureCode(error: unknown): ExecutionIdentityFailureCode {
   if (error instanceof ExecutionIdentityFailure) return error.code
   if (error instanceof ExecutionIdentityError) return error.code
-  if (error instanceof OfficialOpencodeBinaryError) return error.code
+  if (error instanceof RuntimeOpencodeBinaryError) return error.code
   if (error instanceof LauncherPhaseError) return error.code
   return 'execution-identity-mismatch'
 }
@@ -960,7 +958,7 @@ export async function launchVerifiedOpencodeManifest(
   manifest: VerifiedLaunchManifest,
   dependencies: VerifiedLauncherDependencies = {},
 ): Promise<void> {
-  const verifySnapshot = dependencies.verifySnapshot ?? verifyOfficialSnapshot
+  const verifySnapshot = dependencies.verifySnapshot ?? verifyRuntimeOpencodeSnapshot
   const runFffProbe = dependencies.runFffProbe ?? runFffCapabilityProbe
   const scanSource = dependencies.scanSource ?? scanOpencodeProjectSurface
   const acquireStoreLock = dependencies.acquireStoreLock ?? acquireOpencodeStoreLifecycleLock
@@ -993,13 +991,15 @@ export async function launchVerifiedOpencodeManifest(
   ) {
     return executionIdentityFailure('execution-identity-source-changed')
   }
-  await verifySnapshot(manifest.binaryPath, manifest.officialBuildDigest)
-  await runFffProbe({
-    binaryPath: manifest.binaryPath,
-    runRoot: manifest.runRoot,
-    probe: manifest.fffProbe,
-    timeoutMs: manifest.bootstrapTimeoutMs,
-  })
+  await verifySnapshot(manifest.binaryPath, manifest.binaryDigest)
+  if (manifest.fffProbe !== undefined) {
+    await runFffProbe({
+      binaryPath: manifest.binaryPath,
+      runRoot: manifest.runRoot,
+      probe: manifest.fffProbe,
+      timeoutMs: manifest.bootstrapTimeoutMs,
+    })
+  }
 
   let lock: OpencodeStoreLifecycleLock | undefined
   let lockWasAcquired = false
@@ -1028,7 +1028,7 @@ export async function launchVerifiedOpencodeManifest(
 
     // Reverify immediately before exec. Nothing below may switch back to the
     // registry/source executable.
-    await verifySnapshot(manifest.binaryPath, manifest.officialBuildDigest)
+    await verifySnapshot(manifest.binaryPath, manifest.binaryDigest)
     child = spawnServer({
       command: [
         manifest.binaryPath,
@@ -1045,7 +1045,7 @@ export async function launchVerifiedOpencodeManifest(
     await bindStoreServer(lock, {
       pidNamespace: child.pid,
       binaryPath: manifest.binaryPath,
-      officialBuildDigest: manifest.officialBuildDigest,
+      runtimeBinaryDigest: manifest.binaryDigest,
       // Do not consume the injected direct-codec clock: its monotonic sequence
       // is part of caller/assistant ID ordering, while this is audit metadata.
       startedAt: Date.now(),
@@ -1132,7 +1132,9 @@ export async function launchVerifiedOpencodeManifest(
                   kind: manifest.mode,
                   sessionId: session.id,
                   projectId: session.projectID,
-                  version: PINNED_OPENCODE_VERSION,
+                  reportedVersion: session.version,
+                  binaryDigest: manifest.binaryDigest,
+                  protocolCodec: OPENCODE_DIRECT_PROTOCOL_CODEC,
                   nodeRunId: manifest.nodeRunId,
                   leaseNonceDigest: manifest.leaseNonceDigest,
                 })}\n`,

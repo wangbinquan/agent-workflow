@@ -20,10 +20,10 @@
 //   RUN_OPENCODE_INTEGRATION=1 bun test \
 //     packages/backend/tests/integration-opencode/
 //
-// Pinning: the workflow runs each test twice — once against a pinned
-// opencode version (the MIN_OPENCODE_VERSION the platform requires) and once
-// against `latest`. The pinned leg catches "old opencode regressed against
-// new framework", the latest leg catches "new opencode broke our parser".
+// Matrix: the workflow runs each test against a historical behavior fixture
+// and `latest`. Neither entry is an allowlist or admission boundary. The
+// historical leg catches framework regressions against an older executable;
+// the latest leg catches upstream behavior drift.
 //
 // Cost / flakiness: each LIVE case spends ~3-15s in a real LLM call. Total
 // suite wall-clock ~30-60s. `retries: 1` (in playwright/integration profile)
@@ -185,9 +185,9 @@ function joinStdoutText(events: Array<Record<string, unknown>>): string {
 
 describe.skipIf(SKIP)('RFC-054 W2-1 — real opencode integration', () => {
   // Case 1: opencode --version smoke. No LLM call. Locks "the CLI is on PATH
-  // and exposes its version string in the format we parse upstream
-  // (semver). If a future opencode renames the flag or drops --version, the
-  // daemon's MIN_OPENCODE_VERSION probe breaks — catch it here first."
+  // and exposes optional version telemetry in the familiar semver form."
+  // Admission never compares this value; loss of the command is still useful
+  // diagnostic drift for the dedicated integration workflow.
   test('opencode --version emits a parseable semver', () => {
     const raw = execFileSync(OPENCODE_BIN, ['--version'], { encoding: 'utf-8' }).trim()
     expect(raw).toMatch(/^\d+\.\d+\.\d+/)

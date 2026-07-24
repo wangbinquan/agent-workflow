@@ -19,6 +19,7 @@ import { join } from 'node:path'
 const nonce = 'A'.repeat(43)
 const sessionID = 'ses_000000001001AAAAAAAAAAAAAA'
 const leaseNonceDigest = 'a'.repeat(64)
+const binaryDigest = 'b'.repeat(64)
 const roots: string[] = []
 
 afterEach(() => {
@@ -31,7 +32,9 @@ describe('RFC-224 session-ready stderr control marker', () => {
       kind: 'new' as const,
       sessionId: sessionID,
       projectId: 'project-1',
-      version: '1.18.3' as const,
+      reportedVersion: '1.18.3',
+      binaryDigest,
+      protocolCodec: 'opencode-direct-v1' as const,
       nodeRunId: 'run-1',
       leaseNonceDigest,
     }
@@ -54,7 +57,9 @@ describe('RFC-224 session-ready stderr control marker', () => {
       kind: 'new' as const,
       sessionId: sessionID,
       projectId: 'project-1',
-      version: '1.18.3',
+      reportedVersion: 'custom-fork',
+      binaryDigest,
+      protocolCodec: 'opencode-direct-v1',
       nodeRunId: 'run-1',
       leaseNonceDigest,
     } as const

@@ -13,7 +13,11 @@ import {
 } from 'node:fs'
 import { timingSafeEqual } from 'node:crypto'
 import { z } from 'zod'
-import { PINNED_OPENCODE_VERSION, SessionIdSchema, parseDirectApiValue } from './directApiSchemas'
+import {
+  OPENCODE_DIRECT_PROTOCOL_CODEC,
+  SessionIdSchema,
+  parseDirectApiValue,
+} from './directApiSchemas'
 import { canonicalizeIdentity } from './executionIdentity'
 
 export const CONTROL_LINE_PREFIX = 'AW_OPENCODE_CONTROL ' as const
@@ -28,7 +32,10 @@ export const SessionReadyMarkerSchema = z
     kind: z.enum(['new', 'resume']),
     sessionId: SessionIdSchema,
     projectId: z.string().min(1).max(256),
-    version: z.literal(PINNED_OPENCODE_VERSION),
+    /** Upstream-reported telemetry; never an admission gate. */
+    reportedVersion: z.string().min(1).max(256).nullable(),
+    binaryDigest: z.string().regex(/^[0-9a-f]{64}$/),
+    protocolCodec: z.literal(OPENCODE_DIRECT_PROTOCOL_CODEC),
     nodeRunId: z.string().min(1).max(256),
     leaseNonceDigest: z.string().regex(/^[0-9a-f]{64}$/),
   })

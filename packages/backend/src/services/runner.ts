@@ -594,7 +594,9 @@ export function processRunnerOpencodeControlLine(input: {
     if (
       marker.kind !== input.control.mode ||
       marker.nodeRunId !== input.nodeRunId ||
-      marker.leaseNonceDigest !== input.control.leaseNonceDigest
+      marker.leaseNonceDigest !== input.control.leaseNonceDigest ||
+      marker.binaryDigest !== input.control.runtimeBinaryDigest ||
+      marker.protocolCodec !== input.control.protocolCodec
     ) {
       throw new ExecutionIdentityFailure('execution-identity-control-failed')
     }
@@ -614,11 +616,12 @@ export function processRunnerOpencodeControlLine(input: {
         nodeId: input.nodeId,
         currentNodeRunId: input.nodeRunId,
         identityDigest: input.control.identityDigest,
-        officialBuildDigest: input.control.officialBuildDigest,
+        runtimeBinaryDigest: input.control.runtimeBinaryDigest,
         sessionContractDigest: input.control.sessionContractDigest,
         sessionStoreKey: input.control.sessionStoreKey,
         projectId: marker.projectId,
-        opencodeVersion: marker.version,
+        protocolCodec: marker.protocolCodec,
+        reportedVersion: marker.reportedVersion,
         leaseNonceDigest: input.control.leaseNonceDigest,
       })
       token = {
@@ -638,13 +641,13 @@ export function processRunnerOpencodeControlLine(input: {
         owner === undefined ||
         marker.sessionId !== expectedSessionId ||
         marker.projectId !== owner.projectId ||
-        marker.version !== owner.opencodeVersion ||
         owner.sessionId !== expectedSessionId ||
         owner.taskId !== input.taskId ||
         owner.nodeId !== input.nodeId ||
         input.control.createdNodeRunId !== owner.createdNodeRunId ||
         input.control.identityDigest !== owner.identityDigest ||
-        input.control.officialBuildDigest !== owner.officialBuildDigest ||
+        input.control.runtimeBinaryDigest !== owner.runtimeBinaryDigest ||
+        input.control.protocolCodec !== owner.protocolCodec ||
         input.control.sessionContractDigest !== owner.sessionContractDigest ||
         input.control.sessionStoreKey !== owner.sessionStoreKey ||
         token === undefined ||
@@ -1061,11 +1064,12 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         nodeId: owner.nodeId,
         createdNodeRunId: owner.createdNodeRunId,
         identityDigest: owner.identityDigest,
-        officialBuildDigest: owner.officialBuildDigest,
+        runtimeBinaryDigest: owner.runtimeBinaryDigest,
         sessionContractDigest: owner.sessionContractDigest,
         sessionStoreKey: owner.sessionStoreKey,
         projectId: owner.projectId,
-        opencodeVersion: owner.opencodeVersion,
+        protocolCodec: owner.protocolCodec,
+        reportedVersion: owner.reportedVersion,
         currentNodeRunId: opts.nodeRunId,
         leaseNonceDigest: opencodeLeaseNonceDigest!,
       })
@@ -1227,7 +1231,8 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       (opencodeResumeOwner !== undefined &&
         (opencodeControl.createdNodeRunId !== opencodeResumeOwner.createdNodeRunId ||
           opencodeControl.identityDigest !== opencodeResumeOwner.identityDigest ||
-          opencodeControl.officialBuildDigest !== opencodeResumeOwner.officialBuildDigest ||
+          opencodeControl.runtimeBinaryDigest !== opencodeResumeOwner.runtimeBinaryDigest ||
+          opencodeControl.protocolCodec !== opencodeResumeOwner.protocolCodec ||
           opencodeControl.sessionContractDigest !== opencodeResumeOwner.sessionContractDigest ||
           opencodeControl.sessionStoreKey !== opencodeResumeOwner.sessionStoreKey)))
   ) {
@@ -1283,10 +1288,25 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
             ]),
           ],
         }
-  if (sandboxCtx !== undefined && sandboxCtx.mode === 'warn' && !sandboxCtx.status.available) {
-    // Degraded: mechanism missing under warn — run unsandboxed but LOUDLY.
+  const containmentDegradedReasons = Array.isArray(plan.diagnostics?.containmentDegradedReasons)
+    ? plan.diagnostics.containmentDegradedReasons.filter(
+        (value): value is string => typeof value === 'string',
+      )
+    : []
+  if (
+    sandboxCtx !== undefined &&
+    sandboxCtx.mode === 'warn' &&
+    (!sandboxCtx.status.available || containmentDegradedReasons.length > 0)
+  ) {
+    // Degraded: mechanism/capability missing under warn — run with the
+    // explicitly selected reduced boundary but surface it loudly.
     // One open alert per task (rule-deduped), so a 50-node task doesn't spam.
-    await alertSandboxDegradedOnce(opts.db, opts.taskId, sandboxCtx.status.detail, log)
+    await alertSandboxDegradedOnce(
+      opts.db,
+      opts.taskId,
+      containmentDegradedReasons.join(', ') || sandboxCtx.status.detail,
+      log,
+    )
   }
 
   log.info('spawning agent runtime', {

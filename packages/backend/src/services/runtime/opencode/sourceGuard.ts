@@ -53,8 +53,8 @@ async function existsUnsafe(path: string): Promise<boolean> {
 }
 
 /**
- * Apply the pinned v1.18.3 discovery search domain without ever importing or
- * parsing a project-owned file. Presence alone is unsupported.
+ * Apply the behavior codec's frozen discovery search domain without ever
+ * importing or parsing a project-owned file. Presence alone is unsupported.
  */
 export async function scanOpencodeProjectSurface(
   worktreePath: string,

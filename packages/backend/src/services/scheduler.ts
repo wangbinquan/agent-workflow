@@ -3434,9 +3434,9 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         // below:
         //   - 'missing-session-id'           — decideResumeSessionId, pre-spawn
         //   - 'session-not-found'            — stderr inspection, post-spawn
-        //   - 'unsupported-opencode-version' — reserved for the daemon version
-        //                                      probe (not yet wired here; see
-        //                                      design.md §15)
+        //   - 'session-resume-unsupported'   — reserved for an explicit
+        //                                      behavior/capability probe (not
+        //                                      inferred from a version string)
         const resumeDecision = decideResumeSessionId({
           sessionMode: isClarifyRerun ? sessionMode : 'isolated',
           sourceSessionId: priorSessionId,

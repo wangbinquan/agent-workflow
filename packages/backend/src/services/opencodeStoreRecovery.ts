@@ -1,11 +1,10 @@
 // RFC-224 T5/T14/T21 — prior-daemon OpenCode store recovery and retention GC.
 //
-// Every verified launcher runs inside RFC-205's root-owned bwrap with
-// --unshare-pid + --die-with-parent. At boot the daemon already owns the
-// single-instance lock and `reapOrphanRuns` has killed/reaped the persisted
-// outer bwrap group. Only then may this barrier treat the prior namespace as
-// dead, remove the exact fsynced store lock, scrub account state, and repair
-// the session lease by its session/run/nonce triple.
+// Every verified launcher is owned by the daemon's platform containment
+// provider/process group. At boot the daemon already owns the single-instance
+// lock and `reapOrphanRuns` has killed/reaped the persisted outer group. Only
+// then may this barrier remove the exact fsynced store lock, scrub account
+// state, and repair the session lease by its session/run/nonce triple.
 
 import { eq } from 'drizzle-orm'
 import { lstat, readdir, stat } from 'node:fs/promises'
@@ -20,11 +19,9 @@ import {
 import { repairOpencodeSessionLease } from '@/services/opencodeSessionOwner'
 import { executionIdentityFailure } from '@/services/runtime/opencode/failure'
 import {
-  PINNED_OPENCODE_VERSION,
   deriveHermeticOpencodeLayout,
   removeHermeticOpencodeLayout,
 } from '@/services/runtime/opencode/hermetic'
-import { requireOfficialOpencodeBuild } from '@/services/runtime/opencode/officialBuilds'
 import {
   acquireOpencodeStoreLifecycleLock,
   inspectAbandonedOpencodeStoreLock,
@@ -54,7 +51,6 @@ interface RecoveryRun {
 }
 
 export interface OpencodeStoreRecoveryDependencies {
-  expectedOfficialBuildDigest?: () => string
   outerProcessGroupDead?: (run: RecoveryRun) => boolean
 }
 
@@ -206,11 +202,6 @@ export async function recoverOpencodeStoresOnBoot(input: {
     storesRemoved: 0,
   }
   if (businessStores.length === 0 && systemStores.length === 0) return report
-  const expectedOfficialBuildDigest = (
-    input.dependencies?.expectedOfficialBuildDigest ??
-    (() =>
-      requireOfficialOpencodeBuild(PINNED_OPENCODE_VERSION, process.platform, process.arch).digest)
-  )()
   const outerProcessGroupDead =
     input.dependencies?.outerProcessGroupDead ?? defaultOuterProcessGroupDead
   for (const store of businessStores) {
@@ -227,8 +218,7 @@ export async function recoverOpencodeStoresOnBoot(input: {
         if (
           server.scope.kind !== 'business' ||
           server.scope.mode !== 'new' ||
-          server.sessionStoreKey !== store.key ||
-          server.officialBuildDigest !== expectedOfficialBuildDigest
+          server.sessionStoreKey !== store.key
         ) {
           unsafe()
         }
@@ -244,10 +234,7 @@ export async function recoverOpencodeStoresOnBoot(input: {
       continue
     }
 
-    if (
-      owner.sessionStoreKey !== store.key ||
-      owner.officialBuildDigest !== expectedOfficialBuildDigest
-    ) {
+    if (owner.sessionStoreKey !== store.key) {
       unsafe()
     }
     if (abandonedLock !== null) {
@@ -256,7 +243,7 @@ export async function recoverOpencodeStoresOnBoot(input: {
         if (
           server.scope.kind !== 'business' ||
           server.sessionStoreKey !== store.key ||
-          server.officialBuildDigest !== owner.officialBuildDigest
+          server.runtimeBinaryDigest !== owner.runtimeBinaryDigest
         ) {
           unsafe()
         }
@@ -308,8 +295,7 @@ export async function recoverOpencodeStoresOnBoot(input: {
       if (
         server.scope.kind !== 'system-ephemeral' ||
         server.scope.invocationId !== store.key ||
-        server.sessionStoreKey !== store.key ||
-        server.officialBuildDigest !== expectedOfficialBuildDigest
+        server.sessionStoreKey !== store.key
       ) {
         unsafe()
       }

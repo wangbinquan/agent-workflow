@@ -4,7 +4,7 @@
 //  (A) 派生单源——RUNTIME_PROTOCOLS / BUILTIN_RUNTIMES / ProtocolSchema 从
 //      DRIVERS 派生，且 nodeRunMint / runtimeRegistry 不再硬编码
 //      `'opencode' || 'claude-code'` 字面量集合。
-//  (B) 能力接口——RuntimeDriver 已长出 PR-1 的必需能力方法（minVersion /
+//  (B) 能力接口——RuntimeDriver 已长出 PR-1 的必需能力方法（可空 minVersion /
 //      defaultBinary / probe / listModels / captureSessions），两个内建 driver
 //      都实现了它们。mock driver 骨架证明「注册即扩展」：一个第三 kind 的
 //      driver 只要实现接口就能被 getRuntimeDriver 契约消费——buildBusinessSpawn
@@ -65,15 +65,17 @@ describe('RFC-143 (A) 派生单源', () => {
 })
 
 describe('RFC-143 (B) 能力接口', () => {
-  it('两内建 driver 都实现了 PR-1 必需能力方法 + minVersion', () => {
+  it('两内建 driver 都实现了 PR-1 必需能力方法；OpenCode 不设版本门槛', () => {
     for (const kind of RUNTIME_KINDS) {
       const d = getRuntimeDriver(kind)
-      expect(typeof d.minVersion).toBe('string')
+      expect(d.minVersion === null || typeof d.minVersion === 'string').toBe(true)
       expect(typeof d.defaultBinary).toBe('function')
       expect(typeof d.probe).toBe('function')
       expect(typeof d.listModels).toBe('function')
       expect(typeof d.captureSessions).toBe('function')
     }
+    expect(getRuntimeDriver('opencode').minVersion).toBeNull()
+    expect(typeof getRuntimeDriver('claude-code').minVersion).toBe('string')
   })
 
   it('defaultBinary：config path 优先，否则内建名', () => {

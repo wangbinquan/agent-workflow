@@ -87,7 +87,13 @@ export const enUS: Resources = {
       item: {
         ready: '{{name}} v{{version}}',
         readyNoVersion: '{{name}} ok',
+        availableUnverifiedVersion: '{{name}} v{{version}} · protocol not tested',
+        availableUnverified: '{{name}} available · protocol not tested',
         missing: '{{name}} not found',
+        unlaunchable: '{{name}} cannot start',
+        protocolIncompatible: '{{name}} protocol incompatible',
+        containmentBlocked: '{{name}} blocked by isolation policy',
+        degraded: '{{name}} available · isolation degraded',
       },
     },
     section: {
@@ -939,7 +945,11 @@ export const enUS: Resources = {
       modeHint:
         'Enforce: refuse to launch new tasks while the sandbox mechanism is unavailable; Warn: degrade to unsandboxed runs with an alert; Off: never sandbox.',
       enforceUnavailable:
-        'No working sandbox mechanism was detected on this machine — under Enforce, new task launches will be refused.',
+        'The active provider does not satisfy every required containment capability — under Enforce, new task launches will be refused.',
+      warnDegraded:
+        'Containment is degraded. Runs are permitted in Warn mode, but model-reachable child processes may access host resources or the network.',
+      lifetimeBestEffort:
+        'This provider enforces the filesystem and network baseline, but descendant lifetime cleanup is best effort on this platform.',
     },
   },
   onboarding: {
@@ -2208,13 +2218,13 @@ export const enUS: Resources = {
       'port-validation-failed__hint':
         'Check the port validation info in the node drawer, then Resume to retry.',
       'execution-identity-untrusted-binary':
-        'The selected OpenCode executable is not a trusted official build.',
+        'The selected OpenCode executable could not be frozen and verified for this run.',
       'execution-identity-untrusted-binary__hint':
-        'Install the supported official OpenCode build or select its verified executable.',
+        'Check the configured executable path and permissions, then run the runtime test again.',
       'execution-identity-sandbox-required':
-        'This OpenCode run requires the secure Linux sandbox, but it is unavailable.',
+        'This OpenCode run requires platform containment, but the required capabilities are unavailable.',
       'execution-identity-sandbox-required__hint':
-        'Run the daemon on a supported Linux host with the required sandbox enabled.',
+        'Enable a supported containment provider, or explicitly choose Warn/Off to accept a degraded run.',
       'execution-identity-project-config-unsupported':
         'The workspace contains OpenCode project configuration that cannot be safely isolated.',
       'execution-identity-project-config-unsupported__hint':
@@ -2235,9 +2245,9 @@ export const enUS: Resources = {
       'execution-identity-auth-invalid__hint':
         'Update the provider API credentials and retry with a new run.',
       'execution-identity-provider-untrusted':
-        'The selected model provider is not part of the trusted OpenCode build.',
+        'The selected model provider does not match the verified runtime inventory.',
       'execution-identity-provider-untrusted__hint':
-        'Choose a provider/model bundled by the supported official OpenCode build.',
+        'Choose a provider/model exposed by the selected OpenCode runtime.',
       'execution-identity-bootstrap-failed':
         'OpenCode failed its verified startup check before model execution.',
       'execution-identity-bootstrap-failed__hint':

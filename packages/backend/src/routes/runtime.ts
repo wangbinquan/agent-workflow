@@ -16,7 +16,7 @@ import { parseBoolQuery } from '@/util/http'
 import { getRuntimeDriver, type RuntimeKind } from '@/services/runtime'
 import { resolveRuntimeByName } from '@/services/runtimeRegistry'
 import { redactSensitiveString } from '@/util/redact'
-import { withOfficialOpencodeSnapshot as productionOfficialOpencodeSnapshot } from '@/services/runtime/opencode/officialBuilds'
+import { withRuntimeOpencodeSnapshot as productionRuntimeOpencodeSnapshot } from '@/services/runtime/opencode/runtimeBinary'
 import { dirname, join } from 'node:path'
 import { mkdir } from 'node:fs/promises'
 import {
@@ -45,9 +45,9 @@ function executionIdentityCode(error: unknown): ExecutionIdentityFailureCode | n
 }
 
 export function mountRuntimeRoutes(app: Hono, deps: AppDeps): void {
-  const withOfficialOpencodeSnapshot =
-    deps.runtimeDiagnosticTestDependencies?.withOfficialOpencodeSnapshot ??
-    productionOfficialOpencodeSnapshot
+  const withRuntimeOpencodeSnapshot =
+    deps.runtimeDiagnosticTestDependencies?.withRuntimeOpencodeSnapshot ??
+    productionRuntimeOpencodeSnapshot
 
   app.get('/api/runtime/models', async (c) => {
     const cfg = loadConfig(deps.configPath)
@@ -83,7 +83,7 @@ export function mountRuntimeRoutes(app: Hono, deps: AppDeps): void {
       if (kind !== 'opencode') {
         return c.json(await driver.listModels(binary, { refresh }))
       }
-      const listed = await withOfficialOpencodeSnapshot([binary], async (snapshot) => {
+      const listed = await withRuntimeOpencodeSnapshot([binary], async (snapshot) => {
         const root = dirname(snapshot)
         const home = join(root, 'home')
         const cwd = join(root, 'cwd')
@@ -110,7 +110,7 @@ export function mountRuntimeRoutes(app: Hono, deps: AppDeps): void {
           ].map((path) => mkdir(path, { recursive: true, mode: 0o700 })),
         )
         // `models` still initializes OpenCode's configuration stack. An
-        // official executable alone is therefore insufficient: run it from a
+        // frozen executable alone is therefore insufficient: run it from a
         // private source-guarded cwd with every config/auth root redirected,
         // so a repo/V2 plugin or host account cannot execute during inventory.
         const sourceBefore = await scanOpencodeProjectSurface(cwd)

@@ -5,7 +5,6 @@ import { executionIdentityFailure } from './failure'
 import { canonicalizeIdentity, type IdentityJson } from './executionIdentity'
 import { assertOpencodeStoreUnlocked } from './storeHygiene'
 
-export const PINNED_OPENCODE_VERSION = '1.18.3' as const
 export const OPENCODE_FFF_CAPABILITY_CODEC = 1 as const
 export const PINNED_BUILTIN_SKILL = Object.freeze({
   name: 'customize-opencode',
@@ -248,7 +247,7 @@ export function deriveHermeticOpencodeLayout(rootPath: string): HermeticOpencode
   }
 }
 
-/** Materialize every v1.18.3 ConfigPaths root as a distinct private path. */
+/** Materialize every config-discovery root owned by the behavior codec. */
 export async function prepareHermeticOpencodeLayout(
   rootPath: string,
 ): Promise<HermeticOpencodeLayout> {
@@ -378,9 +377,9 @@ export function buildHermeticServerEnv(input: HermeticServerEnvInput): Record<st
   env.OPENCODE_TEST_MANAGED_CONFIG_DIR = input.layout.managedConfig
   // Validate with the canonical identity walker, but do not send its
   // key-sorted serialization to OpenCode. Permission object insertion order
-  // is converted into the ordered Agent.Info rule tail by v1.18.3, so sorting
-  // here can move the wildcard external_directory deny ahead of the exact
-  // Truncate.GLOB deny and change the effective execution policy.
+  // is converted into the ordered Agent.Info rule tail by the qualified
+  // implementation, so sorting here can move the wildcard external_directory
+  // deny ahead of the exact Truncate.GLOB deny and change effective policy.
   canonicalizeIdentity(input.config)
   env.OPENCODE_CONFIG_CONTENT = JSON.stringify(input.config)
   env.OPENCODE_AUTH_CONTENT = input.auth.serialized
@@ -466,8 +465,8 @@ export function buildControlledOpencodeConfig(
     lsp: false,
     instructions: [],
     skills: { paths: [], urls: [] },
-    // OPENCODE_DISABLE_PRUNE materializes as `prune:false` in the pinned
-    // v1.18.3 /config response. Keep it in the frozen raw config too so the
+    // OPENCODE_DISABLE_PRUNE materializes as `prune:false` in the qualified
+    // /config response. Keep it in the frozen raw config too so the
     // same-instance comparator proves the complete effective value instead of
     // accepting an upstream-added field.
     compaction: { auto: false, prune: false },

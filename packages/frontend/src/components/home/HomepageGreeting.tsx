@@ -226,8 +226,9 @@ function RuntimeFailure({ failure }: { failure?: RuntimeFailureView }) {
   )
 }
 
-/** ok → green; missing default → fault; missing non-default → soft (D3). */
-function itemSeverity(row: Pick<RuntimeStatusEntry, 'ok' | 'isDefault'>): Severity {
+/** RFC-227 degraded is visible even though policy permits execution. */
+function itemSeverity(row: Pick<RuntimeStatusEntry, 'ok' | 'isDefault' | 'state'>): Severity {
+  if (row.state === 'degraded') return 'soft'
   if (row.ok) return 'ok'
   return row.isDefault ? 'fault' : 'soft'
 }
@@ -238,6 +239,36 @@ function runtimeFailure(row: RuntimeStatusEntry): RuntimeFailureView | undefined
   return {
     title: copy.title,
     ...(copy.hint !== undefined ? { hint: copy.hint } : {}),
+  }
+}
+
+function runtimeItemText(
+  t: (key: string, opts?: Record<string, unknown>) => string,
+  row: RuntimeStatusEntry,
+): string {
+  const state = row.state ?? (row.ok ? 'ready' : 'not-found')
+  switch (state) {
+    case 'ready':
+      return row.version !== null
+        ? t('home.runtime.item.ready', { name: row.name, version: row.version })
+        : t('home.runtime.item.readyNoVersion', { name: row.name })
+    case 'available-unverified':
+      return row.version !== null
+        ? t('home.runtime.item.availableUnverifiedVersion', {
+            name: row.name,
+            version: row.version,
+          })
+        : t('home.runtime.item.availableUnverified', { name: row.name })
+    case 'unlaunchable':
+      return t('home.runtime.item.unlaunchable', { name: row.name })
+    case 'protocol-incompatible':
+      return t('home.runtime.item.protocolIncompatible', { name: row.name })
+    case 'containment-blocked':
+      return t('home.runtime.item.containmentBlocked', { name: row.name })
+    case 'degraded':
+      return t('home.runtime.item.degraded', { name: row.name })
+    case 'not-found':
+      return t('home.runtime.item.missing', { name: row.name })
   }
 }
 
@@ -257,7 +288,10 @@ function describeRuntimes(
     return { kind: 'single', severity: 'soft', text: t('home.runtime.noneEnabled') }
   }
   if (rows.length > AGGREGATE_THRESHOLD) {
-    const ok = rows.filter((r) => r.ok).length
+    // A policy-permitted degraded runtime remains executable, but it is not
+    // healthy. Counting it green in the collapsed view would hide the exact
+    // cross-platform containment warning that the expanded view exposes.
+    const ok = rows.filter((r) => r.ok && r.state !== 'degraded').length
     if (ok === rows.length) {
       return {
         kind: 'single',
@@ -268,7 +302,7 @@ function describeRuntimes(
     // Name the WORST failure, not the first one — a soft grey row must not
     // shadow a red default-runtime fault (design D1 / Codex gate F5).
     const fault = rows.find((r) => !r.ok && r.isDefault)
-    const worst = fault ?? rows.find((r) => !r.ok)
+    const worst = fault ?? rows.find((r) => !r.ok) ?? rows.find((r) => r.state === 'degraded')
     const failure = worst === undefined ? undefined : runtimeFailure(worst)
     return {
       kind: 'single',
@@ -290,11 +324,7 @@ function describeRuntimes(
         severity: itemSeverity(row),
         muted: !row.ok && !row.isDefault,
         ...(failure !== undefined ? { failure } : {}),
-        text: row.ok
-          ? row.version !== null
-            ? t('home.runtime.item.ready', { name: row.name, version: row.version })
-            : t('home.runtime.item.readyNoVersion', { name: row.name })
-          : t('home.runtime.item.missing', { name: row.name }),
+        text: runtimeItemText(t, row),
       }
     }),
   }

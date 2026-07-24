@@ -2,6 +2,11 @@
 
 状态：Done（2026-07-24，用户已批准；设计门与实现门通过）。以 `proposal.md` 为产品合同。
 
+> **RFC-227 supersession（2026-07-24）**：本文保留“daemon 启动不探测 OpenCode”的
+> 当前合同，但显式使用时的 minimum/exact version gate 已被删除。当前 status、执行与恢复
+> 以 binary snapshot digest、direct behavior codec 与 containment capability 准入；
+> 下文旧版本门说明仅是 RFC-226 当时状态。
+
 ## 1. 当前调用链
 
 ```text

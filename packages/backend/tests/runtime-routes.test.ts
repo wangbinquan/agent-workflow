@@ -10,7 +10,7 @@ import { createApp } from '../src/server'
 import { applyConfigPatch, loadConfig } from '../src/config'
 import { clearOpencodeModelsCache } from '../src/util/opencode-models'
 import { createRuntime, seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
-import { FIXTURE_RUNTIME_DIAGNOSTICS } from './helpers/officialOpencodeFixture'
+import { FIXTURE_RUNTIME_DIAGNOSTICS } from './helpers/runtimeOpencodeFixture'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -136,7 +136,7 @@ describe('GET /api/runtime/models', () => {
     ])
   })
 
-  test('production defaults never admit the deterministic fixture executable', async () => {
+  test('production admits an administrator-selected executable without a vendor allowlist', async () => {
     const productionApp = createApp({
       token: TOKEN,
       configPath: h.configPath,
@@ -145,10 +145,10 @@ describe('GET /api/runtime/models', () => {
       db: h.db,
     })
     const res = await req(productionApp, '/api/runtime/models')
-    expect(res.status).toBe(502)
+    expect(res.status).toBe(200)
     expect((await res.json()) as Record<string, unknown>).toMatchObject({
-      code: 'execution-identity-untrusted-binary',
-      message: 'execution-identity-untrusted-binary',
+      binary: h.binaryPath,
+      cached: false,
     })
   })
 
@@ -162,7 +162,7 @@ describe('GET /api/runtime/models', () => {
       db: h.db,
       runtimeDiagnosticTestDependencies: {
         ...FIXTURE_RUNTIME_DIAGNOSTICS,
-        withOfficialOpencodeSnapshot: async <T>(
+        withRuntimeOpencodeSnapshot: async <T>(
           _command: readonly string[],
           _callback: (snapshotPath: string) => Promise<T>,
         ): Promise<T> => {

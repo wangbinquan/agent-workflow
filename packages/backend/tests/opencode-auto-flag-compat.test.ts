@@ -25,7 +25,7 @@ import { join } from 'node:path'
 import type { Agent } from '@agent-workflow/shared'
 import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
 import {
-  OPENCODE_AUTO_FLAG_MIN_VERSION,
+  OPENCODE_AUTO_FLAG_RENAME_VERSION,
   resolveAutoApproveFlag,
 } from '@/services/runtime/opencode/spawn'
 import { opencodeDriver } from '@/services/runtime/opencode/driver'
@@ -46,7 +46,7 @@ beforeEach(() => {
 
 describe('resolveAutoApproveFlag — version gate', () => {
   test('≥1.18.0 → --auto（改名边界含端点）', () => {
-    expect(OPENCODE_AUTO_FLAG_MIN_VERSION).toBe('1.18.0')
+    expect(OPENCODE_AUTO_FLAG_RENAME_VERSION).toBe('1.18.0')
     for (const v of ['1.18.0', '1.18.3', '1.19.0', '2.0.0']) {
       expect(resolveAutoApproveFlag(v)).toBe('--auto')
     }

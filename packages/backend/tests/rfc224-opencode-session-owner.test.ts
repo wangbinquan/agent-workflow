@@ -68,11 +68,12 @@ function newClaim(overrides: Partial<NewOpencodeSessionClaim> = {}): NewOpencode
     nodeId: 'node-a',
     currentNodeRunId: 'run-created',
     identityDigest: 'identity-a',
-    officialBuildDigest: 'build-a',
+    runtimeBinaryDigest: 'a'.repeat(64),
     sessionContractDigest: 'contract-a',
     sessionStoreKey: 'store-a',
     projectId: 'project-a',
-    opencodeVersion: '1.18.3',
+    protocolCodec: 'opencode-direct-v1',
+    reportedVersion: '1.18.3',
     leaseNonceDigest: 'nonce-a',
     leasedAt: 100,
     ...overrides,
@@ -86,11 +87,12 @@ function immutableOf(input: NewOpencodeSessionClaim): OpencodeSessionOwnerImmuta
     nodeId: input.nodeId,
     createdNodeRunId: input.currentNodeRunId,
     identityDigest: input.identityDigest,
-    officialBuildDigest: input.officialBuildDigest,
+    runtimeBinaryDigest: input.runtimeBinaryDigest,
     sessionContractDigest: input.sessionContractDigest,
     sessionStoreKey: input.sessionStoreKey,
     projectId: input.projectId,
-    opencodeVersion: input.opencodeVersion,
+    protocolCodec: input.protocolCodec,
+    reportedVersion: input.reportedVersion,
   }
 }
 
@@ -283,6 +285,37 @@ describe('RFC-224 OpenCode session owner service', () => {
       leaseNodeRunId: null,
       leaseNonceDigest: null,
       leasedAt: null,
+    })
+  })
+
+  test('reported version is telemetry and does not bind an otherwise identical resume', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    await seedTask(db)
+    await seedRun(db, { id: 'run-created' })
+    await seedRun(db, { id: 'run-resume' })
+    const initial = newClaim({ reportedVersion: '0.1-custom' })
+    claimNewOpencodeSession(db, initial)
+    expect(
+      releaseOpencodeSessionLease(db, {
+        sessionId: initial.sessionId,
+        nodeRunId: initial.currentNodeRunId,
+        leaseNonceDigest: initial.leaseNonceDigest,
+      }),
+    ).toBe(true)
+
+    const claimed = preclaimOpencodeSessionResume(db, {
+      ...immutableOf(initial),
+      reportedVersion: '9999.0-future',
+      currentNodeRunId: 'run-resume',
+      leaseNonceDigest: 'nonce-resume',
+      leasedAt: 250,
+    })
+
+    expect(claimed).toMatchObject({
+      runtimeBinaryDigest: initial.runtimeBinaryDigest,
+      protocolCodec: initial.protocolCodec,
+      reportedVersion: '0.1-custom',
+      leaseNodeRunId: 'run-resume',
     })
   })
 

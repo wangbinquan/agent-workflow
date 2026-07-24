@@ -2,6 +2,10 @@
 
 状态：Done（2026-07-24，用户已批准；设计门与实现门通过，本地交付未提交/推送）。
 
+> **RFC-227 supersession（2026-07-24）**：本文“版本门后移”的已勾任务是历史交付记录。
+> daemon 启动解耦继续有效；显式运行时的版本准入已由 RFC-227 删除并改为行为 codec +
+> binary digest + containment provider。
+
 ## 任务
 
 - [x] **T1 回归测试先红**：为 missing/poison `opencodePath` 增加真实 daemon 启动测试，证明当前

@@ -36,28 +36,24 @@ export async function doctorCommand(): Promise<DoctorResult> {
   } catch {
     // ignore — separate check below catches config issues
   }
-  // RFC-143: probe opencode via its driver (single source for probe + minVersion).
+  // RFC-227: this is an availability probe only. OpenCode versions are
+  // telemetry; protocol behavior is checked by Runtime Test / actual use.
   const ocDriver = getRuntimeDriver('opencode')
   const probe = await ocDriver.probe(ocDriver.defaultBinary({ opencodePath })[0]!)
-  if (probe.version === null) {
+  if (probe.ran !== true) {
     checks.push({
       name: 'opencode binary',
       ok: false,
       message: `'${probe.binary}' not found or not executable; install opencode and ensure PATH or set 'opencodePath' in config`,
     })
-  } else if (!probe.compatible) {
-    checks.push({
-      name: 'opencode version',
-      ok: false,
-      message:
-        probe.incompatibleReason ??
-        `${probe.version} is older than required minimum ${ocDriver.minVersion}`,
-    })
   } else {
     checks.push({
-      name: 'opencode version',
+      name: 'opencode binary',
       ok: true,
-      message: `${probe.version} (>= ${ocDriver.minVersion})`,
+      message:
+        probe.version === null
+          ? `${probe.binary} (version not reported; protocol test required)`
+          : `${probe.version} (reported version; protocol test required)`,
     })
   }
 

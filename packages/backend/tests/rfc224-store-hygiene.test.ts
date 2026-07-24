@@ -103,7 +103,7 @@ describe('RFC-224 OpenCode store lifecycle lock', () => {
     expect(lock.nonceDigest).toHaveLength(64)
     expect((await lstat(lock.lockPath)).mode & 0o777).toBe(0o600)
     expect(JSON.parse((await readFile(lock.lockPath, 'utf8')).trim())).toEqual({
-      codec: 1,
+      codec: 2,
       nonce,
       server: null,
     })
@@ -123,7 +123,7 @@ describe('RFC-224 OpenCode store lifecycle lock', () => {
     const server = {
       pidNamespace: 17,
       binaryPath: '/private/runtime-seal/opencode',
-      officialBuildDigest: 'a'.repeat(64),
+      runtimeBinaryDigest: 'a'.repeat(64),
       startedAt: 123,
       sessionStoreKey: 'b_chain',
       scope: { kind: 'business' as const, mode: 'resume' as const, nodeRunId: 'run-2' },

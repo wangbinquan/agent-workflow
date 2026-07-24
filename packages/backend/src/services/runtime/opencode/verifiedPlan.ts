@@ -12,11 +12,10 @@ import {
   buildHermeticServerEnv,
   buildStrictProviderAuth,
   deriveHermeticOpencodeLayout,
-  OPENCODE_FFF_CAPABILITY_CODEC,
   removeHermeticOpencodeLayout,
   type HermeticOpencodeLayout,
 } from './hermetic'
-import { OFFICIAL_OPENCODE_BUILDS } from './officialBuilds'
+import { inspectRuntimeOpencodeBinary } from './runtimeBinary'
 import {
   assertSourceFingerprintUnchanged,
   readFrozenInstruction,
@@ -33,6 +32,7 @@ import {
   sanitizeNetlessEnvironment,
   type NetlessSubprocessManifest,
 } from './sealedSubprocess'
+import type { RuntimeChildProviderPlan } from './containment'
 import {
   businessOpencodeIdentityDigest,
   identityDigest,
@@ -40,11 +40,12 @@ import {
 } from './executionIdentity'
 import { executionIdentityFailure } from './failure'
 import {
-  PINNED_OPENCODE_VERSION,
+  OPENCODE_DIRECT_PROTOCOL_CODEC,
   ROOT_SESSION_PERMISSION_RULES,
   type SelectedModel,
 } from './directApiSchemas'
 import {
+  VERIFIED_LAUNCH_MANIFEST_CODEC,
   verifiedLauncherCommand,
   writeVerifiedLaunchManifest,
   type VerifiedLaunchManifest,
@@ -62,20 +63,6 @@ const STORE_KEY_RE = /^[A-Za-z0-9_-]{16,160}$/
 const SAFE_MCP_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
 const DEFAULT_BOOTSTRAP_TIMEOUT_MS = 30_000
 const DEFAULT_RUN_TIMEOUT_MS = 60 * 60 * 1000
-
-function officialBuildDigest(): string {
-  const matches = OFFICIAL_OPENCODE_BUILDS.filter(
-    (build) =>
-      build.platform === process.platform &&
-      build.arch === process.arch &&
-      build.version === PINNED_OPENCODE_VERSION &&
-      build.fffCapabilityCodec === OPENCODE_FFF_CAPABILITY_CODEC,
-  )
-  if (matches.length !== 1) {
-    return executionIdentityFailure('execution-identity-untrusted-binary')
-  }
-  return matches[0]!.digest
-}
 
 function parseSelectedModel(
   model: string | null | undefined,
@@ -249,7 +236,7 @@ async function planMcpConfig(
 
 async function materializeMcpWrappers(input: {
   planned: PlannedMcpConfig
-  bwrapPath: string
+  childProvider: RuntimeChildProviderPlan
   layout: HermeticOpencodeLayout
   appHome: string
   realHome: string
@@ -273,7 +260,7 @@ async function materializeMcpWrappers(input: {
     const wrapperManifest: NetlessSubprocessManifest = {
       codec: 1,
       mode: 'mcp',
-      bwrapPath: input.bwrapPath,
+      provider: input.childProvider,
       worktreePath: input.worktreePath,
       scratchPath: input.scratchPath,
       appHome: input.appHome,
@@ -305,8 +292,7 @@ export async function buildVerifiedOpencodeBusinessPlan(
   command: readonly string[],
   dependencies: VerifiedOpencodePlanDependencies = {},
 ): Promise<SpawnPlan> {
-  const sandbox = assertVerifiedOpencodePlanBoundary({
-    platform: process.platform,
+  const { sandbox } = assertVerifiedOpencodePlanBoundary({
     sandbox: getSandboxProvider(),
   })
   if (ctx.dependents.length > 0) {
@@ -476,7 +462,8 @@ export async function buildVerifiedOpencodeBusinessPlan(
     sourceEnv,
   })
   serverEnv.PWD = canonicalWorktree
-  const buildDigest = officialBuildDigest()
+  const buildDigest = (await (dependencies.inspectBinary ?? inspectRuntimeOpencodeBinary)(command))
+    .digest
   const createdNodeRunId = owner?.createdNodeRunId ?? ctx.nodeRunId
   const title = `agent-workflow:rfc224:${createdNodeRunId}`
   const sessionContractDigest = identityDigest({
@@ -491,13 +478,12 @@ export async function buildVerifiedOpencodeBusinessPlan(
     share: null,
     revert: null,
     metadata: null,
-    version: PINNED_OPENCODE_VERSION,
   })
   const currentIdentityDigest = businessOpencodeIdentityDigest({
     config: controlledConfig,
     agent: ctx.agent.name,
     model: selectedModel,
-    officialBuildDigest: buildDigest,
+    binaryDigest: buildDigest,
     sealRoot,
   })
 
@@ -513,11 +499,11 @@ export async function buildVerifiedOpencodeBusinessPlan(
       owner.createdNodeRunId !== createdNodeRunId ||
       owner.createdNodeRunId.length === 0 ||
       owner.identityDigest !== currentIdentityDigest ||
-      owner.officialBuildDigest !== buildDigest ||
+      owner.runtimeBinaryDigest !== buildDigest ||
+      owner.protocolCodec !== OPENCODE_DIRECT_PROTOCOL_CODEC ||
       owner.sessionContractDigest !== sessionContractDigest ||
       owner.sessionStoreKey !== storeKey ||
-      owner.projectId.length === 0 ||
-      owner.opencodeVersion !== PINNED_OPENCODE_VERSION)
+      owner.projectId.length === 0)
   ) {
     return executionIdentityFailure('execution-identity-session-mismatch')
   }
@@ -531,19 +517,16 @@ export async function buildVerifiedOpencodeBusinessPlan(
   let succeeded = false
   try {
     const core = await buildVerifiedOpencodePlan({
-      platform: process.platform,
-      arch: process.arch,
       sandbox,
       appHome,
       command,
-      version: PINNED_OPENCODE_VERSION,
       storeRoot,
       binaryPath,
       fffProbeRoot,
-      expectedOfficialBuildDigest: buildDigest,
+      expectedBinaryDigest: buildDigest,
       dependencies,
     })
-    const { layout, bwrapPath, fffCapability } = core
+    const { layout, containment, childProvider, fffCapability } = core
     if (identityDigest(layout) !== identityDigest(plannedLayout)) {
       return executionIdentityFailure('execution-identity-store-unsafe')
     }
@@ -569,7 +552,7 @@ export async function buildVerifiedOpencodeBusinessPlan(
       manifest: {
         codec: 1,
         mode: 'shell',
-        bwrapPath,
+        provider: childProvider,
         worktreePath: canonicalWorktree,
         scratchPath,
         appHome,
@@ -584,7 +567,7 @@ export async function buildVerifiedOpencodeBusinessPlan(
     })
     await materializeMcpWrappers({
       planned: plannedMcp,
-      bwrapPath,
+      childProvider,
       layout,
       appHome,
       realHome,
@@ -596,10 +579,12 @@ export async function buildVerifiedOpencodeBusinessPlan(
     const sourceAfter = await scanOpencodeProjectSurface(canonicalWorktree)
     assertSourceFingerprintUnchanged(sourceBefore, sourceAfter)
     const manifest: VerifiedLaunchManifest = {
-      codec: 1,
-      version: PINNED_OPENCODE_VERSION,
+      codec: VERIFIED_LAUNCH_MANIFEST_CODEC,
+      protocolCodec: OPENCODE_DIRECT_PROTOCOL_CODEC,
       binaryPath,
-      officialBuildDigest: buildDigest,
+      binaryDigest: buildDigest,
+      containment,
+      childProvider,
       worktreePath: canonicalWorktree,
       runRoot: ctx.runRoot,
       sessionDbPath: plannedLayout.sessionDbPath,
@@ -625,8 +610,12 @@ export async function buildVerifiedOpencodeBusinessPlan(
       sessionTitle: title,
       sessionContractDigest,
       identityDigest: currentIdentityDigest,
-      fffCapabilityCodec: fffCapability.codec,
-      fffProbe: fffCapability.probe,
+      ...(fffCapability === null
+        ? {}
+        : {
+            fffCapabilityCodec: fffCapability.codec,
+            fffProbe: fffCapability.probe,
+          }),
       controlAckPath: ackPath,
       leaseNonce: nonce,
       leaseNonceDigest: nonceDigest,
@@ -648,7 +637,7 @@ export async function buildVerifiedOpencodeBusinessPlan(
       cmd: verifiedLauncherCommand(manifestPath),
       env: {},
       stdin: { mode: 'ignore' },
-      readOnlySubtrees: [sealRoot, ...layout.configRoots, ...fffCapability.readOnlySubtrees],
+      readOnlySubtrees: [sealRoot, ...layout.configRoots, ...core.readOnlySubtrees],
       sessionStore: { root: storeRoot, dbPath: layout.sessionDbPath, persistent: true },
       control: {
         kind: 'opencode-session',
@@ -658,13 +647,18 @@ export async function buildVerifiedOpencodeBusinessPlan(
         ackPath,
         ...(owner === undefined ? {} : { expectedSessionId: owner.sessionId }),
         identityDigest: currentIdentityDigest,
-        officialBuildDigest: buildDigest,
+        runtimeBinaryDigest: buildDigest,
+        protocolCodec: OPENCODE_DIRECT_PROTOCOL_CODEC,
         sessionContractDigest,
         sessionStoreKey: storeKey,
         createdNodeRunId,
       },
       diagnostics: {
         verifiedIdentity: true,
+        containmentProviderId: containment.providerId,
+        containmentMode: containment.mode,
+        containmentCapabilities: containment.capabilities,
+        containmentDegradedReasons: containment.degradedReasons,
         inlineModel: `${selectedModel.providerID}/${selectedModel.modelID}`,
         inlineVariant: selectedModel.variant ?? null,
         mcpCount: Object.keys(plannedMcp.config).length,

@@ -1,5 +1,6 @@
-// RFC-224 regression lock: direct OpenCode requests/responses must stay pinned
-// to the v1.18.3 wire contract; widening these parsers re-opens fallback paths.
+// RFC-224/RFC-227 regression lock: direct OpenCode requests/responses must stay
+// strict to the opencode-direct-v1 behavior contract. Reported release text is
+// telemetry, not protocol identity or an admission boundary.
 
 import { describe, expect, test } from 'bun:test'
 import {
@@ -97,7 +98,7 @@ describe('RFC-224 direct API request/response schemas', () => {
     expect((error as DirectApiValidationError).reason).toBe('unexpected-field')
   })
 
-  test('created session enforces pinned provenance and absence of foreign routing state', () => {
+  test('created session enforces semantic identity while accepting version telemetry drift', () => {
     const expected = {
       directory,
       title: 'agent-workflow:run-1',
@@ -114,9 +115,10 @@ describe('RFC-224 direct API request/response schemas', () => {
         expected,
       ),
     ).toThrow('identity-mismatch')
-    expect(() =>
-      parseAndValidateCreatedSession({ ...session(), version: '1.18.4' }, expected),
-    ).toThrow('identity-mismatch')
+    expect(
+      parseAndValidateCreatedSession({ ...session(), version: 'custom-fork-999' }, expected)
+        .version,
+    ).toBe('custom-fork-999')
   })
 
   test('plain JSON values reject cycles, poison keys, non-finite numbers, and class instances', () => {
@@ -136,7 +138,7 @@ describe('RFC-224 direct API request/response schemas', () => {
   })
 })
 
-describe('RFC-224 pinned ascending message ID codec', () => {
+describe('RFC-224 direct ascending message ID codec', () => {
   test('encodes and decodes the exact 12-hex + 14-base62 layout', () => {
     const id = encodeAscendingMessageId({
       timestampMs: 1,
@@ -151,7 +153,7 @@ describe('RFC-224 pinned ascending message ID codec', () => {
     })
   })
 
-  test('matches v1.18.3 low-six-byte truncation for real epoch milliseconds', () => {
+  test('matches the direct-codec low-six-byte truncation for real epoch milliseconds', () => {
     const timestampMs = Date.now()
     const id = encodeAscendingMessageId({
       timestampMs,

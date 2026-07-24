@@ -4,13 +4,8 @@ import { mkdtempSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { buildVerifiedOpencodeSystemPlan } from '@/services/runtime/opencode/verifiedSystemPlan'
-import {
-  OFFICIAL_OPENCODE_BUILD_CODEC,
-  type OfficialOpencodeBuild,
-} from '@/services/runtime/opencode/officialBuilds'
 import { VerifiedLaunchManifestSchema } from '@/services/runtime/opencode/verifiedManifest'
 import { ExecutionIdentityFailure } from '@/services/runtime/opencode/failure'
-import { OPENCODE_FFF_CAPABILITY_CODEC } from '@/services/runtime/opencode/hermetic'
 import { buildVerifiedOpencodePlan } from '@/services/runtime/opencode/verifiedPlanCore'
 
 const roots: string[] = []
@@ -25,13 +20,8 @@ function root(): string {
   return value
 }
 
-const BUILD: Readonly<OfficialOpencodeBuild> = Object.freeze({
-  platform: 'linux',
-  arch: 'x64',
-  version: '1.18.3',
+const BUILD = Object.freeze({
   digest: 'fdf58364c969a144fff0ae3a30f2fb6e705ada06864842613de1f9ecc70feb20',
-  codec: OFFICIAL_OPENCODE_BUILD_CODEC,
-  fffCapabilityCodec: OPENCODE_FFF_CAPABILITY_CODEC,
 })
 
 describe('RFC-224 verified system plan', () => {
@@ -44,8 +34,6 @@ describe('RFC-224 verified system plan', () => {
 
     await expect(
       buildVerifiedOpencodePlan({
-        platform: 'linux',
-        arch: 'x64',
         sandbox: {
           mode: 'enforce',
           status: { mechanism: 'bwrap', available: true, detail: null },
@@ -53,18 +41,20 @@ describe('RFC-224 verified system plan', () => {
         },
         appHome,
         command: ['/official/opencode'],
-        version: BUILD.version,
         storeRoot,
         binaryPath: snapshotPath,
         fffProbeRoot: join(base, 'fff-probe'),
         dependencies: {
-          officialBuild: () => BUILD,
           requireBwrap: async () => {
             throw new ExecutionIdentityFailure('execution-identity-sandbox-required')
           },
-          snapshotBinary: async () => {
+          snapshotBinary: async ({ snapshotPath: requestedPath }) => {
             snapshotCalls += 1
-            return snapshotPath
+            return {
+              resolvedPath: '/runtime/opencode',
+              snapshotPath: requestedPath,
+              digest: BUILD.digest,
+            }
           },
         },
       }),
@@ -96,8 +86,6 @@ describe('RFC-224 verified system plan', () => {
         },
         ['/bin/echo'],
         {
-          platform: 'linux',
-          arch: 'x64',
           getSandbox: () => null,
         },
       )
@@ -128,8 +116,6 @@ describe('RFC-224 verified system plan', () => {
       },
       ['/official/opencode'],
       {
-        platform: 'linux',
-        arch: 'x64',
         getSandbox: () => ({
           mode: 'enforce',
           status: { mechanism: 'bwrap', available: true, detail: null },
@@ -138,7 +124,6 @@ describe('RFC-224 verified system plan', () => {
         random: (size) => Buffer.alloc(size, 7),
         sourceEnv: { OPENAI_API_KEY: 'test-only-key' },
         requireBwrap: async () => '/usr/bin/bwrap',
-        officialBuild: () => BUILD,
         snapshotBinary: async ({ snapshotPath }) => {
           await mkdir(dirname(snapshotPath), { recursive: true, mode: 0o700 })
           await writeFile(snapshotPath, 'sealed official fixture', {
@@ -146,7 +131,11 @@ describe('RFC-224 verified system plan', () => {
             mode: 0o500,
           })
           await chmod(snapshotPath, 0o500)
-          return snapshotPath
+          return {
+            resolvedPath: '/runtime/opencode',
+            snapshotPath,
+            digest: BUILD.digest,
+          }
         },
       },
     )
@@ -165,7 +154,7 @@ describe('RFC-224 verified system plan', () => {
       selectedAgent: 'aw-system',
       selectedModel: { providerID: 'openai', modelID: 'gpt-5' },
       prompt: 'exact prompt',
-      officialBuildDigest: BUILD.digest,
+      binaryDigest: BUILD.digest,
       fffCapabilityCodec: 1,
     })
     expect(manifest.fffProbe).toMatchObject({

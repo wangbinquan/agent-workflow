@@ -148,7 +148,8 @@ export interface SpawnPlan {
         ackPath: string
         expectedSessionId?: string
         identityDigest: string
-        officialBuildDigest: string
+        runtimeBinaryDigest: string
+        protocolCodec: string
         sessionContractDigest: string
         sessionStoreKey: string
         createdNodeRunId: string
@@ -374,11 +375,12 @@ export interface BusinessNodeSpawnContext {
     nodeId: string
     createdNodeRunId: string
     identityDigest: string
-    officialBuildDigest: string
+    runtimeBinaryDigest: string
     sessionContractDigest: string
     sessionStoreKey: string
     projectId: string
-    opencodeVersion: string
+    protocolCodec: string
+    reportedVersion: string | null
   }
   /** Explicit dependency-injection seam; production callers never set it. */
   testOnlyUnverifiedRuntime?: boolean
@@ -392,8 +394,12 @@ export interface BusinessNodeSpawnContext {
  */
 export interface RuntimeDriver {
   readonly kind: RuntimeKind
-  /** Minimum compatible binary version (probe gate). */
-  readonly minVersion: string
+  /**
+   * Optional protocol-specific minimum used only by runtimes that define a
+   * semver gate. RFC-227 makes OpenCode behavior-qualified, so its value is
+   * null; Claude Code retains its existing minimum.
+   */
+  readonly minVersion: string | null
   /**
    * Parse one stdout line into a normalized event, or `null` when the line is
    * not a structured event (unparseable / falsy JSON) and should fall through

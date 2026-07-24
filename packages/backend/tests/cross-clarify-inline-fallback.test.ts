@@ -25,7 +25,7 @@
 //      stderr patterns post-spawn.
 //   6. The 3 fallback reasons enumerated by RFC-026
 //      (ClarifyInlineFallbackReason) — `missing-session-id`,
-//      `session-not-found`, `unsupported-opencode-version` — are all
+//      `session-not-found`, `session-resume-unsupported` — are all
 //      reachable from the questioner composition + direct compositions.
 //
 // If any of these go red the inline-mode fallback path on the cross-clarify
@@ -76,14 +76,14 @@ describe('RFC-056 C7 — inline fallback enumeration', () => {
     expect(ret.fallbackReason).toBe('missing-session-id')
   })
 
-  test('decideResumeSessionId({sessionMode:inline}) + opencodeSupportsResume=false → fallback unsupported-opencode-version', () => {
+  test('decideResumeSessionId({sessionMode:inline}) + supportsSessionResume=false → capability fallback', () => {
     const ret = decideResumeSessionId({
       sessionMode: 'inline',
       sourceSessionId: 'opc_xyz',
-      opencodeSupportsResume: false,
+      supportsSessionResume: false,
     })
     expect(ret.inlineMode).toBe(false)
-    expect(ret.fallbackReason).toBe('unsupported-opencode-version')
+    expect(ret.fallbackReason).toBe('session-resume-unsupported')
   })
 
   test('decideResumeSessionId({sessionMode:inline}) + valid session id + supported → happy: inline=true, resumeSessionId set', () => {
@@ -117,7 +117,7 @@ describe('RFC-056 C7 — inline fallback enumeration', () => {
     const reasons: ReadonlyArray<ClarifyInlineFallbackReason> = [
       'missing-session-id',
       'session-not-found',
-      'unsupported-opencode-version',
+      'session-resume-unsupported',
     ]
     expect(reasons.length).toBe(3)
   })
@@ -130,15 +130,15 @@ describe('RFC-056 C7 — inline fallback enumeration', () => {
     expect(ret.fallbackReason).toBe('missing-session-id')
   })
 
-  test('cross-clarify questioner + inline mode reaches unsupported-opencode-version fallback (full composition)', () => {
+  test('cross-clarify questioner + inline mode reaches session-resume-unsupported fallback', () => {
     const node = ccNode({ sessionModeForQuestioner: 'inline' })
     const sessionMode = resolveCrossClarifySessionMode(node)
     const ret = decideResumeSessionId({
       sessionMode,
       sourceSessionId: 'opc_xyz',
-      opencodeSupportsResume: false,
+      supportsSessionResume: false,
     })
     expect(sessionMode).toBe('inline')
-    expect(ret.fallbackReason).toBe('unsupported-opencode-version')
+    expect(ret.fallbackReason).toBe('session-resume-unsupported')
   })
 })

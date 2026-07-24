@@ -6,10 +6,10 @@ before it corrupts the daemon's runtime path — a new event-shape, an envelope
 mangling, or a `--version` rename would silently break the platform if all
 our coverage used recorded fixtures.
 
-| File                                              | Cases | What it locks                                                                                                                                                                                           |
-| ------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `opencode-identity-preflight.integration.test.ts` | 1     | Exact official v1.18.3 bytes and config/provider/agent/skill/root-session shapes; on Linux, real bwrap/FFF plus freeze-lease TERM/KILL containment of a TERM-resistant setsid double-fork. No LLM call. |
-| `opencode-live.integration.test.ts`               | 5 + 2 | `--version` / event-kind shape / accumulated text / envelope round-trip / token accumulator. Plus 2 gate-self-tests.                                                                                    |
+| File                                              | Cases | What it locks                                                                                                                                                                                   |
+| ------------------------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `opencode-identity-preflight.integration.test.ts` | 1     | Real-binary config/provider/agent/skill/root-session behavior; reported version is telemetry only. On Linux, also exercises real bwrap/FFF and freeze-lease TERM/KILL containment. No LLM call. |
+| `opencode-live.integration.test.ts`               | 5 + 2 | `--version` telemetry / event-kind shape / accumulated text / envelope round-trip / token accumulator. Plus 2 gate-self-tests.                                                                  |
 
 ## How the gate works
 
@@ -74,10 +74,10 @@ RUN_OPENCODE_INTEGRATION=1 bun test \
 
 Expected wall-clock: 30-60 seconds (5 LLM calls × 3-15s each).
 
-To override the opencode binary path with the reviewed official v1.18.3 build:
+To test any administrator-selected OpenCode executable:
 
 ```sh
-OPENCODE_BIN=/opt/opencode-1.18.3/bin/opencode \
+OPENCODE_BIN=/opt/opencode/bin/opencode \
   RUN_OPENCODE_INTEGRATION=1 \
   bun test packages/backend/tests/integration-opencode/
 ```
@@ -91,9 +91,13 @@ on pushes to `main`, and on PRs that touch the daemon's opencode-facing code (pa
 
 Matrix:
 
-| OS           | opencode                                               |
-| ------------ | ------------------------------------------------------ |
-| ubuntu-22.04 | exact reviewed `opencode-ai@1.18.3` RFC-224 trust root |
+| OS           | opencode                                                  |
+| ------------ | --------------------------------------------------------- |
+| ubuntu-22.04 | historical `1.18.3` behavior fixture and current `latest` |
+
+The two entries are compatibility samples, not a version allowlist. Production
+admission uses the executable snapshot digest, direct behavior codec, and
+containment capabilities.
 
 The runner label is explicit because the preflight requires a real
 unprivileged bubblewrap namespace trial; a moving `ubuntu-latest` label is not
@@ -145,14 +149,15 @@ The order to debug:
 1. **Read the stderr tail** — `RunResult.stderrTail` is captured into the
    bun:test failure output. opencode usually surfaces auth / network /
    provider issues there.
-2. **Check the opencode version and bytes** — `OPENCODE_BIN --version`. RFC-224
-   refuses any version/platform/arch digest outside the reviewed allowlist.
+2. **Record the executable and telemetry** — run `OPENCODE_BIN --version` and
+   hash the selected executable. The version is diagnostic only; inspect the
+   failing behavior/containment assertion rather than comparing a release range.
 3. **Re-run with verbose** — `OPENCODE_DEBUG=1` (if the version supports
    it) prints prompt + response to stderr. Compare the raw stream against
    `RFC-054 W1-1` recordings to see what shape changed.
 4. **Don't disable** — these tests guard the daemon's runtime contract.
-   If opencode genuinely broke compat, review a new official build/codec tuple
-   through a follow-up RFC and update the exact allowlist. Don't skip.
+   If OpenCode genuinely broke compatibility, update the behavior codec through
+   a reviewed change. Do not add a version allowlist or skip the test.
 
 ## Adding a new case
 

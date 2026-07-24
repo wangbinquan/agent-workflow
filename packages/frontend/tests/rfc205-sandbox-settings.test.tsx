@@ -213,6 +213,57 @@ describe('RFC-205 enforce + unavailable warning', () => {
     render(<SandboxCard />, { wrapper: wrap(newQc()) })
     await screen.findByTestId('sandbox-status-chip')
     expect(screen.queryByTestId('sandbox-enforce-unavailable')).toBeNull()
+    expect((await screen.findByTestId('sandbox-warn-degraded')).textContent).toContain(
+      i18n.t('settings.sandbox.warnDegraded'),
+    )
+  })
+
+  test('available provider with missing required capability is visibly degraded', async () => {
+    mockFetch({
+      sandbox: {
+        mode: 'warn',
+        mechanism: 'future-provider',
+        available: true,
+        providerId: 'future-provider',
+        capabilities: {
+          platformHomeIsolation: 'absent',
+          immutableArtifactView: 'strong',
+          modelChildNetworkDeny: 'strong',
+          descendantLifetimeBound: 'strong',
+        },
+        degradedReasons: ['containment-capability-platformHomeIsolation-absent'],
+      },
+      configSandboxMode: 'warn',
+    })
+    render(<SandboxCard />, { wrapper: wrap(newQc()) })
+    const chip = await screen.findByTestId('sandbox-status-chip')
+    expect(chip.className).toContain('status-chip--warn')
+    expect(await screen.findByTestId('sandbox-warn-degraded')).toBeTruthy()
+  })
+
+  test('macOS baseline reports descendant lifetime as best effort without calling it unavailable', async () => {
+    mockFetch({
+      sandbox: {
+        mode: 'enforce',
+        mechanism: 'seatbelt',
+        available: true,
+        providerId: 'macos-seatbelt',
+        capabilities: {
+          platformHomeIsolation: 'strong',
+          immutableArtifactView: 'strong',
+          modelChildNetworkDeny: 'strong',
+          descendantLifetimeBound: 'best-effort',
+        },
+        degradedReasons: [],
+      },
+      configSandboxMode: 'enforce',
+    })
+    render(<SandboxCard />, { wrapper: wrap(newQc()) })
+    const chip = await screen.findByTestId('sandbox-status-chip')
+    expect(chip.className).toContain('status-chip--success')
+    expect((await screen.findByTestId('sandbox-lifetime-best-effort')).textContent).toContain(
+      i18n.t('settings.sandbox.lifetimeBestEffort'),
+    )
   })
 })
 

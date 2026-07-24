@@ -323,7 +323,8 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // RFC-223 PR-8 bumped to 118 with 0118_rfc223_owner_scoped_names.
     // RFC-224 T14 bumped to 119 with 0119_rfc224_opencode_session_owners.
     // RFC-224 probe-receipt fence bumped to 120 with 0120_rfc224_runtime_probe_fence.
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(120)
+    // RFC-227 binary-digest/protocol provenance bumped to 121 with 0121.
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(121)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

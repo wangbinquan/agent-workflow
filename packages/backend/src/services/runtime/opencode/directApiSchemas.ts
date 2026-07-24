@@ -1,12 +1,13 @@
-// RFC-224 — pinned OpenCode v1.18.3 direct-HTTP protocol schemas.
+// RFC-224 / RFC-227 — behavior-qualified OpenCode direct-HTTP schemas.
 //
 // These schemas deliberately do not import the OpenCode SDK. The verified
-// runtime is a pinned external executable, and accepting a newer SDK's widened
-// response shape would silently weaken the execution-identity boundary.
+// runtime is an external executable, and accepting an SDK's widened response
+// shape would silently weaken the execution-identity boundary. The codec id
+// names observed behavior, not an OpenCode release/version range.
 
 import { z } from 'zod'
 
-export const PINNED_OPENCODE_VERSION = '1.18.3' as const
+export const OPENCODE_DIRECT_PROTOCOL_CODEC = 'opencode-direct-v1' as const
 export const SESSION_INVENTORY_PAGE_SIZE = 100 as const
 
 const BASE62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
@@ -181,9 +182,9 @@ export const SessionInfoSchema = z
     projectID: nonEmptyString,
     workspaceID: nonEmptyString.optional(),
     directory: nonEmptyString,
-    // v1.18.3's root-session path is the exact empty string. Child sessions
-    // carry a non-empty relative path; the higher-level identity comparator
-    // pins which form is admissible for the requested session.
+    // The qualified root-session shape uses the exact empty string. Child
+    // sessions carry a non-empty relative path; the higher-level identity
+    // comparator pins which form is admissible for the requested session.
     path: z.string().optional(),
     parentID: SessionIdSchema.optional(),
     summary: SessionSummarySchema.optional(),
@@ -637,7 +638,6 @@ export interface SessionIdentityExpectation {
   agent: string
   model: SelectedModel
   projectID?: string
-  version?: string
   /** Root sessions must expose the exact upstream sessionPath(worktree,cwd). */
   path?: string
 }
@@ -715,9 +715,6 @@ export function validateSessionIdentity<T extends SessionInfo | GlobalSessionInf
   if (session.projectID.length === 0) mismatch(context, '/projectID')
   if (expected.projectID !== undefined && session.projectID !== expected.projectID) {
     mismatch(context, '/projectID')
-  }
-  if (session.version !== (expected.version ?? PINNED_OPENCODE_VERSION)) {
-    mismatch(context, '/version')
   }
   if (
     session.model?.providerID !== expected.model.providerID ||
@@ -962,7 +959,7 @@ export function encodeAscendingMessageId(input: {
   if (input.randomBytes.byteLength !== 14) {
     throw new DirectApiValidationError('message-id', 'invalid-random-length')
   }
-  // v1.18.3 writes the low six bytes of
+  // The qualified ascending-id behavior writes the low six bytes of
   // `BigInt(timestampMs) * 0x1000 + counter`. It does not reject modern epoch
   // milliseconds even though the intermediate exceeds 48 bits; each emitted
   // byte masks the corresponding low-order octet. Reproduce that truncation
@@ -976,10 +973,10 @@ export function encodeAscendingMessageId(input: {
 }
 
 /**
- * Instance-local implementation of OpenCode v1.18.3
- * `Identifier.ascending("message")`. The launcher still waits for a millisecond
- * strictly after the latest stored message and for the following millisecond
- * before POSTing; this class only owns the pinned wire codec.
+ * Instance-local implementation of the `opencode-direct-v1`
+ * `Identifier.ascending("message")` behavior. The launcher still waits for a
+ * millisecond strictly after the latest stored message and for the following
+ * millisecond before POSTing; this class only owns the behavior codec.
  */
 export class AscendingMessageIdGenerator {
   readonly #randomBytes: RandomBytesSource

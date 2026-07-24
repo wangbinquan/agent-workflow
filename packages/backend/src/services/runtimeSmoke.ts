@@ -237,6 +237,7 @@ export function smokeSandboxCtx(
     ],
     runDir,
     ...(plan.readOnlySubtrees === undefined ? {} : { readOnlySubtrees: plan.readOnlySubtrees }),
+    ...(provider.wrapCommand === undefined ? {} : { wrapCommand: provider.wrapCommand }),
   }
 }
 

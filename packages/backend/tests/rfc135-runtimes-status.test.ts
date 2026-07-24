@@ -4,11 +4,10 @@
 // (GET /api/runtime/opencode) the homepage hero used to hardcode:
 //   1. every ENABLED registry runtime is probed live against the binary a real
 //      dispatch would use (row binaryPath > protocol default from config);
-//   2. RFC-226 moves the version gate from daemon boot to explicit runtime
-//      validation: `ok` requires both an exit-0 probe and a compatible version.
-//      Deterministic fixture executables enter through the explicit test
-//      dependency below; production never does. The response deliberately has
-//      NO compatible/minVersion keys;
+//   2. RFC-227 makes OpenCode reported versions telemetry-only: an exit-0
+//      lightweight probe is available-unverified regardless of semver text.
+//      Protocol compatibility belongs to Runtime Test / actual execution. The
+//      response deliberately has NO compatible/minVersion keys;
 //   3. the endpoint sits behind `runtime:read` like the legacy /api/runtime/*
 //      gate (it spawns registered binaries — a narrowed PAT must not reach it);
 //   4. a hung binary is SIGKILLed after the per-row timeout and reads as a
@@ -31,7 +30,8 @@ import {
 import { createSession } from '../src/auth/sessionStore'
 import { createPat } from '../src/auth/patStore'
 import { createUser } from '../src/services/users'
-import { FIXTURE_RUNTIME_DIAGNOSTICS } from './helpers/officialOpencodeFixture'
+import { FIXTURE_RUNTIME_DIAGNOSTICS } from './helpers/runtimeOpencodeFixture'
+import { setSandboxProvider } from '../src/services/sandbox'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -109,8 +109,16 @@ interface StatusEntry {
   binary: string
   ok: boolean
   version: string | null
+  state?: string
+  reportedVersion?: string | null
   isDefault: boolean
   failureCode?: string
+  containment?: {
+    providerId: string | null
+    mode: 'enforce' | 'warn' | 'off'
+    capabilities: Record<string, string>
+    degradedReasons: string[]
+  }
 }
 
 async function bodyOf(res: Response): Promise<{ runtimes: StatusEntry[] }> {
@@ -127,6 +135,7 @@ describe('RFC-135 GET /api/runtimes/status', () => {
 
   afterEach(() => {
     delete process.env[TIMEOUT_ENV]
+    setSandboxProvider(null)
     rmSync(h.tmp, { recursive: true, force: true })
   })
 
@@ -143,6 +152,8 @@ describe('RFC-135 GET /api/runtimes/status', () => {
     expect(cc).toBeDefined()
     expect(oc!.ok).toBe(true)
     expect(oc!.version).toBe('1.18.3')
+    expect(oc!.reportedVersion).toBe('1.18.3')
+    expect(oc!.state).toBe('available-unverified')
     expect(oc!.binary).toBe(h.opencodeBin)
     expect(oc!.isDefault).toBe(true)
     expect(cc!.ok).toBe(true)
@@ -157,7 +168,7 @@ describe('RFC-135 GET /api/runtimes/status', () => {
     }
   })
 
-  test('official admission failure preserves the stable code and redacts arbitrary wire text', async () => {
+  test('snapshot admission failure preserves the stable code and redacts arbitrary wire text', async () => {
     const raw = 'RAW_BACKEND_SECRET /private/sealed/opencode'
     const guardedApp = createApp({
       token: TOKEN,
@@ -167,7 +178,7 @@ describe('RFC-135 GET /api/runtimes/status', () => {
       db: h.db,
       runtimeDiagnosticTestDependencies: {
         ...FIXTURE_RUNTIME_DIAGNOSTICS,
-        withOfficialOpencodeSnapshot: async <T>(
+        withRuntimeOpencodeSnapshot: async <T>(
           _command: readonly string[],
           _callback: (snapshotPath: string) => Promise<T>,
         ): Promise<T> => {
@@ -208,24 +219,88 @@ describe('RFC-135 GET /api/runtimes/status', () => {
     expect(fork!.isDefault).toBe(false)
   })
 
-  test('version below the requirement fails explicit runtime validation', async () => {
+  test('older reported version remains available-unverified', async () => {
     const oldBin = join(h.tmp, 'old-opencode')
     writeVersionBinary(oldBin, 'stub-opencode 1.17.9')
     await createRuntime(h.db, { name: 'old-opencode', protocol: 'opencode', binaryPath: oldBin })
     const json = await bodyOf(await req(h.app))
     const old = json.runtimes.find((r) => r.name === 'old-opencode')
-    expect(old!.ok).toBe(false)
+    expect(old!.ok).toBe(true)
     expect(old!.version).toBe('1.17.9')
+    expect(old!.state).toBe('available-unverified')
   })
 
-  test('unparseable version string fails explicit runtime validation', async () => {
+  test('non-semver reported version remains available-unverified', async () => {
     const weirdBin = join(h.tmp, 'weird-fork')
     writeVersionBinary(weirdBin, 'fork build fortytwo')
     await createRuntime(h.db, { name: 'weird-fork', protocol: 'opencode', binaryPath: weirdBin })
     const json = await bodyOf(await req(h.app))
     const weird = json.runtimes.find((r) => r.name === 'weird-fork')
-    expect(weird!.ok).toBe(false)
+    expect(weird!.ok).toBe(true)
     expect(weird!.version).toBeNull()
+    expect(weird!.state).toBe('available-unverified')
+  })
+
+  test('warn reports degraded but executable; enforce reports containment-blocked', async () => {
+    setSandboxProvider({
+      mode: 'warn',
+      status: {
+        mechanism: 'bwrap',
+        available: false,
+        detail: 'fixture unavailable',
+      },
+      appHome: h.tmp,
+    })
+    const warned = (await bodyOf(await req(h.app))).runtimes.find(
+      (runtime) => runtime.name === 'opencode',
+    )!
+    expect(warned).toMatchObject({
+      ok: true,
+      state: 'degraded',
+      containment: {
+        providerId: 'linux-bwrap',
+        mode: 'warn',
+      },
+    })
+    expect(warned.containment?.degradedReasons).toContain('containment-provider-unavailable')
+
+    setSandboxProvider({
+      mode: 'enforce',
+      status: {
+        mechanism: 'bwrap',
+        available: false,
+        detail: 'fixture unavailable',
+      },
+      appHome: h.tmp,
+    })
+    expect(
+      (await bodyOf(await req(h.app))).runtimes.find((runtime) => runtime.name === 'opencode'),
+    ).toMatchObject({ ok: false, state: 'containment-blocked' })
+  })
+
+  test('macOS Seatbelt is admitted and reports lifetime strength honestly', async () => {
+    setSandboxProvider({
+      mode: 'enforce',
+      status: { mechanism: 'seatbelt', available: true, detail: null },
+      appHome: h.tmp,
+    })
+    const opencode = (await bodyOf(await req(h.app))).runtimes.find(
+      (runtime) => runtime.name === 'opencode',
+    )!
+    expect(opencode).toMatchObject({
+      ok: true,
+      state: 'available-unverified',
+      containment: {
+        providerId: 'macos-seatbelt',
+        mode: 'enforce',
+        capabilities: {
+          platformHomeIsolation: 'strong',
+          immutableArtifactView: 'strong',
+          modelChildNetworkDeny: 'strong',
+          descendantLifetimeBound: 'best-effort',
+        },
+      },
+    })
   })
 
   test('missing binary → ok:false, version:null, endpoint still 200', async () => {
@@ -239,6 +314,7 @@ describe('RFC-135 GET /api/runtimes/status', () => {
     const gone = (await bodyOf(res)).runtimes.find((r) => r.name === 'gone')
     expect(gone!.ok).toBe(false)
     expect(gone!.version).toBeNull()
+    expect(gone!.state).toBe('not-found')
   })
 
   test('config.defaultRuntime drives isDefault', async () => {

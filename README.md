@@ -189,13 +189,13 @@ history.
 
 ## Requirements
 
-| Dependency      | Requirement                                      | Notes                                                                                                  |
-| --------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| **OS**          | macOS on Apple Silicon, or Linux on x86_64/arm64 | Windows is not currently supported.                                                                    |
-| **git**         | **2.38.0 or newer**                              | Required for isolated merge-back via `git merge-tree --write-tree`.                                    |
-| **opencode**    | **1.18.3**, optional                              | Not checked at daemon startup. Explicit runtime checks and OpenCode use require the supported official build; set `opencodePath` to override `PATH`. |
-| **Claude Code** | **2.0.0 or newer**, optional                     | Additional runtime; set `claudeCodePath` or a runtime profile to use it.                               |
-| **Bun**         | **1.3.0 or newer**, source builds only           | Release binaries bundle Bun.                                                                           |
+| Dependency      | Requirement                                      | Notes                                                                                                                                                              |
+| --------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **OS**          | macOS on Apple Silicon, or Linux on x86_64/arm64 | Windows release binaries are not shipped yet; the runtime containment interface is provider-extensible.                                                            |
+| **git**         | **2.38.0 or newer**                              | Required for isolated merge-back via `git merge-tree --write-tree`.                                                                                                |
+| **opencode**    | Optional; no version pin                         | The reported version is telemetry only. Actual use freezes the selected executable bytes and qualifies direct-API behavior; set `opencodePath` to override `PATH`. |
+| **Claude Code** | **2.0.0 or newer**, optional                     | Additional runtime; set `claudeCodePath` or a runtime profile to use it.                                                                                           |
+| **Bun**         | **1.3.0 or newer**, source builds only           | Release binaries bundle Bun.                                                                                                                                       |
 
 Run `agent-workflow doctor` for a full environment check covering OpenCode, Git,
 the data directory, config, token-file permissions, migrations, and lifecycle

@@ -4,6 +4,12 @@
 > `v1.18.3`（commit `127bdb30784d508cc556c71a0f32b508a3061517`）。
 > 每增加一个 digest/codec 都必须重跑本文的源码、变异与 sandbox escape 矩阵。
 
+> **RFC-227 supersession（2026-07-24）**：上述固定版本、official build allowlist 与
+> Linux-only admission 仅保留为 RFC-224 历史设计证据，已不再是当前产品合同。仍保留的
+> 安全不变量是 executable snapshot/re-hash、hermetic config/source、same-instance
+> attestation、session owner/lease 与 fail-closed identity；当前准入改由 binary digest、
+> `opencode-direct-v1` 行为 codec 与开放 containment provider capability 决定。
+
 ## 0. 裁决摘要
 
 平台不再把 inline config 当最终真相，不运行 `debug config → run` 双进程 probe，

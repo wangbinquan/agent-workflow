@@ -10,14 +10,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  # Pin opencode so the global install is reproducible AND cacheable — a
-  # drifting `latest` can't be a stable cache key and quietly changes runtime
-  # behavior between runs. Must stay >= MIN_OPENCODE_VERSION
-  # (packages/backend/src/util/opencode.ts); matches integration-opencode.yml's
-  # pinned leg. Bump together when MIN_OPENCODE_VERSION moves.
-  OPENCODE_VERSION: '1.18.3'
-
 jobs:
   lint:
     # OS-independent gates (prettier / eslint / tsc) plus the tiny shared unit
@@ -104,12 +96,13 @@ jobs:
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-
 
-      - name: Install opencode (required by daemon/doctor tests)
-        # Daemon `start` refuses to run without opencode >= MIN_OPENCODE_VERSION;
-        # cli `doctor` asserts opencode is in PATH. Any shard may hold a
-        # daemon-spawning file, so install it on every shard.
+      - name: Install current opencode (diagnostic compatibility coverage)
+        # OpenCode is optional and daemon startup never probes it. Some doctor
+        # and runtime-diagnostic tests intentionally exercise a real PATH
+        # binary, so CI follows the current npm channel without defining an
+        # application version floor or ceiling.
         run: |
-          bun install -g opencode-ai@${{ env.OPENCODE_VERSION }}
+          bun install -g opencode-ai@latest
           export PATH="$HOME/.bun/bin:$PATH"
           opencode --version
 
@@ -452,15 +445,6 @@ jobs:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-
-
-      - name: Install opencode (start --version probe needs it for log lines)
-        # The smoke test invokes `agent-workflow version`, which does not touch
-        # opencode — but the start path does, and we want the binary to be
-        # ready to run an end-to-end smoke locally if anyone reuses this job.
-        run: |
-          bun install -g opencode-ai@${{ env.OPENCODE_VERSION }}
-          export PATH="$HOME/.bun/bin:$PATH"
-          opencode --version
 
       - name: Install dependencies
         run: bun install --frozen-lockfile

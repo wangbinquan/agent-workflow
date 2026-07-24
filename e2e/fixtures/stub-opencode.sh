@@ -2,7 +2,7 @@
 # Stub opencode binary for Playwright e2e (P-5-07).
 #
 # Two modes:
-#   --version           prints a version line that satisfies MIN_OPENCODE_VERSION.
+#   --version           prints an intentionally non-semver telemetry value.
 #   run <prompt> ...    emits one --format=json text event carrying a
 #                       <workflow-output> envelope, then exits 0.
 #
@@ -19,7 +19,7 @@ set -eu
 
 case "${1-}" in
   --version|-v|version)
-    echo "stub-opencode 1.18.3"
+    echo "stub-opencode custom-build"
     exit 0
     ;;
   run)

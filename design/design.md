@@ -404,6 +404,13 @@ RFC-226 起，OpenCode 是可选运行时：daemon 启动不执行其 binary/ver
 `/health.opencodeVersion` 返回 `null`；运行时 readiness 与兼容性由
 `/api/runtimes/status` 等显式诊断路径报告。
 
+RFC-227 起进一步删除全部 OpenCode 版本准入：reported version 只作 nullable telemetry，
+所选 executable 每次冻结为 private snapshot 并以 digest 防 TOCTOU，协议兼容由
+`opencode-direct-v1` 行为 codec 判定。verified core 消费开放的 containment provider
+capability；Linux bwrap 与 macOS Seatbelt 都可执行，`warn/off` 按配置允许显式降级，
+未来 Windows provider 不需要修改 OpenCode 版本/身份核心。下文较早的 `opencode run`
+伪代码是历史基础，不再是生产执行合同；当前合同见 `docs/OPENCODE_CONFIG.md` 与 RFC-227。
+
 ### 4.3 WebSocket 频道
 
 所有 WS 需 `?token=...`。三个频道：
@@ -1591,7 +1598,7 @@ backup-{ISO date}.tar.gz
 
 下面这些在 v1 实现阶段可能需要再决策，但不阻塞设计落地：
 
-1. ~~**opencode 最低版本号**~~：**RFC-224 / RFC-226 已收口**。OpenCode 是可选运行时，daemon 启动不做版本探测；显式 runtime 检验与实际使用要求受支持的官方 **v1.18.3 exact-hash** 构建，不满足时仅该运行时操作 fail closed。早期 1.14.25 隔离实验与 `tests/integration/opencode-isolation.test.ts` 仅保留历史验证价值。
+1. ~~**opencode 最低版本号**~~：**RFC-227 已删除**。OpenCode 是可选运行时，daemon 启动不做 binary/version 探测；显式 status 中版本只作 telemetry，实际使用按 byte snapshot、direct API behavior codec 与 containment capability 判定。早期版本/隔离实验仅保留历史验证价值。
 2. **大 diff 性能**：几 MB 量级 diff 多进程切片时 IO 密集；如有瓶颈考虑流式切片或限制单 task 最大 diff 大小
 3. **opencode session 复用**：v1 每节点新 session（独立隔离）；若有"长上下文连续对话"需求再设计
 4. **Loop wrapper 跨轮反馈端口**：v1 不做（仅靠 worktree 文件传递）；若实际跑出"非通过 worktree 反馈"的需求再设计 wrapper 级反馈端口绑定 UI

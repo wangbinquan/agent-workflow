@@ -1,9 +1,9 @@
 // RFC-205 T5 (design D6) — runtime sandbox observability card (Settings → Runtime).
 //
-// One StatusChip mirrors the `sandbox` block of GET /api/runtimes/status:
-//   - mode !== 'off' && available   → success 「沙箱：seatbelt/bwrap」
-//   - mode !== 'off' && !available  → warn    「沙箱不可用」
-//   - mode === 'off'                → neutral 「沙箱关闭」
+// One StatusChip mirrors the capability receipt in GET /api/runtimes/status:
+//   - active + required capabilities → success 「沙箱：<provider>」
+//   - unavailable/degraded            → warn    「沙箱不可用」
+//   - mode === 'off'                  → neutral 「沙箱关闭」
 // The status query shares RUNTIMES_STATUS_HOME_QUERY_KEY with the homepage
 // hero so both observers read ONE cache entry; this observer deliberately
 // sets no refetchInterval (the homepage already polls — no second poller).
@@ -49,6 +49,12 @@ export function SandboxCard() {
     staleTime: 30_000,
   })
   const sandbox = status.data?.sandbox
+  const degraded =
+    sandbox !== undefined && (!sandbox.available || (sandbox.degradedReasons?.length ?? 0) > 0)
+  const lifetimeBestEffort =
+    sandbox?.mode !== 'off' &&
+    sandbox?.available === true &&
+    sandbox.capabilities?.descendantLifetimeBound === 'best-effort'
 
   // config is the user's saved intent (authoritative for the control); the
   // status block only fills the gap until the config cache resolves.
@@ -78,7 +84,7 @@ export function SandboxCard() {
       ? null
       : sandbox.mode === 'off'
         ? { kind: 'neutral' as const, text: t('settings.sandbox.chipOff') }
-        : sandbox.available
+        : sandbox.available && !degraded
           ? {
               kind: 'success' as const,
               text: t('settings.sandbox.chipActive', { mechanism: sandbox.mechanism ?? '' }),
@@ -114,7 +120,7 @@ export function SandboxCard() {
           testidPrefix="sandbox-mode"
         />
       </Field>
-      {mode === 'enforce' && sandbox !== undefined && !sandbox.available && (
+      {mode === 'enforce' && degraded && (
         <NoticeBanner
           tone="warning"
           size="compact"
@@ -123,6 +129,27 @@ export function SandboxCard() {
           testid="sandbox-enforce-unavailable"
         >
           {t('settings.sandbox.enforceUnavailable')}
+        </NoticeBanner>
+      )}
+      {mode === 'warn' && degraded && (
+        <NoticeBanner
+          tone="warning"
+          size="compact"
+          className="stack-top--sm"
+          title={t('settings.sandbox.chipUnavailable')}
+          testid="sandbox-warn-degraded"
+        >
+          {t('settings.sandbox.warnDegraded')}
+        </NoticeBanner>
+      )}
+      {lifetimeBestEffort && (
+        <NoticeBanner
+          tone="info"
+          size="compact"
+          className="stack-top--sm"
+          testid="sandbox-lifetime-best-effort"
+        >
+          {t('settings.sandbox.lifetimeBestEffort')}
         </NoticeBanner>
       )}
       {save.error !== null && <ErrorBanner error={save.error} testid="sandbox-save-error" />}

@@ -1,6 +1,6 @@
-// RFC-224 — deterministic correlation state machine for OpenCode v1.18.3's
-// direct HTTP + SSE protocol. It mirrors `run --format json` output without
-// inheriting the CLI's agent/model fallback behavior.
+// RFC-224/227 — deterministic `opencode-direct-v1` correlation state machine
+// for the behavior-qualified direct HTTP + SSE protocol. It mirrors
+// `run --format json` output without inheriting CLI fallback behavior.
 
 import {
   AssistantMessageSchema,
@@ -163,7 +163,7 @@ function isTerminalPart(part: MessagePart, thinking: boolean): MappedPartRecordT
   }
   if (part.type === 'step-start') return 'step_start'
   if (part.type === 'step-finish') return 'step_finish'
-  // Match OpenCode v1.18.3 run.ts exactly: it checks truthiness, not merely
+  // Match the qualified run behavior: it checks truthiness, not merely
   // presence, of `time.end`.
   if (part.type === 'text' && Boolean(part.time?.end)) return 'text'
   if (part.type === 'reasoning' && Boolean(part.time.end) && thinking) return 'reasoning'

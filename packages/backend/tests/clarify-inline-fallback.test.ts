@@ -15,7 +15,7 @@ import type { ClarifyInlineFallbackReason } from '../src/services/sessionModeFal
 const ENUM_REASONS = [
   'missing-session-id',
   'session-not-found',
-  'unsupported-opencode-version',
+  'session-resume-unsupported',
 ] as const satisfies readonly ClarifyInlineFallbackReason[]
 
 describe('RFC-026 fallback reason enum coverage', () => {

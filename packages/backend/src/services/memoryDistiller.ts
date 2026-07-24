@@ -967,6 +967,7 @@ export function distillerSandboxCtx(
     taskWorktrees: [cwd, ...(plan?.sessionStore === undefined ? [] : [plan.sessionStore.root])],
     runDir,
     ...(plan?.readOnlySubtrees === undefined ? {} : { readOnlySubtrees: plan.readOnlySubtrees }),
+    ...(p.wrapCommand === undefined ? {} : { wrapCommand: p.wrapCommand }),
   }
 }
 

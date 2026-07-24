@@ -26,7 +26,7 @@ describe('parseRfc026Event', () => {
     for (const reason of [
       'missing-session-id',
       'session-not-found',
-      'unsupported-opencode-version',
+      'session-resume-unsupported',
     ] as const) {
       const payload = `[rfc026/inline-fallback] {"rfc":"rfc026","code":"inline-clarify-fallback-to-isolated","reason":"${reason}","clarifyGeneration":2}`
       const got = parseRfc026Event(payload)

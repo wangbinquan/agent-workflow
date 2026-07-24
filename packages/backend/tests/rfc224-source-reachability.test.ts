@@ -144,19 +144,19 @@ describe('RFC-224 verified OpenCode source reachability', () => {
       'services/runtime/opencode/fffCapability.ts',
       'services/runtime/opencode/verifiedPlanCore.ts',
     ])
-    expect(callSites(/\bsnapshotOfficialOpencodeBinary\s*\(/)).toEqual([
-      'services/runtime/opencode/officialBuilds.ts',
+    expect(callSites(/\bsnapshotRuntimeOpencodeBinary\s*\(/)).toEqual([
+      'services/runtime/opencode/runtimeBinary.ts',
     ])
 
     expect(business).not.toMatch(/\bprepareHermeticOpencodeLayout\s*\(/)
     expect(system).not.toMatch(/\bprepareHermeticOpencodeLayout\s*\(/)
-    expect(core).toContain('dependencies.snapshotBinary ?? snapshotOfficialOpencodeBinary')
+    expect(core).toContain('dependencies.snapshotBinary ?? snapshotRuntimeOpencodeBinary')
     expect(core).toContain('requireRootOwnedBwrap')
   })
 
-  test('model and status diagnostics execute only an official snapshot', () => {
+  test('model and status diagnostics execute only a byte-frozen runtime snapshot', () => {
     const models = source('routes/runtime.ts')
-    expect(models).toContain('withOfficialOpencodeSnapshot([binary], async (snapshot) =>')
+    expect(models).toContain('withRuntimeOpencodeSnapshot([binary], async (snapshot) =>')
     expect(models).toContain('const result = await driver.listModels(snapshot, {')
     expect(models).toContain('const sourceBefore = await scanOpencodeProjectSurface(cwd)')
     expect(models).toContain('cwd,')
@@ -165,16 +165,16 @@ describe('RFC-224 verified OpenCode source reachability', () => {
     expect(models).toContain('assertSourceFingerprintUnchanged(sourceBefore, sourceAfter)')
 
     const status = source('routes/runtimes.ts')
-    expect(status).toContain('withOfficialOpencodeSnapshot([binary], async (snapshot) =>')
+    expect(status).toContain('withRuntimeOpencodeSnapshot([binary], async (snapshot) =>')
     expect(status).toContain('getRuntimeDriver(row.protocol).probe(snapshot, {')
     expect(status).toContain('isExecutionIdentityFailureCode(error.code)')
     expect(status).toContain(": 'execution-identity-untrusted-binary'")
     expect(status).toContain('incompatibleReason: code')
 
-    const official = source('services/runtime/opencode/officialBuilds.ts')
-    expect(official).toContain('await snapshotOfficialOpencodeBinary({')
-    expect(official).toContain('await verifyOfficialSnapshot(snapshotPath')
-    expect(official).toContain('return await callback(snapshotPath)')
+    const runtimeBinary = source('services/runtime/opencode/runtimeBinary.ts')
+    expect(runtimeBinary).toContain('await snapshotRuntimeOpencodeBinary({')
+    expect(runtimeBinary).toContain('await verifyRuntimeOpencodeSnapshot(snapshotPath')
+    expect(runtimeBinary).toContain('return await callback(snapshotPath, identity)')
   })
 
   test('config-derived launch heads keep their production provenance brand', () => {

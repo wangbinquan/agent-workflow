@@ -7,7 +7,15 @@
 // daemon boot and cached (the mechanism doesn't come and go mid-process; a
 // fresh probe rides the next restart).
 
-export type SandboxMechanism = 'seatbelt' | 'bwrap'
+/**
+ * Provider identifier reported by the host probe.
+ *
+ * RFC-227 deliberately keeps this open: built-ins currently report
+ * `seatbelt` or `bwrap`, while a future Windows Job Object/AppContainer
+ * provider can register its own identifier without widening OpenCode's core
+ * schemas.
+ */
+export type SandboxMechanism = string
 
 export interface SandboxStatus {
   mechanism: SandboxMechanism | null

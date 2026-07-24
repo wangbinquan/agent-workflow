@@ -12,22 +12,48 @@
 import { z } from 'zod'
 import { EXECUTION_IDENTITY_FAILURE_CODES } from '../executionIdentity'
 
+export const RuntimeStatusStateSchema = z.enum([
+  'not-found',
+  'unlaunchable',
+  'available-unverified',
+  'protocol-incompatible',
+  'containment-blocked',
+  'degraded',
+  'ready',
+])
+export type RuntimeStatusState = z.infer<typeof RuntimeStatusStateSchema>
+
 /**
  * RFC-135: GET /api/runtimes/status — one entry per ENABLED registry runtime,
  * probed live (`--version`) against the binary a real dispatch would use.
  *
- * Deliberately carries NO `compatible` / `minVersion`: RFC-226 projects
- * OpenCode's driver verdict into `ok` without exposing driver policy details.
- * For OpenCode, `ok = probe exited 0 && version is compatible`; `version`
- * remains nullable so a failed/unparseable probe can still be represented.
- * Other protocols retain their established availability semantics.
+ * Deliberately carries NO `compatible` / `minVersion`: RFC-227 makes reported
+ * version nullable telemetry and selects compatibility by observed protocol
+ * behavior. Other protocols retain their established availability semantics.
  */
+export const RuntimeCapabilityStrengthSchema = z.enum(['strong', 'best-effort', 'absent'])
+
+export const RuntimeContainmentReceiptSchema = z.object({
+  providerId: z.string().min(1).nullable(),
+  mode: z.enum(['enforce', 'warn', 'off']),
+  capabilities: z.record(z.string().min(1), RuntimeCapabilityStrengthSchema),
+  available: z.boolean(),
+  degradedReasons: z.array(z.string().min(1)),
+})
+
 export const RuntimeStatusEntrySchema = z.object({
   name: z.string(),
   protocol: z.enum(['opencode', 'claude-code']),
   binary: z.string(),
   ok: z.boolean(),
   version: z.string().nullable(),
+  /** RFC-227 precise diagnosis. Optional while older daemons remain readable. */
+  state: RuntimeStatusStateSchema.optional(),
+  /** Neutral alias that makes the no-admission semantics explicit. */
+  reportedVersion: z.string().nullable().optional(),
+  /** Behavior contract selected by a full Runtime Test, never a version range. */
+  protocolCodec: z.string().min(1).optional(),
+  containment: RuntimeContainmentReceiptSchema.optional(),
   isDefault: z.boolean(),
   /**
    * RFC-224: stable, non-secret diagnosis for an execution-identity admission
@@ -46,8 +72,13 @@ export type RuntimeStatusEntry = z.infer<typeof RuntimeStatusEntrySchema>
  */
 export const SandboxStatusSchema = z.object({
   mode: z.enum(['enforce', 'warn', 'off']),
-  mechanism: z.enum(['seatbelt', 'bwrap']).nullable(),
+  // RFC-227: provider ids are extensible (for example a future Windows Job
+  // Object/AppContainer provider), not a Linux/macOS closed enum.
+  mechanism: z.string().min(1).nullable(),
   available: z.boolean(),
+  providerId: z.string().min(1).nullable().optional(),
+  capabilities: z.record(z.string().min(1), RuntimeCapabilityStrengthSchema).optional(),
+  degradedReasons: z.array(z.string().min(1)).optional(),
 })
 export type SandboxStatus = z.infer<typeof SandboxStatusSchema>
 

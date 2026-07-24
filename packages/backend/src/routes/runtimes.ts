@@ -29,7 +29,8 @@ import {
 import type { RuntimeKind } from '@/services/runtime'
 import { getRuntimeDriver } from '@/services/runtime'
 import { smokeRuntime as productionSmokeRuntime, type SmokeResult } from '@/services/runtimeSmoke'
-import { withOfficialOpencodeSnapshot as productionOfficialOpencodeSnapshot } from '@/services/runtime/opencode/officialBuilds'
+import { withRuntimeOpencodeSnapshot as productionRuntimeOpencodeSnapshot } from '@/services/runtime/opencode/runtimeBinary'
+import { inspectRuntimeContainment } from '@/services/runtime/opencode/containment'
 
 // RFC-143: derived from the DRIVERS registry (via RUNTIME_PROTOCOLS) rather than
 // a re-hardcoded literal enum — a new runtime kind is accepted automatically.
@@ -110,9 +111,9 @@ function statusProbeTimeoutMs(): number {
 }
 
 export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
-  const withOfficialOpencodeSnapshot =
-    deps.runtimeDiagnosticTestDependencies?.withOfficialOpencodeSnapshot ??
-    productionOfficialOpencodeSnapshot
+  const withRuntimeOpencodeSnapshot =
+    deps.runtimeDiagnosticTestDependencies?.withRuntimeOpencodeSnapshot ??
+    productionRuntimeOpencodeSnapshot
   const smokeRuntime =
     deps.runtimeDiagnosticTestDependencies?.smokeRuntime ?? productionSmokeRuntime
 
@@ -129,12 +130,11 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
 
   // RFC-135 / RFC-226 — live light status for the homepage hero: every ENABLED
   // runtime is probed `--version` in parallel against the binary a dispatch
-  // would use. This is the explicit, on-demand version gate that replaced the
-  // unconditional OpenCode daemon-start gate.
+  // would use. OpenCode treats the output only as telemetry; protocol behavior
+  // and containment capabilities are independent axes.
   // `runtime:read` mirrors the legacy /api/runtime/* gate (server.ts) — this
   // spawns registered binaries, so a narrowed PAT without the permission must
-  // not reach it. RFC-224 first admits OpenCode through the exact official-build
-  // gate; RFC-226 then projects OpenCode version compatibility into `ok`.
+  // not reach it.
   app.get('/api/runtimes/status', requirePermission('runtime:read'), async (c) => {
     const cfg = loadConfig(deps.configPath)
     const rows = (await listRuntimes(deps.db)).filter((r) => r.enabled)
@@ -146,6 +146,8 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
     const configured = cfg.defaultRuntime ?? 'opencode'
     const defaultName = rows.some((r) => r.name === configured) ? configured : 'opencode'
     const timeoutMs = statusProbeTimeoutMs()
+    const provider = getSandboxProvider()
+    const containment = inspectRuntimeContainment(provider)
     const runtimes = await Promise.all(
       rows.map(async (row) => {
         const binary = resolveRuntimeBinary(row, cfg)
@@ -155,7 +157,7 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
         // failure, so per-probe warns would just flood the log (D5/§6).
         const probe =
           row.protocol === 'opencode'
-            ? await withOfficialOpencodeSnapshot([binary], async (snapshot) => {
+            ? await withRuntimeOpencodeSnapshot([binary], async (snapshot) => {
                 const verified = await getRuntimeDriver(row.protocol).probe(snapshot, {
                   timeoutMs,
                   quiet: true,
@@ -175,21 +177,51 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
                   compatible: false,
                   incompatibleReason: code,
                   ran: false,
+                  snapshotFailure:
+                    typeof error === 'object' &&
+                    error !== null &&
+                    'reason' in error &&
+                    error.reason === 'not-found'
+                      ? ('not-found' as const)
+                      : ('unlaunchable' as const),
                 }
               })
             : await getRuntimeDriver(row.protocol).probe(binary, {
                 timeoutMs,
                 quiet: true,
               })
+        const availabilityState =
+          row.protocol === 'opencode'
+            ? 'snapshotFailure' in probe
+              ? probe.snapshotFailure
+              : probe.ran === true
+                ? ('available-unverified' as const)
+                : ('unlaunchable' as const)
+            : probe.ran === true && probe.compatible
+              ? ('ready' as const)
+              : ('not-found' as const)
+        const state =
+          row.protocol === 'opencode' &&
+          availabilityState === 'available-unverified' &&
+          containment !== null
+            ? containment.mode === 'enforce' && containment.degradedReasons.length > 0
+              ? ('containment-blocked' as const)
+              : containment.mode === 'warn' && containment.degradedReasons.length > 0
+                ? ('degraded' as const)
+                : availabilityState
+            : availabilityState
         return {
           name: row.name,
           protocol: row.protocol,
           binary: probe.binary,
-          // RFC-226: an executable that exits 0 but reports an unsupported or
-          // unparseable version has failed runtime validation. Keep compatible
-          // out of the wire shape; its verdict is projected into `ok`.
-          ok: probe.ran === true && (row.protocol === 'opencode' ? probe.compatible : true),
+          // RFC-227: OpenCode version output is telemetry. A lightweight
+          // status can prove availability but only Runtime Test / execution
+          // selects the behavior codec.
+          ok: state === 'ready' || state === 'available-unverified' || state === 'degraded',
           version: probe.version,
+          reportedVersion: probe.version,
+          state,
+          ...(row.protocol === 'opencode' && containment !== null ? { containment } : {}),
           isDefault: row.name === defaultName,
           ...(isExecutionIdentityFailureCode(probe.incompatibleReason)
             ? { failureCode: probe.incompatibleReason }
@@ -200,13 +232,15 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
     // RFC-205 D6 — sandbox availability + mode for the Settings chip. Provider
     // is null before start.ts installs it (tests) → report config mode with
     // unknown availability.
-    const provider = getSandboxProvider()
     const sandbox =
       provider !== null
         ? {
             mode: provider.mode,
             mechanism: provider.status.mechanism,
             available: provider.status.available,
+            providerId: containment?.providerId ?? null,
+            capabilities: containment?.capabilities ?? {},
+            degradedReasons: containment?.degradedReasons ?? [],
           }
         : { mode: cfg.sandboxMode, mechanism: null, available: false }
     return c.json({ runtimes, sandbox })

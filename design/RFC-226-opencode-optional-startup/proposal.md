@@ -3,6 +3,11 @@
 状态：Done（2026-07-24；用户以「开始」批准。设计门 1 个 P1 已关闭；实现门
 APPROVED / 0 open。显式 OpenCode status 要求 `ran && compatible`，版本门后移而非删除）。
 
+> **RFC-227 supersession（2026-07-24）**：RFC-226 的“版本门后移而非删除”仅描述当时状态。
+> RFC-227 已删除 OpenCode minimum/exact version gate，并把 status、执行与恢复改为
+> byte snapshot + direct API behavior codec + containment capability；以下旧 version/official
+> 条款保留为历史证据。
+
 ## 1. 背景与现状证据
 
 平台已经是多运行时系统：运行时是数据库中的可编辑、可禁用资源，agent 可以显式选择

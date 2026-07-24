@@ -38,11 +38,12 @@ export interface OpencodeSessionOwnerImmutable {
   nodeId: string
   createdNodeRunId: string
   identityDigest: string
-  officialBuildDigest: string
+  runtimeBinaryDigest: string
   sessionContractDigest: string
   sessionStoreKey: string
   projectId: string
-  opencodeVersion: string
+  protocolCodec: string
+  reportedVersion: string | null
 }
 
 export interface NewOpencodeSessionClaim {
@@ -51,11 +52,12 @@ export interface NewOpencodeSessionClaim {
   nodeId: string
   currentNodeRunId: string
   identityDigest: string
-  officialBuildDigest: string
+  runtimeBinaryDigest: string
   sessionContractDigest: string
   sessionStoreKey: string
   projectId: string
-  opencodeVersion: string
+  protocolCodec: string
+  reportedVersion: string | null
   leaseNonceDigest: string
   leasedAt?: number
 }
@@ -94,11 +96,17 @@ function validateImmutable(input: OpencodeSessionOwnerImmutable): void {
   assertNonEmpty(input.nodeId)
   assertNonEmpty(input.createdNodeRunId)
   assertNonEmpty(input.identityDigest)
-  assertNonEmpty(input.officialBuildDigest)
+  assertNonEmpty(input.runtimeBinaryDigest)
   assertNonEmpty(input.sessionContractDigest)
   assertNonEmpty(input.sessionStoreKey)
   assertNonEmpty(input.projectId)
-  assertNonEmpty(input.opencodeVersion)
+  assertNonEmpty(input.protocolCodec)
+  if (
+    input.reportedVersion !== null &&
+    (input.reportedVersion.length === 0 || input.reportedVersion.length > 256)
+  ) {
+    fail('invalid-input')
+  }
 }
 
 function immutableMatches(
@@ -111,11 +119,11 @@ function immutableMatches(
     owner.nodeId === expected.nodeId &&
     owner.createdNodeRunId === expected.createdNodeRunId &&
     owner.identityDigest === expected.identityDigest &&
-    owner.officialBuildDigest === expected.officialBuildDigest &&
+    owner.runtimeBinaryDigest === expected.runtimeBinaryDigest &&
     owner.sessionContractDigest === expected.sessionContractDigest &&
     owner.sessionStoreKey === expected.sessionStoreKey &&
     owner.projectId === expected.projectId &&
-    owner.opencodeVersion === expected.opencodeVersion
+    owner.protocolCodec === expected.protocolCodec
   )
 }
 
@@ -155,11 +163,12 @@ export function claimNewOpencodeSession(
     nodeId: input.nodeId,
     createdNodeRunId: input.currentNodeRunId,
     identityDigest: input.identityDigest,
-    officialBuildDigest: input.officialBuildDigest,
+    runtimeBinaryDigest: input.runtimeBinaryDigest,
     sessionContractDigest: input.sessionContractDigest,
     sessionStoreKey: input.sessionStoreKey,
     projectId: input.projectId,
-    opencodeVersion: input.opencodeVersion,
+    protocolCodec: input.protocolCodec,
+    reportedVersion: input.reportedVersion,
   }
   validateImmutable(immutable)
   assertNonEmpty(input.currentNodeRunId)

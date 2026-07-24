@@ -35,20 +35,19 @@ export interface OpencodeCommandOptions {
  * `--auto` (pure rename — identical describe string; the legacy spelling is
  * REMOVED, not aliased).
  */
-export const OPENCODE_AUTO_FLAG_MIN_VERSION = '1.18.0'
+export const OPENCODE_AUTO_FLAG_RENAME_VERSION = '1.18.0'
 
 /**
  * Pick the auto-approve flag spelling for the probed binary version.
  *
- * 2026-07-21 incident: on opencode 1.18.3 the legacy spelling is an unknown
- * argument to the `.strict()` parser, and opencode's custom `.fail()`
- * (opencode/src/index.ts:104-114) swallows the "Unknown argument" line and
- * prints ONLY the `run` usage before exit 1 — so every spawn on this machine
- * died with a bare usage dump and zero stdout. Version-gate the legacy/test
- * spelling seam instead of flipping its golden argv wholesale.
+ * 2026-07-21 legacy-CLI incident: a newer strict parser removed the legacy
+ * spelling, swallowed the "Unknown argument" line, and printed only `run`
+ * usage before exit 1. This compatibility mapping belongs solely to the
+ * test-only `opencode run` seam; production admission uses the direct API
+ * behavior codec and never compares this version boundary.
  *
  * Unknown (null/undefined/unparseable) → LEGACY spelling, deliberately:
- *  - RFC-224 production uses the pinned direct API and never reaches this
+ *  - RFC-227 production uses the behavior-qualified direct API and never reaches this
  *    `opencode run` compatibility seam;
  *  - the TS mocks (`['bun','run',…]` heads) and the six e2e shell stubs
  *    keep their historical argv byte-for-byte unless explicitly probed.
@@ -61,7 +60,7 @@ export function resolveAutoApproveFlag(
   // for unparseable input, which would silently pick `--auto` for garbage.
   const parsed = extractVersion(binaryVersion)
   if (parsed === null) return '--dangerously-skip-permissions'
-  return compareSemver(parsed, OPENCODE_AUTO_FLAG_MIN_VERSION) >= 0
+  return compareSemver(parsed, OPENCODE_AUTO_FLAG_RENAME_VERSION) >= 0
     ? '--auto'
     : '--dangerously-skip-permissions'
 }

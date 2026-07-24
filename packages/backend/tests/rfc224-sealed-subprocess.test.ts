@@ -9,6 +9,7 @@ import { join, resolve } from 'node:path'
 import {
   isSafeRootOwnedBwrapMode,
   renderNetlessBwrapArgs,
+  renderNetlessSeatbeltProfile,
   requireRootOwnedBwrap,
   sanitizeNetlessEnvironment,
   type NetlessSubprocessManifest,
@@ -80,7 +81,10 @@ function manifest(patch: Partial<NetlessSubprocessManifest> = {}): NetlessSubpro
   return {
     codec: 1,
     mode: 'mcp',
-    bwrapPath: '/usr/bin/bwrap',
+    provider: {
+      providerId: 'linux-bwrap',
+      config: { bwrapPath: '/usr/bin/bwrap' },
+    },
     worktreePath: '/home/operator/worktree',
     scratchPath: '/srv/agent-workflow/runs/run-a/scratch',
     appHome: '/srv/agent-workflow',
@@ -91,6 +95,7 @@ function manifest(patch: Partial<NetlessSubprocessManifest> = {}): NetlessSubpro
     ],
     env: {
       HOME: '/srv/agent-workflow/stores/store-a/home',
+      TMPDIR: '/srv/agent-workflow/stores/store-a/tmp',
       PATH: '/usr/bin:/bin',
     },
     command: ['/home/operator/bin/mcp-a', '--stdio'],
@@ -798,6 +803,21 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
         'execution-identity-store-unsafe',
       )
     }
+  })
+
+  test('macOS provider profile denies child network and restores only exact writable/read-only roots', () => {
+    const profile = renderNetlessSeatbeltProfile(
+      manifest({
+        provider: {
+          providerId: 'macos-seatbelt',
+          config: { sandboxExecPath: '/usr/bin/sandbox-exec' },
+        },
+      }),
+    )
+    expect(profile).toContain('(deny network*)')
+    expect(profile).toContain('(deny file-read* file-write* (subpath "/home/operator"))')
+    expect(profile).toContain('(allow file-read* file-write* (subpath "/home/operator/worktree"))')
+    expect(profile).toContain('(deny file-write* (subpath "/home/operator/bin/mcp-a"))')
   })
 
   test('rebuilds env and rejects loader, OpenCode, Git-exec, and shell-startup injection', () => {

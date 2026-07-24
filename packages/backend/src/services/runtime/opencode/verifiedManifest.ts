@@ -6,14 +6,15 @@ import { constants } from 'node:fs'
 import { lstat, open, unlink } from 'node:fs/promises'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
-import { JsonValueSchema, PINNED_OPENCODE_VERSION } from './directApiSchemas'
+import { JsonValueSchema, OPENCODE_DIRECT_PROTOCOL_CODEC } from './directApiSchemas'
 import { verifiedSelfCommand } from './sealedSubprocess'
 import { executionIdentityFailure } from './failure'
 import { OPENCODE_FFF_CAPABILITY_CODEC } from './hermetic'
 import { FffCapabilityProbeSchema } from './fffCapability'
 import { VerifiedInventoryPlanSchema } from './verifiedInventory'
+import { RuntimeChildProviderPlanSchema, RuntimeContainmentReceiptSchema } from './containment'
 
-export const VERIFIED_LAUNCH_MANIFEST_CODEC = 1 as const
+export const VERIFIED_LAUNCH_MANIFEST_CODEC = 2 as const
 export const MAX_VERIFIED_MANIFEST_BYTES = 4 * 1024 * 1024
 
 const AbsolutePathSchema = z
@@ -26,9 +27,11 @@ const EnvSchema = z.record(z.string().refine((value) => !value.includes('\0')))
 
 const VerifiedLaunchManifestCommonSchema = z.object({
   codec: z.literal(VERIFIED_LAUNCH_MANIFEST_CODEC),
-  version: z.literal(PINNED_OPENCODE_VERSION),
+  protocolCodec: z.literal(OPENCODE_DIRECT_PROTOCOL_CODEC),
   binaryPath: AbsolutePathSchema,
-  officialBuildDigest: Sha256Schema,
+  binaryDigest: Sha256Schema,
+  containment: RuntimeContainmentReceiptSchema,
+  childProvider: RuntimeChildProviderPlanSchema,
   worktreePath: AbsolutePathSchema,
   runRoot: AbsolutePathSchema,
   sessionDbPath: AbsolutePathSchema,
@@ -49,8 +52,8 @@ const VerifiedLaunchManifestCommonSchema = z.object({
   sessionTitle: z.string().min(1).max(512),
   sessionContractDigest: Sha256Schema,
   identityDigest: Sha256Schema,
-  fffCapabilityCodec: z.literal(OPENCODE_FFF_CAPABILITY_CODEC),
-  fffProbe: FffCapabilityProbeSchema,
+  fffCapabilityCodec: z.literal(OPENCODE_FFF_CAPABILITY_CODEC).optional(),
+  fffProbe: FffCapabilityProbeSchema.optional(),
   bootstrapTimeoutMs: z.number().int().positive().max(300_000),
   runTimeoutMs: z
     .number()
@@ -83,18 +86,35 @@ const VerifiedSystemLaunchManifestSchema = VerifiedLaunchManifestCommonSchema.ex
 export const VerifiedLaunchManifestSchema = z
   .union([VerifiedBusinessLaunchManifestSchema, VerifiedSystemLaunchManifestSchema])
   .superRefine((value, ctx) => {
-    const probeRelative = relative(value.runRoot, value.fffProbe.root)
-    if (
-      probeRelative === '' ||
-      probeRelative === '..' ||
-      probeRelative.startsWith(`..${sep}`) ||
-      isAbsolute(probeRelative)
-    ) {
+    if (value.childProvider.providerId === 'linux-bwrap') {
+      if (value.fffCapabilityCodec === undefined || value.fffProbe === undefined) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['fffProbe'],
+          message: 'linux-bwrap requires the filesystem-fallback proof',
+        })
+      }
+    } else if (value.fffCapabilityCodec !== undefined || value.fffProbe !== undefined) {
       ctx.addIssue({
         code: 'custom',
-        path: ['fffProbe', 'root'],
-        message: 'probe root must be a strict run-root child',
+        path: ['fffProbe'],
+        message: 'only linux-bwrap admits a filesystem-fallback proof',
       })
+    }
+    if (value.fffProbe !== undefined) {
+      const probeRelative = relative(value.runRoot, value.fffProbe.root)
+      if (
+        probeRelative === '' ||
+        probeRelative === '..' ||
+        probeRelative.startsWith(`..${sep}`) ||
+        isAbsolute(probeRelative)
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['fffProbe', 'root'],
+          message: 'probe root must be a strict run-root child',
+        })
+      }
     }
     if (value.storeKind !== 'business') return
     if (value.mode === 'resume') {

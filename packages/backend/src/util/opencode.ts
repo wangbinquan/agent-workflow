@@ -1,11 +1,11 @@
-// opencode binary discovery + version probe + min-version gate.
+// OpenCode binary discovery + observational version probe.
 //
-// Min version was verified hands-on in P-0-01 (design.md §18 #1).
-// Bumping requires re-validating the 4 isolation experiments.
+// RFC-227: reported versions are telemetry only. Actual compatibility is
+// decided by the verified direct-API behavior contract, never by semver.
 
 import { createLogger } from './log'
 import { loadConfig } from '@/config'
-import { compareSemver, extractVersion } from './semver'
+import { extractVersion } from './semver'
 import { recordOpencodeBinaryVersion } from './opencode-version-registry'
 
 // RFC-143 PR-5: extractVersion/compareSemver live in ./semver (single copy,
@@ -47,17 +47,6 @@ export function isProductionOpencodeCommand(command: readonly string[]): boolean
 }
 
 /**
- * Minimum supported opencode version.
- * RFC-226 applies this to explicit runtime validation/use, never daemon boot.
- *
- * There is intentionally NO semver upper bound in the generic probe. RFC-224's
- * production execution boundary is stricter and independently requires the
- * exact official pinned build; the generic minimum remains useful for doctor,
- * runtime status, and legacy/test-only probes.
- */
-export const MIN_OPENCODE_VERSION = '1.18.3'
-
-/**
  * RFC-135: optional knobs for the `--version` probes (opencode + claude-code).
  * Omitting both fields is byte-identical to the historical behavior for
  * explicit diagnostics and legacy callers. RFC-226 removed the boot caller.
@@ -80,17 +69,16 @@ export interface ProbeOpts {
 export interface OpencodeProbe {
   /** Resolved binary path (absolute when overridden, "opencode" when on PATH). */
   binary: string
-  /** Parsed "X.Y.Z" string, or null if not found / parse failed. */
+  /** Parsed "X.Y.Z" telemetry, or null when the runtime uses another scheme. */
   version: string | null
   /**
-   * True iff `version >= MIN_OPENCODE_VERSION`.
-   * False on probe failure or too old (there is no upper bound).
+   * Transport availability only: true iff `--version` exited zero. RFC-227
+   * deliberately does not infer protocol compatibility from this value.
    */
   compatible: boolean
   /**
-   * When the binary is present but below the minimum, this carries a
-   * human-readable reason so the daemon log / runtime route surfaces "why
-   * incompatible" rather than just "<= min".
+   * Reserved for transport-level diagnostic detail. Version text never
+   * populates this field.
    */
   incompatibleReason?: string
   /**
@@ -101,8 +89,8 @@ export interface OpencodeProbe {
 }
 
 /**
- * Spawn `<binary> --version`, parse the semver prefix.
- * Returns null if the binary cannot be executed or output is unparseable.
+ * Spawn `<binary> --version` and collect optional semver telemetry. An exit-0
+ * binary remains available even when its version output is non-semver.
  */
 export async function probeOpencode(
   opencodePath?: string,
@@ -183,19 +171,7 @@ export async function probeOpencode(
     warn('opencode binary not executable', { binary, error: (err as Error).message })
   }
 
-  if (version === null) {
-    return { binary, version, compatible: false, ran }
-  }
-  if (compareSemver(version, MIN_OPENCODE_VERSION) < 0) {
-    return {
-      binary,
-      version,
-      compatible: false,
-      incompatibleReason: `opencode ${version} is older than required minimum ${MIN_OPENCODE_VERSION}`,
-      ran,
-    }
-  }
-  return { binary, version, compatible: true, ran }
+  return { binary, version, compatible: ran, ran }
 }
 
 /**

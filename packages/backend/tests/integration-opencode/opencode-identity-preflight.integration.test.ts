@@ -1,10 +1,11 @@
-// RFC-224 T29 — official v1.18.3, no-LLM execution-identity preflight.
+// RFC-224/RFC-227 — real-binary, no-LLM execution-identity preflight.
 //
 // This test deliberately stops at root-session creation. It proves the real
-// binary's config/provider/agent/skill/session shapes against the exact
-// production comparators without posting a message or spending provider
-// tokens. Unlike the legacy live-LLM cases, it therefore runs whenever the
-// integration workflow is enabled, even when repository secrets are absent.
+// binary's config/provider/agent/skill/session behavior against the production
+// codec without posting a message or spending provider tokens. The reported
+// release is telemetry and is deliberately not an identity expectation.
+// Unlike the live-LLM cases, this therefore runs whenever the integration
+// workflow is enabled, even when repository secrets are absent.
 
 import { describe, expect, test } from 'bun:test'
 import { execFileSync } from 'node:child_process'
@@ -29,7 +30,7 @@ import {
   materializeFffCapabilityProbe,
   runFffCapabilityProbe,
 } from '@/services/runtime/opencode/fffCapability'
-import { withOfficialOpencodeSnapshot } from '@/services/runtime/opencode/officialBuilds'
+import { withRuntimeOpencodeSnapshot } from '@/services/runtime/opencode/runtimeBinary'
 import { removeSealedTree } from '@/services/runtime/opencode/sealedInputs'
 import { requireRootOwnedBwrap } from '@/services/runtime/opencode/sealedSubprocess'
 import {
@@ -1097,7 +1098,7 @@ describe('RFC-224 Linux cancellation oracle protocol', () => {
   })
 })
 
-describe.skipIf(!RUN_INTEGRATION)('RFC-224 official no-LLM execution identity', () => {
+describe.skipIf(!RUN_INTEGRATION)('RFC-227 real-binary no-LLM execution identity', () => {
   test('attests config, provider, agent, skill, and root-session contracts on one instance', async () => {
     const canonicalTmp = await realpath(tmpdir())
     const root = await mkdtemp(join(canonicalTmp, 'aw-rfc224-official-preflight-'))
@@ -1142,7 +1143,7 @@ describe.skipIf(!RUN_INTEGRATION)('RFC-224 official no-LLM execution identity', 
     serverEnv.PWD = worktree
 
     try {
-      await withOfficialOpencodeSnapshot([OPENCODE_BIN], async (binaryPath) => {
+      await withRuntimeOpencodeSnapshot([OPENCODE_BIN], async (binaryPath) => {
         if (process.platform === 'linux') {
           const bwrapPath = await requireRootOwnedBwrap()
           await verifyRealBwrapCancellation(bwrapPath)
@@ -1206,7 +1207,6 @@ describe.skipIf(!RUN_INTEGRATION)('RFC-224 official no-LLM execution identity', 
               title,
               agent: 'aw-rfc224-official',
               model: PINNED_MODEL,
-              version: '1.18.3',
             },
             'create-response',
           )

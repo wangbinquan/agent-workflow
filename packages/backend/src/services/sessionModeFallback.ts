@@ -30,7 +30,7 @@
 export type ClarifyInlineFallbackReason =
   | 'missing-session-id'
   | 'session-not-found'
-  | 'unsupported-opencode-version'
+  | 'session-resume-unsupported'
 
 export interface DecideResumeSessionIdInput {
   /** Mode resolved from the upstream clarify node (RFC-026 ClarifySessionMode). */
@@ -38,12 +38,11 @@ export interface DecideResumeSessionIdInput {
   /** opencode session id captured on the source agent run, if any. */
   sourceSessionId: string | null | undefined
   /**
-   * When defined, indicates the daemon-detected opencode CLI does NOT
-   * support `--session`. Older minor versions / forks may lack the flag;
-   * the daemon's version probe is the source of truth. Optional because
-   * the version check is run-time dynamic and most environments are fine.
+   * When false, a behavior/capability probe has established that this runtime
+   * cannot resume a prior session. This is deliberately not inferred from the
+   * reported OpenCode version.
    */
-  opencodeSupportsResume?: boolean
+  supportsSessionResume?: boolean
 }
 
 export interface DecideResumeSessionIdResult {
@@ -66,7 +65,7 @@ export interface DecideResumeSessionIdResult {
  * recording. Three failure modes degrade gracefully to isolated:
  *   - `sessionMode === 'isolated'`   → never resume (no warning; user's choice).
  *   - missing source session id      → fallback `missing-session-id`.
- *   - opencode version doesn't support → fallback `unsupported-opencode-version`.
+ *   - behavior probe rejects resume  → fallback `session-resume-unsupported`.
  *
  * Note: `session-not-found` is decided AFTER the spawn (stderr inspection),
  * not here. This function runs PRE-spawn.
@@ -78,8 +77,8 @@ export function decideResumeSessionId(
     // Author chose isolated — not a fallback, no warning event.
     return { inlineMode: false }
   }
-  if (input.opencodeSupportsResume === false) {
-    return { inlineMode: false, fallbackReason: 'unsupported-opencode-version' }
+  if (input.supportsSessionResume === false) {
+    return { inlineMode: false, fallbackReason: 'session-resume-unsupported' }
   }
   if (
     input.sourceSessionId === null ||

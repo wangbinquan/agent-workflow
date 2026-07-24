@@ -490,7 +490,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     daemonInfoPath: Paths.daemonInfo,
     // RFC-226: runtime readiness is not daemon health. Startup never executes
     // OpenCode; explicit runtime status/Test/use paths perform the version and
-    // RFC-224 official-build admission instead.
+    // RFC-227 byte-frozen runtime admission instead.
     opencodeVersion: null,
     dbVersion,
     db,

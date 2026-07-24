@@ -16,7 +16,14 @@ const INTEGRATION_WORKFLOW = resolve(REPO_ROOT, '.github', 'workflows', 'integra
 const VISUAL_WORKFLOW = resolve(REPO_ROOT, '.github', 'workflows', 'visual-regression-nightly.yml')
 const WEBKIT_WORKFLOW = resolve(REPO_ROOT, '.github', 'workflows', 'e2e-webkit-nightly.yml')
 const E2E_FIXTURE_ROOT = resolve(REPO_ROOT, 'e2e', 'fixtures')
-const REVIEWED_OPENCODE_VERSION = '1.18.3'
+const E2E_STUB_VERSIONS: Readonly<Record<string, string>> = Object.freeze({
+  'stub-opencode-clarify-inline.sh': '1.18.3',
+  'stub-opencode-clarify.sh': '1.17.9',
+  'stub-opencode-commit.sh': '999.0.0',
+  'stub-opencode-cross-clarify.sh': '1.18.4',
+  'stub-opencode-slow.sh': '0.9.0',
+  'stub-opencode.sh': 'custom-build',
+})
 
 const roots: string[] = []
 
@@ -38,12 +45,6 @@ function expectCode(error: unknown, code: ExecutionIdentityFailure['code']) {
 function opencodeInstallTargets(source: string): string[] {
   return [...source.matchAll(/^\s*bun install -g opencode-ai@(.+?)\s*$/gm)].map((match) =>
     match[1]!.trim(),
-  )
-}
-
-function opencodeVersionDeclarations(source: string): string[] {
-  return [...source.matchAll(/^\s*OPENCODE_VERSION:\s*(.+?)\s*$/gm)].map(
-    (match) => `OPENCODE_VERSION: ${match[1]!.trim()}`,
   )
 }
 
@@ -194,29 +195,10 @@ describe('RFC-224 release platform source guard', () => {
     expect(integrationWorkflow).not.toMatch(/^ {4}runs-on: ubuntu-latest$/gm)
   })
 
-  test('pins all four release workflows to the one reviewed official OpenCode build', () => {
-    const envPinnedWorkflows = [
-      {
-        name: 'ci.yml',
-        source: ciWorkflow,
-        expectedInstallTargets: ['${{ env.OPENCODE_VERSION }}', '${{ env.OPENCODE_VERSION }}'],
-      },
-      {
-        name: 'visual-regression-nightly.yml',
-        source: visualWorkflow,
-        expectedInstallTargets: ['${{ env.OPENCODE_VERSION }}'],
-      },
-    ]
-
-    for (const workflow of envPinnedWorkflows) {
-      expect(opencodeVersionDeclarations(workflow.source), workflow.name).toEqual([
-        `OPENCODE_VERSION: '${REVIEWED_OPENCODE_VERSION}'`,
-      ])
-      expect(opencodeInstallTargets(workflow.source), workflow.name).toEqual(
-        workflow.expectedInstallTargets,
-      )
-    }
-
+  test('tests stable and current channels without turning either into an admission pin', () => {
+    expect(opencodeInstallTargets(ciWorkflow)).toEqual(['latest'])
+    expect(opencodeInstallTargets(visualWorkflow)).toEqual([])
+    expect(opencodeInstallTargets(webkitWorkflow)).toEqual([])
     const integrationMatrixBlocks = [
       ...integrationWorkflow.matchAll(/^ {8}opencode:\n((?:^ {10}.*\n)+)/gm),
     ]
@@ -226,12 +208,8 @@ describe('RFC-224 release platform source guard', () => {
         .split('\n')
         .map((line) => line.trim())
         .filter((line) => line.startsWith('-')),
-    ).toEqual([`- '${REVIEWED_OPENCODE_VERSION}'`])
-    expect(opencodeVersionDeclarations(integrationWorkflow)).toEqual([])
+    ).toEqual(["- '1.18.3'", "- 'latest'"])
     expect(opencodeInstallTargets(integrationWorkflow)).toEqual(['${{ matrix.opencode }}'])
-
-    expect(opencodeVersionDeclarations(webkitWorkflow)).toEqual([])
-    expect(opencodeInstallTargets(webkitWorkflow)).toEqual([REVIEWED_OPENCODE_VERSION])
 
     for (const [name, source] of [
       ['ci.yml', ciWorkflow],
@@ -239,8 +217,10 @@ describe('RFC-224 release platform source guard', () => {
       ['integration-opencode.yml', integrationWorkflow],
       ['e2e-webkit-nightly.yml', webkitWorkflow],
     ] as const) {
+      expect(source, name).not.toContain('OPENCODE_VERSION')
+      expect(source, name).not.toContain('MIN_OPENCODE_VERSION')
+      expect(source, name).not.toContain('PINNED_OPENCODE_VERSION')
       expect(source, name).not.toMatch(/^\s*bun install -g opencode-ai(?:\s|$)/gm)
-      expect(source, name).not.toMatch(/^\s*bun install -g opencode-ai@latest(?:\s|$)/gm)
     }
   })
 
@@ -282,7 +262,7 @@ describe('RFC-224 release platform source guard', () => {
     )
   })
 
-  test('keeps every production e2e OpenCode stub on the reviewed build identity', () => {
+  test('keeps the e2e stubs on an explicit version-neutral telemetry matrix', () => {
     const stubs = readdirSync(E2E_FIXTURE_ROOT)
       .filter((name) => /^stub-opencode.*\.sh$/.test(name))
       .sort()
@@ -296,6 +276,10 @@ describe('RFC-224 release platform source guard', () => {
     ])
 
     for (const stub of stubs) {
+      const expectedVersion = E2E_STUB_VERSIONS[stub]
+      if (expectedVersion === undefined) {
+        throw new Error(`missing version-neutral fixture entry for ${stub}`)
+      }
       const source = readFileSync(resolve(E2E_FIXTURE_ROOT, stub), 'utf8')
       const versionArms = [
         ...source.matchAll(
@@ -309,12 +293,13 @@ describe('RFC-224 release platform source guard', () => {
           .map((line) => line.trim())
           .filter(Boolean),
         stub,
-      ).toEqual([`echo "stub-opencode ${REVIEWED_OPENCODE_VERSION}"`, 'exit 0'])
+      ).toEqual([`echo "stub-opencode ${expectedVersion}"`, 'exit 0'])
 
       const advertisedVersions = [...source.matchAll(/\bstub-opencode ([^\s"'`]+)/g)].map(
         (match) => match[1]!,
       )
-      expect(advertisedVersions, stub).toEqual([REVIEWED_OPENCODE_VERSION])
+      expect(advertisedVersions, stub).toEqual([expectedVersion])
     }
+    expect(new Set(Object.values(E2E_STUB_VERSIONS)).size).toBe(stubs.length)
   })
 })

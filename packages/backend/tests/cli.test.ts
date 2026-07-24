@@ -87,13 +87,13 @@ describe('CLI subcommands (P-1-05)', () => {
 
   test('doctor returns ok when opencode + git present', async () => {
     const result = await doctorCommand()
-    // We trust the dev box has supported OpenCode and Git installations.
+    // We trust the dev box has executable OpenCode and Git installations.
     // If a particular check fails, surface its message for easier debugging.
     if (!result.ok) {
       console.error(formatDoctor(result))
     }
     expect(result.ok).toBe(true)
-    expect(result.checks.find((c) => c.name === 'opencode version')?.ok).toBe(true)
+    expect(result.checks.find((c) => c.name === 'opencode binary')?.ok).toBe(true)
     expect(result.checks.find((c) => c.name === 'git version')?.ok).toBe(true)
   })
 

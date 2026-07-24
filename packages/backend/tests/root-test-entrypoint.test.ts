@@ -377,12 +377,9 @@ describe('repository test entrypoint', () => {
     expect(visualJob).toContain('timeout-minutes: 20')
   })
 
-  test('visual regression pins the same opencode version as main CI', () => {
-    const ciVersion = ciWorkflow.match(/OPENCODE_VERSION:\s*'([^']+)'/)?.[1]
-    const visualVersion = visualWorkflow.match(/OPENCODE_VERSION:\s*'([^']+)'/)?.[1]
-    expect(ciVersion).toBeDefined()
-    expect(visualVersion).toBe(ciVersion)
-    expect(visualWorkflow).toContain('opencode-ai@${{ env.OPENCODE_VERSION }}')
+  test('visual regression and binary e2e do not require a globally installed opencode', () => {
+    expect(visualWorkflow).not.toContain('bun install -g opencode-ai@')
+    expect(workflowJob(ciWorkflow, 'e2e')).not.toContain('bun install -g opencode-ai@')
   })
 
   // ---------------------------------------------------------------------------
@@ -427,37 +424,32 @@ describe('repository test entrypoint', () => {
     }
   })
 
-  test('the opencode version CI installs satisfies the daemon MIN_OPENCODE_VERSION', () => {
-    // ci.yml:13-18 states this constraint in a comment ("Must stay >=
-    // MIN_OPENCODE_VERSION ... Bump together") — a cross-file contract whose
-    // only load-bearing carrier was prose. If it ever drifts low, CI installs a
-    // runtime the daemon itself refuses to start against, and the integration
-    // legs verify a version no user can run.
+  test('OpenCode admission and CI define no version floor or ceiling', () => {
     const opencodeUtil = readFileSync(
       resolve(root, 'packages', 'backend', 'src', 'util', 'opencode.ts'),
       'utf8',
     )
-    const min = opencodeUtil.match(/MIN_OPENCODE_VERSION\s*=\s*'([^']+)'/)?.[1]
-    expect(min).toBeDefined()
-
-    const parse = (v: string): number[] => v.split('.').map((p) => Number.parseInt(p, 10))
-    const gte = (a: string, b: string): boolean => {
-      const [x, y] = [parse(a), parse(b)]
-      for (let i = 0; i < Math.max(x.length, y.length); i += 1) {
-        const diff = (x[i] ?? 0) - (y[i] ?? 0)
-        if (diff !== 0) return diff > 0
-      }
-      return true
-    }
-
-    for (const { name, source } of workflowSources) {
-      for (const pinned of [...source.matchAll(/OPENCODE_VERSION:\s*'([^']+)'/g)].map(
-        (m) => m[1]!,
-      )) {
-        expect(`${name}: opencode ${pinned} >= ${min}`).toBe(
-          `${name}: opencode ${pinned} >= ${gte(pinned, min as string) ? min : `TOO OLD (min ${min})`}`,
-        )
-      }
+    const runtimeBinary = readFileSync(
+      resolve(
+        root,
+        'packages',
+        'backend',
+        'src',
+        'services',
+        'runtime',
+        'opencode',
+        'runtimeBinary.ts',
+      ),
+      'utf8',
+    )
+    for (const [name, source] of [
+      ['opencode.ts', opencodeUtil],
+      ['runtimeBinary.ts', runtimeBinary],
+      ...workflowSources.map(({ name, source }) => [name, source] as const),
+    ]) {
+      expect(source, name).not.toContain('MIN_OPENCODE_VERSION')
+      expect(source, name).not.toContain('PINNED_OPENCODE_VERSION')
+      expect(source, name).not.toContain('OPENCODE_VERSION:')
     }
   })
 

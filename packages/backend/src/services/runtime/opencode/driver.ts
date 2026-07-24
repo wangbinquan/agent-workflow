@@ -28,7 +28,7 @@ import { buildOpencodeSpawn } from './spawn'
 import { buildInlineConfig } from './inlineConfig'
 import { pickRuntimeHead } from '../head'
 import { stageSkills } from '../stageSkills'
-import { MIN_OPENCODE_VERSION, probeOpencode } from '@/util/opencode'
+import { probeOpencode } from '@/util/opencode'
 import { getOpencodeBinaryVersion } from '@/util/opencode-version-registry'
 import { listOpencodeModels } from '@/util/opencode-models'
 import { captureChildSessions } from '@/services/sessionCapture'
@@ -40,7 +40,7 @@ import { buildVerifiedOpencodeSystemPlan } from './verifiedSystemPlan'
 
 export const opencodeDriver: RuntimeDriver = {
   kind: 'opencode',
-  minVersion: MIN_OPENCODE_VERSION,
+  minVersion: null,
   parseEvent(line: string): NormalizedEvent | null {
     return parseEvent(line)
   },

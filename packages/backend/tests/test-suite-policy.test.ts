@@ -59,6 +59,9 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   'packages/backend/tests/integration-opencode/opencode-live.integration.test.ts#skipIf': 1,
   'packages/backend/tests/mcp-probe-http-integration.test.ts#skipIf': 1,
   'packages/backend/tests/mcp-probe-stdio-integration.test.ts#skipIf': 1,
+  // RFC-227: the REAL macOS Seatbelt provider test shares the reviewed
+  // RUN_SANDBOX_ITEST gate and is activated on every macOS backend shard.
+  'packages/backend/tests/rfc227-seatbelt-integration.test.ts#skip': 1,
   // RFC-205: the REAL-mechanism sandbox smoke is RUN_SANDBOX_ITEST-gated
   // (activated on the macOS CI shards; the test re-probes and no-ops where
   // the mechanism is unusable).

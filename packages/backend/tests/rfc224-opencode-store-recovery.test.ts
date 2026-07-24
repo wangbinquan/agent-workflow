@@ -134,7 +134,7 @@ async function seedOwner(
   input: {
     storeKey: string
     sessionId?: string
-    officialBuildDigest?: string
+    runtimeBinaryDigest?: string
     lease?: { nodeRunId: string; nonceDigest: string } | null
   },
 ): Promise<void> {
@@ -144,11 +144,12 @@ async function seedOwner(
     nodeId: 'node-a',
     createdNodeRunId: input.lease?.nodeRunId ?? 'logical-created-run',
     identityDigest: 'identity-digest',
-    officialBuildDigest: input.officialBuildDigest ?? BUILD_DIGEST,
+    runtimeBinaryDigest: input.runtimeBinaryDigest ?? BUILD_DIGEST,
     sessionContractDigest: 'session-contract-digest',
     sessionStoreKey: input.storeKey,
     projectId: 'project-a',
-    opencodeVersion: '1.18.3',
+    protocolCodec: 'opencode-direct-v1',
+    reportedVersion: '1.18.3',
     leaseNodeRunId: input.lease?.nodeRunId ?? null,
     leaseNonceDigest: input.lease?.nonceDigest ?? null,
     leasedAt: input.lease === null || input.lease === undefined ? null : 123,
@@ -232,7 +233,7 @@ async function writeAbandonedLock(input: {
   await mkdir(dirname(input.dbPath), { recursive: true, mode: 0o700 })
   await writeFile(
     join(dirname(input.dbPath), OPENCODE_STORE_LOCK_BASENAME),
-    `${JSON.stringify({ codec: 1, nonce: input.nonce, server: input.server })}\n`,
+    `${JSON.stringify({ codec: 2, nonce: input.nonce, server: input.server })}\n`,
     { flag: 'wx', mode: 0o600 },
   )
 }
@@ -242,14 +243,14 @@ function businessServer(input: {
   nodeRunId: string
   nonceMode?: 'new' | 'resume'
   pidNamespace?: number
-  officialBuildDigest?: string
+  runtimeBinaryDigest?: string
 }): OpencodeStoreServerBinding {
   return {
     // This is intentionally different from node_runs.pid. It is an inner PID
     // namespace value and must never reach host liveness proof.
     pidNamespace: input.pidNamespace ?? 7,
     binaryPath: '/private/runtime-seal/opencode',
-    officialBuildDigest: input.officialBuildDigest ?? BUILD_DIGEST,
+    runtimeBinaryDigest: input.runtimeBinaryDigest ?? BUILD_DIGEST,
     startedAt: 100,
     sessionStoreKey: input.storeKey,
     scope: {
@@ -356,7 +357,6 @@ describe('RFC-224 OpenCode boot store recovery', () => {
         appHome,
         priorDaemonSandboxDead: await bootRecoveryCapability(db, appHome),
         dependencies: {
-          expectedOfficialBuildDigest: () => BUILD_DIGEST,
           outerProcessGroupDead: (run) => {
             hostProofs.push({
               id: run.id,
@@ -405,7 +405,6 @@ describe('RFC-224 OpenCode boot store recovery', () => {
         appHome,
         priorDaemonSandboxDead: await bootRecoveryCapability(db, appHome),
         dependencies: {
-          expectedOfficialBuildDigest: () => BUILD_DIGEST,
           outerProcessGroupDead: () => {
             throw new Error('an already-repaired store must not ask for liveness again')
           },
@@ -448,7 +447,6 @@ describe('RFC-224 OpenCode boot store recovery', () => {
         appHome,
         priorDaemonSandboxDead: await bootRecoveryCapability(db, appHome),
         dependencies: {
-          expectedOfficialBuildDigest: () => BUILD_DIGEST,
           outerProcessGroupDead: (run) => {
             expect(run.pid).toBe(pid)
             return false
@@ -477,20 +475,23 @@ describe('RFC-224 OpenCode boot store recovery', () => {
 
   test.each([
     {
-      label: 'owner build',
-      ownerBuild: 'b'.repeat(64),
+      label: 'binary digest',
+      ownerDigest: 'b'.repeat(64),
+      lockDigest: BUILD_DIGEST,
       lockStoreKey: undefined,
       ownerNonceDigest: undefined,
     },
     {
       label: 'lock-bound store',
-      ownerBuild: undefined,
+      ownerDigest: undefined,
+      lockDigest: undefined,
       lockStoreKey: businessKey('z'),
       ownerNonceDigest: undefined,
     },
     {
       label: 'lease nonce',
-      ownerBuild: undefined,
+      ownerDigest: undefined,
+      lockDigest: undefined,
       lockStoreKey: undefined,
       ownerNonceDigest: 'f'.repeat(64),
     },
@@ -505,7 +506,7 @@ describe('RFC-224 OpenCode boot store recovery', () => {
     const digest = nonceDigest(nonce)
     await seedOwner(db, {
       storeKey: key,
-      officialBuildDigest: drift.ownerBuild,
+      runtimeBinaryDigest: drift.ownerDigest,
       lease: {
         nodeRunId: 'run-drift',
         nonceDigest: drift.ownerNonceDigest ?? digest,
@@ -517,7 +518,7 @@ describe('RFC-224 OpenCode boot store recovery', () => {
       server: businessServer({
         storeKey: drift.lockStoreKey ?? key,
         nodeRunId: 'run-drift',
-        officialBuildDigest: drift.ownerBuild,
+        runtimeBinaryDigest: drift.lockDigest ?? drift.ownerDigest,
       }),
     })
 
@@ -527,7 +528,6 @@ describe('RFC-224 OpenCode boot store recovery', () => {
         appHome,
         priorDaemonSandboxDead: await bootRecoveryCapability(db, appHome),
         dependencies: {
-          expectedOfficialBuildDigest: () => BUILD_DIGEST,
           outerProcessGroupDead: () => true,
         },
       }),
@@ -560,7 +560,7 @@ describe('RFC-224 OpenCode boot store recovery', () => {
       server: {
         pidNamespace: 11,
         binaryPath: '/private/runtime-seal/opencode',
-        officialBuildDigest: BUILD_DIGEST,
+        runtimeBinaryDigest: BUILD_DIGEST,
         startedAt: 100,
         sessionStoreKey: key,
         scope: { kind: 'system-ephemeral', invocationId: key },
@@ -573,7 +573,6 @@ describe('RFC-224 OpenCode boot store recovery', () => {
         appHome,
         priorDaemonSandboxDead: await bootRecoveryCapability(db, appHome),
         dependencies: {
-          expectedOfficialBuildDigest: () => BUILD_DIGEST,
           outerProcessGroupDead: () => {
             throw new Error('system remnants rely on the once-only boot barrier')
           },

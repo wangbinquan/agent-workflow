@@ -312,21 +312,21 @@ describe('RFC-224 stable business owner identity', () => {
       config: config('/private/app/runs/task/run-1/opencode-identity-seal'),
       agent: 'worker',
       model,
-      officialBuildDigest: build,
+      binaryDigest: build,
       sealRoot: '/private/app/runs/task/run-1/opencode-identity-seal',
     })
     const resumed = businessOpencodeIdentityDigest({
       config: config('/private/app/runs/task/run-2/opencode-identity-seal'),
       agent: 'worker',
       model,
-      officialBuildDigest: build,
+      binaryDigest: build,
       sealRoot: '/private/app/runs/task/run-2/opencode-identity-seal',
     })
     const changedMcp = businessOpencodeIdentityDigest({
       config: config('/private/app/runs/task/run-2/opencode-identity-seal', 'c'.repeat(64)),
       agent: 'worker',
       model,
-      officialBuildDigest: build,
+      binaryDigest: build,
       sealRoot: '/private/app/runs/task/run-2/opencode-identity-seal',
     })
     expect(resumed).toBe(first)
@@ -342,7 +342,7 @@ describe('RFC-224 stable business owner identity', () => {
         config: unsealedShell,
         agent: 'worker',
         model,
-        officialBuildDigest: build,
+        binaryDigest: build,
         sealRoot,
       }),
     ).toThrow()
@@ -356,7 +356,7 @@ describe('RFC-224 stable business owner identity', () => {
         config: malformedMcp,
         agent: 'worker',
         model,
-        officialBuildDigest: build,
+        binaryDigest: build,
         sealRoot,
       }),
     ).toThrow()

@@ -361,12 +361,12 @@ describe('RuntimeList (RFC-112 PR-D)', () => {
     expect(screen.queryByText('runtimes.smoke.execution-identity-failed')).toBeNull()
     expect(
       screen.getByText(
-        'This OpenCode run requires the secure Linux sandbox, but it is unavailable.',
+        'This OpenCode run requires platform containment, but the required capabilities are unavailable.',
       ),
     ).toBeTruthy()
     expect(
       screen.getByText(
-        'Run the daemon on a supported Linux host with the required sandbox enabled.',
+        'Enable a supported containment provider, or explicitly choose Warn/Off to accept a degraded run.',
       ),
     ).toBeTruthy()
     expect(document.body.textContent).not.toContain(raw)
@@ -404,10 +404,12 @@ describe('RuntimeList (RFC-112 PR-D)', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: '测试二进制' }))
 
     expect(
-      await within(dialog).findByText('本次 OpenCode 运行要求安全 Linux 沙箱，但当前不可用。'),
+      await within(dialog).findByText('本次 OpenCode 运行要求平台隔离，但所需能力当前不可用。'),
     ).toBeTruthy()
     expect(
-      within(dialog).getByText('请在支持的 Linux 主机上运行 daemon，并启用所需沙箱。'),
+      within(dialog).getByText(
+        '请启用受支持的隔离 provider；也可显式选择「警告」或「关闭」接受降级运行。',
+      ),
     ).toBeTruthy()
     expect(dialog.textContent).not.toContain(raw)
     expect(dialog.textContent).not.toContain('execution-identity-sandbox-required')

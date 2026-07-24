@@ -1,6 +1,6 @@
 // RFC-224 — verified OpenCode plan for framework system agents.
 //
-// System invocations share the exact official-binary, hermetic-config,
+// System invocations share the exact byte-frozen binary, hermetic-config,
 // same-instance and direct-API launcher boundary used by business runs. Their
 // only intentional differences are an all-tools-denied agent, no resume/control
 // handshake, and a per-invocation store that is removed after capture.
@@ -16,17 +16,18 @@ import {
   buildStrictProviderAuth,
   removeHermeticOpencodeLayout,
 } from './hermetic'
-import type { OfficialOpencodeBuild, snapshotOfficialOpencodeBinary } from './officialBuilds'
+import type { snapshotRuntimeOpencodeBinary } from './runtimeBinary'
 import { assertSourceFingerprintUnchanged, scanOpencodeProjectSurface } from './sourceGuard'
 import { removeSealedTree } from './sealedInputs'
 import { identityDigest } from './executionIdentity'
 import { executionIdentityFailure } from './failure'
 import {
-  PINNED_OPENCODE_VERSION,
+  OPENCODE_DIRECT_PROTOCOL_CODEC,
   ROOT_SESSION_PERMISSION_RULES,
   type SelectedModel,
 } from './directApiSchemas'
 import {
+  VERIFIED_LAUNCH_MANIFEST_CODEC,
   verifiedLauncherCommand,
   writeVerifiedLaunchManifest,
   type VerifiedLaunchManifest,
@@ -38,17 +39,10 @@ const DEFAULT_BOOTSTRAP_TIMEOUT_MS = 30_000
 const DEFAULT_RUN_TIMEOUT_MS = 60 * 60 * 1000
 
 export interface VerifiedSystemPlanDependencies {
-  platform?: NodeJS.Platform
-  arch?: string
   getSandbox?: () => SandboxProvider | null
   random?: (size: number) => Buffer
-  snapshotBinary?: typeof snapshotOfficialOpencodeBinary
+  snapshotBinary?: typeof snapshotRuntimeOpencodeBinary
   requireBwrap?: () => Promise<string>
-  officialBuild?: (
-    version: string,
-    platform: NodeJS.Platform,
-    arch: string,
-  ) => Readonly<OfficialOpencodeBuild>
   sourceEnv?: Readonly<Record<string, string | undefined>>
 }
 
@@ -90,10 +84,7 @@ export async function buildVerifiedOpencodeSystemPlan(
   command: readonly string[],
   dependencies: VerifiedSystemPlanDependencies = {},
 ): Promise<SpawnPlan> {
-  const platform = dependencies.platform ?? process.platform
-  const arch = dependencies.arch ?? process.arch
-  const sandbox = assertVerifiedOpencodePlanBoundary({
-    platform,
+  const { sandbox } = assertVerifiedOpencodePlanBoundary({
     sandbox: (dependencies.getSandbox ?? getSandboxProvider)(),
   })
   if (
@@ -150,12 +141,9 @@ export async function buildVerifiedOpencodeSystemPlan(
 
   try {
     const core = await buildVerifiedOpencodePlan({
-      platform,
-      arch,
       sandbox,
       appHome: ctx.appHome,
       command,
-      version: PINNED_OPENCODE_VERSION,
       storeRoot,
       binaryPath,
       fffProbeRoot,
@@ -167,12 +155,9 @@ export async function buildVerifiedOpencodeSystemPlan(
         ...(dependencies.requireBwrap === undefined
           ? {}
           : { requireBwrap: dependencies.requireBwrap }),
-        ...(dependencies.officialBuild === undefined
-          ? {}
-          : { officialBuild: dependencies.officialBuild }),
       },
     })
-    const { layout, officialBuild: build, fffCapability } = core
+    const { layout, binaryIdentity, containment, childProvider, fffCapability } = core
     const controlledConfig = buildControlledOpencodeConfig({
       name: ctx.agentName,
       prompt: ctx.systemPrompt,
@@ -215,20 +200,21 @@ export async function buildVerifiedOpencodeSystemPlan(
       share: null,
       revert: null,
       metadata: null,
-      version: PINNED_OPENCODE_VERSION,
     })
     const currentIdentityDigest = identityDigest({
       codec: 1,
       config: controlledConfig,
       agent: ctx.agentName,
       model: selectedModel,
-      officialBuildDigest: build.digest,
+      binaryDigest: binaryIdentity.digest,
     })
     const manifest: VerifiedLaunchManifest = {
-      codec: 1,
-      version: PINNED_OPENCODE_VERSION,
+      codec: VERIFIED_LAUNCH_MANIFEST_CODEC,
+      protocolCodec: OPENCODE_DIRECT_PROTOCOL_CODEC,
       binaryPath,
-      officialBuildDigest: build.digest,
+      binaryDigest: binaryIdentity.digest,
+      containment,
+      childProvider,
       worktreePath: canonicalWorktree,
       runRoot: ctx.runDir,
       sessionDbPath: layout.sessionDbPath,
@@ -245,8 +231,12 @@ export async function buildVerifiedOpencodeSystemPlan(
       sessionTitle,
       sessionContractDigest,
       identityDigest: currentIdentityDigest,
-      fffCapabilityCodec: fffCapability.codec,
-      fffProbe: fffCapability.probe,
+      ...(fffCapability === null
+        ? {}
+        : {
+            fffCapabilityCodec: fffCapability.codec,
+            fffProbe: fffCapability.probe,
+          }),
       bootstrapTimeoutMs: DEFAULT_BOOTSTRAP_TIMEOUT_MS,
       runTimeoutMs: DEFAULT_RUN_TIMEOUT_MS,
     }
@@ -259,7 +249,7 @@ export async function buildVerifiedOpencodeSystemPlan(
       cmd: verifiedLauncherCommand(manifestPath),
       env: {},
       stdin: { mode: 'ignore' },
-      readOnlySubtrees: [sealRoot, ...layout.configRoots, ...fffCapability.readOnlySubtrees],
+      readOnlySubtrees: [sealRoot, ...layout.configRoots, ...core.readOnlySubtrees],
       sessionStore: {
         root: storeRoot,
         dbPath: layout.sessionDbPath,
@@ -268,6 +258,10 @@ export async function buildVerifiedOpencodeSystemPlan(
       control: { kind: 'none' },
       diagnostics: {
         verifiedIdentity: true,
+        containmentProviderId: containment.providerId,
+        containmentMode: containment.mode,
+        containmentCapabilities: containment.capabilities,
+        containmentDegradedReasons: containment.degradedReasons,
         inlineModel: `${selectedModel.providerID}/${selectedModel.modelID}`,
         inlineVariant: null,
         mcpCount: 0,

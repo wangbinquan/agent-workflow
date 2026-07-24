@@ -4,7 +4,7 @@
 // to isolated when inline can't run safely):
 //   - isolated  → never inline, no warning
 //   - missing source session id → fallback `missing-session-id`
-//   - unsupported opencode CLI  → fallback `unsupported-opencode-version`
+//   - session resume capability absent → fallback `session-resume-unsupported`
 // Plus stderr pattern matching that flips the post-spawn path into
 // `session-not-found`. If any of these go red, inline-mode's "fail soft to
 // isolated, never hard-fail the task" guarantee is broken.
@@ -38,16 +38,16 @@ describe('RFC-026 decideResumeSessionId', () => {
     }
   })
 
-  test('inline + opencode-without-support → fallback unsupported-opencode-version', () => {
+  test('inline + runtime-without-resume-capability → capability fallback', () => {
     expect(
       decideResumeSessionId({
         sessionMode: 'inline',
         sourceSessionId: 'opc_abc',
-        opencodeSupportsResume: false,
+        supportsSessionResume: false,
       }),
     ).toEqual({
       inlineMode: false,
-      fallbackReason: 'unsupported-opencode-version',
+      fallbackReason: 'session-resume-unsupported',
     })
   })
 })

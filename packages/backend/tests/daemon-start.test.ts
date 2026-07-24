@@ -240,14 +240,14 @@ describe('daemon start — lifecycle (per-test daemon)', () => {
     }
   })
 
-  test('startup never executes a configured incompatible OpenCode binary', async () => {
+  test('startup never executes a configured OpenCode binary, regardless of reported version', async () => {
     const marker = join(tmp, 'opencode-was-executed')
     const poison = join(tmp, 'poison-opencode')
     writeFileSync(
       poison,
       `#!/bin/sh
 : > "$RFC226_OPENCODE_MARKER"
-printf '%s\\n' 'stub-opencode 0.1.0'
+printf '%s\\n' 'stub-opencode custom-build'
 `,
     )
     chmodSync(poison, 0o755)

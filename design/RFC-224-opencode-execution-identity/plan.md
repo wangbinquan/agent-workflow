@@ -4,6 +4,11 @@
 > 再完成 import/file/process 边界，最后接 direct API launcher 和三条生产路径。
 > 任一中间状态都不得出现“旧 binary 已放行，但新 gate 尚未接上”的窗口。
 
+> **RFC-227 supersession（2026-07-24）**：本文已完成的 official `1.18.3` 与
+> Linux-only 任务是 RFC-224 的历史交付记录，不再构成当前准入规则。RFC-227 保留
+> snapshot/re-hash、same-instance identity 与 session 安全边界，并以管理员选择的 binary
+> digest、行为 codec 和跨平台 containment provider 取代旧版本/OS allowlist。
+
 ## 1. 交付切片
 
 | Slice | 交付                                                                         | 主要证明                                                  |

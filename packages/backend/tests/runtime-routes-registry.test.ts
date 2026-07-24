@@ -23,7 +23,7 @@ import {
 import type { SmokeOptions, SmokeResult } from '../src/services/runtimeSmoke'
 import { agents } from '../src/db/schema'
 import { ulid } from 'ulid'
-import { FIXTURE_RUNTIME_DIAGNOSTICS } from './helpers/officialOpencodeFixture'
+import { FIXTURE_RUNTIME_DIAGNOSTICS } from './helpers/runtimeOpencodeFixture'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

@@ -93,7 +93,13 @@ export interface Resources {
       item: {
         ready: string
         readyNoVersion: string
+        availableUnverifiedVersion: string
+        availableUnverified: string
         missing: string
+        unlaunchable: string
+        protocolIncompatible: string
+        containmentBlocked: string
+        degraded: string
       }
     }
     section: {
@@ -1039,6 +1045,8 @@ export interface Resources {
       modeOff: string
       modeHint: string
       enforceUnavailable: string
+      warnDegraded: string
+      lifetimeBestEffort: string
     }
   }
   onboarding: {
@@ -4085,7 +4093,13 @@ export const zhCN: Resources = {
       item: {
         ready: '{{name}} v{{version}}',
         readyNoVersion: '{{name}} 可用',
+        availableUnverifiedVersion: '{{name}} v{{version}} · 协议尚未测试',
+        availableUnverified: '{{name}} 可执行 · 协议尚未测试',
         missing: '{{name}} 未找到',
+        unlaunchable: '{{name}} 无法启动',
+        protocolIncompatible: '{{name}} 协议不兼容',
+        containmentBlocked: '{{name}} 被隔离策略阻止',
+        degraded: '{{name}} 可运行 · 隔离已降级',
       },
     },
     section: {
@@ -4886,7 +4900,11 @@ export const zhCN: Resources = {
       modeOff: '关闭',
       modeHint:
         '强制（enforce）：沙箱机制不可用时拒绝启动新任务；告警（warn）：不可用时降级为无沙箱运行并发出告警；关闭（off）：从不启用沙箱。',
-      enforceUnavailable: '本机未探测到可用的沙箱机制，强制档位下新任务启动将被拒绝。',
+      enforceUnavailable: '当前 provider 未满足全部必要隔离能力；强制档位下新任务启动将被拒绝。',
+      warnDegraded:
+        '隔离能力已降级。告警档位仍允许执行，但模型可触达的子进程可能访问宿主资源或网络。',
+      lifetimeBestEffort:
+        '当前 provider 已启用文件系统与网络隔离基线，但此平台对子孙进程生命周期的清理仅为尽力而为。',
     },
   },
   onboarding: {
@@ -6072,13 +6090,14 @@ export const zhCN: Resources = {
       'envelope-port-malformed': '代理输出的端口标签不完整（可能被截断）。',
       'port-validation-failed': '代理输出的端口内容未通过校验。',
       'port-validation-failed__hint': '查看节点详情里的端口校验信息，点「继续任务」重试。',
-      'execution-identity-untrusted-binary': '所选 OpenCode 可执行文件不是受信任的官方构建。',
+      'execution-identity-untrusted-binary':
+        '所选 OpenCode 可执行文件无法为本次运行完成冻结与校验。',
       'execution-identity-untrusted-binary__hint':
-        '请安装受支持的 OpenCode 官方构建，或选择其已验证的可执行文件。',
+        '请检查配置的可执行文件路径与权限，然后重新运行运行时测试。',
       'execution-identity-sandbox-required':
-        '本次 OpenCode 运行要求安全 Linux 沙箱，但当前不可用。',
+        '本次 OpenCode 运行要求平台隔离，但所需能力当前不可用。',
       'execution-identity-sandbox-required__hint':
-        '请在支持的 Linux 主机上运行 daemon，并启用所需沙箱。',
+        '请启用受支持的隔离 provider；也可显式选择「警告」或「关闭」接受降级运行。',
       'execution-identity-project-config-unsupported':
         '工作区含有无法安全隔离的 OpenCode 项目配置。',
       'execution-identity-project-config-unsupported__hint':
@@ -6092,9 +6111,9 @@ export const zhCN: Resources = {
         '请为生效运行时选择 provider/model，再重新发起。',
       'execution-identity-auth-invalid': '所选 provider 凭据不符合已验证的认证契约。',
       'execution-identity-auth-invalid__hint': '请更新 provider API 凭据后重新发起新运行。',
-      'execution-identity-provider-untrusted': '所选模型 provider 不属于受信任的 OpenCode 构建。',
+      'execution-identity-provider-untrusted': '所选模型 provider 与已验证的运行时清单不一致。',
       'execution-identity-provider-untrusted__hint':
-        '请选择受支持的 OpenCode 官方构建内置的 provider/model。',
+        '请选择当前 OpenCode 运行时实际提供的 provider/model。',
       'execution-identity-bootstrap-failed': 'OpenCode 在模型执行前未通过启动完整性检查。',
       'execution-identity-bootstrap-failed__hint': '请查看运行时诊断，修复主机环境后重新发起。',
       'execution-identity-mismatch': 'OpenCode 最终解析的执行配置与密封配置不一致。',

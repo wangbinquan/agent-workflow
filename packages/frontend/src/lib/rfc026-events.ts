@@ -27,7 +27,7 @@ export type Rfc026EventDecoded =
   | {
       level: 'warning'
       code: 'inline-clarify-fallback-to-isolated'
-      reason: 'missing-session-id' | 'session-not-found' | 'unsupported-opencode-version'
+      reason: 'missing-session-id' | 'session-not-found' | 'session-resume-unsupported'
       clarifyGeneration?: number
       raw: string
     }
@@ -81,7 +81,7 @@ export function parseRfc026Event(payload: string): Rfc026EventDecoded | null {
   if (
     reasonRaw !== 'missing-session-id' &&
     reasonRaw !== 'session-not-found' &&
-    reasonRaw !== 'unsupported-opencode-version'
+    reasonRaw !== 'session-resume-unsupported'
   ) {
     return null
   }

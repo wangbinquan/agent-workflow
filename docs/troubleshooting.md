@@ -12,25 +12,32 @@ rm ~/.agent-workflow/.daemon.lock
 
 `agent-workflow status` will tell you whether the lock's PID is alive.
 
-## `opencode … is older than required minimum 1.18.3`
+## OpenCode shows `not found`, `unlaunchable`, or `protocol incompatible`
 
-OpenCode is optional and this diagnostic does not prevent the daemon from
-starting. It does mean that runtime status/Test and tasks selecting OpenCode
-will fail closed until the configured binary is fixed.
+OpenCode is optional and never prevents the daemon from starting. There is no
+minimum, maximum, or exact supported OpenCode version. `--version` output is
+telemetry only, including non-semver output.
 
-Upgrade opencode:
+- `not found`: the configured path/PATH token does not resolve.
+- `unlaunchable`: the selected file cannot be executed or frozen into the
+  private run snapshot.
+- `protocol incompatible`: the binary launched, but its direct API behavior
+  does not satisfy the current `opencode-direct-v1` codec.
+- `containment blocked`: `sandboxMode=enforce` was selected and the active
+  platform provider does not satisfy the required containment capabilities.
+- `degraded`: `sandboxMode=warn` permits execution without the missing
+  containment guarantees; the UI and lifecycle alert state exactly what is
+  missing.
 
-```bash
-opencode upgrade
-# or, if installed via bun:
-bun install -g opencode-ai@latest
-```
-
-Or pin a specific binary:
+Select a specific binary when PATH is not the intended one:
 
 ```bash
 agent-workflow config set opencodePath /absolute/path/to/opencode
 ```
+
+Then use Settings → Runtime → Test. Upgrading or downgrading OpenCode is one
+possible fix for a real protocol incompatibility, but version ordering itself
+is never the admission decision.
 
 ## `task-cannot-start` / worktree errors
 

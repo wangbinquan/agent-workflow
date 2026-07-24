@@ -16,8 +16,10 @@ agent 进程（opencode / claude-code）与 daemon 同 UID。没有 OS 边界时
 
 ## 2. FS 沙箱（`sandboxMode`）
 
-按平台包装 agent 进程：macOS `sandbox-exec`（随系统自带）/ Linux `bwrap`
-（bubblewrap，需安装且允许非特权 user namespaces——探测以真实试跑为准）。
+按 provider capability 包装 agent 进程：内置 provider 是 macOS `sandbox-exec`
+（Seatbelt，随系统自带）与 Linux `bwrap`（bubblewrap，需安装且允许非特权 user
+namespaces——探测以真实试跑为准）。OpenCode 核心不按 OS 名称准入，provider id 与能力
+schema 是开放的；未来 Windows Job Object/AppContainer provider 可复用同一合同。
 
 策略：整体遮蔽 `~/.agent-workflow`，放行**本任务** worktree（读写）、本 run 目录
 （读写）、镜像 `repos/`（读写——worktree 的 gitdir/对象库在镜像内，只读会废掉
@@ -25,14 +27,15 @@ agent 进程（opencode / claude-code）与 daemon 同 UID。没有 OS 边界时
 
 `config.json` 的 `sandboxMode`（Settings→Runtime 可改）：
 
-| 档位           | 机制可用           | 机制不可用                                                     |
-| -------------- | ------------------ | -------------------------------------------------------------- |
-| `enforce`      | 包装运行           | **拒绝启动任务**（`sandbox-unavailable`，daemon 本身照常运行） |
-| `warn`（默认） | 包装运行           | 裸跑 + 每任务一条 `sandbox-degraded` 告警                      |
-| `off`          | 从不包装（旧行为） | 同左                                                           |
+| 档位           | 必要 capability 完整  | provider 缺失或 capability 不完整                          |
+| -------------- | --------------------- | ---------------------------------------------------------- |
+| `enforce`      | 包装运行              | **拒绝 OpenCode 执行**；daemon 与其它可用 runtime 照常运行 |
+| `warn`（默认） | 包装运行              | 无隔离降级运行 + 每任务一条 `sandbox-degraded` 告警        |
+| `off`          | 不启用 OS containment | 同左；这是管理员显式接受的策略，不会伪装成“安全执行”       |
 
-状态可在 Settings→Runtime 的沙箱徽章查看（机制 / 可用性 / 档位）；每次 spawn 的
-日志带 `sandboxed=true/false`。
+状态可在 Settings→Runtime 查看 provider、capability、降级原因与档位；每次 spawn 的
+日志带 `sandboxed=true/false`。macOS Seatbelt 的文件系统/子进程网络基线为 strong，
+但对子孙进程生命周期的回收如实标为 best-effort；这不会再被误报成“只能在 Linux 运行”。
 
 ## 3. 自检：`agent-workflow sandbox`（RFC-216）
 
@@ -70,7 +73,10 @@ stop && agent-workflow start`）。
 
 ## 已知限制
 
-- 不隔离网络、不隔离 daemon 自身；Windows 无发行不支持。
+- 通用 RFC-205 外层边界不隔离网络；verified OpenCode 的 shell/local-MCP 子进程另有
+  provider 级 no-network 边界。daemon 自身不在沙箱内。
+- Windows 尚无发行二进制和真实 Job Object/AppContainer provider；当前交付的是开放
+  provider/renderer 合同，不宣称 Windows 产品已完成。
 - 进程侧信道（ps / /proc）不遮蔽——凭据已不入 argv/env，残余为低敏路径信息。
 - `off` / 降级态与 RFC-205 之前等同（威胁未消除，仅可见）。
 - bwrap 缺失的发行版需装 bubblewrap（跑 `agent-workflow sandbox` 拿发行版感知的精确

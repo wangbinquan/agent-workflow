@@ -137,7 +137,7 @@ const ALLOWED_EFFECTIVE_CONFIG_FIELDS = new Set([
   'permission',
   'mcp',
   'plugin',
-  // Exact harmless defaults observed in the pinned v1.18.3 /config response.
+  // Exact harmless defaults admitted by the behavior-qualified /config codec.
   'command',
   'username',
   'mode',
@@ -273,7 +273,7 @@ export function businessOpencodeIdentityDigest(input: {
   config: unknown
   agent: string
   model: unknown
-  officialBuildDigest: string
+  binaryDigest: string
   sealRoot: string
 }): string {
   if (
@@ -281,7 +281,7 @@ export function businessOpencodeIdentityDigest(input: {
     resolve(input.sealRoot) !== input.sealRoot ||
     typeof input.agent !== 'string' ||
     input.agent.length === 0 ||
-    !/^[0-9a-f]{64}$/.test(input.officialBuildDigest)
+    !/^[0-9a-f]{64}$/.test(input.binaryDigest)
   ) {
     fail('')
   }
@@ -320,7 +320,7 @@ export function businessOpencodeIdentityDigest(input: {
     config,
     agent: input.agent,
     model: input.model,
-    officialBuildDigest: input.officialBuildDigest,
+    binaryDigest: input.binaryDigest,
   })
 }
 

@@ -1,7 +1,8 @@
 // RFC-224 — the only shell/local-MCP subprocess boundary admitted by the
 // verified OpenCode launcher. The tiny on-disk wrapper re-enters this binary;
-// this module then constructs bwrap argv directly (no model-controlled shell
-// interpolation) and rebuilds the child environment from an allowlist.
+// this module then dispatches to the sealed containment-provider plan (no
+// model-controlled shell interpolation) and rebuilds the child environment
+// from an allowlist.
 
 import { randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
@@ -10,6 +11,7 @@ import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import { IS_EMBEDDED } from '@/embed'
 import { executionIdentityFailure } from './failure'
+import { RuntimeChildProviderPlanSchema, type RuntimeChildProviderPlan } from './containment'
 
 const SAFE_ENV_NAME =
   /^(?:LANG|LC_ALL|LC_CTYPE|TERM|TZ|GIT_AUTHOR_NAME|GIT_AUTHOR_EMAIL|GIT_COMMITTER_NAME|GIT_COMMITTER_EMAIL|[A-Z][A-Z0-9_]{0,127})$/
@@ -40,7 +42,7 @@ export const NetlessSubprocessManifestSchema = z
   .object({
     codec: z.literal(1),
     mode: z.enum(['shell', 'mcp']),
-    bwrapPath: AbsolutePathSchema,
+    provider: RuntimeChildProviderPlanSchema,
     worktreePath: AbsolutePathSchema,
     scratchPath: AbsolutePathSchema,
     appHome: AbsolutePathSchema,
@@ -52,6 +54,41 @@ export const NetlessSubprocessManifestSchema = z
   .strict()
 
 export type NetlessSubprocessManifest = z.infer<typeof NetlessSubprocessManifestSchema>
+
+export interface NetlessSubprocessInvocation {
+  cmd: readonly string[]
+  cwd: string
+  env: Readonly<Record<string, string>>
+}
+
+export type NetlessSubprocessProviderRenderer = (
+  manifest: NetlessSubprocessManifest,
+  provider: RuntimeChildProviderPlan,
+  passthroughArgs: readonly string[],
+) => NetlessSubprocessInvocation
+
+const customNetlessRenderers = new Map<string, NetlessSubprocessProviderRenderer>()
+
+/**
+ * Future platform providers register one strict provider-plan parser/renderer
+ * at process initialization. OpenCode's planning core carries the opaque JSON
+ * and never needs a Windows/POSIX branch.
+ */
+export function registerNetlessSubprocessProvider(
+  providerId: string,
+  renderer: NetlessSubprocessProviderRenderer,
+): void {
+  if (
+    !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(providerId) ||
+    providerId === 'linux-bwrap' ||
+    providerId === 'macos-seatbelt' ||
+    providerId === 'none' ||
+    customNetlessRenderers.has(providerId)
+  ) {
+    return executionIdentityFailure('execution-identity-store-unsafe')
+  }
+  customNetlessRenderers.set(providerId, renderer)
+}
 
 function shellQuote(value: string): string {
   if (value.includes('\0') || value.includes('\n') || value.includes('\r')) {
@@ -724,7 +761,12 @@ export function renderNetlessBwrapArgs(
     return executionIdentityFailure('execution-identity-mismatch')
   }
   const masks = uniqueMaskRoots([parsed.realHome, parsed.appHome, '/tmp', '/var/tmp'])
-  const writable = [parsed.worktreePath, parsed.scratchPath]
+  const writable = [
+    parsed.worktreePath,
+    parsed.scratchPath,
+    absoluteEnvPath(parsed, 'HOME'),
+    absoluteEnvPath(parsed, 'TMPDIR'),
+  ]
   for (const target of [...writable, ...parsed.bindReadOnly]) {
     // A later bind of an ancestor would hide an earlier tmpfs mask and
     // re-expose the secret tree wholesale. Descendants are intentional:
@@ -780,16 +822,139 @@ export function renderNetlessBwrapArgs(
   return args
 }
 
+const LinuxBwrapProviderConfigSchema = z.object({ bwrapPath: AbsolutePathSchema }).strict()
+const MacSeatbeltProviderConfigSchema = z
+  .object({ sandboxExecPath: z.literal('/usr/bin/sandbox-exec') })
+  .strict()
+const NoContainmentProviderConfigSchema = z.object({}).strict()
+
+function netlessCommand(
+  manifest: NetlessSubprocessManifest,
+  passthroughArgs: readonly string[],
+): string[] {
+  if (passthroughArgs.some((entry) => entry.includes('\0'))) {
+    return executionIdentityFailure('execution-identity-mismatch')
+  }
+  if (manifest.mode === 'mcp' && passthroughArgs.length > 0) {
+    return executionIdentityFailure('execution-identity-mismatch')
+  }
+  return manifest.mode === 'shell'
+    ? [...manifest.command, ...passthroughArgs]
+    : [...manifest.command]
+}
+
+function sbplString(value: string): string {
+  return `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`
+}
+
+function absoluteEnvPath(manifest: NetlessSubprocessManifest, name: 'HOME' | 'TMPDIR'): string {
+  const parsed = AbsolutePathSchema.safeParse(manifest.env[name])
+  if (!parsed.success) {
+    return executionIdentityFailure('execution-identity-store-unsafe')
+  }
+  return parsed.data
+}
+
+/**
+ * macOS model-child profile: provider/server networking remains outside this
+ * inner launcher, while shell and local MCP descendants lose all network
+ * access and see only their exact workspace/scratch/private-home allow-backs.
+ */
+export function renderNetlessSeatbeltProfile(manifest: NetlessSubprocessManifest): string {
+  const parsed = NetlessSubprocessManifestSchema.parse(manifest)
+  const masks = uniqueMaskRoots([
+    parsed.realHome,
+    parsed.appHome,
+    '/tmp',
+    '/private/tmp',
+    '/var/tmp',
+    '/private/var/tmp',
+  ])
+  const writable = [
+    parsed.worktreePath,
+    parsed.scratchPath,
+    absoluteEnvPath(parsed, 'HOME'),
+    absoluteEnvPath(parsed, 'TMPDIR'),
+  ]
+  for (const target of [...writable, ...parsed.bindReadOnly]) {
+    if (target === '/' || target.includes('\0')) {
+      return executionIdentityFailure('execution-identity-store-unsafe')
+    }
+  }
+
+  const lines = ['(version 1)', '(allow default)', '(deny network*)']
+  for (const mask of masks) {
+    lines.push(`(deny file-read* file-write* (subpath ${sbplString(mask)}))`)
+  }
+  for (const target of [...new Set(writable)]) {
+    lines.push(`(allow file-read* file-write* (subpath ${sbplString(target)}))`)
+  }
+  for (const target of [...new Set(parsed.bindReadOnly)]) {
+    lines.push(`(allow file-read* (subpath ${sbplString(target)}))`)
+    lines.push(`(deny file-write* (subpath ${sbplString(target)}))`)
+  }
+  return lines.join('\n')
+}
+
+function renderNetlessInvocation(
+  manifest: NetlessSubprocessManifest,
+  passthroughArgs: readonly string[],
+): NetlessSubprocessInvocation {
+  const provider = RuntimeChildProviderPlanSchema.parse(manifest.provider)
+  if (provider.providerId === 'linux-bwrap') {
+    const config = LinuxBwrapProviderConfigSchema.parse(provider.config)
+    return {
+      cmd: [config.bwrapPath, ...renderNetlessBwrapArgs(manifest, passthroughArgs)],
+      cwd: manifest.worktreePath,
+      env: {},
+    }
+  }
+  if (provider.providerId === 'macos-seatbelt') {
+    const config = MacSeatbeltProviderConfigSchema.parse(provider.config)
+    return {
+      cmd: [
+        config.sandboxExecPath,
+        '-p',
+        renderNetlessSeatbeltProfile(manifest),
+        ...netlessCommand(manifest, passthroughArgs),
+      ],
+      cwd: manifest.worktreePath,
+      env: manifest.env,
+    }
+  }
+  if (provider.providerId === 'none') {
+    NoContainmentProviderConfigSchema.parse(provider.config)
+    return {
+      cmd: netlessCommand(manifest, passthroughArgs),
+      cwd: manifest.worktreePath,
+      env: manifest.env,
+    }
+  }
+  const renderer = customNetlessRenderers.get(provider.providerId)
+  if (renderer === undefined) {
+    return executionIdentityFailure('execution-identity-sandbox-required')
+  }
+  const invocation = renderer(manifest, provider, passthroughArgs)
+  if (
+    invocation.cmd.length === 0 ||
+    invocation.cmd.some((entry) => entry.length === 0 || entry.includes('\0')) ||
+    invocation.cwd !== manifest.worktreePath
+  ) {
+    return executionIdentityFailure('execution-identity-store-unsafe')
+  }
+  return invocation
+}
+
 export async function runNetlessSubprocess(
   manifestPath: string,
   passthroughArgs: readonly string[],
 ): Promise<number> {
   const manifest = await readManifest(manifestPath)
-  const cmd = [manifest.bwrapPath, ...renderNetlessBwrapArgs(manifest, passthroughArgs)]
+  const invocation = renderNetlessInvocation(manifest, passthroughArgs)
   const child = Bun.spawn({
-    cmd,
-    cwd: manifest.worktreePath,
-    env: {},
+    cmd: [...invocation.cmd],
+    cwd: invocation.cwd,
+    env: { ...invocation.env },
     stdin: 'inherit',
     stdout: 'inherit',
     stderr: 'inherit',

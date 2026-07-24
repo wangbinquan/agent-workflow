@@ -15,6 +15,7 @@ import {
   type SessionInfo,
   type WireEvent,
   type WithParts,
+  OPENCODE_DIRECT_PROTOCOL_CODEC,
 } from '@/services/runtime/opencode/directApiSchemas'
 import {
   businessOpencodeIdentityDigest,
@@ -67,7 +68,6 @@ function contract(title: string) {
     share: null,
     revert: null,
     metadata: null,
-    version: '1.18.3',
   }
 }
 
@@ -119,10 +119,26 @@ function commonManifest(title: string) {
     },
   }
   return {
-    codec: 1 as const,
-    version: '1.18.3' as const,
+    codec: 2 as const,
+    protocolCodec: OPENCODE_DIRECT_PROTOCOL_CODEC,
     binaryPath: '/private/rfc224/seal/opencode',
-    officialBuildDigest: buildDigest,
+    binaryDigest: buildDigest,
+    containment: {
+      providerId: 'linux-bwrap',
+      mode: 'enforce' as const,
+      capabilities: {
+        platformHomeIsolation: 'strong' as const,
+        immutableArtifactView: 'strong' as const,
+        modelChildNetworkDeny: 'strong' as const,
+        descendantLifetimeBound: 'strong' as const,
+      },
+      available: true,
+      degradedReasons: [],
+    },
+    childProvider: {
+      providerId: 'linux-bwrap',
+      config: { bwrapPath: '/usr/bin/bwrap' },
+    },
     worktreePath,
     runRoot: '/private/rfc224/run',
     sessionDbPath: '/private/store/xdg-data/opencode/opencode.db',
@@ -146,7 +162,7 @@ function commonManifest(title: string) {
       config: expectedConfig,
       agent: 'worker',
       model,
-      officialBuildDigest: buildDigest,
+      binaryDigest: buildDigest,
     }),
     fffCapabilityCodec: 1 as const,
     fffProbe: {
@@ -178,7 +194,7 @@ function businessManifest(): VerifiedLaunchManifest {
       config: common.expectedConfig,
       agent: common.selectedAgent,
       model: common.selectedModel,
-      officialBuildDigest: common.officialBuildDigest,
+      binaryDigest: common.binaryDigest,
       sealRoot: '/private/rfc224/run/opencode-identity-seal',
     }),
     storeKind: 'business',
@@ -203,7 +219,7 @@ function resumeManifest(): VerifiedLaunchManifest {
       config: common.expectedConfig,
       agent: common.selectedAgent,
       model: common.selectedModel,
-      officialBuildDigest: common.officialBuildDigest,
+      binaryDigest: common.binaryDigest,
       sealRoot: '/private/rfc224/run/opencode-identity-seal',
     }),
     storeKind: 'business',
@@ -591,7 +607,7 @@ describe('RFC-224 verified launcher manifest split', () => {
     expect(() =>
       VerifiedLaunchManifestSchema.parse({
         ...manifest,
-        fffProbe: { ...manifest.fffProbe, root: '/private/outside-run-root' },
+        fffProbe: { ...manifest.fffProbe!, root: '/private/outside-run-root' },
       }),
     ).toThrow()
   })

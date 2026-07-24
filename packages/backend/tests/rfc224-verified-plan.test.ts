@@ -18,17 +18,17 @@ import {
   identityDigest,
 } from '@/services/runtime/opencode/executionIdentity'
 import {
-  PINNED_OPENCODE_VERSION,
+  OPENCODE_DIRECT_PROTOCOL_CODEC,
   ROOT_SESSION_PERMISSION_RULES,
   type SelectedModel,
 } from '@/services/runtime/opencode/directApiSchemas'
-import { OFFICIAL_OPENCODE_BUILDS } from '@/services/runtime/opencode/officialBuilds'
 import { buildVerifiedOpencodeBusinessPlan } from '@/services/runtime/opencode/verifiedPlan'
 import type { VerifiedOpencodePlanDependencies } from '@/services/runtime/opencode/verifiedPlanCore'
 
 const roots: string[] = []
 const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')!
 const originalAuth = process.env.OPENCODE_AUTH_CONTENT
+const TEST_BINARY_DIGEST = 'f'.repeat(64)
 
 afterEach(async () => {
   setSandboxProvider(null)
@@ -139,11 +139,19 @@ function verifiedContext(input: {
 
 const PLAN_DEPENDENCIES: VerifiedOpencodePlanDependencies = {
   requireBwrap: async () => '/usr/bin/bwrap',
+  inspectBinary: async () => ({
+    resolvedPath: '/runtime/opencode',
+    digest: TEST_BINARY_DIGEST,
+  }),
   snapshotBinary: async ({ snapshotPath }) => {
     await mkdir(dirname(snapshotPath), { recursive: true, mode: 0o700 })
     await writeFile(snapshotPath, 'official test seam', { flag: 'wx', mode: 0o500 })
     await chmod(snapshotPath, 0o500)
-    return snapshotPath
+    return {
+      resolvedPath: '/runtime/opencode',
+      snapshotPath,
+      digest: TEST_BINARY_DIGEST,
+    }
   },
 }
 
@@ -172,11 +180,12 @@ function ownerFromPlan(
     nodeId: 'node-1',
     createdNodeRunId: plan.control.createdNodeRunId,
     identityDigest: plan.control.identityDigest,
-    officialBuildDigest: plan.control.officialBuildDigest,
+    runtimeBinaryDigest: plan.control.runtimeBinaryDigest,
     sessionContractDigest: plan.control.sessionContractDigest,
     sessionStoreKey: plan.control.sessionStoreKey,
     projectId: 'project-1',
-    opencodeVersion: PINNED_OPENCODE_VERSION,
+    protocolCodec: plan.control.protocolCodec,
+    reportedVersion: 'custom-version-telemetry',
   }
 }
 
@@ -230,12 +239,6 @@ describe('RFC-224 verified business-plan owner barrier', () => {
       allowShell: true,
       mcp: {},
     })
-    const officialBuild = OFFICIAL_OPENCODE_BUILDS.find(
-      (candidate) =>
-        candidate.platform === 'linux' &&
-        candidate.arch === process.arch &&
-        candidate.version === PINNED_OPENCODE_VERSION,
-    )!
     const createdNodeRunId = 'run-created'
     const title = `agent-workflow:rfc224:${createdNodeRunId}`
     const sessionContractDigest = identityDigest({
@@ -250,13 +253,12 @@ describe('RFC-224 verified business-plan owner barrier', () => {
       share: null,
       revert: null,
       metadata: null,
-      version: PINNED_OPENCODE_VERSION,
     })
     const expectedIdentityDigest = businessOpencodeIdentityDigest({
       config: controlledConfig,
       agent: 'worker',
       model: selectedModel,
-      officialBuildDigest: officialBuild.digest,
+      binaryDigest: TEST_BINARY_DIGEST,
       sealRoot: join(runRoot, 'opencode-identity-seal'),
     })
     const ctx: BusinessNodeSpawnContext = {
@@ -299,16 +301,17 @@ describe('RFC-224 verified business-plan owner barrier', () => {
         // The only immutable drift: all other reconstructed owner fields match.
         identityDigest:
           expectedIdentityDigest.slice(0, -1) + (expectedIdentityDigest.endsWith('0') ? '1' : '0'),
-        officialBuildDigest: officialBuild.digest,
+        runtimeBinaryDigest: TEST_BINARY_DIGEST,
         sessionContractDigest,
         sessionStoreKey: storeKey,
         projectId: 'project-1',
-        opencodeVersion: PINNED_OPENCODE_VERSION,
+        protocolCodec: OPENCODE_DIRECT_PROTOCOL_CODEC,
+        reportedVersion: '0.9.0-custom',
       },
     }
 
     try {
-      await buildVerifiedOpencodeBusinessPlan(ctx, ['opencode'])
+      await buildVerifiedOpencodeBusinessPlan(ctx, ['opencode'], PLAN_DEPENDENCIES)
       throw new Error('expected owner mismatch')
     } catch (error) {
       expect(error).toBeInstanceOf(ExecutionIdentityFailure)

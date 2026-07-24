@@ -57,7 +57,7 @@ import { createLogger } from '@/util/log'
  * these; there is no config, environment, or HTTP switch that can select them.
  */
 export interface RuntimeDiagnosticTestDependencies {
-  withOfficialOpencodeSnapshot<T>(
+  withRuntimeOpencodeSnapshot<T>(
     command: readonly string[],
     callback: (snapshotPath: string) => Promise<T>,
   ): Promise<T>
@@ -114,7 +114,7 @@ export interface AppDeps {
   }) => void | Promise<void>
   /**
    * Test-only route dependency injection. Production callers must omit this;
-   * the default path always enforces the RFC-224 official-build boundary.
+   * the default path always uses RFC-227's byte-frozen runtime snapshot.
    */
   runtimeDiagnosticTestDependencies?: Partial<RuntimeDiagnosticTestDependencies>
 }

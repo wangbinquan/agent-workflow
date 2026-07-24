@@ -105,11 +105,13 @@ describe('ModelSelect render', () => {
 
     wrap(<ModelSelect value={undefined} onChange={() => {}} />)
     expect(
-      await screen.findByText('The selected OpenCode executable is not a trusted official build.'),
+      await screen.findByText(
+        'The selected OpenCode executable could not be frozen and verified for this run.',
+      ),
     ).toBeTruthy()
     expect(
       screen.getByText(
-        'Install the supported official OpenCode build or select its verified executable.',
+        'Check the configured executable path and permissions, then run the runtime test again.',
       ),
     ).toBeTruthy()
     const banner = screen.getByTestId('model-select-load-error')

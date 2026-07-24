@@ -92,6 +92,56 @@ describe('RFC-135 describeRuntimes', () => {
     expect(nonDef!.failure).toBeUndefined()
   })
 
+  test('RFC-227 state copy distinguishes missing, launch, protocol, containment and degraded', () => {
+    const view = describeRuntimes(
+      t,
+      loaded([
+        row('missing', { ok: false, version: null, state: 'not-found' }),
+        row('bad-exec', { ok: false, version: null, state: 'unlaunchable' }),
+        row('bad-protocol', {
+          ok: false,
+          version: '7.0.0',
+          state: 'protocol-incompatible',
+        }),
+      ]),
+    )
+    if (view.kind !== 'items') throw new Error('expected items')
+    expect(view.items.map((item) => item.text)).toEqual([
+      expect.stringContaining('home.runtime.item.missing'),
+      expect.stringContaining('home.runtime.item.unlaunchable'),
+      expect.stringContaining('home.runtime.item.protocolIncompatible'),
+    ])
+
+    const containment = describeRuntimes(
+      t,
+      loaded([
+        row('blocked', { ok: false, state: 'containment-blocked' }),
+        row('degraded', { ok: true, state: 'degraded' }),
+      ]),
+    )
+    if (containment.kind !== 'items') throw new Error('expected items')
+    expect(containment.items[0]!.text).toContain('home.runtime.item.containmentBlocked')
+    expect(containment.items[1]!.text).toContain('home.runtime.item.degraded')
+    expect(containment.items[1]!.severity).toBe('soft')
+  })
+
+  test('available-unverified reports executable availability without claiming protocol readiness', () => {
+    const view = describeRuntimes(
+      t,
+      loaded([
+        row('opencode', {
+          ok: true,
+          state: 'available-unverified',
+          version: '1.18.4',
+        }),
+      ]),
+    )
+    if (view.kind !== 'items') throw new Error('expected items')
+    expect(view.items[0]!.severity).toBe('ok')
+    expect(view.items[0]!.text).toContain('home.runtime.item.availableUnverifiedVersion')
+    expect(view.items[0]!.text).not.toContain('home.runtime.item.missing')
+  })
+
   test('three-or-fewer rows render localized English identity title + hint without the code', async () => {
     await i18n.changeLanguage('en-US')
     const view = describeRuntimes(
@@ -107,8 +157,8 @@ describe('RFC-135 describeRuntimes', () => {
     )
     if (view.kind !== 'items') throw new Error('expected items')
     expect(view.items[0]!.failure).toEqual({
-      title: 'The selected OpenCode executable is not a trusted official build.',
-      hint: 'Install the supported official OpenCode build or select its verified executable.',
+      title: 'The selected OpenCode executable could not be frozen and verified for this run.',
+      hint: 'Check the configured executable path and permissions, then run the runtime test again.',
     })
     expect(JSON.stringify(view)).not.toContain('execution-identity-untrusted-binary')
   })
@@ -131,6 +181,16 @@ describe('RFC-135 describeRuntimes', () => {
     expect(view.severity).toBe('ok')
     expect(view.text).toContain('home.runtime.aggregate')
     expect(view.text).toContain('"ok":4,"total":4')
+  })
+
+  test('above threshold keeps a permitted containment degradation visible', () => {
+    const rows = [row('a'), row('b'), row('c'), row('mac-runtime', { ok: true, state: 'degraded' })]
+    const view = describeRuntimes(t, loaded(rows))
+    if (view.kind !== 'single') throw new Error('expected aggregate')
+    expect(view.severity).toBe('soft')
+    expect(view.text).toContain('home.runtime.aggregateWorst')
+    expect(view.text).toContain('"ok":3,"total":4')
+    expect(view.text).toContain('"name":"mac-runtime"')
   })
 
   test('above threshold names the WORST failure — soft first must not shadow the fault (F5)', () => {
@@ -189,6 +249,7 @@ describe('RFC-135 describeRuntimes', () => {
     expect(itemSeverity({ ok: true, isDefault: false })).toBe('ok')
     expect(itemSeverity({ ok: false, isDefault: true })).toBe('fault')
     expect(itemSeverity({ ok: false, isDefault: false })).toBe('soft')
+    expect(itemSeverity({ ok: true, isDefault: true, state: 'degraded' })).toBe('soft')
   })
 })
 

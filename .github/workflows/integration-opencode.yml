@@ -15,17 +15,15 @@
 #   * `schedule` — 07:30 UTC daily (15-min offset from the webkit
 #     nightly so they don't queue behind each other on the free runner
 #     pool).
-#   * `workflow_dispatch` — manual button for ad-hoc verification after
-#     bumping `MIN_OPENCODE_VERSION` etc.
+#   * `workflow_dispatch` — manual button for ad-hoc compatibility verification.
 #   * `pull_request` — only when the PR diff touches the daemon's
 #     opencode interface or this workflow itself. Path filter is the
 #     tightest gate possible: every other PR skips this workflow
 #     entirely.
 #
-# Matrix: ubuntu-only (macOS LLM parity covered by the daemon's PR e2e),
-# one exact opencode version — RFC-224's official v1.18.3 execution identity.
-# Newer releases are diagnosed separately and require a new pinned codec/build
-# review before they are executable.
+# Matrix: the former RFC-224 baseline plus the current npm channel. Version is
+# never an admission rule; this matrix catches protocol drift on both a stable
+# historical fixture and whatever users receive today.
 
 name: integration-opencode
 
@@ -81,12 +79,13 @@ jobs:
     name: opencode ${{ matrix.opencode }} (ubuntu)
     runs-on: ubuntu-22.04
     strategy:
-      # Keep the matrix form explicit for future reviewed official-build bumps.
       fail-fast: false
       matrix:
         opencode:
-          # RFC-224 admits only this exact reviewed build/version tuple.
+          # Historical behavior fixture, not a runtime allowlist.
           - '1.18.3'
+          # Current-channel compatibility sentinel.
+          - 'latest'
     steps:
       - uses: actions/checkout@v5
 

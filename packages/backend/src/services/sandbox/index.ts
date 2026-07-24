@@ -8,7 +8,12 @@
 
 import { existsSync, realpathSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
-import { computeSandboxPolicy, renderBwrapArgs, renderSeatbeltProfile } from './policy'
+import {
+  computeSandboxPolicy,
+  renderBwrapArgs,
+  renderSeatbeltProfile,
+  type SandboxPolicy,
+} from './policy'
 import type { SandboxStatus } from './probe'
 
 export type SandboxMode = 'enforce' | 'warn' | 'off'
@@ -23,6 +28,8 @@ export interface SandboxCtx {
   runDir: string
   /** Immutable artifacts below an allowed subtree, overlaid read-only. */
   readOnlySubtrees?: readonly string[]
+  /** Provider-owned renderer for mechanisms added after the built-ins. */
+  wrapCommand?: (cmd: readonly string[], policy: SandboxPolicy) => string[]
 }
 
 /** Should this spawn be wrapped at all? (off / unavailable → no) */
@@ -66,6 +73,7 @@ export function wrapSandbox(cmd: readonly string[], ctx: SandboxCtx | undefined)
     runDir: real(ctx.runDir),
     readOnlySubtrees: ctx.readOnlySubtrees?.map(real),
   })
+  if (ctx.wrapCommand !== undefined) return ctx.wrapCommand(cmd, policy)
   if (ctx.status.mechanism === 'seatbelt') {
     return ['/usr/bin/sandbox-exec', '-p', renderSeatbeltProfile(policy), ...cmd]
   }
@@ -85,6 +93,18 @@ export interface SandboxProvider {
   mode: SandboxMode
   status: SandboxStatus
   appHome: string
+  /**
+   * RFC-227 extension seam. OpenCode consumes only the capability receipt and
+   * opaque child plan; platform-specific process/path code remains owned by
+   * the provider that registers the matching subprocess renderer.
+   */
+  runtimeContainment?: {
+    providerId: string
+    capabilities: Readonly<Record<string, 'strong' | 'best-effort' | 'absent'>>
+    childProviderPlan?: unknown
+  }
+  /** Outer-process renderer for a provider not built into RFC-205. */
+  wrapCommand?: (cmd: readonly string[], policy: SandboxPolicy) => string[]
 }
 
 let provider: SandboxProvider | null = null
@@ -129,5 +149,12 @@ export function buildRunSandboxCtx(
   if (existsSync(scratchGitDir) && !taskWorktrees.includes(scratchGitDir)) {
     taskWorktrees.push(scratchGitDir)
   }
-  return { mode: p.mode, status: p.status, appHome: p.appHome, taskWorktrees, runDir }
+  return {
+    mode: p.mode,
+    status: p.status,
+    appHome: p.appHome,
+    taskWorktrees,
+    runDir,
+    ...(p.wrapCommand === undefined ? {} : { wrapCommand: p.wrapCommand }),
+  }
 }
