@@ -5,12 +5,13 @@
 > follow-up。本文裁决源码/测试 finding，并把失败 run 留作诊断历史；绝不把本地
 > 修复或失败 workflow 冒充 exact-SHA 绿色发布证据。
 >
-> 当前本地裁决：**APPROVED / 0 open**。首轮独立复审新增 4 组 P1 / 2 组 P2，
+> 最终裁决（2026-07-24）：**APPROVED / 0 open**。首轮独立复审新增 4 组 P1 / 2 组 P2，
 > real Linux 探针专项复审再新增 5 组 P1 / 3 组 P2，累计 23 组 P1 / 14 组 P2；
 > 对应 resolution、行为锁/source ratchet 与 follow-up T28 全门已在 current tree
-> 复验，最终未关闭 0 P0 / 0 P1 / 0 P2。该裁决只关闭本地实现门；`plan.md` T32、
-> proposal/release 状态与修复 SHA 的 Linux real-sandbox / exact-SHA CI 终态继续
-> 保持 pending。
+> 复验，最终未关闭 0 P0 / 0 P1 / 0 P2。最终 exact SHA
+> `c50036ac35a4a87c52b825f280d1afc1a9d54784` 的 CI、Linux real-sandbox
+> integration、visual 与 git-protocols 均 terminal green；`plan.md` T32 与
+> proposal/release 状态已可关闭为 Done。
 
 ## 1. finding 计数与当前状态
 
@@ -21,7 +22,8 @@
 | P2     |     4 组 |    10 组 | 14 组 | 0        |
 
 每项 resolution 已由对应测试锁住，follow-up T28 全门亦完成，因此本轮终态为 0。
-Linux 平台矩阵与尚不存在的修复 SHA 仍是独立发布证据，不由本地裁决代替。
+Linux 平台矩阵仍是独立发布证据，不由本地裁决代替；最终 exact SHA
+`c50036ac35a4a87c52b825f280d1afc1a9d54784` 已取得该证据。
 
 ## 2. 初审 P1 与 resolution
 
@@ -75,7 +77,7 @@ Linux 平台矩阵与尚不存在的修复 SHA 仍是独立发布证据，不由
 | model-only probe race 测试曾通过 binary 预检查提前返回，未真正证明 SQL CAS                                                            | 固定相同 binary，仅把 model 5.6→5.7；hook 证明已到 CAS，断言 fence 增长、409 且 receipt 未写                                                                                                                                                                                                  | `runtime-routes-registry.test.ts`                                                                    |
 | stable-code 实现演进后 source-reachability 仍锁旧字面量，可能形成假红或诱导放宽生产 guard                                             | 守卫改锁 closed-union 判断、安全 fallback 与动态 `incompatibleReason: code`，不降低生产可达性约束                                                                                                                                                                                             | `rfc224-source-reachability.test.ts`                                                                 |
 | version ratchet 只检查 WebKit presence 与“不含 1.14.99”，没有读取 CI/visual，也允许额外版本或 `@latest`；stub 同样只做 substring 检查 | source guard 同时读取四份 workflow，逐份锁唯一 official 1.18.3 pin 与全部 install target；枚举六个 stub，要求唯一 version arm、逐行 exact 输出与唯一 advertised version                                                                                                                       | `rfc224-source-guard.test.ts`、四份 `.github/workflows/*.yml`、六个 `e2e/fixtures/stub-opencode*.sh` |
-| Linux integration 只有 `/bin/true` capability smoke，没有真实 setsid/double-fork orphan 证据；旧本地全门又早于本轮 follow-up          | integration suite 接线 SIGTERM-resistant Python double-fork+setsid fixture；nonce READY/ARMED 后用 SIGSTOP + `waitpid(WUNTRACED)` freeze lease 固定 exact child/PGID，再证明实际负组 TERM、SIGCONT 后 exact SIGTERM exit、leader/PGID 与 descendant-held stdout EOF；权威平台结果等待修复 SHA | `opencode-identity-preflight.integration.test.ts`、`integration-opencode.yml`、`plan.md` T27/T28     |
+| Linux integration 只有 `/bin/true` capability smoke，没有真实 setsid/double-fork orphan 证据；旧本地全门又早于本轮 follow-up          | integration suite 接线 SIGTERM-resistant Python double-fork+setsid fixture；nonce READY/ARMED 后用 SIGSTOP + `waitpid(WUNTRACED)` freeze lease 固定 exact child/PGID，再证明实际负组 TERM、SIGCONT 后 exact SIGTERM exit、leader/PGID 与 descendant-held stdout EOF；权威平台结果已由最终 exact SHA 取得 | `opencode-identity-preflight.integration.test.ts`、`integration-opencode.yml`、`plan.md` T27/T28     |
 | 探针用 `Date.now()` 分段计时，wall-clock 回拨/前跳会破坏 bounded 声明                                                                 | 所有 phase 统一使用 `process.hrtime.bigint()` 单调时钟，并受同一个 absolute hard deadline 约束                                                                                                                                                                                                | `opencode-identity-preflight.integration.test.ts`                                                    |
 | stdout reader/release rejection 可被旧 `settlesBy` 当作成功 EOF，绕过 containment oracle                                              | reader acquire/read/release 全部显式记录 observer failure；rejected promise 绝不算 fulfilled closure，且 reader 始终 drain 到 EOF                                                                                                                                                             | `opencode-identity-preflight.integration.test.ts`                                                    |
 | official server cleanup 在负 PGID 失败后 fallback 正 PID、只等 leader 且无界 drain pipes，可能误杀复用 PID 或遗留后代                 | server 同样使用 ownership-holding supervisor 与单一 TERM→KILL stop；禁止正 PID fallback，要求 direct settled + PGID absence，并以 absolute deadline bounded drain stdout/stderr                                                                                                               | `opencode-identity-preflight.integration.test.ts`                                                    |
@@ -90,52 +92,76 @@ Linux 平台矩阵与尚不存在的修复 SHA 仍是独立发布证据，不由
 - 两轮 follow-up 9 P1 / 5 P2 的 resolution 已由行为测试或 source ratchet
   current-tree 复验：sealed subprocess **23 pass / 90 assertions**、FFF
   capability **13 pass / 98 assertions**，RFC-224 定向集合
-  **317 pass / 1382 assertions**。完整
+  **322 pass / 1412 assertions**，其中最终 compiled Playwright seam
+  **5 pass / 30 assertions**。完整
   `bun run typecheck && bun run lint && bun run test && bun run format:check`
   已完成：backend **7295 pass / 24 skip / 0 fail**、shared **1438 pass**、
   frontend **5257 pass**；depcheck **1455 modules / 4484 dependencies /
-  0 violations**，`git diff --check`、`bun run build:binary` 与 compiled
-  hidden-command smoke 也均已完成。官方 1.18.3 no-LLM integration 为
-  **2 pass / 12 assertions**。
+  0 violations**，`git diff --check`、`bun run build:binary:e2e` 与 compiled
+  hidden-command smoke 也均已完成。官方 1.18.3 no-LLM RFC-224 子集为
+  **3 pass / 15 assertions**。
 - compiled smoke 枚举四个 hidden self-command 的 invalid invocation，并对
   bwrap native supervisor 分别证明：valid 路径 ACK 前 zero buffered RELEASE；
   ACK 已写/flush 但 control stdin 未 EOF 时同一 pending read 不推进；EOF 后才
   exact RELEASE；wrong nonce 无 RELEASE并以 protocol EOF、raw 137、首个 ESRCH
   observation 单调锁存 fail closed。cleanup 不向已释放 numeric PGID 发 signal。
 - 上轮 macOS official OpenCode **1.18.3 darwin-arm64** no-LLM preflight
-  **1/1（7 assertions）**同样是历史证据；follow-up 若触及其 production funnel，
-  需纳入本轮重跑。
-- real Linux SIGTERM-resistant setsid/double-fork orphan probe 已接线，但本机
-  macOS 无法提供权威结果；该证据只能来自修复 SHA 的 `integration-opencode`。
+  **1/1（7 assertions）**同样只记为历史证据；最终发布裁决使用下述 exact-SHA
+  Linux 权威结果。
+- real Linux SIGTERM-resistant setsid/double-fork orphan probe 已接线；本机
+  macOS 不提供权威结果，最终证据来自 exact SHA
+  `c50036ac35a4a87c52b825f280d1afc1a9d54784` 的 `integration-opencode`。
 
-## 7. 诚实保留的发布证据
+## 7. 发布证据与诊断历史
 
-以下是独立于已完成的本地 finding 终裁、仍未完成的发布证据；不得在提交信息或
-`STATE.md` 中把这些 release gates 提前写成已绿：
+以下按 SHA 顺序保留失败与修复历史；只有最后一个 exact SHA 是 RFC-224 的绿色
+发布点：
 
 1. 首个 implementation SHA
    `b4b3e082c0bf010f123c3e93c7b9abbd1f4f877e` 的 co-author trailer 已核验，
    remote `main` 已包含该 SHA，但它不是绿色发布点。
-2. [`integration-opencode` run 30045245638](https://github.com/wangbinquan/agent-workflow/actions/runs/30045245638)
+   [`integration-opencode` run 30045245638](https://github.com/wangbinquan/agent-workflow/actions/runs/30045245638)
    为 **failure**：official no-LLM preflight 在 FFF 阶段返回
    `execution-identity-bootstrap-failed`，暴露 metadata-only bwrap admission。
    旧 artifact 未保存 FFF raw stderr，因此 Ubuntu 24.04 userns/AppArmor 只能
    记为平台诊断，不能伪写成已捕获的精确原始报错。
-3. [`CI` run 30045245623](https://github.com/wangbinquan/agent-workflow/actions/runs/30045245623)
+   [`CI` run 30045245623](https://github.com/wangbinquan/agent-workflow/actions/runs/30045245623)
    与
    [`visual-regression-nightly` run 30045245613](https://github.com/wangbinquan/agent-workflow/actions/runs/30045245613)
    均为 **failure**，日志明确显示 E2E/visual harness 的
    `stub-opencode 1.14.99` 低于 `MIN_OPENCODE_VERSION=1.18.3`，daemon 在启动时
    正确 fail closed。
-4. product bwrap/FFF verified-self native supervisor、stable code、pre-store
-   admission、suid/sgid mode gate、已资格化 runner、四 workflow/六 stub exact
-   ratchet 与 freeze-lease real orphan integration 已在 current tree 落地，但仍需
-   形成新的 exact SHA，并由该 SHA 的 CI/integration terminal green 证明。T32
-   保持未勾选。
+2. follow-up SHA `a7f6814e028aa27c082508107d1217029e0e417e` 继续保留为失败
+   诊断点：[`integration-opencode` run 30057061688](https://github.com/wangbinquan/agent-workflow/actions/runs/30057061688)
+   因 Python enum/string 比较失败；[`CI` run 30057061665](https://github.com/wangbinquan/agent-workflow/actions/runs/30057061665)
+   因 actionlint 与 E2E model-less seed 422 失败；[`visual-regression-nightly` run 30057061833](https://github.com/wangbinquan/agent-workflow/actions/runs/30057061833)
+   因 theme PUT 422 失败。
+3. follow-up SHA `fe96a42ad1e9423d61675d336585e63344f3eb4a` 的
+   [`integration-opencode` run 30057707597](https://github.com/wangbinquan/agent-workflow/actions/runs/30057707597)
+   已成功；但 [`CI` run 30057707588](https://github.com/wangbinquan/agent-workflow/actions/runs/30057707588)
+   仍因 ShellCheck SC2016 与 8 个 E2E shard seed 422 失败，
+   [`visual-regression-nightly` run 30057707642](https://github.com/wangbinquan/agent-workflow/actions/runs/30057707642)
+   为 **22 pass / 4 fail**。
+4. compiled browser test isolation SHA
+   `791c433508b1721ced96d900b04128a022f02ff2` 的
+   [`integration-opencode` run 30059793133](https://github.com/wangbinquan/agent-workflow/actions/runs/30059793133)、
+   [`visual-regression-nightly` run 30059793075](https://github.com/wangbinquan/agent-workflow/actions/runs/30059793075)
+   与 [`git-protocols-e2e` run 30059793067](https://github.com/wangbinquan/agent-workflow/actions/runs/30059793067)
+   均成功；[`CI` run 30059793066](https://github.com/wangbinquan/agent-workflow/actions/runs/30059793066)
+   在 actionlint 报 SC1072/SC1073 后取消，因此仍不是绿色发布点。
+5. 最终 exact SHA `c50036ac35a4a87c52b825f280d1afc1a9d54784`
+   完成发布门：[`CI` run 30059969045](https://github.com/wangbinquan/agent-workflow/actions/runs/30059969045)
+   **28/28 jobs success**；[`integration-opencode` run 30059985690](https://github.com/wangbinquan/agent-workflow/actions/runs/30059985690)
+   的 RFC-224 subset **3 pass / 15 assertions**，完整 workflow
+   **5 pass / 5 skip / 0 fail、19 assertions**；
+   [`visual-regression-nightly` run 30059987003](https://github.com/wangbinquan/agent-workflow/actions/runs/30059987003)
+   与 [`git-protocols-e2e` run 30059988422](https://github.com/wangbinquan/agent-workflow/actions/runs/30059988422)
+   均 terminal success。T32 可以勾选。
 
 ## 8. 裁决
 
 当前本地裁决为 **APPROVED / 0 open**：累计 **23 组 P1 / 14 组 P2** 全部
-resolved，最终未关闭 **0 P0 / 0 P1 / 0 P2**，T28/T30 可以勾选。该裁决不等于
-发布完成：proposal/release 仍保持 pending，只有修复 SHA 的 T32 真实结果完成后
-才可声明 “exact-SHA CI/integration 绿”并关闭 RFC。
+resolved，最终未关闭 **0 P0 / 0 P1 / 0 P2**，T28/T30/T32 均可勾选。最终
+exact SHA `c50036ac35a4a87c52b825f280d1afc1a9d54784` 已取得 CI、Linux
+`integration-opencode`、visual 与 git-protocols terminal green；RFC-224 于
+**2026-07-24 Done**。

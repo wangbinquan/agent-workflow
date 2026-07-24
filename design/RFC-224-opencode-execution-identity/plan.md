@@ -169,30 +169,41 @@
       READY/ARMED，再由 SIGSTOP + `waitpid(WUNTRACED)` freeze lease 锁住 exact
       child/PGID，证明实际负组 TERM、SIGCONT 后 exact SIGTERM exit、leader reap、
       首个 ESRCH observation 单调锁存与后代持有的 stdout EOF；
-      SURVIVED/WATCHDOG 均失败。该权威结果仍待修复 SHA 的
-      `integration-opencode` 终态，首个失败 run 不算通过证据。
+      SURVIVED/WATCHDOG 均失败。最终 SHA 的
+      [`integration-opencode` 30059985690](https://github.com/wangbinquan/agent-workflow/actions/runs/30059985690)
+      为 terminal success，提供该 Linux 权威结果；首个失败 run 只保留为诊断历史。
 - [x] T28：运行
       `bun run typecheck && bun run lint && bun run test && bun run format:check`，
-      再跑 depcheck、`git diff --check`、`bun run build:binary`、compiled
+      再跑 depcheck、`git diff --check`、`bun run build:binary:e2e`、compiled
       hidden-command smoke；全量为 backend **7295 pass / 24 skip / 0 fail**、
-      shared **1438 pass**、frontend **5257 pass**，depcheck
+      shared **1438 pass**、frontend **5257 pass**，完整 Chromium E2E
+      **142 pass / 31 skip / 0 fail**，depcheck
       **1455 modules / 4484 dependencies / 0 violations**；current-tree RFC-224 定向集合
-      **317 pass / 1382 assertions**，其中 sealed subprocess
+      **322 pass / 1412 assertions**，其中 compiled Playwright seam
+      **5 pass / 30 assertions**、sealed subprocess
       **23 pass / 90 assertions**、FFF capability
       **13 pass / 98 assertions**。compiled smoke 同时锁四个 hidden command
       invalid invocation，以及 bwrap protocol 的 pre-ACK zero buffer、ACK 必须以
       EOF 提交、wrong nonce fail closed。
 - [x] T29：用官方 1.18.3 做 no-LLM config/session preflight 与 pinned codec
-      integration，current-tree 为 **2 pass / 12 assertions**；无官方 binary 的
-      平台只允许显式 skip，不允许 fake 通过 trust gate。
+      integration；最终
+      [`integration-opencode` 30059985690](https://github.com/wangbinquan/agent-workflow/actions/runs/30059985690)
+      中 RFC-224 official 子集为 **3 pass / 15 assertions**，whole workflow 为
+      **5 pass / 5 skip / 0 fail / 19 assertions**；无官方 binary 的平台只允许显式
+      skip，不允许 fake 通过 trust gate。
 - [x] T30：两轮独立复审累计 23 组 P1 / 14 组 P2；逐条核验 resolution 与对应
       行为锁/source ratchet 后全部 resolved，最终未关闭
       **0 P0 / 0 P1 / 0 P2**，实现门 **APPROVED / 0 open**。
 - [x] T31：更正 `CLAUDE.md` inline 优先级断言、更新 `OPENCODE_CONFIG.md`、
       RFC 状态与 `STATE.md`，只记录真实证据。
-- [ ] T32：首个精确 path commit `b4b3e082` 已核验真实 Codex/model co-author
-      trailer 并 push shared `main`，但该 SHA 的 CI/integration 失败；提交 follow-up
-      修复后，等待新 exact SHA 的 CI/integration 终态。
+- [x] T32：精确 path commit 链
+      `b4b3e082c0bf010f123c3e93c7b9abbd1f4f877e` →
+      `a7f6814e028aa27c082508107d1217029e0e417e` →
+      `fe96a42ad1e9423d61675d336585e63344f3eb4a` →
+      `791c433508b1721ced96d900b04128a022f02ff2` →
+      `c50036ac35a4a87c52b825f280d1afc1a9d54784` 的真实 Codex/model co-author
+      trailer 均已核验并 push shared `main`；最终 exact SHA 的 CI、
+      integration-opencode、Visual Regression 与 git-protocols-e2e 均 terminal green。
 
 ## 7. 实现与验证证据（2026-07-23）
 
@@ -225,15 +236,20 @@
   **286/286**、stale/source guards **80/80**、授权矩阵 **109/109**、backend
   focused **94/94**、frontend focused **43/43** 与 source reachability **8/8**
   仅保留为历史 baseline。current-tree RFC-224 定向集合为
-  **317 pass / 1382 assertions**；follow-up 已接线 real bwrap
+  **322 pass / 1412 assertions**，其中最终 compiled Playwright seam
+  **5 pass / 30 assertions**；follow-up 已接线 real bwrap
   SIGTERM-resistant setsid/double-fork orphan probe，并以 SIGSTOP /
   `waitpid(WUNTRACED)` freeze lease 消除 TERM 前 target 自退/换组窗口；本机 macOS
-  无法提供其权威结果，仍等待修复 SHA 的远端 integration 终态。
+  无法提供其权威结果，最终由
+  [`integration-opencode` 30059985690](https://github.com/wangbinquan/agent-workflow/actions/runs/30059985690)
+  的 terminal success 提供远端 Linux 权威证据。
 - **T29**：本机 official OpenCode **1.18.3 darwin-arm64** no-LLM
   config/provider/agent/skill/root-session preflight **1/1（7 assertions）** 通过；
   follow-up workflow 固定已资格化 Ubuntu runner 与 official 1.18.3，并在 suite 前
   以普通用户运行和 production 同级的 exact bwrap capability smoke；不得用
-  sudo/sysctl/setuid 绕过平台能力。
+  sudo/sysctl/setuid 绕过平台能力。最终远端 official 子集为
+  **3 pass / 15 assertions**，whole workflow 为
+  **5 pass / 5 skip / 0 fail / 19 assertions**。
 - **T30–T31**：首轮独立复审新增 **4 组 P1 / 2 组 P2**，real Linux 探针专项
   复审再新增 **5 组 P1 / 3 组 P2**，累计 **23 组 P1 / 14 组 P2**。实现门已补
   登记 bounded direct+negative-PGID reap、FFF stable code、pre-store admission、
@@ -245,31 +261,66 @@
 - **T28 完成**：current-tree sealed subprocess
   **23 pass / 90 assertions**、FFF capability
   **13 pass / 98 assertions**、RFC-224 定向集合
-  **317 pass / 1382 assertions**；format/typecheck/lint、depcheck、
-  `git diff --check`、`build:binary` 与 compiled smoke 均完成。compiled smoke
+  **322 pass / 1412 assertions**（含 compiled Playwright seam
+  **5 pass / 30 assertions**）；format/typecheck/lint、depcheck、
+  `git diff --check`、`build:binary:e2e` 与 compiled smoke 均完成。compiled smoke
   除四个 hidden command invalid-invocation ratchet 外，还证明 bwrap RELEASE
   不得在 ACK 前缓冲、ACK 未 EOF 时 pending read 不得推进、wrong nonce 不得
   release，成功/失败路径均以 raw 137、stdout EOF 与首个 ESRCH observation
   单调锁存收口。
-- **T32 仍 pending**：`b4b3e082c0bf010f123c3e93c7b9abbd1f4f877e` 的 trailer
-  已核验且 remote `main` 已包含该 SHA，但三个 exact-SHA workflow 均失败：
-  [`integration-opencode` 30045245638](https://github.com/wangbinquan/agent-workflow/actions/runs/30045245638)
-  暴露 metadata-only bwrap admission；
-  [`CI` 30045245623](https://github.com/wangbinquan/agent-workflow/actions/runs/30045245623)
-  与
-  [`visual-regression-nightly` 30045245613](https://github.com/wangbinquan/agent-workflow/actions/runs/30045245613)
-  均被仍报告 1.14.99 的 E2E stub 在 daemon startup 拒绝。这三个 URL 仅为失败
-  诊断历史；product capability lifecycle/stable-code/pre-store/mode 修复、四
-  workflow/六 stub exact ratchet 与 real orphan integration 的 follow-up 形成新
-  SHA 并取得 terminal green 前，不勾选 T32。
+- **T32 完成（2026-07-24）**：完整提交链为
+  `b4b3e082c0bf010f123c3e93c7b9abbd1f4f877e` →
+  `a7f6814e028aa27c082508107d1217029e0e417e` →
+  `fe96a42ad1e9423d61675d336585e63344f3eb4a` →
+  `791c433508b1721ced96d900b04128a022f02ff2` →
+  `c50036ac35a4a87c52b825f280d1afc1a9d54784`；各轮真实结果如下：
+  - `b4b3e082`：
+    [`integration-opencode` 30045245638](https://github.com/wangbinquan/agent-workflow/actions/runs/30045245638)
+    暴露 metadata-only bwrap admission；
+    [`CI` 30045245623](https://github.com/wangbinquan/agent-workflow/actions/runs/30045245623)
+    与
+    [`visual-regression-nightly` 30045245613](https://github.com/wangbinquan/agent-workflow/actions/runs/30045245613)
+    均被 1.14.99 E2E stub 在 daemon startup 拒绝，三个 failure 只作诊断历史。
+  - `a7f6814e`：
+    [`integration-opencode` 30057061688](https://github.com/wangbinquan/agent-workflow/actions/runs/30057061688)
+    暴露 Python enum/string oracle 漂移；
+    [`CI` 30057061665](https://github.com/wangbinquan/agent-workflow/actions/runs/30057061665)
+    因 actionlint 与 model-less E2E seed 422 失败；
+    [`visual-regression-nightly` 30057061833](https://github.com/wangbinquan/agent-workflow/actions/runs/30057061833)
+    因 theme config PUT 422 失败。
+  - `fe96a42a`：
+    [`integration-opencode` 30057707597](https://github.com/wangbinquan/agent-workflow/actions/runs/30057707597)
+    首次成功；但
+    [`CI` 30057707588](https://github.com/wangbinquan/agent-workflow/actions/runs/30057707588)
+    仍因 ShellCheck SC2016 与八个 model-less E2E shard 失败，
+    [`visual-regression-nightly` 30057707642](https://github.com/wangbinquan/agent-workflow/actions/runs/30057707642)
+    为 **22 pass / 4 fail**，暴露 stub trust/terminal fixture 漂移。
+  - `791c4335`：
+    [`integration-opencode` 30059793133](https://github.com/wangbinquan/agent-workflow/actions/runs/30059793133)、
+    [`Visual Regression` 30059793075](https://github.com/wangbinquan/agent-workflow/actions/runs/30059793075)
+    与
+    [`git-protocols-e2e` 30059793067](https://github.com/wangbinquan/agent-workflow/actions/runs/30059793067)
+    均成功；但
+    [`CI` 30059793066](https://github.com/wangbinquan/agent-workflow/actions/runs/30059793066)
+    在 static actionlint 报 SC1072/SC1073 后被取消，因此仍不是发布点。
+  - 最终 `c50036ac35a4a87c52b825f280d1afc1a9d54784`：
+    [`CI` 30059969045](https://github.com/wangbinquan/agent-workflow/actions/runs/30059969045)
+    **28/28 jobs success**；
+    [`integration-opencode` 30059985690](https://github.com/wangbinquan/agent-workflow/actions/runs/30059985690)
+    **3 pass / 15 assertions**（whole workflow **5 pass / 5 skip / 0 fail /
+    19 assertions**）；
+    [`Visual Regression` 30059987003](https://github.com/wangbinquan/agent-workflow/actions/runs/30059987003)
+    与
+    [`git-protocols-e2e` 30059988422](https://github.com/wangbinquan/agent-workflow/actions/runs/30059988422)
+    均为 terminal success。该 SHA 是关闭 T32 的绿色发布证据。
 
 ## 8. 完成定义
 
-- proposal AC1–AC10 全有自动化证据；
-- unknown/fake binary、identity/source/session/file-symlink 任一攻击都在模型结果
-  前 fail closed；
-- runner、distiller、smoke 无 direct OpenCode bypass，且取消/超时无 orphan；
-- 三入口、UI/probe/save 的 unsupported/null-model 行为一致且可操作；
-- full gates、compiled binary、official integration、Codex impl gate 全绿；
-- commit trailer 已核验，remote `main` 含该 SHA，exact-SHA CI terminal green；
-- `STATE.md` 与 RFC 状态不提前宣称完成。
+- [x] proposal AC1–AC10 全有自动化证据；
+- [x] unknown/fake binary、identity/source/session/file-symlink 任一攻击都在模型结果
+      前 fail closed；
+- [x] runner、distiller、smoke 无 direct OpenCode bypass，且取消/超时无 orphan；
+- [x] 三入口、UI/probe/save 的 unsupported/null-model 行为一致且可操作；
+- [x] full gates、compiled binary、official integration、Codex impl gate 全绿；
+- [x] commit trailer 已核验，remote `main` 含该 SHA，exact-SHA CI terminal green；
+- [x] `STATE.md` 与 RFC 状态仅在发布证据完成后宣称 Done。
