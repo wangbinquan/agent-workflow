@@ -193,12 +193,14 @@ history.
 | --------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
 | **OS**          | macOS on Apple Silicon, or Linux on x86_64/arm64 | Windows is not currently supported.                                                                    |
 | **git**         | **2.38.0 or newer**                              | Required for isolated merge-back via `git merge-tree --write-tree`.                                    |
-| **opencode**    | **1.14.0 or newer**                              | Hard-required at daemon startup; there is no upper version cap. Set `opencodePath` to override `PATH`. |
+| **opencode**    | **1.18.3**, optional                              | Not checked at daemon startup. Explicit runtime checks and OpenCode use require the supported official build; set `opencodePath` to override `PATH`. |
 | **Claude Code** | **2.0.0 or newer**, optional                     | Additional runtime; set `claudeCodePath` or a runtime profile to use it.                               |
 | **Bun**         | **1.3.0 or newer**, source builds only           | Release binaries bundle Bun.                                                                           |
 
-Run `agent-workflow doctor` before starting the daemon to check opencode, Git, the
-data directory, config, token-file permissions, migrations, and lifecycle health.
+Run `agent-workflow doctor` for a full environment check covering OpenCode, Git,
+the data directory, config, token-file permissions, migrations, and lifecycle
+health. An OpenCode failure means that optional runtime is not ready; it does not
+prevent the daemon from starting.
 
 ## Install a release binary
 

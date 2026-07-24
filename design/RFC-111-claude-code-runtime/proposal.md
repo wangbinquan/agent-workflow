@@ -4,6 +4,10 @@
 
 触发：2026-06-26 用户「需要支持调用 claude code 来作为运行时」。
 
+> **后续修订（RFC-226，2026-07-24）**：OpenCode 与 Claude Code 均为可选运行时；daemon
+> 启动不再以 OpenCode binary/version 为硬门。本文以下内容保留当时的抽象层背景，不代表当前
+> 启动合同。
+
 ---
 
 ## 1. 背景

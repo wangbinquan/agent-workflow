@@ -1,4 +1,9 @@
 
+> **RFC-226 supersession（2026-07-24）**：本审计保留 2026-07-21 当时的证据快照；
+> `B7-daemon-ws-3` 所述 OpenCode boot probe / fail-closed 合同已被 RFC-226 取代。
+> OpenCode 现在是可选 runtime，daemon 启动不执行其 binary，显式 runtime 检验与实际使用仍
+> fail closed。
+
 ### 后端｜HTTP 路由与 API 契约
 
 | id | 严重度 | 逃逸类别 | 未防护的是什么 | 生产后果 | 建议防护层 |

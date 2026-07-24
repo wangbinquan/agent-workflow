@@ -44,15 +44,14 @@ export const OPENCODE_AUTO_FLAG_MIN_VERSION = '1.18.0'
  * argument to the `.strict()` parser, and opencode's custom `.fail()`
  * (opencode/src/index.ts:104-114) swallows the "Unknown argument" line and
  * prints ONLY the `run` usage before exit 1 — so every spawn on this machine
- * died with a bare usage dump and zero stdout. Version-gate the spelling
- * instead of flipping it wholesale: MIN_OPENCODE_VERSION is 1.14.0, both
- * generations must keep working.
+ * died with a bare usage dump and zero stdout. Version-gate the legacy/test
+ * spelling seam instead of flipping its golden argv wholesale.
  *
  * Unknown (null/undefined/unparseable) → LEGACY spelling, deliberately:
- *  - the daemon boot-probes the default binary before anything can spawn, so
- *    real runs always resolve a version (this machine: 1.18.3 → `--auto`);
+ *  - RFC-224 production uses the pinned direct API and never reaches this
+ *    `opencode run` compatibility seam;
  *  - the TS mocks (`['bun','run',…]` heads) and the six e2e shell stubs
- *    (report 1.14.99) then keep today's argv byte-for-byte.
+ *    keep their historical argv byte-for-byte unless explicitly probed.
  */
 export function resolveAutoApproveFlag(
   binaryVersion: string | null | undefined,

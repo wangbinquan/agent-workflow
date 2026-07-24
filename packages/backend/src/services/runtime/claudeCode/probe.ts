@@ -1,7 +1,7 @@
 // RFC-111 PR-B — Claude Code binary discovery + version probe + min-version gate.
-// Mirrors util/opencode.ts. Unlike opencode (hard-fail at daemon startup), the
-// claude probe is SOFT (D10): a missing/old claude only fails a node whose agent
-// selected the claude runtime; opencode-only installs are unaffected.
+// Mirrors util/opencode.ts. Agent runtimes are optional at daemon startup:
+// absence/incompatibility is surfaced by explicit diagnostics and only fails
+// nodes that actually select the runtime (RFC-226).
 
 import { createLogger } from '@/util/log'
 import type { ProbeOpts } from '@/util/opencode'

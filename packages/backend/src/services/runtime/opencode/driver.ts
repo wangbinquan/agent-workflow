@@ -97,8 +97,9 @@ export const opencodeDriver: RuntimeDriver = {
     // forks) are unaffected. claude has no analogous override.
     const { cmd, env } = buildOpencodeSpawn({
       opencodeCmd: head,
-      // 2026-07-21: flag-spelling version gate — the registry is seeded by
-      // probeOpencode (daemon boot probes the default binary before any spawn).
+      // 2026-07-21: legacy/test-only flag-spelling gate. RFC-226 removed boot
+      // prewarming; explicit doctor/status probes may seed this registry, while
+      // RFC-224 production uses the pinned direct API above.
       binaryVersion: getOpencodeBinaryVersion(head[0] ?? 'opencode'),
       agentName: ctx.agentName,
       prompt: ctx.prompt,
@@ -190,9 +191,8 @@ export const opencodeDriver: RuntimeDriver = {
     // — byte-for-byte unchanged for built-ins.
     const { cmd, env } = buildOpencodeSpawn({
       opencodeCmd: businessHead,
-      // 2026-07-21: flag-spelling version gate (see buildSpawn above). Key =
-      // head[0] exactly as spawned; default-head runs resolve 'opencode', the
-      // same token the boot probe recorded.
+      // 2026-07-21: legacy/test-only flag-spelling gate (see buildSpawn above).
+      // Key = head[0] exactly as spawned and as explicit probes record it.
       binaryVersion: getOpencodeBinaryVersion(businessHead?.[0] ?? 'opencode'),
       agentName: ctx.agent.name,
       prompt: ctx.prompt,

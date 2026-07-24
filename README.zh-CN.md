@@ -166,12 +166,13 @@ daemon 把任务和节点状态持久化到 SQLite。重启后，它会对账孤
 | --------------- | ------------------------------------------ | -------------------------------------------------------------------- |
 | **操作系统**    | Apple Silicon macOS，或 x86_64/arm64 Linux | 当前不支持 Windows。                                                 |
 | **git**         | **2.38.0 或更高**                          | 隔离 merge-back 依赖 `git merge-tree --write-tree`。                 |
-| **opencode**    | **1.14.0 或更高**                          | daemon 启动时硬性要求，无版本上限；可用 `opencodePath` 覆盖 `PATH`。 |
+| **opencode**    | **1.18.3**，可选                           | daemon 启动时不检查；显式运行时检验与实际使用要求受支持的官方构建，可用 `opencodePath` 覆盖 `PATH`。 |
 | **Claude Code** | **2.0.0 或更高**，可选                     | 额外运行时；可设置 `claudeCodePath` 或运行时 profile。               |
 | **Bun**         | **1.3.0 或更高**，仅从源码构建时需要       | 发布二进制已内置 Bun。                                               |
 
-启动 daemon 前建议运行 `agent-workflow doctor`，检查 opencode、Git、数据目录、
-配置、token 文件权限、migration 和生命周期健康状态。
+可运行 `agent-workflow doctor` 做完整环境检查，覆盖 opencode、Git、数据目录、配置、
+token 文件权限、migration 和生命周期健康状态。OpenCode 检查失败只表示该可选运行时尚未
+就绪，不会阻止 daemon 启动。
 
 ## 安装发布二进制
 

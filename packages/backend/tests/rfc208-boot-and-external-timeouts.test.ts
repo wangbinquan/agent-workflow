@@ -6,11 +6,9 @@
 // `agent-workflow start` 只会告诉你「another daemon is already running」。
 //
 // 设计门二轮的两条修正锁在这里：
-//   · 探针必须**限时但仍 fail-closed**（释放锁 + 退出）。初稿写的「超时后继续启动到
-//     监听」是错的——opencode 是必需运行时门禁（cli/start.ts 与 design/design.md
-//     §1369），继续监听等于对外提供一个跑不了运行时的 daemon（§6-4）。
-//   · git 门禁与 opencode 门禁是同一形状：`gitVersion.ts` 的 runGit(['--version'])
-//     同样无超时、同样在持锁期间执行，必须一并纳入（§6-12）。
+// RFC-226 supersedes the OpenCode half of that historical decision: OpenCode
+// is optional and must not execute at boot. The git half remains a hard,
+// bounded platform gate because every repository task needs merge-back.
 
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
@@ -23,37 +21,24 @@ const gitVersionSource = readFileSync(
   'utf8',
 )
 
-describe('RFC-208 · boot probes are bounded but still fail closed', () => {
-  test('the opencode boot probe passes a timeout', () => {
-    // The probe already supports `timeoutMs` (util/opencode.ts arms a
-    // detached-process-group SIGKILL only when it is given one); boot simply
-    // never passed it.
-    const call = startSource.slice(
-      startSource.indexOf('ocDriver.probe('),
-      startSource.indexOf('ocDriver.probe(') + 160,
+describe('RFC-208 / RFC-226 · boot probes', () => {
+  test('OpenCode is absent from the daemon boot gate', () => {
+    const boot = startSource.slice(
+      startSource.indexOf('export async function startCommand'),
+      startSource.indexOf('const gitCaps = await detectGitCapabilities()'),
     )
-    expect(call).toContain('timeoutMs')
+    expect(boot).not.toContain("getRuntimeDriver('opencode')")
+    expect(boot).not.toContain('ocDriver.probe')
+    expect(boot).not.toContain('opencode probe ok')
+    expect(startSource).toContain('opencodeVersion: null')
   })
 
-  test('the git boot probe passes a timeout too', () => {
-    // Same wedge, different binary: a git wrapper (nvm/asdf/mise shim, corporate
-    // proxy script) that hangs strands boot just as thoroughly.
+  test('the git boot probe remains bounded', () => {
     const call = gitVersionSource.slice(
       gitVersionSource.indexOf("runGit(process.cwd(), ['--version']"),
       gitVersionSource.indexOf("runGit(process.cwd(), ['--version']") + 120,
     )
     expect(call).toContain('timeoutMs')
-  })
-
-  test('a timed-out probe still releases the lock and exits — never "keep listening"', () => {
-    // Guards against the withdrawn design-gate suggestion. If someone later
-    // makes boot continue past a failed required-runtime probe, this turns red.
-    const gate = startSource.slice(
-      startSource.indexOf('opencode version probe'),
-      startSource.indexOf('opencode probe ok'),
-    )
-    expect(gate).toContain('lock.release()')
-    expect(gate).toContain('process.exit(1)')
   })
 })
 

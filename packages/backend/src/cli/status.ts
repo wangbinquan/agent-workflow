@@ -66,7 +66,7 @@ export function formatStatus(r: StatusResult): string {
     lines.push(`  startedAt:  ${r.info.startedAt}`)
   }
   if (r.health) {
-    lines.push(`  opencode:   ${r.health.opencodeVersion ?? '(unknown)'}`)
+    lines.push(`  opencode:   ${r.health.opencodeVersion ?? '(not checked at startup)'}`)
     lines.push(`  db version: ${r.health.dbVersion}`)
     lines.push(`  uptime:     ${r.health.uptime}s`)
     lines.push(`  tasks now:  ${r.health.runningTasks}`)

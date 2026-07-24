@@ -16,11 +16,11 @@ import { EXECUTION_IDENTITY_FAILURE_CODES } from '../executionIdentity'
  * RFC-135: GET /api/runtimes/status — one entry per ENABLED registry runtime,
  * probed live (`--version`) against the binary a real dispatch would use.
  *
- * Deliberately carries NO `compatible` / `minVersion`: availability is
- * version-gate free (user decision 2026-07-02 — custom binaries own their own
- * version scheme; comparing against the official minimum produced false
- * failures). `ok` = the probe process exited 0; `version` is display-only and
- * may be null even when ok (unparseable custom version strings).
+ * Deliberately carries NO `compatible` / `minVersion`: RFC-226 projects
+ * OpenCode's driver verdict into `ok` without exposing driver policy details.
+ * For OpenCode, `ok = probe exited 0 && version is compatible`; `version`
+ * remains nullable so a failed/unparseable probe can still be represented.
+ * Other protocols retain their established availability semantics.
  */
 export const RuntimeStatusEntrySchema = z.object({
   name: z.string(),

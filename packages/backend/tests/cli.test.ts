@@ -87,7 +87,7 @@ describe('CLI subcommands (P-1-05)', () => {
 
   test('doctor returns ok when opencode + git present', async () => {
     const result = await doctorCommand()
-    // We trust the dev box has opencode (>=1.14.0) and git (>=2.5).
+    // We trust the dev box has supported OpenCode and Git installations.
     // If a particular check fails, surface its message for easier debugging.
     if (!result.ok) {
       console.error(formatDoctor(result))
@@ -136,10 +136,11 @@ describe('CLI subcommands (P-1-05)', () => {
       expect(status.pid).toBe(child.pid ?? -1)
       expect(status.info?.host).toBe('127.0.0.1')
       expect(status.health?.ok).toBe(true)
-      expect(typeof status.health?.opencodeVersion).toBe('string')
+      expect(status.health?.opencodeVersion).toBeNull()
       const text = formatStatus(status)
       expect(text).toContain('daemon running')
       expect(text).toContain(`pid:        ${child.pid}`)
+      expect(text).toContain('not checked at startup')
 
       // stop terminates the daemon and removes the lock.
       const stopResult = await stopCommand({ timeoutMs: 10_000 })

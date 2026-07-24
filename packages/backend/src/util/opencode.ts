@@ -48,22 +48,19 @@ export function isProductionOpencodeCommand(command: readonly string[]): boolean
 
 /**
  * Minimum supported opencode version.
- * Below this the daemon refuses to start (design.md §11.2).
+ * RFC-226 applies this to explicit runtime validation/use, never daemon boot.
  *
- * There is intentionally NO upper bound: the daemon accepts any version
- * `>= MIN_OPENCODE_VERSION`. A cap used to exist as a "you just bumped past a
- * minor — manually re-verify" tripwire, but the PWD/cwd spawn regression that
- * motivated it is now handled at the spawn site (services/runner.ts +
- * services/memoryDistiller.ts explicitly set `PWD = cwd`), so newer opencode
- * releases no longer need a gate to admit them. See the test file for the full
- * historical rationale.
+ * There is intentionally NO semver upper bound in the generic probe. RFC-224's
+ * production execution boundary is stricter and independently requires the
+ * exact official pinned build; the generic minimum remains useful for doctor,
+ * runtime status, and legacy/test-only probes.
  */
 export const MIN_OPENCODE_VERSION = '1.18.3'
 
 /**
  * RFC-135: optional knobs for the `--version` probes (opencode + claude-code).
- * Omitting both fields is byte-identical to the historical behavior — the
- * daemon startup probe and the legacy callers pass nothing.
+ * Omitting both fields is byte-identical to the historical behavior for
+ * explicit diagnostics and legacy callers. RFC-226 removed the boot caller.
  */
 export interface ProbeOpts {
   /**
@@ -97,10 +94,8 @@ export interface OpencodeProbe {
    */
   incompatibleReason?: string
   /**
-   * RFC-135: true iff the `--version` process exited 0 — availability without
-   * any version parsing/gating (a custom binary with an unparseable version
-   * string still counts as runnable). `version`/`compatible` stay as-is for
-   * the daemon startup gate, which is out of RFC-135's scope.
+   * True iff the `--version` process exited 0. RFC-226 runtime status combines
+   * this transport result with `compatible`; daemon startup does not probe.
    */
   ran?: boolean
 }
@@ -160,7 +155,7 @@ export async function probeOpencode(
             : await outPromise
         version = extractVersion(out)
         // 2026-07-21: seed the spawn-time flag-spelling registry. Every probe
-        // path funnels through here (daemon boot / runtime-row save / status
+        // path funnels through here (doctor / runtime validation / status
         // poll), so a successful probe is exactly when we know which spelling
         // of the auto-approve flag this binary takes — see
         // opencode-version-registry.ts + spawn.ts resolveAutoApproveFlag.

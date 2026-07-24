@@ -12,7 +12,11 @@ rm ~/.agent-workflow/.daemon.lock
 
 `agent-workflow status` will tell you whether the lock's PID is alive.
 
-## `opencode … is older than the required 1.14.0`
+## `opencode … is older than required minimum 1.18.3`
+
+OpenCode is optional and this diagnostic does not prevent the daemon from
+starting. It does mean that runtime status/Test and tasks selecting OpenCode
+will fail closed until the configured binary is fixed.
 
 Upgrade opencode:
 
@@ -26,7 +30,6 @@ Or pin a specific binary:
 
 ```bash
 agent-workflow config set opencodePath /absolute/path/to/opencode
-agent-workflow stop && agent-workflow start
 ```
 
 ## `task-cannot-start` / worktree errors

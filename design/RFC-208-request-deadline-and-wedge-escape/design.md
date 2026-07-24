@@ -1,5 +1,9 @@
 # RFC-208 · 请求截止时间与卡死逃生口 —— design
 
+> **RFC-226 supersession（2026-07-24）**：本 RFC 的 bounded-wait 原则与 git boot gate 继续有效；
+> §6 第 4 条“OpenCode 是必需启动门、必须 fail closed”已被 RFC-226 取代。OpenCode 现在只在显式
+> runtime validation / 实际使用时检验，daemon boot 不执行它。下文保留为历史设计门记录。
+
 ## 0. 范围划分
 
 本 RFC 覆盖同一个主题的两条工作线，二者独立可并行，但共享同一条验收原则

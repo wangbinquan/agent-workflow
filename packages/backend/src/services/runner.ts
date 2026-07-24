@@ -1365,10 +1365,9 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     child = trySpawn()
   } catch (err) {
     // RFC-111 (Codex impl-gate P1-2): a missing / unspawnable runtime binary
-    // (the OPTIONAL claude not installed, a bad path) throws ENOENT here. Mark
+    // (an optional runtime not installed, a bad path) throws ENOENT here. Mark
     // the node failed cleanly instead of throwing out of runNode and stranding
-    // the row at 'running' (opencode is hard-required at startup, so in practice
-    // this only fires for claude). The spawn driver's temp dir is cleaned up.
+    // the row at 'running'. The spawn driver's temp dir is cleaned up.
     const identityFailure =
       opencodeControl === undefined ? undefined : ('execution-identity-bootstrap-failed' as const)
     const errorMessage =

@@ -85,7 +85,7 @@ export const ENDPOINTS: EndpointSpec[] = [
       schema: z
         .object({
           ok: z.literal(true),
-          opencodeVersion: z.string(),
+          opencodeVersion: z.string().nullable(),
           dbVersion: z.number(),
           uptime: z.number(),
           runningTasks: z.number(),

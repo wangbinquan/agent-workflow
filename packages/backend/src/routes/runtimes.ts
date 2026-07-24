@@ -127,13 +127,14 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
     })
   })
 
-  // RFC-135 — live light status for the homepage hero: every ENABLED runtime,
-  // probed `--version` in parallel against the binary a dispatch would use.
+  // RFC-135 / RFC-226 — live light status for the homepage hero: every ENABLED
+  // runtime is probed `--version` in parallel against the binary a dispatch
+  // would use. This is the explicit, on-demand version gate that replaced the
+  // unconditional OpenCode daemon-start gate.
   // `runtime:read` mirrors the legacy /api/runtime/* gate (server.ts) — this
   // spawns registered binaries, so a narrowed PAT without the permission must
   // not reach it. RFC-224 first admits OpenCode through the exact official-build
-  // gate; among admitted bytes, availability remains exit-0 with no additional
-  // version-string gate (an unparseable display string is still runnable).
+  // gate; RFC-226 then projects OpenCode version compatibility into `ok`.
   app.get('/api/runtimes/status', requirePermission('runtime:read'), async (c) => {
     const cfg = loadConfig(deps.configPath)
     const rows = (await listRuntimes(deps.db)).filter((r) => r.enabled)
@@ -184,7 +185,10 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
           name: row.name,
           protocol: row.protocol,
           binary: probe.binary,
-          ok: probe.ran === true,
+          // RFC-226: an executable that exits 0 but reports an unsupported or
+          // unparseable version has failed runtime validation. Keep compatible
+          // out of the wire shape; its verdict is projected into `ok`.
+          ok: probe.ran === true && (row.protocol === 'opencode' ? probe.compatible : true),
           version: probe.version,
           isDefault: row.name === defaultName,
           ...(isExecutionIdentityFailureCode(probe.incompatibleReason)

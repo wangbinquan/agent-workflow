@@ -1,7 +1,20 @@
+// RFC-226 regression: OpenCode is an optional runtime. Daemon startup must
+// neither execute its configured binary nor fail because that binary is
+// missing/incompatible; version admission belongs to explicit runtime checks.
+
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { applyConfigPatch, loadConfig } from '../src/config'
 
 const mainPath = resolve(import.meta.dir, '..', 'src', 'main.ts')
 
@@ -66,8 +79,7 @@ describe('daemon start — HTTP contract on a shared bootstrapped daemon (M1 P-1
     expect(res.status).toBe(200)
     const body = (await res.json()) as Record<string, unknown>
     expect(body.ok).toBe(true)
-    expect(typeof body.opencodeVersion).toBe('string')
-    expect(body.opencodeVersion).toMatch(/^\d+\.\d+\.\d+/)
+    expect(body.opencodeVersion).toBeNull()
     expect(typeof body.dbVersion).toBe('number')
     expect(typeof body.uptime).toBe('number')
     expect(body.runningTasks).toBe(0)
@@ -202,8 +214,59 @@ describe('daemon start — lifecycle (per-test daemon)', () => {
     expect(existsSync(logFile)).toBe(true)
     const logged = readFileSync(logFile, 'utf-8')
     expect(logged).toContain('lock acquired')
-    expect(logged).toContain('opencode probe ok')
+    expect(logged).not.toContain('opencode probe ok')
     expect(logged).toContain('db ready')
+  })
+
+  test('missing OpenCode binary does not block startup and health reports not probed', async () => {
+    const configPath = join(tmp, 'config.json')
+    loadConfig(configPath)
+    applyConfigPatch(configPath, { opencodePath: join(tmp, 'missing-opencode') })
+
+    const child = spawnDaemon(env)
+    try {
+      const { url } = await waitForReady(child.stdout, 10_000)
+      const res = await fetch(`${url}health`)
+      expect(res.status).toBe(200)
+      const health = (await res.json()) as { opencodeVersion: string | null }
+      expect(health.opencodeVersion).toBeNull()
+    } finally {
+      try {
+        child.kill('SIGTERM')
+      } catch {
+        /* child may already have exited on a regression */
+      }
+      await child.exited
+    }
+  })
+
+  test('startup never executes a configured incompatible OpenCode binary', async () => {
+    const marker = join(tmp, 'opencode-was-executed')
+    const poison = join(tmp, 'poison-opencode')
+    writeFileSync(
+      poison,
+      `#!/bin/sh
+: > "$RFC226_OPENCODE_MARKER"
+printf '%s\\n' 'stub-opencode 0.1.0'
+`,
+    )
+    chmodSync(poison, 0o755)
+    const configPath = join(tmp, 'config.json')
+    loadConfig(configPath)
+    applyConfigPatch(configPath, { opencodePath: poison })
+
+    const child = spawnDaemon({ ...env, RFC226_OPENCODE_MARKER: marker })
+    try {
+      await waitForReady(child.stdout, 10_000)
+      expect(existsSync(marker)).toBe(false)
+    } finally {
+      try {
+        child.kill('SIGTERM')
+      } catch {
+        /* child may already have exited on a regression */
+      }
+      await child.exited
+    }
   })
 
   test('a second daemon start is rejected while the first holds the lock', async () => {

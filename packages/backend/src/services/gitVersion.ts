@@ -85,7 +85,7 @@ export function mergeTreeGateError(caps: GitCapabilities): string | null {
 }
 
 /** Run `git --version`, parse, cache. Idempotent — call multiple times safely. */
-/** RFC-208 — see BOOT_PROBE_TIMEOUT_MS; finite matters far more than tight. */
+/** RFC-208: the platform-level git boot probe must be finite. */
 export const GIT_PROBE_TIMEOUT_MS = 20_000
 
 export async function detectGitCapabilities(): Promise<GitCapabilities> {
@@ -95,9 +95,9 @@ export async function detectGitCapabilities(): Promise<GitCapabilities> {
     //
     // RFC-208: bounded. This runs at boot while the daemon holds the PID lock,
     // so a hanging git wrapper wedges startup exactly the way a hanging
-    // opencode wrapper does — daemon alive, port never listening, restart
+    // external wrapper does — daemon alive, port never listening, restart
     // useless. A timeout surfaces as exitCode != 0, which the existing gate
-    // already renders as "no capabilities" and refuses to boot on (fail-closed).
+    // renders as "no capabilities" and refuses to boot on (fail-closed).
     const r = await runGit(process.cwd(), ['--version'], { timeoutMs: GIT_PROBE_TIMEOUT_MS })
     v = r.exitCode === 0 ? parseGitVersion(r.stdout) : null
   } catch {

@@ -4,11 +4,11 @@
 // (GET /api/runtime/opencode) the homepage hero used to hardcode:
 //   1. every ENABLED registry runtime is probed live against the binary a real
 //      dispatch would use (row binaryPath > protocol default from config);
-//   2. after RFC-224 official-build admission, availability is VERSION-GATE
-//      FREE (`--version` exiting 0 is the whole status test, and an unparseable
-//      display string still reads ok). Deterministic fixture executables enter
-//      through the explicit test dependency below; production never does. The
-//      response deliberately has NO compatible/minVersion keys;
+//   2. RFC-226 moves the version gate from daemon boot to explicit runtime
+//      validation: `ok` requires both an exit-0 probe and a compatible version.
+//      Deterministic fixture executables enter through the explicit test
+//      dependency below; production never does. The response deliberately has
+//      NO compatible/minVersion keys;
 //   3. the endpoint sits behind `runtime:read` like the legacy /api/runtime/*
 //      gate (it spawns registered binaries — a narrowed PAT must not reach it);
 //   4. a hung binary is SIGKILLed after the per-row timeout and reads as a
@@ -79,7 +79,7 @@ async function makeHarness(): Promise<Harness> {
   loadConfig(configPath) // write defaults
   const opencodeBin = join(tmp, 'opencode-stub')
   const claudeBin = join(tmp, 'claude-stub')
-  writeVersionBinary(opencodeBin, 'stub-opencode 1.14.25')
+  writeVersionBinary(opencodeBin, 'stub-opencode 1.18.3')
   writeVersionBinary(claudeBin, '2.1.193 (Claude Code)')
   // Pin BOTH protocol defaults to controlled stubs — the machine running the
   // tests may or may not have real opencode/claude on PATH.
@@ -142,7 +142,7 @@ describe('RFC-135 GET /api/runtimes/status', () => {
     expect(oc).toBeDefined()
     expect(cc).toBeDefined()
     expect(oc!.ok).toBe(true)
-    expect(oc!.version).toBe('1.14.25')
+    expect(oc!.version).toBe('1.18.3')
     expect(oc!.binary).toBe(h.opencodeBin)
     expect(oc!.isDefault).toBe(true)
     expect(cc!.ok).toBe(true)
@@ -150,7 +150,7 @@ describe('RFC-135 GET /api/runtimes/status', () => {
     expect(cc!.binary).toBe(h.claudeBin)
     expect(cc!.isDefault).toBe(false)
 
-    // D3 decision lock: the version gate must not leak back into the contract.
+    // Compatibility affects `ok` without leaking driver internals into the wire.
     for (const row of json.runtimes) {
       expect('compatible' in row).toBe(false)
       expect('minVersion' in row).toBe(false)
@@ -208,15 +208,23 @@ describe('RFC-135 GET /api/runtimes/status', () => {
     expect(fork!.isDefault).toBe(false)
   })
 
-  test('unparseable version string still reads ok (version-gate-free core)', async () => {
-    // The fixture analogue of a binary whose --version output has no X.Y.Z
-    // shape. Once admitted, it RUNS, so version remains display-only.
+  test('version below the requirement fails explicit runtime validation', async () => {
+    const oldBin = join(h.tmp, 'old-opencode')
+    writeVersionBinary(oldBin, 'stub-opencode 1.17.9')
+    await createRuntime(h.db, { name: 'old-opencode', protocol: 'opencode', binaryPath: oldBin })
+    const json = await bodyOf(await req(h.app))
+    const old = json.runtimes.find((r) => r.name === 'old-opencode')
+    expect(old!.ok).toBe(false)
+    expect(old!.version).toBe('1.17.9')
+  })
+
+  test('unparseable version string fails explicit runtime validation', async () => {
     const weirdBin = join(h.tmp, 'weird-fork')
     writeVersionBinary(weirdBin, 'fork build fortytwo')
     await createRuntime(h.db, { name: 'weird-fork', protocol: 'opencode', binaryPath: weirdBin })
     const json = await bodyOf(await req(h.app))
     const weird = json.runtimes.find((r) => r.name === 'weird-fork')
-    expect(weird!.ok).toBe(true)
+    expect(weird!.ok).toBe(false)
     expect(weird!.version).toBeNull()
   })
 

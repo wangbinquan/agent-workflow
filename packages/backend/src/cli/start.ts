@@ -59,16 +59,6 @@ export interface StartOptions {
   host?: string
 }
 
-/**
- * RFC-208 — ceiling for the mandatory boot probes (opencode + git).
- *
- * Generous: a cold binary on a slow/networked volume can legitimately take a
- * few seconds. The point is not to be tight, it is to be FINITE — an unbounded
- * probe leaves the daemon holding the PID lock while never listening, and a
- * restart cannot recover from that.
- */
-export const BOOT_PROBE_TIMEOUT_MS = 20_000
-
 /** RFC-213 — human-facing fail-closed message: list backups + the restore command. */
 function formatDbCorruptionGuidance(err: DbCorruptionError): string {
   const lines = [
@@ -172,56 +162,13 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   }
   log.info('config loaded', { path: Paths.config, language: config.language, theme: config.theme })
 
-  // 4. opencode version probe — daemon refuses to start on incompatible version.
-  // RFC-143: opencode is the hard-required boot runtime — probe it via its
-  // driver (the exit-on-incompatible gate stays here, a boot-policy call).
-  const ocDriver = getRuntimeDriver('opencode')
-  // RFC-208: bound the probe. `opencode` on PATH is frequently a wrapper
-  // (nvm/asdf/mise shim, corporate proxy script) that can hang; unbounded, the
-  // daemon holds the PID lock and NEVER reaches `listen`, which is the one
-  // failure in this codebase that a restart cannot clear — the next `start`
-  // just reports "another daemon is already running".
-  //
-  // Bounded, but still FAIL-CLOSED: a timed-out required-runtime probe reports
-  // version null below and exits after releasing the lock. Continuing to listen
-  // would serve a daemon that cannot run its mandatory runtime.
-  const probe = await ocDriver.probe(ocDriver.defaultBinary(config)[0]!, {
-    timeoutMs: BOOT_PROBE_TIMEOUT_MS,
-  })
-  if (probe.version === null) {
-    log.error('opencode binary not found or unreadable', { binary: probe.binary })
-    console.error(
-      `agent-workflow: cannot execute "${probe.binary}".\n` +
-        `  install opencode (>=${ocDriver.minVersion}) and ensure it is on PATH,\n` +
-        `  or set 'opencodePath' in ${Paths.config}.`,
-    )
-    lock.release()
-    process.exit(1)
-  }
-  if (!probe.compatible) {
-    log.error('opencode incompatible', {
-      found: probe.version,
-      requiredMinimum: ocDriver.minVersion,
-      reason: probe.incompatibleReason,
-    })
-    console.error(
-      `agent-workflow: opencode ${probe.version} is incompatible.\n` +
-        `  required: version >= ${ocDriver.minVersion}\n` +
-        `  reason: ${probe.incompatibleReason ?? 'unknown'}\n` +
-        `  to recover: \`npm install -g opencode-ai@latest\` (or any version >= ${ocDriver.minVersion}) or set 'opencodePath' in ${Paths.config}.`,
-    )
-    lock.release()
-    process.exit(1)
-  }
-  log.info('opencode probe ok', { version: probe.version, binary: probe.binary })
-
-  // 4b. git version probe — RFC-130 D7: every node run merge-backs via
+  // 4. git version probe — RFC-130 D7: every node run merge-backs via
   // `git merge-tree --write-tree` (git >= 2.38). On older git the daemon boots
   // fine and every task dies at merge-back (AFTER its agent already ran) with a
   // cryptic `merge-back-failed: git merge-tree: usage: ...` — refuse at boot
-  // instead, same hard-gate policy as the opencode probe above. Side effect:
-  // populates the RFC-034 capability cache read by resolveSubmoduleParams
-  // (submodule --jobs / worktree guards), which was never probed at boot before.
+  // instead. Unlike optional agent runtimes, git is a platform dependency for
+  // repository/worktree/snapshot/merge-back operations. Side effect: populate
+  // the RFC-034 capability cache read by resolveSubmoduleParams.
   const gitCaps = await detectGitCapabilities()
   const gitGateError = mergeTreeGateError(gitCaps)
   if (gitGateError !== null) {
@@ -238,12 +185,10 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   }
   log.info('git probe ok', { version: gitCaps.version?.raw ?? null })
 
-  // RFC-111 D10: claude-code is an OPTIONAL second runtime — probe it SOFT
-  // (warn only, NEVER refuse to start). A missing/old claude only fails nodes
-  // whose agent selected it; opencode-only installs are unaffected. We probe
-  // when claude is the configured default (the clearest "claude is needed"
-  // signal available before the DB opens); per-agent claude selection surfaces
-  // as a clear spawn-time failure on the node itself.
+  // RFC-111 D10: claude-code is optional — probe it SOFT (warn only, NEVER
+  // refuse to start) when it is the configured default. RFC-226 makes OpenCode
+  // optional too, but deliberately does not probe it here at all: its
+  // version/build admission belongs to explicit runtime validation and use.
   if (config.defaultRuntime === 'claude-code') {
     const ccDriver = getRuntimeDriver('claude-code')
     const claudeProbe = await ccDriver.probe(ccDriver.defaultBinary(config)[0]!)
@@ -543,7 +488,10 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     token,
     configPath: Paths.config,
     daemonInfoPath: Paths.daemonInfo,
-    opencodeVersion: probe.version,
+    // RFC-226: runtime readiness is not daemon health. Startup never executes
+    // OpenCode; explicit runtime status/Test/use paths perform the version and
+    // RFC-224 official-build admission instead.
+    opencodeVersion: null,
     dbVersion,
     db,
     secretBox,

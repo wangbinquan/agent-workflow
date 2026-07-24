@@ -80,7 +80,11 @@ export interface AppDeps {
    * tests inject a temp file. Read by GET /api/daemon.
    */
   daemonInfoPath?: string
-  /** Opencode version detected at startup; null if probe failed. */
+  /**
+   * Legacy-compatible health field. RFC-226 production startup never probes
+   * optional OpenCode and therefore passes null; tests may inject a string to
+   * verify compatibility with older health payloads.
+   */
   opencodeVersion: string | null
   /** DB schema version (count of applied migrations). */
   dbVersion: number

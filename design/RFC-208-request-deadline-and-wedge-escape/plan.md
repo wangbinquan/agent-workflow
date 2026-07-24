@@ -1,5 +1,9 @@
 # RFC-208 · 请求截止时间与卡死逃生口 —— plan
 
+> **后续修订（RFC-226，2026-07-24）**：本计划中 OpenCode boot probe 的 timeout /
+> fail-closed 工作项已被 supersede。daemon 启动不执行 OpenCode；版本与 official-build
+> 校验只在显式 runtime status/Test/models/doctor 或实际 OpenCode 使用路径中失败。
+
 ## 任务分解
 
 ### PR-1 · 后端 permit 泄漏（最高优先，用户无感但必须重启才能恢复）
