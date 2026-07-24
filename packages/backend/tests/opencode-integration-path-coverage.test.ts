@@ -35,6 +35,7 @@ const YML = resolve(REPO_ROOT, '.github', 'workflows', 'integration-opencode.yml
 
 /** The exact path list every `on:` trigger must carry, sorted for comparison. */
 const CANONICAL = [
+  'packages/backend/src/main.ts',
   'packages/backend/src/services/runner.ts',
   'packages/backend/src/services/envelope.ts',
   'packages/backend/src/services/protocol.ts',

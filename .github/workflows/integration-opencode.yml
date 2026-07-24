@@ -43,6 +43,7 @@ on:
   push:
     branches: [main]
     paths:
+      - 'packages/backend/src/main.ts'
       - 'packages/backend/src/services/runner.ts'
       - 'packages/backend/src/services/envelope.ts'
       - 'packages/backend/src/services/protocol.ts'
@@ -57,6 +58,7 @@ on:
       - '.github/workflows/integration-opencode.yml'
   pull_request:
     paths:
+      - 'packages/backend/src/main.ts'
       - 'packages/backend/src/services/runner.ts'
       - 'packages/backend/src/services/envelope.ts'
       - 'packages/backend/src/services/protocol.ts'
@@ -77,7 +79,7 @@ concurrency:
 jobs:
   integration:
     name: opencode ${{ matrix.opencode }} (ubuntu)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     strategy:
       # Keep the matrix form explicit for future reviewed official-build bumps.
       fail-fast: false
@@ -110,6 +112,19 @@ jobs:
           bwrap_mode="$(stat -c '%a' "$bwrap_path")"
           test "$(stat -c '%u' "$bwrap_path")" = 0
           test "$((8#$bwrap_mode & 8#22))" -eq 0
+          test "$((8#$bwrap_mode & 8#6000))" -eq 0
+          "$bwrap_path" \
+            --die-with-parent \
+            --new-session \
+            --unshare-net \
+            --unshare-pid \
+            --unshare-ipc \
+            --unshare-uts \
+            --ro-bind / / \
+            --proc /proc \
+            --dev /dev \
+            --clearenv \
+            -- /bin/true
 
       - name: Run integration suite
         env:

@@ -491,6 +491,7 @@ jobs:
         run: |
           set -euxo pipefail
           bin=$(find dist -maxdepth 1 -type f -name 'agent-workflow-*' | head -n 1)
+          bin="$PWD/$bin"
           chmod +x "$bin"
           "$bin" version
           "$bin" doctor
@@ -501,7 +502,12 @@ jobs:
               exit 1
               ;;
           esac
-          for hidden in __opencode-verified-run __opencode-netless-subprocess; do
+          for hidden in \
+            __opencode-verified-run \
+            __opencode-netless-subprocess \
+            __opencode-bwrap-capability-supervisor \
+            __opencode-fff-capability-supervisor
+          do
             hidden_stderr="$(mktemp)"
             if "$bin" "$hidden" 2>"$hidden_stderr"; then
               echo "$hidden unexpectedly accepted invalid argv" >&2
@@ -510,6 +516,213 @@ jobs:
             test "$(cat "$hidden_stderr")" = \
               'AW_OPENCODE_FAILURE execution-identity-store-unsafe'
           done
+
+          # Drive the compiled supervisor over real pipes: no FIFO/open-order
+          # races, and every protocol read has its own bounded deadline.
+          RFC224_SMOKE_BIN="$bin" bun -e '
+            const binary = process.env.RFC224_SMOKE_BIN
+            if (binary === undefined || !binary.startsWith("/")) {
+              throw new Error("compiled RFC-224 smoke requires an absolute binary path")
+            }
+
+            async function beforeDeadline(promise, label) {
+              let timer
+              try {
+                return await Promise.race([
+                  promise,
+                  new Promise((_, reject) => {
+                    timer = setTimeout(() => reject(new Error(label)), 5_000)
+                  }),
+                ])
+              } finally {
+                if (timer !== undefined) clearTimeout(timer)
+              }
+            }
+
+            function launch(nonce) {
+              const child = Bun.spawn({
+                cmd: [
+                  binary,
+                  "__opencode-bwrap-capability-supervisor",
+                  "--nonce",
+                  nonce,
+                  "--watchdog-ms",
+                  "10000",
+                  "--",
+                  "/usr/bin/true",
+                ],
+                cwd: "/",
+                env: {},
+                stdin: "pipe",
+                stdout: "pipe",
+                stderr: "pipe",
+                detached: true,
+              })
+              return {
+                nonce,
+                child,
+                reader: child.stdout.getReader(),
+                decoder: new TextDecoder("utf-8", { fatal: true }),
+                buffered: "",
+                stderr: new Response(child.stderr).text(),
+                groupAbsent: false,
+              }
+            }
+
+            async function readLine(trial, label) {
+              for (;;) {
+                const newline = trial.buffered.indexOf("\n")
+                if (newline >= 0) {
+                  const line = trial.buffered.slice(0, newline)
+                  trial.buffered = trial.buffered.slice(newline + 1)
+                  return line
+                }
+                const next = await beforeDeadline(trial.reader.read(), label)
+                if (next.done) throw new Error(`${label}: stdout closed before line`)
+                trial.buffered += trial.decoder.decode(next.value, { stream: true })
+                if (Buffer.byteLength(trial.buffered, "utf8") > 512) {
+                  throw new Error(`${label}: stdout exceeded protocol bound`)
+                }
+              }
+            }
+
+            async function requireStdoutEof(trial, label) {
+              for (;;) {
+                const next = await beforeDeadline(trial.reader.read(), `${label} stdout EOF`)
+                if (next.done) break
+                trial.buffered += trial.decoder.decode(next.value, { stream: true })
+                if (Buffer.byteLength(trial.buffered, "utf8") > 512) {
+                  throw new Error(`${label}: trailing stdout exceeded protocol bound`)
+                }
+              }
+              trial.buffered += trial.decoder.decode()
+              if (trial.buffered !== "") {
+                throw new Error(`${label}: unexpected trailing stdout: ${trial.buffered}`)
+              }
+            }
+
+            async function requireRawCleanup(trial, label) {
+              const rawCode = await beforeDeadline(trial.child.exited, `${label} raw settlement`)
+              if (rawCode !== 137) {
+                throw new Error(`${label}: unexpected raw exit ${rawCode}`)
+              }
+              if ((await beforeDeadline(trial.stderr, `${label} stderr EOF`)) !== "") {
+                throw new Error(`${label}: supervisor emitted stderr`)
+              }
+              const groupDeadline = process.hrtime.bigint() + 2_000_000_000n
+              while (!trial.groupAbsent) {
+                try {
+                  process.kill(-trial.child.pid, 0)
+                } catch (error) {
+                  if (error?.code === "ESRCH") {
+                    trial.groupAbsent = true
+                    break
+                  }
+                  throw error
+                }
+                if (process.hrtime.bigint() >= groupDeadline) break
+                await Bun.sleep(20)
+              }
+              if (!trial.groupAbsent) {
+                throw new Error(`${label}: process group survived release`)
+              }
+            }
+
+            async function closeTrial(trial) {
+              try {
+                await trial.child.stdin.end()
+              } catch {}
+              try {
+                trial.reader.releaseLock()
+              } catch {}
+            }
+
+            const valid = launch("75d77132-1847-4e96-81ee-c277f749cd5a")
+            try {
+              const exitLine = await readLine(valid, "valid supervisor EXIT")
+              if (exitLine !== `RFC224_BWRAP_EXIT ${valid.nonce} 0`) {
+                throw new Error(`unexpected valid supervisor EXIT: ${exitLine}`)
+              }
+              if (valid.buffered !== "") {
+                throw new Error(`valid supervisor emitted output before ACK: ${valid.buffered}`)
+              }
+              await valid.child.stdin.write(`RFC224_BWRAP_ACK ${valid.nonce}\n`)
+              await valid.child.stdin.flush()
+              await valid.child.stdin.end()
+              const releaseLine = await readLine(valid, "valid supervisor RELEASE")
+              if (releaseLine !== `RFC224_BWRAP_RELEASE ${valid.nonce}`) {
+                throw new Error(`unexpected valid supervisor RELEASE: ${releaseLine}`)
+              }
+              await requireStdoutEof(valid, "valid supervisor")
+              await requireRawCleanup(valid, "valid supervisor")
+            } finally {
+              await closeTrial(valid)
+            }
+
+            const eofBound = launch("85d77132-1847-4e96-81ee-c277f749cd5a")
+            try {
+              const exitLine = await readLine(eofBound, "EOF-bound supervisor EXIT")
+              if (exitLine !== `RFC224_BWRAP_EXIT ${eofBound.nonce} 0`) {
+                throw new Error(`unexpected EOF-bound supervisor EXIT: ${exitLine}`)
+              }
+              if (eofBound.buffered !== "") {
+                throw new Error(
+                  `EOF-bound supervisor emitted output before ACK: ${eofBound.buffered}`,
+                )
+              }
+              await eofBound.child.stdin.write(`RFC224_BWRAP_ACK ${eofBound.nonce}\n`)
+              await eofBound.child.stdin.flush()
+              const releaseRead = eofBound.reader.read()
+              const earlyRelease = await Promise.race([
+                releaseRead.then((value) => ({ value })),
+                Bun.sleep(150).then(() => null),
+              ])
+              if (earlyRelease !== null) {
+                throw new Error("EOF-bound supervisor released before ACK EOF")
+              }
+              await eofBound.child.stdin.end()
+              const firstReleaseChunk = await beforeDeadline(
+                releaseRead,
+                "EOF-bound supervisor RELEASE",
+              )
+              if (firstReleaseChunk.done) {
+                throw new Error("EOF-bound supervisor closed before RELEASE")
+              }
+              eofBound.buffered += eofBound.decoder.decode(firstReleaseChunk.value, {
+                stream: true,
+              })
+              const releaseLine = await readLine(eofBound, "EOF-bound supervisor RELEASE")
+              if (releaseLine !== `RFC224_BWRAP_RELEASE ${eofBound.nonce}`) {
+                throw new Error(`unexpected EOF-bound supervisor RELEASE: ${releaseLine}`)
+              }
+              await requireStdoutEof(eofBound, "EOF-bound supervisor")
+              await requireRawCleanup(eofBound, "EOF-bound supervisor")
+            } finally {
+              await closeTrial(eofBound)
+            }
+
+            const wrongAck = launch("95d77132-1847-4e96-81ee-c277f749cd5a")
+            try {
+              const exitLine = await readLine(wrongAck, "wrong-ACK supervisor EXIT")
+              if (exitLine !== `RFC224_BWRAP_EXIT ${wrongAck.nonce} 0`) {
+                throw new Error(`unexpected wrong-ACK supervisor EXIT: ${exitLine}`)
+              }
+              if (wrongAck.buffered !== "") {
+                throw new Error(
+                  `wrong-ACK supervisor emitted output before ACK: ${wrongAck.buffered}`,
+                )
+              }
+              await wrongAck.child.stdin.write(
+                "RFC224_BWRAP_ACK 00000000-0000-4000-8000-000000000000\n",
+              )
+              await wrongAck.child.stdin.flush()
+              await wrongAck.child.stdin.end()
+              await requireStdoutEof(wrongAck, "wrong-ACK supervisor")
+              await requireRawCleanup(wrongAck, "wrong-ACK supervisor")
+            } finally {
+              await closeTrial(wrongAck)
+            }
+          '
 
       - name: Upload artifact
         uses: actions/upload-artifact@v6

@@ -116,8 +116,11 @@
 - [x] T17：SIGTERM/SIGINT/timeout：
       abort fetch/SSE → best-effort session abort → TERM server → bounded grace →
       负进程组 KILL → bounded reap/drain；resistant fixture 无孤儿。
-- [x] T18：在 `main.ts` 添加不出现在 help 的
-      `__opencode-verified-run`，dev/compiled self-command 均可定位。
+- [x] T18：在 `main.ts` 添加四个不出现在 help 的 verified-self hidden
+      self-command：`__opencode-verified-run`、`__opencode-netless-subprocess`、
+      `__opencode-bwrap-capability-supervisor`、
+      `__opencode-fff-capability-supervisor`；dev/compiled 形态均可定位，畸形 argv
+      全部 fail closed。
 
 ## 5. 三条生产入口与产品行为
 
@@ -161,19 +164,35 @@
       caller-id 时间排序与多-step assistant parent binding、cancellation/double-fork
       orphan。
 - [x] T27：运行定向测试与平台 gated sandbox matrix；本机定向/进程组矩阵已绿，
-      macOS 按契约 fail closed。Linux real escape/double-fork 的权威平台证据由
-      integration workflow 承担，当前仍待本次提交的远端终态。
+      macOS 按契约 fail closed。Linux integration 已接线真实
+      SIGTERM-resistant setsid/double-fork orphan probe，要求 nonce-bound
+      READY/ARMED，再由 SIGSTOP + `waitpid(WUNTRACED)` freeze lease 锁住 exact
+      child/PGID，证明实际负组 TERM、SIGCONT 后 exact SIGTERM exit、leader reap、
+      首个 ESRCH observation 单调锁存与后代持有的 stdout EOF；
+      SURVIVED/WATCHDOG 均失败。该权威结果仍待修复 SHA 的
+      `integration-opencode` 终态，首个失败 run 不算通过证据。
 - [x] T28：运行
       `bun run typecheck && bun run lint && bun run test && bun run format:check`，
       再跑 depcheck、`git diff --check`、`bun run build:binary`、compiled
-      hidden-command smoke。
+      hidden-command smoke；全量为 backend **7295 pass / 24 skip / 0 fail**、
+      shared **1438 pass**、frontend **5257 pass**，depcheck
+      **1455 modules / 4484 dependencies / 0 violations**；current-tree RFC-224 定向集合
+      **317 pass / 1382 assertions**，其中 sealed subprocess
+      **23 pass / 90 assertions**、FFF capability
+      **13 pass / 98 assertions**。compiled smoke 同时锁四个 hidden command
+      invalid invocation，以及 bwrap protocol 的 pre-ACK zero buffer、ACK 必须以
+      EOF 提交、wrong nonce fail closed。
 - [x] T29：用官方 1.18.3 做 no-LLM config/session preflight 与 pinned codec
-      integration；无官方 binary 的平台只允许显式 skip，不允许 fake 通过 trust gate。
-- [x] T30：Codex 实现门；逐条修复，最终无未关闭 P0/P1/P2。
+      integration，current-tree 为 **2 pass / 12 assertions**；无官方 binary 的
+      平台只允许显式 skip，不允许 fake 通过 trust gate。
+- [x] T30：两轮独立复审累计 23 组 P1 / 14 组 P2；逐条核验 resolution 与对应
+      行为锁/source ratchet 后全部 resolved，最终未关闭
+      **0 P0 / 0 P1 / 0 P2**，实现门 **APPROVED / 0 open**。
 - [x] T31：更正 `CLAUDE.md` inline 优先级断言、更新 `OPENCODE_CONFIG.md`、
       RFC 状态与 `STATE.md`，只记录真实证据。
-- [ ] T32：精确 path commit，核验真实 Codex/model co-author trailer，push
-      shared `main`，等待该 commit SHA 的 CI/integration 终态。
+- [ ] T32：首个精确 path commit `b4b3e082` 已核验真实 Codex/model co-author
+      trailer 并 push shared `main`，但该 SHA 的 CI/integration 失败；提交 follow-up
+      修复后，等待新 exact SHA 的 CI/integration 终态。
 
 ## 7. 实现与验证证据（2026-07-23）
 
@@ -185,35 +204,64 @@
 - **T5–T11**：`hermetic.ts`、`sourceGuard.ts`、`fffCapability.ts`、
   `sealedInputs.ts`、`sealedSubprocess.ts` 与 RFC-205 read-only overlay 接线完成；
   hermetic/source/FFF/seal/sandbox 负测覆盖 symlink、poison env、masked secret root、
-  精确 executable bind 与 unsupported resource。
+  精确 executable bind 与 unsupported resource。首个 Linux integration 进一步证明
+  bwrap metadata 不是 capability；follow-up 在 production admission 增加有界的真实
+  namespace/mount probe，失败稳定返回 `execution-identity-sandbox-required`。
+  bwrap 与 FFF 分别由 verified-self 原生 supervisor 按 nonce-bound
+  EXIT/RESULT → ACK+EOF → RELEASE → self negative-group SIGKILL 释放；single
+  absolute deadline、protocol EOF、raw 137 与首个 ESRCH observation 单调锁存
+  共同证明完成，FFF 还要求 probe stdout/stderr 双 EOF，release 后 parent 不再
+  signal numeric PGID。
 - **T12–T18**：`directClient.ts`、`sse.ts`、`directCodec.ts`、
-  `verifiedLauncher.ts` 与两个 hidden self-command 完成；direct client/schema/SSE/
-  codec/launcher/control tests 覆盖 same-instance preflight、caller/assistant binding、
-  fail-closed event、cancel/timeout 与 bounded drain。compiled binary 的 hidden
-  command 不出现在 help，畸形直接调用稳定 fail closed。
+  `verifiedLauncher.ts` 与四个 hidden self-command 完成；direct
+  client/schema/SSE/codec/launcher/control tests 覆盖 same-instance preflight、
+  caller/assistant binding、fail-closed event、cancel/timeout 与 bounded drain。
+  compiled binary 的 hidden command 不出现在 help，畸形直接调用稳定 fail closed。
 - **T19–T25**：business/system 共同调用 `verifiedPlanCore.ts` 的
   `buildVerifiedOpencodePlan`；runner、distiller、smoke、inventory、stable failure
   taxonomy 与 product-boundary policy 已接入。source reachability、runner control、
   permanent routing、store recovery/task-delete 与 product policy tests 锁定生产路径。
-- **T26–T27**：阶段性 RFC-224 定向测试 **286/286**、stale/source guards
-  **80/80**、需 localhost/进程信号的 17 文件授权矩阵 **109/109**；最终独立复核
-  backend focused **94/94**、frontend focused **43/43**、source reachability
-  **8/8**。本机为 macOS，secure model execution 按契约 fail closed；Linux
-  root-owned bwrap real escape/double-fork 权威结果仍等待远端 integration 终态，
-  未冒充本地证据。
+- **T26–T27**：首个 implementation SHA 前的阶段性 RFC-224 定向
+  **286/286**、stale/source guards **80/80**、授权矩阵 **109/109**、backend
+  focused **94/94**、frontend focused **43/43** 与 source reachability **8/8**
+  仅保留为历史 baseline。current-tree RFC-224 定向集合为
+  **317 pass / 1382 assertions**；follow-up 已接线 real bwrap
+  SIGTERM-resistant setsid/double-fork orphan probe，并以 SIGSTOP /
+  `waitpid(WUNTRACED)` freeze lease 消除 TERM 前 target 自退/换组窗口；本机 macOS
+  无法提供其权威结果，仍等待修复 SHA 的远端 integration 终态。
 - **T29**：本机 official OpenCode **1.18.3 darwin-arm64** no-LLM
   config/provider/agent/skill/root-session preflight **1/1（7 assertions）** 通过；
-  workflow 固定 Ubuntu 1.18.3 并安装 root-owned、不可 group/world-write 的 bwrap。
-- **T30–T31**：实现门初审与后续对抗复核 finding 均已修复，最终未关闭
-  **0 P0 / 0 P1 / 0 P2**；结论与残余平台/发布证据记录于
-  `codex-impl-gate-2026-07-23.md`，配置与仓库状态文档同步。
-- **T28 已完成**：最终 `bun run test` 三包同轮 **0 fail**（shared
-  **1438/1438**、frontend **5257/5257**）；format、typecheck、lint、
-  `git diff --check` 均绿；depcheck **1455 modules / 4482 dependencies /
-  0 violations**；`build:binary` 与 compiled `version`、`doctor`、help 隐藏性及
-  两条 hidden-command fail-closed smoke 均通过。
-- **T32 仍 pending**：尚未形成/推送本次精确 commit，未核验该 commit trailer，
-  也没有该 exact SHA 的 CI/integration terminal result。
+  follow-up workflow 固定已资格化 Ubuntu runner 与 official 1.18.3，并在 suite 前
+  以普通用户运行和 production 同级的 exact bwrap capability smoke；不得用
+  sudo/sysctl/setuid 绕过平台能力。
+- **T30–T31**：首轮独立复审新增 **4 组 P1 / 2 组 P2**，real Linux 探针专项
+  复审再新增 **5 组 P1 / 3 组 P2**，累计 **23 组 P1 / 14 组 P2**。实现门已补
+  登记 bounded direct+negative-PGID reap、FFF stable code、pre-store admission、
+  suid/sgid mode gate、四 workflow/六 stub exact ratchet，以及 nonce-bound
+  READY/ARMED + freeze lease、actual TERM、descendant-held stdout EOF、
+  SURVIVED/WATCHDOG failure 与 old-PGID no-resignal；resolution/测试已复验，
+  实现门终裁 **APPROVED / 0 open**，最终未关闭
+  **0 P0 / 0 P1 / 0 P2**。
+- **T28 完成**：current-tree sealed subprocess
+  **23 pass / 90 assertions**、FFF capability
+  **13 pass / 98 assertions**、RFC-224 定向集合
+  **317 pass / 1382 assertions**；format/typecheck/lint、depcheck、
+  `git diff --check`、`build:binary` 与 compiled smoke 均完成。compiled smoke
+  除四个 hidden command invalid-invocation ratchet 外，还证明 bwrap RELEASE
+  不得在 ACK 前缓冲、ACK 未 EOF 时 pending read 不得推进、wrong nonce 不得
+  release，成功/失败路径均以 raw 137、stdout EOF 与首个 ESRCH observation
+  单调锁存收口。
+- **T32 仍 pending**：`b4b3e082c0bf010f123c3e93c7b9abbd1f4f877e` 的 trailer
+  已核验且 remote `main` 已包含该 SHA，但三个 exact-SHA workflow 均失败：
+  [`integration-opencode` 30045245638](https://github.com/wangbinquan/agent-workflow/actions/runs/30045245638)
+  暴露 metadata-only bwrap admission；
+  [`CI` 30045245623](https://github.com/wangbinquan/agent-workflow/actions/runs/30045245623)
+  与
+  [`visual-regression-nightly` 30045245613](https://github.com/wangbinquan/agent-workflow/actions/runs/30045245613)
+  均被仍报告 1.14.99 的 E2E stub 在 daemon startup 拒绝。这三个 URL 仅为失败
+  诊断历史；product capability lifecycle/stable-code/pre-store/mode 修复、四
+  workflow/六 stub exact ratchet 与 real orphan integration 的 follow-up 形成新
+  SHA 并取得 terminal green 前，不勾选 T32。
 
 ## 8. 完成定义
 

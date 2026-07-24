@@ -3,6 +3,7 @@
 // this module then constructs bwrap argv directly (no model-controlled shell
 // interpolation) and rebuilds the child environment from an allowlist.
 
+import { randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
 import { chmod, lstat, mkdir, open, realpath, stat } from 'node:fs/promises'
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
@@ -14,6 +15,21 @@ const SAFE_ENV_NAME =
   /^(?:LANG|LC_ALL|LC_CTYPE|TERM|TZ|GIT_AUTHOR_NAME|GIT_AUTHOR_EMAIL|GIT_COMMITTER_NAME|GIT_COMMITTER_EMAIL|[A-Z][A-Z0-9_]{0,127})$/
 const DANGEROUS_ENV_NAME =
   /^(?:OPENCODE_|NODE_OPTIONS$|NODE_PATH$|BUN_|DENO_|PYTHON|RUBY|PERL|LD_|DYLD_|BASH_ENV$|ENV$|ZDOTDIR$|GIT_CONFIG|GIT_EXEC|GIT_SSH|SSH_AUTH_SOCK$|DISPLAY$|WAYLAND_DISPLAY$|ELECTRON_RUN_AS_NODE$|NPM_CONFIG_SCRIPT_SHELL$|COREPACK_|EDITOR$|VISUAL$|PAGER$)/i
+const BWRAP_CAPABILITY_TIMEOUT_MS = 5_000
+const BWRAP_CAPABILITY_STOP_GRACE_MS = 250
+const BWRAP_CAPABILITY_STOP_POLL_MS = 25
+const BWRAP_CAPABILITY_REPORT_LIMIT_BYTES = 512
+const BWRAP_CAPABILITY_WATCHDOG_MS = 10_000
+const BWRAP_CAPABILITY_RELEASE_MARGIN_MS = 2_000
+const BWRAP_CAPABILITY_CONTROL_LIMIT_BYTES = 512
+const BWRAP_CAPABILITY_SUPERVISOR_SUBCOMMAND = '__opencode-bwrap-capability-supervisor'
+const NANOSECONDS_PER_MILLISECOND = 1_000_000n
+
+interface RootOwnedBwrapStopState {
+  groupExited: boolean
+}
+
+type RootOwnedBwrapSignalState = 'owned' | 'releasing' | 'released'
 
 const AbsolutePathSchema = z
   .string()
@@ -102,23 +118,536 @@ export function sanitizeNetlessEnvironment(
   return output
 }
 
-export async function requireRootOwnedBwrap(path = Bun.which('bwrap')): Promise<string> {
-  if (path === null || !isAbsolute(path)) {
-    return executionIdentityFailure('execution-identity-sandbox-required')
+export interface RootOwnedBwrapCapabilityProcess {
+  readonly exited: Promise<number>
+  killGroup(signal: NodeJS.Signals): void
+  isGroupAlive(): boolean
+  hasSignalOwnership?(): boolean
+}
+
+export interface RootOwnedBwrapDependencies {
+  spawn?: (command: readonly string[]) => RootOwnedBwrapCapabilityProcess
+  timeout?: (milliseconds: number) => Promise<void>
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolvePromise) => {
+    const timer = setTimeout(resolvePromise, milliseconds)
+    timer.unref?.()
+  })
+}
+
+function remainingMilliseconds(deadline: bigint): number {
+  const remaining = deadline - process.hrtime.bigint()
+  if (remaining <= 0n) return 0
+  return Math.max(
+    1,
+    Number((remaining + NANOSECONDS_PER_MILLISECOND - 1n) / NANOSECONDS_PER_MILLISECOND),
+  )
+}
+
+async function settleBefore<T>(
+  promise: Promise<T>,
+  deadline: bigint,
+  timeoutMessage: string,
+): Promise<T> {
+  const remaining = remainingMilliseconds(deadline)
+  if (remaining === 0) throw new Error(timeoutMessage)
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(timeoutMessage)), remaining)
+      }),
+    ])
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
   }
-  const resolved = await realpath(path)
-  const before = await lstat(resolved)
-  const metadata = await stat(resolved)
+}
+
+export function isSafeRootOwnedBwrapMode(mode: number): boolean {
+  return (
+    Number.isSafeInteger(mode) &&
+    mode >= 0 &&
+    (mode & 0o6000) === 0 &&
+    (mode & 0o022) === 0 &&
+    (mode & 0o111) !== 0
+  )
+}
+
+function killCurrentProcessGroup(): never {
+  try {
+    process.kill(-process.pid, 'SIGKILL')
+  } finally {
+    // SIGKILL is delivered synchronously to the owned group. This fallback
+    // only terminates the supervisor if the platform unexpectedly rejects the
+    // group signal; it is never used to target a child by a reusable PID.
+    process.exit(125)
+  }
+}
+
+async function readBoundedSupervisorControl(): Promise<string> {
+  const reader = Bun.stdin.stream().getReader()
+  const decoder = new TextDecoder('utf-8', { fatal: true })
+  let value = ''
+  try {
+    for (;;) {
+      const next = await reader.read()
+      if (next.done) break
+      value += decoder.decode(next.value, { stream: true })
+      if (Buffer.byteLength(value, 'utf8') > BWRAP_CAPABILITY_CONTROL_LIMIT_BYTES) {
+        throw new Error('bwrap capability supervisor control exceeded its bound')
+      }
+    }
+    value += decoder.decode()
+    return value
+  } finally {
+    reader.releaseLock()
+  }
+}
+
+/**
+ * Hidden RFC-224 process-group anchor. It is the real parent of bwrap, watches
+ * the daemon-owned control pipe from the moment it starts, and kills its whole
+ * group on EOF, malformed control, or the hard deadline. The parent therefore
+ * never needs a positive-PID fallback and bwrap's --die-with-parent refers to
+ * this still-live, verified-self supervisor.
+ */
+export async function runRootOwnedBwrapCapabilitySupervisor(
+  nonce: string,
+  watchdogMilliseconds: number,
+  command: readonly string[],
+): Promise<number> {
   if (
-    before.isSymbolicLink() ||
-    !metadata.isFile() ||
-    metadata.uid !== 0 ||
-    (metadata.mode & 0o022) !== 0 ||
-    (metadata.mode & 0o111) === 0
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(nonce) ||
+    watchdogMilliseconds !== BWRAP_CAPABILITY_WATCHDOG_MS ||
+    command.length === 0 ||
+    command.length > 64 ||
+    command.some((value) => value.length === 0 || value.includes('\0'))
   ) {
+    return 125
+  }
+
+  // Caught dispositions reset to default across exec, so the bwrap child
+  // remains TERM-responsive while this group leader survives host TERM long
+  // enough to authenticate and report the exact capability outcome.
+  const ignoreSignal = () => undefined
+  process.on('SIGHUP', ignoreSignal)
+  process.on('SIGINT', ignoreSignal)
+  process.on('SIGTERM', ignoreSignal)
+
+  const expectedControl = `RFC224_BWRAP_ACK ${nonce}\n`
+  const control = readBoundedSupervisorControl().then(
+    (value) => {
+      if (value !== expectedControl) return killCurrentProcessGroup()
+    },
+    () => killCurrentProcessGroup(),
+  )
+  void control.catch(() => undefined)
+
+  const watchdog = setTimeout(killCurrentProcessGroup, watchdogMilliseconds)
+  const output = Bun.stdout.writer()
+  let code = 125
+  try {
+    const child = Bun.spawn({
+      cmd: [...command],
+      cwd: '/',
+      env: {},
+      stdin: 'ignore',
+      stdout: 'ignore',
+      stderr: 'ignore',
+    })
+    code = await child.exited
+  } catch {
+    // A spawn failure is an ordinary negative capability result. It still
+    // traverses the authenticated report/release protocol before this group
+    // leader exits.
+  }
+
+  try {
+    output.write(`RFC224_BWRAP_EXIT ${nonce} ${code}\n`)
+    await output.flush()
+    await control
+    output.write(`RFC224_BWRAP_RELEASE ${nonce}\n`)
+    await output.flush()
+    clearTimeout(watchdog)
+    return killCurrentProcessGroup()
+  } catch {
+    return killCurrentProcessGroup()
+  }
+}
+
+function spawnRootOwnedBwrapCapability(
+  command: readonly string[],
+): RootOwnedBwrapCapabilityProcess {
+  const nonce = randomUUID()
+  const child = Bun.spawn({
+    cmd: verifiedSelfCommand(BWRAP_CAPABILITY_SUPERVISOR_SUBCOMMAND, [
+      '--nonce',
+      nonce,
+      '--watchdog-ms',
+      String(BWRAP_CAPABILITY_WATCHDOG_MS),
+      '--',
+      ...command,
+    ]),
+    cwd: '/',
+    env: {},
+    stdin: 'pipe',
+    stdout: 'pipe',
+    stderr: 'ignore',
+    detached: true,
+  })
+  const releaseDeadline =
+    process.hrtime.bigint() +
+    BigInt(BWRAP_CAPABILITY_WATCHDOG_MS + BWRAP_CAPABILITY_RELEASE_MARGIN_MS) *
+      NANOSECONDS_PER_MILLISECOND
+  let signalState: RootOwnedBwrapSignalState = 'owned'
+  let groupExited = false
+  const exited = (async () => {
+    let reader: ReturnType<typeof child.stdout.getReader> | undefined
+    const decoder = new TextDecoder('utf-8', { fatal: true })
+    let buffered = ''
+    let bwrapCode: number | undefined
+    let protocolFailure: unknown = null
+    try {
+      const acquiredReader = child.stdout.getReader()
+      reader = acquiredReader
+      for (;;) {
+        const next = await settleBefore(
+          acquiredReader.read(),
+          releaseDeadline,
+          'bwrap capability supervisor report deadline exceeded',
+        )
+        if (next.done) break
+        buffered += decoder.decode(next.value, { stream: true })
+        if (Buffer.byteLength(buffered, 'utf8') > BWRAP_CAPABILITY_REPORT_LIMIT_BYTES) {
+          throw new Error('bwrap capability supervisor report exceeded its bound')
+        }
+        const newline = buffered.indexOf('\n')
+        if (newline < 0) continue
+        const line = buffered.slice(0, newline)
+        buffered = buffered.slice(newline + 1)
+        const match = new RegExp(`^RFC224_BWRAP_EXIT ${nonce} ([0-9]{1,3})$`).exec(line)
+        const parsedCode = match?.[1] === undefined ? Number.NaN : Number(match[1])
+        if (
+          !Number.isSafeInteger(parsedCode) ||
+          parsedCode < 0 ||
+          parsedCode > 255 ||
+          buffered !== ''
+        ) {
+          throw new Error('invalid bwrap capability supervisor report')
+        }
+        bwrapCode = parsedCode
+        break
+      }
+      if (bwrapCode === undefined) {
+        throw new Error('bwrap capability supervisor exited before its report')
+      }
+
+      // The verified-self supervisor cannot exit before receiving this exact
+      // EOF-delimited ACK. Relinquish host signaling synchronously before the
+      // first byte: from here, its control guardian and hard watchdog are the
+      // only cleanup authorities, so a racing timeout cannot hit a reused PGID.
+      signalState = 'releasing'
+      await settleBefore(
+        Promise.resolve(child.stdin.write(`RFC224_BWRAP_ACK ${nonce}\n`)),
+        releaseDeadline,
+        'bwrap capability supervisor ACK write deadline exceeded',
+      )
+      await settleBefore(
+        Promise.resolve(child.stdin.flush()),
+        releaseDeadline,
+        'bwrap capability supervisor ACK flush deadline exceeded',
+      )
+      await settleBefore(
+        Promise.resolve(child.stdin.end()),
+        releaseDeadline,
+        'bwrap capability supervisor ACK close deadline exceeded',
+      )
+
+      let releaseReceived = false
+      for (;;) {
+        const next = await settleBefore(
+          acquiredReader.read(),
+          releaseDeadline,
+          'bwrap capability supervisor release deadline exceeded',
+        )
+        if (next.done) break
+        buffered += decoder.decode(next.value, { stream: true })
+        if (Buffer.byteLength(buffered, 'utf8') > BWRAP_CAPABILITY_REPORT_LIMIT_BYTES) {
+          throw new Error('bwrap capability supervisor release exceeded its bound')
+        }
+        const newline = buffered.indexOf('\n')
+        if (newline < 0) continue
+        const line = buffered.slice(0, newline)
+        buffered = buffered.slice(newline + 1)
+        if (releaseReceived || line !== `RFC224_BWRAP_RELEASE ${nonce}` || buffered !== '') {
+          throw new Error('invalid bwrap capability supervisor release')
+        }
+        releaseReceived = true
+      }
+      buffered += decoder.decode()
+      if (!releaseReceived || buffered !== '') {
+        throw new Error('partial trailing bwrap capability supervisor output')
+      }
+    } catch (error) {
+      protocolFailure = error
+    } finally {
+      try {
+        await settleBefore(
+          Promise.resolve(child.stdin.end()),
+          releaseDeadline,
+          'bwrap capability supervisor control close deadline exceeded',
+        )
+      } catch (error) {
+        protocolFailure ??= error
+      }
+      if (reader !== undefined) {
+        try {
+          reader.releaseLock()
+        } catch (error) {
+          protocolFailure ??= error
+        }
+      }
+    }
+
+    let supervisorCode: number | undefined
+    try {
+      supervisorCode = await settleBefore(
+        child.exited,
+        releaseDeadline,
+        'bwrap capability supervisor exit deadline exceeded',
+      )
+    } catch (error) {
+      protocolFailure ??= error
+    }
+
+    // Do not settle the exported protocol promise until the real direct
+    // supervisor is reaped and this owned PGID has been observed absent.
+    // Once absent is latched, a later same-number group is never considered.
+    while (!groupExited && remainingMilliseconds(releaseDeadline) > 0) {
+      try {
+        process.kill(-child.pid, 0)
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ESRCH') {
+          groupExited = true
+          break
+        }
+      }
+      if (!groupExited) {
+        await delay(
+          Math.min(
+            BWRAP_CAPABILITY_STOP_POLL_MS,
+            Math.max(1, remainingMilliseconds(releaseDeadline)),
+          ),
+        )
+      }
+    }
+    if (!groupExited) {
+      protocolFailure ??= new Error('bwrap capability supervisor group release deadline exceeded')
+    }
+    signalState = 'released'
+
+    if (protocolFailure !== null) throw protocolFailure
+    if (bwrapCode === undefined || supervisorCode !== 137) {
+      throw new Error('bwrap capability supervisor exit mismatch')
+    }
+    return bwrapCode
+  })()
+  void exited.catch(() => undefined)
+  return {
+    exited,
+    killGroup: (signal) => {
+      if (signalState !== 'owned' || groupExited) return
+      try {
+        process.kill(-child.pid, signal)
+      } catch (error) {
+        // ESRCH/unknown never justify a positive-PID fallback.
+        if ((error as NodeJS.ErrnoException).code === 'ESRCH') groupExited = true
+      }
+    },
+    isGroupAlive: () => {
+      if (groupExited) return false
+      try {
+        process.kill(-child.pid, 0)
+        return true
+      } catch (error) {
+        // ESRCH is the only proof that this PGID is absent. Treat permission
+        // and unknown failures as live so cleanup remains fail-closed.
+        if ((error as NodeJS.ErrnoException).code !== 'ESRCH') return true
+        groupExited = true
+        return false
+      }
+    },
+    hasSignalOwnership: () => signalState === 'owned',
+  }
+}
+
+function rootOwnedBwrapGroupAlive(child: RootOwnedBwrapCapabilityProcess): boolean {
+  try {
+    return child.isGroupAlive()
+  } catch {
+    // Unknown liveness is not proof that the process group is absent.
+    return true
+  }
+}
+
+function rootOwnedBwrapHasSignalOwnership(
+  child: RootOwnedBwrapCapabilityProcess,
+  isDirectSettled: () => boolean,
+): boolean {
+  try {
+    return child.hasSignalOwnership?.() ?? !isDirectSettled()
+  } catch {
+    return false
+  }
+}
+
+async function waitForRootOwnedBwrapCapabilityStop(
+  child: RootOwnedBwrapCapabilityProcess,
+  isDirectSettled: () => boolean,
+  timeout: (milliseconds: number) => Promise<void>,
+  state: RootOwnedBwrapStopState,
+): Promise<boolean> {
+  const polls = Math.ceil(BWRAP_CAPABILITY_STOP_GRACE_MS / BWRAP_CAPABILITY_STOP_POLL_MS)
+  for (let index = 0; index <= polls; index += 1) {
+    const directSettled = isDirectSettled()
+    if (!state.groupExited) {
+      state.groupExited = !rootOwnedBwrapGroupAlive(child)
+    }
+    if (directSettled && state.groupExited) return true
+    if (index < polls) await timeout(BWRAP_CAPABILITY_STOP_POLL_MS)
+  }
+  return false
+}
+
+async function terminateRootOwnedBwrapCapability(
+  child: RootOwnedBwrapCapabilityProcess,
+  isDirectSettled: () => boolean,
+  timeout: (milliseconds: number) => Promise<void>,
+): Promise<boolean> {
+  const state: RootOwnedBwrapStopState = { groupExited: false }
+  if (!rootOwnedBwrapHasSignalOwnership(child, isDirectSettled)) return false
+  child.killGroup('SIGTERM')
+  if (await waitForRootOwnedBwrapCapabilityStop(child, isDirectSettled, timeout, state)) {
+    return true
+  }
+  // A settled direct leader no longer gives us an owned numeric PGID. If the
+  // old number still appears live, treat it as ambiguous (including immediate
+  // PGID reuse) and fail closed without signaling it again.
+  if (
+    isDirectSettled() ||
+    state.groupExited ||
+    !rootOwnedBwrapHasSignalOwnership(child, isDirectSettled)
+  ) {
+    return false
+  }
+  child.killGroup('SIGKILL')
+  return waitForRootOwnedBwrapCapabilityStop(child, isDirectSettled, timeout, state)
+}
+
+export async function requireRootOwnedBwrap(
+  path = Bun.which('bwrap'),
+  dependencies: RootOwnedBwrapDependencies = {},
+): Promise<string> {
+  const spawn = dependencies.spawn ?? spawnRootOwnedBwrapCapability
+  const timeout = dependencies.timeout ?? delay
+  let child: RootOwnedBwrapCapabilityProcess | undefined
+  let exited = false
+  let resolvedPath: string | undefined
+  let failed = false
+  let cleanupFailed = false
+  try {
+    if (path === null || !isAbsolute(path)) {
+      executionIdentityFailure('execution-identity-sandbox-required')
+    }
+    const resolved = await realpath(path)
+    const before = await lstat(resolved)
+    const metadata = await stat(resolved)
+    if (
+      before.isSymbolicLink() ||
+      !metadata.isFile() ||
+      metadata.uid !== 0 ||
+      !isSafeRootOwnedBwrapMode(metadata.mode)
+    ) {
+      executionIdentityFailure('execution-identity-sandbox-required')
+    }
+    child = spawn([
+      resolved,
+      '--die-with-parent',
+      '--new-session',
+      '--unshare-net',
+      '--unshare-pid',
+      '--unshare-ipc',
+      '--unshare-uts',
+      '--ro-bind',
+      '/',
+      '/',
+      '--proc',
+      '/proc',
+      '--dev',
+      '/dev',
+      '--clearenv',
+      '--',
+      '/bin/true',
+    ])
+    const code = await Promise.race([
+      child.exited.then(
+        (value) => {
+          exited = true
+          return value
+        },
+        (error: unknown) => {
+          exited = true
+          throw error
+        },
+      ),
+      timeout(BWRAP_CAPABILITY_TIMEOUT_MS).then(() => null),
+    ])
+    if (code !== 0 || rootOwnedBwrapGroupAlive(child)) {
+      executionIdentityFailure('execution-identity-sandbox-required')
+    }
+    resolvedPath = resolved
+  } catch {
+    failed = true
+  } finally {
+    if (child !== undefined && rootOwnedBwrapGroupAlive(child)) {
+      if (exited) {
+        // Never signal a numeric PGID after its direct leader has settled.
+        cleanupFailed = true
+      } else if (!rootOwnedBwrapHasSignalOwnership(child, () => exited)) {
+        // ACK release is outcome-unknown until the guardian/watchdog reaps the
+        // real supervisor and latches PGID absence. Wait for that authority;
+        // never signal the numeric group during or after this handoff.
+        try {
+          await child.exited
+        } catch {
+          // A negative/invalid capability result is expected on this path.
+        }
+        cleanupFailed = rootOwnedBwrapGroupAlive(child)
+      } else {
+        try {
+          let stopped = await terminateRootOwnedBwrapCapability(child, () => exited, timeout)
+          if (!stopped && !exited && !rootOwnedBwrapHasSignalOwnership(child, () => exited)) {
+            try {
+              await child.exited
+            } catch {
+              // The handoff can complete with a negative capability result.
+            }
+            stopped = !rootOwnedBwrapGroupAlive(child)
+          }
+          cleanupFailed = !stopped
+        } catch {
+          cleanupFailed = true
+        }
+      }
+    }
+  }
+  if (failed || cleanupFailed || resolvedPath === undefined) {
     return executionIdentityFailure('execution-identity-sandbox-required')
   }
-  return resolved
+  return resolvedPath
 }
 
 export interface MaterializeNetlessWrapperInput {

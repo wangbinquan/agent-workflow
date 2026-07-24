@@ -29,7 +29,7 @@ set -eu
 
 case "${1-}" in
   --version|-v|version)
-    echo "stub-opencode 1.14.99"
+    echo "stub-opencode 1.18.3"
     exit 0
     ;;
   run)

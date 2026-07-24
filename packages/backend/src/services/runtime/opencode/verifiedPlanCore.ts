@@ -118,7 +118,12 @@ export async function buildVerifiedOpencodePlan(
     return executionIdentityFailure('execution-identity-untrusted-binary')
   }
 
-  const [layout, snapshotPath, bwrapPath] = await Promise.all([
+  // Capability admission is intentionally serialized ahead of every
+  // filesystem-mutating preparation step. A host that cannot create the
+  // required namespaces must fail before a persistent store or runtime seal is
+  // materialized.
+  const bwrapPath = await (dependencies.requireBwrap ?? requireRootOwnedBwrap)()
+  const [layout, snapshotPath] = await Promise.all([
     prepareHermeticOpencodeLayout(input.storeRoot),
     (dependencies.snapshotBinary ?? snapshotOfficialOpencodeBinary)({
       command: input.command,
@@ -127,7 +132,6 @@ export async function buildVerifiedOpencodePlan(
       platform,
       arch,
     }),
-    (dependencies.requireBwrap ?? requireRootOwnedBwrap)(),
   ])
   if (snapshotPath !== input.binaryPath) {
     return executionIdentityFailure('execution-identity-untrusted-binary')

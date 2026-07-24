@@ -21,7 +21,14 @@ import { statusCommand, formatStatus } from './cli/status'
 import { stopCommand } from './cli/stop'
 import { userCommand } from './cli/user'
 import { authCommand } from './cli/auth'
-import { runNetlessSubprocess } from './services/runtime/opencode/sealedSubprocess'
+import {
+  runNetlessSubprocess,
+  runRootOwnedBwrapCapabilitySupervisor,
+} from './services/runtime/opencode/sealedSubprocess'
+import {
+  isValidFffCapabilitySupervisorInvocation,
+  runFffCapabilityProbeSupervisor,
+} from './services/runtime/opencode/fffCapability'
 import { runVerifiedOpencodeLauncher } from './services/runtime/opencode/verifiedLauncher'
 
 function readFlag(argv: string[], name: string): string | undefined {
@@ -67,6 +74,66 @@ async function main(): Promise<void> {
         process.exit(1)
       }
       process.exit(await runNetlessSubprocess(args[1], args.slice(2)))
+      break
+    }
+
+    case '__opencode-bwrap-capability-supervisor': {
+      const args = Bun.argv.slice(3)
+      const separator = args.indexOf('--')
+      const nonce = args[1]
+      const watchdog = args[3]
+      const command = separator < 0 ? [] : args.slice(separator + 1)
+      if (
+        separator !== 4 ||
+        args[0] !== '--nonce' ||
+        nonce === undefined ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(nonce) ||
+        args[2] !== '--watchdog-ms' ||
+        watchdog !== '10000' ||
+        command.length === 0 ||
+        command.length > 64 ||
+        command.some((value) => value.length === 0 || value.includes('\0'))
+      ) {
+        process.stderr.write('AW_OPENCODE_FAILURE execution-identity-store-unsafe\n')
+        process.exit(1)
+      }
+      try {
+        process.exit(await runRootOwnedBwrapCapabilitySupervisor(nonce, Number(watchdog), command))
+      } catch {
+        process.exit(125)
+      }
+      break
+    }
+
+    case '__opencode-fff-capability-supervisor': {
+      const args = Bun.argv.slice(3)
+      const separator = args.indexOf('--')
+      const nonce = args[1]
+      const watchdog = args[3]
+      const cwd = args[5]
+      const command = separator < 0 ? [] : args.slice(separator + 1)
+      const watchdogMilliseconds = watchdog === undefined ? Number.NaN : Number(watchdog)
+      if (
+        separator !== 6 ||
+        args[0] !== '--nonce' ||
+        nonce === undefined ||
+        args[2] !== '--watchdog-ms' ||
+        watchdog === undefined ||
+        String(watchdogMilliseconds) !== watchdog ||
+        args[4] !== '--cwd' ||
+        cwd === undefined ||
+        !isValidFffCapabilitySupervisorInvocation(nonce, watchdogMilliseconds, cwd, command)
+      ) {
+        process.stderr.write('AW_OPENCODE_FAILURE execution-identity-store-unsafe\n')
+        process.exit(1)
+      }
+      try {
+        process.exit(
+          await runFffCapabilityProbeSupervisor(nonce, watchdogMilliseconds, cwd, command),
+        )
+      } catch {
+        process.exit(125)
+      }
       break
     }
 

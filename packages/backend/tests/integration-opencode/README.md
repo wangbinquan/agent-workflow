@@ -6,17 +6,45 @@ before it corrupts the daemon's runtime path — a new event-shape, an envelope
 mangling, or a `--version` rename would silently break the platform if all
 our coverage used recorded fixtures.
 
-| File                                              | Cases | What it locks                                                                                                        |
-| ------------------------------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------- |
-| `opencode-identity-preflight.integration.test.ts` | 1     | Exact official v1.18.3 bytes plus real config/provider/agent/skill/root-session shapes, without an LLM call.         |
-| `opencode-live.integration.test.ts`               | 5 + 2 | `--version` / event-kind shape / accumulated text / envelope round-trip / token accumulator. Plus 2 gate-self-tests. |
+| File                                              | Cases | What it locks                                                                                                                                                                                           |
+| ------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `opencode-identity-preflight.integration.test.ts` | 1     | Exact official v1.18.3 bytes and config/provider/agent/skill/root-session shapes; on Linux, real bwrap/FFF plus freeze-lease TERM/KILL containment of a TERM-resistant setsid double-fork. No LLM call. |
+| `opencode-live.integration.test.ts`               | 5 + 2 | `--version` / event-kind shape / accumulated text / envelope round-trip / token accumulator. Plus 2 gate-self-tests.                                                                                    |
 
 ## How the gate works
 
 The official no-LLM identity preflight runs whenever
 `RUN_OPENCODE_INTEGRATION=1`; it does not need credentials and never posts a
-prompt. Live LLM tests are **opt-in**. They run only when BOTH conditions hold at
-process start (probed at module load):
+prompt. On Linux, the same case also enters a real private PID namespace,
+launches a TERM-resistant setsid + double-fork descendant, and requires one
+nonce-bound `READY` → `ARMED` handshake. The Python anchor then SIGSTOPs the
+exact bwrap child, confirms the stop with `waitpid(WUNTRACED)` and unchanged
+PGID, and emits `FROZEN`. Only while that freeze lease is held does the host
+send TERM to the actual negative process group and commit the signal; the
+anchor SIGCONTs the exact child and uses exact `waitpid` status to prove a
+SIGTERM exit (`TERM_RELEASED` → `TERM_OBSERVED`). Completion additionally
+requires direct-leader settlement, latching the first observed ESRCH for the
+negative PGID, and EOF on stdout held by the controlled descendants.
+`SURVIVED` or `WATCHDOG` is an explicit failure frame. The normal control pipe
+remains open until the anchor group is naturally killed/reaped, and cleanup
+never re-probes or signals an already-absent leader's old numeric PGID.
+bwrap/Python stderr remains in the Actions step log for diagnosis.
+
+The production path uses four help-hidden verified-self commands:
+`__opencode-verified-run`, `__opencode-netless-subprocess`,
+`__opencode-bwrap-capability-supervisor`, and
+`__opencode-fff-capability-supervisor`. The two native supervisors use
+nonce-bound `EXIT`/`RESULT` → `ACK` plus control EOF → `RELEASE`, then
+self-terminate their negative process group with SIGKILL. A valid observation
+requires one monotonic absolute deadline, protocol stdout EOF, raw exit 137,
+and a monotonically latched first observed ESRCH; FFF also waits for both probe
+stdout and stderr EOF before reporting RESULT. The parent relinquishes
+numeric-PGID signal ownership before the first ACK byte and never signals after
+release. Compiled smoke locks the corresponding pre-ACK empty buffer, ACK-EOF
+boundary, and wrong-nonce failure paths.
+
+Live LLM tests are **opt-in**. They run only when BOTH conditions hold at process
+start (probed at module load):
 
 1. `RUN_OPENCODE_INTEGRATION=1` is set in the environment.
 2. opencode auth is reachable — one of:
@@ -26,8 +54,9 @@ process start (probed at module load):
      opencode source `packages/opencode/src/auth/index.ts:58`)
    - a pre-existing `~/.config/opencode/auth.json`
 
-Without both, every test is `skipIf`'d and `bun test` reports them as
-skipped — no failures, no LLM calls, no charges.
+Without both, the live LLM cases are `skipIf`'d and `bun test` reports them as
+skipped — no LLM calls or charges. The no-LLM preflight still runs whenever
+condition 1 is set.
 
 Two non-LLM cases run unconditionally to verify the gate semantics
 themselves and that the README isn't accidentally deleted.
@@ -62,9 +91,13 @@ on pushes to `main`, and on PRs that touch the daemon's opencode-facing code (pa
 
 Matrix:
 
-| OS            | opencode                                               |
-| ------------- | ------------------------------------------------------ |
-| ubuntu-latest | exact reviewed `opencode-ai@1.18.3` RFC-224 trust root |
+| OS           | opencode                                               |
+| ------------ | ------------------------------------------------------ |
+| ubuntu-22.04 | exact reviewed `opencode-ai@1.18.3` RFC-224 trust root |
+
+The runner label is explicit because the preflight requires a real
+unprivileged bubblewrap namespace trial; a moving `ubuntu-latest` label is not
+an authoritative sandbox capability.
 
 Secrets are optional for the no-LLM preflight and are used only by the live-LLM
 cases — see "Setting up CI secrets" below.
@@ -96,12 +129,12 @@ which is the desired graceful-degradation state.
 
 ## Cost / flakiness budget
 
-| Knob              | Default             | Why                                                                                                                       |
-| ----------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| 5 LLM cases       | per workflow        | Plan target ≥ 5; each tightly scoped to one drift surface                                                                 |
-| timeout 120s/case | per test            | Real LLM 99p ~15s; 120s tolerates outliers without hanging the job                                                        |
-| retries           | implicit (bun test) | Bun test doesn't auto-retry, but transient LLM 429 / network blips are rare; if needed, wrap a case in a small retry loop |
-| Matrix OS legs    | one — ubuntu only   | Linux runs the mandatory bwrap FFF capability proof; macOS official-byte preflight is covered locally/release-side        |
+| Knob              | Default             | Why                                                                                                                                    |
+| ----------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| 5 LLM cases       | per workflow        | Plan target ≥ 5; each tightly scoped to one drift surface                                                                              |
+| timeout 120s/case | per test            | Real LLM 99p ~15s; 120s tolerates outliers without hanging the job                                                                     |
+| retries           | implicit (bun test) | Bun test doesn't auto-retry, but transient LLM 429 / network blips are rare; if needed, wrap a case in a small retry loop              |
+| Matrix OS legs    | one — ubuntu only   | Linux runs mandatory real bwrap FFF and cancellation/orphan containment; macOS official-byte preflight is covered locally/release-side |
 
 Expected daily LLM cost: ~5 calls × ~$0.005 = ~$0.025/day = ~$9/year.
 

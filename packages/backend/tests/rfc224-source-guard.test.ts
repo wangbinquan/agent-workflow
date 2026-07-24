@@ -1,14 +1,22 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdir, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { ExecutionIdentityFailure } from '@/services/runtime/opencode/failure'
 import {
   assertSourceFingerprintUnchanged,
   readFrozenInstruction,
   scanOpencodeProjectSurface,
 } from '@/services/runtime/opencode/sourceGuard'
+
+const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
+const CI_WORKFLOW = resolve(REPO_ROOT, '.github', 'workflows', 'ci.yml')
+const INTEGRATION_WORKFLOW = resolve(REPO_ROOT, '.github', 'workflows', 'integration-opencode.yml')
+const VISUAL_WORKFLOW = resolve(REPO_ROOT, '.github', 'workflows', 'visual-regression-nightly.yml')
+const WEBKIT_WORKFLOW = resolve(REPO_ROOT, '.github', 'workflows', 'e2e-webkit-nightly.yml')
+const E2E_FIXTURE_ROOT = resolve(REPO_ROOT, 'e2e', 'fixtures')
+const REVIEWED_OPENCODE_VERSION = '1.18.3'
 
 const roots: string[] = []
 
@@ -25,6 +33,18 @@ afterEach(() => {
 function expectCode(error: unknown, code: ExecutionIdentityFailure['code']) {
   expect(error).toBeInstanceOf(ExecutionIdentityFailure)
   expect((error as ExecutionIdentityFailure).code).toBe(code)
+}
+
+function opencodeInstallTargets(source: string): string[] {
+  return [...source.matchAll(/^\s*bun install -g opencode-ai@(.+?)\s*$/gm)].map((match) =>
+    match[1]!.trim(),
+  )
+}
+
+function opencodeVersionDeclarations(source: string): string[] {
+  return [...source.matchAll(/^\s*OPENCODE_VERSION:\s*(.+?)\s*$/gm)].map(
+    (match) => `OPENCODE_VERSION: ${match[1]!.trim()}`,
+  )
 }
 
 describe('RFC-224 project source guard', () => {
@@ -159,6 +179,142 @@ describe('RFC-224 frozen instruction read', () => {
       } catch (error) {
         expectCode(error, 'execution-identity-source-changed')
       }
+    }
+  })
+})
+
+describe('RFC-224 release platform source guard', () => {
+  const ciWorkflow = readFileSync(CI_WORKFLOW, 'utf8')
+  const integrationWorkflow = readFileSync(INTEGRATION_WORKFLOW, 'utf8')
+  const visualWorkflow = readFileSync(VISUAL_WORKFLOW, 'utf8')
+  const webkitWorkflow = readFileSync(WEBKIT_WORKFLOW, 'utf8')
+
+  test('pins the Linux FFF gate to the reviewed runner', () => {
+    expect(integrationWorkflow.match(/^ {4}runs-on: ubuntu-22\.04$/gm)).toHaveLength(1)
+    expect(integrationWorkflow).not.toMatch(/^ {4}runs-on: ubuntu-latest$/gm)
+  })
+
+  test('pins all four release workflows to the one reviewed official OpenCode build', () => {
+    const envPinnedWorkflows = [
+      {
+        name: 'ci.yml',
+        source: ciWorkflow,
+        expectedInstallTargets: ['${{ env.OPENCODE_VERSION }}', '${{ env.OPENCODE_VERSION }}'],
+      },
+      {
+        name: 'visual-regression-nightly.yml',
+        source: visualWorkflow,
+        expectedInstallTargets: ['${{ env.OPENCODE_VERSION }}'],
+      },
+    ]
+
+    for (const workflow of envPinnedWorkflows) {
+      expect(opencodeVersionDeclarations(workflow.source), workflow.name).toEqual([
+        `OPENCODE_VERSION: '${REVIEWED_OPENCODE_VERSION}'`,
+      ])
+      expect(opencodeInstallTargets(workflow.source), workflow.name).toEqual(
+        workflow.expectedInstallTargets,
+      )
+    }
+
+    const integrationMatrixBlocks = [
+      ...integrationWorkflow.matchAll(/^ {8}opencode:\n((?:^ {10}.*\n)+)/gm),
+    ]
+    expect(integrationMatrixBlocks).toHaveLength(1)
+    expect(
+      integrationMatrixBlocks[0]![1]!
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith('-')),
+    ).toEqual([`- '${REVIEWED_OPENCODE_VERSION}'`])
+    expect(opencodeVersionDeclarations(integrationWorkflow)).toEqual([])
+    expect(opencodeInstallTargets(integrationWorkflow)).toEqual(['${{ matrix.opencode }}'])
+
+    expect(opencodeVersionDeclarations(webkitWorkflow)).toEqual([])
+    expect(opencodeInstallTargets(webkitWorkflow)).toEqual([REVIEWED_OPENCODE_VERSION])
+
+    for (const [name, source] of [
+      ['ci.yml', ciWorkflow],
+      ['visual-regression-nightly.yml', visualWorkflow],
+      ['integration-opencode.yml', integrationWorkflow],
+      ['e2e-webkit-nightly.yml', webkitWorkflow],
+    ] as const) {
+      expect(source, name).not.toMatch(/^\s*bun install -g opencode-ai(?:\s|$)/gm)
+      expect(source, name).not.toMatch(/^\s*bun install -g opencode-ai@latest(?:\s|$)/gm)
+    }
+  })
+
+  test('proves the unprivileged bwrap capability with the exact FFF namespace surface', () => {
+    const expectedSmoke = [
+      '"$bwrap_path" \\',
+      '--die-with-parent \\',
+      '--new-session \\',
+      '--unshare-net \\',
+      '--unshare-pid \\',
+      '--unshare-ipc \\',
+      '--unshare-uts \\',
+      '--ro-bind / / \\',
+      '--proc /proc \\',
+      '--dev /dev \\',
+      '--clearenv \\',
+      '-- /bin/true',
+    ]
+    const workflowLines = integrationWorkflow.split('\n')
+    const starts = workflowLines
+      .map((line, index) => (line.trim() === expectedSmoke[0] ? index : -1))
+      .filter((index) => index >= 0)
+
+    expect(starts).toHaveLength(1)
+    const start = starts[0]!
+    expect(
+      workflowLines.slice(start, start + expectedSmoke.length).map((line) => line.trim()),
+    ).toEqual(expectedSmoke)
+    expect(integrationWorkflow).toContain('test "$((8#$bwrap_mode & 8#6000))" -eq 0')
+  })
+
+  test('forbids privilege and host-policy workarounds in the Linux gate', () => {
+    expect(integrationWorkflow).not.toMatch(/\bsudo\b[^\n]*(?:\bbwrap\b|\$bwrap_path)/)
+    expect(integrationWorkflow).not.toMatch(
+      /\bsysctl\b|kernel\.(?:apparmor_restrict_unprivileged_userns|unprivileged_userns_clone)/,
+    )
+    expect(integrationWorkflow).not.toMatch(
+      /\bsetuid\b|\b(?:chmod|install)\b[^\n]*(?:[ugoa]*\+s|\b[2467][0-7]{3}\b)/i,
+    )
+  })
+
+  test('keeps every production e2e OpenCode stub on the reviewed build identity', () => {
+    const stubs = readdirSync(E2E_FIXTURE_ROOT)
+      .filter((name) => /^stub-opencode.*\.sh$/.test(name))
+      .sort()
+    expect(stubs).toEqual([
+      'stub-opencode-clarify-inline.sh',
+      'stub-opencode-clarify.sh',
+      'stub-opencode-commit.sh',
+      'stub-opencode-cross-clarify.sh',
+      'stub-opencode-slow.sh',
+      'stub-opencode.sh',
+    ])
+
+    for (const stub of stubs) {
+      const source = readFileSync(resolve(E2E_FIXTURE_ROOT, stub), 'utf8')
+      const versionArms = [
+        ...source.matchAll(
+          /^[ \t]*--version\s*\|\s*-v\s*\|\s*version\)\s*\n([\s\S]*?)^[ \t]*;;\s*$/gm,
+        ),
+      ]
+      expect(versionArms, stub).toHaveLength(1)
+      expect(
+        versionArms[0]![1]!
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean),
+        stub,
+      ).toEqual([`echo "stub-opencode ${REVIEWED_OPENCODE_VERSION}"`, 'exit 0'])
+
+      const advertisedVersions = [...source.matchAll(/\bstub-opencode ([^\s"'`]+)/g)].map(
+        (match) => match[1]!,
+      )
+      expect(advertisedVersions, stub).toEqual([REVIEWED_OPENCODE_VERSION])
     }
   })
 })

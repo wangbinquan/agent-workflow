@@ -11,6 +11,7 @@ import {
 import { VerifiedLaunchManifestSchema } from '@/services/runtime/opencode/verifiedManifest'
 import { ExecutionIdentityFailure } from '@/services/runtime/opencode/failure'
 import { OPENCODE_FFF_CAPABILITY_CODEC } from '@/services/runtime/opencode/hermetic'
+import { buildVerifiedOpencodePlan } from '@/services/runtime/opencode/verifiedPlanCore'
 
 const roots: string[] = []
 
@@ -34,6 +35,48 @@ const BUILD: Readonly<OfficialOpencodeBuild> = Object.freeze({
 })
 
 describe('RFC-224 verified system plan', () => {
+  test('rejects failed bwrap capability admission before store or snapshot materialization', async () => {
+    const base = root()
+    const appHome = join(base, 'app-home')
+    const storeRoot = join(base, 'store')
+    const snapshotPath = join(base, 'seal', 'opencode')
+    let snapshotCalls = 0
+
+    await expect(
+      buildVerifiedOpencodePlan({
+        platform: 'linux',
+        arch: 'x64',
+        sandbox: {
+          mode: 'enforce',
+          status: { mechanism: 'bwrap', available: true, detail: null },
+          appHome,
+        },
+        appHome,
+        command: ['/official/opencode'],
+        version: BUILD.version,
+        storeRoot,
+        binaryPath: snapshotPath,
+        fffProbeRoot: join(base, 'fff-probe'),
+        dependencies: {
+          officialBuild: () => BUILD,
+          requireBwrap: async () => {
+            throw new ExecutionIdentityFailure('execution-identity-sandbox-required')
+          },
+          snapshotBinary: async () => {
+            snapshotCalls += 1
+            return snapshotPath
+          },
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: 'execution-identity-sandbox-required',
+    })
+
+    expect(snapshotCalls).toBe(0)
+    expect(await stat(storeRoot).catch(() => null)).toBeNull()
+    expect(await stat(snapshotPath).catch(() => null)).toBeNull()
+  })
+
   test('fails closed before filesystem setup without enforce+bwrap', async () => {
     const base = root()
     const worktreePath = join(base, 'worktree')

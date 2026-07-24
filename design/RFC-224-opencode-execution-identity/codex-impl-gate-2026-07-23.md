@@ -1,23 +1,27 @@
 # RFC-224 Codex 实现门（2026-07-23）
 
-> 审查对象：当前共享 working tree 中 RFC-224 的生产接线、migration、测试、CI 与
-> 运维文档。该对象尚未形成最终 commit，因此本记录只裁决实现 finding，不把本地
-> 结果冒充 exact-SHA 远端证据。
+> 审查对象：RFC-224 的生产接线、migration、测试、CI、运维文档，以及首个
+> implementation SHA `b4b3e082c0bf010f123c3e93c7b9abbd1f4f877e` 的远端失败后
+> follow-up。本文裁决源码/测试 finding，并把失败 run 留作诊断历史；绝不把本地
+> 修复或失败 workflow 冒充 exact-SHA 绿色发布证据。
 >
-> 最终裁决：**APPROVED / 0 P0 / 0 P1 / 0 P2 未关闭**。T28 本地全门已完成，
-> 允许进入精确提交与远端门禁阶段；`plan.md` T32 以及 Linux real-sandbox /
-> exact-SHA CI 终态继续保持 pending。
+> 当前本地裁决：**APPROVED / 0 open**。首轮独立复审新增 4 组 P1 / 2 组 P2，
+> real Linux 探针专项复审再新增 5 组 P1 / 3 组 P2，累计 23 组 P1 / 14 组 P2；
+> 对应 resolution、行为锁/source ratchet 与 follow-up T28 全门已在 current tree
+> 复验，最终未关闭 0 P0 / 0 P1 / 0 P2。该裁决只关闭本地实现门；`plan.md` T32、
+> proposal/release 状态与修复 SHA 的 Linux real-sandbox / exact-SHA CI 终态继续
+> 保持 pending。
 
-## 1. 最终 finding 计数
+## 1. finding 计数与当前状态
 
-| 严重度 | 初审发现 | 后续复核 |  累计 | 最终未关闭 |
-| ------ | -------: | -------: | ----: | ---------: |
-| P0     |        0 |        0 |     0 |          0 |
-| P1     |     5 组 |     7 组 | 12 组 |          0 |
-| P2     |     4 组 |     5 组 |  9 组 |          0 |
+| 严重度 | 初审发现 | 后续复核 |  累计 | 本轮终态 |
+| ------ | -------: | -------: | ----: | -------- |
+| P0     |        0 |        0 |     0 | 0        |
+| P1     |     5 组 |    18 组 | 23 组 | 0        |
+| P2     |     4 组 |    10 组 | 14 组 | 0        |
 
-“最终未关闭为零”表示当前源码/测试层面没有已知阻断 finding，不表示尚未运行的
-平台矩阵或尚不存在的 commit SHA 已通过。
+每项 resolution 已由对应测试锁住，follow-up T28 全门亦完成，因此本轮终态为 0。
+Linux 平台矩阵与尚不存在的修复 SHA 仍是独立发布证据，不由本地裁决代替。
 
 ## 2. 初审 P1 与 resolution
 
@@ -31,15 +35,26 @@
 
 ## 3. 后续 P1 与 resolution
 
-| Finding                                                                                                      | Resolution                                                                                                                         | Evidence                                                                                                                           |
-| ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| 显式 `model:null`/空白被旧值兜底，OpenCode runtime 可绕过 T24 的 operator-selection 保存门                   | config/runtime save 与共享 effective-runtime policy 统一把显式清空视为缺失 model 并稳定阻断；UI 不允许带病保存                     | `routes/config.ts`、`routes/runtimes.ts`、`executionPolicy.ts` 及 config/runtime route tests                                       |
-| `/api/runtime/models` 在 source fingerprint 最终复核前即可提交缓存，repo source race 可能留下可信缓存        | cache write 移到最终 source guard 之后；fingerprint 漂移时不提交任何 model cache                                                   | `routes/runtime.ts`、`rfc224-source-guard.test.ts`、`rfc224-source-reachability.test.ts`                                           |
-| runtime probe 的成功 receipt 与 config/profile 更新存在 TOCTOU，陈旧成功可写回新 profile 或同名重建行        | migration `0120` 增加 durable `probe_fence`；receipt 绑定 row id、完整 profile、fence 与 effective binary，最终检查和 SQL CAS 同锁 | `runtimeRegistry.ts`、`routes/runtimes.ts`、`migration-0120-rfc224-runtime-probe-fence.test.ts`、`runtime-routes-registry.test.ts` |
-| RuntimeList 仍可按后端 raw message 分支或显示身份错误，稳定错误码未成为产品单一事实源                        | status/probe 只投影闭集 failure code，列表用本地化标题与可操作 hint，任意 raw wire text 不进入 UI                                  | `schemas/runtime.ts`、`rfc135-runtimes-status.test.ts`、`RuntimeList.tsx`、`runtime-list.test.tsx`                                 |
-| ModelSelect 的 model-list 失败仍走字符串错误，无法稳定区分身份拒绝与普通加载失败                             | model API 保留已知 identity code 并安全 fallback；组件统一走 `ErrorBanner`/`resolveApiError`                                       | `routes/runtime.ts`、`ModelSelect.tsx`、`model-select.test.tsx`                                                                    |
-| Homepage runtime 摘要仍依赖通用 Claude 缺失文案，身份阻断在少量行和聚合态均不可操作                          | runtime status schema 增 optional closed-union `failureCode`；首页两种布局均按稳定码渲染本地化 blocker                             | `schemas/runtime.ts`、`HomepageGreeting.tsx`、`homepage-runtime-status.test.ts`                                                    |
-| model inventory 的直接子进程退出后可能残留闭 stdio descendant；正 PID fallback 还会在 PID 复用时误杀无关进程 | `finally` 只向负 PGID `SIGKILL` 并 bounded poll group exit，绝不退化到正 PID；新增后台 descendant marker 负测                      | `util/opencode-models.ts`、`opencode-models.test.ts`                                                                               |
+| Finding                                                                                                                                                                               | Resolution                                                                                                                                                                                                                                                                                                                                                      | Evidence                                                                                                                                                          |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 显式 `model:null`/空白被旧值兜底，OpenCode runtime 可绕过 T24 的 operator-selection 保存门                                                                                            | config/runtime save 与共享 effective-runtime policy 统一把显式清空视为缺失 model 并稳定阻断；UI 不允许带病保存                                                                                                                                                                                                                                                  | `routes/config.ts`、`routes/runtimes.ts`、`executionPolicy.ts` 及 config/runtime route tests                                                                      |
+| `/api/runtime/models` 在 source fingerprint 最终复核前即可提交缓存，repo source race 可能留下可信缓存                                                                                 | cache write 移到最终 source guard 之后；fingerprint 漂移时不提交任何 model cache                                                                                                                                                                                                                                                                                | `routes/runtime.ts`、`rfc224-source-guard.test.ts`、`rfc224-source-reachability.test.ts`                                                                          |
+| runtime probe 的成功 receipt 与 config/profile 更新存在 TOCTOU，陈旧成功可写回新 profile 或同名重建行                                                                                 | migration `0120` 增加 durable `probe_fence`；receipt 绑定 row id、完整 profile、fence 与 effective binary，最终检查和 SQL CAS 同锁                                                                                                                                                                                                                              | `runtimeRegistry.ts`、`routes/runtimes.ts`、`migration-0120-rfc224-runtime-probe-fence.test.ts`、`runtime-routes-registry.test.ts`                                |
+| RuntimeList 仍可按后端 raw message 分支或显示身份错误，稳定错误码未成为产品单一事实源                                                                                                 | status/probe 只投影闭集 failure code，列表用本地化标题与可操作 hint，任意 raw wire text 不进入 UI                                                                                                                                                                                                                                                               | `schemas/runtime.ts`、`rfc135-runtimes-status.test.ts`、`RuntimeList.tsx`、`runtime-list.test.tsx`                                                                |
+| ModelSelect 的 model-list 失败仍走字符串错误，无法稳定区分身份拒绝与普通加载失败                                                                                                      | model API 保留已知 identity code 并安全 fallback；组件统一走 `ErrorBanner`/`resolveApiError`                                                                                                                                                                                                                                                                    | `routes/runtime.ts`、`ModelSelect.tsx`、`model-select.test.tsx`                                                                                                   |
+| Homepage runtime 摘要仍依赖通用 Claude 缺失文案，身份阻断在少量行和聚合态均不可操作                                                                                                   | runtime status schema 增 optional closed-union `failureCode`；首页两种布局均按稳定码渲染本地化 blocker                                                                                                                                                                                                                                                          | `schemas/runtime.ts`、`HomepageGreeting.tsx`、`homepage-runtime-status.test.ts`                                                                                   |
+| model inventory 的直接子进程退出后可能残留闭 stdio descendant；正 PID fallback 还会在 PID 复用时误杀无关进程                                                                          | `finally` 只向负 PGID `SIGKILL` 并 bounded poll group exit，绝不退化到正 PID；新增后台 descendant marker 负测                                                                                                                                                                                                                                                   | `util/opencode-models.ts`、`opencode-models.test.ts`                                                                                                              |
+| `requireRootOwnedBwrap` 只验证 ownership/mode，Ubuntu host 可 metadata 全绿但 namespace 实际不可创建，导致所有 verified OpenCode 在 admission 后统一 bootstrap 失败                   | metadata gate 后以独立进程组有界执行与 FFF 同级的 exact namespace/mount/clearenv bwrap probe；非零、spawn error、timeout 均在 server 前映射 `execution-identity-sandbox-required`；完整 lifecycle/reap 契约由下述独立复审 finding 继续收紧                                                                                                                      | `sealedSubprocess.ts`、`rfc224-sealed-subprocess.test.ts`、`integration-opencode.yml`、`rfc224-source-guard.test.ts`                                              |
+| release E2E/visual fixture 仍报告 `stub-opencode 1.14.99`，生产最低版本已升至 1.18.3，导致全量 Playwright 在 daemon startup 失败且 fixture coverage 失真                              | 六个 `stub-opencode*.sh` 统一为 1.18.3；WebKit/CI/visual/integration 安装 pin 同步；source ratchet 枚举全部 stub 与 workflow runner/version，禁止旧值复发                                                                                                                                                                                                       | `e2e/fixtures/stub-opencode*.sh`、`e2e-webkit-nightly.yml`、`integration-opencode.yml`、`rfc224-source-guard.test.ts`                                             |
+| capability probe 的清理只看 direct child 或一次 signal，未同时有界证明 direct settlement 与负 PGID 消失；daemonized descendant、never-settling direct 或 KILL 后存活 group 可留下孤儿 | verified-self supervisor 持有 direct group identity 到 authenticated release；host 只在 `owned` 阶段向负 PGID TERM→grace→KILL，ACK 首字节前转 `releasing` 后绝不再 signal/positive-PID fallback；完成要求 direct/protocol EOF、raw 137 与首个 ESRCH observation 单调锁存，共用 absolute deadline，任一不满足即 `execution-identity-sandbox-required`            | `sealedSubprocess.ts`、`rfc224-sealed-subprocess.test.ts`                                                                                                         |
+| FFF probe 内第二次 bwrap admission 的 `execution-identity-sandbox-required` 被 blanket catch 改写成 bootstrap failed，破坏稳定产品码                                                  | 只逐码保留该 sandbox-required；其它 artifact/FFF command/schema 失败仍折叠为 `execution-identity-bootstrap-failed`，且 admission 失败不 spawn FFF                                                                                                                                                                                                               | `fffCapability.ts`、`rfc224-fff-capability.test.ts`                                                                                                               |
+| verified plan 用 `Promise.all` 并发做 bwrap admission、store layout 与 binary snapshot，capability 失败前已可能写 store/seal                                                          | `requireBwrap` 串行前置；成功后才 materialize hermetic layout/snapshot，负测断言 admission 失败时 snapshot call 为 0 且 store/seal 路径不存在                                                                                                                                                                                                                   | `verifiedPlanCore.ts`、`rfc224-verified-system-plan.test.ts`                                                                                                      |
+| production bwrap mode gate 只拒绝 group/world-write，仍接受 setuid/setgid executable；workflow metadata smoke 与产品契约不一致                                                        | 统一 mode predicate 同时要求 root-owned regular executable、`mode & 06000 == 0`、`mode & 0022 == 0`；覆盖 setuid、setgid、双位与非 executable 负测                                                                                                                                                                                                              | `sealedSubprocess.ts`、`rfc224-sealed-subprocess.test.ts`、`integration-opencode.yml`                                                                             |
+| real orphan probe 以 ready 后固定 delayed-marker 倒计时判定，调度暂停既可先写 marker 假红，也可在 survivor 写入前假绿                                                                 | 删除 fixed-delay pass oracle；nonce-bound `READY` → `ARMED` 后，anchor 对 exact bwrap child 发 SIGSTOP，以 `waitpid(WUNTRACED)` 确认 stopped/PGID 未漂移并签发 FROZEN freeze lease；只有实际取消后的 EOF 才可通过                                                                                                                                               | `opencode-identity-preflight.integration.test.ts`                                                                                                                 |
+| ready 后 bwrap 自退或 TERM 未实际送达时，旧 helper 仍可凭 leader/group/marker absence 空转通过                                                                                        | host 只在 FROZEN lease 内向实际负组发 TERM，再由 TERM_COMMITTED → SIGCONT → exact waitpid 证明 child 以 SIGTERM 退出；零 signal、自退、换组或非 TERM exit 都 fail closed                                                                                                                                                                                        | `opencode-identity-preflight.integration.test.ts`                                                                                                                 |
+| 成功路径二次 stop 会 signal 已消失的旧 PGID；失败时 inner setsid 后代又无句柄永久循环，兼有误杀与泄漏                                                                                 | lifecycle 单一 stop owner；首次 ESRCH 单调锁存后永不再 probe/signal；stdin control、SURVIVED frame 与 watchdog 使失败 fixture 有界收敛                                                                                                                                                                                                                          | `opencode-identity-preflight.integration.test.ts`、`rfc224-sealed-subprocess.test.ts`                                                                             |
+| silent watchdog 可在 proof 窗口内制造 EOF 冒充 namespace cleanup                                                                                                                      | watchdog 晚于正常 phase budget，先发 nonce-bound `WATCHDOG` failure frame，再由 ownership supervisor 杀完整外层组；任何 watchdog frame 永久判失败                                                                                                                                                                                                               | `opencode-identity-preflight.integration.test.ts`                                                                                                                 |
+| `.exited.then` 布尔不是 PGID ownership token；OS 已 reap 而 JS callback 未落地时，production/integration/server cleanup 可 TERM/KILL 复用数字                                         | bwrap/FFF 均改用 verified-self 原生 supervisor：nonce EXIT/RESULT → ACK+EOF → RELEASE → self negative-group SIGKILL；parent 在首个 ACK byte 前 relinquish，成功要求 absolute deadline、protocol EOF、raw 137、首个 ESRCH observation 单调锁存，release 后不再 signal；FFF 另要求 child stdout/stderr 双 EOF。Linux integration 用 freeze lease 保持 TERM 因果链 | `sealedSubprocess.ts`、`fffCapability.ts`、`rfc224-sealed-subprocess.test.ts`、`rfc224-fff-capability.test.ts`、`opencode-identity-preflight.integration.test.ts` |
 
 ## 4. 初审 P2 / 夹具漂移与 resolution
 
@@ -52,50 +67,75 @@
 
 ## 5. 后续 P2 / 回归证据与 resolution
 
-| Finding                                                                                   | Resolution                                                                                                  | Evidence                                                                               |
-| ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| smoke 的 `execution-identity-failed` outcome 未完整走稳定码本地化                         | smoke/status 结果保存 closed failure code，UI 只从 i18n 映射生成文案                                        | `runtimeSmoke.ts`、`RuntimeList.tsx` 及对应 backend/frontend tests                     |
-| probe 失败/配置变化时 `lastProbe` 的清除与保留语义不够精确，可能显示过期成功              | execution-profile/fence 变化清除继承 receipt；no-op 保留；外部 config 漂移在读取/materialize 时 fail closed | `runtimeRegistry.ts`、`runtime-routes-registry.test.ts`                                |
-| OpenCode model 缺失时，列表/表单的危险态与 Test/Set default/Save 三个动作缺少完整回归锁   | UI 明示危险状态，并在选择合法 model 前禁用全部三个动作                                                      | `RuntimeList.tsx`、`ModelSelect.tsx`、`runtime-list.test.tsx`、`model-select.test.tsx` |
-| model-only probe race 测试曾通过 binary 预检查提前返回，未真正证明 SQL CAS                | 固定相同 binary，仅把 model 5.6→5.7；hook 证明已到 CAS，断言 fence 增长、409 且 receipt 未写                | `runtime-routes-registry.test.ts`                                                      |
-| stable-code 实现演进后 source-reachability 仍锁旧字面量，可能形成假红或诱导放宽生产 guard | 守卫改锁 closed-union 判断、安全 fallback 与动态 `incompatibleReason: code`，不降低生产可达性约束           | `rfc224-source-reachability.test.ts`                                                   |
+| Finding                                                                                                                               | Resolution                                                                                                                                                                                                                                                                                    | Evidence                                                                                             |
+| ------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| smoke 的 `execution-identity-failed` outcome 未完整走稳定码本地化                                                                     | smoke/status 结果保存 closed failure code，UI 只从 i18n 映射生成文案                                                                                                                                                                                                                          | `runtimeSmoke.ts`、`RuntimeList.tsx` 及对应 backend/frontend tests                                   |
+| probe 失败/配置变化时 `lastProbe` 的清除与保留语义不够精确，可能显示过期成功                                                          | execution-profile/fence 变化清除继承 receipt；no-op 保留；外部 config 漂移在读取/materialize 时 fail closed                                                                                                                                                                                   | `runtimeRegistry.ts`、`runtime-routes-registry.test.ts`                                              |
+| OpenCode model 缺失时，列表/表单的危险态与 Test/Set default/Save 三个动作缺少完整回归锁                                               | UI 明示危险状态，并在选择合法 model 前禁用全部三个动作                                                                                                                                                                                                                                        | `RuntimeList.tsx`、`ModelSelect.tsx`、`runtime-list.test.tsx`、`model-select.test.tsx`               |
+| model-only probe race 测试曾通过 binary 预检查提前返回，未真正证明 SQL CAS                                                            | 固定相同 binary，仅把 model 5.6→5.7；hook 证明已到 CAS，断言 fence 增长、409 且 receipt 未写                                                                                                                                                                                                  | `runtime-routes-registry.test.ts`                                                                    |
+| stable-code 实现演进后 source-reachability 仍锁旧字面量，可能形成假红或诱导放宽生产 guard                                             | 守卫改锁 closed-union 判断、安全 fallback 与动态 `incompatibleReason: code`，不降低生产可达性约束                                                                                                                                                                                             | `rfc224-source-reachability.test.ts`                                                                 |
+| version ratchet 只检查 WebKit presence 与“不含 1.14.99”，没有读取 CI/visual，也允许额外版本或 `@latest`；stub 同样只做 substring 检查 | source guard 同时读取四份 workflow，逐份锁唯一 official 1.18.3 pin 与全部 install target；枚举六个 stub，要求唯一 version arm、逐行 exact 输出与唯一 advertised version                                                                                                                       | `rfc224-source-guard.test.ts`、四份 `.github/workflows/*.yml`、六个 `e2e/fixtures/stub-opencode*.sh` |
+| Linux integration 只有 `/bin/true` capability smoke，没有真实 setsid/double-fork orphan 证据；旧本地全门又早于本轮 follow-up          | integration suite 接线 SIGTERM-resistant Python double-fork+setsid fixture；nonce READY/ARMED 后用 SIGSTOP + `waitpid(WUNTRACED)` freeze lease 固定 exact child/PGID，再证明实际负组 TERM、SIGCONT 后 exact SIGTERM exit、leader/PGID 与 descendant-held stdout EOF；权威平台结果等待修复 SHA | `opencode-identity-preflight.integration.test.ts`、`integration-opencode.yml`、`plan.md` T27/T28     |
+| 探针用 `Date.now()` 分段计时，wall-clock 回拨/前跳会破坏 bounded 声明                                                                 | 所有 phase 统一使用 `process.hrtime.bigint()` 单调时钟，并受同一个 absolute hard deadline 约束                                                                                                                                                                                                | `opencode-identity-preflight.integration.test.ts`                                                    |
+| stdout reader/release rejection 可被旧 `settlesBy` 当作成功 EOF，绕过 containment oracle                                              | reader acquire/read/release 全部显式记录 observer failure；rejected promise 绝不算 fulfilled closure，且 reader 始终 drain 到 EOF                                                                                                                                                             | `opencode-identity-preflight.integration.test.ts`                                                    |
+| official server cleanup 在负 PGID 失败后 fallback 正 PID、只等 leader 且无界 drain pipes，可能误杀复用 PID 或遗留后代                 | server 同样使用 ownership-holding supervisor 与单一 TERM→KILL stop；禁止正 PID fallback，要求 direct settled + PGID absence，并以 absolute deadline bounded drain stdout/stderr                                                                                                               | `opencode-identity-preflight.integration.test.ts`                                                    |
 
-## 6. 当前本地证据
+## 6. 本地证据状态
 
-- RFC-224 focused：**286 pass / 0 fail**。
-- stale/source guards focused：**80 pass / 0 fail**。
-- 需 localhost 与自有子进程信号权限的 WS/daemon/process 17 文件：
-  **109 pass / 0 fail，392 assertions**。受限 sandbox 内的 `EADDRINUSE`、
-  `command-mismatch`、`waitDead=false` 已由授权环境复跑证明是平台限制及其级联，
-  不是生产回归。
-- 最终 `bun run test` 三包同轮 **0 fail**；其中 shared
-  **1438 pass / 0 fail**，frontend **5257 pass / 0 fail**，backend 全量也在同一
-  exit-0 命令中完成。最终独立复核另跑 backend focused **94/94**、frontend focused
-  **43/43**、source reachability **8/8**。
-- `bun run format:check`、`bun run typecheck`、`bun run lint`、`git diff --check`
-  均绿；`bun run depcheck`：**1455 modules / 4482 dependencies / 0 violations**。
-- `bun run build:binary` 通过，产物
-  `dist/agent-workflow-macos-arm64`（92.5 MiB）；built-in version smoke 通过。
-  compiled help 不暴露 `__opencode-*`；两条畸形 hidden-command 调用均 exit 1，
-  stderr 精确为 `AW_OPENCODE_FAILURE execution-identity-store-unsafe`。
-- 本机 official OpenCode **1.18.3 darwin-arm64** no-LLM
-  config/provider/agent/skill/root-session preflight：
-  **1 pass / 0 fail（7 assertions）**。
+- 上轮 RFC-224 focused **286/286**、stale/source guards **80/80**、授权矩阵
+  **109/109**、backend focused **94/94**、frontend focused **43/43** 与 source
+  reachability **8/8**，以及 shared **1438/1438**、frontend **5257/5257**、
+  depcheck **1455 modules / 4482 dependencies / 0 violations**，都只代表独立复审
+  前的历史 baseline。
+- 两轮 follow-up 9 P1 / 5 P2 的 resolution 已由行为测试或 source ratchet
+  current-tree 复验：sealed subprocess **23 pass / 90 assertions**、FFF
+  capability **13 pass / 98 assertions**，RFC-224 定向集合
+  **317 pass / 1382 assertions**。完整
+  `bun run typecheck && bun run lint && bun run test && bun run format:check`
+  已完成：backend **7295 pass / 24 skip / 0 fail**、shared **1438 pass**、
+  frontend **5257 pass**；depcheck **1455 modules / 4484 dependencies /
+  0 violations**，`git diff --check`、`bun run build:binary` 与 compiled
+  hidden-command smoke 也均已完成。官方 1.18.3 no-LLM integration 为
+  **2 pass / 12 assertions**。
+- compiled smoke 枚举四个 hidden self-command 的 invalid invocation，并对
+  bwrap native supervisor 分别证明：valid 路径 ACK 前 zero buffered RELEASE；
+  ACK 已写/flush 但 control stdin 未 EOF 时同一 pending read 不推进；EOF 后才
+  exact RELEASE；wrong nonce 无 RELEASE并以 protocol EOF、raw 137、首个 ESRCH
+  observation 单调锁存 fail closed。cleanup 不向已释放 numeric PGID 发 signal。
+- 上轮 macOS official OpenCode **1.18.3 darwin-arm64** no-LLM preflight
+  **1/1（7 assertions）**同样是历史证据；follow-up 若触及其 production funnel，
+  需纳入本轮重跑。
+- real Linux SIGTERM-resistant setsid/double-fork orphan probe 已接线，但本机
+  macOS 无法提供权威结果；该证据只能来自修复 SHA 的 `integration-opencode`。
 
 ## 7. 诚实保留的发布证据
 
-以下不是未关闭 P0/P1/P2，而是尚未完成的门禁/发布证据，因此不得在提交信息或
-`STATE.md` 中提前写成已绿：
+以下是独立于已完成的本地 finding 终裁、仍未完成的发布证据；不得在提交信息或
+`STATE.md` 中把这些 release gates 提前写成已绿：
 
-1. 本机 macOS 无法提供 Linux root-owned bwrap 的 real escape/double-fork 权威
-   结果；该项等待 `integration-opencode` Ubuntu job；
-2. 尚未精确 stage/commit，co-author trailer 尚未针对最终 commit 核验；
-3. 尚未 push，因此不存在可归因于本次实现的 exact-SHA CI/integration 终态，
-   T32 保持未勾选。
+1. 首个 implementation SHA
+   `b4b3e082c0bf010f123c3e93c7b9abbd1f4f877e` 的 co-author trailer 已核验，
+   remote `main` 已包含该 SHA，但它不是绿色发布点。
+2. [`integration-opencode` run 30045245638](https://github.com/wangbinquan/agent-workflow/actions/runs/30045245638)
+   为 **failure**：official no-LLM preflight 在 FFF 阶段返回
+   `execution-identity-bootstrap-failed`，暴露 metadata-only bwrap admission。
+   旧 artifact 未保存 FFF raw stderr，因此 Ubuntu 24.04 userns/AppArmor 只能
+   记为平台诊断，不能伪写成已捕获的精确原始报错。
+3. [`CI` run 30045245623](https://github.com/wangbinquan/agent-workflow/actions/runs/30045245623)
+   与
+   [`visual-regression-nightly` run 30045245613](https://github.com/wangbinquan/agent-workflow/actions/runs/30045245613)
+   均为 **failure**，日志明确显示 E2E/visual harness 的
+   `stub-opencode 1.14.99` 低于 `MIN_OPENCODE_VERSION=1.18.3`，daemon 在启动时
+   正确 fail closed。
+4. product bwrap/FFF verified-self native supervisor、stable code、pre-store
+   admission、suid/sgid mode gate、已资格化 runner、四 workflow/六 stub exact
+   ratchet 与 freeze-lease real orphan integration 已在 current tree 落地，但仍需
+   形成新的 exact SHA，并由该 SHA 的 CI/integration terminal green 证明。T32
+   保持未勾选。
 
 ## 8. 裁决
 
-实现门在当前源码与已运行证据范围内为 **APPROVED**：最终未关闭
-**0 P0 / 0 P1 / 0 P2**，T28 已完成。后续只可在 T32 的真实结果完成后声明
-“exact-SHA CI/integration 绿”；若 Linux integration 出现新产品失败，应重新打开
-实现门，而不是把它记成环境噪声。
+当前本地裁决为 **APPROVED / 0 open**：累计 **23 组 P1 / 14 组 P2** 全部
+resolved，最终未关闭 **0 P0 / 0 P1 / 0 P2**，T28/T30 可以勾选。该裁决不等于
+发布完成：proposal/release 仍保持 pending，只有修复 SHA 的 T32 真实结果完成后
+才可声明 “exact-SHA CI/integration 绿”并关闭 RFC。

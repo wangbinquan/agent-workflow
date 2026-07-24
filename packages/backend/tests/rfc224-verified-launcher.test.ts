@@ -1041,16 +1041,22 @@ describe('RFC-224 hidden launcher failure channel', () => {
     expect(await help.exited).toBe(0)
     expect(helpOutput).not.toContain('__opencode-verified-run')
     expect(helpOutput).not.toContain('__opencode-netless-subprocess')
+    expect(helpOutput).not.toContain('__opencode-bwrap-capability-supervisor')
 
-    const invalid = Bun.spawn({
-      cmd: [process.execPath, 'run', mainPath, '__opencode-verified-run'],
-      stdout: 'pipe',
-      stderr: 'pipe',
-    })
-    expect(await invalid.exited).toBe(1)
-    expect(await new Response(invalid.stdout).text()).toBe('')
-    expect(await new Response(invalid.stderr).text()).toBe(
-      'AW_OPENCODE_FAILURE execution-identity-store-unsafe\n',
-    )
+    for (const subcommand of [
+      '__opencode-verified-run',
+      '__opencode-bwrap-capability-supervisor',
+    ]) {
+      const invalid = Bun.spawn({
+        cmd: [process.execPath, 'run', mainPath, subcommand],
+        stdout: 'pipe',
+        stderr: 'pipe',
+      })
+      expect(await invalid.exited).toBe(1)
+      expect(await new Response(invalid.stdout).text()).toBe('')
+      expect(await new Response(invalid.stderr).text()).toBe(
+        'AW_OPENCODE_FAILURE execution-identity-store-unsafe\n',
+      )
+    }
   })
 })

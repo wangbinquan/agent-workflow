@@ -55,7 +55,7 @@ jobs:
 
       - name: Install opencode (for build smoke parity)
         run: |
-          bun install -g opencode-ai
+          bun install -g opencode-ai@1.18.3
           export PATH="$HOME/.bun/bin:$PATH"
           opencode --version
 
