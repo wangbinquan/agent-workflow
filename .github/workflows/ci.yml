@@ -519,7 +519,8 @@ jobs:
 
           # Drive the compiled supervisor over real pipes: no FIFO/open-order
           # races, and every protocol read has its own bounded deadline.
-          # shellcheck disable=SC2016 -- JS template literals must reach Bun verbatim.
+          # JS template literals must reach Bun verbatim.
+          # shellcheck disable=SC2016
           RFC224_SMOKE_BIN="$bin" bun -e '
             const binary = process.env.RFC224_SMOKE_BIN
             if (binary === undefined || !binary.startsWith("/")) {
