@@ -36,6 +36,7 @@ import { routePopulatedInbox } from './inbox-fixtures'
 const RUN_VISUAL_REGRESSION = process.env.RUN_VISUAL_REGRESSION === '1'
 const EXPECTED_VISUAL_SCENE_COUNT = 26
 const HOMEPAGE_VISUAL_TIME = new Date(2026, 6, 23, 14, 0, 0)
+const VISUAL_OPENCODE_MODEL = 'test/model'
 
 let daemon: DaemonHandle | undefined
 
@@ -50,6 +51,7 @@ function requireDaemon(): DaemonHandle {
 test.beforeEach(async () => {
   if (!RUN_VISUAL_REGRESSION) return
   daemon = await startDaemon()
+  await seedVisualExecutionPolicy()
 })
 
 test.afterEach(async () => {
@@ -86,6 +88,33 @@ async function waitForStableAuthenticatedShell(page: Page): Promise<void> {
   await expect(userMenu).toContainText('e2e_admin')
   await expect(userMenu).toContainText('E2E Administrator')
   await page.waitForLoadState('networkidle')
+}
+
+/**
+ * RFC-224 validates the complete merged system-agent execution policy on
+ * every config write. A fresh visual daemon intentionally uses the model-less
+ * built-in OpenCode runtime, so seed an explicit deterministic model on that
+ * inherited profile before any scene writes its theme (or the network scene
+ * later patches bindPort).
+ *
+ * Seeding the profile also keeps the Runtime screenshot free of the
+ * model-required warning that would otherwise be fixture noise.
+ */
+async function seedVisualExecutionPolicy(): Promise<void> {
+  const d = requireDaemon()
+  const response = await fetch(`${d.baseUrl}/api/runtimes/opencode`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${d.token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ model: VISUAL_OPENCODE_MODEL }),
+  })
+  if (!response.ok) {
+    throw new Error(
+      `visual-regression: failed to seed RFC-224 execution policy (${response.status}): ${await response.text()}`,
+    )
+  }
 }
 
 async function setDaemonTheme(theme: 'light' | 'dark'): Promise<void> {

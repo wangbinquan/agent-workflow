@@ -95,6 +95,7 @@ import time
 
 nonce, watchdog_seconds, command = sys.argv[1], int(sys.argv[2]), sys.argv[3:]
 group_id = os.getpgrp()
+term_signal_number = int(signal.SIGTERM)
 
 def frame(kind, *fields):
     payload = " ".join(["RFC224_ANCHOR", nonce, kind, *[str(field) for field in fields]]) + "\n"
@@ -229,13 +230,13 @@ except (ChildProcessError, ProcessLookupError):
 
 if waited != child:
     fail("ERROR", "TERM_COMMITTED", "WAIT_PID")
-if not os.WIFSIGNALED(status) or os.WTERMSIG(status) != signal.SIGTERM:
+if not os.WIFSIGNALED(status) or os.WTERMSIG(status) != term_signal_number:
     if os.WIFSIGNALED(status):
         fail("TARGET_EXIT", "POSTTERM", "SIGNAL", os.WTERMSIG(status))
     if os.WIFEXITED(status):
         fail("TARGET_EXIT", "POSTTERM", "CODE", os.WEXITSTATUS(status))
     fail("ERROR", "TERM_COMMITTED", "WAIT_STATUS")
-frame("TERM_OBSERVED", child, signal.SIGTERM)
+frame("TERM_OBSERVED", child, term_signal_number)
 
 # Keep the exact process-group identity anchored until the host performs its
 # grace-period escalation. The watchdog is the final cleanup authority if the
@@ -975,6 +976,21 @@ async function stopServer(server: RunningServer): Promise<void> {
 }
 
 describe('RFC-224 Linux cancellation oracle protocol', () => {
+  // Python's IntEnum string form is version-dependent: some releases emit
+  // "15", while others emit "Signals.SIGTERM". Keep the wire protocol numeric
+  // so the Linux runner and the TypeScript verifier agree across versions.
+  test('serializes TERM_OBSERVED with a canonical numeric signal value', () => {
+    expect(BWRAP_CANCELLATION_SUPERVISOR_SCRIPT).toContain(
+      'term_signal_number = int(signal.SIGTERM)',
+    )
+    expect(BWRAP_CANCELLATION_SUPERVISOR_SCRIPT).toContain(
+      'frame("TERM_OBSERVED", child, term_signal_number)',
+    )
+    expect(BWRAP_CANCELLATION_SUPERVISOR_SCRIPT).not.toMatch(
+      /frame\("TERM_OBSERVED"[^\n]*signal\.SIGTERM/,
+    )
+  })
+
   test('rejects a target that self-exits after ARMED but before the TERM freeze lease', async () => {
     const nonce = randomUUID()
     const hardDeadline = monotonicDeadline(ORPHAN_HARD_TIMEOUT_MS)
