@@ -36,13 +36,47 @@ export function countEmbeddedSqlMigrations(): number {
   return count
 }
 
-export async function getEmbeddedAsset(
-  urlPath: string,
-): Promise<{ body: ArrayBuffer; contentType: string } | null> {
+export interface EmbeddedAsset {
+  body: ArrayBuffer
+  contentType: string
+}
+
+export type EmbeddedAssetLookup = (urlPath: string) => Promise<EmbeddedAsset | null>
+
+export async function getEmbeddedAsset(urlPath: string): Promise<EmbeddedAsset | null> {
   const filePath = FRONTEND_FILES[urlPath]
   if (filePath === undefined) return null
   const body = await Bun.file(filePath).arrayBuffer()
   return { body, contentType: mimeTypeFor(urlPath) }
+}
+
+const REVALIDATE_CACHE_CONTROL = 'no-cache, must-revalidate'
+const IMMUTABLE_CACHE_CONTROL = 'public, max-age=31536000, immutable'
+
+/**
+ * Resolve one embedded-frontend request and apply the cache policy at the
+ * response boundary:
+ *   - Vite's /assets/* files are content-hashed, so they can be immutable.
+ *   - index.html, SPA fallbacks, and unhashed public files must revalidate.
+ *   - a missing /assets/* path is not an SPA route. Returning null lets the
+ *     caller send a real 404 instead of serving HTML to a module request.
+ *
+ * The lookup seam keeps the compiled-only asset table behavior-testable while
+ * the committed development stub remains empty.
+ */
+export async function getEmbeddedFrontendResponse(
+  requestPath: string,
+  lookup: EmbeddedAssetLookup = getEmbeddedAsset,
+): Promise<Response | null> {
+  const directPath = stripLeadingSlash(requestPath)
+  const direct = await lookup(directPath)
+  if (direct !== null) return embeddedAssetResponse(direct, directPath)
+
+  if (isViteAssetPath(directPath)) return null
+
+  const indexHtml = await lookup('index.html')
+  if (indexHtml === null) return null
+  return embeddedAssetResponse(indexHtml, 'index.html')
 }
 
 /**
@@ -61,6 +95,25 @@ export async function extractMigrationsTo(targetDir: string): Promise<number> {
     count++
   }
   return count
+}
+
+function embeddedAssetResponse(asset: EmbeddedAsset, assetPath: string): Response {
+  return new Response(asset.body, {
+    headers: {
+      'content-type': asset.contentType,
+      'cache-control': isViteAssetPath(assetPath)
+        ? IMMUTABLE_CACHE_CONTROL
+        : REVALIDATE_CACHE_CONTROL,
+    },
+  })
+}
+
+function isViteAssetPath(path: string): boolean {
+  return path === 'assets' || path.startsWith('assets/')
+}
+
+function stripLeadingSlash(path: string): string {
+  return path.startsWith('/') ? path.slice(1) : path
 }
 
 function mimeTypeFor(path: string): string {
