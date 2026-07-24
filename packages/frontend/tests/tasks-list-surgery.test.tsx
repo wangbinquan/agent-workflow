@@ -228,6 +228,9 @@ describe('/tasks — run-monitor table (RFC-192)', () => {
     fireEvent.click(screen.getByTestId('tasks-subject-workgroup'))
     expect(screen.queryByTestId('task-row-t_flow-a')).toBeNull()
     expect(screen.getByTestId('task-row-t_crew-b')).toBeTruthy()
+    expect(
+      screen.getByRole('link', { name: enUS.tasks.filterAll }).closest('.status-filter__statuses'),
+    ).not.toBeNull()
 
     fireEvent.change(screen.getByTestId('tasks-search'), { target: { value: 'zzz' } })
     const noMatches = screen.getByTestId('tasks-no-matches')

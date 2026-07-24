@@ -152,27 +152,29 @@ function TasksPage() {
       <PageHeader title={t('tasks.title')} actions={isInitialEmpty ? undefined : newTaskAction} />
 
       <div className="status-filter">
-        <Link
-          ref={allStatusRef}
-          to="/tasks"
-          search={{}}
-          className={`chip ${status === undefined ? 'chip--active' : ''}`}
-        >
-          {t('tasks.filterAll')}
-        </Link>
-        {TASK_STATUS.map((s) => (
+        <div className="status-filter__statuses">
           <Link
-            key={s}
+            ref={allStatusRef}
             to="/tasks"
-            search={{ status: s }}
-            className={`chip ${status === s ? 'chip--active' : ''}`}
+            search={{}}
+            className={`chip ${status === undefined ? 'chip--active' : ''}`}
           >
-            {t(`tasks.status.${s}`)}
+            {t('tasks.filterAll')}
           </Link>
-        ))}
+          {TASK_STATUS.map((s) => (
+            <Link
+              key={s}
+              to="/tasks"
+              search={{ status: s }}
+              className={`chip ${status === s ? 'chip--active' : ''}`}
+            >
+              {t(`tasks.status.${s}`)}
+            </Link>
+          ))}
+        </div>
         {/* RFC-192 — subject + name filters, pure client-side. Rendered only
-            when the list has rows so the empty page stays byte-identical to
-            the pre-surgery baseline (tasks.png zero churn). */}
+            when the list has rows so the empty page does not show controls
+            that cannot narrow anything. */}
         {hasRows && (
           // div, not span: Segmented's root is a <div> and <span><div> is
           // invalid nesting (React 19 validateDOMNesting; 实现门 P3).

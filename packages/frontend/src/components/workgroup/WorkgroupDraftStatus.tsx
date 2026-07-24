@@ -34,6 +34,65 @@ function Actions({ children }: { children: ReactNode }): ReactElement {
   return <div className="page__actions">{children}</div>
 }
 
+export function workgroupDraftHasNotice(
+  state: Pick<WorkgroupAutosaveState, 'phase' | 'transport'>,
+): boolean {
+  return (
+    state.transport === 'offline' ||
+    state.phase === 'blocked' ||
+    state.phase === 'reconciling' ||
+    state.phase === 'error' ||
+    state.phase === 'conflict' ||
+    state.phase === 'inaccessible' ||
+    state.phase === 'deleted'
+  )
+}
+
+export function WorkgroupDraftStatusSummary(props: {
+  state: Pick<WorkgroupAutosaveState, 'phase' | 'transport'>
+}): ReactElement {
+  const { t } = useTranslation()
+  const phaseLabel =
+    props.state.phase === 'blocked'
+      ? t('workgroups.autosave.phaseBlocked')
+      : t(`editor.draftStatus.phase.${props.state.phase}`)
+  const transportLabel = t(`editor.draftStatus.transport.${props.state.transport}`)
+
+  return (
+    <div
+      className="editor-draft-status-summary"
+      role="group"
+      aria-label={t('workgroups.autosave.groupLabel')}
+      aria-live="polite"
+      aria-atomic="true"
+      data-testid="workgroup-draft-status"
+    >
+      <StatusChip
+        kind={PHASE_KIND[props.state.phase]}
+        size="sm"
+        aria-label={t('editor.draftStatus.phaseAria', { status: phaseLabel })}
+        data-testid="workgroup-draft-phase"
+      >
+        {phaseLabel}
+      </StatusChip>
+      <StatusChip
+        kind={
+          props.state.transport === 'online'
+            ? 'success'
+            : props.state.transport === 'degraded'
+              ? 'warn'
+              : 'danger'
+        }
+        size="sm"
+        aria-label={t('editor.draftStatus.transportAria', { status: transportLabel })}
+        data-testid="workgroup-draft-transport"
+      >
+        {transportLabel}
+      </StatusChip>
+    </div>
+  )
+}
+
 export function WorkgroupDraftStatus(props: WorkgroupDraftStatusProps): ReactElement {
   const { t } = useTranslation()
   const [confirmation, setConfirmation] = useState<'load' | 'overwrite' | null>(null)
@@ -42,10 +101,6 @@ export function WorkgroupDraftStatus(props: WorkgroupDraftStatusProps): ReactEle
   const { phase, transport, blockReason } = props.state
   const remoteVersion = props.state.conflict?.current?.version ?? props.state.serverRevision.version
   const localRevision = props.state.revision
-  const phaseLabel =
-    phase === 'blocked'
-      ? t('workgroups.autosave.phaseBlocked')
-      : t(`editor.draftStatus.phase.${phase}`)
 
   useEffect(() => {
     if (phase !== 'conflict') setConfirmation(null)
@@ -55,33 +110,8 @@ export function WorkgroupDraftStatus(props: WorkgroupDraftStatusProps): ReactEle
     <section
       className="workflow-draft-status"
       aria-label={t('workgroups.autosave.groupLabel')}
-      data-testid="workgroup-draft-status"
+      data-testid="workgroup-draft-notices"
     >
-      <div
-        className="page__actions workflow-draft-status__summary"
-        aria-live="polite"
-        aria-atomic="true"
-      >
-        <StatusChip
-          kind={PHASE_KIND[phase]}
-          size="sm"
-          aria-label={t('editor.draftStatus.phaseAria', { status: phaseLabel })}
-          data-testid="workgroup-draft-phase"
-        >
-          {phaseLabel}
-        </StatusChip>
-        <StatusChip
-          kind={transport === 'online' ? 'success' : transport === 'degraded' ? 'warn' : 'danger'}
-          size="sm"
-          aria-label={t('editor.draftStatus.transportAria', {
-            status: t(`editor.draftStatus.transport.${transport}`),
-          })}
-          data-testid="workgroup-draft-transport"
-        >
-          {t(`editor.draftStatus.transport.${transport}`)}
-        </StatusChip>
-      </div>
-
       {phase === 'blocked' && (
         <NoticeBanner
           tone="warning"

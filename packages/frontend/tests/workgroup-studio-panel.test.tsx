@@ -1280,7 +1280,7 @@ describe('RFC-171 split skin — source locks (design-gate Codex#1/#3 · R2 Nit 
     expect(css).toMatch(/\.workgroup-card__open::after\s*\{[^}]*inset:\s*0/)
   })
 
-  test('the autosave labels and every notice bar share one spaced status stack above config', () => {
+  test('autosave notices and readiness keep one spaced status stack above config', () => {
     const route = readSrc('routes/workgroups.detail.tsx')
     const css = readSrc('styles.css')
 
@@ -1290,7 +1290,7 @@ describe('RFC-171 split skin — source locks (design-gate Codex#1/#3 · R2 Nit 
       /\.workgroup-editor-status-stack\s*\{[^}]*display:\s*grid;[^}]*gap:\s*var\(--space-2\);[^}]*margin-block-end:\s*var\(--space-3\);/s,
     )
     expect(css).toMatch(
-      /\.workgroup-editor-status-stack\s*>\s*\.workflow-draft-status\s*\{[^}]*display:\s*grid;[^}]*gap:\s*var\(--space-2\);/s,
+      /\.workflow-draft-status\s*\{[^}]*display:\s*grid;[^}]*gap:\s*var\(--space-2\);/s,
     )
   })
 })

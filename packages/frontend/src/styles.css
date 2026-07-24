@@ -2786,12 +2786,12 @@ code {
   border: 0;
   background: transparent;
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--font-md);
   font-weight: 600;
   padding: 4px 10px;
   border-radius: 4px;
   cursor: pointer;
-  line-height: 1.2;
+  line-height: 1.25;
   /* RFC-192: options must never wrap — inside a shrinking flex context (the
      /tasks toolbar) the labels used to collapse into vertical text. */
   white-space: nowrap;
@@ -2902,6 +2902,7 @@ code {
   min-width: 0;
   flex: 0 1 auto;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
   justify-content: flex-end;
 }
@@ -3826,11 +3827,28 @@ code {
 .status-filter {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
   margin-bottom: 16px;
 }
 
-.status-filter > .chip {
+/* Task status links and the subject/search controls share one compact toolbar.
+ * The padded status strip gives 28px pills the same 32px visual row as the
+ * segmented control without stretching either primitive. */
+.status-filter__statuses {
+  display: flex;
+  flex: 1 1 760px;
+  flex-wrap: wrap;
+  align-items: center;
+  min-width: min(100%, 760px);
+  gap: 6px;
+  padding: 2px;
+}
+
+.status-filter__statuses > .chip {
+  min-height: 28px;
+  border-radius: var(--radius-pill);
+  line-height: 1.2;
   cursor: pointer;
   text-decoration: none;
   color: inherit;
@@ -4807,11 +4825,14 @@ details.form-section[open] > summary {
 }
 
 .tabs__tab {
+  display: inline-flex;
+  align-items: center;
   flex: 0 0 auto;
   background: none;
   border: none;
-  padding: 8px 14px;
-  font-size: 13px;
+  padding: 6px 12px;
+  font-size: var(--font-md);
+  line-height: 1.25;
   color: var(--muted);
   cursor: pointer;
   border-bottom: 2px solid transparent;
@@ -4977,7 +4998,9 @@ details.form-section[open] > summary {
   font-size: var(--font-sm);
 }
 .tabs--inspector .tabs__tab {
-  padding: 6px 10px;
+  min-height: 32px;
+  padding: 4px 10px;
+  font-size: 13px;
 }
 
 .tabs--segment {
@@ -4995,7 +5018,7 @@ details.form-section[open] > summary {
   border-bottom: none;
   border-radius: var(--radius-sm);
   margin-bottom: 0;
-  padding: 4px 12px;
+  padding: 4px 10px;
 }
 .tabs--segment .tabs__tab--active {
   background: var(--accent-fill);
@@ -5407,6 +5430,51 @@ details.form-section[open] > summary {
 
 /* ---- Workflow editor ---- */
 
+/* Keep the stable save/transport state beside the resource revision instead
+ * of spending a mostly-empty full-width row on two tiny chips. The revision
+ * is the elastic item; the actionable state remains readable when a long id
+ * has to truncate. */
+.editor-resource-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.editor-resource-meta__revision {
+  display: inline-flex;
+  flex: 0 1 auto;
+  min-width: 96px;
+  align-items: baseline;
+}
+
+.editor-resource-meta__id {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-resource-meta__version {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.editor-draft-status-summary {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* Autosave exceptions remain full-width recovery surfaces below the header.
+ * When two notices coexist (for example conflict + offline), keep the shared
+ * banner rhythm instead of letting them touch. */
+.workflow-draft-status {
+  display: grid;
+  gap: var(--space-2);
+}
+
 .page--editor {
   max-width: none;
   display: flex;
@@ -5441,7 +5509,8 @@ details.form-section[open] > summary {
  * stable, compact heading column and let the real button row scroll inline. */
 .page--editor > .page__header > .page__heading,
 .editor-page-header > .page__heading {
-  flex: 0 0 clamp(160px, 18vw, 240px);
+  flex: 0 1 clamp(280px, 32vw, 420px);
+  min-width: 240px;
   overflow: hidden;
 }
 
@@ -8528,8 +8597,9 @@ details.form-section[open] > summary {
   flex: 1 1 0;
   min-width: 0;
   justify-content: center;
-  min-height: 2.75rem;
+  min-height: 40px;
   padding: var(--space-1) var(--space-2);
+  font-size: var(--font-md);
   overflow: hidden;
   border-radius: calc(var(--radius-lg) - var(--space-1));
 }
@@ -15785,18 +15855,14 @@ mark.comment-anchor[data-active='true'] {
   gap: 4px;
 }
 
-/* Keep every persistent workgroup status surface in one rhythm: the compact
-   save/transport chips, any autosave NoticeBanner, the readiness bar, then a
-   full gutter before the split configuration studio. */
+/* Keep every persistent workgroup status surface in one rhythm: any autosave
+   NoticeBanner, the readiness bar, then a full gutter before the split
+   configuration studio. Stable save/transport chips now live in the header
+   beside id/version. */
 .workgroup-editor-status-stack {
   display: grid;
   gap: var(--space-2);
   margin-block-end: var(--space-3);
-}
-
-.workgroup-editor-status-stack > .workflow-draft-status {
-  display: grid;
-  gap: var(--space-2);
 }
 
 /* Studio page frame — the page becomes a viewport-high flex column so the
@@ -17972,7 +18038,15 @@ button.status-chip {
   gap: var(--space-2);
 }
 
-.tasks-toolbar__search {
+.tasks-toolbar .segmented__option {
+  min-height: 28px;
+  padding: 3px 10px;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.tasks-toolbar .tasks-toolbar__search {
+  min-height: 32px;
   max-width: 220px;
   padding: 4px 10px;
   font-size: 13px;
@@ -18179,6 +18253,39 @@ button.status-chip {
     flex: 0 0 auto;
   }
 
+  /* The title and action rail keep their compact first row. Let the existing
+   * metadata row span the full header width so id/version + two status chips
+   * stay readable at 390px without adding another vertical row. */
+  .editor-page-header {
+    display: grid;
+    grid-template-columns: minmax(0, 132px) minmax(0, 1fr);
+    column-gap: 16px;
+    row-gap: var(--space-1);
+  }
+
+  .editor-page-header--workgroup {
+    grid-template-columns: minmax(0, 88px) minmax(0, 1fr);
+  }
+
+  .editor-page-header > .page__heading {
+    display: contents;
+  }
+
+  .editor-page-header .page__title {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .editor-page-header .page__meta {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .editor-page-header > .page__actions {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
   /* Keep the subject selector and search reachable as two full-width rows.
      A single inline row exceeds the content width under WebKitGTK's font
      metrics and leaves the search input clipped beyond the mobile viewport. */
@@ -18190,6 +18297,21 @@ button.status-chip {
     flex-direction: column;
   }
 
+  .status-filter__statuses {
+    flex: 1 1 100%;
+    flex-wrap: nowrap;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+  }
+
+  .status-filter__statuses > .chip {
+    flex: 0 0 auto;
+    min-height: 36px;
+  }
+
   .tasks-toolbar > .segmented {
     display: flex;
     width: 100%;
@@ -18198,7 +18320,12 @@ button.status-chip {
     overscroll-behavior-inline: contain;
   }
 
-  .tasks-toolbar__search {
+  .tasks-toolbar .segmented__option {
+    min-height: 36px;
+  }
+
+  .tasks-toolbar .tasks-toolbar__search {
+    min-height: 40px;
     max-width: none;
   }
 
@@ -18217,6 +18344,13 @@ button.status-chip {
   .btn.btn--sm,
   .btn.btn--xs {
     min-height: 36px;
+  }
+
+  /* Desktop auth tabs use the calmer 40px density; touch layouts retain the
+   * RFC-198 44px target even though the route-specific selector is stronger
+   * than the shared `.tabs__tab` mobile rule above. */
+  .auth-page .tabs--segment .tabs__tab {
+    min-height: 44px;
   }
 
   .form-grid--cols-2,

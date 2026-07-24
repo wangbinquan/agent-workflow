@@ -25,7 +25,11 @@ import {
   type WorkgroupPanelState,
   type WorkgroupTransientDraftState,
 } from '@/components/workgroup/WorkgroupContextPanel'
-import { WorkgroupDraftStatus } from '@/components/workgroup/WorkgroupDraftStatus'
+import {
+  WorkgroupDraftStatus,
+  WorkgroupDraftStatusSummary,
+  workgroupDraftHasNotice,
+} from '@/components/workgroup/WorkgroupDraftStatus'
 import { WorkgroupMemberGallery } from '@/components/workgroup/WorkgroupMemberGallery'
 import { useOwnedEditScope } from '@/hooks/useOwnedEditScope'
 import { useActor } from '@/hooks/useActor'
@@ -611,9 +615,16 @@ export function WorkgroupEditor(props: {
         className="editor-page-header editor-page-header--workgroup"
         title={config.state.draft.name || props.initial.name}
         meta={
-          <>
-            <code>{props.initial.id}</code> · v{controller.state.serverRevision.version}
-          </>
+          <div className="editor-resource-meta">
+            <span className="editor-resource-meta__revision">
+              <code className="editor-resource-meta__id">{props.initial.id}</code>
+              <span className="editor-resource-meta__version">
+                {' · v'}
+                {controller.state.serverRevision.version}
+              </span>
+            </span>
+            <WorkgroupDraftStatusSummary state={controller.state} />
+          </div>
         }
         actions={
           <>
@@ -655,19 +666,21 @@ export function WorkgroupEditor(props: {
         )}
 
       <div className="workgroup-editor-status-stack" data-testid="workgroup-status-stack">
-        <WorkgroupDraftStatus
-          state={controller.state}
-          onRetryNow={controller.retry}
-          onSaveCopy={controller.requestCopy}
-          onLoadRemote={async () => {
-            transientRef.current.discard()
-            transientRef.current = cleanTransient
-            setTransient(cleanTransient)
-            await controller.confirmLoadRemote()
-          }}
-          onOverwriteRemote={controller.confirmOverwrite}
-          onReturnToList={() => void navigate({ to: '/workgroups' })}
-        />
+        {workgroupDraftHasNotice(controller.state) && (
+          <WorkgroupDraftStatus
+            state={controller.state}
+            onRetryNow={controller.retry}
+            onSaveCopy={controller.requestCopy}
+            onLoadRemote={async () => {
+              transientRef.current.discard()
+              transientRef.current = cleanTransient
+              setTransient(cleanTransient)
+              await controller.confirmLoadRemote()
+            }}
+            onOverwriteRemote={controller.confirmOverwrite}
+            onReturnToList={() => void navigate({ to: '/workgroups' })}
+          />
+        )}
 
         {(!readiness.ready || readiness.warnings.length > 0) && (
           <div

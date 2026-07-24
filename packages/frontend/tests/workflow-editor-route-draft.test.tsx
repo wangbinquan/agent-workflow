@@ -472,6 +472,7 @@ describe('WorkflowEditorLoaded RFC-199 draft integration', () => {
     await flushEffects()
     const header = container.querySelector('.page__header')
     const launchButton = header?.querySelector('.btn--primary')
+    const meta = header?.querySelector('.page__meta')
 
     expect(header?.querySelectorAll('.btn--primary')).toHaveLength(1)
     expect(launchButton?.textContent).toMatch(/^(启动任务|Launch task)$/)
@@ -480,6 +481,9 @@ describe('WorkflowEditorLoaded RFC-199 draft integration', () => {
     expect(screen.getByTestId('workflow-more-actions').classList.contains('btn--sm')).toBe(false)
     expect(screen.queryByRole('button', { name: /导出 YAML|Export YAML/ })).toBeNull()
     expect(screen.queryByTestId('workflow-rename-button')).toBeNull()
+    expect(meta?.querySelector('[data-testid="workflow-draft-phase"]')).not.toBeNull()
+    expect(meta?.querySelector('[data-testid="workflow-draft-transport"]')).not.toBeNull()
+    expect(screen.queryByTestId('workflow-draft-status-focus')).toBeNull()
 
     fireEvent.click(screen.getByTestId('workflow-more-actions'))
     expect(screen.getByTestId('workflow-actions-dialog')).toBeTruthy()

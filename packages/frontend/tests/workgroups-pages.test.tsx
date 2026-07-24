@@ -626,6 +626,15 @@ describe('/workgroups/$id — config editing', () => {
     expect(header?.classList.contains('editor-page-header')).toBe(true)
     expect(header?.querySelector('.page__meta')?.textContent).toContain('wg_review-squad')
     expect(header?.querySelector('.page__meta')?.textContent).toContain('v1')
+    expect(
+      header?.querySelector('.page__meta [data-testid="workgroup-draft-phase"]'),
+    ).not.toBeNull()
+    expect(
+      header?.querySelector('.page__meta [data-testid="workgroup-draft-transport"]'),
+    ).not.toBeNull()
+    expect(
+      screen.getByTestId('workgroup-status-stack').querySelector('.editor-draft-status-summary'),
+    ).toBeNull()
     expect(header?.querySelectorAll('.btn--primary')).toHaveLength(1)
     expect(header?.querySelector('.btn--primary')?.textContent).toContain('Launch task')
     expect(screen.getByTestId('workgroup-more-actions').classList.contains('btn--sm')).toBe(false)
@@ -1103,7 +1112,7 @@ describe('RFC-164 /workgroups wiring', () => {
     )
     expect(edit).toContain('WorkgroupContextPanel')
     expect(edit).toContain('className="editor-page-header editor-page-header--workgroup"')
-    expect(edit).toContain('<code>{props.initial.id}</code>')
+    expect(edit).toContain('<code className="editor-resource-meta__id">{props.initial.id}</code>')
     expect(edit).toContain('controller.state.serverRevision.version')
     expect(edit).toContain('data-testid="workgroup-more-actions"')
     expect(edit).toContain('data-testid="workgroup-actions-dialog"')

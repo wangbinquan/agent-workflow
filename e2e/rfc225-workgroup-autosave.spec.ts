@@ -139,16 +139,29 @@ test('autosaves a real edit and keeps workflow-parity header/actions usable at d
   })
   expect(headerActionFonts.more).toBe(headerActionFonts.launch)
   await expect(page.getByTestId('workgroup-draft-phase')).toHaveText('Saved')
-  const statusSpacing = await page.evaluate(() => {
+  const statusPlacement = await page.evaluate(() => {
+    const header = document.querySelector<HTMLElement>('.editor-page-header')
+    const version = header?.querySelector<HTMLElement>('.editor-resource-meta__version')
+    const summary = header?.querySelector<HTMLElement>('.editor-draft-status-summary')
     const stack = document.querySelector<HTMLElement>('[data-testid="workgroup-status-stack"]')
     const split = document.querySelector<HTMLElement>('.page--split > .split')
     return {
-      stackVisible: stack !== null && stack.getBoundingClientRect().height > 0,
+      summaryInHeader: summary !== null && summary !== undefined,
+      summaryInStack: stack?.contains(summary ?? null) ?? false,
+      stackHeight: stack?.getBoundingClientRect().height ?? -1,
+      gapAfterVersion:
+        summary === null || summary === undefined || version === null || version === undefined
+          ? -1
+          : summary.getBoundingClientRect().left - version.getBoundingClientRect().right,
       gap: (split?.getBoundingClientRect().top ?? 0) - (stack?.getBoundingClientRect().bottom ?? 0),
     }
   })
-  expect(statusSpacing.stackVisible).toBe(true)
-  expect(statusSpacing.gap).toBeGreaterThanOrEqual(12)
+  expect(statusPlacement.summaryInHeader).toBe(true)
+  expect(statusPlacement.summaryInStack).toBe(false)
+  expect(statusPlacement.stackHeight).toBe(0)
+  expect(statusPlacement.gapAfterVersion).toBeGreaterThanOrEqual(4)
+  expect(statusPlacement.gapAfterVersion).toBeLessThanOrEqual(12)
+  expect(statusPlacement.gap).toBeGreaterThanOrEqual(12)
 
   const saveResponse = page.waitForResponse(
     (response) =>
@@ -198,6 +211,10 @@ test('autosaves a real edit and keeps workflow-parity header/actions usable at d
       '[data-testid="workgroup-launch-button"]',
     )
     const more = headerElement?.querySelector<HTMLElement>('[data-testid="workgroup-more-actions"]')
+    const meta = headerElement?.querySelector<HTMLElement>('.editor-resource-meta')
+    const id = meta?.querySelector<HTMLElement>('.editor-resource-meta__id')
+    const version = meta?.querySelector<HTMLElement>('.editor-resource-meta__version')
+    const summary = meta?.querySelector<HTMLElement>('.editor-draft-status-summary')
     return {
       rootClientWidth: root.clientWidth,
       rootScrollWidth: root.scrollWidth,
@@ -207,6 +224,17 @@ test('autosaves a real edit and keeps workflow-parity header/actions usable at d
       launchFontSize:
         launch === null || launch === undefined ? '' : getComputedStyle(launch).fontSize,
       moreFontSize: more === null || more === undefined ? '' : getComputedStyle(more).fontSize,
+      idWidth: id?.getBoundingClientRect().width ?? 0,
+      versionWidth: version?.getBoundingClientRect().width ?? 0,
+      summaryWidth: summary?.getBoundingClientRect().width ?? 0,
+      metaFitsHeader:
+        headerElement !== null &&
+        headerElement !== undefined &&
+        meta !== null &&
+        meta !== undefined &&
+        summary !== null &&
+        summary !== undefined &&
+        summary.getBoundingClientRect().right <= headerElement.getBoundingClientRect().right + 1,
     }
   })
   expect(geometry.rootScrollWidth).toBeLessThanOrEqual(geometry.rootClientWidth + 1)
@@ -216,6 +244,10 @@ test('autosaves a real edit and keeps workflow-parity header/actions usable at d
   expect(geometry.actionsScrollWidth).toBeLessThanOrEqual(geometry.actionsClientWidth + 1)
   expect(geometry.launchFontSize).toBe('16px')
   expect(geometry.moreFontSize).toBe(geometry.launchFontSize)
+  expect(geometry.idWidth).toBeGreaterThan(0)
+  expect(geometry.versionWidth).toBeGreaterThan(0)
+  expect(geometry.summaryWidth).toBeGreaterThan(0)
+  expect(geometry.metaFitsHeader).toBe(true)
 
   await page.getByTestId('workgroup-more-actions').click()
   await expect(actionsDialog).toBeVisible()

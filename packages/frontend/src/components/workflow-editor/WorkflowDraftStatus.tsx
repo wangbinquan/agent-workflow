@@ -51,6 +51,55 @@ function Actions({ children }: { children: ReactNode }): ReactElement {
   return <div className="page__actions">{children}</div>
 }
 
+export function workflowDraftHasNotice(
+  state: Pick<WorkflowEditorDraftState, 'phase' | 'transport'>,
+): boolean {
+  return (
+    state.transport === 'offline' ||
+    state.phase === 'reconciling' ||
+    state.phase === 'error' ||
+    state.phase === 'conflict' ||
+    state.phase === 'inaccessible' ||
+    state.phase === 'deleted'
+  )
+}
+
+export function WorkflowDraftStatusSummary(props: {
+  state: Pick<WorkflowEditorDraftState, 'phase' | 'transport'>
+}): ReactElement {
+  const { t } = useTranslation()
+  const phaseLabel = t(`editor.draftStatus.phase.${props.state.phase}`)
+  const transportLabel = t(`editor.draftStatus.transport.${props.state.transport}`)
+
+  return (
+    <div
+      className="editor-draft-status-summary"
+      role="group"
+      aria-label={t('editor.draftStatus.groupLabel')}
+      aria-live="polite"
+      aria-atomic="true"
+      data-testid="workflow-draft-status-summary"
+    >
+      <StatusChip
+        kind={PHASE_KIND[props.state.phase]}
+        size="sm"
+        aria-label={t('editor.draftStatus.phaseAria', { status: phaseLabel })}
+        data-testid="workflow-draft-phase"
+      >
+        {phaseLabel}
+      </StatusChip>
+      <StatusChip
+        kind={TRANSPORT_KIND[props.state.transport]}
+        size="sm"
+        aria-label={t('editor.draftStatus.transportAria', { status: transportLabel })}
+        data-testid="workflow-draft-transport"
+      >
+        {transportLabel}
+      </StatusChip>
+    </div>
+  )
+}
+
 export function WorkflowDraftStatus(props: WorkflowDraftStatusProps): ReactElement {
   const { t } = useTranslation()
   const [confirmation, setConfirmation] = useState<'load' | 'overwrite' | null>(null)
@@ -65,34 +114,12 @@ export function WorkflowDraftStatus(props: WorkflowDraftStatusProps): ReactEleme
     if (phase !== 'conflict') setConfirmation(null)
   }, [phase])
 
-  const phaseLabel = t(`editor.draftStatus.phase.${phase}`)
-  const transportLabel = t(`editor.draftStatus.transport.${transport}`)
-
   return (
     <section
       className="workflow-draft-status"
       aria-label={t('editor.draftStatus.groupLabel')}
       data-testid="workflow-draft-status"
     >
-      <div className="page__actions workflow-draft-status__summary">
-        <StatusChip
-          kind={PHASE_KIND[phase]}
-          size="sm"
-          aria-label={t('editor.draftStatus.phaseAria', { status: phaseLabel })}
-          data-testid="workflow-draft-phase"
-        >
-          {phaseLabel}
-        </StatusChip>
-        <StatusChip
-          kind={TRANSPORT_KIND[transport]}
-          size="sm"
-          aria-label={t('editor.draftStatus.transportAria', { status: transportLabel })}
-          data-testid="workflow-draft-transport"
-        >
-          {transportLabel}
-        </StatusChip>
-      </div>
-
       {transport === 'offline' && (
         <NoticeBanner
           tone="warning"

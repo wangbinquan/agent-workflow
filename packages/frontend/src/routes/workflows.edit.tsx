@@ -49,7 +49,11 @@ import { PageHeader } from '@/components/PageHeader'
 import { QuickCreateDialog } from '@/components/QuickCreateDialog'
 import { RenameDialog } from '@/components/RenameDialog'
 import { UnsavedChangesGuard } from '@/components/split/UnsavedChangesGuard'
-import { WorkflowDraftStatus } from '@/components/workflow-editor/WorkflowDraftStatus'
+import {
+  WorkflowDraftStatus,
+  WorkflowDraftStatusSummary,
+  workflowDraftHasNotice,
+} from '@/components/workflow-editor/WorkflowDraftStatus'
 import { WorkflowStarterDialog } from '@/components/workflow-editor/WorkflowStarterDialog'
 import { ValidationPanel } from '@/components/workflow-editor/ValidationPanel'
 export { partitionValidationIssues as partitionIssues } from '@/components/workflow-editor/ValidationPanel'
@@ -607,10 +611,17 @@ export function WorkflowEditorLoaded({
   const draftStatusFocusRef = useRef<HTMLDivElement | null>(null)
   const actionErrorFocusRef = useRef<HTMLDivElement | null>(null)
   const focusActionErrorAfterRenderRef = useRef(false)
+  const [draftStatusFocusRequest, setDraftStatusFocusRequest] = useState(0)
+  const draftStatusVisible = workflowDraftHasNotice(controller.state)
 
   const focusDraftStatus = (): void => {
-    draftStatusFocusRef.current?.focus()
+    setDraftStatusFocusRequest((request) => request + 1)
   }
+  useEffect(() => {
+    if (draftStatusFocusRequest === 0 || !draftStatusVisible) return
+    draftStatusFocusRef.current?.focus()
+  }, [draftStatusFocusRequest, draftStatusVisible])
+
   const recordExactActionError = (error: unknown): void => {
     if (
       (error instanceof WorkflowEnsureSavedError && error.reason === 'cancelled') ||
@@ -932,9 +943,16 @@ export function WorkflowEditorLoaded({
           className="editor-page-header"
           title={controller.state.local.name || workflowId}
           meta={
-            <>
-              <code>{workflowId}</code> · v{controller.state.serverRevision.version}
-            </>
+            <div className="editor-resource-meta">
+              <span className="editor-resource-meta__revision">
+                <code className="editor-resource-meta__id">{workflowId}</code>
+                <span className="editor-resource-meta__version">
+                  {' · v'}
+                  {controller.state.serverRevision.version}
+                </span>
+              </span>
+              <WorkflowDraftStatusSummary state={controller.state} />
+            </div>
           }
           actions={headerActions}
         />
@@ -952,24 +970,26 @@ export function WorkflowEditorLoaded({
           <ErrorBanner error={agents.error} />
         )}
 
-        <div ref={draftStatusFocusRef} tabIndex={-1} data-testid="workflow-draft-status-focus">
-          <WorkflowDraftStatus
-            state={controller.state}
-            onRetryNow={controller.retry}
-            onSaveCopy={controller.requestCopy}
-            onLoadRemote={controller.confirmLoadRemote}
-            onOverwriteRemote={controller.confirmOverwrite}
-            onExportLocal={() => downloadWorkflowLocalDraft(controller.state.local)}
-            onRetryAccess={controller.retryAccess}
-            onReturnToList={() => {
-              // The terminal Notice action is itself the user's explicit decision
-              // to leave the retained local draft; do not make it confirm twice.
-              unsafeNavigationRef.current = null
-              void navigate({ to: '/workflows' })
-            }}
-            canSaveCopy
-          />
-        </div>
+        {draftStatusVisible && (
+          <div ref={draftStatusFocusRef} tabIndex={-1} data-testid="workflow-draft-status-focus">
+            <WorkflowDraftStatus
+              state={controller.state}
+              onRetryNow={controller.retry}
+              onSaveCopy={controller.requestCopy}
+              onLoadRemote={controller.confirmLoadRemote}
+              onOverwriteRemote={controller.confirmOverwrite}
+              onExportLocal={() => downloadWorkflowLocalDraft(controller.state.local)}
+              onRetryAccess={controller.retryAccess}
+              onReturnToList={() => {
+                // The terminal Notice action is itself the user's explicit decision
+                // to leave the retained local draft; do not make it confirm twice.
+                unsafeNavigationRef.current = null
+                void navigate({ to: '/workflows' })
+              }}
+              canSaveCopy
+            />
+          </div>
+        )}
 
         <div
           className={editorLayoutClass(selection?.id ?? null, workspaceMode)}

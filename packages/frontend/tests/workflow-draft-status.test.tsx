@@ -11,6 +11,7 @@ import type {
 import { createWorkflowEditorDraftState } from '@/lib/workflow-editor-draft'
 import {
   WorkflowDraftStatus,
+  WorkflowDraftStatusSummary,
   type WorkflowDraftStatusProps,
 } from '@/components/workflow-editor/WorkflowDraftStatus'
 import i18n from '@/i18n'
@@ -78,7 +79,6 @@ afterEach(() => {
 
 describe('<WorkflowDraftStatus />', () => {
   test('maps every save phase to one short StatusChip independently from transport', () => {
-    const actions = callbacks()
     const cases: Array<[WorkflowDraftPhase, string, string]> = [
       ['clean', 'Saved', 'success'],
       ['dirty', 'Unsaved changes', 'warn'],
@@ -89,10 +89,10 @@ describe('<WorkflowDraftStatus />', () => {
       ['inaccessible', 'Inaccessible', 'danger'],
       ['deleted', 'Deleted', 'danger'],
     ]
-    const view = render(<WorkflowDraftStatus state={state('clean')} {...actions} />)
+    const view = render(<WorkflowDraftStatusSummary state={state('clean')} />)
 
     for (const [phase, label, kind] of cases) {
-      view.rerender(<WorkflowDraftStatus state={state(phase)} {...actions} />)
+      view.rerender(<WorkflowDraftStatusSummary state={state(phase)} />)
       const chip = screen.getByTestId('workflow-draft-phase')
       expect(chip.textContent).toBe(label)
       expect(chip.className).toContain(`status-chip--${kind}`)
@@ -101,7 +101,12 @@ describe('<WorkflowDraftStatus />', () => {
 
   test('maps online/degraded/offline on a separate chip and keeps offline notice orthogonal', () => {
     const actions = callbacks()
-    const view = render(<WorkflowDraftStatus state={state('conflict', 'online')} {...actions} />)
+    const view = render(
+      <>
+        <WorkflowDraftStatusSummary state={state('conflict', 'online')} />
+        <WorkflowDraftStatus state={state('conflict', 'online')} {...actions} />
+      </>,
+    )
     const cases: Array<[WorkflowDraftTransport, string, string]> = [
       ['online', 'Online', 'success'],
       ['degraded', 'Live sync degraded', 'warn'],
@@ -109,7 +114,12 @@ describe('<WorkflowDraftStatus />', () => {
     ]
 
     for (const [transport, label, kind] of cases) {
-      view.rerender(<WorkflowDraftStatus state={state('conflict', transport)} {...actions} />)
+      view.rerender(
+        <>
+          <WorkflowDraftStatusSummary state={state('conflict', transport)} />
+          <WorkflowDraftStatus state={state('conflict', transport)} {...actions} />
+        </>,
+      )
       const chip = screen.getByTestId('workflow-draft-transport')
       expect(chip.textContent).toBe(label)
       expect(chip.className).toContain(`status-chip--${kind}`)
