@@ -36,7 +36,27 @@ import { routePopulatedInbox } from './inbox-fixtures'
 const RUN_VISUAL_REGRESSION = process.env.RUN_VISUAL_REGRESSION === '1'
 const EXPECTED_VISUAL_SCENE_COUNT = 26
 const HOMEPAGE_VISUAL_TIME = new Date(2026, 6, 23, 14, 0, 0)
-const VISUAL_OPENCODE_MODEL = 'test/model'
+const VISUAL_RUNTIME_STATUS = {
+  runtimes: [
+    {
+      name: 'opencode',
+      protocol: 'opencode',
+      binary: 'opencode',
+      ok: true,
+      version: '1.18.3',
+      isDefault: true,
+    },
+    {
+      name: 'claude-code',
+      protocol: 'claude-code',
+      binary: 'claude',
+      ok: false,
+      version: null,
+      isDefault: false,
+    },
+  ],
+  sandbox: { mode: 'off', mechanism: null, available: false },
+} as const
 
 let daemon: DaemonHandle | undefined
 
@@ -48,10 +68,21 @@ function requireDaemon(): DaemonHandle {
 // Every scene owns an isolated daemon. This makes a single --grep execution
 // byte-equivalent to the full file: seeded resources and a previous scene's
 // theme can never leak into the next screenshot.
-test.beforeEach(async () => {
+test.beforeEach(async ({ page }) => {
   if (!RUN_VISUAL_REGRESSION) return
   daemon = await startDaemon()
-  await seedVisualExecutionPolicy()
+  // The visual daemon intentionally points config.opencodePath at a shell
+  // fixture. RFC-224 must reject those bytes in production, but recording that
+  // expected rejection would make host executable identity part of unrelated
+  // page pixels. Keep this presentation-only query deterministic; backend and
+  // frontend contract suites own the real verified-status behavior.
+  await page.route('**/api/runtimes/status', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.continue()
+      return
+    }
+    await route.fulfill({ json: VISUAL_RUNTIME_STATUS })
+  })
 })
 
 test.afterEach(async () => {
@@ -88,33 +119,6 @@ async function waitForStableAuthenticatedShell(page: Page): Promise<void> {
   await expect(userMenu).toContainText('e2e_admin')
   await expect(userMenu).toContainText('E2E Administrator')
   await page.waitForLoadState('networkidle')
-}
-
-/**
- * RFC-224 validates the complete merged system-agent execution policy on
- * every config write. A fresh visual daemon intentionally uses the model-less
- * built-in OpenCode runtime, so seed an explicit deterministic model on that
- * inherited profile before any scene writes its theme (or the network scene
- * later patches bindPort).
- *
- * Seeding the profile also keeps the Runtime screenshot free of the
- * model-required warning that would otherwise be fixture noise.
- */
-async function seedVisualExecutionPolicy(): Promise<void> {
-  const d = requireDaemon()
-  const response = await fetch(`${d.baseUrl}/api/runtimes/opencode`, {
-    method: 'PUT',
-    headers: {
-      Authorization: `Bearer ${d.token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ model: VISUAL_OPENCODE_MODEL }),
-  })
-  if (!response.ok) {
-    throw new Error(
-      `visual-regression: failed to seed RFC-224 execution policy (${response.status}): ${await response.text()}`,
-    )
-  }
 }
 
 async function setDaemonTheme(theme: 'light' | 'dark'): Promise<void> {

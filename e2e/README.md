@@ -1,7 +1,10 @@
 # e2e/ — Playwright end-to-end suite
 
-Drives the single binary (`dist/agent-workflow-<plat>-<arch>`) against a
-stub-opencode shim and walks the embedded frontend in a headless browser.
+Drives the separately compiled test binary
+(`dist/agent-workflow-e2e-<plat>-<arch>`) against a stub-opencode shim and
+walks the embedded frontend in a headless browser. The test artifact differs
+from the shipped binary by one compile-time-only dependency-injection seam;
+there is no runtime env/config/HTTP switch that can enable it in production.
 Each spec spawns its own daemon via [`harness.ts`](./harness.ts) into a
 fresh temp `AGENT_WORKFLOW_HOME` on a random ephemeral port, so specs are
 hermetic — no shared SQLite, no shared port, no cross-test pollution.
@@ -10,7 +13,7 @@ hermetic — no shared SQLite, no shared port, no cross-test pollution.
 
 ```sh
 bun install
-bun run build:binary           # produces dist/agent-workflow-<plat>-<arch>
+bun run build:binary:e2e       # produces production + test-only e2e binaries
 bun run e2e                    # 4 workers, chromium only, ~22s on M2
 ```
 

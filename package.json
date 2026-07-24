@@ -22,6 +22,7 @@
     "test:shared": "bun run --filter @agent-workflow/shared test",
     "test:frontend": "bun run --filter @agent-workflow/frontend test",
     "build:binary": "bun run scripts/build-binary.ts",
+    "build:binary:e2e": "bun run scripts/build-binary.ts --include-e2e",
     "e2e": "playwright test",
     "test:visual": "RUN_VISUAL_REGRESSION=1 playwright test e2e/visual-regression.spec.ts --project=chromium",
     "e2e:install": "playwright install --with-deps chromium",

@@ -62,8 +62,8 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Build single-binary
-        run: bun run build:binary
+      - name: Build production + test-only e2e binaries
+        run: bun run build:binary:e2e
 
       - name: Install Playwright browsers (webkit)
         # `--with-deps` installs the system libs webkit needs on

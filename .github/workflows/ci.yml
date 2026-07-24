@@ -416,7 +416,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-binary:
-    name: Build single-binary (smoke)
+    name: Build production binary + e2e artifact (smoke)
     # Order the binary build + e2e AFTER the fast, cheap checks and the full test
     # matrix so their logs read top-down and a green run costs the same as before.
     # Each is a separate job now that the old monolithic `check` was split for
@@ -465,8 +465,8 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Build single-binary
-        run: bun run build:binary
+      - name: Build production + test-only e2e binaries
+        run: bun run build:binary:e2e
 
       - name: Show artifact size
         run: ls -lh dist/
@@ -490,7 +490,7 @@ jobs:
         # though the canonical asset names here never contain any.
         run: |
           set -euxo pipefail
-          bin=$(find dist -maxdepth 1 -type f -name 'agent-workflow-*' | head -n 1)
+          bin=$(find dist -maxdepth 1 -type f -name 'agent-workflow-*' ! -name 'agent-workflow-e2e-*' | head -n 1)
           bin="$PWD/$bin"
           chmod +x "$bin"
           "$bin" version
@@ -519,6 +519,7 @@ jobs:
 
           # Drive the compiled supervisor over real pipes: no FIFO/open-order
           # races, and every protocol read has its own bounded deadline.
+          # shellcheck disable=SC2016 -- JS template literals must reach Bun verbatim.
           RFC224_SMOKE_BIN="$bin" bun -e '
             const binary = process.env.RFC224_SMOKE_BIN
             if (binary === undefined || !binary.startsWith("/")) {
@@ -728,13 +729,25 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: agent-workflow-${{ matrix.os }}
-          path: dist/agent-workflow-*
+          path: |
+            dist/agent-workflow-*
+            !dist/agent-workflow-e2e-*
+          if-no-files-found: error
+
+      - name: Upload test-only e2e artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: agent-workflow-e2e-${{ matrix.os }}
+          path: dist/agent-workflow-e2e-*
           if-no-files-found: error
 
   e2e:
-    # Playwright happy-path against the single binary that `build-binary`
-    # already produced and uploaded — we download it instead of rebuilding on
-    # every shard. download/upload-artifact drops the +x bit, so a one-line
+    # Playwright runs against the compile-time-isolated e2e artifact that
+    # `build-binary` already produced and uploaded. The same job separately
+    # smoke-tests the production artifact, whose runtime trust policy remains
+    # identical to the release build. We download the e2e artifact instead of
+    # rebuilding on every shard. download/upload-artifact drops the +x bit, so
+    # a one-line
     # `chmod +x` restores it (cheap, vs. a full vite build + --compile per
     # shard). This eliminates 8 redundant binary rebuilds (2 OS × 4 shards)
     # per CI run; e2e/harness.ts only needs the file to exist + be executable.
@@ -748,8 +761,8 @@ jobs:
     name: Playwright e2e (shard ${{ matrix.shard }}/4)
     needs: build-binary
     # Same reasoning as build-binary's `if`: a red unit shard must not silently
-    # skip the only layer that exercises real layout, real browser a11y and the
-    # shipped binary. If build-binary itself failed there is no artifact to
+    # skip the only layer that exercises real layout and browser a11y. If
+    # build-binary itself failed there is no artifact to
     # download and this job fails loudly on the download step — which is the
     # honest signal, unlike a skip.
     if: ${{ !cancelled() }}
@@ -787,17 +800,17 @@ jobs:
         # under test comes from the downloaded artifact below, not this install.
         run: bun install --frozen-lockfile
 
-      - name: Download single-binary from build-binary
-        # Reuse the artifact build-binary already produced for this OS instead
-        # of rebuilding it on every shard (see job comment above).
+      - name: Download test-only e2e binary from build-binary
+        # Reuse the separately compiled test artifact. Its compile-time-only
+        # OpenCode dependency seam is absent from the shipped binary.
         uses: actions/download-artifact@v8
         with:
-          name: agent-workflow-${{ matrix.os }}
+          name: agent-workflow-e2e-${{ matrix.os }}
           path: dist
 
-      - name: Restore executable bit on the binary
+      - name: Restore executable bit on the e2e binary
         # upload/download-artifact does not preserve the +x mode bit.
-        run: chmod +x dist/agent-workflow-*
+        run: chmod +x dist/agent-workflow-e2e-*
 
       - name: Cache Playwright browsers
         id: pw-cache

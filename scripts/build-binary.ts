@@ -25,7 +25,6 @@ import { mkdir, rm } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { basename, dirname, join, posix, relative, resolve } from 'node:path'
 
-const require = createRequire(import.meta.url)
 const repoRoot = resolve(import.meta.dirname, '..')
 const frontendDist = join(repoRoot, 'packages', 'frontend', 'dist')
 const migrationsDir = join(repoRoot, 'packages', 'backend', 'db', 'migrations')
@@ -256,6 +255,7 @@ function grammarWasmPaths(): string[] {
 async function main(): Promise<void> {
   process.chdir(repoRoot)
   await mkdir(outDir, { recursive: true })
+  const includeE2eBinary = Bun.argv.includes('--include-e2e')
 
   // 1. Frontend → dist.
   await buildFrontend()
@@ -269,6 +269,7 @@ async function main(): Promise<void> {
 
   // 3. bun build --compile.
   const outfile = join(outDir, `agent-workflow-${platformSuffix()}`)
+  const e2eOutfile = join(outDir, `agent-workflow-e2e-${platformSuffix()}`)
   // RFC-213 impl-gate P1-3: stamp a real binary identity into the executable so
   // the pre-migration restore gate can tell two releases apart (util/version.ts).
   // git describe gives the tag on releases and tag-N-gSHA on intermediate builds;
@@ -291,12 +292,33 @@ async function main(): Promise<void> {
         '--target=bun',
         '--minify',
         `--define=AW_BUILD_VERSION="${buildVersion}"`,
+        '--define=AW_E2E_UNVERIFIED_OPENCODE=false',
         `--outfile=${outfile}`,
       ],
       repoRoot,
     )
     const size = statSync(outfile).size
     process.stdout.write(`\nbuilt: ${outfile} (${(size / 1024 / 1024).toFixed(1)} MiB)\n`)
+    if (includeE2eBinary) {
+      await run(
+        [
+          'bun',
+          'build',
+          mainEntry,
+          '--compile',
+          '--target=bun',
+          '--minify',
+          `--define=AW_BUILD_VERSION="${buildVersion}"`,
+          '--define=AW_E2E_UNVERIFIED_OPENCODE=true',
+          `--outfile=${e2eOutfile}`,
+        ],
+        repoRoot,
+      )
+      const e2eSize = statSync(e2eOutfile).size
+      process.stdout.write(
+        `\nbuilt test-only: ${e2eOutfile} (${(e2eSize / 1024 / 1024).toFixed(1)} MiB)\n`,
+      )
+    }
   } finally {
     // 4. Always restore the stub so dev mode is unaffected.
     writeFileSync(generatedPath, STUB_CONTENTS)
@@ -305,6 +327,10 @@ async function main(): Promise<void> {
   // Spot-check the binary: `--version` should print and exit 0.
   await run([outfile, 'version'], repoRoot)
   process.stdout.write(`\nsmoke ok: ${outfile} version\n`)
+  if (includeE2eBinary) {
+    await run([e2eOutfile, 'version'], repoRoot)
+    process.stdout.write(`\nsmoke ok: ${e2eOutfile} version\n`)
+  }
 }
 
 main().catch(async (err: unknown) => {

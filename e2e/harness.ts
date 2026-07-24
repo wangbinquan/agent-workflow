@@ -1,12 +1,12 @@
-// Spawn the agent-workflow single binary against a temp $AGENT_WORKFLOW_HOME
-// for Playwright e2e (P-5-07).
+// Spawn the separately compiled agent-workflow e2e binary against a temp
+// $AGENT_WORKFLOW_HOME for Playwright e2e (P-5-07).
 //
 // The binary serves both the API and the embedded frontend on the same
 // origin — same shape as production — so the test browser only needs the
 // daemon URL + token. No vite dev server, no CORS plumbing.
 //
-// Local: `bun run build:binary` first, then `bun run e2e`.
-// CI:    the `e2e` job downloads the artifact from `build-binary`.
+// Local: `bun run build:binary:e2e` first, then `bun run e2e`.
+// CI:    the `e2e` job downloads the test-only artifact from `build-binary`.
 //
 // Note: this file runs in Playwright's Node runtime (not Bun), so it uses
 // node:child_process rather than Bun.spawn.
@@ -54,7 +54,8 @@ export interface DaemonHandle {
 
 export interface SpawnOptions {
   /**
-   * Path to the agent-workflow binary. Defaults to dist/agent-workflow-<plat>-<arch>.
+   * Path to the agent-workflow binary. Defaults to
+   * dist/agent-workflow-e2e-<plat>-<arch>.
    * If the file does not exist, harness throws — tell the engineer to build first.
    */
   binary?: string
@@ -94,7 +95,7 @@ function platformSuffix(): string {
 
 export function defaultBinaryPath(): string {
   if (process.env.AGENT_WORKFLOW_E2E_BINARY) return process.env.AGENT_WORKFLOW_E2E_BINARY
-  return resolve(repoRoot, 'dist', `agent-workflow-${platformSuffix()}`)
+  return resolve(repoRoot, 'dist', `agent-workflow-e2e-${platformSuffix()}`)
 }
 
 function isExecutableFile(path: string): boolean {
@@ -259,6 +260,7 @@ const E2E_ADMIN = {
   displayName: 'E2E Administrator',
   password: 'E2EAdministrator123!',
 } as const
+const E2E_OPENCODE_MODEL = 'test/model'
 
 async function authenticatedAdminToken(ready: ReadyDaemon): Promise<string> {
   if (ready.bootstrapToken !== null) {
@@ -294,6 +296,22 @@ async function authenticatedAdminToken(ready: ReadyDaemon): Promise<string> {
   return body.sessionToken
 }
 
+async function seedE2eExecutionPolicy(ready: ReadyDaemon, token: string): Promise<void> {
+  const response = await fetch(`${ready.baseUrl}/api/runtimes/opencode`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ model: E2E_OPENCODE_MODEL }),
+  })
+  if (!response.ok) {
+    throw new Error(
+      `e2e/harness: failed to seed RFC-224 execution policy (${response.status}): ${await response.text()}`,
+    )
+  }
+}
+
 /**
  * Resolve an ephemeral loopback port in the Node parent before spawning the
  * compiled Bun daemon. Bun 1.3.13 on macOS rejects `Bun.serve({ port: 0 })`
@@ -327,7 +345,7 @@ async function startDaemonWithPortAllocator(
   if (!isExecutableFile(binary)) {
     throw new Error(
       `e2e/harness: binary not found at ${binary}\n` +
-        `  Run \`bun run build:binary\` to produce it, or set AGENT_WORKFLOW_E2E_BINARY.`,
+        `  Run \`bun run build:binary:e2e\` to produce it, or set AGENT_WORKFLOW_E2E_BINARY.`,
     )
   }
 
@@ -407,6 +425,9 @@ async function startDaemonWithPortAllocator(
             : await authenticatedAdminToken(ready)
         if (token === null) {
           throw new Error('e2e/harness: bootstrap auth requested for an already-initialized home')
+        }
+        if (opts.authMode !== 'bootstrap') {
+          await seedE2eExecutionPolicy(ready, token)
         }
 
         // Keep draining stdout so the child never blocks on a full pipe.

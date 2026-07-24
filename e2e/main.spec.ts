@@ -634,6 +634,9 @@ test('RFC-022: agent form Dependency tree (preview) renders the full closure', a
     Authorization: `Bearer ${daemon.token}`,
     'Content-Type': 'application/json',
   }
+  // RFC-224 correctly rejects dependent-agent graphs on OpenCode. This scene
+  // exercises only closure persistence/rendering, so pin the fixtures to the
+  // Claude runtime rather than weakening the production capability policy.
   // Seed leaves first so the save-time guard accepts each row.
   const seed = async (name: string, dependsOn: string[]): Promise<string> => {
     const res = await fetch(`${daemon.baseUrl}/api/agents`, {
@@ -645,6 +648,7 @@ test('RFC-022: agent form Dependency tree (preview) renders the full closure', a
         dependsOn,
         outputs: [],
         readonly: false,
+        runtime: 'claude-code',
       }),
     })
     expectOk(res, `seed agent ${name}`)

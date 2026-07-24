@@ -81,7 +81,7 @@ Sequence within the job:
 2. `docker compose -f scripts/git-protocols/docker-compose.test.yml up -d`
 3. `scripts/git-protocols/seed-gitea.sh > /tmp/seed.env` then export to `$GITHUB_ENV`
 4. `bun install --frozen-lockfile`
-5. `bun run build:binary` (the spec needs the daemon binary)
+5. `bun run build:binary:e2e` (the spec needs the test-only daemon binary)
 6. `bunx playwright install --with-deps chromium`
 7. `RUN_GIT_PROTOCOLS=1 bun run e2e e2e/git-protocols.spec.ts`
 8. `docker compose -f scripts/git-protocols/docker-compose.test.yml down -v` (always-run cleanup)

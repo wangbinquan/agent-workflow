@@ -83,7 +83,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Build daemon binary (spec spawns it via harness)
-        run: bun run build:binary
+        run: bun run build:binary:e2e
 
       - name: Install Playwright (chromium only — git spec is headless API-driven)
         run: bunx playwright install --with-deps chromium

@@ -17,12 +17,27 @@ const log = createLogger('opencode')
 const PRODUCTION_OPENCODE_COMMANDS = new WeakSet<string[]>()
 
 /**
+ * Compile-time-only Playwright seam.
+ *
+ * The shipped binary is always built with this symbol defined as `false`.
+ * CI may additionally compile a distinct `agent-workflow-e2e-*` executable
+ * with it set to `true`, allowing the browser harness's deterministic shell
+ * fixture to travel through the existing unbranded dependency-injection path.
+ * There is deliberately no env/config/HTTP switch that can enable this in a
+ * production executable.
+ */
+declare const AW_E2E_UNVERIFIED_OPENCODE: boolean
+const IS_E2E_UNVERIFIED_OPENCODE_BUILD =
+  typeof AW_E2E_UNVERIFIED_OPENCODE !== 'undefined' && AW_E2E_UNVERIFIED_OPENCODE
+
+/**
  * Production launch-head provenance. Tests historically inject thousands of
  * untrusted mock arrays through the same option; an in-memory brand lets the
  * driver keep that explicit dependency seam without mistaking config-derived
  * commands for test fixtures (or trusting a path/name convention).
  */
 export function markProductionOpencodeCommand(command: string[]): string[] {
+  if (IS_E2E_UNVERIFIED_OPENCODE_BUILD) return command
   PRODUCTION_OPENCODE_COMMANDS.add(command)
   return command
 }

@@ -39,7 +39,7 @@ prevents resource or theme state leaking between screenshots.
 
 ```sh
 # 1. Build the daemon binary the spec spawns.
-bun run build:binary
+bun run build:binary:e2e
 
 # 2. Generate (or refresh) darwin baselines.
 bun run test:visual -- --update-snapshots
@@ -95,7 +95,7 @@ docker run --rm -v "$PWD:/work" -w /work \
     curl -fsSL https://bun.sh/install | bash -s "bun-v1.3.13" &&
     export PATH="/root/.bun/bin:$PATH" &&
     bun install --frozen-lockfile &&
-    bun run build:binary &&
+    bun run build:binary:e2e &&
     bun run test:visual -- --update-snapshots
   '
 ```

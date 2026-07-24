@@ -29,6 +29,9 @@ on:
     branches: [main]
     paths:
       - 'packages/frontend/**'
+      - 'packages/backend/src/util/opencode.ts'
+      - 'packages/backend/tests/rfc224-e2e-compiled-seam.test.ts'
+      - 'scripts/build-binary.ts'
       - 'e2e/ux-consistency.spec.ts'
       - 'e2e/visual-regression.spec.ts'
       - 'e2e/visual-regression.spec.ts-snapshots/**'
@@ -45,6 +48,9 @@ on:
   pull_request:
     paths:
       - 'packages/frontend/**'
+      - 'packages/backend/src/util/opencode.ts'
+      - 'packages/backend/tests/rfc224-e2e-compiled-seam.test.ts'
+      - 'scripts/build-binary.ts'
       - 'e2e/ux-consistency.spec.ts'
       - 'e2e/visual-regression.spec.ts'
       - 'e2e/visual-regression.spec.ts-snapshots/**'
@@ -95,7 +101,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Build daemon binary
-        run: bun run build:binary
+        run: bun run build:binary:e2e
 
       - name: Install Playwright (chromium)
         run: bunx playwright install --with-deps chromium
