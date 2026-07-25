@@ -57,8 +57,9 @@ export interface SmokeOptions {
   timeoutMs?: number
   /**
    * Bridge the claude subscription credential into the temp config dir (real
-   * runs). Tests pass false (mock-claude) so CI never touches the keychain. No
-   * effect for the opencode protocol.
+   * runs). Tests pass false (mock-claude) so CI never touches the keychain.
+   * Verified OpenCode plans independently import only the selected provider
+   * from OpenCode's native auth store when no explicit daemon credential exists.
    */
   bridgeCredentials?: boolean
   log?: Logger

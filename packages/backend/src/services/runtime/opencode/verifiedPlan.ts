@@ -10,9 +10,9 @@ import { getSandboxProvider } from '@/services/sandbox'
 import {
   buildControlledOpencodeConfig,
   buildHermeticServerEnv,
-  buildStrictProviderAuth,
   deriveHermeticOpencodeLayout,
   removeHermeticOpencodeLayout,
+  resolveStrictProviderAuth,
   type HermeticOpencodeLayout,
 } from './hermetic'
 import { inspectRuntimeOpencodeBinary } from './runtimeBinary'
@@ -449,7 +449,7 @@ export async function buildVerifiedOpencodeBusinessPlan(
     allowShell: ctx.agent.permission.bash !== 'deny',
     mcp: plannedMcp.config,
   })
-  const auth = buildStrictProviderAuth(selectedModel.providerID, sourceEnv)
+  const auth = await resolveStrictProviderAuth(selectedModel.providerID, sourceEnv)
   const username = `aw-${randomBytes(12).toString('base64url')}`
   const password = randomBytes(32).toString('base64url')
   const serverEnv = buildHermeticServerEnv({

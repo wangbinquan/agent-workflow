@@ -49,9 +49,12 @@ describe('RFC-224 bounded SSE parser', () => {
     expect(cr.finish()).toEqual([event])
   })
 
-  test('requires explicit event: message and rejects extension fields', () => {
-    const missing = new BoundedSseParser()
-    expect(() => missing.push(`data: ${JSON.stringify(event)}\n\n`)).toThrow('missing-event-name')
+  test('accepts the SSE-default message form and rejects conflicting/extension fields', () => {
+    // Regression: OpenCode 1.18.4 emits standards-compliant data-only frames;
+    // requiring an explicit `event: message` made every runtime smoke fail
+    // before the prompt was posted.
+    const implicitMessage = new BoundedSseParser()
+    expect(implicitMessage.push(`data: ${JSON.stringify(event)}\n\n`)).toEqual([event])
 
     const wrong = new BoundedSseParser()
     expect(() => wrong.push(`event: other\ndata: ${JSON.stringify(event)}\n\n`)).toThrow(

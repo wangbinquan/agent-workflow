@@ -44,6 +44,8 @@ export interface SandboxPolicy {
   denyFiles: string[]
   /** Allowed back INSIDE denied subtrees (must win over the denies). */
   allowSubtrees: string[]
+  /** Literal ancestor directories needed only for symlink-safe path traversal. */
+  allowMetadataFiles: string[]
   /** Read-only overlays applied after every read-write allow-back. */
   readOnlySubtrees: string[]
 }
@@ -63,6 +65,18 @@ function validatePolicyPath(path: string, label: string): void {
   ) {
     throw new TypeError(`invalid sandbox ${label} path`)
   }
+}
+
+function metadataAncestors(parent: string, child: string): string[] {
+  if (!isStrictDescendant(parent, child)) return []
+  const components = relative(parent, child).split(sep).filter(Boolean)
+  const ancestors = [parent]
+  let cursor = parent
+  for (const component of components.slice(0, -1)) {
+    cursor = join(cursor, component)
+    ancestors.push(cursor)
+  }
+  return ancestors
 }
 
 /** The one place the deny/allow sets are computed. Pure — no fs access. */
@@ -91,6 +105,14 @@ export function computeSandboxPolicy(input: SandboxPolicyInput): SandboxPolicy {
   // Allow back: this run's worktree(s) + run dir, and the shared git mirror (the
   // object store git commit reads/writes — credential-free after RFC-204 sealing).
   const allowSubtrees = [...input.taskWorktrees, input.runDir, join(h, 'repos')]
+  // Seatbelt's appHome-wide deny also blocks lstat/realpath on parent
+  // directories. The verified store boundary deliberately walks every
+  // ancestor to reject symlink substitution, so restore metadata access to
+  // those exact literals only. This does not grant directory enumeration,
+  // file contents, or writes, and bwrap does not consume this field.
+  const allowMetadataFiles = [
+    ...new Set(allowSubtrees.flatMap((path) => metadataAncestors(h, path))),
+  ]
   const readOnlySubtrees = [...(input.readOnlySubtrees ?? [])]
   const unique = new Set<string>()
   for (const path of readOnlySubtrees) {
@@ -101,7 +123,7 @@ export function computeSandboxPolicy(input: SandboxPolicyInput): SandboxPolicy {
       throw new TypeError('sandbox readOnlySubtree must be nested below an allowed subtree')
     }
   }
-  return { denySubtrees, denyFiles, allowSubtrees, readOnlySubtrees }
+  return { denySubtrees, denyFiles, allowSubtrees, allowMetadataFiles, readOnlySubtrees }
 }
 
 /** SBPL string literal escaping: backslash and double-quote. */
@@ -125,6 +147,9 @@ export function renderSeatbeltProfile(policy: SandboxPolicy): string {
   }
   for (const p of policy.allowSubtrees) {
     lines.push(`(allow file-read* file-write* (subpath ${sbplString(p)}))`)
+  }
+  for (const p of policy.allowMetadataFiles) {
+    lines.push(`(allow file-read-metadata (literal ${sbplString(p)}))`)
   }
   // A read-only subtree is nested below an allow-back. Seatbelt is
   // last-match-wins per operation, so revoke write after every RW allow, then

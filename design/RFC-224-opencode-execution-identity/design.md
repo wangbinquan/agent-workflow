@@ -148,6 +148,14 @@ seal 不存 prompt/MCP secret；一次性 manifest 位于普通 runRoot，launch
   `wellknown`、额外 provider 与额外 key（upstream 对该 env 只 `JSON.parse`，
   不会替平台 schema-validate）；selected model 的 implementation npm 另由
   official `/config/providers` allowlist 校验；
+- RFC-227 后不再依赖固定 provider 环境变量表覆盖所有 OpenCode provider：
+  显式 `OPENCODE_AUTH_CONTENT` / 已分类 API-key env 仍优先；两者均不存在时，
+  parent 按 OpenCode `Global.Path.data` 的 `xdg-basedir` 规则只读外层
+  `opencode/auth.json`，本地仅抽取 selected provider 的严格
+  `{type:"api",key}`，再生成只含该 provider 的 `OPENCODE_AUTH_CONTENT`。
+  原文件、其它 provider 与路径都不进入 hermetic child；文件缺失、symlink、
+  非普通文件、超限、读取中变化或 selected entry 非严格 API schema 均 fail
+  closed。该桥接按路径/结构能力工作，不新增 OS、arch 或 OpenCode 版本准入；
 - server `PATH` 只含 root-owned、不可由 task/model 写的 system directories；
 - `HOME` 本身（不只是 `OPENCODE_TEST_HOME`）指向 per-run private home，避免
   `{file:~/...}`、permission expansion、npm/git/runtime loader 回到真实用户目录；
@@ -393,7 +401,10 @@ launcher/server 持有。readiness 总预算 10s、单请求 2s；stdout 只接�
 `^opencode server listening on http://127\.0\.0\.1:([1-9]\d{0,4})$` 且端口
 `<=65535`，任何额外 stdout/重复 line/redirect/early exit 失败；stderr 只留 capped
 tail。每个 HTTP request 都带 Basic Auth + canonical `directory` query，禁止
-redirect，并有独立 deadline、响应大小上限与 strict schema。
+redirect，并有独立 deadline、响应大小上限与 strict schema。2s 单请求预算只约束
+bootstrap JSON 请求和 SSE 响应头建连；SSE 建立后仍绑定 caller abort signal，
+但生命周期由整个 run deadline 约束。prompt POST 使用 run deadline，不能被
+bootstrap 计时器提前中止。
 
 同 canonical directory 依次读取：
 
@@ -490,6 +501,17 @@ state/nonce 任一变化就 no-op。delayed-finally → repair → reacquire 的
 distiller/smoke 等不复用 session 的 system plan 明确 `control:none`，不伪造 DB
 ownership；它们仍在 prompt 前完成全部 identity gate。
 
+RFC-227 后 system plan 允许非 VCS 临时目录。OpenCode 对这类目录返回
+`projectID="global"`，其 root session wire `path` 是从文件系统 root 到 canonical
+directory 的标准化相对路径，而不是 `""`。strict comparator 只在
+`storeKind=system-ephemeral && projectID="global"` 时接受这个由 canonical
+directory 确定计算的值；business/new/resume 仍精确要求 `path=""`。owner 中的
+`session_contract_digest` 继续用 `path=""` 表示“本次 canonical directory 的 root
+session”这一平台语义，不能把任意 wire path 写进 owner。对应 assistant message
+仍要求 `path.cwd=canonical directory`；只有上述已验证的 global 非 VCS 形态才从
+root session 推导 `path.root=filesystem root`，其余仍要求
+`path.root=canonical worktree`。
+
 ### 7.2 resume
 
 不 GET `/session/:id`：该 route 会先按 stored session directory boot foreign
@@ -545,8 +567,18 @@ route。在 §7.2 current-instance inventory 已唯一验证该 session 后，la
 1. 对 `/event?directory=<canonical>` 建立 authenticated SSE；收到 200、
    `text/event-stream` 且**第一个有效事件为 `server.connected`**后才允许 POST。
    parser 支持任意 chunk、CRLF、多行 `data:` 与 heartbeat comment，但对单行、
-   单事件、累计 buffer 全部设上限；SSE wire event 必须为 `message`，data 必须是
-   `{id:"evt_...",type,properties}`。
+   单事件、累计 buffer 全部设上限；SSE wire event 只接受标准 data-only
+   （缺省事件类型为 `message`）或显式 `event: message` 两种等价编码，拒绝其它
+   event name、重复/扩展字段，data 必须是 `{id:"evt_...",type,properties}`。
+   OpenCode 可在 caller echo 后发送 related `session.updated`；codec 只在其
+   `sessionID/id/directory/path/title/projectID/agent/model/permission/version` 与本次
+   same-instance 初始 root session seal 一致时忽略该通知，任一身份漂移仍立即失败。
+   同会话 `session.diff` 仅作为只读进度通知接纳：properties 必须严格等于
+   `{sessionID,diff: FileDiff[]}`，每个 FileDiff 的 file/before/after、非负整数
+   additions/deletions 与可选 added/deleted/modified status 都必须通过 schema；
+   它不得改变完成条件，其他 related 未知事件仍 fail closed。
+   assistant/session/step token 计量接受上游可选有限数 `total`，但仍严格拒绝
+   其他未知 token 字段；final POST 与 SSE assistant 的完整 token 对象必须相等。
 2. launcher 先读取当前 session 的 message inventory 并验证 id 单调性。它等待
    wall clock 严格大于已有最大 ascending-id timestamp，生成与 pinned
    `Identifier.ascending("message")` 同 codec 的 caller user id
@@ -589,6 +621,12 @@ launcher SIGTERM/SIGINT：
 4. bounded grace；
 5. `kill(-pid, SIGKILL)`；
 6. bounded reap/pipe drain。
+
+macOS 外层 Seatbelt 仍 deny 整个 appHome；若本次授权的 private store 位于
+appHome 内，只对从 appHome 到该 store 的已知父目录 literal 恢复
+`file-read-metadata`，供 launcher 逐级 `lstat/realpath` 证明无 symlink。不得恢复
+这些父目录的 directory enumeration、file-read-data 或 write 权限，其他 task/store
+仍不可读。
 
 business、distiller、smoke 外层也把 launcher 设 process-group leader并做相同兜底；
 Linux inner bwrap PID namespace 由 namespace init 回收 shell/MCP 后代；取消后还要
@@ -716,10 +754,13 @@ required。Runtime UI 对 OpenCode 把 model 显示为 required，null row 显�
   orphan probe。runner pin 只是可复现基线，不能替代 production admission 或
   integration 的真实行为证据。
 - source guard 必须同时读取 `ci.yml`、`visual-regression-nightly.yml`、
-  `integration-opencode.yml` 与 `e2e-webkit-nightly.yml`，逐份证明只有一个
-  official `1.18.3` pin，所有真实安装目标只能引用该 pin，bare、`@latest` 或额外
-  版本都失败。它还枚举六个 `e2e/fixtures/stub-opencode*.sh`，每个 version arm
-  必须唯一且输出精确 `stub-opencode 1.18.3`；额外 advertised version 同样失败。
+  `integration-opencode.yml` 与 `e2e-webkit-nightly.yml`。`ci.yml` 的 source-test
+  与 compiled-binary doctor 两个独立 consumer 都安装 `latest`；integration matrix
+  精确覆盖稳定快照 `1.18.3` 与 `latest`；visual/WebKit 不另装 OpenCode。以上只是
+  兼容性测试 channel，不得进入 runtime admission。source guard 还要拒绝
+  `OPENCODE_VERSION`/`MIN_OPENCODE_VERSION`/`PINNED_OPENCODE_VERSION` 等版本门，
+  并枚举六个 `e2e/fixtures/stub-opencode*.sh`，要求每个 stub 只有一个显式
+  telemetry version arm，不能据此形成生产版本范围。
 - compiled smoke 除四个 hidden command 的 invalid-invocation ratchet 外，还要对
   bwrap native supervisor 跑三条独立协议试验：valid 路径在 ACK 前不得 buffer
   RELEASE，ACK 内容虽已 flush 但 stdin 未 EOF 时同一个 pending read 在观察窗内

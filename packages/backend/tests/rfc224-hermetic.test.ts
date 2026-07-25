@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { lstat, readFile, symlink } from 'node:fs/promises'
+import { lstat, mkdir, readFile, symlink, writeFile } from 'node:fs/promises'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -11,6 +11,8 @@ import {
   buildHermeticServerEnv,
   buildStrictProviderAuth,
   prepareHermeticOpencodeLayout,
+  resolveNativeOpencodeAuthPath,
+  resolveStrictProviderAuth,
 } from '@/services/runtime/opencode/hermetic'
 
 const roots: string[] = []
@@ -91,6 +93,82 @@ describe('RFC-224 strict provider auth', () => {
         expectCode(error, 'execution-identity-auth-invalid')
       }
     }
+  })
+
+  test('imports only the selected provider from the native OpenCode auth store', async () => {
+    // Regression: OpenCode was logged in with zhipuai in Global.Path.data/auth.json,
+    // but the verified plan only recognized a fixed env-key table and failed
+    // before spawn with execution-identity-auth-invalid.
+    const xdgData = root()
+    const store = join(xdgData, 'opencode')
+    await mkdir(store)
+    await writeFile(
+      join(store, 'auth.json'),
+      JSON.stringify({
+        openai: { type: 'api', key: 'must-not-cross-the-boundary' },
+        zhipuai: { type: 'api', key: 'selected-native-key' },
+      }),
+      { mode: 0o600 },
+    )
+
+    const result = await resolveStrictProviderAuth('zhipuai', { XDG_DATA_HOME: xdgData })
+    expect(JSON.parse(result.serialized)).toEqual({
+      zhipuai: { type: 'api', key: 'selected-native-key' },
+    })
+    expect(result.serialized).not.toContain('must-not-cross-the-boundary')
+  })
+
+  test('keeps explicit daemon credentials ahead of the native store', async () => {
+    const result = await resolveStrictProviderAuth(
+      'openai',
+      {
+        OPENAI_API_KEY: 'explicit-key',
+      },
+      { nativeAuthPath: join(root(), 'missing-auth.json') },
+    )
+    expect(JSON.parse(result.serialized)).toEqual({
+      openai: { type: 'api', key: 'explicit-key' },
+    })
+  })
+
+  test('rejects an unsafe or non-API selected entry in the native store', async () => {
+    const xdgData = root()
+    const store = join(xdgData, 'opencode')
+    await mkdir(store)
+    const authPath = join(store, 'auth.json')
+    await writeFile(
+      authPath,
+      JSON.stringify({ zhipuai: { type: 'api', key: 'secret', extra: true } }),
+      { mode: 0o600 },
+    )
+    try {
+      await resolveStrictProviderAuth('zhipuai', { XDG_DATA_HOME: xdgData })
+      throw new Error('expected failure')
+    } catch (error) {
+      expectCode(error, 'execution-identity-auth-invalid')
+      expect(String(error)).not.toContain('secret')
+    }
+
+    const target = join(root(), 'target-auth.json')
+    await writeFile(target, JSON.stringify({ zhipuai: { type: 'api', key: 'secret' } }))
+    const linkedData = root()
+    await mkdir(join(linkedData, 'opencode'))
+    await symlink(target, join(linkedData, 'opencode', 'auth.json'))
+    try {
+      await resolveStrictProviderAuth('zhipuai', { XDG_DATA_HOME: linkedData })
+      throw new Error('expected failure')
+    } catch (error) {
+      expectCode(error, 'execution-identity-auth-invalid')
+    }
+  })
+
+  test('resolves the same xdg-basedir auth path without an OS/version branch', () => {
+    expect(resolveNativeOpencodeAuthPath({}, '/users/me')).toBe(
+      join('/users/me', '.local', 'share', 'opencode', 'auth.json'),
+    )
+    expect(resolveNativeOpencodeAuthPath({ XDG_DATA_HOME: '/data' }, '/ignored')).toBe(
+      join('/data', 'opencode', 'auth.json'),
+    )
   })
 })
 

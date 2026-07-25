@@ -9,7 +9,7 @@
 
 import { createHash, randomBytes } from 'node:crypto'
 import { lstat, unlink } from 'node:fs/promises'
-import { dirname, isAbsolute, join, resolve } from 'node:path'
+import { dirname, isAbsolute, join, parse, resolve } from 'node:path'
 import type { ExecutionIdentityFailureCode } from '@agent-workflow/shared'
 import {
   AscendingMessageIdGenerator,
@@ -666,7 +666,9 @@ function sessionExpectation(
   return {
     ...extra,
     directory: manifest.worktreePath,
-    path: '',
+    ...(manifest.storeKind === 'system-ephemeral'
+      ? { allowGlobalProjectPath: true }
+      : { path: '' }),
     title: manifest.sessionTitle,
     agent: manifest.selectedAgent,
     model: manifest.selectedModel,
@@ -746,6 +748,7 @@ async function runPromptStream(input: {
   manifest: VerifiedLaunchManifest
   client: VerifiedLauncherClient
   sessionID: string
+  rootSession: SessionInfo | GlobalSessionInfo
   signal?: AbortSignal
   random: (size: number) => Uint8Array
   now: () => number
@@ -787,7 +790,14 @@ async function runPromptStream(input: {
       agent: input.manifest.selectedAgent,
       model: input.manifest.selectedModel,
       prompt: input.manifest.prompt,
-      path: { cwd: input.manifest.worktreePath, root: input.manifest.worktreePath },
+      path: {
+        cwd: input.manifest.worktreePath,
+        root:
+          input.rootSession.projectID === 'global' && (input.rootSession.path ?? '') !== ''
+            ? parse(input.manifest.worktreePath).root
+            : input.manifest.worktreePath,
+      },
+      rootSession: input.rootSession,
       now: input.now,
     })
     const ready = codec.consume(first.value)
@@ -1010,6 +1020,7 @@ export async function launchVerifiedOpencodeManifest(
   let stderrPump: Promise<void> | undefined
   let client: VerifiedLauncherClient | undefined
   let sessionID: string | undefined
+  let rootSession: SessionInfo | GlobalSessionInfo | undefined
   let succeeded = false
   let launchFailed = false
   let launchFailure: unknown
@@ -1083,6 +1094,7 @@ export async function launchVerifiedOpencodeManifest(
       budgets: {
         maxJsonBytes: 4 * 1024 * 1024,
         requestTimeoutMs: Math.min(2_000, manifest.bootstrapTimeoutMs),
+        promptTimeoutMs: manifest.runTimeoutMs,
       },
     })
     client = directClient
@@ -1121,6 +1133,7 @@ export async function launchVerifiedOpencodeManifest(
             }
             const session = await resolveSession(manifest, directClient, bootstrapSignal)
             sessionID = session.id
+            rootSession = session
             if (
               identityDigest(expectedSessionContract(manifest)) !== manifest.sessionContractDigest
             ) {
@@ -1155,9 +1168,11 @@ export async function launchVerifiedOpencodeManifest(
       signal,
       sleep,
     )
-    if (sessionID === undefined) {
+    if (sessionID === undefined || rootSession === undefined) {
       return executionIdentityFailure('execution-identity-session-mismatch')
     }
+    const resolvedSessionID = sessionID
+    const resolvedRootSession = rootSession
 
     // The source fence is rechecked at the actual model boundary, after the
     // ownership ack and immediately before opening SSE/POST.
@@ -1169,7 +1184,8 @@ export async function launchVerifiedOpencodeManifest(
           runPromptStream({
             manifest,
             client: directClient,
-            sessionID: sessionID!,
+            sessionID: resolvedSessionID,
+            rootSession: resolvedRootSession,
             signal: runSignal,
             random,
             now,

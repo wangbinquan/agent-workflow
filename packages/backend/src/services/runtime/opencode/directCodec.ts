@@ -11,17 +11,22 @@ import {
   QuestionAskedPropertiesSchema,
   ServerConnectedPropertiesSchema,
   ServerHeartbeatPropertiesSchema,
+  SessionDiffPropertiesSchema,
   SessionErrorPropertiesSchema,
   SessionIdSchema,
   SessionStatusPropertiesSchema,
+  SessionUpdatedPropertiesSchema,
   WireEventSchema,
   WithPartsSchema,
   compareAscendingMessageIds,
   parseDirectApiValue,
+  validateSessionIdentity,
   type AssistantMessage,
+  type GlobalSessionInfo,
   type JsonObject,
   type MessagePart,
   type SelectedModel,
+  type SessionInfo,
   type WireEvent,
   type WithParts,
 } from './directApiSchemas'
@@ -81,6 +86,7 @@ export type DirectCodecFailureReason =
   | 'part-terminal-duplicate'
   | 'delta-before-part'
   | 'unexpected-related-event'
+  | 'session-identity-mismatch'
   | 'session-error'
   | 'permission-requested'
   | 'question-requested'
@@ -100,6 +106,8 @@ export interface DirectCodecOptions {
     cwd: string
     root: string
   }
+  /** Initial same-instance root session seal used to admit related updates. */
+  rootSession?: SessionInfo | GlobalSessionInfo
   thinking?: boolean
   now?: () => number
   maxIgnoredEvents?: number
@@ -305,6 +313,12 @@ export class DirectSessionCodec {
       }
       if (parsedEvent.type === 'message.part.delta') {
         return this.#partDelta(parsedEvent.properties)
+      }
+      if (parsedEvent.type === 'session.updated') {
+        return this.#sessionUpdated(parsedEvent.properties)
+      }
+      if (parsedEvent.type === 'session.diff') {
+        return this.#sessionDiff(parsedEvent.properties)
       }
       if (parsedEvent.type === 'session.status') {
         return this.#sessionStatus(parsedEvent.properties)
@@ -536,6 +550,48 @@ export class DirectSessionCodec {
     if (properties.status.type !== 'idle') return this.#step([])
     this.#idle = true
     return this.#maybeComplete([], 'idle')
+  }
+
+  #sessionUpdated(value: unknown): DirectCodecStep {
+    const properties = parseProperties(SessionUpdatedPropertiesSchema, value, 'session.updated')
+    if (properties.sessionID !== properties.info.id) return this.#fail('schema-mismatch')
+    if (properties.sessionID !== this.#options.sessionID) return this.#ignore()
+    if (!this.#promptPosted) return this.#fail('event-before-prompt')
+    if (this.#idle) return this.#fail('event-after-idle')
+
+    const root = this.#options.rootSession
+    if (root === undefined || root.agent === undefined || root.model === undefined) {
+      return this.#fail('session-identity-mismatch')
+    }
+    try {
+      validateSessionIdentity(properties.info, {
+        sessionID: root.id,
+        directory: root.directory,
+        path: root.path ?? '',
+        title: root.title,
+        agent: root.agent,
+        model: {
+          providerID: root.model.providerID,
+          modelID: root.model.id,
+          ...(root.model.variant === undefined ? {} : { variant: root.model.variant }),
+        },
+        projectID: root.projectID,
+      })
+    } catch {
+      return this.#fail('session-identity-mismatch')
+    }
+    if (properties.info.version !== root.version) {
+      return this.#fail('session-identity-mismatch')
+    }
+    return this.#step([])
+  }
+
+  #sessionDiff(value: unknown): DirectCodecStep {
+    const properties = parseProperties(SessionDiffPropertiesSchema, value, 'session.diff')
+    if (properties.sessionID !== this.#options.sessionID) return this.#ignore()
+    if (!this.#promptPosted) return this.#fail('event-before-prompt')
+    if (this.#idle) return this.#fail('event-after-idle')
+    return this.#step([])
   }
 
   #sessionError(value: unknown): DirectCodecStep {

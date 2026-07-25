@@ -41,6 +41,16 @@ describe('computeSandboxPolicy', () => {
     expect(p.denySubtrees).toEqual([HOME])
     // own task dirs + the shared git mirror (git commit needs repos/) allowed back.
     expect(p.allowSubtrees).toEqual([...input.taskWorktrees, input.runDir, join(HOME, 'repos')])
+    // Symlink-safe lstat/realpath may traverse only exact ancestor literals;
+    // this is metadata access, not a subtree read allow.
+    expect(p.allowMetadataFiles).toEqual([
+      HOME,
+      join(HOME, 'worktrees'),
+      join(HOME, 'worktrees', 'r1'),
+      join(HOME, 'worktrees', 'multi'),
+      join(HOME, 'runs'),
+      join(HOME, 'runs', 't1'),
+    ])
     // skills is NOT allowed back (design Q5).
     expect(p.allowSubtrees.some((a) => a.includes('skills'))).toBe(false)
     // Regression: iso/ + .gitcred-* were the missed holes — now under the deny.
@@ -65,6 +75,9 @@ describe('renderSeatbeltProfile', () => {
     expect(prof).toContain(
       `(allow file-read* file-write* (subpath "${join(HOME, 'runs', 't1', 'n1')}"))`,
     )
+    expect(prof).toContain(`(allow file-read-metadata (literal "${HOME}"))`)
+    expect(prof).toContain(`(allow file-read-metadata (literal "${join(HOME, 'runs', 't1')}"))`)
+    expect(prof).not.toContain(`(allow file-read* (subpath "${join(HOME, 'runs', 't1')}"))`)
   })
 
   test('SBPL escaping: quotes and backslashes in paths', () => {

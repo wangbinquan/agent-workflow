@@ -26,12 +26,14 @@ export type DirectFetch = (url: string, init: RequestInit) => Promise<Response>
 export interface DirectClientBudgets {
   maxJsonBytes: number
   requestTimeoutMs: number
+  promptTimeoutMs: number
   sse?: Partial<SseBudgets>
 }
 
 export const DEFAULT_DIRECT_CLIENT_BUDGETS: Readonly<DirectClientBudgets> = Object.freeze({
   maxJsonBytes: 4 * 1024 * 1024,
   requestTimeoutMs: 30_000,
+  promptTimeoutMs: 30_000,
 })
 
 export class DirectHttpError extends Error {
@@ -152,11 +154,13 @@ interface RequestOptions {
   query?: ReadonlyArray<readonly [string, string]>
   body?: unknown
   signal?: AbortSignal
+  timeoutMs?: number
   accept: 'application/json' | 'text/event-stream'
 }
 
 interface PendingResponse {
   response: Response
+  clearDeadline(): void
   cleanup: (abort?: boolean) => void
 }
 
@@ -190,6 +194,7 @@ export class OpencodeDirectClient {
     this.#budgets = {
       maxJsonBytes: positiveInteger(budgets.maxJsonBytes, 'maxJsonBytes'),
       requestTimeoutMs: positiveInteger(budgets.requestTimeoutMs, 'requestTimeoutMs'),
+      promptTimeoutMs: positiveInteger(budgets.promptTimeoutMs, 'promptTimeoutMs'),
       ...(budgets.sse === undefined ? {} : { sse: budgets.sse }),
     }
   }
@@ -308,6 +313,7 @@ export class OpencodeDirectClient {
         path: `/session/${encodeURIComponent(id)}/message`,
         body: request,
         signal,
+        timeoutMs: this.#budgets.promptTimeoutMs,
         accept: 'application/json',
       },
       'prompt-response',
@@ -336,6 +342,11 @@ export class OpencodeDirectClient {
       accept: 'text/event-stream',
     })
     const { response } = pending
+    // The short request deadline proves the loopback server returned valid SSE
+    // response headers. Once connected, the outer run deadline and caller
+    // signal own the long-lived stream; a bootstrap timer must not abort a
+    // legitimate model response.
+    pending.clearDeadline()
     if (contentType(response) !== 'text/event-stream') {
       await response.body?.cancel().catch(() => undefined)
       pending.cleanup()
@@ -401,7 +412,7 @@ export class OpencodeDirectClient {
     else options.signal?.addEventListener('abort', abortFromCaller, { once: true })
     const timer = setTimeout(
       () => controller.abort(new Error('direct-request-timeout')),
-      this.#budgets.requestTimeoutMs,
+      options.timeoutMs ?? this.#budgets.requestTimeoutMs,
     )
     timer.unref?.()
 
@@ -415,11 +426,17 @@ export class OpencodeDirectClient {
       body = JSON.stringify(options.body)
     }
 
+    let deadlineCleared = false
+    const clearDeadline = () => {
+      if (deadlineCleared) return
+      deadlineCleared = true
+      clearTimeout(timer)
+    }
     let cleaned = false
     const cleanup = (abort = false) => {
       if (cleaned) return
       cleaned = true
-      clearTimeout(timer)
+      clearDeadline()
       options.signal?.removeEventListener('abort', abortFromCaller)
       if (abort && !controller.signal.aborted) controller.abort(new Error('direct-request-closed'))
     }
@@ -442,6 +459,6 @@ export class OpencodeDirectClient {
       cleanup()
       throw new DirectHttpError('unexpected-status', response.status)
     }
-    return { response, cleanup }
+    return { response, clearDeadline, cleanup }
   }
 }

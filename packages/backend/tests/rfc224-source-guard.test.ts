@@ -196,7 +196,10 @@ describe('RFC-224 release platform source guard', () => {
   })
 
   test('tests stable and current channels without turning either into an admission pin', () => {
-    expect(opencodeInstallTargets(ciWorkflow)).toEqual(['latest'])
+    // The source-test job and the compiled-binary doctor job each exercise the
+    // current channel. Two independent consumers are intentional; neither is a
+    // runtime admission/version pin.
+    expect(opencodeInstallTargets(ciWorkflow)).toEqual(['latest', 'latest'])
     expect(opencodeInstallTargets(visualWorkflow)).toEqual([])
     expect(opencodeInstallTargets(webkitWorkflow)).toEqual([])
     const integrationMatrixBlocks = [

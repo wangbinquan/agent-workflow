@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto'
-import { chmod, lstat, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { chmod, lstat, mkdir, open, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { executionIdentityFailure } from './failure'
 import { canonicalizeIdentity, type IdentityJson } from './executionIdentity'
@@ -60,6 +61,8 @@ const PROVIDER_API_KEY_ENV: Readonly<Record<string, readonly string[]>> = Object
   azure: ['AZURE_API_KEY'],
 })
 
+const MAX_NATIVE_AUTH_BYTES = 1024 * 1024
+
 const SAFE_FORWARD_ENV = [
   'LANG',
   'LC_ALL',
@@ -98,6 +101,13 @@ export interface StrictProviderAuth {
   serialized: string
 }
 
+export interface ResolveStrictProviderAuthOptions {
+  /** Test seam; production resolves OpenCode's outer Global.Path.data/auth.json. */
+  nativeAuthPath?: string
+  /** Test seam for the xdg-basedir fallback when XDG_DATA_HOME is absent. */
+  home?: string
+}
+
 function plainRecord(value: unknown): value is Record<string, unknown> {
   return (
     value !== null &&
@@ -128,6 +138,7 @@ function strictApiEntry(value: unknown): value is { type: 'api'; key: string } {
 export function buildStrictProviderAuth(
   providerID: string,
   sourceEnv: Readonly<Record<string, string | undefined>>,
+  nativeAuthContent?: string,
 ): StrictProviderAuth {
   if (!/^[a-z0-9][a-z0-9._-]*$/.test(providerID)) {
     return executionIdentityFailure('execution-identity-auth-invalid')
@@ -156,13 +167,133 @@ export function buildStrictProviderAuth(
     .filter((entry): entry is { name: string; key: string } => {
       return typeof entry.key === 'string' && entry.key.length > 0
     })
-  if (present.length !== 1 || present[0]!.key.includes('\0')) {
+  if (present.length > 0) {
+    if (present.length !== 1 || present[0]!.key.includes('\0')) {
+      return executionIdentityFailure('execution-identity-auth-invalid')
+    }
+    return {
+      providerID,
+      serialized: JSON.stringify({ [providerID]: { type: 'api', key: present[0]!.key } }),
+    }
+  }
+
+  if (nativeAuthContent === undefined) {
+    return executionIdentityFailure('execution-identity-auth-invalid')
+  }
+  let nativeAuth: unknown
+  try {
+    nativeAuth = JSON.parse(nativeAuthContent)
+  } catch {
+    return executionIdentityFailure('execution-identity-auth-invalid')
+  }
+  if (!plainRecord(nativeAuth) || !strictApiEntry(nativeAuth[providerID])) {
     return executionIdentityFailure('execution-identity-auth-invalid')
   }
   return {
     providerID,
-    serialized: JSON.stringify({ [providerID]: { type: 'api', key: present[0]!.key } }),
+    // The outer file may contain many providers. Only the selected provider's
+    // already-validated API entry crosses into the hermetic child.
+    serialized: JSON.stringify({ [providerID]: nativeAuth[providerID] }),
   }
+}
+
+/**
+ * Mirror OpenCode's Global.Path.data (`xdg-basedir` + `opencode/auth.json`).
+ * xdg-basedir uses ~/.local/share on every supported OS when XDG_DATA_HOME is
+ * absent; there is deliberately no Agent Workflow platform admission gate.
+ */
+export function resolveNativeOpencodeAuthPath(
+  sourceEnv: Readonly<Record<string, string | undefined>>,
+  home = homedir(),
+): string {
+  const configuredData = sourceEnv.XDG_DATA_HOME
+  const dataRoot =
+    typeof configuredData === 'string' && configuredData !== ''
+      ? configuredData
+      : join(home, '.local', 'share')
+  if (dataRoot.includes('\0') || !isAbsolute(dataRoot) || resolve(dataRoot) !== dataRoot) {
+    return executionIdentityFailure('execution-identity-auth-invalid')
+  }
+  return join(dataRoot, 'opencode', 'auth.json')
+}
+
+function sameOpenedFile(
+  before: Awaited<ReturnType<typeof lstat>>,
+  after: Awaited<ReturnType<typeof lstat>>,
+): boolean {
+  return (
+    before.dev === after.dev &&
+    before.ino === after.ino &&
+    before.size === after.size &&
+    before.mtimeMs === after.mtimeMs &&
+    before.ctimeMs === after.ctimeMs
+  )
+}
+
+async function readNativeOpencodeAuth(path: string): Promise<string | undefined> {
+  if (path.includes('\0') || !isAbsolute(path) || resolve(path) !== path) {
+    return executionIdentityFailure('execution-identity-auth-invalid')
+  }
+  const before = await lstat(path).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') return null
+    return executionIdentityFailure('execution-identity-auth-invalid')
+  })
+  if (before === null) return undefined
+  if (
+    before.isSymbolicLink() ||
+    !before.isFile() ||
+    before.size <= 0 ||
+    before.size > MAX_NATIVE_AUTH_BYTES
+  ) {
+    return executionIdentityFailure('execution-identity-auth-invalid')
+  }
+
+  const handle = await open(path, 'r').catch(() =>
+    executionIdentityFailure('execution-identity-auth-invalid'),
+  )
+  try {
+    const opened = await handle.stat()
+    if (!opened.isFile() || !sameOpenedFile(before, opened)) {
+      return executionIdentityFailure('execution-identity-auth-invalid')
+    }
+    const bytes = await handle.readFile()
+    const after = await handle.stat()
+    if (
+      bytes.byteLength !== before.size ||
+      bytes.byteLength > MAX_NATIVE_AUTH_BYTES ||
+      !sameOpenedFile(before, after)
+    ) {
+      return executionIdentityFailure('execution-identity-auth-invalid')
+    }
+    return bytes.toString('utf8')
+  } finally {
+    await handle.close()
+  }
+}
+
+/**
+ * Resolve the selected provider credential without exposing OpenCode's whole
+ * native auth store. Explicit daemon env keeps its established precedence;
+ * the native store is only a fallback for a normal `opencode auth login`.
+ */
+export async function resolveStrictProviderAuth(
+  providerID: string,
+  sourceEnv: Readonly<Record<string, string | undefined>>,
+  options: ResolveStrictProviderAuthOptions = {},
+): Promise<StrictProviderAuth> {
+  const inherited = sourceEnv.OPENCODE_AUTH_CONTENT
+  const providerEnvPresent = (PROVIDER_API_KEY_ENV[providerID] ?? []).some((name) => {
+    const value = sourceEnv[name]
+    return typeof value === 'string' && value.length > 0
+  })
+  if ((inherited !== undefined && inherited !== '') || providerEnvPresent) {
+    return buildStrictProviderAuth(providerID, sourceEnv)
+  }
+
+  const nativeAuthPath =
+    options.nativeAuthPath ?? resolveNativeOpencodeAuthPath(sourceEnv, options.home)
+  const nativeAuthContent = await readNativeOpencodeAuth(nativeAuthPath)
+  return buildStrictProviderAuth(providerID, sourceEnv, nativeAuthContent)
 }
 
 function within(root: string, child: string): boolean {

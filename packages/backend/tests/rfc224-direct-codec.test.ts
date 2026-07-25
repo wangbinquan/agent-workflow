@@ -7,13 +7,15 @@ import {
   serializeDirectJsonlRecord,
   type DirectCodecStep,
 } from '@/services/runtime/opencode/directCodec'
-import type {
-  AssistantMessage,
-  JsonObject,
-  MessagePart,
-  UserMessage,
-  WireEvent,
-  WithParts,
+import {
+  ROOT_SESSION_PERMISSION_RULES,
+  type AssistantMessage,
+  type JsonObject,
+  type MessagePart,
+  type SessionInfo,
+  type UserMessage,
+  type WireEvent,
+  type WithParts,
 } from '@/services/runtime/opencode/directApiSchemas'
 
 const sessionID = id('ses', 1)
@@ -51,6 +53,7 @@ function user(): UserMessage {
 }
 
 const zeroTokens = {
+  total: 0,
   input: 0,
   output: 0,
   reasoning: 0,
@@ -95,6 +98,22 @@ function userPart(): MessagePart {
     messageID: callerID,
     type: 'text',
     text: prompt,
+  }
+}
+
+function rootSession(): SessionInfo {
+  return {
+    id: sessionID,
+    slug: 'quiet-moon',
+    projectID: 'project-1',
+    directory,
+    path: '',
+    title: 'agent-workflow:rfc224:run-1',
+    agent: 'worker',
+    model: { providerID: model.providerID, id: model.modelID, variant: model.variant },
+    version: 'runtime-version-telemetry',
+    time: { created: 1, updated: 1 },
+    permission: ROOT_SESSION_PERMISSION_RULES.map((rule) => ({ ...rule })),
   }
 }
 
@@ -301,6 +320,65 @@ describe('RFC-224 direct session codec happy paths', () => {
         .records[0]?.type,
     ).toBe('text')
   })
+
+  test('accepts a related session.updated only while its root identity stays sealed', () => {
+    // Regression: OpenCode 1.18.4 emits session.updated after the caller echo.
+    // Treating every related but previously unlisted event as hostile aborted
+    // the prompt before the first assistant event.
+    const initial = rootSession()
+    const instance = codec({ rootSession: initial })
+    ready(instance)
+    expect(
+      instance.consume(
+        wire('session.updated', {
+          sessionID,
+          info: {
+            ...initial,
+            time: { ...initial.time, updated: 2 },
+          },
+        }),
+      ),
+    ).toMatchObject({ state: 'continue' })
+
+    const drift = codec({ rootSession: initial })
+    ready(drift)
+    expect(
+      drift.consume(
+        wire('session.updated', {
+          sessionID,
+          info: {
+            ...initial,
+            directory: '/private/tmp/foreign',
+          },
+        }),
+      ),
+    ).toMatchObject({ state: 'failed', reason: 'session-identity-mismatch' })
+  })
+
+  test('binds a non-VCS global project assistant to filesystem root plus exact cwd', () => {
+    const globalRoot = '/'
+    const globalSession = {
+      ...rootSession(),
+      projectID: 'global',
+      path: directory.slice(1),
+    }
+    const instance = codec({
+      rootSession: globalSession,
+      path: { cwd: directory, root: globalRoot },
+    })
+    ready(instance)
+    expect(
+      instance.consume(
+        wire('message.updated', {
+          sessionID,
+          info: {
+            ...assistant(assistant1ID),
+            path: { cwd: directory, root: globalRoot },
+          },
+        }),
+      ),
+    ).toMatchObject({ state: 'continue' })
+  })
 })
 
 describe('RFC-224 direct session codec fail-closed correlation', () => {
@@ -418,6 +496,59 @@ describe('RFC-224 direct session codec fail-closed correlation', () => {
       state: 'failed',
       reason: 'unexpected-related-event',
     })
+  })
+
+  test('accepts only the strict same-session diff notification shape', () => {
+    const instance = codec()
+    ready(instance)
+    expect(
+      instance.consume(
+        wire('session.diff', {
+          sessionID,
+          diff: [
+            {
+              file: 'src/index.ts',
+              before: 'old',
+              after: 'new',
+              additions: 1,
+              deletions: 1,
+              status: 'modified',
+            },
+          ],
+        }),
+      ),
+    ).toMatchObject({ state: 'continue' })
+
+    const unexpected = codec()
+    ready(unexpected)
+    expect(
+      unexpected.consume(
+        wire('session.diff', {
+          sessionID,
+          diff: [],
+          routing: 'foreign',
+        }),
+      ),
+    ).toMatchObject({ state: 'failed', reason: 'schema-mismatch' })
+
+    const invalidCounts = codec()
+    ready(invalidCounts)
+    expect(
+      invalidCounts.consume(
+        wire('session.diff', {
+          sessionID,
+          diff: [
+            {
+              file: 'src/index.ts',
+              before: '',
+              after: '',
+              additions: -1,
+              deletions: 0,
+            },
+          ],
+        }),
+      ),
+    ).toMatchObject({ state: 'failed', reason: 'schema-mismatch' })
   })
 
   test('permission/question/session errors are terminal and idle cannot recover failure', () => {

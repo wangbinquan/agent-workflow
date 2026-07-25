@@ -57,9 +57,10 @@ function utf8Bytes(value: string): number {
 
 /**
  * Incremental SSE parser. It accepts arbitrary UTF-8 chunk boundaries, CRLF,
- * LF, or CR line endings, multi-line `data:`, and heartbeat comments. The
- * pinned server emits an explicit `event: message`; missing/duplicate/unknown
- * fields are rejected rather than treated as browser-compatible extensions.
+ * LF, or CR line endings, multi-line `data:`, and heartbeat comments. OpenCode
+ * has emitted both the SSE-default data-only form and an explicit
+ * `event: message`; both mean the same event type. Duplicate, non-message, and
+ * unknown extension fields remain fail-closed.
  */
 export class BoundedSseParser {
   readonly #budgets: SseBudgets
@@ -169,10 +170,8 @@ export class BoundedSseParser {
         this.#eventBytes = 0
         return
       }
-      if (this.#eventName !== 'message') {
-        throw new SseProtocolError(
-          this.#eventName === undefined ? 'missing-event-name' : 'unexpected-event-name',
-        )
+      if (this.#eventName !== undefined && this.#eventName !== 'message') {
+        throw new SseProtocolError('unexpected-event-name')
       }
       if (this.#dataLines.length === 0) throw new SseProtocolError('missing-data')
       const data = this.#dataLines.join('\n')

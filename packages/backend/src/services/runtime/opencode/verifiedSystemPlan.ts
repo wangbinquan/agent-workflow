@@ -13,8 +13,8 @@ import { getSandboxProvider, type SandboxProvider } from '@/services/sandbox'
 import {
   buildControlledOpencodeConfig,
   buildHermeticServerEnv,
-  buildStrictProviderAuth,
   removeHermeticOpencodeLayout,
+  resolveStrictProviderAuth,
 } from './hermetic'
 import type { snapshotRuntimeOpencodeBinary } from './runtimeBinary'
 import { assertSourceFingerprintUnchanged, scanOpencodeProjectSurface } from './sourceGuard'
@@ -177,7 +177,7 @@ export async function buildVerifiedOpencodeSystemPlan(
       ...(ctx.gitUserName == null ? {} : { GIT_COMMITTER_NAME: ctx.gitUserName }),
       ...(ctx.gitUserEmail == null ? {} : { GIT_COMMITTER_EMAIL: ctx.gitUserEmail }),
     }
-    const auth = buildStrictProviderAuth(selectedModel.providerID, sourceEnv)
+    const auth = await resolveStrictProviderAuth(selectedModel.providerID, sourceEnv)
     const serverEnv = buildHermeticServerEnv({
       layout,
       providerID: selectedModel.providerID,

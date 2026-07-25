@@ -6,9 +6,12 @@ import { OpencodeDirectClient, DirectHttpError } from '@/services/runtime/openco
 import {
   ROOT_SESSION_PERMISSION_RULES,
   buildCreateSessionRequest,
+  buildPromptRequest,
 } from '@/services/runtime/opencode/directApiSchemas'
 
 const sessionID = 'ses_000000001001AAAAAAAAAAAAAA'
+const callerID = 'msg_000000002001BBBBBBBBBBBBBB'
+const assistantID = 'msg_000000003001CCCCCCCCCCCCCC'
 const directory = '/private/tmp/rfc224-worktree'
 const password = 'do-not-leak-this-password'
 
@@ -198,6 +201,100 @@ describe('RFC-224 direct HTTP client request boundary', () => {
       properties: {},
     })
     expect((await events.next()).done).toBe(true)
+  })
+
+  test('SSE and prompt use run lifetimes after the short bootstrap request deadline', async () => {
+    const frame = `data: ${JSON.stringify({
+      id: 'evt_000000001001AAAAAAAAAAAAAA',
+      type: 'server.connected',
+      properties: {},
+    })}\n\n`
+    const delayedResponse = (response: () => Response, signal: AbortSignal) =>
+      new Promise<Response>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          signal.removeEventListener('abort', onAbort)
+          resolve(response())
+        }, 30)
+        const onAbort = () => {
+          clearTimeout(timer)
+          reject(new Error('aborted'))
+        }
+        signal.addEventListener('abort', onAbort, { once: true })
+      })
+    const instance = new OpencodeDirectClient({
+      origin: 'http://127.0.0.1:4096',
+      directory,
+      username: 'opencode',
+      password,
+      budgets: {
+        requestTimeoutMs: 5,
+        promptTimeoutMs: 100,
+      },
+      fetch: async (url, init) => {
+        const signal = init.signal as AbortSignal
+        if (new URL(url).pathname === '/event') {
+          const stream = new ReadableStream<Uint8Array>({
+            start(controller) {
+              const timer = setTimeout(() => {
+                signal.removeEventListener('abort', onAbort)
+                controller.enqueue(new TextEncoder().encode(frame))
+                controller.close()
+              }, 30)
+              const onAbort = () => {
+                clearTimeout(timer)
+                controller.error(new Error('aborted'))
+              }
+              signal.addEventListener('abort', onAbort, { once: true })
+            },
+          })
+          return new Response(stream, {
+            headers: { 'content-type': 'text/event-stream' },
+          })
+        }
+        return delayedResponse(
+          () =>
+            Response.json({
+              info: {
+                id: assistantID,
+                sessionID,
+                role: 'assistant',
+                time: { created: 2, completed: 3 },
+                parentID: callerID,
+                modelID: 'gpt-5.6',
+                providerID: 'openai',
+                mode: 'worker',
+                agent: 'worker',
+                path: { cwd: directory, root: directory },
+                cost: 0,
+                tokens: {
+                  total: 0,
+                  input: 0,
+                  output: 0,
+                  reasoning: 0,
+                  cache: { read: 0, write: 0 },
+                },
+              },
+              parts: [],
+            }),
+          signal,
+        )
+      },
+    })
+
+    const events = await instance.subscribeEvents()
+    expect((await events.next()).value?.type).toBe('server.connected')
+    expect((await events.next()).done).toBe(true)
+
+    const response = await instance.postMessage(
+      sessionID,
+      buildPromptRequest({
+        messageID: callerID,
+        agent: 'worker',
+        model: { providerID: 'openai', modelID: 'gpt-5.6' },
+        prompt: 'Reply exactly OK',
+      }),
+    )
+    expect(response.info.id).toBe(assistantID)
   })
 
   test('fetch errors and caller aborts collapse to non-secret stable reasons', async () => {

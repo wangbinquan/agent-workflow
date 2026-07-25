@@ -121,6 +121,32 @@ describe('RFC-224 direct API request/response schemas', () => {
     ).toBe('custom-fork-999')
   })
 
+  test('accepts the exact global-project path only for an opted-in system expectation', () => {
+    const globalPath = directory.slice(1)
+    const globalSession = {
+      ...session(),
+      projectID: 'global',
+      path: globalPath,
+    }
+    const systemExpected = {
+      directory,
+      title: 'agent-workflow:run-1',
+      agent: 'worker',
+      model: { providerID: 'openai', modelID: 'gpt-5.6' },
+      allowGlobalProjectPath: true,
+    }
+    expect(parseAndValidateCreatedSession(globalSession, systemExpected).path).toBe(globalPath)
+    expect(() =>
+      parseAndValidateCreatedSession(globalSession, {
+        ...systemExpected,
+        allowGlobalProjectPath: false,
+      }),
+    ).toThrow('identity-mismatch')
+    expect(() =>
+      parseAndValidateCreatedSession({ ...globalSession, projectID: 'project-1' }, systemExpected),
+    ).toThrow('identity-mismatch')
+  })
+
   test('plain JSON values reject cycles, poison keys, non-finite numbers, and class instances', () => {
     const cycle: Record<string, unknown> = {}
     cycle.self = cycle

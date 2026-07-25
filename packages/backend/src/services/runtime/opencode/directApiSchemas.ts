@@ -6,6 +6,7 @@
 // names observed behavior, not an OpenCode release/version range.
 
 import { z } from 'zod'
+import { parse, relative, sep } from 'node:path'
 
 export const OPENCODE_DIRECT_PROTOCOL_CODEC = 'opencode-direct-v1' as const
 export const SESSION_INVENTORY_PAGE_SIZE = 100 as const
@@ -148,6 +149,7 @@ const SessionTimeSchema = z
 
 const TokenCountsSchema = z
   .object({
+    total: finite.optional(),
     input: finite,
     output: finite,
     reasoning: finite,
@@ -539,6 +541,28 @@ export const MessagePartDeltaPropertiesSchema = z
     delta: z.string(),
   })
   .strict()
+export const SessionUpdatedPropertiesSchema = z
+  .object({
+    sessionID: SessionIdSchema,
+    info: SessionInfoSchema,
+  })
+  .strict()
+const FileDiffSchema = z
+  .object({
+    file: nonEmptyString,
+    before: z.string(),
+    after: z.string(),
+    additions: nonNegativeInteger,
+    deletions: nonNegativeInteger,
+    status: z.enum(['added', 'deleted', 'modified']).optional(),
+  })
+  .strict()
+export const SessionDiffPropertiesSchema = z
+  .object({
+    sessionID: SessionIdSchema,
+    diff: z.array(FileDiffSchema),
+  })
+  .strict()
 export const SessionStatusPropertiesSchema = z
   .object({
     sessionID: SessionIdSchema,
@@ -640,6 +664,11 @@ export interface SessionIdentityExpectation {
   projectID?: string
   /** Root sessions must expose the exact upstream sessionPath(worktree,cwd). */
   path?: string
+  /**
+   * Non-resumable system runs may execute outside a VCS. OpenCode represents
+   * those under projectID=global with path relative to the filesystem root.
+   */
+  allowGlobalProjectPath?: boolean
 }
 
 export function buildCreateSessionRequest(input: {
@@ -726,7 +755,16 @@ export function validateSessionIdentity<T extends SessionInfo | GlobalSessionInf
   if (session.permission === undefined || !samePermissionRules(session.permission)) {
     mismatch(context, '/permission')
   }
-  if (session.path !== (expected.path ?? '')) mismatch(context, '/path')
+  const globalProjectPath = relative(parse(expected.directory).root, expected.directory).replaceAll(
+    sep,
+    '/',
+  )
+  const pathMatches =
+    session.path === (expected.path ?? '') ||
+    (expected.allowGlobalProjectPath === true &&
+      session.projectID === 'global' &&
+      session.path === globalProjectPath)
+  if (!pathMatches) mismatch(context, '/path')
   const forbiddenOptionalFields = [
     ['parentID', session.parentID],
     ['workspaceID', session.workspaceID],
