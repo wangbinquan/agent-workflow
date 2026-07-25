@@ -276,6 +276,16 @@ jobs:
         # MCP URL 与 JSON-schema format，不面向敌意 URI。上游发 3.1.4+ 修复
         # 后：bump overrides 并 REMOVE 本条。
         #   GHSA-v2hh-gcrm-f6hx (fast-uri backslash authority host confusion)
+        #
+        # 2026-07-26 — GHSA-mh99-v99m-4gvg（brace-expansion unbounded
+        # expansion OOM）覆盖 <=5.0.7。minimatch@10 的兼容链已在 bun.lock
+        # 升到 5.0.8；剩余 1.1.14 只来自 ESLint / @eslint/eslintrc /
+        # eslint-plugin-react 的 minimatch@3 lint 工具链。其上游仍约束
+        # brace-expansion ^1.1.7，而 v5 的 CommonJS API 已从 callable export
+        # 改为 named `expand`，全局 override 会直接破坏 minimatch@3。故按本
+        # job 的 dev-only transitive policy 精确 ignore；上游迁到兼容修复版后
+        # REMOVE 本条。
+        #   GHSA-mh99-v99m-4gvg (brace-expansion unbounded expansion OOM)
         run: >-
           bun audit --audit-level=high
           --ignore GHSA-w7jw-789q-3m8p
@@ -283,6 +293,7 @@ jobs:
           --ignore GHSA-3jxr-9vmj-r5cp
           --ignore GHSA-52cp-r559-cp3m
           --ignore GHSA-v2hh-gcrm-f6hx
+          --ignore GHSA-mh99-v99m-4gvg
 
       - name: actionlint (GitHub Actions workflow lint)
         # Pinned via the official downloader script so the version moves only
