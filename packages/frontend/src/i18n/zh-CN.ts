@@ -1609,6 +1609,7 @@ export interface Resources {
       agentMissing: string
       leaderMissing: string
       noNonLeaderWorker: string
+      resourcesInvalid: string
     }
     // Member gallery + context panel (detail page, RFC-168).
     membersEmpty: string
@@ -2832,6 +2833,23 @@ export interface Resources {
     tabAdvanced: string
     portValidationBadge: string
     resourcesIntro: string
+    resourceValidationBadge: string
+    resourceValidationTitle: string
+    resourceLaunchBlocked: string
+    resourceStatusLoadFailed: string
+    resourceKind: {
+      skill: string
+      mcp: string
+      plugin: string
+      agent: string
+    }
+    resourceMissingLabel: string
+    resourceHiddenLabel: string
+    resourceUnavailableLabel: string
+    resourceLoadingLabel: string
+    resourceDirectIssue: string
+    resourceClosureIssue: string
+    resourceHiddenAgent: string
     technicalDetailsSummary: string
     technicalDetailsBody: string
     /** RFC-155 — form-section titles (visible + collapsible groups). */
@@ -5703,6 +5721,7 @@ export const zhCN: Resources = {
       leaderMissing: 'Leader-Worker 模式需要指定一名 agent 成员为 leader。',
       noNonLeaderWorker:
         '花名册里只有 leader 自己——没有可派活的成员，启动后 leader 只能空转（仍可启动）。',
+      resourcesInvalid: '成员代理存在 {{count}} 项缺失或不可用的资源引用，修复前不能启动。',
     },
     membersEmpty: '还没有成员。用下方按钮添加 agent 或人类成员。',
     memberTypeAgent: '代理',
@@ -7004,6 +7023,23 @@ export const zhCN: Resources = {
     portValidationBadge: '端口配置有 {{count}} 项错误',
     resourcesIntro:
       '选择这个代理运行时能使用的能力，以及它可以把工作委派给哪些协作代理。保存引用不会自动安装或下载资源。',
+    resourceValidationBadge: '资源引用有 {{count}} 项错误',
+    resourceValidationTitle: '资源引用无效，修复前不能启动',
+    resourceLaunchBlocked: '资源引用无效，修复前不能启动',
+    resourceStatusLoadFailed: '资源状态加载失败；服务端仍会在启动前执行最终校验。',
+    resourceKind: {
+      skill: 'Skill',
+      mcp: 'MCP',
+      plugin: '插件',
+      agent: '代理',
+    },
+    resourceMissingLabel: '已删除的 {{kind}}',
+    resourceHiddenLabel: '无权限查看的 {{kind}}',
+    resourceUnavailableLabel: '{{name}}（已停用或不可用）',
+    resourceLoadingLabel: '{{kind}}（正在解析）',
+    resourceDirectIssue: '{{resource}} 无法使用，请移除、替换或恢复该资源。',
+    resourceClosureIssue: '协作代理 {{agent}} 引用了不可用资源：{{resource}}。',
+    resourceHiddenAgent: '无权限查看的代理',
     technicalDetailsSummary: '技术说明',
     technicalDetailsBody:
       '协作代理会按依赖闭包递归加载，并合并成员所需的 Skill、MCP 与插件。插件从已安装缓存以 file:// 注入，启动阶段不会联网下载；引用缺失时，启动校验会要求先补齐资源。',
@@ -7595,6 +7631,7 @@ export const zhCN: Resources = {
       'agent-dependency-not-found': '节点使用的代理依赖了不存在的代理。',
       'aggregator-agent-outside-fanout': '聚合代理只能放在扇出包装器内部。',
       'skill-not-found': '节点使用的代理引用了不存在的技能。',
+      'mcp-not-found': '节点使用的代理引用了不存在的 MCP。',
       'plugin-not-found': '节点使用的代理引用了不存在的插件。',
       'plugin-disabled': '节点使用的代理引用了已停用的插件。',
       'binding-node-missing': '输出端口绑定到了不存在的节点。',
@@ -7994,6 +8031,8 @@ export const zhCN: Resources = {
     'agent-name-in-use': '同名代理已存在。',
     'agent-rename-invalid': '重命名参数不合法。',
     'agent-launch-invalid': '发起参数不合法。',
+    'agent-resources-invalid': '该代理存在缺失或不可用的资源引用，无法执行。',
+    'agent-resources-invalid__hint': '打开代理的资源页，恢复、启用、替换或移除异常引用。',
     'agent-launching': '该代理正有任务在发起中，请稍后重试。',
     'agent-id-mismatch': '目标代理已被替换，请刷新后重试。',
     'agent-in-use': '仍有工作流引用该代理，无法删除。',
@@ -8007,6 +8046,7 @@ export const zhCN: Resources = {
     'agent-dependency-still-referenced__hint': '先在依赖它的代理里移除依赖。',
     // --- skill ---
     'skill-not-found': '技能不存在。',
+    'skill-unavailable': '该技能不可用或未通过完整性校验。',
     'skill-invalid': '技能内容不合法。',
     'skill-name-in-use': '同名技能已存在。',
     'skill-in-use': '仍有代理引用该技能，无法删除。',

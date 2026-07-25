@@ -14,7 +14,8 @@ import { canViewResource } from '@/services/resourceAcl'
 import { assertNotBuiltin } from '@/services/systemResources'
 import { getWorkflow } from '@/services/workflow'
 import { assertAgentIdsExecutionPolicy } from '@/services/executionPolicy'
-import { NotFoundError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/util/errors'
+import { loadWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
 
 type LaunchableWorkflow = NonNullable<Awaited<ReturnType<typeof getWorkflow>>>
 
@@ -35,6 +36,15 @@ export async function assertWorkflowLaunchable(
   }
   assertNotBuiltin('workflow', wf)
   await assertWorkflowExecutionPolicy(db, wf.definition, defaultRuntime)
+  const validation = validateWorkflowDef(wf.definition, await loadWorkflowValidationContext(db))
+  if (!validation.ok) {
+    const errors = validation.issues.filter((issue) => (issue.severity ?? 'error') === 'error')
+    throw new ValidationError(
+      'workflow-invalid',
+      `workflow '${workflowId}' failed static validation (${errors.length} error${errors.length === 1 ? '' : 's'})`,
+      { issues: validation.issues },
+    )
+  }
   return wf
 }
 

@@ -42,6 +42,7 @@ import { getWorkgroupById } from '@/services/workgroups'
 import { startTask, type StartTaskDeps } from '@/services/task'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { assertAgentIdsExecutionPolicy } from '@/services/executionPolicy'
+import { assertAgentResourceIntegrity } from '@/services/agentResourceIntegrity'
 
 // RFC-217 T1 — sentinel constants moved to ./constants (zero-dep leaf; cycle
 // fix). Re-exported here for existing test-side importers only; PRODUCTION
@@ -206,20 +207,10 @@ export async function startWorkgroupTask(
     )
   }
 
-  // RFC-224: resolve every canonical roster member through the same
-  // effective-runtime policy used by single-agent/workflow launches. This is
-  // before host seeding, task/worktree materialization, or any model-visible
-  // side effect; scheduled fires reuse this exact path.
-  await assertAgentIdsExecutionPolicy(
-    db,
-    group.members.flatMap((member) =>
-      member.memberType === 'agent' &&
-      typeof member.agentId === 'string' &&
-      member.agentId.length > 0
-        ? [member.agentId]
-        : [],
-    ),
-    deps.defaultRuntime,
+  const memberAgentIds = group.members.flatMap((member) =>
+    member.memberType === 'agent' && typeof member.agentId === 'string' && member.agentId.length > 0
+      ? [member.agentId]
+      : [],
   )
 
   const readiness = workgroupLaunchReadiness(group)
@@ -228,6 +219,52 @@ export async function startWorkgroupTask(
       reasons: readiness.reasons,
     })
   }
+
+  // Save-time leniency lets a roster survive an agent deletion, but launch must
+  // fail before task/worktree materialization. Keep this as the established
+  // workgroup-readiness surface; RFC-228's agent-resources-invalid is reserved
+  // for a present roster Agent whose own resource closure is broken.
+  //
+  // RFC-223 (PR-2): validate the roster by CANONICAL agent id (frozen at save,
+  // beside the display name). This makes a member survive a rename (the id is
+  // stable, no rename guard shields a workgroup member) and refuses to silently
+  // bind a delete+recreate-same-name replacement (ABA).
+  const agentMembers = group.members.filter((m) => m.memberType === 'agent')
+  const existingAgentIds =
+    memberAgentIds.length === 0
+      ? new Set<string>()
+      : new Set(
+          (
+            await db
+              .select({ id: agents.id })
+              .from(agents)
+              .where(inArray(agents.id, [...new Set(memberAgentIds)]))
+          ).map((row) => row.id),
+        )
+  const missingAgentNames = [
+    ...new Set(
+      agentMembers
+        .filter((m) => typeof m.agentId !== 'string' || !existingAgentIds.has(m.agentId))
+        .map((m) => m.agentName ?? '(unnamed)'),
+    ),
+  ]
+  if (missingAgentNames.length > 0) {
+    throw new ValidationError('workgroup-not-ready', 'workgroup is not launch-ready', {
+      reasons: ['agent-missing'],
+      missingAgentNames,
+    })
+  }
+
+  // RFC-224: resolve every canonical roster member through the same
+  // effective-runtime policy used by single-agent/workflow launches. This is
+  // before host seeding, task/worktree materialization, or any model-visible
+  // side effect; scheduled fires reuse this exact path.
+  await assertAgentIdsExecutionPolicy(db, memberAgentIds, deps.defaultRuntime)
+
+  // RFC-228: the roster gate above proves that every member Agent row exists;
+  // this proves that each member's full resource closure is executable. Still
+  // before host seeding, snapshot/state construction, worktree, task or messages.
+  await assertAgentResourceIntegrity(db, memberAgentIds)
 
   // PR-5 (T24): human members auto-join as task collaborators (proposal 目标 6).
   const collaboratorUserIds = resolveWorkgroupCollaborators(
@@ -275,46 +312,6 @@ export async function startWorkgroupTask(
   if (!parsed.success) {
     throw new ValidationError('workgroup-launch-invalid', 'invalid workgroup launch payload', {
       issues: parsed.error.issues,
-    })
-  }
-
-  // Save-time leniency lets a roster survive an agent deletion, but launch must
-  // fail before task/worktree materialization. Without this gate leader_worker
-  // fails only after spending setup work, while free_collab can repeatedly wake
-  // an unresolvable member without a run, cursor advance, or visible error.
-  //
-  // RFC-223 (PR-2): validate the roster by CANONICAL agent id (frozen at save,
-  // beside the display name). This makes a member survive a rename (the id is
-  // stable, no rename guard shields a workgroup member) and refuses to silently
-  // bind a delete+recreate-same-name replacement (ABA). A member with no frozen
-  // id (a soft reference to an agent that did not exist at save) or whose id no
-  // longer resolves is reported missing — re-save the roster to (re-)bind it.
-  const agentMembers = group.members.filter((m) => m.memberType === 'agent')
-  const rosterAgentIds = [
-    ...new Set(agentMembers.flatMap((m) => (typeof m.agentId === 'string' ? [m.agentId] : []))),
-  ]
-  const existingAgentIds =
-    rosterAgentIds.length === 0
-      ? new Set<string>()
-      : new Set(
-          (
-            await db
-              .select({ id: agents.id })
-              .from(agents)
-              .where(inArray(agents.id, rosterAgentIds))
-          ).map((row) => row.id),
-        )
-  const missingAgentNames = [
-    ...new Set(
-      agentMembers
-        .filter((m) => typeof m.agentId !== 'string' || !existingAgentIds.has(m.agentId))
-        .map((m) => m.agentName ?? '(unnamed)'),
-    ),
-  ]
-  if (missingAgentNames.length > 0) {
-    throw new ValidationError('workgroup-not-ready', 'workgroup is not launch-ready', {
-      reasons: ['agent-missing'],
-      missingAgentNames,
     })
   }
 

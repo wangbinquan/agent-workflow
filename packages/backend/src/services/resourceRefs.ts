@@ -161,8 +161,9 @@ export async function assertNewRefsUsable(
  * unrelated ACL edits that preserve usability must not reject a save.
  *
  * Callers pass only ids that preflight matched (or whose dedicated existence
- * validator accepted). This preserves the historical contract for reference
- * kinds that deliberately allow an unresolved token to remain dormant.
+ * validator accepted). Reference kinds that deliberately allow unresolved
+ * tokens keep their own contract; Agent managed Skills are rejected by
+ * RFC-228's complete-candidate integrity gate before this fence.
  * Missing-at-preflight tokens never enter this fence; matched-then-deleted is
  * the race it closes.
  *

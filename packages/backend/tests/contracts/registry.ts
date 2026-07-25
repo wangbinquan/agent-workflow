@@ -138,6 +138,18 @@ export const ENDPOINTS: EndpointSpec[] = [
       schema: AgentSchema,
     },
   },
+  {
+    method: 'GET',
+    path: '/api/agents/:id/resource-status',
+    happy: {
+      pathParams: (h) => ({ id: h.fixtures.agentId }),
+      schema: z.object({
+        ok: z.boolean(),
+        references: z.array(z.object({}).passthrough()),
+        issues: z.array(z.object({}).passthrough()),
+      }),
+    },
+  },
   { method: 'GET', path: '/api/agents/builtins/skill-merger' },
   { method: 'POST', path: '/api/agents' },
   { method: 'POST', path: '/api/agents/import-resolve' },
@@ -318,6 +330,17 @@ export const ENDPOINTS: EndpointSpec[] = [
     happy: {
       pathParams: (h) => ({ id: h.fixtures.workgroupId }),
       schema: WorkgroupSchema,
+    },
+  },
+  {
+    method: 'GET',
+    path: '/api/workgroups/:id/resource-status',
+    happy: {
+      pathParams: (h) => ({ id: h.fixtures.workgroupId }),
+      schema: z.object({
+        ok: z.boolean(),
+        issues: z.array(z.object({}).passthrough()),
+      }),
     },
   },
   { method: 'POST', path: '/api/workgroups' },

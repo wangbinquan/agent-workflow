@@ -9,6 +9,7 @@
 import { useTranslation } from 'react-i18next'
 import type { Mcp } from '@agent-workflow/shared'
 import { ResourcePicker } from './ResourcePicker'
+import type { MultiSelectOption } from './MultiSelect'
 
 export const MCPS_QUERY_KEY = ['mcps'] as const
 
@@ -16,9 +17,10 @@ interface Props {
   value: string[]
   onChange: (next: string[]) => void
   placeholder?: string
+  selectedOptions?: ReadonlyArray<MultiSelectOption>
 }
 
-export function McpsPicker({ value, onChange, placeholder }: Props) {
+export function McpsPicker({ value, onChange, placeholder, selectedOptions }: Props) {
   const { t } = useTranslation()
   return (
     <ResourcePicker<Mcp>
@@ -31,10 +33,14 @@ export function McpsPicker({ value, onChange, placeholder }: Props) {
       ariaLabel={t('agentForm.fieldMcps')}
       placeholder={placeholder}
       testid="mcps-picker-select"
+      selectedOptions={selectedOptions}
       labels={{
         loading: t('agentForm.mcpsPickerLoading'),
         empty: t('agentForm.mcpsPickerEmpty'),
         loadFailed: t('agentForm.mcpsPickerLoadFailed'),
+        unresolved: t('agentForm.resourceLoadingLabel', {
+          kind: t('agentForm.resourceKind.mcp'),
+        }),
       }}
     />
   )

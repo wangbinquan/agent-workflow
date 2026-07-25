@@ -57,6 +57,7 @@ import {
 } from '@agent-workflow/shared'
 import { createHash } from 'node:crypto'
 import type { DbClient } from '@/db/client'
+import { mcps as mcpsTable } from '@/db/schema'
 import { listAgents } from '@/services/agent'
 import { listPlugins } from '@/services/plugin'
 import { listSkills } from '@/services/skill'
@@ -74,21 +75,33 @@ import { NotFoundError } from '@/util/errors'
 
 /**
  * RFC-165 (F14/R3-3): THE production validation context — agents + skills +
- * plugins, all live from the DB. Every launch-path / sync-path caller MUST
+ * MCPs + plugins, all live from the DB. Every launch-path / sync-path caller MUST
  * build its ctx through this helper: hand-rolled `{agents, skills}` objects
  * silently skipped the plugin checks (ctx.plugins undefined ⇒ no-op), so a
  * workflow referencing a missing/disabled plugin validated at launch and
  * died at spawn. A consistency lock test pins every caller to this helper.
  */
 export async function loadWorkflowValidationContext(db: DbClient): Promise<ValidatorContext> {
-  const [agents, skills, plugins] = await Promise.all([
+  const [agents, skills, mcps, plugins] = await Promise.all([
     listAgents(db),
     listSkills(db),
+    db
+      .select({
+        id: mcpsTable.id,
+        name: mcpsTable.name,
+        ownerUserId: mcpsTable.ownerUserId,
+        visibility: mcpsTable.visibility,
+        enabled: mcpsTable.enabled,
+        schemaVersion: mcpsTable.schemaVersion,
+        updatedAt: mcpsTable.updatedAt,
+      })
+      .from(mcpsTable),
     listPlugins(db),
   ])
   return {
     agents,
     skills,
+    mcps,
     plugins,
   }
 }
@@ -119,9 +132,21 @@ export interface ValidatorPluginResource {
   updatedAt?: number
 }
 
+export interface ValidatorMcpResource {
+  id: string
+  name: string
+  ownerUserId?: string | null
+  visibility?: 'public' | 'private'
+  enabled?: boolean
+  schemaVersion?: number
+  updatedAt?: number
+}
+
 export interface ValidatorContext {
   agents: Agent[]
   skills: Skill[]
+  /** RFC-228: canonical MCP inventory. Optional only for legacy pure callers. */
+  mcps?: ValidatorMcpResource[]
   /**
    * RFC-031: list of registered plugins, used to validate that every name in
    * `agent.plugins` (and across the dependsOn closure) maps to a known +
@@ -177,6 +202,15 @@ export function projectWorkflowValidationContext(ctx: ValidatorContext) {
       schemaVersion: skill.schemaVersion,
       contentVersion: skill.contentVersion,
       updatedAt: skill.updatedAt,
+    })),
+    mcps: [...(ctx.mcps ?? [])].sort(compareResourceIdentity).map((mcp) => ({
+      id: mcp.id,
+      name: mcp.name,
+      ownerUserId: mcp.ownerUserId ?? null,
+      visibility: mcp.visibility ?? 'public',
+      enabled: mcp.enabled,
+      schemaVersion: mcp.schemaVersion,
+      updatedAt: mcp.updatedAt,
     })),
     plugins: [...(ctx.plugins ?? [])].sort(compareResourceIdentity).map((plugin) => ({
       id: plugin.id ?? null,
@@ -324,6 +358,9 @@ export function validateWorkflowDef(
   // immutable-id lookup. Name-only nodes fail closed.
   const agentByIdOrName = buildNodeAgentLookup(ctx.agents, (a) => a)
   const skillIds = new Set(ctx.skills.map((s) => s.id))
+  // RFC-228: MCP parity with plugins. Optional only for legacy pure callers;
+  // every production context is built by loadWorkflowValidationContext.
+  const mcpsKnown = ctx.mcps === undefined ? undefined : new Set(ctx.mcps.map((mcp) => mcp.id))
   // RFC-031: lookup tables for plugin reference checks. `pluginsKnown`
   // tells us the plugin id exists; `pluginsEnabled` tells us its enabled flag.
   // When ctx.plugins is undefined we leave both as undefined → checks no-op.
@@ -932,6 +969,21 @@ export function validateWorkflowDef(
           })
         }
       }
+      // RFC-228: a missing MCP must fail static validation rather than being
+      // silently filtered by the scheduler. A present-but-disabled MCP keeps
+      // RFC-223's intentional "not injected" semantics.
+      if (mcpsKnown !== undefined) {
+        for (const mcpId of agent.mcp ?? []) {
+          if (!mcpsKnown.has(mcpId)) {
+            issues.push({
+              code: 'mcp-not-found',
+              message: `agent '${agent.name}' (used by node '${node.id}') references an unknown MCP`,
+              pointer: node.id,
+              target: target.nodeField(node.id, 'agent'),
+            })
+          }
+        }
+      }
       // RFC-031: plugin references on the directly-used agent.
       if (pluginsKnown !== undefined && pluginsEnabled !== undefined) {
         for (const p of agent.plugins ?? []) {
@@ -985,6 +1037,18 @@ export function validateWorkflowDef(
               pointer: node.id,
               target: target.nodeField(node.id, 'agent'),
             })
+          }
+        }
+        if (mcpsKnown !== undefined) {
+          for (const mcpId of dep.mcp ?? []) {
+            if (!mcpsKnown.has(mcpId)) {
+              issues.push({
+                code: 'mcp-not-found',
+                message: `an Agent dependency of '${agent.name}' (used by node '${node.id}') references an unknown MCP`,
+                pointer: node.id,
+                target: target.nodeField(node.id, 'agent'),
+              })
+            }
           }
         }
         // RFC-031: same plugin-name reference check across the closure.

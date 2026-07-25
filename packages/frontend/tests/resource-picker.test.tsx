@@ -30,6 +30,7 @@ const LABELS: ResourcePickerLabels = {
   loading: 'picker loading…',
   empty: 'picker empty',
   loadFailed: 'row list failed to load',
+  unresolved: 'Row (resolving)',
 }
 
 function row(name: string, description = '', enabled = true): Row {
@@ -210,6 +211,37 @@ describe('ResourcePicker — config surface (MultiSelect)', () => {
     )
     fireEvent.focus(combo())
     await waitFor(() => expect(screen.getByText(LABELS.loading)).toBeTruthy())
+  })
+
+  test('an unresolved selected id never renders the raw id as its tag label', () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => new Promise<Response>(() => {}))
+    wrap(
+      <ResourcePicker<Row>
+        {...baseProps}
+        value={['01RAWRESOURCEID']}
+        onChange={() => {}}
+        queryKey={['rp-test', 'unresolved-selected']}
+        endpoint="/api/rows"
+      />,
+    )
+    expect(screen.getByText(LABELS.unresolved)).toBeTruthy()
+    expect(screen.queryByText('01RAWRESOURCEID')).toBeNull()
+  })
+
+  test('actor-safe selected label replaces the unresolved fallback when the list omits the row', async () => {
+    mockRows([])
+    wrap(
+      <ResourcePicker<Row>
+        {...baseProps}
+        value={['missing-id']}
+        onChange={() => {}}
+        queryKey={['rp-test', 'selected-overlay']}
+        endpoint="/api/rows"
+        selectedOptions={[{ value: 'missing-id', label: 'Deleted MCP' }]}
+      />,
+    )
+    expect(screen.getByText('Deleted MCP')).toBeTruthy()
+    expect(screen.queryByText('missing-id')).toBeNull()
   })
 
   test('settled-but-empty shows labels.empty', async () => {

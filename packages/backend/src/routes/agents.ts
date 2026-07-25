@@ -55,6 +55,7 @@ import { mountAclEndpoints } from './resourceAcl'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import type { Agent } from '@agent-workflow/shared'
 import { loadConfig } from '@/config'
+import { getAgentResourceStatus } from '@/services/agentResourceIntegrity'
 
 /**
  * RFC-117: true iff the raw PUT body sets ONLY `runtime` (no other key). Lets the
@@ -121,6 +122,16 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
   app.get('/api/agents/:id', async (c) => {
     const agent = await loadVisibleAgent(actorOf(c), c.req.param('id'))
     return c.json(agent)
+  })
+
+  // RFC-228: actor-safe labels + integrity for the edit form. Existence is
+  // computed from the unfiltered inventory; visibility is applied only while
+  // projecting names, so a private-but-existing ref is never misreported as
+  // deleted and its name is never leaked.
+  app.get('/api/agents/:id/resource-status', async (c) => {
+    const actor = actorOf(c)
+    const agent = await loadVisibleAgent(actor, c.req.param('id'))
+    return c.json(await getAgentResourceStatus(deps.db, actor, agent))
   })
 
   app.post('/api/agents', async (c) => {

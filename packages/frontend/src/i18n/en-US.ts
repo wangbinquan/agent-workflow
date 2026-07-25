@@ -1798,6 +1798,8 @@ export const enUS: Resources = {
       leaderMissing: 'Leader-Worker mode needs one agent member designated as leader.',
       noNonLeaderWorker:
         'The roster only contains the leader — nobody to dispatch to; the leader can only idle (launch still allowed).',
+      resourcesInvalid:
+        'Member Agents have {{count}} missing or unavailable resource references. Fix them before launching.',
     },
     membersEmpty: 'No members yet. Add agent or human members with the buttons below.',
     memberTypeAgent: 'Agent',
@@ -3205,6 +3207,26 @@ export const enUS: Resources = {
     portValidationBadge: 'Port configuration errors: {{count}}',
     resourcesIntro:
       'Choose what this agent can use while it runs and which agents it can delegate work to. Saving a reference does not install or download it.',
+    resourceValidationBadge: 'Resource reference errors: {{count}}',
+    resourceValidationTitle: 'Resource references are invalid; fix them before launching',
+    resourceLaunchBlocked:
+      'Resource references are invalid, so this Agent cannot launch until they are fixed',
+    resourceStatusLoadFailed:
+      'Resource status failed to load. The server will still run the final launch check.',
+    resourceKind: {
+      skill: 'Skill',
+      mcp: 'MCP',
+      plugin: 'plugin',
+      agent: 'Agent',
+    },
+    resourceMissingLabel: 'Deleted {{kind}}',
+    resourceHiddenLabel: 'Restricted {{kind}}',
+    resourceUnavailableLabel: '{{name}} (disabled or unavailable)',
+    resourceLoadingLabel: '{{kind}} (resolving)',
+    resourceDirectIssue: '{{resource}} cannot be used. Remove, replace, or restore it.',
+    resourceClosureIssue:
+      'Collaborating Agent {{agent}} references an unavailable resource: {{resource}}.',
+    resourceHiddenAgent: 'restricted Agent',
     technicalDetailsSummary: 'Technical information',
     technicalDetailsBody:
       'Collaborating agents load recursively with the skills, MCP servers, and plugins they require. Installed plugins are injected from their file:// cache and launch does not download them; launch validation asks you to restore any missing reference first.',
@@ -3824,6 +3846,7 @@ export const enUS: Resources = {
       'agent-dependency-not-found': 'An agent used by a node depends on an unknown agent.',
       'aggregator-agent-outside-fanout': 'Aggregator agents must sit inside a fan-out wrapper.',
       'skill-not-found': 'An agent used by a node references an unknown skill.',
+      'mcp-not-found': 'An agent used by a node references an unknown MCP.',
       'plugin-not-found': 'An agent used by a node references an unknown plugin.',
       'plugin-disabled': 'An agent used by a node references a disabled plugin.',
       'binding-node-missing': 'An output port binds to an unknown node.',
@@ -4296,6 +4319,10 @@ export const enUS: Resources = {
     'agent-name-in-use': 'An agent with this name already exists.',
     'agent-rename-invalid': 'Invalid rename payload.',
     'agent-launch-invalid': 'Invalid launch payload.',
+    'agent-resources-invalid':
+      'This Agent has missing or unavailable resource references and cannot run.',
+    'agent-resources-invalid__hint':
+      'Open the Agent resource tab, then restore, enable, replace, or remove the invalid references.',
     'agent-launching': 'A task launch is in progress for this agent; retry shortly.',
     'agent-id-mismatch': 'The target agent was replaced; refresh and retry.',
     'agent-in-use': 'Workflows still reference this agent; it cannot be deleted.',
@@ -4312,6 +4339,7 @@ export const enUS: Resources = {
     'agent-dependency-still-referenced__hint': 'Remove it from the depending agents first.',
     // --- skill ---
     'skill-not-found': 'Skill not found.',
+    'skill-unavailable': 'This Skill is unavailable or failed its integrity check.',
     'skill-invalid': 'Invalid skill payload.',
     'skill-name-in-use': 'A skill with this name already exists.',
     'skill-in-use': 'Agents still reference this skill; it cannot be deleted.',

@@ -46,9 +46,10 @@ interface Props {
   value: AgentSkillRef[]
   onChange: (next: AgentSkillRef[]) => void
   placeholder?: string
+  selectedOptions?: ReadonlyArray<MultiSelectOption>
 }
 
-export function SkillsPicker({ value, onChange, placeholder }: Props) {
+export function SkillsPicker({ value, onChange, placeholder, selectedOptions }: Props) {
   const { t } = useTranslation()
   const list = useQuery<Skill[]>({
     queryKey: SKILLS_QUERY_KEY,
@@ -76,6 +77,11 @@ export function SkillsPicker({ value, onChange, placeholder }: Props) {
         description: s.description || undefined,
       })
     }
+    for (const option of selectedOptions ?? []) {
+      if (seen.has(option.value)) continue
+      seen.add(option.value)
+      out.push(option)
+    }
     // Synthesize a checked row for any currently-selected ref not covered by the
     // list (every project ref, plus a managed ref whose skill isn't visible) so
     // its tag renders a name rather than the raw token.
@@ -83,10 +89,18 @@ export function SkillsPicker({ value, onChange, placeholder }: Props) {
       const v = encodeSkillRef(ref)
       if (seen.has(v)) continue
       seen.add(v)
-      out.push({ value: v, label: ref.kind === 'project' ? ref.name : ref.skillId })
+      out.push({
+        value: v,
+        label:
+          ref.kind === 'project'
+            ? ref.name
+            : t('agentForm.resourceLoadingLabel', {
+                kind: t('agentForm.resourceKind.skill'),
+              }),
+      })
     }
     return out
-  }, [list.data, value, owners])
+  }, [list.data, value, owners, selectedOptions, t])
 
   const failed = list.error !== null && list.error !== undefined
 

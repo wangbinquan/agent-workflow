@@ -6581,20 +6581,9 @@ export async function prepareNodeRunInjection(
       kind: 'ok'
       dependents: Agent[]
       resolvedSkills: ResolvedSkill[]
-      /**
-       * RFC-028: MCP rows hydrated from the dependsOn closure's union of
-       * agent.mcp[] ids. Empty when nothing in the closure declares an
-       * mcp (most workflows pre-RFC-028). Ids that no longer resolve
-       * in the DB (deleted out from under the running task) are silently
-       * dropped — see loadMcpsByIds + docs/OPENCODE_CONFIG.md §6.
-       */
+      /** RFC-028/RFC-228: exact MCP rows for the requested closure ids. */
       mcps: Mcp[]
-      /**
-       * RFC-031: opencode plugin rows hydrated from the dependsOn closure's
-       * union of agent.plugins[] ids. Empty when no closure member declares
-       * a plugin. Same "silently skip ids that no longer resolve" stance as
-       * mcps — see loadPluginsByIds docstring.
-       */
+      /** RFC-031/RFC-228: exact Plugin rows for the requested closure ids. */
       plugins: Plugin[]
     }
   | { kind: 'failed'; summary: string; message: string }
@@ -6642,13 +6631,34 @@ export async function prepareNodeRunInjection(
     skillsUnion.push(ref)
   }
   const { resolvedSkills, managedSkillIdentities } = await resolveSkills(db, appHome, skillsUnion)
-  // RFC-028: union mcp ids across the full closure (root first, then BFS
-  // dependents) and hydrate the rows. Errors that can't surface as a
-  // 'failed' here — missing MCP ids are silently skipped at hydrate time
-  // (see loadMcpsByIds docstring; we prefer "spawn without that MCP" over
-  // "fail the whole node because a previously-saved id no longer exists").
+  // RFC-228: exact-set checks are the final race fence. A resource can become
+  // unavailable after launch validation; never run a reduced capability set.
+  const requestedManagedSkillIds = skillsUnion.flatMap((ref) =>
+    ref.kind === 'managed' ? [ref.skillId] : [],
+  )
+  const resolvedManagedSkillIds = new Set(managedSkillIdentities.map((skill) => skill.id))
+  const missingSkillIds = requestedManagedSkillIds.filter(
+    (skillId) => !resolvedManagedSkillIds.has(skillId),
+  )
+  if (missingSkillIds.length > 0) {
+    return {
+      kind: 'failed',
+      summary: `agent '${agent.name}' references a missing managed Skill`,
+      message: 'skill-not-found',
+    }
+  }
+
+  // RFC-028: union MCP ids across the full closure (root first, then BFS).
   const mcpIds = collectMcpIdsFromClosure(closure.agents)
   const mcps = await loadMcpsByIds(db, mcpIds)
+  const loadedMcpIds = new Set(mcps.map((mcp) => mcp.id))
+  if (mcpIds.some((mcpId) => !loadedMcpIds.has(mcpId))) {
+    return {
+      kind: 'failed',
+      summary: `agent '${agent.name}' references a missing MCP`,
+      message: 'mcp-not-found',
+    }
+  }
   // RFC-223 PR-6: the external runtimes still key these three managed
   // namespaces by display name. Detect two canonical ids sharing one key at
   // the common hydration boundary, before either runtime stages a skill or
@@ -6673,12 +6683,24 @@ export async function prepareNodeRunInjection(
       message,
     }
   }
-  // RFC-031: same closure + hydrate dance for opencode plugins. Ids that no
-  // longer resolve (deleted out from under the running task) are silently
-  // dropped at the loader; we'd rather start the node without a plugin than
-  // crash on a previously-saved-but-deleted reference.
+  // RFC-031/RFC-228: same exact closure + hydrate fence for plugins.
   const pluginIds = collectPluginIdsFromClosure(closure.agents)
   const plugins = await loadPluginsByIds(db, pluginIds)
+  const loadedPluginIds = new Set(plugins.map((plugin) => plugin.id))
+  if (pluginIds.some((pluginId) => !loadedPluginIds.has(pluginId))) {
+    return {
+      kind: 'failed',
+      summary: `agent '${agent.name}' references a missing Plugin`,
+      message: 'plugin-not-found',
+    }
+  }
+  if (plugins.some((plugin) => !plugin.enabled)) {
+    return {
+      kind: 'failed',
+      summary: `agent '${agent.name}' references a disabled Plugin`,
+      message: 'plugin-disabled',
+    }
+  }
   return { kind: 'ok', dependents, resolvedSkills, mcps, plugins }
 }
 
@@ -6686,8 +6708,9 @@ export async function prepareNodeRunInjection(
 // ref is looked up BY ID; the injection NAME (opencode's registry key — AC7)
 // and disk path come from the row. A `project` ref names a repo-local skill
 // (RFC-178, no DB row) that opencode self-discovers — passed through by name.
-// A managed ref whose id no longer resolves is skipped (deletion is guarded by
-// findAgentsUsingSkill, so this only happens on out-of-band removal).
+// A managed ref whose id no longer resolves is omitted from this low-level
+// result; prepareNodeRunInjection performs RFC-228 exact-set comparison and
+// fails before any runtime spawn.
 async function resolveSkills(
   db: DbClient,
   appHome: string,
@@ -6705,7 +6728,7 @@ async function resolveSkills(
     }
     const rows = await db.select().from(skills).where(eq(skills.id, ref.skillId)).limit(1)
     const row = rows[0]
-    if (!row) continue // dangling managed ref (skill removed out-of-band) — skip
+    if (!row) continue // exact-set caller converts this into skill-not-found
     // RFC-170 T9 (§invariant④): fail-closed if this managed skill did not verify
     // this boot (snapshot unverified/quarantined) — never stage corrupt/missing
     // content into a spawn. Inactive before the boot reverify (tests/pre-HTTP).

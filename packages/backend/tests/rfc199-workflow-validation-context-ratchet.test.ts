@@ -17,7 +17,7 @@ import {
   type ValidatorContext,
 } from '../src/services/workflow.validator'
 
-type InventoryFamily = 'agent' | 'skill' | 'plugin'
+type InventoryFamily = 'agent' | 'skill' | 'mcp' | 'plugin'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 const BACKEND_TSCONFIG = resolve(REPO_ROOT, 'packages', 'backend', 'tsconfig.json')
@@ -37,6 +37,7 @@ const DIRECT_INVENTORY_TYPES = new Map<string, InventoryFamily>([
   ['Agent', 'agent'],
   ['PortLookupAgent', 'agent'],
   ['Skill', 'skill'],
+  ['ValidatorMcpResource', 'mcp'],
   ['ValidatorPluginResource', 'plugin'],
 ])
 const INVENTORY_CARRIER_TYPES = new Set([
@@ -95,6 +96,17 @@ function fixtureContext(): ValidatorContext {
   return {
     agents: [fixtureAgent()],
     skills: [fixtureSkill()],
+    mcps: [
+      {
+        id: 'mcp-filesystem',
+        name: 'filesystem',
+        ownerUserId: 'owner-1',
+        visibility: 'private',
+        enabled: true,
+        schemaVersion: 1,
+        updatedAt: 35,
+      },
+    ],
     plugins: [
       {
         id: 'plugin-formatter',
@@ -228,6 +240,7 @@ function semanticFieldReads(program: ts.Program, sources: ts.SourceFile[]) {
   const reads = new Map<InventoryFamily, Set<string>>([
     ['agent', new Set()],
     ['skill', new Set()],
+    ['mcp', new Set()],
     ['plugin', new Set()],
   ])
 
@@ -280,6 +293,7 @@ describe('RFC-199 validation-context semantic source ratchet', () => {
       agent: [
         'dependsOn',
         'id',
+        'mcp',
         'name',
         'outputKinds',
         'outputWrapperPortNames',
@@ -289,6 +303,7 @@ describe('RFC-199 validation-context semantic source ratchet', () => {
         'skills',
       ],
       skill: ['id'],
+      mcp: ['id'],
       plugin: ['enabled', 'id'],
     })
 
@@ -296,6 +311,7 @@ describe('RFC-199 validation-context semantic source ratchet', () => {
     const projectionFields = new Map<InventoryFamily, Set<string>>([
       ['agent', new Set(Object.keys(projected.agents[0]!))],
       ['skill', new Set(Object.keys(projected.skills[0]!))],
+      ['mcp', new Set(Object.keys(projected.mcps[0]!))],
       ['plugin', new Set(Object.keys(projected.plugins[0]!))],
     ])
     for (const [family, fields] of reads) {

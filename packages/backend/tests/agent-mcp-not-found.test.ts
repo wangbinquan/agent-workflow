@@ -108,7 +108,7 @@ describe('agent.mcp save-time guard', () => {
     }
   })
 
-  test('update without `mcp` field skips the check (preserves existing)', async () => {
+  test('update without `mcp` still rejects a dangling final Agent closure', async () => {
     const m1 = await createMcp(db, {
       name: 'm1',
       description: '',
@@ -125,10 +125,11 @@ describe('agent.mcp save-time guard', () => {
     const { eq } = await import('drizzle-orm')
     await db.delete(mcpsTable).where(eq(mcpsTable.id, m1.id))
 
-    // PATCH something unrelated; should NOT trigger mcp validation, so it
-    // passes even though the stale `mcp: [<id>]` is now unresolvable.
-    const updated = await updateAgent(db, agent.id, { description: 'unrelated change' })
-    expect(updated.description).toBe('unrelated change')
-    expect(updated.mcp).toEqual([m1.id])
+    await expect(
+      updateAgent(db, agent.id, { description: 'unrelated change' }),
+    ).rejects.toMatchObject({
+      code: 'agent-resources-invalid',
+      details: { issues: [{ code: 'mcp-not-found', refKind: 'mcp' }] },
+    })
   })
 })

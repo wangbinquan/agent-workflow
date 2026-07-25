@@ -113,12 +113,11 @@ describe('prepareNodeRunInjection — RFC-028 mcp union', () => {
     expect(result.mcps.map((m) => m.name)).toEqual(['m-root'])
   })
 
-  test('mcp deleted out from under the running task → silently dropped (no kind=failed)', async () => {
+  test('mcp deleted out from under the running task → fails closed before spawn', async () => {
     // Save-time validation prevents creating an agent with a missing mcp,
     // but we can simulate "deleted mid-flight" by deleting the row after
     // the agent was created. The save guard blocks deletes via the cascade,
-    // so we go to raw DB to bypass it (matches the proposal §6 stance:
-    // we never crash a node over a missing MCP).
+    // so we go to raw DB to bypass it and exercise the final runtime fence.
     await seedAgent(db, 'a', { mcp: [mcpIdByName.get('m-root')!] })
     const { mcps: mcpsTable } = await import('../src/db/schema')
     const { eq } = await import('drizzle-orm')
@@ -126,7 +125,6 @@ describe('prepareNodeRunInjection — RFC-028 mcp union', () => {
 
     const agent = (await getAgent(db, 'a'))!
     const result = await prepareNodeRunInjection(db, '/tmp/aw', agent, createLogger('test'))
-    if (result.kind !== 'ok') throw new Error('expected ok')
-    expect(result.mcps).toEqual([])
+    expect(result).toMatchObject({ kind: 'failed', message: 'mcp-not-found' })
   })
 })

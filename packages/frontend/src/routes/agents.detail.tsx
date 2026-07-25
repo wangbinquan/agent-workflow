@@ -37,6 +37,7 @@ import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
 import { validateAgentPortState } from '@/lib/agent-ports'
 import { Route as agentsRoute } from './agents'
+import type { AgentResourceStatus } from '@/lib/agent-resource-status'
 
 export const Route = createRoute({
   getParentRoute: () => agentsRoute,
@@ -64,6 +65,11 @@ function AgentDetailPage() {
   const query = useQuery<Agent>({
     queryKey: ['agents', id],
     queryFn: ({ signal }) => api.get(`/api/agents/${encodeURIComponent(id)}`, undefined, signal),
+  })
+  const resourceStatusQuery = useQuery<AgentResourceStatus>({
+    queryKey: ['agents', id, 'resource-status'],
+    queryFn: ({ signal }) =>
+      api.get(`/api/agents/${encodeURIComponent(id)}/resource-status`, undefined, signal),
   })
 
   // RFC-169: dirty-tracked hydrate-once draft with clean-follow (rebases a clean
@@ -103,6 +109,7 @@ function AgentDetailPage() {
         rows === undefined ? rows : rows.map((r) => (r.id === id ? saved : r)),
       )
       void qc.invalidateQueries({ queryKey: ['agents'], exact: true })
+      void qc.invalidateQueries({ queryKey: ['agents', id, 'resource-status'], exact: true })
       commitSaved(submitted, agentToDraft(saved))
       // stay in place — no navigate (RFC-169 D2).
     },
@@ -181,7 +188,8 @@ function AgentDetailPage() {
         }}
         errors={[save.error, del.error]}
         extra={
-          query.data?.builtin !== true && (
+          query.data?.builtin !== true &&
+          (resourceStatusQuery.data?.ok !== false ? (
             <Link
               to="/tasks/new"
               // RFC-211 §12: while the onboarding tour is running, deep-link the
@@ -198,7 +206,17 @@ function AgentDetailPage() {
             >
               {t('taskWizard.launchEntry')}
             </Link>
-          )
+          ) : (
+            <button
+              type="button"
+              className="btn"
+              disabled
+              title={t('agentForm.resourceLaunchBlocked')}
+              data-testid="agent-launch-button"
+            >
+              {t('taskWizard.launchEntry')}
+            </button>
+          ))
         }
       />
       {jsonDraft !== undefined && (
@@ -234,6 +252,7 @@ function AgentDetailPage() {
         onJsonDraftChange={setJsonDraft}
         focusJsonField={jsonFocusTarget}
         onJsonFocusHandled={clearJsonFocusTarget}
+        resourceStatus={resourceStatusQuery.data}
       />
     </fieldset>
   )

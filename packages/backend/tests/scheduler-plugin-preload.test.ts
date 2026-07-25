@@ -108,7 +108,7 @@ describe('prepareNodeRunInjection — RFC-031 plugin union', () => {
     expect(result.plugins.map((p) => p.name)).toEqual(['p-root'])
   })
 
-  test('plugin deleted out from under the running task → silently dropped (no kind=failed)', async () => {
+  test('plugin deleted out from under the running task → fails closed before spawn', async () => {
     await seedAgent(db, 'a', { plugins: [pluginIdByName.get('p-root')!] })
     // Bypass the cascade guard via raw DB delete to simulate "deleted mid-flight".
     const { plugins: pluginsTable } = await import('../src/db/schema')
@@ -117,7 +117,6 @@ describe('prepareNodeRunInjection — RFC-031 plugin union', () => {
 
     const agent = (await getAgent(db, 'a'))!
     const result = await prepareNodeRunInjection(db, '/tmp/aw', agent, createLogger('test'))
-    if (result.kind !== 'ok') throw new Error('expected ok')
-    expect(result.plugins).toEqual([])
+    expect(result).toMatchObject({ kind: 'failed', message: 'plugin-not-found' })
   })
 })

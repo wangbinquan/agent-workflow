@@ -40,6 +40,8 @@ import {
   assertAgentExecutionPolicy,
   assertAgentIdsExecutionPolicy,
 } from '@/services/executionPolicy'
+import { assertAgentResourceIntegrity } from '@/services/agentResourceIntegrity'
+import { getWorkflow } from '@/services/workflow'
 
 /** Injected launch — `(body) => startTask(body, deps)`, closed over owner + scheduledTaskId. */
 /**
@@ -237,13 +239,17 @@ async function assertScheduledTargetUsable(
   defaultRuntime?: string | null,
 ): Promise<void> {
   if (kind === 'workflow') {
-    const wf = await assertWorkflowLaunchable(
-      db,
-      actor,
-      body['workflowId'] as string,
-      defaultRuntime,
-    )
-    assertNoRequiredUploadInput(wf)
+    // Preserve the RFC-159 schedule-specific incompatibility as the first
+    // visible error after the ACL/builtin gates. A required upload is
+    // unschedulable regardless of any additional static workflow issue.
+    const target = await getWorkflow(db, body['workflowId'] as string)
+    if (target === null || !(await canViewResource(db, actor, 'workflow', target))) {
+      throw new NotFoundError('workflow-not-found', 'workflow not found')
+    }
+    assertNotBuiltin('workflow', target)
+    assertNoRequiredUploadInput(target)
+
+    await assertWorkflowLaunchable(db, actor, body['workflowId'] as string, defaultRuntime)
     return
   }
   if (kind === 'agent') {
@@ -254,6 +260,7 @@ async function assertScheduledTargetUsable(
       throw new NotFoundError('agent-not-found', 'agent not found')
     }
     assertNotBuiltin('agent', agent)
+    await assertAgentResourceIntegrity(db, [agent.id])
     await assertAgentExecutionPolicy(db, agent, defaultRuntime)
     // RFC-223 PR-7: identity arrived as the required canonical id. Refresh the
     // optional name snapshot from that exact row; never resolve or trust a
@@ -278,17 +285,13 @@ async function assertScheduledTargetUsable(
   if (group === null || !(await canViewResource(db, actor, 'workgroup', group))) {
     throw new NotFoundError('workgroup-not-found', 'workgroup not found')
   }
-  await assertAgentIdsExecutionPolicy(
-    db,
-    group.members.flatMap((member) =>
-      member.memberType === 'agent' &&
-      typeof member.agentId === 'string' &&
-      member.agentId.length > 0
-        ? [member.agentId]
-        : [],
-    ),
-    defaultRuntime,
+  const memberAgentIds = group.members.flatMap((member) =>
+    member.memberType === 'agent' && typeof member.agentId === 'string' && member.agentId.length > 0
+      ? [member.agentId]
+      : [],
   )
+  await assertAgentResourceIntegrity(db, memberAgentIds)
+  await assertAgentIdsExecutionPolicy(db, memberAgentIds, defaultRuntime)
   body['workgroupName'] = group.name
 }
 

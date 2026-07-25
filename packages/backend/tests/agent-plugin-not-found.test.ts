@@ -103,16 +103,15 @@ describe('agent.plugins save-time guard', () => {
     }
   })
 
-  test('update without `plugins` field skips the check (preserves existing)', async () => {
+  test('update without `plugins` rejects a disabled final Agent closure', async () => {
     const p1 = await createPlugin(db, { name: 'p1', spec: 'p@1' }, opts())
     const agent = await createAgent(db, agentInput('a', [p1.id]))
-    // Now disable the plugin from under the agent — patching unrelated field
-    // must still succeed; guard only runs when caller touches `plugins`.
+    // Disable the plugin from under the Agent, then patch an unrelated field.
     const { updatePlugin } = await import('../src/services/plugin')
     await updatePlugin(db, p1.id, { enabled: false }, opts())
-    // PATCH something unrelated; should NOT trigger plugin validation, so it
-    // passes even though the stale `plugins: [<id>]` is now disabled.
-    const updated = await updateAgent(db, agent.id, { description: 'unrelated' })
-    expect(updated.plugins).toEqual([p1.id])
+    await expect(updateAgent(db, agent.id, { description: 'unrelated' })).rejects.toMatchObject({
+      code: 'agent-resources-invalid',
+      details: { issues: [{ code: 'plugin-disabled', refKind: 'plugin' }] },
+    })
   })
 })

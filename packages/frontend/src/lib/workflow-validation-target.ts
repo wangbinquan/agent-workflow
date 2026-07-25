@@ -71,6 +71,7 @@ const NODE_FIELD_CODES: Readonly<Record<string, WorkflowNodeFieldKey>> = {
   'agent-not-found': 'agent',
   'aggregator-agent-outside-fanout': 'agent',
   'skill-not-found': 'agent',
+  'mcp-not-found': 'agent',
   'plugin-not-found': 'agent',
   'plugin-disabled': 'agent',
   'agent-dependency-not-found': 'agent',

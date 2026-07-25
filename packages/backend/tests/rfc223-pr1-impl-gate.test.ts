@@ -147,21 +147,24 @@ async function createAgentHttp(
   })
 }
 
-describe('RFC-223 PR-1 P1-1 — missing managed skill is never demoted to project', () => {
+describe('RFC-223 PR-1 P1-1 / RFC-228 — managed Skill identity stays strict', () => {
   let h: Harness
   beforeEach(async () => {
     h = await buildHarness()
   })
 
-  test('an unresolvable managed skill token stays an UNRESOLVED managed ref (not project)', async () => {
+  test('an unresolvable managed Skill is rejected and never demoted to project', async () => {
     const res = await createAgentHttp(h, h.alice.token, {
       name: 'a1',
       skills: [{ kind: 'managed', skillId: 'ghost-skill' }],
     })
-    expect(res.status).toBe(201)
-    const a = (await res.json()) as AgentDto
-    // Kept as managed with the raw token — NOT { kind:'project', name:'ghost-skill' }.
-    expect(a.skills).toEqual([{ kind: 'managed', skillId: 'ghost-skill' }])
+    expect(res.status).toBe(422)
+    expect(await res.json()).toMatchObject({
+      code: 'agent-resources-invalid',
+      details: {
+        issues: [{ code: 'skill-not-found', refKind: 'skill', direct: true }],
+      },
+    })
   })
 
   test('a managed skill referenced by canonical id stays canonical', async () => {

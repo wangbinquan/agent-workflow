@@ -133,7 +133,8 @@ export async function resolveAgentRefsUsable(
   const seenSkill = new Set<string>()
   const skills: AgentSkillRef[] = []
   for (const ref of input.skills) {
-    // NO project demotion (P1-1): an unresolved managed skillId keeps its token.
+    // NO project demotion (P1-1): preserve the managed token so the RFC-228
+    // candidate-integrity gate can reject it as skill-not-found.
     const normalized: AgentSkillRef =
       ref.kind === 'project'
         ? { kind: 'project', name: ref.name }

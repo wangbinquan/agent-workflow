@@ -45,6 +45,7 @@ import { isAgentLaunching } from './agentLaunchReservation'
 import { isOwnerNameUniqueViolation, ownerScopedNameWhere } from './ownerScopedName'
 import { assertRefsUsableInTx } from './resourceRefs'
 import { assertAgentExecutionPolicy } from './executionPolicy'
+import { assertAgentResourceIntegrity } from './agentResourceIntegrity'
 
 type AgentRow = typeof agents.$inferSelect
 
@@ -105,8 +106,8 @@ export async function createAgent(
   // canonical ids AND enforce per-ref ACL in ONE pass, so the id the ACL gate
   // approves is the exact id persisted (no check-then-resolve TOCTOU). On create
   // every reference is new. A null actor (framework seeder) resolves without the
-  // ACL gate. P1-1: a missing managed skill is kept as an unresolved managed ref,
-  // never demoted to a repo-local project ref.
+  // ACL gate. P1-1 preserves an unresolved managed token as managed (never
+  // project); RFC-228's complete-candidate check below then rejects it.
   const resolved = await resolveAgentRefsUsable(db, opts?.actor ?? null, {
     mcp: input.mcp,
     plugins: input.plugins ?? [],
@@ -151,6 +152,27 @@ export async function createAgent(
       opts.executionPolicy.defaultRuntime,
     )
   }
+
+  // RFC-228: validate the complete candidate closure, not only the resource
+  // fields with legacy per-kind guards. This is the missing managed-Skill gate
+  // and also rejects an Agent whose dependent Agent already has a broken
+  // Skill/MCP/Plugin/dependency reference.
+  const candidate: Agent = {
+    ...input,
+    id,
+    ownerUserId,
+    visibility: 'public',
+    ...(opts?.builtin !== undefined ? { builtin: opts.builtin } : {}),
+    inputs: input.inputs ?? [],
+    skills: skillRefs,
+    dependsOn: dependsOnIds,
+    mcp: mcpIds,
+    plugins: pluginIds,
+    schemaVersion: 1,
+    createdAt: 0,
+    updatedAt: 0,
+  }
+  await assertAgentResourceIntegrity(db, [id], { overrides: [candidate] })
 
   const now = Date.now()
   // RFC-005: outputKinds is a sidecar map ported through `frontmatter_extra`
@@ -257,7 +279,8 @@ export async function updateAgent(
   // arrays. Only NEWLY-added references are ACL-checked (D15) — the diff compares
   // RESOLVED IDS against the already-stored ids, so a grandfathered ref
   // re-submitted by name is not mis-flagged as new. undefined patch fields are
-  // left untouched. Skills keep unresolved managed refs (no project demotion, P1-1).
+  // left untouched. Skill resolution preserves managed identity; RFC-228's
+  // merged-candidate check below owns missing-resource rejection.
   const resolvedRefs = await resolveAgentRefsUsable(
     db,
     actor ?? null,
@@ -310,6 +333,22 @@ export async function updateAgent(
       hooks.executionPolicy.defaultRuntime,
     )
   }
+
+  // RFC-228: sparse PATCHes cannot leave a historically dangling closure
+  // hidden behind "the resource field was not touched". Validate the merged
+  // final Agent; removing/replacing the bad ref makes this pass.
+  const { runtime: _runtimePatch, ...patchWithoutRuntime } = patch
+  const candidate: Agent = {
+    ...existing,
+    ...patchWithoutRuntime,
+    skills: skillRefs ?? existing.skills,
+    dependsOn: dependsOnIds ?? existing.dependsOn,
+    mcp: mcpIds ?? existing.mcp,
+    plugins: pluginIds ?? existing.plugins,
+  }
+  if (patch.runtime === null) delete candidate.runtime
+  else if (patch.runtime !== undefined) candidate.runtime = patch.runtime
+  await assertAgentResourceIntegrity(db, [candidate.id], { overrides: [candidate] })
 
   const set: Partial<typeof agents.$inferInsert> = {}
   if (patch.description !== undefined) set.description = patch.description

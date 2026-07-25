@@ -31,6 +31,8 @@ export interface ResourcePickerLabels {
   empty: string
   /** Muted message under the field when the list query failed. */
   loadFailed: string
+  /** Tag text while a selected canonical id has not resolved to a visible row. */
+  unresolved: string
 }
 
 export interface ResourcePickerProps<
@@ -57,6 +59,8 @@ export interface ResourcePickerProps<
   /** data-testid forwarded to the combobox input. */
   testid?: string
   labels: ResourcePickerLabels
+  /** RFC-228: actor-safe labels for selected refs missing from the list query. */
+  selectedOptions?: ReadonlyArray<MultiSelectOption>
 }
 
 export function ResourcePicker<T extends { id: string; name: string; ownerUserId?: string | null }>(
@@ -76,7 +80,7 @@ export function ResourcePicker<T extends { id: string; name: string; ownerUserId
     // RFC-223 (PR-1): selection identity is the resource id.
     const selected = new Set(value)
     const pass = eligible ?? (() => true)
-    return (list.data ?? [])
+    const out: MultiSelectOption[] = (list.data ?? [])
       .filter((item) => pass(item) || selected.has(item.id))
       .map((item) => ({
         value: item.id,
@@ -86,10 +90,26 @@ export function ResourcePicker<T extends { id: string; name: string; ownerUserId
         ),
         description: props.descriptionFn?.(item),
       }))
+    const seen = new Set(out.map((option) => option.value))
+    for (const option of props.selectedOptions ?? []) {
+      if (selected.has(option.value) && !seen.has(option.value)) {
+        seen.add(option.value)
+        out.push(option)
+      }
+    }
+    // MultiSelect's generic fallback is the raw canonical value. Resource ids
+    // are identity, not a user-facing label, so cover every selected id even
+    // while both the list and resource-status queries are still resolving.
+    for (const refId of value) {
+      if (seen.has(refId)) continue
+      seen.add(refId)
+      out.push({ value: refId, label: labels.unresolved })
+    }
+    return out
     // labelFn/descriptionFn are stable module fns in practice. The owner lookup
     // is included so labels refresh when its async query completes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [list.data, value, eligible, owners])
+  }, [list.data, value, eligible, owners, props.selectedOptions, labels.unresolved])
 
   const failed = list.error !== null && list.error !== undefined
 

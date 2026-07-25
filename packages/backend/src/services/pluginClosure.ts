@@ -49,13 +49,10 @@ export function collectPluginIdsFromClosure(closure: readonly Agent[]): string[]
 }
 
 /**
- * Hydrate a list of plugin ids into full `Plugin` rows. Unknown ids are
- * silently skipped: the caller is expected to have already validated ids
- * at save time (RFC-031 T6 `plugin-not-found` guard) but at spawn time a row
- * could have been deleted out from under us, and crashing the node spawn
- * over a missing plugin is worse than starting the opencode process without
- * it (opencode tolerates plugin load failures with a log+publish; see
- * opencode/packages/opencode/src/plugin/index.ts:170-209).
+ * Hydrate a list of plugin ids into full `Plugin` rows. The low-level loader
+ * returns the rows it can parse; RFC-228's scheduler boundary compares the
+ * requested and returned id sets and fails the node on any difference.
+ * Callers must not run a reduced plugin set.
  *
  * Empty input returns `[]` without hitting the DB.
  */

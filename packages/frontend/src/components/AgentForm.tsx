@@ -45,6 +45,13 @@ import {
   PLUGIN_ICON,
   SKILL_ICON,
 } from './icons/resourceIcons'
+import type { MultiSelectOption } from './MultiSelect'
+import {
+  agentResourceIssueLabel,
+  agentResourceReferenceLabel,
+  type AgentResourceRefKind,
+  type AgentResourceStatus,
+} from '@/lib/agent-resource-status'
 
 export interface AgentFormProps {
   value: CreateAgent
@@ -68,6 +75,8 @@ export interface AgentFormProps {
   /** Route-level validation summary asks the form to reveal and focus this field. */
   focusJsonField?: AgentJsonFieldKey
   onJsonFocusHandled?: () => void
+  /** RFC-228: server-authoritative labels and closure integrity. */
+  resourceStatus?: AgentResourceStatus
 }
 
 const DEFAULT: CreateAgent = {
@@ -178,6 +187,7 @@ export function AgentForm({
   onJsonDraftChange,
   focusJsonField,
   onJsonFocusHandled,
+  resourceStatus,
 }: AgentFormProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -272,6 +282,18 @@ export function AgentForm({
 
   const portCount = portBadgeCount(value)
   const refCount = resourceRefCount(value)
+  const resourceIssueCount = resourceStatus?.issues.length ?? 0
+  const selectedResourceOptions = (
+    kind: AgentResourceRefKind,
+    valueOf: (refId: string) => string = (refId) => refId,
+  ): MultiSelectOption[] =>
+    (resourceStatus?.references ?? [])
+      .filter((reference) => reference.kind === kind)
+      .map((reference) => ({
+        value: valueOf(reference.refId),
+        label: agentResourceReferenceLabel(reference, t),
+        ...(reference.state === 'unavailable' ? { disabled: true } : {}),
+      }))
   const invalidJsonCount = agentJsonInvalidFields(jsonDraft).length
   const portValidation = validateAgentPortState(value)
   const blockingPortCount = portValidation.issues.filter(
@@ -297,8 +319,15 @@ export function AgentForm({
       key: 'resources',
       label: t('agentForm.tabResources'),
       testid: 'agent-tab-resources',
-      badge: refCount > 0 ? refCount : undefined,
-      badgeTone: 'neutral',
+      badge: resourceIssueCount > 0 ? resourceIssueCount : refCount > 0 ? refCount : undefined,
+      ...(resourceIssueCount > 0
+        ? {
+            badgeTone: 'danger' as const,
+            badgeAriaLabel: t('agentForm.resourceValidationBadge', {
+              count: resourceIssueCount,
+            }),
+          }
+        : { badgeTone: 'neutral' as const }),
       badgeTestid: 'agent-tab-resources-badge',
     },
     invalidJsonCount > 0
@@ -414,6 +443,18 @@ export function AgentForm({
 
   const resources = (
     <>
+      {resourceIssueCount > 0 && (
+        <div className="error-banner" role="alert" data-testid="agent-resource-integrity-error">
+          <strong>{t('agentForm.resourceValidationTitle')}</strong>
+          <ul>
+            {resourceStatus?.issues.map((issue, index) => (
+              <li key={`${issue.code}:${issue.refId ?? 'hidden'}:${index}`}>
+                {agentResourceIssueLabel(issue, t)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <p className="agent-resources__intro">{t('agentForm.resourcesIntro')}</p>
       {/* RFC-173: two labelled groups so the two kinds of relationship read
           clearly — "capabilities" (skills/MCP/plugins injected into the agent's
@@ -441,6 +482,7 @@ export function AgentForm({
             value={value.skills ?? []}
             onChange={(v) => patch('skills', v)}
             placeholder={t('agentForm.fieldSkillsPlaceholder')}
+            selectedOptions={selectedResourceOptions('skill', (refId) => `managed:${refId}`)}
           />
         </Field>
 
@@ -454,6 +496,7 @@ export function AgentForm({
             value={value.mcp ?? []}
             onChange={(v) => patch('mcp', v)}
             placeholder={t('agentForm.fieldMcpsPlaceholder')}
+            selectedOptions={selectedResourceOptions('mcp')}
           />
         </Field>
 
@@ -467,6 +510,7 @@ export function AgentForm({
             value={value.plugins ?? []}
             onChange={(v) => patch('plugins', v)}
             placeholder={t('agentForm.fieldPluginsPlaceholder')}
+            selectedOptions={selectedResourceOptions('plugin')}
           />
         </Field>
       </section>
@@ -493,6 +537,7 @@ export function AgentForm({
             onChange={(v) => patch('dependsOn', v)}
             selfId={resourceId}
             placeholder={t('agentForm.fieldDependsOnPlaceholder')}
+            selectedOptions={selectedResourceOptions('agent')}
           />
         </Field>
 

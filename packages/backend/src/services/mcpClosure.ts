@@ -47,12 +47,10 @@ export function collectMcpIdsFromClosure(closure: readonly Agent[]): string[] {
 }
 
 /**
- * Hydrate a list of MCP ids into full `Mcp` rows. Unknown ids are silently
- * skipped: the caller is expected to have already validated ids at save time
- * (RFC-028 T5 `mcp-not-found` guard) but at spawn time a row could have been
- * deleted out from under us, and crashing the node spawn over a missing MCP is
- * worse than starting the opencode process without it (opencode itself
- * tolerates missing MCPs by simply not exposing those tools).
+ * Hydrate a list of MCP ids into full `Mcp` rows. The low-level loader returns
+ * the rows it can parse; RFC-228's scheduler boundary compares the requested
+ * and returned id sets and fails the node on any difference. Callers must not
+ * treat a shorter result as permission to run without a requested MCP.
  *
  * Empty input returns `[]` without hitting the DB.
  */

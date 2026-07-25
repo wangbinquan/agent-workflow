@@ -8,6 +8,7 @@
 import { useTranslation } from 'react-i18next'
 import type { Agent } from '@agent-workflow/shared'
 import { ResourcePicker } from './ResourcePicker'
+import type { MultiSelectOption } from './MultiSelect'
 
 export const AGENTS_QUERY_KEY = ['agents'] as const
 
@@ -18,9 +19,16 @@ interface Props {
    *  cannot offer "select self" (which the save-time guard would reject). */
   selfId?: string
   placeholder?: string
+  selectedOptions?: ReadonlyArray<MultiSelectOption>
 }
 
-export function AgentDependsPicker({ value, onChange, selfId, placeholder }: Props) {
+export function AgentDependsPicker({
+  value,
+  onChange,
+  selfId,
+  placeholder,
+  selectedOptions,
+}: Props) {
   const { t } = useTranslation()
   return (
     <ResourcePicker<Agent>
@@ -33,10 +41,14 @@ export function AgentDependsPicker({ value, onChange, selfId, placeholder }: Pro
       descriptionFn={(a) => a.description ?? undefined}
       ariaLabel={t('agentForm.fieldDependsOn')}
       placeholder={placeholder}
+      selectedOptions={selectedOptions}
       labels={{
         loading: t('agentForm.dependsPickerLoading'),
         empty: t('agentForm.dependsPickerEmpty'),
         loadFailed: t('agentForm.dependsPickerLoadFailed'),
+        unresolved: t('agentForm.resourceLoadingLabel', {
+          kind: t('agentForm.resourceKind.agent'),
+        }),
       }}
     />
   )

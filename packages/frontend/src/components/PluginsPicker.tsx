@@ -8,6 +8,7 @@
 import { useTranslation } from 'react-i18next'
 import type { Plugin } from '@agent-workflow/shared'
 import { ResourcePicker } from './ResourcePicker'
+import type { MultiSelectOption } from './MultiSelect'
 
 export const PLUGINS_QUERY_KEY = ['plugins'] as const
 
@@ -15,9 +16,10 @@ interface Props {
   value: string[]
   onChange: (next: string[]) => void
   placeholder?: string
+  selectedOptions?: ReadonlyArray<MultiSelectOption>
 }
 
-export function PluginsPicker({ value, onChange, placeholder }: Props) {
+export function PluginsPicker({ value, onChange, placeholder, selectedOptions }: Props) {
   const { t } = useTranslation()
   return (
     <ResourcePicker<Plugin>
@@ -40,10 +42,14 @@ export function PluginsPicker({ value, onChange, placeholder }: Props) {
       ariaLabel={t('agentForm.fieldPlugins')}
       placeholder={placeholder}
       testid="plugins-picker-select"
+      selectedOptions={selectedOptions}
       labels={{
         loading: t('agentForm.pluginsPickerLoading'),
         empty: t('agentForm.pluginsPickerEmpty'),
         loadFailed: t('agentForm.pluginsPickerLoadFailed'),
+        unresolved: t('agentForm.resourceLoadingLabel', {
+          kind: t('agentForm.resourceKind.plugin'),
+        }),
       }}
     />
   )

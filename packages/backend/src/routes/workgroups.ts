@@ -37,6 +37,10 @@ import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import { resolveOpencodeCmd } from '@/util/opencode'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { mountAclEndpoints } from './resourceAcl'
+import {
+  evaluateAgentResourceIntegrity,
+  loadAgentResourceInventory,
+} from '@/services/agentResourceIntegrity'
 
 export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
   // RFC-099: missing and not-visible produce the identical 404 (D1).
@@ -55,6 +59,29 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
 
   app.get('/api/workgroups/:id', async (c) => {
     return c.json(await loadVisibleWorkgroup(actorOf(c), c.req.param('id')))
+  })
+
+  // RFC-228: advisory status for the editor/wizard. The POST launch service
+  // always recomputes this; this endpoint only prevents a known-bad click and
+  // deliberately omits referenced ids/names from implicit ACL closures.
+  app.get('/api/workgroups/:id/resource-status', async (c) => {
+    const group = await loadVisibleWorkgroup(actorOf(c), c.req.param('id'))
+    const memberAgentIds = group.members.flatMap((member) =>
+      member.memberType === 'agent' && member.agentId ? [member.agentId] : [],
+    )
+    const result = evaluateAgentResourceIntegrity(
+      await loadAgentResourceInventory(deps.db),
+      memberAgentIds,
+    )
+    return c.json({
+      ok: result.ok,
+      issues: result.issues.map((issue) => ({
+        code: issue.code,
+        rootAgentId: issue.rootAgentId,
+        refKind: issue.refKind,
+        direct: issue.ownerAgentId === issue.rootAgentId,
+      })),
+    })
   })
 
   app.post('/api/workgroups', async (c) => {

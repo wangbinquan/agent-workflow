@@ -94,6 +94,16 @@ const cleanTransient: WorkgroupTransientDraftState = {
   discard: () => undefined,
 }
 
+interface WorkgroupResourceStatus {
+  ok: boolean
+  issues: Array<{
+    code: string
+    rootAgentId: string
+    refKind: 'skill' | 'mcp' | 'plugin' | 'agent'
+    direct: boolean
+  }>
+}
+
 function settleScope<T>(
   state: EditScopeState<T>,
   submittedRevision: number,
@@ -281,6 +291,20 @@ export function WorkgroupEditor(props: {
     currentVersion: controller.state.serverRevision.version,
     inFlightMutationId: controller.inFlightMutationId,
     onFrame: controller.remoteFrame,
+  })
+  const resourceStatusQuery = useQuery<WorkgroupResourceStatus>({
+    queryKey: [
+      'workgroups',
+      props.resourceId,
+      'resource-status',
+      controller.state.serverRevision.version,
+    ],
+    queryFn: ({ signal }) =>
+      api.get(
+        `/api/workgroups/${encodeURIComponent(props.resourceId)}/resource-status`,
+        undefined,
+        signal,
+      ),
   })
 
   useEffect(() => {
@@ -606,6 +630,7 @@ export function WorkgroupEditor(props: {
     controller.state.phase === 'conflict' ||
     controller.state.phase === 'inaccessible' ||
     controller.state.phase === 'deleted' ||
+    resourceStatusQuery.data?.ok === false ||
     del.isPending ||
     launch.isPending
 
@@ -698,6 +723,17 @@ export function WorkgroupEditor(props: {
             {readiness.warnings.map((warning) => (
               <span key={warning}>{t('workgroups.readiness.noNonLeaderWorker')}</span>
             ))}
+          </div>
+        )}
+        {resourceStatusQuery.data?.ok === false && (
+          <div
+            className="error-banner workgroup-readiness"
+            role="alert"
+            data-testid="workgroup-resource-integrity-banner"
+          >
+            {t('workgroups.readiness.resourcesInvalid', {
+              count: resourceStatusQuery.data.issues.length,
+            })}
           </div>
         )}
       </div>

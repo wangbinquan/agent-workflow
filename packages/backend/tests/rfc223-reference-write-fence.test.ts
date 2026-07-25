@@ -4,8 +4,8 @@
 // seam, so the mutation deterministically lands in the former TOCTOU window.
 //
 // The same suite locks D15's other half: authorization loss on an unchanged
-// stored ref is grandfathered, and historically tolerated never-resolved
-// workflow / managed-skill refs remain tolerated.
+// stored ref is grandfathered. RFC-228 intentionally ends the historical
+// allowance for never-resolved managed-Skill refs.
 
 import {
   CreateWorkgroupSchema,
@@ -296,18 +296,29 @@ describe('RFC-223 ordinary reference final-transaction fences', () => {
     expect(updated.mcp).toEqual([mcpId])
   })
 
-  test('unresolved managed skill remains a managed ref instead of becoming fence-required', async () => {
+  test('unresolved managed Skill is rejected before the final write fence', async () => {
     const missingSkillId = 'never-resolved-managed-skill'
-    const created = await createAgent(
-      db,
-      {
-        name: 'dormant-skill-ref',
-        ...EMPTY_AGENT,
-        skills: [{ kind: 'managed', skillId: missingSkillId }],
+    await expect(
+      createAgent(
+        db,
+        {
+          name: 'dormant-skill-ref',
+          ...EMPTY_AGENT,
+          skills: [{ kind: 'managed', skillId: missingSkillId }],
+        },
+        { ownerUserId: editor.user.id, actor: editor },
+      ),
+    ).rejects.toMatchObject({
+      code: 'agent-resources-invalid',
+      details: {
+        issues: [{ code: 'skill-not-found', refKind: 'skill', direct: true }],
       },
-      { ownerUserId: editor.user.id, actor: editor },
-    )
-    expect(created.skills).toEqual([{ kind: 'managed', skillId: missingSkillId }])
+    })
+    expect(
+      (await db.select({ name: agents.name }).from(agents)).some(
+        (row) => row.name === 'dormant-skill-ref',
+      ),
+    ).toBe(false)
   })
 
   test('workflow create rejects matched-then-deleted, but preserves dangling-id contract', async () => {
