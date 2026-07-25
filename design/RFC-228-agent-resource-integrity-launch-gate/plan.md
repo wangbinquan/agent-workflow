@@ -1,6 +1,6 @@
 # RFC-228 Agent 引用资源完整性与启动失败关闭 — plan
 
-状态：Done（2026-07-24；本地实现与全量门禁完成，待提交/推送）。
+状态：Done（2026-07-24；实现提交 `bf1b3e1a` 已推送 `main`）。
 
 ## 任务
 
@@ -45,3 +45,4 @@
   hydration、actor-safe status 与 ResourcePicker raw-id 不泄露。
 - UI 证据为 ResourcePicker DOM 回归与 Frontend 全量测试；未把无法建立产品数据态的空白
   live server 页面冒充为本功能的真实交互验收。
+- 实现提交 `bf1b3e1a` 已推送 `main`；远端 CI 按最终发布收尾 SHA 核验。
