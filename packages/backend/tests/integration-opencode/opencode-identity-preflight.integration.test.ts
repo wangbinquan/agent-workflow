@@ -61,6 +61,7 @@ async function verifyNestedBwrapTopology(bwrapPath: string): Promise<void> {
   const canonicalTmp = await realpath(tmpdir())
   const root = await mkdtemp(join(canonicalTmp, 'aw-rfc227-nested-bwrap-'))
   const appHome = join(root, 'app')
+  const reposRoot = join(appHome, 'repos')
   const scratchRepo = join(appHome, 'scratch', 'task')
   const worktree = join(appHome, 'iso', 'task', 'run')
   const runDir = join(appHome, 'runs', 'task', 'run')
@@ -73,7 +74,7 @@ async function verifyNestedBwrapTopology(bwrapPath: string): Promise<void> {
 
   try {
     await Promise.all(
-      [scratchRepo, scratch, privateHome, privateTmp, realHome].map((path) =>
+      [reposRoot, scratchRepo, scratch, privateHome, privateTmp, realHome].map((path) =>
         mkdir(path, { recursive: true, mode: 0o700 }),
       ),
     )
@@ -97,6 +98,7 @@ async function verifyNestedBwrapTopology(bwrapPath: string): Promise<void> {
       taskWorktrees: [worktree, gitCommonDir],
       runDir,
     })
+    expect(outerPolicy.allowSubtrees).toContain(reposRoot)
     const innerManifest: NetlessSubprocessManifest = {
       codec: 1,
       mode: 'shell',
