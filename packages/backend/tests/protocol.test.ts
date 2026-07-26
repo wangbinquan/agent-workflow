@@ -196,6 +196,21 @@ describe('renderUserPrompt — template substitution', () => {
     expect(out).toContain('before [] after')
   })
 
+  test('framework-composed prompt mode preserves literal {{tokens}} without disabling protocol rendering', () => {
+    const out = renderUserPrompt({
+      promptTemplate:
+        'Goal data: {{literal_goal}}\nMessage data: {{literal_message}}\nBuilt-in text: {{__task_id__}}',
+      expandPromptTemplate: false,
+      inputs: {},
+      meta: META,
+      agentOutputs: ['result'],
+    })
+    expect(out).toContain('Goal data: {{literal_goal}}')
+    expect(out).toContain('Message data: {{literal_message}}')
+    expect(out).toContain('Built-in text: {{__task_id__}}')
+    expect(out).toContain('<port name="result">')
+  })
+
   test('unreferenced input ports appended as sections in insertion order', () => {
     const out = renderUserPrompt({
       promptTemplate: 'just do {{action}}',

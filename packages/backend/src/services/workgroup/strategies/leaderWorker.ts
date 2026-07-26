@@ -32,6 +32,20 @@ export async function openCompletionGate(
   state: EngineDbState,
 ): Promise<void> {
   const { db, taskId } = args
+  // leader_worker declares through wg_decision before it reaches this helper.
+  // free_collab converges mechanically, so it has no leader turn that can move
+  // idle → declared. Establish that state here before opening the common gate;
+  // otherwise the holder and "waiting for confirmation" message are created
+  // while the declared → awaiting_confirmation CAS can never land, leaving the
+  // public room and confirm endpoint in contradictory states.
+  if (!state.gate.declaredDone) {
+    const declared = await casGateStatus(db, taskId, {
+      from: ['idle'],
+      to: 'declared',
+      summary: 'free-collab converged',
+    })
+    if (!declared) return
+  }
   // RFC-209 §2.4 — 读一次账本，holder 的 wgRound 与下面那条门消息的 round 共用。
   // 此前两者相隔 9 行、中间夹着两个 await 却各读各的，注释又断言它们同轮——正是本 RFC
   // 要消灭的那类漂移（对抗门 P2）。
@@ -300,8 +314,14 @@ export async function driveLeaderTurn(
   if (outcome.kind === 'canceled') return
   if (outcome.kind === 'awaiting') return // leader asked the human — task parks via outcome pass
   // RFC-181 C — suppressed ask-back exhaustion: DROP-AND-CONTINUE (no throw, no
-  // park) — the leader slides into idle; nudge / round caps take over.
-  if (outcome.kind === 'clarify-forbidden-exhausted') return
+  // park) — consume this turn's input before sliding into idle so the wake
+  // oracle can issue its bounded nudge. Leaving the cursor behind re-wakes the
+  // leader immediately on the same old message, bypassing the nudge cap and
+  // burning every remaining round on identical clarify-forbidden failures.
+  if (outcome.kind === 'clarify-forbidden-exhausted') {
+    await advanceMemberCursor(db, taskId, leaderId, maxMessageId(state.messages))
+    return
+  }
   if (outcome.kind === 'failed') throw new Error(outcome.errorMessage)
   if (outcome.kind === 'protocol-exhausted') {
     throw new Error(`leader protocol violation: ${outcome.errors.join('; ')}`)

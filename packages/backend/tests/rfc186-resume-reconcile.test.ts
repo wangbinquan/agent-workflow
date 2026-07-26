@@ -60,10 +60,13 @@ describe('RFC-186 PR-2 — source wiring locks', () => {
     expect(src).toContain('reconcileRunningAssignments(db, taskId')
   })
 
-  // RFC-186 T5 (audit §5 F6): the 3 cursor advances no longer sit immediately
+  // RFC-186 T5 (audit §5 F6): the normal cursor advances no longer sit immediately
   // BEFORE runHostNode — they moved to after the turn's effects (leader /
   // assignment) or after the hook returns (message), so a mid-turn daemon crash
   // leaves the cursor un-advanced and the resumed engine re-derives the turn.
+  // A fourth advance intentionally consumes a leader turn only after its bounded
+  // clarify-forbidden retries are exhausted, preventing the same old input from
+  // hot-looping without claiming that any host-node effect succeeded.
   test('T5: no advanceMemberCursor immediately precedes runHostNode (F6 pattern removed)', () => {
     const src = [
       'workgroup/engine.ts',
@@ -76,8 +79,12 @@ describe('RFC-186 PR-2 — source wiring locks', () => {
     expect(src).not.toMatch(
       /advanceMemberCursor\([^)]*\)\s*\n\s*\n\s*const result = await hooks\.runHostNode/,
     )
-    // still exactly 3 advances (leader / assignment / message), just repositioned.
-    expect((src.match(/advanceMemberCursor\(db, taskId/g) ?? []).length).toBe(3)
+    // Exactly four advances: successful leader / exhausted-forbidden leader /
+    // assignment / message. The exhausted branch must consume then return.
+    expect((src.match(/advanceMemberCursor\(db, taskId/g) ?? []).length).toBe(4)
+    expect(src).toMatch(
+      /if \(outcome\.kind === 'clarify-forbidden-exhausted'\) {\s*await advanceMemberCursor\(db, taskId, leaderId, maxMessageId\(state\.messages\)\)\s*return\s*}/,
+    )
     expect((src.match(/RFC-186 T5/g) ?? []).length).toBeGreaterThanOrEqual(3)
   })
 })

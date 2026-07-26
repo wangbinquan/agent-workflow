@@ -207,6 +207,12 @@ export interface RunNodeOptions {
   }
   promptTemplate?: string
   /**
+   * Defaults to true. Framework-composed host prompts set false so fenced
+   * workgroup/dynamic-workflow data containing literal `{{...}}` is not
+   * reinterpreted as workflow-template variables.
+   */
+  expandPromptTemplate?: boolean
+  /**
    * RFC-005 review-driven re-run context. When the scheduler is re-running an
    * upstream node after a downstream review's reject/iterate decision, this
    * carries the rendered comments / rejection reason / iterate target port
@@ -958,6 +964,9 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         })
       : renderUserPrompt({
           promptTemplate: opts.promptTemplate,
+          ...(opts.expandPromptTemplate !== undefined
+            ? { expandPromptTemplate: opts.expandPromptTemplate }
+            : {}),
           inputs: opts.inputs,
           meta: opts.templateMeta,
           agentOutputs: opts.agent.outputs,

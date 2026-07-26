@@ -24,7 +24,9 @@ import type { TaskWsMessage } from '@agent-workflow/shared'
 import { TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 import {
   agentHasClarifyChannel,
+  DEFAULT_PROTOCOL_RETRY_BUDGET,
   renderUserPrompt,
+  WG_LEADER_IDLE_NUDGE_LIMIT,
   WorkflowDefinitionSchema,
   type WorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
@@ -910,14 +912,20 @@ describe('RFC-164 engine — source locks', () => {
 
   test('renderUserPrompt end-to-end: workgroup block replaces port list', () => {
     const out = renderUserPrompt({
-      promptTemplate: 'hello',
+      promptTemplate: 'hello {{literal_workgroup_data}}',
+      expandPromptTemplate: false,
       inputs: {},
       meta: { repoPath: '/r', baseBranch: 'main', taskId: 't' },
       agentOutputs: ['legacy_port'],
       workgroupProtocolBlock: '## WG PROTOCOL SENTINEL',
     })
-    expect(out).toContain('## WG PROTOCOL SENTINEL')
+    expect(out).toContain('{{literal_workgroup_data}}')
+    expect(out).toContain('{{literal_workgroup_data}}\n\n## WG PROTOCOL SENTINEL')
     expect(out).not.toContain('legacy_port')
+  })
+
+  test('runHostNode marks every framework-composed workgroup prompt as literal', () => {
+    expect(SCHEDULER_SRC).toContain('expandPromptTemplate: false')
   })
 
   // Round-trip (Codex review P1): a workgroup host run is dispatched with clarify
@@ -1136,6 +1144,10 @@ describe('RFC-164 engine — free_collab orchestration', () => {
     )
     expect(holders).toHaveLength(1)
     expect(holders[0]?.status).toBe('awaiting_review')
+    const gate = gateViewOf(await loadWorkgroupTaskState(db, taskId))
+    expect(gate.declaredDone).toBe(true)
+    expect(gate.awaitingConfirmation).toBe(true)
+    expect(gate.summary).toBe('free-collab converged')
   })
 
   test('fc approved gate on resume → ok (confirm 端点写入 approved 后重入)', async () => {
@@ -1337,7 +1349,7 @@ describe('RFC-181 C — clarify 压制收场（fake hooks）', () => {
     failureCode: 'clarify-forbidden',
   }
 
-  test('leader：压制重提示 → 耗尽 drop-and-continue（不 throw、不 park）→ nudge 后收敛 done', async () => {
+  test('leader：压制重提示后下一次尝试服从 → 收敛 done', async () => {
     // RFC-207 — suppression is now driven by the roster: strip the human so
     // ask-back is off (the RFC-181 `autonomous: true` this replaced meant the
     // same thing). With a human present the leader would legitimately be invited.
@@ -1365,6 +1377,35 @@ describe('RFC-181 C — clarify 压制收场（fake hooks）', () => {
     expect(leaderReqs.every((r) => r.clarifyEnabled === false)).toBe(true)
     // 第二次尝试的 re-prompt 带压制提示。
     expect(leaderReqs[1]?.promptTemplate).toContain('Ask-back is OFF')
+  })
+
+  test('leader：持续违反 STOP 耗尽时消费旧输入，走有界 nudge 后停住而非烧穿 max_rounds', async () => {
+    const base = cfg({ completionGate: false, maxRounds: 20 })
+    const config = {
+      ...base,
+      members: base.members.filter((m) => m.memberType === 'agent'),
+    }
+    const { taskId } = await seedEngineTask(db, config)
+    const attemptsPerTurn = DEFAULT_PROTOCOL_RETRY_BUDGET + 1
+    const logicalTurns = WG_LEADER_IDLE_NUDGE_LIMIT + 1
+    const { hooks, requests } = scriptedHooks({
+      leader: Array.from({ length: attemptsPerTurn * logicalTurns }, () => cfSuppressed),
+      member: [],
+    })
+
+    const result = await runWorkgroupEngine({ db, taskId, log, hooks })
+    expect(result.kind).toBe('awaiting_human')
+    expect(result.detail?.message).toBe('leader-idle')
+    expect(requests).toHaveLength(attemptsPerTurn * logicalTurns)
+
+    const messages = await db
+      .select()
+      .from(workgroupMessages)
+      .where(eq(workgroupMessages.taskId, taskId))
+    expect(messages.filter((message) => message.kind === 'nudge')).toHaveLength(
+      WG_LEADER_IDLE_NUDGE_LIMIT,
+    )
+    expect(messages.some((message) => message.bodyMd.includes('max_rounds'))).toBe(false)
   })
 
   test('worker：压制重提示 → 耗尽 assignment failed 浮出（不 park），任务照常收敛', async () => {

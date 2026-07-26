@@ -254,6 +254,16 @@ export type PromptMode =
 export interface RenderPromptInput {
   /** Node-level prompt template. May be undefined or empty. */
   promptTemplate?: string
+  /**
+   * Whether `promptTemplate` is an author-authored workflow template whose
+   * `{{port}}` / built-in tokens should be expanded. Defaults to true.
+   *
+   * Framework-composed host prompts (workgroup turns and the dynamic-workflow
+   * orchestrator) set this false: they already contain fenced user goal,
+   * charter, messages and results. Re-interpreting `{{...}}` inside those data
+   * blocks as workflow variables silently deletes literal user content.
+   */
+  expandPromptTemplate?: boolean
   /** Resolved input ports — { portName -> concatenated content }. */
   inputs: Record<string, string>
   /** Built-in template variables. */
@@ -497,61 +507,64 @@ export function renderUserPrompt(input: RenderPromptInput): string {
   // memory and genuinely needs the inputs re-included.
   const inlineMode = cc?.mode === 'inline'
 
-  const body = tpl.replace(TEMPLATE_RE, (_match, name: string) => {
-    referenced.add(name)
-    if (BUILTIN_VARS.has(name)) {
-      switch (name) {
-        case '__repo_path__':
-          return input.meta.repoPath
-        case '__base_branch__':
-          return input.meta.baseBranch
-        case '__task_id__':
-          return input.meta.taskId
-        case '__node_id__':
-          return input.meta.nodeId ?? ''
-        case '__iteration__':
-          return input.meta.iteration !== undefined ? String(input.meta.iteration) : ''
-        case '__shard_key__':
-          return fence('shard-key', input.meta.shardKey)
-        case '__review_rejection__':
-          return fence('review-rejection', rc?.rejection)
-        case '__review_comments__':
-          return fence('review-comments', rc?.comments)
-        case '__iterate_target_port__':
-          return inline(rc?.iterateTargetPort)
-        case '__sibling_outputs__':
-          return fence('review-sibling-outputs', rc?.siblingOutputs)
-        case '__clarify_iteration__':
-          return cc?.iteration ?? ''
-        case '__clarify_remaining__':
-          return cc?.remaining ?? ''
-        case '__repos__':
-          return fence(
-            'repository-paths',
-            (input.meta.repos ?? []).map((r) => r.worktreePath).join('\n'),
-          )
-        case '__repo_names__':
-          return fence(
-            'repository-names',
-            (input.meta.repos ?? []).map((r) => r.worktreeDirName).join('\n'),
-          )
-        case '__repo_count__':
-          return String((input.meta.repos ?? []).length)
-      }
-    }
-    // RFC-148: retired tokens render '' unconditionally — historically their
-    // substitution cases returned empty (zero producers), and they must NOT
-    // fall through to the input lookup: a saved workflow with an inbound
-    // port that happens to share the retired name (validator only warns)
-    // would otherwise render upstream content where years of prompts had
-    // an empty string (impl-gate re-review high).
-    if (DEPRECATED_PROMPT_TOKENS.has(name)) return ''
-    // RFC-026: drop input port values from inline-mode reruns (see comment
-    // above the inlineMode declaration).
-    if (inlineMode) return ''
-    const v = input.inputs[name]
-    return fence(name, v)
-  })
+  const body =
+    input.expandPromptTemplate === false
+      ? tpl
+      : tpl.replace(TEMPLATE_RE, (_match, name: string) => {
+          referenced.add(name)
+          if (BUILTIN_VARS.has(name)) {
+            switch (name) {
+              case '__repo_path__':
+                return input.meta.repoPath
+              case '__base_branch__':
+                return input.meta.baseBranch
+              case '__task_id__':
+                return input.meta.taskId
+              case '__node_id__':
+                return input.meta.nodeId ?? ''
+              case '__iteration__':
+                return input.meta.iteration !== undefined ? String(input.meta.iteration) : ''
+              case '__shard_key__':
+                return fence('shard-key', input.meta.shardKey)
+              case '__review_rejection__':
+                return fence('review-rejection', rc?.rejection)
+              case '__review_comments__':
+                return fence('review-comments', rc?.comments)
+              case '__iterate_target_port__':
+                return inline(rc?.iterateTargetPort)
+              case '__sibling_outputs__':
+                return fence('review-sibling-outputs', rc?.siblingOutputs)
+              case '__clarify_iteration__':
+                return cc?.iteration ?? ''
+              case '__clarify_remaining__':
+                return cc?.remaining ?? ''
+              case '__repos__':
+                return fence(
+                  'repository-paths',
+                  (input.meta.repos ?? []).map((r) => r.worktreePath).join('\n'),
+                )
+              case '__repo_names__':
+                return fence(
+                  'repository-names',
+                  (input.meta.repos ?? []).map((r) => r.worktreeDirName).join('\n'),
+                )
+              case '__repo_count__':
+                return String((input.meta.repos ?? []).length)
+            }
+          }
+          // RFC-148: retired tokens render '' unconditionally — historically their
+          // substitution cases returned empty (zero producers), and they must NOT
+          // fall through to the input lookup: a saved workflow with an inbound
+          // port that happens to share the retired name (validator only warns)
+          // would otherwise render upstream content where years of prompts had
+          // an empty string (impl-gate re-review high).
+          if (DEPRECATED_PROMPT_TOKENS.has(name)) return ''
+          // RFC-026: drop input port values from inline-mode reruns (see comment
+          // above the inlineMode declaration).
+          if (inlineMode) return ''
+          const v = input.inputs[name]
+          return fence(name, v)
+        })
 
   let sections = ''
   for (const [name, content] of Object.entries(input.inputs)) {
@@ -693,7 +706,12 @@ export function renderUserPrompt(input: RenderPromptInput): string {
         buildOptionalDualProtocolBlock(input.agentOutputs, input.agentOutputKinds, nonce)
   } else if (input.workgroupProtocolBlock !== undefined) {
     // RFC-164: workgroup runs replace (never extend) the agent-outputs block.
-    trailing = input.workgroupProtocolBlock
+    // Host protocol renderers return a Markdown heading without the standard
+    // protocol block's leading separator. Always establish a section boundary:
+    // otherwise a fenced prompt ending in `</aw-input>` is concatenated as
+    // `</aw-input>## Workgroup output protocol`, hiding the heading from both
+    // Markdown readers and models.
+    trailing = `\n\n${input.workgroupProtocolBlock.replace(/^\n+/, '')}`
   } else {
     trailing = buildProtocolBlock(input.agentOutputs, input.agentOutputKinds, nonce)
   }

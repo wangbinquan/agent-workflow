@@ -60,6 +60,9 @@
 
 ## 工作流提示与人工重跑
 
+- **框架已经组合好的 prompt 不是用户模板，不能再跑一次 `{{token}}` 展开**：工作组回合和动态工作流编排器会先把 goal、charter、消息与结果围栏成完整 prompt；若随后仍走普通 Workflow `promptTemplate` 替换器，用户数据里的任意 `{{literal}}` 会被当成不存在的端口并静默删掉。渲染入口必须显式区分 author template 与 framework-composed prompt，后者原样保留；附加工作组协议块前也要强制建立空行段落边界，防止 `</aw-input>## ...` 粘连。
+- **“显示完成门”与“持久门状态”必须是同一个 CAS 事实**：Free-collab 的机械收敛没有 Leader `wg_decision(done)` 帮它做 `idle → declared`；若只创建 holder/系统消息再尝试 `declared → awaiting_confirmation`，UI 看似等待批准，数据库仍是 `idle`，confirm API 必然拒绝。任何共享 gate helper 都要先建立调用模式缺失的前置状态，再开门。
+- **有界重试结束必须消费触发它的旧输入**：Leader 的 clarify-forbidden 重试耗尽后若不推进 member cursor，wake oracle 会立刻拿同一旧消息再次唤醒，完全绕过 idle-nudge 上限并瞬间烧完 `maxRounds`。`drop-and-continue` 不是空 `return`；先提交 cursor/attempt 等进度事实，才允许调度器决定下一次唤醒。
 - **尾部指令只能引用本轮实际可见的上下文**：Clarify Q&A 在成功产出后会按代际淘汰；评审驳回重跑若尾部仍写“use the answers above”，Agent 会因为上方根本没有答案而再次反问，继而触发 clarify-forbidden。提示拼装必须从同一个 `answersVisible` 判据同时决定 Q&A 块与 STOP 尾句；不可见时改为从 Prior Output / resumed session 恢复已定选择并直接完成。
 - **乱码先走评审闭环，不做无条件转码**：provider 可能直接返回“äº¤ä»”一类已经双重编码的原文，数据库与前端只是在如实展示。review 应退回并要求 Agent 丢弃乱码 Prior Output、重新读取 UTF-8 source 生成；自动 latin1→UTF-8 会误改本来合法的文本。
 

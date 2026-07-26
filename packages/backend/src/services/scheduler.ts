@@ -896,6 +896,11 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
           })),
         },
         promptTemplate: req.promptTemplate,
+        // Workgroup turns and the dynamic-workflow orchestrator hand us a
+        // COMPLETE framework-composed prompt. Its fenced goal/charter/messages
+        // are data, not a second workflow template: preserving this boundary
+        // keeps literal `{{token}}` text byte-for-byte.
+        expandPromptTemplate: false,
         ...(req.workgroupProtocolBlock !== undefined
           ? { workgroupProtocolBlock: req.workgroupProtocolBlock }
           : {}),
