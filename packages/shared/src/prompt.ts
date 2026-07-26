@@ -653,7 +653,8 @@ export function renderUserPrompt(input: RenderPromptInput): string {
   // directive trailer: stopNotice is the one emission source, so the trailer
   // appears exactly once whether or not answered Q&A is also present.
   if (stopNotice && !mandatoryAskBack) {
-    sections += `\n\n${renderClarifyDirectiveTrailer('stop')}`
+    const answersVisible = cc?.flatBlock !== undefined && cc.flatBlock.trim().length > 0
+    sections += `\n\n${renderClarifyDirectiveTrailer('stop', { answersVisible })}`
   }
 
   // Trailing protocol selection (RFC-100 — mandatory ask-back).

@@ -35,6 +35,7 @@ const CATALOG_FILES = [
   'wrapper-loop-around-fanout.yaml',
   'wrapper-loop-around-git.yaml',
   'wrapper-git-around-loop.yaml',
+  'mixed-wrapper-human-roundtrip.yaml',
   'wrapper-loop-review.yaml',
   'clarify-self-roundtrip.yaml',
   'clarify-cross-agent-roundtrip.yaml',
@@ -234,6 +235,24 @@ const AGENT_FIXTURES = [
     name: 'matrix-runtime',
     outputs: ['result'],
     outputKinds: { result: 'string' },
+    readonly: true,
+  },
+  {
+    name: 'matrix-mixed-writer',
+    outputs: ['answer'],
+    outputKinds: { answer: 'markdown' },
+    readonly: false,
+  },
+  {
+    name: 'matrix-mixed-auditor',
+    outputs: ['finding'],
+    outputKinds: { finding: 'markdown' },
+    readonly: true,
+  },
+  {
+    name: 'matrix-mixed-summary',
+    outputs: ['answer'],
+    outputKinds: { answer: 'markdown' },
     readonly: true,
   },
 ] as const
@@ -902,6 +921,129 @@ test('nested wrappers: loop inside git produces one cumulative full-loop diff', 
   const allChanged = outputValue(data, git.id, 'git_diff')
   expect(allChanged).toContain('matrix-generated/nested/iter-0.txt')
   expect(allChanged).toContain('matrix-generated/nested/iter-1.txt')
+})
+
+test('mixed wrappers + humans: clarified decision survives review rejection before fanout and final approval', async () => {
+  const task = await launchOk('mixed-wrapper-human-roundtrip.yaml', {
+    goal: 'ship the reviewed release',
+  })
+
+  const humanPark = await waitForTask(
+    task.id,
+    (row) => row.status === 'awaiting_human' || row.status === 'failed',
+  )
+  expect(humanPark.status).toBe('awaiting_human')
+  const clarification = await waitForClarify(task.id, 'self')
+  expect(clarification.askingNodeId).toBe('mixed_writer')
+  await answerClarify(clarification, 'q-mixed')
+
+  await waitForTask(task.id, (row) => row.status === 'awaiting_review' || row.status === 'failed')
+  const firstReview = await waitForReview(task.id)
+  const reject = await apiFetch(`/api/reviews/${firstReview.nodeRunId}/decision`, {
+    method: 'POST',
+    body: JSON.stringify({
+      decision: 'rejected',
+      rejectReason: 'preserve the clarified target and revise the implementation',
+      reviewIteration: firstReview.reviewIteration,
+    }),
+  })
+  await expectHttp(reject, 200, 'reject mixed inner review')
+
+  const afterReject = await waitForTask(
+    task.id,
+    (row) =>
+      row.status === 'awaiting_review' ||
+      row.status === 'awaiting_human' ||
+      row.status === 'failed',
+  )
+  const afterRejectRuns = await nodeRuns(task.id)
+  expect(afterReject.status).toBe('awaiting_review')
+  const secondReview = await waitForReview(task.id, firstReview.reviewIteration + 1)
+  const revised = afterRejectRuns
+  const writerRuns = runsFor(revised, 'mixed_writer').sort((a, b) => a.id.localeCompare(b.id))
+  expect(writerRuns).toHaveLength(3)
+  // RFC-131 aging intentionally removes old Q&A after the agent has emitted a
+  // valid output. The resolved choice survives through Prior Output instead.
+  expect(writerRuns[2]?.promptText).not.toContain('## Clarify Q&A')
+  expect(writerRuns[2]?.promptText).not.toContain('answers above')
+  expect(writerRuns[2]?.promptText).toContain('## Review Rejection')
+  expect(writerRuns[2]?.promptText).toContain(
+    'preserve the clarified target and revise the implementation',
+  )
+  expect(writerRuns[2]?.promptText).toContain('## Prior Output')
+  expect(writerRuns[2]?.promptText).toContain('mixed-document-v1 target=staging')
+  expect(writerRuns[2]?.promptText).toContain(
+    'resolved context preserved in Prior Output or the resumed session',
+  )
+  expect(outputValue(revised, writerRuns[2]!.id, 'answer')).toBe('mixed-document-v2 target=staging')
+
+  const approveInner = await apiFetch(`/api/reviews/${secondReview.nodeRunId}/decision`, {
+    method: 'POST',
+    body: JSON.stringify({
+      decision: 'approved',
+      reviewIteration: secondReview.reviewIteration,
+    }),
+  })
+  await expectHttp(approveInner, 200, 'approve revised mixed inner review')
+
+  const postInner = await waitForTask(
+    task.id,
+    (row) => row.status === 'awaiting_review' || row.status === 'failed',
+  )
+  if (postInner.status === 'failed') {
+    const failedRuns = await nodeRuns(task.id)
+    throw new Error(
+      `mixed workflow failed after inner approval: ${JSON.stringify({
+        taskError: postInner.errorMessage,
+        runs: failedRuns.runs.map((run) => ({
+          nodeId: run.nodeId,
+          status: run.status,
+          retryIndex: run.retryIndex,
+          shardKey: run.shardKey,
+          errorMessage: run.errorMessage,
+        })),
+      })}`,
+    )
+  }
+  const finalReview = await waitForReview(task.id)
+  const beforeFinalApproval = await nodeRuns(task.id)
+  const git = onlyRun(beforeFinalApproval, 'git_wrap')
+  const changed = outputValue(beforeFinalApproval, git.id, 'git_diff')
+  expect(changed).toContain('matrix-generated/mixed/release.md')
+  expect(changed).toContain('matrix-generated/mixed/checks.md')
+
+  const auditRuns = runsFor(beforeFinalApproval, 'mixed_auditor')
+  expect(auditRuns).toHaveLength(2)
+  expect(auditRuns.every((run) => run.parentNodeRunId !== null)).toBe(true)
+  expect(
+    auditRuns.every(
+      (run) =>
+        run.promptText?.includes('ship the reviewed release') === true &&
+        run.promptText?.includes('<aw-input name="shard-key"') === true &&
+        run.promptText?.includes(`\n${run.shardKey}\n</aw-input>`) === true,
+    ),
+  ).toBe(true)
+  expect(onlyRun(beforeFinalApproval, 'mixed_summary').promptText).toContain(
+    'aggregated-fanout-report',
+  )
+
+  const approveFinal = await apiFetch(`/api/reviews/${finalReview.nodeRunId}/decision`, {
+    method: 'POST',
+    body: JSON.stringify({
+      decision: 'approved',
+      reviewIteration: finalReview.reviewIteration,
+    }),
+  })
+  await expectHttp(approveFinal, 200, 'approve mixed final review')
+
+  const final = await waitForTerminal(task.id)
+  expect(final.status).toBe('done')
+  const data = await nodeRuns(task.id)
+  const output = onlyRun(data, 'final_output')
+  expect(outputValue(data, output.id, 'approved_summary')).toBe('mixed-release-summary')
+  expect(outputValue(data, output.id, 'changed_files')).toContain(
+    'matrix-generated/mixed/release.md',
+  )
 })
 
 test('wrapper-loop review: awaiting_review bubbles, approval resumes the same wrapper, port-not-empty exits', async () => {

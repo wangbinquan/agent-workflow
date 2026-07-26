@@ -276,9 +276,7 @@ describe('RFC-098 WP-8 — runner escalation against a stubborn child', () => {
     h = await buildHarness()
     const nodeRunId = await insertRun(h.db, h.taskId)
     const controller = new AbortController()
-    setTimeout(() => controller.abort(), 150)
-    const t0 = Date.now()
-    const result = await withEnv({ STUBBORN_OPENCODE_GRANDCHILD_PID_FILE: h.pidFile }, () =>
+    const runPromise = withEnv({ STUBBORN_OPENCODE_GRANDCHILD_PID_FILE: h.pidFile }, () =>
       runNode({
         taskId: h.taskId,
         nodeRunId,
@@ -295,16 +293,23 @@ describe('RFC-098 WP-8 — runner escalation against a stubborn child', () => {
         killEscalationGraceMs: GRACE_MS,
       }),
     )
-    const elapsed = Date.now() - t0
+    // Under full-suite load, a fixed 150ms timer can fire before the stubborn
+    // fixture has spawned its grandchild. Wait for the behavior under test to
+    // be ready, then measure the cancellation path itself.
+    const ready = await waitForFile(h.pidFile)
+    const abortAt = Date.now()
+    controller.abort()
+    const result = await runPromise
+    const elapsed = Date.now() - abortAt
 
-    expect(elapsed).toBeLessThan(150 + GRACE_MS + MARGIN_MS)
+    expect(ready).toBe(true)
+    expect(elapsed).toBeLessThan(GRACE_MS + MARGIN_MS)
     expect(result.status).toBe('canceled')
     expect(result.errorMessage).toContain('aborted')
 
     const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]!
     track(row.pid)
     expect(await waitDead(row.pid as number)).toBe(true)
-    expect(await waitForFile(h.pidFile)).toBe(true)
     const grandchildPid = readGrandchildPid(h.pidFile)
     expect(await waitDead(grandchildPid)).toBe(true)
   }, 30_000)

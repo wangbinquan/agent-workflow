@@ -211,14 +211,27 @@ export function parseClarifyEnvelopeBody(
  *    agent finalizes from the answers above.
  *  - undefined → empty string (legacy behaviour: no trailer at all).
  *
+ *  `answersVisible=false` is used by a later review/manual rerun after RFC-131
+ *  aging has intentionally removed old Q&A from the prompt. In that shape the
+ *  resolved decisions live in Prior Output or a resumed session, so claiming
+ *  that the answers are "above" is false and can make a stopped agent try to
+ *  ask again.
+ *
  *  Exported so backend tests can lock the exact wording — changing it is
  *  a contract break with already-running agents in mid-task. */
-export function renderClarifyDirectiveTrailer(directive?: ClarifyDirective): string {
+export function renderClarifyDirectiveTrailer(
+  directive?: ClarifyDirective,
+  options: { answersVisible?: boolean } = {},
+): string {
   if (directive === 'stop') {
+    const finalizeInstruction =
+      options.answersVisible === false
+        ? '- Produce your final <workflow-output> reply now. Use the current inputs and any resolved context preserved in Prior Output or the resumed session; do not ask again. If any detail is still ambiguous, make your best informed call and proceed.'
+        : '- Produce your final <workflow-output> reply now using the answers above. If any detail is still ambiguous, make your best informed call based on the answers and proceed.'
     return [
       '### User directive: STOP CLARIFYING',
       '- The user has ended clarification. You are now RELEASED from ask-back mode — do NOT emit another <workflow-clarify> envelope.',
-      '- Produce your final <workflow-output> reply now using the answers above. If any detail is still ambiguous, make your best informed call based on the answers and proceed.',
+      finalizeInstruction,
     ].join('\n')
   }
   if (directive === 'continue') {

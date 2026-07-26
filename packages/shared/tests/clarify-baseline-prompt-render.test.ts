@@ -75,6 +75,12 @@ describe('RFC-058 baseline — renderClarifyDirectiveTrailer standalone', () => 
       ].join('\n'),
     )
   })
+
+  test('stop without visible Q&A points at preserved context instead of nonexistent answers above', () => {
+    const trailer = renderClarifyDirectiveTrailer('stop', { answersVisible: false })
+    expect(trailer).toContain('resolved context preserved in Prior Output or the resumed session')
+    expect(trailer).not.toContain('answers above')
+  })
 })
 
 describe('RFC-058 baseline — summariseClarifyAnswer 6 cases', () => {

@@ -22,8 +22,10 @@ import {
   ROOT_SESSION_PERMISSION_RULES,
   type SelectedModel,
 } from '@/services/runtime/opencode/directApiSchemas'
-import { buildVerifiedOpencodeBusinessPlan } from '@/services/runtime/opencode/verifiedPlan'
-import type { VerifiedOpencodePlanDependencies } from '@/services/runtime/opencode/verifiedPlanCore'
+import {
+  buildVerifiedOpencodeBusinessPlan,
+  type VerifiedBusinessPlanDependencies,
+} from '@/services/runtime/opencode/verifiedPlan'
 import { AW_INTERNAL_GIT_IDENTITY, runGit } from '@/util/git'
 
 const roots: string[] = []
@@ -142,7 +144,7 @@ function verifiedContext(input: {
   }
 }
 
-const PLAN_DEPENDENCIES: VerifiedOpencodePlanDependencies = {
+const PLAN_DEPENDENCIES: VerifiedBusinessPlanDependencies = {
   requireBwrap: async () => '/usr/bin/bwrap',
   inspectBinary: async () => ({
     resolvedPath: '/runtime/opencode',
@@ -156,6 +158,20 @@ const PLAN_DEPENDENCIES: VerifiedOpencodePlanDependencies = {
       resolvedPath: '/runtime/opencode',
       snapshotPath,
       digest: TEST_BINARY_DIGEST,
+    }
+  },
+  // Unit tests freeze a tiny seam instead of copying/hashing the host's 60+
+  // MiB Bun binary. The dedicated toolchain case below asserts source-path
+  // exclusion and the exact model-facing PATH.
+  resolveToolchainBinary: (token) => (token === 'bun' ? '/runtime/bun' : null),
+  snapshotToolchainBinary: async ({ snapshotPath }) => {
+    await mkdir(dirname(snapshotPath), { recursive: true, mode: 0o700 })
+    await writeFile(snapshotPath, 'bun test seam', { flag: 'wx', mode: 0o500 })
+    await chmod(snapshotPath, 0o500)
+    return {
+      resolvedPath: '/runtime/bun',
+      snapshotPath,
+      digest: 'e'.repeat(64),
     }
   },
 }
@@ -257,17 +273,22 @@ describe('RFC-224 verified business-plan owner barrier', () => {
 
     try {
       const sealRoot = join(runRoot, 'opencode-identity-seal')
+      const toolchainPath = join(sealRoot, 'toolchain', 'bun')
       const shellManifest = JSON.parse(
         await readFile(join(sealRoot, 'shell', 'netless.json'), 'utf8'),
-      ) as { gitCommonDirs: string[] }
+      ) as { gitCommonDirs: string[]; bindReadOnly: string[]; env: Record<string, string> }
       const [mcpIdentity] = await readdir(join(sealRoot, 'mcp'))
       const mcpManifest = JSON.parse(
         await readFile(join(sealRoot, 'mcp', mcpIdentity!, 'netless.json'), 'utf8'),
-      ) as { gitCommonDirs: string[] }
+      ) as { gitCommonDirs: string[]; bindReadOnly: string[]; env: Record<string, string> }
 
       expect(shellManifest.gitCommonDirs).toEqual([commonDir])
       expect(mcpManifest.gitCommonDirs).toEqual([commonDir])
       expect(shellManifest.gitCommonDirs).not.toContain(scratchRepo)
+      expect(shellManifest.bindReadOnly).toContain(toolchainPath)
+      expect(mcpManifest.bindReadOnly).toContain(toolchainPath)
+      expect(shellManifest.env.PATH).toBe(`${dirname(toolchainPath)}:/usr/bin:/bin`)
+      expect(mcpManifest.env.PATH).toBe(`${dirname(toolchainPath)}:/usr/bin:/bin`)
       expect(plan.sandboxTopology).toBe('provider-child-only')
     } finally {
       await plan.cleanup?.()
@@ -338,6 +359,57 @@ describe('RFC-224 verified business-plan owner barrier', () => {
         containmentProviderId: 'macos-seatbelt',
         runnerSandboxed: false,
       })
+    } finally {
+      await plan.cleanup?.()
+      await removeHermeticOpencodeLayout(plan.sessionStore!.root)
+    }
+  })
+
+  test('freezes Bun into the model-facing shell PATH without exposing its source directory', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'rfc227-bun-toolchain-'))
+    roots.push(root)
+    const appHome = join(root, 'app')
+    const worktreePath = join(root, 'worktree')
+    const runRoot = join(appHome, 'runs', 'task-1', 'run-bun')
+    await mkdir(worktreePath, { recursive: true })
+    activateVerifiedMac(appHome)
+
+    const plan = await buildVerifiedOpencodeBusinessPlan(
+      verifiedContext({
+        appHome,
+        worktreePath,
+        runRoot,
+        nodeRunId: 'run-bun',
+        bash: 'allow',
+        nonceChar: 'c',
+      }),
+      ['opencode'],
+      {
+        ...PLAN_DEPENDENCIES,
+        resolveToolchainBinary: (token) => (token === 'bun' ? '/mutable/home/bin/bun' : null),
+        snapshotToolchainBinary: async ({ command, snapshotPath }) => {
+          expect(command).toEqual(['/mutable/home/bin/bun'])
+          await mkdir(dirname(snapshotPath), { recursive: true, mode: 0o700 })
+          await writeFile(snapshotPath, 'frozen bun test seam', { flag: 'wx', mode: 0o500 })
+          await chmod(snapshotPath, 0o500)
+          return {
+            resolvedPath: '/mutable/home/bin/bun',
+            snapshotPath,
+            digest: 'b'.repeat(64),
+          }
+        },
+      },
+    )
+
+    try {
+      const snapshotPath = join(runRoot, 'opencode-identity-seal', 'toolchain', 'bun')
+      const shellManifest = JSON.parse(
+        await readFile(join(runRoot, 'opencode-identity-seal', 'shell', 'netless.json'), 'utf8'),
+      ) as { bindReadOnly: string[]; env: Record<string, string> }
+      expect(shellManifest.bindReadOnly).toContain(snapshotPath)
+      expect(shellManifest.bindReadOnly).not.toContain('/mutable/home/bin/bun')
+      expect(shellManifest.env.PATH).toBe(`${dirname(snapshotPath)}:/usr/bin:/bin`)
+      expect((await lstat(snapshotPath)).mode & 0o777).toBe(0o500)
     } finally {
       await plan.cleanup?.()
       await removeHermeticOpencodeLayout(plan.sessionStore!.root)

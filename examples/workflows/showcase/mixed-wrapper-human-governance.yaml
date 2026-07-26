@@ -1,0 +1,188 @@
+name: showcase-mixed-wrapper-human-governance
+description: 'Git → Loop 内完成澄清、实现与驳回重审，再按变更文件 fanout 审计，汇总后做最终人工批准。'
+definition:
+  $schema_version: 4
+  inputs:
+    - kind: text
+      key: goal
+      label: 交付目标
+      required: true
+      maxLength: 4000
+    - kind: text
+      key: constraints
+      label: 实现与验收约束
+      required: true
+      maxLength: 4000
+  nodes:
+    - id: goal_input
+      kind: input
+      inputKey: goal
+      position: { x: 20, y: 150 }
+    - id: constraints_input
+      kind: input
+      inputKey: constraints
+      position: { x: 20, y: 330 }
+    - id: implementation_git
+      kind: wrapper-git
+      title: 捕获经澄清与评审后的完整实现差异
+      nodeIds: [implementation_loop]
+      position: { x: 240, y: 40 }
+      size: { width: 1040, height: 560 }
+    - id: implementation_loop
+      kind: wrapper-loop
+      title: 澄清、实现、驳回修订、批准
+      nodeIds: [implementation, implementation_clarify, implementation_review]
+      maxIterations: 2
+      exitCondition:
+        kind: port-not-empty
+        nodeId: implementation_review
+        portName: approved_doc
+      outputBindings:
+        - name: approved_implementation
+          bind: { nodeId: implementation_review, portName: approved_doc }
+      position: { x: 350, y: 100 }
+      size: { width: 800, height: 390 }
+    - id: implementation
+      kind: agent-single
+      agentName: impl-engineer
+      promptTemplate: |
+        这是隔离任务工作树中的功能演示，不修改产品源代码。先通过已连接的 clarify
+        通道确认一个会改变交付结果的选择；用户停止澄清后再开始实现。
+
+        实现阶段只创建或更新以下两个文件，不提交、不推送：
+        - docs/showcase-runtime-proof/mixed-wrapper-human-2026-07-27.md
+        - docs/showcase-runtime-proof/mixed-wrapper-human-checks-2026-07-27.txt
+
+        impl_report 必须完整记录：人工选择、两个文件路径、实际写入内容摘要和验证结果。
+        这是后续 review 重跑的持久上下文；即使旧 Clarify Q&A 已被正常淘汰，也必须从
+        Prior Output 保留该选择。若收到 Review Rejection，按驳回意见修订两个文件和
+        impl_report，不得再次发起同一个澄清问题。
+
+        spec={{goal}}
+        context={{constraints}}
+      position: { x: 460, y: 190 }
+    - id: implementation_clarify
+      kind: clarify
+      title: 确认演示交付取舍
+      description: 回答并停止澄清后，Agent 在同一受控会话中实现；回答需折叠进 impl_report。
+      position: { x: 680, y: 400 }
+    - id: implementation_review
+      kind: review
+      title: 评审实现并演示一次驳回修订
+      description: 首次可驳回验证 prior output 与驳回意见组合；修订后批准使 Loop 退出。
+      inputSource: { nodeId: implementation, portName: impl_report }
+      rerunnableOnReject: [implementation]
+      rerunnableOnIterate: []
+      rollbackFilesOnReject: false
+      rollbackFilesOnIterate: false
+      position: { x: 880, y: 190 }
+    - id: audit_fanout
+      kind: wrapper-fanout
+      title: 按每个变更文件并行审计
+      nodeIds: [file_auditor, audit_aggregator]
+      inputs:
+        - name: changed_files
+          kind: list<path<*>>
+          isShardSource: true
+        - name: goal
+          kind: string
+      expectedShardCount: 8
+      position: { x: 1440, y: 40 }
+      size: { width: 800, height: 460 }
+    - id: file_auditor
+      kind: agent-single
+      agentName: code-auditor
+      promptTemplate: |
+        只审计当前变更文件分片，检查它是否满足统一交付目标，并给出文件级证据。
+        scope={{changed_file}}
+        context={{shared_goal}}
+        shard={{__shard_key__}}
+      position: { x: 1550, y: 160 }
+    - id: audit_aggregator
+      kind: agent-single
+      agentName: showcase-audit-aggregator
+      promptTemplate: |
+        等待所有文件分片完成，去重并汇总覆盖范围、证据、风险和最终建议。
+        findings={{findings}}
+      position: { x: 1890, y: 160 }
+    - id: release_notes
+      kind: agent-single
+      agentName: doc-writer
+      promptTemplate: |
+        将并行审计证据整理成最终可批准的 Markdown 交付说明。必须写明目标、分片覆盖、
+        已验证能力和仍存在的限制；若收到 Review Rejection，基于 Prior Output 修订。
+        输出必须是正常可读的 UTF-8 中文；若 Prior Output 出现“äº¤ä»”一类双重编码
+        乱码，丢弃乱码内容并从 source 与工作树中的原始文件重新生成。
+        source={{audit_report}}
+        context={{goal}}
+      position: { x: 2380, y: 160 }
+    - id: final_review
+      kind: review
+      title: 最终人工批准
+      description: 验证 fanout join 后的普通 Agent 与第二个人工暂停可正常恢复。
+      inputSource: { nodeId: release_notes, portName: doc }
+      rerunnableOnReject: [release_notes]
+      rerunnableOnIterate: []
+      rollbackFilesOnReject: false
+      rollbackFilesOnIterate: false
+      position: { x: 2690, y: 160 }
+    - id: delivery_output
+      kind: output
+      ports:
+        - name: approved_release
+          bind: { nodeId: final_review, portName: approved_doc }
+        - name: changed_files
+          bind: { nodeId: implementation_git, portName: git_diff }
+      position: { x: 2990, y: 160 }
+  edges:
+    - id: goal_to_implementation
+      source: { nodeId: goal_input, portName: goal }
+      target: { nodeId: implementation, portName: goal }
+    - id: constraints_to_implementation
+      source: { nodeId: constraints_input, portName: constraints }
+      target: { nodeId: implementation, portName: constraints }
+    - id: implementation_to_clarify
+      source: { nodeId: implementation, portName: __clarify__ }
+      target: { nodeId: implementation_clarify, portName: questions }
+    - id: clarify_to_implementation
+      source: { nodeId: implementation_clarify, portName: answers }
+      target: { nodeId: implementation, portName: __clarify_response__ }
+    - id: implementation_to_review
+      source: { nodeId: implementation, portName: impl_report }
+      target: { nodeId: implementation_review, portName: __review_input__ }
+    - id: git_to_fanout
+      source: { nodeId: implementation_git, portName: git_diff }
+      target: { nodeId: audit_fanout, portName: changed_files }
+    - id: goal_to_fanout
+      source: { nodeId: goal_input, portName: goal }
+      target: { nodeId: audit_fanout, portName: goal }
+    - id: fanout_file_to_auditor
+      boundary: wrapper-input
+      source: { nodeId: audit_fanout, portName: changed_files }
+      target: { nodeId: file_auditor, portName: changed_file }
+    - id: fanout_goal_to_auditor
+      boundary: wrapper-input
+      source: { nodeId: audit_fanout, portName: goal }
+      target: { nodeId: file_auditor, portName: shared_goal }
+    - id: auditor_to_aggregator
+      source: { nodeId: file_auditor, portName: findings }
+      target: { nodeId: audit_aggregator, portName: findings }
+    - id: aggregator_to_fanout
+      boundary: wrapper-output
+      source: { nodeId: audit_aggregator, portName: report }
+      target: { nodeId: audit_fanout, portName: final_report }
+    - id: fanout_to_release_notes
+      source: { nodeId: audit_fanout, portName: final_report }
+      target: { nodeId: release_notes, portName: audit_report }
+    - id: goal_to_release_notes
+      source: { nodeId: goal_input, portName: goal }
+      target: { nodeId: release_notes, portName: goal }
+    - id: release_notes_to_final_review
+      source: { nodeId: release_notes, portName: doc }
+      target: { nodeId: final_review, portName: __review_input__ }
+    - id: final_review_to_output
+      source: { nodeId: final_review, portName: approved_doc }
+      target: { nodeId: delivery_output, portName: approved_release }
+    - id: git_to_output
+      source: { nodeId: implementation_git, portName: git_diff }
+      target: { nodeId: delivery_output, portName: changed_files }

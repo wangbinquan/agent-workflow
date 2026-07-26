@@ -202,6 +202,53 @@ case "$RAW_PROMPT" in
       emit_ports '<port name=\"status\">done</port><port name=\"report\">fanout-generation-1</port>'
     fi
     ;;
+  *MATRIX_MIXED_DRAFT*)
+    case "$RAW_PROMPT" in
+      *"## Review Rejection"*)
+        require_prompt 'preserve the clarified target and revise the implementation'
+        require_prompt '## Prior Output'
+        require_prompt 'mixed-document-v1 target=staging'
+        mkdir -p matrix-generated/mixed
+        printf 'release v2\n' >matrix-generated/mixed/release.md
+        printf 'checks v2\n' >matrix-generated/mixed/checks.md
+        emit_ports '<port name=\"answer\">mixed-document-v2 target=staging</port>'
+        ;;
+      *"Deployment target?"*)
+        require_prompt '## Clarify Q&A'
+        mkdir -p matrix-generated/mixed
+        printf 'release v1\n' >matrix-generated/mixed/release.md
+        printf 'checks v1\n' >matrix-generated/mixed/checks.md
+        emit_ports '<port name=\"answer\">mixed-document-v1 target=staging</port>'
+        ;;
+      *)
+        emit_clarify \
+          '{\"questions\":[{\"id\":\"q-mixed\",\"title\":\"Deployment target?\",\"kind\":\"single\",\"recommended\":true,\"options\":[\"staging\",\"production\"]}]}'
+        ;;
+    esac
+    ;;
+  *MATRIX_MIXED_AUDIT*)
+    changed=$(prompt_input changed_file)
+    shared_goal=$(prompt_input shared_goal)
+    shard_key=$(prompt_input shard-key)
+    [ -n "$changed" ] || {
+      echo "missing mixed audit shard path" >&2
+      exit 15
+    }
+    [ "$shared_goal" = "ship the reviewed release" ] || {
+      echo "missing mixed audit broadcast goal" >&2
+      exit 15
+    }
+    [ "$shard_key" = "$changed" ] || {
+      echo "mixed audit shard-key mismatch: input=$changed shard=$shard_key" >&2
+      exit 15
+    }
+    emit_ports '<port name=\"finding\">audited:'"$changed"'</port>'
+    ;;
+  *MATRIX_MIXED_SUMMARY*)
+    require_prompt 'aggregated-fanout-report'
+    require_prompt 'ship the reviewed release'
+    emit_ports '<port name=\"answer\">mixed-release-summary</port>'
+    ;;
   *MATRIX_SELF_CLARIFY*)
     case "$RAW_PROMPT" in
       *"Choose a delivery mode"*)

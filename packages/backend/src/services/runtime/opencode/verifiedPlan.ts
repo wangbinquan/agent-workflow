@@ -4,7 +4,7 @@
 
 import { createHash, randomBytes } from 'node:crypto'
 import { chmod, lstat, mkdir, realpath, rm } from 'node:fs/promises'
-import { isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { BusinessNodeSpawnContext, SpawnPlan } from '../types'
 import { getSandboxProvider } from '@/services/sandbox'
 import {
@@ -15,7 +15,7 @@ import {
   resolveStrictProviderAuth,
   type HermeticOpencodeLayout,
 } from './hermetic'
-import { inspectRuntimeOpencodeBinary } from './runtimeBinary'
+import { inspectRuntimeOpencodeBinary, snapshotRuntimeOpencodeBinary } from './runtimeBinary'
 import {
   assertSourceFingerprintUnchanged,
   readFrozenInstruction,
@@ -232,9 +232,58 @@ async function ensurePrivateRunRoot(path: string): Promise<void> {
   await chmod(path, 0o700)
 }
 
+const FIXED_NETLESS_PATH = '/usr/bin:/bin'
+
+interface BusinessToolchainSnapshot {
+  executablePaths: string[]
+  path: string
+}
+
+export interface VerifiedBusinessPlanDependencies extends VerifiedOpencodePlanDependencies {
+  /** Resolve optional model-facing tools without trusting the child environment's PATH. */
+  resolveToolchainBinary?: (token: string) => string | null
+  /** Freeze a resolved tool into the private per-run seal before exposing it. */
+  snapshotToolchainBinary?: typeof snapshotRuntimeOpencodeBinary
+}
+
+/**
+ * The verified OpenCode server intentionally receives a minimal fixed PATH.
+ * Model-invoked build/test commands need one additional tool that the product
+ * itself depends on: Bun. Expose a byte-frozen per-run copy instead of the
+ * daemon's mutable user-home installation. Missing Bun remains non-fatal so a
+ * compiled deployment can still run workflows that do not require it.
+ */
+async function snapshotBusinessToolchain(
+  sealRoot: string,
+  dependencies: VerifiedBusinessPlanDependencies,
+): Promise<BusinessToolchainSnapshot | null> {
+  const resolveToolchainBinary =
+    dependencies.resolveToolchainBinary ?? ((token: string) => Bun.which(token))
+  const sourcePath = resolveToolchainBinary('bun')
+  if (sourcePath === null) return null
+
+  const snapshotPath = join(sealRoot, 'toolchain', 'bun')
+  try {
+    const snapshot = await (dependencies.snapshotToolchainBinary ?? snapshotRuntimeOpencodeBinary)({
+      command: [sourcePath],
+      snapshotPath,
+    })
+    if (snapshot.snapshotPath !== snapshotPath || !/^[0-9a-f]{64}$/.test(snapshot.digest)) {
+      return null
+    }
+  } catch {
+    return null
+  }
+  return {
+    executablePaths: [snapshotPath],
+    path: `${dirname(snapshotPath)}:${FIXED_NETLESS_PATH}`,
+  }
+}
+
 function netlessBaseEnv(
   layout: HermeticOpencodeLayout,
   source: Readonly<Record<string, string | undefined>>,
+  toolchainPath = FIXED_NETLESS_PATH,
 ): Record<string, string> {
   return sanitizeNetlessEnvironment({
     LANG: source.LANG,
@@ -246,7 +295,7 @@ function netlessBaseEnv(
     GIT_AUTHOR_EMAIL: source.GIT_AUTHOR_EMAIL,
     GIT_COMMITTER_NAME: source.GIT_COMMITTER_NAME,
     GIT_COMMITTER_EMAIL: source.GIT_COMMITTER_EMAIL,
-    PATH: '/usr/bin:/bin',
+    PATH: toolchainPath,
     HOME: layout.home,
     TMPDIR: layout.tmp,
     PWD: layout.root,
@@ -352,15 +401,16 @@ async function materializeMcpWrappers(input: {
   frozenSkillPaths: readonly string[]
   sourceEnv: Readonly<Record<string, string | undefined>>
   gitCommonDirs: readonly string[]
+  toolchain: BusinessToolchainSnapshot | null
 }): Promise<void> {
   for (const wrapper of input.planned.localWrappers) {
     // The daemon environment is not an MCP configuration surface: inherit only
     // the small, explicit base assembled above. MCP-authored env was checked in
     // the read-only planning phase.
     const mcpEnv = {
-      ...netlessBaseEnv(input.layout, input.sourceEnv),
+      ...netlessBaseEnv(input.layout, input.sourceEnv, input.toolchain?.path),
       ...wrapper.configuredEnv,
-      PATH: '/usr/bin:/bin',
+      PATH: input.toolchain?.path ?? FIXED_NETLESS_PATH,
       HOME: input.layout.home,
       TMPDIR: input.layout.tmp,
       PWD: input.worktreePath,
@@ -377,7 +427,13 @@ async function materializeMcpWrappers(input: {
       // Bind only the executable inode. Rebinding its whole parent after the
       // inner sandbox masks realHome/appHome could expose SSH, cloud, provider,
       // or daemon state beside an otherwise legitimate local MCP binary.
-      bindReadOnly: [...input.frozenSkillPaths, wrapper.executable],
+      bindReadOnly: [
+        ...new Set([
+          ...input.frozenSkillPaths,
+          ...(input.toolchain?.executablePaths ?? []),
+          wrapper.executable,
+        ]),
+      ],
       env: mcpEnv,
       command: [wrapper.executable, ...wrapper.args],
     }
@@ -399,7 +455,7 @@ export function usesLegacyTestOpencodePath(ctx: BusinessNodeSpawnContext): boole
 export async function buildVerifiedOpencodeBusinessPlan(
   ctx: BusinessNodeSpawnContext,
   command: readonly string[],
-  dependencies: VerifiedOpencodePlanDependencies = {},
+  dependencies: VerifiedBusinessPlanDependencies = {},
 ): Promise<SpawnPlan> {
   const { sandbox } = assertVerifiedOpencodePlanBoundary({
     sandbox: getSandboxProvider(),
@@ -637,6 +693,14 @@ export async function buildVerifiedOpencodeBusinessPlan(
       dependencies,
     })
     const { layout, containment, childProvider, fffCapability } = core
+    const needsToolchain =
+      ctx.agent.permission.bash !== 'deny' || plannedMcp.localWrappers.length > 0
+    const toolchain = needsToolchain
+      ? await snapshotBusinessToolchain(sealRoot, dependencies)
+      : null
+    if (needsToolchain && toolchain === null) {
+      ctx.log.warn('business-toolchain-bun-unavailable', { nodeRunId: ctx.nodeRunId })
+    }
     if (identityDigest(layout) !== identityDigest(plannedLayout)) {
       return executionIdentityFailure('execution-identity-store-unsafe')
     }
@@ -668,9 +732,9 @@ export async function buildVerifiedOpencodeBusinessPlan(
         appHome,
         realHome,
         gitCommonDirs,
-        bindReadOnly: frozenSkillPaths,
+        bindReadOnly: [...new Set([...frozenSkillPaths, ...(toolchain?.executablePaths ?? [])])],
         env: {
-          ...netlessBaseEnv(layout, sourceEnv),
+          ...netlessBaseEnv(layout, sourceEnv, toolchain?.path),
           PWD: canonicalWorktree,
         },
         command: ['/bin/sh'],
@@ -687,6 +751,7 @@ export async function buildVerifiedOpencodeBusinessPlan(
       frozenSkillPaths,
       sourceEnv,
       gitCommonDirs,
+      toolchain,
     })
     const sourceAfter = await scanOpencodeProjectSurface(canonicalWorktree)
     assertSourceFingerprintUnchanged(sourceBefore, sourceAfter)

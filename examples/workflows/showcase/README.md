@@ -7,9 +7,10 @@
 - `nested-loop-git-fix.yaml`：Loop → Git 嵌套包装器，以工作树差异作为循环退出条件，再做回归验证。
 - `cross-agent-clarification.yaml`：设计者与质疑者协作，问题进入跨 Agent clarify 通道，回答后只重跑约定路径。
 - `loop-human-review.yaml`：文档 Agent 产出显式 Markdown，Loop 包装器在人工评审处挂起，批准后退出。
+- `mixed-wrapper-human-governance.yaml`：Git → Loop 内澄清、实现、驳回重审并批准，再按变更文件 fanout 审计，汇总后做第二次人工批准。
 
 先导入 [`../../agents/showcase-audit-aggregator.md`](../../agents/showcase-audit-aggregator.md)
-并创建 Agent，再导入这五个 YAML。其余引用的 Agent 是默认展示资源：
+并创建 Agent，再导入这六个 YAML。其余引用的 Agent 是默认展示资源：
 `spec-analyst`、`impl-engineer`、`code-auditor`、`fix-engineer`、
 `test-writer`、`doc-writer`。
 

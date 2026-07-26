@@ -1,0 +1,162 @@
+name: e2e-mixed-wrapper-human-roundtrip
+description: A clarification and rejected review resume inside loop-in-git before a fanout audit and final review.
+definition:
+  $schema_version: 4
+  inputs:
+    - kind: text
+      key: goal
+      label: Delivery goal
+      required: true
+  nodes:
+    - id: goal_input
+      kind: input
+      inputKey: goal
+      position: { x: 20, y: 220 }
+    - id: git_wrap
+      kind: wrapper-git
+      title: Capture the complete reviewed implementation
+      nodeIds: [loop_wrap]
+      position: { x: 180, y: 40 }
+      size: { width: 1000, height: 520 }
+    - id: loop_wrap
+      kind: wrapper-loop
+      title: Clarify, revise, and approve
+      nodeIds: [mixed_writer, clarify_gate, draft_review]
+      maxIterations: 2
+      exitCondition:
+        kind: port-not-empty
+        nodeId: draft_review
+        portName: approved_doc
+      outputBindings:
+        - name: final_doc
+          bind: { nodeId: draft_review, portName: approved_doc }
+      position: { x: 280, y: 110 }
+      size: { width: 780, height: 350 }
+    - id: mixed_writer
+      kind: agent-single
+      agentName: matrix-mixed-writer
+      promptTemplate: |
+        MATRIX_MIXED_DRAFT
+        goal={{goal}}
+        node={{__node_id__}}
+        iteration={{__iteration__}}
+      position: { x: 370, y: 210 }
+    - id: clarify_gate
+      kind: clarify
+      title: Confirm deployment target
+      description: The answer must remain in context if review subsequently reruns the writer.
+      position: { x: 620, y: 360 }
+    - id: draft_review
+      kind: review
+      title: Review implementation draft
+      description: Reject once to verify combined clarification and review context on rerun.
+      inputSource: { nodeId: mixed_writer, portName: answer }
+      rerunnableOnReject: [mixed_writer]
+      rerunnableOnIterate: []
+      rollbackFilesOnReject: false
+      rollbackFilesOnIterate: false
+      position: { x: 760, y: 210 }
+    - id: fan_wrap
+      kind: wrapper-fanout
+      title: Audit every changed file
+      nodeIds: [mixed_auditor, fan_aggregator]
+      inputs:
+        - name: changes
+          kind: list<path<*>>
+          isShardSource: true
+        - name: goal
+          kind: string
+      expectedShardCount: 4
+      position: { x: 1280, y: 40 }
+      size: { width: 760, height: 430 }
+    - id: mixed_auditor
+      kind: agent-single
+      agentName: matrix-mixed-auditor
+      promptTemplate: |
+        MATRIX_MIXED_AUDIT
+        changed={{changed_file}}
+        context={{shared_goal}}
+        shard={{__shard_key__}}
+      position: { x: 1380, y: 150 }
+    - id: fan_aggregator
+      kind: agent-single
+      agentName: matrix-fanout-aggregator
+      promptTemplate: |
+        MATRIX_FANOUT_AGG
+        findings={{findings}}
+      position: { x: 1690, y: 150 }
+    - id: mixed_summary
+      kind: agent-single
+      agentName: matrix-mixed-summary
+      promptTemplate: |
+        MATRIX_MIXED_SUMMARY
+        evidence={{audit_report}}
+        context={{goal}}
+      position: { x: 2160, y: 150 }
+    - id: final_review
+      kind: review
+      title: Final release approval
+      description: A second human gate verifies that a post-fanout review resumes cleanly.
+      inputSource: { nodeId: mixed_summary, portName: answer }
+      rerunnableOnReject: [mixed_summary]
+      rerunnableOnIterate: []
+      rollbackFilesOnReject: false
+      rollbackFilesOnIterate: false
+      position: { x: 2460, y: 150 }
+    - id: final_output
+      kind: output
+      ports:
+        - name: approved_summary
+          bind: { nodeId: final_review, portName: approved_doc }
+        - name: changed_files
+          bind: { nodeId: git_wrap, portName: git_diff }
+      position: { x: 2760, y: 150 }
+  edges:
+    - id: goal_to_writer
+      source: { nodeId: goal_input, portName: goal }
+      target: { nodeId: mixed_writer, portName: goal }
+    - id: writer_to_clarify
+      source: { nodeId: mixed_writer, portName: __clarify__ }
+      target: { nodeId: clarify_gate, portName: questions }
+    - id: clarify_to_writer
+      source: { nodeId: clarify_gate, portName: answers }
+      target: { nodeId: mixed_writer, portName: __clarify_response__ }
+    - id: writer_to_review
+      source: { nodeId: mixed_writer, portName: answer }
+      target: { nodeId: draft_review, portName: __review_input__ }
+    - id: git_to_fan
+      source: { nodeId: git_wrap, portName: git_diff }
+      target: { nodeId: fan_wrap, portName: changes }
+    - id: goal_to_fan
+      source: { nodeId: goal_input, portName: goal }
+      target: { nodeId: fan_wrap, portName: goal }
+    - id: fan_changes_to_auditor
+      boundary: wrapper-input
+      source: { nodeId: fan_wrap, portName: changes }
+      target: { nodeId: mixed_auditor, portName: changed_file }
+    - id: fan_goal_to_auditor
+      boundary: wrapper-input
+      source: { nodeId: fan_wrap, portName: goal }
+      target: { nodeId: mixed_auditor, portName: shared_goal }
+    - id: auditor_to_aggregator
+      source: { nodeId: mixed_auditor, portName: finding }
+      target: { nodeId: fan_aggregator, portName: findings }
+    - id: aggregator_to_fan
+      boundary: wrapper-output
+      source: { nodeId: fan_aggregator, portName: report }
+      target: { nodeId: fan_wrap, portName: final_report }
+    - id: fan_to_summary
+      source: { nodeId: fan_wrap, portName: final_report }
+      target: { nodeId: mixed_summary, portName: audit_report }
+    - id: goal_to_summary
+      source: { nodeId: goal_input, portName: goal }
+      target: { nodeId: mixed_summary, portName: goal }
+    - id: summary_to_final_review
+      source: { nodeId: mixed_summary, portName: answer }
+      target: { nodeId: final_review, portName: __review_input__ }
+    - id: review_to_output
+      source: { nodeId: final_review, portName: approved_doc }
+      target: { nodeId: final_output, portName: approved_summary }
+    - id: git_to_output
+      source: { nodeId: git_wrap, portName: git_diff }
+      target: { nodeId: final_output, portName: changed_files }
