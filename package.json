@@ -27,6 +27,7 @@
     "test:visual": "RUN_VISUAL_REGRESSION=1 playwright test e2e/visual-regression.spec.ts --project=chromium",
     "e2e:install": "playwright install --with-deps chromium",
     "record:opencode": "bun run scripts/record-opencode.ts",
+    "audit:gate": "bun run scripts/audit-gate.ts",
     "depcheck": "depcruise --config .dependency-cruiser.cjs packages/frontend/src packages/backend/src packages/shared/src"
   },
   "devDependencies": {

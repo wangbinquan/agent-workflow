@@ -229,71 +229,20 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: bun audit (high+critical dependency vulnerabilities)
-        # `--audit-level=high` only fails on high / critical advisories,
-        # filtering out the long moderate tail (typical dev-only noise like
-        # esbuild < 0.25, which only affects `vite dev` and doesn't ship in
-        # the single binary). `--prod` was tried first but isn't a documented
-        # flag in bun 1.3.x audit (the help only lists --json / --audit-level
-        # / --ignore). When CI floated to Bun 1.3.14, `--prod` appeared to be
-        # silently ignored: moderate dev advisories still failed the gate. Filtering
-        # by severity is portable across bun versions and matches what local
-        # `bun audit --audit-level=high` reports.
+      - name: dependency audit gate (high+critical)
+        # 不能直接用 `bun audit --audit-level=high --ignore <GHSA>`：那两个 flag
+        # 在 bun 1.3.13 里是**显示层过滤器**，退出码只反映「有没有公告」，与严重度
+        # 和忽略列表无关（`bun audit --help` 原文即「只*打印*…」；实测忽略掉唯一
+        # 那条 critical 后 `--audit-level=critical` 仍 exit 1）。于是它只有两种
+        # 结局：registry 返回数据就恒红且加多少 --ignore 都修不好，返回空就恒绿 ——
+        # 2026-07-26 之前的绿全是后者（成功 run 的该步骤日志里一条公告都没有）。
         #
-        # If this becomes noisy with unfixable transitive high+critical
-        # advisories, address per-advisory (override / patch / upstream
-        # issue / --ignore <GHSA>); do NOT silently downgrade to
-        # continue-on-error.
-        #
-        # GHSA-w7jw-789q-3m8p (shell-quote quote() does not escape newlines):
-        # transitive, dev/tooling-only — pulled via drizzle-orm/drizzle-kit ›
-        # gel (the EdgeDB/Gel driver), which the platform does NOT use (runtime
-        # is bun:sqlite) and which is NOT in the shipped single binary. The
-        # installed shell-quote@1.8.3 is the latest version satisfying the
-        # range and is still in the affected set (<=1.8.3), so there is no fix
-        # to update to yet. Scoped --ignore per the policy above; REMOVE when
-        # drizzle bumps its transitive shell-quote past the advisory.
-        #
-        # 2026-07-21 — three more high advisories surfaced in the FLOATING
-        # advisory DB (not from any lockfile change; a plain re-run started
-        # failing). All three are dev/tooling-only transitive deps, none in the
-        # shipped single binary, and forcing patched versions would major-bump
-        # internals of eslint/minimatch/drizzle-kit for the whole repo — so
-        # scoped --ignore per the documented policy, REMOVE each when its parent
-        # tool bumps past the range:
-        #   GHSA-395f-4hp3-45gv (shell-quote quadratic-DoS in parse()):
-        #     drizzle-kit / drizzle-orm — dev migration tooling.
-        #   GHSA-3jxr-9vmj-r5cp (brace-expansion DoS): eslint / eslint-plugin-
-        #     react / typescript-eslint › minimatch — lint tooling.
-        #   GHSA-52cp-r559-cp3m (js-yaml merge-key quadratic CPU): eslint ›
-        #     @eslint/eslintrc — lint tooling.
-        #
-        # 2026-07-22 — fast-uri（@modelcontextprotocol/sdk 与 eslint › ajv 的
-        # 传递依赖）同日爆两条 high。GHSA-4c8g-83qw-93j6（IDN 规范化）已由
-        # 根 overrides 钉 3.1.3 修掉；GHSA-v2hh-gcrm-f6hx（反斜杠 authority
-        # 混淆）当日范围 >=3.0.0 <=3.1.3，v3 线尚无修复版、强推 v4 会跨大
-        # 版本改 ajv/MCP SDK 运行时解析。本仓 fast-uri 只解析受信配置的
-        # MCP URL 与 JSON-schema format，不面向敌意 URI。上游发 3.1.4+ 修复
-        # 后：bump overrides 并 REMOVE 本条。
-        #   GHSA-v2hh-gcrm-f6hx (fast-uri backslash authority host confusion)
-        #
-        # 2026-07-26 — GHSA-mh99-v99m-4gvg（brace-expansion unbounded
-        # expansion OOM）覆盖 <=5.0.7。minimatch@10 的兼容链已在 bun.lock
-        # 升到 5.0.8；剩余 1.1.14 只来自 ESLint / @eslint/eslintrc /
-        # eslint-plugin-react 的 minimatch@3 lint 工具链。其上游仍约束
-        # brace-expansion ^1.1.7，而 v5 的 CommonJS API 已从 callable export
-        # 改为 named `expand`，全局 override 会直接破坏 minimatch@3。故按本
-        # job 的 dev-only transitive policy 精确 ignore；上游迁到兼容修复版后
-        # REMOVE 本条。
-        #   GHSA-mh99-v99m-4gvg (brace-expansion unbounded expansion OOM)
-        run: >-
-          bun audit --audit-level=high
-          --ignore GHSA-w7jw-789q-3m8p
-          --ignore GHSA-395f-4hp3-45gv
-          --ignore GHSA-3jxr-9vmj-r5cp
-          --ignore GHSA-52cp-r559-cp3m
-          --ignore GHSA-v2hh-gcrm-f6hx
-          --ignore GHSA-mh99-v99m-4gvg
+        # 门禁逻辑移进 scripts/audit-gate.ts：解析 `bun audit --json` 的真实报告、
+        # 按 GHSA 应用忽略列表、只对 high/critical 失败，并打印**可读**表格（bun 把
+        # 报告 gzip 压缩后写 stdout，直接落日志是乱码）。忽略条目连同「为什么可
+        # 接受 / 何时删除」是单一事实源，就在那个脚本里；逐条处置、禁止整体降级成
+        # continue-on-error 的策略未变。
+        run: bun run audit:gate
 
       - name: actionlint (GitHub Actions workflow lint)
         # Pinned via the official downloader script so the version moves only
