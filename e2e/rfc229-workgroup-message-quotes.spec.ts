@@ -289,13 +289,15 @@ test('keyboard jump is immediate when reduced motion is requested', async ({ pag
   await page.keyboard.press('Enter')
 
   await expect(parent).toBeFocused()
-  const centerDistance = await Promise.all([parent.boundingBox(), log.boundingBox()]).then(
-    ([parentBox, logBox]) => {
-      if (parentBox === null || logBox === null) return Number.POSITIVE_INFINITY
-      return Math.abs(parentBox.y + parentBox.height / 2 - (logBox.y + logBox.height / 2))
-    },
-  )
-  // Borders and the keyboard-focused row's outline can shift the visual box
-  // a few pixels; reduced motion still lands synchronously near dead center.
-  expect(centerDistance).toBeLessThan(16)
+  const [parentBox, logBox] = await Promise.all([parent.boundingBox(), log.boundingBox()])
+  if (parentBox === null || logBox === null) {
+    throw new Error('RFC-229 quote target or room log lost its layout box after keyboard jump')
+  }
+  const logCenter = logBox.y + logBox.height / 2
+  // Font metrics differ across browser hosts, so a fixed pixel epsilon makes
+  // this portability check depend on the runner. The UX contract is stronger
+  // and layout-relative: the synchronous jump must place the log's center line
+  // inside the focused target bubble.
+  expect(logCenter).toBeGreaterThanOrEqual(parentBox.y)
+  expect(logCenter).toBeLessThanOrEqual(parentBox.y + parentBox.height)
 })
