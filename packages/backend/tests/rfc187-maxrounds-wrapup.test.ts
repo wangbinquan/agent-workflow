@@ -89,6 +89,7 @@ function resultMsg(): WorkgroupMessage {
     bodyMd: 'wrote hello.txt',
     mentionMemberIds: [],
     assignmentId: null,
+    triggerMessageId: null,
     createdAt: seq,
   }
 }

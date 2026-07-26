@@ -72,6 +72,30 @@ export function maxMessageId(messages: readonly WorkgroupMessage[], floor = ''):
   return max
 }
 
+/**
+ * RFC-229 — authoritative direct parent for a message turn. The turn's shard
+ * freezes maxMsgId, so fresh and adopted continuations resolve identically.
+ */
+export function resolveMessageTurnTriggerId(
+  memberId: string,
+  maxMsgId: string | null,
+  messages: readonly {
+    id: string
+    authorMemberId: string | null
+    mentionMemberIds: readonly string[]
+  }[],
+): string | null {
+  if (maxMsgId === null || maxMsgId.length === 0 || maxMsgId === '0') return null
+  let best: string | null = null
+  for (const message of messages) {
+    if (message.id > maxMsgId) continue
+    if (message.authorMemberId === memberId) continue
+    if (!message.mentionMemberIds.includes(memberId)) continue
+    if (best === null || message.id > best) best = message.id
+  }
+  return best
+}
+
 /** Keep the newest items that fit the char budget (render-measured). */
 export function clipTailByCharBudget<T>(
   items: readonly T[],

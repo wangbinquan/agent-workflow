@@ -185,10 +185,10 @@ describe('deriveMemberCurrentRuns (RFC-179)', () => {
   test('message-turn triggerMessageId = newest mention ≤ maxMsgId', () => {
     // shardKey maxMsgId = 'MSG5'; the newest chat that @-mentioned A1 with id ≤ MSG5.
     const messages = [
-      { id: 'MSG2', mentionMemberIds: [A1] },
-      { id: 'MSG4', mentionMemberIds: [A1] },
-      { id: 'MSG6', mentionMemberIds: [A1] }, // after wake — must NOT be picked
-      { id: 'MSG3', mentionMemberIds: [A2] }, // wrong member
+      { id: 'MSG2', authorMemberId: null, mentionMemberIds: [A1] },
+      { id: 'MSG4', authorMemberId: null, mentionMemberIds: [A1] },
+      { id: 'MSG6', authorMemberId: null, mentionMemberIds: [A1] }, // after wake — must NOT be picked
+      { id: 'MSG3', authorMemberId: null, mentionMemberIds: [A2] }, // wrong member
     ]
     const out = deriveMemberCurrentRuns(
       members,
@@ -315,7 +315,7 @@ describe('deriveWorkgroupRunHistory (RFC-182)', () => {
       msgRun('C2-run', `msg:${A2}:0`, 'done'),
     ]
     // B1-msg（round=1，leader 轮 1 的产出）位于 A* 之后、C* 之前（ULID 序）。
-    const messages = [{ id: 'B1-msg', mentionMemberIds: [], round: 1 }]
+    const messages = [{ id: 'B1-msg', authorMemberId: null, mentionMemberIds: [], round: 1 }]
     const history = deriveWorkgroupRunHistory(namedMembers, LEADER, runs, [], messages)
     expect(history.map((e) => e.nodeRunId)).toEqual(['A1-run', 'A2-run', 'C1-run', 'C2-run'])
     // 计数序数会给重试成功的 A2-run 标 2（卡落错误分隔下）；消息锚定共享轮号。
@@ -365,7 +365,7 @@ describe('deriveWorkgroupRunHistory (RFC-182)', () => {
 
   test('assignmentId / triggerMessageId / startedAt·finishedAt 回填', () => {
     const assignments = [{ id: 'ASG1', assigneeMemberId: A1 }]
-    const messages = [{ id: 'MSG5', mentionMemberIds: [A2] }]
+    const messages = [{ id: 'MSG5', authorMemberId: null, mentionMemberIds: [A2] }]
     const runs: HostRunLite[] = [
       {
         id: 'R1',

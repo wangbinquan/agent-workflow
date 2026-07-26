@@ -25,7 +25,7 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { NodeRun, TaskStatus } from '@agent-workflow/shared'
 import { api } from '../src/api/client'
 import { setBaseUrl, setToken } from '../src/stores/auth'
@@ -132,6 +132,7 @@ function makeRoom(over: Partial<WorkgroupRoomResponse> = {}): WorkgroupRoomRespo
         bodyMd: 'kick off please',
         mentionMemberIds: [],
         assignmentId: null,
+        triggerMessageId: null,
         createdAt: 1000,
       },
       {
@@ -144,6 +145,7 @@ function makeRoom(over: Partial<WorkgroupRoomResponse> = {}): WorkgroupRoomRespo
         bodyMd: '@Worker audit the diff',
         mentionMemberIds: ['mem_work'],
         assignmentId: 'a1',
+        triggerMessageId: null,
         createdAt: 2000,
       },
       {
@@ -156,6 +158,7 @@ function makeRoom(over: Partial<WorkgroupRoomResponse> = {}): WorkgroupRoomRespo
         bodyMd: 'round 1 started',
         mentionMemberIds: [],
         assignmentId: null,
+        triggerMessageId: null,
         createdAt: 2100,
       },
       {
@@ -168,6 +171,7 @@ function makeRoom(over: Partial<WorkgroupRoomResponse> = {}): WorkgroupRoomRespo
         bodyMd: 'found 3 issues in the diff',
         mentionMemberIds: [],
         assignmentId: 'a1',
+        triggerMessageId: null,
         createdAt: 3000,
       },
       {
@@ -180,6 +184,7 @@ function makeRoom(over: Partial<WorkgroupRoomResponse> = {}): WorkgroupRoomRespo
         bodyMd: '@Worker also check the tests',
         mentionMemberIds: ['mem_work'],
         assignmentId: 'a2',
+        triggerMessageId: null,
         createdAt: 4000,
       },
     ],
@@ -302,6 +307,8 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   document.body.innerHTML = ''
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
 
@@ -351,6 +358,117 @@ describe('WorkgroupRoom — message stream', () => {
     installFetch(makeRoom({ messages: [], assignments: [] }))
     renderRoom(makeRoom({ messages: [], assignments: [] }))
     await screen.findByTestId('workgroup-room-empty')
+  })
+
+  test('RFC-229 agent reply quotes its trigger and click centers, focuses, then highlights the parent', async () => {
+    const room = makeRoom()
+    room.messages = room.messages.map((message) =>
+      message.id === '01B'
+        ? { ...message, triggerMessageId: '01A' }
+        : message.id === '01D'
+          ? { ...message, triggerMessageId: '01B' }
+          : message,
+    )
+    const scrollTo = vi.fn()
+    Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
+      configurable: true,
+      value: scrollTo,
+    })
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({ matches: false })),
+    )
+    installFetch(room)
+    renderRoom(room)
+
+    const reference = await screen.findByTestId('wg-msg-reference-01D')
+    expect(reference.tagName).toBe('BUTTON')
+    expect(within(reference).getByText('Replying to @Lead')).toBeTruthy()
+    expect(within(reference).getByText('@Worker audit the diff')).toBeTruthy()
+    // One level only: the parent's own quote of 01A is not recursively nested.
+    expect(within(reference).queryByText('kick off please')).toBeNull()
+
+    vi.useFakeTimers()
+    const parent = screen.getByTestId('wg-msg-01B')
+    const log = screen.getByTestId('workgroup-room-log')
+    Object.defineProperties(log, {
+      scrollTop: { configurable: true, value: 600, writable: true },
+      scrollHeight: { configurable: true, value: 1000 },
+      clientHeight: { configurable: true, value: 400 },
+    })
+    vi.spyOn(log, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 100,
+      top: 100,
+      right: 600,
+      bottom: 500,
+      left: 0,
+      width: 600,
+      height: 400,
+      toJSON: () => ({}),
+    })
+    vi.spyOn(parent, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: -100,
+      top: -100,
+      right: 600,
+      bottom: -20,
+      left: 0,
+      width: 600,
+      height: 80,
+      toJSON: () => ({}),
+    })
+    fireEvent.click(reference)
+    expect(scrollTo).toHaveBeenCalledWith({ behavior: 'smooth', top: 240 })
+    expect(document.activeElement).toBe(parent)
+    expect(parent.className).toContain('workgroup-room__msg--highlighted')
+
+    // The existing tail affordance must take ownership back immediately,
+    // even while the quote's smooth-scroll suppression window is active.
+    fireEvent.click(screen.getByTestId('workgroup-room-jump-latest'))
+    fireEvent.scroll(log)
+    expect(screen.queryByTestId('workgroup-room-jump-latest')).toBeNull()
+
+    await act(async () => {
+      vi.advanceTimersByTime(1600)
+    })
+    expect(parent.className).not.toContain('workgroup-room__msg--highlighted')
+  })
+
+  test('RFC-229 missing trigger degrades to localized non-interactive copy', async () => {
+    const room = makeRoom()
+    room.messages = room.messages.map((message) =>
+      message.id === '01D' ? { ...message, triggerMessageId: 'missing-message' } : message,
+    )
+    installFetch(room)
+    renderRoom(room)
+
+    const reference = await screen.findByTestId('wg-msg-reference-01D')
+    expect(reference.tagName).toBe('DIV')
+    expect(reference.getAttribute('role')).toBe('note')
+    expect(within(reference).getByText('Referenced message unavailable')).toBeTruthy()
+    expect(within(reference).queryByRole('button')).toBeNull()
+  })
+
+  test('RFC-229 quote jump respects reduced-motion preference', async () => {
+    const room = makeRoom()
+    room.messages = room.messages.map((message) =>
+      message.id === '01D' ? { ...message, triggerMessageId: '01B' } : message,
+    )
+    const scrollTo = vi.fn()
+    Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
+      configurable: true,
+      value: scrollTo,
+    })
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({ matches: true })),
+    )
+    installFetch(room)
+    renderRoom(room)
+
+    fireEvent.click(await screen.findByTestId('wg-msg-reference-01D'))
+    expect(scrollTo).toHaveBeenCalledWith({ behavior: 'auto', top: 0 })
   })
 })
 
@@ -1079,6 +1197,7 @@ function deliveryRoom(): WorkgroupRoomResponse {
         bodyMd: '@Alice review the copy',
         mentionMemberIds: ['mem_alice'],
         assignmentId: 'a3',
+        triggerMessageId: null,
         createdAt: 5000,
       },
       {
@@ -1091,6 +1210,7 @@ function deliveryRoom(): WorkgroupRoomResponse {
         bodyMd: '@Worker crunch the data',
         mentionMemberIds: ['mem_work'],
         assignmentId: 'a4',
+        triggerMessageId: null,
         createdAt: 5100,
       },
     ],
@@ -1302,6 +1422,7 @@ describe('WorkgroupRoom — mid-run config entry + decision highlight (PR-5/6)',
           bodyMd: 'we are done: shipped it',
           mentionMemberIds: [],
           assignmentId: null,
+          triggerMessageId: null,
           createdAt: 9000,
         },
       ],

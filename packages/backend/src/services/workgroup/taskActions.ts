@@ -236,6 +236,7 @@ export function buildWorkgroupTaskActions(deps: WorkgroupTaskActionDeps) {
         bodyMd: body,
         mentionMemberIds: mentioned.map((m) => m.id),
         assignmentId: assignmentIds[0] ?? null,
+        triggerMessageId: null,
         createdAt: now,
       }),
     )
@@ -307,6 +308,7 @@ export function buildWorkgroupTaskActions(deps: WorkgroupTaskActionDeps) {
             kind: 'delivery',
             bodyMd,
             assignmentId,
+            triggerMessageId: null,
             createdAt: Date.now(),
           }),
         )
@@ -405,6 +407,7 @@ export function buildWorkgroupTaskActions(deps: WorkgroupTaskActionDeps) {
             bodyMd: approve
               ? 'completion gate APPROVED'
               : `completion gate REJECTED: ${parsed.data.comment ?? ''}`,
+            triggerMessageId: null,
             createdAt: Date.now(),
           }),
         )
@@ -462,6 +465,7 @@ export function buildWorkgroupTaskActions(deps: WorkgroupTaskActionDeps) {
         kind: 'system',
         bodyMd: `assignment '${row.title}' canceled by a task member`,
         assignmentId,
+        triggerMessageId: null,
         createdAt: Date.now(),
       }),
     )

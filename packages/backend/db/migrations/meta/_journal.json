@@ -848,6 +848,13 @@
       "when": 1787846400000,
       "tag": "0121_rfc227_opencode_provenance",
       "breakpoints": true
+    },
+    {
+      "idx": 121,
+      "version": "6",
+      "when": 1787932800000,
+      "tag": "0122_rfc229_workgroup_message_trigger",
+      "breakpoints": true
     }
   ]
 }

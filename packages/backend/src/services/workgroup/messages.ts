@@ -42,6 +42,11 @@ export interface RoomMessageRowArgs {
   bodyMd: string
   mentionMemberIds?: readonly string[]
   assignmentId?: string | null
+  /**
+   * RFC-229 — required at the unique row-construction boundary so a future
+   * writer cannot silently omit message-turn provenance into nullable NULL.
+   */
+  triggerMessageId: string | null
   createdAt: number
 }
 
@@ -57,6 +62,7 @@ export function buildRoomMessageRow(a: RoomMessageRowArgs): typeof workgroupMess
     bodyMd: a.bodyMd,
     mentionsJson: JSON.stringify(a.mentionMemberIds ?? []),
     assignmentId: a.assignmentId ?? null,
+    triggerMessageId: a.triggerMessageId,
     createdAt: a.createdAt,
   }
 }
@@ -79,6 +85,8 @@ export interface PostMessageArgs {
   bodyMd: string
   mentionMemberIds?: string[]
   assignmentId?: string | null
+  /** Omitted for ordinary messages; message-turn chat outputs pass it explicitly. */
+  triggerMessageId?: string | null
 }
 
 export async function postMessage(
@@ -104,6 +112,7 @@ export async function postMessage(
       bodyMd: m.bodyMd,
       mentionMemberIds: m.mentionMemberIds,
       assignmentId: m.assignmentId ?? null,
+      triggerMessageId: m.triggerMessageId ?? null,
       createdAt: Date.now(),
     }),
   )
@@ -149,7 +158,12 @@ export async function persistWgMessages(
   round: number,
   authorMemberId: string,
   items: readonly WgMessageItem[],
-  allow: { allowDirect: boolean; allowBlackboard: boolean },
+  allow: {
+    allowDirect: boolean
+    allowBlackboard: boolean
+    /** Required provenance: message turns pass a parent; all other turns pass null. */
+    triggerMessageId: string | null
+  },
 ): Promise<void> {
   const mode = roundMode(config)
   let dropped = 0
@@ -165,6 +179,7 @@ export async function persistWgMessages(
         authorMemberId,
         kind: 'chat',
         bodyMd: item.body,
+        triggerMessageId: allow.triggerMessageId,
       })
       continue
     }
@@ -184,6 +199,7 @@ export async function persistWgMessages(
       kind: 'chat',
       bodyMd: `@${item.to} ${item.body}`,
       mentionMemberIds: [target.id],
+      triggerMessageId: allow.triggerMessageId,
     })
   }
   if (dropped > 0) {

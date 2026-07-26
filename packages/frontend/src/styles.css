@@ -16194,6 +16194,10 @@ mark.comment-anchor[data-active='true'] {
   gap: 4px;
 }
 
+.workgroup-room__msg--highlighted {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 48%, transparent);
+}
+
 /* Speaker-role chat bubbles — the conversation must read at a glance: every
    non-system message is a shrink-to-fit bubble whose color identifies the
    speaker — leader = accent, agent member = neutral, human = success and
@@ -16255,6 +16259,63 @@ mark.comment-anchor[data-active='true'] {
   font-size: 13px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* One-level trigger quote. The preview is deliberately width-bounded by its
+   message bubble so long agent output cannot create horizontal room overflow. */
+.message-reference {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px 8px;
+  border: 0;
+  border-left: 3px solid color-mix(in srgb, var(--accent) 58%, var(--border));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  overflow: hidden;
+}
+
+.message-reference--interactive {
+  cursor: pointer;
+}
+
+.message-reference--interactive:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.message-reference--interactive:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset-inset);
+}
+
+.message-reference__author,
+.message-reference__unavailable {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.message-reference__body {
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.message-reference--unavailable {
+  border-left-color: var(--border);
+  background: color-mix(in srgb, var(--muted) 7%, transparent);
 }
 
 /* System rows are de-emphasized (round markers, cancellations, warnings). */

@@ -317,6 +317,7 @@ export async function driveLeaderTurn(
     await persistWgMessages(db, taskId, config, round, leaderId, outMessages.value, {
       allowDirect: true,
       allowBlackboard: true,
+      triggerMessageId: null,
     })
   }
   // 2. dispatch assignments (agent members start immediately via next pass;

@@ -43,6 +43,7 @@ import {
   workgroupTaskState,
 } from '@/db/schema'
 import { canViewTask } from '@/services/taskCollab'
+import { resolveMessageTurnTriggerId } from '@/services/workgroup/context'
 import { gateViewOf, type WorkgroupTaskState } from '@/services/workgroup/state'
 import { resolveRoomPauseReason, safeMentions } from '@/services/workgroup/taskActions'
 import { deriveBudgetUsed, roundedModeOf } from '@/services/workgroup/rounds'
@@ -84,6 +85,7 @@ export interface AssignmentLite {
 export interface MessageLite {
   id: string
   mentionMemberIds: readonly string[]
+  authorMemberId: string | null
   /** RFC-182 impl-gate P2 — leader ordinals anchor to MESSAGE rounds (a
    *  protocol retry mints extra leader runs inside ONE logical round; a
    *  run-count ordinal drifts ahead and misplaces the card). Optional for
@@ -173,22 +175,6 @@ function isBetter(candidate: WorkgroupRunEntry, incumbent: WorkgroupRunEntry): b
   return candidate.nodeRunId > incumbent.nodeRunId
 }
 
-/** The @-mention that woke a message-turn: newest message ≤ maxMsgId mentioning the member. */
-function resolveTriggerMessageId(
-  memberId: string,
-  maxMsgId: string | null,
-  messages: readonly MessageLite[],
-): string | null {
-  if (maxMsgId === null || maxMsgId.length === 0 || maxMsgId === '0') return null
-  let best: string | null = null
-  for (const m of messages) {
-    if (m.id > maxMsgId) continue
-    if (!m.mentionMemberIds.includes(memberId)) continue
-    if (best === null || m.id > best) best = m.id
-  }
-  return best
-}
-
 /** RFC-181 C closure → display note, keyed ONLY on the structured
  *  failure_code column (RFC-145 ratchet: errorMessage is human breadcrumbs,
  *  never a machine routing key). The wire carries just the enum (D11). */
@@ -269,7 +255,7 @@ export function deriveWorkgroupRunHistory(
       finishedAt: cr.run.finishedAt ?? null,
       triggerMessageId:
         cr.kind === 'message-turn'
-          ? resolveTriggerMessageId(cr.memberId, cr.maxMsgId, messages)
+          ? resolveMessageTurnTriggerId(cr.memberId, cr.maxMsgId, messages)
           : null,
       assignmentId: cr.kind === 'assignment' ? cr.run.shardKey : null,
       note: noteOf(cr.run),
@@ -471,6 +457,7 @@ export function buildRoomReads(
     const messagesLite = messages.map((m) => ({
       id: m.id,
       mentionMemberIds: safeMentions(m.mentionsJson),
+      authorMemberId: m.authorMemberId,
       round: m.round,
     }))
     // RFC-182 impl-gate P1 — open clarify parks: the asking host run's DB row
@@ -568,6 +555,7 @@ export function buildRoomReads(
         bodyMd: m.bodyMd,
         mentionMemberIds: safeMentions(m.mentionsJson),
         assignmentId: m.assignmentId,
+        triggerMessageId: m.triggerMessageId,
         createdAt: m.createdAt,
       })),
       assignments: assignments.map((a) => ({

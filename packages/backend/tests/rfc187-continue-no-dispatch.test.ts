@@ -76,6 +76,7 @@ const nudge = (n: number): WorkgroupMessage[] =>
     bodyMd: WG_NUDGE_BODY,
     mentionMemberIds: [],
     assignmentId: null,
+    triggerMessageId: null,
     createdAt: i,
   }))
 

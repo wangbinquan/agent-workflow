@@ -167,6 +167,7 @@ function freshContentForLeader(): Pick<WakeInput, 'messages' | 'cursors'> {
         bodyMd: 'shard done',
         mentionMemberIds: [],
         assignmentId: null,
+        triggerMessageId: null,
         createdAt: 1,
       },
     ],

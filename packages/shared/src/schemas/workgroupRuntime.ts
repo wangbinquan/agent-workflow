@@ -149,6 +149,8 @@ export const WorkgroupMessageSchema = z.object({
   /** Parsed @-mention member ids. */
   mentionMemberIds: z.array(z.string()),
   assignmentId: z.string().nullable(),
+  /** RFC-229 — direct parent message for message-triggered member output. */
+  triggerMessageId: z.string().nullable().default(null),
   createdAt: z.number().int(),
 })
 export type WorkgroupMessage = z.infer<typeof WorkgroupMessageSchema>

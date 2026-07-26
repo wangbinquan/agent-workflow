@@ -7,6 +7,7 @@
 
 import { sql } from 'drizzle-orm'
 import {
+  type AnySQLiteColumn,
   check,
   index,
   integer,
@@ -693,6 +694,12 @@ export const workgroupMessages = sqliteTable(
     /** JSON string[] of mentioned member ids. */
     mentionsJson: text('mentions_json').notNull().default('[]'),
     assignmentId: text('assignment_id'),
+    // RFC-229 — direct message parent for message-turn outputs. Nullable for
+    // every non-message-triggered row and pre-migration history.
+    triggerMessageId: text('trigger_message_id').references(
+      (): AnySQLiteColumn => workgroupMessages.id,
+      { onDelete: 'set null' },
+    ),
     createdAt: integer('created_at')
       .notNull()
       .default(sql`(unixepoch() * 1000)`),

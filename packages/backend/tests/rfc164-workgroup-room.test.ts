@@ -188,6 +188,43 @@ describe('RFC-164 room — endpoints', () => {
     )
   })
 
+  test('RFC-229 room aggregate exposes a message trigger reference', async () => {
+    const parentId = ulid()
+    const childId = ulid()
+    await db.insert(workgroupMessages).values({
+      id: parentId,
+      taskId,
+      round: 1,
+      authorKind: 'member',
+      authorMemberId: 'm-lead',
+      kind: 'chat',
+      bodyMd: '@coder inspect this',
+      mentionsJson: JSON.stringify(['m-coder']),
+      triggerMessageId: null,
+      createdAt: 1000,
+    })
+    await db.insert(workgroupMessages).values({
+      id: childId,
+      taskId,
+      round: 1,
+      authorKind: 'member',
+      authorMemberId: 'm-coder',
+      kind: 'chat',
+      bodyMd: 'inspection complete',
+      mentionsJson: '[]',
+      triggerMessageId: parentId,
+      createdAt: 2000,
+    })
+
+    const response = await req(owner.token, `/api/workgroup-tasks/${taskId}/room`)
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as {
+      messages: Array<{ id: string; triggerMessageId: string | null }>
+    }
+    expect(body.messages.find((message) => message.id === parentId)?.triggerMessageId).toBeNull()
+    expect(body.messages.find((message) => message.id === childId)?.triggerMessageId).toBe(parentId)
+  })
+
   test('RFC-179: room memberRuns maps a running assignment run to its member', async () => {
     // RFC-223: room attribution is canonical-id only. Freeze the member's
     // agentId in the task snapshot and the same id on the minted host run.

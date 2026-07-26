@@ -272,6 +272,7 @@ export async function driveBatchTurn(
     await persistWgMessages(db, taskId, config, batch[0]?.round ?? 0, memberId, outMessages.value, {
       allowDirect: switches.directMessages,
       allowBlackboard: switches.blackboard,
+      triggerMessageId: null,
     })
   }
   await consumeTasksAdd(db, taskId, state, memberId, tasksAddRaw)

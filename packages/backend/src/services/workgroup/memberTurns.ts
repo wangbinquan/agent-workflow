@@ -5,6 +5,7 @@
 import { getAgentById } from '@/services/agent'
 import {
   buildMsgShardKey,
+  parseMsgShardKey,
   parseWgMessagesPort,
   parseWgResultPort,
   resolveWorkgroupSwitches,
@@ -34,6 +35,7 @@ import {
   maxMessageId,
   memberById,
   memberDisplayName,
+  resolveMessageTurnTriggerId,
   rosterDisplayNames,
   type WorkgroupProtocolRole,
 } from '@/services/workgroup/context'
@@ -64,6 +66,33 @@ export async function resolveMemberAgent(
   // Name-only snapshots are corrupt legacy data. Fail closed instead of
   // re-binding a mutable display selector to a different persisted identity.
   return null
+}
+
+/**
+ * RFC-229 — freeze the direct-parent boundary before a message turn executes.
+ * Fresh turns use the same state max embedded in their mint row. Adopted
+ * clarify continuations recover the original max from their persisted shard.
+ */
+export function resolveMessageTurnTrigger(
+  state: {
+    messages: readonly EngineDbState['messages'][number][]
+    hostRuns: readonly { id: string; shardKey: string | null }[]
+  },
+  memberId: string,
+  adoptedRunId?: string,
+): { maxMessageId: string | null; triggerMessageId: string | null } {
+  let turnMaxMessageId: string | null
+  if (adoptedRunId === undefined) {
+    turnMaxMessageId = maxMessageId(state.messages)
+  } else {
+    const adopted = state.hostRuns.find((run) => run.id === adoptedRunId)
+    const parsed = typeof adopted?.shardKey === 'string' ? parseMsgShardKey(adopted.shardKey) : null
+    turnMaxMessageId = parsed !== null && parsed.memberId === memberId ? parsed.maxMessageId : null
+  }
+  return {
+    maxMessageId: turnMaxMessageId,
+    triggerMessageId: resolveMessageTurnTriggerId(memberId, turnMaxMessageId, state.messages),
+  }
 }
 
 export async function driveAssignmentTurn(
@@ -214,6 +243,7 @@ export async function driveAssignmentTurn(
     await persistWgMessages(db, taskId, config, assignment.round, memberId, outMessages.value, {
       allowDirect: switches.directMessages,
       allowBlackboard: switches.blackboard,
+      triggerMessageId: null,
     })
   }
   await consumeTasksAdd(db, taskId, state, memberId, tasksAddRaw)
@@ -242,6 +272,7 @@ export async function driveMessageTurn(
   const config = state.config
   const agent = await resolveMemberAgent(args, state, memberId)
   if (agent === null) return
+  const turnTrigger = resolveMessageTurnTrigger(state, memberId, adoptedRunId)
 
   if (adoptedRunId !== undefined && config.mode === 'leader_worker') {
     // Codex 实现门 P2-4 — an ADOPTED msg continuation (clarify-answer rerun on
@@ -296,7 +327,7 @@ export async function driveMessageTurn(
         // turn IS one budget row and needs no ordinal).
         retryIndex: 0,
         overrides: {
-          shardKey: buildMsgShardKey(memberId, maxMessageId(state.messages)),
+          shardKey: buildMsgShardKey(memberId, turnTrigger.maxMessageId ?? '0'),
           agentOverrideName: agent.name,
           agentOverrideId: agent.id,
           wgRound: config.mode === 'leader_worker' ? currentRound(state) : null,
@@ -350,6 +381,7 @@ export async function driveMessageTurn(
     await persistWgMessages(db, taskId, config, turnRound, memberId, outMessages.value, {
       allowDirect: switches.directMessages,
       allowBlackboard: switches.blackboard,
+      triggerMessageId: turnTrigger.triggerMessageId,
     })
   }
   if (resultRaw !== undefined) {
@@ -361,6 +393,7 @@ export async function driveMessageTurn(
         authorMemberId: memberId,
         kind: 'chat',
         bodyMd: parsed.value.summary,
+        triggerMessageId: turnTrigger.triggerMessageId,
       })
     }
   }

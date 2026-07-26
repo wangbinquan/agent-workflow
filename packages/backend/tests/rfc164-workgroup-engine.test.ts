@@ -574,6 +574,57 @@ describe('RFC-164 engine — lw round orchestration', () => {
     expect(memberRuns[0]?.rerunCause).toBe('wg-assignment')
   })
 
+  test('RFC-229 agent @ mention parents every message produced by that message turn', async () => {
+    const config = cfg({
+      switches: { shareOutputs: true, directMessages: true, blackboard: true },
+    })
+    const { taskId } = await seedEngineTask(db, config)
+    const parentId = ulid()
+    await db.insert(workgroupMessages).values({
+      id: parentId,
+      taskId,
+      round: 1,
+      authorKind: 'member',
+      authorMemberId: 'm-lead',
+      kind: 'chat',
+      bodyMd: '@coder inspect the failure',
+      mentionsJson: JSON.stringify(['m-coder']),
+      triggerMessageId: null,
+      createdAt: Date.now(),
+    })
+    const { hooks } = scriptedHooks({
+      leader: [doneLeader({ decision: { action: 'done', summary: 'wrapped' } })],
+      member: [
+        {
+          status: 'done',
+          outputs: {
+            wg_messages: JSON.stringify([
+              { to: null, body: 'first finding' },
+              { to: null, body: 'second finding' },
+            ]),
+            wg_result: JSON.stringify({ summary: 'inspection complete' }),
+          },
+        },
+      ],
+    })
+
+    const result = await runWorkgroupEngine({ db, taskId, log, hooks })
+    expect(result.kind).toBe('ok')
+    const replies = (
+      await db.select().from(workgroupMessages).where(eq(workgroupMessages.taskId, taskId))
+    ).filter((message) => message.authorMemberId === 'm-coder')
+    expect(replies.map((message) => message.bodyMd).sort()).toEqual(
+      ['first finding', 'inspection complete', 'second finding'].sort(),
+    )
+    expect(replies.every((message) => message.triggerMessageId === parentId)).toBe(true)
+
+    const messageRuns = (
+      await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    ).filter((run) => run.rerunCause === 'wg-message-turn')
+    expect(messageRuns).toHaveLength(1)
+    expect(messageRuns[0]?.shardKey).toBe(`msg:m-coder:${parentId}`)
+  })
+
   test('leader protocol violation retries once with error notice, then succeeds', async () => {
     const config = cfg()
     const { taskId } = await seedEngineTask(db, config)

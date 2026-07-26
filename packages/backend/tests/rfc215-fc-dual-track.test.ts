@@ -75,6 +75,7 @@ function msg(overrides: Partial<WorkgroupMessage> = {}): WorkgroupMessage {
     assignmentId: null,
     createdAt: seq,
     ...overrides,
+    triggerMessageId: overrides.triggerMessageId ?? null,
   }
 }
 function asg(overrides: Partial<WorkgroupAssignment> = {}): WorkgroupAssignment {

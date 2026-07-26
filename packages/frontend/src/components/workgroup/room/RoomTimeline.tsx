@@ -4,10 +4,11 @@
 // Extracted from WorkgroupRoom.tsx; memoized so composer keystrokes (state
 // now local to RoomComposer) never re-render the log.
 
-import { memo, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { NodeRun, WorkgroupRunEntry, WorkgroupRuntimeMember } from '@agent-workflow/shared'
 import { EmptyState } from '@/components/EmptyState'
+import { MessageReference } from '@/components/MessageReference'
 import { StatusChip } from '@/components/StatusChip'
 import { DispatchCard } from '@/components/workgroup/room/DispatchCard'
 import { TurnCard } from '@/components/workgroup/room/TurnCard'
@@ -40,6 +41,23 @@ export interface RoomTimelineProps {
   onDeliver: (assignmentId: string, input: WorkgroupDeliverInput) => Promise<unknown>
 }
 
+type ResolveUser = RoomTimelineProps['resolveUser']
+
+function messageAuthorLabel(
+  message: WorkgroupRoomMessage,
+  members: ReadonlyMap<string, WorkgroupRuntimeMember>,
+  resolveUser: ResolveUser,
+  systemLabel: string,
+): string {
+  if (message.authorKind === 'system') return systemLabel
+  if (message.authorKind === 'member') {
+    const member = message.authorMemberId === null ? undefined : members.get(message.authorMemberId)
+    return `@${member?.displayName ?? '?'}`
+  }
+  const user = resolveUser(message.authorUserId)
+  return user?.displayName ?? user?.username ?? message.authorUserId ?? '?'
+}
+
 function RoomTimelineInner({
   timeline,
   runHistory,
@@ -58,6 +76,15 @@ function RoomTimelineInner({
 }: RoomTimelineProps) {
   const { t } = useTranslation()
   const logRef = useRef<HTMLDivElement | null>(null)
+  const messageElementsRef = useRef(new Map<string, HTMLDivElement>())
+  const highlightTimerRef = useRef<number | null>(null)
+  const quoteScrollTimerRef = useRef<number | null>(null)
+  const quoteScrollTargetRef = useRef<number | null>(null)
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null)
+  const messageById = useMemo(
+    () => new Map(data.messages.map((message) => [message.id, message])),
+    [data.messages],
+  )
   // RFC-217 T10 re-render isolation probe: composer keystrokes must never
   // re-render the log (locked by rfc217-room-render-isolation.test.tsx).
   const renderCount = useRef(0)
@@ -79,8 +106,60 @@ function RoomTimelineInner({
   function onLogScroll(): void {
     const el = logRef.current
     if (el === null) return
+    if (quoteScrollTargetRef.current !== null) {
+      setAtBottom(false)
+      return
+    }
     setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 48)
   }
+  const cancelQuoteScroll = useCallback((): void => {
+    quoteScrollTargetRef.current = null
+    if (quoteScrollTimerRef.current !== null) {
+      window.clearTimeout(quoteScrollTimerRef.current)
+      quoteScrollTimerRef.current = null
+    }
+  }, [])
+  const registerMessageElement = useCallback((id: string, node: HTMLDivElement | null): void => {
+    if (node === null) messageElementsRef.current.delete(id)
+    else messageElementsRef.current.set(id, node)
+  }, [])
+  const jumpToMessage = useCallback(
+    (id: string): void => {
+      const target = messageElementsRef.current.get(id)
+      const log = logRef.current
+      if (target === undefined || log === null) return
+      const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+      const targetRect = target.getBoundingClientRect()
+      const logRect = log.getBoundingClientRect()
+      const centeredTop =
+        log.scrollTop + targetRect.top - logRect.top - (log.clientHeight - targetRect.height) / 2
+      const maxScrollTop = Math.max(0, log.scrollHeight - log.clientHeight)
+      const targetScrollTop = Math.min(Math.max(0, centeredTop), maxScrollTop)
+      setAtBottom(false)
+      cancelQuoteScroll()
+      quoteScrollTargetRef.current = targetScrollTop
+      log.scrollTo({
+        top: targetScrollTop,
+        behavior: reducedMotion ? 'auto' : 'smooth',
+      })
+      quoteScrollTimerRef.current = window.setTimeout(cancelQuoteScroll, reducedMotion ? 0 : 1000)
+      target.focus({ preventScroll: true })
+      setHighlightedMessageId(id)
+      if (highlightTimerRef.current !== null) window.clearTimeout(highlightTimerRef.current)
+      highlightTimerRef.current = window.setTimeout(() => {
+        setHighlightedMessageId(null)
+        highlightTimerRef.current = null
+      }, 1600)
+    },
+    [cancelQuoteScroll],
+  )
+  useEffect(
+    () => () => {
+      if (highlightTimerRef.current !== null) window.clearTimeout(highlightTimerRef.current)
+      if (quoteScrollTimerRef.current !== null) window.clearTimeout(quoteScrollTimerRef.current)
+    },
+    [],
+  )
 
   return (
     <>
@@ -88,6 +167,8 @@ function RoomTimelineInner({
         className="workgroup-room__log"
         ref={logRef}
         onScroll={onLogScroll}
+        onWheel={cancelQuoteScroll}
+        onTouchStart={cancelQuoteScroll}
         data-testid="workgroup-room-log"
         data-render-count={renderCount.current}
       >
@@ -120,6 +201,18 @@ function RoomTimelineInner({
             <RoomMessage
               key={entry.message.id}
               message={entry.message}
+              referencedMessage={
+                entry.message.triggerMessageId === null
+                  ? null
+                  : (messageById.get(entry.message.triggerMessageId) ?? null)
+              }
+              referenceUnavailable={
+                entry.message.triggerMessageId !== null &&
+                !messageById.has(entry.message.triggerMessageId)
+              }
+              highlighted={highlightedMessageId === entry.message.id}
+              registerMessageElement={registerMessageElement}
+              onJumpToMessage={jumpToMessage}
               executingPill={executingPills.get(entry.message.id)}
               runHistory={runHistory}
               runIndex={runIndex}
@@ -142,6 +235,7 @@ function RoomTimelineInner({
           type="button"
           className="btn btn--sm workgroup-room__jump"
           onClick={() => {
+            cancelQuoteScroll()
             const el = logRef.current
             if (el !== null) el.scrollTop = el.scrollHeight
             setAtBottom(true)
@@ -165,6 +259,11 @@ export const RoomTimeline = memo(RoomTimelineInner)
 
 interface RoomMessageProps {
   message: WorkgroupRoomMessage
+  referencedMessage: WorkgroupRoomMessage | null
+  referenceUnavailable: boolean
+  highlighted: boolean
+  registerMessageElement: (id: string, node: HTMLDivElement | null) => void
+  onJumpToMessage: (id: string) => void
   /** RFC-179/182 — live message-turns this message woke (pill per member,
    *  clickable into the run's session — D9/G2). */
   executingPill?: readonly { displayName: string; nodeRunId: string }[]
@@ -190,6 +289,11 @@ interface RoomMessageProps {
 
 function RoomMessage({
   message,
+  referencedMessage,
+  referenceUnavailable,
+  highlighted,
+  registerMessageElement,
+  onJumpToMessage,
   executingPill,
   runHistory,
   runIndex,
@@ -216,13 +320,12 @@ function RoomMessage({
     data.config.leaderMemberId !== null &&
     member.id === data.config.leaderMemberId
 
-  let authorLabel: string
-  if (isSystem) authorLabel = t('workgroups.room.authorSystem')
-  else if (message.authorKind === 'member') authorLabel = `@${member?.displayName ?? '?'}`
-  else {
-    const u = resolveUser(message.authorUserId)
-    authorLabel = u?.displayName ?? u?.username ?? message.authorUserId ?? '?'
-  }
+  const systemLabel = t('workgroups.room.authorSystem')
+  const authorLabel = messageAuthorLabel(message, members, resolveUser, systemLabel)
+  const referencedAuthorLabel =
+    referencedMessage === null
+      ? null
+      : messageAuthorLabel(referencedMessage, members, resolveUser, systemLabel)
 
   // Speaker-role chat bubble — every non-system message renders as a bubble
   // whose color identifies who is talking: leader (accent) / agent member
@@ -238,10 +341,16 @@ function RoomMessage({
         : 'agent'
   const modifier =
     ` workgroup-room__msg--${role}` +
-    (!isSystem && message.kind === 'decision' ? ' workgroup-room__msg--decision' : '')
+    (!isSystem && message.kind === 'decision' ? ' workgroup-room__msg--decision' : '') +
+    (highlighted ? ' workgroup-room__msg--highlighted' : '')
 
   return (
-    <div className={`workgroup-room__msg${modifier}`} data-testid={`wg-msg-${message.id}`}>
+    <div
+      ref={(node) => registerMessageElement(message.id, node)}
+      className={`workgroup-room__msg${modifier}`}
+      data-testid={`wg-msg-${message.id}`}
+      tabIndex={-1}
+    >
       <div className="workgroup-room__msg-head">
         <span className="workgroup-room__author">{authorLabel}</span>
         {executingPill !== undefined &&
@@ -268,6 +377,24 @@ function RoomMessage({
         )}
         <span className="workgroup-room__time">{formatRoomTimestamp(message.createdAt, now)}</span>
       </div>
+      {referencedMessage !== null && referencedAuthorLabel !== null && (
+        <MessageReference
+          author={t('workgroups.room.replyingTo', { author: referencedAuthorLabel })}
+          body={referencedMessage.bodyMd}
+          ariaLabel={t('workgroups.room.openReferencedMessage', {
+            author: referencedAuthorLabel,
+          })}
+          onActivate={() => onJumpToMessage(referencedMessage.id)}
+          testId={`wg-msg-reference-${message.id}`}
+        />
+      )}
+      {referenceUnavailable && (
+        <MessageReference
+          unavailable
+          unavailableLabel={t('workgroups.room.referencedMessageUnavailable')}
+          testId={`wg-msg-reference-${message.id}`}
+        />
+      )}
       <div className="workgroup-room__body">{message.bodyMd}</div>
       {cards.length > 0 && (
         <div className="workgroup-room__cards">

@@ -41,6 +41,7 @@ function msg(id: string, round: number): WorkgroupRoomMessage {
     bodyMd: `body ${id}`,
     mentionMemberIds: [],
     assignmentId: null,
+    triggerMessageId: null,
     createdAt: 1000,
   }
 }

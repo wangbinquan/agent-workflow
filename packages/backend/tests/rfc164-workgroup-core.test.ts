@@ -108,6 +108,7 @@ function msg(overrides: Partial<WorkgroupMessage> = {}): WorkgroupMessage {
     assignmentId: null,
     createdAt: seq,
     ...overrides,
+    triggerMessageId: overrides.triggerMessageId ?? null,
   }
 }
 
@@ -351,6 +352,15 @@ describe('RFC-164 core — selectMemberSlices switch matrix', () => {
 // ---------------------------------------------------------------------------
 
 describe('RFC-164 core — rendered blocks', () => {
+  test('RFC-229 quote metadata is UI-only and does not change prompt bytes', () => {
+    const parentId = '01MTRIGGER0000000000000000'
+    const withoutQuote = msg({ id: '01MCHILD000000000000000000', triggerMessageId: null })
+    const withQuote = { ...withoutQuote, triggerMessageId: parentId }
+    expect(renderMessagesBlock(cfg(), 'Activity', [withQuote])).toBe(
+      renderMessagesBlock(cfg(), 'Activity', [withoutQuote]),
+    )
+  })
+
   test('roster uses @displayName tokens and NEVER user ids', () => {
     const block = renderRosterBlock(cfg())
     expect(block).toContain('@planner')

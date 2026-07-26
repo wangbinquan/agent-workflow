@@ -374,6 +374,7 @@ export function rowToMessage(r: typeof workgroupMessages.$inferSelect): Workgrou
     bodyMd: r.bodyMd,
     mentionMemberIds: mentions,
     assignmentId: r.assignmentId,
+    triggerMessageId: r.triggerMessageId,
     createdAt: r.createdAt,
   }
 }

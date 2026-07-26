@@ -54,6 +54,7 @@ function msg(
     assignmentId: null,
     createdAt: 1000,
     ...over,
+    triggerMessageId: over.triggerMessageId ?? null,
   }
 }
 

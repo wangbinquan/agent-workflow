@@ -1731,6 +1731,9 @@ export interface Resources {
       empty: string
       roundDivider: string
       authorSystem: string
+      replyingTo: string
+      openReferencedMessage: string
+      referencedMessageUnavailable: string
       assignedTo: string
       resultSummary: string
       viewRun: string
@@ -5842,6 +5845,9 @@ export const zhCN: Resources = {
       empty: '还没有消息。发一条话启动讨论；@成员名 即直接派单。',
       roundDivider: '第 {{n}} 回合',
       authorSystem: '系统',
+      replyingTo: '回复 {{author}}',
+      openReferencedMessage: '定位到 {{author}} 的原消息',
+      referencedMessageUnavailable: '原消息不可用',
       assignedTo: '派给',
       resultSummary: '结果摘要',
       viewRun: '查看执行现场',

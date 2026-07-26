@@ -42,7 +42,7 @@ function leaderRun(
 describe('RFC-209 T9 — leader 卡片轮号读 wg_round', () => {
   test('打过戳的行直接用 wg_round（不再从消息 round 反推）', () => {
     const runs = [leaderRun('L1-run', 'done', 1), leaderRun('L2-run', 'done', 2)]
-    const messages = [{ id: 'M1-msg', mentionMemberIds: [], round: 1 }]
+    const messages = [{ id: 'M1-msg', authorMemberId: null, mentionMemberIds: [], round: 1 }]
     const history = deriveWorkgroupRunHistory(members, LEADER, runs, [], messages)
     expect(history.map((e) => e.round)).toEqual([1, 2])
   })
@@ -68,7 +68,7 @@ describe('RFC-209 T9 — leader 卡片轮号读 wg_round', () => {
       leaderRun('L2b-run', 'done', 2, 'wg-protocol-retry'),
     ]
     const messages = [
-      { id: 'L2a-run-Z', mentionMemberIds: [], round: 2 }, // 人类发言，id 介于两行之间
+      { id: 'L2a-run-Z', authorMemberId: null, mentionMemberIds: [], round: 2 }, // 人类发言，id 介于两行之间
     ]
     const history = deriveWorkgroupRunHistory(members, LEADER, runs, [], messages)
     expect(history.map((e) => e.nodeRunId)).toEqual(['L2a-run', 'L2b-run'])
@@ -78,7 +78,7 @@ describe('RFC-209 T9 — leader 卡片轮号读 wg_round', () => {
 
   test('wg_round 为 NULL 时回退旧的消息锚定推导（0095 回填前 / 引擎外 mint 的历史行）', () => {
     const runs = [leaderRun('L1-run', 'done', null), leaderRun('L3-run', 'running', null)]
-    const messages = [{ id: 'L2-msg', mentionMemberIds: [], round: 1 }]
+    const messages = [{ id: 'L2-msg', authorMemberId: null, mentionMemberIds: [], round: 1 }]
     const history = deriveWorkgroupRunHistory(members, LEADER, runs, [], messages)
     // L1 之前无消息 → 1；L3 之前有 round-1 消息 → 2
     expect(history.map((e) => e.round)).toEqual([1, 2])

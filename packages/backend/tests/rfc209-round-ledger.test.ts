@@ -284,6 +284,7 @@ describe('RFC-209 §2.2 — 消息行构造器是唯一写入闸口', () => {
       authorKind: 'human',
       kind: 'chat',
       bodyMd: 'hi',
+      triggerMessageId: null,
       createdAt: 123,
     })
     expect(r.round).toBe(7)
@@ -291,6 +292,7 @@ describe('RFC-209 §2.2 — 消息行构造器是唯一写入闸口', () => {
     expect(r.authorMemberId).toBeNull()
     expect(r.authorUserId).toBeNull()
     expect(r.assignmentId).toBeNull()
+    expect(r.triggerMessageId).toBeNull()
   })
 
   test('round 是必填字段（类型层锁 —— schema 的 .default(0) 会让省略静默写 0）', () => {
@@ -307,6 +309,8 @@ describe('RFC-209 §2.2 — 消息行构造器是唯一写入闸口', () => {
     )
     expect(block).toMatch(/\n\s*round: number\n/)
     expect(block).not.toMatch(/round\?:/)
+    expect(block).toMatch(/\n\s*triggerMessageId: string \| null\n/)
+    expect(block).not.toMatch(/triggerMessageId\?:/)
   })
 })
 

@@ -485,6 +485,7 @@ export function buildConfigActions(
         authorUserId: actor.user.id,
         kind: 'system',
         bodyMd: `config updated: ${changes.join('; ')}`,
+        triggerMessageId: null,
         createdAt: Date.now(),
       }),
     )

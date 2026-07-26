@@ -96,6 +96,7 @@ function nudgeMsg(
     bodyMd,
     mentionMemberIds: [],
     assignmentId: null,
+    triggerMessageId: null,
     createdAt: 0,
   }
 }

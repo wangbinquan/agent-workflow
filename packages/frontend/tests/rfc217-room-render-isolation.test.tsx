@@ -27,6 +27,7 @@ function msg(id: string): WorkgroupRoomMessage {
     bodyMd: `body ${id}`,
     mentionMemberIds: [],
     assignmentId: null,
+    triggerMessageId: null,
     createdAt: 1000,
   }
 }
