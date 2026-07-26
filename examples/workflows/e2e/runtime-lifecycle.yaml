@@ -1,0 +1,38 @@
+name: e2e-runtime-lifecycle
+description: Drive retry success, permanent failure, per-node timeout, and cancellation through one real workflow.
+definition:
+  $schema_version: 4
+  inputs:
+    - kind: enum
+      key: mode
+      label: Runtime mode
+      required: true
+      choices: [retry, fail, timeout, cancel]
+      multiSelect: false
+      allowOther: false
+  nodes:
+    - id: mode_input
+      kind: input
+      inputKey: mode
+      position: { x: 20, y: 120 }
+    - id: runtime_worker
+      kind: agent-single
+      agentName: matrix-runtime
+      promptTemplate: |
+        MATRIX_RUNTIME
+        mode={{mode}}
+        task={{__task_id__}}
+      position: { x: 340, y: 120 }
+    - id: final_output
+      kind: output
+      ports:
+        - name: result
+          bind: { nodeId: runtime_worker, portName: result }
+      position: { x: 720, y: 120 }
+  edges:
+    - id: mode_to_worker
+      source: { nodeId: mode_input, portName: mode }
+      target: { nodeId: runtime_worker, portName: mode }
+    - id: worker_to_output
+      source: { nodeId: runtime_worker, portName: result }
+      target: { nodeId: final_output, portName: result }

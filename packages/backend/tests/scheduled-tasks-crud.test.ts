@@ -31,6 +31,12 @@ const UPLOAD_DEF: CreateWorkflow['definition'] = {
   nodes: [],
   edges: [],
 }
+const REQUIRED_TEXT_DEF: CreateWorkflow['definition'] = {
+  $schema_version: 1,
+  inputs: [{ key: 'goal', label: 'Goal', kind: 'text', required: true }],
+  nodes: [],
+  edges: [],
+}
 
 function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
   return buildActor({
@@ -149,6 +155,32 @@ describe('RFC-159 scheduled-task CRUD', () => {
     }
     expect(err).toBeInstanceOf(ValidationError)
     expect((err as ValidationError).code).toBe('scheduled-task-upload-required')
+  })
+
+  test('create: missing required workflow input → workflow-inputs-invalid', async () => {
+    const required = await createWorkflow(db, {
+      name: 'required-input',
+      description: '',
+      definition: REQUIRED_TEXT_DEF,
+    })
+    let err: unknown
+    try {
+      await createScheduledTask(
+        db,
+        {
+          name: 'x',
+          launchKind: 'workflow' as const,
+          launchPayload: launchBody(required.id),
+          scheduleSpec: SPEC,
+          enabled: true,
+        },
+        { actor: actor('alice') },
+      )
+    } catch (e) {
+      err = e
+    }
+    expect(err).toBeInstanceOf(ValidationError)
+    expect((err as ValidationError).code).toBe('workflow-inputs-invalid')
   })
 
   test('update: re-enabling recomputes next_run_at and resets consecutive_failures', async () => {

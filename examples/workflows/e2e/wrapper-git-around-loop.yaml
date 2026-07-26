@@ -1,0 +1,50 @@
+name: e2e-wrapper-git-around-loop
+description: An outer git wrapper captures the cumulative changes made across a complete loop.
+definition:
+  $schema_version: 4
+  inputs: []
+  nodes:
+    - id: git_wrap
+      kind: wrapper-git
+      title: Full-loop diff
+      nodeIds: [loop_wrap]
+      position: { x: 100, y: 40 }
+      size: { width: 900, height: 440 }
+    - id: loop_wrap
+      kind: wrapper-loop
+      title: Two-pass mutation
+      nodeIds: [mutator, checker]
+      maxIterations: 3
+      exitCondition:
+        kind: port-equals
+        nodeId: checker
+        portName: status
+        value: done
+      outputBindings:
+        - name: final_status
+          bind: { nodeId: checker, portName: status }
+      position: { x: 200, y: 110 }
+      size: { width: 680, height: 290 }
+    - id: mutator
+      kind: agent-single
+      agentName: matrix-mutator
+      promptTemplate: 'MATRIX_NESTED_MUTATE iteration={{__iteration__}}'
+      position: { x: 290, y: 200 }
+    - id: checker
+      kind: agent-single
+      agentName: matrix-loop-worker
+      promptTemplate: 'MATRIX_NESTED_CHECK iteration={{__iteration__}} note={{note}}'
+      position: { x: 610, y: 200 }
+    - id: final_output
+      kind: output
+      ports:
+        - name: all_changed
+          bind: { nodeId: git_wrap, portName: git_diff }
+      position: { x: 1100, y: 200 }
+  edges:
+    - id: mutator_to_checker
+      source: { nodeId: mutator, portName: note }
+      target: { nodeId: checker, portName: note }
+    - id: git_to_output
+      source: { nodeId: git_wrap, portName: git_diff }
+      target: { nodeId: final_output, portName: all_changed }

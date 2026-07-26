@@ -1,0 +1,46 @@
+name: e2e-wrapper-git-change-set
+description: Mutate files inside a git wrapper and consume its promoted changed-path list.
+definition:
+  $schema_version: 4
+  inputs:
+    - kind: text
+      key: change_request
+      label: Change request
+      required: true
+  nodes:
+    - id: request_input
+      kind: input
+      inputKey: change_request
+      position: { x: 20, y: 180 }
+    - id: git_wrap
+      kind: wrapper-git
+      title: Capture worktree changes
+      nodeIds: [mutator]
+      position: { x: 220, y: 80 }
+      size: { width: 420, height: 280 }
+    - id: mutator
+      kind: agent-single
+      agentName: matrix-mutator
+      promptTemplate: 'MATRIX_GIT_MUTATE request={{change_request}}'
+      position: { x: 310, y: 170 }
+    - id: summarize
+      kind: agent-single
+      agentName: matrix-summarizer
+      promptTemplate: 'MATRIX_GIT_SUMMARY changed={{changed_paths}}'
+      position: { x: 720, y: 180 }
+    - id: final_output
+      kind: output
+      ports:
+        - name: answer
+          bind: { nodeId: summarize, portName: answer }
+      position: { x: 1040, y: 180 }
+  edges:
+    - id: request_to_inner
+      source: { nodeId: request_input, portName: change_request }
+      target: { nodeId: mutator, portName: change_request }
+    - id: git_to_summary
+      source: { nodeId: git_wrap, portName: git_diff }
+      target: { nodeId: summarize, portName: changed_paths }
+    - id: summary_to_output
+      source: { nodeId: summarize, portName: answer }
+      target: { nodeId: final_output, portName: answer }

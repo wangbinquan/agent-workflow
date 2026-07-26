@@ -1,0 +1,51 @@
+name: e2e-output-kinds-roundtrip
+description: Emit and project every supported output-kind family through the real envelope parser.
+definition:
+  $schema_version: 4
+  inputs: []
+  nodes:
+    - id: kind_producer
+      kind: agent-single
+      agentName: matrix-output-kinds
+      promptTemplate: MATRIX_OUTPUT_KINDS
+      position: { x: 100, y: 160 }
+    - id: final_output
+      kind: output
+      ports:
+        - name: text
+          bind: { nodeId: kind_producer, portName: text }
+        - name: markdown
+          bind: { nodeId: kind_producer, portName: markdown }
+        - name: file
+          bind: { nodeId: kind_producer, portName: file }
+        - name: names
+          bind: { nodeId: kind_producer, portName: names }
+        - name: documents
+          bind: { nodeId: kind_producer, portName: documents }
+        - name: files
+          bind: { nodeId: kind_producer, portName: files }
+        - name: done_signal
+          bind: { nodeId: kind_producer, portName: done_signal }
+      position: { x: 600, y: 160 }
+  edges:
+    - id: text_to_output
+      source: { nodeId: kind_producer, portName: text }
+      target: { nodeId: final_output, portName: text }
+    - id: markdown_to_output
+      source: { nodeId: kind_producer, portName: markdown }
+      target: { nodeId: final_output, portName: markdown }
+    - id: file_to_output
+      source: { nodeId: kind_producer, portName: file }
+      target: { nodeId: final_output, portName: file }
+    - id: names_to_output
+      source: { nodeId: kind_producer, portName: names }
+      target: { nodeId: final_output, portName: names }
+    - id: documents_to_output
+      source: { nodeId: kind_producer, portName: documents }
+      target: { nodeId: final_output, portName: documents }
+    - id: files_to_output
+      source: { nodeId: kind_producer, portName: files }
+      target: { nodeId: final_output, portName: files }
+    - id: signal_to_output
+      source: { nodeId: kind_producer, portName: done_signal }
+      target: { nodeId: final_output, portName: done_signal }

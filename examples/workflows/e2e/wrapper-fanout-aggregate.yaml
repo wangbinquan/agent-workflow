@@ -1,0 +1,84 @@
+name: e2e-wrapper-fanout-aggregate
+description: Shard markdown paths, broadcast context, join all shards, and promote an aggregator report.
+definition:
+  $schema_version: 4
+  inputs:
+    - kind: files
+      key: docs
+      label: Markdown documents
+      required: false
+      minCount: 0
+      maxCount: 20
+      accept: '*.md'
+    - kind: text
+      key: context
+      label: Shared context
+      required: true
+  nodes:
+    - id: docs_input
+      kind: input
+      inputKey: docs
+      position: { x: 20, y: 100 }
+    - id: context_input
+      kind: input
+      inputKey: context
+      position: { x: 20, y: 300 }
+    - id: fan_wrap
+      kind: wrapper-fanout
+      title: Audit every document
+      nodeIds: [fan_worker, fan_aggregator]
+      inputs:
+        - name: docs
+          kind: list<path<md>>
+          isShardSource: true
+        - name: context
+          kind: string
+      expectedShardCount: 20
+      position: { x: 220, y: 40 }
+      size: { width: 720, height: 420 }
+    - id: fan_worker
+      kind: agent-single
+      agentName: matrix-fanout-worker
+      promptTemplate: |
+        MATRIX_FANOUT_WORKER
+        doc={{doc}}
+        context={{shared_context}}
+      position: { x: 320, y: 150 }
+    - id: fan_aggregator
+      kind: agent-single
+      agentName: matrix-fanout-aggregator
+      promptTemplate: |
+        MATRIX_FANOUT_AGG
+        findings={{findings}}
+      position: { x: 650, y: 150 }
+    - id: final_output
+      kind: output
+      ports:
+        - name: final_report
+          bind: { nodeId: fan_wrap, portName: final_report }
+      position: { x: 1040, y: 200 }
+  edges:
+    - id: docs_to_fan
+      source: { nodeId: docs_input, portName: docs }
+      target: { nodeId: fan_wrap, portName: docs }
+    - id: context_to_fan
+      source: { nodeId: context_input, portName: context }
+      target: { nodeId: fan_wrap, portName: context }
+    - id: fan_docs_to_worker
+      boundary: wrapper-input
+      source: { nodeId: fan_wrap, portName: docs }
+      target: { nodeId: fan_worker, portName: doc }
+    - id: fan_context_to_worker
+      boundary: wrapper-input
+      source: { nodeId: fan_wrap, portName: context }
+      target: { nodeId: fan_worker, portName: shared_context }
+    - id: worker_to_aggregator
+      source: { nodeId: fan_worker, portName: finding }
+      target: { nodeId: fan_aggregator, portName: findings }
+    - id: aggregator_to_fan
+      boundary: wrapper-output
+      source: { nodeId: fan_aggregator, portName: report }
+      target: { nodeId: fan_wrap, portName: final_report }
+    - id: fan_to_output
+      source: { nodeId: fan_wrap, portName: final_report }
+      target: { nodeId: final_output, portName: final_report }

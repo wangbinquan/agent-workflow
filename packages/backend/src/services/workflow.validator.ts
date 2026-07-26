@@ -845,6 +845,12 @@ export function validateWorkflowDef(
   // Build a graph that excludes intra-loop edges, then check for cycles.
   const filtered: Array<{ from: string; to: string }> = []
   for (const edge of edges) {
+    // wrapper-fanout boundary edges are container plumbing, not ordinary DAG
+    // dependencies. Counting both mirrors creates the false cycle
+    // fanout → per-shard worker → aggregator → fanout for every complete
+    // aggregator workflow. The dedicated boundary rules below still validate
+    // their direction, declared ports and containment.
+    if (edge.boundary !== undefined) continue
     const srcNode = nodeById.get(edge.source.nodeId)
     const tgtNode = nodeById.get(edge.target.nodeId)
     if (srcNode === undefined) continue

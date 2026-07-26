@@ -1,0 +1,48 @@
+name: e2e-wrapper-loop-port-count-lt
+description: Repeat until the newline-delimited item count falls below two.
+definition:
+  $schema_version: 4
+  inputs:
+    - kind: text
+      key: goal
+      label: Goal
+      required: true
+  nodes:
+    - id: goal_input
+      kind: input
+      inputKey: goal
+      position: { x: 20, y: 180 }
+    - id: loop_wrap
+      kind: wrapper-loop
+      title: Until fewer than two items remain
+      nodeIds: [loop_worker]
+      maxIterations: 3
+      exitCondition:
+        kind: port-count-lt
+        nodeId: loop_worker
+        portName: items
+        n: 2
+        separator: "\n"
+      outputBindings:
+        - name: final_items
+          bind: { nodeId: loop_worker, portName: items }
+      position: { x: 220, y: 80 }
+      size: { width: 460, height: 280 }
+    - id: loop_worker
+      kind: agent-single
+      agentName: matrix-loop-worker
+      promptTemplate: 'MATRIX_LOOP_COUNT iteration={{__iteration__}} goal={{goal}}'
+      position: { x: 330, y: 170 }
+    - id: final_output
+      kind: output
+      ports:
+        - name: final_items
+          bind: { nodeId: loop_wrap, portName: final_items }
+      position: { x: 780, y: 180 }
+  edges:
+    - id: goal_to_worker
+      source: { nodeId: goal_input, portName: goal }
+      target: { nodeId: loop_worker, portName: goal }
+    - id: loop_to_output
+      source: { nodeId: loop_wrap, portName: final_items }
+      target: { nodeId: final_output, portName: final_items }

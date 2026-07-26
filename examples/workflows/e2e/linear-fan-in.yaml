@@ -1,0 +1,53 @@
+name: e2e-linear-fan-in
+description: Parallel branches converge on one prompt port and surface a final output.
+definition:
+  $schema_version: 4
+  inputs:
+    - kind: text
+      key: topic
+      label: Topic
+      required: true
+  nodes:
+    - id: topic_input
+      kind: input
+      inputKey: topic
+      position: { x: 20, y: 180 }
+    - id: source_a
+      kind: agent-single
+      agentName: matrix-source-a
+      promptTemplate: 'MATRIX_SOURCE_A topic={{topic}}'
+      position: { x: 300, y: 80 }
+    - id: source_b
+      kind: agent-single
+      agentName: matrix-source-b
+      promptTemplate: 'MATRIX_SOURCE_B topic={{topic}}'
+      position: { x: 300, y: 280 }
+    - id: merge
+      kind: agent-single
+      agentName: matrix-merge
+      promptTemplate: |
+        MATRIX_MERGE
+        parts={{parts}}
+      position: { x: 620, y: 180 }
+    - id: final_output
+      kind: output
+      ports:
+        - name: answer
+          bind: { nodeId: merge, portName: answer }
+      position: { x: 940, y: 180 }
+  edges:
+    - id: topic_to_a
+      source: { nodeId: topic_input, portName: topic }
+      target: { nodeId: source_a, portName: topic }
+    - id: topic_to_b
+      source: { nodeId: topic_input, portName: topic }
+      target: { nodeId: source_b, portName: topic }
+    - id: a_to_merge
+      source: { nodeId: source_a, portName: part }
+      target: { nodeId: merge, portName: parts }
+    - id: b_to_merge
+      source: { nodeId: source_b, portName: part }
+      target: { nodeId: merge, portName: parts }
+    - id: merge_to_output
+      source: { nodeId: merge, portName: answer }
+      target: { nodeId: final_output, portName: answer }

@@ -1,0 +1,36 @@
+name: e2e-wrapper-loop-exhausted
+description: Intentionally exhaust a loop whose worker never returns the terminal value.
+definition:
+  $schema_version: 4
+  inputs: []
+  nodes:
+    - id: loop_wrap
+      kind: wrapper-loop
+      title: Expected exhaustion
+      nodeIds: [loop_worker]
+      maxIterations: 2
+      exitCondition:
+        kind: port-equals
+        nodeId: loop_worker
+        portName: status
+        value: done
+      outputBindings:
+        - name: final_status
+          bind: { nodeId: loop_worker, portName: status }
+      position: { x: 100, y: 60 }
+      size: { width: 500, height: 300 }
+    - id: loop_worker
+      kind: agent-single
+      agentName: matrix-loop-worker
+      promptTemplate: 'MATRIX_LOOP_EXHAUST iteration={{__iteration__}}'
+      position: { x: 220, y: 160 }
+    - id: final_output
+      kind: output
+      ports:
+        - name: final_status
+          bind: { nodeId: loop_wrap, portName: final_status }
+      position: { x: 720, y: 160 }
+  edges:
+    - id: loop_to_output
+      source: { nodeId: loop_wrap, portName: final_status }
+      target: { nodeId: final_output, portName: final_status }

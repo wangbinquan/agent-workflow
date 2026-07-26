@@ -1,0 +1,72 @@
+name: e2e-wrapper-git-around-fanout
+description: An outer git wrapper captures the merged file changes produced by every fanout shard.
+definition:
+  $schema_version: 4
+  inputs:
+    - kind: files
+      key: docs
+      label: Documents
+      required: true
+      minCount: 2
+      maxCount: 10
+      accept: file
+  nodes:
+    - id: docs_input
+      kind: input
+      inputKey: docs
+      position: { x: 20, y: 180 }
+    - id: git_wrap
+      kind: wrapper-git
+      title: Capture all shard changes
+      nodeIds: [fan_wrap]
+      position: { x: 180, y: 40 }
+      size: { width: 900, height: 480 }
+    - id: fan_wrap
+      kind: wrapper-fanout
+      title: Mutate one file per document
+      nodeIds: [fan_mutator, fan_aggregator]
+      inputs:
+        - name: docs
+          kind: list<path<md>>
+          isShardSource: true
+      expectedShardCount: 10
+      position: { x: 280, y: 100 }
+      size: { width: 680, height: 340 }
+    - id: fan_mutator
+      kind: agent-single
+      agentName: matrix-fanout-mutator
+      promptTemplate: |
+        MATRIX_FANOUT_MUTATE
+        doc={{doc}}
+      position: { x: 380, y: 200 }
+    - id: fan_aggregator
+      kind: agent-single
+      agentName: matrix-fanout-aggregator
+      promptTemplate: |
+        MATRIX_FANOUT_AGG
+        findings={{findings}}
+      position: { x: 690, y: 200 }
+    - id: final_output
+      kind: output
+      ports:
+        - name: changed
+          bind: { nodeId: git_wrap, portName: git_diff }
+      position: { x: 1180, y: 220 }
+  edges:
+    - id: docs_to_fan
+      source: { nodeId: docs_input, portName: docs }
+      target: { nodeId: fan_wrap, portName: docs }
+    - id: fan_docs_to_mutator
+      boundary: wrapper-input
+      source: { nodeId: fan_wrap, portName: docs }
+      target: { nodeId: fan_mutator, portName: doc }
+    - id: mutator_to_aggregator
+      source: { nodeId: fan_mutator, portName: finding }
+      target: { nodeId: fan_aggregator, portName: findings }
+    - id: aggregator_to_fan
+      boundary: wrapper-output
+      source: { nodeId: fan_aggregator, portName: report }
+      target: { nodeId: fan_wrap, portName: final_report }
+    - id: git_to_output
+      source: { nodeId: git_wrap, portName: git_diff }
+      target: { nodeId: final_output, portName: changed }

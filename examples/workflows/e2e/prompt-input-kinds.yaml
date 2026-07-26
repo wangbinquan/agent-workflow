@@ -1,0 +1,106 @@
+name: e2e-prompt-input-kinds
+description: Exercise every non-upload launcher input kind plus explicit, automatic, and built-in prompt injection.
+definition:
+  $schema_version: 4
+  inputs:
+    - kind: text
+      key: explicit_text
+      label: Explicit text
+      required: true
+      maxLength: 200
+    - kind: text
+      key: auto_text
+      label: Automatically appended text
+      required: true
+    - kind: files
+      key: files
+      label: Repository files
+      required: true
+      minCount: 2
+      maxCount: 3
+      accept: file
+    - kind: enum
+      key: mode
+      label: Mode
+      required: true
+      choices: [fast, thorough]
+      multiSelect: false
+      allowOther: false
+    - kind: enum
+      key: tags
+      label: Tags
+      required: true
+      choices: [api, ui, docs]
+      multiSelect: true
+      allowOther: false
+    - kind: git
+      key: branch
+      label: Branch
+      required: true
+      gitKind: branch
+  nodes:
+    - id: explicit_input
+      kind: input
+      inputKey: explicit_text
+      position: { x: 20, y: 20 }
+    - id: auto_input
+      kind: input
+      inputKey: auto_text
+      position: { x: 20, y: 100 }
+    - id: files_input
+      kind: input
+      inputKey: files
+      position: { x: 20, y: 180 }
+    - id: mode_input
+      kind: input
+      inputKey: mode
+      position: { x: 20, y: 260 }
+    - id: tags_input
+      kind: input
+      inputKey: tags
+      position: { x: 20, y: 340 }
+    - id: branch_input
+      kind: input
+      inputKey: branch
+      position: { x: 20, y: 420 }
+    - id: prompt_auditor
+      kind: agent-single
+      agentName: matrix-prompt-auditor
+      promptTemplate: |
+        MATRIX_PROMPT_INPUTS
+        explicit={{explicit_text}}
+        mode={{mode}}
+        node={{__node_id__}}
+        iteration={{__iteration__}}
+        task={{__task_id__}}
+        repo={{__repo_path__}}
+        repo_count={{__repo_count__}}
+      position: { x: 360, y: 200 }
+    - id: final_output
+      kind: output
+      ports:
+        - name: report
+          bind: { nodeId: prompt_auditor, portName: report }
+      position: { x: 760, y: 200 }
+  edges:
+    - id: explicit_to_auditor
+      source: { nodeId: explicit_input, portName: explicit_text }
+      target: { nodeId: prompt_auditor, portName: explicit_text }
+    - id: auto_to_auditor
+      source: { nodeId: auto_input, portName: auto_text }
+      target: { nodeId: prompt_auditor, portName: auto_text }
+    - id: files_to_auditor
+      source: { nodeId: files_input, portName: files }
+      target: { nodeId: prompt_auditor, portName: files }
+    - id: mode_to_auditor
+      source: { nodeId: mode_input, portName: mode }
+      target: { nodeId: prompt_auditor, portName: mode }
+    - id: tags_to_auditor
+      source: { nodeId: tags_input, portName: tags }
+      target: { nodeId: prompt_auditor, portName: tags }
+    - id: branch_to_auditor
+      source: { nodeId: branch_input, portName: branch }
+      target: { nodeId: prompt_auditor, portName: branch }
+    - id: auditor_to_output
+      source: { nodeId: prompt_auditor, portName: report }
+      target: { nodeId: final_output, portName: report }

@@ -81,6 +81,7 @@ import { applyRepairOption, listRepairOptionsForAlert } from '@/services/lifecyc
 import { listOpenLifecycleAlertsForTask } from '@/services/taskAlerts'
 import { getWorkflow } from '@/services/workflow'
 import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
+import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
 import { tasksListBroadcaster, TASKS_LIST_CHANNEL } from '@/ws/broadcaster'
 import { Paths } from '@/util/paths'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
@@ -853,6 +854,13 @@ async function handleMultipartTaskStart(
       )
     }
   }
+  // Upload paths do not exist in the payload yet; validate every other
+  // authored input before materializing the workspace. validateUploadPlan
+  // owns upload counts now, and startTask repeats the full map check after
+  // applyUploadsToWorktree packs the server-written paths.
+  assertWorkflowLaunchInputs(workflow.definition.inputs, startInput.inputs, {
+    ignoreUploadInputs: true,
+  })
   // RFC-107 (Codex impl-gate): validate the uploads (count / total + per-file
   // size / accept / min-max) BEFORE resolving or cloning the repo. Otherwise a
   // valid repoUrl + a bad upload would clone the repo and leave an orphan

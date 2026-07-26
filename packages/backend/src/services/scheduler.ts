@@ -4918,6 +4918,18 @@ async function runFanoutWrapperNode(
       definition,
       state.containerOf,
     )
+    // Boundary inputs are structural mirrors and are deliberately excluded
+    // from resolveUpstreamInputs. Inject every non-shard wrapper input as a
+    // broadcast value here; dispatchFanoutShard replaces only the shard-source
+    // target with the current item. This lets one per-shard node receive both
+    // its item and shared context through explicit wrapper boundaries.
+    for (const edge of boundaryEdges) {
+      if (edge.source.portName === shardPort.name) continue
+      const value = upstreamInputs[edge.source.portName] ?? ''
+      const prior = innerUpstream[edge.target.portName]
+      innerUpstream[edge.target.portName] =
+        prior === undefined ? value : `${prior}\n\n---\n\n${value}`
+    }
 
     if (scope.perShard.has(innerId)) {
       const shardResults = await Promise.all(

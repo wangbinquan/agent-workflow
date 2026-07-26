@@ -2116,6 +2116,12 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
             string,
             { items: Array<{ sourceAbs: string; sourcePath: string }> }
           >()
+          // Registered handlers own the downstream content shape as well as
+          // validation. Scalars are normally byte-preserving, list<T>
+          // canonicalizes its wire form, and signal deliberately discards any
+          // accidental body. Path kinds are normalized after archival below:
+          // their persisted value is a relative path, not the file body.
+          const normalizedContent = new Map<string, string>()
           if (status === 'done' && outputKinds !== undefined) {
             for (const [name, content] of parsed.ports) {
               const kind = outputKinds[name]
@@ -2143,6 +2149,8 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
                         sourcePath: it.sourcePath!,
                       })),
                   })
+                } else {
+                  normalizedContent.set(name, resolved.body)
                 }
               } catch (err) {
                 if (err instanceof PortValidationError) {
@@ -2163,7 +2171,6 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           // 规范化为 repo0 相对路径（D6：绝对路径 / './' 前缀不再泄漏下游；容器
           // 相对形态只进 archive_json）。归档写失败 = 环境级故障，fail loud。
           const worktreeDirName = opts.templateMeta.repos?.[0]?.worktreeDirName ?? ''
-          const normalizedContent = new Map<string, string>()
           const archiveJsonByPort = new Map<string, string>()
           if (
             status === 'done' &&

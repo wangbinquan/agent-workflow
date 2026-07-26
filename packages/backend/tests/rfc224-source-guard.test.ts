@@ -22,6 +22,7 @@ const E2E_STUB_VERSIONS: Readonly<Record<string, string>> = Object.freeze({
   'stub-opencode-commit.sh': '999.0.0',
   'stub-opencode-cross-clarify.sh': '1.18.4',
   'stub-opencode-slow.sh': '0.9.0',
+  'stub-opencode-workflow-matrix.sh': 'workflow-matrix',
   'stub-opencode.sh': 'custom-build',
 })
 
@@ -275,6 +276,7 @@ describe('RFC-224 release platform source guard', () => {
       'stub-opencode-commit.sh',
       'stub-opencode-cross-clarify.sh',
       'stub-opencode-slow.sh',
+      'stub-opencode-workflow-matrix.sh',
       'stub-opencode.sh',
     ])
 

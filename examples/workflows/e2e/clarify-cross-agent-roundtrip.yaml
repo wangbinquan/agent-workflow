@@ -1,0 +1,54 @@
+name: e2e-clarify-cross-agent-roundtrip
+description: A questioner asks the user about an upstream design, then resumes with the sealed answer.
+definition:
+  $schema_version: 4
+  inputs:
+    - kind: text
+      key: topic
+      label: Topic
+      required: true
+  nodes:
+    - id: topic_input
+      kind: input
+      inputKey: topic
+      position: { x: 20, y: 120 }
+    - id: cross_designer
+      kind: agent-single
+      agentName: matrix-cross-designer
+      promptTemplate: 'MATRIX_CROSS_DESIGN topic={{topic}}'
+      position: { x: 260, y: 120 }
+    - id: cross_questioner
+      kind: agent-single
+      agentName: matrix-cross-questioner
+      promptTemplate: 'MATRIX_CROSS_QUESTION design={{design}}'
+      position: { x: 520, y: 120 }
+    - id: cross_gate
+      kind: clarify-cross-agent
+      title: Clarify design trade-off
+      description: The questioner asks the user; the answer returns to the asking agent by default.
+      position: { x: 520, y: 300 }
+    - id: final_output
+      kind: output
+      ports:
+        - name: answer
+          bind: { nodeId: cross_questioner, portName: answer }
+      position: { x: 800, y: 120 }
+  edges:
+    - id: topic_to_designer
+      source: { nodeId: topic_input, portName: topic }
+      target: { nodeId: cross_designer, portName: topic }
+    - id: designer_to_questioner
+      source: { nodeId: cross_designer, portName: design }
+      target: { nodeId: cross_questioner, portName: design }
+    - id: questioner_to_cross
+      source: { nodeId: cross_questioner, portName: __clarify__ }
+      target: { nodeId: cross_gate, portName: questions }
+    - id: cross_to_questioner
+      source: { nodeId: cross_gate, portName: to_questioner }
+      target: { nodeId: cross_questioner, portName: __clarify_response__ }
+    - id: cross_to_designer
+      source: { nodeId: cross_gate, portName: to_designer }
+      target: { nodeId: cross_designer, portName: __external_feedback__ }
+    - id: questioner_to_output
+      source: { nodeId: cross_questioner, portName: answer }
+      target: { nodeId: final_output, portName: answer }

@@ -1,0 +1,50 @@
+name: e2e-wrapper-fanout-unsupported-inner
+description: Intentionally exercise the current fail-closed fanout v1 rejection of an inner wrapper.
+definition:
+  $schema_version: 4
+  inputs:
+    - kind: files
+      key: docs
+      label: Markdown documents
+      required: true
+      minCount: 1
+      maxCount: 5
+      accept: '*.md'
+  nodes:
+    - id: docs_input
+      kind: input
+      inputKey: docs
+      position: { x: 20, y: 180 }
+    - id: fan_wrap
+      kind: wrapper-fanout
+      title: Expected runtime rejection
+      nodeIds: [inner_git]
+      inputs:
+        - name: docs
+          kind: list<path<md>>
+          isShardSource: true
+      position: { x: 220, y: 40 }
+      size: { width: 720, height: 420 }
+    - id: inner_git
+      kind: wrapper-git
+      nodeIds: [inner_mutator]
+      position: { x: 320, y: 120 }
+      size: { width: 420, height: 260 }
+    - id: inner_mutator
+      kind: agent-single
+      agentName: matrix-mutator
+      promptTemplate: 'MATRIX_GIT_MUTATE request=must-not-run'
+      position: { x: 420, y: 200 }
+    - id: final_output
+      kind: output
+      ports:
+        - name: done
+          bind: { nodeId: fan_wrap, portName: __done__ }
+      position: { x: 1040, y: 180 }
+  edges:
+    - id: docs_to_fan
+      source: { nodeId: docs_input, portName: docs }
+      target: { nodeId: fan_wrap, portName: docs }
+    - id: fan_to_output
+      source: { nodeId: fan_wrap, portName: __done__ }
+      target: { nodeId: final_output, portName: done }

@@ -1,0 +1,43 @@
+name: e2e-clarify-self-roundtrip
+description: Let an agent ask the user one question, resume with the sealed answer, and publish its result.
+definition:
+  $schema_version: 4
+  inputs:
+    - kind: text
+      key: topic
+      label: Topic
+      required: true
+  nodes:
+    - id: topic_input
+      kind: input
+      inputKey: topic
+      position: { x: 20, y: 120 }
+    - id: self_clarifier
+      kind: agent-single
+      agentName: matrix-self-clarifier
+      promptTemplate: 'MATRIX_SELF_CLARIFY topic={{topic}}'
+      position: { x: 300, y: 120 }
+    - id: clarify_gate
+      kind: clarify
+      title: Clarify delivery mode
+      description: The agent asks the user before producing its answer.
+      position: { x: 500, y: 300 }
+    - id: final_output
+      kind: output
+      ports:
+        - name: answer
+          bind: { nodeId: self_clarifier, portName: answer }
+      position: { x: 700, y: 120 }
+  edges:
+    - id: topic_to_agent
+      source: { nodeId: topic_input, portName: topic }
+      target: { nodeId: self_clarifier, portName: topic }
+    - id: agent_to_clarify
+      source: { nodeId: self_clarifier, portName: __clarify__ }
+      target: { nodeId: clarify_gate, portName: questions }
+    - id: clarify_to_agent
+      source: { nodeId: clarify_gate, portName: answers }
+      target: { nodeId: self_clarifier, portName: __clarify_response__ }
+    - id: agent_to_output
+      source: { nodeId: self_clarifier, portName: answer }
+      target: { nodeId: final_output, portName: answer }

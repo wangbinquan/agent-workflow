@@ -1,0 +1,39 @@
+name: e2e-upload-input-roundtrip
+description: Upload two markdown files, inject their server-written paths, and verify the files are readable by the agent.
+definition:
+  $schema_version: 4
+  inputs:
+    - kind: upload
+      key: attachments
+      label: Attachments
+      required: true
+      targetDir: matrix-uploads
+      accept: ['.md']
+      minCount: 2
+      maxCount: 2
+      maxFileSize: 1048576
+  nodes:
+    - id: attachments_input
+      kind: input
+      inputKey: attachments
+      position: { x: 20, y: 120 }
+    - id: upload_reader
+      kind: agent-single
+      agentName: matrix-upload-reader
+      promptTemplate: |
+        MATRIX_UPLOAD_INPUT
+        attachments={{attachments}}
+      position: { x: 340, y: 120 }
+    - id: final_output
+      kind: output
+      ports:
+        - name: report
+          bind: { nodeId: upload_reader, portName: report }
+      position: { x: 720, y: 120 }
+  edges:
+    - id: attachments_to_reader
+      source: { nodeId: attachments_input, portName: attachments }
+      target: { nodeId: upload_reader, portName: attachments }
+    - id: reader_to_output
+      source: { nodeId: upload_reader, portName: report }
+      target: { nodeId: final_output, portName: report }

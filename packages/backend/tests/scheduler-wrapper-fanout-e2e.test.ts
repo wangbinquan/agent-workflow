@@ -7,13 +7,15 @@
 //   2. v1-unsupported inner-kind (agent-multi inside wrapper-fanout) →
 //      wrapper row 'failed' with message wrapper-fanout-v1-unsupported-inner-kind
 //      so the user gets a clear PR-D2 escalation path.
-//   3. Non-empty shardSource + agent-single inner + aggregator → wrapper
-//      row 'done', N shard children minted with shardKey set, aggregator
-//      runs once and its renamed outputs land on the wrapper row.
+//   3. Non-empty shardSource + agent-single inner → wrapper row 'done' and
+//      N shard children are minted with shardKey set.
+//   4. Aggregator runs once and its renamed outputs land on the wrapper row.
+//   5. Non-shard wrapper boundary inputs are broadcast into every per-shard
+//      inner prompt alongside the current shard value.
 //
 // Tests 1 and 2 do NOT spawn opencode (the dispatch refuses before any
-// runNode call). Test 3 uses MOCK_OPENCODE_OUTPUTS to fake one envelope per
-// subprocess.
+// runNode call). Tests 3–5 use MOCK_OPENCODE_OUTPUTS to fake one envelope
+// per subprocess.
 
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -376,7 +378,81 @@ describe('wrapper-fanout end-to-end (D.T2 / D.T3 / D.T8 happy path)', () => {
     expect(aggRows[0]?.status).toBe('done')
   })
 
-  test('5. cartesian guard fires when items × nested expectedShardCount > limit', async () => {
+  test('5. non-shard wrapper input is broadcast into every per-shard prompt', async () => {
+    const workerId = await seedAgent(h.db, 'worker', ['result'])
+    const def: WorkflowDefinition = {
+      $schema_version: 4,
+      inputs: [
+        { kind: 'text', key: 'docs', label: 'docs' },
+        { kind: 'text', key: 'context', label: 'context' },
+      ],
+      nodes: [
+        { id: 'docsInput', kind: 'input', inputKey: 'docs' },
+        { id: 'contextInput', kind: 'input', inputKey: 'context' },
+        {
+          id: 'fan',
+          kind: 'wrapper-fanout',
+          nodeIds: ['inner'],
+          inputs: [
+            { name: 'docs', kind: 'list<path<md>>', isShardSource: true },
+            { name: 'context', kind: 'string' },
+          ],
+        },
+        {
+          id: 'inner',
+          kind: 'agent-single',
+          agentId: workerId,
+          agentName: 'worker',
+          promptTemplate: 'Process {{doc}} under {{policy}}',
+        },
+      ] as unknown as WorkflowDefinition['nodes'],
+      edges: [
+        {
+          id: 'docsToFan',
+          source: { nodeId: 'docsInput', portName: 'docs' },
+          target: { nodeId: 'fan', portName: 'docs' },
+        },
+        {
+          id: 'contextToFan',
+          source: { nodeId: 'contextInput', portName: 'context' },
+          target: { nodeId: 'fan', portName: 'context' },
+        },
+        {
+          id: 'fanDocsToInner',
+          source: { nodeId: 'fan', portName: 'docs' },
+          target: { nodeId: 'inner', portName: 'doc' },
+          boundary: 'wrapper-input',
+        },
+        {
+          id: 'fanContextToInner',
+          source: { nodeId: 'fan', portName: 'context' },
+          target: { nodeId: 'inner', portName: 'policy' },
+          boundary: 'wrapper-input',
+        },
+      ],
+    }
+    const taskId = await seedWorkflowAndTask(h, def, {
+      docs: 'a.md\nb.md',
+      context: 'shared-policy',
+    })
+    await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ result: 'processed' }) }, () =>
+      runTask({
+        taskId,
+        db: h.db,
+        appHome: h.appHome,
+        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+      }),
+    )
+
+    const taskRows = await h.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
+    expect(taskRows[0]?.status).toBe('done')
+    const innerRows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'inner'))
+    expect(innerRows).toHaveLength(2)
+    expect(innerRows.map((row) => row.shardKey).sort()).toEqual(['a.md', 'b.md'])
+    expect(innerRows.every((row) => row.promptText?.includes('shared-policy') === true)).toBe(true)
+  })
+
+  test('6. cartesian guard fires when items × nested expectedShardCount > limit', async () => {
     const workerId = await seedAgent(h.db, 'worker', ['result'])
     const def: WorkflowDefinition = {
       $schema_version: 4,

@@ -42,6 +42,7 @@ import {
 } from '@/services/executionPolicy'
 import { assertAgentResourceIntegrity } from '@/services/agentResourceIntegrity'
 import { getWorkflow } from '@/services/workflow'
+import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
 
 /** Injected launch — `(body) => startTask(body, deps)`, closed over owner + scheduledTaskId. */
 /**
@@ -250,6 +251,10 @@ async function assertScheduledTargetUsable(
     assertNoRequiredUploadInput(target)
 
     await assertWorkflowLaunchable(db, actor, body['workflowId'] as string, defaultRuntime)
+    assertWorkflowLaunchInputs(
+      target.definition.inputs,
+      (body['inputs'] as Record<string, string> | undefined) ?? {},
+    )
     return
   }
   if (kind === 'agent') {

@@ -1,0 +1,59 @@
+name: e2e-wrapper-loop-review
+description: Park a loop on human review, resume after approval, and exit on the approved document.
+definition:
+  $schema_version: 4
+  inputs:
+    - kind: text
+      key: topic
+      label: Topic
+      required: true
+  nodes:
+    - id: topic_input
+      kind: input
+      inputKey: topic
+      position: { x: 20, y: 180 }
+    - id: loop_wrap
+      kind: wrapper-loop
+      title: Review-gated loop
+      nodeIds: [writer, review_gate]
+      maxIterations: 2
+      exitCondition:
+        kind: port-not-empty
+        nodeId: review_gate
+        portName: approved_doc
+      outputBindings:
+        - name: final_doc
+          bind: { nodeId: review_gate, portName: approved_doc }
+      position: { x: 220, y: 60 }
+      size: { width: 720, height: 360 }
+    - id: writer
+      kind: agent-single
+      agentName: matrix-review-writer
+      promptTemplate: 'MATRIX_REVIEW_WRITE topic={{topic}}'
+      position: { x: 320, y: 170 }
+    - id: review_gate
+      kind: review
+      title: Approve generated document
+      description: The wrapper must bubble awaiting_review and resume after approval.
+      inputSource: { nodeId: writer, portName: answer }
+      rerunnableOnReject: [writer]
+      rerunnableOnIterate: []
+      rollbackFilesOnReject: false
+      rollbackFilesOnIterate: false
+      position: { x: 650, y: 170 }
+    - id: final_output
+      kind: output
+      ports:
+        - name: final_doc
+          bind: { nodeId: loop_wrap, portName: final_doc }
+      position: { x: 1040, y: 180 }
+  edges:
+    - id: topic_to_writer
+      source: { nodeId: topic_input, portName: topic }
+      target: { nodeId: writer, portName: topic }
+    - id: writer_to_review
+      source: { nodeId: writer, portName: answer }
+      target: { nodeId: review_gate, portName: __review_input__ }
+    - id: loop_to_output
+      source: { nodeId: loop_wrap, portName: final_doc }
+      target: { nodeId: final_output, portName: final_doc }

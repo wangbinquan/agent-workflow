@@ -190,6 +190,46 @@ describe('runNode', () => {
     expect(existsSync(join(h.appHome, 'runs', h.taskId, nodeRunId))).toBe(false)
   })
 
+  test('registered handlers normalize persisted and returned content (signal body is discarded)', async () => {
+    const agent = makeAgent({
+      outputs: ['done_signal'],
+      outputKinds: { done_signal: 'signal' },
+    })
+    const nodeRunId = await insertNodeRun(h.db, h.taskId)
+
+    const result = await withEnv(
+      { MOCK_OPENCODE_OUTPUTS: JSON.stringify({ done_signal: 'must-not-carry-data' }) },
+      () =>
+        runNode({
+          taskId: h.taskId,
+          nodeRunId,
+          nodeId: 'node1',
+          agent,
+          inputs: {},
+          worktreePath: h.worktreePath,
+          templateMeta: {
+            repoPath: '/tmp/repo',
+            baseBranch: 'main',
+            taskId: h.taskId,
+          },
+          skills: [],
+          appHome: h.appHome,
+          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          db: h.db,
+        }),
+    )
+
+    expect(result.status).toBe('done')
+    expect(result.outputs.done_signal).toBe('')
+    const outputRows = await h.db
+      .select()
+      .from(nodeRunOutputs)
+      .where(eq(nodeRunOutputs.nodeRunId, nodeRunId))
+    expect(outputRows).toHaveLength(1)
+    expect(outputRows[0]?.kind).toBe('signal')
+    expect(outputRows[0]?.content).toBe('')
+  })
+
   test('missing envelope -> status=failed with explanatory errorMessage', async () => {
     const agent = makeAgent()
     const nodeRunId = await insertNodeRun(h.db, h.taskId)

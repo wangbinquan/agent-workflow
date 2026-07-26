@@ -210,11 +210,11 @@ async function readGitDiffPaths(h: Harness, wrapperRunId: string): Promise<strin
   return (rows[0]?.content ?? '').split('\n').filter((p) => p.length > 0)
 }
 
-describe('AUDIT S-4 current-behavior lock: wrapper-git baseline = HEAD only, no pre-dirt subtraction', () => {
+describe('AUDIT S-4 regression lock: wrapper-git subtracts unchanged pre-existing dirt', () => {
   let h: Harness
   afterEach(() => h.cleanup())
 
-  test('S-4a sequential wrapper-git pair: second wrapper git_diff is POLLUTED by first stage uncommitted file', async () => {
+  test('S-4a sequential wrapper-git pair: second wrapper git_diff excludes first-stage residue', async () => {
     h = await buildHarness('seq')
     await seedAgent(h.db, 'coder', ['summary'])
     await seedAgent(h.db, 'fixer', ['summary'])
@@ -311,7 +311,7 @@ describe('AUDIT S-4 current-behavior lock: wrapper-git baseline = HEAD only, no 
     expect([...wg2Paths].sort()).toEqual(['fileB.txt'])
   }, 20000)
 
-  test('S-4b git-in-loop: iteration-1 git_diff is the CUMULATIVE union of iterations 0..1, not that round alone', async () => {
+  test('S-4b git-in-loop: iteration-1 git_diff contains only that round', async () => {
     h = await buildHarness('loop')
     await seedAgent(h.db, 'audit', ['findings'])
     const def: WorkflowDefinition = {

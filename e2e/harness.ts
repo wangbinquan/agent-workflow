@@ -73,6 +73,11 @@ export interface SpawnOptions {
    */
   extraEnv?: Record<string, string>
   /**
+   * Test-local config fields merged over the harness defaults. Binding and
+   * authentication-owned fields remain fixed by the harness.
+   */
+  configOverrides?: Record<string, unknown>
+  /**
    * RFC-054 W1-3 — reuse an existing AGENT_WORKFLOW_HOME directory instead
    * of mkdtemp-ing a fresh one. Required for crash-recovery: kill daemon A,
    * spawn daemon B against the same home so the SQLite db + worktrees are
@@ -388,6 +393,7 @@ async function startDaemonWithPortAllocator(
             worktreeAutoGc: { enabled: false },
             eventsArchiveThresholds: { perNodeRunRows: 50_000, globalRows: 1_000_000 },
             largeOutputThresholdBytes: 1_048_576,
+            ...(opts.configOverrides ?? {}),
             bindHost: '127.0.0.1',
             bindPort,
             language: 'en-US',

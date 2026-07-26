@@ -1,0 +1,57 @@
+name: e2e-wrapper-loop-around-git
+description: A git wrapper runs once per loop iteration and only the last iteration is promoted.
+definition:
+  $schema_version: 4
+  inputs: []
+  nodes:
+    - id: loop_wrap
+      kind: wrapper-loop
+      title: Loop around per-iteration git capture
+      nodeIds: [git_wrap, checker]
+      maxIterations: 3
+      exitCondition:
+        kind: port-equals
+        nodeId: checker
+        portName: status
+        value: done
+      outputBindings:
+        - name: final_status
+          bind: { nodeId: checker, portName: status }
+        - name: last_changed
+          bind: { nodeId: git_wrap, portName: git_diff }
+      position: { x: 100, y: 40 }
+      size: { width: 900, height: 440 }
+    - id: git_wrap
+      kind: wrapper-git
+      title: Per-iteration diff
+      nodeIds: [mutator]
+      position: { x: 200, y: 120 }
+      size: { width: 400, height: 260 }
+    - id: mutator
+      kind: agent-single
+      agentName: matrix-mutator
+      promptTemplate: 'MATRIX_NESTED_MUTATE iteration={{__iteration__}}'
+      position: { x: 290, y: 200 }
+    - id: checker
+      kind: agent-single
+      agentName: matrix-loop-worker
+      promptTemplate: 'MATRIX_NESTED_CHECK iteration={{__iteration__}} changed={{changed}}'
+      position: { x: 690, y: 200 }
+    - id: final_output
+      kind: output
+      ports:
+        - name: final_status
+          bind: { nodeId: loop_wrap, portName: final_status }
+        - name: last_changed
+          bind: { nodeId: loop_wrap, portName: last_changed }
+      position: { x: 1100, y: 200 }
+  edges:
+    - id: git_to_checker
+      source: { nodeId: git_wrap, portName: git_diff }
+      target: { nodeId: checker, portName: changed }
+    - id: status_to_output
+      source: { nodeId: loop_wrap, portName: final_status }
+      target: { nodeId: final_output, portName: final_status }
+    - id: changed_to_output
+      source: { nodeId: loop_wrap, portName: last_changed }
+      target: { nodeId: final_output, portName: last_changed }

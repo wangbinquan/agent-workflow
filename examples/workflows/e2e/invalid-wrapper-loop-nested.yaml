@@ -1,0 +1,51 @@
+name: e2e-invalid-wrapper-loop-nested
+description: Intentionally invalid loop-in-loop definition used to verify the static launch gate.
+definition:
+  $schema_version: 4
+  inputs: []
+  nodes:
+    - id: outer_loop
+      kind: wrapper-loop
+      title: Invalid outer loop
+      nodeIds: [inner_loop]
+      maxIterations: 2
+      exitCondition:
+        kind: port-equals
+        nodeId: inner_loop
+        portName: inner_status
+        value: done
+      outputBindings:
+        - name: final_status
+          bind: { nodeId: inner_loop, portName: inner_status }
+      position: { x: 100, y: 40 }
+      size: { width: 780, height: 420 }
+    - id: inner_loop
+      kind: wrapper-loop
+      title: Invalid nested loop
+      nodeIds: [loop_worker]
+      maxIterations: 2
+      exitCondition:
+        kind: port-equals
+        nodeId: loop_worker
+        portName: status
+        value: done
+      outputBindings:
+        - name: inner_status
+          bind: { nodeId: loop_worker, portName: status }
+      position: { x: 200, y: 110 }
+      size: { width: 500, height: 280 }
+    - id: loop_worker
+      kind: agent-single
+      agentName: matrix-loop-worker
+      promptTemplate: 'MATRIX_LOOP_EQUALS iteration={{__iteration__}}'
+      position: { x: 310, y: 190 }
+    - id: final_output
+      kind: output
+      ports:
+        - name: final_status
+          bind: { nodeId: outer_loop, portName: final_status }
+      position: { x: 980, y: 180 }
+  edges:
+    - id: outer_to_output
+      source: { nodeId: outer_loop, portName: final_status }
+      target: { nodeId: final_output, portName: final_status }

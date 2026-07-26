@@ -66,6 +66,7 @@ import { buildLaunchCollabRows } from '@/services/taskCollab'
 import { getWorkflow } from '@/services/workflow'
 import { assertWorkflowExecutionPolicy } from '@/services/taskLaunchGate'
 import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
+import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
 import { materializingSpaces } from '@/services/gc'
 import { rollbackNodeRunWorktrees } from '@/services/nodeRollback'
 import { WRAPPER_KINDS } from '@/services/dispatchFrontier'
@@ -1464,6 +1465,15 @@ async function startTaskImpl(
       `workflow '${input.workflowId}' failed static validation (${errors.length} error${errors.length === 1 ? '' : 's'}); fix issues before starting a task`,
       { issues: validation.issues },
     )
+  }
+  // Browser-side required/picker gates are advisory: JSON API callers and
+  // scheduled fires reach this service directly. Validate the packed map here
+  // before any repo resolution/materialization so a missing required input
+  // cannot silently execute as an empty string. Agent/workgroup launches own
+  // different synthesized-host contracts and validate them in their launch
+  // services before entering this generic workflow funnel.
+  if (deps.agentLaunch === undefined && deps.workgroupLaunch === undefined) {
+    assertWorkflowLaunchInputs(workflow.definition.inputs, input.inputs)
   }
 
   const appHome = deps.appHome ?? Paths.root

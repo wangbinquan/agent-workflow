@@ -1,0 +1,27 @@
+name: e2e-wrapper-git-noop
+description: A successful inner run that makes no repository changes produces an empty git_diff.
+definition:
+  $schema_version: 4
+  inputs: []
+  nodes:
+    - id: git_wrap
+      kind: wrapper-git
+      title: No-op diff capture
+      nodeIds: [observer]
+      position: { x: 100, y: 60 }
+      size: { width: 520, height: 280 }
+    - id: observer
+      kind: agent-single
+      agentName: matrix-noop
+      promptTemplate: MATRIX_GIT_NOOP
+      position: { x: 240, y: 160 }
+    - id: final_output
+      kind: output
+      ports:
+        - name: changed
+          bind: { nodeId: git_wrap, portName: git_diff }
+      position: { x: 760, y: 160 }
+  edges:
+    - id: git_to_output
+      source: { nodeId: git_wrap, portName: git_diff }
+      target: { nodeId: final_output, portName: changed }

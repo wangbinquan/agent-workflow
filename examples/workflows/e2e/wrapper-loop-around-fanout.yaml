@@ -1,0 +1,110 @@
+name: e2e-wrapper-loop-around-fanout
+description: A loop reruns a complete fanout generation and exits from the current generation's aggregator status.
+definition:
+  $schema_version: 4
+  inputs:
+    - kind: files
+      key: docs
+      label: Documents
+      required: true
+      minCount: 2
+      maxCount: 5
+      accept: file
+    - kind: text
+      key: goal
+      label: Shared goal
+      required: true
+  nodes:
+    - id: docs_input
+      kind: input
+      inputKey: docs
+      position: { x: 20, y: 120 }
+    - id: goal_input
+      kind: input
+      inputKey: goal
+      position: { x: 20, y: 320 }
+    - id: loop_wrap
+      kind: wrapper-loop
+      title: Repeat fanout until aggregate status is done
+      nodeIds: [fan_wrap]
+      maxIterations: 3
+      exitCondition:
+        kind: port-equals
+        nodeId: fan_wrap
+        portName: status
+        value: done
+      outputBindings:
+        - name: final_status
+          bind: { nodeId: fan_wrap, portName: status }
+        - name: final_report
+          bind: { nodeId: fan_wrap, portName: report }
+      position: { x: 180, y: 40 }
+      size: { width: 900, height: 500 }
+    - id: fan_wrap
+      kind: wrapper-fanout
+      title: One generation
+      nodeIds: [fan_worker, fan_aggregator]
+      inputs:
+        - name: docs
+          kind: list<path<md>>
+          isShardSource: true
+        - name: goal
+          kind: string
+      expectedShardCount: 5
+      position: { x: 280, y: 100 }
+      size: { width: 680, height: 360 }
+    - id: fan_worker
+      kind: agent-single
+      agentName: matrix-fanout-worker
+      promptTemplate: |
+        MATRIX_FANOUT_WORKER
+        doc={{doc}}
+        context={{shared_goal}}
+      position: { x: 380, y: 210 }
+    - id: fan_aggregator
+      kind: agent-single
+      agentName: matrix-loop-fanout-aggregator
+      promptTemplate: |
+        MATRIX_LOOP_FANOUT_AGG iteration={{__iteration__}}
+        findings={{findings}}
+      position: { x: 690, y: 210 }
+    - id: final_output
+      kind: output
+      ports:
+        - name: final_status
+          bind: { nodeId: loop_wrap, portName: final_status }
+        - name: final_report
+          bind: { nodeId: loop_wrap, portName: final_report }
+      position: { x: 1180, y: 220 }
+  edges:
+    - id: docs_to_fan
+      source: { nodeId: docs_input, portName: docs }
+      target: { nodeId: fan_wrap, portName: docs }
+    - id: goal_to_fan
+      source: { nodeId: goal_input, portName: goal }
+      target: { nodeId: fan_wrap, portName: goal }
+    - id: fan_docs_to_worker
+      boundary: wrapper-input
+      source: { nodeId: fan_wrap, portName: docs }
+      target: { nodeId: fan_worker, portName: doc }
+    - id: fan_goal_to_worker
+      boundary: wrapper-input
+      source: { nodeId: fan_wrap, portName: goal }
+      target: { nodeId: fan_worker, portName: shared_goal }
+    - id: worker_to_aggregator
+      source: { nodeId: fan_worker, portName: finding }
+      target: { nodeId: fan_aggregator, portName: findings }
+    - id: aggregator_status_to_fan
+      boundary: wrapper-output
+      source: { nodeId: fan_aggregator, portName: status }
+      target: { nodeId: fan_wrap, portName: status }
+    - id: aggregator_report_to_fan
+      boundary: wrapper-output
+      source: { nodeId: fan_aggregator, portName: report }
+      target: { nodeId: fan_wrap, portName: report }
+    - id: loop_status_to_output
+      source: { nodeId: loop_wrap, portName: final_status }
+      target: { nodeId: final_output, portName: final_status }
+    - id: loop_report_to_output
+      source: { nodeId: loop_wrap, portName: final_report }
+      target: { nodeId: final_output, portName: final_report }
