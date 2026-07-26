@@ -93,11 +93,11 @@ OpenCode 当前存在两套互相冲突的合同：
 
 verified core 只请求能力，不读取 `process.platform`：
 
-| Provider                                           | 本 RFC 交付         | 基线隔离                                                         | 强后代生命周期                              |
-| -------------------------------------------------- | ------------------- | ---------------------------------------------------------------- | ------------------------------------------- |
-| Linux bwrap                                        | 是                  | appHome 隐藏、seal 只读、inner shell/MCP 无网络                  | private PID namespace，强                   |
-| macOS Seatbelt                                     | 是                  | appHome deny/allow-back、seal 只读、inner shell/MCP 更窄 profile | process group best-effort，无 PID namespace |
-| Windows Job Object + restricted token/AppContainer | 否，future provider | 接口已定义并有 contract test                                     | 目标为 Job kill-on-close                    |
+| Provider                                           | 本 RFC 交付         | 基线隔离                                                             | 强后代生命周期                              |
+| -------------------------------------------------- | ------------------- | -------------------------------------------------------------------- | ------------------------------------------- |
+| Linux bwrap                                        | 是                  | outer + inner bwrap；appHome 隐藏、seal 只读、inner shell/MCP 无网络 | private PID namespace，强                   |
+| macOS Seatbelt                                     | 是                  | model child 单层 Seatbelt；appHome 隐藏、seal 只读、shell/MCP 无网络 | process group best-effort，无 PID namespace |
+| Windows Job Object + restricted token/AppContainer | 否，future provider | 接口已定义并有 contract test                                         | 目标为 Job kill-on-close                    |
 
 基线能力为 `platformHomeIsolation`、`immutableArtifactView` 和
 `modelChildNetworkDeny`。`enforce` 缺任一基线时 fail closed；Linux 和 macOS provider
@@ -175,9 +175,11 @@ secret 与 child network 隔离不再成立；这是显式策略取舍，不得�
 - **AC-6 策略语义**：`enforce/warn/off × provider ready/missing/partial` 真值表逐格有测试；
   warn 的 degraded 告警覆盖 launch/resume/system/distill/smoke，off 不伪装成安全。
 - **AC-7 macOS 实证**：gated real Seatbelt 测试证明 appHome secret 不可读、worktree
-  可用、seal 不可写、inner shell/MCP 网络被拒；模型执行不再因 OS 名称直接失败。
+  可用、seal 不可写、inner shell/MCP 网络被拒；业务计划只生成一层 child
+  `sandbox-exec`，模型执行不再因 OS 名称或递归 Seatbelt 直接失败。
 - **AC-8 Linux 实证**：现有 real bwrap capability、FFF 与 orphan probe 保留；适配为
-  provider receipt 后仍证明 private PID/network/mount 与 bounded reap。
+  provider receipt 后仍真实执行 outer runner + inner child bwrap，并证明
+  private PID/network/mount 与 bounded reap。
 - **AC-9 准确 UI**：status/Test/首页/Settings 对七种状态有中英对称测试；
   `ok=false` 不再统一落到“未找到”，版本只作中性 telemetry。
 - **AC-10 Windows 可扩展性**：provider id/capability 使用开放 string/schema，而非

@@ -11,6 +11,7 @@ import {
   NetlessSubprocessManifestSchema,
   renderNetlessSeatbeltProfile,
 } from '@/services/runtime/opencode/sealedSubprocess'
+import { wrapSpawnPlanSandbox, type SandboxCtx } from '@/services/sandbox'
 import { probeSandboxMechanism } from '@/services/sandbox/probe'
 
 const roots: string[] = []
@@ -24,6 +25,14 @@ const seatbeltTest =
 
 async function runSeatbelt(profile: string, command: readonly string[]): Promise<number> {
   const child = Bun.spawn(['/usr/bin/sandbox-exec', '-p', profile, ...command], {
+    stdout: 'ignore',
+    stderr: 'ignore',
+  })
+  return child.exited
+}
+
+async function runCommand(command: readonly string[]): Promise<number> {
+  const child = Bun.spawn([...command], {
     stdout: 'ignore',
     stderr: 'ignore',
   })
@@ -84,17 +93,32 @@ describe('RFC-227 REAL macOS Seatbelt provider (gated)', () => {
         command: ['/bin/sh'],
       })
       const profile = renderNetlessSeatbeltProfile(manifest)
+      const runnerCtx: SandboxCtx = {
+        mode: 'enforce',
+        status: { mechanism: 'seatbelt', available: true, detail: null },
+        appHome,
+        taskWorktrees: [worktreePath],
+        runDir: join(appHome, 'runs', 'task'),
+      }
 
       expect(await runSeatbelt(profile, ['/bin/cat', secretPath])).not.toBe(0)
-      expect(
-        await runSeatbelt(profile, [
-          '/bin/sh',
-          '-c',
-          'printf WORKTREE_OK > "$1"',
-          'rfc227',
-          worktreeOutput,
-        ]),
-      ).toBe(0)
+      const childSeatbeltCommand = [
+        '/usr/bin/sandbox-exec',
+        '-p',
+        profile,
+        '/bin/sh',
+        '-c',
+        'printf WORKTREE_OK > "$1"',
+        'rfc227',
+        worktreeOutput,
+      ]
+      const spawnCommand = wrapSpawnPlanSandbox(
+        childSeatbeltCommand,
+        runnerCtx,
+        'provider-child-only',
+      )
+      expect(spawnCommand.filter((entry) => entry === '/usr/bin/sandbox-exec')).toHaveLength(1)
+      expect(await runCommand(spawnCommand)).toBe(0)
       expect(readFileSync(worktreeOutput, 'utf8')).toBe('WORKTREE_OK')
       expect(
         await runSeatbelt(profile, [

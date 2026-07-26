@@ -52,7 +52,7 @@ import {
   getSandboxProvider,
   sandboxActive,
   sandboxEnforceBlocked,
-  wrapSandbox,
+  wrapSpawnPlanSandbox,
   type SandboxCtx,
 } from '@/services/sandbox'
 import { lifecycleAlerts } from '@/db/schema'
@@ -1316,7 +1316,9 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     cwd: opts.worktreePath,
     nodeRunId: opts.nodeRunId,
     // RFC-205 AC-7: per-spawn sandbox traceability (alerts carry degradations).
-    sandboxed: sandboxActive(sandboxCtx),
+    sandboxed:
+      sandboxActive(sandboxCtx) && (plan.sandboxTopology ?? 'runner-outer') === 'runner-outer',
+    sandboxTopology: plan.sandboxTopology ?? 'runner-outer',
     ...(plan.diagnostics ?? {}),
   })
 
@@ -1363,7 +1365,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       ...(identityFailure === undefined ? {} : { failureCode: identityFailure }),
     }
   }
-  const spawnCmd = wrapSandbox(cmd, sandboxCtx)
+  const spawnCmd = wrapSpawnPlanSandbox(cmd, sandboxCtx, plan.sandboxTopology)
   const trySpawn = (): Bun.Subprocess<'ignore' | 'pipe', 'pipe', 'pipe'> =>
     Bun.spawn({
       cmd: spawnCmd,

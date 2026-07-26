@@ -17,6 +17,7 @@ import {
 import type { SandboxStatus } from './probe'
 
 export type SandboxMode = 'enforce' | 'warn' | 'off'
+export type SpawnSandboxTopology = 'runner-outer' | 'provider-child-only'
 
 export interface SandboxCtx {
   mode: SandboxMode
@@ -81,6 +82,30 @@ export function wrapSandbox(cmd: readonly string[], ctx: SandboxCtx | undefined)
     return ['bwrap', ...renderBwrapArgs(policy, { appHome: ctx.appHome }), '--', ...cmd]
   }
   return [...cmd]
+}
+
+/**
+ * Select the process layer that owns containment for this spawn plan.
+ *
+ * macOS Seatbelt cannot safely enter a second `sandbox-exec` profile from an
+ * already-sandboxed process. Verified OpenCode business plans therefore keep
+ * the trusted server outside the generic runner wrapper when their
+ * model-controlled shell/MCP children are already forced through the sealed
+ * Seatbelt wrapper. Linux remains runner-outer + child bwrap.
+ *
+ * Only the built-in Seatbelt mechanism may request the child-only topology.
+ * Any stale or malformed request on another provider falls back to the outer
+ * wrapper instead of weakening containment.
+ */
+export function wrapSpawnPlanSandbox(
+  cmd: readonly string[],
+  ctx: SandboxCtx | undefined,
+  topology: SpawnSandboxTopology | undefined,
+): string[] {
+  if (topology === 'provider-child-only' && ctx?.status.mechanism === 'seatbelt') {
+    return [...cmd]
+  }
+  return wrapSandbox(cmd, ctx)
 }
 
 // ---------------------------------------------------------------------------

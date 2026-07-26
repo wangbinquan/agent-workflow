@@ -43,6 +43,11 @@
       由远端 workflow 承担，本次本地 macOS 会话未运行远端 CI。
 - [x] **RFC-227-T13 实现门与交付**：Codex 实现门关闭全部 P0/P1/P2，更新 RFC/STATE；
       只在用户明确要求时提交/推送，并按 exact SHA 报告 CI。
+- [x] **RFC-227-T14 Seatbelt 嵌套回归修复（2026-07-26）**：业务计划把 containment
+      topology 作为显式 `SpawnPlan` 合同；macOS 在 Bash/local MCP 可达时只保留 child
+      Seatbelt，避免 `sandbox_apply: Operation not permitted`，无模型子进程时仍保留
+      runner outer；Linux 保持 outer + child bwrap，并在 Ubuntu real integration
+      中执行生产双层 renderer。
 
 ## 依赖与拆分
 

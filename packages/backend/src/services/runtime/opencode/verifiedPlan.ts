@@ -632,11 +632,17 @@ export async function buildVerifiedOpencodeBusinessPlan(
       runTimeoutMs: DEFAULT_RUN_TIMEOUT_MS,
     }
     await writeVerifiedLaunchManifest(manifestPath, manifest)
+    const sandboxTopology =
+      childProvider.providerId === 'macos-seatbelt' &&
+      (ctx.agent.permission.bash !== 'deny' || plannedMcp.localWrappers.length > 0)
+        ? 'provider-child-only'
+        : 'runner-outer'
     succeeded = true
     return {
       cmd: verifiedLauncherCommand(manifestPath),
       env: {},
       stdin: { mode: 'ignore' },
+      sandboxTopology,
       readOnlySubtrees: [sealRoot, ...layout.configRoots, ...core.readOnlySubtrees],
       sessionStore: { root: storeRoot, dbPath: layout.sessionDbPath, persistent: true },
       control: {
@@ -659,6 +665,8 @@ export async function buildVerifiedOpencodeBusinessPlan(
         containmentMode: containment.mode,
         containmentCapabilities: containment.capabilities,
         containmentDegradedReasons: containment.degradedReasons,
+        runnerSandboxed:
+          sandboxTopology === 'runner-outer' && containment.mode !== 'off' && containment.available,
         inlineModel: `${selectedModel.providerID}/${selectedModel.modelID}`,
         inlineVariant: selectedModel.variant ?? null,
         mcpCount: Object.keys(plannedMcp.config).length,

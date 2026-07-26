@@ -248,15 +248,22 @@ provider 能力，不再通过 `OFFICIAL_OPENCODE_BUILDS.fffCapabilityCodec` 查
 
 `MacSeatbeltContainmentProvider`：
 
-1. outer profile 沿用 RFC-205 appHome deny + exact worktree/run allow-back；
-2. binary/config/skill seal 在所有 RW allow-back 之后追加 write deny/read allow；
-3. server 需要 provider 网络，因此 outer 不做全局 network deny；
-4. shell/local MCP launcher 追加更窄 Seatbelt profile：deny network、只允许 exact
-   worktree/scratch/selected read-only skill 与必要 OS toolchain；
-5. child env 继续 `env -i` 重建，不继承 server/provider/platform secret；
-6. provider probe 必须真实证明 secret deny、worktree allow、seal write deny 和 child
-   network deny，不能只检查 `/usr/bin/sandbox-exec` 存在；
-7. termination 使用 detached process group bounded TERM→KILL，并把
+1. Seatbelt 不能从已受限进程再次可靠执行 `sandbox-exec`；业务 `SpawnPlan` 因而显式
+   选择 containment topology，禁止 runner outer 与 child profile 隐式叠加；
+2. Bash 或 local MCP 可达时，冻结且完成 same-instance attestation 的 OpenCode server
+   属于 provider TCB，runner 不再包装 outer Seatbelt；所有模型可控 shell/local MCP
+   必须进入且只进入一层 child profile；
+3. child profile deny network、隐藏 appHome/realHome，并只允许 exact
+   worktree/scratch/private HOME/private TMP 与 selected read-only artifact；
+4. Bash 被禁且无 local MCP 时没有模型可控子进程，业务计划继续沿用 RFC-205 outer
+   appHome deny + exact worktree/run allow-back；
+5. trusted server boundary 以启动前 digest/manifest 校验固定 binary/config/skill；
+   模型子进程只看到显式绑定的 read-only artifact，不能接触其余 server/daemon
+   surface；
+6. child env 继续 `env -i` 重建，不继承 server/provider/platform secret；
+7. provider probe 必须真实证明 single-layer topology、secret deny、worktree allow、
+   seal write deny 和 child network deny，不能只检查 `/usr/bin/sandbox-exec` 存在；
+8. termination 使用 detached process group bounded TERM→KILL，并把
    `descendantLifetimeBound=best-effort` 写入 receipt。
 
 macOS 不再在 `assertVerifiedOpencodePlanBoundary` 因平台名称失败。
@@ -449,9 +456,10 @@ source ratchet 禁止生产依赖图出现：
 
 gated integration：
 
-- Linux：保留 real bwrap namespace/FFF/orphan/protocol supervisor；
-- macOS：real Seatbelt secret/worktree/seal/inner-network + model execution
-  no-platform-block；
+- Linux：真实运行 production outer + child bwrap，并保留 namespace/FFF/orphan/protocol
+  supervisor；
+- macOS：真实运行 single-layer child Seatbelt，证明 secret/worktree/seal/inner-network +
+  model execution no-platform-block；
 - Windows：本 RFC 仅 contract test；future RFC 再加真实 Job/AppContainer CI。
 
 ### 10.4 前端与全入口

@@ -15,6 +15,7 @@ import {
   sandboxActive,
   sandboxEnforceBlocked,
   wrapSandbox,
+  wrapSpawnPlanSandbox,
   type SandboxCtx,
 } from '../src/services/sandbox/index'
 
@@ -94,7 +95,9 @@ describe('sandboxEnforceBlocked (RFC-205 P0-1 — enforce fails closed)', () => 
   test('runner fails closed on enforce+unavailable before spawning (source lock)', () => {
     const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'runner.ts'), 'utf8')
     const blockIdx = src.indexOf('sandboxEnforceBlocked(sandboxCtx)')
-    const wrapIdx = src.indexOf('const spawnCmd = wrapSandbox(cmd, sandboxCtx)')
+    const wrapIdx = src.indexOf(
+      'const spawnCmd = wrapSpawnPlanSandbox(cmd, sandboxCtx, plan.sandboxTopology)',
+    )
     expect(blockIdx).toBeGreaterThan(0)
     expect(wrapIdx).toBeGreaterThan(blockIdx)
     // and it returns a failed node run (does not throw out / does not spawn).
@@ -145,6 +148,28 @@ describe('wrapSandbox (spawn-boundary)', () => {
     expect(out[2]).toContain('secret.key')
     expect(out.slice(3)).toEqual([...cmd])
     expect(input).toEqual([...cmd]) // never mutated (spawnBinaryPath reads it)
+  })
+
+  test('verified macOS child topology avoids a nested Seatbelt wrapper', () => {
+    const ctx: SandboxCtx = {
+      ...CTX_BASE,
+      mode: 'enforce',
+      status: { mechanism: 'seatbelt', available: true, detail: null },
+    }
+    const input = [...cmd]
+    const out = wrapSpawnPlanSandbox(input, ctx, 'provider-child-only')
+    expect(out).toEqual([...cmd])
+    expect(out).not.toBe(input)
+    expect(wrapSpawnPlanSandbox(input, ctx, 'runner-outer')[0]).toBe('/usr/bin/sandbox-exec')
+  })
+
+  test('child-only topology cannot bypass a non-Seatbelt provider', () => {
+    const ctx: SandboxCtx = {
+      ...CTX_BASE,
+      mode: 'enforce',
+      status: { mechanism: 'bwrap', available: true, detail: null },
+    }
+    expect(wrapSpawnPlanSandbox([...cmd], ctx, 'provider-child-only')[0]).toBe('bwrap')
   })
 
   test('bwrap: argv head is bwrap …binds… -- cmd', () => {

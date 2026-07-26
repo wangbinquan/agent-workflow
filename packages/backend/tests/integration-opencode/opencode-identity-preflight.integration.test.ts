@@ -30,9 +30,14 @@ import {
   materializeFffCapabilityProbe,
   runFffCapabilityProbe,
 } from '@/services/runtime/opencode/fffCapability'
+import {
+  renderNetlessBwrapArgs,
+  requireRootOwnedBwrap,
+  type NetlessSubprocessManifest,
+} from '@/services/runtime/opencode/sealedSubprocess'
 import { withRuntimeOpencodeSnapshot } from '@/services/runtime/opencode/runtimeBinary'
 import { removeSealedTree } from '@/services/runtime/opencode/sealedInputs'
-import { requireRootOwnedBwrap } from '@/services/runtime/opencode/sealedSubprocess'
+import { computeSandboxPolicy, renderBwrapArgs } from '@/services/sandbox/policy'
 import {
   verifyPinnedSkillInventory,
   verifySelectedProviderInventory,
@@ -50,6 +55,77 @@ const ORPHAN_WATCHDOG_SECONDS = 20
 const ORPHAN_STOP_POLL_MS = 20
 const SERVER_SUPERVISOR_WATCHDOG_SECONDS = 45
 const NANOSECONDS_PER_MILLISECOND = 1_000_000n
+
+async function verifyNestedBwrapTopology(bwrapPath: string): Promise<void> {
+  const canonicalTmp = await realpath(tmpdir())
+  const root = await mkdtemp(join(canonicalTmp, 'aw-rfc227-nested-bwrap-'))
+  const appHome = join(root, 'app')
+  const worktree = join(appHome, 'repos', 'project', 'worktrees', 'task')
+  const runDir = join(appHome, 'runs', 'task', 'run')
+  const scratch = join(runDir, 'scratch')
+  const privateHome = join(runDir, 'home')
+  const privateTmp = join(runDir, 'tmp')
+  const realHome = join(root, 'real-home')
+  const secretPath = join(appHome, 'secret.key')
+  const proofPath = join(worktree, 'nested-bwrap.txt')
+
+  try {
+    await Promise.all(
+      [worktree, scratch, privateHome, privateTmp, realHome].map((path) =>
+        mkdir(path, { recursive: true, mode: 0o700 }),
+      ),
+    )
+    await writeFile(secretPath, 'must-stay-hidden\n', { mode: 0o600 })
+    const outerPolicy = computeSandboxPolicy({
+      appHome,
+      taskWorktrees: [worktree],
+      runDir,
+    })
+    const innerManifest: NetlessSubprocessManifest = {
+      codec: 1,
+      mode: 'shell',
+      provider: { providerId: 'linux-bwrap', config: { bwrapPath } },
+      worktreePath: worktree,
+      scratchPath: scratch,
+      appHome,
+      realHome,
+      bindReadOnly: [],
+      env: {
+        HOME: privateHome,
+        TMPDIR: privateTmp,
+        PWD: worktree,
+        PATH: '/usr/bin:/bin',
+      },
+      command: ['/bin/sh'],
+    }
+    const assertion = 'test ! -e "$1" && printf "nested-bwrap-ok\\n" > "$2" && test -w "$3"'
+    const child = Bun.spawn({
+      cmd: [
+        bwrapPath,
+        ...renderBwrapArgs(outerPolicy, { appHome }),
+        '--',
+        bwrapPath,
+        ...renderNetlessBwrapArgs(innerManifest, [
+          '-c',
+          assertion,
+          'nested-bwrap',
+          secretPath,
+          proofPath,
+          scratch,
+        ]),
+      ],
+      stdout: 'pipe',
+      stderr: 'pipe',
+    })
+    const [code, stderr] = await Promise.all([child.exited, new Response(child.stderr).text()])
+    if (code !== 0) {
+      throw new Error(`real nested bwrap topology exited ${code}: ${stderr.slice(-4_096)}`)
+    }
+    expect(await Bun.file(proofPath).text()).toBe('nested-bwrap-ok\n')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+}
 
 const GROUP_OWNERSHIP_SUPERVISOR_SCRIPT = String.raw`
 import os
@@ -1146,6 +1222,7 @@ describe.skipIf(!RUN_INTEGRATION)('RFC-227 real-binary no-LLM execution identity
       await withRuntimeOpencodeSnapshot([OPENCODE_BIN], async (binaryPath) => {
         if (process.platform === 'linux') {
           const bwrapPath = await requireRootOwnedBwrap()
+          await verifyNestedBwrapTopology(bwrapPath)
           await verifyRealBwrapCancellation(bwrapPath)
           const capability = await materializeFffCapabilityProbe({
             probeRoot: fffProbeRoot,

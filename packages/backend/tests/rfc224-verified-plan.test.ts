@@ -93,7 +93,7 @@ function verifiedContext(input: {
   runRoot: string
   nodeRunId: string
   bash: 'allow' | 'deny'
-  mcp: Mcp
+  mcp?: Mcp
   nonceChar: string
   owner?: NonNullable<BusinessNodeSpawnContext['opencodeResumeOwner']>
 }): BusinessNodeSpawnContext {
@@ -102,7 +102,7 @@ function verifiedContext(input: {
     prompt: 'do stable work',
     injectedMemoryBlock: null,
     dependents: [],
-    mcps: [input.mcp],
+    mcps: input.mcp === undefined ? [] : [input.mcp],
     plugins: [],
     resolvedParamsByAgent: new Map([
       [
@@ -170,6 +170,21 @@ function activateVerifiedLinux(appHome: string): void {
   })
 }
 
+function activateVerifiedMac(appHome: string): void {
+  Object.defineProperty(process, 'platform', {
+    ...platformDescriptor,
+    value: 'darwin',
+  })
+  process.env.OPENCODE_AUTH_CONTENT = JSON.stringify({
+    openai: { type: 'api', key: 'test-only-key' },
+  })
+  setSandboxProvider({
+    mode: 'enforce',
+    status: { mechanism: 'seatbelt', available: true, detail: null },
+    appHome,
+  })
+}
+
 function ownerFromPlan(
   plan: Awaited<ReturnType<typeof buildVerifiedOpencodeBusinessPlan>>,
 ): NonNullable<BusinessNodeSpawnContext['opencodeResumeOwner']> {
@@ -190,6 +205,77 @@ function ownerFromPlan(
 }
 
 describe('RFC-224 verified business-plan owner barrier', () => {
+  test('macOS uses one child Seatbelt layer so Bash never nests sandbox-exec', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'rfc227-seatbelt-topology-'))
+    roots.push(root)
+    const appHome = join(root, 'app')
+    const worktreePath = join(root, 'worktree')
+    const executable = join(root, 'tools', 'server')
+    await mkdir(worktreePath, { recursive: true })
+    await mkdir(dirname(executable), { recursive: true })
+    await writeFile(executable, '#!/bin/sh\nexit 0\n', { mode: 0o500 })
+    await chmod(executable, 0o500)
+    activateVerifiedMac(appHome)
+
+    const plan = await buildVerifiedOpencodeBusinessPlan(
+      verifiedContext({
+        appHome,
+        worktreePath,
+        runRoot: join(appHome, 'runs', 'task-1', 'run-mac'),
+        nodeRunId: 'run-mac',
+        bash: 'allow',
+        mcp: localMcp({ executable }),
+        nonceChar: 'a',
+      }),
+      ['opencode'],
+      PLAN_DEPENDENCIES,
+    )
+
+    try {
+      expect(plan.sandboxTopology).toBe('provider-child-only')
+      expect(plan.diagnostics).toMatchObject({
+        containmentProviderId: 'macos-seatbelt',
+        runnerSandboxed: false,
+      })
+    } finally {
+      await plan.cleanup?.()
+      await removeHermeticOpencodeLayout(plan.sessionStore!.root)
+    }
+  })
+
+  test('macOS keeps the runner Seatbelt when no model-controlled child can spawn', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'rfc227-seatbelt-outer-topology-'))
+    roots.push(root)
+    const appHome = join(root, 'app')
+    const worktreePath = join(root, 'worktree')
+    await mkdir(worktreePath, { recursive: true })
+    activateVerifiedMac(appHome)
+
+    const plan = await buildVerifiedOpencodeBusinessPlan(
+      verifiedContext({
+        appHome,
+        worktreePath,
+        runRoot: join(appHome, 'runs', 'task-1', 'run-mac-no-child'),
+        nodeRunId: 'run-mac-no-child',
+        bash: 'deny',
+        nonceChar: 'b',
+      }),
+      ['opencode'],
+      PLAN_DEPENDENCIES,
+    )
+
+    try {
+      expect(plan.sandboxTopology).toBe('runner-outer')
+      expect(plan.diagnostics).toMatchObject({
+        containmentProviderId: 'macos-seatbelt',
+        runnerSandboxed: true,
+      })
+    } finally {
+      await plan.cleanup?.()
+      await removeHermeticOpencodeLayout(plan.sessionStore!.root)
+    }
+  })
+
   test('existing-owner identity drift fails before touching its store or run layout', async () => {
     const root = mkdtempSync(join(tmpdir(), 'rfc224-verified-plan-'))
     roots.push(root)
@@ -355,6 +441,11 @@ describe('RFC-224 verified business-plan owner barrier', () => {
         PLAN_DEPENDENCIES,
       )
       const owner = ownerFromPlan(fresh)
+      expect(fresh.sandboxTopology).toBe('runner-outer')
+      expect(fresh.diagnostics).toMatchObject({
+        containmentProviderId: 'linux-bwrap',
+        runnerSandboxed: true,
+      })
       const resumed = await buildVerifiedOpencodeBusinessPlan(
         verifiedContext({
           appHome,

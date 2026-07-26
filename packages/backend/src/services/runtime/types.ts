@@ -30,6 +30,7 @@ import type { LivePollOptions, LivePollerHandle } from '@/services/subagentLiveC
 // so a VALUE import here would close a module-init cycle. RuntimeProfile is the
 // RFC-113 resolved param set threaded through BusinessNodeSpawnContext.
 import type { RuntimeProfile } from '@/services/runtimeRegistry'
+import type { SpawnSandboxTopology } from '@/services/sandbox'
 
 export type RuntimeKind = 'opencode' | 'claude-code'
 
@@ -129,6 +130,8 @@ export interface SpawnPlan {
   env: Record<string, string>
   stdin?: { mode: 'ignore' } | { mode: 'pipe'; data: string }
   cleanup?: () => void | Promise<void>
+  /** Which process layer owns platform containment for this plan. */
+  sandboxTopology?: SpawnSandboxTopology
   /** RFC-224 immutable runtime artifacts overlaid read-only by RFC-205. */
   readOnlySubtrees?: readonly string[]
   /** Explicit capture locator; consumers must not reopen the user's global DB. */

@@ -6,17 +6,19 @@ before it corrupts the daemon's runtime path — a new event-shape, an envelope
 mangling, or a `--version` rename would silently break the platform if all
 our coverage used recorded fixtures.
 
-| File                                              | Cases | What it locks                                                                                                                                                                                   |
-| ------------------------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `opencode-identity-preflight.integration.test.ts` | 1     | Real-binary config/provider/agent/skill/root-session behavior; reported version is telemetry only. On Linux, also exercises real bwrap/FFF and freeze-lease TERM/KILL containment. No LLM call. |
-| `opencode-live.integration.test.ts`               | 5 + 2 | `--version` telemetry / event-kind shape / accumulated text / envelope round-trip / token accumulator. Plus 2 gate-self-tests.                                                                  |
+| File                                              | Cases | What it locks                                                                                                                                                                                                                           |
+| ------------------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `opencode-identity-preflight.integration.test.ts` | 1     | Real-binary config/provider/agent/skill/root-session behavior; reported version is telemetry only. On Linux, also exercises the production outer + child bwrap topology, real FFF, and freeze-lease TERM/KILL containment. No LLM call. |
+| `opencode-live.integration.test.ts`               | 5 + 2 | `--version` telemetry / event-kind shape / accumulated text / envelope round-trip / token accumulator. Plus 2 gate-self-tests.                                                                                                          |
 
 ## How the gate works
 
 The official no-LLM identity preflight runs whenever
 `RUN_OPENCODE_INTEGRATION=1`; it does not need credentials and never posts a
-prompt. On Linux, the same case also enters a real private PID namespace,
-launches a TERM-resistant setsid + double-fork descendant, and requires one
+prompt. On Linux, the same case first nests the production child bwrap renderer
+inside the production runner bwrap renderer, proves the child can write its
+worktree while the appHome secret stays masked, and then enters a real private
+PID namespace, launches a TERM-resistant setsid + double-fork descendant, and requires one
 nonce-bound `READY` → `ARMED` handshake. The Python anchor then SIGSTOPs the
 exact bwrap child, confirms the stop with `waitpid(WUNTRACED)` and unchanged
 PGID, and emits `FROZEN`. Only while that freeze lease is held does the host
