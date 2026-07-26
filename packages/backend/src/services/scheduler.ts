@@ -187,11 +187,10 @@ import { createLogger, type Logger } from '@/util/log'
 import { gitBlobHashes, gitChangedFiles, runGit, worktreeFilesChanged } from '@/util/git'
 import {
   completeHumanResolvedConflict,
-  // createNodeIso / snapshotNodeIsoFinal / mergeBackNodeIso remain imported for
-  // the WRAPPER iso path only (createOrRebuildWrapperIso / mergeBackWrapperIso —
-  // outside RFC-188's agent-site scope); every AGENT site goes through
-  // isolatedAgentRun.ts (source-lock: rfc188-assembly-single-source.test.ts).
-  createNodeIso,
+  // snapshotNodeIsoFinal / mergeBackNodeIso remain imported for the WRAPPER
+  // merge path only (mergeBackWrapperIso — outside RFC-188's agent-site
+  // scope). Wrapper CREATE shares createIsoUnderLock with every AGENT site so
+  // sibling `git worktree add` mutations cannot race in the common repository.
   discardNodeIso,
   type IsoHandle,
   type MergeBackConflict,
@@ -6274,12 +6273,19 @@ export async function createOrRebuildWrapperIso(
       state.writeSem,
     )
   }
-  const handle = await createNodeIso({
+  // Wrapper-private canonicals and ordinary sibling agent isos mutate the same
+  // repository's `.git/worktrees` registry. They MUST share the task write
+  // semaphore; otherwise a top-level wrapper and a slow sibling can overlap
+  // `git worktree add`, leaving a partially initialized registration whose
+  // `commondir` cannot be read. Keep only the short create/snapshot window
+  // locked — wrapper execution itself remains concurrent.
+  const handle = await createIsoUnderLock({
+    writeSem: state.writeSem,
     appHome: state.opts.appHome,
     taskId,
-    nodeRunId: wrapperRunId,
+    isoKeyRunId: wrapperRunId,
     canonRepos: state.repos,
-    forcedContainerPaths: await forcedPortPathsForTask(state.db, taskId),
+    db,
     log: state.log,
   })
   if (!handle.passthrough) await persistIsoBase(db, wrapperRunId, task.repoCount, handle)

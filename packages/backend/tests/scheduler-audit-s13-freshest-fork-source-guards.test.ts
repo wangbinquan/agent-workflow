@@ -117,7 +117,8 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
     // `await rollbackNodeRunWorktrees(...)` + in-process `lastFreshSnapshot` retry
     // machinery is GONE from the scheduler.
     expect(SCHEDULER_SRC.includes('discardNodeIso(')).toBe(true)
-    expect(SCHEDULER_SRC.includes('createNodeIso(')).toBe(true)
+    expect(SCHEDULER_SRC.includes('createIsoUnderLock(')).toBe(true)
+    expect(SCHEDULER_SRC.includes('createNodeIso(')).toBe(false)
     expect(SCHEDULER_SRC.includes('lastFreshSnapshot')).toBe(false)
     // The shared rollback authority is RETAINED for the RESUME path (D10
     // defense-in-depth) — it still consumes the per-repo map + empty-sha reset

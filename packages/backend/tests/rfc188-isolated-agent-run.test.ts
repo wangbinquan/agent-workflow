@@ -276,17 +276,19 @@ describe('RFC-188 D — 装配单源锁（表级 allowlist）', () => {
   )
   const count = (needle: string): number => src.split(needle).length - 1
 
-  test('裸 iso/merge 原语在 scheduler.ts 只剩 wrapper 路径各 1 处', () => {
-    // wrapper iso 生命周期（createOrRebuildWrapperIso/mergeBackWrapperIso）
-    // 在 RFC-188 范围外；任何第 2 处裸调用 = 新的手抄装配，打回原语。
-    expect(count('createNodeIso(')).toBe(1)
+  test('scheduler.ts 零裸 iso 创建；裸 merge 原语只剩 wrapper 路径各 1 处', () => {
+    // wrapper 新建也必须经过 createIsoUnderLock，否则与顶层 sibling 并发
+    // `git worktree add` 会竞争同一 `.git/worktrees` 注册表。wrapper merge
+    // 生命周期仍在 RFC-188 agent-site 范围外；任何第 2 处裸 merge = 手抄装配。
+    expect(count('createNodeIso(')).toBe(0)
     expect(count('mergeBackNodeIso(')).toBe(1)
     expect(count('snapshotNodeIsoFinal(')).toBe(1)
   })
 
-  test('五个 agent 站点走共享装配：createIsoUnderLock×5 + mergeBackAndSettle×5 + markMergeFailed×3', () => {
-    // 5 = workgroup hook / 主线首建 / 主线 fresh-session 重建 / shard / aggregator。
-    expect(count('createIsoUnderLock(')).toBe(5)
+  test('五个 agent 站点与 wrapper 创建走共享锁：createIsoUnderLock×6 + mergeBackAndSettle×5 + markMergeFailed×3', () => {
+    // 6 = workgroup hook / 主线首建 / 主线 fresh-session 重建 / shard /
+    // aggregator / wrapper-private canonical。
+    expect(count('createIsoUnderLock(')).toBe(6)
     // 5 = hook / 主线 §段③ / shard / aggregator / replayPendingMerges。
     expect(count('mergeBackAndSettle(')).toBe(5)
     // 3 = 主线 / shard / aggregator（hook 有意不打——留 pending-merge 走重放，

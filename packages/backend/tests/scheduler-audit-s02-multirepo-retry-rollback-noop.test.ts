@@ -336,10 +336,12 @@ describe('S-2 multi-repo in-process retry rollback rolls each sub-repo back (RFC
     // …RFC-130 SUPERSEDES the scheduler retry-rollback: the fresh-session retry no
     // longer rolls the canonical worktree back (it never wrote it) — it DISCARDS
     // the failed iso and re-branches a fresh one. So the scheduler's runOneNode
-    // path uses discardNodeIso + createNodeIso, NOT rollbackNodeRunWorktrees. The
-    // resume path (task.ts) keeps the rollback authority as defense-in-depth (D10).
+    // path uses discardNodeIso + createIsoUnderLock, NOT
+    // rollbackNodeRunWorktrees. The resume path (task.ts) keeps the rollback
+    // authority as defense-in-depth (D10).
     expect(schedulerSrc.includes('discardNodeIso(')).toBe(true)
-    expect(schedulerSrc.includes('createNodeIso(')).toBe(true)
+    expect(schedulerSrc.includes('createIsoUnderLock(')).toBe(true)
+    expect(schedulerSrc.includes('createNodeIso(')).toBe(false)
     expect(schedulerSrc.includes('await readSnapshotForLatestRun(')).toBe(false)
   })
 })

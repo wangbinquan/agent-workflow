@@ -42,6 +42,7 @@ import { transitionMergeState } from '../src/services/lifecycle'
 import { retryNode } from '../src/services/task'
 import { createLogger } from '../src/util/log'
 import { runGit } from '../src/util/git'
+import { Semaphore } from '../src/util/semaphore'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
@@ -343,6 +344,7 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
       ],
       opts: { appHome: h.appHome },
       log: createLogger('rfc144-test'),
+      writeSem: new Semaphore(1),
     } as unknown as Parameters<typeof createOrRebuildWrapperIso>[0]
   }
 
@@ -360,6 +362,23 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
     })
     return { taskId, runId }
   }
+
+  test('fresh wrapper 创建等待 task write semaphore，避免与 sibling worktree 注册竞争', async () => {
+    const { taskId, runId } = await seedWrapperTaskRow()
+    const state = fakeSchedulerState(taskId)
+    // 先占住任务写锁，再启动 wrapper 创建。正确接线会在
+    // createIsoUnderLock 排队；修复前的裸 createNodeIso 会绕过锁并完成。
+    const release = await state.writeSem.acquire()
+    const creation = createOrRebuildWrapperIso(state, runId, null)
+    for (let i = 0; i < 100 && state.writeSem.queueLength === 0; i += 1) {
+      await Bun.sleep(5)
+    }
+    const queuedWhileHeld = state.writeSem.queueLength
+    release()
+    const handle = await creation
+    expect(queuedWhileHeld).toBe(1)
+    expect(handle.passthrough).toBe(false)
+  }, 30000)
 
   test('merged 再入：弃旧 iso、从当前 canonical 重建全新 base（旧 base 合并会复活被删文件）', async () => {
     const { taskId, runId } = await seedWrapperTaskRow()
