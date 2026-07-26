@@ -219,6 +219,8 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
   it('runner 业务 spawn 走 driver.buildBusinessSpawn（不再直调两个 spawn 自由函数）', () => {
     const src = SRC('services/runner.ts')
     expect(src).toContain('driver.buildBusinessSpawn(')
+    expect(src).toContain('repoWorktreePaths:')
+    expect(src).toContain('opts.templateMeta.repos?.map((repo) => repo.worktreePath)')
     expect(src).not.toContain('buildOpencodeSpawn(')
     expect(src).not.toContain('buildClaudeSpawn(')
     expect(src).not.toContain('toClaudeMcpConfig')

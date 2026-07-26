@@ -42,6 +42,7 @@ import {
   verifyPinnedSkillInventory,
   verifySelectedProviderInventory,
 } from '@/services/runtime/opencode/verifiedLauncher'
+import { AW_INTERNAL_GIT_IDENTITY, runGit } from '@/util/git'
 
 const RUN_INTEGRATION = process.env.RUN_OPENCODE_INTEGRATION === '1'
 const OPENCODE_BIN = process.env.OPENCODE_BIN ?? 'opencode'
@@ -60,7 +61,8 @@ async function verifyNestedBwrapTopology(bwrapPath: string): Promise<void> {
   const canonicalTmp = await realpath(tmpdir())
   const root = await mkdtemp(join(canonicalTmp, 'aw-rfc227-nested-bwrap-'))
   const appHome = join(root, 'app')
-  const worktree = join(appHome, 'repos', 'project', 'worktrees', 'task')
+  const scratchRepo = join(appHome, 'scratch', 'task')
+  const worktree = join(appHome, 'iso', 'task', 'run')
   const runDir = join(appHome, 'runs', 'task', 'run')
   const scratch = join(runDir, 'scratch')
   const privateHome = join(runDir, 'home')
@@ -71,14 +73,28 @@ async function verifyNestedBwrapTopology(bwrapPath: string): Promise<void> {
 
   try {
     await Promise.all(
-      [worktree, scratch, privateHome, privateTmp, realHome].map((path) =>
+      [scratchRepo, scratch, privateHome, privateTmp, realHome].map((path) =>
         mkdir(path, { recursive: true, mode: 0o700 }),
       ),
     )
+    expect((await runGit(scratchRepo, ['init', '-q', '-b', 'main'])).exitCode).toBe(0)
+    expect(
+      (
+        await runGit(scratchRepo, ['commit', '-q', '--allow-empty', '-m', 'scratch root'], {
+          env: AW_INTERNAL_GIT_IDENTITY,
+        })
+      ).exitCode,
+    ).toBe(0)
+    expect(
+      (await runGit(scratchRepo, ['worktree', 'add', '-q', '--detach', worktree, 'HEAD'])).exitCode,
+    ).toBe(0)
+    const gitCommonDir = await realpath(join(scratchRepo, '.git'))
     await writeFile(secretPath, 'must-stay-hidden\n', { mode: 0o600 })
     const outerPolicy = computeSandboxPolicy({
       appHome,
-      taskWorktrees: [worktree],
+      // Mirrors buildRunSandboxCtx for scratch tasks: the outer runner admits
+      // the exact common dir, then the inner model-child bwrap must preserve it.
+      taskWorktrees: [worktree, gitCommonDir],
       runDir,
     })
     const innerManifest: NetlessSubprocessManifest = {
@@ -89,6 +105,7 @@ async function verifyNestedBwrapTopology(bwrapPath: string): Promise<void> {
       scratchPath: scratch,
       appHome,
       realHome,
+      gitCommonDirs: [gitCommonDir],
       bindReadOnly: [],
       env: {
         HOME: privateHome,
@@ -98,7 +115,8 @@ async function verifyNestedBwrapTopology(bwrapPath: string): Promise<void> {
       },
       command: ['/bin/sh'],
     }
-    const assertion = 'test ! -e "$1" && printf "nested-bwrap-ok\\n" > "$2" && test -w "$3"'
+    const assertion =
+      'test ! -e "$1" && printf "nested-bwrap-ok\\n" > "$2" && test -w "$3" && git -C "$4" add nested-bwrap.txt'
     const child = Bun.spawn({
       cmd: [
         bwrapPath,
@@ -112,6 +130,7 @@ async function verifyNestedBwrapTopology(bwrapPath: string): Promise<void> {
           secretPath,
           proofPath,
           scratch,
+          worktree,
         ]),
       ],
       stdout: 'pipe',

@@ -89,6 +89,7 @@ function manifest(patch: Partial<NetlessSubprocessManifest> = {}): NetlessSubpro
     scratchPath: '/srv/agent-workflow/runs/run-a/scratch',
     appHome: '/srv/agent-workflow',
     realHome: '/home/operator',
+    gitCommonDirs: ['/srv/agent-workflow/repos/project.git'],
     bindReadOnly: [
       '/srv/agent-workflow/runs/run-a/seal/skills/skill-a',
       '/home/operator/bin/mcp-a',
@@ -769,7 +770,7 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
     expect(signals).toEqual(['SIGTERM'])
   })
 
-  test('masks secret roots, unshares network/PIDs, and rebinds only the exact MCP executable', () => {
+  test('masks secret roots and rebinds only exact Git metadata and MCP executable paths', () => {
     const args = renderNetlessBwrapArgs(manifest(), [])
     expect(args).toContain('--unshare-net')
     expect(args).toContain('--unshare-pid')
@@ -787,10 +788,12 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
       '/home/operator/bin/mcp-a',
     ])
     expect(mounts).not.toContainEqual(['--ro-bind', '/home/operator/bin', '/home/operator/bin'])
+    expect(args).toContain('/srv/agent-workflow/repos/project.git')
+    expect(args).not.toContain('/srv/agent-workflow/secret.key')
     expect(args).toContain('/srv/agent-workflow/runs/run-a/seal/skills/skill-a')
   })
 
-  test('rejects a bind that can replace a secret mask or writable root', () => {
+  test('rejects a read-only bind that can replace a secret mask or writable root', () => {
     for (const bindReadOnly of [
       ['/home'],
       ['/home/operator'],
@@ -800,6 +803,25 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
       ['/srv/agent-workflow/runs/run-a'],
     ]) {
       expect(() => renderNetlessBwrapArgs(manifest({ bindReadOnly }), [])).toThrow(
+        'execution-identity-store-unsafe',
+      )
+    }
+  })
+
+  test('rejects duplicate or broad Git common-dir projections', () => {
+    expect(() =>
+      renderNetlessBwrapArgs(
+        manifest({
+          gitCommonDirs: [
+            '/srv/agent-workflow/repos/project.git',
+            '/srv/agent-workflow/repos/project.git',
+          ],
+        }),
+        [],
+      ),
+    ).toThrow('execution-identity-store-unsafe')
+    for (const gitCommonDirs of [['/'], ['/home/operator'], ['/srv/agent-workflow']]) {
+      expect(() => renderNetlessBwrapArgs(manifest({ gitCommonDirs }), [])).toThrow(
         'execution-identity-store-unsafe',
       )
     }
@@ -817,6 +839,9 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
     expect(profile).toContain('(deny network*)')
     expect(profile).toContain('(deny file-read* file-write* (subpath "/home/operator"))')
     expect(profile).toContain('(allow file-read* file-write* (subpath "/home/operator/worktree"))')
+    expect(profile).toContain(
+      '(allow file-read* file-write* (subpath "/srv/agent-workflow/repos/project.git"))',
+    )
     expect(profile).toContain('(deny file-write* (subpath "/home/operator/bin/mcp-a"))')
   })
 

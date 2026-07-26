@@ -139,6 +139,7 @@ describe('RFC-227 containment admission truth table', () => {
         scratchPath,
         appHome: join(root, 'app-home'),
         realHome: join(root, 'real-home'),
+        gitCommonDirs: [],
         bindReadOnly: [],
         env: {},
         command: ['provider-owned'],

@@ -50,7 +50,8 @@ describe('RFC-227 REAL macOS Seatbelt provider (gated)', () => {
       roots.push(root)
       const appHome = join(root, 'app-home')
       const realHome = join(root, 'real-home')
-      const worktreePath = join(appHome, 'worktrees', 'task')
+      const scratchRepo = join(appHome, 'scratch', 'task')
+      const worktreePath = join(appHome, 'iso', 'task', 'run')
       const scratchPath = join(appHome, 'runs', 'task', 'scratch')
       const privateHome = join(appHome, 'runs', 'task', 'home')
       const privateTmp = join(appHome, 'runs', 'task', 'tmp')
@@ -58,7 +59,8 @@ describe('RFC-227 REAL macOS Seatbelt provider (gated)', () => {
       for (const path of [
         appHome,
         realHome,
-        worktreePath,
+        scratchRepo,
+        join(worktreePath, '..'),
         scratchPath,
         privateHome,
         privateTmp,
@@ -66,11 +68,46 @@ describe('RFC-227 REAL macOS Seatbelt provider (gated)', () => {
       ]) {
         mkdirSync(path, { recursive: true })
       }
+      expect(
+        await runCommand(['/usr/bin/git', '-C', scratchRepo, 'init', '-q', '-b', 'main']),
+      ).toBe(0)
+      expect(
+        await runCommand([
+          '/usr/bin/git',
+          '-C',
+          scratchRepo,
+          '-c',
+          'user.name=agent-workflow',
+          '-c',
+          'user.email=agent-workflow@localhost',
+          'commit',
+          '-q',
+          '--allow-empty',
+          '-m',
+          'scratch root',
+        ]),
+      ).toBe(0)
+      expect(
+        await runCommand([
+          '/usr/bin/git',
+          '-C',
+          scratchRepo,
+          'worktree',
+          'add',
+          '-q',
+          '--detach',
+          worktreePath,
+          'HEAD',
+        ]),
+      ).toBe(0)
+      const gitCommonDir = realpathSync(join(scratchRepo, '.git'))
 
       const secretPath = join(appHome, 'secret.key')
+      const canonicalSecretPath = join(scratchRepo, 'canonical-only.txt')
       const worktreeOutput = join(worktreePath, 'output.txt')
       const sealedArtifact = join(sealPath, 'opencode')
       writeFileSync(secretPath, 'TOP-SECRET')
+      writeFileSync(canonicalSecretPath, 'CANONICAL-SECRET')
       writeFileSync(sealedArtifact, 'SEALED')
 
       const manifest = NetlessSubprocessManifestSchema.parse({
@@ -84,6 +121,7 @@ describe('RFC-227 REAL macOS Seatbelt provider (gated)', () => {
         scratchPath,
         appHome,
         realHome,
+        gitCommonDirs: [gitCommonDir],
         bindReadOnly: [sealPath],
         env: {
           HOME: privateHome,
@@ -102,6 +140,7 @@ describe('RFC-227 REAL macOS Seatbelt provider (gated)', () => {
       }
 
       expect(await runSeatbelt(profile, ['/bin/cat', secretPath])).not.toBe(0)
+      expect(await runSeatbelt(profile, ['/bin/cat', canonicalSecretPath])).not.toBe(0)
       const childSeatbeltCommand = [
         '/usr/bin/sandbox-exec',
         '-p',
@@ -120,6 +159,12 @@ describe('RFC-227 REAL macOS Seatbelt provider (gated)', () => {
       expect(spawnCommand.filter((entry) => entry === '/usr/bin/sandbox-exec')).toHaveLength(1)
       expect(await runCommand(spawnCommand)).toBe(0)
       expect(readFileSync(worktreeOutput, 'utf8')).toBe('WORKTREE_OK')
+      // `git add` writes the linked worktree index under the external common
+      // dir. This is the production failure mode: ordinary file writes worked
+      // while every Git command died behind the child-only Seatbelt mask.
+      expect(
+        await runSeatbelt(profile, ['/usr/bin/git', '-C', worktreePath, 'add', 'output.txt']),
+      ).toBe(0)
       expect(
         await runSeatbelt(profile, [
           '/bin/sh',

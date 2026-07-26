@@ -47,6 +47,13 @@ export const NetlessSubprocessManifestSchema = z
     scratchPath: AbsolutePathSchema,
     appHome: AbsolutePathSchema,
     realHome: AbsolutePathSchema,
+    /**
+     * Exact Git common directories resolved and canonicalized by the daemon.
+     * A linked worktree's in-worktree `.git` file points here; without this
+     * projection the appHome/realHome masks make every child `git` command
+     * fail even though the workspace itself remains writable.
+     */
+    gitCommonDirs: z.array(AbsolutePathSchema).max(64),
     bindReadOnly: z.array(AbsolutePathSchema).max(256),
     env: z.record(z.string()),
     command: z.array(z.string()).min(1).max(256),
@@ -752,6 +759,41 @@ function parentDirs(maskRoot: string, target: string): string[] {
   return result.reverse()
 }
 
+function netlessWritableSubtrees(
+  parsed: NetlessSubprocessManifest,
+  masks: readonly string[],
+): string[] {
+  const writable = [
+    parsed.worktreePath,
+    parsed.scratchPath,
+    absoluteEnvPath(parsed, 'HOME'),
+    absoluteEnvPath(parsed, 'TMPDIR'),
+    ...parsed.gitCommonDirs,
+  ]
+  if (new Set(parsed.gitCommonDirs).size !== parsed.gitCommonDirs.length) {
+    return executionIdentityFailure('execution-identity-store-unsafe')
+  }
+  for (const target of [...writable, ...parsed.bindReadOnly]) {
+    if (
+      target === '/' ||
+      target.includes('\0') ||
+      // A later bind/allow of an ancestor would replace a secret mask and
+      // expose that whole tree. Descendants are the intended exact allow-back.
+      masks.some((mask) => contained(target, mask))
+    ) {
+      return executionIdentityFailure('execution-identity-store-unsafe')
+    }
+  }
+  for (const target of parsed.bindReadOnly) {
+    // RO overlays are applied after RW allow-backs. Never let a broad
+    // read-only target replace a writable root; an exact child remains valid.
+    if (writable.some((root) => contained(target, root))) {
+      return executionIdentityFailure('execution-identity-store-unsafe')
+    }
+  }
+  return [...new Set(writable)]
+}
+
 export function renderNetlessBwrapArgs(
   manifest: NetlessSubprocessManifest,
   passthroughArgs: readonly string[],
@@ -761,29 +803,7 @@ export function renderNetlessBwrapArgs(
     return executionIdentityFailure('execution-identity-mismatch')
   }
   const masks = uniqueMaskRoots([parsed.realHome, parsed.appHome, '/tmp', '/var/tmp'])
-  const writable = [
-    parsed.worktreePath,
-    parsed.scratchPath,
-    absoluteEnvPath(parsed, 'HOME'),
-    absoluteEnvPath(parsed, 'TMPDIR'),
-  ]
-  for (const target of [...writable, ...parsed.bindReadOnly]) {
-    // A later bind of an ancestor would hide an earlier tmpfs mask and
-    // re-expose the secret tree wholesale. Descendants are intentional:
-    // parentDirs recreates only their path and the final bind exposes exactly
-    // that file/tree (for example one frozen skill or one MCP executable).
-    if (masks.some((mask) => contained(target, mask))) {
-      return executionIdentityFailure('execution-identity-store-unsafe')
-    }
-  }
-  for (const target of parsed.bindReadOnly) {
-    // RO overlays are applied after RW worktree/scratch allow-backs. Never let
-    // a broad read-only target replace either writable root; an exact child
-    // file remains admissible.
-    if (writable.some((root) => contained(target, root))) {
-      return executionIdentityFailure('execution-identity-store-unsafe')
-    }
-  }
+  const writable = netlessWritableSubtrees(parsed, masks)
   const args = [
     '--die-with-parent',
     '--unshare-net',
@@ -870,17 +890,7 @@ export function renderNetlessSeatbeltProfile(manifest: NetlessSubprocessManifest
     '/var/tmp',
     '/private/var/tmp',
   ])
-  const writable = [
-    parsed.worktreePath,
-    parsed.scratchPath,
-    absoluteEnvPath(parsed, 'HOME'),
-    absoluteEnvPath(parsed, 'TMPDIR'),
-  ]
-  for (const target of [...writable, ...parsed.bindReadOnly]) {
-    if (target === '/' || target.includes('\0')) {
-      return executionIdentityFailure('execution-identity-store-unsafe')
-    }
-  }
+  const writable = netlessWritableSubtrees(parsed, masks)
 
   const lines = ['(version 1)', '(allow default)', '(deny network*)']
   for (const mask of masks) {

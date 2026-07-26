@@ -1129,6 +1129,9 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       // top-level field. Exactly one is set per dispatch by the scheduler.
       resumeSessionId: effectiveResumeSessionId,
       worktreePath: opts.worktreePath,
+      repoWorktreePaths: opts.templateMeta.repos?.map((repo) => repo.worktreePath) ?? [
+        opts.worktreePath,
+      ],
       runRoot,
       configDir,
       gitUserName: opts.gitUserName,

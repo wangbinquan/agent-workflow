@@ -328,6 +328,13 @@ export interface BusinessNodeSpawnContext {
   /** Subprocess cwd = task worktree. */
   worktreePath: string
   /**
+   * Runner-owned repository worktrees for this node (single repo = one entry).
+   * The verified OpenCode driver resolves their exact Git common directories
+   * before sealing model-child sandbox manifests. This is deliberately raw
+   * scheduler topology, never a model/config-authored writable allowlist.
+   */
+  repoWorktreePaths?: readonly string[]
+  /**
    * Per-run root (`<appHome>/runs/<taskId>/<nodeRunId>`). The config dir is
    * `<runRoot>/<configDir.name>`; inventory out + claude's `system.md` stay
    * directly under runRoot (NOT inside the config dir — leaf renames must not

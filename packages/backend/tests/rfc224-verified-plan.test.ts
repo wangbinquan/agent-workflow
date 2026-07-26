@@ -24,6 +24,7 @@ import {
 } from '@/services/runtime/opencode/directApiSchemas'
 import { buildVerifiedOpencodeBusinessPlan } from '@/services/runtime/opencode/verifiedPlan'
 import type { VerifiedOpencodePlanDependencies } from '@/services/runtime/opencode/verifiedPlanCore'
+import { AW_INTERNAL_GIT_IDENTITY, runGit } from '@/util/git'
 
 const roots: string[] = []
 const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')!
@@ -96,6 +97,7 @@ function verifiedContext(input: {
   mcp?: Mcp
   nonceChar: string
   owner?: NonNullable<BusinessNodeSpawnContext['opencodeResumeOwner']>
+  repoWorktreePaths?: readonly string[]
 }): BusinessNodeSpawnContext {
   return {
     agent: agentWithBash(input.bash),
@@ -124,6 +126,9 @@ function verifiedContext(input: {
           opencodeResumeOwner: input.owner,
         }),
     worktreePath: input.worktreePath,
+    ...(input.repoWorktreePaths === undefined
+      ? {}
+      : { repoWorktreePaths: input.repoWorktreePaths }),
     runRoot: input.runRoot,
     configDir: DEFAULT_CONFIG_DIR_PROFILE.opencode,
     wantsInventory: false,
@@ -205,6 +210,102 @@ function ownerFromPlan(
 }
 
 describe('RFC-224 verified business-plan owner barrier', () => {
+  test('projects only a linked worktree Git common dir into shell and local MCP children', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'rfc227-linked-git-projection-'))
+    roots.push(root)
+    const appHome = join(root, 'app')
+    const scratchRepo = join(appHome, 'scratch', 'task-1')
+    const worktreePath = join(appHome, 'iso', 'task-1', 'run-linked')
+    const runRoot = join(appHome, 'runs', 'task-1', 'run-linked')
+    const executable = join(root, 'tools', 'server')
+    await mkdir(scratchRepo, { recursive: true })
+    await mkdir(dirname(worktreePath), { recursive: true })
+    await mkdir(dirname(executable), { recursive: true })
+    await writeFile(executable, '#!/bin/sh\nexit 0\n', { mode: 0o500 })
+    await chmod(executable, 0o500)
+    expect((await runGit(scratchRepo, ['init', '-q', '-b', 'main'])).exitCode).toBe(0)
+    await writeFile(join(scratchRepo, 'README.md'), 'scratch fixture\n')
+    expect((await runGit(scratchRepo, ['add', 'README.md'])).exitCode).toBe(0)
+    expect(
+      (
+        await runGit(scratchRepo, ['commit', '-q', '-m', 'fixture'], {
+          env: AW_INTERNAL_GIT_IDENTITY,
+        })
+      ).exitCode,
+    ).toBe(0)
+    expect(
+      (await runGit(scratchRepo, ['worktree', 'add', '-q', '--detach', worktreePath, 'HEAD']))
+        .exitCode,
+    ).toBe(0)
+    const commonDir = await realpath(join(scratchRepo, '.git'))
+    activateVerifiedMac(appHome)
+
+    const plan = await buildVerifiedOpencodeBusinessPlan(
+      verifiedContext({
+        appHome,
+        worktreePath,
+        repoWorktreePaths: [worktreePath],
+        runRoot,
+        nodeRunId: 'run-linked',
+        bash: 'allow',
+        mcp: localMcp({ executable }),
+        nonceChar: 'c',
+      }),
+      ['opencode'],
+      PLAN_DEPENDENCIES,
+    )
+
+    try {
+      const sealRoot = join(runRoot, 'opencode-identity-seal')
+      const shellManifest = JSON.parse(
+        await readFile(join(sealRoot, 'shell', 'netless.json'), 'utf8'),
+      ) as { gitCommonDirs: string[] }
+      const [mcpIdentity] = await readdir(join(sealRoot, 'mcp'))
+      const mcpManifest = JSON.parse(
+        await readFile(join(sealRoot, 'mcp', mcpIdentity!, 'netless.json'), 'utf8'),
+      ) as { gitCommonDirs: string[] }
+
+      expect(shellManifest.gitCommonDirs).toEqual([commonDir])
+      expect(mcpManifest.gitCommonDirs).toEqual([commonDir])
+      expect(shellManifest.gitCommonDirs).not.toContain(scratchRepo)
+      expect(plan.sandboxTopology).toBe('provider-child-only')
+    } finally {
+      await plan.cleanup?.()
+      await removeHermeticOpencodeLayout(plan.sessionStore!.root)
+    }
+  })
+
+  test('rejects a writable .git pointer redirected to an unrelated valid repository', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'rfc227-linked-git-redirection-'))
+    roots.push(root)
+    const appHome = join(root, 'app')
+    const worktreePath = join(root, 'redirected-worktree')
+    const unrelatedRepo = join(root, 'unrelated-repo')
+    await mkdir(worktreePath, { recursive: true })
+    await mkdir(unrelatedRepo, { recursive: true })
+    expect((await runGit(unrelatedRepo, ['init', '-q', '-b', 'main'])).exitCode).toBe(0)
+    await writeFile(join(worktreePath, '.git'), `gitdir: ${join(unrelatedRepo, '.git')}\n`)
+    activateVerifiedMac(appHome)
+
+    await expect(
+      buildVerifiedOpencodeBusinessPlan(
+        verifiedContext({
+          appHome,
+          worktreePath,
+          repoWorktreePaths: [worktreePath],
+          runRoot: join(appHome, 'runs', 'task-1', 'run-redirected'),
+          nodeRunId: 'run-redirected',
+          bash: 'allow',
+          nonceChar: 'd',
+        }),
+        ['opencode'],
+        PLAN_DEPENDENCIES,
+      ),
+    ).rejects.toMatchObject({
+      code: 'execution-identity-store-unsafe',
+    })
+  })
+
   test('macOS uses one child Seatbelt layer so Bash never nests sandbox-exec', async () => {
     const root = mkdtempSync(join(tmpdir(), 'rfc227-seatbelt-topology-'))
     roots.push(root)
