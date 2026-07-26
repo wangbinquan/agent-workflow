@@ -194,6 +194,18 @@ const CLARIFY_BODY = JSON.stringify({
   ],
 })
 
+const SECOND_CLARIFY_BODY = JSON.stringify({
+  questions: [
+    {
+      id: 'q2',
+      title: 'Which queue?',
+      kind: 'single',
+      recommended: true,
+      options: ['Redis', 'NATS'],
+    },
+  ],
+})
+
 describe('RFC-026 scheduler clarify inline-mode', () => {
   let h: Harness
   beforeEach(async () => {
@@ -324,6 +336,108 @@ describe('RFC-026 scheduler clarify inline-mode', () => {
     expect(infoEvents.length).toBe(1)
     expect(infoEvents[0]!.payload).toContain('clarify-session-resumed')
     expect(infoEvents[0]!.payload).toContain('opc_R0')
+  })
+
+  test('inline multi-round prompts carry only the new Q&A delta already absent from the resumed session', async () => {
+    const agentId = await seedAgent(h.db, 'designer')
+    const { taskId } = await seedWorkflowAndTask(h, makeDef(agentId, { sessionMode: 'inline' }))
+
+    await withEnv(
+      {
+        MOCK_OPENCODE_CLARIFY_BODY: CLARIFY_BODY,
+        MOCK_OPENCODE_EMIT_SESSION_ID: 'opc_chain',
+        MOCK_OPENCODE_CAPTURE_ARGV_TO: h.argvCapturePath,
+      },
+      () =>
+        runTask({
+          taskId,
+          db: h.db,
+          appHome: h.appHome,
+          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        }),
+    )
+    const firstRound = (
+      await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
+    ).find((round) => round.iteration === 0)
+    expect(firstRound).toBeDefined()
+    await autoDispatchClarifyRound({
+      db: h.db,
+      originNodeRunId: firstRound!.intermediaryNodeRunId,
+      directive: 'continue',
+      answers: [
+        {
+          questionId: 'q1',
+          selectedOptionIndices: [0],
+          selectedOptionLabels: [],
+          customText: 'FIRST-INLINE-ANSWER',
+        },
+      ],
+      actor,
+    })
+
+    await reenterScheduler(h.db, taskId)
+    await withEnv(
+      {
+        MOCK_OPENCODE_CLARIFY_BODY: SECOND_CLARIFY_BODY,
+        MOCK_OPENCODE_EMIT_SESSION_ID: 'opc_chain',
+        MOCK_OPENCODE_CAPTURE_ARGV_TO: h.argvCapturePath,
+      },
+      () =>
+        runTask({
+          taskId,
+          db: h.db,
+          appHome: h.appHome,
+          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        }),
+    )
+    const secondRound = (
+      await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
+    ).find((round) => round.iteration === 1)
+    expect(secondRound).toBeDefined()
+    await autoDispatchClarifyRound({
+      db: h.db,
+      originNodeRunId: secondRound!.intermediaryNodeRunId,
+      directive: 'stop',
+      answers: [
+        {
+          questionId: 'q2',
+          selectedOptionIndices: [1],
+          selectedOptionLabels: [],
+          customText: 'SECOND-INLINE-ANSWER',
+        },
+      ],
+      actor,
+    })
+
+    await reenterScheduler(h.db, taskId)
+    await withEnv(
+      {
+        MOCK_OPENCODE_OUTPUTS: JSON.stringify({ design: 'done' }),
+        MOCK_OPENCODE_EMIT_SESSION_ID: 'opc_chain',
+        MOCK_OPENCODE_CAPTURE_ARGV_TO: h.argvCapturePath,
+      },
+      () =>
+        runTask({
+          taskId,
+          db: h.db,
+          appHome: h.appHome,
+          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        }),
+    )
+
+    const designerRuns = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))
+      .filter((run) => run.nodeId === 'd')
+      .sort((a, b) => (a.id < b.id ? -1 : 1))
+    expect(designerRuns).toHaveLength(3)
+    const firstResumePrompt = designerRuns[1]?.promptText ?? ''
+    const secondResumePrompt = designerRuns[2]?.promptText ?? ''
+    expect(firstResumePrompt).toContain('FIRST-INLINE-ANSWER')
+    expect(firstResumePrompt).not.toContain('SECOND-INLINE-ANSWER')
+    expect(secondResumePrompt).toContain('SECOND-INLINE-ANSWER')
+    expect(secondResumePrompt).not.toContain('FIRST-INLINE-ANSWER')
+    expect(
+      readCapturedArgvLines(h.argvCapturePath).filter((line) => line.argv.includes('--session')),
+    ).toHaveLength(2)
   })
 
   test('isolated mode (default) never passes --session — RFC-023 byte-for-byte path preserved', async () => {

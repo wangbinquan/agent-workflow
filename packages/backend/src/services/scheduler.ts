@@ -1321,8 +1321,9 @@ export function decideEnvelopeFollowup(prev: PreviousAttemptShape): EnvelopeFoll
 
 /**
  * RFC-224: a permanent execution-identity failure cannot be repaired by
- * replaying the same frozen inputs. Keep this predicate exported and pure so
- * the scheduler loop's retry-consumption contract has a direct unit oracle.
+ * replaying the same frozen inputs. A closed verified stream is the deliberate
+ * transient exception. Keep this predicate exported and pure so the scheduler
+ * loop's retry-consumption contract has a direct unit oracle.
  */
 export function shouldRetryNodeFailure(failureCode: FailureCode | null | undefined): boolean {
   return !isPermanentRuntimeFailure(failureCode)
@@ -3494,6 +3495,11 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
           dispatchedRunId: nodeRunId,
           iteration,
           envelopeNonce,
+          // RFC-026: an inline resume is an incremental message. Entries
+          // bound to earlier clarify runs already live in that OpenCode
+          // transcript; inject only the unbound/current-run delta. Isolated
+          // and fallback runs still receive the complete un-aged queue.
+          currentRunOnly: resumeDecision.inlineMode,
         })
         // RFC-141: the RFC-120 §18 pure-override handoff suppression (`suppressPriorOutput`) is
         // GONE by user ruling — the reassigned Q&A rides the flat block below, and the prior-output
@@ -3506,8 +3512,8 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
                 flatBlock: clarifyQueue.block,
                 iteration: String(clarifyGeneration),
                 remaining: computeRemaining(definition, node.id, clarifyGeneration),
-                // Inline session resume still suppresses input re-injection + swaps the trailing
-                // reminder; the flat block itself is round-agnostic (RFC-131 aging keeps it small).
+                // Inline session resume suppresses input re-injection, swaps the trailing
+                // reminder, and carries only the queue delta not already in the transcript.
                 ...(resumeDecision.inlineMode ? { mode: 'inline' as const } : {}),
               }
         // effectiveHasClarifyChannel is the "mandatory ask-back is ACTIVE" signal
@@ -5131,6 +5137,11 @@ interface DispatchShardArgs {
    * its value hash matches). See runFanoutWrapperNode's gate block.
    */
   reuseDisabled: boolean
+  /**
+   * Internal process-retry attempt. When present, dispatch must mint a fresh
+   * child row instead of replaying/resetting the failed same-generation row.
+   */
+  processRetryIndex?: number
   log: Logger
 }
 
@@ -5139,6 +5150,11 @@ interface DispatchShardResult {
   shardKey: string
   outputs: Record<string, string>
   message: string
+  /** Present only when the failed attempt may consume process-retry budget. */
+  retry?: {
+    retryIndex: number
+    failureCode: FailureCode | null
+  }
 }
 
 /**
@@ -5151,14 +5167,35 @@ interface DispatchShardResult {
  *     scheduler's runOneNode single-agent branch; bringing that whole branch
  *     in here would duplicate ~500 lines. PR-D2's per-shard review (D.T4)
  *     and per-shard clarify (D.T5) will add the corresponding hand-offs.
- *   - No retry / envelope follow-up. The fanout wrapper's failure semantics
- *     are FAIL-ALL-AFTER-JOIN (RFC-094 / audit S-18): every shard runs to
- *     completion, then ANY failed shard fails the whole wrapper and skips
- *     aggregation — it is not fail-fast (siblings are not cancelled), and it
- *     is not partial-tolerant either (design.md §6.3; the errors-port partial
- *     semantics are deferred to WP-6b). Locked by scheduler-audit-s18.
+ *   - No clarify / review channel. Process failures consume the same global
+ *     retry budget as a top-level agent node; envelope follow-up remains a
+ *     top-level-only optimization because fanout retries use fresh sessions.
+ *     After retries, the wrapper keeps FAIL-ALL-AFTER-JOIN semantics
+ *     (RFC-094 / audit S-18): every shard runs to completion, then ANY failed
+ *     shard fails the whole wrapper and skips aggregation.
  */
 async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchShardResult> {
+  const maxRetries = args.state.opts.defaultNodeRetries ?? DEFAULT_PROTOCOL_RETRY_BUDGET
+  let attemptArgs = args
+  for (let retriesUsed = 0; ; retriesUsed++) {
+    const result = await dispatchFanoutShardAttempt(attemptArgs)
+    if (
+      result.kind !== 'failed' ||
+      result.retry === undefined ||
+      retriesUsed >= maxRetries ||
+      !shouldRetryNodeFailure(result.retry.failureCode)
+    ) {
+      return result
+    }
+    attemptArgs = {
+      ...args,
+      reuseDisabled: true,
+      processRetryIndex: result.retry.retryIndex + 1,
+    }
+  }
+}
+
+async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<DispatchShardResult> {
   const {
     state,
     wrapperRunId,
@@ -5213,10 +5250,13 @@ async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchSha
       )
   ).filter((r) => (r.shardKey ?? null) === rowShardKey)
   const freshest = pickFreshestRun(candidates, { topLevelOnly: false })
-  const reusable = args.reuseDisabled
-    ? undefined
-    : pickReusableShardRun(candidates, { shardKey: rowShardKey, valueHash })
+  const forcedProcessRetry = args.processRetryIndex !== undefined
+  const reusable =
+    args.reuseDisabled || forcedProcessRetry
+      ? undefined
+      : pickReusableShardRun(candidates, { shardKey: rowShardKey, valueHash })
   let shardRunId: string
+  let shardRetryIndex: number
   // RFC-130 §8.3 D9 (T14): when this dispatch RE-RUNS a shard whose prior attempt's
   // delta is already merged into canon, undo that prior delta INSIDE the fresh iso
   // (below, after createNodeIso, before the agent) so the rerun's output REPLACES the
@@ -5246,7 +5286,12 @@ async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchSha
     }
     if (Object.keys(priorNode).length > 0) priorShardUndo = { base: priorBase, node: priorNode }
   }
-  if (freshest !== undefined && reusable !== undefined && reusable.id === freshest.id) {
+  if (
+    !forcedProcessRetry &&
+    freshest !== undefined &&
+    reusable !== undefined &&
+    reusable.id === freshest.id
+  ) {
     // Branch 1 — replay. The `reusable.id === freshest.id` guard refuses a
     // done row that has been SUPERSEDED by a fresher attempt of any status
     // (e.g. a user-targeted shard retry placeholder): replaying it would undo
@@ -5261,6 +5306,7 @@ async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchSha
     return { kind: 'ok', shardKey, outputs, message: '' }
   }
   if (
+    !forcedProcessRetry &&
     freshest !== undefined &&
     freshest.status !== 'done' &&
     freshest.parentNodeRunId === wrapperRunId
@@ -5280,6 +5326,7 @@ async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchSha
     // The re-run consumes the CURRENT shard value — refresh the stored hash
     // so future reuse decisions compare against what actually ran.
     await db.update(nodeRuns).set({ shardValueHash: valueHash }).where(eq(nodeRuns.id, shardRunId))
+    shardRetryIndex = freshest.retryIndex
   } else {
     // Branch 3 — mint a fresh row under this wrapper. The T14 replacement target
     // (priorShardUndo) was already derived above from the latest done+merged
@@ -5288,7 +5335,8 @@ async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchSha
       taskId,
       nodeId: innerNode.id,
       status: 'pending',
-      cause: 'fanout-shard',
+      cause: forcedProcessRetry ? 'process-retry' : 'fanout-shard',
+      retryIndex: args.processRetryIndex ?? 0,
       iteration,
       overrides: {
         parentNodeRunId: wrapperRunId,
@@ -5296,6 +5344,7 @@ async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchSha
         shardValueHash: valueHash,
       },
     })
+    shardRetryIndex = args.processRetryIndex ?? 0
   }
   broadcastNodeStatus(taskId, shardRunId, innerNode.id, 'pending')
 
@@ -5484,6 +5533,10 @@ async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchSha
         shardKey,
         outputs: {},
         message: result.errorMessage ?? `shard-${result.status}`,
+        retry: {
+          retryIndex: shardRetryIndex,
+          failureCode: result.failureCode ?? null,
+        },
       }
     }
     // RFC-130 §段③: merge the shard's iso delta back into the canonical worktree.
@@ -5536,7 +5589,13 @@ async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchSha
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     broadcastNodeStatus(taskId, shardRunId, innerNode.id, 'failed')
-    return { kind: 'failed', shardKey, outputs: {}, message: msg }
+    return {
+      kind: 'failed',
+      shardKey,
+      outputs: {},
+      message: msg,
+      retry: { retryIndex: shardRetryIndex, failureCode: null },
+    }
   } finally {
     releaseSub()
     releaseGlobal()
@@ -5556,7 +5615,19 @@ interface DispatchAggregatorArgs {
   scope: ReturnType<typeof computeShardScope>
   /** RFC-098 B3 (audit S-20): see DispatchShardArgs.reuseDisabled. */
   reuseDisabled: boolean
+  /** Internal fresh-row process retry; see DispatchShardArgs.processRetryIndex. */
+  processRetryIndex?: number
   log: Logger
+}
+
+type DispatchAggregatorResult = OneNodeResult & {
+  outputs: Record<string, string>
+  aggRunId?: string
+  /** Present only when the failed attempt may consume process-retry budget. */
+  retry?: {
+    retryIndex: number
+    failureCode: FailureCode | null
+  }
 }
 
 /**
@@ -5570,7 +5641,30 @@ interface DispatchAggregatorArgs {
  */
 async function dispatchFanoutAggregator(
   args: DispatchAggregatorArgs,
-): Promise<OneNodeResult & { outputs: Record<string, string>; aggRunId?: string }> {
+): Promise<DispatchAggregatorResult> {
+  const maxRetries = args.state.opts.defaultNodeRetries ?? DEFAULT_PROTOCOL_RETRY_BUDGET
+  let attemptArgs = args
+  for (let retriesUsed = 0; ; retriesUsed++) {
+    const result = await dispatchFanoutAggregatorAttempt(attemptArgs)
+    if (
+      result.kind !== 'failed' ||
+      result.retry === undefined ||
+      retriesUsed >= maxRetries ||
+      !shouldRetryNodeFailure(result.retry.failureCode)
+    ) {
+      return result
+    }
+    attemptArgs = {
+      ...args,
+      reuseDisabled: true,
+      processRetryIndex: result.retry.retryIndex + 1,
+    }
+  }
+}
+
+async function dispatchFanoutAggregatorAttempt(
+  args: DispatchAggregatorArgs,
+): Promise<DispatchAggregatorResult> {
   const { state, wrapperRunId, aggNode, aggAgent, iteration, shards, definition, scope, log } = args
   const { db, task, taskId, opts } = state
 
@@ -5671,7 +5765,9 @@ async function dispatchFanoutAggregator(
       )
   ).filter((r) => r.shardKey === null)
   const freshestAgg = pickFreshestRun(aggCandidates, { topLevelOnly: false })
+  const forcedProcessRetry = args.processRetryIndex !== undefined
   if (
+    !forcedProcessRetry &&
     !args.reuseDisabled &&
     freshestAgg !== undefined &&
     freshestAgg.status === 'done' &&
@@ -5687,7 +5783,9 @@ async function dispatchFanoutAggregator(
     return { kind: 'ok', summary: '', message: '', outputs, aggRunId: freshestAgg.id }
   }
   let aggRunId: string
+  let aggRetryIndex: number
   if (
+    !forcedProcessRetry &&
     freshestAgg !== undefined &&
     freshestAgg.status !== 'done' &&
     freshestAgg.parentNodeRunId === wrapperRunId
@@ -5703,15 +5801,18 @@ async function dispatchFanoutAggregator(
       allowTerminal: true,
       reason: 'fanout-aggregator-resume',
     })
+    aggRetryIndex = freshestAgg.retryIndex
   } else {
     aggRunId = await mintNodeRun(db, {
       taskId,
       nodeId: aggNode.id,
       status: 'pending',
-      cause: 'fanout-aggregator',
+      cause: forcedProcessRetry ? 'process-retry' : 'fanout-aggregator',
+      retryIndex: args.processRetryIndex ?? 0,
       iteration,
       overrides: { parentNodeRunId: wrapperRunId },
     })
+    aggRetryIndex = args.processRetryIndex ?? 0
   }
   broadcastNodeStatus(taskId, aggRunId, aggNode.id, 'pending')
 
@@ -5851,6 +5952,14 @@ async function dispatchFanoutAggregator(
         summary: `aggregator ${aggNode.id} ${result.status}`,
         message: result.errorMessage ?? `aggregator-${result.status}`,
         outputs: {},
+        ...(result.status === 'canceled'
+          ? {}
+          : {
+              retry: {
+                retryIndex: aggRetryIndex,
+                failureCode: result.failureCode ?? null,
+              },
+            }),
       }
     }
     // RFC-130 §段③: merge the aggregator's iso delta back into canonical.
@@ -5906,7 +6015,13 @@ async function dispatchFanoutAggregator(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     broadcastNodeStatus(taskId, aggRunId, aggNode.id, 'failed')
-    return { kind: 'failed', summary: 'aggregator threw', message: msg, outputs: {} }
+    return {
+      kind: 'failed',
+      summary: 'aggregator threw',
+      message: msg,
+      outputs: {},
+      retry: { retryIndex: aggRetryIndex, failureCode: null },
+    }
   } finally {
     releaseSub()
     releaseGlobal()

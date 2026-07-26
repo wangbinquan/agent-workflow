@@ -232,6 +232,52 @@ describe('RFC-132 T2 — selectAgentQueue selection', () => {
     expect('question' in render && render.answer?.selectedOptionLabels).toEqual(['A'])
   })
 
+  test('inline-session delta keeps unbound/current-run entries and excludes earlier transcript entries', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedTask(db, taskId)
+    const priorRun = await seedRun(db, taskId, P, { status: 'done' })
+    const currentRun = await seedRun(db, taskId, P, { status: 'running' })
+    const fixtures = [
+      { id: 'old', triggerRunId: priorRun },
+      { id: 'replay', triggerRunId: currentRun },
+      { id: 'new', triggerRunId: null },
+    ] as const
+    for (const fixture of fixtures) {
+      const origin = await seedAnsweredRound(db, taskId, {
+        kind: 'self',
+        askingNodeId: P,
+        questions: [mkQ(fixture.id, `${fixture.id} question`)],
+      })
+      await insertEntry(db, taskId, {
+        originNodeRunId: origin,
+        questionId: fixture.id,
+        roleKind: 'self',
+        defaultTargetNodeId: P,
+        sealed: true,
+        dispatchedAt: Date.now(),
+        triggerRunId: fixture.triggerRunId,
+      })
+    }
+
+    const full = await selectAgentQueue({
+      db,
+      taskId,
+      consumerNodeId: P,
+      dispatchedRunId: currentRun,
+    })
+    expect(full.map((entry) => entry.questionId).sort()).toEqual(['new', 'old', 'replay'])
+
+    const delta = await selectAgentQueue({
+      db,
+      taskId,
+      consumerNodeId: P,
+      dispatchedRunId: currentRun,
+      currentRunOnly: true,
+    })
+    expect(delta.map((entry) => entry.questionId).sort()).toEqual(['new', 'replay'])
+  })
+
   // RFC-172 (route 2): shard SELECTION isolation. Two members share the one __wg_member__ home
   // node P, separated only by node_runs.shard_key. selectAgentQueue({shardKey}) must return ONLY
   // the entries whose origin round was asked on that shard; `undefined` = today's node-only

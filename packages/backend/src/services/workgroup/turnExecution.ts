@@ -11,6 +11,9 @@
 //   - clarify-forbidden is a RETRYABLE nudge with its own notice; exhaustion
 //     is role-specific (leader drops-and-continues, members surface failed)
 //     so the skeleton reports it and the caller settles;
+//   - transient verified-runtime stream failures consume a separate fresh-run
+//     budget. They never consume a logical/protocol attempt, so even a
+//     single-shot message turn can survive a transport interruption;
 //   - an unstructured failure (no failureCode in FOLLOWUP_POLICY) is fatal for
 //     the leader and card-settling for members — again reported, not decided
 //     here;
@@ -19,14 +22,15 @@
 
 import type { Agent, WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 import {
+  DEFAULT_PROTOCOL_RETRY_BUDGET,
   fenceUntrusted,
   followupPolicyForFailure,
+  isTransientRuntimeFailure,
   type EnvelopeFollowupReason,
   type FailureCode,
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { broadcastPendingMint } from '@/services/workgroup/messages'
-import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import { loadRunEnvelopeNonce, mintNodeRun } from '@/services/nodeRunMint'
 import type { RerunCause } from '@agent-workflow/shared'
 import { resolveWgClarifyAllowed } from '@/services/workgroup/lifecycle'
@@ -36,6 +40,7 @@ import {
   type WorkgroupProtocolRole,
 } from '@/services/workgroup/context'
 import type { WorkgroupEngineHooks, WorkgroupHostRunResult } from '@/services/workgroup/hooks'
+import { WG_RERUN_CAUSE } from '@/services/workgroup/constants'
 
 /**
  * RFC-186 §2.2 — unify the workgroup turn's retry-vs-fatal decision on the SAME
@@ -149,7 +154,7 @@ export type TurnOutcome<T> =
   | { kind: 'awaiting'; runId: string }
   /** clarify hard-suppressed and the retry budget is gone — caller settles per role. */
   | { kind: 'clarify-forbidden-exhausted'; runId: string; errorMessage: string }
-  /** run failed: `retryable` says the FOLLOWUP table matched but budget ran out. */
+  /** run failed: `retryable` says a protocol or transient-runtime budget ran out. */
   | { kind: 'failed'; runId: string; errorMessage: string; retryable: boolean }
   /** the model kept emitting an invalid envelope until the budget ran out. */
   | { kind: 'protocol-exhausted'; runId: string; errors: string[] }
@@ -171,25 +176,36 @@ export async function executeTurn<T>(args: TurnArgs, spec: TurnSpec<T>): Promise
   const retryBase = args.retryBase ?? 0
   let errorNotice: string | null = null
   let runId = ''
-  for (let attempt = 0; attempt < spec.maxAttempts; attempt++) {
-    if (adoptedRunId !== undefined && attempt === 0) {
+  let protocolAttempt = 0
+  let transientRetriesUsed = 0
+  let transientRetryPending = false
+  // An adopted attempt already occupies retryBase. Otherwise the first fresh
+  // row occupies it. Every later process/protocol retry advances monotonically.
+  let freshMintOffset = adoptedRunId === undefined ? 0 : 1
+  while (protocolAttempt < spec.maxAttempts) {
+    if (adoptedRunId !== undefined && protocolAttempt === 0) {
       runId = adoptedRunId
     } else {
-      const row = spec.mintRow(attempt, retryBase)
+      const row = spec.mintRow(protocolAttempt, retryBase)
       runId = await mintNodeRun(db, {
         taskId,
         nodeId: spec.nodeId,
         status: 'pending',
-        cause: row.cause,
-        retryIndex: row.retryIndex,
+        // Both retry families are the same logical workgroup turn and must be
+        // excluded from round accounting. `wg-protocol-retry` is the existing
+        // persisted ledger value for that exclusion.
+        cause: transientRetryPending ? WG_RERUN_CAUSE.protocolRetry : row.cause,
+        retryIndex: retryBase + freshMintOffset,
         ...(row.overrides !== undefined ? { overrides: row.overrides } : {}),
       })
+      freshMintOffset += 1
       args.registerMint?.(runId)
       broadcastPendingMint(taskId, runId, spec.nodeId)
     }
+    transientRetryPending = false
     adoptedRunId = undefined
     const envelopeNonce = await loadRunEnvelopeNonce(db, runId)
-    await spec.onAttemptStart?.(runId, attempt)
+    await spec.onAttemptStart?.(runId, protocolAttempt)
 
     const prompt =
       spec.composePrompt(envelopeNonce) +
@@ -225,12 +241,26 @@ export async function executeTurn<T>(args: TurnArgs, spec: TurnSpec<T>): Promise
     if (result.status === 'awaiting') return { kind: 'awaiting', runId }
     if (result.status === 'failed') {
       const msg = result.errorMessage ?? 'run failed'
+      // A direct stream closing is transport/runtime liveness, not a model
+      // protocol error and not a frozen-identity mismatch. Re-run the FULL
+      // logical turn in a fresh process without adding a protocol-error nudge.
+      // This budget is independent from maxAttempts, preserving message turns'
+      // deliberate maxAttempts=1 protocol policy.
+      if (isTransientRuntimeFailure(result.failureCode)) {
+        if (transientRetriesUsed < DEFAULT_PROTOCOL_RETRY_BUDGET) {
+          transientRetriesUsed += 1
+          transientRetryPending = true
+          continue
+        }
+        return { kind: 'failed', runId, errorMessage: msg, retryable: true }
+      }
       // RFC-181 C — hard-suppressed ask-back is a retryable protocol nudge
       // with role wording; exhaustion is settled by the caller (leader:
       // drop-and-continue; member: card floats failed).
       if (result.failureCode === 'clarify-forbidden') {
-        if (attempt < spec.maxAttempts - 1) {
+        if (protocolAttempt < spec.maxAttempts - 1) {
           errorNotice = spec.clarifyForbiddenNotice
+          protocolAttempt += 1
           continue
         }
         return { kind: 'clarify-forbidden-exhausted', runId, errorMessage: msg }
@@ -240,8 +270,9 @@ export async function executeTurn<T>(args: TurnArgs, spec: TurnSpec<T>): Promise
       // model slip (fresh turn + reason-tailored notice); anything else is
       // structural and reported non-retryable.
       const fu = followupForFailure(result.failureCode)
-      if (fu.retry && attempt < spec.maxAttempts - 1) {
+      if (fu.retry && protocolAttempt < spec.maxAttempts - 1) {
         errorNotice = wgFollowupNotice(fu.reason)
+        protocolAttempt += 1
         continue
       }
       return { kind: 'failed', runId, errorMessage: msg, retryable: fu.retry }
@@ -250,9 +281,10 @@ export async function executeTurn<T>(args: TurnArgs, spec: TurnSpec<T>): Promise
     const parsed = spec.parse(result.outputs, { runId, envelopeNonce })
     if (!parsed.ok) {
       errorNotice = parsed.errors.map((e) => `- ${e}`).join('\n')
-      if (attempt === spec.maxAttempts - 1) {
+      if (protocolAttempt === spec.maxAttempts - 1) {
         return { kind: 'protocol-exhausted', runId, errors: parsed.errors }
       }
+      protocolAttempt += 1
       continue
     }
     return { kind: 'done', value: parsed.value, runId, envelopeNonce }

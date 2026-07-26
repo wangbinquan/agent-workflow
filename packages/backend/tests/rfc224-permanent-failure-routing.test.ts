@@ -1,5 +1,7 @@
 // RFC-224 T23 — permanent execution-identity failures must not consume a
 // same-input retry or enter either normal-node/workgroup envelope follow-up.
+// A closed direct stream is a transient transport/runtime failure, not an
+// identity-contract mismatch, and therefore remains process-retryable.
 //
 // These pure routing checks cover every shared identity code, so extending the
 // single-source vocabulary without updating backend behavior fails here.
@@ -28,9 +30,9 @@ const FOLLOWUP_BASE: PreviousAttemptShape = {
 }
 
 describe('RFC-224 permanent failure routing', () => {
-  test('every execution-identity code stops unchanged-input retries', () => {
+  test('only the transient stream failure consumes unchanged-input process retries', () => {
     for (const code of EXECUTION_IDENTITY_FAILURE_CODES) {
-      expect(shouldRetryNodeFailure(code)).toBe(false)
+      expect(shouldRetryNodeFailure(code)).toBe(code === 'execution-identity-stream-failed')
     }
     for (const code of FOLLOWUP_FAILURE_CODES) {
       expect(shouldRetryNodeFailure(code)).toBe(true)

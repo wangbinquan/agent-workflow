@@ -297,6 +297,33 @@ describe('RFC-224 direct HTTP client request boundary', () => {
     expect(response.info.id).toBe(assistantID)
   })
 
+  test('async prompt posts to prompt_async and accepts only a 204 acknowledgement', async () => {
+    let capturedUrl = ''
+    let capturedBody = ''
+    const instance = client(async (url, init) => {
+      capturedUrl = url
+      capturedBody = String(init.body ?? '')
+      return new Response(null, { status: 204 })
+    })
+    const request = buildPromptRequest({
+      messageID: callerID,
+      agent: 'worker',
+      model: { providerID: 'openai', modelID: 'gpt-5.6' },
+      prompt: 'Reply exactly OK',
+    })
+
+    await instance.postMessageAsync(sessionID, request)
+
+    expect(new URL(capturedUrl).pathname).toBe(`/session/${sessionID}/prompt_async`)
+    expect(JSON.parse(capturedBody)).toEqual(request)
+
+    const wrongStatus = client(async () => Response.json({ accepted: true }))
+    await expect(wrongStatus.postMessageAsync(sessionID, request)).rejects.toMatchObject({
+      reason: 'unexpected-status',
+      status: 200,
+    })
+  })
+
   test('fetch errors and caller aborts collapse to non-secret stable reasons', async () => {
     const failed = client(async () => {
       throw new Error(password)

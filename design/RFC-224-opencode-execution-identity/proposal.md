@@ -86,9 +86,10 @@ name 注册；跨 owner agent 在某 repo 执行时，该 repo 或宿主配置�
 3. **same-server direct codec**：verified launcher 启动专用 loopback
    `opencode serve`，读取 `/config`、`/agent`、`/skill`，全字段校验并二次 seal。
    校验通过后 launcher 自己订阅 SSE，生成 caller-owned `messageID`，并向同一
-   server 的 `/session/:id/message` 提交显式 agent/model + 单 text part；只接纳
-   逐 step 绑定该 caller message 的有序 assistant reply 集，不再调用有 fallback
-   的 `opencode run --attach`。
+   server 的 `/session/:id/prompt_async` 提交显式 agent/model + 单 text part；
+   等待 SSE idle 后再读取 latest message 做完整 response/SSE 对账，只接纳逐 step
+   绑定该 caller message 的有序 assistant reply 集，不再调用有 fallback 的
+   `opencode run --attach`。
 4. **最小自动执行面**：final raw config 强制并校验固定 shell、
    `lsp:false`、`formatter:false`、`snapshot:false`、`autoupdate:false`、
    `compaction.auto:false`、`share:"disabled"`；新 session 使用非默认 title，
@@ -164,8 +165,11 @@ name 注册；跨 owner agent 在某 repo 执行时，该 repo 或宿主配置�
   ready-before-POST、event filtering、official JSON golden 与 cancel/abort 均有
   自动化证据；双 resume 只能有一个在 store 接触前取得 lease，resume 对
   title/path/share/revert/metadata 的任一漂移 fail closed。
-- AC7 business/system/smoke 三入口无 direct opencode bypass；identity failure 是
-  permanent，不进 envelope followup/普通 retry。
+- AC7 business/system/smoke 三入口无 direct opencode bypass；identity failure
+  永不进 envelope followup。除 `execution-identity-stream-failed` 代表可恢复的
+  provider/SSE 活性中断、可消耗普通 fresh-process retry 外，其余 identity
+  failure 均为 permanent，不进相同输入普通 retry；normal node、wrapper 与
+  workgroup turn 使用同一分类。
 - AC8 plugin/dependent/null-model 等不支持状态在保存/launch/probe/UI 都给稳定、
   可操作错误。
 - AC9 capability probe 与 launcher/server 的取消/超时都只向负进程组执行

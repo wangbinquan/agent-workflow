@@ -244,6 +244,27 @@ export function formatMemoryBlockWithSnapshot(
   const global = clipByBudget(set.byScope.global, budget.global)
   const all = [...agent, ...workflow, ...repo, ...global]
   if (all.length === 0) return { block: null, snapshot: null }
+  const snapshot = all.map(toSnapshot)
+  return {
+    block: formatMemoryBlockFromSnapshot(snapshot, envelopeNonce),
+    snapshot,
+  }
+}
+
+/**
+ * Rebuild the exact persona fragment represented by a persisted injection
+ * snapshot. RFC-042 same-session follow-ups send only a short USER prompt,
+ * but verified OpenCode still has to reconstruct the original AGENT config
+ * byte-for-byte so its session identity remains stable.
+ *
+ * The snapshot is already post-budget and in canonical scope/order, so this
+ * path must not query live memories or clip against today's budget.
+ */
+export function formatMemoryBlockFromSnapshot(
+  snapshot: readonly InjectedMemorySnapshot[] | null,
+  envelopeNonce = '',
+): string | null {
+  if (snapshot === null || snapshot.length === 0) return null
   const lines: string[] = [
     '## Learned context (auto-injected, advisory)',
     '',
@@ -251,7 +272,7 @@ export function formatMemoryBlockWithSnapshot(
     '',
     '--- BEGIN INJECTED MEMORY ---',
   ]
-  for (const m of all) {
+  for (const m of snapshot) {
     if (envelopeNonce.length === 0) {
       lines.push(`- [${m.scopeType}] ${m.title} — ${m.bodyMd}`)
       continue
@@ -260,7 +281,7 @@ export function formatMemoryBlockWithSnapshot(
     lines.push(fenceUntrusted(`memory:${m.id}`, m.bodyMd, envelopeNonce))
   }
   lines.push('--- END INJECTED MEMORY ---')
-  return { block: lines.join('\n'), snapshot: all.map(toSnapshot) }
+  return lines.join('\n')
 }
 
 function toSnapshot(row: InjectableMemoryRow): InjectedMemorySnapshot {

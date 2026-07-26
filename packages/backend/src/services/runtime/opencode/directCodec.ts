@@ -16,6 +16,7 @@ import {
   SessionIdSchema,
   SessionStatusPropertiesSchema,
   SessionUpdatedPropertiesSchema,
+  TodoUpdatedPropertiesSchema,
   WireEventSchema,
   WithPartsSchema,
   compareAscendingMessageIds,
@@ -320,6 +321,9 @@ export class DirectSessionCodec {
       if (parsedEvent.type === 'session.diff') {
         return this.#sessionDiff(parsedEvent.properties)
       }
+      if (parsedEvent.type === 'todo.updated') {
+        return this.#todoUpdated(parsedEvent.properties)
+      }
       if (parsedEvent.type === 'session.status') {
         return this.#sessionStatus(parsedEvent.properties)
       }
@@ -588,6 +592,14 @@ export class DirectSessionCodec {
 
   #sessionDiff(value: unknown): DirectCodecStep {
     const properties = parseProperties(SessionDiffPropertiesSchema, value, 'session.diff')
+    if (properties.sessionID !== this.#options.sessionID) return this.#ignore()
+    if (!this.#promptPosted) return this.#fail('event-before-prompt')
+    if (this.#idle) return this.#fail('event-after-idle')
+    return this.#step([])
+  }
+
+  #todoUpdated(value: unknown): DirectCodecStep {
+    const properties = parseProperties(TodoUpdatedPropertiesSchema, value, 'todo.updated')
     if (properties.sessionID !== this.#options.sessionID) return this.#ignore()
     if (!this.#promptPosted) return this.#fail('event-before-prompt')
     if (this.#idle) return this.#fail('event-after-idle')

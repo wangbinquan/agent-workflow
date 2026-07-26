@@ -30,7 +30,12 @@ import {
   type WithParts,
 } from './directApiSchemas'
 import { OpencodeDirectClient, type DirectClientBudgets } from './directClient'
-import { DirectSessionCodec, serializeDirectJsonlRecord, type DirectCodecStep } from './directCodec'
+import {
+  DirectSessionCodec,
+  serializeDirectJsonlRecord,
+  type DirectCodecFailureReason,
+  type DirectCodecStep,
+} from './directCodec'
 import {
   businessOpencodeIdentityDigest,
   ExecutionIdentityError,
@@ -38,11 +43,7 @@ import {
   verifyExecutionIdentity,
 } from './executionIdentity'
 import { ExecutionIdentityFailure, executionIdentityFailure } from './failure'
-import {
-  PINNED_BUILTIN_SKILL,
-  assertBundledProviderImplementation,
-  removeHermeticOpencodeLayout,
-} from './hermetic'
+import { PINNED_BUILTIN_SKILL, assertBundledProviderImplementation } from './hermetic'
 import { RuntimeOpencodeBinaryError, verifyRuntimeOpencodeSnapshot } from './runtimeBinary'
 import {
   assertSourceFingerprintUnchanged,
@@ -96,6 +97,7 @@ export interface VerifiedLauncherClient {
   }): Promise<{ sessions: GlobalSessionInfo[]; nextCursorHeader: string | null }>
   getLatestMessage(sessionID: string, signal?: AbortSignal): Promise<WithParts[]>
   postMessage(sessionID: string, body: PromptRequest, signal?: AbortSignal): Promise<WithParts>
+  postMessageAsync(sessionID: string, body: PromptRequest, signal?: AbortSignal): Promise<void>
   abortSession(sessionID: string, signal?: AbortSignal): Promise<boolean>
   subscribeEvents(signal?: AbortSignal): Promise<AsyncGenerator<WireEvent>>
 }
@@ -265,10 +267,6 @@ async function defaultReadAck(path: string, expectedNonce: string): Promise<Cont
   } catch {
     return phaseFailure('execution-identity-control-failed')
   }
-}
-
-async function defaultRemoveStore(path: string): Promise<void> {
-  await removeHermeticOpencodeLayout(path)
 }
 
 function sha256(value: string): string {
@@ -736,12 +734,35 @@ async function waitForClockAfter(
   }
 }
 
-function stepOrFail(step: DirectCodecStep, writeStdout: (value: string) => void): boolean {
+function stepOrFail(
+  step: DirectCodecStep,
+  writeStdout: (value: string) => void,
+  writeStderr: (value: string) => void,
+): boolean {
   for (const record of step.records) writeStdout(serializeDirectJsonlRecord(record))
   if (step.state === 'failed') {
-    return executionIdentityFailure('execution-identity-stream-failed')
+    // The stable failureCode remains intentionally coarse, but the codec reason
+    // is itself a closed, value-free enum. Preserve it before parent capture and
+    // final status so operators can distinguish response reconciliation, stream
+    // loss and policy rejection without exposing HTTP bodies or paths.
+    return promptStreamFailure(step.reason, writeStderr)
   }
   return step.state === 'success'
+}
+
+type PromptStreamFailureReason =
+  | DirectCodecFailureReason
+  | 'stream-ended-before-ready'
+  | 'response-missing'
+  | 'response-before-idle'
+  | 'transport-error'
+
+function promptStreamFailure(
+  reason: PromptStreamFailureReason,
+  writeStderr: (value: string) => void,
+): never {
+  writeStderr(`AW_OPENCODE_CODEC_FAILURE ${reason}\n`)
+  return executionIdentityFailure('execution-identity-stream-failed')
 }
 
 async function runPromptStream(input: {
@@ -754,6 +775,7 @@ async function runPromptStream(input: {
   now: () => number
   sleep: (milliseconds: number, signal?: AbortSignal) => Promise<void>
   writeStdout: (value: string) => void
+  writeStderr: (value: string) => void
 }): Promise<void> {
   const eventController = new AbortController()
   const abortFromParent = () => eventController.abort(input.signal?.reason)
@@ -765,7 +787,7 @@ async function runPromptStream(input: {
     iterator = await input.client.subscribeEvents(eventController.signal)
     const first = await iterator.next()
     if (first.done || first.value === undefined) {
-      return executionIdentityFailure('execution-identity-stream-failed')
+      return promptStreamFailure('stream-ended-before-ready', input.writeStderr)
     }
 
     const history = validateLatestMessageInventory(
@@ -801,6 +823,9 @@ async function runPromptStream(input: {
       now: input.now,
     })
     const ready = codec.consume(first.value)
+    if (ready.state === 'failed') {
+      stepOrFail(ready, input.writeStdout, input.writeStderr)
+    }
     if (ready.state !== 'ready') {
       return executionIdentityFailure('execution-identity-stream-failed')
     }
@@ -810,70 +835,61 @@ async function runPromptStream(input: {
       now: input.now,
       sleep: input.sleep,
     })
-    if (stepOrFail(codec.markPromptPosted(), input.writeStdout)) return
+    if (stepOrFail(codec.markPromptPosted(), input.writeStdout, input.writeStderr)) return
 
-    let settled = false
-    const completion = deferred<void>()
-    const acceptStep = (step: DirectCodecStep) => {
-      if (settled) return
-      try {
-        if (stepOrFail(step, input.writeStdout)) {
-          settled = true
-          completion.resolve()
-        }
-      } catch (error) {
-        settled = true
-        completion.reject(error)
-      }
-    }
-
-    const promptTask = input.client
-      .postMessage(
-        input.sessionID,
-        buildPromptRequest({
-          messageID: callerMessageID,
-          agent: input.manifest.selectedAgent,
-          model: input.manifest.selectedModel,
-          prompt: input.manifest.prompt,
-        }),
-        eventController.signal,
-      )
-      .then((response) => acceptStep(codec.acceptPromptResponse(response)))
-      .catch((error) => {
-        if (!settled) {
-          settled = true
-          completion.reject(error)
-        }
-      })
+    // OpenCode exposes a dedicated async prompt endpoint and its own CLI uses
+    // it. Holding `/message` open for the complete tool-using run couples a
+    // valid workflow to the HTTP server's request lifetime (about five minutes
+    // in the pinned runtime). Submit quickly, then let SSE own liveness.
+    const promptTask = input.client.postMessageAsync(
+      input.sessionID,
+      buildPromptRequest({
+        messageID: callerMessageID,
+        agent: input.manifest.selectedAgent,
+        model: input.manifest.selectedModel,
+        prompt: input.manifest.prompt,
+      }),
+      eventController.signal,
+    )
 
     const eventTask = (async () => {
-      try {
-        for (;;) {
-          const next = await iterator!.next()
-          if (settled) return
-          if (next.done || next.value === undefined) {
-            acceptStep(codec.streamEnded())
-            return
-          }
-          acceptStep(codec.consume(next.value))
+      for (;;) {
+        const next = await iterator!.next()
+        if (next.done || next.value === undefined) {
+          stepOrFail(codec.streamEnded(), input.writeStdout, input.writeStderr)
+          return
         }
-      } catch (error) {
-        if (!settled) {
-          settled = true
-          completion.reject(error)
-        }
+        const step = codec.consume(next.value)
+        if (stepOrFail(step, input.writeStdout, input.writeStderr)) return
+        if (step.state === 'idle') return
       }
     })()
 
-    await completion.promise
+    await Promise.all([promptTask, eventTask])
+
+    // Idle is emitted after the processor finalizes the assistant message.
+    // Re-read that authoritative snapshot and reconcile it against every SSE
+    // update before declaring success; async submission does not weaken the
+    // existing response/SSE consistency proof.
+    const finalMessage = validateLatestMessageInventory(
+      await input.client.getLatestMessage(input.sessionID, eventController.signal),
+      input.sessionID,
+    )
+    if (finalMessage === undefined) {
+      return promptStreamFailure('response-missing', input.writeStderr)
+    }
+    if (
+      !stepOrFail(codec.acceptPromptResponse(finalMessage), input.writeStdout, input.writeStderr)
+    ) {
+      return promptStreamFailure('response-before-idle', input.writeStderr)
+    }
     eventController.abort(new Error('direct-stream-complete'))
-    await Promise.allSettled([promptTask, eventTask])
   } catch (error) {
     if (error instanceof ExecutionIdentityFailure) throw error
     if (eventController.signal.aborted && input.signal?.aborted === true) {
       throw new LauncherCancelledError()
     }
-    return executionIdentityFailure('execution-identity-stream-failed')
+    return promptStreamFailure('transport-error', input.writeStderr)
   } finally {
     input.signal?.removeEventListener('abort', abortFromParent)
     eventController.abort(new Error('direct-stream-finalize'))
@@ -985,14 +1001,13 @@ export async function launchVerifiedOpencodeManifest(
   const now = dependencies.now ?? Date.now
   const sleep = dependencies.sleep ?? defaultSleep
   const readAck = dependencies.readAck ?? defaultReadAck
-  const removeStore = dependencies.removeStore ?? defaultRemoveStore
   const serverStopGraceMs = dependencies.serverStopGraceMs ?? SERVER_STOP_GRACE_MS
   const writeStdout = dependencies.writeStdout ?? ((value) => process.stdout.write(value))
   const writeStderr = dependencies.writeStderr ?? ((value) => process.stderr.write(value))
   const signal = dependencies.signal
 
   verifyManifestDigests(manifest)
-  const storeRoot = resolveStoreRoot(manifest)
+  resolveStoreRoot(manifest)
   const credentials = serverCredentials(manifest)
   const sourceBefore = await scanSource(manifest.worktreePath)
   if (
@@ -1012,8 +1027,6 @@ export async function launchVerifiedOpencodeManifest(
   }
 
   let lock: OpencodeStoreLifecycleLock | undefined
-  let lockWasAcquired = false
-  let lockWasReleased = false
   let child: VerifiedLauncherServerProcess | undefined
   let serverReaped = false
   let stdoutMonitor: StdoutMonitor | undefined
@@ -1030,7 +1043,6 @@ export async function launchVerifiedOpencodeManifest(
       manifest.sessionDbPath,
       manifest.storeKind === 'business' ? manifest.leaseNonce : undefined,
     )
-    lockWasAcquired = true
     await scrubStore({
       dbPath: manifest.sessionDbPath,
       kind: manifest.mode === 'resume' ? 'existing' : 'fresh',
@@ -1191,6 +1203,7 @@ export async function launchVerifiedOpencodeManifest(
             now,
             sleep,
             writeStdout,
+            writeStderr,
           }),
           runningChild,
           runningStdoutMonitor.violation,
@@ -1252,28 +1265,14 @@ export async function launchVerifiedOpencodeManifest(
       }
       try {
         await lock.release()
-        lockWasReleased = true
       } catch (error) {
         cleanupFailure ??= error
       }
     }
-    // System stores remain available for the parent-side post-run capture and
-    // are removed only by the awaited SpawnPlan.cleanup. The launcher owns
-    // deletion solely for a failed fresh business chain that never became a
-    // reusable successful session.
-    if (
-      manifest.storeKind === 'business' &&
-      manifest.mode === 'new' &&
-      !succeeded &&
-      lockWasAcquired &&
-      lockWasReleased
-    ) {
-      try {
-        await removeStore(storeRoot)
-      } catch (error) {
-        cleanupFailure ??= error
-      }
-    }
+    // Keep every reaped store available until the parent has captured session
+    // metadata and diagnostic events. Successful business stores remain
+    // reusable; failed stores are retained for task-history/GC ownership
+    // instead of being deleted before runner.ts can inspect the failure.
   }
   if (cleanupFailure !== undefined) {
     throw new ExecutionIdentityFailure('execution-identity-store-unsafe')

@@ -236,6 +236,9 @@ describe('scheduler-audit S-18/S-19 — wrapper-fanout failure semantics (regres
           // 串行化 shard：调用计数确定（恰好 1 失败 2 成功），计数器文件无竞争。
           maxConcurrentNodes: 1,
           multiProcessSubprocessConcurrency: 1,
+          // This case locks fail-all-after-join itself, independently of the
+          // wrapper's process-retry budget covered by the next regression.
+          defaultNodeRetries: 0,
         }),
     )
 
@@ -306,6 +309,159 @@ describe('scheduler-audit S-18/S-19 — wrapper-fanout failure semantics (regres
     expect(downRows.length).toBe(0)
   }, 60_000)
 
+  test('fanout shard consumes the global retry budget and records each attempt', async () => {
+    await seedAgent(h.db, 'worker', ['result'])
+    const def: WorkflowDefinition = {
+      $schema_version: 4,
+      inputs: [{ kind: 'text', key: 'docs', label: 'docs' }],
+      nodes: [
+        { id: 'inp', kind: 'input', inputKey: 'docs' },
+        {
+          id: 'fan',
+          kind: 'wrapper-fanout',
+          nodeIds: ['inner'],
+          inputs: [{ name: 'docs', kind: 'list<path<md>>', isShardSource: true }],
+        },
+        {
+          id: 'inner',
+          kind: 'agent-single',
+          agentName: 'worker',
+          promptTemplate: 'Process {{doc}}',
+        },
+      ] as unknown as WorkflowDefinition['nodes'],
+      edges: [
+        {
+          id: 'e1',
+          source: { nodeId: 'inp', portName: 'docs' },
+          target: { nodeId: 'fan', portName: 'docs' },
+        },
+        {
+          id: 'eB',
+          source: { nodeId: 'fan', portName: 'docs' },
+          target: { nodeId: 'inner', portName: 'doc' },
+          boundary: 'wrapper-input',
+        },
+      ],
+    }
+    const taskId = await seedWorkflowAndTask(h, def, { docs: 'a.md' })
+    const counterFile = join(h.appHome, 'retry-counter.txt')
+
+    await withEnv(
+      {
+        MOCK_OPENCODE_OUTPUTS: JSON.stringify({ result: 'recovered' }),
+        MOCK_OPENCODE_FAIL_COUNTER: counterFile,
+        MOCK_OPENCODE_FAIL_UNTIL: '1',
+      },
+      () =>
+        runTask({
+          taskId,
+          db: h.db,
+          appHome: h.appHome,
+          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          maxConcurrentNodes: 1,
+          multiProcessSubprocessConcurrency: 1,
+          defaultNodeRetries: 1,
+        }),
+    )
+
+    expect(readFileSync(counterFile, 'utf-8').trim()).toBe('2')
+    expect((await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('done')
+    const wrapper = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'fan')))[0]!
+    const attempts = (
+      await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'inner'))
+    ).filter((row) => row.parentNodeRunId === wrapper.id)
+    expect(attempts.map((row) => [row.retryIndex, row.status])).toEqual([
+      [0, 'failed'],
+      [1, 'done'],
+    ])
+  }, 60_000)
+
+  test('fanout aggregator consumes the global retry budget and records each attempt', async () => {
+    await seedAgent(h.db, 'worker', ['result'])
+    await seedAgent(h.db, 'agg', ['result'], {
+      role: 'aggregator',
+      outputWrapperPortNames: { result: 'final' },
+    })
+    const def: WorkflowDefinition = {
+      $schema_version: 4,
+      inputs: [{ kind: 'text', key: 'docs', label: 'docs' }],
+      nodes: [
+        { id: 'inp', kind: 'input', inputKey: 'docs' },
+        {
+          id: 'fan',
+          kind: 'wrapper-fanout',
+          nodeIds: ['inner', 'aggNode'],
+          inputs: [{ name: 'docs', kind: 'list<path<md>>', isShardSource: true }],
+        },
+        {
+          id: 'inner',
+          kind: 'agent-single',
+          agentName: 'worker',
+          promptTemplate: 'Process {{doc}}',
+        },
+        {
+          id: 'aggNode',
+          kind: 'agent-single',
+          agentName: 'agg',
+          promptTemplate: 'Merge {{items}}',
+        },
+      ] as unknown as WorkflowDefinition['nodes'],
+      edges: [
+        {
+          id: 'e1',
+          source: { nodeId: 'inp', portName: 'docs' },
+          target: { nodeId: 'fan', portName: 'docs' },
+        },
+        {
+          id: 'eB',
+          source: { nodeId: 'fan', portName: 'docs' },
+          target: { nodeId: 'inner', portName: 'doc' },
+          boundary: 'wrapper-input',
+        },
+        {
+          id: 'eAgg',
+          source: { nodeId: 'inner', portName: 'result' },
+          target: { nodeId: 'aggNode', portName: 'items' },
+        },
+      ],
+    }
+    const taskId = await seedWorkflowAndTask(h, def, { docs: 'a.md' })
+    const captureFile = join(h.appHome, 'aggregator-retry.jsonl')
+
+    await withEnv(
+      {
+        MOCK_OPENCODE_OUTPUTS: JSON.stringify({ result: 'ok' }),
+        MOCK_OPENCODE_CRASH_FOR_agg: '1',
+        MOCK_OPENCODE_CAPTURE_ARGV_TO: captureFile,
+      },
+      () =>
+        runTask({
+          taskId,
+          db: h.db,
+          appHome: h.appHome,
+          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          maxConcurrentNodes: 1,
+          multiProcessSubprocessConcurrency: 1,
+          defaultNodeRetries: 1,
+        }),
+    )
+
+    const spawns = readFileSync(captureFile, 'utf-8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as { agent: string })
+    expect(spawns.map((row) => row.agent)).toEqual(['worker', 'agg', 'agg'])
+    expect((await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('failed')
+    const wrapper = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'fan')))[0]!
+    const attempts = (
+      await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'aggNode'))
+    ).filter((row) => row.parentNodeRunId === wrapper.id)
+    expect(attempts.map((row) => [row.retryIndex, row.status])).toEqual([
+      [0, 'failed'],
+      [1, 'failed'],
+    ])
+  }, 60_000)
+
   // ---------------------------------------------------------------------------
   // S-19（RFC-098 B3 修复后回归锁）— failed → resume：重铸新 wrapperRunId，
   // 但旧 wrapper 下已 done 的 shard 子行被跨代复用，只重跑失败的 1 个 shard。
@@ -362,6 +518,7 @@ describe('scheduler-audit S-18/S-19 — wrapper-fanout failure semantics (regres
       opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
       maxConcurrentNodes: 1,
       multiProcessSubprocessConcurrency: 1,
+      defaultNodeRetries: 0,
     }
 
     // ---- run 1：1/3 shard 失败 → wrapper + task failed，2 个 shard done。----

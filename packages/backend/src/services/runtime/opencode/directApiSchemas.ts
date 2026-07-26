@@ -563,6 +563,19 @@ export const SessionDiffPropertiesSchema = z
     diff: z.array(FileDiffSchema),
   })
   .strict()
+const TodoInfoSchema = z
+  .object({
+    content: z.string(),
+    status: z.string(),
+    priority: z.string(),
+  })
+  .strict()
+export const TodoUpdatedPropertiesSchema = z
+  .object({
+    sessionID: SessionIdSchema,
+    todos: z.array(TodoInfoSchema),
+  })
+  .strict()
 export const SessionStatusPropertiesSchema = z
   .object({
     sessionID: SessionIdSchema,

@@ -498,6 +498,36 @@ describe('RFC-224 direct session codec fail-closed correlation', () => {
     })
   })
 
+  test('accepts the strict same-session todo update emitted by todowrite', () => {
+    const instance = codec()
+    ready(instance)
+    expect(
+      instance.consume(
+        wire('todo.updated', {
+          sessionID,
+          todos: [
+            {
+              content: 'Run the workflow regression suite',
+              status: 'in_progress',
+              priority: 'high',
+            },
+          ],
+        }),
+      ),
+    ).toMatchObject({ state: 'continue', ignoredEvents: 0 })
+
+    const malformed = codec()
+    ready(malformed)
+    expect(
+      malformed.consume(
+        wire('todo.updated', {
+          sessionID,
+          todos: [{ content: 'Missing status and priority' }],
+        }),
+      ),
+    ).toMatchObject({ state: 'failed', reason: 'schema-mismatch' })
+  })
+
   test('accepts only the strict same-session diff notification shape', () => {
     const instance = codec()
     ready(instance)

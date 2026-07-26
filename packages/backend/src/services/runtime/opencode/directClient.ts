@@ -320,6 +320,38 @@ export class OpencodeDirectClient {
     )
   }
 
+  /**
+   * Submit a prompt without holding one HTTP request open for the whole agent
+   * run. OpenCode's synchronous `/message` response is subject to the server's
+   * request lifetime; complex tool-using sessions can legitimately outlive it.
+   * Completion and the authoritative final message are reconciled over
+   * SSE + getLatestMessage by the verified launcher.
+   */
+  async postMessageAsync(
+    sessionID: string,
+    body: PromptRequest,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const id = parseDirectApiValue(SessionIdSchema, sessionID, 'session-id')
+    const request = parseDirectApiValue(PromptRequestSchema, body, 'prompt-request')
+    const pending = await this.#request({
+      method: 'POST',
+      path: `/session/${encodeURIComponent(id)}/prompt_async`,
+      body: request,
+      signal,
+      accept: 'application/json',
+    })
+    try {
+      if (pending.response.status !== 204) {
+        await pending.response.body?.cancel().catch(() => undefined)
+        throw new DirectHttpError('unexpected-status', pending.response.status)
+      }
+      await pending.response.body?.cancel().catch(() => undefined)
+    } finally {
+      pending.cleanup()
+    }
+  }
+
   async abortSession(sessionID: string, signal?: AbortSignal): Promise<boolean> {
     const id = parseDirectApiValue(SessionIdSchema, sessionID, 'session-id')
     return this.#jsonRequest(

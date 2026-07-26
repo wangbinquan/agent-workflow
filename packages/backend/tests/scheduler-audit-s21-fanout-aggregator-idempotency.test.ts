@@ -324,7 +324,9 @@ describe('scheduler-audit S-21 — fanout aggregator idempotency + done-filter (
   // ---------------------------------------------------------------------------
   test('source-text lock: dispatchFanoutAggregator picks inner rows via pickReusableShardRun (done-only + freshest) and reuses its own prior row', () => {
     const src = readFileSync(SCHEDULER_SRC, 'utf-8')
-    const start = src.indexOf('async function dispatchFanoutAggregator')
+    // The outer dispatcher now owns the process-retry loop; the attempt helper
+    // owns row selection/idempotency and remains the source-text lock target.
+    const start = src.indexOf('async function dispatchFanoutAggregatorAttempt')
     expect(start).toBeGreaterThan(-1)
     // 函数体切片：到下一个顶层 `async function` 为止。
     const nextFn = src.indexOf('\nasync function ', start + 1)

@@ -218,6 +218,8 @@ describe('RFC-046 — runner persists injected_memories_json', () => {
   })
 
   test('R3: envelope-followup retry copies attempt-0 sibling JSON verbatim', async () => {
+    const envelopeNonce = 'followupmemnonce'
+    const configCapture = join(h.appHome, 'followup-config.json')
     const attempt0Json = JSON.stringify([
       {
         id: 'attempt0_mem',
@@ -242,17 +244,20 @@ describe('RFC-046 — runner persists injected_memories_json', () => {
       status: 'failed',
       injectedMemoriesJson: attempt0Json,
       opencodeSessionId: 'sess_resume',
+      envelopeNonce,
     })
     // Create the followup attempt-1 row in 'pending'.
     const followupId = await insertNodeRun(h.db, h.taskId, {
       nodeId: 'agent-x',
       retryIndex: 1,
       status: 'pending',
+      envelopeNonce,
     })
     await withEnv(
       {
         MOCK_OPENCODE_OUTPUTS: JSON.stringify({ summary: 'ok' }),
         MOCK_OPENCODE_EVENTS: '[]',
+        MOCK_OPENCODE_CAPTURE_CONFIG_JSON_TO: configCapture,
         OPENCODE_TEST_HOME: join(h.appHome, 'no-home'),
       },
       () =>
@@ -281,6 +286,18 @@ describe('RFC-046 — runner persists injected_memories_json', () => {
     expect(parsed.length).toBe(1)
     expect(parsed[0].id).toBe('attempt0_mem')
     expect(parsed[0].version).toBe(7)
+
+    // The short user follow-up must still rebuild the original agent persona
+    // byte-for-byte. Verified OpenCode binds that persona into the persistent
+    // session identity; dropping the inherited memory block here makes every
+    // memory-bearing RFC-042 resume fail with execution-identity-session-mismatch.
+    const capturedConfig = JSON.parse(readFileSync(configCapture, 'utf8')) as {
+      agent: Record<string, { prompt?: string }>
+    }
+    const persona = capturedConfig.agent['test-agent']?.prompt ?? ''
+    expect(persona).toContain('## Learned context (auto-injected, advisory)')
+    expect(persona).toContain('attempt0_mem')
+    expect(persona).toContain('id="followupmemnonce"')
   })
 
   test('R4: envelope-followup retry inherits NULL when attempt 0 has NULL', async () => {

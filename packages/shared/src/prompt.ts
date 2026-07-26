@@ -103,9 +103,10 @@ export interface ClarifyPromptContext {
    *
    * When `'inline'`, the runner has spawned opencode with `--session <id>`
    * and the prior rounds' Q&A + protocol blocks already live in opencode's
-   * session memory. `renderUserPrompt` then skips port-content substitution
-   * and auto-append sections and swaps the trailing protocol block for a
-   * short inline reminder (`buildClarifyInlineReminder()`).
+   * session memory. The scheduler supplies only the current queue delta;
+   * `renderUserPrompt` skips port-content substitution and auto-append
+   * sections and swaps the trailing protocol block for a short inline
+   * reminder (`buildClarifyInlineReminder()`).
    */
   mode?: 'isolated' | 'inline'
 }
@@ -605,12 +606,13 @@ export function renderUserPrompt(input: RenderPromptInput): string {
 
   // RFC-023/026/132 clarify injection — the flat `## Clarify Q&A` block is
   // the single surface (RFC-148 removed the legacy round-grouped sections;
-  // inline mode needs no special title because the block is round-agnostic).
+  // inline mode keeps the same title while the scheduler supplies its delta).
   if (cc?.flatBlock !== undefined && cc.flatBlock.trim().length > 0) {
     // RFC-132 (PR-C): the unified flat `## Clarify Q&A` block — self /
     // questioner / designer all render as equal peers inside it (§5). Emit
-    // it verbatim (it owns its own heading). The block is round-agnostic, so
-    // inline mode needs no separate "current round" title. RFC-148: the
+    // it verbatim (it owns its own heading). Inline mode needs no separate
+    // "current round" title because the scheduler already selected only the
+    // entries absent from the resumed transcript. RFC-148: the
     // legacy round-grouped else-branch that used to follow is deleted — the
     // scheduler has produced flatBlock-only contexts since RFC-132 PR-C.
     // The flat block is framework structure produced by renderFlatClarifyQueue:
@@ -644,15 +646,12 @@ export function renderUserPrompt(input: RenderPromptInput): string {
     }
   }
 
-  // RFC-122: per-(task, asking-node) STOP override on a run that has no prior
-  // answered clarify round to carry the trailer (a first run / pre-clarify
-  // error-retry). `hasClarifyChannel` is already false (the scheduler forced
-  // ask-back off), so the agent gets the output protocol below; this section
-  // makes the user's "stop clarifying" decision explicit so the agent doesn't
-  // re-ask out of its own bias. When a prior round exists the scheduler routes
-  // the trailer through the flat clarify block instead and leaves this flag
-  // false — never
-  // both, so the STOP CLARIFYING trailer appears exactly once.
+  // RFC-122: per-(task, asking-node) STOP override. `hasClarifyChannel` is
+  // already false (the scheduler forced ask-back off), so the agent gets the
+  // output protocol below; this section makes the user's decision explicit so
+  // it does not re-ask out of its own bias. The flat Q&A block never carries a
+  // directive trailer: stopNotice is the one emission source, so the trailer
+  // appears exactly once whether or not answered Q&A is also present.
   if (stopNotice && !mandatoryAskBack) {
     sections += `\n\n${renderClarifyDirectiveTrailer('stop')}`
   }
@@ -922,7 +921,7 @@ export function buildClarifyInlineReminder(nonce?: string): string {
       : ''
   return (
     '\n\n---\n' +
-    'The user has answered your previous `<workflow-clarify>` round (see "Clarify Q&A — User Answers (Current Round)" above). ' +
+    'The user has answered your previous `<workflow-clarify>` round (see "## Clarify Q&A" above). ' +
     'This node stays in MANDATORY ask-back mode until the user clicks "Stop clarifying" — your next reply MUST be another `<workflow-clarify>` envelope. ' +
     'Do not emit `<workflow-output>`; it will be rejected. ' +
     'The full clarify format and asking-back rules from earlier in this session still apply and have not been re-emitted.' +
@@ -998,7 +997,7 @@ export function buildOptionalClarifyInlineReminder(nonce?: string): string {
       : ''
   return (
     '\n\n---\n' +
-    'The user has answered your previous `<workflow-clarify>` round (see "Clarify Q&A — User Answers (Current Round)" above). ' +
+    'The user has answered your previous `<workflow-clarify>` round (see "## Clarify Q&A" above). ' +
     'This node remains in OPTIONAL ask-back mode: if something material is still unclear, reply with another `<workflow-clarify>` envelope; otherwise produce the final `<workflow-output>` now. ' +
     'Reply with exactly one of the two envelopes — the formats from earlier in this session still apply and have not been re-emitted.' +
     nonceReminder

@@ -92,6 +92,7 @@ import { EMPTY_RUNTIME_PROFILE } from './runtime/opencode/inlineConfig'
 import { NOOP_HANDLE } from './subagentLiveCapture'
 import { setNodeRunStatus, transitionNodeRunStatus } from './lifecycle'
 import {
+  formatMemoryBlockFromSnapshot,
   injectMemoryForRun,
   loadInjectedSnapshotFromFirstAttempt,
   type ScopeBudget,
@@ -754,11 +755,11 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
 
   // RFC-041 PR3: silent inject of approved memories into the primary agent's
   // inline prompt. Best-effort — a broken memory table degrades to "no
-  // inject", never to a failed run. Skipped for the envelope-followup path
-  // (the same-session retry is just nudging for a missing envelope; the
-  // first attempt already saw the original block, and re-stringifying a
-  // large prompt fragment on each retry would pointlessly invalidate the
-  // session prompt cache).
+  // inject", never to a failed run. The envelope-followup path does not read
+  // LIVE memories; it reconstructs the original block from the first
+  // attempt's snapshot. That block stays in the AGENT config (verified
+  // OpenCode binds it into the persistent session identity) while the USER
+  // prompt remains the short RFC-042 nudge.
   // RFC-046: capture the post-clip snapshot from inject so the final
   // node_runs UPDATE can persist it to `injected_memories_json`. Stays
   // null in every failure / non-agent / followup-with-attempt-0-null path
@@ -818,6 +819,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           reviewIteration: currentRunRow.reviewIteration,
           runId: opts.nodeRunId,
         })
+        injectedMemoryBlock = formatMemoryBlockFromSnapshot(injectedSnapshot, envelopeNonce)
       }
     } catch (err) {
       log.warn('memory-inject-followup-inherit-failed', {

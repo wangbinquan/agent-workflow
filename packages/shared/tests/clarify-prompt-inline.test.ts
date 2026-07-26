@@ -16,7 +16,7 @@ describe('RFC-026 buildClarifyInlineReminder — inline mode reminder', () => {
     const reminder = buildClarifyInlineReminder()
     expect(reminder).toContain('<workflow-output>')
     expect(reminder).toContain('<workflow-clarify>')
-    expect(reminder).toContain('User Answers (Current Round)')
+    expect(reminder).toContain('"## Clarify Q&A"')
     expect(reminder).toMatch(/session/i)
   })
 
@@ -27,7 +27,7 @@ describe('RFC-026 buildClarifyInlineReminder — inline mode reminder', () => {
   test('RFC-100: inline reminder wording locked verbatim', () => {
     expect(buildClarifyInlineReminder()).toBe(
       '\n\n---\n' +
-        'The user has answered your previous `<workflow-clarify>` round (see "Clarify Q&A — User Answers (Current Round)" above). ' +
+        'The user has answered your previous `<workflow-clarify>` round (see "## Clarify Q&A" above). ' +
         'This node stays in MANDATORY ask-back mode until the user clicks "Stop clarifying" — your next reply MUST be another `<workflow-clarify>` envelope. ' +
         'Do not emit `<workflow-output>`; it will be rejected. ' +
         'The full clarify format and asking-back rules from earlier in this session still apply and have not been re-emitted.',

@@ -1,7 +1,8 @@
 /**
- * RFC-224 execution-identity failures are permanent for an unchanged runtime
- * selection. They are deliberately a closed, non-secret vocabulary shared by
- * save/probe/launch/UI and the runner retry policy.
+ * RFC-224 execution-identity failures are a closed, non-secret vocabulary
+ * shared by save/probe/launch/UI and the runner retry policy. Most identify a
+ * permanent contract mismatch; stream-failed is the deliberate exception
+ * because a provider/SSE transport can disappear transiently after admission.
  */
 export const EXECUTION_IDENTITY_FAILURE_CODES = [
   'execution-identity-untrusted-binary',
@@ -37,12 +38,21 @@ export function isExecutionIdentityFailureCode(
   return typeof value === 'string' && EXECUTION_IDENTITY_FAILURE_CODE_SET.has(value)
 }
 
+/** Runtime liveness failed without proving that the frozen identity is invalid. */
+export function isTransientRuntimeFailure(
+  value: unknown,
+): value is Extract<ExecutionIdentityFailureCode, 'execution-identity-stream-failed'> {
+  return value === 'execution-identity-stream-failed'
+}
+
 /**
- * These failures must never enter same-input process retry or envelope
- * follow-up. The operator must change the runtime/config/source contract.
+ * Permanent execution-identity failures must never enter same-input process
+ * retry or envelope follow-up. A closed stream is transport/runtime liveness,
+ * not proof that the frozen identity contract itself is invalid, so it may
+ * consume the ordinary process-retry budget.
  */
 export function isPermanentRuntimeFailure(value: unknown): boolean {
-  return isExecutionIdentityFailureCode(value)
+  return isExecutionIdentityFailureCode(value) && !isTransientRuntimeFailure(value)
 }
 
 export interface EffectiveExecutionPolicyInput {

@@ -556,6 +556,12 @@ owner、目录已丢失、active lease 冲突均返回
 替代 session。inventory 返回的 session 还须匹配 owner 的 stored
 `projectID/version`。
 
+同会话 envelope follow-up 可以把本轮 USER prompt 缩成协议纠错 nudge，但不得
+改变 frozen agent persona。若首轮注入了 approved memory，runner 必须从本代首轮
+`injected_memories_json` 快照、使用本代复用的 envelope nonce 重建完全相同的
+memory block 放回 inline agent config；不得重读 live memory，也不得省略该 block，
+否则 identity digest 合法地收敛为 `execution-identity-session-mismatch`。
+
 “不 GET `/session/:id`”只禁止会先按 stored foreign directory 路由的 session-info
 route。在 §7.2 current-instance inventory 已唯一验证该 session 后，launcher 才可
 用同一 canonical directory 调
@@ -576,16 +582,19 @@ route。在 §7.2 current-instance inventory 已唯一验证该 session 后，la
    同会话 `session.diff` 仅作为只读进度通知接纳：properties 必须严格等于
    `{sessionID,diff: FileDiff[]}`，每个 FileDiff 的 file/before/after、非负整数
    additions/deletions 与可选 added/deleted/modified status 都必须通过 schema；
-   它不得改变完成条件，其他 related 未知事件仍 fail closed。
+   同会话 `todo.updated` 也仅作为进度通知接纳，properties 必须严格等于
+   `{sessionID,todos:{content:string,status:string,priority:string}[]}`。两者都不得
+   改变完成条件，其他 related 未知事件仍 fail closed。
    assistant/session/step token 计量接受上游可选有限数 `total`，但仍严格拒绝
-   其他未知 token 字段；final POST 与 SSE assistant 的完整 token 对象必须相等。
+   其他未知 token 字段；idle 后 final GET 与 SSE assistant 的完整 token 对象必须相等。
 2. launcher 先读取当前 session 的 message inventory 并验证 id 单调性。它等待
    wall clock 严格大于已有最大 ascending-id timestamp，生成与 pinned
    `Identifier.ascending("message")` 同 codec 的 caller user id
    （`msg_` + 12 hex 时间/计数 + 14 base62），再等待 clock 进入下一个
    millisecond 才 POST，保证正常 server assistant id 排序在 caller 之后；clock
    future/skew 或返回 id 不满足严格顺序即 fail closed。
-3. POST `/session/<id>/message?directory=<canonical>`；body 精确含
+3. POST `/session/<id>/prompt_async?directory=<canonical>`，只接受 204；
+   body 精确含
    `messageID`、selected agent、`model:{providerID,modelID}`、可选顶层
    `variant`、一个与 manifest byte-equal 的 text part；禁止 `noReply/tools/
 format/system`。
@@ -602,9 +611,10 @@ format/system`。
    event、畸形 JSON、断流、server early exit fail closed。
 6. `message.part.updated` 映射为 official v1.18.3 的
    `tool_use/step_start/step_finish/text/reasoning` JSON；`session.error` 失败；
-   success 必须同时满足 POST 2xx 返回 strict final WithParts、final assistant id
-   等于绑定集合最后一个、expected `session.status=idle` 与至少一个 assistant；
-   idle/POST response 顺序不限。
+   success 必须同时满足 async POST 204、expected `session.status=idle`、至少一个
+   assistant，以及 idle 后 `GET /session/:id/message?limit=1` 返回 strict final
+   WithParts；final assistant id 必须等于绑定集合最后一个，GET 的完整 assistant
+   与 parts 必须和 SSE 终态逐字段一致。
 7. unexpected `permission.asked` 或 `question.asked` 立即 abort/fail，不自动
    allow；进入失败态后随后到达的 idle 不能恢复成功。
 
@@ -669,15 +679,19 @@ locator 缺失。
 - `execution-identity-timeout`
 
 runner marker 只持久化 code/path/非敏感 digest；identity code 永不进 envelope
-followup 或相同输入自动 retry。distiller 同样 permanent；smoke 返回明确 identity
-outcome。三条入口共享一个 `buildVerifiedOpencodePlan`，source guard 禁止新增
-direct opencode spawn。
+followup。除 `execution-identity-stream-failed` 表示 provider/SSE 活性中断、可在
+normal node、wrapper 与 workgroup turn 消耗有界 fresh-process retry 外，其余
+identity code 均不进相同输入自动 retry。distiller/smoke 返回明确 identity
+outcome，不自行重试。三条入口共享一个 `buildVerifiedOpencodePlan`，source guard
+禁止新增 direct opencode spawn。
 
 ### 8.1 shared contract、保存门与 UI
 
 上述 identity code 在 `packages/shared` 只有一份 schema/type guard；现有 envelope
 followup code 保持窄 union，`followupPolicyForFailure()` 对 identity code 返回
-undefined，scheduler/workgroup 看到 identity code 时不消耗普通 retry。SQLite
+undefined。`isPermanentRuntimeFailure()` 仅把 stream-failed 排除在 permanent
+集合外；scheduler 与 wrapper 复用普通 process retry，workgroup turn 使用独立于
+协议轮数的有界 fresh-run budget（所以 single-shot message turn 也可恢复）。SQLite
 `failure_code` 是 TEXT，不为失败码本身做 migration；session provenance 按 §7.1
 单独 migration。
 
@@ -711,8 +725,8 @@ required。Runtime UI 对 OpenCode 把 model 显示为 required，null row 显�
 - session create/resume pagination、DB provenance、persistent XDG store、
   parent/workspace/directory/project/version/agent/model/permission；
 - SSE server.connected-before-POST、caller user/text、single 与 multi-step
-  ordered assistant parent binding、跨 session/message、unknown/malformed/drop、
-  idle/POST response 两种顺序、server early exit；
+  ordered assistant parent binding、严格 `todo.updated`、跨 session/message、
+  unknown/malformed/drop、async ACK + idle + final GET 对账、server early exit；
 - official JSON golden 与 secret-not-in-error。
 
 ### 9.2 containment

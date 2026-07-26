@@ -305,11 +305,18 @@ class FakeClient implements VerifiedLauncherClient {
 
   async getLatestMessage(): Promise<WithParts[]> {
     this.calls.push('history')
-    return []
+    if (this.posted === undefined) return []
+    const assistant = this.assistant(this.posted.messageID, true)
+    return [{ info: assistant, parts: [this.answer(this.posted.messageID)] }]
+  }
+
+  async postMessageAsync(_sessionID: string, body: PromptRequest): Promise<void> {
+    this.calls.push('post-async')
+    this.posted = body
   }
 
   async postMessage(_sessionID: string, body: PromptRequest): Promise<WithParts> {
-    this.calls.push('post')
+    this.calls.push('post-sync')
     this.posted = body
     const assistant = this.assistant(body.messageID, true)
     return { info: assistant, parts: [this.answer(body.messageID)] }
@@ -405,12 +412,26 @@ class FakeClient implements VerifiedLauncherClient {
 }
 
 class HangingPromptClient extends FakeClient {
+  override async postMessageAsync(
+    _sessionID: string,
+    body: PromptRequest,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    this.calls.push('post-async')
+    this.posted = body
+    return new Promise((_, reject) => {
+      const abort = () => reject(signal?.reason ?? new Error('aborted'))
+      if (signal?.aborted === true) abort()
+      else signal?.addEventListener('abort', abort, { once: true })
+    })
+  }
+
   override async postMessage(
     _sessionID: string,
     body: PromptRequest,
     signal?: AbortSignal,
   ): Promise<WithParts> {
-    this.calls.push('post')
+    this.calls.push('post-sync')
     this.posted = body
     return new Promise((_, reject) => {
       const abort = () => reject(signal?.reason ?? new Error('aborted'))
@@ -429,6 +450,28 @@ class HangingPromptClient extends FakeClient {
         else signal?.addEventListener('abort', abort, { once: true })
       })
     })()
+  }
+}
+
+class MismatchedPromptClient extends FakeClient {
+  override async getLatestMessage(): Promise<WithParts[]> {
+    const response = await super.getLatestMessage()
+    return response.map((message) => ({
+      info: message.info,
+      parts: message.parts.map((part) =>
+        part.type === 'text' ? { ...part, text: `${part.text}-mismatch` } : part,
+      ),
+    }))
+  }
+
+  override async postMessage(sessionId: string, body: PromptRequest): Promise<WithParts> {
+    const response = await super.postMessage(sessionId, body)
+    return {
+      info: response.info,
+      parts: response.parts.map((part) =>
+        part.type === 'text' ? { ...part, text: `${part.text}-mismatch` } : part,
+      ),
+    }
   }
 }
 
@@ -744,7 +787,8 @@ describe('RFC-224 launcher lifecycle and direct protocol ordering', () => {
       'create',
       'subscribe',
       'history',
-      'post',
+      'post-async',
+      'history',
     ])
     expect(stdout.map((line) => JSON.parse(line).type)).toEqual(['text'])
     expect(stderr).toEqual([])
@@ -868,7 +912,7 @@ describe('RFC-224 launcher lifecycle and direct protocol ordering', () => {
     expect(harness.removed).toEqual([])
   })
 
-  test('nack aborts before SSE/POST, fully reaps, and deletes a failed fresh store', async () => {
+  test('nack aborts before SSE/POST, fully reaps, and leaves the failed store for parent capture', async () => {
     const manifest = businessManifest()
     if (manifest.storeKind !== 'business') throw new Error('fixture narrowing failed')
     const client = new FakeClient(manifest.sessionTitle)
@@ -882,10 +926,11 @@ describe('RFC-224 launcher lifecycle and direct protocol ordering', () => {
       code: 'execution-identity-control-failed',
     })
     expect(client.calls).not.toContain('subscribe')
-    expect(client.calls).not.toContain('post')
+    expect(client.calls).not.toContain('post-async')
+    expect(client.calls).not.toContain('post-sync')
     expect(client.aborts).toBe(1)
     expect(harness.server.signals).toEqual(['SIGTERM'])
-    expect(harness.removed).toEqual(['/private/store'])
+    expect(harness.removed).toEqual([])
   })
 
   test('extra server stdout is bootstrap drift and still performs full cleanup', async () => {
@@ -917,11 +962,26 @@ describe('RFC-224 launcher lifecycle and direct protocol ordering', () => {
     await expect(launchVerifiedOpencodeManifest(manifest, harness.deps)).rejects.toMatchObject({
       code: 'execution-identity-timeout',
     })
-    expect(client.calls).toContain('post')
+    expect(client.calls).toContain('post-async')
+    expect(client.calls).not.toContain('post-sync')
     expect(client.calls).toContain('abort')
     expect(harness.server.signals).toEqual(['SIGTERM'])
     expect(harness.scrubKinds).toEqual(['fresh', 'fresh'])
     expect(harness.removed).toEqual([])
+  })
+
+  test('stream failures retain the closed codec reason before store cleanup', async () => {
+    const manifest = systemManifest()
+    const client = new MismatchedPromptClient(manifest.sessionTitle)
+    const harness = dependencies(manifest, client)
+    const stderr: string[] = []
+    harness.deps.writeStdout = () => undefined
+    harness.deps.writeStderr = (value) => stderr.push(value)
+
+    await expect(launchVerifiedOpencodeManifest(manifest, harness.deps)).rejects.toMatchObject({
+      code: 'execution-identity-stream-failed',
+    })
+    expect(stderr).toContain('AW_OPENCODE_CODEC_FAILURE response-mismatch\n')
   })
 
   test('TERM-resistant server is escalated through its negative-pid process group', async () => {

@@ -109,13 +109,14 @@
       process-group dead，防 delayed-cleanup ABA。
 - [x] T15：SSE 200/parser ready 后要求首个有效事件为 `server.connected`，再用
       pinned-compatible ascending codec 生成并时间排序 caller-owned user message id，
-      POST `model:{providerID,modelID}` +
+      POST `prompt_async` 并只接受 204，body 为 `model:{providerID,modelID}` +
       top-level variant + 一个 byte-equal text part；
       用 `message.updated.parentID` 绑定每个 tool-loop step 的严格递增 assistant-id
       集并复核 agent/provider/model/variant/path，旧 assistant completed 后才接受新
       step；恰好一个 caller user/text，只有已绑定 assistant parts/delta 可达；
-      caller/assistant id 排序、未知相关事件、畸形/drop、permission/question asked、
-      server early exit 全 fail closed。
+      严格接纳同会话 `todo.updated` 进度事件；caller/assistant id 排序、其它未知相关
+      事件、畸形/drop、permission/question asked、server early exit 全 fail closed；
+      idle 后 GET latest final WithParts 并与 SSE 终态逐字段对账。
 - [x] T16：把 pinned v1.18.3 SSE 映射为现有 `run --format json` protocol；
       与官方录制 fixture 对 stdout 顺序、字段和 exit code 做 golden 比较。
 - [x] T17：SIGTERM/SIGINT/timeout：
@@ -133,9 +134,10 @@
       不再拼 direct `opencode run`，nonempty `dependsOn` 先拒绝；plan 暴露 private
       `sessionStore.dbPath` capture locator。
 - [x] T20：runner 使用 launcher process group；identity marker 只持久化
-      code/path/非敏感 digest，identity failure 为 permanent，不进 envelope
-      followup 或相同输入普通 retry；control marker 在普通 stderr persistence 前
-      拦截，duplicate/malformed/CAS/ack failure fail closed，所有退出调用 cleanup。
+      code/path/非敏感 digest；identity failure 不进 envelope followup，除
+      `execution-identity-stream-failed` 可消耗有界 fresh-process retry 外，其余
+      均为 permanent；control marker 在普通 stderr persistence 前拦截，
+      duplicate/malformed/CAS/ack failure fail closed，所有退出调用 cleanup。
 - [x] T21：memory distiller 与 runtime smoke 也只启动 launcher，并补齐
       TERM/KILL/bounded drain、`plan.cleanup` 与 permanent outcome；business live/
       post session capture 显式使用 plan locator，禁止读用户全局 OpenCode DB。
@@ -147,7 +149,12 @@
 - [x] T23：协议/数据库/UI/save/probe 暴露稳定错误：
       untrusted binary、sandbox required、project config、plugin/dependent unsupported、
       model unresolved、bootstrap/mismatch/instance/session/stream/timeout；shared
-      failure union 是单一事实源，identity failure 不进入 followup policy/retry。
+      failure union 是单一事实源，identity failure 不进入 followup policy；
+      stream-failed 是唯一普通 process retry 例外，并覆盖 normal、wrapper 与
+      workgroup turn。
+- [x] T23a：同会话 envelope follow-up 从本代首轮 snapshot + 复用 nonce 重建
+      approved-memory persona，仅缩短 USER nudge，不改变 verified session identity；
+      workgroup 瞬时 stream retry 使用独立 fresh-run budget，不消耗协议轮数。
 - [x] T24：fresh seed 与现有 `model=NULL` 不补默认；OpenCode UI/save/probe/run
       都明确要求 operator 选择 model。shared effective-runtime policy 同时覆盖
       runtime/agent/system-config save、direct launch、schedule save/fire 与最终
@@ -236,7 +243,9 @@
 - **T19–T25**：business/system 共同调用 `verifiedPlanCore.ts` 的
   `buildVerifiedOpencodePlan`；runner、distiller、smoke、inventory、stable failure
   taxonomy 与 product-boundary policy 已接入。source reachability、runner control、
-  permanent routing、store recovery/task-delete 与 product policy tests 锁定生产路径。
+  permanent/transient routing、memory-bearing same-session follow-up、wrapper 与
+  workgroup fresh-run recovery、store recovery/task-delete 与 product policy tests
+  锁定生产路径。
 - **T26–T27**：首个 implementation SHA 前的阶段性 RFC-224 定向
   **286/286**、stale/source guards **80/80**、授权矩阵 **109/109**、backend
   focused **94/94**、frontend focused **43/43** 与 source reachability **8/8**

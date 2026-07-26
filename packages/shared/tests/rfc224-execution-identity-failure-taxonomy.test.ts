@@ -17,6 +17,7 @@ import {
   followupPolicyForFailure,
   isExecutionIdentityFailureCode,
   isPermanentRuntimeFailure,
+  isTransientRuntimeFailure,
 } from '../src'
 
 describe('RFC-224 execution identity failure taxonomy', () => {
@@ -49,11 +50,12 @@ describe('RFC-224 execution identity failure taxonomy', () => {
     expect(new Set(FAILURE_CODES).size).toBe(FAILURE_CODES.length)
   })
 
-  test('schema and guards accept every identity code and reject lookalikes', () => {
+  test('schema and guards accept every identity code while transient stream loss stays retryable', () => {
     for (const code of EXECUTION_IDENTITY_FAILURE_CODES) {
       expect(FailureCodeSchema.parse(code)).toBe(code)
       expect(isExecutionIdentityFailureCode(code)).toBe(true)
-      expect(isPermanentRuntimeFailure(code)).toBe(true)
+      expect(isPermanentRuntimeFailure(code)).toBe(code !== 'execution-identity-stream-failed')
+      expect(isTransientRuntimeFailure(code)).toBe(code === 'execution-identity-stream-failed')
     }
     for (const value of [
       'execution-identity',
@@ -65,6 +67,7 @@ describe('RFC-224 execution identity failure taxonomy', () => {
     ]) {
       expect(isExecutionIdentityFailureCode(value)).toBe(false)
       expect(isPermanentRuntimeFailure(value)).toBe(false)
+      expect(isTransientRuntimeFailure(value)).toBe(false)
     }
   })
 

@@ -20,6 +20,8 @@ import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import {
+  DEFAULT_PROTOCOL_RETRY_BUDGET,
+  type Agent,
   parseWgAssignmentsPort,
   parseWgMessagesPort,
   WG_MAX_ASSIGNMENTS_PER_TURN,
@@ -58,6 +60,7 @@ import {
 } from '../src/services/workgroup/engine'
 import { deriveWakeSet, type WakeInput } from '../src/services/workgroup/wake'
 import { createLogger } from '../src/util/log'
+import { executeTurn } from '../src/services/workgroup/turnExecution'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const log = createLogger('rfc185-fanout-test')
@@ -681,6 +684,169 @@ describe('RFC-185 T6 — engine hard guarantees (Codex P1/P2)', () => {
     expect(result.kind).toBe('ok')
     expect(requests).toHaveLength(2)
     expect(requests[1]?.promptTemplate).toContain('NO <workflow-output> envelope')
+  })
+
+  test('transient verified-stream failure restarts the LEADER turn with the full prompt', async () => {
+    const config = cfg()
+    const { taskId } = await seedEngineTask(db, config)
+    const { hooks, requests } = scriptedHooks({
+      leader: [
+        {
+          status: 'failed',
+          outputs: {},
+          errorMessage: 'execution-identity-stream-failed',
+          failureCode: 'execution-identity-stream-failed',
+        },
+        doneLeader({ decision: { action: 'done', summary: 'transport recovered' } }),
+      ],
+      member: [],
+    })
+    const result = await runWorkgroupEngine({ db, taskId, log, hooks })
+    expect(result.kind).toBe('ok')
+    expect(requests).toHaveLength(2)
+    expect(requests[1]?.promptTemplate).not.toContain('Protocol errors')
+  })
+
+  test('transient verified-stream retry is independent of message-turn protocol budget', async () => {
+    const config = cfg()
+    const { taskId } = await seedEngineTask(db, config)
+    const agent = {
+      id: CODER_AGENT_ID,
+      name: 'coder-a',
+      description: '',
+      outputs: [],
+      syncOutputsOnIterate: true,
+      permission: {},
+      skills: [],
+      dependsOn: [],
+      mcp: [],
+      plugins: [],
+      frontmatterExtra: {},
+      bodyMd: '',
+      schemaVersion: 1,
+      createdAt: 0,
+      updatedAt: 0,
+    } as Agent
+    let calls = 0
+    const hooks: WorkgroupEngineHooks = {
+      runHostNode: async (): Promise<WorkgroupHostRunResult> => {
+        calls += 1
+        if (calls === 1) {
+          return {
+            status: 'failed',
+            outputs: {},
+            errorMessage: 'execution-identity-stream-failed',
+            failureCode: 'execution-identity-stream-failed',
+          }
+        }
+        return { status: 'done', outputs: { wg_result: 'recovered' } }
+      },
+    }
+    const outcome = await executeTurn(
+      { db, taskId, hooks },
+      {
+        nodeId: WG_MEMBER_NODE_ID,
+        agent,
+        role: 'worker',
+        config,
+        clarifyShardKey: 'm-coder',
+        // Message turns deliberately get no protocol retry. Transport retries
+        // are a separate budget and must therefore still recover this turn.
+        maxAttempts: 1,
+        clarifyForbiddenNotice: '',
+        mintRow: () => ({
+          cause: 'wg-message-turn',
+          retryIndex: 0,
+          overrides: {
+            shardKey: 'msg:m-coder:1',
+            agentOverrideName: agent.name,
+            agentOverrideId: agent.id,
+          },
+        }),
+        composePrompt: () => 'handle the directed message',
+        parse: (outputs) => ({ ok: true, value: outputs.wg_result ?? '' }),
+      },
+    )
+    expect(outcome.kind).toBe('done')
+    expect(calls).toBe(2)
+    const rows = await db
+      .select({ retryIndex: nodeRuns.retryIndex, cause: nodeRuns.rerunCause })
+      .from(nodeRuns)
+      .where(eq(nodeRuns.taskId, taskId))
+    expect(rows.map((row) => [row.retryIndex, row.cause])).toEqual([
+      [0, 'wg-message-turn'],
+      [1, 'wg-protocol-retry'],
+    ])
+  })
+
+  test('transient verified-stream retries are bounded even for a single-shot message turn', async () => {
+    const config = cfg()
+    const { taskId } = await seedEngineTask(db, config)
+    const agent = {
+      id: CODER_AGENT_ID,
+      name: 'coder-a',
+      description: '',
+      outputs: [],
+      syncOutputsOnIterate: true,
+      permission: {},
+      skills: [],
+      dependsOn: [],
+      mcp: [],
+      plugins: [],
+      frontmatterExtra: {},
+      bodyMd: '',
+      schemaVersion: 1,
+      createdAt: 0,
+      updatedAt: 0,
+    } as Agent
+    let calls = 0
+    const hooks: WorkgroupEngineHooks = {
+      runHostNode: async (): Promise<WorkgroupHostRunResult> => {
+        calls += 1
+        return {
+          status: 'failed',
+          outputs: {},
+          errorMessage: 'execution-identity-stream-failed',
+          failureCode: 'execution-identity-stream-failed',
+        }
+      },
+    }
+    const outcome = await executeTurn(
+      { db, taskId, hooks },
+      {
+        nodeId: WG_MEMBER_NODE_ID,
+        agent,
+        role: 'worker',
+        config,
+        clarifyShardKey: 'm-coder',
+        maxAttempts: 1,
+        clarifyForbiddenNotice: '',
+        mintRow: () => ({
+          cause: 'wg-message-turn',
+          retryIndex: 0,
+          overrides: {
+            shardKey: 'msg:m-coder:bounded',
+            agentOverrideName: agent.name,
+            agentOverrideId: agent.id,
+          },
+        }),
+        composePrompt: () => 'handle the directed message',
+        parse: (outputs) => ({ ok: true, value: outputs.wg_result ?? '' }),
+      },
+    )
+    expect(outcome).toMatchObject({ kind: 'failed', retryable: true })
+    // Initial run + the shared retry budget: never an unbounded loop.
+    expect(calls).toBe(DEFAULT_PROTOCOL_RETRY_BUDGET + 1)
+    const rows = await db
+      .select({ retryIndex: nodeRuns.retryIndex, cause: nodeRuns.rerunCause })
+      .from(nodeRuns)
+      .where(eq(nodeRuns.taskId, taskId))
+    expect(rows.map((row) => [row.retryIndex, row.cause])).toEqual([
+      [0, 'wg-message-turn'],
+      [1, 'wg-protocol-retry'],
+      [2, 'wg-protocol-retry'],
+      [3, 'wg-protocol-retry'],
+    ])
   })
 
   test('envelope-missing is retryable for an ASSIGNMENT turn too (instance recovers)', async () => {

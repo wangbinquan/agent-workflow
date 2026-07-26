@@ -54,6 +54,14 @@ export interface SelectAgentQueueArgs {
    * Manual §15 entries are shard-AGNOSTIC (broadcast, never shard-filtered) — design §5 P2-1.
    */
   shardKey?: string | null
+  /**
+   * RFC-026 inline-session delta: the resumed OpenCode transcript already
+   * contains every queue entry bound to an earlier run. Keep only entries that
+   * have never been rendered, plus entries already bound to this same run
+   * (crash/replay idempotency). Isolated runs leave this false and continue to
+   * receive the complete un-aged queue.
+   */
+  currentRunOnly?: boolean
 }
 
 /** One un-aged entry of a node's agent queue, resolved for the flat renderer (T1). */
@@ -82,8 +90,10 @@ export interface AgentQueueEntry {
 /**
  * Select a node's agent queue: DISPATCHED, (sealed OR manual), UN-AGED task_questions whose
  * effectiveTarget (override ?? default) is `consumerNodeId`, resolved to render-ready entries
- * (Q&A from the origin clarify round, or the manual body). PURE READ — no writes (binding is the
- * separate {@link bindTriggerRun}). Returns [] when the node has nothing to inject.
+ * (Q&A from the origin clarify round, or the manual body). With `currentRunOnly`, the un-aged set
+ * is further reduced to the incremental message absent from a resumed session. PURE READ — no
+ * writes (binding is the separate {@link bindTriggerRun}). Returns [] when the node has nothing
+ * to inject.
  *
  * Aging is RFC-131 derived ({@link isTargetNodeConsumed}): an entry ages out once its target
  * produced a done+output (or review-superseded canceled+output) top-level run at or after the
@@ -97,7 +107,7 @@ export interface AgentQueueEntry {
  * its manual_body).
  */
 export async function selectAgentQueue(args: SelectAgentQueueArgs): Promise<AgentQueueEntry[]> {
-  const { db, taskId, consumerNodeId, dispatchedRunId, shardKey } = args
+  const { db, taskId, consumerNodeId, dispatchedRunId, shardKey, currentRunOnly = false } = args
 
   // 1. All DISPATCHED entries whose EFFECTIVE TARGET (override ?? default) is this node — every role
   //    in one query. RFC-131 T4 去借壳: select by the target the rerun is minted on (a reassign
@@ -153,15 +163,27 @@ export async function selectAgentQueue(args: SelectAgentQueueArgs): Promise<Agen
     db,
     sameNode.map((r) => r.id),
   )
-  const aged = dispatched.filter(
+  const unaged = dispatched.filter(
     (e) => !isTargetNodeConsumed(consumerNodeId, iteration, e.triggerRunId, sameNode, outputRunIds),
   )
-  if (aged.length === 0) return []
+  // RFC-026 inline resume is an incremental USER message in an existing
+  // transcript. `triggerRunId` is the exact "this entry was rendered into
+  // this run" anchor, so it also provides a stronger delta boundary than
+  // clarify-round numbers (which do not cover manual/cross-role coalescing).
+  // Keep the current id for crash replay; every earlier anchor is already in
+  // the resumed session. A process retry does not set currentRunOnly and
+  // therefore receives the full un-aged context in its fresh process.
+  const visible = currentRunOnly
+    ? unaged.filter(
+        (entry) => entry.triggerRunId === null || entry.triggerRunId === dispatchedRunId,
+      )
+    : unaged
+  if (visible.length === 0) return []
 
   // 3. Resolve each entry's render payload. Clarify entries derive (question, answer) from their
   //    origin clarify round; manual entries (§15) inject their human-authored body.
   const clarifyOriginIds = [
-    ...new Set(aged.filter((e) => e.sourceKind !== 'manual').map((e) => e.originNodeRunId)),
+    ...new Set(visible.filter((e) => e.sourceKind !== 'manual').map((e) => e.originNodeRunId)),
   ]
   const roundByOrigin = new Map<
     string,
@@ -206,7 +228,7 @@ export async function selectAgentQueue(args: SelectAgentQueueArgs): Promise<Agen
   }
 
   const result: AgentQueueEntry[] = []
-  for (const e of aged) {
+  for (const e of visible) {
     let render: FlatClarifyEntry | undefined
     if (e.sourceKind === 'manual') {
       const hasContent =
@@ -318,13 +340,16 @@ export interface BuildClarifyQueueContextArgs {
   iteration: number
   /** RFC-200: fence rendered user/agent-authored Q&A for this run. */
   envelopeNonce?: string
+  /** RFC-026: emit only the queue delta not already present in a resumed session. */
+  currentRunOnly?: boolean
 }
 
 /**
  * The unified deferred clarify injector (design §2). Three steps:
  *   1. selectAgentQueue — the node's DISPATCHED, (sealed OR manual), UN-AGED task_questions across
  *      ALL roles in one query (self / questioner / designer / manual), derived-aged by the sole
- *      RFC-131 oracle. Empty ⇒ undefined.
+ *      RFC-131 oracle. Inline resume additionally keeps only the current session delta.
+ *      Empty ⇒ undefined.
  *   2. bindTriggerRun — stamp the picked entries' trigger_run_id to this rerun (承接 marker).
  *   3. renderFlatClarifyQueue — one flat `## Clarify Q&A` block, every question an equal peer (no
  *      rounds / scope / directive trailer / attribution — §5).
@@ -332,8 +357,15 @@ export interface BuildClarifyQueueContextArgs {
 export async function buildClarifyQueueContext(
   args: BuildClarifyQueueContextArgs,
 ): Promise<ClarifyQueueContext | undefined> {
-  const { db, taskId, consumerNodeId, dispatchedRunId, shardKey } = args
-  const entries = await selectAgentQueue({ db, taskId, consumerNodeId, dispatchedRunId, shardKey })
+  const { db, taskId, consumerNodeId, dispatchedRunId, shardKey, currentRunOnly = false } = args
+  const entries = await selectAgentQueue({
+    db,
+    taskId,
+    consumerNodeId,
+    dispatchedRunId,
+    shardKey,
+    currentRunOnly,
+  })
   if (entries.length === 0) return undefined
   // RFC-134 D9 — 同题同目标渲染去重（角色无关）：同一 (origin round, question) 的多行有效指向
   // 同一节点时（现状可构造：designer 条目被改派到 questioner 节点；RFC-134 新增：回执与后到的
