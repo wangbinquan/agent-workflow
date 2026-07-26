@@ -48,6 +48,7 @@
 ## opencode / runtime
 
 - **opencode 行为以本地源码为准、不靠记忆**：进程启动/CLI 参数/`OPENCODE_*`/退出码/agent·skill 加载顺序/输出 XML——遇到就 grep/read 本地 opencode（路径在贡献者本地）。
+- **OpenCode 的 SSE 工具快照是单行 JSON，line budget 不能小于 event budget**：`message.part.updated` 会在 completed tool state 里重复输出和 metadata，读一个被 shell 截断的大文件就能产生约 76 KiB 的合法单行事件。若 parser 默认 `maxLineBytes=64 KiB`、但 `maxEventBytes=1 MiB`，实际效果是更小的隐藏硬上限：Agent 第一轮工具调用成功、第二轮前稳定报 `execution-identity-stream-failed`，进程重试也无法自愈。默认 line/event/buffer 三个 ceiling 要相容；自定义小预算仍可用于拒绝/单测。
 - **verified business plan 的 `PATH` 是能力白名单，不是 daemon `PATH` 的继承品**：只写 `/usr/bin:/bin` 会让 Agent 里的 `bun test` 在已安装 Bun 的机器上仍报 `bun: command not found`。需要 Bun 时，从 daemon 实际解析到的 binary 做 bytes snapshot/freeze，再把 run-scoped seal 目录显式加入 model shell 与 local MCP 的同一份 `PATH` 和只读 bind；不能暴露用户 home 目录，也不能只修 shell 忘了 MCP。
 - **run-scoped toolchain 绝对路径不是跨节点断言**：fanout 每个 Agent 都有独立 run id，因此 `/.../<node-run-id>/opencode-identity-seal/toolchain/bun` 只对本次进程有效。跨分片/重跑要比较 version、binary SHA-256、`toolchain/bun` 相对后缀与命令退出码；把另一个分片的绝对路径当当前路径会产生假失败。
 - **inline `OPENCODE_CONFIG_CONTENT` 并非最高优先级**（本机 v1.18.4 实证）：其后仍合并 active-org/managed/MDM/`mode`/`OPENCODE_PERMISSION` 覆盖同名 agent；`disable`/`mode:subagent` 还能让 `--agent` 回退默认。CLAUDE.md「Resolved open questions」的旧断言错误，执行身份完整性见 **RFC-224**。

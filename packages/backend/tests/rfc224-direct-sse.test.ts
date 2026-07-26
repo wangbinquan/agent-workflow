@@ -72,6 +72,42 @@ describe('RFC-224 bounded SSE parser', () => {
     ).toThrow('unexpected-field')
   })
 
+  test('accepts OpenCode one-line tool snapshots larger than 64 KiB', () => {
+    // OpenCode emits `message.part.updated` as one JSON `data:` line. Completed
+    // shell output is repeated inside the snapshot and can legitimately cross
+    // 64 KiB even though the event stays below the 1 MiB event budget.
+    const largeToolSnapshot = {
+      ...event,
+      type: 'message.part.updated',
+      properties: {
+        sessionID: 'ses_000000001001AAAAAAAAAAAAAA',
+        part: {
+          id: 'prt_000000001001AAAAAAAAAAAAAA',
+          sessionID: 'ses_000000001001AAAAAAAAAAAAAA',
+          messageID: 'msg_000000001001AAAAAAAAAAAAAA',
+          type: 'tool',
+          callID: 'call-large-output',
+          tool: 'bash',
+          state: {
+            status: 'completed',
+            input: { command: 'read-guidance' },
+            output: 'x'.repeat(76 * 1024),
+            title: 'read-guidance',
+            metadata: {},
+            time: { start: 1, end: 2 },
+          },
+        },
+        time: 2,
+      },
+    }
+    const encoded = frame(largeToolSnapshot)
+    expect(new TextEncoder().encode(encoded).byteLength).toBeGreaterThan(64 * 1024)
+
+    const parser = new BoundedSseParser()
+    expect(parser.push(encoded)).toEqual([largeToolSnapshot])
+    expect(parser.finish()).toEqual([])
+  })
+
   test('rejects invalid UTF-8, malformed JSON, strict-schema drift, and truncation', () => {
     const utf8 = new BoundedSseParser()
     expect(() => utf8.push(new Uint8Array([0xc3, 0x28]))).toThrow('invalid-utf8')

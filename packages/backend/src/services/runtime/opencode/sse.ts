@@ -16,7 +16,13 @@ export interface SseBudgets {
 }
 
 export const DEFAULT_SSE_BUDGETS: Readonly<SseBudgets> = Object.freeze({
-  maxLineBytes: 64 * 1024,
+  // OpenCode serializes each event as one `data:` JSON line. A completed tool
+  // part repeats its bounded output plus metadata in that single line, so a
+  // legitimate event can be larger than 64 KiB (observed: ~76 KiB when a
+  // repository guidance file is truncated by the shell tool). Keep the line
+  // ceiling aligned with the independently enforced event/buffer ceiling so
+  // every otherwise-admissible one-line event remains parseable.
+  maxLineBytes: 1024 * 1024,
   maxEventBytes: 1024 * 1024,
   maxBufferedBytes: 1024 * 1024,
   maxTotalBytes: 32 * 1024 * 1024,
