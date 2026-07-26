@@ -34,6 +34,8 @@ describe('RFC-182 源级锁', () => {
   test('滚动锚定接线：onScroll + atBottom 条件贴底 + 回到最新浮标', () => {
     expect(timeline).toContain('onScroll={onLogScroll}')
     expect(timeline).toContain('workgroup-room__jump')
-    expect(timeline.includes('el !== null && atBottom')).toBe(true)
+    expect(timeline).toContain('if (el === null || !atBottom) return')
+    expect(timeline).toContain('window.requestAnimationFrame')
+    expect(timeline).toContain('el.scrollTop = el.scrollHeight')
   })
 })

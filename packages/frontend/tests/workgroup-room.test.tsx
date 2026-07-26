@@ -425,9 +425,27 @@ describe('WorkgroupRoom — message stream', () => {
 
     // The existing tail affordance must take ownership back immediately,
     // even while the quote's smooth-scroll suppression window is active.
+    const animationFrames: FrameRequestCallback[] = []
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      animationFrames.push(callback)
+      return animationFrames.length
+    })
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined)
     fireEvent.click(screen.getByTestId('workgroup-room-jump-latest'))
+    expect(scrollTo).toHaveBeenLastCalledWith({ behavior: 'auto', top: 600 })
+    expect(log.scrollTop).toBe(log.scrollHeight)
     fireEvent.scroll(log)
     expect(screen.queryByTestId('workgroup-room-jump-latest')).toBeNull()
+
+    // Chromium can deliver a stale native smooth-scroll compositor sample
+    // after the click handler. Both bounded post-paint frames must reclaim the
+    // tail rather than leaving the latest bubble clipped below the viewport.
+    log.scrollTop = 590
+    await act(async () => animationFrames.shift()?.(0))
+    expect(log.scrollTop).toBe(log.scrollHeight)
+    log.scrollTop = 580
+    await act(async () => animationFrames.shift()?.(16))
+    expect(log.scrollTop).toBe(log.scrollHeight)
 
     await act(async () => {
       vi.advanceTimersByTime(1600)

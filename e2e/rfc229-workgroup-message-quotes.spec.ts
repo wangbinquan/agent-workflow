@@ -231,15 +231,22 @@ test('quote preview jumps to, focuses, and highlights the triggering message', a
     })
     .toBeLessThan(180)
 
-  await page.getByTestId('workgroup-room-jump-latest').click()
-  await expect(child).toBeVisible()
+  const jumpLatest = page.getByTestId('workgroup-room-jump-latest')
+  await jumpLatest.click()
+  await expect(jumpLatest).toBeHidden()
   await expect
     .poll(() =>
-      page
-        .getByTestId('workgroup-room-log')
-        .evaluate((element) => element.scrollHeight - element.scrollTop - element.clientHeight),
+      child.evaluate((element) => {
+        const log = element.parentElement
+        if (!(log instanceof HTMLElement)) return false
+        const childRect = element.getBoundingClientRect()
+        const logRect = log.getBoundingClientRect()
+        const viewportTop = logRect.top + log.clientTop
+        const viewportBottom = viewportTop + log.clientHeight
+        return childRect.top >= viewportTop && childRect.bottom <= viewportBottom
+      }),
     )
-    .toBeLessThan(2)
+    .toBe(true)
 })
 
 test('quote stays contained at 390px without widening the chat bubble', async ({ page }) => {

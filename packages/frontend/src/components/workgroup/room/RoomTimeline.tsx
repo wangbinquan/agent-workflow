@@ -101,7 +101,25 @@ function RoomTimelineInner({
     .join(',')}`
   useEffect(() => {
     const el = logRef.current
-    if (el !== null && atBottom) el.scrollTop = el.scrollHeight
+    if (el === null || !atBottom) return
+
+    // A native smooth quote jump can deliver one last compositor scroll sample
+    // after "back to latest" has synchronously taken the tail back. Reconcile
+    // for two paint frames so that stale sample cannot leave the newest message
+    // clipped just below the viewport. The loop is deliberately bounded: normal
+    // wheel/touch scrolling remains user-owned once these frames complete.
+    el.scrollTop = el.scrollHeight
+    let secondFrame = 0
+    const firstFrame = window.requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight
+      secondFrame = window.requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight
+      })
+    })
+    return () => {
+      window.cancelAnimationFrame(firstFrame)
+      window.cancelAnimationFrame(secondFrame)
+    }
   }, [followSig, atBottom])
   function onLogScroll(): void {
     const el = logRef.current
@@ -237,7 +255,13 @@ function RoomTimelineInner({
           onClick={() => {
             cancelQuoteScroll()
             const el = logRef.current
-            if (el !== null) el.scrollTop = el.scrollHeight
+            if (el !== null) {
+              // Setting the current position with `auto` explicitly cancels the
+              // in-flight native smooth scroll before the tail-follow effect
+              // performs its bounded post-paint reconciliation.
+              el.scrollTo({ top: el.scrollTop, behavior: 'auto' })
+              el.scrollTop = el.scrollHeight
+            }
             setAtBottom(true)
           }}
           data-testid="workgroup-room-jump-latest"
