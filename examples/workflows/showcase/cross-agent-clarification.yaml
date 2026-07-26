@@ -1,0 +1,77 @@
+name: showcase-cross-agent-clarification
+description: '规格 Agent 先出方案，审计 Agent 主动向人提一个取舍问题；回答后按跨 Agent clarify 规则恢复。'
+definition:
+  $schema_version: 4
+  inputs:
+    - kind: text
+      key: goal
+      label: 设计目标
+      required: true
+      maxLength: 3000
+    - kind: text
+      key: context
+      label: 已知背景
+      required: true
+      maxLength: 3000
+  nodes:
+    - id: goal_input
+      kind: input
+      inputKey: goal
+      position: { x: 20, y: 100 }
+    - id: context_input
+      kind: input
+      inputKey: context
+      position: { x: 20, y: 280 }
+    - id: designer
+      kind: agent-single
+      agentName: spec-analyst
+      promptTemplate: |
+        先给出一版可执行设计规格。
+        goal={{goal}}
+        context={{context}}
+      position: { x: 300, y: 120 }
+    - id: questioner
+      kind: agent-single
+      agentName: code-auditor
+      promptTemplate: |
+        审查设计规格。在给出 findings 前，必须通过 clarify 通道向用户提出一个
+        会实质改变方案的取舍问题；收到回答后再完成审计。
+        scope={{spec}}
+        context={{context}}
+      position: { x: 620, y: 120 }
+    - id: clarification
+      kind: clarify-cross-agent
+      title: 跨 Agent 设计取舍确认
+      description: 默认只让提问者带着封存回答重跑；必要时也可把反馈送回设计者。
+      position: { x: 620, y: 330 }
+    - id: clarification_output
+      kind: output
+      ports:
+        - name: findings
+          bind: { nodeId: questioner, portName: findings }
+      position: { x: 980, y: 120 }
+  edges:
+    - id: goal_to_designer
+      source: { nodeId: goal_input, portName: goal }
+      target: { nodeId: designer, portName: goal }
+    - id: context_to_designer
+      source: { nodeId: context_input, portName: context }
+      target: { nodeId: designer, portName: context }
+    - id: designer_to_questioner
+      source: { nodeId: designer, portName: spec }
+      target: { nodeId: questioner, portName: spec }
+    - id: context_to_questioner
+      source: { nodeId: context_input, portName: context }
+      target: { nodeId: questioner, portName: context }
+    - id: questioner_to_clarification
+      source: { nodeId: questioner, portName: __clarify__ }
+      target: { nodeId: clarification, portName: questions }
+    - id: clarification_to_questioner
+      source: { nodeId: clarification, portName: to_questioner }
+      target: { nodeId: questioner, portName: __clarify_response__ }
+    - id: clarification_to_designer
+      source: { nodeId: clarification, portName: to_designer }
+      target: { nodeId: designer, portName: __external_feedback__ }
+    - id: questioner_to_output
+      source: { nodeId: questioner, portName: findings }
+      target: { nodeId: clarification_output, portName: findings }

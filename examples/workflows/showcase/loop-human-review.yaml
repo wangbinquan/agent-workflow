@@ -1,0 +1,77 @@
+name: showcase-loop-human-review
+description: '文档 Agent 产出显式 Markdown 后，Loop 包装器在人工评审处挂起，批准后退出。'
+definition:
+  $schema_version: 4
+  inputs:
+    - kind: files
+      key: docs
+      label: 待评审 Markdown
+      required: true
+      minCount: 1
+      maxCount: 4
+      accept: '*.md'
+    - kind: text
+      key: context
+      label: 评审要求
+      required: true
+      maxLength: 2000
+  nodes:
+    - id: docs_input
+      kind: input
+      inputKey: docs
+      position: { x: 20, y: 180 }
+    - id: context_input
+      kind: input
+      inputKey: context
+      position: { x: 20, y: 340 }
+    - id: review_loop
+      kind: wrapper-loop
+      title: 人工批准后退出
+      nodeIds: [review_writer, review_gate]
+      maxIterations: 2
+      exitCondition:
+        kind: port-not-empty
+        nodeId: review_gate
+        portName: approved_doc
+      outputBindings:
+        - name: final_docs
+          bind: { nodeId: review_gate, portName: approved_doc }
+      position: { x: 240, y: 60 }
+      size: { width: 620, height: 340 }
+    - id: review_writer
+      kind: agent-single
+      agentName: doc-writer
+      promptTemplate: |
+        根据选定文档生成一份可人工评审的 Markdown 摘要。
+        source={{source}}
+        context={{context}}
+      position: { x: 330, y: 145 }
+    - id: review_gate
+      kind: review
+      title: 人工评审 Markdown
+      description: 包装器必须向任务层冒泡 awaiting_review；批准后当前轮次退出。
+      inputSource: { nodeId: review_writer, portName: doc }
+      rerunnableOnReject: [review_writer]
+      rerunnableOnIterate: []
+      rollbackFilesOnReject: false
+      rollbackFilesOnIterate: false
+      position: { x: 620, y: 145 }
+    - id: review_output
+      kind: output
+      ports:
+        - name: final_docs
+          bind: { nodeId: review_loop, portName: final_docs }
+      position: { x: 980, y: 180 }
+  edges:
+    - id: docs_to_writer
+      source: { nodeId: docs_input, portName: docs }
+      target: { nodeId: review_writer, portName: source }
+    - id: context_to_writer
+      source: { nodeId: context_input, portName: context }
+      target: { nodeId: review_writer, portName: context }
+    - id: writer_to_review
+      source: { nodeId: review_writer, portName: doc }
+      target: { nodeId: review_gate, portName: __review_input__ }
+    - id: loop_to_output
+      source: { nodeId: review_loop, portName: final_docs }
+      target: { nodeId: review_output, portName: final_docs }

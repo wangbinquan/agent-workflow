@@ -1,0 +1,87 @@
+name: showcase-nested-loop-git-fix
+description: '循环包装器每轮运行一个 Git 包装器；有真实差异即退出，再由测试 Agent 验证最后一轮结果。'
+definition:
+  $schema_version: 4
+  inputs:
+    - kind: text
+      key: findings
+      label: 待修问题
+      required: true
+      maxLength: 4000
+    - kind: text
+      key: constraints
+      label: 修复约束
+      required: true
+      maxLength: 3000
+  nodes:
+    - id: findings_input
+      kind: input
+      inputKey: findings
+      position: { x: 20, y: 120 }
+    - id: constraints_input
+      kind: input
+      inputKey: constraints
+      position: { x: 20, y: 300 }
+    - id: fix_loop
+      kind: wrapper-loop
+      title: 最多两轮，出现工作树差异即退出
+      nodeIds: [fix_git]
+      maxIterations: 2
+      exitCondition:
+        kind: port-not-empty
+        nodeId: fix_git
+        portName: git_diff
+      outputBindings:
+        - name: final_diff
+          bind: { nodeId: fix_git, portName: git_diff }
+      position: { x: 240, y: 40 }
+      size: { width: 760, height: 430 }
+    - id: fix_git
+      kind: wrapper-git
+      title: 捕获当前修复轮次的差异
+      nodeIds: [fixer]
+      position: { x: 350, y: 105 }
+      size: { width: 500, height: 280 }
+    - id: fixer
+      kind: agent-single
+      agentName: fix-engineer
+      promptTemplate: |
+        逐条复核并最小化修复；当前是第 {{__iteration__}} 轮，不提交、不推送。
+        findings={{findings}}
+        context={{context}}
+      position: { x: 450, y: 190 }
+    - id: regression_tests
+      kind: agent-single
+      agentName: test-writer
+      promptTemplate: |
+        针对最终修复差异运行或补齐回归测试。
+        target={{final_diff}}
+        context={{context}}
+      position: { x: 1100, y: 170 }
+    - id: fix_output
+      kind: output
+      ports:
+        - name: final_diff
+          bind: { nodeId: fix_loop, portName: final_diff }
+        - name: test_report
+          bind: { nodeId: regression_tests, portName: test_report }
+      position: { x: 1400, y: 170 }
+  edges:
+    - id: findings_to_fixer
+      source: { nodeId: findings_input, portName: findings }
+      target: { nodeId: fixer, portName: findings }
+    - id: constraints_to_fixer
+      source: { nodeId: constraints_input, portName: constraints }
+      target: { nodeId: fixer, portName: context }
+    - id: loop_to_tests
+      source: { nodeId: fix_loop, portName: final_diff }
+      target: { nodeId: regression_tests, portName: final_diff }
+    - id: constraints_to_tests
+      source: { nodeId: constraints_input, portName: constraints }
+      target: { nodeId: regression_tests, portName: context }
+    - id: loop_to_output
+      source: { nodeId: fix_loop, portName: final_diff }
+      target: { nodeId: fix_output, portName: final_diff }
+    - id: tests_to_output
+      source: { nodeId: regression_tests, portName: test_report }
+      target: { nodeId: fix_output, portName: test_report }

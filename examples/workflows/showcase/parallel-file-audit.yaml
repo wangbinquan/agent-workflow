@@ -1,0 +1,85 @@
+name: showcase-parallel-file-audit
+description: '把仓库文件列表按文件分片，并行审计后 join，再由单个 aggregator 去重分级。'
+definition:
+  $schema_version: 4
+  inputs:
+    - kind: files
+      key: targets
+      label: 待审计文件
+      required: true
+      minCount: 2
+      maxCount: 12
+      accept: file
+    - kind: text
+      key: policy
+      label: 统一审计策略
+      required: true
+      maxLength: 3000
+  nodes:
+    - id: targets_input
+      kind: input
+      inputKey: targets
+      position: { x: 20, y: 100 }
+    - id: policy_input
+      kind: input
+      inputKey: policy
+      position: { x: 20, y: 300 }
+    - id: audit_fanout
+      kind: wrapper-fanout
+      title: 每个文件一个并行审计分片
+      nodeIds: [file_auditor, audit_aggregator]
+      inputs:
+        - name: targets
+          kind: list<path<*>>
+          isShardSource: true
+        - name: policy
+          kind: string
+      expectedShardCount: 12
+      position: { x: 240, y: 40 }
+      size: { width: 760, height: 430 }
+    - id: file_auditor
+      kind: agent-single
+      agentName: code-auditor
+      promptTemplate: |
+        只审计当前分片文件，所有结论必须带文件与行号证据。
+        scope={{target_file}}
+        context={{shared_policy}}
+      position: { x: 350, y: 150 }
+    - id: audit_aggregator
+      kind: agent-single
+      agentName: showcase-audit-aggregator
+      promptTemplate: |
+        等待全部分片完成，去重、分级并生成最终报告。
+        findings={{findings}}
+      position: { x: 680, y: 150 }
+    - id: audit_output
+      kind: output
+      ports:
+        - name: final_report
+          bind: { nodeId: audit_fanout, portName: final_report }
+      position: { x: 1100, y: 210 }
+  edges:
+    - id: targets_to_fanout
+      source: { nodeId: targets_input, portName: targets }
+      target: { nodeId: audit_fanout, portName: targets }
+    - id: policy_to_fanout
+      source: { nodeId: policy_input, portName: policy }
+      target: { nodeId: audit_fanout, portName: policy }
+    - id: fanout_target_to_worker
+      boundary: wrapper-input
+      source: { nodeId: audit_fanout, portName: targets }
+      target: { nodeId: file_auditor, portName: target_file }
+    - id: fanout_policy_to_worker
+      boundary: wrapper-input
+      source: { nodeId: audit_fanout, portName: policy }
+      target: { nodeId: file_auditor, portName: shared_policy }
+    - id: worker_to_aggregator
+      source: { nodeId: file_auditor, portName: findings }
+      target: { nodeId: audit_aggregator, portName: findings }
+    - id: aggregator_to_fanout
+      boundary: wrapper-output
+      source: { nodeId: audit_aggregator, portName: report }
+      target: { nodeId: audit_fanout, portName: final_report }
+    - id: fanout_to_output
+      source: { nodeId: audit_fanout, portName: final_report }
+      target: { nodeId: audit_output, portName: final_report }

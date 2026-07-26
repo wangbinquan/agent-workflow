@@ -1,0 +1,131 @@
+name: showcase-complex-delivery
+description: '规格分析 → Git 隔离实现 → 并行审计与测试 → 文档汇总 → 人工评审。'
+definition:
+  $schema_version: 4
+  inputs:
+    - kind: text
+      key: goal
+      label: 交付目标
+      required: true
+      maxLength: 4000
+    - kind: text
+      key: constraints
+      label: 约束与背景
+      required: true
+      maxLength: 4000
+  nodes:
+    - id: goal_input
+      kind: input
+      inputKey: goal
+      position: { x: 20, y: 120 }
+    - id: constraints_input
+      kind: input
+      inputKey: constraints
+      position: { x: 20, y: 300 }
+    - id: spec
+      kind: agent-single
+      agentName: spec-analyst
+      promptTemplate: |
+        把目标拆成可执行规格，并保留明确的验收标准与非目标。
+        goal={{goal}}
+        context={{context}}
+      position: { x: 260, y: 120 }
+    - id: implementation_git
+      kind: wrapper-git
+      title: 在隔离工作树中实现并捕获完整差异
+      nodeIds: [implementation]
+      position: { x: 500, y: 40 }
+      size: { width: 430, height: 300 }
+    - id: implementation
+      kind: agent-single
+      agentName: impl-engineer
+      promptTemplate: |
+        按规格实现；只改目标所需文件，运行真实验证，不提交、不推送。
+        spec={{spec}}
+        context={{context}}
+      position: { x: 590, y: 145 }
+    - id: audit
+      kind: agent-single
+      agentName: code-auditor
+      promptTemplate: |
+        审计本次实现的全部变更路径，重点检查正确性、错误处理与回归风险。
+        scope={{changed_files}}
+        context={{spec}}
+      position: { x: 1020, y: 60 }
+    - id: tests
+      kind: agent-single
+      agentName: test-writer
+      promptTemplate: |
+        针对这些变更路径补齐或运行正向、边界和错误路径测试。
+        target={{changed_files}}
+        context={{spec}}
+      position: { x: 1020, y: 260 }
+    - id: release_notes
+      kind: agent-single
+      agentName: doc-writer
+      promptTemplate: |
+        将审计与测试结果汇总成一份可评审交付说明。
+        source={{evidence}}
+        context={{spec}}
+      position: { x: 1320, y: 150 }
+    - id: human_review
+      kind: review
+      title: 人工验收交付说明
+      description: 可批准，也可填写拒绝原因让文档汇总节点带着上一版结果重跑。
+      inputSource: { nodeId: release_notes, portName: doc }
+      rerunnableOnReject: [release_notes]
+      rerunnableOnIterate: []
+      rollbackFilesOnReject: false
+      rollbackFilesOnIterate: false
+      position: { x: 1600, y: 150 }
+    - id: delivery_output
+      kind: output
+      ports:
+        - name: approved_delivery
+          bind: { nodeId: human_review, portName: approved_doc }
+        - name: changed_files
+          bind: { nodeId: implementation_git, portName: git_diff }
+      position: { x: 1880, y: 150 }
+  edges:
+    - id: goal_to_spec
+      source: { nodeId: goal_input, portName: goal }
+      target: { nodeId: spec, portName: goal }
+    - id: constraints_to_spec
+      source: { nodeId: constraints_input, portName: constraints }
+      target: { nodeId: spec, portName: context }
+    - id: spec_to_implementation
+      source: { nodeId: spec, portName: spec }
+      target: { nodeId: implementation, portName: spec }
+    - id: constraints_to_implementation
+      source: { nodeId: constraints_input, portName: constraints }
+      target: { nodeId: implementation, portName: context }
+    - id: git_to_audit
+      source: { nodeId: implementation_git, portName: git_diff }
+      target: { nodeId: audit, portName: changed_files }
+    - id: spec_to_audit
+      source: { nodeId: spec, portName: spec }
+      target: { nodeId: audit, portName: spec }
+    - id: git_to_tests
+      source: { nodeId: implementation_git, portName: git_diff }
+      target: { nodeId: tests, portName: changed_files }
+    - id: spec_to_tests
+      source: { nodeId: spec, portName: spec }
+      target: { nodeId: tests, portName: spec }
+    - id: audit_to_notes
+      source: { nodeId: audit, portName: findings }
+      target: { nodeId: release_notes, portName: evidence }
+    - id: tests_to_notes
+      source: { nodeId: tests, portName: test_report }
+      target: { nodeId: release_notes, portName: evidence }
+    - id: spec_to_notes
+      source: { nodeId: spec, portName: spec }
+      target: { nodeId: release_notes, portName: spec }
+    - id: notes_to_review
+      source: { nodeId: release_notes, portName: doc }
+      target: { nodeId: human_review, portName: __review_input__ }
+    - id: review_to_output
+      source: { nodeId: human_review, portName: approved_doc }
+      target: { nodeId: delivery_output, portName: approved_delivery }
+    - id: git_to_output
+      source: { nodeId: implementation_git, portName: git_diff }
+      target: { nodeId: delivery_output, portName: changed_files }
