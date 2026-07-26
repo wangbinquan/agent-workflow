@@ -2749,13 +2749,13 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
   }
 
   if (node.kind === 'wrapper-git') {
-    return runGitWrapperNode(state, args)
+    return runWrapperNode(state, args, runGitWrapperNode)
   }
   if (node.kind === 'wrapper-loop') {
-    return runLoopWrapperNode(state, args)
+    return runWrapperNode(state, args, runLoopWrapperNode)
   }
   if (node.kind === 'wrapper-fanout') {
-    return runFanoutWrapperNode(state, args)
+    return runWrapperNode(state, args, runFanoutWrapperNode)
   }
 
   if (node.kind === 'review') {
@@ -4190,6 +4190,81 @@ async function persistWrapperProgress(
     .where(eq(nodeRuns.id, wrapperRunId))
 }
 
+/**
+ * RFC-230 PR-2 — 三个 wrapper 分派点的共同外壳：把 `WrapperSupersededSignal`
+ * 收敛成 scope 结果。放在这一个位置而不是 15 个 markWrapperTerminal 调用点各判
+ * 一次，是为了让「收尾撞上外部终态」只有一条出口，漏改一个分支不可能发生。
+ */
+async function runWrapperNode(
+  state: SchedulerState,
+  args: OneNodeArgs,
+  run: (state: SchedulerState, args: OneNodeArgs) => Promise<OneNodeResult>,
+): Promise<OneNodeResult> {
+  try {
+    return await run(state, args)
+  } catch (err) {
+    if (err instanceof WrapperSupersededSignal) return err.outcome
+    throw err
+  }
+}
+
+/**
+ * RFC-230 PR-2 — wrapper 收尾时发现自己那行已被外部**合法**终态抢先（用户取消 /
+ * 诊断修复 / 孤儿回收）时抛出的信号。在 wrapper 分派点（runWrapperNode）统一转成
+ * scope 结果，而不是让 ConflictError 一路冒泡成任务级 `scheduler error` —— 那条
+ * 报错说的是「两个写者对同一行的真相不一致」，但取消与修复本来就有权先落定，
+ * 真相并不冲突，冲突的是收尾逻辑假设自己是唯一写者。
+ *
+ * 只有 canceled / interrupted 走这条路。其余非法转移（例如已 done 又要写 failed）
+ * 仍然大声抛出：那才是真正的数据不一致，不能被收敛掩盖。
+ */
+class WrapperSupersededSignal extends Error {
+  constructor(readonly outcome: OneNodeResult) {
+    super(outcome.message)
+    this.name = 'WrapperSupersededSignal'
+  }
+}
+
+/**
+ * 只有这两类错误可能是「别人合法地先落定了这一行」：
+ *   - `illegal-node-run-transition` —— 读到的当前状态已是终态，守卫拒写；
+ *   - `concurrent-node-run-transition` —— 读到非终态但 CAS 被人抢走。
+ * DB 故障、NotFound、以及任何别的异常都不属于这一类，必须原样抛。
+ */
+function isSupersedableTransitionError(err: unknown): boolean {
+  const code = (err as { code?: unknown } | null)?.code
+  return code === 'illegal-node-run-transition' || code === 'concurrent-node-run-transition'
+}
+
+/** 外部抢先的终态 → 本 scope 应当收敛到的结果；不是可收敛的终态则 null（原样抛）。 */
+async function supersedingWrapperOutcome(
+  db: DbClient,
+  wrapperRunId: string,
+): Promise<OneNodeResult | null> {
+  const [cur] = await db
+    .select({ status: nodeRuns.status })
+    .from(nodeRuns)
+    .where(eq(nodeRuns.id, wrapperRunId))
+  if (cur === undefined) return null
+  if (cur.status === 'canceled') {
+    return {
+      kind: 'canceled',
+      summary: 'wrapper canceled while finalizing',
+      message: 'wrapper-superseded-canceled',
+    }
+  }
+  if (cur.status === 'interrupted') {
+    // interrupted 是可 resume 的终态；任务收在 failed（同样可 resume），而不是
+    // 假装成功 done —— 后者会让一段被外部打断的工作以绿色收场。
+    return {
+      kind: 'failed',
+      summary: 'wrapper interrupted while finalizing',
+      message: 'wrapper-superseded-interrupted',
+    }
+  }
+  return null
+}
+
 async function markWrapperTerminal(
   db: DbClient,
   wrapperRunId: string,
@@ -4205,17 +4280,37 @@ async function markWrapperTerminal(
   // flips to interrupted without passing through this function. awaiting_* is
   // still legal when a wrapper bubbled up an awaiting child and is now being
   // short-circuited by cancel.
-  await setNodeRunStatus({
-    db,
-    nodeRunId: wrapperRunId,
-    to: status,
-    allowedFrom: ['running', 'awaiting_review', 'awaiting_human'],
-    reason: 'wrapper-finalize',
-    extra: {
-      finishedAt: Date.now(),
-      ...(errorMessage !== undefined ? { errorMessage } : {}),
-    },
-  })
+  try {
+    await setNodeRunStatus({
+      db,
+      nodeRunId: wrapperRunId,
+      to: status,
+      allowedFrom: ['running', 'awaiting_review', 'awaiting_human'],
+      reason: 'wrapper-finalize',
+      extra: {
+        finishedAt: Date.now(),
+        ...(errorMessage !== undefined ? { errorMessage } : {}),
+      },
+    })
+  } catch (err) {
+    // RFC-230 PR-2: 外部终态抢先 → 收敛。
+    //
+    // 只认这两类错误（Codex 设计门 P2-3）：终态守卫拒写、以及 CAS 丢失。
+    // 捕获**任意**异常然后「重读一眼状态恰好是终态就收敛」，会在底层 DB 故障 /
+    // NotFound 时把原始错误吞掉——那是把两种完全不同的失败混成一种。
+    if (!isSupersedableTransitionError(err)) throw err
+    const outcome = await supersedingWrapperOutcome(db, wrapperRunId)
+    if (outcome === null) throw err
+    // 先清 reuseDisabled 再抛信号：那个 flag 留着会永久禁掉这条 resume 血脉的
+    // done-shard 复用。
+    await clearWrapperReuseDisabled(db, wrapperRunId)
+    createLogger('scheduler').info('wrapper finalize superseded by external terminal state', {
+      wrapperRunId,
+      attempted: status,
+      outcome: outcome.message,
+    })
+    throw new WrapperSupersededSignal(outcome)
+  }
   // Note: wrapperProgressJson is left in place after terminal transitions —
   // it's debug breadcrumb for "where did this wrapper park last" and is
   // never read again by the scheduler once status is terminal…
@@ -4228,6 +4323,11 @@ async function markWrapperTerminal(
   // again — leaving the flag set would permanently disable done-shard reuse
   // for this row's resume lineage. Only the flag is stripped; the rest of the
   // payload stays as breadcrumb.
+  await clearWrapperReuseDisabled(db, wrapperRunId)
+}
+
+/** 见上：终态到达后必须剥掉 fanout 的 `reuseDisabled` 闸门，其余 payload 留作面包屑。 */
+async function clearWrapperReuseDisabled(db: DbClient, wrapperRunId: string): Promise<void> {
   const [terminalRow] = await db
     .select({ wrapperProgressJson: nodeRuns.wrapperProgressJson })
     .from(nodeRuns)

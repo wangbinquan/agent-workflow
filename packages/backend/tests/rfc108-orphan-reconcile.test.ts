@@ -1,9 +1,13 @@
 // RFC-108 T17 (AR-10) — periodic post-boot orphan reconciler.
 //
 // 为什么这条测试存在：boot reaper 只跑一次且乐观翻所有 running；周期 reconciler 在活
-// daemon 里只能翻「进程确已消失」的 run，且要躲过刚 spawn 的竞态。本测试用注入 isGone
-// 锁定：① 进程消失 + 过 grace → 翻 run + 翻 task + 记 periodic-reap；② grace 内的新 run
-// 不碰；③ 进程仍在（isGone=false）不翻；④ 任务还有别的活 run 时不翻 task。
+// daemon 里只能翻「活性证据链确已断裂」的 run，且要躲过刚 spawn 的竞态。本测试用注入
+// 探针锁定编排逻辑：① 进程消失 + 过 grace → 翻 run + 翻 task + 记 periodic-reap；
+// ② grace 内的新 run 不碰；③ 进程仍在不翻；④ 任务还有别的活 run 时不翻 task。
+//
+// RFC-230：注入点从「isGone(run)」收缩为「probeProcessAlive(pid, binary)」——旧签名让
+// 判活口径（pid===null ⇒ 已消失）永远走不到真实代码，正是那次 wrapper 误收事故的测试
+// 盲区。判活语义本身由 rfc230-run-liveness.test.ts 直测真函数。
 
 import { resolve } from 'node:path'
 import { afterEach, describe, expect, test } from 'bun:test'
@@ -65,7 +69,12 @@ describe('RFC-108 T17 — reconcileDeadRunningRuns', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedRunningTask(db)
     const runId = await seedRun(db, taskId, 'running', NOW - 50_000) // older than grace
-    const res = await reconcileDeadRunningRuns({ db, graceMs: 1000, now: NOW, isGone: () => true })
+    const res = await reconcileDeadRunningRuns({
+      db,
+      graceMs: 1000,
+      now: NOW,
+      probeProcessAlive: () => false,
+    })
     expect(res.reapedRuns).toEqual([runId])
     expect(res.reapedTasks).toEqual([taskId])
     const t = await db.select().from(tasks).where(eq(tasks.id, taskId))
@@ -79,15 +88,25 @@ describe('RFC-108 T17 — reconcileDeadRunningRuns', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedRunningTask(db)
     await seedRun(db, taskId, 'running', NOW - 100) // newer than grace 1000
-    const res = await reconcileDeadRunningRuns({ db, graceMs: 1000, now: NOW, isGone: () => true })
+    const res = await reconcileDeadRunningRuns({
+      db,
+      graceMs: 1000,
+      now: NOW,
+      probeProcessAlive: () => false,
+    })
     expect(res.reapedRuns).toHaveLength(0)
   })
 
-  test('alive run (isGone=false) is left running', async () => {
+  test('alive run (probe says alive) is left running', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedRunningTask(db)
     await seedRun(db, taskId, 'running', NOW - 50_000)
-    const res = await reconcileDeadRunningRuns({ db, graceMs: 1000, now: NOW, isGone: () => false })
+    const res = await reconcileDeadRunningRuns({
+      db,
+      graceMs: 1000,
+      now: NOW,
+      probeProcessAlive: () => true,
+    })
     expect(res.reapedRuns).toHaveLength(0)
     expect(res.reapedTasks).toHaveLength(0)
   })
@@ -101,7 +120,7 @@ describe('RFC-108 T17 — reconcileDeadRunningRuns', () => {
       db,
       graceMs: 1000,
       now: NOW,
-      isGone: (r) => r.id === goneId,
+      probeProcessAlive: () => false,
     })
     expect(res.reapedRuns).toEqual([goneId])
     expect(res.reapedTasks).toHaveLength(0) // task kept running (pending run remains)

@@ -56,6 +56,8 @@
 
 - **单二进制 smoke（`bun run build:binary`）会抓 typecheck/`bun:test` 抓不到的模块初始化循环**；推 shared-export 改动前先跑（RFC-079 事故）。
 - **`buildLaunchBody`/`buildLaunchBodyMultiRepo` 白名单 `POST /api/tasks` 字段并丢弃 extras**：加进 `launchCommon` ≠ 上线——必须在 helper 里 stamp（共享 `stampLaunchExtras`）；launch 测试只断言 source-spread（根因），别被绿测试骗过。
+- **后台清扫 loop 写 node_run / task 前必须过「活跃驱动门」`isTaskActive`**（先例 `lifecycleRepair/helpers.ts` `schedulerLivenessGate`）。RFC-230 事故：周期孤儿回收器是唯一绕过这道门的后台写者，且判活口径是 `pid === null ⇒ 进程已消失`——而 wrapper（git/loop/fanout）记账行**永不写 pid**（`pid` 全仓唯一写点在 `runner.ts` spawn 之后），于是内层跑超 60s 宽限期的 wrapper 被误判成孤儿翻 `interrupted`，收尾撞终态守卫→整任务 `scheduler error` 失败，还顺带伪造出 S3「任务在跑但节点全终态」卡死现场。**通用规律：新增一类 run / 行时先问「它的活性证据从哪来」**——没有进程 ≠ 已经死了，容器类行的活性委派给内层行，最终才落到真实进程或真实驱动；证据缺席一律判活（误收=打断活任务，漏收=残骸多活到开机清扫，代价不对称）。
+- **注入式判据 = 真实判据零覆盖**：`isGone`/`probe` 这类注入 seam 让生产口径永远走不到测试里（`design/test-guard-audit-2026-07-21/01-gaps.md` 的 `B2-lifecycle-1`/`M1-lcov-4` 记过、RFC-230 兑现）。注入的是**探针**（pid 是否活）而非**判据**（这行是否该被判死）——判据必须有直测。
 
 ## Codex review（本仓工作流的一部分）
 
