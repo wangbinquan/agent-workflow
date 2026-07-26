@@ -838,10 +838,15 @@ describe('RFC-224 sealed model-reachable subprocess boundary', () => {
     )
     expect(profile).toContain('(deny network*)')
     expect(profile).toContain('(deny file-read* file-write* (subpath "/home/operator"))')
+    expect(profile).toContain('(allow file-read-metadata (literal "/home/operator"))')
+    expect(profile).toContain('(allow file-read-metadata (literal "/srv/agent-workflow"))')
+    expect(profile).toContain('(allow file-read-metadata (literal "/srv/agent-workflow/runs"))')
     expect(profile).toContain('(allow file-read* file-write* (subpath "/home/operator/worktree"))')
     expect(profile).toContain(
       '(allow file-read* file-write* (subpath "/srv/agent-workflow/repos/project.git"))',
     )
+    expect(profile).not.toContain('(allow file-read* file-write* (subpath "/srv/agent-workflow"))')
+    expect(profile).not.toContain('(allow file-read* (subpath "/srv/agent-workflow"))')
     expect(profile).toContain('(deny file-write* (subpath "/home/operator/bin/mcp-a"))')
   })
 

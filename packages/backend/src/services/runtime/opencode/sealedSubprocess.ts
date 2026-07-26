@@ -896,6 +896,22 @@ export function renderNetlessSeatbeltProfile(manifest: NetlessSubprocessManifest
   for (const mask of masks) {
     lines.push(`(deny file-read* file-write* (subpath ${sbplString(mask)}))`)
   }
+  const traversableAncestors = [
+    ...new Set(
+      [...writable, ...parsed.bindReadOnly].flatMap((target) =>
+        masks.flatMap((mask) =>
+          contained(mask, target) && target !== mask ? [mask, ...parentDirs(mask, target)] : [],
+        ),
+      ),
+    ),
+  ]
+  // Git canonicalizes every prefix before following a linked-worktree `.git`
+  // pointer. Restore only metadata on the exact ancestor directories needed
+  // for that traversal; directory contents and sibling files stay behind the
+  // mask.
+  for (const target of traversableAncestors) {
+    lines.push(`(allow file-read-metadata (literal ${sbplString(target)}))`)
+  }
   for (const target of [...new Set(writable)]) {
     lines.push(`(allow file-read* file-write* (subpath ${sbplString(target)}))`)
   }
