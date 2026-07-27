@@ -1229,7 +1229,9 @@ function TaskWizardPage() {
         ((start.error !== null && start.error !== undefined && !startWorkflowVersionMismatch) ||
           (saveConfig.error !== null && saveConfig.error !== undefined)) && (
           <div data-testid="wizard-submit-error">
-            <ErrorBanner error={start.error ?? saveConfig.error} />
+            <ErrorBanner
+              error={workflowTaskCreationDisplayError(start.error ?? saveConfig.error)}
+            />
           </div>
         )}
 
@@ -1914,4 +1916,32 @@ function isWorkflowVersionMismatchError(error: unknown): error is ApiError {
   return (
     error instanceof ApiError && error.status === 409 && error.code === 'workflow-version-mismatch'
   )
+}
+
+/**
+ * A rejected workflow launch carries the complete validation result so editor
+ * surfaces can explain both blockers and advisory warnings. In the task
+ * creation wizard, however, only error-severity issues explain why Create was
+ * refused; showing warnings here makes non-blocking guidance look like more
+ * required work. Keep the original error contract and remove only explicitly
+ * non-blocking issues from this one presentation surface.
+ */
+function workflowTaskCreationDisplayError(error: unknown): unknown {
+  if (!(error instanceof ApiError) || error.code !== 'workflow-invalid') return error
+  if (typeof error.details !== 'object' || error.details === null || Array.isArray(error.details)) {
+    return error
+  }
+
+  const details = error.details as Record<string, unknown>
+  if (!Array.isArray(details.issues)) return error
+  const blockingIssues = details.issues.filter((issue) => {
+    if (typeof issue !== 'object' || issue === null || Array.isArray(issue)) return true
+    return (issue as Record<string, unknown>).severity !== 'warning'
+  })
+  if (blockingIssues.length === details.issues.length) return error
+
+  return new ApiError(error.status, error.code, error.message, {
+    ...details,
+    issues: blockingIssues,
+  })
 }

@@ -988,8 +988,10 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
   // RFC-203 PR-2 实现门 P1：workflow 启动被 422 workflow-invalid 驳回时，
   // details.issues（节点/边定位）必须经富横幅渲染出来——此前 footer 的
   // describeApiError 字符串壳把 issues 整个丢掉，词条精确化后只剩一句
-  // 「工作流内容不合法」，用户无从定位要修哪个节点。
-  test('workflow launch 422 workflow-invalid renders localized validation issues (rich banner)', async () => {
+  // 「工作流内容不合法」，用户无从定位要修哪个节点。任务创建界面只应
+  // 展示真正阻断启动的 error；warning 仍留在工作流编辑器里，避免把提示
+  // 数量误呈现成“还有很多问题无法创建”。
+  test('workflow launch 422 workflow-invalid renders blocking issues without warning advisories', async () => {
     installFetch()
     const base = vi.mocked(globalThis.fetch).getMockImplementation()!
     vi.mocked(globalThis.fetch).mockImplementation(async (input, init) => {
@@ -1003,6 +1005,12 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
               "workflow 'wf-1' failed static validation (1 error); fix issues before starting a task",
             details: {
               issues: [
+                {
+                  code: 'input-orphan-declared',
+                  message:
+                    "workflow.inputs[] declares key 'unused' but no input node references it",
+                  severity: 'warning',
+                },
                 {
                   code: 'wrapper-loop-max-iterations',
                   message: "wrapper-loop 'nd-loop' missing maxIterations (integer >= 1)",
@@ -1034,6 +1042,9 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
     // 校验 issue 本地化行 + 定位原文进可展开折叠块（不是 hover title）
     expect(errorEl.textContent).toMatch(/循环包装器缺少最大迭代次数|missing maxIterations/)
     expect(within(errorEl).getByText(/wrapper-loop 'nd-loop' missing maxIterations/)).toBeTruthy()
+    expect(errorEl.textContent).not.toMatch(
+      /工作流声明的输入没有任何输入节点引用|referenced by no input node|unused/,
+    )
   })
 
   test('RFC-198: editScheduled initial loading/error retries into a seeded wizard', async () => {
