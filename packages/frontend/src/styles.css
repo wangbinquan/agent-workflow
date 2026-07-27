@@ -17848,6 +17848,14 @@ button.status-chip {
   overflow: hidden;
 }
 
+/* Keep compact visibility labels intact while the surrounding badge group
+   yields space to long resource names / owner labels. CJK can otherwise break
+   between any two glyphs, turning 「私有」into a two-line pill on narrow cards. */
+.gallery-card__badges > .chip {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 .gallery-card__badges .data-table__owner {
   overflow: hidden;
   text-overflow: ellipsis;

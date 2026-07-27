@@ -432,10 +432,13 @@ describe('ResourceGalleryPage shell', () => {
     const whenRule = css.match(/\.gallery-card__when\s*\{([^}]*)\}/)?.[1] ?? ''
     const emptyDescRule = css.match(/\.gallery-card__desc--empty\s*\{([^}]*)\}/)?.[1] ?? ''
     const actionHintRule = css.match(/\.gallery-card__action-hint\s*\{([^}]*)\}/)?.[1] ?? ''
+    const badgeChipRule = css.match(/\.gallery-card__badges\s*>\s*\.chip\s*\{([^}]*)\}/)?.[1] ?? ''
     expect(descRule).not.toContain('z-index')
     expect(whenRule).not.toContain('z-index')
     expect(emptyDescRule).toContain('color: var(--muted)')
     expect(actionHintRule).toContain('color: var(--text)')
+    expect(badgeChipRule).toMatch(/white-space:\s*nowrap/)
+    expect(badgeChipRule).toMatch(/flex-shrink:\s*0/)
     expect(css).toContain('.gallery-card__stretch:focus-visible::after')
     expect(css).toContain('@media (forced-colors: active)')
     expect(css).toContain('minmax(min(100%, 320px), 1fr)')
