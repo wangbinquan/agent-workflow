@@ -13,7 +13,7 @@
 // navigating via the shared `shouldRowNavigate` guard (Switch / links /
 // buttons exempt by construction — design §4).
 
-import type { ScheduledTask } from '@agent-workflow/shared'
+import type { ScheduledTask, ScheduledTaskListItem } from '@agent-workflow/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, createRoute, useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
@@ -25,6 +25,7 @@ import { ErrorBanner } from '@/components/ErrorBanner'
 import { Switch } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
 import { PageHeader } from '@/components/PageHeader'
+import { OwnerLabel } from '@/components/OwnerLabel'
 import { RelativeTime } from '@/components/RelativeTime'
 import { StatusChip } from '@/components/StatusChip'
 import { TableViewport } from '@/components/TableViewport'
@@ -55,7 +56,7 @@ function ScheduledPage() {
   const lang = i18n.language.startsWith('zh') ? 'zh' : 'en'
   useScheduledTaskWs()
 
-  const { data, isLoading, error, refetch } = useQuery<ScheduledTask[]>({
+  const { data, isLoading, error, refetch } = useQuery<ScheduledTaskListItem[]>({
     queryKey: ['scheduled-tasks', 'list'],
     queryFn: ({ signal }) => api.get('/api/scheduled-tasks', undefined, signal),
     refetchInterval: 30_000,
@@ -117,6 +118,7 @@ function ScheduledPage() {
               <tr>
                 <th>{t('scheduled.colEnabled')}</th>
                 <th>{t('scheduled.colName')}</th>
+                <th>{t('acl.owner')}</th>
                 <th>{t('scheduled.colSchedule')}</th>
                 <th>{t('scheduled.colNext')}</th>
                 <th>{t('scheduled.colStatus')}</th>
@@ -176,6 +178,9 @@ function ScheduledPage() {
                         </StatusChip>
                       </>
                     )}
+                  </td>
+                  <td className="data-table__owner-cell">
+                    <OwnerLabel ownerUserId={row.ownerUserId} owner={row.owner} />
                   </td>
                   <td className="data-table__muted">{scheduleSummary(row.scheduleSpec, lang)}</td>
                   <td className="data-table__nowrap">

@@ -16,7 +16,7 @@ export interface TaskListFilter {
   search: string
 }
 
-export function filterTaskRows(rows: TaskSummary[], f: TaskListFilter): TaskSummary[] {
+export function filterTaskRows<T extends TaskSummary>(rows: T[], f: TaskListFilter): T[] {
   const q = f.search.trim().toLowerCase()
   if (f.subject === 'all' && q === '') return rows
   return rows.filter((row) => {

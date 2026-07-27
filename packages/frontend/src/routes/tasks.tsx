@@ -18,7 +18,7 @@ import { describeTaskFailure } from '@/lib/task-failure'
 import { Link, createRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { TaskStatus, TaskSummary } from '@agent-workflow/shared'
+import type { TaskListItem, TaskStatus, TaskSummary } from '@agent-workflow/shared'
 import { TASK_STATUS } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { EmptyState } from '@/components/EmptyState'
@@ -26,6 +26,7 @@ import { ErrorBanner } from '@/components/ErrorBanner'
 import { TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
 import { PageHeader } from '@/components/PageHeader'
+import { OwnerLabel } from '@/components/OwnerLabel'
 import { RelativeTime } from '@/components/RelativeTime'
 import { Segmented } from '@/components/Segmented'
 import { StatusChip } from '@/components/StatusChip'
@@ -67,7 +68,7 @@ function TasksPage() {
   const status = search.status
 
   useTasksSync()
-  const { data, isLoading, error, refetch } = useQuery<TaskSummary[]>({
+  const { data, isLoading, error, refetch } = useQuery<TaskListItem[]>({
     queryKey: ['tasks', { status }],
     // RFC-192 (Codex 设计门 P1): listTasks defaults to 100 rows — request the
     // route's full 500-row cap explicitly so client-side subject/search
@@ -75,7 +76,9 @@ function TasksPage() {
     queryFn: ({ signal }) =>
       api.get(
         '/api/tasks',
-        status === undefined ? { limit: '500' } : { status, limit: '500' },
+        status === undefined
+          ? { include_owner: 'true', limit: '500' }
+          : { status, include_owner: 'true', limit: '500' },
         signal,
       ),
     refetchInterval: 15_000, // Fallback for cases where WS is unavailable.
@@ -243,6 +246,7 @@ function TasksPage() {
                 <th>{t('tasks.colStatus')}</th>
                 <th>{t('tasks.colName')}</th>
                 <th>{t('tasks.colSubject')}</th>
+                <th>{t('acl.owner')}</th>
                 <th>{t('tasks.colRepo')}</th>
                 <th>{t('tasks.colStarted')}</th>
                 <th>{t('tasks.colDuration')}</th>
@@ -338,6 +342,9 @@ function TasksPage() {
                       {/* Execution subject (group / agent / workflow) — resolved
                         by TaskSubjectLink so builtin host anchors never leak. */}
                       <TaskSubjectLink task={row} taskId={row.id} badge />
+                    </td>
+                    <td className="data-table__owner-cell">
+                      <OwnerLabel ownerUserId={row.ownerUserId} owner={row.owner} />
                     </td>
                     <td className="data-table__nowrap">
                       <code title={repo.title}>{repo.name}</code>

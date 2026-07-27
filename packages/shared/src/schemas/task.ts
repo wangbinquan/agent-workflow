@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { EXECUTION_IDENTITY_FAILURE_CODES } from '../executionIdentity'
 import { hasQueryCredential } from '../git-url'
 import { InjectedMemorySnapshotSchema } from './memory'
+import { OwnerIdentitySchema } from './user'
 
 export const TASK_STATUS = [
   'pending',
@@ -439,6 +440,13 @@ export const TaskSummarySchema = z.object({
   sourceAgentId: z.string().nullable().optional(),
 })
 export type TaskSummary = z.infer<typeof TaskSummarySchema>
+
+/** RFC-232 — list-only owner projection; TaskSummary and WS wires stay unchanged. */
+export const TaskListItemSchema = TaskSummarySchema.extend({
+  ownerUserId: z.string().nullable(),
+  owner: OwnerIdentitySchema.nullable(),
+}).strict()
+export type TaskListItem = z.infer<typeof TaskListItemSchema>
 
 /**
  * RFC-165: single derivation point for a task's execution subject. Route

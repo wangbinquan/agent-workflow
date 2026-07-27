@@ -14,7 +14,7 @@ import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
-import { getTask, getTaskNodeRuns, listTasks } from '../src/services/task'
+import { getTask, getTaskNodeRuns, listTaskItems, listTasks } from '../src/services/task'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -94,6 +94,9 @@ describe('RFC-203 T4 — failureCode projection', () => {
     const rows = await listTasks(db, {})
     const row = rows.find((r) => r.id === taskId)
     expect(row?.failureCode).toBe('port-validation-failed')
+
+    const ownerRows = await listTaskItems(db, {})
+    expect(ownerRows.find((r) => r.id === taskId)?.failureCode).toBe('port-validation-failed')
   })
 
   test('failed task without a coded run projects null (legacy rows)', async () => {

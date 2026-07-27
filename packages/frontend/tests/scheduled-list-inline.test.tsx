@@ -27,7 +27,7 @@ import {
   createRouter,
   Outlet,
 } from '@tanstack/react-router'
-import type { ScheduledTask } from '@agent-workflow/shared'
+import type { ScheduledTask, ScheduledTaskListItem } from '@agent-workflow/shared'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { runNowBlocked } from '../src/routes/scheduled'
 import { enUS } from '../src/i18n/en-US'
@@ -44,11 +44,12 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function sched(id: string, overrides: Partial<ScheduledTask> = {}): ScheduledTask {
+function sched(id: string, overrides: Partial<ScheduledTaskListItem> = {}): ScheduledTaskListItem {
   return {
     id,
     name: `job-${id}`,
     ownerUserId: 'u1',
+    owner: { id: 'u1', username: 'alice', displayName: 'Alice' },
     launchKind: 'workflow',
     launchPayload: { workflowId: 'wf1' } as unknown as ScheduledTask['launchPayload'],
     scheduleSpec: {
@@ -76,7 +77,7 @@ interface Recorded {
   calls: Array<{ url: string; method: string; body: unknown }>
 }
 
-function installFetch(rows: ScheduledTask[]): Recorded {
+function installFetch(rows: ScheduledTaskListItem[]): Recorded {
   const rec: Recorded = { calls: [] }
   vi.spyOn(globalThis, 'fetch').mockImplementation(
     async (req: RequestInfo | URL, init?: RequestInit) => {
@@ -142,6 +143,25 @@ describe('runNowBlocked — disable predicate (pure)', () => {
 })
 
 describe('/scheduled — inline operations (RFC-192)', () => {
+  test('Owner column shows display name plus full username and stable-id fallback', async () => {
+    installFetch([
+      sched('resolved'),
+      sched('missing', { ownerUserId: 'deleted-user-42', owner: null }),
+    ])
+    await renderPage()
+
+    const resolved = await screen.findByTestId('scheduled-row-resolved')
+    const resolvedOwner = resolved.querySelector('.data-table__owner-cell')
+    expect(resolvedOwner?.textContent).toContain('Alice')
+    expect(resolvedOwner?.textContent).toContain('@alice')
+
+    const missing = screen.getByTestId('scheduled-row-missing')
+    expect(missing.querySelector('.data-table__owner-cell')?.textContent).toContain(
+      'deleted-user-42',
+    )
+    expect(resolved.closest('table')?.querySelector('th:nth-child(3)')?.textContent).toBe('Owner')
+  })
+
   test('Switch PUTs {enabled:false} without navigating the row', async () => {
     const rec = installFetch([sched('s1')])
     const router = await renderPage()

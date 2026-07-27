@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { StartAgentTaskSchema, StartTaskSchema } from './task'
 import { AgentNameSchema } from './agent'
 import { StartWorkgroupTaskSchema, WorkgroupNameSchema } from './workgroup'
+import { OwnerIdentitySchema } from './user'
 import { isValidIanaTz } from '../scheduleTime'
 
 const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/ // 'HH:MM' 24h
@@ -179,6 +180,12 @@ export const ScheduledTaskSchema = z.object({
   updatedAt: z.number().int(),
 })
 export type ScheduledTask = z.infer<typeof ScheduledTaskSchema>
+
+/** RFC-232 — HTTP list row with a minimum owner identity projection. */
+export const ScheduledTaskListItemSchema = ScheduledTaskSchema.extend({
+  owner: OwnerIdentitySchema.nullable(),
+}).strict()
+export type ScheduledTaskListItem = z.infer<typeof ScheduledTaskListItemSchema>
 
 /**
  * POST /api/scheduled-tasks body。`launchPayload` 在 SCHEMA 层保持 unknown ——

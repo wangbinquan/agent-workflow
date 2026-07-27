@@ -11,6 +11,7 @@ import type {
   StartTask,
   Task,
   TaskDiff,
+  TaskListItem,
   TaskNodeRuns,
   TaskRepo,
   TaskSummary,
@@ -107,6 +108,7 @@ import { parsePortValidationFailuresJson } from './envelope'
 import { compareNodeRunsForTimeline, deriveReviewRoundTiming } from './reviewRoundStart'
 import { isHumanReviewConclusion, selectCurrentReviewRound } from '@agent-workflow/shared'
 import { clarifyNavKindForRoundStatus, type ClarifyRoundStatus } from '@agent-workflow/shared'
+import { loadOwnerIdentities } from '@/services/ownerIdentity'
 
 const log = createLogger('task')
 
@@ -3124,10 +3126,15 @@ export function taskVisibilityCondition(
   return or(ownerEq, collabExists)!
 }
 
-export async function listTasks(
+interface TaskSummaryRow {
+  summary: TaskSummary
+  ownerUserId: string | null
+}
+
+async function listTaskSummaryRows(
   db: DbClient,
   filters: ListTasksFilters = {},
-): Promise<TaskSummary[]> {
+): Promise<TaskSummaryRow[]> {
   const conditions = []
   if (filters.status !== undefined) conditions.push(eq(tasks.status, filters.status))
   if (filters.workflowId !== undefined) conditions.push(eq(tasks.workflowId, filters.workflowId))
@@ -3172,9 +3179,36 @@ export async function listTasks(
     })),
   )
   return rows.map((r) => ({
-    ...rowToSummary(r.task, r.workflowName),
-    openAlertCount: openByTask.get(r.task.id) ?? 0,
-    ...(failureCodes.has(r.task.id) ? { failureCode: failureCodes.get(r.task.id) ?? null } : {}),
+    ownerUserId: r.task.ownerUserId ?? null,
+    summary: {
+      ...rowToSummary(r.task, r.workflowName),
+      openAlertCount: openByTask.get(r.task.id) ?? 0,
+      ...(failureCodes.has(r.task.id) ? { failureCode: failureCodes.get(r.task.id) ?? null } : {}),
+    },
+  }))
+}
+
+export async function listTasks(
+  db: DbClient,
+  filters: ListTasksFilters = {},
+): Promise<TaskSummary[]> {
+  return (await listTaskSummaryRows(db, filters)).map((row) => row.summary)
+}
+
+/** RFC-232 — list-only owner projection over the canonical summary pipeline. */
+export async function listTaskItems(
+  db: DbClient,
+  filters: ListTasksFilters = {},
+): Promise<TaskListItem[]> {
+  const rows = await listTaskSummaryRows(db, filters)
+  const owners = await loadOwnerIdentities(
+    db,
+    rows.map((row) => row.ownerUserId),
+  )
+  return rows.map(({ summary, ownerUserId }) => ({
+    ...summary,
+    ownerUserId,
+    owner: ownerUserId === null ? null : (owners.get(ownerUserId) ?? null),
   }))
 }
 

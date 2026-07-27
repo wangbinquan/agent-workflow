@@ -27,7 +27,9 @@ import {
   ImportWorkflowResultSchema,
   McpSchema,
   OverviewResponseSchema,
+  ScheduledTaskListItemSchema,
   SkillSchema,
+  TaskListItemSchema,
   WorkgroupSchema,
   WorkflowDetailSchema,
   WorkflowDraftValidationReceiptSchema,
@@ -377,7 +379,10 @@ export const ENDPOINTS: EndpointSpec[] = [
   {
     method: 'GET',
     path: '/api/tasks',
-    happy: { schema: z.array(z.any()) },
+    happy: {
+      query: { include_owner: 'true' },
+      schema: z.array(TaskListItemSchema),
+    },
   },
   {
     method: 'GET',
@@ -406,7 +411,11 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'POST', path: '/api/tasks/:id/alerts/:alertId/repair' },
   { method: 'GET', path: '/api/tasks/:id/diff' },
   // ---- scheduled tasks (RFC-159) ----
-  { method: 'GET', path: '/api/scheduled-tasks' },
+  {
+    method: 'GET',
+    path: '/api/scheduled-tasks',
+    happy: { schema: z.array(ScheduledTaskListItemSchema) },
+  },
   { method: 'GET', path: '/api/scheduled-tasks/:id' },
   { method: 'POST', path: '/api/scheduled-tasks' },
   { method: 'PUT', path: '/api/scheduled-tasks/:id' },

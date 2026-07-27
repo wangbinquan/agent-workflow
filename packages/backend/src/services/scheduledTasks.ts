@@ -7,6 +7,7 @@
 import type {
   CreateScheduledTask,
   ScheduledTask,
+  ScheduledTaskListItem,
   ScheduleSpec,
   UpdateScheduledTask,
 } from '@agent-workflow/shared'
@@ -43,6 +44,7 @@ import {
 import { assertAgentResourceIntegrity } from '@/services/agentResourceIntegrity'
 import { getWorkflow } from '@/services/workflow'
 import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
+import { loadOwnerIdentities } from '@/services/ownerIdentity'
 
 /** Injected launch — `(body) => startTask(body, deps)`, closed over owner + scheduledTaskId. */
 /**
@@ -213,6 +215,22 @@ export function canViewScheduledTask(actor: Actor, row: ScheduledTask): boolean 
   if (row.ownerUserId === actor.user.id) return true
   if (row.ownerUserId === SYSTEM_USER_ID && actor.user.id === SYSTEM_USER_ID) return true
   return false
+}
+
+/** RFC-232 — HTTP list rows after canonical mapping and visibility filtering. */
+export async function listScheduledTaskItems(
+  db: DbClient,
+  actor: Actor,
+): Promise<ScheduledTaskListItem[]> {
+  const visible = (await listScheduledTasks(db)).filter((row) => canViewScheduledTask(actor, row))
+  const owners = await loadOwnerIdentities(
+    db,
+    visible.map((row) => row.ownerUserId),
+  )
+  return visible.map((row) => ({
+    ...row,
+    owner: owners.get(row.ownerUserId) ?? null,
+  }))
 }
 
 export async function getScheduledTask(db: DbClient, id: string): Promise<ScheduledTask | null> {

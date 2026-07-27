@@ -106,6 +106,28 @@ describe('RFC-159 — scheduled-task route visibility', () => {
     expect(await listIds(h.app, h.adminToken)).toEqual([h.bobSchedId])
   })
 
+  test('list projects only the minimum owner identity after visibility filtering', async () => {
+    const ownerRows = (await (
+      await get(h.app, h.bobToken, '/api/scheduled-tasks')
+    ).json()) as Array<Record<string, unknown>>
+    expect(ownerRows).toHaveLength(1)
+    expect(ownerRows[0]?.['owner']).toEqual({
+      id: expect.any(String),
+      username: 'bob',
+      displayName: 'B',
+    })
+    expect(Object.keys(ownerRows[0]?.['owner'] as object).sort()).toEqual([
+      'displayName',
+      'id',
+      'username',
+    ])
+
+    const strangerRows = (await (
+      await get(h.app, h.carolToken, '/api/scheduled-tasks')
+    ).json()) as unknown[]
+    expect(strangerRows).toEqual([])
+  })
+
   test('detail: owner 200, admin 200, stranger 404 (invisible == missing)', async () => {
     expect((await get(h.app, h.bobToken, `/api/scheduled-tasks/${h.bobSchedId}`)).status).toBe(200)
     expect((await get(h.app, h.adminToken, `/api/scheduled-tasks/${h.bobSchedId}`)).status).toBe(

@@ -3938,6 +3938,7 @@ export interface Resources {
     title: string
     owner: string
     systemOwner: string
+    unknownOwner: string
     visibility: string
     visibilityValue: { public: string; private: string }
     members: string
@@ -8803,6 +8804,7 @@ export const zhCN: Resources = {
     title: '权限',
     owner: '所有者',
     systemOwner: '系统（无所有者）',
+    unknownOwner: '未知归属',
     visibility: '可见性',
     visibilityValue: { public: '全员可用', private: '私有' },
     members: '授权用户',

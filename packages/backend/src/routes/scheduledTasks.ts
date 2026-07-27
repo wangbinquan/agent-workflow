@@ -25,7 +25,7 @@ import {
   createScheduledTask,
   deleteScheduledTask,
   getScheduledTask,
-  listScheduledTasks,
+  listScheduledTaskItems,
   runScheduleNow,
   updateScheduledTask,
 } from '@/services/scheduledTasks'
@@ -67,9 +67,7 @@ function requireLaunchPermission(actor: Actor): void {
 
 export function mountScheduledTaskRoutes(app: Hono, deps: AppDeps): void {
   app.get('/api/scheduled-tasks', async (c) => {
-    const actor = actorOf(c)
-    const all = await listScheduledTasks(deps.db)
-    return c.json(all.filter((row) => canViewScheduledTask(actor, row)))
+    return c.json(await listScheduledTaskItems(deps.db, actorOf(c)))
   })
 
   app.get('/api/scheduled-tasks/:id', async (c) => {

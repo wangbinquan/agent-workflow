@@ -42,6 +42,15 @@ export const UserPublicSchema = UserSchema.pick({
 
 export type UserPublic = z.infer<typeof UserPublicSchema>
 
+/** RFC-232 — minimum public identity embedded in task list rows. */
+export const OwnerIdentitySchema = UserPublicSchema.pick({
+  id: true,
+  username: true,
+  displayName: true,
+}).strict()
+
+export type OwnerIdentity = z.infer<typeof OwnerIdentitySchema>
+
 export const CreateUserBodySchema = z.object({
   username: UserSchema.shape.username,
   email: UserSchema.shape.email.optional(),

@@ -28,6 +28,7 @@ import {
   memories,
   nodeRuns,
   plugins,
+  scheduledTasks,
   skills,
   tasks,
   users,
@@ -63,6 +64,7 @@ export interface SeededFixtures {
   workflowVersion: number
   workflowSnapshotHash: string
   taskId: string
+  scheduledTaskId: string
   nodeRunId: string
   memoryId: string
 }
@@ -109,6 +111,7 @@ export async function buildContractHarness(): Promise<ContractHarness> {
   const workgroupId = ulid()
   const workflowId = ulid()
   const taskId = ulid()
+  const scheduledTaskId = ulid()
   const nodeRunId = ulid()
   const memoryId = ulid()
 
@@ -198,6 +201,23 @@ export async function buildContractHarness(): Promise<ContractHarness> {
     finishedAt: now,
     ownerUserId: alice.id,
   })
+  await db.insert(scheduledTasks).values({
+    id: scheduledTaskId,
+    name: 'contract-schedule',
+    ownerUserId: alice.id,
+    launchPayload: JSON.stringify({
+      workflowId,
+      name: 'contract-schedule-run',
+      scratch: true,
+      inputs: { topic: 'hello' },
+    }),
+    scheduleSpec: JSON.stringify({ kind: 'daily', at: '09:00', timezone: 'UTC' }),
+    enabled: true,
+    nextRunAt: now + 60_000,
+    consecutiveFailures: 0,
+    createdAt: now,
+    updatedAt: now,
+  })
   await db.insert(nodeRuns).values({
     id: nodeRunId,
     taskId,
@@ -238,6 +258,7 @@ export async function buildContractHarness(): Promise<ContractHarness> {
       workflowVersion: workflow.version,
       workflowSnapshotHash: workflow.snapshotHash,
       taskId,
+      scheduledTaskId,
       nodeRunId,
       memoryId,
     },

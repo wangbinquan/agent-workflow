@@ -5121,6 +5121,7 @@ export const enUS: Resources = {
     title: 'Permissions',
     owner: 'Owner',
     systemOwner: 'System (no owner)',
+    unknownOwner: 'Unknown owner',
     visibility: 'Visibility',
     visibilityValue: { public: 'Everyone', private: 'Private' },
     members: 'Authorized users',

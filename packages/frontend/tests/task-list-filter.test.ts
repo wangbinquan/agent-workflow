@@ -4,8 +4,8 @@
 // single derivation point) — including its precedence: a row with BOTH
 // workgroupId and sourceAgentName classifies as workgroup, never agent.
 
-import { describe, expect, test } from 'vitest'
-import type { TaskSummary } from '@agent-workflow/shared'
+import { describe, expect, expectTypeOf, test } from 'vitest'
+import type { TaskListItem, TaskSummary } from '@agent-workflow/shared'
 import { filterTaskRows } from '../src/lib/task-list-filter'
 
 function row(name: string, overrides: Partial<TaskSummary> = {}): TaskSummary {
@@ -62,5 +62,18 @@ describe('filterTaskRows', () => {
       filterTaskRows(ROWS, { subject: 'workgroup', search: 'run' }).map((r) => r.name),
     ).toEqual(['group-run'])
     expect(filterTaskRows(ROWS, { subject: 'agent', search: 'zzz' })).toEqual([])
+  })
+
+  test('generic filter preserves the owner-bearing list-item type', () => {
+    const ownerRows: TaskListItem[] = [
+      {
+        ...row('owner-row'),
+        ownerUserId: 'u1',
+        owner: { id: 'u1', username: 'alice', displayName: 'Alice' },
+      },
+    ]
+    const filtered = filterTaskRows(ownerRows, { subject: 'all', search: '' })
+    expectTypeOf(filtered).toEqualTypeOf<TaskListItem[]>()
+    expect(filtered[0]?.owner?.username).toBe('alice')
   })
 })

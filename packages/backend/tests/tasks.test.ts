@@ -1,7 +1,7 @@
 // HTTP coverage for /api/tasks (P-1-14).
 // Uses a real `git init` fixture so startTask's worktree creation works.
 
-import type { WorkflowDefinition } from '@agent-workflow/shared'
+import type { TasksListWsMessage, WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
@@ -14,6 +14,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { runGit } from '../src/util/git'
+import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '../src/ws/broadcaster'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -99,6 +100,10 @@ describe('task HTTP routes', () => {
 
   test('POST creates task with status=pending (scheduler still running in background)', async () => {
     const wfId = await seedWorkflow(h.db, EMPTY_DEF)
+    const frames: TasksListWsMessage[] = []
+    const unsubscribe = tasksListBroadcaster.subscribe(TASKS_LIST_CHANNEL, (frame) =>
+      frames.push(frame),
+    )
     const res = await req(h.app, '/api/tasks', {
       method: 'POST',
       body: JSON.stringify({
@@ -108,12 +113,36 @@ describe('task HTTP routes', () => {
         ref: 'main',
         inputs: {},
       }),
-    })
+    }).finally(unsubscribe)
     expect(res.status).toBe(201)
     const task = (await res.json()) as { id: string; status: string; branch: string }
     expect(typeof task.id).toBe('string')
     expect(['pending', 'running', 'done']).toContain(task.status)
     expect(task.branch).toBe(`agent-workflow/${task.id}`)
+
+    const created = frames.find((frame) => frame.type === 'task.created')
+    expect(created?.type).toBe('task.created')
+    if (created?.type !== 'task.created') throw new Error('missing task.created frame')
+    expect(Object.keys(created.task).sort()).toEqual(
+      [
+        'cachedRepoId',
+        'errorSummary',
+        'finishedAt',
+        'id',
+        'name',
+        'repoCount',
+        'repoPath',
+        'repoUrl',
+        'sourceAgentName',
+        'spaceKind',
+        'startedAt',
+        'status',
+        'workflowId',
+        'workflowName',
+      ].sort(),
+    )
+    expect(created.task).not.toHaveProperty('ownerUserId')
+    expect(created.task).not.toHaveProperty('owner')
   })
 
   test('POST with unknown workflow id -> 404', async () => {

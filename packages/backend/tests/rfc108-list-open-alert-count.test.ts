@@ -11,7 +11,7 @@ import { ulid } from 'ulid'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { lifecycleAlerts, tasks, workflows } from '../src/db/schema'
-import { listTasks } from '../src/services/task'
+import { listTaskItems, listTasks } from '../src/services/task'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -62,5 +62,9 @@ describe('RFC-108 T22 — listTasks openAlertCount', () => {
     const byId = new Map(list.map((s) => [s.id, s.openAlertCount ?? 0]))
     expect(byId.get(stuck)).toBe(2)
     expect(byId.get(healthy)).toBe(0)
+
+    const ownerRows = await listTaskItems(db)
+    const ownerById = new Map(ownerRows.map((s) => [s.id, s.openAlertCount ?? 0]))
+    expect(ownerById).toEqual(byId)
   })
 })

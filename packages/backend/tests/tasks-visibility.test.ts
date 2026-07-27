@@ -169,6 +169,54 @@ describe('GET /api/tasks visibility filter', () => {
     expect(list.map((t) => t.id).sort()).toEqual([h.bobTaskId, h.systemTaskId].sort())
   })
 
+  test('default wire stays TaskSummary-only; owner projection is explicit opt-in', async () => {
+    const defaults = (await (await reqAs(h.app, h.aliceToken, '/api/tasks')).json()) as Array<
+      Record<string, unknown>
+    >
+    expect(defaults.length).toBe(2)
+    for (const row of defaults) {
+      expect(row).not.toHaveProperty('ownerUserId')
+      expect(row).not.toHaveProperty('owner')
+    }
+
+    for (const enabled of ['true', '1']) {
+      const rows = (await (
+        await reqAs(h.app, h.aliceToken, `/api/tasks?include_owner=${enabled}`)
+      ).json()) as Array<Record<string, unknown>>
+      expect(rows.map(({ owner: _owner, ownerUserId: _ownerUserId, ...row }) => row)).toEqual(
+        defaults,
+      )
+      const bob = rows.find((row) => row['id'] === h.bobTaskId)
+      expect(bob?.['owner']).toEqual({
+        id: expect.any(String),
+        username: 'bob',
+        displayName: 'Bob',
+      })
+      expect(Object.keys(bob?.['owner'] as object).sort()).toEqual([
+        'displayName',
+        'id',
+        'username',
+      ])
+      expect(bob).toHaveProperty('ownerUserId', (bob?.['owner'] as { id: string }).id)
+
+      const system = rows.find((row) => row['id'] === h.systemTaskId)
+      expect(system).toMatchObject({ ownerUserId: '__system__', owner: null })
+    }
+
+    for (const disabled of ['false', '0']) {
+      const rows = (await (
+        await reqAs(h.app, h.aliceToken, `/api/tasks?include_owner=${disabled}`)
+      ).json()) as Array<Record<string, unknown>>
+      expect(rows.every((row) => !('owner' in row) && !('ownerUserId' in row))).toBe(true)
+    }
+  })
+
+  test('include_owner rejects unknown boolean spellings', async () => {
+    const res = await reqAs(h.app, h.aliceToken, '/api/tasks?include_owner=yes')
+    expect(res.status).toBe(422)
+    expect((await res.json()) as unknown).toMatchObject({ code: 'invalid-bool-query' })
+  })
+
   test('bob (owner) sees only his task by default', async () => {
     const res = await reqAs(h.app, h.bobToken, '/api/tasks')
     const list = (await res.json()) as { id: string }[]
@@ -179,6 +227,22 @@ describe('GET /api/tasks visibility filter', () => {
     const res = await reqAs(h.app, h.carolToken, '/api/tasks')
     const list = (await res.json()) as { id: string }[]
     expect(list.map((t) => t.id)).toEqual([h.bobTaskId])
+  })
+
+  test('owner projection does not widen task visibility', async () => {
+    const collaborator = (await (
+      await reqAs(h.app, h.carolToken, '/api/tasks?include_owner=true')
+    ).json()) as Array<{ id: string; owner: { username: string } | null }>
+    expect(collaborator).toHaveLength(1)
+    expect(collaborator[0]).toMatchObject({
+      id: h.bobTaskId,
+      owner: { username: 'bob' },
+    })
+
+    const outsider = (await (
+      await reqAs(h.app, h.daveToken, '/api/tasks?include_owner=true')
+    ).json()) as unknown[]
+    expect(outsider).toEqual([])
   })
 
   test('dave (unrelated) sees nothing', async () => {

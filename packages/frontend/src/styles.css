@@ -3567,8 +3567,7 @@ code {
 }
 
 .table-viewport__hint {
-  position: absolute;
-  inset: 0;
+  display: contents;
   pointer-events: none;
 }
 
@@ -3648,6 +3647,46 @@ code {
 
 .data-table__muted {
   color: var(--muted);
+}
+
+/* RFC-232 — owner identity stays scan-friendly without making an auto-layout
+   table grow to the longest display name. Unique usernames and stable-id
+   fallbacks remain visibly available on touch and keyboard surfaces. */
+.data-table__owner-cell {
+  max-width: 220px;
+}
+
+.owner-label {
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  max-width: 220px;
+  vertical-align: middle;
+}
+
+.owner-label__display {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.owner-label__identity {
+  color: var(--muted);
+  font-size: var(--font-xs);
+  overflow-wrap: anywhere;
+}
+
+.owner-label__identity--stable {
+  font-family: var(--font-mono);
+}
+
+.owner-label--fallback {
+  color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .data-table__nowrap {

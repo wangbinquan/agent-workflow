@@ -25,7 +25,7 @@ import {
   createRouter,
   Outlet,
 } from '@tanstack/react-router'
-import type { TaskSummary } from '@agent-workflow/shared'
+import type { TaskListItem } from '@agent-workflow/shared'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { enUS } from '../src/i18n/en-US'
 import '../src/i18n'
@@ -41,7 +41,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function row(name: string, overrides: Partial<TaskSummary> = {}): TaskSummary {
+function row(name: string, overrides: Partial<TaskListItem> = {}): TaskListItem {
   return {
     id: `t_${name}`,
     name,
@@ -56,6 +56,8 @@ function row(name: string, overrides: Partial<TaskSummary> = {}): TaskSummary {
     errorSummary: null,
     repoCount: 1,
     spaceKind: 'remote',
+    ownerUserId: 'u1',
+    owner: { id: 'u1', username: 'alice', displayName: 'Alice' },
     ...overrides,
   }
 }
@@ -64,7 +66,7 @@ interface Recorded {
   urls: string[]
 }
 
-function installFetch(rows: TaskSummary[]): Recorded {
+function installFetch(rows: TaskListItem[]): Recorded {
   const rec: Recorded = { urls: [] }
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (req: RequestInfo | URL) => {
     const url = req.toString()
@@ -133,14 +135,19 @@ describe('/tasks — run-monitor table (RFC-192)', () => {
     expect(create.getAttribute('href')).toBe('/tasks/new')
   })
 
-  test('query requests limit=500; error line only on FAILED rows (canceled negative)', async () => {
+  test('query requests owner + limit=500; error line only on FAILED rows (canceled negative)', async () => {
     const rec = installFetch([
       row('boom', { status: 'failed', errorSummary: 'node exec failed: exited 1' }),
       row('halted', { status: 'canceled', errorSummary: 'canceled by user', finishedAt: null }),
     ])
     await renderPage()
     await screen.findByTestId('task-row-t_boom')
-    expect(rec.urls.some((u) => u.includes('/api/tasks') && u.includes('limit=500'))).toBe(true)
+    expect(
+      rec.urls.some(
+        (u) =>
+          u.includes('/api/tasks') && u.includes('limit=500') && u.includes('include_owner=true'),
+      ),
+    ).toBe(true)
 
     const err = screen.getByTestId('task-error-t_boom')
     // RFC-203 T4: the cell shows LOCALIZED failure copy; the raw machine
@@ -157,6 +164,24 @@ describe('/tasks — run-monitor table (RFC-192)', () => {
     expect(table?.parentElement?.classList.contains('table-viewport__scroller')).toBe(true)
     expect(table?.closest('.table-viewport')?.classList.contains('table-viewport--lg')).toBe(true)
     expect(document.querySelector('h1.page__title')).not.toBeNull()
+  })
+
+  test('Owner column shows display name plus full username and stable-id fallback', async () => {
+    installFetch([row('resolved'), row('missing', { ownerUserId: 'deleted-user-42', owner: null })])
+    await renderPage()
+
+    const resolved = await screen.findByTestId('task-row-t_resolved')
+    const resolvedOwner = resolved.querySelector('.data-table__owner-cell')
+    expect(resolvedOwner?.textContent).toContain('Alice')
+    expect(resolvedOwner?.textContent).toContain('@alice')
+
+    const missing = screen.getByTestId('task-row-t_missing')
+    expect(missing.querySelector('.data-table__owner-cell')?.textContent).toContain(
+      'deleted-user-42',
+    )
+    expect(
+      within(resolved.closest('table')!).getByRole('columnheader', { name: 'Owner' }),
+    ).toBeTruthy()
   })
 
   test('repo chip only when repoCount>1; URL-mode repo name derives from the redacted URL', async () => {

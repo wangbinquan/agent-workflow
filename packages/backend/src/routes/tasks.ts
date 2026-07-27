@@ -49,6 +49,7 @@ import {
   getTask,
   getTaskDiff,
   getTaskNodeRuns,
+  listTaskItems,
   listTasks,
   materializeSpace,
   resumeTask,
@@ -116,6 +117,7 @@ function resolveStructuralDeepConfig(configPath: string): ResolvedDeepConfig {
 export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
   app.get('/api/tasks', async (c) => {
     const actor = actorOf(c)
+    const includeOwner = parseBoolQuery(c, 'include_owner', { default: false })
     const filters: Parameters<typeof listTasks>[1] = {}
     const status = c.req.query('status')
     if (status !== undefined) {
@@ -160,7 +162,9 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     } else if (!actor.permissions.has('tasks:read:all')) {
       filters.visibility = { actorUserId: actor.user.id, scope: 'mine' }
     }
-    return c.json(await listTasks(deps.db, filters))
+    return c.json(
+      includeOwner ? await listTaskItems(deps.db, filters) : await listTasks(deps.db, filters),
+    )
   })
 
   // RFC-036 visibility gate. All /api/tasks/:id/... reads require the actor
